@@ -18,6 +18,12 @@ const houseProgramSource = (house) =>
 const whisperSamplePath = ["caterer", "whisper.cpp", "samples", ["jfk", "wav"].join(".")].join("/");
 const overlayModulePath = ["..", "program", "library", "reporter_shared", ["cover-overlay", "stage.mjs"].join("-")].join("/");
 const wordnetDirectory = ["know", "wordnet", "open-english-wordnet-2025-json"].join("/");
+// The sibling checkout name and the worker script name are assembled for the
+// same reason as the paths above: this file must not register a dependency on
+// the resources it describes.
+const siblingCheckoutName = ["pyach", "so2n"].join("");
+const dictionaryName = ["English", "30k"].join("");
+const workerScriptName = ["speaker_", "worker.py"].join("");
 
 test("a quiz with no external reference is tier t1", () => {
   const outcome = classifyQuizFile('import { parse } from "../program/understand/index.mjs";');
@@ -45,8 +51,31 @@ test("a quiz that renders an overlay is tier t2 and needs ffmpeg drawtext", () =
   assert.ok(outcome.requirements.some((requirement) => requirement.id === "ffmpeg-drawtext"));
 });
 
-test("a quiz that points at an untracked house program is tier t3", () => {
-  const outcome = classifyQuizFile(houseProgramSource("owen-sound-reporter"), {
+test("a quiz that reads the sibling dictionary is tier t2", () => {
+  const outcome = classifyQuizFile(`const file = "${dictionaryName}.txt";`);
+  assert.equal(outcome.tier, "t2");
+  assert.ok(outcome.requirements.some((requirement) => requirement.id === "sibling-repo"));
+});
+
+test("a quiz that names the sibling checkout is tier t2", () => {
+  const outcome = classifyQuizFile(`const root = "../${siblingCheckoutName}";`);
+  assert.equal(outcome.tier, "t2");
+  assert.ok(outcome.requirements.some((requirement) => requirement.id === "sibling-repo"));
+});
+
+test("a translation quiz is tier t2 because of its file name", () => {
+  const outcome = classifyQuizFile('const value = 1;', { fileName: "translation_english_sentence.test.mjs" });
+  assert.equal(outcome.tier, "t2");
+  assert.ok(outcome.requirements.some((requirement) => requirement.id === "sibling-repo"));
+});
+
+test("a quiz that drives the python worker is tier t2", () => {
+  const outcome = classifyQuizFile(`spawn("python3", ["${workerScriptName}"]);`);
+  assert.equal(outcome.tier, "t2");
+  assert.ok(outcome.requirements.some((requirement) => requirement.id === "python-worker"));
+});
+
+test("a quiz that points at an untracked house program is tier t3", () => {  const outcome = classifyQuizFile(houseProgramSource("owen-sound-reporter"), {
     isTrackedHouse: () => false
   });
   assert.equal(outcome.tier, "t3");

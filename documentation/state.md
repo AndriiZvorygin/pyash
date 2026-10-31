@@ -148,6 +148,13 @@ folder (132 modules, 15,728 lines) moved the same way, into
   one through the real runner in a child process. A green exit code is not a
   green example: `examples/pyash/until-loop.pya` once exited 0 while producing
   `counter = undefined`, so the example quizzes assert on resulting facts.
+- The CI gate runs the whole tiered suite, so CI provisions the resources the
+  suite needs: the Open English WordNet dataset and the whisper sample audio
+  (through `npm run bootstrap`), the `pyachso2n` checkout next to the
+  repository (the translation dictionary and the glyph word lists), and numpy
+  for the python speaker worker. A quiz whose resource is missing is reported
+  as a gap rather than failed, and the quiz suite creates its own scratch
+  directory under `artifacts/` so a fresh checkout can run it.
 
 ## Tried and rejected
 

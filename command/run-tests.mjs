@@ -56,6 +56,11 @@ if (files.length === 0) {
   process.exit(1);
 }
 
+// The quiz suite writes its scratch directories under artifacts/, which is
+// git-ignored and therefore absent in a fresh checkout. Create it here so a
+// clean clone can run the suite without the quizzes having to know about it.
+fs.mkdirSync(path.join(root, "artifacts"), { recursive: true });
+
 const child = spawn(process.execPath, ["--test", ...files, ...process.argv.slice(2)], {
   cwd: root,
   stdio: "inherit",

@@ -2,10 +2,22 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 
+// configure/secret.pya holds real credentials and is git-ignored, so it is
+// absent in a fresh checkout. The tracked example carries the same shape, and
+// the invariant under test (no hardcoded remote housekeeper URL) has to hold
+// for the example as well.
+async function readSecretConfig() {
+  try {
+    return await fs.readFile(new URL("../configure/secret.pya", import.meta.url), "utf8");
+  } catch {
+    return await fs.readFile(new URL("../configure/secret.pya.example", import.meta.url), "utf8");
+  }
+}
+
 test("default config and system service connect the local GPU queue", async () => {
   const [defaults, secret, service, compose, dockerfile, macInstaller, tunnel, webServer, strataHelper, worker] = await Promise.all([
     fs.readFile(new URL("../configure/default.pya", import.meta.url), "utf8"),
-    fs.readFile(new URL("../configure/secret.pya", import.meta.url), "utf8"),
+    readSecretConfig(),
     fs.readFile(new URL("../service/pyash-gpu-worker.service", import.meta.url), "utf8"),
     fs.readFile(new URL("../container/gpu-housekeeper/service/compose.gpu.yaml", import.meta.url), "utf8"),
     fs.readFile(new URL("../container/gpu-housekeeper/Dockerfile", import.meta.url), "utf8"),

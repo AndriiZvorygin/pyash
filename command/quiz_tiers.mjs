@@ -7,7 +7,8 @@
 //
 //   t1  needs nothing beyond the repository
 //   t2  needs a provisioned resource (wordnet, whisper sample audio, ffmpeg
-//       with the drawtext filter)
+//       with the drawtext filter, the pyachso2n sibling checkout, a python
+//       speaker worker)
 //   t3  needs a house checkout that the repository does not track
 //
 // The filesystem and git lookups are injected so the rules can be pinned by a
@@ -21,6 +22,15 @@ export const TIERS = ["t1", "t2", "t3"];
 // house name.
 const HOUSE_PROGRAM_PATH = /(?:\.\.\/|\.\/)[^"'\s]*world\/house\/([^/"'`\s{}]+)\/program\//gu;
 
+// The translation subsystem reads its dictionary and glyph word lists from the
+// pyachso2n checkout that sits next to this repository, so a quiz that
+// exercises that surface needs the sibling checkout to be present.
+const SIBLING_REPO_PATTERN = /pyachso2n|english30k|vocab|pyac_complexity|16GlyphWordList/iu;
+const SIBLING_REPO_FILE_NAME = /^(?:translation_|vocab_)/u;
+
+// The speaker identity module drives a python worker.
+const PYTHON_WORKER_PATTERN = /speaker_worker\.py|speaker_identity|PYA_PYTHON_BIN/u;
+
 export function detectHouseDependencies(source) {
   const houses = new Set();
   for (const match of String(source || "").matchAll(HOUSE_PROGRAM_PATH)) {
@@ -29,7 +39,7 @@ export function detectHouseDependencies(source) {
   return [...houses];
 }
 
-export function detectRequirements(source, { isTrackedHouse = () => true } = {}) {
+export function detectRequirements(source, { isTrackedHouse = () => true, fileName = "" } = {}) {
   const text = String(source || "");
   const requirements = [];
   for (const house of detectHouseDependencies(text)) {
@@ -44,6 +54,12 @@ export function detectRequirements(source, { isTrackedHouse = () => true } = {})
   }
   if (/cover-overlay-stage/u.test(text)) {
     requirements.push({ id: "ffmpeg-drawtext", detail: "ffmpeg with drawtext" });
+  }
+  if (SIBLING_REPO_PATTERN.test(text) || SIBLING_REPO_FILE_NAME.test(String(fileName || ""))) {
+    requirements.push({ id: "sibling-repo", detail: "pyachso2n checkout" });
+  }
+  if (PYTHON_WORKER_PATTERN.test(text)) {
+    requirements.push({ id: "python-worker", detail: "python speaker worker" });
   }
   return requirements;
 }

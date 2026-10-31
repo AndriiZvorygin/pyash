@@ -66,7 +66,18 @@ const resourceChecks = {
       return false;
     }
   },
-  house: (house) => fs.existsSync(path.join(root, "world", "house", house))
+  house: (house) => fs.existsSync(path.join(root, "world", "house", house)),
+  // The translation dictionary and the glyph word lists live in the
+  // pyachso2n checkout next to this repository.
+  "sibling-repo": () => fs.existsSync(path.resolve(root, "..", "pyachso2n", "English30k.txt")),
+  "python-worker": () => {
+    try {
+      execFileSync("python3", ["-c", "import numpy"], { stdio: "ignore" });
+      return true;
+    } catch {
+      return false;
+    }
+  }
 };
 
 function missingRequirements(requirements) {
@@ -78,9 +89,12 @@ function missingRequirements(requirements) {
 }
 
 const files = trackedQuizFiles();
+// The quiz suite writes its scratch directories under artifacts/, which is
+// git-ignored and therefore absent in a fresh checkout.
+fs.mkdirSync(path.join(root, "artifacts"), { recursive: true });
 const classified = files.map((file) => {
   const source = fs.readFileSync(path.join(root, file), "utf8");
-  return { file, ...classifyQuizFile(source, { isTrackedHouse: houseIsTracked }) };
+  return { file, ...classifyQuizFile(source, { isTrackedHouse: houseIsTracked, fileName: path.basename(file) }) };
 });
 
 const gated = [];

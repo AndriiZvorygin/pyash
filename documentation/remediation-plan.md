@@ -770,6 +770,28 @@ directories, which are run output rather than repo content.
 language with a handful of verbs", which no longer matches the repo. Bring it
 in line with the current scope.
 
+**5.5 Make the CI gate green again.** *(done)*
+
+Widening the CI gate to the whole suite (aaa8c82d) turned a 28-file gate into
+a 758-file gate, and the GitHub run has been red since 7a5afffa with 86
+failures. The failures were not one problem but five, and the run log was the
+only place that showed them:
+
+| Cause | Failures | Fix |
+|---|---|---|
+| The `pyachso2n` checkout next to the repository was missing, so the translation dictionary and the glyph word lists could not be read | 79 | CI clones it; the tier machinery reports it as a gap when it is absent |
+| The generated C used `strcmp` and `fmod` without declaring `<string.h>` and `<math.h>`; a newer gcc treats an implicit declaration as an error | 2 | The C prelude derives the header set from the generated source as well as from the helper flags |
+| `artifacts/` is git-ignored, so a fresh checkout had no scratch directory for 66 quizzes to create their temporary files in | 2 | The test runners create it |
+| `configure/secret.pya` holds real credentials and is git-ignored, so the GPU worker service quiz could not read it | 1 | The quiz falls back to the tracked example, which carries the same shape |
+| The python speaker worker imports numpy, which the CI image does not have | 1 | CI installs numpy; the tier machinery reports it as a gap when it is absent |
+
+The two requirement classes the tier machinery gained (`sibling-repo` and
+`python-worker`) follow the existing convention: a quiz whose resource is
+missing is reported with its reason instead of failing the run, because the
+environment is missing something, not the code. The gcc finding was the one
+real defect among them, and it was only visible because CI compiles with a
+newer compiler than this machine.
+
 ---
 
 ## Sequencing
