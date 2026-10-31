@@ -52,6 +52,16 @@ Retrieved 2026-10-31. Raw upstream files are tracked where redistribution terms 
 - The file reports 46,841,097 characters across 6,243 contexts and includes counts, per-million frequency, and context dispersion. PLOS describes the paper as openly available under its Creative Commons Attribution License; preserve attribution to Cai and Brysbaert and the original article when using or adapting the data.
 - See [`FREQUENCY.md`](FREQUENCY.md) for validation and the comparison against the official 8,105-character inventory.
 
+## ASJP v21 comparative wordlists
+
+- Dataset: filtered, reproducible subset in [`sources/asjp-v21/`](sources/asjp-v21/); usage and coverage notes in [`WORDLISTS.md`](WORDLISTS.md).
+- Upstream dataset: [The ASJP Database, version 21](https://doi.org/10.5281/zenodo.16736409), Wichmann, Holman, Brown, Dryer, and Ran (eds.), 2025. The release is also downloadable through the [ASJP site](https://asjp.clld.org/download).
+- License: CC BY 4.0; the upstream license and readme are included with the acquired subset. Preserve the upstream citation and each form's `Source` reference.
+- Retrieved 2026-10-31. Upstream archive SHA-256: `4704ea0cb5ecfb31b6fcf052ef9c18c74e813bccf1b4461072dd40b029b88f90`.
+- Extracted subset: 25 variety records, 100 concepts, 1,859 form rows, and 25 cited source records. `wordlists.csv` SHA-256: `800a130c0702b459760f31948ae160903f959fca3ad18304092b331f040b1f06`.
+- Includes Mandarin; Central, Lhasa, and Written Tibetan; Burmese; Yeniseian lists for Ket, Yugh, Arin, Assan, Kott-Assan, and Pumpokol; Chechen, Abkhaz, and Lezgian; Burushaski, Basque, Navajo, Eyak, and Tlingit; plus Georgian, Finnish, and Hungarian comparison lists. Coverage varies by source list; see [`languages.csv`](sources/asjp-v21/languages.csv).
+- The ASJP words are concept-aligned translations and do not by themselves show cognacy or family relationships. Family/proposal labels are separated in [`LANGUAGE-PROXIMITY.md`](LANGUAGE-PROXIMITY.md) and [`WORDLISTS.md`](WORDLISTS.md).
+
 ## Source follow-up
 
 - Unihan's `kTGH` property already provides each character's official *Table of General Standard Chinese Characters* index and the index ranges identify its level. No additional table download is needed for level membership.
