@@ -648,6 +648,9 @@ export async function handleImperative({
   }
 
   const useRawTo =
+    // `command` writes its output into the register named by `to`; passing the
+    // target fact's current ob instead would erase the destination name.
+    be === "command" ||
     be === "mind" ||
     be === "say" ||
     be === "import" ||
