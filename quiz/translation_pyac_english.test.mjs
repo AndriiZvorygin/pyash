@@ -157,6 +157,21 @@ test("head-final genitive phrases render many sorts of love", () => {
   assert.equal(result.english, "Many sorts of love.");
 });
 
+test("VLIW back-translation preserves a factorized existential list", () => {
+  const result = decodePyacSentence(
+    "fyifyi ba pyat fluhga pxa7n pyantlihyi ba hramlwah ba hfacma ba tlanpuma ba ba hciktlihma pyannatsehsyi7h"
+  );
+
+  assert.equal(
+    result.englishPyash,
+    "there can be su love to self, to a friend such as platonic love, within romance, to family, to gods, or to a thought."
+  );
+  assert.equal(
+    result.english,
+    "There can be love to self, to a friend such as platonic love, within romance, to family, to gods, or to a thought."
+  );
+});
+
 test("Pyac compounds fuse on the surface and decode through the compound lexicon", () => {
   const lowered = lowerSentencePhraseVliw({
     mood: "ya",
