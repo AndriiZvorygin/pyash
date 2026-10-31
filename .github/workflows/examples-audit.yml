@@ -30,7 +30,20 @@ jobs:
       - name: Provision the sibling dictionary checkout
         # The translation subsystem reads its dictionary and glyph word lists
         # from the pyachso2n checkout that sits next to this repository.
-        run: git clone --depth 1 https://gitlab.com/pyac/pyachso2n.git ../pyachso2n
+        # A clone can fail on a flaky network, so it is retried: a run that
+        # dies here has tested nothing at all.
+        run: |
+          for attempt in 1 2 3; do
+            if git clone --depth 1 https://gitlab.com/pyac/pyachso2n.git ../pyachso2n; then
+              exit 0
+            fi
+            rm -rf ../pyachso2n
+            if [ "$attempt" = "3" ]; then
+              echo "the sibling dictionary checkout could not be cloned"
+              exit 1
+            fi
+            sleep 10
+          done
       - name: Bootstrap external toolchains
         run: npm run bootstrap
       - name: Audit examples

@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, chmodSync, copyFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -68,15 +68,30 @@ function platform() {
   return key;
 }
 
-async function fetchChecksumed(url, expectedSha256) {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`download failed ${response.status} ${url}`);
-  const bytes = Buffer.from(await response.arrayBuffer());
-  const actual = createHash("sha256").update(bytes).digest("hex");
-  if (actual !== expectedSha256) {
-    throw new Error(`checksum mismatch for ${url}\n  expected ${expectedSha256}\n  actual   ${actual}`);
+// A download can fail on a flaky network, and a bootstrap that gives up on
+// the first hiccup takes the whole CI run with it. The checksum is what
+// makes a retry safe: a partial or corrupt body never passes.
+export async function fetchChecksumed(url, expectedSha256, { attempts = 3, backoffMs = 2000 } = {}) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`download failed ${response.status} ${url}`);
+      const bytes = Buffer.from(await response.arrayBuffer());
+      const actual = createHash("sha256").update(bytes).digest("hex");
+      if (actual !== expectedSha256) {
+        throw new Error(`checksum mismatch for ${url}\n  expected ${expectedSha256}\n  actual   ${actual}`);
+      }
+      return bytes;
+    } catch (error) {
+      lastError = error;
+      if (attempt >= attempts) break;
+      const waitMs = attempt * backoffMs;
+      console.warn(`download attempt ${attempt} of ${attempts} failed for ${url}: ${error?.message ?? error}`);
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
   }
-  return bytes;
+  throw lastError;
 }
 
 function run(command, args, options = {}) {
@@ -171,7 +186,11 @@ async function main() {
   await bootstrapWordnet({ force });
 }
 
-main().catch((error) => {
-  console.error(String(error?.message ?? error));
-  process.exit(1);
-});
+const isDirectRun = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectRun) {
+  main().catch((error) => {
+    console.error(String(error?.message ?? error));
+    process.exit(1);
+  });
+}
