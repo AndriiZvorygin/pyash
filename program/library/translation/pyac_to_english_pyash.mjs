@@ -59,7 +59,7 @@ for (const entry of PYASH_LEMMA_INDEX.entries) {
 for (const [canonicalEnglish, candidates] of nominalEnglishCandidates) {
   if (candidates.size === 1) NOMINAL_ENGLISH_SURFACES.set(canonicalEnglish, [...candidates][0]);
 }
-const TENSE_MARKERS = new Set(["ki", "ra", "pfih"]);
+const VERB_MORPHOLOGY_MARKERS = new Set(["ki", "ra", "pfih", "ra2"]);
 const ENGLISH_GRAMMAR_SURFACES = new Map();
 const ENGLISH_GRAMMAR_SEQUENCE_SURFACES = [];
 const ENGLISH_EXISTENTIAL_MOOD_SEQUENCES = [];
@@ -487,6 +487,32 @@ function regularPast(lemma) {
   return `${lemma}ed`;
 }
 
+function pastParticiple(lemma) {
+  const irregular = new Map([
+    ["be", "been"],
+    ["bring", "brought"],
+    ["choose", "chosen"],
+    ["come", "come"],
+    ["do", "done"],
+    ["drive", "driven"],
+    ["drink", "drunk"],
+    ["eat", "eaten"],
+    ["find", "found"],
+    ["forgive", "forgiven"],
+    ["get", "gotten"],
+    ["give", "given"],
+    ["go", "gone"],
+    ["know", "known"],
+    ["make", "made"],
+    ["see", "seen"],
+    ["speak", "spoken"],
+    ["take", "taken"],
+    ["think", "thought"],
+    ["write", "written"]
+  ]);
+  return irregular.get(lemma) ?? regularPast(lemma);
+}
+
 function regularProgressive(lemma) {
   if (lemma.endsWith("ie")) return `${lemma.slice(0, -2)}ying`;
   if (lemma.endsWith("e") && !["be", "see"].includes(lemma)) return `${lemma.slice(0, -1)}ing`;
@@ -507,23 +533,32 @@ function inflectVerb(parts, { thirdPerson = false } = {}) {
   const entry = lemmaEntry(surface);
   const lemma = entry?.lemma ?? surface;
   const markers = new Set(parts.filter((part) => part.kind === "grammar").map((part) => part.pya));
+  let verb;
   if (markers.has("ki")) {
-    return new Map([
+    verb = new Map([
       ["walk", "walked"],
       ["give", "gave"],
       ["bring", "brought"],
       ["come", "came"],
       ["forgive", "forgave"]
     ]).get(lemma) ?? regularPast(lemma);
+  } else if (markers.has("pyoh")) {
+    const hasVerbLemma = entry
+      && ["inflectional", "irregular"].includes(entry.kind)
+      && entry.lemma !== surface;
+    verb = hasVerbLemma ? pastParticiple(lemma) : surface;
+  } else if (markers.has("pfih")) {
+    verb = regularProgressive(lemma);
+  } else if (markers.has("ra") && thirdPerson) {
+    verb = regularThirdPerson(lemma);
+  } else if (markers.has("ra")) {
+    verb = lemma;
+  } else {
+    verb = entry?.kind === "irregular" || entry?.morphology?.kind === "finite-past"
+      ? surface
+      : lemma;
   }
-  if (markers.has("pfih")) return regularProgressive(lemma);
-  if (markers.has("ra") && thirdPerson) {
-    return regularThirdPerson(lemma);
-  }
-  if (markers.has("ra")) return lemma;
-  return entry?.kind === "irregular" || entry?.morphology?.kind === "finite-past"
-    ? surface
-    : lemma;
+  return markers.has("ra2") ? `often ${verb}` : verb;
 }
 
 function isLexicalPart(part) {
@@ -636,7 +671,8 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
       const mood = moodPart
         ? ENGLISH_MOOD_GLOSSES.get(moodPart.pya) ?? moodPart.english
         : "";
-      return [prefix, ["that", mood, "be", inflectVerb(action), agent]
+      const frequentative = relativeBody.slice(passiveIndex + 1).some((part) => part.pya === "ra2");
+      return [prefix, ["that", mood, frequentative ? "often" : "", "be", inflectVerb(action), agent]
         .filter(Boolean)
         .join(" ")]
         .filter(Boolean)
@@ -646,7 +682,7 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
     if (verbStart >= 0) {
       const absoluteVerbStart = relativeIndex + 1 + verbStart;
       let verbEnd = absoluteVerbStart + 1;
-      while (verbEnd < parts.length && TENSE_MARKERS.has(parts[verbEnd].pya)) verbEnd += 1;
+      while (verbEnd < parts.length && VERB_MORPHOLOGY_MARKERS.has(parts[verbEnd].pya)) verbEnd += 1;
       const verb = inflectVerb(parts.slice(absoluteVerbStart, verbEnd), { thirdPerson: true });
       const remainderParts = parts.slice(verbEnd);
       const objectCaseIndex = remainderParts.findIndex((part) => part.pya === "ka");

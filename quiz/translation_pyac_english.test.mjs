@@ -84,6 +84,16 @@ test("relative-clause marker renders its English surface instead of its structur
   assert.doesNotMatch(result.englishPyash, /dependent clause/u);
 });
 
+test("frequentative passive aspect renders as often plus a participle", () => {
+  const lowered = lowerSentencePhraseVliw({
+    mood: "tseh",
+    su: { name: "mi na" },
+    be: "pfin pyoh ra2"
+  });
+  const result = renderEnglishFromVliw(lowered.vectors);
+  assert.equal(result.englishPyash, "can su I be often walked.");
+});
+
 test("relative clauses retain the parent phrase before their dependent action", () => {
   const result = decodePyacSentence(
     "pyanna mrattlihka xyekpu wa twot la drenra kcin lyastlihti cyahtlih ba yatlihpwahya"

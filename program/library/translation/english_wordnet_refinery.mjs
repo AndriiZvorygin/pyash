@@ -119,6 +119,7 @@ function persistedToken(token) {
     surface: normalized(token?.surface),
     lemma: normalized(token?.lemma),
     pyashSequence: Array.isArray(token?.pyashSequence) ? [...token.pyashSequence] : [],
+    grammaticalNumber: text(token?.grammaticalNumber),
     grammar: token?.grammar ?? null,
     morphology: token?.morphology ?? null,
     wordnet: {

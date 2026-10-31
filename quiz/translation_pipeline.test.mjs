@@ -140,6 +140,26 @@ test("English paragraph reuses the accepted involve compound before vocabulary r
   assert.deepEqual(result.records[0].unresolved, ["caring"]);
 });
 
+test("unlinked modal passive preserves frequentative markers without emitting a false sentence", async () => {
+  const result = await translateDocument({
+    language: "english",
+    text: "Often love can be confused with other feelings."
+  });
+  const record = result.records[0];
+  assert.equal(record.status, "provisional");
+  assert.deepEqual(record.unresolved, ["confused"]);
+  assert.equal(record.sentence, undefined);
+  assert.equal(record.pyac, undefined);
+  assert.equal(record.phrases.find((phrase) => phrase.slot === "su").surface, "love");
+  assert.deepEqual(record.candidates[0].lexicalSequence, []);
+  assert.deepEqual(record.candidates[0].pyashSequence, ["pyoh", "ra2"]);
+  assert.ok(result.vocabularyCandidates.some((candidate) => candidate.surface === "confused"));
+  assert.ok(!result.vocabularyCandidates.some((candidate) => (
+    candidate.surface === "confused"
+      && candidate.candidateSequences.some((sequence) => sequence.join(" ") === "pyoh ra2")
+  )));
+});
+
 test("existential phrase-list decisions survive English-to-Pyac and Pyash projection", async () => {
   const source = "There can be self-love, love towards a friend (such as platonic love), love in romance, towards family, toward God(s), or towards an object or idea.";
   const result = await translateDocumentSegments({

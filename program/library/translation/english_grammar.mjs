@@ -22,6 +22,7 @@ const GRAMMAR_KINDS = new Set([
   "exemplifier",
   "existential-clause",
   "modal-mood",
+  "aspect-marker",
   "reflexive-marker"
 ]);
 
