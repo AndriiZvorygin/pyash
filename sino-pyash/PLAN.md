@@ -4,7 +4,7 @@
 
 ## Goal
 
-Create a Chinese-facing Pyash layer that maps each of the 8,105 characters in mainland China's *Table of General Standard Chinese Characters* to one unique, speakable Pyac syllable. Keep the character code, its pronunciation evidence, and its semantic links distinct. The codebook provides reversible character encoding; semantic anchors and Chinese compound meanings remain connected to the shared Pyash lexicon.
+Create a Chinese-facing Pyash layer that maps each of the 8,105 characters in mainland China's *Table of General Standard Chinese Characters* to one unique, speakable Pyac syllable. The character codebook provides reversible character encoding. Chinese dictionary words and their senses provide the semantic anchors; an individual character may have multiple readings or meanings and does not have to stand for one Pyash concept by itself.
 
 The official table contains three levels: 3,500, 3,000, and 1,605 characters. Unicode's Unihan `kTGHZ2013` property records that inventory and its order. [MOE](https://www.moe.gov.cn/jyb_xxgk/xxgk_jyta/jyta_yxs/202208/t20220819_654014.html) · [Unicode UAX #38](https://www.unicode.org/reports/tr38/tr38-37.html)
 
@@ -24,9 +24,11 @@ Extend the current atom-generation workflow with a deterministic batch allocator
 
 ## Codebook and semantic use
 
-Store the canonical mapping and provenance in a Pyash `.pya` codebook. Each character has one stable code syllable and may retain multiple readings and senses. Link character meanings to existing shared Pyash anchors when supported; leave multiple valid senses linked rather than forcing one meaning per character. Use the existing Chinese dictionary, compound lexicon, and sense-linking workflow for semantics.
+Store the canonical mapping and provenance in a Pyash `.pya` codebook. Each character has one stable code syllable and may retain multiple readings and senses. Separately, store Chinese lexical entries as word-level anchors linked to shared Pyash senses or compounds, using the existing Chinese dictionary, compound lexicon, and sense-linking workflow.
 
-Encoding a Chinese character string concatenates its per-character code syllables and must round-trip back to the original standard characters. Word-level translation is a separate step: identify Chinese compounds from lexical evidence, then map their meanings and head/modifier relations into Pyash composition. Character order alone does not determine Pyash compound order.
+Encoding a Chinese character string concatenates its per-character code syllables and must round-trip back to the original standard characters. Word-level translation first identifies attested Chinese words and their senses, then maps their meanings and head/modifier relations into Pyash composition. Character order alone does not determine Pyash compound order.
+
+For high-frequency Pyash concepts, prefer a natural one-character Chinese word as the anchor where one exists. Common two-character words remain acceptable and provide useful compound evidence. Track concepts whose natural Chinese anchor takes more than two characters as significant friction; check for a shorter attested synonym or compound, and preserve the longer form when it is the accurate lexical choice. Never shorten a word by assigning the whole meaning to one of its component characters without lexical evidence. Report the one-, two-, and over-two-character coverage for the high-frequency vocabulary sample.
 
 The first scope is exactly the 8,105 standard mainland forms. Other variants require explicit variant records; do not silently normalize an unmapped character.
 
@@ -38,6 +40,7 @@ Ask both reviewers to assess:
 - Whether the evidence sources cover the 8,105-character inventory adequately, including polyphonic characters and historical gaps.
 - Whether the unique-syllable allocation preserves speakability, Pyac layer rules, and unambiguous reverse decoding.
 - Whether character senses, Chinese compounds, and Pyash head/modifier composition are represented without assuming one meaning per character.
+- Whether high-frequency concepts have natural one- or two-character Chinese anchors, and which accurate anchors require more than two characters.
 - Data licensing, attribution, and any missing primary sources.
 
 After both reviews, record the feedback and resolved decisions here. Begin implementation only after those decisions are incorporated into this plan.
