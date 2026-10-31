@@ -24,7 +24,9 @@ jobs:
         run: git clone --depth 1 https://gitlab.com/pyac/pyachso2n.git ../pyachso2n
       - name: Install python worker dependencies
         # The speaker identity module drives a python worker that imports numpy.
-        run: python3 -m pip install --quiet numpy
+        # Some runner images mark the system python as externally managed, so
+        # fall back to the explicit override.
+        run: python3 -m pip install --quiet numpy || python3 -m pip install --quiet --break-system-packages numpy
       - name: Check documentation prose
         run: npm run doc:prose
       - name: Check import graph
