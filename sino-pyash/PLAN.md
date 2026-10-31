@@ -41,6 +41,7 @@ Ask both reviewers to assess:
 
 - Whether the evidence tiers and the distinction between reconstruction, variety reading, cognate, loan, and translation are linguistically sound.
 - Whether the family-proximity ranking correctly separates descent, contact, and character-reading evidence, including the status of Sino-Xenic readings and disputed wider-family proposals.
+- Whether deep-family proposals such as Borean and Sino-Uralic should be represented as named, versioned hypotheses alongside the established classification, with their evidence status and proposed etymologies kept explicit.
 - Whether the evidence sources cover the 8,105-character inventory adequately, including polyphonic characters and historical gaps.
 - Whether the unique-syllable allocation preserves speakability, Pyac layer rules, and unambiguous reverse decoding.
 - Whether character senses, Chinese compounds, and Pyash head/modifier composition are represented without assuming one meaning per character.

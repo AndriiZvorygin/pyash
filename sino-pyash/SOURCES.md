@@ -58,3 +58,4 @@ Retrieved 2026-10-31. Raw upstream files are tracked where redistribution terms 
 - WikiHan supplies Middle Chinese readings; the Baxter–Sagart workbook supplies Old Chinese reconstructions. Keep the two periods and their uncertainty labels distinct.
 - Frequency rankings depend on corpus/register. Preserve Jun Da's modern written-text rank separately from SUBTLEX-CH's film/television-dialogue rank.
 - For family classification and Chinese-contact evidence, see [LANGUAGE-PROXIMITY.md](LANGUAGE-PROXIMITY.md). It distinguishes Sinitic/Sino-Tibetan descent from Sino-Xenic reading strata, documented loans, and translation equivalents; those relationships must not be combined into one proximity score.
+- The same note records Starostin/EHL's Borean proposal and the separate Sino-Uralic/Finno-Sinic proposal as attributed hypotheses, with the limits of each stated. Neither is a reason to label Finno-Ugric a Chinese descendant.

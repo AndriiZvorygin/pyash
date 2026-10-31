@@ -12,6 +12,24 @@ This ranking is for choosing and labeling evidence in the Sino-Pyash character-c
 
 This is the full defensible family-level ranking: Sinitic varieties are the direct comparisons; other Sino-Tibetan branches are the closest established broader-family relatives; there is no accepted finer ranking across unrelated families. It is deliberately not a numeric distance scale. Classification references place Sinitic within Sino-Tibetan while noting that the deeper affiliations and branching remain debated. [Glottolog: Sinitic](https://glottolog.org/resource/languoid/id/sini1245) · [Glottolog: Sino-Tibetan](https://glottolog.org/resource/languoid/id/sino1245) · [Handel, “The Classification of Chinese: Sinitic”](https://doi.org/10.1093/oxfordhb/9780199856336.013.0001)
 
+## Proposed deep-family relationships
+
+These proposals belong in the evidence record, but they are separate from the established family ranking above.
+
+### Starostin / Evolution of Human Languages Borean proposal
+
+The Evolution of Human Languages (EHL) overview describes a proposed Borean ancestor linking four deeper groupings. In the version shown there, **Uralic is placed within Nostratic**, while **Sino-Tibetan (including Sinitic/Chinese) is placed within Sino-Caucasian, also called Dene-Caucasian**. Afro-Asiatic and Austric are the other proposed groupings. This makes Uralic and Sinitic separate branches under a hypothetical remote ancestor; it does not make Finno-Ugric a descendant of Chinese.
+
+The EHL overview itself calls the long-range evidence preliminary and highly speculative, says the Borean comparisons were largely circumstantial phonetic similarities rather than established regular correspondences, and lists full statistical evaluation as unfinished work. Record Borean as a named hypothesis with its author/version and evidence status, never as the default family tree. [EHL overview and classification](https://ehl.santafe.edu/EhlforWeb.pdf)
+
+There are multiple Borean schemes. Harold Fleming's earlier usage and the Starostin/EHL tree do not have identical branch inventories. Any stored classification should identify which proposal it represents rather than merge their diagrams into one tree.
+
+### Sino-Uralic / Finno-Sinic proposals
+
+Sino-Uralic is a separate proposal that directly compares Sinitic and Uralic. Jingyi Gao has published a Finno-Sinic/Sino-Uralic line of argument, including a 2019 review of Karl August Hermann's 1895 Chinese–Finnish–Estonian comparison. Gao reports 19 proposed etymologies in that article. Store those as attributed proposal records and evaluate each proposed comparison for reconstruction quality, regular sound correspondences, semantics, and borrowing alternatives. This is not the same proposal as Borean and does not establish that Finno-Ugric descends from Chinese. [Gao 2019](https://doi.org/10.12697/jeful.2019.10.2.03) · [Hermann 1895, translated and republished](https://doi.org/10.12697/jeful.2019.10.2.04)
+
+The working baseline remains Sinitic within Sino-Tibetan and Uralic as a separate family. Finno-Ugric is traditionally treated as a branch within Uralic, though the exact higher internal subgrouping of Uralic has active competing analyses. The proposed long-range links should remain queryable alongside that baseline, tagged as hypotheses rather than promoted into the accepted tree. [Oxford Guide to the Uralic Languages](https://academic.oup.com/book/43672/chapter-abstract/366299419) · [Glottolog: Sino-Tibetan](https://glottolog.org/resource/languoid/id/sino1245)
+
 ## Evidence usefulness for Chinese character readings
 
 This second ordering is about the kind of evidence, not family descent:
