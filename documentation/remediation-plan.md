@@ -805,34 +805,40 @@ A read of the repository after the five phases, with the numbers that back it.
 
 | Measure | Value |
 |---|---|
-| Tracked files | 2,928 |
-| Commits | 4,671 |
+| Tracked files | 2,927 |
+| Commits | 4,673 |
 | Interpreter core | 6,393 lines / 25 files (3.1%) |
 | Verb layer | 29,571 lines / 151 modules |
-| Applications | 173,077 lines / 689 files |
+| Applications | ~173,100 lines / ~690 files |
 | Specifications | 24 files, each <= 16KB |
 | Gating quiz files | 759 (749 tier 1, 10 tier 2; 1 tier 3 excluded) |
 | Tests | 3,051, zero failures |
-| Examples | 358 |
+| Examples | 357 top-level in `examples/pyash/` |
 | Skills | 24 |
 
-### Example health at clean HEAD
+### Example health
 
-The audit over all 358 examples, with the concurrent agent work removed:
+The audit re-run on the current tree (357 examples, 20 s timeout each):
 
 | Outcome | Count |
 |---|---|
-| passed | 233 |
-| needs input (missing input file or artifact) | 75 |
-| needs backend (live model, media backend, container path) | 21 |
-| timed out | 18 |
+| passed | 230 |
+| needs input (missing input file or artifact) | 69 |
+| needs backend (live model, media backend, container path) | 25 |
+| timed out | 21 |
 | skipped (live network) | 9 |
-| **failed** | **0** |
+| failed | 3 |
 
-Both failures seen in the working tree were the concurrent agent's
-uncommitted work in `program/agent/`: `agent-session.pya` passes at clean
-HEAD, and `coding-loop-guarantee.pya` fails there with an ollama 500, which
-is a backend dependency rather than a defect.
+All three failures are the concurrent agent's uncommitted work in
+`program/agent/`. Checked in a clean worktree at HEAD (`8dd50e61`):
+
+| Example | At clean HEAD |
+|---|---|
+| `agent-session-fromtext-name.pya` | passes (exit 0) |
+| `agent-session.pya` | passes (exit 0) |
+| `coding-loop-guarantee.pya` | ollama 500 — a live-model dependency, not a defect |
+
+So the repository has **no genuine example failure at clean HEAD**.
 
 The audit had a false green: a run that was killed at the timeout was
 counted in the *passed* total. Timeouts are now their own bucket.
@@ -842,8 +848,9 @@ counted in the *passed* total. Timeouts are now their own bucket.
 1. **The guard culture is real.** Each of the checks below is a command with
    a quiz that proves it is non-vacuous: `check_doc_prose.mjs`,
    `check_imports.mjs`, `scan_pyashtoken.mjs`, `quiz_tiers.mjs`,
-   `audit_examples.mjs` with its baseline, and `push_all_check.mjs`. The
-   repository now fails on drift instead of relying on someone noticing.
+   `audit_examples.mjs` with its baseline and `example_audit_rules.mjs`
+   pinned by `quiz/example_audit_guard.test.mjs`, and `push_all_check.mjs`.
+   The repository now fails on drift instead of relying on someone noticing.
 2. **The CI gate is the whole suite.** From 28 files and 254 tests to 758
    files and 3,038 tests, and the tiering is honest: a missing resource is
    reported with its reason, never silently failed.
@@ -851,7 +858,7 @@ counted in the *passed* total. Timeouts are now their own bucket.
    parser, bridge, memory and program, while the applications grew around
    it. That is the shape the design wants.
 4. **The specs are connected to code.** `documentation/reference/spec-implementation-map.md`
-   maps 23 contracts to implementation locations, and it stayed accurate
+   maps 22 contracts to implementation locations, and it stayed accurate
    across a 132-module move.
 5. **Big refactors were done honestly.** Both folder moves resolved and
    recomputed every specifier instead of substituting text, and a guard now
@@ -877,16 +884,16 @@ counted in the *passed* total. Timeouts are now their own bucket.
    actually works in. The `kind` class of problem is guarded; this larger
    class is not.
 4. **The example audit is a nightly job, not a per-push gate.** It takes
-   about 20 minutes for 358 examples, so a broken example surfaces a day
+   about 17 minutes for 357 examples, so a broken example surfaces a day
    later.
-5. **The audit classifier is pattern-based.** It recognises specific
-   backend signatures. A GPU-duty failure (`gpu duty defective: unknown
-   handle`) was not among them, which is why one backend-dependent example
-   looked like a defect.
+5. **The audit classifier is pattern-based, and its buckets are not stable
+   across runs.** It recognises specific backend signatures; a GPU-duty
+   failure (`gpu duty defective: unknown handle`) was not among them, which
+   is why one backend-dependent example looked like a defect. The same
+   example can also land in a different bucket between runs depending on
+   which error surfaces first (`love-teaching-cut-plan.pya` read as *needs
+   input* in one run and *needs backend* in the next), so the counts are a
+   picture, not a constant.
 6. **Doc freshness is not checked.** The prose guard catches corruption,
    not staleness. `documentation/signature.md` is factually correct but
    still titled "Current runtime status (January 2025)".
-7. **The audit is now covered by a quiz.** `quiz/example_audit_guard.test.mjs`
-   pins the classifier buckets and the accounting (a timeout is not a pass,
-   every result lands in exactly one bucket). The gap that used to sit here is
-   closed; what remains is that the classifier is still pattern-based (5).
