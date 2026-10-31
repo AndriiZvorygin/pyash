@@ -12,9 +12,12 @@ The existing Unihan 18.0.0 archive already provides the official table index thr
 
 Use a tiered evidence policy:
 
-1. Old/Middle Chinese reconstructions and documented Sinitic readings, including Mandarin and dialect forms.
-2. Attested Sino-Tibetan cognates or loans; where no relationship is attested, translation equivalents may contribute phonetic evidence but must be labeled as translations.
-3. Wider-language translation evidence for remaining gaps.
+1. Old/Middle Chinese reconstructions and documented Sinitic readings, including Mandarin and other varieties.
+2. Documented Sino-Xenic character-reading traditions (Sino-Japanese, Sino-Korean, and Sino-Vietnamese), labeled as historical Chinese loans adapted into Japonic, Koreanic, and Austroasiatic languages respectively.
+3. Attested Sino-Tibetan cognate sets and Chinese loan strata, recorded separately. Family membership alone does not make a particular word a cognate.
+4. Attested Chinese loan strata in other neighboring language families, with the language, date or stratum, and source recorded per item.
+
+Keep family descent, contact borrowing, and translation equivalence as distinct evidence relations. Translation equivalents can inform semantic anchoring or a separately declared cross-language phoneme-sampling method; they are not evidence for a Chinese pronunciation or a genealogical relationship. Do not turn a family proximity tier into a numeric phonetic weight without reviewer approval. See [language-family proximity](LANGUAGE-PROXIMITY.md) for the ranking and its limits.
 
 Record source, period or variety, reading, and confidence for every evidence item. Within a tier, reuse the existing atom-generation phonetic scoring and candidate-ranking approach. A reconstruction is a scholarly hypothesis, not a directly recorded pronunciation: keep its system and uncertainty explicit. Baxter–Sagart covers nearly 5,000 items, not the full character inventory. [Baxter–Sagart data](https://ocbaxtersagart.lsait.lsa.umich.edu/BaxterSagartOCbyMandarinMC2014-09-20.pdf)
 
@@ -36,7 +39,8 @@ The first scope is exactly the 8,105 standard mainland forms. Other variants req
 
 Ask both reviewers to assess:
 
-- Whether the source tiers and the distinction between reconstruction, dialect reading, cognate, and translation are linguistically sound.
+- Whether the evidence tiers and the distinction between reconstruction, variety reading, cognate, loan, and translation are linguistically sound.
+- Whether the family-proximity ranking correctly separates descent, contact, and character-reading evidence, including the status of Sino-Xenic readings and disputed wider-family proposals.
 - Whether the evidence sources cover the 8,105-character inventory adequately, including polyphonic characters and historical gaps.
 - Whether the unique-syllable allocation preserves speakability, Pyac layer rules, and unambiguous reverse decoding.
 - Whether character senses, Chinese compounds, and Pyash head/modifier composition are represented without assuming one meaning per character.
