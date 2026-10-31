@@ -22,6 +22,8 @@ jobs:
         run: npm run doc:prose
       - name: Check import graph
         run: npm run imports:check
+      - name: Check house-facing surface
+        run: npm run house:api:check
       - name: Run tests
         run: npm run test:ci
       - name: Check package size

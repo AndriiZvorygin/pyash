@@ -1,6 +1,6 @@
 # State of Project
 
-Last measured: 2026-10-30. Reproduce the numbers with
+Last measured: 2026-10-31. Reproduce the numbers with
 `node command/measure_code_balance.mjs` and `npm run test:ci`.
 
 ## What the project is
@@ -26,13 +26,13 @@ illustrate them.
 
 | Measure | Value |
 |---|---|
-| Commits | 4,664 |
+| Commits | 4,675 |
 | Verb modules (top level) | 83 |
-| Modules under `program/verbs/` | 282 |
+| Modules under `program/verbs/` | 151 |
 | Normative specifications | 24 |
-| Quiz files | 753 |
-| Quiz tests | ~3,000 |
-| Examples under `examples/pyash/` | 362 |
+| Quiz files | 793 tracked (759 gate the CI run) |
+| Quiz tests | 3,051, zero failures |
+| Examples under `examples/pyash/` | 357 |
 | Skills | 24 |
 
 ## Line distribution
@@ -43,9 +43,9 @@ Three buckets, because they answer different questions.
 |---|---|---|---|
 | Interpreter core | 6,393 | 25 | The language machinery: parser, bridge, memory, program |
 | Verb layer | 29,571 | 151 | The dispatch surface users write against |
-| Applications | 173,077 | 689 | Library, agent, runtime, command, module |
+| Applications | 173,147 | 690 | Library, agent, runtime, command, module |
 
-The core-to-applications ratio is **1:27.07**, and the core is 3.1% of the
+The core-to-applications ratio is **1:27.08**, and the core is 3.1% of the
 measured lines.
 
 Two caveats on reading that ratio. First, an earlier version of this file
@@ -134,8 +134,16 @@ folder (132 modules, 15,728 lines) moved the same way, into
 ## House and example caveats
 
 - `world/house/*` is gitignored except `base` and `refinery-watchdog`, so
-  house behaviour differs per clone. House-dependent quizzes are the advisory
-  tier and are reported rather than gated.
+  house behaviour differs per clone. House-dependent quizzes are excluded from
+  the CI gate entirely and are not reported as an environment gap either:
+  the house is out of scope for this repository, not missing.
+- The reporter houses are separate repositories that import this
+  repository's `program/` and `module/` modules by path, so those modules are
+  a published library with no importer here. `configure/house_api.pya`
+  declares that surface (36 modules) and `npm run house:api:check` verifies
+  that every declared module exists and that every import a checked-out house
+  makes resolves and is declared. The import half of that check needs a house
+  checkout, so it only runs where one is present.
 - Examples are audited by `node command/audit_examples.mjs`, which runs each
   one through the real runner in a child process. A green exit code is not a
   green example: `examples/pyash/until-loop.pya` once exited 0 while producing

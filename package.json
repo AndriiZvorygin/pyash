@@ -13,6 +13,7 @@
     "config:safety": "node command/check_local_config_safety.mjs",
     "doc:prose": "node command/check_doc_prose.mjs",
     "imports:check": "node command/check_imports.mjs",
+    "house:api:check": "node command/check_house_api.mjs",
     "measure:balance": "node command/measure_code_balance.mjs",
     "examples:audit": "node command/audit_examples.mjs",
     "android:default": "node command/android_default_device.mjs",

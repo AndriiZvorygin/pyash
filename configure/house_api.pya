@@ -1,0 +1,20 @@
+# The house-facing surface of this repository.
+#
+# The reporter houses are separate repositories that import this repository's
+# `program/` and `module/` modules by relative path. Those modules are a
+# library: they have no importer inside this repository, which is exactly what
+# a published library looks like from the inside.
+#
+# This file declares that surface so it can be checked instead of guessed.
+# `command/check_house_api.mjs` verifies that every module listed here exists,
+# and — when a house checkout is present under `world/house/` — that every
+# module a house imports resolves to a file here and is declared below.
+#
+# The list is the union of the imports made by the published house
+# repositories (owen-sound-reporter, grey-county-reporter,
+# andrii-youtube-reporter) and by the local house checkouts, plus the
+# interfaces a house is expected to implement.
+#
+# Add a module here when a house starts importing it. Remove one when no house
+# imports it any more and no house contract needs it.
+su name house_api_modules ob ve text "program/library/agenda_preview_shared.mjs" "program/library/reporter_shared/agenda-llm-segmentation.mjs" "program/library/reporter_shared/agenda-preview-checkpoint.mjs" "program/library/reporter_shared/agenda-preview-cover.mjs" "program/library/reporter_shared/agenda-preview-priority.mjs" "program/library/reporter_shared/agenda-preview-source-chunks.mjs" "program/library/reporter_shared/agenda-preview-toc.mjs" "program/library/reporter_shared/agenda-stage-contracts.mjs" "program/library/reporter_shared/agenda-stage3-summary-renderer.mjs" "program/library/reporter_shared/article-verification-checkpoint.mjs" "program/library/reporter_shared/artifact-contracts.mjs" "program/library/reporter_shared/canadian-english.mjs" "program/library/reporter_shared/civic-sentence-boundaries.mjs" "program/library/reporter_shared/content-source-audit.mjs" "program/library/reporter_shared/cover-background-diagnostics.mjs" "program/library/reporter_shared/cover-overlay-stage.mjs" "program/library/reporter_shared/cover-prompt-policy.mjs" "program/library/reporter_shared/cover-promptify-stage.mjs" "program/library/reporter_shared/escribe-agenda-identity.mjs" "program/library/reporter_shared/escribe-pdf-download.mjs" "program/library/reporter_shared/grounded-numeric-fidelity.mjs" "program/library/reporter_shared/hybrid-pdf-text.mjs" "program/library/reporter_shared/meeting-route.mjs" "program/library/reporter_shared/motion-attribution-verifier.mjs" "program/library/reporter_shared/prefix-normalization.mjs" "program/library/reporter_shared/quality-verifiers.mjs" "program/library/reporter_shared/speaker-diarization-policy.mjs" "program/library/reporter_shared/supporting-attachment-mirror.mjs" "program/library/reporter_shared/transcript-heading-generator.mjs" "program/library/reporter_shared/whole-meeting-synthesis.mjs" "program/library/reporter_shared/writer-adapter-interface.mjs" "program/publisher-interface.mjs" "program/runtime/gpu/configured-endpoints.mjs" "program/runtime/gpu/managed-ollama.mjs" "program/runtime/gpu/steward_adapter.mjs" "program/runtime/gpu/text-model.mjs" ya

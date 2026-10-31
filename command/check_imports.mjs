@@ -19,6 +19,10 @@ const SPECIFIER_PATTERNS = [
   /(?:^|[=(:,\s])import\s*\(\s*(["'])([^"']+)\1\s*\)/gu
 ];
 
+// The patterns are shared with the house-API check, which has to find the same
+// imports in the house checkouts that import this repository's modules.
+export { SPECIFIER_PATTERNS };
+
 export function trackedModules(root = REPO) {
   return execFileSync("git", ["ls-files", "*.mjs"], { cwd: root, encoding: "utf8" })
     .split("\n")

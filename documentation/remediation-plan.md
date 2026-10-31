@@ -619,7 +619,7 @@ one concern, and splitting it on a domain boundary is a separate tranche with
 its own test surface; it is left alone here and recorded as a candidate in
 `documentation/state.md`.
 
-**4.4 House-facing modules read as unreferenced.** *(found, corrected)*
+**4.4 House-facing modules read as unreferenced.** *(found, corrected, guarded)*
 
 A scan for tracked modules with no inbound import found seven candidates:
 
@@ -652,13 +652,25 @@ Checked against the published house repositories
 | `program/runtime/gpu/steward_adapter.mjs` | an adapter contract with an injectable transport; no house consumes it yet |
 
 Of the 61 cross-repository imports the three house repositories make, 60
-resolve against this repository and one does not:
+resolve against this repository and one did not:
 `owen-sound-reporter/program/run-full-transcript-pipeline.mjs` imports
 `program/library/reporter_shared/article-verification-checkpoint.mjs`
 (`articleClaimsVerificationNeedsRetry`,
 `buildArticleVerificationRetryFeedback`), which has never existed in this
-repository's history. Owen's published pipeline cannot start against the
-current `pyash`.
+repository's history, so Owen's published pipeline could not start against
+the current `pyash`.
+
+**The module existed, uncommitted, on another host.** On `debtcollecting.ca`
+there is a `pyash` checkout at `e9074a8d` with the file present but
+untracked, next to two other untracked shared modules
+(`extract-escribe-agenda-items.mjs`, `timed-cue-partition.mjs`) and sixteen
+modified files. The file was copied over byte for byte (md5 verified) and
+pinned by `quiz/article_verification_checkpoint.test.mjs`. Its two functions
+read exactly the keys `verifyArticleClaims` in
+`program/library/reporter_shared/quality-verifiers.mjs` produces, so the
+module belongs to this repository's side of the contract. Owen's import now
+resolves. The other two untracked modules stay where they are: no house
+imports them, so pulling them in would be someone else's work in progress.
 
 The house migration is also half-finished: `grey-county-reporter` still
 carries local copies of `agenda-section-summaries.mjs` (1,291 lines) and
@@ -666,10 +678,31 @@ carries local copies of `agenda-section-summaries.mjs` (1,291 lines) and
 other modules, and the shared copies here are the larger ones (1,629 and
 1,179). Two copies of the same stage logic can drift.
 
-Nothing was deleted. The honest weakness is not dead code, it is that this
-repository **does not declare its house-facing surface and does not check the
+Nothing was deleted. The honest weakness was not dead code, it is that this
+repository **did not declare its house-facing surface and did not check the
 house contract**: a library entry point and a broken import both went
 unnoticed until the surface was audited from the outside.
+
+**4.5 Declare and check the house-facing surface.** *(done)*
+
+- `configure/house_api.pya` declares the surface: the modules a house may
+  import from this repository, read with the interpreter's own parser so the
+  list stays a Pyash sentence file rather than a second format.
+- `command/check_house_api.mjs` checks it: every declared module must exist,
+  and — when a house checkout is present under `world/house/` — every module a
+  house imports, by relative specifier or through the repository root, must
+  resolve to a file here and must be declared.
+- `quiz/house_api_guard.test.mjs` pins the rules without needing a house
+  checkout, and `npm run house:api:check` runs in CI.
+
+The declaration is the union of what the published house repositories and the
+local house checkouts import: 36 modules, of which 32 are shared reporter
+library modules, one is the publisher interface, three are GPU runtime
+modules. Writing the check also found three modules the first scan had
+missed (`cover-overlay-stage.mjs`, `cover-promptify-stage.mjs`,
+`cover-background-diagnostics.mjs`), because the liberit-content-reporter
+house reaches them through a repository root joined at run time rather than
+through a relative specifier.
 
 ---
 
@@ -797,17 +830,20 @@ Per `AGENTS.md`:
    along a domain line.
 2. **`agenda-stage3-summary-renderer.mjs`** (6,675 lines) is already in
    `program/library/` and one concern, but is still a candidate for splitting.
-3. **The house-facing surface.** The reporter houses import this repository's
-   `program/` modules by path. The surface is not declared here and the
-   contract is not checked, and `owen-sound-reporter` currently imports
-   `program/library/reporter_shared/article-verification-checkpoint.mjs`,
-   which does not exist. Two decisions follow: whether that module should
-   exist here (and with what shape), and whether this repository should
-   declare and check its public surface. See 4.4 below.
+3. **The house-facing surface.** *resolved.* The surface is declared in
+   `configure/house_api.pya` and checked by `npm run house:api:check`; the
+   module Owen was missing was recovered from `debtcollecting.ca` and pinned
+   by a quiz. What is left is coverage: the import check only runs where a
+   house checkout is present. See 4.4 and 4.5 below.
 4. **Duplicated stage logic.** `grey-county-reporter` still carries local
    copies of `agenda-section-summaries.mjs` and `agenda-wise-chunks.mjs`
    alongside the shared versions it imports for other modules, so the same
    stage logic exists in two places.
+5. **Uncommitted work on other hosts.** The `debtcollecting.ca` checkout of
+   `pyash` carries two more untracked shared modules
+   (`extract-escribe-agenda-items.mjs`, `timed-cue-partition.mjs`) and sixteen
+   modified files. No house imports the two modules, so they were left
+   alone, but that work is one commit away from being invisible.
 
 ## Baseline measurements
 
@@ -898,22 +934,22 @@ counted in the *passed* total. Timeouts are now their own bucket.
 6. **Vocabulary hygiene is guarded.** The `kind` alias was purged across six
    position classes including the JavaScript boundary, and the guard caught
    its own fixtures while being built.
-7. **The reporter houses share one library.** `program/library/reporter_shared/`
-   is a real library with real external consumers: three published reporter
-   repositories import 61 of its modules by path, and the houses' own phase
-   notes record the deliberate extraction of agenda stage logic from a house
-   into the shared code. The architecture is working; it is the declaration
-   and the contract check that are missing.
+7. **The reporter houses share one library, and that library is now declared.**
+   `program/library/reporter_shared/` is a real library with real external
+   consumers: three published reporter repositories import 61 of its modules
+   by path, and the houses' own phase notes record the deliberate extraction
+   of agenda stage logic from a house into the shared code.
+   `configure/house_api.pya` declares the surface and
+   `npm run house:api:check` keeps it honest.
 
 ### What is still weak
 
-1. **The house-facing surface is undeclared and unchecked.** `program/library/reporter_shared/`,
-   `program/publisher-interface.mjs` and the GPU steward adapter are a library
-   that three published reporter repositories import by path — 61 cross-repo
-   imports, of which one (`article-verification-checkpoint.mjs`, imported by
-   `owen-sound-reporter`) does not exist here and has never existed. Nothing
-   in this repository declares that surface or checks it, so a broken house
-   contract is invisible from here. See 4.4.
+1. **The house contract is only checked where a checkout is present.** CI can
+   verify that the declared surface exists, but the cross-repository import
+   check needs a house checkout under `world/house/`, which this repository
+   does not track. Owen's broken import was found by reading the published
+   house repositories, not by the guard; a check that also ran against the
+   published repositories would have caught it earlier.
 2. **Four oversized modules.** `itinerary_media.mjs` (2,098),
    `qwen_say.mjs` (1,622), `command.mjs` (1,072) and
    `agenda-stage3-summary-renderer.mjs` (6,675). Each is internally
