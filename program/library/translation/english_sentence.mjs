@@ -1363,7 +1363,9 @@ function wordNetSenseCandidates(record, resolveWord, records, index, wordnetInde
     const bridge = wordnetBridges?.get?.(wordNetSenseKey(sense))
       ?? wordnetIndex?.bridgeIndex?.get(wordNetSenseKey(sense));
     if (bridge) {
-      const coverage = resolveWord(bridge.target);
+      const coverage = resolveWord(bridge.target, {
+        partOfSpeech: bridge.targetPartOfSpeech
+      });
       if (coverage?.pyashSequence?.length && coverage.coverageType !== "dictionary-alias") {
         const candidate = makeCandidate({
           phrase: record.surface,
@@ -1385,7 +1387,7 @@ function wordNetSenseCandidates(record, resolveWord, records, index, wordnetInde
     }
     for (const lemma of sense.lemmas ?? []) {
       if (!lemma || lemma === record.surface) continue;
-      const coverage = resolveWord(lemma);
+      const coverage = resolveWord(lemma, { partOfSpeech: sense.pos });
       if (!coverage?.pyashSequence?.length || coverage.coverageType === "dictionary-alias") continue;
       const candidate = makeCandidate({
         phrase: record.surface,
@@ -1775,14 +1777,15 @@ export function analyzeEnglishSentence(source, {
       .filter((entry) => entry?.surface)
       .map((entry) => [entry.surface.toLowerCase(), entry])
   );
-  const resolveWithOverrides = (word, tokenIndex) => {
+  const resolveWithOverrides = (word, lookupOptions) => {
+    const tokenIndex = typeof lookupOptions === "number" ? lookupOptions : undefined;
     const normalized = String(word ?? "").trim().toLowerCase();
     const occurrence = translationOccurrenceKey({ sourceRecordId, tokenIndex });
     const override = occurrenceOverrides?.get?.(occurrence)
       ?? occurrenceOverrides?.get?.(String(tokenIndex))
       ?? coverageOverrides?.get?.(normalized)
       ?? (coverageOverrides && typeof coverageOverrides === "object" ? coverageOverrides[normalized] : null);
-    return override ?? resolveWord?.(word);
+    return override ?? resolveWord?.(word, lookupOptions);
   };
   const records = addWordNetCandidates(applyContextualEnglishGrammar(tokens.map((token, tokenIndex) => wordRecord(token, {
     resolveWord: resolveWithOverrides,
@@ -2225,8 +2228,9 @@ function reflexiveCompoundCoverage(resources, word) {
   };
 }
 
-function stagedEnglishCoverage(resources, word) {
+function stagedEnglishCoverage(resources, word, options = {}) {
   const variants = english30kLookupVariants(word);
+  const lexicalPartOfSpeech = ["n", "v", "a", "s", "r"].includes(options?.partOfSpeech);
   const row = variants.map((variant) => resources.sourceByVariant.get(variant)).find(Boolean);
   const sourceRow = row ?? {
     word,
@@ -2236,7 +2240,26 @@ function stagedEnglishCoverage(resources, word) {
   };
   const reflexiveCompound = reflexiveCompoundCoverage(resources, word);
   if (reflexiveCompound) return { ...sourceRow, ...reflexiveCompound };
-  const grammarOverride = variants.map((variant) => resources.grammarOverrides.get(variant)).find(Boolean);
+  const grammarEntry = variants.map((variant) => resources.grammarIndex.resolve(variant)).find(Boolean);
+  if (lexicalPartOfSpeech
+    && grammarEntry?.components?.length === 1
+    && grammarEntry.components[0].endsWith("_")) {
+    const lexicalWord = grammarEntry.components[0].slice(0, -1);
+    const lexicalAnchor = resources.atomicByVariant.get(lexicalWord);
+    if (lexicalAnchor) {
+      return {
+        ...sourceRow,
+        coverageType: "atomic",
+        status: "covered-atomic",
+        canonicalEnglish: lexicalAnchor.en,
+        pyashSequence: [lexicalAnchor.pya],
+        hnuc: lexicalAnchor.hnuc
+      };
+    }
+  }
+  const grammarOverride = lexicalPartOfSpeech
+    ? null
+    : variants.map((variant) => resources.grammarOverrides.get(variant)).find(Boolean);
   if (grammarOverride) {
     return {
       ...sourceRow,
@@ -2299,7 +2322,9 @@ function stagedEnglishCoverage(resources, word) {
       };
     }
   }
-  const grammar = variants.map((variant) => resources.grammarMappings.get(variant)).find(Boolean);
+  const grammar = lexicalPartOfSpeech
+    ? null
+    : variants.map((variant) => resources.grammarMappings.get(variant)).find(Boolean);
   if (grammar) {
     return {
       ...row,
@@ -2339,7 +2364,7 @@ function needsFullCoverage(analysis) {
 export async function analyzeDefaultEnglishSentence(source, options = {}) {
   const resources = await loadEnglishSentenceResources();
   const analysis = analyzeEnglishSentence(source, {
-    resolveWord: (word) => stagedEnglishCoverage(resources, word),
+    resolveWord: (word, lookupOptions) => stagedEnglishCoverage(resources, word, lookupOptions),
     lemmaEntries: resources.lemmaCatalog.entries,
     grammarIndex: resources.grammarIndex,
     wordnetIndex: resources.wordnet?.index,
@@ -2349,8 +2374,15 @@ export async function analyzeDefaultEnglishSentence(source, options = {}) {
 
   const fullResources = await loadDefaultEnglishSentenceResources();
   return analyzeEnglishSentence(source, {
-    resolveWord: (word) => lookupEnglish30kCoverage(fullResources.coverage, word)
-      ?? stagedEnglishCoverage(resources, word),
+    resolveWord: (word, lookupOptions) => {
+      const staged = stagedEnglishCoverage(resources, word, lookupOptions);
+      if (!lookupOptions?.partOfSpeech) {
+        return lookupEnglish30kCoverage(fullResources.coverage, word) ?? staged;
+      }
+      if (staged) return staged;
+      const fullCoverage = lookupEnglish30kCoverage(fullResources.coverage, word);
+      return fullCoverage?.coverageType === "grammar" ? null : fullCoverage;
+    },
     lemmaEntries: fullResources.lemmaCatalog.entries,
     grammarIndex: fullResources.grammarIndex,
     wordnetIndex: fullResources.wordnet?.index,

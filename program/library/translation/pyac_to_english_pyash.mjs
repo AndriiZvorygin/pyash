@@ -684,12 +684,16 @@ function renderPhrase(parts, { subject = false, standalone = false, vocativeMark
       const nominalSurface = hasNominalCase && !adjective
         ? nominalEnglishForRoot(part)
         : "";
-      let word = part.pya === "dlat" && adjective
-        ? "daily"
-        : selfReferent
-          ? "self"
-          : nominalSurface || lemmaSurface?.surface || rootEnglish(part);
-      if (isPronoun(part)) word = pronounForm(part, subject ? "subject" : "object");
+      let word = part.glossOverride
+        ? part.english
+        : part.pya === "dlat" && adjective
+          ? "daily"
+          : selfReferent
+            ? "self"
+            : nominalSurface || lemmaSurface?.surface || rootEnglish(part);
+      if (!part.glossOverride && isPronoun(part)) {
+        word = pronounForm(part, subject ? "subject" : "object");
+      }
       if (possessive) {
         const owner = PRONOUN_FORMS.get(possessivePya);
         const ownerWord = owner?.possessive ?? `${words.at(-1)}'s`;
@@ -755,14 +759,16 @@ function finishEnglishPyash(mood, body) {
 
 function decodedPart(token, glosses) {
   const grammar = token.en.endsWith("_");
+  const glossOverride = glosses.has(token.pya);
   return {
     pya: token.pya,
     kind: PHRASE_CASE_WORDS.has(token.pya)
       ? "case"
       : grammar ? "grammar" : "root",
-    english: glosses.get(token.pya) ?? (grammar
+    english: glossOverride ? glosses.get(token.pya) : (grammar
       ? englishGrammarSurface(token.pya, token.en)
-      : token.en.replace(/_$/u, ""))
+      : token.en.replace(/_$/u, "")),
+    glossOverride
   };
 }
 

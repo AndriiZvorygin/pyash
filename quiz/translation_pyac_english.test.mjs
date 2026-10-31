@@ -210,6 +210,12 @@ test("Pyac decoder takes lexical English from the dictionary", () => {
   assert.equal(result.english, "But rescue to us from evil.");
 });
 
+test("VLIW projection honors a selected lexical gloss over the root lemma", () => {
+  const lowered = lowerPhraseVliw({ tokens: ["htit", "na", "tseh", "syi7h"] });
+  const result = renderEnglishFromVliw(lowered.vectors, { glosses: { htit: "thing" } });
+  assert.equal(result.englishPyash, "there can be su thing.");
+});
+
 test("Pyac decoder uses Pyash surface atoms as glosses and their lemma table for inflection", () => {
   assert.equal(decodePyacSentence("mina pfinya").englishPyash, "ya su I be walk.");
   assert.equal(decodePyacSentence("mina pfinkiya").englishPyash, "ya su I be walked.");

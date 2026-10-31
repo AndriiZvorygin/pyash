@@ -413,6 +413,21 @@ function adapterSurfaceText(sourceText) {
   return sourceText.replace(/[。！？।॥]+$/u, ".");
 }
 
+function semanticGlosses(tokens) {
+  const candidates = new Map();
+  for (const token of tokens) {
+    if (token?.coverageType !== "semantic-wordnet" || !token.lemma) continue;
+    for (const pya of cloneSequence(token.pyashSequence)) {
+      const glosses = candidates.get(pya) ?? new Set();
+      glosses.add(text(token.lemma));
+      candidates.set(pya, glosses);
+    }
+  }
+  return new Map([...candidates.entries()]
+    .filter(([, glosses]) => glosses.size === 1)
+    .map(([pya, glosses]) => [pya, [...glosses][0]]));
+}
+
 async function analyzeSegment({
   adapter,
   sourceText,
@@ -489,7 +504,12 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
     ? renderVliwPyac(decodePhraseVliw(phraseVliw.vectors))
     : sentence ? renderPyacSentenceSurface(sentence) : "";
   const englishPyash = phraseVliw
-    ? renderEnglishPyash(sentence, [], decodePhraseVliw(phraseVliw.vectors), new Map())
+    ? renderEnglishPyash(
+      sentence,
+      [],
+      decodePhraseVliw(phraseVliw.vectors),
+      semanticGlosses(analysis.tokens)
+    )
     : "";
   const tokenCandidates = analysis.tokens.flatMap((token) => token.semanticCandidates ?? []);
   const hasReviewCandidates = analysis.candidates.length > 0 || tokenCandidates.length > 0;

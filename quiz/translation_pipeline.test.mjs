@@ -140,6 +140,41 @@ test("English paragraph reuses the accepted involve compound before vocabulary r
   assert.deepEqual(result.records[0].unresolved, ["caring"]);
 });
 
+test("existential phrase-list decisions survive English-to-Pyac and Pyash projection", async () => {
+  const source = "There can be self-love, love towards a friend (such as platonic love), love in romance, towards family, toward God(s), or towards an object or idea.";
+  const result = await translateDocumentSegments({
+    language: "english",
+    text: source,
+    segments: segmentTranslationDocument(source),
+    locator: "fixture.txt",
+    verify: async ({ analysis }) => ({
+      verdict: "accept",
+      factorizationId: analysis.phraseCoordination.decision.factorizationId,
+      targetCases: analysis.phraseCoordination.decision.caseTargets.map((target) => ({
+        itemId: target.itemId,
+        caseId: target.options[0].id,
+        pya: target.options[0].pya
+      })),
+      rationale: "the test selects a listed case for each directional member"
+    })
+  });
+  const record = result.records[0];
+
+  assert.equal(record.status, "resolved");
+  assert.equal(record.phraseCoordination.items.length, 6);
+  assert.deepEqual(record.phraseCoordination.factorization.inheritedItemIndexes, [3, 4, 5]);
+  assert.match(record.structural, /fyif yi ba/u);
+  assert.match(record.structural, /pyan na tseh syi7h$/u);
+  assert.ok(record.pyac.length > 0);
+  assert.match(record.pyac, /htit/u);
+  assert.notEqual(record.englishPyash, "there can be su a platonic love love.");
+  assert.doesNotMatch(record.englishPyash, /\ba it\b/iu);
+  for (const expected of ["self", "friend", "platonic", "romance", "family", "God", "thing", "thought"]) {
+    assert.match(record.englishPyash, new RegExp(expected, "iu"));
+  }
+  assert.deepEqual(result.vocabularyCandidates, []);
+});
+
 test("accepted lexical verb and complete phrases produce a full sentence", async () => {
   const source = "Love involves caring for another.";
   const result = await translateDocumentSegments({
