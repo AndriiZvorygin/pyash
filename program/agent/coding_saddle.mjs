@@ -59,7 +59,10 @@ const SADDLE_CHANGE_ACTION = /\b(?:add|build|change|create|edit|fix|generate|imp
 const SADDLE_CODE_TARGET = /\b(?:code|program|script|source|file|function|class|module|test|bug|tool|harness|command|repository|repo|pipeline|variable|package|configuration|config)\b|\.(?:mjs|js|cjs|ts|py|pya|json|sh|md)\b/iu;
 
 export function isSaddleCodeChangeRequest(input = "") {
-  const text = String(input ?? "");
+  const text = String(input ?? "").replace(
+    /\b(?:i|we)\s+(?:just\s+)?(?:did|made|completed|finished)\s+(?:an?\s+)?(?:add|build|change|create|edit|fix|generate|implement|make|modify|patch|refactor|remove|rewrite|update|write)\b/giu,
+    " "
+  );
   if (!SADDLE_CHANGE_ACTION.test(text)) return false;
   if (/\b(?:fix|implement|patch|refactor)\b/iu.test(text)) return true;
   return SADDLE_CODE_TARGET.test(text);
