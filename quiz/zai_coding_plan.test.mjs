@@ -193,3 +193,19 @@ test("isolated Codex profile uses Z.AI Responses and trusts only the active proj
   }
   assert.equal(fs.existsSync(home), false);
 });
+
+test("isolated Z.AI Codex profile defaults to low reasoning effort", () => {
+  const home = createZaiCodexHome({
+    apiKey: "test-only-key",
+    model: "glm-5.3-flash",
+    projectRoot: "/workspace/pyash"
+  });
+  try {
+    const config = fs.readFileSync(path.join(home, "config.toml"), "utf8");
+    const models = JSON.parse(fs.readFileSync(path.join(home, "models.json"), "utf8"));
+    assert.match(config, /^model_reasoning_effort = "low"$/mu);
+    assert.equal(models.models[0].default_reasoning_level, "low");
+  } finally {
+    removeZaiCodexHome(home);
+  }
+});

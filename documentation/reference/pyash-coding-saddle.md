@@ -59,8 +59,10 @@ rather than changing or restarting a Housekeeper-managed server.
 Use `/think` to pick the supported reasoning mode. Ollama accepts `on` or
 `off` and sends its boolean `think` request option. Strata accepts `none`,
 `low`, `medium`, or `high` (with `off`/`on` aliases) and sends the documented
-OpenAI-compatible `reasoning_effort` field. Leaving the selection unset keeps
-the existing model or Strata server default.
+OpenAI-compatible `reasoning_effort` field. Z.AI Coding Plan defaults to `low`
+and shows the effective effort in `/status`; an explicit `/think` selection is
+saved with the active saddle session. MiniMax keeps its provider default until
+an effort is selected.
 
 The web app adds a **Duty** mode beside ordinary chat. Choose an online worker
 and one of its advertised directories, select the model in the existing model

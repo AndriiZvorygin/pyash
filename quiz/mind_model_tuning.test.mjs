@@ -269,6 +269,26 @@ test("mind request payload includes keep_alive default", async () => {
   }
 });
 
+test("mind request payload forwards the selected tools map", async () => {
+  forget();
+  const previousCommandResponse = process.env.PYA_COMMAND_RESPONSE;
+  process.env.PYA_COMMAND_RESPONSE = JSON.stringify({ response: "map handoff test" });
+  await interpret(parse('from filename "./module/mind_zai.pya" ob name zai command mind be import do'));
+  await interpret(parse('from filename "./module/saddle_tools.pya" ob name saddle tools to name saddle tools be import do'));
+  doRemember({ mood: "ya", su: { name: "mind backend" }, ob: { name: "zai command mind" }, be: "default" });
+  const records = [];
+  setExchangeRecorder({ record: (sentence) => records.push(sentence) });
+  try {
+    await interpret(parse('su name answer ob text "hello" for name mind to name text out with name saddle tools be write do'));
+    const payload = decodeMindPayload(records, "mind");
+    assert.equal(payload.toolMapName, "saddle tools");
+  } finally {
+    clearExchangeRecorder();
+    if (previousCommandResponse === undefined) delete process.env.PYA_COMMAND_RESPONSE;
+    else process.env.PYA_COMMAND_RESPONSE = previousCommandResponse;
+  }
+});
+
 test("mind keep alive config overrides request keep_alive", async () => {
   forget();
   doRemember({ mood: "ya", su: { name: "mind model" }, ob: { text: "cap-test-model" }, be: "default" });

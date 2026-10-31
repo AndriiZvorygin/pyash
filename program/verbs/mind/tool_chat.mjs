@@ -198,6 +198,7 @@ export async function runToolChat({
   callPrompt,
   resolvedConfigPrompt,
   historyMessages,
+  toolMapName,
   toolMap,
   tools,
   toolBlock,
@@ -304,6 +305,8 @@ export async function runToolChat({
     turns += 1;
     const requestPayload = { mode: "chat", model, messages, tools, stream: false };
     requestPayload.prompt = buildPromptText(messages);
+    const selectedToolMapName = String(toolMapName ?? "").trim();
+    if (selectedToolMapName) requestPayload.toolMapName = selectedToolMapName;
     if (ollamaHost) requestPayload.host = ollamaHost;
     if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
     if (backendName === "ollama command mind" && Number.isSafeInteger(Number(contextWindow)) && Number(contextWindow) > 0) {

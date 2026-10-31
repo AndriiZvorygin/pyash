@@ -33,6 +33,7 @@ import {
   listSaddleBackendOptions,
   listSaddleMindNames,
   normalizeSaddleThinkSelection,
+  resolveSaddleThinkSetting,
   isSaddleCodeChangeRequest,
   SADDLE_OLLAMA_CONTEXT_PRESETS,
   parseSaddleMindCommand,
@@ -264,7 +265,8 @@ test("coding saddle stores backend and model per selected conversation in Pyash 
       mindName: "zai",
       backend: "zai",
       model: "glm-5.3-flash",
-      host: "https://api.z.ai/api/v1"
+      host: "https://api.z.ai/api/v1",
+      reasoningEffort: "high"
     });
     await writeCodingSaddleState(statePath, state);
 
@@ -277,7 +279,8 @@ test("coding saddle stores backend and model per selected conversation in Pyash 
       mindName: "zai",
       backend: "zai",
       model: "glm-5.3-flash",
-      host: "https://api.z.ai/api/v1"
+      host: "https://api.z.ai/api/v1",
+      reasoningEffort: "high"
     });
     assert.notEqual(saddleSessionProfileKey(session), saddleSessionProfileKey({ sessionName: "coding" }));
     assert.deepEqual(getCodingSaddleProfile(loaded, { sessionName: "coding" }), {});
@@ -376,7 +379,8 @@ test("coding saddle restores its saved session backend and model on restart", as
       mindName: "zai",
       backend: "zai",
       model: "glm-5.3-flash",
-      host: "https://api.z.ai/api/v1"
+      host: "https://api.z.ai/api/v1",
+      reasoningEffort: "high"
     });
     state.activeSessionName = session.sessionName;
     state.activeSessionFile = session.sessionFile;
@@ -389,6 +393,7 @@ test("coding saddle restores its saved session backend and model on restart", as
     assert.equal(restored.backend, "zai");
     assert.equal(restored.model, "glm-5.3-flash");
     assert.equal(restored.host, "https://api.z.ai/api/v1");
+    assert.equal(restored.thinkSetting.value, "high");
     assert.equal(restored.selectionSource, "saved session state");
   } finally {
     for (const key of envKeys) {
@@ -532,6 +537,26 @@ test("coding saddle status exposes selected Pyash mind and queue state", () => {
   assert.doesNotMatch(status, /swac:8090|localhost:11434/);
   assert.match(status, /gpu queue: 0 queued, 3 running/);
   assert.match(status, /state: running/);
+});
+
+test("coding saddle status exposes Z.AI reasoning effort instead of hiding the effective default", () => {
+  const defaultEffort = resolveSaddleThinkSetting({ backend: "zai" });
+  assert.equal(defaultEffort.value, "low");
+
+  const status = formatSaddleStatus({
+    mindName: "zai",
+    model: "glm-5.3-flash",
+    backend: "zai",
+    host: "https://api.z.ai/api/v1",
+    cwd: "/tmp/project",
+    thinkMode: defaultEffort.value
+  });
+  assert.match(status, /reasoning effort: low/u);
+  assert.doesNotMatch(status, /reasoning effort: max|thinking: /u);
+
+  assert.equal(resolveSaddleThinkSetting({ backend: "zai", savedEffort: "high" }).value, "high");
+  assert.equal(resolveSaddleThinkSetting({ backend: "zai", configuredEffort: "max" }).value, "max");
+  assert.equal(resolveSaddleThinkSetting({ backend: "strata" }), null);
 });
 
 test("coding saddle resolves Pyash mind cases and rejects non-mind facts", () => {
@@ -684,6 +709,11 @@ test("coding saddle maps Ollama thinking to boolean and Strata thinking to suppo
     reasoningEffort: "high"
   });
   assert.equal(zaiSentence.reasoningEffort, "high");
+  assert.equal(buildSaddleMindSentence({
+    input: "use the default effort",
+    backend: "zai",
+    reasoningEffort: resolveSaddleThinkSetting({ backend: "zai" }).reasoningEffort
+  }).reasoningEffort, "low");
 });
 
 test("coding saddle builds Strata context choices from Housekeeper-supported sizes", () => {

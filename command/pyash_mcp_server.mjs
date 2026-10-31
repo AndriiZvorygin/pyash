@@ -112,10 +112,19 @@ async function materializeToolsMapFromDefinition({ mapPath, toolsMap }) {
   });
 }
 
-async function ensureDefaultToolsMap({ cwd, toolsMap }) {
+function toolsMapDefinitionPath(cwd, toolsMap) {
+  const name = String(toolsMap ?? "").trim();
+  if (!/^[a-z0-9][a-z0-9 _-]*$/i.test(name)) return "";
+  const filename = `${name.replace(/ /g, "_")}.pya`;
+  const moduleRoot = path.resolve(cwd, "module");
+  const candidate = path.resolve(moduleRoot, filename);
+  return path.dirname(candidate) === moduleRoot ? candidate : "";
+}
+
+async function ensureToolsMap({ cwd, toolsMap }) {
   if (remember(toolsMap)?.be === "map") return;
-  if (toolsMap !== DEFAULT_TOOLS_MAP) return;
-  const mapPath = path.resolve(cwd, "module", "agent_tools.pya");
+  const mapPath = toolsMapDefinitionPath(cwd, toolsMap);
+  if (!mapPath) return;
   await materializeToolsMapFromDefinition({ mapPath, toolsMap });
 }
 
@@ -125,7 +134,7 @@ export async function buildRuntime({ root, toolsMap = DEFAULT_TOOLS_MAP }) {
   clearSignatureHandlers();
   for (const sig of builtInSignatures) registerSignatureHandler(sig);
   await loadDefaultConfig({ cwd: root, interpretFn: interpret, entryPath: root });
-  await ensureDefaultToolsMap({ cwd: root, toolsMap });
+  await ensureToolsMap({ cwd: root, toolsMap });
   const built = buildToolSchemas(toolsMap);
   if (!built?.tools?.length) {
     throw new Error(`tools map not available: ${toolsMap}`);

@@ -4,6 +4,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readPyaTextValues } from "../library/pya_config.mjs";
 
+export const DEFAULT_ZAI_CODING_REASONING_EFFORT = "low";
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const codingKeyNames = ["Z_AI_CODING_API_KEY", "Z_A_CODING_API_KEY", "ZAI_CODING_API_KEY"];
 const defaultSecretPath = path.join(repoRoot, "configure/secret.pya");
@@ -96,7 +98,7 @@ function defaultZaiCodexModelEntry(slug) {
     slug,
     display_name: slug,
     description: "Z.AI Coding Plan model",
-    default_reasoning_level: "max",
+    default_reasoning_level: DEFAULT_ZAI_CODING_REASONING_EFFORT,
     supported_reasoning_levels: [
       { effort: "low", description: "Light reasoning" },
       { effort: "high", description: "Enhanced reasoning" },
@@ -277,11 +279,11 @@ function quoted(value) {
   return JSON.stringify(String(value ?? ""));
 }
 
-export function createZaiCodexHome({ apiKey, model = "glm-5.3-flash", reasoningEffort = "max", contextWindow, projectRoot = process.cwd() } = {}) {
+export function createZaiCodexHome({ apiKey, model = "glm-5.3-flash", reasoningEffort = DEFAULT_ZAI_CODING_REASONING_EFFORT, contextWindow, projectRoot = process.cwd() } = {}) {
   const selectedModel = String(model || "glm-5.3-flash").trim();
   const selectedEffort = ["low", "high", "max"].includes(String(reasoningEffort).trim())
     ? String(reasoningEffort).trim()
-    : "max";
+    : DEFAULT_ZAI_CODING_REASONING_EFFORT;
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "pyash-zai-codex-"));
   fs.chmodSync(home, 0o700);
   const modelsPath = path.join(home, "models.json");

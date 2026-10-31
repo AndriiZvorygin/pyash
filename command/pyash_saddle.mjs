@@ -59,6 +59,7 @@ import {
   normalizeSaddleHost,
   normalizeSaddleModel,
   normalizeSaddleThinkSelection,
+  resolveSaddleThinkSetting,
   resolveSaddleModelOption,
   resolveSaddleMindProfile,
   parseSaddleMindCommand,
@@ -226,6 +227,11 @@ export async function prepareSaddle({
     || (useSavedProfile && savedProfile.host)
     || profileResolved.host
   );
+  const thinkSetting = resolveSaddleThinkSetting({
+    backend: resolvedBackend,
+    savedEffort: useSavedProfile ? savedProfile.reasoningEffort : "",
+    configuredEffort: configValue("mind reasoning effort")
+  });
   const mindModels = new Map([[selectedMind, resolvedModel]]);
   configureSaddle({
     cwd: resolvedCwd,
@@ -234,6 +240,7 @@ export async function prepareSaddle({
     model: resolvedModel,
     backend: resolvedBackend,
     host: resolvedHost,
+    thinkSetting,
     systemPrompt
   });
   return {
@@ -244,6 +251,7 @@ export async function prepareSaddle({
     model: resolvedModel,
     backend: resolvedBackend,
     host: resolvedHost,
+    thinkSetting,
     sessionName,
     sessionFile,
     selectionSource,
@@ -460,7 +468,7 @@ async function main() {
   let sessionName = config.sessionName || SESSION_NAME;
   let sessionFile = config.sessionFile || "";
   let contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
-  let thinkSetting = null;
+  let thinkSetting = config.thinkSetting;
   let busy = false;
   let closing = false;
   let backendPicker = null;
@@ -489,7 +497,8 @@ async function main() {
         mindName,
         backend,
         model,
-        host
+        host,
+        reasoningEffort: thinkSetting?.reasoningEffort
       });
     }
     config.saddleState = nextState;
@@ -608,7 +617,11 @@ async function main() {
     }
     mindModels.set(mindName, model);
     contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
-    thinkSetting = null;
+    thinkSetting = resolveSaddleThinkSetting({
+      backend,
+      savedEffort: saved.reasoningEffort,
+      configuredEffort: configValue("mind reasoning effort")
+    });
     configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
     try {
       await persistSelection({ includeProfile: false });
@@ -751,7 +764,7 @@ async function main() {
     const defaultEffortLabel = backend === "minimax"
       ? "provider default"
       : backend === "zai"
-        ? "max (provider default)"
+        ? "low (Pyash default)"
         : "Strata default";
     writeLine(backend === "ollama"
       ? `thinking for ${model}: current ${thinkSetting?.value ?? "model default"}`
@@ -864,6 +877,7 @@ async function main() {
       writeLine(backend === "ollama"
         ? `thinking: ${thinkSetting.value} for ${model}`
         : `reasoning effort: ${thinkSetting.value} for ${model}`);
+      await reportSelectionSaved();
       prompt({ clear: false });
       return;
     }
@@ -884,6 +898,8 @@ async function main() {
       }
       modelPicker = null;
       modelPickerAllowCustom = false;
+      const previousBackend = backend;
+      const previousEffort = thinkSetting?.value ?? "";
       const nextBackend = normalizeSaddleBackend(selected.backend || modelPickerTarget?.backend || backend);
       const nextMindName = String(selected.mindName || modelPickerTarget?.mindName || mindName).trim();
       backend = nextBackend;
@@ -897,7 +913,11 @@ async function main() {
       } else {
         contextWindow = null;
       }
-      thinkSetting = null;
+      thinkSetting = resolveSaddleThinkSetting({
+        backend,
+        savedEffort: backend === previousBackend ? previousEffort : "",
+        configuredEffort: configValue("mind reasoning effort")
+      });
       promptLabel = "pyash> ";
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
       writeLine(`mind: ${mindName} | backend: ${backend} | model: ${model}`);
@@ -952,12 +972,18 @@ async function main() {
       await dischargeSaddleModel(model, backend, { housekeeperUrl: config.housekeeperUrl, cwd: config.runtimeRoot })
         .catch((error) => writeLine(`discharge: ${error.message}`));
       const nextProfile = resolveConfiguredSaddleMind(canonicalName);
+      const previousBackend = backend;
+      const previousEffort = thinkSetting?.value ?? "";
       mindName = canonicalName;
       backend = nextProfile.backend;
       host = nextProfile.host;
       model = normalizeSaddleModel(mindModels.get(mindName) || nextProfile.model);
       contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
-      thinkSetting = null;
+      thinkSetting = resolveSaddleThinkSetting({
+        backend,
+        savedEffort: backend === previousBackend ? previousEffort : "",
+        configuredEffort: configValue("mind reasoning effort")
+      });
       mindModels.set(mindName, model);
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
       writeLine(`mind: ${mindName} | model: ${model}`);
@@ -1087,7 +1113,11 @@ async function main() {
       model = normalizeSaddleModel(requested, model);
       mindModels.set(mindName, model);
       contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
-      thinkSetting = null;
+      thinkSetting = resolveSaddleThinkSetting({
+        backend,
+        savedEffort: thinkSetting?.value,
+        configuredEffort: configValue("mind reasoning effort")
+      });
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
       writeLine(`model: ${model}`);
       await reportSelectionSaved();

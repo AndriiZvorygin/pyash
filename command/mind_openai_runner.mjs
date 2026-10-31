@@ -12,6 +12,7 @@ import {
 } from "../program/motor/openai_mind.mjs";
 import { submitManagedGpuJob } from "../program/runtime/gpu/managed-ollama.mjs";
 import {
+  DEFAULT_ZAI_CODING_REASONING_EFFORT,
   createZaiCodexHome,
   removeZaiCodexHome,
   resolveZaiApiKey,
@@ -233,12 +234,17 @@ async function runCodexFallback(payload = {}, { stream = false, codexHome = "" }
   const prompt = buildCodexPrompt(payload);
   const runnerDir = path.dirname(fileURLToPath(import.meta.url));
   const mcpServerPath = path.resolve(runnerDir, "pyash_mcp_server.mjs");
-  const mcpServerArgs = [mcpServerPath, "--root", process.cwd(), "--tools-map", "agent tools"];
+  const toolsMapName = String(payload?.toolMapName ?? payload?.toolMap ?? "agent tools").trim() || "agent tools";
+  const mcpServerArgs = [mcpServerPath, "--root", process.cwd(), "--tools-map", toolsMapName];
   const args = [
     "exec",
     "--json",
+    "--disable", "shell_tool",
+    "--cd", process.cwd(),
     "-c", `mcp_servers.pyash.command=${tomlString("node")}`,
     "-c", `mcp_servers.pyash.args=${tomlArray(mcpServerArgs)}`,
+    "-c", `mcp_servers.pyash.default_tools_approval_mode=${tomlString("approve")}`,
+    "-c", "mcp_servers.pyash.required=true",
     "--model", model,
     "--color", "never",
     "--ephemeral",
@@ -291,7 +297,7 @@ async function main() {
       codexHome = createZaiCodexHome({
         apiKey,
         model: payload.model || "glm-5.3",
-        reasoningEffort: payload.reasoningEffort || "max",
+        reasoningEffort: payload.reasoningEffort || DEFAULT_ZAI_CODING_REASONING_EFFORT,
         contextWindow: payload.contextWindow,
         projectRoot: process.cwd()
       });

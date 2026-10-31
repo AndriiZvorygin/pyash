@@ -9,12 +9,13 @@ import { parse } from "../understand/index.mjs";
 const ACTIVE_SESSION_NAME = "coding saddle active session";
 const ACTIVE_SESSION_FILE = "coding saddle active session file";
 const PROFILE_PREFIX = "coding saddle profile ";
-const PROFILE_FIELDS = ["mindName", "backend", "model", "host"];
+const PROFILE_FIELDS = ["mindName", "backend", "model", "host", "reasoningEffort"];
 const FIELD_TO_SUFFIX = {
   mindName: "mind",
   backend: "backend",
   model: "model",
-  host: "host"
+  host: "host",
+  reasoningEffort: "reasoning effort"
 };
 const SUFFIX_TO_FIELD = Object.fromEntries(Object.entries(FIELD_TO_SUFFIX).map(([field, suffix]) => [suffix, field]));
 
@@ -80,7 +81,7 @@ export async function readCodingSaddleState(filePath) {
       continue;
     }
     if (!subject.startsWith(PROFILE_PREFIX)) continue;
-    const match = subject.slice(PROFILE_PREFIX.length).match(/^([a-f0-9]{20}) (mind|backend|model|host)$/u);
+    const match = subject.slice(PROFILE_PREFIX.length).match(/^([a-f0-9]{20}) (mind|backend|model|host|reasoning effort)$/u);
     if (!match || !value.trim()) continue;
     const [, key, suffix] = match;
     const field = SUFFIX_TO_FIELD[suffix];

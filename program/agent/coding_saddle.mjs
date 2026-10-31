@@ -1,5 +1,8 @@
 import path from "node:path";
-import { fetchZaiCodingPlanModels } from "../runtime/zai_coding_plan.mjs";
+import {
+  DEFAULT_ZAI_CODING_REASONING_EFFORT,
+  fetchZaiCodingPlanModels
+} from "../runtime/zai_coding_plan.mjs";
 import { fetchMiniMaxModels } from "../runtime/minimax.mjs";
 
 export const SADDLE_OLLAMA_CONTEXT_PRESETS = [4096, 8192, 16384, 32768, 65536];
@@ -332,6 +335,17 @@ export function normalizeSaddleThinkSelection(value, backend) {
     }
   }
   return null;
+}
+
+export function resolveSaddleThinkSetting({ backend, savedEffort = "", configuredEffort = "" } = {}) {
+  const provider = normalizeSaddleBackend(backend);
+  for (const value of [savedEffort, configuredEffort]) {
+    const setting = normalizeSaddleThinkSelection(value, provider);
+    if (setting) return setting;
+  }
+  return provider === "zai"
+    ? normalizeSaddleThinkSelection(DEFAULT_ZAI_CODING_REASONING_EFFORT, provider)
+    : null;
 }
 
 function mindFieldValue(value) {
@@ -676,7 +690,11 @@ export function formatSaddleStatus({
     ...(Number.isSafeInteger(Number(contextWindow)) && Number(contextWindow) > 0
       ? [`context: ${Number(contextWindow).toLocaleString("en-CA")} tokens`]
       : []),
-    ...(normalizeText(thinkMode) ? [`thinking: ${normalizeText(thinkMode)}`] : []),
+    ...(normalizeText(thinkMode)
+      ? [normalizeSaddleBackend(backend) === "ollama"
+        ? `thinking: ${normalizeText(thinkMode)}`
+        : `reasoning effort: ${normalizeText(thinkMode)}`]
+      : []),
     ...(localBackend
       ? [`route: GPU Housekeeper ${normalizeText(housekeeperUrl) || "(not configured)"}`]
       : [`host: ${normalizeSaddleHost(host)}`]),

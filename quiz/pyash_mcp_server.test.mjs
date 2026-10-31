@@ -80,3 +80,32 @@ test("pyash mcp server lists tools and executes exists tool", async () => {
     client.close();
   }
 });
+
+test("pyash mcp server loads the selected saddle tools map", async () => {
+  const serverPath = path.resolve("command/pyash_mcp_server.mjs");
+  const client = createJsonRpcClient({
+    command: process.execPath,
+    args: [serverPath, "--root", path.resolve("."), "--tools-map", "saddle tools"],
+    cwd: path.resolve(".")
+  });
+  try {
+    const list = await client.send("tools/list", {});
+    const tools = Array.isArray(list?.tools) ? list.tools : [];
+    const descriptions = tools.map((tool) => String(tool?.description ?? ""));
+    assert.equal(tools.length, 8);
+    assert.ok(descriptions.some((description) => description.includes("su name read from filename input be read")));
+    assert.ok(descriptions.some((description) => description.includes("su name command ob text")));
+    assert.ok(descriptions.some((description) => description.includes("su name repair ob text")));
+    assert.equal(descriptions.some((description) => description.includes("su name download")), false);
+
+    const readTool = tools.find((tool) => String(tool?.name ?? "").startsWith("be_read_from_filename"));
+    assert.ok(readTool, "expected read capability in the saddle tools map");
+    const read = await client.send("tools/call", {
+      name: readTool.name,
+      arguments: { from: path.resolve("AGENTS.md") }
+    });
+    assert.match(String(read?.content?.[0]?.text ?? ""), /Pyash/i);
+  } finally {
+    client.close();
+  }
+});

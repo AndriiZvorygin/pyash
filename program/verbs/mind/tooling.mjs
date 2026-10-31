@@ -234,6 +234,7 @@ export function buildToolSentence({ capability, args }) {
   delete call.this;
   delete call.consequence;
   call.mood = "do";
+  if (call.be === "read" && !call.become) call.become = { wo: "text" };
 
   const argObject = (() => {
     if (!args) return {};

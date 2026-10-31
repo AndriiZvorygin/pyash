@@ -35,6 +35,7 @@ const config = fs.readFileSync(path.join(home, "config.toml"), "utf8");
 const models = JSON.parse(fs.readFileSync(path.join(home, "models.json"), "utf8"));
 fs.writeFileSync(process.env.PYA_ZAI_PROBE, JSON.stringify({
   home,
+  args: process.argv.slice(2),
   model: models.models[0].slug,
   hasCodingKey: config.includes(process.env.Z_AI_CODING_API_KEY),
   correctProtocol: config.includes('wire_api = "responses"'),
@@ -49,6 +50,7 @@ process.stdout.write(JSON.stringify({ type: "item.completed", item: { type: "age
       model: "glm-5.3",
       reasoningEffort: "max",
       contextWindow: 65536,
+      toolMapName: "saddle tools",
       messages: [{ role: "user", content: "Reply with a short readiness check." }]
     }, {
       ...process.env,
@@ -66,6 +68,17 @@ process.stdout.write(JSON.stringify({ type: "item.completed", item: { type: "age
     assert.equal(probe.correctProtocol, true);
     assert.equal(probe.correctBaseUrl, true);
     assert.equal(probe.contextWindow, 65536);
+    assert.ok(probe.args.includes("--disable"));
+    assert.ok(probe.args.includes("shell_tool"));
+    assert.ok(probe.args.includes("--cd"));
+    assert.ok(probe.args.includes(root));
+    assert.ok(probe.args.includes('mcp_servers.pyash.default_tools_approval_mode="approve"'));
+    assert.ok(probe.args.includes("mcp_servers.pyash.required=true"));
+    const mcpArgsSetting = probe.args.find((arg) => arg.startsWith("mcp_servers.pyash.args="));
+    assert.ok(mcpArgsSetting, "expected Pyash MCP server args in Codex config");
+    const mcpArgs = JSON.parse(mcpArgsSetting.slice("mcp_servers.pyash.args=".length));
+    assert.equal(mcpArgs.at(-1), "saddle tools");
+    assert.ok(probe.args.includes("--sandbox") === false);
     await assert.rejects(fs.access(probe.home));
     assert.equal(result.stdout.includes("test-only-coding-key"), false);
     assert.equal(result.stderr.includes("test-only-coding-key"), false);

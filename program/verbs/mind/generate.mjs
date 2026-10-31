@@ -135,6 +135,10 @@ export async function runGenerate({
     const keepAlive = Number.isFinite(Number(configured)) ? Math.max(0, Math.trunc(Number(configured))) : 300;
     payload.keep_alive = keepAlive;
   };
+  const applyToolMapName = (payload) => {
+    const name = String(toolMapName ?? "").trim();
+    if (name) payload.toolMapName = name;
+  };
   const applyContextWindow = (payload) => {
     const value = Number(contextWindow);
     if (backendName === "ollama command mind" && Number.isSafeInteger(value) && value > 0) {
@@ -179,6 +183,7 @@ export async function runGenerate({
     const streamStdoutEnabled = resolveStreamStdoutEnabled({ rememberFn: remember });
     const requestPayload = { mode: "chat", model, messages, stream: true };
     requestPayload.prompt = buildPromptText(messages);
+    applyToolMapName(requestPayload);
     if (ollamaHost) requestPayload.host = ollamaHost;
     if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
     applyContextWindow(requestPayload);
@@ -325,6 +330,7 @@ export async function runGenerate({
   if (mockResponse) {
     const requestPayload = { mode: "chat", model, messages, stream: false };
     requestPayload.prompt = buildPromptText(messages);
+    applyToolMapName(requestPayload);
     if (ollamaHost) requestPayload.host = ollamaHost;
     if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
     applyContextWindow(requestPayload);
