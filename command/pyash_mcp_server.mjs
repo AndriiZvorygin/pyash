@@ -56,6 +56,12 @@ function firstTextValue(ob = {}) {
 
 function serializeResult(result) {
   if (!result || typeof result !== "object") return { text: String(result ?? ""), sentence: result };
+  if (result.invoked === "read" && typeof result.result?.text === "string") {
+    return {
+      text: result.result.text,
+      sentence: result
+    };
+  }
   const pyash = sentenceToPyash(result);
   const text = firstTextValue(result.ob)
     || (typeof pyash === "string" ? pyash.trim() : "")
