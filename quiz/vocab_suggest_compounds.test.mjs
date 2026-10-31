@@ -72,6 +72,23 @@ test("vocab_suggest reports the accepted include compound", async () => {
   assert.match(lines.join("\n"), /include: found compound inside \+ containing -> lwak hzan \(accepted-curated\)/u);
 });
 
+test("vocab_suggest reports the accepted gpu compound", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["gpu"], {
+    report: (line) => lines.push(String(line))
+  });
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.missing, 0);
+  assert.deepEqual(result.foundCompounds, [{
+    target: "gpu",
+    components: ["video", "processor", "module"],
+    pyash: ["byot", "ples", "myoc"],
+    status: "accepted-curated",
+    locations: ["input"]
+  }]);
+  assert.match(lines.join("\n"), /gpu: found compound video \+ processor \+ module -> byot ples myoc \(accepted-curated\)/u);
+});
+
 test("vocab_suggest reuses the accepted include compound for the involve inclusion alias", async () => {
   const lines = [];
   const result = await runVocabSuggest(["involve"], {

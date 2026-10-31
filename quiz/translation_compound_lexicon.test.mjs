@@ -74,6 +74,17 @@ test("Chinese compound lexicon preserves ordered morphemes and stable identities
     ["brainstorm"]
   );
 
+  // gpu is a video processor module: the compound records that reading
+  // instead of leaving the token uncovered.
+  const gpu = curated.find((entry) => entry.surface === "gpu");
+  assert.ok(gpu);
+  assert.deepEqual(gpu.morphemes, ["video", "processor", "module"]);
+  assert.deepEqual(gpu.componentGlosses, ["video", "processor", "module"]);
+  assert.deepEqual(gpu.pyashSequence, ["byot", "ples", "myoc"]);
+  assert.deepEqual(gpu.componentLayers, [24, 19, 19]);
+  assert.equal(gpu.head, "module");
+  assert.equal(gpu.status, "accepted-curated");
+
   const byMorpheme = queryChineseCompoundLexicon(entries, { morpheme: "语" });
   assert.deepEqual(byMorpheme.map((entry) => entry.surface), ["语言"]);
   assert.deepEqual(
