@@ -83,7 +83,7 @@ async function analyzePhraseFixtureSentence(source) {
     ["life", { coverageType: "fixture", lemma: "life", pyashSequence: ["hmas"] }],
     ["god", { coverageType: "fixture", lemma: "god", pyashSequence: ["dwa2n"] }],
     ["gods", { coverageType: "fixture", lemma: "god", pyashSequence: ["dwa2n", "pu"] }],
-    ["object", { coverageType: "fixture", lemma: "object", pyashSequence: ["hcas"] }],
+    ["object", { coverageType: "fixture", lemma: "thing", pyashSequence: ["ya"] }],
     ["idea", { coverageType: "fixture", lemma: "idea", pyashSequence: ["tli"] }],
     ["i", { coverageType: "fixture", lemma: "i", pyashSequence: ["mi"] }],
     ["walked", {
@@ -842,7 +842,9 @@ test("existential lists keep phrase coordination separate from clause connectors
   assert.equal(analysis.phraseCoordination.scope, "existential-content");
   assert.equal(analysis.phraseCoordination.role, "su");
   assert.deepEqual(analysis.phraseCoordination.factorization.reflexiveItemIndexes, [0]);
+  assert.deepEqual(analysis.phraseCoordination.factorization.explicitItemIndexes, [1, 2]);
   assert.deepEqual(analysis.phraseCoordination.factorization.inheritedItemIndexes, [3, 4, 5]);
+  assert.equal(analysis.phraseCoordination.factorization.itemHeadIndexes[5], undefined);
   assert.equal(analysis.phraseCoordination.factorization.head.lemma, "love");
   assert.equal(analysis.phraseCoordination.factorization.placement, "after-list");
   assert.equal(analysis.phraseCoordination.decision.caseTargets.length, 4);
@@ -854,6 +856,9 @@ test("existential lists keep phrase coordination separate from clause connectors
     analysis.phraseCoordination.items.at(-1).internalConnectors.map(({ surface }) => surface),
     ["or"]
   );
+  assert.ok(analysis.phraseCoordination.items.at(-1).pyashSequence.includes("ma"));
+  assert.ok(analysis.phraseCoordination.items.at(-1).pyashSequence.includes("tlih"));
+  assert.ok(analysis.phraseCoordination.items.at(-1).pyashSequence.includes("ya"));
   assert.deepEqual(analysis.phraseCoordination.factorization.selfSequence, ["fyif"]);
 });
 

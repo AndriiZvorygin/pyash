@@ -159,7 +159,7 @@ function recordHead(record) {
   if (sequence.length === 0) return null;
   return {
     surface: record.surface,
-    lemma: String(record.lemma ?? record.surface ?? "").toLowerCase(),
+    lemma: String(record.sourceLemma ?? record.surface ?? "").toLowerCase(),
     pyashSequence: sequence
   };
 }
@@ -191,7 +191,7 @@ export function findSharedPhraseHead(coordination, records) {
   const groups = new Map();
   for (const entry of headed) {
     if (!entry.first) continue;
-    const key = entry.first.head.pyashSequence.join(" ");
+    const key = `${entry.first.head.lemma}\u0000${entry.first.head.pyashSequence.join(" ")}`;
     const group = groups.get(key) ?? [];
     group.push(entry);
     groups.set(key, group);

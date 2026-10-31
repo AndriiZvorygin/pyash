@@ -6,8 +6,8 @@ import {
   segmentEnglishPhraseList
 } from "../program/verbs/exchange/translation/english_phrase_coordination.mjs";
 
-function word(surface, sequence, { grammar = null, lemma = surface } = {}) {
-  return { surface, lemma, pyashSequence: sequence, grammar };
+function word(surface, sequence, { grammar = null, lemma = surface, sourceLemma = lemma } = {}) {
+  return { surface, lemma, sourceLemma, pyashSequence: sequence, grammar };
 }
 
 function conjunction(surface, pya = "ba") {
@@ -112,6 +112,23 @@ test("shared-head factoring does not depend on the love vocabulary", () => {
   assert.equal(factored.head.lemma, "respect");
   assert.deepEqual(factored.explicitItemIndexes, [0, 1]);
   assert.deepEqual(factored.inheritedItemIndexes, [2]);
+});
+
+test("shared-head factoring distinguishes source words with the same Pyash sequence", () => {
+  const source = "love toward a friend, love in romance, or toward an object or idea";
+  const records = [
+    word("love", ["pyan"]), caseWord("toward"), word("a", ["tlih"], { grammar: { kind: "number-marker" } }), word("friend", ["pyat"]),
+    word("love", ["pyan"]), caseWord("in", "lwah"), word("romance", ["hram"]),
+    conjunction("or"), caseWord("toward"), word("an", ["tlih"], { grammar: { kind: "number-marker" } }),
+    word("object", ["pyan"], { lemma: "love", sourceLemma: "object" }),
+    conjunction("or"), word("idea", ["tli"])
+  ];
+  const list = segmentEnglishPhraseList({ source, records, startIndex: 0, endIndex: records.length });
+  const factored = findSharedPhraseHead(list, records);
+
+  assert.deepEqual(factored.explicitItemIndexes, [0, 1]);
+  assert.deepEqual(factored.inheritedItemIndexes, [2]);
+  assert.equal(factored.itemHeadIndexes[2], undefined);
 });
 
 test("shared-head factoring declines unrelated lists and lists without omitted case phrases", () => {

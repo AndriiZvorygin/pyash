@@ -443,6 +443,7 @@ function wordRecord(surface, {
   if (grammaticalNumber === "plural" && !pyashSequence.includes("pu")) pyashSequence.push("pu");
   return {
     surface: normalized,
+    sourceLemma: lemma?.lemma ?? normalized,
     coverageType: coverage?.coverageType ?? (grammar ? "grammar" : "unresolved"),
     lemma: coverage?.lemma ?? lemma?.lemma ?? "",
     pyashSequence,

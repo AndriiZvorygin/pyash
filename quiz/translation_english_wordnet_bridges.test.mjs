@@ -11,11 +11,19 @@ import {
   analyzeDefaultEnglishSentence,
   analyzeEnglishSentence
 } from "../program/verbs/exchange/translation/english_sentence.mjs";
+import { buildEnglishGrammarIndex, loadEnglishGrammarCatalog } from "../program/verbs/exchange/translation/english_grammar.mjs";
 import { buildEnglishWordNetIndex } from "../program/verbs/exchange/translation/english_wordnet.mjs";
 
 test("WordNet bridges use one native Pyash row per sense", async () => {
   const catalog = await loadEnglishWordNetBridges();
-  assert.equal(catalog.entries.length, 17);
+  assert.equal(catalog.entries.length, 18);
+  assert.deepEqual(catalog.entries.find((entry) => entry.source === "n:05818974-n"), {
+    source: "n:05818974-n",
+    target: "thing",
+    targetPartOfSpeech: "n",
+    certainty: "contextual",
+    evidence: "Open English WordNet 2025 object-of-thought or feeling sense; generic Pyash thing anchor"
+  });
   assert.deepEqual(catalog.entries.find((entry) => entry.source === "v:01775456-v"), {
     source: "v:01775456-v",
     target: "emotionally",
@@ -23,6 +31,44 @@ test("WordNet bridges use one native Pyash row per sense", async () => {
     certainty: "contextual",
     evidence: "Open English WordNet 2025 emotional-state sense"
   });
+});
+
+test("object of thought or feeling maps to the generic thing anchor", async () => {
+  const grammar = await loadEnglishGrammarCatalog();
+  const result = analyzeEnglishSentence("There can be love toward an object or idea.", {
+    grammarIndex: buildEnglishGrammarIndex({ catalogEntries: grammar.entries }),
+    wordnetIndex: buildEnglishWordNetIndex({
+      rows: [{
+        id: "n:05818974-n:object",
+        pos: "n",
+        synset: "05818974-n",
+        senseKey: "05818974-n",
+        lemma: "object",
+        gloss: "the focus of cognitions or feelings; objects of thought; the object of my affection"
+      }]
+    }),
+    wordnetBridges: buildEnglishWordNetBridgeIndex({
+      entries: [{
+        source: "n:05818974-n",
+        target: "thing",
+        targetPartOfSpeech: "n",
+        certainty: "contextual",
+        evidence: "generic Pyash thing anchor"
+      }]
+    }).bySense,
+    resolveWord: (word) => ({
+      love: { coverageType: "atomic", pyashSequence: ["pyan"] },
+      thing: { coverageType: "grammar", pyashSequence: ["ya"] },
+      idea: { coverageType: "atomic", pyashSequence: ["hcik"] }
+    })[word] ?? null
+  });
+  const object = result.tokens.find((candidate) => candidate.surface === "object");
+  const article = result.tokens.find((candidate) => candidate.surface === "an");
+  assert.equal(object?.coverageType, "semantic-wordnet");
+  assert.equal(object?.lemma, "thing");
+  assert.deepEqual(object?.pyashSequence, ["ya"]);
+  assert.deepEqual(article?.pyashSequence, ["tlih"]);
+  assert.match(object?.evidence ?? "", /bridge thing/u);
 });
 
 test("feel contexts select the bridge for the matching WordNet sense", async () => {
