@@ -919,11 +919,12 @@ Per `AGENTS.md`:
    `.github/workflows/examples-audit.yml` and gates on regressions rather than on
    an absolute pass.
 3. **Core/periphery target** — *resolved.* There is no ratio target. The gauge
-   is the verb-layer gauge: `program/verbs/` now holds 162 modules and 15 of
-   them exceed 400 lines. The largest is `qwen_say.mjs` (1,622), then
-   `command.mjs` (1,072). The third giant, `itinerary_media.mjs` (2,098),
-   held five verb families in one file and is now
-   `program/verbs/itinerary/`, one family per module.
+   is the verb-layer gauge: `program/verbs/` now holds 174 modules and 15 of
+   them exceed 400 lines. The largest is `program/verbs/mind/mind.mjs` (872),
+   which is one verb family. The three giants — `itinerary_media.mjs` (2,098),
+   `qwen_say.mjs` (1,622) and `command.mjs` (1,072) — are now
+   `program/verbs/itinerary/`, `program/verbs/qwen_say/` and
+   `program/verbs/command/`.
 4. **Container-path examples** — *resolved.* `/workplace/...` paths only exist
    inside the container image; the audit classifies them as *needs backend*
    rather than failed, so the baseline holds no entry for them.
@@ -933,17 +934,20 @@ Per `AGENTS.md`:
 
 ## Still open for the owner
 
-1. **The remaining verb giants.** *(partly resolved)* `itinerary_media.mjs`
-   (2,098) held five verb families in one file — `cut`, `draw`, `promptify`,
-   `concatenate` and `footnote` — so it was split into
-   `program/verbs/itinerary/`, one family per module, with the shared
-   helpers in `cuts.mjs`, `window.mjs`, `manifest.mjs`, `routes.mjs` and
-   `media.mjs`. `loop_control.mjs` held two families and is now
-   `program/verbs/loop_control/`. The rule that a module owns one verb
-   family is pinned by `quiz/verb_family_ownership.test.mjs`. What is left
-   is `qwen_say.mjs` (1,622) and `command.mjs` (1,072): each is already one
-   family, so a split there is along internal seams rather than along a
-   domain line.
+1. **The remaining verb giants.** *(resolved)* The three giants were split
+   along their own seams.
+   `itinerary_media.mjs` (2,098) held five verb families in one file — `cut`,
+   `draw`, `promptify`, `concatenate` and `footnote` — and is now
+   `program/verbs/itinerary/`, one family per module, with the shared helpers
+   in `cuts.mjs`, `window.mjs`, `manifest.mjs`, `routes.mjs` and `media.mjs`.
+   `loop_control.mjs` held two families and is now
+   `program/verbs/loop_control/`. `command.mjs` (1,072) is now
+   `program/verbs/command/` — classify, sandbox, policy, audit and execute.
+   `qwen_say.mjs` (1,622) is now `program/verbs/qwen_say/` — config, prompt,
+   text, audio and verify.
+   The rule that a module owns one verb family is pinned by
+   `quiz/verb_family_ownership.test.mjs`. The largest verb module is now 872
+   lines, and it is one family.
 2. **`agenda-stage3-summary-renderer.mjs`** (6,675 lines) is already in
    `program/library/` and one concern, but is still a candidate for splitting.
 3. **The house-facing surface.** *resolved.* The surface is declared in

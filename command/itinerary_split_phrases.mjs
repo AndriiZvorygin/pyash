@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parseItineraryPya, renderItineraryPya } from "./itinerary_io.mjs";
-import { splitTextPhrases } from "../program/verbs/itinerary/cuts.mjs";
+import { splitProsePhrases } from "../program/library/prose_segmentation.mjs";
 
 function usage() {
   return "Usage: node command/itinerary_split_phrases.mjs <input-itinerary.pya> <output-itinerary.pya> [--max-seconds <num>]";
@@ -117,7 +117,7 @@ function splitCutIntoPhrases(cut = {}, sequenceStart = 1, { maxPhraseDurationSec
   const until = Number(cut?.until ?? since);
   const duration = Math.max(0, until - since);
   const fallback = sourceText.replace(/\s+/gu, " ").trim();
-  const phrases = refinePhraseUnits(splitTextPhrases(sourceText));
+  const phrases = refinePhraseUnits(splitProsePhrases(sourceText));
   const units = phrases.length ? phrases : (hasSpeakableContent(fallback) ? [normalizePhraseCapitalization(fallback)] : []);
   if (!units.length) return [];
 

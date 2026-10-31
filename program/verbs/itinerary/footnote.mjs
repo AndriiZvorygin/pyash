@@ -15,7 +15,7 @@ function defaultFootnoteOutputFilename(inputVideo) {
 }
 
 async function runFootnoteVideo({ inputVideo, inputSrt, outputVideo, mode, startDelaySeconds = 0, marginRatio = null }) {
-  const runner = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../command/footnote_video.mjs");
+  const runner = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../command/footnote_video.mjs");
   const args = [runner, inputVideo, inputSrt, outputVideo];
   if (mode) args.push("--mode", mode);
   if (Number.isFinite(marginRatio) && marginRatio >= 0 && marginRatio <= 1) {

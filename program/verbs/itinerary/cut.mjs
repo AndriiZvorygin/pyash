@@ -6,7 +6,8 @@ import { parseSrtToCuts } from "../../../command/itinerary_io.mjs";
 import { lookupArtifactLocator } from "../../bridge/exchange.mjs";
 import { windowCuts, splitOversizedCut } from "./window.mjs";
 import { persistItineraryManifest } from "./manifest.mjs";
-import { splitTextParagraphs, splitTextSentences, splitTextPhrases, hasSpeakableContent, sectionWordTokens, validateSectionCoverage } from "./cuts.mjs";
+import { hasSpeakableContent, splitProseParagraphs, splitProsePhrases, splitProseSentences } from "../../library/prose_segmentation.mjs";
+import { sectionWordTokens, validateSectionCoverage } from "./cuts.mjs";
 
 export async function cutFromFilenameToNameItinerary(sentence, { remember: rememberFn = remember } = {}) {
   const source = (() => {
@@ -142,10 +143,10 @@ export async function cutFromTextToNameItinerary(sentence, { remember: rememberF
     });
   }
   const sections = mode === "sentence"
-    ? splitTextSentences(sourceText)
+    ? splitProseSentences(sourceText, { stripMarkdown: true })
     : mode === "phrase"
-    ? splitTextPhrases(sourceText)
-    : splitTextParagraphs(sourceText);
+    ? splitProsePhrases(sourceText)
+    : splitProseParagraphs(sourceText);
   if (mode === "sentence" || mode === "phrase") {
     const invalid = sections.find((entry) => !hasSpeakableContent(entry));
     if (invalid !== undefined) {

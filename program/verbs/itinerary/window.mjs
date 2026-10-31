@@ -1,4 +1,5 @@
-import { isMarkdownDivider, splitTextSentences, hasSpeakableContent, sectionWordTokens } from "./cuts.mjs";
+import { hasSpeakableContent, isMarkdownDivider, splitProseSentences } from "../../library/prose_segmentation.mjs";
+import { sectionWordTokens } from "./cuts.mjs";
 
 export function normalizeCutEntry(entry, index) {
   const since = Number(entry?.since?.num ?? entry?.since ?? 0);
@@ -79,7 +80,7 @@ export function splitOversizedCut(cut = {}, targetSeconds = 6) {
   const text = String(cut?.obText ?? "").replace(/\s+/g, " ").trim();
   if (!(Number.isFinite(span) && span > target + 1e-6) || !text) return [cut];
 
-  const sentenceSections = splitTextSentences(text).filter(Boolean)
+  const sentenceSections = splitProseSentences(text, { stripMarkdown: true }).filter(Boolean)
     .filter((entry) => !isMarkdownDivider(entry))
     .filter((entry) => hasSpeakableContent(entry));
   if (sentenceSections.length < 2 && sectionWordTokens(text).length < 8) return [cut];

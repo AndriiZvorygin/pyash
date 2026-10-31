@@ -28,7 +28,7 @@ illustrate them.
 |---|---|
 | Commits | 4,675 |
 | Verb modules (top level) | 81 |
-| Modules under `program/verbs/` | 162 |
+| Modules under `program/verbs/` | 174 |
 | Normative specifications | 24 |
 | Quiz files | 793 tracked (759 gate the CI run) |
 | Quiz tests | 3,051, zero failures |
@@ -42,7 +42,7 @@ Three buckets, because they answer different questions.
 | Bucket | Lines | Files | What it means |
 |---|---|---|---|
 | Interpreter core | 6,393 | 25 | The language machinery: parser, bridge, memory, program |
-| Verb layer | 29,697 | 162 | The dispatch surface users write against |
+| Verb layer | 29,684 | 174 | The dispatch surface users write against |
 | Applications | 173,147 | 690 | Library, agent, runtime, command, module |
 
 The core-to-applications ratio is **1:27.08**, and the core is 3.1% of the
@@ -58,22 +58,27 @@ the verb-layer gauge below.
 
 ### Verb surface
 
-`program/verbs/` holds 162 modules; **15** exceed 400 lines. The largest:
+`program/verbs/` holds 174 modules; **15** exceed 400 lines. The largest:
 
 | Lines | Module |
 |---|---|
-| 1,622 | `program/verbs/qwen_say.mjs` |
-| 1,072 | `program/verbs/command.mjs` |
-| 874 | `program/verbs/mind/mind.mjs` |
+| 872 | `program/verbs/mind/mind.mjs` |
 | 775 | `program/verbs/wise_chip.mjs` |
 | 764 | `program/verbs/hear.mjs` |
+| 669 | `program/verbs/verify_platform.mjs` |
+| 662 | `program/verbs/verify_loop.mjs` |
 
 A module owns one verb family — the shapes of one verb. A general verb may
 reach a domain by way of the module for that domain, the way `write` reaches
 mind and vector, but a module that is the only home for two families has no
-domain to bound it. `program/verbs/itinerary_media.mjs` (2,098) held five
-families and is now `program/verbs/itinerary/`, one family per module.
-`quiz/verb_family_ownership.test.mjs` holds the rule.
+domain to bound it. `quiz/verb_family_ownership.test.mjs` holds the rule.
+
+The three giants are gone. `itinerary_media.mjs` (2,098) held five families
+and is now `program/verbs/itinerary/`, one family per module.
+`command.mjs` (1,072) is now `program/verbs/command/` — classify, sandbox,
+policy, audit and execute. `qwen_say.mjs` (1,622) is now
+`program/verbs/qwen_say/` — config, prompt, text, audio and verify. The
+largest verb module is now 872 lines, and it is one family.
 
 The translation domain (85 modules, 20,344 lines) was moved out of
 `program/verbs/` into `program/library/translation/` so that `program/verbs/`
@@ -94,7 +99,8 @@ folder (132 modules, 15,728 lines) moved the same way, into
 - `program/bridge/signature.mjs`: the signature registry and its lookups.
 - `program/verbs/`: verb dispatchers, one verb family per file, kept thin.
 - `program/library/`: domain logic and data — the translation adapters, the
-  reporter pipeline, the VLIW database.
+  reporter pipeline, the VLIW database, the shared prose segmentation that the
+  itinerary cut verb and the qwen say verb both use.
 - `program/remember/index.mjs`: in-memory store with get/set/dump/reset,
   definition index, sandpit traces.
 - `program/beautiful.mjs`: output formatting.
