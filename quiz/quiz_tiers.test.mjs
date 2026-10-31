@@ -79,10 +79,19 @@ test("a fixture string mentioning a house is not a house dependency", () => {
   assert.deepEqual(detectRequirements(source, { isTrackedHouse: () => false }), []);
 });
 
-test("the gating policy file names the tiers that gate ci", () => {
+test("the gating policy file names the tiers that gate ci and the tiers it excludes", () => {
   const policy = fs.readFileSync(path.join(repoRoot, "configure", "test_tiers.pya"), "utf8");
   assert.match(policy, /su name ci_gating_tiers ob text "[^"]+" ya/u);
-  assert.match(policy, /su name ci_advisory_tiers ob text "[^"]+" ya/u);
+  assert.match(policy, /su name ci_excluded_tiers ob text "[^"]+" ya/u);
+});
+
+test("house checkouts are excluded from ci rather than reported as a gap", () => {
+  const policy = fs.readFileSync(path.join(repoRoot, "configure", "test_tiers.pya"), "utf8");
+  const excluded = /su name ci_excluded_tiers ob text "([^"]*)" ya/u.exec(policy)?.[1] ?? "";
+  assert.ok(
+    excluded.split(",").map((value) => value.trim()).includes("t3"),
+    "house checkouts must be an excluded tier"
+  );
 });
 
 test("the repository has a root quiz set to classify", () => {

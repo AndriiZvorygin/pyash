@@ -7,6 +7,10 @@
 // resource this machine does not have is reported with the reason instead of
 // failing the run: the environment is missing something, the code is not
 // broken. In CI the resources are provisioned, so those quizzes gate there.
+//
+// A quiz in an excluded tier is out of scope rather than unrunnable. House
+// checkouts are the case: a house has its own repository and runs its own
+// checks, so those quizzes are neither run nor reported as a gap here.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -19,13 +23,16 @@ import { classifyQuizFile } from "./quiz_tiers.mjs";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const policyFile = path.join(root, "configure", "test_tiers.pya");
 
-const policy = readPyaTextValues(policyFile, ["ci_gating_tiers", "ci_advisory_tiers"]);
-const gatingTiers = new Set(
-  String(policy.ci_gating_tiers || "t1,t2")
-    .split(",")
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean)
-);
+const policy = readPyaTextValues(policyFile, ["ci_gating_tiers", "ci_excluded_tiers"]);
+const tierSet = (value, fallback) =>
+  new Set(
+    String(value || fallback)
+      .split(",")
+      .map((entry) => entry.trim().toLowerCase())
+      .filter(Boolean)
+  );
+const gatingTiers = tierSet(policy.ci_gating_tiers, "t1,t2");
+const excludedTiers = tierSet(policy.ci_excluded_tiers, "t3");
 
 function trackedQuizFiles() {
   const output = execFileSync("git", ["ls-files", "quiz"], { cwd: root, encoding: "utf8" });
@@ -78,7 +85,12 @@ const classified = files.map((file) => {
 
 const gated = [];
 const notGated = [];
+const excluded = [];
 for (const entry of classified) {
+  if (excludedTiers.has(entry.tier)) {
+    excluded.push(entry);
+    continue;
+  }
   const missing = missingRequirements(entry.requirements);
   if (!gatingTiers.has(entry.tier)) {
     notGated.push({ ...entry, reason: `tier ${entry.tier} is advisory` });
@@ -98,9 +110,10 @@ for (const entry of classified) {
 console.log("quiz tiers (policy: configure/test_tiers.pya)");
 for (const tier of ["t1", "t2", "t3"]) {
   const count = byTier.get(tier) || 0;
-  console.log(`  ${tier}  ${String(count).padStart(4)} files${gatingTiers.has(tier) ? "  (gating)" : "  (advisory)"}`);
+  const role = gatingTiers.has(tier) ? "gating" : excludedTiers.has(tier) ? "excluded" : "advisory";
+  console.log(`  ${tier}  ${String(count).padStart(4)} files  (${role})`);
 }
-console.log(`  gating ${gated.length} files, reporting ${notGated.length} without gating`);
+console.log(`  gating ${gated.length} files, reporting ${notGated.length} without gating, excluding ${excluded.length}`);
 if (notGated.length > 0) {
   console.log("");
   console.log("not gated in this environment:");

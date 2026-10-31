@@ -34,7 +34,11 @@ const rootTests = [
   ...testFilesUnder(path.join(root, "quiz", "runtime", "gpu")),
 ];
 
-const includeHouseTests = !/^(0|false|no)$/iu.test(String(process.env.PYASH_INCLUDE_HOUSE_TESTS || ""));
+// House quizzes are excluded by default. A house has its own repository and
+// runs its own checks, so this repository does not gate on them. Set
+// PYASH_INCLUDE_HOUSE_TESTS=1 to run them anyway while working on a house in
+// this checkout.
+const includeHouseTests = /^(1|true|yes)$/iu.test(String(process.env.PYASH_INCLUDE_HOUSE_TESTS || ""));
 const houseTests = !includeHouseTests
   ? []
   : fs.existsSync(path.join(root, "world", "house"))

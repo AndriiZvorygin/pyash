@@ -1,2 +1,14 @@
-su name ci_gating_tiers ob text "t0,t1,t2" ya
-su name ci_advisory_tiers ob text "t3" ya
+# Quiz tiers for the CI gate.
+#
+# t1 and t2 gate the run: they need nothing beyond the repository, or a
+# resource that CI provisions (wordnet, whisper sample audio, ffmpeg with the
+# drawtext filter).
+#
+# t3 is excluded. A quiz that depends on a house checkout belongs to that
+# house's own repository, which runs its own checks. Those quizzes are not run
+# here, and they are not reported as an environment gap either: the house is
+# not missing, it is simply out of scope for this repository.
+#
+# A tier that is in neither list is advisory: it is reported but not gated.
+su name ci_gating_tiers ob text "t1,t2" ya
+su name ci_excluded_tiers ob text "t3" ya
