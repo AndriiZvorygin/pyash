@@ -1,6 +1,6 @@
 # Acquired Source Data
 
-Retrieved 2026-10-31. Raw upstream files are preserved in the versioned directories below. The hashes identify the exact downloads used for local coverage checks.
+Retrieved 2026-10-31. Raw upstream files are tracked where redistribution terms permit. Restricted or unclear data is kept local-only; hashes identify the exact downloads used for local checks.
 
 ## Unicode Unihan 18.0.0
 
@@ -8,9 +8,10 @@ Retrieved 2026-10-31. Raw upstream files are preserved in the versioned director
 - Upstream: <https://www.unicode.org/Public/18.0.0/ucd/Unihan.zip>
 - License: [Unicode License V3](sources/unihan-18.0.0/LICENSE.txt)
 - SHA-256: `4c93ea9c1f636451729a840978f1667a53886af37ba854fdcce109721c63d43e`
-- Relevant properties include `kTGHZ2013`, `kMandarin`, `kHanyuPinyin`, `kCantonese`, `kTang`, `kFanqie`, and `kDefinition` ([UAX #38](https://www.unicode.org/reports/tr38/)).
+- Relevant properties include `kTGH`, `kTGHZ2013`, `kMandarin`, `kHanyuPinyin`, `kCantonese`, `kTang`, `kFanqie`, and `kDefinition` ([UAX #38](https://www.unicode.org/reports/tr38/)).
+- `kTGH` provides all 8,105 official table indices as `2013:<index>`. Local validation found 8,105 unique indices spanning 1–8,105; the documented level ranges are 1–3,500, 3,501–6,500, and 6,501–8,105.
 - Local coverage within the 8,105-character set: `kTGHZ2013` 8,105; `kMandarin` 8,105; `kCantonese` 8,064; `kTang` 2,319; `kHanyuPinyin` 5,596; `kFanqie` 5,103; `kDefinition` 7,758.
-- `kTGHZ2013` values provide Pinyin readings and locations in the referenced dictionary; they do not encode the official table's three levels or list rank.
+- `kTGHZ2013` values provide Pinyin readings and locations in the referenced dictionary. The official index and level are in the distinct `kTGH` property.
 
 ## WikiHan comparative Sinitic pronunciations
 
@@ -31,7 +32,28 @@ Retrieved 2026-10-31. Raw upstream files are preserved in the versioned director
 - SHA-256: `d4d3b50866622f5eaed90f31f3d73e61fc231dad36fe31e63d8bd2ff85c1970b`
 - The authors' page links this workbook as supplementary material for nearly 5,000 reconstructed Old Chinese items, but states no redistribution license. The workbook is locally available for inspection and ignored by Git; only its provenance and checksum are tracked.
 
+## Jun Da Modern Chinese character frequencies (local-only)
+
+- Listing: [Jun Da Chinese text computing, character frequency lists](https://lingua.mtsu.edu/chinese-computing/statistics/)
+- Direct source: <https://lingua.mtsu.edu/chinese-computing/statistics/char/download.php?Which=MO>
+- Supporting corpus description: [Da, 2004, fourth technical report](https://lingua.mtsu.edu/academic/dajun-4thtech.pdf)
+- Local file: `sources/junda-local/CharFreq-Modern.txt` (GBK/GB18030 encoded)
+- SHA-256: `de6649a691da4bccefc7b1467b2ff5888c85830a9fc88056e5d3d675ee9bb1a6`
+- The file contains 9,933 ranked characters. Its counts sum to 193,504,018 character occurrences; the source describes a modern Chinese corpus with informative and imaginative text. It supplies a broad written-language frequency signal.
+- The source site carries a copyright notice and does not state a redistribution license for the list. The downloaded file is therefore local-only and ignored by Git.
+
+## SUBTLEX-CH character frequencies
+
+- Dataset page: [Ghent University SUBTLEX-CH](https://www.ugent.be/plone_portal/pp/experimentele-psychologie/en/research/documents/subtlexch/overview.htm)
+- Original citation: Cai, Q., & Brysbaert, M. (2010). “SUBTLEX-CH: Chinese Word and Character Frequencies Based on Film Subtitles.” *PLOS ONE* 5(6): e10729. [doi:10.1371/journal.pone.0010729](https://doi.org/10.1371/journal.pone.0010729)
+- Downloaded archive: [`SUBTLEX-CH-CHR.zip`](sources/subtlex-ch-2010/SUBTLEX-CH-CHR.zip)
+- Normalized text: [`SUBTLEX-CH-CHR.utf8.tsv`](sources/subtlex-ch-2010/SUBTLEX-CH-CHR.utf8.tsv), converted from the archive's GB18030 text encoding to UTF-8 with LF line endings; trailing empty tab fields are removed, and non-empty fields and values are unchanged.
+- SHA-256: archive `ac5f26c497bf3975bec52895cef039cdb72b667dc3c95f05e4ee35ca8cb97a1f`; normalized TSV `eb5a5485df580fe54071ca8fe2891401ff39030c6a98fc2c768a12856478f4b1`.
+- The file reports 46,841,097 characters across 6,243 contexts and includes counts, per-million frequency, and context dispersion. PLOS describes the paper as openly available under its Creative Commons Attribution License; preserve attribution to Cai and Brysbaert and the original article when using or adapting the data.
+- See [`FREQUENCY.md`](FREQUENCY.md) for validation and the comparison against the official 8,105-character inventory.
+
 ## Source follow-up
 
-- The MOE page for the official *Table of General Standard Chinese Characters* is <https://www.moe.gov.cn/jyb_sjzl/ziliao/A19/201306/t20130601_186002.html>. Unihan gives the full 8,105-character set but not its official levels/order; acquire or extract the MOE table before assigning level-based priorities.
+- Unihan's `kTGH` property already provides each character's official *Table of General Standard Chinese Characters* index and the index ranges identify its level. No additional table download is needed for level membership.
 - WikiHan supplies Middle Chinese readings; the Baxter–Sagart workbook supplies Old Chinese reconstructions. Keep the two periods and their uncertainty labels distinct.
+- Frequency rankings depend on corpus/register. Preserve Jun Da's modern written-text rank separately from SUBTLEX-CH's film/television-dialogue rank.
