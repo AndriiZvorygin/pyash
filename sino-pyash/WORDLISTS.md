@@ -11,6 +11,7 @@ The data is in [`sources/asjp-v21/`](sources/asjp-v21/):
 - [`parameters.csv`](sources/asjp-v21/parameters.csv) maps the concept IDs to glosses.
 - [`sources.bib`](sources/asjp-v21/sources.bib) contains the source entries referenced by the selected forms.
 - [`TRANSCRIPTION.md`](sources/asjp-v21/TRANSCRIPTION.md) explains ASJP's sound transcription and segment conventions.
+- [`PRONUNCIATION.md`](PRONUNCIATION.md) audits segment coverage and limits for the Ket/Yeniseian, North Caucasian, and Tibetan samples, and defines how to preserve pronunciation provenance.
 - [`LICENSE`](sources/asjp-v21/LICENSE) and [`UPSTREAM-README.md`](sources/asjp-v21/UPSTREAM-README.md) preserve the dataset license and citation instructions.
 
 The selected variety records and their concept coverage are:
@@ -33,6 +34,8 @@ The language samples' clause-level word-order descriptions and their limits are 
 These are basic-vocabulary lists, not full dictionaries. ASJP concept matches give translation equivalents for a gloss. They do not establish cognacy, sound correspondence, borrowing, or descent. For phonetic sampling, record the language variety, source list ID, transcription, and whether the comparison is a translation equivalent, a documented loan, or a supported cognate. Treat the grouping column as a search label, not as a phonetic distance score.
 
 The source file's `Value`, `Form`, and `Segments` columns follow the ASJP/CLDF conventions and should be read with the included transcription guide. They are not all IPA strings. The per-form `Source` IDs link to the selected bibliography in `sources.bib`.
+
+For pronunciation comparisons, use the audit and normalization limits in [`PRONUNCIATION.md`](PRONUNCIATION.md). In particular, a BIPA-valid segment token does not certify the precision of its source transcription.
 
 For deeper Sino-Tibetan etymological coverage, [STEDT](https://stedt.johnblowe.com/node/124.html) is a useful next source. Its release page directs interested users to request the download URL; I have not bundled that database because a direct public download and redistribution license were not established here.
 
