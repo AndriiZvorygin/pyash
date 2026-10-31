@@ -23,6 +23,9 @@ export function classify(output) {
   if (/no such file or directory.*(module|know|artifacts|input)/i.test(output)) return "needs input";
   if (/Error opening output .*examples\/out/i.test(output)) return "needs input";
   if (/file or directory unavailable: .*examples\/out/i.test(output)) return "needs input";
+  // An example input artifact that a fresh checkout does not have. The
+  // examples/out folder holds generated files and is not in the repository.
+  if (/examples\/out\/[^\s"']*.*no such file or directory/i.test(output)) return "needs input";
 
   // A live model, media backend, audio device, or built helper binary.
   if (/localhost:11434|localhost:8000|localhost:8188|ollama request failed|whisperx|fetch failed|ECONNREFUSED/i.test(output)) return "needs backend";

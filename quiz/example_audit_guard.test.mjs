@@ -42,6 +42,15 @@ test("a missing input file is not a defect", () => {
   );
 });
 
+test("a missing example input artifact is not a defect", () => {
+  // The examples/out folder holds generated files and is not in the
+  // repository, so a fresh checkout does not have them.
+  assert.equal(
+    classify("head: examples/out/love-of-god-30s.srt: No such file or directory"),
+    "needs input"
+  );
+});
+
 test("a live model is not a defect", () => {
   assert.equal(
     classify("ollama request failed: 500 Internal Server Error (http://localhost:11434/api/chat)"),
