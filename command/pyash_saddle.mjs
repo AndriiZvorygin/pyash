@@ -50,6 +50,7 @@ import {
   formatSaddleBackendPicker,
   formatSaddleModelPicker,
   formatSaddleStatus,
+  layoutSaddleInput,
   listSaddleBackendOptions,
   listSaddleMindNames,
   normalizeSaddleBackend,
@@ -317,8 +318,12 @@ function writeLine(text = "") {
   process.stdout.write(`${String(text)}\n`);
 }
 
-function clearRenderedInput(rows) {
-  const count = Math.max(1, Number(rows) || 1);
+function clearRenderedInput(layout) {
+  const count = Math.max(1, Number(layout?.rowCount) || 1);
+  const cursorRow = Math.max(0, Math.min(count - 1, Number(layout?.cursorRow) || 0));
+  const rowsToBottom = count - cursorRow - 1;
+  if (rowsToBottom > 0) process.stdout.write(`\u001b[${rowsToBottom}B`);
+  process.stdout.write("\r");
   if (count > 1) process.stdout.write(`\u001b[${count - 1}A`);
   for (let index = 0; index < count; index += 1) {
     process.stdout.write("\u001b[2K\r");
@@ -328,16 +333,20 @@ function clearRenderedInput(rows) {
   process.stdout.write("\r");
 }
 
-function renderInput(state, { rows = 1, clear = true, label = "pyash> " } = {}) {
-  if (clear) clearRenderedInput(rows);
-  const lines = String(state?.value ?? "").split("\n");
-  process.stdout.write(`${label}${lines.join("\n")}`);
-  const cursorLine = lines.length - 1;
-  const cursorColumn = String(lines[cursorLine] ?? "").length;
-  if (cursorLine > 0) process.stdout.write(`\u001b[${cursorLine}A`);
-  process.stdout.write(`\r\u001b[${label.length + (cursorLine === 0 ? cursorColumn : 0)}C`);
-  if (cursorLine > 0) process.stdout.write(`\u001b[${cursorLine}B\r\u001b[${label.length + cursorColumn}C`);
-  return lines.length;
+function renderInput(state, { previousLayout, clear = true, label = "pyash> " } = {}) {
+  if (clear) clearRenderedInput(previousLayout);
+  const layout = layoutSaddleInput({
+    value: state?.value,
+    cursor: state?.cursor,
+    label,
+    columns: process.stdout.columns
+  });
+  process.stdout.write(layout.lines.join("\n"));
+  const rowsBelowCursor = layout.rowCount - layout.cursorRow - 1;
+  if (rowsBelowCursor > 0) process.stdout.write(`\u001b[${rowsBelowCursor}A`);
+  process.stdout.write("\r");
+  if (layout.cursorColumn > 0) process.stdout.write(`\u001b[${layout.cursorColumn}C`);
+  return layout;
 }
 
 async function resumeDuty(dutyId) {
@@ -461,7 +470,7 @@ async function main() {
   let thinkPicker = null;
   let sessionPicker = null;
   let promptLabel = "pyash> ";
-  let renderedRows = 1;
+  let renderedInputLayout = { rowCount: 1, cursorRow: 0, cursorColumn: 0 };
 
   const saddleHousekeeper = () => createGpuHousekeeperAdapter({ baseUrl: config.housekeeperUrl });
   const sessionLabel = () => sessionFile
@@ -512,7 +521,11 @@ async function main() {
   };
   const prompt = ({ clear = true, label = promptLabel } = {}) => {
     promptLabel = label;
-    renderedRows = renderInput({ value: "", cursor: 0 }, { rows: renderedRows, clear, label });
+    renderedInputLayout = renderInput({ value: "", cursor: 0 }, {
+      previousLayout: renderedInputLayout,
+      clear,
+      label
+    });
   };
   const applyStrataContext = async (tokens) => {
     busy = true;
@@ -1090,7 +1103,7 @@ async function main() {
     }
 
     busy = true;
-    clearRenderedInput(renderedRows);
+    clearRenderedInput(renderedInputLayout);
     writeLine(`you> ${input}`);
     writeLine(`working: ${model} via ${backend}${isLocalModelBackend(backend) ? " through GPU Housekeeper" : ""}`);
     const stopProgress = startSaddleProgress({
@@ -1168,7 +1181,9 @@ async function main() {
     },
     onExit: () => { shutdown().catch(() => {}); },
     onChange: (state) => {
-      if (!busy && !closing) renderedRows = renderInput(state, { rows: renderedRows, label: promptLabel });
+      if (!busy && !closing) {
+        renderedInputLayout = renderInput(state, { previousLayout: renderedInputLayout, label: promptLabel });
+      }
     }
   });
   process.stdin.on("data", (chunk) => decoder.feed(chunk));

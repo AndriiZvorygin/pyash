@@ -26,6 +26,7 @@ import {
   formatSaddleBackendPicker,
   formatSaddleModelPicker,
   formatSaddleStatus,
+  layoutSaddleInput,
   listSaddleBackendOptions,
   listSaddleMindNames,
   normalizeSaddleThinkSelection,
@@ -52,6 +53,28 @@ test("coding saddle submits Enter and keeps newline input separate", async () =>
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(submitted, ["one\ntwo"]);
   assert.equal(decoder.getState().value, "");
+});
+
+test("coding saddle redraw layout wraps long lines once and preserves the cursor row", () => {
+  const value = "are you able to access the current directory and its file contents? can you see the sino-pyash folder?";
+  const layout = layoutSaddleInput({ value, cursor: value.length, label: "pyash> ", columns: 32 });
+
+  assert.ok(layout.rowCount > 1);
+  assert.equal(layout.rowCount, layout.lines.length);
+  assert.equal(layout.lines.filter((line) => line.includes("pyash> ")).length, 1);
+  assert.ok(layout.lines.every((line) => line.length < 32));
+  assert.equal(layout.lines.join("").slice("pyash> ".length), value);
+  assert.equal(layout.cursorRow, layout.rowCount - 1);
+  assert.equal(layout.cursorColumn, layout.lines.at(-1).length);
+
+  const cursorInsideWrappedLine = layoutSaddleInput({ value: "abcdefghijklmnopqrstuv", cursor: 6, label: "pyash> ", columns: 12 });
+  assert.equal(cursorInsideWrappedLine.cursorRow, 1);
+  assert.equal(cursorInsideWrappedLine.cursorColumn, 2);
+
+  const multiline = layoutSaddleInput({ value: "first\nsecond", cursor: 12, label: "pyash> ", columns: 32 });
+  assert.deepEqual(multiline.lines, ["pyash> first", "second"]);
+  assert.equal(multiline.cursorRow, 1);
+  assert.equal(multiline.cursorColumn, 6);
 });
 
 test("coding saddle supports cursor editing and control actions", () => {

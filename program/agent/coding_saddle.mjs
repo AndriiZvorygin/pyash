@@ -58,6 +58,48 @@ function normalizeText(value) {
   return String(value ?? "").trim();
 }
 
+export function layoutSaddleInput({ value = "", cursor, label = "pyash> ", columns = 80 } = {}) {
+  const text = String(value ?? "");
+  const prefix = String(label ?? "");
+  const cursorIndex = Math.max(0, Math.min(text.length, Number.isInteger(cursor) ? cursor : text.length));
+  // Leave the terminal's final column unused so redraws never trigger implicit autowrap.
+  const maxColumn = Math.max(1, Math.floor(Number(columns) || 80) - 1);
+  const lines = [""];
+  let row = 0;
+  let column = 0;
+  let cursorPosition = null;
+  const rendered = `${prefix}${text}`;
+  const renderedCursor = prefix.length + cursorIndex;
+
+  for (let index = 0; index < rendered.length; index += 1) {
+    const character = rendered[index];
+    if (character === "\n") {
+      if (index === renderedCursor) cursorPosition = { row, column };
+      lines.push("");
+      row += 1;
+      column = 0;
+      if (index + 1 === renderedCursor) cursorPosition = { row, column };
+      continue;
+    }
+    if (column >= maxColumn) {
+      lines.push("");
+      row += 1;
+      column = 0;
+    }
+    if (index === renderedCursor) cursorPosition = { row, column };
+    lines[row] += character;
+    column += 1;
+  }
+
+  if (renderedCursor === rendered.length) cursorPosition = { row, column };
+  return {
+    lines,
+    rowCount: lines.length,
+    cursorRow: cursorPosition?.row ?? row,
+    cursorColumn: cursorPosition?.column ?? column
+  };
+}
+
 export function normalizeSaddleModel(value, fallback = "qwen3.5:9b") {
   return normalizeText(value) || fallback;
 }
