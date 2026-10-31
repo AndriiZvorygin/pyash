@@ -919,10 +919,11 @@ Per `AGENTS.md`:
    `.github/workflows/examples-audit.yml` and gates on regressions rather than on
    an absolute pass.
 3. **Core/periphery target** — *resolved.* There is no ratio target. The gauge
-   is the verb-layer gauge: `program/verbs/` now holds 151 modules and 15 of
-   them exceed 400 lines. The remaining three giants
-   (`itinerary_media.mjs`, `qwen_say.mjs`, `command.mjs`) are individual verb
-   modules, not implementation folders, so bounding them is a separate tranche.
+   is the verb-layer gauge: `program/verbs/` now holds 162 modules and 15 of
+   them exceed 400 lines. The largest is `qwen_say.mjs` (1,622), then
+   `command.mjs` (1,072). The third giant, `itinerary_media.mjs` (2,098),
+   held five verb families in one file and is now
+   `program/verbs/itinerary/`, one family per module.
 4. **Container-path examples** — *resolved.* `/workplace/...` paths only exist
    inside the container image; the audit classifies them as *needs backend*
    rather than failed, so the baseline holds no entry for them.
@@ -932,11 +933,17 @@ Per `AGENTS.md`:
 
 ## Still open for the owner
 
-1. **The remaining verb giants.** Whether `itinerary_media.mjs` (2,098),
-   `qwen_say.mjs` (1,622) and `command.mjs` (1,072) should be split, and on
-   what domain boundary. Each is internally coherent — one concern, many
-   small functions — so a split would be along internal seams rather than
-   along a domain line.
+1. **The remaining verb giants.** *(partly resolved)* `itinerary_media.mjs`
+   (2,098) held five verb families in one file — `cut`, `draw`, `promptify`,
+   `concatenate` and `footnote` — so it was split into
+   `program/verbs/itinerary/`, one family per module, with the shared
+   helpers in `cuts.mjs`, `window.mjs`, `manifest.mjs`, `routes.mjs` and
+   `media.mjs`. `loop_control.mjs` held two families and is now
+   `program/verbs/loop_control/`. The rule that a module owns one verb
+   family is pinned by `quiz/verb_family_ownership.test.mjs`. What is left
+   is `qwen_say.mjs` (1,622) and `command.mjs` (1,072): each is already one
+   family, so a split there is along internal seams rather than along a
+   domain line.
 2. **`agenda-stage3-summary-renderer.mjs`** (6,675 lines) is already in
    `program/library/` and one concern, but is still a candidate for splitting.
 3. **The house-facing surface.** *resolved.* The surface is declared in

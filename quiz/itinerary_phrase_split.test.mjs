@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { splitTextPhrases, cutFromTextToNameItinerary } from "../program/verbs/itinerary_media.mjs";
+import { splitTextPhrases } from "../program/verbs/itinerary/cuts.mjs";
+import { cutFromTextToNameItinerary } from "../program/verbs/itinerary/cut.mjs";
 import { splitItineraryCutsIntoPhrases } from "../command/itinerary_split_phrases.mjs";
 
 test("phrase splitter splits on commas", () => {

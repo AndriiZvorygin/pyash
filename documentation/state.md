@@ -27,8 +27,8 @@ illustrate them.
 | Measure | Value |
 |---|---|
 | Commits | 4,675 |
-| Verb modules (top level) | 83 |
-| Modules under `program/verbs/` | 151 |
+| Verb modules (top level) | 81 |
+| Modules under `program/verbs/` | 162 |
 | Normative specifications | 24 |
 | Quiz files | 793 tracked (759 gate the CI run) |
 | Quiz tests | 3,051, zero failures |
@@ -42,7 +42,7 @@ Three buckets, because they answer different questions.
 | Bucket | Lines | Files | What it means |
 |---|---|---|---|
 | Interpreter core | 6,393 | 25 | The language machinery: parser, bridge, memory, program |
-| Verb layer | 29,571 | 151 | The dispatch surface users write against |
+| Verb layer | 29,697 | 162 | The dispatch surface users write against |
 | Applications | 173,147 | 690 | Library, agent, runtime, command, module |
 
 The core-to-applications ratio is **1:27.08**, and the core is 3.1% of the
@@ -58,15 +58,22 @@ the verb-layer gauge below.
 
 ### Verb surface
 
-`program/verbs/` holds 151 modules; **15** exceed 400 lines. The largest:
+`program/verbs/` holds 162 modules; **15** exceed 400 lines. The largest:
 
 | Lines | Module |
 |---|---|
-| 2,098 | `program/verbs/itinerary_media.mjs` |
 | 1,622 | `program/verbs/qwen_say.mjs` |
 | 1,072 | `program/verbs/command.mjs` |
 | 874 | `program/verbs/mind/mind.mjs` |
 | 775 | `program/verbs/wise_chip.mjs` |
+| 764 | `program/verbs/hear.mjs` |
+
+A module owns one verb family — the shapes of one verb. A general verb may
+reach a domain by way of the module for that domain, the way `write` reaches
+mind and vector, but a module that is the only home for two families has no
+domain to bound it. `program/verbs/itinerary_media.mjs` (2,098) held five
+families and is now `program/verbs/itinerary/`, one family per module.
+`quiz/verb_family_ownership.test.mjs` holds the rule.
 
 The translation domain (85 modules, 20,344 lines) was moved out of
 `program/verbs/` into `program/library/translation/` so that `program/verbs/`
@@ -85,7 +92,7 @@ folder (132 modules, 15,728 lines) moved the same way, into
   `ya`/`def`/`do`/`ret`, result facts for imperatives, sandpit execution for
   ceremonies with multi-word names.
 - `program/bridge/signature.mjs`: the signature registry and its lookups.
-- `program/verbs/`: verb dispatchers, one verb per file, kept thin.
+- `program/verbs/`: verb dispatchers, one verb family per file, kept thin.
 - `program/library/`: domain logic and data — the translation adapters, the
   reporter pipeline, the VLIW database.
 - `program/remember/index.mjs`: in-memory store with get/set/dump/reset,
@@ -128,7 +135,7 @@ folder (132 modules, 15,728 lines) moved the same way, into
   Mutations to `to` targets inside sandpits are written back when a loop
   invocation completes; general sandpit write-back beyond the evoker and the
   result is still limited.
-- `program/verbs/` still has 17 modules over 400 lines; the verb surface is
+- `program/verbs/` still has 15 modules over 400 lines; the verb surface is
   not yet uniformly thin.
 
 ## House and example caveats

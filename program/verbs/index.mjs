@@ -78,7 +78,8 @@ import gather, { signatures as gatherSignatures } from "./gather.mjs";
 import cast, { signatures as castSignatures } from "./cast.mjs";
 import evoke, { signatures as evokeSignatures } from "./evoke.mjs";
 import guarantee, { signatures as guaranteeSignatures } from "./guarantee.mjs";
-import depart, { signatures as loopControlSignatures } from "./loop_control.mjs";
+import depart, { signatures as departSignatures } from "./loop_control/depart.mjs";
+import { signatures as continueSignatures } from "./loop_control/continue.mjs";
 import exportFact, { signatures as exportSignatures } from "./export.mjs";
 import repair, { signatures as repairSignatures } from "./repair.mjs";
 import establish, { signatures as establishSignatures } from "./establish.mjs";
@@ -87,7 +88,11 @@ import router, { signatures as routerSignatures } from "./router.mjs";
 import verify, { signatures as verifySignatures } from "./verify.mjs";
 import verifyHnucGrammar, { signatures as verifyHnucGrammarSignatures } from "./verify_hnuc_grammar.mjs";
 import concatenateFilename, { signatures as concatenateFilenameSignatures } from "./path_join.mjs";
-import itineraryMedia, { signatures as itineraryMediaSignatures } from "./itinerary_media.mjs";
+import { cut as itineraryCut, signatures as itineraryCutSignatures } from "./itinerary/cut.mjs";
+import { draw as itineraryDraw, signatures as itineraryDrawSignatures } from "./itinerary/draw.mjs";
+import { promptify as itineraryPromptify, signatures as itineraryPromptifySignatures } from "./itinerary/promptify.mjs";
+import { concatenate as itineraryConcatenate, signatures as itineraryConcatenateSignatures } from "./itinerary/concatenate.mjs";
+import { footnote as itineraryFootnote, signatures as itineraryFootnoteSignatures } from "./itinerary/footnote.mjs";
 import drawTextImage, { signatures as drawTextImageSignatures } from "./draw_text_image.mjs";
 import android, { signatures as androidSignatures } from "./android.mjs";
 import gpu, { signatures as gpuSignatures } from "./gpu.mjs";
@@ -178,7 +183,11 @@ export {
   verify,
   verifyHnucGrammar,
   concatenateFilename,
-  itineraryMedia,
+  itineraryCut,
+  itineraryDraw,
+  itineraryPromptify,
+  itineraryConcatenate,
+  itineraryFootnote,
   drawTextImage,
   android,
   gpu,
@@ -275,7 +284,8 @@ export const builtInSignatures = [
   ...castSignatures,
   ...evokeSignatures,
   ...guaranteeSignatures,
-  ...loopControlSignatures,
+  ...departSignatures,
+  ...continueSignatures,
   ...exportSignatures,
   ...repairSignatures,
   ...establishSignatures,
@@ -284,7 +294,11 @@ export const builtInSignatures = [
   ...verifySignatures,
   ...verifyHnucGrammarSignatures,
   ...concatenateFilenameSignatures,
-  ...itineraryMediaSignatures,
+  ...itineraryCutSignatures,
+  ...itineraryDrawSignatures,
+  ...itineraryPromptifySignatures,
+  ...itineraryConcatenateSignatures,
+  ...itineraryFootnoteSignatures,
   ...drawTextImageSignatures,
   ...androidSignatures,
   ...gpuSignatures,

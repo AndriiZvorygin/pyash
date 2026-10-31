@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { footnoteVideo } from "../program/verbs/itinerary_media.mjs";
+import { footnoteVideo } from "../program/verbs/itinerary/footnote.mjs";
 
 test("footnoteVideo forwards by num margin ratio to runner", async () => {
   const cwd = process.cwd();

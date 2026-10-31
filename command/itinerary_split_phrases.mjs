@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parseItineraryPya, renderItineraryPya } from "./itinerary_io.mjs";
-import { splitTextPhrases } from "../program/verbs/itinerary_media.mjs";
+import { splitTextPhrases } from "../program/verbs/itinerary/cuts.mjs";
 
 function usage() {
   return "Usage: node command/itinerary_split_phrases.mjs <input-itinerary.pya> <output-itinerary.pya> [--max-seconds <num>]";

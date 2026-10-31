@@ -5,7 +5,7 @@ import path from "node:path";
 import os from "node:os";
 import { spawnSync } from "node:child_process";
 
-import { concatenateFromNameItinerary } from "../program/verbs/itinerary_media.mjs";
+import { concatenateFromNameItinerary } from "../program/verbs/itinerary/concatenate.mjs";
 import { forget, doRemember } from "../program/remember/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 
