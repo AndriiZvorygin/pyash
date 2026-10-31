@@ -10,7 +10,17 @@ import { allRemember, forget, remember, doRemember } from "../program/remember/i
 import { setEntryModulePath } from "../program/bridge/modules.mjs";
 import { loadDefaultConfig } from "./run_pya_helpers.mjs";
 import { resolveConfigText } from "../program/configure/env.mjs";
-import { resolveAgentHouse, ensureAgentDirs } from "../program/agent/session.mjs";
+import {
+  ensureAgentDirs,
+  listSessionFiles,
+  resolveAgentHouse
+} from "../program/agent/session.mjs";
+import {
+  getCodingSaddleProfile,
+  readCodingSaddleState,
+  setCodingSaddleProfile,
+  writeCodingSaddleState
+} from "../program/agent/coding_saddle_state.mjs";
 import { mind_to_name_text } from "../program/verbs/mind/mind.mjs";
 import { requestMindInterrupt } from "../program/agent/interrupt.mjs";
 import { queueDepth } from "../program/runtime/gpu/queue.mjs";
@@ -50,7 +60,8 @@ import {
   resolveSaddleMindProfile,
   parseSaddleMindCommand,
   SADDLE_OLLAMA_CONTEXT_PRESETS,
-  saddleToolEventLabel
+  saddleToolEventLabel,
+  startSaddleProgress
 } from "../program/agent/coding_saddle.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -171,12 +182,47 @@ export async function prepareSaddle({
   forget();
   await loadDefaultConfig({ cwd: resolvedRuntimeRoot, interpretFn: interpret, entryPath: path.join(resolvedRuntimeRoot, "saddle.pya") });
   await importSaddleTools();
-  const selectedMind = String(mindName || configValue("coding saddle mind", "mind")).trim();
-  const profileResolved = resolveConfiguredSaddleMind(selectedMind);
-  const resolvedBackend = profileResolved.backend;
-  const resolvedModel = normalizeSaddleModel(model || profileResolved.model);
-  const resolvedHost = normalizeSaddleHost(host || profileResolved.host);
   const housekeeperUrl = resolveSaddleHousekeeperUrl(resolvedRuntimeRoot);
+  const configuredMindName = String(configValue("coding saddle mind", "mind")).trim();
+  const agentHouse = resolveAgentHouse({
+    mindName: AGENT_NAME,
+    rememberFn: (name) => name === "world root"
+      ? { ob: { filename: resolvedWorldRoot } }
+      : remember(name)
+  });
+  await ensureAgentDirs(agentHouse);
+  const saddleStatePath = path.join(agentHouse, "conduct", "coding-saddle.pya");
+  const saddleState = await readCodingSaddleState(saddleStatePath);
+  const sessionName = saddleState.activeSessionName || SESSION_NAME;
+  const sessionFile = saddleState.activeSessionFile ? path.resolve(saddleState.activeSessionFile) : "";
+  const savedProfile = getCodingSaddleProfile(saddleState, { sessionName, sessionFile });
+  const hasExplicitSelection = Boolean(String(mindName || model || host || "").trim());
+  const useSavedProfile = !hasExplicitSelection;
+  const selectionSource = hasExplicitSelection
+    ? "startup override"
+    : (useSavedProfile && savedProfile.backend && savedProfile.model)
+      ? "saved session state"
+      : "configured mind";
+  const selectedMind = String(
+    mindName
+    || (useSavedProfile && savedProfile.mindName)
+    || configuredMindName
+  ).trim();
+  const profileResolved = resolveConfiguredSaddleMind(selectedMind);
+  const resolvedBackend = normalizeSaddleBackend(
+    (useSavedProfile && savedProfile.backend)
+    || profileResolved.backend
+  );
+  const resolvedModel = normalizeSaddleModel(
+    model
+    || (useSavedProfile && savedProfile.model)
+    || profileResolved.model
+  );
+  const resolvedHost = normalizeSaddleHost(
+    host
+    || (useSavedProfile && savedProfile.host)
+    || profileResolved.host
+  );
   const mindModels = new Map([[selectedMind, resolvedModel]]);
   configureSaddle({
     cwd: resolvedCwd,
@@ -187,8 +233,6 @@ export async function prepareSaddle({
     host: resolvedHost,
     systemPrompt
   });
-  const agentHouse = resolveAgentHouse({ mindName: AGENT_NAME, rememberFn: remember });
-  await ensureAgentDirs(agentHouse);
   return {
     cwd: resolvedCwd,
     runtimeRoot: resolvedRuntimeRoot,
@@ -197,6 +241,13 @@ export async function prepareSaddle({
     model: resolvedModel,
     backend: resolvedBackend,
     host: resolvedHost,
+    sessionName,
+    sessionFile,
+    selectionSource,
+    defaultMindName: configuredMindName,
+    defaultProfile: resolveConfiguredSaddleMind(configuredMindName),
+    saddleState,
+    saddleStatePath,
     housekeeperUrl,
     mindModels,
     agentHouse,
@@ -395,6 +446,8 @@ async function main() {
   const mindModels = config.mindModels;
   let backend = config.backend;
   let host = config.host;
+  let sessionName = config.sessionName || SESSION_NAME;
+  let sessionFile = config.sessionFile || "";
   let contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
   let thinkSetting = null;
   let busy = false;
@@ -406,10 +459,39 @@ async function main() {
   let modelPickerLoading = false;
   let contextPicker = null;
   let thinkPicker = null;
+  let sessionPicker = null;
   let promptLabel = "pyash> ";
   let renderedRows = 1;
 
   const saddleHousekeeper = () => createGpuHousekeeperAdapter({ baseUrl: config.housekeeperUrl });
+  const sessionLabel = () => sessionFile
+    ? path.basename(sessionFile, path.extname(sessionFile))
+    : sessionName;
+  const persistSelection = async ({ includeProfile = true } = {}) => {
+    let nextState = {
+      ...config.saddleState,
+      activeSessionName: sessionName,
+      activeSessionFile: sessionFile
+    };
+    if (includeProfile) {
+      nextState = setCodingSaddleProfile(nextState, { sessionName, sessionFile }, {
+        mindName,
+        backend,
+        model,
+        host
+      });
+    }
+    config.saddleState = nextState;
+    await writeCodingSaddleState(config.saddleStatePath, nextState);
+  };
+  const reportSelectionSaved = async () => {
+    try {
+      await persistSelection();
+      writeLine(`saved model selection for session: ${sessionLabel()}`);
+    } catch (error) {
+      writeLine(`model selection is active but could not be saved: ${error.message}`);
+    }
+  };
   const showStatus = async () => {
     const queue = isLocalModelBackend(backend)
       ? await saddleHousekeeper().getQueue().catch(() => ({ available: false }))
@@ -425,7 +507,7 @@ async function main() {
       cwd: config.cwd,
       queue,
       busy,
-      session: SESSION_NAME
+      session: sessionLabel()
     }));
   };
   const prompt = ({ clear = true, label = promptLabel } = {}) => {
@@ -464,6 +546,63 @@ async function main() {
     modelPickerTarget = null;
     writeLine(formatSaddleBackendPicker({ backends: backendPicker }));
     prompt({ clear: false, label: "select backend> " });
+  };
+  const showSessionPicker = async () => {
+    const files = await listSessionFiles(path.join(config.agentHouse, "session"));
+    const recentFiles = files.slice(-30).reverse();
+    sessionPicker = [
+      { model: "__daily_coding__", value: "__daily_coding__", label: "Daily coding session" },
+      ...recentFiles.map((filename) => ({
+        model: filename,
+        value: filename,
+        label: filename
+      }))
+    ];
+    writeLine("available conversation sessions:");
+    for (const [index, option] of sessionPicker.entries()) {
+      const selected = option.value === "__daily_coding__"
+        ? !sessionFile && sessionName === SESSION_NAME
+        : sessionFile && path.basename(sessionFile) === option.value;
+      writeLine(`${index + 1}. ${option.label}${selected ? " (current)" : ""}`);
+    }
+    writeLine("Choose a session file; the current backend and model are saved separately for each session.");
+    prompt({ clear: false, label: "select session> " });
+  };
+  const activateSession = async (selection) => {
+    await dischargeSaddleModel(model, backend, { housekeeperUrl: config.housekeeperUrl, cwd: config.runtimeRoot })
+      .catch((error) => writeLine(`discharge: ${error.message}`));
+    if (selection.value === "__daily_coding__") {
+      sessionName = SESSION_NAME;
+      sessionFile = "";
+    } else {
+      sessionName = path.basename(selection.value, path.extname(selection.value));
+      sessionFile = path.resolve(config.agentHouse, "session", selection.value);
+    }
+    const saved = getCodingSaddleProfile(config.saddleState, { sessionName, sessionFile });
+    if (Object.keys(saved).length) {
+      mindName = saved.mindName || config.defaultMindName;
+      const configured = resolveConfiguredSaddleMind(mindName);
+      backend = normalizeSaddleBackend(saved.backend || configured.backend);
+      model = normalizeSaddleModel(saved.model || configured.model);
+      host = normalizeSaddleHost(saved.host || configured.host);
+    } else {
+      mindName = config.defaultMindName;
+      backend = config.defaultProfile.backend;
+      model = config.defaultProfile.model;
+      host = config.defaultProfile.host;
+    }
+    mindModels.set(mindName, model);
+    contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
+    thinkSetting = null;
+    configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
+    try {
+      await persistSelection({ includeProfile: false });
+    } catch (error) {
+      writeLine(`session is active but could not be saved: ${error.message}`);
+    }
+    promptLabel = "pyash> ";
+    writeLine(`session: ${sessionLabel()} | mind: ${mindName} | backend: ${backend} | model: ${model}`);
+    prompt({ clear: false });
   };
   const showModelPicker = async (target = null) => {
     const selection = target || { backend, host, model, mindName };
@@ -645,6 +784,17 @@ async function main() {
       prompt({ clear: false, label: "model loading> " });
       return;
     }
+    if (sessionPicker) {
+      const selected = resolveSaddleModelOption(input, sessionPicker);
+      if (!selected) {
+        writeLine("invalid session selection");
+        prompt({ clear: false, label: "select session> " });
+        return;
+      }
+      sessionPicker = null;
+      await activateSession(selected);
+      return;
+    }
     if (backendPicker) {
       const selected = resolveSaddleModelOption(input, backendPicker);
       if (!selected) {
@@ -736,12 +886,30 @@ async function main() {
       promptLabel = "pyash> ";
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
       writeLine(`mind: ${mindName} | backend: ${backend} | model: ${model}`);
+      await reportSelectionSaved();
       prompt({ clear: false });
       return;
     }
     if (input.trim() === "/help") {
-      writeLine("/status  /mind [name]  /model [backend|model-id]  /context [size]  /think [mode]  /host <url>  /usage  /discharge  /exit");
+      writeLine("/status  /session  /mind [name]  /model [backend|model-id]  /context [size]  /think [mode]  /host <url>  /usage  /discharge  /exit");
       prompt({ clear: false });
+      return;
+    }
+    const sessionMatch = input.trim().match(/^\/session(?:\s+(.+))?$/i);
+    if (sessionMatch) {
+      const requested = String(sessionMatch[1] || "").trim();
+      if (!requested || requested.toLowerCase() === "list") {
+        await showSessionPicker();
+        return;
+      }
+      const files = await listSessionFiles(path.join(config.agentHouse, "session"));
+      const match = files.find((filename) => filename.toLowerCase() === requested.toLowerCase());
+      if (!match) {
+        writeLine(`unknown session file: ${requested}; use /session to list available sessions`);
+        prompt({ clear: false });
+        return;
+      }
+      await activateSession({ value: match });
       return;
     }
     if (input.trim() === "/usage") {
@@ -778,6 +946,7 @@ async function main() {
       mindModels.set(mindName, model);
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
       writeLine(`mind: ${mindName} | model: ${model}`);
+      await reportSelectionSaved();
       prompt({ clear: false });
       return;
     }
@@ -906,6 +1075,7 @@ async function main() {
       thinkSetting = null;
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
       writeLine(`model: ${model}`);
+      await reportSelectionSaved();
       prompt({ clear: false });
       return;
     }
@@ -914,6 +1084,7 @@ async function main() {
       host = normalizeSaddleHost(hostMatch[1], host);
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
       writeLine(`host: ${host}`);
+      await reportSelectionSaved();
       prompt({ clear: false });
       return;
     }
@@ -921,7 +1092,12 @@ async function main() {
     busy = true;
     clearRenderedInput(renderedRows);
     writeLine(`you> ${input}`);
-    writeLine(`saddle: queued ${model} via ${backend}${isLocalModelBackend(backend) ? " through GPU Housekeeper" : ""}`);
+    writeLine(`working: ${model} via ${backend}${isLocalModelBackend(backend) ? " through GPU Housekeeper" : ""}`);
+    const stopProgress = startSaddleProgress({
+      backend,
+      model,
+      onProgress: writeLine
+    });
     const turnUsages = [];
     try {
       const result = await runSaddleTurn({
@@ -933,6 +1109,8 @@ async function main() {
         contextWindow,
         think: thinkSetting?.think,
         reasoningEffort: thinkSetting?.reasoningEffort,
+        sessionName,
+        sessionFile,
         onUsage: (usage) => {
           turnUsages.push(usage);
           return usage;
@@ -960,6 +1138,7 @@ async function main() {
     } catch (error) {
       writeLine(`saddle error> ${error?.message ?? error}`);
     } finally {
+      stopProgress();
       busy = false;
       prompt({ clear: false });
     }
@@ -974,6 +1153,7 @@ async function main() {
   writeLine("Pyash coding saddle");
   writeLine("Enter submits; Shift+Enter or Ctrl+J inserts a newline; Ctrl+C interrupts; Ctrl+D exits.");
   await showStatus();
+  writeLine(`model selection source: ${config.selectionSource}`);
   const decoder = createSaddleInputDecoder({
     onSubmit: submit,
     onCancel: async () => {

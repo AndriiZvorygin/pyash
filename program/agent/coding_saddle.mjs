@@ -46,7 +46,8 @@ export function buildSaddleStrataContextOptions({
 
 export const DEFAULT_CODING_SADDLE_SYSTEM_PROMPT = [
   "You are the Pyash coding saddle: an interactive coding agent operating inside the existing Pyash runtime.",
-  "Use the provided Pyash tools for repository work. Do not pretend a change was made when a tool did not succeed.",
+  "For requests about repository files, code, tests, git, or commands, use the relevant Pyash tools before answering and report concrete evidence. For general advice, answer directly without unnecessary tool calls.",
+  "Do not pretend a change was made when a tool did not succeed.",
   "Keep work inside the configured coding directory and prefer small, verifiable steps.",
   "Use command to inspect or run code, write for bounded file creation, and repair for unified-diff corrections.",
   "Before reporting completion, run the narrowest relevant check and report its result.",
@@ -598,5 +599,25 @@ export function saddleToolEventLabel(event = {}) {
   const stage = normalizeText(event.stage).toUpperCase();
   const tool = normalizeText(event.toolName) || "tool";
   if (!stage) return `[tool] ${tool}`;
-  return `[${stage.toLowerCase()}] ${tool}`;
+  const label = stage === "CALL" ? "tool call" : stage === "RESULT" ? "tool result" : stage === "RATIFY" ? "tool approval" : `tool ${stage.toLowerCase()}`;
+  return `[${label}] ${tool}`;
+}
+
+export function startSaddleProgress({
+  backend,
+  model,
+  onProgress,
+  intervalMs = 5000,
+  now = Date.now,
+  setIntervalFn = setInterval,
+  clearIntervalFn = clearInterval
+} = {}) {
+  if (typeof onProgress !== "function") return () => {};
+  const startedAt = now();
+  const timer = setIntervalFn(() => {
+    const elapsedSeconds = Math.max(1, Math.floor((now() - startedAt) / 1000));
+    onProgress(`working... ${elapsedSeconds}s elapsed (${normalizeText(backend) || "model"} / ${normalizeText(model) || "unknown"})`);
+  }, Math.max(250, Number(intervalMs) || 5000));
+  timer?.unref?.();
+  return () => clearIntervalFn(timer);
 }

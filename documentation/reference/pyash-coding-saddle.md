@@ -82,15 +82,20 @@ implicitly. There is no sudo access.
 Enter submits the current request. Shift+Enter inserts a newline on terminals
 that report the standard modified-key sequence; `Ctrl+J` is the portable
 newline fallback. `Ctrl+C` writes the existing Pyash mind-interrupt signal and
-`Ctrl+D` exits. `/status`, `/mind [name]`, `/model <name>`, `/host <url>`,
-`/discharge`, and `/exit` are local saddle commands. `/mind` lists configured
-Pyash minds; `/mind zai` and `/mind openai` switch the active mind. `/model`
-changes the model within that mind.
+`Ctrl+D` exits. `/status`, `/session`, `/mind [name]`, `/model <name>`,
+`/host <url>`, `/discharge`, and `/exit` are local saddle commands. `/session`
+lists conversation files; select one to resume it, or use
+`/session <filename>` directly. `/mind` lists configured Pyash minds;
+`/mind zai` and `/mind openai` switch the active mind. `/model` changes the
+model within that mind.
 
 ## Durable state
 
 Conversation records use the existing coding-saddle agent house and session
-files. A web duty is represented by the existing durable work-status `.pya`
+files. The selected conversation and its backend/model choice are saved in
+`conduct/coding-saddle.pya`, separately from transcript history. Transcript
+model records are historical evidence only and never override the saved
+selection at startup. A web duty is represented by the existing durable work-status `.pya`
 artifact with `kind: coding-duty` metadata and a session file in its owner's
 web assistant area. It does not introduce another queue, model registry, or
 runtime. User messages are durable and worker claims are leased; a worker

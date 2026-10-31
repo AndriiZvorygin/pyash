@@ -6,6 +6,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { allRemember, forget, remember } from "../program/remember/index.mjs";
+import { sentenceToPyash } from "../program/beautiful.mjs";
+import {
+  buildSessionNameForDate,
+  buildSessionNamePrefix
+} from "../program/agent/session.mjs";
+import {
+  getCodingSaddleProfile,
+  readCodingSaddleState,
+  saddleSessionProfileKey,
+  setCodingSaddleProfile,
+  writeCodingSaddleState
+} from "../program/agent/coding_saddle_state.mjs";
 import {
   buildSaddleStrataContextOptions,
   buildSaddleMindSentence,
@@ -21,7 +33,9 @@ import {
   parseSaddleMindCommand,
   resolveSaddleModelOption,
   resolveSaddleModelSelection,
-  resolveSaddleMindProfile
+  resolveSaddleMindProfile,
+  saddleToolEventLabel,
+  startSaddleProgress
 } from "../program/agent/coding_saddle.mjs";
 import { dischargeSaddleModel, prepareSaddle, runSaddleTurn } from "../command/pyash_saddle.mjs";
 
@@ -52,6 +66,72 @@ test("coding saddle supports cursor editing and control actions", () => {
   assert.equal(decoder.getState().cursor, 0);
   decoder.feed("\u0003\u0004");
   assert.deepEqual(events, ["cancel", "exit"]);
+});
+
+test("coding saddle shows elapsed progress and explicit tool event labels", () => {
+  const events = [];
+  let tick = null;
+  let delay = 0;
+  let cleared = false;
+  let now = 1000;
+  const stop = startSaddleProgress({
+    backend: "zai",
+    model: "glm-5.3-flash",
+    intervalMs: 5000,
+    now: () => now,
+    onProgress: (line) => events.push(line),
+    setIntervalFn: (callback, milliseconds) => {
+      tick = callback;
+      delay = milliseconds;
+      return { unref() {} };
+    },
+    clearIntervalFn: () => { cleared = true; }
+  });
+  now = 7000;
+  tick();
+  stop();
+
+  assert.equal(delay, 5000);
+  assert.deepEqual(events, ["working... 6s elapsed (zai / glm-5.3-flash)"]);
+  assert.equal(cleared, true);
+  assert.equal(saddleToolEventLabel({ stage: "call", toolName: "command" }), "[tool call] command");
+  assert.equal(saddleToolEventLabel({ stage: "result", toolName: "repair" }), "[tool result] repair");
+});
+
+test("coding saddle stores backend and model per selected conversation in Pyash state", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-coding-saddle-state-"));
+  const statePath = path.join(root, "conduct", "coding-saddle.pya");
+  const session = { sessionName: "coding", sessionFile: path.join(root, "session", "20261030-coding.pya") };
+  try {
+    let state = {
+      activeSessionName: "20261030-coding",
+      activeSessionFile: session.sessionFile,
+      profiles: {}
+    };
+    state = setCodingSaddleProfile(state, session, {
+      mindName: "zai",
+      backend: "zai",
+      model: "glm-5.3-flash",
+      host: "https://api.z.ai/api/v1"
+    });
+    await writeCodingSaddleState(statePath, state);
+
+    const savedText = await fs.readFile(statePath, "utf8");
+    const loaded = await readCodingSaddleState(statePath);
+    assert.match(savedText, /^su name coding saddle active session/m);
+    assert.doesNotMatch(savedText, /^\s*\{/m);
+    assert.equal(loaded.activeSessionFile, session.sessionFile);
+    assert.deepEqual(getCodingSaddleProfile(loaded, session), {
+      mindName: "zai",
+      backend: "zai",
+      model: "glm-5.3-flash",
+      host: "https://api.z.ai/api/v1"
+    });
+    assert.notEqual(saddleSessionProfileKey(session), saddleSessionProfileKey({ sessionName: "coding" }));
+    assert.deepEqual(getCodingSaddleProfile(loaded, { sessionName: "coding" }), {});
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
 });
 
 test("coding saddle builds a Pyash mind call with backend and session context", () => {
@@ -120,6 +200,83 @@ test("duty saddle keeps runtime root separate from its persistent world root", a
     assert.equal(remember("run root")?.ob?.filename, runtimeRoot);
     assert.equal(remember("world root")?.ob?.filename, worldRoot);
   } finally {
+    forget();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("coding saddle restores its saved session backend and model on restart", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-restore-selection-"));
+  const cwd = path.join(root, "project");
+  const runtimeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const worldRoot = path.join(root, "world");
+  const envKeys = ["PYA_SADDLE_MIND", "PYA_SADDLE_MODEL", "PYA_SADDLE_HOST"];
+  const previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  for (const key of envKeys) delete process.env[key];
+  await fs.mkdir(cwd, { recursive: true });
+  try {
+    const first = await prepareSaddle({ cwd, runtimeRoot, worldRoot });
+    const session = {
+      sessionName: "20261030-coding",
+      sessionFile: path.join(first.agentHouse, "session", "20261030-coding.pya")
+    };
+    let state = setCodingSaddleProfile(first.saddleState, session, {
+      mindName: "zai",
+      backend: "zai",
+      model: "glm-5.3-flash",
+      host: "https://api.z.ai/api/v1"
+    });
+    state.activeSessionName = session.sessionName;
+    state.activeSessionFile = session.sessionFile;
+    await writeCodingSaddleState(first.saddleStatePath, state);
+
+    const restored = await prepareSaddle({ cwd, runtimeRoot, worldRoot });
+    assert.equal(restored.sessionName, session.sessionName);
+    assert.equal(restored.sessionFile, session.sessionFile);
+    assert.equal(restored.mindName, "zai");
+    assert.equal(restored.backend, "zai");
+    assert.equal(restored.model, "glm-5.3-flash");
+    assert.equal(restored.host, "https://api.z.ai/api/v1");
+    assert.equal(restored.selectionSource, "saved session state");
+  } finally {
+    for (const key of envKeys) {
+      if (previousEnv[key] === undefined) delete process.env[key];
+      else process.env[key] = previousEnv[key];
+    }
+    forget();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("coding saddle does not treat historical transcript models as current selection", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-legacy-selection-"));
+  const cwd = path.join(root, "project");
+  const runtimeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const worldRoot = path.join(root, "world");
+  const envKeys = ["PYA_SADDLE_MIND", "PYA_SADDLE_MODEL", "PYA_SADDLE_HOST"];
+  const previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  for (const key of envKeys) delete process.env[key];
+  await fs.mkdir(cwd, { recursive: true });
+  try {
+    const initial = await prepareSaddle({ cwd, runtimeRoot, worldRoot });
+    const dateCompact = buildSessionNamePrefix().replace(/-$/u, "");
+    const sessionName = buildSessionNameForDate({ baseName: "coding", dateCompact });
+    const sessionPath = path.join(initial.agentHouse, "session", `${sessionName}.pya`);
+    await fs.writeFile(sessionPath, [
+      sentenceToPyash({ su: { name: sessionName }, be: "series", mood: "def" }),
+      sentenceToPyash({ su: { name: "system" }, ob: { text: "" }, as: { name: "glm-5.3-flash" }, be: "text", mood: "ya" })
+    ].join("\n") + "\n", "utf8");
+
+    const restored = await prepareSaddle({ cwd, runtimeRoot, worldRoot });
+    assert.equal(restored.mindName, "mind");
+    assert.equal(restored.backend, "ollama");
+    assert.equal(restored.model, "qwen3.5:9b");
+    assert.equal(restored.selectionSource, "configured mind");
+  } finally {
+    for (const key of envKeys) {
+      if (previousEnv[key] === undefined) delete process.env[key];
+      else process.env[key] = previousEnv[key];
+    }
     forget();
     await fs.rm(root, { recursive: true, force: true });
   }
