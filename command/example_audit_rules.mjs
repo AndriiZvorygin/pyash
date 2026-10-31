@@ -49,6 +49,8 @@ export function classify(output) {
   if (/no such file or directory.*(pyachso2n|English30k|16GlyphWordList)/i.test(output)) return "needs backend";
   // An interactive session example waits for a live session that never arrives.
   if (/Detected unsettled top-level await/i.test(output)) return "needs backend";
+  // A session example that cannot run because nothing was piped into it.
+  if (/session defective: no interactive input available/i.test(output)) return "needs backend";
 
   return "failed";
 }

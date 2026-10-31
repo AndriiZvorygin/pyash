@@ -118,11 +118,17 @@ examples are listed in the audit baseline so the nightly audit reports them
 as known failures instead of as regressions.
 
 **An interactive session example hangs instead of saying it cannot run.**
-`program/verbs/session.mjs` falls into the `readline` loop whenever there is
-no scripted input, even when the process has no terminal (`input.isTTY` is
-false). The audit runs examples with no stdin, so the example prints the `> `
-prompt and then dies on an unsettled promise. The verb already knows whether
-it can read interactively; it should say so instead of hanging.
+*(fixed)* `program/verbs/session.mjs` fell into the `readline` loop whenever
+there was no scripted input, even when the process had no terminal
+(`input.isTTY` is false). The audit runs examples with no stdin, so the
+example printed the `> ` prompt and then died on an unsettled promise.
+
+The verb now reads the two cases apart. With a terminal it keeps the
+interactive prompt loop. Without one it reads the lines that were piped in —
+which is how `command/run_examples.mjs` feeds a session example — and ends at
+the end of them. With neither, it says `session defective: no interactive
+input available` instead of waiting for input that never arrives. The audit
+reports that as a gap rather than a defect.
 
 ## Phase 3 findings
 
@@ -999,7 +1005,7 @@ A read of the repository after the five phases, with the numbers that back it.
 | Applications | ~173,100 lines / ~690 files |
 | Specifications | 24 files, each <= 16KB |
 | Gating quiz files | 763 in the gating tiers; 1 tier 3 excluded |
-| Tests | 3,093, zero failures |
+| Tests | 3,096, zero failures |
 | Examples | 357 top-level in `examples/pyash/` |
 | Skills | 24 |
 
@@ -1039,7 +1045,7 @@ counted in the *passed* total. Timeouts are now their own bucket.
    pinned by `quiz/example_audit_guard.test.mjs`, and `push_all_check.mjs`.
    The repository now fails on drift instead of relying on someone noticing.
 2. **The CI gate is the whole suite.** From 28 files and 254 tests to 763
-   files and 3,093 tests, and the tiering is honest: a missing resource is
+   files and 3,096 tests, and the tiering is honest: a missing resource is
    reported with its reason, never silently failed.
 3. **The language core stayed small and central.** 6,393 lines for
    parser, bridge, memory and program, while the applications grew around
@@ -1089,8 +1095,8 @@ counted in the *passed* total. Timeouts are now their own bucket.
    later. The scheduled workflow now provisions the tools the examples shell
    out to and the sibling dictionary checkout, and a missing tool is reported
    as a gap rather than as a defect, so the audit only fails on a real
-   regression. Five examples are in the baseline for the two agent-session
-   defects described above.
+   regression. Three examples are in the baseline for the agent turn-id
+   defect described above.
 5. **The audit classifier is pattern-based, and its buckets are not stable
    across runs.** It recognises specific backend signatures; a GPU-duty
    failure (`gpu duty defective: unknown handle`) was not among them, which

@@ -72,6 +72,13 @@ test("an unbuilt helper binary is not a defect", () => {
   assert.equal(classify(`spawn ${helper} ENOENT`), "needs backend");
 });
 
+test("a session example with nothing piped in is not a defect", () => {
+  assert.equal(
+    classify('su name session defective ob text "session defective: no interactive input available"'),
+    "needs backend"
+  );
+});
+
 test("a missing external binary is not a defect", () => {
   // The audit runs on machines that do not have every media tool installed.
   // A binary that cannot be spawned is a gap in the environment, not a

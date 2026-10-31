@@ -170,8 +170,10 @@ folder (132 modules, 15,728 lines) moved the same way, into
   poppler), so the audit exercises those examples instead of reporting them as
   gaps. A binary that cannot be spawned, a shell tool that is not installed,
   a device that is not attached and a missing sibling dictionary checkout are
-  all gaps rather than defects. The examples that fail for the two
-  agent-session defects are recorded in `configure/example_audit_baseline.pya`.
+  all gaps rather than defects. A session example that has nothing piped into
+  it says so rather than waiting for input that never arrives. The examples
+  that fail for the agent turn-id defect are recorded in
+  `configure/example_audit_baseline.pya`.
 
 ## Tried and rejected
 

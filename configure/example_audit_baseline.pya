@@ -7,31 +7,17 @@
 # Remove an entry once its example passes; the audit reports the ones that
 # have been fixed so the list stays honest.
 #
-# The entries below share one root cause each, and both are defects in the
-# repository rather than in the examples. They are tracked in
-# documentation/remediation-plan.md under "Phase 2 findings that need an owner
-# decision".
-#
-# The agent session examples collide on one turn id: a turn id is derived from
-# the exchange sentence id, and the exchange sentence id is the sentence index
-# in the run, so two runs reach the same id and the shared session ledger
-# reports conflicting evidence for it.
+# The entries below share one root cause: a turn id is derived from the
+# exchange sentence id, and the exchange sentence id is the sentence index in
+# the run, so two runs reach the same id and the shared session ledger reports
+# conflicting evidence for it.
 #
 #   agent-session.pya
 #   agent-session-fromtext-name.pya
 #   coding-loop-guarantee.pya
 #
-# The session examples need an interactive terminal: the audit runs examples
-# without a stdin, and the session verb waits for input that never arrives
-# instead of saying that it cannot run.
-#
-#   agent-session-loop.pya
-#   mind-session.pya
-#
 # su name known_failures ob ve text ya
 su name known_failures ob text "agent-session.pya" ya
 su name known_failures ob text "agent-session-fromtext-name.pya" ya
-su name known_failures ob text "agent-session-loop.pya" ya
-su name known_failures ob text "mind-session.pya" ya
 su name known_failures ob text "coding-loop-guarantee.pya" ya
 prah

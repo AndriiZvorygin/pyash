@@ -191,6 +191,9 @@ Session loop cycle:
 4. append session records
 5. surface response or typed error
 
+A session reads scripted lines, a terminal or a pipe. With none of them it
+MUST surface `session defective: no interactive input available`.
+
 ### 5.1 Mind usage newspaper records
 
 When a selected backend reports token usage on a tool-backed mind call, the

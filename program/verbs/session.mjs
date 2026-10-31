@@ -2,6 +2,7 @@ import readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { doRemember } from "../remember/index.mjs";
+import { throwErrorSentence } from "../error.mjs";
 import { mind_to_name_text } from "./mind/mind.mjs";
 
 function normalizeInputs(values) {
@@ -46,7 +47,7 @@ function buildToolCallLogger() {
   };
 }
 
-export async function session(sentence, { inputs = [] } = {}) {
+export async function session(sentence, { inputs = [], stdin = input } = {}) {
   const mindName = sentence?.for?.name ?? sentence?.to?.name ?? sentence?.su?.name ?? "mind";
   const toolMapName = sentence?.with?.name ?? null;
   const toolMapIsDefault = sentence?.with?.wo === "tools" || sentence?.with?.text === "tools";
@@ -86,7 +87,7 @@ export async function session(sentence, { inputs = [] } = {}) {
     return { done: false };
   };
 
-  const canReadInteractive = Boolean(input?.isTTY);
+  const canReadInteractive = Boolean(stdin?.isTTY);
   if (scripted.length > 0) {
     for (const line of scripted) {
       const { done } = await runTurn(String(line ?? ""));
@@ -104,7 +105,33 @@ export async function session(sentence, { inputs = [] } = {}) {
     }
   }
 
-  const rl = readline.createInterface({ input, output });
+  if (!canReadInteractive) {
+    // No terminal: the lines of the session were piped in. Read them to the
+    // end of the input and run each one as a turn.
+    const piped = readline.createInterface({ input: stdin });
+    const lines = [];
+    try {
+      for await (const line of piped) lines.push(String(line));
+    } finally {
+      piped.close();
+    }
+    if (lines.length === 0) {
+      // There was nothing piped in, so there is no session to run. Saying so
+      // is better than waiting for input that is never going to arrive.
+      throwErrorSentence({
+        name: "session defective",
+        message: "session defective: no interactive input available",
+        from: { name: "session" }
+      });
+    }
+    for (const line of lines) {
+      const { done } = await runTurn(line);
+      if (done) return { be: "session" };
+    }
+    return { be: "session" };
+  }
+
+  const rl = readline.createInterface({ input: stdin, output });
   try {
     // eslint-disable-next-line no-constant-condition
     while (true) {
