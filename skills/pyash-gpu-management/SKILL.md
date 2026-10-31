@@ -22,6 +22,10 @@ Use this skill when video/refinery runs show repeated GPU model load/unload chur
 - A provider is reclaimable only when its runtime is explicitly registered, its
   provider-specific activity probe says idle beyond the configured grace, and
   its safe discharge hook succeeds.
+- ComfyUI's empty queue is immediately reclaimable when measured GPU use is at
+  or below its configured `idleVramThresholdMb` baseline (256 MiB by default),
+  since no model residency remains to keep warm. An active queue always blocks
+  reclamation; above the baseline, preserve the normal idle grace.
 - ComfyUI discharge uses the existing API hooks and does not stop the container.
 - Unknown host processes and registered runtimes without safe hooks are
   diagnostics only and are never touched.

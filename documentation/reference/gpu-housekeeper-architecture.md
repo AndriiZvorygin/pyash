@@ -303,11 +303,17 @@ request that already fits is admitted without a provider probe. If it does not
 fit, the housekeeper considers only managed runtimes with an explicit safe
 discharge hook and a provider-specific idle result. The default idle grace is
 300 seconds and can be set with `GPU_HOUSEKEEPER_IDLE_GRACE_SEC`. ComfyUI is
-discharged without stopping its container, using its existing API hooks. The
-housekeeper rechecks memory after each successful discharge and fails closed if
-the request still does not fit. If capacity is blocked only because a managed
-runtime is active or within its idle grace, a queued job remains waiting and
-retries capacity admission until the configured job/manager wait deadline;
+discharged without stopping its container, using its existing API hooks. When
+its queue is empty and measured ComfyUI GPU use is at or below the runtime's
+`idleVramThresholdMb` (256 MiB by default, enough to cover the CUDA context), it
+is immediately considered idle; no model residency is present to preserve. An
+active queue always remains active. Above that baseline, the normal idle grace
+protects resident models from immediate eviction. The housekeeper rechecks
+memory after each successful discharge and fails closed if the request still
+does not fit. If capacity is blocked only because a managed runtime is active
+or holds meaningful resident memory inside its idle grace, a queued job remains
+waiting and retries capacity admission until the configured job/manager wait
+deadline;
 once the runtime is safely idle, normal discharge and verification proceed.
 Unknown activity and unmanaged GPU use remain fail-closed. Its dry-run response also includes candidate
 diagnostics when a managed runtime is active, still inside idle grace,

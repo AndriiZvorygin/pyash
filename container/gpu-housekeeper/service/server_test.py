@@ -1375,6 +1375,52 @@ class HousekeeperCapacityTests(unittest.TestCase):
     self.assertIn(("/queue", {"clear": True}), calls)
     self.assertIn(("/free", {"unload_models": True, "free_memory": True}), calls)
 
+  def test_comfyui_empty_queue_at_cuda_context_baseline_is_immediately_idle(self):
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running",
+      "gpuExpected": True,
+      "gpuObserved": True,
+      "message": "running"
+    }
+    server.idle_grace_seconds = lambda: 300
+    server.request_comfyui_json = lambda pathname, payload=None, timeout_sec=600: {
+      "queue_running": [],
+      "queue_pending": []
+    }
+
+    activity = server.observe_runtime_activity(
+      "comfyui",
+      server.DEFAULT_RUNTIME_REGISTRY["comfyui"],
+      gpu_used_memory_mb=108
+    )
+
+    self.assertEqual(activity["state"], "idle")
+    self.assertEqual(activity["gpuUsedMemoryMb"], 108)
+    self.assertEqual(activity["idleVramThresholdMb"], 256)
+    self.assertIn("idle GPU baseline", activity["reason"])
+
+  def test_comfyui_empty_queue_with_resident_model_keeps_idle_grace(self):
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running",
+      "gpuExpected": True,
+      "gpuObserved": True,
+      "message": "running"
+    }
+    server.idle_grace_seconds = lambda: 300
+    server.request_comfyui_json = lambda pathname, payload=None, timeout_sec=600: {
+      "queue_running": [],
+      "queue_pending": []
+    }
+
+    activity = server.observe_runtime_activity(
+      "comfyui",
+      server.DEFAULT_RUNTIME_REGISTRY["comfyui"],
+      gpu_used_memory_mb=18000
+    )
+
+    self.assertEqual(activity["state"], "cooldown")
+    self.assertEqual(activity["idleSeconds"], 0)
+
   def test_active_comfyui_queue_is_never_discharged(self):
     server.parse_nvidia_smi = lambda: {
       "available": True,
@@ -1382,7 +1428,7 @@ class HousekeeperCapacityTests(unittest.TestCase):
     }
     server.managed_gpu_processes = lambda _registry: {
       "available": True,
-      "runtimes": {"comfyui": {"usedMemoryMb": 18000}},
+      "runtimes": {"comfyui": {"usedMemoryMb": 108}},
       "unmanagedProcesses": []
     }
     server.parse_runtime_status = lambda _entry: {
@@ -1489,6 +1535,53 @@ class HousekeeperCapacityTests(unittest.TestCase):
     self.assertTrue(result["dryRun"])
     self.assertTrue(result["feasible"])
     self.assertEqual(result["decision"], "reclaim-available")
+
+  def test_capacity_preview_reclaims_comfyui_cuda_baseline_without_idle_grace(self):
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 22000, "vramFreeMb": 2576}]
+    }
+    server.managed_gpu_processes = lambda _registry: {
+      "available": True,
+      "runtimes": {"comfyui": {"usedMemoryMb": 108}},
+      "unmanagedProcesses": []
+    }
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running",
+      "gpuExpected": True,
+      "gpuObserved": True,
+      "message": "running"
+    }
+    server.idle_grace_seconds = lambda: 300
+    server.request_comfyui_json = lambda pathname, payload=None, timeout_sec=600: {
+      "queue_running": [],
+      "queue_pending": []
+    }
+    runtime_registry = {
+      "huggingface": {"runtimeName": "huggingface"},
+      "comfyui": {
+        "runtimeName": "comfyui",
+        "containerName": "comfyui",
+        "gpuExpected": True,
+        "activityProbe": "comfyui-queue",
+        "dischargeKind": "comfyui",
+        "idleVramThresholdMb": 256
+      }
+    }
+    job_spec = self.target_job()["jobSpec"]
+    job_spec["resourceRequest"]["vramRequiredMb"] = 2670
+
+    result = server.preview_capacity({
+      "runtimeName": "huggingface",
+      "profileName": "large-model",
+      "jobSpec": job_spec
+    }, runtime_registry)
+
+    self.assertTrue(result["feasible"])
+    self.assertEqual(result["decision"], "reclaim-available")
+    self.assertEqual(result["candidates"][0]["runtimeName"], "comfyui")
+    self.assertEqual(result["candidates"][0]["activity"]["state"], "idle")
+    self.assertEqual(result["candidates"][0]["activity"]["gpuUsedMemoryMb"], 108)
 
   def test_ollama_probe_requires_quiet_inference_logs_and_no_managed_jobs(self):
     server.parse_runtime_status = lambda _entry: {

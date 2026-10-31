@@ -91,6 +91,7 @@ class DeviceExecutionGate:
 _EXECUTION_GATES: Dict[str, DeviceExecutionGate] = {}
 
 DEFAULT_IDLE_GRACE_SECONDS = 300
+DEFAULT_COMFYUI_IDLE_VRAM_THRESHOLD_MB = 256
 DEFAULT_CAPACITY_WAIT_SECONDS = 1800
 CAPACITY_WAIT_IDLE_GRACE_BUFFER_SECONDS = 30
 DEFAULT_CAPACITY_POLL_SECONDS = 2
@@ -126,6 +127,7 @@ DEFAULT_RUNTIME_REGISTRY = {
     "restartAction": ["restart", "comfyui"],
     "activityProbe": "comfyui-queue",
     "dischargeKind": "comfyui",
+    "idleVramThresholdMb": DEFAULT_COMFYUI_IDLE_VRAM_THRESHOLD_MB,
     "concurrencySafe": False
   },
   "katago": {
@@ -2108,7 +2110,11 @@ def comfyui_queue_has_work(queue: Dict[str, Any]) -> bool:
   return False
 
 
-def observe_runtime_activity(runtime_name: str, runtime_entry: Dict[str, Any]) -> Dict[str, Any]:
+def observe_runtime_activity(
+  runtime_name: str,
+  runtime_entry: Dict[str, Any],
+  gpu_used_memory_mb: Optional[int] = None
+) -> Dict[str, Any]:
   status = parse_runtime_status(runtime_entry)
   base = {
     "runtimeName": runtime_name,
@@ -2263,6 +2269,29 @@ def observe_runtime_activity(runtime_name: str, runtime_entry: Dict[str, Any]) -
     base["state"] = "active"
     base["lastActivityAt"] = utc_now_iso()
     base["reason"] = "provider queue is active"
+    return base
+
+  try:
+    idle_vram_threshold = max(0, int(float(
+      runtime_entry.get("idleVramThresholdMb", DEFAULT_COMFYUI_IDLE_VRAM_THRESHOLD_MB)
+    )))
+    observed_gpu_memory = int(float(gpu_used_memory_mb)) if gpu_used_memory_mb is not None else None
+  except (TypeError, ValueError):
+    idle_vram_threshold = DEFAULT_COMFYUI_IDLE_VRAM_THRESHOLD_MB
+    observed_gpu_memory = None
+  if observed_gpu_memory is not None and 0 < observed_gpu_memory <= idle_vram_threshold:
+    with _LOCK:
+      previous = _RUNTIME_ACTIVITY.get(runtime_name, {})
+      last_activity = normalize_text(previous.get("lastActivityAt"))
+      _RUNTIME_ACTIVITY[runtime_name] = {
+        "lastActivityAt": last_activity,
+        "idleSince": now
+      }
+    base["state"] = "idle"
+    base["lastActivityAt"] = last_activity
+    base["gpuUsedMemoryMb"] = observed_gpu_memory
+    base["idleVramThresholdMb"] = idle_vram_threshold
+    base["reason"] = "provider queue is empty and GPU use is at the idle GPU baseline"
     return base
 
   with _LOCK:
@@ -2452,7 +2481,9 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
         "reason": "GPU process ownership telemetry unavailable"
       })
       continue
-    activity = observe_runtime_activity(runtime_name, entry)
+    usage = process_view.get("runtimes", {}).get(runtime_name, {})
+    used_memory = int(usage.get("usedMemoryMb") or 0)
+    activity = observe_runtime_activity(runtime_name, entry, gpu_used_memory_mb=used_memory)
     if activity.get("state") != "idle":
       if activity.get("state") in {"active", "cooldown"}:
         waiting_for_activity = True
@@ -2463,8 +2494,6 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
         "activity": activity
       })
       continue
-    usage = process_view.get("runtimes", {}).get(runtime_name, {})
-    used_memory = int(usage.get("usedMemoryMb") or 0)
     if discharge_kind == "strata" and activity.get("state") == "idle" and used_memory <= 0:
       # Strata is a host process, so its host PID is intentionally not inferred
       # from Docker container telemetry. Credit only the current deficit here;
