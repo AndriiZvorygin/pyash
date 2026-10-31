@@ -19,10 +19,13 @@ import {
   writeCodingSaddleState
 } from "../program/agent/coding_saddle_state.mjs";
 import {
+  assessSaddleCompletion,
   buildSaddleStrataContextOptions,
   buildSaddleMindSentence,
   createSaddleInputDecoder,
+  DEFAULT_CODING_SADDLE_SYSTEM_PROMPT,
   discoverSaddleModels,
+  formatSaddleCompletionEvidence,
   formatSaddleBackendPicker,
   formatSaddleModelPicker,
   formatSaddleStatus,
@@ -30,11 +33,13 @@ import {
   listSaddleBackendOptions,
   listSaddleMindNames,
   normalizeSaddleThinkSelection,
+  isSaddleCodeChangeRequest,
   SADDLE_OLLAMA_CONTEXT_PRESETS,
   parseSaddleMindCommand,
   resolveSaddleModelOption,
   resolveSaddleModelSelection,
   resolveSaddleMindProfile,
+  runSaddleTurnWithEvidence,
   saddleToolEventLabel,
   startSaddleProgress
 } from "../program/agent/coding_saddle.mjs";
@@ -119,6 +124,128 @@ test("coding saddle shows elapsed progress and explicit tool event labels", () =
   assert.equal(cleared, true);
   assert.equal(saddleToolEventLabel({ stage: "call", toolName: "command" }), "[tool call] command");
   assert.equal(saddleToolEventLabel({ stage: "result", toolName: "repair" }), "[tool result] repair");
+});
+
+test("coding saddle completion evidence requires a successful edit and a later command check", () => {
+  assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /name the target file before editing/u);
+  assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /After the final edit/u);
+  assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /changed file paths/u);
+
+  const input = "write hello program";
+  assert.equal(isSaddleCodeChangeRequest(input), true);
+  assert.equal(isSaddleCodeChangeRequest("how does the saddle look now?"), false);
+
+  const events = [
+    {
+      stage: "call",
+      toolName: "be_write_ob_text_to_filename",
+      toolSentence: { be: "write", ob: { text: "console.log('hello')" }, to: { filename: "hello.js" } }
+    },
+    { stage: "result", toolName: "be_write_ob_text_to_filename", toolText: "written" },
+    {
+      stage: "call",
+      toolName: "be_command_ob_text_to_name_text",
+      toolSentence: { be: "command", ob: { text: "node --check hello.js" } }
+    },
+    { stage: "result", toolName: "be_command_ob_text_to_name_text", toolText: "" }
+  ];
+  const assessment = assessSaddleCompletion(input, events);
+  assert.equal(assessment.complete, true);
+  assert.deepEqual(assessment.changedPaths, ["hello.js"]);
+  assert.equal(assessment.validation.command, "node --check hello.js");
+  assert.match(formatSaddleCompletionEvidence(assessment), /changed: hello\.js; command: node --check hello\.js/u);
+
+  const beforeEditCheck = assessSaddleCompletion(input, [events[2], events[3], events[0], events[1]]);
+  assert.equal(beforeEditCheck.complete, false);
+  assert.match(beforeEditCheck.missing.join(" "), /after the final edit/u);
+
+  const irrelevantCommand = assessSaddleCompletion(input, [
+    ...events.slice(0, 2),
+    { ...events[2], toolSentence: { be: "command", ob: { text: "pwd" } } },
+    events[3]
+  ]);
+  assert.equal(irrelevantCommand.complete, false);
+
+  const failedCheck = assessSaddleCompletion(input, [
+    ...events.slice(0, 2),
+    events[2],
+    { ...events[3], toolText: "command defective: status=1" }
+  ]);
+  assert.equal(failedCheck.complete, false);
+});
+
+test("coding saddle gives an incomplete code-change turn one evidence-driven continuation", async () => {
+  let calls = 0;
+  let continuation = "";
+  const turn = await runSaddleTurnWithEvidence({
+    input: "write hello program",
+    runTurn: async ({ input, onToolCall }) => {
+      calls += 1;
+      if (calls === 1) return { ob: { text: "done" } };
+      continuation = input;
+      const writeTool = "be_write_ob_text_to_filename";
+      const commandTool = "be_command_ob_text_to_name_text";
+      await onToolCall({
+        stage: "call",
+        toolName: writeTool,
+        toolSentence: { be: "write", ob: { text: "console.log('hello')" }, to: { filename: "hello.js" } }
+      });
+      await onToolCall({ stage: "result", toolName: writeTool, toolText: "written" });
+      await onToolCall({
+        stage: "call",
+        toolName: commandTool,
+        toolSentence: { be: "command", ob: { text: "node --check hello.js" } }
+      });
+      await onToolCall({ stage: "result", toolName: commandTool, toolText: "" });
+      return { ob: { text: "Created hello.js and checked its syntax." } };
+    }
+  });
+
+  assert.equal(calls, 2);
+  assert.match(continuation, /Original request: write hello program/u);
+  assert.equal(turn.retried, true);
+  assert.equal(turn.assessment.complete, true);
+  assert.equal(turn.result.ob.text, "Created hello.js and checked its syntax.");
+});
+
+test("coding saddle does not add a completion pass to general advice", async () => {
+  let calls = 0;
+  const turn = await runSaddleTurnWithEvidence({
+    input: "Do you think the saddle is usable?",
+    runTurn: async () => {
+      calls += 1;
+      return { ob: { text: "Yes, for routine tasks with review." } };
+    }
+  });
+  assert.equal(calls, 1);
+  assert.equal(turn.retried, false);
+  assert.equal(turn.assessment.required, false);
+});
+
+test("coding saddle reports incomplete when the corrective pass still has no successful check", async () => {
+  let calls = 0;
+  const turn = await runSaddleTurnWithEvidence({
+    input: "fix the code bug",
+    runTurn: async ({ input, onToolCall }) => {
+      calls += 1;
+      if (calls === 1) {
+        const writeTool = "be_write_ob_text_to_filename";
+        await onToolCall({
+          stage: "call",
+          toolName: writeTool,
+          toolSentence: { be: "write", ob: { text: "fixed" }, to: { filename: "fix.js" } }
+        });
+        await onToolCall({ stage: "result", toolName: writeTool, toolText: "written" });
+        return { ob: { text: "fixed" } };
+      }
+      assert.match(input, /successful relevant validation command/u);
+      return { ob: { text: "done" } };
+    }
+  });
+
+  assert.equal(calls, 2);
+  assert.equal(turn.assessment.complete, false);
+  assert.match(formatSaddleCompletionEvidence(turn.assessment), /^\[saddle incomplete\]/u);
 });
 
 test("coding saddle stores backend and model per selected conversation in Pyash state", async () => {

@@ -44,6 +44,8 @@ import { formatMindUsage, normalizeMindUsage, sumMindUsages } from "../program/v
 import {
   buildSaddleMindSentence,
   buildSaddleStrataContextOptions,
+  formatSaddleCompletionEvidence,
+  runSaddleTurnWithEvidence,
   createSaddleInputDecoder,
   DEFAULT_CODING_SADDLE_SYSTEM_PROMPT,
   discoverSaddleModels,
@@ -1113,29 +1115,39 @@ async function main() {
     });
     const turnUsages = [];
     try {
-      const result = await runSaddleTurn({
+      const turn = await runSaddleTurnWithEvidence({
         input,
-        model,
-        backend,
-        host,
-        housekeeperUrl: config.housekeeperUrl,
-        contextWindow,
-        think: thinkSetting?.think,
-        reasoningEffort: thinkSetting?.reasoningEffort,
-        sessionName,
-        sessionFile,
-        onUsage: (usage) => {
-          turnUsages.push(usage);
-          return usage;
-        },
+        runTurn: ({ input: turnInput, onToolCall }) => runSaddleTurn({
+          input: turnInput,
+          model,
+          backend,
+          host,
+          housekeeperUrl: config.housekeeperUrl,
+          contextWindow,
+          think: thinkSetting?.think,
+          reasoningEffort: thinkSetting?.reasoningEffort,
+          sessionName,
+          sessionFile,
+          onUsage: (usage) => {
+            turnUsages.push(usage);
+            return usage;
+          },
+          onToolCall
+        }),
         onToolCall: async (event) => {
           if (event?.stage === "call" || event?.stage === "result" || event?.stage === "ratify") {
             writeLine(`${saddleToolEventLabel(event)}${event.toolText ? `: ${String(event.toolText).slice(0, 400)}` : ""}`);
           }
+        },
+        onFollowup: (assessment) => {
+          writeLine(`[saddle] completion check missing ${assessment.missing.join("; ")}; making one completion pass`);
         }
       });
+      const result = turn.result;
       const text = result?.ob?.text ?? result?.fromstate?.text ?? result?.value?.text ?? "";
       writeLine(`saddle> ${String(text).trim() || "(no response text)"}`);
+      const evidence = formatSaddleCompletionEvidence(turn.assessment);
+      if (evidence) writeLine(`${evidence}${turn.retryError ? ` retry failed: ${turn.retryError}` : ""}`);
       const usage = sumMindUsages(turnUsages);
       if (usage) {
         writeLine(formatMindUsage(usage));

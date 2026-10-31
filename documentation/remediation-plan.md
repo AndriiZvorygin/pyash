@@ -471,9 +471,21 @@ short sentence." and refused. The specification puts an inline prompt in the
 say `fromtext text`. With that fixed they fail on the missing whisper-stream
 binary, which is a backend dependency rather than a defect.
 
-`.github/workflows/examples-audit.yml` runs the audit on a nightly schedule and
-on demand. It is not on the per-push path because the audit spawns one
-process per example and takes several minutes.
+`.github/workflows/examples-audit.yml` runs the audit monthly and on demand, and
+on a push once a hundred commits have landed since the last audit, whichever
+comes first. It is not on the per-push path because the audit spawns one
+process per example and takes about twelve minutes. The workflow keeps that
+cadence honest: a push that is not due skips the job before it installs
+anything, and a run that cannot tell how many commits have landed runs the
+audit rather than skipping it. The rule itself lives in
+`command/example_audit_due.mjs`, so it can be tested without a repository,
+and `quiz/example_audit_due.test.mjs` pins it.
+
+The audit itself prints the summary and the failures, not one line per
+example, so a run with nothing to report costs one line to read. The
+per-example detail is written to `examples/out/example-audit.json` and kept as
+a CI artifact. `quiz/example_audit_report.test.mjs` pins both halves: the
+quiet output and the report file.
 
 Acceptance: audit is clean for the loop family; a quiz pins the documented
 result; CI runs the audit; every failing example is either fixed or explicitly
