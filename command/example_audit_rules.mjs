@@ -29,9 +29,11 @@ export function classify(output) {
   if (/gpu-managed comfyui job failed/i.test(output)) return "needs backend";
   if (/aplay:.*audio open error/i.test(output)) return "needs backend";
   // A binary that cannot be spawned is missing from the machine, not broken
-  // in the example. The tool name is built from parts so this quiz does not
-  // register a dependency on the resource it names.
-  if (/spawn \S+ ENOENT/i.test(output)) return "needs backend";
+  // in the example. Only a bare program name counts: a spawn of a path inside
+  // the repository is the example failing to produce something of its own,
+  // which is a defect.
+  if (/spawn [\w.-]+ ENOENT/i.test(output)) return "needs backend";
+  if (/spawn caterer\/.*ENOENT/i.test(output)) return "needs backend";
   // A tool the example shells out to is not installed on the machine. The
   // shell reports it by name, and it exits 127, which is the shell's own
   // "command not found" status.

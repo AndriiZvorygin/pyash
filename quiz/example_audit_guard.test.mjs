@@ -71,6 +71,12 @@ test("a missing external binary is not a defect", () => {
   assert.equal(classify("spawn espeak-ng ENOENT"), "needs backend");
 });
 
+test("a missing output of the example's own is a defect", () => {
+  // The binary rule covers a bare program name. A path inside the
+  // repository is something the example was meant to produce.
+  assert.equal(classify("spawn examples/out/thing ENOENT"), "failed");
+});
+
 test("a missing shell tool is not a defect", () => {
   assert.equal(classify("/bin/sh: 1: pandoc: not found"), "needs backend");
   assert.equal(classify("sh: pandoc: command not found"), "needs backend");
