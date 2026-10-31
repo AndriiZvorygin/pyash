@@ -21,13 +21,13 @@ import {
   translateDocumentSegments,
   translateDocument,
   mergeTranslationArtifacts
-} from "../program/verbs/exchange/translation/translation_pipeline.mjs";
+} from "../program/library/translation/translation_pipeline.mjs";
 import {
   renderPyashSentenceSurface,
   renderPyashSurface
-} from "../program/verbs/exchange/translation/pyash_surface.mjs";
+} from "../program/library/translation/pyash_surface.mjs";
 import { lowerSentencePhraseVliw } from "../program/library/vliw/phrase.mjs";
-import { TRANSLATION_SENSE_STATE_FORMAT } from "../program/verbs/exchange/translation/translation_occurrence.mjs";
+import { TRANSLATION_SENSE_STATE_FORMAT } from "../program/library/translation/translation_occurrence.mjs";
 
 test("Pyash surface rendering fuses endings and preserves sentence-final moods", () => {
   assert.equal(

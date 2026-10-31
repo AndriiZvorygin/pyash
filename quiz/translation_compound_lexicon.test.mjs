@@ -9,8 +9,8 @@ import {
   parseCompoundLexicon,
   parseChineseCompoundLexicon,
   queryChineseCompoundLexicon
-} from "../program/verbs/exchange/translation/compound_lexicon.mjs";
-import { buildCompoundAtomLinks } from "../program/verbs/exchange/translation/compound_atom_links.mjs";
+} from "../program/library/translation/compound_lexicon.mjs";
+import { buildCompoundAtomLinks } from "../program/library/translation/compound_atom_links.mjs";
 
 test("Chinese compound lexicon preserves ordered morphemes and stable identities", async () => {
   const entries = await loadChineseCompoundLexicon();
@@ -64,7 +64,7 @@ test("Chinese compound lexicon preserves ordered morphemes and stable identities
   assert.equal(brainstorming.specificAtom, "brain_storming");
 
   const curated = await loadCompoundLexicon({
-    url: new URL("../program/verbs/exchange/translation/compound_coverage_curated.pya", import.meta.url),
+    url: new URL("../program/library/translation/compound_coverage_curated.pya", import.meta.url),
     name: "translation_compounds_derived_curated",
     language: "canonical"
   });
@@ -73,6 +73,17 @@ test("Chinese compound lexicon preserves ordered morphemes and stable identities
     queryCompoundLexicon(curated, { specificAtom: "brain_storming" }).map((entry) => entry.surface),
     ["brainstorm"]
   );
+
+  // gpu is a video processor module: the compound records that reading
+  // instead of leaving the token uncovered.
+  const gpu = curated.find((entry) => entry.surface === "gpu");
+  assert.ok(gpu);
+  assert.deepEqual(gpu.morphemes, ["video", "processor", "module"]);
+  assert.deepEqual(gpu.componentGlosses, ["video", "processor", "module"]);
+  assert.deepEqual(gpu.pyashSequence, ["byot", "ples", "myoc"]);
+  assert.deepEqual(gpu.componentLayers, [24, 19, 19]);
+  assert.equal(gpu.head, "module");
+  assert.equal(gpu.status, "accepted-curated");
 
   const byMorpheme = queryChineseCompoundLexicon(entries, { morpheme: "语" });
   assert.deepEqual(byMorpheme.map((entry) => entry.surface), ["语言"]);

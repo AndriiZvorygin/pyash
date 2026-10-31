@@ -38,7 +38,8 @@ fs.writeFileSync(process.env.PYA_ZAI_PROBE, JSON.stringify({
   model: models.models[0].slug,
   hasCodingKey: config.includes(process.env.Z_AI_CODING_API_KEY),
   correctProtocol: config.includes('wire_api = "responses"'),
-  correctBaseUrl: config.includes('https://api.z.ai/api/v1')
+  correctBaseUrl: config.includes('https://api.z.ai/api/v1'),
+  contextWindow: Number(config.match(/^model_context_window = (\\d+)$/m)?.[1] || 0)
 }));
 process.stdout.write(JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: "GLM route reached Codex CLI" } }) + "\\n");
 `);
@@ -47,6 +48,7 @@ process.stdout.write(JSON.stringify({ type: "item.completed", item: { type: "age
     const result = await runRunner(["--zai-codex"], {
       model: "glm-5.3",
       reasoningEffort: "max",
+      contextWindow: 65536,
       messages: [{ role: "user", content: "Reply with a short readiness check." }]
     }, {
       ...process.env,
@@ -63,6 +65,7 @@ process.stdout.write(JSON.stringify({ type: "item.completed", item: { type: "age
     assert.equal(probe.hasCodingKey, true);
     assert.equal(probe.correctProtocol, true);
     assert.equal(probe.correctBaseUrl, true);
+    assert.equal(probe.contextWindow, 65536);
     await assert.rejects(fs.access(probe.home));
     assert.equal(result.stdout.includes("test-only-coding-key"), false);
     assert.equal(result.stderr.includes("test-only-coding-key"), false);

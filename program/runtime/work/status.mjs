@@ -85,7 +85,7 @@ function organizationEntries(task) {
   return [
     { key: "source", type: "text", value: quoteText(encodeJson(task.source)) },
     { key: "source identity", type: "text", value: quoteText(task.source.identity) },
-    { key: "source kind", type: "text", value: quoteText(task.source.kind) },
+    { key: "source sort", type: "text", value: quoteText(task.source.kind) },
     { key: "source locator", type: "text", value: quoteText(task.source.locator) },
     { key: "domain", type: "text", value: quoteText(task.domain) },
     { key: "deadline", type: "text", value: quoteText(task.deadline) },
@@ -106,7 +106,7 @@ function statusEntries(task) {
   return [
     { key: "task id", type: "text", value: quoteText(task.taskId) },
     { key: "owner", type: "text", value: quoteText(task.owner) },
-    { key: "kind", type: "text", value: quoteText(task.kind) },
+    { key: "sort", type: "text", value: quoteText(task.kind) },
     { key: "title", type: "text", value: quoteText(task.title) },
     { key: "priority", type: "num", value: task.priority },
     { key: "status", type: "text", value: quoteText(task.status) },
@@ -308,7 +308,7 @@ function statusFromText(text) {
   return buildWorkTask({
     taskId: values["task id"],
     owner: values.owner,
-    kind: values.kind,
+    kind: values.sort,
     title: values.title,
     priority: values.priority,
     status: values.status,
@@ -328,7 +328,7 @@ function statusFromText(text) {
     error: values.error,
     source: {
       identity: organization["source identity"],
-      kind: organization["source kind"],
+      kind: organization["source sort"],
       locator: organization["source locator"],
       provider: organization["source provider"],
       eventId: organization["source event id"],

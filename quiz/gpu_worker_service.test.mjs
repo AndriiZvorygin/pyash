@@ -2,10 +2,22 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 
+// configure/secret.pya holds real credentials and is git-ignored, so it is
+// absent in a fresh checkout. The tracked example carries the same shape, and
+// the invariant under test (no hardcoded remote housekeeper URL) has to hold
+// for the example as well.
+async function readSecretConfig() {
+  try {
+    return await fs.readFile(new URL("../configure/secret.pya", import.meta.url), "utf8");
+  } catch {
+    return await fs.readFile(new URL("../configure/secret.pya.example", import.meta.url), "utf8");
+  }
+}
+
 test("default config and system service connect the local GPU queue", async () => {
-  const [defaults, secret, service, compose, dockerfile, macInstaller, tunnel, webServer, strataHelper] = await Promise.all([
+  const [defaults, secret, service, compose, dockerfile, macInstaller, tunnel, webServer, strataHelper, worker] = await Promise.all([
     fs.readFile(new URL("../configure/default.pya", import.meta.url), "utf8"),
-    fs.readFile(new URL("../configure/secret.pya", import.meta.url), "utf8"),
+    readSecretConfig(),
     fs.readFile(new URL("../service/pyash-gpu-worker.service", import.meta.url), "utf8"),
     fs.readFile(new URL("../container/gpu-housekeeper/service/compose.gpu.yaml", import.meta.url), "utf8"),
     fs.readFile(new URL("../container/gpu-housekeeper/Dockerfile", import.meta.url), "utf8"),
@@ -13,6 +25,7 @@ test("default config and system service connect the local GPU queue", async () =
     fs.readFile(new URL("../container/gpu-housekeeper/command/macstudio-peer-tunnel.sh", import.meta.url), "utf8"),
     fs.readFile(new URL("../command/pyash_web_server.mjs", import.meta.url), "utf8"),
     fs.readFile(new URL("../command/strata_prepare_gpu.py", import.meta.url), "utf8"),
+    fs.readFile(new URL("../command/gpu_worker.mjs", import.meta.url), "utf8"),
   ]);
 
   assert.match(defaults, /exists su name gpu housekeeper url ob text "http:\/\/localhost:18886" be default ya/u);
@@ -28,7 +41,8 @@ test("default config and system service connect the local GPU queue", async () =
   assert.match(tunnel, /GPU_HOUSEKEEPER_TUNNEL_LOCAL_PORT:-18887/u);
   assert.match(webServer, /DEFAULT_GPU_HOUSEKEEPER_URL/u);
   assert.match(strataHelper, /PYASH_GPU_HOUSEKEEPER_URL", "http:\/\/127\.0\.0\.1:18886"/u);
-  assert.match(service, /^Environment=PYA_GPU_WORKER_CONCURRENCY=1$/mu);
+  assert.doesNotMatch(service, /^Environment=PYA_GPU_WORKER_CONCURRENCY=/mu);
+  assert.match(worker, /discoverGpuWorkerCapacity\(\{ housekeeperUrl \}\)/u);
   assert.match(service, /command\/gpu_worker\.mjs .*--interval-ms 400/u);
   assert.doesNotMatch(service, /--once/u);
 });

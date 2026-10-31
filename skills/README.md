@@ -10,3 +10,4 @@
 - `pyash-alias` — add/update verb or compositional aliases and tests.
 - `pyash-channel-debug` — matrix channel configure/bootstrap/agent-creation smoke workflows and telemetry-first triage.
 - `pyash-cli-low-churn` — modular `command/pyash/` update workflow with size/test guardrails and regression checklist.
+- `pyash-doc-integrity` — detect prose corrupted by bulk keyword replacement; verify examples still execute.

@@ -2,8 +2,8 @@
 import fs from "node:fs/promises";
 
 import { doRemember, remember, allRemember, forget } from "../remember/index.mjs";
-import mind from "../verbs/mind.mjs";
-import chip from "../verbs/chip.mjs";
+import mind from "../verbs/mind/mind.mjs";
+import chip from "../verbs/mathematics/chip.mjs";
 
 const VERB_HANDLERS = {
   mind,

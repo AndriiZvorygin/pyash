@@ -66,6 +66,7 @@ test("Strata backend sends tools and image data to local OpenAI-compatible chat 
     const result = await runRunner(["--strata"], {
       host: api.host,
       model: "strata",
+      reasoningEffort: "low",
       messages: [{ role: "user", content: "What is in this picture?", imageFiles: [{ filename: imagePath, mimeType: "image/png" }] }],
       tools: [{ type: "function", function: { name: "inspect", parameters: { type: "object", properties: {} } } }]
     }, localStrataEnv(api.host));
@@ -79,6 +80,7 @@ test("Strata backend sends tools and image data to local OpenAI-compatible chat 
     assert.equal(api.calls[0].authorization, "Bearer pyash-local");
     const body = JSON.parse(api.calls[0].body);
     assert.equal(body.model, "strata");
+    assert.equal(body.reasoning_effort, "low");
     assert.equal(body.tools[0].function.name, "inspect");
     assert.match(body.messages[0].content[1].image_url.url, /^data:image\/png;base64,/);
   } finally {

@@ -51,11 +51,16 @@ test("stale business hook rejected when final title is fourth avenue", () => {
 });
 
 test("promptify for fourth avenue picks roadwork/street civic subject", async () => {
+  // The model call is injected so the assertion does not depend on live
+  // model output: a real model sometimes answers with a generic cityscape.
   const out = await runCoverPromptifyStage({
     hookText: "Fourth Avenue One-Way Option Defeated",
     overlayText: "Fourth Avenue One-Way Option Defeated",
     oneSentenceSummary: "On April 27, 2026, council deferred Fourth Avenue to 2027.",
     topNews: "Fourth Avenue project deferred",
+    llm: async () => (
+      "A stylized illustration of a city street under roadwork, with traffic barriers and cones at dusk."
+    )
   });
   assert.match(out.selectedVisualSubject, /roadway|corridor|infrastructure|street|roadwork/iu);
 });

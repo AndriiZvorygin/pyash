@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { resolveEnglishAlias } from "../program/verbs/exchange/translation/english_aliases.mjs";
+import { resolveEnglishAlias } from "../program/library/translation/english_aliases.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");

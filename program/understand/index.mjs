@@ -1,6 +1,6 @@
 import { parse as parseRaw } from "./parse_tokens.mjs";
 import { MOODS } from "../library/grammar/keywords.mjs";
-import { matchGlossToPyash } from "../verbs/exchange/translation/reverse_pairs.mjs";
+import { matchGlossToPyash } from "../library/translation/reverse_pairs.mjs";
 
 export function parse(line) {
   let result = null;

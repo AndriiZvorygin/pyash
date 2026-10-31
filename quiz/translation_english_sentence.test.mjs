@@ -8,9 +8,9 @@ import {
   loadEnglishSentenceResources,
   resolveEnglishSentence,
   selectEnglishWordNetSenses
-} from "../program/verbs/exchange/translation/english_sentence.mjs";
-import { buildEnglishGrammarIndex, loadEnglishGrammarCatalog } from "../program/verbs/exchange/translation/english_grammar.mjs";
-import { buildEnglishWordNetIndex } from "../program/verbs/exchange/translation/english_wordnet.mjs";
+} from "../program/library/translation/english_sentence.mjs";
+import { buildEnglishGrammarIndex, loadEnglishGrammarCatalog } from "../program/library/translation/english_grammar.mjs";
+import { buildEnglishWordNetIndex } from "../program/library/translation/english_wordnet.mjs";
 import {
   buildEnglishSentenceVerificationPrompt,
   buildEnglishPhraseCoordinationPrompt,
@@ -20,7 +20,7 @@ import {
   parseEnglishSentenceVerificationResponse,
   verifyEnglishPhraseCoordination,
   verifyEnglishSentenceCandidates
-} from "../program/verbs/exchange/translation/english_sentence_verification.mjs";
+} from "../program/library/translation/english_sentence_verification.mjs";
 import {
   decodePhraseVliw,
   lowerPhraseVliw,
@@ -30,7 +30,7 @@ import {
 import {
   decodePyacSentence,
   renderEnglishPyash
-} from "../program/verbs/exchange/translation/pyac_to_english_pyash.mjs";
+} from "../program/library/translation/pyac_to_english_pyash.mjs";
 
 function fixtureResolver() {
   const rows = new Map([

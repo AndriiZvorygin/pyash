@@ -29,6 +29,39 @@ For the Z.AI GLM Coding Plan, add `exists su name zai coding api key ob text
 official Codex CLI route through Pyash's existing mind tools; see
 [`mind.md`](../mind.md#zai-glm-coding-plan) for details.
 
+For a Z.AI mind, `/model` queries the account's Coding Plan model catalog. When
+the lookup succeeds, Pyash also refreshes the local Codex `zai` profile's
+`model_catalog_json` file from the returned IDs. Codex itself reads that local
+catalog, so open Pyash's `/model` picker before starting regular Codex when you
+want its model selector refreshed. A failed lookup leaves the configured model
+available and reports the discovery error.
+
+Use `/context` to select a client context budget up to the active model's
+verified maximum, or `/context 128K` to set one directly. GLM-4.5/4.5-Air are
+capped at 128K; GLM-4.6/4.7, GLM-5/5.1, and GLM-5-Turbo at 200K; and GLM-5.2,
+GLM-5.3, GLM-5.3-Flash, and GLM-5.3-FlashX at 1M. Newly listed models without
+a verified limit are capped at 128K. Pyash applies the selection to its Z.AI
+turns and writes `model_context_window` into the local `zai.config.toml`
+profile for future regular Codex sessions. Restart an already-running Codex
+session to load the change. This controls the client's context budget; it does
+not change the model's provider-side context limit. The Coding Plan model-list
+endpoint supplies model IDs only, so context ceilings are tracked separately
+from discovery.
+
+For Ollama, `/context` selects a per-request `num_ctx` preset (4K, 8K, 16K,
+32K, or 64K); `/context default` removes the override and returns to Ollama's
+configured default. This applies to both tool and non-tool turns for the
+current saddle session. Larger contexts consume more memory and must fit the
+selected model and host. Strata's context is not a per-request API setting: it
+is chosen when its server launches, so `/context` reports that limitation
+rather than changing or restarting a Housekeeper-managed server.
+
+Use `/think` to pick the supported reasoning mode. Ollama accepts `on` or
+`off` and sends its boolean `think` request option. Strata accepts `none`,
+`low`, `medium`, or `high` (with `off`/`on` aliases) and sends the documented
+OpenAI-compatible `reasoning_effort` field. Leaving the selection unset keeps
+the existing model or Strata server default.
+
 The web app adds a **Duty** mode beside ordinary chat. Choose an online worker
 and one of its advertised directories, select the model in the existing model
 control, then create a duty with a concise objective and first instruction.

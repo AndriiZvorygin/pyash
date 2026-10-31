@@ -7,27 +7,27 @@ import { fileURLToPath } from "node:url";
 import { buildProgram } from "../program/program.mjs";
 import pyashWords from "../program/library/pyashWords.json" with { type: "json" };
 import { loadCoverage } from "./compound_coverage.mjs";
-import { loadAllCompoundAtomLinks } from "../program/verbs/exchange/translation/compound_lexicons.mjs";
-import { renderPyacSurface } from "../program/verbs/exchange/translation/pyash_surface.mjs";
+import { loadAllCompoundAtomLinks } from "../program/library/translation/compound_lexicons.mjs";
+import { renderPyacSurface } from "../program/library/translation/pyash_surface.mjs";
 import {
   buildEnglishDictionaryAliases,
   loadEnglishDictionaryBlacklist
-} from "../program/verbs/exchange/translation/english_dictionary_aliases.mjs";
+} from "../program/library/translation/english_dictionary_aliases.mjs";
 import {
   buildEnglishLemmaIndex,
   inflectionCandidates,
   loadEnglishLemmaCatalog
-} from "../program/verbs/exchange/translation/english_lemmas.mjs";
-import { loadAnchorWordForms } from "../program/verbs/exchange/translation/anchor_words.mjs";
+} from "../program/library/translation/english_lemmas.mjs";
+import { loadAnchorWordForms } from "../program/library/translation/anchor_words.mjs";
 import {
   loadDefaultEnglish30kCoverage,
   loadEnglish30k,
   english30kLookupVariants,
   lookupEnglish30kCoverage
-} from "../program/verbs/exchange/translation/english30k_coverage.mjs";
-import { buildEnglishGrammarIndex, loadEnglishGrammarCatalog } from "../program/verbs/exchange/translation/english_grammar.mjs";
+} from "../program/library/translation/english30k_coverage.mjs";
+import { buildEnglishGrammarIndex, loadEnglishGrammarCatalog } from "../program/library/translation/english_grammar.mjs";
 import { queryVocabLines } from "./vocab_query.mjs";
-import { resolveEnglishAlias } from "../program/verbs/exchange/translation/english_aliases.mjs";
+import { resolveEnglishAlias } from "../program/library/translation/english_aliases.mjs";
 import {
   MOODS,
   ROLE_KEYS,
@@ -220,7 +220,7 @@ async function loadDefaultAcceptedCompounds() {
 async function loadDefaultCuratedAcceptedCompounds() {
   if (!curatedAcceptedCoveragePromise) {
     curatedAcceptedCoveragePromise = fs
-      .readFile(new URL("../program/verbs/exchange/translation/compound_coverage_curated.pya", import.meta.url), "utf8")
+      .readFile(new URL("../program/library/translation/compound_coverage_curated.pya", import.meta.url), "utf8")
       .then((source) => parseAcceptedCompoundRows(buildProgram(source)))
       .catch((error) => {
         if (error?.code === "ENOENT") return new Map();
@@ -634,11 +634,14 @@ function mergeCompoundRows(target, source) {
   }
 }
 
+// Collects the tokens of a sentence into the two roles that matter for
+// coverage. A name names something and does not need a vocabulary entry of its
+// own; a word does. Tokens that appear in both roles are treated as words.
 function collectTokensFromSentence(sentence, out) {
   if (!sentence || typeof sentence !== "object") return;
   if (typeof sentence.be === "string") {
     for (const token of sentence.be.split(/\s+/).filter(Boolean)) {
-      if (NAME_TOKEN_REGEX.test(token) && !STRUCTURAL_VERB_TOKENS.has(token.toLowerCase())) out.add(token);
+      if (NAME_TOKEN_REGEX.test(token) && !STRUCTURAL_VERB_TOKENS.has(token.toLowerCase())) out.words.add(token);
     }
   }
   const skipKeys = new Set(["raw", "text", "filename", "pyash"]);
@@ -652,7 +655,7 @@ function collectTokensFromSentence(sentence, out) {
     }
     if (typeof node.name === "string") {
       for (const token of tokenizeName(node.name)) {
-        if (!isApprovedContractNameToken(token)) out.add(token);
+        if (!isApprovedContractNameToken(token)) out.names.add(token);
       }
     }
     for (const [key, value] of Object.entries(node)) {
@@ -1047,26 +1050,52 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     parsedFiles.push({ file, text, program });
   }
 
+  // A token that names something anywhere in the program is a name, even where
+  // it also stands in the predicate slot: "be android ... do" names the
+  // android rather than needing a vocabulary entry of its own.
+  const namesAcrossFiles = new Set();
+  for (const { text, program } of parsedFiles) {
+    if (isCompoundCatalog(program)) continue;
+    const roles = { words: new Set(), names: new Set() };
+    for (const sentence of program.sentences) {
+      collectTokensFromSentence(sentence, roles);
+    }
+    for (const block of extractQuotedPyashBlocks(text)) {
+      const blockProgram = buildProgram(block);
+      for (const sentence of blockProgram.sentences) {
+        collectTokensFromSentence(sentence, roles);
+      }
+    }
+    for (const token of roles.names) namesAcrossFiles.add(token);
+  }
+
   let missing = 0;
+  const uncoveredNames = new Set();
   const textTokens = new Set();
   for (const input of resolvedTextInputs) {
     for (const token of tokenizeName(input)) textTokens.add(token);
   }
   for (const { file, text, program } of parsedFiles) {
-    const tokens = new Set();
+    const roles = { words: new Set(), names: new Set() };
     const compoundCatalog = isCompoundCatalog(program);
     if (compoundCatalog) continue;
     for (const sentence of program.sentences) {
-      collectTokensFromSentence(sentence, tokens);
+      collectTokensFromSentence(sentence, roles);
     }
     for (const block of extractQuotedPyashBlocks(text)) {
       const blockProgram = buildProgram(block);
       for (const sentence of blockProgram.sentences) {
-        collectTokensFromSentence(sentence, tokens);
+        collectTokensFromSentence(sentence, roles);
       }
     }
+    const tokens = new Set([...roles.words, ...roles.names]);
     for (const token of tokens) {
       if (isGrammarKeyword(token)) continue;
+      // A token that names something anywhere in the program is a name, even
+      // where it also stands in the predicate slot: "be android ... do" names
+      // the android, it does not need a vocabulary entry of its own. A token
+      // that is only ever a predicate word does.
+      const isNameOnly = namesAcrossFiles.has(token);
       let knownCompounds = acceptedCompounds.get(normalizeCompoundTarget(token));
       if (knownCompounds?.length) {
         registerFoundCompound(foundCompounds, knownCompounds, file, token);
@@ -1089,12 +1118,24 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
       if (ranked) rankedCoverage.set(token, ranked);
       const lines = await queryRyan(token);
       if (lines.length === 0 || (lines.length === 1 && isFileMarker(lines[0]))) {
+        if (isNameOnly) {
+          uncoveredNames.add(token);
+          if (!occurrences.has(token)) occurrences.set(token, new Set());
+          occurrences.get(token).add(file);
+          continue;
+        }
         missing += 1;
         if (!occurrences.has(token)) occurrences.set(token, new Set());
         occurrences.get(token).add(file);
         continue;
       }
       if (!await isExactTokenMatchOrAlias(token, lines)) {
+        if (isNameOnly) {
+          uncoveredNames.add(token);
+          if (!occurrences.has(token)) occurrences.set(token, new Set());
+          occurrences.get(token).add(file);
+          continue;
+        }
         missing += 1;
         if (!occurrences.has(token)) occurrences.set(token, new Set());
         occurrences.get(token).add(file);
@@ -1234,6 +1275,10 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
         const rankSuffix = ranked
           ? `; English30k rank ${ranked.rank} remains unresolved`
           : "";
+        if (uncoveredNames.has(token)) {
+          report(`${token}: name without vocabulary coverage${rankSuffix}${locationSuffix}`);
+          continue;
+        }
         report(`${token}: ${preview || "no suggestions"}${rankSuffix}${locationSuffix}`);
       }
     }
@@ -1339,6 +1384,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
   return {
     exitCode,
     missing,
+    uncoveredNames: [...uncoveredNames].sort((a, b) => a.localeCompare(b)),
     foundCompounds: [...foundCompounds.values()].map(({ row, locations }) => {
       const { identity, aliases, ...publicRow } = row;
       const specificAtom = resolveSpecificAtom(row);

@@ -227,14 +227,28 @@ test("gpu worker leaves a dependency-waiting envelope and claims an independent 
 test("bounded GPU worker batch fans out independent duties through the existing adapter", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-gpu-worker-batch-"));
   const worldRoot = path.join(root, "world");
-  await enqueueMind(worldRoot, { handleId: "batch-one", queuedAt: "2026-03-10T08:00:00.000Z" });
-  await enqueueMind(worldRoot, { handleId: "batch-two", queuedAt: "2026-03-10T08:00:01.000Z" });
+  for (let index = 1; index <= 10; index += 1) {
+    await enqueueMind(worldRoot, {
+      handleId: `batch-${index}`,
+      queuedAt: `2026-03-10T08:00:${String(index).padStart(2, "0")}.000Z`
+    });
+  }
 
   let active = 0;
   let maximum = 0;
+  let arrived = 0;
+  let releaseGate = () => {};
+  const gate = new Promise((resolve) => {
+    releaseGate = resolve;
+  });
+  // The gate only opens once every duty has reached the adapter, so the
+  // overlap is measured deterministically. Racing a fixed sleep instead makes
+  // the assertion depend on how fast the machine happens to do file work.
+  const gateSafety = setTimeout(() => releaseGate(), 15000);
+  const expectedConcurrency = 10;
   const result = await runGpuWorkerBatch({
     worldRoot,
-    concurrency: 2,
+    concurrency: 10,
     pollIntervalMs: 1,
     maxPolls: 5,
     adapter: {
@@ -244,16 +258,20 @@ test("bounded GPU worker batch fans out independent duties through the existing 
       async getJobStatus() {
         active += 1;
         maximum = Math.max(maximum, active);
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        arrived += 1;
+        if (arrived >= expectedConcurrency) releaseGate();
+        await gate;
         active -= 1;
         return { status: "success", result: { response: "ok" } };
       }
     }
   });
+  clearTimeout(gateSafety);
 
-  assert.equal(result.received, 2);
-  assert.equal(result.handled, 2);
-  assert.equal(maximum, 2);
+  assert.equal(result.received, 10);
+  assert.equal(result.handled, 10);
+  assert.equal(arrived, expectedConcurrency, "every duty should reach the adapter exactly once");
+  assert.equal(maximum, expectedConcurrency, "all duties should be in flight at the same time");
   assert.equal((await queueDepth(worldRoot)).total, 0);
 });
 

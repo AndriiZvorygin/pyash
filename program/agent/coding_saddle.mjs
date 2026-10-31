@@ -1,4 +1,48 @@
 import path from "node:path";
+import { fetchZaiCodingPlanModels } from "../runtime/zai_coding_plan.mjs";
+import { fetchMiniMaxModels } from "../runtime/minimax.mjs";
+
+export const SADDLE_OLLAMA_CONTEXT_PRESETS = [4096, 8192, 16384, 32768, 65536];
+
+function formatContextLength(tokens) {
+  const value = Number(tokens);
+  if (!Number.isSafeInteger(value) || value <= 0) return "default";
+  if (value >= 1_000_000) return `${Number((value / 1_000_000).toFixed(2))}M`;
+  if (value >= 1024 && value % 1024 === 0) return `${value / 1024}K`;
+  return value.toLocaleString("en-CA");
+}
+
+export function buildSaddleStrataContextOptions({
+  options = [],
+  currentContextLength = null,
+  defaultContextLength = null
+} = {}) {
+  const values = [...new Set((Array.isArray(options) ? options : [])
+    .map(Number)
+    .filter((value) => Number.isSafeInteger(value) && value >= 8192 && value <= 262144))]
+    .sort((a, b) => a - b);
+  if (!values.length) return [];
+  const choices = values.map((tokens) => ({
+    model: String(tokens),
+    value: formatContextLength(tokens),
+    label: formatContextLength(tokens),
+    tokens
+  }));
+  const defaultTokens = Number(defaultContextLength);
+  if (values.includes(defaultTokens)) {
+    choices.unshift({
+      model: String(defaultTokens),
+      value: "default",
+      label: `Default (${formatContextLength(defaultTokens)})`,
+      tokens: defaultTokens
+    });
+  }
+  return choices.map((choice) => ({
+    ...choice,
+    current: choice.tokens === Number(currentContextLength),
+    isDefault: choice.value === "default"
+  }));
+}
 
 export const DEFAULT_CODING_SADDLE_SYSTEM_PROMPT = [
   "You are the Pyash coding saddle: an interactive coding agent operating inside the existing Pyash runtime.",
@@ -24,6 +68,7 @@ export function normalizeSaddleBackend(value, fallback = "ollama") {
     ["openai command mind", "openai"],
     ["litellm command mind", "litellm"],
     ["openrouter command mind", "openrouter"],
+    ["minimax command mind", "minimax"],
     ["zai command mind", "zai"],
     ["vllm command mind", "vllm"],
     ["strata command mind", "strata"]
@@ -33,6 +78,37 @@ export function normalizeSaddleBackend(value, fallback = "ollama") {
 
 export function normalizeSaddleHost(value, fallback = "http://localhost:11434") {
   return normalizeText(value) || fallback;
+}
+
+export function normalizeSaddleThinkSelection(value, backend) {
+  const selected = normalizeText(value).toLowerCase();
+  const provider = normalizeSaddleBackend(backend);
+  if (provider === "ollama") {
+    if (["off", "none", "false", "0"].includes(selected)) {
+      return { value: "off", think: false, reasoningEffort: null };
+    }
+    if (["on", "think", "true", "1"].includes(selected)) {
+      return { value: "on", think: true, reasoningEffort: null };
+    }
+    return null;
+  }
+  if (provider === "strata") {
+    const effort = selected === "off" ? "none" : selected === "on" ? "high" : selected;
+    if (["none", "low", "medium", "high"].includes(effort)) {
+      return { value: effort, think: null, reasoningEffort: effort };
+    }
+  }
+  if (provider === "minimax") {
+    if (["low", "medium", "high", "xhigh", "max"].includes(selected)) {
+      return { value: selected, think: null, reasoningEffort: selected };
+    }
+  }
+  if (provider === "zai") {
+    if (["low", "high", "max"].includes(selected)) {
+      return { value: selected, think: null, reasoningEffort: selected };
+    }
+  }
+  return null;
 }
 
 function mindFieldValue(value) {
@@ -54,7 +130,7 @@ export function resolveSaddleMindProfile({
   const declaredBackend = mindFieldValue(profile.fromstate);
   const backend = normalizeSaddleBackend(declaredBackend || defaultBackend);
   const model = normalizeSaddleModel(
-    mindFieldValue(profile.as) || (backend === "zai" ? "glm-5.3" : defaultModel)
+    mindFieldValue(profile.as) || (backend === "zai" ? "glm-5.3-flash" : backend === "minimax" ? "MiniMax-M3.1-Flash" : defaultModel)
   );
   const declaredHost = mindFieldValue(profile.from);
   const host = normalizeSaddleHost(declaredHost || hostForBackend(backend), defaultHost);
@@ -73,6 +149,82 @@ export function listSaddleMindNames({ minds = [], activeMindName = "coding saddl
     if (right.toLowerCase() === "mind") return 1;
     return left.localeCompare(right);
   });
+}
+
+const SADDLE_BACKEND_LABELS = new Map([
+  ["ollama", "Ollama"],
+  ["strata", "Strata"],
+  ["zai", "Z.AI"],
+  ["openai", "OpenAI"],
+  ["minimax", "MiniMax"],
+  ["openrouter", "OpenRouter"],
+  ["litellm", "LiteLLM"],
+  ["vllm", "vLLM"]
+]);
+
+const SADDLE_BACKEND_ORDER = ["ollama", "strata", "zai", "openai", "minimax", "openrouter", "litellm", "vllm"];
+
+export function listSaddleBackendOptions({
+  minds = [],
+  defaultBackend = "ollama",
+  defaultModel = "qwen3.5:9b",
+  hostForBackend = () => "http://localhost:11434",
+  currentBackend = "",
+  currentMindName = "",
+  currentModel = "",
+  currentHost = ""
+} = {}) {
+  const profilesByName = new Map();
+  for (const fact of Array.isArray(minds) ? minds : []) {
+    if (fact?.be !== "mind" || !fact?.su?.name) continue;
+    profilesByName.set(normalizeText(fact.su.name).toLowerCase(), fact);
+  }
+
+  const profiles = [...profilesByName.values()]
+    .filter((profile) => normalizeText(profile.su.name).toLowerCase() === "mind" || mindFieldValue(profile.fromstate))
+    .map((profile) => resolveSaddleMindProfile({
+      mindName: profile.su.name,
+      profile,
+      defaultBackend,
+      defaultModel,
+      hostForBackend
+    }));
+
+  const normalizedCurrentBackend = normalizeSaddleBackend(currentBackend, "");
+  if (normalizedCurrentBackend && !profiles.some((profile) => profile.backend === normalizedCurrentBackend)) {
+    profiles.push({
+      mindName: normalizeText(currentMindName) || normalizedCurrentBackend,
+      backend: normalizedCurrentBackend,
+      model: normalizeSaddleModel(currentModel, defaultModel),
+      host: normalizeSaddleHost(currentHost || hostForBackend(normalizedCurrentBackend))
+    });
+  }
+
+  const byBackend = new Map();
+  for (const profile of profiles) {
+    const backend = normalizeSaddleBackend(profile.backend, "");
+    if (!backend) continue;
+    const priority = (profile.mindName.toLowerCase() === normalizeText(currentMindName).toLowerCase() && backend === normalizedCurrentBackend ? 0 : 10)
+      + (profile.mindName.toLowerCase() === backend ? 0 : 1)
+      + (profile.mindName.toLowerCase() === "mind" ? 0 : 1);
+    const existing = byBackend.get(backend);
+    if (!existing || priority < existing.priority) byBackend.set(backend, { ...profile, backend, priority });
+  }
+
+  return [...byBackend.values()]
+    .sort((left, right) => {
+      const leftOrder = SADDLE_BACKEND_ORDER.indexOf(left.backend);
+      const rightOrder = SADDLE_BACKEND_ORDER.indexOf(right.backend);
+      return (leftOrder < 0 ? SADDLE_BACKEND_ORDER.length : leftOrder)
+        - (rightOrder < 0 ? SADDLE_BACKEND_ORDER.length : rightOrder)
+        || left.backend.localeCompare(right.backend);
+    })
+    .map(({ priority, ...profile }) => ({
+      ...profile,
+      value: profile.backend,
+      label: SADDLE_BACKEND_LABELS.get(profile.backend) || profile.backend,
+      current: profile.backend === normalizedCurrentBackend
+    }));
 }
 
 export function parseSaddleMindCommand(value) {
@@ -108,27 +260,73 @@ export function resolveSaddleModelOption(value, models = []) {
 export async function discoverSaddleModels({
   backend,
   host,
+  housekeeperUrl = "",
   currentModel = "",
   fallbackModels = [],
+  apiKey,
   fetchFn = globalThis.fetch,
   timeoutMs = 4000
 } = {}) {
   const normalizedBackend = normalizeSaddleBackend(backend);
   const normalizedHost = normalizeSaddleHost(host);
   const configured = [currentModel, ...fallbackModels].map(normalizeText).filter(Boolean);
-  if (["zai", "openai", "litellm", "openrouter", "vllm"].includes(normalizedBackend)) {
+  if (normalizedBackend === "zai") {
+    const discovered = await fetchZaiCodingPlanModels({
+      host: normalizedHost,
+      apiKey,
+      fetchFn,
+      timeoutMs
+    });
+    return {
+      models: [...new Set([...configured, ...discovered.models])],
+      catalogModels: discovered.models,
+      available: discovered.ok,
+      error: discovered.error || null
+    };
+  }
+  if (normalizedBackend === "minimax") {
+    const discovered = await fetchMiniMaxModels({
+      host: normalizedHost,
+      apiKey,
+      fetchFn,
+      timeoutMs
+    });
+    return {
+      models: [...new Set([...configured, ...discovered.models])],
+      catalogModels: discovered.models,
+      available: discovered.ok,
+      error: discovered.error || null
+    };
+  }
+  if (["openai", "litellm", "openrouter", "vllm"].includes(normalizedBackend)) {
     return { models: [...new Set(configured)], available: false, error: "enter a model ID supported by the selected mind" };
   }
   if (typeof fetchFn !== "function") {
     return { models: [...new Set(configured)], available: false, error: "model discovery is unavailable" };
   }
-  const endpoint = normalizedBackend === "strata" ? "/v1/models" : "/api/tags";
+  const localBackend = ["ollama", "strata"].includes(normalizedBackend);
+  if (!localBackend) {
+    return {
+      models: [...new Set(configured)],
+      available: false,
+      error: `model discovery is unsupported for backend ${normalizedBackend || "(empty)"}`
+    };
+  }
+  const catalogHost = normalizeText(housekeeperUrl).replace(/\/+$/u, "");
+  if (!catalogHost) {
+    return {
+      models: [...new Set(configured)],
+      available: false,
+      error: "GPU Housekeeper URL is required for local model discovery"
+    };
+  }
+  const endpoint = `${catalogHost}/runtime/${normalizedBackend}/models`;
   const controller = typeof AbortController === "function" ? new AbortController() : null;
   const timer = controller && Number.isFinite(Number(timeoutMs))
     ? setTimeout(() => controller.abort(), Number(timeoutMs))
     : null;
   try {
-    const response = await fetchFn(`${normalizedHost.replace(/\/+$/u, "")}${endpoint}`, {
+    const response = await fetchFn(endpoint, {
       signal: controller?.signal
     });
     if (!response?.ok) throw new Error(`model catalogue returned HTTP ${response?.status ?? "unknown"}`);
@@ -165,7 +363,7 @@ export function formatSaddleModelPicker({ models = [], currentModel = "", curren
     const label = normalizeText(entry.label)
       || (backend && backend !== "ollama" ? `${backend}: ${model}` : model);
     const host = normalizeText(entry.host);
-    const location = backend && backend !== "ollama" && host ? ` @ ${host}` : "";
+    const location = backend && !["ollama", "strata"].includes(backend) && host ? ` @ ${host}` : "";
     const marker = model === normalizeText(currentModel)
       && (!normalizeText(currentBackend) || !backend || backend === normalizeText(currentBackend).toLowerCase())
       ? " (current)"
@@ -177,17 +375,33 @@ export function formatSaddleModelPicker({ models = [], currentModel = "", curren
   return lines.join("\n");
 }
 
+export function formatSaddleBackendPicker({ backends = [] } = {}) {
+  const choices = Array.isArray(backends) ? backends : [];
+  const lines = ["available backends:"];
+  choices.forEach((entry, index) => {
+    const label = normalizeText(entry?.label || entry?.backend);
+    const model = normalizeText(entry?.model);
+    const current = entry?.current ? " (current)" : "";
+    lines.push(`${index + 1}. ${label}${model ? ` — ${model}` : ""}${current}`);
+  });
+  lines.push("Enter a number or backend name; Ctrl+C cancels.");
+  return lines.join("\n");
+}
+
 export function buildSaddleMindSentence({
   input,
   model,
   backend,
   host,
+  contextWindow,
+  think,
+  reasoningEffort,
   mindName = "coding saddle",
   toolMapName = "saddle tools",
   sessionName = "coding",
   sessionFile = ""
 } = {}) {
-  return {
+  const sentence = {
     mood: "do",
     be: "write",
     for: { name: normalizeText(mindName) || "coding saddle" },
@@ -202,24 +416,47 @@ export function buildSaddleMindSentence({
     by: { num: 50 },
     // The model is persisted in the mind configuration fact; the sentence stays canonical Pyash shape.
   };
+  if (Number.isSafeInteger(Number(contextWindow)) && Number(contextWindow) > 0) {
+    sentence.contextWindow = Number(contextWindow);
+  }
+  if (typeof think === "boolean") sentence.think = think;
+  if (["none", "low", "medium", "high", "xhigh", "max"].includes(String(reasoningEffort ?? "").trim().toLowerCase())) {
+    sentence.reasoningEffort = String(reasoningEffort).trim().toLowerCase();
+  }
+  return sentence;
 }
 
 export function formatSaddleStatus({
   mindName = "mind",
   model,
+  backend = "",
+  housekeeperUrl = "",
+  contextWindow,
+  thinkMode,
   host,
   cwd,
   queue,
   busy = false,
   session = "coding"
 } = {}) {
-  const queueValue = queue && typeof queue === "object"
-    ? (Number(queue.total ?? queue.runtime ?? queue.input ?? 0) || 0)
-    : Number(queue ?? 0) || 0;
+  const queueValue = queue?.available === false
+    ? "unavailable"
+    : queue && typeof queue === "object" && (queue.queuedCount !== undefined || queue.runningCount !== undefined)
+      ? `${Number(queue.queuedCount ?? 0) || 0} queued, ${Number(queue.runningCount ?? 0) || 0} running`
+      : queue && typeof queue === "object"
+        ? (Number(queue.total ?? queue.runtime ?? queue.input ?? queue.queueDepth ?? 0) || 0)
+        : Number(queue ?? 0) || 0;
+  const localBackend = ["ollama", "strata"].includes(normalizeSaddleBackend(backend));
   return [
     `mind: ${normalizeText(mindName) || "mind"}`,
     `model: ${normalizeSaddleModel(model)}`,
-    `host: ${normalizeSaddleHost(host)}`,
+    ...(Number.isSafeInteger(Number(contextWindow)) && Number(contextWindow) > 0
+      ? [`context: ${Number(contextWindow).toLocaleString("en-CA")} tokens`]
+      : []),
+    ...(normalizeText(thinkMode) ? [`thinking: ${normalizeText(thinkMode)}`] : []),
+    ...(localBackend
+      ? [`route: GPU Housekeeper ${normalizeText(housekeeperUrl) || "(not configured)"}`]
+      : [`host: ${normalizeSaddleHost(host)}`]),
     `session: ${normalizeText(session) || "coding"}`,
     `cwd: ${path.resolve(String(cwd || process.cwd()))}`,
     `gpu queue: ${queueValue}`,

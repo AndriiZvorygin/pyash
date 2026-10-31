@@ -1,7 +1,7 @@
 import path from "node:path";
 
 import { loadCheckpointIndex } from "./run_pya_helpers.mjs";
-import { inspectTranslationRefineryArtifacts } from "../program/verbs/exchange/translation/translation_refinery_artifacts.mjs";
+import { inspectTranslationRefineryArtifacts } from "../program/library/translation/translation_refinery_artifacts.mjs";
 
 function usage() {
   throw new Error("usage: node command/read_translation_refinery.mjs <run-id> [checkpoint-cwd]");

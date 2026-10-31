@@ -2,19 +2,19 @@ import { buildProgram } from "../../program.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { remember, doRemember } from "../../remember/index.mjs";
 import { emitExchangeSentence } from "../../bridge/exchange.mjs";
-import { resolveTranslationSource, resolveTranslationTarget } from "./translation/registry.mjs";
-import { matchGlossToPyash } from "./translation/reverse_pairs.mjs";
-import { translatePyacToEnglishPyash } from "./translation/pyac_to_english_pyash.mjs";
-import { loadAnchorWordForms } from "./translation/anchor_words.mjs";
-import { normalizeAnchorSentence, applyTemplatePairs } from "./translation/helpers.mjs";
+import { resolveTranslationSource, resolveTranslationTarget } from "../../library/translation/registry.mjs";
+import { matchGlossToPyash } from "../../library/translation/reverse_pairs.mjs";
+import { translatePyacToEnglishPyash } from "../../library/translation/pyac_to_english_pyash.mjs";
+import { loadAnchorWordForms } from "../../library/translation/anchor_words.mjs";
+import { normalizeAnchorSentence, applyTemplatePairs } from "../../library/translation/helpers.mjs";
 import {
   analyzeDefaultEnglishSentence,
   resolveEnglishSentence
-} from "./translation/english_sentence.mjs";
+} from "../../library/translation/english_sentence.mjs";
 import {
   createDefaultQueuedMindEnglishSentenceVerifier,
   verifyEnglishSentenceCandidates
-} from "./translation/english_sentence_verification.mjs";
+} from "../../library/translation/english_sentence_verification.mjs";
 import {
   loadEnglishTranslationPairs,
   loadRussianTranslationPairs,
@@ -28,7 +28,7 @@ import {
   loadChineseTranslationTemplates,
   loadInterlinguaTranslationTemplates,
   loadHindiTranslationTemplates
-} from "./translation/pairs.mjs";
+} from "../../library/translation/pairs.mjs";
 
 let englishSentenceVerifierPromise = null;
 
@@ -246,7 +246,7 @@ export async function translation_from_filename_to_vliw(sentence, options = {}) 
   if (target !== "vliw") throw new Error(`translation source-to-VLIW operation requires vliw target, got ${target || "unknown"}`);
   if (!outputName) throw new Error("translation source-to-VLIW operation requires a map output name");
 
-  const { runTranslationVliwJob } = await import("./translation/translation_to_vliw_job.mjs");
+  const { runTranslationVliwJob } = await import("../../library/translation/translation_to_vliw_job.mjs");
   const verbose = process.env.PYA_RUN_VERBOSE === "1";
   const log = (message) => {
     if (verbose) console.error(`[translation] ${message}`);

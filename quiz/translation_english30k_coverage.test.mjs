@@ -14,22 +14,22 @@ import {
   parseEnglish30kText,
   renderEnglish30kCoveragePya,
   summarizeEnglish30kCoverage
-} from "../program/verbs/exchange/translation/english30k_coverage.mjs";
+} from "../program/library/translation/english30k_coverage.mjs";
 import {
   buildEnglishLemmaCandidates,
   buildEnglishLemmaIndex,
   loadEnglishLemmaCatalog,
   parseEnglishLemmaCatalog
-} from "../program/verbs/exchange/translation/english_lemmas.mjs";
+} from "../program/library/translation/english_lemmas.mjs";
 import {
   buildEnglishDictionaryAliases,
   parseEnglishDictionaryBlacklist
-} from "../program/verbs/exchange/translation/english_dictionary_aliases.mjs";
+} from "../program/library/translation/english_dictionary_aliases.mjs";
 import {
   buildEnglishGrammarIndex,
   composeEnglishNounPhrase,
   loadEnglishGrammarCatalog
-} from "../program/verbs/exchange/translation/english_grammar.mjs";
+} from "../program/library/translation/english_grammar.mjs";
 
 test("English30k parser preserves rank, score, and missing source ranks", () => {
   const source = parseEnglish30kText([
@@ -194,7 +194,7 @@ test("vocab_suggest reports ranked unresolved coverage without losing existing c
 
 test("durable English30k manifest records the source contract", async () => {
   const manifest = await fs.readFile(
-    new URL("../program/verbs/exchange/translation/english30k_coverage.pya", import.meta.url),
+    new URL("../program/library/translation/english30k_coverage.pya", import.meta.url),
     "utf8"
   );
   assert.match(manifest, /english30k-coverage-v1/u);

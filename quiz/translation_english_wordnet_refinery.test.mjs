@@ -5,15 +5,15 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { runTranslationDocument } from "../command/translate_document.mjs";
-import { buildEnglishWordNetIndex } from "../program/verbs/exchange/translation/english_wordnet.mjs";
-import { parseTranslationPipelinePya } from "../program/verbs/exchange/translation/translation_pipeline.mjs";
+import { buildEnglishWordNetIndex } from "../program/library/translation/english_wordnet.mjs";
+import { parseTranslationPipelinePya } from "../program/library/translation/translation_pipeline.mjs";
 import {
   appendEnglishWordNetAttachmentCandidates,
   applyEnglishWordNetSenseAttachmentLinks,
   collectEnglishWordNetSourceTerms,
   refineEnglishWordNet
-} from "../program/verbs/exchange/translation/english_wordnet_refinery.mjs";
-import { TRANSLATION_SENSE_STATE_FORMAT } from "../program/verbs/exchange/translation/translation_occurrence.mjs";
+} from "../program/library/translation/english_wordnet_refinery.mjs";
+import { TRANSLATION_SENSE_STATE_FORMAT } from "../program/library/translation/translation_occurrence.mjs";
 
 function resources() {
   return {

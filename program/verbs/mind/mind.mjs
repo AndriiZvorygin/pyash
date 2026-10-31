@@ -344,6 +344,7 @@ export async function mind_to_name_text(sentence, {
   const effectiveModelTuning = (() => {
     const tuning = modelTuning && typeof modelTuning === "object" ? { ...modelTuning } : {};
     if (typeof configuredThink === "boolean") tuning.think = configuredThink;
+    if (typeof sentence?.think === "boolean") tuning.think = sentence.think;
     if (typeof tuning.think !== "boolean") tuning.think = false;
     if (configuredNumPredict !== null) tuning.numPredict = configuredNumPredict;
     if (callNumPredict !== null) tuning.numPredict = callNumPredict;
@@ -526,7 +527,15 @@ export async function mind_to_name_text(sentence, {
     ollamaHost: resolveConfigText("ollama host", { rememberFn: remember }),
     aiHost: resolveConfigText("ai host", { rememberFn: remember })
   });
-  const mindReasoningEffort = runtimeReasoningEffort || resolveConfigText("mind reasoning effort", { rememberFn: remember }) || null;
+  const callReasoningEffort = String(sentence?.reasoningEffort ?? "").trim();
+  const mindReasoningEffort = callReasoningEffort
+    || runtimeReasoningEffort
+    || resolveConfigText("mind reasoning effort", { rememberFn: remember })
+    || null;
+  const contextWindowValue = Number(sentence?.contextWindow);
+  const contextWindow = Number.isSafeInteger(contextWindowValue) && contextWindowValue > 0
+    ? contextWindowValue
+    : null;
   const mindDebug = resolveConfigBool("mind debug", { rememberFn: remember }) === true;
   const debugMind = (label, payload) => {
     if (!mindDebug) return;
@@ -728,6 +737,7 @@ export async function mind_to_name_text(sentence, {
       backendName,
       ollamaHost,
       reasoningEffort: mindReasoningEffort,
+      contextWindow,
       modelTuning: effectiveModelTuning,
       maxToolCalls: configuredMaxToolCalls,
       runtimeContext: {
@@ -789,6 +799,7 @@ export async function mind_to_name_text(sentence, {
       backendName,
       ollamaHost,
       reasoningEffort: mindReasoningEffort,
+      contextWindow,
       modelTuning: effectiveModelTuning,
       mindDebug,
       debugMind,

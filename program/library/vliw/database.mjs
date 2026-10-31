@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 
 import { buildProgram } from "../../program.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
-import { resolveTranslationSource } from "../../verbs/exchange/translation/registry.mjs";
+import { resolveTranslationSource } from "../translation/registry.mjs";
 import {
   decodeCodelet,
   executeCodelets,

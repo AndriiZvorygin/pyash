@@ -6,22 +6,21 @@
 - **type**: REPL
 - **REPL input**:
   ```
-  su name counter ob num 0 be number ya
-su name climb to name counter be ceremony def
-ob num 1 to name counter be plus do
-su name climb be ceremony prah
+  exists su name counter ob num 0 be number ya
+  su name climb to name counter be ceremony def
+  ob num 1 to name counter be plus do
+  su name climb be ceremony prah
   to name counter fromindex num 1 toindex num 3 be climb do
   mem
   ```
 - **Expected output**:
   ```
   Memory: [
-    { "mood": "ya", "su": { "name": "counter" }, "ob": { "num": 2 }, "be": "number" },
-    { "mood": "def", "su": { "name": "climb" }, "be": "ceremony" },
+    { "mood": "def", "su": { "name": "climb" }, "to": { "name": "counter" }, "be": "ceremony" },
     { "mood": "do", "ob": { "num": 1 }, "to": { "name": "counter" }, "be": "plus" },
     { "mood": "prah", "su": { "name": "climb" }, "be": "ceremony" },
     { "mood": "do", "to": { "name": "counter" }, "fromindex": 3, "toindex": 3, "be": "climb", "ob": { "num": 2 } },
-    { "su": { "name": "counter" }, "ob": { "num": 2 }, "be": "climb", "mood": "ya" },
+    { "mood": "ya", "exists": true, "su": { "name": "counter" }, "ob": { "num": 2 }, "be": "number" },
     { "su": { "name": "result" }, "ob": { "num": 2 }, "be": "climb", "mood": "ya" }
   ]
   ```

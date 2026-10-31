@@ -1,6 +1,6 @@
-import { compile_from_filename_to_filename } from "./compile/compile_from_filename.mjs";
-import { transpileProgram } from "./compile/transpile_program.mjs";
-import { transpileSentence } from "./compile/transpile_sentence.mjs";
+import { compile_from_filename_to_filename } from "../../library/compile/compile_from_filename.mjs";
+import { transpileProgram } from "../../library/compile/transpile_program.mjs";
+import { transpileSentence } from "../../library/compile/transpile_sentence.mjs";
 
 export default compile_from_filename_to_filename;
 export { transpileSentence, transpileProgram };

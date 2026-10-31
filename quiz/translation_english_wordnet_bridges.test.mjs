@@ -5,14 +5,14 @@ import {
   buildEnglishWordNetBridgeIndex,
   loadEnglishWordNetBridges,
   parseEnglishWordNetBridgeCatalog
-} from "../program/verbs/exchange/translation/english_wordnet_bridges.mjs";
-import { buildEnglishWordNetSenseBridgeIndex } from "../program/verbs/exchange/translation/english_wordnet_linker.mjs";
+} from "../program/library/translation/english_wordnet_bridges.mjs";
+import { buildEnglishWordNetSenseBridgeIndex } from "../program/library/translation/english_wordnet_linker.mjs";
 import {
   analyzeDefaultEnglishSentence,
   analyzeEnglishSentence
-} from "../program/verbs/exchange/translation/english_sentence.mjs";
-import { buildEnglishGrammarIndex, loadEnglishGrammarCatalog } from "../program/verbs/exchange/translation/english_grammar.mjs";
-import { buildEnglishWordNetIndex } from "../program/verbs/exchange/translation/english_wordnet.mjs";
+} from "../program/library/translation/english_sentence.mjs";
+import { buildEnglishGrammarIndex, loadEnglishGrammarCatalog } from "../program/library/translation/english_grammar.mjs";
+import { buildEnglishWordNetIndex } from "../program/library/translation/english_wordnet.mjs";
 
 test("WordNet bridges use one native Pyash row per sense", async () => {
   const catalog = await loadEnglishWordNetBridges();

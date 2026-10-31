@@ -6,8 +6,8 @@ import {
   loadEnglish30k,
   renderEnglish30kCoveragePya,
   summarizeEnglish30kCoverage
-} from "../program/verbs/exchange/translation/english30k_coverage.mjs";
-import { classifyCompoundCoverage } from "../program/verbs/exchange/translation/compound_verification.mjs";
+} from "../program/library/translation/english30k_coverage.mjs";
+import { classifyCompoundCoverage } from "../program/library/translation/compound_verification.mjs";
 
 async function buildCoverage() {
   const compounds = await loadCoverage();

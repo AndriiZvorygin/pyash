@@ -29,7 +29,7 @@ su name headquarters fixture mail policy be map def
   su name escalation target ob text "chief of staff" ya
   su name escalation reason ob text "decision requirement plus deadline" ya
   su name escalation classification ob text "escalation" ya
-  su name work kind ob text "correspondence" ya
+  su name work sort ob text "correspondence" ya
   su name acceptance ob text "Preserve source evidence; propose no external send or mutation." ya
   su name prompt prefix ob text "Review" ya
   su name default priority ob num 50 ya

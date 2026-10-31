@@ -9,7 +9,7 @@ import {
   reconcileTranslationVocabularyCandidates,
   submitTranslationVocabularyCandidates,
   translationVocabularyQueueHandle
-} from "../program/verbs/exchange/translation/translation_vocabulary_queue.mjs";
+} from "../program/library/translation/translation_vocabulary_queue.mjs";
 
 const result = {
   language: "english",

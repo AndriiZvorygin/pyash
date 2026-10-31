@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 
 import pyashWords from "../pyashWords.json" with { type: "json" };
-import { parseCompoundLexicon } from "../../verbs/exchange/translation/compound_lexicon.mjs";
+import { parseCompoundLexicon } from "../translation/compound_lexicon.mjs";
 
 const CURATED_COMPOUND_URL = new URL(
-  "../../verbs/exchange/translation/compound_coverage_curated.pya",
+  "../translation/compound_coverage_curated.pya",
   import.meta.url
 );
 const CURATED_COMPOUND_NAME = "translation_compounds_derived_curated";

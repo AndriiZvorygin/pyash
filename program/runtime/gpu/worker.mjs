@@ -9,6 +9,7 @@ import { acquireGpuLease, heartbeatGpuLease, readGpuLease, releaseGpuLease } fro
 import { isTerminalHandleStatus, readGpuHandleStatus, writeGpuHandleStatus } from "./handle_status.mjs";
 import { createGpuHousekeeperAdapter } from "./housekeeper_adapter.mjs";
 import { gpuEnvelopeDependencyStatus } from "./readiness.mjs";
+import { MAX_GPU_WORKER_CONCURRENCY } from "./worker_capacity.mjs";
 
 export const DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS = 20 * 60 * 1000;
 export const DEFAULT_GPU_RUNTIME_STALE_MS = 60 * 60 * 1000;
@@ -490,8 +491,8 @@ async function runWorkerSafely(options) {
   }
 }
 
-export async function runGpuWorkerBatch({ concurrency = 2, ...options } = {}) {
-  const limit = Math.max(1, Math.min(8, Math.trunc(Number(concurrency) || 1)));
+export async function runGpuWorkerBatch({ concurrency = 1, ...options } = {}) {
+  const limit = Math.max(1, Math.min(MAX_GPU_WORKER_CONCURRENCY, Math.trunc(Number(concurrency) || 1)));
   let staleRuntime = {
     scanned: 0,
     protected: 0,

@@ -17,7 +17,7 @@ This spec documents current behavior so future changes remain consistent and low
 ## 1.1 Source-to-VLIW refinery
 
 The end-to-end document path is declared in
-`program/verbs/exchange/translation/translation_to_vliw_refinery.pya` under the
+`program/library/translation/translation_to_vliw_refinery.pya` under the
 `translation source vliw` refinery. Its stages carry named map outputs through the
 normal refinery runner:
 
@@ -30,7 +30,7 @@ normal refinery runner:
 7. catalog and pack writes.
 
 `command/translate_document.mjs` invokes this refinery through
-`program/verbs/exchange/translation/translation_to_vliw_refinery.mjs`. The
+`program/library/translation/translation_to_vliw_refinery.mjs`. The
 JavaScript adapter owns resource/index access, asynchronous Housekeeper work,
 and VLIW file writing; the `.pya` file owns stage names, typed map contracts,
 and dependency edges. The final artifacts remain the translation `.pya`
@@ -46,7 +46,7 @@ that lower successfully.
 English source analysis is deterministic-first. Grammar surfaces, conservative morphology,
 existing Pyash atoms/compounds, and sentence constructions are applied before semantic review.
 The read-only WordNet evidence resource is configured in
-`program/verbs/exchange/translation/english_wordnet.pya` and records the source path and hash.
+`program/library/translation/english_wordnet.pya` and records the source path and hash.
 The current resource is Open English WordNet 2025 JSON under
 `know/wordnet/open-english-wordnet-2025-json/`; the dataset is a local knowledge input,
 kept outside version control, with its upstream archive URL and license recorded in the
@@ -63,13 +63,13 @@ when present, bounded graph relatedness contributes to the context score. The ch
 currently remains gloss-based, so relation data is additive evidence rather than a hidden
 runtime download.
 Sense-specific lexical bridges are recorded in the native Pyash map
-`program/verbs/exchange/translation/english_wordnet_bridges.pya`. One row represents one
+`program/library/translation/english_wordnet_bridges.pya`. One row represents one
 WordNet sense: `su` is the POS-prefixed sense key, `ob` is an existing English target anchor,
 `as` is the target part of speech, `with` is certainty, and `via` is provenance. The bridge
 provides a bounded candidate after the normal sentence sense selection; it does not add a
 second vocabulary or transcript format.
 The bounded linker workflow is configured in
-`program/verbs/exchange/translation/english_wordnet_linker.pya`. Its JavaScript adapter emits
+`program/library/translation/english_wordnet_linker.pya`. Its JavaScript adapter emits
 one stable record per WordNet sense, builds a bounded inventory from existing Pyash coverage,
 and sends only unresolved senses through the existing durable `mind`/`gpu` future queue. The
 worker may choose only an inventory-backed target; accepted evidence renders into the bridge
@@ -149,7 +149,7 @@ head carries case/mood boundaries, and continuation vectors preserve longer
 clauses. The reverse adapter remains bounded by the vocabulary and rejects an
 input token that cannot be segmented into known roots and grammatical
 endings. Its implementation is
-`program/verbs/exchange/translation/pyac_to_english_pyash.mjs`.
+`program/library/translation/pyac_to_english_pyash.mjs`.
 
 The VLIW head maps the nominative phrase to `su` and an accusative `ka` phrase
 to `ob`. Other cases retain their prepositions (`pwah` → `for`, `te` → `in`,
@@ -189,12 +189,12 @@ See `examples/pyash/translate-pyash-file-to-english.pya`.
 Exact pairs provide direct Pyash ↔ natural language mappings.
 
 Files:
-- `program/verbs/exchange/translation/pairs_english.pya`
-- `program/verbs/exchange/translation/pairs_russian.pya`
-- `program/verbs/exchange/translation/pairs_french.pya`
-- `program/verbs/exchange/translation/pairs_chinese.pya`
-- `program/verbs/exchange/translation/pairs_interlingua.pya`
-- `program/verbs/exchange/translation/pairs_hindi.pya`
+- `program/library/translation/pairs_english.pya`
+- `program/library/translation/pairs_russian.pya`
+- `program/library/translation/pairs_french.pya`
+- `program/library/translation/pairs_chinese.pya`
+- `program/library/translation/pairs_interlingua.pya`
+- `program/library/translation/pairs_hindi.pya`
 
 Shape:
 ```
@@ -212,12 +212,12 @@ Lookup order: exact pairs are checked before templates and formatters.
 Templates allow variable inputs using placeholders that are **case-based** rather than positional.
 
 Files:
-- `program/verbs/exchange/translation/pairs_english_templates.pya`
-- `program/verbs/exchange/translation/pairs_russian_templates.pya`
-- `program/verbs/exchange/translation/pairs_french_templates.pya`
-- `program/verbs/exchange/translation/pairs_chinese_templates.pya`
-- `program/verbs/exchange/translation/pairs_interlingua_templates.pya`
-- `program/verbs/exchange/translation/pairs_hindi_templates.pya`
+- `program/library/translation/pairs_english_templates.pya`
+- `program/library/translation/pairs_russian_templates.pya`
+- `program/library/translation/pairs_french_templates.pya`
+- `program/library/translation/pairs_chinese_templates.pya`
+- `program/library/translation/pairs_interlingua_templates.pya`
+- `program/library/translation/pairs_hindi_templates.pya`
 
 Shape:
 ```
@@ -288,7 +288,7 @@ See `examples/pyash/translation-fallback-mixed.pya`.
 ## 5.1 English grammatical composition
 
 English grammatical words that have a direct PyAC construction use the durable
-catalog `program/verbs/exchange/translation/english_grammar.pya`. The catalog
+catalog `program/library/translation/english_grammar.pya`. The catalog
 keeps lexical heads separate from grammar markers:
 
 - Person words use the short grammar particles: `i`/`me` -> `mi`, `we`/`us`
@@ -349,7 +349,7 @@ Phrase rules:
    verb-affix `vi`: `pfin ki vi` becomes `pfinkivi`. The sentence mood still
    closes the complete sentence.
 The reusable renderer is
-`program/verbs/exchange/translation/pyash_surface.mjs`; its `renderPyac*`
+`program/library/translation/pyash_surface.mjs`; its `renderPyac*`
 exports name the Pyac projection, while the older `renderPyash*` names remain
 compatibility aliases. Resolved records expose `pyash` and `englishPyash` as
 the English-word projection decoded from VLIW in the `su`/`ob`/`be` shape.

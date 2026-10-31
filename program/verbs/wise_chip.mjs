@@ -348,8 +348,8 @@ function resolveWiseSlices(source, positions) {
 function resolvePairWiseSlices(source, sentence, { rememberFn = remember } = {}) {
   const config = resolveWiseChipConfig(sentence, { rememberFn });
   if (!config) return null;
-  const kind = String(resolveConfigPrimitive(config, ["kind", "mode"], { rememberFn }) ?? "").trim().toLowerCase();
-  if (kind !== "pair") return null;
+  const sort = String(resolveConfigPrimitive(config, ["sort", "mode"], { rememberFn }) ?? "").trim().toLowerCase();
+  if (sort !== "pair") return null;
 
   const joiner = String(resolveConfigPrimitive(config, ["joiner", "pair joiner"], { rememberFn }) ?? "\n\n");
   const firstPatterns = resolveConfigTextList(config, ["first patterns", "question patterns", "left patterns"], { rememberFn });

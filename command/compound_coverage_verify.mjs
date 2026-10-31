@@ -9,11 +9,11 @@ import { resolveConfigText } from "../program/configure/env.mjs";
 import {
   renderDerivedCompoundCoveragePya,
   renderDerivedCompoundCoverageRowPya
-} from "../program/verbs/exchange/translation/compound_coverage.mjs";
+} from "../program/library/translation/compound_coverage.mjs";
 import {
   createDefaultQueuedMindCompoundVerifier,
   verifyCompoundCoverage
-} from "../program/verbs/exchange/translation/compound_verification.mjs";
+} from "../program/library/translation/compound_verification.mjs";
 
 function configureVerifierMind(mindName) {
   const backend = String(resolveConfigText("mind backend", { rememberFn: remember }) || "ollama command mind").trim();

@@ -7,12 +7,12 @@ import {
   loadCompoundLexicon,
   parseCompoundLexicon,
   queryCompoundLexicon
-} from "../program/verbs/exchange/translation/compound_lexicon.mjs";
+} from "../program/library/translation/compound_lexicon.mjs";
 import {
   loadMultilingualCompoundLexicon,
   MULTILINGUAL_COMPOUND_LEXICON_SOURCES
-} from "../program/verbs/exchange/translation/compound_lexicons.mjs";
-import { choosePyacCompoundCandidate } from "../program/verbs/exchange/translation/pyac_complexity.mjs";
+} from "../program/library/translation/compound_lexicons.mjs";
+import { choosePyacCompoundCandidate } from "../program/library/translation/pyac_complexity.mjs";
 
 const languages = ["french", "russian", "hindi", "interlingua"];
 
@@ -74,7 +74,7 @@ test("generic compound loading preserves source language and stable payloads", a
   assert.equal(parsed[0].language, "french");
   assert.deepEqual(queryCompoundLexicon(parsed, { target: "database" }).map((entry) => entry.surface), ["base de données"]);
   const loaded = await loadCompoundLexicon({
-    url: new URL("../program/verbs/exchange/translation/compound_lexicon_french.pya", import.meta.url),
+    url: new URL("../program/library/translation/compound_lexicon_french.pya", import.meta.url),
     name: "translation_compounds_french",
     language: "french"
   });

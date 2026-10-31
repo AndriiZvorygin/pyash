@@ -202,6 +202,6 @@ test("refinery checkpoint replay preserves map payload in result", async (t) => 
   const parsed = JSON.parse(second.stdout.trim());
   assert.equal(parsed?.result?.be, "map");
   assert.equal(parsed?.result?.ob?.map?.produce?.text, "hello from child\n");
-  assert.equal(parsed?.result?.ob?.map?.kind?.text, "write");
+  assert.equal(parsed?.result?.ob?.map?.sort?.text, "write");
   assert.equal(parsed?.result?.ob?.map?.passing?.boolean, true);
 });

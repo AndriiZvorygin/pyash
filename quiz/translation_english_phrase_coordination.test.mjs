@@ -4,7 +4,7 @@ import test from "node:test";
 import {
   findSharedPhraseHead,
   segmentEnglishPhraseList
-} from "../program/verbs/exchange/translation/english_phrase_coordination.mjs";
+} from "../program/library/translation/english_phrase_coordination.mjs";
 
 function word(surface, sequence, { grammar = null, lemma = surface, sourceLemma = lemma } = {}) {
   return { surface, lemma, sourceLemma, pyashSequence: sequence, grammar };

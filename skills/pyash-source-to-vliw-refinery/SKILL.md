@@ -34,4 +34,4 @@ VLIW catalog/pack as executable output.
 
 - `documentation/specifications/10-pipelines.md`
 - `documentation/specifications/11-translation.md`
-- `program/verbs/exchange/translation/translation_to_vliw_refinery.pya`
+- `program/library/translation/translation_to_vliw_refinery.pya`

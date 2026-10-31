@@ -53,7 +53,7 @@ const expectedYaml = {
   flags: [true, false],
   meta: { active: true },
   name: "Ada",
-  pets: [{ kind: "cat" }, { kind: "dog" }]
+  pets: [{ sort: "cat" }, { sort: "dog" }]
 };
 
 const expectedPyash = [
@@ -61,10 +61,10 @@ const expectedPyash = [
   "su name active ob bool truth ya",
   "prah",
   "su name profile pets 1 be json map def",
-  "su name kind ob text \"cat\" ya",
+  "su name sort ob text \"cat\" ya",
   "prah",
   "su name profile pets 2 be json map def",
-  "su name kind ob text \"dog\" ya",
+  "su name sort ob text \"dog\" ya",
   "prah",
   "su name profile be json map def",
   "su name age ob num 36 ya",

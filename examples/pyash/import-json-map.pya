@@ -1,5 +1,5 @@
 ob text quoted.json.
-{"name":"Ada","pets":[{"kind":"cat"},{"kind":"dog"}],"tags":[true,false]}
+{"name":"Ada","pets":[{"sort":"cat"},{"sort":"dog"}],"tags":[true,false]}
 .json.quoted to name profile be import do
 
 ob name profile be write do

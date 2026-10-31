@@ -14,22 +14,42 @@ import { resolveAgentHouse, ensureAgentDirs } from "../program/agent/session.mjs
 import { mind_to_name_text } from "../program/verbs/mind/mind.mjs";
 import { requestMindInterrupt } from "../program/agent/interrupt.mjs";
 import { queueDepth } from "../program/runtime/gpu/queue.mjs";
-import { dischargeOllamaMind } from "../program/motor/ollama_admin.mjs";
+import { createGpuHousekeeperAdapter } from "../program/runtime/gpu/housekeeper_adapter.mjs";
+import { resolveGpuHousekeeperUrl } from "../program/runtime/gpu/managed-ollama.mjs";
+import {
+  formatZaiContextWindow,
+  getZaiCodexContextWindow,
+  getZaiContextWindowOptions,
+  getZaiModelContextLimit,
+  setZaiCodexContextWindow,
+  syncZaiCodexModelCatalog
+} from "../program/runtime/zai_coding_plan.mjs";
 import { requestCodingDutyHub, resolveCodingDutyHub } from "../program/agent/coding_duty_client.mjs";
 import {
+  appendSaddleUsage,
+  formatSaddleUsageSummary,
+  readSaddleUsageSummary
+} from "../program/agent/coding_saddle_usage.mjs";
+import { formatMindUsage, normalizeMindUsage, sumMindUsages } from "../program/verbs/mind/usage.mjs";
+import {
   buildSaddleMindSentence,
+  buildSaddleStrataContextOptions,
   createSaddleInputDecoder,
   DEFAULT_CODING_SADDLE_SYSTEM_PROMPT,
   discoverSaddleModels,
+  formatSaddleBackendPicker,
   formatSaddleModelPicker,
   formatSaddleStatus,
+  listSaddleBackendOptions,
   listSaddleMindNames,
   normalizeSaddleBackend,
   normalizeSaddleHost,
   normalizeSaddleModel,
+  normalizeSaddleThinkSelection,
   resolveSaddleModelOption,
   resolveSaddleMindProfile,
   parseSaddleMindCommand,
+  SADDLE_OLLAMA_CONTEXT_PRESETS,
   saddleToolEventLabel
 } from "../program/agent/coding_saddle.mjs";
 
@@ -40,6 +60,37 @@ const SESSION_NAME = "coding";
 
 function configValue(name, fallback = "") {
   return String(resolveConfigText(name, { rememberFn: remember }) ?? fallback).trim();
+}
+
+function resolveSaddleHousekeeperUrl(cwd = process.cwd()) {
+  return resolveGpuHousekeeperUrl({
+    managerUrl: configValue("gpu housekeeper url"),
+    cwd
+  });
+}
+
+function isLocalModelBackend(backend) {
+  return ["ollama", "strata"].includes(normalizeSaddleBackend(backend));
+}
+
+async function withLocalModelsManaged(backend, housekeeperUrl, action) {
+  if (!isLocalModelBackend(backend)) return action();
+  const managerUrl = resolveGpuHousekeeperUrl({ managerUrl: housekeeperUrl });
+  if (!managerUrl) throw new Error("local saddle models require a configured GPU Housekeeper URL");
+
+  const keys = ["PYA_GPU_HOUSEKEEPER_URL", "PYA_GPU_MANAGER_REQUIRED", "PYA_GPU_MANAGER_ALLOW_DIRECT"];
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  process.env.PYA_GPU_HOUSEKEEPER_URL = managerUrl;
+  process.env.PYA_GPU_MANAGER_REQUIRED = "true";
+  process.env.PYA_GPU_MANAGER_ALLOW_DIRECT = "false";
+  try {
+    return await action();
+  } finally {
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    }
+  }
 }
 
 function resolveSaddleHost(backend) {
@@ -125,6 +176,7 @@ export async function prepareSaddle({
   const resolvedBackend = profileResolved.backend;
   const resolvedModel = normalizeSaddleModel(model || profileResolved.model);
   const resolvedHost = normalizeSaddleHost(host || profileResolved.host);
+  const housekeeperUrl = resolveSaddleHousekeeperUrl(resolvedRuntimeRoot);
   const mindModels = new Map([[selectedMind, resolvedModel]]);
   configureSaddle({
     cwd: resolvedCwd,
@@ -145,6 +197,7 @@ export async function prepareSaddle({
     model: resolvedModel,
     backend: resolvedBackend,
     host: resolvedHost,
+    housekeeperUrl,
     mindModels,
     agentHouse,
     systemPrompt
@@ -156,10 +209,15 @@ export async function runSaddleTurn({
   model,
   backend,
   host,
+  contextWindow,
+  think,
+  reasoningEffort,
   sessionName = SESSION_NAME,
   sessionFile = "",
   sessionUserMetadata = null,
+  onUsage,
   onToolCall,
+  housekeeperUrl = "",
   mindFn = mind_to_name_text
 } = {}) {
   const sentence = buildSaddleMindSentence({
@@ -167,21 +225,41 @@ export async function runSaddleTurn({
     model,
     backend,
     host,
+    contextWindow,
+    think,
+    reasoningEffort,
     mindName: AGENT_NAME,
     toolMapName: TOOL_MAP_NAME,
     sessionName,
     sessionFile
   });
-  return mindFn(sentence, {
+  const emitUsage = (usage) => {
+    const normalized = normalizeMindUsage(usage);
+    if (!normalized) return null;
+    if (typeof onUsage !== "function") return normalized;
+    return onUsage(normalized);
+  };
+  return withLocalModelsManaged(backend, housekeeperUrl, () => mindFn(sentence, {
     onToolCall,
+    onUsage: emitUsage,
     sessionUserContent: String(input ?? ""),
     sessionUserMetadata
-  });
+  }));
 }
 
-async function dischargeSaddleModel(model, backend) {
-  if (normalizeSaddleBackend(backend) !== "ollama") return;
-  await dischargeOllamaMind(model, { rememberFn: remember, timeoutMs: 3000 });
+export async function dischargeSaddleModel(model, backend, {
+  housekeeperUrl = "",
+  cwd = process.cwd(),
+  adapterFactory = createGpuHousekeeperAdapter
+} = {}) {
+  if (!isLocalModelBackend(backend)) return null;
+  const managerUrl = resolveGpuHousekeeperUrl({ managerUrl: housekeeperUrl, cwd });
+  if (!managerUrl) throw new Error("local saddle models require a configured GPU Housekeeper URL");
+  const result = await adapterFactory({ baseUrl: managerUrl }).discharge({ profileName: model });
+  if (result?.success === false) {
+    throw new Error(result.reason || `Housekeeper could not discharge ${model}`);
+  }
+  return result;
 }
 
 function writeLine(text = "") {
@@ -317,35 +395,111 @@ async function main() {
   const mindModels = config.mindModels;
   let backend = config.backend;
   let host = config.host;
+  let contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
+  let thinkSetting = null;
   let busy = false;
   let closing = false;
+  let backendPicker = null;
   let modelPicker = null;
+  let modelPickerTarget = null;
+  let modelPickerAllowCustom = false;
   let modelPickerLoading = false;
+  let contextPicker = null;
+  let thinkPicker = null;
   let promptLabel = "pyash> ";
   let renderedRows = 1;
 
+  const saddleHousekeeper = () => createGpuHousekeeperAdapter({ baseUrl: config.housekeeperUrl });
   const showStatus = async () => {
-    const queue = await queueDepth(path.join(config.cwd, "world")).catch(() => ({ total: 0 }));
-    writeLine(formatSaddleStatus({ mindName, model, host, cwd: config.cwd, queue, busy, session: SESSION_NAME }));
+    const queue = isLocalModelBackend(backend)
+      ? await saddleHousekeeper().getQueue().catch(() => ({ available: false }))
+      : await queueDepth(path.join(config.cwd, "world")).catch(() => ({ total: 0 }));
+    writeLine(formatSaddleStatus({
+      mindName,
+      model,
+      backend,
+      housekeeperUrl: config.housekeeperUrl,
+      contextWindow,
+      thinkMode: thinkSetting?.value,
+      host,
+      cwd: config.cwd,
+      queue,
+      busy,
+      session: SESSION_NAME
+    }));
   };
   const prompt = ({ clear = true, label = promptLabel } = {}) => {
     promptLabel = label;
     renderedRows = renderInput({ value: "", cursor: 0 }, { rows: renderedRows, clear, label });
   };
-  const showModelPicker = async () => {
+  const applyStrataContext = async (tokens) => {
+    busy = true;
+    writeLine(`Housekeeper is reconfiguring Strata to ${formatZaiContextWindow(tokens)} and restarting its lazy server...`);
+    prompt({ clear: false, label: "restarting Strata> " });
+    try {
+      const result = await saddleHousekeeper().setStrataContext({ contextLength: tokens });
+      contextWindow = Number(result.contextLength || tokens);
+      writeLine(`Strata context: ${formatZaiContextWindow(contextWindow)}; Housekeeper verified the restart; model remains unloaded until its next request`);
+    } catch (error) {
+      writeLine(`Strata context change failed: ${error.message}`);
+    } finally {
+      busy = false;
+      promptLabel = "pyash> ";
+      prompt({ clear: false });
+    }
+  };
+  const getBackendOptions = () => listSaddleBackendOptions({
+    minds: allRemember(),
+    defaultBackend: normalizeSaddleBackend(configValue("mind backend", "ollama")),
+    defaultModel: configValue("mind model", "qwen3.5:9b"),
+    hostForBackend: resolveSaddleHost,
+    currentBackend: backend,
+    currentMindName: mindName,
+    currentModel: model,
+    currentHost: host
+  });
+  const showBackendPicker = () => {
+    backendPicker = getBackendOptions();
+    modelPicker = null;
+    modelPickerTarget = null;
+    writeLine(formatSaddleBackendPicker({ backends: backendPicker }));
+    prompt({ clear: false, label: "select backend> " });
+  };
+  const showModelPicker = async (target = null) => {
+    const selection = target || { backend, host, model, mindName };
+    const targetBackend = normalizeSaddleBackend(selection.backend || backend);
+    const targetHost = normalizeSaddleHost(selection.host || host);
+    const targetModel = normalizeSaddleModel(selection.model || model);
     modelPickerLoading = true;
+    backendPicker = null;
+    modelPickerTarget = { ...selection, backend: targetBackend, host: targetHost, model: targetModel };
     writeLine("discovering models...");
     prompt({ clear: false, label: "model loading> " });
     const fallbackModels = String(process.env.PYA_SADDLE_MODELS || "")
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean);
-    const discovered = await discoverSaddleModels({ backend, host, currentModel: model, fallbackModels });
+    const discovered = await discoverSaddleModels({
+      backend: targetBackend,
+      host: targetHost,
+      housekeeperUrl: isLocalModelBackend(targetBackend) ? config.housekeeperUrl : "",
+      currentModel: targetModel,
+      fallbackModels
+    });
+    if (targetBackend === "zai" && discovered.available && discovered.catalogModels?.length) {
+      try {
+        const refreshed = syncZaiCodexModelCatalog({ models: discovered.catalogModels });
+        if (refreshed.updated) writeLine(`Codex Z.AI catalog refreshed: ${refreshed.models.length} models`);
+      } catch (error) {
+        writeLine(`Codex Z.AI catalog refresh failed: ${String(error?.message ?? error)}`);
+      }
+    }
     const discoveredOptions = discovered.models.map((entry) => ({
       model: entry,
       value: entry,
-      backend,
-      host,
+      backend: targetBackend,
+      host: targetHost,
+      mindName: selection.mindName || mindName,
       label: entry
     }));
     const options = [
@@ -356,16 +510,110 @@ async function main() {
       .map((entry) => [entry.value || `${entry.backend || backend}::${entry.model}`, entry]))
       .values()];
     if (!modelPicker.length) {
-      modelPicker = [{ model, value: model, backend, host, label: model }];
+      modelPicker = [{ model: targetModel, value: targetModel, backend: targetBackend, host: targetHost, mindName: selection.mindName || mindName, label: targetModel }];
     }
+    modelPickerAllowCustom = ["openai", "litellm", "openrouter", "vllm"].includes(targetBackend);
     modelPickerLoading = false;
     writeLine(formatSaddleModelPicker({
       models: modelPicker,
-      currentModel: model,
-      currentBackend: backend,
+      currentModel: targetModel,
+      currentBackend: targetBackend,
       error: discovered.available ? "" : discovered.error
     }));
+    if (modelPickerAllowCustom) writeLine("For this backend, you can also enter a model ID directly.");
     prompt({ clear: false, label: "select model> " });
+  };
+  const showContextPicker = async () => {
+    if (backend === "strata") {
+      try {
+        const status = await saddleHousekeeper().getStrataContext();
+        contextWindow = Number(status.contextLength || 0) || null;
+        contextPicker = buildSaddleStrataContextOptions({
+          options: status.options,
+          currentContextLength: status.contextLength,
+          defaultContextLength: status.defaultContextLength
+        });
+        if (!contextPicker.length) throw new Error("Housekeeper returned no supported context sizes");
+        writeLine(`Strata context for ${model}: current ${formatZaiContextWindow(contextWindow)}; default ${formatZaiContextWindow(status.defaultContextLength)}`);
+        writeLine("Choose a size. Housekeeper updates Strata's launch profile and restarts it while holding the GPU gate.");
+        for (const [index, option] of contextPicker.entries()) {
+          writeLine(`${index + 1}. ${option.label}${option.current ? " (current)" : ""}`);
+        }
+        prompt({ clear: false, label: "select context> " });
+        return;
+      } catch (error) {
+        writeLine(`Strata context selection unavailable: ${error.message}`);
+      }
+      prompt({ clear: false });
+      return;
+    }
+    if (backend === "zai") {
+      const maximum = getZaiModelContextLimit({ model });
+      const options = getZaiContextWindowOptions({ model });
+      contextPicker = options.map((tokens) => ({
+        model: String(tokens),
+        value: formatZaiContextWindow(tokens),
+        label: formatZaiContextWindow(tokens),
+        tokens
+      }));
+      writeLine(`context window for ${model}: current ${formatZaiContextWindow(contextWindow)}, model maximum ${formatZaiContextWindow(maximum)}`);
+      writeLine("Choose a size by number or label; this sets the client-side budget, not the provider's model limit.");
+    } else if (backend === "ollama") {
+      contextPicker = [
+        { model: "default", value: "default", label: "Ollama default", tokens: null },
+        ...SADDLE_OLLAMA_CONTEXT_PRESETS.map((tokens) => ({
+          model: String(tokens),
+          value: formatZaiContextWindow(tokens),
+          label: formatZaiContextWindow(tokens),
+          tokens
+        }))
+      ];
+      writeLine(`Ollama context for ${model}: current ${contextWindow ? formatZaiContextWindow(contextWindow) : "Ollama default"}`);
+      writeLine("Choose a request num_ctx preset. Larger contexts use more memory; default leaves Ollama unchanged.");
+    } else {
+      writeLine("Per-request context selection is supported here only for Ollama and Z.AI; Strata context is set at server launch.");
+      prompt({ clear: false });
+      return;
+    }
+    for (const [index, option] of contextPicker.entries()) {
+      writeLine(`${index + 1}. ${option.label}${option.tokens === contextWindow ? " (current)" : ""}`);
+    }
+    prompt({ clear: false, label: "select context> " });
+  };
+  const showThinkPicker = () => {
+    if (!["ollama", "strata", "minimax", "zai"].includes(backend)) {
+      writeLine("/think controls are available for Ollama, Strata, Z.AI, and MiniMax minds");
+      prompt({ clear: false });
+      return;
+    }
+    const options = backend === "ollama"
+      ? ["off", "on"]
+      : backend === "minimax"
+        ? ["low", "medium", "high", "xhigh", "max"]
+        : backend === "zai"
+          ? ["low", "high", "max"]
+          : ["none", "low", "medium", "high"];
+    thinkPicker = options.map((value) => ({ model: value, value, label: value }));
+    const defaultEffortLabel = backend === "minimax"
+      ? "provider default"
+      : backend === "zai"
+        ? "max (provider default)"
+        : "Strata default";
+    writeLine(backend === "ollama"
+      ? `thinking for ${model}: current ${thinkSetting?.value ?? "model default"}`
+      : `reasoning effort for ${model}: current ${thinkSetting?.value ?? defaultEffortLabel}`);
+    for (const [index, option] of thinkPicker.entries()) {
+      writeLine(`${index + 1}. ${option.label}${option.value === thinkSetting?.value ? " (current)" : ""}`);
+    }
+    writeLine(backend === "ollama"
+      ? "Choose whether to request thinking; model support varies."
+      : backend === "minimax"
+        ? "Choose MiniMax reasoning effort. MiniMax M3.1 Flash does not support disabling thinking."
+          : backend === "zai"
+            ? "Choose Z.AI Coding Plan reasoning effort for subsequent saddle requests."
+            : "Choose the Strata reasoning effort for subsequent requests.");
+    promptLabel = "select thinking> ";
+    prompt({ clear: false });
   };
   const shutdown = async () => {
     if (closing) return;
@@ -378,7 +626,6 @@ async function main() {
         reason: "terminal exit"
       }).catch(() => {});
     }
-    await dischargeSaddleModel(model, backend).catch((error) => writeLine(`discharge: ${error.message}`));
     if (process.stdin.isRaw) process.stdin.setRawMode(false);
     process.stdin.pause();
     writeLine("saddle closed");
@@ -398,24 +645,108 @@ async function main() {
       prompt({ clear: false, label: "model loading> " });
       return;
     }
+    if (backendPicker) {
+      const selected = resolveSaddleModelOption(input, backendPicker);
+      if (!selected) {
+        writeLine("invalid backend selection");
+        prompt({ clear: false, label: "select backend> " });
+        return;
+      }
+      await showModelPicker(selected);
+      return;
+    }
+    if (contextPicker) {
+      const selected = resolveSaddleModelOption(input, contextPicker);
+      if (!selected) {
+        writeLine("invalid context window selection");
+        prompt({ clear: false, label: "select context> " });
+        return;
+      }
+      if (backend === "strata") {
+        contextPicker = null;
+        await applyStrataContext(selected.tokens);
+        return;
+      }
+      if (backend === "zai") {
+        const saved = setZaiCodexContextWindow({ model, contextWindow: selected.tokens });
+        if (!saved.updated) {
+          contextPicker = null;
+          promptLabel = "pyash> ";
+          writeLine(`could not save context window: ${saved.reason}`);
+          prompt({ clear: false });
+          return;
+        }
+      }
+      contextWindow = selected.tokens == null ? null : Number(selected.tokens);
+      contextPicker = null;
+      promptLabel = "pyash> ";
+      writeLine(backend === "zai"
+        ? `context window: ${formatZaiContextWindow(contextWindow)} for ${model}; saved for Pyash and future Codex sessions`
+        : `Ollama request context: ${contextWindow ? formatZaiContextWindow(contextWindow) : "provider default"} for ${model}; applies for this saddle session`);
+      prompt({ clear: false });
+      return;
+    }
+    if (thinkPicker) {
+      const selected = resolveSaddleModelOption(input, thinkPicker);
+      if (!selected) {
+        writeLine("invalid thinking selection");
+        prompt({ clear: false, label: "select thinking> " });
+        return;
+      }
+      thinkSetting = normalizeSaddleThinkSelection(selected.value, backend);
+      thinkPicker = null;
+      promptLabel = "pyash> ";
+      writeLine(backend === "ollama"
+        ? `thinking: ${thinkSetting.value} for ${model}`
+        : `reasoning effort: ${thinkSetting.value} for ${model}`);
+      prompt({ clear: false });
+      return;
+    }
     if (modelPicker) {
-      const selected = resolveSaddleModelOption(input, modelPicker);
+      const selected = resolveSaddleModelOption(input, modelPicker)
+        || (modelPickerAllowCustom && input.trim()
+          ? {
+            model: input.trim(),
+            backend: modelPickerTarget?.backend,
+            host: modelPickerTarget?.host,
+            mindName: modelPickerTarget?.mindName
+          }
+          : null);
       if (!selected) {
         writeLine("invalid model selection");
         prompt({ clear: false, label: "select model> " });
         return;
       }
       modelPicker = null;
+      modelPickerAllowCustom = false;
+      const nextBackend = normalizeSaddleBackend(selected.backend || modelPickerTarget?.backend || backend);
+      const nextMindName = String(selected.mindName || modelPickerTarget?.mindName || mindName).trim();
+      backend = nextBackend;
+      mindName = nextMindName;
+      host = normalizeSaddleHost(selected.host || modelPickerTarget?.host || host);
+      modelPickerTarget = null;
       model = normalizeSaddleModel(selected.model, model);
       mindModels.set(mindName, model);
+      if (backend === "zai") {
+        contextWindow = Math.min(contextWindow || getZaiCodexContextWindow({ model }), getZaiModelContextLimit({ model }));
+      } else {
+        contextWindow = null;
+      }
+      thinkSetting = null;
       promptLabel = "pyash> ";
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
-      writeLine(`model: ${model} (mind ${mindName})`);
+      writeLine(`mind: ${mindName} | backend: ${backend} | model: ${model}`);
       prompt({ clear: false });
       return;
     }
     if (input.trim() === "/help") {
-      writeLine("/status  /mind [name]  /model <name>  /host <url>  /discharge  /exit");
+      writeLine("/status  /mind [name]  /model [backend|model-id]  /context [size]  /think [mode]  /host <url>  /usage  /discharge  /exit");
+      prompt({ clear: false });
+      return;
+    }
+    if (input.trim() === "/usage") {
+      const usage = await readSaddleUsageSummary({ worldRoot: config.worldRoot });
+      writeLine(formatSaddleUsageSummary(usage));
       prompt({ clear: false });
       return;
     }
@@ -435,12 +766,15 @@ async function main() {
         return;
       }
       const canonicalName = available.find((name) => name.toLowerCase() === nextMindName.toLowerCase());
-      await dischargeSaddleModel(model, backend).catch((error) => writeLine(`discharge: ${error.message}`));
+      await dischargeSaddleModel(model, backend, { housekeeperUrl: config.housekeeperUrl, cwd: config.runtimeRoot })
+        .catch((error) => writeLine(`discharge: ${error.message}`));
       const nextProfile = resolveConfiguredSaddleMind(canonicalName);
       mindName = canonicalName;
       backend = nextProfile.backend;
       host = nextProfile.host;
       model = normalizeSaddleModel(mindModels.get(mindName) || nextProfile.model);
+      contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
+      thinkSetting = null;
       mindModels.set(mindName, model);
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
       writeLine(`mind: ${mindName} | model: ${model}`);
@@ -448,7 +782,101 @@ async function main() {
       return;
     }
     if (input.trim() === "/model") {
-      await showModelPicker();
+      showBackendPicker();
+      return;
+    }
+    const contextMatch = input.trim().match(/^\/context(?:\s+(.+))?$/i);
+    if (contextMatch) {
+      if (!contextMatch[1]) {
+        await showContextPicker();
+        return;
+      }
+      if (backend === "strata") {
+        try {
+          const status = await saddleHousekeeper().getStrataContext();
+          const choices = buildSaddleStrataContextOptions({
+            options: status.options,
+            currentContextLength: status.contextLength,
+            defaultContextLength: status.defaultContextLength
+          });
+          const selected = resolveSaddleModelOption(contextMatch[1], choices);
+          if (!selected) {
+            writeLine(`unknown Strata context size; available: ${choices.map((choice) => choice.label).join(", ")}`);
+            prompt({ clear: false });
+            return;
+          }
+          await applyStrataContext(selected.tokens);
+        } catch (error) {
+          writeLine(`Strata context selection unavailable: ${error.message}`);
+          prompt({ clear: false });
+        }
+        return;
+      }
+      if (backend !== "zai" && backend !== "ollama") {
+        writeLine("per-request context selection is supported here only for Ollama and Z.AI");
+        prompt({ clear: false });
+        return;
+      }
+      const choices = backend === "zai"
+        ? getZaiContextWindowOptions({ model }).map((tokens) => ({
+          model: String(tokens),
+          value: formatZaiContextWindow(tokens),
+          label: formatZaiContextWindow(tokens),
+          tokens
+        }))
+        : ["default", ...SADDLE_OLLAMA_CONTEXT_PRESETS].map((tokens) => ({
+          model: String(tokens),
+          value: typeof tokens === "number" ? formatZaiContextWindow(tokens) : "default",
+          label: typeof tokens === "number" ? formatZaiContextWindow(tokens) : "default",
+          tokens: typeof tokens === "number" ? tokens : null
+        }));
+      const selected = resolveSaddleModelOption(contextMatch[1], choices);
+      if (!selected) {
+        writeLine(`unknown context size; available: ${choices.map((choice) => choice.label).join(", ")}`);
+        prompt({ clear: false });
+        return;
+      }
+      if (backend === "zai") {
+        const saved = setZaiCodexContextWindow({ model, contextWindow: selected.tokens });
+        if (!saved.updated) {
+          writeLine(`could not save context window: ${saved.reason}`);
+          prompt({ clear: false });
+          return;
+        }
+      }
+      contextWindow = selected.tokens == null ? null : Number(selected.tokens);
+      writeLine(backend === "zai"
+        ? `context window: ${formatZaiContextWindow(contextWindow)} for ${model}; saved for Pyash and future Codex sessions`
+        : `Ollama request context: ${contextWindow ? formatZaiContextWindow(contextWindow) : "provider default"} for ${model}; applies for this saddle session`);
+      prompt({ clear: false });
+      return;
+    }
+    const thinkMatch = input.trim().match(/^\/think(?:\s+(.+))?$/i);
+    if (thinkMatch) {
+      if (!thinkMatch[1]) {
+        showThinkPicker();
+        return;
+      }
+      const selected = normalizeSaddleThinkSelection(thinkMatch[1], backend);
+      if (!selected) {
+        writeLine(backend === "ollama"
+          ? "Ollama accepts /think on or /think off"
+          : backend === "strata"
+            ? "Strata accepts /think none, low, medium, high, on, or off"
+            : backend === "minimax"
+              ? "MiniMax accepts /think low, medium, high, xhigh, or max; thinking cannot be disabled for M3.1 Flash"
+              : backend === "zai"
+                ? "Z.AI accepts /think low, high, or max"
+                : "/think is available for Ollama, Strata, Z.AI, and MiniMax minds");
+        prompt({ clear: false });
+        return;
+      }
+      thinkSetting = selected;
+      promptLabel = "pyash> ";
+      writeLine(backend === "ollama"
+        ? `thinking: ${selected.value} for ${model}`
+        : `reasoning effort: ${selected.value} for ${model}`);
+      prompt({ clear: false });
       return;
     }
     if (input.trim() === "/status") {
@@ -457,14 +885,25 @@ async function main() {
       return;
     }
     if (input.trim() === "/discharge") {
-      await dischargeSaddleModel(model, backend).then(() => writeLine(`discharged: ${model}`)).catch((error) => writeLine(`discharge failed: ${error.message}`));
+      await dischargeSaddleModel(model, backend, { housekeeperUrl: config.housekeeperUrl, cwd: config.runtimeRoot })
+        .then(() => writeLine(`discharged through Housekeeper: ${model}`))
+        .catch((error) => writeLine(`discharge failed: ${error.message}`));
       prompt({ clear: false });
       return;
     }
     const modelMatch = input.trim().match(/^\/model\s+(.+)$/i);
     if (modelMatch) {
-      model = normalizeSaddleModel(modelMatch[1], model);
+      const requested = modelMatch[1].trim();
+      const targetBackend = getBackendOptions().find((entry) => [entry.backend, entry.label]
+        .some((value) => value.toLowerCase() === requested.toLowerCase()));
+      if (targetBackend) {
+        await showModelPicker(targetBackend);
+        return;
+      }
+      model = normalizeSaddleModel(requested, model);
       mindModels.set(mindName, model);
+      contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
+      thinkSetting = null;
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
       writeLine(`model: ${model}`);
       prompt({ clear: false });
@@ -482,13 +921,22 @@ async function main() {
     busy = true;
     clearRenderedInput(renderedRows);
     writeLine(`you> ${input}`);
-    writeLine(`saddle: queued ${model} via ${backend}`);
+    writeLine(`saddle: queued ${model} via ${backend}${isLocalModelBackend(backend) ? " through GPU Housekeeper" : ""}`);
+    const turnUsages = [];
     try {
       const result = await runSaddleTurn({
         input,
         model,
         backend,
         host,
+        housekeeperUrl: config.housekeeperUrl,
+        contextWindow,
+        think: thinkSetting?.think,
+        reasoningEffort: thinkSetting?.reasoningEffort,
+        onUsage: (usage) => {
+          turnUsages.push(usage);
+          return usage;
+        },
         onToolCall: async (event) => {
           if (event?.stage === "call" || event?.stage === "result" || event?.stage === "ratify") {
             writeLine(`${saddleToolEventLabel(event)}${event.toolText ? `: ${String(event.toolText).slice(0, 400)}` : ""}`);
@@ -497,6 +945,18 @@ async function main() {
       });
       const text = result?.ob?.text ?? result?.fromstate?.text ?? result?.value?.text ?? "";
       writeLine(`saddle> ${String(text).trim() || "(no response text)"}`);
+      const usage = sumMindUsages(turnUsages);
+      if (usage) {
+        writeLine(formatMindUsage(usage));
+        await appendSaddleUsage({
+          worldRoot: config.worldRoot,
+          turnId: result?.accordingto?.text ?? "",
+          mindName,
+          backend,
+          model,
+          usage
+        }).catch((error) => writeLine(`usage record failed: ${error.message}`));
+      }
     } catch (error) {
       writeLine(`saddle error> ${error?.message ?? error}`);
     } finally {

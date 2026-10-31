@@ -3,7 +3,7 @@ import { verifyCompoundRecords } from "./compound_coverage_verify.mjs";
 import {
   buildEnglish30kCompoundCoverage,
   loadEnglish30k
-} from "../program/verbs/exchange/translation/english30k_coverage.mjs";
+} from "../program/library/translation/english30k_coverage.mjs";
 
 export async function runEnglish30kCoverageVerification(args = process.argv.slice(2)) {
   const mode = args[0] ?? "summary";

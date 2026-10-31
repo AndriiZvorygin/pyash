@@ -8,16 +8,16 @@ import {
   loadLordPrayerLexicon,
   parseLordPrayerLexicon,
   renderLordPrayerLexiconPya
-} from "../program/verbs/exchange/translation/lord_prayer_lexicon.mjs";
+} from "../program/library/translation/lord_prayer_lexicon.mjs";
 import {
   buildLordPrayerAnalysis,
   renderLordPrayerAnalysisPya
-} from "../program/verbs/exchange/translation/hkestlat_compound_analysis.mjs";
-import { buildLordPrayerTranslation } from "../program/verbs/exchange/translation/lord_prayer_translation.mjs";
+} from "../program/library/translation/hkestlat_compound_analysis.mjs";
+import { buildLordPrayerTranslation } from "../program/library/translation/lord_prayer_translation.mjs";
 import {
   loadLordPrayerLowering,
   parseLordPrayerLowering
-} from "../program/verbs/exchange/translation/lord_prayer_lowering.mjs";
+} from "../program/library/translation/lord_prayer_lowering.mjs";
 import { decodePhraseVliw, renderVliwPyac } from "../program/library/vliw/phrase.mjs";
 
 function fixtureSources() {
@@ -180,7 +180,7 @@ test("Lord's Prayer analysis links dictionary evidence to Greek pilot records", 
 
 test("Greek pilot parser rejects malformed candidate payloads", async () => {
   const source = await fs.readFile(
-    new URL("../program/verbs/exchange/translation/lord_prayer_lexicon.pya", import.meta.url),
+    new URL("../program/library/translation/lord_prayer_lexicon.pya", import.meta.url),
     "utf8"
   );
   const malformed = source.replace('\\"status\\":\\"unresolved\\"', '\\"status\\":\\"invented\\"');

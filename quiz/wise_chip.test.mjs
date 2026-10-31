@@ -240,7 +240,7 @@ test("wise chip can assemble pair chips from boundary proposals and config map",
   await run("prah");
 
   await run("su name chip config be map def");
-  await run('su name kind ob text "pair" ya');
+  await run('su name sort ob text "pair" ya');
   await run('su name second patterns ob ve text "#### Q\'uo" "#### Q’uo" ya');
   await run('su name stop patterns ob ve text "/^Is there another query at this time\\\\?.*$/gmu" ya');
   await run("prah");
@@ -311,7 +311,7 @@ test("wise chip pair mode can require question-like first blocks and drop courte
   await run("prah");
 
   await run("su name chip config be map def");
-  await run('su name kind ob text "pair" ya');
+  await run('su name sort ob text "pair" ya');
   await run('su name second patterns ob ve text "#### Q\'uo" "#### Q’uo" ya');
   await run('su name first require patterns ob ve text "/\\\\?/u" "/^####\\\\s+[A-Z][^\\\\n]*\\\\n(?:How|What|Why|When|Where|Who|Could|Would|Can|Do|Does|Is|Are)\\\\b/imu" ya');
   await run('su name first drop patterns ob ve text "/thank you/iu" "/answers? my question/iu" ya');
@@ -350,7 +350,7 @@ test("wise chip pair mode can drop short courtesy pairs with minimum chars", asy
   await run("prah");
 
   await run("su name chip config be map def");
-  await run('su name kind ob text "pair" ya');
+  await run('su name sort ob text "pair" ya');
   await run('su name second patterns ob ve text "#### Q\'uo" "#### Q’uo" ya');
   await run("su name minimum chars ob num 120 ya");
   await run("prah");

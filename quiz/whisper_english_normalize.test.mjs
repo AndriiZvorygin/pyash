@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { normalizeWhisperEnglishTokens } from "../program/verbs/exchange/translation/whisper_english.mjs";
+import { normalizeWhisperEnglishTokens } from "../program/library/translation/whisper_english.mjs";
 import { parseTokens } from "../program/understand/parse_tokens.mjs";
 
 test("whisper english normalizes mood prefix and role aliases", () => {

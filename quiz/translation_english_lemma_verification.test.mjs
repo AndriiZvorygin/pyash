@@ -6,8 +6,8 @@ import {
   createQueuedMindEnglishLemmaVerifier,
   parseEnglishLemmaVerificationResponse,
   verifyEnglishLemmaCandidates
-} from "../program/verbs/exchange/translation/english_lemma_verification.mjs";
-import { englishLemmaCandidateId } from "../program/verbs/exchange/translation/english_lemmas.mjs";
+} from "../program/library/translation/english_lemma_verification.mjs";
+import { englishLemmaCandidateId } from "../program/library/translation/english_lemmas.mjs";
 
 function candidate(surface, lemma, pya) {
   const record = {

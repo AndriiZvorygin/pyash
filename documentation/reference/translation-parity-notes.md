@@ -6,7 +6,7 @@ translation contract in `documentation/specifications/11-translation.md`.
 
 ## Reverse pairs and template matching
 
-Implementation lives in `program/verbs/exchange/translation/reverse_pairs.mjs`.
+Implementation lives in `program/library/translation/reverse_pairs.mjs`.
 
 - Reverse pairs invert each `pairs_<lang>.pya` exact-pair file into a gloss → Pyash map.
 - Reverse templates compile gloss templates to regular expressions with placeholder
@@ -88,9 +88,9 @@ The anchor is the canonical token, `ob text` is the surface form, and `as wo`
 identifies its role. Implementations may normalize known forms to the anchor.
 
 Anchor words are implemented in
-`program/verbs/exchange/translation/anchor_words.mjs` and applied by
+`program/library/translation/anchor_words.mjs` and applied by
 `normalizeAnchorSentence()` in `helpers.mjs`. They load from
-`program/verbs/exchange/translation/anchor_words.pya`; normalization walks name
+`program/library/translation/anchor_words.pya`; normalization walks name
 tokens (`su.name`, `ob.name`, `to.name`, and `from.name`) and is applied to
 gloss → Pyash translation, not parser fallback.
 

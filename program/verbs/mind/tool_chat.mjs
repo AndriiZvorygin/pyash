@@ -204,6 +204,7 @@ export async function runToolChat({
   backendName,
   ollamaHost,
   reasoningEffort,
+  contextWindow,
   modelTuning,
   maxToolCalls,
   runtimeContext,
@@ -305,6 +306,14 @@ export async function runToolChat({
     requestPayload.prompt = buildPromptText(messages);
     if (ollamaHost) requestPayload.host = ollamaHost;
     if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
+    if (backendName === "ollama command mind" && Number.isSafeInteger(Number(contextWindow)) && Number(contextWindow) > 0) {
+      requestPayload.options = {
+        ...(requestPayload.options && typeof requestPayload.options === "object" ? requestPayload.options : {}),
+        num_ctx: Number(contextWindow)
+      };
+    } else if (backendName === "zai command mind" && Number.isSafeInteger(Number(contextWindow)) && Number(contextWindow) > 0) {
+      requestPayload.contextWindow = Number(contextWindow);
+    }
     applySampling(requestPayload);
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
     debugMind("request", requestPayload);
@@ -371,6 +380,9 @@ export async function runToolChat({
       content: textToolCalls.length > 0 ? "" : lastResponse?.message?.content ?? "",
       tool_calls: toolCalls
     };
+    if (typeof lastResponse?.message?.reasoning_content === "string") {
+      assistantMessage.reasoning_content = lastResponse.message.reasoning_content;
+    }
     messages.push(assistantMessage);
     appendLog(dialogue, { role: "assistant", content: assistantMessage.content });
 

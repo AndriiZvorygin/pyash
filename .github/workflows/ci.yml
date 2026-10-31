@@ -17,6 +17,23 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Bootstrap external toolchains
-        run: npm run bootstrap
+        run: npm run bootstrap -- --with-whisper
+      - name: Provision the sibling dictionary checkout
+        # The translation subsystem reads its dictionary and glyph word lists
+        # from the pyachso2n checkout that sits next to this repository.
+        run: git clone --depth 1 https://gitlab.com/pyac/pyachso2n.git ../pyachso2n
+      - name: Install python worker dependencies
+        # The speaker identity module drives a python worker that imports numpy.
+        # Some runner images mark the system python as externally managed, so
+        # fall back to the explicit override.
+        run: python3 -m pip install --quiet numpy || python3 -m pip install --quiet --break-system-packages numpy
+      - name: Check documentation prose
+        run: npm run doc:prose
+      - name: Check import graph
+        run: npm run imports:check
+      - name: Check house-facing surface
+        # Clones the published house repositories and resolves every import
+        # they make against this repository.
+        run: npm run house:api:check
       - name: Run tests
         run: npm run test:ci

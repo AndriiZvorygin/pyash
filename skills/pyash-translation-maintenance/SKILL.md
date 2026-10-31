@@ -9,14 +9,14 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
 
 ## Pair files
 
-- Exact pairs: `program/verbs/exchange/translation/pairs_<lang>.pya`
-- Templates: `program/verbs/exchange/translation/pairs_<lang>_templates.pya`
-- Anchors: `program/verbs/exchange/translation/anchor_words.pya`
+- Exact pairs: `program/library/translation/pairs_<lang>.pya`
+- Templates: `program/library/translation/pairs_<lang>_templates.pya`
+- Anchors: `program/library/translation/anchor_words.pya`
 
 ## Adapter flow
 
 - `program/verbs/exchange/translation.mjs` chooses pairs/templates or adapter formatters.
-- Reverse matching lives in `program/verbs/exchange/translation/reverse_pairs.mjs`.
+- Reverse matching lives in `program/library/translation/reverse_pairs.mjs`.
 - Anchor normalization is applied for gloss → Pyash inside translation (not core parse fallback).
 
 ## Pyash/Pyac surface boundary

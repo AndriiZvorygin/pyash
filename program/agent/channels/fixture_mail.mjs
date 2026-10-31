@@ -103,7 +103,7 @@ export async function readFixtureMailPlan(policyPath) {
     escalationTarget: text(fields["escalation target"]) || CHIEF_OF_STAFF,
     escalationReason: text(fields["escalation reason"]) || "decision requirement plus deadline",
     escalationClassification: text(fields["escalation classification"]) || "escalation",
-    kind: text(fields["work kind"]) || "correspondence",
+    kind: text(fields["work sort"]) || "correspondence",
     acceptanceText: text(fields.acceptance) || "Preserve source evidence; propose no external send or mutation.",
     promptPrefix: text(fields["prompt prefix"]) || "Review",
     defaultPriority: numberField("default priority", 50),
