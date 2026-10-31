@@ -687,13 +687,18 @@ unnoticed until the surface was audited from the outside.
 
 - `configure/house_api.pya` declares the surface: the modules a house may
   import from this repository, read with the interpreter's own parser so the
-  list stays a Pyash sentence file rather than a second format.
+  list stays a Pyash sentence file rather than a second format. It also
+  declares the published house repositories and the address each is published
+  at.
 - `command/check_house_api.mjs` checks it: every declared module must exist,
-  and — when a house checkout is present under `world/house/` — every module a
-  house imports, by relative specifier or through the repository root, must
-  resolve to a file here and must be declared.
-- `quiz/house_api_guard.test.mjs` pins the rules without needing a house
-  checkout, and `npm run house:api:check` runs in CI.
+  and every module a house imports, by relative specifier or through the
+  repository root, must resolve to a file here and must be declared. The
+  published house repositories are cloned into `artifacts/house-repos/` and
+  checked the same way, so the contract is verified against what the houses
+  actually contain and not only against whichever checkout happens to be
+  present. That is the check that would have caught Owen's missing module.
+- `quiz/house_api_guard.test.mjs` pins the rules without needing a checkout
+  or a network, and `npm run house:api:check` runs in CI.
 
 The declaration is the union of what the published house repositories and the
 local house checkouts import: 36 modules, of which 32 are shared reporter

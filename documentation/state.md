@@ -140,10 +140,12 @@ folder (132 modules, 15,728 lines) moved the same way, into
 - The reporter houses are separate repositories that import this
   repository's `program/` and `module/` modules by path, so those modules are
   a published library with no importer here. `configure/house_api.pya`
-  declares that surface (36 modules) and `npm run house:api:check` verifies
-  that every declared module exists and that every import a checked-out house
-  makes resolves and is declared. The import half of that check needs a house
-  checkout, so it only runs where one is present.
+  declares that surface (36 modules) and the house repositories that consume
+  it, and `npm run house:api:check` verifies that every declared module
+  exists and that every import a house makes resolves and is declared. The
+  check clones the published house repositories into `artifacts/house-repos/`,
+  so the contract is verified against what the houses actually contain rather
+  than against whichever checkout happens to be present.
 - Examples are audited by `node command/audit_examples.mjs`, which runs each
   one through the real runner in a child process. A green exit code is not a
   green example: `examples/pyash/until-loop.pya` once exited 0 while producing

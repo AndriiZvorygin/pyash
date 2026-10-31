@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import {
   checkHouseApi,
   declaredHouseModules,
+  declaredHouseRepositories,
   findHouseImports,
 } from "../command/check_house_api.mjs";
 
@@ -27,8 +28,7 @@ function makeFixture({ declared = [], files = {} } = {}) {
     const full = path.join(root, relative);
     fs.mkdirSync(path.dirname(full), { recursive: true });
     fs.writeFileSync(full, source);
-  }
-  return root;
+  }  return root;
 }
 
 const SHARED = "program/library/reporter_shared/shared-piece.mjs";
@@ -129,4 +129,64 @@ test("every declared module of this repository exists", () => {
   assert.ok(declared.length > 0, "the house surface must be declared");
   const missing = declared.filter((name) => !fs.existsSync(path.join(REPO, name)));
   assert.deepEqual(missing, []);
+});
+
+test("the published house repositories are declared with their address", () => {
+  const repositories = declaredHouseRepositories(REPO);
+  assert.ok(repositories.length > 0, "the published house repositories must be declared");
+  for (const repository of repositories) {
+    assert.ok(repository.name, "a repository needs a name");
+    assert.match(repository.url, /^https?:\/\//u);
+  }
+});
+
+// A house repository, laid out the way one is published: its own program
+// folder that reaches into this repository with relative specifiers.
+function makeHouseRepository(files) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "house-repo-"));
+  for (const [relative, source] of Object.entries(files)) {
+    const full = path.join(dir, relative);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, source);
+  }
+  return dir;
+}
+
+test("an import made by a published house repository is resolved against this repository", () => {
+  const root = makeFixture({
+    declared: [SHARED],
+    files: { [SHARED]: "export const value = 1;\n" }
+  });
+  const repository = makeHouseRepository({
+    "program/main.mjs": `import { value } from "../../../../${SHARED}";\nexport default value;\n`
+  });
+  const report = checkHouseApi({ root, repositories: [{ name: "test-house", dir: repository }] });
+  assert.equal(report.repositoryImports.length, 1);
+  assert.equal(report.repositoryImports[0].target, SHARED);
+  assert.equal(report.broken.length, 0);
+  assert.equal(report.undeclared.length, 0);
+});
+
+test("a published house repository that imports a module this repository lacks is broken", () => {
+  const root = makeFixture({ declared: [SHARED] });
+  const repository = makeHouseRepository({
+    "program/main.mjs": `import { value } from "../../../../${SHARED}";\nexport default value;\n`
+  });
+  const report = checkHouseApi({ root, repositories: [{ name: "test-house", dir: repository }] });
+  assert.equal(report.broken.length, 1);
+  assert.equal(report.broken[0].target, SHARED);
+  assert.equal(report.broken[0].house, "test-house");
+});
+
+test("a published house repository that reaches an undeclared module is reported", () => {
+  const root = makeFixture({
+    declared: [],
+    files: { [SHARED]: "export const value = 1;\n" }
+  });
+  const repository = makeHouseRepository({
+    "program/main.mjs": `import { value } from "../../../../${SHARED}";\nexport default value;\n`
+  });
+  const report = checkHouseApi({ root, repositories: [{ name: "test-house", dir: repository }] });
+  assert.equal(report.undeclared.length, 1);
+  assert.equal(report.undeclared[0].target, SHARED);
 });

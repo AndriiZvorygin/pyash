@@ -32,6 +32,8 @@ jobs:
       - name: Check import graph
         run: npm run imports:check
       - name: Check house-facing surface
+        # Clones the published house repositories and resolves every import
+        # they make against this repository.
         run: npm run house:api:check
       - name: Run tests
         run: npm run test:ci

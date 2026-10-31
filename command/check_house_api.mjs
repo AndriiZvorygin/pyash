@@ -6,17 +6,22 @@
 // a published library with no importer inside this repository, which is why a
 // naive orphan scan reads them as dead code.
 //
-// Two things are checked:
+// Three things are checked:
 //
 //   1. every module declared in configure/house_api.pya exists here;
-//   2. when a house checkout is present under world/house/, every module such
-//      a house imports resolves to a file in this repository and is declared.
+//   2. every module a house imports resolves to a file in this repository and
+//      is declared;
+//   3. the same for the published house repositories, which are cloned so the
+//      contract is checked against what the houses actually contain rather
+//      than against whatever checkout happens to be present.
 //
-// The second check needs a house checkout, which this repository does not
-// track, so it only runs where one is present. The first runs everywhere.
+// A house that imports a module this repository does not have cannot start,
+// and that used to be invisible from here. The published repositories are
+// declared in configure/house_api.pya so the check knows where to look.
 
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { parse } from "../program/understand/index.mjs";
@@ -25,15 +30,17 @@ import { SPECIFIER_PATTERNS } from "./check_imports.mjs";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const HOUSE_DIR = "world/house";
+const CLONE_DIR = path.join("artifacts", "house-repos");
 
 // A house can reach a module of this repository two ways: a relative
 // specifier that climbs out of the house folder, or a path joined onto the
 // repository root that a house resolved at run time.
 const ROOT_JOIN_PATTERN = /\b(?:PYASH_ROOT|pyashRoot|pyash_root)\b\s*[,)]?\s*["']((?:program|module)\/[^"']+)["']/gu;
 
-// Reads the declared surface. The list lives in a Pyash sentence file, so it
-// is read with the interpreter's own parser rather than with a text scan.
-export function declaredHouseModules(root = REPO, file = "configure/house_api.pya") {
+// Reads a vector of texts from a Pyash sentence file. The lists live in a
+// sentence file rather than a second format, so they are read with the
+// interpreter's own parser instead of with a text scan.
+function readConfigVector(root, name, file = "configure/house_api.pya") {
   const full = path.resolve(root, file);
   let source;
   try {
@@ -42,7 +49,7 @@ export function declaredHouseModules(root = REPO, file = "configure/house_api.py
     return [];
   }
   const noComments = source.split(/\r?\n/u).filter((line) => !/^\s*#/u.test(line)).join("\n");
-  const names = [];
+  const values = [];
   for (const raw of splitSentences(noComments, { includeThen: true })) {
     let sentence;
     try {
@@ -50,21 +57,39 @@ export function declaredHouseModules(root = REPO, file = "configure/house_api.py
     } catch {
       continue;
     }
-    if (String(sentence?.su?.name || "").toLowerCase() !== "house_api_modules") continue;
-    const values = sentence?.ob?.ve?.values;
-    if (Array.isArray(values)) {
-      for (const value of values) {
-        const name = String(value).trim();
-        if (name) names.push(name);
+    if (String(sentence?.su?.name || "").toLowerCase() !== String(name).toLowerCase()) continue;
+    const listed = sentence?.ob?.ve?.values;
+    if (Array.isArray(listed)) {
+      for (const value of listed) {
+        const text = String(value).trim();
+        if (text) values.push(text);
       }
       continue;
     }
     const text = String(sentence?.ob?.text || "");
     for (const value of text.split(/[\s,]+/u)) {
-      if (value.trim()) names.push(value.trim());
+      if (value.trim()) values.push(value.trim());
     }
   }
-  return names;
+  return values;
+}
+
+// The modules a house may import from this repository.
+export function declaredHouseModules(root = REPO) {
+  return readConfigVector(root, "house_api_modules");
+}
+
+// The published house repositories, each with the address it is published at.
+export function declaredHouseRepositories(root = REPO) {
+  const repositories = [];
+  for (const entry of readConfigVector(root, "house_api_repositories")) {
+    const separator = entry.search(/\s/u);
+    if (separator < 0) continue;
+    const name = entry.slice(0, separator).trim();
+    const url = entry.slice(separator + 1).trim();
+    if (name && url) repositories.push({ name, url });
+  }
+  return repositories;
 }
 
 // Every module file under the house folder, if the folder is present.
@@ -90,6 +115,51 @@ export function houseFiles(root = REPO) {
   return files;
 }
 
+// Every module file of a house repository.
+export function repositoryFiles(dir) {
+  const files = [];
+  const walk = (current) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(current, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.name === "node_modules" || entry.name === ".git") continue;
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith(".mjs")) files.push(full);
+    }
+  };
+  walk(dir);
+  return files;
+}
+
+// Clones the published house repositories so their imports can be resolved.
+// The clones are cached under artifacts/, which is git-ignored.
+export function fetchHouseRepositories(root = REPO, { cloneDir = CLONE_DIR } = {}) {
+  const base = path.resolve(root, cloneDir);
+  const fetched = [];
+  for (const repository of declaredHouseRepositories(root)) {
+    const dir = path.join(base, repository.name);
+    if (!fs.existsSync(path.join(dir, ".git"))) {
+      fs.mkdirSync(path.dirname(dir), { recursive: true });
+      try {
+        execFileSync("git", ["clone", "--depth", "1", "--quiet", repository.url, dir], {
+          cwd: root,
+          stdio: ["ignore", "ignore", "pipe"]
+        });
+      } catch (error) {
+        fetched.push({ ...repository, dir: "", error: String(error?.message ?? error).split("\n")[0] });
+        continue;
+      }
+    }
+    fetched.push({ ...repository, dir });
+  }
+  return fetched;
+}
+
 function isHouseFacing(root, resolved) {
   const relative = path.relative(root, resolved);
   if (!relative || relative.startsWith("..")) return "";
@@ -99,7 +169,12 @@ function isHouseFacing(root, resolved) {
 
 // Finds what a house imports from this repository. Returns one entry per
 // import, whether or not it resolves.
-export function findHouseImports(files, { root = REPO } = {}) {
+//
+// A house file is resolved as if it sat under world/house/<name>/, because
+// that is where a house repository is checked out and where its relative
+// specifiers point from. baseDir is the directory the files really live in,
+// virtualRoot is where they live as far as the specifiers are concerned.
+export function findHouseImports(files, { root = REPO, baseDir = null, virtualRoot = null, label = "" } = {}) {
   const found = [];
   for (const file of files) {
     let source;
@@ -108,7 +183,10 @@ export function findHouseImports(files, { root = REPO } = {}) {
     } catch {
       continue;
     }
-    const house = path.relative(root, file).split(path.sep).slice(0, 3).join("/");
+    const relative = baseDir ? path.relative(baseDir, file) : path.basename(file);
+    const virtual = virtualRoot ? path.join(virtualRoot, relative) : file;
+    const house = label
+      || (baseDir ? path.relative(baseDir, file).split(path.sep).slice(0, 3).join("/") : path.basename(file));
     for (const pattern of SPECIFIER_PATTERNS) {
       pattern.lastIndex = 0;
       let match;
@@ -116,12 +194,12 @@ export function findHouseImports(files, { root = REPO } = {}) {
         const specifier = match[2];
         if (!specifier.startsWith("./") && !specifier.startsWith("../")) continue;
         if (specifier.includes("${")) continue;
-        const resolved = path.resolve(path.dirname(file), specifier);
+        const resolved = path.resolve(path.dirname(virtual), specifier);
         const target = isHouseFacing(root, resolved);
         if (!target) continue;
         found.push({
           house,
-          file: path.relative(root, file),
+          file: relative,
           specifier,
           target,
           exists: fs.existsSync(resolved)
@@ -135,7 +213,7 @@ export function findHouseImports(files, { root = REPO } = {}) {
       if (!target) continue;
       found.push({
         house,
-        file: path.relative(root, file),
+        file: relative,
         specifier: `${joined[0].trim()} -> ${target}`,
         target,
         exists: fs.existsSync(path.resolve(root, target))
@@ -146,14 +224,39 @@ export function findHouseImports(files, { root = REPO } = {}) {
 }
 
 // The whole check: the declared surface exists, and the houses stay inside it.
-export function checkHouseApi({ root = REPO, files = null } = {}) {
+export function checkHouseApi({ root = REPO, files = null, repositories = null } = {}) {
   const declared = declaredHouseModules(root);
   const declaredSet = new Set(declared);
   const missingDeclared = declared.filter((name) => !fs.existsSync(path.resolve(root, name)));
+
+  const houseBase = path.resolve(root, HOUSE_DIR);
   const houseFilesList = files === null ? houseFiles(root) : files;
-  const houseImports = findHouseImports(houseFilesList, { root });
-  const broken = houseImports.filter((entry) => !entry.exists);
-  const undeclared = houseImports.filter((entry) => entry.exists && !declaredSet.has(entry.target));
+  const houseImports = findHouseImports(houseFilesList, {
+    root,
+    baseDir: houseBase,
+    virtualRoot: houseBase,
+    label: "world/house"
+  });
+
+  const fetched = repositories === null ? fetchHouseRepositories(root) : repositories;
+  const repositoryImports = [];
+  const unfetched = [];
+  for (const repository of fetched) {
+    if (!repository.dir) {
+      unfetched.push(repository);
+      continue;
+    }
+    repositoryImports.push(...findHouseImports(repositoryFiles(repository.dir), {
+      root,
+      baseDir: repository.dir,
+      virtualRoot: path.join(houseBase, repository.name),
+      label: repository.name
+    }));
+  }
+
+  const allImports = [...houseImports, ...repositoryImports];
+  const broken = allImports.filter((entry) => !entry.exists);
+  const undeclared = allImports.filter((entry) => entry.exists && !declaredSet.has(entry.target));
   const seen = new Set();
   const uniqueUndeclared = undeclared.filter((entry) => {
     const key = `${entry.target}`;
@@ -166,6 +269,9 @@ export function checkHouseApi({ root = REPO, files = null } = {}) {
     missingDeclared,
     houseFiles: houseFilesList.length,
     houseImports,
+    repositories: fetched.map((repository) => repository.name),
+    unfetched,
+    repositoryImports,
     broken,
     undeclared: uniqueUndeclared
   };
@@ -175,9 +281,16 @@ const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]) === fil
 if (invokedDirectly) {
   const report = checkHouseApi();
   console.log(`house api: ${report.declared.length} declared module(s), ${report.houseFiles} house file(s) scanned`);
+  if (report.repositories.length > 0) {
+    console.log(`  published house repositories: ${report.repositories.join(", ")}`);
+  }
   if (report.missingDeclared.length > 0) {
     console.log(`  declared but missing (${report.missingDeclared.length}):`);
     for (const name of report.missingDeclared) console.log(`    ${name}`);
+  }
+  if (report.unfetched.length > 0) {
+    console.log(`  published repository that could not be fetched (${report.unfetched.length}):`);
+    for (const repository of report.unfetched) console.log(`    ${repository.name}: ${repository.error}`);
   }
   if (report.broken.length > 0) {
     console.log(`  house import that does not resolve (${report.broken.length}):`);
@@ -187,8 +300,12 @@ if (invokedDirectly) {
     console.log(`  house import that is not declared (${report.undeclared.length}):`);
     for (const entry of report.undeclared) console.log(`    ${entry.target}  (${entry.house}: ${entry.file})`);
   }
-  if (report.missingDeclared.length === 0 && report.broken.length === 0 && report.undeclared.length === 0) {
+  const clean = report.missingDeclared.length === 0
+    && report.unfetched.length === 0
+    && report.broken.length === 0
+    && report.undeclared.length === 0;
+  if (clean) {
     console.log("  ok: declared surface is intact and every house import resolves");
   }
-  process.exitCode = report.missingDeclared.length > 0 || report.broken.length > 0 || report.undeclared.length > 0 ? 1 : 0;
+  process.exitCode = clean ? 0 : 1;
 }
