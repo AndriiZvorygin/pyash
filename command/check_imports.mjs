@@ -9,10 +9,14 @@ import { fileURLToPath } from "node:url";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
+// A specifier is only an import when the `from` clause belongs to an
+// `import`/`export` statement in code. Requiring the statement to start a
+// line (or follow a statement separator) keeps a string that merely contains
+// `from "./x"` — a test fixture, a message — from being read as an import.
 const SPECIFIER_PATTERNS = [
-  /\bfrom\s*(["'])([^"']+)\1/gu,
-  /\bimport\s*\(\s*(["'])([^"']+)\1\s*\)/gu,
-  /\bimport\s+(["'])([^"']+)\1/gu
+  /(?:^|[;{}\n])[ \t]*(?:import|export)\b[^'";]*?\bfrom\s*(["'])([^"']+)\1/gmu,
+  /(?:^|[;{}\n])[ \t]*import\s*(["'])([^"']+)\1/gmu,
+  /(?:^|[=(:,\s])import\s*\(\s*(["'])([^"']+)\1\s*\)/gu
 ];
 
 export function trackedModules(root = REPO) {

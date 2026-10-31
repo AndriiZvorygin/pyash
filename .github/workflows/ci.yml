@@ -20,6 +20,8 @@ jobs:
         run: npm run bootstrap -- --with-whisper
       - name: Check documentation prose
         run: npm run doc:prose
+      - name: Check import graph
+        run: npm run imports:check
       - name: Run tests
         run: npm run test:ci
       - name: Check package size
