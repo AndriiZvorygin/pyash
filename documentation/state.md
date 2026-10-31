@@ -157,6 +157,14 @@ folder (132 modules, 15,728 lines) moved the same way, into
   for the python speaker worker. A quiz whose resource is missing is reported
   as a gap rather than failed, and the quiz suite creates its own scratch
   directory under `artifacts/` so a fresh checkout can run it.
+- The vocabulary checker tells names from words. A token that names something
+  anywhere in a program — even where it also stands in the predicate slot, as
+  `be android ... do` names the android — needs no dictionary entry, and is
+  reported as a name without vocabulary coverage. Only a token that is used
+  solely as a predicate word has to be covered, and only those count as
+  missing. A word that names a physical thing with a plain-English reading
+  (a video processor module) is recorded as a compound instead, which is how
+  `gpu` is covered.
 
 ## Tried and rejected
 

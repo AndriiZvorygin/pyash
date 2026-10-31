@@ -709,6 +709,43 @@ missed (`cover-overlay-stage.mjs`, `cover-promptify-stage.mjs`,
 house reaches them through a repository root joined at run time rather than
 through a relative specifier.
 
+**4.6 A name needs no vocabulary entry; a word does.** *(done, with a residue)*
+
+The vocabulary checker treated every uncovered token as a defect and
+recommended a dictionary entry for each one. That recommendation was wrong
+for the technical compounds (`android`, `ffmpeg`, `ollama`, `json`, `yaml`,
+`markdown`, …): they name things, and a name needs no entry of its own.
+
+`command/vocab_suggest.mjs` now keeps the two roles apart. A token that
+appears in a name role anywhere in a program — a subject name, a target
+name, a map key — is a name, and a token that appears only in the predicate
+slot is a word. A name without coverage is reported as a name and does not
+count as missing; only a word does. Over `examples/pyash` this moves 273
+tokens out of the defect list and leaves seven that are still genuinely
+uncovered words.
+
+`gpu` is the one the owner asked to keep as a word rather than a name: it is
+a physical thing, so it is recorded as a compound of `video + processor +
+module` in `program/library/translation/compound_coverage_curated.pya`
+(`byot ples myoc`) rather than as a plain dictionary entry.
+
+The rule is pinned by `quiz/vocab_suggest_names.test.mjs`.
+
+### The seven words still missing
+
+| Token | Where it appears | Reading |
+|---|---|---|
+| `divide` | `be divide do` | a registered verb (`program/verbs/mathematics/divide.mjs`), English30k rank 4864, and the dictionary holds only `dividend` — a real gap |
+| `tap` | `be android tap … do` | the head verb of the android tap signatures |
+| `llm` | `be chip llm do` | a kind of chip |
+| `get_current_time` | `be mcp clock get_current_time … can` | an MCP tool name |
+| `refine` | `be learn refine card do` | part of a verb-phrase name |
+| `object` | `be plus object number 5` | part of a compound name |
+| `permanent` | `be permanent number` | part of a type name produced by the JavaScript translation layer |
+
+Only `divide` is unambiguous. The other six sit in compound predicate
+phrases, where the checker cannot tell a name from a word by shape alone.
+
 ---
 
 ## Phase 5 — Repo hygiene
@@ -875,6 +912,12 @@ Per `AGENTS.md`:
    (`extract-escribe-agenda-items.mjs`, `timed-cue-partition.mjs`) and sixteen
    modified files. No house imports the two modules, so they were left
    alone, but that work is one commit away from being invisible.
+6. **The `divide` vocabulary gap.** `divide` is a registered verb with no
+   English-to-Pyash word: the vendored kwon dictionary
+   (`caterer/pyac/lyac/kwon_en.json`) carries `dividend` and not `divide`,
+   while `plus`, `subtract` and `multiply` all have entries. The entry
+   belongs upstream in the `pyac/kwon` dictionary rather than in this
+   repository. See 4.6.
 
 ## Baseline measurements
 
