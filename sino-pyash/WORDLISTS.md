@@ -26,6 +26,8 @@ The selected variety records and their concept coverage are:
 
 The list IDs, exact counts, ASJP source IDs, and per-form data are in the CSVs. The additional language groups are comparison samples for separately named proposals; their inclusion does not make those proposals accepted classifications. Georgian is included as an explicit Kartvelian comparator because it is outside the Sino-Caucasian and Dene-Caucasian proposals described in [LANGUAGE-PROXIMITY.md](LANGUAGE-PROXIMITY.md). Finnish and Hungarian represent Uralic for the separate Borean/Sino-Uralic discussion.
 
+The language samples' clause-level word-order descriptions and their limits are documented in [WORD-ORDER.md](WORD-ORDER.md). The ASJP list rows themselves are translation equivalents, not syntactic examples, and cannot establish a variety's basic order.
+
 ## How to use the set
 
 These are basic-vocabulary lists, not full dictionaries. ASJP concept matches give translation equivalents for a gloss. They do not establish cognacy, sound correspondence, borrowing, or descent. For phonetic sampling, record the language variety, source list ID, transcription, and whether the comparison is a translation equivalent, a documented loan, or a supported cognate. Treat the grouping column as a search label, not as a phonetic distance score.

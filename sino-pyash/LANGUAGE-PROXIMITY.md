@@ -46,6 +46,8 @@ The order above is a starting order for evidence review, not a fixed score. A we
 
 The acquired [ASJP comparison lists](WORDLISTS.md) provide shared basic-vocabulary glosses for a small, labeled sample. A shared gloss establishes only that the entries were collected as translation equivalents; it does not establish a cognate or a historical relationship.
 
+Clause-level word-order profiles for those language samples are recorded separately in [WORD-ORDER.md](WORD-ORDER.md). Word order is typological syntax evidence; do not blend it into the genealogical ranking or phonetic-similarity score.
+
 ## Implication for source selection
 
 For the character-to-code assignment, preserve the provenance of each candidate sound: Sinitic variety or reconstruction, Sino-Xenic reading tradition, comparative cognate, attested loan, or cross-language semantic/phoneme sample. Do not pool those as if they measured the same kind of closeness. Frequency rank, population coverage, and phoneme contribution can be reported alongside provenance, but each remains its own field until the reviewers approve a combined scoring rule.
