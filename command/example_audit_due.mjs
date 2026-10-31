@@ -33,10 +33,11 @@ export function decideAuditDue({ event = "push", last = "", commitsSince = null,
   if (commitsSince === null) {
     return { run: true, reason: "the commits since the last audit could not be counted, so the audit runs" };
   }
+  const landed = `${commitsSince} ${commitsSince === 1 ? "commit has" : "commits have"} landed since the last audit`;
   if (commitsSince >= threshold) {
-    return { run: true, reason: `${commitsSince} commits have landed since the last audit, which is the threshold` };
+    return { run: true, reason: `${landed}, which is the threshold` };
   }
-  return { run: false, reason: `only ${commitsSince} commits have landed since the last audit, so the audit is not due yet` };
+  return { run: false, reason: `${landed}, so the audit is not due yet` };
 }
 
 // Count the commits that landed since the given commit.

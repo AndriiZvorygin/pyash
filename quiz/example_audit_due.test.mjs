@@ -21,6 +21,12 @@ test("a push that is not due yet does not run the audit", () => {
   assert.match(verdict.reason, /not due yet/u);
 });
 
+test("one commit reads as one commit", () => {
+  const verdict = decideAuditDue({ event: "push", last: "abc123", commitsSince: 1 });
+  assert.match(verdict.reason, /1 commit has landed/u);
+  assert.doesNotMatch(verdict.reason, /1 commits/u);
+});
+
 test("a push that has landed a hundred commits runs the audit", () => {
   const verdict = decideAuditDue({ event: "push", last: "abc123", commitsSince: 100 });
   assert.equal(verdict.run, true);

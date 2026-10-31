@@ -189,11 +189,12 @@ folder (132 modules, 15,728 lines) moved the same way, into
   runs monthly, and on a push once a hundred commits have landed since the
   last audit, whichever comes first. The rule lives in
   `command/example_audit_due.mjs`, which the workflow uses to decide, and an
-  unknown last audit makes it run rather than skip. The audit prints the
-  summary and the failures; the per-example detail lands in
-  `examples/out/example-audit.json` and is kept as a CI artifact. The examples
-  that fail for the agent turn-id defect are recorded in
-  `configure/example_audit_baseline.pya`.
+  unknown last audit makes it run rather than skip. A push that is not due
+  skips the job before it installs anything, so it costs about twenty
+  seconds. The audit prints the summary and the failures; the per-example
+  detail lands in `examples/out/example-audit.json` and is kept as a CI
+  artifact. A CI run of it prints three lines. The examples that fail for the
+  agent turn-id defect are recorded in `configure/example_audit_baseline.pya`.
 
 ## Tried and rejected
 
