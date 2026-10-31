@@ -60,6 +60,7 @@ Retrieved 2026-10-31. Raw upstream files are tracked where redistribution terms 
 - Retrieved 2026-10-31. Upstream archive SHA-256: `4704ea0cb5ecfb31b6fcf052ef9c18c74e813bccf1b4461072dd40b029b88f90`.
 - Extracted subset: 25 variety records, 100 concepts, 1,859 form rows, and 25 cited source records. `wordlists.csv` SHA-256: `800a130c0702b459760f31948ae160903f959fca3ad18304092b331f040b1f06`.
 - Includes Mandarin; Central, Lhasa, and Written Tibetan; Burmese; Yeniseian lists for Ket, Yugh, Arin, Assan, Kott-Assan, and Pumpokol; Chechen, Abkhaz, and Lezgian; Burushaski, Basque, Navajo, Eyak, and Tlingit; plus Georgian, Finnish, and Hungarian comparison lists. Coverage varies by source list; see [`languages.csv`](sources/asjp-v21/languages.csv).
+- Pronunciation coverage and fidelity for the Ket/Yeniseian, North Caucasian, and Tibetan rows are audited in [`PRONUNCIATION.md`](PRONUNCIATION.md). The `Segments` field is a normalized token layer over ASJP forms, not an independent narrow-IPA or tone record.
 - The ASJP words are concept-aligned translations and do not by themselves show cognacy or family relationships. Family/proposal labels are separated in [`LANGUAGE-PROXIMITY.md`](LANGUAGE-PROXIMITY.md) and [`WORDLISTS.md`](WORDLISTS.md).
 
 ## Classical Chinese corpus and references
