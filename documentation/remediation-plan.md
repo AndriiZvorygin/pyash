@@ -619,9 +619,9 @@ one concern, and splitting it on a domain boundary is a separate tranche with
 its own test surface; it is left alone here and recorded as a candidate in
 `documentation/state.md`.
 
-**4.4 Unreferenced modules.** *(found, open)*
+**4.4 House-facing modules read as unreferenced.** *(found, corrected)*
 
-Seven tracked modules have no inbound import anywhere in the repository:
+A scan for tracked modules with no inbound import found seven candidates:
 
 | Lines | Module |
 |---|---|
@@ -633,19 +633,43 @@ Seven tracked modules have no inbound import anywhere in the repository:
 | 100 | `program/library/reporter_shared/stage-runner.mjs` |
 | 38 | `program/publisher-interface.mjs` |
 
-That is roughly 4,700 lines that no tracked code imports and no command runs.
-The surrounding `reporter_shared/` folder is very much alive — a dozen commands
-import from it — so this is leftover, not a dead area.
+That scan was wrong. It used `git grep`, which only sees tracked files, and
+`world/house/*` is gitignored except for three whitelisted houses. The reporter
+houses are separate repositories that import this repository's `program/`
+modules by relative path, so the library they use is invisible to any
+tracked-file scan.
 
-One caveat: the untracked `grey-county-reporter` house checkout documents
-`agenda-section-summaries` by name in its phase notes, so one of these may be
-intended for that house's use rather than forgotten here. The other six have
-no reference anywhere on this machine.
+Checked against the published house repositories
+(`AndriiZvorygin/owen-sound-reporter`, `grey-county-reporter`,
+`andrii-youtube-reporter`):
 
-They were left alone here: deleting 4,700 lines is a bigger decision than
-bounding the verb surface, and the house question should be settled first. The
-honest options are to remove them, or to move them to the house that wants
-them.
+| Module | Reality |
+|---|---|
+| `program/publisher-interface.mjs` | imported by all three house repositories |
+| `program/library/reporter_shared/agenda-section-summaries.mjs` | shared stage module; the houses' own phase notes record extracting it into the shared library |
+| `agenda-wise-chunks.mjs`, `agenda-stage1-gross-chunking.mjs`, `agenda-stage2-grounding.mjs` | the shared agenda stage modules named in the houses' extraction notes |
+| `stage-runner.mjs` | the shared stage metadata contract |
+| `program/runtime/gpu/steward_adapter.mjs` | an adapter contract with an injectable transport; no house consumes it yet |
+
+Of the 61 cross-repository imports the three house repositories make, 60
+resolve against this repository and one does not:
+`owen-sound-reporter/program/run-full-transcript-pipeline.mjs` imports
+`program/library/reporter_shared/article-verification-checkpoint.mjs`
+(`articleClaimsVerificationNeedsRetry`,
+`buildArticleVerificationRetryFeedback`), which has never existed in this
+repository's history. Owen's published pipeline cannot start against the
+current `pyash`.
+
+The house migration is also half-finished: `grey-county-reporter` still
+carries local copies of `agenda-section-summaries.mjs` (1,291 lines) and
+`agenda-wise-chunks.mjs` (826 lines) while importing the shared versions for
+other modules, and the shared copies here are the larger ones (1,629 and
+1,179). Two copies of the same stage logic can drift.
+
+Nothing was deleted. The honest weakness is not dead code, it is that this
+repository **does not declare its house-facing surface and does not check the
+house contract**: a library entry point and a broken import both went
+unnoticed until the surface was audited from the outside.
 
 ---
 
@@ -773,9 +797,17 @@ Per `AGENTS.md`:
    along a domain line.
 2. **`agenda-stage3-summary-renderer.mjs`** (6,675 lines) is already in
    `program/library/` and one concern, but is still a candidate for splitting.
-3. **Unreferenced modules.** Seven tracked modules have no inbound import
-   anywhere in the repository (about 4,700 lines, mostly under
-   `program/library/reporter_shared/`). See 4.4 below.
+3. **The house-facing surface.** The reporter houses import this repository's
+   `program/` modules by path. The surface is not declared here and the
+   contract is not checked, and `owen-sound-reporter` currently imports
+   `program/library/reporter_shared/article-verification-checkpoint.mjs`,
+   which does not exist. Two decisions follow: whether that module should
+   exist here (and with what shape), and whether this repository should
+   declare and check its public surface. See 4.4 below.
+4. **Duplicated stage logic.** `grey-county-reporter` still carries local
+   copies of `agenda-section-summaries.mjs` and `agenda-wise-chunks.mjs`
+   alongside the shared versions it imports for other modules, so the same
+   stage logic exists in two places.
 
 ## Baseline measurements
 
@@ -866,11 +898,22 @@ counted in the *passed* total. Timeouts are now their own bucket.
 6. **Vocabulary hygiene is guarded.** The `kind` alias was purged across six
    position classes including the JavaScript boundary, and the guard caught
    its own fixtures while being built.
+7. **The reporter houses share one library.** `program/library/reporter_shared/`
+   is a real library with real external consumers: three published reporter
+   repositories import 61 of its modules by path, and the houses' own phase
+   notes record the deliberate extraction of agenda stage logic from a house
+   into the shared code. The architecture is working; it is the declaration
+   and the contract check that are missing.
 
 ### What is still weak
 
-1. **About 4,700 lines of tracked code that nothing references** — seven
-   modules, mostly under `program/library/reporter_shared/`. See 4.4.
+1. **The house-facing surface is undeclared and unchecked.** `program/library/reporter_shared/`,
+   `program/publisher-interface.mjs` and the GPU steward adapter are a library
+   that three published reporter repositories import by path — 61 cross-repo
+   imports, of which one (`article-verification-checkpoint.mjs`, imported by
+   `owen-sound-reporter`) does not exist here and has never existed. Nothing
+   in this repository declares that surface or checks it, so a broken house
+   contract is invisible from here. See 4.4.
 2. **Four oversized modules.** `itinerary_media.mjs` (2,098),
    `qwen_say.mjs` (1,622), `command.mjs` (1,072) and
    `agenda-stage3-summary-renderer.mjs` (6,675). Each is internally
