@@ -35,6 +35,13 @@ export function applyCPrelude(lines, { cHelpers, mainLines, cState, commandPolic
     || needsCsvRuntime
   );
   const headers = [];
+  // The header set is derived from the generated source as well as from the
+  // helper flags, so a call site that uses a libc function cannot slip through
+  // without its declaration. Newer compilers treat an implicit declaration as
+  // an error, so a missing header is a build failure rather than a warning.
+  const generated = [...lines, ...mainLines];
+  const usesStringCall = generated.some(l => typeof l === "string" && /\b(?:strcmp|strcpy|strncmp|strlen|strcat)\s*\(/u.test(l));
+  const usesMathCall = generated.some(l => typeof l === "string" && /\b(?:fmod|fmodf|pow|sqrt|ceil|floor)\s*\(/u.test(l));
   headers.push("#if defined(__GNUC__)");
   headers.push("#pragma GCC diagnostic push");
   headers.push("#pragma GCC diagnostic ignored \"-Wformat-truncation\"");
@@ -44,7 +51,7 @@ export function applyCPrelude(lines, { cHelpers, mainLines, cState, commandPolic
     headers.push("#define _POSIX_C_SOURCE 200809L");
   }
   if (cHelpers.usesPrintf) headers.push("#include <stdio.h>");
-  if (cHelpers.usesString) headers.push("#include <string.h>");
+  if (cHelpers.usesString || usesStringCall) headers.push("#include <string.h>");
   if (cHelpers.usesStdlib) headers.push("#include <stdlib.h>");
   if (needsCtypeHeader) headers.push("#include <ctype.h>");
   if (cHelpers.usesExchange) headers.push("#include <stdint.h>");
@@ -71,7 +78,7 @@ export function applyCPrelude(lines, { cHelpers, mainLines, cState, commandPolic
     headers.push("#include <sys/types.h>");
     headers.push("#include <sys/wait.h>");
   }
-  if (lines.some(l => typeof l === "string" && l.includes("fmod(")) || cHelpers.usesJsonRuntime) headers.push("#include <math.h>");
+  if (usesMathCall || cHelpers.usesJsonRuntime) headers.push("#include <math.h>");
   const needsLoopGlobals =
     [...lines, ...mainLines].some(l => typeof l === "string" && /\b(fromindex|toindex|atindex|by)\b/.test(l));
   if (needsLoopGlobals) {
