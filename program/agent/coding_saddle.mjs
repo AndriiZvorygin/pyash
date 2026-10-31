@@ -49,10 +49,187 @@ export const DEFAULT_CODING_SADDLE_SYSTEM_PROMPT = [
   "For requests about repository files, code, tests, git, or commands, use the relevant Pyash tools before answering and report concrete evidence. For general advice, answer directly without unnecessary tool calls.",
   "Do not pretend a change was made when a tool did not succeed.",
   "Keep work inside the configured coding directory and prefer small, verifiable steps.",
-  "Use command to inspect or run code, write for bounded file creation, and repair for unified-diff corrections.",
-  "Before reporting completion, run the narrowest relevant check and report its result.",
+  "For code changes, name the target file before editing; use write for bounded file creation and repair for unified-diff edits.",
+  "After the final edit, use command to run the narrowest relevant test, build, syntax check, or execution check. A check run before the final edit does not count.",
+  "Before reporting completion, state the changed file paths, summarize the change, and give the exact check command and its result. If work or verification is incomplete, say so plainly instead of saying done.",
   "Respond concisely with the result and any remaining blocker."
 ].join(" ");
+
+const SADDLE_CHANGE_ACTION = /\b(?:add|build|change|create|edit|fix|generate|implement|make|modify|patch|refactor|remove|rewrite|update|write)\b/iu;
+const SADDLE_CODE_TARGET = /\b(?:code|program|script|source|file|function|class|module|test|bug|tool|harness|command|repository|repo|pipeline|variable|package|configuration|config)\b|\.(?:mjs|js|cjs|ts|py|pya|json|sh|md)\b/iu;
+
+export function isSaddleCodeChangeRequest(input = "") {
+  const text = String(input ?? "");
+  if (!SADDLE_CHANGE_ACTION.test(text)) return false;
+  if (/\b(?:fix|implement|patch|refactor)\b/iu.test(text)) return true;
+  return SADDLE_CODE_TARGET.test(text);
+}
+
+function eventToolName(event = {}) {
+  return String(event.toolName ?? event.tool_name ?? event.toolCall?.function?.name ?? "").trim().toLowerCase();
+}
+
+function eventArguments(event = {}) {
+  const raw = event.toolCall?.function?.arguments ?? event.toolCall?.arguments;
+  if (raw && typeof raw === "object") return raw;
+  if (typeof raw === "string") {
+    try { return JSON.parse(raw); } catch { return {}; }
+  }
+  return {};
+}
+
+function toolKind(name = "") {
+  const parts = String(name).split(/[^a-z0-9]+/u).filter(Boolean);
+  return parts[0] === "be" ? parts[1] ?? "" : parts[0] ?? "";
+}
+
+function eventSentence(event = {}) {
+  if (event.toolSentence && typeof event.toolSentence === "object") return event.toolSentence;
+  const args = eventArguments(event);
+  return args.sentence && typeof args.sentence === "object" ? args.sentence : args;
+}
+
+function commandText(event = {}) {
+  const sentence = eventSentence(event);
+  const args = eventArguments(event);
+  const raw = sentence?.ob?.text ?? args.command ?? args.ob?.text ?? args.ob;
+  return typeof raw === "string" ? raw.trim() : "";
+}
+
+function isMutatingCommand(text = "") {
+  const command = String(text ?? "");
+  return /\b(?:apply_patch|install|mkdir|mv|rm|tee|touch)\b|\b(?:cp|git)\s+(?:-[^\s]+\s+)*(?:add|apply|checkout|clean|commit|merge|move|rebase|reset|restore|rm|switch)\b|\bsed\s+-i\b|\bperl\s+-pi\b/iu.test(command)
+    || /(?:^|[^<])>{1,2}\s*(?:["']?)(?:\/|\.\.?\/|~\/|[\w.-]+\/|[\w.-]+\.[a-z0-9_-]+)/iu.test(command);
+}
+
+function isValidationCommand(text = "") {
+  const command = String(text ?? "").trim();
+  if (!command) return false;
+  return /(?:^|[;&|]\s*)(?:git\s+diff\s+--check\b|(?:npm|pnpm|yarn)\s+(?:run\s+)?(?:test|lint|build|check|typecheck)\b|(?:node|npx)\s+(?:--test\b|--check\b|[\w./-]+\.(?:mjs|js|cjs|ts)\b)|(?:python|python3)\s+[\w./-]+\.py\b|(?:bash|sh)\s+[\w./-]+\.sh\b|pytest\b|vitest\b|jest\b|eslint\b|tsc\b|mypy\b|ruff\b|(?:cargo|go)\s+test\b|make\s+(?:test|check|build)\b|\.\/run\s+\S+)/iu.test(command);
+}
+
+function isToolFailure(text = "") {
+  const value = String(text ?? "");
+  return /\b(?:isError|is_error)\s*["']?\s*:\s*true\b|\b(?:command|write|repair) defective\b|\bexit=(?:[1-9]\d*|unknown)\b|"be"\s*:\s*"error"/iu.test(value);
+}
+
+function changedPathForEvent(event = {}) {
+  const sentence = eventSentence(event);
+  const args = eventArguments(event);
+  const target = sentence?.to?.filename ?? args.to?.filename ?? args.filename;
+  if (typeof target === "string" && target.trim()) return target.trim();
+  const patch = sentence?.ob?.text ?? args.ob?.text ?? args.ob;
+  if (typeof patch !== "string") return "";
+  const match = patch.match(/^\+\+\+ b\/(.+)$/mu);
+  return match?.[1]?.trim() ?? "";
+}
+
+function pairToolEvents(events = []) {
+  const pending = new Map();
+  const calls = [];
+  for (let index = 0; index < events.length; index += 1) {
+    const event = events[index] ?? {};
+    const stage = String(event.stage ?? "").toLowerCase();
+    const name = eventToolName(event);
+    if (!name) continue;
+    if (stage === "call") {
+      const call = { event, name, index, resultText: "", resultIndex: -1 };
+      calls.push(call);
+      const queue = pending.get(name) ?? [];
+      queue.push(call);
+      pending.set(name, queue);
+    } else if (stage === "result") {
+      const queue = pending.get(name);
+      const call = queue?.shift();
+      if (call) {
+        call.resultText = String(event.toolText ?? event.tool_text ?? "");
+        call.resultIndex = index;
+      }
+    }
+  }
+  return calls;
+}
+
+export function assessSaddleCompletion(input = "", events = []) {
+  if (!isSaddleCodeChangeRequest(input)) {
+    return { required: false, complete: true, missing: [], changedPaths: [], validation: null };
+  }
+
+  const calls = pairToolEvents(events);
+  const mutations = calls.filter((call) => {
+    if (call.resultIndex < 0 || isToolFailure(call.resultText)) return false;
+    const kind = toolKind(call.name);
+    if (kind === "write") return true;
+    if (kind === "repair") return !/\bcheck\b/iu.test(call.name);
+    return kind === "command" && isMutatingCommand(commandText(call.event));
+  });
+  const lastMutation = mutations.reduce((latest, call) => Math.max(latest, call.index), -1);
+  const validations = calls.filter((call) => toolKind(call.name) === "command"
+    && !isMutatingCommand(commandText(call.event))
+    && isValidationCommand(commandText(call.event))
+    && call.resultIndex > lastMutation
+    && !isToolFailure(call.resultText));
+  const validation = validations.at(-1) ?? null;
+  const missing = [];
+  if (mutations.length === 0) missing.push("a successful file-changing tool call");
+  if (!validation) missing.push("a successful relevant validation command after the final edit");
+  return {
+    required: true,
+    complete: missing.length === 0,
+    missing,
+    changedPaths: [...new Set(mutations.map((call) => changedPathForEvent(call.event)).filter(Boolean))],
+    changeTools: [...new Set(mutations.map((call) => call.name))],
+    validation: validation ? {
+      command: commandText(validation.event),
+      output: validation.resultText.trim().slice(0, 240)
+    } : null
+  };
+}
+
+export function buildSaddleCompletionFollowup(input = "", assessment = {}) {
+  const missing = Array.isArray(assessment.missing) ? assessment.missing : [];
+  return [
+    "Harness completion check: the original code-change request is not complete yet.",
+    `Original request: ${String(input ?? "").trim()}`,
+    `Missing evidence: ${missing.join("; ") || "report the actual changed files and check"}.`,
+    "Continue the original task using the available Pyash tools; do not merely restate your previous answer. Make the requested change, then run a relevant validation command after the last edit. If blocked, report the exact tool error and leave the task explicitly incomplete."
+  ].join("\n");
+}
+
+export function formatSaddleCompletionEvidence(assessment = {}) {
+  if (!assessment.required) return "";
+  if (!assessment.complete) return `[saddle incomplete] ${assessment.missing.join("; ")}.`;
+  const changed = assessment.changedPaths.length ? assessment.changedPaths.join(", ") : assessment.changeTools.join(", ");
+  const output = assessment.validation.output ? ` -> ${assessment.validation.output}` : " (returned successfully)";
+  return `[saddle evidence] changed: ${changed}; command: ${assessment.validation.command}${output}`;
+}
+
+export async function runSaddleTurnWithEvidence({ input, runTurn, onToolCall, onFollowup } = {}) {
+  if (typeof runTurn !== "function") throw new TypeError("runSaddleTurnWithEvidence requires runTurn");
+  const events = [];
+  const invoke = (turnInput) => runTurn({
+    input: turnInput,
+    onToolCall: async (event) => {
+      events.push(event);
+      await onToolCall?.(event);
+    }
+  });
+  let result = await invoke(input);
+  let assessment = assessSaddleCompletion(input, events);
+  let retried = false;
+  let retryError = "";
+  if (assessment.required && !assessment.complete) {
+    retried = true;
+    await onFollowup?.(assessment);
+    try {
+      result = await invoke(buildSaddleCompletionFollowup(input, assessment));
+    } catch (error) {
+      retryError = String(error?.message ?? error);
+    }
+    assessment = assessSaddleCompletion(input, events);
+  }
+  return { result, assessment, retried, retryError, events };
+}
 
 function normalizeText(value) {
   return String(value ?? "").trim();
