@@ -3,6 +3,7 @@ su text "format" ob text "english-wordnet-bridge-v1" ya
 su text "source" ob text "Open English WordNet 2025 sense bridge catalog" ya
 su text "mode" ob text "sense-level semantic bridge" ya
 su text "n:00856168-n" ob name touch as text "n" with text "contextual" via text "Open English WordNet 2025 tactile-sexual sense" ya
+su text "n:05818974-n" ob name thing as text "n" with text "contextual" via text "Open English WordNet 2025 object-of-thought or feeling sense; generic Pyash thing anchor" ya
 su text "n:04953730-n" ob name touch as text "n" with text "contextual" via text "Open English WordNet 2025 tactile-property sense" ya
 su text "n:05685184-n" ob name awareness as text "n" with text "contextual" via text "Open English WordNet 2025 intuitive-awareness sense" ya
 su text "n:14549784-n" ob name air as text "n" with text "contextual" via text "Open English WordNet 2025 atmosphere-as-air sense" ya
