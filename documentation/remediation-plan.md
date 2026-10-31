@@ -999,7 +999,7 @@ A read of the repository after the five phases, with the numbers that back it.
 | Applications | ~173,100 lines / ~690 files |
 | Specifications | 24 files, each <= 16KB |
 | Gating quiz files | 763 in the gating tiers; 1 tier 3 excluded |
-| Tests | 3,091, zero failures |
+| Tests | 3,093, zero failures |
 | Examples | 357 top-level in `examples/pyash/` |
 | Skills | 24 |
 
@@ -1039,7 +1039,7 @@ counted in the *passed* total. Timeouts are now their own bucket.
    pinned by `quiz/example_audit_guard.test.mjs`, and `push_all_check.mjs`.
    The repository now fails on drift instead of relying on someone noticing.
 2. **The CI gate is the whole suite.** From 28 files and 254 tests to 763
-   files and 3,091 tests, and the tiering is honest: a missing resource is
+   files and 3,093 tests, and the tiering is honest: a missing resource is
    reported with its reason, never silently failed.
 3. **The language core stayed small and central.** 6,393 lines for
    parser, bridge, memory and program, while the applications grew around
