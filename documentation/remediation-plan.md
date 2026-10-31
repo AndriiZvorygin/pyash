@@ -792,6 +792,10 @@ environment is missing something, not the code. The gcc finding was the one
 real defect among them, and it was only visible because CI compiles with a
 newer compiler than this machine.
 
+Confirmed on the GitHub run for `0109a04c`: 3,074 tests, 0 failures, 760
+gating quiz files, 2 reported as gaps (the runner's ffmpeg has no drawtext
+filter), 1 excluded (a house).
+
 ---
 
 ## Sequencing
