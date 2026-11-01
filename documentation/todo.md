@@ -43,6 +43,10 @@
     document declares: the seven-stage ladder, the four gates (cumulative
     memory, open vocabulary, goal formation, backend parity), and what needs
     work. Analysis, not a plan.
+  - `documentation/suggest/knowledge-core.md` — what a knowledge core is, what
+    we need from it, what exists today (the claim contract is implemented,
+    tested and load-bearing across seven subsystems; the storage half does not
+    exist), and a six-tranche road from here to there.
   They are posted in the commons room under `world/commons/notes/` for agent
   review. Review questions are in each document.
 - Explore lowering parsed sentences into graph/IR forms for future backends (shell/SQL/IR), aligning with the interlanguage vision.
