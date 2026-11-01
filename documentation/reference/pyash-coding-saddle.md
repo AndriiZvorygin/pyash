@@ -83,8 +83,13 @@ implicitly. There is no sudo access.
 
 Enter submits the current request. Shift+Enter inserts a newline on terminals
 that report the standard modified-key sequence; `Ctrl+J` is the portable
-newline fallback. `Ctrl+C` writes the existing Pyash mind-interrupt signal and
-`Ctrl+D` exits. `/status`, `/session`, `/mind [name]`, `/model <name>`,
+newline fallback. `PageUp` and `PageDown` scroll the conversation; new events
+continue to appear while the view is scrolled. `Ctrl+C` writes the existing
+Pyash mind-interrupt signal and `Ctrl+D` exits. The terminal uses a full-screen
+alternate buffer and restores the shell screen on exit, so its live redraws do
+not remain in normal shell scrollback. Assistant Markdown is rendered with
+terminal styling; tool output remains plain text. `/status`, `/session`,
+`/mind [name]`, `/model <name>`,
 `/host <url>`, `/discharge`, and `/exit` are local saddle commands. `/session`
 lists conversation files; select one to resume it, or use
 `/session <filename>` directly. `/mind` lists configured Pyash minds;

@@ -35,6 +35,7 @@ import {
   syncZaiCodexModelCatalog
 } from "../program/runtime/zai_coding_plan.mjs";
 import { requestCodingDutyHub, resolveCodingDutyHub } from "../program/agent/coding_duty_client.mjs";
+import { createSaddleTerminalUi } from "../program/agent/coding_saddle_tui.mjs";
 import {
   appendSaddleUsage,
   formatSaddleUsageSummary,
@@ -52,7 +53,6 @@ import {
   formatSaddleBackendPicker,
   formatSaddleModelPicker,
   formatSaddleStatus,
-  layoutSaddleInput,
   listSaddleBackendOptions,
   listSaddleMindNames,
   normalizeSaddleBackend,
@@ -324,39 +324,26 @@ export async function dischargeSaddleModel(model, backend, {
   return result;
 }
 
+let activeSaddleUi = null;
+let activeSaddleResizeHandler = null;
+
 function writeLine(text = "") {
-  process.stdout.write(`${String(text)}\n`);
+  if (activeSaddleUi) activeSaddleUi.writeLine(text);
+  else process.stdout.write(`${String(text)}\n`);
 }
 
-function clearRenderedInput(layout) {
-  const count = Math.max(1, Number(layout?.rowCount) || 1);
-  const cursorRow = Math.max(0, Math.min(count - 1, Number(layout?.cursorRow) || 0));
-  const rowsToBottom = count - cursorRow - 1;
-  if (rowsToBottom > 0) process.stdout.write(`\u001b[${rowsToBottom}B`);
-  process.stdout.write("\r");
-  if (count > 1) process.stdout.write(`\u001b[${count - 1}A`);
-  for (let index = 0; index < count; index += 1) {
-    process.stdout.write("\u001b[2K\r");
-    if (index < count - 1) process.stdout.write("\u001b[1B");
-  }
-  if (count > 1) process.stdout.write(`\u001b[${count - 1}A`);
-  process.stdout.write("\r");
+function writeMarkdown(text = "") {
+  if (activeSaddleUi) activeSaddleUi.writeMarkdown(text);
+  else process.stdout.write(`${String(text)}\n`);
 }
 
-function renderInput(state, { previousLayout, clear = true, label = "pyash> " } = {}) {
-  if (clear) clearRenderedInput(previousLayout);
-  const layout = layoutSaddleInput({
-    value: state?.value,
-    cursor: state?.cursor,
-    label,
-    columns: process.stdout.columns
-  });
-  process.stdout.write(layout.lines.join("\n"));
-  const rowsBelowCursor = layout.rowCount - layout.cursorRow - 1;
-  if (rowsBelowCursor > 0) process.stdout.write(`\u001b[${rowsBelowCursor}A`);
-  process.stdout.write("\r");
-  if (layout.cursorColumn > 0) process.stdout.write(`\u001b[${layout.cursorColumn}C`);
-  return layout;
+function restoreActiveSaddleUi() {
+  if (process.stdin.isTTY && process.stdin.isRaw) process.stdin.setRawMode(false);
+  if (process.stdin.isTTY) process.stdin.pause();
+  if (activeSaddleResizeHandler) process.stdout.off("resize", activeSaddleResizeHandler);
+  activeSaddleResizeHandler = null;
+  activeSaddleUi?.exit();
+  activeSaddleUi = null;
 }
 
 async function resumeDuty(dutyId) {
@@ -480,12 +467,34 @@ async function main() {
   let thinkPicker = null;
   let sessionPicker = null;
   let promptLabel = "pyash> ";
-  let renderedInputLayout = { rowCount: 1, cursorRow: 0, cursorColumn: 0 };
+  let inputDecoder = null;
+  const saddleUi = createSaddleTerminalUi();
+  activeSaddleUi = saddleUi;
+  saddleUi.enter();
+  process.once("exit", restoreActiveSaddleUi);
 
   const saddleHousekeeper = () => createGpuHousekeeperAdapter({ baseUrl: config.housekeeperUrl });
+  let queueSnapshot = null;
   const sessionLabel = () => sessionFile
     ? path.basename(sessionFile, path.extname(sessionFile))
     : sessionName;
+  const renderStatus = ({ report = false } = {}) => {
+    const status = formatSaddleStatus({
+      mindName,
+      model,
+      backend,
+      housekeeperUrl: config.housekeeperUrl,
+      contextWindow,
+      thinkMode: thinkSetting?.value,
+      host,
+      cwd: config.cwd,
+      queue: queueSnapshot,
+      busy,
+      session: sessionLabel()
+    });
+    saddleUi.setStatus(status);
+    if (report) writeLine(status);
+  };
   const persistSelection = async ({ includeProfile = true } = {}) => {
     let nextState = {
       ...config.saddleState,
@@ -512,46 +521,33 @@ async function main() {
       writeLine(`model selection is active but could not be saved: ${error.message}`);
     }
   };
-  const showStatus = async () => {
-    const queue = isLocalModelBackend(backend)
+  const showStatus = async ({ report = false } = {}) => {
+    queueSnapshot = isLocalModelBackend(backend)
       ? await saddleHousekeeper().getQueue().catch(() => ({ available: false }))
       : await queueDepth(path.join(config.cwd, "world")).catch(() => ({ total: 0 }));
-    writeLine(formatSaddleStatus({
-      mindName,
-      model,
-      backend,
-      housekeeperUrl: config.housekeeperUrl,
-      contextWindow,
-      thinkMode: thinkSetting?.value,
-      host,
-      cwd: config.cwd,
-      queue,
-      busy,
-      session: sessionLabel()
-    }));
+    renderStatus({ report });
   };
-  const prompt = ({ clear = true, label = promptLabel } = {}) => {
+  const prompt = ({ label = promptLabel } = {}) => {
     promptLabel = label;
-    renderedInputLayout = renderInput({ value: "", cursor: 0 }, {
-      previousLayout: renderedInputLayout,
-      clear,
-      label
-    });
+    saddleUi.setInput(inputDecoder?.getState() ?? { value: "", cursor: 0 }, label);
   };
   const applyStrataContext = async (tokens) => {
     busy = true;
+    saddleUi.setBusy(true);
     writeLine(`Housekeeper is reconfiguring Strata to ${formatZaiContextWindow(tokens)} and restarting its lazy server...`);
     prompt({ clear: false, label: "restarting Strata> " });
     try {
       const result = await saddleHousekeeper().setStrataContext({ contextLength: tokens });
       contextWindow = Number(result.contextLength || tokens);
+      renderStatus();
       writeLine(`Strata context: ${formatZaiContextWindow(contextWindow)}; Housekeeper verified the restart; model remains unloaded until its next request`);
     } catch (error) {
       writeLine(`Strata context change failed: ${error.message}`);
     } finally {
       busy = false;
+      saddleUi.setBusy(false);
       promptLabel = "pyash> ";
-      prompt({ clear: false });
+      prompt();
     }
   };
   const getBackendOptions = () => listSaddleBackendOptions({
@@ -623,6 +619,7 @@ async function main() {
       configuredEffort: configValue("mind reasoning effort")
     });
     configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
+    renderStatus();
     try {
       await persistSelection({ includeProfile: false });
     } catch (error) {
@@ -793,8 +790,7 @@ async function main() {
         reason: "terminal exit"
       }).catch(() => {});
     }
-    if (process.stdin.isRaw) process.stdin.setRawMode(false);
-    process.stdin.pause();
+    restoreActiveSaddleUi();
     writeLine("saddle closed");
   };
   const submit = async (value) => {
@@ -858,6 +854,7 @@ async function main() {
       contextWindow = selected.tokens == null ? null : Number(selected.tokens);
       contextPicker = null;
       promptLabel = "pyash> ";
+      renderStatus();
       writeLine(backend === "zai"
         ? `context window: ${formatZaiContextWindow(contextWindow)} for ${model}; saved for Pyash and future Codex sessions`
         : `Ollama request context: ${contextWindow ? formatZaiContextWindow(contextWindow) : "provider default"} for ${model}; applies for this saddle session`);
@@ -874,6 +871,7 @@ async function main() {
       thinkSetting = normalizeSaddleThinkSelection(selected.value, backend);
       thinkPicker = null;
       promptLabel = "pyash> ";
+      renderStatus();
       writeLine(backend === "ollama"
         ? `thinking: ${thinkSetting.value} for ${model}`
         : `reasoning effort: ${thinkSetting.value} for ${model}`);
@@ -920,6 +918,7 @@ async function main() {
       });
       promptLabel = "pyash> ";
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
+      renderStatus();
       writeLine(`mind: ${mindName} | backend: ${backend} | model: ${model}`);
       await reportSelectionSaved();
       prompt({ clear: false });
@@ -986,6 +985,7 @@ async function main() {
       });
       mindModels.set(mindName, model);
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
+      renderStatus();
       writeLine(`mind: ${mindName} | model: ${model}`);
       await reportSelectionSaved();
       prompt({ clear: false });
@@ -1055,6 +1055,7 @@ async function main() {
         }
       }
       contextWindow = selected.tokens == null ? null : Number(selected.tokens);
+      renderStatus();
       writeLine(backend === "zai"
         ? `context window: ${formatZaiContextWindow(contextWindow)} for ${model}; saved for Pyash and future Codex sessions`
         : `Ollama request context: ${contextWindow ? formatZaiContextWindow(contextWindow) : "provider default"} for ${model}; applies for this saddle session`);
@@ -1083,6 +1084,7 @@ async function main() {
       }
       thinkSetting = selected;
       promptLabel = "pyash> ";
+      renderStatus();
       writeLine(backend === "ollama"
         ? `thinking: ${selected.value} for ${model}`
         : `reasoning effort: ${selected.value} for ${model}`);
@@ -1090,7 +1092,7 @@ async function main() {
       return;
     }
     if (input.trim() === "/status") {
-      await showStatus();
+      await showStatus({ report: true });
       prompt({ clear: false });
       return;
     }
@@ -1119,6 +1121,7 @@ async function main() {
         configuredEffort: configValue("mind reasoning effort")
       });
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
+      renderStatus();
       writeLine(`model: ${model}`);
       await reportSelectionSaved();
       prompt({ clear: false });
@@ -1128,6 +1131,7 @@ async function main() {
     if (hostMatch) {
       host = normalizeSaddleHost(hostMatch[1], host);
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
+      renderStatus();
       writeLine(`host: ${host}`);
       await reportSelectionSaved();
       prompt({ clear: false });
@@ -1135,13 +1139,13 @@ async function main() {
     }
 
     busy = true;
-    clearRenderedInput(renderedInputLayout);
+    saddleUi.setBusy(true);
     writeLine(`you> ${input}`);
-    writeLine(`working: ${model} via ${backend}${isLocalModelBackend(backend) ? " through GPU Housekeeper" : ""}`);
+    saddleUi.setActivity(`working: ${model} via ${backend}${isLocalModelBackend(backend) ? " through GPU Housekeeper" : ""}`);
     const stopProgress = startSaddleProgress({
       backend,
       model,
-      onProgress: writeLine
+      onProgress: (line) => saddleUi.setActivity(line)
     });
     const turnUsages = [];
     try {
@@ -1175,7 +1179,8 @@ async function main() {
       });
       const result = turn.result;
       const text = result?.ob?.text ?? result?.fromstate?.text ?? result?.value?.text ?? "";
-      writeLine(`saddle> ${String(text).trim() || "(no response text)"}`);
+      writeLine("saddle>");
+      writeMarkdown(String(text).trim() || "(no response text)");
       const evidence = formatSaddleCompletionEvidence(turn.assessment);
       if (evidence) writeLine(`${evidence}${turn.retryError ? ` retry failed: ${turn.retryError}` : ""}`);
       const usage = sumMindUsages(turnUsages);
@@ -1195,7 +1200,9 @@ async function main() {
     } finally {
       stopProgress();
       busy = false;
-      prompt({ clear: false });
+      saddleUi.setBusy(false);
+      saddleUi.setActivity("ready");
+      prompt();
     }
   };
 
@@ -1204,12 +1211,12 @@ async function main() {
   process.stdin.resume();
   process.on("SIGINT", () => { shutdown().catch(() => {}); });
   process.on("SIGTERM", () => { shutdown().catch(() => {}); });
+  activeSaddleResizeHandler = () => saddleUi.draw();
+  process.stdout.on("resize", activeSaddleResizeHandler);
 
-  writeLine("Pyash coding saddle");
-  writeLine("Enter submits; Shift+Enter or Ctrl+J inserts a newline; Ctrl+C interrupts; Ctrl+D exits.");
   await showStatus();
   writeLine(`model selection source: ${config.selectionSource}`);
-  const decoder = createSaddleInputDecoder({
+  inputDecoder = createSaddleInputDecoder({
     onSubmit: submit,
     onCancel: async () => {
       if (!busy) return;
@@ -1222,18 +1229,20 @@ async function main() {
       writeLine("interrupt requested");
     },
     onExit: () => { shutdown().catch(() => {}); },
+    onScroll: (direction) => saddleUi.scrollBy(-direction),
     onChange: (state) => {
       if (!busy && !closing) {
-        renderedInputLayout = renderInput(state, { previousLayout: renderedInputLayout, label: promptLabel });
+        saddleUi.setInput(state, promptLabel);
       }
     }
   });
-  process.stdin.on("data", (chunk) => decoder.feed(chunk));
+  process.stdin.on("data", (chunk) => inputDecoder.feed(chunk));
   prompt();
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch((error) => {
+    restoreActiveSaddleUi();
     process.stderr.write(`${String(error?.stack ?? error)}\n`);
     process.exitCode = 1;
   });

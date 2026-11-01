@@ -722,7 +722,8 @@ export function createSaddleInputDecoder({
   onSubmit,
   onCancel,
   onExit,
-  onChange
+  onChange,
+  onScroll
 } = {}) {
   const state = { value: "", cursor: 0 };
   let escape = "";
@@ -775,6 +776,14 @@ export function createSaddleInputDecoder({
         state.value = `${state.value.slice(0, state.cursor)}${state.value.slice(state.cursor + 1)}`;
         changed();
       }
+      return;
+    }
+    if (sequence === "\u001b[5~") {
+      onScroll?.(-1);
+      return;
+    }
+    if (sequence === "\u001b[6~") {
+      onScroll?.(1);
     }
   };
   const handleChar = (char) => {

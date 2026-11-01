@@ -87,14 +87,15 @@ test("coding saddle supports cursor editing and control actions", () => {
   const events = [];
   const decoder = createSaddleInputDecoder({
     onCancel: () => events.push("cancel"),
-    onExit: () => events.push("exit")
+    onExit: () => events.push("exit"),
+    onScroll: (direction) => events.push(`scroll:${direction}`)
   });
 
   decoder.feed("abc\u001b[D\u001b[D\u007f");
   assert.equal(decoder.getState().value, "bc");
   assert.equal(decoder.getState().cursor, 0);
-  decoder.feed("\u0003\u0004");
-  assert.deepEqual(events, ["cancel", "exit"]);
+  decoder.feed("\u001b[5~\u001b[6~\u0003\u0004");
+  assert.deepEqual(events, ["scroll:-1", "scroll:1", "cancel", "exit"]);
 });
 
 test("coding saddle shows elapsed progress and explicit tool event labels", () => {
