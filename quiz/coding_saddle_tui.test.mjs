@@ -100,3 +100,15 @@ test("coding saddle screen keeps progress fixed, scrolls conversation, resizes, 
   assert.match(writes.at(-1), /\u001b\[\?25h\u001b\[\?1049l/u);
   assert.equal(ui.getState().active, false);
 });
+
+test("coding saddle can clear stale transcript before restoring another session", () => {
+  const output = { columns: 40, rows: 10, isTTY: true, write() {} };
+  const ui = createSaddleTerminalUi({ output, color: false });
+  ui.enter();
+  ui.writeLine("previous session message");
+  ui.scrollBy(1);
+  ui.clearHistory();
+  assert.equal(ui.getState().itemCount, 0);
+  assert.equal(ui.getState().scrollOffset, 0);
+  ui.exit();
+});

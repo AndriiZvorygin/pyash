@@ -389,6 +389,11 @@ export function createSaddleTerminalUi({ output = process.stdout, maxItems = 400
     writeMarkdown(text = "") {
       append("markdown", String(text));
     },
+    clearHistory() {
+      items.length = 0;
+      scrollOffset = 0;
+      draw();
+    },
     setStatus(value = "") {
       status = stripTerminalControlSequences(value);
       draw();

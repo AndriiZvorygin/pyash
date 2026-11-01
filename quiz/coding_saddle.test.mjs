@@ -45,7 +45,60 @@ import {
   saddleToolEventLabel,
   startSaddleProgress
 } from "../program/agent/coding_saddle.mjs";
-import { dischargeSaddleModel, prepareSaddle, runSaddleTurn } from "../command/pyash_saddle.mjs";
+import {
+  dischargeSaddleModel,
+  loadSaddleSessionHistory,
+  prepareSaddle,
+  renderSaddleSessionHistory,
+  runSaddleTurn
+} from "../command/pyash_saddle.mjs";
+
+test("coding saddle reloads named and explicitly selected session history", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-history-"));
+  const sessionDir = path.join(root, "session");
+  const dateCompact = buildSessionNamePrefix().slice(0, 8);
+  const dailyName = buildSessionNameForDate({ baseName: "coding", dateCompact });
+  const dailyFile = path.join(sessionDir, `${dailyName}.pya`);
+  const selectedFile = path.join(sessionDir, "project-review.pya");
+  const asChat = (name, content) => sentenceToPyash({
+    su: { name }, ob: { text: content }, be: "answer", mood: "ya"
+  });
+  await fs.mkdir(sessionDir, { recursive: true });
+  await fs.writeFile(dailyFile, [
+    asChat("user", "Please inspect the config."),
+    asChat("agent", "I found the setting in config.pya.")
+  ].join("\n") + "\n", "utf8");
+  await fs.writeFile(selectedFile, [
+    asChat("user", "Review this branch."),
+    asChat("agent", "The branch is ready for tests.")
+  ].join("\n") + "\n", "utf8");
+
+  try {
+    const daily = await loadSaddleSessionHistory({ agentHouse: root, sessionName: "coding" });
+    assert.deepEqual(daily.messages, [
+      { role: "user", content: "Please inspect the config." },
+      { role: "assistant", content: "I found the setting in config.pya." }
+    ]);
+
+    const selected = await loadSaddleSessionHistory({ agentHouse: root, sessionFile: selectedFile });
+    const rendered = [];
+    renderSaddleSessionHistory({
+      clearHistory() { rendered.push(["clear"]); },
+      writeLine(text) { rendered.push(["line", text]); },
+      writeMarkdown(text) { rendered.push(["markdown", text]); }
+    }, selected.messages, "project-review");
+    assert.deepEqual(rendered, [
+      ["clear"],
+      ["line", "session: project-review | restored 2 saved messages"],
+      ["line", "you> Review this branch."],
+      ["line", "saddle>"],
+      ["markdown", "The branch is ready for tests."],
+      ["line", "--- end of saved history ---"]
+    ]);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
 
 test("coding saddle submits Enter and keeps newline input separate", async () => {
   const submitted = [];

@@ -13,6 +13,8 @@ import { resolveConfigText } from "../program/configure/env.mjs";
 import {
   ensureAgentDirs,
   listSessionFiles,
+  readSessionMessages,
+  readSessionMessagesWithFallback,
   resolveAgentHouse
 } from "../program/agent/session.mjs";
 import {
@@ -310,6 +312,37 @@ export async function runSaddleTurn({
   }));
 }
 
+export async function loadSaddleSessionHistory({
+  agentHouse,
+  sessionName = SESSION_NAME,
+  sessionFile = "",
+  historyWindow = 50
+} = {}) {
+  if (sessionFile) return readSessionMessages({ sessionFile, historyWindow });
+  return readSessionMessagesWithFallback({
+    sessionDir: path.join(agentHouse, "session"),
+    baseName: sessionName,
+    historyWindow
+  });
+}
+
+export function renderSaddleSessionHistory(saddleUi, messages = [], session = "", detail = "") {
+  const history = Array.isArray(messages) ? messages : [];
+  saddleUi.clearHistory();
+  saddleUi.writeLine(`session: ${session || SESSION_NAME} | restored ${history.length} saved messages${detail ? ` | ${detail}` : ""}`);
+  for (const message of history) {
+    if (message?.role === "assistant") {
+      saddleUi.writeLine("saddle>");
+      saddleUi.writeMarkdown(String(message.content ?? ""));
+    } else if (message?.role === "user") {
+      saddleUi.writeLine(`you> ${String(message.content ?? "")}`);
+    } else if (message?.role === "tool") {
+      saddleUi.writeLine(`[tool] ${String(message.content ?? "")}`);
+    }
+  }
+  if (history.length) saddleUi.writeLine("--- end of saved history ---");
+}
+
 export async function dischargeSaddleModel(model, backend, {
   housekeeperUrl = "",
   cwd = process.cwd(),
@@ -486,6 +519,20 @@ async function main() {
   const sessionLabel = () => sessionFile
     ? path.basename(sessionFile, path.extname(sessionFile))
     : sessionName;
+  const restoreSessionHistory = async ({ detail = "" } = {}) => {
+    try {
+      const replay = await loadSaddleSessionHistory({
+        agentHouse: config.agentHouse,
+        sessionName,
+        sessionFile,
+        historyWindow: 50
+      });
+      renderSaddleSessionHistory(saddleUi, replay.messages, sessionLabel(), detail);
+    } catch (error) {
+      saddleUi.clearHistory();
+      writeLine(`session history unavailable for ${sessionLabel()}: ${error.message}`);
+    }
+  };
   const renderStatus = ({ report = false } = {}) => {
     const status = formatSaddleStatus({
       mindName,
@@ -626,6 +673,7 @@ async function main() {
       savedEffort: saved.reasoningEffort,
       configuredEffort: configValue("mind reasoning effort")
     });
+    await restoreSessionHistory();
     configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
     renderStatus();
     try {
@@ -1226,7 +1274,7 @@ async function main() {
   process.stdout.on("resize", activeSaddleResizeHandler);
 
   await showStatus();
-  writeLine(`model selection source: ${config.selectionSource}`);
+  await restoreSessionHistory({ detail: `model selection source: ${config.selectionSource}` });
   inputDecoder = createSaddleInputDecoder({
     onSubmit: submit,
     onCancel: async () => {
