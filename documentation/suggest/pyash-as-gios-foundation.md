@@ -232,6 +232,15 @@ the cycle does not.
 conceptual — it is a missing driver, and the pieces it would drive are
 already in place.
 
+**Stage-7 acceptance criterion:** the driver is evidenced only when it
+completes a full mutation → evaluate → select → keep cycle in which (a) at
+least one mutation is *rejected* by the quiz gate — proving selection
+pressure, not just mutation logging — and (b) one accepted mutation is
+traceable to a specific quiz failure it fixed, with the diff and quiz
+evidence retained. "It ran and the suite stayed green" is necessary but not
+sufficient: a loop that only ever accepts is indistinguishable from a
+mutation logger.
+
 ## The four gates
 
 These are the four places where the chain breaks. They are ordered by how
@@ -291,6 +300,12 @@ originates goals over an in-memory store will originate goals it cannot keep
 or check, and over a half-open vocabulary will originate goals it cannot
 express.
 
+The gate-3/gate-2 ordering is less binding than it looks: the compositional
+grid detector dissolves the circularity at small scale by sourcing goal
+candidates from the vocabulary's own named missing cells, so goal formation
+and gap-finding are the same act and neither side of the ordering argument
+has to concede.
+
 ### Gate 4 — Backend parity
 
 **Measured:** all seven `documentation/parity-checklist.md` gates are `done`,
@@ -326,7 +341,8 @@ Ordered by what unblocks the most.
 3. **Ranking-based goal formation.** Close `curator.mjs:140` by adding a
    ranked candidate source, not a free-form generator. The proposal in
    `documentation/suggest/self-chosen-work-candidates.md` spells out the
-   contract.
+   contract. Grid-detector-first sourcing is the resolution to review Q3,
+   so this item need not wait on the gate-2/gate-3 ordering debate.
 4. **The fill in the compositional grid.** Six named cells. Small, bounded,
    checkable by the validator that already names them.
 5. **A declared parity rule.** A list, not a refactor.
