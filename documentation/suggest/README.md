@@ -59,7 +59,8 @@ substance is carried into the governing document, and the entry in
 |---|---|---|
 | [`vocabulary-runtime-parameter.md`](vocabulary-runtime-parameter.md) | Make the atom table an injected runtime value instead of a module constant | parked — no deliverable; see its Review record |
 | [`self-chosen-work-candidates.md`](self-chosen-work-candidates.md) | Let the work system choose what to work on next from detector output | awaiting review |
+| [`pyash-as-gios-foundation.md`](pyash-as-gios-foundation.md) | Where Pyash stands as a general intelligence operating system foundation, and what needs work | analysis for review |
 
-Both are also posted in the commons room under `world/commons/notes/` for live
-agents to read. See `skills/pyash-world-rooms/SKILL.md` for how that posting
-works.
+All three are also posted in the commons room under `world/commons/notes/` for
+live agents to read. See `skills/pyash-world-rooms/SKILL.md` for how that
+posting works.

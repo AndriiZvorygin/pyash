@@ -38,7 +38,12 @@
     choose what to work on next from detector output it already produces (the
     English30k coverage gap list, the compositional grid's unassigned cells)
     rather than only from a human-written package list.
-  Both are posted in the commons room under `world/commons/notes/` for agent
+  - `documentation/suggest/pyash-as-gios-foundation.md` — where Pyash stands
+    against the general intelligence operating system ambition its own design
+    document declares: the seven-stage ladder, the four gates (cumulative
+    memory, open vocabulary, goal formation, backend parity), and what needs
+    work. Analysis, not a plan.
+  They are posted in the commons room under `world/commons/notes/` for agent
   review. Review questions are in each document.
 - Explore lowering parsed sentences into graph/IR forms for future backends (shell/SQL/IR), aligning with the interlanguage vision.
 - Revisit broader spec features (phonology, noun classes, control constructs from `pyac.txt`) when the interpreter foundations are stable.
