@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { buildProgram } from "../program/program.mjs";
+import { deriveSignatureFromCall } from "../program/bridge/signature/derive.mjs";
+import { joinSignatureWords } from "../program/bridge/signature/normalize.mjs";
+import { signatures as gpuSignatures } from "../program/verbs/gpu.mjs";
 import { buildEnglishWordNetIndex } from "../program/library/translation/english_wordnet.mjs";
 import {
   applyEnglishWordNetSenseLinkResponse,
@@ -468,6 +472,8 @@ test("WordNet linker prompt stays bounded to supplied senses and per-sense choic
   });
   const prompt = buildEnglishWordNetSenseLinkPrompt({ records, inventory });
   assert.match(prompt, /bounded Pyash WordNet sense-linking worker/u);
+  assert.match(prompt, /same meaning as the synset definition/u);
+  assert.match(prompt, /WordNet examples after semicolons are omitted/u);
   assert.match(prompt, /A sense row with no choices cannot be accepted/u);
   assert.match(prompt, /For reject or uncertain, set targetEnglish to an empty string/u);
   assert.doesNotMatch(prompt, /omit targetEnglish/u);
@@ -477,6 +483,7 @@ test("WordNet linker prompt stays bounded to supplied senses and per-sense choic
   assert.doesNotMatch(prompt, /AUTHORITATIVE ENGLISH ANCHOR INVENTORY/u);
   assert.doesNotMatch(prompt, /AUTHORITATIVE PYASH GRAMMAR INVENTORY/u);
   assert.doesNotMatch(prompt, /SOURCE CONTEXT BY TERM/u);
+  assert.doesNotMatch(prompt, /original source sentence supports/u);
   assert.doesNotMatch(prompt, /"pyash":"xyek"/u);
   assert.doesNotMatch(prompt, /ollama/u);
   assert.ok(prompt.length <= 12000);
@@ -967,6 +974,9 @@ test("WordNet linker configuration is durable Pyash workflow data", async () => 
     model: "qwen3.5:9b",
     maxBatch: 200,
     maxDutySenses: 4,
+    modelSweepMode: "pilot",
+    modelSweepPilotLimit: 12,
+    modelSweepPilotMultipleChoiceLimit: 2,
     promptMaxChars: 12000,
     promptMaxTokens: 3900,
     maxOutputTokens: 1024,
@@ -1032,6 +1042,44 @@ test("default WordNet linker submitter uses the existing future GPU duty", async
   assert.deepEqual(spec.format.properties.senses.items.required, ["id", "status", "targetEnglish", "rationale"]);
   assert.equal(spec.format.properties.senses.items.properties.targetEnglish.type, "string");
   assert.equal(spec.options.num_predict, 1024);
+});
+
+test("WordNet linker pins its configured model in the GPU mind job spec", async () => {
+  let sentence = "";
+  const submit = createQueuedMindEnglishWordNetSenseLinkSubmitter({
+    parse: (value) => value,
+    model: "qwen3.5:9b",
+    interpret: async (value) => {
+      sentence = value;
+      return { ob: { text: "queued" } };
+    }
+  });
+  const response = await submit({ handleId: "english-wordnet-link-qwen", prompt: "choose an anchor" });
+  assert.equal(response.status, "queued");
+  assert.match(sentence, /vyah start future be gpu mind do/u);
+  assert.doesNotMatch(sentence, /to name "qwen3\.5:9b"/u);
+  const encodedSpec = sentence.match(/ob text (".*") vyah start future be gpu mind do/u)?.[1];
+  const spec = JSON.parse(JSON.parse(encodedSpec));
+  assert.equal(spec.model, "qwen3.5:9b");
+  const sentenceObject = buildProgram(sentence).sentences[0];
+  const derivedSignature = joinSignatureWords(deriveSignatureFromCall(sentenceObject));
+  assert.ok(gpuSignatures.some(({ signatureWords }) => joinSignatureWords(signatureWords) === derivedSignature));
+});
+
+test("WordNet linker prompt uses only the definition before gloss examples", () => {
+  const prompt = buildEnglishWordNetSenseLinkPrompt({
+    records: [{
+      id: "sense-definition-only",
+      source: "n:example",
+      pos: "n",
+      synset: "example",
+      lemmas: ["sample"],
+      gloss: "a thing characteristic of its kind; misleading example about an unrelated sense",
+      candidates: [{ target: "sample", evidence: "same-synset lemma with existing atom coverage" }]
+    }]
+  });
+  assert.match(prompt, /a thing characteristic of its kind/u);
+  assert.doesNotMatch(prompt, /misleading example about an unrelated sense/u);
 });
 
 test("default WordNet linker factory resolves the existing Pyash runtime adapters", async () => {

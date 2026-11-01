@@ -98,6 +98,29 @@ echo $! > artifacts/wordnet-sense-sweep.pid
 
 Inspect `manifest.pya` and the batch files with `node command/pya_to_json.mjs <file> --pretty`.
 
+The Qwen anchor-decision stage is `node command/wordnet_sense_link_sweep.mjs`. Its Pyash config
+starts in `pilot` mode with 12 records: it includes up to two multi-choice rows and samples
+single-choice rows across parts of speech by descending English30k frequency. Switch
+`model-sweep-mode` in `english_wordnet_linker.pya` to `full`
+only after reviewing the pilot. The command submits only
+`needs-sense-choice` records through the configured GPU Housekeeper, explicitly selects the
+`model` from `english_wordnet_linker.pya`, and awaits each bounded duty before submitting the next.
+The model sees a WordNet definition with example clauses removed and only the existing anchors
+allowed for that synset. It can accept one supplied anchor, reject the choices, or leave the row
+uncertain; it cannot generate Pyash sequences or compounds. Completed decisions are checkpointed
+as `.pya` batch artifacts and resume without repeating completed duties. The pilot records a
+collision-checked activation preview without changing the active bridge map. In `full` mode,
+collision-free accepted links are added to the bridge map with contextual certainty; rejected,
+uncertain, and colliding rows remain in the model-stage artifacts for later compound work. The
+pilot's completed batch checkpoints lead the full run, so those model duties are reused.
+Each model batch artifact includes the exact submitted prompt beside its decisions for review.
+
+Open English WordNet 2025 JSON supplies synsets and relations but no `tag_count`, and its lexical
+entry array order is not a reliable frequency rank. Princeton WordNet's `index.sense` provides
+`sense_number` and `tag_cnt` from semantically tagged concordance texts; numbered order is usually
+most-to-least frequent for tagged senses, while untagged senses have no dependable frequency
+order. These counts are corpus evidence, not universal usage frequency ([sense index format](https://wordnet.princeton.edu/documentation/senseidx5wn), [sense ordering notes](https://wordnet.princeton.edu/documentation/wndb5wn)). Use a versioned, explicit frequency resource when choosing a default sense for an atom; do not infer frequency from OEWN JSON array order.
+
 Callers that have loaded the derived compound catalog pass its accepted records explicitly;
 candidate-closed and rejected compounds are excluded from the authoritative inventory.
 Compound and atom relationships are derived by

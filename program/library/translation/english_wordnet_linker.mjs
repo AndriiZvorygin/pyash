@@ -82,6 +82,11 @@ function bounded(value, maxChars) {
   return valueText.length > limit ? `${valueText.slice(0, Math.max(0, limit - 1))}…` : valueText;
 }
 
+function definitionOnly(value, maxChars = 240) {
+  const definition = text(value).split(/\s*;\s*/u, 1)[0];
+  return bounded(definition, maxChars);
+}
+
 function matchingSourceTerms(lemmas, sourceTerms) {
   const rows = Array.isArray(sourceTerms) ? sourceTerms : [];
   return rows.filter((term) => {
@@ -106,7 +111,7 @@ function compactSense(record, context) {
     word: bounded(sourceTerms[0], 32),
     s: text(record?.source),
     p: text(record?.pos),
-    g: bounded(record?.gloss, 56),
+    g: definitionOnly(record?.gloss),
     l: (record?.lemmas ?? []).slice(0, 2).map((lemma) => bounded(lemma, 24)),
     sourceSentences: [...new Set(sentences)].slice(0, 3),
     choices: (record?.candidates ?? []).filter((candidate) => candidate?.selectable !== false).slice(0, 8).map((candidate) => ({
@@ -721,10 +726,12 @@ export function buildEnglishWordNetSenseLinkPrompt({
   const senseRows = records.map((record) => JSON.stringify(compactSense(record, context))).join("\n");
   const fixed = [
     "You are the bounded Pyash WordNet sense-linking worker.",
-    "For each supplied WordNet sense, decide whether its source sentence supports one of the choices on that same row.",
-    "Use the original source sentence, gloss, lemmas, and choice evidence as the only decision context.",
-    "Accept only the sense and choice that best fits the source sentence; reject unrelated senses.",
-    "Use uncertain only when the supplied sentence leaves two or more choices genuinely plausible.",
+    "For each supplied WordNet synset, decide whether one listed English anchor has the same meaning as the synset definition.",
+    "The WordNet definition is the meaning being linked. Any source sentence shown is optional supporting context.",
+    "WordNet examples after semicolons are omitted; do not infer a different sense from example sentences.",
+    "For a single choice, accept it only when that anchor is semantically equivalent to the definition.",
+    "For multiple choices, select the best equivalent anchor; reject all choices when none preserves the definition.",
+    "Use uncertain only when the supplied definition and choices do not support a reliable decision.",
     "A sense row with no choices cannot be accepted; use reject or uncertain.",
     "Choose targetEnglish only from the choices listed on that same sense row.",
     "For an accepted link, targetEnglish must exactly match one listed choice.",
@@ -740,8 +747,8 @@ export function buildEnglishWordNetSenseLinkPrompt({
       "Return every supplied sense id exactly once and include targetEnglish on every row; use an empty string for reject or uncertain. Never return Pyash tokens."
     ] : []),
     `SOURCE: ${text(source) || "Open English WordNet"}`,
-    "Each row contains only one source word, its original source sentence, its WordNet sense, and its allowed choices.",
-    "WORDNET SENSES AND PER-SENSE CHOICES:",
+    "Each row contains one WordNet sense, its definition and lemmas, optional source sentences, and only its allowed anchor choices.",
+    "WORDNET SENSES AND PER-SENSE ANCHOR CHOICES:",
     senseRows
   ];
   const budget = Math.max(1000, Math.trunc(Number(maxChars) || ENGLISH_WORDNET_LINKER_PROMPT_MAX_CHARS));
@@ -1293,6 +1300,9 @@ export function parseEnglishWordNetLinkerConfig(source) {
     model: metadata.model || DEFAULT_TRANSLATION_MODEL,
     maxBatch: Math.max(1, Math.trunc(Number(metadata["max-batch"]) || ENGLISH_WORDNET_LINKER_DEFAULT_BATCH_SIZE)),
     maxDutySenses: Math.max(1, Math.trunc(Number(metadata["max-duty-senses"]) || ENGLISH_WORDNET_LINKER_DEFAULT_DUTY_SIZE)),
+    modelSweepMode: metadata["model-sweep-mode"] || "pilot",
+    modelSweepPilotLimit: Math.max(1, Math.trunc(Number(metadata["model-sweep-pilot-limit"]) || 12)),
+    modelSweepPilotMultipleChoiceLimit: Math.max(0, Math.trunc(Number(metadata["model-sweep-pilot-multiple-choice-limit"]) || 2)),
     promptMaxChars: Math.max(1000, Math.trunc(Number(metadata["prompt-max-chars"]) || ENGLISH_WORDNET_LINKER_PROMPT_MAX_CHARS)),
     promptMaxTokens: Math.max(100, Math.trunc(Number(metadata["prompt-max-tokens"]) || ENGLISH_WORDNET_LINKER_PROMPT_MAX_TOKENS)),
     maxOutputTokens: Math.max(100, Math.trunc(Number(metadata["max-output-tokens"]) || ENGLISH_WORDNET_LINKER_DEFAULT_OUTPUT_TOKENS)),

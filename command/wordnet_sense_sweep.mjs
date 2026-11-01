@@ -107,7 +107,7 @@ async function writeManifest(directory, manifest) {
   await atomicWrite(join(directory, "manifest.pya"), renderEnglishWordNetSweepManifestPya(manifest));
 }
 
-export async function runWordNetSenseSweep({ artifactRoot = ARTIFACT_ROOT } = {}) {
+export async function runWordNetSenseSweep({ artifactRoot = ARTIFACT_ROOT, includeRecords = false } = {}) {
   const [resources, compounds, linkerSource] = await Promise.all([
     loadDefaultEnglishSentenceResources(),
     loadCoverage(),
@@ -117,6 +117,8 @@ export async function runWordNetSenseSweep({ artifactRoot = ARTIFACT_ROOT } = {}
   const compoundIndex = compoundCoverageIndex(compounds.accepted);
   const resolveWord = (word) => compoundIndex.get(normalized(word))
     ?? lookupEnglish30kCoverage(resources.coverage, word);
+  const frequencyRankByTerm = new Map(resources.source.rows.map((row) => [normalized(row.word), row.rank]));
+  const rankForEnglish = (word) => frequencyRankByTerm.get(normalized(word)) ?? Number.POSITIVE_INFINITY;
   const sourceHash = resources.wordnet.sourceHash;
   const coverageIdentity = {
     english30kHash: resources.source.sourceHash,
@@ -221,7 +223,8 @@ export async function runWordNetSenseSweep({ artifactRoot = ARTIFACT_ROOT } = {}
       batchCount: manifest.batchCount,
       counts: manifest.counts,
       automaticLinks: join(directory, "automatic-links.pya"),
-      manifest: manifestPath
+      manifest: manifestPath,
+      ...(includeRecords ? { records: classified.records, resolveWord, rankForEnglish, config } : {})
     };
   } catch (error) {
     if (manifest) {

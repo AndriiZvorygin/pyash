@@ -78,6 +78,19 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
 - Do not bulk-link every WordNet synset. Pilot the reusable linker on selected
   senses from the working translation and a few contrasting cases, then
   inspect accepted and unresolved records before expanding scope.
+- For the bounded catalog workflow, `node command/wordnet_sense_link_sweep.mjs`
+  processes only `needs-sense-choice` rows with existing selectable anchors. It
+  uses the configured model through Housekeeper, stores per-batch `.pya`
+  checkpoints, and activates only accepted links that pass bridge collision
+  checks. Senses with no selectable anchor remain candidates for atom/compound
+  work; the linker never creates a compound.
+- Do not infer atom sense frequency from Open English WordNet JSON entry-array
+  order. That source has no `tag_count`; atom defaults need an explicit ranked
+  sense resource. Princeton WordNet's `index.sense` has `tag_cnt` values from
+  semantic concordances; tagged senses are usually ranked by those counts, but
+  untagged senses have no reliable rank and the counts are not universal
+  frequency measurements. Preserve the resource version and counts when using
+  them for atom defaults.
 
 ## Update anchors quickly
 

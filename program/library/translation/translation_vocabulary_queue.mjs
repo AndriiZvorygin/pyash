@@ -770,6 +770,7 @@ const DEFAULT_TRANSLATION_VOCABULARY_RESPONSE_FORMAT = {
 export function createQueuedMindTranslationVocabularySubmitter({
   interpret,
   parse,
+  model = "",
   responseFormat = DEFAULT_TRANSLATION_VOCABULARY_RESPONSE_FORMAT,
   maxOutputTokens = TRANSLATION_VOCABULARY_MAX_OUTPUT_TOKENS
 } = {}) {
@@ -780,9 +781,11 @@ export function createQueuedMindTranslationVocabularySubmitter({
   }
   return async ({ handleId, prompt, responseFormat: requestedResponseFormat, maxOutputTokens: requestedMaxOutputTokens } = {}) => {
     const outputTokens = Math.max(1, Math.trunc(Number(requestedMaxOutputTokens ?? maxOutputTokens) || TRANSLATION_VOCABULARY_MAX_OUTPUT_TOKENS));
+    const selectedModel = text(model);
     const jobSpec = {
       kind: "ollama-generate",
       prompt: String(prompt ?? ""),
+      ...(selectedModel ? { model: selectedModel } : {}),
       stream: false,
       think: false,
       format: requestedResponseFormat ?? responseFormat,
