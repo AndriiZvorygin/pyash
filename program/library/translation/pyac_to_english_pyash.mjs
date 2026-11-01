@@ -50,6 +50,7 @@ const PYASH_LEMMA_INDEX = buildEnglishLemmaIndex({
 });
 const NOMINAL_ENGLISH_SURFACES = new Map();
 const nominalEnglishCandidates = new Map();
+const ENGLISH_ASPECT_MARKERS = new Set();
 for (const entry of PYASH_LEMMA_INDEX.entries) {
   if (entry.kind === "identity" || entry.lemma !== entry.surface || !entry.canonicalEnglish) continue;
   const candidates = nominalEnglishCandidates.get(entry.canonicalEnglish) ?? new Set();
@@ -67,6 +68,9 @@ try {
   const grammarSource = readFileSync(new URL("./english_grammar.pya", import.meta.url), "utf8");
   const grammarCatalog = parseEnglishGrammarCatalog(grammarSource);
   for (const entry of grammarCatalog.entries) {
+    if (entry.kind === "aspect-marker") {
+      for (const pya of entry.pyashSequence) ENGLISH_ASPECT_MARKERS.add(pya);
+    }
     for (const pya of entry.pyashSequence) {
       if (!ENGLISH_GRAMMAR_SURFACES.has(pya)) ENGLISH_GRAMMAR_SURFACES.set(pya, entry.surface);
     }
@@ -525,7 +529,7 @@ function regularThirdPerson(lemma) {
   return `${lemma}s`;
 }
 
-function inflectVerb(parts, { thirdPerson = false } = {}) {
+function inflectVerb(parts, { thirdPerson = false, includeAspectSurface = true } = {}) {
   parts = collapseVliwCompounds(parts);
   const root = parts.find((part) => part.kind === "root");
   if (!root) return "something";
@@ -558,7 +562,12 @@ function inflectVerb(parts, { thirdPerson = false } = {}) {
       ? surface
       : lemma;
   }
-  return markers.has("ra2") ? `often ${verb}` : verb;
+  if (!includeAspectSurface) return verb;
+  const aspects = [...markers]
+    .filter((marker) => ENGLISH_ASPECT_MARKERS.has(marker))
+    .map((marker) => englishGrammarSurface(marker))
+    .filter(Boolean);
+  return [...new Set([...aspects, verb])].join(" ");
 }
 
 function isLexicalPart(part) {
@@ -901,10 +910,15 @@ export function renderEnglishPyash(sentence, tokens, decoded, glosses = new Map(
     if (!content) return [];
     return phrase.case === "ka" ? ["ob", content] : [content];
   });
+  const verbParts = parts.trailing.map((token) => decodedPart(token, glosses))
+    .filter((part) => part.kind !== "mood");
+  const aspectSurface = [...new Set(verbParts
+    .filter((part) => part.kind === "grammar" && ENGLISH_ASPECT_MARKERS.has(part.pya))
+    .map((part) => englishGrammarSurface(part.pya, part.english))
+    .filter(Boolean))].join(" ");
   const verb = nominalPredicate
     ? "is"
-    : inflectVerb(parts.trailing.map((token) => decodedPart(token, glosses))
-    .filter((part) => part.kind !== "mood"));
+    : inflectVerb(verbParts, { includeAspectSurface: false });
   const negative = decoded.tokens.some((token) => token.pya === "no");
   const renderedVerb = negative ? `not ${verb}` : verb;
   const rendered = zeroVerb
@@ -920,7 +934,7 @@ export function renderEnglishPyash(sentence, tokens, decoded, glosses = new Map(
       ))
       .filter(Boolean)
       .join(" ")}, ${rendered.join(" ")}`;
-  return finishEnglishPyash(mood, body);
+  return finishEnglishPyash([mood, aspectSurface].filter(Boolean).join(" "), body);
 }
 
 function renderEnglish(sentence, tokens, decoded, glosses) {

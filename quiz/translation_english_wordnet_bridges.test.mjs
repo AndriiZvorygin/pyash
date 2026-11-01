@@ -13,6 +13,8 @@ import {
 } from "../program/library/translation/english_sentence.mjs";
 import { buildEnglishGrammarIndex, loadEnglishGrammarCatalog } from "../program/library/translation/english_grammar.mjs";
 import { buildEnglishWordNetIndex } from "../program/library/translation/english_wordnet.mjs";
+import { decodePhraseVliw, lowerSentencePhraseVliw } from "../program/library/vliw/phrase.mjs";
+import { renderEnglishFromVliw } from "../program/library/translation/pyac_to_english_pyash.mjs";
 
 test("WordNet bridges use one native Pyash row per sense", async () => {
   const catalog = await loadEnglishWordNetBridges();
@@ -33,21 +35,21 @@ test("WordNet bridges use one native Pyash row per sense", async () => {
   });
   assert.deepEqual(catalog.entries.find((entry) => entry.source === "v:00621282-v"), {
     source: "v:00621282-v",
-    target: "confuse",
+    target: "identity-mix",
     targetPartOfSpeech: "v",
     certainty: "contextual",
-    evidence: "Open English WordNet 2025 mistake-one-thing-for-another sense; Chinese 混同 treats distinct things as the same; Pyash compound identity mixed uses hdif mrat"
+    evidence: "Open English WordNet 2025 mistake-one-thing-for-another sense; Chinese 混同 treats distinct things as the same; Pyash compound identity-mix uses hdif mrat"
   });
 });
 
-test("the selected confuse sense lowers through the identity-mix compound", async () => {
+test("the selected sense projects identity-mix beside mood and preserves its Pyac sequence", async () => {
   const bridges = buildEnglishWordNetSenseBridgeIndex([{
     id: "english-wordnet-sense-confuse-identity-mix",
     pos: "v",
     synset: "00621282-v",
     status: "accepted-llm",
     link: {
-      target: "confuse",
+      target: "identity-mix",
       pyashSequence: ["hdif", "mrat"],
       targetPartOfSpeech: "v",
       certainty: "contextual",
@@ -60,10 +62,20 @@ test("the selected confuse sense lowers through the identity-mix compound", asyn
   );
   const token = result.tokens.find((candidate) => candidate.surface === "confused");
   assert.equal(token?.coverageType, "semantic-wordnet");
-  assert.equal(token?.lemma, "confuse");
+  assert.equal(token?.lemma, "identity mix");
   assert.deepEqual(token?.pyashSequence, ["hdif", "mrat"]);
   assert.deepEqual(result.verbPhrase.pyashSequence, ["hdif", "mrat", "pyoh", "ra2"]);
   assert.equal(result.verbPhrase.mood, "tseh");
+
+  const lowered = lowerSentencePhraseVliw(result.sentence);
+  assert.deepEqual(
+    decodePhraseVliw(lowered.vectors).tokens.slice(-5).map((part) => part.pya),
+    ["hdif", "mrat", "pyoh", "ra2", "tseh"]
+  );
+  assert.equal(
+    renderEnglishFromVliw(lowered.vectors).englishPyash,
+    "can often su love be identity-mix with other emotion."
+  );
 });
 
 test("object of thought or feeling maps to the generic thing anchor", async () => {

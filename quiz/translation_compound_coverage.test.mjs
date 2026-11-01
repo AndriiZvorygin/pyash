@@ -142,19 +142,20 @@ test("curated prayer constructions enter the shared compound catalog", async () 
   assert.match(include.evidence, /contain-within sense of include/u);
 });
 
-test("Chinese 混同 lowers to the head-final identity-mix compound for the confuse sense", async () => {
+test("Chinese 混同 lowers to the head-final identity-mix compound", async () => {
   const curated = await loadCuratedCompoundDecompositions();
-  const confuse = curated.find((entry) => entry.target === "confuse");
-  assert.ok(confuse);
-  assert.deepEqual(confuse.componentGlosses, ["identity", "mixed"]);
-  assert.deepEqual(confuse.pyashSequence, ["hdif", "mrat"]);
-  assert.deepEqual(confuse.componentLayers, [24, 19]);
-  assert.match(confuse.evidence, /混同/u);
+  const identityMix = curated.find((entry) => entry.target === "identity-mix");
+  assert.ok(identityMix);
+  assert.deepEqual(identityMix.aliases, ["confuse"]);
+  assert.deepEqual(identityMix.componentGlosses, ["identity", "mixed"]);
+  assert.deepEqual(identityMix.pyashSequence, ["hdif", "mrat"]);
+  assert.deepEqual(identityMix.componentLayers, [24, 19]);
+  assert.match(identityMix.evidence, /混同/u);
 
   const chinese = await loadChineseCompoundLexicon();
   const hunTong = chinese.find((entry) => entry.surface === "混同");
   assert.ok(hunTong);
-  assert.equal(hunTong.target, "confuse");
+  assert.equal(hunTong.target, "identity-mix");
   assert.deepEqual(hunTong.sourceMorphemes, ["混", "同"]);
   assert.deepEqual(hunTong.componentGlosses, ["identity", "mixed"]);
   assert.deepEqual(hunTong.pyashSequence, ["hdif", "mrat"]);
