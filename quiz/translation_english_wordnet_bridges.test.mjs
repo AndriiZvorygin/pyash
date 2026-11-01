@@ -35,22 +35,22 @@ test("WordNet bridges use one native Pyash row per sense", async () => {
   });
   assert.deepEqual(catalog.entries.find((entry) => entry.source === "v:00621282-v"), {
     source: "v:00621282-v",
-    target: "identity-mix",
+    target: "identity-confusion",
     targetPartOfSpeech: "v",
     certainty: "contextual",
-    evidence: "Open English WordNet 2025 mistake-one-thing-for-another sense; Chinese 混同 treats distinct things as the same; Pyash compound identity-mix uses hdif mrat"
+    evidence: "Open English WordNet 2025 mistake-one-thing-for-another sense; Chinese 混同 treats distinct things as the same; Pyash compound identity-confusion uses hdif hbun"
   });
 });
 
-test("the selected sense projects identity-mix beside mood and preserves its Pyac sequence", async () => {
+test("the selected sense projects identity-confusion beside mood and preserves its Pyac sequence", async () => {
   const bridges = buildEnglishWordNetSenseBridgeIndex([{
-    id: "english-wordnet-sense-confuse-identity-mix",
+    id: "english-wordnet-sense-confuse-identity-confusion",
     pos: "v",
     synset: "00621282-v",
     status: "accepted-llm",
     link: {
-      target: "identity-mix",
-      pyashSequence: ["hdif", "mrat"],
+      target: "identity-confusion",
+      pyashSequence: ["hdif", "hbun"],
       targetPartOfSpeech: "v",
       certainty: "contextual",
       evidence: "Chinese 混同 describes treating distinct things as the same"
@@ -62,19 +62,19 @@ test("the selected sense projects identity-mix beside mood and preserves its Pya
   );
   const token = result.tokens.find((candidate) => candidate.surface === "confused");
   assert.equal(token?.coverageType, "semantic-wordnet");
-  assert.equal(token?.lemma, "identity mix");
-  assert.deepEqual(token?.pyashSequence, ["hdif", "mrat"]);
-  assert.deepEqual(result.verbPhrase.pyashSequence, ["hdif", "mrat", "pyoh", "ra2"]);
+  assert.equal(token?.lemma, "identity confusion");
+  assert.deepEqual(token?.pyashSequence, ["hdif", "hbun"]);
+  assert.deepEqual(result.verbPhrase.pyashSequence, ["hdif", "hbun", "pyoh", "ra2"]);
   assert.equal(result.verbPhrase.mood, "tseh");
 
   const lowered = lowerSentencePhraseVliw(result.sentence);
   assert.deepEqual(
     decodePhraseVliw(lowered.vectors).tokens.slice(-5).map((part) => part.pya),
-    ["hdif", "mrat", "pyoh", "ra2", "tseh"]
+    ["hdif", "hbun", "pyoh", "ra2", "tseh"]
   );
   assert.equal(
     renderEnglishFromVliw(lowered.vectors).englishPyash,
-    "can often su love be identity-mix with other emotion."
+    "can often su love be identity-confusion with other emotion."
   );
 });
 
