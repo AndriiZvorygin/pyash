@@ -26,8 +26,8 @@ The atom table is a compile-time constant.
 
   | Site | Built at import time |
   |---|---|
-  | `program/library/vliw/phrase.mjs:13-30` | `PHRASE_CASE_WORDS`, `entriesByPya`, `grammarPya` |
-  | `program/library/vliw/quotes.mjs:82-90` | `legacyEntriesByHnuc`, `legacyEntriesByEnglish`, and the derived `legacyNumberWords` |
+  | `program/library/vliw/phrase.mjs:13-32` | `PHRASE_CASE_WORDS`, `entriesByPya`, `grammarPya` |
+  | `program/library/vliw/quotes.mjs:82-98` | `legacyEntriesByHnuc`, `legacyEntriesByEnglish`, and the derived `legacyNumberWords` |
   | `program/library/translation/pyac_to_english_pyash.mjs:35` | a `for (const entry of pyashWords)` index loop |
 
 - **A fourth site reads the static import inside a function.**
