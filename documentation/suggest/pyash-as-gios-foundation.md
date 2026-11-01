@@ -287,8 +287,9 @@ still needs a prompt and an acceptance criterion. The injection point is
 `buildExecutableSupply({ durableCandidates })` in `curator.mjs:71`.
 
 **Why it is third:** it is downstream of the other two. A system that
-originates goals over an empty memory will originate bad goals, and over a
-half-open vocabulary will originate goals it cannot express.
+originates goals over an in-memory store will originate goals it cannot keep
+or check, and over a half-open vocabulary will originate goals it cannot
+express.
 
 ### Gate 4 — Backend parity
 
