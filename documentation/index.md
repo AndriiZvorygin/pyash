@@ -24,3 +24,4 @@
 - `documentation/pyash.md` — high-level design goals and interlanguage intent.
 - `documentation/pyac.txt` — broader 2019 language/spec background.
 - `documentation/compositional-cases.md` — axis/context grid and keyword mapping.
+- `documentation/suggest/` — proposals awaiting review, kept apart from accepted documentation; see `documentation/suggest/README.md` for what belongs there and how a proposal graduates.

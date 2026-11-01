@@ -25,12 +25,13 @@
 - Separate register-fact reliance: direct ceremony/loop parity now keeps `fromindex`, `toindex`, `atindex`, and register-form `by` on the active evoking sentence; named returns preserve payloads without inheriting stale target control state, while explicit role returns remain supported. Mapper/refinery provenance and unsupported nested/imported/compiler mid-loop register mutation remain later work.
 
 ## Later
-- Two plans are written and awaiting review; neither is approved:
-  - `documentation/vocabulary-runtime-parameter.md` — make the atom table an
-    injected runtime value so a vocabulary set can be chosen by configuration
-    and compound coverage can be measured against a named set.
-  - `documentation/self-chosen-work-candidates.md` — let the work system choose
-    what to work on next from detector output it already produces (the
+- Two plans are written and awaiting review; neither is approved. Both live
+  under `documentation/suggest/`, which is where proposals await review:
+  - `documentation/suggest/vocabulary-runtime-parameter.md` — make the atom
+    table an injected runtime value so a vocabulary set can be chosen by
+    configuration and compound coverage can be measured against a named set.
+  - `documentation/suggest/self-chosen-work-candidates.md` — let the work system
+    choose what to work on next from detector output it already produces (the
     English30k coverage gap list, the compositional grid's unassigned cells)
     rather than only from a human-written package list.
   Both are posted in the commons room under `world/commons/notes/` for agent

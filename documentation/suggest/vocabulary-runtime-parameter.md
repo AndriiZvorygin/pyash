@@ -162,7 +162,7 @@ compoundRecords 317   compoundDeterministic 113   compoundVerificationCandidates
 That is a machine-produced, prioritised gap list, and it is the natural source
 of compound-expansion work. Note also that of 317 compound records, only 113
 are deterministic; 204 still need verification and 36 were rejected. See
-`documentation/self-chosen-work-candidates.md`.
+`documentation/suggest/self-chosen-work-candidates.md`.
 
 ## Scope
 
