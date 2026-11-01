@@ -142,26 +142,27 @@ test("curated prayer constructions enter the shared compound catalog", async () 
   assert.match(include.evidence, /contain-within sense of include/u);
 });
 
-test("Chinese 混同 lowers to the head-final identity-mix compound", async () => {
+test("Chinese 混同 lowers to the head-final identity-confusion compound", async () => {
   const curated = await loadCuratedCompoundDecompositions();
-  const identityMix = curated.find((entry) => entry.target === "identity-mix");
-  assert.ok(identityMix);
-  assert.deepEqual(identityMix.aliases, ["confuse"]);
-  assert.deepEqual(identityMix.componentGlosses, ["identity", "mixed"]);
-  assert.deepEqual(identityMix.pyashSequence, ["hdif", "mrat"]);
-  assert.deepEqual(identityMix.componentLayers, [24, 19]);
-  assert.match(identityMix.evidence, /混同/u);
+  const identityConfusion = curated.find((entry) => entry.target === "identity-confusion");
+  assert.ok(identityConfusion);
+  assert.deepEqual(identityConfusion.aliases, ["confuse"]);
+  assert.deepEqual(identityConfusion.componentGlosses, ["identity", "confusion"]);
+  assert.deepEqual(identityConfusion.pyashSequence, ["hdif", "hbun"]);
+  assert.deepEqual(identityConfusion.componentLayers, [24, 24]);
+  assert.equal(identityConfusion.componentGlosses.at(-1), "confusion");
+  assert.match(identityConfusion.evidence, /混同/u);
 
   const chinese = await loadChineseCompoundLexicon();
   const hunTong = chinese.find((entry) => entry.surface === "混同");
   assert.ok(hunTong);
-  assert.equal(hunTong.target, "identity-mix");
+  assert.equal(hunTong.target, "identity-confusion");
   assert.deepEqual(hunTong.sourceMorphemes, ["混", "同"]);
-  assert.deepEqual(hunTong.componentGlosses, ["identity", "mixed"]);
-  assert.deepEqual(hunTong.pyashSequence, ["hdif", "mrat"]);
-  assert.deepEqual(hunTong.componentLayers, [24, 19]);
+  assert.deepEqual(hunTong.componentGlosses, ["identity", "confusion"]);
+  assert.deepEqual(hunTong.pyashSequence, ["hdif", "hbun"]);
+  assert.deepEqual(hunTong.componentLayers, [24, 24]);
   assert.equal(hunTong.maxLayer, 24);
-  assert.equal(hunTong.head, "mixed");
+  assert.equal(hunTong.head, "confusion");
   assert.equal(hunTong.status, "lowered-compound");
 });
 
