@@ -2241,6 +2241,14 @@ export async function loadEnglishSentenceResources() {
         ...entry,
         status: "accepted-curated"
       }));
+      const compoundByVariant = new Map();
+      for (const compound of curatedCompoundRecords) {
+        for (const term of [compound.target, ...(compound.aliases ?? [])]) {
+          for (const variant of english30kLookupVariants(term)) {
+            if (!compoundByVariant.has(variant)) compoundByVariant.set(variant, compound);
+          }
+        }
+      }
       const resources = {
         source,
         lemmaCatalog,
@@ -2252,6 +2260,7 @@ export async function loadEnglishSentenceResources() {
         dictionaryAliases,
         aliases,
         compoundRecords: curatedCompoundRecords,
+        compoundByVariant,
         lemmaIndex,
         sourceByVariant,
         atomicByVariant,
@@ -2322,6 +2331,21 @@ function stagedEnglishCoverage(resources, word, options = {}) {
   };
   const reflexiveCompound = reflexiveCompoundCoverage(resources, word);
   if (reflexiveCompound) return { ...sourceRow, ...reflexiveCompound };
+  const compound = variants.map((variant) => resources.compoundByVariant?.get(variant)).find(Boolean);
+  if (compound) {
+    return {
+      ...sourceRow,
+      coverageType: "compound",
+      status: "covered-compound",
+      canonicalEnglish: compound.target,
+      lemma: compound.target,
+      lemmaKind: "compound",
+      lemmaStatus: compound.status ?? "accepted-curated",
+      componentGlosses: [...(compound.componentGlosses ?? [])],
+      pyashSequence: [...compound.pyashSequence],
+      provenance: compound.provenance ?? "curated compound coverage"
+    };
+  }
   const grammarEntry = variants.map((variant) => resources.grammarIndex.resolve(variant)).find(Boolean);
   if (lexicalPartOfSpeech
     && grammarEntry?.components?.length === 1

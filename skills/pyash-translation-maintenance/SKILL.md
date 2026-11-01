@@ -26,6 +26,10 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   another preposition such as `for` or `to`.
 - Pyac/VLIW uses the same case meanings as phrase-final suffixes, such as `ka`
   for accusative and `pwah` for benefactive.
+- In readable English Pyash, place sentence mood and its aspect marker together
+  before the SVO clause (for example, `can often su love be identity-mix`).
+  Keep the encoded aspect after the verb and voice markers in Pyac, followed by
+  the sentence-final mood.
 - Keep the projections separate: do not fix a Pyash ordering problem by
   postposing English prepositions, and do not treat Pyac suffix order as
   readable Pyash word order.
