@@ -93,9 +93,17 @@ function inventoryScore(entry, roots) {
 function candidateAnchorOptions(candidate, inventory) {
   const sense = candidate?.sense && typeof candidate.sense === "object" ? candidate.sense : {};
   const hasSelectedSense = Boolean(text(candidate?.senseId) || text(sense.synset));
-  const relationAnchors = new Map((candidate?.anchorCandidates ?? [])
-    .filter((anchor) => text(anchor?.target))
-    .map((anchor) => [normalizedWord(anchor.target), anchor]));
+  const relationRows = new Map();
+  for (const anchor of candidate?.anchorCandidates ?? []) {
+    const english = normalizedWord(anchor?.target);
+    if (!english || anchor?.selectable !== true) continue;
+    const rows = relationRows.get(english) ?? [];
+    rows.push(anchor);
+    relationRows.set(english, rows);
+  }
+  const relationAnchors = new Map([...relationRows]
+    .filter(([, rows]) => new Set(rows.map((row) => sequence(row.pyashSequence).join(" "))).size === 1)
+    .map(([english, rows]) => [english, rows[0]]));
   const completeRelationTerms = [...relationAnchors.values()]
     .filter((anchor) => (
       text(anchor?.kind) === "compound-composition"
@@ -169,13 +177,22 @@ export function buildTranslationVocabularyInventory({ sourceText, candidates = [
     .slice(0, 2800)
     .map((entry) => ({ english: entry.en, pyash: entry.pya }));
   const seenEntries = new Set(entries.map((entry) => `${normalizedWord(entry.english)}\u0000${sequence(entry.pyash).join(" ")}`));
-  for (const anchor of candidates.flatMap((candidate) => candidate?.anchorCandidates ?? [])) {
+  for (const anchor of candidates.flatMap((candidate) => (
+    text(candidate?.kind) === "wordnet-sense-attachment"
+      ? (candidate.anchorCandidates ?? []).filter((item) => item?.selectable === true)
+      : (candidate?.anchorCandidates ?? [])
+  ))) {
     const english = text(anchor?.target);
     const pyash = sequence(anchor?.pyashSequence);
     const key = `${normalizedWord(english)}\u0000${pyash.join(" ")}`;
     if (!english || pyash.length === 0 || seenEntries.has(key)) continue;
     seenEntries.add(key);
-    entries.push({ english, pyash });
+    entries.push({
+      english,
+      pyash,
+      targetKind: text(anchor?.targetKind) || (pyash.length > 1 ? "compound" : "atom"),
+      targetId: text(anchor?.targetId) || `${pyash.length > 1 ? "compound" : "atom"}:${pyash.join("+")}`
+    });
   }
   const grammar = grammarEntries
     .filter((entry) => entry?.surface && Array.isArray(entry.pyashSequence))
@@ -210,9 +227,10 @@ function promptCandidate(candidate, inventory) {
     ...(text(candidate?.senseId) ? { selectedSenseId: text(candidate.senseId) } : {}),
     ...(selectedSense ? { selectedSense } : {}),
     anchorOptions: candidateAnchorOptions(candidate, inventory),
-    ...(Array.isArray(candidate?.anchorCandidates) && candidate.anchorCandidates.length > 0
+    ...(Array.isArray(candidate?.anchorCandidates)
+      && candidate.anchorCandidates.some((anchor) => anchor?.selectable === true)
       ? {
-        anchorEvidence: candidate.anchorCandidates.slice(0, 12).map((anchor) => ({
+        anchorEvidence: candidate.anchorCandidates.filter((anchor) => anchor?.selectable === true).slice(0, 12).map((anchor) => ({
           target: text(anchor?.target),
           evidence: bounded(anchor?.evidence, 180),
           ...(text(anchor?.kind) ? { kind: text(anchor.kind) } : {}),
@@ -407,7 +425,15 @@ export function parseTranslationVocabularyVerificationResponse(value, {
         links.push({ id, status: "uncertain", rationale: `automatic safe downgrade: ${boundedRationale}` });
         continue;
       }
-      links.push({ id, status, targetEnglish, pyashSequence, rationale: boundedRationale });
+      links.push({
+        id,
+        status,
+        targetEnglish,
+        pyashSequence,
+        targetKind: text(match.targetKind) || (pyashSequence.length > 1 ? "compound" : "atom"),
+        targetId: text(match.targetId) || `${pyashSequence.length > 1 ? "compound" : "atom"}:${pyashSequence.join("+")}`,
+        rationale: boundedRationale
+      });
       continue;
     }
     links.push({ id, status, rationale: boundedRationale });
@@ -433,6 +459,7 @@ export function applyTranslationVocabularyVerificationResponse(result, response)
       status: verificationStatus,
       ...(link.status === "accept" ? { targetEnglish: link.targetEnglish } : {}),
       ...(link.status === "accept" ? { pyashSequence: [...link.pyashSequence] } : {}),
+      ...(link.status === "accept" ? { targetKind: link.targetKind, targetId: link.targetId } : {}),
       verificationStatus,
       verificationRationale: link.rationale
     };

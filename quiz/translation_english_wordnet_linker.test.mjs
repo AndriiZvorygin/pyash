@@ -90,6 +90,55 @@ test("WordNet linker creates stable one-record-per-sense batches", () => {
   assert.equal(new Set(records.map((record) => record.id)).size, 3);
 });
 
+test("WordNet links distinguish exact atom and accepted compound targets", () => {
+  const atomIndex = buildEnglishWordNetIndex({
+    rows: [{
+      id: "n:touch:touch",
+      pos: "n",
+      synset: "touch",
+      senseKey: "touch",
+      lemma: "touch",
+      gloss: "physical contact"
+    }]
+  });
+  const atom = linkEnglishWordNetSense({
+    sense: { pos: "n", synset: "touch", lemmas: ["touch"] },
+    sourceTerm: "touch",
+    wordnetIndex: atomIndex,
+    resolveWord: () => ({
+      coverageType: "atomic",
+      canonicalEnglish: "touch",
+      pyashSequence: ["tcum"]
+    })
+  });
+  assert.equal(atom.link.targetKind, "atom");
+  assert.equal(atom.link.targetId, "atom:tcum");
+
+  const compoundIndex = buildEnglishWordNetIndex({
+    rows: [{
+      id: "n:sexual-desire:sexual_desire",
+      pos: "n",
+      synset: "sexual-desire",
+      senseKey: "sexual-desire",
+      lemma: "sexual desire",
+      gloss: "strong sexual desire"
+    }]
+  });
+  const compound = linkEnglishWordNetSense({
+    sense: { pos: "n", synset: "sexual-desire", lemmas: ["sexual desire"] },
+    sourceTerm: "sexual desire",
+    wordnetIndex: compoundIndex,
+    resolveWord: () => ({
+      coverageType: "compound",
+      canonicalEnglish: "sexual desire",
+      id: "compound-sexual-desire",
+      pyashSequence: ["hjon", "twin"]
+    })
+  });
+  assert.equal(compound.link.targetKind, "compound");
+  assert.equal(compound.link.targetId, "compound-sexual-desire");
+});
+
 test("WordNet linker uses an exact source lemma dictionary alias before relation compounds", () => {
   const index = buildEnglishWordNetIndex({
     rows: [{
@@ -131,7 +180,7 @@ test("WordNet linker uses an exact source lemma dictionary alias before relation
   assert.match(linked.link.evidence, /existing Pyash dictionary alias|one meaning/u);
 });
 
-test("WordNet linker resolves a dictionary alias through the selected sense lemma", () => {
+test("WordNet linker keeps a polysemous dictionary alias unresolved", () => {
   const index = buildEnglishWordNetIndex({
     rows: [{
       id: "a:sexual-body:sexual",
@@ -166,10 +215,10 @@ test("WordNet linker resolves a dictionary alias through the selected sense lemm
       }
     }[word] ?? null)
   });
-  assert.equal(linked.status, "accepted-deterministic");
-  assert.equal(linked.link.target, "sexual");
-  assert.deepEqual(linked.link.pyashSequence, ["hjon"]);
-  assert.match(linked.link.evidence, /dictionary alias sexually resolves to sexual, a lemma of selected WordNet sense/u);
+  assert.equal(linked.status, "review");
+  assert.equal(linked.link, undefined);
+  assert.equal(linked.candidates[0].target, "sexual");
+  assert.equal(linked.candidates[0].selectable, false);
 });
 
 test("WordNet sense anchors use covered relation targets only", () => {
@@ -205,6 +254,18 @@ test("WordNet sense anchors use covered relation targets only", () => {
   assert.deepEqual(anchors.map((anchor) => anchor.target), ["activity"]);
   assert.deepEqual(anchors[0].pyashSequence, ["twot"]);
   assert.match(anchors[0].evidence, /hypernym/u);
+  assert.equal(anchors[0].selectable, false);
+
+  const acceptedCompoundAnchors = buildEnglishWordNetSenseAnchorCandidates({
+    sense: { pos: "n", synset: "action", lemmas: ["action"] },
+    wordnetIndex: index,
+    resolveWord: (word) => word === "activity"
+      ? { coverageType: "compound", canonicalEnglish: "activity", id: "compound-activity", pyashSequence: ["twa", "twot"] }
+      : null
+  });
+  assert.equal(acceptedCompoundAnchors[0].targetKind, "compound");
+  assert.equal(acceptedCompoundAnchors[0].targetId, "compound-activity");
+  assert.equal(acceptedCompoundAnchors[0].selectable, true);
 });
 
 test("WordNet sense anchors compose a covered multiword relation instead of losing a component", () => {
@@ -267,6 +328,36 @@ test("WordNet sense anchors compose a covered multiword relation instead of losi
   assert.equal(anchors[1].kind, "compound-composition");
   assert.deepEqual(anchors[1].componentTargets, ["sexual", "desire"]);
   assert.match(anchors[1].evidence, /composed from covered components sexual desire/u);
+  assert.equal(anchors[1].selectable, false);
+});
+
+test("WordNet sense anchors do not compose compounds longer than three atoms", () => {
+  const index = buildEnglishWordNetIndex({
+    rows: [{
+      id: "n:source:source",
+      pos: "n",
+      synset: "source",
+      senseKey: "source",
+      lemma: "source",
+      gloss: "a source concept"
+    }, {
+      id: "n:target:one",
+      pos: "n",
+      synset: "target",
+      senseKey: "one",
+      lemma: "one two three four",
+      gloss: "a four part concept"
+    }],
+    relations: [{ source: "n:source", target: "n:target", relation: "similar" }]
+  });
+  const anchors = buildEnglishWordNetSenseAnchorCandidates({
+    sense: { pos: "n", synset: "source", lemmas: ["source"] },
+    wordnetIndex: index,
+    resolveWord: (word) => (["one", "two", "three", "four"].includes(word)
+      ? { coverageType: "atomic", canonicalEnglish: word, pyashSequence: [word] }
+      : null)
+  });
+  assert.equal(anchors.some((anchor) => anchor.kind === "compound-composition"), false);
 });
 
 test("WordNet sense anchors include convergent vocab suggestions with Pyac mappings", () => {
@@ -339,6 +430,8 @@ test("WordNet linker accepts a leaf node mapped to an existing compound", () => 
   assert.equal(records[0].status, "accepted-edge");
   assert.deepEqual(records[0].link.pyashSequence, ["ledger", "house"]);
   assert.equal(records[0].link.target, "ledger house");
+  assert.equal(records[0].link.targetKind, "compound");
+  assert.equal(records[0].link.targetId, "compound:ledger+house");
 });
 
 test("WordNet linker inventory includes accepted compounds and excludes compound candidates", () => {
@@ -357,7 +450,9 @@ test("WordNet linker inventory includes accepted compounds and excludes compound
   });
   assert.deepEqual(inventory.entries, [{
     english: "ledger house",
-    pyash: ["ledger", "house"]
+    pyash: ["ledger", "house"],
+    targetKind: "compound",
+    targetId: "compound:ledger+house"
   }]);
 });
 
@@ -556,6 +651,11 @@ test("WordNet linker skips pending senses without candidate choices", async () =
     status: "review",
     sourceTerms: ["used"],
     candidates: [{ target: "anchor", pyashSequence: ["word"] }]
+  }, {
+    id: "sense-with-evidence-only",
+    status: "review",
+    sourceTerms: ["evidence"],
+    candidates: [{ target: "related", pyashSequence: ["near"], selectable: false }]
   }];
   const requests = [];
   const queued = await submitEnglishWordNetSenseLinks({
@@ -568,8 +668,9 @@ test("WordNet linker skips pending senses without candidate choices", async () =
   });
   assert.equal(requests.length, 1);
   assert.deepEqual(requests[0].candidates.map((record) => record.id), ["sense-with-choice"]);
-  assert.deepEqual(queued.skipped.map((record) => record.id), ["sense-without-choice"]);
+  assert.deepEqual(queued.skipped.map((record) => record.id), ["sense-without-choice", "sense-with-evidence-only"]);
   assert.equal(queued.records.find((record) => record.id === "sense-without-choice").queue, undefined);
+  assert.equal(queued.records.find((record) => record.id === "sense-with-evidence-only").queue, undefined);
   assert.equal(queued.records.find((record) => record.id === "sense-with-choice").queue.status, "queued");
 });
 

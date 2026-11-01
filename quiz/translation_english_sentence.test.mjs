@@ -353,9 +353,8 @@ test("emotion equivalences reuse emotionally and attach number or adjective gram
   const feel = await analyzeDefaultEnglishSentence("feel");
   assert.equal(feel.tokens[0].coverageType, "unresolved");
   assert.ok(feel.tokens[0].wordnet.senses.length > 1);
-  assert.ok(feel.tokens[0].semanticCandidates.some((candidate) => (
-    candidate.lemma === "emotionally" && candidate.pyashSequence.join(" ") === "xyek"
-  )));
+  assert.ok(feel.tokens[0].semanticCandidates.length > 0);
+  assert.ok(feel.tokens[0].semanticCandidates.every((candidate) => candidate.lemma !== "emotionally"));
 });
 
 test("English case surfaces cover the canonical grid and common aliases", async () => {

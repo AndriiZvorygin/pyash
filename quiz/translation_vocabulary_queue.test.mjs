@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   buildTranslationVocabularyVerificationPrompt,
   buildTranslationVocabularyInventory,
+  applyTranslationVocabularyVerificationResponse,
   createQueuedMindTranslationVocabularySubmitter,
   parseTranslationVocabularyVerificationResponse,
   reconcileTranslationVocabularyCandidates,
@@ -83,6 +84,9 @@ test("vocabulary review prompt carries the selected WordNet sense to anchor sele
     anchorCandidates: [{
       target: "activity",
       pyashSequence: ["twot"],
+      targetKind: "atom",
+      targetId: "atom:twot",
+      selectable: true,
       evidence: "fixture WordNet relation reaches activity"
     }],
     evidence: "selected WordNet sense v:01775456; undergo an emotional state"
@@ -120,15 +124,24 @@ test("vocabulary review preserves a complete composed anchor over its components
       target: "sexual desire",
       pyashSequence: ["hjon", "twin"],
       kind: "compound-composition",
+      targetKind: "compound",
+      targetId: "compound:hjon+twin",
+      selectable: true,
       componentTargets: ["sexual", "desire"],
       evidence: "WordNet hypernym reaches sexual desire; composed from covered components sexual desire"
     }, {
       target: "sexual",
       pyashSequence: ["hjon"],
+      targetKind: "atom",
+      targetId: "atom:hjon",
+      selectable: false,
       evidence: "WordNet relation component"
     }, {
       target: "desire",
       pyashSequence: ["twin"],
+      targetKind: "atom",
+      targetId: "atom:twin",
+      selectable: false,
       evidence: "WordNet relation component"
     }],
     evidence: "selected WordNet sense n:07504854-n"
@@ -150,6 +163,82 @@ test("vocabulary review preserves a complete composed anchor over its components
   assert.match(prompt, /complete multiword anchor/u);
   assert.match(prompt, /"anchorOptions":\["sexual desire"\]/u);
   assert.match(prompt, /"components":\["sexual","desire"\]/u);
+});
+
+test("sense linking excludes related atoms unless the linker marks them selectable", () => {
+  const candidate = {
+    id: "wordnet-attachment:attract",
+    surface: "attracted",
+    kind: "wordnet-sense-attachment",
+    senseId: "v:attract",
+    sense: { pos: "v", synset: "attract", lemmas: ["attract"], gloss: "draw toward" },
+    context: ["Being attracted describes a feeling."],
+    anchorCandidates: [{
+      target: "charm",
+      pyashSequence: ["crak"],
+      targetKind: "atom",
+      targetId: "atom:crak",
+      selectable: false,
+      kind: "relation",
+      evidence: "WordNet relation reaches charm"
+    }]
+  };
+  const inventory = buildTranslationVocabularyInventory({
+    sourceText: candidate.context[0],
+    candidates: [candidate]
+  });
+  const prompt = buildTranslationVocabularyVerificationPrompt({
+    language: "english",
+    sourceText: candidate.context[0],
+    locator: "love.txt",
+    candidates: [candidate],
+    inventory
+  });
+  assert.match(prompt, /"anchorOptions":\[\]/u);
+  assert.doesNotMatch(prompt, /"target":"charm"/u);
+  assert.doesNotMatch(prompt, /"english":"charm"/u);
+});
+
+test("accepted sense vocabulary preserves the selected atom or compound identity", () => {
+  const candidate = {
+    id: "wordnet-attachment:lust",
+    surface: "lust",
+    kind: "wordnet-sense-attachment",
+    senseId: "n:07504854-n",
+    sense: { pos: "n", synset: "07504854-n", lemmas: ["lust"], gloss: "sexual desire" },
+    context: ["Lust is a strong sexual desire."],
+    anchorCandidates: [{
+      target: "sexual desire",
+      pyashSequence: ["hjon", "twin"],
+      targetKind: "compound",
+      targetId: "compound:sexual_desire",
+      selectable: true,
+      kind: "compound",
+      evidence: "accepted compound anchor"
+    }]
+  };
+  const inventory = buildTranslationVocabularyInventory({
+    sourceText: candidate.context[0],
+    candidates: [candidate]
+  });
+  const response = parseTranslationVocabularyVerificationResponse(JSON.stringify({
+    verdict: "complete",
+    candidates: [{
+      id: candidate.id,
+      status: "accept",
+      targetEnglish: "sexual desire",
+      rationale: "the accepted compound preserves the selected meaning"
+    }]
+  }), { candidates: [candidate], inventory, requireComplete: true });
+  assert.equal(response.valid, true);
+  assert.equal(response.links[0].targetKind, "compound");
+  assert.equal(response.links[0].targetId, "compound:sexual_desire");
+  const applied = applyTranslationVocabularyVerificationResponse({
+    records: [],
+    vocabularyCandidates: [candidate]
+  }, response);
+  assert.equal(applied.vocabularyCandidates[0].targetKind, "compound");
+  assert.equal(applied.vocabularyCandidates[0].targetId, "compound:sexual_desire");
 });
 
 test("vocabulary candidates preserve independent occurrence queue duties", async () => {

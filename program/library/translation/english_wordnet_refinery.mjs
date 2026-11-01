@@ -38,6 +38,12 @@ function normalized(value) {
   return text(value).toLowerCase();
 }
 
+function sequence(value) {
+  return Array.isArray(value)
+    ? value.filter((word) => typeof word === "string" && word.trim()).map((word) => word.trim())
+    : [];
+}
+
 function accepted(status) {
   return ["accepted-existing", "accepted-edge", "accepted-deterministic", "accepted-llm"]
     .includes(text(status));
@@ -62,12 +68,13 @@ function compoundResolver(compoundRecords = []) {
     const pyashSequence = Array.isArray(record?.pyashSequence)
       ? record.pyashSequence.filter((word) => typeof word === "string" && word.trim())
       : [];
-    if (!target || pyashSequence.length === 0) continue;
+    if (!target || pyashSequence.length < 2 || pyashSequence.length > 3) continue;
     if (["accepted-delimited", "accepted-curated"].includes(text(record.status))) {
       for (const term of [target, ...aliases]) {
         byTarget.set(term, {
           coverageType: "compound",
           canonicalEnglish: target,
+          id: text(record.id) || `compound:${pyashSequence.join("+")}`,
           pyashSequence
         });
       }
@@ -101,6 +108,58 @@ function counts(records, decisions) {
     errors: records.filter((record) => record.status === "error").length,
     unresolved: records.filter((record) => !accepted(record.status)).length
   };
+}
+
+function nonEquivalentAnchorCollisionIds(records = []) {
+  const anchorGroups = new Map();
+  for (const record of records) {
+    if (!accepted(record.status) || !record.link) continue;
+    const pyashKey = sequence(record.link.pyashSequence).join(" ");
+    const keys = new Set([
+      `target:${text(record.link.target).toLowerCase()}`,
+      `id:${text(record.link.targetId)}`,
+      `sequence:${pyashKey}`
+    ].filter((key) => !key.endsWith(":")));
+    for (const key of keys) {
+      const rows = anchorGroups.get(key) ?? new Map();
+      const senses = rows.get(record.selectedSenseId) ?? [];
+      senses.push(record);
+      rows.set(record.selectedSenseId, senses);
+      anchorGroups.set(key, rows);
+    }
+  }
+  const collidingSenses = new Set();
+  for (const rows of anchorGroups.values()) {
+    if (rows.size < 2) continue;
+    const members = [...rows.values()].flat();
+    const groups = new Set(members.map((record) => text(record.link?.equivalenceGroup)));
+    const evidence = new Set(members.map((record) => text(record.link?.equivalenceEvidence)));
+    const identities = new Set(members.map((record) => [
+      text(record.link?.targetKind),
+      text(record.link?.targetId),
+      text(record.link?.target).toLowerCase(),
+      sequence(record.link?.pyashSequence).join(" ")
+    ].join("\u0000")));
+    if (groups.size === 1
+      && !groups.has("")
+      && evidence.size === 1
+      && !evidence.has("")
+      && identities.size === 1) continue;
+    for (const senseId of rows.keys()) collidingSenses.add(senseId);
+  }
+  return collidingSenses;
+}
+
+function withholdNonEquivalentSenseAnchors(records = [], collidingSenses = nonEquivalentAnchorCollisionIds(records)) {
+  return records.map((record) => {
+    if (!collidingSenses.has(record.selectedSenseId) || !accepted(record.status)) return record;
+    const { link, ...unlinked } = record;
+    return {
+      ...unlinked,
+      status: "review",
+      verificationRationale: "selected anchor is shared by non-equivalent WordNet senses; an explicit equivalence group or a distinct anchor is required"
+    };
+  });
 }
 
 function persistedSenseRows(candidate) {
@@ -418,6 +477,13 @@ function attachmentCandidate(record) {
     anchorCandidates: (record.anchorCandidates ?? []).map((candidate) => ({
       target: text(candidate.target),
       pyashSequence: [...(candidate.pyashSequence ?? [])],
+      targetKind: text(candidate.targetKind),
+      targetId: text(candidate.targetId),
+      selectable: candidate.selectable === true,
+      ...(text(candidate.equivalenceGroup) ? {
+        equivalenceGroup: text(candidate.equivalenceGroup),
+        equivalenceEvidence: text(candidate.equivalenceEvidence)
+      } : {}),
       evidence: text(candidate.evidence),
       ...(text(candidate.kind) ? { kind: text(candidate.kind) } : {}),
       ...(Array.isArray(candidate.componentTargets) && candidate.componentTargets.length > 0
@@ -464,7 +530,7 @@ export function appendEnglishWordNetAttachmentCandidates(translation, records) {
 export function applyEnglishWordNetSenseAttachmentLinks(translation) {
   const wordnet = translation?.wordnet;
   if (!wordnet || !Array.isArray(wordnet.records)) return translation;
-  const accepted = (translation.vocabularyCandidates ?? []).filter((candidate) => (
+  const acceptedCandidates = (translation.vocabularyCandidates ?? []).filter((candidate) => (
     candidate?.kind === "wordnet-sense-attachment"
     && candidate?.status === "accepted-llm"
     && text(candidate.targetEnglish)
@@ -472,9 +538,9 @@ export function applyEnglishWordNetSenseAttachmentLinks(translation) {
     && candidate.pyashSequence.length > 0
     && text(candidate.senseId)
   ));
-  if (accepted.length === 0) return translation;
+  if (acceptedCandidates.length === 0) return translation;
   const records = wordnet.records.map((record) => {
-    const candidate = accepted.find((item) => (
+    const candidate = acceptedCandidates.find((item) => (
       item.id === attachmentCandidateId(record)
         || item.id === `wordnet-attachment:${record.id}`
         || (text(item.occurrenceId) && text(item.occurrenceId) === text(record.occurrenceId))
@@ -484,9 +550,17 @@ export function applyEnglishWordNetSenseAttachmentLinks(translation) {
     const pyashSequence = candidate.pyashSequence.filter((word) => typeof word === "string" && word.trim());
     const selectedAnchor = (record.anchorCandidates ?? []).find((anchor) => (
       text(anchor?.target).toLowerCase() === target
+        && anchor?.selectable === true
         && Array.isArray(anchor?.pyashSequence)
         && anchor.pyashSequence.join(" ") === pyashSequence.join(" ")
     ));
+    if (!selectedAnchor) return record;
+    const targetKind = text(selectedAnchor.targetKind)
+      || text(candidate.targetKind)
+      || (pyashSequence.length > 1 ? "compound" : "atom");
+    const targetId = text(selectedAnchor.targetId)
+      || text(candidate.targetId)
+      || `${targetKind}:${pyashSequence.join("+")}`;
     const evidence = selectedAnchor?.kind === "compound-composition"
       ? `selected sense ${record.selectedSenseId} composed multiword anchor ${target} from ${(selectedAnchor.componentTargets ?? []).join(" ")}`
       : `selected sense ${record.selectedSenseId} linked to existing Pyash anchor ${target}`;
@@ -496,6 +570,12 @@ export function applyEnglishWordNetSenseAttachmentLinks(translation) {
       link: {
         target,
         pyashSequence: [...pyashSequence],
+        targetKind,
+        targetId,
+        ...(text(selectedAnchor.equivalenceGroup) && text(selectedAnchor.equivalenceEvidence) ? {
+          equivalenceGroup: text(selectedAnchor.equivalenceGroup),
+          equivalenceEvidence: text(selectedAnchor.equivalenceEvidence)
+        } : {}),
         targetPartOfSpeech: text(record.pos),
         certainty: "contextual",
         evidence
@@ -504,12 +584,26 @@ export function applyEnglishWordNetSenseAttachmentLinks(translation) {
         || `selected sense ${record.selectedSenseId} linked to ${target}`
     };
   });
+  const collidingSenses = nonEquivalentAnchorCollisionIds(records);
+  const safeRecords = withholdNonEquivalentSenseAnchors(records, collidingSenses);
+  const vocabularyCandidates = (translation.vocabularyCandidates ?? []).map((candidate) => {
+    if (candidate?.kind !== "wordnet-sense-attachment"
+      || candidate?.status !== "accepted-llm"
+      || !collidingSenses.has(text(candidate.senseId))) return candidate;
+    return {
+      ...candidate,
+      status: "uncertain-llm",
+      verificationStatus: "uncertain-llm",
+      verificationRationale: "selected anchor is shared by non-equivalent WordNet senses; choose a distinct anchor or record equivalence evidence"
+    };
+  });
   return {
     ...translation,
+    vocabularyCandidates,
     wordnet: {
       ...wordnet,
-      records,
-      counts: counts(records, wordnet.decisions ?? [])
+      records: safeRecords,
+      counts: counts(safeRecords, wordnet.decisions ?? [])
     }
   };
 }
@@ -646,6 +740,24 @@ export async function refineEnglishWordNet({
         wordnetIndex: loadedResources.wordnet?.index,
         edgeMaxDegree: linkerConfig.edgeMaxDegree
       });
+      const exactAnchors = linked.candidates
+        .filter((candidate) => candidate.selectable === true)
+        .map((candidate) => ({
+          ...candidate,
+          depth: 0,
+          kind: candidate.targetKind === "compound" ? "compound" : "exact"
+        }));
+      const resolvedLink = linked.status === "review" && exactAnchors.length === 1
+        ? {
+          ...linked,
+          status: "accepted-deterministic",
+          link: {
+            ...exactAnchors[0],
+            certainty: "deterministic",
+            evidence: `selected sense ${selected.selectedSenseId} has one exact covered anchor: ${exactAnchors[0].evidence}`
+          }
+        }
+        : linked;
       const suggestionRecords = typeof suggestVocabulary === "function"
         ? await suggestVocabulary(selected.selectedSense.lemmas ?? [selected.selectedSense.lemma])
         : [];
@@ -658,30 +770,18 @@ export async function refineEnglishWordNet({
         maxDepth: linkerConfig.anchorMaxDepth ?? 1,
         maxCandidates: linkerConfig.anchorMaxCandidates ?? 8
       });
-      const legacyLink = typeof suggestVocabulary !== "function"
-        && linked.status === "review"
-        && linked.candidates.length === 1
-        ? {
-          status: "accepted-deterministic",
-          link: linked.candidates[0]
-        }
-        : linked;
-      const suggestionAnchors = anchorCandidates.filter((candidate) => candidate.kind === "vocab-suggestion");
-      const relationAnchors = anchorCandidates.filter((candidate) => candidate.kind !== "vocab-suggestion");
-      const resolvedLink = legacyLink.status === "review"
-        && suggestionAnchors.length === 1
-        && relationAnchors.length === 0
-        ? {
-          status: "accepted-deterministic",
-          link: {
-            target: suggestionAnchors[0].target,
-            pyashSequence: suggestionAnchors[0].pyashSequence,
-            targetPartOfSpeech: selected.selectedSense.pos,
-            certainty: "deterministic",
-            evidence: suggestionAnchors[0].evidence
-          }
-        }
-        : legacyLink;
+      const anchorKeys = new Set(exactAnchors.map((candidate) => (
+        `${candidate.target}\u0000${candidate.pyashSequence.join(" ")}`
+      )));
+      const combinedAnchors = [
+        ...exactAnchors,
+        ...anchorCandidates.filter((candidate) => {
+          const key = `${candidate.target}\u0000${candidate.pyashSequence.join(" ")}`;
+          if (anchorKeys.has(key)) return false;
+          anchorKeys.add(key);
+          return true;
+        })
+      ];
       records.push({
         ...resolvedLink,
         occurrenceId: selected.occurrenceId,
@@ -698,7 +798,7 @@ export async function refineEnglishWordNet({
         selectedSense: selected.selectedSense,
         selectionConfidence: selected.selectionConfidence,
         selectionRationale: selected.selectionRationale,
-        anchorCandidates
+        anchorCandidates: combinedAnchors
       });
     } catch (caught) {
       const error = caught?.message || String(caught);
@@ -712,16 +812,17 @@ export async function refineEnglishWordNet({
     sentenceIndex: decision.sentenceIndex,
     tokenIndex: decision.tokenIndex
   }));
+  const safeRecords = withholdNonEquivalentSenseAnchors(records);
   return {
     format: ENGLISH_WORDNET_REFINERY_FORMAT,
     senseStateFormat: result.senseStateFormat || "",
     sourceHash: text(result.sourceHash),
     sourceTerms: terms,
     decisions,
-    records,
+    records: safeRecords,
     context,
-    counts: counts(records, decisions),
-    inventoryCount: records.reduce((count, record) => count + (record.candidates?.length ?? 0), 0),
+    counts: counts(safeRecords, decisions),
+    inventoryCount: safeRecords.reduce((count, record) => count + (record.candidates?.length ?? 0), 0),
     queue: queues.length === 1 ? queues[0] : null,
     queues,
     reconciliation: queues,

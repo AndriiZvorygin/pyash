@@ -116,25 +116,12 @@ test("object of thought or feeling maps to the generic thing anchor", async () =
   assert.match(object?.evidence ?? "", /bridge thing/u);
 });
 
-test("feel contexts select the bridge for the matching WordNet sense", async () => {
+test("feel contexts select unique bridges and retain collisions as unresolved", async () => {
   const cases = [
-    ["a feel for sexual pleasure", "feel", "touch", "tcum"],
-    ["the feel of touch", "feel", "touch", "tcum"],
     ["a feel for animals", "feel", "awareness", "hyes"],
     ["the feel of the city", "feel", "air", "cwat"],
-    ["I feel tired", "feel", "experience", "tyap"],
-    ["I feel small", "feel", "emotionally", "xyek"],
     ["I feel he believes me", "feel", "believe", "kcan"],
-    ["I feel the soft cloth", "feel", "finger", "hjit"],
-    ["He felt the girl in the movie theater", "felt", "touch", "tcum"],
-    ["I feel my pulse", "feel", "touch", "tcum"],
-    ["I feel resentful", "feel", "emotionally", "xyek"],
-    ["I feel the wind", "feel", "touch", "tcum"],
-    ["I feel the effects of inflation", "feel", "experience", "tyap"],
-    ["I feel for my wallet", "feel", "searching", "tsoc"],
-    ["It feels nice to be home", "feels", "appear", "tcuc"],
-    ["He felt his way around the dark room", "felt", "searching", "tsoc"],
-    ["The ground feels shaky", "feels", "appear", "tcuc"]
+    ["I feel the soft cloth", "feel", "finger", "hjit"]
   ];
   for (const [source, surface, lemma, pya] of cases) {
     const result = await analyzeDefaultEnglishSentence(source);
@@ -143,6 +130,20 @@ test("feel contexts select the bridge for the matching WordNet sense", async () 
     assert.equal(token?.lemma, lemma, source);
     assert.deepEqual(token?.pyashSequence, [pya], source);
     assert.match(token?.evidence ?? "", /sentence context matched/u, source);
+  }
+});
+
+test("WordNet bridges with colliding non-equivalent targets remain unresolved", async () => {
+  for (const source of [
+    "a feel for sexual pleasure",
+    "I feel tired",
+    "I feel small",
+    "I feel for my wallet",
+    "It feels nice to be home"
+  ]) {
+    const result = await analyzeDefaultEnglishSentence(source);
+    const token = result.tokens.find((candidate) => ["feel", "feels"].includes(candidate.surface));
+    assert.notEqual(token?.coverageType, "semantic-wordnet", source);
   }
 });
 
@@ -309,4 +310,142 @@ test("bridge index preserves one entry for each source sense", () => {
   });
   assert.equal(index.lookup("V:EXAMPLE-V").target, "emotionally");
   assert.equal(index.entries.length, 1);
+});
+
+test("bridge index withholds a shared target across senses without declared equivalence", () => {
+  const index = buildEnglishWordNetBridgeIndex({
+    entries: [{
+      source: "n:first",
+      target: "touch",
+      targetPartOfSpeech: "n",
+      certainty: "contextual",
+      evidence: "first sense"
+    }, {
+      source: "n:second",
+      target: "touch",
+      targetPartOfSpeech: "n",
+      certainty: "contextual",
+      evidence: "second sense"
+    }]
+  });
+  assert.deepEqual(index.ambiguousTargets, ["touch"]);
+  assert.equal(index.lookup("n:first"), null);
+  assert.equal(index.lookup("n:second"), null);
+  assert.equal(index.entries.length, 2);
+});
+
+test("bridge index also withholds different glosses that resolve to the same atom", () => {
+  const index = buildEnglishWordNetBridgeIndex({
+    entries: [{
+      source: "n:first",
+      target: "touch",
+      targetPartOfSpeech: "n",
+      evidence: "first"
+    }, {
+      source: "n:second",
+      target: "contact",
+      targetPartOfSpeech: "n",
+      evidence: "second"
+    }],
+    resolveTarget: () => ({ coverageType: "atomic", pyashSequence: ["tcum"] })
+  });
+  assert.equal(index.lookup("n:first"), null);
+  assert.equal(index.lookup("n:second"), null);
+  assert.deepEqual(index.ambiguousTargets, ["contact", "touch"]);
+});
+
+test("bridge index allows shared targets only inside a declared equivalence group", () => {
+  const index = buildEnglishWordNetBridgeIndex({
+    entries: [{
+      source: "n:first",
+      target: "touch",
+      targetPartOfSpeech: "n",
+      certainty: "contextual",
+      evidence: "first equivalent sense",
+      equivalenceGroup: "same-touch",
+      equivalenceEvidence: "the synset glosses name the same tactile contact"
+    }, {
+      source: "n:second",
+      target: "touch",
+      targetPartOfSpeech: "n",
+      certainty: "contextual",
+      evidence: "second equivalent sense",
+      equivalenceGroup: "same-touch",
+      equivalenceEvidence: "the synset glosses name the same tactile contact"
+    }]
+  });
+  assert.equal(index.lookup("n:first").equivalenceGroup, "same-touch");
+  assert.equal(index.lookup("n:first").equivalenceEvidence, "the synset glosses name the same tactile contact");
+  assert.equal(index.lookup("n:second").equivalenceGroup, "same-touch");
+  assert.deepEqual(index.ambiguousTargets, []);
+});
+
+test("equivalence evidence cannot merge different atom identities", () => {
+  assert.throws(() => buildEnglishWordNetBridgeIndex({
+    entries: [{
+      source: "n:first",
+      target: "touch",
+      pyashSequence: ["tcum"],
+      targetKind: "atom",
+      targetId: "atom:tcum",
+      targetPartOfSpeech: "n",
+      equivalenceGroup: "same-touch",
+      equivalenceEvidence: "same tactile meaning"
+    }, {
+      source: "n:second",
+      target: "touch",
+      pyashSequence: ["hjit"],
+      targetKind: "atom",
+      targetId: "atom:hjit",
+      targetPartOfSpeech: "n",
+      equivalenceGroup: "same-touch",
+      equivalenceEvidence: "same tactile meaning"
+    }]
+  }), /shared target, part of speech, and evidence/u);
+});
+
+test("bridge index rejects an equivalence group without shared evidence", () => {
+  assert.throws(() => buildEnglishWordNetBridgeIndex({
+    entries: [{
+      source: "n:first",
+      target: "touch",
+      targetPartOfSpeech: "n",
+      equivalenceGroup: "same-touch"
+    }, {
+      source: "n:second",
+      target: "touch",
+      targetPartOfSpeech: "n",
+      equivalenceGroup: "same-touch"
+    }]
+  }), /shared target, part of speech, and evidence/u);
+});
+
+test("dynamic accepted links do not share one atom across distinct senses", () => {
+  const records = ["n:first", "n:second"].map((source) => ({
+    status: "accepted-llm",
+    pos: "n",
+    synset: source.slice(2),
+    link: {
+      target: "touch",
+      pyashSequence: ["tcum"],
+      targetKind: "atom",
+      targetId: "atom:tcum",
+      targetPartOfSpeech: "n",
+      evidence: "same model-selected atom"
+    }
+  }));
+  assert.equal(buildEnglishWordNetSenseBridgeIndex(records).size, 0);
+});
+
+test("bridge catalog persists equivalence evidence as native Pyash rows", () => {
+  const parsed = parseEnglishWordNetBridgeCatalog([
+    "su name translation_english_wordnet_bridges be map def",
+    'su text "format" ob text "english-wordnet-bridge-v1" ya',
+    'su text "source" ob text "fixture" ya',
+    'su text "equivalence:touch-kind" ob text "n:first n:second" via text "same tactile meaning" ya',
+    'su text "n:first" ob name touch as text "n" with text "contextual" via text "first gloss" ya',
+    'su text "n:second" ob name touch as text "n" with text "contextual" via text "second gloss" ya',
+    "prah"
+  ].join("\n"));
+  assert.deepEqual(parsed.entries.map((entry) => entry.equivalenceGroup), ["touch-kind", "touch-kind"]);
 });

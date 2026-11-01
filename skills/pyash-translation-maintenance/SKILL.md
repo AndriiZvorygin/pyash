@@ -54,6 +54,31 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
 - Keep clause coordination separate: split an `and`/`but`/`or` clause only
   when both sides have clause-action evidence.
 
+## WordNet sense anchors
+
+- Treat the selected WordNet synset as the semantic unit. Record its displayed
+  sense lemma as well as its POS and synset id.
+- A direct same-synset atom can be offered as an anchor. Automatic linking also
+  requires a low-degree edge node with one WordNet meaning, and the target word
+  must not name a competing WordNet sense.
+- An accepted compound with two or three Pyash components can be offered as a
+  sense anchor. Candidate-only compounds, unverified component compositions,
+  WordNet relation atoms, and convergent `vocab_suggest` atoms are evidence;
+  they are not selectable links.
+- Keep `targetKind` (`atom` or `compound`) and a stable `targetId` on every
+  accepted sense link. Prefer a compound record id; otherwise derive it from
+  the ordered Pyash components.
+- Do not activate one bridge target for multiple WordNet synsets unless the
+  bridge catalog records evidence that those senses are equivalent. Declare
+  the group with a native `.pya` row such as
+  `su text "equivalence:<group>" ob text "<sense-id-1> <sense-id-2>" via text "shared meaning evidence" ya`.
+  Every sense sharing that target must be in the group and use the same target
+  and part of speech; otherwise leave the colliding rows as evidence and
+  withhold them from the active index.
+- Do not bulk-link every WordNet synset. Pilot the reusable linker on selected
+  senses from the working translation and a few contrasting cases, then
+  inspect accepted and unresolved records before expanding scope.
+
 ## Update anchors quickly
 
 - Add a line by hand:
@@ -69,3 +94,4 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
 - `node --test quiz/translation_pairs_english.test.mjs`
 - `node --test quiz/translation_pairs_templates.test.mjs`
 - `node --test quiz/translation_anchor_words.test.mjs`
+- `node --test quiz/translation_english_wordnet_linker.test.mjs quiz/translation_english_wordnet_refinery.test.mjs quiz/translation_vocabulary_queue.test.mjs quiz/translation_english_wordnet_bridges.test.mjs`

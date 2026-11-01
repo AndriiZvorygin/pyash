@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 
 import { buildProgram } from "../../program.mjs";
+import { buildEnglishWordNetBridgeIndex } from "./english_wordnet_bridges.mjs";
 import {
   buildTranslationVocabularyInventory,
   createQueuedMindTranslationVocabularySubmitter
@@ -107,7 +108,7 @@ function compactSense(record, context) {
     g: bounded(record?.gloss, 56),
     l: (record?.lemmas ?? []).slice(0, 2).map((lemma) => bounded(lemma, 24)),
     sourceSentences: [...new Set(sentences)].slice(0, 3),
-    choices: (record?.candidates ?? []).slice(0, 8).map((candidate) => ({
+    choices: (record?.candidates ?? []).filter((candidate) => candidate?.selectable !== false).slice(0, 8).map((candidate) => ({
       targetEnglish: bounded(candidate?.target, 48),
       evidence: bounded(candidate?.evidence, 120)
     }))
@@ -162,6 +163,27 @@ function sequenceKey(value) {
   return sequence(value).join(" ");
 }
 
+function compoundTargetId(pyashSequence) {
+  return `compound:${sequence(pyashSequence).join("+")}`;
+}
+
+function targetIdentity(coverage, target, pyashSequence) {
+  const words = sequence(pyashSequence);
+  const kind = coverage?.coverageType === "compound" || words.length > 1 ? "compound" : "atom";
+  return {
+    targetKind: kind,
+    targetId: kind === "compound"
+      ? text(coverage?.id) || compoundTargetId(words)
+      : `atom:${words.join("+")}`
+  };
+}
+
+function targetSenseIsUnambiguous(wordnetIndex, target, source) {
+  if (!wordnetIndex || typeof wordnetIndex.lookup !== "function") return true;
+  const senses = new Set(wordnetIndex.lookup(target).map((row) => `${row.pos}:${row.synset}`));
+  return senses.size === 0 || (senses.size === 1 && senses.has(source));
+}
+
 function candidateId(record, target, pyashSequence) {
   return `${record.id}::${normalized(target)}::${sequenceKey(pyashSequence)}`;
 }
@@ -186,9 +208,14 @@ function bridgeFor(wordnetIndex, source, resolveWord) {
   return {
     target: normalized(bridge.target),
     pyashSequence,
+    ...targetIdentity(coverage, bridge.target, pyashSequence),
     targetPartOfSpeech: text(bridge.targetPartOfSpeech),
     certainty: text(bridge.certainty) || "contextual",
-    evidence: text(bridge.evidence)
+    evidence: text(bridge.evidence),
+    ...(text(bridge.equivalenceGroup) ? {
+      equivalenceGroup: text(bridge.equivalenceGroup),
+      equivalenceEvidence: text(bridge.equivalenceEvidence)
+    } : {})
   };
 }
 
@@ -197,15 +224,22 @@ function linkCandidate(record, target, pyashSequence, {
   certainty = "contextual",
   evidence = "",
   sourceLemma = "",
-  edgeEligible = false
+  edgeEligible = false,
+  selectable = true,
+  targetKind: suppliedTargetKind = "",
+  targetId: suppliedTargetId = ""
 } = {}) {
   const targetName = normalized(target);
   const words = sequence(pyashSequence);
   if (!targetName || words.length === 0) return null;
+  const identity = targetIdentity(null, targetName, words);
   return {
     id: candidateId(record, targetName, words),
     target: targetName,
     pyashSequence: words,
+    targetKind: text(suppliedTargetKind) || identity.targetKind,
+    targetId: text(suppliedTargetId) || identity.targetId,
+    selectable: selectable === true,
     targetPartOfSpeech: text(targetPartOfSpeech) || record.pos,
     certainty: text(certainty) || "contextual",
     evidence: text(evidence),
@@ -245,9 +279,14 @@ function directCandidates(record, resolveWord, wordnetIndex, maxEdgeDegree) {
     if (!coverage?.pyashSequence?.length || (
       coverage.coverageType === "dictionary-alias" && !aliasMatchesSource
     )) continue;
+    if (coverage.coverageType === "compound" && coverage.pyashSequence.length > 3) continue;
+    const canonicalTarget = coverage.canonicalEnglish || lemma;
+    const targetEligible = targetSenseIsUnambiguous(wordnetIndex, canonicalTarget, record.source);
     const edgeEligible = singleSenseLemma(wordnetIndex, lemma, record.source)
+      && targetEligible
       && edgeNodeDegree(wordnetIndex, record.source) <= maxEdgeDegree;
-    const candidate = linkCandidate(record, coverage.canonicalEnglish || lemma, coverage.pyashSequence, {
+    const identity = targetIdentity(coverage, canonicalTarget, coverage.pyashSequence);
+    const candidate = linkCandidate(record, canonicalTarget, coverage.pyashSequence, {
       targetPartOfSpeech: record.pos,
       certainty: "deterministic",
       evidence: edgeEligible
@@ -256,7 +295,9 @@ function directCandidates(record, resolveWord, wordnetIndex, maxEdgeDegree) {
           ? `source lemma ${lemma} uses existing Pyash dictionary alias ${coverage.canonicalEnglish || lemma}`
           : `existing Pyash coverage for WordNet lemma ${lemma}`,
       sourceLemma: lemma,
-      edgeEligible
+      edgeEligible,
+      selectable: targetEligible,
+      ...identity
     });
     if (!candidate) continue;
     const key = sequenceKey(candidate.pyashSequence);
@@ -283,9 +324,6 @@ function selectDirectLink(record, sourceTerms = []) {
   if (exactEdgeCandidates.length === 1
     || (sourceVariants.size === 0 && edgeCandidates.length === 1)) {
     return { status: "accepted-edge", link: exactEdgeCandidates[0] ?? edgeCandidates[0] };
-  }
-  if (exactCandidates.length === 1) {
-    return { status: "accepted-deterministic", link: exactCandidates[0] };
   }
   return { status: "review" };
 }
@@ -317,7 +355,8 @@ export function linkEnglishWordNetSense({
   const aliasTarget = normalized(sourceCoverage?.canonicalEnglish);
   if (sourceCoverage?.coverageType === "dictionary-alias"
     && aliasTarget
-    && record.lemmas.includes(aliasTarget)) {
+    && record.lemmas.includes(aliasTarget)
+    && targetSenseIsUnambiguous(wordnetIndex, aliasTarget, source)) {
     const aliasSequence = sequence(sourceCoverage.pyashSequence);
     const aliasCandidate = record.candidates.find((candidate) => (
       candidate.sourceLemmas.includes(aliasTarget)
@@ -330,6 +369,7 @@ export function linkEnglishWordNetSense({
         link: {
           ...aliasCandidate,
           certainty: "deterministic",
+          selectable: true,
           evidence: `dictionary alias ${normalized(sourceTerm)} resolves to ${aliasTarget}, a lemma of selected WordNet sense ${source}`,
           edgeEligible: false
         }
@@ -365,7 +405,9 @@ export function buildEnglishWordNetSenseAnchorCandidates({
     evidence,
     sourceLemma,
     kind = "relation",
-    componentTargets = []
+    componentTargets = [],
+    coverage = null,
+    selectable = false
   }) => {
     const words = sequence(pyashSequence);
     const targetName = normalized(target);
@@ -376,6 +418,8 @@ export function buildEnglishWordNetSenseAnchorCandidates({
       candidates.set(key, {
         target: targetName,
         pyashSequence: words,
+        ...targetIdentity(coverage, targetName, words),
+        selectable: selectable === true,
         depth,
         evidence,
         sourceLemmas: sourceLemma ? [sourceLemma] : [],
@@ -400,17 +444,22 @@ export function buildEnglishWordNetSenseAnchorCandidates({
         const wholeCoverage = resolveWord(lemma);
         const wholeSequence = sequence(wholeCoverage?.pyashSequence);
         if (wholeSequence.length > 0) {
+          const isAcceptedCompound = wholeCoverage.coverageType === "compound"
+            && wholeSequence.length >= 2
+            && wholeSequence.length <= 3;
           addCandidate({
             target: wholeCoverage.canonicalEnglish || lemma,
             pyashSequence: wholeSequence,
             depth: nextDepth,
             evidence,
             sourceLemma: lemma,
-            kind: parts.length > 1 ? "compound" : "relation"
+            kind: parts.length > 1 ? "compound" : "relation",
+            coverage: wholeCoverage,
+            selectable: isAcceptedCompound
           });
           continue;
         }
-        if (parts.length > 1) {
+        if (parts.length > 1 && parts.length <= 3) {
           const components = parts.map((part) => ({
             target: part,
             coverage: resolveWord(part)
@@ -426,7 +475,8 @@ export function buildEnglishWordNetSenseAnchorCandidates({
               evidence: `${evidence}; composed from covered components ${componentTargets.join(" ")}`,
               sourceLemma: lemma,
               kind: "compound-composition",
-              componentTargets
+              componentTargets,
+              selectable: false
             });
             continue;
           }
@@ -441,7 +491,9 @@ export function buildEnglishWordNetSenseAnchorCandidates({
             depth: nextDepth,
             evidence,
             sourceLemma: lemma,
-            kind: parts.length > 1 ? "relation-component" : "relation"
+            kind: parts.length > 1 ? "relation-component" : "relation",
+            coverage,
+            selectable: false
           });
         }
       }
@@ -489,6 +541,8 @@ export function buildEnglishWordNetSenseAnchorCandidates({
       sourceLemmas: [...candidate.sourceLemmas],
       support: candidate.support.size,
       kind: "vocab-suggestion",
+      ...targetIdentity(null, candidate.target, candidate.pyashSequence),
+      selectable: false,
       ...(candidate.ranks.length > 0 ? { bestRank: Math.min(...candidate.ranks) } : {})
     });
   }
@@ -595,8 +649,13 @@ function acceptedCompoundRow(record) {
   const accepted = DERIVED_COMPOUND_STATUSES.slice(0, 2).includes(status);
   const english = normalized(record?.target ?? record?.surface ?? record?.english);
   const pyash = sequence(record?.pyashSequence ?? record?.pyash);
-  if (!accepted || !english || pyash.length < 2) return null;
-  return { english, pyash };
+  if (!accepted || !english || pyash.length < 2 || pyash.length > 3) return null;
+  return {
+    english,
+    pyash,
+    targetKind: "compound",
+    targetId: text(record?.id) || compoundTargetId(pyash)
+  };
 }
 
 export function buildEnglishWordNetSenseLinkInventory({
@@ -617,19 +676,28 @@ export function buildEnglishWordNetSenseLinkInventory({
   const rows = [...(inventory.entries ?? [])];
   const seen = new Set(rows.map(inventoryRowKey));
   for (const anchor of [
-    ...records.flatMap((record) => record.candidates ?? []),
+    ...records.flatMap((record) => (record.candidates ?? []).filter((candidate) => candidate?.selectable !== false)),
     ...anchors,
     ...compoundRecords.map(acceptedCompoundRow).filter(Boolean)
   ]) {
     const row = {
       english: anchor?.target ?? anchor?.english,
-      pyash: anchor?.pyashSequence ?? anchor?.pyash
+      pyash: anchor?.pyashSequence ?? anchor?.pyash,
+      targetKind: anchor?.targetKind,
+      targetId: anchor?.targetId
     };
     if (!normalized(row.english) || sequence(row.pyash).length === 0) continue;
     const key = inventoryRowKey(row);
     if (seen.has(key)) continue;
     seen.add(key);
-    rows.push({ english: normalized(row.english), pyash: sequence(row.pyash) });
+    const words = sequence(row.pyash);
+    const identity = targetIdentity({ coverageType: row.targetKind }, row.english, words);
+    rows.push({
+      english: normalized(row.english),
+      pyash: words,
+      targetKind: text(row.targetKind) || identity.targetKind,
+      targetId: text(row.targetId) || identity.targetId
+    });
   }
   return {
     entries: rows.slice(0, 2800),
@@ -753,7 +821,8 @@ export async function submitEnglishWordNetSenseLinks({
   if (!Array.isArray(records)) throw invalid("WordNet linker records must be an array");
   const pending = records.filter((record) => !ACCEPTED_STATUSES.has(record?.status));
   const decisionPending = pending.filter((record) => (
-    Array.isArray(record?.candidates) && record.candidates.length > 0
+    Array.isArray(record?.candidates)
+      && record.candidates.some((candidate) => candidate?.selectable !== false)
   ));
   const skipped = pending.filter((record) => !decisionPending.includes(record));
   if (decisionPending.length === 0) {
@@ -820,7 +889,8 @@ export async function submitEnglishWordNetSenseLinks({
 function inventoryMatch({ targetEnglish, record }) {
   const targetName = normalized(targetEnglish);
   return (record?.candidates ?? []).find((option) => (
-    normalized(option?.target ?? option?.english) === targetName
+    option?.selectable !== false
+      && normalized(option?.target ?? option?.english) === targetName
   )) ?? null;
 }
 
@@ -900,6 +970,8 @@ export function parseEnglishWordNetSenseLinkResponse(value, {
         status,
         target: targetEnglish,
         pyashSequence,
+        targetKind: text(match.targetKind) || targetIdentity(null, targetEnglish, pyashSequence).targetKind,
+        targetId: text(match.targetId) || targetIdentity(null, targetEnglish, pyashSequence).targetId,
         targetPartOfSpeech: byId.get(id).pos,
         certainty: "contextual",
         rationale: boundedRationale,
@@ -929,6 +1001,8 @@ export function applyEnglishWordNetSenseLinkResponse(records, response) {
         link: {
           target: link.target,
           pyashSequence: [...link.pyashSequence],
+          targetKind: text(link.targetKind) || targetIdentity(null, link.target, link.pyashSequence).targetKind,
+          targetId: text(link.targetId) || targetIdentity(null, link.target, link.pyashSequence).targetId,
           targetPartOfSpeech: link.targetPartOfSpeech,
           certainty: link.certainty,
           evidence: link.evidence
@@ -951,21 +1025,33 @@ export function applyEnglishWordNetSenseLinkResponse(records, response) {
 }
 
 export function buildEnglishWordNetSenseBridgeIndex(records = []) {
-  const bridges = new Map();
+  const bySource = new Map();
   for (const record of records) {
     if (!ACCEPTED_STATUSES.has(record?.status) || !record?.link?.target) continue;
     const source = senseKey(record.pos, record.synset);
     const pyashSequence = sequence(record.link.pyashSequence);
     if (!source || pyashSequence.length === 0) continue;
-    bridges.set(source, {
+    const bridge = {
       target: normalized(record.link.target),
       pyashSequence,
+      targetKind: text(record.link.targetKind) || targetIdentity(null, record.link.target, pyashSequence).targetKind,
+      targetId: text(record.link.targetId) || targetIdentity(null, record.link.target, pyashSequence).targetId,
       targetPartOfSpeech: text(record.link.targetPartOfSpeech) || text(record.pos),
       certainty: text(record.link.certainty) || "contextual",
-      evidence: text(record.link.evidence) || text(record.verificationRationale)
-    });
+      evidence: text(record.link.evidence) || text(record.verificationRationale),
+      ...(text(record.link.equivalenceGroup) ? {
+        equivalenceGroup: text(record.link.equivalenceGroup),
+        equivalenceEvidence: text(record.link.equivalenceEvidence)
+      } : {})
+    };
+    const choices = bySource.get(source) ?? new Map();
+    choices.set(`${bridge.target}\u0000${bridge.targetId}`, bridge);
+    bySource.set(source, choices);
   }
-  return bridges;
+  const entries = [...bySource.entries()]
+    .filter(([, choices]) => choices.size === 1)
+    .map(([source, choices]) => ({ source, ...choices.values().next().value }));
+  return buildEnglishWordNetBridgeIndex({ entries }).bySense;
 }
 
 export async function reconcileEnglishWordNetSenseLinks({
@@ -1101,6 +1187,29 @@ export function renderEnglishWordNetSenseLinksPya({
     .filter((record) => ACCEPTED_STATUSES.has(record?.status) && record?.link?.target && sequence(record.link.pyashSequence).length > 0)
     .sort((left, right) => left.source.localeCompare(right.source));
   const seen = new Set();
+  const equivalenceGroups = new Map();
+  for (const record of accepted) {
+    const group = text(record.link.equivalenceGroup);
+    const evidence = text(record.link.equivalenceEvidence);
+    if (!group || !evidence) continue;
+    const row = equivalenceGroups.get(group) ?? {
+      evidence: new Set(),
+      targets: new Set(),
+      targetIdentities: new Set(),
+      partsOfSpeech: new Set(),
+      sources: []
+    };
+    row.evidence.add(evidence);
+    row.targets.add(normalized(record.link.target));
+    row.targetIdentities.add([
+      text(record.link.targetKind),
+      text(record.link.targetId),
+      sequence(record.link.pyashSequence).join(" ")
+    ].join("\u0000"));
+    row.partsOfSpeech.add(text(record.link.targetPartOfSpeech) || text(record.pos));
+    row.sources.push(record.source);
+    equivalenceGroups.set(group, row);
+  }
   const lines = [
     `su name ${name} be map def`,
     `su text "format" ob text ${JSON.stringify("english-wordnet-bridge-v1")} ya`,
@@ -1108,6 +1217,15 @@ export function renderEnglishWordNetSenseLinksPya({
     `su text "source-hash" ob text ${JSON.stringify(sourceHash)} ya`,
     `su text "mode" ob text ${JSON.stringify("sense-level semantic bridge")} ya`
   ];
+  for (const [group, row] of equivalenceGroups) {
+    const sources = [...new Set(row.sources)].sort();
+    if (sources.length < 2
+      || row.evidence.size !== 1
+      || row.targets.size !== 1
+      || row.targetIdentities.size !== 1
+      || row.partsOfSpeech.size !== 1) continue;
+    lines.push(`su text ${JSON.stringify(`equivalence:${group}`)} ob text ${JSON.stringify(sources.join(" "))} via text ${JSON.stringify(row.evidence.values().next().value)} ya`);
+  }
   for (const record of accepted) {
     if (seen.has(record.source)) continue;
     seen.add(record.source);

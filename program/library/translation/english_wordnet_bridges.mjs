@@ -57,12 +57,36 @@ export function parseEnglishWordNetBridgeCatalog(source) {
   }
   if (!metadata.source) throw invalid("WordNet bridge source requires provenance");
 
+  const equivalenceGroups = new Map();
+  for (const [index, sentence] of sentences.entries()) {
+    if (sentence?.mood !== "ya") continue;
+    const key = textAt(sentence, "su");
+    if (!key.startsWith("equivalence:")) continue;
+    const group = key.slice("equivalence:".length).trim();
+    const sources = textAt(sentence, "ob").split(/\s+/u).filter(Boolean).map((value) => value.toLowerCase());
+    const evidence = textAt(sentence, "via");
+    if (!group || sources.length < 2 || new Set(sources).size !== sources.length || !evidence) {
+      throw invalid("WordNet equivalence group requires an id, distinct senses, and evidence", { index, group });
+    }
+    if (equivalenceGroups.has(group)) throw invalid("WordNet equivalence group is duplicated", { index, group });
+    equivalenceGroups.set(group, { sources, evidence });
+  }
+  const equivalenceBySense = new Map();
+  for (const [group, row] of equivalenceGroups) {
+    for (const sourceKey of row.sources) {
+      if (equivalenceBySense.has(sourceKey)) {
+        throw invalid("WordNet sense belongs to multiple equivalence groups", { source: sourceKey });
+      }
+      equivalenceBySense.set(sourceKey, { group, evidence: row.evidence });
+    }
+  }
+
   const entries = [];
   const seen = new Set();
   for (const [index, sentence] of sentences.entries()) {
     if (sentence?.mood !== "ya") continue;
     const sourceKey = textAt(sentence, "su");
-    if (!sourceKey || METADATA_KEYS.has(sourceKey)) continue;
+    if (!sourceKey || METADATA_KEYS.has(sourceKey) || sourceKey.startsWith("equivalence:")) continue;
     const key = senseKey(sourceKey, index);
     if (seen.has(key)) throw invalid("WordNet bridge sense is duplicated", { index, source: key });
     seen.add(key);
@@ -86,8 +110,23 @@ export function parseEnglishWordNetBridgeCatalog(source) {
       target,
       targetPartOfSpeech,
       certainty,
-      evidence
+      evidence,
+      ...(equivalenceBySense.has(key) ? {
+        equivalenceGroup: equivalenceBySense.get(key).group,
+        equivalenceEvidence: equivalenceBySense.get(key).evidence
+      } : {})
     });
+  }
+  const entryBySense = new Map(entries.map((entry) => [entry.source, entry]));
+  for (const [group, row] of equivalenceGroups) {
+    const members = row.sources.map((sourceKey) => entryBySense.get(sourceKey));
+    if (members.some((entry) => !entry)) {
+      throw invalid("WordNet equivalence group references an unknown bridge sense", { group });
+    }
+    if (new Set(members.map((entry) => entry.target)).size !== 1
+      || new Set(members.map((entry) => entry.targetPartOfSpeech)).size !== 1) {
+      throw invalid("WordNet equivalence group members must share one target and part of speech", { group });
+    }
   }
   return {
     format: ENGLISH_WORDNET_BRIDGE_FORMAT,
@@ -97,23 +136,99 @@ export function parseEnglishWordNetBridgeCatalog(source) {
   };
 }
 
-export function buildEnglishWordNetBridgeIndex({ entries = [] } = {}) {
+export function buildEnglishWordNetBridgeIndex({ entries = [], resolveTarget = null } = {}) {
   const bySense = new Map();
+  const allBySense = new Map();
+  const identityKeysBySense = new Map();
   for (const entry of entries) {
     if (!entry?.source || !entry?.target) continue;
-    if (bySense.has(entry.source)) {
+    if (allBySense.has(entry.source)) {
       throw invalid("WordNet bridge sense is duplicated", { source: entry.source });
     }
-    bySense.set(entry.source, { ...entry });
+    const coverage = typeof resolveTarget === "function" ? resolveTarget(entry.target) : null;
+    const pyashSequence = Array.isArray(entry.pyashSequence)
+      ? entry.pyashSequence.filter((word) => typeof word === "string" && word.trim())
+      : Array.isArray(coverage?.pyashSequence) ? [...coverage.pyashSequence] : [];
+    const targetKind = entry.targetKind
+      || (coverage?.coverageType === "compound" || pyashSequence.length > 1 ? "compound" : "atom");
+    const targetId = entry.targetId || (pyashSequence.length > 0
+      ? targetKind === "compound"
+        ? `compound:${pyashSequence.join("+")}`
+        : `atom:${pyashSequence.join("+")}`
+      : "");
+    const enriched = {
+      ...entry,
+      ...(pyashSequence.length > 0 ? { pyashSequence } : {}),
+      targetKind,
+      ...(targetId ? { targetId } : {})
+    };
+    allBySense.set(entry.source, enriched);
+    const identityKeys = new Set([`target:${entry.target.normalize("NFC").trim().toLowerCase()}`]);
+    if (targetId) identityKeys.add(`identity:${targetId}`);
+    if (pyashSequence.length > 0) identityKeys.add(`sequence:${pyashSequence.join(" ")}`);
+    identityKeysBySense.set(entry.source, identityKeys);
+  }
+  const entriesByGroup = new Map();
+  for (const entry of allBySense.values()) {
+    const group = typeof entry.equivalenceGroup === "string" ? entry.equivalenceGroup.trim() : "";
+    if (!group) continue;
+    entriesByGroup.set(group, [...(entriesByGroup.get(group) ?? []), entry]);
+  }
+  for (const [group, rows] of entriesByGroup) {
+    if (rows.length < 2
+      || rows.some((entry) => !textEvidence(entry.equivalenceEvidence))
+      || rows.some((entry) => !WORDNET_POS.has(entry.targetPartOfSpeech))
+      || new Set(rows.map((entry) => entry.target.normalize("NFC").trim().toLowerCase())).size !== 1
+      || new Set(rows.map((entry) => entry.targetKind)).size !== 1
+      || new Set(rows.map((entry) => entry.targetId || "")).size !== 1
+      || new Set(rows.map((entry) => (entry.pyashSequence ?? []).join(" "))).size !== 1
+      || new Set(rows.map((entry) => entry.targetPartOfSpeech)).size !== 1
+      || new Set(rows.map((entry) => entry.equivalenceEvidence.trim())).size !== 1) {
+      throw invalid("WordNet bridge equivalence group requires shared target, part of speech, and evidence", { group });
+    }
+  }
+  const sourcesByIdentity = new Map();
+  for (const [source, entry] of allBySense) {
+    for (const key of identityKeysBySense.get(source) ?? []) {
+      sourcesByIdentity.set(key, [...(sourcesByIdentity.get(key) ?? []), source]);
+    }
+  }
+  const ambiguousTargets = [];
+  const blocked = new Set();
+  for (const [identity, sources] of sourcesByIdentity) {
+    if (sources.length < 2) continue;
+    const rows = sources.map((source) => allBySense.get(source));
+    const groups = new Set(rows.map((entry) => typeof entry.equivalenceGroup === "string"
+      ? entry.equivalenceGroup.trim()
+      : ""));
+    const evidence = new Set(rows.map((entry) => typeof entry.equivalenceEvidence === "string"
+      ? entry.equivalenceEvidence.trim()
+      : ""));
+    const sharesByEvidence = groups.size === 1
+      && !groups.has("")
+      && evidence.size === 1
+      && !evidence.has("");
+    if (sharesByEvidence) continue;
+    for (const source of sources) blocked.add(source);
+    if (identity.startsWith("target:")) ambiguousTargets.push(identity.slice("target:".length));
+    else ambiguousTargets.push(...rows.map((entry) => entry.target.normalize("NFC").trim().toLowerCase()));
+  }
+  for (const [source, entry] of allBySense) {
+    if (!blocked.has(source)) bySense.set(source, entry);
   }
   return {
-    entries: [...bySense.values()].map((entry) => ({ ...entry })),
+    entries: [...allBySense.values()].map((entry) => ({ ...entry })),
+    ambiguousTargets: [...new Set(ambiguousTargets)].sort(),
     bySense,
     lookup(source) {
       const entry = bySense.get(typeof source === "string" ? source.trim().toLowerCase() : "");
       return entry ? { ...entry } : null;
     }
   };
+}
+
+function textEvidence(value) {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 export async function loadEnglishWordNetBridges({ configUrl = ENGLISH_WORDNET_BRIDGE_CONFIG_URL } = {}) {

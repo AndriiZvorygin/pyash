@@ -158,7 +158,7 @@ test("accepted occurrence sense resumes without re-submitting to the selector", 
   assert.equal(resumed.records[0].occurrenceId, first.records[0].occurrenceId);
 });
 
-test("refinery uses convergent vocab suggestions as a deterministic anchor", async () => {
+test("refinery keeps convergent but non-equivalent atom suggestions out of sense links", async () => {
   const sourceRecord = {
     id: "sentence-one",
     source: { text: "I florp.", sentenceIndex: 0 },
@@ -188,6 +188,7 @@ test("refinery uses convergent vocab suggestions as a deterministic anchor", asy
   };
   const resources = occurrenceResources();
   resources.coverage.byVariant.delete("florp");
+  resources.coverage.byVariant.delete("like");
   const refined = await refineEnglishWordNet({
     result,
     resources,
@@ -207,9 +208,65 @@ test("refinery uses convergent vocab suggestions as a deterministic anchor", asy
       mappings: [{ word: "mystified", pyacSequence: ["hmi2f"] }]
     }]
   });
-  assert.equal(refined.records[0].status, "accepted-deterministic");
-  assert.equal(refined.records[0].link.target, "mystified");
-  assert.deepEqual(refined.records[0].link.pyashSequence, ["hmi2f"]);
+  assert.equal(refined.records[0].status, "review");
+  assert.equal(refined.records[0].link, undefined);
+  const suggestion = refined.records[0].anchorCandidates.find((candidate) => candidate.target === "mystified");
+  assert.ok(suggestion);
+  assert.equal(suggestion.selectable, false);
+});
+
+test("refinery withholds exact direct links that converge on one atom", async () => {
+  const wordnetIndex = buildEnglishWordNetIndex({
+    rows: [{
+      id: "n:alpha:alpha",
+      pos: "n",
+      synset: "alpha",
+      senseKey: "alpha",
+      lemma: "alpha",
+      gloss: "the alpha concept"
+    }, {
+      id: "n:beta:beta",
+      pos: "n",
+      synset: "beta",
+      senseKey: "beta",
+      lemma: "beta",
+      gloss: "the beta concept"
+    }]
+  });
+  const result = {
+    language: "english",
+    sourceHash: "convergent-exact-anchor-source",
+    records: [{
+      id: "sentence-one",
+      source: { text: "alpha beta", sentenceIndex: 0 },
+      tokens: [{ surface: "alpha", tokenIndex: 0, senseCandidates: wordnetIndex.senses("alpha") }, {
+        surface: "beta", tokenIndex: 1, senseCandidates: wordnetIndex.senses("beta")
+      }],
+      unresolved: ["alpha", "beta"]
+    }],
+    vocabularyCandidates: [{
+      surface: "alpha", kind: "lexical-gap", sourceRecordId: "sentence-one", tokenIndex: 0
+    }, {
+      surface: "beta", kind: "lexical-gap", sourceRecordId: "sentence-one", tokenIndex: 1
+    }]
+  };
+  const refined = await refineEnglishWordNet({
+    result,
+    resources: {
+      coverage: {
+        byVariant: new Map([
+          ["alpha", { coverageType: "atomic", canonicalEnglish: "alpha", pyashSequence: ["shared"] }],
+          ["beta", { coverageType: "atomic", canonicalEnglish: "beta", pyashSequence: ["shared"] }]
+        ])
+      },
+      grammarCatalog: { entries: [] },
+      wordnet: { index: wordnetIndex }
+    },
+    config: { edgeMaxDegree: 1 }
+  });
+  assert.deepEqual(refined.records.map((record) => record.status), ["review", "review"]);
+  assert.equal(refined.records.every((record) => !record.link), true);
+  assert.equal(refined.counts.accepted, 0);
 });
 
 test("persisted mixed-part-of-speech senses retain surrounding noun evidence", async () => {
@@ -519,12 +576,16 @@ test("WordNet attachment preserves composed anchor evidence", () => {
       target: "sexual desire",
       pyashSequence: ["hjon", "twin"],
       kind: "compound-composition",
+      targetKind: "compound",
+      targetId: "compound:hjon+twin",
+      selectable: true,
       componentTargets: ["sexual", "desire"],
       evidence: "composed from covered components sexual desire"
     }],
     sentence: "Lust is a strong sexual desire."
   }]);
   assert.equal(translation.vocabularyCandidates[0].anchorCandidates[0].kind, "compound-composition");
+  assert.equal(translation.vocabularyCandidates[0].anchorCandidates[0].targetKind, "compound");
   assert.deepEqual(translation.vocabularyCandidates[0].anchorCandidates[0].componentTargets, ["sexual", "desire"]);
   const linked = applyEnglishWordNetSenseAttachmentLinks({
     wordnet: {
@@ -547,6 +608,107 @@ test("WordNet attachment preserves composed anchor evidence", () => {
     }]
   });
   assert.match(linked.wordnet.records[0].link.evidence, /composed multiword anchor sexual desire/u);
+  assert.equal(linked.wordnet.records[0].link.targetKind, "compound");
+  assert.equal(linked.wordnet.records[0].link.targetId, "compound:hjon+twin");
+});
+
+test("a selected sense cannot attach an unverified related atom", () => {
+  const translation = applyEnglishWordNetSenseAttachmentLinks({
+    wordnet: {
+      decisions: [],
+      records: [{
+        id: "sense-attract",
+        status: "review",
+        pos: "v",
+        synset: "attract",
+        selectedSenseId: "v:attract",
+        anchorCandidates: [{
+          target: "charm",
+          pyashSequence: ["crak"],
+          targetKind: "atom",
+          targetId: "atom:crak",
+          selectable: false,
+          kind: "relation",
+          evidence: "WordNet related sense reaches charm"
+        }]
+      }]
+    },
+    vocabularyCandidates: [{
+      id: "wordnet-attachment:sense-attract:occurrence",
+      occurrenceId: "occurrence-attract",
+      kind: "wordnet-sense-attachment",
+      status: "accepted-llm",
+      senseId: "v:attract",
+      targetEnglish: "charm",
+      pyashSequence: ["crak"],
+      verificationRationale: "closest available word"
+    }]
+  });
+  assert.equal(translation.wordnet.records[0].status, "review");
+  assert.equal(translation.wordnet.records[0].link, undefined);
+});
+
+test("selected senses cannot share an atom unless the compound catalog declares equivalence", () => {
+  const records = ["first", "second"].map((sense) => ({
+    id: `sense-${sense}`,
+    status: "review",
+    pos: "n",
+    synset: sense,
+    selectedSenseId: `n:${sense}`,
+    anchorCandidates: [{
+      target: "touch",
+      pyashSequence: ["tcum"],
+      targetKind: "atom",
+      targetId: "atom:tcum",
+      selectable: true,
+      evidence: "exact covered atom"
+    }]
+  }));
+  const translation = applyEnglishWordNetSenseAttachmentLinks({
+    wordnet: { decisions: [], records },
+    vocabularyCandidates: records.map((record) => ({
+      id: `wordnet-attachment:${record.id}`,
+      kind: "wordnet-sense-attachment",
+      status: "accepted-llm",
+      senseId: record.selectedSenseId,
+      targetEnglish: "touch",
+      pyashSequence: ["tcum"],
+      targetKind: "atom",
+      targetId: "atom:tcum",
+      verificationRationale: "fixture choice"
+    }))
+  });
+  assert.deepEqual(translation.wordnet.records.map((record) => record.status), ["review", "review"]);
+  assert.equal(translation.wordnet.records.every((record) => !record.link), true);
+  assert.deepEqual(translation.vocabularyCandidates.map((candidate) => candidate.status), [
+    "uncertain-llm",
+    "uncertain-llm"
+  ]);
+
+  const equivalent = applyEnglishWordNetSenseAttachmentLinks({
+    wordnet: {
+      decisions: [],
+      records: records.map((record) => ({
+        ...record,
+        anchorCandidates: record.anchorCandidates.map((anchor) => ({
+          ...anchor,
+          equivalenceGroup: "same-touch",
+          equivalenceEvidence: "both selected synsets define the same tactile contact"
+        }))
+      }))
+    },
+    vocabularyCandidates: records.map((record) => ({
+      id: `wordnet-attachment:${record.id}`,
+      kind: "wordnet-sense-attachment",
+      status: "accepted-llm",
+      senseId: record.selectedSenseId,
+      targetEnglish: "touch",
+      pyashSequence: ["tcum"],
+      verificationRationale: "fixture choice"
+    }))
+  });
+  assert.deepEqual(equivalent.wordnet.records.map((record) => record.status), ["accepted-llm", "accepted-llm"]);
+  assert.equal(equivalent.wordnet.records[0].link.equivalenceGroup, "same-touch");
 });
 
 test("WordNet attachment ids remain unique for repeated senses", () => {
@@ -635,7 +797,14 @@ test("accepted attachment links update the selected sense record", () => {
         status: "review",
         pos: "n",
         synset: "00038116-n",
-        selectedSenseId: "n:00038116-n"
+        selectedSenseId: "n:00038116-n",
+        anchorCandidates: [{
+          target: "activity",
+          pyashSequence: ["twot"],
+          targetKind: "atom",
+          targetId: "atom:twot",
+          selectable: true
+        }]
       }]
     },
     vocabularyCandidates: [{
@@ -650,6 +819,8 @@ test("accepted attachment links update the selected sense record", () => {
   });
   assert.equal(linked.wordnet.records[0].status, "accepted-llm");
   assert.deepEqual(linked.wordnet.records[0].link.pyashSequence, ["twot"]);
+  assert.equal(linked.wordnet.records[0].link.targetKind, "atom");
+  assert.equal(linked.wordnet.records[0].link.targetId, "atom:twot");
   assert.equal(linked.wordnet.counts.accepted, 1);
   assert.equal(linked.wordnet.counts.unresolved, 0);
 });

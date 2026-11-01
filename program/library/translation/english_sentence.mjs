@@ -2232,11 +2232,6 @@ export async function loadEnglishSentenceResources() {
       }
       const grammarMappings = new Map(DEFAULT_GRAMMAR_MAPPINGS);
       for (const [surface, mapping] of grammarIndex.mappings) grammarMappings.set(surface, mapping);
-      const wordnetIndex = buildEnglishWordNetIndex({
-        rows: wordnet.rows,
-        relations: wordnet.relations,
-        bridges: bridgeCatalog.entries
-      });
       const curatedCompoundRecords = compoundRecords.map((entry) => ({
         ...entry,
         status: "accepted-curated"
@@ -2249,6 +2244,23 @@ export async function loadEnglishSentenceResources() {
           }
         }
       }
+      const coverage = buildEnglish30kCoverage({
+        source,
+        atomicEntries: pyashWords,
+        aliases,
+        dictionaryAliases,
+        grammarMappings,
+        grammarOverrides: grammarIndex.mappings,
+        compoundRecords: curatedCompoundRecords,
+        lemmaEntries: lemmaCatalog.entries,
+        lemmaIndex
+      });
+      const wordnetIndex = buildEnglishWordNetIndex({
+        rows: wordnet.rows,
+        relations: wordnet.relations,
+        bridges: bridgeCatalog.entries,
+        resolveBridgeTarget: (target) => lookupEnglish30kCoverage(coverage, target)
+      });
       const resources = {
         source,
         lemmaCatalog,
@@ -2264,23 +2276,13 @@ export async function loadEnglishSentenceResources() {
         lemmaIndex,
         sourceByVariant,
         atomicByVariant,
+        coverage,
         wordnet: {
           ...wordnet,
           bridges: bridgeCatalog,
           index: wordnetIndex
         }
       };
-      resources.coverage = buildEnglish30kCoverage({
-        source,
-        atomicEntries: pyashWords,
-        aliases,
-        dictionaryAliases,
-        grammarMappings,
-        grammarOverrides: grammarIndex.mappings,
-        compoundRecords: curatedCompoundRecords,
-        lemmaEntries: lemmaCatalog.entries,
-        lemmaIndex
-      });
       resources.resourceHashes = Object.freeze({
         english30k: source.sourceHash,
         englishLemmas: lemmaCatalog.sourceHash,

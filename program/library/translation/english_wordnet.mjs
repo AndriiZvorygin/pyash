@@ -204,7 +204,7 @@ function relationKey(value) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
-export function buildEnglishWordNetIndex({ rows = [], relations = [], bridges = [] } = {}) {
+export function buildEnglishWordNetIndex({ rows = [], relations = [], bridges = [], resolveBridgeTarget = null } = {}) {
   const byLemma = new Map();
   const bySynset = new Map();
   const relationGraph = new Map();
@@ -249,7 +249,7 @@ export function buildEnglishWordNetIndex({ rows = [], relations = [], bridges = 
     }
     return 0;
   }
-  const bridgeIndex = buildEnglishWordNetBridgeIndex({ entries: bridges });
+  const bridgeIndex = buildEnglishWordNetBridgeIndex({ entries: bridges, resolveTarget: resolveBridgeTarget });
   return {
     rows: rows.map((row) => ({ ...row })),
     relations: relations.map((relation) => ({ ...relation })),

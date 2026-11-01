@@ -58,8 +58,22 @@ group is sent as one duty when it fits; larger groups split on complete sense ro
 never receives a truncated sense identity or exhausts the response budget before returning all
 decision rows.
 The deterministic pre-pass also accepts a low-degree edge synset when one lemma has exactly
-one WordNet sense. The existing target may be an atom or an accepted compound; missing
-vocabulary stays review evidence and is never invented.
+one WordNet sense and the target anchor does not identify a competing WordNet sense. Links
+carry `targetKind` (`atom` or `compound`) and a stable `targetId` (`atom:<Pyac>` or
+`compound:<Pyac parts>`, unless the accepted compound already has a stable record id). Direct
+same-synset lemmas and accepted compounds with two or three components can be offered as
+bounded choices. WordNet relation atoms, convergent word suggestions, and unverified compounds
+remain evidence only; a nearby atom cannot become a sense translation by itself. Composition
+search is capped at three atoms.
+
+The bridge index also withholds a target reused by different synsets unless the `.pya` catalog
+declares their equivalence. Add one evidence row such as
+`su text "equivalence:<group>" ob text "<sense-id-1> <sense-id-2>" via text "shared meaning evidence" ya`;
+all listed senses must share the same target and part of speech. Without that row, colliding
+bridge rows remain in the catalog as evidence but do not become active links. This keeps the senses of `touch`,
+`experience`, `emotionally`, `searching`, and `appear` unresolved where their current bridge
+rows share a target. Give each sense a distinct accepted atom/compound before linking it; shared
+anchors activate only when the equivalence evidence is recorded.
 Callers that have loaded the derived compound catalog pass its accepted records explicitly;
 candidate-closed and rejected compounds are excluded from the authoritative inventory.
 Compound and atom relationships are derived by
@@ -83,9 +97,10 @@ The same equivalence pass reuses `emotionally` (`xyek`) for `emotion`, `emotions
 and the emotional-sensitivity sense of `feelings`; plural `pu` and adjective `ci` remain explicit
 Pyash grammar suffixes. Broad `feel` and singular `feeling` stay contextual because WordNet
 also gives them tactile, perceptual, intuitive, and physical senses. The native bridge catalog
-covers all 17 Open English WordNet senses of `feel` with existing anchors such as `touch`,
-`awareness`, `experience`, `searching`, `appear`, and `air`; sentence context selects among those
-bridges and leaves genuinely tied readings reviewable.
+contains evidence for these readings, but colliding targets such as `touch`, `experience`,
+`emotionally`, `searching`, and `appear` are withheld from the active bridge index until they
+have distinct anchors or an explicit equivalence declaration. Unique anchors such as `awareness`,
+`air`, `believe`, and `finger` can still resolve from sentence context.
 The analyzer also scores a bounded local sentence window against sense glosses and lemmas;
 one unique positive overlap narrows the sense set before deterministic agreement.
 Generic contrast and quantity modifiers such as `different`, `various`, and `several` do not

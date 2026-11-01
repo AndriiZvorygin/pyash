@@ -611,7 +611,7 @@ test("source-to-VLIW refinery re-runs after an accepted Qwen vocabulary link", a
   assert.deepEqual(blorf.pyashSequence, ["pyan"]);
 });
 
-test("source-to-VLIW refinery feeds an accepted sense attachment through the anchor loop", async () => {
+test("source-to-VLIW refinery keeps a related atom as evidence instead of attaching it", async () => {
   const directory = mkdtempSync(join(tmpdir(), "pyash-translation-refinery-wordnet-anchor-loop-"));
   const paths = {
     translation: join(directory, "translation.pya"),
@@ -710,11 +710,11 @@ test("source-to-VLIW refinery feeds an accepted sense attachment through the anc
   });
   const record = output.translation.records[0];
   const florp = record.tokens.find((token) => token.surface === "florp");
-  assert.equal(output.result.vocabularyOutcome, "applied");
-  assert.equal(output.translation.wordnet.records[0].status, "accepted-llm");
-  assert.equal(output.translation.wordnet.records[0].link.target, "activity");
+  assert.equal(output.result.vocabularyOutcome, "partial");
+  assert.equal(output.translation.wordnet.records[0].status, "review");
+  assert.equal(output.translation.wordnet.records[0].link, undefined);
   assert.equal(output.translation.wordnet.records[0].selectedSenseId, "v:anchor-v-one");
-  assert.equal(record.unresolved, undefined);
-  assert.equal(florp.coverageType, "llm");
-  assert.deepEqual(florp.pyashSequence, ["twot"]);
+  assert.ok(record.unresolved);
+  assert.equal(florp.coverageType, "unresolved");
+  assert.deepEqual(florp.pyashSequence, []);
 });
