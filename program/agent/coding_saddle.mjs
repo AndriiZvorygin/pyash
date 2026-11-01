@@ -7,6 +7,38 @@ import { fetchMiniMaxModels } from "../runtime/minimax.mjs";
 
 export const SADDLE_OLLAMA_CONTEXT_PRESETS = [4096, 8192, 16384, 32768, 65536];
 
+const SADDLE_SLASH_COMMANDS = [
+  { name: "/help", takesArguments: false },
+  { name: "/status", takesArguments: false },
+  { name: "/session", takesArguments: true },
+  { name: "/mind", takesArguments: true },
+  { name: "/model", takesArguments: true },
+  { name: "/context", takesArguments: true },
+  { name: "/think", takesArguments: true },
+  { name: "/host", takesArguments: true },
+  { name: "/usage", takesArguments: false },
+  { name: "/discharge", takesArguments: false },
+  { name: "/exit", takesArguments: false },
+  { name: "/quit", takesArguments: false }
+];
+
+export function saddleSlashCommandCompletions({ value = "", cursor } = {}) {
+  const text = String(value ?? "");
+  const position = Math.max(0, Math.min(text.length, Number.isInteger(cursor) ? cursor : text.length));
+  const leading = text.match(/^\s*/u)?.[0] ?? "";
+  const rest = text.slice(leading.length);
+  const token = rest.match(/^\/[^\s]*/u)?.[0] ?? "";
+  if (!token || position < leading.length || position > leading.length + token.length) return [];
+
+  const matches = SADDLE_SLASH_COMMANDS.filter(({ name }) => name.startsWith(token.toLowerCase()));
+  const tail = rest.slice(token.length);
+  return matches.map(({ name, takesArguments }) => {
+    const addSpace = !tail && takesArguments;
+    const value = `${leading}${name}${addSpace ? " " : tail}`;
+    return { value, cursor: leading.length + name.length + (addSpace ? 1 : 0) };
+  });
+}
+
 function formatContextLength(tokens) {
   const value = Number(tokens);
   if (!Number.isSafeInteger(value) || value <= 0) return "default";
@@ -723,22 +755,28 @@ export function createSaddleInputDecoder({
   onCancel,
   onExit,
   onChange,
-  onScroll
+  onScroll,
+  onAutocomplete
 } = {}) {
   const state = { value: "", cursor: 0 };
   let escape = "";
+  let completion = null;
+
+  const resetCompletion = () => { completion = null; };
 
   const changed = () => {
     if (typeof onChange === "function") onChange({ ...state });
   };
   const insert = (text) => {
     const value = String(text ?? "");
+    resetCompletion();
     state.value = `${state.value.slice(0, state.cursor)}${value}${state.value.slice(state.cursor)}`;
     state.cursor += value.length;
     changed();
   };
   const submit = () => {
     const value = state.value;
+    resetCompletion();
     state.value = "";
     state.cursor = 0;
     changed();
@@ -746,33 +784,65 @@ export function createSaddleInputDecoder({
       Promise.resolve(onSubmit(value)).catch(() => undefined);
     }
   };
+  const autocomplete = () => {
+    let choices = [];
+    let index = 0;
+    if (completion && state.value === completion.value && state.cursor === completion.cursor) {
+      choices = completion.choices;
+      index = (completion.index + 1) % choices.length;
+    } else {
+      resetCompletion();
+      try {
+        const values = onAutocomplete?.({ ...state });
+        choices = (Array.isArray(values) ? values : [])
+          .map((choice) => typeof choice === "string"
+            ? { value: choice, cursor: choice.length }
+            : { value: String(choice?.value ?? ""), cursor: Number(choice?.cursor) })
+          .filter((choice) => choice.value);
+      } catch {
+        choices = [];
+      }
+    }
+    if (!choices.length) return;
+    const selected = choices[index];
+    state.value = selected.value;
+    state.cursor = Math.max(0, Math.min(state.value.length,
+      Number.isInteger(selected.cursor) ? selected.cursor : state.value.length));
+    completion = { choices, index, value: state.value, cursor: state.cursor };
+    changed();
+  };
   const handleEscape = (sequence) => {
     if (isShiftEnterSequence(sequence)) {
       insert("\n");
       return;
     }
     if (sequence === "\u001b[D") {
+      resetCompletion();
       state.cursor = Math.max(0, state.cursor - 1);
       changed();
       return;
     }
     if (sequence === "\u001b[C") {
+      resetCompletion();
       state.cursor = Math.min(state.value.length, state.cursor + 1);
       changed();
       return;
     }
     if (sequence === "\u001b[H" || sequence === "\u001b[1~") {
+      resetCompletion();
       state.cursor = 0;
       changed();
       return;
     }
     if (sequence === "\u001b[F" || sequence === "\u001b[4~") {
+      resetCompletion();
       state.cursor = state.value.length;
       changed();
       return;
     }
     if (sequence === "\u001b[3~") {
       if (state.cursor < state.value.length) {
+        resetCompletion();
         state.value = `${state.value.slice(0, state.cursor)}${state.value.slice(state.cursor + 1)}`;
         changed();
       }
@@ -810,6 +880,10 @@ export function createSaddleInputDecoder({
       if (typeof onExit === "function") onExit();
       return;
     }
+    if (char === "\t") {
+      autocomplete();
+      return;
+    }
     if (char === "\r") {
       submit();
       return;
@@ -820,13 +894,14 @@ export function createSaddleInputDecoder({
     }
     if (char === "\u007f" || char === "\b") {
       if (state.cursor > 0) {
+        resetCompletion();
         state.value = `${state.value.slice(0, state.cursor - 1)}${state.value.slice(state.cursor)}`;
         state.cursor -= 1;
         changed();
       }
       return;
     }
-    if (char >= " " || char === "\t") insert(char);
+    if (char >= " ") insert(char);
   };
 
   return {
@@ -837,6 +912,7 @@ export function createSaddleInputDecoder({
       return { ...state };
     },
     setValue(value) {
+      resetCompletion();
       state.value = String(value ?? "");
       state.cursor = state.value.length;
       changed();

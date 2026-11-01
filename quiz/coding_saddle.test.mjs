@@ -41,6 +41,7 @@ import {
   resolveSaddleModelSelection,
   resolveSaddleMindProfile,
   runSaddleTurnWithEvidence,
+  saddleSlashCommandCompletions,
   saddleToolEventLabel,
   startSaddleProgress
 } from "../program/agent/coding_saddle.mjs";
@@ -96,6 +97,26 @@ test("coding saddle supports cursor editing and control actions", () => {
   assert.equal(decoder.getState().cursor, 0);
   decoder.feed("\u001b[5~\u001b[6~\u0003\u0004");
   assert.deepEqual(events, ["scroll:-1", "scroll:1", "cancel", "exit"]);
+});
+
+test("coding saddle autocompletes and cycles slash commands without inserting tabs in ordinary text", () => {
+  assert.deepEqual(
+    saddleSlashCommandCompletions({ value: "/m", cursor: 2 }).map((choice) => choice.value),
+    ["/mind ", "/model "]
+  );
+  assert.deepEqual(
+    saddleSlashCommandCompletions({ value: "/model qwen", cursor: 11 }),
+    []
+  );
+
+  const decoder = createSaddleInputDecoder({ onAutocomplete: saddleSlashCommandCompletions });
+  decoder.feed("/m\t\t");
+  assert.equal(decoder.getState().value, "/model ");
+  decoder.feed("\t");
+  assert.equal(decoder.getState().value, "/mind ");
+  decoder.setValue("regular text");
+  decoder.feed("\t");
+  assert.equal(decoder.getState().value, "regular text");
 });
 
 test("coding saddle shows elapsed progress and explicit tool event labels", () => {

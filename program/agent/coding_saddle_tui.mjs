@@ -276,21 +276,27 @@ function renderHistory(items, width, color) {
 }
 
 function footerHelpLines(width) {
-  return wrapPlainLine("Enter send · Shift+Enter/Ctrl+J newline · PgUp/PgDn scroll · Ctrl+C interrupt · Ctrl+D exit", width);
+  return wrapPlainLine("Enter send · Tab /cmds · Shift+Enter/Ctrl+J newline · PgUp/PgDn scroll · Ctrl+C interrupt · Ctrl+D exit", width);
 }
 
-function statusDisplayLines(value, width, height) {
+function statusDisplayLines(value, width, height, usage = "") {
   const compact = String(value || "starting...")
     .split(" | ")
     .filter((part) => !part.startsWith("cwd: "))
     .join("  ·  ");
-  return wrapPlainLine(compact, width).slice(0, Math.max(1, Math.min(3, height - 6)));
+  const maxRows = Math.max(1, Math.min(5, height - 6));
+  const lines = wrapPlainLine(compact, width).slice(0, Math.min(3, maxRows));
+  if (usage && lines.length < maxRows) {
+    lines.push(...wrapPlainLine(usage, width).slice(0, maxRows - lines.length));
+  }
+  return lines;
 }
 
 export function createSaddleTerminalUi({ output = process.stdout, maxItems = 4000, color } = {}) {
   const enabledColor = color ?? (Boolean(output.isTTY) && !process.env.NO_COLOR && process.env.TERM !== "dumb");
   const items = [];
   let status = "";
+  let usage = "";
   let activity = "ready";
   let input = { value: "", cursor: 0 };
   let promptLabel = "pyash> ";
@@ -311,7 +317,7 @@ export function createSaddleTerminalUi({ output = process.stdout, maxItems = 400
     if (!active) return;
     const width = columns() - 1;
     const height = rows();
-    const statusLines = statusDisplayLines(status, width, height);
+    const statusLines = statusDisplayLines(status, width, height, usage);
     const headerRows = 1 + statusLines.length;
     const inputLayout = layoutSaddleInput({
       value: input.value,
@@ -383,6 +389,10 @@ export function createSaddleTerminalUi({ output = process.stdout, maxItems = 400
       status = stripTerminalControlSequences(value);
       draw();
     },
+    setUsage(value = "") {
+      usage = stripTerminalControlSequences(value);
+      draw();
+    },
     setBusy(value) {
       inputDisabled = Boolean(value);
       status = status.replace(/state: (?:ready|running)/u, `state: ${inputDisabled ? "running" : "ready"}`);
@@ -403,7 +413,7 @@ export function createSaddleTerminalUi({ output = process.stdout, maxItems = 400
     scrollBy(amount) {
       const contentRows = renderHistory(items, columns() - 1, enabledColor).length;
       const width = columns() - 1;
-      const headerRows = 1 + statusDisplayLines(status, width, rows()).length;
+      const headerRows = 1 + statusDisplayLines(status, width, rows(), usage).length;
       const helpLines = footerHelpLines(width);
       const inputRows = Math.max(1, Math.min(layoutSaddleInput({ value: input.value, cursor: input.cursor, label: promptLabel, columns: columns() }).rowCount, 5, rows() - headerRows - 2 - helpLines.length));
       const page = Math.max(1, rows() - headerRows - 1 - inputRows - helpLines.length);
@@ -416,7 +426,7 @@ export function createSaddleTerminalUi({ output = process.stdout, maxItems = 400
       draw();
     },
     getState() {
-      return { active, status, activity, itemCount: items.length, scrollOffset, cursorRow, cursorColumn };
+      return { active, status, usage, activity, itemCount: items.length, scrollOffset, cursorRow, cursorColumn };
     },
     getVisibleLength: visibleLength
   };

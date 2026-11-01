@@ -83,7 +83,9 @@ implicitly. There is no sudo access.
 
 Enter submits the current request. Shift+Enter inserts a newline on terminals
 that report the standard modified-key sequence; `Ctrl+J` is the portable
-newline fallback. `PageUp` and `PageDown` scroll the conversation; new events
+newline fallback. `Tab` completes slash-command names, and repeated Tab cycles
+matching commands; it does not complete command arguments. `PageUp` and
+`PageDown` scroll the conversation; new events
 continue to appear while the view is scrolled. `Ctrl+C` writes the existing
 Pyash mind-interrupt signal and `Ctrl+D` exits. The terminal uses a full-screen
 alternate buffer and restores the shell screen on exit, so its live redraws do

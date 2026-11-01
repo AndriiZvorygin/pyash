@@ -70,6 +70,9 @@ test("coding saddle screen keeps progress fixed, scrolls conversation, resizes, 
   ui.setStatus("mind: zai | model: glm-5.3-flash | state: ready");
   for (let index = 0; index < 16; index += 1) ui.writeLine(`transcript line ${index}`);
   ui.setInput({ value: "inspect files", cursor: 7 }, "pyash> ");
+  ui.setUsage("turn usage · input 120 · output 24 · total 144");
+  assert.equal(ui.getState().usage, "turn usage · input 120 · output 24 · total 144");
+  assert.ok(writes.join("").includes("turn usage"));
   const itemCount = ui.getState().itemCount;
   ui.setActivity("working... 10s elapsed (zai / glm-5.3-flash)");
   assert.equal(ui.getState().itemCount, itemCount);

@@ -65,6 +65,7 @@ import {
   parseSaddleMindCommand,
   SADDLE_OLLAMA_CONTEXT_PRESETS,
   saddleToolEventLabel,
+  saddleSlashCommandCompletions,
   startSaddleProgress
 } from "../program/agent/coding_saddle.mjs";
 
@@ -335,6 +336,13 @@ function writeLine(text = "") {
 function writeMarkdown(text = "") {
   if (activeSaddleUi) activeSaddleUi.writeMarkdown(text);
   else process.stdout.write(`${String(text)}\n`);
+}
+
+function formatSaddleHeaderUsage(rawUsage) {
+  const usage = normalizeMindUsage(rawUsage);
+  if (!usage) return "";
+  const count = (value) => new Intl.NumberFormat("en-US").format(value);
+  return `turn usage · input ${count(usage.inputTokens)} (cached ${count(usage.cachedInputTokens)}) · output ${count(usage.outputTokens)} (reasoning ${count(usage.reasoningOutputTokens)}) · total ${count(usage.totalTokens)}`;
 }
 
 function restoreActiveSaddleUi() {
@@ -926,6 +934,7 @@ async function main() {
     }
     if (input.trim() === "/help") {
       writeLine("/status  /session  /mind [name]  /model [backend|model-id]  /context [size]  /think [mode]  /host <url>  /usage  /discharge  /exit");
+      writeLine("Tab completes slash-command names; repeated Tab cycles matching commands.");
       prompt({ clear: false });
       return;
     }
@@ -1140,6 +1149,7 @@ async function main() {
 
     busy = true;
     saddleUi.setBusy(true);
+    saddleUi.setUsage("");
     writeLine(`you> ${input}`);
     saddleUi.setActivity(`working: ${model} via ${backend}${isLocalModelBackend(backend) ? " through GPU Housekeeper" : ""}`);
     const stopProgress = startSaddleProgress({
@@ -1185,6 +1195,7 @@ async function main() {
       if (evidence) writeLine(`${evidence}${turn.retryError ? ` retry failed: ${turn.retryError}` : ""}`);
       const usage = sumMindUsages(turnUsages);
       if (usage) {
+        saddleUi.setUsage(formatSaddleHeaderUsage(usage));
         writeLine(formatMindUsage(usage));
         await appendSaddleUsage({
           worldRoot: config.worldRoot,
@@ -1230,6 +1241,7 @@ async function main() {
     },
     onExit: () => { shutdown().catch(() => {}); },
     onScroll: (direction) => saddleUi.scrollBy(-direction),
+    onAutocomplete: saddleSlashCommandCompletions,
     onChange: (state) => {
       if (!busy && !closing) {
         saddleUi.setInput(state, promptLabel);
