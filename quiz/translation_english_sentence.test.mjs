@@ -252,6 +252,75 @@ test("English passive participles remain separate from zero-copula actions", asy
   assert.deepEqual(result.unresolved, ["expressed"]);
 });
 
+test("English often lowers to frequentative aspect on a modal passive predicate", async () => {
+  const resources = await loadEnglishSentenceResources();
+  const often = resources.grammarIndex.resolve("often");
+  assert.equal(often.kind, "aspect-marker");
+  assert.deepEqual(often.components, ["frequentative_aspect_"]);
+  assert.deepEqual(often.pyashSequence, ["ra2"]);
+  assert.deepEqual(resources.grammarIndex.resolve("frequently").pyashSequence, ["ra2"]);
+
+  const result = await analyzePhraseFixtureSentence(
+    "Often love can be confused with other feelings."
+  );
+  assert.equal(result.status, "resolved");
+  assert.equal(result.construction, "modal-passive");
+  assert.deepEqual(result.subject.pyashSequence, ["pyan", "na"]);
+  assert.deepEqual(result.verbPhrase.pyashSequence, ["fixture-confused", "pyoh", "ra2"]);
+  assert.equal(result.verbPhrase.mood, "tseh");
+  assert.match(result.phrases.find((phrase) => phrase.slot === "be").surface, /can be confused/u);
+});
+
+test("a passive participle keeps its verb WordNet senses alongside adjective senses", async () => {
+  const result = await analyzeDefaultEnglishSentence(
+    "Often love can be confused with other feelings."
+  );
+  const confused = result.tokens.find((token) => token.surface === "confused");
+  assert.ok(confused.wordnet.senses.some((sense) => (
+    sense.pos === "v" && sense.synset === "00621282-v"
+  )));
+  assert.ok(confused.wordnet.senses.some((sense) => sense.pos === "a" || sense.pos === "s"));
+  const selection = selectEnglishWordNetSenses(
+    confused,
+    result.tokens,
+    result.tokens.indexOf(confused),
+    (await loadEnglishSentenceResources()).wordnet.index
+  );
+  assert.ok(selection.senses.length > 1);
+  assert.ok(selection.senses.every((sense) => sense.pos === "v"));
+  assert.equal(selection.evidence, "");
+  assert.ok(selection.senses.some((sense) => (
+    sense.pos === "v" && sense.synset === "00621282-v"
+  )));
+});
+
+test("an unlinked modal passive keeps aspect and voice pending its lexical sense", async () => {
+  const analysis = await analyzeDefaultEnglishSentence(
+    "Often love can be confused with other feelings."
+  );
+  const candidate = analysis.candidates[0];
+  assert.equal(analysis.status, "review");
+  assert.deepEqual(candidate.lexicalSequence, []);
+  assert.deepEqual(candidate.pyashSequence, ["pyoh", "ra2"]);
+  assert.equal(candidate.mood, "tseh");
+
+  let verificationCalls = 0;
+  const resolved = await resolveEnglishSentence(analysis.sourceText, {
+    analyze: async () => analysis,
+    verify: async () => {
+      verificationCalls += 1;
+      return { verdict: "accept", candidateId: candidate.id };
+    }
+  });
+  assert.equal(verificationCalls, 0);
+  assert.equal(resolved.status, "review");
+  assert.ok(!resolved.sentence);
+
+  const applied = applyEnglishSentenceCandidate(analysis, candidate.id);
+  assert.equal(applied.status, "review");
+  assert.ok(!applied.sentence);
+});
+
 test("English lexical equivalence maps mix surfaces to the existing mixed atom", async () => {
   const present = await analyzeDefaultEnglishSentence("I mix");
   assert.equal(present.status, "review");

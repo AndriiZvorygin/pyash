@@ -6,7 +6,12 @@ import { tmpdir } from "node:os";
 
 import { runTranslationDocument } from "../command/translate_document.mjs";
 import { buildEnglishWordNetIndex } from "../program/library/translation/english_wordnet.mjs";
-import { parseTranslationPipelinePya } from "../program/library/translation/translation_pipeline.mjs";
+import {
+  parseTranslationPipelinePya,
+  renderTranslationPipelinePya,
+  translateDocument
+} from "../program/library/translation/translation_pipeline.mjs";
+import { loadDefaultEnglishSentenceResources } from "../program/library/translation/english_sentence.mjs";
 import {
   appendEnglishWordNetAttachmentCandidates,
   applyEnglishWordNetSenseAttachmentLinks,
@@ -587,6 +592,38 @@ test("WordNet attachment ids remain unique for repeated senses", () => {
     translation.vocabularyCandidates[0].id,
     translation.vocabularyCandidates[1].id
   );
+});
+
+test("persisted plural noun context does not narrow a passive verb to a shared word stem", async () => {
+  const translated = await translateDocument({
+    language: "english",
+    text: "Often love can be confused with other feelings."
+  });
+  const persisted = parseTranslationPipelinePya(renderTranslationPipelinePya(translated));
+  const record = persisted.records[0];
+  const feelings = record.tokens.find((token) => token.surface === "feelings");
+  assert.equal(feelings.grammaticalNumber, "plural");
+
+  const submissions = [];
+  const refined = await refineEnglishWordNet({
+    result: persisted,
+    resources: await loadDefaultEnglishSentenceResources(),
+    submit: async (request) => {
+      submissions.push(request);
+      return { status: "queued" };
+    },
+    suggestVocabulary: async () => []
+  });
+  const decision = refined.decisions.find((item) => item.surface === "confused");
+  assert.ok(decision);
+  assert.equal(decision.selectionEvidence, "");
+  assert.ok(decision.senses.length > 1);
+  assert.ok(decision.senses.some((sense) => sense.synset === "00621282-v"));
+  assert.ok(decision.senses.some((sense) => sense.synset === "01794768-v"));
+  assert.ok(submissions.some((request) => (
+    request.candidates.some((sense) => sense.synset === "00621282-v")
+      && request.candidates.some((sense) => sense.synset === "01794768-v")
+  )));
 });
 
 test("accepted attachment links update the selected sense record", () => {

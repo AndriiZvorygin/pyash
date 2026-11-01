@@ -185,6 +185,23 @@ function wordNetMetadata(surface, wordnetIndex) {
   };
 }
 
+function mergeWordNetMetadata(...metadataRows) {
+  const available = metadataRows.filter(Boolean);
+  if (available.length === 0) return null;
+  const sensesById = new Map();
+  for (const metadata of available) {
+    for (const sense of metadata.senses ?? []) {
+      sensesById.set(`${sense.pos}:${sense.synset}`, sense);
+    }
+  }
+  const senses = [...sensesById.values()];
+  return {
+    partsOfSpeech: [...new Set(senses.map((sense) => sense.pos))],
+    senses,
+    evidence: senses.map((sense) => `${sense.pos}:${sense.synset}${sense.gloss ? ` ${sense.gloss}` : ""}`).join("; ")
+  };
+}
+
 function isVerbOnlyWordNetRecord(surface, wordnetIndex) {
   const metadata = wordNetMetadata(surface, wordnetIndex);
   return Boolean(metadata?.partsOfSpeech?.length)
@@ -198,7 +215,9 @@ function wordNetContextTerms(records, index) {
   for (let contextIndex = start; contextIndex < end; contextIndex += 1) {
     if (contextIndex === index) continue;
     const record = records[contextIndex];
-    for (const value of [record?.surface, record?.lemma]) {
+    const nounContext = record?.grammaticalNumber === "plural"
+      || ["pronoun", "possessive-pronoun"].includes(record?.grammar?.kind);
+    for (const value of nounContext ? [record?.surface] : [record?.surface, record?.lemma]) {
       for (const term of wordNetTerms(value)) {
         if (!WORDNET_CONTEXT_STOP_WORDS.has(term)) terms.add(term);
       }
@@ -433,7 +452,10 @@ function wordRecord(surface, {
     }
   }
   const wordnet = lemma?.lemma && lemma.lemma !== normalized
-    ? (wordNetMetadata(lemma.lemma, wordnetIndex) ?? wordNetMetadata(normalized, wordnetIndex))
+    ? mergeWordNetMetadata(
+      wordNetMetadata(lemma.lemma, wordnetIndex),
+      wordNetMetadata(normalized, wordnetIndex)
+    )
     : wordNetMetadata(normalized, wordnetIndex);
   if (coverage?.coverageType === "dictionary-alias" && wordnet?.senses?.length > 1) {
     coverage = null;
@@ -503,6 +525,18 @@ function isPotentialModalActionRecord(record) {
   return (record.wordnet?.partsOfSpeech ?? []).includes("v");
 }
 
+function aspectMarkerRecords(records) {
+  return records.filter((record) => record.grammar?.kind === "aspect-marker");
+}
+
+function aspectMarkerSequence(records) {
+  return aspectMarkerRecords(records).flatMap((record) => record.pyashSequence);
+}
+
+function aspectMarkerNames(records) {
+  return aspectMarkerRecords(records).flatMap((record) => record.grammar.components);
+}
+
 function findModalAction(records, startIndex = subjectActionStart(records)) {
   for (let modalIndex = startIndex; modalIndex < records.length; modalIndex += 1) {
     const modal = records[modalIndex];
@@ -514,6 +548,11 @@ function findModalAction(records, startIndex = subjectActionStart(records)) {
       records[actionIndex]?.grammar?.kind === NEGATION_GRAMMAR_KIND
       || records[actionIndex]?.surface === "also"
     ) actionIndex += 1;
+    if (records[actionIndex]?.copula && isPassiveAuxiliary(records, actionIndex)) {
+      const auxiliaryIndex = actionIndex;
+      actionIndex += 1;
+      return { modalIndex, auxiliaryIndex, actionIndex, mood, passive: true };
+    }
     if (isPotentialModalActionRecord(records[actionIndex])) return { modalIndex, actionIndex, mood };
   }
   return null;
@@ -1693,7 +1732,9 @@ function makeSubjectPhrase(records, verbIndex) {
       evidence: "English imperative uses the understood second-person subject"
     };
   }
-  const phraseRecords = records.slice(0, verbIndex);
+  const phraseRecords = records.slice(0, verbIndex).filter((record) => (
+    record.grammar?.kind !== "aspect-marker" && !record.consumedBy
+  ));
   const first = phraseRecords[0] ?? records[0];
   return {
     ...first,
@@ -1719,7 +1760,9 @@ function hasNegation(records, verbIndex) {
 function objectRecordsAfter(records, verbIndex) {
   return verbIndex >= 0
     ? records.slice(verbIndex + 1).filter((record) => (
-      record.grammar?.kind !== NEGATION_GRAMMAR_KIND && !record.consumedBy
+      record.grammar?.kind !== NEGATION_GRAMMAR_KIND
+      && record.grammar?.kind !== "aspect-marker"
+      && !record.consumedBy
     ))
     : [];
 }
@@ -1736,6 +1779,7 @@ function phraseRecord(slot, tokens, start, end, pyashSequence) {
 
 function buildPhraseRecords({
   tokens,
+  records,
   subject,
   subjectBoundary,
   verbPhrase,
@@ -1746,7 +1790,12 @@ function buildPhraseRecords({
 } = {}) {
   const phrases = [];
   if (subjectBoundary > 0 && subject?.pyashSequence?.length) {
-    phrases.push(phraseRecord("su", tokens, 0, subjectBoundary, subject.pyashSequence));
+    const subjectRecord = phraseRecord("su", tokens, 0, subjectBoundary, subject.pyashSequence);
+    subjectRecord.surface = tokens
+      .slice(0, subjectBoundary)
+      .filter((_, index) => records[index]?.grammar?.kind !== "aspect-marker")
+      .join(" ");
+    phrases.push(subjectRecord);
   }
   if (verbPhrase?.pyashSequence?.length && verbStart >= 0 && verbEnd > verbStart) {
     phrases.push(phraseRecord("be", tokens, verbStart, verbEnd, verbPhrase.pyashSequence));
@@ -1870,11 +1919,13 @@ export function analyzeEnglishSentence(source, {
         morphologySequence: [
           ...(morphology?.markerSequence ?? []),
           ...(auxiliaryMorphology?.markerSequence ?? []),
+          ...aspectMarkerSequence(records),
           ...(negated ? ["no"] : [])
         ],
         markerNames: [
           ...(morphology?.markerNames ?? []),
           ...(auxiliaryMorphology?.markerNames ?? []),
+          ...aspectMarkerNames(records),
           ...(negated ? ["negatory_quantifier_"] : [])
         ],
         certainty: "deterministic",
@@ -1892,8 +1943,16 @@ export function analyzeEnglishSentence(source, {
         phrase: tokens[finiteIndex],
         lemma: finite.lemma,
         lexicalSequence: finite.pyashSequence,
-        morphologySequence: [...morphology.markerSequence, ...(negated ? ["no"] : [])],
-        markerNames: [...morphology.markerNames, ...(negated ? ["negatory_quantifier_"] : [])],
+        morphologySequence: [
+          ...morphology.markerSequence,
+          ...aspectMarkerSequence(records),
+          ...(negated ? ["no"] : [])
+        ],
+        markerNames: [
+          ...morphology.markerNames,
+          ...aspectMarkerNames(records),
+          ...(negated ? ["negatory_quantifier_"] : [])
+        ],
         certainty: morphology.certainty,
         evidence: morphology.evidence
       });
@@ -1904,19 +1963,24 @@ export function analyzeEnglishSentence(source, {
     const modal = records[modalAction.modalIndex];
     const action = records[modalAction.actionIndex];
     const negated = hasNegation(records, modalAction.actionIndex);
+    const aspects = aspectMarkerSequence(records);
+    const aspectNames = aspectMarkerNames(records);
+    const voiceSequence = modalAction.passive ? ["pyoh"] : [];
+    const voiceNames = modalAction.passive ? ["passive_voice_"] : [];
     verbPhrase = makeCandidate({
       phrase: tokens.slice(modalAction.modalIndex, modalAction.actionIndex + 1).join(" "),
       lemma: action.lemma,
       lexicalSequence: action.pyashSequence,
-      morphologySequence: negated ? ["no"] : [],
-      markerNames: negated ? ["negatory_quantifier_"] : [],
+      morphologySequence: [...voiceSequence, ...aspects, ...(negated ? ["no"] : [])],
+      markerNames: [...voiceNames, ...aspectNames, ...(negated ? ["negatory_quantifier_"] : [])],
       certainty: action.pyashSequence.length > 0
         ? "deterministic"
-        : lexicalVerbCertainty(action),
-      evidence: `modal ${modal.surface} scopes the following action ${action.surface}`,
+        : "contextual",
+      evidence: `modal ${modal.surface} scopes the following ${modalAction.passive ? "passive action" : "action"} ${action.surface}`,
       mood: modalAction.mood,
       moodSurface: modal.surface
     });
+    if (modalAction.passive) verbPhrase.voice = "passive";
   }
 
   if (!verbPhrase && (lexicalIndex >= 0 || imperativeIndex >= 0)) {
@@ -1928,8 +1992,16 @@ export function analyzeEnglishSentence(source, {
         phrase: tokens[selectedIndex],
         lemma: lexical.lemma,
         lexicalSequence: lexical.pyashSequence,
-        morphologySequence: [PRESENT_TENSE_MARKER, ...(negated ? ["no"] : [])],
-        markerNames: [PRESENT_TENSE_NAME, ...(negated ? ["negatory_quantifier_"] : [])],
+        morphologySequence: [
+          PRESENT_TENSE_MARKER,
+          ...aspectMarkerSequence(records),
+          ...(negated ? ["no"] : [])
+        ],
+        markerNames: [
+          PRESENT_TENSE_NAME,
+          ...aspectMarkerNames(records),
+          ...(negated ? ["negatory_quantifier_"] : [])
+        ],
         certainty: lexicalVerbCertainty(lexical),
         evidence: "sentence context supplies a present-tense lexical action"
       });
@@ -1944,8 +2016,16 @@ export function analyzeEnglishSentence(source, {
         phrase: progressive.surface,
         lemma: progressive.lemma,
         lexicalSequence: progressive.pyashSequence,
-        morphologySequence: [...progressive.morphology.markerSequence, ...(hasNegation(records, verbIndex) ? ["no"] : [])],
-        markerNames: [...progressive.morphology.markerNames, ...(hasNegation(records, verbIndex) ? ["negatory_quantifier_"] : [])],
+        morphologySequence: [
+          ...progressive.morphology.markerSequence,
+          ...aspectMarkerSequence(records),
+          ...(hasNegation(records, verbIndex) ? ["no"] : [])
+        ],
+        markerNames: [
+          ...progressive.morphology.markerNames,
+          ...aspectMarkerNames(records),
+          ...(hasNegation(records, verbIndex) ? ["negatory_quantifier_"] : [])
+        ],
         certainty: "contextual",
         evidence: progressive.morphology.evidence
       });
@@ -1981,7 +2061,7 @@ export function analyzeEnglishSentence(source, {
   if (progressiveIndex >= 0) {
     subjectBoundary = progressiveIndex - 1;
     while (subjectBoundary >= 0 && records[subjectBoundary]?.grammar?.kind === NEGATION_GRAMMAR_KIND) subjectBoundary -= 1;
-  } else if (verbIndex >= 0) {
+  } else if (verbIndex >= 0 && !modalAction?.passive) {
     const copulaIndex = records.findIndex((record, index) => index < verbIndex && record.copula);
     if (copulaIndex >= 0) subjectBoundary = copulaIndex;
   }
@@ -2066,6 +2146,7 @@ export function analyzeEnglishSentence(source, {
       : verbIndex + 1;
   const phrases = buildPhraseRecords({
     tokens,
+    records,
     subject,
     subjectBoundary,
     verbPhrase,
@@ -2087,6 +2168,7 @@ export function analyzeEnglishSentence(source, {
     subject,
     verbPhrase,
     verbIndex,
+    ...(modalAction?.passive ? { construction: "modal-passive" } : {}),
     ...(copulaIndex >= 0 ? { copulaIndex, construction: "zero-copula" } : {}),
     ...(phraseCoordination ? { phraseCoordination } : {}),
     phrases,
@@ -2402,11 +2484,14 @@ export async function resolveEnglishSentence(source, {
     const review = await verify({ sourceText: source, analysis, candidates: [] });
     return applyEnglishPhraseCoordinationDecision(analysis, review);
   }
-  if (analysis.candidates.length === 0) return analysis;
+  const candidates = analysis.candidates.filter((candidate) => (
+    Array.isArray(candidate?.lexicalSequence) && candidate.lexicalSequence.length > 0
+  ));
+  if (candidates.length === 0) return analysis;
   const review = await verify({
     sourceText: source,
     analysis,
-    candidates: analysis.candidates
+    candidates
   });
   if (review?.verdict !== "accept" || !review.candidateId) {
     return { ...analysis, review };
@@ -2525,6 +2610,9 @@ export function applyEnglishPhraseCoordinationDecision(analysis, review) {
 export function applyEnglishSentenceCandidate(analysis, candidateId) {
   const candidate = analysis?.candidates?.find((row) => row.id === candidateId);
   if (!candidate) return analysis;
+  if (!Array.isArray(candidate.lexicalSequence) || candidate.lexicalSequence.length === 0) {
+    return { ...analysis, status: "review", sentence: undefined };
+  }
   const subject = analysis.subject;
   const verbIndex = Number.isInteger(analysis.verbIndex)
     ? analysis.verbIndex

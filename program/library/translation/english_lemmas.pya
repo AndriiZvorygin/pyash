@@ -13,6 +13,7 @@ su text "brought" ob text "{\"surface\":\"brought\",\"lemma\":\"bring\",\"kind\"
 su text "came" ob text "{\"surface\":\"came\",\"lemma\":\"come\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of come\"}" ya
 su text "children" ob text "{\"surface\":\"children\",\"lemma\":\"child\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"grammaticalNumber\":\"plural\",\"evidence\":\"English irregular plural of child\"}" ya
 su text "chosen" ob text "{\"surface\":\"chosen\",\"lemma\":\"choose\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English participle of choose\"}" ya
+su text "confused" ob text "{\"surface\":\"confused\",\"lemma\":\"confuse\",\"kind\":\"inflectional\",\"status\":\"accepted-curated\",\"evidence\":\"English inflectional form of confuse; retain surface adjective senses for context-sensitive part-of-speech selection.\"}" ya
 su text "did" ob text "{\"surface\":\"did\",\"lemma\":\"do\",\"canonicalEnglish\":\"done\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of do; Pyash atom is done\"}" ya
 su text "done" ob text "{\"surface\":\"done\",\"lemma\":\"do\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English participle of do\"}" ya
 su text "drank" ob text "{\"surface\":\"drank\",\"lemma\":\"drink\",\"kind\":\"irregular\",\"status\":\"accepted-curated\",\"evidence\":\"English past form of drink\"}" ya

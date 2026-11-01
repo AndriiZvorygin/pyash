@@ -381,7 +381,9 @@ function vocabularyCandidates({ recordId, language, sourceText, context, analysi
     const surface = text(token.surface ?? sourceText);
     const candidateSequences = [
       ...analysis.candidates.filter((candidate) => (
-        String(candidate?.phrase ?? "").toLowerCase().split(/\s+/u).includes(surface.toLowerCase())
+        Array.isArray(candidate?.lexicalSequence)
+          && candidate.lexicalSequence.length > 0
+          && String(candidate?.phrase ?? "").toLowerCase().split(/\s+/u).includes(surface.toLowerCase())
       )),
       ...(Array.isArray(token?.semanticCandidates) ? token.semanticCandidates : [])
     ]
@@ -640,6 +642,7 @@ function makeRecord({ language, sourceHash, locator, segment, analysis, context 
           coverageType: token.coverageType,
           pyashSequence: cloneSequence(token.pyashSequence),
           ...(token.lemma ? { lemma: token.lemma } : {}),
+          ...(token.grammaticalNumber ? { grammaticalNumber: token.grammaticalNumber } : {}),
           ...(token.grammar ? { grammar: token.grammar } : {}),
           ...(token.morphology ? { morphology: token.morphology } : {}),
           ...(senses.length > 0 ? { senseCandidates: senses } : {}),
