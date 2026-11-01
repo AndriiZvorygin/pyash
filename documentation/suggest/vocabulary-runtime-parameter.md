@@ -5,15 +5,66 @@ at the end are answered.
 
 ## Purpose
 
-Make the Pyash atom table an injected runtime value instead of a module-level
-constant, so that a vocabulary set can be chosen by configuration rather than by
-editing an import, and so that compound coverage can be computed against a named
-set.
+Make the Pyash atom table a **declared, injected value** instead of a file path
+chosen per tool.
+
+The reason is not a hypothetical second vocabulary. **There are already two
+copies of the atom table in the tree, they have already diverged, and two of
+the tools answer from the wrong one.** The section below shows it.
 
 This is not a proposal to add atoms. The vocabulary expansion direction is
 compound-first: a new concept should be covered by a compound of existing
 atoms wherever a compound holds up, and a new atom only when no compound does.
-This document is about the machinery that makes that direction testable.
+This document is about the machinery that makes that direction testable, and
+about making the choice of atom table explicit instead of implicit.
+
+## The alternate word lists already exist
+
+Two copies of the atom table are in the tree:
+
+| Copy | Entries | Read by |
+|---|---:|---|
+| `program/library/pyashWords.json` | 7,841 | the interpreter, and every `program/` module |
+| `caterer/pyac/lyac/pyashWords.json` | 7,840 | `command/vocab_query.mjs`, `command/vocab_anchor_ing_suggest.mjs` |
+
+Nothing declares which is authoritative. Each tool picks one by writing a
+path. The interpreter and the vocabulary tooling therefore answer from
+different vocabularies, and **they have already diverged** — by exactly the two
+renames this repository is mid-way through:
+
+| pya | in-repo copy (the interpreter) | lyac copy (the tooling) |
+|---|---|---|
+| `syat` | `toindex` | `until` |
+| `fromindex` | `multiplicative_case_` | — |
+| `tloh` | — | `multiplicative_case_` |
+
+The `hnuc` codes agree (`syat` is `0xA909` in both; `multiplicative_case_` is
+`0x6357` in both). Only the names moved, because the loops were renamed from
+`until`/`tloh` to `toindex`/`fromindex` — the deprecation `documentation/todo.md`
+still carries as "remove stale `tloh` wording".
+
+The consequence is that the tooling names words the interpreter does not have:
+
+```
+$ node -e 'import("./command/vocab_query.mjs").then(async (m) => {
+    console.log(await m.queryVocabLines("syat")); })'
+[ 'syat en until' ]          <- a name the interpreter does not have
+
+$ node -e 'import("./command/vocab_query.mjs").then(async (m) => {
+    console.log(await m.queryVocabLines("toindex")); })'
+[]                          <- the name the interpreter actually uses
+```
+
+A lookup that is supposed to answer "which concept is this word?" answers with
+the pre-rename name. That is the defect this proposal is for, and it is a
+defect that exists today, not one that a future second vocabulary would
+create.
+
+**The immediate fix is small and independent of this proposal:** point the two
+tools at the in-repo copy. That is a two-line change and it does not need the
+refactor below. The refactor is what stops the same divergence happening
+again, because it makes the set a declared thing that every consumer resolves
+the same way.
 
 ## The problem
 
@@ -142,12 +193,17 @@ to them and little else.
 
 ## What this enables
 
-**Compound-first expansion becomes a first-class, testable operation.** Today
-`compound_lexicon.mjs` resolves compound components against the static table,
-and the English30k coverage report is computed against it. With the vocabulary
-injected, "cover this word using compounds drawn from *this* set" is a
-deterministic question with a deterministic answer, and the coverage report
-can be computed per set.
+**One vocabulary is chosen once, and every consumer resolves the same one.**
+That is the whole of the benefit, and it is worth having because the choice is
+currently made per tool by file path and has already gone wrong.
+
+**Compound-first expansion stays testable.** The coverage report is already
+parameterised — `buildEnglish30kCoverage` takes `atomicEntries`, `aliases`,
+`dictionaryAliases`, `compoundRecords` and `lemmaEntries` as arguments — so
+this proposal does **not** unlock per-set coverage measurement. It keeps it
+honest: the atoms a compound resolves against, the atoms the interpreter
+dispatches on, and the atoms the tooling reports on are the same set, by
+construction rather than by three separate file paths.
 
 The coverage report is the measure that matters. Today, from
 `node command/english30k_coverage.mjs`:
@@ -166,8 +222,17 @@ are deterministic; 204 still need verification and 36 were rejected. See
 
 ## Scope
 
-In scope: one new module, three restructurings, five re-threadings, one
-configuration file, the command tools, and a quiz that pins the behaviour.
+**Phase 0, independent of the refactor and approvable on its own:** point
+`command/vocab_query.mjs` and `command/vocab_anchor_ing_suggest.mjs` at the
+in-repo copy, and add a quiz that asserts every vocabulary consumer resolves
+the same set. This fixes the divergence described above and is two lines plus
+a test. It is called out separately because it does not depend on any of the
+design questions below, and because leaving it undone means the tooling keeps
+answering with names the interpreter does not have.
+
+In scope for the refactor: one new module, three restructurings, five
+re-threadings, one configuration file, the command tools, and a quiz that pins
+the behaviour.
 
 Out of scope: adding atoms, changing any atom's spelling, changing the code
 tables in `word_code.mjs`, changing the code space, and moving `MOOD_WORDS`
@@ -202,6 +267,35 @@ open question rather than folded in here.
 - **Grammar/content confusion.** A vocabulary parameter that also carried
   moods would blur the layer boundary the current split depends on.
 
+## Review record
+
+**First review: "the proposal does not explain what the alternate word lists
+are for; before considering it we need a concrete example of a second
+vocabulary you want Pyash to use."**
+
+Accepted, and the proposal was wrong in the way the review says. It described
+the alternate word lists as a future possibility and led with an architecture
+argument. In fact:
+
+- The alternate word lists **already exist** — `program/library/pyashWords.json`
+  and `caterer/pyac/lyac/pyashWords.json` — and they have already diverged by
+  the two renames in flight. Two tools read the stale copy and answer with
+  names the interpreter does not have. That is now the leading section, with
+  the measured divergence.
+- A claim was **overstated and has been withdrawn**: the proposal implied the
+  refactor unlocks per-set coverage measurement. It does not —
+  `buildEnglish30kCoverage` is already fully parameterised. The refactor keeps
+  the sets *consistent*, it does not add a capability there.
+- The **immediate two-line fix is now called out as Phase 0**, separate from
+  the refactor and approvable on its own, because it fixes a live divergence
+  without waiting for any design question to be settled.
+
+The general question behind the review — *is there a concrete second
+vocabulary?* — remains worth asking, and is question 1 below. The Sino
+character codebook in `sino-pyash/PLAN.md` is the one concrete candidate
+currently on the table, but it is deferred, so this proposal does not depend
+on it.
+
 ## Open questions for the reviewer
 
 1. Is one active set per process right, or should the set be selectable per
@@ -211,10 +305,28 @@ open question rather than folded in here.
 3. Is the configuration sentence the right switch, given that the repository
    already prefers configuration sentences over flags?
 4. Should the coverage report be computed per set, or only for the active one?
+5. Should Phase 0 (pointing the two stale tools at the in-repo copy) land
+   before this proposal is approved, or together with it?
 
 ## Reproducing the measurements
 
 ```bash
+# which copy each consumer reads
+grep -rn 'pyashWords.json' --include=*.mjs command/ | grep -v "^.*library/pyashWords"
+
+# the divergence: the two copies name the same hnuc differently
+node -e 'const fs=require("fs");
+for (const [label, file] of [["repo", "program/library/pyashWords.json"],
+                              ["lyac", "caterer/pyac/lyac/pyashWords.json"]]) {
+  const w = JSON.parse(fs.readFileSync(file, "utf8"));
+  for (const e of w) if (["syat","tloh","fromindex"].includes(e.pya)) console.log(label, e.pya, "->", e.en);
+}'
+
+# the consequence: the tooling answers with a name the interpreter lacks
+node -e 'import("./command/vocab_query.mjs").then(async (m) => {
+  console.log("syat ->", await m.queryVocabLines("syat"));
+  console.log("toindex ->", await m.queryVocabLines("toindex")); })'
+
 # the import sites and the static ones
 grep -rln "pyashWords.json" --include=*.mjs program/ command/
 
