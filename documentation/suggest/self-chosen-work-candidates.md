@@ -39,10 +39,20 @@ already automatic and reasonably sophisticated:
 So the machinery can already execute, recover, and re-queue work. It simply
 has nothing to choose from beyond the curated list.
 
-The injection point already exists too:
+The supply summary already has an outside-the-roadmap input too:
 `buildExecutableSupply({ tasks, roadmap, curation, durableCandidates })` at
 `program/runtime/work/curator.mjs:71` accepts durable candidates from outside
-the roadmap.
+the roadmap. Note what that parameter is and is not: when supplied it replaces
+the task source for the summary (`curator.mjs:100-103`), so it changes what
+counts as durable and runnable. It does not create tasks and does not make
+anything executable.
+
+The point where a candidate actually becomes a durable task is
+`curateWorkBacklog`, which materialises each proposed candidate through
+`addWorkTask` (`curator.mjs:288-312`) — carrying `promptText`,
+`acceptanceText`, `contextText`, priority and provenance into a `WorkTask`.
+That is the seam a detector would have to reach, and the place where the
+policy checks the roadmap already applies would have to be applied too.
 
 ## Where the system should look instead
 
@@ -89,11 +99,14 @@ criterion is not a candidate.
 
 ### 2. The attachment point
 
-`curateWorkBacklog` already computes `needsDirection: runnableActive.length === 0`
-at lines 274 and 319 — the system already knows how to say *"I have nothing to
-run; I need a human."* That is where a self-chosen source attaches: **when the
-curated backlog is empty, ask the detectors for the highest-ranked gap instead
-of idling.**
+`curateWorkBacklog` already computes a `needsDirection` result at lines 274
+and 319 — the system already knows how to say *"I have nothing to run; I need
+a human."* It is a conjunction, not an empty-queue test: `needsDirection` is
+true only when the runnable backlog **and** proposed candidates **and**
+credible roadmap candidates **and** retryable technical work **and** work
+awaiting external evidence are all empty. That is where a self-chosen source
+attaches: **when the curated backlog is genuinely exhausted, ask the detectors
+for the highest-ranked gap instead of idling.**
 
 The curated roadmap keeps precedence at all times. A self-chosen candidate is
 only considered when there is no curated work available, so it can never
