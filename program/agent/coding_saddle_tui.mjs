@@ -107,6 +107,10 @@ function wrapSegments(segments, width, {
     while (end < chars.length && chars[end].character !== "\n" && /\s/u.test(chars[end].character) === isWhitespace) end += 1;
     const word = chars.slice(index, end);
     const current = lines.at(-1);
+    if (isWhitespace && current.length + word.length > limit) {
+      index = end;
+      continue;
+    }
     if (isWhitespace && current.length === (lines.length === 1 ? prefix.length : continuationPrefix.length)) {
       index = end;
       continue;

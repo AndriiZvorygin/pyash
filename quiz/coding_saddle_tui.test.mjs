@@ -57,6 +57,13 @@ test("coding saddle keeps wrapped list items aligned under their text", () => {
   assert.equal(lines[2], "  wraps");
 });
 
+test("coding saddle wraps at an exact-width word boundary without clipping its last character", () => {
+  const fullWidthWord = "12345678901234567890";
+  const lines = renderSaddleMarkdown(`${fullWidthWord} next`, { width: 20, color: false });
+  assert.deepEqual(lines, [fullWidthWord, "next"]);
+  assert.ok(lines.every((line) => line.length <= 20));
+});
+
 test("coding saddle screen keeps progress fixed, scrolls conversation, resizes, and restores terminal", () => {
   const writes = [];
   const output = {
