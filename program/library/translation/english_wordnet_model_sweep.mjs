@@ -13,6 +13,10 @@ import {
   renderEnglishWordNetSenseLinksPya,
   submitEnglishWordNetSenseLinks
 } from "./english_wordnet_linker.mjs";
+import {
+  ENGLISH_WORDNET_SENSE_ORDERING,
+  rankEnglishWordNetSenseRecords
+} from "./english_wordnet_sweep.mjs";
 
 export const ENGLISH_WORDNET_MODEL_SWEEP_FORMAT = "english-wordnet-model-sweep-v1";
 export const ENGLISH_WORDNET_MODEL_SWEEP_PROMPT_VERSION = "definition-anchor-v1";
@@ -52,13 +56,9 @@ export function selectEnglishWordNetModelSweepPilotRecords(records = [], limit =
   maxMultipleChoice = Math.max(1, Math.floor(Number(limit) / 6))
 } = {}) {
   const boundedLimit = Math.max(1, Math.trunc(Number(limit) || 12));
-  const frequencyRank = (record) => Math.min(
-    ...record.candidates
-      .filter((candidate) => candidate?.selectable === true)
-      .map((candidate) => Number(rankForEnglish(candidate.target)))
-      .filter((rank) => Number.isFinite(rank) && rank > 0),
-    Number.POSITIVE_INFINITY
-  );
+  const rankedRecords = rankEnglishWordNetSenseRecords(records, { rankForEnglish });
+  const rankById = new Map(rankedRecords.map((record) => [record.id, record.english30kRank ?? Number.POSITIVE_INFINITY]));
+  const frequencyRank = (record) => rankById.get(record.id) ?? Number.POSITIVE_INFINITY;
   const byFrequency = (left, right) => frequencyRank(left) - frequencyRank(right)
     || text(left.source).localeCompare(text(right.source))
     || text(left.id).localeCompare(text(right.id));
@@ -94,7 +94,7 @@ export function selectEnglishWordNetModelSweepPilotRecords(records = [], limit =
       if (!seen.has(record.id)) selected.push(record);
     }
   }
-  return selected;
+  return rankEnglishWordNetSenseRecords(selected, { rankForEnglish });
 }
 
 function resultCounts(records) {
@@ -181,6 +181,7 @@ export function renderEnglishWordNetModelSweepManifestPya({
   batchCount,
   completedBatchCount,
   counts,
+  ordering = ENGLISH_WORDNET_SENSE_ORDERING,
   error = ""
 } = {}) {
   const lines = [
@@ -191,6 +192,7 @@ export function renderEnglishWordNetModelSweepManifestPya({
     `su text "source-hash" ob text ${JSON.stringify(sourceHash)} ya`,
     `su text "coverage-hash" ob text ${JSON.stringify(coverageHash)} ya`,
     `su text "model" ob text ${JSON.stringify(model)} ya`,
+    `su text "ordering" ob text ${JSON.stringify(ordering)} ya`,
     `su text "status" ob text ${JSON.stringify(status)} ya`,
     `su text "record-count" ob num ${recordCount} ya`,
     `su text "batch-size" ob num ${batchSize} ya`,
@@ -273,6 +275,7 @@ export async function runEnglishWordNetModelSweep({
   maxChars,
   maxTokens,
   maxOutputTokens,
+  rankForEnglish = () => Number.POSITIVE_INFINITY,
   submit,
   awaitHandle,
   onBatch = () => {}
@@ -283,10 +286,10 @@ export async function runEnglishWordNetModelSweep({
   if (!sourceHash || !coverageHash || !runId || !model || !artifactDirectory) {
     throw new TypeError("WordNet model sweep requires stable run, source, coverage, and model identities");
   }
-  const pending = records.filter((record) => (
+  const pending = rankEnglishWordNetSenseRecords(records.filter((record) => (
     record?.category === "needs-sense-choice"
       && record.candidates?.some((candidate) => candidate?.selectable === true)
-  ));
+  )), { rankForEnglish });
   const batchSize = Math.max(1, Math.trunc(Number(maxDutySenses) || ENGLISH_WORDNET_LINKER_DEFAULT_DUTY_SIZE));
   const batches = batchesOf(pending, batchSize);
   const directory = resolve(artifactDirectory);
@@ -433,6 +436,8 @@ export function activateEnglishWordNetModelSweepLinks({
     additions.push({
       source,
       target: text(record.link.target).toLowerCase(),
+      gloss: text(record.gloss),
+      lemmas: Array.isArray(record.lemmas) ? [...record.lemmas] : [],
       pyashSequence: [...record.link.pyashSequence],
       targetKind: text(record.link.targetKind),
       targetId: text(record.link.targetId),
@@ -457,6 +462,8 @@ export function activateEnglishWordNetModelSweepLinks({
       source: entry.source,
       pos: entry.targetPartOfSpeech,
       synset: entry.source.slice(2),
+      gloss: entry.gloss,
+      lemmas: entry.lemmas,
       status: "accepted-llm",
       link: entry
     })),
@@ -466,9 +473,16 @@ export function activateEnglishWordNetModelSweepLinks({
   });
   const sourcesToRender = new Set(activeAdditions.map((entry) => entry.source));
   const bridgeLines = rendered.split(/\r?\n/u).filter((line) => (
-    [...sourcesToRender].some((source) => line.startsWith(`su text ${JSON.stringify(source)} ob name `))
+    [...sourcesToRender].some((source) => (
+      line.startsWith(`su text ${JSON.stringify(source)} ob name `)
+        || line.startsWith(`su text ${JSON.stringify(`sense-gloss:${source}`)} ob text `)
+        || line.startsWith(`su text "sense-lemma:${source}:`)
+    ))
   ));
-  if (bridgeLines.length !== activeAdditions.length) {
+  const expectedRows = activeAdditions.reduce((count, entry) => count + 1 + (
+    entry.gloss && Array.isArray(entry.lemmas) && entry.lemmas.length > 0 ? 1 + entry.lemmas.length : 0
+  ), 0);
+  if (bridgeLines.length !== expectedRows) {
     throw new TypeError("could not render every accepted model WordNet bridge row");
   }
   const catalogLines = catalogSource.trimEnd().split(/\r?\n/u);

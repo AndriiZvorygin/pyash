@@ -16,7 +16,7 @@ import { buildEnglishWordNetIndex } from "../program/library/translation/english
 import { decodePhraseVliw, lowerSentencePhraseVliw } from "../program/library/vliw/phrase.mjs";
 import { renderEnglishFromVliw } from "../program/library/translation/pyac_to_english_pyash.mjs";
 
-test("WordNet bridges use one native Pyash row per sense", async () => {
+test("WordNet bridge rows have a lightweight gloss and lemma lookup", async () => {
   const catalog = await loadEnglishWordNetBridges();
   assert.equal(catalog.entries.length, 753);
   assert.equal(catalog.entries.filter((entry) => entry.evidence.includes("active through sweep wordnet-sense-sweep-4c07194f363e-81b5bbefa3b0-d1")).length, 734);
@@ -25,25 +25,84 @@ test("WordNet bridges use one native Pyash row per sense", async () => {
     target: "thing",
     targetPartOfSpeech: "n",
     certainty: "contextual",
-    evidence: "Open English WordNet 2025 object-of-thought or feeling sense; generic Pyash thing anchor"
+    evidence: "Open English WordNet 2025 object-of-thought or feeling sense; generic Pyash thing anchor",
+    gloss: "the focus of cognitions or feelings; objects of thought; the object of my affection",
+    lemmas: ["object"]
   });
   assert.deepEqual(catalog.entries.find((entry) => entry.source === "v:01775456-v"), {
     source: "v:01775456-v",
     target: "emotionally",
     targetPartOfSpeech: "v",
     certainty: "contextual",
-    evidence: "Open English WordNet 2025 emotional-state sense"
+    evidence: "Open English WordNet 2025 emotional-state sense",
+    gloss: "undergo an emotional sensation or be in a particular state of mind; She felt resentful; He felt regret",
+    lemmas: ["experience", "feel"]
   });
   assert.deepEqual(catalog.entries.find((entry) => entry.source === "v:00621282-v"), {
     source: "v:00621282-v",
     target: "identity-confusion",
     targetPartOfSpeech: "v",
     certainty: "contextual",
-    evidence: "Open English WordNet 2025 mistake-one-thing-for-another sense; Chinese 混同 treats distinct things as the same; Pyash compound identity-confusion uses hdif hbun"
+    evidence: "Open English WordNet 2025 mistake-one-thing-for-another sense; Chinese 混同 treats distinct things as the same; Pyash compound identity-confusion uses hdif hbun",
+    gloss: "mistake one thing for another; you are confusing me with the other candidate",
+    lemmas: ["confound", "confuse"]
   });
   assert.equal(catalog.entries.find((entry) => entry.source === "v:00761702-v")?.target, "entreat");
   assert.equal(catalog.entries.find((entry) => entry.source === "v:00761702-v")?.certainty, "deterministic");
   assert.equal(catalog.entries.find((entry) => entry.source === "r:00111558-r")?.target, "inside");
+  assert.ok(catalog.entries.every((entry) => entry.gloss && entry.lemmas.length > 0));
+  assert.equal(catalog.entries.find((entry) => entry.source === "n:00856168-n")?.lemmas.includes("feel"), true);
+});
+
+test("WordNet bridge catalog joins its linked sense gloss and lemmas", () => {
+  const catalog = parseEnglishWordNetBridgeCatalog([
+    "su name translation_english_wordnet_bridges be map def",
+    'su text "format" ob text "english-wordnet-bridge-v1" ya',
+    'su text "source" ob text "fixture" ya',
+    'su text "n:00000001-n" ob name anchor as text "n" with text "contextual" via text "fixture evidence" ya',
+    'su text "sense-gloss:n:00000001-n" ob text "a gloss; an example" ya',
+    'su text "sense-lemma:n:00000001-n:1" ob text "sample" ya',
+    'su text "sense-lemma:n:00000001-n:2" ob text "sample word" ya',
+    "prah",
+    ""
+  ].join("\n"));
+  assert.deepEqual(catalog.entries[0], {
+    source: "n:00000001-n",
+    target: "anchor",
+    targetPartOfSpeech: "n",
+    certainty: "contextual",
+    evidence: "fixture evidence",
+    gloss: "a gloss; an example",
+    lemmas: ["sample", "sample word"]
+  });
+});
+
+test("WordNet bridge catalog rejects incomplete or orphaned gloss metadata", () => {
+  const fixture = (rows) => [
+    "su name translation_english_wordnet_bridges be map def",
+    'su text "format" ob text "english-wordnet-bridge-v1" ya',
+    'su text "source" ob text "fixture" ya',
+    'su text "n:00000001-n" ob name anchor as text "n" with text "contextual" via text "fixture evidence" ya',
+    ...rows,
+    "prah"
+  ].join("\n");
+  assert.throws(
+    () => parseEnglishWordNetBridgeCatalog(fixture(['su text "sense-gloss:n:00000001-n" ob text "gloss only" ya'])),
+    (error) => error.code === "invalid-english-wordnet-bridge"
+  );
+  assert.throws(
+    () => parseEnglishWordNetBridgeCatalog(fixture([
+      'su text "sense-lemma:n:00000001-n:0" ob text "anchor" ya'
+    ])),
+    (error) => error.code === "invalid-english-wordnet-bridge"
+  );
+  assert.throws(
+    () => parseEnglishWordNetBridgeCatalog(fixture([
+      'su text "sense-gloss:n:00000002-n" ob text "orphan gloss" ya',
+      'su text "sense-lemma:n:00000002-n:1" ob text "orphan" ya'
+    ])),
+    (error) => error.code === "invalid-english-wordnet-bridge"
+  );
 });
 
 test("the selected sense projects identity-confusion beside mood and preserves its Pyac sequence", async () => {

@@ -44,7 +44,13 @@ Sense-specific bridges live in the native Pyash map
 `english_wordnet_bridges.pya`. Each bridge sense is one sentence row: `su` identifies the
 WordNet sense, `ob` names an existing English target anchor, `as` records its part of speech,
 `with` records certainty, and `via` records provenance. The bridge adds a bounded candidate;
-it does not create a new Pyash word or bypass sentence-level sense selection.
+it does not create a new Pyash word or bypass sentence-level sense selection. Adjacent
+`sense-gloss:<sense-key>` and `sense-lemma:<sense-key>:<index>` rows project the source
+WordNet gloss and lemmas for active links.
+Open English WordNet remains authoritative in
+`know/wordnet/open-english-wordnet-2025-json/`; this small projection lets
+`kwon <word-or-Pyac-atom>` show linked glosses and target anchors without loading the full
+dataset.
 The bounded sense-linking worker is configured in `english_wordnet_linker.pya`. Its
 `english_wordnet_linker.mjs` module emits one stable record per WordNet sense, accepts only
 targets present in the supplied inventory, and submits unresolved records through the existing
@@ -119,7 +125,7 @@ Open English WordNet 2025 JSON supplies synsets and relations but no `tag_count`
 entry array order is not a reliable frequency rank. Princeton WordNet's `index.sense` provides
 `sense_number` and `tag_cnt` from semantically tagged concordance texts; numbered order is usually
 most-to-least frequent for tagged senses, while untagged senses have no dependable frequency
-order. These counts are corpus evidence, not universal usage frequency ([sense index format](https://wordnet.princeton.edu/documentation/senseidx5wn), [sense ordering notes](https://wordnet.princeton.edu/documentation/wndb5wn)). Use a versioned, explicit frequency resource when choosing a default sense for an atom; do not infer frequency from OEWN JSON array order.
+order. These counts are corpus evidence, not universal usage frequency ([sense index format](https://wordnet.princeton.edu/documentation/senseidx5wn), [sense ordering notes](https://wordnet.princeton.edu/documentation/wndb5wn)). Use a versioned, explicit frequency resource when choosing a default sense for an atom; do not infer frequency from OEWN JSON array order. Sweep artifacts and model batches are ordered by the smallest English30k rank among each sense's lemmas, followed by stable sense key. English30k ranks words, not individual senses, so senses sharing a lemma share its rank; this orders processing without claiming a per-sense frequency distinction.
 
 Callers that have loaded the derived compound catalog pass its accepted records explicitly;
 candidate-closed and rejected compounds are excluded from the authoritative inventory.

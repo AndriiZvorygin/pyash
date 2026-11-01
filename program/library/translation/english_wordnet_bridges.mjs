@@ -9,6 +9,8 @@ export const ENGLISH_WORDNET_BRIDGE_CONFIG_URL = new URL("./english_wordnet_brid
 const WORDNET_POS = new Set(["a", "n", "r", "v", "s"]);
 const CERTAINTIES = new Set(["deterministic", "contextual"]);
 const METADATA_KEYS = new Set(["format", "source", "source-hash", "mode"]);
+const SENSE_GLOSS_PREFIX = "sense-gloss:";
+const SENSE_LEMMA_PREFIX = "sense-lemma:";
 
 function invalid(message, details = {}) {
   const error = new Error(message);
@@ -57,6 +59,44 @@ export function parseEnglishWordNetBridgeCatalog(source) {
   }
   if (!metadata.source) throw invalid("WordNet bridge source requires provenance");
 
+  const senseGlossByKey = new Map();
+  const senseLemmasByKey = new Map();
+  for (const [index, sentence] of sentences.entries()) {
+    if (sentence?.mood !== "ya") continue;
+    const key = textAt(sentence, "su");
+    if (key.startsWith(SENSE_GLOSS_PREFIX)) {
+      const source = senseKey(key.slice(SENSE_GLOSS_PREFIX.length), index);
+      const gloss = textAt(sentence, "ob");
+      if (!gloss) throw invalid("WordNet sense gloss must be non-empty", { index, source });
+      if (senseGlossByKey.has(source)) throw invalid("WordNet sense gloss is duplicated", { index, source });
+      senseGlossByKey.set(source, gloss);
+      continue;
+    }
+    if (!key.startsWith(SENSE_LEMMA_PREFIX)) continue;
+    const lemmaMatch = key.match(/^sense-lemma:(.+):([1-9][0-9]*)$/u);
+    if (!lemmaMatch) throw invalid("WordNet sense lemma key has an invalid sense or sequence index", { index, key });
+    const source = senseKey(lemmaMatch[1], index);
+    const lemma = textAt(sentence, "ob").toLowerCase();
+    if (!lemma) throw invalid("WordNet sense lemma must be non-empty", { index, source });
+    const lemmaIndex = Number(lemmaMatch[2]);
+    const rows = senseLemmasByKey.get(source) ?? new Map();
+    if (rows.has(lemmaIndex)) throw invalid("WordNet sense lemma index is duplicated", { index, source, lemmaIndex });
+    if ([...rows.values()].includes(lemma)) throw invalid("WordNet sense lemma is duplicated", { index, source, lemma });
+    rows.set(lemmaIndex, lemma);
+    senseLemmasByKey.set(source, rows);
+  }
+
+  const senseInfoByKey = new Map();
+  for (const source of new Set([...senseGlossByKey.keys(), ...senseLemmasByKey.keys()])) {
+    const gloss = senseGlossByKey.get(source) ?? "";
+    const lemmaRows = [...(senseLemmasByKey.get(source) ?? new Map()).entries()].sort(([left], [right]) => left - right);
+    const lemmas = [...new Set(lemmaRows.map(([, lemma]) => lemma))];
+    if (!gloss || lemmas.length === 0) {
+      throw invalid("WordNet sense metadata requires a gloss and at least one lemma", { source });
+    }
+    senseInfoByKey.set(source, { gloss, lemmas });
+  }
+
   const equivalenceGroups = new Map();
   for (const [index, sentence] of sentences.entries()) {
     if (sentence?.mood !== "ya") continue;
@@ -86,7 +126,8 @@ export function parseEnglishWordNetBridgeCatalog(source) {
   for (const [index, sentence] of sentences.entries()) {
     if (sentence?.mood !== "ya") continue;
     const sourceKey = textAt(sentence, "su");
-    if (!sourceKey || METADATA_KEYS.has(sourceKey) || sourceKey.startsWith("equivalence:")) continue;
+    if (!sourceKey || METADATA_KEYS.has(sourceKey) || sourceKey.startsWith("equivalence:")
+      || sourceKey.startsWith(SENSE_GLOSS_PREFIX) || sourceKey.startsWith(SENSE_LEMMA_PREFIX)) continue;
     const key = senseKey(sourceKey, index);
     if (seen.has(key)) throw invalid("WordNet bridge sense is duplicated", { index, source: key });
     seen.add(key);
@@ -111,6 +152,7 @@ export function parseEnglishWordNetBridgeCatalog(source) {
       targetPartOfSpeech,
       certainty,
       evidence,
+      ...(senseInfoByKey.has(key) ? senseInfoByKey.get(key) : {}),
       ...(equivalenceBySense.has(key) ? {
         equivalenceGroup: equivalenceBySense.get(key).group,
         equivalenceEvidence: equivalenceBySense.get(key).evidence
@@ -118,6 +160,9 @@ export function parseEnglishWordNetBridgeCatalog(source) {
     });
   }
   const entryBySense = new Map(entries.map((entry) => [entry.source, entry]));
+  for (const source of senseInfoByKey.keys()) {
+    if (!entryBySense.has(source)) throw invalid("WordNet sense info references an unknown bridge sense", { source });
+  }
   for (const [group, row] of equivalenceGroups) {
     const members = row.sources.map((sourceKey) => entryBySense.get(sourceKey));
     if (members.some((entry) => !entry)) {

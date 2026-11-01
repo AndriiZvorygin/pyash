@@ -20,6 +20,10 @@ import {
 } from "../program/library/translation/english_lemmas.mjs";
 import { loadAnchorWordForms } from "../program/library/translation/anchor_words.mjs";
 import {
+  buildEnglishWordNetBridgeIndex,
+  loadEnglishWordNetBridges
+} from "../program/library/translation/english_wordnet_bridges.mjs";
+import {
   loadDefaultEnglish30kCoverage,
   loadEnglish30k,
   english30kLookupVariants,
@@ -70,8 +74,11 @@ let englishGrammarIndexPromise = null;
 let extendedEnglishResourcesPromise = null;
 let anchorWordFormsPromise = null;
 let compoundAtomLinksPromise = null;
+let englishWordNetBridgeLookupPromise = null;
+let englishWordNetBridgeFullLookupPromise = null;
 let fastAtomicIndex = null;
 let fastRootIndex = null;
+let fastAtomicByPyacIndex = null;
 
 const NAME_TOKEN_REGEX = /^[\p{L}][\p{L}\p{N}_-]*$/u;
 const PYASH_QUOTED_START = "quoted.pyash.";
@@ -272,6 +279,141 @@ function buildFastRootIndex() {
     if (key && !fastRootIndex.has(key)) fastRootIndex.set(key, entry);
   }
   return fastRootIndex;
+}
+
+function buildFastAtomicByPyacIndex() {
+  if (fastAtomicByPyacIndex) return fastAtomicByPyacIndex;
+  fastAtomicByPyacIndex = new Map();
+  for (const entry of pyashWords) {
+    if (typeof entry?.en !== "string" || typeof entry?.pya !== "string") continue;
+    const key = entry.pya.trim().toLowerCase();
+    if (key && !fastAtomicByPyacIndex.has(key)) fastAtomicByPyacIndex.set(key, entry);
+  }
+  return fastAtomicByPyacIndex;
+}
+
+function buildEnglishWordNetBridgeLookup(catalog, resolveTarget) {
+  const bridgeIndex = buildEnglishWordNetBridgeIndex({ entries: catalog.entries, resolveTarget });
+  const indexedBySense = new Map(bridgeIndex.entries.map((entry) => [entry.source, entry]));
+  const byTerm = new Map();
+  for (const entry of catalog.entries) {
+    if (!entry.gloss || !Array.isArray(entry.lemmas)) continue;
+    const indexed = indexedBySense.get(entry.source);
+    if (!indexed) continue;
+    const linked = {
+      ...entry,
+      pyashSequence: [...(indexed.pyashSequence ?? [])],
+      active: bridgeIndex.bySense.has(entry.source) && (indexed.pyashSequence ?? []).length > 0,
+      lemmas: [...entry.lemmas]
+    };
+    for (const term of [...entry.lemmas, entry.target]) {
+      for (const variant of english30kLookupVariants(term)) {
+        const key = normalizeCompoundTarget(variant);
+        const rows = byTerm.get(key) ?? [];
+        if (!rows.some((row) => row.source === linked.source)) rows.push(linked);
+        byTerm.set(key, rows);
+      }
+    }
+  }
+  return byTerm;
+}
+
+async function loadEnglishWordNetBridgeLookup({ includeCompounds = false } = {}) {
+  if (includeCompounds) {
+    if (!englishWordNetBridgeFullLookupPromise) {
+      englishWordNetBridgeFullLookupPromise = Promise.all([
+        loadEnglishWordNetBridges(),
+        loadDefaultAcceptedCompounds(),
+        loadDefaultCuratedAcceptedCompounds()
+      ]).then(([catalog, acceptedCompounds, curatedCompounds]) => {
+        const targetCompounds = new Map();
+        mergeCompoundRows(targetCompounds, acceptedCompounds);
+        mergeCompoundRows(targetCompounds, curatedCompounds);
+        return buildEnglishWordNetBridgeLookup(catalog, (target) => {
+          const compound = targetCompounds.get(normalizeCompoundTarget(target))?.[0];
+          if (compound) return { coverageType: "compound", pyashSequence: [...compound.pyash] };
+          const atomic = findAtomicEntry(target);
+          return atomic ? { coverageType: "atomic", pyashSequence: [atomic.pya] } : null;
+        });
+      }).catch((error) => {
+        if (error?.code === "ENOENT") return new Map();
+        throw error;
+      });
+    }
+    return englishWordNetBridgeFullLookupPromise;
+  }
+  if (!englishWordNetBridgeLookupPromise) {
+    englishWordNetBridgeLookupPromise = loadEnglishWordNetBridges().then((catalog) => (
+      buildEnglishWordNetBridgeLookup(catalog, (target) => {
+        const atomic = findAtomicEntry(target);
+        return atomic ? { coverageType: "atomic", pyashSequence: [atomic.pya] } : null;
+      })
+    )).catch((error) => {
+      if (error?.code === "ENOENT") return new Map();
+      throw error;
+    });
+  }
+  return englishWordNetBridgeLookupPromise;
+}
+
+function english30kSenseRank(entry, source) {
+  return Math.min(
+    ...(entry.lemmas ?? [])
+      .map((lemma) => sourceRowForToken(source, lemma)?.rank)
+      .filter((rank) => Number.isFinite(rank) && rank > 0),
+    Number.POSITIVE_INFINITY
+  );
+}
+
+async function reportLinkedWordNetSenses(tokens, report) {
+  if (!Array.isArray(tokens) || tokens.length === 0) return [];
+  let byTerm = await loadEnglishWordNetBridgeLookup();
+  if (byTerm.size === 0) return [];
+  const source = await loadDefaultEnglish30kSourceSafe();
+  const rows = [];
+  const seen = new Set();
+  for (const token of tokens) {
+    const atomic = buildFastAtomicByPyacIndex().get(String(token).trim().toLowerCase());
+    const terms = [atomic?.en ?? token];
+    const matches = new Map();
+    for (const term of terms) {
+      for (const variant of english30kLookupVariants(term)) {
+        for (const entry of byTerm.get(normalizeCompoundTarget(variant)) ?? []) matches.set(entry.source, entry);
+      }
+    }
+    if ([...matches.values()].some((entry) => entry.pyashSequence.length === 0)) {
+      byTerm = await loadEnglishWordNetBridgeLookup({ includeCompounds: true });
+      matches.clear();
+      for (const term of terms) {
+        for (const variant of english30kLookupVariants(term)) {
+          for (const entry of byTerm.get(normalizeCompoundTarget(variant)) ?? []) matches.set(entry.source, entry);
+        }
+      }
+    }
+    const ordered = [...matches.values()].sort((left, right) => (
+      english30kSenseRank(left, source) - english30kSenseRank(right, source)
+        || left.source.localeCompare(right.source)
+    ));
+    for (const entry of ordered) {
+      const identity = `${token}\u0000${entry.source}`;
+      if (seen.has(identity)) continue;
+      seen.add(identity);
+      const pyashSequence = [...entry.pyashSequence];
+      const pyac = pyashSequence.length > 0 ? ` (${renderPyacSurface(pyashSequence.join(" "))})` : "";
+      const linkStatus = entry.active
+        ? "active"
+        : entry.pyashSequence.length === 0
+          ? "unresolved anchor"
+          : "withheld collision";
+      const english30kRank = english30kSenseRank(entry, source);
+      const rankLabel = Number.isFinite(english30kRank)
+        ? `English30k rank ${english30kRank}`
+        : "no English30k lemma rank";
+      report(`${token}: WordNet ${entry.source} [${entry.lemmas.join(", ")}; ${rankLabel}; ${linkStatus}]: ${entry.gloss} -> ${entry.target}${pyac}`);
+      rows.push({ input: token, ...entry, english30kRank: Number.isFinite(english30kRank) ? english30kRank : null, pyashSequence });
+    }
+  }
+  return rows;
 }
 
 function resolveGrammarRootEntries(grammar) {
@@ -1225,6 +1367,8 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     }
   }
 
+  const linkedWordNetSenses = await reportLinkedWordNetSenses(resolvedTextInputs, report);
+
   for (const [target, found] of [...foundCompounds.entries()].sort(([left], [right]) => left.localeCompare(right))) {
     const locationSuffix = [...found.locations]
       .map(name => name.replace(`${process.cwd()}/`, ""))
@@ -1395,6 +1539,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
       };
     }),
     compoundMorphologies: [...compoundMorphologyMatches.values()].flat(),
+    linkedWordNetSenses,
     compoundAtomLinks: [...compoundAtomMatches.entries()].map(([token, links]) => ({
       token,
       compounds: links.map(({ compound, atom }) => ({

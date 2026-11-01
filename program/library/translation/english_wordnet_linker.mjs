@@ -1265,6 +1265,14 @@ export function renderEnglishWordNetSenseLinksPya({
       : "contextual";
     const evidence = record.link.evidence || record.evidence || `WordNet ${record.source} accepted anchor ${target}`;
     lines.push(`su text ${JSON.stringify(record.source)} ob name ${target} as text ${JSON.stringify(record.pos)} with text ${JSON.stringify(certainty)} via text ${JSON.stringify(evidence)} ya`);
+    const gloss = text(record.gloss ?? record.link.gloss);
+    const lemmas = [...new Set(sequence(record.lemmas ?? record.link.lemmas).map(normalized))].sort();
+    if (gloss && lemmas.length > 0) {
+      lines.push(`su text ${JSON.stringify(`sense-gloss:${record.source}`)} ob text ${JSON.stringify(gloss)} ya`);
+      for (const [index, lemma] of lemmas.entries()) {
+        lines.push(`su text ${JSON.stringify(`sense-lemma:${record.source}:${index + 1}`)} ob text ${JSON.stringify(lemma)} ya`);
+      }
+    }
   }
   lines.push("prah");
   return `${lines.join("\n")}\n`;

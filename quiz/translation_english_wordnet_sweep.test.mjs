@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   activateEnglishWordNetSenseSweepLinks,
   classifyEnglishWordNetSenseSweep,
+  rankEnglishWordNetSenseRecords,
   partitionEnglishWordNetSenseSweep,
   parseEnglishWordNetSweepPya,
   renderEnglishWordNetSweepBatchPya,
@@ -73,6 +74,22 @@ test("sense sweep keeps a unique low-degree anchor as an automatic proposal", ()
   assert.equal(result.counts["automatic-link"], 1);
 });
 
+test("sense worklists sort by the highest-frequency English30k lemma with stable ties", () => {
+  const records = [
+    { id: "late", source: "n:z", lemmas: ["unranked"] },
+    { id: "middle", source: "n:b", lemmas: ["common", "rare"] },
+    { id: "first", source: "n:a", lemmas: ["frequent"] },
+    { id: "tie", source: "n:c", lemmas: ["common"] }
+  ];
+  const ranks = new Map([["frequent", 4], ["common", 20], ["rare", 700]]);
+  const ordered = rankEnglishWordNetSenseRecords(records, {
+    rankForEnglish: (term) => ranks.get(term) ?? Number.POSITIVE_INFINITY
+  });
+  assert.deepEqual(ordered.map((record) => [record.id, record.english30kRank]), [
+    ["first", 4], ["middle", 20], ["tie", 20], ["late", null]
+  ]);
+});
+
 test("automatic sweep links activate only when they preserve bridge uniqueness", () => {
   const catalogSource = [
     "su name translation_english_wordnet_bridges be map def",
@@ -88,6 +105,8 @@ test("automatic sweep links activate only when they preserve bridge uniqueness",
       source: "n:00000002-n",
       pos: "n",
       synset: "00000002-n",
+      gloss: "ready gloss",
+      lemmas: ["ready"],
       link: {
         target: "ready",
         pyashSequence: ["newatom"],
@@ -132,6 +151,7 @@ test("automatic sweep links activate only when they preserve bridge uniqueness",
 
   assert.deepEqual(result.activated, ["n:00000002-n"]);
   assert.equal(result.totalCatalogEntries, 2);
+  assert.equal(parseEnglishWordNetBridgeCatalog(result.catalog).entries.find((entry) => entry.source === "n:00000002-n")?.gloss, "ready gloss");
   assert.equal(result.skipped.length, 3);
   assert.ok(result.skipped.some((row) => row.reason === "sense already exists in the active catalog"));
   assert.equal(result.skipped.filter((row) => row.reason === "target identity collides with a non-equivalent WordNet sense").length, 2);

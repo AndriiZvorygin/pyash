@@ -712,7 +712,9 @@ test("WordNet linker accepts only a supplied sense choice and renders native Pya
     target: "emotionally",
     targetPartOfSpeech: "v",
     certainty: "contextual",
-    evidence: "Housekeeper WordNet sense link: the supplied gloss describes an emotional state"
+    evidence: "Housekeeper WordNet sense link: the supplied gloss describes an emotional state",
+    gloss: "a rare unresolved action",
+    lemmas: ["blorp"]
   }]);
   assert.equal(parseEnglishWordNetSenseLinkResponse(JSON.stringify({
     verdict: "complete",

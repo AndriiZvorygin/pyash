@@ -60,6 +60,18 @@ test("vocab_suggest reports the English gloss for an accepted Pyac atom", async 
   assert.match(lines.join("\n"), /^twum: brain$/mu);
 });
 
+test("vocab_suggest shows linked WordNet glosses for English anchors and Pyac atoms", async () => {
+  const englishLines = [];
+  const englishResult = await runVocabSuggest(["touch"], { report: (line) => englishLines.push(String(line)) });
+  assert.match(englishLines.join("\n"), /touch: WordNet n:00856168-n .* -> touch \(tcum\)/u);
+  assert.equal(englishResult.linkedWordNetSenses.find((entry) => entry.source === "n:00856168-n")?.target, "touch");
+  assert.match(englishResult.linkedWordNetSenses.find((entry) => entry.source === "n:00856168-n")?.gloss ?? "", /manual stimulation/u);
+
+  const pyacLines = [];
+  await runVocabSuggest(["tcum"], { report: (line) => pyacLines.push(String(line)) });
+  assert.match(pyacLines.join("\n"), /tcum: WordNet n:00856168-n .* -> touch \(tcum\)/u);
+});
+
 test("vocab_suggest keeps a repository-directory-named token on the vocabulary path", async () => {
   const lines = [];
   const result = await runVocabSuggest(["container"], {
