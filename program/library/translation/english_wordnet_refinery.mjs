@@ -1,3 +1,8 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import pyashWords from "../pyashWords.json" with { type: "json" };
+
 import {
   analyzeEnglishSentence,
   loadDefaultEnglishSentenceResources,
@@ -20,8 +25,19 @@ import {
   isTranslationSenseState,
   translationOccurrenceId
 } from "./translation_occurrence.mjs";
+import { buildDerivedCompoundCoverage } from "./compound_coverage.mjs";
+import { loadCompoundMorphology } from "./compound_morphology.mjs";
+import { classifyCompoundCoverage, verifyCompoundCoverage } from "./compound_verification.mjs";
+import {
+  loadPyacComplexityLayers,
+  loadPyacWordLayerIndex
+} from "./pyac_complexity.mjs";
 
 export const ENGLISH_WORDNET_REFINERY_FORMAT = "english-wordnet-refinery-v1";
+
+const MODULE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
+const REPOSITORY_ROOT = path.resolve(MODULE_DIRECTORY, "../../..");
+let wordNetCompoundResourcesPromise = null;
 
 function invalid(message, details = {}) {
   const error = new Error(message);
@@ -86,6 +102,94 @@ function compoundResolver(compoundRecords = []) {
 function resolveWord(resources, compounds, word) {
   const target = normalized(word);
   return compounds.get(target) ?? lookupEnglish30kCoverage(resources.coverage, target);
+}
+
+async function loadWordNetCompoundResources() {
+  if (!wordNetCompoundResourcesPromise) {
+    wordNetCompoundResourcesPromise = Promise.all([
+      loadPyacComplexityLayers(),
+      loadCompoundMorphology()
+    ]).then(async ([manifest, morphologyEntries]) => {
+      const layerIndex = await loadPyacWordLayerIndex({
+        manifest,
+        directory: path.resolve(REPOSITORY_ROOT, "..", "pyachso2n")
+      });
+      const englishToPyash = new Map();
+      for (const entry of pyashWords) {
+        const english = normalized(entry?.en);
+        const pyash = text(entry?.pya);
+        if (english && pyash && !englishToPyash.has(english)) englishToPyash.set(english, pyash);
+      }
+      return {
+        morphologyEntries,
+        layerIndex: { ...layerIndex, englishToPyash },
+        atomicEntries: pyashWords
+          .filter((entry) => text(entry?.en) && text(entry?.pya))
+          .map((entry) => ({ en: text(entry.en), pya: text(entry.pya) }))
+      };
+    }).catch((error) => {
+      wordNetCompoundResourcesPromise = null;
+      throw error;
+    });
+  }
+  return wordNetCompoundResourcesPromise;
+}
+
+async function buildWordNetCompoundCandidates({ sense, sourceTerm } = {}) {
+  const lemmas = [...new Set((sense?.lemmas ?? [sense?.lemma]).map(normalized).filter(Boolean))];
+  const requested = normalized(sourceTerm);
+  const target = lemmas.find((lemma) => lemma === requested) || normalized(sense?.lemma) || lemmas[0] || "";
+  const senseId = `${text(sense?.pos)}:${text(sense?.synset)}`;
+  const gloss = text(sense?.gloss);
+  if (!target || target.includes(" ") || !senseId.includes(":")) return [];
+  const { atomicEntries, layerIndex, morphologyEntries } = await loadWordNetCompoundResources();
+  const generated = buildDerivedCompoundCoverage({
+    atomicEntries,
+    sourceTerms: [{
+      target,
+      sourceSurfaces: { wordnet: target },
+      provenance: `Open English WordNet ${senseId}`,
+      evidence: gloss
+    }],
+    morphologyEntries,
+    layerIndex
+  });
+  return classifyCompoundCoverage(generated.records
+    .filter((record) => record.target === target && record.status === "candidate-closed")
+    .map((record) => ({
+      ...record,
+      senseId,
+      senseGloss: gloss,
+      evidence: [record.evidence, `Open English WordNet ${senseId} gloss: ${gloss}`]
+        .filter(Boolean)
+        .join("; ")
+    }))).verificationCandidates;
+}
+
+function compoundAnchor(record, sense) {
+  const verificationStatus = text(record?.verificationStatus);
+  const isVerified = ["accepted-deterministic", "accepted-llm", "repaired-llm"].includes(verificationStatus);
+  const components = Array.isArray(record?.componentGlosses)
+    ? record.componentGlosses.map(text).filter(Boolean)
+    : [];
+  return {
+    target: normalized(record?.target),
+    pyashSequence: sequence(record?.pyashSequence),
+    targetKind: "compound",
+    targetId: text(record?.id) || `compound:${sequence(record?.pyashSequence).join("+")}`,
+    selectable: isVerified,
+    kind: "compound-composition",
+    ...(components.length > 0 ? { componentTargets: components } : {}),
+    compoundVerificationStatus: verificationStatus || "unverified",
+    senseGloss: text(record?.senseGloss) || text(sense?.gloss),
+    evidence: [
+      `closed-compound candidate composed from ${components.join(" ")}`,
+      `compound verification ${verificationStatus || "unverified"}`,
+      `WordNet ${text(record?.senseId)} gloss: ${text(record?.senseGloss) || text(sense?.gloss)}`,
+      text(record?.verificationRationale),
+      text(record?.evidence)
+    ].filter(Boolean).join("; ")
+  };
 }
 
 function emptyGrammarIndex() {
@@ -484,6 +588,10 @@ function attachmentCandidate(record) {
         equivalenceGroup: text(candidate.equivalenceGroup),
         equivalenceEvidence: text(candidate.equivalenceEvidence)
       } : {}),
+      ...(text(candidate.compoundVerificationStatus) ? {
+        compoundVerificationStatus: text(candidate.compoundVerificationStatus)
+      } : {}),
+      ...(text(candidate.senseGloss) ? { senseGloss: text(candidate.senseGloss) } : {}),
       evidence: text(candidate.evidence),
       ...(text(candidate.kind) ? { kind: text(candidate.kind) } : {}),
       ...(Array.isArray(candidate.componentTargets) && candidate.componentTargets.length > 0
@@ -561,9 +669,17 @@ export function applyEnglishWordNetSenseAttachmentLinks(translation) {
     const targetId = text(selectedAnchor.targetId)
       || text(candidate.targetId)
       || `${targetKind}:${pyashSequence.join("+")}`;
-    const evidence = selectedAnchor?.kind === "compound-composition"
-      ? `selected sense ${record.selectedSenseId} composed multiword anchor ${target} from ${(selectedAnchor.componentTargets ?? []).join(" ")}`
-      : `selected sense ${record.selectedSenseId} linked to existing Pyash anchor ${target}`;
+    const evidence = [
+      selectedAnchor?.kind === "compound-composition"
+        ? `selected sense ${record.selectedSenseId} linked to verified compound ${target} from ${(selectedAnchor.componentTargets ?? []).join(" ")}`
+        : `selected sense ${record.selectedSenseId} linked to existing Pyash anchor ${target}`,
+      text(selectedAnchor?.compoundVerificationStatus)
+        ? `compound status ${text(selectedAnchor.compoundVerificationStatus)}`
+        : "",
+      text(record.selectedSense?.gloss)
+        ? `WordNet gloss: ${text(record.selectedSense.gloss)}`
+        : ""
+    ].filter(Boolean).join("; ");
     return {
       ...record,
       status: "accepted-llm",
@@ -578,7 +694,10 @@ export function applyEnglishWordNetSenseAttachmentLinks(translation) {
         } : {}),
         targetPartOfSpeech: text(record.pos),
         certainty: "contextual",
-        evidence
+        evidence,
+        ...(text(selectedAnchor.senseGloss) || text(record.selectedSense?.gloss)
+          ? { senseGloss: text(selectedAnchor.senseGloss) || text(record.selectedSense?.gloss) }
+          : {})
       },
       verificationRationale: text(candidate.verificationRationale)
         || `selected sense ${record.selectedSenseId} linked to ${target}`
@@ -617,6 +736,8 @@ export async function refineEnglishWordNet({
   sourceTerms = null,
   awaitHandle = null,
   suggestVocabulary = null,
+  buildCompoundCandidates = buildWordNetCompoundCandidates,
+  verifyCompound = null,
   maxRepairAttempts = 1
 } = {}) {
   if (!result || typeof result !== "object" || text(result.language) !== "english") {
@@ -770,18 +891,44 @@ export async function refineEnglishWordNet({
         maxDepth: linkerConfig.anchorMaxDepth ?? 1,
         maxCandidates: linkerConfig.anchorMaxCandidates ?? 8
       });
+      let createdCompoundAnchors = [];
+      if (typeof buildCompoundCandidates === "function"
+        && typeof verifyCompound === "function"
+        && !accepted(linked.status)
+        && exactAnchors.length === 0
+        && !anchorCandidates.some((candidate) => candidate.selectable === true)) {
+        const proposals = await buildCompoundCandidates({
+          sense: selected.selectedSense,
+          sourceTerm: selected.surface,
+          resources: loadedResources
+        });
+        if (Array.isArray(proposals) && proposals.length > 0) {
+          const verified = await verifyCompoundCoverage(proposals, {
+            invoke: verifyCompound,
+            verifierName: "WordNet compound verifier",
+            maxRepairAttempts
+          });
+          createdCompoundAnchors = verified.records
+            .map((record) => compoundAnchor(record, selected.selectedSense))
+            .filter((candidate) => candidate.target && candidate.pyashSequence.length > 1);
+        }
+      }
       const anchorKeys = new Set(exactAnchors.map((candidate) => (
         `${candidate.target}\u0000${candidate.pyashSequence.join(" ")}`
       )));
-      const combinedAnchors = [
-        ...exactAnchors,
-        ...anchorCandidates.filter((candidate) => {
-          const key = `${candidate.target}\u0000${candidate.pyashSequence.join(" ")}`;
-          if (anchorKeys.has(key)) return false;
-          anchorKeys.add(key);
-          return true;
-        })
-      ];
+      const combinedAnchors = [...exactAnchors];
+      for (const candidate of createdCompoundAnchors) {
+        const key = `${candidate.target}\u0000${candidate.pyashSequence.join(" ")}`;
+        if (anchorKeys.has(key)) continue;
+        anchorKeys.add(key);
+        combinedAnchors.push(candidate);
+      }
+      for (const candidate of anchorCandidates) {
+        const key = `${candidate.target}\u0000${candidate.pyashSequence.join(" ")}`;
+        if (anchorKeys.has(key)) continue;
+        anchorKeys.add(key);
+        combinedAnchors.push(candidate);
+      }
       records.push({
         ...resolvedLink,
         occurrenceId: selected.occurrenceId,

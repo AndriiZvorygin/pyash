@@ -469,6 +469,8 @@ test("WordNet linker prompt stays bounded to supplied senses and per-sense choic
   const prompt = buildEnglishWordNetSenseLinkPrompt({ records, inventory });
   assert.match(prompt, /bounded Pyash WordNet sense-linking worker/u);
   assert.match(prompt, /A sense row with no choices cannot be accepted/u);
+  assert.match(prompt, /For reject or uncertain, set targetEnglish to an empty string/u);
+  assert.doesNotMatch(prompt, /omit targetEnglish/u);
   assert.match(prompt, /v:beta/u);
   assert.match(prompt, /"choices":\[\]/u);
   assert.doesNotMatch(prompt, /emotionally/u);
@@ -714,6 +716,23 @@ test("WordNet linker accepts only a supplied sense choice and renders native Pya
       rationale: "unsupported"
     }]
   }), { records, inventory }).valid, false);
+  assert.equal(parseEnglishWordNetSenseLinkResponse(JSON.stringify({
+    verdict: "complete",
+    senses: [{
+      id: records[0].id,
+      status: "reject",
+      rationale: "no supported link"
+    }]
+  }), { records, inventory }).valid, false);
+  assert.equal(parseEnglishWordNetSenseLinkResponse(JSON.stringify({
+    verdict: "complete",
+    senses: [{
+      id: records[0].id,
+      status: "reject",
+      targetEnglish: "",
+      rationale: "no supported link"
+    }]
+  }), { records, inventory }).valid, true);
   const emptyChoiceRecords = buildEnglishWordNetSenseLinkRecords({
     wordnetIndex: fixtureIndex(),
     resolveWord: resolver,
@@ -984,6 +1003,8 @@ test("default WordNet linker submitter uses the existing future GPU duty", async
   const spec = JSON.parse(JSON.parse(encodedSpec));
   assert.deepEqual(spec.format.required, ["verdict", "senses"]);
   assert.ok(spec.format.properties.senses);
+  assert.deepEqual(spec.format.properties.senses.items.required, ["id", "status", "targetEnglish", "rationale"]);
+  assert.equal(spec.format.properties.senses.items.properties.targetEnglish.type, "string");
   assert.equal(spec.options.num_predict, 1024);
 });
 

@@ -19,6 +19,8 @@ const RESPONSE_HEAD_KINDS = new Set([
 ]);
 const MAX_RESPONSE_CHARS = 12000;
 const MAX_RATIONALE_CHARS = 2000;
+const COMPOUND_VERIFICATION_MAX_OUTPUT_TOKENS = 160;
+const COMPOUND_VERIFIER_QUEUE_FORMAT = "compound-verifier-v2";
 
 function invalid(message, details = {}) {
   const error = new Error(message);
@@ -200,9 +202,9 @@ export function buildCompoundVerificationPrompt({ record, candidates = [record] 
     "Spelling overlap is not a semantic boundary. Classify the final component as lexical-head only when the target denotes a kind of that component.",
     "A derivational or grammatical ending is a separate morphology signal, even when it matches an atomic English word.",
     "For example, acceptant is not a kind of ant, and zincking is not a kind of king.",
-    "Return one JSON object with exactly these useful fields:",
+    "Return one compact JSON object with exactly these fields. Always include candidateId; use an empty string unless accepting:",
     '{"verdict":"accept|reject|uncertain","candidateId":"...","headKind":"lexical-head|derivational-ending|grammatical-ending|uncertain","rationale":"..."}',
-    "A valid accept must use a supplied candidateId, preserve its component sequence, and set headKind to lexical-head.",
+    "An accept must use a supplied candidateId, preserve its component sequence, and set headKind to lexical-head. Keep rationale under 120 characters.",
     "\nTARGET RECORD:",
     jsonForPrompt(record),
     "\nCANDIDATES:",
@@ -489,21 +491,46 @@ export function createMindCompoundVerifier({
 
 function queuedCompoundHandle({ record, phase = "verify", attempt = 1 } = {}) {
   const candidate = candidateId(record).replace(/[^a-z0-9._-]+/giu, "-");
-  return `compound-verifier-${candidate}-${phase}-${Math.max(1, Math.trunc(Number(attempt) || 1))}`;
+  return `${COMPOUND_VERIFIER_QUEUE_FORMAT}-${candidate}-${phase}-${Math.max(1, Math.trunc(Number(attempt) || 1))}`;
 }
 
 export function createQueuedMindCompoundVerifier({
   interpret,
   parse,
-  timeoutMs = 1800000
+  timeoutMs = 1800000,
+  maxOutputTokens = COMPOUND_VERIFICATION_MAX_OUTPUT_TOKENS
 } = {}) {
   if (typeof interpret !== "function") throw invalid("queued compound verifier requires interpret");
   if (typeof parse !== "function") throw invalid("queued compound verifier requires parse");
   const waitMs = Math.max(1000, Math.trunc(Number(timeoutMs) || 1800000));
-  return async ({ prompt, record, phase = "verify", attempt = 1 } = {}) => {
+  return async ({ prompt, record, candidates = [], phase = "verify", attempt = 1 } = {}) => {
     const handleId = queuedCompoundHandle({ record, phase, attempt });
+    const candidateIds = [...new Set((Array.isArray(candidates) && candidates.length > 0 ? candidates : [record])
+      .map(candidateId)
+      .filter(Boolean))];
+    const jobSpec = {
+      kind: "ollama-generate",
+      prompt: String(prompt ?? ""),
+      stream: false,
+      think: false,
+      format: {
+        type: "object",
+        required: ["verdict", "candidateId", "headKind", "rationale"],
+        additionalProperties: false,
+        properties: {
+          verdict: { type: "string", enum: ["accept", "reject", "uncertain"] },
+          candidateId: { type: "string", enum: ["", ...candidateIds] },
+          headKind: { type: "string", enum: [...RESPONSE_HEAD_KINDS] },
+          rationale: { type: "string", maxLength: 160 }
+        }
+      },
+      options: {
+        temperature: 0,
+        num_predict: Math.max(32, Math.trunc(Number(maxOutputTokens) || COMPOUND_VERIFICATION_MAX_OUTPUT_TOKENS))
+      }
+    };
     const start = await interpret(parse(
-      `su name ${JSON.stringify(handleId)} ob text ${JSON.stringify(String(prompt ?? ""))} vyah start future be gpu mind do`
+      `su name ${JSON.stringify(handleId)} ob text ${JSON.stringify(JSON.stringify(jobSpec))} vyah start future be gpu mind do`
     ));
     if (String(start?.ob?.text ?? "").trim() !== "queued") {
       throw invalid("queued compound verifier did not receive a queued duty", { handleId, start });

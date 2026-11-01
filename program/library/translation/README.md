@@ -211,13 +211,15 @@ translation `.pya` catalog guards this boundary: current checkpoints resume sele
 without re-submitting them, while an older or incomplete catalog regenerates only the missing
 token-sense state before continuing the existing refinery stages.
 
-After a sense is selected, the refinery first checks the existing atom and accepted-compound
-coverage through the normal WordNet bridge path. When no direct bridge exists, it emits a bounded
-`wordnet-sense-attachment` candidate for the existing vocabulary/compound refinery. The native
-bridge catalog remains the durable curated lexicon; the document catalog records automatic model
-decisions without requiring a human in the loop. Accepted sense links are fed back through the
-same sentence analyzer before vocabulary review, so the selected sense can affect the current run.
-Each selection queue uses an `english-wordnet-select-*` handle and is stored under
+After a sense is selected, the refinery first checks existing atoms and accepted compounds through
+the normal WordNet bridge path. When neither supplies a compatible anchor, it may derive a bounded
+closed-word compound from covered atoms and run that candidate through the existing queued compound
+verifier. Only a verified compound is offered to the normal vocabulary review, where the selected
+WordNet gloss is compared with the supplied anchor choices. The native bridge catalog remains the
+durable curated lexicon; the document catalog records generated compound evidence and automatic
+model decisions without silently changing the global compound list. Accepted sense links are fed
+back through the same sentence analyzer before vocabulary review, so the selected sense can affect
+the current run. Each selection queue uses an `english-wordnet-select-*` handle and is stored under
 `wordnet-refinery` in the translation `.pya` catalog. `wordnetSelected` counts occurrences with a
 selected sense, `wordnetUnresolved` counts selected senses still lacking a bridge, and
 `wordnetQueuePending`/`wordnetPending` count active Housekeeper queues. Completed queues therefore

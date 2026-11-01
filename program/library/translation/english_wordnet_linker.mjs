@@ -42,7 +42,7 @@ export const ENGLISH_WORDNET_LINKER_RESPONSE_FORMAT = Object.freeze({
       type: "array",
       items: {
         type: "object",
-        required: ["id", "status", "rationale"],
+        required: ["id", "status", "targetEnglish", "rationale"],
         additionalProperties: false,
         properties: {
           id: { type: "string" },
@@ -733,10 +733,10 @@ export function buildEnglishWordNetSenseLinkPrompt({
     "Return exactly one JSON object with this shape:",
     '{"verdict":"complete|partial|uncertain","senses":[{"id":"...","status":"accept|reject|uncertain","targetEnglish":"...","rationale":"..."}]}',
     "Include exactly one result for every supplied sense id. Never return an empty senses array.",
-    "For reject or uncertain, omit targetEnglish.",
+    "For reject or uncertain, set targetEnglish to an empty string; include it on every row.",
     ...(text(repairReason) ? [
       `AUTOMATIC CONTRACT REPAIR: ${bounded(repairReason, 300)}`,
-      "Return every supplied sense id exactly once, and include targetEnglish for every accepted row. Never return Pyash tokens."
+      "Return every supplied sense id exactly once and include targetEnglish on every row; use an empty string for reject or uncertain. Never return Pyash tokens."
     ] : []),
     `SOURCE: ${text(source) || "Open English WordNet"}`,
     "Each row contains only one source word, its original source sentence, its WordNet sense, and its allowed choices.",
@@ -934,6 +934,28 @@ export function parseEnglishWordNetSenseLinkResponse(value, {
     seen.add(id);
     const status = text(row?.status).toLowerCase();
     if (!LINK_STATUSES.has(status)) return { valid: false, reason: "sense status must be accept, reject, or uncertain" };
+    let targetEnglish = row?.targetEnglish;
+    if (typeof targetEnglish !== "string") {
+      if (!recoverRows) return { valid: false, reason: "every sense decision requires targetEnglish as a string" };
+      if (status === "accept") {
+        links.push({
+          id,
+          status: "uncertain",
+          rationale: `automatic safe downgrade: ${bounded(text(row?.rationale), MAX_RATIONALE_CHARS - 28)}`
+        });
+        continue;
+      }
+      targetEnglish = "";
+    }
+    if (status !== "accept" && text(targetEnglish)) {
+      if (!recoverRows) return { valid: false, reason: "rejected or uncertain senses require an empty targetEnglish" };
+      links.push({
+        id,
+        status: "uncertain",
+        rationale: `automatic safe downgrade: ${bounded(text(row?.rationale), MAX_RATIONALE_CHARS - 28)}`
+      });
+      continue;
+    }
     const rationale = text(row?.rationale);
     if (!rationale) return { valid: false, reason: "sense rationale is empty" };
     if (rationale.length > MAX_RATIONALE_CHARS && !recoverRows) {
@@ -944,8 +966,8 @@ export function parseEnglishWordNetSenseLinkResponse(value, {
       if (Object.hasOwn(row, "pyashSequence")) {
         return { valid: false, reason: "response must choose targetEnglish; Pyash sequence is derived" };
       }
-      const targetEnglish = normalized(row?.targetEnglish);
-      if (!targetEnglish) {
+      const normalizedTarget = normalized(targetEnglish);
+      if (!normalizedTarget) {
         if (!recoverRows) return { valid: false, reason: "accepted sense requires targetEnglish" };
         links.push({
           id,
@@ -954,7 +976,7 @@ export function parseEnglishWordNetSenseLinkResponse(value, {
         });
         continue;
       }
-      const match = inventoryMatch({ targetEnglish, record: byId.get(id) });
+      const match = inventoryMatch({ targetEnglish: normalizedTarget, record: byId.get(id) });
       const pyashSequence = sequence(match?.pyashSequence ?? match?.pyash);
       if (!match || pyashSequence.length === 0) {
         if (!recoverRows) return { valid: false, reason: "accepted sense target is outside the supplied sense choices" };
@@ -968,7 +990,7 @@ export function parseEnglishWordNetSenseLinkResponse(value, {
       links.push({
         id,
         status,
-        target: targetEnglish,
+        target: normalizedTarget,
         pyashSequence,
         targetKind: text(match.targetKind) || targetIdentity(null, targetEnglish, pyashSequence).targetKind,
         targetId: text(match.targetId) || targetIdentity(null, targetEnglish, pyashSequence).targetId,
