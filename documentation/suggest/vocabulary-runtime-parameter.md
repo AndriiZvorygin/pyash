@@ -1,7 +1,8 @@
 # Runtime Vocabulary Parameter
 
-**Status:** design for review. Implementation is deferred until the review questions
-at the end are answered.
+**Status:** parked. Reviewed twice; the second round left it without a
+deliverable. The analysis below is kept because it is measured and reproducible,
+but nothing here is queued for work, and no code change is proposed.
 
 ## Purpose
 
@@ -17,6 +18,15 @@ compound-first: a new concept should be covered by a compound of existing
 atoms wherever a compound holds up, and a new atom only when no compound does.
 This document is about the machinery that makes that direction testable, and
 about making the choice of atom table explicit instead of implicit.
+
+**Read this first if the rest of the document is more than you need.** The
+refactor has no deliverable today. The review asked for a concrete second
+vocabulary; there is none in this repository — see "No second vocabulary
+exists" below — and the one thing the proposal could have offered as an
+immediate action was declined as not worth doing. The measurements below are
+the durable part of this document: they describe how the vocabulary is
+actually wired, and they would be the starting point for anyone who later has
+a real reason to change it.
 
 ## The alternate word lists already exist
 
@@ -65,6 +75,42 @@ tools at the in-repo copy. That is a two-line change and it does not need the
 refactor below. The refactor is what stops the same divergence happening
 again, because it makes the set a declared thing that every consumer resolves
 the same way.
+
+## No second vocabulary exists
+
+The review asked for a concrete second vocabulary. The honest answer is that
+this repository does not have one, and the searches that establish that are
+short:
+
+- **No set concept anywhere.** As whole words, `vocabulary_set`, `word_set`,
+  `wordSet` and `vocabularySet` appear in no source file, no `.pya` file and no
+  document in the repository. The only hits are in this proposal and in the run
+  artifacts it produced. (The one substring match is `keywordSets`, an
+  unrelated local variable in
+  `program/library/reporter_shared/agenda-stage2-grounding.mjs:778`.)
+- **The one other word-list axis is language, not set.** The
+  `caterer/pyac/lyac/kwon_*.json` tables — `kwon_en`, `kwon_fi`, `kwon_he`,
+  `kwon_hi`, `kwon_ia`, `kwon_isv`, `kwon_tr`, `kwon_zh` — map the same `pya`
+  atoms to a name *in another language*. That is a per-atom naming table, not
+  an alternative vocabulary, and it already coexists with the atom table
+  without either one being made injectable.
+- **The layer-32 list is an extension, not a set.** The 18,630-word layer-32
+  list is a superset of the base vocabulary rather than an alternative to it,
+  so it does not create the situation a vocabulary parameter exists to solve.
+
+So the refactor would be building a mechanism for a second vocabulary that
+nobody has asked for, on the strength of a divergence between one live copy
+and one stale vendored copy. That is not a reason to do it. What would be a
+reason is a concrete second vocabulary, and there is none.
+
+```
+# no set concept exists
+grep -rnw "vocabulary_set\|word_set\|wordSet\|vocabularySet" \
+  --include=*.mjs --include=*.pya --include=*.md .
+
+# the other word lists are per-language name tables
+ls caterer/pyac/lyac/kwon_*.json
+```
 
 ## The problem
 
@@ -222,13 +268,18 @@ are deterministic; 204 still need verification and 36 were rejected. See
 
 ## Scope
 
-**Phase 0, independent of the refactor and approvable on its own:** point
-`command/vocab_query.mjs` and `command/vocab_anchor_ing_suggest.mjs` at the
-in-repo copy, and add a quiz that asserts every vocabulary consumer resolves
-the same set. This fixes the divergence described above and is two lines plus
-a test. It is called out separately because it does not depend on any of the
-design questions below, and because leaving it undone means the tooling keeps
-answering with names the interpreter does not have.
+**Phase 0 — considered and declined.** The first version of this proposal
+called out a two-line change: point `command/vocab_query.mjs` and
+`command/vocab_anchor_ing_suggest.mjs` at the in-repo copy, and add a quiz
+asserting every vocabulary consumer resolves the same set. It was put to the
+owner as an independent, approvable item and **declined as not worth doing**.
+The measurement behind it stands — after the swap, four atoms that the
+tooling cannot report today (`syat`, `srah`, `fromindex`, `fluh`) become
+reportable under the names the interpreter uses — but the tooling is a
+diagnostic aid, the affected names are two loop words that were renamed
+recently, and nothing in the system depends on the answer. Changing it would
+add a quiz and a diff without changing what the system does. It is recorded
+here so it is not proposed a third time.
 
 In scope for the refactor: one new module, three restructurings, five
 re-threadings, one configuration file, the command tools, and a quiz that pins
@@ -240,6 +291,9 @@ out of the grammar layer. The last is a real piece of work and is listed as an
 open question rather than folded in here.
 
 ## Acceptance
+
+If the proposal is revived, these are the criteria it would be accepted
+against. None of them is being worked toward today.
 
 - `program/library/vocabulary.mjs` exists and exposes `buildVocabulary` and
   `defaultVocabulary`.
@@ -291,12 +345,50 @@ argument. In fact:
   without waiting for any design question to be settled.
 
 The general question behind the review — *is there a concrete second
-vocabulary?* — remains worth asking, and is question 1 below. The Sino
-character codebook in `sino-pyash/PLAN.md` is the one concrete candidate
-currently on the table, but it is deferred, so this proposal does not depend
-on it.
+vocabulary?* — was then asked of the proposal's own author, and the answer
+turned out to be **no**: this repository has no second vocabulary, and the
+searches that show it are in "No second vocabulary exists" above.
+
+**Second review: the two-line immediate fix was declined.** Phase 0 was put
+forward as an independent, approvable item. It was declined as not worth
+doing — the tooling is a diagnostic aid, the affected names are two loop
+words renamed recently, and nothing in the system depends on the answer. So
+the two things that could have made this proposal concrete — a live second
+vocabulary, and a cheap fix with visible value — are both absent.
+
+The Sino character codebook in `sino-pyash/PLAN.md` remains the only concrete
+candidate anywhere in sight, and it is deferred.
+
+### Outcome
+
+**Parked.** Not rejected on the merits — the measurements and the coupling
+analysis are sound — but left without a deliverable, and a proposal without a
+deliverable should not sit in the review queue pretending to be live work.
+
+What would revive it, in order of how much it would be worth:
+
+1. **A second vocabulary that something actually needs.** The clearest case
+   is a second set of *mood* words, because `MOOD_WORDS` is hardcoded in
+   `program/library/vliw/phrase.mjs:19` and a set with different moods
+   cannot exist until that literal moves into the grammar layer. Nothing
+   needs that today.
+2. **A vocabulary that is a strict subset.** A reduced set — the atoms a
+   constrained device or a narrow domain can afford — is the case the
+   parameter would serve best, because it is measurable: the English30k
+   coverage command could be run against it. No such subset has been
+   specified.
+3. **A decision to move the atom table out of the interpreter entirely.** That
+   is a different and larger piece of work than a runtime parameter, and it
+   should not be smuggled in under this proposal's name.
+
+Until one of those exists, the honest state is the one recorded here.
 
 ## Open questions for the reviewer
+
+These are the questions that were left open when the proposal was parked. They
+are kept in the order they were asked, and they are the questions a reviewer
+would answer first if the proposal were revived against one of the three
+conditions in "Outcome" above.
 
 1. Is one active set per process right, or should the set be selectable per
    agent house, per place, or per session?
@@ -305,8 +397,9 @@ on it.
 3. Is the configuration sentence the right switch, given that the repository
    already prefers configuration sentences over flags?
 4. Should the coverage report be computed per set, or only for the active one?
-5. Should Phase 0 (pointing the two stale tools at the in-repo copy) land
-   before this proposal is approved, or together with it?
+5. ~~Should Phase 0 land before this proposal is approved, or together with
+   it?~~ Answered: it was put separately and declined. It is not a question
+   any more, and it is not proposed a third time.
 
 ## Reproducing the measurements
 

@@ -17,6 +17,10 @@ specification and it is not a record of a decision.
   or a runbook under `documentation/recipes/` or `documentation/runbooks/`.
 - When a proposal is rejected, it stays here with the outcome recorded, so the
   reasoning is not lost and the question is not re-asked from scratch.
+- A proposal that survives review but has no deliverable is **parked**. It
+  stays here, with its outcome recorded and its status shown in the table
+  below, until something changes that gives it one. A parked proposal is not
+  queued work.
 
 ## What does not belong here
 
@@ -53,7 +57,7 @@ substance is carried into the governing document, and the entry in
 
 | Document | Subject | Status |
 |---|---|---|
-| [`vocabulary-runtime-parameter.md`](vocabulary-runtime-parameter.md) | Make the atom table an injected runtime value instead of a module constant | awaiting review |
+| [`vocabulary-runtime-parameter.md`](vocabulary-runtime-parameter.md) | Make the atom table an injected runtime value instead of a module constant | parked — no deliverable; see its Review record |
 | [`self-chosen-work-candidates.md`](self-chosen-work-candidates.md) | Let the work system choose what to work on next from detector output | awaiting review |
 
 Both are also posted in the commons room under `world/commons/notes/` for live
