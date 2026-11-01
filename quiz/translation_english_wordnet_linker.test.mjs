@@ -763,6 +763,31 @@ test("WordNet linker accepts only a supplied sense choice and renders native Pya
   assert.match(sequenceResponse.reason, /Pyash sequence is derived/u);
 });
 
+test("WordNet bridge renderer quotes Pyash role words as English targets", () => {
+  const source = renderEnglishWordNetSenseLinksPya({
+    records: [{
+      source: "r:00111558-r",
+      pos: "r",
+      synset: "00111558-r",
+      status: "accepted-edge",
+      link: {
+        target: "within",
+        pyashSequence: ["lwah"],
+        targetKind: "atom",
+        targetId: "atom:lwah",
+        targetPartOfSpeech: "r",
+        certainty: "deterministic",
+        evidence: "unique WordNet edge"
+      }
+    }],
+    source: "fixture WordNet",
+    sourceHash: "fixture-source"
+  });
+  const parsed = parseEnglishWordNetBridgeCatalog(source);
+  assert.equal(parsed.entries[0].target, "within");
+  assert.match(source, /ob name "within"/u);
+});
+
 test("WordNet linker recovers one bounded noisy JSON object and rejects malformed output", () => {
   const records = withChoice(buildEnglishWordNetSenseLinkRecords({
     wordnetIndex: fixtureIndex(),

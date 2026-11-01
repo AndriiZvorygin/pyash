@@ -1197,7 +1197,7 @@ function renderTargetName(value) {
   if (!target || !/^[a-z0-9][a-z0-9_-]*(?: [a-z0-9][a-z0-9_-]*)*$/iu.test(target)) {
     throw invalid("WordNet bridge target cannot be rendered as a Pyash name", { target: value });
   }
-  return target;
+  return JSON.stringify(target);
 }
 
 export function renderEnglishWordNetSenseLinksPya({

@@ -2,12 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  activateEnglishWordNetSenseSweepLinks,
   classifyEnglishWordNetSenseSweep,
   partitionEnglishWordNetSenseSweep,
   parseEnglishWordNetSweepPya,
   renderEnglishWordNetSweepBatchPya,
   renderEnglishWordNetSweepManifestPya
 } from "../program/library/translation/english_wordnet_sweep.mjs";
+import {
+  buildEnglishWordNetBridgeIndex,
+  parseEnglishWordNetBridgeCatalog
+} from "../program/library/translation/english_wordnet_bridges.mjs";
 
 function linkedRecord(pos, synset, target, status = "accepted-edge") {
   return {
@@ -66,6 +71,75 @@ test("sense sweep keeps a unique low-degree anchor as an automatic proposal", ()
   ]);
   assert.equal(result.records[0].category, "automatic-link");
   assert.equal(result.counts["automatic-link"], 1);
+});
+
+test("automatic sweep links activate only when they preserve bridge uniqueness", () => {
+  const catalogSource = [
+    "su name translation_english_wordnet_bridges be map def",
+    "su text \"format\" ob text \"english-wordnet-bridge-v1\" ya",
+    "su text \"source\" ob text \"fixture bridge catalog\" ya",
+    "su text \"n:00000001-n\" ob name prior as text \"n\" with text \"contextual\" via text \"existing evidence\" ya",
+    "prah",
+    ""
+  ].join("\n");
+  const records = [
+    {
+      category: "automatic-link",
+      source: "n:00000002-n",
+      pos: "n",
+      synset: "00000002-n",
+      link: {
+        target: "ready",
+        pyashSequence: ["newatom"],
+        targetKind: "atom",
+        targetId: "atom:newatom",
+        evidence: "unique leaf anchor"
+      }
+    },
+    {
+      category: "automatic-link",
+      source: "n:00000001-n",
+      pos: "n",
+      link: { target: "prior", pyashSequence: ["prioratom"] }
+    },
+    ...["n:00000003-n", "n:00000004-n"].map((source) => ({
+      category: "automatic-link",
+      source,
+      pos: "n",
+      synset: source.slice(2),
+      link: {
+        target: "shared",
+        pyashSequence: ["sharedatom"],
+        targetKind: "atom",
+        targetId: "atom:sharedatom",
+        evidence: "unique leaf anchor"
+      }
+    })),
+    { category: "needs-sense-choice", source: "v:00000005-v", pos: "v", link: { target: "ignored", pyashSequence: ["ignored"] } }
+  ];
+  const sequences = new Map([
+    ["prior", ["prioratom"]],
+    ["ready", ["newatom"]],
+    ["shared", ["sharedatom"]]
+  ]);
+  const result = activateEnglishWordNetSenseSweepLinks({
+    catalogSource,
+    records,
+    runId: "fixture-sweep",
+    sourceHash: "fixture-hash",
+    resolveTarget: (target) => ({ pyashSequence: sequences.get(target) ?? [] })
+  });
+
+  assert.deepEqual(result.activated, ["n:00000002-n"]);
+  assert.equal(result.totalCatalogEntries, 2);
+  assert.equal(result.skipped.length, 3);
+  assert.ok(result.skipped.some((row) => row.reason === "sense already exists in the active catalog"));
+  assert.equal(result.skipped.filter((row) => row.reason === "target identity collides with a non-equivalent WordNet sense").length, 2);
+  const catalog = parseEnglishWordNetBridgeCatalog(result.catalog);
+  const active = buildEnglishWordNetBridgeIndex({ entries: catalog.entries });
+  assert.equal(active.lookup("n:00000002-n").target, "ready");
+  assert.equal(active.lookup("n:00000002-n").certainty, "deterministic");
+  assert.equal(active.lookup("n:00000003-n"), null);
 });
 
 test("sense sweep batch partitioning is stable and bounded", () => {

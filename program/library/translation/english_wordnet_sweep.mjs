@@ -1,5 +1,9 @@
 import { buildProgram } from "../../program.mjs";
-import { buildEnglishWordNetBridgeIndex } from "./english_wordnet_bridges.mjs";
+import {
+  buildEnglishWordNetBridgeIndex,
+  parseEnglishWordNetBridgeCatalog
+} from "./english_wordnet_bridges.mjs";
+import { renderEnglishWordNetSenseLinksPya } from "./english_wordnet_linker.mjs";
 
 export const ENGLISH_WORDNET_SWEEP_FORMAT = "english-wordnet-sense-sweep-v1";
 export const ENGLISH_WORDNET_SWEEP_MANIFEST_NAME = "translation_english_wordnet_sweep_manifest";
@@ -192,4 +196,102 @@ export function parseEnglishWordNetSweepPya(source) {
   }
   const rows = sentences.filter((sentence) => sentence?.mood === "ya" && typeof sentence?.su?.text === "string");
   return { mapName: header.su.name, rows };
+}
+
+export function activateEnglishWordNetSenseSweepLinks({
+  catalogSource,
+  records = [],
+  runId,
+  sourceHash = "",
+  resolveTarget
+} = {}) {
+  if (typeof catalogSource !== "string") throw new TypeError("active WordNet bridge catalog must be Pyash text");
+  if (!Array.isArray(records)) throw new TypeError("WordNet sweep records must be an array");
+  const catalog = parseEnglishWordNetBridgeCatalog(catalogSource);
+  const existingBySense = new Map(catalog.entries.map((entry) => [entry.source, entry]));
+  const additions = [];
+  const skipped = [];
+  for (const record of records) {
+    if (record?.category !== "automatic-link") continue;
+    const source = String(record.source ?? "").trim().toLowerCase();
+    const target = normalized(record?.link?.target);
+    const pyashSequence = sequence(record?.link?.pyashSequence);
+    if (!source || !target || pyashSequence.length === 0) {
+      skipped.push({ source, reason: "automatic proposal lacks a sense, target, or Pyash sequence" });
+      continue;
+    }
+    const existing = existingBySense.get(source);
+    if (existing) {
+      skipped.push({
+        source,
+        reason: existing.target === target
+          && existing.targetPartOfSpeech === record.pos
+          ? "sense already exists in the active catalog"
+          : "sense already has a conflicting active catalog row"
+      });
+      continue;
+    }
+    additions.push({
+      source,
+      target,
+      pyashSequence,
+      targetKind: record.link.targetKind,
+      targetId: record.link.targetId,
+      targetPartOfSpeech: record.link.targetPartOfSpeech || record.pos,
+      certainty: "deterministic",
+      evidence: `${record.link.evidence || "unique low-degree WordNet edge"}; active through sweep ${runId} (source ${sourceHash})`
+    });
+  }
+
+  const candidateIndex = buildEnglishWordNetBridgeIndex({
+    entries: [...catalog.entries, ...additions],
+    resolveTarget
+  });
+  const activeAdditions = additions.filter((entry) => candidateIndex.bySense.has(entry.source));
+  for (const entry of additions) {
+    if (candidateIndex.bySense.has(entry.source)) continue;
+    skipped.push({ source: entry.source, reason: "target identity collides with a non-equivalent WordNet sense" });
+  }
+
+  const recordsToRender = activeAdditions.map((entry) => ({
+    source: entry.source,
+    pos: entry.targetPartOfSpeech,
+    synset: entry.source.slice(2),
+    status: "accepted-edge",
+    link: entry
+  }));
+  const rendered = renderEnglishWordNetSenseLinksPya({
+    records: recordsToRender,
+    source: catalog.source,
+    sourceHash,
+    name: "translation_english_wordnet_sweep_additions"
+  });
+  const renderedLines = rendered.split(/\r?\n/u);
+  const sourcesToRender = new Set(activeAdditions.map((entry) => entry.source));
+  const bridgeLines = renderedLines.filter((line) => (
+    [...sourcesToRender].some((source) => line.startsWith(`su text ${JSON.stringify(source)} ob name `))
+  ));
+  if (bridgeLines.length !== activeAdditions.length) {
+    throw new TypeError("could not render every verified automatic WordNet bridge row");
+  }
+  const catalogLines = catalogSource.trimEnd().split(/\r?\n/u);
+  const endIndex = catalogLines.lastIndexOf("prah");
+  if (endIndex < 0) throw new TypeError("active WordNet bridge catalog has no closing prah");
+  const updatedLines = [...catalogLines.slice(0, endIndex), ...bridgeLines, ...catalogLines.slice(endIndex)];
+  const updated = `${updatedLines.join("\n")}\n`;
+  const parsedUpdated = parseEnglishWordNetBridgeCatalog(updated);
+  const activeUpdated = buildEnglishWordNetBridgeIndex({
+    entries: parsedUpdated.entries,
+    resolveTarget
+  });
+  const inactiveRendered = activeAdditions.filter((entry) => !activeUpdated.bySense.has(entry.source));
+  if (inactiveRendered.length > 0) {
+    throw new TypeError("rendered automatic links failed active bridge validation");
+  }
+  return {
+    catalog: updated,
+    activated: activeAdditions.map((entry) => entry.source),
+    skipped,
+    totalCatalogEntries: parsedUpdated.entries.length
+  };
 }
