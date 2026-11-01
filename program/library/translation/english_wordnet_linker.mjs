@@ -31,6 +31,7 @@ export const ENGLISH_WORDNET_LINKER_DEFAULT_OUTPUT_TOKENS = 1024;
 export const ENGLISH_WORDNET_LINKER_EDGE_MAX_DEGREE = 1;
 export const ENGLISH_WORDNET_LINKER_ANCHOR_MAX_CANDIDATES = 8;
 export const ENGLISH_WORDNET_LINKER_DEFAULT_DUTY_SIZE = 4;
+export const ENGLISH_WORDNET_LINKER_DEFAULT_SWEEP_BATCH_SIZE = 1000;
 export const ENGLISH_WORDNET_LINKER_RESPONSE_FORMAT = Object.freeze({
   type: "object",
   required: ["verdict", "senses"],
@@ -42,7 +43,7 @@ export const ENGLISH_WORDNET_LINKER_RESPONSE_FORMAT = Object.freeze({
       type: "array",
       items: {
         type: "object",
-        required: ["id", "status", "rationale"],
+        required: ["id", "status", "targetEnglish", "rationale"],
         additionalProperties: false,
         properties: {
           id: { type: "string" },
@@ -81,6 +82,11 @@ function bounded(value, maxChars) {
   return valueText.length > limit ? `${valueText.slice(0, Math.max(0, limit - 1))}…` : valueText;
 }
 
+function definitionOnly(value, maxChars = 240) {
+  const definition = text(value).split(/\s*;\s*/u, 1)[0];
+  return bounded(definition, maxChars);
+}
+
 function matchingSourceTerms(lemmas, sourceTerms) {
   const rows = Array.isArray(sourceTerms) ? sourceTerms : [];
   return rows.filter((term) => {
@@ -105,7 +111,7 @@ function compactSense(record, context) {
     word: bounded(sourceTerms[0], 32),
     s: text(record?.source),
     p: text(record?.pos),
-    g: bounded(record?.gloss, 56),
+    g: definitionOnly(record?.gloss),
     l: (record?.lemmas ?? []).slice(0, 2).map((lemma) => bounded(lemma, 24)),
     sourceSentences: [...new Set(sentences)].slice(0, 3),
     choices: (record?.candidates ?? []).filter((candidate) => candidate?.selectable !== false).slice(0, 8).map((candidate) => ({
@@ -720,10 +726,12 @@ export function buildEnglishWordNetSenseLinkPrompt({
   const senseRows = records.map((record) => JSON.stringify(compactSense(record, context))).join("\n");
   const fixed = [
     "You are the bounded Pyash WordNet sense-linking worker.",
-    "For each supplied WordNet sense, decide whether its source sentence supports one of the choices on that same row.",
-    "Use the original source sentence, gloss, lemmas, and choice evidence as the only decision context.",
-    "Accept only the sense and choice that best fits the source sentence; reject unrelated senses.",
-    "Use uncertain only when the supplied sentence leaves two or more choices genuinely plausible.",
+    "For each supplied WordNet synset, decide whether one listed English anchor has the same meaning as the synset definition.",
+    "The WordNet definition is the meaning being linked. Any source sentence shown is optional supporting context.",
+    "WordNet examples after semicolons are omitted; do not infer a different sense from example sentences.",
+    "For a single choice, accept it only when that anchor is semantically equivalent to the definition.",
+    "For multiple choices, select the best equivalent anchor; reject all choices when none preserves the definition.",
+    "Use uncertain only when the supplied definition and choices do not support a reliable decision.",
     "A sense row with no choices cannot be accepted; use reject or uncertain.",
     "Choose targetEnglish only from the choices listed on that same sense row.",
     "For an accepted link, targetEnglish must exactly match one listed choice.",
@@ -733,14 +741,14 @@ export function buildEnglishWordNetSenseLinkPrompt({
     "Return exactly one JSON object with this shape:",
     '{"verdict":"complete|partial|uncertain","senses":[{"id":"...","status":"accept|reject|uncertain","targetEnglish":"...","rationale":"..."}]}',
     "Include exactly one result for every supplied sense id. Never return an empty senses array.",
-    "For reject or uncertain, omit targetEnglish.",
+    "For reject or uncertain, set targetEnglish to an empty string; include it on every row.",
     ...(text(repairReason) ? [
       `AUTOMATIC CONTRACT REPAIR: ${bounded(repairReason, 300)}`,
-      "Return every supplied sense id exactly once, and include targetEnglish for every accepted row. Never return Pyash tokens."
+      "Return every supplied sense id exactly once and include targetEnglish on every row; use an empty string for reject or uncertain. Never return Pyash tokens."
     ] : []),
     `SOURCE: ${text(source) || "Open English WordNet"}`,
-    "Each row contains only one source word, its original source sentence, its WordNet sense, and its allowed choices.",
-    "WORDNET SENSES AND PER-SENSE CHOICES:",
+    "Each row contains one WordNet sense, its definition and lemmas, optional source sentences, and only its allowed anchor choices.",
+    "WORDNET SENSES AND PER-SENSE ANCHOR CHOICES:",
     senseRows
   ];
   const budget = Math.max(1000, Math.trunc(Number(maxChars) || ENGLISH_WORDNET_LINKER_PROMPT_MAX_CHARS));
@@ -934,6 +942,28 @@ export function parseEnglishWordNetSenseLinkResponse(value, {
     seen.add(id);
     const status = text(row?.status).toLowerCase();
     if (!LINK_STATUSES.has(status)) return { valid: false, reason: "sense status must be accept, reject, or uncertain" };
+    let targetEnglish = row?.targetEnglish;
+    if (typeof targetEnglish !== "string") {
+      if (!recoverRows) return { valid: false, reason: "every sense decision requires targetEnglish as a string" };
+      if (status === "accept") {
+        links.push({
+          id,
+          status: "uncertain",
+          rationale: `automatic safe downgrade: ${bounded(text(row?.rationale), MAX_RATIONALE_CHARS - 28)}`
+        });
+        continue;
+      }
+      targetEnglish = "";
+    }
+    if (status !== "accept" && text(targetEnglish)) {
+      if (!recoverRows) return { valid: false, reason: "rejected or uncertain senses require an empty targetEnglish" };
+      links.push({
+        id,
+        status: "uncertain",
+        rationale: `automatic safe downgrade: ${bounded(text(row?.rationale), MAX_RATIONALE_CHARS - 28)}`
+      });
+      continue;
+    }
     const rationale = text(row?.rationale);
     if (!rationale) return { valid: false, reason: "sense rationale is empty" };
     if (rationale.length > MAX_RATIONALE_CHARS && !recoverRows) {
@@ -944,8 +974,8 @@ export function parseEnglishWordNetSenseLinkResponse(value, {
       if (Object.hasOwn(row, "pyashSequence")) {
         return { valid: false, reason: "response must choose targetEnglish; Pyash sequence is derived" };
       }
-      const targetEnglish = normalized(row?.targetEnglish);
-      if (!targetEnglish) {
+      const normalizedTarget = normalized(targetEnglish);
+      if (!normalizedTarget) {
         if (!recoverRows) return { valid: false, reason: "accepted sense requires targetEnglish" };
         links.push({
           id,
@@ -954,7 +984,7 @@ export function parseEnglishWordNetSenseLinkResponse(value, {
         });
         continue;
       }
-      const match = inventoryMatch({ targetEnglish, record: byId.get(id) });
+      const match = inventoryMatch({ targetEnglish: normalizedTarget, record: byId.get(id) });
       const pyashSequence = sequence(match?.pyashSequence ?? match?.pyash);
       if (!match || pyashSequence.length === 0) {
         if (!recoverRows) return { valid: false, reason: "accepted sense target is outside the supplied sense choices" };
@@ -968,7 +998,7 @@ export function parseEnglishWordNetSenseLinkResponse(value, {
       links.push({
         id,
         status,
-        target: targetEnglish,
+        target: normalizedTarget,
         pyashSequence,
         targetKind: text(match.targetKind) || targetIdentity(null, targetEnglish, pyashSequence).targetKind,
         targetId: text(match.targetId) || targetIdentity(null, targetEnglish, pyashSequence).targetId,
@@ -1174,7 +1204,7 @@ function renderTargetName(value) {
   if (!target || !/^[a-z0-9][a-z0-9_-]*(?: [a-z0-9][a-z0-9_-]*)*$/iu.test(target)) {
     throw invalid("WordNet bridge target cannot be rendered as a Pyash name", { target: value });
   }
-  return target;
+  return JSON.stringify(target);
 }
 
 export function renderEnglishWordNetSenseLinksPya({
@@ -1270,6 +1300,9 @@ export function parseEnglishWordNetLinkerConfig(source) {
     model: metadata.model || DEFAULT_TRANSLATION_MODEL,
     maxBatch: Math.max(1, Math.trunc(Number(metadata["max-batch"]) || ENGLISH_WORDNET_LINKER_DEFAULT_BATCH_SIZE)),
     maxDutySenses: Math.max(1, Math.trunc(Number(metadata["max-duty-senses"]) || ENGLISH_WORDNET_LINKER_DEFAULT_DUTY_SIZE)),
+    modelSweepMode: metadata["model-sweep-mode"] || "pilot",
+    modelSweepPilotLimit: Math.max(1, Math.trunc(Number(metadata["model-sweep-pilot-limit"]) || 12)),
+    modelSweepPilotMultipleChoiceLimit: Math.max(0, Math.trunc(Number(metadata["model-sweep-pilot-multiple-choice-limit"]) || 2)),
     promptMaxChars: Math.max(1000, Math.trunc(Number(metadata["prompt-max-chars"]) || ENGLISH_WORDNET_LINKER_PROMPT_MAX_CHARS)),
     promptMaxTokens: Math.max(100, Math.trunc(Number(metadata["prompt-max-tokens"]) || ENGLISH_WORDNET_LINKER_PROMPT_MAX_TOKENS)),
     maxOutputTokens: Math.max(100, Math.trunc(Number(metadata["max-output-tokens"]) || ENGLISH_WORDNET_LINKER_DEFAULT_OUTPUT_TOKENS)),
@@ -1277,7 +1310,8 @@ export function parseEnglishWordNetLinkerConfig(source) {
     selectionMaxOutputTokens: Math.max(100, Math.trunc(Number(metadata["selection-max-output-tokens"]) || ENGLISH_WORDNET_SELECTION_DEFAULT_OUTPUT_TOKENS)),
     edgeMaxDegree: Math.max(0, Math.trunc(Number(metadata["edge-max-degree"]) || ENGLISH_WORDNET_LINKER_EDGE_MAX_DEGREE)),
     anchorMaxCandidates: Math.max(1, Math.trunc(Number(metadata["anchor-max-candidates"]) || ENGLISH_WORDNET_LINKER_ANCHOR_MAX_CANDIDATES)),
-    vocabSuggestionMinSupport: Math.max(1, Math.trunc(Number(metadata["vocab-suggestion-min-support"]) || 2))
+    vocabSuggestionMinSupport: Math.max(1, Math.trunc(Number(metadata["vocab-suggestion-min-support"]) || 2)),
+    sweepBatchSize: Math.max(100, Math.trunc(Number(metadata["sweep-batch-size"]) || ENGLISH_WORDNET_LINKER_DEFAULT_SWEEP_BATCH_SIZE))
   };
 }
 

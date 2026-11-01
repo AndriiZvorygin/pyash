@@ -18,7 +18,8 @@ import { renderEnglishFromVliw } from "../program/library/translation/pyac_to_en
 
 test("WordNet bridges use one native Pyash row per sense", async () => {
   const catalog = await loadEnglishWordNetBridges();
-  assert.equal(catalog.entries.length, 19);
+  assert.equal(catalog.entries.length, 753);
+  assert.equal(catalog.entries.filter((entry) => entry.evidence.includes("active through sweep wordnet-sense-sweep-4c07194f363e-81b5bbefa3b0-d1")).length, 734);
   assert.deepEqual(catalog.entries.find((entry) => entry.source === "n:05818974-n"), {
     source: "n:05818974-n",
     target: "thing",
@@ -40,6 +41,9 @@ test("WordNet bridges use one native Pyash row per sense", async () => {
     certainty: "contextual",
     evidence: "Open English WordNet 2025 mistake-one-thing-for-another sense; Chinese 混同 treats distinct things as the same; Pyash compound identity-confusion uses hdif hbun"
   });
+  assert.equal(catalog.entries.find((entry) => entry.source === "v:00761702-v")?.target, "entreat");
+  assert.equal(catalog.entries.find((entry) => entry.source === "v:00761702-v")?.certainty, "deterministic");
+  assert.equal(catalog.entries.find((entry) => entry.source === "r:00111558-r")?.target, "inside");
 });
 
 test("the selected sense projects identity-confusion beside mood and preserves its Pyac sequence", async () => {

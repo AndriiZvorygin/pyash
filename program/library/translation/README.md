@@ -50,8 +50,9 @@ The bounded sense-linking worker is configured in `english_wordnet_linker.pya`. 
 targets present in the supplied inventory, and submits unresolved records through the existing
 `vyah start future be gpu mind do` queue path. A completed response can be rendered back into
 the native `english_wordnet_bridges.pya` map; the linker is evidence generation, not a second
-vocabulary or transcript format. The durable configuration caps one batch at 200 senses and
-keeps each queued prompt below 12,000 characters. The selected model's durable card is
+vocabulary or transcript format. The model-backed linker caps one batch at 200 senses and
+keeps each queued prompt below 12,000 characters. The deterministic background sweep has its
+own 1,000-sense checkpoint batch size. The selected model's durable card is
 `translation_model_cards.pya`; Qwen3.5 9B declares a 32,768-token context window, a 3,900-token
 safe input budget, and an 8,192-token safe output budget for this workflow. A paragraph-sized
 group is sent as one duty when it fits; larger groups split on complete sense rows, so a provider
@@ -74,6 +75,52 @@ bridge rows remain in the catalog as evidence but do not become active links. Th
 `experience`, `emotionally`, `searching`, and `appear` unresolved where their current bridge
 rows share a target. Give each sense a distinct accepted atom/compound before linking it; shared
 anchors activate only when the equivalence evidence is recorded.
+To scale this deterministic pass across the installed Open English WordNet, run
+`node command/wordnet_sense_sweep.mjs`. It classifies every sense using the same safe edge-node
+and active-bridge rules as the document refinery. Existing active links are recorded as
+`linked-existing`; unique safe edge links become `automatic-link` proposals; target collisions
+are marked `needs-equivalence-review`; selectable but context-dependent anchors become
+`needs-sense-choice`; and senses without an existing selectable anchor become
+`needs-atom-or-compound-anchor`. The sweep makes no model calls and does not edit the curated
+bridge catalog.
+
+The sweep is resumable and idempotent. Its batch size is configured by
+`sweep-batch-size` in `english_wordnet_linker.pya` (currently 1,000). Stable WordNet and lexical
+resource hashes determine the run id. The manifest and numbered checkpoint batches live under
+`artifacts/<run-id>/`; `automatic-links.pya` contains only the deterministic proposals and is a
+review artifact, not an active bridge map. Existing identical batch checkpoints are reused when
+the command runs again. A detached run can be started with:
+
+```bash
+setsid node command/wordnet_sense_sweep.mjs > artifacts/wordnet-sense-sweep.log 2>&1 < /dev/null &
+echo $! > artifacts/wordnet-sense-sweep.pid
+```
+
+Inspect `manifest.pya` and the batch files with `node command/pya_to_json.mjs <file> --pretty`.
+
+The Qwen anchor-decision stage is `node command/wordnet_sense_link_sweep.mjs`. Its Pyash config
+starts in `pilot` mode with 12 records: it includes up to two multi-choice rows and samples
+single-choice rows across parts of speech by descending English30k frequency. Switch
+`model-sweep-mode` in `english_wordnet_linker.pya` to `full`
+only after reviewing the pilot. The command submits only
+`needs-sense-choice` records through the configured GPU Housekeeper, explicitly selects the
+`model` from `english_wordnet_linker.pya`, and awaits each bounded duty before submitting the next.
+The model sees a WordNet definition with example clauses removed and only the existing anchors
+allowed for that synset. It can accept one supplied anchor, reject the choices, or leave the row
+uncertain; it cannot generate Pyash sequences or compounds. Completed decisions are checkpointed
+as `.pya` batch artifacts and resume without repeating completed duties. The pilot records a
+collision-checked activation preview without changing the active bridge map. In `full` mode,
+collision-free accepted links are added to the bridge map with contextual certainty; rejected,
+uncertain, and colliding rows remain in the model-stage artifacts for later compound work. The
+pilot's completed batch checkpoints lead the full run, so those model duties are reused.
+Each model batch artifact includes the exact submitted prompt beside its decisions for review.
+
+Open English WordNet 2025 JSON supplies synsets and relations but no `tag_count`, and its lexical
+entry array order is not a reliable frequency rank. Princeton WordNet's `index.sense` provides
+`sense_number` and `tag_cnt` from semantically tagged concordance texts; numbered order is usually
+most-to-least frequent for tagged senses, while untagged senses have no dependable frequency
+order. These counts are corpus evidence, not universal usage frequency ([sense index format](https://wordnet.princeton.edu/documentation/senseidx5wn), [sense ordering notes](https://wordnet.princeton.edu/documentation/wndb5wn)). Use a versioned, explicit frequency resource when choosing a default sense for an atom; do not infer frequency from OEWN JSON array order.
+
 Callers that have loaded the derived compound catalog pass its accepted records explicitly;
 candidate-closed and rejected compounds are excluded from the authoritative inventory.
 Compound and atom relationships are derived by
@@ -211,13 +258,15 @@ translation `.pya` catalog guards this boundary: current checkpoints resume sele
 without re-submitting them, while an older or incomplete catalog regenerates only the missing
 token-sense state before continuing the existing refinery stages.
 
-After a sense is selected, the refinery first checks the existing atom and accepted-compound
-coverage through the normal WordNet bridge path. When no direct bridge exists, it emits a bounded
-`wordnet-sense-attachment` candidate for the existing vocabulary/compound refinery. The native
-bridge catalog remains the durable curated lexicon; the document catalog records automatic model
-decisions without requiring a human in the loop. Accepted sense links are fed back through the
-same sentence analyzer before vocabulary review, so the selected sense can affect the current run.
-Each selection queue uses an `english-wordnet-select-*` handle and is stored under
+After a sense is selected, the refinery first checks existing atoms and accepted compounds through
+the normal WordNet bridge path. When neither supplies a compatible anchor, it may derive a bounded
+closed-word compound from covered atoms and run that candidate through the existing queued compound
+verifier. Only a verified compound is offered to the normal vocabulary review, where the selected
+WordNet gloss is compared with the supplied anchor choices. The native bridge catalog remains the
+durable curated lexicon; the document catalog records generated compound evidence and automatic
+model decisions without silently changing the global compound list. Accepted sense links are fed
+back through the same sentence analyzer before vocabulary review, so the selected sense can affect
+the current run. Each selection queue uses an `english-wordnet-select-*` handle and is stored under
 `wordnet-refinery` in the translation `.pya` catalog. `wordnetSelected` counts occurrences with a
 selected sense, `wordnetUnresolved` counts selected senses still lacking a bridge, and
 `wordnetQueuePending`/`wordnetPending` count active Housekeeper queues. Completed queues therefore

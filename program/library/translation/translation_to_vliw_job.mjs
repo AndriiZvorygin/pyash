@@ -7,6 +7,7 @@ import { loadCoverage } from "../../../command/compound_coverage.mjs";
 import { runVocabSuggest } from "../../../command/vocab_suggest.mjs";
 import { createDefaultQueuedMindTranslationVocabularySubmitter } from "./translation_vocabulary_queue.mjs";
 import { createDefaultQueuedMindEnglishWordNetSenseSelectionSubmitter } from "./english_wordnet_selection.mjs";
+import { createDefaultQueuedMindCompoundVerifier } from "./compound_verification.mjs";
 import {
   createMemoizedEnglishPhraseCoordinationVerifier,
   createDefaultQueuedMindEnglishSentenceVerifier,
@@ -34,12 +35,13 @@ export async function awaitTranslationGpuDuty(
 }
 
 export async function createDefaultTranslationVliwDependencies() {
-  const [queueVocabulary, wordnetSubmit, queuedSentenceVerifier, coverage, compoundTranslator] = await Promise.all([
+  const [queueVocabulary, wordnetSubmit, queuedSentenceVerifier, coverage, compoundTranslator, verifyCompound] = await Promise.all([
     createDefaultQueuedMindTranslationVocabularySubmitter(),
     createDefaultQueuedMindEnglishWordNetSenseSelectionSubmitter(),
     createDefaultQueuedMindEnglishSentenceVerifier(),
     loadCoverage(),
-    createDefaultQueuedCompoundTranslator()
+    createDefaultQueuedCompoundTranslator(),
+    createDefaultQueuedMindCompoundVerifier()
   ]);
   const verifyPhraseCoordination = createMemoizedEnglishPhraseCoordinationVerifier({
     invoke: queuedSentenceVerifier
@@ -58,6 +60,7 @@ export async function createDefaultTranslationVliwDependencies() {
       submit: wordnetSubmit,
       compoundRecords: coverage.accepted,
       awaitHandle: awaitTranslationGpuDuty,
+      verifyCompound,
       suggestVocabulary: async (words) => {
         const result = await runVocabSuggest(words, { report: () => {} });
         return result.suggestionRecords ?? [];

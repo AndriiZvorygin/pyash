@@ -591,6 +591,13 @@ test("queued compound verifier expresses future GPU work through Pyash", async (
   assert.equal(response, '{"verdict":"uncertain"}');
   assert.equal(calls.length, 2);
   assert.match(calls[0], /vyah start future be gpu mind do/u);
+  const jobSpec = JSON.parse(parse(calls[0]).ob.text);
+  assert.equal(jobSpec.kind, "ollama-generate");
+  assert.equal(jobSpec.think, false);
+  assert.equal(jobSpec.options.num_predict, 160);
+  assert.deepEqual(jobSpec.format.properties.candidateId.enum, ["", "candidate-acid-rain"]);
+  assert.match(jobSpec.prompt, /verify a compound/u);
+  assert.match(calls[0], /compound-verifier-v2-/u);
   assert.match(calls[1], /vyah await be gpu do/u);
   assert.match(calls[1], /during num 9000/u);
 });

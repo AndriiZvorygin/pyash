@@ -11,6 +11,7 @@ import {
   renderTranslationPipelinePya,
   translateDocument
 } from "../program/library/translation/translation_pipeline.mjs";
+import { renderEnglishWordNetSenseLinksPya } from "../program/library/translation/english_wordnet_linker.mjs";
 import { loadDefaultEnglishSentenceResources } from "../program/library/translation/english_sentence.mjs";
 import {
   appendEnglishWordNetAttachmentCandidates,
@@ -19,6 +20,7 @@ import {
   refineEnglishWordNet
 } from "../program/library/translation/english_wordnet_refinery.mjs";
 import { TRANSLATION_SENSE_STATE_FORMAT } from "../program/library/translation/translation_occurrence.mjs";
+import { buildTranslationVocabularyInventory } from "../program/library/translation/translation_vocabulary_queue.mjs";
 
 function resources() {
   return {
@@ -596,6 +598,12 @@ test("WordNet attachment preserves composed anchor evidence", () => {
         pos: "n",
         synset: "07504854-n",
         selectedSenseId: "n:07504854-n",
+        selectedSense: {
+          pos: "n",
+          synset: "07504854-n",
+          lemmas: ["lust"],
+          gloss: "a strong sexual desire"
+        },
         anchorCandidates: translation.vocabularyCandidates[0].anchorCandidates
       }]
     },
@@ -607,9 +615,119 @@ test("WordNet attachment preserves composed anchor evidence", () => {
       verificationRationale: "selected sense retains the complete meaning"
     }]
   });
-  assert.match(linked.wordnet.records[0].link.evidence, /composed multiword anchor sexual desire/u);
+  assert.match(linked.wordnet.records[0].link.evidence, /linked to verified compound sexual desire/u);
+  assert.match(linked.wordnet.records[0].link.evidence, /WordNet gloss: a strong sexual desire/u);
+  assert.equal(linked.wordnet.records[0].link.senseGloss, "a strong sexual desire");
   assert.equal(linked.wordnet.records[0].link.targetKind, "compound");
   assert.equal(linked.wordnet.records[0].link.targetId, "compound:hjon+twin");
+});
+
+test("WordNet refinery derives and verifies a new compound before offering it as a sense anchor", async () => {
+  const sense = {
+    pos: "n",
+    synset: "02846922-n",
+    lemma: "birdhouse",
+    lemmas: ["birdhouse"],
+    gloss: "a shelter for birds"
+  };
+  const sentence = "A birdhouse is a shelter for birds.";
+  const sourceRecord = {
+    id: "record-birdhouse",
+    source: { text: sentence, sentenceIndex: 0 },
+    tokens: [{
+      surface: "birdhouse",
+      lemma: "birdhouse",
+      tokenIndex: 0,
+      pyashSequence: [],
+      senseCandidates: [sense]
+    }],
+    unresolved: ["birdhouse"]
+  };
+  const result = {
+    language: "english",
+    sourceHash: "birdhouse-source",
+    records: [sourceRecord],
+    vocabularyCandidates: [{
+      id: "candidate-birdhouse",
+      occurrenceId: "occurrence-birdhouse",
+      surface: "birdhouse",
+      kind: "lexical-gap",
+      sourceRecordId: sourceRecord.id,
+      tokenIndex: 0,
+      context: [sentence],
+      senseCandidates: [sense]
+    }]
+  };
+  const verifiedCandidates = [];
+  const refined = await refineEnglishWordNet({
+    result,
+    resources: {
+      coverage: { byVariant: new Map() },
+      grammarCatalog: { entries: [] },
+      wordnet: {
+        index: buildEnglishWordNetIndex({ rows: [{
+          id: "n:02846922-n:birdhouse",
+          pos: "n",
+          synset: "02846922-n",
+          lemma: "birdhouse",
+          gloss: sense.gloss
+        }] })
+      }
+    },
+    verifyCompound: async ({ candidates }) => {
+      verifiedCandidates.push(...candidates);
+      return JSON.stringify({
+        verdict: "accept",
+        candidateId: candidates[0].id,
+        headKind: "lexical-head",
+        rationale: "bird modifies house; house is the semantic head"
+      });
+    }
+  });
+
+  assert.equal(verifiedCandidates.length, 1);
+  assert.equal(verifiedCandidates[0].target, "birdhouse");
+  assert.deepEqual(verifiedCandidates[0].componentGlosses, ["bird", "house"]);
+  assert.deepEqual(verifiedCandidates[0].pyashSequence, ["pyaf", "hcas"]);
+  assert.match(verifiedCandidates[0].evidence, /a shelter for birds/u);
+  const anchor = refined.records[0].anchorCandidates.find((candidate) => candidate.target === "birdhouse");
+  assert.ok(anchor);
+  assert.equal(anchor.selectable, true);
+  assert.equal(anchor.targetKind, "compound");
+  assert.equal(anchor.targetId, verifiedCandidates[0].id);
+  assert.deepEqual(anchor.pyashSequence, ["pyaf", "hcas"]);
+  assert.equal(anchor.compoundVerificationStatus, "accepted-llm");
+  assert.match(anchor.senseGloss, /shelter for birds/u);
+
+  const attached = appendEnglishWordNetAttachmentCandidates({
+    language: "english",
+    vocabularyCandidates: []
+  }, refined.records);
+  assert.equal(attached.vocabularyCandidates[0].sense.gloss, sense.gloss);
+  assert.equal(attached.vocabularyCandidates[0].anchorCandidates[0].compoundVerificationStatus, "accepted-llm");
+  const inventory = buildTranslationVocabularyInventory({
+    sourceText: sentence,
+    candidates: attached.vocabularyCandidates
+  });
+  const offered = inventory.entries.find((entry) => entry.english === "birdhouse");
+  assert.deepEqual(offered.pyash, ["pyaf", "hcas"]);
+  assert.equal(offered.targetKind, "compound");
+  assert.equal(offered.targetId, verifiedCandidates[0].id);
+
+  const linked = applyEnglishWordNetSenseAttachmentLinks({
+    wordnet: { ...refined, records: refined.records },
+    vocabularyCandidates: [{
+      ...attached.vocabularyCandidates[0],
+      status: "accepted-llm",
+      targetEnglish: "birdhouse",
+      pyashSequence: ["pyaf", "hcas"],
+      verificationRationale: "selected sense matches the verified compound"
+    }]
+  });
+  assert.equal(linked.wordnet.records[0].status, "accepted-llm");
+  assert.equal(linked.wordnet.records[0].link.targetKind, "compound");
+  assert.equal(linked.wordnet.records[0].link.senseGloss, sense.gloss);
+  assert.match(renderEnglishWordNetSenseLinksPya({ records: linked.wordnet.records }), /WordNet gloss: a shelter for birds/u);
 });
 
 test("a selected sense cannot attach an unverified related atom", () => {

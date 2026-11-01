@@ -287,16 +287,17 @@ export function buildTranslationVocabularyVerificationPrompt({
   return [
     "You are the bounded Pyash vocabulary review worker.",
     "Review unresolved source terms from one translation document.",
-    "Use the supplied context and evidence to choose one existing English anchor when the meaning is clear.",
+    "Use the supplied context and evidence to choose one supplied English anchor when the meaning is clear.",
     "If a candidate includes selectedSense, that WordNet sense and its sentence are the authoritative meaning for this occurrence.",
     "For selectedSense candidates, choose an anchor for that meaning; do not re-disambiguate the source word.",
+    "A selectedSense candidate may include a verified compound-composition anchor. Treat it as a newly composed compound candidate, and choose it only when the full selected sense supports that compound.",
     "The targetEnglish anchor may differ from the source surface and WordNet lemma; choose the closest defensible supplied anchor.",
     "For each candidate, choose targetEnglish from that candidate's anchorOptions, or use uncertain when none is defensible.",
     "When a complete multiword anchor is supplied, preserve the complete term; do not replace it with one of its components merely because the component is also known.",
     "Do not choose a merely related context word when the selected sense does not support it; use uncertain instead.",
     "Keep derivational and grammatical endings separate from lexical heads.",
     "Do not reject a candidate merely because it is a common English word: these are terms the deterministic coverage pass could not resolve.",
-    "Accept only an exact English anchor from the supplied inventory. Use uncertain when no anchor is defensible.",
+    "Accept only an exact English anchor from the supplied inventory, including any verified compound candidates. Use uncertain when no anchor is defensible.",
     "Reject only when the candidate is demonstrably not a translation target in its supplied context.",
     "Include one result entry for every supplied candidate, in supplied order.",
     "Return the English anchor only. The host pipeline derives the Pyash sequence after validation.",
@@ -769,6 +770,7 @@ const DEFAULT_TRANSLATION_VOCABULARY_RESPONSE_FORMAT = {
 export function createQueuedMindTranslationVocabularySubmitter({
   interpret,
   parse,
+  model = "",
   responseFormat = DEFAULT_TRANSLATION_VOCABULARY_RESPONSE_FORMAT,
   maxOutputTokens = TRANSLATION_VOCABULARY_MAX_OUTPUT_TOKENS
 } = {}) {
@@ -779,9 +781,11 @@ export function createQueuedMindTranslationVocabularySubmitter({
   }
   return async ({ handleId, prompt, responseFormat: requestedResponseFormat, maxOutputTokens: requestedMaxOutputTokens } = {}) => {
     const outputTokens = Math.max(1, Math.trunc(Number(requestedMaxOutputTokens ?? maxOutputTokens) || TRANSLATION_VOCABULARY_MAX_OUTPUT_TOKENS));
+    const selectedModel = text(model);
     const jobSpec = {
       kind: "ollama-generate",
       prompt: String(prompt ?? ""),
+      ...(selectedModel ? { model: selectedModel } : {}),
       stream: false,
       think: false,
       format: requestedResponseFormat ?? responseFormat,
