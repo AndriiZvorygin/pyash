@@ -299,6 +299,14 @@ work and evaluation. Whether it must precede detector-driven task creation is
 an open sequencing question; existing durable task infrastructure may support
 a bounded first experiment.
 
+A fuller account of this gate — what a knowledge core is, the requirements
+derived from its consumers, what exists today, and a tranche sequence — is in
+`documentation/suggest/knowledge-core.md`. One fact from it is worth carrying
+here: the claim contract is already load-bearing. Fourteen modules import
+`program/library/knowledge_core.mjs`, including the durable work system's
+queue and status, the channel queue, and the memory layer, which uses it to
+protect evidence records from garbage collection.
+
 ### Gate 2 — Vocabulary and composition coverage
 
 **Measured:** 46.505% English30k lexical coverage; 16,048 unresolved by that
