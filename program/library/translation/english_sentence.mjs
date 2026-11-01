@@ -2461,9 +2461,10 @@ export async function analyzeDefaultEnglishSentence(source, options = {}) {
       if (!lookupOptions?.partOfSpeech) {
         return lookupEnglish30kCoverage(fullResources.coverage, word) ?? staged;
       }
-      if (staged) return staged;
+      if (staged && staged.coverageType !== "unresolved") return staged;
       const fullCoverage = lookupEnglish30kCoverage(fullResources.coverage, word);
-      return fullCoverage?.coverageType === "grammar" ? null : fullCoverage;
+      if (fullCoverage?.coverageType === "grammar") return null;
+      return fullCoverage ?? staged;
     },
     lemmaEntries: fullResources.lemmaCatalog.entries,
     grammarIndex: fullResources.grammarIndex,

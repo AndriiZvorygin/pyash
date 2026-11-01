@@ -30,6 +30,7 @@ import {
 import pyashWords from "../program/library/pyashWords.json" with { type: "json" };
 import {
   loadCompoundLexicon,
+  loadChineseCompoundLexicon,
   parseCompoundLexicon
 } from "../program/library/translation/compound_lexicon.mjs";
 
@@ -139,6 +140,28 @@ test("curated prayer constructions enter the shared compound catalog", async () 
   assert.deepEqual(include.componentLayers, [16, 24]);
   assert.equal(include.head, "containing");
   assert.match(include.evidence, /contain-within sense of include/u);
+});
+
+test("Chinese 混同 lowers to the head-final identity-mix compound for the confuse sense", async () => {
+  const curated = await loadCuratedCompoundDecompositions();
+  const confuse = curated.find((entry) => entry.target === "confuse");
+  assert.ok(confuse);
+  assert.deepEqual(confuse.componentGlosses, ["identity", "mixed"]);
+  assert.deepEqual(confuse.pyashSequence, ["hdif", "mrat"]);
+  assert.deepEqual(confuse.componentLayers, [24, 19]);
+  assert.match(confuse.evidence, /混同/u);
+
+  const chinese = await loadChineseCompoundLexicon();
+  const hunTong = chinese.find((entry) => entry.surface === "混同");
+  assert.ok(hunTong);
+  assert.equal(hunTong.target, "confuse");
+  assert.deepEqual(hunTong.sourceMorphemes, ["混", "同"]);
+  assert.deepEqual(hunTong.componentGlosses, ["identity", "mixed"]);
+  assert.deepEqual(hunTong.pyashSequence, ["hdif", "mrat"]);
+  assert.deepEqual(hunTong.componentLayers, [24, 19]);
+  assert.equal(hunTong.maxLayer, 24);
+  assert.equal(hunTong.head, "mixed");
+  assert.equal(hunTong.status, "lowered-compound");
 });
 
 test("compound coverage separates delimited use from accidental closed splits", () => {
@@ -308,7 +331,7 @@ test("current dictionaries produce broad derived coverage", async (t) => {
     layerIndex: { ...layerIndex, englishToPyash }
   });
   assert.equal(coverage.existingAtomic.length, 7831);
-  assert.equal(coverage.accepted.length, 398);
+  assert.equal(coverage.accepted.length, 399);
   assert.equal(coverage.candidates.length, 412);
   const blueprint = coverage.accepted.find((entry) => entry.target === "blueprint");
   assert.deepEqual(blueprint.pyashSequence, ["plun", "trat"]);

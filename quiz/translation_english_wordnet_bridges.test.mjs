@@ -16,7 +16,7 @@ import { buildEnglishWordNetIndex } from "../program/library/translation/english
 
 test("WordNet bridges use one native Pyash row per sense", async () => {
   const catalog = await loadEnglishWordNetBridges();
-  assert.equal(catalog.entries.length, 18);
+  assert.equal(catalog.entries.length, 19);
   assert.deepEqual(catalog.entries.find((entry) => entry.source === "n:05818974-n"), {
     source: "n:05818974-n",
     target: "thing",
@@ -31,6 +31,39 @@ test("WordNet bridges use one native Pyash row per sense", async () => {
     certainty: "contextual",
     evidence: "Open English WordNet 2025 emotional-state sense"
   });
+  assert.deepEqual(catalog.entries.find((entry) => entry.source === "v:00621282-v"), {
+    source: "v:00621282-v",
+    target: "confuse",
+    targetPartOfSpeech: "v",
+    certainty: "contextual",
+    evidence: "Open English WordNet 2025 mistake-one-thing-for-another sense; Chinese 混同 treats distinct things as the same; Pyash compound identity mixed uses hdif mrat"
+  });
+});
+
+test("the selected confuse sense lowers through the identity-mix compound", async () => {
+  const bridges = buildEnglishWordNetSenseBridgeIndex([{
+    id: "english-wordnet-sense-confuse-identity-mix",
+    pos: "v",
+    synset: "00621282-v",
+    status: "accepted-llm",
+    link: {
+      target: "confuse",
+      pyashSequence: ["hdif", "mrat"],
+      targetPartOfSpeech: "v",
+      certainty: "contextual",
+      evidence: "Chinese 混同 describes treating distinct things as the same"
+    }
+  }]);
+  const result = await analyzeDefaultEnglishSentence(
+    "Often love can be confused with other feelings.",
+    { wordnetBridges: bridges }
+  );
+  const token = result.tokens.find((candidate) => candidate.surface === "confused");
+  assert.equal(token?.coverageType, "semantic-wordnet");
+  assert.equal(token?.lemma, "confuse");
+  assert.deepEqual(token?.pyashSequence, ["hdif", "mrat"]);
+  assert.deepEqual(result.verbPhrase.pyashSequence, ["hdif", "mrat", "pyoh", "ra2"]);
+  assert.equal(result.verbPhrase.mood, "tseh");
 });
 
 test("object of thought or feeling maps to the generic thing anchor", async () => {
