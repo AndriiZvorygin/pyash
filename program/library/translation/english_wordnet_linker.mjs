@@ -31,6 +31,7 @@ export const ENGLISH_WORDNET_LINKER_DEFAULT_OUTPUT_TOKENS = 1024;
 export const ENGLISH_WORDNET_LINKER_EDGE_MAX_DEGREE = 1;
 export const ENGLISH_WORDNET_LINKER_ANCHOR_MAX_CANDIDATES = 8;
 export const ENGLISH_WORDNET_LINKER_DEFAULT_DUTY_SIZE = 4;
+export const ENGLISH_WORDNET_LINKER_DEFAULT_SWEEP_BATCH_SIZE = 1000;
 export const ENGLISH_WORDNET_LINKER_RESPONSE_FORMAT = Object.freeze({
   type: "object",
   required: ["verdict", "senses"],
@@ -1299,7 +1300,8 @@ export function parseEnglishWordNetLinkerConfig(source) {
     selectionMaxOutputTokens: Math.max(100, Math.trunc(Number(metadata["selection-max-output-tokens"]) || ENGLISH_WORDNET_SELECTION_DEFAULT_OUTPUT_TOKENS)),
     edgeMaxDegree: Math.max(0, Math.trunc(Number(metadata["edge-max-degree"]) || ENGLISH_WORDNET_LINKER_EDGE_MAX_DEGREE)),
     anchorMaxCandidates: Math.max(1, Math.trunc(Number(metadata["anchor-max-candidates"]) || ENGLISH_WORDNET_LINKER_ANCHOR_MAX_CANDIDATES)),
-    vocabSuggestionMinSupport: Math.max(1, Math.trunc(Number(metadata["vocab-suggestion-min-support"]) || 2))
+    vocabSuggestionMinSupport: Math.max(1, Math.trunc(Number(metadata["vocab-suggestion-min-support"]) || 2)),
+    sweepBatchSize: Math.max(100, Math.trunc(Number(metadata["sweep-batch-size"]) || ENGLISH_WORDNET_LINKER_DEFAULT_SWEEP_BATCH_SIZE))
   };
 }
 

@@ -950,6 +950,7 @@ test("WordNet linker configuration is durable Pyash workflow data", async () => 
     edgeMaxDegree: 1,
     anchorMaxCandidates: 8,
     vocabSuggestionMinSupport: 2,
+    sweepBatchSize: 1000,
     modelCard: {
       model: "qwen3.5:9b",
       provider: "ollama",

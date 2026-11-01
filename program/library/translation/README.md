@@ -50,8 +50,9 @@ The bounded sense-linking worker is configured in `english_wordnet_linker.pya`. 
 targets present in the supplied inventory, and submits unresolved records through the existing
 `vyah start future be gpu mind do` queue path. A completed response can be rendered back into
 the native `english_wordnet_bridges.pya` map; the linker is evidence generation, not a second
-vocabulary or transcript format. The durable configuration caps one batch at 200 senses and
-keeps each queued prompt below 12,000 characters. The selected model's durable card is
+vocabulary or transcript format. The model-backed linker caps one batch at 200 senses and
+keeps each queued prompt below 12,000 characters. The deterministic background sweep has its
+own 1,000-sense checkpoint batch size. The selected model's durable card is
 `translation_model_cards.pya`; Qwen3.5 9B declares a 32,768-token context window, a 3,900-token
 safe input budget, and an 8,192-token safe output budget for this workflow. A paragraph-sized
 group is sent as one duty when it fits; larger groups split on complete sense rows, so a provider
@@ -74,6 +75,29 @@ bridge rows remain in the catalog as evidence but do not become active links. Th
 `experience`, `emotionally`, `searching`, and `appear` unresolved where their current bridge
 rows share a target. Give each sense a distinct accepted atom/compound before linking it; shared
 anchors activate only when the equivalence evidence is recorded.
+To scale this deterministic pass across the installed Open English WordNet, run
+`node command/wordnet_sense_sweep.mjs`. It classifies every sense using the same safe edge-node
+and active-bridge rules as the document refinery. Existing active links are recorded as
+`linked-existing`; unique safe edge links become `automatic-link` proposals; target collisions
+are marked `needs-equivalence-review`; selectable but context-dependent anchors become
+`needs-sense-choice`; and senses without an existing selectable anchor become
+`needs-atom-or-compound-anchor`. The sweep makes no model calls and does not edit the curated
+bridge catalog.
+
+The sweep is resumable and idempotent. Its batch size is configured by
+`sweep-batch-size` in `english_wordnet_linker.pya` (currently 1,000). Stable WordNet and lexical
+resource hashes determine the run id. The manifest and numbered checkpoint batches live under
+`artifacts/<run-id>/`; `automatic-links.pya` contains only the deterministic proposals and is a
+review artifact, not an active bridge map. Existing identical batch checkpoints are reused when
+the command runs again. A detached run can be started with:
+
+```bash
+setsid node command/wordnet_sense_sweep.mjs > artifacts/wordnet-sense-sweep.log 2>&1 < /dev/null &
+echo $! > artifacts/wordnet-sense-sweep.pid
+```
+
+Inspect `manifest.pya` and the batch files with `node command/pya_to_json.mjs <file> --pretty`.
+
 Callers that have loaded the derived compound catalog pass its accepted records explicitly;
 candidate-closed and rejected compounds are excluded from the authoritative inventory.
 Compound and atom relationships are derived by

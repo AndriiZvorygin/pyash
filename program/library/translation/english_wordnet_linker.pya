@@ -14,4 +14,5 @@ su text "anchor-max-candidates" ob num 8 ya
 su text "vocab-suggestion-min-support" ob num 2 ya
 su text "edge-resolution" ob text "one WordNet meaning plus an existing atom or accepted compound" ya
 su text "response-contract" ob text "one bounded sense-links object" ya
+su text "sweep-batch-size" ob num 1000 ya
 prah
