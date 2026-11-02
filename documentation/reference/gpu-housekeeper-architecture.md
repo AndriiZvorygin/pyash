@@ -142,6 +142,30 @@ The username defaults to the current OS account and can be explicitly set with
 submitting Pyash host. Source identity is diagnostic metadata, not an
 authentication claim. For compatibility, `queueDepth` retains its existing
 running-job count; `queuedCount` and `runningCount` provide explicit counts.
+In `/queue`, those counts include visible forwarded proxy jobs; the additive
+`localQueuedCount` and `localRunningCount` fields isolate work consuming this
+host's capacity. `/snapshot` reports local counts in `queuedCount` and
+`runningCount`. The soft cap compares against the local queued count.
+
+`GPU_HOUSEKEEPER_SOFT_QUEUE_CAP` defaults to 500 waiting local jobs per host.
+This is an observational threshold only: it never rejects a submission or
+changes route eligibility. `/queue` and `/snapshot` expose the current local
+queued/running counts, cap, and `queueOverSoftCap`; crossing the threshold logs
+one warning until the queue returns below it. `queueMetrics` aggregates the
+latest 500 submitted/started/finished transition samples and reports average,
+p95, peak, and over-cap sample counts. These are event samples, not a
+time-weighted queue average.
+
+Completed calls are stored as `.pya` observations beneath the configured
+`GPU_HOUSEKEEPER_PYA_DIR`, capped at 500 call and 500 queue observations per
+host. `/snapshot` exposes rolling per-runtime/model/job-kind `modelCallEstimates`
+with successful-call average duration and sample/failure counts. Routing uses
+this duration only to break ties between immediately eligible candidates with
+the same existing safety/warmth/capacity score; otherwise the established
+model-load estimate and host-local tie-break behaviour remain in effect.
+Execution duration covers runtime job execution after the device gate is
+acquired; time waiting for that gate is represented separately by queue
+transitions.
 
 The default managed runtimes are:
 

@@ -29,6 +29,7 @@ _SUBMISSION_LOCK = threading.Lock()
 _RUNNING_JOB_ID: Optional[str] = None
 _RUNNING_JOB_IDS: Dict[str, set] = {}
 _RUNTIME_ACTIVITY: Dict[str, Dict[str, Any]] = {}
+_LAST_QUEUE_OVER_SOFT_CAP = False
 _NATIVE_RUNTIME_PROCESSES: Dict[str, subprocess.Popen] = {}
 _NATIVE_RUNTIME_LOCK = threading.Lock()
 _OLLAMA_MODEL_CATALOG_CACHE: Dict[str, Any] = {
@@ -101,6 +102,10 @@ DEFAULT_OLLAMA_MIN_GPU_MODEL_FRACTION = 0.99
 DEFAULT_OLLAMA_GPU_WATCHDOG_INTERVAL_SECONDS = 300
 DEFAULT_PYA_LOADING_DIR = "/var/lib/pyash/gpu-housekeeper"
 MODEL_LOADING_OBSERVATION_ROOT = "gpu runtime loading observation"
+MODEL_CALL_OBSERVATION_ROOT = "gpu runtime call observation"
+QUEUE_OBSERVATION_ROOT = "gpu housekeeper queue observation"
+DEFAULT_SOFT_QUEUE_CAP = 500
+METRIC_OBSERVATION_RETENTION = 500
 
 
 DEFAULT_RUNTIME_REGISTRY = {
@@ -166,13 +171,13 @@ def pya_loading_dir() -> Path:
   return Path(normalize_text(os.environ.get("GPU_HOUSEKEEPER_PYA_DIR")) or DEFAULT_PYA_LOADING_DIR)
 
 
-def read_loading_observation(path: Path) -> Optional[Dict[str, Any]]:
+def read_pya_observation(path: Path, map_root: str) -> Optional[Dict[str, Any]]:
   fields: Dict[str, Any] = {}
   try:
     lines = path.read_text(encoding="utf-8").splitlines()
   except OSError:
     return None
-  if not lines or lines[0].strip() != f"su name {MODEL_LOADING_OBSERVATION_ROOT} be json map def":
+  if not lines or lines[0].strip() != f"su name {map_root} be json map def":
     return None
   for line in lines[1:]:
     if line.strip() == "prah":
@@ -186,13 +191,46 @@ def read_loading_observation(path: Path) -> Optional[Dict[str, Any]]:
     except (TypeError, ValueError, json.JSONDecodeError):
       return None
     fields[key] = value
-  if fields.get("schema version") != 1 or not fields.get("model name") or not fields.get("runtime name"):
+  if fields.get("schema version") != 1:
+    return None
+  return fields
+
+
+def read_loading_observation(path: Path) -> Optional[Dict[str, Any]]:
+  fields = read_pya_observation(path, MODEL_LOADING_OBSERVATION_ROOT)
+  if not fields or not fields.get("model name") or not fields.get("runtime name"):
     return None
   try:
     seconds = float(fields.get("loading seconds"))
   except (TypeError, ValueError):
     return None
   if not math.isfinite(seconds) or seconds <= 0 or fields.get("loading state") != "cold":
+    return None
+  return fields
+
+
+def read_runtime_call_observation(path: Path) -> Optional[Dict[str, Any]]:
+  fields = read_pya_observation(path, MODEL_CALL_OBSERVATION_ROOT)
+  if not fields or not fields.get("runtime name") or not fields.get("model name") or not fields.get("job kind"):
+    return None
+  try:
+    seconds = float(fields.get("execution seconds"))
+  except (TypeError, ValueError):
+    return None
+  if not math.isfinite(seconds) or seconds <= 0 or fields.get("outcome") not in {"success", "fail"}:
+    return None
+  return fields
+
+
+def read_queue_observation(path: Path) -> Optional[Dict[str, Any]]:
+  fields = read_pya_observation(path, QUEUE_OBSERVATION_ROOT)
+  if not fields or fields.get("event") not in {"submitted", "started", "finished"}:
+    return None
+  try:
+    fields["queued count"] = max(0, int(fields.get("queued count", 0)))
+    fields["running count"] = max(0, int(fields.get("running count", 0)))
+    fields["soft queue cap"] = max(1, int(fields.get("soft queue cap", DEFAULT_SOFT_QUEUE_CAP)))
+  except (TypeError, ValueError):
     return None
   return fields
 
@@ -204,6 +242,56 @@ def model_loading_observations(limit: int = 500) -> List[Dict[str, Any]]:
   except OSError:
     return []
   return [record for path in paths if (record := read_loading_observation(path))]
+
+
+def runtime_call_observations(limit: int = METRIC_OBSERVATION_RETENTION) -> List[Dict[str, Any]]:
+  root = pya_loading_dir()
+  try:
+    paths = sorted(root.glob("call-*.pya"), key=lambda item: item.name, reverse=True)[:max(1, int(limit))]
+  except OSError:
+    return []
+  return [record for path in paths if (record := read_runtime_call_observation(path))]
+
+
+def queue_observations(limit: int = METRIC_OBSERVATION_RETENTION) -> List[Dict[str, Any]]:
+  root = pya_loading_dir()
+  try:
+    paths = sorted(root.glob("queue-*.pya"), key=lambda item: item.name, reverse=True)[:max(1, int(limit))]
+  except OSError:
+    return []
+  return [record for path in paths if (record := read_queue_observation(path))]
+
+
+def write_pya_observation(prefix: str, map_root: str, record: Dict[str, Any], retention: int = 0) -> Path:
+  lines = [f"su name {map_root} be json map def"]
+  for key, value in record.items():
+    if isinstance(value, bool):
+      encoded = "truth" if value else "false"
+      kind = "bool"
+    elif isinstance(value, (int, float)):
+      encoded = repr(value)
+      kind = "num"
+    else:
+      encoded = json.dumps(str(value), ensure_ascii=False)
+      kind = "text"
+    lines.append(f"su name {key} ob {kind} {encoded} ya")
+  lines.extend(["prah", ""])
+  root = pya_loading_dir()
+  root.mkdir(parents=True, exist_ok=True)
+  stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+  path = root / f"{prefix}-{stamp}-{record['observation id']}.pya"
+  with path.open("x", encoding="utf-8") as stream:
+    stream.write("\n".join(lines))
+    stream.flush()
+    os.fsync(stream.fileno())
+  if retention > 0:
+    paths = sorted(root.glob(f"{prefix}-*.pya"), key=lambda item: item.name, reverse=True)
+    for old_path in paths[retention:]:
+      try:
+        old_path.unlink()
+      except OSError:
+        pass
+  return path
 
 
 def record_model_loading(
@@ -247,27 +335,153 @@ def record_model_loading(
     "load source": normalize_text(load_source),
     "observed timestamp": normalize_text(observed_at) or utc_now_iso()
   }
-  lines = [f"su name {MODEL_LOADING_OBSERVATION_ROOT} be json map def"]
-  for key, value in record.items():
-    if isinstance(value, bool):
-      encoded = "truth" if value else "false"
-      kind = "bool"
-    elif isinstance(value, (int, float)):
-      encoded = repr(value)
-      kind = "num"
-    else:
-      encoded = json.dumps(str(value), ensure_ascii=False)
-      kind = "text"
-    lines.append(f"su name {key} ob {kind} {encoded} ya")
-  lines.extend(["prah", ""])
-  root = pya_loading_dir()
-  root.mkdir(parents=True, exist_ok=True)
-  stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-  path = root / f"loading-{stamp}-{record['observation id']}.pya"
-  with path.open("x", encoding="utf-8") as stream:
-    stream.write("\n".join(lines))
-    stream.flush()
-    os.fsync(stream.fileno())
+  write_pya_observation("loading", MODEL_LOADING_OBSERVATION_ROOT, record)
+  return record
+
+
+def model_call_estimates(observations: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, Any]]:
+  grouped: Dict[tuple, List[Dict[str, Any]]] = {}
+  records = observations if isinstance(observations, list) else runtime_call_observations()
+  for record in records:
+    key = (
+      normalize_text(record.get("runtime name")).lower(),
+      normalize_text(record.get("model name")),
+      normalize_text(record.get("job kind")).lower()
+    )
+    grouped.setdefault(key, []).append(record)
+  estimates = []
+  for (runtime_name, model_name, job_kind), group in grouped.items():
+    recent = group[:20]
+    successes = [float(record["execution seconds"]) for record in recent if record.get("outcome") == "success"]
+    failures = sum(1 for record in recent if record.get("outcome") == "fail")
+    estimates.append({
+      "runtimeName": runtime_name,
+      "modelName": model_name,
+      "jobKind": job_kind,
+      "sampleCount": len(successes),
+      "failedCount": failures,
+      "averageExecutionSeconds": sum(successes) / len(successes) if successes else None,
+      "lastObservedAt": max(normalize_text(record.get("observed timestamp")) for record in recent)
+    })
+  return sorted(estimates, key=lambda item: (item["runtimeName"], item["modelName"], item["jobKind"]))
+
+
+def model_call_estimate(
+  runtime_name: str,
+  model_name: str,
+  job_kind: str,
+  estimates: Optional[List[Dict[str, Any]]] = None
+) -> Optional[Dict[str, Any]]:
+  runtime, model, kind = normalize_text(runtime_name).lower(), normalize_text(model_name), normalize_text(job_kind).lower()
+  source = estimates if isinstance(estimates, list) else model_call_estimates()
+  return next((item for item in source if (
+    normalize_text(item.get("runtimeName")).lower() == runtime
+    and normalize_text(item.get("modelName")) == model
+    and normalize_text(item.get("jobKind")).lower() == kind
+  )), None)
+
+
+def job_call_identity(job: Dict[str, Any]) -> Dict[str, str]:
+  job_spec = job.get("jobSpec") if isinstance(job.get("jobSpec"), dict) else {}
+  payload = job_spec.get("payload") if isinstance(job_spec.get("payload"), dict) else job_spec
+  return {
+    "runtimeName": normalize_text(job.get("runtimeName")).lower(),
+    "modelName": normalize_text(payload.get("model")) or normalize_text(job.get("profileName")),
+    "jobKind": normalize_text(job_spec.get("kind")).lower() or "unknown"
+  }
+
+
+def record_runtime_call(
+  *, host_id: str, runtime_name: str, model_name: str, job_kind: str,
+  execution_seconds: Any, outcome: str, observed_at: str = ""
+) -> Optional[Dict[str, Any]]:
+  try:
+    seconds = float(execution_seconds)
+  except (TypeError, ValueError):
+    return None
+  normalized_outcome = normalize_text(outcome).lower()
+  if not math.isfinite(seconds) or seconds <= 0 or normalized_outcome not in {"success", "fail"}:
+    return None
+  runtime, model, kind = normalize_text(runtime_name).lower(), normalize_text(model_name), normalize_text(job_kind).lower()
+  if not runtime or not model or not kind:
+    return None
+  record = {
+    "schema version": 1,
+    "observation id": str(uuid.uuid4()),
+    "host id": normalize_text(host_id),
+    "runtime name": runtime,
+    "model name": model,
+    "job kind": kind,
+    "execution seconds": seconds,
+    "outcome": normalized_outcome,
+    "observed timestamp": normalize_text(observed_at) or utc_now_iso()
+  }
+  write_pya_observation("call", MODEL_CALL_OBSERVATION_ROOT, record, METRIC_OBSERVATION_RETENTION)
+  return record
+
+
+def soft_queue_cap() -> int:
+  raw = normalize_text(os.environ.get("GPU_HOUSEKEEPER_SOFT_QUEUE_CAP"))
+  try:
+    value = int(raw) if raw else DEFAULT_SOFT_QUEUE_CAP
+  except ValueError:
+    value = DEFAULT_SOFT_QUEUE_CAP
+  return max(1, min(1_000_000, value))
+
+
+def local_queue_counts() -> Dict[str, int]:
+  with _LOCK:
+    local_jobs = [job for job in _JOBS.values() if not bool(job.get("forwarded", False))]
+  return {
+    "queuedCount": sum(1 for job in local_jobs if job.get("status") == "queued"),
+    "runningCount": sum(1 for job in local_jobs if job.get("status") == "running")
+  }
+
+
+def queue_metrics(observations: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+  records = observations if isinstance(observations, list) else queue_observations()
+  queued = [int(record.get("queued count") or 0) for record in records]
+  ordered = sorted(queued)
+  p95 = ordered[max(0, math.ceil(len(ordered) * 0.95) - 1)] if ordered else 0
+  return {
+    "sampling": "job-transition events; not time-weighted",
+    "sampleCount": len(queued),
+    "averageQueuedCount": sum(queued) / len(queued) if queued else 0,
+    "p95QueuedCount": p95,
+    "peakQueuedCount": max(queued, default=0),
+    "overSoftCapSamples": sum(1 for record in records if record.get("over soft cap") is True),
+    "lastObservedAt": max((normalize_text(record.get("observed timestamp")) for record in records), default="")
+  }
+
+
+def record_queue_transition(host_id: str, event: str) -> Optional[Dict[str, Any]]:
+  global _LAST_QUEUE_OVER_SOFT_CAP
+  counts = local_queue_counts()
+  cap = soft_queue_cap()
+  over = counts["queuedCount"] > cap
+  with _LOCK:
+    crossed = over and not _LAST_QUEUE_OVER_SOFT_CAP
+    _LAST_QUEUE_OVER_SOFT_CAP = over
+  record = {
+    "schema version": 1,
+    "observation id": str(uuid.uuid4()),
+    "host id": normalize_text(host_id),
+    "event": normalize_text(event).lower(),
+    "queued count": counts["queuedCount"],
+    "running count": counts["runningCount"],
+    "soft queue cap": cap,
+    "over soft cap": over,
+    "observed timestamp": utc_now_iso()
+  }
+  try:
+    write_pya_observation("queue", QUEUE_OBSERVATION_ROOT, record, METRIC_OBSERVATION_RETENTION)
+  except Exception as err:
+    print(f"[gpu-housekeeper] could not persist queue observation: {normalize_text(err)}", flush=True)
+  if crossed:
+    print(
+      f"[gpu-housekeeper] local queued jobs ({counts['queuedCount']}) exceeded soft queue cap ({cap}); continuing admission",
+      flush=True
+    )
   return record
 
 
@@ -719,10 +933,18 @@ def minimal_jobs() -> List[Dict[str, Any]]:
 
 def queue_view() -> Dict[str, Any]:
   jobs = minimal_jobs()
+  local_counts = local_queue_counts()
+  cap = soft_queue_cap()
+  local_queued = local_counts["queuedCount"]
   return {
     "queueDepth": queue_depth(),
     "queuedCount": sum(1 for job in jobs if job.get("status") == "queued"),
     "runningCount": sum(1 for job in jobs if job.get("status") == "running"),
+    "localQueuedCount": local_queued,
+    "localRunningCount": local_counts["runningCount"],
+    "softQueueCap": cap,
+    "queueOverSoftCap": local_queued > cap,
+    "queueMetrics": queue_metrics(),
     "jobs": jobs
   }
 
@@ -896,6 +1118,10 @@ def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str,
         for item in projected
       )
     load_estimate = model_loading_estimate(runtime_name, model_name)
+    call_identity = job_call_identity(job)
+    call_estimate = model_call_estimate(
+      call_identity["runtimeName"], call_identity["modelName"], call_identity["jobKind"]
+    )
     busy = local_execution_slot_busy(candidate_job, runtime_registry)
     score = 0
     if warm:
@@ -918,6 +1144,8 @@ def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str,
       "modelName": model_name,
       "estimatedLoadSeconds": 0 if warm else (load_estimate.get("medianLoadSeconds") if load_estimate else None),
       "loadEstimateSamples": load_estimate.get("sampleCount", 0) if load_estimate else 0,
+      "estimatedCallSeconds": call_estimate.get("averageExecutionSeconds") if call_estimate else None,
+      "callEstimateSamples": call_estimate.get("sampleCount", 0) if call_estimate else 0,
       "score": score,
       "capacity": capacity,
       "reason": (
@@ -1053,6 +1281,11 @@ def peer_route_candidate(
   model_name = normalize_text(payload.get("model")) or target_profile
   peer_estimates = snapshot.get("modelLoadEstimates") if isinstance(snapshot.get("modelLoadEstimates"), list) else []
   load_estimate = model_loading_estimate(runtime_name, model_name, peer_estimates)
+  peer_call_estimates = snapshot.get("modelCallEstimates") if isinstance(snapshot.get("modelCallEstimates"), list) else []
+  call_identity = job_call_identity(job)
+  call_estimate = model_call_estimate(
+    call_identity["runtimeName"], call_identity["modelName"], call_identity["jobKind"], peer_call_estimates
+  )
   target_safe = bool(runtime.get("concurrencySafe", False))
   execution_slots_view = snapshot.get("executionSlots")
   devices = snapshot.get("devices") if isinstance(snapshot.get("devices"), list) else []
@@ -1108,6 +1341,8 @@ def peer_route_candidate(
       "modelName": model_name,
       "estimatedLoadSeconds": 0 if warm else (load_estimate.get("medianLoadSeconds") if load_estimate else None),
       "loadEstimateSamples": load_estimate.get("sampleCount", 0) if load_estimate else 0,
+      "estimatedCallSeconds": call_estimate.get("averageExecutionSeconds") if call_estimate else None,
+      "callEstimateSamples": call_estimate.get("sampleCount", 0) if call_estimate else 0,
       "score": score,
       "preview": preview,
       "reason": "peer execution slot occupied" if busy else "peer candidate"
@@ -1145,15 +1380,26 @@ def select_route(payload: Dict[str, Any], job: Dict[str, Any], runtime_registry:
 
   immediate = [item for item in candidates if item.get("available") and item.get("immediate")]
   if immediate:
-    load_comparable = len(immediate) > 1 and all(
-      item.get("warm") is True or isinstance(item.get("estimatedLoadSeconds"), (int, float))
-      for item in immediate
+    best_score = max(int(item.get("score") or 0) for item in immediate)
+    equally_viable = [item for item in immediate if int(item.get("score") or 0) == best_score]
+    call_comparable = len(equally_viable) > 1 and all(
+      isinstance(item.get("estimatedCallSeconds"), (int, float))
+      for item in equally_viable
     )
-    selected = max(immediate, key=lambda item: (
-      int(item.get("score") or 0),
-      -float(item.get("estimatedLoadSeconds") or 0) if load_comparable else 0,
-      item.get("hostId") == host_id
-    ))
+    load_comparable = len(equally_viable) > 1 and all(
+      item.get("warm") is True or isinstance(item.get("estimatedLoadSeconds"), (int, float))
+      for item in equally_viable
+    )
+    if call_comparable:
+      selected = min(equally_viable, key=lambda item: (
+        float(item["estimatedCallSeconds"]), item.get("hostId") != host_id
+      ))
+    elif load_comparable:
+      selected = min(equally_viable, key=lambda item: (
+        float(item.get("estimatedLoadSeconds") or 0), item.get("hostId") != host_id
+      ))
+    else:
+      selected = next((item for item in equally_viable if item.get("hostId") == host_id), equally_viable[0])
     return {"selected": selected, "candidates": candidates, "forwarded": selected.get("hostId") != host_id}
   if local.get("available"):
     return {"selected": local, "candidates": candidates, "forwarded": False, "reason": "no peer has an immediate free slot"}
@@ -1172,6 +1418,10 @@ def make_snapshot(host_id: str) -> Dict[str, Any]:
     sync_ollama_profiles(ollama_residency.get("models", []))
   runtime_statuses = list_runtime_statuses(Handler.runtime_registry) if "Handler" in globals() else []
   loading_observations = model_loading_observations()
+  call_observations = runtime_call_observations()
+  queue_samples = queue_observations()
+  local_counts = local_queue_counts()
+  configured_queue_cap = soft_queue_cap()
   profiles = project_strata_profile_residency(profile_list(), runtime_statuses, loading_observations)
   return {
     "hostId": host_id,
@@ -1189,9 +1439,15 @@ def make_snapshot(host_id: str) -> Dict[str, Any]:
       )
     },
     "queueDepth": queue_depth(),
+    "queuedCount": local_counts["queuedCount"],
+    "runningCount": local_counts["runningCount"],
+    "softQueueCap": configured_queue_cap,
+    "queueOverSoftCap": local_counts["queuedCount"] > configured_queue_cap,
+    "queueMetrics": queue_metrics(queue_samples),
     "devices": telemetry["devices"],
     "profiles": profiles,
     "modelLoadEstimates": model_loading_estimates(loading_observations),
+    "modelCallEstimates": model_call_estimates(call_observations),
     "ollamaRunningModels": ollama_residency,
     "ollamaModelCatalog": ollama_model_catalog(),
     "runtimes": runtime_statuses,
@@ -1466,6 +1722,8 @@ def submit_job(
         "runtimeName": runtime_name,
         "loaded": bool(existing.get("loaded", False))
       }
+
+  record_queue_transition(selected_host, "submitted")
 
   return {
     "remoteJobId": remote_job_id,
@@ -4273,6 +4531,10 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
 
 def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[str, Any]]) -> None:
   global _RUNNING_JOB_ID
+  execution_host_id = ""
+  call_identity: Dict[str, str] = {}
+  execution_started: Optional[float] = None
+  outcome = "fail"
   with _LOCK:
     initial = _JOBS.get(remote_job_id)
     if not initial:
@@ -4304,6 +4566,8 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
       profile_name = normalize_text(job.get("profileName"))
       runtime_name = normalize_text(job.get("runtimeName"))
       job_spec = job.get("jobSpec") if isinstance(job.get("jobSpec"), dict) else {}
+      call_identity = job_call_identity(job)
+      execution_host_id = normalize_text(job.get("executionHostId"))
       is_model_ensure = (
         runtime_name.lower() == "ollama"
         and normalize_text(job_spec.get("kind")).lower() == "ollama-ensure-model"
@@ -4315,8 +4579,11 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
           "loaded": True
         }
 
+    record_queue_transition(execution_host_id, "started")
+    execution_started = time.monotonic()
     try:
       result = execute_job(job, runtime_registry)
+      outcome = "success"
       with _LOCK:
         current = _JOBS.get(remote_job_id)
         if current:
@@ -4335,6 +4602,18 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
           current["error"] = {"message": normalize_text(err) or "job failed"}
           current["finishedAt"] = utc_now_iso()
     finally:
+      if execution_started is not None and call_identity:
+        try:
+          record_runtime_call(
+            host_id=execution_host_id,
+            runtime_name=call_identity["runtimeName"],
+            model_name=call_identity["modelName"],
+            job_kind=call_identity["jobKind"],
+            execution_seconds=max(0.000001, time.monotonic() - execution_started),
+            outcome=outcome
+          )
+        except Exception as err:
+          print(f"[gpu-housekeeper] could not persist call observation: {normalize_text(err)}", flush=True)
       with _LOCK:
         if runtime_name.lower() == "ollama":
           _RUNTIME_ACTIVITY[runtime_name.lower()] = {
@@ -4348,6 +4627,8 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
         _RUNNING_JOB_ID = first_running_job_id()
   finally:
     gate.release(shared, vram_required_mb)
+    if execution_started is not None:
+      record_queue_transition(execution_host_id, "finished")
 
 
 def start_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[str, Any]]) -> None:

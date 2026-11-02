@@ -8,6 +8,10 @@ import time
 import unittest
 from unittest.mock import patch
 
+# Keep service observations produced by tests out of the host's persistent state.
+_TEST_PYA_DIR = tempfile.TemporaryDirectory(prefix="gpu-housekeeper-tests-")
+os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = _TEST_PYA_DIR.name
+
 SERVER_PATH = pathlib.Path(__file__).with_name("server.py")
 spec = importlib.util.spec_from_file_location("gpu_housekeeper_server", SERVER_PATH)
 server = importlib.util.module_from_spec(spec)
@@ -1008,7 +1012,10 @@ class HousekeeperOllamaTests(unittest.TestCase):
       server.start_registered_job("shared-two", registry)
       self.assertTrue(both_started.wait(1))
       for _ in range(100):
-        if all(server._JOBS[item]["status"] == "success" for item in ("shared-one", "shared-two")):
+        if (
+          all(server._JOBS[item]["status"] == "success" for item in ("shared-one", "shared-two"))
+          and server.queue_depth() == 0
+        ):
           break
         time.sleep(0.01)
       self.assertEqual(server._JOBS["shared-one"]["status"], "success")
@@ -2476,6 +2483,10 @@ class HousekeeperFederationTests(unittest.TestCase):
           "runtimeName": "ollama", "modelName": "qwen", "sampleCount": 3,
           "medianLoadSeconds": 18.5, "lastObservedAt": "2026-10-22T10:00:00Z"
         }],
+        "modelCallEstimates": [{
+          "runtimeName": "ollama", "modelName": "qwen", "jobKind": "ollama-chat",
+          "sampleCount": 4, "averageExecutionSeconds": 12.25
+        }],
         "executionSlots": [],
         "devices": [{"deviceId": "gpu0"}],
         "queueDepth": 0,
@@ -2493,6 +2504,8 @@ class HousekeeperFederationTests(unittest.TestCase):
 
     self.assertEqual(candidate["estimatedLoadSeconds"], 18.5)
     self.assertEqual(candidate["loadEstimateSamples"], 3)
+    self.assertEqual(candidate["estimatedCallSeconds"], 12.25)
+    self.assertEqual(candidate["callEstimateSamples"], 4)
 
   def test_route_prefers_shorter_measured_load_when_candidates_are_otherwise_equal(self):
     server.configured_peers = lambda: {"swac": "http://swac:8090"}
@@ -2512,6 +2525,131 @@ class HousekeeperFederationTests(unittest.TestCase):
 
     self.assertTrue(route["forwarded"])
     self.assertEqual(route["selected"]["hostId"], "swac")
+
+  def test_route_uses_call_duration_only_as_equal_score_tie_breaker(self):
+    server.configured_peers = lambda: {"swac": "http://swac:8090"}
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "mriczo", "available": True, "immediate": True,
+      "score": 30, "estimatedCallSeconds": 25.0, "callEstimateSamples": 4
+    }
+    server.peer_route_candidate = lambda host_id, url, _job: {
+      "hostId": host_id, "url": url, "available": True, "immediate": True,
+      "score": 30, "estimatedCallSeconds": 8.0, "callEstimateSamples": 5
+    }
+    route = server.select_route(
+      {}, {"runtimeName": "ollama", "profileName": "qwen", "jobSpec": {"kind": "ollama-chat"}},
+      {"ollama": {}}, "mriczo"
+    )
+    self.assertEqual(route["selected"]["hostId"], "swac")
+
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "mriczo", "available": True, "immediate": True,
+      "score": 40, "estimatedCallSeconds": 100.0, "callEstimateSamples": 4
+    }
+    route = server.select_route(
+      {}, {"runtimeName": "ollama", "profileName": "qwen", "jobSpec": {"kind": "ollama-chat"}},
+      {"ollama": {}}, "mriczo"
+    )
+    self.assertEqual(route["selected"]["hostId"], "mriczo")
+
+  def test_call_duration_observations_are_durable_and_aggregated_by_call_type(self):
+    with tempfile.TemporaryDirectory() as observation_dir, patch.dict(os.environ, {
+      "GPU_HOUSEKEEPER_PYA_DIR": observation_dir
+    }):
+      for seconds, outcome in ((10, "success"), (20, "success"), (100, "fail")):
+        server.record_runtime_call(
+          host_id="swac", runtime_name="ollama", model_name="qwen3.5:9b",
+          job_kind="ollama-chat", execution_seconds=seconds, outcome=outcome
+        )
+      files = list(pathlib.Path(observation_dir).glob("call-*.pya"))
+      estimate = server.model_call_estimate("ollama", "qwen3.5:9b", "ollama-chat")
+      artifact = files[0].read_text(encoding="utf-8")
+
+    self.assertEqual(len(files), 3)
+    self.assertEqual(estimate["sampleCount"], 2)
+    self.assertEqual(estimate["failedCount"], 1)
+    self.assertEqual(estimate["averageExecutionSeconds"], 15)
+    self.assertIn("su name gpu runtime call observation be json map def", artifact)
+    self.assertEqual(server.model_call_estimate("ollama", "qwen3.5:9b", "ollama-generate"), None)
+
+  def test_completed_job_records_execution_duration_for_routing(self):
+    original_execute_job = server.execute_job
+    server._JOBS["measured-job"] = {
+      "remoteJobId": "measured-job", "runtimeName": "ollama", "profileName": "qwen",
+      "executionHostId": "mriczo", "deviceId": "gpu0", "status": "queued", "forwarded": False,
+      "jobSpec": {"kind": "ollama-chat", "payload": {"model": "qwen3.5:9b"}}
+    }
+    server.execute_job = lambda _job, _registry: {"response": "ok"}
+    try:
+      server.execute_registered_job("measured-job", {"ollama": {"concurrencySafe": False}})
+      estimate = server.model_call_estimate("ollama", "qwen3.5:9b", "ollama-chat")
+      completed = server._JOBS["measured-job"]["status"]
+    finally:
+      server.execute_job = original_execute_job
+      server._JOBS.clear()
+      server._RUNNING_JOB_IDS.clear()
+      server._RUNNING_JOB_ID = None
+
+    self.assertEqual(completed, "success")
+    self.assertEqual(estimate["sampleCount"], 1)
+    self.assertGreater(estimate["averageExecutionSeconds"], 0)
+
+  def test_soft_queue_cap_is_observational_and_queue_metrics_are_event_sampled(self):
+    original_over = server._LAST_QUEUE_OVER_SOFT_CAP
+    server._LAST_QUEUE_OVER_SOFT_CAP = False
+    with tempfile.TemporaryDirectory() as observation_dir, patch.dict(os.environ, {
+      "GPU_HOUSEKEEPER_PYA_DIR": observation_dir,
+      "GPU_HOUSEKEEPER_SOFT_QUEUE_CAP": "1"
+    }):
+      with patch.object(server, "configured_peers", return_value={}), patch.object(
+        server, "local_route_state", return_value={
+          "hostId": "mriczo", "available": True, "immediate": True, "score": 10
+        }
+      ):
+        accepted = [server.submit_job({
+          "handleId": f"soft-cap-{idx}", "runtimeName": "ollama", "profileName": "qwen",
+          "jobSpec": {"kind": "ollama-generate", "payload": {"model": "qwen", "prompt": "test"}}
+        }, {"ollama": {}}, "mriczo") for idx in range(3)]
+      view = server.queue_view()
+      samples = server.queue_observations()
+
+    server._LAST_QUEUE_OVER_SOFT_CAP = original_over
+    self.assertTrue(all(item["accepted"] for item in accepted))
+    self.assertEqual(view["localQueuedCount"], 3)
+    self.assertEqual(view["softQueueCap"], 1)
+    self.assertTrue(view["queueOverSoftCap"])
+    self.assertEqual(view["queueMetrics"]["sampleCount"], 3)
+    self.assertEqual(view["queueMetrics"]["averageQueuedCount"], 2)
+    self.assertEqual(view["queueMetrics"]["p95QueuedCount"], 3)
+    self.assertEqual(view["queueMetrics"]["peakQueuedCount"], 3)
+    self.assertEqual(view["queueMetrics"]["overSoftCapSamples"], 2)
+    self.assertIn("not time-weighted", view["queueMetrics"]["sampling"])
+    self.assertEqual(len(samples), 3)
+
+  def test_snapshot_exposes_queue_and_call_capacity_metrics(self):
+    with patch.object(server, "parse_nvidia_smi", return_value={"available": True, "backend": "nvidia", "devices": []}), \
+         patch.object(server, "managed_gpu_processes", return_value={"available": True, "runtimes": {}, "unmanagedProcesses": []}), \
+         patch.object(server, "ollama_running_model_status", return_value={"available": False, "models": []}), \
+         patch.object(server, "list_runtime_statuses", return_value=[]), \
+         patch.object(server, "model_loading_observations", return_value=[]), \
+         patch.object(server, "runtime_call_observations", return_value=[{
+           "runtime name": "ollama", "model name": "qwen", "job kind": "ollama-chat",
+           "execution seconds": 6.0, "outcome": "success", "observed timestamp": "2026-11-02T00:00:00Z"
+         }]), \
+         patch.object(server, "queue_observations", return_value=[{
+           "queued count": 3, "over soft cap": False, "observed timestamp": "2026-11-02T00:00:00Z"
+         }]), \
+         patch.object(server, "profile_list", return_value=[]), \
+         patch.object(server, "ollama_model_catalog", return_value={"available": False, "models": []}), \
+         patch.object(server, "local_execution_slot_busy", return_value=False), \
+         patch.object(server, "execution_slots", return_value=[]), \
+         patch.dict(os.environ, {"GPU_HOUSEKEEPER_SOFT_QUEUE_CAP": "7"}):
+      snapshot = server.make_snapshot("swac")
+
+    self.assertEqual(snapshot["queuedCount"], 0)
+    self.assertEqual(snapshot["softQueueCap"], 7)
+    self.assertEqual(snapshot["queueMetrics"]["peakQueuedCount"], 3)
+    self.assertEqual(snapshot["modelCallEstimates"][0]["averageExecutionSeconds"], 6)
 
   def test_pya_load_observations_are_durable_and_estimate_median(self):
     with tempfile.TemporaryDirectory() as observation_dir, patch.dict(os.environ, {"GPU_HOUSEKEEPER_PYA_DIR": observation_dir}):
