@@ -8,16 +8,16 @@ import {
   resolveGpuWorkerConcurrency
 } from "../../../program/runtime/gpu/worker_capacity.mjs";
 
-test("GPU worker defaults to reachable device count and accepts an explicit override", () => {
-  assert.equal(resolveGpuWorkerConcurrency({ discoveredDeviceSlots: 5 }), 5);
-  assert.equal(resolveGpuWorkerConcurrency({ discoveredDeviceSlots: 0 }), 1);
+test("GPU worker defaults to Housekeeper dispatch slots and accepts an explicit override", () => {
+  assert.equal(resolveGpuWorkerConcurrency({ discoveredDispatchSlots: 5 }), 5);
+  assert.equal(resolveGpuWorkerConcurrency({ discoveredDispatchSlots: 0 }), 1);
   assert.equal(parseGpuWorkerConcurrencyOverride("3"), 3);
   assert.equal(parseGpuWorkerConcurrencyOverride("0"), undefined);
-  assert.equal(resolveGpuWorkerConcurrency({ requested: "7", discoveredDeviceSlots: 2 }), 7);
-  assert.equal(resolveGpuWorkerConcurrency({ discoveredDeviceSlots: 100 }), MAX_GPU_WORKER_CONCURRENCY);
+  assert.equal(resolveGpuWorkerConcurrency({ requested: "7", discoveredDispatchSlots: 2 }), 7);
+  assert.equal(resolveGpuWorkerConcurrency({ discoveredDispatchSlots: 100 }), MAX_GPU_WORKER_CONCURRENCY);
 });
 
-test("GPU worker capacity counts devices across reachable configured peers", async () => {
+test("GPU worker fan-out uses primary Housekeeper devices and configured peer slots", async () => {
   const snapshots = new Map([
     ["http://entry", {
       hostId: "mriczo",
@@ -42,7 +42,7 @@ test("GPU worker capacity counts devices across reachable configured peers", asy
   const adapterFactory = ({ baseUrl }) => ({
     async getSnapshot({ timeoutMs }) {
       assert.equal(timeoutMs, 1200);
-      if (!snapshots.has(baseUrl)) throw new Error("peer unavailable");
+      if (baseUrl !== "http://entry") throw new Error("worker must not probe peers directly");
       return snapshots.get(baseUrl);
     }
   });
@@ -54,9 +54,10 @@ test("GPU worker capacity counts devices across reachable configured peers", asy
   });
 
   assert.deepEqual(capacity, {
-    deviceSlots: 5,
-    hostCount: 3,
-    reachablePeerCount: 2
+    dispatchSlots: 5,
+    hostCount: 4,
+    configuredPeerCount: 3,
+    localDeviceSlots: 2
   });
 });
 
@@ -75,5 +76,5 @@ test("GPU worker capacity uses execution slots when device telemetry is absent",
     })
   });
 
-  assert.equal(capacity.deviceSlots, 2);
+  assert.equal(capacity.dispatchSlots, 2);
 });

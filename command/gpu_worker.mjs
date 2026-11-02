@@ -88,14 +88,14 @@ async function main() {
 
   const dispatchConcurrency = async () => {
     if (concurrencyOverride !== undefined) {
-      return { concurrency: concurrencyOverride, source: "environment override", deviceSlots: 0, hostCount: 0 };
+      return { concurrency: concurrencyOverride, source: "environment override", dispatchSlots: 0, hostCount: 0 };
     }
     const now = Date.now();
     if (cachedCapacity && now - capacityObservedAt < GPU_TOPOLOGY_CACHE_MS) return cachedCapacity;
     try {
       const capacity = await discoverGpuWorkerCapacity({ housekeeperUrl });
       cachedCapacity = {
-        concurrency: resolveGpuWorkerConcurrency({ discoveredDeviceSlots: capacity.deviceSlots }),
+        concurrency: resolveGpuWorkerConcurrency({ discoveredDispatchSlots: capacity.dispatchSlots }),
         source: "discovered topology",
         ...capacity
       };
@@ -104,7 +104,7 @@ async function main() {
       cachedCapacity = {
         concurrency: 1,
         source: "safe fallback",
-        deviceSlots: 0,
+        dispatchSlots: 0,
         hostCount: 0,
         error: String(error?.message ?? error).trim()
       };
@@ -120,7 +120,7 @@ async function main() {
     if (capacity.concurrency !== lastLoggedConcurrency) {
       console.log(
         `[gpu worker] dispatch slots=${capacity.concurrency} source=${capacity.source}`
-        + (capacity.deviceSlots ? ` gpu_devices=${capacity.deviceSlots} hosts=${capacity.hostCount}` : "")
+        + (capacity.dispatchSlots ? ` housekeeper_slots=${capacity.dispatchSlots} hosts=${capacity.hostCount}` : "")
         + (capacity.error ? ` detail=${capacity.error}` : "")
       );
       lastLoggedConcurrency = capacity.concurrency;
