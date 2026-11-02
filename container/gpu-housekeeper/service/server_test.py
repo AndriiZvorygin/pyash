@@ -2340,8 +2340,10 @@ class HousekeeperFederationTests(unittest.TestCase):
     self.orig_capacity_plan_for_job = server.capacity_plan_for_job
     self.orig_local_execution_slot_busy = server.local_execution_slot_busy
     self.orig_host_id = server.Handler.host_id
+    self.orig_last_route_hosts = dict(server._LAST_ROUTE_HOST_BY_PROFILE)
     self.orig_accept_forwarded = os.environ.get("GPU_HOUSEKEEPER_ACCEPT_FORWARDED")
     server._JOBS.clear()
+    server._LAST_ROUTE_HOST_BY_PROFILE.clear()
     server.Handler.host_id = "mriczo"
 
   def tearDown(self):
@@ -2355,6 +2357,8 @@ class HousekeeperFederationTests(unittest.TestCase):
     server.capacity_plan_for_job = self.orig_capacity_plan_for_job
     server.local_execution_slot_busy = self.orig_local_execution_slot_busy
     server.Handler.host_id = self.orig_host_id
+    server._LAST_ROUTE_HOST_BY_PROFILE.clear()
+    server._LAST_ROUTE_HOST_BY_PROFILE.update(self.orig_last_route_hosts)
     if self.orig_accept_forwarded is None:
       os.environ.pop("GPU_HOUSEKEEPER_ACCEPT_FORWARDED", None)
     else:
@@ -2471,6 +2475,52 @@ class HousekeeperFederationTests(unittest.TestCase):
     self.assertTrue(candidate["busy"])
     self.assertFalse(candidate["immediate"])
 
+  def test_peer_reclaim_available_capacity_is_deferred_not_immediate(self):
+    responses = iter([
+      {
+        "capabilities": {"ollamaGpuResidencyGuard": True},
+        "runtimes": [{"runtimeName": "ollama", "status": "running"}],
+        "ollamaRunningModels": {"available": True, "models": []},
+        "ollamaModelCatalog": {"available": True, "models": [{"name": "qwen"}]},
+        "profiles": [],
+        "executionSlots": [],
+        "devices": [{"deviceId": "gpu0", "vramFreeMb": 1000}],
+        "queueDepth": 0,
+      },
+      {"feasible": True, "decision": "reclaim-available"},
+    ])
+    server.peer_request_json = lambda *_args, **_kwargs: next(responses)
+
+    candidate = server.peer_route_candidate(
+      "swac", "http://swac:8090",
+      {"runtimeName": "ollama", "profileName": "qwen", "jobSpec": {
+        "kind": "ollama-generate", "payload": {"model": "qwen", "prompt": "hi"}
+      }}
+    )
+
+    self.assertTrue(candidate["available"])
+    self.assertTrue(candidate["deferable"])
+    self.assertFalse(candidate["immediate"])
+    self.assertEqual(candidate["reason"], "peer waiting for GPU capacity")
+
+  def test_route_uses_an_immediate_local_host_over_a_deferred_peer(self):
+    server.configured_peers = lambda: {"swac": "http://swac:8090"}
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "mriczo", "available": True, "immediate": True, "score": 30
+    }
+    server.peer_route_candidate = lambda host_id, url, _job: {
+      "hostId": host_id, "url": url, "available": True, "immediate": False,
+      "deferable": True, "score": -50, "reason": "peer waiting for GPU capacity"
+    }
+
+    route = server.select_route(
+      {}, {"runtimeName": "ollama", "profileName": "qwen", "jobSpec": {}},
+      {"ollama": {}}, "mriczo"
+    )
+
+    self.assertFalse(route["forwarded"])
+    self.assertEqual(route["selected"]["hostId"], "mriczo")
+
   def test_peer_route_includes_its_model_load_estimate(self):
     responses = iter([
       {
@@ -2551,6 +2601,65 @@ class HousekeeperFederationTests(unittest.TestCase):
       {"ollama": {}}, "mriczo"
     )
     self.assertEqual(route["selected"]["hostId"], "mriczo")
+
+  def test_same_profile_rotates_across_idle_hosts_after_first_warm_route(self):
+    server.configured_peers = lambda: {
+      "swac": "http://swac:8090",
+      "macstudio": "http://macstudio:8090"
+    }
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "mriczo", "available": True, "immediate": True, "score": 30, "warm": False
+    }
+
+    def peer_candidate(host_id, url, _job):
+      return {
+        "hostId": host_id, "url": url, "available": True, "immediate": True,
+        "score": 130 if host_id == "macstudio" else 30,
+        "warm": host_id == "macstudio"
+      }
+
+    server.peer_route_candidate = peer_candidate
+    job = {"runtimeName": "ollama", "profileName": "qwen3.5:9b", "jobSpec": {}}
+    routes = [
+      server.select_route({}, job, {"ollama": {}}, "mriczo")
+      for _ in range(3)
+    ]
+
+    self.assertEqual(
+      [route["selected"]["hostId"] for route in routes],
+      ["macstudio", "mriczo", "swac"]
+    )
+    self.assertEqual(routes[0]["selectionPolicy"], "capacity-score")
+    self.assertEqual(routes[1]["selectionPolicy"], "round-robin-host-balance")
+    self.assertEqual(routes[2]["selectionPolicy"], "round-robin-host-balance")
+
+  def test_host_rotation_skips_hosts_without_an_immediate_slot(self):
+    server.configured_peers = lambda: {
+      "swac": "http://swac:8090",
+      "macstudio": "http://macstudio:8090"
+    }
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "mriczo", "available": True, "immediate": True, "score": 30
+    }
+    server.peer_route_candidate = lambda host_id, url, _job: {
+      "hostId": host_id, "url": url, "available": True, "immediate": True,
+      "score": 130 if host_id == "macstudio" else 30
+    }
+    job = {"runtimeName": "ollama", "profileName": "qwen3.5:9b", "jobSpec": {}}
+    first = server.select_route({}, job, {"ollama": {}}, "mriczo")
+    self.assertEqual(first["selected"]["hostId"], "macstudio")
+
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "mriczo", "available": True, "immediate": False, "score": 0
+    }
+    server.peer_route_candidate = lambda host_id, url, _job: {
+      "hostId": host_id, "url": url, "available": True,
+      "immediate": host_id == "swac", "score": 130 if host_id == "macstudio" else 30
+    }
+    next_route = server.select_route({}, job, {"ollama": {}}, "mriczo")
+
+    self.assertEqual(next_route["selected"]["hostId"], "swac")
+    self.assertEqual(next_route["selectionPolicy"], "round-robin-host-balance")
 
   def test_call_duration_observations_are_durable_and_aggregated_by_call_type(self):
     with tempfile.TemporaryDirectory() as observation_dir, patch.dict(os.environ, {

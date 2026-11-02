@@ -26,6 +26,7 @@ _LOCK = threading.Lock()
 # execution boundary used by the current housekeeper.
 _EXECUTION_LOCK = threading.Lock()
 _SUBMISSION_LOCK = threading.Lock()
+_LAST_ROUTE_HOST_BY_PROFILE: Dict[str, str] = {}
 _RUNNING_JOB_ID: Optional[str] = None
 _RUNNING_JOB_IDS: Dict[str, set] = {}
 _RUNTIME_ACTIVITY: Dict[str, Dict[str, Any]] = {}
@@ -1327,14 +1328,16 @@ def peer_route_candidate(
       score += 20
     elif preview.get("decision") == "reclaim-available":
       score -= 60
-    if not busy:
+    capacity_wait = preview.get("decision") == "reclaim-available"
+    if not busy and not capacity_wait:
       score += 10
     candidates.append({
       "hostId": peer_host_id,
       "url": peer_url,
       "deviceId": target_device,
       "available": True,
-      "immediate": not busy,
+      "immediate": not busy and not capacity_wait,
+      "deferable": capacity_wait,
       "busy": busy,
       "queueDepth": int(snapshot.get("queueDepth") or 0),
       "warm": warm,
@@ -1345,7 +1348,11 @@ def peer_route_candidate(
       "callEstimateSamples": call_estimate.get("sampleCount", 0) if call_estimate else 0,
       "score": score,
       "preview": preview,
-      "reason": "peer execution slot occupied" if busy else "peer candidate"
+      "reason": (
+        "peer execution slot occupied"
+        if busy
+        else ("peer waiting for GPU capacity" if capacity_wait else "peer candidate")
+      )
     })
   if not candidates:
     return {
@@ -1356,6 +1363,39 @@ def peer_route_candidate(
       "reason": "peer capacity is unavailable"
     }
   return max(candidates, key=lambda item: (bool(item.get("immediate")), int(item.get("score") or 0), item.get("deviceId") == "gpu0"))
+
+
+def route_profile_key(job: Dict[str, Any]) -> str:
+  return "|".join((
+    normalize_text(job.get("runtimeName")).lower(),
+    normalize_text(job.get("profileName")).lower()
+  ))
+
+
+def next_balanced_route_candidate(
+  job: Dict[str, Any],
+  candidates: List[Dict[str, Any]],
+  immediate: List[Dict[str, Any]]
+) -> Optional[Dict[str, Any]]:
+  """Rotate same-profile work across eligible hosts instead of pinning to a warm peer."""
+  key = route_profile_key(job)
+  previous_host = _LAST_ROUTE_HOST_BY_PROFILE.get(key)
+  hosts = sorted({normalize_text(item.get("hostId")) for item in candidates if normalize_text(item.get("hostId"))})
+  if not previous_host or len(hosts) < 2 or previous_host not in hosts:
+    return None
+
+  by_host: Dict[str, List[Dict[str, Any]]] = {}
+  for candidate in immediate:
+    host = normalize_text(candidate.get("hostId"))
+    if host:
+      by_host.setdefault(host, []).append(candidate)
+  start = hosts.index(previous_host)
+  for offset in range(1, len(hosts)):
+    host = hosts[(start + offset) % len(hosts)]
+    available = by_host.get(host, [])
+    if available:
+      return max(available, key=lambda item: (int(item.get("score") or 0), item.get("deviceId") == "gpu0"))
+  return None
 
 
 def select_route(payload: Dict[str, Any], job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]], host_id: str) -> Dict[str, Any]:
@@ -1380,29 +1420,39 @@ def select_route(payload: Dict[str, Any], job: Dict[str, Any], runtime_registry:
 
   immediate = [item for item in candidates if item.get("available") and item.get("immediate")]
   if immediate:
-    best_score = max(int(item.get("score") or 0) for item in immediate)
-    equally_viable = [item for item in immediate if int(item.get("score") or 0) == best_score]
-    call_comparable = len(equally_viable) > 1 and all(
-      isinstance(item.get("estimatedCallSeconds"), (int, float))
-      for item in equally_viable
-    )
-    load_comparable = len(equally_viable) > 1 and all(
-      item.get("warm") is True or isinstance(item.get("estimatedLoadSeconds"), (int, float))
-      for item in equally_viable
-    )
-    if call_comparable:
-      selected = min(equally_viable, key=lambda item: (
-        float(item["estimatedCallSeconds"]), item.get("hostId") != host_id
-      ))
-    elif load_comparable:
-      selected = min(equally_viable, key=lambda item: (
-        float(item.get("estimatedLoadSeconds") or 0), item.get("hostId") != host_id
-      ))
-    else:
-      selected = next((item for item in equally_viable if item.get("hostId") == host_id), equally_viable[0])
-    return {"selected": selected, "candidates": candidates, "forwarded": selected.get("hostId") != host_id}
+    selected = next_balanced_route_candidate(job, candidates, immediate)
+    selection_policy = "round-robin-host-balance" if selected else "capacity-score"
+    if selected is None:
+      best_score = max(int(item.get("score") or 0) for item in immediate)
+      equally_viable = [item for item in immediate if int(item.get("score") or 0) == best_score]
+      call_comparable = len(equally_viable) > 1 and all(
+        isinstance(item.get("estimatedCallSeconds"), (int, float))
+        for item in equally_viable
+      )
+      load_comparable = len(equally_viable) > 1 and all(
+        item.get("warm") is True or isinstance(item.get("estimatedLoadSeconds"), (int, float))
+        for item in equally_viable
+      )
+      if call_comparable:
+        selected = min(equally_viable, key=lambda item: (
+          float(item["estimatedCallSeconds"]), item.get("hostId") != host_id
+        ))
+      elif load_comparable:
+        selected = min(equally_viable, key=lambda item: (
+          float(item.get("estimatedLoadSeconds") or 0), item.get("hostId") != host_id
+        ))
+      else:
+        selected = next((item for item in equally_viable if item.get("hostId") == host_id), equally_viable[0])
+    _LAST_ROUTE_HOST_BY_PROFILE[route_profile_key(job)] = normalize_text(selected.get("hostId"))
+    return {
+      "selected": selected,
+      "candidates": candidates,
+      "forwarded": selected.get("hostId") != host_id,
+      "selectionPolicy": selection_policy
+    }
   if local.get("available"):
-    return {"selected": local, "candidates": candidates, "forwarded": False, "reason": "no peer has an immediate free slot"}
+    _LAST_ROUTE_HOST_BY_PROFILE[route_profile_key(job)] = normalize_text(local.get("hostId"))
+    return {"selected": local, "candidates": candidates, "forwarded": False, "reason": "no peer has an immediate free slot", "selectionPolicy": "local-queued"}
   return {"selected": None, "candidates": candidates, "forwarded": False, "reason": "no local or peer route is executable"}
 
 
@@ -1510,7 +1560,8 @@ def forward_job_to_peer(payload: Dict[str, Any], job: Dict[str, Any], route: Dic
     "executionHostId": normalize_text(selected.get("hostId")),
     "deviceId": selected_device,
     "score": int(selected.get("score") or 0),
-    "reason": selected.get("reason") or "peer selected"
+    "reason": selected.get("reason") or "peer selected",
+    "selectionPolicy": route.get("selectionPolicy") or "capacity-score"
   }
   with _LOCK:
     _JOBS[job["remoteJobId"]] = job
@@ -1710,7 +1761,8 @@ def submit_job(
       "executionHostId": selected_host,
       "deviceId": selected_device,
       "score": int(selected.get("score") or 0),
-      "reason": selected.get("reason") or route.get("reason") or "local candidate"
+      "reason": selected.get("reason") or route.get("reason") or "local candidate",
+      "selectionPolicy": route.get("selectionPolicy") or "capacity-score"
     }
 
     with _LOCK:
