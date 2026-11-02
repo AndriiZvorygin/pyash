@@ -122,10 +122,79 @@ pilot's completed batch checkpoints lead the full run, so those model duties are
 Each model batch artifact includes the exact submitted prompt beside its decisions for review.
 
 Open English WordNet 2025 JSON supplies synsets and relations but no `tag_count`, and its lexical
-entry array order is not a reliable frequency rank. Princeton WordNet's `index.sense` provides
-`sense_number` and `tag_cnt` from semantically tagged concordance texts; numbered order is usually
-most-to-least frequent for tagged senses, while untagged senses have no dependable frequency
-order. These counts are corpus evidence, not universal usage frequency ([sense index format](https://wordnet.princeton.edu/documentation/senseidx5wn), [sense ordering notes](https://wordnet.princeton.edu/documentation/wndb5wn)). Use a versioned, explicit frequency resource when choosing a default sense for an atom; do not infer frequency from OEWN JSON array order. Sweep artifacts and model batches are ordered by the smallest English30k rank among each sense's lemmas, followed by stable sense key. English30k ranks words, not individual senses, so senses sharing a lemma share its rank; this orders processing without claiming a per-sense frequency distinction.
+entry array order is not a reliable frequency rank. Princeton WordNet 3.1's `index.sense` provides
+`sense_number` and `tag_cnt` from semantically tagged concordance texts. Counts are evidence from
+those concordances, not universal usage frequencies ([sense index format](https://wordnet.princeton.edu/documentation/senseidx5wn), [sense ordering notes](https://wordnet.princeton.edu/documentation/wndb5wn)).
+
+### Frequency-first anchor allocation
+
+`english_wordnet_frequency.pya` pins the official Princeton WordNet 3.1 sense index by source URL,
+archive hash, local index path, and index hash. Install or verify that ignored local data with
+`node command/wordnet_sense_frequency_setup.mjs`. The command joins its rows to Open English
+WordNet 2025 by the exact lexical sense key only. Princeton byte offsets are retained as evidence;
+they are never used to join the different OEWN synset release. Missing keys stay unranked rather
+than being assigned a fabricated zero count.
+
+Run `node command/wordnet_frequency_allocate.mjs` to allocate existing English30k-covered atoms
+and accepted compounds to WordNet synsets. English30k rank is the primary ordering. An exact-key
+Princeton `tag_cnt` breaks equal English30k ranks. When that evidence also ties, or a tied option
+has no exact-key count, the synset remains for compound work instead of receiving a lexical-order
+guess. Allocation is one-to-one: a synset gets at most one anchor and a Pyac target is allocated
+to at most one synset. Curated and deterministic bridge rows remain reserved; previous model links
+remain active only when their Pyac identity matches the frequency allocation. The active bridge
+catalog records the selected lemma, English30k rank, tag count, and exact sense key in its evidence.
+
+The command writes resumable `.pya` batches and a manifest beneath
+`artifacts/<run-id>/`, including residual senses, model-link reconciliation, and compound
+candidates. It applies the resulting active bridge map to `english_wordnet_bridges.pya`. Inspect
+the manifest and worklists with `node command/pya_to_json.mjs <file.pya> --pretty`.
+
+Run `node command/wordnet_frequency_compound_sweep.mjs` to work the residual senses against
+existing closed-compound candidates. Alternate decompositions of the same target are presented
+together to one bounded verifier duty; duties use the configured Pyash mind and GPU Housekeeper,
+never a direct provider request. Decisions are checkpointed to
+`english_wordnet_compound_decisions.pya`. Accepted compounds enter the derived verified compound
+catalog at `compound_coverage_wordnet_verified.pya`; after the sweep, the allocator runs again so
+those newly verified compounds can anchor senses in the active bridge catalog. Rejected and
+uncertain candidates remain durable evidence and do not enter the compound lexicon. The remaining
+synsets without an existing covered lemma or compound candidate stay explicitly unresolved for a
+later atom/compound generation pass.
+
+Only compound candidates with at least one target-sense/head-sense pair supported by a directed
+same-part-of-speech WordNet hypernym path enter the Housekeeper worklist. Candidates without that
+edge remain visible in the allocation artifact as `no-wordnet-head-evidence`; they are not treated
+as linguistically false, but the model cannot promote them by rationale alone.
+
+Each review prompt includes up to four frequency-ranked residual WordNet senses for the candidate
+and up to four WordNet senses per component, ordered by exact Princeton tag count where available.
+It sends definitions only (usage examples after semicolons are removed). An accepted decision must
+cite one supplied target synset id and one supplied sense id for the final component, then cite one
+supplied WordNet sense and a short semantic contribution for each modifier in component order.
+Each modifier contribution is explicitly classified as literal, metaphorical, associative, or uncertain;
+promotion requires literal contributions, and explicit figurative wording downgrades an acceptance.
+Unknown ids or missing modifier explanations are rejected by the response parser, and the decision
+row retains the citations for audit. Promotion also requires the cited target synset to equal the head
+sense or reach it through a directed WordNet hypernym path with the same part of speech. Similarity,
+material, location, and association edges do not establish a lexical head. The parser downgrades an
+acceptance without this relation to uncertain, and the promotion gate independently checks the
+saved relation evidence. The
+`compound-verification-revision` value in `english_wordnet_frequency_allocation.pya` versions these
+decisions: changing the prompt contract reopens stale rows and keeps their prior verdict summary
+attached for audit. If a sweep stops after checkpointing a decision but before promoting its
+compound, the next run restores eligible accepted rows before continuing.
+The verified compound catalog contains only decisions accepted under the configured revision and
+stores each decision id/revision as a link to the full `.pya` decision ledger. Raw provider payloads,
+component-sense evidence, and prompts remain in the ledger rather than being copied into the active
+lexicon.
+
+English30k ranks words rather than WordNet senses. Thus identical ranks do not establish which
+synset is more common; the exact-key Princeton counts are used only as the declared tie-breaker.
+Untagged senses have no dependable Princeton rank, and counts from the tagged concordances should
+not be interpreted as cross-domain or cross-era frequency measurements.
+Dictionary aliases are frequency candidates only when their canonical target is an atomic or
+accepted compound anchor and both records resolve to the same Pyash sequence. If an alias resolves
+to a grammar particle or changes sequence at its canonical target, it stays residual for compound
+work rather than colliding with a lexical anchor.
 
 Callers that have loaded the derived compound catalog pass its accepted records explicitly;
 candidate-closed and rejected compounds are excluded from the authoritative inventory.

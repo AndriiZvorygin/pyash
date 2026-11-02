@@ -772,6 +772,31 @@ test("WordNet linker accepts only a supplied sense choice and renders native Pya
   assert.match(sequenceResponse.reason, /Pyash sequence is derived/u);
 });
 
+test("WordNet bridge rendering preserves hyphenated compound targets", () => {
+  const source = renderEnglishWordNetSenseLinksPya({
+    records: [{
+      source: "v:identity",
+      pos: "v",
+      gloss: "mistake one thing for another",
+      lemmas: ["confuse"],
+      status: "accepted-deterministic",
+      link: {
+        target: "identity-confusion",
+        pyashSequence: ["hdif", "hbun"],
+        targetKind: "compound",
+        targetId: "compound:hdif+hbun",
+        targetPartOfSpeech: "v",
+        certainty: "deterministic",
+        evidence: "fixture frequency link"
+      }
+    }],
+    source: "fixture WordNet",
+    sourceHash: "fixture-source"
+  });
+  assert.match(source, /ob name "identity-confusion"/u);
+  assert.equal(parseEnglishWordNetBridgeCatalog(source).entries[0].target, "identity-confusion");
+});
+
 test("WordNet bridge renderer quotes Pyash role words as English targets", () => {
   const source = renderEnglishWordNetSenseLinksPya({
     records: [{

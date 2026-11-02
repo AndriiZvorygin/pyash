@@ -1200,7 +1200,9 @@ export async function reconcileEnglishWordNetSenseLinks({
 }
 
 function renderTargetName(value) {
-  const target = normalized(value);
+  const target = typeof value === "string"
+    ? value.normalize("NFC").trim().toLowerCase().replace(/_/gu, " ").replace(/\s+/gu, " ").trim()
+    : "";
   if (!target || !/^[a-z0-9][a-z0-9_-]*(?: [a-z0-9][a-z0-9_-]*)*$/iu.test(target)) {
     throw invalid("WordNet bridge target cannot be rendered as a Pyash name", { target: value });
   }

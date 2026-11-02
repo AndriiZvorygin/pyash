@@ -665,21 +665,34 @@ test("WordNet refinery derives and verifies a new compound before offering it as
       coverage: { byVariant: new Map() },
       grammarCatalog: { entries: [] },
       wordnet: {
-        index: buildEnglishWordNetIndex({ rows: [{
-          id: "n:02846922-n:birdhouse",
-          pos: "n",
-          synset: "02846922-n",
-          lemma: "birdhouse",
-          gloss: sense.gloss
-        }] })
+        index: buildEnglishWordNetIndex({
+          rows: [
+            {
+              id: "n:02846922-n:birdhouse",
+              pos: "n",
+              synset: "02846922-n",
+              lemma: "birdhouse",
+              gloss: sense.gloss
+            },
+            { id: "n:02084071-n:bird", pos: "n", synset: "02084071-n", lemma: "bird", gloss: "warm-blooded egg-laying vertebrate" },
+            { id: "n:03544360-n:house", pos: "n", synset: "03544360-n", lemma: "house", gloss: "a dwelling that serves as living quarters" }
+          ],
+          relations: [{ source: "n:02846922-n", target: "n:03544360-n", relation: "hypernym" }]
+        })
       }
     },
     verifyCompound: async ({ candidates }) => {
       verifiedCandidates.push(...candidates);
+      const candidate = candidates[0];
       return JSON.stringify({
         verdict: "accept",
-        candidateId: candidates[0].id,
+        candidateId: candidate.id,
         headKind: "lexical-head",
+        targetSenseId: candidate.targetSenseEvidence[0].source,
+        headSenseId: candidate.componentSenseEvidence.find((row) => row.component === "house").source,
+        modifierSenseIds: [candidate.componentSenseEvidence.find((row) => row.component === "bird").source],
+        modifierEvidence: ["bird literally specifies the kind of house"],
+        modifierRelations: ["literal"],
         rationale: "bird modifies house; house is the semantic head"
       });
     }
@@ -690,6 +703,26 @@ test("WordNet refinery derives and verifies a new compound before offering it as
   assert.deepEqual(verifiedCandidates[0].componentGlosses, ["bird", "house"]);
   assert.deepEqual(verifiedCandidates[0].pyashSequence, ["pyaf", "hcas"]);
   assert.match(verifiedCandidates[0].evidence, /a shelter for birds/u);
+  let noHeadRelationCalls = 0;
+  await refineEnglishWordNet({
+    result: { ...result, sourceHash: "birdhouse-no-head-relation" },
+    resources: {
+      coverage: { byVariant: new Map() },
+      grammarCatalog: { entries: [] },
+      wordnet: {
+        index: buildEnglishWordNetIndex({ rows: [
+          { id: "n:02846922-n:birdhouse", pos: "n", synset: "02846922-n", lemma: "birdhouse", gloss: sense.gloss },
+          { id: "n:02084071-n:bird", pos: "n", synset: "02084071-n", lemma: "bird", gloss: "warm-blooded egg-laying vertebrate" },
+          { id: "n:03544360-n:house", pos: "n", synset: "03544360-n", lemma: "house", gloss: "a dwelling that serves as living quarters" }
+        ] })
+      }
+    },
+    verifyCompound: async () => {
+      noHeadRelationCalls += 1;
+      return "{}";
+    }
+  });
+  assert.equal(noHeadRelationCalls, 0);
   const anchor = refined.records[0].anchorCandidates.find((candidate) => candidate.target === "birdhouse");
   assert.ok(anchor);
   assert.equal(anchor.selectable, true);

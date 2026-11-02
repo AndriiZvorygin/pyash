@@ -1,0 +1,10 @@
+su name frequency be map def
+su text "format" ob text "princeton-wordnet-sense-frequency-v1" ya
+su text "source" ob text "Princeton WordNet 3.1 sense index" ya
+su text "source-url" ob text "https://wordnetcode.princeton.edu/wn3.1.dict.tar.gz" ya
+su text "archive-sha256" ob text "3f7d8be8ef6ecc7167d39b10d66954ec734280b5bdcd57f7d9eafe429d11c22a" ya
+su text "index-path" ob text "know/wordnet/princeton-wordnet-3.1/index.sense" ya
+su text "index-sha256" ob text "a09db263da96dbb3273064c60546530dee5927a2e5a39c90fb576cdbebbb1a22" ya
+su text "license" ob text "Princeton WordNet 3.1 license; see know/wordnet/open-english-wordnet-2025-json/WNDB_License.txt" ya
+su text "join-policy" ob text "exact Open English WordNet lexical sense key only; index offsets are evidence, not join keys" ya
+prah

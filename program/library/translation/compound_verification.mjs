@@ -19,8 +19,10 @@ const RESPONSE_HEAD_KINDS = new Set([
 ]);
 const MAX_RESPONSE_CHARS = 12000;
 const MAX_RATIONALE_CHARS = 2000;
-const COMPOUND_VERIFICATION_MAX_OUTPUT_TOKENS = 160;
-const COMPOUND_VERIFIER_QUEUE_FORMAT = "compound-verifier-v2";
+const COMPOUND_VERIFICATION_MAX_OUTPUT_TOKENS = 288;
+const COMPOUND_VERIFIER_QUEUE_FORMAT = "compound-verifier-v9";
+const MODIFIER_RELATIONS = new Set(["literal", "metaphorical", "associative", "uncertain"]);
+const NON_LITERAL_EVIDENCE = /\b(?:metaphor(?:ical(?:ly)?)?|figurative(?:ly)?|symbolic(?:ally)?|associative(?:ly)?|wordplay|pun|merely associated|only associated)\b/iu;
 
 function invalid(message, details = {}) {
   const error = new Error(message);
@@ -183,6 +185,25 @@ function jsonForPrompt(value) {
     morphologyStatus: value.morphologyStatus ?? "",
     morphologySignals: value.morphologySignals ?? [],
     componentLayers: value.componentLayers ?? [],
+    componentSenseEvidence: (Array.isArray(value.componentSenseEvidence) ? value.componentSenseEvidence : [])
+      .slice(0, 12)
+      .map((sense) => ({
+        component: normalizeText(sense?.component),
+        source: normalizeText(sense?.source),
+        lemmas: Array.isArray(sense?.lemmas) ? sense.lemmas.slice(0, 8) : [],
+        definition: normalizeText(sense?.definition).split(";")[0].slice(0, 320)
+      })),
+    targetSenseEvidence: (Array.isArray(value.targetSenseEvidence) ? value.targetSenseEvidence : [])
+      .slice(0, 4)
+      .map((sense) => ({
+        source: normalizeText(sense?.source),
+        pos: normalizeText(sense?.pos),
+        lemmas: Array.isArray(sense?.lemmas) ? sense.lemmas.slice(0, 8) : [],
+        definition: normalizeText(sense?.definition).split(";")[0].slice(0, 320),
+        compatibleHeadSenseIds: Array.isArray(sense?.compatibleHeadSenseIds)
+          ? sense.compatibleHeadSenseIds.slice(0, 12)
+          : []
+      })),
     evidence: value.evidence ?? "",
     deterministicChecks: value.deterministicChecks ?? {}
   });
@@ -197,14 +218,20 @@ export function buildCompoundVerificationPrompt({ record, candidates = [record] 
   return [
     "You verify a Pyash compound candidate.",
     "Choose only one candidate id supplied below.",
-    "Use the source evidence to judge whether the components compose the target meaning.",
+    "Use the supplied target WordNet sense definitions to judge whether the components compose the target meaning.",
+    "Use the supplied WordNet definitions for each component to choose its relevant meaning; do not infer a component sense from spelling alone.",
     "Pyash order is head-final: the final component is the semantic head.",
-    "Spelling overlap is not a semantic boundary. Classify the final component as lexical-head only when the target denotes a kind of that component.",
-    "A derivational or grammatical ending is a separate morphology signal, even when it matches an atomic English word.",
-    "For example, acceptant is not a kind of ant, and zincking is not a kind of king.",
-    "Return one compact JSON object with exactly these fields. Always include candidateId; use an empty string unless accepting:",
-    '{"verdict":"accept|reject|uncertain","candidateId":"...","headKind":"lexical-head|derivational-ending|grammatical-ending|uncertain","rationale":"..."}',
-    "An accept must use a supplied candidateId, preserve its component sequence, and set headKind to lexical-head. Keep rationale under 120 characters.",
+    "A target/head pair is compatible only when the target synset equals the cited final-component sense or reaches it through directed WordNet hypernym edges with the same part of speech. Accept only a listed compatibleHeadSenseIds pair; otherwise answer uncertain.",
+    "For every modifier before the final head, cite one supplied component sense in componentGlosses order, state its contribution, and classify that contribution as literal, metaphorical, associative, or uncertain.",
+    "Accept only when every modifier contributes its defined meaning literally to the target. If any modifier depends on metaphor, figurative meaning, symbolism, wordplay, or association, reject or mark uncertain.",
+    "The final target sense must also be literally a kind of the final component in the cited component sense, and its definition must support the full modifier-plus-head meaning.",
+    "A spelling match, association, metaphor, idiom, derivational ending, grammatical ending, or unrelated homograph is not a lexical head.",
+    "For named groups or proper-name senses, accept only if the supplied target definition establishes the same literal component composition.",
+    "Component glosses and source-language spellings suggest a segmentation; they do not prove it. If no supplied target sense supports the composition, reject or mark uncertain.",
+    "For an accepted candidate, cite one supplied target sense id, one supplied final-component sense id, and one supplied sense id plus a relation label for each modifier. Never invent ids.",
+    "Return one compact JSON object with exactly these fields:",
+    '{"verdict":"accept|reject|uncertain","candidateId":"...","headKind":"lexical-head|derivational-ending|grammatical-ending|uncertain","targetSenseId":"...|empty","headSenseId":"...|empty","modifierSenseIds":["..."],"modifierEvidence":["..."],"modifierRelations":["literal|metaphorical|associative|uncertain"],"rationale":"..."}',
+    "An accept must use a supplied candidateId, preserve its component sequence, set headKind to lexical-head, cite supplied targetSenseId and headSenseId values, and give one modifierSenseId, one nonempty modifierEvidence explanation, and one modifierRelations label per modifier. Every accepted modifierRelations value must be literal. Keep rationale under 120 characters.",
     "\nTARGET RECORD:",
     jsonForPrompt(record),
     "\nCANDIDATES:",
@@ -298,12 +325,127 @@ export function parseCompoundVerificationResponse(text, { candidates = [] } = {}
   if (headKind && !RESPONSE_HEAD_KINDS.has(headKind)) {
     return { valid: false, reason: "response headKind is unsupported" };
   }
+  const citedSense = normalizeText(payload.targetSenseId ?? payload.target_sense_id
+    ?? payload.senseId ?? payload.sense_id ?? payload.supportingSenseId ?? payload.supporting_sense_id);
+  const rationaleSenseIds = [...new Set(rationale.match(/\b[nvars]:\d{8}-[nvars]\b/gu) ?? [])];
+  const supportingSenseId = citedSense || (rationaleSenseIds.length === 1 ? rationaleSenseIds[0] : "");
+  const selectedCandidate = candidateMap.get(selectedId);
+  const head = normalizeText(selectedCandidate?.componentGlosses?.at(-1) ?? selectedCandidate?.head);
+  const headSenseIds = new Set((selectedCandidate?.componentSenseEvidence ?? [])
+    .filter((sense) => normalizeText(sense?.component) === head)
+    .map((sense) => normalizeText(sense?.source)));
+  const citedHeadSenseId = normalizeText(payload.headSenseId ?? payload.head_sense_id);
+  const rationaleHeadSenseIds = rationaleSenseIds.filter((id) => headSenseIds.has(id));
+  const supportingHeadSenseId = citedHeadSenseId || (rationaleHeadSenseIds.length === 1 ? rationaleHeadSenseIds[0] : "");
+  const supportingModifierSenseIds = Array.isArray(payload.modifierSenseIds)
+    ? payload.modifierSenseIds.map(normalizeText)
+    : [];
+  const supportingModifierEvidence = Array.isArray(payload.modifierEvidence)
+    ? payload.modifierEvidence.map(normalizeText)
+    : [];
+  const supportingModifierRelations = Array.isArray(payload.modifierRelations)
+    ? payload.modifierRelations.map((relation) => normalizeText(relation).toLowerCase())
+    : [];
+  if (verdict === "accept" && Array.isArray(selectedCandidate?.targetSenseEvidence)
+    && selectedCandidate.targetSenseEvidence.length > 0) {
+    const targetSenseIds = new Set(selectedCandidate.targetSenseEvidence.map((sense) => normalizeText(sense?.source)));
+    if (!supportingSenseId || !targetSenseIds.has(supportingSenseId)) {
+      return { valid: false, reason: "accepted response must cite a supplied target sense source id" };
+    }
+  }
+  if (verdict === "accept" && headSenseIds.size > 0 && !headSenseIds.has(supportingHeadSenseId)) {
+    return { valid: false, reason: "accepted response must cite a supplied sense for the final component" };
+  }
+  const componentGlosses = selectedCandidate?.componentGlosses
+    ?? selectedCandidate?.sourceMorphemes
+    ?? selectedCandidate?.morphemes
+    ?? [];
+  const modifierComponents = Array.isArray(componentGlosses)
+    ? componentGlosses.slice(0, -1).map(normalizeText)
+    : [];
+  if (verdict === "accept") {
+    if (supportingModifierSenseIds.length !== modifierComponents.length
+      || supportingModifierEvidence.length !== modifierComponents.length
+      || supportingModifierRelations.length !== modifierComponents.length) {
+      return {
+        valid: false,
+        reason: "accepted response must cite a supplied WordNet sense, explain each modifier, and classify its contribution in component order"
+      };
+    }
+    for (const [index, component] of modifierComponents.entries()) {
+      const senseId = supportingModifierSenseIds[index];
+      const senseExists = (selectedCandidate?.componentSenseEvidence ?? []).some((sense) => (
+        normalizeText(sense?.component) === component && normalizeText(sense?.source) === senseId
+      ));
+      if (!senseId || !senseExists || !supportingModifierEvidence[index]) {
+        return {
+          valid: false,
+          reason: `accepted response must cite a supplied WordNet sense and evidence for modifier ${JSON.stringify(component)}`
+        };
+      }
+      if (!MODIFIER_RELATIONS.has(supportingModifierRelations[index])) {
+        return {
+          valid: false,
+          reason: `accepted response must classify modifier ${JSON.stringify(component)} as literal, metaphorical, associative, or uncertain`
+        };
+      }
+    }
+  }
+  const selectedTargetSense = selectedCandidate?.targetSenseEvidence?.find((sense) => (
+    normalizeText(sense?.source) === supportingSenseId
+  ));
+  const hasWordNetCompatibility = Array.isArray(selectedTargetSense?.compatibleHeadSenseIds);
+  const headRelationSupported = hasWordNetCompatibility
+    ? selectedTargetSense.compatibleHeadSenseIds.includes(supportingHeadSenseId)
+    : undefined;
+  const nonLiteralModifier = supportingModifierRelations.some((relation) => relation !== "literal")
+    || NON_LITERAL_EVIDENCE.test(`${supportingModifierEvidence.join(" ")} ${rationale}`);
+  if (verdict === "accept" && nonLiteralModifier) {
+    return {
+      valid: true,
+      verdict: "uncertain",
+      candidate: selectedCandidate,
+      candidateId: selectedId,
+      headKind: "uncertain",
+      supportingSenseId,
+      supportingHeadSenseId,
+      supportingModifierSenseIds,
+      supportingModifierEvidence,
+      supportingModifierRelations,
+      ...(headRelationSupported !== undefined ? { headRelationSupported } : {}),
+      rationale: `model acceptance withheld: modifier contribution is non-literal or explicitly figurative; ${rationale}`.slice(0, MAX_RATIONALE_CHARS),
+      raw: String(text ?? "")
+    };
+  }
+  if (verdict === "accept" && headRelationSupported === false) {
+    return {
+      valid: true,
+      verdict: "uncertain",
+      candidate: selectedCandidate,
+      candidateId: selectedId,
+      headKind: "uncertain",
+      supportingSenseId,
+      supportingHeadSenseId,
+      supportingModifierSenseIds,
+      supportingModifierEvidence,
+      supportingModifierRelations,
+      headRelationSupported: false,
+      rationale: `model acceptance withheld: no WordNet head relation supports this target/head pair; ${rationale}`.slice(0, MAX_RATIONALE_CHARS),
+      raw: String(text ?? "")
+    };
+  }
   return {
     valid: true,
     verdict,
     candidate: selectedId ? candidateMap.get(selectedId) : null,
     candidateId: selectedId,
     headKind: headKind || "uncertain",
+    supportingSenseId,
+    supportingHeadSenseId,
+    ...(supportingModifierSenseIds.length > 0 ? { supportingModifierSenseIds } : {}),
+    ...(supportingModifierEvidence.length > 0 ? { supportingModifierEvidence } : {}),
+    ...(supportingModifierRelations.length > 0 ? { supportingModifierRelations } : {}),
+    ...(headRelationSupported !== undefined ? { headRelationSupported } : {}),
     rationale,
     raw: String(text ?? "")
   };
@@ -330,6 +472,20 @@ function applyVerification(record, classification, response, {
     verifier: verifierName,
     verificationRationale: response.rationale,
     verificationHeadKind: response.headKind,
+    ...(response.supportingSenseId ? { verificationSenseId: response.supportingSenseId } : {}),
+    ...(response.supportingHeadSenseId ? { verificationHeadSenseId: response.supportingHeadSenseId } : {}),
+    ...(Array.isArray(response.supportingModifierSenseIds)
+      ? { verificationModifierSenseIds: response.supportingModifierSenseIds }
+      : {}),
+    ...(Array.isArray(response.supportingModifierEvidence)
+      ? { verificationModifierEvidence: response.supportingModifierEvidence }
+      : {}),
+    ...(Array.isArray(response.supportingModifierRelations)
+      ? { verificationModifierRelations: response.supportingModifierRelations }
+      : {}),
+    ...(response.headRelationSupported !== undefined
+      ? { verificationHeadRelation: response.headRelationSupported ? "supported" : "unsupported" }
+      : {}),
     ...(response.raw ? { verificationEvidence: response.raw } : {})
   };
 }
@@ -347,6 +503,20 @@ function retainUncertain(record, classification, response, { verifierName, attem
     verifier: verifierName,
     verificationRationale: response?.rationale ?? response?.reason ?? "bounded verification did not establish a decision",
     ...(response?.headKind ? { verificationHeadKind: response.headKind } : {}),
+    ...(response?.supportingSenseId ? { verificationSenseId: response.supportingSenseId } : {}),
+    ...(response?.supportingHeadSenseId ? { verificationHeadSenseId: response.supportingHeadSenseId } : {}),
+    ...(Array.isArray(response?.supportingModifierSenseIds)
+      ? { verificationModifierSenseIds: response.supportingModifierSenseIds }
+      : {}),
+    ...(Array.isArray(response?.supportingModifierEvidence)
+      ? { verificationModifierEvidence: response.supportingModifierEvidence }
+      : {}),
+    ...(Array.isArray(response?.supportingModifierRelations)
+      ? { verificationModifierRelations: response.supportingModifierRelations }
+      : {}),
+    ...(response?.headRelationSupported !== undefined
+      ? { verificationHeadRelation: response.headRelationSupported ? "supported" : "unsupported" }
+      : {}),
     ...(response?.raw ? { verificationEvidence: response.raw } : {})
   };
 }
@@ -364,6 +534,20 @@ function retainRejected(record, classification, response, { verifierName, attemp
     verifier: verifierName,
     verificationRationale: response?.rationale ?? response?.reason ?? "candidate rejected by bounded verification",
     ...(response?.headKind ? { verificationHeadKind: response.headKind } : {}),
+    ...(response?.supportingSenseId ? { verificationSenseId: response.supportingSenseId } : {}),
+    ...(response?.supportingHeadSenseId ? { verificationHeadSenseId: response.supportingHeadSenseId } : {}),
+    ...(Array.isArray(response?.supportingModifierSenseIds)
+      ? { verificationModifierSenseIds: response.supportingModifierSenseIds }
+      : {}),
+    ...(Array.isArray(response?.supportingModifierEvidence)
+      ? { verificationModifierEvidence: response.supportingModifierEvidence }
+      : {}),
+    ...(Array.isArray(response?.supportingModifierRelations)
+      ? { verificationModifierRelations: response.supportingModifierRelations }
+      : {}),
+    ...(response?.headRelationSupported !== undefined
+      ? { verificationHeadRelation: response.headRelationSupported ? "supported" : "unsupported" }
+      : {}),
     ...(response?.raw ? { verificationEvidence: response.raw } : {})
   };
 }
@@ -414,7 +598,7 @@ export async function verifyCompoundCoverage(records, {
         prompt,
         "\nThe previous response failed this deterministic contract:",
         response.reason,
-        "Return only one corrected JSON object with verdict, candidateId when accepting, and rationale.",
+        "Return only one corrected JSON object with verdict, candidateId, headKind, targetSenseId, headSenseId, modifierSenseIds, modifierEvidence, modifierRelations, and rationale.",
         "PREVIOUS RESPONSE:",
         String(raw ?? "")
       ].join("\n");
@@ -508,6 +692,33 @@ export function createQueuedMindCompoundVerifier({
     const candidateIds = [...new Set((Array.isArray(candidates) && candidates.length > 0 ? candidates : [record])
       .map(candidateId)
       .filter(Boolean))];
+    const senseIds = [...new Set((Array.isArray(candidates) && candidates.length > 0 ? candidates : [record])
+      .flatMap((candidate) => Array.isArray(candidate?.targetSenseEvidence)
+        ? candidate.targetSenseEvidence.map((sense) => normalizeText(sense?.source))
+        : [])
+      .filter(Boolean))];
+    const headSenseIds = [...new Set((Array.isArray(candidates) && candidates.length > 0 ? candidates : [record])
+      .flatMap((candidate) => Array.isArray(candidate?.componentSenseEvidence)
+        ? candidate.componentSenseEvidence
+          .filter((sense) => normalizeText(sense?.component) === normalizeText(candidate?.componentGlosses?.at(-1) ?? candidate?.head))
+          .map((sense) => normalizeText(sense?.source))
+        : [])
+      .filter(Boolean))];
+    const modifierSenseIds = [...new Set((Array.isArray(candidates) && candidates.length > 0 ? candidates : [record])
+      .flatMap((candidate) => {
+        const components = Array.isArray(candidate?.componentGlosses)
+          ? candidate.componentGlosses
+          : Array.isArray(candidate?.sourceMorphemes)
+            ? candidate.sourceMorphemes
+            : Array.isArray(candidate?.morphemes) ? candidate.morphemes : [];
+        const modifiers = new Set(components.slice(0, -1).map(normalizeText));
+        return Array.isArray(candidate?.componentSenseEvidence)
+          ? candidate.componentSenseEvidence
+            .filter((sense) => modifiers.has(normalizeText(sense?.component)))
+            .map((sense) => normalizeText(sense?.source))
+          : [];
+      })
+      .filter(Boolean))];
     const jobSpec = {
       kind: "ollama-generate",
       prompt: String(prompt ?? ""),
@@ -515,12 +726,32 @@ export function createQueuedMindCompoundVerifier({
       think: false,
       format: {
         type: "object",
-        required: ["verdict", "candidateId", "headKind", "rationale"],
+        required: ["verdict", "candidateId", "headKind", "targetSenseId", "headSenseId", "modifierSenseIds", "modifierEvidence", "modifierRelations", "rationale"],
         additionalProperties: false,
         properties: {
           verdict: { type: "string", enum: ["accept", "reject", "uncertain"] },
           candidateId: { type: "string", enum: ["", ...candidateIds] },
           headKind: { type: "string", enum: [...RESPONSE_HEAD_KINDS] },
+          targetSenseId: { type: "string", enum: ["", ...senseIds] },
+          headSenseId: { type: "string", enum: ["", ...headSenseIds] },
+          modifierSenseIds: {
+            type: "array",
+            minItems: 0,
+            maxItems: 2,
+            items: { type: "string", enum: ["", ...modifierSenseIds] }
+          },
+          modifierEvidence: {
+            type: "array",
+            minItems: 0,
+            maxItems: 2,
+            items: { type: "string", maxLength: 120 }
+          },
+          modifierRelations: {
+            type: "array",
+            minItems: 0,
+            maxItems: 2,
+            items: { type: "string", enum: [...MODIFIER_RELATIONS] }
+          },
           rationale: { type: "string", maxLength: 160 }
         }
       },

@@ -242,6 +242,18 @@ function normalizeEntry(payload, surface, index, language) {
       throw invalid(`compound ${field} must be non-empty text`, { index, surface });
     }
   }
+  for (const field of ["decisionRevision", "verificationDecisionId"]) {
+    if (payload[field] !== undefined && (typeof payload[field] !== "string" || !payload[field].trim())) {
+      throw invalid(`compound ${field} must be non-empty text`, { index, surface });
+    }
+  }
+  if (payload.verificationDecisionIds !== undefined && (
+    !Array.isArray(payload.verificationDecisionIds) ||
+    payload.verificationDecisionIds.length === 0 ||
+    payload.verificationDecisionIds.some((id) => typeof id !== "string" || !id.trim())
+  )) {
+    throw invalid("compound verification decision ids must be non-empty text values", { index, surface });
+  }
   if (payload.rejectedCandidates !== undefined && (
     !Array.isArray(payload.rejectedCandidates) ||
     payload.rejectedCandidates.some((candidate) => (
@@ -312,6 +324,11 @@ function normalizeEntry(payload, surface, index, language) {
     ...(payload.verifier === undefined ? {} : { verifier: payload.verifier }),
     ...(payload.verificationRationale === undefined ? {} : { verificationRationale: payload.verificationRationale }),
     ...(payload.verificationEvidence === undefined ? {} : { verificationEvidence: payload.verificationEvidence }),
+    ...(payload.decisionRevision === undefined ? {} : { decisionRevision: payload.decisionRevision }),
+    ...(payload.verificationDecisionId === undefined ? {} : { verificationDecisionId: payload.verificationDecisionId }),
+    ...(payload.verificationDecisionIds === undefined ? {} : {
+      verificationDecisionIds: [...new Set(payload.verificationDecisionIds)]
+    }),
     ...(payload.rejectedCandidates === undefined ? {} : {
       rejectedCandidates: payload.rejectedCandidates.map((candidate) => ({
         pyashSequence: [...candidate.pyashSequence],

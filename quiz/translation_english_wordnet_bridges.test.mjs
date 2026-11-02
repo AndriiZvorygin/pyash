@@ -18,9 +18,20 @@ import { renderEnglishFromVliw } from "../program/library/translation/pyac_to_en
 
 test("WordNet bridge rows have a lightweight gloss and lemma lookup", async () => {
   const catalog = await loadEnglishWordNetBridges();
-  assert.equal(catalog.entries.length, 1862);
+  assert.equal(catalog.entries.length, 4113);
   assert.equal(catalog.entries.filter((entry) => entry.evidence.includes("active through sweep wordnet-sense-sweep-4c07194f363e-81b5bbefa3b0-d1")).length, 734);
-  assert.equal(catalog.entries.filter((entry) => entry.evidence.includes("sense-link sweep wordnet-sense-sweep-4c07194f363e-9059730cda6d-d1-model-qwen3-5-9b-definition-anchor-v1")).length, 1109);
+  assert.equal(catalog.entries.filter((entry) => entry.evidence.includes("sense-link sweep wordnet-sense-sweep-4c07194f363e-9059730cda6d-d1-model-qwen3-5-9b-definition-anchor-v1")).length, 969);
+  assert.equal(catalog.entries.filter((entry) => entry.evidence.startsWith("frequency-first anchor allocation")).length, 2391);
+  assert.equal(catalog.entries.find((entry) => entry.source === "n:06850196-n"), undefined);
+  assert.deepEqual(catalog.entries.find((entry) => entry.source === "a:00005204-a"), {
+    source: "a:00005204-a",
+    target: "inevitable",
+    targetPartOfSpeech: "a",
+    certainty: "deterministic",
+    evidence: "frequency-first anchor allocation: exact lemma absolute at English30k rank 2099; Princeton WordNet 3.1 tag count 11 (sense key absolute%3:00:00::)",
+    gloss: "perfect or complete or pure; absolute loyalty; absolute silence; absolute truth; absolute alcohol",
+    lemmas: ["absolute"]
+  });
   assert.deepEqual(catalog.entries.find((entry) => entry.source === "n:05818974-n"), {
     source: "n:05818974-n",
     target: "thing",
@@ -53,15 +64,7 @@ test("WordNet bridge rows have a lightweight gloss and lemma lookup", async () =
   assert.equal(catalog.entries.find((entry) => entry.source === "r:00111558-r")?.target, "inside");
   assert.ok(catalog.entries.every((entry) => entry.gloss && entry.lemmas.length > 0));
   assert.equal(catalog.entries.find((entry) => entry.source === "n:00856168-n")?.lemmas.includes("feel"), true);
-  assert.deepEqual(catalog.entries.find((entry) => entry.source === "n:04609402-n"), {
-    source: "n:04609402-n",
-    target: "workplace",
-    targetPartOfSpeech: "n",
-    certainty: "contextual",
-    evidence: "The definition 'a place where work is done' matches the anchor 'workplace'.; model qwen3.5:9b; sense-link sweep wordnet-sense-sweep-4c07194f363e-9059730cda6d-d1-model-qwen3-5-9b-definition-anchor-v1 (source 4c07194f363e9c870dc925b8cab26f9af93899f6bd91a29b9a1422c1f66d95ba)",
-    gloss: "a place where work is done; he arrived at work early today",
-    lemmas: ["work", "workplace"]
-  });
+  assert.equal(catalog.entries.find((entry) => entry.source === "n:04609402-n"), undefined);
 });
 
 test("WordNet bridge catalog joins its linked sense gloss and lemmas", () => {

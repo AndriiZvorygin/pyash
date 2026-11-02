@@ -10,6 +10,7 @@ import { buildCompoundAtomLinks } from "./compound_atom_links.mjs";
 
 export const DERIVED_COMPOUND_LEXICON_NAME = "translation_compounds_derived";
 export const DERIVED_COMPOUND_CURATED_NAME = "translation_compounds_derived_curated";
+export const WORDNET_VERIFIED_COMPOUNDS_URL = new URL("./compound_coverage_wordnet_verified.pya", import.meta.url);
 export const DERIVED_COMPOUND_STATUSES = Object.freeze([
   "accepted-delimited",
   "accepted-curated",
@@ -96,14 +97,31 @@ export function sourceTermsFromDictionaryRows({ language, surfaceField = languag
 }
 
 export async function loadCuratedCompoundDecompositions({
-  url = new URL("./compound_coverage_curated.pya", import.meta.url)
+  url = new URL("./compound_coverage_curated.pya", import.meta.url),
+  wordnetUrl = WORDNET_VERIFIED_COMPOUNDS_URL
 } = {}) {
   const entries = await loadCompoundLexicon({
     url,
     name: DERIVED_COMPOUND_CURATED_NAME,
     language: "canonical"
   });
-  return entries.map((entry) => ({
+  let wordnetEntries = [];
+  try {
+    wordnetEntries = await loadCompoundLexicon({
+      url: wordnetUrl,
+      name: DERIVED_COMPOUND_CURATED_NAME,
+      language: "canonical"
+    });
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  const seenTargets = new Set();
+  return [...entries, ...wordnetEntries].filter((entry) => {
+    const target = normalizeTerm(entry.target);
+    if (!target || seenTargets.has(target)) return false;
+    seenTargets.add(target);
+    return true;
+  }).map((entry) => ({
     target: entry.target,
     ...(Array.isArray(entry.aliases) && entry.aliases.length > 0
       ? { aliases: entry.aliases }
@@ -114,7 +132,8 @@ export async function loadCuratedCompoundDecompositions({
     ...(Array.isArray(entry.componentLayers) ? { componentLayers: entry.componentLayers } : {}),
     ...(entry.specificAtom ? { specificAtom: entry.specificAtom } : {}),
     evidence: entry.evidence,
-    confidence: entry.confidence
+    confidence: entry.confidence,
+    provenance: entry.provenance
   }));
 }
 
@@ -325,7 +344,7 @@ export function buildDerivedCompoundCoverage({
         status: "accepted-curated",
         confidence: curatedEntry.confidence,
         evidence: curatedEntry.evidence,
-        provenance: [...source.provenance].sort().join("; ") || "compound-coverage-curated.pya",
+        provenance: [...source.provenance].sort().join("; ") || curatedEntry.provenance || "compound-coverage-curated.pya",
         layerIndex,
         morphologyIndex,
         atomicEntries
@@ -445,6 +464,9 @@ function renderDerivedCompoundCoverageRow(entry) {
     verifier: entry.verifier,
     verificationRationale: entry.verificationRationale,
     verificationEvidence: entry.verificationEvidence,
+    decisionRevision: entry.decisionRevision,
+    verificationDecisionId: entry.verificationDecisionId,
+    verificationDecisionIds: entry.verificationDecisionIds,
     evidence: entry.evidence,
     provenance: entry.provenance,
     confidence: entry.confidence,
