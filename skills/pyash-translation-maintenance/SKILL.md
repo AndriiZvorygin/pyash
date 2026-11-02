@@ -96,6 +96,15 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   Curated and deterministic bridge rows stay reserved. Existing model links
   remain only when their selected Pyac identity agrees with the frequency
   allocation; the full reconciliation is saved under the run's artifacts.
+- Every frequency-allocation run emits `atom-coverage.pya` in its artifact
+  folder. It groups `pyashWords` by distinct Pyac identity and records English
+  labels, English30k ranks, direct WordNet sense candidates, active bridge
+  links, and a status for each atom. Read the manifest counters and this ledger
+  before beginning another linking pass. Work only from the unlinked rows:
+  distinguish grammar-only atoms, missing English glosses, direct candidates
+  that remain free, candidates already linked to another anchor, and atoms
+  with no exact WordNet candidate. Preserve linked rows as checkpoints and do
+  not infer unsupported sense links.
 - Run `node command/wordnet_frequency_compound_sweep.mjs` to verify residual
   closed-compound candidates through the configured Pyash mind and GPU
   Housekeeper. Never call a provider directly. The sweep groups alternate

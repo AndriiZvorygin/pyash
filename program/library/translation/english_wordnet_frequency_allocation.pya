@@ -9,6 +9,10 @@ su text "alias-target-policy" ob text "dictionary aliases are eligible only when
 su text "unresolved-ties" ob text "compound-worklist" ya
 su text "preserve-existing" ob text "curated and deterministic links" ya
 su text "model-link-reconciliation" ob text "retain only when the frequency allocation selects the same Pyac identity" ya
+su text "atom-coverage-format" ob text "english-wordnet-atom-coverage-v1" ya
+su text "atom-coverage-scope" ob text "every distinct Pyac identity in pyashWords" ya
+su text "atom-coverage-batch-size" ob num 500 ya
+su text "atom-unlinked-policy" ob text "preserve candidate senses and explicit coverage status; defer unsupported links to a later sense-candidate stage" ya
 su text "allocation-batch-size" ob num 1000 ya
 su text "maximum-compound-components" ob num 3 ya
 su text "compound-candidate-source" ob text "english30k-closed-wordnet-multiword-existing-atoms-v1" ya

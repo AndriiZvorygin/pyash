@@ -9,6 +9,7 @@ import {
   parseEnglishWordNetBridgeCatalog
 } from "../program/library/translation/english_wordnet_bridges.mjs";
 import {
+  buildEnglishWordNetAtomCoverage,
   buildEnglishWordNetFrequencyAllocationRecords,
   allocateEnglishWordNetAnchors,
   ENGLISH_WORDNET_FREQUENCY_ALLOCATION_CONFIG_URL,
@@ -487,6 +488,13 @@ export async function prepareWordNetFrequencyAllocation() {
   ));
   const retainedModelRecords = reconciliation.retainedModelEntries.map((entry) => bridgeRecord(entry, resolveWord));
   const finalRecords = [...preservedRecords, ...retainedModelRecords, ...addedRecords];
+  const atomCoverage = buildEnglishWordNetAtomCoverage({
+    atoms: pyashWords,
+    resolveCoverage: (word) => lookupEnglish30kCoverage(resources.coverage, word),
+    rankForEnglish,
+    wordnetRecords: records,
+    bridgeRecords: finalRecords
+  });
   const bridgeIndex = buildEnglishWordNetBridgeIndex({
     entries: finalRecords.map((record) => ({
       source: record.source,
@@ -560,6 +568,7 @@ export async function prepareWordNetFrequencyAllocation() {
     allocation,
     reconciliation,
     residualCompounds,
+    atomCoverage,
     finalCatalog,
     sourceRecordCount: records.length,
     exactTagMatches: frequency.joined.matchedCount,
@@ -632,6 +641,27 @@ export async function runWordNetFrequencyAllocation({ artifactRoot = ARTIFACT_RO
       records: result.residualCompounds.map((row) => ({ ...row, id: row.id })),
       extra: { "source-hash": result.sourceHash, "coverage-hash": result.coverageHash }
     }));
+    await atomicWrite(join(directory, "atom-coverage.pya"), renderRowsPya({
+      name: "translation_wordnet_atom_coverage",
+      format: result.allocationConfig["atom-coverage-format"],
+      runId: result.runId,
+      records: result.atomCoverage,
+      extra: {
+        "source-hash": result.sourceHash,
+        "coverage-hash": result.coverageHash,
+        "atom-count": result.atomCoverage.length
+      }
+    }));
+    const atomCoverageBatchCount = await writeBatches(directory, {
+      kind: "atoms",
+      name: "translation_wordnet_atom_coverage",
+      format: result.allocationConfig["atom-coverage-format"],
+      runId: result.runId,
+      records: result.atomCoverage,
+      batchSize: result.allocationConfig["atom-coverage-batch-size"],
+      sourceHash: result.sourceHash,
+      coverageHash: result.coverageHash
+    });
     await atomicWrite(join(directory, "bridge-catalog.pya"), result.finalCatalog);
     const manifest = {
       runId: result.runId,
@@ -644,6 +674,15 @@ export async function runWordNetFrequencyAllocation({ artifactRoot = ARTIFACT_RO
       orphanFrequencyKeys: result.orphanFrequencyKeys,
       assignmentBatchCount,
       residualBatchCount,
+      atomCoverageBatchCount,
+      atomCoveragePath: join(directory, "atom-coverage.pya"),
+      atomCount: result.atomCoverage.length,
+      atomsWithSenseLinks: result.atomCoverage.filter((row) => row.status === "linked").length,
+      atomsMissingEnglishGloss: result.atomCoverage.filter((row) => row.status === "missing-english-gloss").length,
+      grammarAtomsWithoutLexicalSense: result.atomCoverage.filter((row) => row.status === "grammar-no-lexical-sense").length,
+      atomsWithoutDirectWordNetCandidate: result.atomCoverage.filter((row) => row.status === "no-direct-wordnet-candidate").length,
+      atomsWithDirectCandidatesUnlinked: result.atomCoverage.filter((row) => row.status === "direct-candidates-unlinked").length,
+      atomsWhoseDirectCandidatesAreAlreadyLinked: result.atomCoverage.filter((row) => row.status === "direct-candidates-already-linked").length,
       frequencyAssignedSenses: result.allocation.assignments.length,
       newFrequencyLinks: result.reconciliation.newAssignments.length,
       residualSenses: result.allocation.residual.length,

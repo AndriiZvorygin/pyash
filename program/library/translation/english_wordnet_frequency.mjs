@@ -475,6 +475,114 @@ export function buildEnglishWordNetFrequencyAllocationRecords({
   return records.sort((left, right) => left.source.localeCompare(right.source));
 }
 
+export function buildEnglishWordNetAtomCoverage({
+  atoms = [],
+  resolveCoverage = () => null,
+  rankForEnglish = () => Number.POSITIVE_INFINITY,
+  wordnetRecords = [],
+  bridgeRecords = []
+} = {}) {
+  if (!Array.isArray(atoms) || !Array.isArray(wordnetRecords) || !Array.isArray(bridgeRecords)) {
+    throw invalid("atom coverage requires atom, WordNet, and bridge record arrays");
+  }
+  const byTarget = new Map();
+  for (const atom of atoms) {
+    const english = typeof atom?.en === "string" ? atom.en.normalize("NFC").trim() : "";
+    const pyac = typeof atom?.pya === "string" ? atom.pya.trim() : "";
+    if (!pyac) continue;
+    const targetId = `atom:${pyac}`;
+    const row = byTarget.get(targetId) ?? { id: targetId, targetId, pyac, labels: [] };
+    if (english && !row.labels.some((label) => normalize(label) === normalize(english))) row.labels.push(english);
+    byTarget.set(targetId, row);
+  }
+
+  const targetsBySource = new Map();
+  for (const sense of bridgeRecords) {
+    if (typeof sense?.source !== "string" || typeof sense?.link?.targetId !== "string") continue;
+    const targets = targetsBySource.get(sense.source) ?? [];
+    targets.push(sense.link.targetId);
+    targetsBySource.set(sense.source, targets);
+  }
+
+  const candidatesByTarget = new Map();
+  for (const sense of wordnetRecords) {
+    for (const candidate of Array.isArray(sense?.candidates) ? sense.candidates : []) {
+      if (candidate?.targetKind !== "atom" || typeof candidate.targetId !== "string") continue;
+      const row = {
+        source: sense.source,
+        pos: sense.pos,
+        synset: sense.synset,
+        lemmas: [...(sense.lemmas ?? [])],
+        definition: String(sense.gloss ?? "").split(";")[0].trim(),
+        matchedLemma: candidate.lemma,
+        english30kRank: Number.isFinite(candidate.rank) ? candidate.rank : null,
+        tagCount: Number.isSafeInteger(candidate.tagCount) ? candidate.tagCount : null,
+        activeTargetIds: [...(targetsBySource.get(sense.source) ?? [])].sort(),
+        ...(candidate.senseKey ? { senseKey: candidate.senseKey } : {})
+      };
+      const rows = candidatesByTarget.get(candidate.targetId) ?? [];
+      if (!rows.some((existing) => existing.source === row.source && existing.matchedLemma === row.matchedLemma)) rows.push(row);
+      candidatesByTarget.set(candidate.targetId, rows);
+    }
+  }
+
+  const linksByTarget = new Map();
+  for (const sense of bridgeRecords) {
+    const targetId = sense?.link?.targetId;
+    if (typeof targetId !== "string" || !targetId.startsWith("atom:")) continue;
+    const rows = linksByTarget.get(targetId) ?? [];
+    rows.push({
+      source: sense.source,
+      pos: sense.pos,
+      synset: sense.synset,
+      lemmas: [...(sense.lemmas ?? [])],
+      definition: String(sense.gloss ?? "").split(";")[0].trim(),
+      target: sense.link.target,
+      pyacSequence: [...(sense.link.pyashSequence ?? [])],
+      certainty: sense.link.certainty,
+      evidence: sense.link.evidence
+    });
+    linksByTarget.set(targetId, rows);
+  }
+
+  return [...byTarget.values()].map((atom) => {
+    const labelCoverage = atom.labels.map((label) => ({
+      label,
+      coverageType: resolveCoverage(label)?.coverageType ?? "none",
+      rank: Number(rankForEnglish(label))
+    }));
+    const candidates = (candidatesByTarget.get(atom.targetId) ?? []).sort((left, right) => (
+      (left.english30kRank ?? Number.MAX_SAFE_INTEGER) - (right.english30kRank ?? Number.MAX_SAFE_INTEGER)
+        || (right.tagCount ?? -1) - (left.tagCount ?? -1)
+        || left.source.localeCompare(right.source)
+        || left.matchedLemma.localeCompare(right.matchedLemma)
+    ));
+    const links = (linksByTarget.get(atom.targetId) ?? []).sort((left, right) => left.source.localeCompare(right.source));
+    const hasLexicalLabel = labelCoverage.some((label) => label.coverageType !== "grammar");
+    const status = links.length > 0
+      ? "linked"
+      : !atom.labels.length
+        ? "missing-english-gloss"
+        : !hasLexicalLabel
+          ? "grammar-no-lexical-sense"
+          : candidates.length > 0
+            ? candidates.every((candidate) => candidate.activeTargetIds.length > 0)
+              ? "direct-candidates-already-linked"
+              : "direct-candidates-unlinked"
+            : "no-direct-wordnet-candidate";
+    const ranks = labelCoverage.map((label) => label.rank).filter((rank) => Number.isFinite(rank) && rank > 0);
+    return {
+      ...atom,
+      labels: [...atom.labels].sort((left, right) => left.localeCompare(right)),
+      english30kRank: ranks.length ? Math.min(...ranks) : null,
+      labelCoverage,
+      status,
+      links,
+      directCandidates: candidates
+    };
+  }).sort((left, right) => left.id.localeCompare(right.id));
+}
+
 export function parseEnglishWordNetFrequencyConfig(source) {
   if (typeof source !== "string") throw invalid("WordNet frequency configuration must be Pyash text");
   const sentences = buildProgram(source).sentences;
@@ -509,6 +617,10 @@ export function parseEnglishWordNetFrequencyAllocationConfig(source) {
   if (metadata.format !== "english-wordnet-frequency-allocation-v1"
     || !Number.isSafeInteger(metadata["allocation-batch-size"])
     || !Number.isSafeInteger(metadata["maximum-compound-components"])
+    || metadata["atom-coverage-format"] !== "english-wordnet-atom-coverage-v1"
+    || metadata["atom-coverage-scope"] !== "every distinct Pyac identity in pyashWords"
+    || !Number.isSafeInteger(metadata["atom-coverage-batch-size"])
+    || !String(metadata["atom-unlinked-policy"] ?? "").trim()
     || metadata["compound-candidate-source"] !== "english30k-closed-wordnet-multiword-existing-atoms-v1"
     || metadata["compound-candidate-order"] !== "english30k-rank-ascending-princeton-tag-count-descending"
     || !Number.isSafeInteger(metadata["compound-verification-batch-size"])

@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import {
+  buildEnglishWordNetAtomCoverage,
   buildEnglishWordNetFrequencyAllocationRecords,
   ENGLISH_WORDNET_FREQUENCY_ALLOCATION_CONFIG_URL,
   allocateEnglishWordNetAnchors,
@@ -61,7 +62,96 @@ test("frequency allocation configuration versions compound verification", async 
   assert.equal(config["compound-verification-batch-size"], 64);
   assert.equal(config["compound-candidate-source"], "english30k-closed-wordnet-multiword-existing-atoms-v1");
   assert.equal(config["compound-candidate-order"], "english30k-rank-ascending-princeton-tag-count-descending");
+  assert.equal(config["atom-coverage-format"], "english-wordnet-atom-coverage-v1");
+  assert.equal(config["atom-coverage-scope"], "every distinct Pyac identity in pyashWords");
+  assert.equal(config["atom-coverage-batch-size"], 500);
   assert.match(config["alias-target-policy"], /grammatical targets remain residual/u);
+});
+
+test("atom coverage inventories every Pyac identity and separates linked, candidate, grammar, and missing cases", () => {
+  const rows = buildEnglishWordNetAtomCoverage({
+    atoms: [
+      { en: "bank", pya: "hban" },
+      { en: "financial institution", pya: "hban" },
+      { en: "the", pya: "dlih" },
+      { en: "unmatched", pya: "hunm" },
+      { en: "overlap", pya: "hovl" },
+      { pya: "hmis" }
+    ],
+    resolveCoverage: (label) => ({
+      bank: { coverageType: "atomic" },
+      "financial institution": { coverageType: "atomic" },
+      the: { coverageType: "grammar" },
+      unmatched: { coverageType: "none" },
+      overlap: { coverageType: "atomic" }
+    })[label] ?? null,
+    rankForEnglish: (label) => ({ bank: 100, "financial institution": 300 }[label] ?? Number.POSITIVE_INFINITY),
+    wordnetRecords: [
+      {
+        source: "n:00000001-n",
+        pos: "n",
+        synset: "00000001-n",
+        lemmas: ["bank"],
+        gloss: "a financial institution; example gloss",
+        candidates: [{ targetKind: "atom", targetId: "atom:hban", lemma: "bank", rank: 100, tagCount: 8 }]
+      },
+      {
+        source: "v:00000002-v",
+        pos: "v",
+        synset: "00000002-v",
+        lemmas: ["overlap"],
+        gloss: "a candidate action",
+        candidates: [{ targetKind: "atom", targetId: "atom:hovl", lemma: "overlap", rank: 50, tagCount: 2 }]
+      },
+      {
+        source: "v:00000003-v",
+        pos: "v",
+        synset: "00000003-v",
+        lemmas: ["unmatched"],
+        gloss: "an unassigned candidate action",
+        candidates: [{ targetKind: "atom", targetId: "atom:hunm", lemma: "unmatched", rank: null, tagCount: 0 }]
+      }
+    ],
+    bridgeRecords: [{
+      source: "n:00000001-n",
+      pos: "n",
+      synset: "00000001-n",
+      lemmas: ["bank"],
+      gloss: "a financial institution; example gloss",
+      link: {
+        targetId: "atom:hban",
+        target: "bank",
+        pyashSequence: ["hban"],
+        certainty: "deterministic",
+        evidence: "frequency-ranked test link"
+      }
+    }, {
+      source: "v:00000002-v",
+      pos: "v",
+      synset: "00000002-v",
+      lemmas: ["overlap"],
+      gloss: "a candidate action",
+      link: {
+        targetId: "atom:another",
+        target: "another anchor",
+        pyashSequence: ["hanr"],
+        certainty: "deterministic",
+        evidence: "already linked test sense"
+      }
+    }]
+  });
+
+  assert.equal(rows.length, 5);
+  const byPyac = new Map(rows.map((row) => [row.pyac, row]));
+  assert.deepEqual(byPyac.get("hban").labels, ["bank", "financial institution"]);
+  assert.equal(byPyac.get("hban").status, "linked");
+  assert.equal(byPyac.get("hban").links[0].source, "n:00000001-n");
+  assert.equal(byPyac.get("dlih").status, "grammar-no-lexical-sense");
+  assert.equal(byPyac.get("hunm").status, "direct-candidates-unlinked");
+  assert.equal(byPyac.get("hunm").directCandidates[0].definition, "an unassigned candidate action");
+  assert.equal(byPyac.get("hovl").status, "direct-candidates-already-linked");
+  assert.deepEqual(byPyac.get("hovl").directCandidates[0].activeTargetIds, ["atom:another"]);
+  assert.equal(byPyac.get("hmis").status, "missing-english-gloss");
 });
 
 test("Princeton sense index parses tag counts without treating missing keys as zero", () => {
