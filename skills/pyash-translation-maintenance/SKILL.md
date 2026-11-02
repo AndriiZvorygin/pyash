@@ -172,8 +172,10 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   prompt. Each launch handles 64 ranked senses and reuses
   `artifacts/<run-id>/sense-translations.pya` and `progress.pya`; inspect
   `component-mappings.pya` and `compound-candidates.pya` when a sense has no
-  candidate. Uncertain results remain explicit, and failed senses are
-  retryable.
+  candidate. Exclude a residual synset when one of its lemmas already resolves
+  to an active linked atomic target; the frequency allocator can leave another
+  synset for that same anchored lemma in its residual pool. Uncertain results
+  remain explicit, and failed senses are retryable.
 - Compound worklists include closed single-token forms from English30k that
   segment into two or three existing atomic lemmas, plus multiword WordNet
   lemmas whose space, underscore, or hyphen boundaries match existing atoms.

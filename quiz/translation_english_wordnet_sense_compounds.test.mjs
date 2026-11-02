@@ -200,6 +200,25 @@ test("worklist keeps only unresolved senses with a linked atomic WordNet head an
   assert.equal(rows[1].frequencyRank, 3000);
 });
 
+test("worklist skips a residual sense whose lemma already has an active atomic link", () => {
+  const rows = buildSenseCompoundWorklist({
+    residualSenses: [
+      { source: "n:05878677-n", pos: "n", synset: "05878677-n", lemmas: ["one"], gloss: "a single person or thing" },
+      { source: "n:00000010-n", pos: "n", synset: "00000010-n", lemmas: ["friendship"], gloss: "a relationship between friends" }
+    ],
+    relations: [
+      { source: "n:05878677-n", target: "n:00000090-n", relation: "hypernym" },
+      { source: "n:00000010-n", target: "n:00000090-n", relation: "hypernym" }
+    ],
+    linkedAtomicSenses: [
+      { source: "n:00000090-n", target: "relationship", targetKind: "atom", pyashSequence: ["hlak"] },
+      { source: "s:02193977-s", target: "one", targetKind: "atom", pyashSequence: ["hyik"] }
+    ]
+  });
+
+  assert.deepEqual(rows.map((row) => row.senseId), ["n:00000010-n"]);
+});
+
 test("Kwon component resolution admits only active linked atomic mappings", () => {
   const mapped = buildKwonLinkedAtomicChoices({
     suggestions: [{

@@ -150,12 +150,14 @@ export function buildSenseCompoundWorklist({
       && Array.isArray(sense?.pyashSequence) && sense.pyashSequence.length === 1;
   });
   const linkedHeadIds = new Set(atomHeads.map((sense) => text(sense.source ?? sense.senseId)));
+  const linkedAtomicTargets = new Set(atomHeads.map((sense) => normalized(sense.target)).filter(Boolean));
   return residualSenses.map((sense) => {
     const source = senseIdOf(sense);
     const pos = text(sense?.pos || source.split(":")[0]);
     const lemmas = [...new Set((sense?.lemmas ?? []).map(normalized).filter(Boolean))];
     const definition = definitionOnly(sense?.gloss ?? sense?.definition);
-    if (!source || !pos || lemmas.length === 0 || !definition || alreadyLinked.has(source)) return null;
+    if (!source || !pos || lemmas.length === 0 || !definition || alreadyLinked.has(source)
+      || lemmas.some((lemma) => linkedAtomicTargets.has(lemma))) return null;
     const compatibleHeads = linkedHypernymHeads(source, linkedHeadIds, relationIndex);
     if (compatibleHeads.length === 0) return null;
     const candidateRanks = (sense?.candidates ?? []).map((candidate) => Number(candidate.rank ?? candidate.english30kRank))
