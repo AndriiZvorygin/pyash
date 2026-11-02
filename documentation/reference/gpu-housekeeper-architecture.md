@@ -67,15 +67,16 @@ It:
 7. writes terminal handle status back to Pyash holding,
 8. acks success/fail in the durable queue.
 
-The worker discovers device counts from the entry Housekeeper and its
-reachable configured peers, then uses that GPU topology to set bounded
-coordinator fan-out. It refreshes the topology every minute and retries failed
+The worker reads the entry Housekeeper's snapshot and uses its local device
+slots plus its configured federation peers to set bounded coordinator fan-out.
+Each configured peer contributes one dispatch slot; the worker does not probe
+peers itself. It refreshes the topology every minute and retries failed
 discovery after five seconds. A single worker therefore dispatches up to the
-number of discovered GPU device slots (with a 64-slot safety ceiling), rather
-than using a fixed default of two. `PYA_GPU_WORKER_CONCURRENCY` remains an
-explicit override. This controls dispatch fan-out, not permission to overlap
-unsafe work on one GPU: Housekeeper remains authoritative for host/device
-admission and routes independent duties to separate idle devices.
+entry Housekeeper's declared host/device capacity (with a 64-slot safety
+ceiling), rather than using a fixed default of two. `PYA_GPU_WORKER_CONCURRENCY`
+remains an explicit override. This controls dispatch fan-out, not permission to
+overlap unsafe work on one GPU: Housekeeper remains authoritative for
+host/device admission and routes independent duties to available devices.
 
 The worker talks to one configured entry housekeeper URL at a time; the entry
 housekeeper performs the peer selection rather than making the worker a second
