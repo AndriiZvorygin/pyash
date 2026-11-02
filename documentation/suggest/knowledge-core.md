@@ -405,34 +405,25 @@ be searched, stored or replayed.
 These are the concrete items the VLIW direction has to fix, and they are
 fixable in the crate rather than by archaeology.
 
-**The vocabulary is still the one thing that cannot be searched.** The IR's
-words come from a fixed atom table, and `program/library/vliw/phrase.mjs:26-32`
-builds `entriesByPya` and `grammarPya` at import time. An IR that is easily
-searchable cannot have a vocabulary that is resolved by module load.
+**Two things the direction does not get for free.**
 
-**Three things the direction does not get for free.**
-
-1. **The Rust side is not built anywhere.** `rust/pyac` is not compiled by
-   any workflow, no npm script invokes it, and there is no `cargo` on this
-   machine. Nothing currently proves the crate still compiles. The reference
-   document's own instruction — `cargo fmt --manifest-path rust/pyac/Cargo.toml
-   -- --check` and `cargo test --manifest-path rust/pyac/Cargo.toml` — is
-   written down but never executed by CI.
-2. **The direction of travel is currently the opposite.** Today JavaScript
+1. **The direction of travel is currently the opposite.** Today JavaScript
    produces and Rust consumes: the JS semantic facade is "the broader
    reference executor", and Rust's coverage is "deliberately limited to
    proven adapters". "Processed with Rust" inverts that, which means the
    knowledge core's Rust implementation becomes the authority and the
    JavaScript one becomes the parity reference for the fourteen modules that
    depend on it.
-3. **The VLIW layer resolves against a static vocabulary at import time.**
+2. **The vocabulary is still the one thing that cannot be searched.** The IR's
+   words come from a fixed atom table, and
    `program/library/vliw/phrase.mjs:26-32` builds `entriesByPya` and
-   `grammarPya` when the module loads, from the fixed atom table. If the
-   knowledge core's representation is VLIW, that layer becomes the knowledge
-   core's storage vocabulary, and its coupling grows rather than shrinks. The
-   vocabulary-parameter proposal in this folder was parked because no second
-   vocabulary existed to justify the refactor; this direction does not change
-   that, but it does raise the cost of leaving the coupling in place.
+   `grammarPya` when the module loads. If the knowledge core's representation
+   is VLIW, that layer becomes the knowledge core's storage vocabulary, and
+   its coupling grows rather than shrinks. An IR that is easily searchable
+   cannot have a vocabulary resolved by module load. The vocabulary-parameter
+   proposal in this folder was parked because no second vocabulary existed to
+   justify the refactor; this direction does not change that, but it does
+   raise the cost of leaving the coupling in place.
 
 ### Adjacent work that is not the core
 
@@ -483,8 +474,8 @@ core's authoritative representation is the VLIW IR, and Rust interprets that
 IR** — executing it, or lowering it to C, to English, or to other targets. T1
 and T6 are where that lands. It does not run through the whole sequence —
 T0 through T5 are mostly independent of it — but it is not optional either,
-and the three things it needs (a build story, more IR precision, and a
-decision about compiled C) are named rather than assumed.
+and the two things it still needs (more IR precision, and a decision
+about compiled C) are named rather than assumed.
 
 ### T0 — Separate the knowledge core from the agent spec
 
@@ -744,15 +735,19 @@ C without a second representation.
 
 **What is needed, in three parts.**
 
-*First, a build story.* The crate is currently compiled by nothing. There is
-no `cargo` in this environment, no GitHub workflow runs `cargo fmt --check` or
-`cargo test`, and no npm script invokes the crate. The reference document
-states the two commands a developer should run, and CI runs neither. Until a
-workflow builds and tests `rust/pyac` on every push, nothing proves the crate
-compiles, and the direction rests on code that no pipeline has touched since
-2026-10-23. This is the cheapest tranche in the sequence and it gates the
-rest: it needs a toolchain pin, a CI job, and a decision on whether the crate
-is built on every push or only on the paths that need it.
+*First, a build story — now in place.* The crate used to be compiled by
+nothing: the toolchain was pinned in `rust-toolchain.toml`, but no workflow
+ran `cargo fmt --check` or `cargo test`, and no npm script invoked it, so
+nothing proved the crate compiled. The pin also declared
+`profile = "minimal"`, which omits rustfmt — so the `cargo fmt --check` step
+that this reference document tells developers to run failed for anyone who
+followed the pin. Both are fixed: `rust-toolchain.toml` now names the
+`rustfmt` component, and `.github/workflows/ci.yml` has a `rust` job that
+installs the pinned toolchain, checks formatting, and runs the crate's tests
+on every push. The crate compiles clean and its 14 tests pass.
+
+What remains of the build story is the ordinary maintenance: keep the pin,
+keep the job, and extend it as the crate grows.
 
 *Second, the IR has to get more precise and more searchable.* The corpus
 measurement above is the input to this part: 64.7% precision, one dead query
@@ -771,10 +766,12 @@ keys must be byte-identical across the two implementations, and the ISA's
 ordering rule (one locale-independent UTF-8 comparison) has to hold in Rust
 exactly as it does in JavaScript.
 
-**Exit criterion:** CI builds and tests the crate; the Rust and JavaScript
-implementations produce byte-identical claim keys, evidence records and
-resolver views over the same catalog and pack; and the compiled C path is
-either brought to parity with them or explicitly retired.
+**Exit criterion (part met):** CI builds and tests the crate, and it does.
+The remaining criterion: the Rust and JavaScript implementations produce
+byte-identical claim keys, evidence records and resolver views over the same
+catalog and pack; the corpus precision and search defects above are closed;
+and the compiled C path is either brought to parity with them or explicitly
+retired.
 **Open decision:** does compiled C remain a knowledge-core backend at all? The
 repository's invariant is "interpreter + JS + C ship together by default", and
 the C knowledge core is a hand-written port with a fixed record array. Under
@@ -939,6 +936,11 @@ node -e 'import("./program/library/vliw/index.mjs").then(async (m) => {
   console.log("hnuc query hits:", m.queryVliwCatalog(db, { hnuc: "0xA909" }).length);
   console.log("null-semantic rows:", db.catalog.records.filter((r) => r.semantic === null).length);
 })'
+
+# the Rust crate is built by CI
+grep -n "  rust:" .github/workflows/ci.yml
+cargo fmt --manifest-path rust/pyac/Cargo.toml -- --check
+cargo test --manifest-path rust/pyac/Cargo.toml
 
 # the roadmap this document proposes to follow
 sed -n '730,790p' documentation/roadmap.md

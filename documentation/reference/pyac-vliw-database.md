@@ -551,6 +551,12 @@ cargo fmt --manifest-path rust/pyac/Cargo.toml -- --check
 cargo test --manifest-path rust/pyac/Cargo.toml
 ```
 
+The toolchain is pinned in `rust-toolchain.toml`; `rustup` installs that
+channel and the components the repository declares, so both commands above
+work from a clean checkout with no manual setup. CI runs them on every push
+in the `rust` job of `.github/workflows/ci.yml`, so the crate cannot drift
+without the build noticing.
+
 ## 7. Backend status
 
 The current executable reference backend is the JavaScript semantic facade.

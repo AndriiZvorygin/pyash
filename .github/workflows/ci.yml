@@ -50,3 +50,23 @@ jobs:
         run: npm run house:api:check
       - name: Run tests
         run: npm run test:ci
+
+  rust:
+    # The Pyac crate is the VLIW boundary: the pack codec, the catalog
+    # reader, and the proven numeric codelet semantics. It was pinned in
+    # rust-toolchain.toml but built by nothing, so nothing proved it
+    # compiled. This job runs the two commands the reference documentation
+    # tells developers to run.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the pinned Rust toolchain
+        # rust-toolchain.toml pins the channel and the components, so rustup
+        # installs exactly what the repository declares.
+        run: |
+          rustup show active-toolchain || rustup toolchain install
+          rustup component add rustfmt
+      - name: Check formatting
+        run: cargo fmt --manifest-path rust/pyac/Cargo.toml -- --check
+      - name: Run the crate tests
+        run: cargo test --manifest-path rust/pyac/Cargo.toml
