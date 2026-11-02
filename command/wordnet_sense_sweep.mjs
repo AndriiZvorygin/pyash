@@ -11,12 +11,17 @@ import {
 } from "../program/library/translation/english_wordnet_linker.mjs";
 import {
   classifyEnglishWordNetSenseSweep,
+  ENGLISH_WORDNET_SENSE_ORDERING,
   partitionEnglishWordNetSenseSweep,
   renderEnglishWordNetSweepAutomaticLinksPya,
   renderEnglishWordNetSweepBatchPya,
-  renderEnglishWordNetSweepManifestPya
+  renderEnglishWordNetSweepManifestPya,
+  rankEnglishWordNetSenseRecords
 } from "../program/library/translation/english_wordnet_sweep.mjs";
-import { lookupEnglish30kCoverage } from "../program/library/translation/english30k_coverage.mjs";
+import {
+  english30kLookupVariants,
+  lookupEnglish30kCoverage
+} from "../program/library/translation/english30k_coverage.mjs";
 import { loadDefaultEnglishSentenceResources } from "../program/library/translation/english_sentence.mjs";
 import { loadCoverage } from "./compound_coverage.mjs";
 
@@ -117,7 +122,12 @@ export async function runWordNetSenseSweep({ artifactRoot = ARTIFACT_ROOT, inclu
   const compoundIndex = compoundCoverageIndex(compounds.accepted);
   const resolveWord = (word) => compoundIndex.get(normalized(word))
     ?? lookupEnglish30kCoverage(resources.coverage, word);
-  const frequencyRankByTerm = new Map(resources.source.rows.map((row) => [normalized(row.word), row.rank]));
+  const frequencyRankByTerm = new Map();
+  for (const row of resources.source.rows) {
+    for (const variant of english30kLookupVariants(row.word)) {
+      if (!frequencyRankByTerm.has(normalized(variant))) frequencyRankByTerm.set(normalized(variant), row.rank);
+    }
+  }
   const rankForEnglish = (word) => frequencyRankByTerm.get(normalized(word)) ?? Number.POSITIVE_INFINITY;
   const sourceHash = resources.wordnet.sourceHash;
   const coverageIdentity = {
@@ -141,7 +151,8 @@ export async function runWordNetSenseSweep({ artifactRoot = ARTIFACT_ROOT, inclu
     bridges: (resources.wordnet.bridges?.entries ?? [])
       .map((entry) => [entry.source, entry.target, entry.targetPartOfSpeech, entry.certainty, entry.equivalenceGroup ?? ""])
       .sort((left, right) => String(left[0]).localeCompare(String(right[0]))),
-    edgeMaxDegree: config.edgeMaxDegree
+    edgeMaxDegree: config.edgeMaxDegree,
+    senseOrdering: ENGLISH_WORDNET_SENSE_ORDERING
   };
   const coverageHash = sha256(JSON.stringify(coverageIdentity));
   const runId = `wordnet-sense-sweep-${sourceHash.slice(0, 12)}-${coverageHash.slice(0, 12)}-d${config.edgeMaxDegree}`;
@@ -159,7 +170,8 @@ export async function runWordNetSenseSweep({ artifactRoot = ARTIFACT_ROOT, inclu
       limit: Number.MAX_SAFE_INTEGER,
       edgeMaxDegree: config.edgeMaxDegree
     });
-    const classified = classifyEnglishWordNetSenseSweep(sourceRecords);
+    const orderedSourceRecords = rankEnglishWordNetSenseRecords(sourceRecords, { rankForEnglish });
+    const classified = classifyEnglishWordNetSenseSweep(orderedSourceRecords);
     const batches = partitionEnglishWordNetSenseSweep(classified.records, config.sweepBatchSize);
     manifest = {
       runId,
@@ -170,6 +182,7 @@ export async function runWordNetSenseSweep({ artifactRoot = ARTIFACT_ROOT, inclu
       batchCount: batches.length,
       completedBatchCount: 0,
       recordCount: classified.records.length,
+      ordering: ENGLISH_WORDNET_SENSE_ORDERING,
       counts: Object.fromEntries(Object.keys(classified.counts).map((key) => [key, 0]))
     };
     await writeManifest(directory, manifest);

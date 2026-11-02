@@ -6,6 +6,7 @@ import {
 import { renderEnglishWordNetSenseLinksPya } from "./english_wordnet_linker.mjs";
 
 export const ENGLISH_WORDNET_SWEEP_FORMAT = "english-wordnet-sense-sweep-v1";
+export const ENGLISH_WORDNET_SENSE_ORDERING = "english30k-minimum-source-lemma-rank-v1";
 export const ENGLISH_WORDNET_SWEEP_MANIFEST_NAME = "translation_english_wordnet_sweep_manifest";
 export const ENGLISH_WORDNET_SWEEP_BATCH_NAME = "translation_english_wordnet_sweep_batch";
 export const ENGLISH_WORDNET_SWEEP_AUTOMATIC_NAME = "translation_english_wordnet_sweep_automatic_links";
@@ -29,6 +30,29 @@ function sequence(value) {
     : [];
 }
 
+function senseRank(record, rankForEnglish) {
+  const terms = [...new Set([
+    ...(Array.isArray(record?.sourceTerms) ? record.sourceTerms : []),
+    ...(Array.isArray(record?.lemmas) ? record.lemmas : [])
+  ].map(normalized).filter(Boolean))];
+  const ranks = terms.map((term) => Number(rankForEnglish(term))).filter((rank) => Number.isFinite(rank) && rank > 0);
+  if (ranks.length > 0) return Math.min(...ranks);
+  const existing = Number(record?.english30kRank);
+  return Number.isFinite(existing) && existing > 0 ? existing : Number.POSITIVE_INFINITY;
+}
+
+export function rankEnglishWordNetSenseRecords(records = [], { rankForEnglish = () => Number.POSITIVE_INFINITY } = {}) {
+  if (!Array.isArray(records)) throw new TypeError("WordNet sense records must be an array");
+  return records.map((record) => {
+    const rank = senseRank(record, rankForEnglish);
+    return { ...record, english30kRank: Number.isFinite(rank) ? rank : null };
+  }).sort((left, right) => (
+    (left.english30kRank ?? Number.POSITIVE_INFINITY) - (right.english30kRank ?? Number.POSITIVE_INFINITY)
+      || normalized(left.source).localeCompare(normalized(right.source))
+      || normalized(left.id).localeCompare(normalized(right.id))
+  ));
+}
+
 function safeRecord(record, category, reason = "") {
   return {
     id: String(record?.id ?? ""),
@@ -38,7 +62,13 @@ function safeRecord(record, category, reason = "") {
     lemmas: Array.isArray(record?.lemmas) ? record.lemmas : [],
     sourceTerms: Array.isArray(record?.sourceTerms) ? record.sourceTerms : [],
     gloss: String(record?.gloss ?? ""),
+    ...(Number.isFinite(Number(record?.english30kRank)) && Number(record.english30kRank) > 0
+      ? { english30kRank: Number(record.english30kRank) }
+      : {}),
     sourceStatus: String(record?.status ?? "review"),
+    ...(Number.isFinite(Number(record?.english30kRank)) && Number(record.english30kRank) > 0
+      ? { english30kRank: Number(record.english30kRank) }
+      : {}),
     category,
     ...(reason ? { reason } : {}),
     ...(["linked-existing", "automatic-link", "needs-equivalence-review"].includes(category) && record?.link
@@ -167,6 +197,7 @@ export function renderEnglishWordNetSweepManifestPya({
   completedBatchCount,
   recordCount,
   counts,
+  ordering = ENGLISH_WORDNET_SENSE_ORDERING,
   error = ""
 } = {}) {
   const lines = [
@@ -180,6 +211,7 @@ export function renderEnglishWordNetSweepManifestPya({
     `su text "batch-count" ob num ${batchCount} ya`,
     `su text "completed-batch-count" ob num ${completedBatchCount} ya`,
     `su text "record-count" ob num ${recordCount} ya`,
+    `su text "ordering" ob text ${JSON.stringify(ordering)} ya`,
     jsonRow("category-counts", counts ?? {}),
     ...(error ? [`su text "error" ob text ${JSON.stringify(error)} ya`] : [])
   ];
@@ -234,6 +266,8 @@ export function activateEnglishWordNetSenseSweepLinks({
     additions.push({
       source,
       target,
+      gloss: record.gloss,
+      lemmas: record.lemmas,
       pyashSequence,
       targetKind: record.link.targetKind,
       targetId: record.link.targetId,
@@ -257,6 +291,8 @@ export function activateEnglishWordNetSenseSweepLinks({
     source: entry.source,
     pos: entry.targetPartOfSpeech,
     synset: entry.source.slice(2),
+    gloss: entry.gloss,
+    lemmas: entry.lemmas,
     status: "accepted-edge",
     link: entry
   }));
@@ -269,9 +305,16 @@ export function activateEnglishWordNetSenseSweepLinks({
   const renderedLines = rendered.split(/\r?\n/u);
   const sourcesToRender = new Set(activeAdditions.map((entry) => entry.source));
   const bridgeLines = renderedLines.filter((line) => (
-    [...sourcesToRender].some((source) => line.startsWith(`su text ${JSON.stringify(source)} ob name `))
+    [...sourcesToRender].some((source) => (
+      line.startsWith(`su text ${JSON.stringify(source)} ob name `)
+        || line.startsWith(`su text ${JSON.stringify(`sense-gloss:${source}`)} ob text `)
+        || line.startsWith(`su text "sense-lemma:${source}:`)
+    ))
   ));
-  if (bridgeLines.length !== activeAdditions.length) {
+  const expectedRows = activeAdditions.reduce((count, entry) => count + 1 + (
+    entry.gloss && Array.isArray(entry.lemmas) && entry.lemmas.length > 0 ? 1 + entry.lemmas.length : 0
+  ), 0);
+  if (bridgeLines.length !== expectedRows) {
     throw new TypeError("could not render every verified automatic WordNet bridge row");
   }
   const catalogLines = catalogSource.trimEnd().split(/\r?\n/u);

@@ -9,6 +9,10 @@ import {
   selectEnglishWordNetSenses
 } from "./english_sentence.mjs";
 import {
+  buildWordNetHeadRelationIndex,
+  hasWordNetHeadSenseRelation
+} from "./english_wordnet.mjs";
+import {
   buildEnglishWordNetSenseBridgeIndex,
   buildEnglishWordNetSenseAnchorCandidates,
   linkEnglishWordNetSense,
@@ -135,7 +139,7 @@ async function loadWordNetCompoundResources() {
   return wordNetCompoundResourcesPromise;
 }
 
-async function buildWordNetCompoundCandidates({ sense, sourceTerm } = {}) {
+async function buildWordNetCompoundCandidates({ sense, sourceTerm, resources } = {}) {
   const lemmas = [...new Set((sense?.lemmas ?? [sense?.lemma]).map(normalized).filter(Boolean))];
   const requested = normalized(sourceTerm);
   const target = lemmas.find((lemma) => lemma === requested) || normalized(sense?.lemma) || lemmas[0] || "";
@@ -154,7 +158,10 @@ async function buildWordNetCompoundCandidates({ sense, sourceTerm } = {}) {
     morphologyEntries,
     layerIndex
   });
-  return classifyCompoundCoverage(generated.records
+  const wordnetIndex = resources?.wordnet?.index;
+  const targetSenseId = `${text(sense?.pos)}:${text(sense?.synset)}`;
+  const relationIndex = buildWordNetHeadRelationIndex(wordnetIndex?.relations ?? []);
+  const candidates = generated.records
     .filter((record) => record.target === target && record.status === "candidate-closed")
     .map((record) => ({
       ...record,
@@ -162,8 +169,33 @@ async function buildWordNetCompoundCandidates({ sense, sourceTerm } = {}) {
       senseGloss: gloss,
       evidence: [record.evidence, `Open English WordNet ${senseId} gloss: ${gloss}`]
         .filter(Boolean)
-        .join("; ")
-    }))).verificationCandidates;
+        .join("; "),
+      componentSenseEvidence: [...new Set(record.componentGlosses.map(normalized))]
+        .flatMap((component) => (wordnetIndex?.senses?.(component) ?? [])
+          .map((componentSense) => ({
+            component,
+            source: `${text(componentSense.pos)}:${text(componentSense.synset)}`,
+            lemmas: [...(componentSense.lemmas ?? [])],
+            definition: text(componentSense.gloss).split(";")[0].slice(0, 320)
+          }))
+          .filter((componentSense) => componentSense.source !== ":")
+          .sort((left, right) => left.source.localeCompare(right.source))
+          .slice(0, 4)),
+      targetSenseEvidence: [{
+        source: targetSenseId,
+        pos: text(sense?.pos),
+        lemmas: [...new Set((sense?.lemmas ?? [sense?.lemma]).map(text).filter(Boolean))],
+        definition: gloss.split(";")[0].slice(0, 320),
+        compatibleHeadSenseIds: record.componentGlosses.at(-1)
+          ? (wordnetIndex?.senses?.(record.componentGlosses.at(-1)) ?? [])
+            .map((headSense) => `${text(headSense.pos)}:${text(headSense.synset)}`)
+            .filter((headSenseId) => hasWordNetHeadSenseRelation(targetSenseId, headSenseId, relationIndex))
+          : []
+      }]
+    }));
+  return classifyCompoundCoverage(candidates.filter((record) => (
+    record.targetSenseEvidence[0]?.compatibleHeadSenseIds.length > 0
+  ))).verificationCandidates;
 }
 
 function compoundAnchor(record, sense) {

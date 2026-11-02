@@ -43,7 +43,7 @@ function pendingRecord(index, candidates = 1) {
 test("model sense sweep persists sequential decisions and resumes completed batches", async (t) => {
   const artifactDirectory = await mkdtemp(path.join(os.tmpdir(), "pyash-wordnet-model-sweep-"));
   t.after(() => rm(artifactDirectory, { recursive: true, force: true }));
-  const records = [pendingRecord(1), pendingRecord(2, 2), pendingRecord(3)];
+  const records = [pendingRecord(3), pendingRecord(2, 2), pendingRecord(1)];
   const pending = new Map();
   let submissions = 0;
   let active = 0;
@@ -80,6 +80,7 @@ test("model sense sweep persists sequential decisions and resumes completed batc
     model: "qwen3.5:9b",
     artifactDirectory,
     maxDutySenses: 2,
+    rankForEnglish: (term) => Number(term.replace("lemma-", "")),
     submit,
     awaitHandle
   };
@@ -94,6 +95,8 @@ test("model sense sweep persists sequential decisions and resumes completed batc
     await readFile(path.join(artifactDirectory, "batches", "batch-00001.pya"), "utf8")
   );
   assert.equal(firstBatch.runId, "wordnet-link-sweep-test");
+  assert.deepEqual(firstBatch.records.map((record) => record.id), ["sense-1", "sense-2"]);
+  assert.deepEqual(firstBatch.records.map((record) => record.english30kRank), [1, 2]);
   assert.equal(firstBatch.records[1].status, "accepted-llm");
 
   const resumed = await runEnglishWordNetModelSweep(options);
@@ -148,7 +151,7 @@ test("pilot selection includes choice cases and samples single anchors across pa
   });
   const selected = selectEnglishWordNetModelSweepPilotRecords(records, 7, {
     maxMultipleChoice: 4,
-    rankForEnglish: (target) => target.includes("v1") ? 1 : target.includes("n2") ? 2 : target.includes("a1") ? 3 : 100
+    rankForEnglish: (lemma) => lemma.endsWith("v1") ? 1 : lemma.endsWith("n2") ? 2 : lemma.endsWith("a1") ? 3 : Number.POSITIVE_INFINITY
   });
   assert.equal(selected.length, 7);
   assert.deepEqual(selected.filter((row) => row.id.startsWith("sense-multi")).map((row) => row.id), [
@@ -158,6 +161,7 @@ test("pilot selection includes choice cases and samples single anchors across pa
     selected.filter((row) => !row.id.startsWith("sense-multi")).map((row) => row.id),
     ["sense-v1", "sense-n2", "sense-a1"]
   );
+  assert.deepEqual(selected.slice(0, 3).map((row) => row.id), ["sense-v1", "sense-n2", "sense-a1"]);
 });
 
 test("WordNet linker configuration defaults the model workflow to its bounded pilot", async () => {
@@ -180,6 +184,8 @@ test("accepted Qwen links activate only when their target identities remain coll
     source: "n:sample",
     pos: "n",
     synset: "sample",
+    gloss: "a sample gloss",
+    lemmas: ["sample", "specimen"],
     status: "accepted-llm",
     verificationRationale: "sample matches the definition",
     link: {
@@ -199,7 +205,9 @@ test("accepted Qwen links activate only when their target identities remain coll
     resolveTarget: () => ({ pyashSequence: ["smal"], coverageType: "atomic" })
   });
   assert.deepEqual(result.activated, ["n:sample"]);
-  assert.equal(parseEnglishWordNetBridgeCatalog(result.catalog).entries.length, 1);
+  const activeEntry = parseEnglishWordNetBridgeCatalog(result.catalog).entries[0];
+  assert.equal(activeEntry.gloss, "a sample gloss");
+  assert.deepEqual(activeEntry.lemmas, ["sample", "specimen"]);
   assert.match(result.catalog, /with text "contextual"/u);
   assert.match(result.catalog, /model qwen3\.5:9b/u);
 });

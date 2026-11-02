@@ -149,6 +149,7 @@ export async function runWordNetSenseLinkSweep() {
     maxChars: config.promptMaxChars,
     maxTokens: config.promptMaxTokens,
     maxOutputTokens: config.maxOutputTokens,
+    rankForEnglish: sweep.rankForEnglish,
     submit,
     awaitHandle: awaitTranslationGpuDuty,
     onBatch: ({ batchIndex, batchCount, reused, records }) => {

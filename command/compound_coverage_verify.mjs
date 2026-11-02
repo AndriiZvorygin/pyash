@@ -60,7 +60,8 @@ async function createCheckpointWriter(outputPath) {
 export async function verifyCompoundRecords(records, {
   mode = "summary",
   mindName = "mind",
-  outputPath = ""
+  outputPath = "",
+  onRecord
 } = {}) {
   if (outputPath && mode !== "pya") {
     throw new Error("compound verification output path requires pya mode");
@@ -83,7 +84,10 @@ export async function verifyCompoundRecords(records, {
     const result = await verifyCompoundCoverage(records, {
       invoke,
       verifierName: mindName,
-      onRecord: checkpoint ? ({ record }) => checkpoint.append(record) : undefined
+      onRecord: async (event) => {
+        if (checkpoint) await checkpoint.append(event.record);
+        if (typeof onRecord === "function") await onRecord(event);
+      }
     });
 
     if (mode === "pya") {

@@ -75,22 +75,79 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   Every sense sharing that target must be in the group and use the same target
   and part of speech; otherwise leave the colliding rows as evidence and
   withhold them from the active index.
-- Do not bulk-link every WordNet synset. Pilot the reusable linker on selected
-  senses from the working translation and a few contrasting cases, then
-  inspect accepted and unresolved records before expanding scope.
-- For the bounded catalog workflow, `node command/wordnet_sense_link_sweep.mjs`
-  processes only `needs-sense-choice` rows with existing selectable anchors. It
-  uses the configured model through Housekeeper, stores per-batch `.pya`
-  checkpoints, and activates only accepted links that pass bridge collision
-  checks. Senses with no selectable anchor remain candidates for atom/compound
-  work; the linker never creates a compound.
-- Do not infer atom sense frequency from Open English WordNet JSON entry-array
-  order. That source has no `tag_count`; atom defaults need an explicit ranked
-  sense resource. Princeton WordNet's `index.sense` has `tag_cnt` values from
-  semantic concordances; tagged senses are usually ranked by those counts, but
-  untagged senses have no reliable rank and the counts are not universal
-  frequency measurements. Preserve the resource version and counts when using
-  them for atom defaults.
+- The frequency-first WordNet workflow is configured in
+  `english_wordnet_frequency.pya` and
+  `english_wordnet_frequency_allocation.pya`. Run
+  `node command/wordnet_sense_frequency_setup.mjs` to verify/install the pinned
+  Princeton WordNet 3.1 `index.sense`, then
+  `node command/wordnet_frequency_allocate.mjs` to reconcile the full OEWN
+  synset set against existing English30k-ranked atoms and accepted compounds.
+- English30k rank is the primary ordering. Exact Princeton `tag_cnt` values
+  join by lexical sense key only and break equal English30k ranks. If the rank
+  and available tag counts do not select a unique lemma, leave the synset for
+  compound work; do not break a semantic tie by alphabetic order. Missing
+  exact-key counts stay unknown, not zero. Preserve the resource version and
+  count in bridge evidence.
+- A dictionary alias can anchor a sense only when its canonical target is an
+  atomic or accepted compound anchor and both resolve to the same Pyash
+  sequence. Grammar particles are not lexical sense anchors; leave aliases
+  that resolve to grammar or change sequence as residual candidates.
+- Allocation keeps one active anchor per synset and one synset per Pyac target.
+  Curated and deterministic bridge rows stay reserved. Existing model links
+  remain only when their selected Pyac identity agrees with the frequency
+  allocation; the full reconciliation is saved under the run's artifacts.
+- Every frequency-allocation run emits `atom-coverage.pya` in its artifact
+  folder. It groups `pyashWords` by distinct Pyac identity and records English
+  labels, English30k ranks, direct WordNet sense candidates, active bridge
+  links, and a status for each atom. Read the manifest counters and this ledger
+  before beginning another linking pass. Work only from the unlinked rows:
+  distinguish grammar-only atoms, missing English glosses, direct candidates
+  that remain free, candidates already linked to another anchor, and atoms
+  with no exact WordNet candidate. Preserve linked rows as checkpoints and do
+  not infer unsupported sense links.
+- Run `node command/wordnet_frequency_compound_sweep.mjs` to verify residual
+  closed-compound candidates through the configured Pyash mind and GPU
+  Housekeeper. Never call a provider directly. The sweep groups alternate
+  decompositions into one duty, checkpoints each decision in
+  `english_wordnet_compound_decisions.pya`, promotes only accepted compounds
+  to `compound_coverage_wordnet_verified.pya`, then reruns allocation so new
+  compounds can become active sense anchors. Rejected and uncertain candidates
+  remain evidence; synsets with no covered lemma or compound candidate remain
+  explicit residuals for later atom/compound generation.
+- Compound worklists include closed single-token forms from English30k that
+  segment into two or three existing atomic lemmas, plus multiword WordNet
+  lemmas whose space, underscore, or hyphen boundaries match existing atoms.
+  WordNet phrase boundaries produce review candidates, never automatic
+  acceptance. English spelling boundaries also remain candidates requiring
+  semantic review. Existing source records keep stable candidate identities
+  when these sources are added. Worklist items and Housekeeper duties run in
+  English30k rank order, with exact Princeton WordNet 3.1 tag counts breaking
+  equal-rank ties; missing counts stay unknown and sort last.
+- Compound verification prompts receive up to four frequency-ranked residual
+  WordNet senses and up to four senses per component, with definition text only;
+  strip usage examples after the semicolon. Every accepted decision must cite
+  a supplied target synset id, a supplied final-component sense id, and one
+  supplied WordNet sense, a concise contribution explanation, and a literal vs
+  figurative relation label for each modifier in component order. Only literal
+  modifier contributions can be promoted. The target sense must equal the head sense or reach
+  it through a directed same-part-of-speech WordNet hypernym path. Similarity and
+  associative relations do not prove lexical headhood. The parser rejects missing
+  or invented modifier citations, and the promotion gate independently requires
+  saved modifier evidence and the head relation. Candidates lacking any
+  compatible target/head pair stay in the artifact as `no-wordnet-head-evidence`
+  and are not sent to the model. Bump
+  `compound-verification-revision` when this decision contract changes so old
+  candidate rows are re-evaluated with their prior verdict retained as evidence.
+  Rebuild the derived active catalog from the current revision only; keep full
+  provider and sense evidence in the decision ledger and link active entries by
+  candidate id rather than copying raw responses into the lexicon.
+- `node command/wordnet_sense_link_sweep.mjs` remains the separate contextual
+  selector for synsets that have multiple existing selectable anchors. It
+  accepts only supplied choices, uses Housekeeper, and does not create atoms
+  or compounds. The frequency allocator does not infer ranks from Open English
+  WordNet JSON entry-array order. Princeton `tag_cnt` is concordance evidence,
+  not a universal frequency measurement; untagged senses have no dependable
+  count-based ordering.
 
 ## Update anchors quickly
 
@@ -108,3 +165,4 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
 - `node --test quiz/translation_pairs_templates.test.mjs`
 - `node --test quiz/translation_anchor_words.test.mjs`
 - `node --test quiz/translation_english_wordnet_linker.test.mjs quiz/translation_english_wordnet_refinery.test.mjs quiz/translation_vocabulary_queue.test.mjs quiz/translation_english_wordnet_bridges.test.mjs`
+- `node --test quiz/translation_english_wordnet_frequency.test.mjs quiz/translation_english_wordnet_frequency_compounds.test.mjs`

@@ -1200,7 +1200,9 @@ export async function reconcileEnglishWordNetSenseLinks({
 }
 
 function renderTargetName(value) {
-  const target = normalized(value);
+  const target = typeof value === "string"
+    ? value.normalize("NFC").trim().toLowerCase().replace(/_/gu, " ").replace(/\s+/gu, " ").trim()
+    : "";
   if (!target || !/^[a-z0-9][a-z0-9_-]*(?: [a-z0-9][a-z0-9_-]*)*$/iu.test(target)) {
     throw invalid("WordNet bridge target cannot be rendered as a Pyash name", { target: value });
   }
@@ -1265,6 +1267,14 @@ export function renderEnglishWordNetSenseLinksPya({
       : "contextual";
     const evidence = record.link.evidence || record.evidence || `WordNet ${record.source} accepted anchor ${target}`;
     lines.push(`su text ${JSON.stringify(record.source)} ob name ${target} as text ${JSON.stringify(record.pos)} with text ${JSON.stringify(certainty)} via text ${JSON.stringify(evidence)} ya`);
+    const gloss = text(record.gloss ?? record.link.gloss);
+    const lemmas = [...new Set(sequence(record.lemmas ?? record.link.lemmas).map(normalized))].sort();
+    if (gloss && lemmas.length > 0) {
+      lines.push(`su text ${JSON.stringify(`sense-gloss:${record.source}`)} ob text ${JSON.stringify(gloss)} ya`);
+      for (const [index, lemma] of lemmas.entries()) {
+        lines.push(`su text ${JSON.stringify(`sense-lemma:${record.source}:${index + 1}`)} ob text ${JSON.stringify(lemma)} ya`);
+      }
+    }
   }
   lines.push("prah");
   return `${lines.join("\n")}\n`;

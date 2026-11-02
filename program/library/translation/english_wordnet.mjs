@@ -204,6 +204,42 @@ function relationKey(value) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
+export function buildWordNetHeadRelationIndex(relations = []) {
+  const hypernyms = new Map();
+  for (const relation of relations) {
+    const source = relationKey(relation?.source);
+    const target = relationKey(relation?.target);
+    if (!source || !target || relation?.relation !== "hypernym") continue;
+    const parents = hypernyms.get(source) ?? [];
+    parents.push(target);
+    hypernyms.set(source, parents);
+  }
+  return { hypernyms };
+}
+
+export function hasWordNetHeadSenseRelation(targetSenseId, headSenseId, index) {
+  const target = relationKey(targetSenseId);
+  const head = relationKey(headSenseId);
+  if (!target || !head || !index?.hypernyms) return false;
+  if (target === head) return true;
+  const targetPos = target.match(/^([nvars]):/u)?.[1] ?? "";
+  const headPos = head.match(/^([nvars]):/u)?.[1] ?? "";
+  if (targetPos !== headPos) return false;
+  const queue = [{ source: target, depth: 0 }];
+  const visited = new Set([target]);
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current.depth >= 16) continue;
+    for (const parent of index.hypernyms.get(current.source) ?? []) {
+      if (parent === head) return true;
+      if (visited.has(parent)) continue;
+      visited.add(parent);
+      queue.push({ source: parent, depth: current.depth + 1 });
+    }
+  }
+  return false;
+}
+
 export function buildEnglishWordNetIndex({ rows = [], relations = [], bridges = [], resolveBridgeTarget = null } = {}) {
   const byLemma = new Map();
   const bySynset = new Map();
