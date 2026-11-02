@@ -5,6 +5,15 @@ from roadmap commitments and identified downstream needs, states what exists
 today against that list, and proposes a sequence of tranches. It changes no
 code and schedules no work.
 
+**Direction taken by the owner:** the knowledge core's authoritative
+representation is **VLIW by default**, and its processing is **Rust**. The
+repository already holds most of that: a `.pyac` pack format, a `.pya` catalog
+format whose contract explicitly carries semantic identity, provenance and
+replay expectations, a Rust crate (`rust/pyac`) that reads both, and a
+compatibility discipline that names every unsupported semantic rather than
+guessing. The sections below say what the direction changes, what it costs,
+and which three decisions it does not settle.
+
 The roadmap names the destination: `documentation/roadmap.md` Week 9 calls
 for "Knowledge core v0.9 (claim identity, evidence shell, KB layout)" and
 lists a **Knowledge core spec v0.1** among its spec drops. But the contract
@@ -106,7 +115,7 @@ been tempted by:
 
 ## 2. What we need from it
 
-Twelve requirements, traced to roadmap commitments or identified downstream
+Fourteen requirements, traced to roadmap commitments or identified downstream
 needs. The origin column names that source; it does not imply that every
 consumer is already implemented. The status column describes the current
 tree, not the priority of the requirement.
@@ -125,6 +134,8 @@ tree, not the priority of the requirement.
 | R10 | Answer flow with citations, contested state surfaced | Week 12 local Llama demo | **absent** |
 | R11 | Interpreter / JS / C parity over the same snapshot | Week 9 and 11 parity gates | **partial** |
 | R12 | Scale beyond the current C record cap, at a defined workload and latency target | Current C implementation limit; product target undecided | **open** |
+| R13 | The authoritative persisted representation is the VLIW pack, with a `.pya` catalog as its semantic index | Owner direction: VLIW by default | **open** |
+| R14 | Core processing — normalization, claim-key derivation, view resolution — is owned by the Rust crate | Owner direction: processed with Rust | **open** |
 
 "met" means both implemented and specified: R1–R3 are stated normatively in
 `documentation/specifications/18-pyash-agent.md` §4.1 and §4.2 and exercised
@@ -310,6 +321,76 @@ core's held store, and the shared word is a trap: Week 11's held store holds
 items*. They are different subjects and should not be built on the same
 mechanism without a decision about why.
 
+### The VLIW and Rust stack that already exists
+
+The owner's direction is not greenfield. The repository already holds the
+container format, the catalog contract, and a Rust crate that reads both.
+
+**The pack.** A `.pyac` file is a fixed-width binary projection: magic
+`PYACVLIW`, 16-bit words, sixteen words per codelet, a 32-byte header,
+little-endian per word (`documentation/reference/pyac-vliw-database.md` §2).
+It is content-addressed — the catalog carries a `pack hash`, and each record
+carries its own `codeletHash`.
+
+**The catalog.** The same reference document states the relationship exactly:
+
+```text
+canonical Pyash `.pya` sentences
+  -> searchable `.pya` catalog
+  -> executable `.pyac` codelet pack
+```
+
+> The catalog carries semantic identity, provenance, compatibility status,
+> source text references, codelet hashes, and replay expectations. The `.pyac`
+> pack carries exact legacy VLIW words. The catalog is the searchable semantic
+> index; the pack is the executable byte projection.
+
+That is the shape a knowledge core wants, already written down: provenance
+and identity live in the catalog, meaning lives in the pack.
+
+**The Rust crate.** `rust/pyac` is 930 lines — `lib.rs` (pack codec, numeric
+codelet execution), `catalog.rs` (`parse_catalog_pya`), `semantic.rs`
+(numeric arithmetic and plus), plus a shared fixture at
+`rust/pyac/tests/fixture_catalog.pya`. It is `#![forbid(unsafe_code)]`,
+edition 2024, and its only dependency is `serde_json`. It has been developed
+in eight commits, the most recent on 2026-10-23.
+
+**The JavaScript reference path.** `command/pyac_database.mjs` exposes
+`build`, `build-translation`, `query` and `replay` over the same contracts,
+and `program/library/vliw/` (3,334 lines) is the broader semantic facade.
+
+**The compatibility discipline.** `27-pyash-vliw-isa.md` §4.3 requires an
+auditable compatibility table, and the database reference records unsupported
+semantics with explicit reasons rather than silent fallbacks:
+`unsupported-vector`, `unsupported-date`, `unsupported-invert`,
+`unsupported-exponential`, `unsupported-remains`
+(`documentation/reference/pyac-vliw-database.md` §7). This is the pattern the
+knowledge core should adopt for claims it cannot encode.
+
+**Three things the direction does not get for free.**
+
+1. **The Rust side is not built anywhere.** `rust/pyac` is not compiled by
+   any workflow, no npm script invokes it, and there is no `cargo` on this
+   machine. Nothing currently proves the crate still compiles. The reference
+   document's own instruction — `cargo fmt --manifest-path rust/pyac/Cargo.toml
+   -- --check` and `cargo test --manifest-path rust/pyac/Cargo.toml` — is
+   written down but never executed by CI.
+2. **The direction of travel is currently the opposite.** Today JavaScript
+   produces and Rust consumes: the JS semantic facade is "the broader
+   reference executor", and Rust's coverage is "deliberately limited to
+   proven adapters". "Processed with Rust" inverts that, which means the
+   knowledge core's Rust implementation becomes the authority and the
+   JavaScript one becomes the parity reference for the fourteen modules that
+   depend on it.
+3. **The VLIW layer resolves against a static vocabulary at import time.**
+   `program/library/vliw/phrase.mjs:26-32` builds `entriesByPya` and
+   `grammarPya` when the module loads, from the fixed atom table. If the
+   knowledge core's representation is VLIW, that layer becomes the knowledge
+   core's storage vocabulary, and its coupling grows rather than shrinks. The
+   vocabulary-parameter proposal in this folder was parked because no second
+   vocabulary existed to justify the refactor; this direction does not change
+   that, but it does raise the cost of leaving the coupling in place.
+
 ### Adjacent work that is not the core
 
 Four things in the tree look like the knowledge core and are not. They matter
@@ -349,10 +430,17 @@ contract knows its own edge, and the edge is exactly where the core begins.
 
 ## 4. The road from here to there
 
-Six tranches. The order is a proposal, not a dependency proof — the same
+Seven tranches. The order is a proposal, not a dependency proof — the same
 discipline as the foundation analysis — and a reviewer may reorder it. What is
 proposed is that each tranche be independently accepted, because each one
 leaves the repository in a state that is better than the one before it.
+
+One tranche carries a direction the owner has already taken: **the knowledge
+core's authoritative representation is VLIW, and its processing is Rust.** T1
+and T6 are where that lands. It does not run through the whole sequence —
+T0 through T5 are mostly independent of it — but it is not optional either,
+and the two things it needs (a build story, and a decision about compiled C)
+are named rather than assumed.
 
 ### T0 — Separate the knowledge core from the agent spec
 
@@ -411,18 +499,44 @@ That spec is the one genuinely unwritten document in the sequence. The
 `module/headquarters-knowledge.pya` schema is the closest existing model for
 the registry layer and should be generalised rather than replaced.
 
-**Recommended format policy:** make versioned Pyash sentence records the
-authoritative persisted state. Store them in immutable `.pya` segments; commit
-the ordered segment set and schema version through a small `.pya` manifest.
-Serialize and flush a new segment before atomically replacing the manifest
-under a single-writer lock; durably flush the manifest and its directory as
-required by the target filesystem. A crash before the manifest swap leaves an
-unreferenced segment; a crash after it leaves the complete new state.
-Concurrent writers must serialize or use an equivalent transaction rule so no
-committed segment is lost. Derived indexes may use an optimized,
-implementation-managed format, but they are disposable, deterministically
-rebuildable caches, never a second source of truth. JSON remains suitable for
-interchange and export, not for new ad hoc authoritative state.
+**Recommended format policy (revised by the owner's direction):** the
+authoritative persisted state is the **VLIW pack**, with a `.pya` catalog as
+its searchable semantic index — the same pair
+`documentation/reference/pyac-vliw-database.md` already specifies for the Pyac
+database, not a new `.pya` segment/manifest design. The pack is content-
+addressed, so a snapshot's identity is its hash rather than a manifest's
+version number, and each record carries its own `codeletHash`.
+
+The commit rule follows from that pair. Write new codelets into a new pack
+segment, flush it, then atomically replace the catalog under a single-writer
+lock; a crash before the catalog swap leaves an unreferenced segment, a crash
+after it leaves the complete new state. Concurrent writers must serialize or
+use an equivalent transaction rule so no committed segment is lost. Derived
+indexes may use an optimized, implementation-managed format, but they are
+disposable, deterministically rebuildable caches, never a second source of
+truth.
+
+**What this means for the claim contract.** A codelet carries the *meaning* of
+a sentence — its words, its case and verb markers, its mood — not the
+metadata a claim also needs. Scope (`as`), validity window (`since`/`until`),
+evidential type (`accordingto`), confidence (`by num`) and the source anchor
+(`source#anchor`) therefore belong in the catalog row, alongside the semantic
+identity and provenance the catalog contract already names. That makes the
+catalog row's schema the knowledge core's schema, and it is the first thing
+the KB layout spec has to specify.
+
+**The expressibility constraint has to be stated, not assumed.** The VLIW
+backend supports a *proven subset*: numeric plus, quote descriptors, generic
+fixed-slot decoding, typed literals, named scalar facts, and the database and
+facade slices. Dates are explicitly `unsupported-date`, vectors
+`unsupported-vector`. A claim with a validity window carries two dates. So
+"VLIW by default" cannot mean "every claim is a codelet"; it means the claim's
+identity and payload are carried in VLIW where the semantics are proven, and
+the remainder rides in the catalog row with an explicit compatibility status —
+the same discipline the ISA already applies to sentences, with the same
+explicit unsupported reasons. The layout spec must decide whether a claim that
+cannot be encoded at all is stored as a catalog-only record, and what its
+status is.
 
 Keep the corpus separate from the KB. `know/` is the repository's dataset
 area, is git-ignored, and currently contains about 2.3 GB of data. Source
@@ -431,12 +545,12 @@ anchor metadata; it should not copy corpus bytes into the persistent KB or
 commit them to Git. A missing or changed external source must be detectable by
 hash verification, while already-ingested evidence remains inspectable.
 
-This is a proposed default, not an assumption that text files alone meet every
-scale target. If measurements show the `.pya` segment/manifest design cannot
-meet the agreed workload, an alternative authoritative backend needs an
-explicit spec-approved exception, lossless deterministic `.pya` export/replay,
-and the same atomicity, concurrency, versioning, migration, and cross-backend
-parity guarantees.
+This is a proposed default, not an assumption that the pack-plus-catalog
+design meets every scale target. If measurements show it cannot meet the
+agreed workload, an alternative authoritative backend needs an explicit
+spec-approved exception, lossless deterministic `.pya` export/replay, and the
+same atomicity, concurrency, versioning, migration, and cross-backend parity
+guarantees.
 **Exit criterion:** the KB layout spec defines the storage medium, entity-page
 format, registries, held/rejected stores, snapshot versioning, and write/recovery
 semantics. A snapshot round-trips byte-for-byte; a concurrent append cannot
@@ -449,8 +563,8 @@ with interpreter, compiled JavaScript, and compiled C returning the same view
 for the same snapshot.
 **Explicitly out of scope:** adjudication, resurrection, and any change to how
 a claim is identified or resolved.
-**Decision for the layout spec:** adopt the `.pya` segment/manifest policy as
-the default and test it against the agreed workload. The review question is
+**Decision for the layout spec:** adopt the pack-plus-catalog policy as the
+default and test it against the agreed workload. The review question is
 whether evidence justifies an exception, not which format to choose without a
 benchmark. The exact configured KB root and any derived-index format remain
 layout details; neither changes which representation is authoritative.
@@ -460,9 +574,11 @@ layout details; neither changes which representation is authoritative.
 **What exists:** digestion emits stable source ids, source artifact records,
 byte spans, anchor markers, and replayable digest artifacts.
 **What is needed:** a specified `su src …` registration contract that places
-those source records in the generic persistent source registry, and a stable
-contract for turning digest anchors/candidates into evidence sentences whose
-`fromtext` anchors resolve to the existing ids.
+those source records in the generic persistent source registry, and a
+claim-ready promotion contract for digest candidates. It must preserve their
+existing anchors while supplying the required `ya` mood, claim identity fields
+(including an explicit scope and validity policy), and a defined confidence
+meaning before candidates enter normal evidence resolution.
 
 The second half is closer than it looks, and the remaining distance is worth
 naming precisely. `candidateSentence` in `program/library/document_digestion.mjs:377-386`
@@ -549,7 +665,48 @@ case linked to the prior rejection. Replay produces the same transitions and
 final KB snapshot across backends. The four golden demos Week 12 names are
 included in acceptance.
 
-### T6 — Scale and hardening
+### T6 — Rust processing and the toolchain
+
+**What exists:** `rust/pyac` (930 lines) with the pack codec, the catalog
+reader and the proven numeric slices; a `#![forbid(unsafe_code)]` crate on
+edition 2024 with one dependency; a shared fixture. The JavaScript facade
+remains the broader reference executor.
+
+**What is needed, in two parts.**
+
+*First, a build story.* The crate is currently compiled by nothing. There is
+no `cargo` in this environment, no GitHub workflow runs `cargo fmt --check` or
+`cargo test`, and no npm script invokes the crate. The reference document
+states the two commands a developer should run, and CI runs neither. Until a
+workflow builds and tests `rust/pyac` on every push, nothing proves the crate
+compiles, and the direction rests on code that no pipeline has touched since
+2026-10-23. This is the cheapest tranche in the sequence and it gates the
+rest: it needs a toolchain pin, a CI job, and a decision on whether the crate
+is built on every push or only on the paths that need it.
+
+*Second, the knowledge core itself in Rust.* R14 asks for the core's
+normalization, claim-key derivation and view resolution to be owned by the
+crate. That is roughly the 450 lines of `program/library/knowledge_core.mjs`,
+reimplemented against the pack and catalog contracts, with the crate as the
+authority and the JavaScript module as the parity reference for the fourteen
+modules that depend on it — including the memory layer's garbage-collection
+rule and the work system's queue ordering. Parity is the hard part: claim
+keys must be byte-identical across the two implementations, and the ISA's
+ordering rule (one locale-independent UTF-8 comparison) has to hold in Rust
+exactly as it does in JavaScript.
+
+**Exit criterion:** CI builds and tests the crate; the Rust and JavaScript
+implementations produce byte-identical claim keys, evidence records and
+resolver views over the same catalog and pack; and the compiled C path is
+either brought to parity with them or explicitly retired.
+**Open decision:** does compiled C remain a knowledge-core backend at all? The
+repository's invariant is "interpreter + JS + C ship together by default", and
+the C knowledge core is a hand-written port with a fixed record array. Under
+this direction C is the implementation being replaced, not one being scaled.
+That is a parity-contract change, and it should be decided here rather than
+discovered later.
+
+### T7 — Scale and hardening
 
 **What exists:** an implementation ceiling of 256 records in the compiled C
 backend; whether that cap is a product requirement is undecided (R12).
@@ -558,11 +715,14 @@ than to hold it, so that the ceiling stops being the size of the knowledge
 base. Alongside it, the replay guarantees at KB scale: the same seed and the
 same evidence set produce the same snapshot. First agree on a representative
 corpus size, query workload, latency target, and memory budget; then measure
-all three backends against those criteria rather than treating an arbitrary
+all backends against those criteria rather than treating an arbitrary
 record count as a product goal.
 **Exit criterion:** the golden end-to-end demos and the agreed workload pass
-on all three backends, with correctness parity and recorded latency/memory
+on every supported backend, with correctness parity and recorded latency/memory
 measurements at the target scale.
+**Note:** if compiled C is retired for the knowledge core in T6, the 256-record
+cap disappears with it, and this tranche becomes a measurement of the Rust
+path rather than a redesign of the C one.
 
 ### The tranche that is not in this list
 
@@ -580,7 +740,7 @@ outcome is stored.
 1. Is the separation between claim identity, evidence, validity, resolver
    views, and adjudication the right model, and is anything missing that would
    make the core more than a well-organised log?
-2. Are the twelve requirements complete, and are the four boundaries
+2. Are the fourteen requirements complete, and are the four boundaries
    ("not a vector store", "not a key-value store", "not a transcript store",
    "not truth-by-model-score") the right exclusions?
 3. Does T0 come first? It is a documentation and index move, with no contract
@@ -590,18 +750,33 @@ outcome is stored.
 4. Should source-id/anchor design and fixtures proceed before T1, with only
    persistent source registration waiting on the layout? This distinguishes
    parallel specification work from the storage integration dependency.
-5. Does the proposed authoritative `.pya` segment/manifest format meet the
-   target workload? If not, what benchmark demonstrates the need for an
-   exception, and how will that backend preserve lossless `.pya` export/replay
-   and the same durability guarantees?
+5. Does the proposed pack-plus-catalog format meet the target workload? If
+   not, what benchmark demonstrates the need for an exception, and how will
+   that backend preserve lossless `.pya` export/replay and the same durability
+   guarantees?
 6. What representative corpus size, query workload, latency target, and memory
    budget should determine whether the C record cap is a product constraint or
    merely an implementation limit?
 7. What semantics should `by num` have, and who supplies it: source
    reliability, evidence strength, submitter confidence, or another explicitly
    defined quantity?
-8. What would show that the knowledge core is earning its place? A measurement
-   against the agreed workload, not a feature list.
+8. **Under "VLIW by default", what happens to a claim that has no proven
+   VLIW encoding?** A claim with a validity window carries two dates, and
+   dates are explicitly `unsupported-date`. Is such a claim stored as a
+   catalog-only record, and what compatibility status does it carry? The
+   answer changes what "the representation is VLIW" means.
+9. **Does compiled C remain a knowledge-core backend?** The repository's
+   invariant is "interpreter + JS + C ship together by default", and the C
+   knowledge core is a hand-written port with a fixed 256-record array. If
+   Rust replaces it, the parity contract changes and the roadmap's invariant
+   has to change with it.
+10. **`27-pyash-vliw-isa.md` §8 lists "connect codelet execution to
+    WorkTask/review/integration machinery" as a non-goal.** The knowledge
+    core *is* connected to that machinery — fourteen modules import the
+    contract, including the work system's queue. Does the knowledge core need
+    its own spec boundary, or does that non-goal need revisiting?
+11. What would show that the knowledge core is earning its place? A
+    measurement against the agreed workload, not a feature list.
 
 ## 6. Reproducing the measurements
 
@@ -645,6 +820,20 @@ grep -rn "su conflict\|su case" --include=*.mjs program/              # empty: n
 wc -l program/library/document_digestion.mjs
 cat module/headquarters-knowledge.pya
 du -sh know/*
+
+# the VLIW and Rust stack
+grep -rn "PYACVLIW" documentation/reference/pyac-vliw-database.md | head -3
+grep -n "The catalog carries semantic identity" -A 3 documentation/reference/pyac-vliw-database.md
+wc -l rust/pyac/src/*.rs rust/pyac/tests/*.rs
+git log --oneline -8 -- rust/
+
+# the Rust crate is not built by anything
+grep -rn "cargo" package.json .github/workflows/ ; echo "(empty: no cargo in scripts or CI)"
+grep -n "cargo test" documentation/reference/pyac-vliw-database.md
+
+# the ISA's compatibility discipline and its non-goal
+grep -n "unsupported-date\|unsupported-vector" documentation/reference/pyac-vliw-database.md | head -3
+grep -n "does not .*connect codelet execution" documentation/specifications/27-pyash-vliw-isa.md
 
 # the roadmap this document proposes to follow
 sed -n '730,790p' documentation/roadmap.md
