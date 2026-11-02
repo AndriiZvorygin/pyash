@@ -18,6 +18,7 @@ const MORPHOLOGY_KINDS = new Set([
   "completive"
 ]);
 const MORPHOLOGY_CERTAINTIES = new Set(["deterministic", "contextual"]);
+const LEMMA_PARTS_OF_SPEECH = new Set(["a", "n", "r", "s", "v"]);
 
 function invalid(message, details = {}) {
   const error = new Error(message);
@@ -36,7 +37,8 @@ export function englishLemmaCandidateId(record) {
   const identity = [
     normalizeEnglishLemmaWord(record?.surface),
     normalizeEnglishLemmaWord(record?.lemma),
-    Array.isArray(record?.pyashSequence) ? record.pyashSequence.join(" ") : ""
+    Array.isArray(record?.pyashSequence) ? record.pyashSequence.join(" ") : "",
+    String(record?.partOfSpeech ?? "").trim().toLowerCase()
   ].join("\u0000");
   return `english-lemma-${createHash("sha256").update(identity).digest("hex").slice(0, 24)}`;
 }
@@ -93,6 +95,11 @@ function normalizeEntry(payload, surface, index) {
     throw invalid("English lemma row rule must be text", { index, surface });
   }
   const morphology = normalizeMorphology(payload.morphology, normalizedSurface, index);
+  const rawPartOfSpeech = String(payload.partOfSpeech ?? "").trim().toLowerCase();
+  if (rawPartOfSpeech && !LEMMA_PARTS_OF_SPEECH.has(rawPartOfSpeech)) {
+    throw invalid("English lemma part of speech is unsupported", { index, surface, partOfSpeech: rawPartOfSpeech });
+  }
+  const partOfSpeech = rawPartOfSpeech === "s" ? "a" : rawPartOfSpeech;
   const pyashSequence = payload.pyashSequence === undefined
     ? []
     : normalizePyashSequence(payload.pyashSequence, normalizedSurface, index);
@@ -108,6 +115,7 @@ function normalizeEntry(payload, surface, index) {
     canonicalEnglish: normalizeEnglishLemmaWord(payload.canonicalEnglish ?? ""),
     kind: payload.kind,
     status,
+    ...(partOfSpeech ? { partOfSpeech } : {}),
     ...(duplicateOf ? { duplicateOf } : {}),
     rule: payload.rule?.trim() ?? "",
     evidence: payload.evidence.trim(),
@@ -186,8 +194,15 @@ export function parseEnglishLemmaCatalog(source, {
     if (sentence?.mood !== "ya" || typeof sentence.su?.text !== "string") continue;
     if (["format", "source", "source-hash", "duplicate-policy", "cutoff"].includes(sentence.su.text)) continue;
     const entry = normalizeEntry(parseJsonPayload(sentence, index), sentence.su.text, index);
-    if (seen.has(entry.surface)) throw invalid("English lemma surface is duplicated", { index, surface: entry.surface });
-    seen.add(entry.surface);
+    const identity = `${entry.surface}\u0000${entry.partOfSpeech ?? ""}`;
+    if (seen.has(identity)) {
+      throw invalid("English lemma surface and part of speech are duplicated", {
+        index,
+        surface: entry.surface,
+        partOfSpeech: entry.partOfSpeech ?? ""
+      });
+    }
+    seen.add(identity);
     entries.push(entry);
   }
   return {
@@ -268,7 +283,7 @@ function buildAtomicLookup(atomicEntries) {
   return lookup;
 }
 
-function addExplicitRows(lookup, entries, atomicLookup, aliases) {
+function addExplicitRows(lookup, lookupByPartOfSpeech, entries, atomicLookup, aliases) {
   for (const entry of entries ?? []) {
     const isDeprecatedDuplicate = entry.kind === "duplicate" && entry.status === DEPRECATED_DUPLICATE_STATUS;
     if (!ACCEPTED_STATUSES.has(entry.status) && !isDeprecatedDuplicate) continue;
@@ -301,9 +316,16 @@ function addExplicitRows(lookup, entries, atomicLookup, aliases) {
         }
       } : {}),
       ...(entry.grammaticalNumber ? { grammaticalNumber: entry.grammaticalNumber } : {}),
+      ...(entry.partOfSpeech ? { partOfSpeech: entry.partOfSpeech } : {}),
       ...(entry.rank === undefined ? {} : { rank: entry.rank })
     };
-    for (const variant of englishLemmaLookupVariants(entry.surface)) lookup.set(variant, row);
+    const destination = entry.partOfSpeech
+      ? lookupByPartOfSpeech.get(entry.partOfSpeech) ?? new Map()
+      : lookup;
+    if (entry.partOfSpeech && !lookupByPartOfSpeech.has(entry.partOfSpeech)) {
+      lookupByPartOfSpeech.set(entry.partOfSpeech, destination);
+    }
+    for (const variant of englishLemmaLookupVariants(entry.surface)) destination.set(variant, row);
   }
   for (const [surface, anchor] of aliases instanceof Map ? aliases.entries() : []) {
     const canonical = atomicLookup.get(englishLemmaLookupVariants(anchor)[0]);
@@ -324,9 +346,11 @@ export function buildEnglishLemmaIndex({
 } = {}) {
   const atomicLookup = buildAtomicLookup(atomicEntries);
   const lookup = new Map(atomicLookup);
-  addExplicitRows(lookup, catalogEntries, atomicLookup, aliases);
+  const lookupByPartOfSpeech = new Map();
+  addExplicitRows(lookup, lookupByPartOfSpeech, catalogEntries, atomicLookup, aliases);
   const sequenceLookup = new Map();
-  for (const row of lookup.values()) {
+  const allRows = [...lookup.values(), ...[...lookupByPartOfSpeech.values()].flatMap((rows) => [...rows.values()])];
+  for (const row of allRows) {
     if (!Array.isArray(row?.pyashSequence) || row.pyashSequence.length === 0) continue;
     const key = row.pyashSequence.join("\u0000");
     const candidates = sequenceLookup.get(key) ?? [];
@@ -352,30 +376,43 @@ export function buildEnglishLemmaIndex({
       ))
       .at(0)?.surface ?? "";
   };
-  const lookupRoot = (lemma) => {
-    const variants = englishLemmaLookupVariants(lemma);
+  const lookupForPartOfSpeech = (surface, partOfSpeech, { scopedOnly = false } = {}) => {
+    const variants = englishLemmaLookupVariants(surface);
+    const normalizedPartOfSpeech = String(partOfSpeech ?? "").trim().toLowerCase() === "s"
+      ? "a"
+      : String(partOfSpeech ?? "").trim().toLowerCase();
+    const scoped = normalizedPartOfSpeech ? lookupByPartOfSpeech.get(normalizedPartOfSpeech) : null;
+    const specific = variants.map((variant) => scoped?.get(variant)).find(Boolean) ?? null;
+    if (specific || scopedOnly) return specific;
     return variants.map((variant) => lookup.get(variant)).find(Boolean) ?? null;
   };
+  const lookupRoot = (lemma, partOfSpeech = "") => {
+    const variants = englishLemmaLookupVariants(lemma);
+    return lookupForPartOfSpeech(lemma, partOfSpeech);
+  };
   const targetByLemma = new Map();
-  for (const row of lookup.values()) {
+  for (const row of allRows) {
     const lemma = normalizeEnglishLemmaWord(row?.lemma);
     const target = normalizeEnglishLemmaWord(row?.canonicalEnglish);
     if (!lemma || !target) continue;
-    const previous = targetByLemma.get(lemma);
+    const key = `${row.partOfSpeech ?? "*"}\u0000${lemma}`;
+    const previous = targetByLemma.get(key);
     if (previous && previous !== target) {
       throw invalid("English lemma is assigned to multiple Pyash atoms", {
         lemma,
+        partOfSpeech: row.partOfSpeech ?? "",
         targets: [...new Set([previous, target])].sort()
       });
     }
-    targetByLemma.set(lemma, target);
+    targetByLemma.set(key, target);
   }
-  const resolve = (surface) => {
-    const variants = englishLemmaLookupVariants(surface);
-    const existing = variants.map((variant) => lookup.get(variant)).find(Boolean);
+  const resolve = (surface, options = {}) => {
+    const rawPartOfSpeech = String(options?.partOfSpeech ?? options?.pos ?? "").trim().toLowerCase();
+    const partOfSpeech = rawPartOfSpeech === "s" ? "a" : rawPartOfSpeech;
+    const existing = lookupForPartOfSpeech(surface, partOfSpeech);
     if (existing) return { surface: normalizeEnglishLemmaWord(surface), ...existing };
     const candidates = inflectionCandidates(surface)
-      .map(({ lemma, rule }) => ({ lemma, rule, row: lookupRoot(lemma) }))
+      .map(({ lemma, rule }) => ({ lemma, rule, row: lookupRoot(lemma, partOfSpeech) }))
       .filter((candidate) => candidate.row?.pyashSequence?.length)
       .map((candidate) => ({
         surface: normalizeEnglishLemmaWord(surface),
@@ -385,6 +422,7 @@ export function buildEnglishLemmaIndex({
         hnuc: candidate.row.hnuc,
         kind: "inflectional",
         status: "accepted-deterministic",
+        ...(partOfSpeech ? { partOfSpeech } : {}),
         rule: candidate.rule,
         evidence: `conservative regular inflection of ${candidate.lemma}`
       }));
@@ -397,9 +435,11 @@ export function buildEnglishLemmaIndex({
   };
   return {
     lookup,
+    lookupByPartOfSpeech,
+    lookupForPartOfSpeech,
     resolve,
     preferredSurfaceForSequence,
-    entries: [...lookup.values()]
+    entries: allRows
   };
 }
 

@@ -4,6 +4,8 @@ import { dirname, join } from "node:path";
 
 import { buildProgram } from "../../program.mjs";
 import {
+  canonicalWordNetTargetPartOfSpeech,
+  englishWordNetTargetId,
   buildEnglishWordNetBridgeIndex,
   parseEnglishWordNetBridgeCatalog
 } from "./english_wordnet_bridges.mjs";
@@ -11,7 +13,7 @@ import { extractBoundedJsonObject } from "./english_verification.mjs";
 import { renderEnglishWordNetSenseLinkRowsPya } from "./english_wordnet_linker.mjs";
 
 export const ENGLISH_WORDNET_ATOM_SENSE_FORMAT = "english-wordnet-atom-sense-sweep-v1";
-export const ENGLISH_WORDNET_ATOM_SENSE_PROMPT_REVISION = "atom-gloss-choice-v1";
+export const ENGLISH_WORDNET_ATOM_SENSE_PROMPT_REVISION = "atom-pos-gloss-choice-v3";
 export const ENGLISH_WORDNET_ATOM_SENSE_CONFIG_URL = new URL("./english_wordnet_atom_sense_sweep.pya", import.meta.url);
 
 export const ENGLISH_WORDNET_ATOM_SENSE_RESPONSE_FORMAT = Object.freeze({
@@ -129,15 +131,25 @@ export function buildEnglishWordNetAtomSenseWorklist(atomCoverage = [], {
   if (!Array.isArray(atomCoverage)) throw invalid("atom sense worklist requires atom coverage rows");
   return atomCoverage
     .filter((atom) => atom?.status === "direct-candidates-unlinked")
-    .map((atom) => {
+    .flatMap((atom) => {
       const labels = unique(atom.labels ?? []).sort((left, right) => left.localeCompare(right));
       const labelSet = new Set(labels.map(normalizedLabel));
+      const candidatesByPos = new Map();
+      for (const candidate of atom.directCandidates ?? []) {
+        const pos = canonicalWordNetTargetPartOfSpeech(candidate?.pos);
+        if (!pos || candidate.availableTargetPartOfSpeech === false || (candidate.activeTargetIds ?? []).length > 0) continue;
+        const rows = candidatesByPos.get(pos) ?? [];
+        rows.push(candidate);
+        candidatesByPos.set(pos, rows);
+      }
+      return [...candidatesByPos.entries()].flatMap(([partOfSpeech, posCandidates]) => {
       const lemmaMappings = (Array.isArray(lemmaEntries) ? lemmaEntries : [])
         .filter((entry) => String(entry?.status ?? "").startsWith("accepted-"))
+        .filter((entry) => !entry.partOfSpeech || canonicalWordNetTargetPartOfSpeech(entry.partOfSpeech) === partOfSpeech)
         .filter((entry) => labelSet.has(normalizedLabel(entry.surface)))
         .filter((entry) => {
           if (typeof resolveTarget !== "function") return false;
-          const target = resolveTarget(entry.canonicalEnglish || entry.surface);
+          const target = resolveTarget(entry.canonicalEnglish || entry.surface, { partOfSpeech });
           return Array.isArray(target?.pyashSequence) && target.pyashSequence.join(" ") === text(atom.pyac);
         })
         .map((entry) => ({ surface: text(entry.surface), lemma: text(entry.lemma), kind: text(entry.kind) }))
@@ -148,7 +160,8 @@ export function buildEnglishWordNetAtomSenseWorklist(atomCoverage = [], {
       ]);
       const bySource = new Map();
       const alreadyRepresented = [];
-      for (const candidate of atom.directCandidates ?? []) {
+      for (const candidate of posCandidates) {
+        if (canonicalWordNetTargetPartOfSpeech(candidate.pos) !== partOfSpeech) continue;
         if (!text(candidate?.source) || (candidate.activeTargetIds ?? []).length > 0) continue;
         if (reservedSources.has(candidate.source)) {
           alreadyRepresented.push({ source: candidate.source, matchedLemmas: [text(candidate.matchedLemma)], reason: "source-already-present-in-bridge-catalog" });
@@ -191,17 +204,22 @@ export function buildEnglishWordNetAtomSenseWorklist(atomCoverage = [], {
         })),
         ...alreadyRepresented
       ];
-      return {
-        id: text(atom.id),
-        targetId: text(atom.targetId || atom.id),
+      const targetId = englishWordNetTargetId("atom", [text(atom.pyac)], partOfSpeech);
+      return [{
+        id: targetId,
+        targetId,
+        responseId: `slot-${hash(targetId).slice(0, 16)}`,
+        partOfSpeech,
         pyac: text(atom.pyac),
         labels,
         english30kRank: Number.isFinite(atom.english30kRank) ? atom.english30kRank : null,
         lemmaMappings,
         candidates,
         excludedCandidates
-      };
+      }];
+      });
     })
+    .flat()
     .filter((atom) => atom.id && atom.pyac && atom.labels.length)
     .sort((left, right) => (
       (left.english30kRank ?? Number.MAX_SAFE_INTEGER) - (right.english30kRank ?? Number.MAX_SAFE_INTEGER)
@@ -230,7 +248,7 @@ export function filterEnglishWordNetAtomSenseWorklist(worklist = [], atomIds = [
 }
 
 function promptItem(item, candidates) {
-  return [item.id, item.labels, item.english30kRank, item.lemmaMappings, candidates.map((candidate) => [
+  return [item.responseId || item.id, item.partOfSpeech, item.labels, item.english30kRank, item.lemmaMappings, candidates.map((candidate) => [
     candidate.source,
     candidate.pos,
     candidate.lemmas,
@@ -244,11 +262,12 @@ function promptItem(item, candidates) {
 export function buildEnglishWordNetAtomSensePrompt(items = []) {
   if (!Array.isArray(items) || items.length === 0) throw invalid("atom sense prompt requires at least one item");
   return [
-    "Choose the supplied WordNet sense whose definition best fits each Pyash atom's English label(s). Definitions omit usage examples.",
-    "Each input row is [atom id, labels, atom English30k rank, accepted lemma mappings, candidates]. Each candidate is [sense id, POS, lemmas, definition, matched labels, English30k rank, WordNet tag count]. Frequency values r/t are secondary evidence; meaning comes first.",
+    "Choose the supplied WordNet sense whose definition best fits each Pyash atom's English label(s) for the specified part of speech. Definitions omit usage examples.",
+    "Each input row is [response slot id, target POS, labels, atom English30k rank, accepted lemma mappings, candidates]. Each candidate is [sense id, source POS, lemmas, definition, matched labels, English30k rank, WordNet tag count]. Frequency values r/t are secondary evidence; meaning comes first.",
     "Use only supplied sense ids. Return no-fit if none applies; uncertain if choices are genuinely indistinguishable. For those statuses source=null. Give one short reason.",
     "A listed lemma mapping is the only permitted bridge from an inflected atom label to a different WordNet lemma. Do not infer a relation from an unrelated word or invent sentence context.",
-    "Return JSON only: {\"decisions\":[{\"id\":\"atom:...\",\"status\":\"select|uncertain|no-fit\",\"source\":\"supplied sense id or null\",\"rationale\":\"short reason\"}]}. Include each atom id exactly once.",
+    "Copy each response slot id exactly as shown. It is an opaque identifier; do not append the POS or reconstruct an atom id.",
+    "Return JSON only: {\"decisions\":[{\"id\":\"slot-<supplied-id>\",\"status\":\"select|uncertain|no-fit\",\"source\":\"supplied sense id or null\",\"rationale\":\"short reason\"}]}. Include each response slot exactly once.",
     JSON.stringify(items.map(({ item, candidates }) => promptItem(item, candidates)))
   ].join("\n");
 }
@@ -276,7 +295,7 @@ export function parseEnglishWordNetAtomSenseResponse(raw, items = []) {
     }
   }
   if (!payload || !Array.isArray(payload.decisions)) return { valid: false, reason: "response did not contain a decisions array" };
-  const expected = new Map(items.map(({ item, candidates }) => [item.id, { item, candidates }]));
+  const expected = new Map(items.map(({ item, candidates }) => [item.responseId || item.id, { item, candidates }]));
   const seen = new Set();
   const decisions = [];
   const issues = [];
@@ -313,8 +332,9 @@ export function parseEnglishWordNetAtomSenseResponse(raw, items = []) {
     }
     seen.add(id);
     decisions.push({
-      id,
+      id: context.item.id,
       targetId: context.item.targetId,
+      partOfSpeech: context.item.partOfSpeech,
       pyac: context.item.pyac,
       labels: context.item.labels,
       status,
@@ -418,9 +438,14 @@ export function appendEnglishWordNetAtomSenseLinks({
   for (const decision of selected) {
     const source = text(decision.source);
     const targetId = text(decision.targetId);
+    const targetPartOfSpeech = canonicalWordNetTargetPartOfSpeech(decision.partOfSpeech || decision.candidate?.pos);
     const candidate = decision.candidate;
-    if (!source || !targetId || !candidate || !text(candidate.pos)) {
+    if (!source || !targetId || !candidate || !text(candidate.pos) || !targetPartOfSpeech) {
       throw invalid("selected atom sense decision lacks its supplied WordNet candidate", { id: decision.id });
+    }
+    if (canonicalWordNetTargetPartOfSpeech(candidate.pos) !== targetPartOfSpeech
+      || targetId !== englishWordNetTargetId("atom", [text(decision.pyac)], targetPartOfSpeech)) {
+      throw invalid("selected atom sense does not match its target part-of-speech slot", { id: decision.id, targetId });
     }
     if (existingSources.has(source) || selectedSources.has(source)) {
       throw invalid("selected WordNet sense is already linked", { source, id: decision.id });
@@ -430,7 +455,7 @@ export function appendEnglishWordNetAtomSenseLinks({
     selectedTargets.add(targetId);
     const candidateTargets = unique(candidate.matchedLemmas ?? []);
     const target = [...candidateTargets, ...unique(decision.labels ?? [])].find((label) => {
-      const coverage = resolveTarget(label);
+      const coverage = resolveTarget(label, { partOfSpeech: targetPartOfSpeech });
       return Array.isArray(coverage?.pyashSequence)
         && coverage.pyashSequence.join(" ") === text(decision.pyac);
     });
@@ -444,7 +469,7 @@ export function appendEnglishWordNetAtomSenseLinks({
       link: {
         target,
         pyashSequence: [text(decision.pyac)],
-        targetPartOfSpeech: candidate.pos,
+        targetPartOfSpeech,
         certainty: "contextual",
         evidence: `atom-target sense selection; model ${text(model)}; run ${text(runId)}; rationale: ${text(decision.rationale)}`
       }
@@ -464,7 +489,11 @@ export function appendEnglishWordNetAtomSenseLinks({
   const withheld = records.filter((record) => !candidateIndex.bySense.has(record.source)).map((record) => {
     const sequence = record.link.pyashSequence.join(" ");
     const conflictingSources = parsed.entries
-      .filter((entry) => resolveTarget(entry.target)?.pyashSequence?.join(" ") === sequence)
+      .filter((entry) => (
+        canonicalWordNetTargetPartOfSpeech(entry.targetPartOfSpeech)
+          === canonicalWordNetTargetPartOfSpeech(record.link.targetPartOfSpeech)
+        && resolveTarget(entry.target, { partOfSpeech: record.link.targetPartOfSpeech })?.pyashSequence?.join(" ") === sequence
+      ))
       .map((entry) => entry.source);
     return {
       source: record.source,
@@ -481,8 +510,8 @@ export function appendEnglishWordNetAtomSenseLinks({
   const index = buildEnglishWordNetBridgeIndex({ entries: nextCatalog.entries, resolveTarget });
   for (const record of activeRecords) {
     const linked = index.bySense.get(record.source);
-    const coverage = resolveTarget(record.link.target);
-    if (!linked || linked.targetId !== `atom:${record.link.pyashSequence.join(" ")}`
+    const coverage = resolveTarget(record.link.target, { partOfSpeech: record.link.targetPartOfSpeech });
+    if (!linked || linked.targetId !== englishWordNetTargetId("atom", record.link.pyashSequence, record.link.targetPartOfSpeech)
       || !coverage || coverage.pyashSequence.join(" ") !== record.link.pyashSequence.join(" ")) {
       throw invalid("atom sense bridge failed active-index validation", { source: record.source, target: record.link.target });
     }

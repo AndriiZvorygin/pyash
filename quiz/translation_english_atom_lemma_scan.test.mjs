@@ -6,6 +6,10 @@ import {
   buildEnglishAtomLemmaCatalogAdditions,
   loadEnglishAtomLemmaScanConfig
 } from "../program/library/translation/english_atom_lemma_scan.mjs";
+import {
+  buildEnglishLemmaIndex,
+  parseEnglishLemmaCatalog
+} from "../program/library/translation/english_lemmas.mjs";
 
 function wordnetIndex(lemmas) {
   const rows = new Map(Object.entries(lemmas));
@@ -157,4 +161,53 @@ test("atom lemma scan keeps ambiguous unranked forms as their own lemma", () => 
   assert.equal(assignments[0].assignments[0].kind, "lemma");
   assert.equal(assignments[0].assignments[0].lemma, "panties");
   assert.deepEqual(assignments[0].assignments[0].candidates.map((row) => row.lemma).sort(), ["pantie", "panty"]);
+});
+
+test("lemma catalog allows POS-scoped homographs and resolves the matching mapping", () => {
+  const payload = {
+    surface: "becoming",
+    lemma: "become",
+    canonicalEnglish: "become",
+    kind: "inflectional",
+    status: "accepted-curated",
+    partOfSpeech: "v",
+    evidence: "The verb form maps to the verb lemma."
+  };
+  const catalog = parseEnglishLemmaCatalog([
+    "su name translation_english30k_lemmas be map def",
+    'su text "format" ob text "english-lemma-v1" ya',
+    `su text "becoming" ob text ${JSON.stringify(JSON.stringify(payload))} ya`,
+    "prah"
+  ].join("\n"));
+  const index = buildEnglishLemmaIndex({
+    atomicEntries: [
+      { en: "becoming", pya: "hbec" },
+      { en: "become", pya: "kbe2" }
+    ],
+    catalogEntries: catalog.entries
+  });
+
+  assert.equal(index.resolve("becoming").canonicalEnglish, "becoming");
+  assert.equal(index.resolve("becoming", { partOfSpeech: "a" }).canonicalEnglish, "becoming");
+  assert.equal(index.resolve("becoming", { partOfSpeech: "v" }).canonicalEnglish, "become");
+  assert.equal(index.resolve("becoming", { pos: "v" }).lemma, "become");
+});
+
+test("lemma catalog rejects duplicate rows for the same surface and part of speech", () => {
+  const row = (partOfSpeech) => JSON.stringify({
+    surface: "becoming",
+    lemma: "become",
+    canonicalEnglish: "become",
+    kind: "inflectional",
+    status: "accepted-curated",
+    ...(partOfSpeech ? { partOfSpeech } : {}),
+    evidence: "fixture"
+  });
+  assert.throws(() => parseEnglishLemmaCatalog([
+    "su name translation_english30k_lemmas be map def",
+    'su text "format" ob text "english-lemma-v1" ya',
+    `su text "becoming" ob text ${JSON.stringify(row("v"))} ya`,
+    `su text "becoming" ob text ${JSON.stringify(row("v"))} ya`,
+    "prah"
+  ].join("\n")), /surface and part of speech/u);
 });

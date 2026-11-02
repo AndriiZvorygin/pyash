@@ -5,6 +5,8 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  canonicalWordNetTargetPartOfSpeech,
+  englishWordNetTargetId,
   buildEnglishWordNetBridgeIndex,
   parseEnglishWordNetBridgeCatalog
 } from "../program/library/translation/english_wordnet_bridges.mjs";
@@ -71,14 +73,22 @@ function frequencyGenerated(entry) {
   return String(entry?.evidence ?? "").startsWith("frequency-first anchor allocation");
 }
 
-function targetIdentity(coverage, target) {
-  const pyashSequence = sequence(coverage?.pyashSequence);
+function targetIdentity(coverage, target, partOfSpeech) {
+  const coverageType = String(coverage?.coverageType ?? "");
+  const aliasTargetType = String(coverage?.canonicalCoverageType ?? "");
+  const lexicalCoverage = !coverage
+    || ["atomic", "compound", "lemma"].includes(coverageType)
+    || (["alias", "dictionary-alias"].includes(coverageType)
+      && ["atomic", "compound"].includes(aliasTargetType));
+  const pyashSequence = lexicalCoverage ? sequence(coverage?.pyashSequence) : [];
   const targetKind = coverage?.coverageType === "compound" || pyashSequence.length > 1 ? "compound" : "atom";
+  const targetPartOfSpeech = canonicalWordNetTargetPartOfSpeech(partOfSpeech);
   return {
     target: String(coverage?.canonicalEnglish || coverage?.target || target).normalize("NFC").trim(),
     pyashSequence,
     targetKind,
-    targetId: `${targetKind}:${pyashSequence.join("+")}`
+    targetId: englishWordNetTargetId(targetKind, pyashSequence, targetPartOfSpeech),
+    targetPartOfSpeech
   };
 }
 
@@ -107,9 +117,24 @@ export function buildWordResolver(resources, compoundCoverage) {
       if (key && !atoms.has(key) && !compounds.has(key)) compounds.set(key, coverage);
     }
   }
-  return (word, { pos = "" } = {}) => {
+  return (word, options = {}) => {
+    const pos = String(options?.partOfSpeech ?? options?.pos ?? "").trim().toLowerCase();
+    const targetPos = canonicalWordNetTargetPartOfSpeech(pos);
     const key = normalized(word);
     const coverage = lookupEnglish30kCoverage(resources.coverage, word);
+    const scopedLemma = targetPos
+      ? resources.lemmaIndex?.lookupForPartOfSpeech?.(word, targetPos, { scopedOnly: true })
+      : null;
+    if (scopedLemma?.pyashSequence?.length === 1) {
+      return {
+        coverageType: "atomic",
+        canonicalEnglish: scopedLemma.canonicalEnglish,
+        lemmaKind: scopedLemma.kind,
+        lemmaStatus: scopedLemma.status,
+        lemmaPyashSequence: [...scopedLemma.pyashSequence],
+        pyashSequence: [...scopedLemma.pyashSequence]
+      };
+    }
     const isLexicalWordNetForm = pos
       && resources.wordnet?.index?.byLemma?.get(key)?.some((row) => row.pos === pos);
     if (isLexicalWordNetForm && ["irregular", "inflectional", "derivational"].includes(coverage?.lemmaKind)) {
@@ -192,10 +217,9 @@ function bridgeRecord(entry, resolveWord) {
   const separator = source.indexOf(":");
   const pos = source.slice(0, separator);
   const synset = source.slice(separator + 1);
-  const identity = targetIdentity(resolveWord(entry.target), entry.target);
-  if (!identity.pyashSequence.length) {
-    throw new Error(`cannot preserve existing WordNet bridge without resolvable anchor: ${source} -> ${entry.target}`);
-  }
+  const targetPartOfSpeech = canonicalWordNetTargetPartOfSpeech(entry.targetPartOfSpeech || pos);
+  const identity = targetIdentity(resolveWord(entry.target, { partOfSpeech: targetPartOfSpeech }), entry.target, targetPartOfSpeech);
+  if (!identity.pyashSequence.length) return null;
   return {
     source,
     pos,
@@ -205,13 +229,38 @@ function bridgeRecord(entry, resolveWord) {
     status: entry.certainty === "deterministic" ? "accepted-deterministic" : "accepted-llm",
     link: {
       ...identity,
-      targetPartOfSpeech: entry.targetPartOfSpeech || pos,
+      targetPartOfSpeech,
       certainty: entry.certainty,
       evidence: entry.evidence,
       ...(entry.equivalenceGroup ? { equivalenceGroup: entry.equivalenceGroup } : {}),
       ...(entry.equivalenceEvidence ? { equivalenceEvidence: entry.equivalenceEvidence } : {})
     }
   };
+}
+
+export function partitionResolvableWordNetBridges(entries = [], resolveWord = () => null) {
+  if (!Array.isArray(entries) || typeof resolveWord !== "function") {
+    throw new TypeError("WordNet bridge partition requires entries and a resolver");
+  }
+  const records = [];
+  const unresolved = [];
+  for (const entry of entries) {
+    const record = bridgeRecord(entry, resolveWord);
+    if (record) {
+      records.push(record);
+      continue;
+    }
+    unresolved.push({
+      ...entry,
+      id: String(entry?.source ?? ""),
+      targetPartOfSpeech: canonicalWordNetTargetPartOfSpeech(
+        entry?.targetPartOfSpeech || String(entry?.source ?? "").slice(0, 1)
+      ),
+      status: "stale-unresolvable-target",
+      reason: "target has no lexical Pyac identity for its target part of speech"
+    });
+  }
+  return { records, unresolved };
 }
 
 function allocationRecord(record, allocation) {
@@ -227,7 +276,7 @@ function allocationRecord(record, allocation) {
       targetId: allocation.targetId,
       targetKind: allocation.targetKind,
       pyashSequence: [...allocation.pyashSequence],
-      targetPartOfSpeech: record.pos,
+      targetPartOfSpeech: allocation.targetPartOfSpeech || canonicalWordNetTargetPartOfSpeech(record.pos),
       certainty: "deterministic",
       evidence: `frequency-first anchor allocation: exact lemma ${allocation.lemma} at English30k rank ${allocation.english30kRank}; ${allocation.tagCount === null ? "no exact-key Princeton tag count" : `Princeton WordNet 3.1 tag count ${allocation.tagCount}`} (sense key ${allocation.senseKey ?? "unmatched exact lexical key"})`
     }
@@ -497,12 +546,15 @@ export async function prepareWordNetFrequencyAllocation() {
     resolveWord
   });
   const preservedEntries = catalog.entries.filter((entry) => !modelGenerated(entry) && !frequencyGenerated(entry));
-  const preservedRecords = preservedEntries.map((entry) => bridgeRecord(entry, resolveWord));
+  const { records: preservedRecords, unresolved: staleBridgeLinks } = partitionResolvableWordNetBridges(
+    preservedEntries,
+    resolveWord
+  );
   const reservedTargetIds = preservedRecords.map((record) => record.link.targetId);
   const reservedSources = preservedRecords.map((record) => record.source);
   const allocation = allocateEnglishWordNetAnchors(records, { reservedTargetIds, reservedSources });
   const reconciliation = reconcileEnglishWordNetFrequencyBridgeRows({
-    existingEntries: catalog.entries,
+    existingEntries: catalog.entries.filter((entry) => !staleBridgeLinks.some((row) => row.source === entry.source)),
     assignments: allocation.assignments,
     resolveTarget: resolveWord
   });
@@ -511,7 +563,11 @@ export async function prepareWordNetFrequencyAllocation() {
     recordsBySource.get(assignment.source),
     assignment
   ));
-  const retainedModelRecords = reconciliation.retainedModelEntries.map((entry) => bridgeRecord(entry, resolveWord));
+  const retainedModelRecords = reconciliation.retainedModelEntries.map((entry) => {
+    const record = bridgeRecord(entry, resolveWord);
+    if (!record) throw new Error(`frequency reconciliation retained a model bridge without a lexical Pyac target: ${entry.source}`);
+    return record;
+  });
   const finalRecords = [...preservedRecords, ...retainedModelRecords, ...addedRecords];
   const atomCoverage = buildEnglishWordNetAtomCoverage({
     atoms: pyashWords,
@@ -598,6 +654,7 @@ export async function prepareWordNetFrequencyAllocation() {
     wordnetIndex: resources.wordnet.index,
     rankForEnglish,
     finalCatalog,
+    staleBridgeLinks,
     sourceRecordCount: records.length,
     exactTagMatches: frequency.joined.matchedCount,
     unmatchedTagKeys: frequency.joined.unmatchedCount,
@@ -662,6 +719,13 @@ export async function runWordNetFrequencyAllocation({ artifactRoot = ARTIFACT_RO
       ],
       extra: { "coverage-hash": result.coverageHash }
     }));
+    await atomicWrite(join(directory, "stale-bridge-links.pya"), renderRowsPya({
+      name: "translation_wordnet_stale_bridge_links",
+      format: "english-wordnet-stale-bridge-links-v1",
+      runId: result.runId,
+      records: result.staleBridgeLinks,
+      extra: { "coverage-hash": result.coverageHash }
+    }));
     await atomicWrite(join(directory, "compound-candidates.pya"), renderRowsPya({
       name: "translation_wordnet_compound_candidates",
       format: "english-wordnet-compound-worklist-v1",
@@ -717,6 +781,8 @@ export async function runWordNetFrequencyAllocation({ artifactRoot = ARTIFACT_RO
       preservedBridges: result.reconciliation.counts.preserved,
       modelLinksRetained: result.reconciliation.counts.modelRetained,
       modelLinksSuperseded: result.reconciliation.counts.modelSuperseded,
+      staleBridgeLinks: result.staleBridgeLinks.length,
+      staleBridgeLinksPath: join(directory, "stale-bridge-links.pya"),
       compoundCandidates: result.residualCompounds.length,
       compoundCandidatesReady: result.residualCompounds.filter((row) => row.disposition === "ready-for-housekeeper-verification").length,
       compoundCandidatesWithoutWordNetHeadEvidence: result.residualCompounds.filter((row) => row.disposition === "no-wordnet-head-evidence").length,

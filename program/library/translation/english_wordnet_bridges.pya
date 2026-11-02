@@ -27602,4 +27602,8 @@ su text "sense-lemma:v:02777278-v:2" ob text "plague" ya
 su text "v:90009391-v" ob name "screenshot" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-5385790a7ad3-1d63cb3d1e-atom-gloss-choice-v1; rationale: Definition matches 'screenshot' exactly as capturing an image from a display." ya
 su text "sense-gloss:v:90009391-v" ob text "to capture an image from a computer's display" ya
 su text "sense-lemma:v:90009391-v:1" ob text "screenshot" ya
+su text "s:01868647-s" ob name "only" as text "s" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-pos-live-pilot-be2e7b247a-1d04b32e5da4; rationale: Sense s:01868647-s defines 'only' as 'exclusive of anyone or anything else', which directly matches the label 'only' without implying solitude, whereas s:02222405-s implies being the single one." ya
+su text "sense-gloss:s:01868647-s" ob text "exclusive of anyone or anything else" ya
+su text "sense-lemma:s:01868647-s:1" ob text "alone" ya
+su text "sense-lemma:s:01868647-s:2" ob text "only" ya
 prah

@@ -17,7 +17,12 @@ import {
   parseEnglishWordNetCompoundDecisions,
   renderEnglishWordNetCompoundDecisions
 } from "../program/library/translation/english_wordnet_compound_decisions.mjs";
-import { buildWordResolver } from "../command/wordnet_frequency_allocate.mjs";
+import {
+  buildWordResolver,
+  partitionResolvableWordNetBridges
+} from "../command/wordnet_frequency_allocate.mjs";
+import { buildEnglishLemmaIndex } from "../program/library/translation/english_lemmas.mjs";
+import pyashWords from "../program/library/pyashWords.json" with { type: "json" };
 
 test("frequency anchor resolution rejects aliases whose canonical target is grammar", () => {
   const resources = {
@@ -52,6 +57,128 @@ test("frequency anchor resolution rejects aliases whose canonical target is gram
     resolveWord
   });
   assert.ok(records.every((record) => record.candidates.length === 0));
+});
+
+test("frequency reconciliation preserves unresolved bridge evidence without treating grammar as a lexical anchor", () => {
+  const calls = [];
+  const result = partitionResolvableWordNetBridges([{
+    source: "n:00000001-n",
+    target: "day",
+    targetPartOfSpeech: "n",
+    certainty: "deterministic",
+    evidence: "older selection"
+  }, {
+    source: "v:00000002-v",
+    target: "day",
+    certainty: "deterministic",
+    evidence: "valid lexical mapping"
+  }], (target, options) => {
+    calls.push([target, options.partOfSpeech]);
+    return options.partOfSpeech === "v"
+      ? { coverageType: "atomic", canonicalEnglish: "day", pyashSequence: ["tcin"] }
+      : { coverageType: "grammar", canonicalEnglish: "day", pyashSequence: ["tcin"] };
+  });
+
+  assert.deepEqual(calls, [["day", "n"], ["day", "v"]]);
+  assert.equal(result.records.length, 1);
+  assert.equal(result.records[0].source, "v:00000002-v");
+  assert.deepEqual(result.unresolved.map(({ source, targetPartOfSpeech, status, reason }) => ({
+    source, targetPartOfSpeech, status, reason
+  })), [{
+    source: "n:00000001-n",
+    targetPartOfSpeech: "n",
+    status: "stale-unresolvable-target",
+    reason: "target has no lexical Pyac identity for its target part of speech"
+  }]);
+});
+
+test("frequency allocation gives an atom one independent anchor slot per part of speech", () => {
+  const records = buildEnglishWordNetFrequencyAllocationRecords({
+    wordnetIndex: {
+      bySynset: new Map([
+        ["n:00000071-n", [{ lemma: "draw", gloss: "a picture" }]],
+        ["v:00000072-v", [{ lemma: "draw", gloss: "make a picture" }]],
+        ["s:00000073-s", [{ lemma: "drawn", gloss: "elongated" }]]
+      ])
+    },
+    frequencyJoin: { entries: [] },
+    rankForEnglish: () => 10,
+    resolveWord: (word) => word === "draw"
+      ? { coverageType: "atomic", canonicalEnglish: "draw", pyashSequence: ["cyuk"] }
+      : word === "drawn"
+        ? { coverageType: "atomic", canonicalEnglish: "draw", pyashSequence: ["cyuk"] }
+        : null
+  });
+
+  const candidateSlots = records.map((record) => record.candidates[0].targetId);
+  assert.deepEqual(candidateSlots.sort(), ["atom:cyuk:a", "atom:cyuk:n", "atom:cyuk:v"]);
+  const allocation = allocateEnglishWordNetAnchors(records);
+  assert.equal(allocation.assignments.length, 3);
+  assert.equal(new Set(allocation.assignments.map((row) => row.targetId)).size, 3);
+  assert.deepEqual(allocation.assignments.map((row) => row.targetPartOfSpeech).sort(), ["a", "n", "v"]);
+});
+
+test("frequency resolver applies a homograph lemma mapping only in its declared part of speech", () => {
+  const lemmaIndex = buildEnglishLemmaIndex({
+    atomicEntries: pyashWords,
+    catalogEntries: [{
+      surface: "becoming",
+      lemma: "draw",
+      canonicalEnglish: "draw",
+      kind: "inflectional",
+      status: "accepted-curated",
+      partOfSpeech: "v",
+      evidence: "fixture POS-scoped mapping"
+    }]
+  });
+  const resources = {
+    coverage: {
+      byVariant: new Map([[
+        "becoming",
+        { coverageType: "atomic", canonicalEnglish: "becoming", pyashSequence: ["hbin"] }
+      ]])
+    },
+    lemmaIndex,
+    wordnet: { index: { byLemma: new Map([["becoming", [{ pos: "v" }, { pos: "a" }]]]) } }
+  };
+  const resolveWord = buildWordResolver(resources, { accepted: [] });
+
+  assert.deepEqual(resolveWord("becoming", { partOfSpeech: "v" }).pyashSequence, ["cyuk"]);
+  assert.equal(resolveWord("becoming", { partOfSpeech: "v" }).canonicalEnglish, "draw");
+  assert.deepEqual(resolveWord("becoming", { partOfSpeech: "a" }).pyashSequence, ["hbin"]);
+  assert.deepEqual(resolveWord("becoming").pyashSequence, ["hbin"]);
+});
+
+test("atom coverage keeps a free verb slot open after the noun slot is linked", () => {
+  const rows = buildEnglishWordNetAtomCoverage({
+    atoms: [{ en: "draw", pya: "cyuk" }],
+    resolveCoverage: () => ({ coverageType: "atomic" }),
+    rankForEnglish: () => 20,
+    wordnetRecords: [
+      {
+        source: "n:00000081-n", pos: "n", synset: "00000081-n", lemmas: ["draw"], gloss: "a picture",
+        candidates: [{ targetKind: "atom", targetId: "atom:cyuk:n", targetPartOfSpeech: "n", pyashSequence: ["cyuk"], lemma: "draw", rank: 20 }]
+      },
+      {
+        source: "v:00000082-v", pos: "v", synset: "00000082-v", lemmas: ["draw"], gloss: "make a picture",
+        candidates: [{ targetKind: "atom", targetId: "atom:cyuk:v", targetPartOfSpeech: "v", pyashSequence: ["cyuk"], lemma: "draw", rank: 20 }]
+      }
+    ],
+    bridgeRecords: [{
+      source: "n:00000081-n", pos: "n", synset: "00000081-n", lemmas: ["draw"], gloss: "a picture",
+      link: {
+        targetId: "atom:cyuk:n", targetPartOfSpeech: "n", target: "draw", pyashSequence: ["cyuk"],
+        certainty: "deterministic", evidence: "existing noun link"
+      }
+    }]
+  });
+
+  assert.equal(rows[0].status, "direct-candidates-unlinked");
+  assert.equal(rows[0].links.length, 1);
+  assert.deepEqual(rows[0].directCandidates.map((candidate) => [candidate.pos, candidate.availableTargetPartOfSpeech]), [
+    ["n", false],
+    ["v", true]
+  ]);
 });
 
 test("frequency anchor resolution accepts only single-atom lemma mappings", () => {
@@ -126,7 +253,7 @@ test("frequency anchor resolution accepts only single-atom lemma mappings", () =
     target: candidate.target,
     targetId: candidate.targetId,
     pyashSequence: candidate.pyashSequence
-  })), [{ target: "seemed", targetId: "atom:sri2t", pyashSequence: ["sri2t"] }]);
+  })), [{ target: "seemed", targetId: "atom:sri2t:v", pyashSequence: ["sri2t"] }]);
 });
 
 test("frequency anchor resolution keeps a lexical WordNet lemma separate from another part of speech's inflection", () => {
@@ -440,6 +567,37 @@ test("frequency reconciliation preserves explicit Qwen atom-target sense selecti
   assert.deepEqual(result.preservedEntries, [entry]);
   assert.deepEqual(result.retainedModelEntries, []);
   assert.deepEqual(result.newAssignments, []);
+});
+
+test("frequency reconciliation resolves bridge targets in their target part of speech", () => {
+  const calls = [];
+  const source = "s:00000019-s";
+  const result = reconcileEnglishWordNetFrequencyBridgeRows({
+    existingEntries: [{
+      source,
+      target: "only",
+      targetPartOfSpeech: "a",
+      certainty: "contextual",
+      evidence: "accepted by model qwen3.5:9b; sense-link sweep model-qwen"
+    }],
+    assignments: [{
+      source,
+      target: "only",
+      targetId: "atom:htun:a",
+      targetPartOfSpeech: "a",
+      pyashSequence: ["htun"]
+    }],
+    resolveTarget: (target, options) => {
+      calls.push([target, options.partOfSpeech]);
+      return options.partOfSpeech === "a"
+        ? { coverageType: "atomic", pyashSequence: ["htun"] }
+        : { coverageType: "grammar", pyashSequence: ["ya"] };
+    }
+  });
+
+  assert.deepEqual(calls, [["only", "a"]]);
+  assert.deepEqual(result.retainedModelEntries.map((entry) => entry.source), [source]);
+  assert.deepEqual(result.supersededModelEntries, []);
 });
 
 test("frequency allocation skips reserved targets and allows a sense to use its next ranked anchor", () => {

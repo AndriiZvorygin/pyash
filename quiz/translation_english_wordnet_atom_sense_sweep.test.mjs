@@ -17,6 +17,7 @@ import {
   runEnglishWordNetAtomSenseSweep
 } from "../program/library/translation/english_wordnet_atom_sense_sweep.mjs";
 import { renderEnglishWordNetSenseLinksPya } from "../program/library/translation/english_wordnet_linker.mjs";
+import { parseEnglishWordNetBridgeCatalog } from "../program/library/translation/english_wordnet_bridges.mjs";
 
 function atom(id, pyac, labels, rank, candidates) {
   return {
@@ -51,7 +52,7 @@ function responseFor(prompt) {
     decisions: rows.map((row) => ({
       id: row[0],
       status: "select",
-      source: row[4][0][0],
+      source: row[5][0][0],
       rationale: "The supplied definition matches the atom label."
     }))
   });
@@ -76,12 +77,66 @@ test("atom worklist keeps only unlinked direct senses and presents definition te
     { ...atom("atom:hgra", "hgra", ["the"], 1, [candidate("n:00000005-n", "article")]), status: "grammar-no-lexical-sense" }
   ]);
 
-  assert.deepEqual(rows.map((row) => row.id), ["atom:hcat", "atom:hban"]);
+  assert.deepEqual(rows.map((row) => row.id), ["atom:hcat:n", "atom:hban:n"]);
   assert.equal(rows[1].candidates.length, 2);
   const prompt = buildEnglishWordNetAtomSensePrompt([{ item: rows[1], candidates: rows[1].candidates }]);
   assert.match(prompt, /a financial institution/u);
   assert.doesNotMatch(prompt, /an example bank/u);
   assert.match(prompt, /Choose the supplied WordNet sense/u);
+});
+
+test("atom worklist creates an independent decision slot for each uncovered part of speech", () => {
+  const rows = buildEnglishWordNetAtomSenseWorklist([
+    atom("atom:cyuk", "cyuk", ["draw"], 20, [
+      candidate("n:00000041-n", "a mark made with a pencil", { lemma: "draw" }),
+      candidate("v:00000042-v", "produce a picture", { lemma: "draw" }),
+      candidate("a:00000043-a", "a drawn or elongated shape", { lemma: "draw" })
+    ])
+  ]);
+
+  assert.deepEqual(rows.map((row) => [row.id, row.partOfSpeech, row.targetId, row.candidates.length]), [
+    ["atom:cyuk:a", "a", "atom:cyuk:a", 1],
+    ["atom:cyuk:n", "n", "atom:cyuk:n", 1],
+    ["atom:cyuk:v", "v", "atom:cyuk:v", 1]
+  ]);
+});
+
+test("atom sense prompts give each POS slot an opaque response id and restore its canonical target identity", () => {
+  const [item] = buildEnglishWordNetAtomSenseWorklist([
+    atom("atom:htun", "htun", ["only"], 74, [
+      candidate("s:00000001-s", "exclusive of anyone or anything else", { lemma: "only" })
+    ])
+  ]);
+  const prompt = buildEnglishWordNetAtomSensePrompt([{ item, candidates: item.candidates }]);
+  const inputRows = JSON.parse(prompt.split("\n").at(-1));
+  const responseId = inputRows[0][0];
+  assert.match(responseId, /^slot-[a-f0-9]{16}$/u);
+  assert.equal(inputRows[0][1], "a");
+  assert.doesNotMatch(prompt, /\[\["atom:htun:a"/u);
+  assert.match(prompt, /Copy each response slot id exactly/u);
+
+  const parsed = parseEnglishWordNetAtomSenseResponse(JSON.stringify({
+    decisions: [{
+      id: responseId,
+      status: "select",
+      source: "s:00000001-s",
+      rationale: "The supplied adjective definition matches the English label."
+    }]
+  }), [{ item, candidates: item.candidates }]);
+  assert.equal(parsed.valid, true);
+  assert.equal(parsed.decisions[0].id, "atom:htun:a");
+  assert.equal(parsed.decisions[0].targetId, "atom:htun:a");
+
+  const repeatedPos = parseEnglishWordNetAtomSenseResponse(JSON.stringify({
+    decisions: [{
+      id: `${responseId}:a`,
+      status: "select",
+      source: "s:00000001-s",
+      rationale: "The response appended a second POS marker."
+    }]
+  }), [{ item, candidates: item.candidates }]);
+  assert.equal(repeatedPos.valid, false);
+  assert.match(repeatedPos.reason, /unknown atom id/u);
 });
 
 test("atom worklist rejects alias-only senses and allows only recorded lemma mappings", () => {
@@ -98,12 +153,12 @@ test("atom worklist rejects alias-only senses and allows only recorded lemma map
     }],
     resolveTarget: (word) => word === "mixed" ? { pyashSequence: ["mrat"] } : null
   });
-  assert.equal(rows.find((row) => row.id === "atom:kyan").candidates.length, 0);
-  assert.equal(rows.find((row) => row.id === "atom:kyan").excludedCandidates[0].matchedLemmas[0], "yak");
-  assert.deepEqual(rows.find((row) => row.id === "atom:mrat").lemmaMappings, [
+  assert.equal(rows.find((row) => row.pyac === "kyan").candidates.length, 0);
+  assert.equal(rows.find((row) => row.pyac === "kyan").excludedCandidates[0].matchedLemmas[0], "yak");
+  assert.deepEqual(rows.find((row) => row.pyac === "mrat").lemmaMappings, [
     { surface: "mixed", lemma: "mix", kind: "inflectional" }
   ]);
-  assert.equal(rows.find((row) => row.id === "atom:mrat").candidates[0].source, "v:00000002-v");
+  assert.equal(rows.find((row) => row.pyac === "mrat").candidates[0].source, "v:00000002-v");
 });
 
 test("atom worklist filtering selects only newly exposed ids and rejects unknown ids", () => {
@@ -136,7 +191,7 @@ test("atom sense response accepts only supplied ids and complete unique decision
   assert.equal(parseEnglishWordNetAtomSenseResponse("x".repeat(1_000_001), items).reason, "provider envelope exceeds the bounded character limit");
   assert.equal(parseEnglishWordNetAtomSenseResponse('{"decisions":[]}', items).reason, "response omitted one or more atom ids");
   assert.equal(parseEnglishWordNetAtomSenseResponse(JSON.stringify({ decisions: [{
-    id: "atom:hban", status: "select", source: "n:invented-n", rationale: "invented"
+    id: items[0].item.responseId, status: "select", source: "n:invented-n", rationale: "invented"
   }] }), items).reason, "selected source is outside the supplied candidates");
 });
 
@@ -159,7 +214,7 @@ test("atom sense sweep preserves valid choices when Qwen mislabels another atom 
       awaitHandle: async () => {
         attempt += 1;
         return JSON.stringify({ decisions: [
-          { id: "atom:hcat", status: "select", source: "n:00000021-n", rationale: "The supplied feline definition matches cat." },
+          { id: worklist[0].responseId, status: "select", source: "n:00000021-n", rationale: "The supplied feline definition matches cat." },
           { id: "atom:invented", status: "select", source: "n:00000022-n", rationale: "The supplied mammal definition matches bat." }
         ] });
       }
@@ -167,8 +222,8 @@ test("atom sense sweep preserves valid choices when Qwen mislabels another atom 
     assert.equal(attempt, 2);
     assert.equal(result.selected, 1);
     assert.equal(result.uncertain, 1);
-    assert.equal(result.records.find((row) => row.id === "atom:hcat").source, "n:00000021-n");
-    assert.match(result.records.find((row) => row.id === "atom:hbat").rationale, /unknown atom id/u);
+    assert.equal(result.records.find((row) => row.id === "atom:hcat:n").source, "n:00000021-n");
+    assert.match(result.records.find((row) => row.id === "atom:hbat:n").rationale, /unknown atom id/u);
   } finally {
     await rm(artifactDirectory, { recursive: true, force: true });
   }
@@ -182,11 +237,11 @@ test("atom sense sweep merges valid decisions across bounded retries", async () 
   const artifactDirectory = await mkdtemp(join(tmpdir(), "pyash-atom-sense-merge-"));
   const replies = [
     JSON.stringify({ decisions: [
-      { id: "atom:hcat", status: "select", source: "n:00000031-n", rationale: "The supplied feline definition matches cat." },
+      { id: worklist[0].responseId, status: "select", source: "n:00000031-n", rationale: "The supplied feline definition matches cat." },
       { id: "atom:unknown", status: "uncertain", source: null, rationale: "Unexpected row." }
     ] }),
     JSON.stringify({ decisions: [
-      { id: "atom:hbat", status: "select", source: "n:00000032-n", rationale: "The supplied mammal definition matches bat." },
+      { id: worklist[1].responseId, status: "select", source: "n:00000032-n", rationale: "The supplied mammal definition matches bat." },
       { id: "atom:unknown", status: "uncertain", source: null, rationale: "Unexpected row." }
     ] })
   ];
@@ -231,8 +286,9 @@ test("atom sense batch artifact round-trips Pyash-quoted prompt, response, and c
 test("selected atom senses append through the shared bridge renderer and pass target validation", () => {
   const base = renderEnglishWordNetSenseLinksPya({ records: [], source: "fixture" });
   const decision = {
-    id: "atom:hban",
-    targetId: "atom:hban",
+    id: "atom:hban:n",
+    targetId: "atom:hban:n",
+    partOfSpeech: "n",
     pyac: "hban",
     labels: ["bank"],
     status: "select",
@@ -257,6 +313,44 @@ test("selected atom senses append through the shared bridge renderer and pass ta
   assert.match(appended.catalogSource, /atom-target sense selection; model qwen3\.5:9b/u);
 });
 
+test("one atom can accept separate noun and verb senses in one activation", () => {
+  const base = renderEnglishWordNetSenseLinksPya({ records: [], source: "fixture" });
+  const slot = (pos, source) => ({
+    id: `atom:cyuk:${pos}`,
+    targetId: `atom:cyuk:${pos}`,
+    pyac: "cyuk",
+    labels: ["draw"],
+    partOfSpeech: pos,
+    status: "select",
+    source,
+    candidate: {
+      source,
+      pos,
+      lemmas: ["draw"],
+      definition: pos === "n" ? "make a picture with a pencil" : "produce a picture",
+      matchedLemmas: ["draw"]
+    },
+    rationale: `The supplied ${pos} definition fits draw.`
+  });
+  const appended = appendEnglishWordNetAtomSenseLinks({
+    catalogSource: base,
+    decisions: [slot("n", "n:00000051-n"), slot("v", "v:00000052-v")],
+    model: "qwen3.5:9b",
+    runId: "fixture-run",
+    resolveTarget: (word) => word === "draw"
+      ? { coverageType: "atomic", canonicalEnglish: "draw", pyashSequence: ["cyuk"] }
+      : null
+  });
+
+  assert.deepEqual(appended.added, ["n:00000051-n", "v:00000052-v"]);
+  assert.deepEqual(appended.withheld, []);
+  const links = parseEnglishWordNetBridgeCatalog(appended.catalogSource).entries;
+  assert.deepEqual(links.map((link) => [link.source, link.targetPartOfSpeech]), [
+    ["n:00000051-n", "n"],
+    ["v:00000052-v", "v"]
+  ]);
+});
+
 test("atom sense activation withholds a selection that collides with an active atom sense", () => {
   const base = renderEnglishWordNetSenseLinksPya({
     source: "fixture",
@@ -269,6 +363,7 @@ test("atom sense activation withholds a selection that collides with an active a
       link: {
         target: "bank",
         pyashSequence: ["hban"],
+        targetPartOfSpeech: "n",
         evidence: "curated active bridge"
       }
     }]
@@ -276,8 +371,9 @@ test("atom sense activation withholds a selection that collides with an active a
   const appended = appendEnglishWordNetAtomSenseLinks({
     catalogSource: base,
     decisions: [{
-      id: "atom:hban",
-      targetId: "atom:hban",
+      id: "atom:hban:n",
+      targetId: "atom:hban:n",
+      partOfSpeech: "n",
       pyac: "hban",
       labels: ["bank"],
       status: "select",

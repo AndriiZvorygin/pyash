@@ -58,6 +58,21 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
 
 - Treat the selected WordNet synset as the semantic unit. Record its displayed
   sense lemma as well as its POS and synset id.
+- Sense-link identity is the ordered Pyac target plus its canonical target POS:
+  `atom:<sequence>:<pos>` or `compound:<sequence>:<pos>`. Source satellite POS
+  `s` maps to target adjective POS `a`; retain `s` on the source sense id.
+  Reusing one Pyac sequence across different target POS is allowed. Two
+  different synsets competing for the same sequence and POS still require an
+  explicit, evidence-backed equivalence group or remain unlinked.
+- Lemma mappings can be POS-scoped. A scoped row takes precedence for that POS;
+  the existing unscoped row remains a fallback for other POS. Thus homographs
+  can resolve to distinct atoms by POS without changing their default lookup.
+  Keep duplicate surface+POS rows invalid and each lemma unique within its POS.
+- Atom sense selection runs once per atom/POS slot. An existing noun link must
+  not hide an unlinked verb, adjective, or adverb slot for the same Pyac atom.
+  Keep the model choice bounded to the candidates supplied for that slot.
+  POS identity is lexical metadata; it does not add or alter Pyash grammar
+  particles, aspect, mood, or surface ordering.
 - A direct same-synset atom can be offered as an anchor. Automatic linking also
   requires a low-degree edge node with one WordNet meaning, and the target word
   must not name a competing WordNet sense.
@@ -65,9 +80,10 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   sense anchor. Candidate-only compounds, unverified component compositions,
   WordNet relation atoms, and convergent `vocab_suggest` atoms are evidence;
   they are not selectable links.
-- Keep `targetKind` (`atom` or `compound`) and a stable `targetId` on every
-  accepted sense link. Prefer a compound record id; otherwise derive it from
-  the ordered Pyash components.
+- Keep `targetKind` (`atom` or `compound`) and a stable POS-qualified
+  `targetId` on every accepted sense link. Derive identity from the ordered
+  Pyash components and canonical target POS; compound catalog ids remain
+  separate provenance identifiers.
 - Do not activate one bridge target for multiple WordNet synsets unless the
   bridge catalog records evidence that those senses are equivalent. Declare
   the group with a native `.pya` row such as
@@ -106,7 +122,8 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   wave. Preserve uncertain or no-fit outputs without activating them. Accepted
   selections are recorded as atom-target sense links before frequency
   allocation is reconciled.
-- Allocation keeps one active anchor per synset and one synset per Pyac target.
+- Allocation keeps one active anchor per synset and one synset per Pyac
+  target/POS slot.
   Curated and deterministic bridge rows stay reserved. Existing model links
   remain only when their selected Pyac identity agrees with the frequency
   allocation; the full reconciliation is saved under the run's artifacts.

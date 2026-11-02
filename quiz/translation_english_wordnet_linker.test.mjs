@@ -94,6 +94,45 @@ test("WordNet linker creates stable one-record-per-sense batches", () => {
   assert.equal(new Set(records.map((record) => record.id)).size, 3);
 });
 
+test("WordNet linker excludes grammar coverage with a sequence from direct and relation anchors", () => {
+  const index = buildEnglishWordNetIndex({
+    rows: [{
+      id: "n:source:source",
+      pos: "n",
+      synset: "source",
+      senseKey: "source",
+      lemma: "source",
+      gloss: "a source concept"
+    }, {
+      id: "n:grammar:grammarword",
+      pos: "n",
+      synset: "grammar",
+      senseKey: "grammarword",
+      lemma: "grammarword",
+      gloss: "a grammatical concept"
+    }],
+    relations: [{ source: "n:source", target: "n:grammar", relation: "hypernym" }]
+  });
+  const resolveWord = (word) => word === "grammarword"
+    ? { coverageType: "grammar", canonicalEnglish: "grammarword", pyashSequence: ["ya"] }
+    : null;
+  const direct = linkEnglishWordNetSense({
+    sense: { pos: "n", synset: "grammar", lemmas: ["grammarword"] },
+    sourceTerm: "grammarword",
+    wordnetIndex: index,
+    resolveWord
+  });
+  const related = buildEnglishWordNetSenseAnchorCandidates({
+    sense: { pos: "n", synset: "source", lemmas: ["source"] },
+    wordnetIndex: index,
+    resolveWord
+  });
+
+  assert.equal(direct.status, "review");
+  assert.deepEqual(direct.candidates, []);
+  assert.deepEqual(related, []);
+});
+
 test("WordNet links distinguish exact atom and accepted compound targets", () => {
   const atomIndex = buildEnglishWordNetIndex({
     rows: [{
@@ -116,7 +155,7 @@ test("WordNet links distinguish exact atom and accepted compound targets", () =>
     })
   });
   assert.equal(atom.link.targetKind, "atom");
-  assert.equal(atom.link.targetId, "atom:tcum");
+  assert.equal(atom.link.targetId, "atom:tcum:n");
 
   const compoundIndex = buildEnglishWordNetIndex({
     rows: [{
@@ -140,7 +179,7 @@ test("WordNet links distinguish exact atom and accepted compound targets", () =>
     })
   });
   assert.equal(compound.link.targetKind, "compound");
-  assert.equal(compound.link.targetId, "compound-sexual-desire");
+  assert.equal(compound.link.targetId, "compound:hjon+twin:n");
 });
 
 test("WordNet linker uses an exact source lemma dictionary alias before relation compounds", () => {
@@ -268,7 +307,7 @@ test("WordNet sense anchors use covered relation targets only", () => {
       : null
   });
   assert.equal(acceptedCompoundAnchors[0].targetKind, "compound");
-  assert.equal(acceptedCompoundAnchors[0].targetId, "compound-activity");
+  assert.equal(acceptedCompoundAnchors[0].targetId, "compound:twa+twot:n");
   assert.equal(acceptedCompoundAnchors[0].selectable, true);
 });
 
@@ -435,7 +474,7 @@ test("WordNet linker accepts a leaf node mapped to an existing compound", () => 
   assert.deepEqual(records[0].link.pyashSequence, ["ledger", "house"]);
   assert.equal(records[0].link.target, "ledger house");
   assert.equal(records[0].link.targetKind, "compound");
-  assert.equal(records[0].link.targetId, "compound:ledger+house");
+  assert.equal(records[0].link.targetId, "compound:ledger+house:n");
 });
 
 test("WordNet linker inventory includes accepted compounds and excludes compound candidates", () => {
