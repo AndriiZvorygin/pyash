@@ -6,13 +6,14 @@ today against that list, and proposes a sequence of tranches. It changes no
 code and schedules no work.
 
 **Direction taken by the owner:** the knowledge core's authoritative
-representation is **VLIW by default**, and its processing is **Rust**. The
-repository already holds most of that: a `.pyac` pack format, a `.pya` catalog
-format whose contract explicitly carries semantic identity, provenance and
-replay expectations, a Rust crate (`rust/pyac`) that reads both, and a
-compatibility discipline that names every unsupported semantic rather than
-guessing. The sections below say what the direction changes, what it costs,
-and which three decisions it does not settle.
+representation is **VLIW by default**, and the VLIW is the **IR** — an
+intermediate representation that is *easily searchable* and a *high-precision
+encoding of information*, i.e. a searchable database, not a compatibility
+target. **Rust is the interpreter for that IR**, and a potential compiler from
+it to C, to English, or to other targets. The repository already holds the
+container format, the catalog contract and a Rust crate that reads both — but
+the measurements below show the current implementation is not yet the thing
+this direction describes, and the gap is specific and nameable.
 
 The roadmap names the destination: `documentation/roadmap.md` Week 9 calls
 for "Knowledge core v0.9 (claim identity, evidence shell, KB layout)" and
@@ -134,8 +135,8 @@ tree, not the priority of the requirement.
 | R10 | Answer flow with citations, contested state surfaced | Week 12 local Llama demo | **absent** |
 | R11 | Interpreter / JS / C parity over the same snapshot | Week 9 and 11 parity gates | **partial** |
 | R12 | Scale beyond the current C record cap, at a defined workload and latency target | Current C implementation limit; product target undecided | **open** |
-| R13 | The authoritative persisted representation is the VLIW pack, with a `.pya` catalog as its semantic index | Owner direction: VLIW by default | **open** |
-| R14 | Core processing — normalization, claim-key derivation, view resolution — is owned by the Rust crate | Owner direction: processed with Rust | **open** |
+| R13 | The authoritative persisted representation is the VLIW IR, with a `.pya` catalog that indexes it for search; encoding precision is the bar, not coverage of a recovered subset | Owner direction: VLIW by default, as a searchable high-precision IR | **open** |
+| R14 | Rust interprets the VLIW IR and can lower it to C, to English, or to other targets; it owns the knowledge core's processing | Owner direction: Rust as the interpreter | **open** |
 
 "met" means both implemented and specified: R1–R3 are stated normatively in
 `documentation/specifications/18-pyash-agent.md` §4.1 and §4.2 and exercised
@@ -359,13 +360,55 @@ in eight commits, the most recent on 2026-10-23.
 `build`, `build-translation`, `query` and `replay` over the same contracts,
 and `program/library/vliw/` (3,334 lines) is the broader semantic facade.
 
-**The compatibility discipline.** `27-pyash-vliw-isa.md` §4.3 requires an
-auditable compatibility table, and the database reference records unsupported
-semantics with explicit reasons rather than silent fallbacks:
-`unsupported-vector`, `unsupported-date`, `unsupported-invert`,
-`unsupported-exponential`, `unsupported-remains`
-(`documentation/reference/pyac-vliw-database.md` §7). This is the pattern the
-knowledge core should adopt for claims it cannot encode.
+**The compatibility discipline — and the problem with it.** `27-pyash-vliw-isa.md`
+§4.3 requires an auditable compatibility table, and the database reference
+records unsupported semantics with explicit reasons rather than silent
+fallbacks. That discipline is worth keeping. But the reasons themselves say
+something the project should decide about deliberately, and the corpus
+measurement below makes it plain: the failures are mostly **missing
+archaeology, not missing capability**. The error text for `invert` is
+"invert sentence lowering requires a recovered legacy sentence fixture"; for
+`date` it is "requires a recovered legacy date encoding". The encoder is
+declining to represent these semantics because no recovered fixture was
+found, not because the IR shape cannot carry them.
+
+### What the current implementation is not yet
+
+The direction describes an IR that is easily searchable and high-precision.
+Measured against the repository's own corpus
+(`quiz/fixtures/pyac_roundtrip_corpus.pya`, 17 sentences), it is neither, and
+the two failures have different causes.
+
+**Precision: 11 of 17 — 64.7%.** The executable rows are the five numeric
+operations, typed literals, boolean literals and named literals. The six that
+fail are: an opaque quote passed to `plus`, and `invert`, `exponential`,
+`remains`, `vector`, `date`. Five of those six fail for the fixture reason
+above; only the `plus` one is a genuine value restriction ("numeric-plus ob
+must be an unsigned 16-bit integer"). For an IR whose bar is high-precision
+encoding, "we never built the fixture" is not an acceptable reason to leave
+a semantic unencoded, because an unencoded semantic is a semantic that cannot
+be searched, stored or replayed.
+
+**Searchability: two query paths are dead, and the search is a scan.**
+
+- `command/pyac_database.mjs` advertises `hnuc` as a query field, and
+  `recordMatches` implements `criteria.hnuc`. But no catalog record carries an
+  `hnuc` field, so **every HNUC query returns zero hits** — verified against
+  the corpus with two different values.
+- `semantic` is `null` on every unsupported record, so a semantic search
+  silently misses 6 of the 17 rows — the same rows that are already the least
+  searchable.
+- `queryVliwCatalog` is a linear `filter` over `catalog.records`, not an
+  index. "Easily searchable" at the scale a knowledge core implies means
+  indexed lookup, not a scan per query.
+
+These are the concrete items the VLIW direction has to fix, and they are
+fixable in the crate rather than by archaeology.
+
+**The vocabulary is still the one thing that cannot be searched.** The IR's
+words come from a fixed atom table, and `program/library/vliw/phrase.mjs:26-32`
+builds `entriesByPya` and `grammarPya` at import time. An IR that is easily
+searchable cannot have a vocabulary that is resolved by module load.
 
 **Three things the direction does not get for free.**
 
@@ -436,11 +479,12 @@ proposed is that each tranche be independently accepted, because each one
 leaves the repository in a state that is better than the one before it.
 
 One tranche carries a direction the owner has already taken: **the knowledge
-core's authoritative representation is VLIW, and its processing is Rust.** T1
+core's authoritative representation is the VLIW IR, and Rust interprets that
+IR** — executing it, or lowering it to C, to English, or to other targets. T1
 and T6 are where that lands. It does not run through the whole sequence —
 T0 through T5 are mostly independent of it — but it is not optional either,
-and the two things it needs (a build story, and a decision about compiled C)
-are named rather than assumed.
+and the three things it needs (a build story, more IR precision, and a
+decision about compiled C) are named rather than assumed.
 
 ### T0 — Separate the knowledge core from the agent spec
 
@@ -500,12 +544,28 @@ That spec is the one genuinely unwritten document in the sequence. The
 the registry layer and should be generalised rather than replaced.
 
 **Recommended format policy (revised by the owner's direction):** the
-authoritative persisted state is the **VLIW pack**, with a `.pya` catalog as
-its searchable semantic index — the same pair
+authoritative persisted state is the **VLIW IR** — the `.pyac` pack — with a
+`.pya` catalog that indexes it for search. The same pair
 `documentation/reference/pyac-vliw-database.md` already specifies for the Pyac
 database, not a new `.pya` segment/manifest design. The pack is content-
 addressed, so a snapshot's identity is its hash rather than a manifest's
 version number, and each record carries its own `codeletHash`.
+
+Note the inversion this makes for knowledge, and it is deliberate. The
+database reference says "Pyash sentences and paragraphs remain the canonical
+semantic source", with the catalog and pack as *projections* of it. For the
+knowledge core the direction is the other way round: the IR is canonical, the
+catalog indexes it, and the Pyash sentence is a rendering of it — the same
+relationship the ISA gives the compiled path, where a program is lowered into
+codelets rather than being read out of them.
+
+**The catalog has to be an index, not a searchable list.** The current
+`queryVliwCatalog` is a linear filter over the records, and two of its
+advertised query fields do not work (`hnuc` is never populated; `semantic` is
+null on unsupported rows). The KB layout spec has to specify the indexed
+lookup contract — which fields are indexed, how the index is derived from the
+pack, and how it is rebuilt — or "the VLIW is a searchable database" is a
+claim without a mechanism behind it.
 
 The commit rule follows from that pair. Write new codelets into a new pack
 segment, flush it, then atomically replace the catalog under a single-writer
@@ -665,14 +725,24 @@ case linked to the prior rejection. Replay produces the same transitions and
 final KB snapshot across backends. The four golden demos Week 12 names are
 included in acceptance.
 
-### T6 — Rust processing and the toolchain
+### T6 — Rust as the interpreter, and the toolchain
 
 **What exists:** `rust/pyac` (930 lines) with the pack codec, the catalog
 reader and the proven numeric slices; a `#![forbid(unsafe_code)]` crate on
 edition 2024 with one dependency; a shared fixture. The JavaScript facade
 remains the broader reference executor.
 
-**What is needed, in two parts.**
+**What the role is.** Rust is the interpreter for the VLIW IR, and a compiler
+from it: the same IR that the knowledge core stores can be executed, or
+lowered to C, or lowered to English, or to any other target that the IR can
+express. That is the shape `documentation/pyash.md` describes — an
+interlanguage between human and machine languages — and it makes the IR the
+pivot rather than an intermediate step on the way to one particular backend.
+The knowledge core is then a consumer of that IR: claims are stored as IR
+records, and the same records answer a query, render to English, or lower to
+C without a second representation.
+
+**What is needed, in three parts.**
 
 *First, a build story.* The crate is currently compiled by nothing. There is
 no `cargo` in this environment, no GitHub workflow runs `cargo fmt --check` or
@@ -684,7 +754,13 @@ compiles, and the direction rests on code that no pipeline has touched since
 rest: it needs a toolchain pin, a CI job, and a decision on whether the crate
 is built on every push or only on the paths that need it.
 
-*Second, the knowledge core itself in Rust.* R14 asks for the core's
+*Second, the IR has to get more precise and more searchable.* The corpus
+measurement above is the input to this part: 64.7% precision, one dead query
+field, one silently-null query field, and a linear scan where an index
+belongs. These are the items that make the VLIW an IR rather than a partial
+reconstruction, and they are all inside the crate's reach.
+
+*Third, the knowledge core itself in Rust.* R14 asks for the core's
 normalization, claim-key derivation and view resolution to be owned by the
 crate. That is roughly the 450 lines of `program/library/knowledge_core.mjs`,
 reimplemented against the pack and catalog contracts, with the crate as the
@@ -775,7 +851,22 @@ outcome is stored.
     core *is* connected to that machinery — fourteen modules import the
     contract, including the work system's queue. Does the knowledge core need
     its own spec boundary, or does that non-goal need revisiting?
-11. What would show that the knowledge core is earning its place? A
+11. **What precision target should the IR hold?** The corpus today is 64.7%
+    executable, and five of the six failures are missing fixtures rather than
+    impossible encodings. What does "high-precision" mean as a number the
+    build can check — 100% of the grammar, or 100% of the corpus?
+12. **What does "easily searchable" require?** The catalog search is a
+    linear scan, `hnuc` is an advertised query field that never matches, and
+    `semantic` is null on unsupported rows. What lookup contract should the
+    KB layout spec state: which fields are indexed, and how is the index
+    rebuilt from the pack?
+13. **Should the repository's "legacy" vocabulary change?** The IR is not a
+    compatibility target, but `27-pyash-vliw-isa.md`, the database reference
+    and the code comments still describe the encoding as recovered and
+    legacy, and the encoder's own error messages use "requires a recovered
+    legacy sentence fixture" as a reason to refuse. Does the terminology
+    change, or only the behaviour?
+14. What would show that the knowledge core is earning its place? A
     measurement against the agreed workload, not a feature list.
 
 ## 6. Reproducing the measurements
@@ -834,6 +925,20 @@ grep -n "cargo test" documentation/reference/pyac-vliw-database.md
 # the ISA's compatibility discipline and its non-goal
 grep -n "unsupported-date\|unsupported-vector" documentation/reference/pyac-vliw-database.md | head -3
 grep -n "does not .*connect codelet execution" documentation/specifications/27-pyash-vliw-isa.md
+
+# the IR's current precision and the dead query paths
+node -e 'import("./program/library/vliw/index.mjs").then(async (m) => {
+  const fs = await import("node:fs");
+  const { buildProgram } = await import("./program/program.mjs");
+  const src = fs.readFileSync("quiz/fixtures/pyac_roundtrip_corpus.pya", "utf8");
+  const sentences = buildProgram(src).sentences.filter((s) => s?.mood !== "def" && s?.mood !== "prah");
+  const db = m.buildVliwDatabase(sentences, { sources: sentences.map((_, i) => ({ language: "pyash", locator: "corpus", sentenceIndex: i })) });
+  const ex = db.catalog.records.filter((r) => r.status === "executable");
+  console.log("precision:", ex.length + "/" + sentences.length, ((ex.length / sentences.length) * 100).toFixed(1) + "%");
+  for (const r of db.catalog.records.filter((r) => r.status === "unsupported")) console.log("  ", r.error.code, "-", r.error.message);
+  console.log("hnuc query hits:", m.queryVliwCatalog(db, { hnuc: "0xA909" }).length);
+  console.log("null-semantic rows:", db.catalog.records.filter((r) => r.semantic === null).length);
+})'
 
 # the roadmap this document proposes to follow
 sed -n '730,790p' documentation/roadmap.md
