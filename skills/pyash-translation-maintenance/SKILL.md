@@ -159,6 +159,21 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   compounds can become active sense anchors. Rejected and uncertain candidates
   remain evidence; synsets with no covered lemma or compound candidate remain
   explicit residuals for later atom/compound generation.
+- For residual synsets with an already-linked atomic WordNet hypernym, run
+  `node command/wordnet_sense_compound_refinery.mjs`. Its workflow and bounded
+  batch settings live in
+  `program/library/translation/wordnet_sense_compound_refinery.pya`. It asks
+  Qwen through the future GPU Housekeeper queue for one sense's translations
+  and transparent word parts in Chinese, French, Russian, and Hindi. Resolve
+  English components with `vocab_suggest`; use only active one-atom links with
+  WordNet sense evidence. Order the candidate head-final only when the target
+  synset has the directed hypernym evidence, then reuse the compound verifier
+  and verified catalog promotion path. Keep whole atom inventories out of the
+  prompt. Each launch handles 64 ranked senses and reuses
+  `artifacts/<run-id>/sense-translations.pya` and `progress.pya`; inspect
+  `component-mappings.pya` and `compound-candidates.pya` when a sense has no
+  candidate. Uncertain results remain explicit, and failed senses are
+  retryable.
 - Compound worklists include closed single-token forms from English30k that
   segment into two or three existing atomic lemmas, plus multiword WordNet
   lemmas whose space, underscore, or hyphen boundaries match existing atoms.

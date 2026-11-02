@@ -213,7 +213,7 @@ export function acceptedDecision(record) {
   );
 }
 
-async function promoteAcceptedCompounds(decisions, { usedTargetIds = [], decisionRevision = "" } = {}) {
+export async function promoteAcceptedCompounds(decisions, { usedTargetIds = [], decisionRevision = "" } = {}) {
   const existing = selectCurrentRevisionCompounds(await readVerifiedWordNetCompounds(), decisionRevision);
   const recordsByTarget = new Map(existing.map((record) => [record.target.toLowerCase(), record]));
   const sequenceOwners = new Map();

@@ -160,6 +160,26 @@ uncertain candidates remain durable evidence and do not enter the compound lexic
 synsets without an existing covered lemma or compound candidate stay explicitly unresolved for a
 later atom/compound generation pass.
 
+For those residual senses, run `node command/wordnet_sense_compound_refinery.mjs`. Its Pyash
+workflow is `wordnet_sense_compound_refinery.pya`; each launch selects the next 64 frequency-ranked
+senses that have a compatible already-linked atomic WordNet head. It asks the configured Qwen mind,
+through the future GPU Housekeeper queue, for sense-specific translations and transparent compound
+parts in Chinese, French, Russian, and Hindi. The prompt contains one sense definition and no atom
+inventory. `vocab_suggest` resolves each English component gloss, and only active one-atom links
+with WordNet senses become candidates. Candidates are ordered head-final using the target sense's
+directed hypernym evidence, then pass through the same compound verifier and promotion contract as
+the closed-word sweep.
+
+The run folder `artifacts/<run-id>/` holds `worklist.pya`, resumable `sense-translations.pya`,
+`component-mappings.pya`, `compound-candidates.pya`, `progress.pya`,
+`sense-compound-decisions.pya`, and verification artifacts.
+Completed translation rows are keyed by WordNet source hash and prompt revision; rerunning resumes
+the next eligible batch and reuses valid translations. The append-only run evidence is
+`newspaper/<run-id>.pya`. Accepted decisions persist in `english_wordnet_compound_decisions.pya` and
+activate only in `compound_coverage_wordnet_verified.pya`; uncertain, rejected, and unmapped results
+remain in their artifacts and do not enter the active compound catalog. Re-run the command to
+continue; it stops selecting completed senses for the current atomic inventory and prompt revision.
+
 Only compound candidates with at least one target-sense/head-sense pair supported by a directed
 same-part-of-speech WordNet hypernym path enter the Housekeeper worklist. Candidates without that
 edge remain visible in the allocation artifact as `no-wordnet-head-evidence`; they are not treated
