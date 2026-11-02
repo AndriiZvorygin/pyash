@@ -5,10 +5,14 @@ import { fileURLToPath } from "node:url";
 import pyashWords from "../program/library/pyashWords.json" with { type: "json" };
 import {
   buildDerivedCompoundCoverage,
+  appendNovelCompoundSourceTerms,
   loadCuratedCompoundDecompositions,
   renderDerivedCompoundCoveragePya,
-  sourceTermsFromDictionaryRows
+  sourceTermsFromDictionaryRows,
+  sourceTermsFromEnglish30kRows,
+  sourceTermsFromWordNetIndex
 } from "../program/library/translation/compound_coverage.mjs";
+import { loadEnglish30k } from "../program/library/translation/english30k_coverage.mjs";
 import { loadCompoundMorphology } from "../program/library/translation/compound_morphology.mjs";
 import { classifyCompoundCoverage } from "../program/library/translation/compound_verification.mjs";
 import {
@@ -26,7 +30,7 @@ const languageSources = [
   ["interlingua", "ia"]
 ];
 
-export async function loadCoverage() {
+export async function loadCoverage({ maximumCompoundComponents = 3, wordnetIndex = null } = {}) {
   const sourceTerms = [];
   for (const [language, field] of languageSources) {
     const filename = `dictionary_${field}.json`;
@@ -37,6 +41,20 @@ export async function loadCoverage() {
       rows,
       provenance: `caterer/pyac/lyac/${filename}`
     }));
+  }
+  const english30k = await loadEnglish30k();
+  const curatedDecompositions = await loadCuratedCompoundDecompositions();
+  sourceTerms.push(...appendNovelCompoundSourceTerms(
+    sourceTerms,
+    curatedDecompositions,
+    sourceTermsFromEnglish30kRows(english30k.rows)
+  ));
+  if (wordnetIndex) {
+    sourceTerms.push(...appendNovelCompoundSourceTerms(
+      sourceTerms,
+      curatedDecompositions,
+      sourceTermsFromWordNetIndex(wordnetIndex)
+    ));
   }
   const manifest = await loadPyacComplexityLayers();
   const layerIndex = await loadPyacWordLayerIndex({
@@ -52,15 +70,18 @@ export async function loadCoverage() {
   return buildDerivedCompoundCoverage({
     atomicEntries: pyashWords,
     sourceTerms,
-    curatedDecompositions: await loadCuratedCompoundDecompositions(),
+    curatedDecompositions,
     morphologyEntries: await loadCompoundMorphology(),
+    maximumCompoundComponents,
     layerIndex: { ...layerIndex, englishToPyash }
   });
 }
 
 export async function runCompoundCoverage(args = process.argv.slice(2)) {
   const mode = args[0] ?? "summary";
-  const coverage = await loadCoverage();
+  const { loadDefaultEnglishSentenceResources } = await import("../program/library/translation/english_sentence.mjs");
+  const resources = await loadDefaultEnglishSentenceResources();
+  const coverage = await loadCoverage({ wordnetIndex: resources.wordnet.index });
   if (mode === "pya") {
     return renderDerivedCompoundCoveragePya(coverage.records);
   }

@@ -105,6 +105,15 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   compounds can become active sense anchors. Rejected and uncertain candidates
   remain evidence; synsets with no covered lemma or compound candidate remain
   explicit residuals for later atom/compound generation.
+- Compound worklists include closed single-token forms from English30k that
+  segment into two or three existing atomic lemmas, plus multiword WordNet
+  lemmas whose space, underscore, or hyphen boundaries match existing atoms.
+  WordNet phrase boundaries produce review candidates, never automatic
+  acceptance. English spelling boundaries also remain candidates requiring
+  semantic review. Existing source records keep stable candidate identities
+  when these sources are added. Worklist items and Housekeeper duties run in
+  English30k rank order, with exact Princeton WordNet 3.1 tag counts breaking
+  equal-rank ties; missing counts stay unknown and sort last.
 - Compound verification prompts receive up to four frequency-ranked residual
   WordNet senses and up to four senses per component, with definition text only;
   strip usage examples after the semicolon. Every accepted decision must cite

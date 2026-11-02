@@ -509,6 +509,8 @@ export function parseEnglishWordNetFrequencyAllocationConfig(source) {
   if (metadata.format !== "english-wordnet-frequency-allocation-v1"
     || !Number.isSafeInteger(metadata["allocation-batch-size"])
     || !Number.isSafeInteger(metadata["maximum-compound-components"])
+    || metadata["compound-candidate-source"] !== "english30k-closed-wordnet-multiword-existing-atoms-v1"
+    || metadata["compound-candidate-order"] !== "english30k-rank-ascending-princeton-tag-count-descending"
     || !Number.isSafeInteger(metadata["compound-verification-batch-size"])
     || !String(metadata["compound-verification-revision"] ?? "").trim()
     || !String(metadata["alias-target-policy"] ?? "").trim()) {

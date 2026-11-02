@@ -59,6 +59,8 @@ test("frequency allocation configuration versions compound verification", async 
   );
   assert.equal(config["compound-verification-revision"], "wordnet-modifier-literalness-v9");
   assert.equal(config["compound-verification-batch-size"], 64);
+  assert.equal(config["compound-candidate-source"], "english30k-closed-wordnet-multiword-existing-atoms-v1");
+  assert.equal(config["compound-candidate-order"], "english30k-rank-ascending-princeton-tag-count-descending");
   assert.match(config["alias-target-policy"], /grammatical targets remain residual/u);
 });
 

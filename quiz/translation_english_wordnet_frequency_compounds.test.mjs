@@ -67,6 +67,20 @@ test("compound verifier batches retain alternate decompositions in one decision 
   assert.deepEqual(groups[1].map((record) => record.id), ["candidate-three"]);
 });
 
+test("compound verification groups run in English30k rank order", () => {
+  const lowFrequency = row("low-frequency", "apple-compound", { en: "apple-compound" }, ["appl", "fruit"]);
+  lowFrequency.verificationRecord.frequencyRank = 900;
+  lowFrequency.verificationRecord.frequencyTagCount = 1;
+  const highFrequency = row("high-frequency", "zebra-compound", { en: "zebra-compound" }, ["zebr", "animal"]);
+  highFrequency.verificationRecord.frequencyRank = 20;
+  highFrequency.verificationRecord.frequencyTagCount = 0;
+
+  assert.deepEqual(
+    groupWordNetCompoundCandidates([lowFrequency, highFrequency]).map((group) => group[0].target),
+    ["zebra-compound", "apple-compound"]
+  );
+});
+
 test("completed compound decisions are skipped without dropping unresolved alternatives", () => {
   const candidates = [
     row("candidate-one", "brainstorm", { zh: "头脑风暴" }, ["twum", "hfup"]),
@@ -77,6 +91,24 @@ test("completed compound decisions are skipped without dropping unresolved alter
   const groups = groupWordNetCompoundCandidates(candidates, new Set(["candidate-three"]));
   assert.equal(groups.length, 1);
   assert.deepEqual(groups[0].map((record) => record.id), ["candidate-one", "candidate-two"]);
+});
+
+test("compound candidates are emitted in English30k frequency order", () => {
+  const residual = [
+    { source: "n:00000010-n", pos: "n", synset: "00000010-n", lemmas: ["zebra"], gloss: "zebra", candidates: [] },
+    { source: "n:00000011-n", pos: "n", synset: "00000011-n", lemmas: ["apple"], gloss: "apple", candidates: [] }
+  ];
+  const candidates = [
+    { id: "zebra", target: "zebra", aliases: [], pyashSequence: ["zebra", "animal"], componentGlosses: ["zebra", "animal"] },
+    { id: "apple", target: "apple", aliases: [], pyashSequence: ["apple", "fruit"], componentGlosses: ["apple", "fruit"] }
+  ];
+  const worklist = compoundWorklist(residual, candidates, [], [], new Map(), "v1", {
+    rankForEnglish: (word) => word === "zebra" ? 10 : 200
+  });
+
+  assert.deepEqual(worklist.map((row) => row.target), ["zebra", "apple"]);
+  assert.deepEqual(worklist.map((row) => row.frequencyRank), [10, 200]);
+  assert.deepEqual(worklist.map((row) => row.verificationRecord.frequencyRank), [10, 200]);
 });
 
 test("derived compound round trips retain decision revision and audit links", () => {

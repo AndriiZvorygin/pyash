@@ -229,7 +229,12 @@ export function compoundWorklist(
   assignedTargetIds,
   decisionsById = new Map(),
   decisionRevision = "",
-  { wordnetIndex = null, senseTagCounts = new Map() } = {}
+  {
+    wordnetIndex = null,
+    senseTagCounts = new Map(),
+    rankForEnglish = () => Number.POSITIVE_INFINITY,
+    maximumCompoundComponents = 3
+  } = {}
 ) {
   const headRelationIndex = buildWordNetHeadRelationIndex(wordnetIndex?.relations ?? []);
   const residualByTerm = new Map();
@@ -256,13 +261,22 @@ export function compoundWorklist(
         const rankRows = (sense.candidates ?? []).filter((candidate) => (
           [target, ...aliases].includes(normalized(candidate.lemma))
         ));
+        const matchingLemmas = sense.lemmas.filter((lemma) => [target, ...aliases].includes(normalized(lemma)));
+        const frequencyRanks = [
+          ...rankRows.map((row) => Number(row.english30kRank ?? row.rank)),
+          ...matchingLemmas.map((lemma) => Number(rankForEnglish(lemma)))
+        ].filter((rank) => Number.isFinite(rank) && rank > 0);
+        const exactTagCounts = [
+          ...rankRows.map((row) => row.tagCount),
+          senseTagCounts.get(sense.source)
+        ].filter(Number.isSafeInteger);
         return {
           source: sense.source,
           pos: sense.pos,
           lemmas: [...sense.lemmas],
           definition: definitionOnly(sense.gloss),
-          frequencyRank: rankRows.length ? Math.min(...rankRows.map((row) => row.rank)) : Number.MAX_SAFE_INTEGER,
-          tagCount: rankRows.map((row) => row.tagCount).filter(Number.isSafeInteger).sort((left, right) => right - left)[0] ?? -1
+          frequencyRank: frequencyRanks.length ? Math.min(...frequencyRanks) : Number.MAX_SAFE_INTEGER,
+          tagCount: exactTagCounts.length ? Math.max(...exactTagCounts) : -1
         };
       })
       .sort((left, right) => left.frequencyRank - right.frequencyRank
@@ -324,8 +338,14 @@ export function compoundWorklist(
       ...sense,
       compatibleHeadSenseIds: sense.compatibleHeadSenseIds.filter((id) => selectedHeadSenseIds.has(id))
     }));
+    const frequencyRank = rankedTargetSenseEvidence.length
+      ? Math.min(...rankedTargetSenseEvidence.map((sense) => sense.frequencyRank))
+      : Number.MAX_SAFE_INTEGER;
+    const frequencyTagCount = rankedTargetSenseEvidence
+      .filter((sense) => sense.frequencyRank === frequencyRank)
+      .reduce((best, sense) => Math.max(best, sense.tagCount), -1);
     const pyashSequence = sequence(record.pyashSequence);
-    if (pyashSequence.length < 2 || pyashSequence.length > 3) continue;
+    if (pyashSequence.length < 2 || pyashSequence.length > maximumCompoundComponents) continue;
     const targetId = `compound:${pyashSequence.join("+")}`;
     rows.push({
       ...record,
@@ -338,6 +358,8 @@ export function compoundWorklist(
       componentGlosses: record.componentGlosses,
       sourceSurfaces: record.sourceSurfaces,
       sourceMorphemesByLanguage: record.sourceMorphemesByLanguage,
+      frequencyRank,
+      frequencyTagCount,
       status: "candidate-closed",
       disposition: targetIdsInUse.has(targetId)
         ? "target-identity-already-linked"
@@ -349,11 +371,20 @@ export function compoundWorklist(
       targetId,
       targetSenseEvidence: targetEvidenceWithHead,
       componentSenseEvidence,
-      verificationRecord: { ...record, componentSenseEvidence, targetSenseEvidence: targetEvidenceWithHead },
+      verificationRecord: {
+        ...record,
+        frequencyRank,
+        frequencyTagCount,
+        componentSenseEvidence,
+        targetSenseEvidence: targetEvidenceWithHead
+      },
       evidence: record.evidence
     });
   }
-  return rows.sort((left, right) => left.target.localeCompare(right.target) || left.id.localeCompare(right.id));
+  return rows.sort((left, right) => left.frequencyRank - right.frequencyRank
+    || right.frequencyTagCount - left.frequencyTagCount
+    || left.target.localeCompare(right.target)
+    || left.id.localeCompare(right.id));
 }
 
 function renderRowsPya({ name, format, runId, records, extra = {} }) {
@@ -418,15 +449,18 @@ async function writeBatches(directory, { kind, name, format, runId, records, bat
 }
 
 export async function prepareWordNetFrequencyAllocation() {
-  const [resources, frequency, compoundCoverage, linkerSource, allocationConfigSource, compoundDecisions] = await Promise.all([
+  const allocationConfigSource = await readFile(ENGLISH_WORDNET_FREQUENCY_ALLOCATION_CONFIG_URL, "utf8");
+  const allocationConfig = parseEnglishWordNetFrequencyAllocationConfig(allocationConfigSource);
+  const [resources, frequency, linkerSource, compoundDecisions] = await Promise.all([
     loadDefaultEnglishSentenceResources(),
     loadEnglishWordNetFrequencyResources(),
-    loadCoverage(),
     readFile(new URL("../program/library/translation/english_wordnet_bridges.pya", import.meta.url), "utf8"),
-    readFile(ENGLISH_WORDNET_FREQUENCY_ALLOCATION_CONFIG_URL, "utf8"),
     loadEnglishWordNetCompoundDecisions()
   ]);
-  const allocationConfig = parseEnglishWordNetFrequencyAllocationConfig(allocationConfigSource);
+  const compoundCoverage = await loadCoverage({
+    maximumCompoundComponents: allocationConfig["maximum-compound-components"],
+    wordnetIndex: resources.wordnet.index
+  });
   const catalog = parseEnglishWordNetBridgeCatalog(linkerSource);
   const resolveWord = buildWordResolver(resources, compoundCoverage);
   const rankForEnglish = rankLookup(resources);
@@ -487,7 +521,9 @@ export async function prepareWordNetFrequencyAllocation() {
     allocationConfig["compound-verification-revision"],
     {
       wordnetIndex: resources.wordnet.index,
-      senseTagCounts: senseTagCountIndex(frequency.joined.entries)
+      senseTagCounts: senseTagCountIndex(frequency.joined.entries),
+      rankForEnglish,
+      maximumCompoundComponents: allocationConfig["maximum-compound-components"]
     }
   );
   const sourceHash = sha256(stableJson({
@@ -502,6 +538,12 @@ export async function prepareWordNetFrequencyAllocation() {
     acceptedCompounds: compoundCoverage.accepted.map((record) => [
       normalized(record.target),
       ...(record.aliases ?? []).map(normalized),
+      sequence(record.pyashSequence)
+    ]).sort((a, b) => a[0].localeCompare(b[0])),
+    compoundCandidates: compoundCoverage.candidates.map((record) => [
+      record.id,
+      normalized(record.target),
+      (record.componentGlosses ?? []).map(normalized),
       sequence(record.pyashSequence)
     ]).sort((a, b) => a[0].localeCompare(b[0])),
     compoundDecisions: compoundDecisions.rows.map((record) => [record.candidateId, record.status]).sort((a, b) => a[0].localeCompare(b[0])),

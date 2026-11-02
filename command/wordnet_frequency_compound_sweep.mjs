@@ -69,8 +69,17 @@ export function groupWordNetCompoundCandidates(records = [], completedIds = new 
     group.push({ ...record, id });
     groups.set(key, group);
   }
+  const frequencyRank = (group) => Math.min(...group
+    .map((record) => Number(record.frequencyRank))
+    .filter((rank) => Number.isFinite(rank) && rank > 0), Number.MAX_SAFE_INTEGER);
+  const frequencyTagCount = (group) => Math.max(-1, ...group
+    .map((record) => Number(record.frequencyTagCount))
+    .filter(Number.isSafeInteger));
   return [...groups.values()].sort((left, right) => (
-    left[0].target.localeCompare(right[0].target) || candidateId(left[0]).localeCompare(candidateId(right[0]))
+    frequencyRank(left) - frequencyRank(right)
+    || frequencyTagCount(right) - frequencyTagCount(left)
+    || left[0].target.localeCompare(right[0].target)
+    || candidateId(left[0]).localeCompare(candidateId(right[0]))
   ));
 }
 

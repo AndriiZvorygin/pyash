@@ -16,6 +16,7 @@ export const DERIVED_COMPOUND_STATUSES = Object.freeze([
   "accepted-curated",
   "candidate-closed"
 ]);
+export const WORDNET_COMPOUND_PROVENANCE = "Open English WordNet multiword lemma";
 
 function stableValue(value) {
   if (Array.isArray(value)) return value.map(stableValue);
@@ -96,6 +97,64 @@ export function sourceTermsFromDictionaryRows({ language, surfaceField = languag
     .filter((row) => normalizeTerm(row.target) && typeof row.sourceSurfaces[language] === "string" && row.sourceSurfaces[language].trim());
 }
 
+export function sourceTermsFromEnglish30kRows(rows, { provenance = "pyachso2n/English30k.txt" } = {}) {
+  if (!Array.isArray(rows)) throw invalid("English30k compound source rows must be an array");
+  return rows
+    .map((row) => {
+      const word = typeof row?.word === "string" ? row.word.normalize("NFC").trim() : "";
+      if (!/^[a-z0-9]+$/iu.test(word)) return null;
+      return {
+        target: word,
+        sourceSurfaces: { english: word },
+        sourceMorphemesByLanguage: { english: [word] },
+        provenance
+      };
+    })
+    .filter(Boolean);
+}
+
+export function sourceTermsFromWordNetIndex(wordnetIndex, { provenance = WORDNET_COMPOUND_PROVENANCE } = {}) {
+  if (!(wordnetIndex?.bySynset instanceof Map)) {
+    throw invalid("WordNet compound source requires an indexed synset map");
+  }
+  const terms = new Map();
+  for (const senses of wordnetIndex.bySynset.values()) {
+    for (const sense of senses ?? []) {
+      const sourceSurface = typeof sense?.lemma === "string" ? sense.lemma.normalize("NFC").trim() : "";
+      const parts = sourceSurface.split(/[\s_-]+/u).filter(Boolean);
+      if (parts.length < 2) continue;
+      const target = parts.join(" ").toLowerCase();
+      if (!terms.has(target)) {
+        terms.set(target, {
+          target,
+          sourceSurfaces: { english: sourceSurface },
+          sourceMorphemesByLanguage: { english: parts },
+          provenance
+        });
+      }
+    }
+  }
+  return [...terms.values()].sort((left, right) => left.target.localeCompare(right.target));
+}
+
+export function appendNovelCompoundSourceTerms(sourceTerms, curatedDecompositions, additions) {
+  if (!Array.isArray(sourceTerms) || !Array.isArray(curatedDecompositions) || !Array.isArray(additions)) {
+    throw invalid("compound source merging requires arrays");
+  }
+  const seen = new Set([
+    ...sourceTerms.map((row) => normalizeTerm(row?.target)),
+    ...curatedDecompositions.map((row) => normalizeTerm(row?.target))
+  ].filter(Boolean));
+  const novel = [];
+  for (const row of additions) {
+    const target = normalizeTerm(row?.target);
+    if (!target || seen.has(target)) continue;
+    seen.add(target);
+    novel.push(row);
+  }
+  return novel;
+}
+
 export async function loadCuratedCompoundDecompositions({
   url = new URL("./compound_coverage_curated.pya", import.meta.url),
   wordnetUrl = WORDNET_VERIFIED_COMPOUNDS_URL
@@ -145,7 +204,7 @@ export function segmentDelimitedCompound(term, atoms) {
   return [parts];
 }
 
-export function segmentClosedCompound(term, atoms, { minimumPartLength = 3, maximumParts = 4 } = {}) {
+export function segmentClosedCompound(term, atoms, { minimumPartLength = 3, maximumParts = 3 } = {}) {
   const value = normalizeTerm(term);
   if (!/^[a-z0-9]+$/u.test(value)) return [];
   const memo = new Map();
@@ -303,10 +362,14 @@ export function buildDerivedCompoundCoverage({
   sourceTerms = [],
   curatedDecompositions = [],
   morphologyEntries = [],
+  maximumCompoundComponents = 3,
   layerIndex
 } = {}) {
   if (!layerIndex?.englishToPyash || !layerIndex?.byWord) {
     throw invalid("compound coverage requires English and Pyash layer indexes");
+  }
+  if (!Number.isSafeInteger(maximumCompoundComponents) || maximumCompoundComponents < 2) {
+    throw invalid("maximum compound components must be an integer of at least two", { maximumCompoundComponents });
   }
   const atoms = atomicMap(atomicEntries);
   const morphologyIndex = buildCompoundMorphologyIndex({ atomicEntries, morphologyEntries });
@@ -357,15 +420,18 @@ export function buildDerivedCompoundCoverage({
     const delimited = segmentDelimitedCompound(target, atoms);
     if (delimited.length) {
       const parts = delimited[0];
+      const wordNetBoundaryCandidate = source.provenance.has(WORDNET_COMPOUND_PROVENANCE);
       const record = makeRecord({
         target,
         sourceMorphemes: parts,
         componentGlosses: parts,
         sourceSurfaces: source.sourceSurfaces,
         sourceMorphemesByLanguage: source.sourceMorphemesByLanguage,
-        status: "accepted-delimited",
-        confidence: "derived-boundary",
-        evidence: "exact source delimiter and existing atomic components",
+        status: wordNetBoundaryCandidate ? "candidate-closed" : "accepted-delimited",
+        confidence: wordNetBoundaryCandidate ? "wordnet-lexical-boundary" : "derived-boundary",
+        evidence: wordNetBoundaryCandidate
+          ? "Open English WordNet multiword lemma boundary; semantic composition requires review"
+          : "exact source delimiter and existing atomic components",
         provenance: [...source.provenance].sort().join("; ") || "derived-compound-coverage",
         layerIndex,
         morphologyIndex,
@@ -376,7 +442,7 @@ export function buildDerivedCompoundCoverage({
       continue;
     }
 
-    const closed = segmentClosedCompound(target, atoms);
+    const closed = segmentClosedCompound(target, atoms, { maximumParts: maximumCompoundComponents });
     if (!closed.length) continue;
     for (const parts of closed) {
       const record = makeRecord({

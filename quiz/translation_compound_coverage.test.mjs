@@ -6,13 +6,17 @@ import { interpret } from "../program/bridge/index.mjs";
 import { forget } from "../program/remember/index.mjs";
 
 import {
+  appendNovelCompoundSourceTerms,
   buildDerivedCompoundCoverage,
   loadCuratedCompoundDecompositions,
   renderDerivedCompoundCoveragePya,
   resolveDerivedCompound,
   segmentClosedCompound,
   segmentDelimitedCompound,
-  sourceTermsFromDictionaryRows
+  sourceTermsFromDictionaryRows,
+  sourceTermsFromEnglish30kRows,
+  sourceTermsFromWordNetIndex,
+  WORDNET_COMPOUND_PROVENANCE
 } from "../program/library/translation/compound_coverage.mjs";
 import { buildCompoundMorphologyIndex, loadCompoundMorphology } from "../program/library/translation/compound_morphology.mjs";
 import {
@@ -209,7 +213,64 @@ test("compound coverage separates delimited use from accidental closed splits", 
   assert.deepEqual(segmentDelimitedCompound("blue-print", atoms), [["blue", "print"]]);
   assert.deepEqual(segmentDelimitedCompound("covered", atoms), []);
   assert.deepEqual(segmentClosedCompound("blueprint", atoms), [["blue", "print"]]);
+  assert.deepEqual(segmentClosedCompound("blackbluegrassroots", atoms), []);
+  assert.deepEqual(segmentClosedCompound("blackbluegrassroots", atoms, { maximumParts: 4 }), [["black", "blue", "grass", "roots"]]);
   assert.deepEqual(segmentClosedCompound("meatus", atoms), []);
+});
+
+test("English30k compound inputs include closed spellings and skip phrases", () => {
+  const sourceTerms = sourceTermsFromEnglish30kRows([
+    { rank: 1, word: "blueprint" },
+    { rank: 2, word: "blue print" },
+    { rank: 3, word: "mother-in-law" },
+    { rank: 4, word: "catfish" }
+  ]);
+
+  assert.deepEqual(sourceTerms.map((row) => row.target), ["blueprint", "catfish"]);
+  assert.deepEqual(sourceTerms[0].sourceSurfaces, { english: "blueprint" });
+  assert.equal(sourceTerms[0].provenance, "pyachso2n/English30k.txt");
+  assert.throws(() => sourceTermsFromEnglish30kRows("blueprint"), /must be an array/u);
+});
+
+test("new compound sources do not mutate identities for existing lexical targets", () => {
+  const sourceTerms = [{ target: "brainstorm", sourceSurfaces: { zh: "头脑风暴" } }];
+  const curated = [{ target: "identity-confusion" }];
+  const additions = [
+    { target: "brainstorm", sourceSurfaces: { english: "brainstorm" } },
+    { target: "identity-confusion", sourceSurfaces: { english: "identity confusion" } },
+    { target: "pocketbook", sourceSurfaces: { english: "pocketbook" } },
+    { target: "POCKETBOOK", sourceSurfaces: { english: "pocketbook" } }
+  ];
+
+  assert.deepEqual(
+    appendNovelCompoundSourceTerms(sourceTerms, curated, additions),
+    [{ target: "pocketbook", sourceSurfaces: { english: "pocketbook" } }]
+  );
+});
+
+test("multiword WordNet lemmas yield review candidates from existing atom components", () => {
+  const sourceTerms = sourceTermsFromWordNetIndex({
+    bySynset: new Map([[
+      "n:00000001-n",
+      [{ lemma: "snake_bird" }, { lemma: "bird-snake" }, { lemma: "snake" }]
+    ]])
+  });
+
+  assert.deepEqual(sourceTerms.map((row) => row.target), ["bird snake", "snake bird"]);
+  assert.equal(sourceTerms[1].provenance, WORDNET_COMPOUND_PROVENANCE);
+  const coverage = buildDerivedCompoundCoverage({
+    atomicEntries,
+    sourceTerms: [sourceTerms[1]],
+    curatedDecompositions: [],
+    morphologyEntries: [],
+    layerIndex
+  });
+
+  assert.equal(coverage.accepted.length, 0);
+  assert.equal(coverage.candidates.length, 1);
+  assert.deepEqual(coverage.candidates[0].componentGlosses, ["snake", "bird"]);
+  assert.equal(coverage.candidates[0].status, "candidate-closed");
+  assert.match(coverage.candidates[0].evidence, /semantic composition requires review/u);
 });
 
 test("compound morphology keeps lexical heads separate from marked endings", async () => {
