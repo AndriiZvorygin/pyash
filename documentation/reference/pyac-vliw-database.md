@@ -101,10 +101,13 @@ renderVliwCatalogPya(database)
 ```
 
 Queries may select record identity, status, semantic adapter, mood, verb,
-case, legacy word, literal value, source language, locator, source line or
+case, word, literal value, source language, locator, source line or
 sentence, content hash, canonical sentence text, and derived read/write
-references. Unsupported records remain queryable and retain their error
-identity; they never become executable by inference.
+references. The `hnuc` criterion selects every record whose codelet contains
+a word with that vocabulary code, because the 16-bit words of a codelet *are*
+the HNUC codes; it accepts a number or a hex spelling such as `0x8a64`.
+Unsupported records remain queryable and retain their error identity; they
+never become executable by inference.
 
 Replay validates the pack hash, each codelet hash, semantic decoding, and the
 optional recorded result. A mismatch raises a stable database error. A
