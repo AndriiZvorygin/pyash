@@ -92,6 +92,20 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   atomic or accepted compound anchor and both resolve to the same Pyash
   sequence. Grammar particles are not lexical sense anchors; leave aliases
   that resolve to grammar or change sequence as residual candidates.
+- For direct-candidate atoms that remain unlinked, run
+  `node command/wordnet_atom_sense_sweep.mjs` to ask the configured Qwen model
+  to choose among the supplied WordNet glosses. The worklist requires an exact
+  atom-label match or an accepted inflectional lemma mapping to the same Pyac
+  atom; alias-only matches are retained as no-fit evidence. Qwen selects only
+  an existing candidate and cannot create a new anchor. The workflow and model
+  are configured in `english_wordnet_atom_sense_sweep.pya`, dispatches up to
+  eight non-overlapping batches per Housekeeper wave, and checkpoints submitted
+  handles, responses, and decisions in the run's artifact folder. It resumes
+  from those Pyash checkpoints. Keep `PYA_MIND_RESPONSE` unset; a nonempty
+  Housekeeper queue is valid, and Housekeeper manages admission for each bounded
+  wave. Preserve uncertain or no-fit outputs without activating them. Accepted
+  selections are recorded as atom-target sense links before frequency
+  allocation is reconciled.
 - Allocation keeps one active anchor per synset and one synset per Pyac target.
   Curated and deterministic bridge rows stay reserved. Existing model links
   remain only when their selected Pyac identity agrees with the frequency
@@ -105,6 +119,37 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   that remain free, candidates already linked to another anchor, and atoms
   with no exact WordNet candidate. Preserve linked rows as checkpoints and do
   not infer unsupported sense links.
+- Link an existing Pyash atom's English surface to its lexical lemma in
+  `english_lemmas.pya` before WordNet sense selection when the atom surface is
+  inflected. Keep the base lemma's canonical target on one Pyash atom; surface
+  variants may reuse that same target with morphology metadata. Do not assign
+  one lemma to competing atom identities. The frequency resolver may accept a
+  lemma mapping as an atomic WordNet target only when its Pyash sequence is one
+  lexical atom; tense, number, and other grammar suffixes stay outside the
+  lexical anchor. Frequency allocation passes the WordNet part of speech into
+  resolution: when a surface is itself a WordNet lemma for that part of speech,
+  do not apply an irregular or inflectional mapping from another part of speech
+  (for example, noun `thought` should not displace the `idea` sense by mapping
+  to verb `think`).
+- For no-direct-candidate atom coverage, run
+  `node command/english_atom_lemma_scan.mjs`. The deterministic scanner reads
+  the current allocation ledger and assigns every English label as a lemma, a
+  grammar word, or a deprecated duplicate. It uses the English grammar catalog
+  and underscore-marked morphology labels, accepts regular WordNet inflections
+  only when the surface is not itself a WordNet lemma, and excludes comparative
+  and superlative suffix guesses. It orders duplicate canonical choices by
+  English30k rank and then the simpler Pyac glyph layer; unresolved forms stay
+  at their own surface lemma. The full assignment ledger is
+  `english_atom_lemma_assignments.pya`; the command adds accepted mappings to
+  `english_lemmas.pya` and reruns frequency allocation. Preserve the catalog's
+  English30k source hash and cutoff during writes.
+- If two existing atoms collide on one lemma, keep the reviewed canonical
+  atom and record the displaced surface as `kind: duplicate`,
+  `status: deprecated-duplicate`, and `duplicateOf: <canonical surface>` in
+  `english_lemmas.pya`. Preserve the atom in the source inventory for now, but
+  remove it from compound candidate formation. Record both English frequency
+  and Pyac glyph-layer evidence; the explicit canonical choice remains
+  reviewable when those measures disagree.
 - Run `node command/wordnet_frequency_compound_sweep.mjs` to verify residual
   closed-compound candidates through the configured Pyash mind and GPU
   Housekeeper. Never call a provider directly. The sweep groups alternate

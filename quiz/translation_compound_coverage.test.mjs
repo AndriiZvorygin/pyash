@@ -32,6 +32,7 @@ import {
   verifyCompoundCoverage
 } from "../program/library/translation/compound_verification.mjs";
 import pyashWords from "../program/library/pyashWords.json" with { type: "json" };
+import { loadCoverage as loadDefaultCompoundCoverage } from "../command/compound_coverage.mjs";
 import {
   loadCompoundLexicon,
   loadChineseCompoundLexicon,
@@ -598,6 +599,17 @@ test("compound mind verifier uses the existing Pyash mind write shape", async ()
     by: { num: 0 },
     atmost: { num: 240 }
   }]);
+});
+
+test("default compound coverage excludes deprecated duplicate atoms", async () => {
+  const coverage = await loadDefaultCompoundCoverage();
+  const deprecated = new Set(["drus", "gvin"]);
+
+  assert.ok(!coverage.activeAtomicEntries.some((entry) => deprecated.has(entry.pya)));
+  assert.ok(coverage.records.every((record) => !record.pyashSequence.some((word) => deprecated.has(word))));
+  assert.ok(coverage.rejected.some((record) => (
+    record.target === "given name" && record.status === "rejected-deprecated-component"
+  )));
 });
 
 test("ambiguous candidate decompositions share one LLM decision", async () => {

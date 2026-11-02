@@ -54,6 +54,163 @@ test("frequency anchor resolution rejects aliases whose canonical target is gram
   assert.ok(records.every((record) => record.candidates.length === 0));
 });
 
+test("frequency anchor resolution accepts only single-atom lemma mappings", () => {
+  const resources = {
+    coverage: {
+      byVariant: new Map([
+        ["seem", {
+          coverageType: "lemma",
+          canonicalEnglish: "seemed",
+          pyashSequence: ["sri2t"]
+        }],
+        ["walked", {
+          coverageType: "lemma",
+          canonicalEnglish: "walking",
+          pyashSequence: ["pfin", "ki"]
+        }],
+        ["draw", {
+          coverageType: "atomic",
+          canonicalEnglish: "draw",
+          pyashSequence: ["cyuk"],
+          lemmaKind: "anchor",
+          lemmaPyashSequence: ["cyuk"]
+        }],
+        ["drew", {
+          coverageType: "atomic",
+          canonicalEnglish: "draw",
+          pyashSequence: ["cyuk"],
+          lemmaKind: "duplicate",
+          lemmaPyashSequence: ["cyuk"]
+        }],
+        ["given", {
+          coverageType: "atomic",
+          canonicalEnglish: "giving",
+          pyashSequence: ["kwin"],
+          lemmaKind: "duplicate",
+          lemmaPyashSequence: ["kwin"]
+        }],
+        ["giving", {
+          coverageType: "atomic",
+          canonicalEnglish: "giving",
+          pyashSequence: ["kwin"],
+          lemmaKind: "inflectional",
+          lemmaPyashSequence: ["kwin"]
+        }]
+      ])
+    }
+  };
+  const resolveWord = buildWordResolver(resources, { accepted: [] });
+  const resolved = resolveWord("seem");
+  assert.equal(resolved.coverageType, "atomic");
+  assert.equal(resolved.canonicalEnglish, "seemed");
+  assert.deepEqual(resolved.pyashSequence, ["sri2t"]);
+  assert.equal(resolveWord("walked"), null);
+  assert.equal(resolveWord("draw").canonicalEnglish, "draw");
+  assert.deepEqual(resolveWord("draw").pyashSequence, ["cyuk"]);
+  assert.equal(resolveWord("drew").canonicalEnglish, "draw");
+  assert.deepEqual(resolveWord("drew").pyashSequence, ["cyuk"]);
+  assert.equal(resolveWord("given").canonicalEnglish, "giving");
+  assert.deepEqual(resolveWord("given").pyashSequence, ["kwin"]);
+  assert.equal(resolveWord("giving").canonicalEnglish, "giving");
+  assert.deepEqual(resolveWord("giving").pyashSequence, ["kwin"]);
+
+  const records = buildEnglishWordNetFrequencyAllocationRecords({
+    wordnetIndex: {
+      bySynset: new Map([["v:02137900-v", [{ lemma: "seem", gloss: "give a certain impression" }]]])
+    },
+    frequencyJoin: { entries: [] },
+    rankForEnglish: () => 200,
+    resolveWord
+  });
+  assert.deepEqual(records[0].candidates.map((candidate) => ({
+    target: candidate.target,
+    targetId: candidate.targetId,
+    pyashSequence: candidate.pyashSequence
+  })), [{ target: "seemed", targetId: "atom:sri2t", pyashSequence: ["sri2t"] }]);
+});
+
+test("frequency anchor resolution keeps a lexical WordNet lemma separate from another part of speech's inflection", () => {
+  const resources = {
+    wordnet: {
+      index: {
+        byLemma: new Map([["thought", [{ pos: "n", lemma: "thought" }]]])
+      }
+    },
+    coverage: {
+      byVariant: new Map([
+        ["thought", {
+          coverageType: "atomic",
+          canonicalEnglish: "think",
+          pyashSequence: ["hcik"],
+          lemmaKind: "irregular",
+          lemmaPyashSequence: ["hcik"]
+        }],
+        ["idea", {
+          coverageType: "dictionary-alias",
+          canonicalEnglish: "concepts",
+          pyashSequence: ["kfen"]
+        }],
+        ["concepts", {
+          coverageType: "atomic",
+          canonicalEnglish: "concepts",
+          pyashSequence: ["kfen"]
+        }]
+      ])
+    }
+  };
+  const resolveWord = buildWordResolver(resources, { accepted: [] });
+  assert.equal(resolveWord("thought", { pos: "n" }), null);
+  assert.deepEqual(resolveWord("thought", { pos: "v" }).pyashSequence, ["hcik"]);
+  const records = buildEnglishWordNetFrequencyAllocationRecords({
+    wordnetIndex: {
+      bySynset: new Map([[
+        "n:00000003-n",
+        [{ lemma: "thought", gloss: "a thought" }, { lemma: "idea", gloss: "an idea" }]
+      ]])
+    },
+    frequencyJoin: { entries: [] },
+    rankForEnglish: (lemma) => ({ thought: 139, idea: 468 }[lemma]),
+    resolveWord
+  });
+  assert.deepEqual(records[0].candidates.map((candidate) => ({
+    lemma: candidate.lemma,
+    target: candidate.target,
+    pyashSequence: candidate.pyashSequence
+  })), [{ lemma: "idea", target: "concepts", pyashSequence: ["kfen"] }]);
+});
+
+test("frequency anchor resolution preserves accepted compound mappings", () => {
+  const resources = {
+    coverage: {
+      byVariant: new Map([[
+        "bookshelf",
+        {
+          coverageType: "compound",
+          canonicalEnglish: "bookshelf",
+          pyashSequence: ["hpuk", "claf"],
+          lemmaKind: "compound",
+          lemmaPyashSequence: ["hpuk", "claf"]
+        }
+      ]])
+    }
+  };
+  const resolveWord = buildWordResolver(resources, {
+    accepted: [{
+      target: "bookshelf",
+      aliases: [],
+      pyashSequence: ["hpuk", "claf"]
+    }]
+  });
+
+  assert.deepEqual(resolveWord("bookshelf"), {
+    coverageType: "compound",
+    canonicalEnglish: "bookshelf",
+    target: "bookshelf",
+    pyashSequence: ["hpuk", "claf"],
+    id: undefined
+  });
+});
+
 test("frequency allocation configuration versions compound verification", async () => {
   const config = parseEnglishWordNetFrequencyAllocationConfig(
     await readFile(ENGLISH_WORDNET_FREQUENCY_ALLOCATION_CONFIG_URL, "utf8")
@@ -266,6 +423,23 @@ test("frequency allocation leaves same-synset lemma ties unresolved", () => {
   assert.equal(result.assignments.find((row) => row.source === "v:00000008-v").target, "identity-confusion");
   assert.equal(result.residual.find((row) => row.source === "n:00000005-n").reason, "english30k-and-wordnet-tag-count-tie-within-synset");
   assert.equal(result.residual.find((row) => row.source === "n:00000006-n").reason, "english30k-and-wordnet-tag-count-tie-within-synset");
+});
+
+test("frequency reconciliation preserves explicit Qwen atom-target sense selections", () => {
+  const entry = {
+    source: "n:00000001-n",
+    target: "bank",
+    certainty: "contextual",
+    evidence: "atom-target sense selection; model qwen3.5:9b; run fixture; rationale: financial institution"
+  };
+  const result = reconcileEnglishWordNetFrequencyBridgeRows({
+    existingEntries: [entry],
+    assignments: [],
+    resolveTarget: () => ({ pyashSequence: ["hban"] })
+  });
+  assert.deepEqual(result.preservedEntries, [entry]);
+  assert.deepEqual(result.retainedModelEntries, []);
+  assert.deepEqual(result.newAssignments, []);
 });
 
 test("frequency allocation skips reserved targets and allows a sense to use its next ranked anchor", () => {

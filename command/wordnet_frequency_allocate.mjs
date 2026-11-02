@@ -62,7 +62,9 @@ function sequence(value) {
 }
 
 function modelGenerated(entry) {
-  return /sense-link sweep.*model-qwen|model qwen3\.5:9b/iu.test(String(entry?.evidence ?? ""));
+  const evidence = String(entry?.evidence ?? "");
+  if (evidence.startsWith("atom-target sense selection;")) return false;
+  return /sense-link sweep.*model-qwen|model qwen3\.5:9b/iu.test(evidence);
 }
 
 function frequencyGenerated(entry) {
@@ -105,9 +107,14 @@ export function buildWordResolver(resources, compoundCoverage) {
       if (key && !atoms.has(key) && !compounds.has(key)) compounds.set(key, coverage);
     }
   }
-  return (word) => {
+  return (word, { pos = "" } = {}) => {
     const key = normalized(word);
     const coverage = lookupEnglish30kCoverage(resources.coverage, word);
+    const isLexicalWordNetForm = pos
+      && resources.wordnet?.index?.byLemma?.get(key)?.some((row) => row.pos === pos);
+    if (isLexicalWordNetForm && ["irregular", "inflectional", "derivational"].includes(coverage?.lemmaKind)) {
+      return atoms.get(key) ?? compounds.get(key) ?? null;
+    }
     if (coverage?.coverageType === "grammar") return {
       coverageType: "grammar",
       canonicalEnglish: normalized(word),
@@ -135,9 +142,27 @@ export function buildWordResolver(resources, compoundCoverage) {
         pyashSequence: aliasSequence
       };
     }
+    if (["anchor", "irregular", "inflectional", "derivational", "duplicate"].includes(coverage?.lemmaKind)) {
+      const pyashSequence = sequence(coverage.lemmaPyashSequence ?? coverage.pyashSequence);
+      if (pyashSequence.length !== 1) return null;
+      return {
+        coverageType: "atomic",
+        canonicalEnglish: coverage.canonicalEnglish || normalized(word),
+        pyashSequence
+      };
+    }
     if (atoms.has(key)) return atoms.get(key);
     if (compounds.has(key)) return compounds.get(key);
     if (!coverage) return null;
+    if (coverage.coverageType === "lemma") {
+      const pyashSequence = sequence(coverage.pyashSequence);
+      if (pyashSequence.length !== 1) return null;
+      return {
+        coverageType: "atomic",
+        canonicalEnglish: coverage.canonicalEnglish || normalized(word),
+        pyashSequence
+      };
+    }
     if (coverage.coverageType === "atomic") return {
       coverageType: "atomic",
       canonicalEnglish: coverage.canonicalEnglish,
@@ -569,6 +594,9 @@ export async function prepareWordNetFrequencyAllocation() {
     reconciliation,
     residualCompounds,
     atomCoverage,
+    resolveWord,
+    wordnetIndex: resources.wordnet.index,
+    rankForEnglish,
     finalCatalog,
     sourceRecordCount: records.length,
     exactTagMatches: frequency.joined.matchedCount,

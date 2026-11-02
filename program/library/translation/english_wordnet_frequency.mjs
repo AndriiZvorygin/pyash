@@ -349,7 +349,9 @@ export function allocateEnglishWordNetAnchors(records = [], {
 }
 
 function isModelGeneratedBridge(entry) {
-  return /sense-link sweep.*model-qwen|model qwen3\.5:9b/iu.test(String(entry?.evidence ?? ""));
+  const evidence = String(entry?.evidence ?? "");
+  if (evidence.startsWith("atom-target sense selection;")) return false;
+  return /sense-link sweep.*model-qwen|model qwen3\.5:9b/iu.test(evidence);
 }
 
 function isFrequencyAllocatedBridge(entry) {
@@ -448,7 +450,7 @@ export function buildEnglishWordNetFrequencyAllocationRecords({
     };
     for (const lemma of lemmas) {
       const rankValue = Number(rankForEnglish(lemma));
-      const coverage = resolveWord(lemma);
+      const coverage = resolveWord(lemma, { pos });
       const pyashSequence = Array.isArray(coverage?.pyashSequence)
         ? coverage.pyashSequence.filter((word) => typeof word === "string" && word.trim()).map((word) => word.trim())
         : [];

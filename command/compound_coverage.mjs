@@ -14,6 +14,11 @@ import {
 } from "../program/library/translation/compound_coverage.mjs";
 import { loadEnglish30k } from "../program/library/translation/english30k_coverage.mjs";
 import { loadCompoundMorphology } from "../program/library/translation/compound_morphology.mjs";
+import {
+  deprecatedEnglishAtomSequences,
+  filterDeprecatedEnglishAtoms,
+  loadEnglishLemmaCatalog
+} from "../program/library/translation/english_lemmas.mjs";
 import { classifyCompoundCoverage } from "../program/library/translation/compound_verification.mjs";
 import {
   loadPyacComplexityLayers,
@@ -42,8 +47,18 @@ export async function loadCoverage({ maximumCompoundComponents = 3, wordnetIndex
       provenance: `caterer/pyac/lyac/${filename}`
     }));
   }
-  const english30k = await loadEnglish30k();
-  const curatedDecompositions = await loadCuratedCompoundDecompositions();
+  const [english30k, allCuratedDecompositions, lemmaCatalog] = await Promise.all([
+    loadEnglish30k(),
+    loadCuratedCompoundDecompositions(),
+    loadEnglishLemmaCatalog()
+  ]);
+  const activeAtomicEntries = filterDeprecatedEnglishAtoms(pyashWords, lemmaCatalog.entries);
+  const deprecatedSequences = deprecatedEnglishAtomSequences(pyashWords, lemmaCatalog.entries);
+  const deprecatedDecompositions = allCuratedDecompositions.filter((record) => (
+    (record.pyashSequence ?? []).some((word) => deprecatedSequences.has(word))
+  ));
+  const deprecatedDecompositionSet = new Set(deprecatedDecompositions);
+  const curatedDecompositions = allCuratedDecompositions.filter((record) => !deprecatedDecompositionSet.has(record));
   sourceTerms.push(...appendNovelCompoundSourceTerms(
     sourceTerms,
     curatedDecompositions,
@@ -62,19 +77,28 @@ export async function loadCoverage({ maximumCompoundComponents = 3, wordnetIndex
     directory: resolve(repositoryRoot, "..", "pyachso2n")
   });
   const englishToPyash = new Map();
-  for (const entry of pyashWords) {
+  for (const entry of activeAtomicEntries) {
     if (entry?.en && entry?.pya && !englishToPyash.has(entry.en.toLowerCase())) {
       englishToPyash.set(entry.en.toLowerCase(), entry.pya);
     }
   }
-  return buildDerivedCompoundCoverage({
-    atomicEntries: pyashWords,
+  const coverage = buildDerivedCompoundCoverage({
+    atomicEntries: activeAtomicEntries,
     sourceTerms,
     curatedDecompositions,
     morphologyEntries: await loadCompoundMorphology(),
     maximumCompoundComponents,
     layerIndex: { ...layerIndex, englishToPyash }
   });
+  return {
+    ...coverage,
+    rejected: [...coverage.rejected, ...deprecatedDecompositions.map((record) => ({
+      target: record.target,
+      status: "rejected-deprecated-component",
+      evidence: `compound uses deprecated duplicate atom in ${record.pyashSequence.join(" ")}`
+    }))],
+    activeAtomicEntries
+  };
 }
 
 export async function runCompoundCoverage(args = process.argv.slice(2)) {

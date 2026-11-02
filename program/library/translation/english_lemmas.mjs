@@ -7,7 +7,8 @@ export const ENGLISH_LEMMA_FORMAT = "english-lemma-v1";
 export const ENGLISH_LEMMA_NAME = "translation_english30k_lemmas";
 
 const ACCEPTED_STATUSES = new Set(["accepted-deterministic", "accepted-curated", "accepted-llm", "repaired-llm"]);
-const MAPPING_KINDS = new Set(["irregular", "inflectional", "derivational", "anchor"]);
+const DEPRECATED_DUPLICATE_STATUS = "deprecated-duplicate";
+const MAPPING_KINDS = new Set(["irregular", "inflectional", "derivational", "anchor", "duplicate"]);
 const MORPHOLOGY_KINDS = new Set([
   "finite-past",
   "finite-present",
@@ -78,6 +79,13 @@ function normalizeEntry(payload, surface, index) {
   }
   const status = String(payload.status ?? "accepted-deterministic").trim();
   if (!status) throw invalid("English lemma row status is empty", { index, surface });
+  const duplicateOf = normalizeEnglishLemmaWord(payload.duplicateOf ?? "");
+  if (payload.kind === "duplicate" && (status !== DEPRECATED_DUPLICATE_STATUS || !duplicateOf)) {
+    throw invalid("duplicate lemma row requires deprecated status and duplicateOf", { index, surface });
+  }
+  if (status === DEPRECATED_DUPLICATE_STATUS && payload.kind !== "duplicate") {
+    throw invalid("deprecated duplicate status requires duplicate mapping kind", { index, surface });
+  }
   if (typeof payload.evidence !== "string" || !payload.evidence.trim()) {
     throw invalid("English lemma row requires evidence", { index, surface });
   }
@@ -100,6 +108,7 @@ function normalizeEntry(payload, surface, index) {
     canonicalEnglish: normalizeEnglishLemmaWord(payload.canonicalEnglish ?? ""),
     kind: payload.kind,
     status,
+    ...(duplicateOf ? { duplicateOf } : {}),
     rule: payload.rule?.trim() ?? "",
     evidence: payload.evidence.trim(),
     ...(pyashSequence.length > 0 ? { pyashSequence } : {}),
@@ -163,7 +172,7 @@ export function parseEnglishLemmaCatalog(source, {
   const metadata = {};
   for (const sentence of sentences) {
     if (sentence?.mood !== "ya" || typeof sentence.su?.text !== "string") continue;
-    if (["format", "source", "source-hash"].includes(sentence.su.text) && typeof sentence.ob?.text === "string") {
+    if (["format", "source", "source-hash", "duplicate-policy"].includes(sentence.su.text) && typeof sentence.ob?.text === "string") {
       metadata[sentence.su.text] = sentence.ob.text;
     }
     if (sentence.su.text === "cutoff" && Number.isInteger(sentence.ob?.num)) metadata.cutoff = sentence.ob.num;
@@ -175,7 +184,7 @@ export function parseEnglishLemmaCatalog(source, {
   const seen = new Set();
   for (const [index, sentence] of sentences.entries()) {
     if (sentence?.mood !== "ya" || typeof sentence.su?.text !== "string") continue;
-    if (["format", "source", "source-hash", "cutoff"].includes(sentence.su.text)) continue;
+    if (["format", "source", "source-hash", "duplicate-policy", "cutoff"].includes(sentence.su.text)) continue;
     const entry = normalizeEntry(parseJsonPayload(sentence, index), sentence.su.text, index);
     if (seen.has(entry.surface)) throw invalid("English lemma surface is duplicated", { index, surface: entry.surface });
     seen.add(entry.surface);
@@ -186,6 +195,7 @@ export function parseEnglishLemmaCatalog(source, {
     name,
     source: metadata.source ?? "",
     sourceHash: metadata["source-hash"] ?? "",
+    duplicatePolicy: metadata["duplicate-policy"] ?? "",
     cutoff: metadata.cutoff ?? null,
     entries
   };
@@ -260,10 +270,18 @@ function buildAtomicLookup(atomicEntries) {
 
 function addExplicitRows(lookup, entries, atomicLookup, aliases) {
   for (const entry of entries ?? []) {
-    if (!ACCEPTED_STATUSES.has(entry.status)) continue;
-    const canonical = atomicLookup.get(englishLemmaLookupVariants(entry.canonicalEnglish || entry.lemma)[0])
+    const isDeprecatedDuplicate = entry.kind === "duplicate" && entry.status === DEPRECATED_DUPLICATE_STATUS;
+    if (!ACCEPTED_STATUSES.has(entry.status) && !isDeprecatedDuplicate) continue;
+    const canonical = atomicLookup.get(englishLemmaLookupVariants(entry.canonicalEnglish || entry.duplicateOf || entry.lemma)[0])
       ?? atomicLookup.get(englishLemmaLookupVariants(entry.surface)[0]);
     if (!canonical) continue;
+    if (isDeprecatedDuplicate) {
+      const duplicate = atomicLookup.get(englishLemmaLookupVariants(entry.surface)[0]);
+      if (!duplicate) throw invalid("deprecated duplicate does not name an existing Pyash atom", { surface: entry.surface });
+      if (duplicate.pyashSequence.join("\u0000") === canonical.pyashSequence.join("\u0000")) {
+        throw invalid("deprecated duplicate must point to a different Pyash atom", { surface: entry.surface, duplicateOf: entry.duplicateOf });
+      }
+    }
     const row = {
       ...canonical,
       surface: entry.surface,
@@ -271,6 +289,7 @@ function addExplicitRows(lookup, entries, atomicLookup, aliases) {
       canonicalEnglish: canonical.canonicalEnglish,
       kind: entry.kind,
       status: entry.status,
+      ...(entry.duplicateOf ? { duplicateOf: entry.duplicateOf } : {}),
       rule: entry.rule,
       evidence: entry.evidence,
       ...(entry.pyashSequence ? { pyashSequence: [...entry.pyashSequence] } : {}),
@@ -337,6 +356,20 @@ export function buildEnglishLemmaIndex({
     const variants = englishLemmaLookupVariants(lemma);
     return variants.map((variant) => lookup.get(variant)).find(Boolean) ?? null;
   };
+  const targetByLemma = new Map();
+  for (const row of lookup.values()) {
+    const lemma = normalizeEnglishLemmaWord(row?.lemma);
+    const target = normalizeEnglishLemmaWord(row?.canonicalEnglish);
+    if (!lemma || !target) continue;
+    const previous = targetByLemma.get(lemma);
+    if (previous && previous !== target) {
+      throw invalid("English lemma is assigned to multiple Pyash atoms", {
+        lemma,
+        targets: [...new Set([previous, target])].sort()
+      });
+    }
+    targetByLemma.set(lemma, target);
+  }
   const resolve = (surface) => {
     const variants = englishLemmaLookupVariants(surface);
     const existing = variants.map((variant) => lookup.get(variant)).find(Boolean);
@@ -416,6 +449,7 @@ export function renderEnglishLemmaCatalogPya({ source, entries }, {
     `su text "source" ob text ${JSON.stringify(source.path ?? source.source ?? "")} ya`,
     `su text "source-hash" ob text ${JSON.stringify(source.sourceHash ?? "")} ya`,
     `su text "cutoff" ob num ${Number(source.cutoff ?? 0)} ya`,
+    ...(source.duplicatePolicy ? [`su text "duplicate-policy" ob text ${JSON.stringify(source.duplicatePolicy)} ya`] : []),
     ...entries
       .filter((entry) => entry?.kind && entry.kind !== "identity")
       .sort((left, right) => normalizeEnglishLemmaWord(left.surface).localeCompare(normalizeEnglishLemmaWord(right.surface)))
@@ -425,13 +459,50 @@ export function renderEnglishLemmaCatalogPya({ source, entries }, {
         ...(entry.canonicalEnglish ? { canonicalEnglish: entry.canonicalEnglish } : {}),
         kind: entry.kind,
         status: entry.status ?? "accepted-deterministic",
+        ...(entry.duplicateOf ? { duplicateOf: entry.duplicateOf } : {}),
         ...(entry.rule ? { rule: entry.rule } : {}),
         ...(entry.morphology ? { morphology: entry.morphology } : {}),
         ...(entry.pyashSequence ? { pyashSequence: entry.pyashSequence } : {}),
         ...(entry.grammaticalNumber ? { grammaticalNumber: entry.grammaticalNumber } : {}),
+        ...(entry.rank === undefined ? {} : { rank: entry.rank }),
         evidence: entry.evidence ?? ""
       }))} ya`),
     "prah"
   ];
   return `${lines.join("\n")}\n`;
+}
+
+export function deprecatedEnglishAtomSequences(atomicEntries, catalogEntries = []) {
+  if (!Array.isArray(atomicEntries) || !Array.isArray(catalogEntries)) {
+    throw invalid("deprecated atom filtering requires atom and lemma arrays");
+  }
+  const deprecated = new Set(catalogEntries
+    .filter((entry) => entry?.kind === "duplicate" && entry?.status === DEPRECATED_DUPLICATE_STATUS)
+    .map((entry) => normalizeEnglishLemmaWord(entry.surface))
+    .filter(Boolean));
+  const bySurface = new Map();
+  for (const entry of atomicEntries) {
+    const surface = normalizeEnglishLemmaWord(entry?.en);
+    const pya = typeof entry?.pya === "string" ? entry.pya.trim() : "";
+    if (surface && pya && !bySurface.has(surface)) bySurface.set(surface, pya);
+  }
+  const sequences = new Set();
+  for (const surface of deprecated) {
+    const pya = bySurface.get(surface);
+    if (!pya) throw invalid("deprecated duplicate does not name an existing Pyash atom", { surface });
+    sequences.add(pya);
+  }
+  return sequences;
+}
+
+export function filterDeprecatedEnglishAtoms(atomicEntries, catalogEntries = []) {
+  if (!Array.isArray(atomicEntries) || !Array.isArray(catalogEntries)) {
+    throw invalid("deprecated atom filtering requires atom and lemma arrays");
+  }
+  deprecatedEnglishAtomSequences(atomicEntries, catalogEntries);
+  const deprecated = new Set(catalogEntries
+    .filter((entry) => entry?.kind === "duplicate" && entry?.status === DEPRECATED_DUPLICATE_STATUS)
+    .map((entry) => normalizeEnglishLemmaWord(entry.surface))
+    .filter(Boolean));
+  return atomicEntries.filter((entry) => !deprecated.has(normalizeEnglishLemmaWord(entry?.en)));
 }

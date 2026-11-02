@@ -18,10 +18,10 @@ import { renderEnglishFromVliw } from "../program/library/translation/pyac_to_en
 
 test("WordNet bridge rows have a lightweight gloss and lemma lookup", async () => {
   const catalog = await loadEnglishWordNetBridges();
-  assert.equal(catalog.entries.length, 4113);
+  assert.equal(catalog.entries.length, 6435);
   assert.equal(catalog.entries.filter((entry) => entry.evidence.includes("active through sweep wordnet-sense-sweep-4c07194f363e-81b5bbefa3b0-d1")).length, 734);
-  assert.equal(catalog.entries.filter((entry) => entry.evidence.includes("sense-link sweep wordnet-sense-sweep-4c07194f363e-9059730cda6d-d1-model-qwen3-5-9b-definition-anchor-v1")).length, 969);
-  assert.equal(catalog.entries.filter((entry) => entry.evidence.startsWith("frequency-first anchor allocation")).length, 2391);
+  assert.equal(catalog.entries.filter((entry) => entry.evidence.includes("sense-link sweep wordnet-sense-sweep-4c07194f363e-9059730cda6d-d1-model-qwen3-5-9b-definition-anchor-v1")).length, 966);
+  assert.equal(catalog.entries.filter((entry) => entry.evidence.startsWith("frequency-first anchor allocation")).length, 2528);
   assert.equal(catalog.entries.find((entry) => entry.source === "n:06850196-n"), undefined);
   assert.deepEqual(catalog.entries.find((entry) => entry.source === "a:00005204-a"), {
     source: "a:00005204-a",

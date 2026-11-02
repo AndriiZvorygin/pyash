@@ -71,6 +71,7 @@ let curatedAcceptedCoveragePromise = null;
 let english30kCoveragePromise = null;
 let english30kSourcePromise = null;
 let englishGrammarIndexPromise = null;
+let englishLemmaIndexPromise = null;
 let extendedEnglishResourcesPromise = null;
 let anchorWordFormsPromise = null;
 let compoundAtomLinksPromise = null;
@@ -457,22 +458,34 @@ async function loadDefaultEnglishGrammarIndexSafe() {
   return englishGrammarIndexPromise;
 }
 
+async function loadDefaultEnglishLemmaIndexSafe() {
+  if (!englishLemmaIndexPromise) {
+    englishLemmaIndexPromise = loadEnglishLemmaCatalog()
+      .then((catalog) => buildEnglishLemmaIndex({
+        atomicEntries: pyashWords,
+        catalogEntries: catalog.entries
+      }))
+      .catch((error) => {
+        if (error?.code === "ENOENT") return null;
+        throw error;
+      });
+  }
+  return englishLemmaIndexPromise;
+}
+
 async function loadExtendedEnglishResourcesSafe() {
   if (!extendedEnglishResourcesPromise) {
     extendedEnglishResourcesPromise = Promise.all([
-      loadEnglishLemmaCatalog(),
+      loadDefaultEnglishLemmaIndexSafe(),
       loadEnglishDictionaryBlacklist()
     ])
-      .then(([lemmaCatalog, dictionary]) => ({
-        lemmaIndex: buildEnglishLemmaIndex({
-          atomicEntries: pyashWords,
-          catalogEntries: lemmaCatalog.entries
-        }),
+      .then(([lemmaIndex, dictionary]) => lemmaIndex ? ({
+        lemmaIndex,
         dictionaryAliases: buildEnglishDictionaryAliases({
           dictionary,
           atomicEntries: pyashWords
         })
-      }))
+      }) : null)
       .catch((error) => {
         if (error?.code === "ENOENT") return null;
         throw error;
@@ -605,6 +618,42 @@ async function findFastEnglishCoverage(token) {
   const atomic = english30kLookupVariants(token)
     .map((variant) => buildFastAtomicIndex().get(variant))
     .find(Boolean) ?? null;
+  if (atomic && !grammar) {
+    const lemmaIndex = await loadDefaultEnglishLemmaIndexSafe();
+    const resolved = lemmaIndex?.resolve(token);
+    if (
+      resolved &&
+      ["anchor", "irregular", "inflectional", "derivational", "duplicate"].includes(resolved.kind) &&
+      resolved.pyashSequence?.length
+    ) {
+      const source = await loadDefaultEnglish30kSourceSafe();
+      const row = sourceRowForToken(source, token);
+      if (row) {
+        return {
+          id: directRecordId(row),
+          ...row,
+          coverageType: "lemma",
+          status: "covered-lemma",
+          canonicalEnglish: resolved.canonicalEnglish,
+          pyashSequence: [...resolved.pyashSequence],
+          hnuc: resolved.hnuc,
+          lemma: resolved.lemma,
+          lemmaKind: resolved.kind,
+          lemmaStatus: resolved.status,
+          ...(resolved.duplicateOf ? { duplicateOf: resolved.duplicateOf } : {}),
+          lemmaRule: resolved.rule,
+          lemmaEvidence: resolved.evidence,
+          ...(resolved.morphology ? {
+            morphology: {
+              ...resolved.morphology,
+              markerNames: [...resolved.morphology.markerNames],
+              markerSequence: [...resolved.morphology.markerSequence]
+            }
+          } : {})
+        };
+      }
+    }
+  }
   if (!grammar && !atomic) return null;
 
   const source = await loadDefaultEnglish30kSourceSafe();
@@ -690,6 +739,7 @@ async function findExtendedEnglishCoverage(token) {
       lemma: resolved.lemma,
       lemmaKind: resolved.kind,
       lemmaStatus: resolved.status,
+      ...(resolved.duplicateOf ? { duplicateOf: resolved.duplicateOf } : {}),
       lemmaRule: resolved.rule,
       lemmaEvidence: resolved.evidence,
       ...(resolved.morphology ? {
@@ -1439,7 +1489,11 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
   }
 
   for (const [token, ranked] of [...lemmaMatches.entries()].sort(([left], [right]) => left.localeCompare(right))) {
-    report(`${token}: lemma ${ranked.lemma} -> ${ranked.pyashSequence.join(" ")} (English30k rank ${ranked.rank})`);
+    if (ranked.lemmaKind === "duplicate") {
+      report(`${token}: deprecated duplicate of ${ranked.duplicateOf} -> ${ranked.pyashSequence.join(" ")} (English30k rank ${ranked.rank})`);
+    } else {
+      report(`${token}: lemma ${ranked.lemma} -> ${ranked.pyashSequence.join(" ")} (English30k rank ${ranked.rank})`);
+    }
   }
 
   for (const [token, ranked] of [...morphologyMatches.entries()].sort(([left], [right]) => left.localeCompare(right))) {

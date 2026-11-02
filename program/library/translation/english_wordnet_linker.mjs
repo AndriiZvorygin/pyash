@@ -1209,12 +1209,8 @@ function renderTargetName(value) {
   return JSON.stringify(target);
 }
 
-export function renderEnglishWordNetSenseLinksPya({
-  records = [],
-  source = "Open English WordNet",
-  sourceHash = "",
-  name = "translation_english_wordnet_bridges"
-} = {}) {
+export function renderEnglishWordNetSenseLinkRowsPya(records = []) {
+  if (!Array.isArray(records)) throw invalid("WordNet sense-link rows must be an array");
   const accepted = records
     .filter((record) => ACCEPTED_STATUSES.has(record?.status) && record?.link?.target && sequence(record.link.pyashSequence).length > 0)
     .sort((left, right) => left.source.localeCompare(right.source));
@@ -1242,13 +1238,7 @@ export function renderEnglishWordNetSenseLinksPya({
     row.sources.push(record.source);
     equivalenceGroups.set(group, row);
   }
-  const lines = [
-    `su name ${name} be map def`,
-    `su text "format" ob text ${JSON.stringify("english-wordnet-bridge-v1")} ya`,
-    `su text "source" ob text ${JSON.stringify(source)} ya`,
-    `su text "source-hash" ob text ${JSON.stringify(sourceHash)} ya`,
-    `su text "mode" ob text ${JSON.stringify("sense-level semantic bridge")} ya`
-  ];
+  const lines = [];
   for (const [group, row] of equivalenceGroups) {
     const sources = [...new Set(row.sources)].sort();
     if (sources.length < 2
@@ -1276,7 +1266,24 @@ export function renderEnglishWordNetSenseLinksPya({
       }
     }
   }
-  lines.push("prah");
+  return lines;
+}
+
+export function renderEnglishWordNetSenseLinksPya({
+  records = [],
+  source = "Open English WordNet",
+  sourceHash = "",
+  name = "translation_english_wordnet_bridges"
+} = {}) {
+  const lines = [
+    `su name ${name} be map def`,
+    `su text "format" ob text ${JSON.stringify("english-wordnet-bridge-v1")} ya`,
+    `su text "source" ob text ${JSON.stringify(source)} ya`,
+    `su text "source-hash" ob text ${JSON.stringify(sourceHash)} ya`,
+    `su text "mode" ob text ${JSON.stringify("sense-level semantic bridge")} ya`,
+    ...renderEnglishWordNetSenseLinkRowsPya(records),
+    "prah"
+  ];
   return `${lines.join("\n")}\n`;
 }
 

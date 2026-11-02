@@ -2,6 +2,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import pyashWords from "../pyashWords.json" with { type: "json" };
+import {
+  filterDeprecatedEnglishAtoms,
+  loadEnglishLemmaCatalog
+} from "./english_lemmas.mjs";
 
 import {
   analyzeEnglishSentence,
@@ -112,14 +116,16 @@ async function loadWordNetCompoundResources() {
   if (!wordNetCompoundResourcesPromise) {
     wordNetCompoundResourcesPromise = Promise.all([
       loadPyacComplexityLayers(),
-      loadCompoundMorphology()
-    ]).then(async ([manifest, morphologyEntries]) => {
+      loadCompoundMorphology(),
+      loadEnglishLemmaCatalog()
+    ]).then(async ([manifest, morphologyEntries, lemmaCatalog]) => {
+      const activeAtomicEntries = filterDeprecatedEnglishAtoms(pyashWords, lemmaCatalog.entries);
       const layerIndex = await loadPyacWordLayerIndex({
         manifest,
         directory: path.resolve(REPOSITORY_ROOT, "..", "pyachso2n")
       });
       const englishToPyash = new Map();
-      for (const entry of pyashWords) {
+      for (const entry of activeAtomicEntries) {
         const english = normalized(entry?.en);
         const pyash = text(entry?.pya);
         if (english && pyash && !englishToPyash.has(english)) englishToPyash.set(english, pyash);
@@ -127,7 +133,7 @@ async function loadWordNetCompoundResources() {
       return {
         morphologyEntries,
         layerIndex: { ...layerIndex, englishToPyash },
-        atomicEntries: pyashWords
+        atomicEntries: activeAtomicEntries
           .filter((entry) => text(entry?.en) && text(entry?.pya))
           .map((entry) => ({ en: text(entry.en), pya: text(entry.pya) }))
       };
