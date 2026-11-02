@@ -98,6 +98,21 @@ test("PyAC queries select semantic, case, word, and value indexes", () => {
   assert.equal(queryVliwCatalog(database, { status: "unsupported" }).length, 0);
 });
 
+test("PyAC catalog search matches an HNUC against the codelet words", () => {
+  const database = buildVliwDatabase([
+    plusSentence(4, 6),
+    plusSentence(8, 9),
+    plusSentence(16, 9)
+  ]);
+
+  // The 16-bit words of a codelet are the HNUC codes of the vocabulary, so an
+  // HNUC query is a membership test over the codelet's words. The criterion
+  // used to compare a scalar `record.hnuc` that no record carries, which made
+  // every HNUC query return zero rows.
+  assert.equal(queryVliwCatalog(database, { hnuc: 0x8a64 }).length, 3);
+  assert.equal(queryVliwCatalog(database, { hnuc: 0xa909 }).length, 0);
+});
+
 test("PyAC catalog projection round-trips through parser-backed .pya text", () => {
   const database = buildVliwDatabase([plusSentence(2, 3)]);
   const source = renderVliwCatalogPya(database, { packLocator: "artifacts/sample.pyac" });

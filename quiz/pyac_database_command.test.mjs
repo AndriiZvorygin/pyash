@@ -76,3 +76,23 @@ test("PyAC database command queries records and replays one stable identity", as
   assert.deepEqual(replay.outcomes.map((outcome) => outcome.id), [record.id]);
   assert.equal(replay.outcomes[0].verified, true);
 });
+
+test("PyAC database command queries an HNUC written as hex", async () => {
+  const paths = tempPaths();
+  writeFileSync(paths.source, "ob num 4 to num 6 be plus do\n", "utf8");
+  await runPyacDatabase(["build", paths.source, paths.catalog, paths.pack], { report: () => {} });
+
+  // HNUC codes are written in hex everywhere else in the repository, so the
+  // query field has to accept the same spelling.
+  const byHex = await runPyacDatabase(
+    ["query", paths.catalog, paths.pack, "hnuc", "0x8a64"],
+    { report: () => {} }
+  );
+  assert.equal(byHex.count, 1);
+
+  const absent = await runPyacDatabase(
+    ["query", paths.catalog, paths.pack, "hnuc", "0xA909"],
+    { report: () => {} }
+  );
+  assert.equal(absent.count, 0);
+});

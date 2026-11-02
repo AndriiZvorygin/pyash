@@ -364,13 +364,10 @@ and `program/library/vliw/` (3,334 lines) is the broader semantic facade.
 §4.3 requires an auditable compatibility table, and the database reference
 records unsupported semantics with explicit reasons rather than silent
 fallbacks. That discipline is worth keeping. But the reasons themselves say
-something the project should decide about deliberately, and the corpus
-measurement below makes it plain: the failures are mostly **missing
-archaeology, not missing capability**. The error text for `invert` is
-"invert sentence lowering requires a recovered legacy sentence fixture"; for
-`date` it is "requires a recovered legacy date encoding". The encoder is
-declining to represent these semantics because no recovered fixture was
-found, not because the IR shape cannot carry them.
+something the project should decide about deliberately: they are the reason
+codes of one guard function, and they describe a missing archaeological
+recovery rather than a missing encoding. The corpus measurement below makes
+that plain.
 
 ### What the current implementation is not yet
 
@@ -382,24 +379,42 @@ the two failures have different causes.
 **Precision: 11 of 17 — 64.7%.** The executable rows are the five numeric
 operations, typed literals, boolean literals and named literals. The six that
 fail are: an opaque quote passed to `plus`, and `invert`, `exponential`,
-`remains`, `vector`, `date`. Five of those six fail for the fixture reason
-above; only the `plus` one is a genuine value restriction ("numeric-plus ob
-must be an unsigned 16-bit integer"). For an IR whose bar is high-precision
-encoding, "we never built the fixture" is not an acceptable reason to leave
-a semantic unencoded, because an unencoded semantic is a semantic that cannot
-be searched, stored or replayed.
+`remains`, `vector`, `date`.
 
-**Searchability: two query paths are dead, and the search is a scan.**
+Five of those six are refused by **one guard function** —
+`rejectUnprovenSemanticSentence` at `program/library/vliw/index.mjs:51-79`.
+It runs before any lowering is attempted and throws for a deny-list of three
+verbs (`remains`, `invert`, `exponential`) plus two shape checks (`vector`
+with an `ob.ve` payload, `date` with an `ob.date` payload). The error text
+says why: "invert sentence lowering requires a recovered legacy sentence
+fixture", "date sentence lowering requires a recovered legacy date
+encoding". The only genuine encoding limit in the corpus is the sixth row —
+"numeric-plus ob must be an unsigned 16-bit integer", which is a real value
+restriction.
 
-- `command/pyac_database.mjs` advertises `hnuc` as a query field, and
-  `recordMatches` implements `criteria.hnuc`. But no catalog record carries an
-  `hnuc` field, so **every HNUC query returns zero hits** — verified against
-  the corpus with two different values.
-- `semantic` is `null` on every unsupported record, so a semantic search
-  silently misses 6 of the 17 rows — the same rows that are already the least
-  searchable.
-- `queryVliwCatalog` is a linear `filter` over `catalog.records`, not an
-  index. "Easily searchable" at the scale a knowledge core implies means
+That is a much smaller problem than a 35% precision gap sounds. For an IR
+whose bar is high-precision encoding, "we never recovered the fixture" is not
+an acceptable reason to leave a semantic unencoded, because an unencoded
+semantic is a semantic that cannot be searched, stored or replayed. Closing
+the precision gap is a matter of writing five encodings that fit the
+16×16-bit codelet shape and round-trip — not of recovering archaeology.
+
+**Searchability: one dead query path, one silently-null field, and a scan.**
+
+- `command/pyac_database.mjs` advertised `hnuc` as a query field, and
+  `recordMatches` compared `record.hnuc` — a field no record carries, so
+  **every HNUC query returned zero rows**. This is now fixed: the 16-bit
+  words of a codelet *are* the vocabulary's HNUC codes, so an HNUC query is a
+  membership test over `record.words`, and it accepts the hex spelling the
+  repository uses everywhere else (`0x8a64`).
+- `semantic` is still `null` on every unsupported record, so a semantic
+  search misses the same six rows. Here the cause is different and worth
+  naming: the guard throws *before* the semantic is identified, so the record
+  honestly cannot say what it was trying to encode. Making those rows
+  semantic-searchable means the guard has to report the intended semantic on
+  the way out, rather than refusing silently.
+- `queryVliwCatalog` is still a linear `filter` over `catalog.records`, not
+  an index. "Easily searchable" at the scale a knowledge core implies means
   indexed lookup, not a scan per query.
 
 These are the concrete items the VLIW direction has to fix, and they are
@@ -933,9 +948,12 @@ node -e 'import("./program/library/vliw/index.mjs").then(async (m) => {
   const ex = db.catalog.records.filter((r) => r.status === "executable");
   console.log("precision:", ex.length + "/" + sentences.length, ((ex.length / sentences.length) * 100).toFixed(1) + "%");
   for (const r of db.catalog.records.filter((r) => r.status === "unsupported")) console.log("  ", r.error.code, "-", r.error.message);
-  console.log("hnuc query hits:", m.queryVliwCatalog(db, { hnuc: "0xA909" }).length);
+  console.log("hnuc query hits:", m.queryVliwCatalog(db, { hnuc: "0x8a64" }).length);
   console.log("null-semantic rows:", db.catalog.records.filter((r) => r.semantic === null).length);
 })'
+
+# the guard that refuses the five unproven semantics
+sed -n '51,79p' program/library/vliw/index.mjs
 
 # the Rust crate is built by CI
 grep -n "  rust:" .github/workflows/ci.yml

@@ -483,6 +483,11 @@ function databasePack(database) {
   return { catalog, pack, decoded: decodePyacPack(pack) };
 }
 
+function hnucValue(value) {
+  if (typeof value === "number") return value;
+  return Number(String(value ?? "").trim());
+}
+
 function recordMatches(record, criteria) {
   if (!criteria || typeof criteria !== "object") return true;
   if (criteria.id !== undefined && record.id !== criteria.id) return false;
@@ -491,7 +496,14 @@ function recordMatches(record, criteria) {
   if (criteria.verb !== undefined && record.verb !== criteria.verb) return false;
   if (criteria.mood !== undefined && record.mood !== criteria.mood) return false;
   if (criteria.case !== undefined && !record.cases.includes(criteria.case)) return false;
-  if (criteria.hnuc !== undefined && record.hnuc !== criteria.hnuc) return false;
+  if (criteria.hnuc !== undefined) {
+    // The 16-bit words of a codelet are the HNUC codes of the vocabulary, so
+    // an HNUC query is a membership test over the codelet's words. Comparing
+    // a scalar `record.hnuc` instead would never match, because no record
+    // carries that field.
+    const hnuc = hnucValue(criteria.hnuc);
+    if (!Number.isInteger(hnuc) || !record.words.includes(hnuc)) return false;
+  }
   if (criteria.codeletHash !== undefined && record.codeletHash !== criteria.codeletHash) return false;
   if (criteria.sourceLanguage !== undefined && record.source?.language !== criteria.sourceLanguage) return false;
   if (criteria.sourceLocator !== undefined && record.source?.locator !== criteria.sourceLocator) return false;
