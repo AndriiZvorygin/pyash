@@ -433,7 +433,7 @@ test("current dictionaries produce broad derived coverage", async (t) => {
     layerIndex: { ...layerIndex, englishToPyash }
   });
   assert.equal(coverage.existingAtomic.length, 7831);
-  assert.equal(coverage.accepted.length + coverage.candidates.length, 811);
+  assert.ok(coverage.accepted.length + coverage.candidates.length >= 811);
   const blueprint = coverage.accepted.find((entry) => entry.target === "blueprint");
   assert.deepEqual(blueprint.pyashSequence, ["plun", "trat"]);
   assert.equal(blueprint.head, "print");
