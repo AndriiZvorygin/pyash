@@ -978,7 +978,11 @@ export function createSaddleInputDecoder({
       autocomplete();
       return;
     }
-    if (char === "\r" || char === "\n") {
+    if (char === "\r") {
+      submit();
+      return;
+    }
+    if (char === "\n") {
       insert("\n");
       return;
     }

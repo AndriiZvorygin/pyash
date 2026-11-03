@@ -107,21 +107,23 @@ test("coding saddle reloads named and explicitly selected session history", asyn
   }
 });
 
-test("coding saddle sends only on Ctrl+Enter and keeps ordinary Enter as a newline", async () => {
+test("coding saddle sends on Enter and keeps Shift+Enter as a newline", async () => {
   const submitted = [];
   const decoder = createSaddleInputDecoder({
     onSubmit: async (value) => submitted.push(value)
   });
 
   decoder.feed("one\r");
-  decoder.feed("two");
-  assert.deepEqual(submitted, []);
-  assert.equal(decoder.getState().value, "one\ntwo");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(submitted, ["one"]);
 
-  decoder.feed("\u001b[13;5u");
+  decoder.feed("two\u001b[13;2uthree");
+  assert.deepEqual(submitted, ["one"]);
+  assert.equal(decoder.getState().value, "two\nthree");
+  decoder.feed("\r");
 
   await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(submitted, ["one\ntwo"]);
+  assert.deepEqual(submitted, ["one", "two\nthree"]);
   assert.equal(decoder.getState().value, "");
 });
 
@@ -135,7 +137,7 @@ test("coding saddle bracketed paste preserves multiline text without sending", a
 
   assert.deepEqual(submitted, []);
   assert.equal(decoder.getState().value, "beforefirst line\nsecond line\nthird line\tindentedafter");
-  decoder.feed("\u001b[27;5;13~");
+  decoder.feed("\r");
   assert.deepEqual(submitted, ["beforefirst line\nsecond line\nthird line\tindentedafter"]);
 });
 
