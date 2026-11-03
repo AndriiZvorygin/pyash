@@ -72,7 +72,15 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   Keep duplicate surface+POS rows invalid and each lemma unique within its POS.
 - Atom sense selection runs once per atom/POS slot. An existing noun link must
   not hide an unlinked verb, adjective, or adverb slot for the same Pyac atom.
-  Keep the model choice bounded to the candidates supplied for that slot.
+  Treat each atom label as a broad, ordinary general-language anchor. Do not
+  infer a sports, technical, regional, slang, or other specialist domain from a
+  bare homograph label. Select a domain-marked sense only when the atom labels
+  explicitly support that domain; a narrower specialist concept belongs in a
+  compound. Frequency evidence is only a prior among semantically compatible
+  general senses. Keep the model choice bounded to the candidates supplied for
+  that slot. An exact spelling, accepted lemma mapping, or shared word fragment
+  only makes a candidate eligible; it does not prove semantic fit. Reject
+  unrelated homographs and accidental fragments as no-fit.
   POS identity is lexical metadata; it does not add or alter Pyash grammar
   particles, aspect, mood, or surface ordering.
 - A direct same-synset atom can be offered as an anchor. Automatic linking also
@@ -138,6 +146,10 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   that remain free, candidates already linked to another anchor, and atoms
   with no exact WordNet candidate. Preserve linked rows as checkpoints and do
   not infer unsupported sense links.
+  Report POS coverage as atom/POS slots, separately from unique atom count:
+  direct-candidate selection can link only POS categories supported by an exact
+  atom label or an accepted same-atom lemma mapping. Do not assume every atom
+  has noun, verb, and adjective WordNet senses.
 - Link an existing Pyash atom's English surface to its lexical lemma in
   `english_lemmas.pya` before WordNet sense selection when the atom surface is
   inflected. Keep the base lemma's canonical target on one Pyash atom; surface

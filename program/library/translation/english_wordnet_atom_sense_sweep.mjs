@@ -13,7 +13,7 @@ import { extractBoundedJsonObject } from "./english_verification.mjs";
 import { renderEnglishWordNetSenseLinkRowsPya } from "./english_wordnet_linker.mjs";
 
 export const ENGLISH_WORDNET_ATOM_SENSE_FORMAT = "english-wordnet-atom-sense-sweep-v1";
-export const ENGLISH_WORDNET_ATOM_SENSE_PROMPT_REVISION = "atom-pos-gloss-choice-v3";
+export const ENGLISH_WORDNET_ATOM_SENSE_PROMPT_REVISION = "atom-general-pos-gloss-choice-v4";
 export const ENGLISH_WORDNET_ATOM_SENSE_CONFIG_URL = new URL("./english_wordnet_atom_sense_sweep.pya", import.meta.url);
 
 export const ENGLISH_WORDNET_ATOM_SENSE_RESPONSE_FORMAT = Object.freeze({
@@ -262,9 +262,11 @@ function promptItem(item, candidates) {
 export function buildEnglishWordNetAtomSensePrompt(items = []) {
   if (!Array.isArray(items) || items.length === 0) throw invalid("atom sense prompt requires at least one item");
   return [
-    "Choose the supplied WordNet sense whose definition best fits each Pyash atom's English label(s) for the specified part of speech. Definitions omit usage examples.",
-    "Each input row is [response slot id, target POS, labels, atom English30k rank, accepted lemma mappings, candidates]. Each candidate is [sense id, source POS, lemmas, definition, matched labels, English30k rank, WordNet tag count]. Frequency values r/t are secondary evidence; meaning comes first.",
-    "Use only supplied sense ids. Return no-fit if none applies; uncertain if choices are genuinely indistinguishable. For those statuses source=null. Give one short reason.",
+    "Choose the supplied WordNet sense that matches each Pyash atom's English label(s) for the specified part of speech as a broad, ordinary general-language concept. These atomic anchors represent general vocabulary; a narrower specialized concept belongs in a compound.",
+    "Do not infer a specialist domain from a bare label. Select a domain-marked candidate only when the atom labels explicitly support that domain. Do not invent missing context. If no general candidate fits, return no-fit; if multiple general senses remain indistinguishable from the labels, return uncertain. For those statuses source=null.",
+    "An exact spelling, accepted lemma mapping, or shared word fragment only makes a candidate eligible for consideration; it does not establish semantic fit. Reject unrelated homographs and accidental fragments with no-fit.",
+    "Each input row is [response slot id, target POS, labels, atom English30k rank, accepted lemma mappings, candidates]. Each candidate is [sense id, source POS, lemmas, definition, matched labels, English30k rank, WordNet tag count]. Frequency evidence is only a prior among semantically compatible general senses; it cannot justify a specialized sense.",
+    "Definitions omit usage examples. Use only supplied sense ids. Give one short reason.",
     "A listed lemma mapping is the only permitted bridge from an inflected atom label to a different WordNet lemma. Do not infer a relation from an unrelated word or invent sentence context.",
     "Copy each response slot id exactly as shown. It is an opaque identifier; do not append the POS or reconstruct an atom id.",
     "Return JSON only: {\"decisions\":[{\"id\":\"slot-<supplied-id>\",\"status\":\"select|uncertain|no-fit\",\"source\":\"supplied sense id or null\",\"rationale\":\"short reason\"}]}. Include each response slot exactly once.",
@@ -477,7 +479,7 @@ export function appendEnglishWordNetAtomSenseLinks({
   }
   const rows = renderEnglishWordNetSenseLinkRowsPya(records);
   if (selected.length !== records.length) throw invalid("not every selected decision produced a bridge row");
-  if (rows.length === 0) return { catalogSource, added: [], entries: parsed.entries };
+  if (rows.length === 0) return { catalogSource, added: [], withheld: [], entries: parsed.entries };
   const appendRows = (source, renderedRows) => {
     const body = source.replace(/\s*prah\s*$/u, "").trimEnd();
     if (body === source.trimEnd()) throw invalid("bridge catalog does not end in its canonical prah");
