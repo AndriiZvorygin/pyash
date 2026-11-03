@@ -371,7 +371,8 @@ export function buildEnglishLemmaIndex({
     const candidates = sequenceLookup.get(sequence.join("\u0000")) ?? [];
     return [...candidates]
       .sort((left, right) => (
-        (sequenceKindRank.get(left.kind) ?? 9) - (sequenceKindRank.get(right.kind) ?? 9)
+        Number(Boolean(left.partOfSpeech)) - Number(Boolean(right.partOfSpeech))
+        || (sequenceKindRank.get(left.kind) ?? 9) - (sequenceKindRank.get(right.kind) ?? 9)
         || String(left.surface).localeCompare(String(right.surface))
       ))
       .at(0)?.surface ?? "";
@@ -497,6 +498,7 @@ export function renderEnglishLemmaCatalogPya({ source, entries }, {
         ...(entry.canonicalEnglish ? { canonicalEnglish: entry.canonicalEnglish } : {}),
         kind: entry.kind,
         status: entry.status ?? "accepted-deterministic",
+        ...(entry.partOfSpeech ? { partOfSpeech: entry.partOfSpeech } : {}),
         ...(entry.duplicateOf ? { duplicateOf: entry.duplicateOf } : {}),
         ...(entry.rule ? { rule: entry.rule } : {}),
         ...(entry.morphology ? { morphology: entry.morphology } : {}),

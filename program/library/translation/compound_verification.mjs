@@ -560,6 +560,7 @@ export async function verifyCompoundCoverage(records, {
   invoke,
   verifierName = "compound verifier",
   maxRepairAttempts = 1,
+  parallelism = 1,
   onRecord
 } = {}) {
   const classification = classifyCompoundCoverage(records);
@@ -569,23 +570,37 @@ export async function verifyCompoundCoverage(records, {
   const repairLimit = Math.min(1, Math.max(0, Number.isFinite(Number(maxRepairAttempts))
     ? Math.trunc(Number(maxRepairAttempts))
     : 1));
-  const verified = [];
-  const handledGroups = new Set();
-  const emit = async (record) => {
-    verified.push(record);
-    if (typeof onRecord === "function") {
-      await onRecord({ record, records: [...verified], total: classification.records.length });
-    }
-  };
-  for (const record of classification.records) {
+  const width = Math.max(1, Math.trunc(Number(parallelism) || 1));
+  const units = [];
+  const llmGroups = new Map();
+  for (const [index, record] of classification.records.entries()) {
     if (record.certainty !== "llm") {
-      await emit(record);
+      units.push({ index, record, candidates: [record], deterministic: true });
       continue;
     }
     const groupKey = candidateGroupKey(record);
-    if (handledGroups.has(groupKey)) continue;
-    handledGroups.add(groupKey);
-    const candidates = classification.verificationCandidates.filter((candidate) => candidateGroupKey(candidate) === groupKey);
+    let group = llmGroups.get(groupKey);
+    if (!group) {
+      group = { index, record, candidates: [], deterministic: false };
+      llmGroups.set(groupKey, group);
+    }
+    group.candidates.push(record);
+  }
+  units.push(...llmGroups.values());
+  units.sort((left, right) => left.index - right.index);
+
+  const verifiedById = new Map();
+  const emit = async (record) => {
+    verifiedById.set(candidateId(record), record);
+    if (typeof onRecord !== "function") return;
+    const snapshot = classification.records
+      .map((candidate) => verifiedById.get(candidateId(candidate)))
+      .filter(Boolean);
+    await onRecord({ record, records: snapshot, total: classification.records.length });
+  };
+  const verifyUnit = async (unit) => {
+    if (unit.deterministic) return unit.candidates;
+    const { record, candidates } = unit;
     const prompt = buildCompoundVerificationPrompt({ record, candidates });
     let attempts = 1;
     let raw = await invoke({ phase: "verify", prompt, record, candidates, attempt: attempts });
@@ -606,41 +621,56 @@ export async function verifyCompoundCoverage(records, {
       response = parseCompoundVerificationResponse(raw, { candidates });
     }
     if (!response.valid) {
-      for (const candidate of candidates) {
-        await emit(retainUncertain(candidate, { ...candidate, ...classifyCompoundCertainty(candidate) }, {
+      return candidates.map((candidate) => retainUncertain(candidate, { ...candidate, ...classifyCompoundCertainty(candidate) }, {
           reason: response.reason,
           raw: String(raw ?? "")
         }, { verifierName, attempts }));
-      }
-      continue;
     }
+    const results = [];
     for (const candidate of candidates) {
       const candidateClassification = { ...candidate, ...classifyCompoundCertainty(candidate) };
       if (response.verdict === "accept" && response.candidateId === candidateId(candidate)) {
         if (response.headKind === "lexical-head") {
-          await emit(applyVerification(candidate, candidateClassification, response, {
+          results.push(applyVerification(candidate, candidateClassification, response, {
             verifierName,
             attempts,
             repaired
           }));
         } else {
-          await emit(retainRejected(candidate, candidateClassification, {
+          results.push(retainRejected(candidate, candidateClassification, {
             ...response,
             rationale: `final component classified as ${response.headKind}: ${response.rationale}`
           }, { verifierName, attempts }));
         }
       } else if (response.verdict === "accept") {
-        await emit(retainRejected(candidate, candidateClassification, {
+        results.push(retainRejected(candidate, candidateClassification, {
           ...response,
           rationale: `alternative candidate not selected: ${response.rationale}`
         }, { verifierName, attempts }));
       } else if (response.verdict === "reject") {
-        await emit(retainRejected(candidate, candidateClassification, response, { verifierName, attempts }));
+        results.push(retainRejected(candidate, candidateClassification, response, { verifierName, attempts }));
       } else {
-        await emit(retainUncertain(candidate, candidateClassification, response, { verifierName, attempts }));
+        results.push(retainUncertain(candidate, candidateClassification, response, { verifierName, attempts }));
       }
     }
+    return results;
+  };
+  for (let offset = 0; offset < units.length; offset += width) {
+    const batch = units.slice(offset, offset + width);
+    const settled = await Promise.allSettled(batch.map(verifyUnit));
+    let batchError = null;
+    for (const [index, outcome] of settled.entries()) {
+      if (outcome.status === "rejected") {
+        batchError ??= outcome.reason;
+        continue;
+      }
+      for (const record of outcome.value) await emit(record);
+    }
+    if (batchError) throw batchError;
   }
+  const verified = classification.records
+    .map((record) => verifiedById.get(candidateId(record)))
+    .filter(Boolean);
   return {
     records: verified,
     deterministic: verified.filter((record) => record.verificationStatus === "accepted-deterministic"),

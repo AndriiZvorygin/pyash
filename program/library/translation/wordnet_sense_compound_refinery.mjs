@@ -552,7 +552,13 @@ async function verifyAndPromote({ context, candidates }) {
     ?? (async (records, onRecord) => {
       const invoke = context.dependencies.compoundVerifier
         ?? await createDefaultQueuedMindCompoundVerifier({ model: context.config.model });
-      return verifyCompoundCoverage(records, { invoke, verifierName: "mind", maxRepairAttempts: 1, onRecord });
+      return verifyCompoundCoverage(records, {
+        invoke,
+        verifierName: "mind",
+        maxRepairAttempts: 1,
+        parallelism: context.config.parallelism,
+        onRecord
+      });
     });
   const batchSize = Math.max(1, context.config.verificationBatchSize);
   for (let offset = 0; offset < pending.length; offset += batchSize) {

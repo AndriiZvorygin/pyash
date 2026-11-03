@@ -4,12 +4,20 @@ import assert from "node:assert/strict";
 import {
   buildEnglishAtomLemmaAssignments,
   buildEnglishAtomLemmaCatalogAdditions,
+  hasUnlinkedInflectionLemmaCandidate,
   loadEnglishAtomLemmaScanConfig
 } from "../program/library/translation/english_atom_lemma_scan.mjs";
 import {
   buildEnglishLemmaIndex,
-  parseEnglishLemmaCatalog
+  loadEnglishLemmaCatalog,
+  parseEnglishLemmaCatalog,
+  renderEnglishLemmaCatalogPya
 } from "../program/library/translation/english_lemmas.mjs";
+import { loadEnglishWordNetBridges } from "../program/library/translation/english_wordnet_bridges.mjs";
+import {
+  forgetEnglishSentenceResources,
+  loadDefaultEnglishSentenceResources
+} from "../program/library/translation/english_sentence.mjs";
 
 function wordnetIndex(lemmas) {
   const rows = new Map(Object.entries(lemmas));
@@ -23,6 +31,8 @@ function wordnetIndex(lemmas) {
 test("atom lemma scan loads the Pyash assignment policy", async () => {
   const config = await loadEnglishAtomLemmaScanConfig();
   assert.equal(config.format, "english-atom-lemma-scan-v1");
+  assert.equal(config["target-status"], "no-direct-candidate-or-unlinked-inflection-POS");
+  assert.match(config["lexical-surface-policy"], /different POS/u);
   assert.match(config["grammar-lemma-collision-policy"], /grammar entry/u);
 });
 
@@ -100,6 +110,87 @@ test("atom lemma scan keeps lexical WordNet entries from being reinterpreted as 
   assert.equal(assignments[0].assignments[0].kind, "lemma");
   assert.equal(assignments[0].assignments[0].lemma, "news");
   assert.equal(assignments[0].assignments[0].method, "surface-lemma");
+});
+
+test("atom lemma scan links an inflected verb alongside a lexicalized adjective satellite", () => {
+  const assignments = buildEnglishAtomLemmaAssignments({
+    atomCoverage: [{
+      id: "atom:hbin",
+      pyac: "hbin",
+      labels: ["becoming"],
+      status: "direct-candidates-unlinked",
+      links: [{ source: "s:00911194-s", targetPartOfSpeech: "s" }]
+    }],
+    atomicEntries: [{ en: "becoming", pya: "hbin" }],
+    wordnetIndex: wordnetIndex({
+      become: [{ pos: "v", synset: "00149403-v" }],
+      becoming: [{ pos: "s", synset: "00911194-s" }]
+    }),
+    rankForEnglish: (word) => ({ become: 400, becoming: 1879 }[word] ?? Number.POSITIVE_INFINITY),
+    layerByWord: new Map([["hbin", 16]])
+  });
+  const assignment = assignments[0].assignments[0];
+
+  assert.equal(assignment.kind, "lemma");
+  assert.equal(assignment.lemma, "become");
+  assert.equal(assignment.canonicalEnglish, "becoming");
+  assert.equal(assignment.canonicalPyac, "hbin");
+  assert.deepEqual(assignment.partOfSpeech, ["v"]);
+
+  const additions = buildEnglishAtomLemmaCatalogAdditions(assignments, [], [{ en: "becoming", pya: "hbin" }]);
+  assert.deepEqual(additions.map((row) => [row.surface, row.lemma, row.partOfSpeech]).sort(), [
+    ["become", "become", "v"],
+    ["becoming", "become", "v"]
+  ]);
+  const index = buildEnglishLemmaIndex({
+    atomicEntries: [{ en: "becoming", pya: "hbin" }],
+    catalogEntries: additions
+  });
+  assert.equal(index.resolve("becoming", { partOfSpeech: "v" }).lemma, "become");
+  assert.equal(index.resolve("becoming", { partOfSpeech: "s" }).lemma, "becoming");
+});
+
+test("atom lemma scan selects a linked atom when an inflection exposes an unlinked POS sense", () => {
+  const coverage = {
+    labels: ["becoming"],
+    links: [{ source: "s:00911194-s", targetPartOfSpeech: "s" }]
+  };
+  const index = wordnetIndex({
+    become: [{ pos: "v", synset: "00149403-v" }],
+    becoming: [{ pos: "s", synset: "00911194-s" }]
+  });
+
+  assert.equal(hasUnlinkedInflectionLemmaCandidate(coverage, index), true);
+  assert.equal(hasUnlinkedInflectionLemmaCandidate(coverage, index, new Set(["v:00149403-v"])), false);
+});
+
+test("sentence resource cache can reload a newly written POS-scoped lemma catalog", async () => {
+  const before = await loadDefaultEnglishSentenceResources();
+  forgetEnglishSentenceResources();
+  const after = await loadDefaultEnglishSentenceResources();
+
+  assert.notEqual(after, before);
+  assert.equal(
+    after.lemmaIndex.lookupForPartOfSpeech("become", "v", { scopedOnly: true })?.pyashSequence?.[0],
+    "hbin"
+  );
+  forgetEnglishSentenceResources();
+});
+
+test("become links to the hbin verb anchor while becoming keeps its satellite sense", async () => {
+  const [lemmas, bridges] = await Promise.all([
+    loadEnglishLemmaCatalog(),
+    loadEnglishWordNetBridges()
+  ]);
+  const become = lemmas.entries.find((entry) => entry.surface === "become" && entry.partOfSpeech === "v");
+  const verbSense = bridges.entries.find((entry) => entry.source === "v:00149403-v");
+  const satelliteSense = bridges.entries.find((entry) => entry.source === "s:00911194-s");
+
+  assert.equal(become?.canonicalEnglish, "becoming");
+  assert.equal(verbSense?.target, "becoming");
+  assert.equal(verbSense?.targetPartOfSpeech, "v");
+  assert.equal(satelliteSense?.target, "becoming");
+  assert.equal(satelliteSense?.targetPartOfSpeech, "s");
 });
 
 test("atom lemma scan preserves curated irregular lemmas with distinct lexical atoms", () => {
@@ -191,6 +282,43 @@ test("lemma catalog allows POS-scoped homographs and resolves the matching mappi
   assert.equal(index.resolve("becoming", { partOfSpeech: "a" }).canonicalEnglish, "becoming");
   assert.equal(index.resolve("becoming", { partOfSpeech: "v" }).canonicalEnglish, "become");
   assert.equal(index.resolve("becoming", { pos: "v" }).lemma, "become");
+});
+
+test("reverse lemma lookup prefers the atom's canonical surface over its base lemma", () => {
+  const index = buildEnglishLemmaIndex({
+    atomicEntries: [{ en: "contrasting", pya: "nros" }],
+    catalogEntries: [{
+      surface: "contrast",
+      lemma: "contrast",
+      canonicalEnglish: "contrasting",
+      kind: "anchor",
+      status: "accepted-deterministic",
+      partOfSpeech: "v",
+      evidence: "The verb lemma resolves to its existing inflected atom."
+    }]
+  });
+
+  assert.equal(index.preferredSurfaceForSequence(["nros"]), "contrasting");
+});
+
+test("lemma catalog renderer preserves distinct POS-scoped rows for one surface", () => {
+  const entries = ["s", "v"].map((partOfSpeech) => ({
+    surface: "becoming",
+    lemma: partOfSpeech === "v" ? "become" : "becoming",
+    canonicalEnglish: "becoming",
+    kind: partOfSpeech === "v" ? "inflectional" : "anchor",
+    status: "accepted-curated",
+    partOfSpeech,
+    evidence: `fixture ${partOfSpeech} mapping`
+  }));
+  const source = renderEnglishLemmaCatalogPya({
+    source: { path: "english30k.txt", sourceHash: "fixture-hash", cutoff: 30000 },
+    entries
+  });
+  const catalog = parseEnglishLemmaCatalog(source);
+
+  assert.deepEqual(catalog.entries.map((entry) => entry.partOfSpeech), ["s", "v"]);
+  assert.equal(catalog.entries.find((entry) => entry.partOfSpeech === "v").lemma, "become");
 });
 
 test("lemma index keeps adjective satellite mappings separate from adjective mappings", () => {

@@ -594,6 +594,13 @@ export async function translateWordNetSenseWave({
   const attemptsLimit = Math.max(1, Math.trunc(Number(maxAttempts) || 1));
   const failures = [];
   let submittedCount = 0;
+  let cacheWrite = Promise.resolve();
+  const cacheSnapshot = () => [...cache.values()].sort((left, right) => left.senseId.localeCompare(right.senseId));
+  const persistRecord = (record) => {
+    if (typeof onCache !== "function") return Promise.resolve();
+    cacheWrite = cacheWrite.then(() => onCache(cacheSnapshot(), record));
+    return cacheWrite;
+  };
   for (let offset = 0; offset < senses.length; offset += width) {
     const wave = senses.slice(offset, offset + width).map((sense, index) => ({
       sense,
@@ -603,11 +610,11 @@ export async function translateWordNetSenseWave({
       repairReason: "",
       lastResponse: ""
     }));
-    for (const state of wave) {
+    await Promise.all(wave.map(async (state) => {
       const existing = cache.get(senseIdOf(state.sense));
       const existingTranslations = Array.isArray(existing?.translations) ? existing.translations : [];
       const missingLanguages = languages.filter((language) => !existingTranslations.some((row) => normalized(row.language) === normalized(language)));
-      if (missingLanguages.length === 0) continue;
+      if (missingLanguages.length === 0) return;
       state.missingLanguages = missingLanguages;
       state.translations = existingTranslations;
       state.attempt = 1;
@@ -627,14 +634,16 @@ export async function translateWordNetSenseWave({
       } catch (error) {
         state.error = text(error?.message ?? error).slice(0, 500) || "Housekeeper submit failed";
       }
-    }
-    for (const state of wave) {
+    }));
+    const fatalErrors = [];
+    await Promise.all(wave.map(async (state) => {
       if (!state.queued) {
         if (state.error) failures.push({ senseId: senseIdOf(state.sense), error: state.error });
-        continue;
+        return;
       }
       let lastError = "";
       while (state.attempt <= attemptsLimit) {
+        let record;
         try {
           const value = await awaitHandle(`${state.handleId}-translate-${state.attempt}`);
           const raw = typeof value === "object" && value !== null && typeof value.text === "string" ? value.text : String(value ?? "");
@@ -649,7 +658,7 @@ export async function translateWordNetSenseWave({
             .map((language) => translationsByLanguage.get(normalized(language)))
             .filter(Boolean);
           const id = senseTranslationKey({ senseId: senseIdOf(state.sense), wordNetHash, promptRevision, languages });
-          const record = {
+          record = {
             id,
             senseId: senseIdOf(state.sense),
             wordNetHash,
@@ -659,10 +668,6 @@ export async function translateWordNetSenseWave({
             translations: state.translations,
             attempts: state.attempt
           };
-          cache.set(record.senseId, record);
-          if (typeof onCache === "function") await onCache([...cache.values()], record);
-          state.queued = false;
-          break;
         } catch (error) {
           const details = error?.details && typeof error.details === "object"
             ? ` ${JSON.stringify(error.details).slice(0, 300)}`
@@ -687,18 +692,28 @@ export async function translateWordNetSenseWave({
             lastError = text(submitError?.message ?? submitError).slice(0, 500) || lastError;
             break;
           }
+          continue;
         }
+        cache.set(record.senseId, record);
+        try {
+          await persistRecord(record);
+        } catch (error) {
+          fatalErrors.push(error);
+        }
+        state.queued = false;
+        return;
       }
       if (state.queued) failures.push({
         senseId: senseIdOf(state.sense),
         error: lastError || "sense translation failed",
         ...(state.lastResponse ? { response: state.lastResponse } : {})
       });
-    }
+    }));
+    if (fatalErrors.length > 0) throw fatalErrors[0];
   }
   return {
-    records: [...cache.values()].sort((left, right) => left.senseId.localeCompare(right.senseId)),
-    failures,
+    records: cacheSnapshot(),
+    failures: failures.sort((left, right) => left.senseId.localeCompare(right.senseId)),
     submittedCount,
     completedCount: senses.filter((sense) => cache.get(senseIdOf(sense))?.status === "complete").length
   };

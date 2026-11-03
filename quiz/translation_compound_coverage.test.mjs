@@ -494,6 +494,47 @@ test("deterministic compounds bypass the LLM and closed candidates enter verific
   assert.equal(checkpoints.at(-1).count, checkpoints.at(-1).total);
 });
 
+test("independent compound verification groups run concurrently and checkpoint in input order", async () => {
+  const coverage = buildDerivedCompoundCoverage({
+    atomicEntries,
+    layerIndex,
+    sourceTerms: [
+      { target: "blackbird", sourceSurfaces: { chinese: "黑鸟" } },
+      { target: "grasssnake", sourceSurfaces: { chinese: "草蛇" } }
+    ]
+  });
+  const candidates = coverage.records.map(withWordNetEvidence);
+  assert.equal(candidates.length, 2);
+  assert.equal(classifyCompoundCoverage(candidates).verificationCandidates.length, 2);
+
+  let active = 0;
+  let maxActive = 0;
+  let started = 0;
+  let releaseBarrier;
+  const barrier = new Promise((resolve) => { releaseBarrier = resolve; });
+  const checkpoints = [];
+  const verified = await verifyCompoundCoverage(candidates, {
+    parallelism: 2,
+    invoke: async ({ record }) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      started += 1;
+      if (started === 2) releaseBarrier();
+      await Promise.race([barrier, new Promise((resolve) => setTimeout(resolve, 150))]);
+      active -= 1;
+      return acceptedCompoundResponse(record);
+    },
+    onRecord: async ({ record, records }) => {
+      checkpoints.push({ id: record.id, ids: records.map((entry) => entry.id) });
+    }
+  });
+
+  assert.equal(maxActive, 2);
+  assert.deepEqual(verified.records.map((record) => record.id), candidates.map((record) => record.id));
+  assert.deepEqual(checkpoints.map(({ id }) => id), candidates.map((record) => record.id));
+  assert.deepEqual(checkpoints.at(-1).ids, candidates.map((record) => record.id));
+});
+
 test("uncertain compound verification gets one bounded repair and accepts only a supplied candidate", async () => {
   const coverage = buildDerivedCompoundCoverage({
     atomicEntries,

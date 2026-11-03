@@ -285,6 +285,84 @@ test("translation wave queues a bounded wave before awaiting and repairs malform
   assert.equal(result.failures.length, 0);
 });
 
+test("translation wave submits and awaits concurrently while serializing stable checkpoints", async () => {
+  const senses = ["n:00000020-n", "n:00000021-n"].map((senseId) => ({
+    senseId,
+    pos: "n",
+    lemma: "target",
+    gloss: "a target"
+  }));
+  const senseByHandle = new Map();
+  const submitBarrier = barrierForTwo();
+  const awaitBarrier = barrierForTwo();
+  const cacheSnapshots = [];
+  let submitActive = 0;
+  let maxSubmitActive = 0;
+  let awaitActive = 0;
+  let maxAwaitActive = 0;
+  let cacheActive = 0;
+  let maxCacheActive = 0;
+  const result = await translateWordNetSenseWave({
+    senses,
+    wordNetHash: "source-hash",
+    languages: ["chinese"],
+    parallelism: 2,
+    submit: async ({ sense, handleId, attempt }) => {
+      submitActive += 1;
+      maxSubmitActive = Math.max(maxSubmitActive, submitActive);
+      senseByHandle.set(`${handleId}-translate-${attempt}`, sense);
+      await submitBarrier.wait();
+      submitActive -= 1;
+      return { status: "queued" };
+    },
+    awaitHandle: async (handleId) => {
+      awaitActive += 1;
+      maxAwaitActive = Math.max(maxAwaitActive, awaitActive);
+      await awaitBarrier.wait();
+      awaitActive -= 1;
+      const sense = senseByHandle.get(handleId);
+      return JSON.stringify({
+        senseId: sense.senseId,
+        translations: [{
+          language: "chinese",
+          surface: "甲乙",
+          composition: "compound",
+          components: [{ surface: "甲", gloss: "first" }, { surface: "乙", gloss: "second" }]
+        }]
+      });
+    },
+    onCache: async (records) => {
+      cacheActive += 1;
+      maxCacheActive = Math.max(maxCacheActive, cacheActive);
+      cacheSnapshots.push(records.map((record) => record.senseId));
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      cacheActive -= 1;
+    }
+  });
+
+  assert.equal(maxSubmitActive, 2);
+  assert.equal(maxAwaitActive, 2);
+  assert.equal(maxCacheActive, 1);
+  assert.ok(cacheSnapshots.every((ids) => ids.every((id, index) => index === 0 || ids[index - 1].localeCompare(id) <= 0)));
+  assert.deepEqual(result.records.map((record) => record.senseId), senses.map((sense) => sense.senseId));
+  assert.equal(result.submittedCount, 2);
+  assert.equal(result.completedCount, 2);
+  assert.deepEqual(result.failures, []);
+});
+
+function barrierForTwo() {
+  let starts = 0;
+  let release;
+  const ready = new Promise((resolve) => { release = resolve; });
+  return {
+    async wait() {
+      starts += 1;
+      if (starts === 2) release();
+      await Promise.race([ready, new Promise((resolve) => setTimeout(resolve, 30))]);
+    }
+  };
+}
+
 test("failed sense response keeps bounded evidence and sends sense-id correction on its one retry", async () => {
   const submissions = [];
   const result = await translateWordNetSenseWave({

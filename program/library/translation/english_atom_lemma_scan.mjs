@@ -32,25 +32,63 @@ function markerLabel(value) {
   return typeof value === "string" && (value.startsWith("_") || value.endsWith("_"));
 }
 
-function eligibleInflection(surface, candidate, wordnetIndex) {
+function eligibleInflectionPartsOfSpeech(surface, candidate, wordnetIndex) {
   const rule = candidate.rule ?? "";
   const normalizedSurface = normalizeEnglishLemmaWord(surface);
   const lemma = normalizeEnglishLemmaWord(candidate.lemma);
-  if (!lemma || lemma === normalizedSurface) return false;
+  if (!lemma || lemma === normalizedSurface) return [];
   const senses = wordnetIndex.lookup(lemma);
-  if (senses.length === 0) return false;
+  if (senses.length === 0) return [];
 
-  // A surface that is itself a WordNet lemma may be lexicalized rather than an
-  // inflected spelling. Preserve it unless the lemma catalog reviewed it.
-  if (wordnetIndex.lookup(normalizedSurface).length > 0) return false;
-
-  if (rule === "plural-or-third-person-s-silent-e") return false;
+  const surfaceSenses = wordnetIndex.lookup(normalizedSurface);
+  const allowedPartsOfSpeech = rule.startsWith("present-participle-") || rule.startsWith("past-")
+    ? new Set(["v"])
+    : rule.startsWith("plural-or-third-person-") || rule.startsWith("plural-ves-")
+      ? new Set(["n", "v"])
+      : new Set();
+  const lemmaPartsOfSpeech = [...new Set(senses
+    .map((sense) => String(sense?.pos ?? "").trim().toLowerCase())
+    .filter((partOfSpeech) => allowedPartsOfSpeech.has(partOfSpeech)))];
+  if (lemmaPartsOfSpeech.length === 0) return [];
+  let partsOfSpeech = surfaceSenses.length === 0
+    ? [""]
+    : lemmaPartsOfSpeech.filter((partOfSpeech) => !surfaceSenses.some((sense) => (
+      String(sense?.pos ?? "").trim().toLowerCase() === partOfSpeech
+    )));
+  if (rule === "plural-or-third-person-s-silent-e") return [];
   if (rule === "plural-or-third-person-es") {
     const endsWithEs = /(?:s|x|z|ch|sh|o)$/u.test(lemma);
-    if (!endsWithEs) return false;
+    if (!endsWithEs) return [];
   }
-  if (rule.startsWith("comparative-") || rule.startsWith("superlative-")) return false;
-  return true;
+  if (rule.startsWith("comparative-") || rule.startsWith("superlative-")) return [];
+  partsOfSpeech = [...new Set(partsOfSpeech)];
+  return partsOfSpeech;
+}
+
+function senseSource(sense) {
+  const explicit = String(sense?.source ?? "").trim();
+  if (explicit) return explicit;
+  const pos = String(sense?.pos ?? "").trim().toLowerCase();
+  const synset = String(sense?.synset ?? "").trim();
+  return pos && synset ? `${pos}:${synset}` : "";
+}
+
+export function hasUnlinkedInflectionLemmaCandidate(coverage, wordnetIndex, activeSenseIds = new Set()) {
+  if (!coverage || !Array.isArray(coverage.labels) || !wordnetIndex || typeof wordnetIndex.lookup !== "function") {
+    return false;
+  }
+  const linkedHere = new Set((coverage.links ?? []).map((link) => String(link?.source ?? "").trim()).filter(Boolean));
+  const active = activeSenseIds instanceof Set ? activeSenseIds : new Set(activeSenseIds);
+  return coverage.labels.some((surface) => inflectionCandidates(surface).some((candidate) => {
+    const allowedPartsOfSpeech = eligibleInflectionPartsOfSpeech(surface, candidate, wordnetIndex);
+    if (allowedPartsOfSpeech.length === 0) return false;
+    return wordnetIndex.lookup(candidate.lemma).some((sense) => {
+      const partOfSpeech = String(sense?.pos ?? "").trim().toLowerCase();
+      if (!allowedPartsOfSpeech.includes("") && !allowedPartsOfSpeech.includes(partOfSpeech)) return false;
+      const source = senseSource(sense);
+      return source && !linkedHere.has(source) && !active.has(source);
+    });
+  }));
 }
 
 function chooseAtom(candidates, rankForEnglish, layerByWord) {
@@ -93,24 +131,29 @@ function exactAtomForSurface(surface, atomsBySurface, rankForEnglish, layerByWor
 function chooseCandidate(surface, atom, atomIndex, catalogBySurface, rankForEnglish, layerByWord, wordnetIndex) {
   const rows = new Map();
   for (const candidate of inflectionCandidates(surface)) {
-    if (!eligibleInflection(surface, candidate, wordnetIndex)) continue;
+    const eligiblePartsOfSpeech = eligibleInflectionPartsOfSpeech(surface, candidate, wordnetIndex);
+    if (eligiblePartsOfSpeech.length === 0) continue;
     const lemma = normalizeEnglishLemmaWord(candidate.lemma);
-    const explicit = catalogTarget(catalogBySurface.get(lemma), atomIndex.bySurface, rankForEnglish, layerByWord);
-    const exactAtom = exactAtomForSurface(lemma, atomIndex.bySurface, rankForEnglish, layerByWord);
-    const root = explicit ?? (exactAtom
-      ? { english: exactAtom.en, pyac: exactAtom.pya, source: "exact-atom-lemma" }
-      : null);
-    const option = {
-      lemma,
-      rule: candidate.rule,
-      rank: rank(lemma, rankForEnglish),
-      targetEnglish: root?.english ?? atom.en,
-      targetPyac: root?.pyac ?? atom.pya,
-      targetLayer: layerByWord.get(root?.pyac ?? atom.pya) ?? Number.MAX_SAFE_INTEGER,
-      targetSource: root?.source ?? "surface-atom"
-    };
-    const previous = rows.get(lemma);
-    if (!previous || option.rule.localeCompare(previous.rule) < 0) rows.set(lemma, option);
+    for (const partOfSpeech of eligiblePartsOfSpeech) {
+      const explicit = catalogTarget(catalogBySurface.get(lemma), atomIndex.bySurface, rankForEnglish, layerByWord);
+      const exactAtom = exactAtomForSurface(lemma, atomIndex.bySurface, rankForEnglish, layerByWord);
+      const root = explicit ?? (exactAtom
+        ? { english: exactAtom.en, pyac: exactAtom.pya, source: "exact-atom-lemma" }
+        : null);
+      const option = {
+        lemma,
+        ...(partOfSpeech ? { partOfSpeech } : {}),
+        rule: candidate.rule,
+        rank: rank(lemma, rankForEnglish),
+        targetEnglish: root?.english ?? atom.en,
+        targetPyac: root?.pyac ?? atom.pya,
+        targetLayer: layerByWord.get(root?.pyac ?? atom.pya) ?? Number.MAX_SAFE_INTEGER,
+        targetSource: root?.source ?? "surface-atom"
+      };
+      const key = `${lemma}\u0000${partOfSpeech}`;
+      const previous = rows.get(key);
+      if (!previous || option.rule.localeCompare(previous.rule) < 0) rows.set(key, option);
+    }
   }
 
   const options = [...rows.values()].sort((left, right) => (
@@ -121,8 +164,15 @@ function chooseCandidate(surface, atom, atomIndex, catalogBySurface, rankForEngl
   if (options.length === 0) return { selected: null, options: [] };
   const winner = options[0];
   const tied = options.filter((option) => option.rank === winner.rank && option.targetLayer === winner.targetLayer);
-  if (tied.length > 1) return { selected: null, options };
-  return { selected: winner, options };
+  const tiedTargets = new Set(tied.map((option) => `${option.lemma}\u0000${option.targetPyac}`));
+  if (tiedTargets.size > 1) return { selected: null, options };
+  return {
+    selected: {
+      ...winner,
+      partOfSpeech: [...new Set(tied.map((option) => option.partOfSpeech).filter(Boolean))]
+    },
+    options
+  };
 }
 
 function grammarLabelsForIdentity(atomCoverage, grammarEntries) {
@@ -147,9 +197,9 @@ export function parseEnglishAtomLemmaScanConfig(source) {
     if (typeof sentence.ob?.text === "string") values[sentence.su.text] = sentence.ob.text;
   }
   if (values.format !== ENGLISH_ATOM_LEMMA_SCAN_FORMAT
-    || values["target-status"] !== "no-direct-wordnet-candidate"
+    || values["target-status"] !== "no-direct-candidate-or-unlinked-inflection-POS"
     || values["fallback-assignment"] !== "surface lemma"
-    || values["lexical-surface-policy"] !== "a surface present as a WordNet lemma stays self-lemma unless an accepted catalog mapping specifies its lemma"
+    || values["lexical-surface-policy"] !== "preserve lexicalized senses in their own POS; allow a WordNet-supported inflection mapping in a different POS"
     || values["grammar-lemma-collision-policy"] !== "do not create a lexical anchor for a lemma surface already reserved as a grammar entry unless that surface has an atomic word"
     || values["frequency-order"] !== "english30k rank ascending") {
     throw invalid("atom lemma scan configuration has unsupported scan rules");
@@ -251,8 +301,13 @@ export function buildEnglishAtomLemmaAssignments({
   }
 
   return atomCoverage.map((coverage) => {
-    if (coverage?.status !== "no-direct-wordnet-candidate") {
-      throw invalid("atom lemma scan only accepts no-direct-wordnet-candidate rows", {
+    if (!new Set([
+      "no-direct-wordnet-candidate",
+      "linked",
+      "direct-candidates-unlinked",
+      "direct-candidates-already-linked"
+    ]).has(coverage?.status)) {
+      throw invalid("atom lemma scan received an unsupported atom coverage row", {
         id: coverage?.id,
         status: coverage?.status
       });
@@ -282,6 +337,7 @@ export function buildEnglishAtomLemmaAssignments({
           surface: surfaceValue,
           kind: "duplicate",
           lemma: existing.lemma,
+          ...(existing.partOfSpeech ? { partOfSpeech: [existing.partOfSpeech] } : {}),
           duplicateOf: existing.duplicateOf,
           canonicalEnglish,
           canonicalPyac: canonicalAtom?.pya ?? "",
@@ -298,6 +354,7 @@ export function buildEnglishAtomLemmaAssignments({
           surface: surfaceValue,
           kind: "lemma",
           lemma: existing.lemma,
+          ...(existing.partOfSpeech ? { partOfSpeech: [existing.partOfSpeech] } : {}),
           canonicalEnglish: canonicalAtom?.en ?? surfaceValue,
           canonicalPyac: canonicalAtom?.pya ?? coverage.pyac,
           method: "accepted-lemma-catalog",
@@ -327,6 +384,7 @@ export function buildEnglishAtomLemmaAssignments({
           surface: surfaceValue,
           kind: isDuplicate ? "duplicate" : "lemma",
           lemma: selected.lemma,
+          ...(selected.partOfSpeech.length > 0 ? { partOfSpeech: selected.partOfSpeech } : {}),
           ...(isDuplicate ? { duplicateOf: selected.lemma } : {}),
           canonicalEnglish: canonical.english,
           canonicalPyac: canonical.pyac,
@@ -348,6 +406,7 @@ export function buildEnglishAtomLemmaAssignments({
         method: choice.options.length > 0 ? "ambiguous-self-lemma" : "surface-lemma",
         candidates: choice.options.map((option) => ({
           lemma: option.lemma,
+          ...(option.partOfSpeech ? { partOfSpeech: option.partOfSpeech } : {}),
           rank: Number.isFinite(option.rank) ? option.rank : null,
           canonicalEnglish: option.targetEnglish,
           canonicalPyac: option.targetPyac,
@@ -373,66 +432,85 @@ export function buildEnglishAtomLemmaCatalogAdditions(assignments = [], existing
     || !Array.isArray(atomicEntries) || !Array.isArray(grammarEntries)) {
     throw invalid("atom lemma catalog additions require assignment and catalog arrays");
   }
-  const existing = new Set(existingEntries.map((entry) => normalizeEnglishLemmaWord(entry.surface)));
+  const identity = (surface, partOfSpeech = "") => `${normalizeEnglishLemmaWord(surface)}\u0000${String(partOfSpeech ?? "").trim().toLowerCase()}`;
+  const existing = new Set(existingEntries.map((entry) => identity(entry.surface, entry.partOfSpeech)));
   const atomicSurfaces = new Set(atomicEntries.map((entry) => normalizeEnglishLemmaWord(entry?.en)).filter(Boolean));
   const grammarSurfaces = new Set(grammarEntries.map((entry) => normalizeEnglishLemmaWord(entry?.surface)).filter(Boolean));
   const additions = new Map();
   for (const row of assignments) {
     for (const assignment of row.assignments ?? []) {
       const surface = normalizeEnglishLemmaWord(assignment.surface);
-      if (!surface || existing.has(surface) || assignment.kind === "grammar-word") continue;
-      if (assignment.kind === "duplicate") {
-        additions.set(surface, {
-          surface: assignment.surface,
-          lemma: assignment.lemma,
-          canonicalEnglish: assignment.canonicalEnglish,
-          kind: "duplicate",
-          status: "deprecated-duplicate",
-          duplicateOf: assignment.duplicateOf || assignment.lemma,
-          rule: assignment.rule ?? "",
-          evidence: assignment.evidence
-        });
-        existing.add(surface);
-      } else if (assignment.kind === "lemma" && assignment.lemma !== surface && assignment.method === "wordnet-regular-inflection") {
-        additions.set(surface, {
-          surface: assignment.surface,
-          lemma: assignment.lemma,
-          canonicalEnglish: assignment.canonicalEnglish,
-          kind: "inflectional",
-          status: "accepted-deterministic",
-          rule: assignment.rule ?? "",
-          evidence: assignment.evidence
-        });
-        existing.add(surface);
+      if (!surface || assignment.kind === "grammar-word") continue;
+      const partOfSpeechScopes = Array.isArray(assignment.partOfSpeech)
+        ? [...new Set(assignment.partOfSpeech.map((value) => String(value ?? "").trim().toLowerCase()).filter(Boolean))]
+        : assignment.partOfSpeech ? [String(assignment.partOfSpeech).trim().toLowerCase()] : [""];
+      for (const partOfSpeech of partOfSpeechScopes) {
+        const key = identity(surface, partOfSpeech);
+        if (existing.has(key)) continue;
+        if (assignment.kind === "duplicate") {
+          additions.set(key, {
+            surface: assignment.surface,
+            lemma: assignment.lemma,
+            canonicalEnglish: assignment.canonicalEnglish,
+            kind: "duplicate",
+            status: "deprecated-duplicate",
+            duplicateOf: assignment.duplicateOf || assignment.lemma,
+            ...(partOfSpeech ? { partOfSpeech } : {}),
+            rule: assignment.rule ?? "",
+            evidence: assignment.evidence
+          });
+          existing.add(key);
+        } else if (assignment.kind === "lemma" && assignment.lemma !== surface && assignment.method === "wordnet-regular-inflection") {
+          additions.set(key, {
+            surface: assignment.surface,
+            lemma: assignment.lemma,
+            canonicalEnglish: assignment.canonicalEnglish,
+            kind: "inflectional",
+            status: "accepted-deterministic",
+            ...(partOfSpeech ? { partOfSpeech } : {}),
+            rule: assignment.rule ?? "",
+            evidence: assignment.evidence
+          });
+          existing.add(key);
+        }
       }
     }
   }
 
   const lemmaTargets = new Map();
+  const canonicalTargetByLemma = new Map();
   for (const row of assignments) {
     for (const assignment of row.assignments ?? []) {
       if (!assignment.lemma || !assignment.canonicalEnglish || assignment.kind === "grammar-word") continue;
       const lemma = normalizeEnglishLemmaWord(assignment.lemma);
       const target = normalizeEnglishLemmaWord(assignment.canonicalEnglish);
-      if (!lemma || lemma === target || existing.has(lemma) || atomicSurfaces.has(lemma)
-        || grammarSurfaces.has(lemma)) continue;
-      const previous = lemmaTargets.get(lemma);
-      if (previous && normalizeEnglishLemmaWord(previous.canonicalEnglish) !== target) {
+      if (!lemma || lemma === target || atomicSurfaces.has(lemma) || grammarSurfaces.has(lemma)) continue;
+      const previousTarget = canonicalTargetByLemma.get(lemma);
+      if (previousTarget && previousTarget !== target) {
         throw invalid("scanned lemma resolves to multiple Pyac targets", {
           lemma,
-          targets: [previous.canonicalEnglish, assignment.canonicalEnglish]
+          targets: [previousTarget, target]
         });
       }
-      if (!previous) lemmaTargets.set(lemma, assignment);
+      canonicalTargetByLemma.set(lemma, target);
+      const scopes = Array.isArray(assignment.partOfSpeech)
+        ? [...new Set(assignment.partOfSpeech.map((value) => String(value ?? "").trim().toLowerCase()).filter(Boolean))]
+        : assignment.partOfSpeech ? [String(assignment.partOfSpeech).trim().toLowerCase()] : [""];
+      for (const partOfSpeech of scopes) {
+        const key = identity(lemma, partOfSpeech);
+        if (!existing.has(key) && !lemmaTargets.has(key)) lemmaTargets.set(key, { ...assignment, partOfSpeech });
+      }
     }
   }
-  for (const [lemma, assignment] of lemmaTargets) {
-    additions.set(lemma, {
+  for (const [key, assignment] of lemmaTargets) {
+    const lemma = normalizeEnglishLemmaWord(assignment.lemma);
+    additions.set(key, {
       surface: assignment.lemma,
       lemma,
       canonicalEnglish: assignment.canonicalEnglish,
       kind: "anchor",
       status: "accepted-deterministic",
+      ...(assignment.partOfSpeech ? { partOfSpeech: assignment.partOfSpeech } : {}),
       evidence: `The atom lemma scan linked ${assignment.lemma} to ${assignment.canonicalEnglish} using English30k rank and WordNet morphology evidence.`
     });
   }

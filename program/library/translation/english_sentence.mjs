@@ -85,6 +85,11 @@ const WORDNET_GRAPH_SELECTION_MIN_EDGE = 0.3;
 let defaultResourcesPromise = null;
 let sentenceResourcesPromise = null;
 
+export function forgetEnglishSentenceResources() {
+  defaultResourcesPromise = null;
+  sentenceResourcesPromise = null;
+}
+
 function stableResourceValue(value) {
   if (Array.isArray(value)) return value.map(stableResourceValue);
   if (value && typeof value === "object") {

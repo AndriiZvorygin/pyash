@@ -19,7 +19,8 @@ import { renderEnglishFromVliw } from "../program/library/translation/pyac_to_en
 test("WordNet bridge rows have a lightweight gloss and lemma lookup", async () => {
   const catalog = await loadEnglishWordNetBridges();
   assert.ok(catalog.entries.length > 6000);
-  assert.equal(catalog.entries.filter((entry) => entry.evidence.includes("active through sweep wordnet-sense-sweep-4c07194f363e-81b5bbefa3b0-d1")).length, 722);
+  // The lemma scan deprecated the duplicate "dressing" atom, invalidating one old derived compound link.
+  assert.equal(catalog.entries.filter((entry) => entry.evidence.includes("active through sweep wordnet-sense-sweep-4c07194f363e-81b5bbefa3b0-d1")).length, 721);
   assert.equal(catalog.entries.filter((entry) => entry.evidence.includes("sense-link sweep wordnet-sense-sweep-4c07194f363e-9059730cda6d-d1-model-qwen3-5-9b-definition-anchor-v1")).length, 956);
   assert.ok(catalog.entries.filter((entry) => entry.evidence.startsWith("frequency-first anchor allocation")).length > 1000);
   assert.equal(catalog.entries.find((entry) => entry.source === "n:06850196-n"), undefined);

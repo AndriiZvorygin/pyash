@@ -58,6 +58,11 @@ Use this skill to work on refinery execution, ratify gates, and run newspaper be
 - Route mind/provider work through the existing Pyash Housekeeper/future queue
   and await the returned duty. Do not call Ollama or another provider directly
   from a refinery adapter.
+- Treat configured parallelism as an execution contract: dispatch independent
+  duties in bounded `Promise.all` waves instead of awaiting each submission in
+  a loop. Keep dependent refinery stages sequential, serialize durable cache or
+  checkpoint writes, and restore stable output ordering after concurrent
+  completions. Add a regression quiz that proves overlap and checkpoint order.
 - Keep retries bounded and stage-local. A malformed provider response gets the
   existing bounded repair/retry path; retain valid rows and write an explicit
   uncertain/error record for the rest instead of hanging or silently dropping

@@ -1,12 +1,12 @@
 su name translation be map def
 su text "format" ob text "english-atom-lemma-scan-v1" ya
-su text "target-status" ob text "no-direct-wordnet-candidate" ya
+su text "target-status" ob text "no-direct-candidate-or-unlinked-inflection-POS" ya
 su text "grammar-marker-convention" ob text "leading or trailing underscore marks grammar or morphology atoms" ya
 su text "regular-inflection-source" ob text "Open English WordNet 2025 lemma index" ya
 su text "frequency-order" ob text "english30k rank ascending" ya
 su text "canonical-order" ob text "reviewed mapping, exact lemma atom, English30k surface rank, then simpler Pyac glyph layer" ya
 su text "ambiguous-candidate-policy" ob text "preserve surface lemma when frequency and glyph-layer evidence tie" ya
-su text "lexical-surface-policy" ob text "a surface present as a WordNet lemma stays self-lemma unless an accepted catalog mapping specifies its lemma" ya
+su text "lexical-surface-policy" ob text "preserve lexicalized senses in their own POS; allow a WordNet-supported inflection mapping in a different POS" ya
 su text "grammar-lemma-collision-policy" ob text "do not create a lexical anchor for a lemma surface already reserved as a grammar entry unless that surface has an atomic word" ya
 su text "fallback-assignment" ob text "surface lemma" ya
 su text "duplicate-policy" ob text "retain duplicate atom in source inventory and exclude it from new compound formation" ya

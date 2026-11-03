@@ -14,9 +14,11 @@ import { loadPyacWordLayerIndex } from "../program/library/translation/pyac_comp
 import {
   buildEnglishAtomLemmaAssignments,
   buildEnglishAtomLemmaCatalogAdditions,
+  hasUnlinkedInflectionLemmaCandidate,
   loadEnglishAtomLemmaScanConfig,
   renderEnglishAtomLemmaAssignmentsPya
 } from "../program/library/translation/english_atom_lemma_scan.mjs";
+import { forgetEnglishSentenceResources } from "../program/library/translation/english_sentence.mjs";
 import { ENGLISH30K_DEFAULT_PATH } from "../program/library/translation/english30k_coverage.mjs";
 import {
   prepareWordNetFrequencyAllocation,
@@ -58,8 +60,16 @@ export async function prepareEnglishAtomLemmaScan() {
     loadEnglishGrammarCatalog(),
     loadPyacWordLayerIndex({ directory: COMPLEXITY_DIRECTORY })
   ]);
-  const targetRows = prepared.atomCoverage.filter((row) => row.status === "no-direct-wordnet-candidate");
-  if (targetRows.length === 0) throw new Error("atom lemma scan found no unlinked atom identities");
+  const activeSenseIds = new Set([
+    ...prepared.reconciliation.preservedEntries,
+    ...prepared.reconciliation.retainedModelEntries,
+    ...prepared.allocation.assignments
+  ].map((entry) => entry.source).filter(Boolean));
+  const targetRows = prepared.atomCoverage.filter((row) => (
+    row.status === "no-direct-wordnet-candidate"
+      || hasUnlinkedInflectionLemmaCandidate(row, prepared.wordnetIndex, activeSenseIds)
+  ));
+  if (targetRows.length === 0) throw new Error("atom lemma scan found no unlinked atom identities or POS lemma forms");
 
   const assignments = buildEnglishAtomLemmaAssignments({
     atomCoverage: targetRows,
@@ -116,11 +126,13 @@ export async function runEnglishAtomLemmaScan() {
   const { assignments, additions, newLemmaCatalog, report, runId } = plan;
   const originalLemmaCatalog = await fs.readFile(LEMMA_CATALOG_URL, "utf8");
   await atomicWrite(LEMMA_CATALOG_URL, newLemmaCatalog);
+  forgetEnglishSentenceResources();
   let allocation;
   try {
     allocation = await runWordNetFrequencyAllocation({ apply: true });
   } catch (error) {
     await atomicWrite(LEMMA_CATALOG_URL, originalLemmaCatalog);
+    forgetEnglishSentenceResources();
     throw error;
   }
   await atomicWrite(ASSIGNMENTS_URL, report);
