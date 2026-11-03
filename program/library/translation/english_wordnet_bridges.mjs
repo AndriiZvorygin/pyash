@@ -12,6 +12,31 @@ const METADATA_KEYS = new Set(["format", "source", "source-hash", "mode"]);
 const SENSE_GLOSS_PREFIX = "sense-gloss:";
 const SENSE_LEMMA_PREFIX = "sense-lemma:";
 
+export function canonicalWordNetTargetPartOfSpeech(value) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+export function englishWordNetTargetId(targetKind, pyashSequence, partOfSpeech) {
+  const kind = targetKind === "compound" ? "compound" : "atom";
+  const sequence = Array.isArray(pyashSequence)
+    ? pyashSequence.filter((word) => typeof word === "string" && word.trim()).map((word) => word.trim())
+    : [];
+  const pos = canonicalWordNetTargetPartOfSpeech(partOfSpeech);
+  if (sequence.length === 0 || !WORDNET_POS.has(pos)) return "";
+  return `${kind}:${sequence.join("+")}:${pos}`;
+}
+
+function hasLexicalTarget(coverage) {
+  if (!coverage) {
+    return false;
+  }
+  if (!coverage.coverageType) return Array.isArray(coverage.pyashSequence) && coverage.pyashSequence.length > 0;
+  if (!["atomic", "compound", "lemma", "alias", "dictionary-alias"].includes(coverage.coverageType)) return false;
+  return !(["alias", "dictionary-alias"].includes(coverage.coverageType)
+    && coverage.canonicalCoverageType
+    && !["atomic", "compound"].includes(coverage.canonicalCoverageType));
+}
+
 function invalid(message, details = {}) {
   const error = new Error(message);
   error.code = "invalid-english-wordnet-bridge";
@@ -132,14 +157,15 @@ export function parseEnglishWordNetBridgeCatalog(source) {
     if (seen.has(key)) throw invalid("WordNet bridge sense is duplicated", { index, source: key });
     seen.add(key);
     const target = targetName(sentence, index);
-    const targetPartOfSpeech = textAt(sentence, "as");
-    if (!WORDNET_POS.has(targetPartOfSpeech)) {
+    const sourceTargetPartOfSpeech = textAt(sentence, "as");
+    if (!WORDNET_POS.has(sourceTargetPartOfSpeech)) {
       throw invalid("WordNet bridge target part of speech is unsupported", {
         index,
         source: key,
-        targetPartOfSpeech
+        targetPartOfSpeech: sourceTargetPartOfSpeech
       });
     }
+    const targetPartOfSpeech = canonicalWordNetTargetPartOfSpeech(sourceTargetPartOfSpeech);
     const certainty = textAt(sentence, "with") || "contextual";
     if (!CERTAINTIES.has(certainty)) {
       throw invalid("WordNet bridge certainty is unsupported", { index, source: key, certainty });
@@ -185,32 +211,43 @@ export function buildEnglishWordNetBridgeIndex({ entries = [], resolveTarget = n
   const bySense = new Map();
   const allBySense = new Map();
   const identityKeysBySense = new Map();
+  const inactiveSenses = new Set();
   for (const entry of entries) {
     if (!entry?.source || !entry?.target) continue;
     if (allBySense.has(entry.source)) {
       throw invalid("WordNet bridge sense is duplicated", { source: entry.source });
     }
-    const coverage = typeof resolveTarget === "function" ? resolveTarget(entry.target) : null;
-    const pyashSequence = Array.isArray(entry.pyashSequence)
+    const sourcePartOfSpeech = String(entry.source).slice(0, 1);
+    const targetPartOfSpeech = canonicalWordNetTargetPartOfSpeech(entry.targetPartOfSpeech || sourcePartOfSpeech);
+    const coverage = typeof resolveTarget === "function"
+      ? resolveTarget(entry.target, { partOfSpeech: targetPartOfSpeech })
+      : null;
+    const resolvedNonLexical = coverage !== null && coverage !== undefined && !hasLexicalTarget(coverage);
+    const pyashSequence = resolvedNonLexical
+      ? []
+      : Array.isArray(entry.pyashSequence)
       ? entry.pyashSequence.filter((word) => typeof word === "string" && word.trim())
       : Array.isArray(coverage?.pyashSequence) ? [...coverage.pyashSequence] : [];
     const targetKind = entry.targetKind
       || (coverage?.coverageType === "compound" || pyashSequence.length > 1 ? "compound" : "atom");
-    const targetId = entry.targetId || (pyashSequence.length > 0
-      ? targetKind === "compound"
-        ? `compound:${pyashSequence.join("+")}`
-        : `atom:${pyashSequence.join("+")}`
-      : "");
+    const targetId = englishWordNetTargetId(targetKind, pyashSequence, targetPartOfSpeech);
     const enriched = {
       ...entry,
       ...(pyashSequence.length > 0 ? { pyashSequence } : {}),
       targetKind,
+      targetPartOfSpeech,
       ...(targetId ? { targetId } : {})
     };
     allBySense.set(entry.source, enriched);
-    const identityKeys = new Set([`target:${entry.target.normalize("NFC").trim().toLowerCase()}`]);
-    if (targetId) identityKeys.add(`identity:${targetId}`);
-    if (pyashSequence.length > 0) identityKeys.add(`sequence:${pyashSequence.join(" ")}`);
+    if (resolvedNonLexical) inactiveSenses.add(entry.source);
+    const identityKeys = new Set();
+    if (!resolvedNonLexical) {
+      identityKeys.add(`target:${entry.target.normalize("NFC").trim().toLowerCase()}:${targetPartOfSpeech}`);
+    }
+    if (pyashSequence.length > 0 && !resolvedNonLexical) {
+      if (targetId) identityKeys.add(`identity:${targetId}`);
+      identityKeys.add(`sequence:${pyashSequence.join(" ")}:${targetPartOfSpeech}`);
+    }
     identityKeysBySense.set(entry.source, identityKeys);
   }
   const entriesByGroup = new Map();
@@ -234,6 +271,7 @@ export function buildEnglishWordNetBridgeIndex({ entries = [], resolveTarget = n
   }
   const sourcesByIdentity = new Map();
   for (const [source, entry] of allBySense) {
+    if (!identityKeysBySense.get(source)?.size) continue;
     for (const key of identityKeysBySense.get(source) ?? []) {
       sourcesByIdentity.set(key, [...(sourcesByIdentity.get(key) ?? []), source]);
     }
@@ -255,11 +293,10 @@ export function buildEnglishWordNetBridgeIndex({ entries = [], resolveTarget = n
       && !evidence.has("");
     if (sharesByEvidence) continue;
     for (const source of sources) blocked.add(source);
-    if (identity.startsWith("target:")) ambiguousTargets.push(identity.slice("target:".length));
-    else ambiguousTargets.push(...rows.map((entry) => entry.target.normalize("NFC").trim().toLowerCase()));
+    ambiguousTargets.push(...rows.map((entry) => entry.target.normalize("NFC").trim().toLowerCase()));
   }
   for (const [source, entry] of allBySense) {
-    if (!blocked.has(source)) bySense.set(source, entry);
+    if (!blocked.has(source) && !inactiveSenses.has(source)) bySense.set(source, entry);
   }
   return {
     entries: [...allBySense.values()].map((entry) => ({ ...entry })),

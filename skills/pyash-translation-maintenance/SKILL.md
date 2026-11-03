@@ -58,6 +58,23 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
 
 - Treat the selected WordNet synset as the semantic unit. Record its displayed
   sense lemma as well as its POS and synset id.
+- Sense-link identity is the ordered Pyac target plus its canonical target POS:
+  `atom:<sequence>:<pos>` or `compound:<sequence>:<pos>`. Source satellite POS
+  `s` remains a distinct target POS and identity; do not merge it into regular
+  adjective POS `a`. Any later Pyash grammatical realization for satellite
+  adjectives is a separate grammar-design task. Reusing one Pyac sequence
+  across different target POS is allowed. Two different synsets competing for
+  the same sequence and POS still require an explicit, evidence-backed
+  equivalence group or remain unlinked.
+- Lemma mappings can be POS-scoped. A scoped row takes precedence for that POS;
+  the existing unscoped row remains a fallback for other POS. Thus homographs
+  can resolve to distinct atoms by POS without changing their default lookup.
+  Keep duplicate surface+POS rows invalid and each lemma unique within its POS.
+- Atom sense selection runs once per atom/POS slot. An existing noun link must
+  not hide an unlinked verb, adjective, or adverb slot for the same Pyac atom.
+  Keep the model choice bounded to the candidates supplied for that slot.
+  POS identity is lexical metadata; it does not add or alter Pyash grammar
+  particles, aspect, mood, or surface ordering.
 - A direct same-synset atom can be offered as an anchor. Automatic linking also
   requires a low-degree edge node with one WordNet meaning, and the target word
   must not name a competing WordNet sense.
@@ -65,9 +82,10 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   sense anchor. Candidate-only compounds, unverified component compositions,
   WordNet relation atoms, and convergent `vocab_suggest` atoms are evidence;
   they are not selectable links.
-- Keep `targetKind` (`atom` or `compound`) and a stable `targetId` on every
-  accepted sense link. Prefer a compound record id; otherwise derive it from
-  the ordered Pyash components.
+- Keep `targetKind` (`atom` or `compound`) and a stable POS-qualified
+  `targetId` on every accepted sense link. Derive identity from the ordered
+  Pyash components and canonical target POS; compound catalog ids remain
+  separate provenance identifiers.
 - Do not activate one bridge target for multiple WordNet synsets unless the
   bridge catalog records evidence that those senses are equivalent. Declare
   the group with a native `.pya` row such as
@@ -92,7 +110,22 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   atomic or accepted compound anchor and both resolve to the same Pyash
   sequence. Grammar particles are not lexical sense anchors; leave aliases
   that resolve to grammar or change sequence as residual candidates.
-- Allocation keeps one active anchor per synset and one synset per Pyac target.
+- For direct-candidate atoms that remain unlinked, run
+  `node command/wordnet_atom_sense_sweep.mjs` to ask the configured Qwen model
+  to choose among the supplied WordNet glosses. The worklist requires an exact
+  atom-label match or an accepted inflectional lemma mapping to the same Pyac
+  atom; alias-only matches are retained as no-fit evidence. Qwen selects only
+  an existing candidate and cannot create a new anchor. The workflow and model
+  are configured in `english_wordnet_atom_sense_sweep.pya`, dispatches up to
+  eight non-overlapping batches per Housekeeper wave, and checkpoints submitted
+  handles, responses, and decisions in the run's artifact folder. It resumes
+  from those Pyash checkpoints. Keep `PYA_MIND_RESPONSE` unset; a nonempty
+  Housekeeper queue is valid, and Housekeeper manages admission for each bounded
+  wave. Preserve uncertain or no-fit outputs without activating them. Accepted
+  selections are recorded as atom-target sense links before frequency
+  allocation is reconciled.
+- Allocation keeps one active anchor per synset and one synset per Pyac
+  target/POS slot.
   Curated and deterministic bridge rows stay reserved. Existing model links
   remain only when their selected Pyac identity agrees with the frequency
   allocation; the full reconciliation is saved under the run's artifacts.
@@ -105,6 +138,37 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   that remain free, candidates already linked to another anchor, and atoms
   with no exact WordNet candidate. Preserve linked rows as checkpoints and do
   not infer unsupported sense links.
+- Link an existing Pyash atom's English surface to its lexical lemma in
+  `english_lemmas.pya` before WordNet sense selection when the atom surface is
+  inflected. Keep the base lemma's canonical target on one Pyash atom; surface
+  variants may reuse that same target with morphology metadata. Do not assign
+  one lemma to competing atom identities. The frequency resolver may accept a
+  lemma mapping as an atomic WordNet target only when its Pyash sequence is one
+  lexical atom; tense, number, and other grammar suffixes stay outside the
+  lexical anchor. Frequency allocation passes the WordNet part of speech into
+  resolution: when a surface is itself a WordNet lemma for that part of speech,
+  do not apply an irregular or inflectional mapping from another part of speech
+  (for example, noun `thought` should not displace the `idea` sense by mapping
+  to verb `think`).
+- For no-direct-candidate atom coverage, run
+  `node command/english_atom_lemma_scan.mjs`. The deterministic scanner reads
+  the current allocation ledger and assigns every English label as a lemma, a
+  grammar word, or a deprecated duplicate. It uses the English grammar catalog
+  and underscore-marked morphology labels, accepts regular WordNet inflections
+  only when the surface is not itself a WordNet lemma, and excludes comparative
+  and superlative suffix guesses. It orders duplicate canonical choices by
+  English30k rank and then the simpler Pyac glyph layer; unresolved forms stay
+  at their own surface lemma. The full assignment ledger is
+  `english_atom_lemma_assignments.pya`; the command adds accepted mappings to
+  `english_lemmas.pya` and reruns frequency allocation. Preserve the catalog's
+  English30k source hash and cutoff during writes.
+- If two existing atoms collide on one lemma, keep the reviewed canonical
+  atom and record the displaced surface as `kind: duplicate`,
+  `status: deprecated-duplicate`, and `duplicateOf: <canonical surface>` in
+  `english_lemmas.pya`. Preserve the atom in the source inventory for now, but
+  remove it from compound candidate formation. Record both English frequency
+  and Pyac glyph-layer evidence; the explicit canonical choice remains
+  reviewable when those measures disagree.
 - Run `node command/wordnet_frequency_compound_sweep.mjs` to verify residual
   closed-compound candidates through the configured Pyash mind and GPU
   Housekeeper. Never call a provider directly. The sweep groups alternate
@@ -114,6 +178,23 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   compounds can become active sense anchors. Rejected and uncertain candidates
   remain evidence; synsets with no covered lemma or compound candidate remain
   explicit residuals for later atom/compound generation.
+- For residual synsets with an already-linked atomic WordNet hypernym, run
+  `node command/wordnet_sense_compound_refinery.mjs`. Its workflow and bounded
+  batch settings live in
+  `program/library/translation/wordnet_sense_compound_refinery.pya`. It asks
+  Qwen through the future GPU Housekeeper queue for one sense's translations
+  and transparent word parts in Chinese, French, Russian, and Hindi. Resolve
+  English components with `vocab_suggest`; use only active one-atom links with
+  WordNet sense evidence. Order the candidate head-final only when the target
+  synset has the directed hypernym evidence, then reuse the compound verifier
+  and verified catalog promotion path. Keep whole atom inventories out of the
+  prompt. Each launch handles 64 ranked senses and reuses
+  `artifacts/<run-id>/sense-translations.pya` and `progress.pya`; inspect
+  `component-mappings.pya` and `compound-candidates.pya` when a sense has no
+  candidate. Exclude a residual synset when one of its lemmas already resolves
+  to an active linked atomic target; the frequency allocator can leave another
+  synset for that same anchored lemma in its residual pool. Uncertain results
+  remain explicit, and failed senses are retryable.
 - Compound worklists include closed single-token forms from English30k that
   segment into two or three existing atomic lemmas, plus multiword WordNet
   lemmas whose space, underscore, or hyphen boundaries match existing atoms.

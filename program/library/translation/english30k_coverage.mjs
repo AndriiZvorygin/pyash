@@ -257,8 +257,14 @@ export function buildEnglish30kCoverage({
   const withLemma = (record) => {
     const resolved = resolvedLemmaIndex.resolve(rowWord(record));
     if (!resolved) return record;
+    const explicitLemmaTarget = ["anchor", "irregular", "inflectional", "derivational", "duplicate"].includes(resolved.kind);
     return {
       ...record,
+      ...(explicitLemmaTarget ? {
+        canonicalEnglish: resolved.canonicalEnglish,
+        pyashSequence: [...resolved.pyashSequence],
+        hnuc: resolved.hnuc ?? record.hnuc
+      } : {}),
       lemma: resolved.lemma,
       lemmaKind: resolved.kind,
       lemmaStatus: resolved.status,

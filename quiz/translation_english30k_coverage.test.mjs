@@ -18,6 +18,7 @@ import {
 import {
   buildEnglishLemmaCandidates,
   buildEnglishLemmaIndex,
+  filterDeprecatedEnglishAtoms,
   loadEnglishLemmaCatalog,
   parseEnglishLemmaCatalog
 } from "../program/library/translation/english_lemmas.mjs";
@@ -313,6 +314,24 @@ test("vocab_suggest reports a ranked surface form through its lemma", async () =
   assert.match(lines.join("\n"), /walked: morphology walk \+ past_tense_ -> pfin ki \(deterministic; English30k rank 647\)/u);
 });
 
+test("vocab_suggest keeps the simpler canonical atom and labels deprecated duplicates", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["draw", "drew", "give", "given", "giving"], {
+    report: (line) => lines.push(String(line))
+  });
+  const output = lines.join("\n");
+
+  assert.equal(result.exitCode, 0);
+  assert.match(output, /draw: lemma draw -> cyuk \(English30k rank 1302\)/u);
+  assert.match(output, /drew: deprecated duplicate of draw -> cyuk/u);
+  assert.match(output, /give: lemma give -> kwin \(English30k rank 158\)/u);
+  assert.match(output, /given: deprecated duplicate of giving -> kwin/u);
+  assert.match(output, /giving: lemma give -> kwin/u);
+  assert.doesNotMatch(output, /draw: root -> cyuk/u);
+  assert.doesNotMatch(output, /drew: root -> drus/u);
+  assert.doesNotMatch(output, /given: root -> gvin/u);
+});
+
 test("durable lemma morphology keeps lexical roots separate from particles", async () => {
   const catalog = await loadEnglishLemmaCatalog();
   const index = buildEnglishLemmaIndex({ atomicEntries: pyashWords, catalogEntries: catalog.entries });
@@ -330,6 +349,98 @@ test("durable lemma morphology keeps lexical roots separate from particles", asy
   assert.equal(index.resolve("walking")?.morphology?.certainty, "contextual");
   assert.equal(index.preferredSurfaceForSequence(["mrat"]), "mix");
   assert.equal(index.preferredSurfaceForSequence(["xyek", "pu"]), "feelings");
+});
+
+test("inflected Pyash atoms map each base lemma to exactly one atom", async () => {
+  const catalog = await loadEnglishLemmaCatalog();
+  const index = buildEnglishLemmaIndex({ atomicEntries: pyashWords, catalogEntries: catalog.entries });
+  const anchors = [
+    { lemma: "ask", surface: "asked", pyash: "hpun" },
+    { lemma: "reach", surface: "reached", pyash: "hte2t" },
+    { lemma: "seem", surface: "seemed", pyash: "sri2t" }
+  ];
+
+  for (const anchor of anchors) {
+    const base = index.resolve(anchor.lemma);
+    const inflected = index.resolve(anchor.surface);
+    assert.equal(base?.lemma, anchor.lemma);
+    assert.equal(base?.canonicalEnglish, anchor.surface);
+    assert.deepEqual(base?.pyashSequence, [anchor.pyash]);
+    assert.equal(inflected?.lemma, anchor.lemma);
+    assert.equal(inflected?.canonicalEnglish, anchor.surface);
+    assert.deepEqual(inflected?.pyashSequence, [anchor.pyash]);
+    assert.deepEqual(inflected?.morphology?.markerSequence, ["ki"]);
+  }
+
+  assert.equal(index.resolve("draw")?.canonicalEnglish, "draw");
+  assert.deepEqual(index.resolve("draw")?.pyashSequence, ["cyuk"]);
+  assert.equal(index.resolve("drew")?.lemma, "draw");
+  assert.equal(index.resolve("drew")?.kind, "duplicate");
+  assert.equal(index.resolve("drew")?.status, "deprecated-duplicate");
+  assert.equal(index.resolve("drew")?.duplicateOf, "draw");
+  assert.equal(index.resolve("drew")?.canonicalEnglish, "draw");
+  assert.deepEqual(index.resolve("drew")?.pyashSequence, ["cyuk"]);
+  assert.deepEqual(index.resolve("drew")?.morphology?.markerSequence, ["ki"]);
+  assert.equal(index.resolve("give")?.canonicalEnglish, "giving");
+  assert.deepEqual(index.resolve("give")?.pyashSequence, ["kwin"]);
+  assert.equal(index.resolve("given")?.kind, "duplicate");
+  assert.equal(index.resolve("given")?.status, "deprecated-duplicate");
+  assert.equal(index.resolve("given")?.duplicateOf, "giving");
+  assert.equal(index.resolve("given")?.canonicalEnglish, "giving");
+  assert.deepEqual(index.resolve("given")?.pyashSequence, ["kwin"]);
+  assert.equal(index.resolve("giving")?.canonicalEnglish, "giving");
+  assert.deepEqual(index.resolve("giving")?.pyashSequence, ["kwin"]);
+
+  const source = await loadEnglish30k();
+  const rank = (word) => source.rows.find((row) => row.normalizedWord === word)?.rank;
+  assert.ok(rank("draw") > rank("drew"));
+  assert.ok(rank("giving") > rank("given"));
+  assert.match(index.resolve("drew")?.evidence ?? "", /layer 16.*layer 24/u);
+  assert.match(index.resolve("given")?.evidence ?? "", /layer 16.*layer 28/u);
+
+  const resolvedAnchorsByLemma = new Map();
+  for (const entry of catalog.entries.filter((row) => [...anchors.map((anchor) => anchor.lemma), "draw", "give"].includes(row.lemma))) {
+    const resolved = index.resolve(entry.surface);
+    const targets = resolvedAnchorsByLemma.get(entry.lemma) ?? new Set();
+    targets.add(resolved?.pyashSequence?.[0]);
+    resolvedAnchorsByLemma.set(entry.lemma, targets);
+  }
+  for (const anchor of anchors) assert.equal(resolvedAnchorsByLemma.get(anchor.lemma)?.size, 1);
+  assert.equal(resolvedAnchorsByLemma.get("draw")?.size, 1);
+  assert.equal(resolvedAnchorsByLemma.get("give")?.size, 1);
+
+  const activeAtoms = filterDeprecatedEnglishAtoms(pyashWords, catalog.entries);
+  assert.ok(activeAtoms.some((entry) => entry.pya === "cyuk"));
+  assert.ok(activeAtoms.some((entry) => entry.pya === "kwin"));
+  assert.ok(!activeAtoms.some((entry) => entry.pya === "drus"));
+  assert.ok(!activeAtoms.some((entry) => entry.pya === "gvin"));
+});
+
+test("lemma index rejects one lemma assigned to multiple canonical atoms", () => {
+  assert.throws(() => buildEnglishLemmaIndex({
+    atomicEntries: [
+      { en: "draw", pya: "cyuk" },
+      { en: "drew", pya: "drus" }
+    ],
+    catalogEntries: [
+      {
+        surface: "draw",
+        lemma: "draw",
+        canonicalEnglish: "draw",
+        kind: "anchor",
+        status: "accepted-curated",
+        evidence: "fixture"
+      },
+      {
+        surface: "drew",
+        lemma: "draw",
+        canonicalEnglish: "drew",
+        kind: "irregular",
+        status: "accepted-curated",
+        evidence: "fixture"
+      }
+    ]
+  }), (error) => error.code === "invalid-english-lemma");
 });
 
 test("curated lexical families resolve romance and distract surfaces to existing atoms", async () => {

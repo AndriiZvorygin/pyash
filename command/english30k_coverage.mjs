@@ -17,7 +17,7 @@ async function buildCoverage() {
   });
   const english30kCompounds = await buildEnglish30kCompoundCoverage({
     source: coverage.source,
-    atomicEntries: pyashWords
+    atomicEntries: compounds.activeAtomicEntries
   });
   const classified = classifyCompoundCoverage(english30kCompounds.records);
   const expanded = await loadDefaultEnglish30kCoverage({

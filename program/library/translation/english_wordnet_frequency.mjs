@@ -4,6 +4,10 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { buildProgram } from "../../program.mjs";
+import {
+  canonicalWordNetTargetPartOfSpeech,
+  englishWordNetTargetId
+} from "./english_wordnet_bridges.mjs";
 
 export const ENGLISH_WORDNET_FREQUENCY_FORMAT = "princeton-wordnet-sense-frequency-v1";
 export const ENGLISH_WORDNET_FREQUENCY_NAME = "frequency";
@@ -296,6 +300,7 @@ export function allocateEnglishWordNetAnchors(records = [], {
       target: candidate.target,
       targetId: candidate.targetId,
       targetKind: candidate.targetKind,
+      targetPartOfSpeech: candidate.targetPartOfSpeech,
       pyashSequence: candidate.pyashSequence,
       english30kRank: candidate.rank,
       tagCount: candidate.tagCount,
@@ -349,7 +354,9 @@ export function allocateEnglishWordNetAnchors(records = [], {
 }
 
 function isModelGeneratedBridge(entry) {
-  return /sense-link sweep.*model-qwen|model qwen3\.5:9b/iu.test(String(entry?.evidence ?? ""));
+  const evidence = String(entry?.evidence ?? "");
+  if (evidence.startsWith("atom-target sense selection;")) return false;
+  return /sense-link sweep.*model-qwen|model qwen3\.5:9b/iu.test(evidence);
 }
 
 function isFrequencyAllocatedBridge(entry) {
@@ -376,10 +383,17 @@ export function reconcileEnglishWordNetFrequencyBridgeRows({
   const supersededModelEntries = [];
   for (const entry of modelEntries) {
     const allocation = assignmentBySource.get(entry.source);
-    const coverage = resolveTarget(entry.target);
+    const targetPartOfSpeech = canonicalWordNetTargetPartOfSpeech(
+      entry.targetPartOfSpeech || String(entry.source ?? "").slice(0, 1)
+    );
+    const allocationPartOfSpeech = canonicalWordNetTargetPartOfSpeech(
+      allocation?.targetPartOfSpeech || String(allocation?.source ?? "").slice(0, 1)
+    );
+    const coverage = resolveTarget(entry.target, { partOfSpeech: targetPartOfSpeech });
     const sequence = Array.isArray(coverage?.pyashSequence) ? coverage.pyashSequence : [];
     if (allocation && sequence.length > 0
-      && allocation.pyashSequence.join(" ") === sequence.join(" ")) {
+      && allocation.pyashSequence.join(" ") === sequence.join(" ")
+      && allocationPartOfSpeech === targetPartOfSpeech) {
       retainedModelEntries.push(entry);
     } else {
       supersededModelEntries.push({
@@ -448,7 +462,7 @@ export function buildEnglishWordNetFrequencyAllocationRecords({
     };
     for (const lemma of lemmas) {
       const rankValue = Number(rankForEnglish(lemma));
-      const coverage = resolveWord(lemma);
+      const coverage = resolveWord(lemma, { pos });
       const pyashSequence = Array.isArray(coverage?.pyashSequence)
         ? coverage.pyashSequence.filter((word) => typeof word === "string" && word.trim()).map((word) => word.trim())
         : [];
@@ -456,13 +470,15 @@ export function buildEnglishWordNetFrequencyAllocationRecords({
       if (["alias", "dictionary-alias"].includes(coverage.coverageType)
         && !["atomic", "compound"].includes(coverage.canonicalCoverageType)) continue;
       const targetKind = coverage.coverageType === "compound" || pyashSequence.length > 1 ? "compound" : "atom";
-      const targetId = `${targetKind}:${pyashSequence.join("+")}`;
+      const targetPartOfSpeech = canonicalWordNetTargetPartOfSpeech(pos);
+      const targetId = englishWordNetTargetId(targetKind, pyashSequence, targetPartOfSpeech);
       const frequency = tagCountBySourceLemma.get(`${source}\u0000${lemma}`);
       record.candidates.push({
         lemma,
         target: String(coverage.canonicalEnglish || coverage.target || lemma).normalize("NFC").trim(),
         targetKind,
         targetId,
+        targetPartOfSpeech,
         pyashSequence,
         rank: Number.isFinite(rankValue) && rankValue > 0 ? rankValue : null,
         tagCount: frequency?.tagCount ?? null,
@@ -510,7 +526,9 @@ export function buildEnglishWordNetAtomCoverage({
       if (candidate?.targetKind !== "atom" || typeof candidate.targetId !== "string") continue;
       const row = {
         source: sense.source,
+        targetId: candidate.targetId,
         pos: sense.pos,
+        targetPartOfSpeech: candidate.targetPartOfSpeech || canonicalWordNetTargetPartOfSpeech(sense.pos),
         synset: sense.synset,
         lemmas: [...(sense.lemmas ?? [])],
         definition: String(sense.gloss ?? "").split(";")[0].trim(),
@@ -520,20 +538,27 @@ export function buildEnglishWordNetAtomCoverage({
         activeTargetIds: [...(targetsBySource.get(sense.source) ?? [])].sort(),
         ...(candidate.senseKey ? { senseKey: candidate.senseKey } : {})
       };
-      const rows = candidatesByTarget.get(candidate.targetId) ?? [];
+      const candidateSequence = Array.isArray(candidate.pyashSequence)
+        ? candidate.pyashSequence
+        : String(candidate.targetId).replace(/^atom:/u, "").replace(/:(?:a|n|r|v)$/u, "").split("+");
+      const targetBaseId = `atom:${candidateSequence.join("+")}`;
+      const rows = candidatesByTarget.get(targetBaseId) ?? [];
       if (!rows.some((existing) => existing.source === row.source && existing.matchedLemma === row.matchedLemma)) rows.push(row);
-      candidatesByTarget.set(candidate.targetId, rows);
+      candidatesByTarget.set(targetBaseId, rows);
     }
   }
 
   const linksByTarget = new Map();
   for (const sense of bridgeRecords) {
     const targetId = sense?.link?.targetId;
-    if (typeof targetId !== "string" || !targetId.startsWith("atom:")) continue;
-    const rows = linksByTarget.get(targetId) ?? [];
+    const pyac = Array.isArray(sense?.link?.pyashSequence) ? sense.link.pyashSequence.join("+") : "";
+    if (typeof targetId !== "string" || !targetId.startsWith("atom:") || !pyac) continue;
+    const baseTargetId = `atom:${pyac}`;
+    const rows = linksByTarget.get(baseTargetId) ?? [];
     rows.push({
       source: sense.source,
       pos: sense.pos,
+      targetPartOfSpeech: canonicalWordNetTargetPartOfSpeech(sense.link.targetPartOfSpeech || sense.pos),
       synset: sense.synset,
       lemmas: [...(sense.lemmas ?? [])],
       definition: String(sense.gloss ?? "").split(";")[0].trim(),
@@ -542,7 +567,7 @@ export function buildEnglishWordNetAtomCoverage({
       certainty: sense.link.certainty,
       evidence: sense.link.evidence
     });
-    linksByTarget.set(targetId, rows);
+    linksByTarget.set(baseTargetId, rows);
   }
 
   return [...byTarget.values()].map((atom) => {
@@ -559,17 +584,20 @@ export function buildEnglishWordNetAtomCoverage({
     ));
     const links = (linksByTarget.get(atom.targetId) ?? []).sort((left, right) => left.source.localeCompare(right.source));
     const hasLexicalLabel = labelCoverage.some((label) => label.coverageType !== "grammar");
-    const status = links.length > 0
-      ? "linked"
-      : !atom.labels.length
+    const linkedTargetParts = new Set(links.map((link) => link.targetPartOfSpeech));
+    const availableCandidates = candidates.filter((candidate) => (
+      candidate.activeTargetIds.length === 0
+      && !linkedTargetParts.has(candidate.targetPartOfSpeech)
+    ));
+    const status = !atom.labels.length
         ? "missing-english-gloss"
         : !hasLexicalLabel
           ? "grammar-no-lexical-sense"
           : candidates.length > 0
-            ? candidates.every((candidate) => candidate.activeTargetIds.length > 0)
-              ? "direct-candidates-already-linked"
-              : "direct-candidates-unlinked"
-            : "no-direct-wordnet-candidate";
+            ? availableCandidates.length > 0
+              ? "direct-candidates-unlinked"
+              : links.length > 0 ? "linked" : "direct-candidates-already-linked"
+            : links.length > 0 ? "linked" : "no-direct-wordnet-candidate";
     const ranks = labelCoverage.map((label) => label.rank).filter((rank) => Number.isFinite(rank) && rank > 0);
     return {
       ...atom,
@@ -578,7 +606,13 @@ export function buildEnglishWordNetAtomCoverage({
       labelCoverage,
       status,
       links,
-      directCandidates: candidates
+      directCandidates: candidates.map((candidate) => ({
+        ...candidate,
+        targetPartOfSpeech: candidate.targetPartOfSpeech,
+        availableTargetPartOfSpeech: availableCandidates.some((available) => (
+          available.source === candidate.source && available.matchedLemma === candidate.matchedLemma
+        ))
+      }))
     };
   }).sort((left, right) => left.id.localeCompare(right.id));
 }

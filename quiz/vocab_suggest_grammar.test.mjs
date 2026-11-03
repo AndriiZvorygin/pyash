@@ -79,7 +79,8 @@ test("vocab_suggest keeps a repository-directory-named token on the vocabulary p
   });
   assert.equal(result.exitCode, 0);
   assert.equal(result.missing, 0);
-  assert.match(lines.join("\n"), /^container: root -> hven \(English30k rank \d+\)$/mu);
+  assert.match(lines.join("\n"), /^container: WordNet n:03099154-n .* -> containers \(hven\)$/mu);
+  assert.match(lines.join("\n"), /^container: lemma contain -> hzan \(English30k rank \d+\)$/mu);
 });
 
 test("vocab_suggest returns separate English suggestions and Pyac mappings", async () => {

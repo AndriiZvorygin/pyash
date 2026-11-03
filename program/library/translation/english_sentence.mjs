@@ -2259,7 +2259,26 @@ export async function loadEnglishSentenceResources() {
         rows: wordnet.rows,
         relations: wordnet.relations,
         bridges: bridgeCatalog.entries,
-        resolveBridgeTarget: (target) => lookupEnglish30kCoverage(coverage, target)
+        resolveBridgeTarget: (target, options = {}) => {
+          const scopedLemma = lemmaIndex.lookupForPartOfSpeech(
+            target,
+            options.partOfSpeech,
+            { scopedOnly: true }
+          );
+          if (scopedLemma?.pyashSequence?.length) {
+            return {
+              coverageType: "atomic",
+              canonicalEnglish: scopedLemma.canonicalEnglish,
+              pyashSequence: [...scopedLemma.pyashSequence]
+            };
+          }
+          const fallback = lookupEnglish30kCoverage(coverage, target);
+          if (!["atomic", "compound", "alias", "dictionary-alias"].includes(fallback?.coverageType)) return null;
+          if (fallback.coverageType === "dictionary-alias"
+            && fallback.canonicalCoverageType
+            && !["atomic", "compound"].includes(fallback.canonicalCoverageType)) return null;
+          return fallback;
+        }
       });
       const resources = {
         source,
@@ -2376,6 +2395,25 @@ function stagedEnglishCoverage(resources, word, options = {}) {
       pyashSequence: [...grammarOverride]
     };
   }
+  const scopedLemma = lexicalPartOfSpeech
+    ? resources.lemmaIndex.lookupForPartOfSpeech(word, options.partOfSpeech, { scopedOnly: true })
+    : null;
+  if (scopedLemma?.pyashSequence?.length) {
+    return {
+      ...sourceRow,
+      coverageType: "lemma",
+      status: "covered-lemma",
+      canonicalEnglish: scopedLemma.canonicalEnglish,
+      pyashSequence: [...scopedLemma.pyashSequence],
+      hnuc: scopedLemma.hnuc,
+      lemma: scopedLemma.lemma,
+      lemmaKind: scopedLemma.kind,
+      lemmaStatus: scopedLemma.status,
+      lemmaRule: scopedLemma.rule,
+      lemmaEvidence: scopedLemma.evidence,
+      lemmaPyashSequence: [...scopedLemma.pyashSequence]
+    };
+  }
   const exact = variants.map((variant) => resources.atomicByVariant.get(variant)).find(Boolean);
   if (exact) {
     return {
@@ -2387,7 +2425,9 @@ function stagedEnglishCoverage(resources, word, options = {}) {
       hnuc: exact.hnuc
     };
   }
-  const resolved = resources.lemmaIndex.resolve(word);
+  const resolved = resources.lemmaIndex.resolve(word, {
+    ...(lexicalPartOfSpeech ? { partOfSpeech: options.partOfSpeech } : {})
+  });
   if (resolved && resolved.status !== "accepted-deterministic") {
     return {
       ...sourceRow,
