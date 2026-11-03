@@ -186,10 +186,11 @@ test("existential phrase-list decisions survive English-to-Pyac and Pyash projec
   assert.match(record.structural, /fyif yi ba/u);
   assert.match(record.structural, /pyan na tseh syi7h$/u);
   assert.ok(record.pyac.length > 0);
-  assert.match(record.pyac, /htit/u);
+  assert.match(record.pyac, /psut/u);
+  assert.match(record.pyac, /kfen/u);
   assert.notEqual(record.englishPyash, "there can be su a platonic love love.");
   assert.doesNotMatch(record.englishPyash, /\ba it\b/iu);
-  for (const expected of ["self", "friend", "platonic", "romance", "family", "God", "thing", "concepts"]) {
+  for (const expected of ["self", "friend", "platonic", "romance", "family", "God", "object", "concepts"]) {
     assert.match(record.englishPyash, new RegExp(expected, "iu"));
   }
   assert.deepEqual(result.vocabularyCandidates, []);
