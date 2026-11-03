@@ -544,6 +544,12 @@ export async function runToolChat({
         const surfaced = surfaceErrorSentence(err);
         if (surfaced?.mood && surfaced?.be) {
           toolResult = surfaced;
+        } else if (capability?.be === "write" && capability?.fromstate?.text === "coding saddle plan") {
+          toolResult = surfaceErrorSentence(buildErrorSentence({
+            name: "coding saddle plan update failed",
+            message: err?.message || String(err),
+            from: { name: "coding saddle plan" }
+          }));
         } else {
           throw err;
         }

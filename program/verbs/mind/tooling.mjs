@@ -203,11 +203,16 @@ export function buildToolSchemas(toolMapName) {
     }
     const readableToolName = buildReadableToolName({ sentence: cap.sentence, caseKeys });
     const finalToolName = toolName.length > 48 && readableToolName ? readableToolName : toolName;
+    const isSaddlePlanTool = cap.sentence?.be === "write"
+      && cap.sentence?.fromstate?.text === "coding saddle plan";
+    const description = isSaddlePlanTool
+      ? `${cap.canonical}. Set ob to a JSON-encoded object string. Create or replace example: {"action":"create","objective":"...","steps":[{"title":"..."}]}. Update example: {"action":"update_step","id":"step-001","status":"done","evidence":"..."}. Step statuses are pending, in_progress, done, or blocked. If an update is rejected, correct the payload and retry.`
+      : cap.canonical;
     tools.push({
       type: "function",
       function: {
         name: finalToolName,
-        description: cap.canonical,
+        description,
         signature: signatureName,
         parameters: {
           type: "object",
