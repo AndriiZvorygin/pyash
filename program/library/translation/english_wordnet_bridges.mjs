@@ -13,8 +13,7 @@ const SENSE_GLOSS_PREFIX = "sense-gloss:";
 const SENSE_LEMMA_PREFIX = "sense-lemma:";
 
 export function canonicalWordNetTargetPartOfSpeech(value) {
-  const pos = typeof value === "string" ? value.trim().toLowerCase() : "";
-  return pos === "s" ? "a" : pos;
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
 
 export function englishWordNetTargetId(targetKind, pyashSequence, partOfSpeech) {
@@ -23,7 +22,7 @@ export function englishWordNetTargetId(targetKind, pyashSequence, partOfSpeech) 
     ? pyashSequence.filter((word) => typeof word === "string" && word.trim()).map((word) => word.trim())
     : [];
   const pos = canonicalWordNetTargetPartOfSpeech(partOfSpeech);
-  if (sequence.length === 0 || !WORDNET_POS.has(pos) || pos === "s") return "";
+  if (sequence.length === 0 || !WORDNET_POS.has(pos)) return "";
   return `${kind}:${sequence.join("+")}:${pos}`;
 }
 

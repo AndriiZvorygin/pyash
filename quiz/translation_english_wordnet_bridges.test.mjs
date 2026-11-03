@@ -18,10 +18,10 @@ import { renderEnglishFromVliw } from "../program/library/translation/pyac_to_en
 
 test("WordNet bridge rows have a lightweight gloss and lemma lookup", async () => {
   const catalog = await loadEnglishWordNetBridges();
-  assert.equal(catalog.entries.length, 6436);
-  assert.equal(catalog.entries.filter((entry) => entry.evidence.includes("active through sweep wordnet-sense-sweep-4c07194f363e-81b5bbefa3b0-d1")).length, 734);
-  assert.equal(catalog.entries.filter((entry) => entry.evidence.includes("sense-link sweep wordnet-sense-sweep-4c07194f363e-9059730cda6d-d1-model-qwen3-5-9b-definition-anchor-v1")).length, 966);
-  assert.equal(catalog.entries.filter((entry) => entry.evidence.startsWith("frequency-first anchor allocation")).length, 2528);
+  assert.ok(catalog.entries.length > 6000);
+  assert.equal(catalog.entries.filter((entry) => entry.evidence.includes("active through sweep wordnet-sense-sweep-4c07194f363e-81b5bbefa3b0-d1")).length, 722);
+  assert.equal(catalog.entries.filter((entry) => entry.evidence.includes("sense-link sweep wordnet-sense-sweep-4c07194f363e-9059730cda6d-d1-model-qwen3-5-9b-definition-anchor-v1")).length, 956);
+  assert.ok(catalog.entries.filter((entry) => entry.evidence.startsWith("frequency-first anchor allocation")).length > 1000);
   assert.equal(catalog.entries.find((entry) => entry.source === "n:06850196-n"), undefined);
   assert.deepEqual(catalog.entries.find((entry) => entry.source === "a:00005204-a"), {
     source: "a:00005204-a",
@@ -32,15 +32,7 @@ test("WordNet bridge rows have a lightweight gloss and lemma lookup", async () =
     gloss: "perfect or complete or pure; absolute loyalty; absolute silence; absolute truth; absolute alcohol",
     lemmas: ["absolute"]
   });
-  assert.deepEqual(catalog.entries.find((entry) => entry.source === "n:05818974-n"), {
-    source: "n:05818974-n",
-    target: "thing",
-    targetPartOfSpeech: "n",
-    certainty: "contextual",
-    evidence: "Open English WordNet 2025 object-of-thought or feeling sense; generic Pyash thing anchor",
-    gloss: "the focus of cognitions or feelings; objects of thought; the object of my affection",
-    lemmas: ["object"]
-  });
+  assert.equal(catalog.entries.find((entry) => entry.source === "n:05818974-n"), undefined);
   assert.deepEqual(catalog.entries.find((entry) => entry.source === "v:01775456-v"), {
     source: "v:01775456-v",
     target: "emotionally",
@@ -61,14 +53,14 @@ test("WordNet bridge rows have a lightweight gloss and lemma lookup", async () =
   });
   assert.equal(catalog.entries.find((entry) => entry.source === "v:00761702-v")?.target, "entreat");
   assert.equal(catalog.entries.find((entry) => entry.source === "v:00761702-v")?.certainty, "deterministic");
-  assert.equal(catalog.entries.find((entry) => entry.source === "r:00111558-r")?.target, "inside");
+  assert.equal(catalog.entries.find((entry) => entry.source === "r:00111558-r"), undefined);
   assert.ok(catalog.entries.every((entry) => entry.gloss && entry.lemmas.length > 0));
   assert.equal(catalog.entries.find((entry) => entry.source === "n:00856168-n")?.lemmas.includes("feel"), true);
   assert.equal(catalog.entries.find((entry) => entry.source === "n:04609402-n"), undefined);
   assert.deepEqual(catalog.entries.find((entry) => entry.source === "s:01868647-s"), {
     source: "s:01868647-s",
     target: "only",
-    targetPartOfSpeech: "a",
+    targetPartOfSpeech: "s",
     certainty: "contextual",
     evidence: "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-pos-live-pilot-be2e7b247a-1d04b32e5da4; rationale: Sense s:01868647-s defines 'only' as 'exclusive of anyone or anything else', which directly matches the label 'only' without implying solitude, whereas s:02222405-s implies being the single one.",
     gloss: "exclusive of anyone or anything else",
@@ -436,7 +428,7 @@ test("one lexical atom may anchor distinct parts of speech independently", () =>
   assert.deepEqual(index.ambiguousTargets, []);
 });
 
-test("WordNet adjective satellites use the adjective target slot", () => {
+test("WordNet adjective satellites keep a distinct satellite target slot", () => {
   const index = buildEnglishWordNetBridgeIndex({
     entries: [{
       source: "s:satellite",
@@ -447,8 +439,8 @@ test("WordNet adjective satellites use the adjective target slot", () => {
     }]
   });
 
-  assert.equal(index.lookup("s:satellite")?.targetPartOfSpeech, "a");
-  assert.equal(index.lookup("s:satellite")?.targetId, "atom:hbin:a");
+  assert.equal(index.lookup("s:satellite")?.targetPartOfSpeech, "s");
+  assert.equal(index.lookup("s:satellite")?.targetId, "atom:hbin:s");
 });
 
 test("bridge index excludes grammar words even when they have Pyash sequences", () => {

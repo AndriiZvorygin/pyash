@@ -60,10 +60,12 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   sense lemma as well as its POS and synset id.
 - Sense-link identity is the ordered Pyac target plus its canonical target POS:
   `atom:<sequence>:<pos>` or `compound:<sequence>:<pos>`. Source satellite POS
-  `s` maps to target adjective POS `a`; retain `s` on the source sense id.
-  Reusing one Pyac sequence across different target POS is allowed. Two
-  different synsets competing for the same sequence and POS still require an
-  explicit, evidence-backed equivalence group or remain unlinked.
+  `s` remains a distinct target POS and identity; do not merge it into regular
+  adjective POS `a`. Any later Pyash grammatical realization for satellite
+  adjectives is a separate grammar-design task. Reusing one Pyac sequence
+  across different target POS is allowed. Two different synsets competing for
+  the same sequence and POS still require an explicit, evidence-backed
+  equivalence group or remain unlinked.
 - Lemma mappings can be POS-scoped. A scoped row takes precedence for that POS;
   the existing unscoped row remains a fallback for other POS. Thus homographs
   can resolve to distinct atoms by POS without changing their default lookup.

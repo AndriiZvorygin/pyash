@@ -99,7 +99,7 @@ function normalizeEntry(payload, surface, index) {
   if (rawPartOfSpeech && !LEMMA_PARTS_OF_SPEECH.has(rawPartOfSpeech)) {
     throw invalid("English lemma part of speech is unsupported", { index, surface, partOfSpeech: rawPartOfSpeech });
   }
-  const partOfSpeech = rawPartOfSpeech === "s" ? "a" : rawPartOfSpeech;
+  const partOfSpeech = rawPartOfSpeech;
   const pyashSequence = payload.pyashSequence === undefined
     ? []
     : normalizePyashSequence(payload.pyashSequence, normalizedSurface, index);
@@ -378,9 +378,7 @@ export function buildEnglishLemmaIndex({
   };
   const lookupForPartOfSpeech = (surface, partOfSpeech, { scopedOnly = false } = {}) => {
     const variants = englishLemmaLookupVariants(surface);
-    const normalizedPartOfSpeech = String(partOfSpeech ?? "").trim().toLowerCase() === "s"
-      ? "a"
-      : String(partOfSpeech ?? "").trim().toLowerCase();
+    const normalizedPartOfSpeech = String(partOfSpeech ?? "").trim().toLowerCase();
     const scoped = normalizedPartOfSpeech ? lookupByPartOfSpeech.get(normalizedPartOfSpeech) : null;
     const specific = variants.map((variant) => scoped?.get(variant)).find(Boolean) ?? null;
     if (specific || scopedOnly) return specific;
@@ -408,7 +406,7 @@ export function buildEnglishLemmaIndex({
   }
   const resolve = (surface, options = {}) => {
     const rawPartOfSpeech = String(options?.partOfSpeech ?? options?.pos ?? "").trim().toLowerCase();
-    const partOfSpeech = rawPartOfSpeech === "s" ? "a" : rawPartOfSpeech;
+    const partOfSpeech = rawPartOfSpeech;
     const existing = lookupForPartOfSpeech(surface, partOfSpeech);
     if (existing) return { surface: normalizeEnglishLemmaWord(surface), ...existing };
     const candidates = inflectionCandidates(surface)

@@ -90,13 +90,15 @@ test("atom worklist creates an independent decision slot for each uncovered part
     atom("atom:cyuk", "cyuk", ["draw"], 20, [
       candidate("n:00000041-n", "a mark made with a pencil", { lemma: "draw" }),
       candidate("v:00000042-v", "produce a picture", { lemma: "draw" }),
-      candidate("a:00000043-a", "a drawn or elongated shape", { lemma: "draw" })
+      candidate("a:00000043-a", "a drawn or elongated shape", { lemma: "draw" }),
+      candidate("s:00000044-s", "stretched in one direction", { lemma: "draw" })
     ])
   ]);
 
   assert.deepEqual(rows.map((row) => [row.id, row.partOfSpeech, row.targetId, row.candidates.length]), [
     ["atom:cyuk:a", "a", "atom:cyuk:a", 1],
     ["atom:cyuk:n", "n", "atom:cyuk:n", 1],
+    ["atom:cyuk:s", "s", "atom:cyuk:s", 1],
     ["atom:cyuk:v", "v", "atom:cyuk:v", 1]
   ]);
 });
@@ -111,8 +113,8 @@ test("atom sense prompts give each POS slot an opaque response id and restore it
   const inputRows = JSON.parse(prompt.split("\n").at(-1));
   const responseId = inputRows[0][0];
   assert.match(responseId, /^slot-[a-f0-9]{16}$/u);
-  assert.equal(inputRows[0][1], "a");
-  assert.doesNotMatch(prompt, /\[\["atom:htun:a"/u);
+  assert.equal(inputRows[0][1], "s");
+  assert.doesNotMatch(prompt, /\[\["atom:htun:s"/u);
   assert.match(prompt, /Copy each response slot id exactly/u);
 
   const parsed = parseEnglishWordNetAtomSenseResponse(JSON.stringify({
@@ -120,16 +122,16 @@ test("atom sense prompts give each POS slot an opaque response id and restore it
       id: responseId,
       status: "select",
       source: "s:00000001-s",
-      rationale: "The supplied adjective definition matches the English label."
+      rationale: "The supplied satellite definition matches the English label."
     }]
   }), [{ item, candidates: item.candidates }]);
   assert.equal(parsed.valid, true);
-  assert.equal(parsed.decisions[0].id, "atom:htun:a");
-  assert.equal(parsed.decisions[0].targetId, "atom:htun:a");
+  assert.equal(parsed.decisions[0].id, "atom:htun:s");
+  assert.equal(parsed.decisions[0].targetId, "atom:htun:s");
 
   const repeatedPos = parseEnglishWordNetAtomSenseResponse(JSON.stringify({
     decisions: [{
-      id: `${responseId}:a`,
+      id: `${responseId}:s`,
       status: "select",
       source: "s:00000001-s",
       rationale: "The response appended a second POS marker."

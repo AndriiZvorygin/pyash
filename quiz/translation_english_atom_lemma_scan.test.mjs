@@ -193,6 +193,32 @@ test("lemma catalog allows POS-scoped homographs and resolves the matching mappi
   assert.equal(index.resolve("becoming", { pos: "v" }).lemma, "become");
 });
 
+test("lemma index keeps adjective satellite mappings separate from adjective mappings", () => {
+  const row = (partOfSpeech) => JSON.stringify({
+    surface: "only",
+    lemma: "only",
+    canonicalEnglish: "only",
+    kind: "anchor",
+    status: "accepted-curated",
+    partOfSpeech,
+    evidence: `fixture ${partOfSpeech} mapping`
+  });
+  const catalog = parseEnglishLemmaCatalog([
+    "su name translation_english30k_lemmas be map def",
+    'su text "format" ob text "english-lemma-v1" ya',
+    `su text "only" ob text ${JSON.stringify(row("a"))} ya`,
+    `su text "only" ob text ${JSON.stringify(row("s"))} ya`,
+    "prah"
+  ].join("\n"));
+  const index = buildEnglishLemmaIndex({
+    atomicEntries: [{ en: "only", pya: "htun" }],
+    catalogEntries: catalog.entries
+  });
+
+  assert.equal(index.resolve("only", { partOfSpeech: "a" }).partOfSpeech, "a");
+  assert.equal(index.resolve("only", { partOfSpeech: "s" }).partOfSpeech, "s");
+});
+
 test("lemma catalog rejects duplicate rows for the same surface and part of speech", () => {
   const row = (partOfSpeech) => JSON.stringify({
     surface: "becoming",

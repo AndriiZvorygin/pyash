@@ -92,10 +92,11 @@ test("frequency reconciliation preserves unresolved bridge evidence without trea
   }]);
 });
 
-test("frequency allocation gives an atom one independent anchor slot per part of speech", () => {
+test("frequency allocation gives an atom independent adjective, satellite, noun, and verb slots", () => {
   const records = buildEnglishWordNetFrequencyAllocationRecords({
     wordnetIndex: {
       bySynset: new Map([
+        ["a:00000070-a", [{ lemma: "draw", gloss: "an elongated shape" }]],
         ["n:00000071-n", [{ lemma: "draw", gloss: "a picture" }]],
         ["v:00000072-v", [{ lemma: "draw", gloss: "make a picture" }]],
         ["s:00000073-s", [{ lemma: "drawn", gloss: "elongated" }]]
@@ -111,11 +112,11 @@ test("frequency allocation gives an atom one independent anchor slot per part of
   });
 
   const candidateSlots = records.map((record) => record.candidates[0].targetId);
-  assert.deepEqual(candidateSlots.sort(), ["atom:cyuk:a", "atom:cyuk:n", "atom:cyuk:v"]);
+  assert.deepEqual(candidateSlots.sort(), ["atom:cyuk:a", "atom:cyuk:n", "atom:cyuk:s", "atom:cyuk:v"]);
   const allocation = allocateEnglishWordNetAnchors(records);
-  assert.equal(allocation.assignments.length, 3);
-  assert.equal(new Set(allocation.assignments.map((row) => row.targetId)).size, 3);
-  assert.deepEqual(allocation.assignments.map((row) => row.targetPartOfSpeech).sort(), ["a", "n", "v"]);
+  assert.equal(allocation.assignments.length, 4);
+  assert.equal(new Set(allocation.assignments.map((row) => row.targetId)).size, 4);
+  assert.deepEqual(allocation.assignments.map((row) => row.targetPartOfSpeech).sort(), ["a", "n", "s", "v"]);
 });
 
 test("frequency resolver applies a homograph lemma mapping only in its declared part of speech", () => {
