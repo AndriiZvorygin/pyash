@@ -57,6 +57,13 @@ function groupKey(record) {
   return `${String(record?.target ?? "").trim().toLowerCase()}\u0000${stableJson(record?.sourceSurfaces ?? {})}`;
 }
 
+function lacksWordNetHeadRelation(row) {
+  const targetSenseEvidence = row?.targetSenseEvidence ?? row?.verificationRecord?.targetSenseEvidence;
+  return !Array.isArray(targetSenseEvidence)
+    || !targetSenseEvidence.some((sense) => Array.isArray(sense?.compatibleHeadSenseIds)
+      && sense.compatibleHeadSenseIds.length > 0);
+}
+
 export function groupWordNetCompoundCandidates(records = [], completedIds = new Set()) {
   if (!Array.isArray(records)) throw new TypeError("compound candidates must be an array");
   const groups = new Map();
@@ -205,10 +212,12 @@ export function acceptedDecision(record) {
       && modifierRelations[index] === "literal"
       && componentSenseEvidence.some((sense) => String(sense?.component ?? "").trim() === modifier
         && String(sense?.source ?? "").trim() === modifierSenseIds[index]));
+  const headRelationValid = String(record?.headRelationPolicy ?? "").trim() === "advisory"
+    || record?.verificationHeadRelation === "supported";
   return Boolean(
     String(record?.verificationSenseId ?? "").trim()
     && String(record?.verificationHeadSenseId ?? "").trim()
-    && record?.verificationHeadRelation === "supported"
+    && headRelationValid
     && modifierEvidenceValid
   );
 }
@@ -339,9 +348,7 @@ export async function runWordNetFrequencyCompoundSweep({ artifactRoot = ARTIFACT
       sourceHash: allocation.sourceHash,
       coverageHash: allocation.coverageHash,
       candidateCount: currentCandidates.length,
-      candidatesWithoutWordNetHeadEvidence: allocation.residualCompounds.filter((row) => (
-        row.disposition === "no-wordnet-head-evidence"
-      )).length,
+      candidatesWithoutWordNetHeadRelation: allocation.residualCompounds.filter(lacksWordNetHeadRelation).length,
       completedCandidateCount: completedIds.size,
       remainingCandidateCount: groups.reduce((count, group) => count + group.length, 0),
       completedGroups,
@@ -410,9 +417,7 @@ export async function runWordNetFrequencyCompoundSweep({ artifactRoot = ARTIFACT
         sourceHash: allocation.sourceHash,
         coverageHash: allocation.coverageHash,
         candidateCount: currentCandidates.length,
-        candidatesWithoutWordNetHeadEvidence: allocation.residualCompounds.filter((row) => (
-          row.disposition === "no-wordnet-head-evidence"
-        )).length,
+        candidatesWithoutWordNetHeadRelation: allocation.residualCompounds.filter(lacksWordNetHeadRelation).length,
         completedCandidateCount: [...currentCandidateIds].filter((id) => (
           decisionsById.get(id)?.decisionRevision === decisionRevision
         )).length,
@@ -435,9 +440,7 @@ export async function runWordNetFrequencyCompoundSweep({ artifactRoot = ARTIFACT
       sourceHash: allocation.sourceHash,
       coverageHash: allocation.coverageHash,
       candidateCount: currentCandidates.length,
-      candidatesWithoutWordNetHeadEvidence: allocation.residualCompounds.filter((row) => (
-        row.disposition === "no-wordnet-head-evidence"
-      )).length,
+      candidatesWithoutWordNetHeadRelation: allocation.residualCompounds.filter(lacksWordNetHeadRelation).length,
       completedCandidateCount: [...currentCandidateIds].filter((id) => (
         decisionsById.get(id)?.decisionRevision === decisionRevision
       )).length,
@@ -475,9 +478,7 @@ export async function runWordNetFrequencyCompoundSweep({ artifactRoot = ARTIFACT
       error: String(error?.message ?? error).slice(0, 500),
       sourceHash: allocation.sourceHash,
       coverageHash: allocation.coverageHash,
-      candidatesWithoutWordNetHeadEvidence: allocation.residualCompounds.filter((row) => (
-        row.disposition === "no-wordnet-head-evidence"
-      )).length,
+      candidatesWithoutWordNetHeadRelation: allocation.residualCompounds.filter(lacksWordNetHeadRelation).length,
       completedCandidateCount: [...currentCandidateIds].filter((id) => (
         decisionsById.get(id)?.decisionRevision === decisionRevision
       )).length,

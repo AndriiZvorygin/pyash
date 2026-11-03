@@ -19,6 +19,7 @@ import {
   parseEnglishWordNetFrequencyAllocationConfig,
   reconcileEnglishWordNetFrequencyBridgeRows
 } from "../program/library/translation/english_wordnet_frequency.mjs";
+import { isCircularEnglishWordNetGloss } from "../program/library/translation/english_wordnet_glosses.mjs";
 import { loadEnglishWordNetCompoundDecisions } from "../program/library/translation/english_wordnet_compound_decisions.mjs";
 import { renderEnglishWordNetSenseLinksPya } from "../program/library/translation/english_wordnet_linker.mjs";
 import {
@@ -71,6 +72,24 @@ function modelGenerated(entry) {
 
 function frequencyGenerated(entry) {
   return String(entry?.evidence ?? "").startsWith("frequency-first anchor allocation");
+}
+
+export function atomSenseEntriesForReselection(entries = [], targetIds = [], resolveWord = () => null) {
+  if (!Array.isArray(entries) || !Array.isArray(targetIds) || typeof resolveWord !== "function") {
+    throw new TypeError("atom sense reselection requires bridge entries, target ids, and a word resolver");
+  }
+  const requestedTargets = new Set(targetIds);
+  return entries.filter((entry) => {
+    const targetPartOfSpeech = canonicalWordNetTargetPartOfSpeech(entry.targetPartOfSpeech || entry.source.slice(0, 1));
+    if (!targetPartOfSpeech) return false;
+    const coverage = resolveWord(entry.target, { partOfSpeech: targetPartOfSpeech });
+    const pyashSequence = sequence(coverage?.pyashSequence);
+    if (coverage?.coverageType !== "atomic" || pyashSequence.length !== 1) return false;
+    const targetId = englishWordNetTargetId("atom", pyashSequence, targetPartOfSpeech);
+    if (!requestedTargets.has(targetId)) return false;
+    return String(entry.evidence ?? "").startsWith("atom-target sense selection;")
+      || isCircularEnglishWordNetGloss(entry.gloss, [entry.target]);
+  });
 }
 
 function targetIdentity(coverage, target, partOfSpeech) {
@@ -308,13 +327,33 @@ export function compoundWorklist(
     wordnetIndex = null,
     senseTagCounts = new Map(),
     rankForEnglish = () => Number.POSITIVE_INFINITY,
-    maximumCompoundComponents = 3
+    resolveWord = () => null,
+    activeAtomicTargetIds = [],
+    maximumCompoundComponents = 3,
+    headRelationPolicy = "advisory"
   } = {}
 ) {
+  if (headRelationPolicy !== "advisory") {
+    throw new TypeError("compound worklist requires the configured advisory head-relation policy");
+  }
   const headRelationIndex = buildWordNetHeadRelationIndex(wordnetIndex?.relations ?? []);
+  const activeAtomicTargets = new Set(activeAtomicTargetIds);
   const residualByTerm = new Map();
   const residualBySource = new Map();
   for (const record of residual) {
+    const alreadyCoveredByAtom = record.lemmas.some((lemma) => {
+      const coverage = resolveWord(lemma, { partOfSpeech: record.pos });
+      const coverageType = coverage?.canonicalCoverageType || coverage?.coverageType;
+      const pyashSequence = sequence(coverage?.pyashSequence);
+      if (coverageType !== "atomic" || pyashSequence.length !== 1) return false;
+      const targetId = englishWordNetTargetId(
+        "atom",
+        pyashSequence,
+        canonicalWordNetTargetPartOfSpeech(record.pos)
+      );
+      return activeAtomicTargets.has(targetId);
+    });
+    if (alreadyCoveredByAtom) continue;
     residualBySource.set(record.source, record);
     for (const lemma of record.lemmas) {
       const key = normalized(lemma);
@@ -378,9 +417,9 @@ export function compoundWorklist(
           .filter((componentSense) => hasWordNetHeadSenseRelation(sense.source, componentSense.source, headRelationIndex))
           .map((componentSense) => componentSense.source)
       }))
-      .sort((left, right) => Number(right.compatibleHeadSenseIds.length > 0) - Number(left.compatibleHeadSenseIds.length > 0)
-        || left.frequencyRank - right.frequencyRank
+      .sort((left, right) => left.frequencyRank - right.frequencyRank
         || right.tagCount - left.tagCount
+        || Number(right.compatibleHeadSenseIds.length > 0) - Number(left.compatibleHeadSenseIds.length > 0)
         || left.source.localeCompare(right.source));
     const selectedTargetRows = rankedTargetWithHeadEvidence.slice(0, 4);
     const selectedHeadComponentSenses = [];
@@ -411,6 +450,7 @@ export function compoundWorklist(
     const selectedHeadSenseIds = new Set(selectedHeadComponentSenses.map((sense) => sense.source));
     const targetEvidenceWithHead = selectedTargetRows.map(({ frequencyRank, tagCount, ...sense }) => ({
       ...sense,
+      headRelationPolicy,
       compatibleHeadSenseIds: sense.compatibleHeadSenseIds.filter((id) => selectedHeadSenseIds.has(id))
     }));
     const frequencyRank = rankedTargetSenseEvidence.length
@@ -436,12 +476,11 @@ export function compoundWorklist(
       frequencyRank,
       frequencyTagCount,
       status: "candidate-closed",
+      headRelationPolicy,
       disposition: targetIdsInUse.has(targetId)
         ? "target-identity-already-linked"
         : decisionsById.get(record.id)?.decisionRevision === decisionRevision
           ? `already-${decisionsById.get(record.id).status}`
-          : targetEvidenceWithHead.length === 0 || !targetEvidenceWithHead.some((sense) => sense.compatibleHeadSenseIds.length > 0)
-            ? "no-wordnet-head-evidence"
           : "ready-for-housekeeper-verification",
       targetId,
       targetSenseEvidence: targetEvidenceWithHead,
@@ -450,6 +489,7 @@ export function compoundWorklist(
         ...record,
         frequencyRank,
         frequencyTagCount,
+        headRelationPolicy,
         componentSenseEvidence,
         targetSenseEvidence: targetEvidenceWithHead
       },
@@ -523,7 +563,7 @@ async function writeBatches(directory, { kind, name, format, runId, records, bat
   return count;
 }
 
-export async function prepareWordNetFrequencyAllocation() {
+export async function prepareWordNetFrequencyAllocation({ reselectAtomTargetIds = [] } = {}) {
   const allocationConfigSource = await readFile(ENGLISH_WORDNET_FREQUENCY_ALLOCATION_CONFIG_URL, "utf8");
   const allocationConfig = parseEnglishWordNetFrequencyAllocationConfig(allocationConfigSource);
   const [resources, frequency, linkerSource, compoundDecisions] = await Promise.all([
@@ -539,22 +579,31 @@ export async function prepareWordNetFrequencyAllocation() {
   const catalog = parseEnglishWordNetBridgeCatalog(linkerSource);
   const resolveWord = buildWordResolver(resources, compoundCoverage);
   const rankForEnglish = rankLookup(resources);
+  const reselectTargets = new Set(reselectAtomTargetIds);
+  const reopenedAtomSenseEntries = atomSenseEntriesForReselection(catalog.entries, [...reselectTargets], resolveWord);
+  const reopenedSources = new Set(reopenedAtomSenseEntries.map((entry) => entry.source));
+  const allocationCatalogEntries = catalog.entries.filter((entry) => !reopenedSources.has(entry.source));
   const records = buildEnglishWordNetFrequencyAllocationRecords({
     wordnetIndex: resources.wordnet.index,
     frequencyJoin: frequency.joined,
     rankForEnglish,
     resolveWord
   });
-  const preservedEntries = catalog.entries.filter((entry) => !modelGenerated(entry) && !frequencyGenerated(entry));
+  const preservedEntries = allocationCatalogEntries.filter((entry) => !modelGenerated(entry) && !frequencyGenerated(entry));
   const { records: preservedRecords, unresolved: staleBridgeLinks } = partitionResolvableWordNetBridges(
     preservedEntries,
     resolveWord
   );
-  const reservedTargetIds = preservedRecords.map((record) => record.link.targetId);
-  const reservedSources = preservedRecords.map((record) => record.source);
+  const reopenedTargetIds = [...new Set(reopenedAtomSenseEntries.map((entry) => {
+    const partOfSpeech = canonicalWordNetTargetPartOfSpeech(entry.targetPartOfSpeech || entry.source.slice(0, 1));
+    const coverage = resolveWord(entry.target, { partOfSpeech });
+    return englishWordNetTargetId("atom", sequence(coverage?.pyashSequence), partOfSpeech);
+  }))];
+  const reservedTargetIds = [...preservedRecords.map((record) => record.link.targetId), ...reopenedTargetIds];
+  const reservedSources = [...preservedRecords.map((record) => record.source), ...reopenedSources];
   const allocation = allocateEnglishWordNetAnchors(records, { reservedTargetIds, reservedSources });
   const reconciliation = reconcileEnglishWordNetFrequencyBridgeRows({
-    existingEntries: catalog.entries.filter((entry) => !staleBridgeLinks.some((row) => row.source === entry.source)),
+    existingEntries: allocationCatalogEntries.filter((entry) => !staleBridgeLinks.some((row) => row.source === entry.source)),
     assignments: allocation.assignments,
     resolveTarget: resolveWord
   });
@@ -612,7 +661,13 @@ export async function prepareWordNetFrequencyAllocation() {
       wordnetIndex: resources.wordnet.index,
       senseTagCounts: senseTagCountIndex(frequency.joined.entries),
       rankForEnglish,
-      maximumCompoundComponents: allocationConfig["maximum-compound-components"]
+      resolveWord,
+      activeAtomicTargetIds: finalRecords
+        .filter((record) => String(record.link?.targetId ?? "").startsWith("atom:"))
+        .map((record) => record.link.targetId)
+        .concat(reopenedTargetIds),
+      maximumCompoundComponents: allocationConfig["maximum-compound-components"],
+      headRelationPolicy: allocationConfig["compound-head-relation-policy"]
     }
   );
   const sourceHash = sha256(stableJson({
@@ -622,7 +677,7 @@ export async function prepareWordNetFrequencyAllocation() {
   }));
   const coverageIdentity = {
     english30k: resources.source.sourceHash,
-    bridges: catalog.entries.map((entry) => [entry.source, entry.target, entry.certainty, entry.evidence]).sort((a, b) => a[0].localeCompare(b[0])),
+    bridges: allocationCatalogEntries.map((entry) => [entry.source, entry.target, entry.certainty, entry.evidence]).sort((a, b) => a[0].localeCompare(b[0])),
     atoms: pyashWords.map((entry) => [normalized(entry?.en), String(entry?.pya ?? "")]).sort((a, b) => a[0].localeCompare(b[0])),
     acceptedCompounds: compoundCoverage.accepted.map((record) => [
       normalized(record.target),
@@ -654,6 +709,7 @@ export async function prepareWordNetFrequencyAllocation() {
     wordnetIndex: resources.wordnet.index,
     rankForEnglish,
     finalCatalog,
+    reopenedAtomSenseEntries,
     staleBridgeLinks,
     sourceRecordCount: records.length,
     exactTagMatches: frequency.joined.matchedCount,
@@ -785,7 +841,8 @@ export async function runWordNetFrequencyAllocation({ artifactRoot = ARTIFACT_RO
       staleBridgeLinksPath: join(directory, "stale-bridge-links.pya"),
       compoundCandidates: result.residualCompounds.length,
       compoundCandidatesReady: result.residualCompounds.filter((row) => row.disposition === "ready-for-housekeeper-verification").length,
-      compoundCandidatesWithoutWordNetHeadEvidence: result.residualCompounds.filter((row) => row.disposition === "no-wordnet-head-evidence").length,
+      compoundCandidatesWithoutWordNetHeadRelation: result.residualCompounds.filter((row) => !row.targetSenseEvidence
+        ?.some((sense) => sense.compatibleHeadSenseIds?.length > 0)).length,
       bridgeOutputHash
     };
     await atomicWrite(manifestPath, renderManifestPya(manifest));

@@ -13,6 +13,7 @@ export const ENGLISH_WORDNET_SENSE_COMPOUNDS_LANGUAGES = Object.freeze([
 ]);
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_MODEL = "qwen3.5:9b";
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_PROMPT_REVISION = "sense-translation-composition-v1";
+export const ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION = "sense-head-advisory-v2";
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_MAX_OUTPUT_TOKENS = 1024;
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_PARALLELISM = 8;
 
@@ -38,6 +39,10 @@ function normalized(value) {
   return text(value).toLowerCase().replace(/[_-]+/gu, " ").replace(/\s+/gu, " ");
 }
 
+export function componentGlossAlternatives(value) {
+  return [...new Set(text(value).split(/\s*\/\s*/u).map(normalized).filter(Boolean))];
+}
+
 function definitionOnly(value, maximum = 320) {
   return text(value).split(";")[0].slice(0, maximum);
 }
@@ -60,25 +65,6 @@ function senseIdOf(sense) {
 
 function senseLemma(sense) {
   return normalized(sense?.lemma) || normalized(sense?.lemmas?.[0]);
-}
-
-function linkedHypernymHeads(targetSenseId, linkedHeadIds, relationIndex) {
-  const target = text(targetSenseId).toLowerCase();
-  const targetPos = target.match(/^([nvars]):/u)?.[1] ?? "";
-  if (!target || !targetPos || linkedHeadIds.size === 0) return [];
-  const queue = [target];
-  const visited = new Set([target]);
-  const matches = new Set();
-  for (let cursor = 0; cursor < queue.length; cursor += 1) {
-    for (const parent of relationIndex.hypernyms.get(queue[cursor]) ?? []) {
-      if (linkedHeadIds.has(parent) && parent.match(/^([nvars]):/u)?.[1] === targetPos) matches.add(parent);
-      if (!visited.has(parent)) {
-        visited.add(parent);
-        queue.push(parent);
-      }
-    }
-  }
-  return [...matches].sort();
 }
 
 export function senseTranslationKey({
@@ -134,32 +120,19 @@ export function buildWordNetSenseTranslationPrompt({
 
 export function buildSenseCompoundWorklist({
   residualSenses = [],
-  relations = [],
   linkedSenseIds = [],
-  linkedAtomicSenses = [],
   maximum = Number.POSITIVE_INFINITY
 } = {}) {
-  if (!Array.isArray(residualSenses) || !Array.isArray(linkedAtomicSenses)) {
-    throw invalid("sense compound worklist requires sense and linked atom arrays");
+  if (!Array.isArray(residualSenses)) {
+    throw invalid("sense compound worklist requires residual senses");
   }
-  const relationIndex = buildWordNetHeadRelationIndex(relations);
   const alreadyLinked = new Set(linkedSenseIds.map(text).filter(Boolean));
-  const atomHeads = linkedAtomicSenses.filter((sense) => {
-    const id = text(sense?.source ?? sense?.senseId);
-    return id && text(sense?.targetKind) === "atom"
-      && Array.isArray(sense?.pyashSequence) && sense.pyashSequence.length === 1;
-  });
-  const linkedHeadIds = new Set(atomHeads.map((sense) => text(sense.source ?? sense.senseId)));
-  const linkedAtomicTargets = new Set(atomHeads.map((sense) => normalized(sense.target)).filter(Boolean));
   return residualSenses.map((sense) => {
     const source = senseIdOf(sense);
     const pos = text(sense?.pos || source.split(":")[0]);
     const lemmas = [...new Set((sense?.lemmas ?? []).map(normalized).filter(Boolean))];
     const definition = definitionOnly(sense?.gloss ?? sense?.definition);
-    if (!source || !pos || lemmas.length === 0 || !definition || alreadyLinked.has(source)
-      || lemmas.some((lemma) => linkedAtomicTargets.has(lemma))) return null;
-    const compatibleHeads = linkedHypernymHeads(source, linkedHeadIds, relationIndex);
-    if (compatibleHeads.length === 0) return null;
+    if (!source || !pos || lemmas.length === 0 || !definition || alreadyLinked.has(source)) return null;
     const candidateRanks = (sense?.candidates ?? []).map((candidate) => Number(candidate.rank ?? candidate.english30kRank))
       .filter((rank) => Number.isFinite(rank) && rank > 0);
     const frequencyRank = Number.isFinite(Number(sense.frequencyRank)) && Number(sense.frequencyRank) > 0
@@ -175,8 +148,7 @@ export function buildSenseCompoundWorklist({
       lemmas,
       gloss: definition,
       frequencyRank,
-      tagCount: tagCount.length ? Math.max(...tagCount) : Number.isSafeInteger(sense?.tagCount) ? sense.tagCount : -1,
-      compatibleHeadSenseIds: compatibleHeads
+      tagCount: tagCount.length ? Math.max(...tagCount) : Number.isSafeInteger(sense?.tagCount) ? sense.tagCount : -1
     };
   }).filter(Boolean)
     .sort((left, right) => left.frequencyRank - right.frequencyRank
@@ -448,10 +420,15 @@ export function buildSenseDerivedCompoundCandidates({
   kwonCandidatesByGloss = new Map(),
   relations = [],
   maxKwonCandidates = 4,
-  maxCandidates = 8
+  maxCandidates = 8,
+  candidateRevision = ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION,
+  headRelationPolicy = "advisory"
 } = {}) {
   const targetSense = normalizedSense(sense);
   if (!targetSense || !Array.isArray(translations)) throw invalid("sense compound generation requires a target sense and translations");
+  if (!text(candidateRevision) || headRelationPolicy !== "advisory") {
+    throw invalid("sense compound generation requires a versioned advisory head-relation policy");
+  }
   const relationIndex = buildWordNetHeadRelationIndex(relations);
   const grouped = new Map();
   const canonicalTarget = targetSense.lemmas[0];
@@ -477,7 +454,6 @@ export function buildSenseDerivedCompoundCandidates({
       if (pyash.some((word) => !word) || new Set(pyash).size !== pyash.length) return;
       for (let headIndex = 0; headIndex < selection.length; headIndex += 1) {
         const headSense = candidateSense(selection[headIndex]);
-        if (!hasWordNetHeadSenseRelation(targetSense.source, headSense.source, relationIndex)) continue;
         const order = [...selection.keys()].filter((index) => index !== headIndex).concat(headIndex);
         const ordered = order.map((index) => selection[index]);
         const orderedPyash = ordered.map((candidate) => text(candidate.pyashSequence[0]));
@@ -485,12 +461,14 @@ export function buildSenseDerivedCompoundCandidates({
         const sequenceKey = orderedPyash.join("+");
         const components = ordered.map((candidate) => normalized(candidate.word));
         if (components.some((component) => !component)) continue;
-        const candidateId = `sense-compound-${hash(`${targetSense.source}\u0000${sequenceKey}`).slice(0, 24)}`;
+        const candidateId = `sense-compound-${hash(`${candidateRevision}\u0000${targetSense.source}\u0000${sequenceKey}`).slice(0, 24)}`;
         const candidate = grouped.get(sequenceKey) ?? {
           id: candidateId,
           candidateId,
           target: canonicalTarget,
           aliases,
+          candidateRevision,
+          headRelationPolicy,
           senseId: targetSense.source,
           targetPartOfSpeech: targetSense.pos,
           sourceMorphemes: components,
@@ -511,8 +489,12 @@ export function buildSenseDerivedCompoundCandidates({
           frequencyTagCount: targetSense.frequencyTagCount,
           targetSenseEvidence: [{
             ...senseRecordForTarget(targetSense),
-            compatibleHeadSenseIds: [headSense.source]
+            compatibleHeadSenseIds: hasWordNetHeadSenseRelation(targetSense.source, headSense.source, relationIndex)
+              ? [headSense.source]
+              : [],
+            headRelationPolicy
           }],
+          headRelationPolicy,
           componentSenseEvidence: ordered.map((option, index) => ({
             component: components[index],
             ...candidateSense(option)

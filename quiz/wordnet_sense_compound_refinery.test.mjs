@@ -30,6 +30,7 @@ test("sense compound refinery links, composes, verifies and records one complete
   const senseByHandle = new Map();
   const recordedPromotions = [];
   let translationSubmitCount = 0;
+  const suggestedTerms = [];
   const dependencies = {
     prepareAllocation: async () => ({
       sourceHash: "wordnet-test-hash",
@@ -71,24 +72,27 @@ test("sense compound refinery links, composes, verifies and records one complete
             surface: `${language} compound`,
             composition: "compound",
             components: [
-              { surface: `${language} friend`, gloss: "friend" },
+              { surface: `${language} friend`, gloss: language === "chinese" ? "friend/companion" : "friend" },
               { surface: `${language} relationship`, gloss: "relationship" }
             ]
           }))
         });
       }
     },
-    suggestVocabulary: async () => ({
-      suggestionRecords: ["friend", "relationship"].map((word) => ({
-        input: word,
-        mappings: [{
-          word,
-          coverageType: "atomic",
-          status: "covered",
-          pyacSequence: [word === "friend" ? "hfre" : "hlak"]
-        }]
-      }))
-    }),
+    suggestVocabulary: async (args) => {
+      suggestedTerms.push(...args.filter((value) => value !== "--text"));
+      return {
+        suggestionRecords: ["friend", "relationship"].map((word) => ({
+          input: word,
+          mappings: [{
+            word,
+            coverageType: "atomic",
+            status: "covered",
+            pyacSequence: [word === "friend" ? "hfre" : "hlak"]
+          }]
+        }))
+      };
+    },
     loadDecisions: async () => ({ rows: [] }),
     decisionsPath: path.join(artifactRoot, "decisions.pya"),
     verifyCandidates: async (records, onRecord) => {
@@ -135,12 +139,17 @@ test("sense compound refinery links, composes, verifies and records one complete
       dependencies
     });
     assert.equal(resumed.selectedSenseCount, 1);
-    assert.equal(resumed.candidateCount, 1);
-    assert.equal(resumed.result["accepted-count"], 1);
+    assert.equal(resumed.candidateCount, 2);
+    assert.equal(resumed.result["accepted-count"], 2);
     assert.equal(resumed.remainingSenseCount, 0);
     assert.equal(resumed.result["remaining-sense-count"], 0);
     assert.equal(translationSubmitCount, 2);
-    assert.deepEqual(recordedPromotions.at(-1).pyashSequence, ["hfre", "hlak"]);
+    assert.ok(suggestedTerms.includes("friend"));
+    assert.ok(suggestedTerms.includes("companion"));
+    assert.deepEqual(recordedPromotions.map((record) => record.pyashSequence).sort((left, right) => left.join("+").localeCompare(right.join("+"))), [
+      ["hfre", "hlak"],
+      ["hlak", "hfre"]
+    ].sort((left, right) => left.join("+").localeCompare(right.join("+"))));
     const completeCache = await readFile(path.join(resumed.artifactDirectory, "sense-translations.pya"), "utf8");
     const candidateSource = await readFile(path.join(resumed.artifactDirectory, "compound-candidates.pya"), "utf8");
     const completeProgress = await readFile(path.join(resumed.artifactDirectory, "progress.pya"), "utf8");

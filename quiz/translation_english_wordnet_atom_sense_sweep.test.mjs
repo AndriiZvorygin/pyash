@@ -10,13 +10,17 @@ import {
   buildEnglishWordNetAtomSenseWorklist,
   ENGLISH_WORDNET_ATOM_SENSE_CONFIG_URL,
   filterEnglishWordNetAtomSenseWorklist,
+  includeReopenedAtomSenseNoFitTargets,
   loadEnglishWordNetAtomSenseConfig,
   parseEnglishWordNetAtomSenseBatchPya,
   parseEnglishWordNetAtomSenseResponse,
   renderEnglishWordNetAtomSenseBatchPya,
   runEnglishWordNetAtomSenseSweep
 } from "../program/library/translation/english_wordnet_atom_sense_sweep.mjs";
-import { renderEnglishWordNetSenseLinksPya } from "../program/library/translation/english_wordnet_linker.mjs";
+import {
+  renderEnglishWordNetSenseLinkRowsPya,
+  renderEnglishWordNetSenseLinksPya
+} from "../program/library/translation/english_wordnet_linker.mjs";
 import { parseEnglishWordNetBridgeCatalog } from "../program/library/translation/english_wordnet_bridges.mjs";
 
 function atom(id, pyac, labels, rank, candidates) {
@@ -37,7 +41,7 @@ function candidate(source, definition, fields = {}) {
     source,
     pos,
     synset,
-    lemmas: [fields.lemma ?? "sample"],
+    lemmas: fields.lemmas ?? [fields.lemma ?? "sample"],
     definition,
     matchedLemma: fields.lemma ?? "sample",
     english30kRank: fields.rank ?? 10,
@@ -52,7 +56,7 @@ function responseFor(prompt) {
     decisions: rows.map((row) => ({
       id: row[0],
       status: "select",
-      source: row[5][0][0],
+      source: row[3][0][0],
       rationale: "The supplied definition matches the atom label."
     }))
   });
@@ -64,7 +68,7 @@ test("atom sense sweep config uses a bounded Qwen batch and one retry", async ()
   assert.equal(config["batch-max-items"], 24);
   assert.equal(config["max-attempts"], 2);
   assert.equal(config.parallelism, 8);
-  assert.equal(config["prompt-revision"], "atom-general-pos-gloss-choice-v4");
+  assert.equal(config["prompt-revision"], "atom-general-pos-gloss-choice-v8");
 });
 
 test("atom worklist keeps only unlinked direct senses and presents definition text only", () => {
@@ -87,8 +91,9 @@ test("atom worklist keeps only unlinked direct senses and presents definition te
   assert.match(prompt, /broad, ordinary general-language concept/u);
   assert.match(prompt, /Do not infer a specialist domain from a bare label/u);
   assert.match(prompt, /domain-marked candidate only when the atom labels explicitly support that domain/u);
-  assert.match(prompt, /An exact spelling, accepted lemma mapping, or shared word fragment only makes a candidate eligible/u);
-  assert.match(prompt, /Frequency evidence is only a prior among semantically compatible general senses/u);
+  assert.match(prompt, /choose the definition that applies across the widest range of ordinary situations/u);
+  assert.match(prompt, /Co-lemmas and frequency counts are intentionally omitted/u);
+  assert.doesNotMatch(prompt, /tag count|English30k rank|lemma mapping/u);
   assert.match(prompt, /narrower specialized concept belongs in a compound/u);
 });
 
@@ -107,6 +112,56 @@ test("atom worklist creates an independent decision slot for each uncovered part
     ["atom:cyuk:n", "n", "atom:cyuk:n", 1],
     ["atom:cyuk:s", "s", "atom:cyuk:s", 1],
     ["atom:cyuk:v", "v", "atom:cyuk:v", 1]
+  ]);
+});
+
+test("general-sense selector receives same-lemma atom competitors even when tag counts differ", () => {
+  const [item] = buildEnglishWordNetAtomSenseWorklist([
+    atom("atom:srot", "srot", ["escort"], 5198, [
+      candidate("v:02029675-v", "accompany as an escort", { lemma: "escort", rank: 5198, tagCount: 7 }),
+      candidate("v:02029932-v", "conduct someone someplace", {
+        lemma: "escort", lemmas: ["escort", "see"], rank: 5198, tagCount: 0
+      })
+    ])
+  ]);
+  const prompt = buildEnglishWordNetAtomSensePrompt([{ item, candidates: item.candidates }]);
+  const inputs = JSON.parse(prompt.split("\n").at(-1));
+
+  assert.equal(item.id, "atom:srot:v");
+  assert.deepEqual(item.candidates.map(({ source, tagCount }) => [source, tagCount]), [
+    ["v:02029932-v", 0]
+  ]);
+  assert.deepEqual(item.excludedCandidates, [{
+    source: "v:02029675-v",
+    matchedLemmas: ["escort"],
+    reason: "candidate-definition-repeats-target-lemma"
+  }]);
+  assert.doesNotMatch(prompt, /accompany as an escort/u);
+  assert.match(prompt, /conduct someone someplace/u);
+  assert.doesNotMatch(prompt, /see/u);
+  assert.doesNotMatch(prompt, /tag count|5198/u);
+  assert.equal(inputs[0][3].length, 1);
+  assert.deepEqual(inputs[0][3].map((row) => row[1]), ["conduct someone someplace"]);
+});
+
+test("circular gloss detection matches whole target words and strips example clauses first", () => {
+  const [item] = buildEnglishWordNetAtomSenseWorklist([
+    atom("atom:hart", "hart", ["art"], 10, [
+      candidate("n:00000071-n", "the art of making art", { lemma: "art" }),
+      candidate("n:00000072-n", "a creative practice; an example of art", { lemma: "art" }),
+      candidate("n:00000073-n", "an artist's practice", { lemma: "art" })
+    ])
+  ]);
+
+  assert.deepEqual(item.candidates.map(({ source }) => source), ["n:00000072-n", "n:00000073-n"]);
+  assert.deepEqual(item.excludedCandidates, [{
+    source: "n:00000071-n",
+    matchedLemmas: ["art"],
+    reason: "candidate-definition-repeats-target-lemma"
+  }]);
+  assert.deepEqual(item.candidates.map(({ definition }) => definition), [
+    "a creative practice",
+    "an artist's practice"
   ]);
 });
 
@@ -184,6 +239,33 @@ test("atom worklist filtering selects only newly exposed ids and rejects unknown
     () => filterEnglishWordNetAtomSenseWorklist(worklist, ["atom:missing"]),
     /unknown atom id/u
   );
+});
+
+test("targeted reselection records no-fit when refreshed lemma validation removes every candidate", () => {
+  const reopened = [{
+    source: "n:03211323-n",
+    target: "discuss",
+    targetPartOfSpeech: "n",
+    lemmas: ["discus", "saucer"]
+  }];
+  const atomCoverage = [{ pyac: "dlak", labels: ["discuss"], english30kRank: 4595 }];
+  const resolveTarget = (word, { partOfSpeech }) => word === "discuss" && partOfSpeech === "n"
+    ? { coverageType: "atomic", pyashSequence: ["dlak"] }
+    : null;
+  const worklist = includeReopenedAtomSenseNoFitTargets([], {
+    reopenedEntries: reopened,
+    atomCoverage,
+    resolveTarget
+  });
+
+  assert.equal(worklist.length, 1);
+  assert.equal(worklist[0].id, "atom:dlak:n");
+  assert.deepEqual(worklist[0].candidates, []);
+  assert.equal(
+    worklist[0].excludedCandidates[0].reason,
+    "reopened-target-has-no-eligible-candidates-after-lemma-validation"
+  );
+  assert.deepEqual(filterEnglishWordNetAtomSenseWorklist(worklist, ["atom:dlak:n"]), worklist);
 });
 
 test("atom sense response accepts only supplied ids and complete unique decisions", () => {
@@ -320,6 +402,29 @@ test("selected atom senses append through the shared bridge renderer and pass ta
   assert.deepEqual(appended.added, ["n:00000001-n"]);
   assert.deepEqual(appended.withheld, []);
   assert.match(appended.catalogSource, /atom-target sense selection; model qwen3\.5:9b/u);
+});
+
+test("curated atom sense links render as contextual bridge records", () => {
+  const rows = renderEnglishWordNetSenseLinkRowsPya([{
+    source: "v:02029932-v",
+    pos: "v",
+    gloss: "conduct someone someplace",
+    lemmas: ["escort", "see"],
+    status: "accepted-curated",
+    link: {
+      target: "escort",
+      targetKind: "atom",
+      targetId: "atom:srot:v",
+      pyashSequence: ["srot"],
+      targetPartOfSpeech: "v",
+      certainty: "contextual",
+      evidence: "curated by user review; broad general sense selected over narrower escort-role sense"
+    }
+  }]);
+
+  assert.match(rows[0], /v:02029932-v/u);
+  assert.match(rows[0], /with text "contextual"/u);
+  assert.match(rows[0], /curated by user review/u);
 });
 
 test("no-fit-only activation returns an empty withheld list without changing the bridge catalog", () => {

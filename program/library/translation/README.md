@@ -171,13 +171,14 @@ later atom/compound generation pass.
 
 For those residual senses, run `node command/wordnet_sense_compound_refinery.mjs`. Its Pyash
 workflow is `wordnet_sense_compound_refinery.pya`; each launch selects the next 64 frequency-ranked
-senses that have a compatible already-linked atomic WordNet head. It asks the configured Qwen mind,
+unlinked senses. It asks the configured Qwen mind,
 through the future GPU Housekeeper queue, for sense-specific translations and transparent compound
 parts in Chinese, French, Russian, and Hindi. The prompt contains one sense definition and no atom
 inventory. `vocab_suggest` resolves each English component gloss, and only active one-atom links
-with WordNet senses become candidates. Candidates are ordered head-final using the target sense's
-directed hypernym evidence, then pass through the same compound verifier and promotion contract as
-the closed-word sweep.
+with WordNet senses become candidates. Slash-separated gloss alternatives are queried separately.
+For each mapped decomposition, the composer proposes each possible final head in Pyash order. The
+target sense's part of speech and any directed hypernym relation are retained as evidence; neither
+blocks a lexical compound. The verifier judges the proposed composition from the cited definitions.
 
 The run folder `artifacts/<run-id>/` holds `worklist.pya`, resumable `sense-translations.pya`,
 `component-mappings.pya`, `compound-candidates.pya`, `progress.pya`,
@@ -189,10 +190,10 @@ activate only in `compound_coverage_wordnet_verified.pya`; uncertain, rejected, 
 remain in their artifacts and do not enter the active compound catalog. Re-run the command to
 continue; it stops selecting completed senses for the current atomic inventory and prompt revision.
 
-Only compound candidates with at least one target-sense/head-sense pair supported by a directed
-same-part-of-speech WordNet hypernym path enter the Housekeeper worklist. Candidates without that
-edge remain visible in the allocation artifact as `no-wordnet-head-evidence`; they are not treated
-as linguistically false, but the model cannot promote them by rationale alone.
+Both sense-derived compounds and closed-word frequency candidates treat directed same-part-of-speech
+hypernym edges as optional evidence. A missing edge or different part of speech never blocks a
+candidate. The verifier judges literal composition from the cited target and component definitions;
+each linked WordNet sense retains its own part of speech.
 
 Each review prompt includes up to four frequency-ranked residual WordNet senses for the candidate
 and up to four WordNet senses per component, ordered by exact Princeton tag count where available.
@@ -202,11 +203,10 @@ supplied WordNet sense and a short semantic contribution for each modifier in co
 Each modifier contribution is explicitly classified as literal, metaphorical, associative, or uncertain;
 promotion requires literal contributions, and explicit figurative wording downgrades an acceptance.
 Unknown ids or missing modifier explanations are rejected by the response parser, and the decision
-row retains the citations for audit. Promotion also requires the cited target synset to equal the head
-sense or reach it through a directed WordNet hypernym path with the same part of speech. Similarity,
-material, location, and association edges do not establish a lexical head. The parser downgrades an
-acceptance without this relation to uncertain, and the promotion gate independently checks the
-saved relation evidence. The
+row retains the citations for audit. Promotion requires the cited target and component senses plus
+literal modifier evidence. A directed WordNet hypernym relation is recorded when present, but its
+absence does not invalidate the composition. Similarity, material, location, and association edges
+remain distinct from hypernym evidence. The
 `compound-verification-revision` value in `english_wordnet_frequency_allocation.pya` versions these
 decisions: changing the prompt contract reopens stale rows and keeps their prior verdict summary
 attached for audit. If a sweep stops after checkpointing a decision but before promoting its

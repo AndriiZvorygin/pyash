@@ -1,6 +1,6 @@
 su name translation be map def
 su text "format" ob text "english-wordnet-atom-sense-sweep-v1" ya
-su text "prompt-revision" ob text "atom-general-pos-gloss-choice-v4" ya
+su text "prompt-revision" ob text "atom-general-pos-gloss-choice-v8" ya
 su text "model" ob text "qwen3.5:9b" ya
 su text "batch-max-items" ob num 24 ya
 su text "batch-max-chars" ob num 10000 ya

@@ -1405,6 +1405,9 @@ su text "sense-lemma:a:01776577-a:1" ob text "permeable" ya
 su text "a:01785901-a" ob name "polytheistic" as text "a" with text "deterministic" via text "leaf/edge WordNet node a:01785901-a has one meaning for lemma polytheistic and existing Pyash coverage; active through sweep wordnet-sense-sweep-4c07194f363e-81b5bbefa3b0-d1 (source 4c07194f363e9c870dc925b8cab26f9af93899f6bd91a29b9a1422c1f66d95ba)" ya
 su text "sense-gloss:a:01785901-a" ob text "worshipping or believing in more than one god" ya
 su text "sense-lemma:a:01785901-a:1" ob text "polytheistic" ya
+su text "a:01796420-a" ob name "plains" as text "a" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The definition 'not elaborate or elaborated' is the broad, ordinary meaning for 'plains' as an adjective describing lack of pattern." ya
+su text "sense-gloss:a:01796420-a" ob text "not elaborate or elaborated" ya
+su text "sense-lemma:a:01796420-a:1" ob text "plain" ya
 su text "a:01798849-a" ob name "fancies" as text "a" with text "deterministic" via text "frequency-first anchor allocation: exact lemma fancy at English30k rank 1155; Princeton WordNet 3.1 tag count 3 (sense key fancy%3:00:00::)" ya
 su text "sense-gloss:a:01798849-a" ob text "not plain; decorative or ornamented; fancy handwriting; fancy clothes" ya
 su text "sense-lemma:a:01798849-a:1" ob text "fancy" ya
@@ -4106,6 +4109,11 @@ su text "sense-lemma:n:00062953-n:1" ob text "climax" ya
 su text "sense-lemma:n:00062953-n:2" ob text "coming" ya
 su text "sense-lemma:n:00062953-n:3" ob text "orgasm" ya
 su text "sense-lemma:n:00062953-n:4" ob text "sexual climax" ya
+su text "n:00068527-n" ob name "surrendering" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'surrendering' directly corresponds to the act of surrendering under agreed conditions as defined." ya
+su text "sense-gloss:n:00068527-n" ob text "the act of surrendering (usually under agreed conditions)" ya
+su text "sense-lemma:n:00068527-n:1" ob text "capitulation" ya
+su text "sense-lemma:n:00068527-n:2" ob text "fall" ya
+su text "sense-lemma:n:00068527-n:3" ob text "surrender" ya
 su text "n:00069153-n" ob name "relapse" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma relapse at English30k rank 12546; Princeton WordNet 3.1 tag count 0 (sense key relapse%1:04:00::)" ya
 su text "sense-gloss:n:00069153-n" ob text "a failure to maintain a higher state" ya
 su text "sense-lemma:n:00069153-n:1" ob text "backsliding" ya
@@ -4221,6 +4229,10 @@ su text "sense-lemma:n:00119553-n:3" ob text "puking" ya
 su text "sense-lemma:n:00119553-n:4" ob text "regurgitation" ya
 su text "sense-lemma:n:00119553-n:5" ob text "vomit" ya
 su text "sense-lemma:n:00119553-n:6" ob text "vomiting" ya
+su text "n:00120388-n" ob name "jumped" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The definition 'the act of jumping' is the most general ordinary concept for 'jumped', excluding specific contexts like parachuting or film transitions." ya
+su text "sense-gloss:n:00120388-n" ob text "the act of jumping" ya
+su text "sense-lemma:n:00120388-n:1" ob text "jump" ya
+su text "sense-lemma:n:00120388-n:2" ob text "jumping" ya
 su text "n:00121022-n" ob name "leap" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma leap at English30k rank 4584; Princeton WordNet 3.1 tag count 5 (sense key leap%1:04:00::)" ya
 su text "sense-gloss:n:00121022-n" ob text "a light, self-propelled movement upwards or forwards" ya
 su text "sense-lemma:n:00121022-n:1" ob text "bounce" ya
@@ -4560,6 +4572,10 @@ su text "sense-lemma:n:00279654-n:1" ob text "chew" ya
 su text "sense-lemma:n:00279654-n:2" ob text "chewing" ya
 su text "sense-lemma:n:00279654-n:3" ob text "manduction" ya
 su text "sense-lemma:n:00279654-n:4" ob text "mastication" ya
+su text "n:00284412-n" ob name "walking" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The definition 'the act of traveling by foot' is the broad, ordinary concept for 'walking', excluding specific sports gaits or paths." ya
+su text "sense-gloss:n:00284412-n" ob text "the act of traveling by foot" ya
+su text "sense-lemma:n:00284412-n:1" ob text "walk" ya
+su text "sense-lemma:n:00284412-n:2" ob text "walking" ya
 su text "n:00289515-n" ob name "gallop" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma gallop at English30k rank 6689; Princeton WordNet 3.1 tag count 2 (sense key gallop%1:04:00::)" ya
 su text "sense-gloss:n:00289515-n" ob text "a fast gait of a horse; a two-beat stride during which all four legs are off the ground simultaneously" ya
 su text "sense-lemma:n:00289515-n:1" ob text "gallop" ya
@@ -6226,6 +6242,10 @@ su text "sense-gloss:n:01247706-n" ob text "systematic killing of a racial or cu
 su text "sense-lemma:n:01247706-n:1" ob text "genocide" ya
 su text "sense-lemma:n:01247706-n:2" ob text "race murder" ya
 su text "sense-lemma:n:01247706-n:3" ob text "racial extermination" ya
+su text "n:01248633-n" ob name "flipping" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'flipping' generally means turning something over; the candidate 'the act of flipping a coin' captures this broad ordinary meaning." ya
+su text "sense-gloss:n:01248633-n" ob text "the act of flipping a coin" ya
+su text "sense-lemma:n:01248633-n:1" ob text "flip" ya
+su text "sense-lemma:n:01248633-n:2" ob text "toss" ya
 su text "n:01250354-n" ob name "manumission" as text "n" with text "deterministic" via text "leaf/edge WordNet node n:01250354-n has one meaning for lemma manumission and existing Pyash coverage; active through sweep wordnet-sense-sweep-4c07194f363e-81b5bbefa3b0-d1 (source 4c07194f363e9c870dc925b8cab26f9af93899f6bd91a29b9a1422c1f66d95ba)" ya
 su text "sense-gloss:n:01250354-n" ob text "the formal act of freeing from slavery; he believed in the manumission of the slaves" ya
 su text "sense-lemma:n:01250354-n:1" ob text "manumission" ya
@@ -7270,6 +7290,11 @@ su text "sense-lemma:n:02673313-n:3" ob text "gas" ya
 su text "sense-lemma:n:02673313-n:4" ob text "gas pedal" ya
 su text "sense-lemma:n:02673313-n:5" ob text "gun" ya
 su text "sense-lemma:n:02673313-n:6" ob text "throttle" ya
+su text "n:02674410-n" ob name "accoutrements" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'accoutrements' refers to clothing or gear worn/carried, matching the provided definition." ya
+su text "sense-gloss:n:02674410-n" ob text "clothing that is worn or carried, but not part of your main clothing" ya
+su text "sense-lemma:n:02674410-n:1" ob text "accessory" ya
+su text "sense-lemma:n:02674410-n:2" ob text "accouterment" ya
+su text "sense-lemma:n:02674410-n:3" ob text "accoutrement" ya
 su text "n:02675461-n" ob name "accordions" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma accordion at English30k rank 20075; Princeton WordNet 3.1 tag count 0 (sense key accordion%1:06:00::)" ya
 su text "sense-gloss:n:02675461-n" ob text "a portable box-shaped free-reed instrument; the reeds are made to vibrate by air from the bellows controlled by the player" ya
 su text "sense-lemma:n:02675461-n:1" ob text "accordion" ya
@@ -7604,6 +7629,9 @@ su text "sense-lemma:n:02809715-n:1" ob text "bath" ya
 su text "n:02810801-n" ob name "bathrobe" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma bathrobe at English30k rank 24894; Princeton WordNet 3.1 tag count 2 (sense key bathrobe%1:06:00::)" ya
 su text "sense-gloss:n:02810801-n" ob text "a loose-fitting robe of towelling; worn after a bath or swim" ya
 su text "sense-lemma:n:02810801-n:1" ob text "bathrobe" ya
+su text "n:02812240-n" ob name "batik" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'batik' refers to a specific type of fabric; the candidate 'a dyed fabric' is the appropriate general category." ya
+su text "sense-gloss:n:02812240-n" ob text "a dyed fabric" ya
+su text "sense-lemma:n:02812240-n:1" ob text "batik" ya
 su text "n:02814603-n" ob name "battle ax" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-8e6cfa8e95f6-743c899084-atom-gloss-choice-v1; rationale: Definition describes a weapon, matching the compound noun 'battle_ax'." ya
 su text "sense-gloss:n:02814603-n" ob text "a broadax used as a weapon" ya
 su text "sense-lemma:n:02814603-n:1" ob text "battle ax" ya
@@ -7910,6 +7938,9 @@ su text "sense-lemma:n:02927500-n:7" ob text "motorbus" ya
 su text "sense-lemma:n:02927500-n:8" ob text "motorcoach" ya
 su text "sense-lemma:n:02927500-n:9" ob text "omnibus" ya
 su text "sense-lemma:n:02927500-n:10" ob text "passenger vehicle" ya
+su text "n:02931992-n" ob name "buttons" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: 'a round fastener sewn to shirts...' is the most common general definition for 'buttons', distinct from badges or UI elements." ya
+su text "sense-gloss:n:02931992-n" ob text "a round fastener sewn to shirts and coats etc. to fit through buttonholes" ya
+su text "sense-lemma:n:02931992-n:1" ob text "button" ya
 su text "n:02932673-n" ob name "buttress" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: Definition matches 'buttress' as a structural support." ya
 su text "sense-gloss:n:02932673-n" ob text "a support usually of stone or brick" ya
 su text "sense-lemma:n:02932673-n:1" ob text "buttress" ya
@@ -9279,6 +9310,12 @@ su text "n:03690633-n" ob name "lodges" as text "n" with text "contextual" via t
 su text "sense-gloss:n:03690633-n" ob text "any of various Native American dwellings" ya
 su text "sense-lemma:n:03690633-n:1" ob text "indian lodge" ya
 su text "sense-lemma:n:03690633-n:2" ob text "lodge" ya
+su text "n:03694269-n" ob name "lookouts" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'lookouts' refers to people or structures providing a view; the candidate 'a structure commanding a wide view' is the best general fit." ya
+su text "sense-gloss:n:03694269-n" ob text "a structure commanding a wide view of its surroundings" ya
+su text "sense-lemma:n:03694269-n:1" ob text "lookout" ya
+su text "sense-lemma:n:03694269-n:2" ob text "lookout station" ya
+su text "sense-lemma:n:03694269-n:3" ob text "observation tower" ya
+su text "sense-lemma:n:03694269-n:4" ob text "observatory" ya
 su text "n:03694483-n" ob name "loom" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma loom at English30k rank 10555; Princeton WordNet 3.1 tag count 1 (sense key loom%1:06:00::)" ya
 su text "sense-gloss:n:03694483-n" ob text "a textile machine for weaving yarn into a textile" ya
 su text "sense-lemma:n:03694483-n:1" ob text "loom" ya
@@ -9392,6 +9429,9 @@ su text "sense-lemma:n:03775145-n:2" ob text "minibar" ya
 su text "n:03775416-n" ob name "minibus" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-5385790a7ad3-1d63cb3d1e-atom-gloss-choice-v1; rationale: Definition describes light bus, matching label 'minibus'." ya
 su text "sense-gloss:n:03775416-n" ob text "a light bus (4 to 10 passengers)" ya
 su text "sense-lemma:n:03775416-n:1" ob text "minibus" ya
+su text "n:03777802-n" ob name "minting" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-3aba7d080449-3740db31ea-atom-general-pos-gloss-choice-v8; rationale: The label 'minting' relates to coins, matching the sense 'a plant where money is coined by authority of the government' (interpreting 'plant' as a place/factory in this context or noting the specific coinage sense)." ya
+su text "sense-gloss:n:03777802-n" ob text "a plant where money is coined by authority of the government" ya
+su text "sense-lemma:n:03777802-n:1" ob text "mint" ya
 su text "n:03778568-n" ob name "mirrors" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma mirror at English30k rank 3609; Princeton WordNet 3.1 tag count 8 (sense key mirror%1:06:00::)" ya
 su text "sense-gloss:n:03778568-n" ob text "polished surface that forms images by reflecting light" ya
 su text "sense-lemma:n:03778568-n:1" ob text "mirror" ya
@@ -9858,6 +9898,9 @@ su text "sense-lemma:n:04036637-n:2" ob text "pyx" ya
 su text "n:04037642-n" ob name "quadruplicate" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: Definition matches four copies/quadruplicate." ya
 su text "sense-gloss:n:04037642-n" ob text "any four copies" ya
 su text "sense-lemma:n:04037642-n:1" ob text "quadruplicate" ya
+su text "n:04040953-n" ob name "quilting" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'quilting' refers to the stitching process; the candidate 'stitching through layers of fabric...' matches this action." ya
+su text "sense-gloss:n:04040953-n" ob text "stitching through layers of fabric and a filling so as to create a design" ya
+su text "sense-lemma:n:04040953-n:1" ob text "quilting" ya
 su text "n:04041562-n" ob name "quinine" as text "n" with text "contextual" via text "The anchor 'quinine' is semantically equivalent to the definition 'a bitter alkaloid extracted from chinchona bark'. The; model qwen3.5:9b; sense-link sweep wordnet-sense-sweep-4c07194f363e-9059730cda6d-d1-model-qwen3-5-9b-definition-anchor-v1 (source 4c07194f363e9c870dc925b8cab26f9af93899f6bd91a29b9a1422c1f66d95ba)" ya
 su text "sense-gloss:n:04041562-n" ob text "a bitter alkaloid extracted from chinchona bark; used in malaria therapy" ya
 su text "sense-lemma:n:04041562-n:1" ob text "quinine" ya
@@ -10335,6 +10378,11 @@ su text "sense-lemma:n:04291140-n:1" ob text "spoon" ya
 su text "n:04296165-n" ob name "sprinkler" as text "n" with text "deterministic" via text "leaf/edge WordNet node n:04296165-n has one meaning for lemma sprinkler and existing Pyash coverage; active through sweep wordnet-sense-sweep-4c07194f363e-81b5bbefa3b0-d1 (source 4c07194f363e9c870dc925b8cab26f9af93899f6bd91a29b9a1422c1f66d95ba)" ya
 su text "sense-gloss:n:04296165-n" ob text "mechanical device that attaches to a garden hose for watering lawn or garden" ya
 su text "sense-lemma:n:04296165-n:1" ob text "sprinkler" ya
+su text "n:04302219-n" ob name "tacked" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: tacked matches gear for a horse broadly" ya
+su text "sense-gloss:n:04302219-n" ob text "gear for a horse" ya
+su text "sense-lemma:n:04302219-n:1" ob text "saddlery" ya
+su text "sense-lemma:n:04302219-n:2" ob text "stable gear" ya
+su text "sense-lemma:n:04302219-n:3" ob text "tack" ya
 su text "n:04305309-n" ob name "stairs" as text "n" with text "contextual" via text "The anchor 'stairs' is semantically equivalent to the definition 'a flight of stairs or a flight of steps'. The evidence; model qwen3.5:9b; sense-link sweep wordnet-sense-sweep-4c07194f363e-9059730cda6d-d1-model-qwen3-5-9b-definition-anchor-v1 (source 4c07194f363e9c870dc925b8cab26f9af93899f6bd91a29b9a1422c1f66d95ba)" ya
 su text "sense-gloss:n:04305309-n" ob text "a flight of stairs or a flight of steps" ya
 su text "sense-lemma:n:04305309-n:1" ob text "stairs" ya
@@ -12550,6 +12598,9 @@ su text "sense-lemma:n:05587575-n:3" ob text "cubitus" ya
 su text "sense-lemma:n:05587575-n:4" ob text "elbow" ya
 su text "sense-lemma:n:05587575-n:5" ob text "elbow joint" ya
 su text "sense-lemma:n:05587575-n:6" ob text "human elbow" ya
+su text "n:05589324-n" ob name "nails" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: 'horny plate covering... digits' is the correct general biological definition for 'nails', distinct from fasteners or units of length." ya
+su text "sense-gloss:n:05589324-n" ob text "horny plate covering and protecting part of the dorsal surface of the digits" ya
+su text "sense-lemma:n:05589324-n:1" ob text "nail" ya
 su text "n:05592040-n" ob name "thumbnail" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma thumbnail at English30k rank 26724; Princeton WordNet 3.1 tag count 1 (sense key thumbnail%1:08:00::)" ya
 su text "sense-gloss:n:05592040-n" ob text "the nail of the thumb" ya
 su text "sense-lemma:n:05592040-n:1" ob text "thumbnail" ya
@@ -12698,6 +12749,13 @@ su text "sense-lemma:n:05669396-n:1" ob text "mnemonics" ya
 su text "n:05670721-n" ob name "discipline" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-8e6cfa8e95f6-743c899084-atom-gloss-choice-v1; rationale: Definition 'a system of rules of conduct' fits the abstract noun sense of 'discipline'." ya
 su text "sense-gloss:n:05670721-n" ob text "a system of rules of conduct or method of practice" ya
 su text "sense-lemma:n:05670721-n:1" ob text "discipline" ya
+su text "n:05675457-n" ob name "conventions" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: conventions matches normative examples broadly" ya
+su text "sense-gloss:n:05675457-n" ob text "something regarded as a normative example" ya
+su text "sense-lemma:n:05675457-n:1" ob text "convention" ya
+su text "sense-lemma:n:05675457-n:2" ob text "formula" ya
+su text "sense-lemma:n:05675457-n:3" ob text "normal" ya
+su text "sense-lemma:n:05675457-n:4" ob text "pattern" ya
+su text "sense-lemma:n:05675457-n:5" ob text "rule" ya
 su text "n:05676878-n" ob name "habitual" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma wont at English30k rank 3648; Princeton WordNet 3.1 tag count 0 (sense key wont%1:09:00::)" ya
 su text "sense-gloss:n:05676878-n" ob text "an established custom; it was their habit to dine at 7 every evening" ya
 su text "sense-lemma:n:05676878-n:1" ob text "habit" ya
@@ -14467,6 +14525,11 @@ su text "sense-gloss:n:06623345-n" ob text "rapid and indistinct speech" ya
 su text "sense-lemma:n:06623345-n:1" ob text "gabble" ya
 su text "sense-lemma:n:06623345-n:2" ob text "jabber" ya
 su text "sense-lemma:n:06623345-n:3" ob text "jabbering" ya
+su text "n:06625409-n" ob name "quoted" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The definition 'a passage or expression that is quoted or cited' is the broad, ordinary meaning for 'quoted', excluding punctuation marks." ya
+su text "sense-gloss:n:06625409-n" ob text "a passage or expression that is quoted or cited" ya
+su text "sense-lemma:n:06625409-n:1" ob text "citation" ya
+su text "sense-lemma:n:06625409-n:2" ob text "quotation" ya
+su text "sense-lemma:n:06625409-n:3" ob text "quote" ya
 su text "n:06626039-n" ob name "film" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma film at English30k rank 9995; Princeton WordNet 3.1 tag count 38 (sense key film%1:10:01::)" ya
 su text "sense-gloss:n:06626039-n" ob text "a form of entertainment that enacts a story by sound and a sequence of images giving the illusion of continuous movement; they went to a movie every Saturday night; the film was shot on location" ya
 su text "sense-lemma:n:06626039-n:1" ob text "film" ya
@@ -14566,6 +14629,12 @@ su text "n:06659006-n" ob name "badge" as text "n" with text "deterministic" via
 su text "sense-gloss:n:06659006-n" ob text "a perceptible indication of something not immediately apparent (as a visible clue that something has happened); he showed signs of strain; they welcomed the signs of spring" ya
 su text "sense-lemma:n:06659006-n:1" ob text "mark" ya
 su text "sense-lemma:n:06659006-n:2" ob text "sign" ya
+su text "n:06659391-n" ob name "traces" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The definition 'an indication that something has been present' is the broad, ordinary meaning for 'traces', excluding specific contexts like horse harness lines or drawings." ya
+su text "sense-gloss:n:06659391-n" ob text "an indication that something has been present" ya
+su text "sense-lemma:n:06659391-n:1" ob text "shadow" ya
+su text "sense-lemma:n:06659391-n:2" ob text "tincture" ya
+su text "sense-lemma:n:06659391-n:3" ob text "trace" ya
+su text "sense-lemma:n:06659391-n:4" ob text "vestige" ya
 su text "n:06661469-n" ob name "argument" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma argument at English30k rank 2103; Princeton WordNet 3.1 tag count 22 (sense key argument%1:10:02::)" ya
 su text "sense-gloss:n:06661469-n" ob text "a fact or assertion offered as evidence that something is true; it was a strong argument that his hypothesis was true" ya
 su text "sense-lemma:n:06661469-n:1" ob text "argument" ya
@@ -14975,6 +15044,10 @@ su text "n:06957857-n" ob name "serbo croatian" as text "n" with text "contextua
 su text "sense-gloss:n:06957857-n" ob text "the Slavic language of the Serbs and Croats" ya
 su text "sense-lemma:n:06957857-n:1" ob text "serbo croat" ya
 su text "sense-lemma:n:06957857-n:2" ob text "serbo croatian" ya
+su text "n:06958441-n" ob name "baltic" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'baltic' refers to a language family; the candidate 'a branch of the Indo-European family...' matches this linguistic concept." ya
+su text "sense-gloss:n:06958441-n" ob text "a branch of the Indo-European family of languages related to the Slavonic languages" ya
+su text "sense-lemma:n:06958441-n:1" ob text "baltic" ya
+su text "sense-lemma:n:06958441-n:2" ob text "baltic language" ya
 su text "n:06959794-n" ob name "english" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma english at English30k rank 331; Princeton WordNet 3.1 tag count 18 (sense key english%1:10:00::)" ya
 su text "sense-gloss:n:06959794-n" ob text "an Indo-European language belonging to the West Germanic branch; the official language of Britain and the United States and most of the commonwealth countries" ya
 su text "sense-lemma:n:06959794-n:1" ob text "english" ya
@@ -15405,6 +15478,17 @@ su text "sense-lemma:n:07137720-n:6" ob text "shrieking" ya
 su text "n:07138418-n" ob name "yodel" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-8e6cfa8e95f6-743c899084-atom-gloss-choice-v1; rationale: Definition describes a songlike cry with fluctuating voice, the primary meaning of 'yodel'." ya
 su text "sense-gloss:n:07138418-n" ob text "a songlike cry in which the voice fluctuates rapidly between the normal voice and falsetto" ya
 su text "sense-lemma:n:07138418-n:1" ob text "yodel" ya
+su text "n:07138578-n" ob name "snorted" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: snorted as noun is a cry of displeasure" ya
+su text "sense-gloss:n:07138578-n" ob text "a cry or noise made to express displeasure or contempt" ya
+su text "sense-lemma:n:07138578-n:1" ob text "bird" ya
+su text "sense-lemma:n:07138578-n:2" ob text "boo" ya
+su text "sense-lemma:n:07138578-n:3" ob text "bronx cheer" ya
+su text "sense-lemma:n:07138578-n:4" ob text "hiss" ya
+su text "sense-lemma:n:07138578-n:5" ob text "hoot" ya
+su text "sense-lemma:n:07138578-n:6" ob text "raspberry" ya
+su text "sense-lemma:n:07138578-n:7" ob text "razz" ya
+su text "sense-lemma:n:07138578-n:8" ob text "razzing" ya
+su text "sense-lemma:n:07138578-n:9" ob text "snort" ya
 su text "n:07139804-n" ob name "swearing" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-8e6cfa8e95f6-743c899084-atom-gloss-choice-v1; rationale: Definition matches 'swearing' as profane or obscene expression." ya
 su text "sense-gloss:n:07139804-n" ob text "profane or obscene expression usually of surprise or anger" ya
 su text "sense-lemma:n:07139804-n:1" ob text "curse" ya
@@ -15623,6 +15707,10 @@ su text "sense-lemma:n:07218356-n:1" ob text "affirmative" ya
 su text "n:07218668-n" ob name "yeah" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma yea at English30k rank 5758; Princeton WordNet 3.1 tag count 0 (sense key yea%1:10:00::)" ya
 su text "sense-gloss:n:07218668-n" ob text "yes; The yeas have it" ya
 su text "sense-lemma:n:07218668-n:1" ob text "yea" ya
+su text "n:07220606-n" ob name "disclaimers" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The definition 'denial of any connection with or knowledge of' is the general ordinary meaning for 'disclaimers', excluding specific legal contexts." ya
+su text "sense-gloss:n:07220606-n" ob text "denial of any connection with or knowledge of" ya
+su text "sense-lemma:n:07220606-n:1" ob text "disavowal" ya
+su text "sense-lemma:n:07220606-n:2" ob text "disclaimer" ya
 su text "n:07223368-n" ob name "complaint" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: Definition 'an expression of grievance or resentment' matches noun label 'complaint'." ya
 su text "sense-gloss:n:07223368-n" ob text "an expression of grievance or resentment" ya
 su text "sense-lemma:n:07223368-n:1" ob text "complaint" ya
@@ -15924,6 +16012,9 @@ su text "sense-lemma:n:07380889-n:1" ob text "departure" ya
 su text "sense-lemma:n:07380889-n:2" ob text "deviation" ya
 su text "sense-lemma:n:07380889-n:3" ob text "difference" ya
 su text "sense-lemma:n:07380889-n:4" ob text "divergence" ya
+su text "n:07382308-n" ob name "snaps" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The plural 'snaps' generally refers to a sudden breaking event, matching the fifth definition." ya
+su text "sense-gloss:n:07382308-n" ob text "a sudden breaking" ya
+su text "sense-lemma:n:07382308-n:1" ob text "snap" ya
 su text "n:07385010-n" ob name "climbing" as text "n" with text "deterministic" via text "leaf/edge WordNet node n:07385010-n has one meaning for lemma climbing and existing Pyash coverage; active through sweep wordnet-sense-sweep-4c07194f363e-81b5bbefa3b0-d1 (source 4c07194f363e9c870dc925b8cab26f9af93899f6bd91a29b9a1422c1f66d95ba)" ya
 su text "sense-gloss:n:07385010-n" ob text "an event that involves rising to a higher point (as in altitude or temperature or intensity etc.)" ya
 su text "sense-lemma:n:07385010-n:1" ob text "climb" ya
@@ -17773,6 +17864,13 @@ su text "sense-lemma:n:08522594-n:1" ob text "desert" ya
 su text "n:08523517-n" ob name "oasis" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-8e6cfa8e95f6-743c899084-atom-gloss-choice-v1; rationale: An oasis is specifically a fertile tract in a desert with water, not just any shelter." ya
 su text "sense-gloss:n:08523517-n" ob text "a fertile tract in a desert (where the water table approaches the surface)" ya
 su text "sense-lemma:n:08523517-n:1" ob text "oasis" ya
+su text "n:08524579-n" ob name "sources" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma source at English30k rank 2154; Princeton WordNet 3.1 tag count 34 (sense key source%1:15:00::)" ya
+su text "sense-gloss:n:08524579-n" ob text "the place where something begins, where it springs into being; the Italian beginning of the Renaissance; Jupiter was the origin of the radiation; Pittsburgh is the source of the Ohio River; communism's Russian root" ya
+su text "sense-lemma:n:08524579-n:1" ob text "beginning" ya
+su text "sense-lemma:n:08524579-n:2" ob text "origin" ya
+su text "sense-lemma:n:08524579-n:3" ob text "root" ya
+su text "sense-lemma:n:08524579-n:4" ob text "rootage" ya
+su text "sense-lemma:n:08524579-n:5" ob text "source" ya
 su text "n:08525470-n" ob name "fountainhead" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-8e6cfa8e95f6-743c899084-atom-gloss-choice-v1; rationale: Definition 'the source of water from which a stream arises' matches the geographical feature 'fountainhead'." ya
 su text "sense-gloss:n:08525470-n" ob text "the source of water from which a stream arises" ya
 su text "sense-lemma:n:08525470-n:1" ob text "fountainhead" ya
@@ -18311,6 +18409,10 @@ su text "n:09416900-n" ob name "planet" as text "n" with text "deterministic" vi
 su text "sense-gloss:n:09416900-n" ob text "(astronomy) any of the nine large celestial bodies in the solar system that revolve around the sun and shine by reflected light; Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune, and Pluto in order of their proximity to the sun; viewed from the constellation Hercules, all the planets rotate around the sun in a counterclockwise direction" ya
 su text "sense-lemma:n:09416900-n:1" ob text "major planet" ya
 su text "sense-lemma:n:09416900-n:2" ob text "planet" ya
+su text "n:09420482-n" ob name "puddles" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The plural 'puddles' refers to small bodies of standing water, matching the second definition." ya
+su text "sense-gloss:n:09420482-n" ob text "a small body of standing water (rainwater) or other liquid" ya
+su text "sense-lemma:n:09420482-n:1" ob text "pool" ya
+su text "sense-lemma:n:09420482-n:2" ob text "puddle" ya
 su text "n:09423701-n" ob name "pulp" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma pulp at English30k rank 11089; Princeton WordNet 3.1 tag count 2 (sense key pulp%1:17:00::)" ya
 su text "sense-gloss:n:09423701-n" ob text "any soft or soggy mass; he pounded it to a pulp" ya
 su text "sense-lemma:n:09423701-n:1" ob text "mush" ya
@@ -18391,6 +18493,9 @@ su text "sense-lemma:n:09471510-n:2" ob text "watercourse" ya
 su text "n:09472659-n" ob name "strip" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma strip at English30k rank 5563; Princeton WordNet 3.1 tag count 8 (sense key strip%1:17:00::)" ya
 su text "sense-gloss:n:09472659-n" ob text "a relatively long narrow piece of something; he felt a flat strip of muscle" ya
 su text "sense-lemma:n:09472659-n:1" ob text "strip" ya
+su text "n:09473603-n" ob name "suns" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: suns matches stars around which planets revolve" ya
+su text "sense-gloss:n:09473603-n" ob text "any star around which a planetary system revolves" ya
+su text "sense-lemma:n:09473603-n:1" ob text "sun" ya
 su text "n:09475525-n" ob name "swamp" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma swamp at English30k rank 4976; Princeton WordNet 3.1 tag count 4 (sense key swamp%1:17:00::)" ya
 su text "sense-gloss:n:09475525-n" ob text "low land that is seasonally flooded; has more woody plants than a marsh and better drainage than a bog" ya
 su text "sense-lemma:n:09475525-n:1" ob text "swamp" ya
@@ -18428,6 +18533,10 @@ su text "n:09493680-n" ob name "volcano" as text "n" with text "deterministic" v
 su text "sense-gloss:n:09493680-n" ob text "a fissure in the earth's crust (or in the surface of some other planet) through which molten lava and gases erupt" ya
 su text "sense-lemma:n:09493680-n:1" ob text "vent" ya
 su text "sense-lemma:n:09493680-n:2" ob text "volcano" ya
+su text "n:09495543-n" ob name "craters" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The plural 'craters' generally refers to geological formations at volcanoes or impact sites, matching the geological definition." ya
+su text "sense-gloss:n:09495543-n" ob text "a bowl-shaped geological formation at the top of a volcano" ya
+su text "sense-lemma:n:09495543-n:1" ob text "crater" ya
+su text "sense-lemma:n:09495543-n:2" ob text "volcanic crater" ya
 su text "n:09498422-n" ob name "waterfall" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-8e6cfa8e95f6-743c899084-atom-gloss-choice-v1; rationale: Only this sense defines a 'steep descent of water', matching the label 'waterfall'." ya
 su text "sense-gloss:n:09498422-n" ob text "a steep descent of the water of a river" ya
 su text "sense-lemma:n:09498422-n:1" ob text "falls" ya
@@ -20017,6 +20126,9 @@ su text "sense-lemma:n:10169387-n:3" ob text "jailor" ya
 su text "sense-lemma:n:10169387-n:4" ob text "prison guard" ya
 su text "sense-lemma:n:10169387-n:5" ob text "screw" ya
 su text "sense-lemma:n:10169387-n:6" ob text "turnkey" ya
+su text "n:10169591-n" ob name "guards" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The definition 'a person who keeps watch over something or someone' is the broad, ordinary meaning for 'guards', excluding specific sports positions or devices." ya
+su text "sense-gloss:n:10169591-n" ob text "a person who keeps watch over something or someone" ya
+su text "sense-lemma:n:10169591-n:1" ob text "guard" ya
 su text "n:10170460-n" ob name "guest" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma guest at English30k rank 2733; Princeton WordNet 3.1 tag count 26 (sense key guest%1:18:00::)" ya
 su text "sense-gloss:n:10170460-n" ob text "a visitor to whom hospitality is extended" ya
 su text "sense-lemma:n:10170460-n:1" ob text "guest" ya
@@ -20980,6 +21092,10 @@ su text "sense-lemma:n:10605574-n:2" ob text "shakespearian" ya
 su text "n:10606497-n" ob name "shearer" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-5385790a7ad3-1d63cb3d1e-atom-gloss-choice-v1; rationale: The label 'shearer' matches the noun sense for a skilled worker who shears wool." ya
 su text "sense-gloss:n:10606497-n" ob text "a skilled worker who shears the wool off of sheep or other animals" ya
 su text "sense-lemma:n:10606497-n:1" ob text "shearer" ya
+su text "n:10607013-n" ob name "shepherds" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: 'a herder of sheep' is the primary general meaning for 'shepherds', distinct from the metaphorical clergyman sense." ya
+su text "sense-gloss:n:10607013-n" ob text "a herder of sheep (on an open range)" ya
+su text "sense-lemma:n:10607013-n:1" ob text "sheepherder" ya
+su text "sense-lemma:n:10607013-n:2" ob text "shepherd" ya
 su text "n:10608548-n" ob name "sheriff" as text "n" with text "deterministic" via text "leaf/edge WordNet node n:10608548-n has one meaning for lemma sheriff and existing Pyash coverage; active through sweep wordnet-sense-sweep-4c07194f363e-81b5bbefa3b0-d1 (source 4c07194f363e9c870dc925b8cab26f9af93899f6bd91a29b9a1422c1f66d95ba)" ya
 su text "sense-gloss:n:10608548-n" ob text "the principal law-enforcement officer in a county" ya
 su text "sense-lemma:n:10608548-n:1" ob text "sheriff" ya
@@ -21599,6 +21715,9 @@ su text "n:11512640-n" ob name "depolarization" as text "n" with text "contextua
 su text "sense-gloss:n:11512640-n" ob text "a loss of polarity or polarization" ya
 su text "sense-lemma:n:11512640-n:1" ob text "depolarisation" ya
 su text "sense-lemma:n:11512640-n:2" ob text "depolarization" ya
+su text "n:11513043-n" ob name "dimorphism" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'dimorphism' refers to two forms in biology; the candidate '(biology) the existence of two forms...' is the correct domain-marked sense." ya
+su text "sense-gloss:n:11513043-n" ob text "(biology) the existence of two forms of individual within the same animal species (independent of sex differences)" ya
+su text "sense-lemma:n:11513043-n:1" ob text "dimorphism" ya
 su text "n:11518177-n" ob name "propulsion" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-8e6cfa8e95f6-743c899084-atom-gloss-choice-v1; rationale: Propulsion is defined here as a propelling force, distinct from the act of propelling." ya
 su text "sense-gloss:n:11518177-n" ob text "a propelling force" ya
 su text "sense-lemma:n:11518177-n:1" ob text "propulsion" ya
@@ -22211,6 +22330,9 @@ su text "sense-lemma:n:13283562-n:4" ob text "pillage" ya
 su text "sense-lemma:n:13283562-n:5" ob text "plunder" ya
 su text "sense-lemma:n:13283562-n:6" ob text "prize" ya
 su text "sense-lemma:n:13283562-n:7" ob text "swag" ya
+su text "n:13284975-n" ob name "devised" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: '(law) a gift of real property by will' is the specific legal definition for 'devised' as a noun, which fits the context better than generic wills." ya
+su text "sense-gloss:n:13284975-n" ob text "(law) a gift of real property by will" ya
+su text "sense-lemma:n:13284975-n:1" ob text "devise" ya
 su text "n:13285587-n" ob name "heirloom" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-5385790a7ad3-1d63cb3d1e-atom-gloss-choice-v1; rationale: Definition 'something that has been in a family for generations' fits 'heirloom'." ya
 su text "sense-gloss:n:13285587-n" ob text "something that has been in a family for generations" ya
 su text "sense-lemma:n:13285587-n:1" ob text "heirloom" ya
@@ -22315,6 +22437,9 @@ su text "sense-lemma:n:13375435-n:2" ob text "working capital" ya
 su text "n:13393131-n" ob name "diamond" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma diamond at English30k rank 5623; Princeton WordNet 3.1 tag count 3 (sense key diamond%1:21:00::)" ya
 su text "sense-gloss:n:13393131-n" ob text "a transparent piece of diamond that has been cut and polished and is valued as a precious gem" ya
 su text "sense-lemma:n:13393131-n:1" ob text "diamond" ya
+su text "n:13393576-n" ob name "pearls" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'pearls' specifically refers to the smooth lustrous structures found in shells, matching this definition." ya
+su text "sense-gloss:n:13393576-n" ob text "a smooth lustrous round structure inside the shell of a clam or oyster" ya
+su text "sense-lemma:n:13393576-n:1" ob text "pearl" ya
 su text "n:13393838-n" ob name "emerald" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-8e6cfa8e95f6-743c899084-atom-gloss-choice-v1; rationale: The label 'emerald' refers to the cut and polished precious gem." ya
 su text "sense-gloss:n:13393838-n" ob text "a transparent piece of emerald that has been cut and polished and is valued as a precious gem" ya
 su text "sense-lemma:n:13393838-n:1" ob text "emerald" ya
@@ -23213,6 +23338,9 @@ su text "sense-gloss:n:13848434-n" ob text "the ratio of the number of workers t
 su text "sense-lemma:n:13848434-n:1" ob text "employee turnover" ya
 su text "sense-lemma:n:13848434-n:2" ob text "turnover" ya
 su text "sense-lemma:n:13848434-n:3" ob text "turnover rate" ya
+su text "n:13852283-n" ob name "seawards" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'seawards' refers to the direction toward the sea, matching the provided definition." ya
+su text "sense-gloss:n:13852283-n" ob text "the direction toward the sea" ya
+su text "sense-lemma:n:13852283-n:1" ob text "seaward" ya
 su text "n:13853771-n" ob name "north northeast" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-8e6cfa8e95f6-743c899084-atom-gloss-choice-v1; rationale: Definition describes the compass point, matching the noun label 'north_northeast'." ya
 su text "sense-gloss:n:13853771-n" ob text "the compass point that is midway between north and northeast" ya
 su text "sense-lemma:n:13853771-n:1" ob text "nne" ya
@@ -23376,6 +23504,9 @@ su text "n:13916195-n" ob name "locative" as text "n" with text "deterministic" 
 su text "sense-gloss:n:13916195-n" ob text "the azimuth of a celestial body is the angle between the vertical plane containing it and the plane of the meridian" ya
 su text "sense-lemma:n:13916195-n:1" ob text "az" ya
 su text "sense-lemma:n:13916195-n:2" ob text "azimuth" ya
+su text "n:13916847-n" ob name "ruts" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'ruts' refers to a groove or furrow, matching the geological definition rather than the abstract routine." ya
+su text "sense-gloss:n:13916847-n" ob text "a groove or furrow (especially one in soft earth caused by wheels)" ya
+su text "sense-lemma:n:13916847-n:1" ob text "rut" ya
 su text "n:13917127-n" ob name "protuberance" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma protuberance at English30k rank 19216; Princeton WordNet 3.1 tag count 1 (sense key protuberance%1:25:00::)" ya
 su text "sense-gloss:n:13917127-n" ob text "something that bulges out or is protuberant or projects from its surroundings; the gun in his pocket made an obvious bulge; the hump of a camel; he stood on the rocky prominence; the occipital protuberance was well developed; the bony excrescence between its horns" ya
 su text "sense-lemma:n:13917127-n:1" ob text "bulge" ya
@@ -26114,6 +26245,9 @@ su text "sense-lemma:n:15285775-n:1" ob text "reign" ya
 su text "n:15287732-n" ob name "today" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma today at English30k rank 3636; Princeton WordNet 3.1 tag count 69 (sense key today%1:28:00::)" ya
 su text "sense-gloss:n:15287732-n" ob text "the present time or age; the world of today; today we have computers" ya
 su text "sense-lemma:n:15287732-n:1" ob text "today" ya
+su text "n:15292202-n" ob name "deep" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The definition 'the central and most intense or profound part' is the broadest ordinary meaning for 'deep' that fits the label without being domain-specific." ya
+su text "sense-gloss:n:15292202-n" ob text "the central and most intense or profound part" ya
+su text "sense-lemma:n:15292202-n:1" ob text "deep" ya
 su text "n:15293639-n" ob name "termination" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma termination at English30k rank 7653; Princeton WordNet 3.1 tag count 3 (sense key termination%1:28:00::)" ya
 su text "sense-gloss:n:15293639-n" ob text "a coming to an end of a contract period; the expiry of his driver's license" ya
 su text "sense-lemma:n:15293639-n:1" ob text "expiration" ya
@@ -27881,6 +28015,9 @@ su text "s:00067988-s" ob name "better" as text "s" with text "deterministic" vi
 su text "sense-gloss:s:00067988-s" ob text "(comparative and superlative of ‘well’) wiser or more advantageous and hence advisable; it would be better to speak to him; the White House thought it best not to respond" ya
 su text "sense-lemma:s:00067988-s:1" ob text "best" ya
 su text "sense-lemma:s:00067988-s:2" ob text "better" ya
+su text "s:00068247-s" ob name "wells" as text "s" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-3aba7d080449-3740db31ea-atom-general-pos-gloss-choice-v8; rationale: The definition 'wise or advantageous and hence advisable' broadly matches the general sense of 'wells' (good, sound) better than the narrower 'resulting favorably'." ya
+su text "sense-gloss:s:00068247-s" ob text "wise or advantageous and hence advisable" ya
+su text "sense-lemma:s:00068247-s:1" ob text "well" ya
 su text "s:00070557-s" ob name "art" as text "s" with text "deterministic" via text "frequency-first anchor allocation: exact lemma artistic at English30k rank 4201; Princeton WordNet 3.1 tag count 3 (sense key artistic%5:00:00:aesthetic:00)" ya
 su text "sense-gloss:s:00070557-s" ob text "satisfying aesthetic standards and sensibilities; artistic workmanship" ya
 su text "sense-lemma:s:00070557-s:1" ob text "artistic" ya
@@ -27897,6 +28034,10 @@ su text "sense-lemma:s:00074073-s:1" ob text "artificial" ya
 su text "sense-lemma:s:00074073-s:2" ob text "contrived" ya
 su text "sense-lemma:s:00074073-s:3" ob text "hokey" ya
 su text "sense-lemma:s:00074073-s:4" ob text "stilted" ya
+su text "s:00080688-s" ob name "hydrophobic" as text "s" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'hydrophobic' means afraid of water; the candidate 'abnormally afraid of water' matches this psychological/behavioral state." ya
+su text "sense-gloss:s:00080688-s" ob text "abnormally afraid of water" ya
+su text "sense-lemma:s:00080688-s:1" ob text "aquaphobic" ya
+su text "sense-lemma:s:00080688-s:2" ob text "hydrophobic" ya
 su text "s:00080947-s" ob name "panicked" as text "s" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-8e6cfa8e95f6-743c899084-atom-gloss-choice-v1; rationale: Verb/Sense matches 'panicked' state of intense fear." ya
 su text "sense-gloss:s:00080947-s" ob text "thrown into a state of intense fear or desperation" ya
 su text "sense-lemma:s:00080947-s:1" ob text "frightened" ya
@@ -29935,6 +30076,13 @@ su text "s:00935453-s" ob name "portmanteau" as text "s" with text "deterministi
 su text "sense-gloss:s:00935453-s" ob text "presumptuously seeking success or a position in a new locality; a carpetbag stranger; a carpetbag politician" ya
 su text "sense-lemma:s:00935453-s:1" ob text "carpetbag" ya
 su text "sense-lemma:s:00935453-s:2" ob text "carpetbagging" ya
+su text "s:00936868-s" ob name "costly" as text "s" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'costly' means having a high price; the candidate 'having a high price' is the direct general sense." ya
+su text "sense-gloss:s:00936868-s" ob text "having a high price" ya
+su text "sense-lemma:s:00936868-s:1" ob text "costly" ya
+su text "sense-lemma:s:00936868-s:2" ob text "dear" ya
+su text "sense-lemma:s:00936868-s:3" ob text "high priced" ya
+su text "sense-lemma:s:00936868-s:4" ob text "pricey" ya
+su text "sense-lemma:s:00936868-s:5" ob text "pricy" ya
 su text "s:00939061-s" ob name "full fledged" as text "s" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-8e6cfa8e95f6-743c899084-atom-gloss-choice-v1; rationale: Definition '(of persons...) having gained full status' matches label 'full_fledged'." ya
 su text "sense-gloss:s:00939061-s" ob text "(of persons, e.g.) having gained full status" ya
 su text "sense-lemma:s:00939061-s:1" ob text "full fledged" ya
@@ -32191,6 +32339,11 @@ su text "sense-lemma:s:01856790-s:4" ob text "upstart" ya
 su text "s:01858476-s" ob name "capital" as text "s" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: The label 'capital' matches the lemma list and definition 'of principal importance' is the standard adjective sense." ya
 su text "sense-gloss:s:01858476-s" ob text "of principal importance" ya
 su text "sense-lemma:s:01858476-s:1" ob text "capital" ya
+su text "s:01859862-s" ob name "substituted" as text "s" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: 'serving or used in place of another' is the general definition for 'substituted', distinct from artificiality or team positions." ya
+su text "sense-gloss:s:01859862-s" ob text "serving or used in place of another" ya
+su text "sense-lemma:s:01859862-s:1" ob text "alternate" ya
+su text "sense-lemma:s:01859862-s:2" ob text "alternative" ya
+su text "sense-lemma:s:01859862-s:3" ob text "substitute" ya
 su text "s:01861243-s" ob name "tributary" as text "s" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: The label 'tributary' refers to a stream flowing into a larger one." ya
 su text "sense-gloss:s:01861243-s" ob text "(of a stream) flowing into a larger stream" ya
 su text "sense-lemma:s:01861243-s:1" ob text "tributary" ya
@@ -32370,6 +32523,9 @@ su text "s:01911319-s" ob name "undefiled" as text "s" with text "contextual" vi
 su text "sense-gloss:s:01911319-s" ob text "free from stain or blemish" ya
 su text "sense-lemma:s:01911319-s:1" ob text "immaculate" ya
 su text "sense-lemma:s:01911319-s:2" ob text "undefiled" ya
+su text "s:01913014-s" ob name "fining" as text "s" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-3aba7d080449-3740db31ea-atom-general-pos-gloss-choice-v8; rationale: The label 'fining' (making pure/refining) matches the sense 'free from impurities'." ya
+su text "sense-gloss:s:01913014-s" ob text "free from impurities" ya
+su text "sense-lemma:s:01913014-s:1" ob text "fine" ya
 su text "s:01913797-s" ob name "sublimate" as text "s" with text "deterministic" via text "frequency-first anchor allocation: exact lemma sublimate at English30k rank 19917; Princeton WordNet 3.1 tag count 0 (sense key sublimate%5:00:00:pure:02)" ya
 su text "sense-gloss:s:01913797-s" ob text "made pure" ya
 su text "sense-lemma:s:01913797-s:1" ob text "sublimate" ya
@@ -34571,6 +34727,9 @@ su text "sense-gloss:v:00024642-v" ob text "make fresh again" ya
 su text "sense-lemma:v:00024642-v:1" ob text "freshen" ya
 su text "sense-lemma:v:00024642-v:2" ob text "refresh" ya
 su text "sense-lemma:v:00024642-v:3" ob text "refreshen" ya
+su text "v:00025978-v" ob name "unbending" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-3aba7d080449-3740db31ea-atom-general-pos-gloss-choice-v8; rationale: The definition 'release from mental strain, tension, or formality' best matches the general meaning of 'unbending' (relaxing)." ya
+su text "sense-gloss:v:00025978-v" ob text "release from mental strain, tension, or formality" ya
+su text "sense-lemma:v:00025978-v:1" ob text "unbend" ya
 su text "v:00028160-v" ob name "crane" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma crane at English30k rank 13763; Princeton WordNet 3.1 tag count 2 (sense key crane%2:29:00::)" ya
 su text "sense-gloss:v:00028160-v" ob text "stretch (the neck) so as to see better; The women craned their necks to see the President drive by" ya
 su text "sense-lemma:v:00028160-v:1" ob text "crane" ya
@@ -34862,6 +35021,10 @@ su text "sense-lemma:v:00076153-v:19" ob text "vomit up" ya
 su text "v:00078418-v" ob name "ails" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-3ac2fdc7e2f0-50419add5f-atom-gloss-choice-v1; rationale: Definition 'be ill or unwell' fits the label 'ails' (state of being sick), while the other sense implies causing sickness." ya
 su text "sense-gloss:v:00078418-v" ob text "be ill or unwell" ya
 su text "sense-lemma:v:00078418-v:1" ob text "ail" ya
+su text "v:00079922-v" ob name "iodized" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'iodized' means treated with iodine; the candidate 'treat with iodine so as to prevent infection' is the broader general sense." ya
+su text "sense-gloss:v:00079922-v" ob text "treat with iodine so as to prevent infection" ya
+su text "sense-lemma:v:00079922-v:1" ob text "iodise" ya
+su text "sense-lemma:v:00079922-v:2" ob text "iodize" ya
 su text "v:00080057-v" ob name "doctor" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: The label 'doctor' matches the lemma in sense v:00080057-v, which defines giving medical treatment." ya
 su text "sense-gloss:v:00080057-v" ob text "give medical treatment to" ya
 su text "sense-lemma:v:00080057-v:1" ob text "doctor" ya
@@ -34973,6 +35136,10 @@ su text "sense-gloss:v:00117793-v" ob text "stay the same; remain in a certain s
 su text "sense-lemma:v:00117793-v:1" ob text "remain" ya
 su text "sense-lemma:v:00117793-v:2" ob text "rest" ya
 su text "sense-lemma:v:00117793-v:3" ob text "stay" ya
+su text "v:00121022-v" ob name "alternate" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: 'do something in turns' is the standard general meaning of 'alternate', distinct from physical back-and-forth motion or job swapping." ya
+su text "sense-gloss:v:00121022-v" ob text "do something in turns" ya
+su text "sense-lemma:v:00121022-v:1" ob text "alternate" ya
+su text "sense-lemma:v:00121022-v:2" ob text "take turns" ya
 su text "v:00121486-v" ob name "flip flop" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: The verb sense for 'flip flop' correctly defines reversing a direction or attitude." ya
 su text "sense-gloss:v:00121486-v" ob text "reverse (a direction, attitude, or course of action)" ya
 su text "sense-lemma:v:00121486-v:1" ob text "alternate" ya
@@ -35042,6 +35209,9 @@ su text "sense-lemma:v:00163880-v:3" ob text "retread" ya
 su text "v:00166139-v" ob name "bulletproof" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma bulletproof at English30k rank 29557; Princeton WordNet 3.1 tag count 0 (sense key bulletproof%2:30:00::)" ya
 su text "sense-gloss:v:00166139-v" ob text "make bulletproof; bulletproof the car" ya
 su text "sense-lemma:v:00166139-v:1" ob text "bulletproof" ya
+su text "v:00170308-v" ob name "syncopated" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'syncopated' relates to rhythm; the candidate 'modify the rhythm by stressing or accenting a weak beat' matches this musical concept." ya
+su text "sense-gloss:v:00170308-v" ob text "modify the rhythm by stressing or accenting a weak beat" ya
+su text "sense-lemma:v:00170308-v:1" ob text "syncopate" ya
 su text "v:00180221-v" ob name "hulled" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-5385790a7ad3-1d63cb3d1e-atom-gloss-choice-v1; rationale: The label 'hulled' (inflected) matches the verb sense to remove hulls from something." ya
 su text "sense-gloss:v:00180221-v" ob text "remove the hulls from" ya
 su text "sense-lemma:v:00180221-v:1" ob text "hull" ya
@@ -35150,6 +35320,10 @@ su text "sense-lemma:v:00216642-v:3" ob text "drench" ya
 su text "sense-lemma:v:00216642-v:4" ob text "soak" ya
 su text "sense-lemma:v:00216642-v:5" ob text "sop" ya
 su text "sense-lemma:v:00216642-v:6" ob text "souse" ya
+su text "v:00217118-v" ob name "bedraggled" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'bedraggled' means wet and dirty, matching the provided definition." ya
+su text "sense-gloss:v:00217118-v" ob text "make wet and dirty, as from rain" ya
+su text "sense-lemma:v:00217118-v:1" ob text "bedraggle" ya
+su text "sense-lemma:v:00217118-v:2" ob text "draggle" ya
 su text "v:00218901-v" ob name "dry" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma dry at English30k rank 1167; Princeton WordNet 3.1 tag count 12 (sense key dry%2:30:01::)" ya
 su text "sense-gloss:v:00218901-v" ob text "remove the moisture from and make dry; dry clothes; dry hair" ya
 su text "sense-lemma:v:00218901-v:1" ob text "dry" ya
@@ -35200,6 +35374,13 @@ su text "sense-lemma:v:00245302-v:1" ob text "capsule" ya
 su text "sense-lemma:v:00245302-v:2" ob text "capsulise" ya
 su text "sense-lemma:v:00245302-v:3" ob text "capsulize" ya
 su text "sense-lemma:v:00245302-v:4" ob text "encapsulate" ya
+su text "v:00245945-v" ob name "abated" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: abated means become less in intensity" ya
+su text "sense-gloss:v:00245945-v" ob text "become less in amount or intensity" ya
+su text "sense-lemma:v:00245945-v:1" ob text "abate" ya
+su text "sense-lemma:v:00245945-v:2" ob text "die away" ya
+su text "sense-lemma:v:00245945-v:3" ob text "let up" ya
+su text "sense-lemma:v:00245945-v:4" ob text "slack" ya
+su text "sense-lemma:v:00245945-v:5" ob text "slack off" ya
 su text "v:00246666-v" ob name "civilization" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma culture at English30k rank 3493; Princeton WordNet 3.1 tag count 0 (sense key culture%2:30:00::)" ya
 su text "sense-gloss:v:00246666-v" ob text "grow in a special preparation; optimal conditions for culturing stem cell lines" ya
 su text "sense-lemma:v:00246666-v:1" ob text "culture" ya
@@ -35408,10 +35589,19 @@ su text "v:00302443-v" ob name "tailor" as text "v" with text "deterministic" vi
 su text "sense-gloss:v:00302443-v" ob text "adjust to a specific need or market; a magazine oriented towards young people; tailor your needs to your surroundings" ya
 su text "sense-lemma:v:00302443-v:1" ob text "orient" ya
 su text "sense-lemma:v:00302443-v:2" ob text "tailor" ya
+su text "v:00303837-v" ob name "tempering" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'tempering' refers to adjusting consistency or hardness, matching the last definition." ya
+su text "sense-gloss:v:00303837-v" ob text "bring to a desired consistency, texture, or hardness by a process of gradually heating and cooling" ya
+su text "sense-lemma:v:00303837-v:1" ob text "anneal" ya
+su text "sense-lemma:v:00303837-v:2" ob text "normalize" ya
+su text "sense-lemma:v:00303837-v:3" ob text "temper" ya
 su text "v:00305890-v" ob name "narrow" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma narrow at English30k rank 1182; Princeton WordNet 3.1 tag count 2 (sense key narrow%2:30:00::)" ya
 su text "sense-gloss:v:00305890-v" ob text "make or become more narrow or restricted; The selection was narrowed; The road narrowed" ya
 su text "sense-lemma:v:00305890-v:1" ob text "contract" ya
 su text "sense-lemma:v:00305890-v:2" ob text "narrow" ya
+su text "v:00306318-v" ob name "distended" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: distended means become wider" ya
+su text "sense-gloss:v:00306318-v" ob text "become wider" ya
+su text "sense-lemma:v:00306318-v:1" ob text "dilate" ya
+su text "sense-lemma:v:00306318-v:2" ob text "distend" ya
 su text "v:00310092-v" ob name "burst" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma burst at English30k rank 1499; Princeton WordNet 3.1 tag count 11 (sense key burst%2:30:00::)" ya
 su text "sense-gloss:v:00310092-v" ob text "come open suddenly and violently, as if from internal pressure; The bubble burst" ya
 su text "sense-lemma:v:00310092-v:1" ob text "break open" ya
@@ -35458,6 +35648,9 @@ su text "sense-lemma:v:00324872-v:1" ob text "jug" ya
 su text "v:00325032-v" ob name "simmer" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma simmer at English30k rank 13324; Princeton WordNet 3.1 tag count 5 (sense key simmer%2:30:00::)" ya
 su text "sense-gloss:v:00325032-v" ob text "boil slowly at low temperature; simmer the sauce; simmering water" ya
 su text "sense-lemma:v:00325032-v:1" ob text "simmer" ya
+su text "v:00326129-v" ob name "fried" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: fried means cook in hot fat or oil" ya
+su text "sense-gloss:v:00326129-v" ob text "cook in hot fat or oil" ya
+su text "sense-lemma:v:00326129-v:1" ob text "fry" ya
 su text "v:00327420-v" ob name "saute" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma saute at English30k rank 25841; Princeton WordNet 3.1 tag count 1 (sense key saute%2:30:00::)" ya
 su text "sense-gloss:v:00327420-v" ob text "fry briefly over high heat; saute the onions" ya
 su text "sense-lemma:v:00327420-v:1" ob text "saute" ya
@@ -35578,6 +35771,9 @@ su text "v:00373903-v" ob name "warm" as text "v" with text "deterministic" via 
 su text "sense-gloss:v:00373903-v" ob text "get warm or warmer; The soup warmed slowly on the stove" ya
 su text "sense-lemma:v:00373903-v:1" ob text "warm" ya
 su text "sense-lemma:v:00373903-v:2" ob text "warm up" ya
+su text "v:00375339-v" ob name "boiled" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: 'bring to, or maintain at, the boiling point' is the most direct and general definition for 'boiled' in a cooking context." ya
+su text "sense-gloss:v:00375339-v" ob text "bring to, or maintain at, the boiling point" ya
+su text "sense-lemma:v:00375339-v:1" ob text "boil" ya
 su text "v:00379335-v" ob name "burning" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma burn at English30k rank 2889; Princeton WordNet 3.1 tag count 11 (sense key burn%2:30:02::)" ya
 su text "sense-gloss:v:00379335-v" ob text "destroy by fire; They burned the house and his diaries" ya
 su text "sense-lemma:v:00379335-v:1" ob text "burn" ya
@@ -35650,6 +35846,10 @@ su text "sense-lemma:v:00395719-v:11" ob text "mix" ya
 su text "v:00397419-v" ob name "conjugate" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma conjugate at English30k rank 24864; Princeton WordNet 3.1 tag count 1 (sense key conjugate%2:30:00::)" ya
 su text "sense-gloss:v:00397419-v" ob text "unite chemically so that the product is easily broken down into the original compounds" ya
 su text "sense-lemma:v:00397419-v:1" ob text "conjugate" ya
+su text "v:00398311-v" ob name "crumbled" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: crumbled means break into fragments" ya
+su text "sense-gloss:v:00398311-v" ob text "break or fall apart into fragments" ya
+su text "sense-lemma:v:00398311-v:1" ob text "crumble" ya
+su text "sense-lemma:v:00398311-v:2" ob text "fall apart" ya
 su text "v:00399390-v" ob name "macerate" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-8e6cfa8e95f6-743c899084-atom-gloss-choice-v1; rationale: Definition 'soften, usually by steeping in liquid' is the standard culinary/chemical sense of 'macerate'." ya
 su text "sense-gloss:v:00399390-v" ob text "soften, usually by steeping in liquid, and cause to disintegrate as a result" ya
 su text "sense-lemma:v:00399390-v:1" ob text "macerate" ya
@@ -35665,6 +35865,11 @@ su text "sense-gloss:v:00405549-v" ob text "bring order and organization to; Can
 su text "sense-lemma:v:00405549-v:1" ob text "coordinate" ya
 su text "sense-lemma:v:00405549-v:2" ob text "organise" ya
 su text "sense-lemma:v:00405549-v:3" ob text "organize" ya
+su text "v:00409010-v" ob name "rigged" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: rigged means equip with sails or masts" ya
+su text "sense-gloss:v:00409010-v" ob text "equip with sails or masts" ya
+su text "sense-lemma:v:00409010-v:1" ob text "rig" ya
+su text "sense-lemma:v:00409010-v:2" ob text "set" ya
+su text "sense-lemma:v:00409010-v:3" ob text "set up" ya
 su text "v:00417060-v" ob name "migration" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma emigrate at English30k rank 15714; Princeton WordNet 3.1 tag count 2 (sense key emigrate%2:30:00::)" ya
 su text "sense-gloss:v:00417060-v" ob text "leave one's country of residence for a new one; Many people had to emigrate during the Nazi period" ya
 su text "sense-lemma:v:00417060-v:1" ob text "emigrate" ya
@@ -35702,11 +35907,19 @@ su text "sense-lemma:v:00430013-v:5" ob text "reduce" ya
 su text "sense-lemma:v:00430013-v:6" ob text "trim" ya
 su text "sense-lemma:v:00430013-v:7" ob text "trim back" ya
 su text "sense-lemma:v:00430013-v:8" ob text "trim down" ya
+su text "v:00432070-v" ob name "thickening" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: thickening means become thick" ya
+su text "sense-gloss:v:00432070-v" ob text "become thick or thicker" ya
+su text "sense-lemma:v:00432070-v:1" ob text "inspissate" ya
+su text "sense-lemma:v:00432070-v:2" ob text "thicken" ya
 su text "v:00432779-v" ob name "wane" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma wane at English30k rank 14133; Princeton WordNet 3.1 tag count 2 (sense key wane%2:30:02::)" ya
 su text "sense-gloss:v:00432779-v" ob text "grow smaller; Interest in the project waned" ya
 su text "sense-lemma:v:00432779-v:1" ob text "decline" ya
 su text "sense-lemma:v:00432779-v:2" ob text "go down" ya
 su text "sense-lemma:v:00432779-v:3" ob text "wane" ya
+su text "v:00438275-v" ob name "checkers" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'checkers' refers to variegating colors or patterns, matching the first definition." ya
+su text "sense-gloss:v:00438275-v" ob text "variegate with different colors, shades, or patterns" ya
+su text "sense-lemma:v:00438275-v:1" ob text "checker" ya
+su text "sense-lemma:v:00438275-v:2" ob text "chequer" ya
 su text "v:00439707-v" ob name "retard" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma retard at English30k rank 13759; Princeton WordNet 3.1 tag count 1 (sense key retard%2:30:01::)" ya
 su text "sense-gloss:v:00439707-v" ob text "cause to move more slowly or operate at a slower rate; This drug will retard your heart rate" ya
 su text "sense-lemma:v:00439707-v:1" ob text "retard" ya
@@ -35716,6 +35929,11 @@ su text "sense-lemma:v:00443222-v:1" ob text "aerify" ya
 su text "sense-lemma:v:00443222-v:2" ob text "gasify" ya
 su text "sense-lemma:v:00443222-v:3" ob text "vaporise" ya
 su text "sense-lemma:v:00443222-v:4" ob text "vaporize" ya
+su text "v:00445584-v" ob name "melt" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: 'reduce... from a solid to a liquid state, usually by heating' is the standard physical definition for 'melt', excluding metaphorical relaxation." ya
+su text "sense-gloss:v:00445584-v" ob text "reduce or cause to be reduced from a solid to a liquid state, usually by heating" ya
+su text "sense-lemma:v:00445584-v:1" ob text "melt" ya
+su text "sense-lemma:v:00445584-v:2" ob text "melt down" ya
+su text "sense-lemma:v:00445584-v:3" ob text "run" ya
 su text "v:00451952-v" ob name "exhaust" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-5385790a7ad3-1d63cb3d1e-atom-gloss-choice-v1; rationale: Definition 'use up the whole supply of' fits the context of exhausting resources." ya
 su text "sense-gloss:v:00451952-v" ob text "use up the whole supply of" ya
 su text "sense-lemma:v:00451952-v:1" ob text "exhaust" ya
@@ -35773,6 +35991,13 @@ su text "sense-lemma:v:00474503-v:2" ob text "perfect" ya
 su text "v:00478759-v" ob name "cup" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma cup at English30k rank 1834; Princeton WordNet 3.1 tag count 2 (sense key cup%2:30:00::)" ya
 su text "sense-gloss:v:00478759-v" ob text "form into the shape of a cup; She cupped her hands" ya
 su text "sense-lemma:v:00478759-v:1" ob text "cup" ya
+su text "v:00478872-v" ob name "vitiated" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'vitiated' means made imperfect or corrupted, matching the definition to make imperfect." ya
+su text "sense-gloss:v:00478872-v" ob text "make imperfect" ya
+su text "sense-lemma:v:00478872-v:1" ob text "deflower" ya
+su text "sense-lemma:v:00478872-v:2" ob text "impair" ya
+su text "sense-lemma:v:00478872-v:3" ob text "mar" ya
+su text "sense-lemma:v:00478872-v:4" ob text "spoil" ya
+su text "sense-lemma:v:00478872-v:5" ob text "vitiate" ya
 su text "v:00480322-v" ob name "erasing" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma erase at English30k rank 17949; Princeton WordNet 3.1 tag count 5 (sense key erase%2:30:00::)" ya
 su text "sense-gloss:v:00480322-v" ob text "remove from memory or existence; The Turks erased the Armenians in 1915" ya
 su text "sense-lemma:v:00480322-v:1" ob text "erase" ya
@@ -35802,6 +36027,10 @@ su text "sense-gloss:v:00493642-v" ob text "make impure; The industrial wastes p
 su text "sense-lemma:v:00493642-v:1" ob text "contaminate" ya
 su text "sense-lemma:v:00493642-v:2" ob text "foul" ya
 su text "sense-lemma:v:00493642-v:3" ob text "pollute" ya
+su text "v:00494453-v" ob name "alloyed" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'alloyed' means lowering value by adding base metal, matching the provided definition." ya
+su text "sense-gloss:v:00494453-v" ob text "lower in value by increasing the base-metal content" ya
+su text "sense-lemma:v:00494453-v:1" ob text "alloy" ya
+su text "sense-lemma:v:00494453-v:2" ob text "debase" ya
 su text "v:00499244-v" ob name "imbrue" as text "v" with text "deterministic" via text "leaf/edge WordNet node v:00499244-v has one meaning for lemma imbrue and existing Pyash coverage; active through sweep wordnet-sense-sweep-4c07194f363e-81b5bbefa3b0-d1 (source 4c07194f363e9c870dc925b8cab26f9af93899f6bd91a29b9a1422c1f66d95ba)" ya
 su text "sense-gloss:v:00499244-v" ob text "permeate or impregnate; The war drenched the country in blood" ya
 su text "sense-lemma:v:00499244-v:1" ob text "drench" ya
@@ -35809,6 +36038,9 @@ su text "sense-lemma:v:00499244-v:2" ob text "imbrue" ya
 su text "v:00510181-v" ob name "inked" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: Definition describes marking or staining with ink, matching 'inked'." ya
 su text "sense-gloss:v:00510181-v" ob text "mark, coat, cover, or stain with ink" ya
 su text "sense-lemma:v:00510181-v:1" ob text "ink" ya
+su text "v:00510938-v" ob name "freckled" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: freckled means mark with freckles" ya
+su text "sense-gloss:v:00510938-v" ob text "mark with freckles" ya
+su text "sense-lemma:v:00510938-v:1" ob text "freckle" ya
 su text "v:00511445-v" ob name "mottle" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: Definition 'colour with streaks' matches the verb sense of mottle better than the staining definition." ya
 su text "sense-gloss:v:00511445-v" ob text "colour with streaks or blotches of different shades" ya
 su text "sense-lemma:v:00511445-v:1" ob text "cloud" ya
@@ -35872,6 +36104,9 @@ su text "v:00532382-v" ob name "depopulation" as text "v" with text "determinist
 su text "sense-gloss:v:00532382-v" ob text "reduce in population; The epidemic depopulated the countryside" ya
 su text "sense-lemma:v:00532382-v:1" ob text "depopulate" ya
 su text "sense-lemma:v:00532382-v:2" ob text "desolate" ya
+su text "v:00534977-v" ob name "introverted" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'introverted' means turning inward; the candidate 'turn inside' is the direct general-language equivalent." ya
+su text "sense-gloss:v:00534977-v" ob text "turn inside" ya
+su text "sense-lemma:v:00534977-v:1" ob text "introvert" ya
 su text "v:00536228-v" ob name "chad" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma vermilion at English30k rank 14682; Princeton WordNet 3.1 tag count 0 (sense key vermilion%2:30:00::)" ya
 su text "sense-gloss:v:00536228-v" ob text "color vermilion" ya
 su text "sense-lemma:v:00536228-v:1" ob text "vermilion" ya
@@ -35892,6 +36127,11 @@ su text "sense-lemma:v:00546016-v:1" ob text "exalt" ya
 su text "v:00547809-v" ob name "aphelion" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma crescendo at English30k rank 18942; Princeton WordNet 3.1 tag count 0 (sense key crescendo%2:30:00::)" ya
 su text "sense-gloss:v:00547809-v" ob text "grow louder; The music crescendoes here" ya
 su text "sense-lemma:v:00547809-v:1" ob text "crescendo" ya
+su text "v:00549075-v" ob name "animated" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: 'give lifelike qualities to' matches 'animated' as a general concept of making something appear alive, whereas the other sense is too specific." ya
+su text "sense-gloss:v:00549075-v" ob text "give lifelike qualities to" ya
+su text "sense-lemma:v:00549075-v:1" ob text "animate" ya
+su text "sense-lemma:v:00549075-v:2" ob text "animise" ya
+su text "sense-lemma:v:00549075-v:3" ob text "animize" ya
 su text "v:00554951-v" ob name "denature" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-5385790a7ad3-1d63cb3d1e-atom-gloss-choice-v1; rationale: Definition matches protein modification context for label 'denature'." ya
 su text "sense-gloss:v:00554951-v" ob text "modify (as a native protein) especially by heat, acid, alkali, or ultraviolet radiation so that all of the original properties are removed or diminished" ya
 su text "sense-lemma:v:00554951-v:1" ob text "denature" ya
@@ -35906,6 +36146,9 @@ su text "v:00561468-v" ob name "leap" as text "v" with text "deterministic" via 
 su text "sense-gloss:v:00561468-v" ob text "pass abruptly from one state or topic to another; leap into fame; jump to a conclusion; jump from one thing to another" ya
 su text "sense-lemma:v:00561468-v:1" ob text "jump" ya
 su text "sense-lemma:v:00561468-v:2" ob text "leap" ya
+su text "v:00571460-v" ob name "rarefied" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'rarefied' means less dense or solid, matching the third definition." ya
+su text "sense-gloss:v:00571460-v" ob text "lessen the density or solidity of" ya
+su text "sense-lemma:v:00571460-v:1" ob text "rarefy" ya
 su text "v:00587464-v" ob name "gum" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: Definition matches 'gum' meaning to become sticky." ya
 su text "sense-gloss:v:00587464-v" ob text "become sticky" ya
 su text "sense-lemma:v:00587464-v:1" ob text "gum" ya
@@ -36362,6 +36605,9 @@ su text "sense-gloss:v:00734417-v" ob text "accept as inevitable" ya
 su text "sense-lemma:v:00734417-v:1" ob text "reconcile" ya
 su text "sense-lemma:v:00734417-v:2" ob text "resign" ya
 su text "sense-lemma:v:00734417-v:3" ob text "submit" ya
+su text "v:00736950-v" ob name "dates" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The definition 'provide with a dateline' is the specific but only fitting meaning for 'dates' as a verb in this context." ya
+su text "sense-gloss:v:00736950-v" ob text "provide with a dateline" ya
+su text "sense-lemma:v:00736950-v:1" ob text "date" ya
 su text "v:00743542-v" ob name "how" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma yak at English30k rank 24767; Princeton WordNet 3.1 tag count 0 (sense key yak%2:32:00::)" ya
 su text "sense-gloss:v:00743542-v" ob text "talk profusely; she was yakking away about her grandchildren" ya
 su text "sense-lemma:v:00743542-v:1" ob text "gab" ya
@@ -36384,6 +36630,11 @@ su text "sense-lemma:v:00750288-v:1" ob text "bring down" ya
 su text "sense-lemma:v:00750288-v:2" ob text "impose" ya
 su text "sense-lemma:v:00750288-v:3" ob text "inflict" ya
 su text "sense-lemma:v:00750288-v:4" ob text "visit" ya
+su text "v:00752538-v" ob name "saddled" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: saddled means impose a task or responsibility" ya
+su text "sense-gloss:v:00752538-v" ob text "impose a task upon, assign a responsibility to" ya
+su text "sense-lemma:v:00752538-v:1" ob text "burden" ya
+su text "sense-lemma:v:00752538-v:2" ob text "charge" ya
+su text "sense-lemma:v:00752538-v:3" ob text "saddle" ya
 su text "v:00753893-v" ob name "command" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma command at English30k rank 769; Princeton WordNet 3.1 tag count 10 (sense key command%2:32:01::)" ya
 su text "sense-gloss:v:00753893-v" ob text "be in command of; The general commanded a huge army" ya
 su text "sense-lemma:v:00753893-v:1" ob text "command" ya
@@ -36585,6 +36836,9 @@ su text "sense-lemma:v:00816283-v:3" ob text "hold forth" ya
 su text "v:00817041-v" ob name "counters" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma counter at English30k rank 5682; Princeton WordNet 3.1 tag count 2 (sense key counter%2:32:00::)" ya
 su text "sense-gloss:v:00817041-v" ob text "speak in response; He countered with some very persuasive arguments" ya
 su text "sense-lemma:v:00817041-v:1" ob text "counter" ya
+su text "v:00817201-v" ob name "fields" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The definition 'answer adequately or successfully' is the most general ordinary meaning for 'fields' as a verb, avoiding specific sports roles." ya
+su text "sense-gloss:v:00817201-v" ob text "answer adequately or successfully" ya
+su text "sense-lemma:v:00817201-v:1" ob text "field" ya
 su text "v:00817348-v" ob name "answer" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma answer at English30k rank 424; Princeton WordNet 3.1 tag count 63 (sense key answer%2:32:00::)" ya
 su text "sense-gloss:v:00817348-v" ob text "react verbally; She didn't want to answer; answer the question; We answered that we would accept the invitation" ya
 su text "sense-lemma:v:00817348-v:1" ob text "answer" ya
@@ -36711,6 +36965,19 @@ su text "sense-lemma:v:00851872-v:2" ob text "flout" ya
 su text "sense-lemma:v:00851872-v:3" ob text "gibe" ya
 su text "sense-lemma:v:00851872-v:4" ob text "jeer" ya
 su text "sense-lemma:v:00851872-v:5" ob text "scoff" ya
+su text "v:00852181-v" ob name "baiting" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'baiting' means harassing with criticism, matching the first definition." ya
+su text "sense-gloss:v:00852181-v" ob text "harass with persistent criticism or carping" ya
+su text "sense-lemma:v:00852181-v:1" ob text "bait" ya
+su text "sense-lemma:v:00852181-v:2" ob text "cod" ya
+su text "sense-lemma:v:00852181-v:3" ob text "rag" ya
+su text "sense-lemma:v:00852181-v:4" ob text "rally" ya
+su text "sense-lemma:v:00852181-v:5" ob text "razz" ya
+su text "sense-lemma:v:00852181-v:6" ob text "ride" ya
+su text "sense-lemma:v:00852181-v:7" ob text "tantalise" ya
+su text "sense-lemma:v:00852181-v:8" ob text "tantalize" ya
+su text "sense-lemma:v:00852181-v:9" ob text "taunt" ya
+su text "sense-lemma:v:00852181-v:10" ob text "tease" ya
+su text "sense-lemma:v:00852181-v:11" ob text "twit" ya
 su text "v:00852780-v" ob name "children" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma kid at English30k rank 6778; Princeton WordNet 3.1 tag count 5 (sense key kid%2:32:01::)" ya
 su text "sense-gloss:v:00852780-v" ob text "tell false information to for fun; Are you pulling my leg?" ya
 su text "sense-lemma:v:00852780-v:1" ob text "kid" ya
@@ -36873,6 +37140,18 @@ su text "v:00883182-v" ob name "congratulate" as text "v" with text "determinist
 su text "sense-gloss:v:00883182-v" ob text "say something to someone that expresses praise; He complimented her on her last physics paper" ya
 su text "sense-lemma:v:00883182-v:1" ob text "compliment" ya
 su text "sense-lemma:v:00883182-v:2" ob text "congratulate" ya
+su text "v:00884747-v" ob name "bragging" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'bragging' refers to showing off, matching the definition to show off." ya
+su text "sense-gloss:v:00884747-v" ob text "show off" ya
+su text "sense-lemma:v:00884747-v:1" ob text "blow" ya
+su text "sense-lemma:v:00884747-v:2" ob text "bluster" ya
+su text "sense-lemma:v:00884747-v:3" ob text "boast" ya
+su text "sense-lemma:v:00884747-v:4" ob text "brag" ya
+su text "sense-lemma:v:00884747-v:5" ob text "gas" ya
+su text "sense-lemma:v:00884747-v:6" ob text "gasconade" ya
+su text "sense-lemma:v:00884747-v:7" ob text "shoot a line" ya
+su text "sense-lemma:v:00884747-v:8" ob text "swash" ya
+su text "sense-lemma:v:00884747-v:9" ob text "tout" ya
+su text "sense-lemma:v:00884747-v:10" ob text "vaunt" ya
 su text "v:00885156-v" ob name "gloat" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma gloat at English30k rank 18781; Princeton WordNet 3.1 tag count 1 (sense key gloat%2:32:00::)" ya
 su text "sense-gloss:v:00885156-v" ob text "dwell on with satisfaction" ya
 su text "sense-lemma:v:00885156-v:1" ob text "crow" ya
@@ -36907,6 +37186,12 @@ su text "v:00893836-v" ob name "thank" as text "v" with text "contextual" via te
 su text "sense-gloss:v:00893836-v" ob text "express gratitude or show appreciation to" ya
 su text "sense-lemma:v:00893836-v:1" ob text "give thanks" ya
 su text "sense-lemma:v:00893836-v:2" ob text "thank" ya
+su text "v:00895399-v" ob name "excused" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: 'grant exemption or release to' is the direct definition of 'excused', distinct from making excuses or asking permission." ya
+su text "sense-gloss:v:00895399-v" ob text "grant exemption or release to" ya
+su text "sense-lemma:v:00895399-v:1" ob text "excuse" ya
+su text "sense-lemma:v:00895399-v:2" ob text "exempt" ya
+su text "sense-lemma:v:00895399-v:3" ob text "let off" ya
+su text "sense-lemma:v:00895399-v:4" ob text "relieve" ya
 su text "v:00896689-v" ob name "defending" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma defend at English30k rank 2830; Princeton WordNet 3.1 tag count 19 (sense key defend%2:32:00::)" ya
 su text "sense-gloss:v:00896689-v" ob text "argue or speak in defense of; She supported the motion to strike" ya
 su text "sense-lemma:v:00896689-v:1" ob text "defend" ya
@@ -37049,6 +37334,10 @@ su text "sense-lemma:v:00939238-v:7" ob text "sing" ya
 su text "sense-lemma:v:00939238-v:8" ob text "spill the beans" ya
 su text "sense-lemma:v:00939238-v:9" ob text "talk" ya
 su text "sense-lemma:v:00939238-v:10" ob text "tattle" ya
+su text "v:00939909-v" ob name "spelling" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: 'orally recite the letters... or give the spelling of' is the correct action for 'spelling', distinct from indicating meaning or writing." ya
+su text "sense-gloss:v:00939909-v" ob text "orally recite the letters of or give the spelling of" ya
+su text "sense-lemma:v:00939909-v:1" ob text "spell" ya
+su text "sense-lemma:v:00939909-v:2" ob text "spell out" ya
 su text "v:00940177-v" ob name "misspell" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-8e6cfa8e95f6-743c899084-atom-gloss-choice-v1; rationale: Definition 'spell incorrectly' matches 'misspell'." ya
 su text "sense-gloss:v:00940177-v" ob text "spell incorrectly" ya
 su text "sense-lemma:v:00940177-v:1" ob text "misspell" ya
@@ -37147,6 +37436,11 @@ su text "sense-lemma:v:00967067-v:3" ob text "report" ya
 su text "v:00971169-v" ob name "satellite" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma satellite at English30k rank 13017; Princeton WordNet 3.1 tag count 0 (sense key satellite%2:32:00::)" ya
 su text "sense-gloss:v:00971169-v" ob text "broadcast or disseminate via satellite" ya
 su text "sense-lemma:v:00971169-v:1" ob text "satellite" ya
+su text "v:00973682-v" ob name "pronouncing" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma pronounce at English30k rank 6807; Princeton WordNet 3.1 tag count 3 (sense key pronounce%2:32:00::)" ya
+su text "sense-gloss:v:00973682-v" ob text "pronounce judgment on; They labeled him unfit to work here" ya
+su text "sense-lemma:v:00973682-v:1" ob text "judge" ya
+su text "sense-lemma:v:00973682-v:2" ob text "label" ya
+su text "sense-lemma:v:00973682-v:3" ob text "pronounce" ya
 su text "v:00976205-v" ob name "heralds" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-5385790a7ad3-1d63cb3d1e-atom-gloss-choice-v1; rationale: Definition 'foreshadow or presage' matches the verb sense of 'heralds'." ya
 su text "sense-gloss:v:00976205-v" ob text "foreshadow or presage" ya
 su text "sense-lemma:v:00976205-v:1" ob text "announce" ya
@@ -37157,6 +37451,14 @@ su text "sense-lemma:v:00976205-v:5" ob text "herald" ya
 su text "v:00980205-v" ob name "promotional" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma proclaim at English30k rank 7372; Princeton WordNet 3.1 tag count 13 (sense key proclaim%2:32:02::)" ya
 su text "sense-gloss:v:00980205-v" ob text "declare formally; declare someone to be something; of titles; He was proclaimed King" ya
 su text "sense-lemma:v:00980205-v:1" ob text "proclaim" ya
+su text "v:00980581-v" ob name "articulated" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'articulated' generally means speaking clearly or pronouncing words, matching the first definition." ya
+su text "sense-gloss:v:00980581-v" ob text "speak, pronounce, or utter in a certain way" ya
+su text "sense-lemma:v:00980581-v:1" ob text "articulate" ya
+su text "sense-lemma:v:00980581-v:2" ob text "enounce" ya
+su text "sense-lemma:v:00980581-v:3" ob text "enunciate" ya
+su text "sense-lemma:v:00980581-v:4" ob text "pronounce" ya
+su text "sense-lemma:v:00980581-v:5" ob text "say" ya
+su text "sense-lemma:v:00980581-v:6" ob text "sound out" ya
 su text "v:00982485-v" ob name "word" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma word at English30k rank 245; Princeton WordNet 3.1 tag count 2 (sense key word%2:32:00::)" ya
 su text "sense-gloss:v:00982485-v" ob text "put into words or an expression; He formulated his concerns to the board of trustees" ya
 su text "sense-lemma:v:00982485-v:1" ob text "articulate" ya
@@ -37180,6 +37482,9 @@ su text "sense-lemma:v:00983976-v:5" ob text "ejaculate" ya
 su text "v:00984210-v" ob name "lisp" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma lisp at English30k rank 16823; Princeton WordNet 3.1 tag count 0 (sense key lisp%2:32:00::)" ya
 su text "sense-gloss:v:00984210-v" ob text "speak with a lisp" ya
 su text "sense-lemma:v:00984210-v:1" ob text "lisp" ya
+su text "v:00984546-v" ob name "inflected" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'inflected' refers to changing word form grammatically, matching the first definition." ya
+su text "sense-gloss:v:00984546-v" ob text "change the form of a word in accordance as required by the grammatical rules of the language" ya
+su text "sense-lemma:v:00984546-v:1" ob text "inflect" ya
 su text "v:00985365-v" ob name "accent" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: The definition 'put stress on' matches the label 'accent' as a verb meaning to emphasize." ya
 su text "sense-gloss:v:00985365-v" ob text "put stress on" ya
 su text "sense-lemma:v:00985365-v:1" ob text "accent" ya
@@ -37198,6 +37503,9 @@ su text "v:00993417-v" ob name "edifying" as text "v" with text "deterministic" 
 su text "sense-gloss:v:00993417-v" ob text "make understand; Can you enlighten me — I don't understand this proposal?" ya
 su text "sense-lemma:v:00993417-v:1" ob text "edify" ya
 su text "sense-lemma:v:00993417-v:2" ob text "enlighten" ya
+su text "v:00995937-v" ob name "encoding" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: 'convert information into code' is the precise technical yet general definition for 'encoding'." ya
+su text "sense-gloss:v:00995937-v" ob text "convert information into code" ya
+su text "sense-lemma:v:00995937-v:1" ob text "encode" ya
 su text "v:00996727-v" ob name "transcribe" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-8e6cfa8e95f6-743c899084-atom-gloss-choice-v1; rationale: The label 'transcribe' matches the definition of rewriting in a different script, distinguishing it from genetic or musical transcription." ya
 su text "sense-gloss:v:00996727-v" ob text "rewrite in a different script" ya
 su text "sense-lemma:v:00996727-v:1" ob text "transcribe" ya
@@ -37337,6 +37645,9 @@ su text "sense-lemma:v:01030757-v:4" ob text "name" ya
 su text "v:01031675-v" ob name "terms" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma term at English30k rank 1830; Princeton WordNet 3.1 tag count 15 (sense key term%2:32:00::)" ya
 su text "sense-gloss:v:01031675-v" ob text "name formally or designate with a term" ya
 su text "sense-lemma:v:01031675-v:1" ob text "term" ya
+su text "v:01031793-v" ob name "tag" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: tag means provide with a name" ya
+su text "sense-gloss:v:01031793-v" ob text "provide with a name or nickname" ya
+su text "sense-lemma:v:01031793-v:1" ob text "tag" ya
 su text "v:01031885-v" ob name "labeled" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma label at English30k rank 11938; Princeton WordNet 3.1 tag count 8 (sense key label%2:32:00::)" ya
 su text "sense-gloss:v:01031885-v" ob text "assign a label to; designate with a label; These students were labelled ‘learning disabled’" ya
 su text "sense-lemma:v:01031885-v:1" ob text "label" ya
@@ -37553,6 +37864,10 @@ su text "sense-gloss:v:01090246-v" ob text "remove offensive capability from" ya
 su text "sense-lemma:v:01090246-v:1" ob text "demilitarise" ya
 su text "sense-lemma:v:01090246-v:2" ob text "demilitarize" ya
 su text "sense-lemma:v:01090246-v:3" ob text "disarm" ya
+su text "v:01090416-v" ob name "unarmed" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: unarmed as verb means take away weapons" ya
+su text "sense-gloss:v:01090416-v" ob text "take away the weapons from" ya
+su text "sense-lemma:v:01090416-v:1" ob text "disarm" ya
+su text "sense-lemma:v:01090416-v:2" ob text "unarm" ya
 su text "v:01091160-v" ob name "staff" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma staff at English30k rank 2212; Princeton WordNet 3.1 tag count 4 (sense key staff%2:33:00::)" ya
 su text "sense-gloss:v:01091160-v" ob text "provide with staff; This position is not always staffed" ya
 su text "sense-lemma:v:01091160-v:1" ob text "staff" ya
@@ -37644,6 +37959,10 @@ su text "v:01128786-v" ob name "invading" as text "v" with text "deterministic" 
 su text "sense-gloss:v:01128786-v" ob text "march aggressively into another's territory by military force for the purposes of conquest and occupation; Hitler invaded Poland on September 1, 1939" ya
 su text "sense-lemma:v:01128786-v:1" ob text "invade" ya
 su text "sense-lemma:v:01128786-v:2" ob text "occupy" ya
+su text "v:01131763-v" ob name "guards" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The definition 'watch over or shield from danger or harm' is the broad, ordinary meaning for 'guards' as a verb." ya
+su text "sense-gloss:v:01131763-v" ob text "watch over or shield from danger or harm" ya
+su text "sense-lemma:v:01131763-v:1" ob text "guard" ya
+su text "sense-lemma:v:01131763-v:2" ob text "ward" ya
 su text "v:01133033-v" ob name "wall" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma wall at English30k rank 764; Princeton WordNet 3.1 tag count 0 (sense key wall%2:33:00::)" ya
 su text "sense-gloss:v:01133033-v" ob text "surround with a wall in order to fortify" ya
 su text "sense-lemma:v:01133033-v:1" ob text "fence" ya
@@ -37707,6 +38026,12 @@ su text "sense-lemma:v:01145613-v:1" ob text "whelk" ya
 su text "v:01146080-v" ob name "shark" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: The label 'shark' matches the lemma 'shark' and definition 'hunt shark', which is the literal sense." ya
 su text "sense-gloss:v:01146080-v" ob text "hunt shark" ya
 su text "sense-lemma:v:01146080-v:1" ob text "shark" ya
+su text "v:01146304-v" ob name "hunting" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The definition 'pursue for food or sport (as of wild animals)' is the standard, broad ordinary meaning for 'hunting'." ya
+su text "sense-gloss:v:01146304-v" ob text "pursue for food or sport (as of wild animals)" ya
+su text "sense-lemma:v:01146304-v:1" ob text "hunt" ya
+su text "sense-lemma:v:01146304-v:2" ob text "hunt down" ya
+su text "sense-lemma:v:01146304-v:3" ob text "run" ya
+su text "sense-lemma:v:01146304-v:4" ob text "track down" ya
 su text "v:01149259-v" ob name "golf" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma golf at English30k rank 11477; Princeton WordNet 3.1 tag count 0 (sense key golf%2:33:00::)" ya
 su text "sense-gloss:v:01149259-v" ob text "play golf" ya
 su text "sense-lemma:v:01149259-v:1" ob text "golf" ya
@@ -37734,6 +38059,10 @@ su text "sense-lemma:v:01155952-v:3" ob text "revenge" ya
 su text "v:01157135-v" ob name "croquet" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-8e6cfa8e95f6-743c899084-atom-gloss-choice-v1; rationale: Definition describes playing croquet, matching label 'croquet' as a verb activity." ya
 su text "sense-gloss:v:01157135-v" ob text "play a game in which players hit a wooden ball through a series of hoops" ya
 su text "sense-lemma:v:01157135-v:1" ob text "croquet" ya
+su text "v:01162686-v" ob name "assigned" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The definition 'attribute or give' is the most general ordinary meaning for 'assigned', avoiding specific contexts like transfer of rights or undue claims." ya
+su text "sense-gloss:v:01162686-v" ob text "attribute or give" ya
+su text "sense-lemma:v:01162686-v:1" ob text "assign" ya
+su text "sense-lemma:v:01162686-v:2" ob text "put" ya
 su text "v:01164011-v" ob name "overdrive" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: Definition 'make use of too often' matches label 'overdrive'." ya
 su text "sense-gloss:v:01164011-v" ob text "make use of too often or too extensively" ya
 su text "sense-lemma:v:01164011-v:1" ob text "overdrive" ya
@@ -37774,6 +38103,9 @@ su text "sense-lemma:v:01172332-v:2" ob text "imbibe" ya
 su text "v:01173104-v" ob name "glutton" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma guzzle at English30k rank 26442; Princeton WordNet 3.1 tag count 1 (sense key guzzle%2:34:00::)" ya
 su text "sense-gloss:v:01173104-v" ob text "drink greedily or as if with great thirst; The boys guzzled the cheap vodka" ya
 su text "sense-lemma:v:01173104-v:1" ob text "guzzle" ya
+su text "v:01173860-v" ob name "tank" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: 'consume excessive amounts of alcohol' is the specific slang/general usage for 'tank' as a verb, distinct from the noun vehicle." ya
+su text "sense-gloss:v:01173860-v" ob text "consume excessive amounts of alcohol" ya
+su text "sense-lemma:v:01173860-v:1" ob text "tank" ya
 su text "v:01175953-v" ob name "pecking" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-5385790a7ad3-1d63cb3d1e-atom-gloss-choice-v1; rationale: Definition 'eat like a bird' fits the inflectional label 'pecking' best among options." ya
 su text "sense-gloss:v:01175953-v" ob text "eat like a bird" ya
 su text "sense-lemma:v:01175953-v:1" ob text "peck" ya
@@ -37859,6 +38191,10 @@ su text "sense-lemma:v:01199186-v:4" ob text "raven" ya
 su text "v:01200739-v" ob name "smoke" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma smoke at English30k rank 1564; Princeton WordNet 3.1 tag count 12 (sense key smoke%2:34:00::)" ya
 su text "sense-gloss:v:01200739-v" ob text "inhale and exhale smoke from cigarettes, cigars, pipes; We never smoked marijuana; Do you smoke?" ya
 su text "sense-lemma:v:01200739-v:1" ob text "smoke" ya
+su text "v:01202883-v" ob name "snorted" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: snorted as verb means inhale drugs specifically" ya
+su text "sense-gloss:v:01202883-v" ob text "inhale recreational drugs" ya
+su text "sense-lemma:v:01202883-v:1" ob text "huff" ya
+su text "sense-lemma:v:01202883-v:2" ob text "snort" ya
 su text "v:01203727-v" ob name "chewing" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma chew at English30k rank 12356; Princeton WordNet 3.1 tag count 10 (sense key chew%2:34:00::)" ya
 su text "sense-gloss:v:01203727-v" ob text "chew (food); to bite and grind with the teeth; He jawed his bubble gum; Chew your food and don't swallow it!; The cows were masticating the grass" ya
 su text "sense-lemma:v:01203727-v:1" ob text "chew" ya
@@ -38017,6 +38353,9 @@ su text "sense-lemma:v:01247417-v:3" ob text "vacuum clean" ya
 su text "v:01247793-v" ob name "bream" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma bream at English30k rank 23374; Princeton WordNet 3.1 tag count 0 (sense key bream%2:35:00::)" ya
 su text "sense-gloss:v:01247793-v" ob text "clean (a ship's bottom) with heat" ya
 su text "sense-lemma:v:01247793-v:1" ob text "bream" ya
+su text "v:01251514-v" ob name "scissors" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: scissors as verb means cut with scissors" ya
+su text "sense-gloss:v:01251514-v" ob text "cut with or as if with scissors" ya
+su text "sense-lemma:v:01251514-v:1" ob text "scissor" ya
 su text "v:01251858-v" ob name "fillet" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: The label 'fillet' matches the culinary action of cutting into filets." ya
 su text "sense-gloss:v:01251858-v" ob text "cut into filets" ya
 su text "sense-lemma:v:01251858-v:1" ob text "filet" ya
@@ -38034,6 +38373,10 @@ su text "sense-lemma:v:01253472-v:2" ob text "fray" ya
 su text "sense-lemma:v:01253472-v:3" ob text "fret" ya
 su text "sense-lemma:v:01253472-v:4" ob text "rub" ya
 su text "sense-lemma:v:01253472-v:5" ob text "scratch" ya
+su text "v:01253792-v" ob name "scouring" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: scouring means clean with hard rubbing" ya
+su text "sense-gloss:v:01253792-v" ob text "clean with hard rubbing" ya
+su text "sense-lemma:v:01253792-v:1" ob text "scour" ya
+su text "sense-lemma:v:01253792-v:2" ob text "scrub" ya
 su text "v:01255535-v" ob name "soft" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma smooth at English30k rank 2402; Princeton WordNet 3.1 tag count 7 (sense key smooth%2:35:00::)" ya
 su text "sense-gloss:v:01255535-v" ob text "make smooth or smoother, as if by rubbing; smooth the surface of the wood" ya
 su text "sense-lemma:v:01255535-v:1" ob text "smooth" ya
@@ -38059,6 +38402,12 @@ su text "sense-lemma:v:01262255-v:2" ob text "break off" ya
 su text "sense-lemma:v:01262255-v:3" ob text "chip" ya
 su text "sense-lemma:v:01262255-v:4" ob text "chip off" ya
 su text "sense-lemma:v:01262255-v:5" ob text "come off" ya
+su text "v:01263582-v" ob name "skimmed" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'skimmed' most commonly refers to removing a layer from a liquid, matching the definition about removing something from a surface." ya
+su text "sense-gloss:v:01263582-v" ob text "remove from the surface" ya
+su text "sense-lemma:v:01263582-v:1" ob text "cream" ya
+su text "sense-lemma:v:01263582-v:2" ob text "cream off" ya
+su text "sense-lemma:v:01263582-v:3" ob text "skim" ya
+su text "sense-lemma:v:01263582-v:4" ob text "skim off" ya
 su text "v:01264055-v" ob name "egg" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: Definition 'coat with beaten egg' matches the verb label 'egg'." ya
 su text "sense-gloss:v:01264055-v" ob text "coat with beaten egg" ya
 su text "sense-lemma:v:01264055-v:1" ob text "egg" ya
@@ -38147,6 +38496,9 @@ su text "v:01281908-v" ob name "wrinkle" as text "v" with text "deterministic" v
 su text "sense-gloss:v:01281908-v" ob text "gather or contract into wrinkles or folds; pucker; purse one's lips" ya
 su text "sense-lemma:v:01281908-v:1" ob text "purse" ya
 su text "sense-lemma:v:01281908-v:2" ob text "wrinkle" ya
+su text "v:01284103-v" ob name "rabbet" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'rabbet' refers to cutting a groove; the candidate 'cut a rectangular groove into' matches this woodworking action." ya
+su text "sense-gloss:v:01284103-v" ob text "cut a rectangular groove into" ya
+su text "sense-lemma:v:01284103-v:1" ob text "rabbet" ya
 su text "v:01285148-v" ob name "hollow" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma hollow at English30k rank 2752; Princeton WordNet 3.1 tag count 0 (sense key hollow%2:35:00::)" ya
 su text "sense-gloss:v:01285148-v" ob text "remove the interior of; hollow out a tree trunk" ya
 su text "sense-lemma:v:01285148-v:1" ob text "core out" ya
@@ -38171,6 +38523,9 @@ su text "sense-gloss:v:01290804-v" ob text "confine or restrain with or as if wi
 su text "sense-lemma:v:01290804-v:1" ob text "cuff" ya
 su text "sense-lemma:v:01290804-v:2" ob text "handcuff" ya
 su text "sense-lemma:v:01290804-v:3" ob text "manacle" ya
+su text "v:01291239-v" ob name "chains" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The definition 'fasten or secure with chains' is the broad, ordinary meaning for 'chains' as a verb." ya
+su text "sense-gloss:v:01291239-v" ob text "fasten or secure with chains" ya
+su text "sense-lemma:v:01291239-v:1" ob text "chain" ya
 su text "v:01291758-v" ob name "leash" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma leash at English30k rank 15295; Princeton WordNet 3.1 tag count 0 (sense key leash%2:35:00::)" ya
 su text "sense-gloss:v:01291758-v" ob text "fasten with a rope; rope the bag securely" ya
 su text "sense-lemma:v:01291758-v:1" ob text "leash" ya
@@ -38241,6 +38596,9 @@ su text "sense-gloss:v:01313320-v" ob text "remove the inner part or the core of
 su text "sense-lemma:v:01313320-v:1" ob text "dig" ya
 su text "sense-lemma:v:01313320-v:2" ob text "excavate" ya
 su text "sense-lemma:v:01313320-v:3" ob text "hollow" ya
+su text "v:01314783-v" ob name "dibble" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'dibble' refers to making holes with a tool; the candidate 'make a hole with a wooden hand tool' is the correct general sense." ya
+su text "sense-gloss:v:01314783-v" ob text "make a hole with a wooden hand tool" ya
+su text "sense-lemma:v:01314783-v:1" ob text "dibble" ya
 su text "v:01315773-v" ob name "palette" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma trowel at English30k rank 17969; Princeton WordNet 3.1 tag count 0 (sense key trowel%2:35:00::)" ya
 su text "sense-gloss:v:01315773-v" ob text "use a trowel on; for light garden work or plaster work" ya
 su text "sense-lemma:v:01315773-v:1" ob text "trowel" ya
@@ -38248,6 +38606,9 @@ su text "v:01317398-v" ob name "fumble" as text "v" with text "deterministic" vi
 su text "sense-gloss:v:01317398-v" ob text "feel about uncertainly or blindly; She groped for her glasses in the darkness of the bedroom" ya
 su text "sense-lemma:v:01317398-v:1" ob text "fumble" ya
 su text "sense-lemma:v:01317398-v:2" ob text "grope" ya
+su text "v:01317800-v" ob name "dowsing" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'dowsing' refers to using a rod for water; the candidate 'use a divining rod in search of underground water...' matches this activity." ya
+su text "sense-gloss:v:01317800-v" ob text "use a divining rod in search of underground water or metal" ya
+su text "sense-lemma:v:01317800-v:1" ob text "dowse" ya
 su text "v:01317993-v" ob name "surf" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: Definition 'look around casually and randomly' matches label 'surf' (verb) better than switch channels or ride waves." ya
 su text "sense-gloss:v:01317993-v" ob text "look around casually and randomly, without seeking anything in particular" ya
 su text "sense-lemma:v:01317993-v:1" ob text "browse" ya
@@ -38268,6 +38629,10 @@ su text "sense-lemma:v:01324555-v:1" ob text "engrave" ya
 su text "sense-lemma:v:01324555-v:2" ob text "grave" ya
 su text "sense-lemma:v:01324555-v:3" ob text "inscribe" ya
 su text "sense-lemma:v:01324555-v:4" ob text "scratch" ya
+su text "v:01324887-v" ob name "engraved" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: 'carve or cut a design or letters into' is the direct definition for 'engraved', distinct from printing blocks or emotional impact." ya
+su text "sense-gloss:v:01324887-v" ob text "carve or cut a design or letters into" ya
+su text "sense-lemma:v:01324887-v:1" ob text "engrave" ya
+su text "sense-lemma:v:01324887-v:2" ob text "etch" ya
 su text "v:01325518-v" ob name "butcher" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma butcher at English30k rank 8991; Princeton WordNet 3.1 tag count 1 (sense key butcher%2:35:00::)" ya
 su text "sense-gloss:v:01325518-v" ob text "kill (animals) usually for food consumption; They slaughtered their only goat to survive the winter" ya
 su text "sense-lemma:v:01325518-v:1" ob text "butcher" ya
@@ -38300,6 +38665,9 @@ su text "sense-lemma:v:01340094-v:1" ob text "clapboard" ya
 su text "v:01340335-v" ob name "bread" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma bread at English30k rank 1226; Princeton WordNet 3.1 tag count 0 (sense key bread%2:35:00::)" ya
 su text "sense-gloss:v:01340335-v" ob text "cover with bread crumbs; bread the pork chops before frying them" ya
 su text "sense-lemma:v:01340335-v:1" ob text "bread" ya
+su text "v:01340501-v" ob name "blinker" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'blinker' refers to putting blinders on a horse; the candidate 'put blinders on (a horse)' is the exact match." ya
+su text "sense-gloss:v:01340501-v" ob text "put blinders on (a horse)" ya
+su text "sense-lemma:v:01340501-v:1" ob text "blinker" ya
 su text "v:01340609-v" ob name "blindfold" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma blindfold at English30k rank 16971; Princeton WordNet 3.1 tag count 0 (sense key blindfold%2:35:00::)" ya
 su text "sense-gloss:v:01340609-v" ob text "cover the eyes of (someone) to prevent them from seeing; the hostage was blindfolded and driven away" ya
 su text "sense-lemma:v:01340609-v:1" ob text "blindfold" ya
@@ -38337,6 +38705,10 @@ su text "sense-gloss:v:01356373-v" ob text "close with a zipper; Zip up your jac
 su text "sense-lemma:v:01356373-v:1" ob text "zip" ya
 su text "sense-lemma:v:01356373-v:2" ob text "zip up" ya
 su text "sense-lemma:v:01356373-v:3" ob text "zipper" ya
+su text "v:01356709-v" ob name "sealing" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: sealing means make tight" ya
+su text "sense-gloss:v:01356709-v" ob text "make tight" ya
+su text "sense-lemma:v:01356709-v:1" ob text "seal" ya
+su text "sense-lemma:v:01356709-v:2" ob text "seal off" ya
 su text "v:01357108-v" ob name "raincoat" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma waterproof at English30k rank 15358; Princeton WordNet 3.1 tag count 0 (sense key waterproof%2:35:00::)" ya
 su text "sense-gloss:v:01357108-v" ob text "make watertight; Waterproof the coat" ya
 su text "sense-lemma:v:01357108-v:1" ob text "waterproof" ya
@@ -38373,6 +38745,9 @@ su text "sense-lemma:v:01369772-v:1" ob text "staple" ya
 su text "v:01369969-v" ob name "rivet" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: Definition 'fasten with a rivet or rivets' is the primary meaning for the verb 'rivet'." ya
 su text "sense-gloss:v:01369969-v" ob text "fasten with a rivet or rivets" ya
 su text "sense-lemma:v:01369969-v:1" ob text "rivet" ya
+su text "v:01370829-v" ob name "buttons" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: 'provide with buttons' matches the transitive verb sense of 'buttons' (to attach them), distinct from fastening existing ones." ya
+su text "sense-gloss:v:01370829-v" ob text "provide with buttons" ya
+su text "sense-lemma:v:01370829-v:1" ob text "button" ya
 su text "v:01370967-v" ob name "pins" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma pin at English30k rank 6330; Princeton WordNet 3.1 tag count 1 (sense key pin%2:35:01::)" ya
 su text "sense-gloss:v:01370967-v" ob text "attach or fasten with pins; pin the needle to the shirt" ya
 su text "sense-lemma:v:01370967-v:1" ob text "pin" ya
@@ -38598,6 +38973,13 @@ su text "sense-lemma:v:01431486-v:1" ob text "copulate" ya
 su text "sense-lemma:v:01431486-v:2" ob text "couple" ya
 su text "sense-lemma:v:01431486-v:3" ob text "mate" ya
 su text "sense-lemma:v:01431486-v:4" ob text "pair" ya
+su text "v:01432586-v" ob name "crossbreeding" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The definition explicitly mentions breeding animals or plants, which directly matches the label 'crossbreeding'." ya
+su text "sense-gloss:v:01432586-v" ob text "breed animals or plants using parents of different races and varieties" ya
+su text "sense-lemma:v:01432586-v:1" ob text "cross" ya
+su text "sense-lemma:v:01432586-v:2" ob text "crossbreed" ya
+su text "sense-lemma:v:01432586-v:3" ob text "hybridise" ya
+su text "sense-lemma:v:01432586-v:4" ob text "hybridize" ya
+su text "sense-lemma:v:01432586-v:5" ob text "interbreed" ya
 su text "v:01433863-v" ob name "kiss" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma kiss at English30k rank 2094; Princeton WordNet 3.1 tag count 18 (sense key kiss%2:35:00::)" ya
 su text "sense-gloss:v:01433863-v" ob text "touch with the lips or press the lips (against someone's mouth or other body part) as an expression of love, greeting, etc.; The newly married couple kissed; She kissed her grandfather on the forehead when she entered the room" ya
 su text "sense-lemma:v:01433863-v:1" ob text "buss" ya
@@ -38684,6 +39066,12 @@ su text "sense-lemma:v:01463037-v:1" ob text "rice" ya
 su text "v:01464275-v" ob name "heterodyne" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-8e6cfa8e95f6-743c899084-atom-gloss-choice-v1; rationale: Verb sense describes combining frequencies, the active process of heterodyning." ya
 su text "sense-gloss:v:01464275-v" ob text "combine (a radio frequency wave) with a locally generated wave of a different frequency so as to produce a new frequency equal to the sum or the difference between the two" ya
 su text "sense-lemma:v:01464275-v:1" ob text "heterodyne" ya
+su text "v:01465557-v" ob name "matted" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: matted means twist together into mass" ya
+su text "sense-gloss:v:01465557-v" ob text "twist together or entwine into a confusing mass" ya
+su text "sense-lemma:v:01465557-v:1" ob text "entangle" ya
+su text "sense-lemma:v:01465557-v:2" ob text "mat" ya
+su text "sense-lemma:v:01465557-v:3" ob text "snarl" ya
+su text "sense-lemma:v:01465557-v:4" ob text "tangle" ya
 su text "v:01473673-v" ob name "kidnapping" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma kidnap at English30k rank 19469; Princeton WordNet 3.1 tag count 3 (sense key kidnap%2:35:00::)" ya
 su text "sense-gloss:v:01473673-v" ob text "take away to an undisclosed location against their will and usually in order to extract a ransom; The industrialist's son was kidnapped" ya
 su text "sense-lemma:v:01473673-v:1" ob text "abduct" ya
@@ -38716,6 +39104,9 @@ su text "sense-lemma:v:01475976-v:5" ob text "muck around" ya
 su text "sense-lemma:v:01475976-v:6" ob text "potter" ya
 su text "sense-lemma:v:01475976-v:7" ob text "putter" ya
 su text "sense-lemma:v:01475976-v:8" ob text "tinker" ya
+su text "v:01476359-v" ob name "puddles" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'puddles' as a verb means to mix up or confuse, matching the first definition." ya
+su text "sense-gloss:v:01476359-v" ob text "mess around, as in a liquid or paste" ya
+su text "sense-lemma:v:01476359-v:1" ob text "puddle" ya
 su text "v:01477180-v" ob name "discharge" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma release at English30k rank 1743; Princeton WordNet 3.1 tag count 12 (sense key release%2:35:00::)" ya
 su text "sense-gloss:v:01477180-v" ob text "release, as from one's grip; Let go of the door handle, please!; relinquish your grip on the rope — you won't fall" ya
 su text "sense-lemma:v:01477180-v:1" ob text "let go" ya
@@ -38812,6 +39203,9 @@ su text "sense-lemma:v:01502587-v:1" ob text "coffin" ya
 su text "v:01504432-v" ob name "misplace" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-8e6cfa8e95f6-743c899084-atom-gloss-choice-v1; rationale: General 'place wrongly' fits; other is specific 'cannot find again'." ya
 su text "sense-gloss:v:01504432-v" ob text "place or position wrongly" ya
 su text "sense-lemma:v:01504432-v:1" ob text "misplace" ya
+su text "v:01504918-v" ob name "bottled" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'bottled' means put into bottles, matching the first definition directly." ya
+su text "sense-gloss:v:01504918-v" ob text "put into bottles" ya
+su text "sense-lemma:v:01504918-v:1" ob text "bottle" ya
 su text "v:01505179-v" ob name "barrel" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma barrel at English30k rank 6169; Princeton WordNet 3.1 tag count 0 (sense key barrel%2:35:00::)" ya
 su text "sense-gloss:v:01505179-v" ob text "put in barrels" ya
 su text "sense-lemma:v:01505179-v:1" ob text "barrel" ya
@@ -38886,6 +39280,11 @@ su text "sense-lemma:v:01530665-v:2" ob text "exorcize" ya
 su text "v:01532279-v" ob name "pot" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma pot at English30k rank 4554; Princeton WordNet 3.1 tag count 1 (sense key pot%2:35:00::)" ya
 su text "sense-gloss:v:01532279-v" ob text "plant in a pot; He potted the palm" ya
 su text "sense-lemma:v:01532279-v:1" ob text "pot" ya
+su text "v:01533466-v" ob name "grafting" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'grafting' in agriculture refers to joining plant parts, matching the second definition." ya
+su text "sense-gloss:v:01533466-v" ob text "cause to grow together parts from different plants" ya
+su text "sense-lemma:v:01533466-v:1" ob text "engraft" ya
+su text "sense-lemma:v:01533466-v:2" ob text "graft" ya
+su text "sense-lemma:v:01533466-v:3" ob text "ingraft" ya
 su text "v:01533813-v" ob name "entrench" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma entrench at English30k rank 22913; Princeton WordNet 3.1 tag count 1 (sense key entrench%2:35:00::)" ya
 su text "sense-gloss:v:01533813-v" ob text "fix firmly or securely" ya
 su text "sense-lemma:v:01533813-v:1" ob text "entrench" ya
@@ -38965,6 +39364,10 @@ su text "v:01563925-v" ob name "collide" as text "v" with text "contextual" via 
 su text "sense-gloss:v:01563925-v" ob text "crash together with violent impact" ya
 su text "sense-lemma:v:01563925-v:1" ob text "clash" ya
 su text "sense-lemma:v:01563925-v:2" ob text "collide" ya
+su text "v:01566925-v" ob name "ruin" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The definition 'destroy completely' is the broadest ordinary meaning for 'ruin', excluding specific contexts like losing virginity or reducing to ruins." ya
+su text "sense-gloss:v:01566925-v" ob text "destroy completely" ya
+su text "sense-lemma:v:01566925-v:1" ob text "destroy" ya
+su text "sense-lemma:v:01566925-v:2" ob text "ruin" ya
 su text "v:01570056-v" ob name "planted" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma plant at English30k rank 2095; Princeton WordNet 3.1 tag count 8 (sense key plant%2:35:00::)" ya
 su text "sense-gloss:v:01570056-v" ob text "put or set (seeds, seedlings, or plants) into the ground; Let's plant flowers in the garden" ya
 su text "sense-lemma:v:01570056-v:1" ob text "plant" ya
@@ -39112,6 +39515,19 @@ su text "sense-lemma:v:01627004-v:1" ob text "machine" ya
 su text "v:01630142-v" ob name "compile" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-5385790a7ad3-1d63cb3d1e-atom-gloss-choice-v1; rationale: Definition matches 'compile' (computer translation) label exactly; other senses are general gathering or composing." ya
 su text "sense-gloss:v:01630142-v" ob text "use a computer program to translate source code written in a particular programming language into computer-readable machine code that can be executed" ya
 su text "sense-lemma:v:01630142-v:1" ob text "compile" ya
+su text "v:01633150-v" ob name "raised" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The definition 'summon into action or bring into existence, often as if by magic' captures the general sense of causing something to rise or appear, fitting 'raised' broadly." ya
+su text "sense-gloss:v:01633150-v" ob text "summon into action or bring into existence, often as if by magic" ya
+su text "sense-lemma:v:01633150-v:1" ob text "arouse" ya
+su text "sense-lemma:v:01633150-v:2" ob text "bring up" ya
+su text "sense-lemma:v:01633150-v:3" ob text "call down" ya
+su text "sense-lemma:v:01633150-v:4" ob text "call forth" ya
+su text "sense-lemma:v:01633150-v:5" ob text "conjure" ya
+su text "sense-lemma:v:01633150-v:6" ob text "conjure up" ya
+su text "sense-lemma:v:01633150-v:7" ob text "evoke" ya
+su text "sense-lemma:v:01633150-v:8" ob text "invoke" ya
+su text "sense-lemma:v:01633150-v:9" ob text "put forward" ya
+su text "sense-lemma:v:01633150-v:10" ob text "raise" ya
+su text "sense-lemma:v:01633150-v:11" ob text "stir" ya
 su text "v:01634074-v" ob name "eliciting" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma elicit at English30k rank 16072; Princeton WordNet 3.1 tag count 2 (sense key elicit%2:36:00::)" ya
 su text "sense-gloss:v:01634074-v" ob text "deduce (a principle) or construe (a meaning); We drew out some interesting linguistic data from the native informant" ya
 su text "sense-lemma:v:01634074-v:1" ob text "draw out" ya
@@ -39233,6 +39649,9 @@ su text "sense-lemma:v:01668067-v:2" ob text "fix" ya
 su text "sense-lemma:v:01668067-v:3" ob text "make" ya
 su text "sense-lemma:v:01668067-v:4" ob text "prepare" ya
 su text "sense-lemma:v:01668067-v:5" ob text "ready" ya
+su text "v:01671344-v" ob name "quilting" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'quilting' refers to sewing together; the candidate 'stitch or sew together' is the broad general sense." ya
+su text "sense-gloss:v:01671344-v" ob text "stitch or sew together" ya
+su text "sense-lemma:v:01671344-v:1" ob text "quilt" ya
 su text "v:01673180-v" ob name "rework" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-8e6cfa8e95f6-743c899084-atom-gloss-choice-v1; rationale: Definition matches 'rework' meaning use again in altered form." ya
 su text "sense-gloss:v:01673180-v" ob text "use again in altered form" ya
 su text "sense-lemma:v:01673180-v:1" ob text "make over" ya
@@ -39252,6 +39671,10 @@ su text "v:01676063-v" ob name "web" as text "v" with text "deterministic" via t
 su text "sense-gloss:v:01676063-v" ob text "construct or form a web, as if by weaving" ya
 su text "sense-lemma:v:01676063-v:1" ob text "net" ya
 su text "sense-lemma:v:01676063-v:2" ob text "web" ya
+su text "v:01679140-v" ob name "forging" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'forging' refers to creating something by hammering; the candidate 'create by hammering' is the direct match." ya
+su text "sense-gloss:v:01679140-v" ob text "create by hammering" ya
+su text "sense-lemma:v:01679140-v:1" ob text "forge" ya
+su text "sense-lemma:v:01679140-v:2" ob text "hammer" ya
 su text "v:01679858-v" ob name "ornament" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma ornament at English30k rank 5413; Princeton WordNet 3.1 tag count 1 (sense key ornament%2:36:00::)" ya
 su text "sense-gloss:v:01679858-v" ob text "make more attractive by adding ornament, colour, etc.; Decorate the room for the party; beautify yourself for the special day" ya
 su text "sense-lemma:v:01679858-v:1" ob text "adorn" ya
@@ -39285,6 +39708,12 @@ su text "sense-gloss:v:01687477-v" ob text "make a blueprint of" ya
 su text "sense-lemma:v:01687477-v:1" ob text "blueprint" ya
 su text "sense-lemma:v:01687477-v:2" ob text "draft" ya
 su text "sense-lemma:v:01687477-v:3" ob text "draught" ya
+su text "v:01690851-v" ob name "depicted" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: depicted means show in a picture" ya
+su text "sense-gloss:v:01690851-v" ob text "show in, or as in, a picture" ya
+su text "sense-lemma:v:01690851-v:1" ob text "depict" ya
+su text "sense-lemma:v:01690851-v:2" ob text "picture" ya
+su text "sense-lemma:v:01690851-v:3" ob text "render" ya
+su text "sense-lemma:v:01690851-v:4" ob text "show" ya
 su text "v:01691771-v" ob name "map" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma map at English30k rank 4407; Princeton WordNet 3.1 tag count 3 (sense key map%2:36:00::)" ya
 su text "sense-gloss:v:01691771-v" ob text "make a map of; show or establish the features of details of; map the surface of Venus" ya
 su text "sense-lemma:v:01691771-v:1" ob text "map" ya
@@ -39317,6 +39746,9 @@ su text "sense-lemma:v:01702148-v:1" ob text "compose" ya
 su text "sense-lemma:v:01702148-v:2" ob text "indite" ya
 su text "sense-lemma:v:01702148-v:3" ob text "pen" ya
 su text "sense-lemma:v:01702148-v:4" ob text "write" ya
+su text "v:01703205-v" ob name "profiling" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'profiling' in a general context often refers to writing about or describing someone/something, matching the definition." ya
+su text "sense-gloss:v:01703205-v" ob text "write about" ya
+su text "sense-lemma:v:01703205-v:1" ob text "profile" ya
 su text "v:01703398-v" ob name "paragraph" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: The label 'paragraph' matches the lemma in sense v:01703398-v, which defines writing paragraphs." ya
 su text "sense-gloss:v:01703398-v" ob text "write paragraphs" ya
 su text "sense-lemma:v:01703398-v:1" ob text "paragraph" ya
@@ -39339,6 +39771,10 @@ su text "v:01708812-v" ob name "footnote" as text "v" with text "deterministic" 
 su text "sense-gloss:v:01708812-v" ob text "add explanatory notes to or supply with critical comments; The scholar annotated the early edition of a famous novel" ya
 su text "sense-lemma:v:01708812-v:1" ob text "annotate" ya
 su text "sense-lemma:v:01708812-v:2" ob text "footnote" ya
+su text "v:01726857-v" ob name "modeling" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'modeling' refers to creating representations; the candidate 'create a representation or simulation of' is the broad general sense." ya
+su text "sense-gloss:v:01726857-v" ob text "create a representation or simulation of" ya
+su text "sense-lemma:v:01726857-v:1" ob text "model" ya
+su text "sense-lemma:v:01726857-v:2" ob text "simulate" ya
 su text "v:01727840-v" ob name "parody" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma parody at English30k rank 14158; Princeton WordNet 3.1 tag count 1 (sense key parody%2:36:00::)" ya
 su text "sense-gloss:v:01727840-v" ob text "make a spoof of or make fun of" ya
 su text "sense-lemma:v:01727840-v:1" ob text "parody" ya
@@ -39463,6 +39899,10 @@ su text "sense-lemma:v:01768652-v:6" ob text "still" ya
 su text "sense-lemma:v:01768652-v:7" ob text "tranquilize" ya
 su text "sense-lemma:v:01768652-v:8" ob text "tranquillise" ya
 su text "sense-lemma:v:01768652-v:9" ob text "tranquillize" ya
+su text "v:01769760-v" ob name "vexed" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: 'disturb the peace of mind of' accurately defines 'vexed', unlike the other options which refer to examination or physical movement." ya
+su text "sense-gloss:v:01769760-v" ob text "disturb the peace of mind of" ya
+su text "sense-lemma:v:01769760-v:1" ob text "vex" ya
+su text "sense-lemma:v:01769760-v:2" ob text "worry" ya
 su text "v:01771015-v" ob name "preoccupation" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma worry at English30k rank 3994; Princeton WordNet 3.1 tag count 32 (sense key worry%2:37:00::)" ya
 su text "sense-gloss:v:01771015-v" ob text "be worried, concerned, anxious, troubled, or uneasy; I worry about my job" ya
 su text "sense-lemma:v:01771015-v:1" ob text "worry" ya
@@ -39508,6 +39948,10 @@ su text "sense-lemma:v:01778720-v:4" ob text "scorn" ya
 su text "v:01779085-v" ob name "love" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma love at English30k rank 176; Princeton WordNet 3.1 tag count 43 (sense key love%2:37:00::)" ya
 su text "sense-gloss:v:01779085-v" ob text "have a great affection or liking for; I love French food; She loves her boss and works hard for him" ya
 su text "sense-lemma:v:01779085-v:1" ob text "love" ya
+su text "v:01780304-v" ob name "saints" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The definition 'hold sacred' is the broad, ordinary meaning for 'saints' as a verb." ya
+su text "sense-gloss:v:01780304-v" ob text "hold sacred" ya
+su text "sense-lemma:v:01780304-v:1" ob text "enshrine" ya
+su text "sense-lemma:v:01780304-v:2" ob text "saint" ya
 su text "v:01781028-v" ob name "cotton" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma cotton at English30k rank 3370; Princeton WordNet 3.1 tag count 0 (sense key cotton%2:37:00::)" ya
 su text "sense-gloss:v:01781028-v" ob text "take a liking to; cotton to something" ya
 su text "sense-lemma:v:01781028-v:1" ob text "cotton" ya
@@ -39614,6 +40058,14 @@ su text "sense-lemma:v:01803805-v:5" ob text "mortify" ya
 su text "v:01805679-v" ob name "humble" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: Definition 'cause to be unpretentious' is the standard meaning of verb 'humble'." ya
 su text "sense-gloss:v:01805679-v" ob text "cause to be unpretentious" ya
 su text "sense-lemma:v:01805679-v:1" ob text "humble" ya
+su text "v:01806967-v" ob name "rags" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-3aba7d080449-3740db31ea-atom-general-pos-gloss-choice-v8; rationale: The definition 'treat cruelly' is the only one that aligns with the general meaning of 'rags' (to treat roughly or abuse)." ya
+su text "sense-gloss:v:01806967-v" ob text "treat cruelly" ya
+su text "sense-lemma:v:01806967-v:1" ob text "bedevil" ya
+su text "sense-lemma:v:01806967-v:2" ob text "crucify" ya
+su text "sense-lemma:v:01806967-v:3" ob text "dun" ya
+su text "sense-lemma:v:01806967-v:4" ob text "frustrate" ya
+su text "sense-lemma:v:01806967-v:5" ob text "rag" ya
+su text "sense-lemma:v:01806967-v:6" ob text "torment" ya
 su text "v:01807344-v" ob name "tease" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma tease at English30k rank 11297; Princeton WordNet 3.1 tag count 2 (sense key tease%2:37:00::)" ya
 su text "sense-gloss:v:01807344-v" ob text "annoy persistently; The children teased the boy because of his stammer" ya
 su text "sense-lemma:v:01807344-v:1" ob text "badger" ya
@@ -39660,6 +40112,13 @@ su text "sense-lemma:v:01813031-v:5" ob text "take aback" ya
 su text "v:01814900-v" ob name "despair" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma despair at English30k rank 1816; Princeton WordNet 3.1 tag count 3 (sense key despair%2:37:00::)" ya
 su text "sense-gloss:v:01814900-v" ob text "abandon hope; give up hope; lose heart; Don't despair — help is on the way!" ya
 su text "sense-lemma:v:01814900-v:1" ob text "despair" ya
+su text "v:01815703-v" ob name "intoxicating" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: intoxicating means fill with high spirits broadly" ya
+su text "sense-gloss:v:01815703-v" ob text "fill with high spirits" ya
+su text "sense-lemma:v:01815703-v:1" ob text "elate" ya
+su text "sense-lemma:v:01815703-v:2" ob text "intoxicate" ya
+su text "sense-lemma:v:01815703-v:3" ob text "lift up" ya
+su text "sense-lemma:v:01815703-v:4" ob text "pick up" ya
+su text "sense-lemma:v:01815703-v:5" ob text "uplift" ya
 su text "v:01816687-v" ob name "inspiration" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma inspire at English30k rank 6673; Princeton WordNet 3.1 tag count 9 (sense key inspire%2:37:00::)" ya
 su text "sense-gloss:v:01816687-v" ob text "heighten or intensify; These paintings exalt the imagination" ya
 su text "sense-lemma:v:01816687-v:1" ob text "animate" ya
@@ -39881,6 +40340,9 @@ su text "sense-lemma:v:01887709-v:12" ob text "sport" ya
 su text "v:01890327-v" ob name "scramble" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma scramble at English30k rank 11127; Princeton WordNet 3.1 tag count 9 (sense key scramble%2:38:00::)" ya
 su text "sense-gloss:v:01890327-v" ob text "to move hurriedly; The friend scrambled after them" ya
 su text "sense-lemma:v:01890327-v:1" ob text "scramble" ya
+su text "v:01891317-v" ob name "bowling" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'bowling' in a general sense refers to rolling a ball, matching the definition to roll a ball." ya
+su text "sense-gloss:v:01891317-v" ob text "roll (a ball)" ya
+su text "sense-lemma:v:01891317-v:1" ob text "bowl" ya
 su text "v:01891569-v" ob name "glider" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma glide at English30k rank 9496; Princeton WordNet 3.1 tag count 3 (sense key glide%2:38:00::)" ya
 su text "sense-gloss:v:01891569-v" ob text "move smoothly and effortlessly" ya
 su text "sense-lemma:v:01891569-v:1" ob text "glide" ya
@@ -39915,6 +40377,10 @@ su text "sense-gloss:v:01897306-v" ob text "overturn accidentally; Don't rock th
 su text "sense-lemma:v:01897306-v:1" ob text "capsize" ya
 su text "sense-lemma:v:01897306-v:2" ob text "turn turtle" ya
 su text "sense-lemma:v:01897306-v:3" ob text "turtle" ya
+su text "v:01897458-v" ob name "flipping" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'flipping' implies tossing something to turn it over; the candidate 'toss with a sharp movement so as to cause to turn over' is the precise match." ya
+su text "sense-gloss:v:01897458-v" ob text "cause to move with a flick" ya
+su text "sense-lemma:v:01897458-v:1" ob text "flick" ya
+su text "sense-lemma:v:01897458-v:2" ob text "flip" ya
 su text "v:01897764-v" ob name "click" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma click at English30k rank 8857; Princeton WordNet 3.1 tag count 5 (sense key click%2:38:00::)" ya
 su text "sense-gloss:v:01897764-v" ob text "move or strike with a noise; he clicked on the light; his arm was snapped forward" ya
 su text "sense-lemma:v:01897764-v:1" ob text "click" ya
@@ -40011,6 +40477,13 @@ su text "sense-lemma:v:01925765-v:4" ob text "shinny" ya
 su text "sense-lemma:v:01925765-v:5" ob text "skin" ya
 su text "sense-lemma:v:01925765-v:6" ob text "sputter" ya
 su text "sense-lemma:v:01925765-v:7" ob text "struggle" ya
+su text "v:01925957-v" ob name "ascending" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: 'go upward with gradual or continuous progress' is the best general fit for 'ascending', covering physical and metaphorical rise." ya
+su text "sense-gloss:v:01925957-v" ob text "go upward with gradual or continuous progress" ya
+su text "sense-lemma:v:01925957-v:1" ob text "ascend" ya
+su text "sense-lemma:v:01925957-v:2" ob text "climb" ya
+su text "sense-lemma:v:01925957-v:3" ob text "climb up" ya
+su text "sense-lemma:v:01925957-v:4" ob text "go up" ya
+su text "sense-lemma:v:01925957-v:5" ob text "mount" ya
 su text "v:01926569-v" ob name "climbing" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma escalade at English30k rank 24382; Princeton WordNet 3.1 tag count 0 (sense key escalade%2:38:00::)" ya
 su text "sense-gloss:v:01926569-v" ob text "climb up and over; They had to escalade canyons to reach their destination" ya
 su text "sense-lemma:v:01926569-v:1" ob text "escalade" ya
@@ -40182,6 +40655,10 @@ su text "v:01970713-v" ob name "avalanche" as text "v" with text "deterministic"
 su text "sense-gloss:v:01970713-v" ob text "gather into a huge mass and roll down a mountain, of snow" ya
 su text "sense-lemma:v:01970713-v:1" ob text "avalanche" ya
 su text "sense-lemma:v:01970713-v:2" ob text "roll down" ya
+su text "v:01972052-v" ob name "skydiving" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'skydiving' matches the definition involving jumping from an airplane and using a parachute." ya
+su text "sense-gloss:v:01972052-v" ob text "jump from an airplane and perform various maneuvers before opening one's parachute" ya
+su text "sense-lemma:v:01972052-v:1" ob text "sky dive" ya
+su text "sense-lemma:v:01972052-v:2" ob text "skydive" ya
 su text "v:01972282-v" ob name "umbrella" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma parachute at English30k rank 20020; Princeton WordNet 3.1 tag count 0 (sense key parachute%2:38:00::)" ya
 su text "sense-gloss:v:01972282-v" ob text "jump from an airplane and descend with a parachute" ya
 su text "sense-lemma:v:01972282-v:1" ob text "chute" ya
@@ -40264,12 +40741,19 @@ su text "sense-lemma:v:02005890-v:6" ob text "tag" ya
 su text "sense-lemma:v:02005890-v:7" ob text "tail" ya
 su text "sense-lemma:v:02005890-v:8" ob text "track" ya
 su text "sense-lemma:v:02005890-v:9" ob text "trail" ya
+su text "v:02008023-v" ob name "haunted" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: 'follow stealthily or recur constantly' directly captures the meaning of being haunted by spirits." ya
+su text "sense-gloss:v:02008023-v" ob text "follow stealthily or recur constantly and spontaneously to" ya
+su text "sense-lemma:v:02008023-v:1" ob text "haunt" ya
+su text "sense-lemma:v:02008023-v:2" ob text "stalk" ya
 su text "v:02008888-v" ob name "return" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma return at English30k rank 337; Princeton WordNet 3.1 tag count 111 (sense key return%2:38:00::)" ya
 su text "sense-gloss:v:02008888-v" ob text "go or come back to place, condition, or activity where one has been before; return to your native land; the professor returned to his teaching position after serving as Dean" ya
 su text "sense-lemma:v:02008888-v:1" ob text "return" ya
 su text "v:02009792-v" ob name "boomerang" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma boomerang at English30k rank 21669; Princeton WordNet 3.1 tag count 1 (sense key boomerang%2:38:00::)" ya
 su text "sense-gloss:v:02009792-v" ob text "return to the initial position from where it came; like a boomerang" ya
 su text "sense-lemma:v:02009792-v:1" ob text "boomerang" ya
+su text "v:02011791-v" ob name "crested" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: crested means reach a high point" ya
+su text "sense-gloss:v:02011791-v" ob text "reach a high point" ya
+su text "sense-lemma:v:02011791-v:1" ob text "crest" ya
 su text "v:02014716-v" ob name "scram" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-5385790a7ad3-1d63cb3d1e-atom-gloss-choice-v1; rationale: Definition matches 'scram' exactly." ya
 su text "sense-gloss:v:02014716-v" ob text "leave immediately" ya
 su text "sense-lemma:v:02014716-v:1" ob text "bugger off" ya
@@ -40314,9 +40798,10 @@ su text "sense-lemma:v:02028855-v:4" ob text "flock" ya
 su text "v:02029199-v" ob name "flock" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma flock at English30k rank 4474; Princeton WordNet 3.1 tag count 2 (sense key flock%2:38:01::)" ya
 su text "sense-gloss:v:02029199-v" ob text "move as a crowd or in a group; Tourists flocked to the shrine where the statue was said to have shed tears" ya
 su text "sense-lemma:v:02029199-v:1" ob text "flock" ya
-su text "v:02029675-v" ob name "escort" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma escort at English30k rank 5198; Princeton WordNet 3.1 tag count 7 (sense key escort%2:38:00::)" ya
-su text "sense-gloss:v:02029675-v" ob text "accompany as an escort; She asked her older brother to escort her to the ball" ya
-su text "sense-lemma:v:02029675-v:1" ob text "escort" ya
+su text "v:02029932-v" ob name "escort" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-4d7375afb286-692a250a3a-atom-general-pos-gloss-choice-v8; rationale: The definition 'conduct someone someplace' is the broad ordinary meaning of 'escort', fitting the general-language concept requirement without needing a specialized domain." ya
+su text "sense-gloss:v:02029932-v" ob text "conduct someone someplace" ya
+su text "sense-lemma:v:02029932-v:1" ob text "escort" ya
+su text "sense-lemma:v:02029932-v:2" ob text "see" ya
 su text "v:02032568-v" ob name "crowded" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma crowd at English30k rank 1053; Princeton WordNet 3.1 tag count 6 (sense key crowd%2:38:01::)" ya
 su text "sense-gloss:v:02032568-v" ob text "cause to herd, drive, or crowd together; We herded the children into a spare classroom" ya
 su text "sense-lemma:v:02032568-v:1" ob text "crowd" ya
@@ -40336,11 +40821,21 @@ su text "sense-lemma:v:02034269-v:5" ob text "scatter" ya
 su text "v:02037650-v" ob name "deflected" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-5385790a7ad3-1d63cb3d1e-atom-gloss-choice-v1; rationale: Definition 'turn aside and away from an initial course' matches the physical deflection meaning; other senses involve blocking or preventing." ya
 su text "sense-gloss:v:02037650-v" ob text "turn aside and away from an initial or intended course" ya
 su text "sense-lemma:v:02037650-v:1" ob text "deflect" ya
+su text "v:02038516-v" ob name "curve" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: 'bend or cause to bend' is the primary general action for 'curve', whereas the others describe specific types of turning." ya
+su text "sense-gloss:v:02038516-v" ob text "bend or cause to bend" ya
+su text "sense-lemma:v:02038516-v:1" ob text "crook" ya
+su text "sense-lemma:v:02038516-v:2" ob text "curve" ya
 su text "v:02038831-v" ob name "arches" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma arch at English30k rank 4876; Princeton WordNet 3.1 tag count 3 (sense key arch%2:38:00::)" ya
 su text "sense-gloss:v:02038831-v" ob text "form an arch or curve; her back arches; her hips curve nicely" ya
 su text "sense-lemma:v:02038831-v:1" ob text "arc" ya
 su text "sense-lemma:v:02038831-v:2" ob text "arch" ya
 su text "sense-lemma:v:02038831-v:3" ob text "curve" ya
+su text "v:02039404-v" ob name "humped" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-3aba7d080449-3740db31ea-atom-general-pos-gloss-choice-v8; rationale: The definition 'round one's back by bending forward...' directly matches the physical action implied by 'humped'." ya
+su text "sense-gloss:v:02039404-v" ob text "round one's back by bending forward and drawing the shoulders forward" ya
+su text "sense-lemma:v:02039404-v:1" ob text "hump" ya
+su text "sense-lemma:v:02039404-v:2" ob text "hunch" ya
+su text "sense-lemma:v:02039404-v:3" ob text "hunch forward" ya
+su text "sense-lemma:v:02039404-v:4" ob text "hunch over" ya
 su text "v:02040822-v" ob name "flex" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma flex at English30k rank 25132; Princeton WordNet 3.1 tag count 1 (sense key flex%2:38:01::)" ya
 su text "sense-gloss:v:02040822-v" ob text "contract; flex a muscle" ya
 su text "sense-lemma:v:02040822-v:1" ob text "flex" ya
@@ -40665,6 +41160,10 @@ su text "sense-lemma:v:02164320-v:2" ob text "flash" ya
 su text "sense-lemma:v:02164320-v:3" ob text "twinkle" ya
 su text "sense-lemma:v:02164320-v:4" ob text "wink" ya
 su text "sense-lemma:v:02164320-v:5" ob text "winkle" ya
+su text "v:02165209-v" ob name "gleaming" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: 'shine brightly, like a star or a light' captures the general sense of 'gleaming', while others are too specific (wet) or faint." ya
+su text "sense-gloss:v:02165209-v" ob text "shine brightly, like a star or a light" ya
+su text "sense-lemma:v:02165209-v:1" ob text "gleam" ya
+su text "sense-lemma:v:02165209-v:2" ob text "glimmer" ya
 su text "v:02166865-v" ob name "dazzling" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma dazzle at English30k rank 13542; Princeton WordNet 3.1 tag count 3 (sense key dazzle%2:39:00::)" ya
 su text "sense-gloss:v:02166865-v" ob text "to cause someone to lose clear vision, especially from intense light; She was dazzled by the bright headlights" ya
 su text "sense-lemma:v:02166865-v:1" ob text "bedazzle" ya
@@ -40768,6 +41267,9 @@ su text "v:02194386-v" ob name "ignorant" as text "v" with text "deterministic" 
 su text "sense-gloss:v:02194386-v" ob text "make or render deaf; a deafening noise" ya
 su text "sense-lemma:v:02194386-v:1" ob text "deaf" ya
 su text "sense-lemma:v:02194386-v:2" ob text "deafen" ya
+su text "v:02194523-v" ob name "deafening" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: deafening means be unbearably loud" ya
+su text "sense-gloss:v:02194523-v" ob text "be unbearably loud" ya
+su text "sense-lemma:v:02194523-v:1" ob text "deafen" ya
 su text "v:02196212-v" ob name "season" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: The label 'season' matches the lemma list and definition 'lend flavor to' is the culinary verb sense." ya
 su text "sense-gloss:v:02196212-v" ob text "lend flavor to" ya
 su text "sense-lemma:v:02196212-v:1" ob text "flavor" ya
@@ -41243,6 +41745,9 @@ su text "sense-gloss:v:02380015-v" ob text "take upon oneself; act presumptuousl
 su text "sense-lemma:v:02380015-v:1" ob text "dare" ya
 su text "sense-lemma:v:02380015-v:2" ob text "make bold" ya
 su text "sense-lemma:v:02380015-v:3" ob text "presume" ya
+su text "v:02380993-v" ob name "logrolling" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'logrolling' refers to political exchange; the candidate 'work toward the passage of some legislation by exchanging political favors...' matches this concept." ya
+su text "sense-gloss:v:02380993-v" ob text "work toward the passage of some legislation by exchanging political favors such as trading votes" ya
+su text "sense-lemma:v:02380993-v:1" ob text "logroll" ya
 su text "v:02384895-v" ob name "retire" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma retire at English30k rank 4073; Princeton WordNet 3.1 tag count 18 (sense key retire%2:41:01::)" ya
 su text "sense-gloss:v:02384895-v" ob text "go into retirement; stop performing one's work or withdraw from one's position; He retired at age 68" ya
 su text "sense-lemma:v:02384895-v:1" ob text "retire" ya
@@ -41451,6 +41956,10 @@ su text "v:02469555-v" ob name "malinger" as text "v" with text "contextual" via
 su text "sense-gloss:v:02469555-v" ob text "avoid responsibilities and duties, e.g., by pretending to be ill" ya
 su text "sense-lemma:v:02469555-v:1" ob text "malinger" ya
 su text "sense-lemma:v:02469555-v:2" ob text "skulk" ya
+su text "v:02470006-v" ob name "spared" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The definition 'refrain from harming' is the broad, ordinary meaning for 'spared', excluding specific contexts like giving up needs or saving from experience." ya
+su text "sense-gloss:v:02470006-v" ob text "refrain from harming" ya
+su text "sense-lemma:v:02470006-v:1" ob text "save" ya
+su text "sense-lemma:v:02470006-v:2" ob text "spare" ya
 su text "v:02470917-v" ob name "boycott" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma boycott at English30k rank 20278; Princeton WordNet 3.1 tag count 2 (sense key boycott%2:41:00::)" ya
 su text "sense-gloss:v:02470917-v" ob text "refuse to sponsor; refuse to do business with" ya
 su text "sense-lemma:v:02470917-v:1" ob text "boycott" ya
@@ -42078,6 +42587,9 @@ su text "v:02662859-v" ob name "rooms" as text "v" with text "deterministic" via
 su text "sense-gloss:v:02662859-v" ob text "live and take one's meals at or in; she rooms in an old boarding house" ya
 su text "sense-lemma:v:02662859-v:1" ob text "board" ya
 su text "sense-lemma:v:02662859-v:2" ob text "room" ya
+su text "v:02665057-v" ob name "correlated" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The label 'correlated' means bearing a mutual relation, matching the first definition." ya
+su text "sense-gloss:v:02665057-v" ob text "to bear a reciprocal or mutual relation" ya
+su text "sense-lemma:v:02665057-v:1" ob text "correlate" ya
 su text "v:02665300-v" ob name "parallel" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma parallel at English30k rank 4087; Princeton WordNet 3.1 tag count 5 (sense key parallel%2:42:00::)" ya
 su text "sense-gloss:v:02665300-v" ob text "be parallel to; Their roles are paralleled by ours" ya
 su text "sense-lemma:v:02665300-v:1" ob text "parallel" ya
@@ -42177,6 +42689,9 @@ su text "sense-lemma:v:02692794-v:2" ob text "ray" ya
 su text "v:02693572-v" ob name "beard" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma beard at English30k rank 3057; Princeton WordNet 3.1 tag count 1 (sense key beard%2:42:00::)" ya
 su text "sense-gloss:v:02693572-v" ob text "go along the rim, like a beard around the chin; Houses bearded the top of the heights" ya
 su text "sense-lemma:v:02693572-v:1" ob text "beard" ya
+su text "v:02695572-v" ob name "ridges" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: 'extend in ridges' is the general descriptive definition for 'ridges', whereas others describe specific ploughing actions." ya
+su text "sense-gloss:v:02695572-v" ob text "extend in ridges" ya
+su text "sense-lemma:v:02695572-v:1" ob text "ridge" ya
 su text "v:02695724-v" ob name "dotted" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma dot at English30k rank 8195; Princeton WordNet 3.1 tag count 3 (sense key dot%2:42:00::)" ya
 su text "sense-gloss:v:02695724-v" ob text "scatter or intersperse like dots or studs; Hills constellated with lights" ya
 su text "sense-lemma:v:02695724-v:1" ob text "constellate" ya
@@ -42209,6 +42724,10 @@ su text "sense-lemma:v:02702962-v:4" ob text "jeopardize" ya
 su text "sense-lemma:v:02702962-v:5" ob text "menace" ya
 su text "sense-lemma:v:02702962-v:6" ob text "peril" ya
 su text "sense-lemma:v:02702962-v:7" ob text "threaten" ya
+su text "v:02703277-v" ob name "beetles" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: beetles as verb means hang over" ya
+su text "sense-gloss:v:02703277-v" ob text "be suspended over or hang over" ya
+su text "sense-lemma:v:02703277-v:1" ob text "beetle" ya
+su text "sense-lemma:v:02703277-v:2" ob text "overhang" ya
 su text "v:02704786-v" ob name "body" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma body at English30k rank 333; Princeton WordNet 3.1 tag count 0 (sense key body%2:42:00::)" ya
 su text "sense-gloss:v:02704786-v" ob text "invest with or as with a body; give body to" ya
 su text "sense-lemma:v:02704786-v:1" ob text "body" ya
@@ -42300,6 +42819,12 @@ su text "sense-lemma:v:02729608-v:2" ob text "represent" ya
 su text "v:02730580-v" ob name "ruts" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma rut at English30k rank 17706; Princeton WordNet 3.1 tag count 0 (sense key rut%2:42:00::)" ya
 su text "sense-gloss:v:02730580-v" ob text "be in a state of sexual excitement; of male mammals" ya
 su text "sense-lemma:v:02730580-v:1" ob text "rut" ya
+su text "v:02733337-v" ob name "remains" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: The definition 'continue in a place, position, or situation' is the most general and ordinary meaning for 'remains' as a verb." ya
+su text "sense-gloss:v:02733337-v" ob text "continue in a place, position, or situation" ya
+su text "sense-lemma:v:02733337-v:1" ob text "continue" ya
+su text "sense-lemma:v:02733337-v:2" ob text "remain" ya
+su text "sense-lemma:v:02733337-v:3" ob text "stay" ya
+su text "sense-lemma:v:02733337-v:4" ob text "stay on" ya
 su text "v:02734445-v" ob name "retail" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma retail at English30k rank 12389; Princeton WordNet 3.1 tag count 1 (sense key retail%2:42:00::)" ya
 su text "sense-gloss:v:02734445-v" ob text "be sold at the retail level; These gems retail at thousands of dollars each" ya
 su text "sense-lemma:v:02734445-v:1" ob text "retail" ya
@@ -42309,6 +42834,14 @@ su text "sense-lemma:v:02736346-v:1" ob text "feel" ya
 su text "v:02737117-v" ob name "linger" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma linger at English30k rank 7656; Princeton WordNet 3.1 tag count 3 (sense key linger%2:42:02::)" ya
 su text "sense-gloss:v:02737117-v" ob text "remain present although waning or gradually dying; Her perfume lingered on" ya
 su text "sense-lemma:v:02737117-v:1" ob text "linger" ya
+su text "v:02754802-v" ob name "adorned" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-a397ca31bb0a-88e5590305-atom-general-pos-gloss-choice-v8; rationale: 'be beautiful to look at' is the correct general sense for 'adorned', while the other refers to authority." ya
+su text "sense-gloss:v:02754802-v" ob text "be beautiful to look at" ya
+su text "sense-lemma:v:02754802-v:1" ob text "adorn" ya
+su text "sense-lemma:v:02754802-v:2" ob text "beautify" ya
+su text "sense-lemma:v:02754802-v:3" ob text "deck" ya
+su text "sense-lemma:v:02754802-v:4" ob text "decorate" ya
+su text "sense-lemma:v:02754802-v:5" ob text "embellish" ya
+su text "sense-lemma:v:02754802-v:6" ob text "grace" ya
 su text "v:02762516-v" ob name "rain" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma rain at English30k rank 1258; Princeton WordNet 3.1 tag count 13 (sense key rain%2:43:00::)" ya
 su text "sense-gloss:v:02762516-v" ob text "precipitate as rain; If it rains much more, we can expect some flooding" ya
 su text "sense-lemma:v:02762516-v:1" ob text "rain" ya

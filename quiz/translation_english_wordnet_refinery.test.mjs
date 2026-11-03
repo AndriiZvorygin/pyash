@@ -703,7 +703,7 @@ test("WordNet refinery derives and verifies a new compound before offering it as
   assert.deepEqual(verifiedCandidates[0].componentGlosses, ["bird", "house"]);
   assert.deepEqual(verifiedCandidates[0].pyashSequence, ["pyaf", "hcas"]);
   assert.match(verifiedCandidates[0].evidence, /a shelter for birds/u);
-  let noHeadRelationCalls = 0;
+  const noHeadRelationCandidates = [];
   await refineEnglishWordNet({
     result: { ...result, sourceHash: "birdhouse-no-head-relation" },
     resources: {
@@ -717,12 +717,15 @@ test("WordNet refinery derives and verifies a new compound before offering it as
         ] })
       }
     },
-    verifyCompound: async () => {
-      noHeadRelationCalls += 1;
+    verifyCompound: async ({ candidates }) => {
+      noHeadRelationCandidates.push(...candidates);
       return "{}";
     }
   });
-  assert.equal(noHeadRelationCalls, 0);
+  assert.ok(noHeadRelationCandidates.length > 0);
+  assert.ok(noHeadRelationCandidates.every((candidate) => candidate.headRelationPolicy === "advisory"));
+  assert.ok(noHeadRelationCandidates.every((candidate) => candidate.targetSenseEvidence[0].headRelationPolicy === "advisory"));
+  assert.ok(noHeadRelationCandidates.every((candidate) => candidate.targetSenseEvidence[0].compatibleHeadSenseIds.length === 0));
   const anchor = refined.records[0].anchorCandidates.find((candidate) => candidate.target === "birdhouse");
   assert.ok(anchor);
   assert.equal(anchor.selectable, true);

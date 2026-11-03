@@ -14,6 +14,7 @@ import {
   buildEnglishWordNetAtomSenseWorklist,
   ENGLISH_WORDNET_ATOM_SENSE_RESPONSE_FORMAT,
   filterEnglishWordNetAtomSenseWorklist,
+  includeReopenedAtomSenseNoFitTargets,
   hashEnglishWordNetAtomSenseWorklist,
   loadEnglishWordNetAtomSenseConfig,
   runEnglishWordNetAtomSenseSweep
@@ -67,7 +68,7 @@ async function atomicWrite(filename, contents) {
   await rename(temporary, filename);
 }
 
-function renderActivationPya({ runId, model, sourceHash, selected = [], uncertain = [], noFit = [] }) {
+function renderActivationPya({ runId, model, sourceHash, selected = [], uncertain = [], noFit = [], reopened = [] }) {
   return [
     "su name translation be map def",
     'su text "format" ob text "english-wordnet-atom-sense-activation-v1" ya',
@@ -77,6 +78,7 @@ function renderActivationPya({ runId, model, sourceHash, selected = [], uncertai
     `su text "selected" ob text quoted.text.${JSON.stringify(selected, null, 2)}.text.quoted ya`,
     `su text "uncertain" ob text quoted.text.${JSON.stringify(uncertain, null, 2)}.text.quoted ya`,
     `su text "no-fit" ob text quoted.text.${JSON.stringify(noFit, null, 2)}.text.quoted ya`,
+    `su text "reopened" ob text quoted.text.${JSON.stringify(reopened, null, 2)}.text.quoted ya`,
     "prah",
     ""
   ].join("\n");
@@ -113,21 +115,26 @@ export async function runWordNetAtomSenseSweep({ maxBatches = Number.POSITIVE_IN
   }
 
   const [prepared, lemmaCatalog] = await Promise.all([
-    prepareWordNetFrequencyAllocation(),
+    prepareWordNetFrequencyAllocation({ reselectAtomTargetIds: atomIds ?? [] }),
     loadEnglishLemmaCatalog()
   ]);
   const catalogPath = fileURLToPath(ENGLISH_WORDNET_BRIDGE_CONFIG_URL);
   const originalCatalog = await readFile(catalogPath, "utf8");
   const originalCatalogHash = sha256(originalCatalog);
-  const catalogSources = new Set(parseEnglishWordNetBridgeCatalog(originalCatalog).entries.map((entry) => entry.source));
+  const catalogSources = new Set(parseEnglishWordNetBridgeCatalog(prepared.finalCatalog).entries.map((entry) => entry.source));
   const completeWorklist = buildEnglishWordNetAtomSenseWorklist(prepared.atomCoverage, {
     lemmaEntries: lemmaCatalog.entries,
     resolveTarget: prepared.resolveWord,
     reservedSources: catalogSources
   });
+  const reselectionWorklist = includeReopenedAtomSenseNoFitTargets(completeWorklist, {
+    reopenedEntries: prepared.reopenedAtomSenseEntries,
+    atomCoverage: prepared.atomCoverage,
+    resolveTarget: prepared.resolveWord
+  });
   const worklist = atomIds === null
-    ? completeWorklist
-    : filterEnglishWordNetAtomSenseWorklist(completeWorklist, atomIds);
+    ? reselectionWorklist
+    : filterEnglishWordNetAtomSenseWorklist(reselectionWorklist, atomIds);
   const candidateHash = hashEnglishWordNetAtomSenseWorklist(worklist);
   const runIdPrefix = `wordnet-atom-sense-${prepared.coverageHash.slice(0, 12)}-${candidateHash.slice(0, 10)}-${sweepConfig["prompt-revision"]}`;
   const artifactDirectory = path.join(ARTIFACT_ROOT, runIdPrefix);
@@ -185,9 +192,10 @@ export async function runWordNetAtomSenseSweep({ maxBatches = Number.POSITIVE_IN
   }
   const selected = result.records.filter((row) => row.status === "select");
   const updated = appendEnglishWordNetAtomSenseLinks({
-    catalogSource: latestCatalog,
+    catalogSource: prepared.finalCatalog,
     decisions: result.records,
     model: sweepConfig.model,
+    promptRevision: sweepConfig["prompt-revision"],
     runId: result.runId,
     resolveTarget: prepared.resolveWord
   });
@@ -214,10 +222,14 @@ export async function runWordNetAtomSenseSweep({ maxBatches = Number.POSITIVE_IN
     ],
     noFit: result.records.filter((row) => row.status === "no-fit").map(({ id, labels, rationale, excludedCandidates }) => ({
       id, labels, rationale, excludedCandidates
+    })),
+    reopened: prepared.reopenedAtomSenseEntries.map(({ source, target, targetPartOfSpeech, evidence }) => ({
+      source, target, targetPartOfSpeech, priorEvidence: evidence
     }))
   }));
-  if (updated.added.length) await atomicWrite(catalogPath, updated.catalogSource);
-  const allocation = updated.added.length
+  const shouldApply = updated.added.length > 0 || prepared.reopenedAtomSenseEntries.length > 0;
+  if (shouldApply) await atomicWrite(catalogPath, updated.catalogSource);
+  const allocation = shouldApply
     ? await runWordNetFrequencyAllocation({ apply: true })
     : null;
   const queueAfter = await housekeeper.getQueue();

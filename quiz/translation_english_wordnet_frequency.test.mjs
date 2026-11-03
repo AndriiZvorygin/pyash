@@ -344,6 +344,7 @@ test("frequency allocation configuration versions compound verification", async 
     await readFile(ENGLISH_WORDNET_FREQUENCY_ALLOCATION_CONFIG_URL, "utf8")
   );
   assert.equal(config["compound-verification-revision"], "wordnet-modifier-literalness-v9");
+  assert.equal(config["compound-head-relation-policy"], "advisory");
   assert.equal(config["compound-verification-batch-size"], 64);
   assert.equal(config["compound-candidate-source"], "english30k-closed-wordnet-multiword-existing-atoms-v1");
   assert.equal(config["compound-candidate-order"], "english30k-rank-ascending-princeton-tag-count-descending");
