@@ -808,6 +808,12 @@ function isShiftEnterSequence(value) {
     || value === "\u001b[27;2;13;~";
 }
 
+function isControlEnterSequence(value) {
+  return value === "\u001b[13;5u"
+    || value === "\u001b[27;5;13~"
+    || value === "\u001b[27;5;13;~";
+}
+
 function isCsiFinal(value) {
   if (value.startsWith("\u001b[")) {
     return value.length > 2 && /[\x40-\x7e]$/.test(value.slice(2));
@@ -825,6 +831,8 @@ export function createSaddleInputDecoder({
 } = {}) {
   const state = { value: "", cursor: 0 };
   let escape = "";
+  let pasting = false;
+  let pasteBuffer = "";
   let completion = null;
 
   const resetCompletion = () => { completion = null; };
@@ -877,6 +885,15 @@ export function createSaddleInputDecoder({
     changed();
   };
   const handleEscape = (sequence) => {
+    if (sequence === "\u001b[200~") {
+      pasting = true;
+      pasteBuffer = "";
+      return;
+    }
+    if (isControlEnterSequence(sequence)) {
+      submit();
+      return;
+    }
     if (isShiftEnterSequence(sequence)) {
       insert("\n");
       return;
@@ -922,6 +939,18 @@ export function createSaddleInputDecoder({
     }
   };
   const handleChar = (char) => {
+    if (pasting) {
+      pasteBuffer += char;
+      if (pasteBuffer.endsWith("\u001b[201~")) {
+        const pastedText = pasteBuffer.slice(0, -"\u001b[201~".length);
+        pasteBuffer = "";
+        pasting = false;
+        insert(pastedText
+          .replace(/\r\n?/gu, "\n")
+          .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/gu, ""));
+      }
+      return;
+    }
     if (escape) {
       escape += char;
       if (isCsiFinal(escape)) {
@@ -949,11 +978,7 @@ export function createSaddleInputDecoder({
       autocomplete();
       return;
     }
-    if (char === "\r") {
-      submit();
-      return;
-    }
-    if (char === "\n") {
+    if (char === "\r" || char === "\n") {
       insert("\n");
       return;
     }

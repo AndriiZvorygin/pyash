@@ -280,7 +280,7 @@ function renderHistory(items, width, color) {
 }
 
 function footerHelpLines(width) {
-  return wrapPlainLine("Enter send/queue · Tab /cmds · Shift+Enter/Ctrl+J newline · PgUp/PgDn scroll · Ctrl+C interrupt · Ctrl+D exit", width);
+  return wrapPlainLine("Enter newline · Ctrl+Enter send/queue · paste keeps newlines · Tab /cmds · PgUp/PgDn scroll · Ctrl+C interrupt · Ctrl+D exit", width);
 }
 
 function statusDisplayLines(value, width, height, usage = "") {
@@ -373,13 +373,13 @@ export function createSaddleTerminalUi({ output = process.stdout, maxItems = 400
     enter() {
       if (active) return;
       active = true;
-      output.write("\u001b[?1049h\u001b[?25l\u001b[2J\u001b[H");
+      output.write("\u001b[?1049h\u001b[?2004h\u001b[>1u\u001b[?25l\u001b[2J\u001b[H");
       draw();
     },
     exit() {
       if (!active) return;
       active = false;
-      output.write("\u001b[0m\u001b[?25h\u001b[?1049l");
+      output.write("\u001b[?2004l\u001b[<u\u001b[0m\u001b[?25h\u001b[?1049l");
     },
     draw,
     writeLine(text = "") {
