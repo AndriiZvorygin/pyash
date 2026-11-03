@@ -1722,7 +1722,7 @@ async function main() {
   process.stdout.on("resize", activeSaddleResizeHandler);
 
   await showStatus();
-  writeLine(`[trace] newspaper: ${saddleTrace.journalPath} · artifacts: ${path.join(config.cwd, "artifacts", saddleTrace.runId)}`);
+  writeLine(`[trace] newspaper: ${saddleTrace.journalPath} · artifacts: ${path.join(config.worldRoot, "artifacts", saddleTrace.runId)}`);
   await restoreSessionHistory({ detail: `model selection source: ${config.selectionSource}` });
   inputDecoder = createSaddleInputDecoder({
     onSubmit: submit,

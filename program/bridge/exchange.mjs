@@ -6,6 +6,7 @@ import { throwErrorSentence } from "../error.mjs";
 
 let exchangeRecorder = null;
 let exchangeRunRoot = null;
+let exchangeArtifactRoot = null;
 let exchangeRunId = null;
 let exchangeSentenceId = null;
 const artifactByLocator = new Map();
@@ -38,9 +39,12 @@ function normalizePath(locator) {
   return relative.replace(/[\\]+/g, "/");
 }
 
-export function setExchangeRecorder({ record, runRoot } = {}) {
+export function setExchangeRecorder({ record, runRoot, artifactRoot } = {}) {
   exchangeRecorder = typeof record === "function" ? record : null;
   exchangeRunRoot = runRoot ? normalizeRunRoot(runRoot) : null;
+  exchangeArtifactRoot = artifactRoot
+    ? normalizeRunRoot(artifactRoot)
+    : exchangeRunRoot;
   exchangeRunId = null;
   exchangeSentenceId = null;
   artifactByLocator.clear();
@@ -54,6 +58,7 @@ export function setExchangeRecorder({ record, runRoot } = {}) {
 export function clearExchangeRecorder() {
   exchangeRecorder = null;
   exchangeRunRoot = null;
+  exchangeArtifactRoot = null;
   exchangeRunId = null;
   exchangeSentenceId = null;
   artifactByLocator.clear();
@@ -65,7 +70,9 @@ export function clearExchangeRecorder() {
 }
 
 export function setExchangeRunRoot(runRoot) {
+  const priorRunRoot = exchangeRunRoot;
   exchangeRunRoot = runRoot ? normalizeRunRoot(runRoot) : null;
+  if (exchangeArtifactRoot === priorRunRoot) exchangeArtifactRoot = exchangeRunRoot;
 }
 
 export function setExchangeRunId(runId) {
@@ -130,11 +137,19 @@ function contentAddressPath(hash, locator) {
   return parts.join("/");
 }
 
+function artifactRoot() {
+  return exchangeArtifactRoot ?? exchangeRunRoot ?? normalizeRunRoot(process.cwd());
+}
+
+function isRunArtifactLocator(locator) {
+  if (!exchangeRunId) return false;
+  return String(locator ?? "").replace(/[\\]+/g, "/").startsWith(`artifacts/${exchangeRunId}/`);
+}
+
 function writeContentAddressed({ hash, locator, bytes } = {}) {
   if (!hash || !bytes) return null;
   const rel = contentAddressPath(hash, locator);
-  const runRoot = exchangeRunRoot ?? normalizeRunRoot(process.cwd());
-  const abs = path.resolve(runRoot, rel);
+  const abs = path.resolve(artifactRoot(), rel);
   fs.mkdirSync(path.dirname(abs), { recursive: true });
   fs.writeFileSync(abs, bytes);
   return { relative: rel, absolute: abs };
@@ -177,10 +192,9 @@ function linkRunAlias({ name, target, locator } = {}) {
     // Already stored in this run folder; avoid duplicate alias files.
     return null;
   }
-  const runRoot = exchangeRunRoot ?? normalizeRunRoot(process.cwd());
   const alias = runAliasName({ artifactName: name, locator });
   const rel = ["artifacts", exchangeRunId, alias].join("/");
-  const abs = path.resolve(runRoot, rel);
+  const abs = path.resolve(artifactRoot(), rel);
   fs.mkdirSync(path.dirname(abs), { recursive: true });
   if (!fs.existsSync(abs)) {
     try {
@@ -198,7 +212,9 @@ function linkRunAlias({ name, target, locator } = {}) {
 
 function materializeLocator({ locator, target, bytes } = {}) {
   if (!locator || isUri(locator)) return null;
-  const runRoot = exchangeRunRoot ?? normalizeRunRoot(process.cwd());
+  const runRoot = isRunArtifactLocator(locator)
+    ? artifactRoot()
+    : exchangeRunRoot ?? normalizeRunRoot(process.cwd());
   const abs = path.resolve(runRoot, locator);
   fs.mkdirSync(path.dirname(abs), { recursive: true });
   if (fs.existsSync(abs)) return abs;
@@ -362,7 +378,10 @@ export function emitExchangeSentence(sentence) {
 export function hashLocator(locator) {
   if (!locator) return null;
   const normalized = normalizeLocator(locator);
-  const absPath = path.resolve(exchangeRunRoot ?? normalizeRunRoot(process.cwd()), normalized);
+  const runRoot = isRunArtifactLocator(normalized)
+    ? artifactRoot()
+    : exchangeRunRoot ?? normalizeRunRoot(process.cwd());
+  const absPath = path.resolve(runRoot, normalized);
   const bytes = fs.readFileSync(absPath);
   const hash = hashBytes(bytes);
   const size = bytes.length;

@@ -311,6 +311,8 @@ test("coding saddle completion evidence requires a successful edit and a later c
   assert.equal(isSaddleCodeChangeRequest(input), true);
   assert.equal(isSaddleCodeChangeRequest("how does the saddle look now?"), false);
   assert.equal(isSaddleCodeChangeRequest("I did an update; can you test the tools now?"), false);
+  assert.equal(isSaddleCodeChangeRequest("see if the file update thing is fixed now"), false);
+  assert.equal(isSaddleCodeChangeRequest("check if the file is changed, and update it if needed"), true);
   assert.equal(isSaddleCodeChangeRequest("update the coding saddle tools to show command output"), true);
 
   const events = [

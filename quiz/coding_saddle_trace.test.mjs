@@ -65,8 +65,8 @@ test("coding saddle records tool arguments and results as artifacts linked from 
     assert.match(journal, /turn-[^\s"]+-input\.pya/u);
     assert.match(journal, /turn-session-001/u);
 
-    const callArtifact = await fs.readFile(path.join(cwd, "artifacts", trace.runId, "tool-event-000001-call.pya"), "utf8");
-    const resultArtifact = await fs.readFile(path.join(cwd, "artifacts", trace.runId, "tool-event-000001-result.pya"), "utf8");
+    const callArtifact = await fs.readFile(path.join(worldRoot, "artifacts", trace.runId, "tool-event-000001-call.pya"), "utf8");
+    const resultArtifact = await fs.readFile(path.join(worldRoot, "artifacts", trace.runId, "tool-event-000001-result.pya"), "utf8");
     assert.match(callArtifact, /printf trace-ok/u);
     assert.match(callArtifact, /call-001/u);
     assert.match(resultArtifact, /trace-ok/u);
@@ -89,7 +89,7 @@ test("coding saddle preserves a call artifact when its tool result never arrives
     });
     trace.close({ status: "interrupted" });
 
-    const artifact = await fs.readFile(path.join(cwd, "artifacts", trace.runId, "tool-event-000001-call.pya"), "utf8");
+    const artifact = await fs.readFile(path.join(worldRoot, "artifacts", trace.runId, "tool-event-000001-call.pya"), "utf8");
     const journal = await fs.readFile(trace.journalPath, "utf8");
     assert.match(artifact, /README\.md/u);
     assert.match(journal, /tool-event-000001-call\.pya/u);
@@ -117,9 +117,10 @@ test("coding saddle tracing allows Pyash writes inside the active project", asyn
 
     const journal = await fs.readFile(trace.journalPath, "utf8");
     assert.match(journal, /chapter-note\.txt/u);
-    const artifacts = await fs.readdir(path.join(cwd, "artifacts", trace.runId));
+    const artifacts = await fs.readdir(path.join(worldRoot, "artifacts", trace.runId));
     assert.ok(artifacts.some((name) => name.includes("chapter-note.txt")));
     assert.equal(await fs.readFile(path.join(worldRoot, "newspaper", path.basename(trace.journalPath)), "utf8"), journal);
+    await assert.rejects(fs.access(path.join(cwd, "artifacts")));
   } finally {
     trace.close();
     forget();
