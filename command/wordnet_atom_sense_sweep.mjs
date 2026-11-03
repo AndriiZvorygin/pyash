@@ -14,6 +14,7 @@ import {
   buildEnglishWordNetAtomSenseWorklist,
   ENGLISH_WORDNET_ATOM_SENSE_RESPONSE_FORMAT,
   filterEnglishWordNetAtomSenseWorklist,
+  includeReopenedAtomSenseNoFitTargets,
   hashEnglishWordNetAtomSenseWorklist,
   loadEnglishWordNetAtomSenseConfig,
   runEnglishWordNetAtomSenseSweep
@@ -126,9 +127,14 @@ export async function runWordNetAtomSenseSweep({ maxBatches = Number.POSITIVE_IN
     resolveTarget: prepared.resolveWord,
     reservedSources: catalogSources
   });
+  const reselectionWorklist = includeReopenedAtomSenseNoFitTargets(completeWorklist, {
+    reopenedEntries: prepared.reopenedAtomSenseEntries,
+    atomCoverage: prepared.atomCoverage,
+    resolveTarget: prepared.resolveWord
+  });
   const worklist = atomIds === null
-    ? completeWorklist
-    : filterEnglishWordNetAtomSenseWorklist(completeWorklist, atomIds);
+    ? reselectionWorklist
+    : filterEnglishWordNetAtomSenseWorklist(reselectionWorklist, atomIds);
   const candidateHash = hashEnglishWordNetAtomSenseWorklist(worklist);
   const runIdPrefix = `wordnet-atom-sense-${prepared.coverageHash.slice(0, 12)}-${candidateHash.slice(0, 10)}-${sweepConfig["prompt-revision"]}`;
   const artifactDirectory = path.join(ARTIFACT_ROOT, runIdPrefix);

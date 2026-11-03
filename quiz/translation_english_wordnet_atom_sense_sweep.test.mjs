@@ -10,6 +10,7 @@ import {
   buildEnglishWordNetAtomSenseWorklist,
   ENGLISH_WORDNET_ATOM_SENSE_CONFIG_URL,
   filterEnglishWordNetAtomSenseWorklist,
+  includeReopenedAtomSenseNoFitTargets,
   loadEnglishWordNetAtomSenseConfig,
   parseEnglishWordNetAtomSenseBatchPya,
   parseEnglishWordNetAtomSenseResponse,
@@ -238,6 +239,33 @@ test("atom worklist filtering selects only newly exposed ids and rejects unknown
     () => filterEnglishWordNetAtomSenseWorklist(worklist, ["atom:missing"]),
     /unknown atom id/u
   );
+});
+
+test("targeted reselection records no-fit when refreshed lemma validation removes every candidate", () => {
+  const reopened = [{
+    source: "n:03211323-n",
+    target: "discuss",
+    targetPartOfSpeech: "n",
+    lemmas: ["discus", "saucer"]
+  }];
+  const atomCoverage = [{ pyac: "dlak", labels: ["discuss"], english30kRank: 4595 }];
+  const resolveTarget = (word, { partOfSpeech }) => word === "discuss" && partOfSpeech === "n"
+    ? { coverageType: "atomic", pyashSequence: ["dlak"] }
+    : null;
+  const worklist = includeReopenedAtomSenseNoFitTargets([], {
+    reopenedEntries: reopened,
+    atomCoverage,
+    resolveTarget
+  });
+
+  assert.equal(worklist.length, 1);
+  assert.equal(worklist[0].id, "atom:dlak:n");
+  assert.deepEqual(worklist[0].candidates, []);
+  assert.equal(
+    worklist[0].excludedCandidates[0].reason,
+    "reopened-target-has-no-eligible-candidates-after-lemma-validation"
+  );
+  assert.deepEqual(filterEnglishWordNetAtomSenseWorklist(worklist, ["atom:dlak:n"]), worklist);
 });
 
 test("atom sense response accepts only supplied ids and complete unique decisions", () => {

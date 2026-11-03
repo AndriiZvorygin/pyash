@@ -8,6 +8,7 @@ import {
   loadEnglishAtomLemmaScanConfig
 } from "../program/library/translation/english_atom_lemma_scan.mjs";
 import {
+  inflectionCandidates,
   buildEnglishLemmaIndex,
   loadEnglishLemmaCatalog,
   parseEnglishLemmaCatalog,
@@ -110,6 +111,53 @@ test("atom lemma scan keeps lexical WordNet entries from being reinterpreted as 
   assert.equal(assignments[0].assignments[0].kind, "lemma");
   assert.equal(assignments[0].assignments[0].lemma, "news");
   assert.equal(assignments[0].assignments[0].method, "surface-lemma");
+});
+
+test("atom lemma scan rejects an s suffix where English requires es", () => {
+  const candidates = inflectionCandidates("discuss");
+  assert.equal(candidates.some(({ lemma }) => lemma === "discus"), false);
+  assert.ok(inflectionCandidates("buses").some(({ lemma, rule }) => lemma === "bus" && rule === "plural-or-third-person-es"));
+  assert.ok(inflectionCandidates("boxes").some(({ lemma, rule }) => lemma === "box" && rule === "plural-or-third-person-es"));
+
+  const assignments = buildEnglishAtomLemmaAssignments({
+    atomCoverage: [{ id: "atom:dlak", pyac: "dlak", labels: ["discuss"], status: "no-direct-wordnet-candidate" }],
+    atomicEntries: [{ en: "discuss", pya: "dlak" }],
+    wordnetIndex: wordnetIndex({ discuss: [], discus: [{ pos: "n", synset: "03211323-n" }] }),
+    rankForEnglish: () => 100,
+    layerByWord: new Map([["dlak", 16]])
+  });
+
+  assert.equal(assignments[0].assignments[0].lemma, "discuss");
+  assert.equal(assignments[0].assignments[0].method, "surface-lemma");
+});
+
+test("lemma catalog rejects generated rows without a valid inflection path", () => {
+  const catalogSource = (surface, entry) => [
+    "su name translation_english30k_lemmas be map def",
+    'su text "format" ob text "english-lemma-v1" ya',
+    `su text ${JSON.stringify(surface)} ob text ${JSON.stringify(JSON.stringify(entry))} ya`,
+    "prah"
+  ].join("\n");
+  const evidence = "WordNet supports discuss as a regular inflection of discus; generated assignment.";
+
+  assert.throws(() => parseEnglishLemmaCatalog(catalogSource("discuss", {
+    surface: "discuss",
+    lemma: "discus",
+    canonicalEnglish: "discuss",
+    kind: "inflectional",
+    status: "accepted-deterministic",
+    partOfSpeech: "n",
+    rule: "plural-or-third-person-s",
+    evidence
+  })), /unsupported inflection/u);
+  assert.throws(() => parseEnglishLemmaCatalog(catalogSource("discus", {
+    surface: "discus",
+    lemma: "discus",
+    canonicalEnglish: "discuss",
+    kind: "anchor",
+    status: "accepted-deterministic",
+    evidence: "The atom lemma scan linked discus to discuss using English30k rank and WordNet morphology evidence."
+  })), /unsupported inflection/u);
 });
 
 test("atom lemma scan links an inflected verb alongside a lexicalized adjective satellite", () => {
@@ -319,6 +367,25 @@ test("lemma catalog renderer preserves distinct POS-scoped rows for one surface"
 
   assert.deepEqual(catalog.entries.map((entry) => entry.partOfSpeech), ["s", "v"]);
   assert.equal(catalog.entries.find((entry) => entry.partOfSpeech === "v").lemma, "become");
+});
+
+test("lemma catalog metadata keys do not shadow lexical surfaces", () => {
+  const source = renderEnglishLemmaCatalogPya({
+    source: { path: "/corpus/English30k.txt", sourceHash: "fixture-hash", cutoff: 30000 },
+    entries: ["format", "source", "cutoff"].map((surface) => ({
+      surface,
+      lemma: surface,
+      canonicalEnglish: surface,
+      kind: "anchor",
+      status: "accepted-curated",
+      evidence: `fixture lexical entry for ${surface}`
+    }))
+  });
+  const catalog = parseEnglishLemmaCatalog(source);
+
+  assert.match(source, /su text "metadata:source"/u);
+  assert.equal(catalog.source, "/corpus/English30k.txt");
+  assert.deepEqual(catalog.entries.map((entry) => entry.surface), ["cutoff", "format", "source"]);
 });
 
 test("lemma index keeps adjective satellite mappings separate from adjective mappings", () => {

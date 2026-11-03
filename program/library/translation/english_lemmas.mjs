@@ -6,6 +6,8 @@ import { buildProgram } from "../../program.mjs";
 export const ENGLISH_LEMMA_FORMAT = "english-lemma-v1";
 export const ENGLISH_LEMMA_NAME = "translation_english30k_lemmas";
 
+const CATALOG_METADATA_PREFIX = "metadata:";
+const LEGACY_METADATA_KEYS = new Set(["format", "source", "source-hash", "duplicate-policy", "cutoff"]);
 const ACCEPTED_STATUSES = new Set(["accepted-deterministic", "accepted-curated", "accepted-llm", "repaired-llm"]);
 const DEPRECATED_DUPLICATE_STATUS = "deprecated-duplicate";
 const MAPPING_KINDS = new Set(["irregular", "inflectional", "derivational", "anchor", "duplicate"]);
@@ -31,6 +33,40 @@ export function normalizeEnglishLemmaWord(value) {
   return typeof value === "string"
     ? value.normalize("NFC").trim().toLowerCase().replace(/[ _-]+/gu, " ")
     : "";
+}
+
+export function englishLemmaMappingIssue(entry, { catalogEntries = [] } = {}) {
+  const surface = normalizeEnglishLemmaWord(entry?.surface);
+  const lemma = normalizeEnglishLemmaWord(entry?.lemma);
+  const canonicalEnglish = normalizeEnglishLemmaWord(entry?.canonicalEnglish);
+  const kind = String(entry?.kind ?? "").trim().toLowerCase();
+  const status = String(entry?.status ?? "").trim().toLowerCase();
+
+  if (kind === "inflectional" && status === "accepted-deterministic") {
+    const rule = String(entry?.rule ?? "").trim();
+    const supported = rule && inflectionCandidates(surface).some((candidate) => (
+      candidate.lemma === lemma && candidate.rule === rule
+    ));
+    if (!supported) return "unsupported inflection: surface, lemma, and rule do not form a valid English inflection";
+  }
+
+  const generatedAnchor = kind === "anchor"
+    && status === "accepted-deterministic"
+    && String(entry?.evidence ?? "").startsWith("The atom lemma scan linked ");
+  if (generatedAnchor && surface !== canonicalEnglish) {
+    const regularInflection = inflectionCandidates(canonicalEnglish).some((candidate) => candidate.lemma === surface);
+    const acceptedMapping = catalogEntries.some((candidate) => (
+      normalizeEnglishLemmaWord(candidate?.surface) === canonicalEnglish
+      && normalizeEnglishLemmaWord(candidate?.lemma) === surface
+      && ["inflectional", "irregular", "derivational"].includes(candidate?.kind)
+      && ACCEPTED_STATUSES.has(String(candidate?.status ?? ""))
+      && !englishLemmaMappingIssue(candidate)
+    ));
+    const supported = regularInflection || acceptedMapping;
+    if (!supported) return "unsupported inflection: generated anchor is not derived from its canonical atom label";
+  }
+
+  return "";
 }
 
 export function englishLemmaCandidateId(record) {
@@ -109,7 +145,7 @@ function normalizeEntry(payload, surface, index) {
   if (grammaticalNumber && !["singular", "plural"].includes(grammaticalNumber)) {
     throw invalid("English lemma grammatical number is unsupported", { index, surface, grammaticalNumber });
   }
-  return {
+  const entry = {
     surface: normalizedSurface,
     lemma,
     canonicalEnglish: normalizeEnglishLemmaWord(payload.canonicalEnglish ?? ""),
@@ -124,6 +160,7 @@ function normalizeEntry(payload, surface, index) {
     ...(grammaticalNumber ? { grammaticalNumber } : {}),
     ...(Number.isInteger(payload.rank) ? { rank: payload.rank } : {})
   };
+  return entry;
 }
 
 function normalizePyashSequence(payload, surface, index) {
@@ -178,12 +215,23 @@ export function parseEnglishLemmaCatalog(source, {
   ));
   if (!header) throw invalid("English lemma source has no canonical map header");
   const metadata = {};
+  const hasNamespacedMetadata = sentences.some((sentence) => (
+    sentence?.mood === "ya"
+    && typeof sentence.su?.text === "string"
+    && sentence.su.text.startsWith(CATALOG_METADATA_PREFIX)
+  ));
   for (const sentence of sentences) {
     if (sentence?.mood !== "ya" || typeof sentence.su?.text !== "string") continue;
-    if (["format", "source", "source-hash", "duplicate-policy"].includes(sentence.su.text) && typeof sentence.ob?.text === "string") {
-      metadata[sentence.su.text] = sentence.ob.text;
+    const key = sentence.su.text;
+    if (key.startsWith(CATALOG_METADATA_PREFIX)) {
+      const field = key.slice(CATALOG_METADATA_PREFIX.length);
+      if (field === "cutoff" && Number.isInteger(sentence.ob?.num)) metadata.cutoff = sentence.ob.num;
+      else if (typeof sentence.ob?.text === "string") metadata[field] = sentence.ob.text;
+    } else if (!hasNamespacedMetadata && ["format", "source", "source-hash", "duplicate-policy"].includes(key)
+      && typeof sentence.ob?.text === "string") {
+      metadata[key] = sentence.ob.text;
     }
-    if (sentence.su.text === "cutoff" && Number.isInteger(sentence.ob?.num)) metadata.cutoff = sentence.ob.num;
+    if (!hasNamespacedMetadata && key === "cutoff" && Number.isInteger(sentence.ob?.num)) metadata.cutoff = sentence.ob.num;
   }
   if (metadata.format !== ENGLISH_LEMMA_FORMAT) {
     throw invalid("English lemma source has an unsupported format", { format: metadata.format });
@@ -192,7 +240,8 @@ export function parseEnglishLemmaCatalog(source, {
   const seen = new Set();
   for (const [index, sentence] of sentences.entries()) {
     if (sentence?.mood !== "ya" || typeof sentence.su?.text !== "string") continue;
-    if (["format", "source", "source-hash", "duplicate-policy", "cutoff"].includes(sentence.su.text)) continue;
+    if (sentence.su.text.startsWith(CATALOG_METADATA_PREFIX)) continue;
+    if (!hasNamespacedMetadata && LEGACY_METADATA_KEYS.has(sentence.su.text)) continue;
     const entry = normalizeEntry(parseJsonPayload(sentence, index), sentence.su.text, index);
     const identity = `${entry.surface}\u0000${entry.partOfSpeech ?? ""}`;
     if (seen.has(identity)) {
@@ -204,6 +253,17 @@ export function parseEnglishLemmaCatalog(source, {
     }
     seen.add(identity);
     entries.push(entry);
+  }
+  for (const entry of entries) {
+    const mappingIssue = englishLemmaMappingIssue(entry, { catalogEntries: entries });
+    if (mappingIssue) {
+      throw invalid(mappingIssue, {
+        surface: entry.surface,
+        lemma: entry.lemma,
+        canonicalEnglish: entry.canonicalEnglish,
+        rule: entry.rule
+      });
+    }
   }
   return {
     format: ENGLISH_LEMMA_FORMAT,
@@ -237,6 +297,7 @@ export function inflectionCandidates(surface) {
   const addStemRules = (ending, rule) => {
     if (!word.endsWith(ending) || word.length <= ending.length + 1) return;
     const stem = word.slice(0, -ending.length);
+    if (ending === "s" && /(?:s|x|z|ch|sh)$/u.test(stem)) return;
     const shortRoot = new Set(["be", "do", "go"]);
     if (stem.length >= 3 || shortRoot.has(stem)) addCandidate(candidates, stem, rule);
     if (stem.length >= 3) addCandidate(candidates, `${stem}e`, `${rule}-silent-e`);
@@ -484,11 +545,11 @@ export function renderEnglishLemmaCatalogPya({ source, entries }, {
   if (!source || !Array.isArray(entries)) throw invalid("English lemma renderer requires source and entries");
   const lines = [
     `su name ${name} be map def`,
-    `su text "format" ob text ${JSON.stringify(ENGLISH_LEMMA_FORMAT)} ya`,
-    `su text "source" ob text ${JSON.stringify(source.path ?? source.source ?? "")} ya`,
-    `su text "source-hash" ob text ${JSON.stringify(source.sourceHash ?? "")} ya`,
-    `su text "cutoff" ob num ${Number(source.cutoff ?? 0)} ya`,
-    ...(source.duplicatePolicy ? [`su text "duplicate-policy" ob text ${JSON.stringify(source.duplicatePolicy)} ya`] : []),
+    `su text "${CATALOG_METADATA_PREFIX}format" ob text ${JSON.stringify(ENGLISH_LEMMA_FORMAT)} ya`,
+    `su text "${CATALOG_METADATA_PREFIX}source" ob text ${JSON.stringify(source.path ?? source.source ?? "")} ya`,
+    `su text "${CATALOG_METADATA_PREFIX}source-hash" ob text ${JSON.stringify(source.sourceHash ?? "")} ya`,
+    `su text "${CATALOG_METADATA_PREFIX}cutoff" ob num ${Number(source.cutoff ?? 0)} ya`,
+    ...(source.duplicatePolicy ? [`su text "${CATALOG_METADATA_PREFIX}duplicate-policy" ob text ${JSON.stringify(source.duplicatePolicy)} ya`] : []),
     ...entries
       .filter((entry) => entry?.kind && entry.kind !== "identity")
       .sort((left, right) => normalizeEnglishLemmaWord(left.surface).localeCompare(normalizeEnglishLemmaWord(right.surface)))

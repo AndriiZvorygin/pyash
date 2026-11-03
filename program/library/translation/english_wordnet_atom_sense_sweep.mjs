@@ -258,6 +258,54 @@ export function filterEnglishWordNetAtomSenseWorklist(worklist = [], atomIds = [
   return filtered;
 }
 
+export function includeReopenedAtomSenseNoFitTargets(worklist = [], {
+  reopenedEntries = [],
+  atomCoverage = [],
+  resolveTarget = null
+} = {}) {
+  if (!Array.isArray(worklist) || !Array.isArray(reopenedEntries) || !Array.isArray(atomCoverage)
+    || typeof resolveTarget !== "function") {
+    throw invalid("reopened atom sense targets require a worklist, bridge entries, coverage, and target resolver");
+  }
+  const rows = [...worklist];
+  const knownIds = new Set(rows.map((row) => row.id));
+  for (const entry of reopenedEntries) {
+    const partOfSpeech = canonicalWordNetTargetPartOfSpeech(entry?.targetPartOfSpeech || entry?.source?.slice(0, 1));
+    if (!partOfSpeech) continue;
+    const target = resolveTarget(entry.target, { partOfSpeech });
+    const pyashSequence = Array.isArray(target?.pyashSequence)
+      ? target.pyashSequence.filter((word) => typeof word === "string" && word.trim()).map((word) => word.trim())
+      : [];
+    if (target?.coverageType !== "atomic" || pyashSequence.length !== 1) continue;
+    const id = englishWordNetTargetId("atom", pyashSequence, partOfSpeech);
+    if (knownIds.has(id)) continue;
+    const atom = atomCoverage.find((row) => text(row?.pyac) === pyashSequence[0]);
+    const labels = unique([...(atom?.labels ?? []), entry.target]);
+    if (labels.length === 0) continue;
+    rows.push({
+      id,
+      targetId: id,
+      responseId: `slot-${hash(id).slice(0, 16)}`,
+      partOfSpeech,
+      pyac: pyashSequence[0],
+      labels,
+      english30kRank: Number.isFinite(atom?.english30kRank) ? atom.english30kRank : null,
+      lemmaMappings: [],
+      candidates: [],
+      excludedCandidates: [{
+        source: text(entry.source),
+        matchedLemmas: unique(entry.lemmas ?? [entry.target]),
+        reason: "reopened-target-has-no-eligible-candidates-after-lemma-validation"
+      }]
+    });
+    knownIds.add(id);
+  }
+  return rows.sort((left, right) => (
+    (left.english30kRank ?? Number.MAX_SAFE_INTEGER) - (right.english30kRank ?? Number.MAX_SAFE_INTEGER)
+      || left.id.localeCompare(right.id)
+  ));
+}
+
 function promptItem(item, candidates) {
   return [item.responseId || item.id, item.partOfSpeech, item.labels, candidates.map((candidate) => [
     candidate.source,
