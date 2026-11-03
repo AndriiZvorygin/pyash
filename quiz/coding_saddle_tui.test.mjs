@@ -69,6 +69,27 @@ test("coding saddle streams one accumulated Markdown response without duplicatin
   ui.exit();
 });
 
+test("coding saddle keeps a completed streamed answer below tool events", () => {
+  const writes = [];
+  const ui = createSaddleTerminalUi({
+    output: { columns: 80, rows: 20, isTTY: true, write(value) { writes.push(String(value)); } },
+    color: false
+  });
+  ui.enter();
+  ui.writeLine("saddle>");
+  const stream = ui.beginMarkdownStream();
+  ui.appendMarkdownStream(stream, "partial response");
+  ui.writeLine("[tool call] inspect");
+  ui.writeLine("[tool result] file contents");
+  ui.replaceMarkdownStream(stream, "Final answer after inspecting the file.");
+  ui.finishMarkdownStream(stream, { precedingText: "saddle>" });
+
+  const lastFrame = writes.join("").slice(writes.join("").lastIndexOf("\u001b[?25l\u001b[H"));
+  assert.ok(lastFrame.indexOf("[tool result] file contents") < lastFrame.indexOf("saddle>"));
+  assert.ok(lastFrame.indexOf("saddle>") < lastFrame.indexOf("Final answer after inspecting the file."));
+  ui.exit();
+});
+
 test("coding saddle keeps wrapped list items aligned under their text", () => {
   const lines = renderSaddleMarkdown("- this is a longer list item that wraps", { width: 20, color: false });
   assert.equal(lines[0], "• this is a longer ");

@@ -340,12 +340,8 @@ export async function runToolChat({
     }
   };
 
-  while (turns < maxToolTurns) {
-    if (typeof checkInterrupted === "function") {
-      await checkInterrupted();
-    }
-    turns += 1;
-    const requestPayload = { mode: "chat", model, messages, tools, stream: stream === true };
+  const buildRequestPayload = (requestTools = tools) => {
+    const requestPayload = { mode: "chat", model, messages, tools: requestTools, stream: stream === true };
     requestPayload.prompt = buildPromptText(messages);
     const selectedToolMapName = String(toolMapName ?? "").trim();
     if (selectedToolMapName) requestPayload.toolMapName = selectedToolMapName;
@@ -360,18 +356,23 @@ export async function runToolChat({
       requestPayload.contextWindow = Number(contextWindow);
     }
     applySampling(requestPayload);
+    return requestPayload;
+  };
+
+  const requestModel = async (requestPayload) => {
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
     debugMind("request", requestPayload);
     const mockResponse = nextMockResponse();
+    let response;
     if (mockResponse) {
       if (typeof mockResponse === "string") {
         try {
-          lastResponse = JSON.parse(mockResponse);
+          response = JSON.parse(mockResponse);
         } catch {
-          lastResponse = { message: { content: mockResponse } };
+          response = { message: { content: mockResponse } };
         }
       } else {
-        lastResponse = mockResponse;
+        response = mockResponse;
       }
     } else {
       if (!backendName) {
@@ -382,16 +383,25 @@ export async function runToolChat({
           raw: { requestPayload }
         });
       }
-      lastResponse = stream === true
+      response = stream === true
         ? await callStreamingToolTurn({ backendName, payload: requestPayload, onAssistantDelta, onToolCall })
         : await callMindBackend({ backendName, payload: requestPayload, debug: mindDebug });
     }
-    onUsage?.(lastResponse?.usage ?? lastResponse?.metadata);
-    recordMindJson({ targetName: mindName, label: "response", payload: stripContext(lastResponse) });
+    onUsage?.(response?.usage ?? response?.metadata);
+    recordMindJson({ targetName: mindName, label: "response", payload: stripContext(response) });
     if (mindDebug) {
       // eslint-disable-next-line no-console
-      console.error(`[mind debug] ${JSON.stringify({ label: "response", hasToolCalls: Array.isArray(lastResponse?.message?.tool_calls), contentLength: (lastResponse?.message?.content ?? "").length })}`);
+      console.error(`[mind debug] ${JSON.stringify({ label: "response", hasToolCalls: Array.isArray(response?.message?.tool_calls), contentLength: (response?.message?.content ?? "").length })}`);
     }
+    return response;
+  };
+
+  while (turns < maxToolTurns) {
+    if (typeof checkInterrupted === "function") {
+      await checkInterrupted();
+    }
+    turns += 1;
+    lastResponse = await requestModel(buildRequestPayload());
 
     const observedToolEvents = Array.isArray(lastResponse?.message?.observed_tool_events)
       ? lastResponse.message.observed_tool_events
@@ -615,14 +625,22 @@ export async function runToolChat({
     }
   }
 
-  if (!responseText) {
-    responseText = lastResponse?.message?.content ?? "";
+  const responseNeedsSummary = !String(responseText ?? "").trim()
+    || String(responseText).trim() === "DID_NOT_RECEIVE_TOOL_RESULT";
+  let finalSummaryRequested = false;
+  if (responseNeedsSummary && (toolCallsUsed > 0 || lastToolText)) {
+    if (typeof checkInterrupted === "function") await checkInterrupted();
+    finalSummaryRequested = true;
+    messages.push({
+      role: "system",
+      content: "All tool actions for the user's request are complete. Provide a concise user-facing answer using the tool results above. Do not call tools and do not return raw tool output."
+    });
+    lastResponse = await requestModel(buildRequestPayload([]));
+    responseText = String(lastResponse?.message?.content ?? "");
   }
-  if (!responseText && lastToolText) {
-    responseText = lastToolText;
-  }
-  if (responseText === "DID_NOT_RECEIVE_TOOL_RESULT" && lastToolText) {
-    responseText = lastToolText;
+  if (finalSummaryRequested && String(responseText).trim() === "DID_NOT_RECEIVE_TOOL_RESULT") responseText = "";
+  if (!String(responseText ?? "").trim() && (toolCallsUsed > 0 || lastToolText)) {
+    responseText = "I completed the tool calls, but the model did not provide a final summary. The tool results are shown above.";
   }
   if (stream !== true && responseText) onAssistantDelta?.(responseText);
   if (mindDebug && !responseText) {

@@ -407,6 +407,20 @@ export function createSaddleTerminalUi({ output = process.stdout, maxItems = 400
       item.cacheKey = null;
       draw();
     },
+    finishMarkdownStream(item, { precedingText = "" } = {}) {
+      const itemIndex = items.indexOf(item);
+      if (itemIndex < 0) return;
+      let start = itemIndex;
+      if (precedingText && itemIndex > 0) {
+        const preceding = items[itemIndex - 1];
+        if (preceding.kind === "text" && preceding.text === precedingText) start -= 1;
+      }
+      const completed = items.splice(start, itemIndex - start + 1);
+      items.push(...completed);
+      if (items.length > maxItems) items.splice(0, items.length - maxItems);
+      scrollOffset = 0;
+      draw();
+    },
     clearHistory() {
       items.length = 0;
       scrollOffset = 0;

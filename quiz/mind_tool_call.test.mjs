@@ -77,6 +77,109 @@ test("mind tool calling executes allowed tool and returns final answer", async (
   }
 });
 
+test("mind tool chat requests a user-facing summary instead of returning the last tool result", async () => {
+  forget();
+  resetMindLogs();
+
+  const capability = parse("su name plus num be plus ob num 1 to name num can");
+  const toolName = joinSignatureWords(deriveSignatureFromCall(capability));
+  await interpret(parse("su name tools be map def"));
+  await interpret(capability);
+  await interpret(parse("prah"));
+  const requests = [];
+  const responseText = await runToolChat({
+    sentence: parse('be write ob text "add" for name helper to name helper-out do'),
+    ob: {},
+    mindName: "helper",
+    model: "fixture-model",
+    dialogue: "helper tool-summary test",
+    callPrompt: "Run a calculation and summarize the result.",
+    resolvedConfigPrompt: "",
+    historyMessages: [],
+    toolMap: new Map([[toolName, capability]]),
+    tools: [{ function: { name: toolName } }],
+    toolBlock: "",
+    backendName: "",
+    ollamaHost: "",
+    reasoningEffort: "",
+    mindDebug: false,
+    debugMind: (label, payload) => {
+      if (label === "request") requests.push(payload);
+    },
+    stream: true,
+    inputs: {
+      inputText: "Run a calculation and summarize the result.",
+      mockResponseRaw: JSON.stringify([
+        {
+          message: {
+            content: "",
+            tool_calls: [{
+              id: "add-1",
+              function: { name: toolName, arguments: { ob: 2, to: "total" } }
+            }]
+          }
+        },
+        { message: { content: "" } },
+        { message: { content: "The result is 2." } }
+      ])
+    }
+  });
+
+  assert.equal(responseText, "The result is 2.");
+  assert.equal(requests.length, 3);
+  assert.deepEqual(requests[2].tools, []);
+  assert.match(requests[2].prompt, /tool actions.*complete/u);
+});
+
+test("mind tool chat explains when both the completion and summary are empty", async () => {
+  forget();
+  resetMindLogs();
+
+  const capability = parse("su name plus num be plus ob num 1 to name num can");
+  const toolName = joinSignatureWords(deriveSignatureFromCall(capability));
+  await interpret(parse("su name tools be map def"));
+  await interpret(capability);
+  await interpret(parse("prah"));
+  const responseText = await runToolChat({
+    sentence: parse('be write ob text "add" for name helper to name helper-out do'),
+    ob: {},
+    mindName: "helper",
+    model: "fixture-model",
+    dialogue: "helper empty-summary test",
+    callPrompt: "Run a calculation and summarize the result.",
+    resolvedConfigPrompt: "",
+    historyMessages: [],
+    toolMap: new Map([[toolName, capability]]),
+    tools: [{ function: { name: toolName } }],
+    toolBlock: "",
+    backendName: "",
+    ollamaHost: "",
+    reasoningEffort: "",
+    mindDebug: false,
+    debugMind: () => {},
+    stream: true,
+    inputs: {
+      inputText: "Run a calculation and summarize the result.",
+      mockResponseRaw: JSON.stringify([
+        {
+          message: {
+            content: "",
+            tool_calls: [{
+              id: "add-2",
+              function: { name: toolName, arguments: { ob: 2, to: "total" } }
+            }]
+          }
+        },
+        { message: { content: "" } },
+        { message: { content: "" } }
+      ])
+    }
+  });
+
+  assert.equal(responseText, "I completed the tool calls, but the model did not provide a final summary. The tool results are shown above.");
+  assert.doesNotMatch(responseText, /^su name/u);
+});
+
 test("mind tool chat forwards observed codex tool events without local re-execution", async () => {
   forget();
   resetMindLogs();

@@ -1628,6 +1628,7 @@ async function main() {
       const finalText = String(text).trim() || "(no response text)";
       if (lastTurnStreamed && responseStream) {
         if (responseStreamedText.trim() !== finalText) saddleUi.replaceMarkdownStream(responseStream, finalText);
+        saddleUi.finishMarkdownStream(responseStream, { precedingText: "saddle>" });
       } else {
         writeLine("saddle>");
         writeMarkdown(finalText);
