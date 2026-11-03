@@ -10,10 +10,11 @@ import {
   parseEnglishWordNetBridgeCatalog
 } from "./english_wordnet_bridges.mjs";
 import { extractBoundedJsonObject } from "./english_verification.mjs";
+import { englishWordNetDefinition, isCircularEnglishWordNetGloss } from "./english_wordnet_glosses.mjs";
 import { renderEnglishWordNetSenseLinkRowsPya } from "./english_wordnet_linker.mjs";
 
 export const ENGLISH_WORDNET_ATOM_SENSE_FORMAT = "english-wordnet-atom-sense-sweep-v1";
-export const ENGLISH_WORDNET_ATOM_SENSE_PROMPT_REVISION = "atom-general-pos-gloss-choice-v7";
+export const ENGLISH_WORDNET_ATOM_SENSE_PROMPT_REVISION = "atom-general-pos-gloss-choice-v8";
 export const ENGLISH_WORDNET_ATOM_SENSE_CONFIG_URL = new URL("./english_wordnet_atom_sense_sweep.pya", import.meta.url);
 
 export const ENGLISH_WORDNET_ATOM_SENSE_RESPONSE_FORMAT = Object.freeze({
@@ -80,7 +81,7 @@ function pyaJsonRow(key, value) {
 }
 
 function definition(value) {
-  return text(value).split(";")[0].slice(0, 240);
+  return englishWordNetDefinition(text(value)).slice(0, 240);
 }
 
 function unique(values) {
@@ -189,18 +190,28 @@ export function buildEnglishWordNetAtomSenseWorklist(atomCoverage = [], {
         bySource.set(candidate.source, row);
       }
       const allCandidates = [...bySource.values()];
-      const candidates = allCandidates.filter((candidate) => (
+      const labelMatchedCandidates = allCandidates.filter((candidate) => (
         candidate.matchedLemmas.some((lemma) => permittedLemmas.has(normalizedLabel(lemma)))
-      )).sort((left, right) => (
+      ));
+      const circularCandidates = labelMatchedCandidates.filter((candidate) => (
+        isCircularEnglishWordNetGloss(candidate.definition, candidate.matchedLemmas)
+      ));
+      const candidates = labelMatchedCandidates.filter((candidate) => !circularCandidates.includes(candidate))
+        .sort((left, right) => (
         (left.english30kRank ?? Number.MAX_SAFE_INTEGER) - (right.english30kRank ?? Number.MAX_SAFE_INTEGER)
           || (right.tagCount ?? -1) - (left.tagCount ?? -1)
           || left.source.localeCompare(right.source)
       ));
       const excludedCandidates = [
-        ...allCandidates.filter((candidate) => !candidates.includes(candidate)).map((candidate) => ({
+        ...allCandidates.filter((candidate) => !labelMatchedCandidates.includes(candidate)).map((candidate) => ({
         source: candidate.source,
         matchedLemmas: candidate.matchedLemmas,
         reason: "candidate-lemma-does-not-match-atom-label-or-accepted-lemma"
+        })),
+        ...circularCandidates.map((candidate) => ({
+          source: candidate.source,
+          matchedLemmas: candidate.matchedLemmas,
+          reason: "candidate-definition-repeats-target-lemma"
         })),
         ...alreadyRepresented
       ];
@@ -260,6 +271,7 @@ export function buildEnglishWordNetAtomSensePrompt(items = []) {
     "Choose the supplied WordNet sense that matches each Pyash atom's English label(s) for the specified part of speech as a broad, ordinary general-language concept. These atomic anchors represent general vocabulary; a narrower specialized concept belongs in a compound.",
     "Do not infer a specialist domain from a bare label. Select a domain-marked candidate only when the atom labels explicitly support that domain. Do not invent missing context. If no general candidate fits, return no-fit; if multiple general senses remain indistinguishable from the labels, return uncertain. For those statuses source=null.",
     "When multiple sense definitions fit the same atom label, choose the definition that applies across the widest range of ordinary situations. Prefer the broader ordinary meaning over a narrower role or activity.",
+    "A definition that repeats its matched target lemma is circular and must not be selected; circular definitions are excluded before this prompt is built.",
     "Choose from glosses only. Co-lemmas and frequency counts are intentionally omitted; do not infer a mismatch from synonyms that are not shown.",
     "Each input row is [response slot id, target POS, atom English label(s), candidates]. Each candidate is [sense id, definition]. Definitions omit usage examples. Use only supplied sense ids and give one short reason.",
     "Copy each response slot id exactly as shown. It is an opaque identifier; do not append the POS or reconstruct an atom id.",
@@ -572,6 +584,8 @@ function makeBatches(pending, { claimedSources, config }) {
   };
   for (const item of pending) {
     if (item.candidates.length === 0) {
+      const onlyCircularGlosses = item.excludedCandidates.length > 0
+        && item.excludedCandidates.every((candidate) => candidate.reason === "candidate-definition-repeats-target-lemma");
       skipped.push({
         id: item.id,
         targetId: item.targetId,
@@ -580,7 +594,9 @@ function makeBatches(pending, { claimedSources, config }) {
         excludedCandidates: item.excludedCandidates,
         status: "no-fit",
         source: "",
-        rationale: "No direct candidate lemma matches the atom labels or an accepted lemma mapping."
+        rationale: onlyCircularGlosses
+          ? "Every matching candidate definition repeats its target lemma; circular definitions were withheld."
+          : "No direct candidate lemma matches the atom labels or an accepted lemma mapping."
       });
       continue;
     }

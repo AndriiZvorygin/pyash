@@ -24,16 +24,6 @@ test("WordNet bridge rows have a lightweight gloss and lemma lookup", async () =
   assert.equal(catalog.entries.filter((entry) => entry.evidence.includes("sense-link sweep wordnet-sense-sweep-4c07194f363e-9059730cda6d-d1-model-qwen3-5-9b-definition-anchor-v1")).length, 956);
   assert.ok(catalog.entries.filter((entry) => entry.evidence.startsWith("frequency-first anchor allocation")).length > 1000);
   assert.equal(catalog.entries.find((entry) => entry.source === "n:06850196-n"), undefined);
-  assert.equal(catalog.entries.find((entry) => entry.source === "v:02029675-v"), undefined);
-  assert.deepEqual(catalog.entries.find((entry) => entry.source === "v:02029932-v"), {
-    source: "v:02029932-v",
-    target: "escort",
-    targetPartOfSpeech: "v",
-    certainty: "contextual",
-    evidence: "User-selected general-language gloss: conduct someone someplace; preferred over the narrower escort-role sense.",
-    gloss: "conduct someone someplace",
-    lemmas: ["escort", "see"]
-  });
   assert.deepEqual(catalog.entries.find((entry) => entry.source === "a:00005204-a"), {
     source: "a:00005204-a",
     target: "inevitable",

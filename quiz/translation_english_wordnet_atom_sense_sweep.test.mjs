@@ -67,7 +67,7 @@ test("atom sense sweep config uses a bounded Qwen batch and one retry", async ()
   assert.equal(config["batch-max-items"], 24);
   assert.equal(config["max-attempts"], 2);
   assert.equal(config.parallelism, 8);
-  assert.equal(config["prompt-revision"], "atom-general-pos-gloss-choice-v7");
+  assert.equal(config["prompt-revision"], "atom-general-pos-gloss-choice-v8");
 });
 
 test("atom worklist keeps only unlinked direct senses and presents definition text only", () => {
@@ -128,17 +128,39 @@ test("general-sense selector receives same-lemma atom competitors even when tag 
 
   assert.equal(item.id, "atom:srot:v");
   assert.deepEqual(item.candidates.map(({ source, tagCount }) => [source, tagCount]), [
-    ["v:02029675-v", 7],
     ["v:02029932-v", 0]
   ]);
-  assert.match(prompt, /accompany as an escort/u);
+  assert.deepEqual(item.excludedCandidates, [{
+    source: "v:02029675-v",
+    matchedLemmas: ["escort"],
+    reason: "candidate-definition-repeats-target-lemma"
+  }]);
+  assert.doesNotMatch(prompt, /accompany as an escort/u);
   assert.match(prompt, /conduct someone someplace/u);
   assert.doesNotMatch(prompt, /see/u);
   assert.doesNotMatch(prompt, /tag count|5198/u);
-  assert.equal(inputs[0][3].length, 2);
-  assert.deepEqual(inputs[0][3].map((row) => row[1]), [
-    "accompany as an escort",
-    "conduct someone someplace"
+  assert.equal(inputs[0][3].length, 1);
+  assert.deepEqual(inputs[0][3].map((row) => row[1]), ["conduct someone someplace"]);
+});
+
+test("circular gloss detection matches whole target words and strips example clauses first", () => {
+  const [item] = buildEnglishWordNetAtomSenseWorklist([
+    atom("atom:hart", "hart", ["art"], 10, [
+      candidate("n:00000071-n", "the art of making art", { lemma: "art" }),
+      candidate("n:00000072-n", "a creative practice; an example of art", { lemma: "art" }),
+      candidate("n:00000073-n", "an artist's practice", { lemma: "art" })
+    ])
+  ]);
+
+  assert.deepEqual(item.candidates.map(({ source }) => source), ["n:00000072-n", "n:00000073-n"]);
+  assert.deepEqual(item.excludedCandidates, [{
+    source: "n:00000071-n",
+    matchedLemmas: ["art"],
+    reason: "candidate-definition-repeats-target-lemma"
+  }]);
+  assert.deepEqual(item.candidates.map(({ definition }) => definition), [
+    "a creative practice",
+    "an artist's practice"
   ]);
 });
 

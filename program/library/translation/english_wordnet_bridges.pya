@@ -40314,7 +40314,7 @@ su text "sense-lemma:v:02028855-v:4" ob text "flock" ya
 su text "v:02029199-v" ob name "flock" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma flock at English30k rank 4474; Princeton WordNet 3.1 tag count 2 (sense key flock%2:38:01::)" ya
 su text "sense-gloss:v:02029199-v" ob text "move as a crowd or in a group; Tourists flocked to the shrine where the statue was said to have shed tears" ya
 su text "sense-lemma:v:02029199-v:1" ob text "flock" ya
-su text "v:02029932-v" ob name "escort" as text "v" with text "contextual" via text "User-selected general-language gloss: conduct someone someplace; preferred over the narrower escort-role sense." ya
+su text "v:02029932-v" ob name "escort" as text "v" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; prompt atom-general-pos-gloss-choice-v8; run wordnet-atom-sense-4d7375afb286-692a250a3a-atom-general-pos-gloss-choice-v8; rationale: The definition 'conduct someone someplace' is the broad ordinary meaning of 'escort', fitting the general-language concept requirement without needing a specialized domain." ya
 su text "sense-gloss:v:02029932-v" ob text "conduct someone someplace" ya
 su text "sense-lemma:v:02029932-v:1" ob text "escort" ya
 su text "sense-lemma:v:02029932-v:2" ob text "see" ya

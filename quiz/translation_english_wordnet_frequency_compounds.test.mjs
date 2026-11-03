@@ -9,6 +9,7 @@ import {
   wordNetCompoundDecisionRecord
 } from "../command/wordnet_frequency_compound_sweep.mjs";
 import {
+  atomSenseEntriesForReselection,
   buildWordNetHeadRelationIndex,
   compoundWorklist,
   hasWordNetHeadSenseRelation
@@ -37,6 +38,30 @@ function row(id, target, sourceSurfaces, pyashSequence) {
     }
   };
 }
+
+test("targeted atom reselection reopens a circular bridge definition generically", () => {
+  const entry = {
+    source: "v:02029675-v",
+    target: "escort",
+    targetPartOfSpeech: "v",
+    evidence: "frequency-first anchor allocation",
+    gloss: "accompany as an escort; example: escort someone to a ball"
+  };
+  const resolveWord = (word) => word === "escort"
+    ? { coverageType: "atomic", pyashSequence: ["srot"] }
+    : null;
+
+  assert.deepEqual(atomSenseEntriesForReselection(
+    [entry],
+    ["atom:srot:v"],
+    resolveWord
+  ), [entry]);
+  assert.deepEqual(atomSenseEntriesForReselection(
+    [entry],
+    ["atom:other:v"],
+    resolveWord
+  ), []);
+});
 
 test("WordNet hypernym evidence remains same-part-of-speech and directed", () => {
   const index = buildWordNetHeadRelationIndex([

@@ -19,6 +19,7 @@ import {
   parseEnglishWordNetFrequencyAllocationConfig,
   reconcileEnglishWordNetFrequencyBridgeRows
 } from "../program/library/translation/english_wordnet_frequency.mjs";
+import { isCircularEnglishWordNetGloss } from "../program/library/translation/english_wordnet_glosses.mjs";
 import { loadEnglishWordNetCompoundDecisions } from "../program/library/translation/english_wordnet_compound_decisions.mjs";
 import { renderEnglishWordNetSenseLinksPya } from "../program/library/translation/english_wordnet_linker.mjs";
 import {
@@ -71,6 +72,24 @@ function modelGenerated(entry) {
 
 function frequencyGenerated(entry) {
   return String(entry?.evidence ?? "").startsWith("frequency-first anchor allocation");
+}
+
+export function atomSenseEntriesForReselection(entries = [], targetIds = [], resolveWord = () => null) {
+  if (!Array.isArray(entries) || !Array.isArray(targetIds) || typeof resolveWord !== "function") {
+    throw new TypeError("atom sense reselection requires bridge entries, target ids, and a word resolver");
+  }
+  const requestedTargets = new Set(targetIds);
+  return entries.filter((entry) => {
+    const targetPartOfSpeech = canonicalWordNetTargetPartOfSpeech(entry.targetPartOfSpeech || entry.source.slice(0, 1));
+    if (!targetPartOfSpeech) return false;
+    const coverage = resolveWord(entry.target, { partOfSpeech: targetPartOfSpeech });
+    const pyashSequence = sequence(coverage?.pyashSequence);
+    if (coverage?.coverageType !== "atomic" || pyashSequence.length !== 1) return false;
+    const targetId = englishWordNetTargetId("atom", pyashSequence, targetPartOfSpeech);
+    if (!requestedTargets.has(targetId)) return false;
+    return String(entry.evidence ?? "").startsWith("atom-target sense selection;")
+      || isCircularEnglishWordNetGloss(entry.gloss, [entry.target]);
+  });
 }
 
 function targetIdentity(coverage, target, partOfSpeech) {
@@ -561,15 +580,7 @@ export async function prepareWordNetFrequencyAllocation({ reselectAtomTargetIds 
   const resolveWord = buildWordResolver(resources, compoundCoverage);
   const rankForEnglish = rankLookup(resources);
   const reselectTargets = new Set(reselectAtomTargetIds);
-  const reopenedAtomSenseEntries = catalog.entries.filter((entry) => {
-    if (!reselectTargets.size || !String(entry.evidence ?? "").startsWith("atom-target sense selection;")) return false;
-    const targetPartOfSpeech = canonicalWordNetTargetPartOfSpeech(entry.targetPartOfSpeech || entry.source.slice(0, 1));
-    const coverage = resolveWord(entry.target, { partOfSpeech: targetPartOfSpeech });
-    const pyashSequence = sequence(coverage?.pyashSequence);
-    return coverage?.coverageType === "atomic"
-      && pyashSequence.length === 1
-      && reselectTargets.has(englishWordNetTargetId("atom", pyashSequence, targetPartOfSpeech));
-  });
+  const reopenedAtomSenseEntries = atomSenseEntriesForReselection(catalog.entries, [...reselectTargets], resolveWord);
   const reopenedSources = new Set(reopenedAtomSenseEntries.map((entry) => entry.source));
   const allocationCatalogEntries = catalog.entries.filter((entry) => !reopenedSources.has(entry.source));
   const records = buildEnglishWordNetFrequencyAllocationRecords({
@@ -583,8 +594,13 @@ export async function prepareWordNetFrequencyAllocation({ reselectAtomTargetIds 
     preservedEntries,
     resolveWord
   );
-  const reservedTargetIds = preservedRecords.map((record) => record.link.targetId);
-  const reservedSources = preservedRecords.map((record) => record.source);
+  const reopenedTargetIds = [...new Set(reopenedAtomSenseEntries.map((entry) => {
+    const partOfSpeech = canonicalWordNetTargetPartOfSpeech(entry.targetPartOfSpeech || entry.source.slice(0, 1));
+    const coverage = resolveWord(entry.target, { partOfSpeech });
+    return englishWordNetTargetId("atom", sequence(coverage?.pyashSequence), partOfSpeech);
+  }))];
+  const reservedTargetIds = [...preservedRecords.map((record) => record.link.targetId), ...reopenedTargetIds];
+  const reservedSources = [...preservedRecords.map((record) => record.source), ...reopenedSources];
   const allocation = allocateEnglishWordNetAnchors(records, { reservedTargetIds, reservedSources });
   const reconciliation = reconcileEnglishWordNetFrequencyBridgeRows({
     existingEntries: allocationCatalogEntries.filter((entry) => !staleBridgeLinks.some((row) => row.source === entry.source)),
@@ -648,7 +664,8 @@ export async function prepareWordNetFrequencyAllocation({ reselectAtomTargetIds 
       resolveWord,
       activeAtomicTargetIds: finalRecords
         .filter((record) => String(record.link?.targetId ?? "").startsWith("atom:"))
-        .map((record) => record.link.targetId),
+        .map((record) => record.link.targetId)
+        .concat(reopenedTargetIds),
       maximumCompoundComponents: allocationConfig["maximum-compound-components"],
       headRelationPolicy: allocationConfig["compound-head-relation-policy"]
     }
