@@ -7,6 +7,41 @@ qwen3.5:9b
 hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M
 ```
 
+## Warm Qwen throughput across GPU hosts
+
+Matched warm throughput measurements were recorded on 2026-11-02 for
+`qwen3.5:9b` Q4_K_M, digest
+`6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7`.
+Each direct and Housekeeper run used the same five prompts (sample IDs
+`12, 37, 270, 495, 837`), in order. Their ordered `(sample ID, prompt SHA-256)`
+set hashes to
+`e5320b9f7dabeb2a574c3c4b18807b656f26d3a48d5dd946e379c4b13c3d770c`, and all
+six result files matched it. Request settings were `num_ctx=32768`,
+`temperature=0.2`, `top_p=0.8`, `top_k=20`, `think=false`, and
+`keep_alive=1800`. Each run made two unmeasured warmups (a two-token ping, then
+sample 12), followed by the five sequential measured calls. No model was
+switched or unloaded between warmup and measurement.
+
+Tokens/second is Ollama `eval_count / eval_duration`; it measures generation
+throughput, not Housekeeper queue wait or total request latency. The direct
+and Housekeeper rows were run serially on each same host. Housekeeper jobs
+were pinned to the listed device and their completed job records verified the
+execution host, device, and `forwarded=false`.
+
+| Host and accelerator | Power limit | Direct mean / weighted tok/s | Housekeeper mean / weighted tok/s | Housekeeper mean delta |
+| --- | ---: | ---: | ---: | ---: |
+| mriczo, RTX 3090 24 GB | 250 W | 104.84 / 104.69 | 104.58 / 103.77 | -0.25% |
+| Mac Studio, M1 Ultra 64 GB unified memory | n/a | 61.12 / 60.81 | 61.17 / 60.92 | +0.08% |
+| SWAC, RTX 3060 12 GB | 110 W | 43.61 / 43.59 | 43.29 / 42.98 | -0.74% |
+
+The small differences are within the variation of this five-prompt run; they
+show no material Housekeeper generation-throughput penalty. Interpret the
+cross-host differences as hardware/runtime results, not a Housekeeper ranking.
+The Mac Studio Housekeeper and SWAC container were refreshed to GitHub
+`master` at `e94958459` before their measured runs. An initial unpinned SWAC
+submission was automatically forwarded to mriczo and excluded; the recorded
+SWAC jobs used routing depth 1 and were verified local.
+
 ## FLORES-200 translation
 
 Criterion also provides a local-dataset `flores-200` suite for comparing
