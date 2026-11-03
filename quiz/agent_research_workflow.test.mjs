@@ -337,6 +337,47 @@ test("max tool calls counts each call in one model response and rejects the exce
   }
 });
 
+test("default tool-call budget permits bounded multi-step work", async () => {
+  forget();
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-agent-research-default-limit-"));
+  doRemember({ mood: "ya", su: { name: "agent cwd" }, be: "cwd", ob: { filename: cwd } });
+  doRemember({ mood: "ya", su: { name: "agent sandbox" }, be: "truth", ob: { boolean: true } });
+  await interpret(parse("su name tools as wo sandpit be map def"));
+  await interpret(parse("su name agent ob bool truth ya"));
+  await interpret(parse("su name write one be write ob text input to filename \"one.txt\" can"));
+  await interpret(parse("prah"));
+  const { tools, toolMap } = buildToolSchemas("tools");
+  const writeTool = toolBySubject(tools, "write one");
+  const toolCalls = Array.from({ length: 4 }, (_, index) => ({
+    ...toolResponse(writeTool.function.name, { ob: `write-${index + 1}` }, `write-${index + 1}`).message.tool_calls[0]
+  }));
+  const result = await runToolChat({
+    sentence: parse('be write ob text "research" for name helper to name text out with name tools do'),
+    mindName: "helper",
+    model: "fixture",
+    dialogue: "helper research",
+    callPrompt: "write",
+    historyMessages: [],
+    toolMap,
+    tools,
+    toolBlock: "",
+    backendName: "",
+    ollamaHost: "",
+    reasoningEffort: "",
+    mindDebug: false,
+    debugMind: () => {},
+    inputs: {
+      mockResponseRaw: JSON.stringify([
+        { message: { role: "assistant", content: "", tool_calls: toolCalls } },
+        { message: { role: "assistant", content: "finished" } }
+      ])
+    }
+  });
+
+  assert.equal(result, "finished");
+  assert.equal(await fs.readFile(path.join(cwd, "one.txt"), "utf8"), "write-4");
+});
+
 test("bounded HTML markdown dispatch honors atmost byte", async () => {
   forget();
   const filename = path.join(await fs.mkdtemp(path.join(os.tmpdir(), "pyash-agent-research-html-")), "source.html");

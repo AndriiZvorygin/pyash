@@ -1,5 +1,6 @@
 const WORD = (value) => ({ kind: "word", value });
 const SEQUENCE = (...values) => ({ kind: "sequence", values });
+const COMMAND = (value) => ({ kind: "command", value });
 
 // This declarative table is the single classifier contract for the interpreter
 // and generated JavaScript/C runtimes.
@@ -13,7 +14,7 @@ export const COMMAND_POLICY_CONTRACT = Object.freeze([
       WORD("dd"),
       WORD("shred"),
       { kind: "fork_bomb" },
-      WORD("format")
+      COMMAND("format")
     ])
   }),
   Object.freeze({
@@ -103,6 +104,10 @@ function hasWordBoundary(text, value) {
 
 function hasRule(text, rule) {
   if (rule.kind === "word") return hasWordBoundary(text, rule.value);
+  if (rule.kind === "command") {
+    const escaped = String(rule.value ?? "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(?:^|[;&|]\\s*)(?:sudo\\s+)?(?:[^\\s;&|]*/)?${escaped}(?=\\s|$)`, "iu").test(text);
+  }
   if (rule.kind === "sequence") {
     const normalized = String(text).toLowerCase();
     const sequence = rule.values.map(value => String(value).toLowerCase()).join("\\s+");
@@ -124,6 +129,9 @@ export function classifyCommandText(commandText) {
   const cmd = String(commandText ?? "").trim();
   if (!cmd) return "unknown";
   if (/^node\s+(?:\.\/)?command\/see_vl_runner\.mjs\b/iu.test(cmd)) return "read_only";
+  if (/^git\s+log(?:\s|$)/iu.test(cmd)
+    && !/[;&|<>`$\r\n]/u.test(cmd)
+    && !/(?:^|\s)--(?:output|ext-diff|textconv)(?:=|\s|$)/iu.test(cmd)) return "read_only";
   for (const entry of COMMAND_POLICY_CONTRACT) {
     if (hasContractRule(cmd, entry.rules)) return entry.name;
   }

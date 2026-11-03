@@ -315,7 +315,7 @@ export async function runToolChat({
   const maxToolTurns = 6;
   const effectiveMaxToolCalls = Number.isFinite(Number(maxToolCalls))
     ? Math.max(0, Math.trunc(Number(maxToolCalls)))
-    : 3;
+    : 12;
   let toolCallsUsed = 0;
   let turns = 0;
   let lastResponse = null;

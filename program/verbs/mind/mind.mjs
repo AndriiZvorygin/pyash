@@ -335,7 +335,7 @@ export async function mind_to_name_text(sentence, {
   const configuredThink = resolveConfigMapBool("mind configure", "think", { rememberFn: remember });
   const configuredMaxToolCalls = normalizeMaxToolCalls(
     resolveConfigMapNum("mind configure", "max tool calls", { rememberFn: remember })
-  ) ?? 3;
+  ) ?? 12;
   const configuredNumPredict = normalizeNumPredict(
     resolveConfigMapNum("mind configure", "max tokens", { rememberFn: remember })
     ?? resolveConfigMapNum("mind configure", "max output tokens", { rememberFn: remember })
