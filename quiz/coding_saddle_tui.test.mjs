@@ -86,6 +86,9 @@ test("coding saddle screen keeps progress fixed, scrolls conversation, resizes, 
   assert.match(writes.join(""), /working\.\.\. 10s elapsed/u);
   ui.setBusy(true);
   assert.match(ui.getState().status, /state: running$/u);
+  ui.setInput({ value: "queue this follow-up", cursor: 20 }, "next> ");
+  assert.match(writes.join(""), /queue this follow-up/u);
+  assert.match(writes.at(-1), /\u001b\[\?25h/u);
   ui.setBusy(false);
 
   ui.scrollBy(1);

@@ -565,6 +565,7 @@ async function main() {
   let sessionPicker = null;
   let promptLabel = "pyash> ";
   let inputDecoder = null;
+  const queuedInputs = [];
   const saddleUi = createSaddleTerminalUi();
   activeSaddleUi = saddleUi;
   saddleUi.enter();
@@ -654,9 +655,21 @@ async function main() {
       : await queueDepth(path.join(config.cwd, "world")).catch(() => ({ total: 0 }));
     renderStatus({ report });
   };
+  const currentInputLabel = () => busy
+    ? (queuedInputs.length ? `queue ${queuedInputs.length + 1}> ` : "next> ")
+    : promptLabel;
   const prompt = ({ label = promptLabel } = {}) => {
-    promptLabel = label;
-    saddleUi.setInput(inputDecoder?.getState() ?? { value: "", cursor: 0 }, label);
+    if (!busy) promptLabel = label;
+    saddleUi.setInput(inputDecoder?.getState() ?? { value: "", cursor: 0 }, currentInputLabel());
+  };
+  const dispatchQueuedInput = () => {
+    if (busy || closing) return;
+    const nextInput = queuedInputs.shift();
+    if (nextInput !== undefined) {
+      void submit(nextInput, { alreadyDisplayed: true });
+      return;
+    }
+    prompt();
   };
   const applyStrataContext = async (tokens) => {
     busy = true;
@@ -674,7 +687,7 @@ async function main() {
       busy = false;
       saddleUi.setBusy(false);
       promptLabel = "pyash> ";
-      prompt();
+      dispatchQueuedInput();
     }
   };
   const getBackendOptions = () => listSaddleBackendOptions({
@@ -923,14 +936,25 @@ async function main() {
     restoreActiveSaddleUi();
     writeLine("saddle closed");
   };
-  const submit = async (value) => {
+  const submit = async (value, { alreadyDisplayed = false } = {}) => {
     const input = String(value ?? "");
-    if (!input.trim() || busy || closing) {
+    if (!input.trim() || closing) {
       prompt({ clear: false });
       return;
     }
     if (input.trim() === "/exit" || input.trim() === "/quit") {
       await shutdown();
+      return;
+    }
+    if (busy) {
+      if (input.trim().startsWith("/")) {
+        writeLine("commands wait until the current response finishes; ordinary messages are queued");
+        prompt({ clear: false });
+        return;
+      }
+      queuedInputs.push(input);
+      writeLine(`[queued ${queuedInputs.length}] you> ${input}`);
+      prompt({ clear: false });
       return;
     }
     if (modelPickerLoading) {
@@ -1272,8 +1296,9 @@ async function main() {
     busy = true;
     saddleUi.setBusy(true);
     saddleUi.setUsage("");
-    writeLine(`you> ${input}`);
+    if (!alreadyDisplayed) writeLine(`you> ${input}`);
     saddleUi.setActivity(`working: ${model} via ${backend}${isLocalModelBackend(backend) ? " through GPU Housekeeper" : ""}`);
+    prompt({ clear: false });
     const stopProgress = startSaddleProgress({
       backend,
       model,
@@ -1335,7 +1360,7 @@ async function main() {
       busy = false;
       saddleUi.setBusy(false);
       saddleUi.setActivity("ready");
-      prompt();
+      dispatchQueuedInput();
     }
   };
 
@@ -1365,8 +1390,8 @@ async function main() {
     onScroll: (direction) => saddleUi.scrollBy(-direction),
     onAutocomplete: saddleSlashCommandCompletions,
     onChange: (state) => {
-      if (!busy && !closing) {
-        saddleUi.setInput(state, promptLabel);
+      if (!closing) {
+        saddleUi.setInput(state, currentInputLabel());
       }
     }
   });

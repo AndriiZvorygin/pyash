@@ -280,7 +280,7 @@ function renderHistory(items, width, color) {
 }
 
 function footerHelpLines(width) {
-  return wrapPlainLine("Enter send · Tab /cmds · Shift+Enter/Ctrl+J newline · PgUp/PgDn scroll · Ctrl+C interrupt · Ctrl+D exit", width);
+  return wrapPlainLine("Enter send/queue · Tab /cmds · Shift+Enter/Ctrl+J newline · PgUp/PgDn scroll · Ctrl+C interrupt · Ctrl+D exit", width);
 }
 
 function statusDisplayLines(value, width, height, usage = "") {
@@ -304,7 +304,6 @@ export function createSaddleTerminalUi({ output = process.stdout, maxItems = 400
   let activity = "ready";
   let input = { value: "", cursor: 0 };
   let promptLabel = "pyash> ";
-  let inputDisabled = false;
   let scrollOffset = 0;
   let active = false;
   let cursorRow = 1;
@@ -353,7 +352,7 @@ export function createSaddleTerminalUi({ output = process.stdout, maxItems = 400
       fitLine(scrollOffset
         ? `${activity || "ready"}  ·  scrollback (PgDn to return)`
         : (activity || "ready"), width, enabledColor, activity === "ready" ? "status" : "activity"),
-      ...visibleInput.map((line) => fitLine(line, width, enabledColor, inputDisabled ? "status" : null)),
+      ...visibleInput.map((line) => fitLine(line, width, enabledColor)),
       ...helpLines.map((line) => fitLine(line, width, enabledColor, "status"))
     ];
     while (screen.length < height) screen.splice(height - 1, 0, "");
@@ -367,7 +366,7 @@ export function createSaddleTerminalUi({ output = process.stdout, maxItems = 400
     const inputFirstRow = headerRows + maxTranscriptRows + 1;
     cursorRow = Math.min(height, inputFirstRow + cursorRelativeRow + 1);
     cursorColumn = Math.min(columns(), Math.max(1, inputLayout.cursorColumn + 1));
-    output.write(`\u001b[${cursorRow};${cursorColumn}H${inputDisabled ? "\u001b[?25l" : "\u001b[?25h"}`);
+    output.write(`\u001b[${cursorRow};${cursorColumn}H\u001b[?25h`);
   };
 
   return {
@@ -403,8 +402,7 @@ export function createSaddleTerminalUi({ output = process.stdout, maxItems = 400
       draw();
     },
     setBusy(value) {
-      inputDisabled = Boolean(value);
-      status = status.replace(/state: (?:ready|running)/u, `state: ${inputDisabled ? "running" : "ready"}`);
+      status = status.replace(/state: (?:ready|running)/u, `state: ${value ? "running" : "ready"}`);
       draw();
     },
     setActivity(value = "") {
