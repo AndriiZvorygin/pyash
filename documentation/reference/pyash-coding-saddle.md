@@ -7,6 +7,9 @@ session `.pya`; the host worker runs the existing mind and saddle tools inside
 that repository. `WorkTask` is the internal persistence contract, not the user
 vocabulary.
 
+See the [Coding Saddle Capability Standard](coding-saddle-capability-standard.md)
+for the user-facing baseline, current gaps, and acceptance evidence.
+
 ## Run
 
 From the repository root, start a local interactive coding session:
@@ -81,7 +84,10 @@ implicitly. There is no sudo access.
 
 ## Controls
 
-Enter submits the current request. Shift+Enter inserts a newline on terminals
+Enter submits the current request. While a response is active, the editor stays
+available and Enter queues the drafted message for sequential delivery; the
+prompt shows `next>` or `queue N>`. Slash commands wait until the current
+response finishes. Shift+Enter inserts a newline on terminals
 that report the standard modified-key sequence; `Ctrl+J` is the portable
 newline fallback. `Tab` completes slash-command names, and repeated Tab cycles
 matching commands; it does not complete command arguments. `PageUp` and
