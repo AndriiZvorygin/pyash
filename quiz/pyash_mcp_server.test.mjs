@@ -94,10 +94,11 @@ test("pyash mcp server loads the selected saddle tools map", async () => {
     const list = await client.send("tools/list", {});
     const tools = Array.isArray(list?.tools) ? list.tools : [];
     const descriptions = tools.map((tool) => String(tool?.description ?? ""));
-    assert.equal(tools.length, 8);
+    assert.equal(tools.length, 9);
     assert.ok(descriptions.some((description) => description.includes("su name read from filename input be read")));
     assert.ok(descriptions.some((description) => description.includes("su name command ob text")));
     assert.ok(descriptions.some((description) => description.includes("su name repair ob text")));
+    assert.ok(descriptions.some((description) => description.includes('su name session plan ob text "input" fromstate text "coding saddle plan" be write can')));
     assert.equal(descriptions.some((description) => description.includes("su name download")), false);
 
     const readTool = tools.find((tool) => String(tool?.name ?? "").startsWith("be_read_from_filename"));

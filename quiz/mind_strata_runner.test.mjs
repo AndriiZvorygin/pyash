@@ -101,9 +101,10 @@ test("Strata backend preserves OpenAI-compatible streaming", async () => {
       messages: [{ role: "user", content: "Say hello" }]
     }, localStrataEnv(api.host));
     assert.equal(result.code, 0, result.stderr);
-    assert.match(result.stdout, /"local "/);
-    assert.match(result.stdout, /"stream"/);
-    assert.match(result.stdout, /\[STREAM_END\]/);
+    const records = result.stdout.trim().split(/\r?\n/u).map((line) => JSON.parse(line));
+    assert.deepEqual(records.filter((record) => record.type === "chunk").map((record) => record.text), ["local ", "stream"]);
+    assert.equal(records.at(-1).type, "terminal");
+    assert.equal(records.at(-1).envelope.message.content, "local stream");
     assert.equal(api.calls[0].path, "/v1/chat/completions");
     assert.equal(JSON.parse(api.calls[0].body).stream, true);
   } finally {

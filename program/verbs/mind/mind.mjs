@@ -285,6 +285,11 @@ async function ensureDefaultToolMapLoaded() {
 export async function mind_to_name_text(sentence, {
   inputs = [],
   onToolCall,
+  onAssistantDelta,
+  onUsage,
+  saddlePlanTool,
+  sessionContextSummary = "",
+  sessionPlan = "",
   sessionUserContent = "",
   sessionUserMetadata = null,
   sessionAssistantMetadata = null
@@ -584,6 +589,12 @@ export async function mind_to_name_text(sentence, {
       mindName,
       configPrompt: resolvedConfigPrompt
     });
+    if (String(sessionContextSummary ?? "").trim()) {
+      agentSystemPrompt = `${agentSystemPrompt}\n\nSESSION CONTEXT CHECKPOINT (older turns, retained for continuity):\n${String(sessionContextSummary).trim()}`;
+    }
+    if (String(sessionPlan ?? "").trim()) {
+      agentSystemPrompt = `${agentSystemPrompt}\n\nACTIVE SESSION PLAN (current task state):\n${String(sessionPlan).trim()}`;
+    }
     const namingPrompt = resolvedConfigPrompt ?? "";
     const sessionNameSeed = sessionNameHint ?? globalSessionNameHint ?? sessionNameFromFromtext;
     if (sessionFileOverride || sessionNameSeed || !historySeriesName) {
@@ -711,15 +722,10 @@ export async function mind_to_name_text(sentence, {
       return recordMindAnswer({ mindName, dialogue, callPrompt, responseText, outputName, historySeriesName, sessionTurn });
     }
   }
+  const backendUsesRequiredHousekeeper = process.env.PYA_GPU_MANAGER_REQUIRED === "true"
+    && ["ollama command mind", "strata command mind"].includes(String(backendName ?? "").trim().toLowerCase());
   if (toolMapName) {
-    if (aspect === "stream") {
-      throwErrorSentence({
-        name: "mind aspect invalid",
-        message: "mind stream is not supported with tools",
-        from: { name: "mind" },
-        raw: { aspect }
-      });
-    }
+    const streamToolTurns = aspect === "stream" && !backendUsesRequiredHousekeeper;
     const mockResponseRaw = resolveConfigText("mind response", { rememberFn: remember });
     responseText = await runToolChat({
       sentence,
@@ -754,6 +760,10 @@ export async function mind_to_name_text(sentence, {
       debugMind,
       inputs: { inputText, mockResponseRaw, imageInputs: inputs },
       onToolCall,
+      onAssistantDelta,
+      onUsage,
+      saddlePlanTool,
+      stream: streamToolTurns,
       checkInterrupted: assertNotInterrupted
     });
   } else {
@@ -786,6 +796,7 @@ export async function mind_to_name_text(sentence, {
         });
       }
       : null;
+    const streamGeneration = aspect === "stream" && !backendUsesRequiredHousekeeper;
     const { responseText: text, reply, stream } = await runGenerate({
       sentence,
       ob,
@@ -805,16 +816,20 @@ export async function mind_to_name_text(sentence, {
       debugMind,
       outputName,
       historySeriesName,
-      aspect,
+      aspect: streamGeneration ? "stream" : "complete",
       inputText,
       inputs,
       checkInterrupted: assertNotInterrupted,
+      onAssistantDelta,
+      onToolCall,
+      onUsage,
       onComplete: completeStreamSession,
       sessionTurn
     });
     if (stream) return stream;
     responseText = text ?? "";
     replyEnvelope = reply ?? null;
+    if (!streamGeneration && responseText) onAssistantDelta?.(responseText);
   }
 
   if (!responseText && String(outputName ?? "").trim().endsWith("_channel_out")) {

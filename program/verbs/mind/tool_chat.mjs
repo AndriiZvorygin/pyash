@@ -1,7 +1,8 @@
 import { remember } from "../../remember/index.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { buildErrorSentence, throwErrorSentence, surfaceErrorSentence } from "../../error.mjs";
-import { resolveInterpret, callMindBackend } from "./backend.mjs";
+import { resolveInterpret, callMindBackend, callMindBackendStream } from "./backend.mjs";
+import { startStreamTail } from "./stream.mjs";
 import { mapDefChainFromName } from "./map_helpers.mjs";
 import { mapSentenceToPyash } from "../exchange/json_map.mjs";
 import { recordMindJson, stripContext } from "./logging.mjs";
@@ -22,6 +23,43 @@ function buildPromptText(messages) {
     lines.push(`${role}: ${content}`);
   }
   return lines.join("\n");
+}
+
+async function callStreamingToolTurn({ backendName, payload, onAssistantDelta, onToolCall } = {}) {
+  const stream = await callMindBackendStream({ backendName, payload });
+  const filename = stream?.ob?.filename ?? stream?.result?.ob?.filename ?? stream?.result?.filename;
+  if (!filename) throw new Error("mind tool stream missing filename");
+  let terminal = null;
+  await new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      stop();
+      if (error) reject(error);
+      else resolve();
+    };
+    const stop = startStreamTail({
+      filename,
+      onLine: (line) => {
+        const record = JSON.parse(line);
+        if (record?.type === "terminal") {
+          if (record.ok === false) throw new Error(record.error?.message ?? "mind stream failed");
+          terminal = record.envelope ?? {};
+        } else if (record?.type === "event") {
+          onToolCall?.(record.event);
+        } else {
+          const text = record?.type === "chunk" ? record.text : record;
+          if (typeof text !== "string") throw new Error("mind tool stream malformed record");
+          if (text) onAssistantDelta?.(text);
+        }
+      },
+      onEnd: () => finish(),
+      onError: (error) => finish(error)
+    });
+  });
+  if (!terminal) throw new Error("mind tool stream missing terminal reply");
+  return terminal;
 }
 
 function modelLooksVisionCapable(model) {
@@ -213,6 +251,10 @@ export async function runToolChat({
   debugMind,
   inputs,
   onToolCall,
+  onAssistantDelta,
+  onUsage,
+  saddlePlanTool,
+  stream = false,
   checkInterrupted
 } = {}) {
   const applySampling = (payload) => {
@@ -303,7 +345,7 @@ export async function runToolChat({
       await checkInterrupted();
     }
     turns += 1;
-    const requestPayload = { mode: "chat", model, messages, tools, stream: false };
+    const requestPayload = { mode: "chat", model, messages, tools, stream: stream === true };
     requestPayload.prompt = buildPromptText(messages);
     const selectedToolMapName = String(toolMapName ?? "").trim();
     if (selectedToolMapName) requestPayload.toolMapName = selectedToolMapName;
@@ -340,8 +382,11 @@ export async function runToolChat({
           raw: { requestPayload }
         });
       }
-      lastResponse = await callMindBackend({ backendName, payload: requestPayload, debug: mindDebug });
+      lastResponse = stream === true
+        ? await callStreamingToolTurn({ backendName, payload: requestPayload, onAssistantDelta, onToolCall })
+        : await callMindBackend({ backendName, payload: requestPayload, debug: mindDebug });
     }
+    onUsage?.(lastResponse?.usage ?? lastResponse?.metadata);
     recordMindJson({ targetName: mindName, label: "response", payload: stripContext(lastResponse) });
     if (mindDebug) {
       // eslint-disable-next-line no-console
@@ -359,7 +404,8 @@ export async function runToolChat({
         stage,
         toolName,
         toolCall: observed?.toolCall ?? observed?.tool_call ?? null,
-        toolText: observed?.toolText ?? observed?.tool_text ?? ""
+        toolText: observed?.toolText ?? observed?.tool_text ?? "",
+        ...(observed?.commandOutcome ? { commandOutcome: observed.commandOutcome } : {})
       });
       if (stage === "result") {
         lastToolText = String(observed?.toolText ?? observed?.tool_text ?? "").trim();
@@ -477,7 +523,12 @@ export async function runToolChat({
       }
       try {
         if (!toolResult) {
-          toolResult = await interpret(toolSentence, { runtimeContext });
+          if (capability?.be === "write" && capability?.fromstate?.text === "coding saddle plan") {
+            if (typeof saddlePlanTool !== "function") throw new Error("session plan tool is unavailable in this mind call");
+            toolResult = await saddlePlanTool(String(toolSentence?.ob?.text ?? ""));
+          } else {
+            toolResult = await interpret(toolSentence, { runtimeContext });
+          }
         }
       } catch (err) {
         const surfaced = surfaceErrorSentence(err);
@@ -534,14 +585,26 @@ export async function runToolChat({
       } else {
         toolText = String(surfacedTool ?? "");
       }
-      await emitToolCall({ stage: "result", toolName, toolSentence, toolCall: call, toolText });
+      const commandOutcome = String(toolName).toLowerCase().startsWith("be_command")
+        ? (surfacedTool?.be === "command"
+          ? { exitCode: 0, signal: null, timedOut: false }
+          : (() => {
+              const status = toolText.match(/\bstatus=(\d+)\b/u);
+              return status ? { exitCode: Number(status[1]), signal: null, timedOut: false } : null;
+            })())
+        : null;
+      await emitToolCall({
+        stage: "result", toolName, toolSentence, toolCall: call, toolText,
+        ...(commandOutcome ? { commandOutcome } : {})
+      });
       submitRunToolEvent({
         stage: "result",
         toolName,
         toolSentence,
         toolCall: call,
         resultSentence: surfacedTool,
-        toolText
+        toolText,
+        ...(commandOutcome ? { commandOutcome } : {})
       });
       const toolMessage = { role: "tool", content: toolText };
       if (toolCallId) toolMessage.tool_call_id = toolCallId;
@@ -561,6 +624,7 @@ export async function runToolChat({
   if (responseText === "DID_NOT_RECEIVE_TOOL_RESULT" && lastToolText) {
     responseText = lastToolText;
   }
+  if (stream !== true && responseText) onAssistantDelta?.(responseText);
   if (mindDebug && !responseText) {
     // eslint-disable-next-line no-console
     console.error(`[mind debug] ${JSON.stringify({ label: "empty-response", lastResponse: stripContext(lastResponse ?? {}) })}`);

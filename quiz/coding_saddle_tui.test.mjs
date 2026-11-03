@@ -50,6 +50,25 @@ test("coding saddle Markdown styling is terminal-native and strips model control
   assert.equal(stripTerminalControlSequences("\u001b[31mred\u001b[0m"), "red");
 });
 
+test("coding saddle streams one accumulated Markdown response without duplicating it", () => {
+  const writes = [];
+  const ui = createSaddleTerminalUi({
+    output: { columns: 60, rows: 12, isTTY: true, write(value) { writes.push(String(value)); } },
+    color: false
+  });
+  ui.enter();
+  ui.writeLine("saddle>");
+  const stream = ui.beginMarkdownStream();
+  ui.appendMarkdownStream(stream, "**A streamed ");
+  ui.appendMarkdownStream(stream, "answer**\n\n- item");
+  ui.replaceMarkdownStream(stream, "**A streamed answer**\n\n- item");
+  const output = writes.join("");
+  assert.match(output, /A streamed answer/u);
+  assert.match(output, /• item/u);
+  assert.equal(ui.getState().itemCount, 2);
+  ui.exit();
+});
+
 test("coding saddle keeps wrapped list items aligned under their text", () => {
   const lines = renderSaddleMarkdown("- this is a longer list item that wraps", { width: 20, color: false });
   assert.equal(lines[0], "• this is a longer ");

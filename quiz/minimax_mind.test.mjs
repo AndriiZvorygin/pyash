@@ -207,9 +207,10 @@ test("MiniMax runner supports streaming responses", async () => {
       messages: [{ role: "user", content: "Say hello" }]
     }, { ...process.env, MINIMAX_API_KEY: "fixture-key", PYA_COMMAND_RESPONSE: "" });
     assert.equal(result.code, 0, result.stderr);
-    assert.match(result.stdout, /"MiniMax "/);
-    assert.match(result.stdout, /"stream"/);
-    assert.match(result.stdout, /\[STREAM_END\]/);
+    const records = result.stdout.trim().split(/\r?\n/u).map((line) => JSON.parse(line));
+    assert.deepEqual(records.filter((record) => record.type === "chunk").map((record) => record.text), ["MiniMax ", "stream"]);
+    assert.equal(records.at(-1).type, "terminal");
+    assert.equal(records.at(-1).envelope.message.content, "MiniMax stream");
     assert.equal(JSON.parse(api.calls[0].body).stream, true);
   } finally {
     await api.close();

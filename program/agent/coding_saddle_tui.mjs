@@ -388,6 +388,25 @@ export function createSaddleTerminalUi({ output = process.stdout, maxItems = 400
     writeMarkdown(text = "") {
       append("markdown", String(text));
     },
+    beginMarkdownStream() {
+      const item = { kind: "markdown", text: "", cacheKey: null, renderedLines: [] };
+      items.push(item);
+      if (items.length > maxItems) items.splice(0, items.length - maxItems);
+      draw();
+      return item;
+    },
+    appendMarkdownStream(item, text = "") {
+      if (!item || !items.includes(item)) return;
+      item.text += stripTerminalControlSequences(text);
+      item.cacheKey = null;
+      draw();
+    },
+    replaceMarkdownStream(item, text = "") {
+      if (!item || !items.includes(item)) return;
+      item.text = stripTerminalControlSequences(text);
+      item.cacheKey = null;
+      draw();
+    },
     clearHistory() {
       items.length = 0;
       scrollOffset = 0;

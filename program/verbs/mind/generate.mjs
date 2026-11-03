@@ -110,6 +110,9 @@ export async function runGenerate({
   inputText,
   inputs = [],
   checkInterrupted,
+  onAssistantDelta,
+  onToolCall,
+  onUsage,
   onComplete,
   sessionTurn = null
 } = {}) {
@@ -213,20 +216,17 @@ export async function runGenerate({
         if (mockResponse) {
           const mockEnvelope = normalizeMindReply(mockResponse);
           const finalText = mockEnvelope.text;
-          const chunks = String(finalText ?? "")
-            .split(/\s+/)
-            .filter(Boolean)
-            .map(word => `${word} `);
-          for (const chunk of chunks) {
-            streamedChunks.push(chunk);
-            writeStreamChunk(streamOutputPath, chunk);
+          if (finalText) {
+            streamedChunks.push(finalText);
+            writeStreamChunk(streamOutputPath, finalText);
             signalFirstRecord?.();
-            if (streamStdoutEnabled) {
-              process.stdout.write(chunk);
-            }
+            onAssistantDelta?.(finalText);
+            if (streamStdoutEnabled) process.stdout.write(finalText);
           }
           terminalPayload = { ...mockEnvelope, response: finalText, done: true };
           const envelope = requireMindReplyText(mergeMindReplyChunks(streamedChunks, terminalPayload));
+          onUsage?.(envelope.metadata);
+          for (const event of terminalPayload?.message?.observed_tool_events ?? []) onToolCall?.(event);
           recordMindReply({ targetName: mindName, envelope });
           if (mindDebug) {
             // eslint-disable-next-line no-console
@@ -256,11 +256,16 @@ export async function runGenerate({
                   terminalPayload = chunk.envelope ?? {};
                   return;
                 }
+                if (chunk?.type === "event") {
+                  onToolCall?.(chunk.event);
+                  return;
+                }
                 const textChunk = chunk?.type === "chunk" ? chunk.text : chunk;
                 if (typeof textChunk !== "string") throw new Error("mind stream malformed chunk");
                 streamedChunks.push(textChunk);
                 writeStreamChunk(streamOutputPath, textChunk);
                 signalFirstRecord?.();
+                onAssistantDelta?.(textChunk);
                 if (streamStdoutEnabled) process.stdout.write(textChunk);
               },
               onEnd: () => {
@@ -275,6 +280,8 @@ export async function runGenerate({
           });
           if (!terminalPayload) throw new Error("mind stream missing terminal reply");
           const envelope = requireMindReplyText(mergeMindReplyChunks(streamedChunks, terminalPayload));
+          onUsage?.(envelope.metadata);
+          for (const event of terminalPayload?.message?.observed_tool_events ?? []) onToolCall?.(event);
           recordMindReply({ targetName: mindName, envelope });
           if (mindDebug) {
             // eslint-disable-next-line no-console
@@ -389,6 +396,7 @@ export async function runGenerate({
     }
     reply = normalizeMindReply(backendResponse ?? {});
     responseText = reply.text;
+    onUsage?.(reply.metadata);
     if (!responseText) {
       if (backendErrorText) {
         throwErrorSentence({

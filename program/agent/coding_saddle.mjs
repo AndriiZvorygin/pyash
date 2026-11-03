@@ -15,6 +15,7 @@ const SADDLE_SLASH_COMMANDS = [
   { name: "/model", takesArguments: true },
   { name: "/context", takesArguments: true },
   { name: "/think", takesArguments: true },
+  { name: "/plan", takesArguments: true },
   { name: "/host", takesArguments: true },
   { name: "/usage", takesArguments: false },
   { name: "/discharge", takesArguments: false },
@@ -85,7 +86,9 @@ export const DEFAULT_CODING_SADDLE_SYSTEM_PROMPT = [
   "Do not pretend a change was made when a tool did not succeed.",
   "Keep work inside the configured coding directory and prefer small, verifiable steps.",
   "For code changes, name the target file before editing; use write for bounded file creation and repair for unified-diff edits.",
+  "For substantial multi-step coding work, maintain a concise session plan with the update session plan tool; update step states as work proceeds and mark a step done only after recording concrete verification evidence. Keep plans to the necessary steps and skip them for simple questions or one-step edits.",
   "After the final edit, use command to run the narrowest relevant test, build, syntax check, or execution check. A check run before the final edit does not count.",
+  "Do not commit or push unless the user explicitly requests it. The harness will show the current worktree status and bounded diff for review before the completion evidence.",
   "Before reporting completion, state the changed file paths, summarize the change, and give the exact check command and its result. If work or verification is incomplete, say so plainly instead of saying done.",
   "Respond concisely with the result and any remaining blocker."
 ].join(" ");
@@ -151,6 +154,12 @@ function isToolFailure(text = "") {
   return /\b(?:isError|is_error)\s*["']?\s*:\s*true\b|\b(?:command|write|repair) defective\b|\bexit=(?:[1-9]\d*|unknown)\b|"be"\s*:\s*"error"/iu.test(value);
 }
 
+function eventCommandOutcome(event = {}) {
+  if (event.commandOutcome && typeof event.commandOutcome === "object") return event.commandOutcome;
+  const match = String(event.toolText ?? event.tool_text ?? "").match(/\bexit=(\d+)\b/u);
+  return match ? { exitCode: Number(match[1]), signal: null, timedOut: false } : null;
+}
+
 function changedPathForEvent(event = {}) {
   const sentence = eventSentence(event);
   const args = eventArguments(event);
@@ -206,7 +215,10 @@ export function assessSaddleCompletion(input = "", events = []) {
     && !isMutatingCommand(commandText(call.event))
     && isValidationCommand(commandText(call.event))
     && call.resultIndex > lastMutation
-    && !isToolFailure(call.resultText));
+    && !isToolFailure(call.resultText)
+    && eventCommandOutcome(events[call.resultIndex])?.exitCode === 0
+    && !eventCommandOutcome(events[call.resultIndex])?.signal
+    && eventCommandOutcome(events[call.resultIndex])?.timedOut !== true);
   const validation = validations.at(-1) ?? null;
   const missing = [];
   if (mutations.length === 0) missing.push("a successful file-changing tool call");
@@ -219,6 +231,7 @@ export function assessSaddleCompletion(input = "", events = []) {
     changeTools: [...new Set(mutations.map((call) => call.name))],
     validation: validation ? {
       command: commandText(validation.event),
+      exitCode: eventCommandOutcome(events[validation.resultIndex])?.exitCode,
       output: validation.resultText.trim().slice(0, 240)
     } : null
   };
@@ -238,20 +251,60 @@ export function formatSaddleCompletionEvidence(assessment = {}) {
   if (!assessment.required) return "";
   if (!assessment.complete) return `[saddle incomplete] ${assessment.missing.join("; ")}.`;
   const changed = assessment.changedPaths.length ? assessment.changedPaths.join(", ") : assessment.changeTools.join(", ");
-  const output = assessment.validation.output ? ` -> ${assessment.validation.output}` : " (returned successfully)";
-  return `[saddle evidence] changed: ${changed}; command: ${assessment.validation.command}${output}`;
+  const output = assessment.validation.output ? `; output: ${assessment.validation.output}` : "";
+  return `[saddle evidence] changed: ${changed}; validation: ${assessment.validation.command}; exit: ${assessment.validation.exitCode}${output}`;
 }
 
-export async function runSaddleTurnWithEvidence({ input, runTurn, onToolCall, onFollowup } = {}) {
+export function buildSaddleWorktreeReviewCommand({
+  trackedDiffLimit = 16000,
+  untrackedDiffLimit = 10000,
+  untrackedFileLimit = 2500
+} = {}) {
+  const bounded = (value, fallback, maximum) => {
+    const number = Number(value);
+    return Number.isSafeInteger(number) ? Math.max(1000, Math.min(maximum, number)) : fallback;
+  };
+  const trackedLimit = bounded(trackedDiffLimit, 16000, 24000);
+  const untrackedLimit = bounded(untrackedDiffLimit, 10000, 16000);
+  const fileLimit = bounded(untrackedFileLimit, 2500, 5000);
+  const excludedPathspecs = [
+    ".",
+    "':(exclude,glob)**/.env'",
+    "':(exclude,glob)**/.env.*'",
+    "':(exclude,glob)**/secret.pya'",
+    "':(exclude,glob)**/*.pem'",
+    "':(exclude,glob)**/*.key'",
+    "':(exclude,glob)**/*credentials*'",
+    "':(exclude,glob)**/*token*'"
+  ].join(" ");
+  return [
+    "set -e; printf '%s\\n' '[worktree root]'; git rev-parse --show-toplevel",
+    "printf '%s\\n' '[worktree status]'",
+    "git -c core.quotePath=true status --short --untracked-files=all",
+    "printf '%s\\n' '[tracked diff summary against HEAD]'",
+    `git diff --stat HEAD -- ${excludedPathspecs}`,
+    "printf '%s\\n' '[tracked diff excerpt; sensitive config paths omitted]'",
+    `git diff --no-ext-diff --unified=3 HEAD -- ${excludedPathspecs} | head -c ${trackedLimit} || true`,
+    "printf '%s\\n' '[untracked text diff excerpts; sensitive paths omitted]'",
+    `git ls-files -z --others --exclude-standard | while IFS= read -r -d '' file; do case "$file" in .env|.env.*|*/.env|*/.env.*|secret.pya|*/secret.pya|*.pem|*.key|*credentials*|*token*) printf '[sensitive untracked path omitted]\\n' ;; *) printf '\\n--- untracked: %q ---\\n' "$file"; git diff --no-index --no-ext-diff --unified=3 /dev/null "$file" | head -c ${fileLimit} || true ;; esac; done | head -c ${untrackedLimit} || true`,
+    "printf '%s\\n' '[diff excerpts are bounded; review includes any pre-existing worktree changes]'"
+  ].join("; ");
+}
+
+export async function runSaddleTurnWithEvidence({ input, runTurn, onToolCall, onAssistantDelta, onTurnStart, onFollowup, onReview } = {}) {
   if (typeof runTurn !== "function") throw new TypeError("runSaddleTurnWithEvidence requires runTurn");
   const events = [];
-  const invoke = (turnInput) => runTurn({
-    input: turnInput,
-    onToolCall: async (event) => {
-      events.push(event);
-      await onToolCall?.(event);
-    }
-  });
+  const invoke = async (turnInput) => {
+    await onTurnStart?.();
+    return runTurn({
+      input: turnInput,
+      onAssistantDelta,
+      onToolCall: async (event) => {
+        events.push(event);
+        await onToolCall?.(event);
+      }
+    });
+  };
   let result = await invoke(input);
   let assessment = assessSaddleCompletion(input, events);
   let retried = false;
@@ -266,7 +319,16 @@ export async function runSaddleTurnWithEvidence({ input, runTurn, onToolCall, on
     }
     assessment = assessSaddleCompletion(input, events);
   }
-  return { result, assessment, retried, retryError, events };
+  let worktreeReview = null;
+  let worktreeReviewError = "";
+  if (assessment.required && assessment.changeTools.length && typeof onReview === "function") {
+    try {
+      worktreeReview = await onReview({ assessment, events });
+    } catch (error) {
+      worktreeReviewError = String(error?.message ?? error);
+    }
+  }
+  return { result, assessment, retried, retryError, events, worktreeReview, worktreeReviewError };
 }
 
 function normalizeText(value) {
@@ -668,7 +730,9 @@ export function buildSaddleMindSentence({
   mindName = "coding saddle",
   toolMapName = "saddle tools",
   sessionName = "coding",
-  sessionFile = ""
+  sessionFile = "",
+  historyWindow = 50,
+  stream = true
 } = {}) {
   const sentence = {
     mood: "do",
@@ -682,9 +746,10 @@ export function buildSaddleMindSentence({
     fromtext: sessionFile
       ? { filename: path.resolve(String(sessionFile)) }
       : { name: `session name ${normalizeText(sessionName) || "coding"}` },
-    by: { num: 50 },
+    by: { num: Math.max(1, Math.trunc(Number(historyWindow) || 50)) },
     // The model is persisted in the mind configuration fact; the sentence stays canonical Pyash shape.
   };
+  if (stream) sentence.vyah = { ve: { type: "name", values: ["stream"] } };
   if (Number.isSafeInteger(Number(contextWindow)) && Number(contextWindow) > 0) {
     sentence.contextWindow = Number(contextWindow);
   }

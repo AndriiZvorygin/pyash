@@ -1,12 +1,14 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import assert from "node:assert/strict";
 
 import { allRemember, forget, remember } from "../program/remember/index.mjs";
 import { sentenceToPyash } from "../program/beautiful.mjs";
+import { classifyCommandText } from "../program/library/command_policy.mjs";
 import {
   buildSessionNameForDate,
   buildSessionNamePrefix
@@ -20,6 +22,7 @@ import {
 } from "../program/agent/coding_saddle_state.mjs";
 import {
   assessSaddleCompletion,
+  buildSaddleWorktreeReviewCommand,
   buildSaddleStrataContextOptions,
   buildSaddleMindSentence,
   createSaddleInputDecoder,
@@ -226,13 +229,26 @@ test("coding saddle completion evidence requires a successful edit and a later c
       toolName: "be_command_ob_text_to_name_text",
       toolSentence: { be: "command", ob: { text: "node --check hello.js" } }
     },
-    { stage: "result", toolName: "be_command_ob_text_to_name_text", toolText: "" }
+    {
+      stage: "result",
+      toolName: "be_command_ob_text_to_name_text",
+      toolText: "42\n",
+      commandOutcome: { exitCode: 0, signal: null, timedOut: false }
+    }
   ];
   const assessment = assessSaddleCompletion(input, events);
   assert.equal(assessment.complete, true);
   assert.deepEqual(assessment.changedPaths, ["hello.js"]);
   assert.equal(assessment.validation.command, "node --check hello.js");
-  assert.match(formatSaddleCompletionEvidence(assessment), /changed: hello\.js; command: node --check hello\.js/u);
+  assert.equal(assessment.validation.exitCode, 0);
+  assert.match(formatSaddleCompletionEvidence(assessment), /changed: hello\.js; validation: node --check hello\.js; exit: 0/u);
+
+  const commandWithoutOutcome = assessSaddleCompletion(input, [
+    ...events.slice(0, 3),
+    { ...events[3], commandOutcome: undefined }
+  ]);
+  assert.equal(commandWithoutOutcome.complete, false);
+  assert.match(commandWithoutOutcome.missing.join(" "), /successful relevant validation/u);
 
   const beforeEditCheck = assessSaddleCompletion(input, [events[2], events[3], events[0], events[1]]);
   assert.equal(beforeEditCheck.complete, false);
@@ -248,9 +264,92 @@ test("coding saddle completion evidence requires a successful edit and a later c
   const failedCheck = assessSaddleCompletion(input, [
     ...events.slice(0, 2),
     events[2],
-    { ...events[3], toolText: "command defective: status=1" }
+    { ...events[3], toolText: "command defective: status=1", commandOutcome: { exitCode: 1, signal: null, timedOut: false } }
   ]);
   assert.equal(failedCheck.complete, false);
+});
+
+test("coding saddle worktree review uses bounded read-only Git inspection and omits sensitive paths", () => {
+  const command = buildSaddleWorktreeReviewCommand({ trackedDiffLimit: 999999, untrackedDiffLimit: 1200 });
+  assert.match(command, /git -c core\.quotePath=true status --short --untracked-files=all/u);
+  assert.match(command, /git diff --stat HEAD/u);
+  assert.match(command, /git diff --no-ext-diff --unified=3 HEAD/u);
+  assert.match(command, /git ls-files -z --others --exclude-standard/u);
+  assert.match(command, /\*credentials\*\|\*token\*/u);
+  assert.match(command, /head -c 24000/u);
+  assert.match(command, /head -c 1200/u);
+  assert.match(command, /pre-existing worktree changes/u);
+  assert.equal(classifyCommandText(command), "read_only");
+  assert.doesNotMatch(command, /git (?:add|commit|push|reset|clean)\b/u);
+});
+
+test("coding saddle worktree review shows real diffs while omitting sensitive untracked files", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-review-"));
+  try {
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    execFileSync("git", ["config", "user.email", "saddle-test@example.invalid"], { cwd: root });
+    execFileSync("git", ["config", "user.name", "Saddle Test"], { cwd: root });
+    await fs.writeFile(path.join(root, "tracked.txt"), "before\n", "utf8");
+    await fs.writeFile(path.join(root, ".env"), "tracked-secret-before\n", "utf8");
+    execFileSync("git", ["add", "tracked.txt", ".env"], { cwd: root });
+    execFileSync("git", ["commit", "-qm", "fixture"], { cwd: root });
+    await fs.writeFile(path.join(root, "tracked.txt"), "after\n", "utf8");
+    await fs.writeFile(path.join(root, ".env"), "tracked-secret-after\n", "utf8");
+    await fs.writeFile(path.join(root, "new-file.txt"), "new review content\n", "utf8");
+    await fs.writeFile(path.join(root, "api-token.txt"), "untracked-secret-do-not-print\n", "utf8");
+
+    const output = execFileSync("bash", ["-lc", buildSaddleWorktreeReviewCommand()], {
+      cwd: root,
+      encoding: "utf8",
+      maxBuffer: 64 * 1024
+    });
+    assert.match(output, /\[worktree status\]/u);
+    assert.match(output, /tracked\.txt/u);
+    assert.match(output, /\+after/u);
+    assert.match(output, /new-file\.txt/u);
+    assert.match(output, /new review content/u);
+    assert.doesNotMatch(output, /tracked-secret-(?:before|after)|untracked-secret-do-not-print/u);
+    assert.match(output, /pre-existing worktree changes/u);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("coding saddle collects the worktree review after edits and validation", async () => {
+  const order = [];
+  const turn = await runSaddleTurnWithEvidence({
+    input: "write hello program",
+    runTurn: async ({ onToolCall }) => {
+      const events = [
+        {
+          stage: "call",
+          toolName: "be_write_ob_text_to_filename",
+          toolSentence: { be: "write", ob: { text: "console.log('hello')" }, to: { filename: "hello.js" } }
+        },
+        { stage: "result", toolName: "be_write_ob_text_to_filename", toolText: "written" },
+        {
+          stage: "call",
+          toolName: "be_command_ob_text_to_name_text",
+          toolSentence: { be: "command", ob: { text: "node --check hello.js" } }
+        },
+        { stage: "result", toolName: "be_command_ob_text_to_name_text", toolText: "", commandOutcome: { exitCode: 0 } }
+      ];
+      for (const event of events) {
+        order.push(event.stage);
+        await onToolCall(event);
+      }
+      return { ob: { text: "Created hello.js and checked its syntax." } };
+    },
+    onReview: async ({ assessment, events }) => {
+      order.push("review");
+      assert.equal(assessment.complete, true);
+      assert.equal(events.length, 4);
+      return "hello.js diff";
+    }
+  });
+
+  assert.equal(turn.worktreeReview, "hello.js diff");
+  assert.deepEqual(order, ["call", "result", "call", "result", "review"]);
 });
 
 test("coding saddle gives an incomplete code-change turn one evidence-driven continuation", async () => {
@@ -275,7 +374,7 @@ test("coding saddle gives an incomplete code-change turn one evidence-driven con
         toolName: commandTool,
         toolSentence: { be: "command", ob: { text: "node --check hello.js" } }
       });
-      await onToolCall({ stage: "result", toolName: commandTool, toolText: "" });
+      await onToolCall({ stage: "result", toolName: commandTool, toolText: "", commandOutcome: { exitCode: 0 } });
       return { ob: { text: "Created hello.js and checked its syntax." } };
     }
   });
@@ -373,7 +472,8 @@ test("coding saddle builds a Pyash mind call with backend and session context", 
     host: "http://mriczo:11434",
     contextWindow: 131072,
     think: true,
-    sessionName: "coding"
+    sessionName: "coding",
+    historyWindow: 12
   });
 
   assert.equal(sentence.be, "write");
@@ -384,6 +484,8 @@ test("coding saddle builds a Pyash mind call with backend and session context", 
   assert.equal(sentence.contextWindow, 131072);
   assert.equal(sentence.think, true);
   assert.equal(sentence.fromtext.name, "session name coding");
+  assert.equal(sentence.by.num, 12);
+  assert.deepEqual(sentence.vyah.ve.values, ["stream"]);
 });
 
 test("coding saddle delegates turns to the existing mind engine", async () => {

@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
+import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 import {
   resolveHost,
@@ -123,6 +124,18 @@ function clipText(value, limit = 4000) {
   return `${text.slice(0, limit)}...`;
 }
 
+function writeMindStreamRecord(record) {
+  process.stdout.write(`${JSON.stringify(record)}\n`);
+}
+
+function writeMindStreamText(text) {
+  if (text) writeMindStreamRecord({ type: "chunk", text: String(text) });
+}
+
+function writeMindStreamTerminal(envelope) {
+  writeMindStreamRecord({ type: "terminal", ok: true, envelope: envelope ?? {} });
+}
+
 function normalizeCodexToolName(item = {}) {
   return String(item?.tool ?? item?.tool_name ?? item?.name ?? item?.type ?? "tool").trim() || "tool";
 }
@@ -178,6 +191,11 @@ function mapCodexEvents(events = []) {
         observedToolEvents.push({
           stage: "result",
           toolName: "command",
+          commandOutcome: {
+            exitCode: Number.isFinite(exitCode) ? exitCode : null,
+            signal: item?.signal ?? null,
+            timedOut: item?.timed_out === true
+          },
           toolText: clipText(`exit=${Number.isFinite(exitCode) ? exitCode : "unknown"}${output ? ` output=${output}` : ""}`)
         });
       }
@@ -256,24 +274,59 @@ async function runCodexFallback(payload = {}, { stream = false, codexHome = "" }
     "--ephemeral",
     prompt
   ];
-  const proc = spawnSync("codex", args, {
-    encoding: "utf8",
+  const proc = spawn("codex", args, {
     env: codexHome ? { ...process.env, CODEX_HOME: codexHome } : process.env,
-    maxBuffer: 16 * 1024 * 1024
+    stdio: ["ignore", "pipe", "pipe"]
   });
-  if (proc.error) throw proc.error;
-  if (proc.status !== 0) {
-    const stderr = String(proc.stderr || "").trim();
-    throw new Error(`codex exec failed: status=${proc.status}${stderr ? ` stderr=${JSON.stringify(stderr)}` : ""}`);
+  const decoder = new StringDecoder("utf8");
+  let stdoutBuffer = "";
+  let stdout = "";
+  let stderr = "";
+  const events = [];
+  const consumeLine = (rawLine) => {
+    const line = String(rawLine ?? "").trim();
+    if (!line) return;
+    stdout += `${line}\n`;
+    const parsed = parseJsonLines(line);
+    for (const event of parsed) {
+      events.push(event);
+      if (!stream) continue;
+      const mapped = mapCodexEvents([event]);
+      for (const toolEvent of mapped.observedToolEvents) {
+        writeMindStreamRecord({ type: "event", event: toolEvent });
+      }
+      if (String(event?.type) === "item.completed" && String(event?.item?.type) === "agent_message") {
+        writeMindStreamText(mapped.responseText);
+      }
+    }
+  };
+  proc.stdout.on("data", (chunk) => {
+    stdoutBuffer += decoder.write(chunk);
+    const lines = stdoutBuffer.split(/\r?\n/u);
+    stdoutBuffer = lines.pop() ?? "";
+    for (const line of lines) consumeLine(line);
+  });
+  proc.stderr.on("data", (chunk) => { stderr += String(chunk); });
+  const exit = await new Promise((resolve, reject) => {
+    proc.once("error", reject);
+    proc.once("close", (code, signal) => resolve({ code, signal }));
+  });
+  stdoutBuffer += decoder.end();
+  if (stdoutBuffer.trim()) consumeLine(stdoutBuffer);
+  if (exit.code !== 0) {
+    const diagnostic = stderr.trim();
+    throw new Error(`codex exec failed: status=${exit.code ?? "unknown"} signal=${exit.signal ?? ""}${diagnostic ? ` stderr=${JSON.stringify(diagnostic)}` : ""}`);
   }
-  const events = parseJsonLines(proc.stdout);
   const { responseText, observedToolEvents } = mapCodexEvents(events);
   if (stream) {
-    const chunks = responseText.split(/\s+/).filter(Boolean);
-    for (const chunk of chunks) {
-      process.stdout.write(`${JSON.stringify(`${chunk} `)}\n`);
+    if (!responseText && stdout) {
+      const completed = events.filter((event) => event?.type === "item.completed" && event?.item?.type === "agent_message").at(-1);
+      if (completed) writeMindStreamText(mapCodexEvents([completed]).responseText);
     }
-    process.stdout.write("[STREAM_END]\n");
+    writeMindStreamTerminal({
+      response: responseText,
+      message: { role: "assistant", content: responseText }
+    });
     return null;
   }
   return {
@@ -366,8 +419,8 @@ async function main() {
     });
     if (payload.stream === true) {
       const text = String(result?.choices?.[0]?.message?.content ?? result?.response ?? "");
-      if (text) process.stdout.write(`${JSON.stringify(text)}\n`);
-      process.stdout.write("[STREAM_END]\n");
+      writeMindStreamText(text);
+      writeMindStreamTerminal(result);
     } else {
       process.stdout.write(`${JSON.stringify(result)}\n`);
     }
@@ -375,16 +428,16 @@ async function main() {
   }
 
   if (payload.stream === true) {
-    await requestStream({
+    const result = await requestStream({
       host,
       apiKey,
       body,
       providerLabel: minimax ? "MiniMax" : undefined,
       onChunk: (chunk) => {
-        process.stdout.write(`${JSON.stringify(String(chunk))}\n`);
+        writeMindStreamText(chunk);
       }
     });
-    process.stdout.write("[STREAM_END]\n");
+    writeMindStreamTerminal(result);
     return;
   }
 

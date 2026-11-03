@@ -97,12 +97,36 @@ Pyash mind-interrupt signal and `Ctrl+D` exits. The terminal uses a full-screen
 alternate buffer and restores the shell screen on exit, so its live redraws do
 not remain in normal shell scrollback. Assistant Markdown is rendered with
 terminal styling; tool output remains plain text. `/status`, `/session`,
-`/mind [name]`, `/model <name>`,
-`/host <url>`, `/discharge`, and `/exit` are local saddle commands. `/session`
+`/mind [name]`, `/model <name>`, `/plan`, `/host <url>`, `/discharge`, and
+`/exit` are local saddle commands. `/session`
 lists conversation files; select one to resume it, or use
 `/session <filename>` directly. `/mind` lists configured Pyash minds;
 `/mind zai` and `/mind openai` switch the active mind. `/model` changes the
-model within that mind.
+model within that mind. `/plan` shows the current session's coding plan and
+`/plan clear` removes that session's plan. For substantial multi-step work the
+model can update an ordered plan through the saddle tool map; completed steps
+must include validation evidence. Plans are stored in session-isolated
+`conduct/coding-saddle-plan-<session-key>.pya` files.
+
+When the selected backend exposes OpenAI-compatible server-sent events, the
+saddle renders assistant text as it arrives and continues to show progress and
+tool events separately. Housekeeper-managed Ollama/Strata requests and the
+Z.AI Codex CLI route remain buffered when their transport does not expose safe
+assistant-text deltas; the saddle still shows activity and live tool events
+where available.
+
+Context compaction is automatic at 80% of the selected context budget. The
+saddle prefers the previous provider-reported input-token count and otherwise
+uses a conservative character-based estimate. It writes a continuity summary
+to a session-isolated `.pya` checkpoint, keeps up to the latest 12 exchanges in
+the active prompt, and reduces that window further if pressure remains high.
+The durable transcript remains unchanged. When a local backend has no
+configured context size, the estimate uses a conservative 8K-token budget.
+
+For recognized code-change turns, completion requires a successful edit and a
+relevant validation command run afterward with structured exit code `0`, no
+signal, and no timeout. The saddle reports the command and its observed result;
+missing or failed evidence leaves the task marked incomplete.
 
 ## Durable state
 
@@ -129,6 +153,12 @@ different worker hosts can process independent duties concurrently. Model
 requests continue through the selected existing backend and its normal queue.
 The terminal and browser are projections, not authoritative transcript or
 queue stores.
+
+After a code-edit turn, the terminal shows a bounded, read-only Git status and
+diff before the completion evidence. It includes the current shared worktree,
+so pre-existing edits can appear alongside this turn's changes. Credential-like
+files are excluded from diff contents; review the paths and diff before
+accepting or committing the work.
 
 ## Host Workers
 

@@ -90,3 +90,38 @@ process.stdout.write(JSON.stringify({ type: "item.completed", item: { type: "age
     await fs.rm(tempDir, { recursive: true, force: true });
   }
 });
+
+test("Z.AI streaming surfaces Codex tool events and only completed assistant text", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-zai-stream-test-"));
+  const binDir = path.join(tempDir, "bin");
+  await fs.mkdir(binDir);
+  const fakeCodexPath = path.join(binDir, "codex");
+  await fs.writeFile(fakeCodexPath, `#!/usr/bin/env node
+const events = [
+  { type: "item.started", item: { id: "cmd-1", type: "command_execution", command: "pwd" } },
+  { type: "item.completed", item: { id: "cmd-1", type: "command_execution", exit_code: 0, aggregated_output: "/repo" } },
+  { type: "item.completed", item: { type: "agent_message", text: "Verified the repository." } }
+];
+for (const event of events) process.stdout.write(JSON.stringify(event) + "\\n");
+`);
+  await fs.chmod(fakeCodexPath, 0o700);
+  try {
+    const result = await runRunner(["--zai-codex", "--stream"], {
+      model: "glm-5.3-flash",
+      messages: [{ role: "user", content: "Inspect and report." }]
+    }, {
+      ...process.env,
+      PATH: `${binDir}${path.delimiter}${process.env.PATH || ""}`,
+      PYA_COMMAND_RESPONSE: "",
+      Z_AI_CODING_API_KEY: "test-only-coding-key"
+    });
+    assert.equal(result.code, 0, result.stderr);
+    const records = result.stdout.trim().split(/\r?\n/u).map((line) => JSON.parse(line));
+    assert.deepEqual(records.filter((record) => record.type === "event").map((record) => record.event.stage), ["call", "result"]);
+    assert.deepEqual(records.filter((record) => record.type === "chunk").map((record) => record.text), ["Verified the repository."]);
+    assert.equal(records.at(-1).type, "terminal");
+    assert.equal(records.at(-1).envelope.message.content, "Verified the repository.");
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});

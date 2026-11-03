@@ -40,14 +40,32 @@ import {
 import { requestCodingDutyHub, resolveCodingDutyHub } from "../program/agent/coding_duty_client.mjs";
 import { createSaddleTerminalUi } from "../program/agent/coding_saddle_tui.mjs";
 import {
+  clearCodingSaddlePlan,
+  formatCodingSaddlePlan,
+  readCodingSaddlePlan,
+  saddlePlanPath,
+  updateCodingSaddlePlan
+} from "../program/agent/coding_saddle_plan.mjs";
+import {
   appendSaddleUsage,
   formatSaddleUsageSummary,
   readSaddleUsageSummary
 } from "../program/agent/coding_saddle_usage.mjs";
+import {
+  estimateSaddleInputTokens,
+  generateSaddleContextSummary,
+  measureSaddleContextPressure,
+  readSaddleContextCheckpoint,
+  saddleContextCheckpointPath,
+  shouldCompactSaddleContext,
+  writeSaddleContextCheckpoint,
+  SADDLE_COMPACTION_RECENT_PAIRS
+} from "../program/agent/coding_saddle_context.mjs";
 import { formatMindUsage, normalizeMindUsage, sumMindUsages } from "../program/verbs/mind/usage.mjs";
 import {
   buildSaddleMindSentence,
   buildSaddleStrataContextOptions,
+  buildSaddleWorktreeReviewCommand,
   formatSaddleCompletionEvidence,
   runSaddleTurnWithEvidence,
   createSaddleInputDecoder,
@@ -118,7 +136,7 @@ function isLocalModelBackend(backend) {
   return ["ollama", "strata"].includes(normalizeSaddleBackend(backend));
 }
 
-async function withLocalModelsManaged(backend, housekeeperUrl, action) {
+export async function withLocalModelsManaged(backend, housekeeperUrl, action) {
   if (!isLocalModelBackend(backend)) return action();
   const managerUrl = resolveGpuHousekeeperUrl({ managerUrl: housekeeperUrl });
   if (!managerUrl) throw new Error("local saddle models require a configured GPU Housekeeper URL");
@@ -136,6 +154,88 @@ async function withLocalModelsManaged(backend, housekeeperUrl, action) {
       else process.env[key] = previous[key];
     }
   }
+}
+
+const CONSERVATIVE_LOCAL_CONTEXT_BUDGET = 8192;
+
+export async function prepareSaddleContextForTurn({
+  agentHouse,
+  sessionName,
+  sessionFile,
+  backend,
+  model,
+  host,
+  contextWindow,
+  systemPrompt,
+  userInput,
+  housekeeperUrl,
+  loadHistory = loadSaddleSessionHistory,
+  summarize = generateSaddleContextSummary
+} = {}) {
+  const filename = saddleContextCheckpointPath({ agentHouse, sessionName, sessionFile });
+  const checkpoint = await readSaddleContextCheckpoint(filename);
+  const budget = Number.isSafeInteger(Number(contextWindow)) && Number(contextWindow) > 0
+    ? Number(contextWindow)
+    : isLocalModelBackend(backend) ? CONSERVATIVE_LOCAL_CONTEXT_BUDGET : null;
+  const activeWindow = checkpoint.summary
+    ? Math.min(SADDLE_COMPACTION_RECENT_PAIRS, checkpoint.historyWindow || SADDLE_COMPACTION_RECENT_PAIRS)
+    : 50;
+  const recent = await loadHistory({ agentHouse, sessionName, sessionFile, historyWindow: activeWindow });
+  const estimatedInputTokens = estimateSaddleInputTokens({
+    messages: recent.messages,
+    systemPrompt: [systemPrompt, checkpoint.summary].filter(Boolean).join("\n"),
+    userInput,
+    toolSchema: "Pyash coding tools: read, write, repair, command, list, see, interpret javascript"
+  });
+  const reportedInputTokens = checkpoint.measurement === "provider usage" ? checkpoint.lastInputTokens : null;
+  const pressure = measureSaddleContextPressure({
+    contextBudget: budget,
+    providerInputTokens: reportedInputTokens,
+    estimatedInputTokens
+  });
+  let next = {
+    ...checkpoint,
+    contextBudget: budget,
+    historyWindow: activeWindow
+  };
+  if (shouldCompactSaddleContext(pressure)) {
+    if (checkpoint.summary && activeWindow <= 1) {
+      throw new Error(`context remains above the 80% limit after compaction to one recent exchange (${formatSaddleContextPressure(pressure)}); shorten the active request or increase the context window`);
+    }
+    const nextHistoryWindow = checkpoint.summary
+      ? Math.max(1, Math.floor(activeWindow / 2))
+      : SADDLE_COMPACTION_RECENT_PAIRS;
+    const allHistory = await loadHistory({ agentHouse, sessionName, sessionFile, historyWindow: 50 });
+    const keepMessages = Math.min(allHistory.messages.length, nextHistoryWindow * 2);
+    const olderMessages = allHistory.messages.slice(0, Math.max(0, allHistory.messages.length - keepMessages));
+    const summaryMessages = olderMessages.length ? olderMessages : allHistory.messages;
+    const result = await withLocalModelsManaged(backend, housekeeperUrl, () => summarize({
+      backend,
+      model,
+      host,
+      contextWindow: budget,
+      priorSummary: checkpoint.summary,
+      messages: summaryMessages
+    }));
+    next = {
+      ...checkpoint,
+      summary: result.summary,
+      lastInputTokens: null,
+      contextBudget: budget,
+      measurement: pressure.source,
+      historyWindow: nextHistoryWindow,
+      compactedAt: new Date().toISOString()
+    };
+    await writeSaddleContextCheckpoint(filename, next);
+  }
+  return {
+    filename,
+    checkpoint: next,
+    summary: next.summary,
+    historyWindow: next.summary ? next.historyWindow : 50,
+    pressure,
+    compacted: Boolean(next.compactedAt && next.compactedAt !== checkpoint.compactedAt)
+  };
 }
 
 function resolveSaddleHost(backend) {
@@ -335,9 +435,14 @@ export async function runSaddleTurn({
   reasoningEffort,
   sessionName = SESSION_NAME,
   sessionFile = "",
+  historyWindow = 50,
+  sessionContextSummary = "",
   sessionUserMetadata = null,
   onUsage,
   onToolCall,
+  onAssistantDelta,
+  saddlePlanTool,
+  sessionPlan = "",
   housekeeperUrl = "",
   mindFn = mind_to_name_text
 } = {}) {
@@ -352,7 +457,9 @@ export async function runSaddleTurn({
     mindName: AGENT_NAME,
     toolMapName: TOOL_MAP_NAME,
     sessionName,
-    sessionFile
+    sessionFile,
+    historyWindow,
+    stream: true
   });
   const emitUsage = (usage) => {
     const normalized = normalizeMindUsage(usage);
@@ -362,9 +469,13 @@ export async function runSaddleTurn({
   };
   return withLocalModelsManaged(backend, housekeeperUrl, () => mindFn(sentence, {
     onToolCall,
+    onAssistantDelta,
+    saddlePlanTool,
     onUsage: emitUsage,
     sessionUserContent: String(input ?? ""),
-    sessionUserMetadata
+    sessionUserMetadata,
+    sessionContextSummary,
+    sessionPlan
   }));
 }
 
@@ -432,6 +543,12 @@ function formatSaddleHeaderUsage(rawUsage) {
   if (!usage) return "";
   const count = (value) => new Intl.NumberFormat("en-US").format(value);
   return `turn usage · input ${count(usage.inputTokens)} (cached ${count(usage.cachedInputTokens)}) · output ${count(usage.outputTokens)} (reasoning ${count(usage.reasoningOutputTokens)}) · total ${count(usage.totalTokens)}`;
+}
+
+function formatSaddleContextPressure(pressure = {}) {
+  if (!pressure?.available) return "context budget unavailable";
+  const count = (value) => new Intl.NumberFormat("en-US").format(value);
+  return `context ${count(pressure.tokens)}/${count(pressure.budget)} (${Math.round(pressure.ratio * 100)}%, ${pressure.source})`;
 }
 
 function restoreActiveSaddleUi() {
@@ -576,6 +693,20 @@ async function main() {
   const sessionLabel = () => sessionFile
     ? path.basename(sessionFile, path.extname(sessionFile))
     : sessionName;
+  const activePlanFile = () => saddlePlanPath({
+    agentHouse: config.agentHouse,
+    sessionName,
+    sessionFile
+  });
+  const saddlePlanTool = async (input) => {
+    const plan = await updateCodingSaddlePlan(activePlanFile(), input);
+    return {
+      mood: "ya",
+      su: { name: "coding saddle plan result" },
+      be: "text",
+      ob: { text: formatCodingSaddlePlan(plan) }
+    };
+  };
   const restoreSessionHistory = async ({ detail = "" } = {}) => {
     try {
       const replay = await loadSaddleSessionHistory({
@@ -1079,8 +1210,22 @@ async function main() {
       return;
     }
     if (input.trim() === "/help") {
-      writeLine("/status  /session  /mind [name]  /model [backend|model-id]  /context [size]  /think [mode]  /host <url>  /usage  /discharge  /exit");
+      writeLine("/status  /session  /mind [name]  /model [backend|model-id]  /context [size]  /think [mode]  /plan [clear]  /host <url>  /usage  /discharge  /exit");
       writeLine("Tab completes slash-command names; repeated Tab cycles matching commands.");
+      prompt({ clear: false });
+      return;
+    }
+    const planMatch = input.trim().match(/^\/plan(?:\s+(.+))?$/i);
+    if (planMatch) {
+      const requested = String(planMatch[1] ?? "").trim().toLowerCase();
+      if (requested === "clear") {
+        await clearCodingSaddlePlan(activePlanFile());
+        writeLine(`cleared plan for session ${sessionLabel()}`);
+      } else if (requested) {
+        writeLine("usage: /plan or /plan clear");
+      } else {
+        writeLine(formatCodingSaddlePlan(await readCodingSaddlePlan(activePlanFile())));
+      }
       prompt({ clear: false });
       return;
     }
@@ -1305,25 +1450,70 @@ async function main() {
       onProgress: (line) => saddleUi.setActivity(line)
     });
     const turnUsages = [];
+    let contextTurn = null;
+    let responseStream = null;
+    let responseStreamedText = "";
+    let lastTurnStreamed = false;
     try {
+      contextTurn = await prepareSaddleContextForTurn({
+        agentHouse: config.agentHouse,
+        sessionName,
+        sessionFile,
+        backend,
+        model,
+        host,
+        contextWindow,
+        systemPrompt: config.systemPrompt,
+        userInput: input,
+        housekeeperUrl: config.housekeeperUrl
+      });
+      config.sessionContextSummary = contextTurn.summary;
+      config.sessionHistoryWindow = contextTurn.historyWindow;
+      const sessionPlan = formatCodingSaddlePlan(await readCodingSaddlePlan(activePlanFile()));
+      config.sessionPlan = sessionPlan === "No active plan for this session." ? "" : sessionPlan;
+      saddleUi.setUsage(formatSaddleContextPressure(contextTurn.pressure));
+      if (contextTurn.compacted) {
+        writeLine(`[context compacted] ${formatSaddleContextPressure(contextTurn.pressure)}; transcript retained; active context is summary + latest ${contextTurn.historyWindow} exchanges`);
+      }
       const turn = await runSaddleTurnWithEvidence({
         input,
-        runTurn: ({ input: turnInput, onToolCall }) => runSaddleTurn({
+        onTurnStart: () => {
+          responseStream = null;
+          responseStreamedText = "";
+          lastTurnStreamed = false;
+        },
+        onAssistantDelta: (delta) => {
+          const textDelta = String(delta ?? "");
+          if (!textDelta) return;
+          if (!responseStream) {
+            writeLine("saddle>");
+            responseStream = saddleUi.beginMarkdownStream();
+          }
+          lastTurnStreamed = true;
+          responseStreamedText += textDelta;
+          saddleUi.appendMarkdownStream(responseStream, textDelta);
+        },
+        runTurn: ({ input: turnInput, onToolCall, onAssistantDelta }) => runSaddleTurn({
           input: turnInput,
           model,
           backend,
           host,
           housekeeperUrl: config.housekeeperUrl,
           contextWindow,
+          sessionContextSummary: config.sessionContextSummary ?? "",
+          sessionPlan: config.sessionPlan ?? "",
+          historyWindow: config.sessionHistoryWindow ?? 50,
           think: thinkSetting?.think,
           reasoningEffort: thinkSetting?.reasoningEffort,
           sessionName,
           sessionFile,
+          saddlePlanTool,
           onUsage: (usage) => {
             turnUsages.push(usage);
             return usage;
           },
-          onToolCall
+          onToolCall,
+          onAssistantDelta
         }),
         onToolCall: async (event) => {
           if (event?.stage === "call" || event?.stage === "result" || event?.stage === "ratify") {
@@ -1332,17 +1522,63 @@ async function main() {
         },
         onFollowup: (assessment) => {
           writeLine(`[saddle] completion check missing ${assessment.missing.join("; ")}; making one completion pass`);
+        },
+        onReview: async () => {
+          const review = await interpret({
+            mood: "do",
+            be: "command",
+            ob: { text: buildSaddleWorktreeReviewCommand() }
+          });
+          if (review?.be === "ratify") {
+            return `[review requires command approval] ${review.ob?.text ?? "approval required"}`;
+          }
+          if (review?.mood === "error" || review?.be === "error") {
+            throw new Error(review?.ob?.text ?? "Pyash command interpreter rejected the worktree review");
+          }
+          const output = review?.ob?.text ?? review?.ob?.wo ?? "";
+          return String(output).trim() || "[worktree review returned no output]";
         }
       });
       const result = turn.result;
       const text = result?.ob?.text ?? result?.fromstate?.text ?? result?.value?.text ?? "";
-      writeLine("saddle>");
-      writeMarkdown(String(text).trim() || "(no response text)");
+      if (turn.worktreeReview) {
+        writeLine("worktree review · inspect this before accepting or committing");
+        writeLine(turn.worktreeReview);
+      } else if (turn.assessment.required && turn.assessment.changeTools?.length) {
+        writeLine(`[worktree review unavailable] ${turn.worktreeReviewError || "the harness could not collect the Git review"}`);
+      }
+      const finalText = String(text).trim() || "(no response text)";
+      if (lastTurnStreamed && responseStream) {
+        if (responseStreamedText.trim() !== finalText) saddleUi.replaceMarkdownStream(responseStream, finalText);
+      } else {
+        writeLine("saddle>");
+        writeMarkdown(finalText);
+      }
       const evidence = formatSaddleCompletionEvidence(turn.assessment);
       if (evidence) writeLine(`${evidence}${turn.retryError ? ` retry failed: ${turn.retryError}` : ""}`);
       const usage = sumMindUsages(turnUsages);
+      const reportedInputTokens = turnUsages
+        .map((entry) => Number(entry?.inputTokens))
+        .filter((value) => Number.isSafeInteger(value) && value > 0)
+        .reduce((maximum, value) => Math.max(maximum, value), 0);
+      if (contextTurn) {
+        const checkpoint = {
+          ...contextTurn.checkpoint,
+          lastInputTokens: reportedInputTokens || contextTurn.pressure.tokens,
+          contextBudget: contextTurn.pressure.budget ?? contextTurn.checkpoint.contextBudget,
+          measurement: reportedInputTokens ? "provider usage" : contextTurn.pressure.source,
+          historyWindow: contextTurn.historyWindow
+        };
+        await writeSaddleContextCheckpoint(contextTurn.filename, checkpoint)
+          .catch((error) => writeLine(`context checkpoint save failed: ${error.message}`));
+        const contextAfterTurn = measureSaddleContextPressure({
+          contextBudget: checkpoint.contextBudget,
+          providerInputTokens: reportedInputTokens || null,
+          estimatedInputTokens: contextTurn.pressure.tokens
+        });
+        saddleUi.setUsage(`${formatSaddleHeaderUsage(usage) || "turn usage · not reported"} · ${formatSaddleContextPressure(contextAfterTurn)}`);
+      }
       if (usage) {
-        saddleUi.setUsage(formatSaddleHeaderUsage(usage));
         writeLine(formatMindUsage(usage));
         await appendSaddleUsage({
           worldRoot: config.worldRoot,

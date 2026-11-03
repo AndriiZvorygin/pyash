@@ -15,7 +15,8 @@ test("saddle tools map exposes coding signatures", async () => {
   const capabilityLines = [
     "su name command be command ob text input to name text out can",
     "su name repair be repair ob text input to name map outcome can",
-    "su name repair check be repair as wo check ob text input to name map outcome can"
+    "su name repair check be repair as wo check ob text input to name map outcome can",
+    "su name session plan be write fromstate \"coding saddle plan\" ob text input can"
   ];
 
   for (const line of capabilityLines) {

@@ -198,7 +198,7 @@ async function requestJson({ host, apiKey, body, providerLabel = "OpenAI-compati
   return parseChatCompletionsResponse(parsed);
 }
 
-async function requestStream({ host, apiKey, body, onChunk, providerLabel = "OpenAI-compatible" }) {
+async function requestStream({ host, apiKey, body, onChunk, onToolCall, providerLabel = "OpenAI-compatible" }) {
   const endpoint = chatCompletionsEndpoint(host);
   const res = await fetch(endpoint, {
     method: "POST",
@@ -222,26 +222,55 @@ async function requestStream({ host, apiKey, body, onChunk, providerLabel = "Ope
   }
   const decoder = new TextDecoder();
   let buffer = "";
+  let content = "";
+  let usage = null;
+  const toolCalls = new Map();
+  const consumeLine = (lineRaw) => {
+    const line = String(lineRaw || "").trim();
+    if (!line || !line.startsWith("data:")) return;
+    const data = line.slice(5).trim();
+    if (!data || data === "[DONE]") return;
+    let payload;
+    try {
+      payload = JSON.parse(data);
+    } catch {
+      return;
+    }
+    if (payload?.usage && typeof payload.usage === "object") usage = payload.usage;
+    const delta = payload?.choices?.[0]?.delta ?? {};
+    const text = parseMessageContent({ content: delta.content });
+    if (text) {
+      content += text;
+      onChunk?.(text);
+    }
+    for (const fragment of Array.isArray(delta.tool_calls) ? delta.tool_calls : []) {
+      const index = Number.isSafeInteger(Number(fragment?.index)) ? Number(fragment.index) : toolCalls.size;
+      const current = toolCalls.get(index) ?? {
+        id: "",
+        type: "function",
+        function: { name: "", arguments: "" }
+      };
+      if (fragment?.id) current.id += asText(fragment.id);
+      if (fragment?.type) current.type = asText(fragment.type);
+      if (fragment?.function?.name) current.function.name += asText(fragment.function.name);
+      if (fragment?.function?.arguments) current.function.arguments += asText(fragment.function.arguments);
+      toolCalls.set(index, current);
+    }
+    const observed = payload?.choices?.[0]?.message?.observed_tool_events;
+    if (Array.isArray(observed)) for (const event of observed) onToolCall?.(event);
+  };
   for await (const rawChunk of res.body) {
     buffer += decoder.decode(rawChunk, { stream: true });
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
-    for (const lineRaw of lines) {
-      const line = String(lineRaw || "").trim();
-      if (!line || !line.startsWith("data:")) continue;
-      const data = line.slice(5).trim();
-      if (!data || data === "[DONE]") continue;
-      let payload;
-      try {
-        payload = JSON.parse(data);
-      } catch {
-        continue;
-      }
-      const delta = payload?.choices?.[0]?.delta ?? {};
-      const text = asText(delta?.content);
-      if (text && typeof onChunk === "function") onChunk(text);
-    }
+    for (const line of lines) consumeLine(line);
   }
+  buffer += decoder.decode();
+  if (buffer.trim()) consumeLine(buffer);
+  const message = { role: "assistant", content };
+  const completedToolCalls = [...toolCalls.entries()].sort(([a], [b]) => a - b).map(([, call]) => call);
+  if (completedToolCalls.length) message.tool_calls = completedToolCalls;
+  return { response: content, message, usage };
 }
 
 export {
