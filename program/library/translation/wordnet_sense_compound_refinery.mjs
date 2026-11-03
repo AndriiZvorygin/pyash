@@ -16,10 +16,12 @@ import {
   ENGLISH_WORDNET_SENSE_COMPOUNDS_CONFIG_URL,
   ENGLISH_WORDNET_SENSE_COMPOUNDS_NAME,
   ENGLISH_WORDNET_SENSE_COMPOUNDS_PROMPT_REVISION,
+  ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION,
   ENGLISH_WORDNET_SENSE_COMPOUNDS_PARALLELISM,
   ENGLISH_WORDNET_SENSE_COMPOUNDS_MAX_OUTPUT_TOKENS,
   ENGLISH_WORDNET_SENSE_TRANSLATION_CACHE_NAME,
   buildKwonLinkedAtomicChoices,
+  componentGlossAlternatives,
   buildSenseCompoundWorklist,
   buildSenseDerivedCompoundCandidates,
   createQueuedMindWordNetSenseTranslationTransport,
@@ -187,9 +189,17 @@ function parseConfig(source) {
     if (typeof sentence.ob?.text === "string") values[key] = sentence.ob.text;
     else if (typeof sentence.ob?.num === "number") values[key] = sentence.ob.num;
   }
+  if (values.format !== "translation-wordnet-sense-compound-refinery-v2") {
+    throw invalid("sense compound refinery configuration has an unsupported format", { format: values.format });
+  }
   const languages = text(values["comparison-languages"])
     .split(",").map((language) => language.trim().toLowerCase()).filter(Boolean);
   if (!languages.length) throw invalid("sense compound refinery requires comparison languages");
+  const candidateRevision = text(values["candidate-revision"]) || ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION;
+  const headRelationPolicy = text(values["head-relation-policy"]).toLowerCase() || "advisory";
+  if (candidateRevision !== ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION || headRelationPolicy !== "advisory") {
+    throw invalid("sense compound refinery requires the configured advisory head policy and candidate revision");
+  }
   return {
     model: text(values.model),
     languages,
@@ -197,7 +207,9 @@ function parseConfig(source) {
     maxOutputTokens: Number(values["max-output-tokens"]) || ENGLISH_WORDNET_SENSE_COMPOUNDS_MAX_OUTPUT_TOKENS,
     parallelism: Number(values.parallelism) || ENGLISH_WORDNET_SENSE_COMPOUNDS_PARALLELISM,
     maximumSenses: Number(values["max-senses-per-launch"]) || 64,
-    verificationBatchSize: Number(values["verification-batch-size"]) || 32
+    verificationBatchSize: Number(values["verification-batch-size"]) || 32,
+    candidateRevision,
+    headRelationPolicy
   };
 }
 
@@ -213,6 +225,13 @@ function queueState(queue = {}) {
     queued: Number.isFinite(queued) ? Math.max(0, queued) : jobs.length,
     running: Number.isFinite(running) ? Math.max(0, running) : 0
   };
+}
+
+function currentProgress(progress, atomInventoryHash, candidateRevision) {
+  return Boolean(progress
+    && READY_PROGRESS.has(progress.status)
+    && progress.atomInventoryHash === atomInventoryHash
+    && progress.candidateRevision === candidateRevision);
 }
 
 async function inspectHousekeeper({ model, dependencies }) {
@@ -280,9 +299,7 @@ async function loadInventory({ context, dependencies }) {
     && Array.isArray(entry.pyashSequence) && entry.pyashSequence.length === 1);
   const fullWorklist = buildSenseCompoundWorklist({
     residualSenses: allocation.allocation.residual,
-    relations: allocation.wordnetIndex.relations,
-    linkedSenseIds,
-    linkedAtomicSenses
+    linkedSenseIds
   });
   const progressPath = join(context.artifactDirectory, "progress.pya");
   const translationPath = join(context.artifactDirectory, "sense-translations.pya");
@@ -307,8 +324,7 @@ async function loadInventory({ context, dependencies }) {
   ]).sort((left, right) => left[0].localeCompare(right[0]))));
   const pending = fullWorklist.filter((sense) => {
     const progress = progressBySense.get(sense.senseId);
-    if (!progress || !READY_PROGRESS.has(progress.status) || progress.atomInventoryHash !== atomInventoryHash) return true;
-    return false;
+    return !currentProgress(progress, atomInventoryHash, context.config.candidateRevision);
   }).slice(0, context.config.maximumSenses);
   const dataHash = hash(stableJson({
     sourceHash: allocation.sourceHash,
@@ -317,14 +333,15 @@ async function loadInventory({ context, dependencies }) {
     pending: pending.map((row) => row.senseId)
   }));
   const worklistPath = join(context.artifactDirectory, "worklist.pya");
-  await atomicWrite(worklistPath, renderRowsPya(WORKLIST_NAME, "wordnet-sense-compound-worklist-v1", pending, {
+  await atomicWrite(worklistPath, renderRowsPya(WORKLIST_NAME, "wordnet-sense-compound-worklist-v2", pending, {
     "source-hash": allocation.sourceHash,
     "atom-inventory-hash": atomInventoryHash,
+    "candidate-revision": context.config.candidateRevision,
     "worklist-hash": dataHash,
     "eligible-sense-count": fullWorklist.length,
     "remaining-sense-count": fullWorklist.filter((sense) => {
       const progress = progressBySense.get(sense.senseId);
-      return !progress || !READY_PROGRESS.has(progress.status) || progress.atomInventoryHash !== atomInventoryHash;
+      return !currentProgress(progress, atomInventoryHash, context.config.candidateRevision);
     }).length
   }));
   context.allocation = allocation;
@@ -424,18 +441,26 @@ async function composeCandidates({ context, worklist, translations }) {
   const cacheBySense = new Map(cacheRows.map((record) => [record.senseId, record]));
   const completeSenses = selected.filter((sense) => cacheBySense.get(sense.senseId)?.status === "complete");
   const glosses = collectComponentGlosses(completeSenses.flatMap((sense) => cacheBySense.get(sense.senseId)?.translations ?? []));
+  const lookupGlosses = [...new Set(glosses.flatMap(componentGlossAlternatives))];
   let suggestionRecords = [];
-  if (glosses.length > 0) {
-    const args = glosses.flatMap((gloss) => ["--text", gloss]);
+  if (lookupGlosses.length > 0) {
+    const args = lookupGlosses.flatMap((gloss) => ["--text", gloss]);
     const suggestions = await (context.dependencies.suggestVocabulary ?? runVocabSuggest)(args, { report: () => {} });
     suggestionRecords = suggestions.suggestionRecords ?? [];
   }
-  const byGloss = buildKwonLinkedAtomicChoices({
+  const choicesByLookupGloss = buildKwonLinkedAtomicChoices({
     suggestions: suggestionRecords,
     activeAtomEntries: context.linkedAtomicSenses,
     layerByWord: context.layerIndex.byWord,
     deprecatedSurfaces: context.deprecatedSurfaces
   });
+  const byGloss = new Map(choicesByLookupGloss);
+  for (const gloss of glosses) {
+    const choices = componentGlossAlternatives(gloss)
+      .flatMap((alternative) => choicesByLookupGloss.get(normalizeGloss(alternative)) ?? []);
+    const unique = new Map(choices.map((choice) => [`${choice.linkedSense.source}\u0000${choice.pyashSequence.join("+")}`, choice]));
+    byGloss.set(normalizeGloss(gloss), [...unique.values()]);
+  }
   const candidates = completeSenses.flatMap((sense) => {
     const translations = cacheBySense.get(sense.senseId)?.translations ?? [];
     return buildSenseDerivedCompoundCandidates({
@@ -444,7 +469,9 @@ async function composeCandidates({ context, worklist, translations }) {
       kwonCandidatesByGloss: byGloss,
       relations: context.allocation.wordnetIndex.relations,
       maxKwonCandidates: 4,
-      maxCandidates: 8
+      maxCandidates: 8,
+      candidateRevision: context.config.candidateRevision,
+      headRelationPolicy: context.config.headRelationPolicy
     });
   });
   const candidatesById = new Map(candidates.map((candidate) => [candidate.id, candidate]));
@@ -454,6 +481,7 @@ async function composeCandidates({ context, worklist, translations }) {
   const componentMappings = glosses.map((gloss) => ({
     id: `component-gloss-${hash(normalizeGloss(gloss)).slice(0, 24)}`,
     gloss,
+    alternatives: componentGlossAlternatives(gloss),
     atoms: (byGloss.get(normalizeGloss(gloss)) ?? []).map((choice) => ({
       word: choice.word,
       pyashSequence: choice.pyashSequence,
@@ -463,13 +491,14 @@ async function composeCandidates({ context, worklist, translations }) {
     status: (byGloss.get(normalizeGloss(gloss)) ?? []).length > 0 ? "linked-atom-candidates" : "unresolved-component-gloss"
   }));
   const mappingsPath = join(context.artifactDirectory, "component-mappings.pya");
-  const mappingsContents = renderRowsPya(COMPONENT_MAP_NAME, "wordnet-sense-compound-component-mappings-v1", componentMappings);
+  const mappingsContents = renderRowsPya(COMPONENT_MAP_NAME, "wordnet-sense-compound-component-mappings-v2", componentMappings);
   await atomicWrite(mappingsPath, mappingsContents);
   const candidatesPath = join(context.artifactDirectory, "compound-candidates.pya");
   const candidateHash = hash(stableJson(uniqueCandidates));
-  await atomicWrite(candidatesPath, renderRowsPya(CANDIDATE_NAME, "wordnet-sense-derived-compound-candidates-v1", uniqueCandidates, {
+  await atomicWrite(candidatesPath, renderRowsPya(CANDIDATE_NAME, "wordnet-sense-derived-compound-candidates-v2", uniqueCandidates, {
     "worklist-hash": worklist["worklist-hash"],
     "translation-cache-hash": translations["translation-cache-hash"],
+    "candidate-revision": context.config.candidateRevision,
     "candidate-hash": candidateHash
   }));
   context.candidates = uniqueCandidates;
@@ -518,6 +547,7 @@ async function updateProgress(context, worklistRows, candidateRows, decisions) {
       senseId: sense.senseId,
       status,
       atomInventoryHash: context.atomInventoryHash,
+      candidateRevision: context.config.candidateRevision,
       sourceHash: context.allocation.sourceHash,
       promptRevision: context.config.promptRevision,
       candidateIds: senseCandidates.map((candidate) => candidate.id),
@@ -528,7 +558,7 @@ async function updateProgress(context, worklistRows, candidateRows, decisions) {
   await atomicWrite(path, renderRowsPya(PROGRESS_NAME, "wordnet-sense-compound-progress-v1", context.progressRecords));
   const remainingCount = (context.fullWorklist ?? []).filter((sense) => {
     const progress = bySense.get(sense.senseId);
-    return !progress || !READY_PROGRESS.has(progress.status) || progress.atomInventoryHash !== context.atomInventoryHash;
+    return !currentProgress(progress, context.atomInventoryHash, context.config.candidateRevision);
   }).length;
   return { path, remainingCount };
 }
@@ -561,6 +591,7 @@ async function verifyAndPromote({ context, candidates }) {
       });
     });
   const batchSize = Math.max(1, context.config.verificationBatchSize);
+  const promotedInThisRun = new Set();
   for (let offset = 0; offset < pending.length; offset += batchSize) {
     const batch = pending.slice(offset, offset + batchSize);
     await verifier(batch, async ({ record }) => {
@@ -570,7 +601,10 @@ async function verifyAndPromote({ context, candidates }) {
     });
     const batchRecords = batch.map((candidate) => decisionsById.get(candidate.id)).filter(Boolean);
     const promoted = await (context.dependencies.promoteAccepted ?? promoteAcceptedCompounds)(batchRecords, { usedTargetIds, decisionRevision });
-    for (const decision of promoted.decisions) decisionsById.set(decision.candidateId, decision);
+    for (const decision of promoted.decisions) {
+      decisionsById.set(decision.candidateId, decision);
+      promotedInThisRun.add(decision.candidateId);
+    }
     await atomicWrite(decisionsPath, renderEnglishWordNetCompoundDecisions([...decisionsById.values()]));
     const batchPath = join(context.artifactDirectory, `verification-${String(Math.floor(offset / batchSize) + 1).padStart(4, "0")}.pya`);
     await atomicWrite(batchPath, renderRowsPya(DECISION_BATCH_NAME, "wordnet-sense-compound-verification-batch-v1", promoted.decisions.map((record) => ({
@@ -584,7 +618,7 @@ async function verifyAndPromote({ context, candidates }) {
   }
   const priorAccepted = candidateRows
     .map((candidate) => decisionsById.get(candidate.id))
-    .filter((record) => record && acceptedDecision(record));
+    .filter((record) => record && acceptedDecision(record) && !promotedInThisRun.has(record.candidateId));
   if (priorAccepted.length > 0) {
     const restored = await (context.dependencies.promoteAccepted ?? promoteAcceptedCompounds)(priorAccepted, { usedTargetIds, decisionRevision });
     for (const decision of restored.decisions) decisionsById.set(decision.candidateId, decision);

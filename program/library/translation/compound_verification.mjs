@@ -20,7 +20,7 @@ const RESPONSE_HEAD_KINDS = new Set([
 const MAX_RESPONSE_CHARS = 12000;
 const MAX_RATIONALE_CHARS = 2000;
 const COMPOUND_VERIFICATION_MAX_OUTPUT_TOKENS = 288;
-const COMPOUND_VERIFIER_QUEUE_FORMAT = "compound-verifier-v9";
+const COMPOUND_VERIFIER_QUEUE_FORMAT = "compound-verifier-v10";
 const MODIFIER_RELATIONS = new Set(["literal", "metaphorical", "associative", "uncertain"]);
 const NON_LITERAL_EVIDENCE = /\b(?:metaphor(?:ical(?:ly)?)?|figurative(?:ly)?|symbolic(?:ally)?|associative(?:ly)?|wordplay|pun|merely associated|only associated)\b/iu;
 
@@ -180,6 +180,7 @@ function jsonForPrompt(value) {
     componentGlosses: value.componentGlosses ?? [],
     pyashSequence: value.pyashSequence ?? [],
     head: value.head ?? "",
+    headRelationPolicy: normalizeText(value.headRelationPolicy) || "required",
     modifiers: value.modifiers ?? [],
     componentRoles: value.componentRoles ?? [],
     morphologyStatus: value.morphologyStatus ?? "",
@@ -200,6 +201,7 @@ function jsonForPrompt(value) {
         pos: normalizeText(sense?.pos),
         lemmas: Array.isArray(sense?.lemmas) ? sense.lemmas.slice(0, 8) : [],
         definition: normalizeText(sense?.definition).split(";")[0].slice(0, 320),
+        ...(sense?.headRelationPolicy ? { headRelationPolicy: normalizeText(sense.headRelationPolicy) } : {}),
         compatibleHeadSenseIds: Array.isArray(sense?.compatibleHeadSenseIds)
           ? sense.compatibleHeadSenseIds.slice(0, 12)
           : []
@@ -221,10 +223,11 @@ export function buildCompoundVerificationPrompt({ record, candidates = [record] 
     "Use the supplied target WordNet sense definitions to judge whether the components compose the target meaning.",
     "Use the supplied WordNet definitions for each component to choose its relevant meaning; do not infer a component sense from spelling alone.",
     "Pyash order is head-final: the final component is the semantic head.",
-    "A target/head pair is compatible only when the target synset equals the cited final-component sense or reaches it through directed WordNet hypernym edges with the same part of speech. Accept only a listed compatibleHeadSenseIds pair; otherwise answer uncertain.",
+    "Use WordNet head relations as supporting evidence. Enforce compatibleHeadSenseIds when headRelationPolicy is required (the default). When the policy is advisory, part-of-speech labels and missing hypernym edges do not veto a compound; judge the target and component definitions directly.",
+    "When headRelationPolicy is required, the target sense must be literally a kind of the final component; when it is advisory, judge literal composition from the supplied definitions without requiring that relation.",
     "For every modifier before the final head, cite one supplied component sense in componentGlosses order, state its contribution, and classify that contribution as literal, metaphorical, associative, or uncertain.",
     "Accept only when every modifier contributes its defined meaning literally to the target. If any modifier depends on metaphor, figurative meaning, symbolism, wordplay, or association, reject or mark uncertain.",
-    "The final target sense must also be literally a kind of the final component in the cited component sense, and its definition must support the full modifier-plus-head meaning.",
+    "The final component is the proposed semantic head. For advisory head relations, judge whether the target definition composes literally with that head and the modifiers; do not require the target to share the head's part of speech.",
     "A spelling match, association, metaphor, idiom, derivational ending, grammatical ending, or unrelated homograph is not a lexical head.",
     "For named groups or proper-name senses, accept only if the supplied target definition establishes the same literal component composition.",
     "Component glosses and source-language spellings suggest a segmentation; they do not prove it. If no supplied target sense supports the composition, reject or mark uncertain.",
@@ -394,6 +397,9 @@ export function parseCompoundVerificationResponse(text, { candidates = [] } = {}
   const selectedTargetSense = selectedCandidate?.targetSenseEvidence?.find((sense) => (
     normalizeText(sense?.source) === supportingSenseId
   ));
+  const headRelationPolicy = normalizeText(
+    selectedCandidate?.headRelationPolicy ?? selectedTargetSense?.headRelationPolicy
+  ).toLowerCase() || "required";
   const hasWordNetCompatibility = Array.isArray(selectedTargetSense?.compatibleHeadSenseIds);
   const headRelationSupported = hasWordNetCompatibility
     ? selectedTargetSense.compatibleHeadSenseIds.includes(supportingHeadSenseId)
@@ -417,7 +423,7 @@ export function parseCompoundVerificationResponse(text, { candidates = [] } = {}
       raw: String(text ?? "")
     };
   }
-  if (verdict === "accept" && headRelationSupported === false) {
+  if (verdict === "accept" && headRelationSupported === false && headRelationPolicy !== "advisory") {
     return {
       valid: true,
       verdict: "uncertain",

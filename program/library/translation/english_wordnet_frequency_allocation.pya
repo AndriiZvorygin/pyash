@@ -19,4 +19,5 @@ su text "compound-candidate-source" ob text "english30k-closed-wordnet-multiword
 su text "compound-candidate-order" ob text "english30k-rank-ascending-princeton-tag-count-descending" ya
 su text "compound-verification-batch-size" ob num 64 ya
 su text "compound-verification-revision" ob text "wordnet-modifier-literalness-v9" ya
+su text "compound-head-relation-policy" ob text "advisory" ya
 prah

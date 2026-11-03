@@ -38,7 +38,7 @@ function row(id, target, sourceSurfaces, pyashSequence) {
   };
 }
 
-test("compound head compatibility requires a same-part-of-speech directed hypernym path", () => {
+test("WordNet hypernym evidence remains same-part-of-speech and directed", () => {
   const index = buildWordNetHeadRelationIndex([
     { source: "n:00000001-n", target: "n:00000002-n", relation: "hypernym" },
     { source: "n:00000002-n", target: "n:00000003-n", relation: "hypernym" },
@@ -200,7 +200,7 @@ test("deterministic compound outcomes persist their verification status as the d
   assert.equal(normalized.coverageStatus, "candidate-closed");
 });
 
-test("WordNet compound promotion requires cited senses and a supported head relation", () => {
+test("compound promotion validates cited senses and applies an advisory head-relation policy", () => {
   const base = {
     status: "accepted-llm",
     decisionRevision: "wordnet-modifier-literalness-v9",
@@ -226,6 +226,8 @@ test("WordNet compound promotion requires cited senses and a supported head rela
   assert.equal(acceptedDecision({ ...base, verificationModifierRelations: ["metaphorical"] }), false);
   assert.equal(acceptedDecision({ status: "accepted-llm", decisionRevision: "legacy-v1" }), false);
   assert.equal(acceptedDecision({ ...base, decisionRevision: "wordnet-directed-head-relation-v7" }), true);
+  assert.equal(acceptedDecision({ ...base, headRelationPolicy: "advisory", verificationHeadRelation: "unsupported" }), true);
+  assert.equal(acceptedDecision({ ...base, headRelationPolicy: "advisory", verificationHeadSenseId: "" }), false);
 });
 
 test("compound worklist supplies bounded WordNet definitions without usage examples", () => {
@@ -286,6 +288,7 @@ test("compound worklist supplies bounded WordNet definitions without usage examp
       pos: "n",
       lemmas: ["friendship"],
       definition: "a relationship between friends",
+      headRelationPolicy: "advisory",
       compatibleHeadSenseIds: ["n:00000004-n"]
     },
     {
@@ -293,6 +296,7 @@ test("compound worklist supplies bounded WordNet definitions without usage examp
       pos: "n",
       lemmas: ["friendship"],
       definition: "a social relation",
+      headRelationPolicy: "advisory",
       compatibleHeadSenseIds: []
     }
   ]);
@@ -333,7 +337,9 @@ test("compound worklist supplies bounded WordNet definitions without usage examp
     wordnetIndex,
     senseTagCounts: new Map()
   });
-  assert.equal(withoutHeadRelation[0].disposition, "no-wordnet-head-evidence");
+  assert.equal(withoutHeadRelation[0].disposition, "ready-for-housekeeper-verification");
+  assert.equal(withoutHeadRelation[0].verificationRecord.headRelationPolicy, "advisory");
+  assert.deepEqual(withoutHeadRelation[0].verificationRecord.targetSenseEvidence[0].compatibleHeadSenseIds, []);
 });
 
 test("compound prompt requires evidence from a supplied target sense", () => {

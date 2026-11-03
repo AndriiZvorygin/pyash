@@ -192,16 +192,16 @@ async function buildWordNetCompoundCandidates({ sense, sourceTerm, resources } =
         pos: text(sense?.pos),
         lemmas: [...new Set((sense?.lemmas ?? [sense?.lemma]).map(text).filter(Boolean))],
         definition: gloss.split(";")[0].slice(0, 320),
+        headRelationPolicy: "advisory",
         compatibleHeadSenseIds: record.componentGlosses.at(-1)
           ? (wordnetIndex?.senses?.(record.componentGlosses.at(-1)) ?? [])
             .map((headSense) => `${text(headSense.pos)}:${text(headSense.synset)}`)
             .filter((headSenseId) => hasWordNetHeadSenseRelation(targetSenseId, headSenseId, relationIndex))
           : []
-      }]
+      }],
+      headRelationPolicy: "advisory"
     }));
-  return classifyCompoundCoverage(candidates.filter((record) => (
-    record.targetSenseEvidence[0]?.compatibleHeadSenseIds.length > 0
-  ))).verificationCandidates;
+  return classifyCompoundCoverage(candidates).verificationCandidates;
 }
 
 function compoundAnchor(record, sense) {

@@ -659,6 +659,7 @@ export function parseEnglishWordNetFrequencyAllocationConfig(source) {
     || metadata["compound-candidate-order"] !== "english30k-rank-ascending-princeton-tag-count-descending"
     || !Number.isSafeInteger(metadata["compound-verification-batch-size"])
     || !String(metadata["compound-verification-revision"] ?? "").trim()
+    || metadata["compound-head-relation-policy"] !== "advisory"
     || !String(metadata["alias-target-policy"] ?? "").trim()) {
     throw invalid("WordNet frequency allocation configuration is incomplete", { format: metadata.format });
   }

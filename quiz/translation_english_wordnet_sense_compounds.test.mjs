@@ -10,6 +10,7 @@ import {
   senseTranslationKey,
   buildSenseCompoundWorklist,
   buildKwonLinkedAtomicChoices,
+  componentGlossAlternatives,
   translateWordNetSenseWave
 } from "../program/library/translation/english_wordnet_sense_compounds.mjs";
 
@@ -167,14 +168,19 @@ test("sense compounds map only linked atom choices and put the WordNet head last
     relations: [{ source: "n:00000010-n", target: "n:00000020-n", relation: "hypernym" }]
   });
 
-  assert.equal(candidates.length, 1);
-  assert.deepEqual(candidates[0].pyashSequence, ["hfre", "hlak"]);
-  assert.deepEqual(candidates[0].sourceLanguages, ["chinese", "french"]);
-  assert.deepEqual(candidates[0].componentGlosses, ["friend", "relationship"]);
-  assert.equal(candidates[0].targetSenseEvidence[0].compatibleHeadSenseIds[0], "n:00000020-n");
+  assert.equal(candidates.length, 2);
+  const relationshipHead = candidates.find((candidate) => candidate.pyashSequence.join(" ") === "hfre hlak");
+  const friendHead = candidates.find((candidate) => candidate.pyashSequence.join(" ") === "hlak hfre");
+  assert.ok(relationshipHead);
+  assert.ok(friendHead);
+  assert.deepEqual(relationshipHead.sourceLanguages, ["chinese", "french"]);
+  assert.deepEqual(relationshipHead.componentGlosses, ["friend", "relationship"]);
+  assert.equal(relationshipHead.targetSenseEvidence[0].compatibleHeadSenseIds[0], "n:00000020-n");
+  assert.equal(relationshipHead.headRelationPolicy, "advisory");
+  assert.equal(friendHead.headRelationPolicy, "advisory");
 });
 
-test("worklist keeps only unresolved senses with a linked atomic WordNet head and ranks by frequency", () => {
+test("worklist keeps unresolved senses without requiring a POS-matched linked head", () => {
   const rows = buildSenseCompoundWorklist({
     residualSenses: [
       { source: "n:00000010-n", pos: "n", synset: "00000010-n", lemmas: ["rare target"], gloss: "a rare target", candidates: [{ english30kRank: 3000, tagCount: 1 }] },
@@ -194,29 +200,77 @@ test("worklist keeps only unresolved senses with a linked atomic WordNet head an
     ]
   });
 
-  assert.deepEqual(rows.map((row) => row.senseId), ["n:00000011-n", "n:00000010-n"]);
-  assert.equal(rows[0].compatibleHeadSenseIds[0], "n:00000090-n");
+  assert.deepEqual(rows.map((row) => row.senseId), ["n:00000011-n", "n:00000010-n", "n:00000012-n"]);
+  assert.equal(rows[0].compatibleHeadSenseIds, undefined);
   assert.equal(rows[0].frequencyRank, 20);
   assert.equal(rows[1].frequencyRank, 3000);
 });
 
-test("worklist skips a residual sense whose lemma already has an active atomic link", () => {
+test("a linked sense for one part of speech does not suppress a residual sense for another", () => {
   const rows = buildSenseCompoundWorklist({
     residualSenses: [
       { source: "n:05878677-n", pos: "n", synset: "05878677-n", lemmas: ["one"], gloss: "a single person or thing" },
-      { source: "n:00000010-n", pos: "n", synset: "00000010-n", lemmas: ["friendship"], gloss: "a relationship between friends" }
+      { source: "s:02193977-s", pos: "s", synset: "02193977-s", lemmas: ["one"], gloss: "being a single unit" }
     ],
-    relations: [
-      { source: "n:05878677-n", target: "n:00000090-n", relation: "hypernym" },
-      { source: "n:00000010-n", target: "n:00000090-n", relation: "hypernym" }
-    ],
+    linkedSenseIds: ["s:02193977-s"],
     linkedAtomicSenses: [
-      { source: "n:00000090-n", target: "relationship", targetKind: "atom", pyashSequence: ["hlak"] },
       { source: "s:02193977-s", target: "one", targetKind: "atom", pyashSequence: ["hyik"] }
     ]
   });
 
-  assert.deepEqual(rows.map((row) => row.senseId), ["n:00000010-n"]);
+  assert.deepEqual(rows.map((row) => row.senseId), ["n:05878677-n"]);
+});
+
+test("component gloss alternatives are queried independently", () => {
+  assert.deepEqual(componentGlossAlternatives("seat / rank"), ["seat", "rank"]);
+  assert.deepEqual(componentGlossAlternatives("chair"), ["chair"]);
+});
+
+test("compound candidates may use a head sense with a different part of speech and no hypernym edge", () => {
+  const candidates = buildSenseDerivedCompoundCandidates({
+    sense: {
+      senseId: "n:00000040-n",
+      pos: "n",
+      lemma: "ranking",
+      lemmas: ["ranking"],
+      gloss: "a position in an ordered scale"
+    },
+    translations: [{
+      language: "chinese",
+      surface: "等级",
+      composition: "compound",
+      components: [
+        { surface: "等", gloss: "equal" },
+        { surface: "级", gloss: "rank" }
+      ]
+    }],
+    kwonCandidatesByGloss: new Map([
+      ["equal", [{
+        word: "equal",
+        coverageType: "atomic",
+        pyashSequence: ["hfoo"],
+        componentLayers: [16],
+        linkedSense: { source: "a:00000041-a", pos: "a", lemmas: ["equal"], definition: "having the same quantity" }
+      }]],
+      ["rank", [{
+        word: "rank",
+        coverageType: "atomic",
+        pyashSequence: ["hbar"],
+        componentLayers: [16],
+        linkedSense: { source: "n:00000042-n", pos: "n", lemmas: ["rank"], definition: "a position in a scale" }
+      }]]
+    ]),
+    relations: []
+  });
+
+  assert.equal(candidates.length, 2);
+  const adjectiveHead = candidates.find((candidate) => candidate.head === "equal");
+  assert.ok(adjectiveHead);
+  assert.deepEqual(adjectiveHead.pyashSequence, ["hbar", "hfoo"]);
+  assert.equal(adjectiveHead.targetSenseEvidence[0].pos, "n");
+  assert.equal(adjectiveHead.componentSenseEvidence.at(-1).pos, "a");
+  assert.deepEqual(adjectiveHead.targetSenseEvidence[0].compatibleHeadSenseIds, []);
+  assert.equal(adjectiveHead.headRelationPolicy, "advisory");
 });
 
 test("Kwon component resolution admits only active linked atomic mappings", () => {

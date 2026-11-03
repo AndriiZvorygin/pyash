@@ -308,9 +308,13 @@ export function compoundWorklist(
     wordnetIndex = null,
     senseTagCounts = new Map(),
     rankForEnglish = () => Number.POSITIVE_INFINITY,
-    maximumCompoundComponents = 3
+    maximumCompoundComponents = 3,
+    headRelationPolicy = "advisory"
   } = {}
 ) {
+  if (headRelationPolicy !== "advisory") {
+    throw new TypeError("compound worklist requires the configured advisory head-relation policy");
+  }
   const headRelationIndex = buildWordNetHeadRelationIndex(wordnetIndex?.relations ?? []);
   const residualByTerm = new Map();
   const residualBySource = new Map();
@@ -378,9 +382,9 @@ export function compoundWorklist(
           .filter((componentSense) => hasWordNetHeadSenseRelation(sense.source, componentSense.source, headRelationIndex))
           .map((componentSense) => componentSense.source)
       }))
-      .sort((left, right) => Number(right.compatibleHeadSenseIds.length > 0) - Number(left.compatibleHeadSenseIds.length > 0)
-        || left.frequencyRank - right.frequencyRank
+      .sort((left, right) => left.frequencyRank - right.frequencyRank
         || right.tagCount - left.tagCount
+        || Number(right.compatibleHeadSenseIds.length > 0) - Number(left.compatibleHeadSenseIds.length > 0)
         || left.source.localeCompare(right.source));
     const selectedTargetRows = rankedTargetWithHeadEvidence.slice(0, 4);
     const selectedHeadComponentSenses = [];
@@ -411,6 +415,7 @@ export function compoundWorklist(
     const selectedHeadSenseIds = new Set(selectedHeadComponentSenses.map((sense) => sense.source));
     const targetEvidenceWithHead = selectedTargetRows.map(({ frequencyRank, tagCount, ...sense }) => ({
       ...sense,
+      headRelationPolicy,
       compatibleHeadSenseIds: sense.compatibleHeadSenseIds.filter((id) => selectedHeadSenseIds.has(id))
     }));
     const frequencyRank = rankedTargetSenseEvidence.length
@@ -436,12 +441,11 @@ export function compoundWorklist(
       frequencyRank,
       frequencyTagCount,
       status: "candidate-closed",
+      headRelationPolicy,
       disposition: targetIdsInUse.has(targetId)
         ? "target-identity-already-linked"
         : decisionsById.get(record.id)?.decisionRevision === decisionRevision
           ? `already-${decisionsById.get(record.id).status}`
-          : targetEvidenceWithHead.length === 0 || !targetEvidenceWithHead.some((sense) => sense.compatibleHeadSenseIds.length > 0)
-            ? "no-wordnet-head-evidence"
           : "ready-for-housekeeper-verification",
       targetId,
       targetSenseEvidence: targetEvidenceWithHead,
@@ -450,6 +454,7 @@ export function compoundWorklist(
         ...record,
         frequencyRank,
         frequencyTagCount,
+        headRelationPolicy,
         componentSenseEvidence,
         targetSenseEvidence: targetEvidenceWithHead
       },
@@ -612,7 +617,8 @@ export async function prepareWordNetFrequencyAllocation() {
       wordnetIndex: resources.wordnet.index,
       senseTagCounts: senseTagCountIndex(frequency.joined.entries),
       rankForEnglish,
-      maximumCompoundComponents: allocationConfig["maximum-compound-components"]
+      maximumCompoundComponents: allocationConfig["maximum-compound-components"],
+      headRelationPolicy: allocationConfig["compound-head-relation-policy"]
     }
   );
   const sourceHash = sha256(stableJson({
@@ -785,7 +791,8 @@ export async function runWordNetFrequencyAllocation({ artifactRoot = ARTIFACT_RO
       staleBridgeLinksPath: join(directory, "stale-bridge-links.pya"),
       compoundCandidates: result.residualCompounds.length,
       compoundCandidatesReady: result.residualCompounds.filter((row) => row.disposition === "ready-for-housekeeper-verification").length,
-      compoundCandidatesWithoutWordNetHeadEvidence: result.residualCompounds.filter((row) => row.disposition === "no-wordnet-head-evidence").length,
+      compoundCandidatesWithoutWordNetHeadRelation: result.residualCompounds.filter((row) => !row.targetSenseEvidence
+        ?.some((sense) => sense.compatibleHeadSenseIds?.length > 0)).length,
       bridgeOutputHash
     };
     await atomicWrite(manifestPath, renderManifestPya(manifest));
