@@ -15,6 +15,7 @@ import {
   beginSessionTurn,
   completeSessionTurn,
   ensureSessionFile,
+  readSessionMessages,
   readSessionMessagesWithFallback,
   readSessionReplay
 } from "../program/agent/session.mjs";
@@ -240,6 +241,36 @@ test("live projection keeps the original task beside the bounded latest pair wit
   const projected = projectSessionReplay({ sentences, historyWindow: 1 });
   assert.deepEqual(projected.messages.map((entry) => entry.content), ["task-1", "task-3", "answer-3"]);
   assert.equal(projected.messages.filter((entry) => entry.content === "task-1").length, 1);
+});
+
+test("session replay orders interleaved records by durable turn ordinal", async () => {
+  const root = path.resolve("/tmp/pyash-agent-session-order-test");
+  await fs.rm(root, { recursive: true, force: true });
+  const sessionFile = await ensureSessionFile({
+    sessionDir: root,
+    sessionName: "ordered",
+    systemPrompt: "system",
+    model: "model"
+  });
+  const makeTurn = (ordinal) => {
+    const turnId = `ordered-${ordinal}`;
+    const requestHash = canonicalRequestHash({ ordinal });
+    return [
+      buildSessionTurnSentence({ role: "user", content: `question-${ordinal}`, turnId, requestHash, ordinal }),
+      buildSessionTurnSentence({ role: "assistant", content: `answer-${ordinal}`, turnId, requestHash, ordinal }),
+      buildSessionCheckpointSentence({ turnId, requestHash, responseText: `answer-${ordinal}`, ordinal })
+    ];
+  };
+  try {
+    await fs.appendFile(sessionFile, [...makeTurn(2), ...makeTurn(1)]
+      .map((sentence) => sentenceToPyash(sentence)).join("\n") + "\n", "utf8");
+    const history = await readSessionMessages({ sessionFile, historyWindow: 10 });
+    assert.deepEqual(history.messages.map((entry) => entry.content), [
+      "question-1", "answer-1", "question-2", "answer-2"
+    ]);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
 });
 
 test("verify loop promotes its successful verifier disposition into the generator session ledger", async () => {

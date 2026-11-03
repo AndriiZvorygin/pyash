@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 import readline from "node:readline/promises";
+import fs from "node:fs/promises";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
@@ -26,6 +27,7 @@ import {
 } from "../program/agent/coding_saddle_state.mjs";
 import { mind_to_name_text } from "../program/verbs/mind/mind.mjs";
 import { requestMindInterrupt } from "../program/agent/interrupt.mjs";
+import { startStreamTail } from "../program/verbs/mind/stream.mjs";
 import { queueDepth } from "../program/runtime/gpu/queue.mjs";
 import { createGpuHousekeeperAdapter } from "../program/runtime/gpu/housekeeper_adapter.mjs";
 import { resolveGpuHousekeeperUrl } from "../program/runtime/gpu/managed-ollama.mjs";
@@ -467,16 +469,82 @@ export async function runSaddleTurn({
     if (typeof onUsage !== "function") return normalized;
     return onUsage(normalized);
   };
-  return withLocalModelsManaged(backend, housekeeperUrl, () => mindFn(sentence, {
-    onToolCall,
-    onAssistantDelta,
-    saddlePlanTool,
-    onUsage: emitUsage,
-    sessionUserContent: String(input ?? ""),
-    sessionUserMetadata,
-    sessionContextSummary,
-    sessionPlan
-  }));
+  return withLocalModelsManaged(backend, housekeeperUrl, async () => {
+    const result = await mindFn(sentence, {
+      onToolCall,
+      onAssistantDelta,
+      saddlePlanTool,
+      onUsage: emitUsage,
+      sessionUserContent: String(input ?? ""),
+      sessionUserMetadata,
+      sessionContextSummary,
+      sessionPlan
+    });
+    if (result?.be === "stream" && result?.ob?.kind === "mind") {
+      return waitForSaddleMindStream(result);
+    }
+    return result;
+  });
+}
+
+export async function waitForSaddleMindStream(stream, {
+  tailStream = startStreamTail
+} = {}) {
+  const filename = String(stream?.ob?.filename ?? "").trim();
+  if (!filename) throw new Error("mind stream is missing its output filename");
+  const resolvedFilename = path.resolve(filename);
+  try {
+    await fs.access(resolvedFilename);
+  } catch {
+    throw new Error(`mind stream output is unavailable: ${resolvedFilename}`);
+  }
+
+  const envelope = await new Promise((resolve, reject) => {
+    let terminal = null;
+    let stopTail = null;
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      stopTail?.();
+      callback(value);
+    };
+    stopTail = tailStream({
+      filename: resolvedFilename,
+      onLine(line) {
+        let record;
+        try {
+          record = JSON.parse(line);
+        } catch {
+          return;
+        }
+        if (record?.type !== "terminal") return;
+        if (record.ok === false) {
+          finish(reject, new Error(record.error?.message || "mind stream failed"));
+          return;
+        }
+        terminal = record.envelope ?? null;
+      },
+      onEnd() {
+        if (!terminal) {
+          finish(reject, new Error("mind stream ended without a terminal response"));
+          return;
+        }
+        finish(resolve, terminal);
+      },
+      onError(error) {
+        finish(reject, error);
+      }
+    });
+  });
+  const text = String(envelope?.text ?? envelope?.response ?? envelope?.message?.content ?? "");
+  return {
+    ...stream,
+    ...(envelope?.createdAt ? { during: { date: String(envelope.createdAt) } } : {}),
+    ...(envelope?.model ? { as: { name: String(envelope.model) } } : {}),
+    be: "answer",
+    ob: { text }
+  };
 }
 
 export async function loadSaddleSessionHistory({
@@ -485,11 +553,12 @@ export async function loadSaddleSessionHistory({
   sessionFile = "",
   historyWindow = 50
 } = {}) {
-  if (sessionFile) return readSessionMessages({ sessionFile, historyWindow });
+  if (sessionFile) return readSessionMessages({ sessionFile, historyWindow, includePending: true });
   return readSessionMessagesWithFallback({
     sessionDir: path.join(agentHouse, "session"),
     baseName: sessionName,
-    historyWindow
+    historyWindow,
+    includePending: true
   });
 }
 
@@ -503,6 +572,7 @@ export function renderSaddleSessionHistory(saddleUi, messages = [], session = ""
       saddleUi.writeMarkdown(String(message.content ?? ""));
     } else if (message?.role === "user") {
       saddleUi.writeLine(`you> ${String(message.content ?? "")}`);
+      if (message.pending) saddleUi.writeLine("[unfinished turn; no completed response was saved]");
     } else if (message?.role === "tool") {
       saddleUi.writeLine(`[tool] ${String(message.content ?? "")}`);
     }
@@ -672,6 +742,7 @@ async function main() {
   let thinkSetting = config.thinkSetting;
   let busy = false;
   let closing = false;
+  let activeSubmitDone = null;
   let backendPicker = null;
   let modelPicker = null;
   let modelPickerTarget = null;
@@ -1057,12 +1128,15 @@ async function main() {
     if (closing) return;
     closing = true;
     if (busy) {
+      saddleUi.setActivity("interrupt requested; waiting for the active turn to settle");
       await requestMindInterrupt({
         worldRoot: path.join(config.cwd, "world"),
         agentName: AGENT_NAME,
         source: "coding saddle",
         reason: "terminal exit"
       }).catch(() => {});
+      const activeTurn = activeSubmitDone;
+      if (activeTurn) await activeTurn;
     }
     restoreActiveSaddleUi();
     writeLine("saddle closed");
@@ -1439,6 +1513,9 @@ async function main() {
       return;
     }
 
+    let settleActiveSubmit;
+    const activeTurn = new Promise((resolve) => { settleActiveSubmit = resolve; });
+    activeSubmitDone = activeTurn;
     busy = true;
     saddleUi.setBusy(true);
     saddleUi.setUsage("");
@@ -1597,6 +1674,8 @@ async function main() {
       busy = false;
       saddleUi.setBusy(false);
       saddleUi.setActivity("ready");
+      settleActiveSubmit();
+      if (activeSubmitDone === activeTurn) activeSubmitDone = null;
       dispatchQueuedInput();
     }
   };

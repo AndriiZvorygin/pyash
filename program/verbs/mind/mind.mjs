@@ -826,7 +826,15 @@ export async function mind_to_name_text(sentence, {
       onComplete: completeStreamSession,
       sessionTurn
     });
-    if (stream) return stream;
+    if (stream) {
+      return sessionTurn?.turnId
+        ? {
+          ...stream,
+          accordingto: { text: sessionTurn.turnId },
+          fromtext: { text: sessionTurn.requestHash ?? "" }
+        }
+        : stream;
+    }
     responseText = text ?? "";
     replyEnvelope = reply ?? null;
     if (!streamGeneration && responseText) onAssistantDelta?.(responseText);

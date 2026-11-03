@@ -197,6 +197,8 @@ test("session turn user record is durable before completion and pending tails st
 
   const history = await readSessionMessages({ sessionFile, historyWindow: 10 });
   assert.deepEqual(history.messages, []);
+  const saddleHistory = await readSessionMessages({ sessionFile, historyWindow: 10, includePending: true });
+  assert.deepEqual(saddleHistory.messages, [{ role: "user", content: "pending request", pending: true, turnId: started.turnId }]);
 
   const resumed = await beginSessionTurn({
     sessionFile,

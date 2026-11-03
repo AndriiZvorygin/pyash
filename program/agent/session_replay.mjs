@@ -371,6 +371,8 @@ function normalizeTurn(turn) {
     modern: turn.modern,
     legacy: turn.legacy,
     firstIndex: turn.firstIndex,
+    ordinal: Number(user?.metadata?.ordinal ?? user?.sentence?.by?.num) || null,
+    timestamp: String(user?.sentence?.during?.date ?? ""),
     requestHash: turn.requestHash || user?.requestHash || "",
     userContent: user?.content ?? "",
     responseText: assistant?.content ?? checkpoint?.responseText ?? "",
@@ -386,6 +388,14 @@ function normalizeTurn(turn) {
     checkpoint: checkpoint ?? null,
     records: turn.records
   };
+}
+
+function compareTurnsByConversationOrder(left, right) {
+  const leftTime = Date.parse(left.timestamp);
+  const rightTime = Date.parse(right.timestamp);
+  if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) return leftTime - rightTime;
+  if (left.ordinal && right.ordinal && left.ordinal !== right.ordinal) return left.ordinal - right.ordinal;
+  return left.firstIndex - right.firstIndex || left.turnId.localeCompare(right.turnId);
 }
 
 function stableTurnSnapshot(turn) {
@@ -463,7 +473,7 @@ function buildLiveMessages({ turns, recentTurns, originalTask }) {
 
 export function projectSessionReplay({ sentences = [], historyWindow = 50 } = {}) {
   const source = Array.isArray(sentences) ? sentences : [];
-  const turns = buildTurns(source).map(normalizeTurn);
+  const turns = buildTurns(source).map(normalizeTurn).sort(compareTurnsByConversationOrder);
   const completeTurns = turns.filter((turn) => turn.complete);
   const maxPairs = Math.max(0, Math.trunc(Number(historyWindow) || 0));
   const recentTurns = maxPairs > 0 ? completeTurns.slice(-maxPairs) : [];

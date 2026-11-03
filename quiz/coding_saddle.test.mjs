@@ -10,6 +10,8 @@ import { allRemember, forget, remember } from "../program/remember/index.mjs";
 import { sentenceToPyash } from "../program/beautiful.mjs";
 import { classifyCommandText } from "../program/library/command_policy.mjs";
 import {
+  ensureSessionFile,
+  beginSessionTurn,
   buildSessionNameForDate,
   buildSessionNamePrefix
 } from "../program/agent/session.mjs";
@@ -54,7 +56,8 @@ import {
   prepareSaddle,
   renderSaddleSessionHistory,
   resolveSaddleProjectWorldRoot,
-  runSaddleTurn
+  runSaddleTurn,
+  waitForSaddleMindStream
 } from "../command/pyash_saddle.mjs";
 
 test("coding saddle reloads named and explicitly selected session history", async () => {
@@ -117,6 +120,80 @@ test("coding saddle submits Enter and keeps newline input separate", async () =>
   await new Promise((resolve) => setImmediate(resolve));
   assert.deepEqual(submitted, ["one\ntwo"]);
   assert.equal(decoder.getState().value, "");
+});
+
+test("coding saddle waits for the stream terminal before returning a completed turn", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-stream-"));
+  const streamFile = path.join(root, "answer.stream.txt");
+  const priorManagerRequired = process.env.PYA_GPU_MANAGER_REQUIRED;
+  await fs.writeFile(streamFile, `${JSON.stringify("first token")}\n`, "utf8");
+  let settled = false;
+  const streamed = [];
+  const resultPromise = runSaddleTurn({
+    input: "answer this",
+    model: "glm-5.3-flash",
+    backend: "ollama",
+    host: "http://localhost:11434",
+    housekeeperUrl: "http://housekeeper:18886",
+    onAssistantDelta: (delta) => streamed.push(delta),
+    mindFn: async (_sentence, options) => {
+      assert.equal(process.env.PYA_GPU_MANAGER_REQUIRED, "true");
+      options.onAssistantDelta("first token");
+      setTimeout(() => {
+        fs.appendFile(streamFile, `${JSON.stringify({ type: "terminal", ok: true, envelope: { text: "complete answer" } })}\n[PYA_STREAM_END]\n`, "utf8").catch(() => {});
+      }, 120);
+      return {
+        su: { name: "mind-stream" },
+        as: { name: "open" },
+        be: "stream",
+        ob: { filename: streamFile, kind: "mind" }
+      };
+    }
+  }).finally(() => { settled = true; });
+
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(settled, false, "saddle returned before the stream terminal");
+    assert.equal(process.env.PYA_GPU_MANAGER_REQUIRED, "true", "local GPU management was released before the stream finished");
+    const result = await resultPromise;
+    assert.equal(result.be, "answer");
+    assert.equal(result.ob.text, "complete answer");
+    assert.deepEqual(streamed, ["first token"]);
+
+    const failedStreamFile = path.join(root, "failed.stream.txt");
+    await fs.writeFile(failedStreamFile, `${JSON.stringify({ type: "terminal", ok: false, error: { message: "provider interrupted" } })}\n[PYA_STREAM_END]\n`, "utf8");
+    await assert.rejects(waitForSaddleMindStream({
+      be: "stream",
+      ob: { filename: failedStreamFile, kind: "mind" }
+    }), /provider interrupted/);
+  } finally {
+    if (priorManagerRequired === undefined) delete process.env.PYA_GPU_MANAGER_REQUIRED;
+    else process.env.PYA_GPU_MANAGER_REQUIRED = priorManagerRequired;
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("coding saddle history restores an unfinished prompt with an explicit status", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-pending-"));
+  const sessionDir = path.join(root, "session");
+  const sessionFile = await ensureSessionFile({ sessionDir, sessionName: "pending", systemPrompt: "system", model: "model" });
+  await beginSessionTurn({ sessionFile, userContent: "unfinished question", request: { prompt: "unfinished question" } });
+
+  try {
+    const history = await loadSaddleSessionHistory({ agentHouse: root, sessionFile });
+    assert.deepEqual(history.messages.map(({ role, content, pending }) => ({ role, content, pending })), [
+      { role: "user", content: "unfinished question", pending: true }
+    ]);
+    const rendered = [];
+    renderSaddleSessionHistory({
+      clearHistory() {},
+      writeLine(text) { rendered.push(text); },
+      writeMarkdown() {}
+    }, history.messages, "pending");
+    assert.ok(rendered.some((line) => line.includes("unfinished turn; no completed response was saved")));
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
 });
 
 test("coding saddle redraw layout wraps long lines once and preserves the cursor row", () => {
