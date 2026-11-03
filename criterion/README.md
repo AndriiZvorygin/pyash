@@ -19,6 +19,8 @@ node command/criterion.mjs prompt-ablation --dataset /path/to/meetingbank/test.j
 
 Use `OLLAMA_BASE_URL` (or the existing `OLLAMA_HOST`) for the Ollama endpoint. A run uses the same profile and context length for every model in a comparison. `--resume` reuses completed sample rows and is the benchmark equivalent of `again`. Reports persist `runScope: smoke` for `--smoke`; unrestricted runs are labelled `runScope: full`.
 
+Ollama Criterion runs finish one model's sample batch before moving to the next. Requests keep each model resident for 30 minutes by default (`sampling.keep_alive` can override this), while Housekeeper may still reclaim it for an admitted capacity handoff. Cleanup unloads only the last model actually used; it does not issue unload requests for every comparison model. Direct Ollama cleanup checks `/api/ps` first and skips models that are already absent.
+
 `helpos-local` reads one or more directories shaped like:
 
 ```text

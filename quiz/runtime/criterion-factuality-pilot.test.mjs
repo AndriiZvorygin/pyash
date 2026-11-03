@@ -127,18 +127,20 @@ test("factuality preflight verifies version, tags, warmup, and a real sample req
   assert.deepEqual(result.requests.map(request => request.kind), ["warmup", "meeting"]);
 });
 
-test("factuality lane discharges each Ollama model without stopping Ollama", async () => {
+test("direct Criterion discharge never loads a model that is already absent", async () => {
   const requests = [];
   const result = await dischargeOllamaModels({
     baseUrl: "http://ollama.test",
     models: ["qwen3.5:9b"],
     fetchImpl: async (url, options) => {
-      requests.push({ url, body: JSON.parse(options.body) });
+      requests.push({ url, body: options?.body ? JSON.parse(options.body) : null });
+      if (url.endsWith("/api/ps")) return { ok: true, json: async () => ({ models: [] }) };
       return { ok: true, json: async () => ({}) };
     }
   });
   assert.equal(result.status, "ok");
-  assert.deepEqual(requests[0].body, { model: "qwen3.5:9b", prompt: "", stream: false, keep_alive: 0 });
+  assert.deepEqual(requests.map(request => request.url), ["http://ollama.test/api/ps"]);
+  assert.equal(result.results[0].status, "already-unloaded");
 });
 
 test("factuality discharge verifies that Ollama released the requested model", async () => {
@@ -157,6 +159,7 @@ test("factuality discharge verifies that Ollama released the requested model", a
     }
   });
   assert.equal(result.verified, true);
+  assert.equal(requests.filter(request => request.url.endsWith("/api/generate")).length, 1);
   assert.ok(requests.some(request => request.url.endsWith("/api/ps")));
 });
 
@@ -263,9 +266,8 @@ test("factuality pilot completes every generation batch before judging", async (
     root, datasetPath, models, selectionCount: 1, runId: "factuality-model-major-test", fetchImpl, generationRunner, judgeExecutor, smoke: true
   });
   assert.deepEqual(events, [
-    `generate:${models[0]}`, `discharge:${models[0]}`,
-    `generate:${models[1]}`, `discharge:${models[1]}`,
-    `discharge:${models[0]}`, `discharge:${models[1]}`,
+    `generate:${models[0]}`,
+    `generate:${models[1]}`,
     `judge:${models[0]}`, `judge:${models[1]}`
   ]);
   assert.equal(run.execution.generationCompletedForAllModelsBeforeJudging, true);

@@ -23,6 +23,8 @@ export const DEFAULT_PROFILES = Object.freeze({
   reasoning: Object.freeze({ think: true, reasoningMode: "reasoned", temperature: 0.6, top_p: 0.95, top_k: 20, contextLength: 32768 })
 });
 
+const DEFAULT_CRITERION_KEEP_ALIVE_SECONDS = 1800;
+
 export function resolveProfile(name = "summary_direct", overrides = {}) {
   const base = DEFAULT_PROFILES[name] ?? DEFAULT_PROFILES.summary_direct;
   return {
@@ -102,6 +104,7 @@ export async function runOllamaChat({
           model,
           messages: [{ role: "user", content: String(prompt ?? "") }],
           stream: false,
+          keep_alive: settings.keep_alive ?? DEFAULT_CRITERION_KEEP_ALIVE_SECONDS,
           think: settings.think,
           ...(settings.format === undefined ? {} : { format: settings.format }),
           options: {
@@ -236,6 +239,8 @@ export function createQueuedOllamaExecutor({
   const normalizedTimeout = Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0 ? Math.trunc(Number(timeoutMs)) : 900000;
   const normalizedVram = Number(vramRequiredMb) > 0 ? Math.trunc(Number(vramRequiredMb)) : null;
   const metadataHousekeeper = housekeeperAdapter ?? createGpuHousekeeperAdapter({ baseUrl: normalizedHousekeeperUrl });
+  let lastSubmittedModel = "";
+  let lastDischargedModel = "";
 
   async function submit({ model, prompt = "", profile = "summary_direct", contextLength, sampling = {}, identity = "", operation = "generate", kind = "ollama-chat" }) {
     const settings = resolveProfile(profile, { ...sampling, contextLength });
@@ -256,6 +261,7 @@ export function createQueuedOllamaExecutor({
         model,
         messages: [{ role: "user", content: String(prompt ?? "") }],
         stream: false,
+        keep_alive: settings.keep_alive ?? DEFAULT_CRITERION_KEEP_ALIVE_SECONDS,
         think: settings.think,
         ...(settings.format === undefined ? {} : { format: settings.format }),
         options
@@ -309,6 +315,10 @@ export function createQueuedOllamaExecutor({
       pollMs,
       workerTag: `criterion-ollama-${process.pid}`
     });
+    if (operation !== "discharge") {
+      lastSubmittedModel = String(model);
+      lastDischargedModel = "";
+    }
     const finishedAt = now().toISOString();
     const rawText = response.message?.content ?? response.response ?? "";
     return {
@@ -332,26 +342,54 @@ export function createQueuedOllamaExecutor({
   }
 
   const executor = input => submit({ ...input, kind: "ollama-chat" });
-  const dischargeModel = async model => submit({
-    model,
-    prompt: "",
-    profile: "baseline",
-    sampling: { keep_alive: 0, num_predict: 1 },
-    identity: `discharge-${Date.now()}`,
-    operation: "discharge",
-    kind: "ollama-generate"
-  });
-  const dischargeModels = async models => {
-    const results = [];
-    for (const model of models ?? []) {
-      try {
-        await dischargeModel(model);
-        results.push({ model, status: "ok" });
-      } catch (error) {
-        results.push({ model, status: "failed", error: String(error?.message ?? error) });
-      }
+  const dischargeModel = async model => {
+    const targetModel = lastSubmittedModel;
+    const requestedModel = String(model ?? "").trim();
+    if (!targetModel) return { model: requestedModel, status: "skipped", reason: "this Criterion adapter has not submitted model work" };
+    if (requestedModel && requestedModel !== targetModel) {
+      return { model: requestedModel, status: "skipped", reason: `only the last submitted model can be discharged safely (${targetModel})` };
     }
-    return { status: results.every(result => result.status === "ok") ? "ok" : "partial", results, verifiedByHousekeeper: true };
+    if (lastDischargedModel === targetModel) return { model: targetModel, status: "ok", alreadyDischarged: true };
+    await submit({
+      model: targetModel,
+      prompt: "",
+      profile: "baseline",
+      sampling: { keep_alive: 0, num_predict: 1 },
+      identity: `discharge-${Date.now()}`,
+      operation: "discharge",
+      kind: "ollama-generate"
+    });
+    lastDischargedModel = targetModel;
+    return { model: targetModel, status: "ok" };
+  };
+  const dischargeModels = async models => {
+    const requestedModels = [...new Set((models ?? []).map(model => String(model ?? "").trim()).filter(Boolean))];
+    if (!lastSubmittedModel) {
+      return {
+        status: "ok",
+        results: requestedModels.map(model => ({ model, status: "skipped", reason: "this Criterion adapter submitted no model work" })),
+        verifiedByHousekeeper: true,
+        skipped: true
+      };
+    }
+    if (requestedModels.length && !requestedModels.includes(lastSubmittedModel)) {
+      return {
+        status: "ok",
+        results: [{ model: lastSubmittedModel, status: "skipped", reason: "the last submitted model is outside the requested discharge set" }],
+        verifiedByHousekeeper: true,
+        skipped: true
+      };
+    }
+    try {
+      const result = await dischargeModel(lastSubmittedModel);
+      return { status: "ok", results: [result], verifiedByHousekeeper: true };
+    } catch (error) {
+      return {
+        status: "partial",
+        results: [{ model: lastSubmittedModel, status: "failed", error: String(error?.message ?? error) }],
+        verifiedByHousekeeper: false
+      };
+    }
   };
   const metadataProvider = async ({ model }) => {
     try {

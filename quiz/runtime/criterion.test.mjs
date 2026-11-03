@@ -79,6 +79,7 @@ test("Ollama adapter uses one configured profile and keeps thinking out of score
   assert.equal(request.url, "http://example.test/api/chat");
   assert.equal(request.body.think, true);
   assert.equal(request.body.options.num_ctx, 65536);
+  assert.equal(request.body.keep_alive, 1800);
   assert.equal(result.text, "final answer");
   assert.equal(result.timing.outputTokens, 3);
 });
@@ -110,10 +111,15 @@ test("queued Ollama Criterion adapter uses the durable GPU lane and housekeeper 
   assert.equal(requests[0].jobSpec.kind, "ollama-chat");
   assert.equal(requests[0].jobSpec.resourceRequest.vramRequiredMb, 22000);
   assert.equal(requests[0].jobSpec.payload.model, "qwen3.8:27b");
+  assert.equal(requests[0].jobSpec.payload.keep_alive, 1800);
 
-  await adapter.dischargeModels(["qwen3.8:27b"]);
-  assert.equal(requests[1].jobSpec.kind, "ollama-generate");
-  assert.equal(requests[1].jobSpec.payload.keep_alive, 0);
+  await adapter.executor({ model: "qwen3.8:9b", prompt: "Second model.", identity: "sample-2" });
+  await adapter.dischargeModels(["qwen3.8:27b", "qwen3.8:9b"]);
+  await adapter.dischargeModels(["qwen3.8:27b", "qwen3.8:9b"]);
+  assert.equal(requests.length, 3, "cleanup must issue at most one unload for the model used last");
+  assert.equal(requests[2].jobSpec.kind, "ollama-generate");
+  assert.equal(requests[2].jobSpec.payload.model, "qwen3.8:9b");
+  assert.equal(requests[2].jobSpec.payload.keep_alive, 0);
 });
 
 test("queued Ollama metadata stays on the housekeeper lane", async () => {
@@ -470,6 +476,28 @@ test("criterion run compares models and writes replayable artifacts", async () =
   assert.match(run.replayCommand, /--resume/);
   assert.equal(run.results[0].pass, null);
   assert.equal(run.runScope, "full");
+});
+
+test("criterion completes every sample for one model before switching models", async () => {
+  const root = await tempRoot();
+  const dataset = await writeJson(root, "ordered.json", [
+    { id: "m1", transcript: "First transcript.", summary: "First." },
+    { id: "m2", transcript: "Second transcript.", summary: "Second." }
+  ]);
+  const calls = [];
+  await runCriterion({
+    benchmark: "meetingbank",
+    datasetPath: dataset,
+    models: ["model-a", "model-b"],
+    runId: "model-batched-order",
+    root,
+    executor: async ({ model, sample }) => {
+      calls.push(`${model}:${sample.id}`);
+      return { text: "Summary.", timing: {} };
+    },
+    metadataProvider
+  });
+  assert.deepEqual(calls, ["model-a:m1", "model-a:m2", "model-b:m1", "model-b:m2"]);
 });
 
 test("criterion smoke runs are labelled separately from full aggregates", async () => {
