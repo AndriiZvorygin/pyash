@@ -5,6 +5,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createCodingSaddleTrace } from "../program/agent/coding_saddle_trace.mjs";
+import { interpret } from "../program/bridge/index.mjs";
+import { forget } from "../program/remember/index.mjs";
 import { splitSentences } from "../program/library/sentenceSplitter.mjs";
 import { parse } from "../program/understand/index.mjs";
 
@@ -63,8 +65,8 @@ test("coding saddle records tool arguments and results as artifacts linked from 
     assert.match(journal, /turn-[^\s"]+-input\.pya/u);
     assert.match(journal, /turn-session-001/u);
 
-    const callArtifact = await fs.readFile(path.join(worldRoot, "artifacts", trace.runId, "tool-event-000001-call.pya"), "utf8");
-    const resultArtifact = await fs.readFile(path.join(worldRoot, "artifacts", trace.runId, "tool-event-000001-result.pya"), "utf8");
+    const callArtifact = await fs.readFile(path.join(cwd, "artifacts", trace.runId, "tool-event-000001-call.pya"), "utf8");
+    const resultArtifact = await fs.readFile(path.join(cwd, "artifacts", trace.runId, "tool-event-000001-result.pya"), "utf8");
     assert.match(callArtifact, /printf trace-ok/u);
     assert.match(callArtifact, /call-001/u);
     assert.match(resultArtifact, /trace-ok/u);
@@ -76,7 +78,8 @@ test("coding saddle records tool arguments and results as artifacts linked from 
 
 test("coding saddle preserves a call artifact when its tool result never arrives", async () => {
   const worldRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-trace-partial-"));
-  const trace = createCodingSaddleTrace({ worldRoot, runId: "partial-saddle-run" });
+  const cwd = path.join(worldRoot, "project");
+  const trace = createCodingSaddleTrace({ worldRoot, cwd, runId: "partial-saddle-run" });
   try {
     trace.beginTurn({ input: "Run a command." });
     trace.recordToolEvent({
@@ -86,7 +89,7 @@ test("coding saddle preserves a call artifact when its tool result never arrives
     });
     trace.close({ status: "interrupted" });
 
-    const artifact = await fs.readFile(path.join(worldRoot, "artifacts", trace.runId, "tool-event-000001-call.pya"), "utf8");
+    const artifact = await fs.readFile(path.join(cwd, "artifacts", trace.runId, "tool-event-000001-call.pya"), "utf8");
     const journal = await fs.readFile(trace.journalPath, "utf8");
     assert.match(artifact, /README\.md/u);
     assert.match(journal, /tool-event-000001-call\.pya/u);
@@ -94,5 +97,32 @@ test("coding saddle preserves a call artifact when its tool result never arrives
   } finally {
     trace.close();
     await fs.rm(worldRoot, { recursive: true, force: true });
+  }
+});
+
+test("coding saddle tracing allows Pyash writes inside the active project", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-trace-write-"));
+  const worldRoot = path.join(tempRoot, "world");
+  const cwd = path.join(tempRoot, "project");
+  await fs.mkdir(cwd, { recursive: true });
+  const outputPath = path.join(cwd, "chapter-note.txt");
+  const trace = createCodingSaddleTrace({ worldRoot, cwd, runId: "saddle-project-write" });
+
+  forget();
+  try {
+    trace.beginTurn({ input: "Write a project note." });
+    const result = await interpret(parse(`ob text "written through Pyash" to filename "${outputPath}" be write do`));
+    assert.equal(result.value.text, "written through Pyash");
+    assert.equal(await fs.readFile(outputPath, "utf8"), "written through Pyash");
+
+    const journal = await fs.readFile(trace.journalPath, "utf8");
+    assert.match(journal, /chapter-note\.txt/u);
+    const artifacts = await fs.readdir(path.join(cwd, "artifacts", trace.runId));
+    assert.ok(artifacts.some((name) => name.includes("chapter-note.txt")));
+    assert.equal(await fs.readFile(path.join(worldRoot, "newspaper", path.basename(trace.journalPath)), "utf8"), journal);
+  } finally {
+    trace.close();
+    forget();
+    await fs.rm(tempRoot, { recursive: true, force: true });
   }
 });

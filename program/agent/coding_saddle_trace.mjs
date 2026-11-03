@@ -72,6 +72,7 @@ export function createCodingSaddleTrace({
   runId: providedRunId = ""
 } = {}) {
   const root = path.resolve(String(worldRoot || path.join(cwd || process.cwd(), "world")));
+  const projectRoot = path.resolve(String(cwd || process.cwd()));
   const date = now instanceof Date ? now : new Date(now);
   const stamp = date.toISOString().replace(/[-:.]/g, "");
   const runId = stableRunId(providedRunId || `${stamp}-${pid}-coding-saddle`);
@@ -93,7 +94,7 @@ export function createCodingSaddleTrace({
     fs.appendFileSync(journalPath, line.endsWith("\n") ? line : `${line}\n`, "utf8");
   };
   const exchangeRecord = (sentence) => append(sentence);
-  setExchangeRecorder({ runRoot: root, record: exchangeRecord });
+  setExchangeRecorder({ runRoot: projectRoot, record: exchangeRecord });
   setExchangeRunId(runId);
 
   append(mapBlock(`coding saddle run ${runId}`, [
