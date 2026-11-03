@@ -72,6 +72,7 @@ test("saddle plan capability dispatches to the session callback instead of gener
   assert.deepEqual(callbackInputs, [JSON.stringify(action)]);
   assert.deepEqual(events.map(({ stage }) => stage), ["call", "result"]);
   assert.match(events[1].toolText, /Add streamed chunks/u);
+  assert.equal(events[1].resultSentence?.be, "text");
 });
 
 test("invalid saddle plan input is returned to the model as a recoverable tool result", async () => {

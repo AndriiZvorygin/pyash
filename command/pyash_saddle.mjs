@@ -41,6 +41,7 @@ import {
 } from "../program/runtime/zai_coding_plan.mjs";
 import { requestCodingDutyHub, resolveCodingDutyHub } from "../program/agent/coding_duty_client.mjs";
 import { createSaddleTerminalUi } from "../program/agent/coding_saddle_tui.mjs";
+import { createCodingSaddleTrace } from "../program/agent/coding_saddle_trace.mjs";
 import {
   clearCodingSaddlePlan,
   formatCodingSaddlePlan,
@@ -738,6 +739,15 @@ async function main() {
   let host = config.host;
   let sessionName = config.sessionName || SESSION_NAME;
   let sessionFile = config.sessionFile || "";
+  const saddleTrace = createCodingSaddleTrace({
+    worldRoot: config.worldRoot,
+    cwd: config.cwd,
+    sessionName,
+    sessionFile,
+    backend: config.backend,
+    model: config.model
+  });
+  process.once("exit", () => saddleTrace.close({ status: "process exit" }));
   let contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
   let thinkSetting = config.thinkSetting;
   let busy = false;
@@ -1138,6 +1148,7 @@ async function main() {
       const activeTurn = activeSubmitDone;
       if (activeTurn) await activeTurn;
     }
+    saddleTrace.close({ status: "closed" });
     restoreActiveSaddleUi();
     writeLine("saddle closed");
   };
@@ -1532,7 +1543,12 @@ async function main() {
     let responseStream = null;
     let responseSegmentText = "";
     let lastTurnStreamed = false;
+    let traceTurnId = "";
+    let traceStatus = "failed";
+    let traceError = "";
+    let sessionTurnId = "";
     try {
+      traceTurnId = saddleTrace.beginTurn({ input, backend, model, sessionName, sessionFile });
       contextTurn = await prepareSaddleContextForTurn({
         agentHouse: config.agentHouse,
         sessionName,
@@ -1594,6 +1610,11 @@ async function main() {
           onAssistantDelta
         }),
         onToolCall: async (event) => {
+          try {
+            saddleTrace.recordToolEvent(event);
+          } catch (error) {
+            writeLine(`[trace recording failed] ${error?.message ?? error}`);
+          }
           if (event?.stage === "call" || event?.stage === "result" || event?.stage === "ratify") {
             responseStream = null;
             responseSegmentText = "";
@@ -1620,6 +1641,7 @@ async function main() {
         }
       });
       const result = turn.result;
+      sessionTurnId = String(result?.accordingto?.text ?? "");
       const text = result?.ob?.text ?? result?.fromstate?.text ?? result?.value?.text ?? "";
       if (turn.worktreeReview) {
         writeLine("worktree review · inspect this before accepting or committing");
@@ -1669,9 +1691,18 @@ async function main() {
           usage
         }).catch((error) => writeLine(`usage record failed: ${error.message}`));
       }
+      traceStatus = "completed";
     } catch (error) {
-      writeLine(`saddle error> ${error?.message ?? error}`);
+      traceError = String(error?.message ?? error);
+      writeLine(`saddle error> ${traceError}`);
     } finally {
+      if (traceTurnId) {
+        try {
+          saddleTrace.finishTurn({ status: traceStatus, error: traceError, sessionTurnId });
+        } catch (error) {
+          writeLine(`[trace recording failed] ${error?.message ?? error}`);
+        }
+      }
       stopProgress();
       busy = false;
       saddleUi.setBusy(false);
@@ -1691,6 +1722,7 @@ async function main() {
   process.stdout.on("resize", activeSaddleResizeHandler);
 
   await showStatus();
+  writeLine(`[trace] newspaper: ${saddleTrace.journalPath} · artifacts: ${path.join(config.worldRoot, "artifacts", saddleTrace.runId)}`);
   await restoreSessionHistory({ detail: `model selection source: ${config.selectionSource}` });
   inputDecoder = createSaddleInputDecoder({
     onSubmit: submit,

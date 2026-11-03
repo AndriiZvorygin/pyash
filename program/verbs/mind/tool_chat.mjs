@@ -610,7 +610,7 @@ export async function runToolChat({
             })())
         : null;
       await emitToolCall({
-        stage: "result", toolName, toolSentence, toolCall: call, toolText,
+        stage: "result", toolName, toolSentence, toolCall: call, toolText, resultSentence: surfacedTool,
         ...(commandOutcome ? { commandOutcome } : {})
       });
       submitRunToolEvent({
