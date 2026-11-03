@@ -44,6 +44,7 @@ async function appendCheckpoint({ runId, sentence }) {
 export async function runWordNetSenseCompoundRefineryCommand({
   dependencies = {},
   configuration = {},
+  runId: requestedRunId = "",
   report = console.log
 } = {}) {
   if (process.env.PYA_MIND_RESPONSE) {
@@ -52,7 +53,9 @@ export async function runWordNetSenseCompoundRefineryCommand({
   const releaseLock = await acquireRunLock();
   try {
     const allocation = await (dependencies.prepareAllocation ?? prepareWordNetFrequencyAllocation)();
-    const runId = wordNetSenseCompoundRunId({ sourceHash: allocation.sourceHash });
+    const runId = requestedRunId
+      ? sanitizeRunId(requestedRunId)
+      : wordNetSenseCompoundRunId({ sourceHash: allocation.sourceHash });
     let checkpointPath = "";
     let checkpointWrite = Promise.resolve();
     let result;

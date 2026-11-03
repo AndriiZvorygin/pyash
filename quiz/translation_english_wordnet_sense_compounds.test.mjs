@@ -206,6 +206,29 @@ test("worklist keeps unresolved senses without requiring a POS-matched linked he
   assert.equal(rows[1].frequencyRank, 3000);
 });
 
+test("tag-count worklist prioritizes the strongest unlinked sense and uses rank for ties", () => {
+  const rows = buildSenseCompoundWorklist({
+    residualSenses: [
+      { source: "n:00000010-n", pos: "n", synset: "00000010-n", lemmas: ["common"], gloss: "common meaning", candidates: [{ english30kRank: 1, tagCount: 1 }] },
+      { source: "n:00000011-n", pos: "n", synset: "00000011-n", lemmas: ["highest"], gloss: "highest tagged meaning", candidates: [{ english30kRank: 9000, tagCount: 226 }] },
+      { source: "n:00000012-n", pos: "n", synset: "00000012-n", lemmas: ["less tagged"], gloss: "less tagged meaning", candidates: [{ english30kRank: 800, tagCount: 10 }] },
+      { source: "n:00000013-n", pos: "n", synset: "00000013-n", lemmas: ["rank tie winner"], gloss: "rank tie winner meaning", candidates: [{ english30kRank: 20, tagCount: 10 }] },
+      { source: "n:00000014-n", pos: "n", synset: "00000014-n", lemmas: ["unknown count"], gloss: "unknown tag count", candidates: [{ english30kRank: 2 }] },
+      { source: "n:00000015-n", pos: "n", synset: "00000015-n", lemmas: ["linked"], gloss: "already assigned", candidates: [{ english30kRank: 3, tagCount: 999 }] }
+    ],
+    linkedSenseIds: ["n:00000015-n"],
+    order: "tag-count-descending"
+  });
+
+  assert.deepEqual(rows.map((row) => row.senseId), [
+    "n:00000011-n",
+    "n:00000013-n",
+    "n:00000012-n",
+    "n:00000010-n",
+    "n:00000014-n"
+  ]);
+});
+
 test("a linked sense for one part of speech does not suppress a residual sense for another", () => {
   const rows = buildSenseCompoundWorklist({
     residualSenses: [

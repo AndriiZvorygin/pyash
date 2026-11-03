@@ -7,6 +7,7 @@ su text "max-output-tokens" ob num 1024 ya
 su text "parallelism" ob num 8 ya
 su text "max-senses-per-launch" ob num 64 ya
 su text "verification-batch-size" ob num 32 ya
+su text "worklist-order" ob text "tag-count-descending" ya
 su text "candidate-revision" ob text "sense-head-advisory-v2" ya
 su text "head-relation-policy" ob text "advisory" ya
 prah

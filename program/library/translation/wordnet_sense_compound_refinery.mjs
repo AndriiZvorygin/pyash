@@ -197,6 +197,10 @@ function parseConfig(source) {
   if (!languages.length) throw invalid("sense compound refinery requires comparison languages");
   const candidateRevision = text(values["candidate-revision"]) || ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION;
   const headRelationPolicy = text(values["head-relation-policy"]).toLowerCase() || "advisory";
+  const worklistOrder = text(values["worklist-order"]) || "english30k-rank";
+  if (!["english30k-rank", "tag-count-descending"].includes(worklistOrder)) {
+    throw invalid("sense compound refinery worklist order is unsupported", { worklistOrder });
+  }
   if (candidateRevision !== ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION || headRelationPolicy !== "advisory") {
     throw invalid("sense compound refinery requires the configured advisory head policy and candidate revision");
   }
@@ -208,6 +212,7 @@ function parseConfig(source) {
     parallelism: Number(values.parallelism) || ENGLISH_WORDNET_SENSE_COMPOUNDS_PARALLELISM,
     maximumSenses: Number(values["max-senses-per-launch"]) || 64,
     verificationBatchSize: Number(values["verification-batch-size"]) || 32,
+    worklistOrder,
     candidateRevision,
     headRelationPolicy
   };
@@ -299,7 +304,8 @@ async function loadInventory({ context, dependencies }) {
     && Array.isArray(entry.pyashSequence) && entry.pyashSequence.length === 1);
   const fullWorklist = buildSenseCompoundWorklist({
     residualSenses: allocation.allocation.residual,
-    linkedSenseIds
+    linkedSenseIds,
+    order: context.config.worklistOrder
   });
   const progressPath = join(context.artifactDirectory, "progress.pya");
   const translationPath = join(context.artifactDirectory, "sense-translations.pya");
@@ -337,6 +343,7 @@ async function loadInventory({ context, dependencies }) {
     "source-hash": allocation.sourceHash,
     "atom-inventory-hash": atomInventoryHash,
     "candidate-revision": context.config.candidateRevision,
+    "worklist-order": context.config.worklistOrder,
     "worklist-hash": dataHash,
     "eligible-sense-count": fullWorklist.length,
     "remaining-sense-count": fullWorklist.filter((sense) => {

@@ -121,10 +121,14 @@ export function buildWordNetSenseTranslationPrompt({
 export function buildSenseCompoundWorklist({
   residualSenses = [],
   linkedSenseIds = [],
-  maximum = Number.POSITIVE_INFINITY
+  maximum = Number.POSITIVE_INFINITY,
+  order = "english30k-rank"
 } = {}) {
   if (!Array.isArray(residualSenses)) {
     throw invalid("sense compound worklist requires residual senses");
+  }
+  if (!["english30k-rank", "tag-count-descending"].includes(order)) {
+    throw invalid("sense compound worklist order is unsupported", { order });
   }
   const alreadyLinked = new Set(linkedSenseIds.map(text).filter(Boolean));
   return residualSenses.map((sense) => {
@@ -151,9 +155,13 @@ export function buildSenseCompoundWorklist({
       tagCount: tagCount.length ? Math.max(...tagCount) : Number.isSafeInteger(sense?.tagCount) ? sense.tagCount : -1
     };
   }).filter(Boolean)
-    .sort((left, right) => left.frequencyRank - right.frequencyRank
-      || right.tagCount - left.tagCount
-      || left.senseId.localeCompare(right.senseId))
+    .sort(order === "tag-count-descending"
+      ? (left, right) => right.tagCount - left.tagCount
+        || left.frequencyRank - right.frequencyRank
+        || left.senseId.localeCompare(right.senseId)
+      : (left, right) => left.frequencyRank - right.frequencyRank
+        || right.tagCount - left.tagCount
+        || left.senseId.localeCompare(right.senseId))
     .slice(0, Math.max(0, Number.isFinite(Number(maximum)) ? Math.trunc(Number(maximum)) : Infinity));
 }
 
