@@ -69,7 +69,7 @@ test("coding saddle streams one accumulated Markdown response without duplicatin
   ui.exit();
 });
 
-test("coding saddle keeps a completed streamed answer below tool events", () => {
+test("coding saddle keeps streamed text and tool events in chronological order", () => {
   const writes = [];
   const ui = createSaddleTerminalUi({
     output: { columns: 80, rows: 20, isTTY: true, write(value) { writes.push(String(value)); } },
@@ -77,16 +77,25 @@ test("coding saddle keeps a completed streamed answer below tool events", () => 
   });
   ui.enter();
   ui.writeLine("saddle>");
-  const stream = ui.beginMarkdownStream();
-  ui.appendMarkdownStream(stream, "partial response");
+  const introduction = ui.beginMarkdownStream();
+  ui.appendMarkdownStream(introduction, "I will inspect the file.");
   ui.writeLine("[tool call] inspect");
   ui.writeLine("[tool result] file contents");
-  ui.replaceMarkdownStream(stream, "Final answer after inspecting the file.");
-  ui.finishMarkdownStream(stream, { precedingText: "saddle>" });
+  ui.writeLine("saddle>");
+  const answer = ui.beginMarkdownStream();
+  ui.appendMarkdownStream(answer, "Partial answer");
+  ui.replaceMarkdownStream(answer, "Final answer after inspecting the file.");
 
   const lastFrame = writes.join("").slice(writes.join("").lastIndexOf("\u001b[?25l\u001b[H"));
-  assert.ok(lastFrame.indexOf("[tool result] file contents") < lastFrame.indexOf("saddle>"));
-  assert.ok(lastFrame.indexOf("saddle>") < lastFrame.indexOf("Final answer after inspecting the file."));
+  const introductionIndex = lastFrame.indexOf("I will inspect the file.");
+  const callIndex = lastFrame.indexOf("[tool call] inspect");
+  const resultIndex = lastFrame.indexOf("[tool result] file contents");
+  const finalPromptIndex = lastFrame.lastIndexOf("saddle>");
+  const answerIndex = lastFrame.indexOf("Final answer after inspecting the file.");
+  assert.ok(introductionIndex < callIndex);
+  assert.ok(callIndex < resultIndex);
+  assert.ok(resultIndex < finalPromptIndex);
+  assert.ok(finalPromptIndex < answerIndex);
   ui.exit();
 });
 

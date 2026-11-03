@@ -1530,7 +1530,7 @@ async function main() {
     const turnUsages = [];
     let contextTurn = null;
     let responseStream = null;
-    let responseStreamedText = "";
+    let responseSegmentText = "";
     let lastTurnStreamed = false;
     try {
       contextTurn = await prepareSaddleContextForTurn({
@@ -1557,7 +1557,7 @@ async function main() {
         input,
         onTurnStart: () => {
           responseStream = null;
-          responseStreamedText = "";
+          responseSegmentText = "";
           lastTurnStreamed = false;
         },
         onAssistantDelta: (delta) => {
@@ -1568,7 +1568,7 @@ async function main() {
             responseStream = saddleUi.beginMarkdownStream();
           }
           lastTurnStreamed = true;
-          responseStreamedText += textDelta;
+          responseSegmentText += textDelta;
           saddleUi.appendMarkdownStream(responseStream, textDelta);
         },
         runTurn: ({ input: turnInput, onToolCall, onAssistantDelta }) => runSaddleTurn({
@@ -1595,6 +1595,8 @@ async function main() {
         }),
         onToolCall: async (event) => {
           if (event?.stage === "call" || event?.stage === "result" || event?.stage === "ratify") {
+            responseStream = null;
+            responseSegmentText = "";
             writeLine(`${saddleToolEventLabel(event)}${event.toolText ? `: ${String(event.toolText).slice(0, 400)}` : ""}`);
           }
         },
@@ -1627,8 +1629,7 @@ async function main() {
       }
       const finalText = String(text).trim() || "(no response text)";
       if (lastTurnStreamed && responseStream) {
-        if (responseStreamedText.trim() !== finalText) saddleUi.replaceMarkdownStream(responseStream, finalText);
-        saddleUi.finishMarkdownStream(responseStream, { precedingText: "saddle>" });
+        if (responseSegmentText.trim() !== finalText) saddleUi.replaceMarkdownStream(responseStream, finalText);
       } else {
         writeLine("saddle>");
         writeMarkdown(finalText);
