@@ -170,7 +170,7 @@ function parseChatCompletionsResponse(payload = {}) {
 
 function chatCompletionsEndpoint(host) {
   const base = normalizeHost(host);
-  return /\/v1$/iu.test(base) ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
+  return /\/v\d+$/iu.test(base) ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
 }
 
 async function requestJson({ host, apiKey, body, providerLabel = "OpenAI-compatible" }) {
@@ -223,6 +223,7 @@ async function requestStream({ host, apiKey, body, onChunk, onToolCall, provider
   const decoder = new TextDecoder();
   let buffer = "";
   let content = "";
+  let reasoningContent = "";
   let usage = null;
   const toolCalls = new Map();
   const consumeLine = (lineRaw) => {
@@ -238,6 +239,7 @@ async function requestStream({ host, apiKey, body, onChunk, onToolCall, provider
     }
     if (payload?.usage && typeof payload.usage === "object") usage = payload.usage;
     const delta = payload?.choices?.[0]?.delta ?? {};
+    if (typeof delta.reasoning_content === "string") reasoningContent += delta.reasoning_content;
     const text = parseMessageContent({ content: delta.content });
     if (text) {
       content += text;
@@ -268,6 +270,7 @@ async function requestStream({ host, apiKey, body, onChunk, onToolCall, provider
   buffer += decoder.decode();
   if (buffer.trim()) consumeLine(buffer);
   const message = { role: "assistant", content };
+  if (reasoningContent) message.reasoning_content = reasoningContent;
   const completedToolCalls = [...toolCalls.entries()].sort(([a], [b]) => a - b).map(([, call]) => call);
   if (completedToolCalls.length) message.tool_calls = completedToolCalls;
   return { response: content, message, usage };

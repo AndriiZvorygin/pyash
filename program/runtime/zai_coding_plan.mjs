@@ -46,6 +46,23 @@ export function resolveZaiCodingApiKey({ env = process.env, secretFilePath = def
   return readSecretValue(secretFilePath, "zai coding api key");
 }
 
+export function resolveZaiCodingHost(value = "") {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "https://api.z.ai/api/coding/paas/v4";
+  try {
+    const url = new URL(raw);
+    if (url.hostname.toLowerCase() === "api.z.ai" && /\/api\/v1\/?$/u.test(url.pathname)) {
+      url.pathname = "/api/coding/paas/v4";
+      url.search = "";
+      url.hash = "";
+      return url.toString().replace(/\/$/u, "");
+    }
+  } catch {
+    // Let the normal endpoint validation report malformed custom hosts.
+  }
+  return raw;
+}
+
 export async function fetchZaiCodingPlanModels({
   host = "https://api.z.ai/api/v1",
   apiKey = resolveZaiCodingApiKey(),

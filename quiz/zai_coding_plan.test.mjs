@@ -15,9 +15,23 @@ import {
   removeZaiCodexHome,
   resolveZaiApiKey,
   resolveZaiCodingApiKey,
+  resolveZaiCodingHost,
   setZaiCodexContextWindow,
   syncZaiCodexModelCatalog
 } from "../program/runtime/zai_coding_plan.mjs";
+
+test("Z.AI Coding Plan endpoint normalizes legacy saved hosts", () => {
+  assert.equal(resolveZaiCodingHost(), "https://api.z.ai/api/coding/paas/v4");
+  assert.equal(
+    resolveZaiCodingHost("https://api.z.ai/api/v1/"),
+    "https://api.z.ai/api/coding/paas/v4"
+  );
+  assert.equal(
+    resolveZaiCodingHost("https://api.z.ai/api/v1?old=1#fragment"),
+    "https://api.z.ai/api/coding/paas/v4"
+  );
+  assert.equal(resolveZaiCodingHost("http://127.0.0.1:8080/v1"), "http://127.0.0.1:8080/v1");
+});
 
 test("Z.AI standard and Coding Plan keys resolve from distinct Pyash secret facts", () => {
   const secretFilePath = path.join(os.tmpdir(), `pyash-zai-secret-${process.pid}.pya`);

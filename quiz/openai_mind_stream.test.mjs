@@ -8,6 +8,7 @@ test("OpenAI-compatible stream preserves text and assembles fragmented tool call
   const server = http.createServer((request, response) => {
     assert.equal(request.url, "/v1/chat/completions");
     response.writeHead(200, { "content-type": "text/event-stream" });
+    response.write('data: {"choices":[{"delta":{"reasoning_content":"Need inspect before action. "}}]}\n\n');
     response.write('data: {"choices":[{"delta":{"content":"Checking "}}]}\n\n');
     response.write('data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"be_command","arguments":"{\\"cmd\\":"}}]}}]}\n\n');
     response.end('data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\"pwd\\"}"}}]}}],"usage":{"prompt_tokens":21,"completion_tokens":3}}\n\ndata: [DONE]\n\n');
@@ -24,6 +25,7 @@ test("OpenAI-compatible stream preserves text and assembles fragmented tool call
     });
     assert.deepEqual(chunks, ["Checking "]);
     assert.equal(result.message.content, "Checking ");
+    assert.equal(result.message.reasoning_content, "Need inspect before action. ");
     assert.equal(result.message.tool_calls[0].id, "call_1");
     assert.equal(result.message.tool_calls[0].function.name, "be_command");
     assert.equal(result.message.tool_calls[0].function.arguments, '{"cmd":"pwd"}');

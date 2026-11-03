@@ -7,7 +7,7 @@ export const MIND_BACKEND_CHOICES = [
   { key: "openai-codex", value: "openai command mind", label: "OpenAI Codex OAuth" },
   { key: "openrouter", value: "openrouter command mind", label: "OpenRouter" },
   { key: "minimax", value: "minimax command mind", label: "MiniMax" },
-  { key: "zai", value: "zai command mind", label: "Z.AI GLM Coding Plan (Codex CLI)" },
+  { key: "zai", value: "zai command mind", label: "Z.AI GLM Coding Plan (streaming)" },
   { key: "vllm", value: "vllm command mind", label: "vLLM" },
   { key: "strata", value: "strata command mind", label: "Strata (local, GPU-managed)" }
 ];
@@ -307,7 +307,7 @@ export function suggestMindRelayName({ source = "", model = "", fallback = "defa
 export function defaultMindHostForSource(source = "") {
   const key = String(source || "").trim().toLowerCase();
   if (key === "strata") return "http://127.0.0.1:8081";
-  if (key === "zai") return "https://api.z.ai/api/v1";
+  if (key === "zai") return "https://api.z.ai/api/coding/paas/v4";
   if (key === "minimax") return "https://api.minimax.io/v1";
   if (key === "openai-api" || key === "openai-codex") {
     return "https://api.openai.com";

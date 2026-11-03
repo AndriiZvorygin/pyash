@@ -747,7 +747,7 @@ test("coding saddle selects named Pyash minds without changing global defaults",
     assert.equal(zai.mindName, "zai");
     assert.equal(zai.backend, "zai");
     assert.equal(zai.model, "glm-5.3");
-    assert.equal(zai.host, "https://api.z.ai/api/v1");
+    assert.equal(zai.host, "https://api.z.ai/api/coding/paas/v4");
     assert.equal(remember("coding saddle")?.fromstate?.text, "zai");
     assert.equal(remember("coding saddle")?.as?.name, "glm-5.3");
     const zaiCall = await runSaddleTurn({

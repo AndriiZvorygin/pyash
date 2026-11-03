@@ -105,7 +105,7 @@ export function createCollectMindInteractive(deps) {
         textOut("- GPU note: Strata calls the local Pyash GPU Housekeeper before each model load.");
       }
       if (selectedChoice?.key === "zai") {
-        textOut("- auth note: configure `zai coding api key` in configure/secret.pya; this uses the documented Codex CLI Responses integration.");
+        textOut("- auth note: configure `zai coding api key` in configure/secret.pya; Pyash uses the Coding Plan OpenAI-compatible Chat Completions endpoint with streaming.");
       }
 
       printer.header("B.1 Provider Endpoint");

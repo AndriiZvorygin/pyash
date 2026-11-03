@@ -13,11 +13,9 @@ import {
 } from "../program/motor/openai_mind.mjs";
 import { submitManagedGpuJob } from "../program/runtime/gpu/managed-ollama.mjs";
 import {
-  DEFAULT_ZAI_CODING_REASONING_EFFORT,
-  createZaiCodexHome,
-  removeZaiCodexHome,
   resolveZaiApiKey,
-  resolveZaiCodingApiKey
+  resolveZaiCodingApiKey,
+  resolveZaiCodingHost
 } from "../program/runtime/zai_coding_plan.mjs";
 import { resolveMiniMaxApiKey } from "../program/runtime/minimax.mjs";
 
@@ -25,14 +23,14 @@ function parseArgs(argv) {
   const args = argv.slice(2);
   const stream = args.includes("--stream");
   const strata = args.includes("--strata");
-  const zaiCodex = args.includes("--zai-codex");
+  const zaiCoding = args.includes("--zai-coding");
   const minimax = args.includes("--minimax");
   const managed = args.includes("--managed");
   const payloadIndex = args.indexOf("--payload");
   const payloadFileIndex = args.indexOf("--payload-file");
   const payload = payloadIndex !== -1 ? args[payloadIndex + 1] ?? "" : null;
   const payloadFile = payloadFileIndex !== -1 ? args[payloadFileIndex + 1] ?? "" : null;
-  return { stream, strata, managed, zaiCodex, minimax, payload, payloadFile };
+  return { stream, strata, managed, zaiCoding, minimax, payload, payloadFile };
 }
 
 function readStdin() {
@@ -44,7 +42,7 @@ function readStdin() {
 }
 
 async function parsePayload() {
-  const { stream, strata, managed, zaiCodex, minimax, payload: payloadArg, payloadFile } = parseArgs(process.argv);
+  const { stream, strata, managed, zaiCoding, minimax, payload: payloadArg, payloadFile } = parseArgs(process.argv);
   let raw = "";
   if (payloadArg != null) raw = payloadArg;
   else if (payloadFile) raw = await fs.promises.readFile(payloadFile, "utf8");
@@ -57,7 +55,7 @@ async function parsePayload() {
     throw new Error(`mind_openai_runner: invalid JSON payload (${err?.message ?? err})`);
   }
   payload.stream = stream || payload.stream === true;
-  return { payload, strata, managed, zaiCodex, minimax };
+  return { payload, strata, managed, zaiCoding, minimax };
 }
 
 function textPart(part) {
@@ -339,36 +337,14 @@ async function runCodexFallback(payload = {}, { stream = false, codexHome = "" }
 }
 
 async function main() {
-  const { payload, strata, managed, zaiCodex, minimax } = await parsePayload();
+  const { payload, strata, managed, zaiCoding, minimax } = await parsePayload();
 
   if (process.env.PYA_COMMAND_RESPONSE) {
     process.stdout.write(`${process.env.PYA_COMMAND_RESPONSE}\n`);
     return;
   }
 
-  if (zaiCodex) {
-    const apiKey = resolveZaiCodingApiKey();
-    if (!apiKey) {
-      throw new Error("Z.AI Coding Plan key missing: add `exists su name zai coding api key ob text \"...\" be default ya` to configure/secret.pya");
-    }
-    let codexHome = "";
-    try {
-      codexHome = createZaiCodexHome({
-        apiKey,
-        model: payload.model || "glm-5.3",
-        reasoningEffort: payload.reasoningEffort || DEFAULT_ZAI_CODING_REASONING_EFFORT,
-        contextWindow: payload.contextWindow,
-        projectRoot: process.cwd()
-      });
-      const fallback = await runCodexFallback(payload, { stream: payload.stream === true, codexHome });
-      if (fallback) process.stdout.write(`${JSON.stringify(fallback)}\n`);
-    } finally {
-      removeZaiCodexHome(codexHome);
-    }
-    return;
-  }
-
-  const host = resolveHost(payload);
+  const host = zaiCoding ? resolveZaiCodingHost(payload.host) : resolveHost(payload);
   let hostName = "";
   try {
     hostName = new URL(host).hostname.toLowerCase();
@@ -380,10 +356,14 @@ async function main() {
   if (minimax && !minimaxApiKey) {
     throw new Error('MiniMax API key missing: add `exists su name minimax api key ob text "..." be default ya` (or `minimax key`) to configure/secret.pya, or set MINIMAX_API_KEY');
   }
-  const usesZaiApi = !strata && hostName === "api.z.ai";
+  const usesZaiApi = !strata && !zaiCoding && hostName === "api.z.ai";
   const zaiApiKey = usesZaiApi ? resolveZaiApiKey() : "";
   if (usesZaiApi && !explicitApiKey && !zaiApiKey) {
     throw new Error("Z.AI API key missing: add `exists su name zai api key ob text \"...\" be default ya` to configure/secret.pya");
+  }
+  const zaiCodingApiKey = zaiCoding ? resolveZaiCodingApiKey() : "";
+  if (zaiCoding && !zaiCodingApiKey) {
+    throw new Error("Z.AI Coding Plan key missing: add `exists su name zai coding api key ob text \"...\" be default ya` to configure/secret.pya");
   }
   const providerPayload = !explicitApiKey && usesZaiApi
     ? { ...payload, apiKey: zaiApiKey }
@@ -393,15 +373,20 @@ async function main() {
     .find(Boolean);
   const apiKey = minimax
     ? minimaxApiKey
-    : strata
-      ? (strataKey || "pyash-local")
-      : resolveApiKey({ host, payload: providerPayload });
+    : zaiCoding
+      ? zaiCodingApiKey
+      : strata
+        ? (strataKey || "pyash-local")
+        : resolveApiKey({ host, payload: providerPayload });
   if (!apiKey && !strata) {
     const fallback = await runCodexFallback(payload, { stream: payload.stream === true });
     if (fallback) process.stdout.write(`${JSON.stringify(fallback)}\n`);
     return;
   }
   const body = await buildChatCompletionsRequest(payload);
+  if (zaiCoding && payload.stream === true && Array.isArray(body.tools) && body.tools.length > 0) {
+    body.tool_stream = true;
+  }
 
   if (strata && managed) {
     const managedBody = { ...body, stream: false };
@@ -432,7 +417,7 @@ async function main() {
       host,
       apiKey,
       body,
-      providerLabel: minimax ? "MiniMax" : undefined,
+      providerLabel: minimax ? "MiniMax" : zaiCoding ? "Z.AI Coding Plan" : undefined,
       onChunk: (chunk) => {
         writeMindStreamText(chunk);
       }
@@ -441,7 +426,12 @@ async function main() {
     return;
   }
 
-  const result = await requestJson({ host, apiKey, body, providerLabel: minimax ? "MiniMax" : undefined });
+  const result = await requestJson({
+    host,
+    apiKey,
+    body,
+    providerLabel: minimax ? "MiniMax" : zaiCoding ? "Z.AI Coding Plan" : undefined
+  });
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 

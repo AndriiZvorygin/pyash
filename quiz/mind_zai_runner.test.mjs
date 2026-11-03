@@ -1,13 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
-import os from "node:os";
+import http from "node:http";
 import path from "node:path";
-import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const runner = path.join(root, "command/mind_openai_runner.mjs");
+const zaiMind = path.join(root, "module/mind_zai.pya");
+
+test("Z.AI Pyash mind routes streamed calls through the direct Coding Plan runner", async () => {
+  const source = await fs.readFile(zaiMind, "utf8");
+  assert.match(source, /mind_openai_runner\.mjs --zai-coding"/u);
+  assert.match(source, /mind_openai_runner\.mjs --zai-coding --stream"/u);
+  assert.doesNotMatch(source, /--zai-codex/u);
+});
 
 function runRunner(args, payload, env) {
   return new Promise((resolve) => {
@@ -21,107 +29,56 @@ function runRunner(args, payload, env) {
   });
 }
 
-test("Z.AI mind runner calls Codex with a temporary isolated Responses profile", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-zai-runner-test-"));
-  const binDir = path.join(tempDir, "bin");
-  const probePath = path.join(tempDir, "probe.json");
-  await fs.mkdir(binDir);
-  const fakeCodexPath = path.join(binDir, "codex");
-  await fs.writeFile(fakeCodexPath, `#!/usr/bin/env node
-import fs from "node:fs";
-import path from "node:path";
-const home = process.env.CODEX_HOME;
-const config = fs.readFileSync(path.join(home, "config.toml"), "utf8");
-const models = JSON.parse(fs.readFileSync(path.join(home, "models.json"), "utf8"));
-fs.writeFileSync(process.env.PYA_ZAI_PROBE, JSON.stringify({
-  home,
-  args: process.argv.slice(2),
-  model: models.models[0].slug,
-  hasCodingKey: config.includes(process.env.Z_AI_CODING_API_KEY),
-  correctProtocol: config.includes('wire_api = "responses"'),
-  correctBaseUrl: config.includes('https://api.z.ai/api/v1'),
-  contextWindow: Number(config.match(/^model_context_window = (\\d+)$/m)?.[1] || 0)
-}));
-process.stdout.write(JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: "GLM route reached Codex CLI" } }) + "\\n");
-`);
-  await fs.chmod(fakeCodexPath, 0o700);
-  try {
-    const result = await runRunner(["--zai-codex"], {
-      model: "glm-5.3",
-      reasoningEffort: "max",
-      contextWindow: 65536,
-      toolMapName: "saddle tools",
-      messages: [{ role: "user", content: "Reply with a short readiness check." }]
-    }, {
-      ...process.env,
-      PATH: `${binDir}${path.delimiter}${process.env.PATH || ""}`,
-      PYA_ZAI_PROBE: probePath,
-      PYA_COMMAND_RESPONSE: "",
-      Z_AI_CODING_API_KEY: "test-only-coding-key"
+test("Z.AI Coding Plan uses its Chat Completions endpoint and streams assistant/tool deltas", async () => {
+  let requestBody;
+  let authorization;
+  let requestPath;
+  const server = http.createServer((request, response) => {
+    requestPath = request.url;
+    authorization = request.headers.authorization;
+    let body = "";
+    request.on("data", (chunk) => { body += String(chunk); });
+    request.on("end", () => {
+      requestBody = JSON.parse(body);
+      response.writeHead(200, { "content-type": "text/event-stream" });
+      response.write('data: {"choices":[{"delta":{"reasoning_content":"Inspecting the request. "}}]}\n\n');
+      response.write('data: {"choices":[{"delta":{"content":"The result is "}}]}\n\n');
+      response.write('data: {"choices":[{"delta":{"content":"ready."}}]}\n\n');
+      response.write('data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"be_command","arguments":"{\\"cmd\\":"}}]}}]}\n\n');
+      response.end('data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\"pwd\\"}"}}]}}],"usage":{"prompt_tokens":21,"completion_tokens":7,"total_tokens":28}}\n\ndata: [DONE]\n\n');
     });
-    assert.equal(result.code, 0, result.stderr);
-    const answer = JSON.parse(result.stdout.trim());
-    assert.equal(answer.response, "GLM route reached Codex CLI");
-    const probe = JSON.parse(await fs.readFile(probePath, "utf8"));
-    assert.equal(probe.model, "glm-5.3");
-    assert.equal(probe.hasCodingKey, true);
-    assert.equal(probe.correctProtocol, true);
-    assert.equal(probe.correctBaseUrl, true);
-    assert.equal(probe.contextWindow, 65536);
-    assert.ok(probe.args.includes("--disable"));
-    assert.ok(probe.args.includes("shell_tool"));
-    assert.ok(probe.args.includes("--cd"));
-    assert.ok(probe.args.includes(root));
-    assert.ok(probe.args.includes('mcp_servers.pyash.default_tools_approval_mode="approve"'));
-    assert.ok(probe.args.includes("mcp_servers.pyash.required=true"));
-    const mcpArgsSetting = probe.args.find((arg) => arg.startsWith("mcp_servers.pyash.args="));
-    assert.ok(mcpArgsSetting, "expected Pyash MCP server args in Codex config");
-    const mcpArgs = JSON.parse(mcpArgsSetting.slice("mcp_servers.pyash.args=".length));
-    assert.ok(mcpArgs.includes("--root"));
-    assert.equal(mcpArgs[mcpArgs.indexOf("--root") + 1], root);
-    assert.ok(mcpArgs.includes("--config-root"));
-    assert.equal(mcpArgs[mcpArgs.indexOf("--config-root") + 1], root);
-    assert.equal(mcpArgs.at(-1), "saddle tools");
-    assert.ok(probe.args.includes("--sandbox") === false);
-    await assert.rejects(fs.access(probe.home));
-    assert.equal(result.stdout.includes("test-only-coding-key"), false);
-    assert.equal(result.stderr.includes("test-only-coding-key"), false);
-  } finally {
-    await fs.rm(tempDir, { recursive: true, force: true });
-  }
-});
-
-test("Z.AI streaming surfaces Codex tool events and only completed assistant text", async () => {
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-zai-stream-test-"));
-  const binDir = path.join(tempDir, "bin");
-  await fs.mkdir(binDir);
-  const fakeCodexPath = path.join(binDir, "codex");
-  await fs.writeFile(fakeCodexPath, `#!/usr/bin/env node
-const events = [
-  { type: "item.started", item: { id: "cmd-1", type: "command_execution", command: "pwd" } },
-  { type: "item.completed", item: { id: "cmd-1", type: "command_execution", exit_code: 0, aggregated_output: "/repo" } },
-  { type: "item.completed", item: { type: "agent_message", text: "Verified the repository." } }
-];
-for (const event of events) process.stdout.write(JSON.stringify(event) + "\\n");
-`);
-  await fs.chmod(fakeCodexPath, 0o700);
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
   try {
-    const result = await runRunner(["--zai-codex", "--stream"], {
+    const result = await runRunner(["--zai-coding", "--stream"], {
       model: "glm-5.3-flash",
+      host: `http://127.0.0.1:${port}/api/coding/paas/v4`,
+      toolMapName: "saddle tools",
+      tools: [{ type: "function", function: { name: "be_command", parameters: { type: "object", properties: { cmd: { type: "string" } } } } }],
       messages: [{ role: "user", content: "Inspect and report." }]
     }, {
       ...process.env,
-      PATH: `${binDir}${path.delimiter}${process.env.PATH || ""}`,
       PYA_COMMAND_RESPONSE: "",
       Z_AI_CODING_API_KEY: "test-only-coding-key"
     });
     assert.equal(result.code, 0, result.stderr);
     const records = result.stdout.trim().split(/\r?\n/u).map((line) => JSON.parse(line));
-    assert.deepEqual(records.filter((record) => record.type === "event").map((record) => record.event.stage), ["call", "result"]);
-    assert.deepEqual(records.filter((record) => record.type === "chunk").map((record) => record.text), ["Verified the repository."]);
-    assert.equal(records.at(-1).type, "terminal");
-    assert.equal(records.at(-1).envelope.message.content, "Verified the repository.");
+    assert.deepEqual(records.filter((record) => record.type === "chunk").map((record) => record.text), ["The result is ", "ready."]);
+    const terminal = records.at(-1);
+    assert.equal(terminal.type, "terminal");
+    assert.equal(terminal.envelope.message.content, "The result is ready.");
+    assert.equal(terminal.envelope.message.reasoning_content, "Inspecting the request. ");
+    assert.equal(terminal.envelope.message.tool_calls[0].function.arguments, '{"cmd":"pwd"}');
+    assert.equal(terminal.envelope.usage.total_tokens, 28);
+    assert.equal(requestPath, "/api/coding/paas/v4/chat/completions");
+    assert.equal(authorization, "Bearer test-only-coding-key");
+    assert.equal(requestBody.stream, true);
+    assert.equal(requestBody.tool_stream, true);
+    assert.equal(requestBody.model, "glm-5.3-flash");
+    assert.equal(result.stdout.includes("test-only-coding-key"), false);
+    assert.equal(result.stderr.includes("test-only-coding-key"), false);
   } finally {
-    await fs.rm(tempDir, { recursive: true, force: true });
+    await new Promise((resolve) => server.close(resolve));
   }
 });

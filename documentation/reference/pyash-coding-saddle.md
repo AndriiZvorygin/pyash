@@ -27,9 +27,10 @@ and coding root, they do not start a separate model runtime.
 For the Z.AI GLM Coding Plan, add `exists su name zai coding api key ob text
 "<your key>" be default ya` to the ignored, permission-restricted
 `configure/secret.pya`, then launch with
-`PYA_SADDLE_MIND=zai node command/pyash_saddle.mjs`. The saddle defaults to
-`glm-5.3` and Z.AI's Responses API endpoint for this mind. This uses the
-official Codex CLI route through Pyash's existing mind tools; see
+`PYA_SADDLE_MIND=zai node command/pyash_saddle.mjs`. The Z.AI mind uses the
+Coding Plan OpenAI Chat Completions endpoint at
+`https://api.z.ai/api/coding/paas/v4`; the saddle streams SSE text and tool-call
+deltas while Pyash's mind loop executes its tools. See
 [`mind.md`](../mind.md#zai-glm-coding-plan) for details.
 
 For a Z.AI mind, `/model` queries the account's Coding Plan model catalog. When
@@ -110,10 +111,9 @@ must include validation evidence. Plans are stored in session-isolated
 
 When the selected backend exposes OpenAI-compatible server-sent events, the
 saddle renders assistant text as it arrives and continues to show progress and
-tool events separately. Housekeeper-managed Ollama/Strata requests and the
-Z.AI Codex CLI route remain buffered when their transport does not expose safe
-assistant-text deltas; the saddle still shows activity and live tool events
-where available.
+tool events separately. Z.AI Coding Plan, MiniMax, and other SSE-capable
+Chat Completions backends stream response deltas. Housekeeper-managed
+Ollama/Strata requests remain buffered by their current job transport.
 
 Context compaction is automatic at 80% of the selected context budget. The
 saddle prefers the previous provider-reported input-token count and otherwise

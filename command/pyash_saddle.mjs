@@ -240,7 +240,7 @@ export async function prepareSaddleContextForTurn({
 
 function resolveSaddleHost(backend) {
   if (backend === "ollama") return configValue("ollama host", "http://localhost:11434");
-  if (backend === "zai") return "https://api.z.ai/api/v1";
+  if (backend === "zai") return "https://api.z.ai/api/coding/paas/v4";
   return configValue("ai host", configValue("ollama host", "http://localhost:11434"));
 }
 
