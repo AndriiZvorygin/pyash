@@ -47,6 +47,14 @@
     we need from it, what exists today (the claim contract is implemented,
     tested and load-bearing across seven subsystems; the storage half does not
     exist), and a six-tranche road from here to there.
+  - `documentation/suggest/repository-modularization.md` — whether the
+    repository is too monolithic, how comparable language and operating system
+    projects organize modules and tests, and six changes with acceptance
+    criteria. The measurements say the interpreter is not monolithic (3.1% of
+    the code surface) but the repository is (one tree, no area boundaries),
+    and that the quiz suite is not too big but badly laid out (95% of 781
+    quiz files flat in one directory). Supporting scripts and output are in
+    `documentation/suggest/repository-modularization-appendix.md`.
   They are posted in the commons room under `world/commons/notes/` for agent
   review. Review questions are in each document.
 - Explore lowering parsed sentences into graph/IR forms for future backends (shell/SQL/IR), aligning with the interlanguage vision.

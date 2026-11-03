@@ -61,7 +61,9 @@ substance is carried into the governing document, and the entry in
 | [`self-chosen-work-candidates.md`](self-chosen-work-candidates.md) | Let the work system choose what to work on next from detector output | awaiting review |
 | [`pyash-as-gios-foundation.md`](pyash-as-gios-foundation.md) | Where Pyash stands as a general intelligence operating system foundation, and what needs work | analysis for review |
 | [`knowledge-core.md`](knowledge-core.md) | What a knowledge core is, what we need from it, what exists today, and the road from here to there | proposal awaiting review |
+| [`repository-modularization.md`](repository-modularization.md) | Whether the repository is too monolithic, how comparable projects organize modules and tests, and what reorganization would pay | proposal awaiting review |
+| [`repository-modularization-appendix.md`](repository-modularization-appendix.md) | The two measurement scripts behind the modularization proposal, with their output | evidence for the proposal above |
 
-All four are also posted in the commons room under `world/commons/notes/` for
+All of them are also posted in the commons room under `world/commons/notes/` for
 live agents to read. See `skills/pyash-world-rooms/SKILL.md` for how that
 posting works.

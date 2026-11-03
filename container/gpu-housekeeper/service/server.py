@@ -26,7 +26,6 @@ _LOCK = threading.Lock()
 # execution boundary used by the current housekeeper.
 _EXECUTION_LOCK = threading.Lock()
 _SUBMISSION_LOCK = threading.Lock()
-_LAST_ROUTE_HOST_BY_PROFILE: Dict[str, str] = {}
 _RUNNING_JOB_ID: Optional[str] = None
 _RUNNING_JOB_IDS: Dict[str, set] = {}
 _RUNTIME_ACTIVITY: Dict[str, Dict[str, Any]] = {}
@@ -105,8 +104,10 @@ DEFAULT_PYA_LOADING_DIR = "/var/lib/pyash/gpu-housekeeper"
 MODEL_LOADING_OBSERVATION_ROOT = "gpu runtime loading observation"
 MODEL_CALL_OBSERVATION_ROOT = "gpu runtime call observation"
 QUEUE_OBSERVATION_ROOT = "gpu housekeeper queue observation"
+ROUTING_CONFIG_ROOT = "gpu housekeeper routing configuration"
 DEFAULT_SOFT_QUEUE_CAP = 500
 METRIC_OBSERVATION_RETENTION = 500
+MIN_ROUTE_THROUGHPUT_SAMPLES = 3
 
 
 DEFAULT_RUNTIME_REGISTRY = {
@@ -354,6 +355,14 @@ def model_call_estimates(observations: Optional[List[Dict[str, Any]]] = None) ->
   for (runtime_name, model_name, job_kind), group in grouped.items():
     recent = group[:20]
     successes = [float(record["execution seconds"]) for record in recent if record.get("outcome") == "success"]
+    throughput = [
+      float(record["generation tokens per second"])
+      for record in recent
+      if record.get("outcome") == "success"
+      and isinstance(record.get("generation tokens per second"), (int, float))
+      and math.isfinite(float(record["generation tokens per second"]))
+      and float(record["generation tokens per second"]) > 0
+    ]
     failures = sum(1 for record in recent if record.get("outcome") == "fail")
     estimates.append({
       "runtimeName": runtime_name,
@@ -362,6 +371,8 @@ def model_call_estimates(observations: Optional[List[Dict[str, Any]]] = None) ->
       "sampleCount": len(successes),
       "failedCount": failures,
       "averageExecutionSeconds": sum(successes) / len(successes) if successes else None,
+      "throughputSampleCount": len(throughput),
+      "averageTokensPerSecond": sum(throughput) / len(throughput) if throughput else None,
       "lastObservedAt": max(normalize_text(record.get("observed timestamp")) for record in recent)
     })
   return sorted(estimates, key=lambda item: (item["runtimeName"], item["modelName"], item["jobKind"]))
@@ -392,9 +403,55 @@ def job_call_identity(job: Dict[str, Any]) -> Dict[str, str]:
   }
 
 
+def routing_config() -> Dict[str, Any]:
+  fields = read_pya_observation(pya_loading_dir() / "routing.pya", ROUTING_CONFIG_ROOT) or {}
+  try:
+    priority = max(-100_000, min(100_000, int(fields.get("route priority", 0))))
+  except (TypeError, ValueError):
+    priority = 0
+  model = normalize_text(fields.get("throughput prior model"))
+  try:
+    tokens_per_second = float(fields.get("throughput prior tokens per second", 0))
+  except (TypeError, ValueError):
+    tokens_per_second = 0
+  if not math.isfinite(tokens_per_second) or tokens_per_second <= 0:
+    tokens_per_second = 0
+  return {
+    "routePriority": priority,
+    "throughputPrior": {"modelName": model, "tokensPerSecond": tokens_per_second}
+  }
+
+
+def route_priority() -> int:
+  return routing_config()["routePriority"]
+
+
+def route_throughput_prior() -> Dict[str, Any]:
+  return routing_config()["throughputPrior"]
+
+
+def ollama_generation_metrics(result: Any) -> Dict[str, Any]:
+  if not isinstance(result, dict):
+    return {}
+  try:
+    output_tokens = int(result.get("eval_count"))
+    eval_duration_ns = float(result.get("eval_duration"))
+  except (TypeError, ValueError):
+    return {}
+  if output_tokens <= 0 or not math.isfinite(eval_duration_ns) or eval_duration_ns <= 0:
+    return {}
+  generation_seconds = eval_duration_ns / 1_000_000_000
+  return {
+    "output_tokens": output_tokens,
+    "generation_seconds": generation_seconds,
+    "tokens_per_second": output_tokens / generation_seconds
+  }
+
+
 def record_runtime_call(
   *, host_id: str, runtime_name: str, model_name: str, job_kind: str,
-  execution_seconds: Any, outcome: str, observed_at: str = ""
+  execution_seconds: Any, outcome: str, observed_at: str = "",
+  output_tokens: Any = None, generation_seconds: Any = None
 ) -> Optional[Dict[str, Any]]:
   try:
     seconds = float(execution_seconds)
@@ -417,6 +474,15 @@ def record_runtime_call(
     "outcome": normalized_outcome,
     "observed timestamp": normalize_text(observed_at) or utc_now_iso()
   }
+  try:
+    token_count = int(output_tokens)
+    generation_time = float(generation_seconds)
+  except (TypeError, ValueError):
+    token_count, generation_time = 0, 0
+  if token_count > 0 and math.isfinite(generation_time) and generation_time > 0:
+    record["generation output tokens"] = token_count
+    record["generation seconds"] = generation_time
+    record["generation tokens per second"] = token_count / generation_time
   write_pya_observation("call", MODEL_CALL_OBSERVATION_ROOT, record, METRIC_OBSERVATION_RETENTION)
   return record
 
@@ -1123,6 +1189,17 @@ def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str,
     call_estimate = model_call_estimate(
       call_identity["runtimeName"], call_identity["modelName"], call_identity["jobKind"]
     )
+    throughput_prior = route_throughput_prior()
+    measured_tps = (
+      call_estimate.get("averageTokensPerSecond")
+      if call_estimate and int(call_estimate.get("throughputSampleCount") or 0) >= MIN_ROUTE_THROUGHPUT_SAMPLES
+      else None
+    )
+    benchmark_tps = (
+      throughput_prior["tokensPerSecond"]
+      if throughput_prior["modelName"] == model_name
+      else None
+    )
     busy = local_execution_slot_busy(candidate_job, runtime_registry)
     score = 0
     if warm:
@@ -1147,6 +1224,10 @@ def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str,
       "loadEstimateSamples": load_estimate.get("sampleCount", 0) if load_estimate else 0,
       "estimatedCallSeconds": call_estimate.get("averageExecutionSeconds") if call_estimate else None,
       "callEstimateSamples": call_estimate.get("sampleCount", 0) if call_estimate else 0,
+      "measuredTokensPerSecond": measured_tps,
+      "throughputSampleCount": call_estimate.get("throughputSampleCount", 0) if call_estimate else 0,
+      "benchmarkTokensPerSecond": benchmark_tps,
+      "routePriority": route_priority(),
       "score": score,
       "capacity": capacity,
       "reason": (
@@ -1174,7 +1255,10 @@ def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str,
       "candidates": candidates,
       "reason": reason
     }
-  return max(available, key=lambda item: (bool(item.get("immediate")), int(item.get("score") or 0), item.get("deviceId") == "gpu0"))
+  return max(available, key=lambda item: (
+    bool(item.get("immediate")), int(item.get("routePriority") or 0),
+    int(item.get("score") or 0), item.get("deviceId") == "gpu0"
+  ))
 
 
 def peer_request_json(base_url: str, pathname: str, payload: Optional[Dict[str, Any]] = None, timeout_ms: int = 1500) -> Dict[str, Any]:
@@ -1287,6 +1371,23 @@ def peer_route_candidate(
   call_estimate = model_call_estimate(
     call_identity["runtimeName"], call_identity["modelName"], call_identity["jobKind"], peer_call_estimates
   )
+  measured_tps = (
+    call_estimate.get("averageTokensPerSecond")
+    if call_estimate and int(call_estimate.get("throughputSampleCount") or 0) >= MIN_ROUTE_THROUGHPUT_SAMPLES
+    else None
+  )
+  prior = snapshot.get("routeThroughputPrior") if isinstance(snapshot.get("routeThroughputPrior"), dict) else {}
+  benchmark_tps = (
+    prior.get("tokensPerSecond")
+    if normalize_text(prior.get("modelName")) == model_name
+    and isinstance(prior.get("tokensPerSecond"), (int, float))
+    and float(prior.get("tokensPerSecond")) > 0
+    else None
+  )
+  try:
+    peer_route_priority = int(snapshot.get("routePriority", 0))
+  except (TypeError, ValueError):
+    peer_route_priority = 0
   target_safe = bool(runtime.get("concurrencySafe", False))
   execution_slots_view = snapshot.get("executionSlots")
   devices = snapshot.get("devices") if isinstance(snapshot.get("devices"), list) else []
@@ -1346,6 +1447,10 @@ def peer_route_candidate(
       "loadEstimateSamples": load_estimate.get("sampleCount", 0) if load_estimate else 0,
       "estimatedCallSeconds": call_estimate.get("averageExecutionSeconds") if call_estimate else None,
       "callEstimateSamples": call_estimate.get("sampleCount", 0) if call_estimate else 0,
+      "measuredTokensPerSecond": measured_tps,
+      "throughputSampleCount": call_estimate.get("throughputSampleCount", 0) if call_estimate else 0,
+      "benchmarkTokensPerSecond": benchmark_tps,
+      "routePriority": peer_route_priority,
       "score": score,
       "preview": preview,
       "reason": (
@@ -1365,37 +1470,60 @@ def peer_route_candidate(
   return max(candidates, key=lambda item: (bool(item.get("immediate")), int(item.get("score") or 0), item.get("deviceId") == "gpu0"))
 
 
-def route_profile_key(job: Dict[str, Any]) -> str:
-  return "|".join((
-    normalize_text(job.get("runtimeName")).lower(),
-    normalize_text(job.get("profileName")).lower()
-  ))
-
-
-def next_balanced_route_candidate(
-  job: Dict[str, Any],
+def select_fastest_route_candidate(
   candidates: List[Dict[str, Any]],
-  immediate: List[Dict[str, Any]]
-) -> Optional[Dict[str, Any]]:
-  """Rotate same-profile work across eligible hosts instead of pinning to a warm peer."""
-  key = route_profile_key(job)
-  previous_host = _LAST_ROUTE_HOST_BY_PROFILE.get(key)
-  hosts = sorted({normalize_text(item.get("hostId")) for item in candidates if normalize_text(item.get("hostId"))})
-  if not previous_host or len(hosts) < 2 or previous_host not in hosts:
-    return None
+  host_id: str
+) -> tuple[Dict[str, Any], str]:
+  """Prefer measured throughput, then benchmark priors, then configured host rank."""
+  measured = len(candidates) > 1 and all(
+    int(item.get("throughputSampleCount") or 0) >= MIN_ROUTE_THROUGHPUT_SAMPLES
+    and isinstance(item.get("measuredTokensPerSecond"), (int, float))
+    and float(item["measuredTokensPerSecond"]) > 0
+    for item in candidates
+  )
+  if measured:
+    return max(candidates, key=lambda item: (
+      float(item["measuredTokensPerSecond"]), int(item.get("score") or 0),
+      item.get("hostId") == host_id, item.get("deviceId") == "gpu0"
+    )), "measured-throughput"
 
-  by_host: Dict[str, List[Dict[str, Any]]] = {}
-  for candidate in immediate:
-    host = normalize_text(candidate.get("hostId"))
-    if host:
-      by_host.setdefault(host, []).append(candidate)
-  start = hosts.index(previous_host)
-  for offset in range(1, len(hosts)):
-    host = hosts[(start + offset) % len(hosts)]
-    available = by_host.get(host, [])
-    if available:
-      return max(available, key=lambda item: (int(item.get("score") or 0), item.get("deviceId") == "gpu0"))
-  return None
+  benchmark = len(candidates) > 1 and all(
+    isinstance(item.get("benchmarkTokensPerSecond"), (int, float))
+    and float(item["benchmarkTokensPerSecond"]) > 0
+    for item in candidates
+  )
+  if benchmark:
+    return max(candidates, key=lambda item: (
+      float(item["benchmarkTokensPerSecond"]), int(item.get("score") or 0),
+      item.get("hostId") == host_id, item.get("deviceId") == "gpu0"
+    )), "benchmark-throughput-prior"
+
+  priorities = [int(item.get("routePriority") or 0) for item in candidates]
+  if len(candidates) > 1 and max(priorities, default=0) != min(priorities, default=0):
+    return max(candidates, key=lambda item: (
+      int(item.get("routePriority") or 0), int(item.get("score") or 0),
+      item.get("hostId") == host_id, item.get("deviceId") == "gpu0"
+    )), "configured-host-priority"
+
+  best_score = max(int(item.get("score") or 0) for item in candidates)
+  equally_viable = [item for item in candidates if int(item.get("score") or 0) == best_score]
+  call_comparable = len(equally_viable) > 1 and all(
+    isinstance(item.get("estimatedCallSeconds"), (int, float))
+    for item in equally_viable
+  )
+  load_comparable = len(equally_viable) > 1 and all(
+    item.get("warm") is True or isinstance(item.get("estimatedLoadSeconds"), (int, float))
+    for item in equally_viable
+  )
+  if call_comparable:
+    return min(equally_viable, key=lambda item: (
+      float(item["estimatedCallSeconds"]), item.get("hostId") != host_id
+    )), "call-duration"
+  if load_comparable:
+    return min(equally_viable, key=lambda item: (
+      float(item.get("estimatedLoadSeconds") or 0), item.get("hostId") != host_id
+    )), "model-load-time"
+  return next((item for item in equally_viable if item.get("hostId") == host_id), equally_viable[0]), "capacity-score"
 
 
 def select_route(payload: Dict[str, Any], job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]], host_id: str) -> Dict[str, Any]:
@@ -1420,30 +1548,7 @@ def select_route(payload: Dict[str, Any], job: Dict[str, Any], runtime_registry:
 
   immediate = [item for item in candidates if item.get("available") and item.get("immediate")]
   if immediate:
-    selected = next_balanced_route_candidate(job, candidates, immediate)
-    selection_policy = "round-robin-host-balance" if selected else "capacity-score"
-    if selected is None:
-      best_score = max(int(item.get("score") or 0) for item in immediate)
-      equally_viable = [item for item in immediate if int(item.get("score") or 0) == best_score]
-      call_comparable = len(equally_viable) > 1 and all(
-        isinstance(item.get("estimatedCallSeconds"), (int, float))
-        for item in equally_viable
-      )
-      load_comparable = len(equally_viable) > 1 and all(
-        item.get("warm") is True or isinstance(item.get("estimatedLoadSeconds"), (int, float))
-        for item in equally_viable
-      )
-      if call_comparable:
-        selected = min(equally_viable, key=lambda item: (
-          float(item["estimatedCallSeconds"]), item.get("hostId") != host_id
-        ))
-      elif load_comparable:
-        selected = min(equally_viable, key=lambda item: (
-          float(item.get("estimatedLoadSeconds") or 0), item.get("hostId") != host_id
-        ))
-      else:
-        selected = next((item for item in equally_viable if item.get("hostId") == host_id), equally_viable[0])
-    _LAST_ROUTE_HOST_BY_PROFILE[route_profile_key(job)] = normalize_text(selected.get("hostId"))
+    selected, selection_policy = select_fastest_route_candidate(immediate, host_id)
     return {
       "selected": selected,
       "candidates": candidates,
@@ -1451,7 +1556,6 @@ def select_route(payload: Dict[str, Any], job: Dict[str, Any], runtime_registry:
       "selectionPolicy": selection_policy
     }
   if local.get("available"):
-    _LAST_ROUTE_HOST_BY_PROFILE[route_profile_key(job)] = normalize_text(local.get("hostId"))
     return {"selected": local, "candidates": candidates, "forwarded": False, "reason": "no peer has an immediate free slot", "selectionPolicy": "local-queued"}
   return {"selected": None, "candidates": candidates, "forwarded": False, "reason": "no local or peer route is executable"}
 
@@ -1472,9 +1576,12 @@ def make_snapshot(host_id: str) -> Dict[str, Any]:
   queue_samples = queue_observations()
   local_counts = local_queue_counts()
   configured_queue_cap = soft_queue_cap()
+  throughput_prior = route_throughput_prior()
   profiles = project_strata_profile_residency(profile_list(), runtime_statuses, loading_observations)
   return {
     "hostId": host_id,
+    "routePriority": route_priority(),
+    "routeThroughputPrior": throughput_prior,
     "accelerator": {
       "memoryBackend": telemetry.get("backend") or accelerator_memory_backend(),
       "memoryModel": (telemetry.get("devices") or [{}])[0].get("memoryModel", "dedicated")
@@ -4587,6 +4694,7 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
   call_identity: Dict[str, str] = {}
   execution_started: Optional[float] = None
   outcome = "fail"
+  call_result: Any = None
   with _LOCK:
     initial = _JOBS.get(remote_job_id)
     if not initial:
@@ -4635,6 +4743,7 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
     execution_started = time.monotonic()
     try:
       result = execute_job(job, runtime_registry)
+      call_result = result
       outcome = "success"
       with _LOCK:
         current = _JOBS.get(remote_job_id)
@@ -4656,13 +4765,16 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
     finally:
       if execution_started is not None and call_identity:
         try:
+          generation = ollama_generation_metrics(call_result) if call_identity["runtimeName"] == "ollama" else {}
           record_runtime_call(
             host_id=execution_host_id,
             runtime_name=call_identity["runtimeName"],
             model_name=call_identity["modelName"],
             job_kind=call_identity["jobKind"],
             execution_seconds=max(0.000001, time.monotonic() - execution_started),
-            outcome=outcome
+            outcome=outcome,
+            output_tokens=generation.get("output_tokens"),
+            generation_seconds=generation.get("generation_seconds")
           )
         except Exception as err:
           print(f"[gpu-housekeeper] could not persist call observation: {normalize_text(err)}", flush=True)

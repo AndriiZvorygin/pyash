@@ -90,3 +90,24 @@ Enable it with `systemctl --user enable --now pyash-macstudio-housekeeper-tunnel
 NVIDIA deployments continue to use service/compose.gpu.yaml and CUDA memory
 telemetry from nvidia-smi. Apple Silicon support is an opt-in native runtime
 profile and does not change the Linux defaults.
+
+## Throughput-aware routing
+
+Federated Housekeepers route to the fastest immediately available host. Live
+Ollama generation throughput from at least three successful same-model calls
+takes precedence. Until comparable samples exist, configure each host with a
+benchmark-derived fallback. The current warm `qwen3.5:9b` Housekeeper results
+are:
+
+| Host | Route priority | Prior model | Prior tokens/s |
+| --- | ---: | --- | ---: |
+| Mriczo RTX 3090 | 300 | `qwen3.5:9b` | 104.5806 |
+| Mac Studio M1 Ultra | 200 | `qwen3.5:9b` | 61.1725 |
+| SWAC RTX 3060 | 100 | `qwen3.5:9b` | 43.2859 |
+
+Store the corresponding `route priority`, `throughput prior model`, and
+`throughput prior tokens per second` fields in each host's `routing.pya` under
+its configured `GPU_HOUSEKEEPER_PYA_DIR`. A busy or capacity-blocked host is
+skipped so work can run concurrently on the next eligible host; when all hosts
+are busy, existing queue behavior is retained. Update priors after re-running
+the same benchmark following material model, driver, or power-limit changes.

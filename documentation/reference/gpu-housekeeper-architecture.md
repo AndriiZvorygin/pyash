@@ -160,13 +160,44 @@ time-weighted queue average.
 Completed calls are stored as `.pya` observations beneath the configured
 `GPU_HOUSEKEEPER_PYA_DIR`, capped at 500 call and 500 queue observations per
 host. `/snapshot` exposes rolling per-runtime/model/job-kind `modelCallEstimates`
-with successful-call average duration and sample/failure counts. Routing uses
-this duration only to break ties between immediately eligible candidates with
-the same existing safety/warmth/capacity score; otherwise the established
-model-load estimate and host-local tie-break behaviour remain in effect.
-Execution duration covers runtime job execution after the device gate is
-acquired; time waiting for that gate is represented separately by queue
-transitions.
+with successful-call average duration, generation tokens/second, and
+sample/failure counts. Ollama generation throughput is calculated from
+`eval_count / eval_duration`, so prompt processing, model loading, and
+Housekeeper queue time do not distort the generation rate. Execution duration
+covers runtime job execution after the device gate is acquired; time waiting
+for that gate is represented separately by queue transitions.
+
+Routing considers only immediately executable candidates when any exist.
+For the same runtime/model/job kind, it first compares live generation
+throughput when every candidate has at least three successful throughput
+samples. Otherwise, an exact-model configured throughput prior is used; for
+other models, configured host priority is used. These performance rankings
+precede warmth/capacity score, while capacity eligibility, GPU residency
+guards, and device admission remain authoritative. A busy host is not selected
+over an idle host, allowing successive jobs to spread concurrently to the next
+fastest available machines. If no peer has an immediate slot, the existing
+local durable-queue behavior remains unchanged. The selected policy and
+candidate diagnostics are included in job route metadata.
+
+Each host reads its calibration from `routing.pya` in the configured
+`GPU_HOUSEKEEPER_PYA_DIR`, alongside the other Pyash state artifacts:
+
+```text
+su name gpu housekeeper routing configuration be json map def
+su name schema version ob num 1 ya
+su name route priority ob num 300 ya
+su name throughput prior model ob text "qwen3.5:9b" ya
+su name throughput prior tokens per second ob num 104.5806 ya
+prah
+```
+
+The current fleet is calibrated with the warm `qwen3.5:9b` Housekeeper
+benchmark: Mriczo RTX 3090 `104.5806` tokens/s (priority `300`), Mac Studio
+`61.1725` tokens/s (priority `200`), and SWAC RTX 3060 `43.2859` tokens/s
+(priority `100`). These are fallback priors, not claims that every model scales
+identically; three or more live same-model observations supersede them. Re-run
+the same warm benchmark after material driver, model, or power-limit changes
+and update each host's `routing.pya`.
 
 The default managed runtimes are:
 

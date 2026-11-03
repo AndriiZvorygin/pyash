@@ -2340,10 +2340,8 @@ class HousekeeperFederationTests(unittest.TestCase):
     self.orig_capacity_plan_for_job = server.capacity_plan_for_job
     self.orig_local_execution_slot_busy = server.local_execution_slot_busy
     self.orig_host_id = server.Handler.host_id
-    self.orig_last_route_hosts = dict(server._LAST_ROUTE_HOST_BY_PROFILE)
     self.orig_accept_forwarded = os.environ.get("GPU_HOUSEKEEPER_ACCEPT_FORWARDED")
     server._JOBS.clear()
-    server._LAST_ROUTE_HOST_BY_PROFILE.clear()
     server.Handler.host_id = "mriczo"
 
   def tearDown(self):
@@ -2357,8 +2355,6 @@ class HousekeeperFederationTests(unittest.TestCase):
     server.capacity_plan_for_job = self.orig_capacity_plan_for_job
     server.local_execution_slot_busy = self.orig_local_execution_slot_busy
     server.Handler.host_id = self.orig_host_id
-    server._LAST_ROUTE_HOST_BY_PROFILE.clear()
-    server._LAST_ROUTE_HOST_BY_PROFILE.update(self.orig_last_route_hosts)
     if self.orig_accept_forwarded is None:
       os.environ.pop("GPU_HOUSEKEEPER_ACCEPT_FORWARDED", None)
     else:
@@ -2535,8 +2531,11 @@ class HousekeeperFederationTests(unittest.TestCase):
         }],
         "modelCallEstimates": [{
           "runtimeName": "ollama", "modelName": "qwen", "jobKind": "ollama-chat",
-          "sampleCount": 4, "averageExecutionSeconds": 12.25
+          "sampleCount": 4, "averageExecutionSeconds": 12.25,
+          "throughputSampleCount": 4, "averageTokensPerSecond": 58.5
         }],
+        "routePriority": 100,
+        "routeThroughputPrior": {"modelName": "qwen", "tokensPerSecond": 43.2859},
         "executionSlots": [],
         "devices": [{"deviceId": "gpu0"}],
         "queueDepth": 0,
@@ -2556,6 +2555,10 @@ class HousekeeperFederationTests(unittest.TestCase):
     self.assertEqual(candidate["loadEstimateSamples"], 3)
     self.assertEqual(candidate["estimatedCallSeconds"], 12.25)
     self.assertEqual(candidate["callEstimateSamples"], 4)
+    self.assertEqual(candidate["measuredTokensPerSecond"], 58.5)
+    self.assertEqual(candidate["throughputSampleCount"], 4)
+    self.assertEqual(candidate["benchmarkTokensPerSecond"], 43.2859)
+    self.assertEqual(candidate["routePriority"], 100)
 
   def test_route_prefers_shorter_measured_load_when_candidates_are_otherwise_equal(self):
     server.configured_peers = lambda: {"swac": "http://swac:8090"}
@@ -2602,38 +2605,81 @@ class HousekeeperFederationTests(unittest.TestCase):
     )
     self.assertEqual(route["selected"]["hostId"], "mriczo")
 
-  def test_same_profile_rotates_across_idle_hosts_after_first_warm_route(self):
+  def test_benchmark_throughput_prefers_fastest_idle_host_then_falls_back_for_parallelism(self):
     server.configured_peers = lambda: {
       "swac": "http://swac:8090",
       "macstudio": "http://macstudio:8090"
     }
-    server.local_route_state = lambda _job, _registry, _host: {
-      "hostId": "mriczo", "available": True, "immediate": True, "score": 30, "warm": False
-    }
+    busy_hosts = set()
+    benchmark_tps = {"mriczo": 104.5806, "macstudio": 61.1725, "swac": 43.2859}
 
-    def peer_candidate(host_id, url, _job):
+    def candidate(host_id, url=""):
       return {
-        "hostId": host_id, "url": url, "available": True, "immediate": True,
+        "hostId": host_id, "url": url, "available": True,
+        "immediate": host_id not in busy_hosts,
         "score": 130 if host_id == "macstudio" else 30,
-        "warm": host_id == "macstudio"
+        "benchmarkTokensPerSecond": benchmark_tps[host_id],
+        "routePriority": {"mriczo": 300, "macstudio": 200, "swac": 100}[host_id]
       }
 
-    server.peer_route_candidate = peer_candidate
+    server.local_route_state = lambda _job, _registry, _host: candidate("mriczo")
+    server.peer_route_candidate = lambda host_id, url, _job: candidate(host_id, url)
     job = {"runtimeName": "ollama", "profileName": "qwen3.5:9b", "jobSpec": {}}
-    routes = [
-      server.select_route({}, job, {"ollama": {}}, "mriczo")
-      for _ in range(3)
-    ]
+    first = server.select_route({}, job, {"ollama": {}}, "mriczo")
+    self.assertEqual(first["selected"]["hostId"], "mriczo")
+    self.assertEqual(first["selectionPolicy"], "benchmark-throughput-prior")
 
-    self.assertEqual(
-      [route["selected"]["hostId"] for route in routes],
-      ["macstudio", "mriczo", "swac"]
+    busy_hosts.add("mriczo")
+    second = server.select_route({}, job, {"ollama": {}}, "mriczo")
+    self.assertEqual(second["selected"]["hostId"], "macstudio")
+    self.assertTrue(second["forwarded"])
+
+    busy_hosts.add("macstudio")
+    third = server.select_route({}, job, {"ollama": {}}, "mriczo")
+    self.assertEqual(third["selected"]["hostId"], "swac")
+    self.assertTrue(third["forwarded"])
+
+  def test_measured_model_throughput_overrides_benchmark_prior(self):
+    server.configured_peers = lambda: {"macstudio": "http://macstudio:8090"}
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "mriczo", "available": True, "immediate": True, "score": 30,
+      "routePriority": 300, "benchmarkTokensPerSecond": 104.5806,
+      "measuredTokensPerSecond": 72.0, "throughputSampleCount": 5
+    }
+    server.peer_route_candidate = lambda host_id, url, _job: {
+      "hostId": host_id, "url": url, "available": True, "immediate": True, "score": 30,
+      "routePriority": 200, "benchmarkTokensPerSecond": 61.1725,
+      "measuredTokensPerSecond": 89.0, "throughputSampleCount": 4
+    }
+
+    route = server.select_route(
+      {}, {"runtimeName": "ollama", "profileName": "qwen3.5:9b", "jobSpec": {}},
+      {"ollama": {}}, "mriczo"
     )
-    self.assertEqual(routes[0]["selectionPolicy"], "capacity-score")
-    self.assertEqual(routes[1]["selectionPolicy"], "round-robin-host-balance")
-    self.assertEqual(routes[2]["selectionPolicy"], "round-robin-host-balance")
 
-  def test_host_rotation_skips_hosts_without_an_immediate_slot(self):
+    self.assertEqual(route["selected"]["hostId"], "macstudio")
+    self.assertEqual(route["selectionPolicy"], "measured-throughput")
+
+  def test_configured_host_priority_ranks_non_calibrated_models(self):
+    server.configured_peers = lambda: {"swac": "http://swac:8090"}
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "mriczo", "available": True, "immediate": True, "score": 30,
+      "routePriority": 300
+    }
+    server.peer_route_candidate = lambda host_id, url, _job: {
+      "hostId": host_id, "url": url, "available": True, "immediate": True,
+      "score": 130, "routePriority": 100
+    }
+
+    route = server.select_route(
+      {}, {"runtimeName": "ollama", "profileName": "another-model", "jobSpec": {}},
+      {"ollama": {}}, "mriczo"
+    )
+
+    self.assertEqual(route["selected"]["hostId"], "mriczo")
+    self.assertEqual(route["selectionPolicy"], "configured-host-priority")
+
+  def test_fallback_routes_to_an_immediate_peer_when_local_slot_is_busy(self):
     server.configured_peers = lambda: {
       "swac": "http://swac:8090",
       "macstudio": "http://macstudio:8090"
@@ -2659,7 +2705,7 @@ class HousekeeperFederationTests(unittest.TestCase):
     next_route = server.select_route({}, job, {"ollama": {}}, "mriczo")
 
     self.assertEqual(next_route["selected"]["hostId"], "swac")
-    self.assertEqual(next_route["selectionPolicy"], "round-robin-host-balance")
+    self.assertEqual(next_route["selectionPolicy"], "capacity-score")
 
   def test_call_duration_observations_are_durable_and_aggregated_by_call_type(self):
     with tempfile.TemporaryDirectory() as observation_dir, patch.dict(os.environ, {
@@ -2668,18 +2714,30 @@ class HousekeeperFederationTests(unittest.TestCase):
       for seconds, outcome in ((10, "success"), (20, "success"), (100, "fail")):
         server.record_runtime_call(
           host_id="swac", runtime_name="ollama", model_name="qwen3.5:9b",
-          job_kind="ollama-chat", execution_seconds=seconds, outcome=outcome
+          job_kind="ollama-chat", execution_seconds=seconds, outcome=outcome,
+          output_tokens=100 if outcome == "success" else None,
+          generation_seconds=2 if seconds == 10 else 10 if outcome == "success" else None
         )
       files = list(pathlib.Path(observation_dir).glob("call-*.pya"))
       estimate = server.model_call_estimate("ollama", "qwen3.5:9b", "ollama-chat")
-      artifact = files[0].read_text(encoding="utf-8")
+      artifacts = [path.read_text(encoding="utf-8") for path in files]
 
     self.assertEqual(len(files), 3)
     self.assertEqual(estimate["sampleCount"], 2)
     self.assertEqual(estimate["failedCount"], 1)
     self.assertEqual(estimate["averageExecutionSeconds"], 15)
-    self.assertIn("su name gpu runtime call observation be json map def", artifact)
+    self.assertEqual(estimate["throughputSampleCount"], 2)
+    self.assertEqual(estimate["averageTokensPerSecond"], 30)
+    self.assertTrue(any("su name generation tokens per second" in item for item in artifacts))
+    self.assertTrue(all("su name gpu runtime call observation be json map def" in item for item in artifacts))
     self.assertEqual(server.model_call_estimate("ollama", "qwen3.5:9b", "ollama-generate"), None)
+
+  def test_ollama_generation_metrics_use_output_eval_count_and_duration(self):
+    self.assertEqual(
+      server.ollama_generation_metrics({"eval_count": 50, "eval_duration": 2_500_000_000}),
+      {"output_tokens": 50, "generation_seconds": 2.5, "tokens_per_second": 20.0}
+    )
+    self.assertEqual(server.ollama_generation_metrics({"eval_count": 50}), {})
 
   def test_completed_job_records_execution_duration_for_routing(self):
     original_execute_job = server.execute_job
@@ -2688,7 +2746,9 @@ class HousekeeperFederationTests(unittest.TestCase):
       "executionHostId": "mriczo", "deviceId": "gpu0", "status": "queued", "forwarded": False,
       "jobSpec": {"kind": "ollama-chat", "payload": {"model": "qwen3.5:9b"}}
     }
-    server.execute_job = lambda _job, _registry: {"response": "ok"}
+    server.execute_job = lambda _job, _registry: {
+      "response": "ok", "eval_count": 40, "eval_duration": 2_000_000_000
+    }
     try:
       server.execute_registered_job("measured-job", {"ollama": {"concurrencySafe": False}})
       estimate = server.model_call_estimate("ollama", "qwen3.5:9b", "ollama-chat")
@@ -2702,6 +2762,8 @@ class HousekeeperFederationTests(unittest.TestCase):
     self.assertEqual(completed, "success")
     self.assertEqual(estimate["sampleCount"], 1)
     self.assertGreater(estimate["averageExecutionSeconds"], 0)
+    self.assertEqual(estimate["throughputSampleCount"], 1)
+    self.assertEqual(estimate["averageTokensPerSecond"], 20)
 
   def test_soft_queue_cap_is_observational_and_queue_metrics_are_event_sampled(self):
     original_over = server._LAST_QUEUE_OVER_SOFT_CAP
@@ -2736,7 +2798,7 @@ class HousekeeperFederationTests(unittest.TestCase):
     self.assertEqual(len(samples), 3)
 
   def test_snapshot_exposes_queue_and_call_capacity_metrics(self):
-    with patch.object(server, "parse_nvidia_smi", return_value={"available": True, "backend": "nvidia", "devices": []}), \
+    with tempfile.TemporaryDirectory() as routing_dir, patch.object(server, "parse_nvidia_smi", return_value={"available": True, "backend": "nvidia", "devices": []}), \
          patch.object(server, "managed_gpu_processes", return_value={"available": True, "runtimes": {}, "unmanagedProcesses": []}), \
          patch.object(server, "ollama_running_model_status", return_value={"available": False, "models": []}), \
          patch.object(server, "list_runtime_statuses", return_value=[]), \
@@ -2752,13 +2814,29 @@ class HousekeeperFederationTests(unittest.TestCase):
          patch.object(server, "ollama_model_catalog", return_value={"available": False, "models": []}), \
          patch.object(server, "local_execution_slot_busy", return_value=False), \
          patch.object(server, "execution_slots", return_value=[]), \
-         patch.dict(os.environ, {"GPU_HOUSEKEEPER_SOFT_QUEUE_CAP": "7"}):
+         patch.dict(os.environ, {
+           "GPU_HOUSEKEEPER_SOFT_QUEUE_CAP": "7",
+           "GPU_HOUSEKEEPER_PYA_DIR": routing_dir
+         }):
+      (pathlib.Path(routing_dir) / "routing.pya").write_text(
+        "su name gpu housekeeper routing configuration be json map def\n"
+        "su name schema version ob num 1 ya\n"
+        "su name route priority ob num 100 ya\n"
+        f"su name throughput prior model ob text {json.dumps('qwen3.5:9b')} ya\n"
+        "su name throughput prior tokens per second ob num 43.2859 ya\n"
+        "prah\n",
+        encoding="utf-8"
+      )
       snapshot = server.make_snapshot("swac")
 
     self.assertEqual(snapshot["queuedCount"], 0)
     self.assertEqual(snapshot["softQueueCap"], 7)
     self.assertEqual(snapshot["queueMetrics"]["peakQueuedCount"], 3)
     self.assertEqual(snapshot["modelCallEstimates"][0]["averageExecutionSeconds"], 6)
+    self.assertEqual(snapshot["routePriority"], 100)
+    self.assertEqual(snapshot["routeThroughputPrior"], {
+      "modelName": "qwen3.5:9b", "tokensPerSecond": 43.2859
+    })
 
   def test_pya_load_observations_are_durable_and_estimate_median(self):
     with tempfile.TemporaryDirectory() as observation_dir, patch.dict(os.environ, {"GPU_HOUSEKEEPER_PYA_DIR": observation_dir}):
