@@ -1,21 +1,66 @@
 # Appendix — Repository Modularization Measurement Scripts
 
 **Status:** evidence for
-[`repository-modularization.md`](repository-modularization.md). It carries the
-two measurements that need a script rather than a shell one-liner, plus the
-output they produced at commit `4e31f9f8d`. It is not a second proposal. If
-the proposal is accepted, these become `command/measure_module_graph.mjs` and
-`command/measure_test_suite.mjs`.
+[`repository-modularization.md`](repository-modularization.md). It carries
+reproducible inventory and analysis snippets plus the output they produced at
+commit `4e31f9f8d`. It is not a second proposal. If the proposal is accepted,
+the graph and timing scripts can become `command/measure_module_graph.mjs`
+and `command/measure_test_suite.mjs`.
 
-Both scripts are read-only. Neither writes to the working tree.
+All snippets are read-only. None writes to the working tree.
+
+---
+
+## 0. Selected-bucket extension split
+
+This reproduces the `.mjs` and `.pya` line/file counts using the same logical
+line convention as `measure_code_balance.mjs`. Run it at the pinned commit.
+Unlike `wc -l`, it counts a final line even if the file has no trailing
+newline.
+
+```bash
+node --input-type=module <<'NODE'
+import fs from "node:fs";
+import path from "node:path";
+
+const buckets = {
+  core: ["program/bridge", "program/understand", "program/remember"],
+  verbs: ["program/verbs"],
+  applications: ["program/library", "program/agent", "program/runtime", "command", "module"]
+};
+
+function visit(directory, totals) {
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    if (entry.name.startsWith(".")) continue;
+    const file = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      visit(file, totals);
+      continue;
+    }
+    const extension = path.extname(entry.name);
+    if (!Object.hasOwn(totals, extension)) continue;
+    const text = fs.readFileSync(file, "utf8");
+    const lines = text.length === 0 ? 0 : text.split("\n").length - Number(text.endsWith("\n"));
+    totals[extension].files += 1;
+    totals[extension].lines += lines;
+  }
+}
+
+for (const [bucket, directories] of Object.entries(buckets)) {
+  const totals = { ".mjs": { files: 0, lines: 0 }, ".pya": { files: 0, lines: 0 } };
+  for (const directory of directories) visit(directory, totals);
+  console.log(bucket, JSON.stringify(totals));
+}
+NODE
+```
 
 ---
 
 ## 1. The module graph
 
-Reports the cross-directory import edges inside `program/`, the fan-in
-per module, the import cycles, how the quiz suite couples to the program
-tree, and the candidate layer violations.
+Reports the cross-directory import edges inside `program/`, fan-in per module,
+nontrivial cyclic strongly connected components, quiz coupling to the program
+tree, and candidate area-edge families.
 
 ### Script
 
@@ -96,14 +141,14 @@ for (const [file, count] of [...fanIn.entries()]
   console.log(String(count).padStart(5), file);
 }
 
-// Import cycles, by strongly connected component.
+// Nontrivial strongly connected components (SCCs). Member order is not a path.
 const adjacency = new Map([...edges].filter(([file]) => file.startsWith("program/")));
 const index = new Map();
 const low = new Map();
 const onStack = new Set();
 const stack = [];
 let counter = 0;
-const cycles = [];
+const cyclicComponents = [];
 
 function connect(node) {
   index.set(node, counter);
@@ -127,7 +172,7 @@ function connect(node) {
       onStack.delete(member);
       component.push(member);
     } while (member !== node);
-    if (component.length > 1) cycles.push(component);
+    if (component.length > 1) cyclicComponents.push(component);
   }
 }
 
@@ -135,9 +180,9 @@ for (const node of adjacency.keys()) {
   if (!index.has(node)) connect(node);
 }
 
-console.log("\nimport cycles in program/");
-if (cycles.length === 0) console.log("  none");
-for (const cycle of cycles) console.log(`  ${cycle.join(" -> ")}`);
+console.log("\ncyclic strongly connected components in program/");
+if (cyclicComponents.length === 0) console.log("  none");
+for (const component of cyclicComponents) console.log(`  { ${component.join(", ")} }`);
 
 // How the quizzes reach the program tree.
 const quizzes = files.filter((file) => file.startsWith("quiz/") && file.endsWith(".test.mjs"));
@@ -188,7 +233,7 @@ console.log(
     `(${((reachedCount / programModules.length) * 100).toFixed(1)}%)`
 );
 
-// Candidate layer violations: edges that run from a lower layer to a higher one.
+// Candidate area-edge families for review, not presumed violations.
 const RULES = [
   ["program/library", "program/verbs"],
   ["program/library", "program/runtime"],
@@ -199,7 +244,7 @@ const RULES = [
   ["program/configure", "program/verbs"]
 ];
 
-console.log("\ncandidate layer violations");
+console.log("\ncandidate area-edge families");
 let violations = 0;
 for (const [lower, higher] of RULES) {
   let count = 0;
@@ -305,9 +350,9 @@ top fan-in
     71 program/bridge/exchange.mjs
     54 program/program.mjs
 
-import cycles in program/
-  program/motor/mcp/snapshot.mjs -> program/motor/mcp/config.mjs -> program/motor/mcp.mjs -> program/bridge/modules.mjs -> program/bridge/refinery.mjs -> program/bridge/signature/derive.mjs -> program/bridge/signature.mjs -> program/remember/index.mjs
-  program/library/vliw/database.mjs -> program/library/vliw/index.mjs
+cyclic strongly connected components in program/
+  { program/motor/mcp/snapshot.mjs, program/motor/mcp/config.mjs, program/motor/mcp.mjs, program/bridge/modules.mjs, program/bridge/refinery.mjs, program/bridge/signature/derive.mjs, program/bridge/signature.mjs, program/remember/index.mjs }
+  { program/library/vliw/database.mjs, program/library/vliw/index.mjs }
 
 quiz coupling
   quizzes using only barrel/top-level program imports: 483
@@ -326,7 +371,7 @@ quiz coupling
 
 program modules reached transitively by quizzes: 590/617 (95.6%)
 
-candidate layer violations
+candidate area-edge families
     15 program/library -> program/runtime
      7 program/library -> program/verbs
      7 program/agent -> program/verbs

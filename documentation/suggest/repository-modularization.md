@@ -13,30 +13,30 @@ lot of stuff. How are comparable programming language and operating system
 projects organized?*
 
 This document answers that question with measurements rather than impressions,
-because the two can disagree sharply. The measurements are taken at commit
-`4e31f9f8d` and every one of them carries the command that reproduces it.
-Where a claim is a judgment rather than a measurement, it says so.
+because the two can disagree sharply. The inventory is pinned to commit
+`4e31f9f8d`. Commands and scripts are included for the measurements; the
+comparisons and architectural conclusions are judgments, not measurements.
 
 The short answer, stated up front so a reviewer can stop early if it is
 wrong:
 
-- **The interpreter is not monolithic.** It is 6,421 lines across 25 modules,
-  3.1% of the measured code surface, with three clear hubs.
-- **The repository is monolithic as an operating system.** One tree holds the
-  language, an agent runtime, a work scheduler, Matrix chat, a translation
-  and WordNet refinery, video and subtitle pipelines, a web server, an
-  Android bridge, a C backend, and a GPU house — with no area boundaries
-  between them.
-- **The test suite is not too big. It is badly laid out.** 781 quiz files,
-  96,221 lines, 3,401 test cases. 744 of them — 95% — sit flat in one
-  directory with no mapping to the source tree, no shared harness, and no
-  per-area run command.
-- **Part of the "monolith" feeling is a measurement artifact.** The
-  repository's own `command/measure_code_balance.mjs` counts generated Pyash
-  *data* files as source. 64,617 lines of the applications bucket are `.pya`
-  data, including one generated 41,745-line WordNet map. Code-only, the
-  core-to-applications ratio is 1:26.5 rather than the 1:36.6 the tool
-  reports.
+- **This is a monorepo with unevenly enforced boundaries, not an undivided
+  codebase.** The interpreter, verb families, library areas, specifications,
+  and houses already have recognizable structure. Ownership and dependency
+  rules are less consistently explicit or enforced.
+- **The code-balance ratio is a selected-bucket metric, not a whole-repository
+  measure.** Within the paths counted by `command/measure_code_balance.mjs`,
+  `.mjs`-only core-to-applications is 1:26.50. Several `program/` paths are
+  outside those buckets, so the ratio should not be read as the interpreter's
+  share of all repository code.
+- **The quiz tree is mostly flat.** At the measured commit, 744 of 781 test
+  files were directly under `quiz/`. Resource tiers and a full-suite runner
+  already exist; what is missing is a consistent source-area map and a
+  standard area-targeted workflow.
+- **`.pya` is a mixed format.** The selected application buckets contain
+  64,504 lines of `.pya`, including a generated WordNet map, executable
+  Pyash, and other map/configuration files. The extension alone cannot tell
+  code from data, so a code-only ratio requires a file-level classification.
 
 ---
 
@@ -44,18 +44,31 @@ wrong:
 
 ### 1.1 Code shape
 
-Counting `.mjs` only, across `program/`, `command/`, and `module/`:
+An extension-specific inventory of `.mjs` files in the tool's selected
+buckets gives:
 
 | Bucket | Lines | Files | What it is |
 |---|---|---|---|
-| interpreter core | 6,421 | 25 | `program/bridge`, `program/understand`, `program/remember` |
-| verb layer | 29,868 | 174 | `program/verbs` |
-| applications | 170,080 | 607 | `program/library`, `program/agent`, `program/runtime`, `command`, `module` |
+| interpreter core | 6,396 | 25 | `program/bridge`, `program/understand`, `program/remember` |
+| verb layer | 29,694 | 174 | `program/verbs` |
+| applications | 169,473 | 607 | `program/library`, `program/agent`, `program/runtime`, `command`, `module` |
 
-Code-only ratio: **core : applications = 1 : 26.49**, core share **3.1%**.
+Selected-bucket ratio: **core : applications = 1 : 26.50**, core share
+**3.1% of those buckets**.
 
-The repository's own tool reports a different figure because it counts `.pya`
-files as source:
+These counts use logical lines (a final unterminated line counts). The
+extension-split inventory is reproduced in the appendix. Shell commands using
+`wc -l` count newline characters and can differ slightly; do not compare those
+totals as if they used the same line-count convention.
+
+This is not a complete inventory of `program/`, `command/`, and `module/`.
+The script defines its buckets explicitly; for example, `program/motor/`,
+`program/configure/`, `program/verify/`, and root-level `program/` modules
+are not counted. Use this ratio to compare the defined buckets over time,
+not to estimate the interpreter's share of all repository code.
+
+The repository's own tool reports the combined `.mjs` and `.pya` figure for
+these selected buckets:
 
 ```
 node command/measure_code_balance.mjs
@@ -70,16 +83,18 @@ node command/measure_code_balance.mjs
   core share of measured = 2.4%
 ```
 
-The 64,617-line difference is generated Pyash data, not logic:
+The tool counts `.pya` alongside `.mjs`. Its 64,504 `.pya` lines in the
+selected application buckets are not all classified by the tool as data:
 
 | Bucket | `.mjs` lines | `.mjs` files | `.pya` lines | `.pya` files |
 |---|---|---|---|---|
-| core | 6,421 | 25 | 0 | 0 |
-| verbs | 29,868 | 174 | 0 | 0 |
-| applications | 170,080 | 607 | 64,617 | 113 |
+| core | 6,396 | 25 | 0 | 0 |
+| verbs | 29,694 | 174 | 0 | 0 |
+| applications | 169,473 | 607 | 64,504 | 113 |
 
-**27.5% of the applications bucket is data.** The single largest source file
-in the repository is one of them:
+**27.6% of the selected applications bucket is `.pya` by extension.** That is
+not the same as 27.6% data. The largest file is the generated WordNet bridge
+map:
 
 ```
 find program command module -type f \( -name '*.mjs' -o -name '*.pya' \) -exec wc -l {} + | sort -rn | head
@@ -97,10 +112,11 @@ find program command module -type f \( -name '*.mjs' -o -name '*.pya' \) -exec w
 ```
 
 `english_wordnet_bridges.pya` is a generated sense-to-lemma map, roughly
-10,000 entries of three or four map sentences each. It is not a program. It
-is 41,745 lines and it is 6.5 times the size of the entire interpreter core.
-It sits inside `program/library/translation/` as though it were source code,
-and it is what makes the applications bucket look enormous.
+10,000 entries of three or four map sentences each. It is runtime-loaded by
+the translation library. It is 41,745 lines and 6.5 times the measured
+interpreter core. This one file is data; other `.pya` files include executable
+Pyash and configuration, so classify them individually rather than infer
+their role from their extension.
 
 ### 1.2 The layers are already there
 
@@ -149,9 +165,12 @@ Layer direction mostly holds. `program/verbs` reaches outward (107 edges to
 `program/remember`, 91 to `program/error.mjs`, 81 to `program/library`, 63 to
 `program/bridge`), and the deeper layers mostly reach down rather than up.
 
-Seven edges run the wrong way, and they are the ones worth naming:
+Seven cross-area edge categories have candidate dependencies in the direction
+the proposed layering would forbid. Their counts sum to 45 direct import
+edges; these are candidates for review, not yet confirmed architectural
+violations:
 
-| Edge | Count | Why it matters |
+| Candidate edge family | Direct imports | Why it may matter |
 |---|---|---|
 | `program/library` → `program/runtime` | 15 | a library module depends on the runtime that should sit above it |
 | `program/library` → `program/verbs` | 7 | the library reaches up into the dispatch surface |
@@ -161,27 +180,42 @@ Seven edges run the wrong way, and they are the ones worth naming:
 | `program/bridge` → `program/verbs` | 2 | the dispatch core reaches up into the dispatch surface |
 | `program/configure` → `program/verbs` | 2 | configuration reaches up into verbs |
 
-There are exactly **two import cycles** in `program/`:
+The graph script found two nontrivial cyclic strongly connected components
+(SCCs) in `program/` (its current detector does not report singleton
+self-imports):
 
 ```
-program/motor/mcp/snapshot.mjs -> program/motor/mcp/config.mjs -> program/motor/mcp.mjs
-  -> program/bridge/modules.mjs -> program/bridge/refinery.mjs -> program/bridge/signature/derive.mjs
-  -> program/bridge/signature.mjs -> program/remember/index.mjs
+{ program/motor/mcp/snapshot.mjs, program/motor/mcp/config.mjs,
+  program/motor/mcp.mjs, program/bridge/modules.mjs, program/bridge/refinery.mjs,
+  program/bridge/signature/derive.mjs, program/bridge/signature.mjs,
+  program/remember/index.mjs }
 
-program/library/vliw/database.mjs -> program/library/vliw/index.mjs
+{ program/library/vliw/database.mjs, program/library/vliw/index.mjs }
 ```
 
-The second one matters more than its size suggests: `program/library/vliw/` is
-the intermediate representation that the Rust interpreter is meant to consume,
-and it currently has a cycle in its own entry point.
+These are SCC memberships, not ordered paths: the measurement script reports
+members in Tarjan traversal order, which does not prove that each adjacent pair
+in the display is an import edge. Before fixing a cycle, report one concrete
+closed path of import edges within each SCC. A component can contain more than
+one distinct cycle.
+
+The VLIW component may matter more than its size suggests:
+`program/library/vliw/` is the intermediate representation that the Rust
+interpreter is meant to consume. Confirm its concrete import path and impact
+before prioritizing a repair.
 
 ### 1.4 The test suite's shape
 
 ```
 git ls-files quiz | grep '\.test\.mjs$' | wc -l          # 781 files
-git ls-files quiz | grep '\.test\.mjs$' | xargs cat | wc -l   # 96,221 lines
-git ls-files quiz | grep '\.test\.mjs$' | xargs grep -ho 'test(' | wc -l   # 3,401 tests
+git ls-files quiz | grep '\.test\.mjs$' | xargs cat | wc -l   # 96,221 newline-terminated lines
+git ls-files quiz | grep '\.test\.mjs$' | xargs grep -ho 'test(' | wc -l   # 3,401 textual occurrences
 ```
+
+The `test(` count is a rough source-text proxy, not an authoritative test
+case count: aliases, generated tests, and matching comments or strings can
+make it differ from the runner's TAP summary. Use the TAP summary when
+comparing executed test totals.
 
 Nesting depth:
 
@@ -195,9 +229,10 @@ git ls-files quiz | grep '\.test\.mjs$' | awk -F/ '{print NF-1}' | sort | uniq -
      11 3      # quiz/runtime/gpu/
 ```
 
-**744 of 781 quiz files — 95% — sit flat in one directory.** Only
-`quiz/runtime/` is organized, and it is organized by runtime subsystem, not
-by anything that mirrors `program/`.
+**744 of 781 quiz files — 95% — sit directly under `quiz/`.** The other 37
+are under `quiz/runtime/` and `quiz/runtime/gpu/`. This is a discoverability
+and ownership mismatch with the source areas; it does not by itself prove that
+the runner is serial or that file placement is the cause of suite duration.
 
 Size distribution:
 
@@ -212,7 +247,7 @@ Size distribution:
 The suite is a long tail of 563 fast files plus a small number of large
 ones. The large ones are dense rather than sloppy, except two:
 
-| File | Lines | Tests | Lines per test |
+| File | Lines | `test(` matches | Lines per match |
 |---|---|---|---|
 | `quiz/agenda_stage3_numeric_repair.test.mjs` | 5,274 | 175 | 30 |
 | `quiz/channel_runtime.test.mjs` | 2,450 | 39 | 63 |
@@ -256,9 +291,12 @@ top 25 for **64.2%**. The three slowest quiz files are
 `module manuscript scored fixture refinery run avoids unknown-verb wiring
 failures` at 59.9 seconds.
 
-So the suite is not "awefully long" across the board. One domain —
-translation and vocabulary, which is also where the 41,745-line generated
-data file lives — carries a third of the cost.
+These are shares of **summed per-test durations**, not shares of wall-clock
+time. They identify expensive tests, but do not predict how quickly CI shards
+would finish: process startup, parallelism, resource contention, and the
+critical path also matter. Translation and vocabulary account for about a
+third of the measured summed time and are good candidates for a shard
+experiment.
 
 ### 1.6 How the suite is coupled to the code
 
@@ -284,15 +322,16 @@ suite, transitively. Only 27 modules are unreached, 17 of them in
 **The suite is white-box against interpreter internals.** More than half the
 quizzes reach straight past the public surface into `program/bridge`,
 `program/understand`, and `program/remember`. That is a deliberate choice
-and mostly a good one — it tests the machinery rather than the surface — but
-it means **the internal file layout is the contract the tests hold.** Moving
-a module is a breaking change to 298 quizzes, not just to the importers of
-one file.
+and mostly a good one — it tests the machinery rather than the surface. The
+count of 298 means those quizzes import at least one deep path; it does not
+mean moving any single module affects all 298. Per-module importer counts are
+the better estimate of a particular move's blast radius.
 
-**There is almost no shared test infrastructure.** `quiz/helpers/` is 161 lines
-across two files, and only 8 of 781 quizzes import it. Meanwhile 428 quizzes
-each carry their own copy of the memory-reset discipline. The isolation rule
-exists as a convention repeated 428 times rather than as one function.
+Shared test-helper usage is low: `quiz/helpers/` is 161 lines across two
+files, and only 8 of 781 quizzes import it. The 428 count is a search for
+memory-reset calls, not proof of 428 copies of identical boilerplate. Inspect
+the repeated patterns before deciding which helper contracts are genuinely
+common.
 
 ### 1.7 What already works
 
@@ -329,9 +368,9 @@ how the CI workflow gets a fast signal.
 
 **Houses.** `world/house/` holds 29 house directories, each with its own
 `program/`, `identity/`, `memory/`, and `conduct/` subtrees. Five are already
-separate git repositories. This is the Fuchsia "area" pattern already half
-built, and it is where the answer to the repository-as-OS question probably
-lives.
+separate git repositories. Houses show that independently organized units
+can coexist in the larger tree; they are one useful precedent, not a complete
+ownership or dependency policy for all of `program/`.
 
 ### 1.8 The current state of the suite
 
@@ -346,11 +385,11 @@ identities"):
 # duration_ms 270331.939667
 ```
 
-The job took 4m59s wall clock. The single failure is
+The job took 4m59s wall clock. The single recorded failure is
 `existential phrase-list decisions survive English-to-Pyac and Pyash projection`
-in `quiz/translation_pipeline.test.mjs`; it reproduces in isolation and is in
-the other agent's in-flight translation work, not in the areas this document
-touches.
+in `quiz/translation_pipeline.test.mjs`; it reproduced in isolation at that
+time. Treat it as a known baseline failure for comparisons, without inferring
+ownership or cause from this modularization inventory.
 
 A local run without the tier gate produced six failures on one run and four on
 another. The stable ones are missing local resources — this machine's ffmpeg
@@ -358,16 +397,18 @@ has no `drawtext` filter and the GPU housekeeper is not running — which is
 exactly what the tier policy exists to skip. The fourth stable failure is
 the same translation phrase-list assertion. Two more, in
 `quiz/saddle_tools_signatures.test.mjs` and `quiz/sandpit.test.mjs`, appeared
-on one run only: **both pass in isolation, and both failed only under
-full-suite concurrency.** They are intermittent concurrency flakes, and they
-are a side-effect of running 781 files in one undifferentiated pool.
+on one run only: both pass in isolation and failed during a full-suite run.
+That is evidence of an order- or concurrency-sensitive interaction, not proof
+that the test count or runner pool caused it. Identify shared state, ports,
+fixtures, and resource contention before increasing parallelism.
 
 ---
 
 ## Part 2 — How comparable projects are organized
 
-Four mechanisms appear in every comparable project examined. They are listed
-with their sources so a reviewer can check the claim rather than trust it.
+The projects below use overlapping but different mechanisms. They are
+examples to compare, not a claim that every project uses the same layout or
+enforcement model. Sources are included so a reviewer can check each claim.
 
 ### 2.1 Rust — crates, and two kinds of test
 
@@ -404,10 +445,13 @@ Sources: [rustc-dev-guide compiler source](https://rustc-dev-guide.rust-lang.org
 [rustc-dev-guide compiletest](https://rustc-dev-guide.rust-lang.org/tests/compiletest.html),
 [The Rust book, test organization](https://doc.rust-lang.org/book/ch11-03-test-organization.html).
 
-### 2.2 Linux — subsystems, tests beside the code, and a naming rule
+### 2.2 Linux — subsystems, maintainership, and multiple test models
 
 The kernel tree is a set of subsystems — `drivers/`, `fs/`, `net/`, `mm/`,
-`arch/` — each with its own maintainer in `MAINTAINERS`.
+`arch/` — with maintainership recorded in `MAINTAINERS`. KUnit tests can sit
+near the code they test, while broader userspace self-tests have their own
+testing structure. Linux is an example of in-tree subsystem ownership, not a
+universal rule that every test mirrors its source path.
 
 Test placement is prescribed: "The `tests` directory should be placed at the
 same level as the code under test. For example, tests for `lib/string.c` live
@@ -493,14 +537,24 @@ The lesson is not that seL4 is small. It is that the unverified surface is
 Source: [seL4 repository](https://github.com/seL4/seL4),
 [seL4 FAQ](https://sel4.systems/About/FAQ.html).
 
-### 2.6 The four mechanisms, summarized
+### 2.6 The mechanisms, summarized
 
-| Mechanism | Rust | Linux | CPython | Fuchsia | This repository today |
+| Dimension | Rust | Linux | CPython | Fuchsia | Pyash today |
 |---|---|---|---|---|---|
-| Named areas with an owner | crate `OWNERS`-style review | `MAINTAINERS` per subsystem | `Lib/` packages | `OWNERS` per area | partial — 29 houses, 5 with own repos |
-| Tests mirror the source tree | `tests/` per crate | `tests/` beside the code | `Lib/test/test_<module>.py` | area-local `tests/` | **no** — 95% flat |
-| Boundary enforced by tooling | cargo visibility | Kconfig + Kbuild | — | `BUILD.gn` | `check_imports.mjs` checks resolution only, **not direction** |
-| Tests runnable per area | `./x test library/std` | `kunit.py` per subsystem | `python -m test -j0` | per-area targets | **no** — one pool of 781 |
+| Area structure | Cargo crates/workspaces | subsystem directories | `Lib/` packages | recursive areas | interpreter packages, verb families, libraries, houses |
+| Ownership | crate/review conventions | `MAINTAINERS` | package maintainers | required `OWNERS` | partial; houses are the clearest ownership units |
+| Dependency boundaries | crate/API graph | Kconfig/Kbuild and subsystem conventions | mostly package conventions | `BUILD.gn` | `check_imports.mjs` verifies resolution, not direction |
+| Test organization | unit and suite-oriented tests | KUnit plus userspace self-tests | nested `Lib/test` tree | area tests plus cross-area suites | 95% of quiz files are at the quiz root |
+| Targeted execution | `./x test <crate>` | KUnit/subsystem targets | `python -m test` selectors | per-area build targets | resource-tier runner exists; no standard source-area selector |
+
+These projects are not interchangeable templates. Fuchsia is the closest
+analogue for a single repository spanning OS-like areas because it combines
+area ownership with build-enforced dependencies. Linux demonstrates that a
+large monorepo can use subsystem maintainers and multiple testing models.
+Rust demonstrates stronger package boundaries and targeted builds; CPython
+demonstrates discoverable package-mapped tests and a resource-aware runner.
+seL4 is a different comparison: its useful lesson is to name the trusted and
+verified surface, not to copy its repository scale or layout.
 
 ---
 
@@ -509,9 +563,9 @@ Source: [seL4 repository](https://github.com/seL4/seL4),
 This section is judgment, built on the measurements above. It is the part a
 reviewer should attack.
 
-### 3.1 What is not monolithic
+### 3.1 What is already modularized
 
-**The interpreter.** 6,421 lines, 25 modules, three hubs with obvious names
+**The interpreter.** 6,396 logical lines, 25 modules, three hubs with obvious names
 (`remember`, `understand`, `bridge`), and a clean outward direction. It is
 the healthiest part of the repository. It does not need modularizing.
 
@@ -524,57 +578,61 @@ lines and only 15 exceed 400. It was split once already this season
 **The specification set.** 23 files, a stated size rule, a core order and a
 feature order.
 
-**The test suite's coverage.** 95.6% transitive reach, 3,401 test cases,
-resource-tiered so that a missing local dependency is reported rather than
-failing.
+**The test suite's coverage.** 95.6% transitive reach, resource-tiered so
+that a missing local dependency is reported rather than failing. The source
+inventory finds 3,401 `test(` text matches; use runner output for executed
+test-case totals.
 
 **The CI shape.** A `test` job, a `rust` job, an examples audit, a smoke
 lane, and a tier policy that reports environment gaps honestly.
 
-### 3.2 What is genuinely monolithic
+### 3.2 Where boundaries are less complete
 
-**The repository as an operating system.** One tree holds roughly 700
-application modules across at least eight unrelated domains: language
-tooling, Matrix chat and channels, translation and WordNet, video and
-subtitle pipelines, a web server and browser automation, print audit, an
-Android bridge, a GPU house, and a C compiler backend. Nothing in the tree
-marks where one domain ends and the next begins. The comparable projects all
-mark it — Linux with `MAINTAINERS`, Fuchsia with `OWNERS` plus a build-system
-dependency rule, Rust with crates that publish independently.
+**The repository as an operating-system-style monorepo.** One tree holds
+more than 600 `.mjs` application modules in the measured buckets, plus Pyash
+programs and data, across several domains: language tooling,
+Matrix chat and channels, translation and WordNet, video and subtitle
+pipelines, a web server and browser automation, print audit, an Android
+bridge, a C backend, and GPU houses. These domains are not unmarked: they have
+directories, some have family or library sub-areas, and `world/house/`
+contains independently organized houses. The gap is that ownership,
+dependency direction, and area-level test workflows are not consistently
+explicit or enforced.
 
-This is the thing the question is really about, and it is a real finding. The
-counter-argument deserves a hearing: a general intelligence operating system
-is *supposed* to be one coherent system, and splitting it into separate
-repositories would multiply cross-repository change cost and split the
-specification. That argument is right. The answer is therefore **not** to
-fragment the repository, but to mark the areas inside it and enforce the
-boundaries — which is what Fuchsia does inside one repository.
+That is an improvement opportunity, not proof that a single repository is
+inherently too monolithic. For an operating-system-like project, one coherent
+tree can be an advantage: cross-area changes and the specification stay
+together. The relevant comparison is not “one repo versus many,” but how
+clearly each repo makes area ownership and allowed dependencies visible and
+enforceable.
 
-**The quiz tree.** 744 of 781 files flat, no mapping to the source tree, no
-shared harness, no per-area run command, no per-area CI shard, and 781 files
-in one pool with two known concurrency flakes. This is the concrete, fixable
-form of "the test suites are awfully long and cover a lot of stuff".
+**The quiz tree.** 744 of 781 files are directly under `quiz/`, so area
+discovery is weak. However, resource tiers and a full-suite runner already
+exist. The evidence supports improving area selection and ownership; it does
+not establish that flat layout caused the observed wall time or flakes.
 
-**Seven backward layer edges and two import cycles.** The layering exists in
-the directory names but is not held by anything. `check_imports.mjs` verifies
-that every relative specifier *resolves* — 4,332 of them across 1,610
-modules — and stops there.
+**Dependency policy.** `check_imports.mjs` verifies that relative specifiers
+resolve — 4,332 across 1,610 modules in the measured inventory — but does
+not enforce a reviewed area-dependency policy. The 45 direct imports in seven
+candidate edge families and two cyclic SCCs are a starting inventory, not a
+pre-approved list of architectural mistakes.
 
 ### 3.3 Part of the impression is a measurement artifact
 
 This deserves its own section because it would otherwise be repeated.
 
-`command/measure_code_balance.mjs` counts `.pya` files as source. The
-applications bucket therefore includes 64,617 lines of generated translation
-data, of which one file is 41,745 lines. Read directly, that says "the
-applications layer is 36 times the core". Read correctly, it says the
-applications layer is 26 times the core in *code*, and the repository's
-largest file is a data file, not a program.
+`command/measure_code_balance.mjs` counts both `.mjs` and `.pya` in its
+selected buckets. The `.pya` extension includes executable Pyash, maps,
+configuration, and generated artifacts. One generated artifact,
+`english_wordnet_bridges.pya`, contributes 41,745 lines at the measured
+commit; that does not justify classifying every `.pya` line as data. The
+reported 1:36.58 and `.mjs`-only 1:26.50 ratios also cover only
+the script's selected buckets, not the whole repository.
 
-The distinction matters for the decision: **a 41,745-line generated data file
-is a storage and loading question, not a modularization question.** Splitting
-it, or moving it, would not make the code more modular — it would only make
-the measurement honest.
+The distinction matters: the generated map is a data-size and runtime-loading
+question, while executable `.pya` belongs in a code inventory. A mixed
+extension count should not drive a source-tree move. Classify files and report
+the split before using the ratio to guide structure.
 
 ---
 
@@ -600,28 +658,32 @@ and `quiz/sandpit/` stay at the top level, because they are shared.
 
 **Payoff.**
 
-- A fast inner loop: `node --test quiz/library/vliw/` instead of a 4m59s
-  suite.
-- CI shards. Translation is 33.7% of the test time; sharded, it runs
-  *beside* the rest rather than behind it. The 4m59s job could become three
-  jobs of roughly two minutes.
-- A natural home for per-area helpers, which today have nowhere to live.
+- A focused inner loop, for example `node --test quiz/library/vliw/`.
+- An explicit area-to-test mapping that can support CI sharding if a small
+  experiment demonstrates a wall-clock benefit.
+- A natural home for area-specific helpers and fixtures, alongside the
+  existing shared helpers.
 - The naming discipline Rust, CPython, and KUnit all use.
 
-**Risk.** 298 quizzes import deep paths, so every moved file needs its
-relative specifiers rewritten from `../program/...` to `../../program/...`.
-This is mechanical, it is scriptable, and the suite is its own proof: the
-moved area must pass before and after. It must be done one area at a time,
-never as one sweep.
+**Risk.** Moving test files out of `quiz/` changes the base for relative
+imports in those files, whether they import a deep module or a public barrel.
+The 298 count describes quizzes with at least one deep import; it does not
+measure all path rewrites or the impact of moving an individual module. Move
+one area at a time and check the runner, tier classification, examples, and CI
+discovery as well as relative paths.
 
 **Acceptance criterion.** `node --test quiz/<area>/` runs an area's quizzes
-and nothing else; the full suite still reports the same pass count; and
-`command/check_imports.mjs` stays clean.
+and nothing else; all moved tests remain discoverable by `npm test` and
+`npm run test:ci`; and TAP pass/fail/skip results match the recorded baseline,
+with pre-existing failures tracked separately. Measure wall-clock time before
+claiming a CI speedup.
 
 ### 4.2 Enforce the dependency direction
 
-**Change.** Extend `command/check_imports.mjs`, which already runs in CI and
-already resolves every relative specifier, with a layering rule set:
+**Change.** First produce a reviewable file-to-file dependency inventory and
+agree on the intended area interfaces. Then extend `command/check_imports.mjs`,
+which already runs in CI and resolves relative specifiers, with those reviewed
+rules:
 
 - `program/library` must not import `program/verbs` or `program/runtime`
 - `program/bridge` must not import `program/verbs`
@@ -630,36 +692,41 @@ already resolves every relative specifier, with a layering rule set:
 - `program/verify` (or an equivalent check) must find no import cycle in
   `program/`
 
-**Payoff.** Turns "we have layers" into "the layers are held". Seven
-backward edges and two cycles is a small, closable list. The two cycles in
-particular would stop being able to grow.
+**Payoff.** Turns the intended dependency direction into a checkable contract.
+The current graph is a starting inventory: seven candidate area-edge
+categories (45 direct imports) and two cyclic SCCs. It is not yet a verified
+list of 45 defects or two simple cycle paths.
 
-**Risk.** The rules as written above are the *target* state. Landing them
-requires fixing seven edges and two cycles, which is real work and needs a
-decision per edge. A softer first step is to report violations without
-failing, so the list can be worked down deliberately.
+**Risk.** The area rules below are hypotheses until each concrete dependency
+is reviewed. Some edges may be legitimate and better expressed through an
+interface. Begin in report-only mode, record each accepted exception with a
+reason, and only then make new violations fail CI. For cycles, report an
+actual closed path in addition to SCC membership.
 
-**Acceptance criterion.** The check exists, runs in CI, and the violation
-count is zero or explicitly waived with a written reason per edge.
+**Acceptance criterion.** The approved policy and baseline inventory are
+checked in; CI rejects new unapproved edges; existing exceptions have an
+owner and reason; and the cycle report contains concrete import paths.
 
 ### 4.3 Give the suite a shared harness
 
-**Change.** One `quiz/helpers/memory.mjs` exporting a `withFreshMemory()`
-wrapper, and one `quiz/helpers/assert_sentence.mjs` for the sentence-shape
-assertions that currently appear inline. Move the mock Matrix server out of
-`quiz/pyash_configure_cli.test.mjs` into `quiz/helpers/matrix_server.mjs`.
+**Change.** Extract helpers only where inspection finds repeated behavior
+with the same contract. The inline Matrix mock in
+`quiz/pyash_configure_cli.test.mjs` is a concrete candidate. A memory-isolation
+helper and sentence-shape helper should follow only if their current call
+patterns and semantics are genuinely shared.
 
-**Payoff.** 428 quizzes currently carry their own copy of the isolation
-discipline. One helper turns the rule from a convention into a mechanism, and
-removes the copy-paste drift that makes a shared rule hard to keep.
+**Payoff.** A shared helper can reduce duplicated setup and make its behavior
+easier to maintain. The current search finds 428 files with memory-reset
+calls, but does not establish 428 copies of the same isolation boilerplate.
 
 **Risk.** Low, but it touches many files. It should land *after* 4.1, because
 4.1 changes the relative path of every helper import anyway — doing both at
 once would make the diff unreviewable.
 
-**Acceptance criterion.** `quiz/helpers/` is imported by a majority of
-quizzes; the number of quizzes containing their own memory-reset boilerplate
-falls below 50.
+**Acceptance criterion.** Each extracted helper has focused tests and is
+adopted by the tests that share its contract. Track duplicate setup patterns
+before and after; do not require unrelated quizzes to import a helper merely
+to meet a majority-use target.
 
 ### 4.4 Split the three outliers
 
@@ -676,10 +743,14 @@ falls below 50.
 understand. After the split, each file can be read in a sitting, and a failure
 names its area without a search.
 
-**Risk.** Low, and the suite verifies each split immediately.
+**Risk.** Splitting can make fixtures, setup, and test order less obvious.
+Keep related cases together and verify behavior rather than relying only on a
+textual count of `test(` calls.
 
-**Acceptance criterion.** No quiz file exceeds 1,000 lines; the count of
-tests is unchanged.
+**Acceptance criterion.** The split has clear behavior-group boundaries; all
+existing cases and assertions are accounted for; focused and full TAP results
+preserve pass/fail/skip behavior. A line-count target is a review aid, not a
+quality criterion.
 
 ### 4.5 Name the areas, and give each one an owner
 
@@ -689,50 +760,57 @@ the quiz directory that tests it, and its owner. Reuse the existing
 `documentation/reference/spec-implementation-map.md`, which already maps
 contract to implementation, and extend it rather than building a second map.
 
-**Payoff.** This is the Fuchsia `OWNERS` idea at the scale that fits this
-repository. It makes the repository-as-OS legible: a reader can see that
-translation, chat, video, web, and the GPU house are separate domains with
-separate owners, even though they share a tree.
+**Payoff.** This adapts the Fuchsia `OWNERS` idea to this repository. It can
+make the translation, chat, video, web, and GPU areas legible without
+implying that each already has a separate owner or a standalone specification.
 
 **Risk.** Documentation only. It can be wrong without breaking anything,
 which is also its weakness — an area map that nothing enforces will drift.
 It is worth doing *after* 4.2, which makes at least some of the boundaries
 enforceable.
 
-**Acceptance criterion.** Every directory under `program/` appears in the map
-with an owner and a governing specification.
+**Acceptance criterion.** Every named area has an explicit scope, test
+location, applicable specification (or a recorded gap), and a real owner or
+an explicit unowned status. Do not invent owners or imply every leaf directory
+has a standalone specification.
 
-### 4.6 Move the generated data out of `program/`
+### 4.6 Separate code and data in the inventory
 
-**Change.** The 64,617 lines of generated `.pya` data — chiefly
-`program/library/translation/english_wordnet_bridges.pya` at 41,745 lines —
-move to a data location that is not counted as source, and
-`command/measure_code_balance.mjs` gains an explicit data/code split.
+**Change.** Classify `.pya` files by role and update
+`command/measure_code_balance.mjs` to report executable code, configuration,
+and generated/runtime data separately. Keep the WordNet map at its current
+path initially: it is runtime-loaded, and a separate inventory change can
+correct the metric without relocating the artifact.
 
-**Payoff.** Two things at once. The measurement stops being misleading, and
-the generated artifact stops being a thing a reviewer has to open. The file
-is regenerable — it carries a `source-hash` field — so it does not need to be
-a source file at all.
+**Payoff.** The size report becomes more meaningful without conflating file
+format with program role. A later storage move can be considered if it solves
+a real loading, packaging, or review problem.
 
-**Risk.** Low technically, but it touches the import path of every consumer
-of the bridge map, and the `know/` directory is already 2.3 GB, so where it
-lands needs a decision.
+**Risk.** Classification needs an explicit, reviewable rule or manifest.
+Moving the map would affect runtime URLs, generators, tests, and tooling.
+A `source-hash` field alone does not prove deterministic regeneration or that
+the source inputs are available.
 
-**Acceptance criterion.** `measure_code_balance.mjs` reports code and data
-separately, and the largest source file under `program/` is under 7,000
-lines.
+**Acceptance criterion.** The report documents included paths and line-count
+semantics, separates `.mjs` and `.pya` by reviewed role, and verifies the
+generated map's source hash. If it is ever moved, runtime consumers and
+generation are tested from a clean checkout. Do not use a maximum-file-size
+threshold as a proxy for modularity.
 
 ### 4.7 What is deliberately not proposed
 
-- **Splitting the repository into separate repositories.** This contradicts the
-  general intelligence operating system premise, and the comparable projects
-  that keep one tree (Fuchsia, Linux, CPython) solve it with in-tree area
-  boundaries and enforced dependency rules, not with fragmentation.
-- **A rewrite of the test suite.** The density problem is in three files, not
-  in 781. The suite's coverage and isolation discipline are good.
-- **A big-bang tree move.** The 298 deep-importing quizzes make any
-  single-sweep move a wide, hard-to-review diff. Every move is one area, one
-  commit, one green run.
+- **Splitting the repository into separate repositories as the first move.**
+  Keep the shared tree unless an area has independent build, release, and
+  ownership needs that outweigh cross-area change cost. Fuchsia and Linux
+  demonstrate that strong in-tree boundaries are viable; Rust and CPython
+  provide other useful mechanisms, not a single required layout.
+- **A rewrite of the test suite.** The strongest size outliers are a small
+  subset of the 781 files, while transitive code reach is high. This does not
+  remove the need to investigate the observed order/concurrency-sensitive
+  failures.
+- **A big-bang tree move.** Move one area at a time, with importer and test
+  discovery checks; the 298 deep-importing quizzes are a suite-wide count, not
+  the impact count for moving any one module.
 - **New command-line flags.** Nothing here needs configuration. Per
   AGENTS.md, configurability belongs in Pyash-native defaults or configuration
   sentences, not in switches.
@@ -741,39 +819,42 @@ lines.
 
 ## Review questions
 
-1. **Is the core-to-applications ratio the right thing to watch?** The
-   repository's own tool reports 1:36.58; code-only it is 1:26.5. Should
-   `measure_code_balance.mjs` report the split, and should the doc that
-   quotes it use the code-only figure?
-2. **Is the quiz sharding worth 298 files of import rewrites?** The payoff
-   is a fast inner loop and parallel CI. Is there a cheaper way to get
-   parallel CI — sharding by file hash rather than by directory?
-3. **Do the seven backward layer edges represent real mistakes, or
-   legitimate coupling that the layer names do not capture?** The
-   `program/library` → `program/runtime` edge (15) is the largest.
-4. **Should the layering rules be enforced immediately or reported first?**
-   A failing check blocks every pull request that touches an offending file.
-5. **Are the areas in 4.5 the right areas?** The proposal lists nine
-   directories. The repository also has `command/` (212 files, 57,059 lines),
-   `program/agent/` (51 files), and `program/runtime/` (68 files), which may
-   want different boundaries.
-6. **Where should generated translation data live?** `know/` is already 2.3
-   GB. `data/` at the repository root? A per-area `data/` directory?
-7. **Should `program/verbs/` finish its family split?** 81 verb modules still
-   sit at the top level of `program/verbs/` beside 11 family directories.
-8. **Is the two-cycle bound the right target?** The
-   `program/library/vliw` cycle is in the code the Rust interpreter is meant
-   to consume, so it may deserve fixing first regardless of this proposal.
+1. **What code inventory should be measured?** The existing tool reports
+   selected buckets and combines `.mjs` and `.pya`; should it gain reviewed
+   path and file-role categories before ratios are used for decisions?
+2. **What is the smallest useful test-area pilot?** Try targeted execution
+   and one measured CI shard before moving the whole quiz tree. Compare actual
+   wall time and TAP outcomes, not summed per-test duration alone.
+3. **Which candidate dependencies violate an agreed boundary?** The
+   `program/library` → `program/runtime` family is largest at 15 direct
+   imports; inspect those concrete imports before setting a rule.
+4. **Should dependency checks begin report-only?** Existing imports need
+   explicit review and waivers before new rules become CI blockers.
+5. **Are the proposed area names useful?** Include `command/`, `program/agent/`,
+   and `program/runtime/` in the discussion instead of implying a single
+   one-to-one mirror is already known to be right.
+6. **Does the generated map need to move at all?** First separate its role in
+   the size report; consider a storage move only if runtime packaging or
+   loading provides a concrete reason.
+7. **Which verb families should be completed next?** 81 verb modules still
+   sit at the top level beside 11 family directories; choose moves by
+   ownership and cohesion, not a quota.
+8. **Which concrete cycle path should be fixed first?** The VLIW SCC is a
+   candidate because of its Rust-consumer role, but print and inspect a real
+   import path before prioritizing a repair.
 
 ---
 
 ## Reproducing the measurements
 
-Every number above was taken at commit `4e31f9f8d`.
+The inventories above were taken at commit `4e31f9f8d`. To reproduce them,
+check out that commit first; later edits can change counts. Logical line
+counts from the Node tool include a final unterminated line, while the shell
+`wc -l` commands below count newline characters. The latter are useful for
+rough size checks, not exact reproduction of logical-line totals.
 
 ```bash
-# the code buckets, and the code-versus-data split the repository's tool does
-# not make
+# combined `.mjs` + `.pya` counts for the tool's selected buckets
 node command/measure_code_balance.mjs
 
 # the largest files in the tree
@@ -793,7 +874,7 @@ git ls-files quiz | grep '\.test\.mjs$' | xargs cat | wc -l      # 96,221 lines
 git ls-files quiz | grep '\.test\.mjs$' | xargs grep -ho 'test(' | wc -l
 git ls-files quiz | grep '\.test\.mjs$' | awk -F/ '{print NF-1}' | sort | uniq -c
 
-# the three density outliers
+# the three density outliers (test-count column is a textual approximation)
 for f in $(git ls-files quiz | grep '\.test\.mjs$'); do
   echo "$(wc -l < "$f") $(grep -c 'test(' "$f") $f"
 done | sort -rn | head -15
@@ -806,7 +887,8 @@ grep -rl 'forget\|resetMemory\|reset_memory' \
 # the resource tiers
 node command/run_test_tiers.mjs 2>&1 | head -8
 
-# the CI run quoted in section 1.8
+# historical CI evidence quoted in section 1.8; requires gh auth and the run
+# to remain available
 gh run view 41551328723 --log-failed 2>&1 \
   | grep -E '^test.*# (tests|pass|fail|skipped|duration_ms) '
 
