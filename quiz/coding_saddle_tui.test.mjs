@@ -118,6 +118,11 @@ test("coding saddle screen keeps progress fixed, scrolls conversation, resizes, 
   assert.ok(writes.join("").includes("PgDn"));
   assert.match(writes[0], /\u001b\[\?1049h/u);
 
+  const redrawStart = writes.length;
+  ui.scrollToBottom();
+  assert.equal(ui.getState().scrollOffset, 0);
+  assert.match(writes.slice(redrawStart).join(""), /transcript line 15/u);
+
   ui.exit();
   assert.match(writes.at(-1), /\u001b\[\?25h\u001b\[\?1049l/u);
   assert.equal(ui.getState().active, false);

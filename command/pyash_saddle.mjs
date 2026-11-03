@@ -1073,6 +1073,7 @@ async function main() {
       prompt({ clear: false });
       return;
     }
+    saddleUi.scrollToBottom();
     if (input.trim() === "/exit" || input.trim() === "/quit") {
       await shutdown();
       return;
