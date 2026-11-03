@@ -22,7 +22,11 @@ const ANSI = {
   title: "\u001b[1;36m",
   status: "\u001b[2m",
   prompt: "\u001b[1;32m",
-  activity: "\u001b[1;33m"
+  activity: "\u001b[1;33m",
+  toolCall: "\u001b[1;35m",
+  toolResult: "\u001b[35m",
+  toolApproval: "\u001b[1;33m",
+  toolOther: "\u001b[35m"
 };
 
 export function stripTerminalControlSequences(value = "") {
@@ -256,6 +260,15 @@ function fitLine(value, width, color, style = null) {
   return value;
 }
 
+function plainLineRole(line) {
+  if (line.startsWith("you> ")) return "prompt";
+  const toolLabel = /^\[tool(?:\s+([^\]]+))?\]/iu.exec(line)?.[1]?.toLowerCase();
+  if (toolLabel === "call") return "toolCall";
+  if (toolLabel === "result") return "toolResult";
+  if (toolLabel === "approval") return "toolApproval";
+  return toolLabel ? "toolOther" : null;
+}
+
 function renderHistory(items, width, color) {
   const lines = [];
   for (const item of items) {
@@ -265,7 +278,7 @@ function renderHistory(items, width, color) {
       item.renderedLines = item.kind === "markdown"
         ? renderSaddleMarkdown(item.text, { width, color })
         : stripTerminalControlSequences(item.text).split("\n").flatMap((line) => {
-          const role = line.startsWith("you> ") ? "prompt" : null;
+          const role = plainLineRole(line);
           return wrapPlainLine(line, width).map((wrapped) => styleText(wrapped, role ? [role] : [], color));
         });
     }

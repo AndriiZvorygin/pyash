@@ -90,6 +90,26 @@ test("coding saddle keeps a completed streamed answer below tool events", () => 
   ui.exit();
 });
 
+test("coding saddle colors tool events separately from model responses", () => {
+  const writes = [];
+  const ui = createSaddleTerminalUi({
+    output: { columns: 80, rows: 14, isTTY: true, write(value) { writes.push(String(value)); } },
+    color: true
+  });
+  ui.enter();
+  ui.writeLine("[tool call] be_read_from_filename");
+  ui.writeLine("[tool result] README.md contents");
+  ui.writeLine("[tool approval] command execution");
+  ui.writeMarkdown("The file says the project is ready.");
+
+  const output = writes.join("");
+  assert.match(output, /\u001b\[1;35m\[tool call\] be_read_from_filename\u001b\[0m/u);
+  assert.match(output, /\u001b\[35m\[tool result\] README\.md contents\u001b\[0m/u);
+  assert.match(output, /\u001b\[1;33m\[tool approval\] command execution\u001b\[0m/u);
+  assert.doesNotMatch(output, /\u001b\[1;35mThe file says the project/u);
+  ui.exit();
+});
+
 test("coding saddle keeps wrapped list items aligned under their text", () => {
   const lines = renderSaddleMarkdown("- this is a longer list item that wraps", { width: 20, color: false });
   assert.equal(lines[0], "• this is a longer ");
