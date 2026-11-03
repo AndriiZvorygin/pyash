@@ -94,7 +94,8 @@ export function createCodingSaddleTrace({
     fs.appendFileSync(journalPath, line.endsWith("\n") ? line : `${line}\n`, "utf8");
   };
   const exchangeRecord = (sentence) => append(sentence);
-  setExchangeRecorder({ runRoot: projectRoot, record: exchangeRecord });
+  // Keep workspace access rooted at the project while storing saddle run artifacts beside its newspaper.
+  setExchangeRecorder({ runRoot: projectRoot, artifactRoot: root, record: exchangeRecord });
   setExchangeRunId(runId);
 
   append(mapBlock(`coding saddle run ${runId}`, [

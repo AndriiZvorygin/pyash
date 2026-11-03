@@ -101,6 +101,9 @@ export function isSaddleCodeChangeRequest(input = "") {
     /\b(?:i|we)\s+(?:just\s+)?(?:did|made|completed|finished)\s+(?:an?\s+)?(?:add|build|change|create|edit|fix|generate|implement|make|modify|patch|refactor|remove|rewrite|update|write)\b/giu,
     " "
   );
+  const statusInquiry = /^\s*(?:(?:can|could)\s+you\s+)?(?:see|check|verify|confirm|test)\s+(?:if|whether)\b/iu.test(text);
+  const requestedFollowupChange = /\b(?:and|then|if so|if not|otherwise)\s+(?:please\s+)?(?:add|build|change|create|edit|fix|implement|make|modify|patch|refactor|remove|rewrite|update|write)\b/iu.test(text);
+  if (statusInquiry && !requestedFollowupChange) return false;
   if (!SADDLE_CHANGE_ACTION.test(text)) return false;
   if (/\b(?:fix|implement|patch|refactor)\b/iu.test(text)) return true;
   return SADDLE_CODE_TARGET.test(text);
