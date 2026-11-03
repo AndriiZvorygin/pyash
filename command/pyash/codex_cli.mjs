@@ -59,7 +59,12 @@ export async function codexCommand(args, { installRoot, cwd = "", envOverrides =
   const finalArgs = [];
   if (!parsed.noMcp) {
     const serverPath = path.join(installRoot, "command", "pyash_mcp_server.mjs");
-    const serverArgs = [serverPath, "--root", rootDir, "--tools-map", parsed.toolsMap || "agent tools"];
+    const serverArgs = [
+      serverPath,
+      "--root", rootDir,
+      "--config-root", installRoot,
+      "--tools-map", parsed.toolsMap || "agent tools"
+    ];
     finalArgs.push("-c", `mcp_servers.pyash.command=${tomlString("node")}`);
     finalArgs.push("-c", `mcp_servers.pyash.args=${tomlArray(serverArgs)}`);
   }

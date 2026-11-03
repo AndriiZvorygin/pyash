@@ -101,10 +101,15 @@ model within that mind.
 ## Durable state
 
 Conversation records use the existing coding-saddle agent house and session
-files. The selected conversation and its backend/model choice are saved in
-`conduct/coding-saddle.pya`, separately from transcript history. Transcript
-model records are historical evidence only and never override the saved
-selection at startup. A web duty is represented by the existing durable work-status `.pya`
+files, scoped to the resolved launch directory. Opening the saddle from another
+directory starts with that directory's session history rather than replaying a
+different project's transcript. A project's selected conversation and its
+backend/model choice are saved in `conduct/coding-saddle.pya`, separately from
+transcript history. The most recently selected backend, model, host, and
+reasoning effort are stored separately as a fallback for a fresh project
+session; a saved selection for the current project session takes precedence.
+Transcript model records are historical evidence only and never override the
+saved selection at startup. A web duty is represented by the existing durable work-status `.pya`
 artifact with `kind: coding-duty` metadata and a session file in its owner's
 web assistant area. It does not introduce another queue, model registry, or
 runtime. User messages are durable and worker claims are leased; a worker

@@ -284,7 +284,10 @@ export function createZaiCodexHome({ apiKey, model = "glm-5.3-flash", reasoningE
   const selectedEffort = ["low", "high", "max"].includes(String(reasoningEffort).trim())
     ? String(reasoningEffort).trim()
     : DEFAULT_ZAI_CODING_REASONING_EFFORT;
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), "pyash-zai-codex-"));
+  const isolatedHomeParent = path.join(os.homedir(), ".codex", "pyash");
+  fs.mkdirSync(isolatedHomeParent, { recursive: true, mode: 0o700 });
+  fs.chmodSync(isolatedHomeParent, 0o700);
+  const home = fs.mkdtempSync(path.join(isolatedHomeParent, "zai-codex-"));
   fs.chmodSync(home, 0o700);
   const modelsPath = path.join(home, "models.json");
   const modelEntry = defaultZaiCodexModelEntry(selectedModel);

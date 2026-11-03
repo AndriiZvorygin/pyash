@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
@@ -75,6 +76,32 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const AGENT_NAME = "coding saddle";
 const TOOL_MAP_NAME = "saddle tools";
 const SESSION_NAME = "coding";
+const RECENT_MODEL_SESSION = "__recent_model__";
+
+export function resolveSaddleProjectWorldRoot({ runtimeRoot, cwd } = {}) {
+  const resolvedRuntimeRoot = path.resolve(runtimeRoot || root);
+  const resolvedCwd = path.resolve(cwd || process.cwd());
+  if (resolvedCwd === resolvedRuntimeRoot) return path.join(resolvedRuntimeRoot, "world");
+  const projectId = createHash("sha256").update(resolvedCwd).digest("hex").slice(0, 24);
+  return path.join(resolvedRuntimeRoot, "world", "coding-saddle-projects", projectId);
+}
+
+function resolveSaddleAgentHouseAtWorldRoot(worldRoot) {
+  return resolveAgentHouse({
+    mindName: AGENT_NAME,
+    rememberFn: (name) => name === "world root"
+      ? { ob: { filename: worldRoot } }
+      : remember(name)
+  });
+}
+
+function isPathWithin(directory, target) {
+  const relative = path.relative(path.resolve(directory), path.resolve(target));
+  return Boolean(relative)
+    && relative !== ".."
+    && !relative.startsWith(`..${path.sep}`)
+    && !path.isAbsolute(relative);
+}
 
 function configValue(name, fallback = "") {
   return String(resolveConfigText(name, { rememberFn: remember }) ?? fallback).trim();
@@ -175,8 +202,8 @@ function configureSaddle({ cwd, runtimeRoot = cwd, worldRoot = path.join(cwd, "w
 
 export async function prepareSaddle({
   cwd = process.cwd(),
-  runtimeRoot = cwd,
-  worldRoot = path.join(runtimeRoot, "world"),
+  runtimeRoot = root,
+  worldRoot,
   mindName = process.env.PYA_SADDLE_MIND,
   model = process.env.PYA_SADDLE_MODEL,
   host = process.env.PYA_SADDLE_HOST,
@@ -184,31 +211,56 @@ export async function prepareSaddle({
 } = {}) {
   const resolvedCwd = path.resolve(cwd);
   const resolvedRuntimeRoot = path.resolve(runtimeRoot);
-  const resolvedWorldRoot = path.resolve(worldRoot);
+  const resolvedWorldRoot = path.resolve(worldRoot || resolveSaddleProjectWorldRoot({
+    runtimeRoot: resolvedRuntimeRoot,
+    cwd: resolvedCwd
+  }));
+  const globalWorldRoot = path.join(resolvedRuntimeRoot, "world");
   setEntryModulePath(resolvedCwd);
   forget();
   await loadDefaultConfig({ cwd: resolvedRuntimeRoot, interpretFn: interpret, entryPath: path.join(resolvedRuntimeRoot, "saddle.pya") });
   await importSaddleTools();
   const housekeeperUrl = resolveSaddleHousekeeperUrl(resolvedRuntimeRoot);
   const configuredMindName = String(configValue("coding saddle mind", "mind")).trim();
-  const agentHouse = resolveAgentHouse({
-    mindName: AGENT_NAME,
-    rememberFn: (name) => name === "world root"
-      ? { ob: { filename: resolvedWorldRoot } }
-      : remember(name)
-  });
+  const agentHouse = resolveSaddleAgentHouseAtWorldRoot(resolvedWorldRoot);
+  const globalAgentHouse = resolveSaddleAgentHouseAtWorldRoot(globalWorldRoot);
   await ensureAgentDirs(agentHouse);
+  const useGlobalRecentPreference = worldRoot == null;
   const saddleStatePath = path.join(agentHouse, "conduct", "coding-saddle.pya");
   const saddleState = await readCodingSaddleState(saddleStatePath);
-  const sessionName = saddleState.activeSessionName || SESSION_NAME;
-  const sessionFile = saddleState.activeSessionFile ? path.resolve(saddleState.activeSessionFile) : "";
-  const savedProfile = getCodingSaddleProfile(saddleState, { sessionName, sessionFile });
+  const sessionDir = path.join(agentHouse, "session");
+  const storedSessionFile = saddleState.activeSessionFile ? path.resolve(saddleState.activeSessionFile) : "";
+  const sessionFile = storedSessionFile && isPathWithin(sessionDir, storedSessionFile) ? storedSessionFile : "";
+  const sessionName = storedSessionFile && !sessionFile
+    ? SESSION_NAME
+    : saddleState.activeSessionName || SESSION_NAME;
+  const sessionProfile = getCodingSaddleProfile(saddleState, { sessionName, sessionFile });
+  const recentModelStatePath = path.join(
+    useGlobalRecentPreference ? globalAgentHouse : agentHouse,
+    "conduct",
+    "coding-saddle-recent.pya"
+  );
+  const recentModelState = await readCodingSaddleState(recentModelStatePath);
+  let recentModelProfile = getCodingSaddleProfile(recentModelState, { sessionName: RECENT_MODEL_SESSION });
+  if (useGlobalRecentPreference && !Object.keys(recentModelProfile).length) {
+    const legacyStatePath = path.join(globalAgentHouse, "conduct", "coding-saddle.pya");
+    const legacyState = legacyStatePath === saddleStatePath
+      ? saddleState
+      : await readCodingSaddleState(legacyStatePath);
+    recentModelProfile = getCodingSaddleProfile(legacyState, {
+      sessionName: legacyState.activeSessionName || SESSION_NAME,
+      sessionFile: legacyState.activeSessionFile || ""
+    });
+  }
+  const savedProfile = Object.keys(sessionProfile).length ? sessionProfile : recentModelProfile;
   const hasExplicitSelection = Boolean(String(mindName || model || host || "").trim());
   const useSavedProfile = !hasExplicitSelection;
   const selectionSource = hasExplicitSelection
     ? "startup override"
-    : (useSavedProfile && savedProfile.backend && savedProfile.model)
+    : (useSavedProfile && sessionProfile.backend && sessionProfile.model)
       ? "saved session state"
+      : (useSavedProfile && recentModelProfile.backend && recentModelProfile.model)
+        ? "recent model preference"
       : "configured mind";
   const selectedMind = String(
     mindName
@@ -262,9 +314,13 @@ export async function prepareSaddle({
     defaultProfile: resolveConfiguredSaddleMind(configuredMindName),
     saddleState,
     saddleStatePath,
+    recentModelState,
+    recentModelStatePath,
+    recentModelProfile,
     housekeeperUrl,
     mindModels,
     agentHouse,
+    sessionDir,
     systemPrompt
   };
 }
@@ -567,6 +623,22 @@ async function main() {
     }
     config.saddleState = nextState;
     await writeCodingSaddleState(config.saddleStatePath, nextState);
+    if (includeProfile) {
+      const recentState = setCodingSaddleProfile(
+        config.recentModelState,
+        { sessionName: RECENT_MODEL_SESSION },
+        {
+          mindName,
+          backend,
+          model,
+          host,
+          reasoningEffort: thinkSetting?.reasoningEffort
+        }
+      );
+      config.recentModelState = recentState;
+      config.recentModelProfile = getCodingSaddleProfile(recentState, { sessionName: RECENT_MODEL_SESSION });
+      await writeCodingSaddleState(config.recentModelStatePath, recentState);
+    }
   };
   const reportSelectionSaved = async () => {
     try {
@@ -661,16 +733,18 @@ async function main() {
       model = normalizeSaddleModel(saved.model || configured.model);
       host = normalizeSaddleHost(saved.host || configured.host);
     } else {
-      mindName = config.defaultMindName;
-      backend = config.defaultProfile.backend;
-      model = config.defaultProfile.model;
-      host = config.defaultProfile.host;
+      const recent = config.recentModelProfile;
+      mindName = recent.mindName || config.defaultMindName;
+      const configured = resolveConfiguredSaddleMind(mindName);
+      backend = normalizeSaddleBackend(recent.backend || configured.backend);
+      model = normalizeSaddleModel(recent.model || configured.model);
+      host = normalizeSaddleHost(recent.host || configured.host);
     }
     mindModels.set(mindName, model);
     contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
     thinkSetting = resolveSaddleThinkSetting({
       backend,
-      savedEffort: saved.reasoningEffort,
+      savedEffort: saved.reasoningEffort || config.recentModelProfile.reasoningEffort,
       configuredEffort: configValue("mind reasoning effort")
     });
     await restoreSessionHistory();

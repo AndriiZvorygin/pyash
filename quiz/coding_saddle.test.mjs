@@ -50,6 +50,7 @@ import {
   loadSaddleSessionHistory,
   prepareSaddle,
   renderSaddleSessionHistory,
+  resolveSaddleProjectWorldRoot,
   runSaddleTurn
 } from "../command/pyash_saddle.mjs";
 
@@ -504,6 +505,117 @@ test("coding saddle does not treat historical transcript models as current selec
     assert.equal(restored.backend, "ollama");
     assert.equal(restored.model, "qwen3.5:9b");
     assert.equal(restored.selectionSource, "configured mind");
+  } finally {
+    for (const key of envKeys) {
+      if (previousEnv[key] === undefined) delete process.env[key];
+      else process.env[key] = previousEnv[key];
+    }
+    forget();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("coding saddle loads its configured mind when launched from another project", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-external-project-"));
+  const cwd = path.join(root, "hpuk", "slesh");
+  const worldRoot = path.join(root, "world");
+  const runtimeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const envKeys = ["PYA_SADDLE_MIND", "PYA_SADDLE_MODEL", "PYA_SADDLE_HOST"];
+  const previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  for (const key of envKeys) delete process.env[key];
+  await fs.mkdir(cwd, { recursive: true });
+  try {
+    const config = await prepareSaddle({ cwd, worldRoot });
+
+    assert.equal(config.cwd, cwd);
+    assert.equal(config.runtimeRoot, runtimeRoot);
+    assert.equal(config.mindName, "mind");
+    assert.equal(config.backend, "ollama");
+    assert.equal(config.model, "qwen3.5:9b");
+    assert.equal(remember("run root")?.ob?.filename, runtimeRoot);
+  } finally {
+    for (const key of envKeys) {
+      if (previousEnv[key] === undefined) delete process.env[key];
+      else process.env[key] = previousEnv[key];
+    }
+    forget();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("coding saddle keeps histories per project while reusing the recent model preference", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-project-sessions-"));
+  const runtimeRoot = path.join(root, "runtime");
+  const projectA = path.join(root, "projects", "alpha");
+  const projectB = path.join(root, "projects", "beta");
+  const envKeys = ["PYA_SADDLE_MIND", "PYA_SADDLE_MODEL", "PYA_SADDLE_HOST"];
+  const previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  for (const key of envKeys) delete process.env[key];
+  await fs.mkdir(path.join(runtimeRoot, "configure"), { recursive: true });
+  await fs.mkdir(projectA, { recursive: true });
+  await fs.mkdir(projectB, { recursive: true });
+  try {
+    await fs.writeFile(path.join(runtimeRoot, "configure", "default.pya"), [
+      "exists su name mind backend be default ob name ollama command mind ya",
+      'exists su name mind model ob text "qwen3.5:9b" be default ya',
+      'exists su name coding saddle mind ob text "mind" be default ya',
+      'exists su name mind be mind from name "http://localhost:11434" via state "qwen3.5:9b" ya',
+      'exists su name zai be mind from state "zai" from space "https://api.z.ai/api/v1" via state "glm-5.3-flash" ya'
+    ].join("\n") + "\n", "utf8");
+    const globalRecentPath = path.join(
+      runtimeRoot,
+      "world",
+      "house",
+      "coding saddle",
+      "conduct",
+      "coding-saddle-recent.pya"
+    );
+    const recentState = setCodingSaddleProfile({}, { sessionName: "__recent_model__" }, {
+      mindName: "zai",
+      backend: "zai",
+      model: "glm-5.3-flash",
+      host: "https://api.z.ai/api/v1",
+      reasoningEffort: "high"
+    });
+    await writeCodingSaddleState(globalRecentPath, recentState);
+
+    const first = await prepareSaddle({ cwd: projectA, runtimeRoot });
+    assert.equal(first.worldRoot, resolveSaddleProjectWorldRoot({ runtimeRoot, cwd: projectA }));
+    assert.equal(first.mindName, "zai");
+    assert.equal(first.backend, "zai");
+    assert.equal(first.model, "glm-5.3-flash");
+    assert.equal(first.thinkSetting.value, "high");
+    assert.equal(first.selectionSource, "recent model preference");
+
+    const compactDate = buildSessionNamePrefix().slice(0, 8);
+    const todaySession = buildSessionNameForDate({ baseName: "coding", dateCompact: compactDate });
+    const transcriptPath = path.join(first.agentHouse, "session", `${todaySession}.pya`);
+    await fs.writeFile(transcriptPath, [
+      sentenceToPyash({ su: { name: "user" }, ob: { text: "alpha-only history" }, be: "answer", mood: "ya" }),
+      sentenceToPyash({ su: { name: "agent" }, ob: { text: "alpha response" }, be: "answer", mood: "ya" })
+    ].join("\n") + "\n", "utf8");
+    const firstHistory = await loadSaddleSessionHistory({ agentHouse: first.agentHouse, sessionName: "coding" });
+    assert.equal(firstHistory.messages.length, 2);
+
+    const projectPreference = setCodingSaddleProfile(first.saddleState, { sessionName: "coding" }, {
+      mindName: "mind",
+      backend: "ollama",
+      model: "qwen3.5:9b",
+      host: "http://localhost:11434"
+    });
+    await writeCodingSaddleState(first.saddleStatePath, projectPreference);
+    const resumedFirst = await prepareSaddle({ cwd: projectA, runtimeRoot });
+    assert.equal(resumedFirst.selectionSource, "saved session state");
+    assert.equal(resumedFirst.mindName, "mind");
+    assert.equal(resumedFirst.model, "qwen3.5:9b");
+
+    const second = await prepareSaddle({ cwd: projectB, runtimeRoot });
+    assert.notEqual(second.worldRoot, first.worldRoot);
+    assert.notEqual(second.agentHouse, first.agentHouse);
+    assert.equal(second.mindName, "zai");
+    assert.equal(second.model, "glm-5.3-flash");
+    const secondHistory = await loadSaddleSessionHistory({ agentHouse: second.agentHouse, sessionName: "coding" });
+    assert.deepEqual(secondHistory.messages, []);
   } finally {
     for (const key of envKeys) {
       if (previousEnv[key] === undefined) delete process.env[key];

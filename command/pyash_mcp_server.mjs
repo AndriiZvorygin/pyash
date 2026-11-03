@@ -23,9 +23,11 @@ function readArgValue(args, name, fallback = "") {
 function parseArgs(argv) {
   const args = argv.slice(2);
   const root = readArgValue(args, "--root", process.cwd());
+  const configRoot = readArgValue(args, "--config-root", root);
   const toolsMap = readArgValue(args, "--tools-map", DEFAULT_TOOLS_MAP);
   return {
     root: path.resolve(root),
+    configRoot: path.resolve(configRoot),
     toolsMap
   };
 }
@@ -128,20 +130,23 @@ async function ensureToolsMap({ cwd, toolsMap }) {
   await materializeToolsMapFromDefinition({ mapPath, toolsMap });
 }
 
-export async function buildRuntime({ root, toolsMap = DEFAULT_TOOLS_MAP }) {
-  process.chdir(root);
+export async function buildRuntime({ root, configRoot = root, toolsMap = DEFAULT_TOOLS_MAP }) {
+  const workspaceRoot = path.resolve(root);
+  const resolvedConfigRoot = path.resolve(configRoot);
+  process.chdir(workspaceRoot);
   forget();
   clearSignatureHandlers();
   for (const sig of builtInSignatures) registerSignatureHandler(sig);
-  await loadDefaultConfig({ cwd: root, interpretFn: interpret, entryPath: root });
-  await ensureToolsMap({ cwd: root, toolsMap });
+  await loadDefaultConfig({ cwd: resolvedConfigRoot, interpretFn: interpret, entryPath: resolvedConfigRoot });
+  await ensureToolsMap({ cwd: resolvedConfigRoot, toolsMap });
   const built = buildToolSchemas(toolsMap);
   if (!built?.tools?.length) {
     throw new Error(`tools map not available: ${toolsMap}`);
   }
   const tools = toolListFromSchemas(built.tools);
   return {
-    root,
+    root: workspaceRoot,
+    configRoot: resolvedConfigRoot,
     toolsMap,
     tools,
     toolMap: built.toolMap

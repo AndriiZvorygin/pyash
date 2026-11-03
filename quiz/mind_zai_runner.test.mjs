@@ -77,6 +77,10 @@ process.stdout.write(JSON.stringify({ type: "item.completed", item: { type: "age
     const mcpArgsSetting = probe.args.find((arg) => arg.startsWith("mcp_servers.pyash.args="));
     assert.ok(mcpArgsSetting, "expected Pyash MCP server args in Codex config");
     const mcpArgs = JSON.parse(mcpArgsSetting.slice("mcp_servers.pyash.args=".length));
+    assert.ok(mcpArgs.includes("--root"));
+    assert.equal(mcpArgs[mcpArgs.indexOf("--root") + 1], root);
+    assert.ok(mcpArgs.includes("--config-root"));
+    assert.equal(mcpArgs[mcpArgs.indexOf("--config-root") + 1], root);
     assert.equal(mcpArgs.at(-1), "saddle tools");
     assert.ok(probe.args.includes("--sandbox") === false);
     await assert.rejects(fs.access(probe.home));

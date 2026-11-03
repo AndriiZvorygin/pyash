@@ -185,6 +185,7 @@ test("isolated Codex profile uses Z.AI Responses and trusts only the active proj
     assert.match(config, /\[projects\."\/workspace\/pyash"\]\s+trust_level = "trusted"/u);
     assert.equal(models.models[0].slug, "glm-5.3");
     assert.equal(models.models[0].context_window, 1048576);
+    assert.equal(home.startsWith(path.join(os.homedir(), ".codex", "pyash") + path.sep), true);
     assert.equal(fs.statSync(home).mode & 0o777, 0o700);
     assert.equal(fs.statSync(configPath).mode & 0o777, 0o600);
     assert.equal(fs.statSync(modelsPath).mode & 0o777, 0o600);

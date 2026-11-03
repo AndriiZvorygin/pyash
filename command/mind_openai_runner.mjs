@@ -233,9 +233,15 @@ async function runCodexFallback(payload = {}, { stream = false, codexHome = "" }
   const model = String(payload?.model || "gpt-5-codex").trim() || "gpt-5-codex";
   const prompt = buildCodexPrompt(payload);
   const runnerDir = path.dirname(fileURLToPath(import.meta.url));
+  const installRoot = path.resolve(runnerDir, "..");
   const mcpServerPath = path.resolve(runnerDir, "pyash_mcp_server.mjs");
   const toolsMapName = String(payload?.toolMapName ?? payload?.toolMap ?? "agent tools").trim() || "agent tools";
-  const mcpServerArgs = [mcpServerPath, "--root", process.cwd(), "--tools-map", toolsMapName];
+  const mcpServerArgs = [
+    mcpServerPath,
+    "--root", process.cwd(),
+    "--config-root", installRoot,
+    "--tools-map", toolsMapName
+  ];
   const args = [
     "exec",
     "--json",
