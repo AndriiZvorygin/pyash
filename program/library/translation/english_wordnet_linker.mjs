@@ -60,7 +60,7 @@ export const ENGLISH_WORDNET_LINKER_RESPONSE_FORMAT = Object.freeze({
   }
 });
 
-const ACCEPTED_STATUSES = new Set(["accepted-existing", "accepted-edge", "accepted-deterministic", "accepted-llm"]);
+const ACCEPTED_STATUSES = new Set(["accepted-existing", "accepted-edge", "accepted-deterministic", "accepted-llm", "accepted-curated"]);
 const LINK_STATUSES = new Set(["accept", "reject", "uncertain"]);
 const MAX_RATIONALE_CHARS = 1200;
 const WORDNET_POS = new Set(["a", "n", "r", "s", "v"]);

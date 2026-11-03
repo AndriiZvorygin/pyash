@@ -778,3 +778,51 @@ test("queued compound verifier expresses future GPU work through Pyash", async (
   assert.match(calls[1], /vyah await be gpu do/u);
   assert.match(calls[1], /during num 9000/u);
 });
+
+test("queued compound verifier unwraps Housekeeper model envelopes before applying response limits", async () => {
+  const answer = JSON.stringify({
+    verdict: "uncertain",
+    candidateId: "",
+    headKind: "uncertain",
+    targetSenseId: "",
+    headSenseId: "",
+    modifierSenseIds: [],
+    modifierEvidence: [],
+    modifierRelations: [],
+    rationale: "The candidate does not have enough literal evidence."
+  });
+  const envelope = JSON.stringify({
+    model: "qwen3.5:9b",
+    response: answer,
+    context: Array.from({ length: 10000 }, () => 1234),
+    total_duration: 1200000000
+  });
+  assert.ok(envelope.length > 12000);
+  const invoke = createQueuedMindCompoundVerifier({
+    parse: (source) => source,
+    interpret: async (sentence) => sentence.includes("vyah start future be gpu mind do")
+      ? { ob: { text: "queued" } }
+      : { ob: { text: "success" }, result: { text: envelope } }
+  });
+
+  const response = await invoke({ prompt: "verify", record: { id: "candidate-envelope" } });
+  assert.equal(response, answer);
+  assert.equal(parseCompoundVerificationResponse(response, { candidates: [{ id: "candidate-envelope" }] }).valid, true);
+});
+
+test("queued compound verifier keeps malformed and oversized Housekeeper envelopes bounded", async () => {
+  const run = async (resultText) => {
+    const invoke = createQueuedMindCompoundVerifier({
+      parse: (source) => source,
+      interpret: async (sentence) => sentence.includes("vyah start future be gpu mind do")
+        ? { ob: { text: "queued" } }
+        : { ob: { text: "success" }, result: { text: resultText } }
+    });
+    return invoke({ prompt: "verify", record: { id: "candidate-bounded-envelope" } });
+  };
+
+  const malformed = "{\"response\":";
+  assert.equal(await run(malformed), malformed);
+  const oversized = await run(JSON.stringify({ response: "ok", context: "x".repeat(300000) }));
+  assert.equal(oversized, "provider response envelope exceeds the bounded limit");
+});

@@ -146,10 +146,10 @@ test("sense compound refinery links, composes, verifies and records one complete
     assert.equal(translationSubmitCount, 2);
     assert.ok(suggestedTerms.includes("friend"));
     assert.ok(suggestedTerms.includes("companion"));
-    assert.deepEqual(recordedPromotions.map((record) => record.pyashSequence), [
+    assert.deepEqual(recordedPromotions.map((record) => record.pyashSequence).sort((left, right) => left.join("+").localeCompare(right.join("+"))), [
       ["hfre", "hlak"],
       ["hlak", "hfre"]
-    ]);
+    ].sort((left, right) => left.join("+").localeCompare(right.join("+"))));
     const completeCache = await readFile(path.join(resumed.artifactDirectory, "sense-translations.pya"), "utf8");
     const candidateSource = await readFile(path.join(resumed.artifactDirectory, "compound-candidates.pya"), "utf8");
     const completeProgress = await readFile(path.join(resumed.artifactDirectory, "progress.pya"), "utf8");

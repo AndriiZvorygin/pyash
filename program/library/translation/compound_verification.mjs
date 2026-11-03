@@ -19,6 +19,7 @@ const RESPONSE_HEAD_KINDS = new Set([
 ]);
 const MAX_RESPONSE_CHARS = 12000;
 const MAX_RATIONALE_CHARS = 2000;
+const MAX_QUEUED_MIND_ENVELOPE_CHARS = 256000;
 const COMPOUND_VERIFICATION_MAX_OUTPUT_TOKENS = 288;
 const COMPOUND_VERIFIER_QUEUE_FORMAT = "compound-verifier-v10";
 const MODIFIER_RELATIONS = new Set(["literal", "metaphorical", "associative", "uncertain"]);
@@ -33,6 +34,30 @@ function invalid(message, details = {}) {
 
 function normalizeText(value) {
   return typeof value === "string" ? value.normalize("NFC").trim() : "";
+}
+
+function queuedMindAnswer(value) {
+  const raw = String(value ?? "");
+  if (raw.length > MAX_QUEUED_MIND_ENVELOPE_CHARS) {
+    return "provider response envelope exceeds the bounded limit";
+  }
+  let payload;
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return raw;
+  const choice = Array.isArray(payload.choices) ? payload.choices[0] : null;
+  return [
+    payload.response,
+    payload.output_text,
+    payload.output,
+    payload.text,
+    payload.message?.content,
+    choice?.message?.content,
+    choice?.text
+  ].find((answer) => typeof answer === "string") ?? raw;
 }
 
 function candidateId(record) {
@@ -808,7 +833,7 @@ export function createQueuedMindCompoundVerifier({
     if (String(completed?.ob?.text ?? "").trim() !== "success") {
       throw invalid("queued compound verifier duty did not complete successfully", { handleId, completed });
     }
-    return String(completed?.result?.text ?? "");
+    return queuedMindAnswer(completed?.result?.text ?? "");
   };
 }
 

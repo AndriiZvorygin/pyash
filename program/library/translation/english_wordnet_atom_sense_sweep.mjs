@@ -13,7 +13,7 @@ import { extractBoundedJsonObject } from "./english_verification.mjs";
 import { renderEnglishWordNetSenseLinkRowsPya } from "./english_wordnet_linker.mjs";
 
 export const ENGLISH_WORDNET_ATOM_SENSE_FORMAT = "english-wordnet-atom-sense-sweep-v1";
-export const ENGLISH_WORDNET_ATOM_SENSE_PROMPT_REVISION = "atom-general-pos-gloss-choice-v4";
+export const ENGLISH_WORDNET_ATOM_SENSE_PROMPT_REVISION = "atom-general-pos-gloss-choice-v7";
 export const ENGLISH_WORDNET_ATOM_SENSE_CONFIG_URL = new URL("./english_wordnet_atom_sense_sweep.pya", import.meta.url);
 
 export const ENGLISH_WORDNET_ATOM_SENSE_RESPONSE_FORMAT = Object.freeze({
@@ -248,14 +248,9 @@ export function filterEnglishWordNetAtomSenseWorklist(worklist = [], atomIds = [
 }
 
 function promptItem(item, candidates) {
-  return [item.responseId || item.id, item.partOfSpeech, item.labels, item.english30kRank, item.lemmaMappings, candidates.map((candidate) => [
+  return [item.responseId || item.id, item.partOfSpeech, item.labels, candidates.map((candidate) => [
     candidate.source,
-    candidate.pos,
-    candidate.lemmas,
-    candidate.definition,
-    candidate.matchedLemmas,
-    candidate.english30kRank,
-    candidate.tagCount
+    candidate.definition
   ])];
 }
 
@@ -264,10 +259,9 @@ export function buildEnglishWordNetAtomSensePrompt(items = []) {
   return [
     "Choose the supplied WordNet sense that matches each Pyash atom's English label(s) for the specified part of speech as a broad, ordinary general-language concept. These atomic anchors represent general vocabulary; a narrower specialized concept belongs in a compound.",
     "Do not infer a specialist domain from a bare label. Select a domain-marked candidate only when the atom labels explicitly support that domain. Do not invent missing context. If no general candidate fits, return no-fit; if multiple general senses remain indistinguishable from the labels, return uncertain. For those statuses source=null.",
-    "An exact spelling, accepted lemma mapping, or shared word fragment only makes a candidate eligible for consideration; it does not establish semantic fit. Reject unrelated homographs and accidental fragments with no-fit.",
-    "Each input row is [response slot id, target POS, labels, atom English30k rank, accepted lemma mappings, candidates]. Each candidate is [sense id, source POS, lemmas, definition, matched labels, English30k rank, WordNet tag count]. Frequency evidence is only a prior among semantically compatible general senses; it cannot justify a specialized sense.",
-    "Definitions omit usage examples. Use only supplied sense ids. Give one short reason.",
-    "A listed lemma mapping is the only permitted bridge from an inflected atom label to a different WordNet lemma. Do not infer a relation from an unrelated word or invent sentence context.",
+    "When multiple sense definitions fit the same atom label, choose the definition that applies across the widest range of ordinary situations. Prefer the broader ordinary meaning over a narrower role or activity.",
+    "Choose from glosses only. Co-lemmas and frequency counts are intentionally omitted; do not infer a mismatch from synonyms that are not shown.",
+    "Each input row is [response slot id, target POS, atom English label(s), candidates]. Each candidate is [sense id, definition]. Definitions omit usage examples. Use only supplied sense ids and give one short reason.",
     "Copy each response slot id exactly as shown. It is an opaque identifier; do not append the POS or reconstruct an atom id.",
     "Return JSON only: {\"decisions\":[{\"id\":\"slot-<supplied-id>\",\"status\":\"select|uncertain|no-fit\",\"source\":\"supplied sense id or null\",\"rationale\":\"short reason\"}]}. Include each response slot exactly once.",
     JSON.stringify(items.map(({ item, candidates }) => promptItem(item, candidates)))
@@ -425,6 +419,7 @@ export function appendEnglishWordNetAtomSenseLinks({
   catalogSource,
   decisions = [],
   model,
+  promptRevision = "",
   runId,
   resolveTarget
 } = {}) {
@@ -473,7 +468,7 @@ export function appendEnglishWordNetAtomSenseLinks({
         pyashSequence: [text(decision.pyac)],
         targetPartOfSpeech,
         certainty: "contextual",
-        evidence: `atom-target sense selection; model ${text(model)}; run ${text(runId)}; rationale: ${text(decision.rationale)}`
+        evidence: `atom-target sense selection; model ${text(model)}; prompt ${text(promptRevision) || "unspecified"}; run ${text(runId)}; rationale: ${text(decision.rationale)}`
       }
     });
   }

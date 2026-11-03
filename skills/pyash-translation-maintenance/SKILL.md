@@ -83,6 +83,10 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   unrelated homographs and accidental fragments as no-fit.
   POS identity is lexical metadata; it does not add or alter Pyash grammar
   particles, aspect, mood, or surface ordering.
+- Keep atom-sense model choices focused on definitions: send the slot id, POS,
+  atom label(s), candidate sense ids, and definition glosses. Omit WordNet
+  co-lemmas, usage examples, and frequency counts from that prompt; those fields
+  can distract from comparing the meanings themselves.
 - A direct same-synset atom can be offered as an anchor. Automatic linking also
   requires a low-degree edge node with one WordNet meaning, and the target word
   must not name a competing WordNet sense.

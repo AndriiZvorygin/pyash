@@ -40314,9 +40314,10 @@ su text "sense-lemma:v:02028855-v:4" ob text "flock" ya
 su text "v:02029199-v" ob name "flock" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma flock at English30k rank 4474; Princeton WordNet 3.1 tag count 2 (sense key flock%2:38:01::)" ya
 su text "sense-gloss:v:02029199-v" ob text "move as a crowd or in a group; Tourists flocked to the shrine where the statue was said to have shed tears" ya
 su text "sense-lemma:v:02029199-v:1" ob text "flock" ya
-su text "v:02029675-v" ob name "escort" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma escort at English30k rank 5198; Princeton WordNet 3.1 tag count 7 (sense key escort%2:38:00::)" ya
-su text "sense-gloss:v:02029675-v" ob text "accompany as an escort; She asked her older brother to escort her to the ball" ya
-su text "sense-lemma:v:02029675-v:1" ob text "escort" ya
+su text "v:02029932-v" ob name "escort" as text "v" with text "contextual" via text "User-selected general-language gloss: conduct someone someplace; preferred over the narrower escort-role sense." ya
+su text "sense-gloss:v:02029932-v" ob text "conduct someone someplace" ya
+su text "sense-lemma:v:02029932-v:1" ob text "escort" ya
+su text "sense-lemma:v:02029932-v:2" ob text "see" ya
 su text "v:02032568-v" ob name "crowded" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma crowd at English30k rank 1053; Princeton WordNet 3.1 tag count 6 (sense key crowd%2:38:01::)" ya
 su text "sense-gloss:v:02032568-v" ob text "cause to herd, drive, or crowd together; We herded the children into a spare classroom" ya
 su text "sense-lemma:v:02032568-v:1" ob text "crowd" ya

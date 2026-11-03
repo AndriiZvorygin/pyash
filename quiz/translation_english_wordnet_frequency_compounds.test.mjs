@@ -111,6 +111,26 @@ test("compound candidates are emitted in English30k frequency order", () => {
   assert.deepEqual(worklist.map((row) => row.verificationRecord.frequencyRank), [10, 200]);
 });
 
+test("an active atomic anchor keeps its covered lemma out of compound verification", () => {
+  const residual = [{
+    source: "v:02029675-v", pos: "v", synset: "02029675-v", lemmas: ["escort"],
+    gloss: "accompany as an escort", candidates: []
+  }];
+  const candidates = [{
+    id: "escort-compound", target: "escort", aliases: [], pyashSequence: ["srot", "hgo"],
+    componentGlosses: ["escort", "go"]
+  }];
+  const resolveWord = (lemma) => lemma === "escort"
+    ? { coverageType: "atomic", pyashSequence: ["srot"] }
+    : null;
+  const worklist = compoundWorklist(residual, candidates, [], [], new Map(), "v1", {
+    resolveWord,
+    activeAtomicTargetIds: ["atom:srot:v"]
+  });
+
+  assert.deepEqual(worklist, []);
+});
+
 test("derived compound round trips retain decision revision and audit links", () => {
   const record = {
     id: "brainstorm",
