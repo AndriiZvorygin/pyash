@@ -64,6 +64,7 @@ test("atom sense sweep config uses a bounded Qwen batch and one retry", async ()
   assert.equal(config["batch-max-items"], 24);
   assert.equal(config["max-attempts"], 2);
   assert.equal(config.parallelism, 8);
+  assert.equal(config["prompt-revision"], "atom-general-pos-gloss-choice-v4");
 });
 
 test("atom worklist keeps only unlinked direct senses and presents definition text only", () => {
@@ -83,6 +84,12 @@ test("atom worklist keeps only unlinked direct senses and presents definition te
   assert.match(prompt, /a financial institution/u);
   assert.doesNotMatch(prompt, /an example bank/u);
   assert.match(prompt, /Choose the supplied WordNet sense/u);
+  assert.match(prompt, /broad, ordinary general-language concept/u);
+  assert.match(prompt, /Do not infer a specialist domain from a bare label/u);
+  assert.match(prompt, /domain-marked candidate only when the atom labels explicitly support that domain/u);
+  assert.match(prompt, /An exact spelling, accepted lemma mapping, or shared word fragment only makes a candidate eligible/u);
+  assert.match(prompt, /Frequency evidence is only a prior among semantically compatible general senses/u);
+  assert.match(prompt, /narrower specialized concept belongs in a compound/u);
 });
 
 test("atom worklist creates an independent decision slot for each uncovered part of speech", () => {
@@ -313,6 +320,21 @@ test("selected atom senses append through the shared bridge renderer and pass ta
   assert.deepEqual(appended.added, ["n:00000001-n"]);
   assert.deepEqual(appended.withheld, []);
   assert.match(appended.catalogSource, /atom-target sense selection; model qwen3\.5:9b/u);
+});
+
+test("no-fit-only activation returns an empty withheld list without changing the bridge catalog", () => {
+  const base = renderEnglishWordNetSenseLinksPya({ records: [], source: "fixture" });
+  const result = appendEnglishWordNetAtomSenseLinks({
+    catalogSource: base,
+    decisions: [{ id: "atom:htun:n", status: "no-fit", source: "", rationale: "No general sense fits." }],
+    model: "qwen3.5:9b",
+    runId: "fixture-run",
+    resolveTarget: () => null
+  });
+
+  assert.equal(result.catalogSource, base);
+  assert.deepEqual(result.added, []);
+  assert.deepEqual(result.withheld, []);
 });
 
 test("one atom can accept separate noun and verb senses in one activation", () => {

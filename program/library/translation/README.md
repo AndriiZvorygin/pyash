@@ -144,6 +144,15 @@ to at most one synset. Curated and deterministic bridge rows remain reserved; pr
 remain active only when their Pyac identity matches the frequency allocation. The active bridge
 catalog records the selected lemma, English30k rank, tag count, and exact sense key in its evidence.
 
+The atom-sense sweep is POS-scoped and selects a broad, ordinary general-language sense for an
+atom label. It must not infer a sports, technical, regional, or other specialist domain from a bare
+homograph; narrower specialist concepts belong in compound work. Its candidate inventory is
+limited to WordNet POS forms supported by the atom's exact English labels or accepted same-atom
+lemma mappings, but spelling and lemma matches only make candidates eligible; they do not prove
+semantic fit. Read `atom-coverage.pya` by atom/POS slot: a unique atom count does not imply that
+every atom has noun, verb, and adjective senses, so a three-links-per-atom expectation is not a
+valid measure of direct lexical coverage.
+
 The command writes resumable `.pya` batches and a manifest beneath
 `artifacts/<run-id>/`, including residual senses, model-link reconciliation, and compound
 candidates. It applies the resulting active bridge map to `english_wordnet_bridges.pya`. Inspect

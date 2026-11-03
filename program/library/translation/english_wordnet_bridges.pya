@@ -4898,9 +4898,6 @@ su text "n:00453279-n" ob name "hunting" as text "n" with text "deterministic" v
 su text "sense-gloss:n:00453279-n" ob text "the pursuit and killing or capture of wild animals regarded as a sport" ya
 su text "sense-lemma:n:00453279-n:1" ob text "hunt" ya
 su text "sense-lemma:n:00453279-n:2" ob text "hunting" ya
-su text "n:00459310-n" ob name "down" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: The label 'down' in American football specifically refers to a complete play to advance the ball, matching sense n:00459310-n." ya
-su text "sense-gloss:n:00459310-n" ob text "(American football) a complete play to advance the football" ya
-su text "sense-lemma:n:00459310-n:1" ob text "down" ya
 su text "n:00460037-n" ob name "virtual reality" as text "n" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-8e6cfa8e95f6-743c899084-atom-gloss-choice-v1; rationale: Definition matches 'virtual_reality' exactly." ya
 su text "sense-gloss:n:00460037-n" ob text "a hypothetical three-dimensional visual world created by a computer" ya
 su text "sense-lemma:n:00460037-n:1" ob text "virtual reality" ya
