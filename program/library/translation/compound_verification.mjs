@@ -5,6 +5,7 @@ export const COMPOUND_VERIFICATION_STATUSES = Object.freeze([
   "accepted-deterministic",
   "accepted-llm",
   "repaired-llm",
+  "not-selected-llm",
   "uncertain-llm",
   "rejected-deterministic",
   "rejected-llm"
@@ -20,8 +21,8 @@ const RESPONSE_HEAD_KINDS = new Set([
 const MAX_RESPONSE_CHARS = 12000;
 const MAX_RATIONALE_CHARS = 2000;
 const MAX_QUEUED_MIND_ENVELOPE_CHARS = 256000;
-const COMPOUND_VERIFICATION_MAX_OUTPUT_TOKENS = 288;
-const COMPOUND_VERIFIER_QUEUE_FORMAT = "compound-verifier-v10";
+const COMPOUND_VERIFICATION_MAX_OUTPUT_TOKENS = 192;
+const COMPOUND_VERIFIER_QUEUE_FORMAT = "compound-verifier-v12-synset-groups";
 const MODIFIER_RELATIONS = new Set(["literal", "metaphorical", "associative", "uncertain"]);
 const NON_LITERAL_EVIDENCE = /\b(?:metaphor(?:ical(?:ly)?)?|figurative(?:ly)?|symbolic(?:ally)?|associative(?:ly)?|wordplay|pun|merely associated|only associated)\b/iu;
 
@@ -195,76 +196,194 @@ export function classifyCompoundCoverage(records) {
   };
 }
 
-function jsonForPrompt(value) {
-  return JSON.stringify({
-    id: candidateId(value),
-    target: value.target,
-    sourceSurfaces: value.sourceSurfaces ?? {},
-    sourceMorphemesByLanguage: value.sourceMorphemesByLanguage ?? {},
-    sourceMorphemes: value.sourceMorphemes ?? value.morphemes ?? [],
-    componentGlosses: value.componentGlosses ?? [],
-    pyashSequence: value.pyashSequence ?? [],
-    head: value.head ?? "",
-    headRelationPolicy: normalizeText(value.headRelationPolicy) || "required",
-    modifiers: value.modifiers ?? [],
-    componentRoles: value.componentRoles ?? [],
-    morphologyStatus: value.morphologyStatus ?? "",
-    morphologySignals: value.morphologySignals ?? [],
-    componentLayers: value.componentLayers ?? [],
-    componentSenseEvidence: (Array.isArray(value.componentSenseEvidence) ? value.componentSenseEvidence : [])
-      .slice(0, 12)
-      .map((sense) => ({
-        component: normalizeText(sense?.component),
-        source: normalizeText(sense?.source),
-        lemmas: Array.isArray(sense?.lemmas) ? sense.lemmas.slice(0, 8) : [],
-        definition: normalizeText(sense?.definition).split(";")[0].slice(0, 320)
-      })),
-    targetSenseEvidence: (Array.isArray(value.targetSenseEvidence) ? value.targetSenseEvidence : [])
-      .slice(0, 4)
-      .map((sense) => ({
-        source: normalizeText(sense?.source),
-        pos: normalizeText(sense?.pos),
-        lemmas: Array.isArray(sense?.lemmas) ? sense.lemmas.slice(0, 8) : [],
-        definition: normalizeText(sense?.definition).split(";")[0].slice(0, 320),
-        ...(sense?.headRelationPolicy ? { headRelationPolicy: normalizeText(sense.headRelationPolicy) } : {}),
-        compatibleHeadSenseIds: Array.isArray(sense?.compatibleHeadSenseIds)
-          ? sense.compatibleHeadSenseIds.slice(0, 12)
-          : []
-      })),
-    evidence: value.evidence ?? "",
-    deterministicChecks: value.deterministicChecks ?? {}
+function targetPosFor(record) {
+  return normalizeText(record?.targetPartOfSpeech)
+    || normalizeText(record?.targetSenseEvidence?.[0]?.pos);
+}
+
+function matchingPosRank(sense, targetPos) {
+  if (!targetPos) return 1;
+  const sensePos = normalizeText(sense?.pos || normalizeText(sense?.source).slice(0, 1));
+  if (targetPos === "a" || targetPos === "s") return ["a", "s"].includes(sensePos) ? 0 : 1;
+  return sensePos === targetPos ? 0 : 1;
+}
+
+function candidateComponents(record) {
+  return Array.isArray(record?.componentGlosses)
+    ? record.componentGlosses.map(normalizeText)
+    : Array.isArray(record?.sourceMorphemes)
+      ? record.sourceMorphemes.map(normalizeText)
+      : Array.isArray(record?.morphemes) ? record.morphemes.map(normalizeText) : [];
+}
+
+function promptComponentEvidence(record) {
+  const senses = Array.isArray(record?.componentSenseEvidence) ? record.componentSenseEvidence : [];
+  const components = candidateComponents(record);
+  const targetPos = targetPosFor(record);
+  return components.map((component) => {
+    const componentSenses = senses
+      .map((sense, index) => ({ sense, index }))
+      .filter(({ sense }) => normalizeText(sense?.component) === component)
+      .sort((left, right) => matchingPosRank(left.sense, targetPos)
+        - matchingPosRank(right.sense, targetPos)
+        || Number(normalizeText(left.sense?.mappingKind) === "word-suggestion")
+          - Number(normalizeText(right.sense?.mappingKind) === "word-suggestion")
+        || left.index - right.index)
+      .slice(0, 2);
+    const linkedSenses = componentSenses.map(({ sense }) => ({
+      id: normalizeText(sense?.source),
+      pos: normalizeText(sense?.pos || normalizeText(sense?.source).slice(0, 1)),
+      definition: normalizeText(sense?.definition).split(";")[0].slice(0, 220),
+      ...(normalizeText(sense?.mappingKind) ? { mappingKind: normalizeText(sense.mappingKind) } : {}),
+      ...(normalizeText(sense?.mappingKind) === "word-suggestion"
+        ? { mappingLookupGloss: normalizeText(sense?.mappingLookupGloss) }
+        : {})
+    }));
+    const sourceGlossEvidence = [];
+    for (const { sense } of componentSenses) {
+      const linkedSenseId = normalizeText(sense?.source);
+      const gloss = normalizeText(sense?.mappingLookupGloss);
+      const sourceSenses = Array.isArray(sense?.mappingLookupSenseEvidence) ? sense.mappingLookupSenseEvidence : [];
+      if (!linkedSenseId || !gloss || sourceSenses.length === 0) continue;
+      sourceGlossEvidence.push({
+        linkedSenseId,
+        gloss,
+        senses: sourceSenses.slice(0, 1).map((sourceSense) => ({
+          id: normalizeText(sourceSense?.source),
+          pos: normalizeText(sourceSense?.pos),
+          definition: normalizeText(sourceSense?.definition).split(";")[0].slice(0, 180)
+        }))
+      });
+    }
+    return { component, linkedSenses, sourceGlossEvidence };
+  });
+}
+
+function promptSourceLanguages(value) {
+  const languages = [...new Set(value?.sourceLanguages ?? Object.keys(value?.sourceSurfaces ?? {}))]
+    .map(normalizeText)
+    .filter(Boolean)
+    .sort();
+  return languages.map((language) => {
+    const sourceParts = value?.sourceTranslationMorphemesByLanguage?.[language] ?? [];
+    const sourceGlosses = value?.sourceTranslationGlossesByLanguage?.[language] ?? [];
+    const sourceRoles = value?.sourceComponentRolesByLanguage?.[language] ?? [];
+    const componentGlosses = value?.sourceComponentGlossesByLanguage?.[language] ?? [];
+    const componentIndexes = value?.sourceComponentIndexesByLanguage?.[language]
+      ?? sourceParts.map((_, index) => index);
+    return {
+      language,
+      surface: normalizeText(value?.sourceSurfaces?.[language]),
+      compositionEvidence: normalizeText(value?.sourceCompositionEvidenceByLanguage?.[language]).slice(0, 180),
+      components: componentIndexes.map((sourceIndex, componentIndex) => ({
+        pyashComponent: normalizeText(value?.componentGlosses?.[componentIndex]),
+        sourceIndex,
+        surface: normalizeText(sourceParts[sourceIndex]),
+        gloss: normalizeText(sourceGlosses[sourceIndex] ?? componentGlosses[componentIndex]),
+        role: normalizeText(sourceRoles[sourceIndex])
+      }))
+    };
   });
 }
 
 export function buildCompoundVerificationPrompt({ record, candidates = [record] } = {}) {
   if (!record || typeof record !== "object") throw invalid("compound verification prompt requires a record");
-  const candidateRows = candidates
-    .filter((candidate) => candidate && typeof candidate === "object")
-    .map(jsonForPrompt)
-    .join("\n");
-  return [
-    "You verify a Pyash compound candidate.",
-    "Choose only one candidate id supplied below.",
-    "Use the supplied target WordNet sense definitions to judge whether the components compose the target meaning.",
-    "Use the supplied WordNet definitions for each component to choose its relevant meaning; do not infer a component sense from spelling alone.",
-    "Pyash order is head-final: the final component is the semantic head.",
-    "Use WordNet head relations as supporting evidence. Enforce compatibleHeadSenseIds when headRelationPolicy is required (the default). When the policy is advisory, part-of-speech labels and missing hypernym edges do not veto a compound; judge the target and component definitions directly.",
-    "When headRelationPolicy is required, the target sense must be literally a kind of the final component; when it is advisory, judge literal composition from the supplied definitions without requiring that relation.",
-    "For every modifier before the final head, cite one supplied component sense in componentGlosses order, state its contribution, and classify that contribution as literal, metaphorical, associative, or uncertain.",
-    "Accept only when every modifier contributes its defined meaning literally to the target. If any modifier depends on metaphor, figurative meaning, symbolism, wordplay, or association, reject or mark uncertain.",
-    "The final component is the proposed semantic head. For advisory head relations, judge whether the target definition composes literally with that head and the modifiers; do not require the target to share the head's part of speech.",
-    "A spelling match, association, metaphor, idiom, derivational ending, grammatical ending, or unrelated homograph is not a lexical head.",
-    "For named groups or proper-name senses, accept only if the supplied target definition establishes the same literal component composition.",
-    "Component glosses and source-language spellings suggest a segmentation; they do not prove it. If no supplied target sense supports the composition, reject or mark uncertain.",
-    "For an accepted candidate, cite one supplied target sense id, one supplied final-component sense id, and one supplied sense id plus a relation label for each modifier. Never invent ids.",
-    "Return one compact JSON object with exactly these fields:",
-    '{"verdict":"accept|reject|uncertain","candidateId":"...","headKind":"lexical-head|derivational-ending|grammatical-ending|uncertain","targetSenseId":"...|empty","headSenseId":"...|empty","modifierSenseIds":["..."],"modifierEvidence":["..."],"modifierRelations":["literal|metaphorical|associative|uncertain"],"rationale":"..."}',
-    "An accept must use a supplied candidateId, preserve its component sequence, set headKind to lexical-head, cite supplied targetSenseId and headSenseId values, and give one modifierSenseId, one nonempty modifierEvidence explanation, and one modifierRelations label per modifier. Every accepted modifierRelations value must be literal. Keep rationale under 120 characters.",
-    "\nTARGET RECORD:",
-    jsonForPrompt(record),
-    "\nCANDIDATES:",
+  const validCandidates = candidates.filter((candidate) => candidate && typeof candidate === "object");
+  if (validCandidates.length > 8) {
+    throw invalid("compound verification group exceeds the eight-candidate prompt limit", {
+      candidateCount: validCandidates.length
+    });
+  }
+  const targetSense = (record.targetSenseEvidence ?? []).find((sense) => (
+    normalizeText(sense?.source) === normalizeText(record.senseId)
+  )) ?? record.targetSenseEvidence?.[0];
+  const sourceDecompositions = new Map();
+  const linkedEvidenceByKey = new Map();
+  const candidateRows = validCandidates.map((candidate) => {
+    const languageRows = promptSourceLanguages(candidate).filter((row) => (
+      row.surface || row.components.length > 0
+    ));
+    const sourceComponentIndexes = {};
+    for (const languageRow of languageRows) {
+      const sourceParts = candidate.sourceTranslationMorphemesByLanguage?.[languageRow.language] ?? [];
+      const sourceGlosses = candidate.sourceTranslationGlossesByLanguage?.[languageRow.language] ?? [];
+      const decomposition = {
+        language: languageRow.language,
+        surface: languageRow.surface,
+        parts: sourceParts.map((surface, index) => ({
+          surface: normalizeText(surface),
+          gloss: normalizeText(sourceGlosses[index] ?? ""),
+          role: normalizeText(candidate.sourceComponentRolesByLanguage?.[languageRow.language]?.[index])
+        })),
+        compositionEvidence: languageRow.compositionEvidence.slice(0, 120)
+      };
+      sourceDecompositions.set(JSON.stringify(decomposition), decomposition);
+      sourceComponentIndexes[languageRow.language] = languageRow.components.map((component) => component.sourceIndex);
+    }
+    const componentEvidence = promptComponentEvidence(candidate);
+    return JSON.stringify({
+      id: candidateId(candidate),
+      pyashComponents: candidateComponents(candidate).map((word, index) => ({
+        word,
+        pyac: normalizeText(candidate?.pyashSequence?.[index]),
+        senseEvidenceIds: (componentEvidence[index]?.linkedSenses ?? []).map((sense) => {
+          const sourceGloss = componentEvidence[index]?.sourceGlossEvidence
+            .find((source) => source.linkedSenseId === sense.id);
+          const linkedEvidence = {
+            id: sense.id,
+            pos: sense.pos,
+            definition: sense.definition.slice(0, 180),
+            ...(sense.mappingKind ? { mappingKind: sense.mappingKind } : {}),
+            ...(sense.mappingLookupGloss ? { mappingLookupGloss: sense.mappingLookupGloss } : {}),
+            ...(sourceGloss ? {
+              sourceGlossEvidence: {
+                gloss: sourceGloss.gloss,
+                senses: sourceGloss.senses.slice(0, 1).map((sourceSense) => ({
+                  id: sourceSense.id,
+                  pos: sourceSense.pos,
+                  definition: sourceSense.definition.slice(0, 120)
+                }))
+              }
+            } : {})
+          };
+          const key = JSON.stringify(linkedEvidence);
+          let stored = linkedEvidenceByKey.get(key);
+          if (!stored) {
+            stored = { evidenceId: `e${linkedEvidenceByKey.size + 1}`, ...linkedEvidence };
+            linkedEvidenceByKey.set(key, stored);
+          }
+          return stored.evidenceId;
+        })
+      })),
+      sourceComponentIndexes
+    });
+  }).join("\n");
+  const prompt = [
+    "Choose at most one literal Pyash compound for this WordNet sense.",
+    "Every listed candidate targets the same synset. Compare the full list; select at most one.",
+    "Use the supplied target and WordNet definitions for each component, plus translated parts; spelling alone is insufficient.",
+    "A grammatical, bound, or uncertain source part cannot support acceptance. Part-of-speech labels help choose senses but do not decide whether a compound is eligible; head relations are optional.",
+    "Accept only if current component meanings compose the target. Reject only when every listed candidate clearly mismatches; otherwise use uncertain.",
+    "For accept, cite target/component IDs in order. For word-suggestions, compare source-gloss meaning and polarity and cite its ID; otherwise use an empty string.",
+    "For reject, candidateId and targetSenseId are empty. Keep rationale under 120 characters.",
+    '{"verdict":"accept|reject|uncertain","candidateId":"accepted id or empty","headKind":"lexical-head|derivational-ending|grammatical-ending|uncertain","targetSenseId":"...|empty","componentSenseIds":["one id per component"],"sourceGlossSenseIds":["one id per component or empty"],"composition":"literal|nonliteral|uncertain","rationale":"brief reason"}',
+    `TARGET: ${JSON.stringify({
+      id: normalizeText(targetSense?.source ?? record.senseId),
+      pos: normalizeText(targetSense?.pos ?? record.targetPartOfSpeech),
+      definition: normalizeText(targetSense?.definition).split(";")[0].slice(0, 180)
+    })}`,
+    `SOURCE LANGUAGE DECOMPOSITIONS: ${JSON.stringify([...sourceDecompositions.values()])}`,
+    `LINKED ATOM SENSE EVIDENCE (candidate evidence ids refer here): ${JSON.stringify([...linkedEvidenceByKey.values()])}`,
+    "CANDIDATES (sourceComponentIndexes maps each component to its translated part):",
     candidateRows
   ].join("\n");
+  if (prompt.length > 10000) {
+    throw invalid("compound verification prompt exceeds the safe character budget", {
+      characters: prompt.length,
+      candidateCount: validCandidates.length
+    });
+  }
+  return prompt;
 }
 
 function extractJsonObject(text) {
@@ -312,6 +431,187 @@ function extractJsonObject(text) {
   return null;
 }
 
+function polarityRoots(value, { negativeOnly = false } = {}) {
+  const tokens = normalizeText(value).toLowerCase().match(/[\p{L}\p{N}-]+/gu) ?? [];
+  const stopWords = new Set(["a", "an", "and", "are", "as", "be", "been", "being", "by", "for", "from", "in", "is", "it", "of", "on", "or", "the", "to", "was", "were", "with"]);
+  const roots = new Set();
+  for (const raw of tokens) {
+    const token = raw.replace(/^-+|-+$/gu, "");
+    if (!token || stopWords.has(token)) continue;
+    if (/^(?:not|never|without|lack|lacks|lacked|lacking|absence)$/u.test(token)) continue;
+    const explicit = /^(?:un|non|dis)-?/u.exec(token);
+    const root = explicit ? token.slice(explicit[0].length) : token;
+    if (explicit && root.length >= 4) roots.add(root);
+    if (!negativeOnly && !explicit && token.length >= 4) roots.add(token);
+    if (!negativeOnly || explicit) {
+      for (const suffix of ["ness", "ment", "tion", "sion", "ity", "ing", "ed", "es", "s"]) {
+        if (root.length > suffix.length + 3 && root.endsWith(suffix)) {
+          roots.add(root.slice(0, -suffix.length));
+        }
+      }
+    }
+  }
+  const source = normalizeText(value).toLowerCase();
+  for (const match of source.matchAll(/\b(?:not|never|without|lack(?:s|ed|ing)?|absence of)\s+(?:a|an|the\s+)?([\p{L}\p{N}-]+)/gu)) {
+    const concept = match[1].replace(/^-+|-+$/gu, "");
+    if (concept.length >= 4) {
+      roots.add(concept);
+      for (const suffix of ["ness", "ment", "tion", "sion", "ity", "ing", "ed", "es", "s"]) {
+        if (concept.length > suffix.length + 3 && concept.endsWith(suffix)) roots.add(concept.slice(0, -suffix.length));
+      }
+    }
+  }
+  return roots;
+}
+
+function hasPolarityConflict(sourceGlossSense, linkedSense) {
+  const sourceText = [
+    ...(Array.isArray(sourceGlossSense?.lemmas) ? sourceGlossSense.lemmas : []),
+    sourceGlossSense?.definition
+  ].join(" ");
+  const linkedText = [
+    ...(Array.isArray(linkedSense?.lemmas) ? linkedSense.lemmas : []),
+    linkedSense?.definition
+  ].join(" ");
+  const sourceNegated = polarityRoots(sourceText, { negativeOnly: true });
+  const linkedNegated = polarityRoots(linkedText, { negativeOnly: true });
+  const sourcePositive = polarityRoots(sourceText);
+  const linkedPositive = polarityRoots(linkedText);
+  for (const root of sourceNegated) sourcePositive.delete(root);
+  for (const root of linkedNegated) linkedPositive.delete(root);
+  return [...sourceNegated].some((root) => linkedPositive.has(root))
+    || [...linkedNegated].some((root) => sourcePositive.has(root));
+}
+
+function parseCompactCompoundVerification({
+  payload,
+  candidate,
+  candidateId: selectedId,
+  verdict,
+  headKind,
+  rationale,
+  raw
+}) {
+  if (!candidate) {
+    return {
+      valid: true,
+      verdict,
+      candidate: null,
+      candidateId: selectedId,
+      headKind: headKind || "uncertain",
+      rationale,
+      raw
+    };
+  }
+  const components = candidateComponents(candidate);
+  const targetSenseId = normalizeText(payload.targetSenseId);
+  const componentSenseIds = Array.isArray(payload.componentSenseIds)
+    ? payload.componentSenseIds.map(normalizeText)
+    : [];
+  const sourceGlossSenseIds = Array.isArray(payload.sourceGlossSenseIds)
+    ? payload.sourceGlossSenseIds.map(normalizeText)
+    : [];
+  const composition = normalizeText(payload.composition).toLowerCase();
+  if (!["literal", "nonliteral", "uncertain"].includes(composition)) {
+    return { valid: false, reason: "response composition must be literal, nonliteral, or uncertain" };
+  }
+  if (verdict !== "accept") {
+    return {
+      valid: true,
+      verdict,
+      candidate,
+      candidateId: selectedId,
+      headKind: headKind || "uncertain",
+      supportingSenseId: targetSenseId,
+      supportingComponentSenseIds: componentSenseIds,
+      supportingSourceGlossSenseIds: sourceGlossSenseIds,
+      supportingHeadSenseId: componentSenseIds.at(-1) ?? "",
+      supportingModifierSenseIds: componentSenseIds.slice(0, -1),
+      supportingComposition: composition,
+      rationale,
+      raw
+    };
+  }
+  if (componentSenseIds.length !== components.length || sourceGlossSenseIds.length !== components.length) {
+    return { valid: false, reason: "accepted response must cite one linked sense and one source-gloss slot per component in order" };
+  }
+  const targetSense = (candidate.targetSenseEvidence ?? []).find((sense) => (
+    normalizeText(sense?.source) === targetSenseId
+  ));
+  if (!targetSenseId || !targetSense) {
+    return { valid: false, reason: "accepted response must cite a supplied target sense source id" };
+  }
+  const polarityMismatches = [];
+  for (const [index, component] of components.entries()) {
+    const linkedSenseId = componentSenseIds[index];
+    const linkedSense = (candidate.componentSenseEvidence ?? []).find((sense) => (
+      normalizeText(sense?.component) === component && normalizeText(sense?.source) === linkedSenseId
+    ));
+    if (!linkedSenseId || !linkedSense) {
+      return { valid: false, reason: "accepted response must cite a supplied linked sense for component " + JSON.stringify(component) };
+    }
+    const sourceGlossSenseId = sourceGlossSenseIds[index];
+    const sourceGlossSense = (linkedSense.mappingLookupSenseEvidence ?? []).find((sense) => (
+      normalizeText(sense?.source) === sourceGlossSenseId
+    ));
+    if (normalizeText(linkedSense.mappingKind) === "word-suggestion" && (!sourceGlossSenseId || !sourceGlossSense)) {
+      return {
+        valid: false,
+        reason: "accepted word-suggestion component " + JSON.stringify(component) + " must cite its supplied source gloss sense"
+      };
+    }
+    if (sourceGlossSenseId && !sourceGlossSense) {
+      return { valid: false, reason: "source gloss sense for component " + JSON.stringify(component) + " is outside its linked sense evidence" };
+    }
+    if (sourceGlossSense && hasPolarityConflict(sourceGlossSense, linkedSense)) {
+      polarityMismatches.push(component);
+    }
+  }
+  const headSenseId = componentSenseIds.at(-1);
+  const headRelationSupported = Array.isArray(targetSense.compatibleHeadSenseIds)
+    ? targetSense.compatibleHeadSenseIds.includes(headSenseId)
+    : undefined;
+  if (polarityMismatches.length > 0) {
+    return {
+      valid: true,
+      verdict: "reject",
+      candidate,
+      candidateId: selectedId,
+      headKind,
+      supportingSenseId: targetSenseId,
+      supportingComponentSenseIds: componentSenseIds,
+      supportingSourceGlossSenseIds: sourceGlossSenseIds,
+      supportingHeadSenseId: headSenseId,
+      supportingModifierSenseIds: componentSenseIds.slice(0, -1),
+      supportingComposition: composition,
+      ...(headRelationSupported !== undefined ? { headRelationSupported } : {}),
+      rationale: "rejected: linked sense reverses source gloss polarity for " + polarityMismatches.join(", "),
+      raw
+    };
+  }
+  const downgraded = composition !== "literal"
+    || headKind !== "lexical-head"
+    || NON_LITERAL_EVIDENCE.test(rationale);
+  return {
+    valid: true,
+    verdict: verdict === "accept" && downgraded ? "uncertain" : verdict,
+    candidate,
+    candidateId: selectedId,
+    headKind: downgraded ? "uncertain" : headKind,
+    supportingSenseId: targetSenseId,
+    supportingComponentSenseIds: componentSenseIds,
+    supportingSourceGlossSenseIds: sourceGlossSenseIds,
+    supportingHeadSenseId: headSenseId,
+    supportingModifierSenseIds: componentSenseIds.slice(0, -1),
+    supportingComposition: composition,
+    ...(headRelationSupported !== undefined ? { headRelationSupported } : {}),
+    rationale: downgraded && verdict === "accept"
+      ? "acceptance withheld: composition or head is not literal; " + rationale
+      : rationale,
+    raw
+  };
+}
+
 export function parseCompoundVerificationResponse(text, { candidates = [] } = {}) {
   if (String(text ?? "").length > MAX_RESPONSE_CHARS) {
     return { valid: false, reason: "response exceeds the bounded character limit" };
@@ -341,6 +641,9 @@ export function parseCompoundVerificationResponse(text, { candidates = [] } = {}
   if (selectedId && !candidateMap.has(selectedId)) {
     return { valid: false, reason: "response candidateId is outside the supplied candidate set" };
   }
+  if (verdict !== "accept" && selectedId) {
+    return { valid: false, reason: "candidateId must be empty when verdict is reject or uncertain" };
+  }
   if (verdict === "accept") {
     if (!selectedId || !candidateMap.has(selectedId)) {
       return { valid: false, reason: "accepted response must select a supplied candidateId" };
@@ -353,11 +656,22 @@ export function parseCompoundVerificationResponse(text, { candidates = [] } = {}
   if (headKind && !RESPONSE_HEAD_KINDS.has(headKind)) {
     return { valid: false, reason: "response headKind is unsupported" };
   }
+  const selectedCandidate = candidateMap.get(selectedId);
+  if (Array.isArray(payload.componentSenseIds) || payload.composition !== undefined) {
+    return parseCompactCompoundVerification({
+      payload,
+      candidate: selectedCandidate,
+      candidateId: selectedId,
+      verdict,
+      headKind: headKind || "uncertain",
+      rationale,
+      raw: String(text ?? "")
+    });
+  }
   const citedSense = normalizeText(payload.targetSenseId ?? payload.target_sense_id
     ?? payload.senseId ?? payload.sense_id ?? payload.supportingSenseId ?? payload.supporting_sense_id);
   const rationaleSenseIds = [...new Set(rationale.match(/\b[nvars]:\d{8}-[nvars]\b/gu) ?? [])];
   const supportingSenseId = citedSense || (rationaleSenseIds.length === 1 ? rationaleSenseIds[0] : "");
-  const selectedCandidate = candidateMap.get(selectedId);
   const head = normalizeText(selectedCandidate?.componentGlosses?.at(-1) ?? selectedCandidate?.head);
   const headSenseIds = new Set((selectedCandidate?.componentSenseEvidence ?? [])
     .filter((sense) => normalizeText(sense?.component) === head)
@@ -505,6 +819,13 @@ function applyVerification(record, classification, response, {
     verificationHeadKind: response.headKind,
     ...(response.supportingSenseId ? { verificationSenseId: response.supportingSenseId } : {}),
     ...(response.supportingHeadSenseId ? { verificationHeadSenseId: response.supportingHeadSenseId } : {}),
+    ...(Array.isArray(response.supportingComponentSenseIds)
+      ? { verificationComponentSenseIds: response.supportingComponentSenseIds }
+      : {}),
+    ...(Array.isArray(response.supportingSourceGlossSenseIds)
+      ? { verificationSourceGlossSenseIds: response.supportingSourceGlossSenseIds }
+      : {}),
+    ...(response.supportingComposition ? { verificationComposition: response.supportingComposition } : {}),
     ...(Array.isArray(response.supportingModifierSenseIds)
       ? { verificationModifierSenseIds: response.supportingModifierSenseIds }
       : {}),
@@ -536,6 +857,13 @@ function retainUncertain(record, classification, response, { verifierName, attem
     ...(response?.headKind ? { verificationHeadKind: response.headKind } : {}),
     ...(response?.supportingSenseId ? { verificationSenseId: response.supportingSenseId } : {}),
     ...(response?.supportingHeadSenseId ? { verificationHeadSenseId: response.supportingHeadSenseId } : {}),
+    ...(Array.isArray(response?.supportingComponentSenseIds)
+      ? { verificationComponentSenseIds: response.supportingComponentSenseIds }
+      : {}),
+    ...(Array.isArray(response?.supportingSourceGlossSenseIds)
+      ? { verificationSourceGlossSenseIds: response.supportingSourceGlossSenseIds }
+      : {}),
+    ...(response?.supportingComposition ? { verificationComposition: response.supportingComposition } : {}),
     ...(Array.isArray(response?.supportingModifierSenseIds)
       ? { verificationModifierSenseIds: response.supportingModifierSenseIds }
       : {}),
@@ -567,6 +895,13 @@ function retainRejected(record, classification, response, { verifierName, attemp
     ...(response?.headKind ? { verificationHeadKind: response.headKind } : {}),
     ...(response?.supportingSenseId ? { verificationSenseId: response.supportingSenseId } : {}),
     ...(response?.supportingHeadSenseId ? { verificationHeadSenseId: response.supportingHeadSenseId } : {}),
+    ...(Array.isArray(response?.supportingComponentSenseIds)
+      ? { verificationComponentSenseIds: response.supportingComponentSenseIds }
+      : {}),
+    ...(Array.isArray(response?.supportingSourceGlossSenseIds)
+      ? { verificationSourceGlossSenseIds: response.supportingSourceGlossSenseIds }
+      : {}),
+    ...(response?.supportingComposition ? { verificationComposition: response.supportingComposition } : {}),
     ...(Array.isArray(response?.supportingModifierSenseIds)
       ? { verificationModifierSenseIds: response.supportingModifierSenseIds }
       : {}),
@@ -583,8 +918,57 @@ function retainRejected(record, classification, response, { verifierName, attemp
   };
 }
 
+function retainNotSelected(record, classification, response, { verifierName, attempts } = {}) {
+  const rejected = retainRejected(record, classification, response, { verifierName, attempts });
+  return {
+    ...rejected,
+    status: "not-selected-llm",
+    verificationStatus: "not-selected-llm",
+    verificationRationale: `alternative candidate not selected: ${response?.rationale ?? response?.reason ?? "another supplied candidate was selected"}`
+  };
+}
+
 function candidateGroupKey(record) {
-  return `${normalizeText(record?.target)}\u0000${JSON.stringify(record?.sourceSurfaces ?? {})}`;
+  const senseId = normalizeText(record?.senseId ?? record?.targetSenseEvidence?.[0]?.source);
+  return senseId
+    ? `sense\u0000${senseId}`
+    : `${normalizeText(record?.target)}\u0000${JSON.stringify(record?.sourceSurfaces ?? {})}`;
+}
+
+export function groupCompoundVerificationCandidates(records = []) {
+  if (!Array.isArray(records)) throw invalid("compound verification grouping requires records");
+  const groups = new Map();
+  for (const [index, record] of records.entries()) {
+    const key = candidateGroupKey(record);
+    let group = groups.get(key);
+    if (!group) {
+      group = { key, index, candidates: [] };
+      groups.set(key, group);
+    }
+    group.candidates.push(record);
+  }
+  return [...groups.values()];
+}
+
+export function batchCompoundVerificationGroups(groups = [], maximumRows = 32) {
+  if (!Array.isArray(groups)) throw invalid("compound verification batching requires groups");
+  const limit = Math.max(1, Math.trunc(Number(maximumRows) || 32));
+  const batches = [];
+  let batch = [];
+  let rowCount = 0;
+  for (const group of groups) {
+    const candidates = Array.isArray(group?.candidates) ? group.candidates : [];
+    if (candidates.length === 0) continue;
+    if (batch.length > 0 && rowCount + candidates.length > limit) {
+      batches.push(batch);
+      batch = [];
+      rowCount = 0;
+    }
+    batch.push(...candidates);
+    rowCount += candidates.length;
+  }
+  if (batch.length > 0) batches.push(batch);
+  return batches;
 }
 
 export async function verifyCompoundCoverage(records, {
@@ -602,22 +986,18 @@ export async function verifyCompoundCoverage(records, {
     ? Math.trunc(Number(maxRepairAttempts))
     : 1));
   const width = Math.max(1, Math.trunc(Number(parallelism) || 1));
-  const units = [];
-  const llmGroups = new Map();
-  for (const [index, record] of classification.records.entries()) {
-    if (record.certainty !== "llm") {
-      units.push({ index, record, candidates: [record], deterministic: true });
-      continue;
-    }
-    const groupKey = candidateGroupKey(record);
-    let group = llmGroups.get(groupKey);
-    if (!group) {
-      group = { index, record, candidates: [], deterministic: false };
-      llmGroups.set(groupKey, group);
-    }
-    group.candidates.push(record);
-  }
-  units.push(...llmGroups.values());
+  const units = classification.records
+    .map((record, index) => ({ record, index }))
+    .filter(({ record }) => record.certainty !== "llm")
+    .map(({ record, index }) => ({ index, record, candidates: [record], deterministic: true }));
+  const inputIndex = new Map(classification.records.map((record, index) => [candidateId(record), index]));
+  units.push(...groupCompoundVerificationCandidates(classification.verificationCandidates)
+    .map((group) => ({
+      index: inputIndex.get(candidateId(group.candidates[0])) ?? group.index,
+      record: group.candidates[0],
+      candidates: group.candidates,
+      deterministic: false
+    })));
   units.sort((left, right) => left.index - right.index);
 
   const verifiedById = new Map();
@@ -644,7 +1024,7 @@ export async function verifyCompoundCoverage(records, {
         prompt,
         "\nThe previous response failed this deterministic contract:",
         response.reason,
-        "Return only one corrected JSON object with verdict, candidateId, headKind, targetSenseId, headSenseId, modifierSenseIds, modifierEvidence, modifierRelations, and rationale.",
+        "Return only one corrected JSON object with verdict, candidateId, headKind, targetSenseId, componentSenseIds, sourceGlossSenseIds, composition, and rationale.",
         "PREVIOUS RESPONSE:",
         String(raw ?? "")
       ].join("\n");
@@ -674,10 +1054,7 @@ export async function verifyCompoundCoverage(records, {
           }, { verifierName, attempts }));
         }
       } else if (response.verdict === "accept") {
-        results.push(retainRejected(candidate, candidateClassification, {
-          ...response,
-          rationale: `alternative candidate not selected: ${response.rationale}`
-        }, { verifierName, attempts }));
+        results.push(retainNotSelected(candidate, candidateClassification, response, { verifierName, attempts }));
       } else if (response.verdict === "reject") {
         results.push(retainRejected(candidate, candidateClassification, response, { verifierName, attempts }));
       } else {
@@ -706,6 +1083,7 @@ export async function verifyCompoundCoverage(records, {
     records: verified,
     deterministic: verified.filter((record) => record.verificationStatus === "accepted-deterministic"),
     accepted: verified.filter((record) => ["accepted-deterministic", "accepted-llm", "repaired-llm"].includes(record.verificationStatus)),
+    notSelected: verified.filter((record) => record.verificationStatus === "not-selected-llm"),
     uncertain: verified.filter((record) => record.verificationStatus === "uncertain-llm"),
     rejected: verified.filter((record) => ["rejected-deterministic", "rejected-llm"].includes(record.verificationStatus))
   };
@@ -758,27 +1136,19 @@ export function createQueuedMindCompoundVerifier({
         ? candidate.targetSenseEvidence.map((sense) => normalizeText(sense?.source))
         : [])
       .filter(Boolean))];
-    const headSenseIds = [...new Set((Array.isArray(candidates) && candidates.length > 0 ? candidates : [record])
-      .flatMap((candidate) => Array.isArray(candidate?.componentSenseEvidence)
-        ? candidate.componentSenseEvidence
-          .filter((sense) => normalizeText(sense?.component) === normalizeText(candidate?.componentGlosses?.at(-1) ?? candidate?.head))
-          .map((sense) => normalizeText(sense?.source))
-        : [])
-      .filter(Boolean))];
-    const modifierSenseIds = [...new Set((Array.isArray(candidates) && candidates.length > 0 ? candidates : [record])
+    const componentSenseIds = [...new Set((Array.isArray(candidates) && candidates.length > 0 ? candidates : [record])
       .flatMap((candidate) => {
-        const components = Array.isArray(candidate?.componentGlosses)
-          ? candidate.componentGlosses
-          : Array.isArray(candidate?.sourceMorphemes)
-            ? candidate.sourceMorphemes
-            : Array.isArray(candidate?.morphemes) ? candidate.morphemes : [];
-        const modifiers = new Set(components.slice(0, -1).map(normalizeText));
         return Array.isArray(candidate?.componentSenseEvidence)
-          ? candidate.componentSenseEvidence
-            .filter((sense) => modifiers.has(normalizeText(sense?.component)))
-            .map((sense) => normalizeText(sense?.source))
+          ? candidate.componentSenseEvidence.map((sense) => normalizeText(sense?.source))
           : [];
       })
+      .filter(Boolean))];
+    const sourceGlossSenseIds = [...new Set((Array.isArray(candidates) && candidates.length > 0 ? candidates : [record])
+      .flatMap((candidate) => Array.isArray(candidate?.componentSenseEvidence)
+        ? candidate.componentSenseEvidence.flatMap((sense) => Array.isArray(sense?.mappingLookupSenseEvidence)
+          ? sense.mappingLookupSenseEvidence.map((lookupSense) => normalizeText(lookupSense?.source))
+          : [])
+        : [])
       .filter(Boolean))];
     const jobSpec = {
       kind: "ollama-generate",
@@ -787,33 +1157,27 @@ export function createQueuedMindCompoundVerifier({
       think: false,
       format: {
         type: "object",
-        required: ["verdict", "candidateId", "headKind", "targetSenseId", "headSenseId", "modifierSenseIds", "modifierEvidence", "modifierRelations", "rationale"],
+        required: ["verdict", "candidateId", "headKind", "targetSenseId", "componentSenseIds", "sourceGlossSenseIds", "composition", "rationale"],
         additionalProperties: false,
         properties: {
           verdict: { type: "string", enum: ["accept", "reject", "uncertain"] },
           candidateId: { type: "string", enum: ["", ...candidateIds] },
           headKind: { type: "string", enum: [...RESPONSE_HEAD_KINDS] },
           targetSenseId: { type: "string", enum: ["", ...senseIds] },
-          headSenseId: { type: "string", enum: ["", ...headSenseIds] },
-          modifierSenseIds: {
+          componentSenseIds: {
             type: "array",
             minItems: 0,
-            maxItems: 2,
-            items: { type: "string", enum: ["", ...modifierSenseIds] }
+            maxItems: 3,
+            items: { type: "string", enum: ["", ...componentSenseIds] }
           },
-          modifierEvidence: {
+          sourceGlossSenseIds: {
             type: "array",
             minItems: 0,
-            maxItems: 2,
-            items: { type: "string", maxLength: 120 }
+            maxItems: 3,
+            items: { type: "string", enum: ["", ...sourceGlossSenseIds] }
           },
-          modifierRelations: {
-            type: "array",
-            minItems: 0,
-            maxItems: 2,
-            items: { type: "string", enum: [...MODIFIER_RELATIONS] }
-          },
-          rationale: { type: "string", maxLength: 160 }
+          composition: { type: "string", enum: ["literal", "nonliteral", "uncertain"] },
+          rationale: { type: "string", maxLength: 120 }
         }
       },
       options: {

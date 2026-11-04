@@ -202,6 +202,12 @@ export function acceptedDecision(record) {
   const modifierRelations = Array.isArray(record?.verificationModifierRelations)
     ? record.verificationModifierRelations.map((relation) => String(relation ?? "").trim().toLowerCase())
     : [];
+  const componentSenseIds = Array.isArray(record?.verificationComponentSenseIds)
+    ? record.verificationComponentSenseIds.map((senseId) => String(senseId ?? "").trim())
+    : [];
+  const sourceGlossSenseIds = Array.isArray(record?.verificationSourceGlossSenseIds)
+    ? record.verificationSourceGlossSenseIds.map((senseId) => String(senseId ?? "").trim())
+    : [];
   const componentSenseEvidence = Array.isArray(record?.componentSenseEvidence) ? record.componentSenseEvidence : [];
   const modifierEvidenceValid = modifiers.length > 0
     && modifierSenseIds.length === modifiers.length
@@ -212,13 +218,54 @@ export function acceptedDecision(record) {
       && modifierRelations[index] === "literal"
       && componentSenseEvidence.some((sense) => String(sense?.component ?? "").trim() === modifier
         && String(sense?.source ?? "").trim() === modifierSenseIds[index]));
+  const compactEvidenceValid = record?.verificationComposition === "literal"
+    && componentSenseIds.length === components.length
+    && sourceGlossSenseIds.length === components.length
+    && componentSenseIds.every((senseId, index) => {
+      const component = String(components[index] ?? "").trim();
+      const sense = componentSenseEvidence.find((row) => String(row?.component ?? "").trim() === component
+        && String(row?.source ?? "").trim() === senseId);
+      if (!senseId || !sense) return false;
+      const sourceGlossSenseId = sourceGlossSenseIds[index];
+      const sourceGlossExists = (sense.mappingLookupSenseEvidence ?? []).some((row) => (
+        String(row?.source ?? "").trim() === sourceGlossSenseId
+      ));
+      if (String(sense.mappingKind ?? "").trim() === "word-suggestion") return Boolean(sourceGlossSenseId && sourceGlossExists);
+      return !sourceGlossSenseId || sourceGlossExists;
+    })
+    && String(record?.verificationHeadSenseId ?? "").trim() === componentSenseIds.at(-1);
+  const componentChoiceSenseIds = Array.isArray(record?.verificationComponentSenseIds)
+    ? record.verificationComponentSenseIds.map((senseId) => String(senseId ?? "").trim())
+    : [];
+  const componentChoiceGlosses = Array.isArray(record?.verificationSourceGlosses)
+    ? record.verificationSourceGlosses.map((gloss) => String(gloss ?? "").trim().toLowerCase())
+    : [];
+  const componentChoiceMeanings = Array.isArray(record?.verificationComponentMeanings)
+    ? record.verificationComponentMeanings.map((meaning) => String(meaning ?? "").trim())
+    : [];
+  const componentChoiceValid = record?.verificationMethod === "wordnet-sense-component-choice"
+    && record?.verificationComposition === "literal"
+    && Boolean(String(record?.verificationRationale ?? "").trim())
+    && componentChoiceSenseIds.length === components.length
+    && componentChoiceGlosses.length === components.length
+    && componentChoiceMeanings.length === components.length
+    && componentChoiceSenseIds.every((senseId, index) => {
+      const component = String(components[index] ?? "").trim();
+      const sense = componentSenseEvidence.find((row) => String(row?.component ?? "").trim() === component
+        && String(row?.source ?? "").trim() === senseId);
+      if (!senseId || !sense || !componentChoiceGlosses[index]) return false;
+      const linkedMeaning = String(sense.definition ?? "").split(";")[0].slice(0, 180).trim();
+      return String(sense.mappingLookupGloss ?? "").trim().toLowerCase() === componentChoiceGlosses[index]
+        && linkedMeaning === componentChoiceMeanings[index];
+    })
+    && String(record?.verificationHeadSenseId ?? "").trim() === componentChoiceSenseIds.at(-1);
   const headRelationValid = String(record?.headRelationPolicy ?? "").trim() === "advisory"
     || record?.verificationHeadRelation === "supported";
   return Boolean(
     String(record?.verificationSenseId ?? "").trim()
     && String(record?.verificationHeadSenseId ?? "").trim()
     && headRelationValid
-    && modifierEvidenceValid
+    && (compactEvidenceValid || modifierEvidenceValid || componentChoiceValid)
   );
 }
 

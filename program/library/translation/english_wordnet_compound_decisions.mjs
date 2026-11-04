@@ -8,6 +8,7 @@ const DECISION_STATUSES = new Set([
   "accepted-deterministic",
   "accepted-llm",
   "repaired-llm",
+  "not-selected-llm",
   "rejected-deterministic",
   "rejected-llm",
   "uncertain-llm"

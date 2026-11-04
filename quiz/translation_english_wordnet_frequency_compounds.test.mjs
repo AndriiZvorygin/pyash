@@ -243,6 +243,18 @@ test("deterministic compound outcomes persist their verification status as the d
   const normalized = parseEnglishWordNetCompoundDecisions(renderEnglishWordNetCompoundDecisions([legacyRow])).rows[0];
   assert.equal(normalized.status, "rejected-deterministic");
   assert.equal(normalized.coverageStatus, "candidate-closed");
+
+  const notSelected = {
+    candidateId: "not-selected-alternative",
+    target: "blackbird",
+    pyashSequence: ["hblack", "hbird"],
+    status: "not-selected-llm"
+  };
+  assert.equal(acceptedDecision(notSelected), false);
+  assert.equal(
+    parseEnglishWordNetCompoundDecisions(renderEnglishWordNetCompoundDecisions([notSelected])).rows[0].status,
+    "not-selected-llm"
+  );
 });
 
 test("compound promotion validates cited senses and applies an advisory head-relation policy", () => {
@@ -273,6 +285,62 @@ test("compound promotion validates cited senses and applies an advisory head-rel
   assert.equal(acceptedDecision({ ...base, decisionRevision: "wordnet-directed-head-relation-v7" }), true);
   assert.equal(acceptedDecision({ ...base, headRelationPolicy: "advisory", verificationHeadRelation: "unsupported" }), true);
   assert.equal(acceptedDecision({ ...base, headRelationPolicy: "advisory", verificationHeadSenseId: "" }), false);
+});
+
+test("compound promotion accepts compact linked-sense proofs and requires source gloss proof for suggestions", () => {
+  const base = {
+    status: "accepted-llm",
+    decisionRevision: "wordnet-modifier-literalness-v9",
+    headRelationPolicy: "advisory",
+    componentGlosses: ["friend", "ship"],
+    componentSenseEvidence: [
+      {
+        component: "friend",
+        source: "n:00000003-n",
+        mappingKind: "word-suggestion",
+        mappingLookupSenseEvidence: [{ source: "n:00000004-n", definition: "a person regarded with affection" }]
+      },
+      { component: "ship", source: "n:00000002-n" }
+    ],
+    verificationSenseId: "n:00000001-n",
+    verificationHeadSenseId: "n:00000002-n",
+    verificationComposition: "literal",
+    verificationComponentSenseIds: ["n:00000003-n", "n:00000002-n"],
+    verificationSourceGlossSenseIds: ["n:00000004-n", ""]
+  };
+  assert.equal(acceptedDecision(base), true);
+  assert.equal(acceptedDecision({ ...base, verificationComposition: "uncertain" }), false);
+  assert.equal(acceptedDecision({ ...base, verificationHeadSenseId: "n:00000003-n" }), false);
+  assert.equal(acceptedDecision({ ...base, verificationSourceGlossSenseIds: ["", ""] }), false);
+  assert.equal(acceptedDecision({ ...base, verificationComponentSenseIds: ["n:99999999-n", "n:00000002-n"] }), false);
+});
+
+test("component-choice promotion requires the chosen atoms to match offered source gloss evidence", () => {
+  const base = {
+    status: "accepted-llm",
+    verificationStatus: "accepted-llm",
+    verificationMethod: "wordnet-sense-component-choice",
+    verificationComposition: "literal",
+    verificationRationale: "Friend relationship expresses friendship.",
+    headRelationPolicy: "advisory",
+    componentGlosses: ["friend", "relationship"],
+    componentSenseEvidence: [
+      { component: "friend", source: "n:00000003-n", definition: "a person attached by affection", mappingLookupGloss: "friend" },
+      { component: "relationship", source: "n:00000002-n", definition: "a relation between entities", mappingLookupGloss: "relationship" }
+    ],
+    verificationSenseId: "n:00000001-n",
+    verificationComponentSenseIds: ["n:00000003-n", "n:00000002-n"],
+    verificationSourceGlosses: ["friend", "relationship"],
+    verificationComponentMeanings: ["a person attached by affection", "a relation between entities"],
+    verificationHeadSenseId: "n:00000002-n"
+  };
+
+  assert.equal(acceptedDecision(base), true);
+  assert.equal(acceptedDecision({ ...base, verificationSourceGlosses: ["donate", "relationship"] }), false);
+  assert.equal(acceptedDecision({ ...base, verificationComponentMeanings: ["yes", "a relation between entities"] }), false);
+  assert.equal(acceptedDecision({ ...base, verificationComponentSenseIds: ["n:99999999-n", "n:00000002-n"] }), false);
+  assert.equal(acceptedDecision({ ...base, verificationRationale: "" }), false);
+  assert.equal(acceptedDecision({ ...base, verificationMethod: "separate-verifier" }), false);
 });
 
 test("compound worklist supplies bounded WordNet definitions without usage examples", () => {
@@ -411,13 +479,11 @@ test("compound prompt requires evidence from a supplied target sense", () => {
   assert.match(prompt, /a vessel/u);
   assert.match(prompt, /targetSenseId/u);
   assert.match(prompt, /WordNet definitions for each component/u);
-  assert.match(prompt, /literally a kind of the final component/u);
-  assert.match(prompt, /targetSenseId/u);
-  assert.match(prompt, /headSenseId/u);
-  assert.match(prompt, /modifierSenseIds/u);
-  assert.match(prompt, /modifierEvidence/u);
-  assert.match(prompt, /classify that contribution as literal/u);
-  assert.match(prompt, /metaphor, figurative meaning, symbolism, wordplay, or association/u);
+  assert.match(prompt, /componentSenseIds/u);
+  assert.match(prompt, /sourceGlossSenseIds/u);
+  assert.match(prompt, /part-of-speech labels help choose senses but do not decide/iu);
+  assert.doesNotMatch(prompt, /TARGET RECORD:/u);
+  assert.doesNotMatch(prompt, /modifierEvidence/u);
 
   const response = parseCompoundVerificationResponse(JSON.stringify({
     verdict: "accept",
@@ -566,6 +632,169 @@ test("compound prompt requires evidence from a supplied target sense", () => {
     { candidates: [candidate] }
   );
   assert.equal(malformedNoise.valid, false);
+});
+
+test("compact compound evidence validates ordered component senses and source-gloss polarity", () => {
+  const candidate = {
+    id: "conscious-state",
+    target: "consciousness",
+    componentGlosses: ["aware", "state"],
+    pyashSequence: ["hawa", "hsta"],
+    headRelationPolicy: "advisory",
+    componentSenseEvidence: [
+      {
+        component: "aware",
+        source: "a:00000001-a",
+        pos: "a",
+        lemmas: ["aware"],
+        definition: "having knowledge",
+        mappingKind: "word-suggestion",
+        mappingLookupGloss: "consciousness",
+        mappingLookupSenseEvidence: [{
+          source: "n:00000003-n",
+          pos: "n",
+          lemmas: ["consciousness"],
+          definition: "an alert cognitive state"
+        }]
+      },
+      {
+        component: "state",
+        source: "n:00000002-n",
+        pos: "n",
+        lemmas: ["state"],
+        definition: "a condition"
+      },
+      {
+        component: "aware",
+        source: "a:00000004-a",
+        pos: "a",
+        lemmas: ["unconscious"],
+        definition: "not conscious",
+        mappingKind: "word-suggestion",
+        mappingLookupGloss: "consciousness",
+        mappingLookupSenseEvidence: [{
+          source: "n:00000003-n",
+          pos: "n",
+          lemmas: ["consciousness"],
+          definition: "an alert cognitive state"
+        }]
+      }
+    ],
+    targetSenseEvidence: [{
+      source: "n:00000005-n",
+      pos: "n",
+      definition: "an alert cognitive state"
+    }]
+  };
+  const acceptedPayload = {
+    verdict: "accept",
+    candidateId: candidate.id,
+    headKind: "lexical-head",
+    targetSenseId: "n:00000005-n",
+    componentSenseIds: ["a:00000001-a", "n:00000002-n"],
+    sourceGlossSenseIds: ["n:00000003-n", ""],
+    composition: "literal",
+    rationale: "The parts directly compose the target."
+  };
+  const accepted = parseCompoundVerificationResponse(JSON.stringify(acceptedPayload), { candidates: [candidate] });
+  assert.equal(accepted.valid, true);
+  assert.equal(accepted.verdict, "accept");
+  assert.deepEqual(accepted.supportingComponentSenseIds, ["a:00000001-a", "n:00000002-n"]);
+  assert.deepEqual(accepted.supportingSourceGlossSenseIds, ["n:00000003-n", ""]);
+
+  const missingGlossCitation = parseCompoundVerificationResponse(JSON.stringify({
+    ...acceptedPayload,
+    sourceGlossSenseIds: ["", ""]
+  }), { candidates: [candidate] });
+  assert.equal(missingGlossCitation.valid, false);
+  assert.match(missingGlossCitation.reason, /word-suggestion component/u);
+
+  const wrongOrder = parseCompoundVerificationResponse(JSON.stringify({
+    ...acceptedPayload,
+    componentSenseIds: ["n:00000002-n", "a:00000001-a"]
+  }), { candidates: [candidate] });
+  assert.equal(wrongOrder.valid, false);
+  assert.match(wrongOrder.reason, /linked sense for component/u);
+
+  const reversedPolarity = parseCompoundVerificationResponse(JSON.stringify({
+    ...acceptedPayload,
+    componentSenseIds: ["a:00000004-a", "n:00000002-n"]
+  }), { candidates: [candidate] });
+  assert.equal(reversedPolarity.valid, true);
+  assert.equal(reversedPolarity.verdict, "reject");
+  assert.match(reversedPolarity.rationale, /reverses source gloss polarity/u);
+
+  const nonliteral = parseCompoundVerificationResponse(JSON.stringify({
+    ...acceptedPayload,
+    composition: "nonliteral"
+  }), { candidates: [candidate] });
+  assert.equal(nonliteral.valid, true);
+  assert.equal(nonliteral.verdict, "uncertain");
+});
+
+test("compound verifier exposes POS evidence without using it as an eligibility gate", () => {
+  const candidate = {
+    id: "bear-duty-candidate",
+    target: "attend",
+    targetPartOfSpeech: "v",
+    sourceMorphemes: ["duty", "bear"],
+    componentGlosses: ["duty", "bear"],
+    pyashSequence: ["duty", "bear"],
+    sourceLanguages: ["chinese", "french", "russian", "hindi"],
+    sourceComponentGlossesByLanguage: {
+      chinese: ["bear", "responsibility"],
+      french: ["carry", "responsibility"],
+      russian: ["bear", "duty"],
+      hindi: ["bear", "responsibility"]
+    },
+    sourceTranslationMorphemesByLanguage: { chinese: ["bear", "responsibility"] },
+    sourceTranslationGlossesByLanguage: { chinese: ["bear", "responsibility"] },
+    sourceComponentIndexesByLanguage: { chinese: [1, 0] },
+    componentSenseEvidence: [
+      { component: "duty", source: "n:00000003-n", pos: "n", lemmas: ["duty"], definition: "an obligation" },
+      { component: "bear", source: "n:00000004-n", pos: "n", lemmas: ["bear"], definition: "a large mammal" },
+      { component: "bear", source: "v:00000005-v", pos: "v", lemmas: ["bear"], definition: "have or carry" }
+    ],
+    targetSenseEvidence: [{ source: "v:00000001-v", pos: "v", lemmas: ["attend"], definition: "take charge of" }]
+  };
+  const prompt = buildCompoundVerificationPrompt({ record: candidate, candidates: [candidate] });
+  assert.match(prompt, /TARGET: .*"pos":"v"/u);
+  assert.match(prompt, /part-of-speech labels help choose senses but do not decide whether a compound is eligible/iu);
+  assert.match(prompt, /SOURCE LANGUAGE DECOMPOSITIONS/u);
+  assert.match(prompt, /spelling alone is insufficient/u);
+  assert.match(prompt, /"language":"chinese"/u);
+  assert.match(prompt, /"sourceComponentIndexes":\{"chinese":\[1,0\]/u);
+  assert.match(prompt, /"surface":"responsibility","gloss":"responsibility"/u);
+  const matchingHeadPos = prompt.indexOf('"id":"v:00000005-v","pos":"v"');
+  const unrelatedHeadPos = prompt.indexOf('"id":"n:00000004-n","pos":"n"');
+  assert.ok(matchingHeadPos >= 0 && unrelatedHeadPos > matchingHeadPos);
+  assert.match(prompt, /"id":"n:00000003-n","pos":"n"/u);
+
+  const wrongPos = parseCompoundVerificationResponse(JSON.stringify({
+    verdict: "accept",
+    candidateId: candidate.id,
+    headKind: "lexical-head",
+    targetSenseId: "v:00000001-v",
+    headSenseId: "n:00000004-n",
+    modifierSenseIds: ["n:00000003-n"],
+    modifierEvidence: ["duty contributes an obligation"],
+    modifierRelations: ["literal"],
+    rationale: "The parts compose the target."
+  }), { candidates: [candidate] });
+  assert.equal(wrongPos.valid, true);
+
+  const matchingPos = parseCompoundVerificationResponse(JSON.stringify({
+    verdict: "accept",
+    candidateId: candidate.id,
+    headKind: "lexical-head",
+    targetSenseId: "v:00000001-v",
+    headSenseId: "v:00000005-v",
+    modifierSenseIds: ["n:00000003-n"],
+    modifierEvidence: ["duty contributes an obligation"],
+    modifierRelations: ["literal"],
+    rationale: "The parts compose the target."
+  }), { candidates: [candidate] });
+  assert.equal(matchingPos.valid, true);
 });
 
 test("compound decision revisions retain prior verdict summaries and re-open stale candidates", () => {

@@ -200,23 +200,83 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   compounds can become active sense anchors. Rejected and uncertain candidates
   remain evidence; synsets with no covered lemma or compound candidate remain
   explicit residuals for later atom/compound generation.
-- For residual synsets with an already-linked atomic WordNet hypernym, run
+- For residual WordNet senses, run
   `node command/wordnet_sense_compound_refinery.mjs`. Its workflow and bounded
   batch settings live in
   `program/library/translation/wordnet_sense_compound_refinery.pya`. It asks
-  Qwen through the future GPU Housekeeper queue for one sense's translations
-  and transparent word parts in Chinese, French, Russian, and Hindi. Resolve
-  English components with `vocab_suggest`; use only active one-atom links with
-  WordNet sense evidence. Order the candidate head-final only when the target
-  synset has the directed hypernym evidence, then reuse the compound verifier
-  and verified catalog promotion path. Keep whole atom inventories out of the
+  the configured Qwen mind through the GPU Housekeeper queue for one sense's
+  translations and transparent word parts in Chinese, French, Russian, and
+  Hindi. The configured `parallelism` bounds simultaneous duties; Housekeeper
+  may run them across available workers. Resolve English components with
+  `vocab_suggest`; use active one-atom links with WordNet sense evidence.
+  Candidate components are always in Pyash head-final order. A directed
+  hypernym relation is supporting evidence, not a prerequisite for generating
+  or accepting a literal compound. Keep whole atom inventories out of the
   prompt. Each launch handles 64 ranked senses and reuses
   `artifacts/<run-id>/sense-translations.pya` and `progress.pya`; inspect
+  `translation-failures.pya` before interpreting a low yield, since parser
+  errors and provider failures are tracked separately from verifier rejections.
+  It records each failed sense, bounded response/error evidence, and attempt
+  count. A `simple` translation may carry redundant model-generated component
+  notes; the parser preserves its surface and drops those notes. Inspect
   `component-mappings.pya` and `compound-candidates.pya` when a sense has no
-  candidate. Exclude a residual synset when one of its lemmas already resolves
+  candidate. The result separates candidate rows, source-decomposition decision
+  groups, and distinct senses, so alternate atom mappings do not inflate or
+  obscure the success rate. An alternative not chosen after an accepted group is
+  `not-selected-llm`, not a rejected compound. Component mapping uses
+  `vocab_suggest` terms first. Add active atoms through exact shared WordNet
+  synsets only when `vocab_suggest` returns no lexical term for that component,
+  and cap that fallback at the first four unique senses in WordNet lookup order.
+  Worklist priority is configured by `worklist-order`: `tag-count-descending`
+  ranks unlinked residual senses by their highest exact Princeton `tag_cnt`, then
+  English30k rank and stable sense id. This selection order is separate from the
+  rank-first atom frequency allocation. Missing tag counts sort last.
+  A suggested term without an active atom link remains unresolved rather than
+  expanding to every WordNet synonym. Exclude a residual
+  synset when one of its lemmas already resolves
   to an active linked atomic target; the frequency allocator can leave another
   synset for that same anchored lemma in its residual pool. Uncertain results
   remain explicit, and failed senses are retryable.
+  For a new sense-derived compound, make one focused Housekeeper mind call per
+  sense to compose and judge the compound together. Include the target sense,
+  source-language decomposition, English gloss alternatives for each source
+  part and active Kwon-linked atom words. Represent these as JSON objects with
+  `source`, `gloss`, and `atoms`; include each source/gloss pair once and list
+  each atom word once in its group. Keep Kwon order, cap each gloss at four atoms,
+  and omit source-language labels, candidate or synset ids, per-atom definitions,
+  and preassembled compound combinations. The model returns two or three atom
+  words in modifier-before-head order, choosing one atom from each of at least two
+  distinct source parts in the same decomposition; two atoms from one part do not
+  meet the minimum. If fewer than two parts fit, return `uncertain` with an empty
+  atom list. Show a two-part example in the prompt.
+  The parser resolves the selected words to one coherent source decomposition
+  and validates each against the offered active atoms. Deterministic evidence
+  checks and promotion follow this call; there is no separate LLM verifier.
+  Uncertain and failed choices remain in `component-compositions.pya` for
+  resumption or inspection.
+
+  Translation splits of prefixes, suffixes, inflections, and grammatical
+  endings do not form lexical compound candidates; explicit hyphen-marked bound
+  morphemes are retained as uncertain.
+- For candidates handled by the separate compound verifier, use direct one-atom lexical mappings
+  from `vocab_suggest` (`root`, `lemma`, `dictionary-alias`, or `gloss`) only
+  when the linked atom has WordNet evidence matching the component gloss (or
+  lists that gloss as a linked lemma). A `word-suggestion` is only a discovery
+  hint: it may add an active linked atom as a verifier candidate, but it never
+  proves lexical equivalence and must not be accepted deterministically. Keep
+  the mapping kind, lookup gloss, source gloss's WordNet sense definitions,
+  suggested word, and coverage type in candidate and component artifacts. The
+  verifier must compare the supplied atom sense definition with the source gloss
+  sense definitions and target sense, then cite the atom sense for acceptance.
+  Its compact response cites one supplied component sense per part and, for
+  each word suggestion, one supplied source-gloss sense for that mapping.
+  Contradictory polarity is grounds for rejection. Preserve the English gloss returned for each
+  translated part in the candidate and verifier prompt; a direct-looking alias
+  whose sense does not match remains ineligible.
+  If one atom has several linked senses, retain all of them in component
+  evidence rather than letting input order choose a homograph. Keep each
+  source-language gloss array aligned with the candidate's head-final Pyash
+  component order so the verifier can resolve the atom meaning from context.
 - Compound worklists include closed single-token forms from English30k that
   segment into two or three existing atomic lemmas, plus multiword WordNet
   lemmas whose space, underscore, or hyphen boundaries match existing atoms.

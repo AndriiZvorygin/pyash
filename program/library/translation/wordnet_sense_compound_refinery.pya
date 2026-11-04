@@ -2,13 +2,14 @@ su name translation_wordnet_sense_compound_config be map def
 su text "format" ob text "translation-wordnet-sense-compound-refinery-v2" ya
 su text "model" ob text "qwen3.5:9b" ya
 su text "comparison-languages" ob text "chinese,french,russian,hindi" ya
-su text "prompt-revision" ob text "sense-translation-composition-v1" ya
+su text "prompt-revision" ob text "sense-translation-gloss-alternatives-v5" ya
 su text "max-output-tokens" ob num 1024 ya
 su text "parallelism" ob num 8 ya
 su text "max-senses-per-launch" ob num 64 ya
-su text "verification-batch-size" ob num 32 ya
 su text "worklist-order" ob text "tag-count-descending" ya
-su text "candidate-revision" ob text "sense-head-advisory-v2" ya
+su text "candidate-revision" ob text "sense-component-choice-v6" ya
+su text "component-choice-prompt-revision" ob text "sense-component-choice-v6" ya
+su text "component-choice-max-output-tokens" ob num 256 ya
 su text "head-relation-policy" ob text "advisory" ya
 prah
 su name translation wordnet sense compounds be refinery def
