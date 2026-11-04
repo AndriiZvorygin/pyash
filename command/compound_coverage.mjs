@@ -7,6 +7,7 @@ import {
   buildDerivedCompoundCoverage,
   appendNovelCompoundSourceTerms,
   loadCuratedCompoundDecompositions,
+  loadWordNetVerifiedCompoundIndex,
   renderDerivedCompoundCoveragePya,
   sourceTermsFromDictionaryRows,
   sourceTermsFromEnglish30kRows,
@@ -47,10 +48,11 @@ export async function loadCoverage({ maximumCompoundComponents = 3, wordnetIndex
       provenance: `caterer/pyac/lyac/${filename}`
     }));
   }
-  const [english30k, allCuratedDecompositions, lemmaCatalog] = await Promise.all([
+  const [english30k, allCuratedDecompositions, lemmaCatalog, wordnetSenseCompounds] = await Promise.all([
     loadEnglish30k(),
     loadCuratedCompoundDecompositions(),
-    loadEnglishLemmaCatalog()
+    loadEnglishLemmaCatalog(),
+    loadWordNetVerifiedCompoundIndex()
   ]);
   const activeAtomicEntries = filterDeprecatedEnglishAtoms(pyashWords, lemmaCatalog.entries);
   const deprecatedSequences = deprecatedEnglishAtomSequences(pyashWords, lemmaCatalog.entries);
@@ -97,7 +99,8 @@ export async function loadCoverage({ maximumCompoundComponents = 3, wordnetIndex
       status: "rejected-deprecated-component",
       evidence: `compound uses deprecated duplicate atom in ${record.pyashSequence.join(" ")}`
     }))],
-    activeAtomicEntries
+    activeAtomicEntries,
+    wordnetSenseCompounds
   };
 }
 

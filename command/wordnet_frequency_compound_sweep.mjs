@@ -269,43 +269,66 @@ export function acceptedDecision(record) {
   );
 }
 
-export async function promoteAcceptedCompounds(decisions, { usedTargetIds = [], decisionRevision = "" } = {}) {
-  const existing = selectCurrentRevisionCompounds(await readVerifiedWordNetCompounds(), decisionRevision);
-  const recordsByTarget = new Map(existing.map((record) => [record.target.toLowerCase(), record]));
-  const sequenceOwners = new Map();
-  for (const record of existing) {
-    sequenceOwners.set(`compound:${sequence(record.pyashSequence).join("+")}`, record.target.toLowerCase());
+function senseTargetKey(record) {
+  const senseId = String(record?.senseId ?? record?.verificationSenseId ?? "").trim();
+  const target = String(record?.target ?? "").trim().toLowerCase();
+  return senseId && target ? `${senseId}\u0000${target}` : "";
+}
+
+export function promoteAcceptedCompoundRecords(existingRecords, decisions, { usedTargetIds = [], decisionRevision = "" } = {}) {
+  if (!Array.isArray(existingRecords) || !Array.isArray(decisions)) {
+    throw new TypeError("compound promotion requires existing records and decisions");
   }
-  const inUse = new Set(usedTargetIds);
+  const records = existingRecords.map((record) => ({ ...record }));
+  const recordsBySenseTarget = new Map(records
+    .map((record, index) => [senseTargetKey(record), index])
+    .filter(([key]) => Boolean(key)));
+  const sequenceOwners = new Map();
+  for (const record of records) {
+    const target = String(record.target ?? "").trim().toLowerCase();
+    const key = `compound:${sequence(record.pyashSequence).join("+")}`;
+    const owners = sequenceOwners.get(key) ?? new Set();
+    owners.add(target);
+    sequenceOwners.set(key, owners);
+  }
+  const reservedTargetIds = new Set(usedTargetIds);
   const promotions = [];
   const updatedDecisions = decisions.map((decision) => {
     if (!acceptedDecision(decision)) return decision;
     const target = String(decision.target ?? "").trim().toLowerCase();
+    const senseId = String(decision.senseId ?? decision.verificationSenseId ?? "").trim();
+    if (!senseId) return { ...decision, promotionStatus: "missing-sense-id" };
     const pyashSequence = sequence(decision.pyashSequence);
     const targetId = `compound:${pyashSequence.join("+")}`;
-    const existingTarget = recordsByTarget.get(target);
-    if (existingTarget) {
-      const sameSequence = sequence(existingTarget.pyashSequence).join(" ") === pyashSequence.join(" ");
+    const key = senseTargetKey({ senseId, target });
+    const existingIndex = recordsBySenseTarget.get(key);
+    if (existingIndex !== undefined) {
+      const existing = records[existingIndex];
+      const sameSequence = sequence(existing.pyashSequence).join(" ") === pyashSequence.join(" ");
       if (sameSequence) {
-        const verificationDecisionIds = [...new Set([
-          ...(Array.isArray(existingTarget.verificationDecisionIds) ? existingTarget.verificationDecisionIds : []),
-          ...(existingTarget.verificationDecisionId ? [existingTarget.verificationDecisionId] : []),
+        const ids = [...new Set([
+          ...(Array.isArray(existing.verificationDecisionIds) ? existing.verificationDecisionIds : []),
+          ...(existing.verificationDecisionId ? [existing.verificationDecisionId] : []),
           decision.candidateId
         ])];
-        recordsByTarget.set(target, {
-          ...existingTarget,
+        records[existingIndex] = {
+          ...existing,
           decisionRevision,
-          verificationDecisionIds
-        });
+          aliases: [...new Set([...(existing.aliases ?? []), ...(decision.aliases ?? [])])],
+          verificationDecisionIds: ids
+        };
       }
-      return { ...decision, promotionStatus: sameSequence ? "already-active" : "target-record-conflict" };
+      return { ...decision, promotionStatus: sameSequence ? "already-active" : "sense-target-record-conflict" };
     }
-    if (inUse.has(targetId) || sequenceOwners.has(targetId)) {
+    const owners = sequenceOwners.get(targetId) ?? new Set();
+    if (reservedTargetIds.has(targetId) || [...owners].some((owner) => owner !== target)) {
       return { ...decision, promotionStatus: "target-identity-conflict" };
     }
-    inUse.add(targetId);
-    sequenceOwners.set(targetId, target);
+    owners.add(target);
+    sequenceOwners.set(targetId, owners);
     const record = {
+      senseId,
+      targetPartOfSpeech: String(decision.targetPartOfSpeech ?? senseId.slice(0, 1)).trim(),
       decisionRevision,
       verificationDecisionId: decision.candidateId,
       verificationDecisionIds: [decision.candidateId],
@@ -333,17 +356,26 @@ export async function promoteAcceptedCompounds(decisions, { usedTargetIds = [], 
       provenance: "WordNet frequency compound verification through Housekeeper",
       status: decision.status
     };
-    recordsByTarget.set(target, record);
+    recordsBySenseTarget.set(key, records.length);
+    records.push(record);
     promotions.push(record);
     return { ...decision, promotionStatus: "promoted-to-derived-index" };
   });
-  await writeVerifiedWordNetCompounds([...recordsByTarget.values()]);
   return {
     decisions: updatedDecisions,
     promotions,
-    activeCount: recordsByTarget.size,
+    records,
+    activeCount: records.length,
     conflicts: updatedDecisions.filter((record) => String(record.promotionStatus ?? "").includes("conflict"))
   };
+}
+
+export async function promoteAcceptedCompounds(decisions, { usedTargetIds = [], decisionRevision = "" } = {}) {
+  const existing = selectCurrentRevisionCompounds(await readVerifiedWordNetCompounds(), decisionRevision);
+  const promoted = promoteAcceptedCompoundRecords(existing, decisions, { usedTargetIds, decisionRevision });
+  await writeVerifiedWordNetCompounds(promoted.records);
+  const { records: _records, ...result } = promoted;
+  return result;
 }
 
 export async function runWordNetFrequencyCompoundSweep({ artifactRoot = ARTIFACT_ROOT } = {}) {

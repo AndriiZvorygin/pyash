@@ -627,49 +627,38 @@ test("Kwon component resolution admits only active linked atomic mappings", () =
   assert.deepEqual(mapped.get("relation").map((row) => row.word), ["relation"]);
 });
 
-test("Kwon word suggestions discover linked atom candidates without proving gloss equivalence", () => {
+test("unresolved word suggestions cannot override a linked WordNet word sense", () => {
   const mapped = buildKwonLinkedAtomicChoices({
     suggestions: [{
-      input: "that",
-      mappings: [
-        { word: "that", coverageType: "grammar", kind: "grammar", pyacSequence: ["la"] },
-        { word: "becoming", coverageType: "atomic", kind: "word-suggestion", pyacSequence: ["hbin"] },
-        { word: "what", coverageType: "atomic", kind: "word-suggestion", pyacSequence: ["hkam"] },
-        { word: "there", coverageType: "atomic", kind: "word-suggestion", pyacSequence: ["klan"] }
-      ]
-    }, {
-      input: "matter",
-      mappings: [
-        { word: "phenomenon", coverageType: "atomic", kind: "word-suggestion", pyacSequence: ["gjan"] },
-        { word: "affairs", coverageType: "atomic", kind: "word-suggestion", pyacSequence: ["swan"] },
-        { word: "question", coverageType: "atomic", kind: "word-suggestion", pyacSequence: ["hwas"] }
-      ]
-    }, {
-      input: "light",
-      mappings: [
-        { word: "light", coverageType: "root", kind: "root", pyacSequence: ["kwan"] }
-      ]
+      input: "accord",
+      status: "unresolved",
+      wordSuggestions: ["accordions"],
+      mappings: [{ word: "accordions", coverageType: "atomic", kind: "word-suggestion", pyacSequence: ["kfo7n"] }]
+    }],
+    linkedWordNetSenses: [{
+      input: "accord",
+      source: "n:06786235-n",
+      target: "treaty",
+      targetPartOfSpeech: "n",
+      lemmas: ["accord", "pact", "treaty"],
+      gloss: "a written agreement between two states or sovereigns",
+      pyashSequence: ["tyot"]
     }],
     activeAtomEntries: [
-      { source: "s:00000001-s", target: "becoming", targetPartOfSpeech: "s", targetKind: "atom", pyashSequence: ["hbin"], lemmas: ["becoming"], definition: "displaying to best advantage" },
-      { source: "n:00000002-n", target: "what", targetPartOfSpeech: "n", targetKind: "atom", pyashSequence: ["hkam"], lemmas: ["cerium"], definition: "a metallic element" },
-      { source: "r:00000003-r", target: "there", targetPartOfSpeech: "r", targetKind: "atom", pyashSequence: ["klan"], lemmas: ["there"], definition: "at that place" },
-      { source: "n:00000004-n", target: "phenomenon", targetPartOfSpeech: "n", targetKind: "atom", pyashSequence: ["gjan"], lemmas: ["phenomenon"], definition: "a state or process" },
-      { source: "n:00000005-n", target: "light", targetPartOfSpeech: "n", targetKind: "atom", pyashSequence: ["kwan"], lemmas: ["light"], definition: "electromagnetic radiation" }
+      { source: "n:02675461-n", target: "accordions", targetPartOfSpeech: "n", targetKind: "atom", pyashSequence: ["kfo7n"], lemmas: ["accordion", "squeeze box"], definition: "a portable box-shaped free-reed instrument" },
+      { source: "n:06786235-n", target: "treaty", targetPartOfSpeech: "n", targetKind: "atom", pyashSequence: ["tyot"], lemmas: ["accord", "pact", "treaty"], definition: "a written agreement between two states or sovereigns" }
     ],
-    layerByWord: new Map([["hbin", 16], ["hkam", 16], ["klan", 16], ["gjan", 16], ["kwan", 16]])
+    layerByWord: new Map([["kfo7n", 32], ["tyot", 16]]),
+    wordnetIndex: {
+      lookup: (word) => word === "accord"
+        ? [{ pos: "n", synset: "06786235-n", lemma: "accord", gloss: "a written agreement between two states or sovereigns" }]
+        : [],
+      bySynset: new Map([["n:06786235-n", [{ lemma: "accord" }, { lemma: "pact" }, { lemma: "treaty" }]]])
+    }
   });
 
-  assert.deepEqual(mapped.get("that").map((row) => [row.word, row.mappingKind, row.mappingLookupGloss, row.mappingSuggestedWord]), [
-    ["becoming", "word-suggestion", "that", "becoming"],
-    ["what", "word-suggestion", "that", "what"],
-    ["there", "word-suggestion", "that", "there"]
-  ]);
-  assert.deepEqual(mapped.get("matter").map((row) => [row.word, row.mappingKind, row.mappingSuggestedWord]), [
-    ["phenomenon", "word-suggestion", "phenomenon"]
-  ]);
-  assert.deepEqual(mapped.get("light").map((row) => [row.word, row.mappingKind, row.mappingCoverageType]), [
-    ["light", "root", "root"]
+  assert.deepEqual(mapped.get("accord").map((row) => [row.word, row.linkedSense.source]), [
+    ["treaty", "n:06786235-n"]
   ]);
 });
 

@@ -375,6 +375,29 @@ test("frequency anchor resolution preserves accepted compound mappings", () => {
   });
 });
 
+test("frequency anchor resolution selects verified compounds by exact WordNet synset", () => {
+  const resolveWord = buildWordResolver({
+    coverage: { byVariant: new Map() }
+  }, { accepted: [] }, [{
+    id: "verified-conform-sense",
+    senseId: "v:00000010-v",
+    targetPartOfSpeech: "v",
+    target: "conform to",
+    aliases: ["follow"],
+    pyashSequence: ["kfo7n", "tyik"]
+  }]);
+
+  assert.deepEqual(resolveWord("conform to", { partOfSpeech: "v", senseId: "v:00000010-v" }), {
+    coverageType: "compound",
+    canonicalEnglish: "conform to",
+    target: "conform to",
+    pyashSequence: ["kfo7n", "tyik"],
+    id: "verified-conform-sense",
+    senseId: "v:00000010-v"
+  });
+  assert.equal(resolveWord("conform to", { partOfSpeech: "v", senseId: "v:00000011-v" }), null);
+});
+
 test("frequency allocation configuration versions compound verification", async () => {
   const config = parseEnglishWordNetFrequencyAllocationConfig(
     await readFile(ENGLISH_WORDNET_FREQUENCY_ALLOCATION_CONFIG_URL, "utf8")
