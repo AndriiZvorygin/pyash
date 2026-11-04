@@ -55,6 +55,7 @@ import {
   loadSaddleSessionHistory,
   prepareSaddle,
   renderSaddleSessionHistory,
+  resolveSaddleProjectHouseDirectory,
   resolveSaddleProjectWorldRoot,
   runSaddleTurn,
   waitForSaddleMindStream
@@ -762,6 +763,10 @@ test("coding saddle keeps histories per project while reusing the recent model p
       'exists su name mind be mind from name "http://localhost:11434" via state "qwen3.5:9b" ya',
       'exists su name zai be mind from state "zai" from space "https://api.z.ai/api/v1" via state "glm-5.3-flash" ya'
     ].join("\n") + "\n", "utf8");
+    const firstWorldRoot = resolveSaddleProjectWorldRoot({ runtimeRoot, cwd: projectA });
+    const legacyHouse = path.join(firstWorldRoot, "house", "coding saddle");
+    await fs.mkdir(path.join(legacyHouse, "identity"), { recursive: true });
+    await fs.writeFile(path.join(legacyHouse, "identity", "biography.md"), "project identity data\n", "utf8");
     const globalRecentPath = path.join(
       runtimeRoot,
       "world",
@@ -780,7 +785,11 @@ test("coding saddle keeps histories per project while reusing the recent model p
     await writeCodingSaddleState(globalRecentPath, recentState);
 
     const first = await prepareSaddle({ cwd: projectA, runtimeRoot });
-    assert.equal(first.worldRoot, resolveSaddleProjectWorldRoot({ runtimeRoot, cwd: projectA }));
+    assert.equal(first.worldRoot, firstWorldRoot);
+    assert.equal(first.agentHouse, resolveSaddleProjectHouseDirectory({ worldRoot: firstWorldRoot, cwd: projectA }));
+    assert.equal(path.basename(first.agentHouse), "alpha");
+    assert.equal(await fs.readFile(path.join(first.agentHouse, "identity", "biography.md"), "utf8"), "project identity data\n");
+    await assert.rejects(fs.access(legacyHouse), { code: "ENOENT" });
     assert.equal(first.mindName, "zai");
     assert.equal(first.backend, "zai");
     assert.equal(first.model, "glm-5.3-flash");
@@ -812,10 +821,51 @@ test("coding saddle keeps histories per project while reusing the recent model p
     const second = await prepareSaddle({ cwd: projectB, runtimeRoot });
     assert.notEqual(second.worldRoot, first.worldRoot);
     assert.notEqual(second.agentHouse, first.agentHouse);
+    assert.equal(path.basename(second.agentHouse), "beta");
     assert.equal(second.mindName, "zai");
     assert.equal(second.model, "glm-5.3-flash");
     const secondHistory = await loadSaddleSessionHistory({ agentHouse: second.agentHouse, sessionName: "coding" });
     assert.deepEqual(secondHistory.messages, []);
+  } finally {
+    for (const key of envKeys) {
+      if (previousEnv[key] === undefined) delete process.env[key];
+      else process.env[key] = previousEnv[key];
+    }
+    forget();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("coding saddle refuses to merge a legacy project house into an existing project-named house", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-house-conflict-"));
+  const runtimeRoot = path.join(root, "runtime");
+  const cwd = path.join(root, "projects", "biography");
+  const envKeys = ["PYA_SADDLE_MIND", "PYA_SADDLE_MODEL", "PYA_SADDLE_HOST"];
+  const previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  for (const key of envKeys) delete process.env[key];
+  await fs.mkdir(path.join(runtimeRoot, "configure"), { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+  try {
+    await fs.writeFile(path.join(runtimeRoot, "configure", "default.pya"), [
+      "exists su name mind backend be default ob name ollama command mind ya",
+      'exists su name mind model ob text "qwen3.5:9b" be default ya',
+      'exists su name coding saddle mind ob text "mind" be default ya',
+      'exists su name mind be mind from name "http://localhost:11434" via state "qwen3.5:9b" ya'
+    ].join("\n") + "\n", "utf8");
+    const worldRoot = resolveSaddleProjectWorldRoot({ runtimeRoot, cwd });
+    const legacyHouse = path.join(worldRoot, "house", "coding saddle");
+    const projectHouse = resolveSaddleProjectHouseDirectory({ worldRoot, cwd });
+    await fs.mkdir(path.join(legacyHouse, "identity"), { recursive: true });
+    await fs.mkdir(path.join(projectHouse, "identity"), { recursive: true });
+    await fs.writeFile(path.join(legacyHouse, "identity", "legacy.md"), "keep legacy\n", "utf8");
+    await fs.writeFile(path.join(projectHouse, "identity", "current.md"), "keep current\n", "utf8");
+
+    await assert.rejects(
+      prepareSaddle({ cwd, runtimeRoot }),
+      /project saddle house migration conflict/
+    );
+    assert.equal(await fs.readFile(path.join(legacyHouse, "identity", "legacy.md"), "utf8"), "keep legacy\n");
+    assert.equal(await fs.readFile(path.join(projectHouse, "identity", "current.md"), "utf8"), "keep current\n");
   } finally {
     for (const key of envKeys) {
       if (previousEnv[key] === undefined) delete process.env[key];
