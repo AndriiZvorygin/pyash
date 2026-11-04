@@ -14,8 +14,8 @@ export const ENGLISH_WORDNET_SENSE_COMPOUNDS_LANGUAGES = Object.freeze([
 ]);
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_MODEL = "qwen3.5:9b";
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_PROMPT_REVISION = "sense-translation-gloss-alternatives-v5";
-export const ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_PROMPT_REVISION = "sense-component-choice-v8";
-export const ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION = "sense-component-choice-v6";
+export const ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_PROMPT_REVISION = "sense-component-choice-v9";
+export const ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION = "sense-component-choice-v7";
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_MAX_OUTPUT_TOKENS = 1024;
 export const ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_MAX_OUTPUT_TOKENS = 256;
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_PARALLELISM = 8;
@@ -166,6 +166,7 @@ export function buildWordNetSenseTranslationPrompt({
 export function buildSenseCompoundWorklist({
   residualSenses = [],
   linkedSenseIds = [],
+  resolveTargetCoverage = null,
   maximum = Number.POSITIVE_INFINITY,
   minimumTagCount = 0,
   order = "english30k-rank"
@@ -195,6 +196,30 @@ export function buildSenseCompoundWorklist({
     const frequencyRank = Number.isFinite(Number(sense.frequencyRank)) && Number(sense.frequencyRank) > 0
       ? Number(sense.frequencyRank)
       : candidateRanks.length ? Math.min(...candidateRanks) : Number.MAX_SAFE_INTEGER;
+    const targetCoverage = typeof resolveTargetCoverage === "function"
+      ? resolveTargetCoverage({
+        senseId: source,
+        pos,
+        lemmas,
+        definition
+      })
+      : null;
+    const coverageType = text(targetCoverage?.coverageType).toLowerCase();
+    const canonicalCoverageType = text(targetCoverage?.canonicalCoverageType).toLowerCase();
+    const resolvedCoverageType = ["alias", "dictionary-alias"].includes(coverageType)
+      ? canonicalCoverageType
+      : coverageType;
+    if (resolvedCoverageType === "grammar" || resolvedCoverageType === "compound") return null;
+    let targetHead;
+    if (resolvedCoverageType === "atomic") {
+      const word = normalized(targetCoverage?.canonicalEnglish ?? targetCoverage?.word ?? lemmas[0]);
+      const pyashSequence = Array.isArray(targetCoverage?.pyashSequence)
+        ? targetCoverage.pyashSequence.map(text).filter(Boolean)
+        : [];
+      const componentLayer = Number(targetCoverage?.componentLayer);
+      if (!word || pyashSequence.length !== 1 || !Number.isInteger(componentLayer)) return null;
+      targetHead = { coverageType: "atomic", word, pyashSequence, componentLayer };
+    }
     return {
       senseId: source,
       pos,
@@ -203,7 +228,8 @@ export function buildSenseCompoundWorklist({
       lemmas,
       gloss: definition,
       frequencyRank,
-      tagCount
+      tagCount,
+      ...(targetHead ? { targetHead } : {})
     };
   }).filter(Boolean)
     .sort(order === "tag-count-descending"
@@ -675,6 +701,7 @@ function availableChoiceValues(decompositions) {
 export function buildSenseCompoundChoiceResponseFormat(input) {
   const options = Array.isArray(input?.sourceOptions) ? input.sourceOptions : [];
   const atoms = [...new Set(options.map((row) => text(row.word)).filter(Boolean))];
+  const hasFixedHead = Boolean(input?.targetHead);
   return {
     type: "object",
     oneOf: [
@@ -686,8 +713,8 @@ export function buildSenseCompoundChoiceResponseFormat(input) {
           verdict: { type: "string", enum: ["compound"] },
           atoms: {
             type: "array",
-            minItems: 2,
-            maxItems: MAX_COMPONENTS,
+            minItems: hasFixedHead ? 1 : 2,
+            maxItems: hasFixedHead ? MAX_COMPONENTS - 1 : MAX_COMPONENTS,
             uniqueItems: true,
             items: { type: "string", enum: atoms }
           }
@@ -713,10 +740,13 @@ export function buildSenseCompoundChoiceInput({
   maximumChoices = MAX_COMPONENT_CHOICES
 } = {}) {
   if (!normalizedSense(sense)) throw invalid("component-choice prompt requires one target sense");
+  const targetHead = normalizeTargetHead(sense?.targetHead);
   const decompositions = sourceDecompositionChoices(translations, kwonCandidatesByGloss, maximumChoices);
   if (decompositions.length === 0) return null;
-  const sourceOptions = availableChoiceValues(decompositions);
-  if (sourceOptions.length < 2) return null;
+  const sourceOptions = availableChoiceValues(decompositions).filter((option) => (
+    !targetHead || option.pyashSequence.join("+") !== targetHead.pyashSequence[0]
+  ));
+  if (sourceOptions.length < (targetHead ? 1 : 2)) return null;
   const groupsByKey = new Map();
   for (const option of sourceOptions) {
     const key = `${option.language}\u0000${option.translationSurface}\u0000${option.sourceIndex}`;
@@ -732,22 +762,37 @@ export function buildSenseCompoundChoiceInput({
     atoms,
     atomMeanings
   }));
+  const componentCountRule = targetHead
+    ? "The final compound has two or three atoms total. Choose one or two modifier atoms from distinct source parts; the existing target head is appended automatically. Return modifier atoms only."
+    : "A compound must contain at least two different atoms and may contain at most three. Choose one atom from each of two or three different source parts in the same translation. Two atoms from the same source part do not satisfy the minimum. One atom alone is not a compound.";
   const sections = [
     "Form one Pyash compound for the target meaning.",
     "Pyash has a limited inventory of existing atoms. Use only the listed atom words; do not invent or alter words.",
     "The JSON groups source parts, their English glosses, available Pyash atom words, and each atom's linked meaning. Choose atoms whose meanings jointly express the target. These are component choices, not prebuilt compounds.",
-    "A compound must contain at least two different atoms and may contain at most three. Choose one atom from each of two or three different source parts in the same translation. Two atoms from the same source part do not satisfy the minimum. One atom alone is not a compound.",
-    "Pyash compounds are head-final: the last atom is the head and names the kind of thing or action; earlier atom(s) modify that head. Identify the semantic head from the TARGET meaning, then output the selected atoms in modifier-to-head order. Do not copy the source language's written order automatically.",
+    componentCountRule,
+    targetHead
+      ? `This target already has an existing lexical head ${targetHead.word} (${targetHead.pyashSequence[0]}). Keep that exact word as the final atom. A genuinely new subtype is formed by placing its modifier(s) before this head. Do not replace the head with a source-language component.`
+      : "Pyash compounds are head-final: the last atom is the head and names the kind of thing or action; earlier atom(s) modify that head. Identify the semantic head from the TARGET meaning, then output the selected atoms in modifier-to-head order. Do not copy the source language's written order automatically.",
+    "Pyash compounds are head-final: the final atom is the head and names the kind of thing or action; earlier atom(s) modify it. Do not copy source-language order automatically.",
     "Ordering example (illustrative only, not candidate atoms): bird snake means a type of snake, so the Pyash order is [bird, snake]. Snake bird means a type of bird, so the Pyash order is [snake, bird].",
-    "If fewer than two fit, return uncertain with an empty atoms array.",
+    targetHead
+      ? "If no source modifier improves the target's meaning, return uncertain with an empty atoms array."
+      : "If fewer than two fit, return uncertain with an empty atoms array.",
+    ...(targetHead ? [`EXISTING TARGET HEAD: ${JSON.stringify({ word: targetHead.word, pyac: targetHead.pyashSequence[0] })}`] : []),
     `TARGET: ${senseLemma(sense)} — ${definitionOnly(sense?.definition ?? sense?.gloss)}`,
     "COMPONENT OPTIONS:",
     JSON.stringify(componentOptions, null, 2),
-    'Example: part one offers atom1 and part two offers atom2; return {"verdict":"compound","atoms":["atom1","atom2"]}',
-    'If fewer than two different atoms fit: {"verdict":"uncertain","atoms":[]}',
+    targetHead
+      ? 'Example: the existing head is better and part one offers health; return {"verdict":"compound","atoms":["health"]}; the pipeline appends better.'
+      : 'Example: part one offers atom1 and part two offers atom2; return {"verdict":"compound","atoms":["atom1","atom2"]}',
+    targetHead
+      ? 'If no useful modifier fits: {"verdict":"uncertain","atoms":[]}'
+      : 'If fewer than two different atoms fit: {"verdict":"uncertain","atoms":[]}',
     "Return one compound, not a list of alternatives.",
     "Return only this JSON shape:",
-    '{"verdict":"compound|uncertain","atoms":["existing atom word"]}'
+    targetHead
+      ? '{"verdict":"compound|uncertain","atoms":["existing modifier atom word"]}'
+      : '{"verdict":"compound|uncertain","atoms":["existing atom word"]}'
   ];
   const prompt = sections.join("\n");
   if (prompt.length > MAX_SENSE_COMPOSITION_PROMPT_CHARS) {
@@ -756,7 +801,7 @@ export function buildSenseCompoundChoiceInput({
       sourceOptionCount: sourceOptions.length
     });
   }
-  const input = { prompt, sourceOptions, targetPos: text(sense?.pos) };
+  const input = { prompt, sourceOptions, targetPos: text(sense?.pos), ...(targetHead ? { targetHead } : {}) };
   input.responseFormat = buildSenseCompoundChoiceResponseFormat(input);
   return input;
 }
@@ -795,11 +840,17 @@ export function parseSenseCompoundChoiceResponse(value, { input } = {}) {
     if (atoms.length) {
       throw invalid("uncertain component-choice response must not select atom words");
     }
-    return { verdict, selectedComponents: [], rationale: "Available mapped atoms do not provide two distinct components." };
+    return { verdict, selectedComponents: [], rationale: input.targetHead
+      ? "Available mapped atoms do not provide a useful modifier for the existing lexical head."
+      : "Available mapped atoms do not provide two distinct components." };
   }
   if (verdict !== "compound") throw invalid("component-choice response verdict is unsupported", { verdict });
-  if (atoms.length < 2 || atoms.length > MAX_COMPONENTS) {
-    throw invalid("component-choice response must select two or three atom words");
+  const minimumAtoms = input.targetHead ? 1 : 2;
+  const maximumAtoms = input.targetHead ? MAX_COMPONENTS - 1 : MAX_COMPONENTS;
+  if (atoms.length < minimumAtoms || atoms.length > maximumAtoms) {
+    throw invalid(input.targetHead
+      ? "component-choice response must select one or two modifier atom words"
+      : "component-choice response must select two or three atom words");
   }
   if (new Set(atoms.map(normalized)).size !== atoms.length) {
     throw invalid("component-choice response repeats an atom word");
@@ -845,6 +896,28 @@ export function parseSenseCompoundChoiceResponse(value, { input } = {}) {
   }));
   const rationale = `Selected existing atoms: ${selectedComponents.map((component) => component.word).join(" + ")}`.slice(0, 180);
   return { verdict, selectedComponents, rationale };
+}
+
+function normalizeTargetHead(value) {
+  if (value === undefined || value === null) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw invalid("existing target head must be an atomic coverage record");
+  }
+  const word = normalized(value.word ?? value.canonicalEnglish);
+  const pyashSequence = Array.isArray(value.pyashSequence) ? value.pyashSequence.map(text).filter(Boolean) : [];
+  const componentLayer = Number(value.componentLayer);
+  if (text(value.coverageType).toLowerCase() !== "atomic"
+    || !word
+    || pyashSequence.length !== 1
+    || !Number.isInteger(componentLayer)) {
+    throw invalid("existing target head requires one covered atom and its complexity layer", {
+      word,
+      coverageType: text(value.coverageType),
+      pyashSequence,
+      componentLayer: value.componentLayer
+    });
+  }
+  return { coverageType: "atomic", word, pyashSequence, componentLayer };
 }
 
 function normalizedSense(sense) {
@@ -1047,14 +1120,19 @@ export function buildSenseDerivedCompoundCandidateFromChoice({
   headRelationPolicy = "advisory"
 } = {}) {
   const targetSense = normalizedSense(sense);
+  const targetHead = normalizeTargetHead(sense?.targetHead);
   if (!targetSense || !Array.isArray(selectedComponents) || !Array.isArray(translations)) {
     throw invalid("component-choice candidate requires a target, selected atoms, and source translations");
   }
   if (!text(candidateRevision) || headRelationPolicy !== "advisory") {
     throw invalid("component-choice candidate requires a versioned advisory head policy");
   }
-  if (selectedComponents.length < 2 || selectedComponents.length > MAX_COMPONENTS) {
-    throw invalid("component-choice candidate requires two or three selected atoms");
+  const minimumModifiers = targetHead ? 1 : 2;
+  const maximumModifiers = targetHead ? MAX_COMPONENTS - 1 : MAX_COMPONENTS;
+  if (selectedComponents.length < minimumModifiers || selectedComponents.length > maximumModifiers) {
+    throw invalid(targetHead
+      ? "component-choice candidate requires one or two selected modifiers"
+      : "component-choice candidate requires two or three selected atoms");
   }
   const language = normalized(selectedComponents[0]?.language);
   if (!language || selectedComponents.some((component) => normalized(component?.language) !== language)) {
@@ -1096,27 +1174,57 @@ export function buildSenseDerivedCompoundCandidateFromChoice({
   if (new Set(selected.map((component) => component.sequence)).size !== selected.length) {
     throw invalid("component-choice candidate repeats an atom");
   }
+  if (targetHead && selected.some((component) => component.sequence === targetHead.pyashSequence[0])) {
+    throw invalid("component-choice modifier repeats the existing lexical head", { head: targetHead.word });
+  }
   const targetId = targetSense.source;
   const canonicalTarget = targetSense.lemmas[0];
   const aliases = targetSense.lemmas.slice(1);
-  const pyashSequence = selected.map((component) => component.sequence);
-  const componentGlosses = selected.map((component) => component.word);
-  const headSense = selected.at(-1).linked;
+  const headSense = targetHead ? {
+    source: targetSense.source,
+    pos: targetSense.pos,
+    lemmas: [...targetSense.lemmas],
+    definition: targetSense.definition
+  } : selected.at(-1).linked;
+  const targetHeadChoice = targetHead ? {
+    mappingKind: "target-lexical-head",
+    mappingCoverageType: "atomic",
+    mappingLookupGloss: targetHead.word,
+    mappingLookupSenseEvidence: [{
+      source: targetSense.source,
+      pos: targetSense.pos,
+      lemmas: [...targetSense.lemmas],
+      definition: targetSense.definition
+    }]
+  } : null;
+  const allSelected = targetHead
+    ? [...selected, {
+      word: targetHead.word,
+      sequence: targetHead.pyashSequence[0],
+      linked: headSense,
+      choice: targetHeadChoice,
+      sourceGloss: targetHead.word,
+      componentMeaning: targetSense.definition,
+      componentLayer: targetHead.componentLayer
+    }]
+    : selected;
+  const pyashSequence = allSelected.map((component) => component.sequence);
+  const componentGlosses = allSelected.map((component) => component.word);
   const relationIndex = buildWordNetHeadRelationIndex(relations);
   const candidateId = `sense-compound-${hash(`${candidateRevision}\u0000${targetId}\u0000${pyashSequence.join("+")}`).slice(0, 24)}`;
-  const componentSenseEvidence = selected.map((component) => ({
+  const componentSenseEvidence = allSelected.map((component) => ({
     component: component.word,
     ...component.linked,
-    ...(component.choice.mappingKind ? { mappingKind: component.choice.mappingKind } : {}),
-    ...(component.choice.mappingCoverageType ? { mappingCoverageType: component.choice.mappingCoverageType } : {}),
-    ...(component.choice.mappingLookupGloss ? { mappingLookupGloss: component.choice.mappingLookupGloss } : {}),
-    ...(component.choice.mappingLookupSenseEvidence?.length
+    ...(component.choice?.mappingKind ? { mappingKind: component.choice.mappingKind } : {}),
+    ...(component.choice?.mappingCoverageType ? { mappingCoverageType: component.choice.mappingCoverageType } : {}),
+    ...(component.choice?.mappingLookupGloss ? { mappingLookupGloss: component.choice.mappingLookupGloss } : {}),
+    ...(component.choice?.mappingLookupSenseEvidence?.length
       ? { mappingLookupSenseEvidence: component.choice.mappingLookupSenseEvidence }
       : {}),
-    ...(component.choice.mappingSuggestedWord ? { mappingSuggestedWord: component.choice.mappingSuggestedWord } : {})
+    ...(component.choice?.mappingSuggestedWord ? { mappingSuggestedWord: component.choice.mappingSuggestedWord } : {})
   }));
-  const componentLayers = selected.map((component) => component.choice.componentLayers[0]);
-  const targetHeadRelation = hasWordNetHeadSenseRelation(targetId, headSense.source, relationIndex);
+  const componentLayers = allSelected.map((component) => component.componentLayer ?? component.choice?.componentLayers?.[0]);
+  const targetHeadRelation = Boolean(targetHead) || hasWordNetHeadSenseRelation(targetId, headSense.source, relationIndex);
   const rationaleText = text(rationale).slice(0, 180);
   return {
     id: candidateId,
@@ -1145,8 +1253,17 @@ export function buildSenseDerivedCompoundCandidateFromChoice({
     sourceTranslationGlossesByLanguage: { [language]: sourceComponents.map((component) => text(component.gloss)) },
     sourceComponentIndexesByLanguage: { [language]: selected.map((component) => component.sourceIndex) },
     sourceLanguages: [language],
+    ...(targetHead ? {
+      targetHeadEvidence: {
+        word: targetHead.word,
+        pyashSequence: [...targetHead.pyashSequence],
+        componentLayer: targetHead.componentLayer,
+        targetSenseId: targetSense.source,
+        coverageType: targetHead.coverageType
+      }
+    } : {}),
     status: "candidate-closed",
-    confidence: "sense-derived-comparison-compound",
+    confidence: targetHead ? "sense-derived-subtype-compound" : "sense-derived-comparison-compound",
     provenance: "WordNet sense translation and Housekeeper component-choice proposal",
     frequencyRank: targetSense.frequencyRank,
     frequencyTagCount: targetSense.frequencyTagCount,
@@ -1162,12 +1279,12 @@ export function buildSenseDerivedCompoundCandidateFromChoice({
     verificationComposition: "literal",
     verificationMethod: "wordnet-sense-component-choice",
     verificationSenseId: targetId,
-    verificationComponentSenseIds: componentSenseEvidence.map((evidence) => evidence.source),
-    verificationSourceGlosses: selected.map((component) => component.sourceGloss),
-    verificationComponentMeanings: selected.map((component) => component.componentMeaning),
+    verificationComponentSenseIds: allSelected.map((component) => component.linked.source),
+    verificationSourceGlosses: allSelected.map((component) => component.sourceGloss),
+    verificationComponentMeanings: allSelected.map((component) => component.componentMeaning),
     verificationHeadSenseId: headSense.source,
     verificationRationale: rationaleText,
-    evidence: `target ${targetId}; ${language} source decomposition; existing atoms ${componentGlosses.join(" + ")}`
+    evidence: `target ${targetId}; ${language} source decomposition; existing atoms ${componentGlosses.join(" + ")}${targetHead ? `; fixed lexical head ${targetHead.word}` : ""}`
   };
 }
 

@@ -70,11 +70,14 @@ test("sense compound refinery links, composes, decides, and records one complete
       wordnetIndex: {
         relations: [{ source: "n:00000010-n", target: "n:00000030-n", relation: "hypernym" }]
       },
-      resolveWord: (word) => ({
-        coverageType: "atomic",
-        canonicalEnglish: word,
-        pyashSequence: word === "friend" ? ["hfre"] : ["hlak"]
-      })
+      resolveWord: (word) => {
+        const coverage = ({
+          friend: { coverageType: "atomic", canonicalEnglish: "friend", pyashSequence: ["hfre"] },
+          relationship: { coverageType: "atomic", canonicalEnglish: "relationship", pyashSequence: ["hlak"] },
+          grammar: { coverageType: "grammar", canonicalEnglish: "comparative_degree_", pyashSequence: ["trah"] }
+        })[word];
+        return coverage ?? null;
+      }
     }),
     loadBridges: async () => ({
       entries: [

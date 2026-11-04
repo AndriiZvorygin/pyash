@@ -180,21 +180,27 @@ Translation splits of prefixes, suffixes, inflections, and grammatical material 
 compounds; bound-affix decompositions remain uncertain. Slash-separated English part glosses are
 kept as alternatives.
 
+Before composition, resolve existing compound and grammar coverage. A grammar-covered sense stays
+out of the lexical compound worklist. If an unlinked lexical sense already has an atomic target for
+its lemma, preserve that atom as the fixed final head and compose only one or two source-backed
+modifiers before it. The model cannot replace or repeat that head. Without an existing lexical head,
+the model selects the semantic head from its two or three source-backed atoms. Thus a new subtype of
+`better` can keep `better` as its head, while a genuinely new lexical target gets the head its
+meaning requires.
+
 After translation, `vocab_suggest` resolves each part gloss to active linked atoms. It prefers its
 lexical suggestions and uses up to four exact shared-WordNet-synset atom choices only when no
 lexical suggestion exists. A suggestion without an active atom link stays unresolved. One focused
 Housekeeper mind call per sense receives the target definition and a JSON array of `{source, gloss,
 atoms}` groups. Each source and gloss appears once per group, with its available atom words listed
-once. The model returns two or three atom words in Pyash modifier-before-head order, choosing one
-atom from each of two or three distinct source parts in the same translation decomposition. The
-prompt shows a matching two-part example; two atoms from one source part do not satisfy the minimum.
-If fewer than two source parts fit, it returns `uncertain` with an empty atom list. It receives no
-source-language label, candidate ids, per-atom definition text, or preassembled compound
-combinations. The parser resolves the selected words to one coherent source decomposition and checks
-that they are distinct available atoms. The response combines
-proposal and semantic judgment;
-there is no second LLM verifier call in this refinery. Deterministic checks gate promotion. A target's
-POS and any directed hypernym relation remain evidence, but neither blocks a lexical compound.
+once. The model selects modifiers from distinct source parts in the same translation decomposition;
+two modifiers from one part do not qualify. The prompt shows a matching two-part example. If too few
+source parts fit, it returns `uncertain` with an empty atom list. It receives no source-language
+label, candidate ids, per-atom definition text, or preassembled compound combinations. The parser
+resolves the selected words to one coherent source decomposition and checks that they are distinct
+available atoms. The response combines proposal and semantic judgment; there is no second LLM
+verifier call in this refinery. Deterministic checks gate promotion. A target's POS and any directed
+hypernym relation remain evidence, but neither blocks a lexical compound.
 
 The run folder `artifacts/<run-id>/` holds `worklist.pya`, resumable
 `sense-translations.pya`, `translation-failures.pya` (failed sense ids and bounded error/response

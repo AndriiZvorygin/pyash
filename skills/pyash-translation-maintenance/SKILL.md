@@ -124,10 +124,11 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   compound work; do not break a semantic tie by alphabetic order. Missing
   exact-key counts stay unknown, not zero. Preserve the resource version and
   count in bridge evidence.
-- A dictionary alias can anchor a sense only when its canonical target is an
-  atomic or accepted compound anchor and both resolve to the same Pyash
-  sequence. Grammar particles are not lexical sense anchors; leave aliases
-  that resolve to grammar or change sequence as residual candidates.
+- A dictionary alias can anchor a lexical sense only when its canonical target
+  is an atomic or accepted compound anchor and both resolve to the same Pyash
+  sequence. Grammar particles are not lexical sense anchors. Resolve known
+  grammar coverage before compound formation and keep grammar-covered senses
+  out of lexical compound worklists.
 - For direct-candidate atoms that remain unlinked, run
   `node command/wordnet_atom_sense_sweep.mjs` to ask the configured Qwen model
   to choose among the supplied WordNet glosses. The worklist requires an exact
@@ -233,11 +234,15 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   English30k rank and stable sense id. This selection order is separate from the
   rank-first atom frequency allocation. Missing tag counts sort last.
   A suggested term without an active atom link remains unresolved rather than
-  expanding to every WordNet synonym. Exclude a residual
-  synset when one of its lemmas already resolves
-  to an active linked atomic target; the frequency allocator can leave another
-  synset for that same anchored lemma in its residual pool. Uncertain results
-  remain explicit, and failed senses are retryable.
+  expanding to every WordNet synonym. Exclude a residual synset when an
+  existing accepted compound already covers that sense. If a residual lexical
+  sense has an existing atomic target for its lemma, retain that atom as the
+  mandatory final head and compose only source-backed modifier(s) before it.
+  Do not let a source-language component replace the known lexical head. A
+  genuinely new lexical target with no existing atomic head uses the semantic
+  head selected from its components. Grammar-covered senses remain outside the
+  lexical worklist. Uncertain results remain explicit, and failed senses are
+  retryable.
   For a new sense-derived compound, make one focused Housekeeper mind call per
   sense to compose and judge the compound together. Include the target sense,
   source-language decomposition, English gloss alternatives for each source
@@ -256,8 +261,12 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   meet the minimum. If fewer than two parts fit, return `uncertain` with an empty
   atom list. Show a two-part example in the prompt.
   The parser resolves the selected words to one coherent source decomposition
-  and validates each against the offered active atoms. Deterministic evidence
-  checks and promotion follow this call; there is no separate LLM verifier.
+  and validates each against the offered active atoms. With an existing target
+  atom, the model returns one or two modifiers and the pipeline appends that
+  target as the final component; a source choice that duplicates the fixed head
+  is removed from the offered choices. Without a fixed target head, the model
+  returns two or three components. Deterministic evidence checks and promotion
+  follow this call; there is no separate LLM verifier.
   Uncertain and failed choices remain in `component-compositions.pya` for
   resumption or inspection.
 

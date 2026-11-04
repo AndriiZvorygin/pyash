@@ -385,9 +385,34 @@ async function loadInventory({ context, dependencies }) {
   const linkedSenseIds = linkedEntries.map((entry) => entry.source);
   const linkedAtomicSenses = linkedEntries.filter((entry) => entry.targetKind === "atom"
     && Array.isArray(entry.pyashSequence) && entry.pyashSequence.length === 1);
+  const resolveTargetCoverage = (sense) => {
+    const lemma = sense.lemmas[0];
+    const coverage = allocation.resolveWord(lemma, {
+      partOfSpeech: sense.pos,
+      senseId: sense.senseId
+    });
+    if (!coverage || !["atomic", "compound", "grammar", "alias", "dictionary-alias"].includes(coverage.coverageType)) return null;
+    if (coverage.coverageType === "grammar" || coverage.coverageType === "compound") return coverage;
+    if (["alias", "dictionary-alias"].includes(coverage.coverageType)) {
+      if (coverage.canonicalCoverageType === "grammar") return { ...coverage, coverageType: "grammar" };
+      if (coverage.canonicalCoverageType === "compound") return { ...coverage, coverageType: "compound" };
+      if (coverage.canonicalCoverageType !== "atomic") return null;
+    }
+    const pyashSequence = Array.isArray(coverage.pyashSequence)
+      ? coverage.pyashSequence.map(text).filter(Boolean)
+      : [];
+    return {
+      ...coverage,
+      coverageType: "atomic",
+      word: coverage.canonicalEnglish || lemma,
+      pyashSequence,
+      componentLayer: pyashSequence.length === 1 ? layerIndex.byWord.get(pyashSequence[0]) : undefined
+    };
+  };
   const completeWorklist = buildSenseCompoundWorklist({
     residualSenses: allocation.allocation.residual,
     linkedSenseIds,
+    resolveTargetCoverage,
     minimumTagCount: context.config.minimumTagCount,
     order: context.config.worklistOrder
   });
@@ -421,9 +446,14 @@ async function loadInventory({ context, dependencies }) {
     records: currentTranslations,
     bySense: new Map(currentTranslations.map((record) => [record.senseId, record]))
   };
-  const atomInventoryHash = hash(stableJson(linkedAtomicSenses.map((entry) => [
-    entry.source, entry.target, entry.pyashSequence, entry.targetId
-  ]).sort((left, right) => left[0].localeCompare(right[0]))));
+  const atomInventoryHash = hash(stableJson({
+    linkedAtomicSenses: linkedAtomicSenses.map((entry) => [
+      entry.source, entry.target, entry.pyashSequence, entry.targetId
+    ]).sort((left, right) => left[0].localeCompare(right[0])),
+    existingTargetHeads: completeWorklist
+      .filter((sense) => sense.targetHead)
+      .map((sense) => [sense.senseId, sense.targetHead])
+  }));
   const pending = fullWorklist.filter((sense) => {
     if (requestedSenseSet?.has(sense.senseId)) return true;
     const progress = progressBySense.get(sense.senseId);

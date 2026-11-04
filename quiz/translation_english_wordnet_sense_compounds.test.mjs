@@ -20,6 +20,7 @@ import {
   buildCompoundVerificationPrompt,
   classifyCompoundCertainty
 } from "../program/library/translation/compound_verification.mjs";
+import { acceptedDecision } from "../command/wordnet_frequency_compound_sweep.mjs";
 
 const languages = ["chinese", "french", "russian", "hindi"];
 
@@ -200,6 +201,85 @@ test("component-choice response resolves only offered atoms and preserves head-f
   assert.throws(() => parseSenseCompoundChoiceResponse(JSON.stringify({
     verdict: "compound", atoms: ["friend", "friend"]
   }), { input }), /repeats an atom word/u);
+});
+
+test("an existing lexical target stays the mandatory head of a new sense compound", () => {
+  const atom = (word, sequence, definition, gloss) => ({
+    word,
+    coverageType: "atomic",
+    status: "active-linked-atom",
+    pyashSequence: [sequence],
+    componentLayers: [16],
+    mappingKind: "word-suggestion",
+    mappingCoverageType: "atomic",
+    mappingLookupGloss: gloss,
+    mappingLookupSenseEvidence: [{ source: `n:${sequence}`, pos: "n", lemmas: [gloss], definition: `${gloss} meaning` }],
+    mappingSuggestedWord: word,
+    linkedSense: { source: `n:${sequence}`, pos: "n", lemmas: [word], definition }
+  });
+  const sense = {
+    senseId: "a:00000020-a",
+    pos: "a",
+    lemma: "better",
+    lemmas: ["better"],
+    definition: "changed for the better in health or fitness",
+    targetHead: {
+      coverageType: "atomic",
+      word: "better",
+      pyashSequence: ["pcac"],
+      componentLayer: 16
+    }
+  };
+  const translations = [{
+    language: "chinese",
+    surface: "好转",
+    composition: "compound",
+    compositionEvidence: "health plus change expresses improvement",
+    components: [
+      { surface: "好", gloss: "good/healthy", role: "lexical" },
+      { surface: "转", gloss: "turn/change", role: "lexical" }
+    ]
+  }];
+  const choices = new Map([
+    ["healthy", [atom("health", "hhea", "a healthy state", "healthy")]],
+    ["good", [atom("health", "hhea", "a healthy state", "good")]],
+    ["change", [
+      atom("change", "hcha", "the act of changing", "change"),
+      atom("better", "pcac", "of superior quality", "change")
+    ]],
+    ["turn", [atom("change", "hcha", "the act of changing", "turn")]]
+  ]);
+  const input = buildSenseCompoundChoiceInput({ sense, translations, kwonCandidatesByGloss: choices });
+
+  assert.match(input.prompt, /existing lexical head better \(pcac\)/u);
+  assert.match(input.prompt, /Choose one or two modifier atoms/u);
+  assert.match(input.prompt, /Keep that exact word as the final atom/u);
+  assert.equal(input.sourceOptions.some((option) => option.pyashSequence[0] === "pcac"), false);
+  assert.equal(input.responseFormat.oneOf[0].properties.atoms.minItems, 1);
+  assert.equal(input.responseFormat.oneOf[0].properties.atoms.maxItems, 2);
+
+  const parsed = parseSenseCompoundChoiceResponse(JSON.stringify({
+    verdict: "compound",
+    atoms: ["health"]
+  }), { input });
+  const candidate = buildSenseDerivedCompoundCandidateFromChoice({
+    sense,
+    selectedComponents: parsed.selectedComponents,
+    translations,
+    candidateRevision: "sense-component-choice-v7",
+    rationale: parsed.rationale
+  });
+
+  assert.deepEqual(candidate.pyashSequence, ["hhea", "pcac"]);
+  assert.deepEqual(candidate.componentGlosses, ["health", "better"]);
+  assert.equal(candidate.head, "better");
+  assert.deepEqual(candidate.modifiers, ["health"]);
+  assert.equal(candidate.targetHeadEvidence.word, "better");
+  assert.equal(acceptedDecision({ ...candidate, status: "accepted-llm" }), true);
+  assert.throws(() => parseSenseCompoundChoiceResponse(JSON.stringify({
+    verdict: "compound",
+    atoms: ["health", "better"]
+  }), { input }), /not an available atom/u);
 });
 
 test("sense translation response parses bounded noisy JSON and keeps only requested languages", () => {
@@ -558,6 +638,66 @@ test("tag-count floor keeps only senses with at least the configured count", () 
     ["n:00000030-n", 3],
     ["n:00000020-n", 2]
   ]);
+});
+
+test("compound worklist keeps existing lexical heads, and excludes grammar-covered targets", () => {
+  const rows = buildSenseCompoundWorklist({
+    residualSenses: [
+      { source: "a:00000021-a", pos: "a", lemmas: ["better"], gloss: "changed for the better" },
+      { source: "r:00000022-r", pos: "r", lemmas: ["more"], gloss: "comparative degree" },
+      { source: "r:00000026-r", pos: "r", lemmas: ["most"], gloss: "superlative degree" },
+      { source: "n:00000024-n", pos: "n", lemmas: ["compound target"], gloss: "already covered by an accepted compound" },
+      { source: "a:00000025-a", pos: "a", lemmas: ["improved"], gloss: "of better quality" },
+      { source: "a:00000023-a", pos: "a", lemmas: ["novel"], gloss: "new and original" }
+    ],
+    resolveTargetCoverage: (sense) => {
+      if (sense.lemmas[0] === "better") return {
+        coverageType: "atomic",
+        canonicalEnglish: "better",
+        pyashSequence: ["pcac"],
+        componentLayer: 16
+      };
+      if (sense.lemmas[0] === "more") return {
+        coverageType: "dictionary-alias",
+        canonicalCoverageType: "grammar",
+        canonicalEnglish: "comparative_degree_",
+        pyashSequence: ["trah"]
+      };
+      if (sense.lemmas[0] === "most") return {
+        coverageType: "grammar",
+        canonicalEnglish: "superlative_degree_",
+        pyashSequence: ["pluh"]
+      };
+      if (sense.lemmas[0] === "compound target") return {
+        coverageType: "compound",
+        canonicalEnglish: "compound target",
+        pyashSequence: ["hmod", "hhea"]
+      };
+      if (sense.lemmas[0] === "improved") return {
+        coverageType: "dictionary-alias",
+        canonicalCoverageType: "atomic",
+        canonicalEnglish: "better",
+        pyashSequence: ["pcac"],
+        componentLayer: 16
+      };
+      return null;
+    }
+  });
+
+  assert.deepEqual(rows.map((row) => row.senseId), ["a:00000021-a", "a:00000023-a", "a:00000025-a"]);
+  assert.deepEqual(rows[0].targetHead, {
+    coverageType: "atomic",
+    word: "better",
+    pyashSequence: ["pcac"],
+    componentLayer: 16
+  });
+  assert.equal(rows[1].targetHead, undefined);
+  assert.deepEqual(rows[2].targetHead, {
+    coverageType: "atomic",
+    word: "better",
+    pyashSequence: ["pcac"],
+    componentLayer: 16
+  });
 });
 
 test("a linked sense for one part of speech does not suppress a residual sense for another", () => {
