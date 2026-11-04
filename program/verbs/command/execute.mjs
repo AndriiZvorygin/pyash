@@ -51,9 +51,24 @@ export function startFileTail({ filename, onLine }) {
   return () => clearInterval(interval);
 }
 
-export async function runCommandText(cmd, { input, timeoutMs, cwd, env, maxOutputBytes, onStdout, onStderr } = {}) {
+export async function runCommandText(cmd, { input, timeoutMs, cwd, env, maxOutputBytes, onStdout, onStderr, signal } = {}) {
   return new Promise((resolve, reject) => {
     let proc;
+    let abortTimer = null;
+    let aborted = false;
+    const cleanupSignal = () => {
+      if (abortTimer) clearTimeout(abortTimer);
+      signal?.removeEventListener?.("abort", abortProcess);
+    };
+    const abortProcess = () => {
+      if (!proc || proc.exitCode !== null || proc.signalCode !== null) return;
+      aborted = true;
+      proc.kill("SIGINT");
+      abortTimer = setTimeout(() => {
+        if (proc.exitCode === null && proc.signalCode === null) proc.kill("SIGKILL");
+      }, 1000);
+      abortTimer.unref?.();
+    };
     const spawnOptions = {
       stdio: ["pipe", "pipe", "pipe"],
       cwd,
@@ -95,15 +110,19 @@ export async function runCommandText(cmd, { input, timeoutMs, cwd, env, maxOutpu
     });
     proc.on("error", (err) => {
       if (timeoutHandle) clearTimeout(timeoutHandle);
+      cleanupSignal();
       reject(err);
     });
     proc.on("close", status => {
       if (timeoutHandle) clearTimeout(timeoutHandle);
+      cleanupSignal();
       if (exceededOutputLimit) {
         stderr += `output exceeded ${maxOutputBytes} bytes`;
       }
-      resolve({ status, signal: proc.signalCode ?? null, stdout, stderr, timedOut, exceededOutputLimit });
+      resolve({ status, signal: proc.signalCode ?? null, stdout, stderr, timedOut, exceededOutputLimit, aborted });
     });
+    if (signal?.aborted) abortProcess();
+    else signal?.addEventListener?.("abort", abortProcess, { once: true });
     if (typeof timeoutMs === "number" && timeoutMs > 0) {
       timeoutHandle = setTimeout(() => {
         timedOut = true;
