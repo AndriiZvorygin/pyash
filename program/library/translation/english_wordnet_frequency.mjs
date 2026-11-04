@@ -462,7 +462,7 @@ export function buildEnglishWordNetFrequencyAllocationRecords({
     };
     for (const lemma of lemmas) {
       const rankValue = Number(rankForEnglish(lemma));
-      const coverage = resolveWord(lemma, { pos });
+      const coverage = resolveWord(lemma, { pos, senseId: source });
       const pyashSequence = Array.isArray(coverage?.pyashSequence)
         ? coverage.pyashSequence.filter((word) => typeof word === "string" && word.trim()).map((word) => word.trim())
         : [];

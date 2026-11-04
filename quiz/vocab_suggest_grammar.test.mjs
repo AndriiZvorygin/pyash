@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { runVocabSuggest } from "../command/vocab_suggest.mjs";
+import { buildKwonLinkedAtomicChoices } from "../program/library/translation/english_wordnet_sense_compounds.mjs";
 
 test("vocab_suggest reports indefinite pronouns as fused Pyac words", async () => {
   const lines = [];
@@ -101,4 +102,32 @@ test("vocab_suggest returns separate English suggestions and Pyac mappings", asy
   });
   assert.deepEqual(bewildered.wordSuggestions, ["panicked", "mystified", "crazily"]);
   assert.equal(bewildered.mappings.find((mapping) => mapping.word === "mystified")?.pyac, "hmi2f");
+});
+
+test("vocab_suggest does not treat an English word prefix as a synonym", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["accord"], { report: (line) => lines.push(String(line)) });
+  const accord = result.suggestionRecords.find((record) => record.input === "accord");
+  const activeAtomEntries = result.linkedWordNetSenses.map((sense) => ({
+    source: sense.source,
+    target: sense.target,
+    targetPartOfSpeech: sense.targetPartOfSpeech,
+    targetKind: "atom",
+    pyashSequence: sense.pyashSequence,
+    lemmas: sense.lemmas,
+    definition: sense.gloss
+  }));
+  const choices = buildKwonLinkedAtomicChoices({
+    suggestions: result.suggestionRecords,
+    linkedWordNetSenses: result.linkedWordNetSenses,
+    activeAtomEntries,
+    layerByWord: new Map(activeAtomEntries.map((entry) => [entry.pyashSequence[0], 16]))
+  });
+
+  assert.deepEqual(accord.wordSuggestions, []);
+  assert.deepEqual(accord.mappings, []);
+  assert.equal(accord.status, "unresolved");
+  assert.deepEqual(choices.get("accord").map((choice) => choice.word), ["treaty"]);
+  assert.match(lines.join("\n"), /accord: no suggestions; English30k rank 4800 remains unresolved/u);
+  assert.doesNotMatch(lines.join("\n"), /accordions/u);
 });

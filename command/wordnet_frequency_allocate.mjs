@@ -82,7 +82,7 @@ export function atomSenseEntriesForReselection(entries = [], targetIds = [], res
   return entries.filter((entry) => {
     const targetPartOfSpeech = canonicalWordNetTargetPartOfSpeech(entry.targetPartOfSpeech || entry.source.slice(0, 1));
     if (!targetPartOfSpeech) return false;
-    const coverage = resolveWord(entry.target, { partOfSpeech: targetPartOfSpeech });
+    const coverage = resolveWord(entry.target, { partOfSpeech: targetPartOfSpeech, senseId: entry.source });
     const pyashSequence = sequence(coverage?.pyashSequence);
     if (coverage?.coverageType !== "atomic" || pyashSequence.length !== 1) return false;
     const targetId = englishWordNetTargetId("atom", pyashSequence, targetPartOfSpeech);
@@ -111,7 +111,7 @@ function targetIdentity(coverage, target, partOfSpeech) {
   };
 }
 
-export function buildWordResolver(resources, compoundCoverage) {
+export function buildWordResolver(resources, compoundCoverage, wordNetSenseCompounds = compoundCoverage.wordnetSenseCompounds ?? []) {
   const atoms = new Map();
   for (const entry of pyashWords) {
     const target = normalized(entry?.en);
@@ -136,11 +136,35 @@ export function buildWordResolver(resources, compoundCoverage) {
       if (key && !atoms.has(key) && !compounds.has(key)) compounds.set(key, coverage);
     }
   }
+  const compoundsBySense = new Map();
+  for (const record of wordNetSenseCompounds) {
+    const senseId = String(record?.senseId ?? "").trim();
+    const pyashSequence = sequence(record?.pyashSequence);
+    if (!senseId || pyashSequence.length < 2 || pyashSequence.length > 3) continue;
+    const coverage = {
+      coverageType: "compound",
+      canonicalEnglish: String(record.target).normalize("NFC").trim(),
+      target: String(record.target).normalize("NFC").trim(),
+      pyashSequence,
+      id: record.id,
+      senseId
+    };
+    compoundsBySense.set(senseId, [...(compoundsBySense.get(senseId) ?? []), {
+      coverage,
+      terms: new Set([record.target, ...(record.aliases ?? [])].map(normalized).filter(Boolean))
+    }]);
+  }
   return (word, options = {}) => {
     const pos = String(options?.partOfSpeech ?? options?.pos ?? "").trim().toLowerCase();
     const targetPos = canonicalWordNetTargetPartOfSpeech(pos);
     const key = normalized(word);
+    const senseId = String(options?.senseId ?? options?.source ?? "").trim();
     const coverage = lookupEnglish30kCoverage(resources.coverage, word);
+    if (senseId) {
+      const exact = (compoundsBySense.get(senseId) ?? [])
+        .find((row) => row.terms.has(key));
+      if (exact) return exact.coverage;
+    }
     const scopedLemma = targetPos
       ? resources.lemmaIndex?.lookupForPartOfSpeech?.(word, targetPos, { scopedOnly: true })
       : null;
@@ -237,7 +261,10 @@ function bridgeRecord(entry, resolveWord) {
   const pos = source.slice(0, separator);
   const synset = source.slice(separator + 1);
   const targetPartOfSpeech = canonicalWordNetTargetPartOfSpeech(entry.targetPartOfSpeech || pos);
-  const identity = targetIdentity(resolveWord(entry.target, { partOfSpeech: targetPartOfSpeech }), entry.target, targetPartOfSpeech);
+  const identity = targetIdentity(resolveWord(entry.target, {
+    partOfSpeech: targetPartOfSpeech,
+    senseId: entry.source
+  }), entry.target, targetPartOfSpeech);
   if (!identity.pyashSequence.length) return null;
   return {
     source,
@@ -342,7 +369,7 @@ export function compoundWorklist(
   const residualBySource = new Map();
   for (const record of residual) {
     const alreadyCoveredByAtom = record.lemmas.some((lemma) => {
-      const coverage = resolveWord(lemma, { partOfSpeech: record.pos });
+      const coverage = resolveWord(lemma, { partOfSpeech: record.pos, senseId: record.source });
       const coverageType = coverage?.canonicalCoverageType || coverage?.coverageType;
       const pyashSequence = sequence(coverage?.pyashSequence);
       if (coverageType !== "atomic" || pyashSequence.length !== 1) return false;
@@ -596,7 +623,7 @@ export async function prepareWordNetFrequencyAllocation({ reselectAtomTargetIds 
   );
   const reopenedTargetIds = [...new Set(reopenedAtomSenseEntries.map((entry) => {
     const partOfSpeech = canonicalWordNetTargetPartOfSpeech(entry.targetPartOfSpeech || entry.source.slice(0, 1));
-    const coverage = resolveWord(entry.target, { partOfSpeech });
+    const coverage = resolveWord(entry.target, { partOfSpeech, senseId: entry.source });
     return englishWordNetTargetId("atom", sequence(coverage?.pyashSequence), partOfSpeech);
   }))];
   const reservedTargetIds = [...preservedRecords.map((record) => record.link.targetId), ...reopenedTargetIds];

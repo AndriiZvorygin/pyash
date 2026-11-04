@@ -5,6 +5,7 @@ import {
   acceptedDecisionsForRevision,
   acceptedDecision,
   groupWordNetCompoundCandidates,
+  promoteAcceptedCompoundRecords,
   selectCurrentRevisionCompounds,
   wordNetCompoundDecisionRecord
 } from "../command/wordnet_frequency_compound_sweep.mjs";
@@ -184,6 +185,101 @@ test("derived compound round trips retain decision revision and audit links", ()
 
   assert.equal(current.length, 1);
   assert.deepEqual(current[0].verificationDecisionIds, ["candidate-brainstorm-1", "candidate-brainstorm-2"]);
+});
+
+test("verified compound index groups entries by synset and preserves same-target senses", () => {
+  const record = (senseId, target, pyashSequence) => ({
+    id: `${senseId}:${target}`,
+    senseId,
+    targetPartOfSpeech: senseId.slice(0, 1),
+    target,
+    surface: target,
+    sourceMorphemes: ["accord", "agree"],
+    morphemes: ["accord", "agree"],
+    componentGlosses: ["accord", "agree"],
+    pyashSequence,
+    componentLayers: [16, 16],
+    maxLayer: 16,
+    head: "agree",
+    decisionRevision: "v9",
+    verificationDecisionId: `decision:${senseId}:${target}`,
+    verificationDecisionIds: [`decision:${senseId}:${target}`],
+    confidence: "verified-wordnet-compound",
+    provenance: "WordNet frequency compound verification through Housekeeper",
+    status: "accepted-llm"
+  });
+  const source = renderDerivedCompoundCoveragePya([
+    record("v:00000001-v", "conform to", ["kfo7n", "tyik"]),
+    record("v:00000001-v", "follow", ["kfo7n", "rwit"]),
+    record("v:00000002-v", "conform to", ["kfo7n", "mwac"])
+  ], { name: "translation_compounds_derived_curated" });
+  const parsed = parseCompoundLexicon(source, {
+    name: "translation_compounds_derived_curated",
+    language: "canonical"
+  });
+
+  assert.equal((source.match(/su text "v:0000000[12]-v"/gu) ?? []).length, 2);
+  assert.deepEqual(parsed.map((entry) => [entry.senseId, entry.target, entry.pyashSequence]), [
+    ["v:00000001-v", "conform to", ["kfo7n", "tyik"]],
+    ["v:00000001-v", "follow", ["kfo7n", "rwit"]],
+    ["v:00000002-v", "conform to", ["kfo7n", "mwac"]]
+  ]);
+});
+
+test("compound promotion keys records by synset while retaining target and sequence guards", () => {
+  const accepted = ({ candidateId, target, senseId, pyashSequence }) => ({
+    candidateId,
+    target,
+    senseId,
+    verificationSenseId: senseId,
+    targetPartOfSpeech: senseId.slice(0, 1),
+    status: "accepted-llm",
+    sourceMorphemes: ["accord", "agree"],
+    componentGlosses: ["accord", "agree"],
+    pyashSequence,
+    componentLayers: [16, 16],
+    maxLayer: 16,
+    headRelationPolicy: "advisory",
+    verificationComposition: "literal",
+    verificationMethod: "wordnet-sense-component-choice",
+    verificationComponentSenseIds: ["n:00000010-n", "v:00000011-v"],
+    verificationSourceGlosses: ["accord", "agree"],
+    verificationComponentMeanings: ["an agreement", "be in accord"],
+    verificationHeadSenseId: "v:00000011-v",
+    verificationRationale: "The component senses compose the target sense.",
+    componentSenseEvidence: [
+      { component: "accord", source: "n:00000010-n", definition: "an agreement", mappingLookupGloss: "accord" },
+      { component: "agree", source: "v:00000011-v", definition: "be in accord", mappingLookupGloss: "agree" }
+    ]
+  });
+  const existing = [{
+    senseId: "v:00000001-v",
+    targetPartOfSpeech: "v",
+    target: "conform to",
+    pyashSequence: ["accord", "satisfied"],
+    decisionRevision: "v9",
+    verificationDecisionId: "old-decision",
+    verificationDecisionIds: ["old-decision"]
+  }];
+  const otherSense = accepted({
+    candidateId: "new-sense",
+    target: "conform to",
+    senseId: "v:00000002-v",
+    pyashSequence: ["accord", "agree"]
+  });
+  const result = promoteAcceptedCompoundRecords(existing, [otherSense], { decisionRevision: "v9" });
+
+  assert.equal(result.decisions[0].promotionStatus, "promoted-to-derived-index");
+  assert.deepEqual(result.records.map((row) => row.senseId), ["v:00000001-v", "v:00000002-v"]);
+
+  const competingMeaning = accepted({
+    candidateId: "different-sequence-same-sense",
+    target: "conform to",
+    senseId: "v:00000001-v",
+    pyashSequence: ["accord", "agree"]
+  });
+  const conflict = promoteAcceptedCompoundRecords(existing, [competingMeaning], { decisionRevision: "v9" });
+  assert.equal(conflict.decisions[0].promotionStatus, "sense-target-record-conflict");
 });
 
 test("resume restores all accepted decisions in the active revision, including non-residual targets", () => {

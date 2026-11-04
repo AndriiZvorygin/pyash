@@ -44,6 +44,7 @@ function stableJson(value) {
 
 function compoundId(entry) {
   const identity = [
+    entry.senseId ?? "",
     entry.surface,
     entry.morphemes.join("\u0001"),
     entry.target,
@@ -59,12 +60,19 @@ function invalid(message, details = {}) {
   return error;
 }
 
-function normalizeEntry(payload, surface, index, language) {
+function normalizeEntry(payload, rowKey, index, language) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw invalid("compound row payload must be an object", { index });
   }
-  if (payload.surface !== surface) {
-    throw invalid("compound row surface must match its Pyash key", { index, surface });
+  const senseId = typeof payload.senseId === "string" ? payload.senseId.trim() : "";
+  if (senseId ? senseId !== rowKey : payload.surface !== rowKey) {
+    throw invalid("compound row key must match its target surface or sense id", { index, rowKey, senseId, surface: payload.surface });
+  }
+  const surface = payload.surface;
+  if (payload.targetPartOfSpeech !== undefined && (
+    typeof payload.targetPartOfSpeech !== "string" || !payload.targetPartOfSpeech.trim()
+  )) {
+    throw invalid("compound target part of speech must be non-empty text", { index, rowKey });
   }
   if (!Array.isArray(payload.morphemes) || payload.morphemes.length < 2 || payload.morphemes.some((item) => typeof item !== "string" || !item)) {
     throw invalid("compound row requires at least two ordered morphemes", { index, surface });
@@ -192,6 +200,9 @@ function normalizeEntry(payload, surface, index, language) {
   if (payload.coverageStatus !== undefined && (typeof payload.coverageStatus !== "string" || !payload.coverageStatus)) {
     throw invalid("compound coverage status must be text", { index, surface });
   }
+  if (payload.genericLookup !== undefined && typeof payload.genericLookup !== "boolean") {
+    throw invalid("compound generic lookup marker must be boolean", { index, surface });
+  }
   if (payload.translationStatus !== undefined && !["complete", "partial"].includes(payload.translationStatus)) {
     throw invalid("compound translation status is unsupported", { index, surface });
   }
@@ -276,7 +287,9 @@ function normalizeEntry(payload, surface, index, language) {
   const entry = {
     id: compoundId(payload),
     language,
-    surface,
+    surface: payload.surface,
+    ...(senseId ? { senseId } : {}),
+    ...(payload.targetPartOfSpeech ? { targetPartOfSpeech: payload.targetPartOfSpeech.trim() } : {}),
     morphemes: [...payload.morphemes],
     target: payload.target,
     ...(payload.aliases === undefined ? {} : { aliases: [...new Set(payload.aliases)] }),
@@ -307,6 +320,7 @@ function normalizeEntry(payload, surface, index, language) {
       )
     }),
     ...(payload.coverageStatus === undefined ? {} : { coverageStatus: payload.coverageStatus }),
+    ...(payload.genericLookup === undefined ? {} : { genericLookup: payload.genericLookup }),
     ...(payload.translationStatus === undefined ? {} : { translationStatus: payload.translationStatus }),
     ...(payload.translationRequestId === undefined ? {} : { translationRequestId: payload.translationRequestId }),
     ...(payload.translationModel === undefined ? {} : { translationModel: payload.translationModel }),
@@ -369,10 +383,22 @@ export function parseCompoundLexicon(source, { name, language, atomicEntries = p
     } catch (error) {
       throw invalid("compound row JSON payload is malformed", { index, cause: error.message });
     }
-    const entry = normalizeEntry(payload, sentence.su.text, index, language);
-    if (seen.has(entry.surface)) throw invalid("compound surface is duplicated", { surface: entry.surface });
-    seen.add(entry.surface);
-    entries.push(entry);
+    const payloadRows = payload && typeof payload === "object" && !Array.isArray(payload)
+      && Array.isArray(payload.records)
+      ? payload.records.map((record) => ({ ...record, senseId: record?.senseId ?? payload.senseId }))
+      : [payload];
+    if (payloadRows.some((record) => !record || typeof record !== "object" || Array.isArray(record))) {
+      throw invalid("compound sense-index records must be objects", { index, rowKey: sentence.su.text });
+    }
+    for (const record of payloadRows) {
+      const entry = normalizeEntry(record, sentence.su.text, index, language);
+      const identity = entry.senseId
+        ? `sense:${entry.senseId}\u0000${entry.target}`
+        : `surface:${entry.surface}`;
+      if (seen.has(identity)) throw invalid("compound identity is duplicated", { surface: entry.surface, senseId: entry.senseId });
+      seen.add(identity);
+      entries.push(entry);
+    }
   }
   if (!entries.length) throw invalid("compound lexicon has no rows");
   return buildCompoundAtomLinks({ atomicEntries, compoundEntries: entries }).entries;
@@ -433,6 +459,8 @@ export function queryChineseCompoundLexicon(entries, criteria = {}) {
 export function canonicalCompoundPayload(entry) {
   return stableJson({
     surface: entry.surface,
+    senseId: entry.senseId ?? null,
+    targetPartOfSpeech: entry.targetPartOfSpeech ?? null,
     morphemes: entry.morphemes,
     target: entry.target,
     gloss: entry.gloss ?? null,
@@ -450,6 +478,7 @@ export function canonicalCompoundPayload(entry) {
     sourceSurfaces: entry.sourceSurfaces ?? null,
     sourceMorphemesByLanguage: entry.sourceMorphemesByLanguage ?? null,
     coverageStatus: entry.coverageStatus ?? null,
+    genericLookup: entry.genericLookup ?? null,
     translationStatus: entry.translationStatus ?? null,
     translationRequestId: entry.translationRequestId ?? null,
     translationModel: entry.translationModel ?? null,

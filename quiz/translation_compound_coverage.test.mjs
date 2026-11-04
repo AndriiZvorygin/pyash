@@ -9,7 +9,9 @@ import {
   appendNovelCompoundSourceTerms,
   buildDerivedCompoundCoverage,
   loadCuratedCompoundDecompositions,
+  loadWordNetVerifiedCompoundIndex,
   renderDerivedCompoundCoveragePya,
+  renderDerivedCompoundCoverageRowPya,
   resolveDerivedCompound,
   segmentClosedCompound,
   segmentDelimitedCompound,
@@ -232,6 +234,19 @@ test("Chinese 混同 lowers to the head-final identity-confusion compound", asyn
   assert.equal(hunTong.status, "lowered-compound");
 });
 
+test("synset compounds stay exact-sense scoped when a target already has an atom or lemma", async () => {
+  const [generic, indexed] = await Promise.all([
+    loadCuratedCompoundDecompositions(),
+    loadWordNetVerifiedCompoundIndex()
+  ]);
+
+  assert.equal(generic.some((entry) => entry.target === "love"), false);
+  assert.equal(generic.some((entry) => entry.target === "become"), false);
+  assert.ok(generic.some((entry) => entry.target === "include"));
+  assert.ok(indexed.some((entry) => entry.target === "love" && entry.senseId === "v:01779456-v"));
+  assert.ok(indexed.some((entry) => entry.target === "become" && entry.senseId === "v:02632685-v"));
+});
+
 test("compound coverage separates delimited use from accidental closed splits", () => {
   const atoms = new Map(atomicEntries.map((entry) => [entry.en, entry.pya]));
   assert.deepEqual(segmentDelimitedCompound("blue-print", atoms), [["blue", "print"]]);
@@ -409,6 +424,18 @@ test("compound coverage renders a parser-readable durable catalog", () => {
   assert.equal(parsed[0].morphologyStatus, "lexical-compound");
   assert.equal(parsed[0].sourceSurfaces.chinese, "蓝图");
   assert.deepEqual(parsed[0].sourceMorphemesByLanguage.chinese, ["蓝图"]);
+
+  const indexedRow = renderDerivedCompoundCoverageRowPya({
+    ...coverage.records[0],
+    senseId: "n:00000001-n",
+    targetPartOfSpeech: "n"
+  });
+  assert.match(indexedRow, /^su text "n:00000001-n" ob text /u);
+  const indexed = parseCompoundLexicon(
+    `su name translation_compounds_derived be map def\n${indexedRow}\nprah\n`,
+    { name: "translation_compounds_derived", language: "canonical" }
+  );
+  assert.equal(indexed[0].senseId, "n:00000001-n");
 });
 
 test("current dictionaries produce broad derived coverage", async (t) => {

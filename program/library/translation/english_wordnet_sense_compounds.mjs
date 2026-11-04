@@ -84,7 +84,7 @@ function lookupGlossSenseEvidence(wordnetIndex, gloss, maximum = 4, prioritizedS
 
 function isVocabularyTermMapping(mapping) {
   const mappingKind = text(mapping?.kind);
-  return (mappingKind === "word-suggestion" || DIRECT_COMPONENT_MAPPING_KINDS.has(mappingKind))
+  return DIRECT_COMPONENT_MAPPING_KINDS.has(mappingKind)
     && DIRECT_COMPONENT_COVERAGE_TYPES.has(text(mapping?.coverageType))
     && !/duplicate|deprecated|grammar/iu.test(text(mapping?.status))
     && Boolean(text(mapping?.word));
@@ -281,8 +281,9 @@ export function buildKwonLinkedAtomicChoices({
     const inputLinkedSenses = linkedSensesByInput.get(input) ?? [];
     if (!input) continue;
     const hasVocabularySuggestionTerm = inputSuggestions.some((suggestion) => (
-      (Array.isArray(suggestion?.wordSuggestions) && suggestion.wordSuggestions.some((word) => Boolean(normalized(word))))
-      || (Array.isArray(suggestion?.mappings) && suggestion.mappings.some(isVocabularyTermMapping))
+      text(suggestion?.status) !== "unresolved"
+      && ((Array.isArray(suggestion?.wordSuggestions) && suggestion.wordSuggestions.some((word) => Boolean(normalized(word))))
+        || (Array.isArray(suggestion?.mappings) && suggestion.mappings.some(isVocabularyTermMapping)))
     ));
     const choices = [];
 
@@ -312,14 +313,14 @@ export function buildKwonLinkedAtomicChoices({
     for (const suggestion of inputSuggestions) for (const mapping of suggestion?.mappings ?? []) {
       const mappingKind = text(mapping?.kind);
       const isDiscoverySuggestion = mappingKind === "word-suggestion";
-      if (!isVocabularyTermMapping(mapping)) continue;
+      if (!isVocabularyTermMapping(mapping) && !isDiscoverySuggestion) continue;
+      if (isDiscoverySuggestion && text(suggestion?.status) === "unresolved") continue;
       const sequence = mapping.pyacSequence ?? mapping.pyashSequence;
       if (!Array.isArray(sequence) || sequence.length !== 1) continue;
       for (const active of activeByWord.get(normalized(mapping.word)) ?? []) {
         if (active.pyashSequence[0] !== sequence[0]) continue;
         // Direct mappings must match the component gloss's WordNet evidence already.
-        // Suggestions only discover active linked atoms; the compound verifier must
-        // assess their supplied sense definitions before any promotion.
+        // Blocked Kwon suggestions discover active atoms for the composition choice.
         if (!isDiscoverySuggestion && wordnetIndex && typeof wordnetIndex.lookup === "function") {
           const expectedSenseIds = new Set(wordnetIndex.lookup(input)
             .map((sense) => `${text(sense?.pos)}:${text(sense?.synset)}`)

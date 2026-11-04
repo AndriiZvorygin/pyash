@@ -159,23 +159,18 @@ export async function loadCuratedCompoundDecompositions({
   url = new URL("./compound_coverage_curated.pya", import.meta.url),
   wordnetUrl = WORDNET_VERIFIED_COMPOUNDS_URL
 } = {}) {
-  const entries = await loadCompoundLexicon({
-    url,
-    name: DERIVED_COMPOUND_CURATED_NAME,
-    language: "canonical"
-  });
-  let wordnetEntries = [];
-  try {
-    wordnetEntries = await loadCompoundLexicon({
-      url: wordnetUrl,
+  const [entries, wordnetEntries] = await Promise.all([
+    loadCompoundLexicon({
+      url,
       name: DERIVED_COMPOUND_CURATED_NAME,
       language: "canonical"
-    });
-  } catch (error) {
-    if (error?.code !== "ENOENT") throw error;
-  }
+    }),
+    loadWordNetVerifiedCompoundIndex({ url: wordnetUrl })
+  ]);
+  // Only rows explicitly marked for generic lookup may leave their synset lane.
+  const genericWordNetEntries = wordnetEntries.filter((entry) => entry.genericLookup === true);
   const seenTargets = new Set();
-  return [...entries, ...wordnetEntries].filter((entry) => {
+  return [...entries, ...genericWordNetEntries].filter((entry) => {
     const target = normalizeTerm(entry.target);
     if (!target || seenTargets.has(target)) return false;
     seenTargets.add(target);
@@ -194,6 +189,21 @@ export async function loadCuratedCompoundDecompositions({
     confidence: entry.confidence,
     provenance: entry.provenance
   }));
+}
+
+export async function loadWordNetVerifiedCompoundIndex({
+  url = WORDNET_VERIFIED_COMPOUNDS_URL
+} = {}) {
+  try {
+    return await loadCompoundLexicon({
+      url,
+      name: DERIVED_COMPOUND_CURATED_NAME,
+      language: "canonical"
+    });
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
 }
 
 export function segmentDelimitedCompound(term, atoms) {
@@ -504,6 +514,8 @@ export function resolveDerivedCompound(records, { language, surface, target } = 
 function renderDerivedCompoundCoverageRow(entry) {
   const payload = {
     surface: entry.target,
+    ...(entry.senseId ? { senseId: entry.senseId } : {}),
+    ...(entry.targetPartOfSpeech ? { targetPartOfSpeech: entry.targetPartOfSpeech } : {}),
     aliases: entry.aliases,
     morphemes: entry.sourceMorphemes,
     sourceMorphemes: entry.sourceMorphemes,
@@ -521,6 +533,7 @@ function renderDerivedCompoundCoverageRow(entry) {
     morphologyStatus: entry.morphologyStatus,
     morphologySignals: entry.morphologySignals,
     coverageStatus: entry.coverageStatus,
+    genericLookup: entry.genericLookup,
     verificationStatus: entry.verificationStatus,
     verificationHeadKind: entry.verificationHeadKind,
     certainty: entry.certainty,
@@ -538,12 +551,16 @@ function renderDerivedCompoundCoverageRow(entry) {
     confidence: entry.confidence,
     status: entry.status
   };
-  return `su text ${JSON.stringify(entry.target)} ob text ${JSON.stringify(JSON.stringify(payload))} ya`;
+  return {
+    key: entry.senseId ?? entry.target,
+    payload
+  };
 }
 
 export function renderDerivedCompoundCoverageRowPya(entry) {
   if (!entry || typeof entry !== "object") throw invalid("compound row renderer requires a record");
-  return renderDerivedCompoundCoverageRow(entry);
+  const { key, payload } = renderDerivedCompoundCoverageRow(entry);
+  return `su text ${JSON.stringify(key)} ob text ${JSON.stringify(JSON.stringify(payload))} ya`;
 }
 
 export function renderDerivedCompoundCoveragePya(
@@ -552,9 +569,26 @@ export function renderDerivedCompoundCoveragePya(
 ) {
   if (!Array.isArray(records)) throw invalid("compound renderer requires records");
   if (typeof name !== "string" || !name) throw invalid("compound renderer requires a map name");
-  const rows = records
-    .slice()
-    .sort((left, right) => left.target.localeCompare(right.target) || left.id.localeCompare(right.id))
-    .map(renderDerivedCompoundCoverageRow);
+  const grouped = new Map();
+  for (const entry of records) {
+    const key = entry?.senseId ?? entry?.target;
+    if (typeof key !== "string" || !key) throw invalid("compound renderer requires a target or sense id");
+    const group = grouped.get(key) ?? [];
+    group.push(entry);
+    grouped.set(key, group);
+  }
+  const rows = [...grouped.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, entries]) => {
+      const payloads = entries
+        .slice()
+        .sort((left, right) => left.target.localeCompare(right.target) || left.id.localeCompare(right.id))
+        .map(renderDerivedCompoundCoverageRow)
+        .map((row) => row.payload);
+      const payload = entries[0].senseId
+        ? JSON.stringify({ senseId: entries[0].senseId, records: payloads })
+        : JSON.stringify(payloads[0]);
+      return `su text ${JSON.stringify(key)} ob text ${JSON.stringify(payload)} ya`;
+    });
   return [`su name ${name} be map def`, ...rows, "prah", ""].join("\n");
 }
