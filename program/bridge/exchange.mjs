@@ -121,6 +121,28 @@ function hashBytes(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
+function safeArtifactSegment(value, fallback = "artifact") {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/gu, "-")
+    .replace(/^-+|-+$/gu, "") || fallback;
+}
+
+export function recordExchangeJsonArtifact({ identity, label, producer = "exchange", payload, directory = "mind" } = {}) {
+  if (!exchangeRecorder || !exchangeStrict || !exchangeRunId) return null;
+  const serialized = JSON.stringify(payload, null, 2);
+  if (typeof serialized !== "string") return null;
+  const bytes = Buffer.from(serialized, "utf8");
+  const digest = hashBytes(bytes);
+  const locator = path.join(
+    "artifacts",
+    safeArtifactSegment(exchangeRunId, "run"),
+    safeArtifactSegment(directory, "exchange"),
+    `${safeArtifactSegment(identity, "mind")}-${safeArtifactSegment(label, "payload")}-${digest}.json`
+  ).replace(/[\\]+/gu, "/");
+  return recordArtifact({ locator, producer, bytes, kind: "json" });
+}
+
 function artifactExtension(locator) {
   if (!locator) return "";
   try {

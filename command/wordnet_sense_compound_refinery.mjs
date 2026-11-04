@@ -7,14 +7,21 @@ import { fileURLToPath } from "node:url";
 import { prepareWordNetFrequencyAllocation } from "./wordnet_frequency_allocate.mjs";
 import { encodeCheckpointText, sanitizeRunId } from "./run_pya_helpers.mjs";
 import { sentenceToPyash } from "../program/beautiful.mjs";
+import {
+  clearExchangeRecorder,
+  setExchangeRecorder,
+  setExchangeRunId,
+  setExchangeSentenceId,
+  setExchangeStrict
+} from "../program/bridge/exchange.mjs";
 import { runWordNetSenseCompoundRefinery, wordNetSenseCompoundRunId } from "../program/library/translation/wordnet_sense_compound_refinery.mjs";
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ARTIFACT_ROOT = path.join(REPOSITORY_ROOT, "artifacts");
 
-async function acquireRunLock() {
-  await fs.mkdir(ARTIFACT_ROOT, { recursive: true });
-  const lockPath = path.join(ARTIFACT_ROOT, ".wordnet-sense-compound-refinery.lock");
+async function acquireRunLock(artifactRoot = ARTIFACT_ROOT) {
+  await fs.mkdir(artifactRoot, { recursive: true });
+  const lockPath = path.join(artifactRoot, ".wordnet-sense-compound-refinery.lock");
   let handle;
   try {
     handle = await fs.open(lockPath, "wx");
@@ -27,51 +34,75 @@ async function acquireRunLock() {
   return () => fs.rm(lockPath, { force: true });
 }
 
-async function appendCheckpoint({ runId, sentence }) {
-  if (!runId || sentence?.be !== "checkpoint" || sentence?.mood !== "ya") return null;
-  const directory = path.join(REPOSITORY_ROOT, "newspaper");
-  const filename = path.join(directory, `${sanitizeRunId(runId)}.pya`);
-  await fs.mkdir(directory, { recursive: true });
-  const safe = { ...sentence };
-  for (const role of ["fromtext", "totext"]) {
-    if (typeof safe[role]?.text !== "string") continue;
-    safe[role] = { ...safe[role], text: encodeCheckpointText(safe[role].text) };
-  }
-  await fs.appendFile(filename, `${sentenceToPyash(safe)}\n`, "utf8");
-  return filename;
-}
-
 export async function runWordNetSenseCompoundRefineryCommand({
   dependencies = {},
   configuration = {},
   runId: requestedRunId = "",
+  repositoryRoot = REPOSITORY_ROOT,
+  artifactRoot = path.join(repositoryRoot, "artifacts"),
   report = console.log
 } = {}) {
   if (process.env.PYA_MIND_RESPONSE) {
     throw new Error("WordNet sense compound refinery requires PYA_MIND_RESPONSE to be unset");
   }
-  const releaseLock = await acquireRunLock();
+  const releaseLock = await acquireRunLock(artifactRoot);
   try {
     const allocation = await (dependencies.prepareAllocation ?? prepareWordNetFrequencyAllocation)();
     const runId = requestedRunId
       ? sanitizeRunId(requestedRunId)
       : wordNetSenseCompoundRunId({ sourceHash: allocation.sourceHash });
     let checkpointPath = "";
-    let checkpointWrite = Promise.resolve();
+    const newspaperPath = path.join(repositoryRoot, "newspaper", `${sanitizeRunId(runId)}.pya`);
+    let newspaperWrite = Promise.resolve();
+    let evokeIndex = 0;
+    const appendNewspaper = (sentence) => {
+      if (!sentence) return;
+      const safe = { ...sentence };
+      if (safe.be === "checkpoint") {
+        for (const role of ["fromtext", "totext"]) {
+          if (typeof safe[role]?.text === "string") {
+            safe[role] = { ...safe[role], text: encodeCheckpointText(safe[role].text) };
+          }
+        }
+      }
+      newspaperWrite = newspaperWrite.then(async () => {
+        await fs.mkdir(path.dirname(newspaperPath), { recursive: true });
+        await fs.appendFile(newspaperPath, `${sentenceToPyash(safe)}\n`, "utf8");
+      });
+    };
+    setExchangeRecorder({ runRoot: repositoryRoot, record: appendNewspaper });
+    setExchangeRunId(runId);
+    setExchangeStrict(true);
     let result;
     try {
-      result = await runWordNetSenseCompoundRefinery({
+      result = await (dependencies.runRefinery ?? runWordNetSenseCompoundRefinery)({
+        artifactRoot,
         runId,
         configuration,
         dependencies: { ...dependencies, prepareAllocation: async () => allocation },
-        onCheckpoint: (sentence) => {
-          checkpointWrite = checkpointWrite.then(async () => {
-            checkpointPath = await appendCheckpoint({ runId, sentence }) || checkpointPath;
+        onEvoke: (actionSentence) => {
+          const sentenceId = `evoke-${evokeIndex++}`;
+          setExchangeSentenceId(sentenceId);
+          appendNewspaper({
+            mood: "ya",
+            exists: true,
+            be: "evoke",
+            su: { name: sentenceId },
+            ob: { la: actionSentence }
           });
-        }
+        },
+        onCheckpoint: (sentence) => {
+          appendNewspaper(sentence);
+          checkpointPath = path.join(repositoryRoot, "newspaper", `${sanitizeRunId(runId)}.pya`);
+        },
+        onStage: appendNewspaper
       });
     } finally {
-      await checkpointWrite;
+      try {
+        await newspaperWrite;
+      } finally {
+        clearExchangeRecorder();
+      }
     }
     const summary = {
       runId,

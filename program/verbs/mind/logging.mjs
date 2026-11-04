@@ -1,4 +1,7 @@
-import { emitExchangeSentence } from "../../bridge/exchange.mjs";
+import {
+  emitExchangeSentence,
+  recordExchangeJsonArtifact
+} from "../../bridge/exchange.mjs";
 import { jsonToMapSentences } from "../exchange/json_map.mjs";
 import { normalizeMindReply } from "./reply.mjs";
 
@@ -74,6 +77,12 @@ export function recordMindJson({ targetName, label, payload }) {
   const count = nextDebugCount(targetName);
   const baseName = `${targetName || "mind"} ${label} ${count}`;
   const jsonValue = payload ?? {};
+  recordExchangeJsonArtifact({
+    identity: `${targetName || "mind"}-${count}`,
+    label,
+    producer: `mind ${label}`,
+    payload: jsonValue
+  });
   const messageSeries = messageSeriesFromPayload(jsonValue, baseName);
   const payloadForMap = messageSeries
     ? { ...jsonValue, messages: { name: messageSeries.seriesName } }
