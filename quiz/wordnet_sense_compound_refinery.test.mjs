@@ -9,8 +9,18 @@ import { interpret } from "../program/bridge/index.mjs";
 import { builtInSignatures } from "../program/verbs/index.mjs";
 import { forget } from "../program/remember/index.mjs";
 import { buildProgram } from "../program/program.mjs";
-import { runWordNetSenseCompoundRefinery } from "../program/library/translation/wordnet_sense_compound_refinery.mjs";
+import {
+  resolveWordNetSenseCompoundMaximumSenses,
+  runWordNetSenseCompoundRefinery
+} from "../program/library/translation/wordnet_sense_compound_refinery.mjs";
 import { parseWordNetSenseTranslationCache } from "../program/library/translation/english_wordnet_sense_compounds.mjs";
+
+test("sense compound launch overrides cannot exceed the configured batch limit", () => {
+  assert.equal(resolveWordNetSenseCompoundMaximumSenses(64), 64);
+  assert.equal(resolveWordNetSenseCompoundMaximumSenses(64, 16), 16);
+  assert.equal(resolveWordNetSenseCompoundMaximumSenses(64, 100000), 64);
+  assert.throws(() => resolveWordNetSenseCompoundMaximumSenses(64, 0), /positive integer/u);
+});
 
 test("sense compound refinery links, composes, decides, and records one complete sense", async () => {
   const artifactRows = (source) => buildProgram(source).sentences
@@ -149,6 +159,9 @@ test("sense compound refinery links, composes, decides, and records one complete
     const progressSource = await readFile(path.join(result.artifactDirectory, "progress.pya"), "utf8");
     assert.equal(parseWordNetSenseTranslationCache(cacheSource).bySense.get(sense.senseId).status, "partial");
     assert.match(progressSource, /retry/u);
+    forget();
+    clearSignatureHandlers();
+    for (const signature of builtInSignatures) registerSignatureHandler(signature);
     const resumed = await runWordNetSenseCompoundRefinery({
       artifactRoot,
       runId: "sense-compound-test",

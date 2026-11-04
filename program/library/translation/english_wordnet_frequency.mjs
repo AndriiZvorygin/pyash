@@ -471,11 +471,24 @@ export function buildEnglishWordNetFrequencyAllocationRecords({
         && !["atomic", "compound"].includes(coverage.canonicalCoverageType)) continue;
       const targetKind = coverage.coverageType === "compound" || pyashSequence.length > 1 ? "compound" : "atom";
       const targetPartOfSpeech = canonicalWordNetTargetPartOfSpeech(pos);
+      const proposedTarget = String(coverage.canonicalEnglish || coverage.target || lemma).normalize("NFC").trim();
+      const canonicalCoverage = resolveWord(proposedTarget, { pos });
+      const canonicalSequence = Array.isArray(canonicalCoverage?.pyashSequence)
+        ? canonicalCoverage.pyashSequence.filter((word) => typeof word === "string" && word.trim()).map((word) => word.trim())
+        : [];
+      if (!ALLOWED_COVERAGE_TYPES.has(canonicalCoverage?.coverageType)
+        || canonicalSequence.length === 0
+        || canonicalSequence.join(" ") !== pyashSequence.join(" ")) continue;
+      const canonicalKind = canonicalCoverage.coverageType === "compound" || canonicalSequence.length > 1
+        ? "compound"
+        : "atom";
+      if (canonicalKind !== targetKind) continue;
+      const target = String(canonicalCoverage.canonicalEnglish || canonicalCoverage.target || proposedTarget).normalize("NFC").trim();
       const targetId = englishWordNetTargetId(targetKind, pyashSequence, targetPartOfSpeech);
       const frequency = tagCountBySourceLemma.get(`${source}\u0000${lemma}`);
       record.candidates.push({
         lemma,
-        target: String(coverage.canonicalEnglish || coverage.target || lemma).normalize("NFC").trim(),
+        target,
         targetKind,
         targetId,
         targetPartOfSpeech,

@@ -83,6 +83,19 @@ function invalid(message, details = {}) {
   return error;
 }
 
+export function resolveWordNetSenseCompoundMaximumSenses(configuredMaximum, requestedMaximum) {
+  const configured = Number(configuredMaximum);
+  if (!Number.isSafeInteger(configured) || configured < 1) {
+    throw invalid("sense compound refinery configured maximumSenses must be a positive integer");
+  }
+  if (requestedMaximum === undefined) return configured;
+  const requested = Number(requestedMaximum);
+  if (!Number.isSafeInteger(requested) || requested < 1) {
+    throw invalid("sense compound refinery maximumSenses override must be a positive integer");
+  }
+  return Math.min(configured, requested);
+}
+
 function text(value) {
   return typeof value === "string" ? value.normalize("NFC").trim() : "";
 }
@@ -310,7 +323,15 @@ async function inspectHousekeeper({ model, dependencies }) {
 }
 
 async function ensureRefinery({ interpretFn = interpret } = {}) {
-  if (getRefinery(WORDNET_SENSE_COMPOUND_REFINERY_NAME)) return getRefinery(WORDNET_SENSE_COMPOUND_REFINERY_NAME);
+  const registered = getRefinery(WORDNET_SENSE_COMPOUND_REFINERY_NAME);
+  if (registered) return registered;
+  if (definitionPromise) {
+    const previousDefinition = definitionPromise;
+    await previousDefinition;
+    const restored = getRefinery(WORDNET_SENSE_COMPOUND_REFINERY_NAME);
+    if (restored) return restored;
+    if (definitionPromise === previousDefinition) definitionPromise = null;
+  }
   if (!definitionPromise) {
     definitionPromise = readFile(WORDNET_SENSE_COMPOUND_REFINERY_URL, "utf8")
       .then((source) => buildProgram(source).sentences)
@@ -1012,13 +1033,10 @@ export async function runWordNetSenseCompoundRefinery({
   if (process.env.PYA_MIND_RESPONSE) throw invalid("sense compound refinery requires PYA_MIND_RESPONSE to be unset");
   const source = await readFile(WORDNET_SENSE_COMPOUND_REFINERY_URL, "utf8");
   const config = parseConfig(source);
-  if (configuration.maximumSenses !== undefined) {
-    const maximumSenses = Number(configuration.maximumSenses);
-    if (!Number.isSafeInteger(maximumSenses) || maximumSenses < 1) {
-      throw invalid("sense compound refinery maximumSenses override must be a positive integer");
-    }
-    config.maximumSenses = maximumSenses;
-  }
+  config.maximumSenses = resolveWordNetSenseCompoundMaximumSenses(
+    config.maximumSenses,
+    configuration.maximumSenses
+  );
   const previousHousekeeper = process.env.PYA_GPU_HOUSEKEEPER_URL;
   const previousManagerRequired = process.env.PYA_GPU_MANAGER_REQUIRED;
   try {

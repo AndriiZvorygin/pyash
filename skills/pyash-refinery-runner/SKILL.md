@@ -31,6 +31,12 @@ Use this skill to work on refinery execution, ratify gates, and run newspaper be
 - Store durable state as parser-readable `.pya` artifacts. Do not add a JSON
   state file, a parallel transcript, or extra CLI destination flags to carry
   intermediate stages.
+- For broad WordNet sense sweeps, honor the configured `max-senses-per-launch`
+  limit (currently 64). Keep the stable run id, let each chunk complete through
+  its composition and decision artifacts, then continue from the progress map.
+  Do not raise the limit to the full backlog. When repeating launches in one
+  process, retain that run's prepared allocation snapshot and ensure the
+  Pyash refinery definition is re-registered after runtime memory is cleared.
 
 ## Checkpoints and newspapers
 
