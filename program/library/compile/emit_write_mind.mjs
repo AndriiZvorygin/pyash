@@ -1,4 +1,5 @@
 import { DEFAULT_TEXT_MODEL } from "../../runtime/gpu/text-model.mjs";
+import { DEFAULT_MAX_MIND_TOOL_TURNS } from "../../runtime/mind-limits.mjs";
 
 function historyWindowLiteral(windowValue, fallbackExpression = "cfg.window") {
   const numeric = Number(windowValue);
@@ -93,7 +94,7 @@ export function handleMindWrite(context, helpers) {
   lines.push("let reply = \"\";");
   lines.push("let lastResponse = null;");
   lines.push("let turns = 0;");
-  lines.push("const maxToolTurns = 6;");
+  lines.push(`const maxToolTurns = ${DEFAULT_MAX_MIND_TOOL_TURNS};`);
   lines.push("while (turns < maxToolTurns) {");
   lines.push("  turns += 1;");
   lines.push("  const requestPayload = { model, messages, tools, stream: false };");

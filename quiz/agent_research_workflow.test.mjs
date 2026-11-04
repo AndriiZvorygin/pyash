@@ -337,7 +337,7 @@ test("max tool calls counts each call in one model response and rejects the exce
   }
 });
 
-test("default tool-call budget permits bounded multi-step work", async () => {
+test("default tool-call budget permits work across more than six rounds and twelve calls", async () => {
   forget();
   const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-agent-research-default-limit-"));
   doRemember({ mood: "ya", su: { name: "agent cwd" }, be: "cwd", ob: { filename: cwd } });
@@ -348,9 +348,10 @@ test("default tool-call budget permits bounded multi-step work", async () => {
   await interpret(parse("prah"));
   const { tools, toolMap } = buildToolSchemas("tools");
   const writeTool = toolBySubject(tools, "write one");
-  const toolCalls = Array.from({ length: 4 }, (_, index) => ({
-    ...toolResponse(writeTool.function.name, { ob: `write-${index + 1}` }, `write-${index + 1}`).message.tool_calls[0]
-  }));
+  const mockResponses = Array.from({ length: 13 }, (_, index) =>
+    toolResponse(writeTool.function.name, { ob: `write-${index + 1}` }, `write-${index + 1}`)
+  );
+  mockResponses.push({ message: { role: "assistant", content: "finished" } });
   const result = await runToolChat({
     sentence: parse('be write ob text "research" for name helper to name text out with name tools do'),
     mindName: "helper",
@@ -367,15 +368,12 @@ test("default tool-call budget permits bounded multi-step work", async () => {
     mindDebug: false,
     debugMind: () => {},
     inputs: {
-      mockResponseRaw: JSON.stringify([
-        { message: { role: "assistant", content: "", tool_calls: toolCalls } },
-        { message: { role: "assistant", content: "finished" } }
-      ])
+      mockResponseRaw: JSON.stringify(mockResponses)
     }
   });
 
   assert.equal(result, "finished");
-  assert.equal(await fs.readFile(path.join(cwd, "one.txt"), "utf8"), "write-4");
+  assert.equal(await fs.readFile(path.join(cwd, "one.txt"), "utf8"), "write-13");
 });
 
 test("bounded HTML markdown dispatch honors atmost byte", async () => {

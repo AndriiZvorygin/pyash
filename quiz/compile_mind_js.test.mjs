@@ -18,6 +18,7 @@ test("compile mind to javascript uses PYA_MIND_RESPONSE", async () => {
   ].join("\n");
   const wrapped = await compileToJs(pyash);
   const js = wrapped.replace(/^\s*quoted\.javascript\.\s*/, "").replace(/\s*\.javascript\.quoted\s*$/, "");
+  assert.match(js, /const maxToolTurns = 65535;/);
   const logs = [];
   const result = vm.runInNewContext(js, {
     console: { log: (...args) => logs.push(args.join(" ")) },

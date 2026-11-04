@@ -11,6 +11,7 @@ import { buildToolSentence } from "./tooling.mjs";
 import { deriveSignatureFromCall, joinSignatureWords } from "../../bridge/signature.mjs";
 import { resolveRatifyDecision } from "../../agent/ratify_policy.mjs";
 import { submitRunToolEvent } from "../../bridge/newspaper.mjs";
+import { DEFAULT_MAX_MIND_TOOL_TURNS, normalizeMindToolCallLimit } from "../../runtime/mind-limits.mjs";
 
 function buildPromptText(messages) {
   if (!Array.isArray(messages)) return "";
@@ -312,10 +313,8 @@ export async function runToolChat({
   messages.push(userMessage);
 
   const interpret = await resolveInterpret();
-  const maxToolTurns = 6;
-  const effectiveMaxToolCalls = Number.isFinite(Number(maxToolCalls))
-    ? Math.max(0, Math.trunc(Number(maxToolCalls)))
-    : 12;
+  const maxToolTurns = DEFAULT_MAX_MIND_TOOL_TURNS;
+  const effectiveMaxToolCalls = normalizeMindToolCallLimit(maxToolCalls);
   let toolCallsUsed = 0;
   let turns = 0;
   let lastResponse = null;

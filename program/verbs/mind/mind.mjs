@@ -33,6 +33,7 @@ import { recordMindAnswer } from "./series.mjs";
 import { resolveMindPrompt, resolveGenitiveText, resolvePromptFromName } from "./resolve_prompt.mjs";
 import { resolveHistoryContext } from "./history_context.mjs";
 import { runToolChat } from "./tool_chat.mjs";
+import { normalizeMindToolCallLimit } from "../../runtime/mind-limits.mjs";
 import { runGenerate } from "./generate.mjs";
 import { normalizeMindBackendName, resolveMindBackendHost } from "./backend.mjs";
 import { mindSignatureWords } from "./signatures.mjs";
@@ -162,14 +163,6 @@ function normalizeNumPredict(value) {
   const whole = Math.trunc(numeric);
   if (whole <= 0) return null;
   return whole;
-}
-
-function normalizeMaxToolCalls(value) {
-  if (value === undefined || value === null) return null;
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return null;
-  const whole = Math.trunc(numeric);
-  return whole >= 0 ? whole : null;
 }
 
 function readMapText(map, keys = []) {
@@ -333,9 +326,9 @@ export async function mind_to_name_text(sentence, {
   await ensureMindTuningLoaded(model);
   const modelTuning = resolveMindTuningForModel(model, { rememberFn: remember });
   const configuredThink = resolveConfigMapBool("mind configure", "think", { rememberFn: remember });
-  const configuredMaxToolCalls = normalizeMaxToolCalls(
+  const configuredMaxToolCalls = normalizeMindToolCallLimit(
     resolveConfigMapNum("mind configure", "max tool calls", { rememberFn: remember })
-  ) ?? 12;
+  );
   const configuredNumPredict = normalizeNumPredict(
     resolveConfigMapNum("mind configure", "max tokens", { rememberFn: remember })
     ?? resolveConfigMapNum("mind configure", "max output tokens", { rememberFn: remember })
