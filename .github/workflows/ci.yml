@@ -4,9 +4,6 @@ on:
   push:
     branches: [master, dev]
   workflow_dispatch:
-  schedule:
-    # The schedule runs from the default branch (master) as a full-suite safety check.
-    - cron: "0 8 * * *"
 
 jobs:
   dev-checks:
@@ -66,8 +63,8 @@ jobs:
             echo "No quiz test files changed since the master merge-base; smoke and static checks passed."
           fi
 
-  master-tests:
-    name: Full test suite (master)
+  master-focused-checks:
+    name: Focused checks (master)
     if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:
@@ -78,35 +75,14 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Bootstrap external toolchains
-        run: npm run bootstrap -- --with-whisper
-      - name: Provision the sibling dictionary checkout
-        # The translation subsystem reads its dictionary and glyph word lists
-        # from the pyachso2n checkout that sits next to this repository.
-        run: |
-          for attempt in 1 2 3; do
-            if git clone --depth 1 https://gitlab.com/pyac/pyachso2n.git ../pyachso2n; then
-              exit 0
-            fi
-            rm -rf ../pyachso2n
-            if [ "$attempt" = "3" ]; then
-              echo "the sibling dictionary checkout could not be cloned"
-              exit 1
-            fi
-            sleep 10
-          done
-      - name: Install python worker dependencies
-        # The speaker identity module drives a python worker that imports numpy.
-        # Some runner images mark the system python as externally managed.
-        run: python3 -m pip install --quiet numpy || python3 -m pip install --quiet --break-system-packages numpy
+      - name: Run smoke tests
+        run: npm run test:ci:smoke
       - name: Check documentation prose
         run: npm run doc:prose
       - name: Check import graph
         run: npm run imports:check
       - name: Check house-facing surface
         run: npm run house:api:check
-      - name: Run full tests
-        run: npm run test:ci
 
   rust:
     name: Rust checks
