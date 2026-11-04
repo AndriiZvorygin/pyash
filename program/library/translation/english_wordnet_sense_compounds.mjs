@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { buildProgram } from "../../program.mjs";
+import { recordExchangeJsonArtifact } from "../../bridge/exchange.mjs";
 import { extractBoundedJsonObject } from "./english_verification.mjs";
 import { hasWordNetHeadSenseRelation, buildWordNetHeadRelationIndex } from "./english_wordnet.mjs";
 
@@ -1376,15 +1377,18 @@ export function createQueuedMindWordNetSenseTranslationTransport({
         num_predict: Math.max(1, Math.trunc(Number(maxOutputTokens) || ENGLISH_WORDNET_SENSE_COMPOUNDS_MAX_OUTPUT_TOKENS))
       }
     };
+    const queuedHandle = `${id}-translate-${attempt}`;
+    recordExchangeJsonArtifact({ identity: queuedHandle, label: "request", producer: "gpu mind request", payload: { handleId: queuedHandle, job: jobSpec } });
     const start = await interpret(parse(
-      `su name ${JSON.stringify(`${id}-translate-${attempt}`)} ob text ${JSON.stringify(JSON.stringify(jobSpec))} vyah start future be gpu mind do`
+      `su name ${JSON.stringify(queuedHandle)} ob text ${JSON.stringify(JSON.stringify(jobSpec))} vyah start future be gpu mind do`
     ));
-    return { status: text(start?.ob?.text), handleId: `${id}-translate-${attempt}`, response: start };
+    return { status: text(start?.ob?.text), handleId: queuedHandle, response: start };
     },
     async await(handleId) {
     const completed = await interpret(parse(
       `accordingto text ${JSON.stringify(text(handleId))} during num ${Math.max(1000, Math.trunc(Number(timeoutMs) || 1800000))} vyah await be gpu do`
     ));
+    recordExchangeJsonArtifact({ identity: handleId, label: "response", producer: "gpu mind response", payload: { handleId: text(handleId), status: text(completed?.ob?.text), result: completed?.result ?? null } });
     if (text(completed?.ob?.text) !== "success") throw invalid("Housekeeper sense translation did not complete", { handleId, response: completed });
     return { text: text(completed?.result?.text), handleId: text(handleId), model, metadata: completed?.result?.metadata ?? null };
     }
@@ -1418,6 +1422,7 @@ export function createQueuedMindSenseCompoundChoiceTransport({
       }
     };
     const queuedHandle = `${id}-compose-${Math.max(1, Math.trunc(Number(attempt) || 1))}`;
+    recordExchangeJsonArtifact({ identity: queuedHandle, label: "request", producer: "gpu mind request", payload: { handleId: queuedHandle, job: jobSpec } });
     const started = await interpret(parse(
       `su name ${JSON.stringify(queuedHandle)} ob text ${JSON.stringify(JSON.stringify(jobSpec))} vyah start future be gpu mind do`
     ));
@@ -1427,6 +1432,7 @@ export function createQueuedMindSenseCompoundChoiceTransport({
     const completed = await interpret(parse(
       `accordingto text ${JSON.stringify(queuedHandle)} during num ${waitMs} vyah await be gpu do`
     ));
+    recordExchangeJsonArtifact({ identity: queuedHandle, label: "response", producer: "gpu mind response", payload: { handleId: queuedHandle, status: text(completed?.ob?.text), result: completed?.result ?? null } });
     if (text(completed?.ob?.text) !== "success") {
       throw invalid("Housekeeper component-choice duty did not complete successfully", { handleId: queuedHandle, response: completed });
     }

@@ -74,7 +74,12 @@ Use this skill to work on refinery execution, ratify gates, and run newspaper be
   uncertain/error record for the rest instead of hanging or silently dropping
   work.
 - Obey the repository single-flight rule for GPU/LLM-heavy runs. Record model,
-  queue, provider, and attempt evidence in the run artifacts/newspaper.
+  queue, provider, and attempt evidence in the run artifacts/newspaper. When a
+  strict exchange recorder is active, persist each complete mind request and
+  response payload as a content-addressed JSON artifact under the run's artifact
+  folder; emit its artifact record into the newspaper correlated to the current
+  evoke identity. Keep the full prompt and response in those artifacts so the
+  newspaper remains readable while preserving exact call evidence.
 
 ## Ratify / resume checklist
 
