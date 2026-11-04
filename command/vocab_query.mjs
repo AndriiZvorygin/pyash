@@ -43,6 +43,21 @@ export async function queryVocabLines(prefix) {
   const normalized = input.toLowerCase();
   const { entries, blacklist } = await loadData();
 
+  const exactLines = new Set();
+  for (const entry of entries) {
+    if (!entry?.pya || !entry?.en) continue;
+    if (entry.en.trim().toLowerCase() === normalized || entry.pya.trim().toLowerCase() === normalized) {
+      const line = buildLine(entry);
+      if (line) exactLines.add(line);
+    }
+  }
+  if (exactLines.size > 0) return [...exactLines];
+
+  const blocked = blacklist[`X${normalized}`] ?? blacklist[`X${input}`];
+  if ((typeof blocked === "string" && blocked.length > 0) || (Array.isArray(blocked) && blocked.length > 0)) {
+    return [JSON.stringify(blocked)];
+  }
+
   const lines = new Set();
   for (const entry of entries) {
     if (!entry?.pya || !entry?.en) continue;
@@ -67,11 +82,6 @@ export async function queryVocabLines(prefix) {
       }
     }
     if (lines.size > 0) return [...lines];
-  }
-
-  const blocked = blacklist[`X${normalized}`] ?? blacklist[`X${input}`];
-  if ((typeof blocked === "string" && blocked.length > 0) || (Array.isArray(blocked) && blocked.length > 0)) {
-    return [JSON.stringify(blocked)];
   }
 
   return [];

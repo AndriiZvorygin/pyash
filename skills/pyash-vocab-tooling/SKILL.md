@@ -33,6 +33,10 @@ reports zero hits, and `quiz/pyash_name_purge.test.mjs` pins that.
 `scan_pyashtoken.mjs` only reports name positions. English prose that happens
 to use the word is data, not a name, and is skipped.
 
+Exact English dictionary blacklist alternatives take precedence over prefix
+matches. For example, `kwon accord` must return its alternatives rather than
+the unrelated prefix match `accordions`.
+
 ## Anchor helpers
 
 - Add anchor form:

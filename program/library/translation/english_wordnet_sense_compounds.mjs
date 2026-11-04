@@ -369,16 +369,19 @@ export function buildKwonLinkedAtomicChoices({
         }
       }
     }
-    const unique = new Map();
-    for (const choice of choices) {
-      const key = `${choice.linkedSense.source}\u0000${choice.pyashSequence.join("+")}`;
-      if (!unique.has(key)) unique.set(key, choice);
-    }
-    result.set(input, [...unique.values()]
+    const rankedChoices = choices
       .map((choice, index) => ({ choice, index, score: componentMappingScore(choice) }))
-      .sort((left, right) => right.score - left.score || left.index - right.index)
-      .slice(0, MAX_WORDNET_FALLBACK_SENSES)
-      .map(({ choice }) => choice));
+      .sort((left, right) => right.score - left.score || left.index - right.index);
+    const unique = new Map();
+    for (const { choice } of rankedChoices) {
+      // A prompt shows one linked meaning per available atom; duplicate senses
+      // for the same word otherwise crowd other Kwon alternatives out.
+      const key = `${normalized(choice.word)}\u0000${choice.pyashSequence.join("+")}`;
+      if (unique.has(key)) continue;
+      unique.set(key, choice);
+      if (unique.size >= MAX_WORDNET_FALLBACK_SENSES) break;
+    }
+    result.set(input, [...unique.values()]);
   }
   return result;
 }

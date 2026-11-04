@@ -243,8 +243,11 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   source-language decomposition, English gloss alternatives for each source
   part and active Kwon-linked atom words. Represent these as JSON objects with
   `source`, `gloss`, and `atoms`; include each source/gloss pair once and list
-  each atom word once in its group. Keep Kwon order, cap each gloss at four atoms,
-  and omit source-language labels, candidate or synset ids, per-atom definitions,
+  each atom word once in its group. Rank by existing sense evidence, preserve
+  Kwon order for ties, and cap each gloss at four distinct atom words. If an
+  atom has several linked senses, retain its highest-scoring sense once so
+  duplicate links do not crowd other alternatives out. Omit source-language
+  labels, candidate or synset ids, per-atom definitions,
   and preassembled compound combinations. The model returns two or three atom
   words in modifier-before-head order, choosing one atom from each of at least two
   distinct source parts in the same decomposition; two atoms from one part do not

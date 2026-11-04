@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { runVocabSuggest } from "../command/vocab_suggest.mjs";
-import { buildKwonLinkedAtomicChoices } from "../program/library/translation/english_wordnet_sense_compounds.mjs";
+import {
+  buildKwonLinkedAtomicChoices,
+  buildSenseCompoundChoiceInput
+} from "../program/library/translation/english_wordnet_sense_compounds.mjs";
 
 test("vocab_suggest reports indefinite pronouns as fused Pyac words", async () => {
   const lines = [];
@@ -104,10 +107,22 @@ test("vocab_suggest returns separate English suggestions and Pyac mappings", asy
   assert.equal(bewildered.mappings.find((mapping) => mapping.word === "mystified")?.pyac, "hmi2f");
 });
 
-test("vocab_suggest does not treat an English word prefix as a synonym", async () => {
+test("vocab_suggest uses exact blacklist alternatives before English prefix matches", async () => {
   const lines = [];
   const result = await runVocabSuggest(["accord"], { report: (line) => lines.push(String(line)) });
   const accord = result.suggestionRecords.find((record) => record.input === "accord");
+  assert.deepEqual(accord.wordSuggestions, ["treaty", "coincidence", "chord", "heart"]);
+  assert.equal(accord.suggestionSource, "blacklist");
+  assert.match(lines.join("\n"), /accord blocked, instead: treaty, coincidence, chord, heart/u);
+  assert.doesNotMatch(lines.join("\n"), /accordions/u);
+
+  const meet = await runVocabSuggest(["meet"], { report: () => {} });
+  assert.deepEqual(meet.suggestionRecords.find((record) => record.input === "meet").wordSuggestions, ["see", "visit"]);
+});
+
+test("compound prompt keeps distinct atom choices from every exact Kwon alternative", async () => {
+  const words = ["accord", "treaty", "coincidence", "chord", "heart", "meet", "see", "visit"];
+  const result = await runVocabSuggest(words.flatMap((word) => ["--text", word]), { report: () => {} });
   const activeAtomEntries = result.linkedWordNetSenses.map((sense) => ({
     source: sense.source,
     target: sense.target,
@@ -117,17 +132,32 @@ test("vocab_suggest does not treat an English word prefix as a synonym", async (
     lemmas: sense.lemmas,
     definition: sense.gloss
   }));
-  const choices = buildKwonLinkedAtomicChoices({
+  const kwonCandidatesByGloss = buildKwonLinkedAtomicChoices({
     suggestions: result.suggestionRecords,
     linkedWordNetSenses: result.linkedWordNetSenses,
+    componentGlosses: ["accord", "meet"],
     activeAtomEntries,
     layerByWord: new Map(activeAtomEntries.map((entry) => [entry.pyashSequence[0], 16]))
   });
+  const choiceInput = buildSenseCompoundChoiceInput({
+    sense: { senseId: "n:00000001-n", pos: "n", lemma: "sample", definition: "a sample target" },
+    translations: [{
+      language: "test-language",
+      surface: "part-a-part-b",
+      composition: "compound",
+      components: [
+        { surface: "part-a", gloss: "accord", role: "lexical" },
+        { surface: "part-b", gloss: "meet", role: "lexical" }
+      ]
+    }],
+    kwonCandidatesByGloss
+  });
 
-  assert.deepEqual(accord.wordSuggestions, []);
-  assert.deepEqual(accord.mappings, []);
-  assert.equal(accord.status, "unresolved");
-  assert.deepEqual(choices.get("accord").map((choice) => choice.word), ["treaty"]);
-  assert.match(lines.join("\n"), /accord: no suggestions; English30k rank 4800 remains unresolved/u);
-  assert.doesNotMatch(lines.join("\n"), /accordions/u);
+  assert.ok(choiceInput);
+  assert.deepEqual(
+    choiceInput.sourceOptions.filter((choice) => choice.sourceGloss === "accord").map((choice) => choice.word),
+    ["treaty", "coincidence", "chord", "heart"]
+  );
+  assert.match(choiceInput.prompt, /"coincidence"/u);
+  assert.match(choiceInput.prompt, /"heart"/u);
 });
