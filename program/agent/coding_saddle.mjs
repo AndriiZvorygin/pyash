@@ -88,6 +88,7 @@ export const DEFAULT_CODING_SADDLE_SYSTEM_PROMPT = [
   "For code changes, name the target file before editing; use write for bounded file creation and repair for unified-diff edits.",
   "For substantial multi-step coding work, maintain a concise session plan with the update session plan tool; update step states as work proceeds and mark a step done only after recording concrete verification evidence. Keep plans to the necessary steps and skip them for simple questions or one-step edits.",
   "After the final edit, use command to run the narrowest relevant test, build, syntax check, or execution check. A check run before the final edit does not count.",
+  "After a coding task passes its final verification, record only durable project decisions or constraints in the active agent house's absolute memory/MEMORY.md path shown in context (not a project-relative path), with the validation command and a session or artifact evidence reference. Do not store routine task logs, temporary findings, or unverified claims; if no durable decision was made, do not write a memory entry.",
   "Do not commit or push unless the user explicitly requests it. The harness will show the current worktree status and bounded diff for review before the completion evidence.",
   "Before reporting completion, state the changed file paths, summarize the change, and give the exact check command and its result. If work or verification is incomplete, say so plainly instead of saying done.",
   "Respond concisely with the result and any remaining blocker."

@@ -6,7 +6,8 @@ import fs from "node:fs/promises";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
-import { forget, remember } from "../program/remember/index.mjs";
+import { doRemember, forget, remember } from "../program/remember/index.mjs";
+import { repair } from "../program/verbs/repair.mjs";
 
 async function run(line) {
   return interpret(parse(line));
@@ -102,5 +103,44 @@ test("repair is atomic on validation failure", async () => {
     );
     assert.equal(await fs.readFile("first.txt", "utf8"), "one\n");
     assert.equal(await fs.readFile("second.txt", "utf8"), "two\n");
+  });
+});
+
+test("repair accepts explicit saddle home paths but blocks relative traversal", async () => {
+  await withTempDir(async (projectDir) => {
+    forget();
+    const homeDir = await fs.mkdtemp(path.join(os.homedir(), ".pyash-saddle-repair-"));
+    const relativeHomeDir = path.relative(os.homedir(), homeDir).split(path.sep).join("/");
+    await fs.writeFile(path.join(homeDir, "note.md"), "before\n", "utf8");
+    doRemember({ mood: "ya", su: { name: "agent sandbox" }, ob: { boolean: true }, be: "truth" });
+    doRemember({ mood: "ya", su: { name: "agent cwd" }, ob: { filename: projectDir }, be: "cwd" });
+    doRemember({ mood: "ya", su: { name: "agent home file access" }, ob: { boolean: true }, be: "truth" });
+    doRemember({ mood: "ya", su: { name: "agent cwd strict relative paths" }, ob: { boolean: true }, be: "truth" });
+
+    try {
+      const homePatch = [
+        `--- a/~/${relativeHomeDir}/note.md`,
+        `+++ b/~/${relativeHomeDir}/note.md`,
+        "@@ -1,1 +1,1 @@",
+        "-before",
+        "+after"
+      ].join("\n");
+      await repair({ ob: { text: homePatch } }, { remember });
+      assert.equal(await fs.readFile(path.join(homeDir, "note.md"), "utf8"), "after\n");
+
+      const traversalPatch = [
+        "--- /dev/null",
+        "+++ ../outside.md",
+        "@@ -0,0 +1,1 @@",
+        "+blocked"
+      ].join("\n");
+      await assert.rejects(
+        repair({ ob: { text: traversalPatch } }, { remember }),
+        (error) => error?.sentence?.su?.name === "repair path defective"
+      );
+    } finally {
+      await fs.rm(homeDir, { recursive: true, force: true });
+      forget();
+    }
   });
 });

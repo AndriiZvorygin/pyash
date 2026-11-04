@@ -305,6 +305,8 @@ test("coding saddle shows elapsed progress and explicit tool event labels", () =
 test("coding saddle completion evidence requires a successful edit and a later command check", () => {
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /name the target file before editing/u);
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /After the final edit/u);
+  assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /active agent house's absolute memory\/MEMORY\.md path/u);
+  assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /validation command and a session or artifact evidence reference/u);
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /changed file paths/u);
 
   const input = "write hello program";
@@ -728,6 +730,9 @@ test("coding saddle loads its configured mind when launched from another project
     const config = await prepareSaddle({ cwd, worldRoot });
 
     assert.equal(config.cwd, cwd);
+    assert.equal(path.basename(config.agentHouse), "slesh-coding-saddle");
+    assert.equal(remember("agent home file access")?.ob?.boolean, true);
+    assert.equal(remember("agent cwd strict relative paths")?.ob?.boolean, true);
     assert.equal(config.runtimeRoot, runtimeRoot);
     assert.equal(config.mindName, "mind");
     assert.equal(config.backend, "ollama");
@@ -781,6 +786,7 @@ test("coding saddle keeps histories per project while reusing the recent model p
 
     const first = await prepareSaddle({ cwd: projectA, runtimeRoot });
     assert.equal(first.worldRoot, resolveSaddleProjectWorldRoot({ runtimeRoot, cwd: projectA }));
+    assert.equal(path.basename(first.agentHouse), "alpha-coding-saddle");
     assert.equal(first.mindName, "zai");
     assert.equal(first.backend, "zai");
     assert.equal(first.model, "glm-5.3-flash");
@@ -812,6 +818,7 @@ test("coding saddle keeps histories per project while reusing the recent model p
     const second = await prepareSaddle({ cwd: projectB, runtimeRoot });
     assert.notEqual(second.worldRoot, first.worldRoot);
     assert.notEqual(second.agentHouse, first.agentHouse);
+    assert.equal(path.basename(second.agentHouse), "beta-coding-saddle");
     assert.equal(second.mindName, "zai");
     assert.equal(second.model, "glm-5.3-flash");
     const secondHistory = await loadSaddleSessionHistory({ agentHouse: second.agentHouse, sessionName: "coding" });

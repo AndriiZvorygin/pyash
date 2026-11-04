@@ -15,6 +15,7 @@ import { callMcpTool, lookupMcpTool } from "../motor/mcp.mjs";
 import { resolveInlineGenitive, normalizeDownloadSentence, shouldBootstrapNumberForVerb, applyResolvedTypedValue } from "./imperative_helpers.mjs";
 import { throwFileUnavailable } from "../library/file_errors.mjs";
 import { isWorldToolsActive, resolveWorldPath } from "../library/world.mjs";
+import { resolveAgentPath } from "../library/agent_cwd.mjs";
 import { TYPE_TOKENS } from "../library/grammar/keywords.mjs";
 
 const GENITIVE_TEXT_TAILS = new Set(["text", "filename"]);
@@ -202,18 +203,22 @@ function resolveTypedGenitives(sentence, { state, memory } = {}) {
   }
 }
 
-function resolveSourceFilename(raw, { rememberFn } = {}) {
+function resolveSourceFilename(raw, { rememberFn, access } = {}) {
   if (!raw) return null;
   const value = String(raw);
+  const sandbox = rememberFn?.("agent sandbox")?.ob?.boolean === true;
+  if (sandbox && (access === "read" || access === "list")) {
+    return resolveAgentPath(value, { rememberFn, access });
+  }
   const agentCwd = rememberFn?.("agent cwd")?.ob?.filename ?? null;
   if (agentCwd && !path.isAbsolute(value)) {
-    return path.resolve(agentCwd, value);
+    return { resolved: path.resolve(agentCwd, value), outside: false };
   }
   if (isWorldToolsActive({ rememberFn })) {
     const { resolved } = resolveWorldPath(value, { rememberFn });
-    return resolved;
+    return { resolved, outside: false };
   }
-  return path.resolve(value);
+  return { resolved: path.resolve(value), outside: false };
 }
 
 function guardSourceFilenames(sentence, { rememberFn } = {}) {
@@ -240,8 +245,18 @@ function guardSourceFilenames(sentence, { rememberFn } = {}) {
       });
     }
     if (/^https?:\/\//i.test(raw)) continue;
-    const resolved = resolveSourceFilename(raw, { rememberFn });
-    if (!resolved) continue;
+    const access = be === "read" ? "read" : be === "list" ? "list" : undefined;
+    const pathResult = resolveSourceFilename(raw, { rememberFn, access });
+    if (!pathResult) continue;
+    if (pathResult.outside) {
+      throwErrorSentence({
+        name: `${be} path outside allowed roots`,
+        message: `${be} path outside allowed file roots: ${raw}`,
+        from: be || "interpret",
+        raw: { role: slot.role, value: raw }
+      });
+    }
+    const resolved = pathResult.resolved;
     if (!fs.existsSync(resolved)) {
       throwFileUnavailable({ path: resolved, from: be || "interpret" });
     }
