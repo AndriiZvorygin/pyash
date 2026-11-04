@@ -320,7 +320,7 @@ export function buildKwonLinkedAtomicChoices({
       for (const active of activeByWord.get(normalized(mapping.word)) ?? []) {
         if (active.pyashSequence[0] !== sequence[0]) continue;
         // Direct mappings must match the component gloss's WordNet evidence already.
-        // Blocked Kwon suggestions discover active atoms for the composition choice.
+        // Word suggestions remain candidates for the composition decision.
         if (!isDiscoverySuggestion && wordnetIndex && typeof wordnetIndex.lookup === "function") {
           const expectedSenseIds = new Set(wordnetIndex.lookup(input)
             .map((sense) => `${text(sense?.pos)}:${text(sense?.synset)}`)
@@ -717,20 +717,22 @@ export function buildSenseCompoundChoiceInput({
   const groupsByKey = new Map();
   for (const option of sourceOptions) {
     const key = `${option.language}\u0000${option.translationSurface}\u0000${option.sourceIndex}`;
-    const group = groupsByKey.get(key) ?? { source: option.sourcePart, glosses: [], atoms: [] };
+    const group = groupsByKey.get(key) ?? { source: option.sourcePart, glosses: [], atoms: [], atomMeanings: {} };
     if (!group.glosses.includes(option.sourceGloss)) group.glosses.push(option.sourceGloss);
     if (!group.atoms.includes(option.word)) group.atoms.push(option.word);
+    if (!group.atomMeanings[option.word] && option.meaning) group.atomMeanings[option.word] = option.meaning;
     groupsByKey.set(key, group);
   }
-  const componentOptions = [...groupsByKey.values()].map(({ source, glosses, atoms }) => ({
+  const componentOptions = [...groupsByKey.values()].map(({ source, glosses, atoms, atomMeanings }) => ({
     source,
     gloss: glosses.join(" / "),
-    atoms
+    atoms,
+    atomMeanings
   }));
   const sections = [
     "Form one Pyash compound for the target meaning.",
     "Pyash has a limited inventory of existing atoms. Use only the listed atom words; do not invent or alter words.",
-    "The JSON groups source parts, their English glosses, and available Pyash atom words. Choose atoms that jointly express the target. These are component choices, not prebuilt compounds.",
+    "The JSON groups source parts, their English glosses, available Pyash atom words, and each atom's linked meaning. Choose atoms whose meanings jointly express the target. These are component choices, not prebuilt compounds.",
     "A compound must contain at least two different atoms and may contain at most three. Choose one atom from each of two or three different source parts in the same translation. Two atoms from the same source part do not satisfy the minimum. One atom alone is not a compound. Put modifiers before the head. If fewer than two fit, return uncertain with an empty atoms array.",
     `TARGET: ${senseLemma(sense)} — ${definitionOnly(sense?.definition ?? sense?.gloss)}`,
     "COMPONENT OPTIONS:",

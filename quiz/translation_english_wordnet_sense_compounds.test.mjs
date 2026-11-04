@@ -85,18 +85,37 @@ test("component-choice prompt groups glosses and atoms under their source part",
   assert.match(input.prompt, /"atoms":\["atom1","atom2"\]/u);
   assert.match(input.prompt, /"verdict":"uncertain","atoms":\[\]/u);
   assert.match(input.prompt, /"atoms":\["existing atom word"\]/u);
+  assert.match(input.prompt, /each atom's linked meaning/u);
   const optionsStart = input.prompt.indexOf("COMPONENT OPTIONS:\n") + "COMPONENT OPTIONS:\n".length;
   const optionsEnd = input.prompt.indexOf("\nExample:", optionsStart);
   const componentOptions = JSON.parse(input.prompt.slice(optionsStart, optionsEnd));
   assert.deepEqual(componentOptions, [
-    { source: "赋", gloss: "bestow / assign", atoms: ["donate", "yeah", "assigned", "unspecified", "attaching", "impose"] },
-    { source: "予", gloss: "give", atoms: ["giving", "yeah"] }
+    {
+      source: "赋",
+      gloss: "bestow / assign",
+      atoms: ["donate", "yeah", "assigned", "unspecified", "attaching", "impose"],
+      atomMeanings: {
+        donate: "give to a charity or good cause",
+        yeah: "yes",
+        assigned: "designated to a role",
+        unspecified: "not specified",
+        attaching: "joining or fastening",
+        impose: "force something onto"
+      }
+    },
+    {
+      source: "予",
+      gloss: "give",
+      atoms: ["giving", "yeah"],
+      atomMeanings: { giving: "cause to have, in the abstract or physical sense", yeah: "yes" }
+    }
   ]);
   assert.throws(() => parseSenseCompoundChoiceResponse(JSON.stringify({
     verdict: "compound",
     atoms: ["donate", "assigned"]
   }), { input }), /distinct parts of one source decomposition/u);
-  assert.doesNotMatch(input.prompt, /give to a charity or good cause|designated to a role/u);
+  assert.match(input.prompt, /give to a charity or good cause/u);
+  assert.match(input.prompt, /designated to a role/u);
   assert.doesNotMatch(input.prompt, /sourceLanguage|Chinese:|赋 \/ bestow|component choice\]/u);
   assert.doesNotMatch(input.prompt, /v:\d{8}-v|sense-compound-[a-f0-9]{12}/u);
   assert.doesNotMatch(input.prompt, /donate \+ giving|giving \+ donate/u);

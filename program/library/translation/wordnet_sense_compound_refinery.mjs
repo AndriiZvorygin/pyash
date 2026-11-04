@@ -96,6 +96,18 @@ export function resolveWordNetSenseCompoundMaximumSenses(configuredMaximum, requ
   return Math.min(configured, requested);
 }
 
+export function resolveWordNetSenseCompoundSenseIds(requestedSenseIds) {
+  if (requestedSenseIds === undefined) return null;
+  if (!Array.isArray(requestedSenseIds) || requestedSenseIds.length === 0) {
+    throw invalid("sense compound senseIds override must be a nonempty array");
+  }
+  const senseIds = [...new Set(requestedSenseIds.map((senseId) => text(senseId)))];
+  if (senseIds.some((senseId) => !/^[nvars]:\d{8}-[nvars]$/u.test(senseId))) {
+    throw invalid("sense compound senseIds override contains an invalid WordNet sense id", { senseIds });
+  }
+  return senseIds;
+}
+
 function text(value) {
   return typeof value === "string" ? value.normalize("NFC").trim() : "";
 }
@@ -373,12 +385,24 @@ async function loadInventory({ context, dependencies }) {
   const linkedSenseIds = linkedEntries.map((entry) => entry.source);
   const linkedAtomicSenses = linkedEntries.filter((entry) => entry.targetKind === "atom"
     && Array.isArray(entry.pyashSequence) && entry.pyashSequence.length === 1);
-  const fullWorklist = buildSenseCompoundWorklist({
+  const completeWorklist = buildSenseCompoundWorklist({
     residualSenses: allocation.allocation.residual,
     linkedSenseIds,
     minimumTagCount: context.config.minimumTagCount,
     order: context.config.worklistOrder
   });
+  const requestedSenseIds = context.config.senseIds;
+  const requestedSenseSet = requestedSenseIds ? new Set(requestedSenseIds) : null;
+  const fullWorklist = requestedSenseSet
+    ? completeWorklist.filter((sense) => requestedSenseSet.has(sense.senseId))
+    : completeWorklist;
+  if (requestedSenseSet) {
+    const found = new Set(fullWorklist.map((sense) => sense.senseId));
+    const missing = requestedSenseIds.filter((senseId) => !found.has(senseId));
+    if (missing.length > 0) {
+      throw invalid("requested WordNet senses are not eligible for compound composition", { missing });
+    }
+  }
   const progressPath = join(context.artifactDirectory, "progress.pya");
   const translationPath = join(context.artifactDirectory, "sense-translations.pya");
   const progressSource = await (dependencies.readFile ?? readIfPresent)(progressPath);
@@ -401,6 +425,7 @@ async function loadInventory({ context, dependencies }) {
     entry.source, entry.target, entry.pyashSequence, entry.targetId
   ]).sort((left, right) => left[0].localeCompare(right[0]))));
   const pending = fullWorklist.filter((sense) => {
+    if (requestedSenseSet?.has(sense.senseId)) return true;
     const progress = progressBySense.get(sense.senseId);
     return !currentProgress(progress, atomInventoryHash, context.config.candidateRevision);
   }).slice(0, context.config.maximumSenses);
@@ -910,7 +935,7 @@ async function recordAndPromoteChoices({ context, candidates }) {
   let decisionsChanged = false;
   for (const candidate of candidateRows) {
     const prior = decisionsById.get(candidate.id);
-    if (prior?.decisionRevision === decisionRevision) continue;
+    if (prior?.decisionRevision === decisionRevision && !context.config.senseIds?.includes(candidate.senseId)) continue;
     const decision = wordNetCompoundDecisionRecord({
       ...candidate,
       status: "accepted-llm",
@@ -1044,6 +1069,7 @@ export async function runWordNetSenseCompoundRefinery({
     config.maximumSenses,
     configuration.maximumSenses
   );
+  config.senseIds = resolveWordNetSenseCompoundSenseIds(configuration.senseIds);
   const previousHousekeeper = process.env.PYA_GPU_HOUSEKEEPER_URL;
   const previousManagerRequired = process.env.PYA_GPU_MANAGER_REQUIRED;
   try {

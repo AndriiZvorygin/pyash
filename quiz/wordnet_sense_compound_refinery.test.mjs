@@ -11,6 +11,7 @@ import { forget } from "../program/remember/index.mjs";
 import { buildProgram } from "../program/program.mjs";
 import {
   resolveWordNetSenseCompoundMaximumSenses,
+  resolveWordNetSenseCompoundSenseIds,
   runWordNetSenseCompoundRefinery
 } from "../program/library/translation/wordnet_sense_compound_refinery.mjs";
 import { parseWordNetSenseTranslationCache } from "../program/library/translation/english_wordnet_sense_compounds.mjs";
@@ -20,6 +21,16 @@ test("sense compound launch overrides cannot exceed the configured batch limit",
   assert.equal(resolveWordNetSenseCompoundMaximumSenses(64, 16), 16);
   assert.equal(resolveWordNetSenseCompoundMaximumSenses(64, 100000), 64);
   assert.throws(() => resolveWordNetSenseCompoundMaximumSenses(64, 0), /positive integer/u);
+});
+
+test("sense compound launch can select exact WordNet senses for a focused retry", () => {
+  assert.equal(resolveWordNetSenseCompoundSenseIds(undefined), null);
+  assert.deepEqual(resolveWordNetSenseCompoundSenseIds(["v:00150596-v", "v:01185870-v", "v:00150596-v"]), [
+    "v:00150596-v",
+    "v:01185870-v"
+  ]);
+  assert.throws(() => resolveWordNetSenseCompoundSenseIds([]), /nonempty array/u);
+  assert.throws(() => resolveWordNetSenseCompoundSenseIds(["accord"]), /invalid WordNet sense id/u);
 });
 
 test("sense compound refinery links, composes, decides, and records one complete sense", async () => {
@@ -222,6 +233,18 @@ test("sense compound refinery links, composes, decides, and records one complete
     assert.equal(buildProgram(worklistSource).sentences.find((sentence) => sentence.su?.text === "meta:minimum-tag-count")?.ob?.text, "2");
     assert.match(candidateSource, /friendship/u);
     assert.match(completeProgress, /accepted/u);
+
+    const focusedRetry = await runWordNetSenseCompoundRefinery({
+      artifactRoot,
+      runId: "sense-compound-test",
+      initialize: false,
+      configuration: { senseIds: [sense.senseId] },
+      dependencies
+    });
+    assert.equal(focusedRetry.selectedSenseCount, 1);
+    assert.equal(focusedRetry.candidateCount, 1);
+    assert.equal(translationSubmitCount, 2);
+    assert.equal(compositionResponseCount, 2);
 
     const failed = await runWordNetSenseCompoundRefinery({
       artifactRoot,
