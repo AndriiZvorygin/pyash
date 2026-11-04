@@ -246,10 +246,14 @@ function parseConfig(source) {
   if (!languages.length) throw invalid("sense compound refinery requires comparison languages");
   const candidateRevision = text(values["candidate-revision"]) || ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION;
   const choicePromptRevision = text(values["component-choice-prompt-revision"]) || ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_PROMPT_REVISION;
+  const choiceMaxAttempts = Number(values["component-choice-max-attempts"] ?? 2);
   const headRelationPolicy = text(values["head-relation-policy"]).toLowerCase() || "advisory";
   const minimumTagCount = Number(values["minimum-tag-count"] ?? 0);
   if (!Number.isSafeInteger(minimumTagCount) || minimumTagCount < 0) {
     throw invalid("sense compound refinery minimum-tag-count must be a nonnegative integer");
+  }
+  if (!Number.isSafeInteger(choiceMaxAttempts) || choiceMaxAttempts < 1) {
+    throw invalid("sense compound refinery component-choice-max-attempts must be a positive integer");
   }
   const worklistOrder = text(values["worklist-order"]) || "english30k-rank";
   if (candidateRevision !== ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION
@@ -265,6 +269,7 @@ function parseConfig(source) {
     languages,
     promptRevision: text(values["prompt-revision"]) || ENGLISH_WORDNET_SENSE_COMPOUNDS_PROMPT_REVISION,
     choicePromptRevision,
+    choiceMaxAttempts,
     maxOutputTokens: Number(values["max-output-tokens"]) || ENGLISH_WORDNET_SENSE_COMPOUNDS_MAX_OUTPUT_TOKENS,
     choiceMaxOutputTokens: Number(values["component-choice-max-output-tokens"]) || ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_MAX_OUTPUT_TOKENS,
     parallelism: Number(values.parallelism) || ENGLISH_WORDNET_SENSE_COMPOUNDS_PARALLELISM,
@@ -693,9 +698,11 @@ async function composeCandidates({ context, worklist, translations }) {
       if (parsed.verdict === "compound") makeCandidate(sense, sourceTranslations, input, rawResponse, row);
     } catch (error) {
       compositionFailureCount += 1;
+      const exhausted = attempt >= context.config.choiceMaxAttempts;
       row = {
         ...common,
-        status: "failed",
+        status: exhausted ? "uncertain" : "failed",
+        ...(exhausted ? { rationale: `Choice attempt limit (${context.config.choiceMaxAttempts}) exhausted after an invalid or unavailable response.` } : {}),
         error: text(error?.message ?? error).slice(0, 500) || "component-choice request failed",
         response: String(rawResponse).slice(0, 4000)
       };

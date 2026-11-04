@@ -244,6 +244,38 @@ test("sense compound refinery links, composes, decides, and records one complete
     assert.equal(failed.result["translation-failure-count"], 1);
     const failureArtifact = await readFile(path.join(failed.artifactDirectory, "translation-failures.pya"), "utf8");
     assert.match(failureArtifact, /sense translation response has no bounded JSON object/u);
+
+    let invalidChoiceCallCount = 0;
+    const invalidChoiceDependencies = {
+      ...dependencies,
+      composeSenseCompound: async () => {
+        invalidChoiceCallCount += 1;
+        return JSON.stringify({ verdict: "compound", atoms: ["friend", "friend"] });
+      }
+    };
+    const retryRunId = "sense-compound-choice-attempt-limit-test";
+    const firstInvalidChoice = await runWordNetSenseCompoundRefinery({
+      artifactRoot,
+      runId: retryRunId,
+      initialize: false,
+      dependencies: invalidChoiceDependencies
+    });
+    assert.equal(firstInvalidChoice.result["pending-sense-count"], 1);
+    const secondInvalidChoice = await runWordNetSenseCompoundRefinery({
+      artifactRoot,
+      runId: retryRunId,
+      initialize: false,
+      dependencies: invalidChoiceDependencies
+    });
+    assert.equal(secondInvalidChoice.result["uncertain-no-candidate-sense-count"], 1);
+    const terminalInvalidChoice = await runWordNetSenseCompoundRefinery({
+      artifactRoot,
+      runId: retryRunId,
+      initialize: false,
+      dependencies: invalidChoiceDependencies
+    });
+    assert.equal(terminalInvalidChoice.selectedSenseCount, 0);
+    assert.equal(invalidChoiceCallCount, 2);
   } finally {
     if (priorFixture === undefined) delete process.env.PYA_MIND_RESPONSE;
     else process.env.PYA_MIND_RESPONSE = priorFixture;
