@@ -249,7 +249,9 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   duplicate links do not crowd other alternatives out. Omit source-language
   labels, candidate or synset ids, per-atom definitions,
   and preassembled compound combinations. The model returns two or three atom
-  words in modifier-before-head order, choosing one atom from each of at least two
+  words in explicit Pyash head-final order: the final atom is the semantic head
+  and earlier atoms modify it. Do not copy source-language order automatically.
+  Choose one atom from each of at least two
   distinct source parts in the same decomposition; two atoms from one part do not
   meet the minimum. If fewer than two parts fit, return `uncertain` with an empty
   atom list. Show a two-part example in the prompt.

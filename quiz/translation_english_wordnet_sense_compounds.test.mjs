@@ -82,6 +82,10 @@ test("component-choice prompt groups glosses and atoms under their source part",
   assert.match(input.prompt, /A compound must contain at least two different atoms/u);
   assert.match(input.prompt, /one atom from each of two or three different source parts/u);
   assert.match(input.prompt, /Two atoms from the same source part do not satisfy the minimum/u);
+  assert.match(input.prompt, /Pyash compounds are head-final/u);
+  assert.match(input.prompt, /last atom is the head/u);
+  assert.match(input.prompt, /bird snake.*type of snake/u);
+  assert.match(input.prompt, /Snake bird.*type of bird/u);
   assert.match(input.prompt, /"atoms":\["atom1","atom2"\]/u);
   assert.match(input.prompt, /"verdict":"uncertain","atoms":\[\]/u);
   assert.match(input.prompt, /"atoms":\["existing atom word"\]/u);
