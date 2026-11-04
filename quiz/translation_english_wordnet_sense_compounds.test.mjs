@@ -45,7 +45,7 @@ test("sense translation prompt is scoped to one definition and comparison-langua
   assert.match(prompt, /For each part, provide up to three distinct concise English lexical glosses/u);
 });
 
-test("component-choice prompt groups available atoms by source gloss without candidate compounds or ids", () => {
+test("component-choice prompt groups glosses and atoms under their source part", () => {
   const atom = (word, sequence, definition, gloss) => ({
     word,
     coverageType: "atomic",
@@ -85,9 +85,17 @@ test("component-choice prompt groups available atoms by source gloss without can
   assert.match(input.prompt, /"atoms":\["atom1","atom2"\]/u);
   assert.match(input.prompt, /"verdict":"uncertain","atoms":\[\]/u);
   assert.match(input.prompt, /"atoms":\["existing atom word"\]/u);
-  assert.match(input.prompt, /"source": "赋",\s+"gloss": "bestow",\s+"atoms": \[\s+"donate",\s+"yeah"/u);
-  assert.match(input.prompt, /"source": "赋",\s+"gloss": "assign",\s+"atoms": \[\s+"assigned",\s+"unspecified",\s+"attaching",\s+"impose"/u);
-  assert.match(input.prompt, /"source": "予",\s+"gloss": "give",\s+"atoms": \[\s+"giving"/u);
+  const optionsStart = input.prompt.indexOf("COMPONENT OPTIONS:\n") + "COMPONENT OPTIONS:\n".length;
+  const optionsEnd = input.prompt.indexOf("\nExample:", optionsStart);
+  const componentOptions = JSON.parse(input.prompt.slice(optionsStart, optionsEnd));
+  assert.deepEqual(componentOptions, [
+    { source: "赋", gloss: "bestow / assign", atoms: ["donate", "yeah", "assigned", "unspecified", "attaching", "impose"] },
+    { source: "予", gloss: "give", atoms: ["giving", "yeah"] }
+  ]);
+  assert.throws(() => parseSenseCompoundChoiceResponse(JSON.stringify({
+    verdict: "compound",
+    atoms: ["donate", "assigned"]
+  }), { input }), /distinct parts of one source decomposition/u);
   assert.doesNotMatch(input.prompt, /give to a charity or good cause|designated to a role/u);
   assert.doesNotMatch(input.prompt, /sourceLanguage|Chinese:|赋 \/ bestow|component choice\]/u);
   assert.doesNotMatch(input.prompt, /v:\d{8}-v|sense-compound-[a-f0-9]{12}/u);

@@ -13,7 +13,7 @@ export const ENGLISH_WORDNET_SENSE_COMPOUNDS_LANGUAGES = Object.freeze([
 ]);
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_MODEL = "qwen3.5:9b";
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_PROMPT_REVISION = "sense-translation-gloss-alternatives-v5";
-export const ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_PROMPT_REVISION = "sense-component-choice-v6";
+export const ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_PROMPT_REVISION = "sense-component-choice-v7";
 export const ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION = "sense-component-choice-v6";
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_MAX_OUTPUT_TOKENS = 1024;
 export const ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_MAX_OUTPUT_TOKENS = 256;
@@ -714,12 +714,17 @@ export function buildSenseCompoundChoiceInput({
   if (sourceOptions.length < 2) return null;
   const groupsByKey = new Map();
   for (const option of sourceOptions) {
-    const key = `${option.sourcePart}\u0000${option.sourceGloss}`;
-    const group = groupsByKey.get(key) ?? { source: option.sourcePart, gloss: option.sourceGloss, atoms: [] };
+    const key = `${option.language}\u0000${option.translationSurface}\u0000${option.sourceIndex}`;
+    const group = groupsByKey.get(key) ?? { source: option.sourcePart, glosses: [], atoms: [] };
+    if (!group.glosses.includes(option.sourceGloss)) group.glosses.push(option.sourceGloss);
     if (!group.atoms.includes(option.word)) group.atoms.push(option.word);
     groupsByKey.set(key, group);
   }
-  const componentOptions = [...groupsByKey.values()];
+  const componentOptions = [...groupsByKey.values()].map(({ source, glosses, atoms }) => ({
+    source,
+    gloss: glosses.join(" / "),
+    atoms
+  }));
   const sections = [
     "Form one Pyash compound for the target meaning.",
     "Pyash has a limited inventory of existing atoms. Use only the listed atom words; do not invent or alter words.",
