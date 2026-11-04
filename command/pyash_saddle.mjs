@@ -16,8 +16,7 @@ import {
   ensureAgentDirs,
   listSessionFiles,
   readSessionMessages,
-  readSessionMessagesWithFallback,
-  resolveAgentHouse
+  readSessionMessagesWithFallback
 } from "../program/agent/session.mjs";
 import {
   getCodingSaddleProfile,
@@ -42,6 +41,11 @@ import {
 import { requestCodingDutyHub, resolveCodingDutyHub } from "../program/agent/coding_duty_client.mjs";
 import { createSaddleTerminalUi } from "../program/agent/coding_saddle_tui.mjs";
 import { createCodingSaddleTrace } from "../program/agent/coding_saddle_trace.mjs";
+import {
+  ensureCodingSaddleHouse,
+  resolveCodingSaddleHousePath,
+  seedCodingSaddleHouseGuide
+} from "../program/agent/coding_saddle_house.mjs";
 import {
   clearCodingSaddlePlan,
   formatCodingSaddlePlan,
@@ -105,61 +109,6 @@ export function resolveSaddleProjectWorldRoot({ runtimeRoot, cwd } = {}) {
   if (resolvedCwd === resolvedRuntimeRoot) return path.join(resolvedRuntimeRoot, "world");
   const projectId = createHash("sha256").update(resolvedCwd).digest("hex").slice(0, 24);
   return path.join(resolvedRuntimeRoot, "world", "coding-saddle-projects", projectId);
-}
-
-export function resolveSaddleProjectHouseDirectory({ worldRoot, cwd } = {}) {
-  const resolvedWorldRoot = path.resolve(worldRoot || path.join(root, "world"));
-  const projectName = path.basename(path.resolve(cwd || process.cwd()));
-  return path.join(resolvedWorldRoot, "house", projectName || "project");
-}
-
-function resolveSaddleAgentHouseAtWorldRoot(worldRoot) {
-  return resolveAgentHouse({
-    mindName: AGENT_NAME,
-    rememberFn: (name) => name === "world root"
-      ? { ob: { filename: worldRoot } }
-      : remember(name)
-  });
-}
-
-async function resolveSaddleProjectAgentHouse({ worldRoot, cwd }) {
-  const resolvedWorldRoot = path.resolve(worldRoot);
-  const legacyHouse = resolveSaddleAgentHouseAtWorldRoot(resolvedWorldRoot);
-  const defaultLegacyHouse = path.join(resolvedWorldRoot, "house", AGENT_NAME);
-  if (path.resolve(legacyHouse) !== path.resolve(defaultLegacyHouse)) return legacyHouse;
-
-  const projectHouse = resolveSaddleProjectHouseDirectory({ worldRoot: resolvedWorldRoot, cwd });
-  if (path.resolve(projectHouse) === path.resolve(legacyHouse)) return projectHouse;
-
-  const exists = async (filename) => {
-    try {
-      await fs.lstat(filename);
-      return true;
-    } catch (error) {
-      if (error?.code === "ENOENT") return false;
-      throw error;
-    }
-  };
-  const [legacyExists, projectExists] = await Promise.all([
-    exists(legacyHouse),
-    exists(projectHouse)
-  ]);
-  if (!legacyExists) return projectHouse;
-  if (projectExists) {
-    throw new Error(
-      `project saddle house migration conflict: both ${legacyHouse} and ${projectHouse} exist; `
-      + "preserve or reconcile the existing house data before restarting the saddle"
-    );
-  }
-
-  await fs.mkdir(path.dirname(projectHouse), { recursive: true });
-  try {
-    await fs.rename(legacyHouse, projectHouse);
-  } catch (error) {
-    if (error?.code === "ENOENT" && await exists(projectHouse)) return projectHouse;
-    throw new Error(`could not move project saddle house from ${legacyHouse} to ${projectHouse}: ${error.message}`, { cause: error });
-  }
-  return projectHouse;
 }
 
 function isPathWithin(directory, target) {
@@ -334,6 +283,24 @@ function configureSaddle({ cwd, runtimeRoot = cwd, worldRoot = path.join(cwd, "w
   });
   doRemember({
     mood: "ya",
+    su: { name: "agent cwd" },
+    be: "cwd",
+    ob: { filename: path.resolve(cwd) }
+  });
+  doRemember({
+    mood: "ya",
+    su: { name: "agent home file access" },
+    be: "truth",
+    ob: { boolean: true }
+  });
+  doRemember({
+    mood: "ya",
+    su: { name: "agent cwd strict relative paths" },
+    be: "truth",
+    ob: { boolean: true }
+  });
+  doRemember({
+    mood: "ya",
     su: { name: "coding saddle system" },
     be: "text",
     ob: { text: systemPrompt }
@@ -371,12 +338,15 @@ export async function prepareSaddle({
   await importSaddleTools();
   const housekeeperUrl = resolveSaddleHousekeeperUrl(resolvedRuntimeRoot);
   const configuredMindName = String(configValue("coding saddle mind", "mind")).trim();
-  const agentHouse = resolvedCwd === resolvedRuntimeRoot
-    ? resolveSaddleAgentHouseAtWorldRoot(resolvedWorldRoot)
-    : await resolveSaddleProjectAgentHouse({ worldRoot: resolvedWorldRoot, cwd: resolvedCwd });
-  const globalAgentHouse = resolveSaddleAgentHouseAtWorldRoot(globalWorldRoot);
-  await ensureAgentDirs(agentHouse);
   const useGlobalRecentPreference = worldRoot == null;
+  const agentHouse = await ensureCodingSaddleHouse({ worldRoot: resolvedWorldRoot, cwd: resolvedCwd });
+  const globalAgentHouse = useGlobalRecentPreference
+    ? (resolvedWorldRoot === globalWorldRoot
+      ? agentHouse
+      : await ensureCodingSaddleHouse({ worldRoot: globalWorldRoot, cwd: resolvedRuntimeRoot }))
+    : resolveCodingSaddleHousePath({ worldRoot: globalWorldRoot, cwd: resolvedRuntimeRoot });
+  await ensureAgentDirs(agentHouse);
+  await seedCodingSaddleHouseGuide({ agentHouse, cwd: resolvedCwd });
   const saddleStatePath = path.join(agentHouse, "conduct", "coding-saddle.pya");
   const saddleState = await readCodingSaddleState(saddleStatePath);
   const sessionDir = path.join(agentHouse, "session");

@@ -8,6 +8,7 @@ import { schedulerList } from "../agent/scheduler_control.mjs";
 import { listAgents } from "../agent/admin.mjs";
 import { listWarmOllamaMinds } from "../motor/ollama_admin.mjs";
 import { listSayBackends } from "../motor/say_admin.mjs";
+import { resolveAgentPath } from "../library/agent_cwd.mjs";
 
 function resolveFilename(value, { rememberFn } = {}) {
   if (!value) return "";
@@ -162,7 +163,18 @@ export async function list(sentence, { remember: rememberFn = remember } = {}) {
       const place = resolveWorldPlace({ rememberFn }) ?? "commons";
       return resolveWorldPlaceDir(place, { rememberFn }) ?? path.resolve(String(rootRaw));
     })()
-    : path.resolve(String(rootRaw));
+    : (() => {
+      const { resolved, outside, agentCwd } = resolveAgentPath(rootRaw, { rememberFn, access: "list" });
+      if (outside) {
+        throwErrorSentence({
+          name: "list defective",
+          message: `list defective: path is outside allowed file roots${agentCwd ? ` (${agentCwd})` : ""}`,
+          from: { name: "list" },
+          raw: { root: rootRaw }
+        });
+      }
+      return resolved;
+    })();
   const hiddenToken = sentence?.with?.name ?? sentence?.with?.text ?? sentence?.with?.wo;
   const hidden = hiddenToken === "hidden";
   const mode = sentence?.as?.wo;
