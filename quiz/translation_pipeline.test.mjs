@@ -1,3 +1,4 @@
+// Requires know/wordnet/open-english-wordnet-2025-json through shared translation helpers.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";

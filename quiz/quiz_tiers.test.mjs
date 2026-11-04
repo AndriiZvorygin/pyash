@@ -37,6 +37,14 @@ test("a quiz that reads the wordnet dataset is tier t2", () => {
   assert.ok(outcome.requirements.some((requirement) => requirement.id === "wordnet"));
 });
 
+test("translation quizzes declare transitive WordNet requirements in their source", () => {
+  for (const fileName of ["translation_pipeline.test.mjs", "translation_reverse.test.mjs"]) {
+    const source = fs.readFileSync(path.join(repoRoot, "quiz", fileName), "utf8");
+    const outcome = classifyQuizFile(source, { fileName });
+    assert.ok(outcome.requirements.some((requirement) => requirement.id === "wordnet"));
+  }
+});
+
 test("a quiz that plays the whisper sample audio is tier t2", () => {
   const outcome = classifyQuizFile(`path.join(cwd, ${JSON.stringify(whisperSamplePath)})`);
   assert.equal(outcome.tier, "t2");
