@@ -835,6 +835,7 @@ export function createSaddleInputDecoder({
 } = {}) {
   const state = { value: "", cursor: 0 };
   let escape = "";
+  let escapeTimer = null;
   let pasting = false;
   let pasteBuffer = "";
   let completion = null;
@@ -956,6 +957,8 @@ export function createSaddleInputDecoder({
       return;
     }
     if (escape) {
+      if (escapeTimer) clearTimeout(escapeTimer);
+      escapeTimer = null;
       escape += char;
       if (isCsiFinal(escape)) {
         const sequence = escape;
@@ -968,6 +971,13 @@ export function createSaddleInputDecoder({
     }
     if (char === "\u001b") {
       escape = char;
+      escapeTimer = setTimeout(() => {
+        escapeTimer = null;
+        if (escape !== "\u001b") return;
+        escape = "";
+        onCancel?.();
+      }, 80);
+      escapeTimer.unref?.();
       return;
     }
     if (char === "\u0003") {

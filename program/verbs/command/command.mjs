@@ -15,11 +15,13 @@ import { resolveCommandPolicy, shouldRequireRatify, shouldDeny, isNetworkDenied,
 import { emitCommandAudit, commandRequestSentence, resolveCommandIdentity, commandResultSentence, rememberCommandResult, recordCommandOutput } from "./audit.mjs";
 import { rewriteRunRootCommandPath, resolveSandboxSettings, buildAllowedEnv, validateSandboxWritePolicy } from "./sandbox.mjs";
 import { resolveStreamOutputPath, parseCommandTimeoutOverride, isInlineTimeoutOverrideEnabled, startFileTail, runCommandText } from "./execute.mjs";
+import { currentMindInterruptSignal } from "../../agent/interrupt.mjs";
 
 const commandStreamProcesses = new Map();
 const STREAM_END_TOKEN = "[PYA_STREAM_END]";
 
-export async function command(sentence, { remember: rememberFn = remember } = {}) {
+export async function command(sentence, { remember: rememberFn = remember, runtimeContext = null } = {}) {
+  const interruptSignal = runtimeContext?.signal ?? currentMindInterruptSignal();
   const modifiers = Array.isArray(sentence?.vyah?.ve?.values) ? sentence.vyah.ve.values : [];
   const aspect = getEffectiveVyahAspect(modifiers, { verb: "command", caseKey: "vyah" });
   const debug = resolveConfigBool("command debug", { rememberFn }) === true;
@@ -194,9 +196,23 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
       proc = spawn(shell, ["-lc", String(cmd)], spawnOptions);
     }
     let stderr = "";
+    let abortTimer = null;
+    const abortProcess = () => {
+      if (proc.exitCode !== null || proc.signalCode !== null) return;
+      proc.kill("SIGINT");
+      abortTimer = setTimeout(() => {
+        if (proc.exitCode === null && proc.signalCode === null) proc.kill("SIGKILL");
+      }, 1000);
+      abortTimer.unref?.();
+    };
+    const cleanupSignal = () => {
+      if (abortTimer) clearTimeout(abortTimer);
+      interruptSignal?.removeEventListener?.("abort", abortProcess);
+    };
     proc.stderr.on("data", data => { stderr += data.toString("utf8"); });
     proc.stdout.on("data", data => { outStream.write(data); });
     proc.on("close", (status) => {
+      cleanupSignal();
       if (status && status !== 0) {
         // eslint-disable-next-line no-console
         console.error(`command stream exited ${status}: ${stderr.trim()}`);
@@ -206,10 +222,13 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
       commandStreamProcesses.delete(streamName);
     });
     proc.on("error", () => {
+      cleanupSignal();
       outStream.write(`\n${STREAM_END_TOKEN}\n`);
       outStream.end();
       commandStreamProcesses.delete(streamName);
     });
+    if (interruptSignal?.aborted) abortProcess();
+    else interruptSignal?.addEventListener?.("abort", abortProcess, { once: true });
     const streamInput = sentence?.from?.name ? rememberFn?.(sentence.from.name) : null;
     if (streamInput?.be === "stream" && streamInput.ob?.filename) {
       const stopTail = startFileTail({
@@ -274,6 +293,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
     cwd: sandbox.cwd,
     env: commandEnv,
     maxOutputBytes: sandbox.maxOutputBytes,
+    signal: interruptSignal,
     onStdout: process.env.PYA_RUN_VERBOSE === "1"
       ? (text) => {
           try {

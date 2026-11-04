@@ -7,6 +7,7 @@ import path from "node:path";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { command } from "../program/verbs/command.mjs";
+import { runWithMindInterruptSignal } from "../program/agent/interrupt.mjs";
 
 function assertCommandSucceeded(result) {
   assert.equal(result?.be, "command");
@@ -47,6 +48,48 @@ test("command direct node uses process exec path when PATH is empty", async () =
   } finally {
     if (priorPath === undefined) delete process.env.PATH;
     else process.env.PATH = priorPath;
+  }
+});
+
+test("command subprocess is terminated by the active saddle interrupt signal", async () => {
+  const controller = new AbortController();
+  const startedAt = Date.now();
+  const commandPromise = runWithMindInterruptSignal({ signal: controller.signal }, () => command({
+    mood: "do",
+    be: "command",
+    ob: { text: "sleep 1" }
+  }, { remember: () => null }));
+
+  setTimeout(() => controller.abort("test interrupt"), 50);
+  await assert.rejects(commandPromise, /command defective/u);
+  assert.ok(Date.now() - startedAt < 700, "the command runner should stop before its natural exit");
+});
+
+test("streaming command closes its stream when the active saddle interrupt signal fires", async () => {
+  const controller = new AbortController();
+  const streamName = `interrupt-stream-${process.pid}-${Date.now()}`;
+  const result = await runWithMindInterruptSignal({ signal: controller.signal }, () => command({
+    mood: "do",
+    be: "command",
+    su: { name: streamName },
+    ob: { text: "sleep 1" },
+    vyah: { ve: { type: "name", values: ["stream"] } }
+  }, { remember: () => null }));
+  const streamPath = result?.ob?.filename;
+  assert.ok(streamPath);
+
+  try {
+    controller.abort("test stream interrupt");
+    const deadline = Date.now() + 600;
+    let content = "";
+    while (Date.now() < deadline) {
+      content = await fs.readFile(streamPath, "utf8").catch(() => "");
+      if (content.includes("[PYA_STREAM_END]")) break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.match(content, /\[PYA_STREAM_END\]/u);
+  } finally {
+    await fs.rm(streamPath, { force: true });
   }
 });
 

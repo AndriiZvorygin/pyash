@@ -25,7 +25,12 @@ import {
   writeCodingSaddleState
 } from "../program/agent/coding_saddle_state.mjs";
 import { mind_to_name_text } from "../program/verbs/mind/mind.mjs";
-import { requestMindInterrupt } from "../program/agent/interrupt.mjs";
+import {
+  beginActiveMindRun,
+  consumeMindInterrupt,
+  requestMindInterrupt,
+  runWithMindInterruptSignal
+} from "../program/agent/interrupt.mjs";
 import { startStreamTail } from "../program/verbs/mind/stream.mjs";
 import { queueDepth } from "../program/runtime/gpu/queue.mjs";
 import { createGpuHousekeeperAdapter } from "../program/runtime/gpu/housekeeper_adapter.mjs";
@@ -1158,7 +1163,7 @@ async function main() {
     if (busy) {
       saddleUi.setActivity("interrupt requested; waiting for the active turn to settle");
       await requestMindInterrupt({
-        worldRoot: path.join(config.cwd, "world"),
+        worldRoot: config.worldRoot,
         agentName: AGENT_NAME,
         source: "coding saddle",
         reason: "terminal exit"
@@ -1545,6 +1550,8 @@ async function main() {
     let settleActiveSubmit;
     const activeTurn = new Promise((resolve) => { settleActiveSubmit = resolve; });
     activeSubmitDone = activeTurn;
+    const interruptController = new AbortController();
+    let finishActiveMindRun = async () => {};
     busy = true;
     saddleUi.setBusy(true);
     saddleUi.setUsage("");
@@ -1566,6 +1573,11 @@ async function main() {
     let traceError = "";
     let sessionTurnId = "";
     try {
+      finishActiveMindRun = await beginActiveMindRun({
+        worldRoot: config.worldRoot,
+        agentName: AGENT_NAME,
+        controller: interruptController
+      });
       traceTurnId = saddleTrace.beginTurn({ input, backend, model, sessionName, sessionFile });
       contextTurn = await prepareSaddleContextForTurn({
         agentHouse: config.agentHouse,
@@ -1587,7 +1599,7 @@ async function main() {
       if (contextTurn.compacted) {
         writeLine(`[context compacted] ${formatSaddleContextPressure(contextTurn.pressure)}; transcript retained; active context is summary + latest ${contextTurn.historyWindow} exchanges`);
       }
-      const turn = await runSaddleTurnWithEvidence({
+      const turn = await runWithMindInterruptSignal({ signal: interruptController.signal }, () => runSaddleTurnWithEvidence({
         input,
         onTurnStart: () => {
           responseStream = null;
@@ -1657,7 +1669,7 @@ async function main() {
           const output = review?.ob?.text ?? review?.ob?.wo ?? "";
           return String(output).trim() || "[worktree review returned no output]";
         }
-      });
+      }));
       const result = turn.result;
       sessionTurnId = String(result?.accordingto?.text ?? "");
       const text = result?.ob?.text ?? result?.fromstate?.text ?? result?.value?.text ?? "";
@@ -1711,9 +1723,17 @@ async function main() {
       }
       traceStatus = "completed";
     } catch (error) {
-      traceError = String(error?.message ?? error);
-      writeLine(`saddle error> ${traceError}`);
+      if (interruptController.signal.aborted) {
+        traceStatus = "interrupted";
+        traceError = "interrupted by user";
+        writeLine("interrupted");
+      } else {
+        traceError = String(error?.message ?? error);
+        writeLine(`saddle error> ${traceError}`);
+      }
     } finally {
+      await consumeMindInterrupt({ agentHouse: config.agentHouse, agentName: AGENT_NAME }).catch(() => {});
+      await finishActiveMindRun().catch((error) => writeLine(`[interrupt cleanup failed] ${error.message}`));
       if (traceTurnId) {
         try {
           saddleTrace.finishTurn({ status: traceStatus, error: traceError, sessionTurnId });
@@ -1746,13 +1766,17 @@ async function main() {
     onSubmit: submit,
     onCancel: async () => {
       if (!busy) return;
-      await requestMindInterrupt({
-        worldRoot: path.join(config.cwd, "world"),
+      const result = await requestMindInterrupt({
+        worldRoot: config.worldRoot,
         agentName: AGENT_NAME,
         source: "coding saddle",
         reason: "user interrupt"
-      }).catch(() => {});
-      writeLine("interrupt requested");
+      }).catch((error) => ({ requested: false, error }));
+      if (result.requested) {
+        writeLine(`interrupt sent; stopping the active saddle turn${result.abortedRuns ? ` (${result.abortedRuns} request)` : ""}`);
+      } else {
+        writeLine(`interrupt unavailable: ${result.error?.message ?? "no active mind run was registered"}`);
+      }
     },
     onExit: () => { shutdown().catch(() => {}); },
     onScroll: (direction) => saddleUi.scrollBy(-direction),

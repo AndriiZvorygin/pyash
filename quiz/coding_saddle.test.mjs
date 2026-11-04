@@ -253,6 +253,21 @@ test("coding saddle supports cursor editing and control actions", () => {
   assert.deepEqual(events, ["scroll:-1", "scroll:1", "cancel", "exit"]);
 });
 
+test("standalone Escape requests an interrupt without consuming escape sequences", async () => {
+  const events = [];
+  const decoder = createSaddleInputDecoder({
+    onCancel: () => events.push("cancel"),
+    onScroll: (direction) => events.push(`scroll:${direction}`)
+  });
+
+  decoder.feed("\u001b");
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  assert.deepEqual(events, ["cancel"]);
+
+  decoder.feed("\u001b[5~");
+  assert.deepEqual(events, ["cancel", "scroll:-1"]);
+});
+
 test("coding saddle autocompletes and cycles slash commands without inserting tabs in ordinary text", () => {
   assert.deepEqual(
     saddleSlashCommandCompletions({ value: "/m", cursor: 2 }).map((choice) => choice.value),
