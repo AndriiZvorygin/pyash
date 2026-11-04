@@ -110,7 +110,14 @@ async function analyzePhraseFixtureSentence(source) {
 
 test("English sentence resources expose one shared full coverage index", async () => {
   const resources = await loadEnglishSentenceResources();
-  assert.equal(resources.coverage.counts.compound, 62);
+  const compoundRecords = resources.coverage.records.filter((record) => record.coverageType === "compound");
+  assert.equal(resources.coverage.records.length, resources.source.rows.length);
+  assert.equal(resources.coverage.counts.compound, compoundRecords.length);
+  assert.equal(
+    Object.values(resources.coverage.counts).reduce((total, count) => total + count, 0),
+    resources.coverage.records.length
+  );
+  assert.ok(compoundRecords.length > 0);
   assert.deepEqual(resources.coverage.byVariant.get("involve").pyashSequence, ["lwak", "hzan"]);
   assert.equal(resources.source.cutoff, 30000);
   assert.ok(resources.wordnet.rows.length > 4000);

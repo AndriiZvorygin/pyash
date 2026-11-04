@@ -2,27 +2,87 @@ name: CI
 
 on:
   push:
-    branches: [ "*" ]
-  pull_request:
-    branches: [ "*" ]
+    branches: [master, dev]
+  workflow_dispatch:
+  schedule:
+    # The schedule runs from the default branch (master) as a full-suite safety check.
+    - cron: "0 8 * * *"
 
 jobs:
-  test:
+  dev-checks:
+    name: Focused checks (dev)
+    if: github.ref == 'refs/heads/dev' && github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Bootstrap external toolchains
+        run: npm run bootstrap -- --with-whisper
+      - name: Provision the sibling dictionary checkout
+        run: |
+          for attempt in 1 2 3; do
+            if git clone --depth 1 https://gitlab.com/pyac/pyachso2n.git ../pyachso2n; then
+              exit 0
+            fi
+            rm -rf ../pyachso2n
+            if [ "$attempt" = "3" ]; then
+              echo "the sibling dictionary checkout could not be cloned"
+              exit 1
+            fi
+            sleep 10
+          done
+      - name: Install python worker dependencies
+        run: python3 -m pip install --quiet numpy || python3 -m pip install --quiet --break-system-packages numpy
+      - name: Run smoke tests
+        run: npm run test:ci:smoke
+      - name: Check documentation prose
+        run: npm run doc:prose
+      - name: Check import graph
+        run: npm run imports:check
+      - name: Run quiz tests changed on dev
+        shell: bash
+        run: |
+          git fetch --no-tags origin master
+          base="$(git merge-base origin/master "$GITHUB_SHA")"
+          tests=()
+          while IFS= read -r -d '' file; do
+            if [[ "$file" == quiz/*.test.mjs ]] && [[ -f "$file" ]]; then
+              tests+=("$file")
+            fi
+          done < <(git diff --name-only -z "$base" "$GITHUB_SHA")
+
+          if ((${#tests[@]})); then
+            printf 'Running focused tests:\n'
+            printf '  %s\n' "${tests[@]}"
+            node --test --test-concurrency=1 "${tests[@]}"
+          else
+            echo "No quiz test files changed since the master merge-base; smoke and static checks passed."
+          fi
+
+  master-tests:
+    name: Full test suite (master)
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
       - name: Install dependencies
-        run: npm install
+        run: npm ci
       - name: Bootstrap external toolchains
         run: npm run bootstrap -- --with-whisper
       - name: Provision the sibling dictionary checkout
         # The translation subsystem reads its dictionary and glyph word lists
         # from the pyachso2n checkout that sits next to this repository.
-        # A clone can fail on a flaky network, so it is retried: a run that
-        # dies here has tested nothing at all.
         run: |
           for attempt in 1 2 3; do
             if git clone --depth 1 https://gitlab.com/pyac/pyachso2n.git ../pyachso2n; then
@@ -37,32 +97,24 @@ jobs:
           done
       - name: Install python worker dependencies
         # The speaker identity module drives a python worker that imports numpy.
-        # Some runner images mark the system python as externally managed, so
-        # fall back to the explicit override.
+        # Some runner images mark the system python as externally managed.
         run: python3 -m pip install --quiet numpy || python3 -m pip install --quiet --break-system-packages numpy
       - name: Check documentation prose
         run: npm run doc:prose
       - name: Check import graph
         run: npm run imports:check
       - name: Check house-facing surface
-        # Clones the published house repositories and resolves every import
-        # they make against this repository.
         run: npm run house:api:check
-      - name: Run tests
+      - name: Run full tests
         run: npm run test:ci
 
   rust:
-    # The Pyac crate is the VLIW boundary: the pack codec, the catalog
-    # reader, and the proven numeric codelet semantics. It was pinned in
-    # rust-toolchain.toml but built by nothing, so nothing proved it
-    # compiled. This job runs the two commands the reference documentation
-    # tells developers to run.
+    name: Rust checks
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install the pinned Rust toolchain
-        # rust-toolchain.toml pins the channel and the components, so rustup
-        # installs exactly what the repository declares.
         run: |
           rustup show active-toolchain || rustup toolchain install
           rustup component add rustfmt
