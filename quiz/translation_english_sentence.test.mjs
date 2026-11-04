@@ -108,6 +108,18 @@ async function analyzePhraseFixtureSentence(source) {
   });
 }
 
+async function analyzeGrammarProjectionSentence(source, words = {}) {
+  const coverageOverrides = new Map(Object.entries(words).map(([surface, sequence]) => [
+    surface,
+    {
+      coverageType: "fixture",
+      lemma: surface,
+      pyashSequence: Array.isArray(sequence) ? sequence : [sequence]
+    }
+  ]));
+  return analyzeDefaultEnglishSentence(source, { coverageOverrides });
+}
+
 test("English sentence resources expose one shared full coverage index", async () => {
   const resources = await loadEnglishSentenceResources();
   const compoundRecords = resources.coverage.records.filter((record) => record.coverageType === "compound");
@@ -276,6 +288,103 @@ test("English often lowers to frequentative aspect on a modal passive predicate"
   assert.deepEqual(result.verbPhrase.pyashSequence, ["fixture-confused", "pyoh", "ra2"]);
   assert.equal(result.verbPhrase.mood, "tseh");
   assert.match(result.phrases.find((phrase) => phrase.slot === "be").surface, /can be confused/u);
+});
+
+test("modal passive consumes be in the token projection and keeps it out of vocabulary gaps", async () => {
+  const result = await analyzeGrammarProjectionSentence(
+    "Often love can be confused with other feelings.",
+    { confused: "fixture-confused" }
+  );
+  const auxiliary = result.tokens.find((token) => token.surface === "be");
+  assert.equal(result.status, "resolved");
+  assert.deepEqual(result.unresolved, []);
+  assert.equal(auxiliary.coverageType, "grammar");
+  assert.deepEqual(auxiliary.pyashSequence, ["pyoh"]);
+  assert.equal(auxiliary.consumedBy, "modal-passive");
+});
+
+test("initial being is a nominalized subject phrase before the copula", async () => {
+  const result = await analyzeGrammarProjectionSentence(
+    "Being sexually or physically attracted is the feeling of lust.",
+    {
+      sexually: "fixture-sexually",
+      physically: "fixture-physically",
+      attracted: "fixture-attracted",
+      lust: "fixture-lust"
+    }
+  );
+  const being = result.tokens.find((token) => token.surface === "being");
+  const copula = result.tokens.find((token) => token.surface === "is");
+  assert.equal(result.status, "resolved");
+  assert.equal(result.construction, "zero-copula");
+  assert.equal(being.consumedBy, "gerund-subject");
+  assert.deepEqual(being.pyashSequence, []);
+  assert.equal(copula.consumedBy, "zero-copula");
+  assert.ok(result.subject.pyashSequence.includes("na"));
+  assert.ok(result.subject.pyashSequence.includes("fixture-attracted"));
+  assert.ok(!result.subject.pyashSequence.includes("fixture-being"));
+  assert.equal(result.phraseCoordination.kind, "phrase-list");
+  assert.equal(result.phraseCoordination.items.length, 2);
+});
+
+test("think of as treats of as a verb particle and as as the essive complement", async () => {
+  const result = await analyzeGrammarProjectionSentence(
+    "Lust and love may be thought of as different.",
+    {
+      lust: "fixture-lust",
+      different: "fixture-different"
+    }
+  );
+  const of = result.tokens.find((token) => token.surface === "of");
+  const as = result.tokens.find((token) => token.surface === "as");
+  assert.equal(result.status, "resolved");
+  assert.equal(result.sentence.mood, "mwih");
+  assert.equal(of.consumedBy, "think-of-as");
+  assert.deepEqual(of.pyashSequence, []);
+  assert.deepEqual(as.pyashSequence, ["swih"]);
+  assert.equal(result.sentence.ob.name, "fixture-different swih");
+  assert.deepEqual(result.verbPhrase.pyashSequence, ["hcik", "pyoh"]);
+});
+
+test("copular main clause keeps its passive relative clause attached and projects its auxiliaries", async () => {
+  const result = await analyzeGrammarProjectionSentence(
+    "Normal friendship is a form of love that can be distracted by lust and misunderstanding.",
+    {
+      normal: "fixture-normal",
+      friendship: "fixture-friendship",
+      distracted: "fixture-distracted",
+      lust: "fixture-lust"
+    }
+  );
+  const mainCopula = result.tokens.find((token) => token.surface === "is");
+  const relativeMarker = result.tokens.find((token) => token.surface === "that");
+  const relativeAuxiliary = result.tokens.find((token) => token.surface === "be");
+  const relativeModal = result.tokens.find((token) => token.surface === "can");
+  assert.equal(result.status, "resolved");
+  assert.equal(result.construction, "zero-copula");
+  assert.equal(mainCopula.consumedBy, "zero-copula");
+  assert.deepEqual(mainCopula.pyashSequence, []);
+  assert.equal(relativeMarker.grammar.kind, "dependent-clause");
+  assert.match(result.sentence.ob.name, /^la .* ba /u);
+  assert.equal(relativeAuxiliary.consumedBy, "passive-relative-clause");
+  assert.deepEqual(relativeAuxiliary.pyashSequence, ["pyoh"]);
+  assert.deepEqual(relativeModal.pyashSequence, ["tseh"]);
+  assert.match(result.sentence.ob.name, /la .* pyoh tseh ba pyan ti hfam/u);
+});
+
+test("unlinked passive-relative action keeps voice and mood in the partial parent phrase", async () => {
+  const result = await analyzeDefaultEnglishSentence(
+    "Normal friendship is a form of love that can be distracted by lust and misunderstanding."
+  );
+  const can = result.tokens.find((token) => token.surface === "can");
+  const be = result.tokens.find((token) => token.surface === "be");
+  const object = result.phrases.find((phrase) => phrase.slot === "ob");
+  assert.ok(result.unresolved.includes("distracted"));
+  assert.deepEqual(can.pyashSequence, ["tseh"]);
+  assert.deepEqual(be.pyashSequence, ["pyoh"]);
+  assert.equal(be.consumedBy, "passive-relative-clause");
+  assert.ok(object.pyashSequence.includes("pyoh"));
+  assert.ok(object.pyashSequence.includes("tseh"));
 });
 
 test("a passive participle keeps its verb WordNet senses alongside adjective senses", async () => {
