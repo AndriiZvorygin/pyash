@@ -203,8 +203,9 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
 - For residual WordNet senses, run
   `node command/wordnet_sense_compound_refinery.mjs`. Its workflow and bounded
   batch settings live in
-  `program/library/translation/wordnet_sense_compound_refinery.pya`. It asks
-  the configured Qwen mind through the GPU Housekeeper queue for one sense's
+  `program/library/translation/wordnet_sense_compound_refinery.pya`. The
+  worklist uses descending WordNet tag-count order with a floor of two tags.
+  It asks the configured Qwen mind through the GPU Housekeeper queue for one sense's
   translations and transparent word parts in Chinese, French, Russian, and
   Hindi. The configured `parallelism` bounds simultaneous duties; Housekeeper
   may run them across available workers. Resolve English components with

@@ -166,6 +166,7 @@ export function buildSenseCompoundWorklist({
   residualSenses = [],
   linkedSenseIds = [],
   maximum = Number.POSITIVE_INFINITY,
+  minimumTagCount = 0,
   order = "english30k-rank"
 } = {}) {
   if (!Array.isArray(residualSenses)) {
@@ -174,6 +175,9 @@ export function buildSenseCompoundWorklist({
   if (!["english30k-rank", "tag-count-descending"].includes(order)) {
     throw invalid("sense compound worklist order is unsupported", { order });
   }
+  if (!Number.isSafeInteger(minimumTagCount) || minimumTagCount < 0) {
+    throw invalid("sense compound worklist minimum tag count must be a nonnegative integer", { minimumTagCount });
+  }
   const alreadyLinked = new Set(linkedSenseIds.map(text).filter(Boolean));
   return residualSenses.map((sense) => {
     const source = senseIdOf(sense);
@@ -181,13 +185,15 @@ export function buildSenseCompoundWorklist({
     const lemmas = [...new Set((sense?.lemmas ?? []).map(normalized).filter(Boolean))];
     const definition = definitionOnly(sense?.gloss ?? sense?.definition);
     if (!source || !pos || lemmas.length === 0 || !definition || alreadyLinked.has(source)) return null;
+    const tagCounts = (sense?.candidates ?? []).map((candidate) => candidate.tagCount)
+      .filter(Number.isSafeInteger);
+    const tagCount = tagCounts.length ? Math.max(...tagCounts) : Number.isSafeInteger(sense?.tagCount) ? sense.tagCount : -1;
+    if (minimumTagCount > 0 && tagCount < minimumTagCount) return null;
     const candidateRanks = (sense?.candidates ?? []).map((candidate) => Number(candidate.rank ?? candidate.english30kRank))
       .filter((rank) => Number.isFinite(rank) && rank > 0);
     const frequencyRank = Number.isFinite(Number(sense.frequencyRank)) && Number(sense.frequencyRank) > 0
       ? Number(sense.frequencyRank)
       : candidateRanks.length ? Math.min(...candidateRanks) : Number.MAX_SAFE_INTEGER;
-    const tagCount = (sense?.candidates ?? []).map((candidate) => candidate.tagCount)
-      .filter(Number.isSafeInteger);
     return {
       senseId: source,
       pos,
@@ -196,7 +202,7 @@ export function buildSenseCompoundWorklist({
       lemmas,
       gloss: definition,
       frequencyRank,
-      tagCount: tagCount.length ? Math.max(...tagCount) : Number.isSafeInteger(sense?.tagCount) ? sense.tagCount : -1
+      tagCount
     };
   }).filter(Boolean)
     .sort(order === "tag-count-descending"

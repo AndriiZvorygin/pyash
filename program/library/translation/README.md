@@ -171,7 +171,8 @@ later atom/compound generation pass.
 
 For those residual senses, run `node command/wordnet_sense_compound_refinery.mjs`. Its Pyash
 workflow is `wordnet_sense_compound_refinery.pya`; each launch selects up to 64 unlinked senses in
-configured tag-count order. It asks the configured Qwen mind, through the configured GPU Housekeeper
+configured tag-count order, starting at the highest count and including senses with at least two
+WordNet tags. It asks the configured Qwen mind, through the configured GPU Housekeeper
 queue, for sense-specific translations and transparent compound parts in Chinese, French, Russian,
 and Hindi. This translation prompt contains one sense definition and no atom inventory. It requests
 multiple concise English gloss alternatives when a source part has distinct context-fitting meanings.

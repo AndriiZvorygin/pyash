@@ -197,6 +197,7 @@ test("sense compound refinery links, composes, decides, and records one complete
     assert.ok(suggestedTerms.includes("companion"));
     assert.deepEqual(recordedPromotions.map((record) => record.pyashSequence), [["hfre", "hlak"]]);
     const completeCache = await readFile(path.join(completed.artifactDirectory, "sense-translations.pya"), "utf8");
+    const worklistSource = await readFile(path.join(completed.artifactDirectory, "worklist.pya"), "utf8");
     const candidateSource = await readFile(path.join(completed.artifactDirectory, "compound-candidates.pya"), "utf8");
     const completeProgress = await readFile(path.join(completed.artifactDirectory, "progress.pya"), "utf8");
     const allCompositions = await readFile(path.join(completed.artifactDirectory, "component-compositions.pya"), "utf8");
@@ -205,6 +206,7 @@ test("sense compound refinery links, composes, decides, and records one complete
       { attempt: 2, status: "compound" }
     ]);
     assert.equal(parseWordNetSenseTranslationCache(completeCache).bySense.get(sense.senseId).status, "complete");
+    assert.equal(buildProgram(worklistSource).sentences.find((sentence) => sentence.su?.text === "meta:minimum-tag-count")?.ob?.text, "2");
     assert.match(candidateSource, /friendship/u);
     assert.match(completeProgress, /accepted/u);
 

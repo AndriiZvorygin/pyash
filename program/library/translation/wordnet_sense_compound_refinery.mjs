@@ -234,6 +234,10 @@ function parseConfig(source) {
   const candidateRevision = text(values["candidate-revision"]) || ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION;
   const choicePromptRevision = text(values["component-choice-prompt-revision"]) || ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_PROMPT_REVISION;
   const headRelationPolicy = text(values["head-relation-policy"]).toLowerCase() || "advisory";
+  const minimumTagCount = Number(values["minimum-tag-count"] ?? 0);
+  if (!Number.isSafeInteger(minimumTagCount) || minimumTagCount < 0) {
+    throw invalid("sense compound refinery minimum-tag-count must be a nonnegative integer");
+  }
   const worklistOrder = text(values["worklist-order"]) || "english30k-rank";
   if (candidateRevision !== ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION
     || choicePromptRevision !== ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_PROMPT_REVISION
@@ -252,6 +256,7 @@ function parseConfig(source) {
     choiceMaxOutputTokens: Number(values["component-choice-max-output-tokens"]) || ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_MAX_OUTPUT_TOKENS,
     parallelism: Number(values.parallelism) || ENGLISH_WORDNET_SENSE_COMPOUNDS_PARALLELISM,
     maximumSenses: Number(values["max-senses-per-launch"]) || 64,
+    minimumTagCount,
     worklistOrder,
     candidateRevision,
     headRelationPolicy
@@ -345,6 +350,7 @@ async function loadInventory({ context, dependencies }) {
   const fullWorklist = buildSenseCompoundWorklist({
     residualSenses: allocation.allocation.residual,
     linkedSenseIds,
+    minimumTagCount: context.config.minimumTagCount,
     order: context.config.worklistOrder
   });
   const progressPath = join(context.artifactDirectory, "progress.pya");
@@ -384,6 +390,7 @@ async function loadInventory({ context, dependencies }) {
     "atom-inventory-hash": atomInventoryHash,
     "candidate-revision": context.config.candidateRevision,
     "worklist-order": context.config.worklistOrder,
+    "minimum-tag-count": context.config.minimumTagCount,
     "worklist-hash": dataHash,
     "eligible-sense-count": fullWorklist.length,
     "remaining-sense-count": fullWorklist.filter((sense) => {
@@ -408,6 +415,7 @@ async function loadInventory({ context, dependencies }) {
     "source-hash": allocation.sourceHash,
     "atom-inventory-hash": atomInventoryHash,
     "eligible-sense-count": fullWorklist.length,
+    "minimum-tag-count": context.config.minimumTagCount,
     "selected-sense-count": pending.length,
     "remaining-sense-count": fullWorklist.filter((sense) => {
       const progress = progressBySense.get(sense.senseId);

@@ -511,6 +511,24 @@ test("tag-count worklist prioritizes the strongest unlinked sense and uses rank 
   ]);
 });
 
+test("tag-count floor keeps only senses with at least the configured count", () => {
+  const rows = buildSenseCompoundWorklist({
+    residualSenses: [
+      { source: "n:00000030-n", pos: "n", lemmas: ["three"], gloss: "three tags", candidates: [{ rank: 30, tagCount: 3 }] },
+      { source: "n:00000020-n", pos: "n", lemmas: ["two"], gloss: "two tags", candidates: [{ rank: 20, tagCount: 2 }] },
+      { source: "n:00000010-n", pos: "n", lemmas: ["one"], gloss: "one tag", candidates: [{ rank: 10, tagCount: 1 }] },
+      { source: "n:00000000-n", pos: "n", lemmas: ["untagged"], gloss: "no tag count" }
+    ],
+    order: "tag-count-descending",
+    minimumTagCount: 2
+  });
+
+  assert.deepEqual(rows.map((row) => [row.senseId, row.tagCount]), [
+    ["n:00000030-n", 3],
+    ["n:00000020-n", 2]
+  ]);
+});
+
 test("a linked sense for one part of speech does not suppress a residual sense for another", () => {
   const rows = buildSenseCompoundWorklist({
     residualSenses: [
