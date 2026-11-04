@@ -9,7 +9,7 @@ su text "max-senses-per-launch" ob num 64 ya
 su text "worklist-order" ob text "tag-count-descending" ya
 su text "minimum-tag-count" ob num 2 ya
 su text "candidate-revision" ob text "sense-component-choice-v6" ya
-su text "component-choice-prompt-revision" ob text "sense-component-choice-v7" ya
+su text "component-choice-prompt-revision" ob text "sense-component-choice-v8" ya
 su text "component-choice-max-attempts" ob num 2 ya
 su text "component-choice-max-output-tokens" ob num 256 ya
 su text "head-relation-policy" ob text "advisory" ya
