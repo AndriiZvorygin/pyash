@@ -26,6 +26,10 @@ repository, runs `npm ci`, then runs `npm run test:ci`. If tests fail, Codex
 attempt is followed by a complete `npm run test:ci` run. Tests are not weakened
 to make the check green.
 
+The runner prepends the newest complete NVM Node installation when available,
+so cron can find the same `node`, `npm`, and `codex` tools even with its minimal
+default `PATH`.
+
 Codex uses `danger-full-access` because this host's workspace sandbox cannot
 start bubblewrap network namespaces. The separate worktree, bounded prompt,
 no-secret/no-push instructions, test reruns, and local-only candidate commits

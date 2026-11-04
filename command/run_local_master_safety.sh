@@ -14,14 +14,18 @@ LOCK=${PYA_MASTER_SAFETY_LOCK:-/tmp/pyash-${BRANCH}-safety.lock}
 WORKTREE_PARENT=${PYA_MASTER_SAFETY_WORKTREE_PARENT:-$(dirname -- "$REPOSITORY")}
 
 export HOME=${HOME:-/home/htaf}
-if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
-  NVM_ROOT="$HOME/.nvm/versions/node"
-  if [[ -d "$NVM_ROOT" ]]; then
-    LATEST_NODE=$(find "$NVM_ROOT" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V | tail -1)
-    if [[ -n "$LATEST_NODE" ]]; then
-      export PATH="$NVM_ROOT/$LATEST_NODE/bin:$PATH"
+NVM_ROOT="$HOME/.nvm/versions/node"
+if [[ -d "$NVM_ROOT" ]]; then
+  while IFS= read -r node_version; do
+    node_bin="$NVM_ROOT/$node_version/bin"
+    if [[ -x "$node_bin/node" && -x "$node_bin/npm" ]]; then
+      case ":$PATH:" in
+        *":$node_bin:"*) ;;
+        *) export PATH="$node_bin:$PATH" ;;
+      esac
+      break
     fi
-  fi
+  done < <(find "$NVM_ROOT" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -Vr)
 fi
 CODEX=${PYA_MASTER_SAFETY_CODEX_BIN:-$(command -v codex || true)}
 if [[ -z "$CODEX" || ! -x "$CODEX" ]]; then

@@ -36,6 +36,44 @@ test("Codex repair uses the requested Luna xhigh full-access profile and verific
   assert.doesNotMatch(runner, /git -C "\$WORKTREE" push\b/u);
 });
 
+test("runner adds the latest NVM toolchain even when cron already has system Node and npm", () => {
+  const runner = read("run_local_master_safety.sh");
+  assert.match(runner, /NVM_ROOT="\$HOME\/\.nvm\/versions\/node"[\s\S]*?sort -Vr/u);
+  assert.match(runner, /node_bin="\$NVM_ROOT\/\$node_version\/bin"[\s\S]*?node_bin\/node[\s\S]*?node_bin\/npm/u);
+  assert.doesNotMatch(runner, /if ! command -v node[\s\S]*?NVM_ROOT/u);
+});
+
+test("runner finds NVM Codex in a cron-like PATH that already contains system Node and npm", () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pyash-master-safety-cron-path-"));
+  const nvmBin = path.join(tempRoot, ".nvm", "versions", "node", "v99.0.0", "bin");
+  fs.mkdirSync(nvmBin, { recursive: true });
+  for (const name of ["node", "npm", "codex"]) {
+    const binary = path.join(nvmBin, name);
+    fs.writeFileSync(binary, "#!/usr/bin/env bash\nexit 0\n");
+    fs.chmodSync(binary, 0o755);
+  }
+
+  try {
+    const result = execFileSync("bash", [path.join(repoRoot, "command", "run_local_master_safety.sh")], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: {
+        HOME: tempRoot,
+        PATH: "/usr/bin:/bin",
+        PYA_MASTER_SAFETY_REPOSITORY: path.join(tempRoot, "missing-repository")
+      },
+      stdio: "pipe"
+    });
+    assert.fail(`runner unexpectedly succeeded: ${result}`);
+  } catch (error) {
+    const output = `${error.stdout || ""}${error.stderr || ""}`;
+    assert.match(output, /Pyash repository not found/u);
+    assert.doesNotMatch(output, /Codex executable not found/u);
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test("the local cron installer replaces only its own marked block", () => {
   const installer = fs.readFileSync(path.join(repoRoot, "command", "install_local_master_safety_cron.sh"), "utf8");
   const uninstaller = fs.readFileSync(path.join(repoRoot, "command", "uninstall_local_master_safety_cron.sh"), "utf8");
