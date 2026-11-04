@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { allRemember, forget, remember } from "../program/remember/index.mjs";
 import { sentenceToPyash } from "../program/beautiful.mjs";
 import { classifyCommandText } from "../program/library/command_policy.mjs";
+import { resolveCodingSaddleHousePath } from "../program/agent/coding_saddle_house.mjs";
 import {
   ensureSessionFile,
   beginSessionTurn,
@@ -55,7 +56,6 @@ import {
   loadSaddleSessionHistory,
   prepareSaddle,
   renderSaddleSessionHistory,
-  resolveSaddleProjectHouseDirectory,
   resolveSaddleProjectWorldRoot,
   runSaddleTurn,
   waitForSaddleMindStream
@@ -306,6 +306,8 @@ test("coding saddle shows elapsed progress and explicit tool event labels", () =
 test("coding saddle completion evidence requires a successful edit and a later command check", () => {
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /name the target file before editing/u);
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /After the final edit/u);
+  assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /active agent house's absolute memory\/MEMORY\.md path/u);
+  assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /validation command and a session or artifact evidence reference/u);
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /changed file paths/u);
 
   const input = "write hello program";
@@ -729,6 +731,9 @@ test("coding saddle loads its configured mind when launched from another project
     const config = await prepareSaddle({ cwd, worldRoot });
 
     assert.equal(config.cwd, cwd);
+    assert.equal(path.basename(config.agentHouse), "slesh-coding-saddle");
+    assert.equal(remember("agent home file access")?.ob?.boolean, true);
+    assert.equal(remember("agent cwd strict relative paths")?.ob?.boolean, true);
     assert.equal(config.runtimeRoot, runtimeRoot);
     assert.equal(config.mindName, "mind");
     assert.equal(config.backend, "ollama");
@@ -786,8 +791,8 @@ test("coding saddle keeps histories per project while reusing the recent model p
 
     const first = await prepareSaddle({ cwd: projectA, runtimeRoot });
     assert.equal(first.worldRoot, firstWorldRoot);
-    assert.equal(first.agentHouse, resolveSaddleProjectHouseDirectory({ worldRoot: firstWorldRoot, cwd: projectA }));
-    assert.equal(path.basename(first.agentHouse), "alpha");
+    assert.equal(first.agentHouse, resolveCodingSaddleHousePath({ worldRoot: firstWorldRoot, cwd: projectA }));
+    assert.equal(path.basename(first.agentHouse), "alpha-coding-saddle");
     assert.equal(await fs.readFile(path.join(first.agentHouse, "identity", "biography.md"), "utf8"), "project identity data\n");
     await assert.rejects(fs.access(legacyHouse), { code: "ENOENT" });
     assert.equal(first.mindName, "zai");
@@ -821,7 +826,7 @@ test("coding saddle keeps histories per project while reusing the recent model p
     const second = await prepareSaddle({ cwd: projectB, runtimeRoot });
     assert.notEqual(second.worldRoot, first.worldRoot);
     assert.notEqual(second.agentHouse, first.agentHouse);
-    assert.equal(path.basename(second.agentHouse), "beta");
+    assert.equal(path.basename(second.agentHouse), "beta-coding-saddle");
     assert.equal(second.mindName, "zai");
     assert.equal(second.model, "glm-5.3-flash");
     const secondHistory = await loadSaddleSessionHistory({ agentHouse: second.agentHouse, sessionName: "coding" });
@@ -854,7 +859,7 @@ test("coding saddle refuses to merge a legacy project house into an existing pro
     ].join("\n") + "\n", "utf8");
     const worldRoot = resolveSaddleProjectWorldRoot({ runtimeRoot, cwd });
     const legacyHouse = path.join(worldRoot, "house", "coding saddle");
-    const projectHouse = resolveSaddleProjectHouseDirectory({ worldRoot, cwd });
+    const projectHouse = resolveCodingSaddleHousePath({ worldRoot, cwd });
     await fs.mkdir(path.join(legacyHouse, "identity"), { recursive: true });
     await fs.mkdir(path.join(projectHouse, "identity"), { recursive: true });
     await fs.writeFile(path.join(legacyHouse, "identity", "legacy.md"), "keep legacy\n", "utf8");
@@ -862,7 +867,7 @@ test("coding saddle refuses to merge a legacy project house into an existing pro
 
     await assert.rejects(
       prepareSaddle({ cwd, runtimeRoot }),
-      /project saddle house migration conflict/
+      /coding saddle house migration conflict/
     );
     assert.equal(await fs.readFile(path.join(legacyHouse, "identity", "legacy.md"), "utf8"), "keep legacy\n");
     assert.equal(await fs.readFile(path.join(projectHouse, "identity", "current.md"), "utf8"), "keep current\n");

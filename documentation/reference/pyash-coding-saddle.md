@@ -130,16 +130,35 @@ missing or failed evidence leaves the task marked incomplete.
 
 ## Durable state
 
-Conversation records use the existing coding-saddle agent house and session
-files, scoped to the resolved launch directory. Opening the saddle from another
-directory starts with that directory's session history rather than replaying a
-different project's transcript. A project's selected conversation and its
+Conversation records use a readable project-named coding-saddle house beneath
+the existing per-project world root. The world root remains scoped to the exact
+resolved launch directory; its `.pya` project manifest records that directory,
+and `conduct/agent.pya` maps `coding saddle` to the house. On first use, the
+legacy `house/coding saddle` is moved only when that destination is absent or
+empty. If both locations contain data, startup stops with both paths rather
+than merging or overwriting either house. An `identity/HOUSE.md` guide explains
+the house directories and is injected with the other identity files; an
+existing user-authored guide is preserved.
+
+Opening the saddle from another directory starts with that directory's session
+history rather than replaying a different project's transcript. Relative file
+tool paths resolve from the saddle's project working directory. `~/...` and
+explicit absolute paths under the user's home are enabled for saddle read,
+write, list, and repair tools. Unprefixed relative paths cannot escape the
+project directory with `..`. Shell commands still run from the project
+directory under the existing command sandbox; the file-tool home permission
+does not widen command roots. A project's selected conversation and its
 backend/model choice are saved in `conduct/coding-saddle.pya`, separately from
 transcript history. The most recently selected backend, model, host, and
 reasoning effort are stored separately as a fallback for a fresh project
 session; a saved selection for the current project session takes precedence.
 Transcript model records are historical evidence only and never override the
-saved selection at startup. A web duty is represented by the existing durable work-status `.pya`
+saved selection at startup. The saddle prompt directs the agent, after verified
+coding work, to record durable project decisions in the active house's
+`memory/MEMORY.md` (using its absolute house path) with the validation command
+and session or artifact evidence reference. Routine task notes and unverified
+claims do not belong there. The Knowledge Core remains a separate,
+evidence-oriented knowledge system. A web duty is represented by the existing durable work-status `.pya`
 artifact with `kind: coding-duty` metadata and a session file in its owner's
 web assistant area. It does not introduce another queue, model registry, or
 runtime. User messages are durable and worker claims are leased; a worker

@@ -71,10 +71,16 @@ function extractReadLimits(sentence) {
 export async function read_from_filename(sentence = {}) {
   let { from } = sentence;
   if (from?.filename) {
-    const { resolved, outside } = resolveAgentPath(from.filename, { rememberFn: remember });
-    if (!outside && resolved) {
-      from = { ...from, filename: resolved };
+    const { resolved, outside, agentCwd } = resolveAgentPath(from.filename, { rememberFn: remember, access: "read" });
+    if (outside) {
+      throwErrorSentence({
+        name: "read defective",
+        message: `read defective: path is outside allowed file roots${agentCwd ? ` (${agentCwd})` : ""}`,
+        from: { name: "read" },
+        raw: { filename: from.filename }
+      });
     }
+    if (resolved) from = { ...from, filename: resolved };
   }
   if (isWorldToolsActive({ rememberFn: remember })) {
     const { resolved, outside, root } = resolveWorldPath(from?.filename ?? "", { rememberFn: remember });
@@ -125,11 +131,16 @@ export async function read_tail_from_filename(sentence) {
       raw: { sentence }
     });
   }
-  let targetPath = path.resolve(String(filename));
-  const agentResolved = resolveAgentPath(filename, { rememberFn: remember });
-  if (!agentResolved.outside && agentResolved.resolved) {
-    targetPath = agentResolved.resolved;
+  const agentResolved = resolveAgentPath(filename, { rememberFn: remember, access: "read" });
+  if (agentResolved.outside) {
+    throwErrorSentence({
+      name: "read defective",
+      message: `read defective: path is outside allowed file roots (${agentResolved.agentCwd})`,
+      from: { name: "read" },
+      raw: { filename }
+    });
   }
+  let targetPath = agentResolved.resolved || path.resolve(String(filename));
   if (isWorldToolsActive({ rememberFn: remember })) {
     if (filename === ".activity.pya") {
       const place = resolveWorldPlace({ rememberFn: remember }) ?? "commons";
