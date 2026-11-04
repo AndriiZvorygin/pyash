@@ -2,11 +2,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { parse } from "../program/understand/index.mjs";
+import { normalizeMindToolCallLimit } from "../program/runtime/mind-limits.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { allRemember, forget } from "../program/remember/index.mjs";
 import { setExchangeRecorder, clearExchangeRecorder } from "../program/bridge/exchange.mjs";
 import { resetMindLogs } from "../program/verbs/mind/mind.mjs";
 import { jsonObjectFromMapName } from "../program/verbs/exchange/json_map_export.mjs";
+
+test("mind tool call limit defaults and clamps at uint16 maximum", () => {
+  assert.equal(normalizeMindToolCallLimit(undefined), 65_535);
+  assert.equal(normalizeMindToolCallLimit(12), 12);
+  assert.equal(normalizeMindToolCallLimit(70_000), 65_535);
+});
 
 function buildMapIndex(records) {
   const index = new Map();

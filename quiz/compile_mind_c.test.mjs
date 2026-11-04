@@ -29,6 +29,7 @@ test("compile mind to C uses PYA_MIND_RESPONSE", async (t) => {
     "su name answer ob text \"Hello\" for name helper to name text helper-out be write do"
   ].join("\n");
   const c = await compileToC(pyash);
+  assert.match(c, /while \(turns < 65535\)/);
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-mind-c-"));
   const cPath = path.join(tmpDir, "out.c");
   const exePath = path.join(tmpDir, "out");

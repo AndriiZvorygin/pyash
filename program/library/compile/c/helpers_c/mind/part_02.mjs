@@ -1,4 +1,5 @@
 import { DEFAULT_TEXT_MODEL } from "../../../../../runtime/gpu/text-model.mjs";
+import { DEFAULT_MAX_MIND_TOOL_TURNS } from "../../../../../runtime/mind-limits.mjs";
 
 const DEFAULT_TEXT_MODEL_C = JSON.stringify(DEFAULT_TEXT_MODEL);
 
@@ -173,7 +174,7 @@ export const MIND_RUNTIME_HELPER_PART_02 = [
 "  cJSON_AddItemToArray(messages, user);",
 "  int turns = 0;",
 "  char *out = NULL;",
-"  while (turns < 6) {",
+`  while (turns < ${DEFAULT_MAX_MIND_TOOL_TURNS}) {`,
 "    turns += 1;",
 "    cJSON *root = cJSON_CreateObject();",
 "    cJSON_AddStringToObject(root, \"model\", model);",
