@@ -10,7 +10,7 @@ BRANCH=${PYA_MASTER_SAFETY_BRANCH:-master}
 MODEL=${PYA_MASTER_SAFETY_MODEL:-gpt-6-luna}
 REASONING=${PYA_MASTER_SAFETY_REASONING:-xhigh}
 MAX_REPAIRS=${PYA_MASTER_SAFETY_MAX_REPAIRS:-2}
-LOCK=${PYA_MASTER_SAFETY_LOCK:-/tmp/pyash-master-safety.lock}
+LOCK=${PYA_MASTER_SAFETY_LOCK:-/tmp/pyash-${BRANCH}-safety.lock}
 WORKTREE_PARENT=${PYA_MASTER_SAFETY_WORKTREE_PARENT:-$(dirname -- "$REPOSITORY")}
 
 export HOME=${HOME:-/home/htaf}
@@ -37,10 +37,14 @@ if ! [[ "$MAX_REPAIRS" =~ ^[0-2]$ ]]; then
   printf 'PYA_MASTER_SAFETY_MAX_REPAIRS must be between 0 and 2.\n' >&2
   exit 2
 fi
+if ! [[ "$BRANCH" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  printf 'PYA_MASTER_SAFETY_BRANCH must be a simple branch name.\n' >&2
+  exit 2
+fi
 
-mkdir -p "$REPOSITORY/artifacts/local-master-safety" "$WORKTREE_PARENT"
+mkdir -p "$REPOSITORY/artifacts/local-$BRANCH-safety" "$WORKTREE_PARENT"
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
-ARTIFACT_DIR="$REPOSITORY/artifacts/local-master-safety/$RUN_ID"
+ARTIFACT_DIR="$REPOSITORY/artifacts/local-$BRANCH-safety/$RUN_ID"
 mkdir -m 700 "$ARTIFACT_DIR"
 LOG="$ARTIFACT_DIR/run.log"
 exec > >(tee -a "$LOG") 2>&1
@@ -110,8 +114,8 @@ printf 'repository: %s\nremote: %s\nbranch: %s\nmodel: %s (%s)\n' "$REPOSITORY" 
 git -C "$REPOSITORY" fetch --no-tags "$REMOTE" "+refs/heads/$BRANCH:refs/remotes/$REMOTE/$BRANCH"
 BASE_SHA=$(git -C "$REPOSITORY" rev-parse "refs/remotes/$REMOTE/$BRANCH")
 SHORT_SHA=${BASE_SHA:0:12}
-BRANCH_NAME="local-master-safety/$SHORT_SHA-$RUN_ID"
-WORKTREE="$WORKTREE_PARENT/.pyash-master-safety-$RUN_ID"
+BRANCH_NAME="local-$BRANCH-safety/$SHORT_SHA-$RUN_ID"
+WORKTREE="$WORKTREE_PARENT/.pyash-$BRANCH-safety-$RUN_ID"
 printf 'testing fetched commit: %s\nworktree: %s\n' "$BASE_SHA" "$WORKTREE"
 git -C "$REPOSITORY" worktree add -b "$BRANCH_NAME" "$WORKTREE" "$BASE_SHA"
 
@@ -146,13 +150,17 @@ while :; do
 
   repair_attempt=$((repair_attempt + 1))
   failure_log="$suite_log"
-  prompt="$ARTIFACT_DIR/codex-repair-attempt-$(printf '%02d' "$repair_attempt").md"
+  prompt="$ARTIFACT_DIR/codex-repair-prompt-$(printf '%02d' "$repair_attempt").md"
+  response="$ARTIFACT_DIR/codex-repair-result-$(printf '%02d' "$repair_attempt").md"
+  evidence_relative="artifacts/local-safety-evidence/test-suite-attempt-$(printf '%02d' "$suite_attempt").log"
+  mkdir -p "$WORKTREE/$(dirname -- "$evidence_relative")"
+  cp "$failure_log" "$WORKTREE/$evidence_relative"
   cat > "$prompt" <<EOF
 # Local master full-suite repair
 
-This fresh local worktree is based on GitHub $BRANCH at commit $BASE_SHA. Its full repository CI-tier suite failed; inspect the test output at:
+This fresh local worktree is based on GitHub $BRANCH at commit $BASE_SHA. Its full repository CI-tier suite failed; inspect this in-worktree test output:
 
-$failure_log
+$evidence_relative
 
 Repair the actual underlying code or test defect with the smallest appropriate change. Do not weaken, delete, skip, or broaden tests just to obtain a pass. Do not access or modify files outside this worktree. Do not inspect credentials or secret files. Do not change Git remotes, push, merge, or commit. Do not invoke GPU, media, or long-running external-model pipelines. Keep scratch files under /tmp or the ignored artifacts directory, not as untracked repository files. Run focused tests for your fix and report changed files and exact commands. The outer runner will rerun the entire suite and only preserve a repair if that full run passes.
 
@@ -168,7 +176,7 @@ EOF
       --cd "$WORKTREE" \
       --ephemeral \
       --json \
-      --output-last-message "$ARTIFACT_DIR/codex-repair-attempt-$(printf '%02d' "$repair_attempt").md" \
+      --output-last-message "$response" \
       - < "$prompt" \
       > "$ARTIFACT_DIR/codex-repair-attempt-$(printf '%02d' "$repair_attempt").jsonl" \
       2> "$ARTIFACT_DIR/codex-repair-attempt-$(printf '%02d' "$repair_attempt").stderr.log"; then
@@ -190,7 +198,7 @@ if [[ "$FINAL_STATUS" == passed ]]; then
       FINAL_STATUS=passed-uncommitted-protected-paths
     else
       git -C "$WORKTREE" -c user.name='Pyash Local Safety' -c user.email='pyash-local-safety@localhost' \
-        commit -m "repair full-suite failures on master $SHORT_SHA"
+        commit -m "repair full-suite failures on $BRANCH $SHORT_SHA"
       git -C "$WORKTREE" diff --binary "$BASE_SHA" HEAD > "$ARTIFACT_DIR/verified-repair.patch"
       CANDIDATE_COMMIT=$(git -C "$WORKTREE" rev-parse HEAD)
       printf '%s\n' "$CANDIDATE_COMMIT" > "$ARTIFACT_DIR/candidate-commit.txt"
