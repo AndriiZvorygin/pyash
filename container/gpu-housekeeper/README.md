@@ -59,7 +59,7 @@ downloading its weights:
 ```sh
 curl -fsSL https://github.com/Niko1221/Strata/releases/latest/download/install.sh -o /tmp/strata-install.sh
 sh /tmp/strata-install.sh
-strata launch --family deepseek41 --model ist-das-2.00bpw --max-context 8192 --plan --access local --port 8080
+strata launch --family deepseek41 --model ist-das-2.00bpw --context 8192 --vision off --plan --access local --port 8080
 ```
 
 The Mac Studio has 64 GiB unified memory and needs ample SSD space for the

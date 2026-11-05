@@ -111,7 +111,7 @@ if strata_url:
         "runtimeActionTimeoutSec": 1800,
         "beginAction": [
             "launch", "--family", "deepseek41", "--model", strata_model,
-            "--max-context", "8192", "--yes", "--no-tui", "--access", "local", "--port", "8080"
+            "--context", "8192", "--vision", "off", "--yes", "--no-tui", "--access", "local", "--port", "8080"
         ],
         "stopAction": ["launch", "--stop"],
         "defaultContextLength": 8192,
