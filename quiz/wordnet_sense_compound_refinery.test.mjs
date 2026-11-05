@@ -234,8 +234,24 @@ test("sense compound refinery links, composes, decides, and records one complete
     ]);
     assert.equal(parseWordNetSenseTranslationCache(completeCache).bySense.get(sense.senseId).status, "complete");
     assert.equal(buildProgram(worklistSource).sentences.find((sentence) => sentence.su?.text === "meta:minimum-tag-count")?.ob?.text, "1");
+    assert.equal(buildProgram(worklistSource).sentences.find((sentence) => sentence.su?.text === "meta:prompt-revision")?.ob?.text, "sense-translation-gloss-alternatives-v7");
     assert.match(candidateSource, /friendship/u);
     assert.match(completeProgress, /accepted/u);
+
+    await writeFile(
+      path.join(completed.artifactDirectory, "progress.pya"),
+      completeProgress.replaceAll("sense-translation-gloss-alternatives-v7", "sense-translation-gloss-alternatives-v6"),
+      "utf8"
+    );
+    const stalePromptResume = await runWordNetSenseCompoundRefinery({
+      artifactRoot,
+      runId: "sense-compound-test",
+      initialize: false,
+      configuration: {},
+      dependencies
+    });
+    assert.equal(stalePromptResume.selectedSenseCount, 1);
+    assert.equal(stalePromptResume.remainingSenseCount, 0);
 
     const focusedRetry = await runWordNetSenseCompoundRefinery({
       artifactRoot,

@@ -268,10 +268,12 @@ function parseConfig(source) {
     throw invalid("sense compound refinery component-choice-max-attempts must be a positive integer");
   }
   const worklistOrder = text(values["worklist-order"]) || "english30k-rank";
-  if (candidateRevision !== ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION
+  const promptRevision = text(values["prompt-revision"]) || ENGLISH_WORDNET_SENSE_COMPOUNDS_PROMPT_REVISION;
+  if (promptRevision !== ENGLISH_WORDNET_SENSE_COMPOUNDS_PROMPT_REVISION
+    || candidateRevision !== ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION
     || choicePromptRevision !== ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_PROMPT_REVISION
     || headRelationPolicy !== "advisory") {
-    throw invalid("sense compound refinery requires the configured advisory head policy and candidate revision");
+    throw invalid("sense compound refinery requires the current translation and choice prompt revisions, candidate revision, and advisory head policy");
   }
   if (!["english30k-rank", "tag-count-descending"].includes(worklistOrder)) {
     throw invalid("sense compound refinery worklist order is unsupported", { worklistOrder });
@@ -279,7 +281,7 @@ function parseConfig(source) {
   return {
     model: text(values.model),
     languages,
-    promptRevision: text(values["prompt-revision"]) || ENGLISH_WORDNET_SENSE_COMPOUNDS_PROMPT_REVISION,
+    promptRevision,
     choicePromptRevision,
     choiceMaxAttempts,
     maxOutputTokens: Number(values["max-output-tokens"]) || ENGLISH_WORDNET_SENSE_COMPOUNDS_MAX_OUTPUT_TOKENS,
@@ -307,11 +309,13 @@ function queueState(queue = {}) {
   };
 }
 
-function currentProgress(progress, atomInventoryHash, candidateRevision) {
+function currentProgress(progress, atomInventoryHash, candidateRevision, promptRevision, choicePromptRevision) {
   return Boolean(progress
     && READY_PROGRESS.has(progress.status)
     && progress.atomInventoryHash === atomInventoryHash
-    && progress.candidateRevision === candidateRevision);
+    && progress.candidateRevision === candidateRevision
+    && progress.promptRevision === promptRevision
+    && progress.choicePromptRevision === choicePromptRevision);
 }
 
 async function inspectHousekeeper({ model, dependencies }) {
@@ -457,12 +461,20 @@ async function loadInventory({ context, dependencies }) {
   const pending = fullWorklist.filter((sense) => {
     if (requestedSenseSet?.has(sense.senseId)) return true;
     const progress = progressBySense.get(sense.senseId);
-    return !currentProgress(progress, atomInventoryHash, context.config.candidateRevision);
+    return !currentProgress(
+      progress,
+      atomInventoryHash,
+      context.config.candidateRevision,
+      context.config.promptRevision,
+      context.config.choicePromptRevision
+    );
   }).slice(0, context.config.maximumSenses);
   const dataHash = hash(stableJson({
     sourceHash: allocation.sourceHash,
     coverageHash: allocation.coverageHash,
     atomInventoryHash,
+    promptRevision: context.config.promptRevision,
+    choicePromptRevision: context.config.choicePromptRevision,
     pending: pending.map((row) => row.senseId)
   }));
   const worklistPath = join(context.artifactDirectory, "worklist.pya");
@@ -470,13 +482,21 @@ async function loadInventory({ context, dependencies }) {
     "source-hash": allocation.sourceHash,
     "atom-inventory-hash": atomInventoryHash,
     "candidate-revision": context.config.candidateRevision,
+    "prompt-revision": context.config.promptRevision,
+    "component-choice-prompt-revision": context.config.choicePromptRevision,
     "worklist-order": context.config.worklistOrder,
     "minimum-tag-count": context.config.minimumTagCount,
     "worklist-hash": dataHash,
     "eligible-sense-count": fullWorklist.length,
     "remaining-sense-count": fullWorklist.filter((sense) => {
       const progress = progressBySense.get(sense.senseId);
-      return !currentProgress(progress, atomInventoryHash, context.config.candidateRevision);
+      return !currentProgress(
+        progress,
+        atomInventoryHash,
+        context.config.candidateRevision,
+        context.config.promptRevision,
+        context.config.choicePromptRevision
+      );
     }).length
   }));
   context.allocation = allocation;
@@ -872,7 +892,13 @@ async function updateProgress(context, worklistRows, candidateRows, decisions) {
   await atomicWrite(path, renderRowsPya(PROGRESS_NAME, "wordnet-sense-compound-progress-v1", context.progressRecords));
   const remainingCount = (context.fullWorklist ?? []).filter((sense) => {
     const progress = bySense.get(sense.senseId);
-    return !currentProgress(progress, context.atomInventoryHash, context.config.candidateRevision);
+    return !currentProgress(
+      progress,
+      context.atomInventoryHash,
+      context.config.candidateRevision,
+      context.config.promptRevision,
+      context.config.choicePromptRevision
+    );
   }).length;
   return { path, remainingCount };
 }
