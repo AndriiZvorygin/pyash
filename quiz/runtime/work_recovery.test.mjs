@@ -230,7 +230,7 @@ test("known timed-out turns remain ambiguous and preserve workspace evidence", a
   assert.deepEqual(unchanged.checkpoint.interruption.workspaceEvidence.changedFiles, ["hello.txt"]);
 });
 
-test("active-writer recovery preserves the old thread and isolates the replacement worktree", async () => {
+test("active-writer recovery preserves the old thread and reuses the shared checkout", async () => {
   const worldRoot = await world("pyash-work-recovery-replacement-");
   await blockedTask(worldRoot, {
     taskId: "roadmap-active-writer",
@@ -253,8 +253,10 @@ test("active-writer recovery preserves the old thread and isolates the replaceme
   assert.equal(recovered.task.status, "ready");
   assert.equal(recovered.task.checkpoint.worker.threadId, "");
   assert.deepEqual(recovered.task.checkpoint.worker.previousThreadIds, ["luna-thread"]);
-  assert.equal(recovered.task.checkpoint.workspace.worktreePath, "/tmp/roadmap-active-writer-replacement-1");
+  assert.equal(recovered.task.checkpoint.workspace.worktreePath, "");
+  assert.equal(recovered.task.checkpoint.workspace.mode, "shared-checkout");
   assert.equal(recovered.task.checkpoint.workspace.replacementOf, "/tmp/roadmap-active-writer");
+  assert.equal(recovered.replacementCheckout, true);
 });
 
 test("healthy preflight recovers operational roadmap work before a new ready package", async () => {

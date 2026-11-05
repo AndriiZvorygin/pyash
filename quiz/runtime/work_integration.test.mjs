@@ -201,6 +201,7 @@ test("Luna reconciliation on the current automation baseline integrates after Lu
     }
   });
   const clients = new Map();
+  const worktreesBefore = (await git(repositoryRoot, "worktree", "list", "--porcelain")).stdout;
   class FakeClient {
     constructor(role) { this.role = role; this.turnOptions = []; }
     async startThread() { return { thread: { id: `${this.role}-thread` } }; }
@@ -237,11 +238,8 @@ test("Luna reconciliation on the current automation baseline integrates after Lu
   const task = await readWorkTaskStatus(worldRoot, taskId);
   assert.equal(task.status, "accepted");
   assert.equal(task.checkpoint.integration.status, "integrated");
-  assert.equal(task.checkpoint.workspace.worktreePath, path.join(
-    path.dirname(repositoryRoot),
-    "repo-worktrees",
-    `${taskId}-reconciliation`
-  ));
+  assert.equal(task.checkpoint.workspace.worktreePath, repositoryRoot);
+  assert.equal(task.checkpoint.workspace.mode, "shared-checkout");
   assert.equal(task.checkpoint.workspace.worktreePath.includes(`${path.sep}holding${path.sep}`), false);
   assert.equal(task.checkpoint.integration.reconciliation.materialAttempts, 1);
   assert.equal(task.checkpoint.integration.reconciliation.conflictsResolved, 1);
@@ -257,4 +255,5 @@ test("Luna reconciliation on the current automation baseline integrates after Lu
     options.hardTimeoutMs
   ])), [[900000, 900000, 1800000], [900000, 900000, 1800000]]);
   assert.equal((await git(repositoryRoot, "show", "refs/heads/automation/roadmap:reconciled.txt")).stdout, "semantic reconciliation\n");
+  assert.equal((await git(repositoryRoot, "worktree", "list", "--porcelain")).stdout, worktreesBefore);
 });

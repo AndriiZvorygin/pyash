@@ -21,7 +21,7 @@ import { projectWorkContext } from "./context.mjs";
 import { emitWorkEvent } from "./observer.mjs";
 import { diffStat } from "./report.mjs";
 import { appendWorkOutcome } from "./outcome.mjs";
-import { collectGitEvidence, prepareWorktree } from "./workspace.mjs";
+import { acquireSharedWorkspaceLease, collectGitEvidence, prepareSharedCheckout } from "./workspace.mjs";
 import { integrateAcceptedWork } from "./integration.mjs";
 import {
   classifyImplementationPass,
@@ -506,7 +506,7 @@ function uniqueFileChanges(changes) {
   });
 }
 
-export async function runWorkSupervisorOnce({
+async function runWorkSupervisorOnceUnlocked({
   worldRoot,
   repositoryRoot = process.cwd(),
   owner = "",
@@ -514,7 +514,7 @@ export async function runWorkSupervisorOnce({
   workerTag = "sol-luna",
   roleConfig = {},
   appServerFactory = ({}) => spawnCodexAppServer({}),
-  workspaceFactory = prepareWorktree,
+  workspaceFactory = prepareSharedCheckout,
   evidenceFactory = collectGitEvidence,
   baseRef = "",
   integrationBranch = "",
@@ -1726,5 +1726,29 @@ export async function runWorkSupervisorOnce({
     return fail(err);
   } finally {
     for (const client of startedClients) await closeClient(client);
+  }
+}
+
+export async function runWorkSupervisorOnce(options = {}) {
+  const workspaceFactory = options.workspaceFactory || prepareSharedCheckout;
+  if (workspaceFactory !== prepareSharedCheckout) return runWorkSupervisorOnceUnlocked(options);
+
+  const lease = await acquireSharedWorkspaceLease({
+    worldRoot: options.worldRoot,
+    repositoryRoot: options.repositoryRoot || process.cwd()
+  });
+  if (lease.status !== "acquired") {
+    return {
+      claimed: false,
+      status: lease.status,
+      error: lease.reason,
+      changedPaths: lease.changedPaths || [],
+      queue: await queueDepth(options.worldRoot)
+    };
+  }
+  try {
+    return await runWorkSupervisorOnceUnlocked(options);
+  } finally {
+    await lease.release();
   }
 }

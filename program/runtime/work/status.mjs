@@ -142,7 +142,7 @@ function checkpointBlocks(task) {
       { key: "repository", type: "text", value: quoteText(checkpoint.workspace.repository) },
       { key: "base revision", type: "text", value: quoteText(checkpoint.workspace.baseRevision) },
       { key: "branch", type: "text", value: quoteText(checkpoint.workspace.branch) },
-      { key: "worktree path", type: "text", value: quoteText(checkpoint.workspace.worktreePath) },
+      { key: "checkout path", type: "text", value: quoteText(checkpoint.workspace.worktreePath) },
       { key: "mode", type: "text", value: quoteText(checkpoint.workspace.mode) },
       { key: "replacement of", type: "text", value: quoteText(checkpoint.workspace.replacementOf) }
     ]),
@@ -359,7 +359,7 @@ function statusFromText(text) {
         repository: workspace.repository,
         baseRevision: workspace["base revision"],
         branch: workspace.branch,
-        worktreePath: workspace["worktree path"],
+        worktreePath: workspace["checkout path"] ?? workspace["worktree path"],
         mode: workspace.mode,
         replacementOf: workspace["replacement of"]
       },

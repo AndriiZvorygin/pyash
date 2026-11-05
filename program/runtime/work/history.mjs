@@ -65,7 +65,7 @@ export async function appendWorkSchedulerEvent(worldRoot, event = {}, { now = ()
     integration: event.integration,
     previousBlocker: event.previousBlocker,
     recoveryCount: event.recoveryCount,
-    replacementWorktree: event.replacementWorktree,
+    replacementCheckout: event.replacementCheckout,
     previousThreadId: event.previousThreadId,
     classification: event.classification,
     role: event.role,

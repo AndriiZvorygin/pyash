@@ -10,7 +10,7 @@ import {
 import { mergeWorkCheckpoint } from "./checkpoint.mjs";
 import { readWorkTaskStatus, writeWorkTaskStatus } from "./status.mjs";
 import { emitWorkEvent } from "./observer.mjs";
-import { prepareWorktree, collectGitEvidence, isInsideDirectory, resolveWorktreePath } from "./workspace.mjs";
+import { acquireSharedWorkspaceLease, prepareSharedCheckout, collectGitEvidence } from "./workspace.mjs";
 import { integrateAcceptedWork } from "./integration.mjs";
 import { classifyImplementationPass, summarizeImplementationProgress } from "./progress.mjs";
 import {
@@ -67,9 +67,9 @@ function promptIntegration(task, checkpoint, workspace, branch, reconciliation) 
   return [
     "You are Luna, the Pyash implementation worker performing bounded integration reconciliation.",
     "Do not run git cherry-pick --continue and do not modify master.",
-    "Work only in the assigned reconciliation worktree, which is based on the current automation branch.",
+    "Work only in the repository checkout provided for this serialized task.",
     "Reapply the semantic intent of the already reviewed task on top of this current baseline.",
-    "Inspect the original task worktree, its commits, the current baseline, and the conflicting files before editing.",
+    "Inspect the original task's recorded commits, the current baseline, and the conflicting files before editing.",
     "Do not resurrect code that the current automation branch has intentionally superseded.",
     "Run the task's focused acceptance tests and relevant regression/parity tests, then create a task-local reconciliation commit when the result is ready for independent Luna review.",
     "Use these exact headings: SUMMARY:, CHANGED FILES:, TESTS:, BLOCKERS:, UNCERTAINTY:.",
@@ -80,13 +80,13 @@ function promptIntegration(task, checkpoint, workspace, branch, reconciliation) 
     `Original context: ${task.contextText || "none"}`,
     `Original planner work order: ${checkpoint.plan.workOrder || "not recorded"}`,
     `Original planner risks: ${checkpoint.plan.risks || "none reported"}`,
-    `Original task worktree: ${checkpoint.workspace.worktreePath || "not recorded"}`,
+    `Original task checkout: ${checkpoint.workspace.worktreePath || "not recorded"}`,
     `Original task base revision: ${checkpoint.workspace.baseRevision || "not recorded"}`,
     `Original task tip: ${reconciliation.taskCommit || checkpoint.implementation.commit || "not recorded"}`,
     `Current automation branch: ${branch}`,
     `Current reconciliation baseline: ${workspace.baseRevision}`,
     `Reconciliation attempt: ${reconciliation.attempts}`,
-    `Reconciliation worktree: ${workspace.worktreePath}`,
+    `Reconciliation checkout: ${workspace.worktreePath}`,
     `Prior reconciliation correction: ${reconciliation.revisionInstructions || "none"}`,
     "Preserve the original task history as evidence. Report the semantic choices made for each conflict and any remaining uncertainty."
   ].join("\n");
@@ -106,7 +106,7 @@ function promptIntegrationReview(task, checkpoint, workspace, branch, reconcilia
     `Original reviewed implementation evidence: ${checkpoint.implementation.summary || "not recorded"}`,
     `Original task tip: ${reconciliation.taskCommit || checkpoint.implementation.commit || "not recorded"}`,
     `Current automation branch: ${branch}`,
-    `Reconciliation worktree: ${workspace.worktreePath}`,
+    `Reconciliation checkout: ${workspace.worktreePath}`,
     `Reconciliation summary: ${reconciliation.summary || "not recorded"}`,
     `Reconciled files: ${reconciliation.changedFiles.join(", ") || "none reported"}`,
     `Reconciled tests: ${reconciliation.tests.join("; ") || "none reported"}`,
@@ -126,7 +126,7 @@ function promptIntegrationEscalation(task, checkpoint, workspace, branch, reconc
     `Acceptance criteria: ${task.acceptanceText}`,
     `Original planner work order: ${checkpoint.plan.workOrder || "not recorded"}`,
     `Current automation branch: ${branch}`,
-    `Reconciliation worktree: ${workspace.worktreePath}`,
+    `Reconciliation checkout: ${workspace.worktreePath}`,
     `Reconciled files: ${reconciliation.changedFiles.join(", ") || "none reported"}`,
     `Reconciled tests: ${reconciliation.tests.join("; ") || "none reported"}`,
     `Reconciliation summary: ${reconciliation.summary || "not recorded"}`,
@@ -189,14 +189,14 @@ async function openThread(client, { role, threadId, cwd, config, approvalPolicy,
   return id;
 }
 
-export async function runWorkIntegrationReconciliationOnce({
+async function runWorkIntegrationReconciliationOnceUnlocked({
   worldRoot,
   repositoryRoot = process.cwd(),
   owner = "",
   taskId = "",
   roleConfig = {},
   appServerFactory = ({}) => spawnCodexAppServer({}),
-  workspaceFactory = prepareWorktree,
+  workspaceFactory = prepareSharedCheckout,
   evidenceFactory = collectGitEvidence,
   integrationBranch = "automation/roadmap",
   pushIntegration = false,
@@ -364,20 +364,13 @@ export async function runWorkIntegrationReconciliationOnce({
     const original = task.checkpoint.workspace;
     const prior = task.checkpoint.integration.reconciliation;
     const branch = text(integrationBranch) || "automation/roadmap";
-    const originalWorktreePath = text(original.worktreePath);
-    const originalWorktreeInHolding = originalWorktreePath
-      && isInsideDirectory(path.join(worldRoot, "holding"), originalWorktreePath);
-    const requestedWorktree = prior.worktreePath
-      || (originalWorktreePath && !originalWorktreeInHolding
-        ? `${originalWorktreePath}-reconciliation`
-        : resolveWorktreePath({ repositoryRoot, worldRoot, taskId: `${task.taskId}-reconciliation` }));
     workspace = await workspaceFactory({
       repositoryRoot,
       worldRoot,
       taskId: `${task.taskId}-reconciliation`,
       baseRevision: "",
       baseRef: branch,
-      worktreePath: requestedWorktree
+      worktreePath: repositoryRoot
     });
     const reconciliation = {
       ...prior,
@@ -787,5 +780,29 @@ export async function runWorkIntegrationReconciliationOnce({
     return fail(error);
   } finally {
     for (const client of startedClients) await closeClient(client);
+  }
+}
+
+export async function runWorkIntegrationReconciliationOnce(options = {}) {
+  const workspaceFactory = options.workspaceFactory || prepareSharedCheckout;
+  if (workspaceFactory !== prepareSharedCheckout) return runWorkIntegrationReconciliationOnceUnlocked(options);
+
+  const lease = await acquireSharedWorkspaceLease({
+    worldRoot: options.worldRoot,
+    repositoryRoot: options.repositoryRoot || process.cwd()
+  });
+  if (lease.status !== "acquired") {
+    return {
+      claimed: false,
+      status: lease.status,
+      error: lease.reason,
+      changedPaths: lease.changedPaths || [],
+      queue: await queueDepth(options.worldRoot)
+    };
+  }
+  try {
+    return await runWorkIntegrationReconciliationOnceUnlocked(options);
+  } finally {
+    await lease.release();
   }
 }
