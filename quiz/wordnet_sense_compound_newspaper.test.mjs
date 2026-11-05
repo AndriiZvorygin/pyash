@@ -128,3 +128,44 @@ test("direct sense compound runs save mind prompts and responses as linked artif
     await rm(repositoryRoot, { recursive: true, force: true });
   }
 });
+
+test("resumed sense compound runs continue newspaper evoke identities", async () => {
+  const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "pyash-sense-resume-newspaper-"));
+  const artifactRoot = path.join(repositoryRoot, "artifacts");
+  const runId = "sense-compound-resume-newspaper-test";
+  const oldFixture = process.env.PYA_MIND_RESPONSE;
+  delete process.env.PYA_MIND_RESPONSE;
+
+  try {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await runWordNetSenseCompoundRefineryCommand({
+        repositoryRoot,
+        artifactRoot,
+        runId,
+        report: () => {},
+        dependencies: {
+          prepareAllocation: async () => ({ sourceHash: "test-source" }),
+          runRefinery: async ({ onEvoke }) => {
+            onEvoke({ mood: "do", be: "mind", su: { name: "mind" } });
+            return {
+              runId,
+              artifactDirectory: path.join(artifactRoot, runId),
+              selectedSenseCount: 1,
+              remainingSenseCount: 0,
+              candidateCount: 0,
+              result: {}
+            };
+          }
+        }
+      });
+    }
+
+    const newspaper = await readFile(path.join(repositoryRoot, "newspaper", `${runId}.pya`), "utf8");
+    const evokeIds = [...newspaper.matchAll(/(?:^|\s)su name evoke-(\d+)(?=\s)/gu)].map(match => match[1]);
+    assert.deepEqual(evokeIds, ["0", "1"]);
+  } finally {
+    if (oldFixture === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = oldFixture;
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});

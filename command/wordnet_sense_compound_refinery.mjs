@@ -34,6 +34,21 @@ async function acquireRunLock(artifactRoot = ARTIFACT_ROOT) {
   return () => fs.rm(lockPath, { force: true });
 }
 
+async function nextNewspaperEvokeIndex(newspaperPath) {
+  let source;
+  try {
+    source = await fs.readFile(newspaperPath, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return 0;
+    throw error;
+  }
+  let nextIndex = 0;
+  for (const match of source.matchAll(/(?:^|\s)su name evoke-(\d+)(?=\s)/gu)) {
+    nextIndex = Math.max(nextIndex, Number(match[1]) + 1);
+  }
+  return nextIndex;
+}
+
 export async function runWordNetSenseCompoundRefineryCommand({
   dependencies = {},
   configuration = {},
@@ -54,7 +69,7 @@ export async function runWordNetSenseCompoundRefineryCommand({
     let checkpointPath = "";
     const newspaperPath = path.join(repositoryRoot, "newspaper", `${sanitizeRunId(runId)}.pya`);
     let newspaperWrite = Promise.resolve();
-    let evokeIndex = 0;
+    let evokeIndex = await nextNewspaperEvokeIndex(newspaperPath);
     const appendNewspaper = (sentence) => {
       if (!sentence) return;
       const safe = { ...sentence };
