@@ -42,6 +42,9 @@ Use this skill to work on refinery execution, ratify gates, and run newspaper be
 
 - Run with `--newspaper --run-id <stable-id>` and reuse that same id to resume
   matching work. Choose a new id for a fresh run.
+- When a direct refinery adapter appends to the same newspaper on resume,
+  continue its existing sentence/evoke identity sequence; resetting identities
+  can make later evidence collide with earlier events.
 - Checkpoints are append-only evidence in the run newspaper, normally
   `newspaper/<sanitized-run-id>.pya`; the run artifact folder normally lives at
   `artifacts/<sanitized-run-id>/`. The canonical conversation or source record
