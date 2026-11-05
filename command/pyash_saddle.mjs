@@ -116,12 +116,28 @@ export function resolveSaddleProjectWorldRoot({ runtimeRoot, cwd } = {}) {
   return path.join(resolvedRuntimeRoot, "world", "coding-saddle-projects", projectId);
 }
 
-function isPathWithin(directory, target) {
-  const relative = path.relative(path.resolve(directory), path.resolve(target));
-  return Boolean(relative)
+function isRelativePathWithin(directory, target) {
+  const relative = path.relative(directory, target);
+  return relative !== ""
     && relative !== ".."
     && !relative.startsWith(`..${path.sep}`)
     && !path.isAbsolute(relative);
+}
+
+async function isPathWithin(directory, target) {
+  const resolvedDirectory = path.resolve(directory);
+  const resolvedTarget = path.resolve(target);
+  if (isRelativePathWithin(resolvedDirectory, resolvedTarget)) return true;
+  try {
+    const [realDirectory, realTarget] = await Promise.all([
+      fs.realpath(resolvedDirectory),
+      fs.realpath(resolvedTarget)
+    ]);
+    return isRelativePathWithin(realDirectory, realTarget);
+  } catch (error) {
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return false;
+    throw error;
+  }
 }
 
 function configValue(name, fallback = "") {
@@ -356,7 +372,7 @@ export async function prepareSaddle({
   const saddleState = await readCodingSaddleState(saddleStatePath);
   const sessionDir = path.join(agentHouse, "session");
   const storedSessionFile = saddleState.activeSessionFile ? path.resolve(saddleState.activeSessionFile) : "";
-  const sessionFile = storedSessionFile && isPathWithin(sessionDir, storedSessionFile) ? storedSessionFile : "";
+  const sessionFile = storedSessionFile && await isPathWithin(sessionDir, storedSessionFile) ? storedSessionFile : "";
   const sessionName = storedSessionFile && !sessionFile
     ? SESSION_NAME
     : saddleState.activeSessionName || SESSION_NAME;

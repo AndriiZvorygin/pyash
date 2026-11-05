@@ -84,6 +84,33 @@ test("coding saddle house migration stops without merging two populated houses",
   }
 });
 
+test("coding saddle accepts a mapped house reached through a shared-world symlink", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-house-symlink-"));
+  const worldRoot = path.join(root, "dev", "world");
+  const cwd = path.join(root, "projects", "biography");
+  const sharedHouse = path.join(root, "shared", "biography-coding-saddle");
+  const destination = resolveCodingSaddleHousePath({ worldRoot, cwd });
+  await fs.mkdir(path.join(worldRoot, "conduct"), { recursive: true });
+  await fs.mkdir(path.join(sharedHouse, "session"), { recursive: true });
+  await fs.writeFile(path.join(sharedHouse, "session", "coding.pya"), "existing transcript\n", "utf8");
+  await fs.mkdir(path.dirname(destination), { recursive: true });
+  await fs.symlink(sharedHouse, destination, "dir");
+  await fs.writeFile(
+    path.join(worldRoot, "conduct", "agent.pya"),
+    `su name coding saddle house directory ob filename ${JSON.stringify(sharedHouse)} ya\n`,
+    "utf8"
+  );
+
+  try {
+    assert.equal(await ensureCodingSaddleHouse({ worldRoot, cwd }), destination);
+    assert.equal(await fs.readFile(path.join(destination, "session", "coding.pya"), "utf8"), "existing transcript\n");
+    const mapping = await fs.readFile(path.join(worldRoot, "conduct", "agent.pya"), "utf8");
+    assert.ok(mapping.includes(`su name coding saddle house directory ob filename ${JSON.stringify(sharedHouse)} ya`));
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test("coding saddle seeds and injects its house guide without replacing user identity", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-house-guide-"));
   const cwd = path.join(root, "repo");

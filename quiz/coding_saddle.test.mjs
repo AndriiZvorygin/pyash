@@ -654,6 +654,41 @@ test("duty saddle keeps runtime root separate from its persistent world root", a
   }
 });
 
+test("coding saddle accepts a saved session path through a shared-world symlink", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-shared-world-"));
+  const cwd = path.join(root, "projects", "biography");
+  const sharedWorldRoot = path.join(root, "shared", "project-world");
+  const runtimeWorldRoot = path.join(root, "runtime", "project-world");
+  const runtimeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const sessionName = "20261105-coding";
+  const sessionFile = path.join(sharedWorldRoot, "house", "biography-coding-saddle", "session", `${sessionName}.pya`);
+  const envKeys = ["PYA_SADDLE_MIND", "PYA_SADDLE_MODEL", "PYA_SADDLE_HOST"];
+  const previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  for (const key of envKeys) delete process.env[key];
+  try {
+    await fs.mkdir(cwd, { recursive: true });
+    await fs.mkdir(path.dirname(sessionFile), { recursive: true });
+    await fs.mkdir(path.dirname(runtimeWorldRoot), { recursive: true });
+    await fs.symlink(sharedWorldRoot, runtimeWorldRoot, "dir");
+    await fs.writeFile(sessionFile, "session transcript\n", "utf8");
+    await writeCodingSaddleState(path.join(sharedWorldRoot, "house", "biography-coding-saddle", "conduct", "coding-saddle.pya"), {
+      activeSessionName: sessionName,
+      activeSessionFile: sessionFile
+    });
+
+    const restored = await prepareSaddle({ cwd, runtimeRoot, worldRoot: runtimeWorldRoot });
+    assert.equal(restored.sessionName, sessionName);
+    assert.equal(restored.sessionFile, sessionFile);
+  } finally {
+    for (const key of envKeys) {
+      if (previousEnv[key] === undefined) delete process.env[key];
+      else process.env[key] = previousEnv[key];
+    }
+    forget();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test("coding saddle restores its saved session backend and model on restart", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-restore-selection-"));
   const cwd = path.join(root, "project");

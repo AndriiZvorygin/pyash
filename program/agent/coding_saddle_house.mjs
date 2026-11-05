@@ -41,6 +41,19 @@ async function directoryIsEmpty(directory) {
   }
 }
 
+async function resolvesToSameDirectory(left, right) {
+  try {
+    const [resolvedLeft, resolvedRight] = await Promise.all([
+      fs.realpath(left),
+      fs.realpath(right)
+    ]);
+    return resolvedLeft === resolvedRight;
+  } catch (error) {
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return false;
+    throw error;
+  }
+}
+
 async function assertManifestScope({ worldRoot, cwd }) {
   const filename = path.join(worldRoot, "coding-saddle-project.pya");
   let content;
@@ -72,7 +85,7 @@ async function migrateLegacyHouse({ worldRoot, destination }) {
   const candidates = [...new Set([mapped, fallback].filter(Boolean).map((value) => path.resolve(value)))];
 
   for (const source of candidates) {
-    if (source === destination) continue;
+    if (source === destination || await resolvesToSameDirectory(source, destination)) continue;
     let sourceExists = false;
     try {
       const stat = await fs.stat(source);
@@ -120,7 +133,8 @@ async function writeHouseMapping(worldRoot, destination) {
   } catch (error) {
     if (error?.code !== "ENOENT") throw error;
   }
-  const declaration = `su name coding saddle house directory ob filename ${JSON.stringify(destination)} ya`;
+  const canonicalDestination = await fs.realpath(destination);
+  const declaration = `su name coding saddle house directory ob filename ${JSON.stringify(canonicalDestination)} ya`;
   const lines = content.split(/\r?\n/u);
   const kept = lines.filter((line) => !/^\s*su name coding saddle house directory ob filename\b/iu.test(line));
   const normalized = `${kept.join("\n").trimEnd()}${kept.some((line) => line.trim()) ? "\n" : ""}${declaration}\n`;
@@ -130,10 +144,11 @@ async function writeHouseMapping(worldRoot, destination) {
 
 async function writeProjectManifest({ filename, cwd, destination }) {
   const label = path.basename(path.resolve(cwd));
+  const canonicalDestination = await fs.realpath(destination);
   const declarations = [
     `su name coding saddle project cwd ob filename ${JSON.stringify(path.resolve(cwd))} ya`,
     `su name coding saddle project label ob text ${JSON.stringify(label)} ya`,
-    `su name coding saddle project house ob filename ${JSON.stringify(destination)} ya`
+    `su name coding saddle project house ob filename ${JSON.stringify(canonicalDestination)} ya`
   ];
   let existing = "";
   try {
