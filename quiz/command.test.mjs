@@ -202,7 +202,52 @@ test("command timeout surfaces as command defective instead of empty success", a
   const sentence = parse("ob text \"sleep 1\" be command do");
   await assert.rejects(
     () => command(sentence, { remember: rememberFn }),
-    /command defective: status=0 signal=SIGKILL stderr=\"timeout after 10ms\"/
+    /command defective: status=unknown signal=SIGKILL[\s\S]*timed out: true[\s\S]*timeout after 10ms/u
+  );
+});
+
+test("command failure exposes command, working directory, and both output streams", async () => {
+  const cmd = "node -e \"process.stdout.write('stdout-marker\\n'); process.stderr.write('stderr-marker\\n'); process.exit(7)\"";
+  await assert.rejects(
+    () => command({ mood: "do", be: "command", ob: { text: cmd } }, { remember: () => null }),
+    (error) => {
+      assert.match(error.message, /command defective: status=7 signal=/u);
+      assert.ok(error.message.includes(`command: ${cmd}`));
+      assert.ok(error.message.includes(`working directory: ${process.cwd()}`));
+      assert.match(error.message, /stdout:\nstdout-marker/u);
+      assert.match(error.message, /stderr:\nstderr-marker/u);
+      assert.equal(error.sentence.ob.raw.status, 7);
+      assert.equal(error.sentence.ob.raw.stdout, "stdout-marker\n");
+      assert.equal(error.sentence.ob.raw.stderr, "stderr-marker\n");
+      return true;
+    }
+  );
+});
+
+test("command failure says explicitly when stdout and stderr are empty", async () => {
+  const cmd = "node -e \"process.exit(3)\"";
+  await assert.rejects(
+    () => command({ mood: "do", be: "command", ob: { text: cmd } }, { remember: () => null }),
+    (error) => {
+      assert.match(error.message, /status=3/u);
+      assert.match(error.message, /stdout:\n<empty>/u);
+      assert.match(error.message, /stderr:\n<empty>/u);
+      return true;
+    }
+  );
+});
+
+test("command failure bounds long output while retaining its beginning and tail", async () => {
+  const cmd = `node -e "process.stdout.write('START' + 'x'.repeat(6000) + 'END'); process.exit(4)"`;
+  await assert.rejects(
+    () => command({ mood: "do", be: "command", ob: { text: cmd } }, { remember: () => null }),
+    (error) => {
+      assert.match(error.message, /START/u);
+      assert.match(error.message, /characters omitted; showing output tail/u);
+      assert.match(error.message, /END/u);
+      assert.ok(error.message.length < 6000, `diagnostic should be bounded, got ${error.message.length} chars`);
+      return true;
+    }
   );
 });
 

@@ -113,6 +113,34 @@ test("pyash mcp server loads the selected saddle tools map", async () => {
   }
 });
 
+test("saddle MCP command errors expose failure diagnostics to the model", async () => {
+  const serverPath = path.resolve("command/pyash_mcp_server.mjs");
+  const client = createJsonRpcClient({
+    command: process.execPath,
+    args: [serverPath, "--root", path.resolve("."), "--tools-map", "saddle tools"],
+    cwd: path.resolve(".")
+  });
+  try {
+    const list = await client.send("tools/list", {});
+    const commandTool = list?.tools?.find((tool) => tool.name === "be_command_ob_text_to_name_text");
+    assert.ok(commandTool, "expected the saddle command tool");
+    const commandText = `node -e "process.stdout.write('stdout-from-failed-tool\\n'); process.stderr.write('stderr-from-failed-tool\\n'); process.exit(9)"`;
+    const result = await client.send("tools/call", {
+      name: commandTool.name,
+      arguments: { ob: commandText }
+    });
+    assert.equal(result?.isError, true);
+    const visibleText = String(result?.content?.[0]?.text ?? "");
+    assert.match(visibleText, /status=9/u);
+    assert.ok(visibleText.includes(`command: ${commandText}`));
+    assert.ok(visibleText.includes(`working directory: ${path.resolve(".")}`));
+    assert.match(visibleText, /stdout:\nstdout-from-failed-tool/u);
+    assert.match(visibleText, /stderr:\nstderr-from-failed-tool/u);
+  } finally {
+    client.close();
+  }
+});
+
 test("pyash mcp server loads tools from Pyash while operating in an external project", async () => {
   const installRoot = path.resolve(".");
   const serverPath = path.join(installRoot, "command", "pyash_mcp_server.mjs");
