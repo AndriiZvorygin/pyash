@@ -1,24 +1,44 @@
-# Pyash as a GIOS Foundation
+# Pyash as a General Intelligence Operating System
 
-**Status:** analysis for review. It states where Pyash stands against the
-ambition its own design document declares, what stands between it and the next
-stage, and what would have to be true for the next stage to be claimed. It
-proposes no code change and schedules no work.
+**Status:** architecture direction and capability assessment. Pyash is intended
+to be a general intelligence operating system (GI-OS), with the Pyash language
+as its native meaning and workflow interface. This document assesses current
+evidence against that direction; it distinguishes implemented behavior from
+the target architecture.
 
 ## Purpose
 
-`documentation/pyash.md` says Pyash is "an interlanguage between all human
-languages and all computer languages", that it should be "grown rather than
-hand-designed, using LLMs and evolutionary programming", and that it aims to
-be "a Turing-complete, general-purpose language". That is the ambition of a
-general intelligence operating system (GIOS): a substrate that can hold
-arbitrary human meaning, act on a world, accumulate what it learns, decide
-what to do next, and improve itself.
+`documentation/pyash.md` describes Pyash as a GI-OS: a system that can hold
+human meaning, act on a world, accumulate what it learns, decide what to do
+next, and improve itself. The Pyash language is one layer of that system. The
+operating environment also includes its runtime, shared libraries, agent homes,
+world data, tools, and provider lifecycle.
 
-This document asks one question: **on that ambition, where does Pyash
-actually stand, and what needs work?** It is an assessment, not a plan.
-Measured claims include commands or code references for reproduction;
-readiness judgments are analysis for reviewers, not measured results.
+This document asks one question: **where does Pyash stand as an operating
+system, and what needs work?** Measured claims include commands or code
+references for reproduction; readiness judgments are analysis, not measured
+results.
+
+## Operating-system storage model
+
+The system installation is the Pyash repository root. Shared runtime libraries
+live once in `program/library/` and are intended to be mounted or exposed
+read-only to model workers, like shared libraries on a conventional operating
+system. Model-specific persistent data belongs in the writable world/home
+volume, not in copies of the system library tree. The GI-OS home root is named
+`world/home/`; the current agent-house implementation uses
+`world/house/<agent>/` until a deliberate path migration is made.
+
+`world/library/` is the shared writable knowledge and artifact place. It is
+separate from the installed code libraries under `program/library/`. The
+architecture expects workers to read shared code and write only to their home
+or explicitly authorized world locations. This is a target access boundary;
+current tools and filesystem policies implement specific parts of it, and
+should not be described as a complete OS sandbox without evidence.
+
+Reusable libraries and the system installation are shared resources, not
+per-task checkouts. Task outputs and audit artifacts belong in the established
+world and artifact locations.
 
 The current evidence points to a substantial language, application, and agent
 runtime, alongside important gaps in persistent knowledge, vocabulary
