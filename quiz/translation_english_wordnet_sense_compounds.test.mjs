@@ -40,6 +40,11 @@ test("sense translation prompt is scoped to one definition and comparison-langua
   assert.doesNotMatch(prompt, /their friendship lasted years/u);
   assert.doesNotMatch(prompt, /hfre|hlak|hbad/u);
   assert.match(prompt, /"chinese","french","russian","hindi"/u);
+  assert.match(prompt, /every translation containing two or more Han characters must be decomposed/u);
+  assert.match(prompt, /For a two-character Chinese translation, list both characters as separate parts/u);
+  assert.match(prompt, /Chinese multi-character translations cannot be simple or have empty components/u);
+  assert.match(prompt, /exactly one translation row for each requested language/u);
+  assert.match(prompt, /compound requires two or three components, simple requires an empty components array/u);
   assert.match(prompt, /Do not split prefixes, suffixes, inflectional endings, or grammatical material/u);
   assert.match(prompt, /A classifier, article, particle/u);
   assert.match(prompt, /compositionEvidence/u);
@@ -297,7 +302,7 @@ test("sense translation response parses bounded noisy JSON and keeps only reques
   assert.equal(response.valid, true);
   assert.deepEqual(response.missingLanguages, []);
   assert.equal(response.translations[0].components[1].gloss, "relationship");
-  const simpleWithExplanatoryParts = parseWordNetSenseTranslationResponse(JSON.stringify({
+  assert.throws(() => parseWordNetSenseTranslationResponse(JSON.stringify({
     senseId: "n:00000010-n",
     translations: [{
       language: "chinese",
@@ -309,9 +314,34 @@ test("sense translation response parses bounded noisy JSON and keeps only reques
         { surface: "个", gloss: "general noun classifier", role: "grammatical" }
       ]
     }]
+  }), { senseId: "n:00000010-n", languages: ["chinese"] }), /must be decomposed/u);
+  const twoCharacterDecomposition = parseWordNetSenseTranslationResponse(JSON.stringify({
+    senseId: "n:00000010-n",
+    translations: [{
+      language: "chinese",
+      surface: "思考",
+      composition: "compound",
+      compositionEvidence: "思 contributes thought and 考 contributes consideration.",
+      components: [
+        { surface: "思", gloss: "think; thought", role: "lexical" },
+        { surface: "考", gloss: "consider; examine", role: "lexical" }
+      ]
+    }]
   }), { senseId: "n:00000010-n", languages: ["chinese"] });
-  assert.equal(simpleWithExplanatoryParts.translations[0].composition, "simple");
-  assert.deepEqual(simpleWithExplanatoryParts.translations[0].components, []);
+  assert.deepEqual(twoCharacterDecomposition.translations[0].components.map(({ surface }) => surface), ["思", "考"]);
+  assert.throws(() => parseWordNetSenseTranslationResponse(JSON.stringify({
+    senseId: "n:00000010-n",
+    translations: [{
+      language: "chinese",
+      surface: "思考",
+      composition: "compound",
+      compositionEvidence: "thought plus consideration",
+      components: [
+        { surface: "思", gloss: "thought", role: "lexical" },
+        { surface: "好", gloss: "good", role: "lexical" }
+      ]
+    }]
+  }), { senseId: "n:00000010-n", languages: ["chinese"] }), /cover the complete translation/u);
   const affixSplit = parseWordNetSenseTranslationResponse(JSON.stringify({
     senseId: "n:00000010-n",
     translations: [{
@@ -326,7 +356,7 @@ test("sense translation response parses bounded noisy JSON and keeps only reques
     }]
   }), { senseId: "n:00000010-n", languages: ["french"] });
   assert.equal(affixSplit.translations[0].composition, "uncertain");
-  assert.deepEqual(affixSplit.translations[0].components, []);
+  assert.deepEqual(affixSplit.translations[0].components.map(({ surface }) => surface), ["dé-", "-couvrir"]);
   assert.equal(affixSplit.translations[0].compositionEvidence, "decomposition contains a bound-morpheme marker");
   const classifier = parseWordNetSenseTranslationResponse(JSON.stringify({
     senseId: "n:00000010-n",
@@ -342,7 +372,7 @@ test("sense translation response parses bounded noisy JSON and keeps only reques
     }]
   }), { senseId: "n:00000010-n", languages: ["chinese"] });
   assert.equal(classifier.translations[0].composition, "uncertain");
-  assert.deepEqual(classifier.translations[0].components, []);
+  assert.deepEqual(classifier.translations[0].components.map(({ surface }) => surface), ["一", "个"]);
   assert.match(classifier.translations[0].compositionEvidence, /grammatical, bound, or unverified component/u);
   const unsupportedComposition = parseWordNetSenseTranslationResponse(JSON.stringify({
     senseId: "n:00000010-n",
@@ -358,16 +388,15 @@ test("sense translation response parses bounded noisy JSON and keeps only reques
     }]
   }), { senseId: "n:00000010-n", languages: ["chinese"] });
   assert.equal(unsupportedComposition.translations[0].composition, "uncertain");
-  assert.deepEqual(unsupportedComposition.translations[0].components, []);
-  const wrapped = parseWordNetSenseTranslationResponse(JSON.stringify({
+  assert.deepEqual(unsupportedComposition.translations[0].components.map(({ surface }) => surface), ["发", "现"]);
+  assert.throws(() => parseWordNetSenseTranslationResponse(JSON.stringify({
     model: "qwen3.5:9b",
     response: JSON.stringify({
       senseId: "n:00000010-n",
       translations: [{ language: "chinese", surface: "朋友关系", composition: "simple", components: [], compositionEvidence: "single lexical item" }]
     }),
     done: true
-  }), { senseId: "n:00000010-n", languages: ["chinese"] });
-  assert.equal(wrapped.translations[0].surface, "朋友关系");
+  }), { senseId: "n:00000010-n", languages: ["chinese"] }), /must be decomposed/u);
   assert.throws(() => parseWordNetSenseTranslationResponse(JSON.stringify({
     senseId: "n:00000010-n",
     translations: [

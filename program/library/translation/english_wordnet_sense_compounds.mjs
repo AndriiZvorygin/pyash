@@ -13,7 +13,7 @@ export const ENGLISH_WORDNET_SENSE_COMPOUNDS_LANGUAGES = Object.freeze([
   "chinese", "french", "russian", "hindi"
 ]);
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_MODEL = "qwen3.5:9b";
-export const ENGLISH_WORDNET_SENSE_COMPOUNDS_PROMPT_REVISION = "sense-translation-gloss-alternatives-v5";
+export const ENGLISH_WORDNET_SENSE_COMPOUNDS_PROMPT_REVISION = "sense-translation-gloss-alternatives-v7";
 export const ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_PROMPT_REVISION = "sense-component-choice-v9";
 export const ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION = "sense-component-choice-v7";
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_MAX_OUTPUT_TOKENS = 1024;
@@ -45,6 +45,10 @@ function text(value) {
 
 function normalized(value) {
   return text(value).toLowerCase().replace(/[_-]+/gu, " ").replace(/\s+/gu, " ").trim();
+}
+
+function hanCharacters(value) {
+  return [...text(value).matchAll(/\p{Script=Han}/gu)].map(([character]) => character);
 }
 
 export function componentGlossAlternatives(value) {
@@ -146,11 +150,14 @@ export function buildWordNetSenseTranslationPrompt({
   return [
     "Translate this one WordNet sense into the requested comparison languages.",
     "Use its definition to preserve this sense; translate the ordinary lexical meaning, not an explanatory sentence.",
-    "Mark compound only when the current ordinary word meaning is transparently composed from its listed parts.",
+    "For Chinese, every translation containing two or more Han characters must be decomposed; never label it simple, even when it is a lexicalized word.",
+    "For a two-character Chinese translation, list both characters as separate parts in written order, give each character its current contribution to this meaning, and make the two part surfaces concatenate exactly to the full translation. For longer Chinese translations, list two or three current lexical parts whose surfaces cover the full translation exactly, with no omitted characters.",
+    "For other languages, mark compound when the current ordinary word meaning is transparently composed from its listed parts.",
     "For each part, label role lexical, grammatical, bound, or uncertain. A classifier, article, particle, inflection, derivational ending, or other grammatical material is not a lexical compound part.",
-    "Do not split prefixes, suffixes, inflectional endings, or grammatical material. Chinese characters count only when each has a current lexical meaning that contributes to this word, not just a historical or dictionary character meaning.",
+    "Do not split prefixes, suffixes, inflectional endings, or grammatical material in other languages. For Chinese, explain each character's current contribution in this word; historical meaning alone is not sufficient.",
     "When compound, list two or three source-language parts in natural written order. For each part, provide up to three distinct concise English lexical glosses that fit this exact sense, separated by / when needed. Include multiple glosses when they express distinct context-compatible contributions; do not add loose synonyms. Explain in compositionEvidence how their current meanings jointly express the sense.",
-    "Do not mark a mere phrase, classifier construction, idiom, or opaque lexicalized form as compound. Use simple with empty components, or uncertain when unsure.",
+    "Return exactly one translation row for each requested language, with no duplicate or extra language rows. For every language, compound requires two or three components, simple requires an empty components array, and uncertain may use an empty array or two or three components; never return exactly one component.",
+    "Chinese multi-character translations cannot be simple or have empty components. If their decomposition is unclear, use uncertain and still provide the character or part surfaces and your best current gloss for each. For other languages, do not mark a mere phrase, classifier construction, idiom, or opaque lexicalized form as compound; use simple with empty components, or uncertain when unsure.",
     "Do not invent Pyash words or choose Pyash atoms. No Pyash atom inventory is provided.",
     "Return one JSON object only, with this shape:",
     '{"senseId":"...","translations":[{"language":"...","surface":"...","composition":"compound|simple|uncertain","compositionEvidence":"...","components":[{"surface":"...","gloss":"...","role":"lexical|grammatical|bound|uncertain"}]}]}',
@@ -469,6 +476,22 @@ export function parseWordNetSenseTranslationResponse(value, {
       return { surface: partSurface, gloss, role };
     });
     const compositionEvidence = text(row?.compositionEvidence).slice(0, 500);
+    const han = language === "chinese" ? hanCharacters(surface) : [];
+    if (han.length >= 2) {
+      if (composition === "simple") {
+        throw invalid("multi-character Chinese translation must be decomposed", { index, language, surface, hanCharacterCount: han.length });
+      }
+      if (components.length < 2 || components.length > MAX_COMPONENTS) {
+        throw invalid("multi-character Chinese translation requires two or three decomposed parts", { index, language, surface, componentCount: components.length });
+      }
+      const joinedParts = components.map((component) => component.surface).join("").normalize("NFC");
+      if (joinedParts !== surface.normalize("NFC")) {
+        throw invalid("Chinese decomposition parts must cover the complete translation in written order", { index, language, surface, joinedParts });
+      }
+      if (han.length === 2 && (components.length !== 2 || components.some((component) => hanCharacters(component.surface).length !== 1))) {
+        throw invalid("two-character Chinese translations require one component per character", { index, language, surface });
+      }
+    }
     if (components.length > MAX_COMPONENTS) {
       throw invalid("sense translation decomposition exceeds three components", { index, language, componentCount: components.length });
     }
@@ -488,7 +511,7 @@ export function parseWordNetSenseTranslationResponse(value, {
       language,
       surface,
       composition: rejectComposition ? "uncertain" : composition,
-      components: composition === "simple" || rejectComposition ? [] : components,
+      components: composition === "simple" ? [] : components,
       compositionEvidence: rejectComposition
         ? hasBoundMorphemeMarkers
           ? "decomposition contains a bound-morpheme marker"
