@@ -233,7 +233,7 @@ test("sense compound refinery links, composes, decides, and records one complete
       { attempt: 2, status: "compound" }
     ]);
     assert.equal(parseWordNetSenseTranslationCache(completeCache).bySense.get(sense.senseId).status, "complete");
-    assert.equal(buildProgram(worklistSource).sentences.find((sentence) => sentence.su?.text === "meta:minimum-tag-count")?.ob?.text, "2");
+    assert.equal(buildProgram(worklistSource).sentences.find((sentence) => sentence.su?.text === "meta:minimum-tag-count")?.ob?.text, "1");
     assert.match(candidateSource, /friendship/u);
     assert.match(completeProgress, /accepted/u);
 
