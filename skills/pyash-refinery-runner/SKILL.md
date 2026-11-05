@@ -35,8 +35,10 @@ Use this skill to work on refinery execution, ratify gates, and run newspaper be
   limit (currently 64). Keep the stable run id, let each chunk complete through
   its composition and decision artifacts, then continue from the progress map.
   Do not raise the limit to the full backlog. When repeating launches in one
-  process, retain that run's prepared allocation snapshot and ensure the
-  Pyash refinery definition is re-registered after runtime memory is cleared.
+  sweep, refresh the allocation between chunks when accepted vocabulary changes
+  coverage, while preserving the same run id and progress artifacts. A stable
+  allocation snapshot should cover one chunk only. Ensure the Pyash refinery
+  definition is re-registered after runtime memory is cleared.
 
 ## Checkpoints and newspapers
 

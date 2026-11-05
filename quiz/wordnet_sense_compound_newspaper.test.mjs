@@ -11,7 +11,10 @@ import {
   createQueuedMindSenseCompoundChoiceTransport,
   createQueuedMindWordNetSenseTranslationTransport
 } from "../program/library/translation/english_wordnet_sense_compounds.mjs";
-import { runWordNetSenseCompoundRefineryCommand } from "../command/wordnet_sense_compound_refinery.mjs";
+import {
+  runWordNetSenseCompoundRefineryCommand,
+  runWordNetSenseCompoundRefinerySweepCommand
+} from "../command/wordnet_sense_compound_refinery.mjs";
 
 test("direct sense compound runs save mind prompts and responses as linked artifacts", async () => {
   const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "pyash-sense-newspaper-"));
@@ -163,6 +166,79 @@ test("resumed sense compound runs continue newspaper evoke identities", async ()
     const newspaper = await readFile(path.join(repositoryRoot, "newspaper", `${runId}.pya`), "utf8");
     const evokeIds = [...newspaper.matchAll(/(?:^|\s)su name evoke-(\d+)(?=\s)/gu)].map(match => match[1]);
     assert.deepEqual(evokeIds, ["0", "1"]);
+  } finally {
+    if (oldFixture === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = oldFixture;
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test("compound sweep continues across inventory rechecks until the backlog completes", async () => {
+  const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "pyash-sense-sweep-"));
+  const oldFixture = process.env.PYA_MIND_RESPONSE;
+  delete process.env.PYA_MIND_RESPONSE;
+  const remainingCounts = [10, 15, 0];
+  const signatures = ["before", "after-one", "after-one", "after-two", "after-two"];
+  let chunks = 0;
+  let allocationReads = 0;
+
+  try {
+    const result = await runWordNetSenseCompoundRefinerySweepCommand({
+      repositoryRoot,
+      artifactRoot: path.join(repositoryRoot, "artifacts"),
+      runId: "sense-compound-sweep-test",
+      report: () => {},
+      dependencies: {
+        prepareAllocation: async () => ({ sourceHash: `test-source-${++allocationReads}` }),
+        progressSignature: async () => signatures.shift(),
+        runChunk: async () => {
+          const remainingSenseCount = remainingCounts[chunks];
+          chunks += 1;
+          return {
+            selectedSenseCount: remainingSenseCount === 0 ? 0 : 64,
+            remainingSenseCount,
+            candidateCount: 0,
+            translationFailureCount: 0,
+            result: { "promoted-sense-count": remainingSenseCount === 15 ? 2 : 0 }
+          };
+        }
+      }
+    });
+
+    assert.equal(result.sweepComplete, true);
+    assert.equal(result.batchCount, 3);
+    assert.equal(chunks, 3);
+    assert.equal(allocationReads, 3);
+  } finally {
+    if (oldFixture === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = oldFixture;
+    await rm(repositoryRoot, { recursive: true, force: true });
+  }
+});
+
+test("compound sweep fails clearly when a bounded chunk makes no durable progress", async () => {
+  const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "pyash-sense-sweep-stall-"));
+  const oldFixture = process.env.PYA_MIND_RESPONSE;
+  delete process.env.PYA_MIND_RESPONSE;
+
+  try {
+    await assert.rejects(runWordNetSenseCompoundRefinerySweepCommand({
+      repositoryRoot,
+      artifactRoot: path.join(repositoryRoot, "artifacts"),
+      runId: "sense-compound-sweep-stall-test",
+      report: () => {},
+      dependencies: {
+        prepareAllocation: async () => ({ sourceHash: "test-source" }),
+        progressSignature: async () => "unchanged",
+        runChunk: async () => ({
+          selectedSenseCount: 1,
+          remainingSenseCount: 1,
+          candidateCount: 0,
+          translationFailureCount: 1,
+          result: {}
+        })
+      }
+    }), /made no durable progress/u);
   } finally {
     if (oldFixture === undefined) delete process.env.PYA_MIND_RESPONSE;
     else process.env.PYA_MIND_RESPONSE = oldFixture;

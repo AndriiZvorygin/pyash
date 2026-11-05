@@ -2,6 +2,7 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 import { prepareWordNetFrequencyAllocation } from "./wordnet_frequency_allocate.mjs";
@@ -63,73 +64,178 @@ export async function runWordNetSenseCompoundRefineryCommand({
   const releaseLock = await acquireRunLock(artifactRoot);
   try {
     const allocation = await (dependencies.prepareAllocation ?? prepareWordNetFrequencyAllocation)();
+    return await runWordNetSenseCompoundRefineryChunk({
+      dependencies,
+      configuration,
+      requestedRunId,
+      repositoryRoot,
+      artifactRoot,
+      report,
+      allocation
+    });
+  } finally {
+    await releaseLock();
+  }
+}
+
+async function runWordNetSenseCompoundRefineryChunk({
+  dependencies,
+  configuration,
+  requestedRunId,
+  repositoryRoot,
+  artifactRoot,
+  report,
+  allocation
+}) {
+  const runId = requestedRunId
+    ? sanitizeRunId(requestedRunId)
+    : wordNetSenseCompoundRunId({ sourceHash: allocation.sourceHash });
+  let checkpointPath = "";
+  const newspaperPath = path.join(repositoryRoot, "newspaper", `${sanitizeRunId(runId)}.pya`);
+  let newspaperWrite = Promise.resolve();
+  let evokeIndex = await nextNewspaperEvokeIndex(newspaperPath);
+  const appendNewspaper = (sentence) => {
+    if (!sentence) return;
+    const safe = { ...sentence };
+    if (safe.be === "checkpoint") {
+      for (const role of ["fromtext", "totext"]) {
+        if (typeof safe[role]?.text === "string") {
+          safe[role] = { ...safe[role], text: encodeCheckpointText(safe[role].text) };
+        }
+      }
+    }
+    newspaperWrite = newspaperWrite.then(async () => {
+      await fs.mkdir(path.dirname(newspaperPath), { recursive: true });
+      await fs.appendFile(newspaperPath, `${sentenceToPyash(safe)}\n`, "utf8");
+    });
+  };
+  setExchangeRecorder({ runRoot: repositoryRoot, record: appendNewspaper });
+  setExchangeRunId(runId);
+  setExchangeStrict(true);
+  let result;
+  try {
+    result = await (dependencies.runRefinery ?? runWordNetSenseCompoundRefinery)({
+      artifactRoot,
+      runId,
+      configuration,
+      dependencies: { ...dependencies, prepareAllocation: async () => allocation },
+      onEvoke: (actionSentence) => {
+        const sentenceId = `evoke-${evokeIndex++}`;
+        setExchangeSentenceId(sentenceId);
+        appendNewspaper({
+          mood: "ya",
+          exists: true,
+          be: "evoke",
+          su: { name: sentenceId },
+          ob: { la: actionSentence }
+        });
+      },
+      onCheckpoint: (sentence) => {
+        appendNewspaper(sentence);
+        checkpointPath = path.join(repositoryRoot, "newspaper", `${sanitizeRunId(runId)}.pya`);
+      },
+      onStage: appendNewspaper
+    });
+  } finally {
+    try {
+      await newspaperWrite;
+    } finally {
+      clearExchangeRecorder();
+    }
+  }
+  const summary = {
+    runId,
+    artifactDirectory: result.artifactDirectory,
+    checkpointPath,
+    selectedSenseCount: result.selectedSenseCount,
+    remainingSenseCount: result.remainingSenseCount,
+    candidateCount: result.candidateCount,
+    ...result.result
+  };
+  report(JSON.stringify(summary, null, 2));
+  return { ...result, result: summary, checkpointPath };
+}
+
+async function progressArtifactSignature(artifactDirectory) {
+  const hash = createHash("sha256");
+  for (const filename of ["worklist.pya", "progress.pya"]) {
+    hash.update(filename);
+    try {
+      hash.update(await fs.readFile(path.join(artifactDirectory, filename)));
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+  }
+  return hash.digest("hex");
+}
+
+export async function runWordNetSenseCompoundRefinerySweepCommand({
+  dependencies = {},
+  configuration = {},
+  runId: requestedRunId = "",
+  repositoryRoot = REPOSITORY_ROOT,
+  artifactRoot = path.join(repositoryRoot, "artifacts"),
+  report = console.log,
+  maximumBatches = 10000
+} = {}) {
+  if (process.env.PYA_MIND_RESPONSE) {
+    throw new Error("WordNet sense compound refinery requires PYA_MIND_RESPONSE to be unset");
+  }
+  if (!Number.isSafeInteger(maximumBatches) || maximumBatches < 1) {
+    throw new Error("WordNet sense compound sweep requires a positive batch limit");
+  }
+  const releaseLock = await acquireRunLock(artifactRoot);
+  try {
+    const prepareAllocation = dependencies.prepareAllocation ?? prepareWordNetFrequencyAllocation;
+    let allocation = await prepareAllocation();
     const runId = requestedRunId
       ? sanitizeRunId(requestedRunId)
       : wordNetSenseCompoundRunId({ sourceHash: allocation.sourceHash });
-    let checkpointPath = "";
-    const newspaperPath = path.join(repositoryRoot, "newspaper", `${sanitizeRunId(runId)}.pya`);
-    let newspaperWrite = Promise.resolve();
-    let evokeIndex = await nextNewspaperEvokeIndex(newspaperPath);
-    const appendNewspaper = (sentence) => {
-      if (!sentence) return;
-      const safe = { ...sentence };
-      if (safe.be === "checkpoint") {
-        for (const role of ["fromtext", "totext"]) {
-          if (typeof safe[role]?.text === "string") {
-            safe[role] = { ...safe[role], text: encodeCheckpointText(safe[role].text) };
-          }
-        }
-      }
-      newspaperWrite = newspaperWrite.then(async () => {
-        await fs.mkdir(path.dirname(newspaperPath), { recursive: true });
-        await fs.appendFile(newspaperPath, `${sentenceToPyash(safe)}\n`, "utf8");
-      });
-    };
-    setExchangeRecorder({ runRoot: repositoryRoot, record: appendNewspaper });
-    setExchangeRunId(runId);
-    setExchangeStrict(true);
-    let result;
-    try {
-      result = await (dependencies.runRefinery ?? runWordNetSenseCompoundRefinery)({
-        artifactRoot,
-        runId,
+    const artifactDirectory = path.join(artifactRoot, runId);
+    let batchCount = 0;
+    let lastResult = null;
+
+    while (batchCount < maximumBatches) {
+      const before = await (dependencies.progressSignature ?? progressArtifactSignature)(artifactDirectory);
+      const runChunk = dependencies.runChunk ?? runWordNetSenseCompoundRefineryChunk;
+      lastResult = await runChunk({
+        dependencies,
         configuration,
-        dependencies: { ...dependencies, prepareAllocation: async () => allocation },
-        onEvoke: (actionSentence) => {
-          const sentenceId = `evoke-${evokeIndex++}`;
-          setExchangeSentenceId(sentenceId);
-          appendNewspaper({
-            mood: "ya",
-            exists: true,
-            be: "evoke",
-            su: { name: sentenceId },
-            ob: { la: actionSentence }
-          });
-        },
-        onCheckpoint: (sentence) => {
-          appendNewspaper(sentence);
-          checkpointPath = path.join(repositoryRoot, "newspaper", `${sanitizeRunId(runId)}.pya`);
-        },
-        onStage: appendNewspaper
+        requestedRunId: runId,
+        repositoryRoot,
+        artifactRoot,
+        report: () => {},
+        allocation
       });
-    } finally {
-      try {
-        await newspaperWrite;
-      } finally {
-        clearExchangeRecorder();
+      batchCount += 1;
+      report(JSON.stringify({
+        event: "wordnet-sense-compound-batch-complete",
+        batchCount,
+        runId,
+        selectedSenseCount: lastResult.selectedSenseCount,
+        remainingSenseCount: lastResult.remainingSenseCount,
+        candidateCount: lastResult.candidateCount,
+        promotedSenseCount: Number(lastResult.result?.["promoted-sense-count"] ?? 0),
+        translationFailureCount: lastResult.translationFailureCount,
+        artifactDirectory,
+        checkpointPath: lastResult.checkpointPath
+      }));
+
+      if (lastResult.remainingSenseCount === 0) {
+        return { ...lastResult, batchCount, sweepComplete: true };
       }
+      if (lastResult.selectedSenseCount === 0) {
+        throw new Error(`WordNet sense compound sweep has ${lastResult.remainingSenseCount} senses remaining but selected no work`);
+      }
+
+      const after = await (dependencies.progressSignature ?? progressArtifactSignature)(artifactDirectory);
+      if (before === after) {
+        throw new Error(`WordNet sense compound sweep made no durable progress; ${lastResult.remainingSenseCount} senses remain in ${artifactDirectory}`);
+      }
+      allocation = await prepareAllocation();
     }
-    const summary = {
-      runId,
-      artifactDirectory: result.artifactDirectory,
-      checkpointPath,
-      selectedSenseCount: result.selectedSenseCount,
-      remainingSenseCount: result.remainingSenseCount,
-      candidateCount: result.candidateCount,
-      ...result.result
-    };
-    report(JSON.stringify(summary, null, 2));
-    return { ...result, result: summary, checkpointPath };
+
+    throw new Error(`WordNet sense compound sweep reached its ${maximumBatches}-batch safety limit with ${lastResult?.remainingSenseCount ?? "unknown"} senses remaining`);
   } finally {
     await releaseLock();
   }
@@ -142,7 +248,7 @@ function isMainModule() {
 
 if (isMainModule()) {
   try {
-    await runWordNetSenseCompoundRefineryCommand();
+    await runWordNetSenseCompoundRefinerySweepCommand();
   } catch (error) {
     process.stderr.write(`${error?.message ?? String(error)}\n`);
     process.exitCode = 1;
