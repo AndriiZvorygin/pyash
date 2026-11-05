@@ -71,14 +71,17 @@ GPU_HOUSEKEEPER_BIND_HOST=YOUR_TRUSTED_OVERLAY_IP \
 GPU_HOUSEKEEPER_STRATA_RUNTIME_URL=http://127.0.0.1:8080 \
 GPU_HOUSEKEEPER_STRATA_MODEL=ist-das-2.00bpw \
 GPU_HOUSEKEEPER_STRATA_VRAM_REQUIRED_MB=50000 \
+GPU_HOUSEKEEPER_STRATA_ACTION_TIMEOUT_SEC=28800 \
 container/gpu-housekeeper/command/install-macos.sh
 ```
 
 The 2.00 bpw DeepSeek set needs 257 GB of SSD space. A 64 GB Mac meets Strata's
 documented minimum, but the published performance measurements are from a
 128 GB M5 Max, so expect the Mac Studio's actual speed to differ. Strata's
-weights stay in its own user data directory, outside the Pyash checkout. A
-`strata` mind request is queued through Housekeeper; Housekeeper
+weights stay in its own user data directory, outside the Pyash checkout. The
+startup timeout is configurable through
+`GPU_HOUSEKEEPER_STRATA_ACTION_TIMEOUT_SEC`; the example allows up to eight
+hours for the initial model and engine download. A `strata` mind request is queued through Housekeeper; Housekeeper
 first checks unified-memory capacity, discharges idle Ollama if needed, starts
 Strata if its API is down, and loads the model for the request. The API remains
 bound to loopback; only the Housekeeper peer is exposed to trusted workers.

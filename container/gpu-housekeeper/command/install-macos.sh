@@ -25,6 +25,7 @@ STRATA_RUNTIME_URL="${GPU_HOUSEKEEPER_STRATA_RUNTIME_URL:-}"
 STRATA_BIN="${GPU_HOUSEKEEPER_STRATA_BIN:-$HOME/.local/bin/strata}"
 STRATA_MODEL="${GPU_HOUSEKEEPER_STRATA_MODEL:-ist-das-2.00bpw}"
 STRATA_MEMORY_FLOOR_MB="${GPU_HOUSEKEEPER_STRATA_VRAM_REQUIRED_MB:-50000}"
+STRATA_ACTION_TIMEOUT_SEC="${GPU_HOUSEKEEPER_STRATA_ACTION_TIMEOUT_SEC:-1800}"
 if [[ "$BIND_HOST" == *:* ]]; then
   HOUSEKEEPER_URL="http://[$BIND_HOST]:$HOUSEKEEPER_PORT"
 else
@@ -62,6 +63,7 @@ STRATA_RUNTIME_URL="$STRATA_RUNTIME_URL" \
 STRATA_BIN="$STRATA_BIN" \
 STRATA_MODEL="$STRATA_MODEL" \
 STRATA_MEMORY_FLOOR_MB="$STRATA_MEMORY_FLOOR_MB" \
+STRATA_ACTION_TIMEOUT_SEC="$STRATA_ACTION_TIMEOUT_SEC" \
 /usr/bin/python3 - <<'PY'
 import json
 import os
@@ -108,7 +110,7 @@ if strata_url:
         "containerName": "",
         "actionDriver": "strata-cli",
         "runtimeCommand": strata_bin,
-        "runtimeActionTimeoutSec": 1800,
+        "runtimeActionTimeoutSec": int(os.environ["STRATA_ACTION_TIMEOUT_SEC"]),
         "beginAction": [
             "launch", "--family", "deepseek41", "--model", strata_model,
             "--context", "8192", "--vision", "off", "--yes", "--no-tui", "--access", "local", "--port", "8080"
