@@ -2574,7 +2574,9 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
       "candidates": []
     }
 
-  requested_device = request.get("deviceId") or job.get("deviceId")
+  runtime_name = normalize_text(job.get("runtimeName")).lower()
+  runtime_entry = runtime_registry.get(runtime_name) or {}
+  requested_device = request.get("deviceId") or job.get("deviceId") or runtime_entry.get("deviceId")
   device_id = normalize_device_id(requested_device, devices)
   device = next((item for item in devices if item.get("deviceId") == device_id), None)
   if device is None:
@@ -2587,6 +2589,11 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
     }
 
   required = request["vramRequiredMb"]
+  try:
+    runtime_floor = max(0, int(runtime_entry.get("minimumVramRequiredMb") or 0))
+  except (TypeError, ValueError):
+    runtime_floor = 0
+  required = max(required, runtime_floor)
   free_before = int(device.get("vramFreeMb") or 0)
   total = int(device.get("vramTotalMb") or 0)
   common = {
@@ -2929,11 +2936,39 @@ def prepare_capacity(payload: Dict[str, Any], runtime_registry: Dict[str, Dict[s
 
 
 def request_strata_json(pathname: str, payload: Optional[Dict[str, Any]] = None, timeout_sec: int = 30) -> Dict[str, Any]:
-  """Reach loopback-only Strata through a short-lived host-network helper."""
+  """Reach loopback-only Strata directly on Apple Silicon or via the Linux helper."""
   base = normalize_text(os.environ.get("GPU_HOUSEKEEPER_STRATA_RUNTIME_URL")) or "http://127.0.0.1:8081"
-  helper_image = normalize_text(os.environ.get("GPU_HOUSEKEEPER_STRATA_HELPER_IMAGE")) or "liberit/gpu-housekeeper:latest"
   method = "GET" if payload is None else "POST"
   body = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+  url = f"{base.rstrip('/')}/{pathname.lstrip('/')}"
+  if accelerator_memory_backend() == "apple-unified":
+    headers = {"Content-Type": "application/json"}
+    key = normalize_text(os.environ.get("STRATA_API_KEY"))
+    if key:
+      headers["Authorization"] = f"Bearer {key}"
+    request = Request(
+      url,
+      data=None if payload is None else body.encode("utf-8"),
+      headers=headers,
+      method=method
+    )
+    try:
+      with urlopen(request, timeout=max(1, int(timeout_sec))) as response:
+        raw = response.read().decode("utf-8")
+    except HTTPError as err:
+      detail = err.read().decode("utf-8", errors="replace")
+      raise RuntimeError(f"Strata API request failed ({err.code}): {detail or 'HTTP error'}") from err
+    except URLError as err:
+      raise RuntimeError(f"Strata API request failed: {err.reason}") from err
+    try:
+      response = json.loads(raw or "{}")
+    except (TypeError, json.JSONDecodeError) as err:
+      raise RuntimeError("Strata API returned invalid JSON") from err
+    if not isinstance(response, dict):
+      raise RuntimeError("Strata API response must be a JSON object")
+    return response
+
+  helper_image = normalize_text(os.environ.get("GPU_HOUSEKEEPER_STRATA_HELPER_IMAGE")) or "liberit/gpu-housekeeper:latest"
   helper_script = "\n".join([
     "import json, os, sys, urllib.error, urllib.request",
     "url, method, body = sys.argv[1:4]",
@@ -2949,7 +2984,6 @@ def request_strata_json(pathname: str, payload: Optional[Dict[str, Any]] = None,
     "except urllib.error.HTTPError as err:",
     "  print(json.dumps({'_httpStatus': err.code, '_httpBody': err.read().decode(errors='replace')}))",
   ])
-  url = f"{base.rstrip('/')}/{pathname.lstrip('/')}"
   args = ["run", "--rm", "--pull=never", "--network", "host", "--entrypoint", "python3"]
   if normalize_text(os.environ.get("STRATA_API_KEY")):
     args.extend(["-e", "STRATA_API_KEY"])
@@ -3171,6 +3205,50 @@ def runtime_action(runtime_registry: Dict[str, Dict[str, Any]], runtime_name: st
       "status": "missing",
       "message": f"runtime not managed: {runtime_name}"
     }
+
+  if normalize_text(entry.get("actionDriver")).lower() == "strata-cli":
+    command = normalize_text(entry.get("runtimeCommand"))
+    if not command:
+      return {"success": False, "status": "defective", "message": "Strata runtimeCommand not configured"}
+    if action_key not in {"beginAction", "stopAction", "restartAction"}:
+      return {"success": False, "status": "invalid", "message": f"unsupported Strata CLI action: {action_key}"}
+    if action_key == "beginAction" and parse_runtime_status(entry).get("status") == "running":
+      return {"success": True, "status": "running", "message": "Strata API is already available"}
+    try:
+      timeout_sec = max(1, int(entry.get("runtimeActionTimeoutSec") or 1800))
+    except (TypeError, ValueError):
+      timeout_sec = 1800
+
+    def invoke(configured_action: str) -> Dict[str, Any]:
+      arguments = entry.get(configured_action)
+      if not isinstance(arguments, list) or not arguments:
+        return {"success": False, "status": "defective", "message": f"Strata {configured_action} not configured"}
+      try:
+        result = subprocess.run(
+          [command, *[str(value) for value in arguments]],
+          capture_output=True,
+          text=True,
+          timeout=timeout_sec
+        )
+      except subprocess.TimeoutExpired:
+        return {"success": False, "status": "timeout", "message": f"Strata CLI {configured_action} timed out after {timeout_sec}s"}
+      except Exception as err:
+        return {"success": False, "status": "defective", "message": normalize_text(err) or "Strata CLI action failed"}
+      detail = normalize_text(result.stderr or result.stdout)
+      if result.returncode != 0:
+        return {"success": False, "status": "defective", "message": detail or f"Strata CLI exited {result.returncode}"}
+      return {
+        "success": True,
+        "status": "starting" if configured_action == "beginAction" else "stopped",
+        "message": detail or "Strata CLI action completed"
+      }
+
+    if action_key == "restartAction":
+      stopped = invoke("stopAction")
+      if not stopped.get("success"):
+        return stopped
+      return invoke("beginAction")
+    return invoke(action_key)
 
   if normalize_text(entry.get("actionDriver")).lower() == "native-process":
     with _NATIVE_RUNTIME_LOCK:
@@ -3702,20 +3780,32 @@ def ensure_runtime_ready(runtime_registry: Dict[str, Dict[str, Any]], runtime_na
     raise RuntimeError(f"runtime not managed: {runtime_name}")
 
   status = parse_runtime_status(entry)
-  if runtime_is_stopped(status):
+  strata_cli = normalize_text(entry.get("actionDriver")).lower() == "strata-cli"
+  if runtime_is_stopped(status) or (strata_cli and status.get("status") == "unknown"):
     result = runtime_action(runtime_registry, runtime_name, "beginAction")
     if not result.get("success"):
       raise RuntimeError(result.get("message") or f"runtime begin failed: {runtime_name}")
     status = parse_runtime_status(entry)
-    if normalize_text(entry.get("runtimeMode")).lower() == "native-ollama":
-      deadline = time.monotonic() + 30
-      while status.get("status") == "stopped" and time.monotonic() < deadline:
+    if normalize_text(entry.get("runtimeMode")).lower() == "native-ollama" or strata_cli:
+      timeout_sec = 30
+      if strata_cli:
+        try:
+          timeout_sec = max(1, int(os.environ.get("GPU_HOUSEKEEPER_STRATA_READY_TIMEOUT_SEC", "120")))
+        except (TypeError, ValueError):
+          timeout_sec = 120
+      deadline = time.monotonic() + timeout_sec
+      while status.get("status") != "running" and time.monotonic() < deadline:
         time.sleep(0.25)
         status = parse_runtime_status(entry)
       if status.get("status") != "running":
-        raise RuntimeError(status.get("message") or "native Ollama did not start after launchd kickstart")
+        label = "Strata" if strata_cli else "native Ollama"
+        raise RuntimeError(status.get("message") or f"{label} did not become available after start")
 
-  if bool(entry.get("gpuExpected", False)) and status.get("gpuObserved") is False:
+  if (
+    bool(entry.get("gpuExpected", False))
+    and status.get("gpuObserved") is False
+    and status.get("loaded") is not False
+  ):
     result = runtime_action(runtime_registry, runtime_name, "restartAction")
     if not result.get("success"):
       raise RuntimeError(result.get("message") or f"runtime restart failed: {runtime_name}")
@@ -4265,6 +4355,7 @@ def execute_strata_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str
   if not isinstance(payload, dict):
     raise RuntimeError("strata-chat payload must be a map")
 
+  ensure_runtime_ready(runtime_registry, "strata")
   status = parse_runtime_status(runtime_registry.get("strata") or {})
   if runtime_is_stopped(status) or status.get("status") == "unknown":
     raise RuntimeError(status.get("message") or "Strata runtime is unavailable")
@@ -4635,6 +4726,14 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
         default_context_length = max(0, min(1_000_000, int(item.get("defaultContextLength") or 0)))
       except (TypeError, ValueError):
         default_context_length = 0
+      try:
+        minimum_vram_required_mb = max(0, int(item.get("minimumVramRequiredMb") or 0))
+      except (TypeError, ValueError):
+        minimum_vram_required_mb = 0
+      try:
+        runtime_action_timeout_sec = max(1, int(item.get("runtimeActionTimeoutSec") or 1800))
+      except (TypeError, ValueError):
+        runtime_action_timeout_sec = 1800
       registry[runtime_name] = {
         "runtimeName": runtime_name,
         "containerName": container_name,
@@ -4647,6 +4746,8 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
         "runtimeLogPath": normalize_text(item.get("runtimeLogPath")),
         "runtimeEnvironment": item.get("runtimeEnvironment") if isinstance(item.get("runtimeEnvironment"), dict) else {},
         "defaultContextLength": default_context_length,
+        "minimumVramRequiredMb": minimum_vram_required_mb,
+        "runtimeActionTimeoutSec": runtime_action_timeout_sec,
         "contextConfigPath": normalize_text(item.get("contextConfigPath")),
         "contextSystemdUnit": normalize_text(item.get("contextSystemdUnit")),
         "contextAgentSocket": normalize_text(item.get("contextAgentSocket")),
@@ -4684,7 +4785,19 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
       strata["defaultContextLength"] = int(os.environ.get("GPU_HOUSEKEEPER_STRATA_DEFAULT_CONTEXT_LENGTH", "32768"))
     except (TypeError, ValueError):
       strata["defaultContextLength"] = 32768
-    strata["deviceId"] = normalize_text(os.environ.get("GPU_HOUSEKEEPER_STRATA_DEVICE_ID")) or "gpu0"
+    try:
+      strata["minimumVramRequiredMb"] = max(0, int(
+        os.environ.get("GPU_HOUSEKEEPER_STRATA_VRAM_REQUIRED_MB")
+        or strata.get("minimumVramRequiredMb")
+        or 0
+      ))
+    except (TypeError, ValueError):
+      strata["minimumVramRequiredMb"] = 0
+    strata["deviceId"] = (
+      normalize_text(os.environ.get("GPU_HOUSEKEEPER_STRATA_DEVICE_ID"))
+      or normalize_text(strata.get("deviceId"))
+      or ("apple0" if accelerator_memory_backend() == "apple-unified" else "gpu0")
+    )
   return registry
 
 
