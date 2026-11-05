@@ -83,7 +83,7 @@ export function splitSentences(text, { includeThen = false } = {}) {
   return sentences.map(sentence => {
     let restored = sentence;
     for (const { placeholder, block } of replacements) {
-      restored = restored.replace(placeholder, block);
+      restored = restored.replace(placeholder, () => block);
     }
     return restored;
   });
@@ -179,7 +179,7 @@ export function splitSentencesWithLines(text, { includeThen = false } = {}) {
   return sentences.map(({ text: sentence, line: lineNum }) => {
     let restored = sentence;
     for (const { placeholder, block } of replacements) {
-      restored = restored.replace(placeholder, block);
+      restored = restored.replace(placeholder, () => block);
     }
     return { text: restored, line: lineNum };
   });
