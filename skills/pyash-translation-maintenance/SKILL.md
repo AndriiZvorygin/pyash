@@ -205,7 +205,9 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   `node command/wordnet_sense_compound_refinery.mjs`. Its workflow and bounded
   batch settings live in
   `program/library/translation/wordnet_sense_compound_refinery.pya`. The
-  worklist uses descending WordNet tag-count order with a floor of two tags.
+  worklist uses descending WordNet tag-count order and includes every residual
+  sense with at least one exact WordNet tag count. Untagged senses are outside
+  this pass.
   It asks the configured Qwen mind through the GPU Housekeeper queue for one sense's
   translations and transparent word parts in Chinese, French, Russian, and
   Hindi. The configured `parallelism` bounds simultaneous duties; Housekeeper
