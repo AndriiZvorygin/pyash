@@ -82,3 +82,39 @@ test("Z.AI Coding Plan uses its Chat Completions endpoint and streams assistant/
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+test("Z.AI Coding Plan streams provider failures as terminal error records", async () => {
+  const server = http.createServer((request, response) => {
+    request.resume();
+    request.on("end", () => {
+      response.writeHead(503, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: { message: "temporary provider outage" } }));
+    });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  try {
+    const result = await runRunner(["--zai-coding", "--stream"], {
+      model: "glm-5.3-flash",
+      host: `http://127.0.0.1:${port}/api/coding/paas/v4`,
+      messages: [{ role: "user", content: "Reply briefly." }]
+    }, {
+      ...process.env,
+      PYA_COMMAND_RESPONSE: "",
+      Z_AI_CODING_API_KEY: "test-only-coding-key"
+    });
+    assert.notEqual(result.code, 0);
+    const records = result.stdout.trim().split(/\r?\n/u).filter(Boolean).map((line) => JSON.parse(line));
+    assert.deepEqual(records, [{
+      type: "terminal",
+      ok: false,
+      error: {
+        name: "Error",
+        message: "Z.AI Coding Plan request failed: status=503 error=temporary provider outage"
+      }
+    }]);
+    assert.match(result.stderr, /temporary provider outage/u);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
