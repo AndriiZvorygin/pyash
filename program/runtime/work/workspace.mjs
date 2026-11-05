@@ -27,6 +27,33 @@ function stdout(result) {
   return String(result?.stdout ?? "").trim();
 }
 
+export function isInsideDirectory(directory, target) {
+  const relative = path.relative(path.resolve(directory), path.resolve(target));
+  return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
+}
+
+export function resolveWorktreePath({
+  repositoryRoot = process.cwd(),
+  worldRoot = "",
+  taskId = "",
+  worktreePath = "",
+  worktreeRoot = "",
+  env = process.env
+} = {}) {
+  const requestedPath = String(worktreePath || "").trim();
+  if (requestedPath) return path.resolve(requestedPath);
+
+  const repository = path.resolve(String(repositoryRoot || process.cwd()));
+  const configuredRoot = String(worktreeRoot || env?.PYA_WORKTREE_ROOT || "").trim();
+  const root = configuredRoot
+    ? path.resolve(configuredRoot)
+    : path.join(path.dirname(repository), `${path.basename(repository)}-worktrees`);
+  if (worldRoot && isInsideDirectory(path.join(worldRoot, "holding"), root)) {
+    throw new Error("worktree root must be outside world/holding");
+  }
+  return path.resolve(root, String(taskId));
+}
+
 export async function prepareWorktree({
   repositoryRoot,
   worldRoot,
@@ -34,16 +61,17 @@ export async function prepareWorktree({
   baseRevision = "",
   baseRef = "",
   worktreePath: requestedWorktreePath = "",
+  worktreeRoot = "",
   gitRunner = null
 } = {}) {
   const repository = path.resolve(String(repositoryRoot || process.cwd()));
-  const worktreePath = path.resolve(String(requestedWorktreePath || path.join(
-    path.resolve(String(worldRoot)),
-    "holding",
-    "work",
-    "worktrees",
-    String(taskId)
-  )));
+  const worktreePath = resolveWorktreePath({
+    repositoryRoot: repository,
+    worldRoot,
+    taskId,
+    worktreePath: requestedWorktreePath,
+    worktreeRoot
+  });
   await fs.mkdir(path.dirname(worktreePath), { recursive: true });
   const revision = String(baseRevision || stdout(await git({
     cwd: repository,

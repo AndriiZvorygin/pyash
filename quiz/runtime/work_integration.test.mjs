@@ -190,7 +190,11 @@ test("Luna reconciliation on the current automation baseline integrates after Lu
     ...blockedTask(taskId, "Ceremony and sandpit error propagation", 120, "merge conflict", "reconciliation"),
     status: "ready",
     checkpoint: {
-      workspace: { repository: repositoryRoot, baseRevision, worktreePath: path.join(repositoryRoot, "old-task-worktree") },
+      workspace: {
+        repository: repositoryRoot,
+        baseRevision,
+        worktreePath: path.join(worldRoot, "holding", "work", "worktrees", taskId)
+      },
       plan: { workOrder: "Preserve truthful ceremony errors and run focused regression tests." },
       implementation: { summary: "Accepted task implementation on the old baseline.", commit: baseRevision },
       integration: { status: "reconciliation", reconciliation: { taskBaseRevision: baseRevision, taskCommit: baseRevision } }
@@ -233,6 +237,12 @@ test("Luna reconciliation on the current automation baseline integrates after Lu
   const task = await readWorkTaskStatus(worldRoot, taskId);
   assert.equal(task.status, "accepted");
   assert.equal(task.checkpoint.integration.status, "integrated");
+  assert.equal(task.checkpoint.workspace.worktreePath, path.join(
+    path.dirname(repositoryRoot),
+    "repo-worktrees",
+    `${taskId}-reconciliation`
+  ));
+  assert.equal(task.checkpoint.workspace.worktreePath.includes(`${path.sep}holding${path.sep}`), false);
   assert.equal(task.checkpoint.integration.reconciliation.materialAttempts, 1);
   assert.equal(task.checkpoint.integration.reconciliation.conflictsResolved, 1);
   assert.equal(task.checkpoint.review.role, "reviewer");

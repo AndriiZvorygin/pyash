@@ -10,7 +10,7 @@ import {
 import { mergeWorkCheckpoint } from "./checkpoint.mjs";
 import { readWorkTaskStatus, writeWorkTaskStatus } from "./status.mjs";
 import { emitWorkEvent } from "./observer.mjs";
-import { prepareWorktree, collectGitEvidence } from "./workspace.mjs";
+import { prepareWorktree, collectGitEvidence, isInsideDirectory, resolveWorktreePath } from "./workspace.mjs";
 import { integrateAcceptedWork } from "./integration.mjs";
 import { classifyImplementationPass, summarizeImplementationProgress } from "./progress.mjs";
 import {
@@ -364,8 +364,13 @@ export async function runWorkIntegrationReconciliationOnce({
     const original = task.checkpoint.workspace;
     const prior = task.checkpoint.integration.reconciliation;
     const branch = text(integrationBranch) || "automation/roadmap";
+    const originalWorktreePath = text(original.worktreePath);
+    const originalWorktreeInHolding = originalWorktreePath
+      && isInsideDirectory(path.join(worldRoot, "holding"), originalWorktreePath);
     const requestedWorktree = prior.worktreePath
-      || `${original.worktreePath || path.join(worldRoot, "holding", "work", "worktrees", task.taskId)}-reconciliation`;
+      || (originalWorktreePath && !originalWorktreeInHolding
+        ? `${originalWorktreePath}-reconciliation`
+        : resolveWorktreePath({ repositoryRoot, worldRoot, taskId: `${task.taskId}-reconciliation` }));
     workspace = await workspaceFactory({
       repositoryRoot,
       worldRoot,
