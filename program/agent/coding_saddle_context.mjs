@@ -156,6 +156,8 @@ export async function generateSaddleContextSummary({
       { role: "user", content: buildSaddleCompactionPrompt({ priorSummary, messages }) }
     ]
   };
+  // Context maintenance is routine housekeeping; avoid inheriting a slow provider default.
+  if (backendName === "zai command mind") payload.reasoningEffort = "low";
   if (asPositiveInteger(contextWindow)) {
     if (backendName === "ollama command mind") payload.options = { num_ctx: Number(contextWindow) };
     else payload.contextWindow = Number(contextWindow);

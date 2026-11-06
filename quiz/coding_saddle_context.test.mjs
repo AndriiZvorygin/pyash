@@ -110,6 +110,21 @@ test("coding saddle context summarizer uses the selected backend and rejects emp
   }), /empty summary/u);
 });
 
+test("Z.AI context compaction uses low reasoning effort for housekeeping summaries", async () => {
+  let observed;
+  await generateSaddleContextSummary({
+    backend: "zai",
+    model: "glm-5.3-flash",
+    host: "https://api.z.ai/api/coding/paas/v4",
+    messages: [{ role: "user", content: "Summarize this completed research exchange." }],
+    callBackend: async (request) => {
+      observed = request;
+      return { message: { content: "The research exchange is summarized." } };
+    }
+  });
+  assert.equal(observed.payload.reasoningEffort, "low");
+});
+
 test("coding saddle automatically checkpoints older turns at 80 percent and retains recent exchanges", async () => {
   const agentHouse = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-auto-context-"));
   const messages = Array.from({ length: 60 }, (_, index) => ({
