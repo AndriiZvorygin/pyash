@@ -16,28 +16,21 @@ safety boundary. Development does not require pull requests.
 ## Promoting work
 
 1. Keep feature work and its focused tests on `dev`; wait for the `dev` checks.
-2. Bring upstream `master` changes into `dev` regularly and rerun its checks:
+2. The local maintainer cron fetches both branches and both push remotes, tests
+   the proposed `dev`-into-`master` merge with the full CI tier, then pushes the
+   tested commit to both branches on each remote. This also accepts `master`
+   revisions into `dev`. No pull request or manual branch checkout is needed.
+3. To run the maintainer immediately instead of waiting for its daily 04:00
+   schedule:
 
    ```sh
-   git fetch origin
-   git switch dev
-   git merge origin/master
-   git push origin dev
+   cd /home/htaf/pyac/pyash-dev
+   command/run_local_master_safety.sh
    ```
 
-3. When ready to promote, merge `dev` directly into `master` and push. The full
-   suite runs on the resulting `master` commit:
-
-   ```sh
-   git switch master
-   git pull --ff-only origin master
-   git merge --no-ff dev
-   git push origin master
-   ```
-
-If the post-merge full suite fails, the failure report identifies the exact
-run, commit, failing step, and relevant test evidence. Fix on `dev`, validate
-there, then promote the correction to `master`.
+If the full suite fails or a merge conflicts, no branch is promoted. The run
+artifact identifies the exact source commits and contains the failure logs;
+repair the issue on `dev` and rerun the maintainer.
 
 ## Automated failure diagnosis
 

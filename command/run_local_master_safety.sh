@@ -7,6 +7,8 @@ DEFAULT_REPOSITORY=$(cd -- "$SCRIPT_DIR/.." && pwd)
 REPOSITORY=${PYA_MASTER_SAFETY_REPOSITORY:-$DEFAULT_REPOSITORY}
 REMOTE=${PYA_MASTER_SAFETY_REMOTE:-github}
 BRANCH=${PYA_MASTER_SAFETY_BRANCH:-master}
+DEV_BRANCH=${PYA_MASTER_SAFETY_DEV_BRANCH:-dev}
+PUSH_REMOTES=${PYA_MASTER_SAFETY_PUSH_REMOTES:-origin github}
 MODEL=${PYA_MASTER_SAFETY_MODEL:-gpt-6-luna}
 REASONING=${PYA_MASTER_SAFETY_REASONING:-xhigh}
 MAX_REPAIRS=${PYA_MASTER_SAFETY_MAX_REPAIRS:-2}
@@ -45,6 +47,10 @@ if ! [[ "$BRANCH" =~ ^[A-Za-z0-9._-]+$ ]]; then
   printf 'PYA_MASTER_SAFETY_BRANCH must be a simple branch name.\n' >&2
   exit 2
 fi
+if ! [[ "$DEV_BRANCH" =~ ^[A-Za-z0-9._-]+$ ]] || [[ "$DEV_BRANCH" == "$BRANCH" ]]; then
+  printf 'PYA_MASTER_SAFETY_DEV_BRANCH must be a different simple branch name.\n' >&2
+  exit 2
+fi
 
 mkdir -p "$REPOSITORY/artifacts/local-$BRANCH-safety" "$WORKTREE_PARENT"
 RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
@@ -62,10 +68,13 @@ fi
 WORKTREE=''
 BRANCH_NAME=''
 CANDIDATE_COMMIT=''
+PROMOTED_COMMIT=''
+PUSHED_REMOTES=''
 KEEP_WORKTREE=0
 KEEP_BRANCH=0
 FINAL_STATUS=failed
 BASE_SHA=''
+DEV_SHA=''
 TEST_SUMMARY=''
 TIER_SUMMARY=''
 finish() {
@@ -90,6 +99,9 @@ write_result() {
     printf 'su name source remote ob text "%s" ya\n' "$REMOTE"
     printf 'su name source branch ob text "%s" ya\n' "$BRANCH"
     printf 'su name source commit ob text "%s" ya\n' "$BASE_SHA"
+    printf 'su name source dev branch ob text "%s" ya\n' "$DEV_BRANCH"
+    printf 'su name source dev commit ob text "%s" ya\n' "$DEV_SHA"
+    printf 'su name push remotes ob text "%s" ya\n' "$PUSH_REMOTES"
     printf 'su name codex model ob text "%s" ya\n' "$MODEL"
     printf 'su name reasoning effort ob text "%s" ya\n' "$REASONING"
     printf 'su name repair limit ob num %s ya\n' "$MAX_REPAIRS"
@@ -107,21 +119,74 @@ write_result() {
     if [[ -n "$CANDIDATE_COMMIT" ]]; then
       printf 'su name candidate commit ob text "%s" ya\n' "$CANDIDATE_COMMIT"
     fi
+    if [[ -n "$PROMOTED_COMMIT" ]]; then
+      printf 'su name promoted commit ob text "%s" ya\n' "$PROMOTED_COMMIT"
+    fi
+    if [[ -n "$PUSHED_REMOTES" ]]; then
+      printf 'su name pushed remotes ob text "%s" ya\n' "$PUSHED_REMOTES"
+    fi
     printf 'prah\n'
   } > "$ARTIFACT_DIR/result.pya"
 }
 trap finish EXIT
 
-printf 'local master safety run %s\n' "$RUN_ID"
-printf 'repository: %s\nremote: %s\nbranch: %s\nmodel: %s (%s)\n' "$REPOSITORY" "$REMOTE" "$BRANCH" "$MODEL" "$REASONING"
+printf 'local master maintainer run %s\n' "$RUN_ID"
+printf 'repository: %s\nsource remote: %s\nmaster: %s\ndev: %s\npush remotes: %s\nmodel: %s (%s)\n' \
+  "$REPOSITORY" "$REMOTE" "$BRANCH" "$DEV_BRANCH" "$PUSH_REMOTES" "$MODEL" "$REASONING"
 
-git -C "$REPOSITORY" fetch --no-tags "$REMOTE" "+refs/heads/$BRANCH:refs/remotes/$REMOTE/$BRANCH"
+read -r -a push_remote_names <<< "$PUSH_REMOTES"
+if (( ${#push_remote_names[@]} == 0 )); then
+  printf 'no push remotes configured; refusing promotion\n' >&2
+  FINAL_STATUS=configuration-error
+  exit 2
+fi
+declare -A fetched_remotes=()
+for remote_name in "$REMOTE" "${push_remote_names[@]}"; do
+  if ! [[ "$remote_name" =~ ^[A-Za-z0-9._-]+$ ]]; then
+    printf 'invalid git remote name: %s\n' "$remote_name" >&2
+    FINAL_STATUS=configuration-error
+    exit 2
+  fi
+  if [[ -n "${fetched_remotes[$remote_name]:-}" ]]; then continue; fi
+  if ! git -C "$REPOSITORY" remote get-url "$remote_name" >/dev/null 2>&1; then
+    printf 'git remote is not configured: %s\n' "$remote_name" >&2
+    FINAL_STATUS=configuration-error
+    exit 2
+  fi
+  git -C "$REPOSITORY" fetch --no-tags "$remote_name" \
+    "+refs/heads/$BRANCH:refs/remotes/$remote_name/$BRANCH" \
+    "+refs/heads/$DEV_BRANCH:refs/remotes/$remote_name/$DEV_BRANCH"
+  fetched_remotes[$remote_name]=1
+done
+
 BASE_SHA=$(git -C "$REPOSITORY" rev-parse "refs/remotes/$REMOTE/$BRANCH")
-SHORT_SHA=${BASE_SHA:0:12}
+DEV_SHA=$(git -C "$REPOSITORY" rev-parse "refs/remotes/$REMOTE/$DEV_BRANCH")
+for push_remote in "${push_remote_names[@]}"; do
+  remote_master=$(git -C "$REPOSITORY" rev-parse "refs/remotes/$push_remote/$BRANCH")
+  remote_dev=$(git -C "$REPOSITORY" rev-parse "refs/remotes/$push_remote/$DEV_BRANCH")
+  if [[ "$remote_master" != "$BASE_SHA" || "$remote_dev" != "$DEV_SHA" ]]; then
+    printf 'remote branch refs disagree; refusing to test or promote\n'
+    printf '%s: %s=%s %s=%s\n' "$REMOTE" "$BRANCH" "$BASE_SHA" "$DEV_BRANCH" "$DEV_SHA"
+    printf '%s: %s=%s %s=%s\n' "$push_remote" "$BRANCH" "$remote_master" "$DEV_BRANCH" "$remote_dev"
+    FINAL_STATUS=remote-divergence
+    exit 1
+  fi
+done
+
+SHORT_SHA=${DEV_SHA:0:12}
 BRANCH_NAME="local-$BRANCH-safety/$SHORT_SHA-$RUN_ID"
 WORKTREE="$WORKTREE_PARENT/.pyash-$BRANCH-safety-$RUN_ID"
-printf 'testing fetched commit: %s\nworktree: %s\n' "$BASE_SHA" "$WORKTREE"
+printf 'testing proposed merge: %s %s + %s %s\nworktree: %s\n' "$REMOTE" "$BASE_SHA" "$DEV_BRANCH" "$DEV_SHA" "$WORKTREE"
 git -C "$REPOSITORY" worktree add -b "$BRANCH_NAME" "$WORKTREE" "$BASE_SHA"
+if ! git -C "$WORKTREE" -c user.name='Pyash Maintainer' -c user.email='pyash-maintainer@localhost' \
+  merge --no-edit "$DEV_SHA"; then
+  printf 'dev/master merge conflict; preserving the candidate worktree for review\n'
+  KEEP_WORKTREE=1
+  FINAL_STATUS=merge-conflict
+  exit 1
+fi
+CANDIDATE_COMMIT=$(git -C "$WORKTREE" rev-parse HEAD)
+printf 'proposed merge commit: %s\n' "$CANDIDATE_COMMIT"
 
 printf '\n== dependency install ==\n'
 (cd "$WORKTREE" && npm ci)
@@ -160,9 +225,9 @@ while :; do
   mkdir -p "$WORKTREE/$(dirname -- "$evidence_relative")"
   cp "$failure_log" "$WORKTREE/$evidence_relative"
   cat > "$prompt" <<EOF
-# Local master full-suite repair
+# Local master maintainer full-suite repair
 
-This fresh local worktree is based on GitHub $BRANCH at commit $BASE_SHA. Its full repository CI-tier suite failed; inspect this in-worktree test output:
+This fresh local worktree contains the proposed merge of GitHub $BRANCH at $BASE_SHA and $DEV_BRANCH at $DEV_SHA. Its full repository CI-tier suite failed; inspect this in-worktree test output:
 
 $evidence_relative
 
@@ -193,27 +258,52 @@ done
 
 if [[ "$FINAL_STATUS" == passed ]]; then
   if [[ -n "$(git -C "$WORKTREE" status --porcelain --untracked-files=all)" ]]; then
-    printf '\n== review and record verified local candidate ==\n'
+    printf '\n== record verified repair on merge candidate ==\n'
     git -C "$WORKTREE" add -A
     forbidden=$(git -C "$WORKTREE" diff --cached --name-only | rg '(^|/)(\.env($|\.)|(secret|secrets)(/|\.|$)|.*\.key$|.*credentials.*|know/|artifacts/)' || true)
     if [[ -n "$forbidden" ]]; then
-      printf 'refusing to commit protected paths; candidate left in worktree:\n%s\n' "$forbidden"
+      printf 'refusing to promote protected paths; candidate left in worktree:\n%s\n' "$forbidden"
       KEEP_WORKTREE=1
       FINAL_STATUS=passed-uncommitted-protected-paths
+    elif ! git -C "$WORKTREE" -c user.name='Pyash Maintainer' -c user.email='pyash-maintainer@localhost' \
+      commit -m "repair full-suite failures before promoting dev $SHORT_SHA"; then
+      KEEP_WORKTREE=1
+      KEEP_BRANCH=1
+      FINAL_STATUS=repair-commit-failed
+      exit 1
     else
-      git -C "$WORKTREE" -c user.name='Pyash Local Safety' -c user.email='pyash-local-safety@localhost' \
-        commit -m "repair full-suite failures on $BRANCH $SHORT_SHA"
       git -C "$WORKTREE" diff --binary "$BASE_SHA" HEAD > "$ARTIFACT_DIR/verified-repair.patch"
       CANDIDATE_COMMIT=$(git -C "$WORKTREE" rev-parse HEAD)
       printf '%s\n' "$CANDIDATE_COMMIT" > "$ARTIFACT_DIR/candidate-commit.txt"
-      KEEP_BRANCH=1
-      printf 'verified repair commit is local only on %s\n' "$BRANCH_NAME"
+      printf 'verified repair is recorded on the tested merge candidate\n'
     fi
   fi
-  printf 'full CI-tier suite passed for %s\n' "$BASE_SHA"
+  printf 'full CI-tier suite passed for %s + %s\n' "$BASE_SHA" "$DEV_SHA"
+fi
+
+if [[ "$FINAL_STATUS" == passed ]]; then
+  PROMOTED_COMMIT=$(git -C "$WORKTREE" rev-parse HEAD)
+  for push_remote in "${push_remote_names[@]}"; do
+    printf '\n== atomically promote to %s and %s on %s ==\n' "$BRANCH" "$DEV_BRANCH" "$push_remote"
+    if ! git -C "$WORKTREE" push --atomic "$push_remote" \
+      "$PROMOTED_COMMIT:refs/heads/$BRANCH" \
+      "$PROMOTED_COMMIT:refs/heads/$DEV_BRANCH"; then
+      printf 'promotion push failed for %s; preserving tested candidate for safe retry\n' "$push_remote"
+      KEEP_WORKTREE=1
+      KEEP_BRANCH=1
+      FINAL_STATUS=push-failed
+      exit 1
+    fi
+    if [[ -n "$PUSHED_REMOTES" ]]; then PUSHED_REMOTES+=" "; fi
+    PUSHED_REMOTES+="$push_remote"
+  done
+  CANDIDATE_COMMIT=$PROMOTED_COMMIT
+  printf '%s\n' "$PROMOTED_COMMIT" > "$ARTIFACT_DIR/promoted-commit.txt"
+  FINAL_STATUS=promoted
+  printf 'promoted tested commit %s to %s and %s on: %s\n' "$PROMOTED_COMMIT" "$BRANCH" "$DEV_BRANCH" "$PUSHED_REMOTES"
 fi
 
 printf 'result: %s\n' "$FINAL_STATUS"
-if [[ "$FINAL_STATUS" != passed ]]; then
+if [[ "$FINAL_STATUS" != promoted ]]; then
   exit 1
 fi

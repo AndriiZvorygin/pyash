@@ -1,11 +1,13 @@
-# Local Master Safety Check
+# Local Dev-to-Master Maintainer
 
-GitHub CI runs the focused checks on `dev` and `master`. The full CI-tier suite
-runs locally from cron against a freshly fetched `github/master` snapshot.
+The local maintainer promotes `dev` into `master` only after the exact proposed
+merge passes Pyash's full CI-tier test suite. It also synchronizes accepted
+`master` revisions back into `dev`, so the two branches converge after a green
+run.
 
 ## Install and operate
 
-From this checkout:
+From the development checkout:
 
 ```bash
 command/install_local_master_safety_cron.sh
@@ -19,28 +21,33 @@ jobs. The schedule is daily at 04:00 in the host's local timezone. The runner
 acquires its own `flock` lock to prevent overlapping cron and manual runs; the
 crontab calls the runner directly so it does not contend with itself.
 
-## What it does
+## Promotion gate
 
-Each run fetches `github/master`, creates a disposable Git worktree beside the
-repository, runs `npm ci`, then runs `npm run test:ci`. If tests fail, Codex
-`gpt-6-luna` at `xhigh` gets at most two repair attempts in that worktree. Each
-attempt is followed by a complete `npm run test:ci` run. Tests are not weakened
-to make the check green.
+Each run fetches `master` and `dev` from the configured push remotes (by
+default, `origin` and `github`). It stops if those remotes disagree. In a
+disposable Git worktree it merges `dev` into `master`, installs dependencies,
+and runs `npm run test:ci` against that exact candidate. Existing checkouts,
+including a dirty local `master` worktree, are not checked out or modified.
 
-The runner prepends the newest complete NVM Node installation when available,
-so cron can find the same `node`, `npm`, and `codex` tools even with its minimal
-default `PATH`.
+If the full suite fails, Codex `gpt-6-luna` at `xhigh` gets at most two repair
+attempts in that isolated candidate. Each attempt is followed by a complete
+suite run. Tests are not weakened to make the check green. A conflict, failed
+suite, unsafe repair, or stale push leaves the branches unpromoted and records
+the candidate for inspection.
+
+After a green suite, the tested commit is pushed atomically to both `master`
+and `dev` on each configured remote. This promotes development work and
+incorporates any intervening master history into dev. Pushes are never forced.
+Atomicity applies per remote; if a later remote rejects the push after an
+earlier remote accepted it, the run records which remote moved and stops so
+the refs can be reconciled before the next run.
 
 Codex uses `danger-full-access` because this host's workspace sandbox cannot
 start bubblewrap network namespaces. The separate worktree, bounded prompt,
-no-secret/no-push instructions, test reruns, and local-only candidate commits
-reduce accidental impact; full-access Codex still has the host's filesystem
-and network permissions, so review candidate changes before integrating them.
-
-When a repair passes the entire suite, the runner records a commit on a local
-`local-master-safety/*` branch. It does not push or merge automatically. A
-failed or unsafe-to-commit repair remains in its isolated worktree for
-inspection. The main `master` and `dev` worktrees are not modified.
+no-secret/no-push instructions for the repair agent, test reruns, and
+path-protected candidate commit reduce accidental impact. Full-access Codex
+still has the host's filesystem and network permissions, so review artifacts
+after any automated repair.
 
 ## Evidence
 
@@ -51,11 +58,13 @@ artifacts/local-master-safety/<UTC-run-id>/
 ```
 
 Each run contains `run.log`, per-attempt full-suite logs, Codex JSONL/stderr
-traces and final messages, and `result.pya`. A verified repair also includes
-`verified-repair.patch` and `candidate-commit.txt`. A preserved failed worktree
-path and candidate branch are recorded in `result.pya` and `run.log`.
+traces and final messages, and `result.pya`. A verified repair includes
+`verified-repair.patch` and `candidate-commit.txt`; a successful promotion
+includes `promoted-commit.txt`. The result records source master/dev commits,
+promoted commit, pushed remotes, and any preserved worktree.
 
 Optional environment overrides include `PYA_MASTER_SAFETY_REMOTE`,
-`PYA_MASTER_SAFETY_BRANCH`, `PYA_MASTER_SAFETY_MODEL`,
+`PYA_MASTER_SAFETY_BRANCH`, `PYA_MASTER_SAFETY_DEV_BRANCH`,
+`PYA_MASTER_SAFETY_PUSH_REMOTES`, `PYA_MASTER_SAFETY_MODEL`,
 `PYA_MASTER_SAFETY_REASONING`, `PYA_MASTER_SAFETY_MAX_REPAIRS` (0–2),
 `PYA_MASTER_SAFETY_REPOSITORY`, and `PYA_MASTER_SAFETY_CODEX_BIN`.

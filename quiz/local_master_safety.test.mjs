@@ -10,11 +10,15 @@ import { pyaFileToJson } from "../program/library/pya_to_json.mjs";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (name) => fs.readFileSync(path.join(repoRoot, "command", name), "utf8");
 
-test("local master safety fetches master and runs the full CI tier in an isolated worktree", () => {
+test("local maintainer tests the dev-to-master candidate in an isolated worktree", () => {
   const runner = read("run_local_master_safety.sh");
-  assert.ok(runner.includes('fetch --no-tags "$REMOTE" "+refs/heads/$BRANCH:refs/remotes/$REMOTE/$BRANCH"'));
+  assert.match(runner, /refs\/heads\/\$DEV_BRANCH:refs\/remotes\/\$remote_name\/\$DEV_BRANCH/u);
   assert.match(runner, /worktree add -b "\$BRANCH_NAME" "\$WORKTREE" "\$BASE_SHA"/u);
+  assert.match(runner, /merge --no-edit "\$DEV_SHA"/u);
   assert.match(runner, /npm run test:ci/u);
+  assert.match(runner, /git -C "\$WORKTREE" push --atomic "\$push_remote"/u);
+  assert.match(runner, /\$PROMOTED_COMMIT:refs\/heads\/\$BRANCH/u);
+  assert.match(runner, /\$PROMOTED_COMMIT:refs\/heads\/\$DEV_BRANCH/u);
   assert.match(runner, /artifacts\/local-\$BRANCH-safety/u);
   assert.match(runner, /local-\$BRANCH-safety\//u);
   assert.match(runner, /MAX_REPAIRS=\$\{PYA_MASTER_SAFETY_MAX_REPAIRS:-2\}/u);
@@ -33,7 +37,7 @@ test("Codex repair uses the requested Luna xhigh full-access profile and verific
   assert.match(runner, /su name tier summary/u);
   assert.match(runner, /Do not weaken, delete, skip, or broaden tests/u);
   assert.match(runner, /git -C "\$WORKTREE" diff --binary "\$BASE_SHA" HEAD/u);
-  assert.doesNotMatch(runner, /git -C "\$WORKTREE" push\b/u);
+  assert.match(runner, /Do not change Git remotes, push, merge, or commit/u);
 });
 
 test("runner adds the latest NVM toolchain even when cron already has system Node and npm", () => {
@@ -144,8 +148,15 @@ test("runner completes a local fake-master run and emits a parseable result map"
   git(["add", "."]);
   git(["commit", "--quiet", "-m", "fixture master"]);
   git(["branch", "-M", "master"]);
+  git(["checkout", "-b", "dev"]);
+  fs.writeFileSync(path.join(repository, "dev-change.txt"), "ready\n");
+  git(["add", "dev-change.txt"]);
+  git(["commit", "--quiet", "-m", "fixture dev change"]);
+  const devCommit = git(["rev-parse", "HEAD"]);
+  git(["checkout", "master"]);
   execFileSync("git", ["clone", "--bare", "--quiet", repository, bare], { stdio: "pipe" });
   git(["remote", "add", "github", bare]);
+  git(["remote", "add", "origin", bare]);
 
   const fakeNpm = path.join(fakeBin, "npm");
   fs.writeFileSync(fakeNpm, `#!/usr/bin/env bash
@@ -181,11 +192,15 @@ exit 2
     const artifactDir = path.join(runRoot, runId);
     const result = await pyaFileToJson(path.join(artifactDir, "result.pya"));
     const resultMap = result.memory[0]?.ob?.map;
-    assert.equal(resultMap.status.text, "passed");
+    assert.equal(resultMap.status.text, "promoted");
     assert.equal(resultMap["test summary"].text, "tests 5; pass 5; fail 0; skipped 0; todo 0; duration_ms 12.5");
     assert.match(resultMap["tier summary"].text, /gating 10 files/u);
+    assert.equal(resultMap["source dev commit"].text, devCommit);
+    assert.equal(resultMap["promoted commit"].text, devCommit);
+    assert.equal(git(["--git-dir", bare, "rev-parse", "refs/heads/master"]), devCommit);
+    assert.equal(git(["--git-dir", bare, "rev-parse", "refs/heads/dev"]), devCommit);
     assert.equal(fs.existsSync(resultMap["worktree path"].text), false);
-    assert.match(fs.readFileSync(path.join(artifactDir, "run.log"), "utf8"), /full CI-tier suite passed/u);
+    assert.match(fs.readFileSync(path.join(artifactDir, "run.log"), "utf8"), /promoted tested commit/u);
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }
@@ -211,8 +226,14 @@ test("runner gives Codex failure evidence inside its worktree and verifies a rep
   git(["add", "."]);
   git(["commit", "--quiet", "-m", "fixture master"]);
   git(["branch", "-M", "master"]);
+  git(["checkout", "-b", "dev"]);
+  fs.writeFileSync(path.join(repository, "dev-change.txt"), "ready\n");
+  git(["add", "dev-change.txt"]);
+  git(["commit", "--quiet", "-m", "fixture dev change"]);
+  git(["checkout", "master"]);
   execFileSync("git", ["clone", "--bare", "--quiet", repository, bare], { stdio: "pipe" });
   git(["remote", "add", "github", bare]);
+  git(["remote", "add", "origin", bare]);
 
   const fakeNpm = path.join(fakeBin, "npm");
   fs.writeFileSync(fakeNpm, `#!/usr/bin/env bash
@@ -274,8 +295,11 @@ printf '{"type":"turn.completed"}\\n'
     const artifactDir = path.join(runRoot, runId);
     const result = await pyaFileToJson(path.join(artifactDir, "result.pya"));
     const resultMap = result.memory[0]?.ob?.map;
-    assert.equal(resultMap.status.text, "passed");
+    assert.equal(resultMap.status.text, "promoted");
     assert.ok(resultMap["candidate commit"].text);
+    assert.equal(resultMap["promoted commit"].text, resultMap["candidate commit"].text);
+    assert.equal(git(["--git-dir", bare, "rev-parse", "refs/heads/master"]), resultMap["promoted commit"].text);
+    assert.equal(git(["--git-dir", bare, "rev-parse", "refs/heads/dev"]), resultMap["promoted commit"].text);
     assert.equal(fs.existsSync(path.join(artifactDir, "verified-repair.patch")), true);
     assert.match(fs.readFileSync(path.join(artifactDir, "test-suite-attempt-01.log"), "utf8"), /not ok 1/u);
     assert.match(fs.readFileSync(path.join(artifactDir, "test-suite-attempt-02.log"), "utf8"), /# pass 5/u);
