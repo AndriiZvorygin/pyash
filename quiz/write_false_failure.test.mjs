@@ -39,6 +39,32 @@ test("write succeeds when post-write exchange recording fails", async () => {
   }
 });
 
+test("write to a valid path outside the exchange run root does not report a false failure", async () => {
+  const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-write-run-root-"));
+  const externalRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-write-external-"));
+  const previousConsoleError = console.error;
+  const warnings = [];
+  const target = path.join(externalRoot, "MEMORY.md");
+  console.error = (...args) => warnings.push(args.join(" "));
+  setExchangeRecorder({ runRoot: projectRoot, record: () => undefined });
+
+  try {
+    const result = await write({
+      ob: { text: "format-change record" },
+      to: { filename: target }
+    }, { remember: () => undefined });
+
+    assert.equal(await fs.readFile(target, "utf8"), "format-change record");
+    assert.equal(result.be, "write");
+    assert.match(warnings.join("\n"), /file saved at .*; exchange bookkeeping failed: exchange defective/u);
+  } finally {
+    clearExchangeRecorder();
+    console.error = previousConsoleError;
+    await fs.rm(projectRoot, { recursive: true, force: true });
+    await fs.rm(externalRoot, { recursive: true, force: true });
+  }
+});
+
 test("write retry records an artifact after an earlier journal failure", async () => {
   const previousCwd = process.cwd();
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-write-retry-"));
