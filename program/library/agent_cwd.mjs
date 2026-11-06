@@ -53,20 +53,20 @@ function isContained(root, candidate) {
 
 export function resolveAgentPath(target, { rememberFn, access = "workspace" } = {}) {
   const raw = String(target ?? "");
+  const isHomeRelative = raw === "~" || raw.startsWith(`~${path.sep}`) || raw.startsWith("~/");
+  const expanded = isHomeRelative
+    ? (raw === "~" ? os.homedir() : path.join(os.homedir(), raw.slice(2)))
+    : raw;
   const agentCwd = resolveAgentCwd({ rememberFn });
   if (!agentCwd) {
-    return { resolved: path.resolve(raw), agentCwd: null, outside: false, roots: [] };
+    return { resolved: path.resolve(expanded), agentCwd: null, outside: false, roots: [] };
   }
 
   const homeAccessFact = rememberFn?.("agent home file access")?.ob?.boolean === true;
   const homeAccessOperations = new Set(["read", "write", "list", "repair"]);
   const allowHome = homeAccessFact && homeAccessOperations.has(String(access));
-  const isHomeRelative = raw === "~" || raw.startsWith(`~${path.sep}`) || raw.startsWith("~/");
   const invalidTilde = raw.startsWith("~") && !isHomeRelative;
   const explicitHomePath = isHomeRelative || (path.isAbsolute(raw) && isContained(os.homedir(), raw));
-  const expanded = isHomeRelative
-    ? (raw === "~" ? os.homedir() : path.join(os.homedir(), raw.slice(2)))
-    : raw;
   const resolved = path.isAbsolute(expanded)
     ? path.resolve(expanded)
     : path.resolve(agentCwd, expanded);

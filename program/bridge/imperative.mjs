@@ -207,7 +207,8 @@ function resolveSourceFilename(raw, { rememberFn, access } = {}) {
   if (!raw) return null;
   const value = String(raw);
   const sandbox = rememberFn?.("agent sandbox")?.ob?.boolean === true;
-  if (sandbox && (access === "read" || access === "list")) {
+  const homeRelative = value === "~" || value.startsWith(`~${path.sep}`) || value.startsWith("~/");
+  if ((sandbox && (access === "read" || access === "list")) || homeRelative) {
     return resolveAgentPath(value, { rememberFn, access });
   }
   const agentCwd = rememberFn?.("agent cwd")?.ob?.filename ?? null;
@@ -257,6 +258,10 @@ function guardSourceFilenames(sentence, { rememberFn } = {}) {
       });
     }
     const resolved = pathResult.resolved;
+    const homeRelative = raw === "~" || raw.startsWith(`~${path.sep}`) || raw.startsWith("~/");
+    if (homeRelative && resolved) {
+      sentence[slot.role] = { ...sentence[slot.role], filename: resolved };
+    }
     if (!fs.existsSync(resolved)) {
       throwFileUnavailable({ path: resolved, from: be || "interpret" });
     }
