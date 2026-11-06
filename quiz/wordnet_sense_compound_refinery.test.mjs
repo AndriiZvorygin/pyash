@@ -57,6 +57,7 @@ test("sense compound refinery links, composes, decides, and records one complete
   const recordedPromotions = [];
   const savedDecisionBatchSizes = [];
   const compositionPrompts = [];
+  let inventoryRevision = false;
   let compositionResponseCount = 0;
   let translationSubmitCount = 0;
   const suggestedTerms = [];
@@ -74,6 +75,7 @@ test("sense compound refinery links, composes, decides, and records one complete
         const coverage = ({
           friend: { coverageType: "atomic", canonicalEnglish: "friend", pyashSequence: ["hfre"] },
           relationship: { coverageType: "atomic", canonicalEnglish: "relationship", pyashSequence: ["hlak"] },
+          affection: { coverageType: "atomic", canonicalEnglish: "affection", pyashSequence: ["haff"] },
           grammar: { coverageType: "grammar", canonicalEnglish: "comparative_degree_", pyashSequence: ["trah"] }
         })[word];
         return coverage ?? null;
@@ -82,10 +84,13 @@ test("sense compound refinery links, composes, decides, and records one complete
     loadBridges: async () => ({
       entries: [
         { source: "n:00000020-n", target: "friend", targetPartOfSpeech: "n", certainty: "deterministic", evidence: "test", lemmas: ["friend"], definition: "a person attached by affection" },
-        { source: "n:00000030-n", target: "relationship", targetPartOfSpeech: "n", certainty: "deterministic", evidence: "test", lemmas: ["relationship"], definition: "a relation between entities" }
+        { source: "n:00000030-n", target: "relationship", targetPartOfSpeech: "n", certainty: "deterministic", evidence: "test", lemmas: ["relationship"], definition: "a relation between entities" },
+        ...(inventoryRevision ? [
+          { source: "n:00000040-n", target: "affection", targetPartOfSpeech: "n", certainty: "deterministic", evidence: "inventory revision test", lemmas: ["affection"], definition: "a feeling of affection" }
+        ] : [])
       ]
     }),
-    loadLayerIndex: async () => ({ byWord: new Map([["hfre", 16], ["hlak", 16]]) }),
+    loadLayerIndex: async () => ({ byWord: new Map([["hfre", 16], ["hlak", 16], ["haff", 16]]) }),
     loadLemmaCatalog: async () => ({ entries: [] }),
     translationTransport: {
       async submit({ sense: target, languages, handleId, attempt }) {
@@ -167,24 +172,36 @@ test("sense compound refinery links, composes, decides, and records one complete
     assert.equal(result.result["accepted-count"], 0);
     assert.equal(result.result["selected-sense-count"], 1);
     assert.equal(result.result["candidate-sense-count"], 0);
-    assert.equal(result.result["pending-sense-count"], 1);
-    assert.equal(result.remainingSenseCount, 1);
+    assert.equal(result.result["pending-sense-count"], 0);
+    assert.equal(result.result["failed-sense-count"], 1);
+    assert.equal(result.remainingSenseCount, 0);
     const cacheSource = await readFile(path.join(result.artifactDirectory, "sense-translations.pya"), "utf8");
     const progressSource = await readFile(path.join(result.artifactDirectory, "progress.pya"), "utf8");
     assert.equal(parseWordNetSenseTranslationCache(cacheSource).bySense.get(sense.senseId).status, "partial");
-    assert.match(progressSource, /retry/u);
+    assert.match(progressSource, /failed/u);
     forget();
     clearSignatureHandlers();
     for (const signature of builtInSignatures) registerSignatureHandler(signature);
-    const resumed = await runWordNetSenseCompoundRefinery({
+    inventoryRevision = true;
+    const inventoryChangedResume = await runWordNetSenseCompoundRefinery({
       artifactRoot,
       runId: "sense-compound-test",
       initialize: false,
       configuration: {},
       dependencies
     });
+    assert.equal(inventoryChangedResume.selectedSenseCount, 0);
+    assert.equal(inventoryChangedResume.remainingSenseCount, 0);
+    assert.equal(translationSubmitCount, 1);
+    const resumed = await runWordNetSenseCompoundRefinery({
+      artifactRoot,
+      runId: "sense-compound-test",
+      initialize: false,
+      configuration: { senseIds: [sense.senseId] },
+      dependencies
+    });
     assert.equal(resumed.candidateCount, 0);
-    assert.equal(resumed.result["pending-sense-count"], 1);
+    assert.equal(resumed.result["failed-sense-count"], 1);
     const failedComposition = await readFile(path.join(resumed.artifactDirectory, "component-compositions.pya"), "utf8");
     const failedRows = artifactRows(failedComposition);
     assert.equal(failedRows.length, 1);
@@ -196,7 +213,7 @@ test("sense compound refinery links, composes, decides, and records one complete
       artifactRoot,
       runId: "sense-compound-test",
       initialize: false,
-      configuration: {},
+      configuration: { senseIds: [sense.senseId] },
       dependencies
     });
     const decisionSource = await readFile(completed.result["decision-path"], "utf8");
@@ -250,7 +267,7 @@ test("sense compound refinery links, composes, decides, and records one complete
       configuration: {},
       dependencies
     });
-    assert.equal(stalePromptResume.selectedSenseCount, 1);
+    assert.equal(stalePromptResume.selectedSenseCount, 0);
     assert.equal(stalePromptResume.remainingSenseCount, 0);
 
     const focusedRetry = await runWordNetSenseCompoundRefinery({
@@ -264,6 +281,32 @@ test("sense compound refinery links, composes, decides, and records one complete
     assert.equal(focusedRetry.candidateCount, 1);
     assert.equal(translationSubmitCount, 2);
     assert.equal(compositionResponseCount, 2);
+
+    const interruptedRunId = "sense-compound-interrupted-claim-test";
+    await assert.rejects(runWordNetSenseCompoundRefinery({
+      artifactRoot,
+      runId: interruptedRunId,
+      initialize: false,
+      dependencies: {
+        ...dependencies,
+        suggestVocabulary: async () => {
+          throw new Error("simulated stage interruption");
+        }
+      }
+    }));
+    const interruptedArtifactDirectory = path.join(artifactRoot, interruptedRunId);
+    const claimedProgress = await readFile(path.join(interruptedArtifactDirectory, "progress.pya"), "utf8");
+    assert.match(claimedProgress, /processing/u);
+    const resumedAfterInterruption = await runWordNetSenseCompoundRefinery({
+      artifactRoot,
+      runId: interruptedRunId,
+      initialize: false,
+      configuration: {},
+      dependencies
+    });
+    assert.equal(resumedAfterInterruption.selectedSenseCount, 0);
+    const interruptedProgress = await readFile(path.join(interruptedArtifactDirectory, "progress.pya"), "utf8");
+    assert.match(interruptedProgress, /interrupted/u);
 
     const failed = await runWordNetSenseCompoundRefinery({
       artifactRoot,
@@ -302,11 +345,13 @@ test("sense compound refinery links, composes, decides, and records one complete
       initialize: false,
       dependencies: invalidChoiceDependencies
     });
-    assert.equal(firstInvalidChoice.result["pending-sense-count"], 1);
+    assert.equal(firstInvalidChoice.result["pending-sense-count"], 0);
+    assert.equal(firstInvalidChoice.result["failed-sense-count"], 1);
     const secondInvalidChoice = await runWordNetSenseCompoundRefinery({
       artifactRoot,
       runId: retryRunId,
       initialize: false,
+      configuration: { senseIds: [sense.senseId] },
       dependencies: invalidChoiceDependencies
     });
     assert.equal(secondInvalidChoice.result["uncertain-no-candidate-sense-count"], 1);

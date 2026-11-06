@@ -243,8 +243,13 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   Do not let a source-language component replace the known lexical head. A
   genuinely new lexical target with no existing atomic head uses the semantic
   head selected from its components. Grammar-covered senses remain outside the
-  lexical worklist. Uncertain results remain explicit, and failed senses are
-  retryable.
+  lexical worklist. Every selected sense is durably claimed in `progress.pya`
+  before provider work begins. Automatic sweeps skip any sense with a progress
+  record, even if a later compound promotion changes the global atom-inventory
+  hash or the recorded outcome is failed or uncertain. This keeps each sense
+  to one automatic processing pass and makes remaining counts monotonic. Use
+  an explicit `senseIds` selection only when deliberately retrying a specific
+  sense; that focused retry replaces its current progress outcome.
   For a new sense-derived compound, make one focused Housekeeper mind call per
   sense to compose and judge the compound together. Include the target sense,
   source-language decomposition, English gloss alternatives for each source
