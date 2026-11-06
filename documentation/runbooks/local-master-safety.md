@@ -16,7 +16,8 @@ command/uninstall_local_master_safety_cron.sh
 
 The installer replaces only its marked crontab block and preserves unrelated
 jobs. The schedule is daily at 04:00 in the host's local timezone. The runner
-uses `flock` to prevent overlapping runs.
+acquires its own `flock` lock to prevent overlapping cron and manual runs; the
+crontab calls the runner directly so it does not contend with itself.
 
 ## What it does
 

@@ -17,7 +17,7 @@ awk -v begin="$BEGIN" -v end="$END" '
   $0 == end { skip = 0; next }
   !skip { print }
 ' "$temporary" > "$filtered"
-printf '\n%s\n0 4 * * * /usr/bin/flock -n /tmp/pyash-master-safety.lock %s\n%s\n' \
+printf '\n%s\n0 4 * * * %s\n%s\n' \
   "$BEGIN" "$RUNNER" "$END" >> "$filtered"
 crontab "$filtered"
 printf 'installed daily 04:00 local master safety cron entry\nrunner: %s\n' "$RUNNER"

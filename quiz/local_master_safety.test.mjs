@@ -83,7 +83,8 @@ test("the local cron installer replaces only its own marked block", () => {
     assert.match(script, /!skip \{ print \}/u);
   }
   assert.match(installer, /0 4 \* \* \*/u);
-  assert.match(installer, /flock -n \/tmp\/pyash-master-safety\.lock/u);
+  assert.doesNotMatch(installer, /flock/u);
+  assert.match(read("run_local_master_safety.sh"), /exec 9>"\$LOCK"[\s\S]*?flock -n 9/u);
 });
 
 test("install and uninstall preserve unrelated crontab entries", () => {
@@ -112,6 +113,8 @@ fi
     assert.equal((crontab.match(/keep-me/gu) || []).length, 1);
     assert.equal((crontab.match(/BEGIN PYASH LOCAL MASTER SAFETY/gu) || []).length, 1);
     assert.equal((crontab.match(/0 4 \* \* \*/gu) || []).length, 1);
+    assert.ok(crontab.split(/\r?\n/u).includes(`0 4 * * * ${path.join(repoRoot, "command", "run_local_master_safety.sh")}`));
+    assert.doesNotMatch(crontab, /flock.*run_local_master_safety/u);
     execFileSync("bash", [uninstaller], { cwd: repoRoot, env, stdio: "pipe" });
     crontab = fs.readFileSync(state, "utf8");
     assert.match(crontab, /MAILTO=operator@example\.test/u);
