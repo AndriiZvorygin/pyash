@@ -26,9 +26,12 @@ function normalizeRunRoot(value) {
 
 function normalizePath(locator) {
   const runRoot = exchangeRunRoot ?? normalizeRunRoot(process.cwd());
-  const resolved = path.resolve(runRoot, locator);
+  const raw = String(locator);
+  const resolved = path.resolve(runRoot, raw);
   const relative = path.relative(runRoot, resolved);
   if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    // Preserve explicit external locators without allowing relative traversal.
+    if (path.isAbsolute(raw)) return resolved.replace(/[\\]+/g, "/");
     throwErrorSentence({
       name: "exchange defective",
       message: "exchange defective",
@@ -238,6 +241,10 @@ function materializeLocator({ locator, target, bytes } = {}) {
     ? artifactRoot()
     : exchangeRunRoot ?? normalizeRunRoot(process.cwd());
   const abs = path.resolve(runRoot, locator);
+  const relative = path.relative(runRoot, abs);
+  if (path.isAbsolute(locator) && (relative.startsWith("..") || path.isAbsolute(relative))) {
+    return fs.existsSync(abs) ? abs : null;
+  }
   fs.mkdirSync(path.dirname(abs), { recursive: true });
   if (fs.existsSync(abs)) return abs;
   if (target && path.resolve(target) !== abs) {

@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import { clearExchangeRecorder, setExchangeRecorder } from "../program/bridge/exchange.mjs";
+import { clearExchangeRecorder, setExchangeRecorder, setExchangeRunId } from "../program/bridge/exchange.mjs";
 import write from "../program/verbs/exchange/write.mjs";
 
 test("write succeeds when post-write exchange recording fails", async () => {
@@ -44,9 +44,11 @@ test("write to a valid path outside the exchange run root does not report a fals
   const externalRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-write-external-"));
   const previousConsoleError = console.error;
   const warnings = [];
+  const records = [];
   const target = path.join(externalRoot, "MEMORY.md");
   console.error = (...args) => warnings.push(args.join(" "));
-  setExchangeRecorder({ runRoot: projectRoot, record: () => undefined });
+  setExchangeRecorder({ runRoot: projectRoot, artifactRoot: projectRoot, record: (sentence) => records.push(sentence) });
+  setExchangeRunId("external-write-run");
 
   try {
     const result = await write({
@@ -56,7 +58,11 @@ test("write to a valid path outside the exchange run root does not report a fals
 
     assert.equal(await fs.readFile(target, "utf8"), "format-change record");
     assert.equal(result.be, "write");
-    assert.match(warnings.join("\n"), /file saved at .*; exchange bookkeeping failed: exchange defective/u);
+    const artifact = records.find((sentence) => sentence.be === "artifact");
+    assert.equal(artifact?.to?.filename, target);
+    assert.ok(records.some((sentence) => sentence.be === "exchange" && sentence.as?.name === "write"));
+    assert.equal(await fs.readFile(path.join(projectRoot, "artifacts", "external-write-run", `${artifact.su.name}-MEMORY.md`), "utf8"), "format-change record");
+    assert.deepEqual(warnings, []);
   } finally {
     clearExchangeRecorder();
     console.error = previousConsoleError;

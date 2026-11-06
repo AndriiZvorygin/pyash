@@ -3,7 +3,7 @@ import fsSync from "node:fs";
 import path from "node:path";
 import { remember } from "../../remember/index.mjs";
 import { recordArtifact, recordExchange } from "../../bridge/exchange.mjs";
-import { throwErrorSentence } from "../../error.mjs";
+import { isErrorSentence, throwErrorSentence } from "../../error.mjs";
 import { getEffectiveVyahAspect } from "../../library/grammar/vyah.mjs";
 import { resolveConfigBool } from "../../configure/env.mjs";
 import { ensureAgentPathDir, resolveAgentPath } from "../../library/agent_cwd.mjs";
@@ -216,6 +216,7 @@ export default async function write(sentence, { remember: rememberFn = remember 
         recordExchange({ artifactName: artifact.su.name, op: "write", producer: "exchange" });
       }
     } catch (error) {
+      if (isErrorSentence(error)) throw error;
       reportPostWriteFailure({ target, stage: "exchange bookkeeping", error });
     }
     if (worldMode) {
