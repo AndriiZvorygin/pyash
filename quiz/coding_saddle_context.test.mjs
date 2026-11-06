@@ -173,9 +173,16 @@ test("coding saddle summarizes the final oversized exchange and supports summary
   const filename = saddleContextCheckpointPath({ agentHouse, sessionName: "coding" });
   const messages = [
     { role: "user", content: "Continue the 2008 month reads." },
-    { role: "assistant", content: "Tool results and notes. ".repeat(1500) }
+    { role: "assistant", content: "The next month remains to be reviewed." },
+    { role: "user", content: "Continue with that month." },
+    { role: "assistant", content: "The source folder and extraction plan are ready." }
   ];
+  const olderMessages = Array.from({ length: 102 }, (_, index) => ({
+    role: index % 2 ? "assistant" : "user",
+    content: `Previously summarized exchange ${index}.`
+  }));
   const summaries = [];
+  const historyRequests = [];
   try {
     await writeSaddleContextCheckpoint(filename, {
       summary: "Earlier decisions and project context.",
@@ -193,7 +200,11 @@ test("coding saddle summarizes the final oversized exchange and supports summary
       contextWindow: 262144,
       systemPrompt: "Coding agent",
       userInput: "Continue the 2008 month reads.",
-      loadHistory: async ({ historyWindow }) => historyWindow === 0 ? { messages: [] } : { messages },
+      loadHistory: async ({ historyWindow }) => {
+        historyRequests.push(historyWindow);
+        if (historyWindow === 0) return { messages: [] };
+        return { messages: historyWindow === 1 ? messages : olderMessages };
+      },
       summarize: async ({ messages: sourceMessages }) => {
         summaries.push(sourceMessages);
         return { summary: "The oversized 2008 research turn is summarized; next step is continue the month reads." };
@@ -201,7 +212,8 @@ test("coding saddle summarizes the final oversized exchange and supports summary
     });
     assert.equal(compacted.compacted, true);
     assert.equal(compacted.historyWindow, 0);
-    assert.equal(summaries[0].length, messages.length);
+    assert.deepEqual(historyRequests, [1]);
+    assert.deepEqual(summaries[0], messages);
     assert.equal((await readSaddleContextCheckpoint(filename)).historyWindow, 0);
 
     await writeSaddleContextCheckpoint(filename, {

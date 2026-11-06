@@ -227,10 +227,12 @@ export async function prepareSaddleContextForTurn({
     const nextHistoryWindow = checkpoint.summary
       ? Math.max(0, Math.floor(activeWindow / 2))
       : SADDLE_COMPACTION_RECENT_PAIRS;
-    const allHistory = await loadHistory({ agentHouse, sessionName, sessionFile, historyWindow: 50 });
-    const keepMessages = Math.min(allHistory.messages.length, nextHistoryWindow * 2);
-    const olderMessages = allHistory.messages.slice(0, Math.max(0, allHistory.messages.length - keepMessages));
-    const summaryMessages = olderMessages.length ? olderMessages : allHistory.messages;
+    // The checkpoint summary already covers history older than the active window.
+    // Re-loading 50 exchanges here duplicated that context and could make compaction
+    // itself larger than the request it was meant to repair.
+    const keepMessages = Math.min(recent.messages.length, nextHistoryWindow * 2);
+    const olderMessages = recent.messages.slice(0, Math.max(0, recent.messages.length - keepMessages));
+    const summaryMessages = olderMessages.length ? olderMessages : recent.messages;
     const result = await withLocalModelsManaged(backend, housekeeperUrl, () => summarize({
       backend,
       model,
