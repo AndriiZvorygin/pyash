@@ -346,7 +346,6 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind, re
   if (hash) {
     sentence.accordingto = { name: "sha256" };
     sentence.fromtext = { text: hash };
-    artifactHashes.set(sentence.su.name, hash);
     const written = writeContentAddressed({ hash, locator: normalized, bytes });
     materializeLocator({ locator: normalized, target: written?.absolute, bytes });
     linkRunAlias({ name: sentence.su.name, target: written?.absolute, locator: normalized });
@@ -357,10 +356,11 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind, re
   if (kind) {
     sentence.as = { name: kind };
   }
+  exchangeRecorder(sentence);
+  if (hash) artifactHashes.set(sentence.su.name, hash);
   artifactByLocator.set(normalized, sentence.su.name);
   artifactLocatorByName.set(sentence.su.name, normalized);
   if (producer && kind !== "metadata") artifactLatestByProducer.set(String(producer), normalized);
-  exchangeRecorder(sentence);
   return sentence;
 }
 

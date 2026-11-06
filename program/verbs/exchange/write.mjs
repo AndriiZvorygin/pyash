@@ -3,7 +3,7 @@ import fsSync from "node:fs";
 import path from "node:path";
 import { remember } from "../../remember/index.mjs";
 import { recordArtifact, recordExchange } from "../../bridge/exchange.mjs";
-import { throwErrorSentence } from "../../error.mjs";
+import { isErrorSentence, throwErrorSentence } from "../../error.mjs";
 import { getEffectiveVyahAspect } from "../../library/grammar/vyah.mjs";
 import { resolveConfigBool } from "../../configure/env.mjs";
 import { ensureAgentPathDir, resolveAgentPath } from "../../library/agent_cwd.mjs";
@@ -11,6 +11,12 @@ import { appendWorldActivity, isWorldToolsActive, resolveWorldAgent, resolveWorl
 import { renderWriteValue, normalizeNewlines } from "./write_helpers.mjs";
 import { startFileTail, makeStreamIncrementalWriter } from "./write_stream.mjs";
 import { resolveKeyboardCommand, sendKeyboardText } from "./write_keyboard.mjs";
+
+function reportPostWriteFailure({ target, stage, error }) {
+  const detail = String(error?.message ?? error ?? "unknown error");
+  // File persistence is the write operation; bookkeeping must not turn it into a false failure.
+  console.error(`[write warning] file saved at ${target}; ${stage} failed: ${detail}`);
+}
 
 export default async function write(sentence, { remember: rememberFn = remember } = {}) {
   const modifiers = Array.isArray(sentence?.vyah?.ve?.values) ? sentence.vyah.ve.values : [];
@@ -204,9 +210,14 @@ export default async function write(sentence, { remember: rememberFn = remember 
     }
     await fs.writeFile(target, normalized, "utf8");
     const buffer = Buffer.from(normalized, "utf8");
-    const artifact = recordArtifact({ locator: target, producer: "exchange", bytes: buffer });
-    if (artifact?.su?.name) {
-      recordExchange({ artifactName: artifact.su.name, op: "write", producer: "exchange" });
+    try {
+      const artifact = recordArtifact({ locator: target, producer: "exchange", bytes: buffer });
+      if (artifact?.su?.name) {
+        recordExchange({ artifactName: artifact.su.name, op: "write", producer: "exchange" });
+      }
+    } catch (error) {
+      if (isErrorSentence(error)) throw error;
+      reportPostWriteFailure({ target, stage: "exchange bookkeeping", error });
     }
     if (worldMode) {
       const agent = resolveWorldAgent({ rememberFn }) ?? "agent";
@@ -214,16 +225,20 @@ export default async function write(sentence, { remember: rememberFn = remember 
       const placeDir = resolveWorldPlaceDir(place, { rememberFn });
       if (placeDir) {
         const rel = path.relative(placeDir, target);
-        await appendWorldActivity({
-          placeDir,
-          sentence: {
-            mood: "ya",
-            su: { name: agent },
-            to: { filename: rel },
-            at: { date: new Date().toISOString() },
-            be: "write"
-          }
-        });
+        try {
+          await appendWorldActivity({
+            placeDir,
+            sentence: {
+              mood: "ya",
+              su: { name: agent },
+              to: { filename: rel },
+              at: { date: new Date().toISOString() },
+              be: "write"
+            }
+          });
+        } catch (error) {
+          reportPostWriteFailure({ target, stage: "world activity recording", error });
+        }
       }
     }
   } else {
