@@ -464,14 +464,31 @@ async function loadInventory({ context, dependencies }) {
   const pending = fullWorklist.filter((sense) => {
     if (requestedSenseSet?.has(sense.senseId)) return true;
     const progress = progressBySense.get(sense.senseId);
-    return !currentProgress(
-      progress,
-      atomInventoryHash,
-      context.config.candidateRevision,
-      context.config.promptRevision,
-      context.config.choicePromptRevision
-    );
+    return !isProcessedProgress(progress);
   }).slice(0, context.config.maximumSenses);
+  const claimedProgressBySense = new Map(progressBySense);
+  for (const sense of pending) {
+    claimedProgressBySense.set(sense.senseId, {
+      ...claimedProgressBySense.get(sense.senseId),
+      id: sense.senseId,
+      senseId: sense.senseId,
+      status: "processing",
+      atomInventoryHash,
+      candidateRevision: context.config.candidateRevision,
+      sourceHash: allocation.sourceHash,
+      promptRevision: context.config.promptRevision,
+      choicePromptRevision: context.config.choicePromptRevision,
+      claimRunId: context.runId ?? ""
+    });
+  }
+  const claimedProgress = [...claimedProgressBySense.values()];
+  if (pending.length > 0) {
+    await atomicWrite(progressPath, renderRowsPya(
+      PROGRESS_NAME,
+      "wordnet-sense-compound-progress-v1",
+      claimedProgress
+    ));
+  }
   const dataHash = hash(stableJson({
     sourceHash: allocation.sourceHash,
     coverageHash: allocation.coverageHash,
