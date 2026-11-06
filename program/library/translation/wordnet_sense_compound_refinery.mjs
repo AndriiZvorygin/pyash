@@ -73,7 +73,6 @@ const COMPOSITION_NAME = "translation_wordnet_sense_compound_compositions";
 const CANDIDATE_NAME = "translation_wordnet_sense_compound_candidates";
 const DECISION_BATCH_NAME = "translation_wordnet_sense_compound_decisions";
 const TRANSLATION_FAILURES_NAME = "translation_wordnet_sense_translation_failures";
-const READY_PROGRESS = new Set(["accepted", "rejected", "uncertain", "no-compound-candidate"]);
 let definitionPromise = null;
 
 function invalid(message, details = {}) {
@@ -309,13 +308,9 @@ function queueState(queue = {}) {
   };
 }
 
-function currentProgress(progress, atomInventoryHash, candidateRevision, promptRevision, choicePromptRevision) {
-  return Boolean(progress
-    && READY_PROGRESS.has(progress.status)
-    && progress.atomInventoryHash === atomInventoryHash
-    && progress.candidateRevision === candidateRevision
-    && progress.promptRevision === promptRevision
-    && progress.choicePromptRevision === choicePromptRevision);
+function isProcessedProgress(progress) {
+  // Inventory changes must never requeue a sense that this sweep already claimed.
+  return Boolean(progress && text(progress.status));
 }
 
 async function inspectHousekeeper({ model, dependencies }) {
@@ -438,6 +433,14 @@ async function loadInventory({ context, dependencies }) {
   const translationSource = await (dependencies.readFile ?? readIfPresent)(translationPath);
   const progressRecords = progressSource ? parseRowsPya(progressSource, PROGRESS_NAME) : [];
   const progressBySense = new Map(progressRecords.map((record) => [record.senseId, record]));
+  for (const progress of progressRecords) {
+    if (progress.status !== "processing") continue;
+    progressBySense.set(progress.senseId, {
+      ...progress,
+      status: "interrupted",
+      interruptedRunId: progress.claimRunId ?? ""
+    });
+  }
   const parsedTranslationState = translationSource
     ? parseWordNetSenseTranslationCache(translationSource)
     : { records: [], bySense: new Map() };
@@ -489,14 +492,7 @@ async function loadInventory({ context, dependencies }) {
     "worklist-hash": dataHash,
     "eligible-sense-count": fullWorklist.length,
     "remaining-sense-count": fullWorklist.filter((sense) => {
-      const progress = progressBySense.get(sense.senseId);
-      return !currentProgress(
-        progress,
-        atomInventoryHash,
-        context.config.candidateRevision,
-        context.config.promptRevision,
-        context.config.choicePromptRevision
-      );
+      return !isProcessedProgress(progressBySense.get(sense.senseId));
     }).length
   }));
   context.allocation = allocation;
@@ -504,7 +500,7 @@ async function loadInventory({ context, dependencies }) {
   context.linkedAtomicSenses = linkedAtomicSenses;
   context.deprecatedSurfaces = deprecatedSurfaces;
   context.layerIndex = layerIndex;
-  context.progressRecords = progressRecords;
+  context.progressRecords = claimedProgress;
   context.translationState = translationState;
   context.fullWorklist = fullWorklist;
   context.atomInventoryHash = atomInventoryHash;
@@ -519,8 +515,7 @@ async function loadInventory({ context, dependencies }) {
     "minimum-tag-count": context.config.minimumTagCount,
     "selected-sense-count": pending.length,
     "remaining-sense-count": fullWorklist.filter((sense) => {
-      const progress = progressBySense.get(sense.senseId);
-      return !progress || !READY_PROGRESS.has(progress.status) || progress.atomInventoryHash !== atomInventoryHash;
+      return !isProcessedProgress(progressBySense.get(sense.senseId));
     }).length,
     "housekeeper-host": context.housekeeperState?.host ?? "",
     "housekeeper-queue-depth": context.housekeeperState?.queued ?? 0,
@@ -858,13 +853,13 @@ async function updateProgress(context, worklistRows, candidateRows, decisions) {
     const senseTranslation = context.translationState?.bySense.get(sense.senseId);
     const completeTranslation = senseTranslation?.status === "complete";
     const composition = compositionBySense.get(sense.senseId);
-    let status = "retry";
+    let status = "failed";
     if (!completeTranslation) {
-      status = "retry";
+      status = "failed";
     } else if (senseCandidates.length === 0) {
       if (composition?.status === "uncertain") status = "uncertain";
       else if (composition?.status === "no-available-decomposition") status = "no-compound-candidate";
-      else if (composition?.status === "failed" || composition?.status === "compound") status = "retry";
+      else if (composition?.status === "failed" || composition?.status === "compound") status = "failed";
       else status = senseTranslation.translations.some((translation) => translation.composition === "uncertain")
         ? "uncertain"
         : "no-compound-candidate";
@@ -892,13 +887,7 @@ async function updateProgress(context, worklistRows, candidateRows, decisions) {
   await atomicWrite(path, renderRowsPya(PROGRESS_NAME, "wordnet-sense-compound-progress-v1", context.progressRecords));
   const remainingCount = (context.fullWorklist ?? []).filter((sense) => {
     const progress = bySense.get(sense.senseId);
-    return !currentProgress(
-      progress,
-      context.atomInventoryHash,
-      context.config.candidateRevision,
-      context.config.promptRevision,
-      context.config.choicePromptRevision
-    );
+    return !isProcessedProgress(progress);
   }).length;
   return { path, remainingCount };
 }
@@ -913,6 +902,7 @@ function senseOutcomeSummary(worklistRows, candidateRows, progressRecords) {
     rejected: 0,
     noCandidate: 0,
     uncertainWithoutCandidate: 0,
+    failed: 0,
     pending: 0
   };
   for (const senseId of selectedIds) {
@@ -924,6 +914,7 @@ function senseOutcomeSummary(worklistRows, candidateRows, progressRecords) {
     }
     else if (status === "rejected") counts.rejected += 1;
     else if (status === "no-compound-candidate") counts.noCandidate += 1;
+    else if (status === "failed") counts.failed += 1;
     else counts.pending += 1;
   }
   const candidateSenseCount = [...candidateIds].filter((senseId) => selectedIds.has(senseId)).length;
@@ -938,6 +929,7 @@ function senseOutcomeSummary(worklistRows, candidateRows, progressRecords) {
     "rejected-sense-count": counts.rejected,
     "no-candidate-sense-count": counts.noCandidate,
     "uncertain-no-candidate-sense-count": counts.uncertainWithoutCandidate,
+    "failed-sense-count": counts.failed,
     "pending-sense-count": counts.pending,
     "accepted-candidate-sense-percent": candidateAcceptedPercent
   };
@@ -1180,6 +1172,7 @@ async function runInitializedRefinery({
     config,
     dependencies,
     allocation,
+    runId: stableRunId,
     artifactDirectory,
     interpretFn,
     parseFn,
