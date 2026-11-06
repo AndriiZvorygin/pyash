@@ -197,7 +197,7 @@ export async function prepareSaddleContextForTurn({
     ? Number(contextWindow)
     : isLocalModelBackend(backend) ? CONSERVATIVE_LOCAL_CONTEXT_BUDGET : null;
   const activeWindow = checkpoint.summary
-    ? Math.min(SADDLE_COMPACTION_RECENT_PAIRS, checkpoint.historyWindow || SADDLE_COMPACTION_RECENT_PAIRS)
+    ? Math.min(SADDLE_COMPACTION_RECENT_PAIRS, checkpoint.historyWindow ?? SADDLE_COMPACTION_RECENT_PAIRS)
     : 50;
   const recent = await loadHistory({ agentHouse, sessionName, sessionFile, historyWindow: activeWindow });
   const estimatedInputTokens = estimateSaddleInputTokens({
@@ -206,7 +206,10 @@ export async function prepareSaddleContextForTurn({
     userInput,
     toolSchema: "Pyash coding tools: read, write, repair, command, list, see, interpret javascript"
   });
-  const reportedInputTokens = checkpoint.measurement === "provider usage" ? checkpoint.lastInputTokens : null;
+  const reportedInputTokens = checkpoint.measurement === "provider usage"
+    && !(checkpoint.summary && activeWindow === 0)
+    ? checkpoint.lastInputTokens
+    : null;
   const pressure = measureSaddleContextPressure({
     contextBudget: budget,
     providerInputTokens: reportedInputTokens,
@@ -218,11 +221,11 @@ export async function prepareSaddleContextForTurn({
     historyWindow: activeWindow
   };
   if (shouldCompactSaddleContext(pressure)) {
-    if (checkpoint.summary && activeWindow <= 1) {
-      throw new Error(`context remains above the 80% limit after compaction to one recent exchange (${formatSaddleContextPressure(pressure)}); shorten the active request or increase the context window`);
+    if (checkpoint.summary && activeWindow === 0) {
+      throw new Error(`context remains above the 80% limit with summary-only history (${formatSaddleContextPressure(pressure)}); shorten the active request or increase the context window`);
     }
     const nextHistoryWindow = checkpoint.summary
-      ? Math.max(1, Math.floor(activeWindow / 2))
+      ? Math.max(0, Math.floor(activeWindow / 2))
       : SADDLE_COMPACTION_RECENT_PAIRS;
     const allHistory = await loadHistory({ agentHouse, sessionName, sessionFile, historyWindow: 50 });
     const keepMessages = Math.min(allHistory.messages.length, nextHistoryWindow * 2);
@@ -1613,7 +1616,10 @@ async function main() {
       config.sessionPlan = sessionPlan === "No active plan for this session." ? "" : sessionPlan;
       saddleUi.setUsage(formatSaddleContextPressure(contextTurn.pressure));
       if (contextTurn.compacted) {
-        writeLine(`[context compacted] ${formatSaddleContextPressure(contextTurn.pressure)}; transcript retained; active context is summary + latest ${contextTurn.historyWindow} exchanges`);
+        const retainedContext = contextTurn.historyWindow === 0
+          ? "summary only"
+          : `summary + latest ${contextTurn.historyWindow} exchanges`;
+        writeLine(`[context compacted] ${formatSaddleContextPressure(contextTurn.pressure)}; transcript retained; active context is ${retainedContext}`);
       }
       const turn = await runWithMindInterruptSignal({ signal: interruptController.signal }, () => runSaddleTurnWithEvidence({
         input,

@@ -739,6 +739,10 @@ export function buildSaddleMindSentence({
   historyWindow = 50,
   stream = true
 } = {}) {
+  const requestedHistoryWindow = Number(historyWindow);
+  const resolvedHistoryWindow = Number.isSafeInteger(requestedHistoryWindow) && requestedHistoryWindow >= 0
+    ? requestedHistoryWindow
+    : 50;
   const sentence = {
     mood: "do",
     be: "write",
@@ -751,7 +755,7 @@ export function buildSaddleMindSentence({
     fromtext: sessionFile
       ? { filename: path.resolve(String(sessionFile)) }
       : { name: `session name ${normalizeText(sessionName) || "coding"}` },
-    by: { num: Math.max(1, Math.trunc(Number(historyWindow) || 50)) },
+    by: { num: resolvedHistoryWindow },
     // The model is persisted in the mind configuration fact; the sentence stays canonical Pyash shape.
   };
   if (stream) sentence.vyah = { ve: { type: "name", values: ["stream"] } };

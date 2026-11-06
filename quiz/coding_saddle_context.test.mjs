@@ -167,3 +167,69 @@ test("coding saddle automatically checkpoints older turns at 80 percent and reta
     await fs.rm(agentHouse, { recursive: true, force: true });
   }
 });
+
+test("coding saddle summarizes the final oversized exchange and supports summary-only context", async () => {
+  const agentHouse = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-summary-only-"));
+  const filename = saddleContextCheckpointPath({ agentHouse, sessionName: "coding" });
+  const messages = [
+    { role: "user", content: "Continue the 2008 month reads." },
+    { role: "assistant", content: "Tool results and notes. ".repeat(1500) }
+  ];
+  const summaries = [];
+  try {
+    await writeSaddleContextCheckpoint(filename, {
+      summary: "Earlier decisions and project context.",
+      lastInputTokens: 594600,
+      contextBudget: 262144,
+      measurement: "provider usage",
+      historyWindow: 1,
+      compactedAt: "2026-11-06T18:00:00.000Z"
+    });
+    const compacted = await prepareSaddleContextForTurn({
+      agentHouse,
+      sessionName: "coding",
+      backend: "zai",
+      model: "glm-5.3-flash",
+      contextWindow: 262144,
+      systemPrompt: "Coding agent",
+      userInput: "Continue the 2008 month reads.",
+      loadHistory: async ({ historyWindow }) => historyWindow === 0 ? { messages: [] } : { messages },
+      summarize: async ({ messages: sourceMessages }) => {
+        summaries.push(sourceMessages);
+        return { summary: "The oversized 2008 research turn is summarized; next step is continue the month reads." };
+      }
+    });
+    assert.equal(compacted.compacted, true);
+    assert.equal(compacted.historyWindow, 0);
+    assert.equal(summaries[0].length, messages.length);
+    assert.equal((await readSaddleContextCheckpoint(filename)).historyWindow, 0);
+
+    await writeSaddleContextCheckpoint(filename, {
+      ...compacted.checkpoint,
+      lastInputTokens: 594600,
+      contextBudget: 262144,
+      measurement: "provider usage",
+      historyWindow: 0
+    });
+    const summaryOnly = await prepareSaddleContextForTurn({
+      agentHouse,
+      sessionName: "coding",
+      backend: "zai",
+      model: "glm-5.3-flash",
+      contextWindow: 262144,
+      systemPrompt: "Coding agent",
+      userInput: "Continue the 2008 month reads.",
+      loadHistory: async ({ historyWindow }) => {
+        assert.equal(historyWindow, 0);
+        return { messages: [] };
+      },
+      summarize: async () => assert.fail("summary-only context should not reuse stale provider usage")
+    });
+    assert.equal(summaryOnly.compacted, false);
+    assert.equal(summaryOnly.historyWindow, 0);
+    assert.equal(summaryOnly.pressure.source, "conservative estimate");
+    assert.ok(summaryOnly.pressure.ratio < 0.8);
+  } finally {
+    await fs.rm(agentHouse, { recursive: true, force: true });
+  }
+});

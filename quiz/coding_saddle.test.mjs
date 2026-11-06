@@ -603,6 +603,7 @@ test("coding saddle builds a Pyash mind call with backend and session context", 
   assert.equal(sentence.fromtext.name, "session name coding");
   assert.equal(sentence.by.num, 12);
   assert.deepEqual(sentence.vyah.ve.values, ["stream"]);
+  assert.equal(buildSaddleMindSentence({ input: "continue from the summary", historyWindow: 0 }).by.num, 0);
 });
 
 test("coding saddle delegates turns to the existing mind engine", async () => {
