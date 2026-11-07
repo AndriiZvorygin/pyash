@@ -54,7 +54,25 @@ test("PyAC catalogs retain executable and unsupported semantic records", () => {
   assert.match(database.catalog.records[1].error.message, /numeric-plus/iu);
 });
 
-test("PyAC keeps vector and date sentences explicitly unsupported", () => {
+test("PyAC records vector and date literals as executable", () => {
+  const database = buildVliwDatabase([
+    parse("ob ve num 1 2 3 be vector ya"),
+    parse("ob date 2025-05-01 be date ya")
+  ]);
+
+  assert.deepEqual(database.catalog.records.map((record) => record.status), [
+    "executable",
+    "executable"
+  ]);
+  assert.deepEqual(database.catalog.records.map((record) => record.semantic), [
+    "vector",
+    "date"
+  ]);
+});
+
+test("PyAC rejects vector and date sentences the codelet cannot carry", () => {
+  // The legacy format has no slot for the `exists` keyword, so a declared
+  // vector or date is written without it.
   const database = buildVliwDatabase([
     parse("exists su name values ob ve num 1 2 3 be vector ya"),
     parse("exists su name start ob date 2025-05-01 be date ya")
@@ -66,23 +84,26 @@ test("PyAC keeps vector and date sentences explicitly unsupported", () => {
   ]);
   assert.deepEqual(database.catalog.records.map((record) => record.verb), ["vector", "date"]);
   assert.deepEqual(database.catalog.records.map((record) => record.error.code), [
-    "unsupported-vector",
-    "unsupported-date"
+    "unsupported-sentence",
+    "unsupported-sentence"
   ]);
 });
 
-test("PyAC keeps unproven arithmetic domains explicitly unsupported", () => {
+test("PyAC records the proven arithmetic domains as executable", () => {
   const database = buildVliwDatabase([
     parse("ob num 2 be invert do"),
     parse("ob num 2 from num 3 be exponential do"),
     parse("ob num 9 from num 4 be remains do")
   ]);
 
-  assert.deepEqual(database.catalog.records.map((record) => record.error.code), [
-    "unsupported-invert",
-    "unsupported-exponential",
-    "unsupported-remains"
-  ]);
+  assert.deepEqual(
+    database.catalog.records.map((record) => [record.status, record.semantic]),
+    [
+      ["executable", "numeric-invert"],
+      ["executable", "numeric-arithmetic"],
+      ["executable", "numeric-arithmetic"]
+    ]
+  );
 });
 
 test("PyAC queries select semantic, case, word, and value indexes", () => {

@@ -16,7 +16,34 @@ const OPERATOR_WORDS = Object.freeze({
   subtract: 0xabd2,
   multiply: 0xec90,
   divide: 0x8893,
-  xor: 0xa810
+  xor: 0xa810,
+  exponential: 0x8c29,
+  remains: 0xe82a
+});
+
+// Which case carries the right operand. `to` is the right operand for the
+// four operators that write their result somewhere else; `from` and `by` are
+// the right operand for the two whose `to` is the result target.
+const OPERATOR_ROLES = Object.freeze({
+  plus: Object.freeze(["to", "from", "with"]),
+  subtract: Object.freeze(["to", "from", "with"]),
+  multiply: Object.freeze(["to", "from", "with"]),
+  divide: Object.freeze(["to", "from", "with"]),
+  xor: Object.freeze(["to", "from", "with"]),
+  exponential: Object.freeze(["from", "by"]),
+  remains: Object.freeze(["from", "by"])
+});
+
+// The role the decoder reports, so the decoded sentence names the same case
+// the encoder read.
+const OPERATOR_CANONICAL_ROLE = Object.freeze({
+  plus: "to",
+  subtract: "to",
+  multiply: "to",
+  divide: "to",
+  xor: "to",
+  exponential: "from",
+  remains: "from"
 });
 
 const OPERATOR_BY_WORD = new Map(
@@ -68,11 +95,14 @@ function exactKeys(value, expected, role) {
 }
 
 function operandRole(sentence) {
-  const roles = ["to", "from", "with"].filter((role) => sentence[role] !== undefined);
-  if (roles.length !== 1) {
-    throw encodingError("unsupported-sentence", "numeric arithmetic requires one right operand", { roles });
+  const roles = OPERATOR_ROLES[sentence?.be] ?? [];
+  const present = roles.filter((role) => sentence[role] !== undefined);
+  if (present.length !== 1) {
+    throw encodingError("unsupported-sentence", "numeric arithmetic requires one right operand", {
+      roles: present
+    });
   }
-  return roles[0];
+  return present[0];
 }
 
 export function normalizeNumericArithmeticSentence(sentence) {
@@ -195,8 +225,13 @@ export function decodeNumericArithmeticCodelet(input) {
     mood: "do",
     be,
     ob: { num: left },
-    to: { num: right }
+    [OPERATOR_CANONICAL_ROLE[be] ?? "to"]: { num: right }
   };
+}
+
+function saturate(value) {
+  if (!Number.isFinite(value)) return 0xffff;
+  return Math.min(Math.max(Math.trunc(value), 0), 0xffff);
 }
 
 function calculate(be, left, right) {
@@ -208,14 +243,20 @@ function calculate(be, left, right) {
     return Math.trunc(left / right);
   }
   if (be === "xor") return left ^ right;
+  if (be === "exponential") return saturate(left ** right);
+  if (be === "remains") {
+    if (right === 0) throw encodingError("division-by-zero", "numeric remainder cannot divide by zero");
+    return left % right;
+  }
   throw encodingError("unsupported-operator", `numeric operator ${be} is unsupported`);
 }
 
 export async function executeNumericArithmeticCodelet(input) {
   const sentence = decodeNumericArithmeticCodelet(input);
+  const role = OPERATOR_CANONICAL_ROLE[sentence.be] ?? "to";
   return {
     su: { name: "result" },
-    ob: { num: calculate(sentence.be, sentence.ob.num, sentence.to.num) },
+    ob: { num: calculate(sentence.be, sentence.ob.num, sentence[role].num) },
     be: "number",
     mood: "ya"
   };

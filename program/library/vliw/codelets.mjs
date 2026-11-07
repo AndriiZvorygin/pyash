@@ -7,6 +7,24 @@ import {
 
 export const CODELET_WORD_COUNT = 16;
 
+// The head word is the legacy index: bit 0 says whether the vector completes
+// the codelet, and the remaining bits mark the phrase-closing case words and
+// the codelet-ending mood words. `lwonprom/program/compile.c` reads a slot as
+// a boundary when its bit equals bit 0, so the head carries the completion bit
+// and one bit per boundary slot.
+export const INDEX_COMPLETION_BIT = 0x0001;
+
+export function indexWordFor(boundarySlots) {
+  let word = INDEX_COMPLETION_BIT;
+  for (const slot of boundarySlots) {
+    if (!Number.isInteger(slot) || slot < 1 || slot >= CODELET_WORD_COUNT) {
+      throw codeletError("invalid-codelet", "index boundary slot is outside the codelet", { slot });
+    }
+    word |= 1 << slot;
+  }
+  return word;
+}
+
 export class VliwCodeletError extends Error {
   constructor(code, message, details = {}) {
     super(message);

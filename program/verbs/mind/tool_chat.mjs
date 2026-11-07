@@ -26,6 +26,23 @@ function buildPromptText(messages) {
   return lines.join("\n");
 }
 
+function isZaiPromptLengthError(error) {
+  return /(?:code\s*=\s*1261|prompt exceeds max length)/iu.test(String(error?.message ?? error));
+}
+
+function trimOldestHistoryMessages(messages, start, end) {
+  const count = Math.max(0, end - start);
+  if (!count) return { removed: 0, end };
+
+  let removeCount = Math.max(1, Math.ceil(count / 2));
+  if (removeCount < count && messages[start + removeCount]?.role !== "user") {
+    const nextUser = messages.findIndex((message, index) => index >= start + removeCount && index < end && message?.role === "user");
+    removeCount = nextUser >= 0 ? nextUser - start : count;
+  }
+  messages.splice(start, removeCount);
+  return { removed: removeCount, end: end - removeCount };
+}
+
 async function callStreamingToolTurn({ backendName, payload, onAssistantDelta, onToolCall } = {}) {
   const stream = await callMindBackendStream({ backendName, payload });
   const filename = stream?.ob?.filename ?? stream?.result?.ob?.filename ?? stream?.result?.filename;
@@ -256,7 +273,9 @@ export async function runToolChat({
   onUsage,
   saddlePlanTool,
   stream = false,
-  checkInterrupted
+  checkInterrupted,
+  callBackend = callMindBackend,
+  callStream = callStreamingToolTurn
 } = {}) {
   const applySampling = (payload) => {
     if (!payload || typeof payload !== "object") return;
@@ -304,7 +323,9 @@ export async function runToolChat({
   if (resolvedConfigPrompt) messages.push({ role: "system", content: resolvedConfigPrompt });
   if (toolBlock) messages.push({ role: "system", content: toolBlock });
   if (tools?.length) messages.push({ role: "system", content: buildToolUseDirective(tools) });
+  const historyStart = messages.length;
   if (historyMessages.length) messages.push(...historyMessages);
+  let historyEnd = messages.length;
   const userContent = [callPrompt, inputText.trim()].filter(Boolean).join("\n\n");
   const userMessage = { role: "user", content: userContent };
   if (visionInputs.length && modelLooksVisionCapable(model)) {
@@ -358,41 +379,64 @@ export async function runToolChat({
     return requestPayload;
   };
 
-  const requestModel = async (requestPayload) => {
-    recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
-    debugMind("request", requestPayload);
+  const requestModel = async (initialPayload) => {
+    let requestPayload = initialPayload;
+    let removedHistoryMessages = 0;
     const mockResponse = nextMockResponse();
-    let response;
-    if (mockResponse) {
-      if (typeof mockResponse === "string") {
-        try {
-          response = JSON.parse(mockResponse);
-        } catch {
-          response = { message: { content: mockResponse } };
+    for (;;) {
+      recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
+      debugMind("request", requestPayload);
+      let response;
+      try {
+        if (mockResponse) {
+          if (typeof mockResponse === "string") {
+            try {
+              response = JSON.parse(mockResponse);
+            } catch {
+              response = { message: { content: mockResponse } };
+            }
+          } else {
+            response = mockResponse;
+          }
+        } else {
+          if (!backendName) {
+            throwErrorSentence({
+              name: "mind backend missing",
+              message: "mind backend missing for chat/tooling request",
+              from: { name: "mind" },
+              raw: { requestPayload }
+            });
+          }
+          response = stream === true
+            ? await callStream({ backendName, payload: requestPayload, onAssistantDelta, onToolCall })
+            : await callBackend({ backendName, payload: requestPayload, debug: mindDebug });
         }
-      } else {
-        response = mockResponse;
-      }
-    } else {
-      if (!backendName) {
-        throwErrorSentence({
-          name: "mind backend missing",
-          message: "mind backend missing for chat/tooling request",
-          from: { name: "mind" },
-          raw: { requestPayload }
+      } catch (error) {
+        if (backendName !== "zai command mind" || !isZaiPromptLengthError(error)) throw error;
+        const trimmed = trimOldestHistoryMessages(messages, historyStart, historyEnd);
+        if (!trimmed.removed) {
+          const promptBytes = Buffer.byteLength(JSON.stringify({ messages: requestPayload.messages, tools: requestPayload.tools }), "utf8");
+          throw new Error(`${error.message}; retried after removing ${removedHistoryMessages} older conversation messages, but the remaining current-turn context, system instructions, and tool schemas still exceed the provider limit (messages and tools: about ${promptBytes} bytes)`);
+        }
+        historyEnd = trimmed.end;
+        removedHistoryMessages += trimmed.removed;
+        await emitToolCall({
+          stage: "context_compacted",
+          toolName: "Z.AI prompt limit",
+          toolText: `Removed ${removedHistoryMessages} oldest saved conversation messages after provider rejected an oversized prompt; current request retained.`,
+          providerHistoryWindow: Math.ceil((historyEnd - historyStart) / 2)
         });
+        requestPayload = buildRequestPayload();
+        continue;
       }
-      response = stream === true
-        ? await callStreamingToolTurn({ backendName, payload: requestPayload, onAssistantDelta, onToolCall })
-        : await callMindBackend({ backendName, payload: requestPayload, debug: mindDebug });
+      onUsage?.(response?.usage ?? response?.metadata);
+      recordMindJson({ targetName: mindName, label: "response", payload: stripContext(response) });
+      if (mindDebug) {
+        // eslint-disable-next-line no-console
+        console.error(`[mind debug] ${JSON.stringify({ label: "response", hasToolCalls: Array.isArray(response?.message?.tool_calls), contentLength: (response?.message?.content ?? "").length })}`);
+      }
+      return response;
     }
-    onUsage?.(response?.usage ?? response?.metadata);
-    recordMindJson({ targetName: mindName, label: "response", payload: stripContext(response) });
-    if (mindDebug) {
-      // eslint-disable-next-line no-console
-      console.error(`[mind debug] ${JSON.stringify({ label: "response", hasToolCalls: Array.isArray(response?.message?.tool_calls), contentLength: (response?.message?.content ?? "").length })}`);
-    }
-    return response;
   };
 
   while (turns < maxToolTurns) {

@@ -10,6 +10,7 @@ import { saddleSessionProfileKey } from "./coding_saddle_state.mjs";
 
 export const SADDLE_COMPACTION_THRESHOLD = 0.8;
 export const SADDLE_COMPACTION_RECENT_PAIRS = 12;
+export const SADDLE_DEFAULT_HISTORY_PAIRS = 50;
 
 const CONTEXT_FACTS = {
   summary: "coding saddle context summary",
@@ -17,6 +18,7 @@ const CONTEXT_FACTS = {
   contextBudget: "coding saddle context budget",
   measurement: "coding saddle context measurement",
   historyWindow: "coding saddle context history window",
+  providerHistoryWindow: "coding saddle provider history window",
   compactedAt: "coding saddle context compacted timestamp"
 };
 
@@ -73,7 +75,7 @@ function makeFact(name, value, kind = "text") {
 }
 
 export async function readSaddleContextCheckpoint(filename) {
-  const state = { summary: "", lastInputTokens: null, contextBudget: null, measurement: "", historyWindow: SADDLE_COMPACTION_RECENT_PAIRS, compactedAt: "" };
+  const state = { summary: "", lastInputTokens: null, contextBudget: null, measurement: "", historyWindow: SADDLE_COMPACTION_RECENT_PAIRS, providerHistoryWindow: null, compactedAt: "" };
   let source;
   try {
     source = await fs.readFile(filename, "utf8");
@@ -91,6 +93,10 @@ export async function readSaddleContextCheckpoint(filename) {
       state.historyWindow = asNonNegativeInteger(value);
       continue;
     }
+    if (valueName === "providerHistoryWindow") {
+      state.providerHistoryWindow = asNonNegativeInteger(value);
+      continue;
+    }
     if (valueName === "lastInputTokens" || valueName === "contextBudget") {
       state[valueName] = asPositiveInteger(value);
     } else {
@@ -98,15 +104,16 @@ export async function readSaddleContextCheckpoint(filename) {
     }
   }
   state.historyWindow = Math.min(SADDLE_COMPACTION_RECENT_PAIRS, state.historyWindow ?? SADDLE_COMPACTION_RECENT_PAIRS);
+  if (state.providerHistoryWindow !== null) state.providerHistoryWindow = Math.min(SADDLE_DEFAULT_HISTORY_PAIRS, state.providerHistoryWindow);
   return state;
 }
 
 export async function writeSaddleContextCheckpoint(filename, state = {}) {
   const lines = [];
-  for (const key of ["summary", "lastInputTokens", "contextBudget", "measurement", "historyWindow", "compactedAt"]) {
+  for (const key of ["summary", "lastInputTokens", "contextBudget", "measurement", "historyWindow", "providerHistoryWindow", "compactedAt"]) {
     const value = state[key];
     if (value == null || value === "") continue;
-    lines.push(makeFact(CONTEXT_FACTS[key], value, ["lastInputTokens", "contextBudget", "historyWindow"].includes(key) ? "num" : "text"));
+    lines.push(makeFact(CONTEXT_FACTS[key], value, ["lastInputTokens", "contextBudget", "historyWindow", "providerHistoryWindow"].includes(key) ? "num" : "text"));
   }
   const target = path.resolve(filename);
   await fs.mkdir(path.dirname(target), { recursive: true });
