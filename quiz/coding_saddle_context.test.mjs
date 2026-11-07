@@ -56,6 +56,7 @@ test("coding saddle context checkpoints persist as session-isolated Pyash senten
       contextBudget: 10000,
       measurement: "provider usage",
       historyWindow: 12,
+      providerHistoryWindow: 4,
       compactedAt: "2026-11-03T12:00:00.000Z"
     };
     await writeSaddleContextCheckpoint(first, checkpoint);
@@ -65,7 +66,8 @@ test("coding saddle context checkpoints persist as session-isolated Pyash senten
       lastInputTokens: null,
       contextBudget: null,
       measurement: "",
-      historyWindow: 50,
+      historyWindow: 12,
+      providerHistoryWindow: null,
       compactedAt: ""
     });
     assert.match(await fs.readFile(first, "utf8"), /^su name coding saddle context summary/m);
@@ -74,11 +76,11 @@ test("coding saddle context checkpoints persist as session-isolated Pyash senten
   }
 });
 
-test("coding saddle persists a provider-reduced history window without requiring a summary", async () => {
+test("coding saddle persists provider history caps separately from compaction history", async () => {
   const agentHouse = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-history-cap-"));
   const filename = saddleContextCheckpointPath({ agentHouse, sessionName: "coding" });
   try {
-    await writeSaddleContextCheckpoint(filename, { historyWindow: 4 });
+    await writeSaddleContextCheckpoint(filename, { providerHistoryWindow: 4 });
     const requestedWindows = [];
     const context = await prepareSaddleContextForTurn({
       agentHouse,
@@ -96,6 +98,8 @@ test("coding saddle persists a provider-reduced history window without requiring
     });
     assert.deepEqual(requestedWindows, [4]);
     assert.equal(context.historyWindow, 4);
+    assert.equal(context.providerHistoryWindow, 4);
+    assert.equal(context.checkpoint.historyWindow, 12);
   } finally {
     await fs.rm(agentHouse, { recursive: true, force: true });
   }

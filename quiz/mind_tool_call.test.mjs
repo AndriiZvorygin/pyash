@@ -332,7 +332,7 @@ test("Z.AI prompt-length rejection retries after trimming old history and keeps 
   assert.ok(requests.at(-1).messages.some((message) => message.role === "user" && message.content.includes("Who is the biggest billionaire with C?")));
   assert.equal(events.filter((event) => event.stage === "context_compacted").length, requests.length - 1);
   assert.match(events.at(-1).toolText, /current request retained/u);
-  assert.equal(events.at(-1).historyWindow, 1);
+  assert.equal(events.at(-1).providerHistoryWindow, 1);
 });
 
 test("Z.AI reports when prompt limits persist after all saved history is removed", async () => {

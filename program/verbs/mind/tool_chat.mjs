@@ -424,7 +424,7 @@ export async function runToolChat({
           stage: "context_compacted",
           toolName: "Z.AI prompt limit",
           toolText: `Removed ${removedHistoryMessages} oldest saved conversation messages after provider rejected an oversized prompt; current request retained.`,
-          historyWindow: Math.ceil((historyEnd - historyStart) / 2)
+          providerHistoryWindow: Math.ceil((historyEnd - historyStart) / 2)
         });
         requestPayload = buildRequestPayload();
         continue;
