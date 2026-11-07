@@ -10,6 +10,7 @@ import { saddleSessionProfileKey } from "./coding_saddle_state.mjs";
 
 export const SADDLE_COMPACTION_THRESHOLD = 0.8;
 export const SADDLE_COMPACTION_RECENT_PAIRS = 12;
+export const SADDLE_DEFAULT_HISTORY_PAIRS = 50;
 
 const CONTEXT_FACTS = {
   summary: "coding saddle context summary",
@@ -73,7 +74,7 @@ function makeFact(name, value, kind = "text") {
 }
 
 export async function readSaddleContextCheckpoint(filename) {
-  const state = { summary: "", lastInputTokens: null, contextBudget: null, measurement: "", historyWindow: SADDLE_COMPACTION_RECENT_PAIRS, compactedAt: "" };
+  const state = { summary: "", lastInputTokens: null, contextBudget: null, measurement: "", historyWindow: SADDLE_DEFAULT_HISTORY_PAIRS, compactedAt: "" };
   let source;
   try {
     source = await fs.readFile(filename, "utf8");
@@ -97,7 +98,7 @@ export async function readSaddleContextCheckpoint(filename) {
       state[valueName] = String(value ?? "");
     }
   }
-  state.historyWindow = Math.min(SADDLE_COMPACTION_RECENT_PAIRS, state.historyWindow ?? SADDLE_COMPACTION_RECENT_PAIRS);
+  state.historyWindow = Math.min(SADDLE_DEFAULT_HISTORY_PAIRS, state.historyWindow ?? SADDLE_DEFAULT_HISTORY_PAIRS);
   return state;
 }
 

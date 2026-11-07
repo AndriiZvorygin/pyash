@@ -71,7 +71,8 @@ import {
   saddleContextCheckpointPath,
   shouldCompactSaddleContext,
   writeSaddleContextCheckpoint,
-  SADDLE_COMPACTION_RECENT_PAIRS
+  SADDLE_COMPACTION_RECENT_PAIRS,
+  SADDLE_DEFAULT_HISTORY_PAIRS
 } from "../program/agent/coding_saddle_context.mjs";
 import { formatMindUsage, normalizeMindUsage, sumMindUsages } from "../program/verbs/mind/usage.mjs";
 import {
@@ -198,7 +199,7 @@ export async function prepareSaddleContextForTurn({
     : isLocalModelBackend(backend) ? CONSERVATIVE_LOCAL_CONTEXT_BUDGET : null;
   const activeWindow = checkpoint.summary
     ? Math.min(SADDLE_COMPACTION_RECENT_PAIRS, checkpoint.historyWindow ?? SADDLE_COMPACTION_RECENT_PAIRS)
-    : 50;
+    : Math.min(SADDLE_DEFAULT_HISTORY_PAIRS, checkpoint.historyWindow ?? SADDLE_DEFAULT_HISTORY_PAIRS);
   const recent = await loadHistory({ agentHouse, sessionName, sessionFile, historyWindow: activeWindow });
   const estimatedInputTokens = estimateSaddleInputTokens({
     messages: recent.messages,
@@ -256,7 +257,7 @@ export async function prepareSaddleContextForTurn({
     filename,
     checkpoint: next,
     summary: next.summary,
-    historyWindow: next.summary ? next.historyWindow : 50,
+    historyWindow: next.historyWindow ?? SADDLE_DEFAULT_HISTORY_PAIRS,
     pressure,
     compacted: Boolean(next.compactedAt && next.compactedAt !== checkpoint.compactedAt)
   };
@@ -1669,10 +1670,21 @@ async function main() {
           } catch (error) {
             writeLine(`[trace recording failed] ${error?.message ?? error}`);
           }
-          if (event?.stage === "call" || event?.stage === "result" || event?.stage === "ratify") {
+          if (event?.stage === "call" || event?.stage === "result" || event?.stage === "ratify" || event?.stage === "context_compacted") {
+            if (event?.stage === "context_compacted" && contextTurn) {
+              const suggestedWindow = Number(event.historyWindow);
+              if (Number.isSafeInteger(suggestedWindow) && suggestedWindow >= 0) {
+                contextTurn.historyWindow = Math.min(contextTurn.historyWindow, suggestedWindow);
+                config.sessionHistoryWindow = contextTurn.historyWindow;
+              }
+            }
             responseStream = null;
             responseSegmentText = "";
-            writeLine(`${saddleToolEventLabel(event)}${event.toolText ? `: ${String(event.toolText).slice(0, 400)}` : ""}`);
+            if (event?.stage === "context_compacted") {
+              writeLine(`[prompt trimmed] ${String(event.toolText ?? "").slice(0, 400)}`);
+            } else {
+              writeLine(`${saddleToolEventLabel(event)}${event.toolText ? `: ${String(event.toolText).slice(0, 400)}` : ""}`);
+            }
           }
         },
         onFollowup: (assessment) => {

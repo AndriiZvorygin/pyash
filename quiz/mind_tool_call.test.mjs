@@ -288,6 +288,106 @@ test("mind tool chat gives models readable errors instead of Pyash protocol sent
   assert.doesNotMatch(secondPrompt, /call: be_/);
 });
 
+test("Z.AI prompt-length rejection retries after trimming old history and keeps the active request", async () => {
+  const historyMessages = Array.from({ length: 8 }, (_, index) => ({
+    role: index % 2 === 0 ? "user" : "assistant",
+    content: `saved exchange ${index}`
+  }));
+  const requests = [];
+  const events = [];
+  const responseText = await runToolChat({
+    sentence: parse('be write ob text "question" for name helper to name text helper-out do'),
+    ob: {},
+    mindName: "helper",
+    model: "glm-5.3-flash",
+    dialogue: "helper prompt-size test",
+    callPrompt: "Who is the biggest billionaire with C?",
+    resolvedConfigPrompt: "Answer the current user using available tools.",
+    historyMessages,
+    toolMapName: "test tools",
+    toolMap: new Map(),
+    tools: [{ type: "function", function: { name: "be_read_from_filename" } }],
+    toolBlock: "TOOLS: be read from filename",
+    backendName: "zai command mind",
+    ollamaHost: "https://api.z.ai/api/coding/paas/v4",
+    reasoningEffort: "low",
+    mindDebug: false,
+    debugMind: () => {},
+    stream: true,
+    inputs: { inputText: "Who is the biggest billionaire with C?" },
+    onToolCall: async (event) => events.push(event),
+    callStream: async ({ payload }) => {
+      requests.push(payload);
+      const activeHistory = payload.messages.filter((message) => /^saved exchange /u.test(message.content ?? ""));
+      if (activeHistory.length > 2) {
+        throw new Error("Z.AI Coding Plan request failed: status=400 code=1261 error=Prompt exceeds max length");
+      }
+      return { message: { role: "assistant", content: "I will check the current candidates." } };
+    }
+  });
+
+  assert.equal(responseText, "I will check the current candidates.");
+  assert.ok(requests.length >= 2);
+  assert.equal(requests.at(-1).messages.filter((message) => /^saved exchange /u.test(message.content ?? "")).length, 2);
+  assert.ok(requests.at(-1).messages.some((message) => message.role === "user" && message.content.includes("Who is the biggest billionaire with C?")));
+  assert.equal(events.filter((event) => event.stage === "context_compacted").length, requests.length - 1);
+  assert.match(events.at(-1).toolText, /current request retained/u);
+  assert.equal(events.at(-1).historyWindow, 1);
+});
+
+test("Z.AI reports when prompt limits persist after all saved history is removed", async () => {
+  await assert.rejects(runToolChat({
+    sentence: parse('be write ob text "question" for name helper to name text helper-out do'),
+    ob: {},
+    mindName: "helper",
+    model: "glm-5.3-flash",
+    dialogue: "helper irreducible prompt test",
+    callPrompt: "Keep this active request.",
+    resolvedConfigPrompt: "System instructions.",
+    historyMessages: [{ role: "user", content: "old" }, { role: "assistant", content: "history" }],
+    toolMapName: "test tools",
+    toolMap: new Map(),
+    tools: [{ type: "function", function: { name: "be_read_from_filename" } }],
+    toolBlock: "TOOLS: read",
+    backendName: "zai command mind",
+    mindDebug: false,
+    debugMind: () => {},
+    stream: false,
+    inputs: { inputText: "Keep this active request." },
+    callBackend: async () => {
+      throw new Error("Z.AI Coding Plan request failed: status=400 code=1261 error=Prompt exceeds max length");
+    }
+  }), /retried after removing 2 older conversation messages, but the remaining current-turn context, system instructions, and tool schemas still exceed the provider limit/u);
+});
+
+test("prompt-length recovery does not change non-Z.AI backend behavior", async () => {
+  let calls = 0;
+  await assert.rejects(runToolChat({
+    sentence: parse('be write ob text "question" for name helper to name text helper-out do'),
+    ob: {},
+    mindName: "helper",
+    model: "example-model",
+    dialogue: "helper non-ZAI prompt limit test",
+    callPrompt: "Keep this active request.",
+    resolvedConfigPrompt: "System instructions.",
+    historyMessages: [{ role: "user", content: "old" }],
+    toolMapName: "test tools",
+    toolMap: new Map(),
+    tools: [{ type: "function", function: { name: "be_read_from_filename" } }],
+    toolBlock: "TOOLS: read",
+    backendName: "openai command mind",
+    mindDebug: false,
+    debugMind: () => {},
+    stream: false,
+    inputs: { inputText: "Keep this active request." },
+    callBackend: async () => {
+      calls += 1;
+      throw new Error("provider request failed: status=400 code=1261 error=Prompt exceeds max length");
+    }
+  }), /Prompt exceeds max length/u);
+  assert.equal(calls, 1);
+});
+
 test("runtime status tool receives the current model context", async () => {
   forget();
   resetMindLogs();
