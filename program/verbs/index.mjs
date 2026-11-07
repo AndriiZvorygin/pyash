@@ -47,6 +47,7 @@ import health, { signatures as healthSignatures } from "./health.mjs";
 import status, { signatures as statusSignatures } from "./status.mjs";
 import go, { signatures as goSignatures } from "./go.mjs";
 import copy, { signatures as copySignatures } from "./copy.mjs";
+import clusterCompress, { signatures as clusterCompressSignatures } from "./cluster_compress.mjs";
 import directory, { signatures as directorySignatures } from "./directory.mjs";
 import exists, { signatures as existsSignatures } from "./exists.mjs";
 import ecology, { signatures as ecologySignatures } from "./ecology.mjs";
@@ -156,6 +157,7 @@ export {
   status,
   go,
   copy,
+  clusterCompress,
   wait,
   sleep,
   session,
@@ -253,6 +255,7 @@ export const builtInSignatures = [
   ...statusSignatures,
   ...goSignatures,
   ...copySignatures,
+  ...clusterCompressSignatures,
   ...directorySignatures,
   ...existsSignatures,
   ...ecologySignatures,
