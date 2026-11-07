@@ -67,8 +67,11 @@ from filename "archives/site.zim" as wo cluster-compress be read do
 from filename "archives/site.zim" as wo cluster-compress ob text "index.html" be read do
 ```
 
-Search uses the existing `search` verb and requires an indexed ZIM for full-text
-results:
+Search uses Kiwix's `kiwix-search` command and the full-text index embedded in
+the ZIM. The `zimwriterfs` default builds that index. `read` uses OpenZIM's
+`zimdump` to list entries or extract one article directly. For browser-based
+retrieval and interactive search, the optional Kiwix Server serves the same
+ZIM and its embedded index:
 
 ```pyash
 ob text "offline archive" in filename "archives/site.zim" as wo cluster-compress be search do
@@ -77,12 +80,19 @@ ob text "offline archive" in filename "archives/site.zim" as wo cluster-compress
 ## Tools and configuration
 
 Local text and HTML conversion invokes `zimwriterfs` through Pyash `command`.
-Reading uses `zimdump`; searching uses `kiwix-search`. Web capture uses Docker
-with the configured Zimit image, defaulting to `ghcr.io/openzim/zimit`; the
-container must be available locally or Docker must be able to retrieve it.
+Reading uses `zimdump`; searching uses Kiwix's `kiwix-search`. Web capture uses
+Docker with the configured Zimit image, defaulting to `ghcr.io/openzim/zimit`;
+the container must be available locally or Docker must be able to retrieve it.
 The existing command policy classifies archive creation tools as local writers,
 archive inspection/search tools as read-only, and Docker under process control.
 Command policy, timeout, network, and sandbox settings remain authoritative.
+
+Set `PYA_ENABLE_ZIM_TOOLS=truth` and run `npm run setup:zim` to install the
+Debian/Ubuntu host packages and build `pyash/zim-tools:ubuntu-24.04` from
+`containers/zim-tools/Dockerfile`. With the CI variable
+`PYA_ENABLE_ZIM_TOOLS=true`, CI builds the image and runs an actual
+create/read/search smoke test. The integration quiz skips by default, keeping
+normal setup and CI lightweight.
 
 Defaults live in `configure/default.pya`: writer, reader, search tool, Zimit
 image, archive metadata defaults, and the existing `ksus hzip` compound. The

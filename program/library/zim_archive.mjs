@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { remember } from "../remember/index.mjs";
 import { resolveConfigText } from "../configure/env.mjs";
 import { throwErrorSentence } from "../error.mjs";
@@ -195,32 +196,35 @@ function zimwriterfsCommand({ input, output, metadata, illustration, tool }) {
 async function runZimwriterfs(sentence, { inputDirectory, target, metadata, sandbox, rememberFn, runtimeContext }) {
   const tool = configuredTool("zim html folder writer module", "zimwriterfs", rememberFn);
   const illustrationSetting = resolveConfigText("zim archive illustration", { rememberFn });
-  let stage = null;
-  let stagedIllustration = null;
+  const stage = await fs.mkdtemp(path.join(path.dirname(target), ".zim-writer-"));
   try {
-    if (illustrationSetting) {
-      const configuredIllustration = path.resolve(sandbox.runRoot, illustrationSetting);
-      const iconStats = await fs.stat(configuredIllustration).catch(() => null);
-      if (!iconStats?.isFile()) {
-        fail(sentence, "cluster compress configuration invalid", "configured ZIM illustration file is unavailable", { illustration: configuredIllustration });
-      }
-      stage = await fs.mkdtemp(path.join(path.dirname(target), ".zim-writer-"));
-      stagedIllustration = path.join(stage, "illustration.png");
-      await fs.copyFile(configuredIllustration, stagedIllustration);
+    const stagedInput = path.join(stage, "content");
+    await fs.cp(inputDirectory, stagedInput, { recursive: true, errorOnExist: true });
+    const illustration = illustrationSetting
+      ? path.resolve(sandbox.runRoot, illustrationSetting)
+      : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../containers/zim-tools/archive-illustration.png");
+    const iconStats = await fs.stat(illustration).catch(() => null);
+    if (!iconStats?.isFile()) {
+      fail(sentence, "cluster compress configuration invalid", "ZIM illustration file is unavailable", { illustration });
     }
-    const relativeInput = path.relative(sandbox.cwd, inputDirectory) || ".";
+    let iconName = "pyash-archive-illustration.png";
+    for (let suffix = 2; await fs.lstat(path.join(stagedInput, iconName)).then(() => true).catch(() => false); suffix += 1) {
+      iconName = `pyash-archive-illustration-${suffix}.png`;
+    }
+    const stagedIllustration = path.join(stagedInput, iconName);
+    await fs.copyFile(illustration, stagedIllustration);
+    const relativeInput = path.relative(sandbox.cwd, stagedInput) || ".";
     const relativeTarget = path.relative(sandbox.cwd, target);
-    const relativeIllustration = stagedIllustration ? path.relative(sandbox.cwd, stagedIllustration) : null;
     const commandText = zimwriterfsCommand({
       tool,
       input: relativeInput,
       output: relativeTarget,
       metadata,
-      illustration: relativeIllustration
+      illustration: iconName
     });
     return await runCommand(sentence, commandText, "zim html folder writer", { rememberFn, runtimeContext });
   } finally {
-    if (stage) await fs.rm(stage, { recursive: true, force: true });
+    await fs.rm(stage, { recursive: true, force: true });
   }
 }
 

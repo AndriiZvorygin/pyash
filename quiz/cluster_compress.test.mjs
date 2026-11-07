@@ -133,7 +133,9 @@ test("text files and HTML folders convert to ZIM through the existing write and 
     const calls = await fs.readFile(log, "utf8");
     assert.equal((calls.match(/^zimwriterfs /gmu) ?? []).length, 5);
     assert.match(calls, /--welcome=index\.html/u);
+    assert.match(calls, /--illustration=pyash-archive-illustration\.png/u);
     assert.match(calls, /--name=write/u);
+    assert.deepEqual(await fs.readdir(path.join(root, "site")), ["index.html"]);
     assert.ok(await fs.stat(path.join(root, "archives", "text.zim")));
   });
 });

@@ -102,3 +102,24 @@ jobs:
         run: cargo fmt --manifest-path rust/pyac/Cargo.toml -- --check
       - name: Run the crate tests
         run: cargo test --manifest-path rust/pyac/Cargo.toml
+
+  zim-toolchain:
+    name: Optional ZIM toolchain
+    if: vars.PYA_ENABLE_ZIM_TOOLS == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install ZIM tools and build the image
+        env:
+          PYA_ENABLE_ZIM_TOOLS: truth
+        run: npm run setup:zim
+      - name: Verify real archive creation, reading, and search
+        env:
+          PYA_ENABLE_ZIM_TOOLS: truth
+        run: node --test quiz/cluster_compress.test.mjs quiz/cluster_compress_live.test.mjs quiz/zim_tools_setup.test.mjs
