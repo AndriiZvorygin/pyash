@@ -119,3 +119,7 @@ selected entry with `read as cluster-compress`. The server HTTP search endpoint
 searches across the loaded archives. The public browser and search endpoint is
 `https://zim.zvorygin.ca`, reverse-proxied by Caddy to the local Kiwix server;
 the DNS updater includes this hostname in its dual-stack web records.
+The current host library includes `pyash-language-reference.zim`, built from
+the specification index, sentence-and-grammar, core-execution, aspect,
+compositional-cases, Pyac, Pyash design, and glossary documents. The smaller
+hierarchy and ZIM-workflow archives remain separate search results.
