@@ -617,7 +617,47 @@ not enforce a reviewed area-dependency policy. The 45 direct imports in seven
 candidate edge families and two cyclic SCCs are a starting inventory, not a
 pre-approved list of architectural mistakes.
 
-### 3.3 Part of the impression is a measurement artifact
+### 3.3 Candidate GI-OS area model
+
+The GIOS analysis in
+[`pyash-as-gios-foundation.md`](pyash-as-gios-foundation.md) asks which
+capabilities Pyash can provide and what evidence supports them. This section
+adds a complementary repository view: which platform areas provide those
+capabilities, how their contracts meet, and where their implementations and
+tests currently live.
+
+The following is a **proposed logical map**. It distinguishes implemented
+boundaries from proposed ones and records shared source seams explicitly.
+
+| Area | Responsibility | Pyash / Pyac contract surface | Current code anchors | Governing docs and representative quizzes |
+|---|---|---|---|---|
+| Language and execution | Parse sentences, derive signatures, dispatch, preserve memory semantics, and lower supported programs. | Canonical Pyash sentences and paragraphs; `.pyac` represents supported compiled execution while preserving Pyash semantics. | `program/understand/`, `program/bridge/`, `program/remember/`, `program/library/compile/`, `rust/pyac/` | Specs `01`-`06`, `11-modules`, `27-pyash-vliw-isa`; `quiz/core.test.mjs`, `quiz/compile_*`, `quiz/vliw_*` |
+| Capabilities and domain services | Expose composable actions such as command execution, exchange, translation, speech, drawing, and media workflows. | Pyash verb signatures, `.pya` modules, maps, and series; Pyac lowering applies where the operation is supported. | `program/verbs/`, `program/library/`, `program/motor/`, `module/`, `examples/pyash/` | Specs `07`-`12`, `17-content-ingest`, `25-teaching-video`; focused `quiz/*` verb, module, and workflow tests |
+| Agents and work coordination | Manage agent identity, sessions, channels, durable duties, scheduling, recovery, and collaboration. | Pyash sentences and maps for agent, session, channel, and work operations; compiled forms follow the same semantic contract where supported. | `program/agent/`, `program/runtime/work/`, `world/house/` | Specs `18-pyash-agent`, `19-ops-safety`, `24-channel-contract`; `quiz/agent_*`, `quiz/channel_*`, `quiz/runtime/work_*` |
+| Minds and compute resources | Select mind providers and models, allocate local or remote inference capacity, and observe queue and host health. | Pyash mind/configuration/work requests; provider and worker transports are adapters behind those contracts. Pyac applies when mind operations have a supported compiled form. | `program/verbs/mind/`, `program/motor/`, `program/runtime/gpu/`, `configure/`, `world/house/` | Specs `08-tools-and-mcp`, `23-configure`, `26-criterion`; `documentation/reference/gpu-housekeeper-architecture.md`; `quiz/mind_*`, `quiz/runtime/gpu/` |
+| State, knowledge, and provenance | Preserve session and knowledge state, claims and evidence, run records, artifacts, and replay information. | Sentence-native facts, maps, series, and newspaper/artifact sentences; `.pyac` carries supported compiled state effects. | `program/remember/`, `program/library/knowledge_core.mjs`, `program/bridge/exchange.mjs`, `command/run_pya_program.mjs`, `world/newspaper/` | Specs `05-run-recording-and-artifacts`, `06-data-formats`, `18-pyash-agent`; `quiz/remember_persistent.test.mjs`, `quiz/knowledge_core.test.mjs`, `quiz/run_newspaper_*` |
+| Human and agent surfaces | Provide entry points and reusable workflows over platform capabilities. | Pyash statements and `.pya` programs define canonical behavior; CLI and saddle surfaces bind user input to those contracts. `.pyac` carries supported compiled programs. | `program/main.mjs`, `command/`, `module/`, `examples/pyash/`, coding saddle under `program/agent/` | Specs `07-io-and-scripts`, `10-pipelines`, `11-modules`, `19-ops-safety`; `quiz/run_args.test.mjs`, `quiz/module_import_*`, `quiz/coding_saddle*.test.mjs` |
+
+#### Proposed interface rule
+
+1. Public Pyash-facing behavior is specified as Pyash sentences, module
+   declarations, maps, or series. These forms are the canonical service and
+   workflow contracts.
+2. Pyac is the compiled representation for capabilities with a defined Pyac
+   lowering and execution contract. Each supported lowering preserves the
+   source sentence's meaning and observable effects.
+3. JavaScript, C, Rust, HTTP, and provider-specific request shapes describe
+   implementation or transport details. The area map links each to the
+   corresponding Pyash/Pyac contract that agents and workflows compose.
+4. The map marks missing Pyash/Pyac surfaces and compiled coverage as explicit
+   gaps, with supporting evidence and status. It records parity for each
+   lowering that its contract and tests establish.
+
+This rule follows the existing sentence/paragraph ABI and the Pyac lowering
+specification. The Pyac specification limits compiled support to representable,
+proven cases, so the area map preserves that boundary.
+
+### 3.4 Part of the impression is a measurement artifact
 
 This deserves its own section because it would otherwise be repeated.
 
@@ -752,27 +792,34 @@ existing cases and assertions are accounted for; focused and full TAP results
 preserve pass/fail/skip behavior. A line-count target is a review aid, not a
 quality criterion.
 
-### 4.5 Name the areas, and give each one an owner
+### 4.5 Name the areas, and map their contracts
 
 **Change.** Publish an area map — `documentation/reference/repository-areas.md`
-— that lists each area, the code it owns, the specification that governs it,
-the quiz directory that tests it, and its owner. Reuse the existing
-`documentation/reference/spec-implementation-map.md`, which already maps
-contract to implementation, and extend it rather than building a second map.
+— that lists each area's responsibility, Pyash/Pyac contract surface, current
+code anchors, governing specification, representative quizzes, and allowed
+dependency direction. Reuse the existing
+`documentation/reference/spec-implementation-map.md` for contract-to-code
+pointers rather than building a competing implementation map. The proposed
+GI-OS area model above is the review starting point for this inventory.
 
-**Payoff.** This adapts the Fuchsia `OWNERS` idea to this repository. It can
-make the translation, chat, video, web, and GPU areas legible without
-implying that each already has a separate owner or a standalone specification.
+**Payoff.** This adapts Fuchsia's explicit area-boundary discipline to this
+repository. It can make translation, chat, video, web, agent, and GPU areas
+legible while keeping Pyash/Pyac contracts as the public interface. With one
+maintainer, the map records the project maintainer as accountable reviewer;
+dependency rules and focused tests provide the enforceable structure.
 
 **Risk.** Documentation only. It can be wrong without breaking anything,
 which is also its weakness — an area map that nothing enforces will drift.
 It is worth doing *after* 4.2, which makes at least some of the boundaries
-enforceable.
+enforceable. Contract rows must distinguish implemented Pyash/Pyac behavior
+from proposed seams and implementation-specific transports.
 
-**Acceptance criterion.** Every named area has an explicit scope, test
-location, applicable specification (or a recorded gap), and a real owner or
-an explicit unowned status. Do not invent owners or imply every leaf directory
-has a standalone specification.
+**Acceptance criterion.** Every named area has an explicit responsibility,
+Pyash/Pyac contract (or a clearly recorded contract gap), current code
+anchors, test targets, applicable specification (or a recorded gap), and
+allowed dependency direction. The current maintainer is accountable for the
+map; area ownership remains a future option rather than a prerequisite.
+Avoid implying every leaf directory has a standalone specification.
 
 ### 4.6 Separate code and data in the inventory
 
