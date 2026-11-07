@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  namespace: pyash-inference
+  labels:
+    app: ollama
+    pyash.io/managed-by: gpu-housekeeper
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ollama
+  template:
+    metadata:
+      labels:
+        app: ollama
+        pyash.io/managed-by: gpu-housekeeper
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: swac
+      runtimeClassName: nvidia
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: ollama
+          image: liberit/ollama:0.34.1-cuda12.2-sm86-clean
+          imagePullPolicy: Never
+          env:
+            - name: OLLAMA_HOST
+              value: 0.0.0.0:11434
+          ports:
+            - name: api
+              containerPort: 11434
+          resources:
+            requests:
+              nvidia.com/gpu: "1"
+            limits:
+              nvidia.com/gpu: "1"
+          startupProbe:
+            httpGet:
+              path: /api/version
+              port: api
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /api/version
+              port: api
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/version
+              port: api
+            periodSeconds: 20
+            failureThreshold: 3
+          volumeMounts:
+            - name: ollama-data
+              mountPath: /root/.ollama
+            - name: shared-models
+              mountPath: /models
+      volumes:
+        - name: ollama-data
+          hostPath:
+            path: /home/htaf/hven/hmas/ollama_data
+            type: Directory
+        - name: shared-models
+          hostPath:
+            path: /home/htaf/liberit/hmas/models
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama
+  namespace: pyash-inference
+spec:
+  type: NodePort
+  externalTrafficPolicy: Local
+  selector:
+    app: ollama
+  ports:
+    - name: api
+      port: 11434
+      targetPort: api
+      nodePort: 31143

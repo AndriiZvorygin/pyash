@@ -1047,6 +1047,154 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.assertTrue(registry["safe"]["concurrencySafe"])
 
 
+class KubernetesOllamaRuntimeTests(unittest.TestCase):
+  def runtime_entry(self):
+    return {
+      "runtimeName": "ollama",
+      "runtimeMode": "kubernetes-ollama",
+      "actionDriver": "kubernetes",
+      "kubernetesApiUrl": "https://k3s.example:6443",
+      "kubernetesTokenFile": "/run/kubernetes/token",
+      "kubernetesCaFile": "/run/kubernetes/ca.crt",
+      "kubernetesNamespace": "inference",
+      "kubernetesDeployment": "ollama",
+      "kubernetesNodeName": "swac",
+      "kubernetesReadyTimeoutSec": 45,
+      "exclusiveHostGpu": True,
+      "gpuExpected": True,
+      "dischargeKind": "ollama"
+    }
+
+  def test_registry_accepts_kubernetes_ollama_without_docker_container(self):
+    with patch.dict(os.environ, {
+      "GPU_HOUSEKEEPER_RUNTIME_REGISTRY": json.dumps([self.runtime_entry()])
+    }):
+      entry = server.load_runtime_registry()["ollama"]
+    self.assertEqual(entry["containerName"], "")
+    self.assertEqual(entry["actionDriver"], "kubernetes")
+    self.assertEqual(entry["kubernetesNodeName"], "swac")
+    self.assertEqual(entry["kubernetesReadyTimeoutSec"], 45)
+    self.assertTrue(entry["exclusiveHostGpu"])
+
+  def test_kubernetes_status_requires_ready_gpu_deployment_and_ollama_api(self):
+    entry = self.runtime_entry()
+    with patch.object(server.kubernetes_runtime, "runtime_status", return_value={
+      "status": "running", "gpuObserved": True, "nodeName": "swac"
+    }), patch.object(server, "request_ollama_json", return_value={"version": "0.12.0"}), \
+         patch.object(server, "ollama_running_model_status", return_value={"available": True, "models": []}):
+      status = server.parse_runtime_status(entry)
+    self.assertEqual(status["status"], "running")
+    self.assertTrue(status["gpuObserved"])
+    self.assertEqual(status["nodeName"], "swac")
+    self.assertIn("Kubernetes Ollama API running", status["message"])
+
+  def test_kubernetes_status_fails_closed_without_a_gpu_reservation(self):
+    entry = self.runtime_entry()
+    with patch.object(server.kubernetes_runtime, "runtime_status", return_value={
+      "status": "running", "gpuObserved": False, "message": "pod has no GPU claim"
+    }), patch.object(server, "request_ollama_json") as ollama_request:
+      status = server.parse_runtime_status(entry)
+    self.assertEqual(status["status"], "unknown")
+    self.assertFalse(status["gpuObserved"])
+    self.assertIn("GPU claim", status["message"])
+    ollama_request.assert_not_called()
+
+  def test_kubernetes_runtime_actions_scale_only_the_managed_deployment(self):
+    entry = self.runtime_entry()
+    with patch.object(server.kubernetes_runtime, "set_replicas", return_value={"success": True, "status": "starting"}) as scale, \
+         patch.object(server.kubernetes_runtime, "restart", return_value={"success": True, "status": "running"}) as restart, \
+         patch.object(server.kubernetes_runtime, "wait_for_replicas", return_value=True) as wait:
+      started = server.runtime_action({"ollama": entry}, "ollama", "beginAction")
+      stopped = server.runtime_action({"ollama": entry}, "ollama", "stopAction")
+      restarted = server.runtime_action({"ollama": entry}, "ollama", "restartAction")
+    self.assertTrue(started["success"])
+    self.assertTrue(stopped["success"])
+    self.assertEqual(stopped["status"], "stopped")
+    self.assertTrue(restarted["success"])
+    self.assertEqual([call.args[1] for call in scale.call_args_list], [1, 0])
+    wait.assert_called_once_with(entry, 0, 1800)
+    restart.assert_called_once_with(entry, 1800)
+
+  def test_kubernetes_runtime_is_not_a_local_candidate_without_gpu_readiness(self):
+    entry = self.runtime_entry()
+    with patch.object(server, "parse_runtime_status", return_value={
+      "status": "running", "gpuObserved": False, "message": "pod has no GPU claim"
+    }):
+      candidate = server.local_route_state(
+        {"runtimeName": "ollama", "profileName": "qwen3.5:9b"},
+        {"ollama": entry},
+        "swac"
+      )
+    self.assertFalse(candidate["available"])
+    self.assertIn("GPU claim", candidate["reason"])
+
+  def test_exclusive_kubernetes_gpu_blocks_other_local_runtimes_until_stopped(self):
+    registry = {
+      "ollama": self.runtime_entry(),
+      "comfyui": {"runtimeName": "comfyui", "containerName": "comfyui"}
+    }
+    with patch.object(server, "parse_runtime_status", return_value={
+      "status": "stopping", "gpuObserved": False
+    }):
+      candidate = server.local_route_state(
+        {"runtimeName": "comfyui", "profileName": "image"}, registry, "swac"
+      )
+    self.assertFalse(candidate["available"])
+    self.assertIn("GPU reserved by ollama", candidate["reason"])
+
+  def test_other_local_runtime_can_be_considered_after_gpu_reservation_stops(self):
+    registry = {
+      "ollama": self.runtime_entry(),
+      "comfyui": {"runtimeName": "comfyui", "containerName": "comfyui"}
+    }
+    telemetry = {
+      "available": True,
+      "devices": [{
+        "deviceId": "gpu0", "vramTotalMb": 24576,
+        "vramUsedMb": 100, "vramFreeMb": 24476
+      }]
+    }
+    with patch.object(server, "parse_runtime_status", return_value={"status": "stopped"}), \
+         patch.object(server, "parse_nvidia_smi", return_value=telemetry), \
+         patch.object(server, "capacity_plan_for_job", return_value={"decision": "fits"}), \
+         patch.object(server, "local_execution_slot_busy", return_value=False):
+      candidate = server.local_route_state(
+        {"runtimeName": "comfyui", "profileName": "image"}, registry, "swac"
+      )
+    self.assertTrue(candidate["available"])
+
+  def test_peer_route_rejects_kubernetes_ollama_without_gpu_reservation(self):
+    snapshot = {
+      "runtimes": [{
+        "runtimeName": "ollama",
+        "runtimeMode": "kubernetes-ollama",
+        "status": "running",
+        "gpuObserved": False,
+        "message": "pod has no GPU claim"
+      }]
+    }
+    job = {"runtimeName": "ollama", "profileName": "qwen3.5:9b", "jobSpec": {}}
+    with patch.object(server, "peer_request_json", return_value=snapshot):
+      candidate = server.peer_route_candidate("swac", "http://swac:18886", job)
+    self.assertFalse(candidate["available"])
+    self.assertIn("GPU claim", candidate["reason"])
+
+  def test_peer_route_respects_exclusive_kubernetes_gpu_reservation(self):
+    snapshot = {
+      "gpuReservations": [{
+        "runtimeName": "ollama",
+        "status": "running",
+        "exclusiveHostGpu": True
+      }],
+      "runtimes": [{"runtimeName": "comfyui", "status": "running"}]
+    }
+    job = {"runtimeName": "comfyui", "profileName": "image", "jobSpec": {}}
+    with patch.object(server, "peer_request_json", return_value=snapshot):
+      candidate = server.peer_route_candidate("swac", "http://swac:18886", job)
+    self.assertFalse(candidate["available"])
+    self.assertIn("GPU reserved by ollama", candidate["reason"])
+
+
 class HousekeeperAppleSiliconTests(unittest.TestCase):
   def setUp(self):
     self.original_backend = os.environ.get("GPU_HOUSEKEEPER_DEVICE_BACKEND")

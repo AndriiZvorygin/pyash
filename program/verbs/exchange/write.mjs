@@ -11,6 +11,7 @@ import { appendWorldActivity, isWorldToolsActive, resolveWorldAgent, resolveWorl
 import { renderWriteValue, normalizeNewlines } from "./write_helpers.mjs";
 import { startFileTail, makeStreamIncrementalWriter } from "./write_stream.mjs";
 import { resolveKeyboardCommand, sendKeyboardText } from "./write_keyboard.mjs";
+import { writeClusterCompress } from "../../library/zim_archive.mjs";
 
 function reportPostWriteFailure({ target, stage, error }) {
   const detail = String(error?.message ?? error ?? "unknown error");
@@ -18,7 +19,11 @@ function reportPostWriteFailure({ target, stage, error }) {
   console.error(`[write warning] file saved at ${target}; ${stage} failed: ${detail}`);
 }
 
-export default async function write(sentence, { remember: rememberFn = remember } = {}) {
+export default async function write(sentence, { remember: rememberFn = remember, runtimeContext = null } = {}) {
+  const requestedFormat = String(sentence?.as?.wo ?? sentence?.become?.wo ?? sentence?.become?.name ?? "").trim().toLowerCase();
+  if (requestedFormat === "cluster-compress" || requestedFormat === "zim") {
+    return writeClusterCompress(sentence, { remember: rememberFn, runtimeContext });
+  }
   const modifiers = Array.isArray(sentence?.vyah?.ve?.values) ? sentence.vyah.ve.values : [];
   const aspect = getEffectiveVyahAspect(modifiers, { verb: "write", caseKey: "vyah" });
   const aspectKey = aspect === "stream" ? "stream" : "eval";
@@ -308,6 +313,13 @@ export const signatures = [
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "vec", "text"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "vec", "bool"], handler: write },
   { signatureWords: ["be", "write", "ob", "text", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "as", "wo", "cluster-compress", "ob", "text", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "as", "wo", "cluster-compress", "ob", "filename", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "as", "wo", "cluster-compress", "from", "text", "fromstate", "wo", "text", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "as", "wo", "cluster-compress", "from", "filename", "fromstate", "wo", "text", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "as", "wo", "cluster-compress", "from", "filename", "fromstate", "wo", "html", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "as", "wo", "cluster-compress", "from", "filename", "fromstate", "wo", "web", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "as", "wo", "cluster-compress", "from", "filename", "fromstate", "wo", "warc", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "ob", "num", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "ob", "date", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "ob", "bool", "to", "filename"], handler: write },
