@@ -77,6 +77,16 @@ ZIM and its embedded index:
 ob text "offline archive" in filename "archives/site.zim" as wo cluster-compress be search do
 ```
 
+When the search `filename` names a directory, Pyash searches each top-level
+regular `*.zim` file in name order and prefixes each match with its archive
+filename. It does not descend into subdirectories or follow symlinks. This
+supports direct agent retrieval from the shared library:
+
+```pyash
+ob text "offline archive" in filename "world/library/archive" as wo cluster-compress be search do
+from filename "world/library/archive/site.zim" as wo cluster-compress ob text "index.html" be read do
+```
+
 ## Tools and configuration
 
 Local text and HTML conversion invokes `zimwriterfs` through Pyash `command`.
@@ -96,5 +106,11 @@ normal setup and CI lightweight.
 
 Defaults live in `configure/default.pya`: writer, reader, search tool, Zimit
 image, archive metadata defaults, and the existing `ksus hzip` compound. The
-resulting `.zim` remains a file artifact. `containers/kiwix-server/` provides an
-optional loopback-only read-only server for a directory of completed archives.
+resulting `.zim` remains a file artifact. `containers/kiwix-server/` provides a
+read-only server for the shared `world/library/archive/` collection on host port
+8091 over IPv4 and IPv6. Every top-level `*.zim` file in that directory is
+included when the container starts. Add or remove files there and restart the
+service to refresh the collection. Pyash agents can search the collection
+directory with the existing `search as cluster-compress` verb and retrieve a
+selected entry with `read as cluster-compress`. The server HTTP search endpoint
+searches across the loaded archives.

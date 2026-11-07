@@ -1,14 +1,29 @@
 # Kiwix Server
 
-This optional container serves ZIM files from an existing host directory. It
-binds to loopback on port 8080, and mounts the library read-only.
+This container serves the shared Pyash ZIM collection from
+`world/library/archive/`. Every top-level `*.zim` file in that directory is loaded
+when the server starts. The directory is mounted read-only. The server listens
+on host port `8091` over IPv4 and IPv6; port `8080` remains available to other
+local services. Put at least one archive in the collection before starting it.
 
 ```sh
-ZIM_LIBRARY_PATH=/path/to/zim-files docker compose up -d
+docker compose -f containers/kiwix-server/compose.yaml up -d
 ```
 
-Open <http://127.0.0.1:8080/> to browse the library. Keep archive files in the
-chosen host directory and point `ZIM_LIBRARY_PATH` there.
+Open <http://127.0.0.1:8091/> or <http://[::1]:8091/> to browse the library.
+Adding or removing a ZIM means adding or removing a top-level file in
+`world/library/archive/`, then restarting the service so Kiwix reloads the
+collection:
+
+```sh
+docker compose -f containers/kiwix-server/compose.yaml restart
+```
+
+The Kiwix search endpoint is available at
+`http://[::1]:8091/search?pattern=QUERY&format=xml`. Its `pattern` parameter
+searches the loaded collection. Agents can also use Pyash's existing per-archive
+`search as cluster-compress` and `read as cluster-compress` verbs directly on
+files in `world/library/archive/`.
 
 ## Creating and searching archives from Pyash
 

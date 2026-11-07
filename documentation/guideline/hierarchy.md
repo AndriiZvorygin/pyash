@@ -110,6 +110,10 @@ Common compounds
 - `hierarchy/library`  -> `/usr/lib`
 - `hierarchy/sharing`  -> `/usr/share`
 
+World library collections
+- `world/library/archive/` stores shared, searchable ZIM archive artifacts.
+  Kiwix loads each top-level `*.zim` file from this collection at server start.
+
 
 ### Sugar form examples
 

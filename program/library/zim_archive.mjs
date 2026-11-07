@@ -461,6 +461,37 @@ async function resolveZimInput(sentence, rememberFn) {
   return { sandbox, filename: input.path, relative: path.relative(sandbox.cwd, input.path) };
 }
 
+async function resolveZimSearchInputs(sentence, rememberFn) {
+  const sandbox = resolveSandboxSettings({ sentence, rememberFn });
+  const filename = filenameFromSentence(sentence);
+  if (!filename) fail(sentence, "zim archive missing", "ZIM search requires from filename or in filename");
+  const input = await resolveSandboxPath(filename, sandbox, { access: "read", kind: "any" });
+  if (input.error) fail(sentence, "zim archive invalid", input.error, { filename, resolved: input.candidate });
+  const stats = await fs.stat(input.path).catch(() => null);
+  if (stats?.isFile()) {
+    if (path.extname(input.path).toLowerCase() !== ".zim") {
+      fail(sentence, "zim archive invalid", "ZIM search input file must use the .zim extension", { filename: input.path });
+    }
+    return {
+      libraryPath: input.path,
+      isCollection: false,
+      archives: [{ filename: input.path, relative: path.relative(sandbox.cwd, input.path) }]
+    };
+  }
+  if (!stats?.isDirectory()) {
+    fail(sentence, "zim archive invalid", "ZIM search input must be an archive or a directory of archives", { filename: input.path });
+  }
+  const entries = await fs.readdir(input.path, { withFileTypes: true });
+  const archives = [];
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    if (!entry.isFile() || path.extname(entry.name).toLowerCase() !== ".zim") continue;
+    const archivePath = path.join(input.path, entry.name);
+    const resolved = await resolveInputFile(sentence, sandbox, archivePath);
+    archives.push({ filename: resolved.path, relative: path.relative(sandbox.cwd, resolved.path) });
+  }
+  return { libraryPath: input.path, isCollection: true, archives };
+}
+
 export async function readZimArchive(sentence, {
   remember: rememberFn = remember,
   runtimeContext = null
@@ -486,18 +517,35 @@ export async function searchZimArchive(sentence, {
   remember: rememberFn = remember,
   runtimeContext = null
 } = {}) {
-  const { filename, relative } = await resolveZimInput(sentence, rememberFn);
+  const { libraryPath, isCollection, archives } = await resolveZimSearchInputs(sentence, rememberFn);
   const query = String(sentence?.ob?.text ?? rememberFn(sentence?.ob?.name)?.ob?.text ?? "").trim();
   if (!query) fail(sentence, "zim search query missing", "ZIM search requires ob text query");
   const tool = configuredTool("zim archive search module", "kiwix-search", rememberFn);
-  const commandText = [shellArgument(tool), shellArgument(relative), shellArgument(query)].join(" ");
-  const result = await runCommand(sentence, commandText, "zim archive search", { rememberFn, runtimeContext });
-  if (result?.be !== "command" || result?.mood !== "ya") return result;
+  const results = [];
+  let singleArchiveOutput = "";
+  for (const archive of archives) {
+    const commandText = [shellArgument(tool), shellArgument(archive.relative), shellArgument(query)].join(" ");
+    const result = await runCommand(sentence, commandText, "zim archive search", { rememberFn, runtimeContext });
+    if (result?.be !== "command" || result?.mood !== "ya") return result;
+    const text = String(result?.ob?.text ?? "");
+    if (isCollection) {
+      const trimmed = text.trim();
+      if (trimmed) results.push(`${path.basename(archive.filename)}\n${trimmed}`);
+    } else {
+      singleArchiveOutput = text;
+    }
+  }
+  let output = singleArchiveOutput;
+  if (isCollection) {
+    if (archives.length === 0) output = "No ZIM archives found in the selected directory.";
+    else if (results.length === 0) output = `No results found across ${archives.length} ZIM archives.`;
+    else output = results.join("\n");
+  }
   return {
     mood: "ya",
     su: sentence?.to?.name ? { name: sentence.to.name } : (sentence?.su ?? { name: "ZIM search results" }),
-    ob: { text: result?.ob?.text ?? "" },
-    from: { filename },
+    ob: { text: output },
+    from: { filename: libraryPath },
     be: "search"
   };
 }

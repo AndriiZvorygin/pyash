@@ -28,6 +28,12 @@ world/*
 !world/conduct/
 world/conduct/*
 !world/conduct/import.pya
+!world/library/
+world/library/*
+!world/library/.gitkeep
+!world/library/archive/
+world/library/archive/*
+!world/library/archive/.gitkeep
 !world/house/
 world/house/*
 !world/house/base/

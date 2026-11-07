@@ -190,6 +190,29 @@ test("read and search use the existing Pyash verbs for a ZIM archive", async () 
   });
 });
 
+test("search through Pyash accepts a directory and searches its direct ZIM members", async () => {
+  await withZimTools(async (root, log) => {
+    await fs.writeFile(path.join(root, "archives", "first.zim"), "fixture-zim", "utf8");
+    await fs.writeFile(path.join(root, "archives", "second.zim"), "fixture-zim", "utf8");
+    await fs.mkdir(path.join(root, "archives", "nested"));
+    await fs.writeFile(path.join(root, "archives", "nested", "ignored.zim"), "fixture-zim", "utf8");
+    await fs.writeFile(path.join(root, "archives", "ignored.txt"), "not an archive", "utf8");
+
+    const result = await interpret(parse(
+      'ob text "love" in filename "archives" as wo cluster-compress be search do'
+    ));
+
+    assert.equal(result?.be, "search");
+    assert.match(result?.ob?.text ?? "", /first\.zim[\s\S]*article\.html/u);
+    assert.match(result?.ob?.text ?? "", /second\.zim[\s\S]*article\.html/u);
+    assert.doesNotMatch(result?.ob?.text ?? "", /ignored\.zim|ignored\.txt/u);
+    const calls = await fs.readFile(log, "utf8");
+    assert.equal((calls.match(/^kiwix-search /gmu) ?? []).length, 2);
+    assert.match(calls, /kiwix-search archives\/first\.zim love/u);
+    assert.match(calls, /kiwix-search archives\/second\.zim love/u);
+  });
+});
+
 test("archive conversion rejects paths outside the agent working root and unsafe HTML symlinks", async () => {
   await withZimTools(async (root) => {
     const outside = path.join(path.dirname(root), "outside-zim-input.txt");
@@ -201,6 +224,18 @@ test("archive conversion rejects paths outside the agent working root and unsafe
       );
     } finally {
       await fs.rm(outside, { force: true });
+    }
+
+    const outsideLibrary = path.join(path.dirname(root), "outside-zim-library");
+    await fs.mkdir(outsideLibrary);
+    await fs.writeFile(path.join(outsideLibrary, "outside.zim"), "outside", "utf8");
+    try {
+      await assert.rejects(
+        interpret(parse(`ob text "query" in filename ${JSON.stringify(outsideLibrary)} as wo cluster-compress be search do`)),
+        /outside|under the command working directory/u
+      );
+    } finally {
+      await fs.rm(outsideLibrary, { recursive: true, force: true });
     }
 
     const externalTarget = path.join(path.dirname(root), "outside-output.zim");
