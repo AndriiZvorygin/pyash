@@ -54,7 +54,25 @@ test("PyAC catalogs retain executable and unsupported semantic records", () => {
   assert.match(database.catalog.records[1].error.message, /numeric-plus/iu);
 });
 
-test("PyAC keeps vector and date sentences explicitly unsupported", () => {
+test("PyAC records vector and date literals as executable", () => {
+  const database = buildVliwDatabase([
+    parse("ob ve num 1 2 3 be vector ya"),
+    parse("ob date 2025-05-01 be date ya")
+  ]);
+
+  assert.deepEqual(database.catalog.records.map((record) => record.status), [
+    "executable",
+    "executable"
+  ]);
+  assert.deepEqual(database.catalog.records.map((record) => record.semantic), [
+    "vector",
+    "date"
+  ]);
+});
+
+test("PyAC rejects vector and date sentences the codelet cannot carry", () => {
+  // The legacy format has no slot for the `exists` keyword, so a declared
+  // vector or date is written without it.
   const database = buildVliwDatabase([
     parse("exists su name values ob ve num 1 2 3 be vector ya"),
     parse("exists su name start ob date 2025-05-01 be date ya")
@@ -66,8 +84,8 @@ test("PyAC keeps vector and date sentences explicitly unsupported", () => {
   ]);
   assert.deepEqual(database.catalog.records.map((record) => record.verb), ["vector", "date"]);
   assert.deepEqual(database.catalog.records.map((record) => record.error.code), [
-    "unsupported-vector",
-    "unsupported-date"
+    "unsupported-sentence",
+    "unsupported-sentence"
   ]);
 });
 

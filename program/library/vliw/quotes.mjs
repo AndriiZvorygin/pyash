@@ -1,9 +1,15 @@
 import pyashWords from "../pyashWords.json" with { type: "json" };
 
 export const QUOTE_DENOTE = 0x001d;
+export const QUOTE_DENOTE_MASK = 0x001f;
 export const NUMBER_QUOTE_WORD = 0x881d;
 export const LETTER_QUOTE_WORD = 0x081d;
 export const PARAGRAPH_LETTER_QUOTE_WORD = 0x0e1d;
+
+// The legacy quote sorts and thicknesses are normative: `lwonprom/program/pyash.h`
+// fixes the sort denotations and the vector/scalar thickness encodings.
+export const UINT_SORT_DENOTE = 4;
+export const VECTOR_THICK_LONG = 6;
 
 const NAME_LITERAL_MASK = 0x0020;
 const POINTED_MASK = 0x0040;
@@ -21,6 +27,9 @@ const vectorWordCounts = new Map([
   [4, 16],
   [7, 3]
 ]);
+const vectorThicknessByCount = new Map(
+  [...vectorWordCounts].map(([thickness, count]) => [count, thickness])
+);
 const quoteSortNames = new Map([
   [0, "letter"],
   [1, "word"],
@@ -145,19 +154,72 @@ export function decodeQuoteWord(word) {
   return { ...descriptor };
 }
 
+export function uintQuoteWord({ vectorThick = 0, scalarBytes = 2 } = {}) {
+  const scalarThick = scalarByteWidths.indexOf(scalarBytes);
+  if (scalarThick < 0) {
+    throw quoteError("unsupported-quote", "no legacy scalar width matches the requested bytes", {
+      scalarBytes
+    });
+  }
+  if (!Number.isInteger(vectorThick) || vectorThick < 0 || vectorThick > 7) {
+    throw quoteError("unsupported-quote", "no legacy vector thickness matches the requested width", {
+      vectorThick
+    });
+  }
+  return (
+    (UINT_SORT_DENOTE << 13) |
+    (vectorThick << 8) |
+    (scalarThick << 11) |
+    QUOTE_DENOTE
+  );
+}
+
+export function vectorThicknessFor(count) {
+  return vectorThicknessByCount.get(count) ?? VECTOR_THICK_LONG;
+}
+
+export function isUintVectorQuoteWord(word) {
+  if ((word & QUOTE_DENOTE_MASK) !== QUOTE_DENOTE) return false;
+  const header = decodeQuoteHeader(word);
+  if (header.sortName !== "uint" || header.scalarBytes !== 2) return false;
+  return header.vectorThick !== 0;
+}
+
 function dynamicQuoteDescriptor(word) {
   if ((word & 0x001f) !== QUOTE_DENOTE) return null;
   const header = decodeQuoteHeader(word);
-  if (header.vectorWords === null || header.scalarBytes !== 2) return null;
   if (header.sortName === "uint") {
-    return {
-      word,
-      family: "number",
-      payloadWords: header.vectorWords,
-      valueType: "uint16-vector",
-      supported: true
-    };
+    if (header.vectorThick === VECTOR_THICK_LONG) {
+      return {
+        word,
+        family: "number",
+        payloadWords: null,
+        valueType: "uint-vector",
+        supported: true
+      };
+    }
+    if (header.vectorWords === null) return null;
+    if (header.scalarBytes === 2) {
+      return {
+        word,
+        family: "number",
+        payloadWords: header.vectorWords,
+        valueType: header.vectorWords > 1 ? "uint16-vector" : "uint16",
+        supported: true
+      };
+    }
+    if (header.scalarBytes === 4 || header.scalarBytes === 8) {
+      return {
+        word,
+        family: "number",
+        payloadWords: header.vectorWords,
+        valueType: `uint${header.scalarBytes * 8}${header.vectorWords > 1 ? "-vector" : ""}`,
+        supported: true
+      };
+    }
+    return null;
   }
+  if (header.vectorWords === null || header.scalarBytes !== 2) return null;
   if (header.sortName === "letter") {
     return {
       word,
@@ -233,7 +295,7 @@ export function decodeQuote(words, offset = 0) {
   }
 
   let payloadOffset = offset + 1;
-  let payloadWords = descriptor.payloadWords;
+  let elementCount = descriptor.payloadWords;
   let lengthWord;
   if (header.explicitVectorLength) {
     if (payloadOffset >= values.length) {
@@ -243,8 +305,16 @@ export function decodeQuote(words, offset = 0) {
     }
     lengthWord = values[payloadOffset];
     payloadOffset += 1;
-    payloadWords = lengthWord;
+    elementCount = lengthWord;
   }
+  if (!Number.isInteger(elementCount) || elementCount < 1) {
+    throw quoteError("unsupported-quote", `${descriptor.family} quote has an unsupported element count`, {
+      offset,
+      elementCount
+    });
+  }
+  const scalarWords = header.scalarBytes / 2;
+  const payloadWords = elementCount * scalarWords;
   const end = payloadOffset + payloadWords;
   if (end > values.length) {
     throw quoteError("truncated-quote", `${descriptor.family} quote payload is truncated`, {
@@ -258,10 +328,14 @@ export function decodeQuote(words, offset = 0) {
   let value = payload[0];
   if (descriptor.family === "letter" || descriptor.family === "paragraph-letter") {
     value = textValue(payload);
+  } else if (descriptor.family === "number" && elementCount > 1) {
+    value = [];
+    for (let index = 0; index < elementCount; index += 1) {
+      const element = payload.slice(index * scalarWords, (index + 1) * scalarWords);
+      value.push(header.scalarBytes > 2 ? unsignedValue(element, header.scalarBytes) : element[0]);
+    }
   } else if (descriptor.family === "number" && header.scalarBytes > 2) {
     value = unsignedValue(payload, header.scalarBytes);
-  } else if (descriptor.family === "number" && header.vectorWords > 1) {
-    value = payload;
   }
   return {
     ...descriptor,

@@ -44,6 +44,20 @@ import {
   lowerNumericInvertSentence,
   numericInvertCompatibility
 } from "./invert.mjs";
+import {
+  dateCompatibility,
+  decodeDateCodelet,
+  executeDateCodelet,
+  isDateSentence,
+  lowerDateSentence
+} from "./date.mjs";
+import {
+  decodeVectorCodelet,
+  executeVectorCodelet,
+  isVectorSentence,
+  lowerVectorSentence
+} from "./vector.mjs";
+import { isUintVectorQuoteWord } from "./quotes.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { deriveSentenceEffects, scheduleCodeletDependencies } from "./effects.mjs";
 
@@ -56,25 +70,13 @@ function semanticDecode(decoded, semantic, sentence) {
   };
 }
 
-function rejectUnprovenSemanticSentence(sentence) {
-  if (sentence?.be === "vector" && sentence?.ob?.ve !== undefined) {
-    throw new VliwEncodingError(
-      "unsupported-vector",
-      "vector sentence lowering requires a recovered legacy sentence fixture",
-      { sentence }
-    );
-  }
-  if (sentence?.be === "date" && sentence?.ob?.date !== undefined) {
-    throw new VliwEncodingError(
-      "unsupported-date",
-      "date sentence lowering requires a recovered legacy date encoding",
-      { sentence }
-    );
-  }
-}
-
 export function lowerSentence(sentence) {
-  rejectUnprovenSemanticSentence(sentence);
+  if (isDateSentence(sentence)) {
+    return [lowerDateSentence(sentence)];
+  }
+  if (isVectorSentence(sentence)) {
+    return [lowerVectorSentence(sentence)];
+  }
   if (isBooleanLiteralSentence(sentence)) {
     return [lowerBooleanLiteralSentence(sentence)];
   }
@@ -102,6 +104,43 @@ export function lowerParagraph(paragraph) {
 
 export function decodeCodelet(input) {
   const decoded = decodeLegacyCodelet(input);
+  const quoteItem = decoded.items.find((item) => item.kind === "quote");
+  if (quoteItem?.quote.word === dateCompatibility.quote) {
+    try {
+      return semanticDecode(
+        decoded,
+        "date",
+        decodeDateCodelet(decoded.words)
+      );
+    } catch (error) {
+      if (error instanceof VliwEncodingError && error.code === "malformed-codelet") {
+        throw new VliwCodeletError("unsupported-codelet", "date codelet is malformed", {
+          cause: error.code,
+          details: error.details,
+          items: decoded.items
+        });
+      }
+      throw error;
+    }
+  }
+  if (quoteItem && isUintVectorQuoteWord(quoteItem.quote.word)) {
+    try {
+      return semanticDecode(
+        decoded,
+        "vector",
+        decodeVectorCodelet(decoded.words)
+      );
+    } catch (error) {
+      if (error instanceof VliwEncodingError && error.code === "malformed-codelet") {
+        throw new VliwCodeletError("unsupported-codelet", "vector codelet is malformed", {
+          cause: error.code,
+          details: error.details,
+          items: decoded.items
+        });
+      }
+      throw error;
+    }
+  }
   if (decoded.words[0] === namedLiteralCompatibility.head) {
     const namedNominative = decoded.items.find((candidate) => (
       candidate.kind === "word" && candidate.word === booleanLiteralCompatibility.nominativeCase
@@ -271,6 +310,10 @@ export async function executeCodelets(codelets) {
       result = await executeNumericArithmeticCodelet(words);
     } else if (decoded.semantic === "numeric-invert") {
       result = await executeNumericInvertCodelet(words);
+    } else if (decoded.semantic === "date") {
+      result = await executeDateCodelet(words);
+    } else if (decoded.semantic === "vector") {
+      result = await executeVectorCodelet(words);
     } else {
       result = await executeNumericPlusCodelet(words);
     }
