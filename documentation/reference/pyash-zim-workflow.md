@@ -116,4 +116,6 @@ included when the container starts. Add or remove files there and restart the
 service to refresh the collection. Pyash agents can search the collection
 directory with the existing `search as cluster-compress` verb and retrieve a
 selected entry with `read as cluster-compress`. The server HTTP search endpoint
-searches across the loaded archives.
+searches across the loaded archives. The public browser and search endpoint is
+`https://zim.zvorygin.ca`, reverse-proxied by Caddy to the local Kiwix server;
+the DNS updater includes this hostname in its dual-stack web records.
