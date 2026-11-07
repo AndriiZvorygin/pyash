@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional
 from urllib.error import HTTPError, URLError
 from urllib.parse import unquote
 from urllib.request import Request, urlopen
+import kubernetes_runtime
 
 _JOBS: Dict[str, Dict[str, Any]] = {}
 _PROFILES: Dict[str, Dict[str, Any]] = {}
@@ -1128,6 +1129,39 @@ def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str,
       "immediate": False,
       "reason": f"runtime not managed: {runtime_name}"
     }
+  runtime_entry = runtime_registry[runtime_name]
+  for reserved_name, reserved_entry in runtime_registry.items():
+    if reserved_name == runtime_name or not reserved_entry.get("exclusiveHostGpu"):
+      continue
+    try:
+      reservation_status = parse_runtime_status(reserved_entry)
+    except Exception as err:
+      reservation_status = {"status": "unknown", "message": normalize_text(err)}
+    if normalize_text(reservation_status.get("status")).lower() != "stopped":
+      state = normalize_text(reservation_status.get("status")).lower() or "unknown"
+      return {
+        "hostId": host_id,
+        "available": False,
+        "immediate": False,
+        "deviceId": explicit_execution_device_id(job),
+        "reason": (
+          f"GPU reserved by {reserved_name} runtime ({state}); "
+          "other local runtimes are not eligible"
+        )
+      }
+  if normalize_text(runtime_entry.get("actionDriver")).lower() == "kubernetes":
+    try:
+      status = parse_runtime_status(runtime_entry)
+    except Exception as err:
+      status = {"status": "unknown", "message": normalize_text(err)}
+    if status.get("status") != "running" or status.get("gpuObserved") is not True:
+      return {
+        "hostId": host_id,
+        "available": False,
+        "immediate": False,
+        "deviceId": explicit_execution_device_id(job),
+        "reason": status.get("message") or "Kubernetes runtime is not ready with its GPU allocation"
+      }
   telemetry = parse_nvidia_smi()
   devices = telemetry.get("devices") if isinstance(telemetry, dict) else []
   if not isinstance(devices, list):
@@ -1295,6 +1329,27 @@ def peer_route_candidate(
 ) -> Dict[str, Any]:
   snapshot = peer_request_json(peer_url, "/snapshot", timeout_ms=peer_timeout_ms())
   runtime_name = normalize_text(job.get("runtimeName")).lower()
+  reservations = snapshot.get("gpuReservations") if isinstance(snapshot.get("gpuReservations"), list) else []
+  for reservation in reservations:
+    if not isinstance(reservation, dict):
+      continue
+    reserved_runtime = normalize_text(reservation.get("runtimeName")).lower()
+    reservation_status = normalize_text(reservation.get("status")).lower()
+    if (
+      reservation.get("exclusiveHostGpu") is True
+      and reserved_runtime
+      and reserved_runtime != runtime_name
+      and reservation_status != "stopped"
+    ):
+      return {
+        "hostId": peer_host_id,
+        "url": peer_url,
+        "available": False,
+        "reason": (
+          f"peer GPU reserved by {reserved_runtime} runtime ({reservation_status or 'unknown'}); "
+          "other peer runtimes are not eligible"
+        )
+      }
   runtimes = snapshot.get("runtimes") if isinstance(snapshot.get("runtimes"), list) else []
   runtime = next((item for item in runtimes if normalize_text(item.get("runtimeName")).lower() == runtime_name), None)
   if not isinstance(runtime, dict):
@@ -1306,6 +1361,17 @@ def peer_route_candidate(
       "url": peer_url,
       "available": False,
       "reason": f"peer runtime is unavailable: {runtime_name}"
+    }
+  if (
+    runtime_name == "ollama"
+    and normalize_text(runtime.get("runtimeMode")).lower() == "kubernetes-ollama"
+    and runtime.get("gpuObserved") is not True
+  ):
+    return {
+      "hostId": peer_host_id,
+      "url": peer_url,
+      "available": False,
+      "reason": normalize_text(runtime.get("message")) or "peer Kubernetes Ollama pod has no verified GPU allocation"
     }
   if runtime_is_stopped(runtime):
     return {
@@ -1571,6 +1637,17 @@ def make_snapshot(host_id: str) -> Dict[str, Any]:
   if ollama_residency.get("available"):
     sync_ollama_profiles(ollama_residency.get("models", []))
   runtime_statuses = list_runtime_statuses(Handler.runtime_registry) if "Handler" in globals() else []
+  gpu_reservations = [
+    {
+      "runtimeName": normalize_text(item.get("runtimeName")).lower(),
+      "status": normalize_text(item.get("status")).lower() or "unknown",
+      "deviceId": normalize_text(item.get("deviceId")),
+      "exclusiveHostGpu": True
+    }
+    for item in runtime_statuses
+    if item.get("exclusiveHostGpu") is True
+    and normalize_text(item.get("status")).lower() != "stopped"
+  ]
   loading_observations = model_loading_observations()
   call_observations = runtime_call_observations()
   queue_samples = queue_observations()
@@ -1590,6 +1667,10 @@ def make_snapshot(host_id: str) -> Dict[str, Any]:
     "capabilities": {
       "ollamaModelProvisioning": True,
       "ollamaGpuResidencyGuard": True,
+      "kubernetesRuntimeControl": any(
+        normalize_text(item.get("actionDriver")).lower() == "kubernetes"
+        for item in (list(Handler.runtime_registry.values()) if "Handler" in globals() else [])
+      ),
       "nativeOllamaRuntime": any(
         normalize_text(item.get("runtimeMode")).lower() == "native-ollama"
         for item in (list(Handler.runtime_registry.values()) if "Handler" in globals() else [])
@@ -1608,6 +1689,7 @@ def make_snapshot(host_id: str) -> Dict[str, Any]:
     "ollamaRunningModels": ollama_residency,
     "ollamaModelCatalog": ollama_model_catalog(),
     "runtimes": runtime_statuses,
+    "gpuReservations": gpu_reservations,
     "gpuProcesses": process_view,
     "executionSlotBusy": local_execution_slot_busy(),
     "executionSlots": execution_slots(Handler.runtime_registry) if "Handler" in globals() else execution_slots(),
@@ -2069,6 +2151,82 @@ def parse_runtime_status(runtime_entry: Dict[str, Any]) -> Dict[str, Any]:
   container_name = normalize_text(runtime_entry.get("containerName"))
   gpu_expected = bool(runtime_entry.get("gpuExpected", False))
   runtime_mode = normalize_text(runtime_entry.get("runtimeMode")).lower()
+
+  if runtime_mode == "kubernetes-ollama":
+    try:
+      cluster_status = kubernetes_runtime.runtime_status(runtime_entry)
+    except Exception as err:
+      return {
+        "runtimeName": runtime_name,
+        "status": "unknown",
+        "containerName": "",
+        "runtimeMode": runtime_mode,
+        "gpuExpected": gpu_expected,
+        "gpuObserved": False,
+        "loaded": None,
+        "message": normalize_text(err) or "Kubernetes Ollama status probe failed"
+      }
+    if cluster_status.get("status") != "running":
+      return {
+        "runtimeName": runtime_name,
+        "status": cluster_status.get("status", "unknown"),
+        "containerName": "",
+        "runtimeMode": runtime_mode,
+        "gpuExpected": gpu_expected,
+        "gpuObserved": bool(cluster_status.get("gpuObserved")),
+        "loaded": None,
+        **cluster_status
+      }
+    if cluster_status.get("gpuObserved") is not True:
+      return {
+        **cluster_status,
+        "runtimeName": runtime_name,
+        "status": "unknown",
+        "containerName": "",
+        "runtimeMode": runtime_mode,
+        "gpuExpected": gpu_expected,
+        "gpuObserved": False,
+        "loaded": None
+      }
+    try:
+      response = request_ollama_json("/api/version", None, timeout_sec=5)
+    except Exception as err:
+      return {
+        "runtimeName": runtime_name,
+        "status": "unknown",
+        "containerName": "",
+        "runtimeMode": runtime_mode,
+        "gpuExpected": gpu_expected,
+        "gpuObserved": True,
+        "loaded": None,
+        "message": f"Kubernetes Ollama pod is ready but its API is unavailable: {normalize_text(err)}"
+      }
+    version = normalize_text(response.get("version"))
+    if not version:
+      return {
+        "runtimeName": runtime_name,
+        "status": "unknown",
+        "containerName": "",
+        "runtimeMode": runtime_mode,
+        "gpuExpected": gpu_expected,
+        "gpuObserved": True,
+        "loaded": None,
+        "message": "Kubernetes Ollama API response did not include its version"
+      }
+    residency = ollama_running_model_status()
+    loaded_models = residency.get("models", []) if residency.get("available") else []
+    return {
+      "runtimeName": runtime_name,
+      "status": "running",
+      "containerName": "",
+      "runtimeMode": runtime_mode,
+      "gpuExpected": gpu_expected,
+      "gpuObserved": True,
+      "loaded": bool(loaded_models) if residency.get("available") else None,
+      "version": version,
+      "nodeName": cluster_status.get("nodeName"),
+      "message": f"Kubernetes Ollama API running ({version}) on {cluster_status.get('nodeName') or 'configured node'}"
+    }
 
   if runtime_mode == "native-ollama":
     try:
@@ -3133,6 +3291,8 @@ def list_runtime_statuses(runtime_registry: Dict[str, Dict[str, Any]]) -> List[D
     entry = runtime_registry[runtime_name]
     status = parse_runtime_status(entry)
     status["concurrencySafe"] = bool(entry.get("concurrencySafe", False))
+    status["exclusiveHostGpu"] = bool(entry.get("exclusiveHostGpu", False))
+    status["deviceId"] = normalize_text(entry.get("deviceId"))
     out.append(status)
   return out
 
@@ -3205,6 +3365,33 @@ def runtime_action(runtime_registry: Dict[str, Dict[str, Any]], runtime_name: st
       "status": "missing",
       "message": f"runtime not managed: {runtime_name}"
     }
+
+  if normalize_text(entry.get("actionDriver")).lower() == "kubernetes":
+    try:
+      if action_key == "beginAction":
+        return kubernetes_runtime.set_replicas(entry, 1)
+      if action_key == "stopAction":
+        scaled = kubernetes_runtime.set_replicas(entry, 0)
+        if not scaled.get("success"):
+          return scaled
+        timeout_sec = max(1, int(entry.get("runtimeActionTimeoutSec") or 1800))
+        if not kubernetes_runtime.wait_for_replicas(entry, 0, timeout_sec):
+          return {
+            "success": False,
+            "status": "timeout",
+            "message": "Kubernetes Ollama pod did not fully stop; GPU reservation remains active"
+          }
+        return {
+          "success": True,
+          "status": "stopped",
+          "message": "Kubernetes Ollama pod stopped and released its GPU reservation"
+        }
+      if action_key == "restartAction":
+        timeout_sec = max(2, int(entry.get("runtimeActionTimeoutSec") or 1800))
+        return kubernetes_runtime.restart(entry, timeout_sec)
+      return {"success": False, "status": "invalid", "message": f"unsupported Kubernetes action: {action_key}"}
+    except Exception as err:
+      return {"success": False, "status": "defective", "message": normalize_text(err) or "Kubernetes runtime action failed"}
 
   if normalize_text(entry.get("actionDriver")).lower() == "strata-cli":
     command = normalize_text(entry.get("runtimeCommand"))
@@ -3786,19 +3973,25 @@ def ensure_runtime_ready(runtime_registry: Dict[str, Dict[str, Any]], runtime_na
     if not result.get("success"):
       raise RuntimeError(result.get("message") or f"runtime begin failed: {runtime_name}")
     status = parse_runtime_status(entry)
-    if normalize_text(entry.get("runtimeMode")).lower() == "native-ollama" or strata_cli:
+    runtime_mode = normalize_text(entry.get("runtimeMode")).lower()
+    if runtime_mode in {"native-ollama", "kubernetes-ollama"} or strata_cli:
       timeout_sec = 30
       if strata_cli:
         try:
           timeout_sec = max(1, int(os.environ.get("GPU_HOUSEKEEPER_STRATA_READY_TIMEOUT_SEC", "120")))
         except (TypeError, ValueError):
           timeout_sec = 120
+      elif runtime_mode == "kubernetes-ollama":
+        try:
+          timeout_sec = max(1, int(entry.get("kubernetesReadyTimeoutSec") or 180))
+        except (TypeError, ValueError):
+          timeout_sec = 180
       deadline = time.monotonic() + timeout_sec
       while status.get("status") != "running" and time.monotonic() < deadline:
         time.sleep(0.25)
         status = parse_runtime_status(entry)
       if status.get("status") != "running":
-        label = "Strata" if strata_cli else "native Ollama"
+        label = "Strata" if strata_cli else ("Kubernetes Ollama" if runtime_mode == "kubernetes-ollama" else "native Ollama")
         raise RuntimeError(status.get("message") or f"{label} did not become available after start")
 
   if (
@@ -4718,9 +4911,15 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
       container_name = normalize_text(item.get("containerName"))
       discharge_kind = normalize_text(item.get("dischargeKind")).lower()
       runtime_mode = normalize_text(item.get("runtimeMode")).lower()
+      action_driver = normalize_text(item.get("actionDriver")).lower()
       external_strata = runtime_name == "strata" and discharge_kind == "strata"
       native_ollama = runtime_name == "ollama" and runtime_mode == "native-ollama"
-      if not runtime_name or (not container_name and not external_strata and not native_ollama):
+      kubernetes_ollama = (
+        runtime_name == "ollama"
+        and runtime_mode == "kubernetes-ollama"
+        and action_driver == "kubernetes"
+      )
+      if not runtime_name or (not container_name and not external_strata and not native_ollama and not kubernetes_ollama):
         continue
       try:
         default_context_length = max(0, min(1_000_000, int(item.get("defaultContextLength") or 0)))
@@ -4734,11 +4933,15 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
         runtime_action_timeout_sec = max(1, int(item.get("runtimeActionTimeoutSec") or 1800))
       except (TypeError, ValueError):
         runtime_action_timeout_sec = 1800
+      try:
+        kubernetes_ready_timeout_sec = max(1, int(item.get("kubernetesReadyTimeoutSec") or 180))
+      except (TypeError, ValueError):
+        kubernetes_ready_timeout_sec = 180
       registry[runtime_name] = {
         "runtimeName": runtime_name,
         "containerName": container_name,
         "runtimeMode": runtime_mode,
-        "actionDriver": normalize_text(item.get("actionDriver")).lower(),
+        "actionDriver": action_driver,
         "launchdDomain": normalize_text(item.get("launchdDomain")).lower(),
         "launchdLabel": normalize_text(item.get("launchdLabel")),
         "launchdPlist": normalize_text(item.get("launchdPlist")),
@@ -4748,6 +4951,14 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
         "defaultContextLength": default_context_length,
         "minimumVramRequiredMb": minimum_vram_required_mb,
         "runtimeActionTimeoutSec": runtime_action_timeout_sec,
+        "kubernetesApiUrl": normalize_text(item.get("kubernetesApiUrl")),
+        "kubernetesTokenFile": normalize_text(item.get("kubernetesTokenFile")),
+        "kubernetesCaFile": normalize_text(item.get("kubernetesCaFile")),
+        "kubernetesNamespace": normalize_text(item.get("kubernetesNamespace")),
+        "kubernetesDeployment": normalize_text(item.get("kubernetesDeployment")),
+        "kubernetesNodeName": normalize_text(item.get("kubernetesNodeName")),
+        "kubernetesReadyTimeoutSec": kubernetes_ready_timeout_sec,
+        "exclusiveHostGpu": parse_bool_value(item.get("exclusiveHostGpu", False), False),
         "contextConfigPath": normalize_text(item.get("contextConfigPath")),
         "contextSystemdUnit": normalize_text(item.get("contextSystemdUnit")),
         "contextAgentSocket": normalize_text(item.get("contextAgentSocket")),
