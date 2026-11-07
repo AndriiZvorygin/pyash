@@ -55,6 +55,8 @@ export const COMMAND_POLICY_CONTRACT = Object.freeze([
       WORD("chown"),
       WORD("truncate"),
       WORD("install"),
+      WORD("warc2zim"),
+      WORD("zimwriterfs"),
       { kind: "redirect" },
       { kind: "word_before_redirect", value: "cat" }
     ])
@@ -77,7 +79,9 @@ export const COMMAND_POLICY_CONTRACT = Object.freeze([
       { kind: "sequence", values: ["node", "--version"] },
       WORD("uname"),
       WORD("pwd"),
-      WORD("whoami")
+      WORD("whoami"),
+      WORD("zimdump"),
+      WORD("kiwix-search")
     ])
   })
 ]);

@@ -228,6 +228,15 @@ The following are golden vectors, not new syntax:
 5. A sentence containing an unmapped current HNUC, unsupported nested value,
    conflicting write, or unrepresentable effect MUST return an explicit
    encoding error and no executable codelet.
+6. A date literal MUST travel in the uint sort with the 64-bit scalar
+   thickness, so `ob date 2025-05-01 be date ya` MUST encode with the
+   eight-word body `00C1 981D 9C00 8924 0196 0000 245E 217E`, where the four
+   payload words carry the milliseconds since the Unix epoch.
+7. A numeric vector literal MUST travel in the uint sort with the vector
+   thickness that states its element count, so `ob ve num 1 2 3 be vector
+   ya` MUST encode with the seven-word body `0061 8F1D 0001 0002 0003 245E
+   217E`, and a width without a fixed legacy thickness MUST use the explicit
+   length form.
 
 Conformance tests should compare sentence round-trips, exact golden bytes,
 malformed continuation/quote rejection, compatibility-table coverage,
