@@ -892,7 +892,7 @@ export function renderAutonomousRoadmapMarkdown(roadmap = {}) {
       if (item.scope) output.push(`- Scope: ${item.scope}`);
       if (item.nonGoals) output.push(`- Non-goals: ${listField(item.nonGoals)}`);
       if (item.acceptance) output.push(`- Acceptance: ${item.acceptance}`);
-      if (item.worktree) output.push(`- Worktree: \`${item.worktree}\``);
+      if (item.worktree) output.push(`- Checkout: \`${item.worktree}\``);
       if (item.commit) output.push(`- Commit: \`${item.commit}\``);
       output.push("");
     }
@@ -937,7 +937,7 @@ export function renderAutonomousRoadmapReport(roadmap = {}) {
       if (item.source) lines.push(`  source: ${item.source}`);
       if (item.dependsOnTaskIds?.length) lines.push(`  hard prerequisites: ${item.dependsOnTaskIds.join(", ")}`);
       if (item.dependencyStatus?.unmet?.length) lines.push(`  dependency wait: ${item.dependencyStatus.unmet.map((entry) => `${entry.dependency} (${entry.reason})`).join("; ")}`);
-      if (item.worktree) lines.push(`  worktree: ${item.worktree}`);
+      if (item.worktree) lines.push(`  checkout: ${item.worktree}`);
       if (item.commit) lines.push(`  commit: ${item.commit}`);
     }
     lines.push("");

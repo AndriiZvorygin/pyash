@@ -996,7 +996,12 @@ test("supervisor does not replay an ambiguous in-flight turn until a human resum
   });
   assert.equal(first.status, "blocked");
   assert.equal(turnCalls, 1);
-  const repeated = await runWorkSupervisorOnce({ worldRoot, repositoryRoot: "/repo", owner: "background" });
+  const repeated = await runWorkSupervisorOnce({
+    worldRoot,
+    repositoryRoot: "/repo",
+    owner: "background",
+    workspaceFactory: async () => { throw new Error("ambiguous turns must not open a workspace"); }
+  });
   assert.equal(repeated.status, "blocked");
   assert.equal(turnCalls, 1);
   const resumed = await resumeWorkTask(worldRoot, "ambiguous-task", "Retry this turn after checking the worktree.");

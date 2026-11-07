@@ -127,3 +127,35 @@ test("coding saddle tracing allows Pyash writes inside the active project", asyn
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
 });
+
+test("coding saddle tracing records external house writes in its newspaper and artifact directory", async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-trace-external-write-"));
+  const worldRoot = path.join(tempRoot, "world");
+  const cwd = path.join(tempRoot, "project");
+  const houseRoot = path.join(tempRoot, "house");
+  await fs.mkdir(cwd, { recursive: true });
+  await fs.mkdir(houseRoot, { recursive: true });
+  const outputPath = path.join(houseRoot, "MEMORY.md");
+  const trace = createCodingSaddleTrace({ worldRoot, cwd, runId: "saddle-external-write" });
+
+  forget();
+  try {
+    trace.beginTurn({ input: "Update the house memory file." });
+    const result = await interpret(parse(`ob text "format-change record" to filename "${outputPath}" be write do`));
+    assert.equal(result.value.text, "format-change record");
+    assert.equal(await fs.readFile(outputPath, "utf8"), "format-change record");
+
+    const journal = await fs.readFile(trace.journalPath, "utf8");
+    assert.match(journal, /be artifact ya/u);
+    assert.match(journal, /be exchange ya/u);
+    assert.ok(journal.includes(outputPath));
+    const artifacts = await fs.readdir(path.join(worldRoot, "artifacts", trace.runId));
+    const alias = artifacts.find((name) => name.includes("MEMORY.md"));
+    assert.ok(alias, "expected the external file artifact alias in the saddle run directory");
+    assert.equal(await fs.readFile(path.join(worldRoot, "artifacts", trace.runId, alias), "utf8"), "format-change record");
+  } finally {
+    trace.close();
+    forget();
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});

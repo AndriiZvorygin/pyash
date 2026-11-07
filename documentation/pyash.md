@@ -1,8 +1,20 @@
-Pyash is a small experimental language built on **human linguistic universals**. It treats grammar as the API surface for code and is designed as an **interlanguage** between all human languages and all computer languages, from assembly level on up.
+Pyash is being built as a **general intelligence operating system (GI-OS)**. The Pyash language is its native interface for describing meaning, workflows, agents, and computation; the runtime, shared libraries, persistent world, and model-facing tools are parts of the operating system around that language.
+
+Pyash is grounded in **human linguistic universals** and designed as an **interlanguage** between human languages and computer languages, from assembly level on up. Its operating-system model follows familiar system boundaries: the Pyash repository root is the shared system installation, while `world/` holds mutable user, agent, and world data. Shared Pyash libraries live once under `program/library/` and are intended to be available read-only to model workers. They are not copied into each model's home or task directory.
 
 Its long-term aim is to be a **Turing-complete, general-purpose language**, but one that is *grown* rather than hand-designed, using LLMs and evolutionary programming. Workflows, pipelines, and orchestrations are the main early focus because they give clear structure and strong feedback for this evolutionary process.
 
 At its core, a Pyash sentence is a **verb plus a bundle of typed noun phrases** in named cases. The verb does not “do the work” directly. Instead, it inspects the cases and noun classes and **dispatches** to an underlying implementation. Think of it as multiple dispatch over grammatical roles rather than positional arguments. This keeps the surface close to natural language while giving a precise, machine-friendly structure.
+
+### GI-OS storage model
+
+- The Pyash root is the system volume: runtime code and shared libraries are installed once. `program/library/` is the shared library tree; model workers should read it in place, with changes made through trusted, versioned system maintenance.
+- `world/` is the writable home/data volume for sessions, memories, artifacts, queues, and shared world knowledge. The GI-OS model calls the per-user home root `world/home/`.
+- The current agent-house runtime stores agent homes at `world/house/<agent>/`. That is the implemented path today; `world/home/` describes the OS-level home-drive model and does not claim that the runtime directory has already migrated.
+- `world/library/` is a writable world-knowledge and artifact place. It is distinct from the installed shared code libraries in `program/library/`.
+- Model jobs should reuse the shared system installation and write outputs to their authorized world/home locations. They should not create per-model copies of the Pyash library tree or repository checkout.
+
+Read-only library access is the intended GI-OS boundary. Existing tools and filesystem policies provide parts of the access model; this description does not claim that every model process is already confined by a complete operating-system sandbox.
 
 Because it is based on linguistic universals, the same Pyash core can be:
 

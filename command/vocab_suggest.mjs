@@ -1011,7 +1011,8 @@ async function buildStructuredSuggestionRecord(token, {
   morphologyMatches,
   compoundMorphologyMatches,
   pyaGlossMatches,
-  okTextTokens
+  okTextTokens,
+  rankedCoverage
 }) {
   const input = normalizeCompoundTarget(token);
   const mappings = [];
@@ -1091,10 +1092,11 @@ async function buildStructuredSuggestionRecord(token, {
     .filter((line) => !isFileMarker(line) && parseBlacklist(line) === null && !line.startsWith("#define"))
     .map(getGlossFromLine)
     .filter(Boolean);
+  const isKnownUnresolvedEnglishWord = rankedCoverage.get(token)?.coverageType === "unresolved";
   const wordSuggestions = uniqueStrings([
     ...directMappings.map((mapping) => mapping.word),
     ...blacklistWords,
-    ...lineWords
+    ...(isKnownUnresolvedEnglishWord ? [] : lineWords)
   ]).filter((word) => word !== input);
 
   for (const word of wordSuggestions) {
@@ -1436,20 +1438,21 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     for (const [token, filesForToken] of [...occurrences.entries()].sort(([a], [b]) => a.localeCompare(b))) {
       const lines = await queryRyan(token);
       const blacklistValue = lines.length === 1 ? parseBlacklist(lines[0]) : null;
-    const suggestionList = lines.filter(
-      line => !isFileMarker(line) && parseBlacklist(line) === null && !line.startsWith("#define")
-    );
-    const glosses = [];
-    const seenGlosses = new Set();
-    for (const line of suggestionList) {
-      const gloss = getGlossFromLine(line);
-      if (!gloss) continue;
-      const lower = gloss.toLowerCase();
-      if (seenGlosses.has(lower)) continue;
-      seenGlosses.add(lower);
-      glosses.push(gloss);
-    }
-    const preview = glosses.slice(0, 4).join(" | ");
+      const isKnownUnresolvedEnglishWord = rankedCoverage.get(token)?.coverageType === "unresolved";
+      const suggestionList = isKnownUnresolvedEnglishWord
+        ? []
+        : lines.filter(line => !isFileMarker(line) && parseBlacklist(line) === null && !line.startsWith("#define"));
+      const glosses = [];
+      const seenGlosses = new Set();
+      for (const line of suggestionList) {
+        const gloss = getGlossFromLine(line);
+        if (!gloss) continue;
+        const lower = gloss.toLowerCase();
+        if (seenGlosses.has(lower)) continue;
+        seenGlosses.add(lower);
+        glosses.push(gloss);
+      }
+      const preview = glosses.slice(0, 4).join(" | ");
       const fileList = [...filesForToken]
         .map(name => name.replace(`${process.cwd()}/`, ""))
         .filter(name => name && name !== "input");
@@ -1555,7 +1558,8 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
       morphologyMatches,
       compoundMorphologyMatches,
       pyaGlossMatches,
-      okTextTokens
+      okTextTokens,
+      rankedCoverage
     }));
   }
 

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -62,7 +63,11 @@ test("push_all falls back to the literal host when ssh cannot resolve it", () =>
 });
 
 test("the configured github remote in this repository passes its own guard", () => {
-  const remote = path.join(repoRoot, ".git", "config");
+  const gitCommonDir = execFileSync("git", ["rev-parse", "--git-common-dir"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  }).trim();
+  const remote = path.resolve(repoRoot, gitCommonDir, "config");
   const config = fs.readFileSync(remote, "utf8");
   assert.match(config, /github-andriizvorygin|github\.com/);
 });

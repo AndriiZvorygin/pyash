@@ -170,25 +170,48 @@ synsets without an existing covered lemma or compound candidate stay explicitly 
 later atom/compound generation pass.
 
 For those residual senses, run `node command/wordnet_sense_compound_refinery.mjs`. Its Pyash
-workflow is `wordnet_sense_compound_refinery.pya`; each launch selects the next 64 frequency-ranked
-unlinked senses. It asks the configured Qwen mind,
-through the future GPU Housekeeper queue, for sense-specific translations and transparent compound
-parts in Chinese, French, Russian, and Hindi. The prompt contains one sense definition and no atom
-inventory. `vocab_suggest` resolves each English component gloss, and only active one-atom links
-with WordNet senses become candidates. Slash-separated gloss alternatives are queried separately.
-For each mapped decomposition, the composer proposes each possible final head in Pyash order. The
-target sense's part of speech and any directed hypernym relation are retained as evidence; neither
-blocks a lexical compound. The verifier judges the proposed composition from the cited definitions.
+workflow is `wordnet_sense_compound_refinery.pya`; each launch selects up to 64 unlinked senses in
+configured tag-count order, starting at the highest count and including senses with at least two
+WordNet tags. It asks the configured Qwen mind, through the configured GPU Housekeeper
+queue, for sense-specific translations and transparent compound parts in Chinese, French, Russian,
+and Hindi. This translation prompt contains one sense definition and no atom inventory. It requests
+multiple concise English gloss alternatives when a source part has distinct context-fitting meanings.
+Translation splits of prefixes, suffixes, inflections, and grammatical material do not form lexical
+compounds; bound-affix decompositions remain uncertain. Slash-separated English part glosses are
+kept as alternatives.
 
-The run folder `artifacts/<run-id>/` holds `worklist.pya`, resumable `sense-translations.pya`,
-`component-mappings.pya`, `compound-candidates.pya`, `progress.pya`,
-`sense-compound-decisions.pya`, and verification artifacts.
-Completed translation rows are keyed by WordNet source hash and prompt revision; rerunning resumes
-the next eligible batch and reuses valid translations. The append-only run evidence is
-`newspaper/<run-id>.pya`. Accepted decisions persist in `english_wordnet_compound_decisions.pya` and
-activate only in `compound_coverage_wordnet_verified.pya`; uncertain, rejected, and unmapped results
-remain in their artifacts and do not enter the active compound catalog. Re-run the command to
-continue; it stops selecting completed senses for the current atomic inventory and prompt revision.
+Before composition, resolve existing compound and grammar coverage. A grammar-covered sense stays
+out of the lexical compound worklist. If an unlinked lexical sense already has an atomic target for
+its lemma, preserve that atom as the fixed final head and compose only one or two source-backed
+modifiers before it. The model cannot replace or repeat that head. Without an existing lexical head,
+the model selects the semantic head from its two or three source-backed atoms. Thus a new subtype of
+`better` can keep `better` as its head, while a genuinely new lexical target gets the head its
+meaning requires.
+
+After translation, `vocab_suggest` resolves each part gloss to active linked atoms. It prefers its
+lexical suggestions and uses up to four exact shared-WordNet-synset atom choices only when no
+lexical suggestion exists. A suggestion without an active atom link stays unresolved. One focused
+Housekeeper mind call per sense receives the target definition and a JSON array of `{source, gloss,
+atoms}` groups. Each source and gloss appears once per group, with its available atom words listed
+once. The model selects modifiers from distinct source parts in the same translation decomposition;
+two modifiers from one part do not qualify. The prompt shows a matching two-part example. If too few
+source parts fit, it returns `uncertain` with an empty atom list. It receives no source-language
+label, candidate ids, per-atom definition text, or preassembled compound combinations. The parser
+resolves the selected words to one coherent source decomposition and checks that they are distinct
+available atoms. The response combines proposal and semantic judgment; there is no second LLM
+verifier call in this refinery. Deterministic checks gate promotion. A target's POS and any directed
+hypernym relation remain evidence, but neither blocks a lexical compound.
+
+The run folder `artifacts/<run-id>/` holds `worklist.pya`, resumable
+`sense-translations.pya`, `translation-failures.pya` (failed sense ids and bounded error/response
+evidence), `component-mappings.pya`, `component-compositions.pya`, `compound-candidates.pya`,
+`progress.pya`, and `sense-compound-decisions.pya`. Completed translations and component choices
+are keyed by their source, inventory, and prompt revisions; reruns reuse valid rows and continue
+incomplete senses. The append-only run evidence is `newspaper/<run-id>.pya`. Accepted decisions
+persist in `english_wordnet_compound_decisions.pya` and activate only in
+`compound_coverage_wordnet_verified.pya`; uncertain, rejected, failed, and unmapped results remain
+in their artifacts and do not enter the active compound catalog. Independent senses dispatch
+concurrently up to the configured `parallelism` value (currently eight) through Housekeeper.
 
 Both sense-derived compounds and closed-word frequency candidates treat directed same-part-of-speech
 hypernym edges as optional evidence. A missing edge or different part of speech never blocks a

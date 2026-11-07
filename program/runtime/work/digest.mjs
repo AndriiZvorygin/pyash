@@ -228,7 +228,7 @@ function compactReport(task) {
     ...roleLines,
     `${reviewLabel}: ${review.decision || "(not recorded)"} ${excerpt(review.explanation, 280)}`,
     `Diff: ${renderWorkTaskReport(task).match(/^Diff: .*$/mu)?.[0]?.replace(/^Diff:\s*/u, "") || "not recorded"}`,
-    checkpoint.workspace?.worktreePath ? `Worktree: ${checkpoint.workspace.worktreePath}` : "",
+    checkpoint.workspace?.worktreePath ? `Checkout: ${checkpoint.workspace.worktreePath}` : "",
     checkpoint.implementation?.commit ? `Commit: ${checkpoint.implementation.commit}` : ""
   ].filter(Boolean).join("\n");
 }

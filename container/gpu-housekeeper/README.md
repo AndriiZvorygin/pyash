@@ -44,6 +44,48 @@ Housekeeper source and observation state live under
 ~/.local/share/pyash-gpu-housekeeper/; model weights remain in Ollama's
 ~/.ollama/models.
 
+### Optional Strata runtime on Mac Studio
+
+Strata runs as a separate loopback service on port 8080. The Housekeeper can
+start and stop it through the Strata CLI, calls its API directly from macOS,
+and admits Strata work only when the configured unified-memory floor is free.
+This lets a model hand off safely from idle Ollama instead of loading both
+models beside one another. The default Mac profile uses Apple device `apple0`,
+an 8K context, and a 50,000 MiB admission floor.
+
+Install Strata's official Terminal CLI, then check the DeepSeek plan before
+downloading its weights:
+
+```sh
+curl -fsSL https://github.com/Niko1221/Strata/releases/latest/download/install.sh -o /tmp/strata-install.sh
+sh /tmp/strata-install.sh
+strata launch --family deepseek41 --model ist-das-2.00bpw --context 8192 --vision off --plan --access local --port 8080
+```
+
+The Mac Studio has 64 GiB unified memory and needs ample SSD space for the
+DeepSeek set. The 2.00 bpw set is the smaller official Mac option. After the
+plan confirms available space, register Strata and refresh the Housekeeper:
+
+```sh
+GPU_HOUSEKEEPER_BIND_HOST=YOUR_TRUSTED_OVERLAY_IP \
+GPU_HOUSEKEEPER_STRATA_RUNTIME_URL=http://127.0.0.1:8080 \
+GPU_HOUSEKEEPER_STRATA_MODEL=ist-das-2.00bpw \
+GPU_HOUSEKEEPER_STRATA_VRAM_REQUIRED_MB=50000 \
+GPU_HOUSEKEEPER_STRATA_ACTION_TIMEOUT_SEC=28800 \
+container/gpu-housekeeper/command/install-macos.sh
+```
+
+The 2.00 bpw DeepSeek set needs 257 GB of SSD space. A 64 GB Mac meets Strata's
+documented minimum, but the published performance measurements are from a
+128 GB M5 Max, so expect the Mac Studio's actual speed to differ. Strata's
+weights stay in its own user data directory, outside the Pyash checkout. The
+startup timeout is configurable through
+`GPU_HOUSEKEEPER_STRATA_ACTION_TIMEOUT_SEC`; the example allows up to eight
+hours for the initial model and engine download. A `strata` mind request is queued through Housekeeper; Housekeeper
+first checks unified-memory capacity, discharges idle Ollama if needed, starts
+Strata if its API is down, and loads the model for the request. The API remains
+bound to loopback; only the Housekeeper peer is exposed to trusted workers.
+
 Add the Mac as a peer in the GPU Housekeeper host's GPU_HOUSEKEEPER_PEERS
 setting, for example:
 

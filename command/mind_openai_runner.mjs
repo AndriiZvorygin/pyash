@@ -436,6 +436,14 @@ async function main() {
 }
 
 main().catch((err) => {
-  process.stderr.write(`${err?.message ?? String(err)}\n`);
-  process.exit(1);
+  const message = err?.message ?? String(err);
+  if (parseArgs(process.argv).stream) {
+    writeMindStreamRecord({
+      type: "terminal",
+      ok: false,
+      error: { name: err?.name ?? "Error", message }
+    });
+  }
+  process.stderr.write(`${message}\n`);
+  process.exitCode = 1;
 });

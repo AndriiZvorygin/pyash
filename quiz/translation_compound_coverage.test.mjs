@@ -9,7 +9,9 @@ import {
   appendNovelCompoundSourceTerms,
   buildDerivedCompoundCoverage,
   loadCuratedCompoundDecompositions,
+  loadWordNetVerifiedCompoundIndex,
   renderDerivedCompoundCoveragePya,
+  renderDerivedCompoundCoverageRowPya,
   resolveDerivedCompound,
   segmentClosedCompound,
   segmentDelimitedCompound,
@@ -24,10 +26,13 @@ import {
   loadPyacWordLayerIndex
 } from "../program/library/translation/pyac_complexity.mjs";
 import {
+  batchCompoundVerificationGroups,
+  buildCompoundVerificationPrompt,
   classifyCompoundCoverage,
   createDefaultMindCompoundVerifier,
   createQueuedMindCompoundVerifier,
   createMindCompoundVerifier,
+  groupCompoundVerificationCandidates,
   parseCompoundVerificationResponse,
   verifyCompoundCoverage
 } from "../program/library/translation/compound_verification.mjs";
@@ -65,6 +70,26 @@ const layerIndex = {
     ["meat", 16], ["us", 16], ["kwak", 24]
   ])
 };
+
+test("compound verification batching preserves complete source-decomposition groups", () => {
+  const candidates = [
+    { id: "one-a", target: "blackbird", senseId: "n:00000001-n", sourceSurfaces: { chinese: "黑鸟" } },
+    { id: "one-b", target: "blackbird", senseId: "n:00000001-n", sourceSurfaces: { french: "oiseau-noir" } },
+    { id: "one-c", target: "blackbird", senseId: "n:00000001-n", sourceSurfaces: { hindi: "काली चिड़िया" } },
+    { id: "two-a", target: "blackbird", senseId: "n:00000002-n", sourceSurfaces: { chinese: "黑鸟" } }
+  ];
+  const groups = groupCompoundVerificationCandidates(candidates);
+  const batches = batchCompoundVerificationGroups(groups, 2);
+
+  assert.deepEqual(groups.map((group) => group.candidates.map((record) => record.id)), [
+    ["one-a", "one-b", "one-c"],
+    ["two-a"]
+  ]);
+  assert.deepEqual(batches.map((batch) => batch.map((record) => record.id)), [
+    ["one-a", "one-b", "one-c"],
+    ["two-a"]
+  ]);
+});
 
 function withWordNetEvidence(record) {
   const components = record.componentGlosses;
@@ -209,6 +234,19 @@ test("Chinese 混同 lowers to the head-final identity-confusion compound", asyn
   assert.equal(hunTong.status, "lowered-compound");
 });
 
+test("synset compounds stay exact-sense scoped when a target already has an atom or lemma", async () => {
+  const [generic, indexed] = await Promise.all([
+    loadCuratedCompoundDecompositions(),
+    loadWordNetVerifiedCompoundIndex()
+  ]);
+
+  assert.equal(generic.some((entry) => entry.target === "love"), false);
+  assert.equal(generic.some((entry) => entry.target === "become"), false);
+  assert.ok(generic.some((entry) => entry.target === "include"));
+  assert.ok(indexed.some((entry) => entry.target === "love" && entry.senseId === "v:01779456-v"));
+  assert.ok(indexed.some((entry) => entry.target === "become" && entry.senseId === "v:02632685-v"));
+});
+
 test("compound coverage separates delimited use from accidental closed splits", () => {
   const atoms = new Map(atomicEntries.map((entry) => [entry.en, entry.pya]));
   assert.deepEqual(segmentDelimitedCompound("blue-print", atoms), [["blue", "print"]]);
@@ -329,7 +367,7 @@ test("compound morphology keeps lexical heads separate from marked endings", asy
       calls.push(candidates[0].target);
       return JSON.stringify({
         verdict: "reject",
-        candidateId: candidates[0].id,
+        candidateId: "",
         headKind: "derivational-ending",
         rationale: "the final spelling is an ending rather than a semantic subtype"
       });
@@ -386,6 +424,18 @@ test("compound coverage renders a parser-readable durable catalog", () => {
   assert.equal(parsed[0].morphologyStatus, "lexical-compound");
   assert.equal(parsed[0].sourceSurfaces.chinese, "蓝图");
   assert.deepEqual(parsed[0].sourceMorphemesByLanguage.chinese, ["蓝图"]);
+
+  const indexedRow = renderDerivedCompoundCoverageRowPya({
+    ...coverage.records[0],
+    senseId: "n:00000001-n",
+    targetPartOfSpeech: "n"
+  });
+  assert.match(indexedRow, /^su text "n:00000001-n" ob text /u);
+  const indexed = parseCompoundLexicon(
+    `su name translation_compounds_derived be map def\n${indexedRow}\nprah\n`,
+    { name: "translation_compounds_derived", language: "canonical" }
+  );
+  assert.equal(indexed[0].senseId, "n:00000001-n");
 });
 
 test("current dictionaries produce broad derived coverage", async (t) => {
@@ -503,7 +553,15 @@ test("independent compound verification groups run concurrently and checkpoint i
       { target: "grasssnake", sourceSurfaces: { chinese: "草蛇" } }
     ]
   });
-  const candidates = coverage.records.map(withWordNetEvidence);
+  const candidates = coverage.records.map((candidate, index) => {
+    const row = withWordNetEvidence(candidate);
+    const senseId = `n:0000000${index + 1}-n`;
+    return {
+      ...row,
+      senseId,
+      targetSenseEvidence: row.targetSenseEvidence.map((sense) => ({ ...sense, source: senseId }))
+    };
+  });
   assert.equal(candidates.length, 2);
   assert.equal(classifyCompoundCoverage(candidates).verificationCandidates.length, 2);
 
@@ -579,6 +637,14 @@ test("uncertain compound verification gets one bounded repair and accepts only a
       rationale: "invented"
     }), { candidates: [candidate] }),
     { valid: false, reason: "response candidateId is outside the supplied candidate set" }
+  );
+  assert.deepEqual(
+    parseCompoundVerificationResponse(JSON.stringify({
+      verdict: "reject",
+      candidateId: candidate.id,
+      rationale: "one candidate appears wrong"
+    }), { candidates: [candidate] }),
+    { valid: false, reason: "candidateId must be empty when verdict is reject or uncertain" }
   );
   const noisy = parseCompoundVerificationResponse(
     `model preamble\n${acceptedCompoundResponse(candidate)}\nmodel tail`,
@@ -702,8 +768,86 @@ test("ambiguous candidate decompositions share one LLM decision", async () => {
   assert.deepEqual(calls, [{ phase: "verify", count: 2 }]);
   assert.equal(verified.accepted.length, 1);
   assert.equal(verified.accepted[0].id, "candidate-blackbird-b");
-  assert.equal(verified.rejected.length, 1);
-  assert.equal(verified.rejected[0].id, "candidate-blackbird-a");
+  assert.equal(verified.rejected.length, 0);
+  assert.equal(verified.notSelected.length, 1);
+  assert.equal(verified.notSelected[0].id, "candidate-blackbird-a");
+  assert.equal(verified.notSelected[0].verificationStatus, "not-selected-llm");
+});
+
+test("compound prompt compares all alternatives for one synset within the safe budget", () => {
+  const coverage = buildDerivedCompoundCoverage({
+    atomicEntries,
+    layerIndex,
+    sourceTerms: [{ target: "blackbird", sourceSurfaces: { chinese: "黑鸟" } }]
+  });
+  const candidate = withWordNetEvidence(coverage.records[0]);
+  const alternative = {
+    ...candidate,
+    id: "candidate-blackbird-alternative",
+    candidateId: "candidate-blackbird-alternative",
+    pyashSequence: ["bird", "hkis"]
+  };
+  const prompt = buildCompoundVerificationPrompt({ record: candidate, candidates: [candidate, alternative] });
+
+  assert.ok(prompt.length <= 10000);
+  assert.match(prompt, /Every listed candidate targets the same synset/u);
+  assert.match(prompt, /Compare the full list/u);
+  assert.match(prompt, /Reject only when every listed candidate/u);
+  assert.match(prompt, /candidate-blackbird-alternative/u);
+});
+
+test("compound verification prompt keeps eight candidates compact and shares component evidence", () => {
+  const sourceGlossSense = {
+    source: "n:00000090-n",
+    pos: "n",
+    lemmas: ["decision"],
+    definition: "the act of making up your mind"
+  };
+  const source = {
+    id: "candidate-compact-0",
+    candidateId: "candidate-compact-0",
+    target: "decide",
+    senseId: "v:00000091-v",
+    targetPartOfSpeech: "v",
+    targetSenseEvidence: [{ source: "v:00000091-v", pos: "v", definition: "reach or make a decision" }],
+    componentGlosses: ["decision", "firmness"],
+    pyashSequence: ["hden", "hret"],
+    componentSenseEvidence: ["n:00000092-n", "n:00000093-n"].map((senseId, index) => ({
+      component: index === 0 ? "decision" : "firmness",
+      source: senseId,
+      pos: "n",
+      lemmas: [index === 0 ? "decision" : "firmness"],
+      definition: index === 0 ? "the act of making up your mind" : "the quality of being firm",
+      mappingKind: "word-suggestion",
+      mappingLookupGloss: index === 0 ? "decide" : "firm",
+      mappingLookupSenseEvidence: [sourceGlossSense, {
+        source: "n:00000094-n",
+        pos: "n",
+        lemmas: ["alternative"],
+        definition: "an unrelated example sense that should not be repeated"
+      }]
+    })),
+    sourceLanguages: ["chinese"],
+    sourceSurfaces: { chinese: "决定" },
+    sourceTranslationMorphemesByLanguage: { chinese: ["决", "定"] },
+    sourceTranslationGlossesByLanguage: { chinese: ["decide", "set or firm"] },
+    sourceComponentRolesByLanguage: { chinese: ["lexical", "lexical"] },
+    sourceComponentIndexesByLanguage: { chinese: [0, 1] },
+    sourceCompositionEvidenceByLanguage: { chinese: "resolve + set jointly mean decide" }
+  };
+  const candidates = Array.from({ length: 8 }, (_, index) => ({
+    ...source,
+    id: `candidate-compact-${index}`,
+    candidateId: `candidate-compact-${index}`,
+    pyashSequence: [`atom-${index}`, "hret"]
+  }));
+  const prompt = buildCompoundVerificationPrompt({ record: candidates[0], candidates });
+
+  assert.ok(prompt.length < 4000, `prompt length was ${prompt.length}`);
+  assert.match(prompt, /决定/u);
+  assert.match(prompt, /the act of making up your mind/u);
+  assert.doesNotMatch(prompt, /unrelated example sense that should not be repeated/u);
+  assert.match(prompt, /candidate-compact-7/u);
 });
 
 test("default compound verifier delegates through the existing mind runtime", async () => {
@@ -762,19 +906,19 @@ test("queued compound verifier expresses future GPU work through Pyash", async (
   const jobSpec = JSON.parse(parse(calls[0]).ob.text);
   assert.equal(jobSpec.kind, "ollama-generate");
   assert.equal(jobSpec.think, false);
-  assert.equal(jobSpec.options.num_predict, 288);
+  assert.equal(jobSpec.options.num_predict, 192);
   assert.deepEqual(jobSpec.format.properties.candidateId.enum, ["", "candidate-acid-rain"]);
   assert.deepEqual(jobSpec.format.properties.targetSenseId.enum, ["", "n:00000001-n"]);
-  assert.deepEqual(jobSpec.format.properties.headSenseId.enum, ["", "n:00000002-n"]);
-  assert.deepEqual(jobSpec.format.properties.modifierSenseIds.items.enum, ["", "n:00000003-n"]);
-  assert.deepEqual(jobSpec.format.properties.modifierRelations.items.enum, ["literal", "metaphorical", "associative", "uncertain"]);
+  assert.deepEqual(jobSpec.format.properties.componentSenseIds.items.enum, ["", "n:00000003-n", "n:00000002-n"]);
+  assert.deepEqual(jobSpec.format.properties.sourceGlossSenseIds.items.enum, [""]);
+  assert.equal(jobSpec.format.properties.componentSenseIds.maxItems, 3);
+  assert.equal(jobSpec.format.properties.sourceGlossSenseIds.maxItems, 3);
   assert.ok(jobSpec.format.required.includes("targetSenseId"));
-  assert.ok(jobSpec.format.required.includes("headSenseId"));
-  assert.ok(jobSpec.format.required.includes("modifierSenseIds"));
-  assert.ok(jobSpec.format.required.includes("modifierEvidence"));
-  assert.ok(jobSpec.format.required.includes("modifierRelations"));
+  assert.ok(jobSpec.format.required.includes("componentSenseIds"));
+  assert.ok(jobSpec.format.required.includes("sourceGlossSenseIds"));
+  assert.ok(jobSpec.format.required.includes("composition"));
   assert.match(jobSpec.prompt, /verify a compound/u);
-  assert.match(calls[0], /compound-verifier-v10-/u);
+  assert.match(calls[0], /compound-verifier-v12-synset-groups-/u);
   assert.match(calls[1], /vyah await be gpu do/u);
   assert.match(calls[1], /during num 9000/u);
 });

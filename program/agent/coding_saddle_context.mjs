@@ -25,6 +25,11 @@ function asPositiveInteger(value) {
   return Number.isSafeInteger(number) && number > 0 ? number : null;
 }
 
+function asNonNegativeInteger(value) {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number >= 0 ? number : null;
+}
+
 export function estimateSaddleInputTokens({ messages = [], systemPrompt = "", userInput = "", toolSchema = "" } = {}) {
   const serialized = [systemPrompt, toolSchema, userInput, ...messages.map((message) => `${message?.role ?? ""}: ${message?.content ?? ""}`)]
     .filter(Boolean)
@@ -82,13 +87,17 @@ export async function readSaddleContextCheckpoint(filename) {
     const valueName = Object.keys(CONTEXT_FACTS).find((key) => CONTEXT_FACTS[key] === sentence?.su?.name);
     if (!valueName) continue;
     const value = sentence?.ob?.text ?? sentence?.ob?.num;
-    if (valueName === "lastInputTokens" || valueName === "contextBudget" || valueName === "historyWindow") {
+    if (valueName === "historyWindow") {
+      state.historyWindow = asNonNegativeInteger(value);
+      continue;
+    }
+    if (valueName === "lastInputTokens" || valueName === "contextBudget") {
       state[valueName] = asPositiveInteger(value);
     } else {
       state[valueName] = String(value ?? "");
     }
   }
-  state.historyWindow = Math.min(SADDLE_COMPACTION_RECENT_PAIRS, state.historyWindow || SADDLE_COMPACTION_RECENT_PAIRS);
+  state.historyWindow = Math.min(SADDLE_COMPACTION_RECENT_PAIRS, state.historyWindow ?? SADDLE_COMPACTION_RECENT_PAIRS);
   return state;
 }
 

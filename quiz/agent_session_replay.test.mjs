@@ -147,6 +147,21 @@ test("replay projector rejects a checkpoint that disagrees with its assistant re
   );
 });
 
+test("session response and checkpoint round-trip shell prompts containing dollar-backtick", async () => {
+  const { sessionFile } = await makeSession("quoted-dollar-backtick");
+  const responseText = "The prompt was `htaf@mriczo:~/Desktop/0$` — with no command.\n\nWhat should we inspect next?";
+  const turn = await beginSessionTurn({
+    sessionFile,
+    userContent: "Review this prompt",
+    request: { prompt: "Review this prompt" }
+  });
+  await completeSessionTurn({ sessionFile, turn, responseText });
+
+  const replay = await readSessionReplay({ sessionFile, historyWindow: 5 });
+  assert.equal(replay.messages.at(-1)?.content, responseText);
+  assert.equal(replay.turns.at(-1)?.complete, true);
+});
+
 test("legacy adjacent turns project with synthetic ids without rewriting the transcript", async () => {
   const { sessionFile } = await makeSession("legacy");
   await appendSessionEntry({ sessionFile, role: "user", content: "old question", metadata: { timestamp: "2026-01-01T00:00:00.000Z" } });

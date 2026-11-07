@@ -83,6 +83,7 @@ export function buildSaddleStrataContextOptions({
 export const DEFAULT_CODING_SADDLE_SYSTEM_PROMPT = [
   "You are the Pyash coding saddle: an interactive coding agent operating inside the existing Pyash runtime.",
   "For requests about repository files, code, tests, git, or commands, use the relevant Pyash tools before answering and report concrete evidence. For general advice, answer directly without unnecessary tool calls.",
+  "Never launch Pyash or provider mind-runner scripts (such as command/mind_ollama_runner.mjs) through the shell; they are internal adapters requiring a structured request payload. Use the active conversation for replies and Pyash mind calls for deliberate model requests.",
   "Do not pretend a change was made when a tool did not succeed.",
   "Keep work inside the configured coding directory and prefer small, verifiable steps.",
   "For code changes, name the target file before editing; use write for bounded file creation and repair for unified-diff edits.",
@@ -738,6 +739,10 @@ export function buildSaddleMindSentence({
   historyWindow = 50,
   stream = true
 } = {}) {
+  const requestedHistoryWindow = Number(historyWindow);
+  const resolvedHistoryWindow = Number.isSafeInteger(requestedHistoryWindow) && requestedHistoryWindow >= 0
+    ? requestedHistoryWindow
+    : 50;
   const sentence = {
     mood: "do",
     be: "write",
@@ -750,7 +755,7 @@ export function buildSaddleMindSentence({
     fromtext: sessionFile
       ? { filename: path.resolve(String(sessionFile)) }
       : { name: `session name ${normalizeText(sessionName) || "coding"}` },
-    by: { num: Math.max(1, Math.trunc(Number(historyWindow) || 50)) },
+    by: { num: resolvedHistoryWindow },
     // The model is persisted in the mind configuration fact; the sentence stays canonical Pyash shape.
   };
   if (stream) sentence.vyah = { ve: { type: "name", values: ["stream"] } };
@@ -835,6 +840,7 @@ export function createSaddleInputDecoder({
 } = {}) {
   const state = { value: "", cursor: 0 };
   let escape = "";
+  let escapeTimer = null;
   let pasting = false;
   let pasteBuffer = "";
   let completion = null;
@@ -956,6 +962,8 @@ export function createSaddleInputDecoder({
       return;
     }
     if (escape) {
+      if (escapeTimer) clearTimeout(escapeTimer);
+      escapeTimer = null;
       escape += char;
       if (isCsiFinal(escape)) {
         const sequence = escape;
@@ -968,6 +976,13 @@ export function createSaddleInputDecoder({
     }
     if (char === "\u001b") {
       escape = char;
+      escapeTimer = setTimeout(() => {
+        escapeTimer = null;
+        if (escape !== "\u001b") return;
+        escape = "";
+        onCancel?.();
+      }, 80);
+      escapeTimer.unref?.();
       return;
     }
     if (char === "\u0003") {

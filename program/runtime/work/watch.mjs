@@ -45,7 +45,7 @@ export function renderWorkEvent(event) {
     case "plan-completed":
       return [`${prefix} SOL PLAN`, ...block("  summary:", event.summary), ...block("  work order:", event.workOrder)];
     case "implementation-started":
-      return [`${prefix} LUNA       Implementing ${title}...`, `  model: ${text(event.model) || "unknown"}`, `  worktree: ${text(event.worktree) || "unknown"}`];
+      return [`${prefix} LUNA       Implementing ${title}...`, `  model: ${text(event.model) || "unknown"}`, `  checkout: ${text(event.worktree) || "unknown"}`];
     case "implementation-completed":
       return [`${prefix} LUNA DONE`, ...block("  summary:", event.summary)];
     case "tests-reported":

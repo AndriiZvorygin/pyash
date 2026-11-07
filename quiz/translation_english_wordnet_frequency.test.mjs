@@ -59,6 +59,42 @@ test("frequency anchor resolution rejects aliases whose canonical target is gram
   assert.ok(records.every((record) => record.candidates.length === 0));
 });
 
+test("frequency allocation rejects aliases whose canonical compound is grammar for that part of speech", () => {
+  const records = buildEnglishWordNetFrequencyAllocationRecords({
+    wordnetIndex: {
+      bySynset: new Map([
+        ["n:00000003-n", [{ lemma: "becoming", gloss: "a noun sense" }]],
+        ["v:00000004-v", [{ lemma: "becoming", gloss: "a verb sense" }]]
+      ])
+    },
+    frequencyJoin: { entries: [] },
+    rankForEnglish: () => 10,
+    resolveWord: (word, { pos } = {}) => {
+      if (word === "becoming") return {
+        coverageType: "compound",
+        canonicalEnglish: "become",
+        pyashSequence: ["hbin", "tfa7m"]
+      };
+      if (word === "become" && pos === "n") return {
+        coverageType: "grammar",
+        canonicalEnglish: "become",
+        pyashSequence: ["become"]
+      };
+      if (word === "become" && pos === "v") return {
+        coverageType: "compound",
+        canonicalEnglish: "become",
+        pyashSequence: ["hbin", "tfa7m"]
+      };
+      return null;
+    }
+  });
+
+  assert.deepEqual(records.map((record) => [record.source, record.candidates.map((candidate) => candidate.targetId)]), [
+    ["n:00000003-n", []],
+    ["v:00000004-v", ["compound:hbin+tfa7m:v"]]
+  ]);
+});
+
 test("frequency reconciliation preserves unresolved bridge evidence without treating grammar as a lexical anchor", () => {
   const calls = [];
   const result = partitionResolvableWordNetBridges([{
@@ -337,6 +373,29 @@ test("frequency anchor resolution preserves accepted compound mappings", () => {
     pyashSequence: ["hpuk", "claf"],
     id: undefined
   });
+});
+
+test("frequency anchor resolution selects verified compounds by exact WordNet synset", () => {
+  const resolveWord = buildWordResolver({
+    coverage: { byVariant: new Map() }
+  }, { accepted: [] }, [{
+    id: "verified-conform-sense",
+    senseId: "v:00000010-v",
+    targetPartOfSpeech: "v",
+    target: "conform to",
+    aliases: ["follow"],
+    pyashSequence: ["kfo7n", "tyik"]
+  }]);
+
+  assert.deepEqual(resolveWord("conform to", { partOfSpeech: "v", senseId: "v:00000010-v" }), {
+    coverageType: "compound",
+    canonicalEnglish: "conform to",
+    target: "conform to",
+    pyashSequence: ["kfo7n", "tyik"],
+    id: "verified-conform-sense",
+    senseId: "v:00000010-v"
+  });
+  assert.equal(resolveWord("conform to", { partOfSpeech: "v", senseId: "v:00000011-v" }), null);
 });
 
 test("frequency allocation configuration versions compound verification", async () => {

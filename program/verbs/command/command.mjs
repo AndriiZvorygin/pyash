@@ -15,11 +15,59 @@ import { resolveCommandPolicy, shouldRequireRatify, shouldDeny, isNetworkDenied,
 import { emitCommandAudit, commandRequestSentence, resolveCommandIdentity, commandResultSentence, rememberCommandResult, recordCommandOutput } from "./audit.mjs";
 import { rewriteRunRootCommandPath, resolveSandboxSettings, buildAllowedEnv, validateSandboxWritePolicy } from "./sandbox.mjs";
 import { resolveStreamOutputPath, parseCommandTimeoutOverride, isInlineTimeoutOverrideEnabled, startFileTail, runCommandText } from "./execute.mjs";
+import { currentMindInterruptSignal } from "../../agent/interrupt.mjs";
 
 const commandStreamProcesses = new Map();
 const STREAM_END_TOKEN = "[PYA_STREAM_END]";
+const FAILURE_OUTPUT_LIMIT = 4000;
+const FAILURE_COMMAND_LIMIT = 1200;
 
-export async function command(sentence, { remember: rememberFn = remember } = {}) {
+function boundedDiagnosticText(value, limit) {
+  const text = String(value ?? "");
+  if (text.length <= limit) return text;
+  const headLength = Math.min(600, Math.floor(limit / 4));
+  const tailLength = limit - headLength;
+  const omitted = text.length - limit;
+  return `${text.slice(0, headLength)}\n...[${omitted} characters omitted; showing output tail]...\n${text.slice(-tailLength)}`;
+}
+
+function formatCommandFailure({
+  cmd,
+  cwd,
+  status,
+  signal,
+  timedOut,
+  exceededOutputLimit,
+  aborted,
+  timeoutMs,
+  maxOutputBytes,
+  stdout,
+  stderr,
+  launchError
+}) {
+  const statusText = Number.isInteger(status) ? String(status) : "unknown";
+  const signalText = signal ? String(signal) : "none";
+  const stream = (label, value) => {
+    const text = String(value ?? "");
+    if (!text) return `${label}:\n<empty>`;
+    return `${label}:\n${boundedDiagnosticText(text, FAILURE_OUTPUT_LIMIT).trimEnd()}`;
+  };
+  const details = [
+    `command defective: status=${statusText} signal=${signalText}`,
+    `command: ${boundedDiagnosticText(cmd, FAILURE_COMMAND_LIMIT)}`,
+    `working directory: ${cwd || "<unknown>"}`,
+    `exit code: ${statusText}`,
+    `timed out: ${timedOut === true}${timedOut && timeoutMs ? ` (limit ${timeoutMs}ms)` : ""}`,
+    `output limit exceeded: ${exceededOutputLimit === true}${exceededOutputLimit && maxOutputBytes ? ` (limit ${maxOutputBytes} bytes)` : ""}`,
+    `aborted: ${aborted === true}`
+  ];
+  if (launchError) details.push(`launch error: ${String(launchError)}`);
+  details.push(stream("stdout", stdout), stream("stderr", stderr));
+  return details.join("\n");
+}
+
+export async function command(sentence, { remember: rememberFn = remember, runtimeContext = null } = {}) {
+  const interruptSignal = runtimeContext?.signal ?? currentMindInterruptSignal();
   const modifiers = Array.isArray(sentence?.vyah?.ve?.values) ? sentence.vyah.ve.values : [];
   const aspect = getEffectiveVyahAspect(modifiers, { verb: "command", caseKey: "vyah" });
   const debug = resolveConfigBool("command debug", { rememberFn }) === true;
@@ -194,9 +242,23 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
       proc = spawn(shell, ["-lc", String(cmd)], spawnOptions);
     }
     let stderr = "";
+    let abortTimer = null;
+    const abortProcess = () => {
+      if (proc.exitCode !== null || proc.signalCode !== null) return;
+      proc.kill("SIGINT");
+      abortTimer = setTimeout(() => {
+        if (proc.exitCode === null && proc.signalCode === null) proc.kill("SIGKILL");
+      }, 1000);
+      abortTimer.unref?.();
+    };
+    const cleanupSignal = () => {
+      if (abortTimer) clearTimeout(abortTimer);
+      interruptSignal?.removeEventListener?.("abort", abortProcess);
+    };
     proc.stderr.on("data", data => { stderr += data.toString("utf8"); });
     proc.stdout.on("data", data => { outStream.write(data); });
     proc.on("close", (status) => {
+      cleanupSignal();
       if (status && status !== 0) {
         // eslint-disable-next-line no-console
         console.error(`command stream exited ${status}: ${stderr.trim()}`);
@@ -206,10 +268,13 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
       commandStreamProcesses.delete(streamName);
     });
     proc.on("error", () => {
+      cleanupSignal();
       outStream.write(`\n${STREAM_END_TOKEN}\n`);
       outStream.end();
       commandStreamProcesses.delete(streamName);
     });
+    if (interruptSignal?.aborted) abortProcess();
+    else interruptSignal?.addEventListener?.("abort", abortProcess, { once: true });
     const streamInput = sentence?.from?.name ? rememberFn?.(sentence.from.name) : null;
     if (streamInput?.be === "stream" && streamInput.ob?.filename) {
       const stopTail = startFileTail({
@@ -268,27 +333,52 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
   const effectiveTimeoutMs = (inlineTimeoutMs !== null && isInlineTimeoutOverrideEnabled({ rememberFn }))
     ? inlineTimeoutMs
     : sandbox.timeoutMs;
-  const res = await runCommandText(cmd, {
-    input,
-    timeoutMs: effectiveTimeoutMs,
-    cwd: sandbox.cwd,
-    env: commandEnv,
-    maxOutputBytes: sandbox.maxOutputBytes,
-    onStdout: process.env.PYA_RUN_VERBOSE === "1"
-      ? (text) => {
-          try {
-            process.stdout.write(text);
-          } catch {}
-        }
-      : null,
-    onStderr: process.env.PYA_RUN_VERBOSE === "1"
-      ? (text) => {
-          try {
-            process.stderr.write(text);
-          } catch {}
-        }
-      : null
-  });
+  let res;
+  try {
+    res = await runCommandText(cmd, {
+      input,
+      timeoutMs: effectiveTimeoutMs,
+      cwd: sandbox.cwd,
+      env: commandEnv,
+      maxOutputBytes: sandbox.maxOutputBytes,
+      signal: interruptSignal,
+      onStdout: process.env.PYA_RUN_VERBOSE === "1"
+        ? (text) => {
+            try {
+              process.stdout.write(text);
+            } catch {}
+          }
+        : null,
+      onStderr: process.env.PYA_RUN_VERBOSE === "1"
+        ? (text) => {
+            try {
+              process.stderr.write(text);
+            } catch {}
+          }
+        : null
+    });
+  } catch (err) {
+    const launchError = String(err?.message ?? err);
+    throwErrorSentence({
+      name: "command defective",
+      message: formatCommandFailure({
+        cmd,
+        cwd: sandbox.cwd,
+        status: null,
+        signal: null,
+        timedOut: false,
+        exceededOutputLimit: false,
+        aborted: false,
+        timeoutMs: effectiveTimeoutMs,
+        maxOutputBytes: sandbox.maxOutputBytes,
+        stdout: "",
+        stderr: "",
+        launchError
+      }),
+      from: { la: sentence },
+      raw: { cmd, cwd: sandbox.cwd, timeoutMs: effectiveTimeoutMs, launchError }
+    });
+  }
   if (debug) {
     const stdout = String(res.stdout ?? "");
     const stderr = String(res.stderr ?? "");
@@ -298,7 +388,7 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
       class: commandClass,
       policyMode: policy.mode,
       policySource: policy.source,
-      status: res.status ?? 0,
+      status: res.status ?? null,
       signal: res.signal ?? null,
       timedOut: res.timedOut === true,
       stdoutLength: stdout.length,
@@ -315,20 +405,37 @@ export async function command(sentence, { remember: rememberFn = remember } = {}
       policy,
       decision: "error",
       sentence,
-      resultSentence: { mood: "do", be: "error", su: { name: "command defective" }, ob: { text: `status=${res.status ?? 0} signal=${res.signal ?? ""}` } },
+      resultSentence: { mood: "do", be: "error", su: { name: "command defective" }, ob: { text: `status=${Number.isInteger(res.status) ? res.status : "unknown"} signal=${res.signal ?? "none"}` } },
       rememberFn
     });
     throwErrorSentence({
       name: "command defective",
-      message: `command defective: status=${res.status ?? 0} signal=${res.signal ?? ""} stderr=${JSON.stringify(res.stderr ?? "")}`,
+      message: formatCommandFailure({
+        cmd,
+        cwd: sandbox.cwd,
+        status: res.status,
+        signal: res.signal,
+        timedOut: res.timedOut,
+        exceededOutputLimit: res.exceededOutputLimit,
+        aborted: res.aborted,
+        timeoutMs: effectiveTimeoutMs,
+        maxOutputBytes: sandbox.maxOutputBytes,
+        stdout: res.stdout,
+        stderr: res.stderr
+      }),
       from: { la: sentence },
       raw: {
-        status: res.status ?? 0,
+        status: res.status,
         signal: res.signal ?? "",
         timedOut: res.timedOut === true,
         exceededOutputLimit: res.exceededOutputLimit === true,
         stderr: res.stderr ?? "",
-        stdout: res.stdout ?? ""
+        stdout: res.stdout ?? "",
+        command: cmd,
+        cwd: sandbox.cwd,
+        timeoutMs: effectiveTimeoutMs,
+        maxOutputBytes: sandbox.maxOutputBytes,
+        aborted: res.aborted === true
       }
     });
   }

@@ -13,6 +13,21 @@ Purpose: define agent loop, session/memory storage, scheduler hooks, and channel
 
 Session files stay in agent house; operational logs go to world newspaper.
 
+### Shared system libraries and home data
+
+The GI-OS storage model keeps reusable Pyash runtime libraries in the system
+installation at `program/library/`, shared once and exposed read-only to model
+workers. Agent homes hold mutable, agent-specific state and outputs; workers
+use the shared libraries in place instead of copying them into an agent home,
+task directory, or separate repository checkout.
+
+The OS-level home-volume name is `world/home/`. The current agent-house
+implementation remains `world/house/<agent>/`; the conceptual name does not
+change the active path. `world/library/` is the mutable shared-knowledge place,
+not the installed system-library tree. The read-only access rule is the target
+architecture; current runtime and tool policies enforce only the boundaries
+they explicitly implement.
+
 ## 2. Session model
 
 Session key: `yyyymmdd-<name>` (name sanitized to alnum + underscore).

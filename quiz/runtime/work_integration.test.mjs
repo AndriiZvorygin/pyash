@@ -190,13 +190,18 @@ test("Luna reconciliation on the current automation baseline integrates after Lu
     ...blockedTask(taskId, "Ceremony and sandpit error propagation", 120, "merge conflict", "reconciliation"),
     status: "ready",
     checkpoint: {
-      workspace: { repository: repositoryRoot, baseRevision, worktreePath: path.join(repositoryRoot, "old-task-worktree") },
+      workspace: {
+        repository: repositoryRoot,
+        baseRevision,
+        worktreePath: path.join(worldRoot, "holding", "work", "worktrees", taskId)
+      },
       plan: { workOrder: "Preserve truthful ceremony errors and run focused regression tests." },
       implementation: { summary: "Accepted task implementation on the old baseline.", commit: baseRevision },
       integration: { status: "reconciliation", reconciliation: { taskBaseRevision: baseRevision, taskCommit: baseRevision } }
     }
   });
   const clients = new Map();
+  const worktreesBefore = (await git(repositoryRoot, "worktree", "list", "--porcelain")).stdout;
   class FakeClient {
     constructor(role) { this.role = role; this.turnOptions = []; }
     async startThread() { return { thread: { id: `${this.role}-thread` } }; }
@@ -233,6 +238,9 @@ test("Luna reconciliation on the current automation baseline integrates after Lu
   const task = await readWorkTaskStatus(worldRoot, taskId);
   assert.equal(task.status, "accepted");
   assert.equal(task.checkpoint.integration.status, "integrated");
+  assert.equal(task.checkpoint.workspace.worktreePath, repositoryRoot);
+  assert.equal(task.checkpoint.workspace.mode, "shared-checkout");
+  assert.equal(task.checkpoint.workspace.worktreePath.includes(`${path.sep}holding${path.sep}`), false);
   assert.equal(task.checkpoint.integration.reconciliation.materialAttempts, 1);
   assert.equal(task.checkpoint.integration.reconciliation.conflictsResolved, 1);
   assert.equal(task.checkpoint.review.role, "reviewer");
@@ -247,4 +255,5 @@ test("Luna reconciliation on the current automation baseline integrates after Lu
     options.hardTimeoutMs
   ])), [[900000, 900000, 1800000], [900000, 900000, 1800000]]);
   assert.equal((await git(repositoryRoot, "show", "refs/heads/automation/roadmap:reconciled.txt")).stdout, "semantic reconciliation\n");
+  assert.equal((await git(repositoryRoot, "worktree", "list", "--porcelain")).stdout, worktreesBefore);
 });

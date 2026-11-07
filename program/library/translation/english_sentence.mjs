@@ -886,11 +886,11 @@ function relativeClauseProjection(records, relativeIndex) {
   const auxiliaryIndex = modalIndex >= 0 && records[modalIndex + 1]?.copula
     ? modalIndex + 1
     : -1;
-  const actionIndex = auxiliaryIndex >= 0 && records[auxiliaryIndex + 1]?.pyashSequence?.length > 0
+  const actionIndex = auxiliaryIndex >= 0 && isPotentialModalActionRecord(records[auxiliaryIndex + 1])
     ? auxiliaryIndex + 1
     : -1;
   if (modalIndex < 0 || auxiliaryIndex < 0 || actionIndex < 0) {
-    const activeActionIndex = relativeBody.findIndex((record) => isLexicalActionRecord(record));
+    const activeActionIndex = relativeBody.findIndex((record) => isPotentialModalActionRecord(record));
     if (activeActionIndex >= 0) {
       const actionRecord = relativeBody[activeActionIndex];
       const actionTail = relativeBody.slice(activeActionIndex + 1);
@@ -985,6 +985,58 @@ function projectRelativeClauseTokens(records, projection) {
     }
     return record;
   });
+}
+
+function projectPassiveAuxiliaryToken(records, auxiliaryIndex, construction) {
+  if (auxiliaryIndex < 0) return records;
+  return records.map((record, index) => index === auxiliaryIndex
+    ? {
+      ...record,
+      coverageType: "grammar",
+      pyashSequence: ["pyoh"],
+      consumedBy: construction,
+      semanticCandidates: [],
+      evidence: "passive auxiliary contributes passive_voice_ pyoh"
+    }
+    : record);
+}
+
+function projectStructuralCopulaToken(records, copulaIndex) {
+  if (copulaIndex < 0) return records;
+  return records.map((record, index) => index === copulaIndex
+    ? {
+      ...record,
+      coverageType: "grammar",
+      pyashSequence: [],
+      consumedBy: "zero-copula",
+      semanticCandidates: [],
+      construction: {
+        kind: "zero-copula",
+        evidence: "the Pyash clause expresses the subject-to-complement relation without a lexical copula"
+      },
+      evidence: "the Pyash clause expresses the subject-to-complement relation without a lexical copula"
+    }
+    : record);
+}
+
+function projectGerundSubjectToken(records) {
+  if (records[0]?.surface !== "being") return records;
+  const copulaIndex = findStructuralCopulaIndex(records);
+  if (copulaIndex <= 0) return records;
+  return records.map((record, index) => index === 0
+    ? {
+      ...record,
+      coverageType: "grammar",
+      pyashSequence: [],
+      consumedBy: "gerund-subject",
+      semanticCandidates: [],
+      construction: {
+        kind: "gerund-subject",
+        evidence: "initial being introduces a nominalized action phrase before the structural copula"
+      },
+      evidence: "initial being introduces a nominalized action phrase before the structural copula"
+    }
+    : record);
 }
 
 function analyzeExistentialClause({ source, tokens, records, existential, grammarIndex }) {
@@ -1126,6 +1178,25 @@ function applyContextualEnglishGrammar(records, grammarIndex) {
   const exemplifier = grammarIndex?.resolve("such as");
   const existential = existentialEntry(records, grammarIndex);
   return records.map((record, index) => {
+    if (record.surface === "of"
+      && records[index - 1]?.lemma === "think"
+      && records[index - 2]?.copula
+      && records[index - 3]?.grammar?.kind === "modal-mood"
+      && records[index + 1]?.surface === "as") {
+      return {
+        ...record,
+        coverageType: "grammar",
+        pyashSequence: [],
+        consumedBy: "think-of-as",
+        semanticCandidates: [],
+        construction: {
+          kind: "verb-frame-particle",
+          frame: "think of as",
+          evidence: "of belongs to the passive think of … as frame and does not mark a genitive phrase here"
+        },
+        evidence: "of belongs to the passive think of … as frame and does not mark a genitive phrase here"
+      };
+    }
     if (index === 0 && existential) {
       return {
         ...record,
@@ -1314,8 +1385,7 @@ function findImperativeVerbIndex(records) {
   if (!following) return -1;
   if (following.grammar?.kind === "pronoun"
     || following.grammar?.kind === "possessive-determiner"
-    || following.grammar?.kind === NEGATION_GRAMMAR_KIND
-    || following.grammar?.position === "link") return 0;
+    || following.grammar?.kind === NEGATION_GRAMMAR_KIND) return 0;
   return -1;
 }
 
@@ -1454,6 +1524,7 @@ function wordNetSenseCandidates(record, resolveWord, records, index, wordnetInde
 
 function addWordNetCandidates(records, resolveWord, wordnetIndex, wordnetBridges) {
   return records.map((record, index) => {
+    if (record.copula || record.consumedBy) return { ...record, semanticCandidates: [] };
     const selection = selectEnglishWordNetSenses(record, records, index, wordnetIndex);
     const candidateSets = wordNetSenseCandidates(record, resolveWord, records, index, wordnetIndex, wordnetBridges, selection);
     const candidates = candidateSets.flat();
@@ -1767,7 +1838,9 @@ function objectRecordsAfter(records, verbIndex) {
     ? records.slice(verbIndex + 1).filter((record) => (
       record.grammar?.kind !== NEGATION_GRAMMAR_KIND
       && record.grammar?.kind !== "aspect-marker"
-      && !record.consumedBy
+      && (!record.consumedBy
+        || record.construction?.kind === "passive-auxiliary"
+        || record.consumedBy === "passive-relative-clause")
     ))
     : [];
 }
@@ -1841,13 +1914,13 @@ export function analyzeEnglishSentence(source, {
       ?? (coverageOverrides && typeof coverageOverrides === "object" ? coverageOverrides[normalized] : null);
     return override ?? resolveWord?.(word, lookupOptions);
   };
-  const records = addWordNetCandidates(applyContextualEnglishGrammar(tokens.map((token, tokenIndex) => wordRecord(token, {
+  let records = projectGerundSubjectToken(addWordNetCandidates(applyContextualEnglishGrammar(tokens.map((token, tokenIndex) => wordRecord(token, {
     resolveWord: resolveWithOverrides,
     lemmaBySurface,
     grammarIndex,
     wordnetIndex,
     tokenIndex
-  })), grammarIndex), resolveWithOverrides, wordnetIndex, wordnetBridges);
+  })), grammarIndex), resolveWithOverrides, wordnetIndex, wordnetBridges));
   const existential = findExistentialClause(records);
   const clauseParts = splitClauses ? splitIndependentClauses(source, records) : [];
   if (clauseParts.length > 1) {
@@ -1897,6 +1970,13 @@ export function analyzeEnglishSentence(source, {
   const modalAction = progressiveIndex < 0 && finiteIndex < 0 && copulaIndex < 0 && imperativeIndex < 0
     ? findModalAction(records)
     : null;
+  const relativeIndex = records.findIndex((record) => record.grammar?.kind === "dependent-clause");
+  const relativeProjection = relativeClauseProjection(records, relativeIndex);
+  records = projectRelativeClauseTokens(records, relativeProjection);
+  if (modalAction?.passive) {
+    records = projectPassiveAuxiliaryToken(records, modalAction.auxiliaryIndex, "modal-passive");
+  }
+  records = projectStructuralCopulaToken(records, copulaIndex);
   const lexicalIndex = progressiveIndex < 0 && finiteIndex < 0 && copulaIndex < 0 && imperativeIndex < 0 && !modalAction
     ? findLexicalActionIndex(records)
     : -1;
@@ -2117,6 +2197,7 @@ export function analyzeEnglishSentence(source, {
     .map(({ record }) => record.surface);
   const subjectRecordsReady = subjectRecords.every((record, index) => (
     record.pyashSequence.length > 0
+    || Boolean(record.consumedBy)
     || factoredReflexiveIndexes.has(index)
   ));
   const subjectReady = subject.pyashSequence.length > 0

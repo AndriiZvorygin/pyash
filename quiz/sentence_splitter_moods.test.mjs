@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { splitSentences } from "../program/library/sentenceSplitter.mjs";
+import { splitSentences, splitSentencesWithLines } from "../program/library/sentenceSplitter.mjs";
 
 test("splitSentences splits on all moods when configured", () => {
   const text = [
@@ -41,4 +41,10 @@ test("splitSentences respects la/ko and quoted blocks", () => {
     "ob num 1 be equally from num 1 then",
     "su name after be topic ya"
   ]);
+});
+
+test("quoted block restoration preserves literal JavaScript replacement tokens", () => {
+  const source = "su name answer ob text quoted.text.prompt `host:~/Desktop/0$` and $& and $' and $$\nnext line.text.quoted be write ya";
+  assert.deepEqual(splitSentences(source), [source]);
+  assert.deepEqual(splitSentencesWithLines(source), [{ text: source, line: 1 }]);
 });

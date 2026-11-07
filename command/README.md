@@ -33,6 +33,8 @@ Utility scripts for working with Pyash from the shell:
 - `android_default_device.mjs [--yes] [--serial <id>] [--file <path>]` — detect attached ADB device(s) and set `su name android device id ...` in `configure/secret.pya` (prompts before writing).
 - `codex_account.mjs <read|login|cancel|logout|rate-limits|models> ...` — Codex App Server account/auth helper for `openai-codex` setup.
 - `work_supervisor.mjs [--world <path>] [--repository <path>]` — manage durable autonomous work items. Use `background --watch` for a live human-readable run view, `report <task-id>` to regenerate a completed task report, and `--email-report <address>` to submit that same report through the configured mail transport.
+
+Background work uses the existing repository checkout under a single-writer lease. It refuses to claim work while that checkout has local changes. No per-task Git checkout is created; the configured automation branch is selected for background runs and the prior branch is restored when the checkout is clean.
 - `run_work_supervisor_smoke.mjs` — explicitly run the real Codex supervisor smoke against a temporary fixture repository; never part of `npm test`.
 - `push_all.sh` — pushes the current clean branch to both the configured `origin` and the Pyash GitHub mirror.
 

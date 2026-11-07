@@ -31,11 +31,22 @@ Use this skill to work on refinery execution, ratify gates, and run newspaper be
 - Store durable state as parser-readable `.pya` artifacts. Do not add a JSON
   state file, a parallel transcript, or extra CLI destination flags to carry
   intermediate stages.
+- For broad WordNet sense sweeps, honor the configured `max-senses-per-launch`
+  limit (currently 64). Keep the stable run id, let each chunk complete through
+  its composition and decision artifacts, then continue from the progress map.
+  Do not raise the limit to the full backlog. When repeating launches in one
+  sweep, refresh the allocation between chunks when accepted vocabulary changes
+  coverage, while preserving the same run id and progress artifacts. A stable
+  allocation snapshot should cover one chunk only. Ensure the Pyash refinery
+  definition is re-registered after runtime memory is cleared.
 
 ## Checkpoints and newspapers
 
 - Run with `--newspaper --run-id <stable-id>` and reuse that same id to resume
   matching work. Choose a new id for a fresh run.
+- When a direct refinery adapter appends to the same newspaper on resume,
+  continue its existing sentence/evoke identity sequence; resetting identities
+  can make later evidence collide with earlier events.
 - Checkpoints are append-only evidence in the run newspaper, normally
   `newspaper/<sanitized-run-id>.pya`; the run artifact folder normally lives at
   `artifacts/<sanitized-run-id>/`. The canonical conversation or source record
@@ -68,7 +79,12 @@ Use this skill to work on refinery execution, ratify gates, and run newspaper be
   uncertain/error record for the rest instead of hanging or silently dropping
   work.
 - Obey the repository single-flight rule for GPU/LLM-heavy runs. Record model,
-  queue, provider, and attempt evidence in the run artifacts/newspaper.
+  queue, provider, and attempt evidence in the run artifacts/newspaper. When a
+  strict exchange recorder is active, persist each complete mind request and
+  response payload as a content-addressed JSON artifact under the run's artifact
+  folder; emit its artifact record into the newspaper correlated to the current
+  evoke identity. Keep the full prompt and response in those artifacts so the
+  newspaper remains readable while preserving exact call evidence.
 
 ## Ratify / resume checklist
 

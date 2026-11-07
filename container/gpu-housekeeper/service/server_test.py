@@ -1121,6 +1121,54 @@ class HousekeeperAppleSiliconTests(unittest.TestCase):
     self.assertEqual(registry["ollama"]["containerName"], "")
     self.assertEqual(registry["ollama"]["defaultContextLength"], 8192)
 
+  def test_strata_registry_uses_apple_device_and_memory_floor(self):
+    with patch.dict(os.environ, {
+      "GPU_HOUSEKEEPER_RUNTIME_REGISTRY": json.dumps([self.native_runtime()]),
+      "GPU_HOUSEKEEPER_STRATA_RUNTIME_URL": "http://127.0.0.1:8080",
+      "GPU_HOUSEKEEPER_STRATA_DEVICE_ID": "apple0",
+      "GPU_HOUSEKEEPER_STRATA_VRAM_REQUIRED_MB": "50000"
+    }):
+      strata = server.load_runtime_registry()["strata"]
+    self.assertEqual(strata["deviceId"], "apple0")
+    self.assertEqual(strata["minimumVramRequiredMb"], 50000)
+
+  def test_strata_cli_driver_launches_and_stops_the_configured_local_service(self):
+    entry = {
+      "runtimeName": "strata",
+      "actionDriver": "strata-cli",
+      "runtimeCommand": "/Users/ai/.local/bin/strata",
+      "beginAction": ["launch", "--family", "deepseek41", "--model", "ist-das-2.00bpw", "--yes", "--no-tui"],
+      "stopAction": ["launch", "--stop"],
+      "runtimeActionTimeoutSec": 1800
+    }
+    completed = type("Completed", (), {"returncode": 0, "stdout": "started", "stderr": ""})()
+    with patch.object(server, "parse_runtime_status", return_value={"status": "stopped"}), \
+         patch.object(server.subprocess, "run", return_value=completed) as run:
+      started = server.runtime_action({"strata": entry}, "strata", "beginAction")
+      stopped = server.runtime_action({"strata": entry}, "strata", "stopAction")
+    self.assertTrue(started["success"])
+    self.assertTrue(stopped["success"])
+    self.assertEqual(run.call_args_list[0].args[0], [entry["runtimeCommand"], *entry["beginAction"]])
+    self.assertEqual(run.call_args_list[1].args[0], [entry["runtimeCommand"], *entry["stopAction"]])
+
+  def test_strata_job_readiness_starts_a_stopped_server_through_housekeeper(self):
+    entry = {
+      "runtimeName": "strata",
+      "actionDriver": "strata-cli",
+      "runtimeCommand": "/Users/ai/.local/bin/strata",
+      "beginAction": ["launch", "--family", "deepseek41", "--model", "ist-das-2.00bpw"]
+    }
+    statuses = iter([
+      {"status": "unknown"},
+      {"status": "unknown"},
+      {"status": "running"}
+    ])
+    completed = type("Completed", (), {"returncode": 0, "stdout": "started", "stderr": ""})()
+    with patch.object(server, "parse_runtime_status", side_effect=lambda _entry: next(statuses)), \
+         patch.object(server.subprocess, "run", return_value=completed) as run:
+      server.ensure_runtime_ready({"strata": entry}, "strata")
+    self.assertEqual(run.call_args.args[0], [entry["runtimeCommand"], *entry["beginAction"]])
+
   def test_housekeeper_listener_supports_an_additional_loopback_bind(self):
     self.assertIs(server.housekeeper_server_class("127.0.0.1"), server.ThreadingHTTPServer)
     ipv6_server_class = server.housekeeper_server_class("eb22::1")
@@ -1376,6 +1424,46 @@ class HousekeeperCapacityTests(unittest.TestCase):
     }
     result = server.ensure_capacity_for_job(self.target_job(), {"huggingface": {"runtimeName": "huggingface"}})
     self.assertEqual(result["decision"], "fits")
+
+  def test_strata_memory_floor_discharges_idle_ollama_before_start(self):
+    telemetry = iter([
+      {"available": True, "devices": [{
+        "deviceId": "apple0", "vramTotalMb": 57344, "vramUsedMb": 9344, "vramFreeMb": 48000
+      }]},
+      {"available": True, "devices": [{
+        "deviceId": "apple0", "vramTotalMb": 57344, "vramUsedMb": 3344, "vramFreeMb": 54000
+      }]}
+    ])
+    server.parse_nvidia_smi = lambda: next(telemetry)
+    server.request_strata_json = lambda *_args, **_kwargs: {"service": "strata", "loaded": False}
+    server.managed_gpu_processes = lambda _registry: {
+      "available": True,
+      "runtimes": {"ollama": {"usedMemoryMb": 6000}},
+      "unmanagedProcesses": []
+    }
+    server.observe_runtime_activity = lambda *_args, **_kwargs: {"state": "idle"}
+    server.idle_grace_seconds = lambda: 0
+    discharged = []
+    server.discharge_runtime = lambda name, _entry: discharged.append(name) or {"success": True}
+    registry = {
+      "strata": {
+        "runtimeName": "strata", "dischargeKind": "strata",
+        "minimumVramRequiredMb": 50000
+      },
+      "ollama": {"runtimeName": "ollama", "dischargeKind": "ollama"}
+    }
+    job = {
+      "runtimeName": "strata", "profileName": "deepseek-v4.1-flash-2.00bpw",
+      "deviceId": "apple0",
+      "jobSpec": {"kind": "strata-chat", "resourceRequest": {"vramRequiredMb": 20000}}
+    }
+
+    result = server.ensure_capacity_for_job(job, registry)
+
+    self.assertEqual(discharged, ["ollama"])
+    self.assertEqual(result["decision"], "reclaimed")
+    self.assertEqual(result["requiredVramMb"], 50000)
+    self.assertEqual(result["freeBeforeMb"], 54000)
 
   def test_local_route_selects_an_idle_device_when_device_is_unspecified(self):
     server.parse_nvidia_smi = lambda: {
@@ -1984,6 +2072,28 @@ class HousekeeperCapacityTests(unittest.TestCase):
           os.environ.pop(name, None)
         else:
           os.environ[name] = value
+
+  def test_strata_mac_api_calls_use_native_loopback_http_without_docker(self):
+    class FakeResponse:
+      def __enter__(self):
+        return self
+
+      def __exit__(self, *_args):
+        return False
+
+      def read(self):
+        return b'{"service":"strata","loaded":true}'
+
+    with patch.dict(os.environ, {
+      "GPU_HOUSEKEEPER_STRATA_RUNTIME_URL": "http://127.0.0.1:8080",
+      "GPU_HOUSEKEEPER_DEVICE_BACKEND": "apple-unified"
+    }), patch.object(server, "urlopen", return_value=FakeResponse()) as urlopen, \
+         patch.object(server, "run_docker") as run_docker:
+      result = server.request_strata_json("/v1/status")
+
+    self.assertTrue(result["loaded"])
+    self.assertEqual(urlopen.call_args.args[0].full_url, "http://127.0.0.1:8080/v1/status")
+    run_docker.assert_not_called()
 
 
 class HousekeeperComfyuiTests(unittest.TestCase):

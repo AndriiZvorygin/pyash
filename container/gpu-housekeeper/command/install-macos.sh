@@ -21,6 +21,11 @@ USER_DOMAIN="user/$(id -u)"
 HOUSEKEEPER_PID_FILE="$INSTALL_DIR/housekeeper.pid"
 HOUSEKEEPER_PORT="${GPU_HOUSEKEEPER_PORT:-18886}"
 BIND_HOST="${GPU_HOUSEKEEPER_BIND_HOST:-127.0.0.1}"
+STRATA_RUNTIME_URL="${GPU_HOUSEKEEPER_STRATA_RUNTIME_URL:-}"
+STRATA_BIN="${GPU_HOUSEKEEPER_STRATA_BIN:-$HOME/.local/bin/strata}"
+STRATA_MODEL="${GPU_HOUSEKEEPER_STRATA_MODEL:-ist-das-2.00bpw}"
+STRATA_MEMORY_FLOOR_MB="${GPU_HOUSEKEEPER_STRATA_VRAM_REQUIRED_MB:-50000}"
+STRATA_ACTION_TIMEOUT_SEC="${GPU_HOUSEKEEPER_STRATA_ACTION_TIMEOUT_SEC:-1800}"
 if [[ "$BIND_HOST" == *:* ]]; then
   HOUSEKEEPER_URL="http://[$BIND_HOST]:$HOUSEKEEPER_PORT"
 else
@@ -54,6 +59,11 @@ HOME_DIR="$HOME" \
 HOUSEKEEPER_LABEL="$HOUSEKEEPER_LABEL" \
 BIND_HOST="$BIND_HOST" \
 BIND_PORT="$HOUSEKEEPER_PORT" \
+STRATA_RUNTIME_URL="$STRATA_RUNTIME_URL" \
+STRATA_BIN="$STRATA_BIN" \
+STRATA_MODEL="$STRATA_MODEL" \
+STRATA_MEMORY_FLOOR_MB="$STRATA_MEMORY_FLOOR_MB" \
+STRATA_ACTION_TIMEOUT_SEC="$STRATA_ACTION_TIMEOUT_SEC" \
 /usr/bin/python3 - <<'PY'
 import json
 import os
@@ -89,6 +99,32 @@ registry = [{
     "modelStorePath": os.path.join(home, ".ollama", "models")
 }]
 
+strata_url = os.environ["STRATA_RUNTIME_URL"].strip()
+if strata_url:
+    strata_bin = os.environ["STRATA_BIN"]
+    if not os.path.isfile(strata_bin) or not os.access(strata_bin, os.X_OK):
+        raise SystemExit(f"Strata is configured at {strata_url}, but its CLI is not executable: {strata_bin}")
+    strata_model = os.environ["STRATA_MODEL"]
+    registry.append({
+        "runtimeName": "strata",
+        "containerName": "",
+        "actionDriver": "strata-cli",
+        "runtimeCommand": strata_bin,
+        "runtimeActionTimeoutSec": int(os.environ["STRATA_ACTION_TIMEOUT_SEC"]),
+        "beginAction": [
+            "launch", "--family", "deepseek41", "--model", strata_model,
+            "--context", "8192", "--vision", "off", "--yes", "--no-tui", "--access", "local", "--port", "8080"
+        ],
+        "stopAction": ["launch", "--stop"],
+        "defaultContextLength": 8192,
+        "deviceId": "apple0",
+        "minimumVramRequiredMb": int(os.environ["STRATA_MEMORY_FLOOR_MB"]),
+        "gpuExpected": True,
+        "activityProbe": "strata-status",
+        "dischargeKind": "strata",
+        "concurrencySafe": False
+    })
+
 housekeeper = {
     "Label": housekeeper_label,
     "ProgramArguments": [
@@ -116,6 +152,15 @@ housekeeper = {
     "StandardOutPath": os.path.join(log_dir, "housekeeper.log"),
     "StandardErrorPath": os.path.join(log_dir, "housekeeper.error.log")
 }
+
+if strata_url:
+    housekeeper["EnvironmentVariables"].update({
+        "GPU_HOUSEKEEPER_STRATA_RUNTIME_URL": strata_url,
+        "GPU_HOUSEKEEPER_STRATA_DEVICE_ID": "apple0",
+        "GPU_HOUSEKEEPER_STRATA_VRAM_REQUIRED_MB": os.environ["STRATA_MEMORY_FLOOR_MB"],
+        "GPU_HOUSEKEEPER_STRATA_DEFAULT_CONTEXT_LENGTH": "8192",
+        "GPU_HOUSEKEEPER_STRATA_READY_TIMEOUT_SEC": "120"
+    })
 
 for path, value in ((os.environ["HOUSEKEEPER_PLIST"], housekeeper),):
     with open(path, "wb") as handle:
@@ -168,3 +213,7 @@ echo "Ollama is started and supervised by the Housekeeper process."
 echo "Ollama API: loopback only at http://127.0.0.1:11434"
 echo "Housekeeper peer: $HOUSEKEEPER_URL; host id macstudio"
 echo "Model downloads are restricted to qwen3.5:9b."
+if [[ -n "$STRATA_RUNTIME_URL" ]]; then
+  echo "Strata API: $STRATA_RUNTIME_URL; Housekeeper runtime registered on apple0"
+  echo "Strata admission floor: $STRATA_MEMORY_FLOOR_MB MiB unified memory"
+fi
