@@ -37,6 +37,13 @@ import {
   lowerNumericArithmeticSentence,
   numericArithmeticCompatibility
 } from "./arithmetic.mjs";
+import {
+  decodeNumericInvertCodelet,
+  executeNumericInvertCodelet,
+  isNumericInvertSentence,
+  lowerNumericInvertSentence,
+  numericInvertCompatibility
+} from "./invert.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { deriveSentenceEffects, scheduleCodeletDependencies } from "./effects.mjs";
 
@@ -50,18 +57,6 @@ function semanticDecode(decoded, semantic, sentence) {
 }
 
 function rejectUnprovenSemanticSentence(sentence) {
-  const unsupportedVerb = {
-    remains: "unsupported-remains",
-    invert: "unsupported-invert",
-    exponential: "unsupported-exponential"
-  }[sentence?.be];
-  if (sentence?.mood === "do" && unsupportedVerb) {
-    throw new VliwEncodingError(
-      unsupportedVerb,
-      `${sentence.be} sentence lowering requires a recovered legacy sentence fixture`,
-      { sentence }
-    );
-  }
   if (sentence?.be === "vector" && sentence?.ob?.ve !== undefined) {
     throw new VliwEncodingError(
       "unsupported-vector",
@@ -88,6 +83,9 @@ export function lowerSentence(sentence) {
   }
   if (isTypedLiteralSentence(sentence)) {
     return [lowerTypedLiteralSentence(sentence)];
+  }
+  if (isNumericInvertSentence(sentence)) {
+    return [lowerNumericInvertSentence(sentence)];
   }
   if (isNumericArithmeticSentence(sentence) && sentence.be !== "plus") {
     return [lowerNumericArithmeticSentence(sentence)];
@@ -188,6 +186,27 @@ export function decodeCodelet(input) {
   }
   if (
     decoded.words[0] === numericArithmeticCompatibility.head &&
+    decoded.words[7] === numericInvertCompatibility.invert
+  ) {
+    try {
+      return semanticDecode(
+        decoded,
+        "numeric-invert",
+        decodeNumericInvertCodelet(decoded.words)
+      );
+    } catch (error) {
+      if (error instanceof VliwEncodingError && error.code === "malformed-codelet") {
+        throw new VliwCodeletError("unsupported-codelet", "numeric invert codelet is malformed", {
+          cause: error.code,
+          details: error.details,
+          items: decoded.items
+        });
+      }
+      throw error;
+    }
+  }
+  if (
+    decoded.words[0] === numericArithmeticCompatibility.head &&
     decoded.words[7] !== numericArithmeticCompatibility.operators.plus
   ) {
     try {
@@ -250,6 +269,8 @@ export async function executeCodelets(codelets) {
       result = await executeTypedLiteralCodelet(words);
     } else if (decoded.semantic === "numeric-arithmetic") {
       result = await executeNumericArithmeticCodelet(words);
+    } else if (decoded.semantic === "numeric-invert") {
+      result = await executeNumericInvertCodelet(words);
     } else {
       result = await executeNumericPlusCodelet(words);
     }

@@ -5,9 +5,11 @@ pub mod semantic;
 
 pub use catalog::{CatalogError, PyacCatalog, parse_catalog_pya};
 pub use semantic::{
-    NumericArithmeticInstruction, NumericOperator, NumericPlusInstruction, SemanticError,
-    decode_numeric_arithmetic, decode_numeric_plus, execute_numeric_arithmetic,
-    execute_numeric_arithmetic_codelet, execute_numeric_plus, execute_numeric_plus_codelet,
+    NumericArithmeticInstruction, NumericInvertInstruction, NumericOperator,
+    NumericPlusInstruction, SemanticError, decode_numeric_arithmetic, decode_numeric_invert,
+    decode_numeric_plus, execute_numeric_arithmetic, execute_numeric_arithmetic_codelet,
+    execute_numeric_invert, execute_numeric_invert_codelet, execute_numeric_plus,
+    execute_numeric_plus_codelet,
 };
 
 use std::fmt::{Display, Formatter};
@@ -369,7 +371,7 @@ mod tests {
     #[test]
     fn preserves_the_failed_codelet_index() {
         let mut malformed = ONE_PLUS;
-        malformed[7] = 0xe82a;
+        malformed[7] = 0x1234;
         let bytes = encode_pack(&[ONE_PLUS, malformed]).expect("fixtures fit");
         let pack = decode_pack(&bytes).expect("valid pack");
         let error = execute_numeric_arithmetic_pack(&pack).expect_err("unknown operator");

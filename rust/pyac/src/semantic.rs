@@ -4,6 +4,7 @@ const HEAD: u16 = 0x0149;
 const NUMBER_QUOTE: u16 = 0x881d;
 const INSTRUMENTAL_CASE: u16 = 0x287e;
 const ACCUSATIVE_CASE: u16 = 0x245e;
+const DATIVE_CASE: u16 = 0x207e;
 const DEONTIC_MOOD: u16 = 0x295e;
 
 const PLUS: u16 = 0x8a64;
@@ -11,6 +12,9 @@ const SUBTRACT: u16 = 0xabd2;
 const MULTIPLY: u16 = 0xec90;
 const DIVIDE: u16 = 0x8893;
 const XOR: u16 = 0xa810;
+const EXPONENTIAL: u16 = 0x8c29;
+const REMAINS: u16 = 0xe82a;
+const INVERT: u16 = 0xaad2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NumericOperator {
@@ -19,6 +23,8 @@ pub enum NumericOperator {
     Multiply,
     Divide,
     Xor,
+    Exponential,
+    Remains,
 }
 
 impl NumericOperator {
@@ -29,6 +35,8 @@ impl NumericOperator {
             MULTIPLY => Some(Self::Multiply),
             DIVIDE => Some(Self::Divide),
             XOR => Some(Self::Xor),
+            EXPONENTIAL => Some(Self::Exponential),
+            REMAINS => Some(Self::Remains),
             _ => None,
         }
     }
@@ -40,6 +48,8 @@ impl NumericOperator {
             Self::Multiply => MULTIPLY,
             Self::Divide => DIVIDE,
             Self::Xor => XOR,
+            Self::Exponential => EXPONENTIAL,
+            Self::Remains => REMAINS,
         }
     }
 }
@@ -49,6 +59,14 @@ pub struct NumericArithmeticInstruction {
     pub operator: NumericOperator,
     pub ob: u16,
     pub to: u16,
+}
+
+/// The legacy invert codelet carries the value in the accusative phrase and
+/// the bound it is inverted about in the dative phrase. Pyash inverts a
+/// number by negating it, so the bound is fixed at zero.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NumericInvertInstruction {
+    pub ob: u16,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,6 +89,9 @@ pub enum SemanticError {
     UnsupportedOperator {
         actual: u16,
     },
+    UnsupportedBound {
+        actual: u16,
+    },
     DivisionByZero,
 }
 
@@ -80,6 +101,7 @@ impl SemanticError {
             Self::InvalidShape { .. } => "malformed-codelet",
             Self::NonzeroTail { .. } => "nonzero-tail",
             Self::UnsupportedOperator { .. } => "unsupported-operator",
+            Self::UnsupportedBound { .. } => "unsupported-sentence",
             Self::DivisionByZero => "division-by-zero",
         }
     }
@@ -106,6 +128,12 @@ impl std::fmt::Display for SemanticError {
                 write!(
                     formatter,
                     "numeric arithmetic operator 0x{actual:04x} is unsupported"
+                )
+            }
+            Self::UnsupportedBound { actual } => {
+                write!(
+                    formatter,
+                    "numeric invert only supports a zero bound, got {actual}"
                 )
             }
             Self::DivisionByZero => formatter.write_str("numeric division cannot divide by zero"),
@@ -177,6 +205,24 @@ pub fn execute_numeric_plus(instruction: &NumericPlusInstruction) -> u16 {
     instruction.ob.saturating_add(instruction.to)
 }
 
+/// Saturating exponentiation, matching the JavaScript reference backend:
+/// the result is truncated and clamped into the unsigned 16-bit range.
+fn saturating_power(base: u16, exponent: u16) -> u64 {
+    let mut result: u64 = 1;
+    let mut factor: u64 = u64::from(base);
+    let mut remaining = exponent;
+    while remaining > 0 {
+        if remaining & 1 == 1 {
+            result = result.saturating_mul(factor);
+        }
+        remaining >>= 1;
+        if remaining > 0 {
+            factor = factor.saturating_mul(factor);
+        }
+    }
+    result.min(u64::from(u16::MAX))
+}
+
 pub fn execute_numeric_arithmetic(
     instruction: &NumericArithmeticInstruction,
 ) -> Result<u64, SemanticError> {
@@ -191,7 +237,43 @@ pub fn execute_numeric_arithmetic(
             Ok(u64::from(instruction.ob / instruction.to))
         }
         NumericOperator::Xor => Ok(u64::from(instruction.ob ^ instruction.to)),
+        NumericOperator::Exponential => Ok(saturating_power(instruction.ob, instruction.to)),
+        NumericOperator::Remains => {
+            if instruction.to == 0 {
+                return Err(SemanticError::DivisionByZero);
+            }
+            Ok(u64::from(instruction.ob % instruction.to))
+        }
     }
+}
+
+pub fn decode_numeric_invert(
+    words: &[u16; WORDS_PER_CODELET],
+) -> Result<NumericInvertInstruction, SemanticError> {
+    expect(words, 0, HEAD)?;
+    expect(words, 1, NUMBER_QUOTE)?;
+    expect(words, 3, ACCUSATIVE_CASE)?;
+    expect(words, 4, NUMBER_QUOTE)?;
+    expect(words, 6, DATIVE_CASE)?;
+    expect(words, 7, INVERT)?;
+    expect(words, 8, DEONTIC_MOOD)?;
+    for (index, actual) in words.iter().enumerate().skip(9) {
+        if *actual != 0 {
+            return Err(SemanticError::NonzeroTail {
+                index,
+                actual: *actual,
+            });
+        }
+    }
+    let bound = words[5];
+    if bound != 0 {
+        return Err(SemanticError::UnsupportedBound { actual: bound });
+    }
+    Ok(NumericInvertInstruction { ob: words[2] })
+}
+
+pub fn execute_numeric_invert(instruction: &NumericInvertInstruction) -> i64 {
+    -i64::from(instruction.ob)
 }
 
 pub fn execute_numeric_plus_codelet(
@@ -206,6 +288,13 @@ pub fn execute_numeric_arithmetic_codelet(
 ) -> Result<u64, SemanticError> {
     let instruction = decode_numeric_arithmetic(words)?;
     execute_numeric_arithmetic(&instruction)
+}
+
+pub fn execute_numeric_invert_codelet(
+    words: &[u16; WORDS_PER_CODELET],
+) -> Result<i64, SemanticError> {
+    let instruction = decode_numeric_invert(words)?;
+    Ok(execute_numeric_invert(&instruction))
 }
 
 #[cfg(test)]
@@ -287,17 +376,80 @@ mod tests {
     }
 
     #[test]
+    fn executes_exponential_and_remainder_like_the_reference_backend() {
+        assert_eq!(
+            execute_numeric_arithmetic_codelet(&arithmetic_codelet(
+                NumericOperator::Exponential,
+                2,
+                10
+            )),
+            Ok(1024)
+        );
+        assert_eq!(
+            execute_numeric_arithmetic_codelet(&arithmetic_codelet(
+                NumericOperator::Exponential,
+                2,
+                20
+            )),
+            Ok(u64::from(u16::MAX))
+        );
+        assert_eq!(
+            execute_numeric_arithmetic_codelet(&arithmetic_codelet(NumericOperator::Remains, 9, 4)),
+            Ok(1)
+        );
+    }
+
+    fn invert_codelet(ob: u16, bound: u16) -> [u16; WORDS_PER_CODELET] {
+        [
+            HEAD,
+            NUMBER_QUOTE,
+            ob,
+            ACCUSATIVE_CASE,
+            NUMBER_QUOTE,
+            bound,
+            DATIVE_CASE,
+            INVERT,
+            DEONTIC_MOOD,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ]
+    }
+
+    #[test]
+    fn executes_the_legacy_invert_shape() {
+        assert_eq!(
+            execute_numeric_invert_codelet(&invert_codelet(5, 0)),
+            Ok(-5)
+        );
+        assert_eq!(
+            execute_numeric_invert_codelet(&invert_codelet(5, 9)).expect_err("only a zero bound"),
+            SemanticError::UnsupportedBound { actual: 9 }
+        );
+    }
+
+    #[test]
     fn reports_arithmetic_operator_errors() {
         let mut unknown = arithmetic_codelet(NumericOperator::Plus, 1, 1);
-        unknown[7] = 0xe82a;
+        unknown[7] = 0x1234;
         assert_eq!(
             decode_numeric_arithmetic(&unknown).expect_err("unknown operator"),
-            SemanticError::UnsupportedOperator { actual: 0xe82a }
+            SemanticError::UnsupportedOperator { actual: 0x1234 }
         );
 
         let divide_by_zero = arithmetic_codelet(NumericOperator::Divide, 8, 0);
         assert_eq!(
             execute_numeric_arithmetic_codelet(&divide_by_zero).expect_err("division by zero"),
+            SemanticError::DivisionByZero
+        );
+
+        let remainder_by_zero = arithmetic_codelet(NumericOperator::Remains, 9, 0);
+        assert_eq!(
+            execute_numeric_arithmetic_codelet(&remainder_by_zero).expect_err("division by zero"),
             SemanticError::DivisionByZero
         );
     }

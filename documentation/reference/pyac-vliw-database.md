@@ -587,10 +587,15 @@ values but no recovered legacy date encoding or execution handler; their rows
 carry `unsupported-date`. The structural continuation decoder is available for
 lossless multi-vector evidence; it does not promote either domain to execution.
 
-Unary `invert`, `exponential`, and vocabulary-only `remains` sentences also
-remain outside the proven adapter set. Catalog rows preserve the stable
-`unsupported-invert`, `unsupported-exponential`, and `unsupported-remains`
-reasons rather than falling through to numeric-plus lowering.
+Unary `invert`, `exponential`, and vocabulary-only `remains` sentences are now
+part of the proven adapter set. `exponential` and `remains` are Pyash-native
+semantics in the legacy binary operator layout — the vocabulary word is
+normative but the legacy has no power or remainder verb — and `invert` keeps
+the legacy invert codelet shape with its bound fixed at zero. The Rust crate
+mirrors the same operator set and invert codelet, so the two implementations
+agree on the bytes and on the values they compute. Its pack executor still
+covers the arithmetic slice only and reports an unsupported operator for a
+codelet outside that slice rather than guessing.
 
 ## 8. Conformance
 

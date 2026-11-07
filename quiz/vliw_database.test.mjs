@@ -71,18 +71,21 @@ test("PyAC keeps vector and date sentences explicitly unsupported", () => {
   ]);
 });
 
-test("PyAC keeps unproven arithmetic domains explicitly unsupported", () => {
+test("PyAC records the proven arithmetic domains as executable", () => {
   const database = buildVliwDatabase([
     parse("ob num 2 be invert do"),
     parse("ob num 2 from num 3 be exponential do"),
     parse("ob num 9 from num 4 be remains do")
   ]);
 
-  assert.deepEqual(database.catalog.records.map((record) => record.error.code), [
-    "unsupported-invert",
-    "unsupported-exponential",
-    "unsupported-remains"
-  ]);
+  assert.deepEqual(
+    database.catalog.records.map((record) => [record.status, record.semantic]),
+    [
+      ["executable", "numeric-invert"],
+      ["executable", "numeric-arithmetic"],
+      ["executable", "numeric-arithmetic"]
+    ]
+  );
 });
 
 test("PyAC queries select semantic, case, word, and value indexes", () => {

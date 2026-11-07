@@ -41,8 +41,8 @@ test("PyAC corpus round-trips supported rows through VLIW and canonical Pyash", 
   const unsupported = database.catalog.records.filter((record) => record.status === "unsupported");
 
   assert.equal(sentences.length, 17);
-  assert.equal(executable.length, 11);
-  assert.equal(unsupported.length, 6);
+  assert.equal(executable.length, 14);
+  assert.equal(unsupported.length, 3);
   assert.equal(database.catalog.packHash.length, 64);
 
   const plus = executable.find((record) => record.semantic === "numeric-plus");
@@ -58,17 +58,14 @@ test("PyAC corpus round-trips supported rows through VLIW and canonical Pyash", 
   }
 
   const outcomes = await replayVliwDatabase(database);
-  assert.equal(outcomes.filter((outcome) => outcome.status === "replayed").length, 11);
-  assert.equal(outcomes.filter((outcome) => outcome.status === "unsupported").length, 6);
+  assert.equal(outcomes.filter((outcome) => outcome.status === "replayed").length, 14);
+  assert.equal(outcomes.filter((outcome) => outcome.status === "unsupported").length, 3);
   assert.deepEqual(
     outcomes
       .filter((outcome) => outcome.status === "unsupported")
       .map((outcome) => outcome.error.code),
     [
       "numeric-range",
-      "unsupported-invert",
-      "unsupported-exponential",
-      "unsupported-remains",
       "unsupported-vector",
       "unsupported-date"
     ]

@@ -104,6 +104,43 @@ translation adapter, preserves one source record per translated sentence, and
 passes canonical sentences through catalog, pack, query, and replay contracts.
 Records retain language, locator, line index, sentence index, and original text.
 
+## Numeric operators
+
+The binary numeric operators share one nine-word prefix. The operator word at
+slot 7 names the operation, and the head word at slot 0 is the legacy parse
+index for that shape:
+
+```text
+0149 881D A 287E 881D B 245E operator 295E
+```
+
+`arithmetic.mjs` covers `subtract` (`0xABD2`), `multiply` (`0xEC90`),
+`divide` (`0x8893`), `xor` (`0xA810`), `exponential` (`0x8C29`), and `remains`
+(`0xE82A`). `plus` keeps its own adapter because it saturates at `0xFFFF`.
+
+`exponential` and `remains` are Pyash-native semantics in the legacy binary
+operator layout: the legacy has no power or remainder verb, so the vocabulary
+word is normative but no legacy sentence exists for them. The right operand
+comes from `from` or `by`, because in those two verbs `to` is the result
+target. The result saturates into the unsigned 16-bit range, and a zero
+divisor is a `division-by-zero` execution error.
+
+## Numeric invert
+
+The legacy invert codelet carries the value in the accusative phrase and the
+bound it is inverted about in the dative phrase:
+
+```text
+0149 881D A 245E 881D B 207E AAD2 295E
+```
+
+The legacy computes `not value + bound`. Pyash inverts a number by negating
+it, so the bound is fixed at zero and the legacy phrase shape is kept. A
+codelet whose dative phrase names a bound is the legacy's own form; Pyash has
+no verb for it, so the decoder rejects it rather than inventing a meaning.
+The implementation is `program/library/vliw/invert.mjs`, with conformance in
+`quiz/vliw_invert.test.mjs`.
+
 ## Reference facade
 
 `program/library/vliw/index.mjs` exposes:
@@ -115,8 +152,13 @@ Records retain language, locator, line index, sentence index, and original text.
   references and duplicate writers.
 
 The proven facade supports numeric `plus`, scalar `subtract`, `multiply`,
-`divide`, and `xor`; anonymous and named numeric/text/boolean literals;
-multiword legacy names; and bounded paragraph-letter text. Valid but unknown
-codelets decode losslessly and are then rejected explicitly. Vector and date
-values remain unsupported catalog rows until their exact legacy layouts have
-golden fixtures.
+`divide`, `xor`, `exponential`, and `remains`; numeric `invert`; anonymous and
+named numeric/text/boolean literals; multiword legacy names; and bounded
+paragraph-letter text. Valid but unknown codelets decode losslessly and are
+then rejected explicitly. Vector and date values remain unsupported catalog
+rows until their exact legacy layouts have golden fixtures.
+
+The Rust crate in `rust/pyac/` mirrors the numeric operator set and the invert
+codelet, so the two implementations agree on the bytes and on the values they
+compute. Its pack executor still covers the arithmetic slice only; it reports
+an unsupported operator for a codelet outside that slice rather than guessing.
