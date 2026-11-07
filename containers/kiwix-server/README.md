@@ -1,10 +1,11 @@
 # Kiwix Server
 
-This container serves the shared Pyash ZIM collection from
-`world/library/archive/`. Every top-level `*.zim` file in that directory is loaded
-when the server starts. The directory is mounted read-only. The server listens
-on host port `8091` over IPv4 and IPv6; port `8080` remains available to other
-local services. Put at least one archive in the collection before starting it.
+This container serves the shared Pyash ZIM collection from `/srv/search/archive/`.
+The Pyash-facing path `world/library/archive/` is a symlink to that directory.
+Every top-level `*.zim` file there is loaded when the server starts. The
+directory is mounted read-only. The server listens on host port `8091` over
+IPv4 and IPv6; port `8080` remains available to other local services. Put at
+least one archive in the collection before starting it.
 
 ```sh
 docker compose -f containers/kiwix-server/compose.yaml up -d
@@ -12,7 +13,8 @@ docker compose -f containers/kiwix-server/compose.yaml up -d
 
 Open <http://127.0.0.1:8091/> or <http://[::1]:8091/> to browse the library.
 Adding or removing a ZIM means adding or removing a top-level file in
-`world/library/archive/`, then restarting the service so Kiwix reloads the
+`/srv/search/archive/` (or through its Pyash symlink
+`world/library/archive/`), then restarting the service so Kiwix reloads the
 collection:
 
 ```sh

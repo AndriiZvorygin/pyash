@@ -112,7 +112,9 @@ Common compounds
 
 World library collections
 - `world/library/archive/` stores shared, searchable ZIM archive artifacts.
-  Kiwix loads each top-level `*.zim` file from this collection at server start.
+  On the host, this stable Pyash path symlinks to `/srv/search/archive/`.
+  Kiwix loads each top-level `*.zim` file from the persistent service directory
+  at server start.
 
 
 ### Sugar form examples

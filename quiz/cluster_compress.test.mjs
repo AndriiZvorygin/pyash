@@ -213,6 +213,39 @@ test("read and search use the existing Pyash verbs for a ZIM archive", async () 
   });
 });
 
+test("ZIM reads follow the configured external library symlink and reject other outside links", async () => {
+  await withZimTools(async (root) => {
+    const storage = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-zim-external-store-"));
+    const libraryAlias = path.join(root, "library");
+    await fs.writeFile(path.join(storage, "guide.zim"), "fixture-zim", "utf8");
+    await fs.symlink(storage, libraryAlias, "dir");
+    doRemember(parse('exists su name zim archive library directory ob text "library" be default ya'));
+    doRemember(parse(`exists su name zim archive service directory ob text ${JSON.stringify(storage)} be default ya`));
+
+    try {
+      const result = await interpret(parse(
+        'from filename "library/guide.zim" as wo cluster-compress ob text "index.html" be read do'
+      ));
+      assert.equal(result?.be, "read");
+      assert.equal(result?.ob?.text, "article body\n");
+
+      const unrelatedStore = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-zim-unrelated-store-"));
+      await fs.writeFile(path.join(unrelatedStore, "outside.zim"), "fixture-zim", "utf8");
+      await fs.symlink(unrelatedStore, path.join(root, "unrelated"), "dir");
+      try {
+        await assert.rejects(
+          interpret(parse('from filename "unrelated/outside.zim" as wo cluster-compress be read do')),
+          /outside|command roots/u
+        );
+      } finally {
+        await fs.rm(unrelatedStore, { recursive: true, force: true });
+      }
+    } finally {
+      await fs.rm(storage, { recursive: true, force: true });
+    }
+  });
+});
+
 test("search through Pyash accepts a directory and searches its direct ZIM members", async () => {
   await withZimTools(async (root, log) => {
     await fs.writeFile(path.join(root, "archives", "first.zim"), "fixture-zim", "utf8");

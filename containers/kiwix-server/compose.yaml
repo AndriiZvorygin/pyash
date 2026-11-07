@@ -12,5 +12,5 @@ services:
         host_ip: "::"
         protocol: tcp
     volumes:
-      - "../../world/library/archive:/data:ro"
+      - "/srv/search/archive:/data:ro"
     restart: unless-stopped

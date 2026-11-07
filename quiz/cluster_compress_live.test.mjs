@@ -57,12 +57,13 @@ test("installed ZIM tools create, read, and full-text search a real archive and 
   const site = path.join(root, "site");
   const secondSite = path.join(root, "second-site");
   const library = path.join(root, "library");
+  const libraryStorage = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-zim-live-storage-"));
   const previousFixtures = Object.fromEntries(fixtureNames.map((name) => [name, process.env[name]]));
   const previousShell = process.env.SHELL;
   let kiwixServer;
   await fs.mkdir(site);
   await fs.mkdir(secondSite);
-  await fs.mkdir(library);
+  await fs.symlink(libraryStorage, library, "dir");
   await fs.writeFile(
     path.join(site, "index.html"),
     "<!doctype html><html><head><title>Offline test</title></head><body>cobalt archive retrieval proof</body></html>",
@@ -83,6 +84,7 @@ test("installed ZIM tools create, read, and full-text search a real archive and 
   doRemember(parse("exists su name command classifier enabled ob bool truth ya"));
   doRemember(parse('exists su name zim archive default language ob text "eng" be default ya'));
   doRemember(parse('exists su name zim archive library directory ob text "library" be default ya'));
+  doRemember(parse(`exists su name zim archive service directory ob text ${JSON.stringify(libraryStorage)} be default ya`));
 
   try {
     const created = await interpret(parse(
@@ -98,8 +100,8 @@ test("installed ZIM tools create, read, and full-text search a real archive and 
     await fs.copyFile(path.join(root, "offline.zim"), path.join(library, "offline.zim"));
 
     kiwixServer = await startKiwixServer([
-      path.join(library, "pyash-guide.zim"),
-      path.join(library, "offline.zim")
+      path.join(libraryStorage, "pyash-guide.zim"),
+      path.join(libraryStorage, "offline.zim")
     ]);
     doRemember(parse(`exists su name zim archive search server ob text ${JSON.stringify(kiwixServer.endpoint)} be default ya`));
 
@@ -150,5 +152,6 @@ test("installed ZIM tools create, read, and full-text search a real archive and 
       else process.env[name] = value;
     }
     await fs.rm(root, { recursive: true, force: true });
+    await fs.rm(libraryStorage, { recursive: true, force: true });
   }
 });

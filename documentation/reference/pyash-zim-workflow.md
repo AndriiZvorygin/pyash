@@ -111,9 +111,11 @@ Defaults live in `configure/default.pya`: writer, reader, search tool, Zimit
 image, archive metadata defaults, and the existing `ksus hzip` compound. The
 resulting `.zim` remains a file artifact. `containers/kiwix-server/` provides a
 read-only server for the shared `world/library/archive/` collection on host port
-8091 over IPv4 and IPv6. Every top-level `*.zim` file in that directory is
-included when the container starts. Add or remove files there and restart the
-service to refresh the collection. Pyash agents can search the collection
+8091 over IPv4 and IPv6. The persistent host collection lives at
+`/srv/search/archive/`; `world/library/archive/` is its stable Pyash-facing
+symlink. Every top-level `*.zim` file in the persistent directory is included
+when the container starts. Add or remove files through either path and restart
+the service to refresh the collection. Pyash agents can search the collection
 directory with the existing `search as cluster-compress` verb and retrieve a
 selected entry with `read as cluster-compress`. The server HTTP search endpoint
 searches across the loaded archives. The public browser and search endpoint is
