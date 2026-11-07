@@ -473,6 +473,7 @@ async function resolveZimSearchInputs(sentence, rememberFn) {
       fail(sentence, "zim archive invalid", "ZIM search input file must use the .zim extension", { filename: input.path });
     }
     return {
+      sandbox,
       libraryPath: input.path,
       isCollection: false,
       archives: [{ filename: input.path, relative: path.relative(sandbox.cwd, input.path) }]
@@ -489,7 +490,7 @@ async function resolveZimSearchInputs(sentence, rememberFn) {
     const resolved = await resolveInputFile(sentence, sandbox, archivePath);
     archives.push({ filename: resolved.path, relative: path.relative(sandbox.cwd, resolved.path) });
   }
-  return { libraryPath: input.path, isCollection: true, archives };
+  return { sandbox, libraryPath: input.path, isCollection: true, archives };
 }
 
 export async function readZimArchive(sentence, {
@@ -517,9 +518,19 @@ export async function searchZimArchive(sentence, {
   remember: rememberFn = remember,
   runtimeContext = null
 } = {}) {
-  const { libraryPath, isCollection, archives } = await resolveZimSearchInputs(sentence, rememberFn);
+  const { sandbox, libraryPath, isCollection, archives } = await resolveZimSearchInputs(sentence, rememberFn);
   const query = String(sentence?.ob?.text ?? rememberFn(sentence?.ob?.name)?.ob?.text ?? "").trim();
   if (!query) fail(sentence, "zim search query missing", "ZIM search requires ob text query");
+  const configuredLibrary = resolveConfigText("zim archive library directory", { rememberFn }) ?? "world/library/archive";
+  const sharedLibraryPath = path.resolve(sandbox.cwd, configuredLibrary);
+  const isSharedLibrary = isCollection && sharedLibraryPath === libraryPath;
+  const isSharedArchive = !isCollection && sharedLibraryPath === path.dirname(libraryPath);
+  if (isSharedLibrary || isSharedArchive) {
+    const archiveFilter = isSharedArchive
+      ? path.basename(libraryPath, path.extname(libraryPath)).toLowerCase()
+      : null;
+    return searchZimLibraryServer(sentence, { query, archives, archiveFilter, rememberFn });
+  }
   const tool = configuredTool("zim archive search module", "kiwix-search", rememberFn);
   const results = [];
   let singleArchiveOutput = "";
@@ -546,6 +557,93 @@ export async function searchZimArchive(sentence, {
     su: sentence?.to?.name ? { name: sentence.to.name } : (sentence?.su ?? { name: "ZIM search results" }),
     ob: { text: output },
     from: { filename: libraryPath },
+    be: "search"
+  };
+}
+
+function decodeXmlText(value = "") {
+  return String(value)
+    .replace(/&lt;/giu, "<")
+    .replace(/&gt;/giu, ">")
+    .replace(/&quot;/giu, '"')
+    .replace(/&apos;/giu, "'")
+    .replace(/&#39;/giu, "'")
+    .replace(/&#(\d+);/gu, (_, digits) => String.fromCodePoint(Number(digits)))
+    .replace(/&#x([\da-f]+);/giu, (_, digits) => String.fromCodePoint(Number.parseInt(digits, 16)))
+    .replace(/&amp;/giu, "&");
+}
+
+function xmlTagText(source, tag) {
+  const escapedTag = String(tag).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const match = String(source).match(new RegExp(`<${escapedTag}(?:\\s[^>]*)?>([\\s\\S]*?)</${escapedTag}>`, "iu"));
+  return match?.[1] ?? "";
+}
+
+export function parseKiwixSearchResults(xml, { endpoint, archives = [], archiveFilter = null } = {}) {
+  const archiveByName = new Map(archives.map((archive) => [
+    path.basename(archive.filename, path.extname(archive.filename)).toLowerCase(), archive.relative
+  ]));
+  const items = [...String(xml ?? "").matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/giu)];
+  return items.map(([, item]) => {
+    const title = decodeXmlText(xmlTagText(item, "title")).trim();
+    const rawLink = decodeXmlText(xmlTagText(item, "link")).trim();
+    const description = decodeXmlText(xmlTagText(item, "description"))
+      .replace(/<[^>]*>/gu, " ")
+      .replace(/\s+/gu, " ")
+      .trim();
+    const link = rawLink && endpoint ? new URL(rawLink, endpoint) : null;
+    const parts = link?.pathname.match(/^\/content\/([^/]+)\/(.+)$/u);
+    const archiveId = parts?.[1] ? decodeURIComponent(parts[1]) : "";
+    const entry = parts?.[2] ? decodeURIComponent(parts[2]) : "";
+    const bookTitle = decodeXmlText(xmlTagText(xmlTagText(item, "book"), "title")).trim();
+    return {
+      title,
+      link: link?.toString() ?? rawLink,
+      archiveId,
+      archivePath: archiveByName.get(archiveId.toLowerCase()) ?? "",
+      bookTitle,
+      entry,
+      snippet: description
+    };
+  }).filter((result) => (result.title || result.snippet || result.link)
+    && (!archiveFilter || result.archiveId.toLowerCase() === archiveFilter));
+}
+
+async function searchZimLibraryServer(sentence, { query, archives, archiveFilter = null, rememberFn }) {
+  const base = resolveConfigText("zim archive search server", { rememberFn });
+  if (!base) fail(sentence, "zim search server missing", "shared ZIM library search requires zim archive search server configuration");
+  let endpoint;
+  try {
+    endpoint = new URL("/search", base);
+  } catch (error) {
+    fail(sentence, "zim search server invalid", "zim archive search server must be a valid HTTP URL", { endpoint: base, error: error.message });
+  }
+  endpoint.searchParams.set("pattern", query);
+  endpoint.searchParams.set("format", "xml");
+  let response;
+  try {
+    response = await fetch(endpoint, { signal: AbortSignal.timeout(10000) });
+  } catch (error) {
+    fail(sentence, "zim search server unavailable", `cannot query the shared ZIM library search server: ${error.message}`, { endpoint: base });
+  }
+  if (!response.ok) {
+    fail(sentence, "zim search server defective", `shared ZIM library search returned HTTP ${response.status}`, { endpoint: endpoint.toString() });
+  }
+  const xml = await response.text();
+  const results = parseKiwixSearchResults(xml, { endpoint: base, archives, archiveFilter });
+  const output = results.length === 0
+    ? "No results found in the shared ZIM archive library."
+    : results.map((result) => [
+      `archive: ${result.archivePath || result.bookTitle || result.archiveId}`,
+      `title: ${result.title}`,
+      `entry: ${result.entry || result.link}`,
+      `snippet: ${result.snippet}`
+    ].join("\n")).join("\n\n");
+  return {
+    mood: "ya",
+    su: sentence?.to?.name ? { name: sentence.to.name } : (sentence?.su ?? { name: "ZIM search results" }),
+    ob: { text: output },
+    from: { filename: archives[0]?.filename ? path.dirname(archives[0].filename) : "world/library/archive" },
     be: "search"
   };
 }

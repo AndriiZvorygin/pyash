@@ -67,30 +67,33 @@ from filename "archives/site.zim" as wo cluster-compress be read do
 from filename "archives/site.zim" as wo cluster-compress ob text "index.html" be read do
 ```
 
-Search uses Kiwix's `kiwix-search` command and the full-text index embedded in
-the ZIM. The `zimwriterfs` default builds that index. `read` uses OpenZIM's
-`zimdump` to list entries or extract one article directly. For browser-based
-retrieval and interactive search, the optional Kiwix Server serves the same
-ZIM and its embedded index:
+Search in the shared `world/library/archive` collection uses the configured
+Kiwix Server's full-text index and returns the archive path, article title,
+entry path, and matching excerpt. The `zimwriterfs` default builds the index.
+`read` uses OpenZIM's `zimdump` to list entries or extract one article directly.
+The server also supports searching one archive from that shared collection:
 
 ```pyash
-ob text "offline archive" in filename "archives/site.zim" as wo cluster-compress be search do
+ob text "Pyash" in filename "world/library/archive/pyash-hierarchy.zim" as wo cluster-compress be search do
 ```
 
-When the search `filename` names a directory, Pyash searches each top-level
-regular `*.zim` file in name order and prefixes each match with its archive
-filename. It does not descend into subdirectories or follow symlinks. This
-supports direct agent retrieval from the shared library:
+When `filename` names the shared library directory or one of its direct
+archives, Pyash queries the server for full results. Other archive directories
+use the local `kiwix-search` command and return its matching titles; directory
+search only considers top-level regular `*.zim` files in name order and does
+not follow subdirectories or symlinks. This supports direct agent retrieval
+from the shared library:
 
 ```pyash
-ob text "offline archive" in filename "world/library/archive" as wo cluster-compress be search do
-from filename "world/library/archive/site.zim" as wo cluster-compress ob text "index.html" be read do
+ob text "Pyash" in filename "world/library/archive" as wo cluster-compress be search do
+from filename "world/library/archive/pyash-hierarchy.zim" as wo cluster-compress ob text "index.html" be read do
 ```
 
 ## Tools and configuration
 
 Local text and HTML conversion invokes `zimwriterfs` through Pyash `command`.
-Reading uses `zimdump`; searching uses Kiwix's `kiwix-search`. Web capture uses
+Reading uses `zimdump`; shared-library search uses the configured Kiwix Server,
+and other local searches use `kiwix-search`. Web capture uses
 Docker with the configured Zimit image, defaulting to `ghcr.io/openzim/zimit`;
 the container must be available locally or Docker must be able to retrieve it.
 The existing command policy classifies archive creation tools as local writers,

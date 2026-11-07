@@ -7,8 +7,31 @@ import path from "node:path";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { doRemember, forget } from "../program/remember/index.mjs";
+import { parseKiwixSearchResults } from "../program/library/zim_archive.mjs";
 
 const fixtureNames = ["PYA_COMMAND_RESPONSE", "PYA_COMMAND_DEBUG", "PYA_ZIM_TOOL_LOG", "PYA_ZIM_TOOL_FAIL"];
+
+test("Kiwix search RSS results retain archive, entry, title, and excerpt", () => {
+  const xml = `<?xml version="1.0"?><rss><channel><item>
+    <title>Guide &amp; reference</title>
+    <link>/content/pyash-guide/index.html</link>
+    <description>A <b>Pyash</b> archive &amp; retrieval guide.</description>
+    <book><title>Pyash guide</title></book>
+  </item></channel></rss>`;
+
+  assert.deepEqual(parseKiwixSearchResults(xml, {
+    endpoint: "http://[::1]:8091",
+    archives: [{ filename: "/repo/world/library/archive/pyash-guide.zim", relative: "world/library/archive/pyash-guide.zim" }]
+  }), [{
+    title: "Guide & reference",
+    link: "http://[::1]:8091/content/pyash-guide/index.html",
+    archiveId: "pyash-guide",
+    archivePath: "world/library/archive/pyash-guide.zim",
+    bookTitle: "Pyash guide",
+    entry: "index.html",
+    snippet: "A Pyash archive & retrieval guide."
+  }]);
+});
 
 async function writeExecutable(filename, lines) {
   await fs.writeFile(filename, ["#!/bin/sh", ...lines].join("\n"), "utf8");
