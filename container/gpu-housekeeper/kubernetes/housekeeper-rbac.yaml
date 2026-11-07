@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pyash-inference
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: housekeeper-scheduler
+  namespace: pyash-inference
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: housekeeper-ollama-control
+  namespace: pyash-inference
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["ollama"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale"]
+    resourceNames: ["ollama"]
+    verbs: ["get", "patch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: housekeeper-ollama-control
+  namespace: pyash-inference
+subjects:
+  - kind: ServiceAccount
+    name: housekeeper-scheduler
+    namespace: pyash-inference
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: housekeeper-ollama-control
+---
+# The API server fills this token Secret. Copy its token and CA to the local,
+# ignored Housekeeper credential directory; never commit those data fields.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: housekeeper-scheduler-token
+  namespace: pyash-inference
+  annotations:
+    kubernetes.io/service-account.name: housekeeper-scheduler
+type: kubernetes.io/service-account-token

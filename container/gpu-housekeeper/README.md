@@ -1,5 +1,16 @@
 # GPU Housekeeper
 
+## Kubernetes GPU worker pilot
+
+The initial heterogeneous-cluster pilot keeps the existing Housekeeper
+federation and routing policy, while allowing a worker runtime to be managed
+through Kubernetes. The first target is SWAC Ollama; Mriczo remains the
+Housekeeper authority and Mac Studio stays a native peer. See the [Kubernetes
+GPU Housekeeper pilot guide](kubernetes/README.md) for prerequisites,
+least-privilege access, deployment, verification, and rollback. Kubernetes
+support is opt-in through the existing runtime registry; non-Kubernetes
+profiles keep their current behavior.
+
 ## Apple Silicon peer
 
 command/install-macos.sh installs a user-scoped, headless Ollama runtime and
