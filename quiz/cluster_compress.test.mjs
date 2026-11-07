@@ -7,6 +7,7 @@ import path from "node:path";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { doRemember, forget } from "../program/remember/index.mjs";
+import { resolveConfigBool, resolveConfigNum, resolveConfigText } from "../program/configure/env.mjs";
 import { parseKiwixSearchResults } from "../program/library/zim_archive.mjs";
 
 const fixtureNames = ["PYA_COMMAND_RESPONSE", "PYA_COMMAND_DEBUG", "PYA_ZIM_TOOL_LOG", "PYA_ZIM_TOOL_FAIL"];
@@ -38,7 +39,7 @@ async function writeExecutable(filename, lines) {
   await fs.chmod(filename, 0o755);
 }
 
-async function withZimTools(run) {
+async function withZimTools(run, { captureNetworkEnabled = true } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-zim-workflow-"));
   const bin = path.join(root, "bin");
   await fs.mkdir(bin, { recursive: true });
@@ -104,6 +105,16 @@ async function withZimTools(run) {
   doRemember(parse("exists su name agent sandbox ob bool truth ya"));
   doRemember(parse("exists su name command policy mode ob wo allow ya"));
   doRemember(parse("exists su name command classifier enabled ob bool truth ya"));
+  doRemember(parse(`su name sandbox configure be map def
+  su name network ob bool lie ya
+prah`));
+  doRemember(parse(`exists su name web archive network ob bool ${captureNetworkEnabled ? "truth" : "lie"} be default ya`));
+  doRemember(parse('exists su name web archive prefix ob text "prefix" be default ya'));
+  doRemember(parse("exists su name web archive page maximum ob num 2000 be default ya"));
+  doRemember(parse("exists su name web archive page timeout seconds ob num 90 be default ya"));
+  doRemember(parse("exists su name web archive duration maximum seconds ob num 3600 be default ya"));
+  doRemember(parse("exists su name web archive size maximum bytes ob num 2147483648 be default ya"));
+  doRemember(parse("exists su name web archive workers ob num 1 be default ya"));
 
   try {
     await run(root, log);
@@ -163,6 +174,29 @@ test("text files and HTML folders convert to ZIM through the existing write and 
   });
 });
 
+test("default Pyash configuration enables bounded Zimit captures", async () => {
+  const config = await fs.readFile(path.join(process.cwd(), "configure/default.pya"), "utf8");
+  const captureFacts = config
+    .split(/\r?\n/u)
+    .map(line => line.trim())
+    .filter(line => line.startsWith("exists su name web archive "));
+  assert.equal(captureFacts.length, 7);
+
+  forget();
+  try {
+    for (const fact of captureFacts) doRemember(parse(fact));
+    assert.equal(resolveConfigBool("web archive network"), true);
+    assert.equal(resolveConfigText("web archive prefix"), "prefix");
+    assert.equal(resolveConfigNum("web archive page maximum"), 2000);
+    assert.equal(resolveConfigNum("web archive page timeout seconds"), 90);
+    assert.equal(resolveConfigNum("web archive duration maximum seconds"), 3600);
+    assert.equal(resolveConfigNum("web archive size maximum bytes"), 2147483648);
+    assert.equal(resolveConfigNum("web archive workers"), 1);
+  } finally {
+    forget();
+  }
+});
+
 test("web capture retains the ZIM and WARC evidence, and WARC input uses the same conversion route", async () => {
   await withZimTools(async (root, log) => {
     const webResult = await interpret(parse(
@@ -173,6 +207,12 @@ test("web capture retains the ZIM and WARC evidence, and WARC input uses the sam
     assert.equal(await fs.readFile(webResult.warc.filename, "utf8"), "fixture-warc");
     assert.match(await fs.readFile(log, "utf8"), /--keep/u);
     assert.match(await fs.readFile(log, "utf8"), /--seeds=https:\/\/example\.org\//u);
+    assert.match(await fs.readFile(log, "utf8"), /--scopeType=prefix/u);
+    assert.match(await fs.readFile(log, "utf8"), /--pageLimit=2000/u);
+    assert.match(await fs.readFile(log, "utf8"), /--pageLoadTimeout=90/u);
+    assert.match(await fs.readFile(log, "utf8"), /--timeHardLimit=3600/u);
+    assert.match(await fs.readFile(log, "utf8"), /--sizeHardLimit=2147483648/u);
+    assert.match(await fs.readFile(log, "utf8"), /--workers=1/u);
 
     const warcResult = await interpret(parse(
       'from filename "capture.warc" fromstate wo warc tostate wo zim to filename "archives/warc.zim" be cluster-compress do'
@@ -183,6 +223,17 @@ test("web capture retains the ZIM and WARC evidence, and WARC input uses the sam
     assert.match(calls, /warc2zim \/input\/capture\.warc/u);
     assert.ok(await fs.stat(path.join(root, "archives", "web.zim.capture")));
   });
+});
+
+test("web capture obeys its dedicated network permission", async () => {
+  await withZimTools(async (root, log) => {
+    await assert.rejects(
+      interpret(parse('from filename "https://example.org/" fromstate wo web tostate wo zim to filename "archives/blocked.zim" be cluster-compress do')),
+      /web-to-ZIM capture requires enabled network permission/u
+    );
+    assert.equal(await fs.readFile(log, "utf8").catch(() => ""), "");
+    assert.deepEqual(await fs.readdir(path.join(root, "archives")), []);
+  }, { captureNetworkEnabled: false });
 });
 
 test("read and search use the existing Pyash verbs for a ZIM archive", async () => {

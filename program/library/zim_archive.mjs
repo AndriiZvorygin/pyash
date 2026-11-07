@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { remember } from "../remember/index.mjs";
-import { resolveConfigText } from "../configure/env.mjs";
+import { resolveConfigBool, resolveConfigNum, resolveConfigText } from "../configure/env.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { resolveSandboxSettings } from "../verbs/command/sandbox.mjs";
 import { command } from "../verbs/command/command.mjs";
@@ -135,6 +135,20 @@ function configuredTool(name, fallback, rememberFn) {
 
 function configuredImage(name, fallback, rememberFn) {
   return resolveConfigText(name, { rememberFn }) || fallback;
+}
+
+function captureConfigText(name, sentence, rememberFn) {
+  const value = String(resolveConfigText(name, { rememberFn }) ?? "").trim();
+  if (!value) fail(sentence, "cluster compress configuration invalid", `missing Zimit setting: ${name}`, { setting: name });
+  return value;
+}
+
+function captureConfigPositiveInteger(name, sentence, rememberFn) {
+  const value = resolveConfigNum(name, { rememberFn });
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    fail(sentence, "cluster compress configuration invalid", `Zimit setting must be a positive integer: ${name}`, { setting: name, value });
+  }
+  return value;
 }
 
 async function runCommand(sentence, commandText, label, { rememberFn, runtimeContext } = {}) {
@@ -327,8 +341,21 @@ async function writeWebCapture(sentence, { source, sandbox, target, rememberFn, 
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     fail(sentence, "cluster compress input invalid", "web state supports only HTTP and HTTPS URLs", { url: urlText });
   }
-  if (sandbox.networkAllowed === false) fail(sentence, "cluster compress network disabled", "web-to-ZIM capture requires network access", { url: url.href });
+  const networkEnabled = resolveConfigBool("web archive network", { rememberFn })
+    ?? sandbox.networkAllowed;
+  if (networkEnabled !== true) {
+    fail(sentence, "cluster compress network disabled", "web-to-ZIM capture requires enabled network permission", { url: url.href });
+  }
   const name = safeArchiveName(target);
+  const scopeType = captureConfigText("web archive prefix", sentence, rememberFn);
+  if (!["page", "page-spa", "prefix", "host", "domain", "any", "custom"].includes(scopeType)) {
+    fail(sentence, "cluster compress configuration invalid", `unsupported Zimit scope type: ${scopeType}`, { scopeType });
+  }
+  const pageLimit = captureConfigPositiveInteger("web archive page maximum", sentence, rememberFn);
+  const pageTimeoutSeconds = captureConfigPositiveInteger("web archive page timeout seconds", sentence, rememberFn);
+  const hardTimeLimitSeconds = captureConfigPositiveInteger("web archive duration maximum seconds", sentence, rememberFn);
+  const hardSizeLimitBytes = captureConfigPositiveInteger("web archive size maximum bytes", sentence, rememberFn);
+  const workers = captureConfigPositiveInteger("web archive workers", sentence, rememberFn);
   const stage = await fs.mkdtemp(path.join(path.dirname(target), ".zim-web-"));
   const image = configuredImage("zim website capture image", "ghcr.io/openzim/zimit", rememberFn);
   const tool = configuredTool("zim website capture module", "zimit", rememberFn);
@@ -340,6 +367,12 @@ async function writeWebCapture(sentence, { source, sandbox, target, rememberFn, 
     shellArgument(tool),
     shellArgument(`--seeds=${url.href}`),
     shellArgument(`--name=${name}`),
+    shellArgument(`--scopeType=${scopeType}`),
+    shellArgument(`--pageLimit=${pageLimit}`),
+    shellArgument(`--pageLoadTimeout=${pageTimeoutSeconds}`),
+    shellArgument(`--timeHardLimit=${hardTimeLimitSeconds}`),
+    shellArgument(`--sizeHardLimit=${hardSizeLimitBytes}`),
+    shellArgument(`--workers=${workers}`),
     "--output=/output",
     "--keep"
   ].join(" ");

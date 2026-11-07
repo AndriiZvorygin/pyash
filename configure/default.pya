@@ -167,3 +167,10 @@ exists su name zim website capture image ob text "ghcr.io/openzim/zimit" be defa
 exists su name zim archive default language ob text "eng" be default ya
 exists su name zim archive default creator ob text "Pyash" be default ya
 exists su name zim archive default publisher ob text "Pyash" be default ya
+exists su name web archive network ob bool truth be default ya
+exists su name web archive prefix ob text "prefix" be default ya
+exists su name web archive page maximum ob num 2000 be default ya
+exists su name web archive page timeout seconds ob num 90 be default ya
+exists su name web archive duration maximum seconds ob num 3600 be default ya
+exists su name web archive size maximum bytes ob num 2147483648 be default ya
+exists su name web archive workers ob num 1 be default ya
