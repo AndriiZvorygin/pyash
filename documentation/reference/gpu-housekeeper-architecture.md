@@ -559,9 +559,29 @@ are separate projections over durable Pyash state, not competing schedulers.
 
 ## 8. Configuration and operational notes
 
+### IPv6 network allocation and endpoint order
+
+Each Linux host receives its own IPv6 `/64`. The Docker daemon's built-in
+`bridge` IPAM range carries that host prefix; `container/gpu-housekeeper/command/begin.sh`
+derives the Housekeeper's `/80` using the Kwon-assigned Pyash word
+`housekeeper_WORD = 0x49C6` (`nrap`). Thus mriczo's `...:e8c1::/64` yields
+`...:e8c1:49c6::/80`, while SWAC's `...:e929::/64` yields
+`...:e929:49c6::/80`. The Compose network is dual-stack, retaining automatic
+IPv4 allocation while adding the host-specific IPv6 slice.
+
+Federation endpoint alternatives use `|` ordering within a host entry. Put
+IPv6 first and a verified IPv4 endpoint second. Housekeeper falls through
+only when its read-only peer probe fails; an endpoint that responds with a
+capacity or runtime decision remains authoritative. It never retries a job
+submission over another endpoint, avoiding duplicate execution after an
+ambiguous POST failure. Endpoint order selects the peer transport path and
+does not override the throughput-aware host scheduler. Validate each route
+from inside the Housekeeper container, since host-level IPv6 reachability
+does not guarantee container-network reachability.
+
 Peer configuration is host-local deployment configuration, not durable Pyash
 state. The value is a semicolon-separated allowlist of normalized host IDs and
-URLs:
+URLs. A peer may have ordered fallback URLs separated by `|`:
 
 ```sh
 GPU_HOUSEKEEPER_HOST_ID=mriczo

@@ -42,6 +42,49 @@ from that endpoint.
 Port 18886 is the Housekeeper port. Configure workers and federated peers to
 use this port; Linux Compose publishes only this port.
 
+### Host-specific Docker IPv6 and peer routing
+
+Linux Docker must expose the host's assigned IPv6 `/64` on its built-in
+`bridge` network. `command/begin.sh` reads that bridge's IPv6 IPAM prefix and
+derives the Housekeeper network from the Kwon-assigned Pyash word
+`housekeeper_WORD = 0x49C6` (`nrap`), reserving `49C6::/80` under the host
+prefix. For example:
+
+| Host | Docker bridge IPv6 prefix | Housekeeper network |
+| --- | --- | --- |
+| mriczo | `eb22:3b21:2100:e8c1::/64` | `eb22:3b21:2100:e8c1:49c6::/80` |
+| SWAC | `eb22:3b21:2100:e929::/64` | `eb22:3b21:2100:e929:49c6::/80` |
+
+Compose enables IPv6 on the Housekeeper network and keeps Docker's automatic
+IPv4 allocation for local compatibility. The startup script fails clearly if
+the Docker bridge has no IPv6 IPAM prefix; enable daemon IPv6 and set
+`fixed-cidr-v6` before starting Housekeeper. A configured subnet alone does
+not prove that a peer route is reachable, so test the endpoint from the
+Housekeeper container before switching traffic.
+
+Peer URLs may list endpoints in priority order separated by `|`. Housekeeper
+tries the IPv6 endpoint first and advances to IPv4 only when the read-only
+peer probe fails. A reachable peer's capacity decision is kept. Once a job
+submission starts, Housekeeper does not retry it over another endpoint, to
+avoid duplicate execution after an ambiguous POST failure. Endpoint order
+does not change which GPU host the throughput-aware scheduler selects. IPv6
+literals use URL brackets. For example, Mac Studio's verified overlay route
+can precede the existing IPv4 tunnel:
+
+```text
+macstudio=http://[eb22:3b21:3111:aca8::1]:18886|http://DOCKER_BRIDGE_GATEWAY:18887
+```
+
+Keep a peer on its known working IPv4 endpoint until its IPv6 route has passed
+the same container-originated health check. This is currently required for
+SWAC; its assigned `e929` prefix does not by itself establish a working
+inbound route from mriczo.
+
+`command/begin.sh` reads non-secret host peer settings from
+`service/.env` when present; set `GPU_HOUSEKEEPER_ENV_FILE` to a host-local
+deployment file when starting from a separate checkout. Credentials should
+remain in Pyash secret configuration, not in this peer-routing file.
+
 To install or refresh from a checkout on the Mac:
 
 ```sh

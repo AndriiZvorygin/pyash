@@ -1104,6 +1104,21 @@ def configured_peers() -> Dict[str, str]:
   return parse_peer_registry(os.environ.get("GPU_HOUSEKEEPER_PEERS", ""))
 
 
+def peer_route_candidate_with_fallback(
+  peer_host_id: str,
+  peer_urls: str,
+  job: Dict[str, Any]
+) -> Dict[str, Any]:
+  endpoints = [normalize_text(item) for item in peer_urls.split("|") if normalize_text(item)]
+  failures = []
+  for peer_url in endpoints:
+    try:
+      return peer_route_candidate(peer_host_id, peer_url, job)
+    except Exception as err:
+      failures.append(f"{peer_url}: {normalize_text(err) or 'peer request failed'}")
+  raise RuntimeError("all peer endpoints failed: " + "; ".join(failures))
+
+
 def route_visited_hosts(payload: Dict[str, Any]) -> List[str]:
   routing = payload.get("routing") if isinstance(payload.get("routing"), dict) else {}
   visited = routing.get("visitedHosts")
@@ -1602,7 +1617,7 @@ def select_route(payload: Dict[str, Any], job: Dict[str, Any], runtime_registry:
       if peer_host_id == host_id or peer_host_id in visited:
         continue
       try:
-        candidate = peer_route_candidate(peer_host_id, peer_url, job)
+        candidate = peer_route_candidate_with_fallback(peer_host_id, peer_url, job)
       except Exception as err:
         candidate = {
           "hostId": peer_host_id,

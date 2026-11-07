@@ -2621,9 +2621,66 @@ class HousekeeperFederationTests(unittest.TestCase):
 
   def test_parse_peer_registry_uses_host_url_pairs(self):
     self.assertEqual(
-      server.parse_peer_registry("swac=http://swac:8090;gpu-peer=http://gpu-peer:8090"),
-      {"swac": "http://swac:8090", "gpu-peer": "http://gpu-peer:8090"}
+      server.parse_peer_registry(
+        "swac=http://swac:8090;macstudio=http://[eb22::1]:18886|http://host-gateway:18887"
+      ),
+      {
+        "swac": "http://swac:8090",
+        "macstudio": "http://[eb22::1]:18886|http://host-gateway:18887"
+      }
     )
+
+  def test_peer_route_tries_ipv6_endpoint_before_ipv4_fallback(self):
+    ipv6_url = "http://[eb22:3b21:3111:aca8::1]:18886"
+    ipv4_url = "http://172.17.0.1:18887"
+    calls = []
+    server.configured_peers = lambda: {"macstudio": f"{ipv6_url}|{ipv4_url}"}
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "mriczo", "available": False, "immediate": False
+    }
+
+    def probe(host_id, url, _job):
+      calls.append(url)
+      if url == ipv6_url:
+        raise RuntimeError("IPv6 peer request timed out")
+      return {
+        "hostId": host_id,
+        "url": url,
+        "available": True,
+        "immediate": True,
+        "score": 10
+      }
+
+    server.peer_route_candidate = probe
+    route = server.select_route(
+      {}, {"runtimeName": "ollama", "profileName": "qwen", "jobSpec": {}},
+      {"ollama": {}}, "mriczo"
+    )
+
+    self.assertEqual(calls, [ipv6_url, ipv4_url])
+    self.assertEqual(route["selected"]["url"], ipv4_url)
+    self.assertEqual(route["selected"]["hostId"], "macstudio")
+
+  def test_peer_capacity_result_does_not_trigger_endpoint_fallback(self):
+    ipv6_url = "http://[eb22:3b21:3111:aca8::1]:18886"
+    calls = []
+    server.configured_peers = lambda: {
+      "macstudio": f"{ipv6_url}|http://172.17.0.1:18887"
+    }
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "mriczo", "available": True, "immediate": False
+    }
+
+    def probe(host_id, url, _job):
+      calls.append(url)
+      return {"hostId": host_id, "url": url, "available": False, "reason": "peer busy"}
+
+    server.peer_route_candidate = probe
+    server.select_route(
+      {}, {"runtimeName": "ollama", "profileName": "qwen", "jobSpec": {}},
+      {"ollama": {}}, "mriczo"
+    )
+    self.assertEqual(calls, [ipv6_url])
 
   def test_busy_local_host_routes_to_idle_peer(self):
     server.configured_peers = lambda: {"swac": "http://swac:8090"}
