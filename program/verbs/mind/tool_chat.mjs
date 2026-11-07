@@ -13,6 +13,9 @@ import { resolveRatifyDecision } from "../../agent/ratify_policy.mjs";
 import { submitRunToolEvent } from "../../bridge/newspaper.mjs";
 import { DEFAULT_MAX_MIND_TOOL_TURNS, normalizeMindToolCallLimit } from "../../runtime/mind-limits.mjs";
 
+const ZAI_TOOL_RESULT_CONTEXT_BUDGET = 96 * 1024;
+const ZAI_TOOL_RESULT_MESSAGE_LIMIT = 12 * 1024;
+
 function buildPromptText(messages) {
   if (!Array.isArray(messages)) return "";
   const lines = [];
@@ -41,6 +44,60 @@ function trimOldestHistoryMessages(messages, start, end) {
   }
   messages.splice(start, removeCount);
   return { removed: removeCount, end: end - removeCount };
+}
+
+function abbreviateToolResult(content, maxChars) {
+  const source = String(content ?? "");
+  if (source.length <= maxChars) return source;
+  if (maxChars < 120) return "";
+  const marker = `\n\n[Middle omitted for prompt size; original result: ${source.length} characters.]\n\n`;
+  const contentBudget = Math.max(0, maxChars - marker.length);
+  const headLength = Math.ceil(contentBudget / 2);
+  const tailLength = Math.floor(contentBudget / 2);
+  return `${source.slice(0, headLength)}${marker}${tailLength ? source.slice(-tailLength) : ""}`;
+}
+
+function compactCurrentTurnToolResults(messages, startIndex, {
+  totalBudget = ZAI_TOOL_RESULT_CONTEXT_BUDGET,
+  perMessageLimit = ZAI_TOOL_RESULT_MESSAGE_LIMIT
+} = {}) {
+  const toolMessages = [];
+  for (let index = Math.max(0, startIndex); index < messages.length; index += 1) {
+    if (messages[index]?.role === "tool" && typeof messages[index]?.content === "string") toolMessages.push(messages[index]);
+  }
+  let remaining = totalBudget;
+  let changed = 0;
+  let removedCharacters = 0;
+  for (let index = toolMessages.length - 1; index >= 0; index -= 1) {
+    const message = toolMessages[index];
+    const original = message.content;
+    const cap = Math.min(perMessageLimit, remaining);
+    const shortened = abbreviateToolResult(original, cap);
+    if (shortened !== original) {
+      message.content = shortened;
+      changed += 1;
+      removedCharacters += original.length - shortened.length;
+    }
+    remaining = Math.max(0, remaining - message.content.length);
+  }
+  return { changed, removedCharacters };
+}
+
+function requestSizeBreakdown(payload, { historyStart = 0, historyEnd = 0 } = {}) {
+  const messages = Array.isArray(payload?.messages) ? payload.messages : [];
+  const size = (value) => Buffer.byteLength(JSON.stringify(value ?? []), "utf8");
+  const system = messages.slice(0, historyStart);
+  const savedHistory = messages.slice(historyStart, historyEnd);
+  const currentTurn = messages.slice(historyEnd);
+  const toolsBytes = size(payload?.tools ?? []);
+  const messageBytes = size(messages);
+  return {
+    totalBytes: messageBytes + toolsBytes,
+    systemBytes: size(system),
+    savedHistoryBytes: size(savedHistory),
+    currentTurnBytes: size(currentTurn),
+    toolsBytes
+  };
 }
 
 async function callStreamingToolTurn({ backendName, payload, onAssistantDelta, onToolCall } = {}) {
@@ -323,7 +380,7 @@ export async function runToolChat({
   if (resolvedConfigPrompt) messages.push({ role: "system", content: resolvedConfigPrompt });
   if (toolBlock) messages.push({ role: "system", content: toolBlock });
   if (tools?.length) messages.push({ role: "system", content: buildToolUseDirective(tools) });
-  const historyStart = messages.length;
+  let historyStart = messages.length;
   if (historyMessages.length) messages.push(...historyMessages);
   let historyEnd = messages.length;
   const userContent = [callPrompt, inputText.trim()].filter(Boolean).join("\n\n");
@@ -382,6 +439,9 @@ export async function runToolChat({
   const requestModel = async (initialPayload) => {
     let requestPayload = initialPayload;
     let removedHistoryMessages = 0;
+    let compactedToolMessages = 0;
+    let removedToolCharacters = 0;
+    let toolCompactionNoteAdded = false;
     const mockResponse = nextMockResponse();
     for (;;) {
       recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
@@ -413,10 +473,31 @@ export async function runToolChat({
         }
       } catch (error) {
         if (backendName !== "zai command mind" || !isZaiPromptLengthError(error)) throw error;
+        const toolCompaction = compactCurrentTurnToolResults(messages, historyEnd + 1);
+        if (toolCompaction.changed) {
+          compactedToolMessages += toolCompaction.changed;
+          removedToolCharacters += toolCompaction.removedCharacters;
+          if (!toolCompactionNoteAdded) {
+            messages.splice(historyStart, 0, {
+              role: "system",
+              content: "Some completed tool outputs above were abbreviated to fit the provider prompt limit. Those actions already ran; do not repeat side-effecting calls just to recover omitted output. Re-read a source only if the remaining evidence requires it."
+            });
+            historyStart += 1;
+            historyEnd += 1;
+            toolCompactionNoteAdded = true;
+          }
+          await emitToolCall({
+            stage: "context_compacted",
+            toolName: "Z.AI prompt limit",
+            toolText: `Abbreviated ${compactedToolMessages} completed tool result(s), omitting ${removedToolCharacters} characters; tool actions were not repeated.`
+          });
+          requestPayload = buildRequestPayload();
+          continue;
+        }
         const trimmed = trimOldestHistoryMessages(messages, historyStart, historyEnd);
         if (!trimmed.removed) {
-          const promptBytes = Buffer.byteLength(JSON.stringify({ messages: requestPayload.messages, tools: requestPayload.tools }), "utf8");
-          throw new Error(`${error.message}; retried after removing ${removedHistoryMessages} older conversation messages, but the remaining current-turn context, system instructions, and tool schemas still exceed the provider limit (messages and tools: about ${promptBytes} bytes)`);
+          const sizes = requestSizeBreakdown(requestPayload, { historyStart, historyEnd });
+          throw new Error(`${error.message}; recovery removed ${removedHistoryMessages} saved history message(s) and abbreviated ${compactedToolMessages} completed tool result(s) by ${removedToolCharacters} characters, but the request still exceeds the provider limit (JSON bytes: ${sizes.totalBytes}; system: ${sizes.systemBytes}; saved history: ${sizes.savedHistoryBytes}; current turn: ${sizes.currentTurnBytes}; tool schemas: ${sizes.toolsBytes})`);
         }
         historyEnd = trimmed.end;
         removedHistoryMessages += trimmed.removed;
