@@ -10,6 +10,7 @@
     "test:gpu-housekeeper": "python3 -m unittest discover -s container/gpu-housekeeper/service -p '*_test.py'",
     "quiz": "node command/run-tests.mjs",
     "bootstrap": "node command/bootstrap_caterer.mjs",
+    "setup:zim": "bash command/setup_zim_tools.sh",
     "package:check": "node command/check_package_size.mjs",
     "config:safety": "node command/check_local_config_safety.mjs",
     "doc:prose": "node command/check_doc_prose.mjs",

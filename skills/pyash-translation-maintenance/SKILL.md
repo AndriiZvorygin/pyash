@@ -273,7 +273,10 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   target as the final component; a source choice that duplicates the fixed head
   is removed from the offered choices. Without a fixed target head, the model
   returns two or three components. Deterministic evidence checks and promotion
-  follow this call; there is no separate LLM verifier.
+  follow this call; there is no separate LLM verifier. Before prompting for a fixed
+  head, remove any modifier whose ordered `modifier + head` sequence is already
+  assigned to a compound of the target POS. A sequence assigned only to another
+  POS remains available. Keep the promotion collision check as the final guard.
   Uncertain and failed choices remain in `component-compositions.pya` for
   resumption or inspection.
 

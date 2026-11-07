@@ -157,6 +157,25 @@ test("an active atomic anchor keeps its covered lemma out of compound verificati
   assert.deepEqual(worklist, []);
 });
 
+test("a compound target reserved for a verb remains available to a noun sense", () => {
+  const residual = [{
+    source: "n:00031563-n", pos: "n", synset: "00031563-n", lemmas: ["group"],
+    gloss: "entities considered as a unit", candidates: []
+  }];
+  const candidates = [{
+    id: "group-compound", target: "group", aliases: [], pyashSequence: ["kcat", "kcot"],
+    componentGlosses: ["together", "gather"]
+  }];
+  const verbTargetId = "compound:kcat+kcot:v";
+  const nounTargetId = "compound:kcat+kcot:n";
+
+  const nounWorklist = compoundWorklist(residual, candidates, [verbTargetId], [], new Map(), "v1");
+  assert.equal(nounWorklist[0].disposition, "ready-for-housekeeper-verification");
+
+  const reservedNounWorklist = compoundWorklist(residual, candidates, [nounTargetId], [], new Map(), "v1");
+  assert.equal(reservedNounWorklist[0].disposition, "target-identity-already-linked");
+});
+
 test("derived compound round trips retain decision revision and audit links", () => {
   const record = {
     id: "brainstorm",
@@ -280,6 +299,61 @@ test("compound promotion keys records by synset while retaining target and seque
   });
   const conflict = promoteAcceptedCompoundRecords(existing, [competingMeaning], { decisionRevision: "v9" });
   assert.equal(conflict.decisions[0].promotionStatus, "sense-target-record-conflict");
+});
+
+test("compound sequence ownership is specific to part of speech", () => {
+  const decision = (candidateId, target, senseId) => ({
+    candidateId,
+    target,
+    senseId,
+    verificationSenseId: senseId,
+    targetPartOfSpeech: senseId.slice(0, 1),
+    status: "accepted-llm",
+    sourceMorphemes: ["together", "gather"],
+    componentGlosses: ["together", "gather"],
+    pyashSequence: ["kcat", "kcot"],
+    componentLayers: [16, 16],
+    maxLayer: 16,
+    headRelationPolicy: "advisory",
+    verificationComposition: "literal",
+    verificationMethod: "wordnet-sense-component-choice",
+    verificationComponentSenseIds: ["n:00000010-n", "v:00000011-v"],
+    verificationSourceGlosses: ["together", "gather"],
+    verificationComponentMeanings: ["close together", "collect"],
+    verificationHeadSenseId: "v:00000011-v",
+    verificationRationale: "The components compose the selected target sense.",
+    componentSenseEvidence: [
+      { component: "together", source: "n:00000010-n", definition: "close together", mappingLookupGloss: "together" },
+      { component: "gather", source: "v:00000011-v", definition: "collect", mappingLookupGloss: "gather" }
+    ],
+    verificationDecisionId: candidateId,
+    verificationDecisionIds: [candidateId]
+  });
+  const existing = [{
+    senseId: "v:00368338-v",
+    targetPartOfSpeech: "v",
+    target: "merge",
+    pyashSequence: ["kcat", "kcot"],
+    decisionRevision: "v9"
+  }];
+
+  const noun = promoteAcceptedCompoundRecords(
+    existing,
+    [decision("noun-group", "group", "n:00031563-n")],
+    { decisionRevision: "v9" }
+  );
+  assert.equal(noun.decisions[0].promotionStatus, "promoted-to-derived-index");
+  assert.deepEqual(noun.records.map((record) => [record.target, record.targetPartOfSpeech]), [
+    ["merge", "v"],
+    ["group", "n"]
+  ]);
+
+  const samePartOfSpeech = promoteAcceptedCompoundRecords(
+    noun.records,
+    [decision("noun-cluster", "cluster", "n:00031563-n")],
+    { decisionRevision: "v9" }
+  );
+  assert.equal(samePartOfSpeech.decisions[0].promotionStatus, "target-identity-conflict");
 });
 
 test("resume restores all accepted decisions in the active revision, including non-residual targets", () => {

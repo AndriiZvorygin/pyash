@@ -7,8 +7,31 @@ import path from "node:path";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { doRemember, forget } from "../program/remember/index.mjs";
+import { parseKiwixSearchResults } from "../program/library/zim_archive.mjs";
 
 const fixtureNames = ["PYA_COMMAND_RESPONSE", "PYA_COMMAND_DEBUG", "PYA_ZIM_TOOL_LOG", "PYA_ZIM_TOOL_FAIL"];
+
+test("Kiwix search RSS results retain archive, entry, title, and excerpt", () => {
+  const xml = `<?xml version="1.0"?><rss><channel><item>
+    <title>Guide &amp; reference</title>
+    <link>/content/pyash-guide/index.html</link>
+    <description>A <b>Pyash</b> archive &amp; retrieval guide.</description>
+    <book><title>Pyash guide</title></book>
+  </item></channel></rss>`;
+
+  assert.deepEqual(parseKiwixSearchResults(xml, {
+    endpoint: "http://[::1]:8091",
+    archives: [{ filename: "/repo/world/library/archive/pyash-guide.zim", relative: "world/library/archive/pyash-guide.zim" }]
+  }), [{
+    title: "Guide & reference",
+    link: "http://[::1]:8091/content/pyash-guide/index.html",
+    archiveId: "pyash-guide",
+    archivePath: "world/library/archive/pyash-guide.zim",
+    bookTitle: "Pyash guide",
+    entry: "index.html",
+    snippet: "A Pyash archive & retrieval guide."
+  }]);
+});
 
 async function writeExecutable(filename, lines) {
   await fs.writeFile(filename, ["#!/bin/sh", ...lines].join("\n"), "utf8");
@@ -133,7 +156,9 @@ test("text files and HTML folders convert to ZIM through the existing write and 
     const calls = await fs.readFile(log, "utf8");
     assert.equal((calls.match(/^zimwriterfs /gmu) ?? []).length, 5);
     assert.match(calls, /--welcome=index\.html/u);
+    assert.match(calls, /--illustration=pyash-archive-illustration\.png/u);
     assert.match(calls, /--name=write/u);
+    assert.deepEqual(await fs.readdir(path.join(root, "site")), ["index.html"]);
     assert.ok(await fs.stat(path.join(root, "archives", "text.zim")));
   });
 });
@@ -188,6 +213,62 @@ test("read and search use the existing Pyash verbs for a ZIM archive", async () 
   });
 });
 
+test("ZIM reads follow the configured external library symlink and reject other outside links", async () => {
+  await withZimTools(async (root) => {
+    const storage = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-zim-external-store-"));
+    const libraryAlias = path.join(root, "library");
+    await fs.writeFile(path.join(storage, "guide.zim"), "fixture-zim", "utf8");
+    await fs.symlink(storage, libraryAlias, "dir");
+    doRemember(parse('exists su name zim archive library directory ob text "library" be default ya'));
+    doRemember(parse(`exists su name zim archive service directory ob text ${JSON.stringify(storage)} be default ya`));
+
+    try {
+      const result = await interpret(parse(
+        'from filename "library/guide.zim" as wo cluster-compress ob text "index.html" be read do'
+      ));
+      assert.equal(result?.be, "read");
+      assert.equal(result?.ob?.text, "article body\n");
+
+      const unrelatedStore = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-zim-unrelated-store-"));
+      await fs.writeFile(path.join(unrelatedStore, "outside.zim"), "fixture-zim", "utf8");
+      await fs.symlink(unrelatedStore, path.join(root, "unrelated"), "dir");
+      try {
+        await assert.rejects(
+          interpret(parse('from filename "unrelated/outside.zim" as wo cluster-compress be read do')),
+          /outside|command roots/u
+        );
+      } finally {
+        await fs.rm(unrelatedStore, { recursive: true, force: true });
+      }
+    } finally {
+      await fs.rm(storage, { recursive: true, force: true });
+    }
+  });
+});
+
+test("search through Pyash accepts a directory and searches its direct ZIM members", async () => {
+  await withZimTools(async (root, log) => {
+    await fs.writeFile(path.join(root, "archives", "first.zim"), "fixture-zim", "utf8");
+    await fs.writeFile(path.join(root, "archives", "second.zim"), "fixture-zim", "utf8");
+    await fs.mkdir(path.join(root, "archives", "nested"));
+    await fs.writeFile(path.join(root, "archives", "nested", "ignored.zim"), "fixture-zim", "utf8");
+    await fs.writeFile(path.join(root, "archives", "ignored.txt"), "not an archive", "utf8");
+
+    const result = await interpret(parse(
+      'ob text "love" in filename "archives" as wo cluster-compress be search do'
+    ));
+
+    assert.equal(result?.be, "search");
+    assert.match(result?.ob?.text ?? "", /first\.zim[\s\S]*article\.html/u);
+    assert.match(result?.ob?.text ?? "", /second\.zim[\s\S]*article\.html/u);
+    assert.doesNotMatch(result?.ob?.text ?? "", /ignored\.zim|ignored\.txt/u);
+    const calls = await fs.readFile(log, "utf8");
+    assert.equal((calls.match(/^kiwix-search /gmu) ?? []).length, 2);
+    assert.match(calls, /kiwix-search archives\/first\.zim love/u);
+    assert.match(calls, /kiwix-search archives\/second\.zim love/u);
+  });
+});
+
 test("archive conversion rejects paths outside the agent working root and unsafe HTML symlinks", async () => {
   await withZimTools(async (root) => {
     const outside = path.join(path.dirname(root), "outside-zim-input.txt");
@@ -199,6 +280,18 @@ test("archive conversion rejects paths outside the agent working root and unsafe
       );
     } finally {
       await fs.rm(outside, { force: true });
+    }
+
+    const outsideLibrary = path.join(path.dirname(root), "outside-zim-library");
+    await fs.mkdir(outsideLibrary);
+    await fs.writeFile(path.join(outsideLibrary, "outside.zim"), "outside", "utf8");
+    try {
+      await assert.rejects(
+        interpret(parse(`ob text "query" in filename ${JSON.stringify(outsideLibrary)} as wo cluster-compress be search do`)),
+        /outside|under the command working directory/u
+      );
+    } finally {
+      await fs.rm(outsideLibrary, { recursive: true, force: true });
     }
 
     const externalTarget = path.join(path.dirname(root), "outside-output.zim");

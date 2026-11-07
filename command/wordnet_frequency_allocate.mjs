@@ -488,7 +488,13 @@ export function compoundWorklist(
       .reduce((best, sense) => Math.max(best, sense.tagCount), -1);
     const pyashSequence = sequence(record.pyashSequence);
     if (pyashSequence.length < 2 || pyashSequence.length > maximumCompoundComponents) continue;
-    const targetId = `compound:${pyashSequence.join("+")}`;
+    const targetIds = [...new Set(senseSources.map((source) => englishWordNetTargetId(
+      "compound",
+      pyashSequence,
+      canonicalWordNetTargetPartOfSpeech(String(source).split(":", 1)[0])
+    )).filter(Boolean))];
+    const targetAlreadyLinked = targetIds.length > 0
+      && targetIds.every((targetId) => targetIdsInUse.has(targetId));
     rows.push({
       ...record,
       id: record.id,
@@ -504,12 +510,13 @@ export function compoundWorklist(
       frequencyTagCount,
       status: "candidate-closed",
       headRelationPolicy,
-      disposition: targetIdsInUse.has(targetId)
+      disposition: targetAlreadyLinked
         ? "target-identity-already-linked"
         : decisionsById.get(record.id)?.decisionRevision === decisionRevision
           ? `already-${decisionsById.get(record.id).status}`
           : "ready-for-housekeeper-verification",
-      targetId,
+      targetId: targetIds.length === 1 ? targetIds[0] : "",
+      targetIds,
       targetSenseEvidence: targetEvidenceWithHead,
       componentSenseEvidence,
       verificationRecord: {

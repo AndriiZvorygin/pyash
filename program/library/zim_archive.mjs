@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { remember } from "../remember/index.mjs";
 import { resolveConfigText } from "../configure/env.mjs";
 import { throwErrorSentence } from "../error.mjs";
@@ -33,7 +34,20 @@ async function isWithinAny(roots, candidate) {
   return false;
 }
 
-async function resolveSandboxPath(raw, sandbox, { access = "read", kind = "file" } = {}) {
+async function isConfiguredZimStorage(candidate, real, sandbox, rememberFn) {
+  const librarySetting = resolveConfigText("zim archive library directory", { rememberFn }) ?? "world/library/archive";
+  const storageSetting = resolveConfigText("zim archive service directory", { rememberFn });
+  if (!storageSetting) return false;
+  const libraryAlias = path.resolve(sandbox.cwd, librarySetting);
+  const storageRoot = path.resolve(sandbox.cwd, storageSetting);
+  return isWithin(libraryAlias, candidate) && isWithin(storageRoot, real);
+}
+
+async function resolveSandboxPath(raw, sandbox, {
+  access = "read",
+  kind = "file",
+  rememberFn = remember
+} = {}) {
   const candidate = path.resolve(sandbox.cwd, String(raw ?? ""));
   const cwdReal = await fs.realpath(sandbox.cwd).catch(() => null);
   if (!cwdReal || !isWithin(cwdReal, candidate)) {
@@ -41,13 +55,15 @@ async function resolveSandboxPath(raw, sandbox, { access = "read", kind = "file"
   }
   const real = await fs.realpath(candidate).catch(() => null);
   const roots = access === "write" ? sandbox.writableRoots : sandbox.commandRoots;
-  if (!real || !isWithin(cwdReal, real) || !await isWithinAny(roots, real)) {
+  const withinCommandRoots = real && isWithin(cwdReal, real) && await isWithinAny(roots, real);
+  const configuredZimStorage = real && await isConfiguredZimStorage(candidate, real, sandbox, rememberFn);
+  if (!real || (!withinCommandRoots && !configuredZimStorage)) {
     return { error: `path is outside ${access === "write" ? "writable" : "command"} roots`, candidate };
   }
   const stat = await fs.stat(real).catch(() => null);
   if (kind === "file" && !stat?.isFile()) return { error: "path must be a regular file", candidate: real };
   if (kind === "directory" && !stat?.isDirectory()) return { error: "path must be a directory", candidate: real };
-  return { path: real, cwd: cwdReal };
+  return { path: configuredZimStorage ? candidate : real, cwd: cwdReal };
 }
 
 async function assertNoSymlinks(root, sentence) {
@@ -131,14 +147,18 @@ async function runCommand(sentence, commandText, label, { rememberFn, runtimeCon
   }, { remember: rememberFn, runtimeContext });
 }
 
-async function ensureTarget(sentence, sandbox) {
+async function ensureTarget(sentence, sandbox, rememberFn) {
   const rawTarget = outputFromSentence(sentence);
   if (!rawTarget) fail(sentence, "cluster compress output missing", "ZIM conversion requires to filename");
   if (path.extname(rawTarget).toLowerCase() !== ".zim") {
     fail(sentence, "cluster compress output invalid", "ZIM output filename must use the .zim extension", { target: rawTarget });
   }
   const target = path.resolve(sandbox.cwd, rawTarget);
-  const parent = await resolveSandboxPath(path.dirname(target), sandbox, { access: "write", kind: "directory" });
+  const parent = await resolveSandboxPath(path.dirname(target), sandbox, {
+    access: "write",
+    kind: "directory",
+    rememberFn
+  });
   if (parent.error) fail(sentence, "cluster compress sandbox defective", parent.error, { target: rawTarget, path: parent.candidate });
   const targetPath = path.join(parent.path, path.basename(target));
   const exists = await fs.lstat(targetPath).then(() => true).catch((error) => {
@@ -149,24 +169,36 @@ async function ensureTarget(sentence, sandbox) {
   return { targetPath, parent: parent.path, relativeTarget: path.relative(parent.cwd, targetPath) };
 }
 
-async function resolveInputFile(sentence, sandbox, rawPath) {
-  const resolved = await resolveSandboxPath(rawPath, sandbox, { access: "read", kind: "file" });
+async function resolveInputFile(sentence, sandbox, rawPath, rememberFn) {
+  const resolved = await resolveSandboxPath(rawPath, sandbox, {
+    access: "read",
+    kind: "file",
+    rememberFn
+  });
   if (resolved.error) fail(sentence, "cluster compress input invalid", resolved.error, { path: rawPath, resolved: resolved.candidate });
   return resolved;
 }
 
-async function resolveInputDirectory(sentence, sandbox, rawPath) {
-  const resolved = await resolveSandboxPath(rawPath, sandbox, { access: "read", kind: "directory" });
+async function resolveInputDirectory(sentence, sandbox, rawPath, rememberFn) {
+  const resolved = await resolveSandboxPath(rawPath, sandbox, {
+    access: "read",
+    kind: "directory",
+    rememberFn
+  });
   if (resolved.error) fail(sentence, "cluster compress input invalid", resolved.error, { path: rawPath, resolved: resolved.candidate });
   await assertNoSymlinks(resolved.path, sentence);
   return resolved;
 }
 
-async function inferSourceState(sentence, source, sandbox) {
+async function inferSourceState(sentence, source, sandbox, rememberFn) {
   if (typeof source?.text === "string") return "text";
   if (!source?.filename) return "";
   if (/\.warc(?:\.gz)?$/iu.test(source.filename)) return "warc";
-  const resolved = await resolveSandboxPath(source.filename, sandbox, { access: "read", kind: "any" });
+  const resolved = await resolveSandboxPath(source.filename, sandbox, {
+    access: "read",
+    kind: "any",
+    rememberFn
+  });
   if (resolved.error) fail(sentence, "cluster compress input invalid", resolved.error, { path: source.filename, resolved: resolved.candidate });
   const stats = await fs.stat(resolved.path).catch(() => null);
   if (stats?.isDirectory()) return "html";
@@ -195,39 +227,42 @@ function zimwriterfsCommand({ input, output, metadata, illustration, tool }) {
 async function runZimwriterfs(sentence, { inputDirectory, target, metadata, sandbox, rememberFn, runtimeContext }) {
   const tool = configuredTool("zim html folder writer module", "zimwriterfs", rememberFn);
   const illustrationSetting = resolveConfigText("zim archive illustration", { rememberFn });
-  let stage = null;
-  let stagedIllustration = null;
+  const stage = await fs.mkdtemp(path.join(path.dirname(target), ".zim-writer-"));
   try {
-    if (illustrationSetting) {
-      const configuredIllustration = path.resolve(sandbox.runRoot, illustrationSetting);
-      const iconStats = await fs.stat(configuredIllustration).catch(() => null);
-      if (!iconStats?.isFile()) {
-        fail(sentence, "cluster compress configuration invalid", "configured ZIM illustration file is unavailable", { illustration: configuredIllustration });
-      }
-      stage = await fs.mkdtemp(path.join(path.dirname(target), ".zim-writer-"));
-      stagedIllustration = path.join(stage, "illustration.png");
-      await fs.copyFile(configuredIllustration, stagedIllustration);
+    const stagedInput = path.join(stage, "content");
+    await fs.cp(inputDirectory, stagedInput, { recursive: true, errorOnExist: true });
+    const illustration = illustrationSetting
+      ? path.resolve(sandbox.runRoot, illustrationSetting)
+      : path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../containers/zim-tools/archive-illustration.png");
+    const iconStats = await fs.stat(illustration).catch(() => null);
+    if (!iconStats?.isFile()) {
+      fail(sentence, "cluster compress configuration invalid", "ZIM illustration file is unavailable", { illustration });
     }
-    const relativeInput = path.relative(sandbox.cwd, inputDirectory) || ".";
+    let iconName = "pyash-archive-illustration.png";
+    for (let suffix = 2; await fs.lstat(path.join(stagedInput, iconName)).then(() => true).catch(() => false); suffix += 1) {
+      iconName = `pyash-archive-illustration-${suffix}.png`;
+    }
+    const stagedIllustration = path.join(stagedInput, iconName);
+    await fs.copyFile(illustration, stagedIllustration);
+    const relativeInput = path.relative(sandbox.cwd, stagedInput) || ".";
     const relativeTarget = path.relative(sandbox.cwd, target);
-    const relativeIllustration = stagedIllustration ? path.relative(sandbox.cwd, stagedIllustration) : null;
     const commandText = zimwriterfsCommand({
       tool,
       input: relativeInput,
       output: relativeTarget,
       metadata,
-      illustration: relativeIllustration
+      illustration: iconName
     });
     return await runCommand(sentence, commandText, "zim html folder writer", { rememberFn, runtimeContext });
   } finally {
-    if (stage) await fs.rm(stage, { recursive: true, force: true });
+    await fs.rm(stage, { recursive: true, force: true });
   }
 }
 
 async function writeTextSource(sentence, { source, sandbox, target, metadata, rememberFn, runtimeContext }) {
   let text = source.text;
   if (text === null && source.filename) {
-    const input = await resolveInputFile(sentence, sandbox, source.filename);
+    const input = await resolveInputFile(sentence, sandbox, source.filename, rememberFn);
     const bytes = await fs.readFile(input.path);
     try {
       text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
@@ -255,7 +290,7 @@ async function writeTextSource(sentence, { source, sandbox, target, metadata, re
 
 async function writeHtmlFolder(sentence, { source, sandbox, target, metadata, rememberFn, runtimeContext }) {
   if (!source.filename) fail(sentence, "cluster compress input missing", "HTML state requires from filename naming an HTML folder");
-  const input = await resolveInputDirectory(sentence, sandbox, source.filename);
+  const input = await resolveInputDirectory(sentence, sandbox, source.filename, rememberFn);
   const welcome = path.resolve(input.path, metadata.welcome);
   if (!isWithin(input.path, welcome) || !await fs.stat(welcome).then((stat) => stat.isFile()).catch(() => false)) {
     fail(sentence, "cluster compress input invalid", "HTML folder must contain the configured ZIM welcome file", { welcome: metadata.welcome, input: input.path });
@@ -343,7 +378,7 @@ async function writeWebCapture(sentence, { source, sandbox, target, rememberFn, 
 
 async function writeWarcSource(sentence, { source, sandbox, target, rememberFn, runtimeContext }) {
   if (!source.filename) fail(sentence, "cluster compress input missing", "WARC state requires from filename");
-  const input = await resolveInputFile(sentence, sandbox, source.filename);
+  const input = await resolveInputFile(sentence, sandbox, source.filename, rememberFn);
   if (!/\.warc(?:\.gz)?$/iu.test(input.path)) fail(sentence, "cluster compress input invalid", "WARC state requires a .warc or .warc.gz file", { source: input.path });
   const stage = await fs.mkdtemp(path.join(path.dirname(target), ".zim-warc-"));
   const mountInput = path.dirname(input.path);
@@ -387,14 +422,14 @@ export async function clusterCompress(sentence, {
   runtimeContext = null
 } = {}) {
   const sandbox = resolveSandboxSettings({ sentence, rememberFn });
-  const targetInfo = await ensureTarget(sentence, sandbox);
+  const targetInfo = await ensureTarget(sentence, sandbox, rememberFn);
   const target = targetInfo.targetPath;
   const targetState = stateValue(sentence?.tostate ?? sentence?.become);
   if (targetState && targetState !== "zim" && targetState !== "cluster-compress") {
     fail(sentence, "cluster compress target state invalid", `cluster-compress cannot produce ${targetState}`, { targetState });
   }
   const source = sentence?.from ?? sentence?.ob ?? {};
-  const sourceState = stateValue(sentence?.fromstate) || await inferSourceState(sentence, source, sandbox);
+  const sourceState = stateValue(sentence?.fromstate) || await inferSourceState(sentence, source, sandbox, rememberFn);
   const metadata = resolveMetadata(sentence, rememberFn, target, sourceState);
   let result;
   if (sourceState === "text") {
@@ -439,7 +474,12 @@ export async function clusterCompress(sentence, {
 export async function writeClusterCompress(sentence, options = {}) {
   const source = sentence?.from ?? sentence?.ob ?? {};
   const sandbox = resolveSandboxSettings({ sentence, rememberFn: options.remember ?? remember });
-  const sourceState = stateValue(sentence?.fromstate) || await inferSourceState(sentence, source, sandbox);
+  const sourceState = stateValue(sentence?.fromstate) || await inferSourceState(
+    sentence,
+    source,
+    sandbox,
+    options.remember ?? remember
+  );
   return clusterCompress({
     ...sentence,
     from: source,
@@ -452,9 +492,45 @@ async function resolveZimInput(sentence, rememberFn) {
   const sandbox = resolveSandboxSettings({ sentence, rememberFn });
   const filename = filenameFromSentence(sentence);
   if (!filename) fail(sentence, "zim archive missing", "ZIM read/search requires from filename or in filename");
-  const input = await resolveInputFile(sentence, sandbox, filename);
+  const input = await resolveInputFile(sentence, sandbox, filename, rememberFn);
   if (path.extname(input.path).toLowerCase() !== ".zim") fail(sentence, "zim archive invalid", "ZIM read/search input must use the .zim extension", { filename: input.path });
   return { sandbox, filename: input.path, relative: path.relative(sandbox.cwd, input.path) };
+}
+
+async function resolveZimSearchInputs(sentence, rememberFn) {
+  const sandbox = resolveSandboxSettings({ sentence, rememberFn });
+  const filename = filenameFromSentence(sentence);
+  if (!filename) fail(sentence, "zim archive missing", "ZIM search requires from filename or in filename");
+  const input = await resolveSandboxPath(filename, sandbox, {
+    access: "read",
+    kind: "any",
+    rememberFn
+  });
+  if (input.error) fail(sentence, "zim archive invalid", input.error, { filename, resolved: input.candidate });
+  const stats = await fs.stat(input.path).catch(() => null);
+  if (stats?.isFile()) {
+    if (path.extname(input.path).toLowerCase() !== ".zim") {
+      fail(sentence, "zim archive invalid", "ZIM search input file must use the .zim extension", { filename: input.path });
+    }
+    return {
+      sandbox,
+      libraryPath: input.path,
+      isCollection: false,
+      archives: [{ filename: input.path, relative: path.relative(sandbox.cwd, input.path) }]
+    };
+  }
+  if (!stats?.isDirectory()) {
+    fail(sentence, "zim archive invalid", "ZIM search input must be an archive or a directory of archives", { filename: input.path });
+  }
+  const entries = await fs.readdir(input.path, { withFileTypes: true });
+  const archives = [];
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    if (!entry.isFile() || path.extname(entry.name).toLowerCase() !== ".zim") continue;
+    const archivePath = path.join(input.path, entry.name);
+    const resolved = await resolveInputFile(sentence, sandbox, archivePath, rememberFn);
+    archives.push({ filename: resolved.path, relative: path.relative(sandbox.cwd, resolved.path) });
+  }
+  return { sandbox, libraryPath: input.path, isCollection: true, archives };
 }
 
 export async function readZimArchive(sentence, {
@@ -482,18 +558,132 @@ export async function searchZimArchive(sentence, {
   remember: rememberFn = remember,
   runtimeContext = null
 } = {}) {
-  const { filename, relative } = await resolveZimInput(sentence, rememberFn);
+  const { sandbox, libraryPath, isCollection, archives } = await resolveZimSearchInputs(sentence, rememberFn);
   const query = String(sentence?.ob?.text ?? rememberFn(sentence?.ob?.name)?.ob?.text ?? "").trim();
   if (!query) fail(sentence, "zim search query missing", "ZIM search requires ob text query");
+  const configuredLibrary = resolveConfigText("zim archive library directory", { rememberFn }) ?? "world/library/archive";
+  const sharedLibraryPath = path.resolve(sandbox.cwd, configuredLibrary);
+  const isSharedLibrary = isCollection && sharedLibraryPath === libraryPath;
+  const isSharedArchive = !isCollection && sharedLibraryPath === path.dirname(libraryPath);
+  if (isSharedLibrary || isSharedArchive) {
+    const archiveFilter = isSharedArchive
+      ? path.basename(libraryPath, path.extname(libraryPath)).toLowerCase()
+      : null;
+    return searchZimLibraryServer(sentence, { query, archives, archiveFilter, rememberFn });
+  }
   const tool = configuredTool("zim archive search module", "kiwix-search", rememberFn);
-  const commandText = [shellArgument(tool), shellArgument(relative), shellArgument(query)].join(" ");
-  const result = await runCommand(sentence, commandText, "zim archive search", { rememberFn, runtimeContext });
-  if (result?.be !== "command" || result?.mood !== "ya") return result;
+  const results = [];
+  let singleArchiveOutput = "";
+  for (const archive of archives) {
+    const commandText = [shellArgument(tool), shellArgument(archive.relative), shellArgument(query)].join(" ");
+    const result = await runCommand(sentence, commandText, "zim archive search", { rememberFn, runtimeContext });
+    if (result?.be !== "command" || result?.mood !== "ya") return result;
+    const text = String(result?.ob?.text ?? "");
+    if (isCollection) {
+      const trimmed = text.trim();
+      if (trimmed) results.push(`${path.basename(archive.filename)}\n${trimmed}`);
+    } else {
+      singleArchiveOutput = text;
+    }
+  }
+  let output = singleArchiveOutput;
+  if (isCollection) {
+    if (archives.length === 0) output = "No ZIM archives found in the selected directory.";
+    else if (results.length === 0) output = `No results found across ${archives.length} ZIM archives.`;
+    else output = results.join("\n");
+  }
   return {
     mood: "ya",
     su: sentence?.to?.name ? { name: sentence.to.name } : (sentence?.su ?? { name: "ZIM search results" }),
-    ob: { text: result?.ob?.text ?? "" },
-    from: { filename },
+    ob: { text: output },
+    from: { filename: libraryPath },
+    be: "search"
+  };
+}
+
+function decodeXmlText(value = "") {
+  return String(value)
+    .replace(/&lt;/giu, "<")
+    .replace(/&gt;/giu, ">")
+    .replace(/&quot;/giu, '"')
+    .replace(/&apos;/giu, "'")
+    .replace(/&#39;/giu, "'")
+    .replace(/&#(\d+);/gu, (_, digits) => String.fromCodePoint(Number(digits)))
+    .replace(/&#x([\da-f]+);/giu, (_, digits) => String.fromCodePoint(Number.parseInt(digits, 16)))
+    .replace(/&amp;/giu, "&");
+}
+
+function xmlTagText(source, tag) {
+  const escapedTag = String(tag).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const match = String(source).match(new RegExp(`<${escapedTag}(?:\\s[^>]*)?>([\\s\\S]*?)</${escapedTag}>`, "iu"));
+  return match?.[1] ?? "";
+}
+
+export function parseKiwixSearchResults(xml, { endpoint, archives = [], archiveFilter = null } = {}) {
+  const archiveByName = new Map(archives.map((archive) => [
+    path.basename(archive.filename, path.extname(archive.filename)).toLowerCase(), archive.relative
+  ]));
+  const items = [...String(xml ?? "").matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/giu)];
+  return items.map(([, item]) => {
+    const title = decodeXmlText(xmlTagText(item, "title")).trim();
+    const rawLink = decodeXmlText(xmlTagText(item, "link")).trim();
+    const description = decodeXmlText(xmlTagText(item, "description"))
+      .replace(/<[^>]*>/gu, " ")
+      .replace(/\s+/gu, " ")
+      .trim();
+    const link = rawLink && endpoint ? new URL(rawLink, endpoint) : null;
+    const parts = link?.pathname.match(/^\/content\/([^/]+)\/(.+)$/u);
+    const archiveId = parts?.[1] ? decodeURIComponent(parts[1]) : "";
+    const entry = parts?.[2] ? decodeURIComponent(parts[2]) : "";
+    const bookTitle = decodeXmlText(xmlTagText(xmlTagText(item, "book"), "title")).trim();
+    return {
+      title,
+      link: link?.toString() ?? rawLink,
+      archiveId,
+      archivePath: archiveByName.get(archiveId.toLowerCase()) ?? "",
+      bookTitle,
+      entry,
+      snippet: description
+    };
+  }).filter((result) => (result.title || result.snippet || result.link)
+    && (!archiveFilter || result.archiveId.toLowerCase() === archiveFilter));
+}
+
+async function searchZimLibraryServer(sentence, { query, archives, archiveFilter = null, rememberFn }) {
+  const base = resolveConfigText("zim archive search server", { rememberFn });
+  if (!base) fail(sentence, "zim search server missing", "shared ZIM library search requires zim archive search server configuration");
+  let endpoint;
+  try {
+    endpoint = new URL("/search", base);
+  } catch (error) {
+    fail(sentence, "zim search server invalid", "zim archive search server must be a valid HTTP URL", { endpoint: base, error: error.message });
+  }
+  endpoint.searchParams.set("pattern", query);
+  endpoint.searchParams.set("format", "xml");
+  let response;
+  try {
+    response = await fetch(endpoint, { signal: AbortSignal.timeout(10000) });
+  } catch (error) {
+    fail(sentence, "zim search server unavailable", `cannot query the shared ZIM library search server: ${error.message}`, { endpoint: base });
+  }
+  if (!response.ok) {
+    fail(sentence, "zim search server defective", `shared ZIM library search returned HTTP ${response.status}`, { endpoint: endpoint.toString() });
+  }
+  const xml = await response.text();
+  const results = parseKiwixSearchResults(xml, { endpoint: base, archives, archiveFilter });
+  const output = results.length === 0
+    ? "No results found in the shared ZIM archive library."
+    : results.map((result) => [
+      `archive: ${result.archivePath || result.bookTitle || result.archiveId}`,
+      `title: ${result.title}`,
+      `entry: ${result.entry || result.link}`,
+      `snippet: ${result.snippet}`
+    ].join("\n")).join("\n\n");
+  return {
+    mood: "ya",
+    su: sentence?.to?.name ? { name: sentence.to.name } : (sentence?.su ?? { name: "ZIM search results" }),
+    ob: { text: output },
+    from: { filename: archives[0]?.filename ? path.dirname(archives[0].filename) : "world/library/archive" },
     be: "search"
   };
 }

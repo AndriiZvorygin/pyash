@@ -287,6 +287,61 @@ test("an existing lexical target stays the mandatory head of a new sense compoun
   }), { input }), /not an available atom/u);
 });
 
+test("a known two-word compound head removes same-POS modifiers already in use", () => {
+  const atom = (word, sequence, definition, gloss) => ({
+    word,
+    coverageType: "atomic",
+    status: "active-linked-atom",
+    pyashSequence: [sequence],
+    componentLayers: [16],
+    linkedSense: { source: `n:${sequence}`, pos: "n", lemmas: [word], definition },
+    mappingLookupGloss: gloss,
+    mappingSuggestedWord: word
+  });
+  const sense = {
+    senseId: "a:00000023-a",
+    pos: "a",
+    lemma: "better",
+    definition: "improved in quality",
+    targetHead: { coverageType: "atomic", word: "better", pyashSequence: ["pcac"], componentLayer: 16 }
+  };
+  const translations = [{
+    language: "english",
+    surface: "healthy improvement",
+    composition: "compound",
+    components: [
+      { surface: "healthy", gloss: "healthy", role: "lexical" },
+      { surface: "improvement", gloss: "improvement", role: "lexical" }
+    ]
+  }];
+  const choices = new Map([
+    ["healthy", [atom("health", "hhea", "a state of health", "healthy")]],
+    ["improvement", [atom("change", "hcha", "an improvement or change", "improvement")]]
+  ]);
+
+  const samePosConflict = buildSenseCompoundChoiceInput({
+    sense,
+    translations,
+    kwonCandidatesByGloss: choices,
+    reservedTargetIds: new Set(["compound:hhea+pcac:a"])
+  });
+  assert.deepEqual(samePosConflict.sourceOptions.map((option) => option.word), ["change"]);
+  assert.doesNotMatch(samePosConflict.prompt, /health/u);
+  assert.deepEqual(samePosConflict.responseFormat.oneOf[0].properties.atoms.items.enum, ["change"]);
+  assert.throws(() => parseSenseCompoundChoiceResponse(JSON.stringify({
+    verdict: "compound",
+    atoms: ["health"]
+  }), { input: samePosConflict }), /not an available atom/u);
+
+  const otherPosOnly = buildSenseCompoundChoiceInput({
+    sense,
+    translations,
+    kwonCandidatesByGloss: choices,
+    reservedTargetIds: ["compound:hhea+pcac:v"]
+  });
+  assert.deepEqual(otherPosOnly.sourceOptions.map((option) => option.word), ["health", "change"]);
+});
+
 test("sense translation response parses bounded noisy JSON and keeps only requested languages", () => {
   const response = parseWordNetSenseTranslationResponse(`provider note\n${JSON.stringify({
     senseId: "n:00000010-n",

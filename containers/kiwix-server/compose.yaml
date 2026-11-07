@@ -3,7 +3,14 @@ services:
     image: ghcr.io/kiwix/kiwix-serve:3.8.2
     command: ["*.zim"]
     ports:
-      - "127.0.0.1:8080:8080"
+      - target: 8080
+        published: "8091"
+        host_ip: 0.0.0.0
+        protocol: tcp
+      - target: 8080
+        published: "8091"
+        host_ip: "::"
+        protocol: tcp
     volumes:
-      - "${ZIM_LIBRARY_PATH:?Set ZIM_LIBRARY_PATH to a directory containing ZIM files}:/data:ro"
+      - "/srv/search/archive:/data:ro"
     restart: unless-stopped

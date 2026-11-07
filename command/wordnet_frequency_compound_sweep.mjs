@@ -10,6 +10,10 @@ import {
 } from "../program/library/translation/compound_coverage.mjs";
 import { loadCompoundLexicon } from "../program/library/translation/compound_lexicon.mjs";
 import {
+  canonicalWordNetTargetPartOfSpeech,
+  englishWordNetTargetId
+} from "../program/library/translation/english_wordnet_bridges.mjs";
+import {
   ENGLISH_WORDNET_COMPOUND_DECISIONS_URL,
   loadEnglishWordNetCompoundDecisions,
   renderEnglishWordNetCompoundDecisions
@@ -286,7 +290,11 @@ export function promoteAcceptedCompoundRecords(existingRecords, decisions, { use
   const sequenceOwners = new Map();
   for (const record of records) {
     const target = String(record.target ?? "").trim().toLowerCase();
-    const key = `compound:${sequence(record.pyashSequence).join("+")}`;
+    const partOfSpeech = canonicalWordNetTargetPartOfSpeech(
+      record.targetPartOfSpeech || String(record.senseId ?? "").slice(0, 1)
+    );
+    const key = englishWordNetTargetId("compound", sequence(record.pyashSequence), partOfSpeech);
+    if (!key) continue;
     const owners = sequenceOwners.get(key) ?? new Set();
     owners.add(target);
     sequenceOwners.set(key, owners);
@@ -298,8 +306,12 @@ export function promoteAcceptedCompoundRecords(existingRecords, decisions, { use
     const target = String(decision.target ?? "").trim().toLowerCase();
     const senseId = String(decision.senseId ?? decision.verificationSenseId ?? "").trim();
     if (!senseId) return { ...decision, promotionStatus: "missing-sense-id" };
+    const targetPartOfSpeech = canonicalWordNetTargetPartOfSpeech(
+      decision.targetPartOfSpeech || senseId.slice(0, 1)
+    );
     const pyashSequence = sequence(decision.pyashSequence);
-    const targetId = `compound:${pyashSequence.join("+")}`;
+    const targetId = englishWordNetTargetId("compound", pyashSequence, targetPartOfSpeech);
+    if (!targetId) return { ...decision, promotionStatus: "missing-target-part-of-speech" };
     const key = senseTargetKey({ senseId, target });
     const existingIndex = recordsBySenseTarget.get(key);
     if (existingIndex !== undefined) {
@@ -328,7 +340,7 @@ export function promoteAcceptedCompoundRecords(existingRecords, decisions, { use
     sequenceOwners.set(targetId, owners);
     const record = {
       senseId,
-      targetPartOfSpeech: String(decision.targetPartOfSpeech ?? senseId.slice(0, 1)).trim(),
+      targetPartOfSpeech,
       decisionRevision,
       verificationDecisionId: decision.candidateId,
       verificationDecisionIds: [decision.candidateId],

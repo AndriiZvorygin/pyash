@@ -110,6 +110,12 @@ Common compounds
 - `hierarchy/library`  -> `/usr/lib`
 - `hierarchy/sharing`  -> `/usr/share`
 
+World library collections
+- `world/library/archive/` stores shared, searchable ZIM archive artifacts.
+  On the host, this stable Pyash path symlinks to `/srv/search/archive/`.
+  Kiwix loads each top-level `*.zim` file from the persistent service directory
+  at server start.
+
 
 ### Sugar form examples
 

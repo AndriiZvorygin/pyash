@@ -82,6 +82,13 @@ function invalid(message, details = {}) {
   return error;
 }
 
+function allocatedTargetIds(allocation) {
+  return [
+    ...(allocation?.preservedTargetIds ?? []),
+    ...(allocation?.allocation?.assignments ?? []).map((row) => row.targetId)
+  ].filter((targetId) => typeof targetId === "string" && targetId);
+}
+
 export function resolveWordNetSenseCompoundMaximumSenses(configuredMaximum, requestedMaximum) {
   const configured = Number(configuredMaximum);
   if (!Number.isSafeInteger(configured) || configured < 1) {
@@ -645,6 +652,7 @@ async function composeCandidates({ context, worklist, translations }) {
     const unique = new Map(choices.map((choice) => [`${choice.linkedSense.source}\u0000${choice.pyashSequence.join("+")}`, choice]));
     byGloss.set(normalizeGloss(gloss), [...unique.values()]);
   }
+  const reservedTargetIds = new Set(allocatedTargetIds(context.allocation));
   const compositionPath = join(context.artifactDirectory, "component-compositions.pya");
   const compositionSource = await readIfPresent(compositionPath);
   const oldCompositionRows = compositionSource.trim()
@@ -718,7 +726,12 @@ async function composeCandidates({ context, worklist, translations }) {
   };
   const composeOne = async (sense) => {
     const sourceTranslations = cacheBySense.get(sense.senseId)?.translations ?? [];
-    const input = buildSenseCompoundChoiceInput({ sense, translations: sourceTranslations, kwonCandidatesByGloss: byGloss });
+    const input = buildSenseCompoundChoiceInput({
+      sense,
+      translations: sourceTranslations,
+      kwonCandidatesByGloss: byGloss,
+      reservedTargetIds
+    });
     const inputHash = input ? hash(input.prompt) : hash(stableJson({ senseId: sense.senseId, sourceTranslations, noAvailableAtoms: true }));
     const matching = matchingAttempts(sense, inputHash);
     const prior = matching.find((record) => cacheMatches(record, sense, inputHash));
@@ -993,10 +1006,7 @@ async function recordAndPromoteChoices({ context, candidates }) {
     }
     await atomicWrite(decisionsPath, renderEnglishWordNetCompoundDecisions(rows));
   };
-  const usedTargetIds = [
-    ...context.allocation.preservedTargetIds,
-    ...context.allocation.allocation.assignments.map((row) => row.targetId)
-  ];
+  const usedTargetIds = allocatedTargetIds(context.allocation);
   let decisionsChanged = false;
   for (const candidate of candidateRows) {
     const prior = decisionsById.get(candidate.id);

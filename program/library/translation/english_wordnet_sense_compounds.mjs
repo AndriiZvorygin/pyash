@@ -4,6 +4,7 @@ import { buildProgram } from "../../program.mjs";
 import { recordExchangeJsonArtifact } from "../../bridge/exchange.mjs";
 import { extractBoundedJsonObject } from "./english_verification.mjs";
 import { hasWordNetHeadSenseRelation, buildWordNetHeadRelationIndex } from "./english_wordnet.mjs";
+import { englishWordNetTargetId } from "./english_wordnet_bridges.mjs";
 
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_NAME = "translation_wordnet_sense_compounds";
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_FORMAT = "english-wordnet-sense-compounds-v1";
@@ -14,7 +15,7 @@ export const ENGLISH_WORDNET_SENSE_COMPOUNDS_LANGUAGES = Object.freeze([
 ]);
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_MODEL = "qwen3.5:9b";
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_PROMPT_REVISION = "sense-translation-gloss-alternatives-v7";
-export const ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_PROMPT_REVISION = "sense-component-choice-v9";
+export const ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_PROMPT_REVISION = "sense-component-choice-v13";
 export const ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION = "sense-component-choice-v7";
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_MAX_OUTPUT_TOKENS = 1024;
 export const ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_MAX_OUTPUT_TOKENS = 256;
@@ -760,14 +761,27 @@ export function buildSenseCompoundChoiceInput({
   sense,
   translations = [],
   kwonCandidatesByGloss = new Map(),
+  reservedTargetIds = [],
   maximumChoices = MAX_COMPONENT_CHOICES
 } = {}) {
   if (!normalizedSense(sense)) throw invalid("component-choice prompt requires one target sense");
   const targetHead = normalizeTargetHead(sense?.targetHead);
+  const targetPos = text(sense?.pos);
+  const reservedTargets = new Set((reservedTargetIds instanceof Set
+    ? [...reservedTargetIds]
+    : Array.isArray(reservedTargetIds) ? reservedTargetIds : [])
+    .map(text)
+    .filter(Boolean));
   const decompositions = sourceDecompositionChoices(translations, kwonCandidatesByGloss, maximumChoices);
   if (decompositions.length === 0) return null;
   const sourceOptions = availableChoiceValues(decompositions).filter((option) => (
-    !targetHead || option.pyashSequence.join("+") !== targetHead.pyashSequence[0]
+    !targetHead
+    || (option.pyashSequence.join("+") !== targetHead.pyashSequence[0]
+      && !reservedTargets.has(englishWordNetTargetId(
+        "compound",
+        [...option.pyashSequence, ...targetHead.pyashSequence],
+        targetPos
+      )))
   ));
   if (sourceOptions.length < (targetHead ? 1 : 2)) return null;
   const groupsByKey = new Map();
@@ -796,6 +810,7 @@ export function buildSenseCompoundChoiceInput({
     targetHead
       ? `This target already has an existing lexical head ${targetHead.word} (${targetHead.pyashSequence[0]}). Keep that exact word as the final atom. A genuinely new subtype is formed by placing its modifier(s) before this head. Do not replace the head with a source-language component.`
       : "Pyash compounds are head-final: the last atom is the head and names the kind of thing or action; earlier atom(s) modify that head. Identify the semantic head from the TARGET meaning, then output the selected atoms in modifier-to-head order. Do not copy the source language's written order automatically.",
+    ...(targetHead ? ["Modifiers whose modifier + head sequence is already assigned for this part of speech have been removed from the available options."] : []),
     "Pyash compounds are head-final: the final atom is the head and names the kind of thing or action; earlier atom(s) modify it. Do not copy source-language order automatically.",
     "Ordering example (illustrative only, not candidate atoms): bird snake means a type of snake, so the Pyash order is [bird, snake]. Snake bird means a type of bird, so the Pyash order is [snake, bird].",
     targetHead
@@ -824,7 +839,7 @@ export function buildSenseCompoundChoiceInput({
       sourceOptionCount: sourceOptions.length
     });
   }
-  const input = { prompt, sourceOptions, targetPos: text(sense?.pos), ...(targetHead ? { targetHead } : {}) };
+  const input = { prompt, sourceOptions, targetPos, ...(targetHead ? { targetHead } : {}) };
   input.responseFormat = buildSenseCompoundChoiceResponseFormat(input);
   return input;
 }
