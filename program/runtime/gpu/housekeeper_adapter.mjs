@@ -45,7 +45,9 @@ async function requestJson({ baseUrl = "", pathname = "", method = "GET", body, 
     } catch {
       detail = "";
     }
-    throw new Error(`gpu housekeeper adapter defective (${response.status}): ${detail || response.statusText || "request failed"}`);
+    const error = new Error(`gpu housekeeper adapter defective (${response.status}): ${detail || response.statusText || "request failed"}`);
+    error.statusCode = response.status;
+    throw error;
   }
   return parseJsonOrThrow(response);
 }

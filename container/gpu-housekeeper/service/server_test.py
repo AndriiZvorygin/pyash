@@ -28,6 +28,104 @@ class HousekeeperServerConfigTests(unittest.TestCase):
     self.assertEqual(server.parse_server_args(["--port", "8090"]).port, 8090)
 
 
+class HousekeeperDurableQueueTests(unittest.TestCase):
+  def setUp(self):
+    self.original_pya_dir = os.environ.get("GPU_HOUSEKEEPER_PYA_DIR")
+    self.temp_dir = tempfile.TemporaryDirectory(prefix="gpu-housekeeper-durable-queue-")
+    os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = self.temp_dir.name
+    server._JOBS.clear()
+
+  def tearDown(self):
+    server._JOBS.clear()
+    if self.original_pya_dir is None:
+      os.environ.pop("GPU_HOUSEKEEPER_PYA_DIR", None)
+    else:
+      os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = self.original_pya_dir
+    self.temp_dir.cleanup()
+
+  def test_submit_persists_job_envelope_before_accepting(self):
+    payload = {
+      "handleId": "durable-handle",
+      "runtimeName": "test-runtime",
+      "profileName": "test-profile",
+      "source": {"hostId": "debtcollecting", "username": "htaf"},
+      "jobSpec": {"kind": "test-job", "payload": {"prompt": "persist me"}}
+    }
+    route = {"selected": {
+      "hostId": "mriczo", "deviceId": "gpu0", "score": 1, "reason": "test"
+    }}
+    with patch.object(server, "select_route", return_value=route):
+      accepted = server.submit_job(payload, {"test-runtime": {}}, "mriczo")
+
+    self.assertTrue(accepted["accepted"])
+    durable_path = server.durable_job_path(accepted["remoteJobId"])
+    self.assertTrue(durable_path.is_file())
+    self.assertTrue(durable_path.read_text(encoding="utf-8").startswith(
+      "su name gpu housekeeper durable job be json map def\n"
+    ))
+    persisted = server.read_durable_job(durable_path)
+    self.assertEqual(persisted["jobSpec"], payload["jobSpec"])
+    self.assertEqual(persisted["source"]["hostId"], "debtcollecting")
+
+  def test_submit_is_rejected_if_durable_write_fails(self):
+    payload = {
+      "handleId": "unpersisted-handle", "runtimeName": "test-runtime",
+      "profileName": "test-profile", "jobSpec": {"kind": "test-job"}
+    }
+    with patch.object(server, "select_route", return_value={"selected": {"hostId": "mriczo"}}), \
+         patch.object(server, "persist_durable_job", side_effect=OSError("disk unavailable")):
+      accepted = server.submit_job(payload, {"test-runtime": {}}, "mriczo")
+    self.assertFalse(accepted["accepted"])
+    self.assertIn("could not persist accepted job", accepted["error"])
+    self.assertEqual(server._JOBS, {})
+
+  def test_restart_restores_queued_interrupted_terminal_and_forwarded_jobs(self):
+    base = {
+      "runtimeName": "test-runtime", "profileName": "test-profile",
+      "jobSpec": {"kind": "test-job", "payload": {"value": 7}},
+      "submittedAt": "2026-11-08T10:00:00Z", "startedAt": "",
+      "finishedAt": "", "source": {"hostId": "debtcollecting"},
+      "forwarded": False, "deviceId": "gpu0"
+    }
+    records = [
+      {**base, "remoteJobId": "job-queued", "status": "queued", "message": "queued"},
+      {**base, "remoteJobId": "job-interrupted", "status": "running", "message": "running", "startedAt": "2026-11-08T10:01:00Z"},
+      {**base, "remoteJobId": "job-complete", "status": "success", "message": "completed", "result": {"text": "done"}, "finishedAt": "2026-11-08T10:02:00Z"},
+      {**base, "remoteJobId": "job-forwarded", "status": "running", "message": "forwarded", "forwarded": True, "peerUrl": "http://swac:18886", "peerJobId": "job-peer-1"}
+    ]
+    for record in records:
+      server.persist_durable_job(record)
+
+    resumed = server.restore_persisted_jobs()
+
+    self.assertEqual(set(resumed), {"job-queued", "job-interrupted"})
+    self.assertEqual(server._JOBS["job-queued"]["status"], "queued")
+    self.assertEqual(server._JOBS["job-interrupted"]["status"], "queued")
+    self.assertEqual(server._JOBS["job-interrupted"]["startedAt"], "")
+    self.assertIn("resuming interrupted job", server._JOBS["job-interrupted"]["message"])
+    self.assertEqual(server.job_status("job-complete")["result"], {"text": "done"})
+    self.assertTrue(server._JOBS["job-forwarded"]["forwarded"])
+    self.assertEqual(server._JOBS["job-forwarded"]["peerJobId"], "job-peer-1")
+
+  def test_terminal_execution_state_is_persisted_for_same_remote_id(self):
+    job = {
+      "remoteJobId": "job-finish", "handleId": "handle-finish",
+      "runtimeName": "test-runtime", "profileName": "test-profile",
+      "jobSpec": {"kind": "test-job"}, "deviceId": "gpu0",
+      "status": "queued", "message": "queued", "submittedAt": "now",
+      "startedAt": "", "finishedAt": "", "source": {"hostId": "test"},
+      "forwarded": False
+    }
+    server._JOBS[job["remoteJobId"]] = job
+    server.persist_durable_job(job)
+    with patch.object(server, "execute_job", return_value={"answer": "complete"}):
+      server.execute_registered_job(job["remoteJobId"], {"test-runtime": {}})
+
+    restored = server.read_durable_job(server.durable_job_path(job["remoteJobId"]))
+    self.assertEqual(restored["status"], "success")
+    self.assertEqual(restored["result"], {"answer": "complete"})
+
+
 class StrataContextControlTests(unittest.TestCase):
   def registry(self):
     return {"strata": {
@@ -1808,10 +1906,20 @@ class HousekeeperCapacityTests(unittest.TestCase):
     activity = server.observe_runtime_activity("ollama", server.DEFAULT_RUNTIME_REGISTRY["ollama"])
     self.assertEqual(activity["state"], "cooldown")
 
-    server._JOBS["ollama-running"] = {
-      "runtimeName": "ollama", "status": "running"
+    server._JOBS["ollama-queued"] = {
+      "runtimeName": "ollama", "status": "queued", "message": "queued"
     }
-    server.run_docker = lambda *_args, **_kwargs: self.fail("tracked work must be checked before logs")
+    server._JOBS["ollama-waiting"] = {
+      "runtimeName": "ollama", "status": "running", "message": "waiting for GPU capacity"
+    }
+    server.run_docker = lambda *_args, **_kwargs: {"success": True, "stdout": "quiet"}
+    activity = server.observe_runtime_activity("ollama", server.DEFAULT_RUNTIME_REGISTRY["ollama"])
+    self.assertEqual(activity["state"], "idle")
+
+    server._JOBS["ollama-active"] = {
+      "runtimeName": "ollama", "status": "running", "message": "running"
+    }
+    server.run_docker = lambda *_args, **_kwargs: self.fail("active execution must be checked before logs")
     activity = server.observe_runtime_activity("ollama", server.DEFAULT_RUNTIME_REGISTRY["ollama"])
     self.assertEqual(activity["state"], "active")
 
@@ -3493,6 +3601,84 @@ class HousekeeperSourceTraceTests(unittest.TestCase):
     self.assertEqual(forwarded_payloads[0]["deviceId"], "gpu1")
     self.assertEqual(result["route"]["deviceId"], "gpu1")
     self.assertEqual(result["route"]["originHostId"], "mriczo")
+
+
+class HousekeeperIdleReaperTests(unittest.TestCase):
+  def registry(self):
+    return {"comfyui": {
+      "runtimeName": "comfyui",
+      "activityProbe": "comfyui-queue",
+      "dischargeKind": "comfyui",
+      "deviceId": "gpu0"
+    }}
+
+  def test_reaper_discharges_resident_runtime_after_idle_probe_and_exclusive_gate(self):
+    registry = self.registry()
+    gate = server.DeviceExecutionGate()
+    calls = []
+    with patch.object(server, "observe_runtime_activity", return_value={"state": "idle"}), \
+         patch.object(server, "runtime_gpu_residency", return_value={"state": "resident", "usedMemoryMb": 6144}), \
+         patch.object(server, "execution_gate_for", return_value=gate), \
+         patch.object(server, "discharge_runtime", side_effect=lambda name, _entry: calls.append(name) or {
+           "success": True, "reason": "freed"
+         }):
+      outcomes = server.run_idle_runtime_reaper_once(registry)
+
+    self.assertEqual(calls, ["comfyui"])
+    self.assertEqual(outcomes[0]["state"], "discharged")
+    self.assertFalse(gate.exclusive)
+
+  def test_reaper_skips_cooldown_unknown_empty_and_unsupported_runtime(self):
+    registry = self.registry()
+    registry["ollama"] = {
+      "runtimeName": "ollama", "activityProbe": "ollama-access-log", "dischargeKind": "ollama"
+    }
+    registry["strata"] = {
+      "runtimeName": "strata", "activityProbe": "strata-status", "dischargeKind": "strata"
+    }
+    registry["huggingface"] = {
+      "runtimeName": "huggingface",
+      "activityProbe": "provider-owned",
+      "dischargeKind": "huggingface"
+    }
+    states = {
+      "comfyui": {"state": "cooldown"},
+      "ollama": {"state": "unknown"},
+      "strata": {"state": "idle"}
+    }
+    with patch.object(server, "observe_runtime_activity", side_effect=lambda name, *_args: states[name]), \
+         patch.object(server, "runtime_gpu_residency", return_value={"state": "empty"}), \
+         patch.object(server, "execution_gate_for") as gate_for, \
+         patch.object(server, "discharge_runtime") as discharge:
+      outcomes = server.run_idle_runtime_reaper_once(registry)
+
+    self.assertEqual([item["state"] for item in outcomes], ["cooldown", "unsupported", "unknown", "empty"])
+    gate_for.assert_not_called()
+    discharge.assert_not_called()
+
+  def test_reaper_skips_when_managed_gpu_execution_gate_is_busy(self):
+    gate = server.DeviceExecutionGate()
+    self.assertTrue(gate.try_acquire_exclusive())
+    with patch.object(server, "observe_runtime_activity", return_value={"state": "idle"}), \
+         patch.object(server, "runtime_gpu_residency", return_value={"state": "resident", "usedMemoryMb": 6144}), \
+         patch.object(server, "execution_gate_for", return_value=gate), \
+         patch.object(server, "discharge_runtime") as discharge:
+      outcomes = server.run_idle_runtime_reaper_once(self.registry())
+    gate.release(shared=False)
+
+    self.assertEqual(outcomes[0]["state"], "busy")
+    discharge.assert_not_called()
+
+  def test_reaper_skips_runtime_when_residency_cannot_be_verified(self):
+    with patch.object(server, "observe_runtime_activity", return_value={"state": "idle"}), \
+         patch.object(server, "runtime_gpu_residency", return_value={"state": "unknown", "reason": "probe failed"}), \
+         patch.object(server, "execution_gate_for") as gate_for, \
+         patch.object(server, "discharge_runtime") as discharge:
+      outcomes = server.run_idle_runtime_reaper_once(self.registry())
+
+    self.assertEqual(outcomes[0]["state"], "unknown")
+    gate_for.assert_not_called()
+    discharge.assert_not_called()
 
 
 if __name__ == "__main__":
