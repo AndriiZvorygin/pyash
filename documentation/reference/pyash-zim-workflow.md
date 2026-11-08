@@ -46,12 +46,14 @@ from filename "https://example.org/" fromstate wo web tostate wo zim to filename
 
 Web capture is network-enabled for this specific operation by the
 `web archive network` default. General command sandbox network
-settings remain unchanged. The default Zimit profile uses prefix scope, one
-worker, a one-second interval between pages, a 2,000-page cap, a 90-second
-page-load timeout, a one-hour hard time limit, and a 2 GiB hard WARC-size
-limit. The page delay is a coarse pacing control; it does not cap individual
-HTTP requests per second. These settings live in
-`configure/default.pya` and can be overridden in local Pyash configuration.
+settings remain unchanged. The `web archive configure` map in
+`configure/default.pya` sets prefix scope, one worker, a one-second interval
+between pages, a 2,000-page cap, a 90-second page-load timeout, a one-hour
+hard time limit, and a 2 GiB hard WARC-size limit. Its default block rule
+omits common image formats to keep captures text-focused. Remove or change
+that rule to retain images. The page delay is a coarse pacing control; it does
+not cap individual HTTP requests per second. Local Pyash configuration can
+override the map.
 
 An existing WARC can be converted without recapturing the site:
 

@@ -7,10 +7,21 @@ import path from "node:path";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { doRemember, forget } from "../program/remember/index.mjs";
-import { resolveConfigBool, resolveConfigNum, resolveConfigText } from "../program/configure/env.mjs";
+import {
+  resolveConfigBool,
+  resolveConfigMapNum,
+  resolveConfigMapSeries,
+  resolveConfigMapText
+} from "../program/configure/env.mjs";
 import { parseKiwixSearchResults } from "../program/library/zim_archive.mjs";
 
 const fixtureNames = ["PYA_COMMAND_RESPONSE", "PYA_COMMAND_DEBUG", "PYA_ZIM_TOOL_LOG", "PYA_ZIM_TOOL_FAIL"];
+
+async function runPyaBlock(source) {
+  for (const line of source.split(/\r?\n/u).map((value) => value.trim()).filter(Boolean)) {
+    await interpret(parse(line));
+  }
+}
 
 test("Kiwix search RSS results retain archive, entry, title, and excerpt", () => {
   const xml = `<?xml version="1.0"?><rss><channel><item>
@@ -30,8 +41,22 @@ test("Kiwix search RSS results retain archive, entry, title, and excerpt", () =>
     archivePath: "world/library/archive/pyash-guide.zim",
     bookTitle: "Pyash guide",
     entry: "index.html",
+    originalUrl: "",
     snippet: "A Pyash archive & retrieval guide."
   }]);
+});
+
+test("Kiwix search derives live source URLs from host-based Zimit entries", () => {
+  const xml = `<rss><channel><item>
+    <title>Society for Psychical Research</title>
+    <link>/content/psi-encyclopedia/psi-encyclopedia.spr.ac.uk/articles/society-psychical-research/</link>
+    <description>Article excerpt.</description>
+    <book><title>Psi Encyclopedia</title></book>
+  </item></channel></rss>`;
+
+  const results = parseKiwixSearchResults(xml, { endpoint: "https://zim.example" });
+  assert.equal(results[0].entry, "psi-encyclopedia.spr.ac.uk/articles/society-psychical-research/");
+  assert.equal(results[0].originalUrl, "https://psi-encyclopedia.spr.ac.uk/articles/society-psychical-research/");
 });
 
 async function writeExecutable(filename, lines) {
@@ -116,13 +141,16 @@ async function withZimTools(run, { captureNetworkEnabled = true } = {}) {
   su name network ob bool lie ya
 prah`));
   doRemember(parse(`exists su name web archive network ob bool ${captureNetworkEnabled ? "truth" : "lie"} be default ya`));
-  doRemember(parse('exists su name web archive prefix ob text "prefix" be default ya'));
-  doRemember(parse("exists su name web archive page maximum ob num 2000 be default ya"));
-  doRemember(parse("exists su name web archive page timeout seconds ob num 90 be default ya"));
-  doRemember(parse("exists su name web archive page interval seconds ob num 1 be default ya"));
-  doRemember(parse("exists su name web archive duration maximum seconds ob num 3600 be default ya"));
-  doRemember(parse("exists su name web archive size maximum bytes ob num 2147483648 be default ya"));
-  doRemember(parse("exists su name web archive workers ob num 1 be default ya"));
+  await runPyaBlock(`su name web archive configure be map def
+  su name web archive prefix ob text "prefix" ya
+  su name web archive page maximum ob num 2000 ya
+  su name web archive page timeout seconds ob num 90 ya
+  su name web archive page interval seconds ob num 1 ya
+  su name web archive duration maximum seconds ob num 3600 ya
+  su name web archive size maximum bytes ob num 2147483648 ya
+  su name web archive workers ob num 1 ya
+  su name photograph filter ob ve text "[.](apng|avif|bmp|gif|heic|heif|ico|jpe?g|jxl|png|svg|tiff?|webp)([?#].*)?$" ya
+prah`);
 
   try {
     await run(root, log);
@@ -184,23 +212,28 @@ test("text files and HTML folders convert to ZIM through the existing write and 
 
 test("default Pyash configuration enables bounded Zimit captures", async () => {
   const config = await fs.readFile(path.join(process.cwd(), "configure/default.pya"), "utf8");
-  const captureFacts = config
-    .split(/\r?\n/u)
+  const networkFact = config.split(/\r?\n/u)
     .map(line => line.trim())
-    .filter(line => line.startsWith("exists su name web archive "));
-  assert.equal(captureFacts.length, 8);
+    .find(line => line.startsWith("exists su name web archive network "));
+  const captureConfig = config.match(/su name web archive configure be map def[\s\S]*?\nprah/u)?.[0];
+  assert.ok(networkFact);
+  assert.ok(captureConfig);
 
   forget();
   try {
-    for (const fact of captureFacts) doRemember(parse(fact));
+    doRemember(parse(networkFact));
+    await runPyaBlock(captureConfig);
     assert.equal(resolveConfigBool("web archive network"), true);
-    assert.equal(resolveConfigText("web archive prefix"), "prefix");
-    assert.equal(resolveConfigNum("web archive page maximum"), 2000);
-    assert.equal(resolveConfigNum("web archive page timeout seconds"), 90);
-    assert.equal(resolveConfigNum("web archive page interval seconds"), 1);
-    assert.equal(resolveConfigNum("web archive duration maximum seconds"), 3600);
-    assert.equal(resolveConfigNum("web archive size maximum bytes"), 2147483648);
-    assert.equal(resolveConfigNum("web archive workers"), 1);
+    assert.equal(resolveConfigMapText("web archive configure", "web archive prefix"), "prefix");
+    assert.equal(resolveConfigMapNum("web archive configure", "web archive page maximum"), 2000);
+    assert.equal(resolveConfigMapNum("web archive configure", "web archive page timeout seconds"), 90);
+    assert.equal(resolveConfigMapNum("web archive configure", "web archive page interval seconds"), 1);
+    assert.equal(resolveConfigMapNum("web archive configure", "web archive duration maximum seconds"), 3600);
+    assert.equal(resolveConfigMapNum("web archive configure", "web archive size maximum bytes"), 2147483648);
+    assert.equal(resolveConfigMapNum("web archive configure", "web archive workers"), 1);
+    assert.deepEqual(resolveConfigMapSeries("web archive configure", "photograph filter"), [
+      "[.](apng|avif|bmp|gif|heic|heif|ico|jpe?g|jxl|png|svg|tiff?|webp)([?#].*)?$"
+    ]);
   } finally {
     forget();
   }
@@ -223,6 +256,7 @@ test("web capture retains the ZIM and WARC evidence, and WARC input uses the sam
     assert.match(await fs.readFile(log, "utf8"), /--timeHardLimit=3600/u);
     assert.match(await fs.readFile(log, "utf8"), /--sizeHardLimit=2147483648/u);
     assert.match(await fs.readFile(log, "utf8"), /--workers=1/u);
+    assert.match(await fs.readFile(log, "utf8"), /--blockRules=.*apng.*webp/u);
     assert.match(await fs.readFile(log, "utf8"), /docker run --rm --entrypoint=chown/u);
     assert.match(await fs.readFile(log, "utf8"), /--entrypoint=chown.* -R \d+:\d+ \/output/u);
 

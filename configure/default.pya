@@ -168,10 +168,13 @@ exists su name zim archive default language ob text "eng" be default ya
 exists su name zim archive default creator ob text "Pyash" be default ya
 exists su name zim archive default publisher ob text "Pyash" be default ya
 exists su name web archive network ob bool truth be default ya
-exists su name web archive prefix ob text "prefix" be default ya
-exists su name web archive page maximum ob num 2000 be default ya
-exists su name web archive page timeout seconds ob num 90 be default ya
-exists su name web archive page interval seconds ob num 1 be default ya
-exists su name web archive duration maximum seconds ob num 3600 be default ya
-exists su name web archive size maximum bytes ob num 2147483648 be default ya
-exists su name web archive workers ob num 1 be default ya
+su name web archive configure be map def
+  su name web archive prefix ob text "prefix" ya
+  su name web archive page maximum ob num 2000 ya
+  su name web archive page timeout seconds ob num 90 ya
+  su name web archive page interval seconds ob num 1 ya
+  su name web archive duration maximum seconds ob num 3600 ya
+  su name web archive size maximum bytes ob num 2147483648 ya
+  su name web archive workers ob num 1 ya
+  su name photograph filter ob ve text "[.](apng|avif|bmp|gif|heic|heif|ico|jpe?g|jxl|png|svg|tiff?|webp)([?#].*)?$" ya
+prah

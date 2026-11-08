@@ -2,7 +2,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { remember } from "../remember/index.mjs";
-import { resolveConfigBool, resolveConfigNum, resolveConfigText } from "../configure/env.mjs";
+import {
+  resolveConfigBool,
+  resolveConfigMapNum,
+  resolveConfigMapSeries,
+  resolveConfigMapText,
+  resolveConfigText
+} from "../configure/env.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { resolveSandboxSettings } from "../verbs/command/sandbox.mjs";
 import { command } from "../verbs/command/command.mjs";
@@ -137,16 +143,16 @@ function configuredImage(name, fallback, rememberFn) {
   return resolveConfigText(name, { rememberFn }) || fallback;
 }
 
-function captureConfigText(name, sentence, rememberFn) {
-  const value = String(resolveConfigText(name, { rememberFn }) ?? "").trim();
-  if (!value) fail(sentence, "cluster compress configuration invalid", `missing Zimit setting: ${name}`, { setting: name });
+function captureConfigText(key, sentence, rememberFn) {
+  const value = String(resolveConfigMapText("web archive configure", key, { rememberFn }) ?? "").trim();
+  if (!value) fail(sentence, "cluster compress configuration invalid", `missing Zimit setting: ${key}`, { setting: key });
   return value;
 }
 
-function captureConfigPositiveInteger(name, sentence, rememberFn) {
-  const value = resolveConfigNum(name, { rememberFn });
+function captureConfigPositiveInteger(key, sentence, rememberFn) {
+  const value = resolveConfigMapNum("web archive configure", key, { rememberFn });
   if (!Number.isSafeInteger(value) || value <= 0) {
-    fail(sentence, "cluster compress configuration invalid", `Zimit setting must be a positive integer: ${name}`, { setting: name, value });
+    fail(sentence, "cluster compress configuration invalid", `Zimit setting must be a positive integer: ${key}`, { setting: key, value });
   }
   return value;
 }
@@ -357,6 +363,13 @@ async function writeWebCapture(sentence, { source, sandbox, target, rememberFn, 
   const hardTimeLimitSeconds = captureConfigPositiveInteger("web archive duration maximum seconds", sentence, rememberFn);
   const hardSizeLimitBytes = captureConfigPositiveInteger("web archive size maximum bytes", sentence, rememberFn);
   const workers = captureConfigPositiveInteger("web archive workers", sentence, rememberFn);
+  const blockRules = resolveConfigMapSeries("web archive configure", "photograph filter", { rememberFn });
+  if (!blockRules) {
+    fail(sentence, "cluster compress configuration invalid", "missing Zimit photograph filter rules", { setting: "photograph filter" });
+  }
+  if (!Array.isArray(blockRules) || blockRules.some((rule) => !String(rule).trim())) {
+    fail(sentence, "cluster compress configuration invalid", "photograph filter patterns must be non-empty text values", { blockRules });
+  }
   const stage = await fs.mkdtemp(path.join(path.dirname(target), ".zim-web-"));
   const image = configuredImage("zim website capture image", "ghcr.io/openzim/zimit", rememberFn);
   const tool = configuredTool("zim website capture module", "zimit", rememberFn);
@@ -376,6 +389,7 @@ async function writeWebCapture(sentence, { source, sandbox, target, rememberFn, 
     shellArgument(`--timeHardLimit=${hardTimeLimitSeconds}`),
     shellArgument(`--sizeHardLimit=${hardSizeLimitBytes}`),
     shellArgument(`--workers=${workers}`),
+    ...blockRules.map((rule) => shellArgument(`--blockRules=${rule}`)),
     "--output=/output",
     "--keep"
   ].join(" ");
@@ -668,6 +682,19 @@ function xmlTagText(source, tag) {
   return match?.[1] ?? "";
 }
 
+function originalPageUrl(entry) {
+  const value = String(entry ?? "");
+  const separator = value.indexOf("/");
+  if (separator < 0) return "";
+  const host = value.slice(0, separator);
+  if (!/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/iu.test(host)) return "";
+  try {
+    return new URL(`https://${value}`).toString();
+  } catch {
+    return "";
+  }
+}
+
 export function parseKiwixSearchResults(xml, { endpoint, archives = [], archiveFilter = null } = {}) {
   const archiveByName = new Map(archives.map((archive) => [
     path.basename(archive.filename, path.extname(archive.filename)).toLowerCase(), archive.relative
@@ -692,6 +719,7 @@ export function parseKiwixSearchResults(xml, { endpoint, archives = [], archiveF
       archivePath: archiveByName.get(archiveId.toLowerCase()) ?? "",
       bookTitle,
       entry,
+      originalUrl: originalPageUrl(entry),
       snippet: description
     };
   }).filter((result) => (result.title || result.snippet || result.link)
@@ -722,12 +750,15 @@ async function searchZimLibraryServer(sentence, { query, archives, archiveFilter
   const results = parseKiwixSearchResults(xml, { endpoint: base, archives, archiveFilter });
   const output = results.length === 0
     ? "No results found in the shared ZIM archive library."
-    : results.map((result) => [
-      `archive: ${result.archivePath || result.bookTitle || result.archiveId}`,
-      `title: ${result.title}`,
-      `entry: ${result.entry || result.link}`,
-      `snippet: ${result.snippet}`
-    ].join("\n")).join("\n\n");
+    : results.map((result) => {
+      return [
+        `archive: ${result.archivePath || result.bookTitle || result.archiveId}`,
+        `title: ${result.title}`,
+        `entry: ${result.entry || result.link}`,
+        ...(result.originalUrl ? [`original: ${result.originalUrl}`] : []),
+        `snippet: ${result.snippet}`
+      ].join("\n");
+    }).join("\n\n");
   return {
     mood: "ya",
     su: sentence?.to?.name ? { name: sentence.to.name } : (sentence?.su ?? { name: "ZIM search results" }),

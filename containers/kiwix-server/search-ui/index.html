@@ -57,6 +57,17 @@
       return element;
     }
 
+    function originalPageUrl(entry) {
+      const separator = entry.indexOf("/");
+      const host = separator < 0 ? entry : entry.slice(0, separator);
+      if (!/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/iu.test(host)) return "";
+      try {
+        return new URL(`https://${entry}`).toString();
+      } catch {
+        return "";
+      }
+    }
+
     function renderResults(xmlText) {
       const xml = new DOMParser().parseFromString(xmlText, "application/xml");
       if (xml.querySelector("parsererror")) throw new Error("The search service returned invalid XML.");
@@ -78,7 +89,22 @@
         link.textContent = title;
         heading.append(link);
         article.append(heading);
-        article.append(textElement("small", `${archive} · ${decodeURIComponent(entry)}`, "subtle"));
+        let decodedEntry = entry;
+        try {
+          decodedEntry = decodeURIComponent(entry);
+        } catch {
+          // Keep the encoded archive path visible when it contains malformed escapes.
+        }
+        article.append(textElement("small", `${archive} · ${decodedEntry}`, "subtle"));
+        const sourceUrl = originalPageUrl(decodedEntry);
+        if (sourceUrl) {
+          const sourceLink = document.createElement("a");
+          sourceLink.href = sourceUrl;
+          sourceLink.target = "_blank";
+          sourceLink.rel = "noopener noreferrer";
+          sourceLink.textContent = "Open original page";
+          article.append(document.createTextNode(" · "), sourceLink);
+        }
         article.append(textElement("p", snippet));
         results.append(article);
       }
