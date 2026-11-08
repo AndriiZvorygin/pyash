@@ -112,6 +112,7 @@ prah`));
   doRemember(parse('exists su name web archive prefix ob text "prefix" be default ya'));
   doRemember(parse("exists su name web archive page maximum ob num 2000 be default ya"));
   doRemember(parse("exists su name web archive page timeout seconds ob num 90 be default ya"));
+  doRemember(parse("exists su name web archive page interval seconds ob num 1 be default ya"));
   doRemember(parse("exists su name web archive duration maximum seconds ob num 3600 be default ya"));
   doRemember(parse("exists su name web archive size maximum bytes ob num 2147483648 be default ya"));
   doRemember(parse("exists su name web archive workers ob num 1 be default ya"));
@@ -180,7 +181,7 @@ test("default Pyash configuration enables bounded Zimit captures", async () => {
     .split(/\r?\n/u)
     .map(line => line.trim())
     .filter(line => line.startsWith("exists su name web archive "));
-  assert.equal(captureFacts.length, 7);
+  assert.equal(captureFacts.length, 8);
 
   forget();
   try {
@@ -189,6 +190,7 @@ test("default Pyash configuration enables bounded Zimit captures", async () => {
     assert.equal(resolveConfigText("web archive prefix"), "prefix");
     assert.equal(resolveConfigNum("web archive page maximum"), 2000);
     assert.equal(resolveConfigNum("web archive page timeout seconds"), 90);
+    assert.equal(resolveConfigNum("web archive page interval seconds"), 1);
     assert.equal(resolveConfigNum("web archive duration maximum seconds"), 3600);
     assert.equal(resolveConfigNum("web archive size maximum bytes"), 2147483648);
     assert.equal(resolveConfigNum("web archive workers"), 1);
@@ -210,6 +212,7 @@ test("web capture retains the ZIM and WARC evidence, and WARC input uses the sam
     assert.match(await fs.readFile(log, "utf8"), /--scopeType=prefix/u);
     assert.match(await fs.readFile(log, "utf8"), /--pageLimit=2000/u);
     assert.match(await fs.readFile(log, "utf8"), /--pageLoadTimeout=90/u);
+    assert.match(await fs.readFile(log, "utf8"), /--pageExtraDelay=1/u);
     assert.match(await fs.readFile(log, "utf8"), /--timeHardLimit=3600/u);
     assert.match(await fs.readFile(log, "utf8"), /--sizeHardLimit=2147483648/u);
     assert.match(await fs.readFile(log, "utf8"), /--workers=1/u);

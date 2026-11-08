@@ -353,6 +353,7 @@ async function writeWebCapture(sentence, { source, sandbox, target, rememberFn, 
   }
   const pageLimit = captureConfigPositiveInteger("web archive page maximum", sentence, rememberFn);
   const pageTimeoutSeconds = captureConfigPositiveInteger("web archive page timeout seconds", sentence, rememberFn);
+  const pageIntervalSeconds = captureConfigPositiveInteger("web archive page interval seconds", sentence, rememberFn);
   const hardTimeLimitSeconds = captureConfigPositiveInteger("web archive duration maximum seconds", sentence, rememberFn);
   const hardSizeLimitBytes = captureConfigPositiveInteger("web archive size maximum bytes", sentence, rememberFn);
   const workers = captureConfigPositiveInteger("web archive workers", sentence, rememberFn);
@@ -370,6 +371,7 @@ async function writeWebCapture(sentence, { source, sandbox, target, rememberFn, 
     shellArgument(`--scopeType=${scopeType}`),
     shellArgument(`--pageLimit=${pageLimit}`),
     shellArgument(`--pageLoadTimeout=${pageTimeoutSeconds}`),
+    shellArgument(`--pageExtraDelay=${pageIntervalSeconds}`),
     shellArgument(`--timeHardLimit=${hardTimeLimitSeconds}`),
     shellArgument(`--sizeHardLimit=${hardSizeLimitBytes}`),
     shellArgument(`--workers=${workers}`),
