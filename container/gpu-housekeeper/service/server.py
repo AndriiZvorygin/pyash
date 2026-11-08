@@ -125,6 +125,7 @@ DEFAULT_RUNTIME_REGISTRY = {
   "ollama": {
     "runtimeName": "ollama",
     "containerName": "ollama",
+    "defaultContextLength": 32768,
     "gpuExpected": True,
     "beginAction": ["start", "ollama"],
     "stopAction": ["stop", "ollama"],

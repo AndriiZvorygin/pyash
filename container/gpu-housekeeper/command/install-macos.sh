@@ -86,11 +86,11 @@ registry = [{
     "actionDriver": "native-process",
     "runtimeCommand": os.environ["OLLAMA_BIN"],
     "runtimeLogPath": os.path.join(log_dir, "ollama.log"),
-    "defaultContextLength": 8192,
+    "defaultContextLength": 32768,
     "runtimeEnvironment": {
         "OLLAMA_HOST": "127.0.0.1:11434",
         "OLLAMA_NO_CLOUD": "1",
-        "OLLAMA_CONTEXT_LENGTH": "8192",
+        "OLLAMA_CONTEXT_LENGTH": "32768",
         "OLLAMA_NUM_PARALLEL": "1",
         "OLLAMA_MAX_LOADED_MODELS": "1"
     },

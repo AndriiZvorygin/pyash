@@ -14,6 +14,12 @@ footprints while avoiding the earlier multi-gigabyte overstatement at 32K.
 Other memory backends retain their previous conservative estimate until they
 have independent measurements.
 
+The default Ollama request context is 32,768 tokens, above the 16K minimum
+operating target. Mriczo has a measured 32K Qwen deployment; the calibrated
+admission estimate is 8,454 MiB. SWAC's 12 GiB GPU currently reports 11,934 MiB
+free, so the same request fits with 3,480 MiB remaining by the admission
+estimate. Explicit per-job `num_ctx` settings continue to override the default.
+
 ## Measurements
 
 Both hosts reported the same Ollama model digest:

@@ -27,6 +27,21 @@ class HousekeeperServerConfigTests(unittest.TestCase):
     self.assertEqual(server.parse_server_args([]).port, 18886)
     self.assertEqual(server.parse_server_args(["--port", "8090"]).port, 8090)
 
+  def test_default_ollama_context_is_32k_and_reaches_requests_without_override(self):
+    with patch.dict(os.environ, {
+      "GPU_HOUSEKEEPER_RUNTIME_REGISTRY": "",
+      "GPU_HOUSEKEEPER_STRATA_RUNTIME_URL": ""
+    }, clear=False):
+      registry = server.load_runtime_registry()
+    context_length = server.runtime_default_context_length(registry)
+    payload = server.normalize_ollama_payload(
+      {"payload": {"model": "qwen3.5:9b", "messages": []}},
+      "qwen3.5:9b",
+      context_length
+    )
+    self.assertEqual(context_length, 32768)
+    self.assertEqual(payload["options"]["num_ctx"], 32768)
+
 
 class HousekeeperDurableQueueTests(unittest.TestCase):
   def setUp(self):

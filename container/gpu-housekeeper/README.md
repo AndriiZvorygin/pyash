@@ -32,8 +32,8 @@ instance. Do not bind the unauthenticated Housekeeper API to a public
 interface. The native
 Housekeeper uses macOS memory_pressure plus physical-memory telemetry and
 reserves 8 GiB for macOS and other applications. Its capacity is unified
-memory, not dedicated NVIDIA VRAM. The managed Ollama runtime starts with an
-8K-token context and one parallel request; Housekeeper applies that context
+memory, not dedicated NVIDIA VRAM. The managed Ollama runtime starts with a
+32K-token context and one parallel request; Housekeeper applies that context
 to warm-load and inference requests unless a job explicitly sets `num_ctx`.
 Ollama residency is checked through
 /api/ps; idle models are discharged with keep_alive=0 and verified absent
