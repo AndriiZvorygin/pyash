@@ -51,7 +51,18 @@ Use this skill when video/refinery runs show repeated GPU model load/unload chur
 - For ordinary `ollama-chat` and `ollama-generate` inference, omit
   `resourceRequest.vramRequiredMb` unless measured demand is known. Each
   Housekeeper estimates cold-load demand from its own installed model size
-  and effective context; avoid a fleet-wide fixed VRAM declaration.
+  and effective context; avoid a fleet-wide fixed VRAM declaration. On
+  NVIDIA hosts the calibrated fallback is
+  `ceil(model MiB * 1.10 + 256 + 160 MiB per 4K context)`; unmeasured memory
+  backends retain their conservative fallback. Treat it as an admission estimate
+  and compare it with live evidence in
+  `/snapshot`: `ollamaRunningModels.models[].processVramMb` is the per-model
+  NVIDIA process allocation only when one Ollama model is resident,
+  `gpuProcesses.runtimes.ollama.usedMemoryMb` is the runtime aggregate, and
+  `devices[].vramUsedMb` includes all device users. Ollama `sizeVram` reports
+  model residency rather than the complete runner process allocation. See
+  `documentation/reference/gpu-housekeeper-vram-calibration.md` for the
+  empirical Qwen 3.5 9B 4K/32K calibration.
 - `keep_alive: 0` is a real discharge request for the target model. Verify
   `/api/ps`, `/runtime/ollama/models` and housekeeper snapshot state after
   provisioning or a smoke request.

@@ -103,9 +103,12 @@ DEFAULT_OLLAMA_MODEL_STORE_PATH = "/root/.ollama"
 DEFAULT_OLLAMA_GPU_STARTUP_GRACE_SECONDS = 60
 DEFAULT_OLLAMA_MIN_GPU_MODEL_FRACTION = 0.99
 DEFAULT_OLLAMA_GPU_WATCHDOG_INTERVAL_SECONDS = 300
-OLLAMA_VRAM_WEIGHT_HEADROOM = 1.20
-OLLAMA_VRAM_FIXED_HEADROOM_MB = 512
-OLLAMA_VRAM_PER_4K_CONTEXT_MB = 512
+OLLAMA_VRAM_DEFAULT_WEIGHT_HEADROOM = 1.20
+OLLAMA_VRAM_DEFAULT_FIXED_HEADROOM_MB = 512
+OLLAMA_VRAM_DEFAULT_PER_4K_CONTEXT_MB = 512
+OLLAMA_VRAM_NVIDIA_WEIGHT_HEADROOM = 1.10
+OLLAMA_VRAM_NVIDIA_FIXED_HEADROOM_MB = 256
+OLLAMA_VRAM_NVIDIA_PER_4K_CONTEXT_MB = 160
 OLLAMA_VRAM_CONTEXT_BASE_TOKENS = 4096
 DEFAULT_PYA_LOADING_DIR = "/var/lib/pyash/gpu-housekeeper"
 MODEL_LOADING_OBSERVATION_ROOT = "gpu runtime loading observation"
@@ -1765,7 +1768,11 @@ def make_snapshot(host_id: str) -> Dict[str, Any]:
     "runtimes": {},
     "unmanagedProcesses": []
   }
-  ollama_residency = ollama_running_model_status()
+  ollama_residency = annotate_ollama_process_vram(
+    ollama_running_model_status(),
+    process_view,
+    telemetry.get("backend") or accelerator_memory_backend()
+  )
   if ollama_residency.get("available"):
     sync_ollama_profiles(ollama_residency.get("models", []))
   runtime_statuses = list_runtime_statuses(Handler.runtime_registry) if "Handler" in globals() else []
@@ -3045,15 +3052,20 @@ def infer_ollama_inference_resource_request(
     context_length = runtime_default_context_length(runtime_registry, "ollama") or OLLAMA_VRAM_CONTEXT_BASE_TOKENS
   context_units = max(1, math.ceil(context_length / OLLAMA_VRAM_CONTEXT_BASE_TOKENS))
   model_size_mb = math.ceil(size_bytes / (1024 * 1024))
+  nvidia_calibration = accelerator_memory_backend() == "nvidia-cuda"
+  weight_headroom = OLLAMA_VRAM_NVIDIA_WEIGHT_HEADROOM if nvidia_calibration else OLLAMA_VRAM_DEFAULT_WEIGHT_HEADROOM
+  fixed_headroom_mb = OLLAMA_VRAM_NVIDIA_FIXED_HEADROOM_MB if nvidia_calibration else OLLAMA_VRAM_DEFAULT_FIXED_HEADROOM_MB
+  per_4k_context_mb = OLLAMA_VRAM_NVIDIA_PER_4K_CONTEXT_MB if nvidia_calibration else OLLAMA_VRAM_DEFAULT_PER_4K_CONTEXT_MB
   required_vram_mb = math.ceil(
-    model_size_mb * OLLAMA_VRAM_WEIGHT_HEADROOM
-    + OLLAMA_VRAM_FIXED_HEADROOM_MB
-    + context_units * OLLAMA_VRAM_PER_4K_CONTEXT_MB
+    model_size_mb * weight_headroom
+    + fixed_headroom_mb
+    + context_units * per_4k_context_mb
   )
   return {
     "vramRequiredMb": required_vram_mb,
     "modelSizeMb": model_size_mb,
     "contextLength": context_length,
+    "calibration": "nvidia-deployed-measurements" if nvidia_calibration else "conservative-unmeasured-backend",
     "source": "ollama-model-size-estimate",
   }
 
@@ -4255,6 +4267,10 @@ def ollama_running_model_status() -> Dict[str, Any]:
     except (TypeError, ValueError):
       size = 0
       size_vram = 0
+    try:
+      context_length = max(0, int(item.get("context_length") or 0))
+    except (TypeError, ValueError):
+      context_length = 0
     fraction = (size_vram / size) if size > 0 else None
     resident = size > 0 and size_vram > 0 and fraction >= ollama_min_gpu_model_fraction()
     reason = "model weights are resident on GPU" if resident else (
@@ -4267,11 +4283,33 @@ def ollama_running_model_status() -> Dict[str, Any]:
       "size": size,
       "sizeVram": size_vram,
       "gpuFraction": round(fraction, 4) if fraction is not None else None,
+      **({"contextLength": context_length} if context_length else {}),
       "loaded": True,
       "gpuResident": resident,
       "reason": reason
     })
   return {"available": True, "models": models, "error": ""}
+
+
+def annotate_ollama_process_vram(
+  residency: Dict[str, Any],
+  process_view: Dict[str, Any],
+  memory_backend: str
+) -> Dict[str, Any]:
+  """Attribute process VRAM to a model only when Ollama has one resident model."""
+  result = dict(residency)
+  models = residency.get("models") if isinstance(residency.get("models"), list) else []
+  copied_models = [dict(model) for model in models if isinstance(model, dict)]
+  result["models"] = copied_models
+  if memory_backend != "nvidia-cuda" or len(copied_models) != 1 or not copied_models[0].get("gpuResident"):
+    return result
+  runtime = (process_view.get("runtimes") or {}).get("ollama") if isinstance(process_view, dict) else None
+  processes = runtime.get("processes") if isinstance(runtime, dict) else None
+  used_mb = max(0, int(runtime.get("usedMemoryMb") or 0)) if isinstance(runtime, dict) else 0
+  if used_mb > 0 and isinstance(processes, list) and processes:
+    copied_models[0]["processVramMb"] = used_mb
+    copied_models[0]["processVramSource"] = "nvidia-smi-compute-processes"
+  return result
 
 
 def ollama_model_residency(model_name: str, models: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:

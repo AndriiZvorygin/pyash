@@ -825,7 +825,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
       "models": [
         {"name": "cpu-model", "size": 1000, "size_vram": 0},
         {"name": "partial-model", "size": 1000, "size_vram": 950},
-        {"name": "gpu-model", "size": 1000, "size_vram": 1000},
+        {"name": "gpu-model", "size": 1000, "size_vram": 1000, "context_length": 32768},
         {"name": "unknown-size-model", "size": 0, "size_vram": 900}
       ]
     }
@@ -840,6 +840,37 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.assertFalse(server._PROFILES["cpu-model"]["loaded"])
     self.assertFalse(server._PROFILES["partial-model"]["loaded"])
     self.assertTrue(server._PROFILES["gpu-model"]["loaded"])
+    self.assertEqual(server.ollama_model_residency("gpu-model", report["models"])["contextLength"], 32768)
+
+  def test_single_resident_ollama_model_reports_full_process_vram(self):
+    residency = {
+      "available": True,
+      "models": [{"name": "qwen3.5:9b", "gpuResident": True, "sizeVram": 6_618_370_538}],
+    }
+    processes = {
+      "available": True,
+      "runtimes": {"ollama": {
+        "usedMemoryMb": 7656,
+        "processes": [{"pid": 194212, "processName": "llama-server", "usedMemoryMb": 7656}],
+      }},
+    }
+
+    annotated = server.annotate_ollama_process_vram(residency, processes, "nvidia-cuda")
+
+    self.assertEqual(annotated["models"][0]["processVramMb"], 7656)
+    self.assertEqual(annotated["models"][0]["processVramSource"], "nvidia-smi-compute-processes")
+    self.assertNotIn("processVramMb", residency["models"][0])
+
+  def test_multiple_resident_ollama_models_keep_process_vram_unattributed(self):
+    residency = {"available": True, "models": [
+      {"name": "model-a", "gpuResident": True},
+      {"name": "model-b", "gpuResident": True},
+    ]}
+    processes = {"runtimes": {"ollama": {"usedMemoryMb": 9000, "processes": [{"pid": 1}]}}}
+
+    annotated = server.annotate_ollama_process_vram(residency, processes, "nvidia-cuda")
+
+    self.assertTrue(all("processVramMb" not in model for model in annotated["models"]))
 
   def test_cpu_resident_model_restarts_ollama_before_request_is_sent(self):
     actions = []
@@ -1765,8 +1796,9 @@ class HousekeeperCapacityTests(unittest.TestCase):
     }
     server.ollama_model_catalog = lambda force=False: {
       "available": True,
-      "models": [{"name": "qwen3.5:9b", "size": 5_500_000_000}],
+      "models": [{"name": "qwen3.5:9b", "size": 6_594_474_711}],
     }
+    server.ollama_running_model_status = lambda: {"available": True, "models": []}
     plan = server.capacity_plan_for_job({
       "runtimeName": "ollama",
       "profileName": "qwen3.5:9b",
@@ -1809,6 +1841,61 @@ class HousekeeperCapacityTests(unittest.TestCase):
     twenty_seven_b_4k = estimate("qwen3.5:27b", 4096)
     self.assertGreater(nine_b_16k, nine_b_4k)
     self.assertGreater(twenty_seven_b_4k, nine_b_4k)
+
+  def test_ollama_vram_estimate_has_headroom_over_deployed_qwen_measurements(self):
+    original_backend = server.accelerator_memory_backend
+    server.accelerator_memory_backend = lambda: "nvidia-cuda"
+    model = {
+      "name": "qwen3.5:9b",
+      "size": 6_594_474_711,
+      "digest": "6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7",
+    }
+    server.ollama_model_catalog = lambda force=False: {"available": True, "models": [model]}
+    cases = [(4096, 6448), (32768, 7656)]
+
+    try:
+      for context_length, observed_process_mb in cases:
+        with self.subTest(context_length=context_length):
+          request = server.infer_ollama_inference_resource_request({
+            "runtimeName": "ollama",
+            "profileName": model["name"],
+            "jobSpec": {
+              "kind": "ollama-chat",
+              "payload": {
+                "model": model["name"], "messages": [],
+                "options": {"num_ctx": context_length},
+              },
+            },
+          }, {"ollama": {"runtimeName": "ollama", "defaultContextLength": 32768}})
+
+          self.assertGreaterEqual(request["vramRequiredMb"], observed_process_mb)
+          self.assertLessEqual(request["vramRequiredMb"], int(observed_process_mb * 1.15))
+          self.assertEqual(request["contextLength"], context_length)
+          self.assertEqual(request["calibration"], "nvidia-deployed-measurements")
+    finally:
+      server.accelerator_memory_backend = original_backend
+
+  def test_unmeasured_ollama_memory_backend_keeps_conservative_estimate(self):
+    original_backend = server.accelerator_memory_backend
+    server.accelerator_memory_backend = lambda: "apple-unified"
+    server.ollama_model_catalog = lambda force=False: {
+      "available": True,
+      "models": [{"name": "qwen3.5:9b", "size": 6_594_474_711}],
+    }
+    try:
+      estimate = server.infer_ollama_inference_resource_request({
+        "runtimeName": "ollama",
+        "profileName": "qwen3.5:9b",
+        "jobSpec": {
+          "kind": "ollama-chat",
+          "payload": {"model": "qwen3.5:9b", "messages": [], "options": {"num_ctx": 32768}},
+        },
+      }, {"ollama": {"runtimeName": "ollama"}})
+    finally:
+      server.accelerator_memory_backend = original_backend
+
+    self.assertEqual(estimate["vramRequiredMb"], 12155)
+    self.assertEqual(estimate["calibration"], "conservative-unmeasured-backend")
 
   def test_explicit_ollama_vram_request_overrides_model_estimate(self):
     server.parse_nvidia_smi = lambda: {
