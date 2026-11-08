@@ -43,6 +43,12 @@ test("default config and system service connect the local GPU queue", async () =
   assert.match(begin, /GPU_HOUSEKEEPER_ENV_FILE/u);
   assert.match(begin, /refusing IPv6 network migration/u);
   assert.match(begin, /\/queue/u);
+  assert.match(begin, /network_migration_needed=true/u);
+  assert.ok(
+    begin.indexOf('docker compose "${COMPOSE_ENV_ARGS[@]}" -p gpu-housekeeper -f "$COMPOSE_FILE" down')
+      < begin.indexOf('docker compose "${COMPOSE_ENV_ARGS[@]}" -p gpu-housekeeper -f "$COMPOSE_FILE" up'),
+    "an idle network migration must remove the old project network before compose up"
+  );
   assert.doesNotMatch(compose, /8090/u);
   assert.match(dockerfile, /EXPOSE 18886/u);
   assert.match(macInstaller, /GPU_HOUSEKEEPER_PORT:-18886/u);
