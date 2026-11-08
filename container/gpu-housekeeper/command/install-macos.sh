@@ -214,7 +214,7 @@ echo "Native Ollama and Pyash GPU Housekeeper are running."
 echo "Ollama is started and supervised by the Housekeeper process."
 echo "Ollama API: loopback only at http://127.0.0.1:11434"
 echo "Housekeeper peer: $HOUSEKEEPER_URL; host id macstudio"
-echo "Model downloads are restricted to qwen3.5:9b."
+echo "Model pulls require explicit queued provisioning and host capacity checks."
 if [[ -n "$STRATA_RUNTIME_URL" ]]; then
   echo "Strata API: $STRATA_RUNTIME_URL; Housekeeper runtime registered on apple0"
   echo "Strata admission floor: $STRATA_MEMORY_FLOOR_MB MiB unified memory"
