@@ -91,9 +91,11 @@ the claim is treated as abandoned: its handle is marked `fail`, the runtime
 file moves to `produce/fail`, and any stale matching lease is released. A claim
 whose handle is already terminal success is moved to `produce/success` instead.
 This keeps an interrupted worker from blocking the queue while avoiding an
-automatic replay of a remote job whose outcome is ambiguous. The stale age can
-be tuned with `PYA_GPU_RUNTIME_STALE_MS` when an unusually long-running job
-needs a larger recovery window.
+automatic replay while a known remote job is still available. If polling
+returns `404` because a Housekeeper restarted before durable job records were
+deployed, the worker resubmits the same durable envelope a bounded number of
+times. The stale age can be tuned with `PYA_GPU_RUNTIME_STALE_MS` when an
+unusually long-running job needs a larger recovery window.
 
 ### 2.3 GPU Housekeeper
 
@@ -117,10 +119,20 @@ needs a larger recovery window.
 - `POST /runtime/stop`
 - `POST /runtime/restart`
 
-The housekeeper does not own a durable job queue; `world/holding/gpu/` owns
-that. `/submit` registers an execution record, admits it through a gate for its
-physical device, and `/job/<remoteJobId>` exposes transient status so
-`gpu_worker` can copy the final result back into the Pyash handle. Default
+`world/holding/gpu/` remains the durable duty queue and source of truth for
+unclaimed work. Once `/submit` accepts a duty, the Housekeeper atomically
+records its execution envelope and state as a `.pya` file beneath
+`GPU_HOUSEKEEPER_PYA_DIR/jobs/` before acknowledging it. On restart, queued
+jobs are restored and interrupted local running jobs return to `queued`, then
+resume with the same `remoteJobId`; forwarded job references and terminal
+results are restored for polling as well. Replayed submissions are deduplicated
+by `handleId` and matching job content, returning the original remote ID;
+reusing a handle for different content is rejected. This durable execution journal lets
+the Housekeeper restart without requiring its accepted queue to drain, while
+the caller-side holding spool remains authoritative for the duty itself.
+`/submit` admits work through a gate for its physical device, and
+`/job/<remoteJobId>` exposes status so `gpu_worker` can copy the final result
+back into the Pyash handle. Default
 runtimes are exclusive per device. A runtime may set `concurrencySafe` in the
 host-local runtime registry to opt into shared same-device execution; that
 choice is still subject to its declared VRAM request and live capacity checks.
@@ -212,13 +224,17 @@ Runtime configuration can be overridden with `GPU_HOUSEKEEPER_RUNTIME_REGISTRY`.
 The runtime registry is also the safety boundary for automatic memory
 reclamation. A runtime being present in the registry means that the
 housekeeper is allowed to inspect and manage its configured container; it does
-not mean that the housekeeper may terminate arbitrary host processes. Automatic
-reclamation requires both a runtime-specific `activityProbe` and a supported
-`dischargeKind`. ComfyUI uses its empty-queue probe and `/interrupt`, queue-clear,
-and `/free` hooks. Ollama uses the Housekeeper job ledger plus recent container
-inference access logs; discharge sends `keep_alive: 0` and verifies `/api/ps` is
-empty. Unknown activity, failed telemetry, and managed runtimes without a safe
-hook remain untouched. The Strata pre-load hook requests admission through
+not mean that the housekeeper may terminate arbitrary host processes. A
+background idle reaper checks every 30 seconds by default and discharges
+registered resident runtimes once their provider-specific idle probe has
+exceeded `GPU_HOUSEKEEPER_IDLE_GRACE_SEC` (300 seconds by default). It takes the
+device's exclusive execution gate and rechecks activity and residency before
+using an existing provider hook. Queued jobs do not count as provider activity;
+jobs actually executing do. ComfyUI uses its empty-queue probe and `/interrupt`,
+queue-clear, and `/free` hooks. Ollama uses recent container inference access
+logs and Housekeeper execution state; discharge sends `keep_alive: 0` and
+verifies `/api/ps` is empty. Unknown activity, failed telemetry, and managed
+runtimes without a safe hook remain untouched. The Strata pre-load hook requests admission through
 `/capacity/prepare`, which takes the device gate and performs capacity checks
 before Strata allocates model VRAM. For reverse handoff, the optional Strata
 runtime entry queries its status through a short-lived host-network helper
@@ -350,7 +366,10 @@ Jobs may declare an optional memory request in their `jobSpec`:
 request that already fits is admitted without a provider probe. If it does not
 fit, the housekeeper considers only managed runtimes with an explicit safe
 discharge hook and a provider-specific idle result. The default idle grace is
-300 seconds and can be set with `GPU_HOUSEKEEPER_IDLE_GRACE_SEC`. ComfyUI is
+300 seconds and can be set with `GPU_HOUSEKEEPER_IDLE_GRACE_SEC`. A background
+reaper checks registered runtimes every 30 seconds, releasing idle residency
+even without a new request; tune this with
+`GPU_HOUSEKEEPER_IDLE_REAPER_INTERVAL_SEC`. ComfyUI is
 discharged without stopping its container, using its existing API hooks. The
 housekeeper rechecks memory after each successful discharge and fails closed if
 the request still does not fit. If capacity is blocked only because a managed

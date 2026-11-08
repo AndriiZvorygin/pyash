@@ -67,7 +67,7 @@ test("gpu mind status and await follow durable duty lifecycle through worker", a
   assert.equal(submitted[0]?.profileName, "llama3.2");
   assert.equal(submitted[0]?.jobSpec?.kind, "ollama-generate");
   assert.equal(submitted[0]?.jobSpec?.prompt, "teach fractions briefly");
-  assert.equal(submitted[0]?.jobSpec?.resourceRequest?.vramRequiredMb, 12000);
+  assert.equal(submitted[0]?.jobSpec?.resourceRequest, undefined);
 
   const state = await readGpuHandleStatus(worldRoot, "gpu handle one");
   assert.equal(state?.status, "success");

@@ -111,7 +111,7 @@ export async function submitManagedGpuJob({
   fetchImpl = globalThis.fetch,
   timeoutMs = Number.parseInt(String(process.env.PYA_GPU_MANAGER_TIMEOUT_MS || "3600000"), 10) || 3600000,
   pollIntervalMs = Number.parseInt(String(process.env.PYA_GPU_MANAGER_POLL_MS || "500"), 10) || 500,
-  vramRequiredMb = Number.parseInt(String(process.env.PYA_GPU_VRAM_REQUIRED_MB || "12000"), 10) || 12000,
+  vramRequiredMb,
 } = {}) {
   if (typeof fetchImpl !== "function") throw new Error("managed GPU job requires fetch");
   const explicitManager = text(managerUrl || process.env.PYA_GPU_HOUSEKEEPER_URL || process.env.GPU_HOUSEKEEPER_URL);
@@ -124,13 +124,27 @@ export async function submitManagedGpuJob({
   if (!normalizedRuntime || !normalizedProfile || !jobSpec || typeof jobSpec !== "object") {
     throw new Error("managed GPU job requires runtimeName, profileName, and jobSpec");
   }
-  const normalizedJobSpec = {
-    ...jobSpec,
-    resourceRequest: {
-      vramRequiredMb: Math.max(1, Number(vramRequiredMb) || 12000),
-      ...(jobSpec.resourceRequest && typeof jobSpec.resourceRequest === "object" ? jobSpec.resourceRequest : {}),
-    },
+  const inferenceKind = normalizedRuntime === "ollama"
+    && ["ollama-chat", "ollama-generate"].includes(text(jobSpec.kind).toLowerCase());
+  const provisioningKind = normalizedRuntime === "ollama" && text(jobSpec.kind).toLowerCase() === "ollama-ensure-model";
+  const configuredVram = Number.parseInt(String(
+    (inferenceKind ? process.env.PYA_OLLAMA_VRAM_REQUIRED_MB : "")
+      || process.env.PYA_GPU_VRAM_REQUIRED_MB
+      || (normalizedRuntime === "ollama" ? "" : "12000")
+  ), 10);
+  const requestedVram = Number(vramRequiredMb) > 0
+    ? Math.trunc(Number(vramRequiredMb))
+    : (Number.isFinite(configuredVram) && configuredVram > 0 ? configuredVram : 0);
+  if (provisioningKind && requestedVram <= 0) {
+    throw new Error("managed Ollama provisioning requires an explicit vramRequiredMb");
+  }
+  const resourceRequest = {
+    ...(requestedVram > 0 ? { vramRequiredMb: requestedVram } : {}),
+    ...(jobSpec.resourceRequest && typeof jobSpec.resourceRequest === "object" ? jobSpec.resourceRequest : {}),
   };
+  const normalizedJobSpec = { ...jobSpec };
+  if (Object.keys(resourceRequest).length) normalizedJobSpec.resourceRequest = resourceRequest;
+  else delete normalizedJobSpec.resourceRequest;
   const submit = await requestJson({
     fetchImpl,
     url: `${resolvedManager}/submit`,
@@ -171,7 +185,9 @@ export async function ensureManagedOllamaModel({
   managerUrl = "",
   providerUrl = "",
   deviceId = process.env.PYA_GPU_DEVICE_ID || "",
-  vramRequiredMb = Number.parseInt(String(process.env.PYA_OLLAMA_VRAM_REQUIRED_MB || "12000"), 10) || 12000,
+  vramRequiredMb = Number.parseInt(String(
+    process.env.PYA_OLLAMA_VRAM_REQUIRED_MB || process.env.PYA_GPU_VRAM_REQUIRED_MB || ""
+  ), 10) || 0,
   ramRequiredMb = 0,
   diskRequiredMb = 0,
   pullIfMissing = false,
@@ -183,8 +199,11 @@ export async function ensureManagedOllamaModel({
 } = {}) {
   const exactModel = text(model);
   if (!exactModel) throw new Error("managed Ollama provisioning requires an exact model tag");
+  if (!Number.isFinite(Number(vramRequiredMb)) || Number(vramRequiredMb) <= 0) {
+    throw new Error("managed Ollama provisioning requires an explicit vramRequiredMb");
+  }
   const resourceRequest = {
-    vramRequiredMb: Math.max(1, Number(vramRequiredMb) || 0),
+    vramRequiredMb: Math.trunc(Number(vramRequiredMb)),
     ...(Number(ramRequiredMb) > 0 ? { ramRequiredMb: Math.floor(Number(ramRequiredMb)) } : {}),
     ...(Number(diskRequiredMb) > 0 ? { diskRequiredMb: Math.floor(Number(diskRequiredMb)) } : {}),
     ...(text(deviceId) ? { deviceId: text(deviceId) } : {}),
@@ -228,7 +247,13 @@ export async function requestManagedOllamaChat({
   fetchImpl = globalThis.fetch,
   timeoutMs = Number.parseInt(String(env.PYA_GPU_MANAGER_TIMEOUT_MS || process.env.PYA_GPU_MANAGER_TIMEOUT_MS || "1800000"), 10) || 1800000,
   pollIntervalMs = Number.parseInt(String(env.PYA_GPU_MANAGER_POLL_MS || process.env.PYA_GPU_MANAGER_POLL_MS || "500"), 10) || 500,
-  vramRequiredMb = Number.parseInt(String(env.PYA_OLLAMA_VRAM_REQUIRED_MB || process.env.PYA_OLLAMA_VRAM_REQUIRED_MB || "12000"), 10) || 12000,
+  vramRequiredMb = Number.parseInt(String(
+    env.PYA_OLLAMA_VRAM_REQUIRED_MB
+      || process.env.PYA_OLLAMA_VRAM_REQUIRED_MB
+      || env.PYA_GPU_VRAM_REQUIRED_MB
+      || process.env.PYA_GPU_VRAM_REQUIRED_MB
+      || ""
+  ), 10) || 0,
   deviceId = env.PYA_GPU_DEVICE_ID || process.env.PYA_GPU_DEVICE_ID || "",
   hostId = env.PYA_GPU_HOST_ID || process.env.PYA_GPU_HOST_ID || "",
   username = env.PYA_GPU_USERNAME || process.env.PYA_GPU_USERNAME || "",
@@ -297,10 +322,7 @@ export async function requestManagedOllamaChat({
       ...(text(deviceId) ? { deviceId: text(deviceId) } : {}),
       jobSpec: {
         kind: "ollama-chat",
-        resourceRequest: {
-          vramRequiredMb: Math.max(1, Number(vramRequiredMb) || 12000),
-          ...(text(deviceId) ? { deviceId: text(deviceId) } : {}),
-        },
+        ...(Number(vramRequiredMb) > 0 ? { resourceRequest: { vramRequiredMb: Math.trunc(Number(vramRequiredMb)) } } : {}),
         payload,
       },
     },

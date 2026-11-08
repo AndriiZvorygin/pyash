@@ -23,7 +23,7 @@ function response(payload, status = 200) {
   };
 }
 
-test("remote Ollama requests submit to the GPU housekeeper with Qwen resource demand", async () => {
+test("remote Ollama requests leave Qwen resource demand to the host housekeeper", async () => {
   const calls = [];
   const fetchImpl = async (url, options = {}) => {
     calls.push({ url, options, body: options.body ? JSON.parse(options.body) : null });
@@ -54,7 +54,7 @@ test("remote Ollama requests submit to the GPU housekeeper with Qwen resource de
   });
   assert.equal(calls[0].body.profileName, DEFAULT_TEXT_MODEL);
   assert.equal(calls[0].body.jobSpec.kind, "ollama-chat");
-  assert.equal(calls[0].body.jobSpec.resourceRequest.vramRequiredMb, 12000);
+  assert.equal(calls[0].body.jobSpec.resourceRequest, undefined);
   assert.equal(calls[0].body.jobSpec.payload.model, DEFAULT_TEXT_MODEL);
 });
 
@@ -185,4 +185,11 @@ test("Ollama model provisioning uses one exact queued housekeeper job", async ()
   assert.equal(calls[0].body.jobSpec.payload.model, "qwen3.5:9b");
   assert.equal(calls[0].body.jobSpec.payload.pullIfMissing, false);
   assert.equal(calls[0].body.jobSpec.resourceRequest.vramRequiredMb, 7000);
+});
+
+test("Ollama model provisioning requires an explicit VRAM request", async () => {
+  await assert.rejects(
+    ensureManagedOllamaModel({ model: "qwen3.5:9b", fetchImpl: async () => response({}) }),
+    /requires an explicit vramRequiredMb/u
+  );
 });

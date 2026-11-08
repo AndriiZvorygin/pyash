@@ -286,6 +286,19 @@ test("housekeeper adapter getJobStatus calls GET /job/<id>", async () => {
   );
 });
 
+test("housekeeper adapter preserves HTTP status so missing remote jobs can be resumed", async () => {
+  await withMockFetch(
+    async () => makeJsonResponse({ status: 404, body: { error: "job not found" } }),
+    async () => {
+      const adapter = createGpuHousekeeperAdapter({ baseUrl: "http://housekeeper:18886" });
+      await assert.rejects(
+        adapter.getJobStatus({ remoteJobId: "lost-job" }),
+        (error) => error.statusCode === 404 && /job not found/u.test(error.message)
+      );
+    }
+  );
+});
+
 test("housekeeper adapter discharge posts expected payload", async () => {
   await withMockFetch(
     async () => makeJsonResponse({ body: { success: true } }),

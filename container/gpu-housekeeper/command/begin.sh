@@ -24,6 +24,7 @@ export GPU_HOUSEKEEPER_IPV6_SUBNET="$(
 )"
 echo "gpu-housekeeper IPv6 subnet: $GPU_HOUSEKEEPER_IPV6_SUBNET"
 
+network_migration_needed=false
 if existing_network="$(docker network inspect gpu-housekeeper_default --format '{{json .}}' 2>/dev/null)"; then
   if ! printf '%s' "$existing_network" | GPU_HOUSEKEEPER_EXPECTED_IPV6_SUBNET="$GPU_HOUSEKEEPER_IPV6_SUBNET" python3 -c '
 import ipaddress
@@ -41,6 +42,7 @@ actual = next((
 ), None)
 sys.exit(0 if network.get("EnableIPv6") and actual == expected else 1)
 '; then
+    network_migration_needed=true
     if [[ "$(docker inspect --format '{{.State.Running}}' gpu-housekeeper 2>/dev/null || true)" == "true" ]]; then
       if ! queue_payload="$(curl -fsS --max-time 3 "http://127.0.0.1:${GPU_HOUSEKEEPER_PUBLISH_PORT:-18886}/queue")"; then
         echo "refusing IPv6 network migration: cannot verify the running Housekeeper queue" >&2
@@ -60,6 +62,11 @@ print(sum(1 for job in jobs if str(job.get("status", "")).lower() in pending))
       fi
     fi
   fi
+fi
+
+if [[ "$network_migration_needed" == "true" ]]; then
+  echo "recreating Housekeeper project network with IPv6 subnet $GPU_HOUSEKEEPER_IPV6_SUBNET"
+  docker compose "${COMPOSE_ENV_ARGS[@]}" -p gpu-housekeeper -f "$COMPOSE_FILE" down
 fi
 
 docker compose "${COMPOSE_ENV_ARGS[@]}" -p gpu-housekeeper -f "$COMPOSE_FILE" up -d --build --remove-orphans
