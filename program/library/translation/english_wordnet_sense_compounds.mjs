@@ -821,7 +821,7 @@ export function buildSenseCompoundChoiceInput({
     "COMPONENT OPTIONS:",
     JSON.stringify(componentOptions, null, 2),
     targetHead
-      ? 'Example: the existing head is better and part one offers health; return {"verdict":"compound","atoms":["health"]}; the pipeline appends better.'
+      ? "Return only modifier atoms selected from COMPONENT OPTIONS; the pipeline appends the existing head."
       : 'Example: part one offers atom1 and part two offers atom2; return {"verdict":"compound","atoms":["atom1","atom2"]}',
     targetHead
       ? 'If no useful modifier fits: {"verdict":"uncertain","atoms":[]}'
