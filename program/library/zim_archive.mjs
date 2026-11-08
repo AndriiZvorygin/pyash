@@ -2,7 +2,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { remember } from "../remember/index.mjs";
-import { resolveConfigText } from "../configure/env.mjs";
+import {
+  resolveConfigBool,
+  resolveConfigMapNum,
+  resolveConfigMapSeries,
+  resolveConfigMapText,
+  resolveConfigText
+} from "../configure/env.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { resolveSandboxSettings } from "../verbs/command/sandbox.mjs";
 import { command } from "../verbs/command/command.mjs";
@@ -135,6 +141,20 @@ function configuredTool(name, fallback, rememberFn) {
 
 function configuredImage(name, fallback, rememberFn) {
   return resolveConfigText(name, { rememberFn }) || fallback;
+}
+
+function captureConfigText(key, sentence, rememberFn) {
+  const value = String(resolveConfigMapText("web archive configure", key, { rememberFn }) ?? "").trim();
+  if (!value) fail(sentence, "cluster compress configuration invalid", `missing Zimit setting: ${key}`, { setting: key });
+  return value;
+}
+
+function captureConfigPositiveInteger(key, sentence, rememberFn) {
+  const value = resolveConfigMapNum("web archive configure", key, { rememberFn });
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    fail(sentence, "cluster compress configuration invalid", `Zimit setting must be a positive integer: ${key}`, { setting: key, value });
+  }
+  return value;
 }
 
 async function runCommand(sentence, commandText, label, { rememberFn, runtimeContext } = {}) {
@@ -327,11 +347,33 @@ async function writeWebCapture(sentence, { source, sandbox, target, rememberFn, 
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     fail(sentence, "cluster compress input invalid", "web state supports only HTTP and HTTPS URLs", { url: urlText });
   }
-  if (sandbox.networkAllowed === false) fail(sentence, "cluster compress network disabled", "web-to-ZIM capture requires network access", { url: url.href });
+  const networkEnabled = resolveConfigBool("web archive network", { rememberFn })
+    ?? sandbox.networkAllowed;
+  if (networkEnabled !== true) {
+    fail(sentence, "cluster compress network disabled", "web-to-ZIM capture requires enabled network permission", { url: url.href });
+  }
   const name = safeArchiveName(target);
+  const scopeType = captureConfigText("web archive prefix", sentence, rememberFn);
+  if (!["page", "page-spa", "prefix", "host", "domain", "any", "custom"].includes(scopeType)) {
+    fail(sentence, "cluster compress configuration invalid", `unsupported Zimit scope type: ${scopeType}`, { scopeType });
+  }
+  const pageLimit = captureConfigPositiveInteger("web archive page maximum", sentence, rememberFn);
+  const pageTimeoutSeconds = captureConfigPositiveInteger("web archive page timeout seconds", sentence, rememberFn);
+  const pageIntervalSeconds = captureConfigPositiveInteger("web archive page interval seconds", sentence, rememberFn);
+  const hardTimeLimitSeconds = captureConfigPositiveInteger("web archive duration maximum seconds", sentence, rememberFn);
+  const hardSizeLimitBytes = captureConfigPositiveInteger("web archive size maximum bytes", sentence, rememberFn);
+  const workers = captureConfigPositiveInteger("web archive workers", sentence, rememberFn);
+  const blockRules = resolveConfigMapSeries("web archive configure", "photograph filter", { rememberFn });
+  if (!blockRules) {
+    fail(sentence, "cluster compress configuration invalid", "missing Zimit photograph filter rules", { setting: "photograph filter" });
+  }
+  if (!Array.isArray(blockRules) || blockRules.some((rule) => !String(rule).trim())) {
+    fail(sentence, "cluster compress configuration invalid", "photograph filter patterns must be non-empty text values", { blockRules });
+  }
   const stage = await fs.mkdtemp(path.join(path.dirname(target), ".zim-web-"));
   const image = configuredImage("zim website capture image", "ghcr.io/openzim/zimit", rememberFn);
   const tool = configuredTool("zim website capture module", "zimit", rememberFn);
+  const owner = `${process.getuid?.() ?? 0}:${process.getgid?.() ?? 0}`;
   const commandText = [
     "docker run --rm",
     "-v",
@@ -340,19 +382,40 @@ async function writeWebCapture(sentence, { source, sandbox, target, rememberFn, 
     shellArgument(tool),
     shellArgument(`--seeds=${url.href}`),
     shellArgument(`--name=${name}`),
+    shellArgument(`--scopeType=${scopeType}`),
+    shellArgument(`--pageLimit=${pageLimit}`),
+    shellArgument(`--pageLoadTimeout=${pageTimeoutSeconds}`),
+    shellArgument(`--pageExtraDelay=${pageIntervalSeconds}`),
+    shellArgument(`--timeHardLimit=${hardTimeLimitSeconds}`),
+    shellArgument(`--sizeHardLimit=${hardSizeLimitBytes}`),
+    shellArgument(`--workers=${workers}`),
+    ...blockRules.map((rule) => shellArgument(`--blockRules=${rule}`)),
     "--output=/output",
     "--keep"
+  ].join(" ");
+  const ownershipCommand = [
+    "docker run --rm --entrypoint=chown",
+    "-v",
+    shellArgument(`${stage}:/output`),
+    shellArgument(image),
+    "-R",
+    owner,
+    "/output"
   ].join(" ");
   let retainedCapture = false;
   try {
     const commandResult = await runCommand(sentence, commandText, "zim website capture", { rememberFn, runtimeContext });
     if (commandResult?.be !== "command" || commandResult?.mood !== "ya") return commandResult;
-    const generated = path.join(stage, `${name}.zim`);
-    const stats = await fs.stat(generated).catch(() => null);
+    const ownershipResult = await runCommand(sentence, ownershipCommand, "zim capture ownership", { rememberFn, runtimeContext });
+    if (ownershipResult?.be !== "command" || ownershipResult?.mood !== "ya") return ownershipResult;
+    const stagedFiles = await listFilesRecursively(stage);
+    const zimFiles = stagedFiles.filter((filename) => /\.zim$/iu.test(filename));
+    const generated = zimFiles.length === 1 ? zimFiles[0] : null;
+    const stats = generated ? await fs.stat(generated).catch(() => null) : null;
     if (!stats?.isFile() || stats.size === 0) {
-      fail(sentence, "cluster compress output missing", "Zimit completed without creating a non-empty ZIM archive", { output: generated, outputText: commandResult?.ob?.text ?? "" });
+      fail(sentence, "cluster compress output missing", "Zimit must create exactly one non-empty ZIM archive", { outputs: zimFiles, outputText: commandResult?.ob?.text ?? "" });
     }
-    const warcs = (await listFilesRecursively(stage)).filter((filename) => /\.warc(?:\.gz)?$/iu.test(filename));
+    const warcs = stagedFiles.filter((filename) => /\.warc(?:\.gz)?$/iu.test(filename));
     const captureDirectory = `${target}.capture`;
     const captureExists = await fs.lstat(captureDirectory).then(() => true).catch(() => false);
     if (captureExists) {
@@ -619,6 +682,19 @@ function xmlTagText(source, tag) {
   return match?.[1] ?? "";
 }
 
+function originalPageUrl(entry) {
+  const value = String(entry ?? "");
+  const separator = value.indexOf("/");
+  if (separator < 0) return "";
+  const host = value.slice(0, separator);
+  if (!/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/iu.test(host)) return "";
+  try {
+    return new URL(`https://${value}`).toString();
+  } catch {
+    return "";
+  }
+}
+
 export function parseKiwixSearchResults(xml, { endpoint, archives = [], archiveFilter = null } = {}) {
   const archiveByName = new Map(archives.map((archive) => [
     path.basename(archive.filename, path.extname(archive.filename)).toLowerCase(), archive.relative
@@ -643,6 +719,7 @@ export function parseKiwixSearchResults(xml, { endpoint, archives = [], archiveF
       archivePath: archiveByName.get(archiveId.toLowerCase()) ?? "",
       bookTitle,
       entry,
+      originalUrl: originalPageUrl(entry),
       snippet: description
     };
   }).filter((result) => (result.title || result.snippet || result.link)
@@ -673,12 +750,15 @@ async function searchZimLibraryServer(sentence, { query, archives, archiveFilter
   const results = parseKiwixSearchResults(xml, { endpoint: base, archives, archiveFilter });
   const output = results.length === 0
     ? "No results found in the shared ZIM archive library."
-    : results.map((result) => [
-      `archive: ${result.archivePath || result.bookTitle || result.archiveId}`,
-      `title: ${result.title}`,
-      `entry: ${result.entry || result.link}`,
-      `snippet: ${result.snippet}`
-    ].join("\n")).join("\n\n");
+    : results.map((result) => {
+      return [
+        `archive: ${result.archivePath || result.bookTitle || result.archiveId}`,
+        `title: ${result.title}`,
+        `entry: ${result.entry || result.link}`,
+        ...(result.originalUrl ? [`original: ${result.originalUrl}`] : []),
+        `snippet: ${result.snippet}`
+      ].join("\n");
+    }).join("\n\n");
   return {
     mood: "ya",
     su: sentence?.to?.name ? { name: sentence.to.name } : (sentence?.su ?? { name: "ZIM search results" }),

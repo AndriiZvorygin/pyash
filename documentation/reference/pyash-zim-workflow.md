@@ -44,6 +44,17 @@ stored in `archives/site.zim.capture/` alongside `archives/site.zim`:
 from filename "https://example.org/" fromstate wo web tostate wo zim to filename "archives/site.zim" be cluster-compress do
 ```
 
+Web capture is network-enabled for this specific operation by the
+`web archive network` default. General command sandbox network
+settings remain unchanged. The `web archive configure` map in
+`configure/default.pya` sets prefix scope, one worker, a one-second interval
+between pages, a 2,000-page cap, a 90-second page-load timeout, a one-hour
+hard time limit, and a 2 GiB hard WARC-size limit. Its default block rule
+omits common image formats to keep captures text-focused. Remove or change
+that rule to retain images. The page delay is a coarse pacing control; it does
+not cap individual HTTP requests per second. Local Pyash configuration can
+override the map.
+
 An existing WARC can be converted without recapturing the site:
 
 ```pyash
@@ -98,7 +109,9 @@ Docker with the configured Zimit image, defaulting to `ghcr.io/openzim/zimit`;
 the container must be available locally or Docker must be able to retrieve it.
 The existing command policy classifies archive creation tools as local writers,
 archive inspection/search tools as read-only, and Docker under process control.
-Command policy, timeout, network, and sandbox settings remain authoritative.
+Command policy, timeout, and sandbox settings remain authoritative for the
+underlying process; the URL-capture permission and bounded crawler profile are
+specific to Zimit.
 
 Set `PYA_ENABLE_ZIM_TOOLS=truth` and run `npm run setup:zim` to install the
 Debian/Ubuntu host packages and build `pyash/zim-tools:ubuntu-24.04` from
@@ -108,7 +121,7 @@ create/read/search smoke test. The integration quiz skips by default, keeping
 normal setup and CI lightweight.
 
 Defaults live in `configure/default.pya`: writer, reader, search tool, Zimit
-image, archive metadata defaults, and the existing `ksus hzip` compound. The
+image, crawl permission and bounds, archive metadata defaults, and the existing `ksus hzip` compound. The
 resulting `.zim` remains a file artifact. `containers/kiwix-server/` provides a
 read-only server for the shared `world/library/archive/` collection on host port
 8091 over IPv4 and IPv6. The persistent host collection lives at
