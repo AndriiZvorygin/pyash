@@ -360,6 +360,7 @@ async function writeWebCapture(sentence, { source, sandbox, target, rememberFn, 
   const stage = await fs.mkdtemp(path.join(path.dirname(target), ".zim-web-"));
   const image = configuredImage("zim website capture image", "ghcr.io/openzim/zimit", rememberFn);
   const tool = configuredTool("zim website capture module", "zimit", rememberFn);
+  const owner = `${process.getuid?.() ?? 0}:${process.getgid?.() ?? 0}`;
   const commandText = [
     "docker run --rm",
     "-v",
@@ -378,16 +379,29 @@ async function writeWebCapture(sentence, { source, sandbox, target, rememberFn, 
     "--output=/output",
     "--keep"
   ].join(" ");
+  const ownershipCommand = [
+    "docker run --rm --entrypoint=chown",
+    "-v",
+    shellArgument(`${stage}:/output`),
+    shellArgument(image),
+    "-R",
+    owner,
+    "/output"
+  ].join(" ");
   let retainedCapture = false;
   try {
     const commandResult = await runCommand(sentence, commandText, "zim website capture", { rememberFn, runtimeContext });
     if (commandResult?.be !== "command" || commandResult?.mood !== "ya") return commandResult;
-    const generated = path.join(stage, `${name}.zim`);
-    const stats = await fs.stat(generated).catch(() => null);
+    const ownershipResult = await runCommand(sentence, ownershipCommand, "zim capture ownership", { rememberFn, runtimeContext });
+    if (ownershipResult?.be !== "command" || ownershipResult?.mood !== "ya") return ownershipResult;
+    const stagedFiles = await listFilesRecursively(stage);
+    const zimFiles = stagedFiles.filter((filename) => /\.zim$/iu.test(filename));
+    const generated = zimFiles.length === 1 ? zimFiles[0] : null;
+    const stats = generated ? await fs.stat(generated).catch(() => null) : null;
     if (!stats?.isFile() || stats.size === 0) {
-      fail(sentence, "cluster compress output missing", "Zimit completed without creating a non-empty ZIM archive", { output: generated, outputText: commandResult?.ob?.text ?? "" });
+      fail(sentence, "cluster compress output missing", "Zimit must create exactly one non-empty ZIM archive", { outputs: zimFiles, outputText: commandResult?.ob?.text ?? "" });
     }
-    const warcs = (await listFilesRecursively(stage)).filter((filename) => /\.warc(?:\.gz)?$/iu.test(filename));
+    const warcs = stagedFiles.filter((filename) => /\.warc(?:\.gz)?$/iu.test(filename));
     const captureDirectory = `${target}.capture`;
     const captureExists = await fs.lstat(captureDirectory).then(() => true).catch(() => false);
     if (captureExists) {

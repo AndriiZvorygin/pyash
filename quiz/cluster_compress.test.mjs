@@ -57,20 +57,27 @@ async function withZimTools(run, { captureNetworkEnabled = true } = {}) {
   ]);
   await writeExecutable(docker, [
     'printf "docker %s\\n" "$*" >> "$PYA_ZIM_TOOL_LOG"',
+    'case "$*" in *"--entrypoint=chown"*) exit 0 ;; esac',
     'output=',
     'name=',
+    'mode=zimit',
     'while [ "$#" -gt 0 ]; do',
     '  case "$1" in',
     '    *:/output) output="${1%:/output}" ;;',
     '    --name=*) name="${1#--name=}" ;;',
+    '    warc2zim) mode=warc ;;',
     '  esac',
     '  shift',
     'done',
     '[ "$PYA_ZIM_TOOL_FAIL" = "1" ] && exit 7',
     'mkdir -p "$output"',
-    'printf "fixture-zim" > "$output/$name.zim"',
-    'mkdir -p "$output/$name"',
-    'printf "fixture-warc" > "$output/$name/capture.warc.gz"',
+    'if [ "$mode" = "warc" ]; then',
+    '  printf "fixture-zim" > "$output/$name.zim"',
+    'else',
+    '  mkdir -p "$output/$name"',
+    '  printf "fixture-zim" > "$output/$name/$name.zim"',
+    '  printf "fixture-warc" > "$output/$name/capture.warc.gz"',
+    'fi',
     'printf "zimit-created %s\\n" "$name"'
   ]);
   await writeExecutable(zimdump, [
@@ -216,6 +223,8 @@ test("web capture retains the ZIM and WARC evidence, and WARC input uses the sam
     assert.match(await fs.readFile(log, "utf8"), /--timeHardLimit=3600/u);
     assert.match(await fs.readFile(log, "utf8"), /--sizeHardLimit=2147483648/u);
     assert.match(await fs.readFile(log, "utf8"), /--workers=1/u);
+    assert.match(await fs.readFile(log, "utf8"), /docker run --rm --entrypoint=chown/u);
+    assert.match(await fs.readFile(log, "utf8"), /--entrypoint=chown.* -R \d+:\d+ \/output/u);
 
     const warcResult = await interpret(parse(
       'from filename "capture.warc" fromstate wo warc tostate wo zim to filename "archives/warc.zim" be cluster-compress do'
