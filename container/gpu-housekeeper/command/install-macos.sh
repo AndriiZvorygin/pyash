@@ -8,6 +8,7 @@ fi
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SOURCE_SERVER="$ROOT_DIR/service/server.py"
+SOURCE_KUBERNETES_RUNTIME="$ROOT_DIR/service/kubernetes_runtime.py"
 APP_DIR="$HOME/Applications/Ollama.app"
 OLLAMA_BIN="$APP_DIR/Contents/Resources/ollama"
 INSTALL_DIR="$HOME/.local/share/pyash-gpu-housekeeper"
@@ -49,6 +50,7 @@ if [[ ! -x "$OLLAMA_BIN" ]]; then
 fi
 
 install -m 755 "$SOURCE_SERVER" "$SERVER_PATH"
+install -m 644 "$SOURCE_KUBERNETES_RUNTIME" "$INSTALL_DIR/kubernetes_runtime.py"
 
 OLLAMA_BIN="$OLLAMA_BIN" \
 HOUSEKEEPER_PLIST="$HOUSEKEEPER_PLIST" \

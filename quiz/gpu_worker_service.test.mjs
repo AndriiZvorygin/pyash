@@ -52,6 +52,8 @@ test("default config and system service connect the local GPU queue", async () =
   assert.doesNotMatch(compose, /8090/u);
   assert.match(dockerfile, /EXPOSE 18886/u);
   assert.match(macInstaller, /GPU_HOUSEKEEPER_PORT:-18886/u);
+  assert.match(macInstaller, /SOURCE_KUBERNETES_RUNTIME=.*kubernetes_runtime\.py/u);
+  assert.match(macInstaller, /install -m 644 "\$SOURCE_KUBERNETES_RUNTIME" "\$INSTALL_DIR\/kubernetes_runtime\.py"/u);
   assert.match(macInstaller, /GPU_HOUSEKEEPER_STRATA_ACTION_TIMEOUT_SEC:-1800/u);
   assert.match(macInstaller, /"runtimeActionTimeoutSec": int\(os\.environ\["STRATA_ACTION_TIMEOUT_SEC"\]\)/u);
   assert.match(tunnel, /GPU_HOUSEKEEPER_TUNNEL_REMOTE_PORT:-18886/u);
