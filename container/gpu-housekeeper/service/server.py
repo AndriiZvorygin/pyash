@@ -103,6 +103,10 @@ DEFAULT_OLLAMA_MODEL_STORE_PATH = "/root/.ollama"
 DEFAULT_OLLAMA_GPU_STARTUP_GRACE_SECONDS = 60
 DEFAULT_OLLAMA_MIN_GPU_MODEL_FRACTION = 0.99
 DEFAULT_OLLAMA_GPU_WATCHDOG_INTERVAL_SECONDS = 300
+OLLAMA_VRAM_WEIGHT_HEADROOM = 1.20
+OLLAMA_VRAM_FIXED_HEADROOM_MB = 512
+OLLAMA_VRAM_PER_4K_CONTEXT_MB = 512
+OLLAMA_VRAM_CONTEXT_BASE_TOKENS = 4096
 DEFAULT_PYA_LOADING_DIR = "/var/lib/pyash/gpu-housekeeper"
 MODEL_LOADING_OBSERVATION_ROOT = "gpu runtime loading observation"
 MODEL_CALL_OBSERVATION_ROOT = "gpu runtime call observation"
@@ -3004,8 +3008,65 @@ def job_resource_request(job: Dict[str, Any]) -> Optional[Dict[str, Any]]:
   }
 
 
+def infer_ollama_inference_resource_request(
+  job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]
+) -> Optional[Dict[str, Any]]:
+  """Estimate cold Ollama inference VRAM from this host's installed model and context."""
+  if normalize_text(job.get("runtimeName")).lower() != "ollama":
+    return None
+  job_spec = job.get("jobSpec") if isinstance(job.get("jobSpec"), dict) else {}
+  kind = normalize_text(job_spec.get("kind")).lower()
+  if kind not in {"ollama-chat", "ollama-generate"}:
+    return None
+
+  model_name = ollama_model_for_job(job)
+  if not model_name:
+    return {"error": "cannot infer Ollama VRAM request without an exact model name"}
+  catalog = ollama_model_catalog()
+  if catalog.get("available") is not True:
+    return {"error": catalog.get("error") or "Ollama model catalog unavailable for VRAM estimate"}
+  model = ollama_model_entry(model_name, catalog)
+  if not model:
+    return {"error": f"installed model size unavailable for Ollama inference model: {model_name}"}
+  try:
+    size_bytes = int(model.get("size") or 0)
+  except (TypeError, ValueError):
+    size_bytes = 0
+  if size_bytes <= 0:
+    return {"error": f"installed model size unavailable for Ollama inference model: {model_name}"}
+
+  payload = job_spec.get("payload") if isinstance(job_spec.get("payload"), dict) else job_spec
+  options = payload.get("options") if isinstance(payload.get("options"), dict) else {}
+  try:
+    context_length = int(options.get("num_ctx") or 0)
+  except (TypeError, ValueError):
+    context_length = 0
+  if context_length <= 0:
+    context_length = runtime_default_context_length(runtime_registry, "ollama") or OLLAMA_VRAM_CONTEXT_BASE_TOKENS
+  context_units = max(1, math.ceil(context_length / OLLAMA_VRAM_CONTEXT_BASE_TOKENS))
+  model_size_mb = math.ceil(size_bytes / (1024 * 1024))
+  required_vram_mb = math.ceil(
+    model_size_mb * OLLAMA_VRAM_WEIGHT_HEADROOM
+    + OLLAMA_VRAM_FIXED_HEADROOM_MB
+    + context_units * OLLAMA_VRAM_PER_4K_CONTEXT_MB
+  )
+  return {
+    "vramRequiredMb": required_vram_mb,
+    "modelSizeMb": model_size_mb,
+    "contextLength": context_length,
+    "source": "ollama-model-size-estimate",
+  }
+
+
 def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
   request = job_resource_request(job)
+  inferred_request = None
+  if request is None:
+    inferred_request = infer_ollama_inference_resource_request(job, runtime_registry)
+    if inferred_request and not inferred_request.get("error"):
+      request = {"vramRequiredMb": inferred_request["vramRequiredMb"], "deviceId": ""}
+    elif inferred_request:
+      request = {"vramRequiredMb": 0, "deviceId": ""}
   if not request:
     return {
       "decision": "not-requested",
@@ -3048,6 +3109,14 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
   total = int(device.get("vramTotalMb") or 0)
   common = {
     "requiredVramMb": required,
+    "resourceRequestSource": (
+      inferred_request.get("source") if inferred_request and not inferred_request.get("error")
+      else ("unknown" if inferred_request else "declared")
+    ),
+    **({
+      "estimatedModelSizeMb": inferred_request["modelSizeMb"],
+      "contextLength": inferred_request["contextLength"],
+    } if inferred_request and not inferred_request.get("error") else {}),
     "deviceId": device_id,
     "freeBeforeMb": free_before,
     "totalMb": total,
@@ -3084,6 +3153,11 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
     common["decision"] = "fits"
     common["reason"] = "target profile is already warm; no additional VRAM is required"
     common["targetProfileLoaded"] = True
+    return common
+  if inferred_request and inferred_request.get("error"):
+    common["decision"] = "request-unknown"
+    common["reason"] = inferred_request["error"]
+    common["requiredVramMb"] = None
     return common
   if free_before >= required:
     common["decision"] = "fits"
@@ -3325,6 +3399,8 @@ def ensure_capacity_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dic
   decision = plan.get("decision")
   if decision in {"not-requested", "fits"}:
     return plan
+  if decision == "request-unknown":
+    raise RuntimeError(plan.get("reason") or "Ollama inference VRAM requirement could not be estimated")
   if decision == "telemetry-unavailable":
     raise RuntimeError(plan.get("reason") or "GPU capacity telemetry unavailable")
   if decision == "insufficient" and plan.get("waitForCapacity") is True:

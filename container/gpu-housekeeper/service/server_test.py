@@ -332,9 +332,9 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.orig_parse_runtime_status = server.parse_runtime_status
     self.orig_runtime_action = server.runtime_action
     self.orig_request_ollama_json = server.request_ollama_json
+    self.orig_ollama_model_catalog = server.ollama_model_catalog
     self.orig_request_strata_json = server.request_strata_json
     self.orig_ollama_model_status = server.ollama_running_model_status
-    self.orig_ollama_model_catalog = server.ollama_model_catalog
     self.orig_memory_available_mb = server.memory_available_mb
     self.orig_container_disk_available_mb = server.container_disk_available_mb
     self.original_pull_env = os.environ.get("GPU_HOUSEKEEPER_ALLOW_MODEL_PULL")
@@ -358,9 +358,9 @@ class HousekeeperOllamaTests(unittest.TestCase):
     server.parse_runtime_status = self.orig_parse_runtime_status
     server.runtime_action = self.orig_runtime_action
     server.request_ollama_json = self.orig_request_ollama_json
+    server.ollama_model_catalog = self.orig_ollama_model_catalog
     server.request_strata_json = self.orig_request_strata_json
     server.ollama_running_model_status = self.orig_ollama_model_status
-    server.ollama_model_catalog = self.orig_ollama_model_catalog
     server.memory_available_mb = self.orig_memory_available_mb
     server.container_disk_available_mb = self.orig_container_disk_available_mb
     if self.original_pull_env is None:
@@ -422,6 +422,10 @@ class HousekeeperOllamaTests(unittest.TestCase):
     server.parse_nvidia_smi = lambda: {
       "available": True,
       "devices": [{"deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 0, "vramFreeMb": 24576}]
+    }
+    server.ollama_model_catalog = lambda force=False: {
+      "available": True,
+      "models": [{"name": "qwen-test", "size": 1_000_000_000}],
     }
     generate = server.submit_job({
       "handleId": "handle-one",
@@ -1060,6 +1064,10 @@ class HousekeeperOllamaTests(unittest.TestCase):
     server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600: (
       {"models": [{"name": "qwen-test", "size": 1000, "size_vram": 1000}]} if pathname == "/api/ps" else {"response": "ok"}
     )
+    server.ollama_model_catalog = lambda force=False: {
+      "available": True,
+      "models": [{"name": "qwen-test", "size": 1_000_000_000}],
+    }
 
     submitted = server.submit_job({
       "handleId": "handle-direct",
@@ -1702,6 +1710,7 @@ class HousekeeperCapacityTests(unittest.TestCase):
     self.orig_parse_runtime_status = server.parse_runtime_status
     self.orig_request_comfyui_json = server.request_comfyui_json
     self.orig_request_ollama_json = server.request_ollama_json
+    self.orig_ollama_model_catalog = server.ollama_model_catalog
     self.orig_request_strata_json = server.request_strata_json
     self.orig_ollama_running_model_status = server.ollama_running_model_status
     self.orig_run_docker = server.run_docker
@@ -1722,6 +1731,7 @@ class HousekeeperCapacityTests(unittest.TestCase):
     server.parse_runtime_status = self.orig_parse_runtime_status
     server.request_comfyui_json = self.orig_request_comfyui_json
     server.request_ollama_json = self.orig_request_ollama_json
+    server.ollama_model_catalog = self.orig_ollama_model_catalog
     server.request_strata_json = self.orig_request_strata_json
     server.ollama_running_model_status = self.orig_ollama_running_model_status
     server.run_docker = self.orig_run_docker
@@ -1747,6 +1757,110 @@ class HousekeeperCapacityTests(unittest.TestCase):
         **job_spec
       }
     }
+
+  def test_cold_ollama_inference_estimates_vram_from_host_model_size(self):
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 12288, "vramUsedMb": 354, "vramFreeMb": 11934}],
+    }
+    server.ollama_model_catalog = lambda force=False: {
+      "available": True,
+      "models": [{"name": "qwen3.5:9b", "size": 5_500_000_000}],
+    }
+    plan = server.capacity_plan_for_job({
+      "runtimeName": "ollama",
+      "profileName": "qwen3.5:9b",
+      "jobSpec": {
+        "kind": "ollama-chat",
+        "payload": {"model": "qwen3.5:9b", "messages": [], "options": {"num_ctx": 4096}},
+      },
+    }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+
+    self.assertEqual(plan["decision"], "fits")
+    self.assertLess(plan["requiredVramMb"], 11934)
+    self.assertGreater(plan["requiredVramMb"], 6448)
+    self.assertEqual(plan["resourceRequestSource"], "ollama-model-size-estimate")
+
+  def test_ollama_vram_estimate_scales_with_model_size_and_context(self):
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 0, "vramFreeMb": 24576}],
+    }
+    server.ollama_model_catalog = lambda force=False: {
+      "available": True,
+      "models": [
+        {"name": "qwen3.5:9b", "size": 5_500_000_000},
+        {"name": "qwen3.5:27b", "size": 16_000_000_000},
+      ],
+    }
+
+    def estimate(model, context):
+      return server.capacity_plan_for_job({
+        "runtimeName": "ollama",
+        "profileName": model,
+        "jobSpec": {
+          "kind": "ollama-generate",
+          "payload": {"model": model, "prompt": "test", "options": {"num_ctx": context}},
+        },
+      }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})["requiredVramMb"]
+
+    nine_b_4k = estimate("qwen3.5:9b", 4096)
+    nine_b_16k = estimate("qwen3.5:9b", 16384)
+    twenty_seven_b_4k = estimate("qwen3.5:27b", 4096)
+    self.assertGreater(nine_b_16k, nine_b_4k)
+    self.assertGreater(twenty_seven_b_4k, nine_b_4k)
+
+  def test_explicit_ollama_vram_request_overrides_model_estimate(self):
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 12288, "vramUsedMb": 0, "vramFreeMb": 12288}],
+    }
+    server.ollama_model_catalog = lambda force=False: self.fail("explicit request should skip model inference")
+    plan = server.capacity_plan_for_job({
+      "runtimeName": "ollama",
+      "profileName": "qwen3.5:9b",
+      "jobSpec": {
+        "kind": "ollama-chat",
+        "resourceRequest": {"vramRequiredMb": 7000},
+        "payload": {"model": "qwen3.5:9b", "messages": []},
+      },
+    }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+
+    self.assertEqual(plan["requiredVramMb"], 7000)
+    self.assertEqual(plan["resourceRequestSource"], "declared")
+
+  def test_warm_ollama_model_does_not_require_catalog_for_a_cold_load_estimate(self):
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 12288, "vramUsedMb": 6448, "vramFreeMb": 5840}],
+    }
+    server.ollama_model_catalog = lambda force=False: {"available": False, "error": "catalog unavailable", "models": []}
+    server._PROFILES["qwen3.5:9b"] = {
+      "profileName": "qwen3.5:9b", "runtimeName": "ollama", "loaded": True,
+    }
+    plan = server.capacity_plan_for_job({
+      "runtimeName": "ollama",
+      "profileName": "qwen3.5:9b",
+      "jobSpec": {"kind": "ollama-chat", "payload": {"model": "qwen3.5:9b", "messages": []}},
+    }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+
+    self.assertEqual(plan["decision"], "fits")
+    self.assertTrue(plan["targetProfileLoaded"])
+
+  def test_unknown_model_size_fails_closed_for_ollama_inference(self):
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 12288, "vramUsedMb": 0, "vramFreeMb": 12288}],
+    }
+    server.ollama_model_catalog = lambda force=False: {"available": True, "models": []}
+    plan = server.capacity_plan_for_job({
+      "runtimeName": "ollama",
+      "profileName": "missing-model",
+      "jobSpec": {"kind": "ollama-chat", "payload": {"model": "missing-model", "messages": []}},
+    }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+
+    self.assertEqual(plan["decision"], "request-unknown")
+    self.assertIn("installed model size", plan["reason"])
 
   def test_process_telemetry_parses_pid_name_and_memory(self):
     class FakeProcess:
@@ -3580,6 +3694,10 @@ class HousekeeperFederationTests(unittest.TestCase):
   def test_local_queued_submission_reserves_execution_slot(self):
     server.configured_peers = lambda: {}
     server.local_route_state = server.__dict__["local_route_state"]
+    server.ollama_model_catalog = lambda force=False: {
+      "available": True,
+      "models": [{"name": "qwen", "size": 1_000_000_000}],
+    }
     result = server.submit_job({
       "handleId": "reservation",
       "runtimeName": "ollama",

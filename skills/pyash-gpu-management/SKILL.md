@@ -48,6 +48,10 @@ Use this skill when video/refinery runs show repeated GPU model load/unload chur
   Ollama's catalog/pull API. Do not copy model files between GPU hosts or add
   a model registry to Criterion. A failed fit should be reported as
   insufficient capacity; unavailable telemetry should remain unknown.
+- For ordinary `ollama-chat` and `ollama-generate` inference, omit
+  `resourceRequest.vramRequiredMb` unless measured demand is known. Each
+  Housekeeper estimates cold-load demand from its own installed model size
+  and effective context; avoid a fleet-wide fixed VRAM declaration.
 - `keep_alive: 0` is a real discharge request for the target model. Verify
   `/api/ps`, `/runtime/ollama/models` and housekeeper snapshot state after
   provisioning or a smoke request.

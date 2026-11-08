@@ -67,7 +67,7 @@ PYA_SADDLE_MIND=zai node command/pyash_saddle.mjs
 
 This selects the Pyash mind named `zai`, whose default endpoint is `https://api.z.ai/api/coding/paas/v4`. Override the starting mind with `/mind` or `PYA_SADDLE_MIND`; `/model` selects a model for the active mind. Other minds continue using their existing configuration. GLM-5.3 is text-only; the model uses Pyash tools through the existing mind tool loop.
 
-Durable `be gpu mind` jobs include a Housekeeper `resourceRequest.vramRequiredMb` by default (12,000 MiB). Set `PYA_OLLAMA_VRAM_REQUIRED_MB` or `PYA_GPU_VRAM_REQUIRED_MB` to adjust the default, or provide `resourceRequest.vramRequiredMb` in the job map. This declaration lets the Housekeeper safely reclaim idle managed runtimes before loading the requested model.
+For Ollama inference, omit `resourceRequest.vramRequiredMb` to let each Housekeeper estimate the request from that host's installed model size and the effective context length. The estimate uses 1.2 times installed weight size, 512 MiB fixed runtime headroom, and 512 MiB per 4K context for KV-cache headroom. That lets routing distinguish a 9B model from a larger model and account for different model files across hosts. Set `resourceRequest.vramRequiredMb` in the job map when a measured or specialized requirement is known; it overrides the estimate. `PYA_OLLAMA_VRAM_REQUIRED_MB` and `PYA_GPU_VRAM_REQUIRED_MB` remain explicit global overrides. Ollama model provisioning/pulls require an explicit VRAM request (and RAM/disk requests when pulling).
 
 ## Optional Local Strata Backend
 

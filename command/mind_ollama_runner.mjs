@@ -500,7 +500,6 @@ async function runHousekeeperManagedMind(payload) {
     providerUrl: resolveHost(payload),
     timeoutMs,
     pollIntervalMs,
-    vramRequiredMb: Number.parseInt(String(process.env.PYA_OLLAMA_VRAM_REQUIRED_MB || "12000"), 10) || 12000,
     jobSpec: { kind: "ollama-generate", payload: request }
   });
 }
