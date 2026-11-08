@@ -64,7 +64,7 @@ async function writeExecutable(filename, lines) {
   await fs.chmod(filename, 0o755);
 }
 
-async function withZimTools(run, { captureNetworkEnabled = true } = {}) {
+async function withZimTools(run, { captureNetworkEnabled = true, pageIncludeRules = ["example.org/articles/"] } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-zim-workflow-"));
   const bin = path.join(root, "bin");
   await fs.mkdir(bin, { recursive: true });
@@ -142,13 +142,15 @@ async function withZimTools(run, { captureNetworkEnabled = true } = {}) {
 prah`));
   doRemember(parse(`exists su name web archive network ob bool ${captureNetworkEnabled ? "truth" : "lie"} be default ya`));
   await runPyaBlock(`su name web archive configure be map def
-  su name web archive prefix ob text "prefix" ya
+  su name web archive prefix ob text "custom" ya
   su name web archive page maximum ob num 2000 ya
   su name web archive page timeout seconds ob num 90 ya
   su name web archive page interval seconds ob num 1 ya
   su name web archive duration maximum seconds ob num 3600 ya
   su name web archive size maximum bytes ob num 2147483648 ya
   su name web archive workers ob num 1 ya
+  su name web archive behavior ob text "autoscroll,siteSpecific" ya
+${pageIncludeRules.map(rule => `  su name web archive page include ob ve text ${JSON.stringify(rule)} ya`).join("\n")}
   su name photograph filter ob ve text "[.](apng|avif|bmp|gif|heic|heif|ico|jpe?g|jxl|png|svg|tiff?|webp)([?#].*)?$" ya
 prah`);
 
@@ -231,9 +233,11 @@ test("default Pyash configuration enables bounded Zimit captures", async () => {
     assert.equal(resolveConfigMapNum("web archive configure", "web archive duration maximum seconds"), 3600);
     assert.equal(resolveConfigMapNum("web archive configure", "web archive size maximum bytes"), 2147483648);
     assert.equal(resolveConfigMapNum("web archive configure", "web archive workers"), 1);
+    assert.equal(resolveConfigMapText("web archive configure", "web archive behavior"), "autoscroll,siteSpecific");
     assert.deepEqual(resolveConfigMapSeries("web archive configure", "photograph filter"), [
       "[.](apng|avif|bmp|gif|heic|heif|ico|jpe?g|jxl|png|svg|tiff?|webp)([?#].*)?$"
     ]);
+    assert.equal(resolveConfigMapSeries("web archive configure", "web archive page include"), undefined);
   } finally {
     forget();
   }
@@ -249,13 +253,15 @@ test("web capture retains the ZIM and WARC evidence, and WARC input uses the sam
     assert.equal(await fs.readFile(webResult.warc.filename, "utf8"), "fixture-warc");
     assert.match(await fs.readFile(log, "utf8"), /--keep/u);
     assert.match(await fs.readFile(log, "utf8"), /--seeds=https:\/\/example\.org\//u);
-    assert.match(await fs.readFile(log, "utf8"), /--scopeType=prefix/u);
+    assert.match(await fs.readFile(log, "utf8"), /--scopeType=custom/u);
+    assert.match(await fs.readFile(log, "utf8"), /--scopeIncludeRx=example.org\/articles\//u);
     assert.match(await fs.readFile(log, "utf8"), /--pageLimit=2000/u);
     assert.match(await fs.readFile(log, "utf8"), /--pageLoadTimeout=90/u);
     assert.match(await fs.readFile(log, "utf8"), /--pageExtraDelay=1/u);
     assert.match(await fs.readFile(log, "utf8"), /--timeHardLimit=3600/u);
     assert.match(await fs.readFile(log, "utf8"), /--sizeHardLimit=2147483648/u);
     assert.match(await fs.readFile(log, "utf8"), /--workers=1/u);
+    assert.match(await fs.readFile(log, "utf8"), /--behaviors=autoscroll,siteSpecific/u);
     assert.match(await fs.readFile(log, "utf8"), /--blockRules=.*apng.*webp/u);
     assert.match(await fs.readFile(log, "utf8"), /docker run --rm --entrypoint=chown/u);
     assert.match(await fs.readFile(log, "utf8"), /--entrypoint=chown.* -R \d+:\d+ \/output/u);
@@ -280,6 +286,16 @@ test("web capture obeys its dedicated network permission", async () => {
     assert.equal(await fs.readFile(log, "utf8").catch(() => ""), "");
     assert.deepEqual(await fs.readdir(path.join(root, "archives")), []);
   }, { captureNetworkEnabled: false });
+});
+
+test("custom Zimit scopes require an explicit page include rule", async () => {
+  await withZimTools(async (root, log) => {
+    await assert.rejects(
+      interpret(parse('from filename "https://example.org/" fromstate wo web tostate wo zim to filename "archives/no-scope.zim" be cluster-compress do')),
+      /custom Zimit scope requires at least one page include rule/u
+    );
+    assert.equal(await fs.readFile(log, "utf8").catch(() => ""), "");
+  }, { pageIncludeRules: [] });
 });
 
 test("read and search use the existing Pyash verbs for a ZIM archive", async () => {
