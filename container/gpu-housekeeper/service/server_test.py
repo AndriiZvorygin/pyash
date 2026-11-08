@@ -79,6 +79,28 @@ class HousekeeperDurableQueueTests(unittest.TestCase):
     self.assertIn("could not persist accepted job", accepted["error"])
     self.assertEqual(server._JOBS, {})
 
+  def test_replayed_handle_returns_same_job_without_duplicate_submission(self):
+    payload = {
+      "handleId": "idempotent-handle", "runtimeName": "test-runtime",
+      "profileName": "test-profile", "jobSpec": {"kind": "test-job", "payload": {"value": 1}}
+    }
+    route = {"selected": {"hostId": "mriczo", "deviceId": "gpu0", "score": 1}}
+    with patch.object(server, "select_route", return_value=route) as select_route:
+      first = server.submit_job(payload, {"test-runtime": {}}, "mriczo")
+      replayed = server.submit_job(payload, {"test-runtime": {}}, "mriczo")
+      mismatched = server.submit_job({
+        **payload, "jobSpec": {"kind": "test-job", "payload": {"value": 2}}
+      }, {"test-runtime": {}}, "mriczo")
+
+    self.assertTrue(first["accepted"])
+    self.assertTrue(replayed["accepted"])
+    self.assertTrue(replayed["replayed"])
+    self.assertEqual(replayed["remoteJobId"], first["remoteJobId"])
+    self.assertEqual(select_route.call_count, 1)
+    self.assertFalse(mismatched["accepted"])
+    self.assertIn("different job content", mismatched["error"])
+    self.assertEqual(len(server._JOBS), 1)
+
   def test_restart_restores_queued_interrupted_terminal_and_forwarded_jobs(self):
     base = {
       "runtimeName": "test-runtime", "profileName": "test-profile",

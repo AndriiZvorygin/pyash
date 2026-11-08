@@ -125,7 +125,9 @@ records its execution envelope and state as a `.pya` file beneath
 `GPU_HOUSEKEEPER_PYA_DIR/jobs/` before acknowledging it. On restart, queued
 jobs are restored and interrupted local running jobs return to `queued`, then
 resume with the same `remoteJobId`; forwarded job references and terminal
-results are restored for polling as well. This durable execution journal lets
+results are restored for polling as well. Replayed submissions are deduplicated
+by `handleId` and matching job content, returning the original remote ID;
+reusing a handle for different content is rejected. This durable execution journal lets
 the Housekeeper restart without requiring its accepted queue to drain, while
 the caller-side holding spool remains authoritative for the duty itself.
 `/submit` admits work through a gate for its physical device, and

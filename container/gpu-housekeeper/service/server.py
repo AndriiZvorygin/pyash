@@ -2053,6 +2053,31 @@ def submit_job(
   }
 
   with _SUBMISSION_LOCK:
+    with _LOCK:
+      existing = next(
+        (item for item in _JOBS.values() if normalize_text(item.get("handleId")) == handle_id),
+        None
+      )
+      if existing:
+        same_envelope = (
+          normalize_text(existing.get("runtimeName")).lower() == runtime_lower
+          and normalize_text(existing.get("profileName")) == profile_name
+          and existing.get("jobSpec") == job_spec
+        )
+        if not same_envelope:
+          return {
+            "accepted": False,
+            "error": "handleId is already registered with different job content"
+          }
+        return {
+          "remoteJobId": existing["remoteJobId"],
+          "accepted": True,
+          "forwarded": bool(existing.get("forwarded", False)),
+          "executionHostId": normalize_text(existing.get("executionHostId")),
+          "route": existing.get("route") or {},
+          "source": existing.get("source") or {"hostId": "unknown"},
+          "replayed": True
+        }
     route = select_route(payload, job, runtime_registry, selected_host)
     selected = route.get("selected") or {}
     if route.get("forwarded"):
