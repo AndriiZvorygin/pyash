@@ -357,12 +357,20 @@ async function writeWebCapture(sentence, { source, sandbox, target, rememberFn, 
   if (!["page", "page-spa", "prefix", "host", "domain", "any", "custom"].includes(scopeType)) {
     fail(sentence, "cluster compress configuration invalid", `unsupported Zimit scope type: ${scopeType}`, { scopeType });
   }
+  const scopeIncludes = resolveConfigMapSeries("web archive configure", "web archive page include", { rememberFn }) ?? [];
+  if (!Array.isArray(scopeIncludes) || scopeIncludes.some((rule) => !String(rule).trim())) {
+    fail(sentence, "cluster compress configuration invalid", "Zimit page include rules must be non-empty text values", { scopeIncludes });
+  }
+  if (scopeType === "custom" && scopeIncludes.length === 0) {
+    fail(sentence, "cluster compress configuration invalid", "custom Zimit scope requires at least one page include rule");
+  }
   const pageLimit = captureConfigPositiveInteger("web archive page maximum", sentence, rememberFn);
   const pageTimeoutSeconds = captureConfigPositiveInteger("web archive page timeout seconds", sentence, rememberFn);
   const pageIntervalSeconds = captureConfigPositiveInteger("web archive page interval seconds", sentence, rememberFn);
   const hardTimeLimitSeconds = captureConfigPositiveInteger("web archive duration maximum seconds", sentence, rememberFn);
   const hardSizeLimitBytes = captureConfigPositiveInteger("web archive size maximum bytes", sentence, rememberFn);
   const workers = captureConfigPositiveInteger("web archive workers", sentence, rememberFn);
+  const behaviors = resolveConfigMapText("web archive configure", "web archive behavior", { rememberFn });
   const blockRules = resolveConfigMapSeries("web archive configure", "photograph filter", { rememberFn });
   if (!blockRules) {
     fail(sentence, "cluster compress configuration invalid", "missing Zimit photograph filter rules", { setting: "photograph filter" });
@@ -383,12 +391,14 @@ async function writeWebCapture(sentence, { source, sandbox, target, rememberFn, 
     shellArgument(`--seeds=${url.href}`),
     shellArgument(`--name=${name}`),
     shellArgument(`--scopeType=${scopeType}`),
+    ...scopeIncludes.map((rule) => shellArgument(`--scopeIncludeRx=${rule}`)),
     shellArgument(`--pageLimit=${pageLimit}`),
     shellArgument(`--pageLoadTimeout=${pageTimeoutSeconds}`),
     shellArgument(`--pageExtraDelay=${pageIntervalSeconds}`),
     shellArgument(`--timeHardLimit=${hardTimeLimitSeconds}`),
     shellArgument(`--sizeHardLimit=${hardSizeLimitBytes}`),
     shellArgument(`--workers=${workers}`),
+    ...(behaviors ? [shellArgument(`--behaviors=${behaviors}`)] : []),
     ...blockRules.map((rule) => shellArgument(`--blockRules=${rule}`)),
     "--output=/output",
     "--keep"

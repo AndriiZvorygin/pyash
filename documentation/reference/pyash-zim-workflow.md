@@ -50,10 +50,15 @@ settings remain unchanged. The `web archive configure` map in
 `configure/default.pya` sets prefix scope, one worker, a one-second interval
 between pages, a 2,000-page cap, a 90-second page-load timeout, a one-hour
 hard time limit, and a 2 GiB hard WARC-size limit. Its default block rule
-omits common image formats to keep captures text-focused. Remove or change
-that rule to retain images. The page delay is a coarse pacing control; it does
-not cap individual HTTP requests per second. Local Pyash configuration can
-override the map.
+omits common image formats to keep captures text-focused. The default
+`web archive behavior` value leaves out Browsertrix's `autofetch` behavior,
+which fetches alternate image resolutions and lazy-loaded resources. Keep
+that behavior disabled for a no-image capture; enable it together with an
+adjusted photograph filter when images are wanted. A `custom` scope requires
+one or more URL regexes in the `web archive page include` series; they are
+passed to Zimit as `--scopeIncludeRx` rules. The page delay is a coarse pacing
+control; it does not cap individual HTTP requests per second. Local Pyash
+configuration can override these settings.
 
 An existing WARC can be converted without recapturing the site:
 
