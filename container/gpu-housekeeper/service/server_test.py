@@ -147,6 +147,84 @@ class HousekeeperDurableQueueTests(unittest.TestCase):
     self.assertEqual(restored["status"], "success")
     self.assertEqual(restored["result"], {"answer": "complete"})
 
+  def test_capacity_wait_releases_device_gate_for_idle_runtime_reaper(self):
+    job = {
+      "remoteJobId": "job-capacity-wait", "runtimeName": "test-runtime",
+      "profileName": "test-profile", "jobSpec": {
+        "kind": "test-job", "capacityWaitSec": 2, "sleepMs": 10
+      },
+      "deviceId": "gpu0", "status": "queued", "message": "queued",
+      "submittedAt": "now", "startedAt": "", "finishedAt": "",
+      "forwarded": False
+    }
+    server._JOBS[job["remoteJobId"]] = job
+    gate = server.DeviceExecutionGate()
+    capacity_checks = iter([RuntimeError("GPU capacity temporarily unavailable"), None])
+    reaper_observations = []
+
+    def check_capacity(_job, _registry):
+      result = next(capacity_checks)
+      if result:
+        raise result
+
+    def run_reaper(_registry):
+      durable_job = server.read_durable_job(server.durable_job_path(job["remoteJobId"]))
+      reaper_observations.append({
+        "gateAvailable": gate.try_acquire_exclusive(),
+        "jobStatus": server._JOBS[job["remoteJobId"]]["status"],
+        "runningIds": set(server._RUNNING_JOB_IDS.get("gpu0", set())),
+        "durableStatus": durable_job["status"],
+        "durableMessage": durable_job["message"]
+      })
+      if reaper_observations[-1]["gateAvailable"]:
+        gate.release(shared=False)
+      return [{"runtimeName": "comfyui", "state": "discharged"}]
+
+    with patch.object(server, "execution_gate_for", return_value=gate), \
+         patch.object(server, "ensure_capacity_for_job", side_effect=check_capacity), \
+         patch.object(server, "run_idle_runtime_reaper_once", side_effect=run_reaper), \
+         patch.object(server, "capacity_poll_seconds", return_value=0.1):
+      server.execute_registered_job(job["remoteJobId"], {
+        "test-runtime": {"runtimeName": "test-runtime", "concurrencySafe": False},
+        "comfyui": {"runtimeName": "comfyui", "deviceId": "gpu0"}
+      })
+
+    self.assertEqual(len(reaper_observations), 1)
+    self.assertTrue(reaper_observations[0]["gateAvailable"])
+    self.assertEqual(reaper_observations[0]["jobStatus"], "queued")
+    self.assertNotIn(job["remoteJobId"], reaper_observations[0]["runningIds"])
+    self.assertEqual(reaper_observations[0]["durableStatus"], "queued")
+    self.assertEqual(reaper_observations[0]["durableMessage"], "waiting for GPU capacity")
+    self.assertEqual(server._JOBS[job["remoteJobId"]]["status"], "success")
+    self.assertEqual(server._JOBS[job["remoteJobId"]]["message"], "completed")
+    self.assertFalse(gate.exclusive)
+
+  def test_comfyui_job_completion_starts_a_fresh_idle_grace_period(self):
+    job = {
+      "remoteJobId": "job-comfy-idle-grace", "runtimeName": "comfyui",
+      "profileName": "asr", "jobSpec": {"kind": "comfyui-hear"},
+      "deviceId": "gpu0", "status": "queued", "message": "queued",
+      "submittedAt": "now", "startedAt": "", "finishedAt": "",
+      "forwarded": False
+    }
+    server._JOBS[job["remoteJobId"]] = job
+    registry = {"comfyui": {
+      "runtimeName": "comfyui", "activityProbe": "comfyui-queue"
+    }}
+    started_at = time.time()
+
+    def fake_execute(_job, _registry, **callbacks):
+      callbacks["on_capacity_ready"]()
+      return {"message": "completed"}
+
+    with patch.object(server, "execute_job", side_effect=fake_execute):
+      server.execute_registered_job(job["remoteJobId"], registry)
+
+    activity = server._RUNTIME_ACTIVITY["comfyui"]
+    self.assertGreaterEqual(activity["idleSince"], started_at)
+    self.assertTrue(activity["lastActivityAt"])
+    self.assertEqual(server._JOBS[job["remoteJobId"]]["status"], "success")
+
 
 class StrataContextControlTests(unittest.TestCase):
   def registry(self):
@@ -656,7 +734,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.assertEqual([payload["prompt"] for payload in calls], [""])
     self.assertEqual(actions, [("ollama", "restartAction")])
 
-  def test_ollama_execution_discharges_non_target_warm_models_then_runs_target(self):
+  def test_ollama_execution_preserves_other_gpu_resident_models(self):
     calls = []
     server.parse_runtime_status = lambda _entry: {
       "status": "running",
@@ -672,9 +750,6 @@ class HousekeeperOllamaTests(unittest.TestCase):
           {"name": "old-model", "size": 1000, "size_vram": 1000},
           {"name": "qwen-test", "size": 1000, "size_vram": 1000}
         ]}
-      if pathname == "/api/generate" and payload.get("model") == "old-model":
-        self.assertEqual(payload.get("keep_alive"), 0)
-        return {"done": True}
       if pathname == "/api/generate":
         self.assertEqual(payload.get("model"), "qwen-test")
         self.assertEqual(payload.get("keep_alive"), 300)
@@ -689,9 +764,12 @@ class HousekeeperOllamaTests(unittest.TestCase):
     }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
 
     self.assertEqual(result, {"response": "ok"})
-    generated_models = [payload.get("model") for pathname, payload in calls if pathname == "/api/generate"]
-    self.assertIn("old-model", generated_models)
-    self.assertIn("qwen-test", generated_models)
+    generation_calls = [payload for pathname, payload in calls if pathname == "/api/generate"]
+    self.assertEqual(len(generation_calls), 1)
+    self.assertEqual(generation_calls[0]["model"], "qwen-test")
+    self.assertFalse(any(payload.get("keep_alive") == 0 for payload in generation_calls))
+    self.assertTrue(server._PROFILES["old-model"]["loaded"])
+    self.assertTrue(server._PROFILES["qwen-test"]["loaded"])
 
   def test_warm_target_profile_is_admitted_when_vram_is_full(self):
     server.parse_nvidia_smi = lambda: {
@@ -1023,8 +1101,9 @@ class HousekeeperOllamaTests(unittest.TestCase):
     counter_lock = threading.Lock()
     active = 0
 
-    def fake_execute(job, _runtime_registry):
+    def fake_execute(job, _runtime_registry, **callbacks):
       nonlocal active
+      callbacks["on_capacity_ready"]()
       with counter_lock:
         active += 1
         if active == 2:
@@ -1097,8 +1176,9 @@ class HousekeeperOllamaTests(unittest.TestCase):
     counter_lock = threading.Lock()
     active = 0
 
-    def fake_execute(job, _runtime_registry):
+    def fake_execute(job, _runtime_registry, **callbacks):
       nonlocal active
+      callbacks["on_capacity_ready"]()
       with counter_lock:
         active += 1
         if active == 2:
@@ -3191,9 +3271,11 @@ class HousekeeperFederationTests(unittest.TestCase):
       "executionHostId": "mriczo", "deviceId": "gpu0", "status": "queued", "forwarded": False,
       "jobSpec": {"kind": "ollama-chat", "payload": {"model": "qwen3.5:9b"}}
     }
-    server.execute_job = lambda _job, _registry: {
-      "response": "ok", "eval_count": 40, "eval_duration": 2_000_000_000
-    }
+    def fake_execute(_job, _registry, **callbacks):
+      callbacks["on_capacity_ready"]()
+      return {"response": "ok", "eval_count": 40, "eval_duration": 2_000_000_000}
+
+    server.execute_job = fake_execute
     try:
       server.execute_registered_job("measured-job", {"ollama": {"concurrencySafe": False}})
       estimate = server.model_call_estimate("ollama", "qwen3.5:9b", "ollama-chat")

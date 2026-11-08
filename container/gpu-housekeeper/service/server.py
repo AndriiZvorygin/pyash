@@ -4457,27 +4457,6 @@ def guarded_ollama_request(
   return result.get("value") if isinstance(result.get("value"), dict) else {}
 
 
-def discharge_warm_ollama_models(target_model: str, warm_models: Optional[List[str]] = None) -> None:
-  target = normalize_text(target_model)
-  for model in warm_models if isinstance(warm_models, list) else warm_ollama_models():
-    if model == target:
-      continue
-    try:
-      request_ollama_json("/api/generate", {
-        "model": model,
-        "prompt": "",
-        "stream": False,
-        "keep_alive": 0
-      }, timeout_sec=30)
-      with _LOCK:
-        if model in _PROFILES:
-          _PROFILES[model]["loaded"] = False
-          _PROFILES[model]["gpuResident"] = False
-          _PROFILES[model]["gpuResidencyReason"] = "model discharged before inference"
-    except Exception:
-      continue
-
-
 def ensure_ollama_model_gpu_resident(model_name: str, runtime_registry: Dict[str, Dict[str, Any]]) -> Optional[Dict[str, Any]]:
   """Load a cold model with an empty prompt, then verify placement before real inference."""
   model = normalize_text(model_name)
@@ -4775,8 +4754,6 @@ def execute_ollama_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str
     restarted = restart_ollama_after_gpu_guard_failure(runtime_registry, target_model, reason)
     restart_state = "Ollama restarted" if restarted.get("success") else f"Ollama restart failed: {normalize_text(restarted.get('message'))}"
     raise RuntimeError(f"Ollama GPU guard refused CPU/partial-offload model before inference ({restart_state}): {reason}")
-  warm_models = [item["name"] for item in running_models if item.get("gpuResident")]
-  discharge_warm_ollama_models(target_model, warm_models)
   loading_sample = None
   if gpu_expected and not (target_residency and target_residency.get("gpuResident")):
     loading_sample = ensure_ollama_model_gpu_resident(target_model, runtime_registry)
@@ -5144,10 +5121,17 @@ def execute_comfyui_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[st
       raise RuntimeError(f"ComfyUI CUDA recovery retry failed: {retry_error}") from retry_error
 
 
-def execute_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+def execute_job(
+  job: Dict[str, Any],
+  runtime_registry: Dict[str, Dict[str, Any]],
+  on_capacity_wait=None,
+  on_capacity_ready=None
+) -> Dict[str, Any]:
   runtime_name = normalize_text(job.get("runtimeName")).lower()
   job_spec = job.get("jobSpec") if isinstance(job.get("jobSpec"), dict) else {}
   if runtime_name == "ollama" and normalize_text(job_spec.get("kind")).lower() == "ollama-ensure-model":
+    if callable(on_capacity_ready):
+      on_capacity_ready()
     return execute_ollama_ensure_model(job, runtime_registry)
   deadline = time.time() + capacity_wait_seconds(job)
   while True:
@@ -5157,11 +5141,16 @@ def execute_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str, Any]]
     except RuntimeError as err:
       if not capacity_waitable_error(err) or time.time() >= deadline:
         raise
-      with _LOCK:
-        current = _JOBS.get(normalize_text(job.get("remoteJobId")))
-        if current:
-          current["message"] = "waiting for GPU capacity"
-      time.sleep(min(capacity_poll_seconds(), max(0.1, deadline - time.time())))
+      if callable(on_capacity_wait):
+        on_capacity_wait(err)
+      else:
+        with _LOCK:
+          current = _JOBS.get(normalize_text(job.get("remoteJobId")))
+          if current:
+            current["message"] = "waiting for GPU capacity"
+        time.sleep(min(capacity_poll_seconds(), max(0.1, deadline - time.time())))
+  if callable(on_capacity_ready):
+    on_capacity_ready()
   if runtime_name == "ollama":
     return execute_ollama_job(job, runtime_registry)
   if runtime_name == "strata":
@@ -5309,6 +5298,8 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
   execution_host_id = ""
   call_identity: Dict[str, str] = {}
   execution_started: Optional[float] = None
+  gate_held = True
+  last_capacity_reaper_check = 0.0
   outcome = "fail"
   call_result: Any = None
   with _LOCK:
@@ -5363,10 +5354,91 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
           "loaded": True
         }
 
-    record_queue_transition(execution_host_id, "started")
-    execution_started = time.monotonic()
+    def wait_for_capacity(_error: BaseException) -> None:
+      nonlocal gate_held, last_capacity_reaper_check
+      global _RUNNING_JOB_ID
+      with _LOCK:
+        current = _JOBS.get(remote_job_id)
+        if not current:
+          raise RuntimeError(f"job disappeared while waiting for GPU capacity: {remote_job_id}")
+        if current.get("status") != "queued" or current.get("message") != "waiting for GPU capacity":
+          previous = (current.get("status"), current.get("message"), current.get("startedAt"))
+          current["status"] = "queued"
+          current["message"] = "waiting for GPU capacity"
+          current["startedAt"] = ""
+          try:
+            persist_durable_job(current)
+          except Exception as persist_error:
+            current["status"], current["message"], current["startedAt"] = previous
+            raise RuntimeError(
+              f"could not checkpoint capacity wait for {remote_job_id}: {normalize_text(persist_error)}"
+            ) from persist_error
+          _RUNNING_JOB_IDS.get(device_id, set()).discard(remote_job_id)
+          if not _RUNNING_JOB_IDS.get(device_id):
+            _RUNNING_JOB_IDS.pop(device_id, None)
+          _RUNNING_JOB_ID = first_running_job_id()
+          record_transition = True
+        else:
+          record_transition = False
+
+      if record_transition:
+        record_queue_transition(execution_host_id, "capacity-wait")
+      if gate_held:
+        gate.release(shared, vram_required_mb)
+        gate_held = False
+
+      try:
+        now = time.monotonic()
+        if now - last_capacity_reaper_check >= idle_runtime_reaper_interval_seconds():
+          last_capacity_reaper_check = now
+          try:
+            run_idle_runtime_reaper_once(runtime_registry)
+          except Exception as reaper_error:
+            print(
+              f"[gpu-housekeeper] capacity-wait idle reaper failed: {normalize_text(reaper_error)}",
+              flush=True
+            )
+        time.sleep(min(capacity_poll_seconds(), max(0.1, capacity_wait_seconds(job))))
+      finally:
+        gate.acquire(
+          shared,
+          vram_required_mb,
+          can_share=lambda reserved: shared_vram_can_admit(device_id, vram_required_mb, reserved)
+          if shared else None
+        )
+        gate_held = True
+
+    def capacity_ready() -> None:
+      nonlocal execution_started
+      global _RUNNING_JOB_ID
+      with _LOCK:
+        current = _JOBS.get(remote_job_id)
+        if not current:
+          raise RuntimeError(f"job disappeared before GPU execution: {remote_job_id}")
+        current["status"] = "running"
+        current["message"] = "running"
+        current["startedAt"] = utc_now_iso()
+        try:
+          persist_durable_job(current)
+        except Exception as persist_error:
+          current["status"] = "queued"
+          current["message"] = f"durable queue checkpoint failed; job remains queued: {normalize_text(persist_error)}"
+          current["startedAt"] = ""
+          raise RuntimeError(
+            f"could not checkpoint GPU execution for {remote_job_id}: {normalize_text(persist_error)}"
+          ) from persist_error
+        _RUNNING_JOB_IDS.setdefault(device_id, set()).add(remote_job_id)
+        _RUNNING_JOB_ID = remote_job_id
+      record_queue_transition(execution_host_id, "started")
+      execution_started = time.monotonic()
+
     try:
-      result = execute_job(job, runtime_registry)
+      result = execute_job(
+        job,
+        runtime_registry,
+        on_capacity_wait=wait_for_capacity,
+        on_capacity_ready=capacity_ready
+      )
       call_result = result
       outcome = "success"
       with _LOCK:
@@ -5416,13 +5488,19 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
             "lastActivityAt": utc_now_iso(),
             "idleSince": time.time()
           }
+        elif normalize_text((runtime_registry.get(runtime_name.lower()) or {}).get("activityProbe")).lower() == "comfyui-queue":
+          _RUNTIME_ACTIVITY[runtime_name.lower()] = {
+            "lastActivityAt": utc_now_iso(),
+            "idleSince": time.time()
+          }
         running_on_device = _RUNNING_JOB_IDS.get(device_id, set())
         running_on_device.discard(remote_job_id)
         if not running_on_device:
           _RUNNING_JOB_IDS.pop(device_id, None)
         _RUNNING_JOB_ID = first_running_job_id()
   finally:
-    gate.release(shared, vram_required_mb)
+    if gate_held:
+      gate.release(shared, vram_required_mb)
     if execution_started is not None:
       record_queue_transition(execution_host_id, "finished")
 
