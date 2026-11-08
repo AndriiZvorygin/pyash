@@ -1829,14 +1829,15 @@ class HousekeeperCapacityTests(unittest.TestCase):
     self.assertEqual(plan["requiredVramMb"], 7000)
     self.assertEqual(plan["resourceRequestSource"], "declared")
 
-  def test_warm_ollama_model_does_not_require_catalog_for_a_cold_load_estimate(self):
+  def test_live_warm_ollama_model_is_recognized_after_housekeeper_restart(self):
     server.parse_nvidia_smi = lambda: {
       "available": True,
       "devices": [{"deviceId": "gpu0", "vramTotalMb": 12288, "vramUsedMb": 6448, "vramFreeMb": 5840}],
     }
     server.ollama_model_catalog = lambda force=False: {"available": False, "error": "catalog unavailable", "models": []}
-    server._PROFILES["qwen3.5:9b"] = {
-      "profileName": "qwen3.5:9b", "runtimeName": "ollama", "loaded": True,
+    server.ollama_running_model_status = lambda: {
+      "available": True,
+      "models": [{"name": "qwen3.5:9b", "size": 6_800_000_000, "sizeVram": 6_800_000_000, "gpuResident": True}],
     }
     plan = server.capacity_plan_for_job({
       "runtimeName": "ollama",

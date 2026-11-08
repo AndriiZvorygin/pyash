@@ -3141,6 +3141,19 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
       target_profile = normalize_text(payload.get("model"))
   with _LOCK:
     target_loaded = bool(target_profile and _PROFILES.get(target_profile, {}).get("loaded", False))
+  job_spec = job.get("jobSpec") if isinstance(job.get("jobSpec"), dict) else {}
+  if (
+    not target_loaded
+    and target_profile
+    and normalize_text(job.get("runtimeName")).lower() == "ollama"
+    and normalize_text(job_spec.get("kind")).lower() in {"ollama-chat", "ollama-generate"}
+  ):
+    residency = ollama_running_model_status()
+    if residency.get("available"):
+      target = ollama_model_residency(target_profile, residency.get("models", []))
+      target_loaded = bool(target and target.get("gpuResident"))
+      if target_loaded:
+        sync_ollama_profiles(residency.get("models", []))
   if not target_loaded and normalize_text(job.get("runtimeName")).lower() == "strata":
     # Strata is external to the Housekeeper, so its residency record is
     # intentionally in-memory. Reconcile provider state after a restart so a
