@@ -103,6 +103,7 @@ export async function submitManagedGpuJob({
   managerUrl = "",
   providerUrl = "",
   deviceId = process.env.PYA_GPU_DEVICE_ID || "",
+  targetHostId = "",
   hostId = process.env.PYA_GPU_HOST_ID || "",
   username = process.env.PYA_GPU_USERNAME || "",
   workerId = "pyash-managed-gpu-client",
@@ -157,6 +158,7 @@ export async function submitManagedGpuJob({
       profileName: normalizedProfile,
       dischargeAllowed: dischargeAllowed !== false,
       ...(text(deviceId) ? { deviceId: text(deviceId) } : {}),
+      ...(text(targetHostId) ? { targetHostId: text(targetHostId).toLowerCase() } : {}),
       jobSpec: normalizedJobSpec,
     },
   });
@@ -185,11 +187,13 @@ export async function ensureManagedOllamaModel({
   managerUrl = "",
   providerUrl = "",
   deviceId = process.env.PYA_GPU_DEVICE_ID || "",
+  targetHostId = "",
   vramRequiredMb = Number.parseInt(String(
     process.env.PYA_OLLAMA_VRAM_REQUIRED_MB || process.env.PYA_GPU_VRAM_REQUIRED_MB || ""
   ), 10) || 0,
   ramRequiredMb = 0,
   diskRequiredMb = 0,
+  modelSizeEstimateMb = 0,
   pullIfMissing = false,
   dischargeAllowed = true,
   handleId = "",
@@ -202,10 +206,16 @@ export async function ensureManagedOllamaModel({
   if (!Number.isFinite(Number(vramRequiredMb)) || Number(vramRequiredMb) <= 0) {
     throw new Error("managed Ollama provisioning requires an explicit vramRequiredMb");
   }
+  const hasModelSizeEstimate = Number.isFinite(Number(modelSizeEstimateMb)) && Number(modelSizeEstimateMb) > 0;
+  const hasAbsoluteDiskRequirement = Number.isFinite(Number(diskRequiredMb)) && Number(diskRequiredMb) > 0;
+  if (pullIfMissing && !hasModelSizeEstimate && !hasAbsoluteDiskRequirement) {
+    throw new Error("managed Ollama model pulls require modelSizeEstimateMb or diskRequiredMb");
+  }
   const resourceRequest = {
     vramRequiredMb: Math.trunc(Number(vramRequiredMb)),
     ...(Number(ramRequiredMb) > 0 ? { ramRequiredMb: Math.floor(Number(ramRequiredMb)) } : {}),
-    ...(Number(diskRequiredMb) > 0 ? { diskRequiredMb: Math.floor(Number(diskRequiredMb)) } : {}),
+    ...(hasAbsoluteDiskRequirement ? { diskRequiredMb: Math.floor(Number(diskRequiredMb)) } : {}),
+    ...(hasModelSizeEstimate ? { modelSizeEstimateMb: Math.ceil(Number(modelSizeEstimateMb)) } : {}),
     ...(text(deviceId) ? { deviceId: text(deviceId) } : {}),
   };
   return submitManagedGpuJob({
@@ -214,6 +224,7 @@ export async function ensureManagedOllamaModel({
     managerUrl,
     providerUrl,
     deviceId,
+    targetHostId,
     dischargeAllowed,
     handleId,
     fetchImpl,

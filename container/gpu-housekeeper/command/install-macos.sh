@@ -146,7 +146,7 @@ housekeeper = {
         "GPU_HOUSEKEEPER_OLLAMA_GPU_WATCHDOG_INTERVAL_SEC": "300",
         "GPU_HOUSEKEEPER_OLLAMA_MODEL_STORE_PATH": os.path.join(home, ".ollama", "models"),
         "GPU_HOUSEKEEPER_ALLOW_MODEL_PULL": "true",
-        "GPU_HOUSEKEEPER_MODEL_ALLOWLIST": "qwen3.5:9b",
+        "GPU_HOUSEKEEPER_MODEL_ALLOWLIST": "*",
         "GPU_HOUSEKEEPER_PYA_DIR": state_dir,
         "OLLAMA_RUNTIME_URL": "http://127.0.0.1:11434",
         "OLLAMA_RUNTIME_TIMEOUT_SEC": "1800"

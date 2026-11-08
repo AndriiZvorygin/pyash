@@ -91,12 +91,51 @@ To install or refresh from a checkout on the Mac:
 GPU_HOUSEKEEPER_BIND_HOST=YOUR_TRUSTED_OVERLAY_IP container/gpu-housekeeper/command/install-macos.sh
 ```
 
-The installer enables Housekeeper model pulling for qwen3.5:9b only. Other
-models require deliberately changing the local runtime registry and allowlist.
+The installer enables explicit Housekeeper model pulls for exact tags using
+the `*` allowlist. Pulls still require a queued `ollama-ensure-model` request,
+VRAM admission, a model-size estimate or absolute disk requirement, and enough
+live host storage. Linux hosts keep pulling disabled by default; enable it in
+the host-local `service/.env` with `GPU_HOUSEKEEPER_ALLOW_MODEL_PULL=true` and
+`GPU_HOUSEKEEPER_MODEL_ALLOWLIST=*` (or a comma-separated exact-tag list).
+Keep the Housekeeper bound to trusted interfaces only.
 Logs are written to ~/Library/Logs/pyash-gpu-housekeeper/. The installed
 Housekeeper source and observation state live under
 ~/.local/share/pyash-gpu-housekeeper/; model weights remain in Ollama's
 ~/.ollama/models.
+
+For a targeted remote install, call `ensureManagedOllamaModel` from
+`program/runtime/gpu/managed-ollama.mjs` with `targetHostId` set to the
+configured Housekeeper host ID, `pullIfMissing: true`, an explicit
+`vramRequiredMb`, and `modelSizeEstimateMb` in MiB. The request may enter
+through any Housekeeper; the explicit target prevents normal throughput
+routing from moving the installation to another host. Without `targetHostId`,
+the normal scheduler still selects a host. For example, Prometheus 7B is about 4,167
+MiB; Housekeeper requires at least 5,209 MiB free for it (25% headroom, with a
+1 GiB minimum), plus 2 GiB available RAM by default. An explicit
+`ramRequiredMb` can raise that RAM floor. `diskRequiredMb` remains supported
+as an absolute free-space requirement for existing callers.
+
+Example: pull Prometheus 7B onto SWAC. Its installed catalog entry on Mriczo
+reports 4,368,440,200 bytes, rounded up to 4,167 MiB; SWAC's Housekeeper
+requires 5,209 MiB free before it starts the pull.
+
+```js
+import { ensureManagedOllamaModel } from "./program/runtime/gpu/managed-ollama.mjs";
+
+const result = await ensureManagedOllamaModel({
+  model: "hf.co/prometheus-eval/prometheus-7b-v2.0-GGUF:Q4_K_M",
+  managerUrl: "http://mriczo:18886",
+  targetHostId: "swac",
+  vramRequiredMb: 6120,
+  modelSizeEstimateMb: 4167,
+  pullIfMissing: true,
+});
+console.log(result);
+```
+
+The exact tag is passed to Ollama's pull API on the target host. The worker
+does not copy weight files from Mriczo; that host only supplies the size
+estimate for preflight.
 
 ### Optional Strata runtime on Mac Studio
 

@@ -187,6 +187,31 @@ test("Ollama model provisioning uses one exact queued housekeeper job", async ()
   assert.equal(calls[0].body.jobSpec.resourceRequest.vramRequiredMb, 7000);
 });
 
+test("Ollama model pulls carry an expected size and can target a remote host manager", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options = {}) => {
+    calls.push({ url, body: options.body ? JSON.parse(options.body) : null });
+    if (url.endsWith("/submit")) return response({ remoteJobId: "job-pull" });
+    return response({ status: "success", result: { state: "available", pulled: true } });
+  };
+
+  await ensureManagedOllamaModel({
+    model: "hf.co/prometheus-eval/prometheus-7b-v2.0-GGUF:Q4_K_M",
+    managerUrl: "http://mriczo:18886",
+    targetHostId: "swac",
+    vramRequiredMb: 6120,
+    modelSizeEstimateMb: 4167.2,
+    pullIfMissing: true,
+    fetchImpl,
+    pollIntervalMs: 1,
+  });
+
+  assert.equal(calls[0].url, "http://mriczo:18886/submit");
+  assert.equal(calls[0].body.targetHostId, "swac");
+  assert.equal(calls[0].body.jobSpec.resourceRequest.modelSizeEstimateMb, 4168);
+  assert.equal(calls[0].body.jobSpec.payload.pullIfMissing, true);
+});
+
 test("Ollama model provisioning requires an explicit VRAM request", async () => {
   await assert.rejects(
     ensureManagedOllamaModel({ model: "qwen3.5:9b", fetchImpl: async () => response({}) }),

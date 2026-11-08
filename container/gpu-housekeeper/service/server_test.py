@@ -27,6 +27,15 @@ class HousekeeperServerConfigTests(unittest.TestCase):
     self.assertEqual(server.parse_server_args([]).port, 18886)
     self.assertEqual(server.parse_server_args(["--port", "8090"]).port, 8090)
 
+  def test_model_size_estimate_rounds_up_to_a_whole_mib(self):
+    request = server.job_resource_request({
+      "jobSpec": {"resourceRequest": {
+        "vramRequiredMb": 6000,
+        "modelSizeEstimateMb": 4167.2
+      }}
+    })
+    self.assertEqual(request["modelSizeEstimateMb"], 4168)
+
   def test_default_ollama_context_is_32k_and_reaches_requests_without_override(self):
     with patch.dict(os.environ, {
       "GPU_HOUSEKEEPER_RUNTIME_REGISTRY": "",
@@ -577,6 +586,100 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.assertTrue(result["pulled"])
     self.assertEqual(calls[1][0], "/api/pull")
     self.assertEqual(calls[1][1], {"name": model, "stream": False})
+
+  def test_wildcard_pull_uses_model_size_buffer_and_blocks_low_disk(self):
+    model = "hf.co/prometheus-eval/prometheus-7b-v2.0-GGUF:Q4_K_M"
+    calls = []
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running", "gpuExpected": True, "gpuObserved": True
+    }
+    server.ollama_running_model_status = lambda: {"available": True, "models": []}
+    server.ollama_model_catalog = lambda force=False: {"available": True, "models": []}
+    server.memory_available_mb = lambda: {"available": True, "availableMb": 4096, "totalMb": 16384}
+    server.container_disk_available_mb = lambda _container, path_name: {
+      "available": True, "availableMb": 5208, "path": path_name
+    }
+    server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600: (
+      calls.append((pathname, payload)) or {"models": []}
+    )
+    with patch.object(server, "ensure_capacity_for_job", return_value={"decision": "fits"}) as capacity_check, patch.dict(
+      os.environ,
+      {"GPU_HOUSEKEEPER_ALLOW_MODEL_PULL": "true", "GPU_HOUSEKEEPER_MODEL_ALLOWLIST": "*"}
+    ):
+      result = server.execute_ollama_ensure_model({
+        "runtimeName": "ollama",
+        "profileName": model,
+        "dischargeAllowed": False,
+        "jobSpec": {
+          "kind": "ollama-ensure-model",
+          "resourceRequest": {"vramRequiredMb": 6120, "modelSizeEstimateMb": 4167},
+          "payload": {"model": model, "pullIfMissing": True}
+        }
+      }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True, "containerName": "ollama"}})
+
+    self.assertEqual(result["state"], "insufficient-capacity")
+    self.assertEqual(result["resources"]["disk"]["requiredMb"], 5209)
+    self.assertEqual(result["resources"]["disk"]["bufferMb"], 1042)
+    self.assertEqual(result["resources"]["ram"]["requiredMb"], 2048)
+    capacity_check.assert_not_called()
+    self.assertNotIn(("/api/pull", {"name": model, "stream": False}), calls)
+
+  def test_wildcard_pull_succeeds_when_buffered_model_size_fits(self):
+    model = "hf.co/prometheus-eval/prometheus-7b-v2.0-GGUF:Q4_K_M"
+    catalogs = iter([
+      {"available": True, "models": []},
+      {"available": True, "models": [{"name": model, "digest": "sha256:pulled", "size": 4_368_440_200}]}
+    ])
+    calls = []
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running", "gpuExpected": True, "gpuObserved": True
+    }
+    server.ollama_running_model_status = lambda: {"available": True, "models": []}
+    server.ollama_model_catalog = lambda force=False: next(catalogs)
+    server.memory_available_mb = lambda: {"available": True, "availableMb": 4096, "totalMb": 16384}
+    server.container_disk_available_mb = lambda _container, path_name: {
+      "available": True, "availableMb": 5209, "path": path_name
+    }
+    def fake_request(pathname, payload=None, timeout_sec=600):
+      calls.append((pathname, payload))
+      if pathname == "/api/ps":
+        return {"models": []}
+      if pathname == "/api/pull":
+        return {"status": "success"}
+      raise AssertionError(pathname)
+    server.request_ollama_json = fake_request
+    with patch.object(server, "ensure_capacity_for_job", return_value={"decision": "fits"}), patch.dict(
+      os.environ,
+      {"GPU_HOUSEKEEPER_ALLOW_MODEL_PULL": "true", "GPU_HOUSEKEEPER_MODEL_ALLOWLIST": "*"}
+    ):
+      result = server.execute_ollama_ensure_model({
+        "runtimeName": "ollama",
+        "profileName": model,
+        "dischargeAllowed": False,
+        "jobSpec": {
+          "kind": "ollama-ensure-model",
+          "resourceRequest": {"vramRequiredMb": 6120, "modelSizeEstimateMb": 4167},
+          "payload": {"model": model, "pullIfMissing": True}
+        }
+      }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True, "containerName": "ollama"}})
+
+    self.assertEqual(result["state"], "available")
+    self.assertTrue(result["pulled"])
+    self.assertEqual(result["resources"]["disk"]["requiredMb"], 5209)
+    self.assertEqual(calls[-1], ("/api/pull", {"name": model, "stream": False}))
+
+  def test_wildcard_model_allowlist_still_requires_pull_opt_in(self):
+    model = "some-unlisted-model:Q4_K_M"
+    with patch.dict(os.environ, {
+      "GPU_HOUSEKEEPER_ALLOW_MODEL_PULL": "true",
+      "GPU_HOUSEKEEPER_MODEL_ALLOWLIST": "*"
+    }):
+      self.assertTrue(server.ollama_model_pull_allowed(model))
+    with patch.dict(os.environ, {
+      "GPU_HOUSEKEEPER_ALLOW_MODEL_PULL": "false",
+      "GPU_HOUSEKEEPER_MODEL_ALLOWLIST": "*"
+    }):
+      self.assertFalse(server.ollama_model_pull_allowed(model))
 
   def test_ensure_model_reports_insufficient_vram(self):
     model = "large-model:latest"
@@ -3241,6 +3344,73 @@ class HousekeeperFederationTests(unittest.TestCase):
     self.assertFalse(candidate["immediate"])
     self.assertEqual(candidate["reason"], "peer waiting for GPU capacity")
 
+  def test_peer_can_accept_model_provisioning_when_model_is_not_installed(self):
+    responses = iter([
+      {
+        "capabilities": {"ollamaModelProvisioning": True},
+        "runtimes": [{"runtimeName": "ollama", "status": "running"}],
+        "ollamaModelCatalog": {"available": True, "models": []},
+        "profiles": [],
+        "modelLoadEstimates": [],
+        "modelCallEstimates": [],
+        "executionSlots": [],
+        "devices": [{"deviceId": "gpu0"}],
+        "queueDepth": 0,
+      },
+      {"feasible": True, "decision": "fits"},
+    ])
+    server.peer_request_json = lambda *_args, **_kwargs: next(responses)
+
+    candidate = server.peer_route_candidate(
+      "swac", "http://swac:18886", {
+        "runtimeName": "ollama", "profileName": "new-model:Q4_K_M", "jobSpec": {
+          "kind": "ollama-ensure-model",
+          "resourceRequest": {"vramRequiredMb": 6000},
+          "payload": {"model": "new-model:Q4_K_M", "pullIfMissing": True},
+        }
+      }
+    )
+
+    self.assertTrue(candidate["available"])
+    self.assertTrue(candidate["immediate"])
+    self.assertEqual(candidate["hostId"], "swac")
+
+  def test_explicit_target_host_overrides_normal_fastest_host_selection(self):
+    server.configured_peers = lambda: {"swac": "http://swac:18886"}
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "mriczo", "available": True, "immediate": True, "score": 200
+    }
+    server.peer_route_candidate = lambda host_id, url, _job: {
+      "hostId": host_id, "url": url, "available": True, "immediate": False,
+      "deferable": True, "score": 10
+    }
+
+    route = server.select_route(
+      {"targetHostId": "SWAC"},
+      {"runtimeName": "ollama", "profileName": "new-model", "jobSpec": {}},
+      {"ollama": {}}, "mriczo"
+    )
+
+    self.assertTrue(route["forwarded"])
+    self.assertEqual(route["selected"]["hostId"], "swac")
+    self.assertEqual(route["selectionPolicy"], "explicit-target")
+
+  def test_explicit_target_rejects_unknown_hosts_instead_of_falling_back(self):
+    server.configured_peers = lambda: {"swac": "http://swac:18886"}
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "mriczo", "available": True, "immediate": True
+    }
+    server.peer_route_candidate = lambda *_args: self.fail("unknown target must not probe peers")
+
+    route = server.select_route(
+      {"targetHostId": "unknown"},
+      {"runtimeName": "ollama", "profileName": "new-model", "jobSpec": {}},
+      {"ollama": {}}, "mriczo"
+    )
+
+    self.assertIsNone(route["selected"])
+    self.assertEqual(route["reason"], "unknown target host: unknown")
+
   def test_route_uses_an_immediate_local_host_over_a_deferred_peer(self):
     server.configured_peers = lambda: {"swac": "http://swac:8090"}
     server.local_route_state = lambda _job, _registry, _host: {
@@ -3916,13 +4086,14 @@ class HousekeeperSourceTraceTests(unittest.TestCase):
     }
     with patch.object(server, "peer_request_json", side_effect=fake_peer_request):
       result = server.forward_job_to_peer(
-        {"routing": {"originHostId": "mriczo", "forwardDepth": 0, "visitedHosts": []}},
+        {"targetHostId": "swac", "routing": {"originHostId": "mriczo", "forwardDepth": 0, "visitedHosts": []}},
         job,
         {"selected": {"hostId": "swac", "url": "http://swac:8090", "deviceId": "gpu1", "score": 20}}
       )
 
     self.assertTrue(result["accepted"])
     self.assertEqual(forwarded_payloads[0]["source"], source)
+    self.assertEqual(forwarded_payloads[0]["targetHostId"], "swac")
     self.assertEqual(forwarded_payloads[0]["deviceId"], "gpu1")
     self.assertEqual(result["route"]["deviceId"], "gpu1")
     self.assertEqual(result["route"]["originHostId"], "mriczo")

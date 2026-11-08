@@ -291,15 +291,22 @@ image raises its minimum; for example, swac's RTX 3060 uses the documented
 Ollama model availability is exposed separately from model execution. An
 explicit `ollama-ensure-model` job can check an exact provider tag and return
 its digest, size and model metadata through the same queue, device gate and
-runtime lifecycle. It does not pull by default. Pulling is an explicit,
-allowlisted operation controlled on the host by
-`GPU_HOUSEKEEPER_ALLOW_MODEL_PULL=true` and
-`GPU_HOUSEKEEPER_MODEL_ALLOWLIST=<exact tags>`, and requires declared VRAM,
-RAM and model-store disk capacity. The housekeeper starts the registered
-Ollama container when needed and uses Ollama's own `/api/pull`; Criterion or a
-Pyash caller never copies model files between hosts or manages model
-residency itself. A missing model therefore produces a structured
-`not-installed` or `not-authorized` result instead of an implicit download.
+runtime lifecycle. It does not pull by default. Pulling is an explicit
+host-opted-in operation requiring `GPU_HOUSEKEEPER_ALLOW_MODEL_PULL=true` and
+either an exact-tag allowlist or `GPU_HOUSEKEEPER_MODEL_ALLOWLIST=*`. A pull
+request declares VRAM admission and either `modelSizeEstimateMb` or the legacy
+absolute `diskRequiredMb`. For a size estimate, Housekeeper requires the
+estimate plus 25% headroom (at least 1 GiB); it also requires 2 GiB available
+RAM by default, unless the request raises that floor with `ramRequiredMb`.
+The host checks free space on the Ollama model-store filesystem before
+pulling. The Housekeeper starts the registered Ollama runtime when needed and
+uses Ollama's own `/api/pull`; Criterion or a Pyash caller never copies model
+files between hosts or manages model residency itself. Set `targetHostId` to a
+configured local or peer host to pin installation there; the entry Housekeeper
+validates the target and routes only to that host. Without it, the entry
+Housekeeper applies its normal federation routing. A missing model therefore produces a
+structured `not-installed` or `not-authorized` result instead of an implicit
+download.
 
 The model catalog is queried from Ollama `/api/tags` and is available at
 `GET /runtime/ollama/models` and in `/snapshot`. Matching is exact, including

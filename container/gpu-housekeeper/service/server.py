@@ -110,6 +110,9 @@ OLLAMA_VRAM_NVIDIA_WEIGHT_HEADROOM = 1.10
 OLLAMA_VRAM_NVIDIA_FIXED_HEADROOM_MB = 256
 OLLAMA_VRAM_NVIDIA_PER_4K_CONTEXT_MB = 160
 OLLAMA_VRAM_CONTEXT_BASE_TOKENS = 4096
+OLLAMA_MODEL_PULL_DISK_BUFFER_RATIO = 0.25
+OLLAMA_MODEL_PULL_MIN_DISK_BUFFER_MB = 1024
+OLLAMA_MODEL_PULL_DEFAULT_RAM_REQUIRED_MB = 2048
 DEFAULT_PYA_LOADING_DIR = "/var/lib/pyash/gpu-housekeeper"
 MODEL_LOADING_OBSERVATION_ROOT = "gpu runtime loading observation"
 MODEL_CALL_OBSERVATION_ROOT = "gpu runtime call observation"
@@ -1732,6 +1735,66 @@ def select_route(payload: Dict[str, Any], job: Dict[str, Any], runtime_registry:
   depth = route_forward_depth(payload)
   visited = set(route_visited_hosts(payload))
   local = local_route_state(job, runtime_registry, host_id)
+  target_host_id = normalize_text(payload.get("targetHostId")).lower()
+  if target_host_id:
+    if target_host_id == normalize_text(host_id).lower():
+      if local.get("available"):
+        return {
+          "selected": local,
+          "candidates": [local],
+          "forwarded": False,
+          "selectionPolicy": "explicit-target"
+        }
+      return {
+        "selected": None,
+        "candidates": [local],
+        "forwarded": False,
+        "reason": f"target host {target_host_id} is unavailable: {local.get('reason') or 'no executable local route'}",
+        "selectionPolicy": "explicit-target"
+      }
+
+    peer_url = configured_peers().get(target_host_id)
+    if not peer_url:
+      return {
+        "selected": None,
+        "candidates": [local],
+        "forwarded": False,
+        "reason": f"unknown target host: {target_host_id}",
+        "selectionPolicy": "explicit-target"
+      }
+    if depth > 0 or target_host_id in visited:
+      return {
+        "selected": None,
+        "candidates": [local],
+        "forwarded": False,
+        "reason": f"target host {target_host_id} was already visited during forwarding",
+        "selectionPolicy": "explicit-target"
+      }
+    try:
+      target = peer_route_candidate_with_fallback(target_host_id, peer_url, job)
+    except Exception as err:
+      target = {
+        "hostId": target_host_id,
+        "url": peer_url,
+        "available": False,
+        "reason": normalize_text(err) or "peer probe failed"
+      }
+    candidates = [local, target]
+    if target.get("available"):
+      return {
+        "selected": target,
+        "candidates": candidates,
+        "forwarded": True,
+        "selectionPolicy": "explicit-target"
+      }
+    return {
+      "selected": None,
+      "candidates": candidates,
+      "forwarded": False,
+      "reason": f"target host {target_host_id} is unavailable: {target.get('reason') or 'no executable peer route'}",
+      "selectionPolicy": "explicit-target"
+    }
+
   candidates = [local]
   if depth == 0:
     for peer_host_id, peer_url in configured_peers().items():
@@ -1862,6 +1925,7 @@ def forward_job_to_peer(payload: Dict[str, Any], job: Dict[str, Any], route: Dic
     "deviceId": selected_device,
     "dischargeAllowed": job.get("dischargeAllowed", True),
     "source": job.get("source") or {"hostId": "unknown"},
+    **({"targetHostId": normalize_text(payload.get("targetHostId")).lower()} if normalize_text(payload.get("targetHostId")) else {}),
     "routing": {
       "originHostId": origin,
       "forwardDepth": route_forward_depth(payload) + 1,
@@ -1914,6 +1978,10 @@ def submit_job(
   handle_id = normalize_text(payload.get("handleId"))
   runtime_name = normalize_text(payload.get("runtimeName"))
   profile_name = normalize_text(payload.get("profileName"))
+  target_host_value = payload.get("targetHostId")
+  if target_host_value is not None and not isinstance(target_host_value, str):
+    return {"accepted": False, "error": "targetHostId must be text"}
+  target_host_id = normalize_text(target_host_value).lower()
   job_spec = payload.get("jobSpec")
 
   if not handle_id or not runtime_name or not profile_name:
@@ -2046,6 +2114,7 @@ def submit_job(
     "runtimeName": runtime_name,
     "profileName": profile_name,
     "jobSpec": job_spec,
+    "targetHostId": target_host_id,
     "deviceId": normalize_text(payload.get("deviceId")),
     "dischargeAllowed": payload.get("dischargeAllowed", True) is not False,
     "status": "queued",
@@ -2075,6 +2144,7 @@ def submit_job(
           normalize_text(existing.get("runtimeName")).lower() == runtime_lower
           and normalize_text(existing.get("profileName")) == profile_name
           and existing.get("jobSpec") == job_spec
+          and normalize_text(existing.get("targetHostId")).lower() == target_host_id
         )
         if not same_envelope:
           return {
@@ -2990,7 +3060,7 @@ def job_resource_request(job: Dict[str, Any]) -> Optional[Dict[str, Any]]:
   if vram <= 0:
     raise RuntimeError("resourceRequest.vramRequiredMb must be a positive number")
 
-  def optional_positive(name: str, aliases: List[str]) -> Optional[int]:
+  def optional_positive(name: str, aliases: List[str], round_up: bool = False) -> Optional[int]:
     raw_value = None
     for alias in aliases:
       if alias in request:
@@ -2999,7 +3069,8 @@ def job_resource_request(job: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if raw_value is None:
       return None
     try:
-      value = int(float(raw_value))
+      numeric_value = float(raw_value)
+      value = math.ceil(numeric_value) if round_up else int(numeric_value)
     except (TypeError, ValueError):
       raise RuntimeError(f"resourceRequest.{name} must be a positive number")
     if value <= 0:
@@ -3008,11 +3079,15 @@ def job_resource_request(job: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
   ram = optional_positive("ramRequiredMb", ["ramRequiredMb", "ram_required_mb"])
   disk = optional_positive("diskRequiredMb", ["diskRequiredMb", "disk_required_mb"])
+  model_size_estimate = optional_positive(
+    "modelSizeEstimateMb", ["modelSizeEstimateMb", "model_size_estimate_mb"], round_up=True
+  )
   return {
     "vramRequiredMb": vram,
     "deviceId": normalize_text(request.get("deviceId")),
     "ramRequiredMb": ram,
-    "diskRequiredMb": disk
+    "diskRequiredMb": disk,
+    "modelSizeEstimateMb": model_size_estimate
   }
 
 
@@ -4170,7 +4245,21 @@ def ollama_model_pull_allowed(model_name: str) -> bool:
     for item in raw.replace(";", ",").split(",")
     if item.strip()
   }
-  return normalize_text(model_name) in allowed
+  return "*" in allowed or normalize_text(model_name) in allowed
+
+
+def ollama_model_pull_disk_requirement_mb(model_size_estimate_mb: int) -> Dict[str, int]:
+  """Reserve the estimated model size plus 25% headroom and at least 1 GiB."""
+  size_mb = max(1, int(model_size_estimate_mb))
+  buffer_mb = max(
+    OLLAMA_MODEL_PULL_MIN_DISK_BUFFER_MB,
+    math.ceil(size_mb * OLLAMA_MODEL_PULL_DISK_BUFFER_RATIO)
+  )
+  return {
+    "modelSizeEstimateMb": size_mb,
+    "bufferMb": buffer_mb,
+    "requiredMb": size_mb + buffer_mb
+  }
 
 
 def memory_available_mb() -> Dict[str, Any]:
@@ -4703,34 +4792,21 @@ def ensure_ollama_resource_capacity(job: Dict[str, Any], runtime_registry: Dict[
       "state": "invalid-resource-request",
       "reason": "ollama-ensure-model requires resourceRequest.vramRequiredMb"
     }
-  if require_storage and request.get("ramRequiredMb") is None:
+  if require_storage and request.get("diskRequiredMb") is None and request.get("modelSizeEstimateMb") is None:
     return {
       "state": "invalid-resource-request",
-      "reason": "pulling a missing model requires resourceRequest.ramRequiredMb"
-    }
-  if require_storage and request.get("diskRequiredMb") is None:
-    return {
-      "state": "invalid-resource-request",
-      "reason": "pulling a missing model requires resourceRequest.diskRequiredMb"
+      "reason": "pulling a missing model requires resourceRequest.modelSizeEstimateMb or diskRequiredMb"
     }
 
-  try:
-    capacity = ensure_capacity_for_job(job, runtime_registry)
-  except RuntimeError as err:
-    reason = normalize_text(err) or "declared VRAM requirement does not fit"
-    return {
-      "state": "capacity-unknown" if "telemetry" in reason.lower() else "insufficient-capacity",
-      "reason": reason,
-      "capacity": {"decision": "telemetry-unavailable" if "telemetry" in reason.lower() else "insufficient"}
-    }
-
-  resources = {"vram": capacity}
+  resources: Dict[str, Any] = {}
   ram_required = request.get("ramRequiredMb")
+  if require_storage and ram_required is None:
+    ram_required = OLLAMA_MODEL_PULL_DEFAULT_RAM_REQUIRED_MB
   if ram_required is not None:
     memory = memory_available_mb()
-    resources["ram"] = memory
     if not memory.get("available"):
       return {"state": "capacity-unknown", "reason": memory.get("error") or "memory telemetry unavailable", "resources": resources}
+    resources["ram"] = {**memory, "requiredMb": ram_required}
     if int(memory.get("availableMb") or 0) < ram_required:
       return {
         "state": "insufficient-capacity",
@@ -4750,12 +4826,34 @@ def ensure_ollama_resource_capacity(job: Dict[str, Any], runtime_registry: Dict[
     if not disk.get("available"):
       return {"state": "capacity-unknown", "reason": disk.get("error") or "model-store disk telemetry unavailable", "resources": resources}
     disk_required = request.get("diskRequiredMb")
-    if int(disk.get("availableMb") or 0) < disk_required:
+    model_size_estimate = request.get("modelSizeEstimateMb")
+    disk_requirement = None
+    if model_size_estimate is not None:
+      disk_requirement = ollama_model_pull_disk_requirement_mb(model_size_estimate)
+    required_disk_mb = max(
+      int(disk_required or 0),
+      int((disk_requirement or {}).get("requiredMb") or 0)
+    )
+    if disk_requirement:
+      resources["disk"].update(disk_requirement)
+    resources["disk"]["requiredMb"] = required_disk_mb
+    if int(disk.get("availableMb") or 0) < required_disk_mb:
       return {
         "state": "insufficient-capacity",
-        "reason": f"available model-store disk is below declared requirement ({disk.get('availableMb')} < {disk_required} MiB)",
+        "reason": f"available model-store disk is below required pull space ({disk.get('availableMb')} < {required_disk_mb} MiB)",
         "resources": resources
       }
+  try:
+    capacity = ensure_capacity_for_job(job, runtime_registry)
+  except RuntimeError as err:
+    reason = normalize_text(err) or "declared VRAM requirement does not fit"
+    return {
+      "state": "capacity-unknown" if "telemetry" in reason.lower() else "insufficient-capacity",
+      "reason": reason,
+      "capacity": {"decision": "telemetry-unavailable" if "telemetry" in reason.lower() else "insufficient"},
+      "resources": resources
+    }
+  resources["vram"] = capacity
   return {"state": "fits", "resources": resources}
 
 

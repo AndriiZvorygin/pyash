@@ -40,10 +40,14 @@ Use this skill when video/refinery runs show repeated GPU model load/unload chur
 - Model availability is a queued `ollama-ensure-model` duty, not an implicit
   pull hidden inside generation. Preserve the exact provider tag, including
   `:` `/` and quantization suffixes.
-- Require a realistic full-load `vramRequiredMb`; model pulls additionally
-  require declared `ramRequiredMb` and `diskRequiredMb` and are denied unless
-  the host allowlists the exact tag with `GPU_HOUSEKEEPER_ALLOW_MODEL_PULL`
-  and `GPU_HOUSEKEEPER_MODEL_ALLOWLIST`.
+- Require a realistic full-load `vramRequiredMb`. Model pulls require
+  `GPU_HOUSEKEEPER_ALLOW_MODEL_PULL=true` plus an exact-tag allowlist or `*`.
+  Prefer `modelSizeEstimateMb`; the host requires that estimate plus 25%
+  storage headroom (at least 1 GiB), checks live free space on its model store,
+  and requires 2 GiB available RAM unless the request sets a higher
+  `ramRequiredMb`. Legacy `diskRequiredMb` remains an absolute free-space
+  requirement. Set `targetHostId` to pin placement through any entry
+  Housekeeper; omit it to let federation choose normally.
 - The host-local housekeeper starts the registered Ollama runtime and uses
   Ollama's catalog/pull API. Do not copy model files between GPU hosts or add
   a model registry to Criterion. A failed fit should be reported as
