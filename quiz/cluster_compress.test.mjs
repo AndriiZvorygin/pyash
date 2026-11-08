@@ -263,7 +263,7 @@ test("web capture retains the ZIM and WARC evidence, and WARC input uses the sam
     assert.match(await fs.readFile(log, "utf8"), /--workers=1/u);
     assert.match(await fs.readFile(log, "utf8"), /--behaviors=autoscroll,siteSpecific/u);
     assert.match(await fs.readFile(log, "utf8"), /--blockRules=.*apng.*webp/u);
-    assert.match(await fs.readFile(log, "utf8"), /docker run --rm --entrypoint=chown/u);
+    assert.match(await fs.readFile(log, "utf8"), /docker run --rm --user 0:0 --entrypoint=chown/u);
     assert.match(await fs.readFile(log, "utf8"), /--entrypoint=chown.* -R \d+:\d+ \/output/u);
 
     const warcResult = await interpret(parse(

@@ -404,7 +404,7 @@ async function writeWebCapture(sentence, { source, sandbox, target, rememberFn, 
     "--keep"
   ].join(" ");
   const ownershipCommand = [
-    "docker run --rm --entrypoint=chown",
+    "docker run --rm --user 0:0 --entrypoint=chown",
     "-v",
     shellArgument(`${stage}:/output`),
     shellArgument(image),
