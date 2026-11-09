@@ -8,7 +8,8 @@ import { createHuggingFaceExecutor } from "../program/runtime/criterion/huggingf
 import { runCriterion, rerunCriterion } from "../program/runtime/criterion/run.mjs";
 import { runNightmare, runReverie } from "../program/runtime/criterion/suites.mjs";
 import { loadRun, renderComparison, renderRunMarkdown } from "../program/runtime/criterion/report.mjs";
-import { createQueuedOllamaExecutor, DEFAULT_PROFILES } from "../program/runtime/criterion/ollama.mjs";
+import { createQueuedOllamaExecutor, DEFAULT_PROFILES, resolveConfiguredGpuHousekeeperUrl } from "../program/runtime/criterion/ollama.mjs";
+import { inspectThroughputTargetQueue, runThroughputBenchmark } from "../program/runtime/criterion/throughput.mjs";
 import { createStrataExecutor, DEFAULT_STRATA_BASE_URL } from "../program/runtime/criterion/strata.mjs";
 import { runDeepSWE, DEFAULT_DEEPSWE_AGENT, DEFAULT_DEEPSWE_MODEL } from "../program/runtime/criterion/deepswe.mjs";
 import { stableJson } from "../program/runtime/criterion/metrics.mjs";
@@ -95,6 +96,7 @@ function usage() {
     "criterion list",
     "criterion inspect --benchmark <name>",
     "criterion run --benchmark <name> --dataset <local.jsonl> [--engine ollama|strata|huggingface] [--base-url <runtime>] [--model <a,b>] [--profile translation_direct|summary_direct|summary_reasoned|summary_reasoned_hidden] [--split train|validation|test] [--smoke] [--resume]",
+    "criterion throughput --model <installed-ollama-tag> --host-id <housekeeper-host> [--gpu-id gpu-0] [--run-id <id>]",
     "criterion baseline --benchmark meetingbank --dataset <local.jsonl> --baseline lead-3 [--resume]",
     "criterion fact-audit --dataset <meetingbank.jsonl> --source-runs <run-id,...> --judge-model <external-model> [--limit 5] [--resume]",
     "criterion omnicseval-meeting --dataset <meetingbank.jsonl> --annotations <annotations.jsonl> --source-runs <run-id,...> --judge-model <external-model> [--resume]",
@@ -204,6 +206,57 @@ async function runCommand(args, root) {
   }
   print({ runId: result.runId, status: result.status, results: `criterion/results/${result.runId}.jsonl`, report: `criterion/results/${result.runId}.md`, csv: `criterion/results/${result.runId}.csv`, review: `criterion/review/${result.runId}.html` }, hasFlag(args, "--json"));
   return result.status === "partial" && hasFlag(args, "--strict") ? 1 : 0;
+}
+
+async function throughputCommand(args, root) {
+  const models = listFlag(args, ["--model"]);
+  if (models.length !== 1) throw new Error("criterion throughput accepts exactly one --model per run; benchmark models in separate runs to avoid model-switch load time");
+  const hostId = flag(args, "--host-id", process.env.PYA_GPU_HOST_ID ?? "");
+  if (!hostId) throw new Error("criterion throughput requires --host-id or PYA_GPU_HOST_ID to pin the run to one host");
+  const runId = flag(args, "--run-id", `throughput-${Date.now()}`);
+  const gpuId = flag(args, "--gpu-id", process.env.PYA_CRITERION_GPU_ID ?? process.env.PYA_GPU_ID ?? "gpu-0");
+  const housekeeperUrl = resolveConfiguredGpuHousekeeperUrl({ housekeeperUrl: flag(args, "--gpu-housekeeper-url", process.env.PYA_GPU_HOUSEKEEPER_URL ?? "") });
+  const hostQueueCheck = await inspectThroughputTargetQueue({ housekeeperUrl, hostId });
+  const adapter = createQueuedOllamaExecutor({
+    root,
+    runId,
+    housekeeperUrl,
+    gpuId,
+    hostId,
+    vramRequiredMb: process.env.PYA_CRITERION_OLLAMA_VRAM_REQUIRED_MB
+  });
+  const result = await runThroughputBenchmark({
+    model: models[0],
+    executor: adapter.executor,
+    metadataProvider: adapter.metadataProvider,
+    root,
+    runId,
+    hostId,
+    gpuId,
+    hostQueueCheck,
+    onEvent: event => {
+      if (event.event.startsWith("warmup-")) {
+        process.stderr.write(`[criterion throughput] ${event.event === "warmup-started" ? "starting" : "finished"} ${event.kind}\n`);
+        return;
+      }
+      process.stderr.write(`[criterion throughput] ${event.sampleId}: ${event.status}${event.generationTokensPerSecond === null ? "" : ` ${event.generationTokensPerSecond.toFixed(2)} tok/s`}\n`);
+    }
+  });
+  const aggregate = result.throughput.aggregate;
+  print({
+    runId: result.runId,
+    status: result.status,
+    model: models[0],
+    hostId,
+    gpuId,
+    arithmeticMeanTokensPerSecond: aggregate.arithmeticMeanTokensPerSecond,
+    weightedTokensPerSecond: aggregate.weightedTokensPerSecond,
+    results: `criterion/results/${result.runId}.jsonl`,
+    report: `criterion/results/${result.runId}.md`,
+    pya: `criterion/results/${result.runId}.pya`,
+    json: `criterion/results/${result.runId}.json`
+  }, hasFlag(args, "--json"));
+  return result.status === "partial" ? 1 : 0;
 }
 
 async function baselineCommand(args, root) {
@@ -531,6 +584,7 @@ export async function main(argv = process.argv.slice(2), { root = process.cwd() 
   if (command === "criterion" && subcommand === "inspect") return inspectCommand(args);
   if (command === "criterion" && (subcommand === "deepswe" || subcommand === "deep-swe")) return deepSWECommand(rest, root);
   if (command === "criterion" && subcommand === "run") return runCommand(args, root);
+  if (command === "criterion" && subcommand === "throughput") return throughputCommand(args, root);
   if (command === "criterion" && subcommand === "baseline") return baselineCommand(args, root);
   if (command === "criterion" && (subcommand === "fact-audit" || subcommand === "meetingbank-fact-audit")) return factAuditCommand(args, root);
   if (command === "criterion" && subcommand === "omnicseval-meeting") return factAuditCommand(args, root, FACT_EVALUATION_MODES.exact);
@@ -545,6 +599,7 @@ export async function main(argv = process.argv.slice(2), { root = process.cwd() 
   if (command === "list") return listCommand([subcommand, ...rest].filter(Boolean));
   if (command === "inspect") return inspectCommand([subcommand, ...rest].filter(Boolean));
   if (command === "run") return runCommand([subcommand, ...rest].filter(Boolean), root);
+  if (command === "throughput") return throughputCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "baseline") return baselineCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "deepswe" || command === "deep-swe") return deepSWECommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "fact-audit" || command === "meetingbank-fact-audit") return factAuditCommand([subcommand, ...rest].filter(Boolean), root);
