@@ -10,11 +10,16 @@ import {
 } from "../program/library/translation/compound_coverage.mjs";
 import { loadCompoundLexicon } from "../program/library/translation/compound_lexicon.mjs";
 import {
+  canonicalWordNetTargetPartOfSpeech,
+  englishWordNetTargetId
+} from "../program/library/translation/english_wordnet_bridges.mjs";
+import {
   ENGLISH_WORDNET_COMPOUND_DECISIONS_URL,
   loadEnglishWordNetCompoundDecisions,
   renderEnglishWordNetCompoundDecisions
 } from "../program/library/translation/english_wordnet_compound_decisions.mjs";
 import { parseEnglishWordNetFrequencyAllocationConfig } from "../program/library/translation/english_wordnet_frequency.mjs";
+import { componentGlossLookupAlternatives } from "../program/library/translation/english_wordnet_sense_compounds.mjs";
 import { verifyCompoundRecords } from "./compound_coverage_verify.mjs";
 import {
   prepareWordNetFrequencyAllocation,
@@ -255,7 +260,8 @@ export function acceptedDecision(record) {
         && String(row?.source ?? "").trim() === senseId);
       if (!senseId || !sense || !componentChoiceGlosses[index]) return false;
       const linkedMeaning = String(sense.definition ?? "").split(";")[0].slice(0, 180).trim();
-      return String(sense.mappingLookupGloss ?? "").trim().toLowerCase() === componentChoiceGlosses[index]
+      return componentGlossLookupAlternatives(componentChoiceGlosses[index])
+        .includes(String(sense.mappingLookupGloss ?? "").trim().toLowerCase())
         && linkedMeaning === componentChoiceMeanings[index];
     })
     && String(record?.verificationHeadSenseId ?? "").trim() === componentChoiceSenseIds.at(-1);
@@ -286,7 +292,11 @@ export function promoteAcceptedCompoundRecords(existingRecords, decisions, { use
   const sequenceOwners = new Map();
   for (const record of records) {
     const target = String(record.target ?? "").trim().toLowerCase();
-    const key = `compound:${sequence(record.pyashSequence).join("+")}`;
+    const partOfSpeech = canonicalWordNetTargetPartOfSpeech(
+      record.targetPartOfSpeech || String(record.senseId ?? "").slice(0, 1)
+    );
+    const key = englishWordNetTargetId("compound", sequence(record.pyashSequence), partOfSpeech);
+    if (!key) continue;
     const owners = sequenceOwners.get(key) ?? new Set();
     owners.add(target);
     sequenceOwners.set(key, owners);
@@ -298,8 +308,12 @@ export function promoteAcceptedCompoundRecords(existingRecords, decisions, { use
     const target = String(decision.target ?? "").trim().toLowerCase();
     const senseId = String(decision.senseId ?? decision.verificationSenseId ?? "").trim();
     if (!senseId) return { ...decision, promotionStatus: "missing-sense-id" };
+    const targetPartOfSpeech = canonicalWordNetTargetPartOfSpeech(
+      decision.targetPartOfSpeech || senseId.slice(0, 1)
+    );
     const pyashSequence = sequence(decision.pyashSequence);
-    const targetId = `compound:${pyashSequence.join("+")}`;
+    const targetId = englishWordNetTargetId("compound", pyashSequence, targetPartOfSpeech);
+    if (!targetId) return { ...decision, promotionStatus: "missing-target-part-of-speech" };
     const key = senseTargetKey({ senseId, target });
     const existingIndex = recordsBySenseTarget.get(key);
     if (existingIndex !== undefined) {
@@ -328,7 +342,7 @@ export function promoteAcceptedCompoundRecords(existingRecords, decisions, { use
     sequenceOwners.set(targetId, owners);
     const record = {
       senseId,
-      targetPartOfSpeech: String(decision.targetPartOfSpeech ?? senseId.slice(0, 1)).trim(),
+      targetPartOfSpeech,
       decisionRevision,
       verificationDecisionId: decision.candidateId,
       verificationDecisionIds: [decision.candidateId],
@@ -370,10 +384,15 @@ export function promoteAcceptedCompoundRecords(existingRecords, decisions, { use
   };
 }
 
-export async function promoteAcceptedCompounds(decisions, { usedTargetIds = [], decisionRevision = "" } = {}) {
-  const existing = selectCurrentRevisionCompounds(await readVerifiedWordNetCompounds(), decisionRevision);
+export async function promoteAcceptedCompounds(decisions, {
+  usedTargetIds = [],
+  decisionRevision = "",
+  readExisting = readVerifiedWordNetCompounds,
+  writeRecords = writeVerifiedWordNetCompounds
+} = {}) {
+  const existing = await readExisting();
   const promoted = promoteAcceptedCompoundRecords(existing, decisions, { usedTargetIds, decisionRevision });
-  await writeVerifiedWordNetCompounds(promoted.records);
+  await writeRecords(promoted.records);
   const { records: _records, ...result } = promoted;
   return result;
 }
@@ -382,11 +401,6 @@ export async function runWordNetFrequencyCompoundSweep({ artifactRoot = ARTIFACT
   const allocationConfig = parseEnglishWordNetFrequencyAllocationConfig(await readFile(ALLOCATION_CONFIG_URL, "utf8"));
   const decisionRevision = String(allocationConfig["compound-verification-revision"] ?? "").trim();
   if (!decisionRevision) throw new Error("compound verification requires a configured decision revision");
-  const priorVerified = await readVerifiedWordNetCompounds();
-  const currentVerified = selectCurrentRevisionCompounds(priorVerified, decisionRevision);
-  if (currentVerified.length !== priorVerified.length) {
-    await writeVerifiedWordNetCompounds(currentVerified);
-  }
   const allocation = await prepareWordNetFrequencyAllocation();
   const currentCandidates = allocation.residualCompounds.filter((record) => (
     record.disposition === "ready-for-housekeeper-verification" || record.disposition.startsWith("already-")

@@ -8,6 +8,7 @@ fi
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SOURCE_SERVER="$ROOT_DIR/service/server.py"
+SOURCE_KUBERNETES_RUNTIME="$ROOT_DIR/service/kubernetes_runtime.py"
 APP_DIR="$HOME/Applications/Ollama.app"
 OLLAMA_BIN="$APP_DIR/Contents/Resources/ollama"
 INSTALL_DIR="$HOME/.local/share/pyash-gpu-housekeeper"
@@ -49,6 +50,7 @@ if [[ ! -x "$OLLAMA_BIN" ]]; then
 fi
 
 install -m 755 "$SOURCE_SERVER" "$SERVER_PATH"
+install -m 644 "$SOURCE_KUBERNETES_RUNTIME" "$INSTALL_DIR/kubernetes_runtime.py"
 
 OLLAMA_BIN="$OLLAMA_BIN" \
 HOUSEKEEPER_PLIST="$HOUSEKEEPER_PLIST" \
@@ -84,11 +86,11 @@ registry = [{
     "actionDriver": "native-process",
     "runtimeCommand": os.environ["OLLAMA_BIN"],
     "runtimeLogPath": os.path.join(log_dir, "ollama.log"),
-    "defaultContextLength": 8192,
+    "defaultContextLength": 32768,
     "runtimeEnvironment": {
         "OLLAMA_HOST": "127.0.0.1:11434",
         "OLLAMA_NO_CLOUD": "1",
-        "OLLAMA_CONTEXT_LENGTH": "8192",
+        "OLLAMA_CONTEXT_LENGTH": "32768",
         "OLLAMA_NUM_PARALLEL": "1",
         "OLLAMA_MAX_LOADED_MODELS": "1"
     },
@@ -144,7 +146,7 @@ housekeeper = {
         "GPU_HOUSEKEEPER_OLLAMA_GPU_WATCHDOG_INTERVAL_SEC": "300",
         "GPU_HOUSEKEEPER_OLLAMA_MODEL_STORE_PATH": os.path.join(home, ".ollama", "models"),
         "GPU_HOUSEKEEPER_ALLOW_MODEL_PULL": "true",
-        "GPU_HOUSEKEEPER_MODEL_ALLOWLIST": "qwen3.5:9b",
+        "GPU_HOUSEKEEPER_MODEL_ALLOWLIST": "*",
         "GPU_HOUSEKEEPER_PYA_DIR": state_dir,
         "OLLAMA_RUNTIME_URL": "http://127.0.0.1:11434",
         "OLLAMA_RUNTIME_TIMEOUT_SEC": "1800"
@@ -212,7 +214,7 @@ echo "Native Ollama and Pyash GPU Housekeeper are running."
 echo "Ollama is started and supervised by the Housekeeper process."
 echo "Ollama API: loopback only at http://127.0.0.1:11434"
 echo "Housekeeper peer: $HOUSEKEEPER_URL; host id macstudio"
-echo "Model downloads are restricted to qwen3.5:9b."
+echo "Model pulls require explicit queued provisioning and host capacity checks."
 if [[ -n "$STRATA_RUNTIME_URL" ]]; then
   echo "Strata API: $STRATA_RUNTIME_URL; Housekeeper runtime registered on apple0"
   echo "Strata admission floor: $STRATA_MEMORY_FLOOR_MB MiB unified memory"

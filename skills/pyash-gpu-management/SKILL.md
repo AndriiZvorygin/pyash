@@ -1,6 +1,6 @@
 ---
 name: pyash-gpu-management
-description: "Diagnose and reduce GPU/model thrashing in Pyash refinery runs using demand-driven housekeeper admission, provider-safe discharge, and minimal probes."
+description: "Diagnose GPU/model residency and queue behavior in Pyash using Housekeeper admission, idle reaping, provider-safe discharge, and minimal probes."
 ---
 
 # Pyash GPU Management
@@ -18,7 +18,13 @@ Use this skill when video/refinery runs show repeated GPU model load/unload chur
 - Criterion and Pyash callers may declare a VRAM demand when a job needs
   capacity for a large model. The housekeeper owns admission and must compare
   that demand with live GPU telemetry before reclaiming residency.
-- Automatic reclamation is demand-driven, not a general idle cleanup job.
+- The Housekeeper runs a periodic idle reaper (30-second checks by default).
+  Registered runtimes are discharged after their provider-specific activity
+  probe has remained idle beyond `GPU_HOUSEKEEPER_IDLE_GRACE_SEC`.
+- Queued work is not provider activity. A running inference, ComfyUI queue
+  entry, Ollama access-log request inside the grace period, or Strata in-flight
+  request prevents discharge. The reaper also takes the device's exclusive
+  execution gate and rechecks activity before invoking a provider hook.
 - A provider is reclaimable only when its runtime is explicitly registered, its
   provider-specific activity probe says idle beyond the configured grace, and
   its safe discharge hook succeeds.
@@ -34,14 +40,33 @@ Use this skill when video/refinery runs show repeated GPU model load/unload chur
 - Model availability is a queued `ollama-ensure-model` duty, not an implicit
   pull hidden inside generation. Preserve the exact provider tag, including
   `:` `/` and quantization suffixes.
-- Require a realistic full-load `vramRequiredMb`; model pulls additionally
-  require declared `ramRequiredMb` and `diskRequiredMb` and are denied unless
-  the host allowlists the exact tag with `GPU_HOUSEKEEPER_ALLOW_MODEL_PULL`
-  and `GPU_HOUSEKEEPER_MODEL_ALLOWLIST`.
+- Require a realistic full-load `vramRequiredMb`. Model pulls require
+  `GPU_HOUSEKEEPER_ALLOW_MODEL_PULL=true` plus an exact-tag allowlist or `*`.
+  Prefer `modelSizeEstimateMb`; the host requires that estimate plus 25%
+  storage headroom (at least 1 GiB), checks live free space on its model store,
+  and requires 2 GiB available RAM unless the request sets a higher
+  `ramRequiredMb`. Legacy `diskRequiredMb` remains an absolute free-space
+  requirement. Set `targetHostId` to pin placement through any entry
+  Housekeeper; omit it to let federation choose normally.
 - The host-local housekeeper starts the registered Ollama runtime and uses
   Ollama's catalog/pull API. Do not copy model files between GPU hosts or add
   a model registry to Criterion. A failed fit should be reported as
   insufficient capacity; unavailable telemetry should remain unknown.
+- For ordinary `ollama-chat` and `ollama-generate` inference, omit
+  `resourceRequest.vramRequiredMb` unless measured demand is known. Each
+  Housekeeper estimates cold-load demand from its own installed model size
+  and effective context; avoid a fleet-wide fixed VRAM declaration. On
+  NVIDIA hosts the calibrated fallback is
+  `ceil(model MiB * 1.10 + 256 + 160 MiB per 4K context)`; unmeasured memory
+  backends retain their conservative fallback. Treat it as an admission estimate
+  and compare it with live evidence in
+  `/snapshot`: `ollamaRunningModels.models[].processVramMb` is the per-model
+  NVIDIA process allocation only when one Ollama model is resident,
+  `gpuProcesses.runtimes.ollama.usedMemoryMb` is the runtime aggregate, and
+  `devices[].vramUsedMb` includes all device users. Ollama `sizeVram` reports
+  model residency rather than the complete runner process allocation. See
+  `documentation/reference/gpu-housekeeper-vram-calibration.md` for the
+  empirical Qwen 3.5 9B 4K/32K calibration.
 - `keep_alive: 0` is a real discharge request for the target model. Verify
   `/api/ps`, `/runtime/ollama/models` and housekeeper snapshot state after
   provisioning or a smoke request.
@@ -107,7 +132,9 @@ Single-sentence quick run:
   additional model capacity.
 - Inspect `/capacity/preview` before a large run when residency is uncertain.
 - Keep automatic discharge limited to registered providers with a safe hook and
-  verified idle state; do not add generic process-kill logic.
+  verified idle state; do not add generic process-kill logic. The idle reaper
+  is unconditional idle-residency cleanup, separate from demand-driven
+  capacity reclamation.
 - Keep explicit Pyash discharge stages available at intended refinery
   boundaries.
 - Keep stage discharges outside inner per-item loops unless intentional.

@@ -7,15 +7,64 @@ import path from "node:path";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { doRemember, forget } from "../program/remember/index.mjs";
+import {
+  resolveConfigBool,
+  resolveConfigMapNum,
+  resolveConfigMapSeries,
+  resolveConfigMapText
+} from "../program/configure/env.mjs";
+import { parseKiwixSearchResults } from "../program/library/zim_archive.mjs";
 
 const fixtureNames = ["PYA_COMMAND_RESPONSE", "PYA_COMMAND_DEBUG", "PYA_ZIM_TOOL_LOG", "PYA_ZIM_TOOL_FAIL"];
+
+async function runPyaBlock(source) {
+  for (const line of source.split(/\r?\n/u).map((value) => value.trim()).filter(Boolean)) {
+    await interpret(parse(line));
+  }
+}
+
+test("Kiwix search RSS results retain archive, entry, title, and excerpt", () => {
+  const xml = `<?xml version="1.0"?><rss><channel><item>
+    <title>Guide &amp; reference</title>
+    <link>/content/pyash-guide/index.html</link>
+    <description>A <b>Pyash</b> archive &amp; retrieval guide.</description>
+    <book><title>Pyash guide</title></book>
+  </item></channel></rss>`;
+
+  assert.deepEqual(parseKiwixSearchResults(xml, {
+    endpoint: "http://[::1]:8091",
+    archives: [{ filename: "/repo/world/library/archive/pyash-guide.zim", relative: "world/library/archive/pyash-guide.zim" }]
+  }), [{
+    title: "Guide & reference",
+    link: "http://[::1]:8091/content/pyash-guide/index.html",
+    archiveId: "pyash-guide",
+    archivePath: "world/library/archive/pyash-guide.zim",
+    bookTitle: "Pyash guide",
+    entry: "index.html",
+    originalUrl: "",
+    snippet: "A Pyash archive & retrieval guide."
+  }]);
+});
+
+test("Kiwix search derives live source URLs from host-based Zimit entries", () => {
+  const xml = `<rss><channel><item>
+    <title>Society for Psychical Research</title>
+    <link>/content/psi-encyclopedia/psi-encyclopedia.spr.ac.uk/articles/society-psychical-research/</link>
+    <description>Article excerpt.</description>
+    <book><title>Psi Encyclopedia</title></book>
+  </item></channel></rss>`;
+
+  const results = parseKiwixSearchResults(xml, { endpoint: "https://zim.example" });
+  assert.equal(results[0].entry, "psi-encyclopedia.spr.ac.uk/articles/society-psychical-research/");
+  assert.equal(results[0].originalUrl, "https://psi-encyclopedia.spr.ac.uk/articles/society-psychical-research/");
+});
 
 async function writeExecutable(filename, lines) {
   await fs.writeFile(filename, ["#!/bin/sh", ...lines].join("\n"), "utf8");
   await fs.chmod(filename, 0o755);
 }
 
-async function withZimTools(run) {
+async function withZimTools(run, { captureNetworkEnabled = true, pageIncludeRules = ["example.org/articles/"] } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-zim-workflow-"));
   const bin = path.join(root, "bin");
   await fs.mkdir(bin, { recursive: true });
@@ -33,20 +82,27 @@ async function withZimTools(run) {
   ]);
   await writeExecutable(docker, [
     'printf "docker %s\\n" "$*" >> "$PYA_ZIM_TOOL_LOG"',
+    'case "$*" in *"--entrypoint=chown"*) exit 0 ;; esac',
     'output=',
     'name=',
+    'mode=zimit',
     'while [ "$#" -gt 0 ]; do',
     '  case "$1" in',
     '    *:/output) output="${1%:/output}" ;;',
     '    --name=*) name="${1#--name=}" ;;',
+    '    warc2zim) mode=warc ;;',
     '  esac',
     '  shift',
     'done',
     '[ "$PYA_ZIM_TOOL_FAIL" = "1" ] && exit 7',
     'mkdir -p "$output"',
-    'printf "fixture-zim" > "$output/$name.zim"',
-    'mkdir -p "$output/$name"',
-    'printf "fixture-warc" > "$output/$name/capture.warc.gz"',
+    'if [ "$mode" = "warc" ]; then',
+    '  printf "fixture-zim" > "$output/$name.zim"',
+    'else',
+    '  mkdir -p "$output/$name"',
+    '  printf "fixture-zim" > "$output/$name/$name.zim"',
+    '  printf "fixture-warc" > "$output/$name/capture.warc.gz"',
+    'fi',
     'printf "zimit-created %s\\n" "$name"'
   ]);
   await writeExecutable(zimdump, [
@@ -81,6 +137,22 @@ async function withZimTools(run) {
   doRemember(parse("exists su name agent sandbox ob bool truth ya"));
   doRemember(parse("exists su name command policy mode ob wo allow ya"));
   doRemember(parse("exists su name command classifier enabled ob bool truth ya"));
+  doRemember(parse(`su name sandbox configure be map def
+  su name network ob bool lie ya
+prah`));
+  doRemember(parse(`exists su name web archive network ob bool ${captureNetworkEnabled ? "truth" : "lie"} be default ya`));
+  await runPyaBlock(`su name web archive configure be map def
+  su name web archive prefix ob text "custom" ya
+  su name web archive page maximum ob num 2000 ya
+  su name web archive page timeout seconds ob num 90 ya
+  su name web archive page interval seconds ob num 1 ya
+  su name web archive duration maximum seconds ob num 3600 ya
+  su name web archive size maximum bytes ob num 2147483648 ya
+  su name web archive workers ob num 1 ya
+  su name web archive behavior ob text "autoscroll,siteSpecific" ya
+${pageIncludeRules.map(rule => `  su name web archive page include ob ve text ${JSON.stringify(rule)} ya`).join("\n")}
+  su name photograph filter ob ve text "[.](apng|avif|bmp|gif|heic|heif|ico|jpe?g|jxl|png|svg|tiff?|webp)([?#].*)?$" ya
+prah`);
 
   try {
     await run(root, log);
@@ -133,9 +205,42 @@ test("text files and HTML folders convert to ZIM through the existing write and 
     const calls = await fs.readFile(log, "utf8");
     assert.equal((calls.match(/^zimwriterfs /gmu) ?? []).length, 5);
     assert.match(calls, /--welcome=index\.html/u);
+    assert.match(calls, /--illustration=pyash-archive-illustration\.png/u);
     assert.match(calls, /--name=write/u);
+    assert.deepEqual(await fs.readdir(path.join(root, "site")), ["index.html"]);
     assert.ok(await fs.stat(path.join(root, "archives", "text.zim")));
   });
+});
+
+test("default Pyash configuration enables bounded Zimit captures", async () => {
+  const config = await fs.readFile(path.join(process.cwd(), "configure/default.pya"), "utf8");
+  const networkFact = config.split(/\r?\n/u)
+    .map(line => line.trim())
+    .find(line => line.startsWith("exists su name web archive network "));
+  const captureConfig = config.match(/su name web archive configure be map def[\s\S]*?\nprah/u)?.[0];
+  assert.ok(networkFact);
+  assert.ok(captureConfig);
+
+  forget();
+  try {
+    doRemember(parse(networkFact));
+    await runPyaBlock(captureConfig);
+    assert.equal(resolveConfigBool("web archive network"), true);
+    assert.equal(resolveConfigMapText("web archive configure", "web archive prefix"), "prefix");
+    assert.equal(resolveConfigMapNum("web archive configure", "web archive page maximum"), 2000);
+    assert.equal(resolveConfigMapNum("web archive configure", "web archive page timeout seconds"), 90);
+    assert.equal(resolveConfigMapNum("web archive configure", "web archive page interval seconds"), 1);
+    assert.equal(resolveConfigMapNum("web archive configure", "web archive duration maximum seconds"), 3600);
+    assert.equal(resolveConfigMapNum("web archive configure", "web archive size maximum bytes"), 2147483648);
+    assert.equal(resolveConfigMapNum("web archive configure", "web archive workers"), 1);
+    assert.equal(resolveConfigMapText("web archive configure", "web archive behavior"), "autoscroll,siteSpecific");
+    assert.deepEqual(resolveConfigMapSeries("web archive configure", "photograph filter"), [
+      "[.](apng|avif|bmp|gif|heic|heif|ico|jpe?g|jxl|png|svg|tiff?|webp)([?#].*)?$"
+    ]);
+    assert.equal(resolveConfigMapSeries("web archive configure", "web archive page include"), undefined);
+  } finally {
+    forget();
+  }
 });
 
 test("web capture retains the ZIM and WARC evidence, and WARC input uses the same conversion route", async () => {
@@ -148,6 +253,18 @@ test("web capture retains the ZIM and WARC evidence, and WARC input uses the sam
     assert.equal(await fs.readFile(webResult.warc.filename, "utf8"), "fixture-warc");
     assert.match(await fs.readFile(log, "utf8"), /--keep/u);
     assert.match(await fs.readFile(log, "utf8"), /--seeds=https:\/\/example\.org\//u);
+    assert.match(await fs.readFile(log, "utf8"), /--scopeType=custom/u);
+    assert.match(await fs.readFile(log, "utf8"), /--scopeIncludeRx=example.org\/articles\//u);
+    assert.match(await fs.readFile(log, "utf8"), /--pageLimit=2000/u);
+    assert.match(await fs.readFile(log, "utf8"), /--pageLoadTimeout=90/u);
+    assert.match(await fs.readFile(log, "utf8"), /--pageExtraDelay=1/u);
+    assert.match(await fs.readFile(log, "utf8"), /--timeHardLimit=3600/u);
+    assert.match(await fs.readFile(log, "utf8"), /--sizeHardLimit=2147483648/u);
+    assert.match(await fs.readFile(log, "utf8"), /--workers=1/u);
+    assert.match(await fs.readFile(log, "utf8"), /--behaviors=autoscroll,siteSpecific/u);
+    assert.match(await fs.readFile(log, "utf8"), /--blockRules=.*apng.*webp/u);
+    assert.match(await fs.readFile(log, "utf8"), /docker run --rm --user 0:0 --entrypoint=chown/u);
+    assert.match(await fs.readFile(log, "utf8"), /--entrypoint=chown.* -R \d+:\d+ \/output/u);
 
     const warcResult = await interpret(parse(
       'from filename "capture.warc" fromstate wo warc tostate wo zim to filename "archives/warc.zim" be cluster-compress do'
@@ -158,6 +275,27 @@ test("web capture retains the ZIM and WARC evidence, and WARC input uses the sam
     assert.match(calls, /warc2zim \/input\/capture\.warc/u);
     assert.ok(await fs.stat(path.join(root, "archives", "web.zim.capture")));
   });
+});
+
+test("web capture obeys its dedicated network permission", async () => {
+  await withZimTools(async (root, log) => {
+    await assert.rejects(
+      interpret(parse('from filename "https://example.org/" fromstate wo web tostate wo zim to filename "archives/blocked.zim" be cluster-compress do')),
+      /web-to-ZIM capture requires enabled network permission/u
+    );
+    assert.equal(await fs.readFile(log, "utf8").catch(() => ""), "");
+    assert.deepEqual(await fs.readdir(path.join(root, "archives")), []);
+  }, { captureNetworkEnabled: false });
+});
+
+test("custom Zimit scopes require an explicit page include rule", async () => {
+  await withZimTools(async (root, log) => {
+    await assert.rejects(
+      interpret(parse('from filename "https://example.org/" fromstate wo web tostate wo zim to filename "archives/no-scope.zim" be cluster-compress do')),
+      /custom Zimit scope requires at least one page include rule/u
+    );
+    assert.equal(await fs.readFile(log, "utf8").catch(() => ""), "");
+  }, { pageIncludeRules: [] });
 });
 
 test("read and search use the existing Pyash verbs for a ZIM archive", async () => {
@@ -188,6 +326,111 @@ test("read and search use the existing Pyash verbs for a ZIM archive", async () 
   });
 });
 
+test("query-only ZIM search defaults to the configured local library", async () => {
+  const previousFetch = globalThis.fetch;
+  let requestedUrl;
+  globalThis.fetch = async (url) => {
+    requestedUrl = new URL(url);
+    return {
+      ok: true,
+      status: 200,
+      text: async () => `<rss><channel><item>
+        <title>Pyash guide</title>
+        <link>/content/guide/index.html</link>
+        <description>A local Pyash reference.</description>
+        <book><title>Guide</title></book>
+      </item></channel></rss>`
+    };
+  };
+
+  try {
+    await withZimTools(async (root) => {
+      await fs.writeFile(path.join(root, "archives", "guide.zim"), "fixture-zim", "utf8");
+      doRemember(parse('exists su name zim archive library directory ob text "archives" be default ya'));
+      doRemember(parse('exists su name zim archive search server ob text "http://127.0.0.1:8091" be default ya'));
+
+      const result = await interpret(parse('ob text "Pyash guide" fromstate wo zim be search do'));
+
+      assert.equal(result?.be, "search");
+      assert.match(result?.ob?.text ?? "", /archive: archives\/guide\.zim/u);
+      assert.match(result?.ob?.text ?? "", /title: Pyash guide/u);
+      assert.match(result?.ob?.text ?? "", /snippet: A local Pyash reference\./u);
+      assert.equal(requestedUrl.pathname, "/search");
+      assert.equal(requestedUrl.searchParams.get("pattern"), "Pyash guide");
+      assert.equal(requestedUrl.searchParams.get("format"), "xml");
+    });
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("query-only ZIM search clearly reports a missing configured library mount", async () => {
+  await withZimTools(async () => {
+    doRemember(parse('exists su name zim archive library directory ob text "missing-archives" be default ya'));
+
+    await assert.rejects(
+      interpret(parse('ob text "Pyash" fromstate wo zim be search do')),
+      /configured local ZIM archive library is unavailable/u
+    );
+  });
+});
+
+test("ZIM reads follow the configured external library symlink and reject other outside links", async () => {
+  await withZimTools(async (root) => {
+    const storage = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-zim-external-store-"));
+    const libraryAlias = path.join(root, "library");
+    await fs.writeFile(path.join(storage, "guide.zim"), "fixture-zim", "utf8");
+    await fs.symlink(storage, libraryAlias, "dir");
+    doRemember(parse('exists su name zim archive library directory ob text "library" be default ya'));
+    doRemember(parse(`exists su name zim archive service directory ob text ${JSON.stringify(storage)} be default ya`));
+
+    try {
+      const result = await interpret(parse(
+        'from filename "library/guide.zim" as wo cluster-compress ob text "index.html" be read do'
+      ));
+      assert.equal(result?.be, "read");
+      assert.equal(result?.ob?.text, "article body\n");
+
+      const unrelatedStore = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-zim-unrelated-store-"));
+      await fs.writeFile(path.join(unrelatedStore, "outside.zim"), "fixture-zim", "utf8");
+      await fs.symlink(unrelatedStore, path.join(root, "unrelated"), "dir");
+      try {
+        await assert.rejects(
+          interpret(parse('from filename "unrelated/outside.zim" as wo cluster-compress be read do')),
+          /outside|command roots/u
+        );
+      } finally {
+        await fs.rm(unrelatedStore, { recursive: true, force: true });
+      }
+    } finally {
+      await fs.rm(storage, { recursive: true, force: true });
+    }
+  });
+});
+
+test("search through Pyash accepts a directory and searches its direct ZIM members", async () => {
+  await withZimTools(async (root, log) => {
+    await fs.writeFile(path.join(root, "archives", "first.zim"), "fixture-zim", "utf8");
+    await fs.writeFile(path.join(root, "archives", "second.zim"), "fixture-zim", "utf8");
+    await fs.mkdir(path.join(root, "archives", "nested"));
+    await fs.writeFile(path.join(root, "archives", "nested", "ignored.zim"), "fixture-zim", "utf8");
+    await fs.writeFile(path.join(root, "archives", "ignored.txt"), "not an archive", "utf8");
+
+    const result = await interpret(parse(
+      'ob text "love" in filename "archives" as wo cluster-compress be search do'
+    ));
+
+    assert.equal(result?.be, "search");
+    assert.match(result?.ob?.text ?? "", /first\.zim[\s\S]*article\.html/u);
+    assert.match(result?.ob?.text ?? "", /second\.zim[\s\S]*article\.html/u);
+    assert.doesNotMatch(result?.ob?.text ?? "", /ignored\.zim|ignored\.txt/u);
+    const calls = await fs.readFile(log, "utf8");
+    assert.equal((calls.match(/^kiwix-search /gmu) ?? []).length, 2);
+    assert.match(calls, /kiwix-search archives\/first\.zim love/u);
+    assert.match(calls, /kiwix-search archives\/second\.zim love/u);
+  });
+});
+
 test("archive conversion rejects paths outside the agent working root and unsafe HTML symlinks", async () => {
   await withZimTools(async (root) => {
     const outside = path.join(path.dirname(root), "outside-zim-input.txt");
@@ -199,6 +442,18 @@ test("archive conversion rejects paths outside the agent working root and unsafe
       );
     } finally {
       await fs.rm(outside, { force: true });
+    }
+
+    const outsideLibrary = path.join(path.dirname(root), "outside-zim-library");
+    await fs.mkdir(outsideLibrary);
+    await fs.writeFile(path.join(outsideLibrary, "outside.zim"), "outside", "utf8");
+    try {
+      await assert.rejects(
+        interpret(parse(`ob text "query" in filename ${JSON.stringify(outsideLibrary)} as wo cluster-compress be search do`)),
+        /outside|under the command working directory/u
+      );
+    } finally {
+      await fs.rm(outsideLibrary, { recursive: true, force: true });
     }
 
     const externalTarget = path.join(path.dirname(root), "outside-output.zim");

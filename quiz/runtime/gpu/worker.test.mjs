@@ -190,6 +190,42 @@ test("gpu worker tolerates a transient remote status fetch failure", async () =>
   assert.equal(status?.status, "success");
 });
 
+test("gpu worker resubmits its durable runtime envelope when a housekeeper restart loses the remote job", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-gpu-worker-recover-"));
+  const worldRoot = path.join(root, "world");
+  await enqueueMind(worldRoot, { handleId: "mind-job-recover" });
+  const submitted = [];
+  const polled = [];
+  const result = await runGpuWorkerOnce({
+    worldRoot,
+    pollIntervalMs: 1,
+    maxPolls: 5,
+    adapter: {
+      async submitJob(args) {
+        submitted.push(args);
+        return { remoteJobId: `remote-${submitted.length}` };
+      },
+      async getJobStatus({ remoteJobId }) {
+        polled.push(remoteJobId);
+        if (remoteJobId === "remote-1") {
+          const error = new Error("gpu housekeeper adapter defective (404): job not found");
+          error.statusCode = 404;
+          throw error;
+        }
+        return { status: "success", result: { response: "resumed" } };
+      }
+    }
+  });
+
+  assert.equal(result.handled, 1);
+  assert.equal(submitted.length, 2);
+  assert.deepEqual(polled, ["remote-1", "remote-2"]);
+  assert.equal(submitted[0].handleId, submitted[1].handleId);
+  assert.deepEqual(submitted[0].jobSpec, submitted[1].jobSpec);
+  assert.equal((await readGpuHandleStatus(worldRoot, "mind-job-recover"))?.status, "success");
+  assert.equal((await queueDepth(worldRoot)).total, 0);
+});
+
 test("gpu worker leaves a dependency-waiting envelope and claims an independent one", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-gpu-worker-dependency-"));
   const worldRoot = path.join(root, "world");

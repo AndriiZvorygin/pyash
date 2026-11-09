@@ -301,5 +301,6 @@ export const signatures = [
   { signatureWords: ["be", "search", "as", "wo", "cluster-compress", "in", "filename", "ob", "text"], handler: search },
   { signatureWords: ["be", "search", "as", "wo", "cluster-compress", "in", "filename", "ob", "name", "text"], handler: search },
   { signatureWords: ["be", "search", "ob", "text", "inside", "filename", "as", "wo", "cluster-compress"], handler: search },
-  { signatureWords: ["be", "search", "ob", "text", "in", "filename", "fromstate", "wo", "zim"], handler: search }
+  { signatureWords: ["be", "search", "ob", "text", "in", "filename", "fromstate", "wo", "zim"], handler: search },
+  { signatureWords: ["be", "search", "fromstate", "wo", "zim", "ob", "text"], handler: search }
 ];

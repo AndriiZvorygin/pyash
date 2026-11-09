@@ -208,11 +208,21 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   worklist uses descending WordNet tag-count order and includes every residual
   sense with at least one exact WordNet tag count. Untagged senses are outside
   this pass.
+  Preserve each synset's maximum exact tag count on the allocation record and
+  through its residual row, even when no atom/compound candidate exists;
+  otherwise the compound worklist can mistake high-frequency unanchored senses
+  for untagged rows and silently drop them.
   It asks the configured Qwen mind through the GPU Housekeeper queue for one sense's
-  translations and transparent word parts in Chinese, French, Russian, and
-  Hindi. The configured `parallelism` bounds simultaneous duties; Housekeeper
+  translations and transparent word parts in English, Chinese, French, Russian,
+  and Hindi. For English, include all WordNet lemmas so a multiword lexical lemma
+  such as `chemical chain` can contribute its own English compound parts. The configured `parallelism` bounds simultaneous duties; Housekeeper
   may run them across available workers. Resolve English components with
-  `vocab_suggest`; use active one-atom links with WordNet sense evidence.
+  `vocab_suggest`; split slash- and pipe-separated gloss alternatives, and
+  query multiword glosses both as a phrase and by their constituent words.
+  Otherwise active Kwon atoms such as `building` can be omitted when the
+  component gloss is `building structure`. For a bare infinitive gloss such as `to obtain`, query its
+  verb lemma (`obtain`) while retaining the original gloss as the component key
+  and evidence. Use active one-atom links with WordNet sense evidence.
   Candidate components are always in Pyash head-final order. A directed
   hypernym relation is supporting evidence, not a prerequisite for generating
   or accepting a literal compound. Keep whole atom inventories out of the
@@ -252,28 +262,31 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   sense; that focused retry replaces its current progress outcome.
   For a new sense-derived compound, make one focused Housekeeper mind call per
   sense to compose and judge the compound together. Include the target sense,
-  source-language decomposition, English gloss alternatives for each source
-  part and active Kwon-linked atom words. Represent these as JSON objects with
-  `source`, `gloss`, and `atoms`; include each source/gloss pair once and list
-  each atom word once in its group. Rank by existing sense evidence, preserve
+  English gloss groups and active Kwon-linked atom words with their linked
+  meanings. Represent options as JSON objects with `gloss`, `atoms`, and
+  `atomMeanings`; include each gloss once and each atom word once in its group.
+  Rank by existing sense evidence, preserve
   Kwon order for ties, and cap each gloss at four distinct atom words. If an
   atom has several linked senses, retain its highest-scoring sense once so
   duplicate links do not crowd other alternatives out. Omit source-language
-  labels, candidate or synset ids, per-atom definitions,
-  and preassembled compound combinations. The model returns two or three atom
+  labels, translated surfaces, candidate or synset ids, and preassembled
+  compound combinations. The model returns two or three distinct atom
   words in explicit Pyash head-final order: the final atom is the semantic head
   and earlier atoms modify it. Do not copy source-language order automatically.
-  Choose one atom from each of at least two
-  distinct source parts in the same decomposition; two atoms from one part do not
-  meet the minimum. If fewer than two parts fit, return `uncertain` with an empty
-  atom list. Show a two-part example in the prompt.
-  The parser resolves the selected words to one coherent source decomposition
-  and validates each against the offered active atoms. With an existing target
+  Atoms may be combined across gloss groups; source translation and source part
+  do not constrain the compound. If fewer than two atoms fit, return `uncertain`
+  with an empty atom list. Show a two-atom example in the prompt.
+  The parser resolves each selected word independently to an offered active atom
+  and retains its source gloss and translation provenance. With an existing target
   atom, the model returns one or two modifiers and the pipeline appends that
   target as the final component; a source choice that duplicates the fixed head
   is removed from the offered choices. Without a fixed target head, the model
   returns two or three components. Deterministic evidence checks and promotion
   follow this call; there is no separate LLM verifier.
+  Before prompting for a fixed head, remove any modifier whose ordered
+  `modifier + head` sequence is already assigned to a compound of the target
+  POS. A sequence assigned only to another POS remains available. Keep the
+  promotion collision check as the final guard.
   Uncertain and failed choices remain in `component-compositions.pya` for
   resumption or inspection.
 

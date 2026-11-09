@@ -12,6 +12,7 @@ import { gpuEnvelopeDependencyStatus } from "./readiness.mjs";
 import { MAX_GPU_WORKER_CONCURRENCY } from "./worker_capacity.mjs";
 
 export const DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS = 20 * 60 * 1000;
+export const DEFAULT_GPU_REMOTE_JOB_RECOVERIES = 3;
 export const DEFAULT_GPU_RUNTIME_STALE_MS = 60 * 60 * 1000;
 export const DEFAULT_GPU_RUNTIME_GC_INTERVAL_MS = 60 * 1000;
 
@@ -258,6 +259,7 @@ async function pollRemoteJob({ adapter, remoteJobId, pollIntervalMs, maxPolls, h
       status = await adapter.getJobStatus({ remoteJobId });
       lastPollError = null;
     } catch (error) {
+      if (Number(error?.statusCode) === 404) throw error;
       lastPollError = error;
       if (typeof heartbeat === "function") await heartbeat();
       await delay(pollIntervalMs);
@@ -318,6 +320,7 @@ export async function runGpuWorkerOnce({
   pollIntervalMs = 250,
   maxPolls,
   remoteJobTimeoutMs = Number(process.env.PYA_GPU_WORKER_TIMEOUT_MS) || DEFAULT_GPU_REMOTE_JOB_TIMEOUT_MS,
+  remoteJobRecoveries = DEFAULT_GPU_REMOTE_JOB_RECOVERIES,
   leaseTtlMs = 300000,
   retryMax = 0,
   leaseScope = "physical"
@@ -379,6 +382,7 @@ export async function runGpuWorkerOnce({
   const runtimeName = normalizeText(envelope.serviceName || jobSpec.runtimeName);
   const profileName = normalizeText(envelope.residencyName || jobSpec.profileName);
   let success = false;
+  let recoveredRemoteJobs = 0;
 
   try {
     if (!runtimeName || !profileName) {
@@ -386,15 +390,16 @@ export async function runGpuWorkerOnce({
     }
 
     await markRunning(worldRoot, envelope);
-    const submit = await housekeeper.submitJob({
+    const submitArgs = {
       handleId: envelope.handleId,
       runtimeName,
       profileName,
       jobSpec,
       deviceId: envelope.deviceId,
       dischargeAllowed: envelope.dischargeAllowed
-    });
-    const remoteJobId = remoteJobIdFromSubmit(submit);
+    };
+    const submit = await housekeeper.submitJob(submitArgs);
+    let remoteJobId = remoteJobIdFromSubmit(submit);
     if (!remoteJobId) throw new Error("gpu worker defective: housekeeper did not return remoteJobId");
 
     const effectiveMaxPolls = resolveGpuWorkerMaxPolls({
@@ -402,17 +407,33 @@ export async function runGpuWorkerOnce({
       maxPolls,
       timeoutMs: remoteJobTimeoutMs
     });
-    const remote = await pollRemoteJob({
-      adapter: housekeeper,
-      remoteJobId,
-      pollIntervalMs,
-      maxPolls: effectiveMaxPolls,
-      heartbeat: () => heartbeatGpuLease(worldRoot, {
-        gpuId: leaseId,
-        owner,
-        handleId: envelope.handleId
-      })
-    });
+    let remote;
+    while (true) {
+      try {
+        remote = await pollRemoteJob({
+          adapter: housekeeper,
+          remoteJobId,
+          pollIntervalMs,
+          maxPolls: effectiveMaxPolls,
+          heartbeat: () => heartbeatGpuLease(worldRoot, {
+            gpuId: leaseId,
+            owner,
+            handleId: envelope.handleId
+          })
+        });
+        break;
+      } catch (error) {
+        const recoveryLimit = Math.max(0, Math.trunc(Number(remoteJobRecoveries) || 0));
+        if (Number(error?.statusCode) !== 404 || recoveredRemoteJobs >= recoveryLimit) throw error;
+        recoveredRemoteJobs += 1;
+        console.warn(
+          `[gpu worker] Housekeeper no longer has remote job ${remoteJobId}; resubmitting durable handle ${envelope.handleId} (${recoveredRemoteJobs}/${recoveryLimit})`
+        );
+        const recoveredSubmit = await housekeeper.submitJob(submitArgs);
+        remoteJobId = remoteJobIdFromSubmit(recoveredSubmit);
+        if (!remoteJobId) throw new Error("gpu worker defective: Housekeeper recovery did not return remoteJobId");
+      }
+    }
 
     const finishedAt = normalizeText(remote.finishedAt) || new Date().toISOString();
     const message = normalizeText(remote.message) || remote.status;
@@ -472,6 +493,7 @@ export async function runGpuWorkerOnce({
     received: 1,
     handled: success ? 1 : 0,
     sent: success ? 1 : 0,
+    recoveredRemoteJobs: typeof recoveredRemoteJobs === "number" ? recoveredRemoteJobs : 0,
     dependencyWaiting: dependencySkips,
     queueDepth: depth.total
   };
@@ -552,6 +574,7 @@ export async function runGpuWorkerBatch({ concurrency = 1, ...options } = {}) {
     received: total.received + Number(result?.received || 0),
     handled: total.handled + Number(result?.handled || 0),
     sent: total.sent + Number(result?.sent || 0),
+    recoveredRemoteJobs: total.recoveredRemoteJobs + Number(result?.recoveredRemoteJobs || 0),
     queueDepth: Math.max(total.queueDepth, Number(result?.queueDepth || 0)),
     dependencyWaiting: [...total.dependencyWaiting, ...(result?.dependencyWaiting || [])],
     errors: [...total.errors, ...(result?.error ? [result.error] : [])],
@@ -560,6 +583,7 @@ export async function runGpuWorkerBatch({ concurrency = 1, ...options } = {}) {
     received: 0,
     handled: 0,
     sent: 0,
+    recoveredRemoteJobs: 0,
     queueDepth: 0,
     dependencyWaiting: [],
     errors: [],

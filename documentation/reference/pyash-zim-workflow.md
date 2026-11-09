@@ -44,6 +44,22 @@ stored in `archives/site.zim.capture/` alongside `archives/site.zim`:
 from filename "https://example.org/" fromstate wo web tostate wo zim to filename "archives/site.zim" be cluster-compress do
 ```
 
+Web capture is network-enabled for this specific operation by the
+`web archive network` default. General command sandbox network
+settings remain unchanged. The `web archive configure` map in
+`configure/default.pya` sets prefix scope, one worker, a one-second interval
+between pages, a 2,000-page cap, a 90-second page-load timeout, a one-hour
+hard time limit, and a 2 GiB hard WARC-size limit. Its default block rule
+omits common image formats to keep captures text-focused. The default
+`web archive behavior` value leaves out Browsertrix's `autofetch` behavior,
+which fetches alternate image resolutions and lazy-loaded resources. Keep
+that behavior disabled for a no-image capture; enable it together with an
+adjusted photograph filter when images are wanted. A `custom` scope requires
+one or more URL regexes in the `web archive page include` series; they are
+passed to Zimit as `--scopeIncludeRx` rules. The page delay is a coarse pacing
+control; it does not cap individual HTTP requests per second. Local Pyash
+configuration can override these settings.
+
 An existing WARC can be converted without recapturing the site:
 
 ```pyash
@@ -67,24 +83,74 @@ from filename "archives/site.zim" as wo cluster-compress be read do
 from filename "archives/site.zim" as wo cluster-compress ob text "index.html" be read do
 ```
 
-Search uses the existing `search` verb and requires an indexed ZIM for full-text
-results:
+Search with only a query and `fromstate wo zim` uses the configured
+`world/library/archive` collection by default. It uses the configured Kiwix
+Server's full-text index and returns the archive path, article title, entry
+path, and matching excerpt. The `zimwriterfs` default builds the index.
+`read` uses OpenZIM's `zimdump` to list entries or extract one article directly.
+The server also supports searching one archive from that shared collection;
+an explicit archive path overrides the default collection:
 
 ```pyash
-ob text "offline archive" in filename "archives/site.zim" as wo cluster-compress be search do
+ob text "Pyash" fromstate wo zim be search do
+ob text "Pyash" in filename "world/library/archive/pyash-hierarchy.zim" as wo cluster-compress be search do
+```
+
+When `filename` names the shared library directory or one of its direct
+archives, Pyash queries the server for full results. Other archive directories
+use the local `kiwix-search` command and return its matching titles; directory
+search only considers top-level regular `*.zim` files in name order and does
+not follow subdirectories or symlinks. This supports direct agent retrieval
+from the shared library:
+
+```pyash
+ob text "Pyash" in filename "world/library/archive" as wo cluster-compress be search do
+from filename "world/library/archive/pyash-hierarchy.zim" as wo cluster-compress ob text "index.html" be read do
 ```
 
 ## Tools and configuration
 
 Local text and HTML conversion invokes `zimwriterfs` through Pyash `command`.
-Reading uses `zimdump`; searching uses `kiwix-search`. Web capture uses Docker
-with the configured Zimit image, defaulting to `ghcr.io/openzim/zimit`; the
-container must be available locally or Docker must be able to retrieve it.
+Reading uses `zimdump`; shared-library search uses the configured Kiwix Server,
+and other local searches use `kiwix-search`. Web capture uses
+Docker with the configured Zimit image, defaulting to `ghcr.io/openzim/zimit`;
+the container must be available locally or Docker must be able to retrieve it.
 The existing command policy classifies archive creation tools as local writers,
 archive inspection/search tools as read-only, and Docker under process control.
-Command policy, timeout, network, and sandbox settings remain authoritative.
+Command policy, timeout, and sandbox settings remain authoritative for the
+underlying process; the URL-capture permission and bounded crawler profile are
+specific to Zimit.
+
+Set `PYA_ENABLE_ZIM_TOOLS=truth` and run `npm run setup:zim` to install the
+Debian/Ubuntu host packages and build `pyash/zim-tools:ubuntu-24.04` from
+`containers/zim-tools/Dockerfile`. With the CI variable
+`PYA_ENABLE_ZIM_TOOLS=true`, CI builds the image and runs an actual
+create/read/search smoke test. The integration quiz skips by default, keeping
+normal setup and CI lightweight.
 
 Defaults live in `configure/default.pya`: writer, reader, search tool, Zimit
-image, archive metadata defaults, and the existing `ksus hzip` compound. The
-resulting `.zim` remains a file artifact. `containers/kiwix-server/` provides an
-optional loopback-only read-only server for a directory of completed archives.
+image, crawl permission and bounds, archive metadata defaults, the shared ZIM
+library and Kiwix endpoint, and the `ksus mres` cluster-compression compound.
+The compound uses existing atoms for “cluster” and information “compression”;
+its project gloss describes ZIM cluster compression because WordNet has no
+single synset for that specific operation. Host-local library or server
+overrides belong in `configure/secret.pya`. The
+resulting `.zim` remains a file artifact. `containers/kiwix-server/` provides a
+read-only server for the shared `world/library/archive/` collection on host port
+8091 over IPv4 and IPv6. The persistent host collection lives at
+`/srv/search/archive/`; `world/library/archive/` is its stable Pyash-facing
+symlink. Every top-level `*.zim` file in the persistent directory is included
+when the container starts. Add or remove files through either path and restart
+the service to refresh the collection. Pyash agents can search the collection
+directory with the existing `search as cluster-compress` verb and retrieve a
+selected entry with `read as cluster-compress`. The server HTTP search endpoint
+searches across the loaded archives. The public browser and search endpoint is
+`https://zim.zvorygin.ca`, reverse-proxied by Caddy to the local Kiwix server;
+the DNS updater includes this hostname in its dual-stack web records.
+The host library's `pyash-documentation.zim` snapshot was built from 152
+Markdown, text, and JSON documents beneath `documentation/`. The current
+language, assembly, and GPU coding collections are listed in
+[offline-code-references.md](offline-code-references.md). The domain root
+provides full-text article search, including queries encoded in the URL
+fragment; `/library` opens Kiwix's archive catalog. The searchable page is
+`containers/kiwix-server/search-ui/index.html`.

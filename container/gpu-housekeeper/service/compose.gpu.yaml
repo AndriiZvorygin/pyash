@@ -52,3 +52,10 @@ services:
       - ${GPU_HOUSEKEEPER_KUBERNETES_CREDENTIALS_DIR:-./state/kubernetes}:/run/kubernetes:ro
     extra_hosts:
       - host.docker.internal:host-gateway
+
+networks:
+  default:
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: ${GPU_HOUSEKEEPER_IPV6_SUBNET:?start with command/begin.sh to derive the host IPv6 subnet}

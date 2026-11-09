@@ -56,6 +56,7 @@ test("coding saddle context checkpoints persist as session-isolated Pyash senten
       contextBudget: 10000,
       measurement: "provider usage",
       historyWindow: 12,
+      providerHistoryWindow: 4,
       compactedAt: "2026-11-03T12:00:00.000Z"
     };
     await writeSaddleContextCheckpoint(first, checkpoint);
@@ -66,11 +67,41 @@ test("coding saddle context checkpoints persist as session-isolated Pyash senten
       contextBudget: null,
       measurement: "",
       historyWindow: 12,
+      providerHistoryWindow: null,
       compactedAt: ""
     });
     assert.match(await fs.readFile(first, "utf8"), /^su name coding saddle context summary/m);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("coding saddle persists provider history caps separately from compaction history", async () => {
+  const agentHouse = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-history-cap-"));
+  const filename = saddleContextCheckpointPath({ agentHouse, sessionName: "coding" });
+  try {
+    await writeSaddleContextCheckpoint(filename, { providerHistoryWindow: 4 });
+    const requestedWindows = [];
+    const context = await prepareSaddleContextForTurn({
+      agentHouse,
+      sessionName: "coding",
+      backend: "zai",
+      model: "glm-5.3-flash",
+      contextWindow: 262144,
+      systemPrompt: "Coding agent",
+      userInput: "Continue the task.",
+      loadHistory: async ({ historyWindow }) => {
+        requestedWindows.push(historyWindow);
+        return { messages: [{ role: "user", content: "Recent request." }] };
+      },
+      summarize: async () => assert.fail("small retained context should not be compacted")
+    });
+    assert.deepEqual(requestedWindows, [4]);
+    assert.equal(context.historyWindow, 4);
+    assert.equal(context.providerHistoryWindow, 4);
+    assert.equal(context.checkpoint.historyWindow, 12);
+  } finally {
+    await fs.rm(agentHouse, { recursive: true, force: true });
   }
 });
 

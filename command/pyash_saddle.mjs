@@ -71,7 +71,8 @@ import {
   saddleContextCheckpointPath,
   shouldCompactSaddleContext,
   writeSaddleContextCheckpoint,
-  SADDLE_COMPACTION_RECENT_PAIRS
+  SADDLE_COMPACTION_RECENT_PAIRS,
+  SADDLE_DEFAULT_HISTORY_PAIRS
 } from "../program/agent/coding_saddle_context.mjs";
 import { formatMindUsage, normalizeMindUsage, sumMindUsages } from "../program/verbs/mind/usage.mjs";
 import {
@@ -196,9 +197,12 @@ export async function prepareSaddleContextForTurn({
   const budget = Number.isSafeInteger(Number(contextWindow)) && Number(contextWindow) > 0
     ? Number(contextWindow)
     : isLocalModelBackend(backend) ? CONSERVATIVE_LOCAL_CONTEXT_BUDGET : null;
-  const activeWindow = checkpoint.summary
+  const compactionWindow = checkpoint.summary
     ? Math.min(SADDLE_COMPACTION_RECENT_PAIRS, checkpoint.historyWindow ?? SADDLE_COMPACTION_RECENT_PAIRS)
-    : 50;
+    : SADDLE_DEFAULT_HISTORY_PAIRS;
+  const activeWindow = checkpoint.providerHistoryWindow == null
+    ? compactionWindow
+    : Math.min(compactionWindow, checkpoint.providerHistoryWindow);
   const recent = await loadHistory({ agentHouse, sessionName, sessionFile, historyWindow: activeWindow });
   const estimatedInputTokens = estimateSaddleInputTokens({
     messages: recent.messages,
@@ -218,7 +222,7 @@ export async function prepareSaddleContextForTurn({
   let next = {
     ...checkpoint,
     contextBudget: budget,
-    historyWindow: activeWindow
+    historyWindow: checkpoint.summary ? compactionWindow : SADDLE_COMPACTION_RECENT_PAIRS
   };
   if (shouldCompactSaddleContext(pressure)) {
     if (checkpoint.summary && activeWindow === 0) {
@@ -252,11 +256,15 @@ export async function prepareSaddleContextForTurn({
     };
     await writeSaddleContextCheckpoint(filename, next);
   }
+  const resolvedCompactionWindow = next.summary
+    ? Math.min(SADDLE_COMPACTION_RECENT_PAIRS, next.historyWindow ?? SADDLE_COMPACTION_RECENT_PAIRS)
+    : SADDLE_DEFAULT_HISTORY_PAIRS;
   return {
     filename,
     checkpoint: next,
     summary: next.summary,
-    historyWindow: next.summary ? next.historyWindow : 50,
+    historyWindow: Math.min(resolvedCompactionWindow, next.providerHistoryWindow ?? SADDLE_DEFAULT_HISTORY_PAIRS),
+    providerHistoryWindow: next.providerHistoryWindow,
     pressure,
     compacted: Boolean(next.compactedAt && next.compactedAt !== checkpoint.compactedAt)
   };
@@ -1669,10 +1677,25 @@ async function main() {
           } catch (error) {
             writeLine(`[trace recording failed] ${error?.message ?? error}`);
           }
-          if (event?.stage === "call" || event?.stage === "result" || event?.stage === "ratify") {
+          if (event?.stage === "call" || event?.stage === "result" || event?.stage === "ratify" || event?.stage === "context_compacted") {
+            if (event?.stage === "context_compacted" && contextTurn) {
+              const suggestedWindow = Number(event.providerHistoryWindow);
+              if (Number.isSafeInteger(suggestedWindow) && suggestedWindow >= 0) {
+                contextTurn.providerHistoryWindow = Math.min(
+                  contextTurn.providerHistoryWindow ?? SADDLE_DEFAULT_HISTORY_PAIRS,
+                  suggestedWindow
+                );
+                contextTurn.historyWindow = Math.min(contextTurn.historyWindow, suggestedWindow);
+                config.sessionHistoryWindow = contextTurn.historyWindow;
+              }
+            }
             responseStream = null;
             responseSegmentText = "";
-            writeLine(`${saddleToolEventLabel(event)}${event.toolText ? `: ${String(event.toolText).slice(0, 400)}` : ""}`);
+            if (event?.stage === "context_compacted") {
+              writeLine(`[prompt trimmed] ${String(event.toolText ?? "").slice(0, 400)}`);
+            } else {
+              writeLine(`${saddleToolEventLabel(event)}${event.toolText ? `: ${String(event.toolText).slice(0, 400)}` : ""}`);
+            }
           }
         },
         onFollowup: (assessment) => {
@@ -1723,7 +1746,8 @@ async function main() {
           lastInputTokens: reportedInputTokens || contextTurn.pressure.tokens,
           contextBudget: contextTurn.pressure.budget ?? contextTurn.checkpoint.contextBudget,
           measurement: reportedInputTokens ? "provider usage" : contextTurn.pressure.source,
-          historyWindow: contextTurn.historyWindow
+          historyWindow: contextTurn.checkpoint.historyWindow,
+          providerHistoryWindow: contextTurn.providerHistoryWindow
         };
         await writeSaddleContextCheckpoint(contextTurn.filename, checkpoint)
           .catch((error) => writeLine(`context checkpoint save failed: ${error.message}`));

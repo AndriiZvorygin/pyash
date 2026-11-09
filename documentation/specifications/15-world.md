@@ -470,6 +470,7 @@ Tools appear via place listing.
   * `world/library/text/` (normalized text extraction)
   * `world/library/abridged/` (deterministic reduction output)
   * `world/library/summarized/` (summary/distillation output)
+  * `world/library/archive/` (published, searchable ZIM archive collection)
 * when fresh content hash matches latest cached hash, heavy refinement steps MAY be skipped and prior staged outputs reused
 
 **MVP:** one full tool loop

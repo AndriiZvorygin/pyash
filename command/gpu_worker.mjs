@@ -134,15 +134,16 @@ async function main() {
     const received = Number(result?.received ?? 0);
     const handled = Number(result?.handled ?? 0);
     const sent = Number(result?.sent ?? 0);
+    const recoveredRemoteJobs = Number(result?.recoveredRemoteJobs ?? 0);
     const queue = Number(result?.queueDepth ?? 0);
     const dependencyWaiting = Array.isArray(result?.dependencyWaiting) ? result.dependencyWaiting.length : 0;
     const errors = Array.isArray(result?.errors) ? result.errors.length : 0;
     const staleReclaimed = Number(result?.staleRuntime?.reclaimed ?? 0);
     const staleCompleted = Number(result?.staleRuntime?.completed ?? 0);
     const staleGcError = String(result?.staleRuntime?.error ?? "").trim();
-    if (received > 0 || handled > 0 || sent > 0 || queue > 0 || dependencyWaiting > 0 || errors > 0 || staleReclaimed > 0 || staleCompleted > 0 || staleGcError) {
+    if (received > 0 || handled > 0 || sent > 0 || recoveredRemoteJobs > 0 || queue > 0 || dependencyWaiting > 0 || errors > 0 || staleReclaimed > 0 || staleCompleted > 0 || staleGcError) {
       console.log(
-        `${cycleIso} gpu worker: slots=${capacity.concurrency} received=${received} handled=${handled} sent=${sent} queue=${queue} dependency_waiting=${dependencyWaiting} errors=${errors} stale_reclaimed=${staleReclaimed} stale_completed=${staleCompleted}${staleGcError ? ` stale_gc_error=${staleGcError}` : ""}`
+        `${cycleIso} gpu worker: slots=${capacity.concurrency} received=${received} handled=${handled} sent=${sent} remote_recoveries=${recoveredRemoteJobs} queue=${queue} dependency_waiting=${dependencyWaiting} errors=${errors} stale_reclaimed=${staleReclaimed} stale_completed=${staleCompleted}${staleGcError ? ` stale_gc_error=${staleGcError}` : ""}`
       );
     }
     if (runOnce) break;

@@ -4,18 +4,19 @@ import { buildProgram } from "../../program.mjs";
 import { recordExchangeJsonArtifact } from "../../bridge/exchange.mjs";
 import { extractBoundedJsonObject } from "./english_verification.mjs";
 import { hasWordNetHeadSenseRelation, buildWordNetHeadRelationIndex } from "./english_wordnet.mjs";
+import { englishWordNetTargetId } from "./english_wordnet_bridges.mjs";
 
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_NAME = "translation_wordnet_sense_compounds";
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_FORMAT = "english-wordnet-sense-compounds-v1";
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_CONFIG_URL = new URL("./wordnet_sense_compound_refinery.pya", import.meta.url);
 export const ENGLISH_WORDNET_SENSE_TRANSLATION_CACHE_NAME = "translation_wordnet_sense_translation_cache";
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_LANGUAGES = Object.freeze([
-  "chinese", "french", "russian", "hindi"
+  "english", "chinese", "french", "russian", "hindi"
 ]);
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_MODEL = "qwen3.5:9b";
-export const ENGLISH_WORDNET_SENSE_COMPOUNDS_PROMPT_REVISION = "sense-translation-gloss-alternatives-v7";
-export const ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_PROMPT_REVISION = "sense-component-choice-v9";
-export const ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION = "sense-component-choice-v7";
+export const ENGLISH_WORDNET_SENSE_COMPOUNDS_PROMPT_REVISION = "sense-translation-gloss-alternatives-v11";
+export const ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_PROMPT_REVISION = "sense-component-choice-v13";
+export const ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION = "sense-component-choice-v10";
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_MAX_OUTPUT_TOKENS = 1024;
 export const ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_MAX_OUTPUT_TOKENS = 256;
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_PARALLELISM = 8;
@@ -43,6 +44,13 @@ function text(value) {
   return typeof value === "string" ? value.normalize("NFC").trim() : "";
 }
 
+function normalizeTranslationSurface(value, language) {
+  const surface = text(value);
+  return language === "chinese"
+    ? surface.replace(/\s+/gu, "")
+    : surface.replace(/\s+/gu, " ");
+}
+
 function normalized(value) {
   return text(value).toLowerCase().replace(/[_-]+/gu, " ").replace(/\s+/gu, " ").trim();
 }
@@ -52,7 +60,127 @@ function hanCharacters(value) {
 }
 
 export function componentGlossAlternatives(value) {
-  return [...new Set(text(value).split(/\s*\/\s*/u).map(normalized).filter(Boolean))];
+  return [...new Set(text(value).split(/\s*(?:\/|\|)\s*/u).map(normalized).filter(Boolean))];
+}
+
+export function componentGlossLookupAlternatives(value) {
+  return [...new Set(componentGlossAlternatives(value).flatMap((alternative) => {
+    const infinitive = /^to\s+([\p{L}]+(?:['’-][\p{L}]+)*)$/u.exec(alternative);
+    if (infinitive) return [infinitive[1]];
+    const phrase = alternative.replace(/^to\s+/u, "");
+    return [alternative, ...phrase.split(/\s+/u).filter(Boolean)];
+  }))];
+}
+
+export function wordNetLemmaComponentTranslations(sense) {
+  const lemmas = [...new Set([
+    ...(Array.isArray(sense?.lemmas) ? sense.lemmas : []),
+    text(sense?.lemma)
+  ].map((lemma) => text(lemma).replace(/_/gu, " ").toLowerCase()).filter(Boolean))];
+  return lemmas.flatMap((lemma) => {
+    const parts = lemma.split(/\s+/u).filter(Boolean);
+    if (parts.length < 2 || parts.length > MAX_COMPONENTS) return [];
+    return [{
+      language: "english",
+      surface: lemma,
+      composition: "compound",
+      compositionEvidence: "WordNet lists this multiword lemma for the exact target sense; its lexical words are exposed as English component candidates.",
+      components: parts.map((part) => ({ surface: part, gloss: part, role: "lexical" }))
+    }];
+  });
+}
+
+export function hasCompositionSourceTranslations(sense, translationRecord) {
+  if (translationRecord?.status === "complete") return true;
+  const usableRows = (translationRecord?.translations ?? []).some((translation) => (
+    ["compound", "uncertain"].includes(normalized(translation?.composition))
+    && Array.isArray(translation?.components)
+    && translation.components.length >= 2
+  ));
+  return usableRows || wordNetLemmaComponentTranslations(sense).length > 0;
+}
+
+export function mergeWordNetSenseTranslationFailures(existingRows = [], newRows = [], {
+  resolvedTranslations = []
+} = {}) {
+  const byId = new Map();
+  for (const row of existingRows) {
+    const id = text(row?.id ?? row?.senseId);
+    if (id) byId.set(id, { ...row, id });
+  }
+  for (const row of newRows) {
+    const senseId = text(row?.senseId);
+    const language = normalized(row?.language);
+    if (!senseId || !language) continue;
+    const id = text(row?.id) || `translation-failure-${hash([
+      senseId,
+      language,
+      text(row?.promptRevision),
+      text(row?.handleId),
+      String(row?.attempt ?? "")
+    ].join("\u0000")).slice(0, 24)}`;
+    const previous = byId.get(id);
+    const attempts = new Map();
+    for (const event of [...(previous?.attemptErrors ?? []), ...(row.attemptErrors ?? [])]) {
+      const eventId = text(event?.id) || hash(stableJson(event));
+      attempts.set(eventId, { ...event, id: eventId });
+    }
+    byId.set(id, {
+      ...previous,
+      ...row,
+      id,
+      attemptErrors: [...attempts.values()].sort((left, right) => (
+        Number(left.attempt ?? 0) - Number(right.attempt ?? 0) || text(left.id).localeCompare(text(right.id))
+      ))
+    });
+  }
+  const resolved = new Map();
+  for (const record of resolvedTranslations) {
+    for (const translation of record?.translations ?? []) {
+      const key = `${text(record.senseId)}\u0000${normalized(translation?.language)}`;
+      if (key !== "\u0000") resolved.set(key, text(record.id));
+    }
+  }
+  for (const [id, row] of byId) {
+    const resolutionKey = `${text(row.senseId)}\u0000${normalized(row.language)}`;
+    const resolutionId = resolved.get(resolutionKey);
+    if (resolved.has(resolutionKey)) byId.set(id, {
+      ...row,
+      status: "recovered",
+      ...(resolutionId ? { recoveredByTranslationId: resolutionId } : {})
+    });
+  }
+  return [...byId.values()].sort((left, right) => (
+    text(left.senseId).localeCompare(text(right.senseId))
+    || normalized(left.language).localeCompare(normalized(right.language))
+    || Number(left.attempt ?? 0) - Number(right.attempt ?? 0)
+    || text(left.id).localeCompare(text(right.id))
+  ));
+}
+
+export function mapComponentGlossChoices(componentGlosses, choicesByLookupGloss) {
+  const byGloss = new Map(choicesByLookupGloss instanceof Map ? choicesByLookupGloss : []);
+  for (const gloss of componentGlosses ?? []) {
+    const alternatives = componentGlossAlternatives(gloss);
+    const allChoices = [];
+    for (const alternative of alternatives) {
+      const choices = componentGlossLookupAlternatives(alternative)
+        .flatMap((lookup) => byGloss.get(normalized(lookup)) ?? []);
+      const unique = new Map(choices.map((choice) => [
+        `${text(choice?.linkedSense?.source)}\u0000${(choice?.pyashSequence ?? []).join("+")}`,
+        choice
+      ]));
+      const rows = [...unique.values()];
+      byGloss.set(normalized(alternative), rows);
+      allChoices.push(...rows);
+    }
+    const unique = new Map(allChoices.map((choice) => [
+      `${text(choice?.linkedSense?.source)}\u0000${(choice?.pyashSequence ?? []).join("+")}`,
+      choice
+    ]));
+    byGloss.set(normalized(gloss), [...unique.values()]);
+  }
+  return byGloss;
 }
 
 function definitionOnly(value, maximum = 320) {
@@ -142,6 +270,7 @@ export function buildWordNetSenseTranslationPrompt({
 } = {}) {
   const id = senseIdOf(sense);
   const lemma = senseLemma(sense);
+  const lemmas = [...new Set([lemma, ...(sense?.lemmas ?? []).map(normalized)].filter(Boolean))];
   const gloss = definitionOnly(sense?.definition ?? sense?.gloss);
   const requested = [...new Set((missingLanguages ?? []).map(normalized).filter(Boolean))];
   if (!id || !lemma || !gloss || !requested.length) {
@@ -150,20 +279,25 @@ export function buildWordNetSenseTranslationPrompt({
   return [
     "Translate this one WordNet sense into the requested comparison languages.",
     "Use its definition to preserve this sense; translate the ordinary lexical meaning, not an explanatory sentence.",
-    "For Chinese, every translation containing two or more Han characters must be decomposed; never label it simple, even when it is a lexicalized word.",
-    "For a two-character Chinese translation, list both characters as separate parts in written order, give each character its current contribution to this meaning, and make the two part surfaces concatenate exactly to the full translation. For longer Chinese translations, list two or three current lexical parts whose surfaces cover the full translation exactly, with no omitted characters.",
+    "When English is requested, use the listed sense lemmas to select the clearest expression for this sense. If the fitting lemma is a transparent compound, list its lexical parts even if other languages express the sense differently.",
+    "For Chinese, decompose every translation containing two or more Han characters into contiguous morpheme spans in written order. Their component surfaces must cover every character of the translation surface exactly once, with no omissions, repetitions, or reordering.",
+    "Use the smallest meaningful lexical morphemes. If multiple Han characters in a lexical span each contribute meaning to this sense, list those contributions as separate lexical components. Keep multiple characters in one component only when they form a lexicalized morpheme whose characters do not independently contribute to this sense.",
+    "Do not insert spaces inside the Chinese translation or component surfaces.",
+    "List known grammatical or derivational material as its own component. It can occur alongside a transparent Chinese compound and does not by itself make the decomposition uncertain or count as a lexical component.",
+    "Mark a Chinese translation compound only when at least two lexical components jointly express this sense. Do not call one lexical component plus grammatical material a compound.",
     "For other languages, mark compound when the current ordinary word meaning is transparently composed from its listed parts.",
     "For each part, label role lexical, grammatical, bound, or uncertain. A classifier, article, particle, inflection, derivational ending, or other grammatical material is not a lexical compound part.",
     "Do not split prefixes, suffixes, inflectional endings, or grammatical material in other languages. For Chinese, explain each character's current contribution in this word; historical meaning alone is not sufficient.",
     "When compound, list two or three source-language parts in natural written order. For each part, provide up to three distinct concise English lexical glosses that fit this exact sense, separated by / when needed. Include multiple glosses when they express distinct context-compatible contributions; do not add loose synonyms. Explain in compositionEvidence how their current meanings jointly express the sense.",
-    "Return exactly one translation row for each requested language, with no duplicate or extra language rows. For every language, compound requires two or three components, simple requires an empty components array, and uncertain may use an empty array or two or three components; never return exactly one component.",
-    "Chinese multi-character translations cannot be simple or have empty components. If their decomposition is unclear, use uncertain and still provide the character or part surfaces and your best current gloss for each. For other languages, do not mark a mere phrase, classifier construction, idiom, or opaque lexicalized form as compound; use simple with empty components, or uncertain when unsure.",
+    "Return exactly one translation row and one best translation surface for each requested language; do not combine alternatives with commas or slashes. The components array can contain at most three entries. A compound requires at least two lexical components; known grammatical or bound components do not count toward that minimum. Simple requires an empty components array. Uncertain may use an empty array or a best segmentation of two or three spans; never return exactly one component.",
+    "Chinese multi-character translations cannot be simple or have empty components. If a character's contribution is unclear, use uncertain and still provide a best segmentation covering the entire surface. Do not use uncertain only because a known grammatical or derivational component is present. For other languages, do not mark a mere phrase, classifier construction, idiom, or opaque lexicalized form as compound; use simple with empty components, or uncertain when unsure.",
     "Do not invent Pyash words or choose Pyash atoms. No Pyash atom inventory is provided.",
     "Return one JSON object only, with this shape:",
     '{"senseId":"...","translations":[{"language":"...","surface":"...","composition":"compound|simple|uncertain","compositionEvidence":"...","components":[{"surface":"...","gloss":"...","role":"lexical|grammatical|bound|uncertain"}]}]}',
     `SENSE ID: ${id}`,
     `PART OF SPEECH: ${text(sense?.pos)}`,
     `SENSE WORD: ${lemma}`,
+    `SENSE LEMMAS: ${JSON.stringify(lemmas)}`,
     `DEFINITION: ${gloss}`,
     `LANGUAGES: ${JSON.stringify(requested)}`,
     repairReason ? `REPAIR REQUIREMENT: ${text(repairReason).slice(0, 300)}` : ""
@@ -194,9 +328,11 @@ export function buildSenseCompoundWorklist({
     const lemmas = [...new Set((sense?.lemmas ?? []).map(normalized).filter(Boolean))];
     const definition = definitionOnly(sense?.gloss ?? sense?.definition);
     if (!source || !pos || lemmas.length === 0 || !definition || alreadyLinked.has(source)) return null;
-    const tagCounts = (sense?.candidates ?? []).map((candidate) => candidate.tagCount)
-      .filter(Number.isSafeInteger);
-    const tagCount = tagCounts.length ? Math.max(...tagCounts) : Number.isSafeInteger(sense?.tagCount) ? sense.tagCount : -1;
+    const tagCounts = [
+      ...(sense?.candidates ?? []).map((candidate) => candidate.tagCount),
+      sense?.tagCount
+    ].filter(Number.isSafeInteger);
+    const tagCount = tagCounts.length ? Math.max(...tagCounts) : -1;
     if (minimumTagCount > 0 && tagCount < minimumTagCount) return null;
     const candidateRanks = (sense?.candidates ?? []).map((candidate) => Number(candidate.rank ?? candidate.english30kRank))
       .filter((rank) => Number.isFinite(rank) && rank > 0);
@@ -419,11 +555,7 @@ export function buildKwonLinkedAtomicChoices({
   return result;
 }
 
-export function parseWordNetSenseTranslationResponse(value, {
-  senseId,
-  languages = ENGLISH_WORDNET_SENSE_COMPOUNDS_LANGUAGES,
-  maxResponseChars = MAX_RESPONSE_CHARS
-} = {}) {
+function parseWordNetSenseTranslationPayload(value, { senseId, maxResponseChars = MAX_RESPONSE_CHARS } = {}) {
   const raw = String(value ?? "");
   if (raw.length > maxResponseChars) throw invalid("sense translation response exceeds its character limit");
   const payload = extractBoundedJsonObject(raw);
@@ -451,12 +583,24 @@ export function parseWordNetSenseTranslationResponse(value, {
   if (!Array.isArray(translationPayload.translations) || translationPayload.translations.length === 0) {
     throw invalid("sense translation response has no translations");
   }
+  return { raw, wrappedResponse, translationPayload, expectedSenseId };
+}
+
+export function parseWordNetSenseTranslationResponse(value, {
+  senseId,
+  languages = ENGLISH_WORDNET_SENSE_COMPOUNDS_LANGUAGES,
+  maxResponseChars = MAX_RESPONSE_CHARS
+} = {}) {
+  const { raw, wrappedResponse, translationPayload, expectedSenseId } = parseWordNetSenseTranslationPayload(value, {
+    senseId,
+    maxResponseChars
+  });
   const allowed = new Set(languages.map(normalized));
   const seen = new Set();
   const translations = [];
   for (const [index, row] of translationPayload.translations.entries()) {
     const language = normalized(row?.language);
-    const surface = text(row?.surface);
+    const surface = normalizeTranslationSurface(row?.surface, language);
     const composition = normalized(row?.composition);
     if (!allowed.has(language)) throw invalid("sense translation response contains an unrequested language", { index, language });
     if (seen.has(language)) throw invalid("sense translation response contains a duplicate language", { index, language });
@@ -464,7 +608,7 @@ export function parseWordNetSenseTranslationResponse(value, {
     if (!COMPOSITION_KINDS.has(composition)) throw invalid("sense translation composition kind is invalid", { index, language, composition });
     if (!Array.isArray(row?.components)) throw invalid("sense translation components must be an array", { index, language });
     const components = row.components.map((component, componentIndex) => {
-      const partSurface = text(component?.surface);
+      const partSurface = normalizeTranslationSurface(component?.surface, language);
       const gloss = text(component?.gloss);
       const role = normalized(component?.role);
       if (!partSurface || partSurface.length > MAX_COMPONENT_CHARS || !gloss || gloss.length > MAX_COMPONENT_CHARS) {
@@ -486,10 +630,7 @@ export function parseWordNetSenseTranslationResponse(value, {
       }
       const joinedParts = components.map((component) => component.surface).join("").normalize("NFC");
       if (joinedParts !== surface.normalize("NFC")) {
-        throw invalid("Chinese decomposition parts must cover the complete translation in written order", { index, language, surface, joinedParts });
-      }
-      if (han.length === 2 && (components.length !== 2 || components.some((component) => hanCharacters(component.surface).length !== 1))) {
-        throw invalid("two-character Chinese translations require one component per character", { index, language, surface });
+        throw invalid("Chinese decomposition parts must cover every character of the surface in written order", { index, language, surface, joinedParts });
       }
     }
     if (components.length > MAX_COMPONENTS) {
@@ -503,17 +644,26 @@ export function parseWordNetSenseTranslationResponse(value, {
     }
     seen.add(language);
     const nonLexicalParts = components.some((component) => component.role !== "lexical");
+    const lexicalComponentCount = components.filter((component) => component.role === "lexical").length;
+    const hasUncertainPart = components.some((component) => component.role === "uncertain");
     const hasBoundMorphemeMarkers = composition === "compound"
       && components.some((component) => /^[\p{Pd}]|[\p{Pd}]$/u.test(component.surface));
     const evidenceMissing = composition === "compound" && compositionEvidence.length === 0;
-    const rejectComposition = composition === "compound" && (nonLexicalParts || hasBoundMorphemeMarkers || evidenceMissing);
+    const invalidCompoundParts = language === "chinese"
+      ? lexicalComponentCount < 2 || hasUncertainPart || hasBoundMorphemeMarkers
+      : nonLexicalParts || hasBoundMorphemeMarkers;
+    const rejectComposition = composition === "compound" && (invalidCompoundParts || evidenceMissing);
     translations.push({
       language,
       surface,
       composition: rejectComposition ? "uncertain" : composition,
       components: composition === "simple" ? [] : components,
       compositionEvidence: rejectComposition
-        ? hasBoundMorphemeMarkers
+        ? language === "chinese" && lexicalComponentCount < 2
+          ? "Chinese compound needs at least two lexical components"
+          : hasUncertainPart
+            ? "decomposition contains an uncertain component"
+            : hasBoundMorphemeMarkers
           ? "decomposition contains a bound-morpheme marker"
           : nonLexicalParts
             ? "decomposition includes a grammatical, bound, or unverified component"
@@ -527,6 +677,62 @@ export function parseWordNetSenseTranslationResponse(value, {
     senseId: expectedSenseId,
     translations: translations.sort((left, right) => requested.indexOf(left.language) - requested.indexOf(right.language)),
     missingLanguages: requested.filter((language) => !seen.has(language)),
+    raw: wrappedResponse || raw
+  };
+}
+
+export function parseWordNetSenseTranslationResponsePartial(value, {
+  senseId,
+  languages = ENGLISH_WORDNET_SENSE_COMPOUNDS_LANGUAGES,
+  maxResponseChars = MAX_RESPONSE_CHARS
+} = {}) {
+  const { raw, wrappedResponse, translationPayload, expectedSenseId } = parseWordNetSenseTranslationPayload(value, {
+    senseId,
+    maxResponseChars
+  });
+  const requested = [...new Set(languages.map(normalized))];
+  const allowed = new Set(requested);
+  const seen = new Set();
+  const translationsByLanguage = new Map();
+  const failuresByLanguage = new Map();
+  for (const [index, row] of translationPayload.translations.entries()) {
+    const language = normalized(row?.language);
+    if (!allowed.has(language)) continue;
+    if (seen.has(language)) {
+      translationsByLanguage.delete(language);
+      failuresByLanguage.set(language, {
+        language,
+        error: "sense translation response contains a duplicate language",
+        details: { index, language }
+      });
+      continue;
+    }
+    seen.add(language);
+    try {
+      const parsed = parseWordNetSenseTranslationResponse(JSON.stringify({
+        senseId: expectedSenseId,
+        translations: [row]
+      }), { senseId: expectedSenseId, languages: [language], maxResponseChars });
+      translationsByLanguage.set(language, parsed.translations[0]);
+    } catch (error) {
+      failuresByLanguage.set(language, {
+        language,
+        error: text(error?.message ?? error) || "sense translation row failed validation",
+        ...(error?.details && typeof error.details === "object" ? { details: error.details } : {})
+      });
+    }
+  }
+  for (const language of requested) {
+    if (!translationsByLanguage.has(language) && !failuresByLanguage.has(language)) {
+      failuresByLanguage.set(language, { language, error: "sense translation response omitted the requested language" });
+    }
+  }
+  return {
+    valid: true,
+    senseId: expectedSenseId,
+    translations: requested.map((language) => translationsByLanguage.get(language)).filter(Boolean),
+    failures: requested.map((language) => failuresByLanguage.get(language)).filter(Boolean),
+    missingLanguages: requested.filter((language) => !translationsByLanguage.has(language)),
     raw: wrappedResponse || raw
   };
 }
@@ -656,7 +862,12 @@ function choiceMeaning(choice) {
   return definitionOnly(choice?.linkedSense?.definition ?? choice?.linkedSense?.gloss, 180);
 }
 
-function sourceDecompositionChoices(translations, kwonCandidatesByGloss, maximumChoices = MAX_COMPONENT_CHOICES) {
+function sourceDecompositionChoices(
+  translations,
+  kwonCandidatesByGloss,
+  maximumChoices = MAX_COMPONENT_CHOICES,
+  minimumAvailableParts = 1
+) {
   if (!Array.isArray(translations)) return [];
   const decompositions = [];
   for (const translation of translations) {
@@ -682,14 +893,16 @@ function sourceDecompositionChoices(translations, kwonCandidatesByGloss, maximum
         glossOptions
       };
     });
-    if (parts.some((part) => !part.surface || part.role !== "lexical"
-      || !part.glossOptions.some((option) => option.choices.length > 0))) continue;
+    const availableParts = parts.filter((part) => part.surface
+      && part.role === "lexical"
+      && part.glossOptions.some((option) => option.choices.length > 0));
+    if (availableParts.length < minimumAvailableParts) continue;
     decompositions.push({
       language: normalized(translation.language),
       surface: text(translation.surface),
       compositionEvidence: text(translation.compositionEvidence),
       translation,
-      parts
+      parts: availableParts
     });
   }
   return decompositions;
@@ -760,53 +973,73 @@ export function buildSenseCompoundChoiceInput({
   sense,
   translations = [],
   kwonCandidatesByGloss = new Map(),
+  reservedTargetIds = [],
   maximumChoices = MAX_COMPONENT_CHOICES
 } = {}) {
   if (!normalizedSense(sense)) throw invalid("component-choice prompt requires one target sense");
   const targetHead = normalizeTargetHead(sense?.targetHead);
-  const decompositions = sourceDecompositionChoices(translations, kwonCandidatesByGloss, maximumChoices);
+  const targetPos = text(sense?.pos);
+  const reservedTargets = new Set((reservedTargetIds instanceof Set
+    ? [...reservedTargetIds]
+    : Array.isArray(reservedTargetIds) ? reservedTargetIds : [])
+    .map(text)
+    .filter(Boolean));
+  const decompositions = sourceDecompositionChoices(
+    translations,
+    kwonCandidatesByGloss,
+    maximumChoices,
+    1
+  );
   if (decompositions.length === 0) return null;
   const sourceOptions = availableChoiceValues(decompositions).filter((option) => (
-    !targetHead || option.pyashSequence.join("+") !== targetHead.pyashSequence[0]
+    !targetHead
+    || (option.pyashSequence.join("+") !== targetHead.pyashSequence[0]
+      && !reservedTargets.has(englishWordNetTargetId(
+        "compound",
+        [...option.pyashSequence, ...targetHead.pyashSequence],
+        targetPos
+      )))
   ));
-  if (sourceOptions.length < (targetHead ? 1 : 2)) return null;
-  const groupsByKey = new Map();
+  const distinctAvailableAtoms = new Set(sourceOptions.map((option) => option.pyashSequence.join("+")));
+  if (distinctAvailableAtoms.size < (targetHead ? 1 : 2)) return null;
+  const optionsByGloss = new Map();
   for (const option of sourceOptions) {
-    const key = `${option.language}\u0000${option.translationSurface}\u0000${option.sourceIndex}`;
-    const group = groupsByKey.get(key) ?? { source: option.sourcePart, glosses: [], atoms: [], atomMeanings: {} };
-    if (!group.glosses.includes(option.sourceGloss)) group.glosses.push(option.sourceGloss);
-    if (!group.atoms.includes(option.word)) group.atoms.push(option.word);
-    if (!group.atomMeanings[option.word] && option.meaning) group.atomMeanings[option.word] = option.meaning;
-    groupsByKey.set(key, group);
+    const gloss = option.sourceGloss;
+    const glossGroup = optionsByGloss.get(gloss) ?? {
+      gloss,
+      atoms: [],
+      atomMeanings: {}
+    };
+    if (!glossGroup.atoms.includes(option.word)) glossGroup.atoms.push(option.word);
+    if (!glossGroup.atomMeanings[option.word] && option.meaning) glossGroup.atomMeanings[option.word] = option.meaning;
+    optionsByGloss.set(gloss, glossGroup);
   }
-  const componentOptions = [...groupsByKey.values()].map(({ source, glosses, atoms, atomMeanings }) => ({
-    source,
-    gloss: glosses.join(" / "),
-    atoms,
-    atomMeanings
-  }));
+  const atomOptions = [...optionsByGloss.values()];
   const componentCountRule = targetHead
-    ? "The final compound has two or three atoms total. Choose one or two modifier atoms from distinct source parts; the existing target head is appended automatically. Return modifier atoms only."
-    : "A compound must contain at least two different atoms and may contain at most three. Choose one atom from each of two or three different source parts in the same translation. Two atoms from the same source part do not satisfy the minimum. One atom alone is not a compound.";
-  const sections = [
+    ? "The final compound has two or three atoms total, including the existing target head. Choose one or two distinct modifier atoms. The pipeline appends the target head."
+    : "Choose two or three distinct atoms in Pyash head-final order. A single atom is not a compound.";
+  const minimumAtoms = targetHead ? 1 : 2;
+  const renderPrompt = (groups, truncated) => [
     "Form one Pyash compound for the target meaning.",
     "Pyash has a limited inventory of existing atoms. Use only the listed atom words; do not invent or alter words.",
-    "The JSON groups source parts, their English glosses, available Pyash atom words, and each atom's linked meaning. Choose atoms whose meanings jointly express the target. These are component choices, not prebuilt compounds.",
+    "Each gloss lists available atoms and their linked meanings. Choose any listed atoms whose meanings jointly express the target. Atoms may be combined across gloss groups.",
     componentCountRule,
     targetHead
-      ? `This target already has an existing lexical head ${targetHead.word} (${targetHead.pyashSequence[0]}). Keep that exact word as the final atom. A genuinely new subtype is formed by placing its modifier(s) before this head. Do not replace the head with a source-language component.`
-      : "Pyash compounds are head-final: the last atom is the head and names the kind of thing or action; earlier atom(s) modify that head. Identify the semantic head from the TARGET meaning, then output the selected atoms in modifier-to-head order. Do not copy the source language's written order automatically.",
-    "Pyash compounds are head-final: the final atom is the head and names the kind of thing or action; earlier atom(s) modify it. Do not copy source-language order automatically.",
+      ? `This target already has an existing lexical head ${targetHead.word} (${targetHead.pyashSequence[0]}). Keep that exact word as the final atom; place modifiers before it.`
+      : "Pyash compounds are head-final: the final atom is the semantic head; earlier atoms modify it.",
+    ...(targetHead ? ["Modifiers whose modifier + head sequence is already assigned for this part of speech have been removed from the available options."] : []),
     "Ordering example (illustrative only, not candidate atoms): bird snake means a type of snake, so the Pyash order is [bird, snake]. Snake bird means a type of bird, so the Pyash order is [snake, bird].",
     targetHead
-      ? "If no source modifier improves the target's meaning, return uncertain with an empty atoms array."
-      : "If fewer than two fit, return uncertain with an empty atoms array.",
+      ? "If no available modifier improves the target's meaning, return uncertain with an empty atoms array."
+      : "If fewer than two available atoms fit, return uncertain with an empty atoms array.",
     ...(targetHead ? [`EXISTING TARGET HEAD: ${JSON.stringify({ word: targetHead.word, pyac: targetHead.pyashSequence[0] })}`] : []),
     `TARGET: ${senseLemma(sense)} — ${definitionOnly(sense?.definition ?? sense?.gloss)}`,
-    "COMPONENT OPTIONS:",
-    JSON.stringify(componentOptions, null, 2),
+    "Select atoms by their linked meanings and the target sense.",
+    "AVAILABLE ATOM OPTIONS:",
+    JSON.stringify(groups, null, 2),
+    ...(truncated ? ["Lower-priority atom options were omitted to stay within the safe prompt size."] : []),
     targetHead
-      ? 'Example: the existing head is better and part one offers health; return {"verdict":"compound","atoms":["health"]}; the pipeline appends better.'
+      ? "Return only modifier atoms selected from AVAILABLE ATOM OPTIONS; the pipeline appends the existing head."
       : 'Example: part one offers atom1 and part two offers atom2; return {"verdict":"compound","atoms":["atom1","atom2"]}',
     targetHead
       ? 'If no useful modifier fits: {"verdict":"uncertain","atoms":[]}'
@@ -814,17 +1047,43 @@ export function buildSenseCompoundChoiceInput({
     "Return one compound, not a list of alternatives.",
     "Return only this JSON shape:",
     targetHead
-      ? '{"verdict":"compound|uncertain","atoms":["existing modifier atom word"]}'
-      : '{"verdict":"compound|uncertain","atoms":["existing atom word"]}'
-  ];
-  const prompt = sections.join("\n");
-  if (prompt.length > MAX_SENSE_COMPOSITION_PROMPT_CHARS) {
-    throw invalid("component-choice prompt exceeds its safe character budget", {
-      characters: prompt.length,
-      sourceOptionCount: sourceOptions.length
-    });
+      ? '{"verdict":"compound|uncertain","atoms":["modifier atom word"]}'
+      : '{"verdict":"compound|uncertain","atoms":["atom word"]}'
+  ].join("\n");
+  const retainedGroups = atomOptions.map((group) => ({
+    ...group,
+    atoms: [...group.atoms],
+    atomMeanings: { ...group.atomMeanings }
+  }));
+  const distinctWords = (groups) => new Set(groups.flatMap((group) => group.atoms));
+  let prompt = renderPrompt(retainedGroups, false);
+  while (prompt.length > MAX_SENSE_COMPOSITION_PROMPT_CHARS) {
+    const removableGroup = [...retainedGroups].reverse().find((group) => group.atoms.length > 1);
+    if (removableGroup) {
+      const removedWord = removableGroup.atoms.pop();
+      delete removableGroup.atomMeanings[removedWord];
+    } else if (retainedGroups.length > 1) {
+      const lastGroup = retainedGroups.at(-1);
+      const remainingWords = new Set(retainedGroups.slice(0, -1).flatMap((group) => group.atoms));
+      if (remainingWords.size < minimumAtoms) return null;
+      retainedGroups.pop();
+      lastGroup.atoms = [];
+    } else {
+      return null;
+    }
+    if (distinctWords(retainedGroups).size < minimumAtoms) return null;
+    prompt = renderPrompt(retainedGroups, true);
   }
-  const input = { prompt, sourceOptions, targetPos: text(sense?.pos), ...(targetHead ? { targetHead } : {}) };
+  const retainedGlossWords = new Set(retainedGroups.flatMap((group) => group.atoms.map((word) => `${group.gloss}\u0000${word}`)));
+  const retainedSourceOptions = sourceOptions.filter((option) => retainedGlossWords.has(`${option.sourceGloss}\u0000${option.word}`));
+  const input = {
+    prompt,
+    sourceOptions: retainedSourceOptions,
+    targetPos,
+    promptTruncated: retainedSourceOptions.length < sourceOptions.length,
+    omittedOptionCount: Math.max(0, sourceOptions.length - retainedSourceOptions.length),
+    ...(targetHead ? { targetHead } : {})
+  };
   input.responseFormat = buildSenseCompoundChoiceResponseFormat(input);
   return input;
 }
@@ -878,39 +1137,35 @@ export function parseSenseCompoundChoiceResponse(value, { input } = {}) {
   if (new Set(atoms.map(normalized)).size !== atoms.length) {
     throw invalid("component-choice response repeats an atom word");
   }
-  const languages = [...new Set(input.sourceOptions.map((option) => normalized(option.language)).filter(Boolean))];
   const compareOptions = (left, right) => (
     Number(normalized(right.choice?.linkedSense?.pos) === normalized(input.targetPos))
     - Number(normalized(left.choice?.linkedSense?.pos) === normalized(input.targetPos))
     || componentMappingScore(right.choice) - componentMappingScore(left.choice)
-    || left.sourceIndex - right.sourceIndex
     || left.sourceGloss.localeCompare(right.sourceGloss)
+    || left.language.localeCompare(right.language)
+    || left.translationSurface.localeCompare(right.translationSurface)
+    || left.sourceIndex - right.sourceIndex
   );
-  let selectedComponents = null;
-  for (const language of languages) {
-    const optionsByWord = atoms.map((word) => input.sourceOptions
-      .filter((option) => normalized(option.language) === language && normalized(option.word) === normalized(word))
-      .sort(compareOptions));
-    if (optionsByWord.some((options) => options.length === 0)) continue;
-    const choose = (index, current, usedSourceIndexes, usedSequences) => {
-      if (index === optionsByWord.length) return current;
-      for (const option of optionsByWord[index]) {
-        const sequence = option.pyashSequence.join("+");
-        if (usedSourceIndexes.has(option.sourceIndex) || usedSequences.has(sequence)) continue;
-        const selected = choose(index + 1, [...current, option],
-          new Set([...usedSourceIndexes, option.sourceIndex]), new Set([...usedSequences, sequence]));
-        if (selected) return selected;
-      }
-      return null;
-    };
-    selectedComponents = choose(0, [], new Set(), new Set());
-    if (selectedComponents) break;
+  const optionsByWord = atoms.map((word) => input.sourceOptions
+    .filter((option) => normalized(option.word) === normalized(word))
+    .sort(compareOptions));
+  if (optionsByWord.some((options) => options.length === 0)) {
+    const unavailable = atoms.filter((word, index) => optionsByWord[index].length === 0);
+    throw invalid("component-choice response selected an atom that is not an available atom", { unavailable });
   }
+  const choose = (index, current, usedSequences) => {
+    if (index === optionsByWord.length) return current;
+    for (const option of optionsByWord[index]) {
+      const sequence = option.pyashSequence.join("+");
+      if (usedSequences.has(sequence)) continue;
+      const selected = choose(index + 1, [...current, option], new Set([...usedSequences, sequence]));
+      if (selected) return selected;
+    }
+    return null;
+  };
+  let selectedComponents = choose(0, [], new Set());
   if (!selectedComponents) {
-    const unavailable = atoms.filter((word) => !input.sourceOptions.some((option) => normalized(option.word) === normalized(word)));
-    throw invalid(unavailable.length
-      ? "component-choice response selected a word that is not an available atom"
-      : "component-choice response does not map to distinct parts of one source decomposition", { unavailable });
+    throw invalid("component-choice response selected words that resolve to the same Pyac atom");
   }
   selectedComponents = selectedComponents.map((option) => ({
     ...option,
@@ -1157,24 +1412,27 @@ export function buildSenseDerivedCompoundCandidateFromChoice({
       ? "component-choice candidate requires one or two selected modifiers"
       : "component-choice candidate requires two or three selected atoms");
   }
-  const language = normalized(selectedComponents[0]?.language);
-  if (!language || selectedComponents.some((component) => normalized(component?.language) !== language)) {
-    throw invalid("component-choice candidate must use one source language");
-  }
-  const translation = translations.find((row) => normalized(row?.language) === language
-    && normalized(row?.composition) === "compound");
-  if (!translation) throw invalid("component-choice candidate has no matching source decomposition", { language });
-  const sourceComponents = translation.components ?? [];
-  const seenIndexes = new Set();
   const selected = selectedComponents.map((component) => {
+    const language = normalized(component?.language);
+    const translation = translations.find((row) => normalized(row?.language) === language
+      && text(row?.surface) === text(component?.translationSurface)
+      && normalized(row?.composition) === "compound");
+    if (!translation) {
+      throw invalid("component-choice candidate has no matching source evidence", {
+        language,
+        translationSurface: component?.translationSurface
+      });
+    }
+    const sourceComponents = translation.components ?? [];
     const sourceIndex = Number(component?.sourceIndex);
     const source = sourceComponents[sourceIndex];
     const choice = component?.choice;
     const linked = candidateSense(choice);
     const sequence = Array.isArray(choice?.pyashSequence) ? choice.pyashSequence.map(text).filter(Boolean) : [];
-    if (!Number.isSafeInteger(sourceIndex) || !source || seenIndexes.has(sourceIndex)
+    if (!Number.isSafeInteger(sourceIndex) || !source
       || text(source?.surface) !== text(component?.sourcePart)
       || !componentGlossAlternatives(source?.gloss).includes(normalized(component?.sourceGloss))
+      || normalized(source?.role) !== "lexical"
       || normalized(choice?.word) !== normalized(component?.word)
       || !linked || sequence.length !== 1 || !Number.isInteger(choice.componentLayers?.[0])) {
       throw invalid("component-choice candidate contains an ungrounded atom selection", {
@@ -1182,8 +1440,9 @@ export function buildSenseDerivedCompoundCandidateFromChoice({
         word: component?.word
       });
     }
-    seenIndexes.add(sourceIndex);
     return {
+      language,
+      translation,
       sourceIndex,
       sourcePart: text(component.sourcePart),
       sourceGloss: normalized(component.sourceGloss),
@@ -1231,6 +1490,41 @@ export function buildSenseDerivedCompoundCandidateFromChoice({
       componentLayer: targetHead.componentLayer
     }]
     : selected;
+  const sourceEvidenceByLanguage = new Map();
+  selected.forEach((component, candidateIndex) => {
+    const sourceEvidence = sourceEvidenceByLanguage.get(component.language) ?? {
+      translation: component.translation,
+      selected: []
+    };
+    if (text(sourceEvidence.translation.surface) !== text(component.translation.surface)) {
+      throw invalid("selected source evidence has multiple translations for one language", { language: component.language });
+    }
+    sourceEvidence.selected.push({ ...component, candidateIndex });
+    sourceEvidenceByLanguage.set(component.language, sourceEvidence);
+  });
+  const sourceSurfaces = {};
+  const sourceMorphemesByLanguage = {};
+  const sourceComponentGlossesByLanguage = {};
+  const sourceComponentRolesByLanguage = {};
+  const sourceCompositionEvidenceByLanguage = {};
+  const sourceTranslationMorphemesByLanguage = {};
+  const sourceTranslationGlossesByLanguage = {};
+  const sourceComponentIndexesByLanguage = {};
+  const sourceCandidateComponentIndexesByLanguage = {};
+  for (const [language, sourceEvidence] of sourceEvidenceByLanguage) {
+    const translation = sourceEvidence.translation;
+    const sourceComponents = translation.components ?? [];
+    const selectedForLanguage = sourceEvidence.selected;
+    sourceSurfaces[language] = text(translation.surface);
+    sourceMorphemesByLanguage[language] = selectedForLanguage.map((component) => component.sourcePart);
+    sourceComponentGlossesByLanguage[language] = selectedForLanguage.map((component) => component.sourceGloss);
+    sourceComponentRolesByLanguage[language] = sourceComponents.map((component) => text(component.role));
+    sourceCompositionEvidenceByLanguage[language] = text(translation.compositionEvidence);
+    sourceTranslationMorphemesByLanguage[language] = sourceComponents.map((component) => text(component.surface));
+    sourceTranslationGlossesByLanguage[language] = sourceComponents.map((component) => text(component.gloss));
+    sourceComponentIndexesByLanguage[language] = selectedForLanguage.map((component) => component.sourceIndex);
+    sourceCandidateComponentIndexesByLanguage[language] = selectedForLanguage.map((component) => component.candidateIndex);
+  }
   const pyashSequence = allSelected.map((component) => component.sequence);
   const componentGlosses = allSelected.map((component) => component.word);
   const relationIndex = buildWordNetHeadRelationIndex(relations);
@@ -1267,15 +1561,16 @@ export function buildSenseDerivedCompoundCandidateFromChoice({
     maxLayer: Math.max(...componentLayers),
     head: componentGlosses.at(-1),
     modifiers: componentGlosses.slice(0, -1),
-    sourceSurfaces: { [language]: text(translation.surface) },
-    sourceMorphemesByLanguage: { [language]: selected.map((component) => component.sourcePart) },
-    sourceComponentGlossesByLanguage: { [language]: selected.map((component) => component.sourceGloss) },
-    sourceComponentRolesByLanguage: { [language]: selected.map(() => "lexical") },
-    sourceCompositionEvidenceByLanguage: { [language]: text(translation.compositionEvidence) },
-    sourceTranslationMorphemesByLanguage: { [language]: sourceComponents.map((component) => text(component.surface)) },
-    sourceTranslationGlossesByLanguage: { [language]: sourceComponents.map((component) => text(component.gloss)) },
-    sourceComponentIndexesByLanguage: { [language]: selected.map((component) => component.sourceIndex) },
-    sourceLanguages: [language],
+    sourceSurfaces,
+    sourceMorphemesByLanguage,
+    sourceComponentGlossesByLanguage,
+    sourceComponentRolesByLanguage,
+    sourceCompositionEvidenceByLanguage,
+    sourceTranslationMorphemesByLanguage,
+    sourceTranslationGlossesByLanguage,
+    sourceComponentIndexesByLanguage,
+    sourceCandidateComponentIndexesByLanguage,
+    sourceLanguages: [...sourceEvidenceByLanguage.keys()].sort(),
     ...(targetHead ? {
       targetHeadEvidence: {
         word: targetHead.word,
@@ -1307,7 +1602,7 @@ export function buildSenseDerivedCompoundCandidateFromChoice({
     verificationComponentMeanings: allSelected.map((component) => component.componentMeaning),
     verificationHeadSenseId: headSense.source,
     verificationRationale: rationaleText,
-    evidence: `target ${targetId}; ${language} source decomposition; existing atoms ${componentGlosses.join(" + ")}${targetHead ? `; fixed lexical head ${targetHead.word}` : ""}`
+    evidence: `target ${targetId}; selected linked atoms ${componentGlosses.join(" + ")}; source gloss evidence retained by language${targetHead ? `; fixed lexical head ${targetHead.word}` : ""}`
   };
 }
 
@@ -1363,7 +1658,8 @@ export async function translateWordNetSenseWave({
   maxAttempts = 2,
   submit,
   awaitHandle,
-  onCache
+  onCache,
+  onFailure
 } = {}) {
   if (!Array.isArray(senses) || typeof submit !== "function" || typeof awaitHandle !== "function") {
     throw invalid("sense translation wave requires senses and Housekeeper submit/await functions");
@@ -1372,6 +1668,7 @@ export async function translateWordNetSenseWave({
   const width = Math.max(1, Math.trunc(Number(parallelism) || 1));
   const attemptsLimit = Math.max(1, Math.trunc(Number(maxAttempts) || 1));
   const failures = [];
+  const fatalErrors = [];
   let submittedCount = 0;
   let cacheWrite = Promise.resolve();
   const cacheSnapshot = () => [...cache.values()].sort((left, right) => left.senseId.localeCompare(right.senseId));
@@ -1380,125 +1677,207 @@ export async function translateWordNetSenseWave({
     cacheWrite = cacheWrite.then(() => onCache(cacheSnapshot(), record));
     return cacheWrite;
   };
+  const describeError = (error) => {
+    const message = text(error?.message ?? error) || "sense translation failed";
+    const details = error?.details && typeof error.details === "object" ? error.details : {};
+    const concise = Object.fromEntries(Object.entries(details).filter(([key]) => key !== "response").slice(0, 4));
+    const handleId = text(details.handleId);
+    const providerStatus = text(details.response?.ob?.text ?? details.response?.status ?? details.status);
+    const suffix = [
+      handleId ? "handle=" + handleId : "",
+      providerStatus ? "provider-status=" + providerStatus : "",
+      Object.keys(concise).length ? JSON.stringify(concise).slice(0, 300) : ""
+    ].filter(Boolean).join(" ");
+    return (message + (suffix ? " " + suffix : "")).slice(0, 800);
+  };
+  const failureId = (senseId, language) => "translation-failure-" + hash(stableJson([
+    senseId, normalized(language), promptRevision
+  ])).slice(0, 24);
+  const recordAttemptFailure = async (state, language, error, handleId, response = "") => {
+    const senseId = senseIdOf(state.sense);
+    const detail = describeError(error);
+    const event = {
+      id: "translation-attempt-" + hash(stableJson([
+        senseId, language, promptRevision, state.attempt, handleId, detail
+      ])).slice(0, 24),
+      attempt: state.attempt,
+      handleId,
+      error: detail
+    };
+    state.attemptErrorsByLanguage[language] = [
+      ...(state.attemptErrorsByLanguage[language] ?? []),
+      event
+    ];
+    state.lastFailureByLanguage.set(language, event);
+    if (response) state.lastResponseByLanguage.set(language, response.slice(0, MAX_FAILURE_RESPONSE_CHARS));
+    if (typeof onFailure !== "function") return;
+    try {
+      await onFailure({
+        id: failureId(senseId, language),
+        senseId,
+        language,
+        promptRevision,
+        status: "failed",
+        attempts: state.attempt,
+        handleId,
+        error: detail,
+        attemptErrors: state.attemptErrorsByLanguage[language],
+        ...(state.lastResponseByLanguage.has(language)
+          ? { response: state.lastResponseByLanguage.get(language) }
+          : {})
+      });
+    } catch (writeError) {
+      fatalErrors.push(writeError);
+    }
+  };
+  const makeRecord = (state) => {
+    const senseId = senseIdOf(state.sense);
+    const translations = languages.map((language) => state.translationsByLanguage.get(normalized(language))).filter(Boolean);
+    if (!translations.length) return null;
+    const attemptErrorsByLanguage = {
+      ...state.priorAttemptErrorsByLanguage,
+      ...Object.fromEntries(Object.entries(state.attemptErrorsByLanguage).filter(([, rows]) => rows.length > 0))
+    };
+    return {
+      id: senseTranslationKey({ senseId, wordNetHash, promptRevision, languages }),
+      senseId,
+      wordNetHash,
+      promptRevision,
+      languages: [...languages],
+      translationPromptRevisionByLanguage: state.languagePromptRevisionByLanguage,
+      status: languages.every((language) => state.translationsByLanguage.has(normalized(language))) ? "complete" : "partial",
+      translations,
+      attempts: state.attempt,
+      ...(Object.keys(attemptErrorsByLanguage).length ? { attemptErrorsByLanguage } : {})
+    };
+  };
+  const saveRecord = async (state) => {
+    const record = makeRecord(state);
+    if (!record) return;
+    cache.set(record.senseId, record);
+    try {
+      await persistRecord(record);
+    } catch (error) {
+      fatalErrors.push(error);
+    }
+  };
+  const summarizeRemainingError = (state, language) => {
+    const row = state.lastFailureByLanguage.get(normalized(language));
+    return row?.error || "translation row missing";
+  };
+
   for (let offset = 0; offset < senses.length; offset += width) {
     const wave = senses.slice(offset, offset + width).map((sense, index) => ({
       sense,
-      handleId: `wordnet-sense-${hash(`${senseIdOf(sense)}\u0000${offset + index}`).slice(0, 20)}`,
-      attempt: 0,
-      queued: false,
-      repairReason: "",
-      lastResponse: ""
+      handleId: "wordnet-sense-" + hash(senseIdOf(sense) + "\u0000" + (offset + index)).slice(0, 20)
     }));
     await Promise.all(wave.map(async (state) => {
-      const existing = cache.get(senseIdOf(state.sense));
+      const senseId = senseIdOf(state.sense);
+      const existing = cache.get(senseId);
       const existingTranslations = Array.isArray(existing?.translations) ? existing.translations : [];
-      const missingLanguages = languages.filter((language) => !existingTranslations.some((row) => normalized(row.language) === normalized(language)));
-      if (missingLanguages.length === 0) return;
-      state.missingLanguages = missingLanguages;
-      state.translations = existingTranslations;
-      state.attempt = 1;
-      try {
-        const response = await submit({
-          sense: state.sense,
-          handleId: state.handleId,
-          attempt: state.attempt,
-          languages: missingLanguages,
-          repairReason: ""
-        });
-        if (text(response?.status ?? response?.ob?.text).toLowerCase() !== "queued") {
-          throw invalid("Housekeeper did not queue sense translation", { handleId: state.handleId });
+      state.translationsByLanguage = new Map(existingTranslations.map((row) => [normalized(row.language), row]));
+      state.languagePromptRevisionByLanguage = { ...(existing?.translationPromptRevisionByLanguage ?? {}) };
+      for (const translation of existingTranslations) {
+        const language = normalized(translation.language);
+        if (language && !state.languagePromptRevisionByLanguage[language]) {
+          state.languagePromptRevisionByLanguage[language] = text(existing?.promptRevision) || promptRevision;
         }
-        state.queued = true;
-        submittedCount += 1;
-      } catch (error) {
-        state.error = text(error?.message ?? error).slice(0, 500) || "Housekeeper submit failed";
       }
-    }));
-    const fatalErrors = [];
-    await Promise.all(wave.map(async (state) => {
-      if (!state.queued) {
-        if (state.error) failures.push({ senseId: senseIdOf(state.sense), error: state.error, attempts: state.attempt });
+      state.priorAttemptErrorsByLanguage = { ...(existing?.attemptErrorsByLanguage ?? {}) };
+      state.attemptErrorsByLanguage = {};
+      state.lastFailureByLanguage = new Map();
+      state.lastResponseByLanguage = new Map();
+      state.attempt = 0;
+      state.missingLanguages = languages.filter((language) => !state.translationsByLanguage.has(normalized(language)));
+      if (!state.missingLanguages.length) {
+        if (existing && (existing.promptRevision !== promptRevision
+          || stableJson(existing.languages ?? []) !== stableJson(languages))) await saveRecord(state);
         return;
       }
-      let lastError = "";
-      while (state.attempt <= attemptsLimit) {
-        let record;
+      let repairReason = "";
+      while (state.missingLanguages.length > 0 && state.attempt < attemptsLimit) {
+        state.attempt += 1;
+        const requestedLanguages = [...state.missingLanguages];
+        const attemptHandle = state.handleId + "-translate-" + state.attempt;
+        let raw = "";
         try {
-          const value = await awaitHandle(`${state.handleId}-translate-${state.attempt}`);
-          const raw = typeof value === "object" && value !== null && typeof value.text === "string" ? value.text : String(value ?? "");
-          state.lastResponse = raw.slice(0, MAX_FAILURE_RESPONSE_CHARS);
-          const parsed = parseWordNetSenseTranslationResponse(raw, {
-            senseId: senseIdOf(state.sense),
-            languages: state.missingLanguages
+          const queued = await submit({
+            sense: state.sense,
+            handleId: state.handleId,
+            attempt: state.attempt,
+            languages: requestedLanguages,
+            repairReason
           });
-          const translationsByLanguage = new Map(state.translations.map((row) => [normalized(row.language), row]));
-          for (const row of parsed.translations) translationsByLanguage.set(row.language, row);
-          state.translations = languages
-            .map((language) => translationsByLanguage.get(normalized(language)))
-            .filter(Boolean);
-          const id = senseTranslationKey({ senseId: senseIdOf(state.sense), wordNetHash, promptRevision, languages });
-          record = {
-            id,
-            senseId: senseIdOf(state.sense),
-            wordNetHash,
-            promptRevision,
-            languages: [...languages],
-            status: languages.every((language) => state.translations.some((row) => normalized(row.language) === normalized(language))) ? "complete" : "partial",
-            translations: state.translations,
-            attempts: state.attempt
-          };
-        } catch (error) {
-          const details = error?.details && typeof error.details === "object"
-            ? ` ${JSON.stringify(error.details).slice(0, 300)}`
-            : "";
-          lastError = `${text(error?.message ?? error)}${details}`.slice(0, 800)
-            || "sense translation response failed validation";
-          if (state.attempt >= attemptsLimit) break;
-          state.attempt += 1;
-          try {
-            const response = await submit({
-              sense: state.sense,
-              handleId: state.handleId,
-              attempt: state.attempt,
-              languages: state.missingLanguages,
-              repairReason: lastError
-            });
-            if (text(response?.status ?? response?.ob?.text).toLowerCase() !== "queued") {
-              throw invalid("Housekeeper did not queue repaired sense translation", { handleId: state.handleId });
-            }
-            submittedCount += 1;
-          } catch (submitError) {
-            lastError = text(submitError?.message ?? submitError).slice(0, 500) || lastError;
-            break;
+          if (text(queued?.status ?? queued?.ob?.text).toLowerCase() !== "queued") {
+            throw invalid("Housekeeper did not queue sense translation", { handleId: attemptHandle });
           }
+          submittedCount += 1;
+          const value = await awaitHandle(attemptHandle);
+          raw = typeof value === "object" && value !== null && typeof value.text === "string"
+            ? value.text
+            : String(value ?? "");
+        } catch (error) {
+          for (const language of requestedLanguages) await recordAttemptFailure(state, language, error, attemptHandle, raw);
+          repairReason = requestedLanguages.map((language) => language + ": " + summarizeRemainingError(state, language)).join("; ").slice(0, 1000);
+          await saveRecord(state);
           continue;
         }
-        cache.set(record.senseId, record);
+        const boundedResponse = raw.slice(0, MAX_FAILURE_RESPONSE_CHARS);
+        let parsed;
         try {
-          await persistRecord(record);
+          parsed = parseWordNetSenseTranslationResponsePartial(raw, { senseId, languages: requestedLanguages });
         } catch (error) {
-          fatalErrors.push(error);
+          for (const language of requestedLanguages) await recordAttemptFailure(state, language, error, attemptHandle, boundedResponse);
+          repairReason = requestedLanguages.map((language) => language + ": " + summarizeRemainingError(state, language)).join("; ").slice(0, 1000);
+          await saveRecord(state);
+          continue;
         }
-        state.queued = false;
-        return;
+        for (const translation of parsed.translations) {
+          const language = normalized(translation.language);
+          state.translationsByLanguage.set(language, translation);
+          state.languagePromptRevisionByLanguage[language] = promptRevision;
+        }
+        for (const failure of parsed.failures) {
+          await recordAttemptFailure(state, failure.language, {
+            message: failure.error,
+            details: failure.details
+          }, attemptHandle, boundedResponse);
+        }
+        state.missingLanguages = requestedLanguages.filter((language) => !state.translationsByLanguage.has(normalized(language)));
+        repairReason = state.missingLanguages.map((language) => language + ": " + summarizeRemainingError(state, language)).join("; ").slice(0, 1000);
+        await saveRecord(state);
       }
-      if (state.queued) failures.push({
-        senseId: senseIdOf(state.sense),
-        error: lastError || "sense translation failed",
-        attempts: state.attempt,
-        ...(state.lastResponse ? { response: state.lastResponse } : {})
-      });
+      for (const language of state.missingLanguages) {
+        const normalizedLanguage = normalized(language);
+        const lastFailure = state.lastFailureByLanguage.get(normalizedLanguage);
+        failures.push({
+          id: failureId(senseId, normalizedLanguage),
+          senseId,
+          language: normalizedLanguage,
+          promptRevision,
+          error: lastFailure?.error ?? "sense translation response did not contain a valid row for this language",
+          attempts: state.attempt,
+          handleId: lastFailure?.handleId ?? "",
+          attemptErrors: state.attemptErrorsByLanguage[normalizedLanguage] ?? [],
+          ...(state.lastResponseByLanguage.has(normalizedLanguage)
+            ? { response: state.lastResponseByLanguage.get(normalizedLanguage) }
+            : {})
+        });
+      }
+      const record = makeRecord(state);
+      if (record) cache.set(senseId, record);
     }));
-    if (fatalErrors.length > 0) throw fatalErrors[0];
+    if (fatalErrors.length) throw fatalErrors[0];
   }
   return {
     records: cacheSnapshot(),
-    failures: failures.sort((left, right) => left.senseId.localeCompare(right.senseId)),
+    failures: failures.sort((left, right) => left.senseId.localeCompare(right.senseId)
+      || left.language.localeCompare(right.language)),
     submittedCount,
-    completedCount: senses.filter((sense) => cache.get(senseIdOf(sense))?.status === "complete").length
+    completedCount: senses.filter((sense) => cache.get(senseIdOf(sense))?.status === "complete").length,
+    partialCount: senses.filter((sense) => cache.get(senseIdOf(sense))?.status === "partial").length
   };
 }
-
 export function createQueuedMindWordNetSenseTranslationTransport({
   interpret,
   parse,

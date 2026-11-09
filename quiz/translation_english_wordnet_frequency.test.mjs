@@ -13,6 +13,7 @@ import {
   parsePrincetonWordNetSenseIndex,
   reconcileEnglishWordNetFrequencyBridgeRows
 } from "../program/library/translation/english_wordnet_frequency.mjs";
+import { buildSenseCompoundWorklist } from "../program/library/translation/english_wordnet_sense_compounds.mjs";
 import {
   parseEnglishWordNetCompoundDecisions,
   renderEnglishWordNetCompoundDecisions
@@ -23,6 +24,38 @@ import {
 } from "../command/wordnet_frequency_allocate.mjs";
 import { buildEnglishLemmaIndex } from "../program/library/translation/english_lemmas.mjs";
 import pyashWords from "../program/library/pyashWords.json" with { type: "json" };
+
+test("exact synset tag counts survive allocation residuals without atom candidates", () => {
+  const [record] = buildEnglishWordNetFrequencyAllocationRecords({
+    wordnetIndex: {
+      bySynset: new Map([[
+        "n:00000001-n",
+        [{ lemma: "unanchored term", gloss: "a sense with no current atom anchor" }]
+      ]])
+    },
+    frequencyJoin: {
+      entries: [{
+        pos: "n",
+        synset: "00000001-n",
+        lemma: "unanchored term",
+        tagCount: 7,
+        senseNumber: 1,
+        senseKey: "unanchored_term%1:00:00::"
+      }]
+    },
+    rankForEnglish: () => Number.POSITIVE_INFINITY,
+    resolveWord: () => null
+  });
+  const { residual } = allocateEnglishWordNetAnchors([record]);
+
+  assert.equal(record.tagCount, 7);
+  assert.equal(residual[0].tagCount, 7);
+  assert.deepEqual(buildSenseCompoundWorklist({
+    residualSenses: residual,
+    minimumTagCount: 2,
+    order: "tag-count-descending"
+  }).map((sense) => [sense.senseId, sense.tagCount]), [["n:00000001-n", 7]]);
+});
 
 test("frequency anchor resolution rejects aliases whose canonical target is grammar", () => {
   const resources = {
@@ -402,7 +435,7 @@ test("frequency allocation configuration versions compound verification", async 
   const config = parseEnglishWordNetFrequencyAllocationConfig(
     await readFile(ENGLISH_WORDNET_FREQUENCY_ALLOCATION_CONFIG_URL, "utf8")
   );
-  assert.equal(config["compound-verification-revision"], "wordnet-modifier-literalness-v9");
+  assert.equal(config["compound-verification-revision"], "wordnet-modifier-literalness-v10");
   assert.equal(config["compound-head-relation-policy"], "advisory");
   assert.equal(config["compound-verification-batch-size"], 64);
   assert.equal(config["compound-candidate-source"], "english30k-closed-wordnet-multiword-existing-atoms-v1");
