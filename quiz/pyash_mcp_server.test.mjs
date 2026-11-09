@@ -94,11 +94,17 @@ test("pyash mcp server loads the selected saddle tools map", async () => {
     const list = await client.send("tools/list", {});
     const tools = Array.isArray(list?.tools) ? list.tools : [];
     const descriptions = tools.map((tool) => String(tool?.description ?? ""));
-    assert.equal(tools.length, 9);
+    assert.equal(tools.length, 10);
     assert.ok(descriptions.some((description) => description.includes("su name read from filename input be read")));
     assert.ok(descriptions.some((description) => description.includes("su name command ob text")));
     assert.ok(descriptions.some((description) => description.includes("su name repair ob text")));
     assert.ok(descriptions.some((description) => description.includes('su name session plan ob text "input" fromstate text "coding saddle plan" be write can')));
+    const zimSearchTool = tools.find((tool) => /search/u.test(String(tool?.name ?? ""))
+      && /zim/u.test(String(tool?.description ?? "")));
+    assert.ok(zimSearchTool, "expected the query-only ZIM search capability");
+    assert.match(zimSearchTool.description, /zim/u);
+    assert.deepEqual(zimSearchTool.inputSchema?.required, ["ob"]);
+    assert.deepEqual(Object.keys(zimSearchTool.inputSchema?.properties ?? {}), ["ob"]);
     assert.equal(descriptions.some((description) => description.includes("su name download")), false);
 
     const readTool = tools.find((tool) => String(tool?.name ?? "").startsWith("be_read_from_filename"));

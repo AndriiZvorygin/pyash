@@ -326,6 +326,55 @@ test("read and search use the existing Pyash verbs for a ZIM archive", async () 
   });
 });
 
+test("query-only ZIM search defaults to the configured local library", async () => {
+  const previousFetch = globalThis.fetch;
+  let requestedUrl;
+  globalThis.fetch = async (url) => {
+    requestedUrl = new URL(url);
+    return {
+      ok: true,
+      status: 200,
+      text: async () => `<rss><channel><item>
+        <title>Pyash guide</title>
+        <link>/content/guide/index.html</link>
+        <description>A local Pyash reference.</description>
+        <book><title>Guide</title></book>
+      </item></channel></rss>`
+    };
+  };
+
+  try {
+    await withZimTools(async (root) => {
+      await fs.writeFile(path.join(root, "archives", "guide.zim"), "fixture-zim", "utf8");
+      doRemember(parse('exists su name zim archive library directory ob text "archives" be default ya'));
+      doRemember(parse('exists su name zim archive search server ob text "http://127.0.0.1:8091" be default ya'));
+
+      const result = await interpret(parse('ob text "Pyash guide" fromstate wo zim be search do'));
+
+      assert.equal(result?.be, "search");
+      assert.match(result?.ob?.text ?? "", /archive: archives\/guide\.zim/u);
+      assert.match(result?.ob?.text ?? "", /title: Pyash guide/u);
+      assert.match(result?.ob?.text ?? "", /snippet: A local Pyash reference\./u);
+      assert.equal(requestedUrl.pathname, "/search");
+      assert.equal(requestedUrl.searchParams.get("pattern"), "Pyash guide");
+      assert.equal(requestedUrl.searchParams.get("format"), "xml");
+    });
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("query-only ZIM search clearly reports a missing configured library mount", async () => {
+  await withZimTools(async () => {
+    doRemember(parse('exists su name zim archive library directory ob text "missing-archives" be default ya'));
+
+    await assert.rejects(
+      interpret(parse('ob text "Pyash" fromstate wo zim be search do')),
+      /configured local ZIM archive library is unavailable/u
+    );
+  });
+});
+
 test("ZIM reads follow the configured external library symlink and reject other outside links", async () => {
   await withZimTools(async (root) => {
     const storage = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-zim-external-store-"));

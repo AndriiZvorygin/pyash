@@ -83,13 +83,16 @@ from filename "archives/site.zim" as wo cluster-compress be read do
 from filename "archives/site.zim" as wo cluster-compress ob text "index.html" be read do
 ```
 
-Search in the shared `world/library/archive` collection uses the configured
-Kiwix Server's full-text index and returns the archive path, article title,
-entry path, and matching excerpt. The `zimwriterfs` default builds the index.
+Search with only a query and `fromstate wo zim` uses the configured
+`world/library/archive` collection by default. It uses the configured Kiwix
+Server's full-text index and returns the archive path, article title, entry
+path, and matching excerpt. The `zimwriterfs` default builds the index.
 `read` uses OpenZIM's `zimdump` to list entries or extract one article directly.
-The server also supports searching one archive from that shared collection:
+The server also supports searching one archive from that shared collection;
+an explicit archive path overrides the default collection:
 
 ```pyash
+ob text "Pyash" fromstate wo zim be search do
 ob text "Pyash" in filename "world/library/archive/pyash-hierarchy.zim" as wo cluster-compress be search do
 ```
 
@@ -126,7 +129,12 @@ create/read/search smoke test. The integration quiz skips by default, keeping
 normal setup and CI lightweight.
 
 Defaults live in `configure/default.pya`: writer, reader, search tool, Zimit
-image, crawl permission and bounds, archive metadata defaults, and the existing `ksus hzip` compound. The
+image, crawl permission and bounds, archive metadata defaults, the shared ZIM
+library and Kiwix endpoint, and the `ksus mres` cluster-compression compound.
+The compound uses existing atoms for “cluster” and information “compression”;
+its project gloss describes ZIM cluster compression because WordNet has no
+single synset for that specific operation. Host-local library or server
+overrides belong in `configure/secret.pya`. The
 resulting `.zim` remains a file artifact. `containers/kiwix-server/` provides a
 read-only server for the shared `world/library/archive/` collection on host port
 8091 over IPv4 and IPv6. The persistent host collection lives at

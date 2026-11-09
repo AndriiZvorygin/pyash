@@ -38,6 +38,7 @@ import {
 } from "../program/library/translation/compound_verification.mjs";
 import pyashWords from "../program/library/pyashWords.json" with { type: "json" };
 import { loadCoverage as loadDefaultCompoundCoverage } from "../command/compound_coverage.mjs";
+import { matchVliwCompound } from "../program/library/vliw/compound_dictionary.mjs";
 import {
   loadCompoundLexicon,
   loadChineseCompoundLexicon,
@@ -208,6 +209,36 @@ test("curated prayer constructions enter the shared compound catalog", async () 
   assert.deepEqual(include.componentLayers, [16, 24]);
   assert.equal(include.head, "containing");
   assert.match(include.evidence, /contain-within sense of include/u);
+});
+
+test("cluster compression composes existing atoms with its domain gloss and no sequence overlap", async () => {
+  const entries = await loadCompoundLexicon({
+    url: new URL("../program/library/translation/compound_coverage_curated.pya", import.meta.url),
+    name: "translation_compounds_derived_curated",
+    language: "canonical"
+  });
+  const clusterCompression = entries.find((entry) => entry.surface === "cluster compression");
+
+  assert.ok(clusterCompression);
+  assert.equal(clusterCompression.gloss, "compression applied to a cluster of archive content");
+  assert.deepEqual(clusterCompression.morphemes, ["cluster", "compression"]);
+  assert.deepEqual(clusterCompression.componentGlosses, ["cluster", "compression"]);
+  assert.deepEqual(clusterCompression.pyashSequence, ["ksus", "mres"]);
+  assert.deepEqual(clusterCompression.componentLayers, [16, 19]);
+  assert.equal(clusterCompression.head, "compression");
+  assert.match(clusterCompression.evidence, /n:00617323-n/u);
+
+  const sameSequence = (await loadCuratedCompoundDecompositions()).filter((entry) => (
+    JSON.stringify(entry.pyashSequence) === JSON.stringify(["ksus", "mres"])
+  ));
+  assert.deepEqual(sameSequence.map((entry) => entry.target), ["cluster compression"]);
+  assert.ok(pyashWords.some((word) => word.pya === "ksus"));
+  assert.ok(pyashWords.some((word) => word.pya === "mres"));
+  assert.equal(pyashWords.some((word) => word.pya === "ksusmres"), false);
+
+  const vliwMatch = matchVliwCompound(["ksus", "mres"], 0);
+  assert.equal(vliwMatch?.english, "compression applied to a cluster of archive content");
+  assert.deepEqual(vliwMatch?.pyashSequence, ["ksus", "mres"]);
 });
 
 test("Chinese 混同 lowers to the head-final identity-confusion compound", async () => {

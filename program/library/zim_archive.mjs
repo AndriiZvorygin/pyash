@@ -572,14 +572,29 @@ async function resolveZimInput(sentence, rememberFn) {
 
 async function resolveZimSearchInputs(sentence, rememberFn) {
   const sandbox = resolveSandboxSettings({ sentence, rememberFn });
-  const filename = filenameFromSentence(sentence);
-  if (!filename) fail(sentence, "zim archive missing", "ZIM search requires from filename or in filename");
+  const explicitFilename = filenameFromSentence(sentence);
+  const filename = explicitFilename
+    ?? resolveConfigText("zim archive library directory", { rememberFn })
+    ?? "world/library/archive";
   const input = await resolveSandboxPath(filename, sandbox, {
     access: "read",
     kind: "any",
     rememberFn
   });
-  if (input.error) fail(sentence, "zim archive invalid", input.error, { filename, resolved: input.candidate });
+  if (input.error) {
+    const libraryStats = explicitFilename
+      ? null
+      : await fs.stat(path.resolve(sandbox.cwd, filename)).catch(() => null);
+    if (!explicitFilename && !libraryStats) {
+      fail(
+        sentence,
+        "zim archive library unavailable",
+        `configured local ZIM archive library is unavailable: ${filename}; check the mount and zim archive library directory setting`,
+        { filename, resolved: input.candidate }
+      );
+    }
+    fail(sentence, "zim archive invalid", input.error, { filename, resolved: input.candidate });
+  }
   const stats = await fs.stat(input.path).catch(() => null);
   if (stats?.isFile()) {
     if (path.extname(input.path).toLowerCase() !== ".zim") {

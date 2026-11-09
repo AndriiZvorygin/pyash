@@ -152,7 +152,7 @@ exists su name review mind brief be mind as name "qwen3.5:9b" fromtext name revi
 exists su name review mind long be mind as name "qwen3.5:9b" fromtext name review long prompter ya
 exists su hear be default ob name whisper command hear ya
 exists su name qwen say clip verify enabled ob bool truth be default ya
-exists su name zim cluster compression compound ob text "ksus hzip" be default ya
+exists su name zim cluster compression compound ob text "ksus mres" be default ya
 exists su name zim cluster writer module ob text "libzim" be default ya
 exists su name zim cluster compression codec ob text "zstd" be default ya
 exists su name zim website capture module ob text "zimit" be default ya
