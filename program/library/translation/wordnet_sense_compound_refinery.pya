@@ -8,6 +8,7 @@ su text "parallelism" ob num 8 ya
 su text "max-senses-per-launch" ob num 64 ya
 su text "worklist-order" ob text "tag-count-descending" ya
 su text "minimum-tag-count" ob num 1 ya
+su text "require-princeton-intersection" ob text "true" ya
 su text "candidate-revision" ob text "sense-component-choice-v10" ya
 su text "component-choice-prompt-revision" ob text "sense-component-choice-v13" ya
 su text "component-choice-max-attempts" ob num 2 ya

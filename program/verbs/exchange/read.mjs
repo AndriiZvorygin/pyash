@@ -318,5 +318,6 @@ export const signatures = [
   { signatureWords: ["be", "read", "from", "filename", "fromstate", "wo", "zim", "ob", "text", "to", "name", "text"], handler: read_fromstate_zim },
   { signatureWords: ["be", "read", "from", "filename", "fromstate", "wo", "cluster-compress"], handler: read_fromstate_zim },
   { signatureWords: ["be", "read", "as", "wo", "cluster-compress", "from", "filename", "ob", "text"], handler: read_fromstate_zim },
+  { signatureWords: ["be", "read", "as", "wo", "cluster-compress", "by", "text", "from", "filename", "ob", "text"], handler: read_fromstate_zim },
   { signatureWords: ["be", "read", "from", "filename", "fromstate", "wo", "zim", "ob", "text"], handler: read_fromstate_zim }
 ];

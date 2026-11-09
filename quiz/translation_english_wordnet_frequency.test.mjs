@@ -57,6 +57,30 @@ test("exact synset tag counts survive allocation residuals without atom candidat
   }).map((sense) => [sense.senseId, sense.tagCount]), [["n:00000001-n", 7]]);
 });
 
+test("Princeton synset membership survives allocation when the lexical sense key changed", () => {
+  const records = buildEnglishWordNetFrequencyAllocationRecords({
+    wordnetIndex: {
+      bySynset: new Map([[
+        "n:00000041-n",
+        [{ lemma: "updated lexical form", gloss: "a Princeton-matched synset" }]
+      ]])
+    },
+    frequencyJoin: { entries: [] },
+    princetonSynsetIds: new Set(["n:00000041-n"]),
+    rankForEnglish: () => Number.POSITIVE_INFINITY,
+    resolveWord: () => null
+  });
+  const { residual } = allocateEnglishWordNetAnchors(records);
+
+  assert.equal(residual[0].princetonMatched, true);
+  assert.equal(residual[0].tagCount, undefined);
+  assert.deepEqual(buildSenseCompoundWorklist({
+    residualSenses: residual,
+    minimumTagCount: 0,
+    requirePrincetonIntersection: true
+  }).map((sense) => [sense.senseId, sense.tagCount]), [["n:00000041-n", -1]]);
+});
+
 test("frequency anchor resolution rejects aliases whose canonical target is grammar", () => {
   const resources = {
     coverage: {

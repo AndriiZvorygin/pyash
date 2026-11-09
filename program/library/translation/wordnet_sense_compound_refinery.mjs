@@ -290,6 +290,10 @@ function parseConfig(source) {
   if (!Number.isSafeInteger(minimumTagCount) || minimumTagCount < 0) {
     throw invalid("sense compound refinery minimum-tag-count must be a nonnegative integer");
   }
+  const requirePrincetonIntersectionText = text(values["require-princeton-intersection"] ?? "false").toLowerCase();
+  if (!["true", "false"].includes(requirePrincetonIntersectionText)) {
+    throw invalid("sense compound refinery require-princeton-intersection must be true or false");
+  }
   if (!Number.isSafeInteger(choiceMaxAttempts) || choiceMaxAttempts < 1) {
     throw invalid("sense compound refinery component-choice-max-attempts must be a positive integer");
   }
@@ -315,6 +319,7 @@ function parseConfig(source) {
     parallelism: Number(values.parallelism) || ENGLISH_WORDNET_SENSE_COMPOUNDS_PARALLELISM,
     maximumSenses: Number(values["max-senses-per-launch"]) || 64,
     minimumTagCount,
+    requirePrincetonIntersection: requirePrincetonIntersectionText === "true",
     worklistOrder,
     candidateRevision,
     headRelationPolicy
@@ -467,7 +472,9 @@ async function loadInventory({ context, dependencies }) {
     linkedSenseIds,
     resolveTargetCoverage,
     minimumTagCount: context.config.minimumTagCount,
-    order: context.config.worklistOrder
+    order: context.config.worklistOrder,
+    rankForEnglish: allocation.rankForEnglish,
+    requirePrincetonIntersection: context.config.requirePrincetonIntersection
   });
   const requestedSenseIds = context.config.senseIds;
   const requestedSenseSet = requestedSenseIds ? new Set(requestedSenseIds) : null;
@@ -553,6 +560,9 @@ async function loadInventory({ context, dependencies }) {
     atomInventoryHash,
     promptRevision: context.config.promptRevision,
     choicePromptRevision: context.config.choicePromptRevision,
+    worklistOrder: context.config.worklistOrder,
+    minimumTagCount: context.config.minimumTagCount,
+    requirePrincetonIntersection: context.config.requirePrincetonIntersection,
     pending: pending.map((row) => row.senseId)
   }));
   const worklistPath = join(context.artifactDirectory, "worklist.pya");
@@ -564,6 +574,7 @@ async function loadInventory({ context, dependencies }) {
     "component-choice-prompt-revision": context.config.choicePromptRevision,
     "worklist-order": context.config.worklistOrder,
     "minimum-tag-count": context.config.minimumTagCount,
+    "require-princeton-intersection": context.config.requirePrincetonIntersection,
     "worklist-hash": dataHash,
     "eligible-sense-count": fullWorklist.length,
     "remaining-sense-count": fullWorklist.filter((sense) => {
@@ -590,6 +601,7 @@ async function loadInventory({ context, dependencies }) {
     "atom-inventory-hash": atomInventoryHash,
     "eligible-sense-count": fullWorklist.length,
     "minimum-tag-count": context.config.minimumTagCount,
+    "require-princeton-intersection": context.config.requirePrincetonIntersection,
     "selected-sense-count": pending.length,
     "remaining-sense-count": fullWorklist.filter((sense) => {
       return !completedSenseIds.has(sense.senseId)
