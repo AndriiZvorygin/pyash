@@ -8,31 +8,32 @@ import { parse } from "./understand/index.mjs";
 import { interpret } from "./bridge/index.mjs";
 import { allRemember, forget, remember, doRemember } from "./remember/index.mjs";
 import { splitSentences, splitSentencesWithLines } from "./library/sentenceSplitter.mjs";
-import { setEntryModulePath } from "./bridge/modules.mjs";
+import { popModuleDir, pushModuleDir, setEntryModuleDir } from "./bridge/modules.mjs";
 import { state } from "./bridge/state.mjs";
 import { sentenceToPyash } from "./beautiful.mjs";
 
 async function loadConfigFile({ configPath, interpretFn }) {
+  let raw;
   try {
-    const raw = await fs.readFile(configPath, "utf8");
-    const lines = splitSentencesWithLines(raw, { includeThen: true });
-    for (const entry of lines) {
-      const trimmed = entry.text.trim();
-      if (!trimmed) continue;
-      if (trimmed.startsWith("#")) continue;
-      state.currentSourceFilename = configPath;
-      state.currentSourceLine = entry.line;
-      const sentence = parse(trimmed);
-      state.currentSourceSentence = sentence;
-      await interpretFn(sentence);
-    }
-    state.currentSourceFilename = null;
-    state.currentSourceLine = null;
-    state.currentSourceSentence = null;
+    raw = await fs.readFile(configPath, "utf8");
   } catch (err) {
     if (err?.code === "ENOENT") return;
     throw err;
   }
+  const lines = splitSentencesWithLines(raw, { includeThen: true });
+  for (const entry of lines) {
+    const trimmed = entry.text.trim();
+    if (!trimmed) continue;
+    if (trimmed.startsWith("#")) continue;
+    state.currentSourceFilename = configPath;
+    state.currentSourceLine = entry.line;
+    const sentence = parse(trimmed);
+    state.currentSourceSentence = sentence;
+    await interpretFn(sentence);
+  }
+  state.currentSourceFilename = null;
+  state.currentSourceLine = null;
+  state.currentSourceSentence = null;
 }
 
 async function loadDefaultConfig({ cwd, interpretFn }) {
@@ -41,9 +42,14 @@ async function loadDefaultConfig({ cwd, interpretFn }) {
     path.resolve(cwd, "configure", "secret.pya"),
     path.resolve(cwd, "configure", "container.pya")
   ];
-  for (const configPath of configPaths) {
-    if (configPath.endsWith(`${path.sep}container.pya`) && !(await isContainerEnv())) continue;
-    await loadConfigFile({ configPath, interpretFn });
+  pushModuleDir(path.resolve(cwd));
+  try {
+    for (const configPath of configPaths) {
+      if (configPath.endsWith(`${path.sep}container.pya`) && !(await isContainerEnv())) continue;
+      await loadConfigFile({ configPath, interpretFn });
+    }
+  } finally {
+    popModuleDir();
   }
 }
 
@@ -62,7 +68,7 @@ async function isContainerEnv() {
 }
 
 async function repl() {
-  setEntryModulePath(process.cwd());
+  setEntryModuleDir(process.cwd());
   await loadDefaultConfig({ cwd: process.cwd(), interpretFn: interpret });
   const runRoot = path.resolve(process.cwd());
   if (!remember("run root")) {

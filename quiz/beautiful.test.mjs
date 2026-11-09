@@ -87,3 +87,12 @@ test("sentenceToPyash round-trips bounded reads with one atmost byte", () => {
   assert.equal((rendered.match(/atmost byte/g) ?? []).length, 1);
   assert.equal(parse(rendered)?.atmost?.byte, 65536);
 });
+
+test("sentenceToPyash preserves typed as selectors for CLI round trips", () => {
+  const source = "from filename \"world/library/archive/guide.zim\" as wo cluster-compress ob text \"guide.html\" by text \"buffer creation\" be read do";
+  const parsed = parse(source);
+  const rendered = sentenceToPyash(parsed);
+
+  assert.match(rendered, /as wo cluster-compress/u);
+  assert.deepEqual(parse(rendered)?.as, parsed.as);
+});
