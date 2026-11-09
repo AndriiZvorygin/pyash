@@ -83,6 +83,19 @@ from filename "archives/site.zim" as wo cluster-compress be read do
 from filename "archives/site.zim" as wo cluster-compress ob text "index.html" be read do
 ```
 
+For a large page, focus the read on the phrase from the search query. Pyash
+fetches that entry from the configured Kiwix server and returns a bounded set
+of passages with their nearest headings:
+
+```pyash
+from filename "world/library/archive/gpu-opencl-reference-2026-11.zim" as wo cluster-compress ob text "OpenCL_API.html" by text "clCreateBuffer" be read do
+```
+
+The shared-library focused read defaults to an 8 MiB page-fetch limit, a 900
+character context around each match, and a 16,000 byte output limit. The page
+and output limits are set by `archive focus page size bytes` and
+`archive focus result size bytes` in `configure/default.pya`.
+
 Search with only a query and `fromstate wo zim` uses the configured
 `world/library/archive` collection by default and queries the configured Kiwix
 Server's full-text index. When the archive collection is mounted locally,

@@ -7,11 +7,18 @@ import {
   resolveConfigMapNum,
   resolveConfigMapSeries,
   resolveConfigMapText,
+  resolveConfigNum,
   resolveConfigText
 } from "../configure/env.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { resolveSandboxSettings } from "../verbs/command/sandbox.mjs";
 import { command } from "../verbs/command/command.mjs";
+
+const DEFAULT_ZIM_PASSAGE_MAX_PAGE_BYTES = 8 * 1024 * 1024;
+const DEFAULT_ZIM_PASSAGE_MAX_OUTPUT_BYTES = 16000;
+const DEFAULT_ZIM_PASSAGE_CONTEXT_CHARS = 900;
+const MAX_ZIM_PASSAGE_LIMIT = 32 * 1024 * 1024;
+const MAX_ZIM_PASSAGE_OUTPUT_BYTES = 256 * 1024;
 
 function fail(sentence, name, message, raw = {}) {
   throwErrorSentence({ name, message, from: { la: sentence }, raw });
@@ -635,6 +642,15 @@ export async function readZimArchive(sentence, {
 } = {}) {
   const { filename, relative } = await resolveZimInput(sentence, rememberFn);
   const requestedEntry = typeof sentence?.ob?.text === "string" ? sentence.ob.text.trim() : "";
+  const focus = typeof sentence?.by?.text === "string" ? sentence.by.text.trim() : "";
+  if (focus) {
+    return readFocusedZimPassage(sentence, {
+      filename,
+      requestedEntry,
+      focus,
+      rememberFn
+    });
+  }
   const tool = configuredTool("zim archive reader module", "zimdump", rememberFn);
   const commandText = requestedEntry
     ? [shellArgument(tool), "show", shellArgument(`--url=${requestedEntry}`), "--", shellArgument(relative)].join(" ")
@@ -645,6 +661,251 @@ export async function readZimArchive(sentence, {
     mood: "ya",
     su: sentence?.to?.name ? { name: sentence.to.name } : (sentence?.su ?? { name: "ZIM archive contents" }),
     ob: { text: result?.ob?.text ?? "" },
+    from: { filename },
+    be: "read"
+  };
+}
+
+function configuredPositiveLimit(name, fallback, maximum, rememberFn) {
+  const value = resolveConfigNum(name, { rememberFn });
+  if (!Number.isSafeInteger(value) || value <= 0) return fallback;
+  return Math.min(value, maximum);
+}
+
+function htmlEntityText(value) {
+  const named = {
+    amp: "&", apos: "'", copy: "©", gt: ">", hellip: "…", ldquo: "“", lsquo: "‘",
+    lt: "<", mdash: "—", nbsp: " ", ndash: "–", quot: '"', reg: "®", rdquo: "”",
+    rsquo: "’", trade: "™"
+  };
+  return String(value).replace(/&(#x[\da-f]+|#\d+|[a-z][a-z\d]+);/giu, (entity, body) => {
+    if (body[0] !== "#") return named[body.toLowerCase()] ?? entity;
+    const codePoint = body[1]?.toLowerCase() === "x"
+      ? Number.parseInt(body.slice(2), 16)
+      : Number.parseInt(body.slice(1), 10);
+    if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff
+      || (codePoint >= 0xd800 && codePoint <= 0xdfff)) return "�";
+    return String.fromCodePoint(codePoint);
+  });
+}
+
+function htmlFragmentText(value) {
+  return htmlEntityText(String(value).replace(/<[^>]*>/gu, " ")).replace(/\s+/gu, " ").trim();
+}
+
+function htmlToZimPassageText(html) {
+  return htmlEntityText(String(html)
+    .replace(/<!--[\s\S]*?-->/gu, " ")
+    .replace(/<(script|style|noscript|svg|nav|footer)\b[^>]*>[\s\S]*?<\/\1\s*>/giu, " ")
+    .replace(/<h([1-6])\b[^>]*>/giu, (_, level) => `\n\n${"#".repeat(Number(level))} `)
+    .replace(/<\/h[1-6]\s*>/giu, "\n\n")
+    .replace(/<(?:br|hr)\b[^>]*>/giu, "\n")
+    .replace(/<(?:p|li|pre|div|section|article|tr|td|th|blockquote|ul|ol|table|dt|dd)\b[^>]*>/giu, "\n")
+    .replace(/<\/(?:p|li|pre|div|section|article|tr|td|th|blockquote|ul|ol|table|dt|dd)\s*>/giu, "\n")
+    .replace(/<[^>]*>/gu, " "))
+    .replace(/\u00a0/gu, " ")
+    .replace(/[\t\f\v ]+/gu, " ")
+    .replace(/ *\n */gu, "\n")
+    .replace(/\n{3,}/gu, "\n\n")
+    .trim();
+}
+
+function sliceTextByBytes(text, maxBytes) {
+  let output = "";
+  let bytes = 0;
+  for (const character of text) {
+    const characterBytes = Buffer.byteLength(character);
+    if (bytes + characterBytes > maxBytes) break;
+    output += character;
+    bytes += characterBytes;
+  }
+  return output;
+}
+
+function focusedPassages(text, focus, contextChars, maxOutputBytes) {
+  const needle = focus.toLocaleLowerCase();
+  const focusTerms = focus
+    .replace(/([a-z\d])([A-Z])/gu, "$1 $2")
+    .toLocaleLowerCase()
+    .match(/[a-z\d]+/gu)
+    ?.filter((term) => term.length >= 4) ?? [];
+  const lowerText = text.toLocaleLowerCase();
+  const matches = [];
+  let offset = 0;
+  while (matches.length < 32) {
+    const found = lowerText.indexOf(needle, offset);
+    if (found < 0) break;
+    matches.push(found);
+    offset = found + needle.length;
+  }
+  if (matches.length === 0) return [];
+
+  const headings = [...text.matchAll(/^#{1,6}\s+(.+)$/gmu)].map((match) => ({
+    offset: match.index,
+    text: match[1].trim()
+  }));
+  const sections = new Map();
+  let headingIndex = 0;
+  for (const match of matches) {
+    while (headingIndex < headings.length && headings[headingIndex].offset <= match) headingIndex += 1;
+    const heading = headings[headingIndex - 1] ?? { offset: -1, text: "" };
+    const section = sections.get(heading.offset) ?? { heading: heading.text, positions: [] };
+    section.positions.push(match);
+    sections.set(heading.offset, section);
+  }
+
+  const rankedSections = [...sections.entries()]
+    .map((entry) => {
+      const words = entry[1].heading.toLocaleLowerCase().match(/[a-z\d]+/gu) ?? [];
+      const relevance = focusTerms.reduce((score, term) => score + Number(words.some((word) => (
+        word.startsWith(term.slice(0, 4)) || term.startsWith(word.slice(0, 4))
+      ))), 0);
+      return { entry, relevance };
+    })
+    .sort((left, right) => right.relevance - left.relevance
+      || right.entry[1].positions.length - left.entry[1].positions.length
+      || left.entry[1].positions[0] - right.entry[1].positions[0]);
+  const output = [];
+  let usedBytes = 0;
+  for (const [index, { entry: [, section] }] of rankedSections.slice(0, 4).entries()) {
+    const match = section.positions[0];
+    const start = Math.max(0, match - contextChars);
+    const end = Math.min(text.length, match + needle.length + contextChars);
+    const label = section.heading ? `passage ${index + 1} — ${section.heading}` : `passage ${index + 1}`;
+    const prefix = `${output.length ? "\n\n" : ""}${label}\n`;
+    const budget = maxOutputBytes - usedBytes - Buffer.byteLength(prefix);
+    if (budget <= 0) break;
+    let excerpt = text.slice(start, end).trim();
+    if (Buffer.byteLength(excerpt) > budget) {
+      excerpt = sliceTextByBytes(excerpt, Math.max(0, budget - Buffer.byteLength("…")));
+      const lastSpace = excerpt.lastIndexOf(" ");
+      if (lastSpace > excerpt.length * 0.75) excerpt = excerpt.slice(0, lastSpace);
+      excerpt = `${excerpt.trimEnd()}…`;
+    }
+    output.push(`${prefix}${excerpt}`);
+    usedBytes += Buffer.byteLength(prefix) + Buffer.byteLength(excerpt);
+  }
+  return output;
+}
+
+async function readResponseWithinLimit(response, maxBytes, sentence) {
+  const declaredBytes = Number(response.headers?.get?.("content-length"));
+  if (Number.isFinite(declaredBytes) && declaredBytes > maxBytes) {
+    fail(sentence, "zim archive invalid", `ZIM page exceeds the configured passage page limit of ${maxBytes} bytes`, { declaredBytes, maxBytes });
+  }
+  if (!response.body?.getReader) {
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length > maxBytes) {
+      fail(sentence, "zim archive invalid", `ZIM page exceeds the configured passage page limit of ${maxBytes} bytes`, { receivedBytes: bytes.length, maxBytes });
+    }
+    return bytes.toString("utf8");
+  }
+
+  const reader = response.body.getReader();
+  const chunks = [];
+  let receivedBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = Buffer.from(value);
+      receivedBytes += chunk.length;
+      if (receivedBytes > maxBytes) {
+        await reader.cancel();
+        fail(sentence, "zim archive invalid", `ZIM page exceeds the configured passage page limit of ${maxBytes} bytes`, { receivedBytes, maxBytes });
+      }
+      chunks.push(chunk);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+async function readFocusedZimPassage(sentence, { filename, requestedEntry, focus, rememberFn }) {
+  if (!requestedEntry) {
+    fail(sentence, "zim archive missing", "focused ZIM read requires ob text entry path");
+  }
+  if (requestedEntry.length > 512) {
+    fail(sentence, "zim archive invalid", "focused ZIM read entry path must be 512 characters or fewer");
+  }
+  if (focus.length > 256) {
+    fail(sentence, "zim archive invalid", "focused ZIM read query must be 256 characters or fewer");
+  }
+  const sandbox = resolveSandboxSettings({ sentence, rememberFn });
+  const library = resolveConfigText("zim archive library directory", { rememberFn }) ?? "world/library/archive";
+  const libraryPath = path.resolve(sandbox.cwd, library);
+  if (path.resolve(path.dirname(filename)) !== libraryPath) {
+    fail(sentence, "zim archive invalid", "focused ZIM read requires an archive in the configured shared library", { filename, libraryPath });
+  }
+
+  const entry = requestedEntry.replace(/^\/+/, "");
+  const segments = entry.split("/");
+  if (segments.some((segment) => !segment || segment === "." || segment === ".." || segment.includes("\\") || /[\u0000-\u001f]/u.test(segment))) {
+    fail(sentence, "zim archive invalid", "focused ZIM read entry path contains an invalid path segment", { entry: requestedEntry });
+  }
+  const base = resolveConfigText("zim archive search server", { rememberFn });
+  let pageUrl;
+  try {
+    const endpoint = new URL(base);
+    if (!/^https?:$/u.test(endpoint.protocol)) throw new Error("unsupported protocol");
+    const archiveId = path.basename(filename, path.extname(filename));
+    const encodedEntry = segments.map((segment) => encodeURIComponent(segment)).join("/");
+    pageUrl = new URL(`/content/${encodeURIComponent(archiveId)}/${encodedEntry}`, endpoint);
+  } catch (error) {
+    fail(sentence, "zim search server invalid", "focused ZIM read requires a valid configured Kiwix HTTP server", { endpoint: base, error: error.message });
+  }
+
+  let response;
+  try {
+    response = await fetch(pageUrl, {
+      // Keep the response size and streamed bytes in the same representation.
+      headers: { "accept-encoding": "identity" },
+      signal: AbortSignal.timeout(15000)
+    });
+  } catch (error) {
+    fail(sentence, "zim search server unavailable", `cannot retrieve focused ZIM page: ${error.message}`, { endpoint: pageUrl.toString() });
+  }
+  if (!response.ok) {
+    fail(sentence, "zim search server defective", `Kiwix returned HTTP ${response.status} for focused ZIM page`, { endpoint: pageUrl.toString() });
+  }
+  const maxPageBytes = configuredPositiveLimit(
+    "archive focus page size bytes",
+    DEFAULT_ZIM_PASSAGE_MAX_PAGE_BYTES,
+    MAX_ZIM_PASSAGE_LIMIT,
+    rememberFn
+  );
+  const html = await readResponseWithinLimit(response, maxPageBytes, sentence);
+  const titleMatch = html.match(/<title\b[^>]*>([\s\S]*?)<\/title\s*>/iu);
+  const title = titleMatch ? htmlFragmentText(titleMatch[1]).slice(0, 256) : "";
+  const text = htmlToZimPassageText(html);
+  const maxOutputBytes = configuredPositiveLimit(
+    "archive focus result size bytes",
+    DEFAULT_ZIM_PASSAGE_MAX_OUTPUT_BYTES,
+    MAX_ZIM_PASSAGE_OUTPUT_BYTES,
+    rememberFn
+  );
+  const header = [
+    title ? `title: ${title}` : "",
+    `entry: ${entry}`,
+    `focus: ${focus}`
+  ].filter(Boolean).join("\n");
+  const passageBudget = maxOutputBytes - Buffer.byteLength(header) - 2;
+  if (passageBudget < 1) {
+    fail(sentence, "zim archive invalid", "configured ZIM focus output limit is too small for the page locator", { maxOutputBytes });
+  }
+  const passages = focusedPassages(text, focus, DEFAULT_ZIM_PASSAGE_CONTEXT_CHARS, passageBudget);
+  if (passages.length === 0) {
+    fail(sentence, "zim archive invalid", `focused ZIM page does not contain the requested text: ${focus}`, { entry, focus, title });
+  }
+  const output = `${header}\n\n${passages.join("\n\n")}`;
+  const boundedOutput = Buffer.byteLength(output) <= maxOutputBytes
+    ? output
+    : `${sliceTextByBytes(output, maxOutputBytes - Buffer.byteLength("…")).trimEnd()}…`;
+  return {
+    mood: "ya",
+    su: sentence?.to?.name ? { name: sentence.to.name } : (sentence?.su ?? { name: "ZIM focus" }),
+    ob: { text: boundedOutput },
     from: { filename },
     be: "read"
   };
