@@ -64,10 +64,14 @@ its command identity graph:
 
 The request evoke record precedes policy audits. A declared `to filename`
 output is written first and then recorded as an artifact and exchange
-operation. If a later command reuses an artifact locator, content addressing,
-aliasing, and hash-consistency rules remain unchanged: no duplicate artifact
-declaration is required, but that command's exchange operation still carries
-its own request identity.
+operation. A locator identifies a filesystem path, which may be rewritten.
+Repeated recording of identical bytes at the same locator reuses the latest
+artifact declaration. Rewriting that path with different bytes creates a new
+artifact declaration and content-addressed snapshot; earlier snapshots remain
+immutable and replay-verifiable. Each command's exchange operation still
+carries its own request identity. Replay reports `hash inconsistency` when
+content-addressed evidence no longer matches its recorded hash, not merely
+because a working file was edited later.
 
 Command policy audits from the interpreter and compiled JavaScript/C backends
 are sentence-native records with `fromtext text <ISO-8601 timestamp>`. Their

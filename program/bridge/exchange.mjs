@@ -314,32 +314,27 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind, re
   if (existing) {
     artifactLocatorByName.set(existing, normalized);
     if (producer && kind !== "metadata") artifactLatestByProducer.set(String(producer), normalized);
-    if (hash) {
-      const priorHash = artifactHashes.get(existing);
-      if (priorHash && priorHash !== hash) {
-        throwErrorSentence({
-          name: "hash inconsistency",
-          message: `hash inconsistency at ${normalized}`,
-          from: { name: "exchange" },
-          raw: { locator: normalized }
-        });
+    const priorHash = artifactHashes.get(existing);
+    const changedVersion = hash && priorHash && priorHash !== hash;
+    if (!changedVersion) {
+      if (hash && !priorHash) artifactHashes.set(existing, hash);
+      if (hash && bytes) {
+        const written = writeContentAddressed({ hash, locator: normalized, bytes });
+        materializeLocator({ locator: normalized, target: written?.absolute, bytes });
+        linkRunAlias({ name: existing, target: written?.absolute, locator: normalized });
       }
-      if (!priorHash) artifactHashes.set(existing, hash);
+      return {
+        mood: "ya",
+        exists: true,
+        be: "artifact",
+        su: { name: existing },
+        ob: correlation,
+        to: { filename: normalized },
+        from: { name: producer }
+      };
     }
-    if (hash && bytes) {
-      const written = writeContentAddressed({ hash, locator: normalized, bytes });
-      materializeLocator({ locator: normalized, target: written?.absolute, bytes });
-      linkRunAlias({ name: existing, target: written?.absolute, locator: normalized });
-    }
-    return {
-      mood: "ya",
-      exists: true,
-      be: "artifact",
-      su: { name: existing },
-      ob: correlation,
-      to: { filename: normalized },
-      from: { name: producer }
-    };
+    // Fall through to a new artifact name for a changed snapshot. The
+    // filesystem locator can change; each artifact hash remains immutable.
   }
   const sentence = {
     mood: "ya",

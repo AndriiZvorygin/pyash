@@ -3,6 +3,8 @@ import { download_http, download_ytdlp, download_missing } from "./handlers.mjs"
 export const signatures = [
   { signatureWords: ["be", "download", "as", "wo", "web", "from", "filename", "fromstate", "name", "http", "to", "filename"], handler: (s, ctx) => download_http(s, { scheme: "http", intent: "web", ...ctx }) },
   { signatureWords: ["be", "download", "as", "wo", "web", "from", "filename", "fromstate", "name", "https", "to", "filename"], handler: (s, ctx) => download_http(s, { scheme: "https", intent: "web", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "markdown", "from", "filename", "fromstate", "name", "http", "to", "filename"], handler: (s, ctx) => download_http(s, { scheme: "http", intent: "markdown", ...ctx }) },
+  { signatureWords: ["be", "download", "as", "wo", "markdown", "from", "filename", "fromstate", "name", "https", "to", "filename"], handler: (s, ctx) => download_http(s, { scheme: "https", intent: "markdown", ...ctx }) },
   { signatureWords: ["be", "download", "as", "wo", "file", "from", "filename", "fromstate", "name", "http", "to", "filename"], handler: (s, ctx) => download_http(s, { scheme: "http", intent: "file", ...ctx }) },
   { signatureWords: ["be", "download", "as", "wo", "file", "from", "filename", "fromstate", "name", "https", "to", "filename"], handler: (s, ctx) => download_http(s, { scheme: "https", intent: "file", ...ctx }) },
   { signatureWords: ["be", "download", "as", "wo", "video", "from", "filename", "fromstate", "name", "http", "to", "filename"], handler: (s, ctx) => download_ytdlp(s, { scheme: "http", intent: "video", ...ctx }) },

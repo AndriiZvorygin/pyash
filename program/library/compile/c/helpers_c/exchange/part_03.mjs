@@ -1,6 +1,4 @@
 export const EXCHANGE_HELPER_PART_03 = [
-"      pya_exchange_fail(\"hash inconsistency\", \"hash inconsistency\");",
-"    }",
 "    if (!pya_artifacts[existing].has_hash) {",
 "      strncpy(pya_artifacts[existing].hash, hash, sizeof(pya_artifacts[existing].hash) - 1);",
 "      pya_artifacts[existing].hash[sizeof(pya_artifacts[existing].hash) - 1] = '\\0';",

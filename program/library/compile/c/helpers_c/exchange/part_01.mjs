@@ -77,7 +77,7 @@ export const EXCHANGE_HELPER_PART_01 = [
 "static int pya_artifact_count = 0;",
 "",
 "static int pya_find_artifact(const char *locator) {",
-"  for (int i = 0; i < pya_artifact_count; i++) {",
+"  for (int i = pya_artifact_count - 1; i >= 0; i--) {",
 "    if (strcmp(pya_artifacts[i].locator, locator) == 0) return i;",
 "  }",
 "  return -1;",

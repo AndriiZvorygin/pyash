@@ -6,6 +6,7 @@ import { remember } from "../../remember/index.mjs";
 import { throwErrorSentence } from "../../error.mjs";
 import { resolveAgentCwd, resolveAgentPath } from "../../library/agent_cwd.mjs";
 import { resolveConfigMapText } from "../../configure/env.mjs";
+import { htmlToMarkdown } from "../exchange/read.mjs";
 import { resolveUrl, resolveOutput, resolveExtraArgs, parseMonthWindow, isMultiDownload } from "./helpers.mjs";
 import { missingBackend, recordDownloadArtifact, runCurl, runYtDlp } from "./runners.mjs";
 
@@ -144,13 +145,13 @@ export async function download_http(sentence, { scheme, intent, remember: rememb
   await fs.mkdir(path.dirname(cachePath), { recursive: true });
 
   const mock = process.env.PYA_DOWNLOAD_RESPONSE;
-  if (mock !== undefined) {
+  if (mock !== undefined && intent !== "markdown") {
     await fs.writeFile(resolvedDest, String(mock ?? ""), "utf8");
     await fs.writeFile(cachePath, String(mock ?? ""), "utf8");
     return { ob: { filename: resolvedDest }, be: "download" };
   }
 
-  if (!noCache) {
+  if (!noCache && mock === undefined) {
     try {
       await fs.access(cachePath);
       if (resolvedDest !== cachePath) {
@@ -162,14 +163,38 @@ export async function download_http(sentence, { scheme, intent, remember: rememb
   }
 
   const extraArgs = resolveExtraArgs(sentence, { rememberFn });
-  const { status, stderr } = await runCurl({ url, outputPath: resolvedDest, extraArgs });
-  if (status !== 0) {
-    throwErrorSentence({
-      name: "download defective",
-      message: `download defective: curl failed${stderr ? ` (${stderr.trim()})` : ""}`,
-      from: { name: "download" },
-      raw: { url, scheme, intent }
-    });
+  if (intent === "markdown") {
+    const temporaryDirectory = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-download-markdown-"));
+    const htmlPath = path.join(temporaryDirectory, "page.html");
+    try {
+      if (mock !== undefined) {
+        await fs.writeFile(htmlPath, String(mock ?? ""), "utf8");
+      } else {
+        const { status, stderr } = await runCurl({ url, outputPath: htmlPath, extraArgs });
+        if (status !== 0) {
+          throwErrorSentence({
+            name: "download defective",
+            message: `download defective: curl failed${stderr ? ` (${stderr.trim()})` : ""}`,
+            from: { name: "download" },
+            raw: { url, scheme, intent }
+          });
+        }
+      }
+      const html = await fs.readFile(htmlPath, "utf8");
+      await fs.writeFile(resolvedDest, htmlToMarkdown(html), "utf8");
+    } finally {
+      await fs.rm(temporaryDirectory, { recursive: true, force: true });
+    }
+  } else {
+    const { status, stderr } = await runCurl({ url, outputPath: resolvedDest, extraArgs });
+    if (status !== 0) {
+      throwErrorSentence({
+        name: "download defective",
+        message: `download defective: curl failed${stderr ? ` (${stderr.trim()})` : ""}`,
+        from: { name: "download" },
+        raw: { url, scheme, intent }
+      });
+    }
   }
   if (resolvedDest !== cachePath) {
     await fs.copyFile(resolvedDest, cachePath);

@@ -50,6 +50,29 @@ test("download infers fromstate from URL and writes mock output", async () => {
   }
 });
 
+test("download as markdown converts fetched HTML into a Markdown file", async () => {
+  forget();
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-download-markdown-"));
+  const outPath = path.join(tmpDir, "rust-book.md");
+  const original = process.env.PYA_DOWNLOAD_RESPONSE;
+  process.env.PYA_DOWNLOAD_RESPONSE = '<h1>References and Borrowing</h1><p>Rust references let you borrow a value. <a href="https://doc.rust-lang.org/book/ch04-02-references-and-borrowing.html">Read the chapter</a>.</p>';
+  try {
+    const result = await interpret(parse(
+      `be download from filename "https://doc.rust-lang.org/book/ch04-02-references-and-borrowing.html" as wo markdown to filename "${outPath}" do`
+    ));
+    const content = await fs.readFile(outPath, "utf8");
+    assert.match(content, /References and Borrowing/u);
+    assert.match(content, /Rust references let you borrow a value/u);
+    assert.match(content, /\[Read the chapter\]\(https:\/\/doc\.rust-lang\.org\/book\/ch04-02-references-and-borrowing\.html\)/u);
+    assert.doesNotMatch(content, /<\/?(?:h1|p|a)\b/u);
+    assert.equal(result?.value?.filename, outPath);
+  } finally {
+    if (original === undefined) delete process.env.PYA_DOWNLOAD_RESPONSE;
+    else process.env.PYA_DOWNLOAD_RESPONSE = original;
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+});
+
 test("download magnet backend missing is deterministic", async () => {
   forget();
   await assert.rejects(

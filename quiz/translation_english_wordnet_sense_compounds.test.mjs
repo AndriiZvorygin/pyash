@@ -46,8 +46,9 @@ test("sense translation prompt is scoped to one definition and comparison-langua
   assert.match(prompt, /a relationship between friends/u);
   assert.doesNotMatch(prompt, /their friendship lasted years/u);
   assert.doesNotMatch(prompt, /hfre|hlak|hbad/u);
-  assert.deepEqual(languages, ["english", "chinese", "french", "russian", "hindi"]);
-  assert.match(prompt, /"english","chinese","french","russian","hindi"/u);
+  assert.deepEqual(languages, ["chinese", "hindi", "russian", "german", "japanese", "korean", "finnish"]);
+  assert.doesNotMatch(prompt, /"english"/u);
+  assert.match(prompt, /"chinese","hindi","russian","german","japanese","korean","finnish"/u);
   assert.match(prompt, /decompose every translation containing two or more Han characters/u);
   assert.match(prompt, /component surfaces must cover every character of the translation surface exactly once/u);
   assert.match(prompt, /smallest meaningful lexical morphemes/u);
@@ -64,21 +65,22 @@ test("sense translation prompt is scoped to one definition and comparison-langua
   assert.match(prompt, /For each part, provide up to three distinct concise English lexical glosses/u);
 });
 
-test("English sense translations expose multiword WordNet lemmas for composition", () => {
-  const prompt = buildWordNetSenseTranslationPrompt({
-    sense: {
-      senseId: "n:09263527-n",
-      pos: "n",
-      lemma: "chain",
-      lemmas: ["chain", "chemical chain"],
-      gloss: "(chemistry) a series of linked atoms (generally in an organic molecule)"
-    },
-    languages: ["english"]
-  });
+test("English source compounds come from WordNet lemmas without requesting an English translation", () => {
+  const sense = {
+    senseId: "n:09263527-n",
+    pos: "n",
+    lemma: "chain",
+    lemmas: ["chain", "chemical chain"],
+    gloss: "(chemistry) a series of linked atoms (generally in an organic molecule)"
+  };
+  const prompt = buildWordNetSenseTranslationPrompt({ sense, languages });
 
-  assert.match(prompt, /"english"/u);
-  assert.match(prompt, /SENSE LEMMAS: \["chain","chemical chain"\]/u);
-  assert.match(prompt, /When English is requested, use the listed sense lemmas to select the clearest expression/u);
+  assert.equal(languages.includes("english"), false);
+  assert.doesNotMatch(prompt, /LANGUAGES: \[[^\]]*"english"/u);
+  assert.deepEqual(wordNetLemmaComponentTranslations(sense).map(({ surface, components }) => ({
+    surface,
+    parts: components.map((component) => component.surface)
+  })), [{ surface: "chemical chain", parts: ["chemical", "chain"] }]);
 });
 
 test("English compound sense translation preserves chemical-chain components", () => {
@@ -1679,7 +1681,7 @@ test("translation wave queues a bounded wave before awaiting and repairs malform
   assert.equal(result.failures.length, 0);
 });
 
-test("translation wave adds English to a compatible cached language set without retranslating it", async () => {
+test("translation wave adds newly selected languages without retranslating compatible cached languages", async () => {
   const sense = {
     senseId: "n:09263527-n",
     pos: "n",
@@ -1722,17 +1724,17 @@ test("translation wave adds English to a compatible cached language set without 
     },
     awaitHandle: async () => JSON.stringify({
       senseId: sense.senseId,
-      translations: [{
-        language: "english",
-        surface: "chain",
+      translations: requestedLanguages.map((language) => ({
+        language,
+        surface: `${language} chain`,
         composition: "simple",
-        compositionEvidence: "single-word lemma",
+        compositionEvidence: "single lexical expression",
         components: []
-      }]
+      }))
     })
   });
 
-  assert.deepEqual(requestedLanguages, ["english"]);
+  assert.deepEqual(requestedLanguages, ["german", "japanese", "korean", "finnish"]);
   assert.equal(result.submittedCount, 1);
   assert.equal(result.records[0].status, "complete");
   assert.deepEqual(result.records[0].languages, languages);
@@ -1741,7 +1743,10 @@ test("translation wave adds English to a compatible cached language set without 
     french: priorPromptRevision,
     russian: priorPromptRevision,
     hindi: priorPromptRevision,
-    english: "sense-translation-gloss-alternatives-v9"
+    german: "sense-translation-gloss-alternatives-v9",
+    japanese: "sense-translation-gloss-alternatives-v9",
+    korean: "sense-translation-gloss-alternatives-v9",
+    finnish: "sense-translation-gloss-alternatives-v9"
   });
 });
 

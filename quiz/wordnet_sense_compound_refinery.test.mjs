@@ -15,7 +15,10 @@ import {
   resolveWordNetSenseCompoundSenseIds,
   runWordNetSenseCompoundRefinery
 } from "../program/library/translation/wordnet_sense_compound_refinery.mjs";
-import { parseWordNetSenseTranslationCache } from "../program/library/translation/english_wordnet_sense_compounds.mjs";
+import {
+  ENGLISH_WORDNET_SENSE_COMPOUNDS_LANGUAGES,
+  parseWordNetSenseTranslationCache
+} from "../program/library/translation/english_wordnet_sense_compounds.mjs";
 
 test("sense compound launch overrides cannot exceed the configured batch limit", () => {
   assert.equal(resolveWordNetSenseCompoundMaximumSenses(64), 64);
@@ -62,6 +65,7 @@ test("sense compound refinery links, composes, decides, and records one complete
     candidates: [{ lemma: "friendship", rank: 1200, tagCount: 4 }]
   };
   const senseByHandle = new Map();
+  const submittedLanguageSets = [];
   const recordedPromotions = [];
   const savedDecisionBatchSizes = [];
   const compositionPrompts = [];
@@ -104,6 +108,7 @@ test("sense compound refinery links, composes, decides, and records one complete
     translationTransport: {
       async submit({ sense: target, languages, handleId, attempt }) {
         translationSubmitCount += 1;
+        submittedLanguageSets.push([...languages]);
         const id = `${handleId}-translate-${attempt}`;
         senseByHandle.set(id, { sense: target, languages });
         return { status: "queued", handleId: id };
@@ -202,6 +207,8 @@ test("sense compound refinery links, composes, decides, and records one complete
     assert.equal(inventoryChangedResume.selectedSenseCount, 0);
     assert.equal(inventoryChangedResume.remainingSenseCount, 0);
     assert.equal(translationSubmitCount, 2);
+    assert.deepEqual(submittedLanguageSets[0], ENGLISH_WORDNET_SENSE_COMPOUNDS_LANGUAGES);
+    assert.ok(submittedLanguageSets.every((requested) => !requested.includes("english")));
     const resumed = await runWordNetSenseCompoundRefinery({
       artifactRoot,
       runId: "sense-compound-test",
@@ -390,7 +397,7 @@ test("sense compound refinery links, composes, decides, and records one complete
     const languageFailures = buildProgram(failureArtifact).sentences
       .filter((sentence) => sentence.su?.text?.startsWith("translation-failure-") && typeof sentence.ob?.text === "string")
       .map((sentence) => JSON.parse(sentence.ob.text));
-    assert.deepEqual(languageFailures.map((row) => row.language).sort(), ["chinese", "english", "french", "hindi", "russian"]);
+    assert.deepEqual(languageFailures.map((row) => row.language).sort(), [...ENGLISH_WORDNET_SENSE_COMPOUNDS_LANGUAGES].sort());
     assert.ok(languageFailures.every((row) => row.status === "failed" && row.attemptErrors.length === 2));
 
     const partialHandles = new Map();
@@ -435,7 +442,7 @@ test("sense compound refinery links, composes, decides, and records one complete
     assert.equal(partialRun.candidateCount, 1);
     assert.equal(partialRun.result["accepted-count"], 1);
     assert.equal(partialRun.translationFailureCount, 1);
-    assert.equal(partialRun.result["translation-failed-language-count"], 4);
+    assert.equal(partialRun.result["translation-failed-language-count"], 6);
     const partialCache = await readFile(path.join(partialRun.artifactDirectory, "sense-translations.pya"), "utf8");
     assert.equal(parseWordNetSenseTranslationCache(partialCache).bySense.get(sense.senseId).status, "partial");
     const partialProgress = await readFile(path.join(partialRun.artifactDirectory, "progress.pya"), "utf8");

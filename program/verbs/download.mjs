@@ -15,7 +15,7 @@ export default async function download(sentence, { remember: rememberFn = rememb
   }
   const intent = sentence?.as?.wo;
   if (scheme === "http" || scheme === "https") {
-    if (intent === "web" || intent === "file") {
+    if (intent === "web" || intent === "file" || intent === "markdown") {
       return download_http(sentence, { scheme, intent, remember: rememberFn });
     }
     if (intent === "video" || intent === "audio") {

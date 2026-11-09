@@ -84,9 +84,24 @@ from filename "archives/site.zim" as wo cluster-compress ob text "index.html" be
 ```
 
 Search with only a query and `fromstate wo zim` uses the configured
-`world/library/archive` collection by default. It uses the configured Kiwix
-Server's full-text index and returns the archive path, article title, entry
-path, and matching excerpt. The `zimwriterfs` default builds the index.
+`world/library/archive` collection by default and queries the configured Kiwix
+Server's full-text index. When the archive collection is mounted locally,
+results include its archive path, article title, entry path, and matching
+excerpt. A remote Kiwix server can also provide query-only search without a
+local archive mount; those results identify the archive from the server's
+archive ID or book title. This is useful when the indexed ZIM collection is
+hosted elsewhere. Each result includes a `page` URL for the Kiwix content route.
+Download it directly as Markdown and read the saved file to inspect the full
+page; raw HTML is available when the markup itself matters:
+
+```pyash
+be download from filename "https://zim.example/content/rust/book.html" as wo markdown to filename "artifacts/rust-book.md" do
+from filename "artifacts/rust-book.md" be read do
+```
+
+If neither the local collection nor a configured search server is available,
+search fails with a clear configuration error. The `zimwriterfs` default builds
+the index.
 `read` uses OpenZIM's `zimdump` to list entries or extract one article directly.
 The server also supports searching one archive from that shared collection;
 an explicit archive path overrides the default collection:

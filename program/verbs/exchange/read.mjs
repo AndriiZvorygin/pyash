@@ -29,7 +29,7 @@ function stripHtmlTags(text) {
   return String(text ?? "").replace(/<[^>]*>/g, "");
 }
 
-function htmlToMarkdown(html) {
+export function htmlToMarkdown(html) {
   let text = String(html ?? "");
   text = text.replace(/<script[\s\S]*?<\/script>/gi, "");
   text = text.replace(/<style[\s\S]*?<\/style>/gi, "");
