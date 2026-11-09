@@ -84,6 +84,9 @@ test("pyash mcp server lists tools and executes exists tool", async () => {
 });
 
 test("pyash mcp server loads the selected saddle tools map", async () => {
+  const markdownPath = path.resolve("artifacts", `mcp-download-markdown-${process.pid}.md`);
+  const previousDownloadResponse = process.env.PYA_DOWNLOAD_RESPONSE;
+  process.env.PYA_DOWNLOAD_RESPONSE = "<h1>Retrieved page</h1><p>Useful source text.</p>";
   const serverPath = path.resolve("command/pyash_mcp_server.mjs");
   const client = createJsonRpcClient({
     command: process.execPath,
@@ -94,7 +97,7 @@ test("pyash mcp server loads the selected saddle tools map", async () => {
     const list = await client.send("tools/list", {});
     const tools = Array.isArray(list?.tools) ? list.tools : [];
     const descriptions = tools.map((tool) => String(tool?.description ?? ""));
-    assert.equal(tools.length, 12);
+    assert.equal(tools.length, 13);
     assert.ok(descriptions.some((description) => description.includes("su name read from filename input be read")));
     assert.ok(descriptions.some((description) => description.includes("su name command ob text")));
     assert.ok(descriptions.some((description) => description.includes("su name repair ob text")));
@@ -108,6 +111,16 @@ test("pyash mcp server loads the selected saddle tools map", async () => {
     const downloadTool = tools.find((tool) => String(tool?.name ?? "").startsWith("be_download_as_wo_web_"));
     assert.ok(downloadTool, "expected web download capability in the saddle tools map");
     assert.deepEqual(downloadTool.inputSchema?.required, ["from", "to"]);
+
+    const downloadMarkdownTool = tools.find((tool) => String(tool?.name ?? "").startsWith("be_download_markdown_"));
+    assert.ok(downloadMarkdownTool, "expected Markdown download capability in the saddle tools map");
+    assert.deepEqual(downloadMarkdownTool.inputSchema?.required, ["from", "to"]);
+    const markdownDownload = await client.send("tools/call", {
+      name: downloadMarkdownTool.name,
+      arguments: { from: "https://example.com/page.html", to: markdownPath }
+    });
+    assert.equal(markdownDownload?.isError, undefined);
+    assert.match(await fs.readFile(markdownPath, "utf8"), /Retrieved page\nUseful source text\./u);
 
     const readMarkdownTool = tools.find((tool) => String(tool?.name ?? "")
       .startsWith("be_read_markdown_from_filename"));
@@ -124,6 +137,9 @@ test("pyash mcp server loads the selected saddle tools map", async () => {
     assert.match(String(read?.content?.[0]?.text ?? ""), /Pyash/i);
   } finally {
     client.close();
+    if (previousDownloadResponse === undefined) delete process.env.PYA_DOWNLOAD_RESPONSE;
+    else process.env.PYA_DOWNLOAD_RESPONSE = previousDownloadResponse;
+    await fs.rm(markdownPath, { force: true });
   }
 });
 

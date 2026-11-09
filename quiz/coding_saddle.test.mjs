@@ -320,7 +320,7 @@ test("coding saddle shows elapsed progress and explicit tool event labels", () =
 
 test("coding saddle completion evidence requires a successful edit and a later command check", () => {
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /Never launch .*mind_ollama_runner\.mjs.*structured request payload/u);
-  assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /documentation research.*ZIM search first.*download a returned page URL.*read the saved HTML as Markdown.*retrieved page text/u);
+  assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /documentation research.*ZIM search first.*download a returned page URL as Markdown.*read the saved Markdown file.*raw HTML only when.*retrieved page text/u);
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /name the target file before editing/u);
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /After the final edit/u);
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /active agent house's absolute memory\/MEMORY\.md path/u);

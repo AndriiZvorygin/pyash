@@ -19,6 +19,7 @@ test("saddle tools map exposes coding signatures", async () => {
     "su name session plan be write fromstate \"coding saddle plan\" ob text input can",
     "su name search be search ob text input fromstate wo zim can",
     "su name download be download from filename input as wo web to filename input can",
+    "su name download markdown be download from filename input as wo markdown to filename input can",
     "su name read markdown be read from filename input fromstate wo html become wo markdown atmost byte 65536 can"
   ];
 
@@ -43,11 +44,17 @@ test("saddle tools map exposes coding signatures", async () => {
   assert.deepEqual(searchCall.fromstate, { text: "zim", wo: "zim" });
   assert.equal(searchCall.in, undefined);
 
-  const downloadLine = capabilityLines.at(-2);
+  const downloadLine = capabilityLines.find((line) => line.startsWith("su name download "));
   const downloadSignature = joinSignatureWords(deriveSignatureFromCall(parse(downloadLine)));
   const downloadTool = buildToolSchemas("saddle tools").tools
     .find((tool) => tool.function.signature === downloadSignature);
   assert.deepEqual(downloadTool.function.parameters.required, ["from", "to"]);
+
+  const downloadMarkdownLine = capabilityLines.find((line) => line.startsWith("su name download markdown "));
+  const downloadMarkdownSignature = joinSignatureWords(deriveSignatureFromCall(parse(downloadMarkdownLine)));
+  const downloadMarkdownTool = buildToolSchemas("saddle tools").tools
+    .find((tool) => tool.function.signature === downloadMarkdownSignature);
+  assert.deepEqual(downloadMarkdownTool.function.parameters.required, ["from", "to"]);
 
   const readMarkdownLine = capabilityLines.at(-1);
   const readMarkdownSignature = joinSignatureWords(deriveSignatureFromCall(parse(readMarkdownLine)));

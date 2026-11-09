@@ -90,8 +90,15 @@ results include its archive path, article title, entry path, and matching
 excerpt. A remote Kiwix server can also provide query-only search without a
 local archive mount; those results identify the archive from the server's
 archive ID or book title. This is useful when the indexed ZIM collection is
-hosted elsewhere. Each result includes a `page` URL for the Kiwix content route;
-download that URL and read the saved HTML as Markdown to inspect the full page.
+hosted elsewhere. Each result includes a `page` URL for the Kiwix content route.
+Download it directly as Markdown and read the saved file to inspect the full
+page; raw HTML is available when the markup itself matters:
+
+```pyash
+be download from filename "https://zim.example/content/rust/book.html" as wo markdown to filename "artifacts/rust-book.md" do
+from filename "artifacts/rust-book.md" be read do
+```
+
 If neither the local collection nor a configured search server is available,
 search fails with a clear configuration error. The `zimwriterfs` default builds
 the index.
