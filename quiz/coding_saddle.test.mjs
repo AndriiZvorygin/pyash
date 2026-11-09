@@ -370,9 +370,14 @@ test("coding saddle shows elapsed progress and explicit tool event labels", () =
   assert.equal(saddleToolEventLabel({ stage: "result", toolName: "repair" }), "[tool result] repair");
 });
 
+test("coding saddle explains archive focus tool arguments", () => {
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("call `read_archive_focus` with `archive_path`, `entry_path`, and `focus`; copy `entry_path` exactly from search results"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("Never substitute the focus phrase for the entry path."));
+});
+
 test("coding saddle completion evidence requires a successful edit and a later command check", () => {
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /Never launch .*mind_ollama_runner\.mjs.*structured request payload/u);
-  assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /documentation research.*ZIM search first.*`read archive focus`.*archive path, entry path, and search phrase.*bounded passages.*download a returned page URL as Markdown.*read the saved file.*retrieved page text/u);
+  assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /documentation research.*ZIM search first.*`search archive`.*archive path and query.*`read_archive_focus`.*`archive_path`, `entry_path`, and `focus`.*copy `entry_path` exactly from search results.*Never substitute the focus phrase for the entry path.*returned bounded passages.*download a returned page URL as Markdown.*read the saved file.*retrieved page text/u);
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /name the target file before editing/u);
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /After the final edit/u);
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /active agent house's absolute memory\/MEMORY\.md path/u);
