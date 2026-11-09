@@ -613,6 +613,9 @@ export async function prepareWordNetFrequencyAllocation({ reselectAtomTargetIds 
   const catalog = parseEnglishWordNetBridgeCatalog(linkerSource);
   const resolveWord = buildWordResolver(resources, compoundCoverage);
   const rankForEnglish = rankLookup(resources);
+  const princetonSynsetIds = new Set(frequency.frequency.rows.map((row) => (
+    `${row.pos}:${String(row.offset).padStart(8, "0")}-${row.pos}`
+  )));
   const reselectTargets = new Set(reselectAtomTargetIds);
   const reopenedAtomSenseEntries = atomSenseEntriesForReselection(catalog.entries, [...reselectTargets], resolveWord);
   const reopenedSources = new Set(reopenedAtomSenseEntries.map((entry) => entry.source));
@@ -620,6 +623,7 @@ export async function prepareWordNetFrequencyAllocation({ reselectAtomTargetIds 
   const records = buildEnglishWordNetFrequencyAllocationRecords({
     wordnetIndex: resources.wordnet.index,
     frequencyJoin: frequency.joined,
+    princetonSynsetIds,
     rankForEnglish,
     resolveWord
   });

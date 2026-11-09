@@ -205,16 +205,24 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   `node command/wordnet_sense_compound_refinery.mjs`. Its workflow and bounded
   batch settings live in
   `program/library/translation/wordnet_sense_compound_refinery.pya`. The
-  worklist uses descending WordNet tag-count order and includes every residual
-  sense with at least one exact WordNet tag count. Untagged senses are outside
-  this pass.
+  current pass uses descending WordNet tag-count order and includes residual
+  senses with at least one exact Princeton lexical-key tag count. After that
+  pass, continue the same run with `minimum-tag-count` set to `0`,
+  `worklist-order` set to `english30k-rank`, and
+  `require-princeton-intersection` set to `true`. The intersection is by
+  Princeton POS plus synset offset, so it can include a shared synset even when
+  its OEWN lexical key changed. Keep exact-key tag counts separate: an unknown
+  count stays unknown rather than becoming zero. Rank every lemma in a synset
+  against English30k and use its best rank; completed sense ids remain skipped
+  from the previous pass.
   Preserve each synset's maximum exact tag count on the allocation record and
   through its residual row, even when no atom/compound candidate exists;
   otherwise the compound worklist can mistake high-frequency unanchored senses
   for untagged rows and silently drop them.
   It asks the configured Qwen mind through the GPU Housekeeper queue for one sense's
-  translations and transparent word parts in English, Chinese, French, Russian,
-  and Hindi. For English, include all WordNet lemmas so a multiword lexical lemma
+  translations and transparent word parts in Chinese, Hindi, Russian, German,
+  Japanese, Korean, and Finnish. English compound sources come from all WordNet lemmas
+  so a multiword lexical lemma
   such as `chemical chain` can contribute its own English compound parts. The configured `parallelism` bounds simultaneous duties; Housekeeper
   may run them across available workers. Resolve English components with
   `vocab_suggest`; split slash- and pipe-separated gloss alternatives, and

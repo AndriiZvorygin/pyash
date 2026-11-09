@@ -324,6 +324,7 @@ export function allocateEnglishWordNetAnchors(records = [], {
         synset: record.synset,
         lemmas: Array.isArray(record.lemmas) ? [...record.lemmas] : [],
         gloss: String(record.gloss ?? ""),
+        ...(record.princetonMatched === true ? { princetonMatched: true } : {}),
         reason,
         ...(Number.isSafeInteger(record.tagCount) ? { tagCount: record.tagCount } : {}),
         candidates: candidates.map((candidate) => ({
@@ -433,11 +434,13 @@ export function reconcileEnglishWordNetFrequencyBridgeRows({
 export function buildEnglishWordNetFrequencyAllocationRecords({
   wordnetIndex,
   frequencyJoin,
+  princetonSynsetIds = new Set(),
   rankForEnglish = () => Number.POSITIVE_INFINITY,
   resolveWord = () => null
 } = {}) {
   if (!(wordnetIndex?.bySynset instanceof Map)) throw invalid("frequency allocation requires a WordNet index");
   if (!Array.isArray(frequencyJoin?.entries)) throw invalid("frequency allocation requires joined tag-count entries");
+  if (!(princetonSynsetIds instanceof Set)) throw invalid("frequency allocation requires Princeton synset identities");
   const tagCountBySourceLemma = new Map();
   const tagCountBySource = new Map();
   for (const row of frequencyJoin.entries) {
@@ -462,6 +465,7 @@ export function buildEnglishWordNetFrequencyAllocationRecords({
       synset,
       lemmas,
       gloss: String(rows.map((row) => row.gloss).find(Boolean) ?? ""),
+      ...(princetonSynsetIds.has(source) ? { princetonMatched: true } : {}),
       ...(tagCountBySource.has(source) ? { tagCount: tagCountBySource.get(source) } : {}),
       candidates: []
     };

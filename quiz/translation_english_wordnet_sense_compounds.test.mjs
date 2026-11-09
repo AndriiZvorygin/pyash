@@ -1071,6 +1071,68 @@ test("tag-count floor keeps only senses with at least the configured count", () 
   ]);
 });
 
+test("English-rank queue includes only Princeton-intersection synsets and ranks every lemma", () => {
+  const rows = buildSenseCompoundWorklist({
+    residualSenses: [
+      {
+        source: "n:00000031-n",
+        pos: "n",
+        lemmas: ["uncommon alias", "common alias"],
+        gloss: "a Princeton-matched zero-tag sense",
+        tagCount: 0,
+        princetonMatched: true
+      },
+      {
+        source: "n:00000032-n",
+        pos: "n",
+        lemmas: ["less common"],
+        gloss: "another Princeton-matched zero-tag sense",
+        tagCount: 0,
+        princetonMatched: true
+      },
+      {
+        source: "n:00000033-n",
+        pos: "n",
+        lemmas: ["one tagged"],
+        gloss: "a Princeton-matched sense with one tag",
+        tagCount: 1,
+        princetonMatched: true
+      },
+      {
+        source: "n:00000035-n",
+        pos: "n",
+        lemmas: ["matched but key changed"],
+        gloss: "a synset in both resources with no exact lexical-key count",
+        princetonMatched: true
+      },
+      {
+        source: "n:00000034-n",
+        pos: "n",
+        lemmas: ["not in Princeton"],
+        gloss: "a WordNet-only sense"
+      }
+    ],
+    rankForEnglish: (lemma) => ({
+      "common alias": 12,
+      "uncommon alias": 400,
+      "less common": 45,
+      "one tagged": 90,
+      "matched but key changed": 70,
+      "not in Princeton": 1
+    }[lemma] ?? Number.POSITIVE_INFINITY),
+    order: "english30k-rank",
+    minimumTagCount: 0,
+    requirePrincetonIntersection: true
+  });
+
+  assert.deepEqual(rows.map(({ senseId, frequencyRank, tagCount }) => [senseId, frequencyRank, tagCount]), [
+    ["n:00000031-n", 12, 0],
+    ["n:00000032-n", 45, 0],
+    ["n:00000035-n", 70, -1],
+    ["n:00000033-n", 90, 1]
+  ]);
+});
+
 test("compound worklist keeps existing lexical heads, and excludes grammar-covered targets", () => {
   const rows = buildSenseCompoundWorklist({
     residualSenses: [
