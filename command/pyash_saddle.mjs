@@ -670,20 +670,31 @@ export async function loadSaddleSessionHistory({
 
 export function renderSaddleSessionHistory(saddleUi, messages = [], session = "", detail = "") {
   const history = Array.isArray(messages) ? messages : [];
-  saddleUi.clearHistory();
-  saddleUi.writeLine(`session: ${session || SESSION_NAME} | restored ${history.length} saved messages${detail ? ` | ${detail}` : ""}`);
+  const entries = [{
+    kind: "text",
+    text: `session: ${session || SESSION_NAME} | restored ${history.length} saved messages${detail ? ` | ${detail}` : ""}`
+  }];
   for (const message of history) {
     if (message?.role === "assistant") {
-      saddleUi.writeLine("saddle>");
-      saddleUi.writeMarkdown(String(message.content ?? ""));
+      entries.push({ kind: "text", text: "saddle>" });
+      entries.push({ kind: "markdown", text: String(message.content ?? "") });
     } else if (message?.role === "user") {
-      saddleUi.writeLine(`you> ${String(message.content ?? "")}`);
-      if (message.pending) saddleUi.writeLine("[unfinished turn; no completed response was saved]");
+      entries.push({ kind: "text", text: `you> ${String(message.content ?? "")}` });
+      if (message.pending) entries.push({ kind: "text", text: "[unfinished turn; no completed response was saved]" });
     } else if (message?.role === "tool") {
-      saddleUi.writeLine(`[tool] ${String(message.content ?? "")}`);
+      entries.push({ kind: "text", text: `[tool] ${String(message.content ?? "")}` });
     }
   }
-  if (history.length) saddleUi.writeLine("--- end of saved history ---");
+  if (history.length) entries.push({ kind: "text", text: "--- end of saved history ---" });
+  if (typeof saddleUi.replaceItems === "function") {
+    saddleUi.replaceItems(entries);
+    return;
+  }
+  saddleUi.clearHistory();
+  for (const entry of entries) {
+    if (entry.kind === "markdown") saddleUi.writeMarkdown(entry.text);
+    else saddleUi.writeLine(entry.text);
+  }
 }
 
 export async function dischargeSaddleModel(model, backend, {

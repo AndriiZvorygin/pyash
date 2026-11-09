@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
+import { renderSaddleSessionHistory } from "../command/pyash_saddle.mjs";
 import {
   createSaddleTerminalUi,
   renderSaddleMarkdown,
@@ -96,6 +97,29 @@ test("coding saddle keeps streamed text and tool events in chronological order",
   assert.ok(callIndex < resultIndex);
   assert.ok(resultIndex < finalPromptIndex);
   assert.ok(finalPromptIndex < answerIndex);
+  ui.exit();
+});
+
+test("coding saddle restores a long history with one terminal redraw", () => {
+  const writes = [];
+  const ui = createSaddleTerminalUi({
+    output: { columns: 80, rows: 200, isTTY: true, write(value) { writes.push(String(value)); } },
+    color: false
+  });
+  ui.enter();
+  writes.length = 0;
+
+  const messages = Array.from({ length: 80 }, (_, index) => ({
+    role: index % 2 ? "assistant" : "user",
+    content: `saved message ${index}`
+  }));
+  renderSaddleSessionHistory(ui, messages, "20261107-coding");
+
+  assert.equal(writes.length, 1, `expected one terminal frame, got ${writes.length} writes`);
+  assert.equal(ui.getState().itemCount, 122);
+  const frame = writes.join("");
+  assert.match(frame, /restored 80 saved messages/u);
+  assert.match(frame, /--- end of saved history ---/u);
   ui.exit();
 });
 

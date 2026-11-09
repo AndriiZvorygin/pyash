@@ -324,8 +324,13 @@ export function createSaddleTerminalUi({ output = process.stdout, maxItems = 400
 
   const columns = () => Math.max(20, Number(output.columns) || 80);
   const rows = () => Math.max(8, Number(output.rows) || 24);
-  const append = (kind, text) => {
-    items.push({ kind, text: stripTerminalControlSequences(text) });
+  const appendItems = (entries) => {
+    for (const entry of entries) {
+      items.push({
+        kind: entry?.kind === "markdown" ? "markdown" : "text",
+        text: stripTerminalControlSequences(entry?.text ?? "")
+      });
+    }
     if (items.length > maxItems) items.splice(0, items.length - maxItems);
     draw();
   };
@@ -371,15 +376,16 @@ export function createSaddleTerminalUi({ output = process.stdout, maxItems = 400
     while (screen.length < height) screen.splice(height - 1, 0, "");
     screen.length = height;
 
-    output.write("\u001b[?25l\u001b[H");
+    const frame = ["\u001b[?25l\u001b[H"];
     for (let index = 0; index < screen.length; index += 1) {
-      output.write(`\u001b[2K${screen[index]}`);
-      if (index < screen.length - 1) output.write("\u001b[1B\r");
+      frame.push(`\u001b[2K${screen[index]}`);
+      if (index < screen.length - 1) frame.push("\u001b[1B\r");
     }
     const inputFirstRow = headerRows + maxTranscriptRows + 1;
     cursorRow = Math.min(height, inputFirstRow + cursorRelativeRow + 1);
     cursorColumn = Math.min(columns(), Math.max(1, inputLayout.cursorColumn + 1));
-    output.write(`\u001b[${cursorRow};${cursorColumn}H\u001b[?25h`);
+    frame.push(`\u001b[${cursorRow};${cursorColumn}H\u001b[?25h`);
+    output.write(frame.join(""));
   };
 
   return {
@@ -396,10 +402,15 @@ export function createSaddleTerminalUi({ output = process.stdout, maxItems = 400
     },
     draw,
     writeLine(text = "") {
-      append("text", String(text));
+      appendItems([{ kind: "text", text: String(text) }]);
     },
     writeMarkdown(text = "") {
-      append("markdown", String(text));
+      appendItems([{ kind: "markdown", text: String(text) }]);
+    },
+    replaceItems(entries = []) {
+      items.length = 0;
+      scrollOffset = 0;
+      appendItems(Array.isArray(entries) ? entries : []);
     },
     beginMarkdownStream() {
       const item = { kind: "markdown", text: "", cacheKey: null, renderedLines: [] };
