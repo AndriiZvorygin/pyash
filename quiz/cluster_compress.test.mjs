@@ -375,6 +375,43 @@ test("query-only ZIM search clearly reports a missing configured library mount",
   });
 });
 
+test("query-only ZIM search uses the configured remote index without a local archive mount", async () => {
+  const previousFetch = globalThis.fetch;
+  let requestedUrl;
+  globalThis.fetch = async (url) => {
+    requestedUrl = new URL(url);
+    return {
+      ok: true,
+      status: 200,
+      text: async () => `<rss><channel><item>
+        <title>Rust agent guides - The Rust Programming Language</title>
+        <link>/content/rust-agent-guides-1.99.1/book/introduction.html</link>
+        <description>The official Rust book and language documentation.</description>
+        <book><title>rust-agent-guides-1.99.1</title></book>
+      </item></channel></rss>`
+    };
+  };
+
+  try {
+    await withZimTools(async () => {
+      doRemember(parse('exists su name zim archive library directory ob text "missing-archives" be default ya'));
+      doRemember(parse('exists su name zim archive search server ob text "https://zim.example" be default ya'));
+
+      const result = await interpret(parse('ob text "Rust" fromstate wo zim be search do'));
+
+      assert.equal(result?.be, "search");
+      assert.match(result?.ob?.text ?? "", /archive: rust-agent-guides-1\.99\.1/u);
+      assert.match(result?.ob?.text ?? "", /title: Rust agent guides/u);
+      assert.match(result?.ob?.text ?? "", /snippet: The official Rust book/u);
+      assert.equal(requestedUrl.origin, "https://zim.example");
+      assert.equal(requestedUrl.pathname, "/search");
+      assert.equal(requestedUrl.searchParams.get("pattern"), "Rust");
+    });
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test("ZIM reads follow the configured external library symlink and reject other outside links", async () => {
   await withZimTools(async (root) => {
     const storage = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-zim-external-store-"));

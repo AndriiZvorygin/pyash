@@ -586,6 +586,14 @@ async function resolveZimSearchInputs(sentence, rememberFn) {
       ? null
       : await fs.stat(path.resolve(sandbox.cwd, filename)).catch(() => null);
     if (!explicitFilename && !libraryStats) {
+      if (resolveConfigText("zim archive search server", { rememberFn })) {
+        return {
+          sandbox,
+          libraryPath: input.candidate,
+          isCollection: true,
+          archives: []
+        };
+      }
       fail(
         sentence,
         "zim archive library unavailable",
