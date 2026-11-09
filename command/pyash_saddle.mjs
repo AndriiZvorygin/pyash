@@ -14,6 +14,8 @@ import { loadDefaultConfig } from "./run_pya_helpers.mjs";
 import { resolveConfigText } from "../program/configure/env.mjs";
 import {
   ensureAgentDirs,
+  buildSessionNameForDate,
+  buildSessionNamePrefix,
   listSessionFiles,
   readSessionMessages,
   readSessionMessagesWithFallback
@@ -115,6 +117,39 @@ export function resolveSaddleProjectWorldRoot({ runtimeRoot, cwd } = {}) {
   if (resolvedCwd === resolvedRuntimeRoot) return path.join(resolvedRuntimeRoot, "world");
   const projectId = createHash("sha256").update(resolvedCwd).digest("hex").slice(0, 24);
   return path.join(resolvedRuntimeRoot, "world", "coding-saddle-projects", projectId);
+}
+
+function compactLocalDate(date) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}`;
+}
+
+async function findLatestOlderSessionFile({ sessionDir, sessionName }) {
+  let entries;
+  try {
+    entries = await fs.readdir(sessionDir, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return "";
+    throw error;
+  }
+
+  const today = buildSessionNamePrefix().slice(0, 8);
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterday = compactLocalDate(yesterdayDate);
+  const suffix = `${buildSessionNameForDate({ baseName: sessionName, dateCompact: "00000000" }).slice(8)}.pya`;
+  const candidates = entries
+    .filter((entry) => entry.isFile() && /^\d{8}/u.test(entry.name))
+    .map((entry) => ({ entry, date: entry.name.slice(0, 8) }))
+    .filter(({ entry, date }) => entry.name === `${date}${suffix}` && date < yesterday && date <= today)
+    .sort((left, right) => right.date.localeCompare(left.date));
+
+  for (const { entry } of candidates) {
+    const filename = path.join(sessionDir, entry.name);
+    const replay = await readSessionMessages({ sessionFile: filename, historyWindow: 1, includePending: true });
+    if (replay.messages.length || replay.pendingTurns.length) return filename;
+  }
+  return "";
 }
 
 function isRelativePathWithin(directory, target) {
@@ -385,10 +420,28 @@ export async function prepareSaddle({
   const saddleState = await readCodingSaddleState(saddleStatePath);
   const sessionDir = path.join(agentHouse, "session");
   const storedSessionFile = saddleState.activeSessionFile ? path.resolve(saddleState.activeSessionFile) : "";
-  const sessionFile = storedSessionFile && await isPathWithin(sessionDir, storedSessionFile) ? storedSessionFile : "";
-  const sessionName = storedSessionFile && !sessionFile
+  let sessionFile = storedSessionFile && await isPathWithin(sessionDir, storedSessionFile) ? storedSessionFile : "";
+  let sessionName = storedSessionFile && !sessionFile
     ? SESSION_NAME
     : saddleState.activeSessionName || SESSION_NAME;
+  if (!sessionFile) {
+    let recentHistoryIsEmpty = false;
+    try {
+      const recentHistory = await readSessionMessagesWithFallback({
+        sessionDir,
+        baseName: sessionName,
+        historyWindow: 1,
+        includePending: true
+      });
+      recentHistoryIsEmpty = !recentHistory.messages.length && !recentHistory.pendingTurns.length;
+    } catch {
+      // Keep the normal history renderer responsible for reporting a damaged recent transcript.
+    }
+    if (recentHistoryIsEmpty) {
+      sessionFile = await findLatestOlderSessionFile({ sessionDir, sessionName });
+      if (sessionFile) sessionName = path.basename(sessionFile, path.extname(sessionFile));
+    }
+  }
   const sessionProfile = getCodingSaddleProfile(saddleState, { sessionName, sessionFile });
   const recentModelStatePath = path.join(
     useGlobalRecentPreference ? globalAgentHouse : agentHouse,

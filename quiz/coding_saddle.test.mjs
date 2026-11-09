@@ -108,6 +108,58 @@ test("coding saddle reloads named and explicitly selected session history", asyn
   }
 });
 
+test("coding saddle resumes the newest same-project transcript after a multi-day gap", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-gap-resume-"));
+  const runtimeRoot = path.join(root, "runtime");
+  const cwd = path.join(root, "projects", "biography");
+  const envKeys = ["PYA_SADDLE_MIND", "PYA_SADDLE_MODEL", "PYA_SADDLE_HOST"];
+  const previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  for (const key of envKeys) delete process.env[key];
+  await fs.mkdir(path.join(runtimeRoot, "configure"), { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+  try {
+    await fs.writeFile(path.join(runtimeRoot, "configure", "default.pya"), [
+      "exists su name mind backend be default ob name ollama command mind ya",
+      'exists su name mind model ob text "qwen3.5:9b" be default ya',
+      'exists su name coding saddle mind ob text "mind" be default ya',
+      'exists su name mind be mind from name "http://localhost:11434" via state "qwen3.5:9b" ya'
+    ].join("\n") + "\n", "utf8");
+
+    const initial = await prepareSaddle({ cwd, runtimeRoot });
+    const sessionDir = path.join(initial.agentHouse, "session");
+    const olderFile = path.join(sessionDir, `${buildSessionNameForDate({ baseName: "coding", dateCompact: "20200101" })}.pya`);
+    const latestFile = path.join(sessionDir, `${buildSessionNameForDate({ baseName: "coding", dateCompact: "20200102" })}.pya`);
+    const chat = (name, content) => sentenceToPyash({
+      su: { name }, ob: { text: content }, be: "answer", mood: "ya"
+    });
+    await fs.writeFile(olderFile, `${chat("user", "older conversation")}\n`, "utf8");
+    await fs.writeFile(latestFile, [
+      chat("user", "resume this biography work"),
+      chat("agent", "I have the previous biography context.")
+    ].join("\n") + "\n", "utf8");
+
+    const resumed = await prepareSaddle({ cwd, runtimeRoot });
+    assert.equal(resumed.sessionFile, latestFile);
+    assert.equal(resumed.sessionName, "20200102-coding");
+    const history = await loadSaddleSessionHistory({
+      agentHouse: resumed.agentHouse,
+      sessionName: resumed.sessionName,
+      sessionFile: resumed.sessionFile
+    });
+    assert.deepEqual(history.messages, [
+      { role: "user", content: "resume this biography work" },
+      { role: "assistant", content: "I have the previous biography context." }
+    ]);
+  } finally {
+    for (const key of envKeys) {
+      if (previousEnv[key] === undefined) delete process.env[key];
+      else process.env[key] = previousEnv[key];
+    }
+    forget();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test("coding saddle sends on Enter and keeps Shift+Enter as a newline", async () => {
   const submitted = [];
   const decoder = createSaddleInputDecoder({
