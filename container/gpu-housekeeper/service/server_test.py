@@ -1204,6 +1204,10 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.assertEqual(server.job_status("fail")["error"], {"message": "boom"})
 
   def test_registered_job_executes_without_housekeeper_backlog(self):
+    server.parse_nvidia_smi = lambda: {
+      "available": True,
+      "devices": [{"deviceId": "gpu0", "vramTotalMb": 24576, "vramUsedMb": 0, "vramFreeMb": 24576}]
+    }
     server.parse_runtime_status = lambda _entry: {
       "status": "running",
       "gpuExpected": True,
