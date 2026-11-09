@@ -27,6 +27,14 @@ class HousekeeperServerConfigTests(unittest.TestCase):
     self.assertEqual(server.parse_server_args([]).port, 18886)
     self.assertEqual(server.parse_server_args(["--port", "8090"]).port, 8090)
 
+  def test_peer_timeout_default_allows_snapshot_telemetry_to_finish(self):
+    with patch.dict(os.environ, {"GPU_HOUSEKEEPER_PEER_TIMEOUT_MS": ""}, clear=False):
+      self.assertEqual(server.peer_timeout_ms(), 5000)
+
+  def test_peer_health_monitor_defaults_to_low_frequency_probes(self):
+    with patch.dict(os.environ, {"GPU_HOUSEKEEPER_PEER_HEALTH_INTERVAL_SEC": ""}, clear=False):
+      self.assertEqual(server.peer_health_interval_seconds(), 15)
+
   def test_model_size_estimate_rounds_up_to_a_whole_mib(self):
     request = server.job_resource_request({
       "jobSpec": {"resourceRequest": {
@@ -3131,9 +3139,14 @@ class HousekeeperFederationTests(unittest.TestCase):
     self.orig_parse_nvidia_smi = server.parse_nvidia_smi
     self.orig_capacity_plan_for_job = server.capacity_plan_for_job
     self.orig_local_execution_slot_busy = server.local_execution_slot_busy
+    self.orig_persist_durable_job = server.persist_durable_job
     self.orig_host_id = server.Handler.host_id
+    self.orig_peer_health = {key: dict(value) for key, value in server._PEER_HEALTH.items()}
     self.orig_accept_forwarded = os.environ.get("GPU_HOUSEKEEPER_ACCEPT_FORWARDED")
+    self.orig_peer_failure_limit = os.environ.get("GPU_HOUSEKEEPER_PEER_FAILURE_LIMIT")
+    self.orig_peer_cooldown = os.environ.get("GPU_HOUSEKEEPER_PEER_COOLDOWN_SEC")
     server._JOBS.clear()
+    server._PEER_HEALTH.clear()
     server.Handler.host_id = "mriczo"
 
   def tearDown(self):
@@ -3146,12 +3159,79 @@ class HousekeeperFederationTests(unittest.TestCase):
     server.parse_nvidia_smi = self.orig_parse_nvidia_smi
     server.capacity_plan_for_job = self.orig_capacity_plan_for_job
     server.local_execution_slot_busy = self.orig_local_execution_slot_busy
+    server.persist_durable_job = self.orig_persist_durable_job
     server.Handler.host_id = self.orig_host_id
+    server._PEER_HEALTH.clear()
+    server._PEER_HEALTH.update(self.orig_peer_health)
     if self.orig_accept_forwarded is None:
       os.environ.pop("GPU_HOUSEKEEPER_ACCEPT_FORWARDED", None)
     else:
       os.environ["GPU_HOUSEKEEPER_ACCEPT_FORWARDED"] = self.orig_accept_forwarded
+    if self.orig_peer_failure_limit is None:
+      os.environ.pop("GPU_HOUSEKEEPER_PEER_FAILURE_LIMIT", None)
+    else:
+      os.environ["GPU_HOUSEKEEPER_PEER_FAILURE_LIMIT"] = self.orig_peer_failure_limit
+    if self.orig_peer_cooldown is None:
+      os.environ.pop("GPU_HOUSEKEEPER_PEER_COOLDOWN_SEC", None)
+    else:
+      os.environ["GPU_HOUSEKEEPER_PEER_COOLDOWN_SEC"] = self.orig_peer_cooldown
     server._JOBS.clear()
+
+  def test_peer_is_quarantined_after_repeated_probe_failures(self):
+    server.configured_peers = lambda: {"macstudio": "http://macstudio:18886"}
+    server.local_route_state = lambda _job, _registry, _host: {
+      "hostId": "mriczo", "available": True, "immediate": False
+    }
+    calls = []
+
+    def unavailable(host_id, url, _job):
+      calls.append((host_id, url))
+      raise RuntimeError("network unreachable")
+
+    server.peer_route_candidate = unavailable
+    with patch.dict(os.environ, {
+      "GPU_HOUSEKEEPER_PEER_FAILURE_LIMIT": "2",
+      "GPU_HOUSEKEEPER_PEER_COOLDOWN_SEC": "60"
+    }, clear=False):
+      for _ in range(3):
+        route = server.select_route(
+          {}, {"runtimeName": "ollama", "profileName": "qwen", "jobSpec": {}},
+          {"ollama": {}}, "mriczo"
+        )
+        self.assertEqual(route["selected"]["hostId"], "mriczo")
+
+    self.assertEqual(len(calls), 2)
+    health = server.peer_health_snapshot()["macstudio"]
+    self.assertEqual(health["status"], "unavailable")
+    self.assertGreater(health["retryInSeconds"], 0)
+
+  def test_peer_health_probe_fails_all_forwarded_jobs_assigned_to_down_host(self):
+    server._JOBS.update({
+      job_id: {
+        "remoteJobId": job_id,
+        "forwarded": True,
+        "executionHostId": "macstudio",
+        "peerUrl": "http://macstudio:18886",
+        "peerJobId": f"remote-{job_id}",
+        "status": "running",
+        "message": "forwarded",
+        "runtimeName": "ollama",
+        "profileName": "qwen",
+        "jobSpec": {"kind": "ollama-chat"}
+      }
+      for job_id in ("job-proxy-a", "job-proxy-b")
+    })
+    server.persist_durable_job = lambda _job: pathlib.Path("/tmp/housekeeper-test-job.pya")
+    server.peer_request_json = lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("connection refused"))
+
+    with patch.dict(os.environ, {"GPU_HOUSEKEEPER_PEER_FAILURE_LIMIT": "1"}, clear=False):
+      result = server.probe_peer_health("macstudio", "http://macstudio:18886")
+
+    self.assertEqual(result["status"], "unavailable")
+    for job_id in ("job-proxy-a", "job-proxy-b"):
+      self.assertEqual(server._JOBS[job_id]["status"], "fail")
+      self.assertIn("peer macstudio became unavailable", server._JOBS[job_id]["message"])
+    self.assertEqual(server.peer_health_snapshot()["macstudio"]["status"], "unavailable")
 
   def test_parse_peer_registry_uses_host_url_pairs(self):
     self.assertEqual(

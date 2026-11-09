@@ -46,6 +46,7 @@ _STRATA_MODEL_CATALOG_CACHE: Dict[str, Any] = {
   "models": [],
   "error": "not observed"
 }
+_PEER_HEALTH: Dict[str, Dict[str, Any]] = {}
 
 
 class DeviceExecutionGate:
@@ -97,8 +98,10 @@ DEFAULT_IDLE_GRACE_SECONDS = 300
 DEFAULT_IDLE_REAPER_INTERVAL_SECONDS = 30
 DEFAULT_CAPACITY_WAIT_SECONDS = 1800
 DEFAULT_CAPACITY_POLL_SECONDS = 2
-DEFAULT_PEER_TIMEOUT_MS = 1500
+DEFAULT_PEER_TIMEOUT_MS = 5000
 DEFAULT_PEER_FAILURE_LIMIT = 3
+DEFAULT_PEER_COOLDOWN_SECONDS = 60
+DEFAULT_PEER_HEALTH_INTERVAL_SECONDS = 15
 DEFAULT_OLLAMA_MODEL_STORE_PATH = "/root/.ollama"
 DEFAULT_OLLAMA_GPU_STARTUP_GRACE_SECONDS = 60
 DEFAULT_OLLAMA_MIN_GPU_MODEL_FRACTION = 0.99
@@ -1210,6 +1213,143 @@ def peer_failure_limit() -> int:
   return max(1, min(20, value))
 
 
+def peer_cooldown_seconds() -> int:
+  raw = normalize_text(os.environ.get("GPU_HOUSEKEEPER_PEER_COOLDOWN_SEC"))
+  try:
+    value = int(raw) if raw else DEFAULT_PEER_COOLDOWN_SECONDS
+  except ValueError:
+    value = DEFAULT_PEER_COOLDOWN_SECONDS
+  return max(5, min(3600, value))
+
+
+def peer_health_interval_seconds() -> int:
+  raw = normalize_text(os.environ.get("GPU_HOUSEKEEPER_PEER_HEALTH_INTERVAL_SEC"))
+  try:
+    value = int(raw) if raw else DEFAULT_PEER_HEALTH_INTERVAL_SECONDS
+  except ValueError:
+    value = DEFAULT_PEER_HEALTH_INTERVAL_SECONDS
+  return max(5, min(300, value))
+
+
+def peer_health_snapshot() -> Dict[str, Dict[str, Any]]:
+  now = time.time()
+  with _LOCK:
+    snapshots = {}
+    for host_id, state in _PEER_HEALTH.items():
+      unavailable_until = float(state.get("unavailableUntilEpoch") or 0)
+      retry_in = max(0, int(unavailable_until - now))
+      snapshots[host_id] = {
+        "status": "unavailable" if retry_in else ("available" if state.get("lastSuccessAt") else "unknown"),
+        "consecutiveFailures": int(state.get("consecutiveFailures") or 0),
+        "lastSuccessAt": state.get("lastSuccessAt") or "",
+        "lastFailureAt": state.get("lastFailureAt") or "",
+        "lastError": state.get("lastError") or "",
+        "retryInSeconds": retry_in,
+        "unavailableUntil": datetime.fromtimestamp(unavailable_until, timezone.utc).isoformat().replace("+00:00", "Z")
+        if retry_in else ""
+      }
+    return snapshots
+
+
+def peer_is_quarantined(peer_host_id: str) -> bool:
+  with _LOCK:
+    state = _PEER_HEALTH.get(normalize_text(peer_host_id).lower()) or {}
+    return float(state.get("unavailableUntilEpoch") or 0) > time.time()
+
+
+def record_peer_success(peer_host_id: str) -> None:
+  host_id = normalize_text(peer_host_id).lower()
+  if not host_id:
+    return
+  with _LOCK:
+    state = _PEER_HEALTH.setdefault(host_id, {})
+    state.update({
+      "consecutiveFailures": 0,
+      "lastSuccessAt": utc_now_iso(),
+      "lastError": "",
+      "unavailableUntilEpoch": 0
+    })
+
+
+def fail_forwarded_jobs_for_peer(peer_host_id: str, reason: str) -> None:
+  host_id = normalize_text(peer_host_id).lower()
+  message = f"forwarded job failed because peer {host_id} became unavailable: {normalize_text(reason)}"
+  with _LOCK:
+    for job in _JOBS.values():
+      if (
+        not job.get("forwarded")
+        or normalize_text(job.get("executionHostId")).lower() != host_id
+        or normalize_text(job.get("status")).lower() in {"success", "fail"}
+      ):
+        continue
+      job["status"] = "fail"
+      job["message"] = message
+      job["error"] = {"message": message}
+      job["finishedAt"] = utc_now_iso()
+      try:
+        persist_durable_job(job)
+      except Exception as persist_error:
+        print(
+          f"[gpu-housekeeper] could not persist failed peer job {job.get('remoteJobId')}: "
+          f"{normalize_text(persist_error)}",
+          flush=True
+        )
+
+
+def record_peer_failure(peer_host_id: str, reason: str) -> bool:
+  host_id = normalize_text(peer_host_id).lower()
+  if not host_id:
+    return False
+  now = time.time()
+  tripped = False
+  with _LOCK:
+    state = _PEER_HEALTH.setdefault(host_id, {})
+    if float(state.get("unavailableUntilEpoch") or 0) > now:
+      return True
+    failures = int(state.get("consecutiveFailures") or 0) + 1
+    state.update({"consecutiveFailures": failures, "lastFailureAt": utc_now_iso(), "lastError": normalize_text(reason)})
+    if failures >= peer_failure_limit():
+      state["unavailableUntilEpoch"] = now + peer_cooldown_seconds()
+      tripped = True
+  if tripped:
+    print(
+      f"[gpu-housekeeper] peer {host_id} quarantined for {peer_cooldown_seconds()}s after "
+      f"{peer_failure_limit()} consecutive failures: {normalize_text(reason)}",
+      flush=True
+    )
+    fail_forwarded_jobs_for_peer(host_id, reason)
+  return tripped
+
+
+def probe_peer_health(peer_host_id: str, peer_urls: str) -> Dict[str, Any]:
+  if peer_is_quarantined(peer_host_id):
+    return peer_health_snapshot().get(normalize_text(peer_host_id).lower(), {"status": "unavailable"})
+  failures = []
+  endpoints = [normalize_text(item) for item in peer_urls.split("|") if normalize_text(item)]
+  for peer_url in endpoints:
+    try:
+      response = peer_request_json(peer_url, "/health", timeout_ms=peer_timeout_ms())
+      if normalize_text(response.get("status")).lower() not in {"ok", "healthy"}:
+        raise RuntimeError(normalize_text(response.get("status")) or "peer health check returned no healthy status")
+      record_peer_success(peer_host_id)
+      return {"hostId": peer_host_id, "status": "available", "url": peer_url}
+    except Exception as err:
+      failures.append(f"{peer_url}: {normalize_text(err) or 'peer health check failed'}")
+  reason = "all peer health endpoints failed: " + "; ".join(failures)
+  quarantined = record_peer_failure(peer_host_id, reason)
+  return {"hostId": peer_host_id, "status": "unavailable" if quarantined else "degraded", "error": reason}
+
+
+def peer_health_monitor_loop() -> None:
+  while True:
+    for peer_host_id, peer_urls in configured_peers().items():
+      try:
+        probe_peer_health(peer_host_id, peer_urls)
+      except Exception as err:
+        print(f"[gpu-housekeeper] peer monitor error for {peer_host_id}: {normalize_text(err)}", flush=True)
+    time.sleep(peer_health_interval_seconds())
+
+
 def parse_peer_registry(raw: str = "") -> Dict[str, str]:
   peers: Dict[str, str] = {}
   for item in normalize_text(raw).split(";"):
@@ -1233,14 +1373,24 @@ def peer_route_candidate_with_fallback(
   peer_urls: str,
   job: Dict[str, Any]
 ) -> Dict[str, Any]:
+  if peer_is_quarantined(peer_host_id):
+    state = peer_health_snapshot().get(normalize_text(peer_host_id).lower(), {})
+    raise RuntimeError(
+      f"peer host {peer_host_id} is quarantined after repeated failures "
+      f"(retry in {state.get('retryInSeconds', 0)}s)"
+    )
   endpoints = [normalize_text(item) for item in peer_urls.split("|") if normalize_text(item)]
   failures = []
   for peer_url in endpoints:
     try:
-      return peer_route_candidate(peer_host_id, peer_url, job)
+      candidate = peer_route_candidate(peer_host_id, peer_url, job)
+      record_peer_success(peer_host_id)
+      return candidate
     except Exception as err:
       failures.append(f"{peer_url}: {normalize_text(err) or 'peer request failed'}")
-  raise RuntimeError("all peer endpoints failed: " + "; ".join(failures))
+  reason = "all peer endpoints failed: " + "; ".join(failures)
+  record_peer_failure(peer_host_id, reason)
+  raise RuntimeError(reason)
 
 
 def route_visited_hosts(payload: Dict[str, Any]) -> List[str]:
@@ -1899,6 +2049,7 @@ def make_snapshot(host_id: str) -> Dict[str, Any]:
     "federation": {
       "enabled": bool(configured_peers()),
       "acceptsForwarded": parse_bool_env("GPU_HOUSEKEEPER_ACCEPT_FORWARDED", True),
+      "peerHealth": peer_health_snapshot(),
       "peers": [
         {"hostId": peer_host_id, "url": peer_url}
         for peer_host_id, peer_url in configured_peers().items()
@@ -2166,6 +2317,9 @@ def submit_job(
       try:
         return forward_job_to_peer(payload, job, route)
       except Exception as err:
+        peer_host_id = normalize_text(selected.get("hostId"))
+        if peer_host_id:
+          record_peer_failure(peer_host_id, normalize_text(err) or "forwarded submission failed")
         return {
           "accepted": False,
           "error": f"peer forwarding failed: {normalize_text(err) or 'unknown error'}",
@@ -2231,6 +2385,8 @@ def refresh_forwarded_job(remote_job_id: str) -> None:
     return
   try:
     remote = peer_request_json(peer_url, f"/job/{peer_job_id}", timeout_ms=peer_timeout_ms())
+    peer_host_id = normalize_text(job.get("executionHostId"))
+    record_peer_success(peer_host_id)
     with _LOCK:
       current = _JOBS.get(remote_job_id)
       if not current:
@@ -2249,6 +2405,7 @@ def refresh_forwarded_job(remote_job_id: str) -> None:
       except Exception as persist_error:
         print(f"[gpu-housekeeper] could not persist forwarded job {remote_job_id}: {normalize_text(persist_error)}", flush=True)
   except Exception as err:
+    peer_host_id = normalize_text(job.get("executionHostId"))
     with _LOCK:
       current = _JOBS.get(remote_job_id)
       if not current:
@@ -2256,7 +2413,7 @@ def refresh_forwarded_job(remote_job_id: str) -> None:
       failures = int(current.get("peerFailureCount") or 0) + 1
       current["peerFailureCount"] = failures
       current["message"] = f"forwarded job status unavailable: {normalize_text(err) or 'peer request failed'}"
-      if failures >= peer_failure_limit():
+      if not peer_host_id and failures >= peer_failure_limit():
         current["status"] = "fail"
         current["error"] = {"message": current["message"]}
         current["finishedAt"] = utc_now_iso()
@@ -2264,6 +2421,8 @@ def refresh_forwarded_job(remote_job_id: str) -> None:
         persist_durable_job(current)
       except Exception as persist_error:
         print(f"[gpu-housekeeper] could not persist forwarded job {remote_job_id}: {normalize_text(persist_error)}", flush=True)
+    if peer_host_id:
+      record_peer_failure(peer_host_id, normalize_text(err) or "peer request failed")
 
 
 def job_status(remote_job_id: str) -> Optional[Dict[str, Any]]:
@@ -5934,6 +6093,11 @@ def main() -> None:
     target=idle_runtime_reaper_loop,
     args=(Handler.runtime_registry,),
     name="gpu-idle-runtime-reaper",
+    daemon=True
+  ).start()
+  threading.Thread(
+    target=peer_health_monitor_loop,
+    name="gpu-peer-health-monitor",
     daemon=True
   ).start()
 

@@ -44,8 +44,18 @@ sys.exit(0 if network.get("EnableIPv6") and actual == expected else 1)
 '; then
     network_migration_needed=true
     if [[ "$(docker inspect --format '{{.State.Running}}' gpu-housekeeper 2>/dev/null || true)" == "true" ]]; then
-      if ! queue_payload="$(curl -fsS --max-time 3 "http://127.0.0.1:${GPU_HOUSEKEEPER_PUBLISH_PORT:-18886}/queue")"; then
-        echo "refusing IPv6 network migration: cannot verify the running Housekeeper queue" >&2
+      queue_payload="$(curl -fsS --max-time 3 "http://127.0.0.1:${GPU_HOUSEKEEPER_PUBLISH_PORT:-18886}/queue" 2>/dev/null || true)"
+      if [[ -z "$queue_payload" ]]; then
+        queue_payload="$(docker exec gpu-housekeeper python3 -c '
+import json
+import urllib.request
+
+with urllib.request.urlopen("http://127.0.0.1:18886/queue", timeout=3) as response:
+  print(json.dumps(json.load(response)))
+' 2>/dev/null || true)"
+      fi
+      if [[ -z "$queue_payload" ]]; then
+        echo "refusing IPv6 network migration: cannot verify the running Housekeeper queue through host or container API" >&2
         exit 1
       fi
       pending_jobs="$(printf '%s' "$queue_payload" | python3 -c '
