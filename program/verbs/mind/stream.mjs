@@ -27,6 +27,16 @@ function writeStreamTerminal(filePath, { envelope, error } = {}) {
   fsSync.appendFileSync(filePath, `${JSON.stringify(record)}\n`, "utf8");
 }
 
+function readCommandProcessReport(filename) {
+  const processPath = String(filename).replace(/\.stream\.txt$/u, ".process.txt");
+  if (processPath === filename) return undefined;
+  try {
+    return fsSync.readFileSync(processPath, "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
 function startStreamFile(filePath) {
   fsSync.mkdirSync(path.dirname(filePath), { recursive: true });
   fsSync.writeFileSync(filePath, "", "utf8");
@@ -54,7 +64,7 @@ function startStreamTail({ filename, onLine, onEnd, onError }) {
     for (const line of lines) {
       if (!line.length) continue;
       if (line.trim() === "[PYA_STREAM_END]") {
-        if (onEnd) onEnd();
+        if (onEnd) onEnd(readCommandProcessReport(filename));
         return;
       }
       try {

@@ -75,10 +75,30 @@ can precede the existing IPv4 tunnel:
 macstudio=http://[eb22:3b21:3111:aca8::1]:18886|http://DOCKER_BRIDGE_GATEWAY:18887
 ```
 
+Peer reachability uses a host-level circuit breaker. After
+`GPU_HOUSEKEEPER_PEER_FAILURE_LIMIT` consecutive failed peer requests (default
+3), the peer is quarantined for `GPU_HOUSEKEEPER_PEER_COOLDOWN_SEC` seconds
+(default 60). New jobs do not probe or route to it during that window. When
+the breaker opens, active forwarded jobs assigned to that peer are persisted
+as failed instead of remaining indefinitely in `running`; the snapshot's
+`federation.peerHealth` reports the last failure and retry delay. A successful
+peer request clears the failure count. A background health probe runs every
+`GPU_HOUSEKEEPER_PEER_HEALTH_INTERVAL_SEC` seconds (default 15), so unreachable
+hosts are detected even when no client polls an active forwarded job. This is
+especially useful when a worker host is intentionally offline or unreachable.
+
+The Linux Compose service also joins the Ollama container's existing Docker
+network (`GPU_HOUSEKEEPER_OLLAMA_DOCKER_NETWORK`, default `hmas_default`) and
+uses `http://ollama:11434` by default. This avoids routing telemetry through a
+host-published port. Set the network variable in `service/.env` when the
+Ollama Compose project uses a different network. Peer snapshot probes default
+to a 5-second timeout, which accommodates measured snapshot work while still
+bounding failed-host detection.
+
 Keep a peer on its known working IPv4 endpoint until its IPv6 route has passed
-the same container-originated health check. This is currently required for
-SWAC; its assigned `e929` prefix does not by itself establish a working
-inbound route from mriczo.
+the same container-originated health check. SWAC's assigned `e929` prefix does
+not by itself establish a working inbound route from mriczo; leave SWAC out of
+the peer list until its Housekeeper is online and that route is verified.
 
 `command/begin.sh` reads non-secret host peer settings from
 `service/.env` when present; set `GPU_HOUSEKEEPER_ENV_FILE` to a host-local

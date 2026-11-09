@@ -7,6 +7,9 @@ services:
     image: liberit/gpu-housekeeper:latest
     entrypoint: ["python3", "/service/server.py"]
     command: ["--host", "0.0.0.0", "--port", "18886", "--host-id", "${GPU_HOUSEKEEPER_HOST_ID:-gpu-housekeeper}"]
+    networks:
+      - default
+      - ollama
     restart: unless-stopped
     ports:
       - "${GPU_HOUSEKEEPER_PUBLISH_PORT:-18886}:18886"
@@ -21,11 +24,13 @@ services:
     environment:
       - GPU_HOUSEKEEPER_HOST_ID=${GPU_HOUSEKEEPER_HOST_ID:-gpu-housekeeper}
       - GPU_HOUSEKEEPER_PEERS=${GPU_HOUSEKEEPER_PEERS:-}
-      - GPU_HOUSEKEEPER_PEER_TIMEOUT_MS=${GPU_HOUSEKEEPER_PEER_TIMEOUT_MS:-1500}
+      - GPU_HOUSEKEEPER_PEER_TIMEOUT_MS=${GPU_HOUSEKEEPER_PEER_TIMEOUT_MS:-5000}
       - GPU_HOUSEKEEPER_PEER_FAILURE_LIMIT=${GPU_HOUSEKEEPER_PEER_FAILURE_LIMIT:-3}
+      - GPU_HOUSEKEEPER_PEER_COOLDOWN_SEC=${GPU_HOUSEKEEPER_PEER_COOLDOWN_SEC:-60}
+      - GPU_HOUSEKEEPER_PEER_HEALTH_INTERVAL_SEC=${GPU_HOUSEKEEPER_PEER_HEALTH_INTERVAL_SEC:-15}
       - GPU_HOUSEKEEPER_ACCEPT_FORWARDED=${GPU_HOUSEKEEPER_ACCEPT_FORWARDED:-true}
       - GPU_HOUSEKEEPER_RUNTIME_REGISTRY=${GPU_HOUSEKEEPER_RUNTIME_REGISTRY:-}
-      - OLLAMA_RUNTIME_URL=${OLLAMA_RUNTIME_URL:-http://host.docker.internal:11434}
+      - OLLAMA_RUNTIME_URL=${OLLAMA_RUNTIME_URL:-http://ollama:11434}
       - GPU_HOUSEKEEPER_STRATA_RUNTIME_URL=${GPU_HOUSEKEEPER_STRATA_RUNTIME_URL:-}
       - GPU_HOUSEKEEPER_STRATA_HELPER_IMAGE=${GPU_HOUSEKEEPER_STRATA_HELPER_IMAGE:-liberit/gpu-housekeeper:latest}
       - GPU_HOUSEKEEPER_STRATA_CONTEXT_CONFIG_PATH=${GPU_HOUSEKEEPER_STRATA_CONTEXT_CONFIG_PATH:-}
@@ -59,3 +64,6 @@ networks:
     ipam:
       config:
         - subnet: ${GPU_HOUSEKEEPER_IPV6_SUBNET:?start with command/begin.sh to derive the host IPv6 subnet}
+  ollama:
+    external: true
+    name: ${GPU_HOUSEKEEPER_OLLAMA_DOCKER_NETWORK:-hmas_default}

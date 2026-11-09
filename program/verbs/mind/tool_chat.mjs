@@ -100,11 +100,18 @@ function requestSizeBreakdown(payload, { historyStart = 0, historyEnd = 0 } = {}
   };
 }
 
-async function callStreamingToolTurn({ backendName, payload, onAssistantDelta, onToolCall } = {}) {
-  const stream = await callMindBackendStream({ backendName, payload });
+export async function callStreamingToolTurn({
+  backendName,
+  payload,
+  onAssistantDelta,
+  onToolCall,
+  streamBackend = callMindBackendStream
+} = {}) {
+  const stream = await streamBackend({ backendName, payload });
   const filename = stream?.ob?.filename ?? stream?.result?.ob?.filename ?? stream?.result?.filename;
   if (!filename) throw new Error("mind tool stream missing filename");
   let terminal = null;
+  let processReport = "";
   await new Promise((resolve, reject) => {
     let settled = false;
     const finish = (error) => {
@@ -129,11 +136,17 @@ async function callStreamingToolTurn({ backendName, payload, onAssistantDelta, o
           if (text) onAssistantDelta?.(text);
         }
       },
-      onEnd: () => finish(),
+      onEnd: (report) => {
+        processReport = String(report ?? "");
+        finish();
+      },
       onError: (error) => finish(error)
     });
   });
-  if (!terminal) throw new Error("mind tool stream missing terminal reply");
+  if (!terminal) {
+    const detail = processReport ? `\n${processReport.trimEnd()}` : "";
+    throw new Error(`mind tool stream missing terminal reply${detail}`);
+  }
   return terminal;
 }
 
