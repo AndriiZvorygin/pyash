@@ -1,11 +1,51 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { allRemember, forget } from "../program/remember/index.mjs";
 import { deriveSignatureFromCall, joinSignatureWords } from "../program/bridge/signature.mjs";
 import { resetMindLogs } from "../program/verbs/mind/mind.mjs";
-import { extractExplicitToolCalls, runToolChat } from "../program/verbs/mind/tool_chat.mjs";
+import { callStreamingToolTurn, extractExplicitToolCalls, runToolChat } from "../program/verbs/mind/tool_chat.mjs";
+
+test("missing tool-stream terminal includes command process diagnostics", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-mind-stream-error-"));
+  const streamPath = path.join(tempDir, "runner.stream.txt");
+  const processPath = path.join(tempDir, "runner.process.txt");
+  const processReport = [
+    "status: 1",
+    "signal: none",
+    "working directory: /tmp/biography",
+    "command: node command/mind_openai_runner.mjs --minimax --stream",
+    "stdout bytes: 0",
+    "stderr bytes: 23",
+    "stderr truncated: false",
+    "stderr:",
+    "MiniMax transport error"
+  ].join("\n") + "\n";
+  try {
+    await fs.writeFile(streamPath, "\n[PYA_STREAM_END]\n", "utf8");
+    await fs.writeFile(processPath, processReport, "utf8");
+    await assert.rejects(
+      callStreamingToolTurn({
+        backendName: "minimax command mind",
+        payload: {},
+        streamBackend: async () => ({ ob: { filename: streamPath } })
+      }),
+      (error) => {
+        assert.match(error.message, /mind tool stream missing terminal reply/u);
+        assert.match(error.message, /status: 1/u);
+        assert.match(error.message, /stdout bytes: 0/u);
+        assert.match(error.message, /MiniMax transport error/u);
+        return true;
+      }
+    );
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
 
 test("mind tool chat normalizes explicit textual tool-call encodings", () => {
   const tools = [{ function: { name: "search" } }];

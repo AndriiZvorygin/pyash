@@ -22,6 +22,29 @@ const STREAM_END_TOKEN = "[PYA_STREAM_END]";
 const FAILURE_OUTPUT_LIMIT = 4000;
 const FAILURE_COMMAND_LIMIT = 1200;
 
+function resolveStreamProcessPath(streamPath) {
+  return String(streamPath).replace(/\.stream\.txt$/u, ".process.txt");
+}
+
+function appendBoundedTail(current, chunk, limit = FAILURE_OUTPUT_LIMIT) {
+  return `${current}${String(chunk ?? "")}`.slice(-limit);
+}
+
+function formatStreamProcessReport({ cmd, cwd, status, signal, stdoutBytes, stderr, stderrBytes, launchError }) {
+  const lines = [
+    `status: ${Number.isInteger(status) ? status : "unknown"}`,
+    `signal: ${signal || "none"}`,
+    `working directory: ${cwd || "<unknown>"}`,
+    `command: ${boundedDiagnosticText(cmd, FAILURE_COMMAND_LIMIT)}`,
+    `stdout bytes: ${stdoutBytes}`,
+    `stderr bytes: ${stderrBytes}`,
+    `stderr truncated: ${stderrBytes > Buffer.byteLength(stderr, "utf8")}`
+  ];
+  if (launchError) lines.push(`launch error: ${launchError}`);
+  lines.push(`stderr:\n${stderr.trim() ? boundedDiagnosticText(stderr, FAILURE_OUTPUT_LIMIT) : "<empty>"}`);
+  return `${lines.join("\n")}\n`;
+}
+
 function boundedDiagnosticText(value, limit) {
   const text = String(value ?? "");
   if (text.length <= limit) return text;
@@ -217,7 +240,9 @@ export async function command(sentence, { remember: rememberFn = remember, runti
       });
     }
     const streamPath = resolveStreamOutputPath(sentence);
+    const processPath = resolveStreamProcessPath(streamPath);
     await fs.mkdir(path.dirname(streamPath), { recursive: true });
+    await fs.rm(processPath, { force: true });
     fsSync.writeFileSync(streamPath, "");
     const outStream = fsSync.createWriteStream(streamPath, { flags: "a" });
     let proc;
@@ -242,7 +267,24 @@ export async function command(sentence, { remember: rememberFn = remember, runti
       proc = spawn(shell, ["-lc", String(cmd)], spawnOptions);
     }
     let stderr = "";
+    let stderrBytes = 0;
+    let stdoutBytes = 0;
+    let processReportWritten = false;
     let abortTimer = null;
+    const writeProcessReport = ({ status = proc.exitCode, signal = proc.signalCode, launchError = "" } = {}) => {
+      if (processReportWritten) return;
+      processReportWritten = true;
+      fsSync.writeFileSync(processPath, formatStreamProcessReport({
+        cmd,
+        cwd: sandbox.cwd,
+        status,
+        signal,
+        stdoutBytes,
+        stderr,
+        stderrBytes,
+        launchError
+      }), "utf8");
+    };
     const abortProcess = () => {
       if (proc.exitCode !== null || proc.signalCode !== null) return;
       proc.kill("SIGINT");
@@ -255,10 +297,18 @@ export async function command(sentence, { remember: rememberFn = remember, runti
       if (abortTimer) clearTimeout(abortTimer);
       interruptSignal?.removeEventListener?.("abort", abortProcess);
     };
-    proc.stderr.on("data", data => { stderr += data.toString("utf8"); });
-    proc.stdout.on("data", data => { outStream.write(data); });
+    proc.stderr.on("data", data => {
+      const text = data.toString("utf8");
+      stderrBytes += Buffer.byteLength(text, "utf8");
+      stderr = appendBoundedTail(stderr, text);
+    });
+    proc.stdout.on("data", data => {
+      stdoutBytes += data.length;
+      outStream.write(data);
+    });
     proc.on("close", (status) => {
       cleanupSignal();
+      writeProcessReport({ status, signal: proc.signalCode });
       if (status && status !== 0) {
         // eslint-disable-next-line no-console
         console.error(`command stream exited ${status}: ${stderr.trim()}`);
@@ -267,8 +317,9 @@ export async function command(sentence, { remember: rememberFn = remember, runti
       outStream.end();
       commandStreamProcesses.delete(streamName);
     });
-    proc.on("error", () => {
+    proc.on("error", (error) => {
       cleanupSignal();
+      writeProcessReport({ status: null, signal: proc.signalCode, launchError: error?.message ?? String(error) });
       outStream.write(`\n${STREAM_END_TOKEN}\n`);
       outStream.end();
       commandStreamProcesses.delete(streamName);
