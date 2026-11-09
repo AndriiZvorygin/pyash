@@ -177,6 +177,5 @@ export const EXCHANGE_HELPER_PART_02 = [
 "  char ca_abs[PYA_TEXT_CAP];",
 "  snprintf(ca_abs, sizeof(ca_abs), \"%s/%s\", runRoot, ca_rel);",
 "  int existing = pya_find_artifact(norm);",
-"  if (existing >= 0) {",
-"    if (pya_artifacts[existing].has_hash && strcmp(pya_artifacts[existing].hash, hash) != 0) {"
+"  if (existing >= 0 && (!pya_artifacts[existing].has_hash || strcmp(pya_artifacts[existing].hash, hash) == 0)) {"
 ];
