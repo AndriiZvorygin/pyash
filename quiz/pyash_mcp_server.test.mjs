@@ -94,7 +94,7 @@ test("pyash mcp server loads the selected saddle tools map", async () => {
     const list = await client.send("tools/list", {});
     const tools = Array.isArray(list?.tools) ? list.tools : [];
     const descriptions = tools.map((tool) => String(tool?.description ?? ""));
-    assert.equal(tools.length, 10);
+    assert.equal(tools.length, 12);
     assert.ok(descriptions.some((description) => description.includes("su name read from filename input be read")));
     assert.ok(descriptions.some((description) => description.includes("su name command ob text")));
     assert.ok(descriptions.some((description) => description.includes("su name repair ob text")));
@@ -105,7 +105,15 @@ test("pyash mcp server loads the selected saddle tools map", async () => {
     assert.match(zimSearchTool.description, /zim/u);
     assert.deepEqual(zimSearchTool.inputSchema?.required, ["ob"]);
     assert.deepEqual(Object.keys(zimSearchTool.inputSchema?.properties ?? {}), ["ob"]);
-    assert.equal(descriptions.some((description) => description.includes("su name download")), false);
+    const downloadTool = tools.find((tool) => String(tool?.name ?? "").startsWith("be_download_as_wo_web_"));
+    assert.ok(downloadTool, "expected web download capability in the saddle tools map");
+    assert.deepEqual(downloadTool.inputSchema?.required, ["from", "to"]);
+
+    const readMarkdownTool = tools.find((tool) => String(tool?.name ?? "")
+      .startsWith("be_read_markdown_from_filename"));
+    assert.ok(readMarkdownTool, "expected bounded HTML-to-Markdown capability in the saddle tools map");
+    assert.deepEqual(readMarkdownTool.inputSchema?.required, ["from"]);
+    assert.match(readMarkdownTool.description, /atmost byte 65536/u);
 
     const readTool = tools.find((tool) => String(tool?.name ?? "").startsWith("be_read_from_filename"));
     assert.ok(readTool, "expected read capability in the saddle tools map");

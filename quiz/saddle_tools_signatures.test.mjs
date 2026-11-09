@@ -17,7 +17,9 @@ test("saddle tools map exposes coding signatures", async () => {
     "su name repair be repair ob text input to name map outcome can",
     "su name repair check be repair as wo check ob text input to name map outcome can",
     "su name session plan be write fromstate \"coding saddle plan\" ob text input can",
-    "su name search be search ob text input fromstate wo zim can"
+    "su name search be search ob text input fromstate wo zim can",
+    "su name download be download from filename input as wo web to filename input can",
+    "su name read markdown be read from filename input fromstate wo html become wo markdown atmost byte 65536 can"
   ];
 
   for (const line of capabilityLines) {
@@ -25,18 +27,32 @@ test("saddle tools map exposes coding signatures", async () => {
     assert.ok(toolMap.has(signature), `missing signature: ${signature}`);
   }
 
-  const searchSignature = joinSignatureWords(deriveSignatureFromCall(parse(capabilityLines.at(-1))));
+  const searchLine = capabilityLines.find((line) => line.startsWith("su name search "));
+  const searchSignature = joinSignatureWords(deriveSignatureFromCall(parse(searchLine)));
   const searchTool = buildToolSchemas("saddle tools").tools
     .find((tool) => tool.function.signature === searchSignature);
   assert.deepEqual(searchTool.function.parameters.properties, { ob: { type: "string" } });
   assert.deepEqual(searchTool.function.parameters.required, ["ob"]);
 
   const searchCall = buildToolSentence({
-    capability: parse(capabilityLines.at(-1)),
+    capability: parse(searchLine),
     args: { ob: "Pyash archive" }
   });
   assert.equal(searchCall.be, "search");
   assert.equal(searchCall.ob.text, "Pyash archive");
   assert.deepEqual(searchCall.fromstate, { text: "zim", wo: "zim" });
   assert.equal(searchCall.in, undefined);
+
+  const downloadLine = capabilityLines.at(-2);
+  const downloadSignature = joinSignatureWords(deriveSignatureFromCall(parse(downloadLine)));
+  const downloadTool = buildToolSchemas("saddle tools").tools
+    .find((tool) => tool.function.signature === downloadSignature);
+  assert.deepEqual(downloadTool.function.parameters.required, ["from", "to"]);
+
+  const readMarkdownLine = capabilityLines.at(-1);
+  const readMarkdownSignature = joinSignatureWords(deriveSignatureFromCall(parse(readMarkdownLine)));
+  const readMarkdownTool = buildToolSchemas("saddle tools").tools
+    .find((tool) => tool.function.signature === readMarkdownSignature);
+  assert.deepEqual(readMarkdownTool.function.parameters.required, ["from"]);
+  assert.deepEqual(readMarkdownTool.function.parameters.properties, { from: { type: "string" } });
 });

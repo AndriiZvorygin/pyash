@@ -788,6 +788,7 @@ async function searchZimLibraryServer(sentence, { query, archives, archiveFilter
         `archive: ${result.archivePath || result.bookTitle || result.archiveId}`,
         `title: ${result.title}`,
         `entry: ${result.entry || result.link}`,
+        ...(result.link ? [`page: ${result.link}`] : []),
         ...(result.originalUrl ? [`original: ${result.originalUrl}`] : []),
         `snippet: ${result.snippet}`
       ].join("\n");

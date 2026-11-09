@@ -354,6 +354,7 @@ test("query-only ZIM search defaults to the configured local library", async () 
       assert.equal(result?.be, "search");
       assert.match(result?.ob?.text ?? "", /archive: archives\/guide\.zim/u);
       assert.match(result?.ob?.text ?? "", /title: Pyash guide/u);
+      assert.match(result?.ob?.text ?? "", /page: http:\/\/127\.0\.0\.1:8091\/content\/guide\/index\.html/u);
       assert.match(result?.ob?.text ?? "", /snippet: A local Pyash reference\./u);
       assert.equal(requestedUrl.pathname, "/search");
       assert.equal(requestedUrl.searchParams.get("pattern"), "Pyash guide");
@@ -402,6 +403,7 @@ test("query-only ZIM search uses the configured remote index without a local arc
       assert.equal(result?.be, "search");
       assert.match(result?.ob?.text ?? "", /archive: rust-agent-guides-1\.99\.1/u);
       assert.match(result?.ob?.text ?? "", /title: Rust agent guides/u);
+      assert.match(result?.ob?.text ?? "", /page: https:\/\/zim\.example\/content\/rust-agent-guides-1\.99\.1\/book\/introduction\.html/u);
       assert.match(result?.ob?.text ?? "", /snippet: The official Rust book/u);
       assert.equal(requestedUrl.origin, "https://zim.example");
       assert.equal(requestedUrl.pathname, "/search");
