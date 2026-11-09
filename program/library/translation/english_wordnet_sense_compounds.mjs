@@ -11,7 +11,7 @@ export const ENGLISH_WORDNET_SENSE_COMPOUNDS_FORMAT = "english-wordnet-sense-com
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_CONFIG_URL = new URL("./wordnet_sense_compound_refinery.pya", import.meta.url);
 export const ENGLISH_WORDNET_SENSE_TRANSLATION_CACHE_NAME = "translation_wordnet_sense_translation_cache";
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_LANGUAGES = Object.freeze([
-  "english", "chinese", "french", "russian", "hindi"
+  "chinese", "hindi", "russian", "german", "japanese", "korean", "finnish"
 ]);
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_MODEL = "qwen3.5:9b";
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_PROMPT_REVISION = "sense-translation-gloss-alternatives-v11";
