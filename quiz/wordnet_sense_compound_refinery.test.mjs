@@ -315,6 +315,16 @@ test("sense compound refinery links, composes, decides, and records one complete
     });
     assert.equal(canonicalFiltered.selectedSenseCount, 0);
     assert.equal(canonicalFiltered.remainingSenseCount, 0);
+    await assert.rejects(runWordNetSenseCompoundRefinery({
+      artifactRoot: canonicalRoot,
+      runId: "sense-compound-explicit-canonical-retry-test",
+      initialize: false,
+      configuration: { senseIds: [sense.senseId] },
+      dependencies: {
+        ...dependencies,
+        loadWordNetCompoundIndex: async () => [{ senseId: sense.senseId, target: "friendship" }]
+      }
+    }), /not eligible for compound composition/u);
     await rm(canonicalRoot, { recursive: true, force: true });
 
     const focusedRetry = await runWordNetSenseCompoundRefinery({
