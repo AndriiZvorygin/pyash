@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -26,7 +26,12 @@ import {
   buildSenseCompoundChoiceInput,
   buildSenseDerivedCompoundCandidateFromChoice,
   componentGlossAlternatives,
+  componentGlossLookupAlternatives,
+  hasCompositionSourceTranslations,
+  mergeWordNetSenseTranslationFailures,
+  mapComponentGlossChoices,
   buildSenseCompoundWorklist,
+  wordNetLemmaComponentTranslations,
   createQueuedMindSenseCompoundChoiceTransport,
   createQueuedMindWordNetSenseTranslationTransport,
   parseSenseCompoundChoiceResponse,
@@ -38,6 +43,7 @@ import {
   buildEnglishWordNetBridgeIndex,
   loadEnglishWordNetBridges
 } from "./english_wordnet_bridges.mjs";
+import { loadWordNetVerifiedCompoundIndex } from "./compound_coverage.mjs";
 import { loadPyacWordLayerIndex } from "./pyac_complexity.mjs";
 import { DEFAULT_ATOM_WORD_LAYER_DIRECTORY } from "./atom_word_generation.mjs";
 import { loadEnglishLemmaCatalog } from "./english_lemmas.mjs";
@@ -73,6 +79,7 @@ const COMPOSITION_NAME = "translation_wordnet_sense_compound_compositions";
 const CANDIDATE_NAME = "translation_wordnet_sense_compound_candidates";
 const DECISION_BATCH_NAME = "translation_wordnet_sense_compound_decisions";
 const TRANSLATION_FAILURES_NAME = "translation_wordnet_sense_translation_failures";
+const SENSE_COMPOUND_RUN_DIRECTORY = /^wordnet-sense-compounds-[a-f0-9]{24}$/u;
 let definitionPromise = null;
 
 function invalid(message, details = {}) {
@@ -100,6 +107,19 @@ export function resolveWordNetSenseCompoundMaximumSenses(configuredMaximum, requ
     throw invalid("sense compound refinery maximumSenses override must be a positive integer");
   }
   return Math.min(configured, requested);
+}
+
+export function resolveWordNetSenseCompoundMinimumTagCount(configuredMinimum, requestedMinimum) {
+  const configured = Number(configuredMinimum);
+  if (!Number.isSafeInteger(configured) || configured < 0) {
+    throw invalid("sense compound refinery configured minimumTagCount must be a nonnegative integer");
+  }
+  if (requestedMinimum === undefined) return configured;
+  const requested = Number(requestedMinimum);
+  if (!Number.isSafeInteger(requested) || requested < 0) {
+    throw invalid("sense compound refinery minimumTagCount override must be a nonnegative integer");
+  }
+  return requested;
 }
 
 export function resolveWordNetSenseCompoundSenseIds(requestedSenseIds) {
@@ -316,8 +336,31 @@ function queueState(queue = {}) {
 }
 
 function isProcessedProgress(progress) {
-  // Inventory changes must never requeue a sense that this sweep already claimed.
-  return Boolean(progress && text(progress.status));
+  return Boolean(text(progress?.senseId));
+}
+
+async function completedSenseIdsFromHistory({ artifactRoot, currentDirectory, sourceHash, currentProgress, readText }) {
+  const completed = new Set(currentProgress
+    .filter(isProcessedProgress)
+    .map((record) => record.senseId));
+  let entries;
+  try {
+    entries = await readdir(artifactRoot, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return completed;
+    throw error;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()
+      || resolve(artifactRoot, entry.name) === resolve(currentDirectory)
+      || !SENSE_COMPOUND_RUN_DIRECTORY.test(entry.name)) continue;
+    const source = await readText(join(artifactRoot, entry.name, "progress.pya"));
+    if (!source) continue;
+    for (const record of parseRowsPya(source, PROGRESS_NAME)) {
+      if (isProcessedProgress(record)) completed.add(record.senseId);
+    }
+  }
+  return completed;
 }
 
 async function inspectHousekeeper({ model, dependencies }) {
@@ -388,7 +431,11 @@ async function loadInventory({ context, dependencies }) {
     .map((entry) => entry.surface);
   const deprecated = new Set(deprecatedSurfaces.map((word) => word.toLowerCase()));
   const linkedEntries = [...bridgeIndex.bySense.values()].filter((entry) => !deprecated.has(text(entry.target).toLowerCase()));
-  const linkedSenseIds = linkedEntries.map((entry) => entry.source);
+  const wordnetCompounds = await (dependencies.loadWordNetCompoundIndex ?? loadWordNetVerifiedCompoundIndex)();
+  const linkedSenseIds = [...new Set([
+    ...linkedEntries.map((entry) => entry.source),
+    ...wordnetCompounds.map((entry) => text(entry?.senseId))
+  ].filter(Boolean))];
   const linkedAtomicSenses = linkedEntries.filter((entry) => entry.targetKind === "atom"
     && Array.isArray(entry.pyashSequence) && entry.pyashSequence.length === 1);
   const resolveTargetCoverage = (sense) => {
@@ -448,13 +495,19 @@ async function loadInventory({ context, dependencies }) {
       interruptedRunId: progress.claimRunId ?? ""
     });
   }
+  const completedSenseIds = await completedSenseIdsFromHistory({
+    artifactRoot: dirname(context.artifactDirectory),
+    currentDirectory: context.artifactDirectory,
+    sourceHash: allocation.sourceHash,
+    currentProgress: [...progressBySense.values()],
+    readText: dependencies.readFile ?? readIfPresent
+  });
+  for (const senseId of requestedSenseSet ?? []) completedSenseIds.delete(senseId);
   const parsedTranslationState = translationSource
     ? parseWordNetSenseTranslationCache(translationSource)
     : { records: [], bySense: new Map() };
   const currentTranslations = parsedTranslationState.records.filter((record) => (
     record.wordNetHash === allocation.sourceHash
-      && record.promptRevision === context.config.promptRevision
-      && stableJson(record.languages ?? []) === stableJson(context.config.languages)
   ));
   const translationState = {
     records: currentTranslations,
@@ -470,13 +523,12 @@ async function loadInventory({ context, dependencies }) {
   }));
   const pending = fullWorklist.filter((sense) => {
     if (requestedSenseSet?.has(sense.senseId)) return true;
-    const progress = progressBySense.get(sense.senseId);
-    return !isProcessedProgress(progress);
+    return !completedSenseIds.has(sense.senseId)
+      && !isProcessedProgress(progressBySense.get(sense.senseId));
   }).slice(0, context.config.maximumSenses);
-  const claimedProgressBySense = new Map(progressBySense);
   for (const sense of pending) {
-    claimedProgressBySense.set(sense.senseId, {
-      ...claimedProgressBySense.get(sense.senseId),
+    progressBySense.set(sense.senseId, {
+      ...(progressBySense.get(sense.senseId) ?? {}),
       id: sense.senseId,
       senseId: sense.senseId,
       status: "processing",
@@ -485,17 +537,16 @@ async function loadInventory({ context, dependencies }) {
       sourceHash: allocation.sourceHash,
       promptRevision: context.config.promptRevision,
       choicePromptRevision: context.config.choicePromptRevision,
-      claimRunId: context.runId ?? ""
+      claimRunId: context.runId,
+      candidateIds: []
     });
   }
-  const claimedProgress = [...claimedProgressBySense.values()];
-  if (pending.length > 0) {
-    await atomicWrite(progressPath, renderRowsPya(
-      PROGRESS_NAME,
-      "wordnet-sense-compound-progress-v1",
-      claimedProgress
-    ));
-  }
+  const claimedProgress = [...progressBySense.values()];
+  await atomicWrite(join(context.artifactDirectory, "progress.pya"), renderRowsPya(
+    PROGRESS_NAME,
+    "wordnet-sense-compound-progress-v1",
+    claimedProgress
+  ));
   const dataHash = hash(stableJson({
     sourceHash: allocation.sourceHash,
     coverageHash: allocation.coverageHash,
@@ -516,7 +567,8 @@ async function loadInventory({ context, dependencies }) {
     "worklist-hash": dataHash,
     "eligible-sense-count": fullWorklist.length,
     "remaining-sense-count": fullWorklist.filter((sense) => {
-      return !isProcessedProgress(progressBySense.get(sense.senseId));
+      return !completedSenseIds.has(sense.senseId)
+        && !isProcessedProgress(progressBySense.get(sense.senseId));
     }).length
   }));
   context.allocation = allocation;
@@ -525,6 +577,7 @@ async function loadInventory({ context, dependencies }) {
   context.deprecatedSurfaces = deprecatedSurfaces;
   context.layerIndex = layerIndex;
   context.progressRecords = claimedProgress;
+  context.completedSenseIds = completedSenseIds;
   context.translationState = translationState;
   context.fullWorklist = fullWorklist;
   context.atomInventoryHash = atomInventoryHash;
@@ -539,7 +592,8 @@ async function loadInventory({ context, dependencies }) {
     "minimum-tag-count": context.config.minimumTagCount,
     "selected-sense-count": pending.length,
     "remaining-sense-count": fullWorklist.filter((sense) => {
-      return !isProcessedProgress(progressBySense.get(sense.senseId));
+      return !completedSenseIds.has(sense.senseId)
+        && !isProcessedProgress(progressBySense.get(sense.senseId));
     }).length,
     "housekeeper-host": context.housekeeperState?.host ?? "",
     "housekeeper-queue-depth": context.housekeeperState?.queued ?? 0,
@@ -558,6 +612,25 @@ async function translateSelected({ context, worklist }) {
       model: context.config.model,
       maxOutputTokens: context.config.maxOutputTokens
     });
+  context.translationFailurePath = join(context.artifactDirectory, "translation-failures.pya");
+  const previousFailureSource = await readIfPresent(context.translationFailurePath);
+  let failureRows = previousFailureSource.trim()
+    ? parseRowsPya(previousFailureSource, TRANSLATION_FAILURES_NAME)
+    : [];
+  let failureWrite = Promise.resolve();
+  const persistFailures = () => {
+    failureWrite = failureWrite.then(async () => {
+      const failureContent = renderRowsPya(TRANSLATION_FAILURES_NAME, "wordnet-sense-translation-failures-v1", failureRows, {
+        "prompt-revision": context.config.promptRevision,
+        "model": context.config.model,
+        "failure-count": failureRows.length,
+        "failed-sense-count": new Set(failureRows.filter((row) => row.status === "failed").map((row) => row.senseId)).size
+      });
+      await atomicWrite(context.translationFailurePath, failureContent);
+      return failureContent;
+    });
+    return failureWrite;
+  };
   const response = await translateWordNetSenseWave({
     senses: selected,
     cachedRecords: cached,
@@ -574,6 +647,10 @@ async function translateSelected({ context, worklist }) {
         "prompt-revision": context.config.promptRevision,
         model: context.config.model
       }));
+    },
+    onFailure: async (failure) => {
+      failureRows = mergeWordNetSenseTranslationFailures(failureRows, [failure]);
+      await persistFailures();
     }
   });
   if (response.records.length === 0) {
@@ -584,27 +661,25 @@ async function translateSelected({ context, worklist }) {
     }));
   }
   context.translationState = { records: response.records, bySense: new Map(response.records.map((record) => [record.senseId, record])) };
-  context.translationFailures = response.failures;
-  context.translationFailurePath = join(context.artifactDirectory, "translation-failures.pya");
-  const failureContent = renderRowsPya(TRANSLATION_FAILURES_NAME, "wordnet-sense-translation-failures-v1", response.failures.map((failure) => ({
-    ...failure,
-    id: failure.senseId
-  })), {
-    "prompt-revision": context.config.promptRevision,
-    "model": context.config.model,
-    "failure-count": response.failures.length
+  failureRows = mergeWordNetSenseTranslationFailures(failureRows, response.failures, {
+    resolvedTranslations: response.records
   });
-  await atomicWrite(context.translationFailurePath, failureContent);
+  await persistFailures();
+  context.translationFailures = response.failures;
   const content = await readFile(cachePath, "utf8");
+  const failureContent = await readFile(context.translationFailurePath, "utf8");
+  const failedSenseIds = [...new Set(response.failures.map((failure) => failure.senseId))];
+  context.translationFailedSenseCount = failedSenseIds.length;
   return {
     "translation-cache-path": cachePath,
     "translation-cache-hash": hash(content),
     "translated-count": response.completedCount,
     "submitted-count": response.submittedCount,
-    "failed-count": response.failures.length,
+    "failed-count": failedSenseIds.length,
+    "failed-language-count": response.failures.length,
     "failure-path": context.translationFailurePath,
     "failure-hash": hash(failureContent),
-    "failure-sense-ids": response.failures.map((failure) => failure.senseId),
+    "failure-sense-ids": failedSenseIds,
     "partial-sense-ids": response.records.filter((record) => record.status !== "complete").map((record) => record.senseId)
   };
 }
@@ -625,9 +700,16 @@ async function composeCandidates({ context, worklist, translations }) {
   const cacheRows = context.translationState?.records
     ?? parseWordNetSenseTranslationCache(await readFile(cachePath, "utf8")).records;
   const cacheBySense = new Map(cacheRows.map((record) => [record.senseId, record]));
-  const completeSenses = selected.filter((sense) => cacheBySense.get(sense.senseId)?.status === "complete");
-  const glosses = collectComponentGlosses(completeSenses.flatMap((sense) => cacheBySense.get(sense.senseId)?.translations ?? []));
-  const lookupGlosses = [...new Set(glosses.flatMap(componentGlossAlternatives))];
+  const compositionSenses = selected.filter((sense) => hasCompositionSourceTranslations(sense, cacheBySense.get(sense.senseId)));
+  const sourceTranslationsBySense = new Map(compositionSenses.map((sense) => [
+    sense.senseId,
+    [
+      ...(cacheBySense.get(sense.senseId)?.translations ?? []),
+      ...wordNetLemmaComponentTranslations(sense)
+    ]
+  ]));
+  const glosses = collectComponentGlosses(compositionSenses.flatMap((sense) => sourceTranslationsBySense.get(sense.senseId) ?? []));
+  const lookupGlosses = [...new Set(glosses.flatMap(componentGlossLookupAlternatives))];
   let suggestionRecords = [];
   let linkedWordNetSenses = [];
   if (lookupGlosses.length > 0) {
@@ -645,14 +727,7 @@ async function composeCandidates({ context, worklist, translations }) {
     deprecatedSurfaces: context.deprecatedSurfaces,
     wordnetIndex: context.allocation.wordnetIndex
   });
-  const byGloss = new Map(choicesByLookupGloss);
-  for (const gloss of glosses) {
-    const choices = componentGlossAlternatives(gloss)
-      .flatMap((alternative) => choicesByLookupGloss.get(normalizeGloss(alternative)) ?? []);
-    const unique = new Map(choices.map((choice) => [`${choice.linkedSense.source}\u0000${choice.pyashSequence.join("+")}`, choice]));
-    byGloss.set(normalizeGloss(gloss), [...unique.values()]);
-  }
-  const reservedTargetIds = new Set(allocatedTargetIds(context.allocation));
+  const byGloss = mapComponentGlossChoices(glosses, choicesByLookupGloss);
   const compositionPath = join(context.artifactDirectory, "component-compositions.pya");
   const compositionSource = await readIfPresent(compositionPath);
   const oldCompositionRows = compositionSource.trim()
@@ -669,7 +744,7 @@ async function composeCandidates({ context, worklist, translations }) {
       const rows = [...compositionById.values()].sort((left, right) => left.senseId.localeCompare(right.senseId)
         || Number(left.attempt ?? 0) - Number(right.attempt ?? 0)
         || left.id.localeCompare(right.id));
-      const contents = renderRowsPya(COMPOSITION_NAME, "wordnet-sense-compound-component-compositions-v2", rows, {
+      const contents = renderRowsPya(COMPOSITION_NAME, "wordnet-sense-compound-component-compositions-v3", rows, {
         "source-hash": worklist["source-hash"],
         "translation-cache-hash": translations["translation-cache-hash"],
         "atom-inventory-hash": worklist["atom-inventory-hash"],
@@ -688,6 +763,7 @@ async function composeCandidates({ context, worklist, translations }) {
       maxOutputTokens: context.config.choiceMaxOutputTokens
     });
   const translationCacheHash = text(translations["translation-cache-hash"]);
+  const reservedTargetIds = new Set(allocatedTargetIds(context.allocation));
   const cacheMatches = (record, sense, inputHash) => Boolean(record
     && record.senseId === sense.senseId
     && record.sourceHash === worklist["source-hash"]
@@ -725,7 +801,7 @@ async function composeCandidates({ context, worklist, translations }) {
     return candidate;
   };
   const composeOne = async (sense) => {
-    const sourceTranslations = cacheBySense.get(sense.senseId)?.translations ?? [];
+    const sourceTranslations = sourceTranslationsBySense.get(sense.senseId) ?? [];
     const input = buildSenseCompoundChoiceInput({
       sense,
       translations: sourceTranslations,
@@ -747,6 +823,10 @@ async function composeCandidates({ context, worklist, translations }) {
       candidateRevision: context.config.candidateRevision,
       promptRevision: context.config.choicePromptRevision,
       inputHash,
+      ...(input?.promptTruncated ? {
+        promptTruncated: true,
+        omittedOptionCount: input.omittedOptionCount
+      } : {}),
       ...(input ? { prompt: input.prompt } : {})
     };
     if (!input) {
@@ -788,8 +868,8 @@ async function composeCandidates({ context, worklist, translations }) {
       row = {
         ...common,
         status: parsed.verdict,
-        sourceLanguage: parsed.sourceLanguage,
         selectedWords: parsed.selectedComponents.map((component) => component.word),
+        selectedSourceLanguages: [...new Set(parsed.selectedComponents.map((component) => component.language))].sort(),
         selectedSourceParts: parsed.selectedComponents.map((component) => component.sourcePart),
         selectedSourceGlosses: parsed.selectedComponents.map((component) => component.sourceGloss),
         rationale: parsed.rationale,
@@ -812,8 +892,8 @@ async function composeCandidates({ context, worklist, translations }) {
     await persistCompositions();
   };
   const compositionWidth = Math.max(1, Math.trunc(Number(context.config.parallelism) || 1));
-  for (let offset = 0; offset < completeSenses.length; offset += compositionWidth) {
-    await Promise.all(completeSenses.slice(offset, offset + compositionWidth).map(composeOne));
+  for (let offset = 0; offset < compositionSenses.length; offset += compositionWidth) {
+    await Promise.all(compositionSenses.slice(offset, offset + compositionWidth).map(composeOne));
   }
   await compositionWrite;
   context.compositionRecords = compositionRecords;
@@ -824,6 +904,7 @@ async function composeCandidates({ context, worklist, translations }) {
     id: `component-gloss-${hash(normalizeGloss(gloss)).slice(0, 24)}`,
     gloss,
     alternatives: componentGlossAlternatives(gloss),
+    lookupAlternatives: componentGlossLookupAlternatives(gloss),
     atoms: (byGloss.get(normalizeGloss(gloss)) ?? []).map((choice) => ({
       word: choice.word,
       pyashSequence: choice.pyashSequence,
@@ -842,7 +923,7 @@ async function composeCandidates({ context, worklist, translations }) {
   await atomicWrite(mappingsPath, mappingsContents);
   const candidatesPath = join(context.artifactDirectory, "compound-candidates.pya");
   const candidateHash = hash(stableJson(uniqueCandidates));
-  await atomicWrite(candidatesPath, renderRowsPya(CANDIDATE_NAME, "wordnet-sense-derived-compound-candidates-v2", uniqueCandidates, {
+  await atomicWrite(candidatesPath, renderRowsPya(CANDIDATE_NAME, "wordnet-sense-derived-compound-candidates-v3", uniqueCandidates, {
     "worklist-hash": worklist["worklist-hash"],
     "translation-cache-hash": translations["translation-cache-hash"],
     "candidate-revision": context.config.candidateRevision,
@@ -859,7 +940,7 @@ async function composeCandidates({ context, worklist, translations }) {
     "component-mappings-path": mappingsPath,
     "component-mappings-hash": hash(mappingsContents),
     "candidate-hash": candidateHash,
-    "source-sense-count": selected.length,
+    "source-sense-count": compositionSenses.length,
     "candidate-count": uniqueCandidates.length,
     "mapped-gloss-count": byGloss.size,
     "unmapped-glosses": glosses.flatMap((gloss) => componentGlossAlternatives(gloss))
@@ -884,21 +965,22 @@ async function updateProgress(context, worklistRows, candidateRows, decisions) {
     const completeTranslation = senseTranslation?.status === "complete";
     const composition = compositionBySense.get(sense.senseId);
     let status = "failed";
-    if (!completeTranslation) {
-      status = "failed";
-    } else if (senseCandidates.length === 0) {
-      if (composition?.status === "uncertain") status = "uncertain";
+    if (senseCandidates.length === 0) {
+      if (!completeTranslation) {
+        status = "failed";
+      } else if (composition?.status === "uncertain") status = "uncertain";
       else if (composition?.status === "no-available-decomposition") status = "no-compound-candidate";
       else if (composition?.status === "failed" || composition?.status === "compound") status = "failed";
-      else status = senseTranslation.translations.some((translation) => translation.composition === "uncertain")
+      else status = senseTranslation?.translations?.some((translation) => translation.composition === "uncertain")
         ? "uncertain"
         : "no-compound-candidate";
-    }
-    else if (senseDecisions.length > 0) {
+    } else if (senseDecisions.length > 0) {
       if (senseDecisions.some((decision) => acceptedDecision(decision)
         && ["promoted-to-derived-index", "already-active"].includes(decision.promotionStatus))) status = "accepted";
       else if (senseDecisions.some((decision) => decision.status === "uncertain-llm")) status = "uncertain";
       else if (senseDecisions.some((decision) => ["rejected-llm", "rejected-deterministic"].includes(decision.status))) status = "rejected";
+    } else if (!completeTranslation) {
+      status = "failed";
     }
     bySense.set(sense.senseId, {
       id: sense.senseId,
@@ -917,7 +999,7 @@ async function updateProgress(context, worklistRows, candidateRows, decisions) {
   await atomicWrite(path, renderRowsPya(PROGRESS_NAME, "wordnet-sense-compound-progress-v1", context.progressRecords));
   const remainingCount = (context.fullWorklist ?? []).filter((sense) => {
     const progress = bySense.get(sense.senseId);
-    return !isProcessedProgress(progress);
+    return !context.completedSenseIds?.has(sense.senseId) && !isProcessedProgress(progress);
   }).length;
   return { path, remainingCount };
 }
@@ -1065,7 +1147,9 @@ async function recordAndPromoteChoices({ context, candidates }) {
     "rejected-count": choiceOutcomes["rejected-component-choice-count"],
     ...senseOutcomes,
     ...choiceOutcomes,
-    "translation-failure-count": context.translationFailures?.length ?? 0,
+    "translation-failure-count": context.translationFailedSenseCount ?? 0,
+    "translation-failed-language-count": context.translationFailures?.length ?? 0,
+    "translation-failed-sense-count": context.translationFailedSenseCount ?? 0,
     "translation-failure-path": context.translationFailurePath ?? "",
     "progress-path": progress.path,
     "remaining-sense-count": progress.remainingCount
@@ -1143,6 +1227,10 @@ export async function runWordNetSenseCompoundRefinery({
   config.maximumSenses = resolveWordNetSenseCompoundMaximumSenses(
     config.maximumSenses,
     configuration.maximumSenses
+  );
+  config.minimumTagCount = resolveWordNetSenseCompoundMinimumTagCount(
+    config.minimumTagCount,
+    configuration.minimumTagCount
   );
   config.senseIds = resolveWordNetSenseCompoundSenseIds(configuration.senseIds);
   const previousHousekeeper = process.env.PYA_GPU_HOUSEKEEPER_URL;
@@ -1227,7 +1315,7 @@ async function runInitializedRefinery({
   return {
     runId: stableRunId,
     artifactDirectory,
-    translationFailureCount: context.translationFailures?.length ?? 0,
+    translationFailureCount: context.translationFailedSenseCount ?? 0,
     translationFailurePath: context.translationFailurePath ?? "",
     result,
     selectedSenseCount: context.worklist.length,

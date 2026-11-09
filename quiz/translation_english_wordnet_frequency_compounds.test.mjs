@@ -5,6 +5,7 @@ import {
   acceptedDecisionsForRevision,
   acceptedDecision,
   groupWordNetCompoundCandidates,
+  promoteAcceptedCompounds,
   promoteAcceptedCompoundRecords,
   selectCurrentRevisionCompounds,
   wordNetCompoundDecisionRecord
@@ -390,6 +391,28 @@ test("a revision refresh retains only compounds accepted under the current verif
   assert.throws(() => selectCurrentRevisionCompounds([current], ""), /revision is required/u);
 });
 
+test("promoting a new verifier revision preserves older verified compound records", async () => {
+  const previous = [{
+    senseId: "n:00000001-n",
+    targetPartOfSpeech: "n",
+    target: "older compound",
+    pyashSequence: ["old", "head"],
+    decisionRevision: "wordnet-modifier-literalness-v9",
+    verificationDecisionId: "older-decision",
+    verificationDecisionIds: ["older-decision"]
+  }];
+  let written;
+
+  const result = await promoteAcceptedCompounds([], {
+    decisionRevision: "wordnet-modifier-literalness-v10",
+    readExisting: async () => previous,
+    writeRecords: async (records) => { written = records; }
+  });
+
+  assert.deepEqual(written, previous);
+  assert.equal(result.activeCount, 1);
+});
+
 test("deterministic compound outcomes persist their verification status as the decision", () => {
   const decision = wordNetCompoundDecisionRecord({
     id: "known-ending",
@@ -511,6 +534,29 @@ test("component-choice promotion requires the chosen atoms to match offered sour
   assert.equal(acceptedDecision({ ...base, verificationComponentSenseIds: ["n:99999999-n", "n:00000002-n"] }), false);
   assert.equal(acceptedDecision({ ...base, verificationRationale: "" }), false);
   assert.equal(acceptedDecision({ ...base, verificationMethod: "separate-verifier" }), false);
+});
+
+test("component-choice evidence accepts a recorded bare infinitive lemma lookup", () => {
+  const decision = {
+    status: "accepted-llm",
+    verificationMethod: "wordnet-sense-component-choice",
+    verificationComposition: "literal",
+    verificationRationale: "Object plus obtain expresses acquisition.",
+    headRelationPolicy: "advisory",
+    componentGlosses: ["object", "obtain"],
+    componentSenseEvidence: [
+      { component: "object", source: "n:00000010-n", definition: "a tangible entity", mappingLookupGloss: "object" },
+      { component: "obtain", source: "v:00000011-v", definition: "come into possession", mappingLookupGloss: "obtain" }
+    ],
+    verificationSenseId: "v:00000012-v",
+    verificationComponentSenseIds: ["n:00000010-n", "v:00000011-v"],
+    verificationSourceGlosses: ["object", "to obtain"],
+    verificationComponentMeanings: ["a tangible entity", "come into possession"],
+    verificationHeadSenseId: "v:00000011-v"
+  };
+
+  assert.equal(acceptedDecision(decision), true);
+  assert.equal(acceptedDecision({ ...decision, verificationSourceGlosses: ["object", "to purchase"] }), false);
 });
 
 test("compound worklist supplies bounded WordNet definitions without usage examples", () => {

@@ -19,6 +19,7 @@ import {
   renderEnglishWordNetCompoundDecisions
 } from "../program/library/translation/english_wordnet_compound_decisions.mjs";
 import { parseEnglishWordNetFrequencyAllocationConfig } from "../program/library/translation/english_wordnet_frequency.mjs";
+import { componentGlossLookupAlternatives } from "../program/library/translation/english_wordnet_sense_compounds.mjs";
 import { verifyCompoundRecords } from "./compound_coverage_verify.mjs";
 import {
   prepareWordNetFrequencyAllocation,
@@ -259,7 +260,8 @@ export function acceptedDecision(record) {
         && String(row?.source ?? "").trim() === senseId);
       if (!senseId || !sense || !componentChoiceGlosses[index]) return false;
       const linkedMeaning = String(sense.definition ?? "").split(";")[0].slice(0, 180).trim();
-      return String(sense.mappingLookupGloss ?? "").trim().toLowerCase() === componentChoiceGlosses[index]
+      return componentGlossLookupAlternatives(componentChoiceGlosses[index])
+        .includes(String(sense.mappingLookupGloss ?? "").trim().toLowerCase())
         && linkedMeaning === componentChoiceMeanings[index];
     })
     && String(record?.verificationHeadSenseId ?? "").trim() === componentChoiceSenseIds.at(-1);
@@ -382,10 +384,15 @@ export function promoteAcceptedCompoundRecords(existingRecords, decisions, { use
   };
 }
 
-export async function promoteAcceptedCompounds(decisions, { usedTargetIds = [], decisionRevision = "" } = {}) {
-  const existing = selectCurrentRevisionCompounds(await readVerifiedWordNetCompounds(), decisionRevision);
+export async function promoteAcceptedCompounds(decisions, {
+  usedTargetIds = [],
+  decisionRevision = "",
+  readExisting = readVerifiedWordNetCompounds,
+  writeRecords = writeVerifiedWordNetCompounds
+} = {}) {
+  const existing = await readExisting();
   const promoted = promoteAcceptedCompoundRecords(existing, decisions, { usedTargetIds, decisionRevision });
-  await writeVerifiedWordNetCompounds(promoted.records);
+  await writeRecords(promoted.records);
   const { records: _records, ...result } = promoted;
   return result;
 }
@@ -394,11 +401,6 @@ export async function runWordNetFrequencyCompoundSweep({ artifactRoot = ARTIFACT
   const allocationConfig = parseEnglishWordNetFrequencyAllocationConfig(await readFile(ALLOCATION_CONFIG_URL, "utf8"));
   const decisionRevision = String(allocationConfig["compound-verification-revision"] ?? "").trim();
   if (!decisionRevision) throw new Error("compound verification requires a configured decision revision");
-  const priorVerified = await readVerifiedWordNetCompounds();
-  const currentVerified = selectCurrentRevisionCompounds(priorVerified, decisionRevision);
-  if (currentVerified.length !== priorVerified.length) {
-    await writeVerifiedWordNetCompounds(currentVerified);
-  }
   const allocation = await prepareWordNetFrequencyAllocation();
   const currentCandidates = allocation.residualCompounds.filter((record) => (
     record.disposition === "ready-for-housekeeper-verification" || record.disposition.startsWith("already-")
