@@ -97,11 +97,14 @@ test("pyash mcp server loads the selected saddle tools map", async () => {
     const list = await client.send("tools/list", {});
     const tools = Array.isArray(list?.tools) ? list.tools : [];
     const descriptions = tools.map((tool) => String(tool?.description ?? ""));
-    assert.equal(tools.length, 14);
+    assert.equal(tools.length, 15);
     assert.ok(descriptions.some((description) => description.includes("su name read from filename input be read")));
     assert.ok(descriptions.some((description) => description.includes("su name command ob text")));
     assert.ok(descriptions.some((description) => description.includes("su name repair ob text")));
-    assert.ok(descriptions.some((description) => description.includes("su name read archive focus")));
+    const archiveFocusTool = tools.find((tool) => tool.name === "read_archive_focus");
+    assert.ok(archiveFocusTool, "expected the semantic archive-focus tool");
+    assert.match(archiveFocusTool.description, /Read a bounded passage/u);
+    assert.deepEqual(archiveFocusTool.inputSchema?.required, ["archive_path", "entry_path", "focus"]);
     assert.ok(descriptions.some((description) => description.includes('su name session plan ob text "input" fromstate text "coding saddle plan" be write can')));
     const zimSearchTool = tools.find((tool) => /search/u.test(String(tool?.name ?? ""))
       && /zim/u.test(String(tool?.description ?? "")));
