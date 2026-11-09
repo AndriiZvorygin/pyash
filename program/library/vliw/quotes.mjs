@@ -1,4 +1,5 @@
 import pyashWords from "../pyashWords.json" with { type: "json" };
+import { decodePyacWord } from "./word_code.mjs";
 
 export const QUOTE_DENOTE = 0x001d;
 export const QUOTE_DENOTE_MASK = 0x001f;
@@ -7,8 +8,12 @@ export const LETTER_QUOTE_WORD = 0x081d;
 export const PARAGRAPH_LETTER_QUOTE_WORD = 0x0e1d;
 
 // The legacy quote sorts and thicknesses are normative: `lwonprom/program/pyash.h`
-// fixes the sort denotations and the vector/scalar thickness encodings.
+// fixes the sort denotations and the vector/scalar thickness encodings, and
+// `lwonprom/documentation/encoding.tex` fixes what each sort means.
+export const LETTER_SORT_DENOTE = 0;
+export const WORD_SORT_DENOTE = 1;
 export const UINT_SORT_DENOTE = 4;
+export const INT_SORT_DENOTE = 5;
 export const VECTOR_THICK_LONG = 6;
 
 const NAME_LITERAL_MASK = 0x0020;
@@ -154,7 +159,7 @@ export function decodeQuoteWord(word) {
   return { ...descriptor };
 }
 
-export function uintQuoteWord({ vectorThick = 0, scalarBytes = 2 } = {}) {
+export function quoteWordFor({ sort = UINT_SORT_DENOTE, vectorThick = 0, scalarBytes = 2 } = {}) {
   const scalarThick = scalarByteWidths.indexOf(scalarBytes);
   if (scalarThick < 0) {
     throw quoteError("unsupported-quote", "no legacy scalar width matches the requested bytes", {
@@ -166,12 +171,19 @@ export function uintQuoteWord({ vectorThick = 0, scalarBytes = 2 } = {}) {
       vectorThick
     });
   }
+  if (![LETTER_SORT_DENOTE, WORD_SORT_DENOTE, UINT_SORT_DENOTE, INT_SORT_DENOTE].includes(sort)) {
+    throw quoteError("unsupported-quote", "no legacy quote sort matches the requested sort", { sort });
+  }
   return (
-    (UINT_SORT_DENOTE << 13) |
+    (sort << 13) |
     (vectorThick << 8) |
     (scalarThick << 11) |
     QUOTE_DENOTE
   );
+}
+
+export function uintQuoteWord({ vectorThick = 0, scalarBytes = 2 } = {}) {
+  return quoteWordFor({ sort: UINT_SORT_DENOTE, vectorThick, scalarBytes });
 }
 
 export function vectorThicknessFor(count) {
@@ -185,16 +197,29 @@ export function isUintVectorQuoteWord(word) {
   return header.vectorThick !== 0;
 }
 
+export function isIntVectorQuoteWord(word) {
+  if ((word & QUOTE_DENOTE_MASK) !== QUOTE_DENOTE) return false;
+  const header = decodeQuoteHeader(word);
+  if (header.sortName !== "int" || header.scalarBytes !== 2) return false;
+  return header.vectorThick !== 0;
+}
+
+export function isLetterQuoteWord(word) {
+  if ((word & QUOTE_DENOTE_MASK) !== QUOTE_DENOTE) return false;
+  return decodeQuoteHeader(word).sortName === "letter";
+}
+
 function dynamicQuoteDescriptor(word) {
   if ((word & 0x001f) !== QUOTE_DENOTE) return null;
   const header = decodeQuoteHeader(word);
-  if (header.sortName === "uint") {
+  if (header.sortName === "uint" || header.sortName === "int") {
+    const signed = header.sortName === "int";
     if (header.vectorThick === VECTOR_THICK_LONG) {
       return {
         word,
         family: "number",
         payloadWords: null,
-        valueType: "uint-vector",
+        valueType: signed ? "int-vector" : "uint-vector",
         supported: true
       };
     }
@@ -204,7 +229,9 @@ function dynamicQuoteDescriptor(word) {
         word,
         family: "number",
         payloadWords: header.vectorWords,
-        valueType: header.vectorWords > 1 ? "uint16-vector" : "uint16",
+        valueType: signed
+          ? (header.vectorWords > 1 ? "int16-vector" : "int16")
+          : (header.vectorWords > 1 ? "uint16-vector" : "uint16"),
         supported: true
       };
     }
@@ -213,13 +240,22 @@ function dynamicQuoteDescriptor(word) {
         word,
         family: "number",
         payloadWords: header.vectorWords,
-        valueType: `uint${header.scalarBytes * 8}${header.vectorWords > 1 ? "-vector" : ""}`,
+        valueType: `${signed ? "int" : "uint"}${header.scalarBytes * 8}${header.vectorWords > 1 ? "-vector" : ""}`,
         supported: true
       };
     }
     return null;
   }
   if (header.vectorWords === null || header.scalarBytes !== 2) return null;
+  if (header.sortName === "word") {
+    return {
+      word,
+      family: "word",
+      payloadWords: header.vectorWords,
+      valueType: header.vectorWords > 1 ? "word-vector" : "word",
+      supported: true
+    };
+  }
   if (header.sortName === "letter") {
     return {
       word,
@@ -266,6 +302,29 @@ function unsignedValue(payload, scalarBytes) {
     0n
   );
   return scalarBytes <= 4 ? Number(value) : value;
+}
+
+function signedValue(payload, scalarBytes) {
+  const bits = BigInt(scalarBytes * 8);
+  const raw = payload.reduce(
+    (value, word, index) => value + (BigInt(word) << BigInt(index * 16)),
+    0n
+  );
+  const limit = 1n << (bits - 1n);
+  const signed = raw >= limit ? raw - (1n << bits) : raw;
+  return scalarBytes <= 4 ? Number(signed) : signed;
+}
+
+// A word quote holds legacy word codes. The vocabulary spelling wins when the
+// code is a known word; otherwise the code is a phonetic Pyac word.
+function decodeVectorWord(code) {
+  const known = lookupLegacyWord(code);
+  if (known?.en) return known.en;
+  try {
+    return decodePyacWord(code);
+  } catch {
+    return null;
+  }
 }
 
 function textValue(payload) {
@@ -328,14 +387,24 @@ export function decodeQuote(words, offset = 0) {
   let value = payload[0];
   if (descriptor.family === "letter" || descriptor.family === "paragraph-letter") {
     value = textValue(payload);
-  } else if (descriptor.family === "number" && elementCount > 1) {
-    value = [];
-    for (let index = 0; index < elementCount; index += 1) {
-      const element = payload.slice(index * scalarWords, (index + 1) * scalarWords);
-      value.push(header.scalarBytes > 2 ? unsignedValue(element, header.scalarBytes) : element[0]);
+  } else if (descriptor.family === "word") {
+    const words = payload.map((code) => decodeVectorWord(code));
+    value = elementCount > 1 ? words : words[0];
+  } else if (descriptor.family === "number") {
+    const signed = header.sortName === "int";
+    if (elementCount > 1) {
+      value = [];
+      for (let index = 0; index < elementCount; index += 1) {
+        const element = payload.slice(index * scalarWords, (index + 1) * scalarWords);
+        value.push(signed
+          ? signedValue(element, header.scalarBytes)
+          : (header.scalarBytes > 2 ? unsignedValue(element, header.scalarBytes) : element[0]));
+      }
+    } else if (signed) {
+      value = signedValue(payload, header.scalarBytes);
+    } else if (header.scalarBytes > 2) {
+      value = unsignedValue(payload, header.scalarBytes);
     }
-  } else if (descriptor.family === "number" && header.scalarBytes > 2) {
-    value = unsignedValue(payload, header.scalarBytes);
   }
   return {
     ...descriptor,

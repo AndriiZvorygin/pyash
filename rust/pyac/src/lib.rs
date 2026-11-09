@@ -6,9 +6,9 @@ pub mod semantic;
 
 pub use catalog::{CatalogError, PyacCatalog, parse_catalog_pya};
 pub use literal::{
-    DateInstruction, VectorInstruction, decode_date, decode_quote_header, decode_vector,
-    execute_date, execute_date_codelet, execute_vector, execute_vector_codelet, format_date,
-    index_word,
+    DateInstruction, VectorElements, VectorInstruction, decode_date, decode_quote_header,
+    decode_vector, execute_date, execute_date_codelet, execute_vector, execute_vector_codelet,
+    format_date, index_word,
 };
 pub use semantic::{
     NumericArithmeticInstruction, NumericInvertInstruction, NumericOperator,

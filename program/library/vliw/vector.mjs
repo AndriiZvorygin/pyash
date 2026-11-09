@@ -5,34 +5,56 @@ import {
   normalizeLiteralName
 } from "./literal_layout.mjs";
 import {
+  INT_SORT_DENOTE,
+  isIntVectorQuoteWord,
+  isLetterQuoteWord,
   isUintVectorQuoteWord,
-  uintQuoteWord,
+  LETTER_QUOTE_WORD,
+  PARAGRAPH_LETTER_QUOTE_WORD,
+  quoteWordFor,
+  UINT_SORT_DENOTE,
   VECTOR_THICK_LONG,
   vectorThicknessFor
 } from "./quotes.mjs";
 
-// A numeric vector travels as a uint quote whose vector thickness states how
-// many 16-bit elements it holds. The legacy format has fixed thicknesses for
-// two, three, four, eight, and sixteen elements and an explicit length form
-// for every other width.
+// A vector travels as a quote whose vector thickness states how many elements
+// it holds. The legacy quote sort says how to read the payload, so the sort
+// carries the element type: the unsigned integer sort for numbers and the
+// signed integer sort for booleans.
+//
+// A text vector cannot use one region, because the legacy quote sorts hold
+// fixed-width elements and a text element is a string. It uses one region per
+// element instead, the way the legacy codelet holds several values at once.
 export const VECTOR_MIN_ELEMENTS = 2;
 export const VECTOR_MAX_ELEMENTS = 11;
+export const TEXT_VECTOR_MAX_ELEMENTS = 6;
+
+export const VECTOR_SORTS = Object.freeze({
+  num: UINT_SORT_DENOTE,
+  bool: INT_SORT_DENOTE
+});
 
 export const vectorCompatibility = Object.freeze({
   minElements: VECTOR_MIN_ELEMENTS,
   maxElements: VECTOR_MAX_ELEMENTS,
-  scalarBytes: 2
+  textMaxElements: TEXT_VECTOR_MAX_ELEMENTS,
+  scalarBytes: 2,
+  sorts: VECTOR_SORTS
 });
 
-export function vectorQuoteWord(count) {
-  return uintQuoteWord({ vectorThick: vectorThicknessFor(count), scalarBytes: 2 });
+export function vectorQuoteWord(type, count) {
+  return quoteWordFor({
+    sort: VECTOR_SORTS[type],
+    vectorThick: vectorThicknessFor(count),
+    scalarBytes: 2
+  });
 }
 
 export function vectorUsesExplicitLength(count) {
   return vectorThicknessFor(count) === VECTOR_THICK_LONG;
 }
 
-function readElements(values) {
+function readNumbers(values) {
   return values.map((value) => {
     if (!Number.isInteger(value) || value < 0 || value > 0xffff) {
       throw encodingError(
@@ -43,6 +65,38 @@ function readElements(values) {
     }
     return value;
   });
+}
+
+function readBooleans(values) {
+  return values.map((value) => {
+    if (value === "truth" || value === true) return 1;
+    if (value === "lie" || value === false) return 0;
+    throw encodingError(
+      "unsupported-vector-type",
+      "boolean vector elements must be truth or lie",
+      { value }
+    );
+  });
+}
+
+function textRegion(value) {
+  if (typeof value !== "string" || value.length === 0) {
+    throw encodingError(
+      "unsupported-vector-type",
+      "text vector elements must be non-empty text",
+      { value }
+    );
+  }
+  if (value.length === 1) {
+    return {
+      quoteWord: LETTER_QUOTE_WORD,
+      payloadWords: [value.charCodeAt(0)]
+    };
+  }
+  return {
+    quoteWord: PARAGRAPH_LETTER_QUOTE_WORD,
+    payloadWords: [value.length, ...Array.from(value, (character) => character.charCodeAt(0))]
+  };
 }
 
 export function isVectorSentence(sentence) {
@@ -85,54 +139,66 @@ export function normalizeVectorSentence(sentence) {
       vector
     });
   }
-  if (vector.type !== undefined && vector.type !== "num") {
+  const type = vector.type === undefined ? "num" : vector.type;
+  if (type !== "num" && type !== "bool" && type !== "text") {
     throw encodingError(
       "unsupported-vector-type",
-      "only numeric vectors have a proven legacy quote encoding",
+      "only numeric, boolean, and text vectors have a proven legacy quote encoding",
       { type: vector.type }
     );
   }
-
-  const values = readElements(vector.values);
-  if (values.length < VECTOR_MIN_ELEMENTS) {
+  if (vector.values.length < VECTOR_MIN_ELEMENTS) {
     throw encodingError(
       "unsupported-vector-width",
-      "a one-element vector is indistinguishable from a numeric literal",
-      { count: values.length, minimum: VECTOR_MIN_ELEMENTS }
+      "a one-element vector is indistinguishable from a scalar literal",
+      { count: vector.values.length, minimum: VECTOR_MIN_ELEMENTS }
     );
   }
-  if (values.length > VECTOR_MAX_ELEMENTS) {
+  const maximum = type === "text" ? TEXT_VECTOR_MAX_ELEMENTS : VECTOR_MAX_ELEMENTS;
+  if (vector.values.length > maximum) {
     throw encodingError(
       "unsupported-vector-width",
       "the vector does not fit in one codelet",
-      { count: values.length, maximum: VECTOR_MAX_ELEMENTS }
+      { count: vector.values.length, maximum }
     );
   }
 
+  const values = type === "num"
+    ? readNumbers(vector.values)
+    : type === "bool"
+      ? readBooleans(vector.values)
+      : vector.values.map((value) => {
+        textRegion(value);
+        return value;
+      });
+
   const normalized = {
     mood: "ya",
-    ob: { ve: { type: "num", values } },
+    ob: { ve: { type, values } },
     be: "vector"
   };
   if (sentence.su !== undefined) {
     const name = normalizeLiteralName(sentence.su);
     normalized.su = { name: name.name };
   }
-  return normalized;
+  return { normalized, type, payload: values };
 }
 
 export function lowerVectorSentence(sentence) {
-  const normalized = normalizeVectorSentence(sentence);
-  const values = normalized.ob.ve.values;
+  const { normalized, type, payload } = normalizeVectorSentence(sentence);
   const nameWords = normalized.su ? normalizeLiteralName(normalized.su).words : [];
-  const payload = vectorUsesExplicitLength(values.length)
-    ? [values.length, ...values]
-    : values;
-  const codelet = buildLiteralCodelet({
-    nameWords,
-    quoteWord: vectorQuoteWord(values.length),
-    payloadWords: payload
-  });
+
+  let regions;
+  if (type === "text") {
+    regions = payload.map((value) => textRegion(value));
+  } else {
+    const words = vectorUsesExplicitLength(payload.length)
+      ? [payload.length, ...payload]
+      : payload;
+    regions = [{ quoteWord: vectorQuoteWord(type, payload.length), payloadWords: words }];
+  }
+
+  const codelet = buildLiteralCodelet({ nameWords, regions });
   return {
     sentence: normalized,
     words: codelet.words,
@@ -141,13 +207,42 @@ export function lowerVectorSentence(sentence) {
   };
 }
 
+function regionText(region) {
+  return region.payloadWords.map((code) => String.fromCharCode(code)).join("");
+}
+
 export function decodeVectorCodelet(input) {
   const literal = decodeLiteralCodelet(input, {
-    acceptsQuote: (quote) => isUintVectorQuoteWord(quote.word),
-    payloadWordCount: (quote) => quote.payloadWords  });
+    acceptsQuote: (quote) => (
+      isUintVectorQuoteWord(quote.word) ||
+      isIntVectorQuoteWord(quote.word) ||
+      isLetterQuoteWord(quote.word)
+    ),
+    payloadWordCount: (quote) => quote.payloadWords
+  });
+
+  const first = literal.regions[0].quote;
+  let type;
+  let values;
+  if (isUintVectorQuoteWord(first.word)) {
+    type = "num";
+    values = literal.regions[0].payloadWords;
+  } else if (isIntVectorQuoteWord(first.word)) {
+    type = "bool";
+    values = literal.regions[0].payloadWords.map((code) => (code === 0 ? "lie" : "truth"));
+  } else {
+    type = "text";
+    if (!literal.regions.every((region) => isLetterQuoteWord(region.quote.word))) {
+      throw encodingError("malformed-codelet", "a text vector holds only letter regions", {
+        words: literal.regions.map((region) => region.quote.word)
+      });
+    }
+    values = literal.regions.map((region) => regionText(region));
+  }
+
   const sentence = {
     mood: "ya",
-    ob: { ve: { type: "num", values: literal.payloadWords } },
+    ob: { ve: { type, values } },
     be: "vector"
   };
   if (literal.name) {

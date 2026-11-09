@@ -13,11 +13,14 @@ export const REALIS_MOOD_WORD = 0x217e;
 
 // The literal families share one codelet layout:
 //
-//   head | name words | nominative | quote | payload | accusative | realis
+//   head | name words | nominative | region | region | ... | accusative | realis
 //
-// The name phrase and its nominative case are present only when the sentence
-// names the value. The legacy format has no slot for the `exists` keyword,
-// so a named literal is written without it.
+// Each region is a quote with its payload. The name phrase and its nominative
+// case are present only when the sentence names the value. The legacy format
+// has no slot for the `exists` keyword, so a named literal is written without
+// it. A region holds one value; a vector of fixed-width values uses a single
+// region whose vector thickness states the count, and a vector of texts uses
+// one region per element.
 export function encodingError(code, message, details = {}) {
   return new VliwEncodingError(code, message, details);
 }
@@ -54,7 +57,7 @@ export function normalizeLiteralName(value) {
   };
 }
 
-export function buildLiteralCodelet({ nameWords = [], quoteWord, payloadWords }) {
+export function buildLiteralCodelet({ nameWords = [], regions }) {
   const body = [];
   const boundarySlots = [];
   let slot = 1;
@@ -69,12 +72,15 @@ export function buildLiteralCodelet({ nameWords = [], quoteWord, payloadWords })
     slot += 1;
   }
 
-  body.push(quoteWord);
-  slot += 1;
-  for (const word of payloadWords) {
-    body.push(word);
+  for (const region of regions) {
+    body.push(region.quoteWord);
     slot += 1;
+    for (const word of region.payloadWords) {
+      body.push(word);
+      slot += 1;
+    }
   }
+
   body.push(ACCUSATIVE_CASE_WORD);
   boundarySlots.push(slot);
   slot += 1;
@@ -83,7 +89,7 @@ export function buildLiteralCodelet({ nameWords = [], quoteWord, payloadWords })
   slot += 1;
 
   if (slot > CODELET_WORD_COUNT) {
-    throw encodingError("literal-width", "the literal does not fit in one codelet", {
+    throw encodingError("literal-width", "the value does not fit in one codelet", {
       usedWords: slot,
       limit: CODELET_WORD_COUNT
     });
@@ -130,31 +136,38 @@ export function readLiteralCodelet(decoded, { quoteWord, acceptsQuote, payloadWo
     });
   }
 
-  const quoteItem = decoded.items.find((item) => item.kind === "quote");
-  const accepted = quoteItem
-    ? (acceptsQuote ? acceptsQuote(quoteItem.quote) : quoteItem.quote.word === quoteWord)
+  const quoteItems = decoded.items.filter((item) => item.kind === "quote");
+  const firstQuote = quoteItems[0];
+  const accepted = firstQuote
+    ? (acceptsQuote ? acceptsQuote(firstQuote.quote) : firstQuote.quote.word === quoteWord)
     : false;
-  if (!quoteItem || quoteItem.offset !== quoteOffset || !accepted) {
+  if (!firstQuote || firstQuote.offset !== quoteOffset || !accepted) {
     throw encodingError("malformed-codelet", "literal codelet has an unexpected quote", {
       expected: quoteWord ?? null,
-      actual: quoteItem?.quote?.word ?? quoteItem?.word ?? null,
+      actual: firstQuote?.quote?.word ?? firstQuote?.word ?? null,
       offset: quoteOffset
     });
   }
 
-  // The quote header owns the words that follow it. The explicit-length form
-  // spends one of them on the length, so the element words start after it.
-  const payloadStart = quoteItem.offset + 1 + (quoteItem.quote.lengthWord === undefined ? 0 : 1);
-  const payloadLength = payloadWordCount(quoteItem.quote);
-  const payloadWords = Array.from(words.slice(payloadStart, payloadStart + payloadLength));
-  if (payloadWords.length !== payloadLength) {
-    throw encodingError("malformed-codelet", "literal codelet has a truncated payload", {
-      requiredWords: payloadLength,
-      actual: payloadWords.length
-    });
+  // The regions follow one another. The quote header owns the words that
+  // follow it, and the explicit-length form spends one of them on the length,
+  // so the element words start after it.
+  const regions = [];
+  for (const quoteItem of quoteItems) {
+    const payloadStart = quoteItem.offset + 1 + (quoteItem.quote.lengthWord === undefined ? 0 : 1);
+    const payloadLength = payloadWordCount(quoteItem.quote);
+    const payloadWords = Array.from(words.slice(payloadStart, payloadStart + payloadLength));
+    if (payloadWords.length !== payloadLength) {
+      throw encodingError("malformed-codelet", "literal codelet has a truncated payload", {
+        requiredWords: payloadLength,
+        actual: payloadWords.length
+      });
+    }
+    regions.push({ quote: quoteItem.quote, payloadWords });
   }
 
-  const accusativeOffset = quoteItem.quote.nextOffset;
+  const lastRegion = regions[regions.length - 1];
+  const accusativeOffset = lastRegion.quote.nextOffset;
   const realisOffset = accusativeOffset + 1;
   if (words[accusativeOffset] !== ACCUSATIVE_CASE_WORD) {
     throw encodingError("malformed-codelet", "literal codelet has an invalid accusative case word", {
@@ -200,7 +213,8 @@ export function readLiteralCodelet(decoded, { quoteWord, acceptsQuote, payloadWo
   return {
     name: name.join(" "),
     nameWords,
-    payloadWords,
+    regions,
+    payloadWords: regions[0]?.payloadWords ?? [],
     usedWords
   };
 }
