@@ -16,6 +16,7 @@ import { FACT_EVALUATION_MODES, FACT_JUDGE_PROMPT_VERSION, FACT_SCORER_VERSION, 
 import { runPromptAblation } from "../program/runtime/criterion/prompt-ablation.mjs";
 import { runMeetingBankJudgePilot, MEETINGBANK_JUDGE_PILOT_MODELS } from "../program/runtime/criterion/judge-pilot.mjs";
 import { runMeetingBankFactualityPilot, MEETINGBANK_FACTUALITY_MODELS, MEETINGBANK_FACTUALITY_RUN_ID, MEETINGBANK_FACTUALITY_SELECTION_SEED, UNIRRM_FACTUALITY_MODEL } from "../program/runtime/criterion/factuality-pilot.mjs";
+import { listCriterionRuns, renderCriterionRuns } from "../program/runtime/criterion/run_index.mjs";
 
 function flag(args, name, fallback = null) {
   const prefix = `${name}=`;
@@ -102,6 +103,7 @@ function usage() {
     "criterion meetingbank-factuality-pilot --dataset <meetingbank.jsonl> [--model <qwen,...>] [--smoke] [--resume]",
     "criterion deepswe --tasks <deep-swe/tasks> [--model <model,...>] [--agent mini-swe-agent] [--base-url <model-endpoint>] [--sample-seed 0] [--limit N|--smoke] [--resume]",
     "criterion report <run-id>",
+    "criterion runs [--model <text>] [--benchmark <text>] [--status <text>] [--host <text>] [--limit <count>]",
     "criterion again <run-id>",
     "criterion compare <run-id> [<run-id> ...]",
     "criterion golden <run-id> [--golden <path>] [--write]",
@@ -453,6 +455,27 @@ async function reportCommand(args, root) {
   return 0;
 }
 
+async function runsCommand(args, root) {
+  const rawLimit = flag(args, "--limit", "30");
+  const limit = Number(rawLimit);
+  if (!Number.isInteger(limit) || limit < 1) throw new Error("criterion runs --limit must be a positive integer");
+  const result = await listCriterionRuns({
+    root,
+    model: flag(args, "--model", ""),
+    benchmark: flag(args, "--benchmark", ""),
+    status: flag(args, "--status", ""),
+    host: flag(args, "--host", ""),
+    limit
+  });
+  const relativeIndexPath = path.relative(root, result.indexPath) || result.indexPath;
+  if (hasFlag(args, "--json")) {
+    print({ ...result, indexPath: relativeIndexPath }, true);
+    return 0;
+  }
+  process.stdout.write(renderCriterionRuns(result.runs, { totalRuns: result.matchingRuns, indexPath: relativeIndexPath }));
+  return 0;
+}
+
 async function compareCommand(args, root) {
   const ids = positional(args);
   if (!ids.length) throw new Error("criterion compare requires one or more run ids");
@@ -515,6 +538,7 @@ export async function main(argv = process.argv.slice(2), { root = process.cwd() 
   if (command === "criterion" && (subcommand === "meetingbank-judge-pilot" || subcommand === "judge-pilot")) return meetingBankJudgePilotCommand(args, root);
   if (command === "criterion" && (subcommand === "meetingbank-factuality-pilot" || subcommand === "factuality-pilot")) return meetingBankFactualityPilotCommand(args, root);
   if (command === "criterion" && subcommand === "report") return reportCommand(rest, root);
+  if (command === "criterion" && subcommand === "runs") return runsCommand(rest, root);
   if (command === "criterion" && subcommand === "compare") return compareCommand(rest, root);
   if (command === "criterion" && subcommand === "golden") return goldenCommand(rest, root);
   if (command === "criterion" && subcommand === "again") return againCommand(rest, root);
@@ -529,6 +553,7 @@ export async function main(argv = process.argv.slice(2), { root = process.cwd() 
   if (command === "meetingbank-judge-pilot" || command === "judge-pilot") return meetingBankJudgePilotCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "meetingbank-factuality-pilot" || command === "factuality-pilot") return meetingBankFactualityPilotCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "report") return reportCommand([subcommand, ...rest].filter(Boolean), root);
+  if (command === "runs") return runsCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "compare") return compareCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "golden") return goldenCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "again") return againCommand([subcommand, ...rest].filter(Boolean), root);

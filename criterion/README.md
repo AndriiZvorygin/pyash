@@ -9,6 +9,7 @@ node command/criterion.mjs list
 node command/criterion.mjs inspect --benchmark meetingbank
 node command/criterion.mjs run --benchmark meetingbank --dataset /path/to/split.jsonl --model qwen3.5:9b,hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M --profile summary_direct --smoke
 node command/criterion.mjs report <run-id>
+node command/criterion.mjs runs [--model <text>] [--benchmark <text>] [--status <text>] [--host <text>] [--limit <count>] [--json]
 node command/criterion.mjs compare <run-a> <run-b>
 node command/criterion.mjs golden <run-id> --write
 node command/criterion.mjs again <run-id>
@@ -16,6 +17,14 @@ node command/criterion.mjs meetingbank-fact-audit --dataset /path/to/meetingbank
 node command/criterion.mjs omnicseval-meeting --dataset /path/to/meetingbank/test.jsonl --annotations /path/to/omnicseval-meeting.jsonl --source-runs meetingbank-meetingscript-full-20260915 --judge-model <external-judge> --resume
 node command/criterion.mjs prompt-ablation --dataset /path/to/meetingbank/test.jsonl --annotations /path/to/omnicseval-meeting.json --source-run full-meetingbank-summary-direct-20260913 --run-id meetingbank-qwen-prompt-ablation --smoke --resume
 ```
+
+`criterion runs` refreshes `criterion/results/index.pya` from the saved `.pya`
+run manifests and lists the newest 30 runs. Use `--model`, `--benchmark`,
+`--status`, or `--host` to filter, `--limit` to change the number shown, and
+`--json` for machine-readable output. The index is generated and ignored; run
+the command on the host that owns the results. Results are not synchronized
+between machines, so a local index cannot discover manifests saved only on
+another host. Open a listed run with `criterion report <run-id>`.
 
 Use `OLLAMA_BASE_URL` (or the existing `OLLAMA_HOST`) for the Ollama endpoint. A run uses the same profile and context length for every model in a comparison. `--resume` reuses completed sample rows and is the benchmark equivalent of `again`. Reports persist `runScope: smoke` for `--smoke`; unrestricted runs are labelled `runScope: full`.
 
