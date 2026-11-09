@@ -205,3 +205,20 @@ test("vocab_suggest derives the expanded deterministic compound set", async () =
   }]);
   assert.match(lines.join("\n"), /acid-rain: found compound acid \+ rain -> flat myic \(accepted-delimited\)/u);
 });
+
+test("vocab_suggest reports the accepted cluster-compress compound", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["cluster-compress"], {
+    report: (line) => lines.push(String(line))
+  });
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.missing, 0);
+  assert.deepEqual(result.foundCompounds, [{
+    target: "cluster-compress",
+    components: ["cluster", "compress"],
+    pyash: ["ksus", "hzip"],
+    status: "accepted-curated",
+    locations: ["input"]
+  }]);
+  assert.match(lines.join("\n"), /cluster-compress: found compound cluster \+ compress -> ksus hzip \(accepted-curated\)/u);
+});

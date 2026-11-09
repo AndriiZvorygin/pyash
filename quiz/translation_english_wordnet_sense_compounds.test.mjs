@@ -3,17 +3,24 @@ import test from "node:test";
 
 import {
   buildWordNetSenseTranslationPrompt,
+  ENGLISH_WORDNET_SENSE_COMPOUNDS_LANGUAGES,
   buildSenseDerivedCompoundCandidates,
   buildSenseCompoundChoiceInput,
   parseSenseCompoundChoiceResponse,
   buildSenseDerivedCompoundCandidateFromChoice,
   parseWordNetSenseTranslationResponse,
+  parseWordNetSenseTranslationResponsePartial,
   parseWordNetSenseTranslationCache,
   renderWordNetSenseTranslationCache,
+  mergeWordNetSenseTranslationFailures,
+  hasCompositionSourceTranslations,
   senseTranslationKey,
   buildSenseCompoundWorklist,
   buildKwonLinkedAtomicChoices,
   componentGlossAlternatives,
+  componentGlossLookupAlternatives,
+  mapComponentGlossChoices,
+  wordNetLemmaComponentTranslations,
   translateWordNetSenseWave
 } from "../program/library/translation/english_wordnet_sense_compounds.mjs";
 import {
@@ -22,7 +29,7 @@ import {
 } from "../program/library/translation/compound_verification.mjs";
 import { acceptedDecision } from "../command/wordnet_frequency_compound_sweep.mjs";
 
-const languages = ["chinese", "french", "russian", "hindi"];
+const languages = ENGLISH_WORDNET_SENSE_COMPOUNDS_LANGUAGES;
 
 test("sense translation prompt is scoped to one definition and comparison-language set", () => {
   const prompt = buildWordNetSenseTranslationPrompt({
@@ -39,19 +46,110 @@ test("sense translation prompt is scoped to one definition and comparison-langua
   assert.match(prompt, /a relationship between friends/u);
   assert.doesNotMatch(prompt, /their friendship lasted years/u);
   assert.doesNotMatch(prompt, /hfre|hlak|hbad/u);
-  assert.match(prompt, /"chinese","french","russian","hindi"/u);
-  assert.match(prompt, /every translation containing two or more Han characters must be decomposed/u);
-  assert.match(prompt, /For a two-character Chinese translation, list both characters as separate parts/u);
+  assert.deepEqual(languages, ["english", "chinese", "french", "russian", "hindi"]);
+  assert.match(prompt, /"english","chinese","french","russian","hindi"/u);
+  assert.match(prompt, /decompose every translation containing two or more Han characters/u);
+  assert.match(prompt, /component surfaces must cover every character of the translation surface exactly once/u);
+  assert.match(prompt, /smallest meaningful lexical morphemes/u);
+  assert.match(prompt, /at least two lexical components jointly express/u);
+  assert.doesNotMatch(prompt, /do not need to cover every character/u);
+  assert.match(prompt, /Do not insert spaces inside the Chinese translation or component surfaces/u);
+  assert.match(prompt, /one best translation surface/u);
   assert.match(prompt, /Chinese multi-character translations cannot be simple or have empty components/u);
-  assert.match(prompt, /exactly one translation row for each requested language/u);
-  assert.match(prompt, /compound requires two or three components, simple requires an empty components array/u);
+  assert.match(prompt, /exactly one translation row and one best translation surface for each requested language/u);
+  assert.match(prompt, /at most three entries\. A compound requires at least two lexical components/u);
   assert.match(prompt, /Do not split prefixes, suffixes, inflectional endings, or grammatical material/u);
   assert.match(prompt, /A classifier, article, particle/u);
   assert.match(prompt, /compositionEvidence/u);
   assert.match(prompt, /For each part, provide up to three distinct concise English lexical glosses/u);
 });
 
-test("component-choice prompt groups glosses and atoms under their source part", () => {
+test("English sense translations expose multiword WordNet lemmas for composition", () => {
+  const prompt = buildWordNetSenseTranslationPrompt({
+    sense: {
+      senseId: "n:09263527-n",
+      pos: "n",
+      lemma: "chain",
+      lemmas: ["chain", "chemical chain"],
+      gloss: "(chemistry) a series of linked atoms (generally in an organic molecule)"
+    },
+    languages: ["english"]
+  });
+
+  assert.match(prompt, /"english"/u);
+  assert.match(prompt, /SENSE LEMMAS: \["chain","chemical chain"\]/u);
+  assert.match(prompt, /When English is requested, use the listed sense lemmas to select the clearest expression/u);
+});
+
+test("English compound sense translation preserves chemical-chain components", () => {
+  const response = parseWordNetSenseTranslationResponse(JSON.stringify({
+    senseId: "n:09263527-n",
+    translations: [{
+      language: "english",
+      surface: "chemical chain",
+      composition: "compound",
+      compositionEvidence: "chemical specifies the domain and chain is the structural head",
+      components: [
+        { surface: "chemical", gloss: "chemical", role: "lexical" },
+        { surface: "chain", gloss: "chain", role: "lexical" }
+      ]
+    }]
+  }), { senseId: "n:09263527-n", languages: ["english"] });
+
+  assert.equal(response.valid, true);
+  assert.deepEqual(response.translations[0].components.map((component) => component.surface), ["chemical", "chain"]);
+});
+
+test("a multiword WordNet lemma supplies English compound atoms independently of translated wording", () => {
+  const sense = {
+    senseId: "n:09263527-n",
+    pos: "n",
+    lemma: "chain",
+    lemmas: ["chain", "chemical chain"],
+    definition: "(chemistry) a series of linked atoms (generally in an organic molecule)",
+    targetHead: { coverageType: "atomic", word: "series", pyashSequence: ["slis"], componentLayer: 16 }
+  };
+  const translations = wordNetLemmaComponentTranslations(sense);
+  const chemical = {
+    word: "chemical",
+    coverageType: "atomic",
+    status: "active-linked-atom",
+    pyashSequence: ["ryik"],
+    componentLayers: [16],
+    linkedSense: { source: "a:02703361-a", pos: "a", lemmas: ["chemical"], definition: "relating to or used in chemistry" }
+  };
+  const series = {
+    word: "chain",
+    coverageType: "atomic",
+    status: "active-linked-atom",
+    pyashSequence: ["slis"],
+    componentLayers: [16],
+    linkedSense: { source: "n:03038685-n", pos: "n", lemmas: ["chain"], definition: "a series of things depending on each other" }
+  };
+  const input = buildSenseCompoundChoiceInput({
+    sense,
+    translations,
+    kwonCandidatesByGloss: new Map([["chemical", [chemical]], ["chain", [series]]])
+  });
+
+  assert.deepEqual(translations.map((translation) => translation.surface), ["chemical chain"]);
+  assert.deepEqual(input.sourceOptions.map((option) => [option.word, option.sourcePart]), [["chemical", "chemical"]]);
+  const selected = parseSenseCompoundChoiceResponse(JSON.stringify({
+    verdict: "compound",
+    atoms: ["chemical"]
+  }), { input });
+  const candidate = buildSenseDerivedCompoundCandidateFromChoice({
+    sense,
+    selectedComponents: selected.selectedComponents,
+    translations,
+    candidateRevision: "sense-component-choice-v10",
+    rationale: selected.rationale
+  });
+  assert.deepEqual(candidate.pyashSequence, ["ryik", "slis"]);
+  assert.deepEqual(candidate.sourceSurfaces, { english: "chemical chain" });
+});
+
+test("component-choice prompt offers gloss-linked atoms without binding choices to a translation", () => {
   const atom = (word, sequence, definition, gloss) => ({
     word,
     coverageType: "atomic",
@@ -74,63 +172,159 @@ test("component-choice prompt groups glosses and atoms under their source part",
       { surface: "赋", gloss: "bestow/assign", role: "lexical" },
       { surface: "予", gloss: "give", role: "lexical" }
     ]
+  }, {
+    language: "hindi",
+    surface: "दान देना",
+    composition: "compound",
+    compositionEvidence: "दान means aid; देना means provide.",
+    components: [
+      { surface: "दान", gloss: "aid", role: "lexical" },
+      { surface: "देना", gloss: "supplied", role: "lexical" }
+    ]
   }];
   const choices = new Map([
     ["bestow", [atom("donate", "hdon", "give to a charity or good cause", "bestow"), atom("yeah", "dwam", "yes", "bestow")]],
     ["assign", [atom("assigned", "ysad", "designated to a role", "assign"), atom("unspecified", "ysun", "not specified", "assign"), atom("attaching", "ytac", "joining or fastening", "assign"), atom("impose", "ypom", "force something onto", "assign")]],
-    ["give", [atom("giving", "kwin", "cause to have, in the abstract or physical sense", "give"), atom("yeah", "dwam", "yes", "give")]]
+    ["give", [atom("giving", "kwin", "cause to have, in the abstract or physical sense", "give"), atom("yeah", "dwam", "yes", "give")]],
+    ["aid", [atom("aid", "haid", "help or support", "aid")]],
+    ["supplied", [atom("supplied", "hsup", "provided for use", "supplied")]]
   ]);
   const sense = { senseId: "v:00120124-v", pos: "v", lemma: "get", gloss: "give certain properties to something" };
   const input = buildSenseCompoundChoiceInput({ sense, translations, kwonCandidatesByGloss: choices });
 
   assert.match(input.prompt, /limited inventory of existing atoms/u);
-  assert.match(input.prompt, /If fewer than two fit, return uncertain with an empty atoms array/u);
-  assert.match(input.prompt, /A compound must contain at least two different atoms/u);
-  assert.match(input.prompt, /one atom from each of two or three different source parts/u);
-  assert.match(input.prompt, /Two atoms from the same source part do not satisfy the minimum/u);
+  assert.match(input.prompt, /If fewer than two available atoms fit, return uncertain with an empty atoms array/u);
+  assert.match(input.prompt, /Choose two or three distinct atoms in Pyash head-final order/u);
+  assert.match(input.prompt, /Atoms may be combined across gloss groups/u);
+  assert.doesNotMatch(input.prompt, /single translation|same source part|TRANSLATION COMPONENT OPTIONS/u);
   assert.match(input.prompt, /Pyash compounds are head-final/u);
-  assert.match(input.prompt, /last atom is the head/u);
+  assert.match(input.prompt, /final atom is the semantic head/u);
+  assert.doesNotMatch(input.prompt, /all atoms from a single object/u);
   assert.match(input.prompt, /bird snake.*type of snake/u);
   assert.match(input.prompt, /Snake bird.*type of bird/u);
   assert.match(input.prompt, /"atoms":\["atom1","atom2"\]/u);
   assert.match(input.prompt, /"verdict":"uncertain","atoms":\[\]/u);
-  assert.match(input.prompt, /"atoms":\["existing atom word"\]/u);
-  assert.match(input.prompt, /each atom's linked meaning/u);
-  const optionsStart = input.prompt.indexOf("COMPONENT OPTIONS:\n") + "COMPONENT OPTIONS:\n".length;
+  assert.match(input.prompt, /"atoms":\["atom word"\]/u);
+  assert.match(input.prompt, /their linked meanings/u);
+  const optionsStart = input.prompt.indexOf("AVAILABLE ATOM OPTIONS:\n") + "AVAILABLE ATOM OPTIONS:\n".length;
   const optionsEnd = input.prompt.indexOf("\nExample:", optionsStart);
   const componentOptions = JSON.parse(input.prompt.slice(optionsStart, optionsEnd));
   assert.deepEqual(componentOptions, [
-    {
-      source: "赋",
-      gloss: "bestow / assign",
-      atoms: ["donate", "yeah", "assigned", "unspecified", "attaching", "impose"],
-      atomMeanings: {
-        donate: "give to a charity or good cause",
-        yeah: "yes",
-        assigned: "designated to a role",
-        unspecified: "not specified",
-        attaching: "joining or fastening",
-        impose: "force something onto"
-      }
-    },
-    {
-      source: "予",
-      gloss: "give",
-      atoms: ["giving", "yeah"],
-      atomMeanings: { giving: "cause to have, in the abstract or physical sense", yeah: "yes" }
-    }
+    { gloss: "bestow", atoms: ["donate", "yeah"], atomMeanings: { donate: "give to a charity or good cause", yeah: "yes" } },
+    { gloss: "assign", atoms: ["assigned", "unspecified", "attaching", "impose"], atomMeanings: {
+      assigned: "designated to a role", unspecified: "not specified", attaching: "joining or fastening", impose: "force something onto"
+    } },
+    { gloss: "give", atoms: ["giving", "yeah"], atomMeanings: { giving: "cause to have, in the abstract or physical sense", yeah: "yes" } },
+    { gloss: "aid", atoms: ["aid"], atomMeanings: { aid: "help or support" } },
+    { gloss: "supplied", atoms: ["supplied"], atomMeanings: { supplied: "provided for use" } }
   ]);
-  assert.throws(() => parseSenseCompoundChoiceResponse(JSON.stringify({
-    verdict: "compound",
-    atoms: ["donate", "assigned"]
-  }), { input }), /distinct parts of one source decomposition/u);
   assert.match(input.prompt, /give to a charity or good cause/u);
   assert.match(input.prompt, /designated to a role/u);
-  assert.doesNotMatch(input.prompt, /sourceLanguage|Chinese:|赋 \/ bestow|component choice\]/u);
+  assert.doesNotMatch(input.prompt, /sourceLanguage|source language|translation|Chinese:|赋 \/ bestow|component choice\]/u);
   assert.doesNotMatch(input.prompt, /v:\d{8}-v|sense-compound-[a-f0-9]{12}/u);
-  assert.doesNotMatch(input.prompt, /donate \+ giving|giving \+ donate/u);
   assert.equal(input.responseFormat.oneOf[0].properties.atoms.minItems, 2);
+  assert.equal(input.responseFormat.oneOf[0].properties.atoms.maxItems, 3);
+  assert.equal(input.responseFormat.oneOf[0].properties.translation, undefined);
   assert.equal(input.responseFormat.oneOf[1].properties.atoms.maxItems, 0);
+
+  const parsed = parseSenseCompoundChoiceResponse(JSON.stringify({
+    verdict: "compound",
+    atoms: ["donate", "aid"]
+  }), { input });
+  const onePartInput = buildSenseCompoundChoiceInput({
+    sense,
+    translations: [translations[0]],
+    kwonCandidatesByGloss: new Map([
+      ["bestow", choices.get("bestow")],
+      ["assign", choices.get("assign")]
+    ])
+  });
+  assert.ok(onePartInput);
+  const sameSourcePart = parseSenseCompoundChoiceResponse(JSON.stringify({
+    verdict: "compound",
+    atoms: ["donate", "assigned"]
+  }), { input: onePartInput });
+  assert.deepEqual(sameSourcePart.selectedComponents.map((component) => component.sourcePart), ["赋", "赋"]);
+  const samePartCandidate = buildSenseDerivedCompoundCandidateFromChoice({
+    sense,
+    selectedComponents: sameSourcePart.selectedComponents,
+    translations: [translations[0]],
+    candidateRevision: "sense-component-choice-v10",
+    rationale: sameSourcePart.rationale
+  });
+  assert.deepEqual(samePartCandidate.sourceComponentIndexesByLanguage.chinese, [0, 0]);
+  assert.equal(buildSenseCompoundChoiceInput({
+    sense,
+    translations: [translations[0]],
+    kwonCandidatesByGloss: new Map([["bestow", choices.get("bestow").slice(0, 1)]])
+  }), null);
+  const candidate = buildSenseDerivedCompoundCandidateFromChoice({
+    sense,
+    selectedComponents: parsed.selectedComponents,
+    translations,
+    candidateRevision: "sense-component-choice-v10",
+    rationale: parsed.rationale
+  });
+  assert.deepEqual(candidate.componentGlosses, ["donate", "aid"]);
+  assert.deepEqual(candidate.sourceLanguages, ["chinese", "hindi"]);
+  assert.deepEqual(candidate.sourceMorphemesByLanguage, { chinese: ["赋"], hindi: ["दान"] });
+  assert.deepEqual(candidate.sourceCandidateComponentIndexesByLanguage, { chinese: [0], hindi: [1] });
+  const verificationPrompt = buildCompoundVerificationPrompt({ record: candidate });
+  assert.ok(verificationPrompt.includes('"pyashComponents":[{"word":"donate"'));
+  assert.ok(verificationPrompt.includes('"word":"aid"'));
+  assert.ok(verificationPrompt.includes('"sourceComponentIndexes":{"chinese":[0,null],"hindi":[null,0]}'));
+  assert.throws(() => parseSenseCompoundChoiceResponse(JSON.stringify({
+    verdict: "compound",
+    translation: "irrelevant",
+    atoms: ["donate", "aid"]
+  }), { input }), /only verdict and an atoms array/u);
+});
+
+test("component-choice prompt trims lower-priority options to its safe budget and keeps the response schema aligned", () => {
+  const atom = (word, definition, index) => ({
+    word,
+    coverageType: "atomic",
+    status: "active-linked-atom",
+    pyashSequence: [`w${index}`],
+    componentLayers: [16],
+    linkedSense: { source: `n:${String(index).padStart(8, "0")}-n`, pos: "n", lemmas: [word], definition }
+  });
+  const translations = [];
+  const choices = new Map();
+  let index = 1;
+  for (let group = 0; group < 48; group += 1) {
+    const gloss = `component gloss ${group}`;
+    translations.push({
+      language: `language-${group}`,
+      surface: `surface ${group}`,
+      composition: "compound",
+      components: [
+        { surface: `part ${group}`, gloss, role: "lexical" },
+        { surface: `head ${group}`, gloss: `head gloss ${group}`, role: "lexical" }
+      ]
+    });
+    const longMeaning = `${"linked atom meaning ".repeat(12)}${group}`;
+    choices.set(gloss, Array.from({ length: 4 }, (_, choice) => atom(`atom-${group}-${choice}`, longMeaning, index++)));
+    choices.set(`head gloss ${group}`, [atom(`head-atom-${group}`, longMeaning, index++)]);
+  }
+  const input = buildSenseCompoundChoiceInput({
+    sense: { senseId: "n:00000010-n", pos: "n", lemma: "target", gloss: "a target meaning" },
+    translations,
+    kwonCandidatesByGloss: choices
+  });
+
+  assert.ok(input);
+  assert.ok(input.prompt.length <= 8000);
+  assert.equal(input.promptTruncated, true);
+  assert.ok(input.omittedOptionCount > 0);
+  const optionsStart = input.prompt.indexOf("AVAILABLE ATOM OPTIONS:\n") + "AVAILABLE ATOM OPTIONS:\n".length;
+  const displayedGroupEnds = [input.prompt.indexOf("\nLower-priority", optionsStart), input.prompt.indexOf("\nExample:", optionsStart)]
+    .filter((offset) => offset >= 0);
+  const displayedGroups = JSON.parse(input.prompt.slice(optionsStart, Math.min(...displayedGroupEnds)));
+  const displayedWords = [...new Set(displayedGroups.flatMap((group) => group.atoms))].sort();
+  assert.deepEqual(input.responseFormat.oneOf[0].properties.atoms.items.enum.slice().sort(), displayedWords);
+  assert.deepEqual([...new Set(input.sourceOptions.map((option) => option.word))].sort(), displayedWords);
+  assert.doesNotMatch(input.prompt, /atom-47-3/u);
 });
 
 test("component-choice response resolves only offered atoms and preserves head-final order", () => {
@@ -186,6 +380,7 @@ test("component-choice response resolves only offered atoms and preserves head-f
   assert.deepEqual(candidate.pyashSequence, ["hfre", "hlak"]);
   assert.deepEqual(candidate.componentGlosses, ["friend", "relationship"]);
   assert.deepEqual(candidate.sourceComponentIndexesByLanguage.chinese, [0, 1]);
+  assert.deepEqual(candidate.sourceCandidateComponentIndexesByLanguage.chinese, [0, 1]);
   assert.equal(candidate.compositionRationale, "Selected existing atoms: friend + relationship");
   assert.throws(() => parseSenseCompoundChoiceResponse(JSON.stringify({
     verdict: "compound", atoms: ["invented", "relationship"]
@@ -257,7 +452,7 @@ test("an existing lexical target stays the mandatory head of a new sense compoun
   const input = buildSenseCompoundChoiceInput({ sense, translations, kwonCandidatesByGloss: choices });
 
   assert.match(input.prompt, /existing lexical head better \(pcac\)/u);
-  assert.match(input.prompt, /Choose one or two modifier atoms/u);
+  assert.match(input.prompt, /Choose one or two distinct modifier atoms/u);
   assert.match(input.prompt, /Keep that exact word as the final atom/u);
   assert.equal(input.sourceOptions.some((option) => option.pyashSequence[0] === "pcac"), false);
   assert.equal(input.responseFormat.oneOf[0].properties.atoms.minItems, 1);
@@ -342,6 +537,50 @@ test("a known two-word compound head removes same-POS modifiers already in use",
   assert.deepEqual(otherPosOnly.sourceOptions.map((option) => option.word), ["health", "change"]);
 });
 
+test("one unmapped source part does not hide another eligible modifier for an existing head", () => {
+  const change = {
+    word: "change",
+    coverageType: "atomic",
+    status: "active-linked-atom",
+    pyashSequence: ["hcha"],
+    componentLayers: [16],
+    mappingKind: "word-suggestion",
+    mappingCoverageType: "atomic",
+    mappingLookupGloss: "change",
+    mappingLookupSenseEvidence: [{ source: "v:00000001-v", pos: "v", lemmas: ["change"], definition: "change meaning" }],
+    linkedSense: { source: "v:00000001-v", pos: "v", lemmas: ["change"], definition: "make different" }
+  };
+  const translations = [{
+    language: "chinese",
+    surface: "合适",
+    composition: "compound",
+    components: [
+      { surface: "合", gloss: "correspond", role: "lexical" },
+      { surface: "适", gloss: "change", role: "lexical" }
+    ]
+  }];
+  const sense = {
+    senseId: "a:00000021-a",
+    pos: "a",
+    lemma: "better",
+    definition: "changed for the better",
+    targetHead: { coverageType: "atomic", word: "better", pyashSequence: ["pcac"], componentLayer: 16 }
+  };
+  const input = buildSenseCompoundChoiceInput({
+    sense,
+    translations,
+    kwonCandidatesByGloss: new Map([["change", [change]]])
+  });
+
+  assert.ok(input);
+  assert.deepEqual(input.sourceOptions.map((option) => [option.sourcePart, option.word]), [["适", "change"]]);
+  assert.equal(buildSenseCompoundChoiceInput({
+    sense: { senseId: "n:00000022-n", pos: "n", lemma: "change", definition: "a change" },
+    translations,
+    kwonCandidatesByGloss: new Map([["change", [change]]])
+  }), null);
+});
+
 test("sense translation response parses bounded noisy JSON and keeps only requested languages", () => {
   const response = parseWordNetSenseTranslationResponse(`provider note\n${JSON.stringify({
     senseId: "n:00000010-n",
@@ -388,15 +627,66 @@ test("sense translation response parses bounded noisy JSON and keeps only reques
     senseId: "n:00000010-n",
     translations: [{
       language: "chinese",
-      surface: "思考",
+      surface: "综 合 征",
       composition: "compound",
-      compositionEvidence: "thought plus consideration",
+      compositionEvidence: "general pattern plus sign expresses a syndrome",
       components: [
-        { surface: "思", gloss: "thought", role: "lexical" },
-        { surface: "好", gloss: "good", role: "lexical" }
+        { surface: "综", gloss: "general pattern", role: "lexical" },
+        { surface: "征", gloss: "sign", role: "lexical" }
       ]
     }]
-  }), { senseId: "n:00000010-n", languages: ["chinese"] }), /cover the complete translation/u);
+  }), { senseId: "n:00000010-n", languages: ["chinese"] }), /cover every character/u);
+
+  const cartridgeDecomposition = parseWordNetSenseTranslationResponse(JSON.stringify({
+    senseId: "n:02975150-n",
+    translations: [{
+      language: "chinese",
+      surface: "子弹壳",
+      composition: "compound",
+      compositionEvidence: "子弹 is bullet and 壳 is casing or shell.",
+      components: [
+        { surface: "子弹", gloss: "bullet", role: "lexical" },
+        { surface: "壳", gloss: "casing; shell", role: "lexical" }
+      ]
+    }]
+  }), { senseId: "n:02975150-n", languages: ["chinese"] });
+  assert.equal(cartridgeDecomposition.translations[0].composition, "compound");
+  assert.deepEqual(cartridgeDecomposition.translations[0].components.map(({ surface }) => surface), ["子弹", "壳"]);
+
+  const lexicalCompoundWithGrammar = parseWordNetSenseTranslationResponse(JSON.stringify({
+    senseId: "a:00951310-a",
+    translations: [{
+      language: "chinese",
+      surface: "外部的",
+      composition: "compound",
+      compositionEvidence: "外 means outside and 部 means part; 的 marks adjectival form.",
+      components: [
+        { surface: "外", gloss: "outside", role: "lexical" },
+        { surface: "部", gloss: "part", role: "lexical" },
+        { surface: "的", gloss: "adjectival marker", role: "grammatical" }
+      ]
+    }]
+  }), { senseId: "a:00951310-a", languages: ["chinese"] });
+  assert.equal(lexicalCompoundWithGrammar.translations[0].composition, "compound");
+  assert.deepEqual(lexicalCompoundWithGrammar.translations[0].components.map(({ surface }) => surface), ["外", "部", "的"]);
+
+  const whitespaceChinese = parseWordNetSenseTranslationResponse(JSON.stringify({
+    senseId: "n:00000010-n",
+    translations: [{
+      language: "chinese",
+      surface: "纸 皮 书",
+      composition: "compound",
+      compositionEvidence: "paper cover plus book",
+      components: [
+        { surface: "纸 ", gloss: "paper", role: "lexical" },
+        { surface: "皮", gloss: "cover", role: "lexical" },
+        { surface: "书", gloss: "book", role: "lexical" }
+      ]
+    }]
+  }), { senseId: "n:00000010-n", languages: ["chinese"] });
+  assert.equal(whitespaceChinese.translations[0].composition, "compound");
+  assert.equal(whitespaceChinese.translations[0].surface, "纸皮书");
+  assert.deepEqual(whitespaceChinese.translations[0].components.map(({ surface }) => surface), ["纸", "皮", "书"]);
   const affixSplit = parseWordNetSenseTranslationResponse(JSON.stringify({
     senseId: "n:00000010-n",
     translations: [{
@@ -428,7 +718,7 @@ test("sense translation response parses bounded noisy JSON and keeps only reques
   }), { senseId: "n:00000010-n", languages: ["chinese"] });
   assert.equal(classifier.translations[0].composition, "uncertain");
   assert.deepEqual(classifier.translations[0].components.map(({ surface }) => surface), ["一", "个"]);
-  assert.match(classifier.translations[0].compositionEvidence, /grammatical, bound, or unverified component/u);
+  assert.match(classifier.translations[0].compositionEvidence, /at least two lexical components/u);
   const unsupportedComposition = parseWordNetSenseTranslationResponse(JSON.stringify({
     senseId: "n:00000010-n",
     translations: [{
@@ -461,6 +751,61 @@ test("sense translation response parses bounded noisy JSON and keeps only reques
       { language: "chinese", surface: "甲乙", composition: "simple", components: [], compositionEvidence: "single lexical item" }
     ]
   }), { senseId: "n:00000010-n", languages: ["chinese"] }), /duplicate language/u);
+});
+
+test("partial sense parsing keeps valid languages and isolates malformed rows", () => {
+  const result = parseWordNetSenseTranslationResponsePartial(JSON.stringify({
+    senseId: "n:00000070-n",
+    translations: [
+      {
+        language: "chinese",
+        surface: "朋友关系",
+        composition: "compound",
+        compositionEvidence: "friend + relationship",
+        components: [
+          { surface: "朋友", gloss: "friend", role: "lexical" },
+          { surface: "关系", gloss: "relationship", role: "lexical" }
+        ]
+      },
+      {
+        language: "hindi",
+        surface: "मुद्दा",
+        composition: "uncertain",
+        compositionEvidence: "possible single lexical item",
+        components: [{ surface: "मुद्दा", gloss: "matter", role: "lexical" }]
+      },
+      {
+        language: "french",
+        surface: "amitié",
+        composition: "simple",
+        compositionEvidence: "single lexical item",
+        components: []
+      }
+    ]
+  }), { senseId: "n:00000070-n", languages: ["chinese", "hindi", "french"] });
+
+  assert.deepEqual(result.translations.map((row) => row.language), ["chinese", "french"]);
+  assert.deepEqual(result.failures.map(({ language, error }) => [language, error]), [
+    ["hindi", "uncertain translation decomposition must be empty or contain two or three parts"]
+  ]);
+});
+
+test("partial sense parsing invalidates only a duplicated language", () => {
+  const result = parseWordNetSenseTranslationResponsePartial(JSON.stringify({
+    senseId: "n:00000071-n",
+    translations: [
+      { language: "chinese", surface: "朋友关系", composition: "compound", compositionEvidence: "friend + relationship", components: [
+        { surface: "朋友", gloss: "friend", role: "lexical" }, { surface: "关系", gloss: "relationship", role: "lexical" }
+      ] },
+      { language: "french", surface: "amitié", composition: "simple", compositionEvidence: "single lexical item", components: [] },
+      { language: "french", surface: "amour amical", composition: "simple", compositionEvidence: "alternate wording", components: [] }
+    ]
+  }), { senseId: "n:00000071-n", languages: ["chinese", "french"] });
+
+  assert.deepEqual(result.translations.map((row) => row.language), ["chinese"]);
+  assert.deepEqual(result.failures.map(({ language, error }) => [language, error]), [
+    ["french", "sense translation response contains a duplicate language"]
+  ]);
 });
 
 test("sense translation cache round-trips by stable sense and prompt identity", () => {
@@ -801,8 +1146,67 @@ test("a linked sense for one part of speech does not suppress a residual sense f
 
 test("component gloss alternatives are queried independently", () => {
   assert.deepEqual(componentGlossAlternatives("seat / rank"), ["seat", "rank"]);
+  assert.deepEqual(componentGlossAlternatives("position|place"), ["position", "place"]);
   assert.deepEqual(componentGlossAlternatives("chair"), ["chair"]);
   assert.deepEqual(componentGlossAlternatives("un-"), ["un"]);
+  assert.deepEqual(componentGlossLookupAlternatives("to obtain / to get"), ["obtain", "get"]);
+  assert.deepEqual(componentGlossLookupAlternatives("dwelling unit/building structure"), [
+    "dwelling unit", "dwelling", "unit", "building structure", "building", "structure"
+  ]);
+  assert.deepEqual(componentGlossLookupAlternatives("to obtain something"), [
+    "to obtain something", "obtain", "something"
+  ]);
+});
+
+test("pipe alternatives and phrase words resolve to their Kwon atom choices", () => {
+  const place = {
+    input: "place",
+    status: "covered",
+    mappings: [{ word: "place", coverageType: "atomic", kind: "root", pyacSequence: ["tcas"] }]
+  };
+  const building = {
+    input: "building",
+    status: "covered",
+    mappings: [{ word: "building", coverageType: "atomic", kind: "root", pyacSequence: ["plit"] }]
+  };
+  const activeAtomEntries = [
+    { source: "n:08682181-n", target: "place", targetPartOfSpeech: "n", targetKind: "atom", pyashSequence: ["tcas"], lemmas: ["place"], definition: "a point located with respect to surface features" },
+    { source: "n:00000091-n", target: "building", targetPartOfSpeech: "n", targetKind: "atom", pyashSequence: ["plit"], lemmas: ["building"], definition: "a structure with a roof and walls" }
+  ];
+  const mapped = buildKwonLinkedAtomicChoices({
+    suggestions: [place, building],
+    componentGlosses: ["position|place", "dwelling unit/building structure"],
+    activeAtomEntries,
+    layerByWord: new Map([["tcas", 16], ["plit", 16]])
+  });
+  const byGloss = mapComponentGlossChoices(
+    ["position|place", "dwelling unit/building structure"],
+    mapped
+  );
+
+  assert.deepEqual(byGloss.get("position|place").map((choice) => choice.word), ["place"]);
+  assert.deepEqual(byGloss.get("dwelling unit/building structure").map((choice) => choice.word), ["building"]);
+});
+
+test("infinitive component glosses map selected atom choices back to their original words", () => {
+  const obtain = {
+    word: "obtain",
+    pyashSequence: ["hobt"],
+    linkedSense: { source: "v:00000043-v", pos: "v", lemmas: ["obtain"], definition: "come to have" }
+  };
+  const get = {
+    word: "get",
+    pyashSequence: ["hget"],
+    linkedSense: { source: "v:00000044-v", pos: "v", lemmas: ["get"], definition: "come into possession" }
+  };
+  const byGloss = mapComponentGlossChoices(
+    ["to obtain / to get"],
+    new Map([["obtain", [obtain]], ["get", [get]]])
+  );
+
+  assert.deepEqual(byGloss.get("to obtain"), [obtain]);
+  assert.deepEqual(byGloss.get("to get"), [get]);
+  assert.deepEqual(byGloss.get("to obtain / to get"), [obtain, get]);
 });
 
 test("compound candidates may use a head sense with a different part of speech and no hypernym edge", () => {
@@ -1273,6 +1677,212 @@ test("translation wave queues a bounded wave before awaiting and repairs malform
   assert.equal(result.submittedCount, 3);
   assert.equal(result.completedCount, 2);
   assert.equal(result.failures.length, 0);
+});
+
+test("translation wave adds English to a compatible cached language set without retranslating it", async () => {
+  const sense = {
+    senseId: "n:09263527-n",
+    pos: "n",
+    lemma: "chain",
+    lemmas: ["chain", "chemical chain"],
+    gloss: "(chemistry) a series of linked atoms"
+  };
+  const priorLanguages = ["chinese", "french", "russian", "hindi"];
+  const priorPromptRevision = "sense-translation-gloss-alternatives-v7";
+  const cachedRecords = [{
+    id: senseTranslationKey({
+      senseId: sense.senseId,
+      wordNetHash: "source-hash",
+      promptRevision: priorPromptRevision,
+      languages: priorLanguages
+    }),
+    senseId: sense.senseId,
+    wordNetHash: "source-hash",
+    promptRevision: priorPromptRevision,
+    languages: priorLanguages,
+    status: "complete",
+    translations: priorLanguages.map((language) => ({
+      language,
+      surface: language,
+      composition: "simple",
+      compositionEvidence: "saved translation",
+      components: []
+    }))
+  }];
+  let requestedLanguages = [];
+  const result = await translateWordNetSenseWave({
+    senses: [sense],
+    cachedRecords,
+    wordNetHash: "source-hash",
+    languages,
+    promptRevision: "sense-translation-gloss-alternatives-v9",
+    submit: async ({ languages: requested }) => {
+      requestedLanguages = requested;
+      return { status: "queued", handleId: "english-only-translation" };
+    },
+    awaitHandle: async () => JSON.stringify({
+      senseId: sense.senseId,
+      translations: [{
+        language: "english",
+        surface: "chain",
+        composition: "simple",
+        compositionEvidence: "single-word lemma",
+        components: []
+      }]
+    })
+  });
+
+  assert.deepEqual(requestedLanguages, ["english"]);
+  assert.equal(result.submittedCount, 1);
+  assert.equal(result.records[0].status, "complete");
+  assert.deepEqual(result.records[0].languages, languages);
+  assert.deepEqual(result.records[0].translationPromptRevisionByLanguage, {
+    chinese: priorPromptRevision,
+    french: priorPromptRevision,
+    russian: priorPromptRevision,
+    hindi: priorPromptRevision,
+    english: "sense-translation-gloss-alternatives-v9"
+  });
+});
+
+test("translation wave caches valid languages and retries only invalid languages", async () => {
+  const sense = { senseId: "n:00000072-n", pos: "n", lemma: "friendship", gloss: "a relationship between friends" };
+  const requests = [];
+  const failureEvents = [];
+  const cacheSnapshots = [];
+  const languageByHandle = new Map();
+  const result = await translateWordNetSenseWave({
+    senses: [sense],
+    wordNetHash: "source-hash",
+    languages: ["chinese", "hindi"],
+    submit: async ({ handleId, attempt, languages: requested }) => {
+      requests.push({ attempt, languages: [...requested] });
+      languageByHandle.set(`${handleId}-translate-${attempt}`, requested);
+      return { status: "queued" };
+    },
+    awaitHandle: async (handleId) => {
+      const requested = languageByHandle.get(handleId);
+      if (requested.includes("chinese")) {
+        return JSON.stringify({
+          senseId: sense.senseId,
+          translations: [
+            {
+              language: "chinese", surface: "朋友关系", composition: "compound", compositionEvidence: "friend + relationship",
+              components: [
+                { surface: "朋友", gloss: "friend", role: "lexical" },
+                { surface: "关系", gloss: "relationship", role: "lexical" }
+              ]
+            },
+            {
+              language: "hindi", surface: "मुद्दा", composition: "uncertain", compositionEvidence: "uncertain part",
+              components: [{ surface: "मुद्दा", gloss: "matter", role: "lexical" }]
+            }
+          ]
+        });
+      }
+      return JSON.stringify({
+        senseId: sense.senseId,
+        translations: [{ language: "hindi", surface: "मित्रता", composition: "simple", compositionEvidence: "one lexical word", components: [] }]
+      });
+    },
+    onFailure: async (failure) => failureEvents.push(failure),
+    onCache: async (records) => cacheSnapshots.push(records[0])
+  });
+
+  assert.deepEqual(requests, [
+    { attempt: 1, languages: ["chinese", "hindi"] },
+    { attempt: 2, languages: ["hindi"] }
+  ]);
+  assert.equal(cacheSnapshots[0].status, "partial");
+  assert.deepEqual(cacheSnapshots[0].translations.map((row) => row.language), ["chinese"]);
+  assert.equal(cacheSnapshots.at(-1).status, "complete");
+  assert.deepEqual(result.records[0].translations.map((row) => row.language), ["chinese", "hindi"]);
+  assert.equal(result.completedCount, 1);
+  assert.deepEqual(failureEvents.map(({ language, attempts }) => [language, attempts]), [["hindi", 1]]);
+  assert.deepEqual(result.failures, []);
+});
+
+test("translation wave retains partial translations and diagnoses each exhausted language", async () => {
+  const sense = { senseId: "n:00000073-n", pos: "n", lemma: "friendship", gloss: "a relationship between friends" };
+  const languageByHandle = new Map();
+  const cached = [];
+  const result = await translateWordNetSenseWave({
+    senses: [sense],
+    wordNetHash: "source-hash",
+    languages: ["chinese", "hindi"],
+    submit: async ({ handleId, attempt, languages: requested }) => {
+      languageByHandle.set(`${handleId}-translate-${attempt}`, requested);
+      return { status: "queued" };
+    },
+    awaitHandle: async (handleId) => {
+      const requested = languageByHandle.get(handleId);
+      const translations = [];
+      if (requested.includes("chinese")) translations.push({
+        language: "chinese", surface: "朋友关系", composition: "compound", compositionEvidence: "friend + relationship",
+        components: [
+          { surface: "朋友", gloss: "friend", role: "lexical" },
+          { surface: "关系", gloss: "relationship", role: "lexical" }
+        ]
+      });
+      translations.push({
+        language: "hindi", surface: "मुद्दा", composition: "uncertain", compositionEvidence: "uncertain part",
+        components: [{ surface: "मुद्दा", gloss: "matter", role: "lexical" }]
+      });
+      return JSON.stringify({ senseId: sense.senseId, translations });
+    },
+    onCache: async (records) => cached.push(records[0])
+  });
+
+  assert.equal(result.records[0].status, "partial");
+  assert.deepEqual(result.records[0].translations.map((row) => row.language), ["chinese"]);
+  assert.equal(cached.length, 2);
+  assert.equal(result.failures.length, 1);
+  assert.equal(result.failures[0].senseId, sense.senseId);
+  assert.equal(result.failures[0].language, "hindi");
+  assert.equal(result.failures[0].attempts, 2);
+  assert.equal(result.failures[0].attemptErrors.length, 2);
+  assert.match(result.failures[0].error, /uncertain translation decomposition/u);
+});
+
+test("cumulative translation failures retain attempts and mark recovered languages", () => {
+  const existing = [{
+    id: "translation-failure-hindi",
+    senseId: "n:00000074-n",
+    language: "hindi",
+    status: "failed",
+    attemptErrors: [{ id: "attempt-one", attempt: 1, error: "malformed row" }]
+  }];
+  const appended = mergeWordNetSenseTranslationFailures(existing, [{
+    id: "translation-failure-hindi",
+    senseId: "n:00000074-n",
+    language: "hindi",
+    status: "failed",
+    attemptErrors: [{ id: "attempt-two", attempt: 2, error: "invalid segmentation" }]
+  }]);
+  const recovered = mergeWordNetSenseTranslationFailures(appended, [], {
+    resolvedTranslations: [{ senseId: "n:00000074-n", translations: [{ language: "hindi" }] }]
+  });
+
+  assert.equal(recovered.length, 1);
+  assert.equal(recovered[0].status, "recovered");
+  assert.equal(recovered[0].attemptErrors.length, 2);
+  assert.deepEqual(recovered.flatMap((row) => row.attemptErrors.map((attempt) => attempt.id)).sort(), ["attempt-one", "attempt-two"]);
+});
+
+test("partial translations with useful components are eligible for composition", () => {
+  const sense = { senseId: "n:00000075-n", lemmas: ["friendship"], lemma: "friendship" };
+  assert.equal(hasCompositionSourceTranslations(sense, {
+    status: "partial",
+    translations: [{ language: "chinese", composition: "compound", components: [{}, {}] }]
+  }), true);
+  assert.equal(hasCompositionSourceTranslations(sense, {
+    status: "partial",
+    translations: [{ language: "french", composition: "simple", components: [] }]
+  }), false);
+  assert.equal(hasCompositionSourceTranslations({ ...sense, lemmas: ["self love"] }, {
+    status: "partial",
+    translations: [{ language: "french", composition: "simple", components: [] }]
+  }), true);
 });
 
 test("translation wave submits and awaits concurrently while serializing stable checkpoints", async () => {

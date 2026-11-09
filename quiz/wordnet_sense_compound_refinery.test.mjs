@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -11,6 +11,7 @@ import { forget } from "../program/remember/index.mjs";
 import { buildProgram } from "../program/program.mjs";
 import {
   resolveWordNetSenseCompoundMaximumSenses,
+  resolveWordNetSenseCompoundMinimumTagCount,
   resolveWordNetSenseCompoundSenseIds,
   runWordNetSenseCompoundRefinery
 } from "../program/library/translation/wordnet_sense_compound_refinery.mjs";
@@ -21,6 +22,13 @@ test("sense compound launch overrides cannot exceed the configured batch limit",
   assert.equal(resolveWordNetSenseCompoundMaximumSenses(64, 16), 16);
   assert.equal(resolveWordNetSenseCompoundMaximumSenses(64, 100000), 64);
   assert.throws(() => resolveWordNetSenseCompoundMaximumSenses(64, 0), /positive integer/u);
+});
+
+test("sense compound launch can raise its minimum tag-count threshold", () => {
+  assert.equal(resolveWordNetSenseCompoundMinimumTagCount(1), 1);
+  assert.equal(resolveWordNetSenseCompoundMinimumTagCount(1, 2), 2);
+  assert.throws(() => resolveWordNetSenseCompoundMinimumTagCount(1, -1), /nonnegative integer/u);
+  assert.throws(() => resolveWordNetSenseCompoundMinimumTagCount(1, 1.5), /nonnegative integer/u);
 });
 
 test("sense compound launch can select exact WordNet senses for a focused retry", () => {
@@ -92,6 +100,7 @@ test("sense compound refinery links, composes, decides, and records one complete
     }),
     loadLayerIndex: async () => ({ byWord: new Map([["hfre", 16], ["hlak", 16], ["haff", 16]]) }),
     loadLemmaCatalog: async () => ({ entries: [] }),
+    loadWordNetCompoundIndex: async () => [],
     translationTransport: {
       async submit({ sense: target, languages, handleId, attempt }) {
         translationSubmitCount += 1;
@@ -177,7 +186,7 @@ test("sense compound refinery links, composes, decides, and records one complete
     assert.equal(result.remainingSenseCount, 0);
     const cacheSource = await readFile(path.join(result.artifactDirectory, "sense-translations.pya"), "utf8");
     const progressSource = await readFile(path.join(result.artifactDirectory, "progress.pya"), "utf8");
-    assert.equal(parseWordNetSenseTranslationCache(cacheSource).bySense.get(sense.senseId).status, "partial");
+    assert.equal(parseWordNetSenseTranslationCache(cacheSource).bySense.get(sense.senseId).status, "complete");
     assert.match(progressSource, /failed/u);
     forget();
     clearSignatureHandlers();
@@ -192,7 +201,7 @@ test("sense compound refinery links, composes, decides, and records one complete
     });
     assert.equal(inventoryChangedResume.selectedSenseCount, 0);
     assert.equal(inventoryChangedResume.remainingSenseCount, 0);
-    assert.equal(translationSubmitCount, 1);
+    assert.equal(translationSubmitCount, 2);
     const resumed = await runWordNetSenseCompoundRefinery({
       artifactRoot,
       runId: "sense-compound-test",
@@ -200,14 +209,10 @@ test("sense compound refinery links, composes, decides, and records one complete
       configuration: { senseIds: [sense.senseId] },
       dependencies
     });
-    assert.equal(resumed.candidateCount, 0);
-    assert.equal(resumed.result["failed-sense-count"], 1);
-    const failedComposition = await readFile(path.join(resumed.artifactDirectory, "component-compositions.pya"), "utf8");
-    const failedRows = artifactRows(failedComposition);
-    assert.equal(failedRows.length, 1);
-    assert.equal(failedRows[0].attempt, 1);
-    assert.equal(failedRows[0].status, "failed");
-    const legacyComposition = failedComposition.replace(/su text "meta:([^"]+)" ob text/gu, 'su text "$1" ob text');
+    assert.equal(resumed.candidateCount, 1);
+    assert.equal(resumed.result["accepted-sense-count"], 1);
+    const resumedComposition = await readFile(path.join(resumed.artifactDirectory, "component-compositions.pya"), "utf8");
+    const legacyComposition = resumedComposition.replace(/su text "meta:([^"]+)" ob text/gu, 'su text "$1" ob text');
     await writeFile(path.join(resumed.artifactDirectory, "component-compositions.pya"), legacyComposition, "utf8");
     const completed = await runWordNetSenseCompoundRefinery({
       artifactRoot,
@@ -231,33 +236,32 @@ test("sense compound refinery links, composes, decides, and records one complete
     assert.equal(completed.result["rejected-count"], 0);
     assert.equal(completed.result["accepted-component-choice-percent"], 100);
     assert.equal(completed.result["pending-component-choice-count"], 0);
-    assert.deepEqual(savedDecisionBatchSizes, [1, 1]);
+    assert.deepEqual(savedDecisionBatchSizes, [1, 1, 1, 1]);
     assert.equal(compositionPrompts.length, 2);
-    assert.match(compositionPrompts[0], /"source": "chinese friend",\s+"gloss": "friend",\s+"atoms": \[\s+"friend"/u);
+    assert.match(compositionPrompts[0], /"gloss": "friend",\s+"atoms": \[\s+"friend"/u);
     assert.equal(completed.remainingSenseCount, 0);
     assert.equal(completed.result["remaining-sense-count"], 0);
     assert.equal(translationSubmitCount, 2);
     assert.ok(suggestedTerms.includes("friend"));
     assert.ok(suggestedTerms.includes("companion"));
-    assert.deepEqual(recordedPromotions.map((record) => record.pyashSequence), [["hfre", "hlak"]]);
+    assert.deepEqual(recordedPromotions.map((record) => record.pyashSequence), [["hfre", "hlak"], ["hfre", "hlak"]]);
     const completeCache = await readFile(path.join(completed.artifactDirectory, "sense-translations.pya"), "utf8");
     const worklistSource = await readFile(path.join(completed.artifactDirectory, "worklist.pya"), "utf8");
     const candidateSource = await readFile(path.join(completed.artifactDirectory, "compound-candidates.pya"), "utf8");
     const completeProgress = await readFile(path.join(completed.artifactDirectory, "progress.pya"), "utf8");
     const allCompositions = await readFile(path.join(completed.artifactDirectory, "component-compositions.pya"), "utf8");
     assert.deepEqual(artifactRows(allCompositions).map(({ attempt, status }) => ({ attempt, status })), [
-      { attempt: 1, status: "failed" },
-      { attempt: 2, status: "compound" }
+      { attempt: 1, status: "compound" }
     ]);
     assert.equal(parseWordNetSenseTranslationCache(completeCache).bySense.get(sense.senseId).status, "complete");
     assert.equal(buildProgram(worklistSource).sentences.find((sentence) => sentence.su?.text === "meta:minimum-tag-count")?.ob?.text, "1");
-    assert.equal(buildProgram(worklistSource).sentences.find((sentence) => sentence.su?.text === "meta:prompt-revision")?.ob?.text, "sense-translation-gloss-alternatives-v7");
+    assert.equal(buildProgram(worklistSource).sentences.find((sentence) => sentence.su?.text === "meta:prompt-revision")?.ob?.text, "sense-translation-gloss-alternatives-v11");
     assert.match(candidateSource, /friendship/u);
     assert.match(completeProgress, /accepted/u);
 
     await writeFile(
       path.join(completed.artifactDirectory, "progress.pya"),
-      completeProgress.replaceAll("sense-translation-gloss-alternatives-v7", "sense-translation-gloss-alternatives-v6"),
+      completeProgress.replaceAll("sense-translation-gloss-alternatives-v11", "sense-translation-gloss-alternatives-v8"),
       "utf8"
     );
     const stalePromptResume = await runWordNetSenseCompoundRefinery({
@@ -269,6 +273,49 @@ test("sense compound refinery links, composes, decides, and records one complete
     });
     assert.equal(stalePromptResume.selectedSenseCount, 0);
     assert.equal(stalePromptResume.remainingSenseCount, 0);
+
+    for (const [index, status] of ["processing", "failed"].entries()) {
+      const historicalRunId = `wordnet-sense-compounds-${String.fromCharCode(97 + index).repeat(24)}`;
+      const historicalDirectory = path.join(artifactRoot, historicalRunId);
+      await mkdir(historicalDirectory, { recursive: true });
+      const historicalRecord = {
+        id: sense.senseId,
+        senseId: sense.senseId,
+        status,
+        sourceHash: `older-wordnet-test-hash-${index}`
+      };
+      await writeFile(path.join(historicalDirectory, "progress.pya"), [
+        "su name translation_wordnet_sense_compound_progress be map def",
+        'su text "format" ob text "wordnet-sense-compound-progress-v1" ya',
+        `su text ${JSON.stringify(sense.senseId)} ob text ${JSON.stringify(JSON.stringify(historicalRecord))} ya`,
+        "prah",
+        ""
+      ].join("\n"), "utf8");
+    }
+    const crossRunFiltered = await runWordNetSenseCompoundRefinery({
+      artifactRoot,
+      runId: "sense-compound-cross-run-filter-test",
+      initialize: false,
+      configuration: {},
+      dependencies
+    });
+    assert.equal(crossRunFiltered.selectedSenseCount, 0);
+    assert.equal(crossRunFiltered.remainingSenseCount, 0);
+
+    const canonicalRoot = await mkdtemp(path.join(os.tmpdir(), "pyash-sense-compound-canonical-filter-"));
+    const canonicalFiltered = await runWordNetSenseCompoundRefinery({
+      artifactRoot: canonicalRoot,
+      runId: "sense-compound-canonical-filter-test",
+      initialize: false,
+      configuration: {},
+      dependencies: {
+        ...dependencies,
+        loadWordNetCompoundIndex: async () => [{ senseId: sense.senseId, target: "friendship" }]
+      }
+    });
+    assert.equal(canonicalFiltered.selectedSenseCount, 0);
+    assert.equal(canonicalFiltered.remainingSenseCount, 0);
+    await rm(canonicalRoot, { recursive: true, force: true });
 
     const focusedRetry = await runWordNetSenseCompoundRefinery({
       artifactRoot,
@@ -287,6 +334,7 @@ test("sense compound refinery links, composes, decides, and records one complete
       artifactRoot,
       runId: interruptedRunId,
       initialize: false,
+      configuration: { senseIds: [sense.senseId] },
       dependencies: {
         ...dependencies,
         suggestVocabulary: async () => {
@@ -301,18 +349,18 @@ test("sense compound refinery links, composes, decides, and records one complete
       artifactRoot,
       runId: interruptedRunId,
       initialize: false,
-      configuration: {},
+      configuration: { senseIds: [sense.senseId] },
       dependencies
     });
-    assert.equal(resumedAfterInterruption.selectedSenseCount, 0);
+    assert.equal(resumedAfterInterruption.selectedSenseCount, 1);
     const interruptedProgress = await readFile(path.join(interruptedArtifactDirectory, "progress.pya"), "utf8");
-    assert.match(interruptedProgress, /interrupted/u);
+    assert.match(interruptedProgress, /accepted/u);
 
     const failed = await runWordNetSenseCompoundRefinery({
       artifactRoot,
       runId: "sense-compound-translation-failure-test",
       initialize: false,
-      configuration: { maximumSenses: 1 },
+      configuration: { maximumSenses: 1, senseIds: [sense.senseId] },
       dependencies: {
         ...dependencies,
         translationTransport: {
@@ -329,13 +377,69 @@ test("sense compound refinery links, composes, decides, and records one complete
     assert.equal(failed.result["translation-failure-count"], 1);
     const failureArtifact = await readFile(path.join(failed.artifactDirectory, "translation-failures.pya"), "utf8");
     assert.match(failureArtifact, /sense translation response has no bounded JSON object/u);
+    const languageFailures = buildProgram(failureArtifact).sentences
+      .filter((sentence) => sentence.su?.text?.startsWith("translation-failure-") && typeof sentence.ob?.text === "string")
+      .map((sentence) => JSON.parse(sentence.ob.text));
+    assert.deepEqual(languageFailures.map((row) => row.language).sort(), ["chinese", "english", "french", "hindi", "russian"]);
+    assert.ok(languageFailures.every((row) => row.status === "failed" && row.attemptErrors.length === 2));
+
+    const partialHandles = new Map();
+    const partialRun = await runWordNetSenseCompoundRefinery({
+      artifactRoot,
+      runId: "sense-compound-partial-translation-test",
+      initialize: false,
+      configuration: { maximumSenses: 1, senseIds: [sense.senseId] },
+      dependencies: {
+        ...dependencies,
+        translationTransport: {
+          async submit({ handleId, attempt, languages }) {
+            partialHandles.set(`${handleId}-translate-${attempt}`, languages);
+            return { status: "queued" };
+          },
+          async await(handleId) {
+            const requestedLanguages = partialHandles.get(handleId);
+            if (requestedLanguages.includes("chinese")) {
+              return JSON.stringify({
+                senseId: sense.senseId,
+                translations: [{
+                  language: "chinese",
+                  surface: "朋友关系",
+                  composition: "compound",
+                  compositionEvidence: "friend + relationship",
+                  components: [
+                    { surface: "朋友", gloss: "friend", role: "lexical" },
+                    { surface: "关系", gloss: "relationship", role: "lexical" }
+                  ]
+                }]
+              });
+            }
+            return "noise without a bounded JSON object";
+          }
+        },
+        composeSenseCompound: async ({ input }) => JSON.stringify({
+          verdict: "compound",
+          atoms: ["friend", "relationship"]
+        })
+      }
+    });
+    assert.equal(partialRun.candidateCount, 1);
+    assert.equal(partialRun.result["accepted-count"], 1);
+    assert.equal(partialRun.translationFailureCount, 1);
+    assert.equal(partialRun.result["translation-failed-language-count"], 4);
+    const partialCache = await readFile(path.join(partialRun.artifactDirectory, "sense-translations.pya"), "utf8");
+    assert.equal(parseWordNetSenseTranslationCache(partialCache).bySense.get(sense.senseId).status, "partial");
+    const partialProgress = await readFile(path.join(partialRun.artifactDirectory, "progress.pya"), "utf8");
+    assert.match(partialProgress, /accepted/u);
 
     let invalidChoiceCallCount = 0;
     const invalidChoiceDependencies = {
       ...dependencies,
       composeSenseCompound: async () => {
         invalidChoiceCallCount += 1;
-        return JSON.stringify({ verdict: "compound", atoms: ["friend", "friend"] });
+        return JSON.stringify({
+          verdict: "compound",
+          atoms: ["friend", "friend"]
+        });
       }
     };
     const retryRunId = "sense-compound-choice-attempt-limit-test";
@@ -343,6 +447,7 @@ test("sense compound refinery links, composes, decides, and records one complete
       artifactRoot,
       runId: retryRunId,
       initialize: false,
+      configuration: { senseIds: [sense.senseId] },
       dependencies: invalidChoiceDependencies
     });
     assert.equal(firstInvalidChoice.result["pending-sense-count"], 0);

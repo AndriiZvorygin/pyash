@@ -271,12 +271,16 @@ function promptSourceLanguages(value) {
     const componentGlosses = value?.sourceComponentGlossesByLanguage?.[language] ?? [];
     const componentIndexes = value?.sourceComponentIndexesByLanguage?.[language]
       ?? sourceParts.map((_, index) => index);
+    const candidateComponentIndexes = value?.sourceCandidateComponentIndexesByLanguage?.[language]
+      ?? componentIndexes.map((_, index) => index);
     return {
       language,
       surface: normalizeText(value?.sourceSurfaces?.[language]),
       compositionEvidence: normalizeText(value?.sourceCompositionEvidenceByLanguage?.[language]).slice(0, 180),
       components: componentIndexes.map((sourceIndex, componentIndex) => ({
-        pyashComponent: normalizeText(value?.componentGlosses?.[componentIndex]),
+        pyashComponent: normalizeText(value?.componentGlosses?.[candidateComponentIndexes[componentIndex] ?? componentIndex]
+          ?? value?.componentGlosses?.[componentIndex]),
+        candidateComponentIndex: candidateComponentIndexes[componentIndex] ?? componentIndex,
         sourceIndex,
         surface: normalizeText(sourceParts[sourceIndex]),
         gloss: normalizeText(sourceGlosses[sourceIndex] ?? componentGlosses[componentIndex]),
@@ -304,6 +308,7 @@ export function buildCompoundVerificationPrompt({ record, candidates = [record] 
       row.surface || row.components.length > 0
     ));
     const sourceComponentIndexes = {};
+    const candidateComponentCount = candidateComponents(candidate).length;
     for (const languageRow of languageRows) {
       const sourceParts = candidate.sourceTranslationMorphemesByLanguage?.[languageRow.language] ?? [];
       const sourceGlosses = candidate.sourceTranslationGlossesByLanguage?.[languageRow.language] ?? [];
@@ -318,7 +323,14 @@ export function buildCompoundVerificationPrompt({ record, candidates = [record] 
         compositionEvidence: languageRow.compositionEvidence.slice(0, 120)
       };
       sourceDecompositions.set(JSON.stringify(decomposition), decomposition);
-      sourceComponentIndexes[languageRow.language] = languageRow.components.map((component) => component.sourceIndex);
+      const indexesByCandidateComponent = Array(candidateComponentCount).fill(null);
+      for (const component of languageRow.components) {
+        const candidateIndex = Number(component.candidateComponentIndex);
+        if (Number.isSafeInteger(candidateIndex) && candidateIndex >= 0 && candidateIndex < candidateComponentCount) {
+          indexesByCandidateComponent[candidateIndex] = component.sourceIndex;
+        }
+      }
+      sourceComponentIndexes[languageRow.language] = indexesByCandidateComponent;
     }
     const componentEvidence = promptComponentEvidence(candidate);
     return JSON.stringify({

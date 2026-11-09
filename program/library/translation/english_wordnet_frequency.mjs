@@ -325,6 +325,7 @@ export function allocateEnglishWordNetAnchors(records = [], {
         lemmas: Array.isArray(record.lemmas) ? [...record.lemmas] : [],
         gloss: String(record.gloss ?? ""),
         reason,
+        ...(Number.isSafeInteger(record.tagCount) ? { tagCount: record.tagCount } : {}),
         candidates: candidates.map((candidate) => ({
           lemma: candidate.lemma,
           target: candidate.target,
@@ -438,13 +439,16 @@ export function buildEnglishWordNetFrequencyAllocationRecords({
   if (!(wordnetIndex?.bySynset instanceof Map)) throw invalid("frequency allocation requires a WordNet index");
   if (!Array.isArray(frequencyJoin?.entries)) throw invalid("frequency allocation requires joined tag-count entries");
   const tagCountBySourceLemma = new Map();
+  const tagCountBySource = new Map();
   for (const row of frequencyJoin.entries) {
     if (!Number.isSafeInteger(row.tagCount) || row.tagCount < 0) continue;
-    tagCountBySourceLemma.set(`${row.pos}:${row.synset}\u0000${normalize(row.lemma)}`, {
+    const source = `${row.pos}:${row.synset}`;
+    tagCountBySourceLemma.set(`${source}\u0000${normalize(row.lemma)}`, {
       tagCount: row.tagCount,
       senseNumber: row.senseNumber,
       senseKey: row.senseKey
     });
+    tagCountBySource.set(source, Math.max(tagCountBySource.get(source) ?? 0, row.tagCount));
   }
   const records = [];
   for (const [source, rows] of wordnetIndex.bySynset) {
@@ -458,6 +462,7 @@ export function buildEnglishWordNetFrequencyAllocationRecords({
       synset,
       lemmas,
       gloss: String(rows.map((row) => row.gloss).find(Boolean) ?? ""),
+      ...(tagCountBySource.has(source) ? { tagCount: tagCountBySource.get(source) } : {}),
       candidates: []
     };
     for (const lemma of lemmas) {

@@ -85,6 +85,36 @@ test("Chinese compound lexicon preserves ordered morphemes and stable identities
   assert.equal(gpu.head, "module");
   assert.equal(gpu.status, "accepted-curated");
 
+  const clusterCompress = curated.find((entry) => entry.surface === "cluster-compress");
+  assert.ok(clusterCompress);
+  assert.deepEqual(clusterCompress.morphemes, ["cluster", "compress"]);
+  assert.deepEqual(clusterCompress.pyashSequence, ["ksus", "hzip"]);
+  assert.deepEqual(clusterCompress.componentLayers, [16, 24]);
+  assert.equal(clusterCompress.head, "compress");
+  assert.equal(clusterCompress.pyashSentence, "su name libzim ob filename \"<capture.warc>\" to filename \"<archive.zim>\" be cluster-compress do");
+  assert.match(clusterCompress.evidence, /cluster is the distinguishing modifier/u);
+  assert.equal(JSON.parse(canonicalCompoundPayload(clusterCompress)).pyashSentence, clusterCompress.pyashSentence);
+  assert.equal(clusterCompress.status, "accepted-curated");
+
+  const malformedSentencePayload = {
+    surface: "invalid-layout",
+    target: "invalid-layout",
+    morphemes: ["cluster", "compress"],
+    componentGlosses: ["cluster", "compress"],
+    pyashSequence: ["ksus", "hzip"],
+    componentLayers: [16, 24],
+    maxLayer: 24,
+    head: "compress",
+    pyashSentence: 42,
+    provenance: "test",
+    confidence: "curated",
+    status: "accepted-curated"
+  };
+  assert.throws(() => parseCompoundLexicon(
+    `su name test compounds be map def\nsu text "invalid-layout" ob text ${JSON.stringify(JSON.stringify(malformedSentencePayload))} ya`,
+    { name: "test compounds", language: "test" }
+  ), /compound Pyash sentence must be one non-empty sentence/u);
+
   const byMorpheme = queryChineseCompoundLexicon(entries, { morpheme: "语" });
   assert.deepEqual(byMorpheme.map((entry) => entry.surface), ["语言"]);
   assert.deepEqual(

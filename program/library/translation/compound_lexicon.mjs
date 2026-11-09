@@ -168,6 +168,13 @@ function normalizeEntry(payload, rowKey, index, language) {
   if (payload.evidence !== undefined && (typeof payload.evidence !== "string" || !payload.evidence)) {
     throw invalid("compound evidence must be text", { index, surface });
   }
+  if (payload.pyashSentence !== undefined && (
+    typeof payload.pyashSentence !== "string" ||
+    !payload.pyashSentence.trim() ||
+    /[\r\n]/u.test(payload.pyashSentence)
+  )) {
+    throw invalid("compound Pyash sentence must be one non-empty sentence", { index, surface });
+  }
   if (payload.head !== undefined && (
     typeof payload.head !== "string" ||
     payload.head !== payload.componentGlosses?.at(-1)
@@ -302,6 +309,7 @@ function normalizeEntry(payload, rowKey, index, language) {
     ...(payload.componentLayers === undefined ? {} : { componentLayers: [...payload.componentLayers] }),
     ...(payload.maxLayer === undefined ? {} : { maxLayer: payload.maxLayer }),
     ...(payload.evidence === undefined ? {} : { evidence: payload.evidence }),
+    ...(payload.pyashSentence === undefined ? {} : { pyashSentence: payload.pyashSentence }),
     ...(payload.head === undefined ? {} : { head: payload.head }),
     ...(payload.morphologyStatus === undefined ? {} : { morphologyStatus: payload.morphologyStatus }),
     ...(payload.morphologySignals === undefined ? {} : {
@@ -472,6 +480,7 @@ export function canonicalCompoundPayload(entry) {
     componentLayers: entry.componentLayers ?? null,
     maxLayer: entry.maxLayer ?? null,
     evidence: entry.evidence ?? null,
+    pyashSentence: entry.pyashSentence ?? null,
     head: entry.head ?? null,
     morphologyStatus: entry.morphologyStatus ?? null,
     morphologySignals: entry.morphologySignals ?? null,
