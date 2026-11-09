@@ -35,6 +35,24 @@ class HousekeeperServerConfigTests(unittest.TestCase):
     with patch.dict(os.environ, {"GPU_HOUSEKEEPER_PEER_HEALTH_INTERVAL_SEC": ""}, clear=False):
       self.assertEqual(server.peer_health_interval_seconds(), 15)
 
+  def test_ipv4_and_ipv6_housekeeper_listeners_bind_same_port(self):
+    ipv4 = server.create_housekeeper_server("0.0.0.0", 0)
+    ipv6 = None
+    try:
+      port = ipv4.server_address[1]
+      ipv6 = server.create_housekeeper_server("::", port)
+      for family, address in ((server.socket.AF_INET, "127.0.0.1"), (server.socket.AF_INET6, "::1")):
+        probe = server.socket.socket(family, server.socket.SOCK_STREAM)
+        try:
+          probe.settimeout(1)
+          probe.connect((address, port))
+        finally:
+          probe.close()
+    finally:
+      ipv4.server_close()
+      if ipv6 is not None:
+        ipv6.server_close()
+
   def test_model_size_estimate_rounds_up_to_a_whole_mib(self):
     request = server.job_resource_request({
       "jobSpec": {"resourceRequest": {
