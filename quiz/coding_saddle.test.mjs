@@ -371,13 +371,37 @@ test("coding saddle shows elapsed progress and explicit tool event labels", () =
 });
 
 test("coding saddle explains archive focus tool arguments", () => {
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("call `read_archive_focus` with `archive_path`, `entry_path`, and `focus`; copy `entry_path` exactly from search results"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("Never substitute the focus phrase for the entry path."));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`read_archive_focus(archive_path, entry_path, focus)`"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("Focused reads require the exact `entry_path` returned by search"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("tool resolves the host-configured Kiwix endpoint"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("agents do not need to know the server address or where ZIM files are mounted."));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("pass a locator returned by a tool unchanged to the next tool."));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("returned full `page` URL to the download tool"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("Wikipedia, Wiktionary, Wikibooks, Wikiversity, Wikisource, DevDocs"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("publisher per-site request limits do not apply"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`search_zim_library(query)`"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`search_archive(archive_path, query)`"));
 });
 
 test("coding saddle completion evidence requires a successful edit and a later command check", () => {
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /Never launch .*mind_ollama_runner\.mjs.*structured request payload/u);
-  assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /documentation research.*ZIM search first.*`search archive`.*archive path and query.*`read_archive_focus`.*`archive_path`, `entry_path`, and `focus`.*copy `entry_path` exactly from search results.*Never substitute the focus phrase for the entry path.*returned bounded passages.*download a returned page URL as Markdown.*read the saved file.*retrieved page text/u);
+  for (const guidance of [
+    "documentation and reference research",
+    "`search_zim_library(query)` first",
+    "host-configured Kiwix endpoint",
+    "agents do not need to know the server address",
+    "full `page` URL",
+    "publisher per-site request limits do not apply",
+    "Do not construct, normalize, or replace archive paths or URLs",
+    "pass a locator returned by a tool unchanged",
+    "`search_archive(archive_path, query)`",
+    "`read_archive_focus(archive_path, entry_path, focus)`",
+    "Focused reads require the exact `entry_path` returned by search",
+    "Ground claims in retrieved page text",
+    "Use the original live website only"
+  ]) {
+    assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes(guidance), `missing ZIM guidance: ${guidance}`);
+  }
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /name the target file before editing/u);
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /After the final edit/u);
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /active agent house's absolute memory\/MEMORY\.md path/u);
