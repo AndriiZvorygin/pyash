@@ -309,8 +309,11 @@ function statusDisplayLines(value, width, height, usage = "") {
   return lines;
 }
 
-export function createSaddleTerminalUi({ output = process.stdout, maxItems = 4000, color } = {}) {
+export function createSaddleTerminalUi({ output = process.stdout, maxItems = 4000, color, onOutputError } = {}) {
   const enabledColor = color ?? (Boolean(output.isTTY) && !process.env.NO_COLOR && process.env.TERM !== "dumb");
+  if (typeof onOutputError === "function" && typeof output.on === "function") {
+    output.on("error", onOutputError);
+  }
   const items = [];
   let status = "";
   let usage = "";

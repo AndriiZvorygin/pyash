@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 import readline from "node:readline/promises";
+import { writeSync } from "node:fs";
 import fs from "node:fs/promises";
 
 import { parse } from "../program/understand/index.mjs";
@@ -715,6 +716,18 @@ export async function dischargeSaddleModel(model, backend, {
 
 let activeSaddleUi = null;
 let activeSaddleResizeHandler = null;
+let activeSaddleOutputFailed = false;
+
+function handleSaddleOutputError(error) {
+  activeSaddleOutputFailed = true;
+  const detail = error?.code ? ` (${error.code})` : "";
+  try {
+    writeSync(2, `pyash saddle: terminal output failed${detail}; exiting cleanly\n`);
+  } catch {
+    // The diagnostic stream may share the same closed pipe.
+  }
+  process.exit(1);
+}
 
 function writeLine(text = "") {
   if (activeSaddleUi) activeSaddleUi.writeLine(text);
@@ -744,7 +757,7 @@ function restoreActiveSaddleUi() {
   if (process.stdin.isTTY) process.stdin.pause();
   if (activeSaddleResizeHandler) process.stdout.off("resize", activeSaddleResizeHandler);
   activeSaddleResizeHandler = null;
-  activeSaddleUi?.exit();
+  if (!activeSaddleOutputFailed) activeSaddleUi?.exit();
   activeSaddleUi = null;
 }
 
@@ -882,7 +895,7 @@ async function main() {
   let promptLabel = "pyash> ";
   let inputDecoder = null;
   const queuedInputs = [];
-  const saddleUi = createSaddleTerminalUi();
+  const saddleUi = createSaddleTerminalUi({ onOutputError: handleSaddleOutputError });
   activeSaddleUi = saddleUi;
   saddleUi.enter();
   process.once("exit", restoreActiveSaddleUi);
