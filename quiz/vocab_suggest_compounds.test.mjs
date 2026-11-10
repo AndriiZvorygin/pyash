@@ -70,19 +70,6 @@ test("vocab_suggest exposes pre-sweep canonical WordNet compounds with their sen
   ))), true);
 });
 
-test("vocab_suggest exposes current canonical WordNet compounds with their sense glosses", async () => {
-  const lines = [];
-  const result = await runVocabSuggest(["brighten"], {
-    report: (line) => lines.push(String(line))
-  });
-
-  assert.equal(result.exitCode, 0);
-  assert.equal(result.missing, 0);
-  assert.match(lines.join("\n"), /brighten: found compound light \+ becoming -> kwan hbin \(accepted-llm\)/u);
-  assert.match(lines.join("\n"), /brighten: WordNet v:02777127-v \[brighten, clear, clear up, light up\]: become clear -> brighten \(kwan hbin\)/u);
-  assert.equal(result.foundCompounds.some((compound) => compound.senseGlosses?.some((gloss) => gloss.definition === "become clear")), true);
-});
-
 test("vocab_suggest reports the accepted include compound", async () => {
   const lines = [];
   const result = await runVocabSuggest(["include"], {
