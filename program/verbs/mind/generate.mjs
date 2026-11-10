@@ -211,6 +211,7 @@ export async function runGenerate({
     (async () => {
       const streamedChunks = [];
       let terminalPayload = null;
+      let processReport = "";
       try {
         const mockResponse = nextMockGenerateResponse(mockResponseRaw);
         if (mockResponse) {
@@ -268,7 +269,8 @@ export async function runGenerate({
                 onAssistantDelta?.(textChunk);
                 if (streamStdoutEnabled) process.stdout.write(textChunk);
               },
-              onEnd: () => {
+              onEnd: (report) => {
+                processReport = String(report ?? "");
                 stop();
                 resolve();
               },
@@ -278,7 +280,10 @@ export async function runGenerate({
               }
             });
           });
-          if (!terminalPayload) throw new Error("mind stream missing terminal reply");
+          if (!terminalPayload) {
+            const detail = processReport ? `\n${processReport.trimEnd()}` : "";
+            throw new Error(`mind stream missing terminal reply${detail}`);
+          }
           const envelope = requireMindReplyText(mergeMindReplyChunks(streamedChunks, terminalPayload));
           onUsage?.(envelope.metadata);
           for (const event of terminalPayload?.message?.observed_tool_events ?? []) onToolCall?.(event);

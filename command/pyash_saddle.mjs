@@ -14,6 +14,8 @@ import { loadDefaultConfig } from "./run_pya_helpers.mjs";
 import { resolveConfigText } from "../program/configure/env.mjs";
 import {
   ensureAgentDirs,
+  buildSessionNameForDate,
+  buildSessionNamePrefix,
   listSessionFiles,
   readSessionMessages,
   readSessionMessagesWithFallback
@@ -77,6 +79,7 @@ import {
 import { formatMindUsage, normalizeMindUsage, sumMindUsages } from "../program/verbs/mind/usage.mjs";
 import {
   buildSaddleMindSentence,
+  buildSaddleOllamaContextOptions,
   buildSaddleStrataContextOptions,
   buildSaddleWorktreeReviewCommand,
   formatSaddleCompletionEvidence,
@@ -84,6 +87,7 @@ import {
   createSaddleInputDecoder,
   DEFAULT_CODING_SADDLE_SYSTEM_PROMPT,
   discoverSaddleModels,
+  getSaddleOllamaModelContextLength,
   formatSaddleBackendPicker,
   formatSaddleModelPicker,
   formatSaddleStatus,
@@ -97,7 +101,6 @@ import {
   resolveSaddleModelOption,
   resolveSaddleMindProfile,
   parseSaddleMindCommand,
-  SADDLE_OLLAMA_CONTEXT_PRESETS,
   saddleToolEventLabel,
   saddleSlashCommandCompletions,
   startSaddleProgress
@@ -115,6 +118,39 @@ export function resolveSaddleProjectWorldRoot({ runtimeRoot, cwd } = {}) {
   if (resolvedCwd === resolvedRuntimeRoot) return path.join(resolvedRuntimeRoot, "world");
   const projectId = createHash("sha256").update(resolvedCwd).digest("hex").slice(0, 24);
   return path.join(resolvedRuntimeRoot, "world", "coding-saddle-projects", projectId);
+}
+
+function compactLocalDate(date) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}`;
+}
+
+async function findLatestOlderSessionFile({ sessionDir, sessionName }) {
+  let entries;
+  try {
+    entries = await fs.readdir(sessionDir, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return "";
+    throw error;
+  }
+
+  const today = buildSessionNamePrefix().slice(0, 8);
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterday = compactLocalDate(yesterdayDate);
+  const suffix = `${buildSessionNameForDate({ baseName: sessionName, dateCompact: "00000000" }).slice(8)}.pya`;
+  const candidates = entries
+    .filter((entry) => entry.isFile() && /^\d{8}/u.test(entry.name))
+    .map((entry) => ({ entry, date: entry.name.slice(0, 8) }))
+    .filter(({ entry, date }) => entry.name === `${date}${suffix}` && date < yesterday && date <= today)
+    .sort((left, right) => right.date.localeCompare(left.date));
+
+  for (const { entry } of candidates) {
+    const filename = path.join(sessionDir, entry.name);
+    const replay = await readSessionMessages({ sessionFile: filename, historyWindow: 1, includePending: true });
+    if (replay.messages.length || replay.pendingTurns.length) return filename;
+  }
+  return "";
 }
 
 function isRelativePathWithin(directory, target) {
@@ -385,10 +421,28 @@ export async function prepareSaddle({
   const saddleState = await readCodingSaddleState(saddleStatePath);
   const sessionDir = path.join(agentHouse, "session");
   const storedSessionFile = saddleState.activeSessionFile ? path.resolve(saddleState.activeSessionFile) : "";
-  const sessionFile = storedSessionFile && await isPathWithin(sessionDir, storedSessionFile) ? storedSessionFile : "";
-  const sessionName = storedSessionFile && !sessionFile
+  let sessionFile = storedSessionFile && await isPathWithin(sessionDir, storedSessionFile) ? storedSessionFile : "";
+  let sessionName = storedSessionFile && !sessionFile
     ? SESSION_NAME
     : saddleState.activeSessionName || SESSION_NAME;
+  if (!sessionFile) {
+    let recentHistoryIsEmpty = false;
+    try {
+      const recentHistory = await readSessionMessagesWithFallback({
+        sessionDir,
+        baseName: sessionName,
+        historyWindow: 1,
+        includePending: true
+      });
+      recentHistoryIsEmpty = !recentHistory.messages.length && !recentHistory.pendingTurns.length;
+    } catch {
+      // Keep the normal history renderer responsible for reporting a damaged recent transcript.
+    }
+    if (recentHistoryIsEmpty) {
+      sessionFile = await findLatestOlderSessionFile({ sessionDir, sessionName });
+      if (sessionFile) sessionName = path.basename(sessionFile, path.extname(sessionFile));
+    }
+  }
   const sessionProfile = getCodingSaddleProfile(saddleState, { sessionName, sessionFile });
   const recentModelStatePath = path.join(
     useGlobalRecentPreference ? globalAgentHouse : agentHouse,
@@ -617,20 +671,31 @@ export async function loadSaddleSessionHistory({
 
 export function renderSaddleSessionHistory(saddleUi, messages = [], session = "", detail = "") {
   const history = Array.isArray(messages) ? messages : [];
-  saddleUi.clearHistory();
-  saddleUi.writeLine(`session: ${session || SESSION_NAME} | restored ${history.length} saved messages${detail ? ` | ${detail}` : ""}`);
+  const entries = [{
+    kind: "text",
+    text: `session: ${session || SESSION_NAME} | restored ${history.length} saved messages${detail ? ` | ${detail}` : ""}`
+  }];
   for (const message of history) {
     if (message?.role === "assistant") {
-      saddleUi.writeLine("saddle>");
-      saddleUi.writeMarkdown(String(message.content ?? ""));
+      entries.push({ kind: "text", text: "saddle>" });
+      entries.push({ kind: "markdown", text: String(message.content ?? "") });
     } else if (message?.role === "user") {
-      saddleUi.writeLine(`you> ${String(message.content ?? "")}`);
-      if (message.pending) saddleUi.writeLine("[unfinished turn; no completed response was saved]");
+      entries.push({ kind: "text", text: `you> ${String(message.content ?? "")}` });
+      if (message.pending) entries.push({ kind: "text", text: "[unfinished turn; no completed response was saved]" });
     } else if (message?.role === "tool") {
-      saddleUi.writeLine(`[tool] ${String(message.content ?? "")}`);
+      entries.push({ kind: "text", text: `[tool] ${String(message.content ?? "")}` });
     }
   }
-  if (history.length) saddleUi.writeLine("--- end of saved history ---");
+  if (history.length) entries.push({ kind: "text", text: "--- end of saved history ---" });
+  if (typeof saddleUi.replaceItems === "function") {
+    saddleUi.replaceItems(entries);
+    return;
+  }
+  saddleUi.clearHistory();
+  for (const entry of entries) {
+    if (entry.kind === "markdown") saddleUi.writeMarkdown(entry.text);
+    else saddleUi.writeLine(entry.text);
+  }
 }
 
 export async function dischargeSaddleModel(model, backend, {
@@ -801,6 +866,7 @@ async function main() {
   });
   process.once("exit", () => saddleTrace.close({ status: "process exit" }));
   let contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
+  let ollamaModelCatalog = [];
   let thinkSetting = config.thinkSetting;
   let busy = false;
   let closing = false;
@@ -822,6 +888,22 @@ async function main() {
   process.once("exit", restoreActiveSaddleUi);
 
   const saddleHousekeeper = () => createGpuHousekeeperAdapter({ baseUrl: config.housekeeperUrl });
+  const getOllamaContextOptions = async () => {
+    let modelContextLength = getSaddleOllamaModelContextLength({ models: ollamaModelCatalog, model });
+    if (!modelContextLength) {
+      try {
+        const catalog = await saddleHousekeeper().getOllamaModels();
+        ollamaModelCatalog = Array.isArray(catalog?.models) ? catalog.models : [];
+        modelContextLength = getSaddleOllamaModelContextLength({ models: ollamaModelCatalog, model });
+      } catch {
+        ollamaModelCatalog = [];
+      }
+    }
+    return {
+      modelContextLength,
+      options: buildSaddleOllamaContextOptions({ modelContextLength, currentContextLength: contextWindow })
+    };
+  };
   let queueSnapshot = null;
   const sessionLabel = () => sessionFile
     ? path.basename(sessionFile, path.extname(sessionFile))
@@ -1057,6 +1139,7 @@ async function main() {
       currentModel: targetModel,
       fallbackModels
     });
+    if (targetBackend === "ollama") ollamaModelCatalog = discovered.modelCatalog ?? [];
     if (targetBackend === "zai" && discovered.available && discovered.catalogModels?.length) {
       try {
         const refreshed = syncZaiCodexModelCatalog({ models: discovered.catalogModels });
@@ -1130,17 +1213,13 @@ async function main() {
       writeLine(`context window for ${model}: current ${formatZaiContextWindow(contextWindow)}, model maximum ${formatZaiContextWindow(maximum)}`);
       writeLine("Choose a size by number or label; this sets the client-side budget, not the provider's model limit.");
     } else if (backend === "ollama") {
-      contextPicker = [
-        { model: "default", value: "default", label: "Ollama default", tokens: null },
-        ...SADDLE_OLLAMA_CONTEXT_PRESETS.map((tokens) => ({
-          model: String(tokens),
-          value: formatZaiContextWindow(tokens),
-          label: formatZaiContextWindow(tokens),
-          tokens
-        }))
-      ];
+      const contextOptions = await getOllamaContextOptions();
+      contextPicker = contextOptions.options;
       writeLine(`Ollama context for ${model}: current ${contextWindow ? formatZaiContextWindow(contextWindow) : "Ollama default"}`);
-      writeLine("Choose a request num_ctx preset. Larger contexts use more memory; default leaves Ollama unchanged.");
+      writeLine(contextOptions.modelContextLength
+        ? `Model catalog maximum: ${formatZaiContextWindow(contextOptions.modelContextLength)}. Housekeeper still checks GPU memory when the request is submitted.`
+        : "Model context metadata unavailable; showing the conservative presets up to 64K. Larger contexts use more memory; default leaves Ollama unchanged.");
+      writeLine("Choose a request num_ctx preset. This does not change the model's default context.");
     } else {
       writeLine("Per-request context selection is supported here only for Ollama and Z.AI; Strata context is set at server launch.");
       prompt({ clear: false });
@@ -1472,12 +1551,7 @@ async function main() {
           label: formatZaiContextWindow(tokens),
           tokens
         }))
-        : ["default", ...SADDLE_OLLAMA_CONTEXT_PRESETS].map((tokens) => ({
-          model: String(tokens),
-          value: typeof tokens === "number" ? formatZaiContextWindow(tokens) : "default",
-          label: typeof tokens === "number" ? formatZaiContextWindow(tokens) : "default",
-          tokens: typeof tokens === "number" ? tokens : null
-        }));
+        : (await getOllamaContextOptions()).options;
       const selected = resolveSaddleModelOption(contextMatch[1], choices);
       if (!selected) {
         writeLine(`unknown context size; available: ${choices.map((choice) => choice.label).join(", ")}`);

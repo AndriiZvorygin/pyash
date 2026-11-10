@@ -50,6 +50,64 @@ const TOOL_NON_CASE_FIELDS = new Set([
   "consequence"
 ]);
 
+const TOOL_ARGUMENT_SCHEMA_ADAPTERS = {
+  "search": {
+    toolName: "search_zim_library",
+    description: "Search the configured Kiwix ZIM service for archives and entries. The tool resolves the host-configured endpoint, which may be remote; no local ZIM mount or server address is needed. Results include a usable full page URL from that service. Pass that returned URL unchanged to a retrieval tool. Search uses archived content and does not contact source websites.",
+    fields: {
+      ob: {
+        name: "query",
+        description: "Terms to find in the ZIM collection served by the configured Kiwix endpoint."
+      }
+    }
+  },
+  "search archive": {
+    toolName: "search_archive",
+    description: "Search one ZIM archive through the configured Kiwix service when its archive file is mounted in the configured local library. archive_path is a local archive path or library directory, not a URL. Search results include usable page URLs; pass returned locators unchanged. For remote-only archives, use search_zim_library. Searching archived content does not contact source websites.",
+    fields: {
+      in: {
+        name: "archive_path",
+        description: "A .zim file path or the configured archive directory for a local indexed search."
+      },
+      ob: {
+        name: "query",
+        description: "Terms to find in the local ZIM index."
+      }
+    }
+  },
+  "read archive focus": {
+    toolName: "read_archive_focus",
+    description: "Read a bounded passage from one ZIM entry when its archive file is mounted in the configured local library. Copy entry_path exactly from search results; focus is the symbol or phrase to find within that entry. For remote-only archives, retrieve the full page URL returned by search instead.",
+    fields: {
+      from: {
+        name: "archive_path",
+        description: "Path to the .zim archive in the shared archive library."
+      },
+      ob: {
+        name: "entry_path",
+        description: "Exact entry path copied from a search result, for example OpenCL_API.html."
+      },
+      by: {
+        name: "focus",
+        description: "Symbol or phrase to locate within the entry, for example clCreateBuffer."
+      }
+    }
+  }
+};
+
+function toolCapabilityName(capability) {
+  const subjectName = String(capability?.su?.name ?? "").trim();
+  const namespaceMarker = " internal ";
+  const namespaceIndex = subjectName.lastIndexOf(namespaceMarker);
+  return namespaceIndex >= 0
+    ? subjectName.slice(namespaceIndex + namespaceMarker.length).trim()
+    : subjectName;
+}
+
+function toolArgumentSchemaAdapter(capability) {
+  return TOOL_ARGUMENT_SCHEMA_ADAPTERS[toolCapabilityName(capability)] ?? null;
+}
+
 function isInputMarker(value) {
   if (!value || typeof value !== "object") return false;
   return value.text === "input" || value.name === "input" || value.wo === "input" || value.filename === "input";
@@ -180,6 +238,7 @@ export function buildToolSchemas(toolMapName) {
   const toolMap = new Map();
   const tools = [];
   for (const cap of caps) {
+    const argumentSchemaAdapter = toolArgumentSchemaAdapter(cap.sentence);
     const signatureWords = deriveSignatureFromCall(cap.sentence, { remember });
     const signatureName = joinSignatureWords(signatureWords);
     const toolName = toolFunctionNameFromSignature(signatureWords);
@@ -195,19 +254,31 @@ export function buildToolSchemas(toolMapName) {
       caseKeys = openKeys;
     }
     caseKeys.sort(compareUtf8);
-    for (const caseKey of caseKeys) {
+    const schemaCaseKeys = argumentSchemaAdapter
+      ? [...caseKeys].sort((left, right) => compareUtf8(
+        argumentSchemaAdapter.fields[left]?.name ?? left,
+        argumentSchemaAdapter.fields[right]?.name ?? right
+      ))
+      : caseKeys;
+    for (const caseKey of schemaCaseKeys) {
       const value = cap.sentence[caseKey];
       const typeWords = toolTypeWordsFromValue(value, caseKey);
-      properties[caseKey] = { type: toolSchemaType(typeWords) };
-      required.push(caseKey);
+      const field = argumentSchemaAdapter?.fields[caseKey];
+      const argumentName = field?.name ?? caseKey;
+      properties[argumentName] = {
+        type: toolSchemaType(typeWords),
+        ...(field?.description ? { description: field.description } : {})
+      };
+      required.push(argumentName);
     }
     const readableToolName = buildReadableToolName({ sentence: cap.sentence, caseKeys });
-    const finalToolName = toolName.length > 48 && readableToolName ? readableToolName : toolName;
+    const finalToolName = argumentSchemaAdapter?.toolName
+      ?? (toolName.length > 48 && readableToolName ? readableToolName : toolName);
     const isSaddlePlanTool = cap.sentence?.be === "write"
       && cap.sentence?.fromstate?.text === "coding saddle plan";
     const description = isSaddlePlanTool
       ? `${cap.canonical}. Set ob to a JSON-encoded object string. Create or replace example: {"action":"create","objective":"...","steps":[{"title":"..."}]}. Update example: {"action":"update_step","id":"step-001","status":"done","evidence":"..."}. Step statuses are pending, in_progress, done, or blocked. If an update is rejected, correct the payload and retry.`
-      : cap.canonical;
+      : argumentSchemaAdapter?.description ?? cap.canonical;
     tools.push({
       type: "function",
       function: {
@@ -224,7 +295,14 @@ export function buildToolSchemas(toolMapName) {
     toolMap.set(finalToolName, cap.sentence);
     toolMap.set(signatureName, cap.sentence);
   }
-  const toolBlock = `TOOLS:\n${caps.map(c => c.canonical).join("\n")}`;
+  const toolBlock = `TOOLS:\n${caps.map((cap) => {
+    const argumentSchemaAdapter = toolArgumentSchemaAdapter(cap.sentence);
+    if (!argumentSchemaAdapter) return cap.canonical;
+    const argumentNames = Object.values(argumentSchemaAdapter.fields)
+      .map((field) => field.name)
+      .sort(compareUtf8);
+    return `${argumentSchemaAdapter.toolName}: ${argumentSchemaAdapter.description} Arguments: ${argumentNames.join(", ")}.`;
+  }).join("\n")}`;
   return { tools, toolMap, toolBlock };
 }
 
@@ -239,7 +317,9 @@ export function buildToolSentence({ capability, args }) {
   delete call.this;
   delete call.consequence;
   call.mood = "do";
-  if (call.be === "read" && !call.become) call.become = { wo: "text" };
+  if (call.be === "read" && !call.become && call.as?.wo !== "cluster-compress") {
+    call.become = { wo: "text" };
+  }
 
   const argObject = (() => {
     if (!args) return {};
@@ -258,8 +338,13 @@ export function buildToolSentence({ capability, args }) {
   const capabilityCaseKeys = new Set(
     Object.keys(capability ?? {}).filter((key) => !TOOL_NON_CASE_FIELDS.has(key))
   );
+  const argumentSchemaAdapter = toolArgumentSchemaAdapter(capability);
+  const aliasedCaseKeys = new Map(
+    Object.entries(argumentSchemaAdapter?.fields ?? {}).map(([caseKey, field]) => [field.name, caseKey])
+  );
 
-  for (const [caseKey, argValue] of Object.entries(argObject)) {
+  for (const [argumentName, argValue] of Object.entries(argObject)) {
+    const caseKey = aliasedCaseKeys.get(argumentName) ?? argumentName;
     if (!capabilityCaseKeys.has(caseKey)) continue;
     const typeWords = toolTypeWordsFromValue(capability?.[caseKey], caseKey);
     const hasName = typeWords.includes("name");

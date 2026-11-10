@@ -92,6 +92,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 - Do not introduce ad hoc `.json` state/config files. Prefer Pyash sentence files (`.pya`) unless a task explicitly requires JSON output.
 
 ## GPU/LLM Concurrency Rule
-- Never start more than one GPU/LLM-heavy pipeline run at the same time (ASR, diarize, agenda stage3, image generation, or full transcript pipelines).
-- Before launching any such run, check for active related processes and wait/stop them first.
-- Treat pipeline execution as single-flight: one meeting pipeline at a time per host.
+- Route GPU/LLM inference through Pyash GPU Housekeeper whenever it is available; do not bypass it with direct Ollama/model calls.
+- A non-empty Housekeeper queue is normal and is not a reason to stall, refuse, or wait before submitting independent work. Submit the bounded job and let Housekeeper perform admission, placement, concurrency control, and queueing across available hosts/devices.
+- Check active work when diagnosing a stalled job, when a task explicitly requires isolated performance measurements, or when no managed queue is available. Do not manually unload models or create competing unmanaged inference processes to make room.
+- Preserve declared dependencies between pipeline stages. Independent duties may run concurrently when Housekeeper admits them; same-device overlap remains governed by Housekeeper capacity/VRAM admission and the runtime's concurrency-safety declaration.

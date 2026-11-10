@@ -310,7 +310,9 @@ export function buildSenseCompoundWorklist({
   resolveTargetCoverage = null,
   maximum = Number.POSITIVE_INFINITY,
   minimumTagCount = 0,
-  order = "english30k-rank"
+  order = "english30k-rank",
+  rankForEnglish = () => Number.POSITIVE_INFINITY,
+  requirePrincetonIntersection = false
 } = {}) {
   if (!Array.isArray(residualSenses)) {
     throw invalid("sense compound worklist requires residual senses");
@@ -333,12 +335,20 @@ export function buildSenseCompoundWorklist({
       sense?.tagCount
     ].filter(Number.isSafeInteger);
     const tagCount = tagCounts.length ? Math.max(...tagCounts) : -1;
+    if (requirePrincetonIntersection && sense?.princetonMatched !== true) return null;
     if (minimumTagCount > 0 && tagCount < minimumTagCount) return null;
     const candidateRanks = (sense?.candidates ?? []).map((candidate) => Number(candidate.rank ?? candidate.english30kRank))
       .filter((rank) => Number.isFinite(rank) && rank > 0);
-    const frequencyRank = Number.isFinite(Number(sense.frequencyRank)) && Number(sense.frequencyRank) > 0
-      ? Number(sense.frequencyRank)
-      : candidateRanks.length ? Math.min(...candidateRanks) : Number.MAX_SAFE_INTEGER;
+    const lemmaRanks = typeof rankForEnglish === "function"
+      ? lemmas.map((lemma) => Number(rankForEnglish(lemma))).filter((rank) => Number.isFinite(rank) && rank > 0)
+      : [];
+    const suppliedRank = Number(sense.frequencyRank);
+    const frequencyRanks = [
+      ...(Number.isFinite(suppliedRank) && suppliedRank > 0 ? [suppliedRank] : []),
+      ...candidateRanks,
+      ...lemmaRanks
+    ];
+    const frequencyRank = frequencyRanks.length ? Math.min(...frequencyRanks) : Number.MAX_SAFE_INTEGER;
     const targetCoverage = typeof resolveTargetCoverage === "function"
       ? resolveTargetCoverage({
         senseId: source,
@@ -372,6 +382,7 @@ export function buildSenseCompoundWorklist({
       gloss: definition,
       frequencyRank,
       tagCount,
+      ...(typeof sense?.princetonMatched === "boolean" ? { princetonMatched: sense.princetonMatched } : {}),
       ...(targetHead ? { targetHead } : {})
     };
   }).filter(Boolean)

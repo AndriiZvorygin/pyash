@@ -62,6 +62,7 @@ test("sense compound refinery links, composes, decides, and records one complete
     synset: "00000010-n",
     lemmas: ["friendship"],
     gloss: "a relationship between friends; sample gloss omitted",
+    princetonMatched: true,
     candidates: [{ lemma: "friendship", rank: 1200, tagCount: 4 }]
   };
   const senseByHandle = new Map();

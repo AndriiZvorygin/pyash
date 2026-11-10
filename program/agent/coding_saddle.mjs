@@ -5,7 +5,8 @@ import {
 } from "../runtime/zai_coding_plan.mjs";
 import { fetchMiniMaxModels } from "../runtime/minimax.mjs";
 
-export const SADDLE_OLLAMA_CONTEXT_PRESETS = [4096, 8192, 16384, 32768, 65536];
+export const SADDLE_OLLAMA_CONTEXT_PRESETS = [4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576];
+const SADDLE_OLLAMA_FALLBACK_CONTEXT_LIMIT = 65536;
 
 const SADDLE_SLASH_COMMANDS = [
   { name: "/help", takesArguments: false },
@@ -43,9 +44,44 @@ export function saddleSlashCommandCompletions({ value = "", cursor } = {}) {
 function formatContextLength(tokens) {
   const value = Number(tokens);
   if (!Number.isSafeInteger(value) || value <= 0) return "default";
+  if (value >= 1048576 && value % 1048576 === 0) return `${value / 1048576}M`;
   if (value >= 1_000_000) return `${Number((value / 1_000_000).toFixed(2))}M`;
   if (value >= 1024 && value % 1024 === 0) return `${value / 1024}K`;
   return value.toLocaleString("en-CA");
+}
+
+export function getSaddleOllamaModelContextLength({ models = [], model = "" } = {}) {
+  const selectedModel = normalizeText(model);
+  const entry = (Array.isArray(models) ? models : []).find((item) => {
+    const name = typeof item === "string" ? item : item?.name ?? item?.model ?? item?.id;
+    return normalizeText(name) === selectedModel;
+  });
+  const value = Number(typeof entry === "object" && entry !== null
+    ? entry.details?.context_length ?? entry.context_length ?? entry.contextLength
+    : null);
+  return Number.isSafeInteger(value) && value >= 4096 ? value : null;
+}
+
+export function buildSaddleOllamaContextOptions({ modelContextLength = null, currentContextLength = null } = {}) {
+  const requestedLimit = Number(modelContextLength);
+  const limit = Number.isSafeInteger(requestedLimit) && requestedLimit >= 4096
+    ? Math.min(requestedLimit, SADDLE_OLLAMA_CONTEXT_PRESETS.at(-1))
+    : SADDLE_OLLAMA_FALLBACK_CONTEXT_LIMIT;
+  const values = SADDLE_OLLAMA_CONTEXT_PRESETS.filter((tokens) => tokens <= limit);
+  if (requestedLimit >= 4096 && requestedLimit <= limit && !values.includes(requestedLimit)) values.push(requestedLimit);
+  values.sort((a, b) => a - b);
+  return [
+    { model: "default", value: "default", label: "Ollama default", tokens: null },
+    ...values.map((tokens) => ({
+      model: String(tokens),
+      value: formatContextLength(tokens),
+      label: formatContextLength(tokens),
+      tokens
+    }))
+  ].map((choice) => ({
+    ...choice,
+    current: choice.tokens === (Number(currentContextLength) || null)
+  }));
 }
 
 export function buildSaddleStrataContextOptions({
@@ -83,8 +119,8 @@ export function buildSaddleStrataContextOptions({
 export const DEFAULT_CODING_SADDLE_SYSTEM_PROMPT = [
   "You are the Pyash coding saddle: an interactive coding agent operating inside the existing Pyash runtime.",
   "For requests about repository files, code, tests, git, or commands, use the relevant Pyash tools before answering and report concrete evidence. For general advice, answer directly without unnecessary tool calls.",
-  "For documentation research, use ZIM search first, then download a returned page URL as Markdown and read the saved Markdown file; use raw HTML only when the source markup itself matters, and ground claims in retrieved page text, not search snippets alone.",
-  "Never launch Pyash or provider mind-runner scripts (such as command/mind_ollama_runner.mjs) through the shell; they are internal adapters requiring a structured request payload. Use the active conversation for replies and Pyash mind calls for deliberate model requests.",
+  "Never launch Pyash or provider mind-runner scripts (such as command/mind_ollama_runner.mjs) through the shell; they are internal adapters requiring a structured request payload, not shell entry points. The active saddle already runs the selected model: answer directly as that model, and use project tools only to inspect project data.",
+  "For documentation and reference research, use `search_zim_library(query)` first. The tool resolves the host-configured Kiwix endpoint (which may be remote) and returns usable archive locators, including a full `page` URL; agents do not need to know the server address or where ZIM files are mounted. The indexed collection can include Wikipedia, Wiktionary, Wikibooks, Wikiversity, Wikisource, DevDocs, Rust and assembly guides, OpenCL references, and Pyash documentation. Search uses archived content without contacting original websites, so publisher per-site request limits do not apply. Do not construct, normalize, or replace archive paths or URLs: pass a locator returned by a tool unchanged to the next tool. For remote pages, pass the returned full `page` URL to the download tool. Use `search_archive(archive_path, query)` or `read_archive_focus(archive_path, entry_path, focus)` only when a tool result supplies a usable local archive path. Focused reads require the exact `entry_path` returned by search and a `focus` phrase. Ground claims in retrieved page text, not search snippets alone. Use the original live website only when the archive lacks the needed material or current source content is required.",
   "Do not pretend a change was made when a tool did not succeed.",
   "Keep work inside the configured coding directory and prefer small, verifiable steps.",
   "For code changes, name the target file before editing; use write for bounded file creation and repair for unified-diff edits.",
@@ -676,7 +712,12 @@ export async function discoverSaddleModels({
       return entry?.id ?? entry?.name ?? entry?.model ?? "";
     }).map(normalizeText).filter(Boolean);
     const models = [...new Set([...configured, ...discovered])];
-    return { models, available: true, error: models.length ? null : "no models are available" };
+    return {
+      models,
+      modelCatalog: normalizedBackend === "ollama" ? entries : [],
+      available: true,
+      error: models.length ? null : "no models are available"
+    };
   } catch (error) {
     return {
       models: [...new Set(configured)],

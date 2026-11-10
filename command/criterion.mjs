@@ -8,7 +8,8 @@ import { createHuggingFaceExecutor } from "../program/runtime/criterion/huggingf
 import { runCriterion, rerunCriterion } from "../program/runtime/criterion/run.mjs";
 import { runNightmare, runReverie } from "../program/runtime/criterion/suites.mjs";
 import { loadRun, renderComparison, renderRunMarkdown } from "../program/runtime/criterion/report.mjs";
-import { createQueuedOllamaExecutor, DEFAULT_PROFILES } from "../program/runtime/criterion/ollama.mjs";
+import { createQueuedOllamaExecutor, DEFAULT_PROFILES, resolveConfiguredGpuHousekeeperUrl } from "../program/runtime/criterion/ollama.mjs";
+import { inspectThroughputTargetQueue, runThroughputBenchmark } from "../program/runtime/criterion/throughput.mjs";
 import { createStrataExecutor, DEFAULT_STRATA_BASE_URL } from "../program/runtime/criterion/strata.mjs";
 import { runDeepSWE, DEFAULT_DEEPSWE_AGENT, DEFAULT_DEEPSWE_MODEL } from "../program/runtime/criterion/deepswe.mjs";
 import { stableJson } from "../program/runtime/criterion/metrics.mjs";
@@ -16,6 +17,7 @@ import { FACT_EVALUATION_MODES, FACT_JUDGE_PROMPT_VERSION, FACT_SCORER_VERSION, 
 import { runPromptAblation } from "../program/runtime/criterion/prompt-ablation.mjs";
 import { runMeetingBankJudgePilot, MEETINGBANK_JUDGE_PILOT_MODELS } from "../program/runtime/criterion/judge-pilot.mjs";
 import { runMeetingBankFactualityPilot, MEETINGBANK_FACTUALITY_MODELS, MEETINGBANK_FACTUALITY_RUN_ID, MEETINGBANK_FACTUALITY_SELECTION_SEED, UNIRRM_FACTUALITY_MODEL } from "../program/runtime/criterion/factuality-pilot.mjs";
+import { listCriterionRuns, renderCriterionRuns } from "../program/runtime/criterion/run_index.mjs";
 
 function flag(args, name, fallback = null) {
   const prefix = `${name}=`;
@@ -94,6 +96,7 @@ function usage() {
     "criterion list",
     "criterion inspect --benchmark <name>",
     "criterion run --benchmark <name> --dataset <local.jsonl> [--engine ollama|strata|huggingface] [--base-url <runtime>] [--model <a,b>] [--profile translation_direct|summary_direct|summary_reasoned|summary_reasoned_hidden] [--split train|validation|test] [--smoke] [--resume]",
+    "criterion throughput --model <installed-ollama-tag> --host-id <housekeeper-host> [--gpu-id gpu-0] [--run-id <id>]",
     "criterion baseline --benchmark meetingbank --dataset <local.jsonl> --baseline lead-3 [--resume]",
     "criterion fact-audit --dataset <meetingbank.jsonl> --source-runs <run-id,...> --judge-model <external-model> [--limit 5] [--resume]",
     "criterion omnicseval-meeting --dataset <meetingbank.jsonl> --annotations <annotations.jsonl> --source-runs <run-id,...> --judge-model <external-model> [--resume]",
@@ -102,6 +105,7 @@ function usage() {
     "criterion meetingbank-factuality-pilot --dataset <meetingbank.jsonl> [--model <qwen,...>] [--smoke] [--resume]",
     "criterion deepswe --tasks <deep-swe/tasks> [--model <model,...>] [--agent mini-swe-agent] [--base-url <model-endpoint>] [--sample-seed 0] [--limit N|--smoke] [--resume]",
     "criterion report <run-id>",
+    "criterion runs [--model <text>] [--benchmark <text>] [--status <text>] [--host <text>] [--limit <count>]",
     "criterion again <run-id>",
     "criterion compare <run-id> [<run-id> ...]",
     "criterion golden <run-id> [--golden <path>] [--write]",
@@ -202,6 +206,57 @@ async function runCommand(args, root) {
   }
   print({ runId: result.runId, status: result.status, results: `criterion/results/${result.runId}.jsonl`, report: `criterion/results/${result.runId}.md`, csv: `criterion/results/${result.runId}.csv`, review: `criterion/review/${result.runId}.html` }, hasFlag(args, "--json"));
   return result.status === "partial" && hasFlag(args, "--strict") ? 1 : 0;
+}
+
+async function throughputCommand(args, root) {
+  const models = listFlag(args, ["--model"]);
+  if (models.length !== 1) throw new Error("criterion throughput accepts exactly one --model per run; benchmark models in separate runs to avoid model-switch load time");
+  const hostId = flag(args, "--host-id", process.env.PYA_GPU_HOST_ID ?? "");
+  if (!hostId) throw new Error("criterion throughput requires --host-id or PYA_GPU_HOST_ID to pin the run to one host");
+  const runId = flag(args, "--run-id", `throughput-${Date.now()}`);
+  const gpuId = flag(args, "--gpu-id", process.env.PYA_CRITERION_GPU_ID ?? process.env.PYA_GPU_ID ?? "gpu-0");
+  const housekeeperUrl = resolveConfiguredGpuHousekeeperUrl({ housekeeperUrl: flag(args, "--gpu-housekeeper-url", process.env.PYA_GPU_HOUSEKEEPER_URL ?? "") });
+  const hostQueueCheck = await inspectThroughputTargetQueue({ housekeeperUrl, hostId });
+  const adapter = createQueuedOllamaExecutor({
+    root,
+    runId,
+    housekeeperUrl,
+    gpuId,
+    hostId,
+    vramRequiredMb: process.env.PYA_CRITERION_OLLAMA_VRAM_REQUIRED_MB
+  });
+  const result = await runThroughputBenchmark({
+    model: models[0],
+    executor: adapter.executor,
+    metadataProvider: adapter.metadataProvider,
+    root,
+    runId,
+    hostId,
+    gpuId,
+    hostQueueCheck,
+    onEvent: event => {
+      if (event.event.startsWith("warmup-")) {
+        process.stderr.write(`[criterion throughput] ${event.event === "warmup-started" ? "starting" : "finished"} ${event.kind}\n`);
+        return;
+      }
+      process.stderr.write(`[criterion throughput] ${event.sampleId}: ${event.status}${event.generationTokensPerSecond === null ? "" : ` ${event.generationTokensPerSecond.toFixed(2)} tok/s`}\n`);
+    }
+  });
+  const aggregate = result.throughput.aggregate;
+  print({
+    runId: result.runId,
+    status: result.status,
+    model: models[0],
+    hostId,
+    gpuId,
+    arithmeticMeanTokensPerSecond: aggregate.arithmeticMeanTokensPerSecond,
+    weightedTokensPerSecond: aggregate.weightedTokensPerSecond,
+    results: `criterion/results/${result.runId}.jsonl`,
+    report: `criterion/results/${result.runId}.md`,
+    pya: `criterion/results/${result.runId}.pya`,
+    json: `criterion/results/${result.runId}.json`
+  }, hasFlag(args, "--json"));
+  return result.status === "partial" ? 1 : 0;
 }
 
 async function baselineCommand(args, root) {
@@ -453,6 +508,27 @@ async function reportCommand(args, root) {
   return 0;
 }
 
+async function runsCommand(args, root) {
+  const rawLimit = flag(args, "--limit", "30");
+  const limit = Number(rawLimit);
+  if (!Number.isInteger(limit) || limit < 1) throw new Error("criterion runs --limit must be a positive integer");
+  const result = await listCriterionRuns({
+    root,
+    model: flag(args, "--model", ""),
+    benchmark: flag(args, "--benchmark", ""),
+    status: flag(args, "--status", ""),
+    host: flag(args, "--host", ""),
+    limit
+  });
+  const relativeIndexPath = path.relative(root, result.indexPath) || result.indexPath;
+  if (hasFlag(args, "--json")) {
+    print({ ...result, indexPath: relativeIndexPath }, true);
+    return 0;
+  }
+  process.stdout.write(renderCriterionRuns(result.runs, { totalRuns: result.matchingRuns, indexPath: relativeIndexPath }));
+  return 0;
+}
+
 async function compareCommand(args, root) {
   const ids = positional(args);
   if (!ids.length) throw new Error("criterion compare requires one or more run ids");
@@ -508,6 +584,7 @@ export async function main(argv = process.argv.slice(2), { root = process.cwd() 
   if (command === "criterion" && subcommand === "inspect") return inspectCommand(args);
   if (command === "criterion" && (subcommand === "deepswe" || subcommand === "deep-swe")) return deepSWECommand(rest, root);
   if (command === "criterion" && subcommand === "run") return runCommand(args, root);
+  if (command === "criterion" && subcommand === "throughput") return throughputCommand(args, root);
   if (command === "criterion" && subcommand === "baseline") return baselineCommand(args, root);
   if (command === "criterion" && (subcommand === "fact-audit" || subcommand === "meetingbank-fact-audit")) return factAuditCommand(args, root);
   if (command === "criterion" && subcommand === "omnicseval-meeting") return factAuditCommand(args, root, FACT_EVALUATION_MODES.exact);
@@ -515,12 +592,14 @@ export async function main(argv = process.argv.slice(2), { root = process.cwd() 
   if (command === "criterion" && (subcommand === "meetingbank-judge-pilot" || subcommand === "judge-pilot")) return meetingBankJudgePilotCommand(args, root);
   if (command === "criterion" && (subcommand === "meetingbank-factuality-pilot" || subcommand === "factuality-pilot")) return meetingBankFactualityPilotCommand(args, root);
   if (command === "criterion" && subcommand === "report") return reportCommand(rest, root);
+  if (command === "criterion" && subcommand === "runs") return runsCommand(rest, root);
   if (command === "criterion" && subcommand === "compare") return compareCommand(rest, root);
   if (command === "criterion" && subcommand === "golden") return goldenCommand(rest, root);
   if (command === "criterion" && subcommand === "again") return againCommand(rest, root);
   if (command === "list") return listCommand([subcommand, ...rest].filter(Boolean));
   if (command === "inspect") return inspectCommand([subcommand, ...rest].filter(Boolean));
   if (command === "run") return runCommand([subcommand, ...rest].filter(Boolean), root);
+  if (command === "throughput") return throughputCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "baseline") return baselineCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "deepswe" || command === "deep-swe") return deepSWECommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "fact-audit" || command === "meetingbank-fact-audit") return factAuditCommand([subcommand, ...rest].filter(Boolean), root);
@@ -529,6 +608,7 @@ export async function main(argv = process.argv.slice(2), { root = process.cwd() 
   if (command === "meetingbank-judge-pilot" || command === "judge-pilot") return meetingBankJudgePilotCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "meetingbank-factuality-pilot" || command === "factuality-pilot") return meetingBankFactualityPilotCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "report") return reportCommand([subcommand, ...rest].filter(Boolean), root);
+  if (command === "runs") return runsCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "compare") return compareCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "golden") return goldenCommand([subcommand, ...rest].filter(Boolean), root);
   if (command === "again") return againCommand([subcommand, ...rest].filter(Boolean), root);

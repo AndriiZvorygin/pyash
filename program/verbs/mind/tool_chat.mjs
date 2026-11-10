@@ -12,6 +12,7 @@ import { deriveSignatureFromCall, joinSignatureWords } from "../../bridge/signat
 import { resolveRatifyDecision } from "../../agent/ratify_policy.mjs";
 import { submitRunToolEvent } from "../../bridge/newspaper.mjs";
 import { DEFAULT_MAX_MIND_TOOL_TURNS, normalizeMindToolCallLimit } from "../../runtime/mind-limits.mjs";
+import { isInternalMindRunnerCommand } from "../command/execute.mjs";
 
 const ZAI_TOOL_RESULT_CONTEXT_BUDGET = 96 * 1024;
 const ZAI_TOOL_RESULT_MESSAGE_LIMIT = 12 * 1024;
@@ -100,11 +101,18 @@ function requestSizeBreakdown(payload, { historyStart = 0, historyEnd = 0 } = {}
   };
 }
 
-async function callStreamingToolTurn({ backendName, payload, onAssistantDelta, onToolCall } = {}) {
-  const stream = await callMindBackendStream({ backendName, payload });
+export async function callStreamingToolTurn({
+  backendName,
+  payload,
+  onAssistantDelta,
+  onToolCall,
+  streamBackend = callMindBackendStream
+} = {}) {
+  const stream = await streamBackend({ backendName, payload });
   const filename = stream?.ob?.filename ?? stream?.result?.ob?.filename ?? stream?.result?.filename;
   if (!filename) throw new Error("mind tool stream missing filename");
   let terminal = null;
+  let processReport = "";
   await new Promise((resolve, reject) => {
     let settled = false;
     const finish = (error) => {
@@ -129,11 +137,17 @@ async function callStreamingToolTurn({ backendName, payload, onAssistantDelta, o
           if (text) onAssistantDelta?.(text);
         }
       },
-      onEnd: () => finish(),
+      onEnd: (report) => {
+        processReport = String(report ?? "");
+        finish();
+      },
       onError: (error) => finish(error)
     });
   });
-  if (!terminal) throw new Error("mind tool stream missing terminal reply");
+  if (!terminal) {
+    const detail = processReport ? `\n${processReport.trimEnd()}` : "";
+    throw new Error(`mind tool stream missing terminal reply${detail}`);
+  }
   return terminal;
 }
 
@@ -657,7 +671,14 @@ export async function runToolChat({
       }
       try {
         if (!toolResult) {
-          if (capability?.be === "write" && capability?.fromstate?.text === "coding saddle plan") {
+          if (isInternalMindRunnerCommand(toolSentence?.ob?.text)) {
+            toolResult = buildErrorSentence({
+              name: "internal mind runner invocation",
+              message: "provider mind-runner scripts are internal adapters, not shell entry points; the active saddle already runs the selected model, so answer directly or use project tools to inspect files",
+              from: { name: "mind tool" },
+              raw: { toolName, command: toolSentence?.ob?.text }
+            });
+          } else if (capability?.be === "write" && capability?.fromstate?.text === "coding saddle plan") {
             if (typeof saddlePlanTool !== "function") throw new Error("session plan tool is unavailable in this mind call");
             toolResult = await saddlePlanTool(String(toolSentence?.ob?.text ?? ""));
           } else {

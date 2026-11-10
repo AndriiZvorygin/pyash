@@ -326,6 +326,58 @@ test("read and search use the existing Pyash verbs for a ZIM archive", async () 
   });
 });
 
+test("focused ZIM read extracts a bounded passage from an oversized shared page", async () => {
+  const previousFetch = globalThis.fetch;
+  let requestedUrl;
+  try {
+    await withZimTools(async (root) => {
+      const archive = path.join(root, "archives", "large.zim");
+      await fs.writeFile(archive, "fixture-zim", "utf8");
+      doRemember(parse('exists su name zim archive library directory ob text "archives" be default ya'));
+      doRemember(parse(`exists su name zim archive service directory ob text ${JSON.stringify(path.dirname(archive))} be default ya`));
+      doRemember(parse('exists su name zim archive search server ob text "http://kiwix.test" be default ya'));
+
+      const filler = "unrelated long specification text. ".repeat(40000);
+      globalThis.fetch = async (url) => {
+        requestedUrl = new URL(url);
+        return new Response(
+          `<html><head><title>Large API reference</title><style>style-noise-hidden ${filler}</style></head><body><h2>Buffer creation</h2>${filler}<p>clCreateBuffer creates a buffer object and returns its handle.</p>${filler}</body></html>`,
+          { status: 200, headers: { "content-type": "text/html; charset=utf-8" } }
+        );
+      };
+
+      const result = await interpret(parse(
+        'from filename "archives/large.zim" as wo cluster-compress ob text "oversized.html" by text "clCreateBuffer" be read do'
+      ));
+
+      assert.equal(result?.be, "read");
+      assert.equal(requestedUrl?.pathname, "/content/large/oversized.html");
+      assert.match(result?.ob?.text ?? "", /Large API reference/u);
+      assert.match(result?.ob?.text ?? "", /Buffer creation/u);
+      assert.match(result?.ob?.text ?? "", /clCreateBuffer creates a buffer object/u);
+      assert.ok(Buffer.byteLength(result?.ob?.text ?? "") <= 16000);
+      assert.doesNotMatch(result?.ob?.text ?? "", /style-noise-hidden/u);
+      assert.ok((result?.ob?.text?.match(/unrelated long specification text/gu) ?? []).length < 60);
+
+      doRemember(parse('exists su name archive focus page size bytes ob num 256 be default ya'));
+      await assert.rejects(
+        interpret(parse(
+          'from filename "archives/large.zim" as wo cluster-compress ob text "oversized.html" by text "clCreateBuffer" be read do'
+        )),
+        /configured passage page limit of 256 bytes/u
+      );
+      await assert.rejects(
+        interpret(parse(
+          'from filename "archives/large.zim" as wo cluster-compress ob text "../outside.html" by text "clCreateBuffer" be read do'
+        )),
+        /invalid path segment/u
+      );
+    });
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+});
+
 test("query-only ZIM search defaults to the configured local library", async () => {
   const previousFetch = globalThis.fetch;
   let requestedUrl;

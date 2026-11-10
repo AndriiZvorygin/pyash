@@ -1,11 +1,51 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { allRemember, forget } from "../program/remember/index.mjs";
 import { deriveSignatureFromCall, joinSignatureWords } from "../program/bridge/signature.mjs";
 import { resetMindLogs } from "../program/verbs/mind/mind.mjs";
-import { extractExplicitToolCalls, runToolChat } from "../program/verbs/mind/tool_chat.mjs";
+import { callStreamingToolTurn, extractExplicitToolCalls, runToolChat } from "../program/verbs/mind/tool_chat.mjs";
+
+test("missing tool-stream terminal includes command process diagnostics", async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-mind-stream-error-"));
+  const streamPath = path.join(tempDir, "runner.stream.txt");
+  const processPath = path.join(tempDir, "runner.process.txt");
+  const processReport = [
+    "status: 1",
+    "signal: none",
+    "working directory: /tmp/biography",
+    "command: node command/mind_openai_runner.mjs --minimax --stream",
+    "stdout bytes: 0",
+    "stderr bytes: 23",
+    "stderr truncated: false",
+    "stderr:",
+    "MiniMax transport error"
+  ].join("\n") + "\n";
+  try {
+    await fs.writeFile(streamPath, "\n[PYA_STREAM_END]\n", "utf8");
+    await fs.writeFile(processPath, processReport, "utf8");
+    await assert.rejects(
+      callStreamingToolTurn({
+        backendName: "minimax command mind",
+        payload: {},
+        streamBackend: async () => ({ ob: { filename: streamPath } })
+      }),
+      (error) => {
+        assert.match(error.message, /mind tool stream missing terminal reply/u);
+        assert.match(error.message, /status: 1/u);
+        assert.match(error.message, /stdout bytes: 0/u);
+        assert.match(error.message, /MiniMax transport error/u);
+        return true;
+      }
+    );
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+});
 
 test("mind tool chat normalizes explicit textual tool-call encodings", () => {
   const tools = [{ function: { name: "search" } }];
@@ -23,6 +63,58 @@ test("mind tool chat ignores prose that is not an explicit allowed tool call", (
     extractExplicitToolCalls("I should search the web before answering.", [{ function: { name: "search" } }]),
     []
   );
+});
+
+test("mind tool calls cannot shell-launch provider runner adapters", async () => {
+  forget();
+  resetMindLogs();
+
+  const capability = parse("su name command be command ob text input can");
+  const toolName = joinSignatureWords(deriveSignatureFromCall(capability));
+  const events = [];
+  const responseText = await runToolChat({
+    sentence: parse('be write ob text "answer the question" for name helper to name text helper-out do'),
+    ob: {},
+    mindName: "helper",
+    model: "fixture-model",
+    dialogue: "helper internal runner guard",
+    callPrompt: "Answer as the selected model.",
+    resolvedConfigPrompt: "",
+    historyMessages: [],
+    toolMap: new Map([[toolName, capability]]),
+    tools: [{ type: "function", function: { name: toolName, parameters: { type: "object", properties: { ob: { type: "string" } } } } }],
+    toolBlock: "",
+    backendName: "ollama command mind",
+    ollamaHost: "",
+    reasoningEffort: "",
+    mindDebug: false,
+    debugMind: () => {},
+    onToolCall: async (event) => events.push(event),
+    stream: false,
+    inputs: {
+      inputText: "Answer as the selected model.",
+      mockResponseRaw: JSON.stringify([
+        {
+          message: {
+            content: "",
+            tool_calls: [{
+              id: "runner-call",
+              function: {
+                name: toolName,
+                arguments: { ob: "PYA_COMMAND_TIMEOUT_MS=900000 node ./command/mind_ollama_runner.mjs" }
+              }
+            }]
+          }
+        },
+        { message: { content: "I will answer directly as the selected model." } }
+      ])
+    }
+  });
+
+  assert.equal(responseText, "I will answer directly as the selected model.");
+  const rejected = events.find((event) => event.stage === "result");
+  assert.match(rejected?.toolText ?? "", /internal adapters, not shell entry points/u);
+  assert.match(rejected?.toolText ?? "", /active saddle already runs the selected model/u);
 });
 
 test("mind tool chat preserves repeated explicit calls for the call limit", () => {

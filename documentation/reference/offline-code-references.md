@@ -58,6 +58,14 @@ article:
 from filename "world/library/archive/rust-agent-guides-1.99.1.zim" as wo cluster-compress ob text "book/ch04-02-references-and-borrowing.html" be read do
 ```
 
+For an oversized reference page, keep the search result's `entry` path and pass
+the query as the read focus. This returns a short excerpt around matching text
+instead of the entire page:
+
+```pyash
+from filename "world/library/archive/gpu-opencl-reference-2026-11.zim" as wo cluster-compress ob text "OpenCL_API.html" by text "clCreateBuffer" be read do
+```
+
 Choose the matching Rust edition/toolchain, RISC-V extension/profile/ABI,
 assembler version, and GPU device/API feature set from the project before
 using a result. Archive landing pages are source indexes; the manuals remain

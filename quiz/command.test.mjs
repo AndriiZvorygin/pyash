@@ -8,6 +8,7 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { command } from "../program/verbs/command.mjs";
 import { runWithMindInterruptSignal } from "../program/agent/interrupt.mjs";
+import { startStreamTail } from "../program/verbs/mind/stream.mjs";
 
 function assertCommandSucceeded(result) {
   assert.equal(result?.be, "command");
@@ -90,6 +91,48 @@ test("streaming command closes its stream when the active saddle interrupt signa
     assert.match(content, /\[PYA_STREAM_END\]/u);
   } finally {
     await fs.rm(streamPath, { force: true });
+  }
+});
+
+test("streaming command persists process diagnostics for a failed child", async () => {
+  const streamName = `failed-stream-${process.pid}-${Date.now()}`;
+  const result = await command({
+    mood: "do",
+    be: "command",
+    su: { name: streamName },
+    ob: { text: "node -e \"process.stderr.write('provider-error-marker'); process.exit(7)\"" },
+    vyah: { ve: { type: "name", values: ["stream"] } }
+  }, { remember: () => null });
+  const streamPath = result?.ob?.filename;
+  const processPath = streamPath.replace(/\.stream\.txt$/u, ".process.txt");
+
+  try {
+    const processReport = await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("stream did not close")), 3000);
+      const stop = startStreamTail({
+        filename: streamPath,
+        onLine: () => {},
+        onEnd: (report) => {
+          clearTimeout(timeout);
+          stop();
+          resolve(report);
+        },
+        onError: (error) => {
+          clearTimeout(timeout);
+          stop();
+          reject(error);
+        }
+      });
+    });
+
+    assert.match(processReport, /status: 7/u);
+    assert.match(processReport, /signal: none/u);
+    assert.match(processReport, /stdout bytes: 0/u);
+    assert.match(processReport, /provider-error-marker/u);
+    assert.equal(await fs.readFile(processPath, "utf8"), processReport);
+  } finally {
+    await fs.rm(streamPath, { force: true });
+    await fs.rm(processPath, { force: true });
   }
 });
 

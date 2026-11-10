@@ -18,6 +18,11 @@ export function parseCommandTimeoutOverride(cmd) {
   return Math.max(1, Math.trunc(value));
 }
 
+export function isInternalMindRunnerCommand(cmd) {
+  const value = String(cmd ?? "");
+  return /(?:^|[;&|]\s*)(?:(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*)(?:node|nodejs)\s+["']?(?:[^\s"']*\/)?mind_(?:ollama|openai)_runner\.mjs(?:["']?)(?=\s|$)/u.test(value);
+}
+
 export function isInlineTimeoutOverrideEnabled({ rememberFn = remember } = {}) {
   const envFlag = String(process.env.PYA_COMMAND_INLINE_TIMEOUTS ?? "").trim();
   if (envFlag === "1" || /^true$/iu.test(envFlag)) return true;

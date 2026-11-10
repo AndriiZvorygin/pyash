@@ -27,6 +27,8 @@ import {
   assessSaddleCompletion,
   buildSaddleWorktreeReviewCommand,
   buildSaddleStrataContextOptions,
+  buildSaddleOllamaContextOptions,
+  getSaddleOllamaModelContextLength,
   buildSaddleMindSentence,
   createSaddleInputDecoder,
   DEFAULT_CODING_SADDLE_SYSTEM_PROMPT,
@@ -104,6 +106,58 @@ test("coding saddle reloads named and explicitly selected session history", asyn
       ["line", "--- end of saved history ---"]
     ]);
   } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("coding saddle resumes the newest same-project transcript after a multi-day gap", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-gap-resume-"));
+  const runtimeRoot = path.join(root, "runtime");
+  const cwd = path.join(root, "projects", "biography");
+  const envKeys = ["PYA_SADDLE_MIND", "PYA_SADDLE_MODEL", "PYA_SADDLE_HOST"];
+  const previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  for (const key of envKeys) delete process.env[key];
+  await fs.mkdir(path.join(runtimeRoot, "configure"), { recursive: true });
+  await fs.mkdir(cwd, { recursive: true });
+  try {
+    await fs.writeFile(path.join(runtimeRoot, "configure", "default.pya"), [
+      "exists su name mind backend be default ob name ollama command mind ya",
+      'exists su name mind model ob text "qwen3.5:9b" be default ya',
+      'exists su name coding saddle mind ob text "mind" be default ya',
+      'exists su name mind be mind from name "http://localhost:11434" via state "qwen3.5:9b" ya'
+    ].join("\n") + "\n", "utf8");
+
+    const initial = await prepareSaddle({ cwd, runtimeRoot });
+    const sessionDir = path.join(initial.agentHouse, "session");
+    const olderFile = path.join(sessionDir, `${buildSessionNameForDate({ baseName: "coding", dateCompact: "20200101" })}.pya`);
+    const latestFile = path.join(sessionDir, `${buildSessionNameForDate({ baseName: "coding", dateCompact: "20200102" })}.pya`);
+    const chat = (name, content) => sentenceToPyash({
+      su: { name }, ob: { text: content }, be: "answer", mood: "ya"
+    });
+    await fs.writeFile(olderFile, `${chat("user", "older conversation")}\n`, "utf8");
+    await fs.writeFile(latestFile, [
+      chat("user", "resume this biography work"),
+      chat("agent", "I have the previous biography context.")
+    ].join("\n") + "\n", "utf8");
+
+    const resumed = await prepareSaddle({ cwd, runtimeRoot });
+    assert.equal(resumed.sessionFile, latestFile);
+    assert.equal(resumed.sessionName, "20200102-coding");
+    const history = await loadSaddleSessionHistory({
+      agentHouse: resumed.agentHouse,
+      sessionName: resumed.sessionName,
+      sessionFile: resumed.sessionFile
+    });
+    assert.deepEqual(history.messages, [
+      { role: "user", content: "resume this biography work" },
+      { role: "assistant", content: "I have the previous biography context." }
+    ]);
+  } finally {
+    for (const key of envKeys) {
+      if (previousEnv[key] === undefined) delete process.env[key];
+      else process.env[key] = previousEnv[key];
+    }
+    forget();
     await fs.rm(root, { recursive: true, force: true });
   }
 });
@@ -318,9 +372,38 @@ test("coding saddle shows elapsed progress and explicit tool event labels", () =
   assert.equal(saddleToolEventLabel({ stage: "result", toolName: "repair" }), "[tool result] repair");
 });
 
+test("coding saddle explains archive focus tool arguments", () => {
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`read_archive_focus(archive_path, entry_path, focus)`"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("Focused reads require the exact `entry_path` returned by search"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("tool resolves the host-configured Kiwix endpoint"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("agents do not need to know the server address or where ZIM files are mounted."));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("pass a locator returned by a tool unchanged to the next tool."));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("returned full `page` URL to the download tool"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("Wikipedia, Wiktionary, Wikibooks, Wikiversity, Wikisource, DevDocs"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("publisher per-site request limits do not apply"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`search_zim_library(query)`"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`search_archive(archive_path, query)`"));
+});
+
 test("coding saddle completion evidence requires a successful edit and a later command check", () => {
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /Never launch .*mind_ollama_runner\.mjs.*structured request payload/u);
-  assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /documentation research.*ZIM search first.*download a returned page URL as Markdown.*read the saved Markdown file.*raw HTML only when.*retrieved page text/u);
+  for (const guidance of [
+    "documentation and reference research",
+    "`search_zim_library(query)` first",
+    "host-configured Kiwix endpoint",
+    "agents do not need to know the server address",
+    "full `page` URL",
+    "publisher per-site request limits do not apply",
+    "Do not construct, normalize, or replace archive paths or URLs",
+    "pass a locator returned by a tool unchanged",
+    "`search_archive(archive_path, query)`",
+    "`read_archive_focus(archive_path, entry_path, focus)`",
+    "Focused reads require the exact `entry_path` returned by search",
+    "Ground claims in retrieved page text",
+    "Use the original live website only"
+  ]) {
+    assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes(guidance), `missing ZIM guidance: ${guidance}`);
+  }
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /name the target file before editing/u);
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /After the final edit/u);
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /active agent house's absolute memory\/MEMORY\.md path/u);
@@ -611,10 +694,10 @@ test("coding saddle delegates turns to the existing mind engine", async () => {
   let observed = null;
   const result = await runSaddleTurn({
     input: "run the focused test",
-    model: "qwen3.5:9b",
+    model: "SparkLLM/Spark-X2.6-4B:q4_k_m",
     backend: "ollama",
     host: "http://localhost:11434",
-    contextWindow: 65536,
+    contextWindow: 1048576,
     think: false,
     housekeeperUrl: "http://housekeeper:18886",
     mindFn: async (sentence, options) => {
@@ -629,7 +712,8 @@ test("coding saddle delegates turns to the existing mind engine", async () => {
   assert.equal(result.ob.text, "done");
   assert.equal(observed.sentence.ob.text, "run the focused test");
   assert.equal(observed.sentence.fromstate.text, "ollama");
-  assert.equal(observed.sentence.contextWindow, 65536);
+  assert.equal(observed.sentence.for.name, "coding saddle");
+  assert.equal(observed.sentence.contextWindow, 1048576);
   assert.equal(observed.sentence.think, false);
   assert.equal(observed.options.sessionUserContent, "run the focused test");
 });
@@ -1087,13 +1171,37 @@ test("coding saddle discovers and selects models from the active backend", async
     currentModel: "qwen3.5:9b",
     fetchFn: async (url) => {
       assert.equal(url, "http://housekeeper:18886/runtime/ollama/models");
-      return { ok: true, async json() { return { models: [{ name: "qwen3.5:9b" }, { name: "qwen3.8:27b" }] }; } };
+      return { ok: true, async json() { return { models: [
+        { name: "qwen3.5:9b", details: { context_length: 262144 } },
+        { name: "qwen3.8:27b", details: { context_length: 262144 } }
+      ] }; } };
     }
   });
 
   assert.deepEqual(ollama.models, ["qwen3.5:9b", "qwen3.8:27b"]);
+  assert.equal(getSaddleOllamaModelContextLength({ models: ollama.modelCatalog, model: "qwen3.5:9b" }), 262144);
   assert.equal(resolveSaddleModelSelection("2", ollama.models), "qwen3.8:27b");
   assert.match(formatSaddleModelPicker({ models: ollama.models, currentModel: ollama.models[0] }), /1\. qwen3\.5:9b \(current\)/);
+});
+
+test("coding saddle exposes Ollama context presets only up to the model catalog limit", () => {
+  const catalog = [
+    { name: "SparkLLM/Spark-X2.6-4B:q4_k_m", details: { context_length: 1048576 } },
+    { name: "qwen3.5:9b", details: { context_length: 262144 } }
+  ];
+  const sparkLimit = getSaddleOllamaModelContextLength({ models: catalog, model: catalog[0].name });
+  const sparkChoices = buildSaddleOllamaContextOptions({ modelContextLength: sparkLimit, currentContextLength: 65536 });
+  assert.equal(sparkChoices.at(-1).tokens, 1048576);
+  assert.equal(sparkChoices.at(-1).label, "1M");
+  assert.equal(sparkChoices.find((choice) => choice.tokens === 65536)?.current, true);
+
+  const qwenLimit = getSaddleOllamaModelContextLength({ models: catalog, model: catalog[1].name });
+  const qwenChoices = buildSaddleOllamaContextOptions({ modelContextLength: qwenLimit });
+  assert.equal(qwenChoices.at(-1).tokens, 262144);
+  assert.ok(qwenChoices.every((choice) => choice.tokens <= 262144));
+
+  const unknownLimitChoices = buildSaddleOllamaContextOptions();
+  assert.equal(unknownLimitChoices.at(-1).tokens, 65536);
 });
 
 test("coding saddle lists each configured backend once with its default mind and model", () => {
@@ -1165,7 +1273,7 @@ test("coding saddle discharges local model residency through Housekeeper", async
 });
 
 test("coding saddle maps Ollama thinking to boolean and Strata thinking to supported efforts", () => {
-  assert.deepEqual(SADDLE_OLLAMA_CONTEXT_PRESETS, [4096, 8192, 16384, 32768, 65536]);
+  assert.deepEqual(SADDLE_OLLAMA_CONTEXT_PRESETS, [4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576]);
   assert.deepEqual(normalizeSaddleThinkSelection("off", "ollama"), {
     value: "off", think: false, reasoningEffort: null
   });
