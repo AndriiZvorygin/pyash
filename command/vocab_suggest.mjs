@@ -118,6 +118,9 @@ const ACCEPTED_COMPOUND_STATUSES = new Set([
   "accepted-llm",
   "repaired-llm"
 ]);
+const PACKED_PYAC_ATOMS = new Set(pyashWords
+  .map((entry) => String(entry?.pya ?? "").trim().toLowerCase())
+  .filter((word) => /^[a-z0-9]+$/u.test(word)));
 const COMPOUND_STATUS_RANK = new Map([
   ["accepted-delimited", 1],
   ["accepted-curated", 2],
@@ -138,6 +141,28 @@ function isPlainVocabularyToken(input) {
 
 function isGrammarKeyword(token) {
   return GRAMMAR_KEYWORDS.has(String(token ?? "").toLowerCase());
+}
+
+function isPackedPyacCompound(value, maximumComponents = 3) {
+  const packed = String(value ?? "").trim().toLowerCase();
+  if (!/^[a-z0-9]+$/u.test(packed)) return false;
+  const memo = new Map();
+  const canSegment = (offset, count) => {
+    if (offset === packed.length) return count >= 2;
+    if (count >= maximumComponents) return false;
+    const key = `${offset}:${count}`;
+    if (memo.has(key)) return memo.get(key);
+    for (let end = offset + 1; end <= packed.length; end += 1) {
+      if (!PACKED_PYAC_ATOMS.has(packed.slice(offset, end))) continue;
+      if (canSegment(end, count + 1)) {
+        memo.set(key, true);
+        return true;
+      }
+    }
+    memo.set(key, false);
+    return false;
+  };
+  return canSegment(0, 0);
 }
 
 function tokenizeName(name) {
@@ -837,9 +862,46 @@ function registerFoundCompound(foundCompounds, rows, location, matchedTarget = n
   }
 }
 
+function buildPackedPyacCompoundIndex(compounds) {
+  const bySequence = new Map();
+  for (const rows of compounds.values()) {
+    for (const row of rows) {
+      if (!Array.isArray(row.pyash) || row.pyash.length < 2) continue;
+      const packed = row.pyash.join("").toLowerCase();
+      if (!/^[a-z0-9]+$/u.test(packed)) continue;
+      const matches = bySequence.get(packed) ?? new Map();
+      matches.set(row.identity, row);
+      bySequence.set(packed, matches);
+    }
+  }
+  return new Map([...bySequence].map(([packed, rows]) => [
+    packed,
+    [...rows.values()].sort((left, right) => left.target.localeCompare(right.target)
+      || left.pyash.join("+").localeCompare(right.pyash.join("+")))
+  ]));
+}
+
+function registerFoundPackedCompound(foundCompounds, rows, token) {
+  registerFoundCompound(foundCompounds, rows, "input", token);
+  const found = foundCompounds.get(token);
+  if (found) found.pyacSequenceQuery = token;
+}
+
+function wordNetLinkStatus(rows = []) {
+  const linked = rows.filter((row) => row.senseLinks?.length > 0).length;
+  if (linked === rows.length) return "linked";
+  return linked > 0 ? "partially-linked" : "unlinked";
+}
+
 async function addWordNetCompoundSenseGlosses(foundCompounds, report) {
   const rows = [...foundCompounds.values()].flatMap((found) => found.rows ?? [found.row]);
-  if (!rows.some((row) => row.senseLinks?.length)) return [];
+  if (!rows.some((row) => row.senseLinks?.length)) {
+    for (const [input, found] of foundCompounds) {
+      if (!found.pyacSequenceQuery) continue;
+      report(`${input}: no WordNet sense link recorded for ${[...new Set((found.rows ?? [found.row]).map((row) => row.target))].join(", ")}`);
+    }
+    return [];
+  }
   if (!englishWordNetCompoundGlossesPromise) {
     englishWordNetCompoundGlossesPromise = loadEnglishWordNetCompoundGlosses()
       .then(({ records }) => records)
@@ -870,13 +932,28 @@ async function addWordNetCompoundSenseGlosses(foundCompounds, report) {
         }
       }
     }
-    if (senseGlosses.length === 0) continue;
+    if (senseGlosses.length === 0) {
+      if (found.pyacSequenceQuery) {
+        const hasRecordedLink = (found.rows ?? [found.row]).some((row) => row.senseLinks?.length > 0);
+        if (hasRecordedLink) report(`${target}: WordNet sense link recorded, but no matching gloss row exists`);
+      }
+      continue;
+    }
     found.senseGlosses = senseGlosses;
     for (const senseGloss of senseGlosses) {
       const pyac = renderPyacSurface(senseGloss.pyashSequence.join(" "));
       const lemmas = senseGloss.lemmas.join(", ");
       report(`${target}: WordNet ${senseGloss.senseId} [${lemmas}]: ${senseGloss.definition} -> ${senseGloss.target} (${pyac})`);
       reported.push({ input: target, ...senseGloss, pyac });
+    }
+  }
+  for (const [input, found] of foundCompounds) {
+    if (!found.pyacSequenceQuery) continue;
+    const unlinkedTargets = [...new Set((found.rows ?? [found.row])
+      .filter((row) => !row.senseLinks?.length)
+      .map((row) => row.target))];
+    if (unlinkedTargets.length > 0) {
+      report(`${input}: no WordNet sense link recorded for ${unlinkedTargets.join(", ")}`);
     }
   }
   return reported;
@@ -1275,6 +1352,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
   const occurrences = new Map();
   const acceptedCompounds = new Map();
   const foundCompounds = new Map();
+  let packedPyacCompoundIndex = null;
   const rankedCoverage = new Map();
   const compoundMorphologyMatches = new Map();
   const dictionaryMatches = new Map();
@@ -1416,6 +1494,25 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
       okTextTokens.add(token);
       continue;
     }
+    if (isPackedPyacCompound(token)) {
+      mergeCompoundRows(acceptedCompounds, await loadDefaultWordNetCompounds());
+      packedPyacCompoundIndex = buildPackedPyacCompoundIndex(acceptedCompounds);
+      let packedMatches = packedPyacCompoundIndex.get(token.toLowerCase());
+      if (!packedMatches?.length) {
+        await ensureCuratedAcceptedCompounds();
+        packedPyacCompoundIndex = buildPackedPyacCompoundIndex(acceptedCompounds);
+        packedMatches = packedPyacCompoundIndex.get(token.toLowerCase());
+      }
+      if (!packedMatches?.length) {
+        await ensureDefaultAcceptedCompounds();
+        packedPyacCompoundIndex = buildPackedPyacCompoundIndex(acceptedCompounds);
+        packedMatches = packedPyacCompoundIndex.get(token.toLowerCase());
+      }
+      if (packedMatches?.length) {
+        registerFoundPackedCompound(foundCompounds, packedMatches, token);
+        if (!fastRanked || fastRanked.coverageType === "unresolved") continue;
+      }
+    }
     mergeCompoundRows(acceptedCompounds, await loadDefaultWordNetCompounds());
     const canonicalCompounds = acceptedCompounds.get(normalizeCompoundTarget(token));
     if (canonicalCompounds?.length) registerFoundCompound(foundCompounds, canonicalCompounds, "input", token);
@@ -1510,7 +1607,8 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
       const specificSuffix = specificAtom
         ? `; specific atom ${specificAtom.english} -> ${specificAtom.pyash}`
         : "";
-      report(`${target}: found compound ${row.components.join(" + ")} -> ${row.pyash.join(" ")} (${row.status})${specificSuffix}${locationSuffix ? ` (${locationSuffix})` : ""}`);
+      const englishTargetSuffix = found.pyacSequenceQuery ? `; English target ${row.target}` : "";
+      report(`${target}: found compound ${row.components.join(" + ")} -> ${row.pyash.join(" ")} (${row.status})${specificSuffix}${englishTargetSuffix}${locationSuffix ? ` (${locationSuffix})` : ""}`);
     }
   }
 
@@ -1657,12 +1755,17 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
       format: "vocab-suggest-v2",
       records,
       foundCompounds: [...foundCompounds.entries()].map(([target, found]) => ({
-        target,
+        target: found.pyacSequenceQuery ? found.row.target : target,
+        ...(found.pyacSequenceQuery ? {
+          inputSequence: found.pyacSequenceQuery,
+          wordNetLinkStatus: wordNetLinkStatus(found.rows ?? [found.row])
+        } : {}),
         components: found.row.components,
         pyacSequence: found.row.pyash,
         status: found.row.status,
         ...(found.rows?.length > 1 ? {
           readings: found.rows.map((row) => ({
+            ...(found.pyacSequenceQuery ? { target: row.target } : {}),
             components: row.components,
             pyacSequence: row.pyash,
             status: row.status,
@@ -1684,16 +1787,23 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     exitCode,
     missing,
     uncoveredNames: [...uncoveredNames].sort((a, b) => a.localeCompare(b)),
-    foundCompounds: [...foundCompounds.values()].map(({ row, rows, locations, senseGlosses }) => {
+    foundCompounds: [...foundCompounds.entries()].map(([target, found]) => {
+      const { row, rows, locations, senseGlosses, pyacSequenceQuery } = found;
       const { identity, aliases, senseLinks, ...publicRow } = row;
       const specificAtom = resolveSpecificAtom(row);
       return {
         ...publicRow,
+        ...(pyacSequenceQuery ? {
+          target: row.target,
+          inputSequence: pyacSequenceQuery,
+          wordNetLinkStatus: wordNetLinkStatus(rows ?? [row])
+        } : { target }),
         ...(specificAtom ? { specificAtomPyash: specificAtom.pyash } : {}),
         ...(row.senseId ? { senseId: row.senseId } : {}),
         ...(senseGlosses?.length ? { senseGlosses } : {}),
         ...(rows?.length > 1 ? {
           readings: rows.map((reading) => ({
+            ...(pyacSequenceQuery ? { target: reading.target } : {}),
             components: reading.components,
             pyashSequence: [...reading.pyash],
             status: reading.status,

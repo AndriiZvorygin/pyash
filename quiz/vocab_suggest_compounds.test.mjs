@@ -70,6 +70,56 @@ test("vocab_suggest exposes pre-sweep canonical WordNet compounds with their sen
   ))), true);
 });
 
+test("vocab_suggest resolves a concatenated Pyac compound and reports its WordNet sense", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["pyanhbin"], {
+    report: (line) => lines.push(String(line))
+  });
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.missing, 0);
+  assert.match(lines.join("\n"), /pyanhbin: found compound love \+ becoming -> pyan hbin \(accepted-llm\)/u);
+  assert.match(lines.join("\n"), /pyanhbin: WordNet v:01779456-v \[love\]: be enamored or in love with -> love \(pyan hbin\)/u);
+  assert.equal(result.foundCompounds.some((compound) => (
+    compound.target === "love"
+    && compound.inputSequence === "pyanhbin"
+    && compound.wordNetLinkStatus === "linked"
+  )), true);
+});
+
+test("vocab_suggest reports all WordNet senses for a packed compound sequence", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["prachcot"], {
+    report: (line) => lines.push(String(line))
+  });
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.missing, 0);
+  assert.match(lines.join("\n"), /prachcot: WordNet v:01832678-v \[enjoy, love\]: get pleasure from -> enjoy \(prac hcot\)/u);
+  assert.match(lines.join("\n"), /prachcot: WordNet n:07506848-n \[enjoyment\]: the pleasure felt when having a good time -> enjoyment \(prac hcot\)/u);
+  assert.equal(result.foundCompounds.some((compound) => (
+    compound.inputSequence === "prachcot"
+    && compound.wordNetLinkStatus === "linked"
+    && compound.senseGlosses?.length === 2
+  )), true);
+});
+
+test("vocab_suggest identifies when a packed Pyac compound has no WordNet link", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["ksushzip"], {
+    report: (line) => lines.push(String(line))
+  });
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.missing, 0);
+  assert.match(lines.join("\n"), /ksushzip: found compound cluster \+ compress -> ksus hzip \(accepted-curated\)/u);
+  assert.match(lines.join("\n"), /ksushzip: no WordNet sense link recorded/u);
+  assert.equal(result.foundCompounds.some((compound) => (
+    compound.inputSequence === "ksushzip"
+    && compound.wordNetLinkStatus === "unlinked"
+  )), true);
+});
+
 test("vocab_suggest reports the accepted include compound", async () => {
   const lines = [];
   const result = await runVocabSuggest(["include"], {
