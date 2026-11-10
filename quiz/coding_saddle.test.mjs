@@ -27,6 +27,8 @@ import {
   assessSaddleCompletion,
   buildSaddleWorktreeReviewCommand,
   buildSaddleStrataContextOptions,
+  buildSaddleOllamaContextOptions,
+  getSaddleOllamaModelContextLength,
   buildSaddleMindSentence,
   createSaddleInputDecoder,
   DEFAULT_CODING_SADDLE_SYSTEM_PROMPT,
@@ -668,10 +670,10 @@ test("coding saddle delegates turns to the existing mind engine", async () => {
   let observed = null;
   const result = await runSaddleTurn({
     input: "run the focused test",
-    model: "qwen3.5:9b",
+    model: "SparkLLM/Spark-X2.6-4B:q4_k_m",
     backend: "ollama",
     host: "http://localhost:11434",
-    contextWindow: 65536,
+    contextWindow: 1048576,
     think: false,
     housekeeperUrl: "http://housekeeper:18886",
     mindFn: async (sentence, options) => {
@@ -686,7 +688,8 @@ test("coding saddle delegates turns to the existing mind engine", async () => {
   assert.equal(result.ob.text, "done");
   assert.equal(observed.sentence.ob.text, "run the focused test");
   assert.equal(observed.sentence.fromstate.text, "ollama");
-  assert.equal(observed.sentence.contextWindow, 65536);
+  assert.equal(observed.sentence.for.name, "coding saddle");
+  assert.equal(observed.sentence.contextWindow, 1048576);
   assert.equal(observed.sentence.think, false);
   assert.equal(observed.options.sessionUserContent, "run the focused test");
 });
@@ -1144,13 +1147,37 @@ test("coding saddle discovers and selects models from the active backend", async
     currentModel: "qwen3.5:9b",
     fetchFn: async (url) => {
       assert.equal(url, "http://housekeeper:18886/runtime/ollama/models");
-      return { ok: true, async json() { return { models: [{ name: "qwen3.5:9b" }, { name: "qwen3.8:27b" }] }; } };
+      return { ok: true, async json() { return { models: [
+        { name: "qwen3.5:9b", details: { context_length: 262144 } },
+        { name: "qwen3.8:27b", details: { context_length: 262144 } }
+      ] }; } };
     }
   });
 
   assert.deepEqual(ollama.models, ["qwen3.5:9b", "qwen3.8:27b"]);
+  assert.equal(getSaddleOllamaModelContextLength({ models: ollama.modelCatalog, model: "qwen3.5:9b" }), 262144);
   assert.equal(resolveSaddleModelSelection("2", ollama.models), "qwen3.8:27b");
   assert.match(formatSaddleModelPicker({ models: ollama.models, currentModel: ollama.models[0] }), /1\. qwen3\.5:9b \(current\)/);
+});
+
+test("coding saddle exposes Ollama context presets only up to the model catalog limit", () => {
+  const catalog = [
+    { name: "SparkLLM/Spark-X2.6-4B:q4_k_m", details: { context_length: 1048576 } },
+    { name: "qwen3.5:9b", details: { context_length: 262144 } }
+  ];
+  const sparkLimit = getSaddleOllamaModelContextLength({ models: catalog, model: catalog[0].name });
+  const sparkChoices = buildSaddleOllamaContextOptions({ modelContextLength: sparkLimit, currentContextLength: 65536 });
+  assert.equal(sparkChoices.at(-1).tokens, 1048576);
+  assert.equal(sparkChoices.at(-1).label, "1M");
+  assert.equal(sparkChoices.find((choice) => choice.tokens === 65536)?.current, true);
+
+  const qwenLimit = getSaddleOllamaModelContextLength({ models: catalog, model: catalog[1].name });
+  const qwenChoices = buildSaddleOllamaContextOptions({ modelContextLength: qwenLimit });
+  assert.equal(qwenChoices.at(-1).tokens, 262144);
+  assert.ok(qwenChoices.every((choice) => choice.tokens <= 262144));
+
+  const unknownLimitChoices = buildSaddleOllamaContextOptions();
+  assert.equal(unknownLimitChoices.at(-1).tokens, 65536);
 });
 
 test("coding saddle lists each configured backend once with its default mind and model", () => {
@@ -1222,7 +1249,7 @@ test("coding saddle discharges local model residency through Housekeeper", async
 });
 
 test("coding saddle maps Ollama thinking to boolean and Strata thinking to supported efforts", () => {
-  assert.deepEqual(SADDLE_OLLAMA_CONTEXT_PRESETS, [4096, 8192, 16384, 32768, 65536]);
+  assert.deepEqual(SADDLE_OLLAMA_CONTEXT_PRESETS, [4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576]);
   assert.deepEqual(normalizeSaddleThinkSelection("off", "ollama"), {
     value: "off", think: false, reasoningEffort: null
   });
