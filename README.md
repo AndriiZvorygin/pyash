@@ -227,6 +227,28 @@ See `documentation/container.md` for full container workflows including build, c
 - When a refinery is checkpointed, later stages should consume canonical outputs from the run root rather than from another stage’s scratch folder
 - `know/produce/` is for durable promoted outputs, not intermediates or scratch files
 
+### Artifact Retention
+
+Preview old run artifacts, newspaper logs, and content-addressed objects:
+
+```bash
+npm run artifacts:prune
+```
+
+The preview is read-only. To apply the default 90-day retention policy:
+
+```bash
+npm run artifacts:prune -- --apply
+```
+
+Only dated run directories and old `.pya`/`text-*.txt` newspaper logs are
+eligible. Shared `artifacts/sha256/` objects are removed only after the run/log
+pass, when no retained text record references their hash and no other hard link
+still points to the object. The cleaner skips persistent artifact directories,
+tracked files, locked runs, and `world/holding/`; an incomplete reference scan
+disables content-store deletion. Inspect the preview and warnings before using
+`--apply`.
+
 ## Stability Notes
 
 Stable enough for iteration:

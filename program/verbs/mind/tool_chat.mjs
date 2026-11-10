@@ -12,6 +12,7 @@ import { deriveSignatureFromCall, joinSignatureWords } from "../../bridge/signat
 import { resolveRatifyDecision } from "../../agent/ratify_policy.mjs";
 import { submitRunToolEvent } from "../../bridge/newspaper.mjs";
 import { DEFAULT_MAX_MIND_TOOL_TURNS, normalizeMindToolCallLimit } from "../../runtime/mind-limits.mjs";
+import { isInternalMindRunnerCommand } from "../command/execute.mjs";
 
 const ZAI_TOOL_RESULT_CONTEXT_BUDGET = 96 * 1024;
 const ZAI_TOOL_RESULT_MESSAGE_LIMIT = 12 * 1024;
@@ -670,7 +671,14 @@ export async function runToolChat({
       }
       try {
         if (!toolResult) {
-          if (capability?.be === "write" && capability?.fromstate?.text === "coding saddle plan") {
+          if (isInternalMindRunnerCommand(toolSentence?.ob?.text)) {
+            toolResult = buildErrorSentence({
+              name: "internal mind runner invocation",
+              message: "provider mind-runner scripts are internal adapters, not shell entry points; the active saddle already runs the selected model, so answer directly or use project tools to inspect files",
+              from: { name: "mind tool" },
+              raw: { toolName, command: toolSentence?.ob?.text }
+            });
+          } else if (capability?.be === "write" && capability?.fromstate?.text === "coding saddle plan") {
             if (typeof saddlePlanTool !== "function") throw new Error("session plan tool is unavailable in this mind call");
             toolResult = await saddlePlanTool(String(toolSentence?.ob?.text ?? ""));
           } else {

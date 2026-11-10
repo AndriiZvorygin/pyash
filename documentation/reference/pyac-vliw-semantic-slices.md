@@ -186,18 +186,36 @@ width:
 0301 8E1D length element element element element element 245E 217E
 ```
 
+The quote sort is the element type, so a boolean vector travels in the signed
+integer sort with the same thickness rule, where a truth is the non-zero
+element and a lie is the zero element:
+
+```text
+0061 AF1D element element element 245E 217E
+```
+
+A text vector cannot use one region, because the legacy quote sorts hold
+fixed-width elements and a text element is a string. It travels as one
+letter-sort region per element instead, which keeps every character and its
+case exactly:
+
+```text
+3001 0E1D length character character character character 0E1D length character character character 245E 217E
+```
+
 A one-element vector is refused, because its quote is identical to a numeric
-literal and the format cannot tell the two apart. A vector holds at most
-eleven elements, the widest that still fits in one codelet. Only numeric
-vectors have a proven encoding; other element types keep an explicit rejection
-reason. The implementation is `program/library/vliw/vector.mjs`, with
-conformance in `quiz/vliw_vector.test.mjs`.
+literal and the format cannot tell the two apart. A numeric or boolean vector
+holds at most eleven elements, the widest that still fits in one codelet, and a
+text vector holds at most six. An element type without a proven legacy quote
+encoding keeps an explicit rejection reason. The implementation is
+`program/library/vliw/vector.mjs`, with conformance in
+`quiz/vliw_vector.test.mjs`.
 
 Both literal families share the layout in
 `program/library/vliw/literal_layout.mjs`: head, optional name phrase with its
-nominative case, quote, payload, accusative case, and realis mood. The legacy
-format has no slot for the `exists` keyword, so a declared literal is written
-without it and a name outside the legacy vocabulary is refused.
+nominative case, one or more quote regions, accusative case, and realis mood.
+The legacy format has no slot for the `exists` keyword, so a declared literal
+is written without it and a name outside the legacy vocabulary is refused.
 
 ## Reference facade
 
@@ -212,8 +230,9 @@ without it and a name outside the legacy vocabulary is refused.
 The proven facade supports numeric `plus`, scalar `subtract`, `multiply`,
 `divide`, `xor`, `exponential`, and `remains`; numeric `invert`; anonymous and
 named numeric/text/boolean literals; multiword legacy names; bounded
-paragraph-letter text; and numeric vector and date literals. Valid but unknown
-codelets decode losslessly and are then rejected explicitly.
+paragraph-letter text; and numeric, boolean, and text vector literals, plus
+date literals. Valid but unknown codelets decode losslessly and are then
+rejected explicitly.
 
 The Rust crate in `rust/pyac/` mirrors the numeric operator set, the invert
 codelet, and the date and vector literal families, so the two implementations

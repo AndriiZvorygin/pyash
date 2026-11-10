@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 
 import { renderSaddleSessionHistory } from "../command/pyash_saddle.mjs";
 import {
@@ -216,5 +217,21 @@ test("coding saddle can clear stale transcript before restoring another session"
   ui.clearHistory();
   assert.equal(ui.getState().itemCount, 0);
   assert.equal(ui.getState().scrollOffset, 0);
+  ui.exit();
+});
+
+test("coding saddle forwards terminal output failures to its shutdown handler", () => {
+  const output = new EventEmitter();
+  output.columns = 40;
+  output.rows = 10;
+  output.isTTY = true;
+  output.write = () => {};
+  const errors = [];
+  const ui = createSaddleTerminalUi({ output, color: false, onOutputError: (error) => errors.push(error) });
+  const error = Object.assign(new Error("write EPIPE"), { code: "EPIPE" });
+
+  output.emit("error", error);
+
+  assert.deepEqual(errors, [error]);
   ui.exit();
 });

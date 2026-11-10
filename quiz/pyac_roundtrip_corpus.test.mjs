@@ -40,8 +40,8 @@ test("PyAC corpus round-trips supported rows through VLIW and canonical Pyash", 
   const executable = database.catalog.records.filter((record) => record.status === "executable");
   const unsupported = database.catalog.records.filter((record) => record.status === "unsupported");
 
-  assert.equal(sentences.length, 17);
-  assert.equal(executable.length, 16);
+  assert.equal(sentences.length, 19);
+  assert.equal(executable.length, 18);
   assert.equal(unsupported.length, 1);
   assert.equal(database.catalog.packHash.length, 64);
 
@@ -58,7 +58,7 @@ test("PyAC corpus round-trips supported rows through VLIW and canonical Pyash", 
   }
 
   const outcomes = await replayVliwDatabase(database);
-  assert.equal(outcomes.filter((outcome) => outcome.status === "replayed").length, 16);
+  assert.equal(outcomes.filter((outcome) => outcome.status === "replayed").length, 18);
   assert.equal(outcomes.filter((outcome) => outcome.status === "unsupported").length, 1);
   assert.deepEqual(
     outcomes

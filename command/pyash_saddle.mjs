@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 import readline from "node:readline/promises";
+import { writeSync } from "node:fs";
 import fs from "node:fs/promises";
 
 import { parse } from "../program/understand/index.mjs";
@@ -79,6 +80,7 @@ import {
 import { formatMindUsage, normalizeMindUsage, sumMindUsages } from "../program/verbs/mind/usage.mjs";
 import {
   buildSaddleMindSentence,
+  buildSaddleOllamaContextOptions,
   buildSaddleStrataContextOptions,
   buildSaddleWorktreeReviewCommand,
   formatSaddleCompletionEvidence,
@@ -86,6 +88,7 @@ import {
   createSaddleInputDecoder,
   DEFAULT_CODING_SADDLE_SYSTEM_PROMPT,
   discoverSaddleModels,
+  getSaddleOllamaModelContextLength,
   formatSaddleBackendPicker,
   formatSaddleModelPicker,
   formatSaddleStatus,
@@ -99,7 +102,6 @@ import {
   resolveSaddleModelOption,
   resolveSaddleMindProfile,
   parseSaddleMindCommand,
-  SADDLE_OLLAMA_CONTEXT_PRESETS,
   saddleToolEventLabel,
   saddleSlashCommandCompletions,
   startSaddleProgress
@@ -714,6 +716,18 @@ export async function dischargeSaddleModel(model, backend, {
 
 let activeSaddleUi = null;
 let activeSaddleResizeHandler = null;
+let activeSaddleOutputFailed = false;
+
+function handleSaddleOutputError(error) {
+  activeSaddleOutputFailed = true;
+  const detail = error?.code ? ` (${error.code})` : "";
+  try {
+    writeSync(2, `pyash saddle: terminal output failed${detail}; exiting cleanly\n`);
+  } catch {
+    // The diagnostic stream may share the same closed pipe.
+  }
+  process.exit(1);
+}
 
 function writeLine(text = "") {
   if (activeSaddleUi) activeSaddleUi.writeLine(text);
@@ -743,7 +757,7 @@ function restoreActiveSaddleUi() {
   if (process.stdin.isTTY) process.stdin.pause();
   if (activeSaddleResizeHandler) process.stdout.off("resize", activeSaddleResizeHandler);
   activeSaddleResizeHandler = null;
-  activeSaddleUi?.exit();
+  if (!activeSaddleOutputFailed) activeSaddleUi?.exit();
   activeSaddleUi = null;
 }
 
@@ -865,6 +879,7 @@ async function main() {
   });
   process.once("exit", () => saddleTrace.close({ status: "process exit" }));
   let contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
+  let ollamaModelCatalog = [];
   let thinkSetting = config.thinkSetting;
   let busy = false;
   let closing = false;
@@ -880,12 +895,28 @@ async function main() {
   let promptLabel = "pyash> ";
   let inputDecoder = null;
   const queuedInputs = [];
-  const saddleUi = createSaddleTerminalUi();
+  const saddleUi = createSaddleTerminalUi({ onOutputError: handleSaddleOutputError });
   activeSaddleUi = saddleUi;
   saddleUi.enter();
   process.once("exit", restoreActiveSaddleUi);
 
   const saddleHousekeeper = () => createGpuHousekeeperAdapter({ baseUrl: config.housekeeperUrl });
+  const getOllamaContextOptions = async () => {
+    let modelContextLength = getSaddleOllamaModelContextLength({ models: ollamaModelCatalog, model });
+    if (!modelContextLength) {
+      try {
+        const catalog = await saddleHousekeeper().getOllamaModels();
+        ollamaModelCatalog = Array.isArray(catalog?.models) ? catalog.models : [];
+        modelContextLength = getSaddleOllamaModelContextLength({ models: ollamaModelCatalog, model });
+      } catch {
+        ollamaModelCatalog = [];
+      }
+    }
+    return {
+      modelContextLength,
+      options: buildSaddleOllamaContextOptions({ modelContextLength, currentContextLength: contextWindow })
+    };
+  };
   let queueSnapshot = null;
   const sessionLabel = () => sessionFile
     ? path.basename(sessionFile, path.extname(sessionFile))
@@ -1121,6 +1152,7 @@ async function main() {
       currentModel: targetModel,
       fallbackModels
     });
+    if (targetBackend === "ollama") ollamaModelCatalog = discovered.modelCatalog ?? [];
     if (targetBackend === "zai" && discovered.available && discovered.catalogModels?.length) {
       try {
         const refreshed = syncZaiCodexModelCatalog({ models: discovered.catalogModels });
@@ -1194,17 +1226,13 @@ async function main() {
       writeLine(`context window for ${model}: current ${formatZaiContextWindow(contextWindow)}, model maximum ${formatZaiContextWindow(maximum)}`);
       writeLine("Choose a size by number or label; this sets the client-side budget, not the provider's model limit.");
     } else if (backend === "ollama") {
-      contextPicker = [
-        { model: "default", value: "default", label: "Ollama default", tokens: null },
-        ...SADDLE_OLLAMA_CONTEXT_PRESETS.map((tokens) => ({
-          model: String(tokens),
-          value: formatZaiContextWindow(tokens),
-          label: formatZaiContextWindow(tokens),
-          tokens
-        }))
-      ];
+      const contextOptions = await getOllamaContextOptions();
+      contextPicker = contextOptions.options;
       writeLine(`Ollama context for ${model}: current ${contextWindow ? formatZaiContextWindow(contextWindow) : "Ollama default"}`);
-      writeLine("Choose a request num_ctx preset. Larger contexts use more memory; default leaves Ollama unchanged.");
+      writeLine(contextOptions.modelContextLength
+        ? `Model catalog maximum: ${formatZaiContextWindow(contextOptions.modelContextLength)}. Housekeeper still checks GPU memory when the request is submitted.`
+        : "Model context metadata unavailable; showing the conservative presets up to 64K. Larger contexts use more memory; default leaves Ollama unchanged.");
+      writeLine("Choose a request num_ctx preset. This does not change the model's default context.");
     } else {
       writeLine("Per-request context selection is supported here only for Ollama and Z.AI; Strata context is set at server launch.");
       prompt({ clear: false });
@@ -1536,12 +1564,7 @@ async function main() {
           label: formatZaiContextWindow(tokens),
           tokens
         }))
-        : ["default", ...SADDLE_OLLAMA_CONTEXT_PRESETS].map((tokens) => ({
-          model: String(tokens),
-          value: typeof tokens === "number" ? formatZaiContextWindow(tokens) : "default",
-          label: typeof tokens === "number" ? formatZaiContextWindow(tokens) : "default",
-          tokens: typeof tokens === "number" ? tokens : null
-        }));
+        : (await getOllamaContextOptions()).options;
       const selected = resolveSaddleModelOption(contextMatch[1], choices);
       if (!selected) {
         writeLine(`unknown context size; available: ${choices.map((choice) => choice.label).join(", ")}`);

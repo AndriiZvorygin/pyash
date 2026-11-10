@@ -155,8 +155,7 @@ export function lowerDateSentence(sentence) {
     : [];
   const codelet = buildLiteralCodelet({
     nameWords,
-    quoteWord: DATE_QUOTE_WORD,
-    payloadWords: epochToPayload(epoch)
+    regions: [{ quoteWord: DATE_QUOTE_WORD, payloadWords: epochToPayload(epoch) }]
   });
   return {
     sentence: normalized,

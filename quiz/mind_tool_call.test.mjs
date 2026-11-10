@@ -65,6 +65,58 @@ test("mind tool chat ignores prose that is not an explicit allowed tool call", (
   );
 });
 
+test("mind tool calls cannot shell-launch provider runner adapters", async () => {
+  forget();
+  resetMindLogs();
+
+  const capability = parse("su name command be command ob text input can");
+  const toolName = joinSignatureWords(deriveSignatureFromCall(capability));
+  const events = [];
+  const responseText = await runToolChat({
+    sentence: parse('be write ob text "answer the question" for name helper to name text helper-out do'),
+    ob: {},
+    mindName: "helper",
+    model: "fixture-model",
+    dialogue: "helper internal runner guard",
+    callPrompt: "Answer as the selected model.",
+    resolvedConfigPrompt: "",
+    historyMessages: [],
+    toolMap: new Map([[toolName, capability]]),
+    tools: [{ type: "function", function: { name: toolName, parameters: { type: "object", properties: { ob: { type: "string" } } } } }],
+    toolBlock: "",
+    backendName: "ollama command mind",
+    ollamaHost: "",
+    reasoningEffort: "",
+    mindDebug: false,
+    debugMind: () => {},
+    onToolCall: async (event) => events.push(event),
+    stream: false,
+    inputs: {
+      inputText: "Answer as the selected model.",
+      mockResponseRaw: JSON.stringify([
+        {
+          message: {
+            content: "",
+            tool_calls: [{
+              id: "runner-call",
+              function: {
+                name: toolName,
+                arguments: { ob: "PYA_COMMAND_TIMEOUT_MS=900000 node ./command/mind_ollama_runner.mjs" }
+              }
+            }]
+          }
+        },
+        { message: { content: "I will answer directly as the selected model." } }
+      ])
+    }
+  });
+
+  assert.equal(responseText, "I will answer directly as the selected model.");
+  const rejected = events.find((event) => event.stage === "result");
+  assert.match(rejected?.toolText ?? "", /internal adapters, not shell entry points/u);
+  assert.match(rejected?.toolText ?? "", /active saddle already runs the selected model/u);
+});
+
 test("mind tool chat preserves repeated explicit calls for the call limit", () => {
   const call = JSON.stringify({ name: "search", arguments: { input: "Pyash" } });
   const calls = extractExplicitToolCalls(
