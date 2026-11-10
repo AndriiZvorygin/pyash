@@ -24,6 +24,11 @@ import {
   parseEnglishWordNetCompoundDecisions,
   renderEnglishWordNetCompoundDecisions
 } from "../program/library/translation/english_wordnet_compound_decisions.mjs";
+import {
+  buildEnglishWordNetCompoundGlosses,
+  parseEnglishWordNetCompoundGlosses,
+  renderEnglishWordNetCompoundGlosses
+} from "../program/library/translation/english_wordnet_compound_glosses.mjs";
 import { parseCompoundLexicon } from "../program/library/translation/compound_lexicon.mjs";
 import { renderDerivedCompoundCoveragePya } from "../program/library/translation/compound_coverage.mjs";
 
@@ -1030,4 +1035,40 @@ test("compound decision revisions retain prior verdict summaries and re-open sta
   const parsed = parseEnglishWordNetCompoundDecisions(renderEnglishWordNetCompoundDecisions([current])).rows[0];
   assert.equal(parsed.status, "rejected-llm");
   assert.deepEqual(parsed.previousDecision, { decisionRevision: "sense-v1", status: "accepted-llm" });
+});
+
+test("WordNet compound gloss index projects canonical senses and preserves definitions", () => {
+  const decision = {
+    candidateId: "sense-compound-111111111111111111111111",
+    target: "brighten",
+    senseId: "v:02777127-v",
+    status: "accepted-llm",
+    pyashSequence: ["kwan", "hbin"],
+    targetSenseEvidence: [{
+      source: "v:02777127-v",
+      pos: "v",
+      lemmas: ["brighten", "clear", "clear up", "light up"],
+      definition: "become clear"
+    }]
+  };
+  const record = {
+    senseId: decision.senseId,
+    target: decision.target,
+    targetPartOfSpeech: "v",
+    pyashSequence: decision.pyashSequence,
+    verificationDecisionIds: [decision.candidateId]
+  };
+  const glosses = buildEnglishWordNetCompoundGlosses([record], [decision]);
+  const parsed = parseEnglishWordNetCompoundGlosses(renderEnglishWordNetCompoundGlosses(glosses));
+
+  assert.equal(parsed.records.length, 1);
+  assert.deepEqual(parsed.records[0], {
+    senseId: decision.senseId,
+    target: decision.target,
+    partOfSpeech: "v",
+    lemmas: ["brighten", "clear", "clear up", "light up"],
+    definition: "become clear",
+    pyashSequence: ["kwan", "hbin"],
+    decisionId: decision.candidateId
+  });
 });

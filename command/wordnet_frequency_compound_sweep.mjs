@@ -8,6 +8,10 @@ import {
   renderDerivedCompoundCoveragePya,
   WORDNET_VERIFIED_COMPOUNDS_URL
 } from "../program/library/translation/compound_coverage.mjs";
+import {
+  buildEnglishWordNetCompoundGlosses,
+  upsertEnglishWordNetCompoundGlosses
+} from "../program/library/translation/english_wordnet_compound_glosses.mjs";
 import { loadCompoundLexicon } from "../program/library/translation/compound_lexicon.mjs";
 import {
   canonicalWordNetTargetPartOfSpeech,
@@ -393,6 +397,8 @@ export async function promoteAcceptedCompounds(decisions, {
   const existing = await readExisting();
   const promoted = promoteAcceptedCompoundRecords(existing, decisions, { usedTargetIds, decisionRevision });
   await writeRecords(promoted.records);
+  const glosses = buildEnglishWordNetCompoundGlosses(promoted.promotions, decisions);
+  if (glosses.length > 0) await upsertEnglishWordNetCompoundGlosses(glosses);
   const { records: _records, ...result } = promoted;
   return result;
 }
