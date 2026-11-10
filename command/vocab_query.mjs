@@ -66,9 +66,12 @@ function linesFromLocators(locators) {
   return [...lines];
 }
 
-async function queryIndexedVocabLines(input, { indexPaths = KWON_LOOKUP_INDEX_PATHS, root } = {}) {
+async function queryIndexedVocabLines(input, { indexPaths = KWON_LOOKUP_INDEX_PATHS, root, onWarning } = {}) {
   const normalized = input.toLowerCase();
-  const options = root ? { root } : {};
+  const options = {
+    ...(root ? { root } : {}),
+    ...(typeof onWarning === "function" ? { onWarning } : {})
+  };
   const [englishExact, pyacExact] = await Promise.all([
     lookupKwonIndex({ kind: "english", key: normalized, indexPath: indexPaths.english, ...options }),
     lookupKwonIndex({ kind: "pyac", key: normalized, indexPath: indexPaths.pyac, ...options })

@@ -36,6 +36,11 @@ const SOURCE_PATHS = Object.freeze([
 
 const sourceValidationPromises = new Map();
 const postingIdentityIndexes = new WeakMap();
+const staleIndexWarnings = new Set();
+const sourceScanWarnings = new Set();
+const changedSourceIndexPromises = new Map();
+const pendingStaleCatalogs = new Set();
+const pendingScanFallbacks = new Map();
 
 function compareText(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -72,6 +77,7 @@ function addValue(indexes, kind, key, value) {
   const normalizedKey = kind === "english" ? normalizeEnglish(key) : normalizePyac(key);
   if (!normalizedKey) return;
   const index = indexes[kind];
+  if (!index) return;
   const values = index.get(normalizedKey) ?? [];
   let identitiesByKey = postingIdentityIndexes.get(index);
   if (!identitiesByKey) {
@@ -315,8 +321,55 @@ function scanOpenWordNetJson(buffer, sourceId, indexes) {
   }
 }
 
+function scanJsonCatalog(buffer, sourceId, indexes) {
+  const parsed = JSON.parse(buffer.toString("utf8"));
+  const entries = Array.isArray(parsed) ? parsed : [];
+  entries.forEach((entry, rowIndex) => {
+    if (typeof entry?.en !== "string" || typeof entry?.pya !== "string") return;
+    const inline = {
+      sourceId,
+      rowIndex,
+      recordId: `${entry.pya}:${entry.en}`,
+      inline: { pya: entry.pya, en: entry.en, ...(entry.hnuc ? { hnuc: entry.hnuc } : {}) }
+    };
+    addLocator(indexes, "english", entry.en, inline);
+    addLocator(indexes, "pyac", entry.pya, inline);
+  });
+  if (sourceId.endsWith("dictionary_en.json")) {
+    const blacklist = parsed?.en?.blacklist ?? {};
+    for (const [blockedKey, value] of Object.entries(blacklist)) {
+      const term = blockedKey.startsWith("X") ? blockedKey.slice(1) : blockedKey;
+      addValue(indexes, "english", term, { sourceId, recordId: `blacklist:${blockedKey}`, inline: { blacklist: value } });
+    }
+  }
+}
+
 function makeIndexes() {
   return { english: new Map(), pyac: new Map(), wordnet: new Map(), "open-wordnet": new Map() };
+}
+
+function scanChangedSource(kind, sourceId, source) {
+  const indexes = { [kind]: new Map() };
+  if (sourceId.endsWith(".pya")) scanPyaLines(source, sourceId, indexes);
+  else if (kind === "open-wordnet" && OPEN_WORDNET_JSON_FILE.test(sourceId.split(/[\\/]/u).at(-1) ?? "")) {
+    scanOpenWordNetJson(source, sourceId, indexes);
+  } else scanJsonCatalog(source, sourceId, indexes);
+  return indexes[kind];
+}
+
+async function currentSourceIndex(kind, staleSource, root) {
+  const cacheKey = `${resolve(root)}\u0000${kind}\u0000${staleSource.relativePath}`;
+  const cached = changedSourceIndexPromises.get(cacheKey);
+  if (cached?.validationHash === staleSource.actual) return cached.promise;
+  const source = await readFile(resolveSourcePath(root, staleSource.relativePath));
+  const pending = Promise.resolve().then(() => scanChangedSource(kind, staleSource.relativePath, source));
+  changedSourceIndexPromises.set(cacheKey, { validationHash: staleSource.actual, promise: pending });
+  try {
+    return await pending;
+  } catch (error) {
+    if (changedSourceIndexPromises.get(cacheKey)?.promise === pending) changedSourceIndexPromises.delete(cacheKey);
+    throw error;
+  }
 }
 
 function createIndex(kind, entries, sourceHashes) {
@@ -543,26 +596,62 @@ async function validateSourceHashes(sourceHashes, root) {
     try {
       source = await readFile(resolveSourcePath(root, relativePath));
     } catch (error) {
-      throw Object.assign(new Error(`kwon lookup index source is unavailable: ${relativePath}`), {
-        code: "stale-kwon-lookup-index",
-        details: { relativePath, cause: error.code ?? error.message }
-      });
+      return { relativePath, expected, unavailable: error.code ?? error.message };
     }
     const actual = hash(source);
-    if (actual !== expected) {
-      throw Object.assign(new Error(`kwon lookup index is stale for ${relativePath}; rebuild the lookup indexes`), {
-        code: "stale-kwon-lookup-index",
-        details: { relativePath, expected, actual }
-      });
-    }
-  }));
+    return actual === expected ? null : { relativePath, expected, actual };
+  })).then((results) => results.filter(Boolean));
   sourceValidationPromises.set(cacheKey, pending);
   try {
-    await pending;
+    return await pending;
   } catch (error) {
     sourceValidationPromises.delete(cacheKey);
     throw error;
   }
+}
+
+function warnStaleIndex({ kind, indexPath, root, staleSources, onWarning }) {
+  if (staleSources.length === 0) return;
+  const paths = staleSources.map(({ relativePath }) => relativePath);
+  for (const path of paths) pendingStaleCatalogs.add(path);
+  const warningKey = `${resolve(root)}\u0000${resolve(indexPath)}\u0000${paths.join("\u0001")}`;
+  if (staleIndexWarnings.has(warningKey)) return;
+  staleIndexWarnings.add(warningKey);
+  const unavailable = staleSources.some((source) => source.unavailable);
+  const details = paths.join(", ");
+  const message = `kwon ${kind} lookup index is stale${details ? ` for ${details}` : ""}; changed catalogs are scanned for this lookup, with indexed entries as fallback if a source is unavailable${unavailable ? " (one or more source files are unavailable)" : ""}. Persist refreshed indexes with: node command/vocab_lookup_index.mjs`;
+  if (typeof onWarning === "function") onWarning(message);
+}
+
+function warnSourceScanFallback({ kind, indexPath, root, sourceId, error, onWarning }) {
+  const warningKey = `${resolve(root)}\u0000${resolve(indexPath)}\u0000${kind}\u0000${sourceId}`;
+  if (sourceScanWarnings.has(warningKey)) return;
+  sourceScanWarnings.add(warningKey);
+  pendingScanFallbacks.set(sourceId, error.message);
+  const message = `kwon ${kind} lookup could not scan changed catalog ${sourceId}; using its indexed entries for now (${error.message}). Rebuild with: node command/vocab_lookup_index.mjs`;
+  if (typeof onWarning === "function") onWarning(message);
+}
+
+export function takeKwonLookupWarnings() {
+  if (pendingStaleCatalogs.size === 0 && pendingScanFallbacks.size === 0) return [];
+  const warnings = [];
+  if (pendingStaleCatalogs.size > 0) {
+    warnings.push(
+      `Warning: Kwon lookup indexes are stale for ${[...pendingStaleCatalogs].sort(compareText).join(", ")}. `
+      + "Changed catalogs are scanned for current results; failed scans retain their indexed entries. "
+      + "Persist refreshed indexes with: node command/vocab_lookup_index.mjs"
+    );
+  }
+  if (pendingScanFallbacks.size > 0) {
+    warnings[0] = `${warnings[0] ?? "Warning: Kwon used indexed entries for changed catalogs."}\n`
+      + `Live scan fallback: ${[...pendingScanFallbacks]
+        .sort(([left], [right]) => compareText(left, right))
+        .map(([sourceId, reason]) => `${sourceId} (${reason})`)
+        .join(", ")}.`;
+  }
+  pendingStaleCatalogs.clear();
+  pendingScanFallbacks.clear();
+  return warnings;
 }
 
 export async function lookupKwonIndex({
@@ -570,7 +659,8 @@ export async function lookupKwonIndex({
   key,
   prefix = false,
   indexPath = KWON_LOOKUP_INDEX_PATHS[kind],
-  root = PYASH_REPOSITORY_ROOT
+  root = PYASH_REPOSITORY_ROOT,
+  onWarning
 } = {}) {
   if (!KWON_LOOKUP_INDEX_KINDS.includes(kind)) throw new TypeError(`unsupported kwon index kind: ${kind}`);
   const normalized = kind === "english" ? normalizeEnglish(key) : normalizePyac(key);
@@ -580,7 +670,8 @@ export async function lookupKwonIndex({
     const fileSize = (await handle.stat()).size;
     const header = await indexHeader(handle, fileSize);
     if (header.kind !== kind) throw Object.assign(new Error(`kwon index kind mismatch: expected ${kind}, found ${header.kind}`), { code: "invalid-kwon-lookup-index" });
-    await validateSourceHashes(header.sourceHashes, root);
+    const staleSources = await validateSourceHashes(header.sourceHashes, root);
+    warnStaleIndex({ kind, indexPath, root, staleSources, onWarning });
     let low = header.dataStart;
     let high = fileSize;
     let searchSteps = 0;
@@ -633,7 +724,25 @@ export async function lookupKwonIndex({
       if (matchesKey) matches.push(...expandIndexPostings(parsed.values, header.sourceIds));
       else if (compareText(rowKey, normalized) > 0 && (!prefix || !rowKey.startsWith(normalized))) break;
     }
-    return matches;
+    const changedSources = staleSources.filter((source) => !source.unavailable);
+    const changedSourceIds = new Set(changedSources.map((source) => source.relativePath));
+    if (changedSourceIds.size === 0) return matches;
+    let currentMatches = matches;
+    for (const source of changedSources) {
+      try {
+        const entries = await currentSourceIndex(kind, source, root);
+        const replacement = [];
+        for (const [entryKey, postings] of entries) {
+          const matchesKey = prefix ? entryKey.startsWith(normalized) : entryKey === normalized;
+          if (matchesKey) replacement.push(...postings);
+        }
+        currentMatches = currentMatches.filter((match) => match?.sourceId !== source.relativePath);
+        currentMatches.push(...replacement);
+      } catch (error) {
+        warnSourceScanFallback({ kind, indexPath, root, sourceId: source.relativePath, error, onWarning });
+      }
+    }
+    return currentMatches;
   } finally {
     await handle.close();
   }
@@ -815,26 +924,7 @@ export async function buildKwonLookupIndexes({ root = PYASH_REPOSITORY_ROOT, sou
   for (const sourceId of jsonSources) {
     const source = sourcesById.get(sourceId);
     sourceHashes[sourceId] = hash(source);
-    const parsed = JSON.parse(source.toString("utf8"));
-    const entries = Array.isArray(parsed) ? parsed : [];
-    entries.forEach((entry, rowIndex) => {
-      if (typeof entry?.en !== "string" || typeof entry?.pya !== "string") return;
-      const inline = {
-        sourceId,
-        rowIndex,
-        recordId: `${entry.pya}:${entry.en}`,
-        inline: { pya: entry.pya, en: entry.en, ...(entry.hnuc ? { hnuc: entry.hnuc } : {}) }
-      };
-      addLocator(indexes, "english", entry.en, inline);
-      addLocator(indexes, "pyac", entry.pya, inline);
-    });
-    if (sourceId.endsWith("dictionary_en.json")) {
-      const blacklist = parsed?.en?.blacklist ?? {};
-      for (const [blockedKey, value] of Object.entries(blacklist)) {
-        const term = blockedKey.startsWith("X") ? blockedKey.slice(1) : blockedKey;
-        addValue(indexes, "english", term, { sourceId, recordId: `blacklist:${blockedKey}`, inline: { blacklist: value } });
-      }
-    }
+    scanJsonCatalog(source, sourceId, indexes);
   }
   if (sourcesById.has(OPEN_WORDNET_CONFIG_PATH)) {
     const configSource = sourcesById.get(OPEN_WORDNET_CONFIG_PATH);
@@ -875,6 +965,11 @@ export async function writeKwonLookupIndexes({ root = PYASH_REPOSITORY_ROOT, pat
 
 export function clearKwonLookupIndexValidationCache() {
   sourceValidationPromises.clear();
+  staleIndexWarnings.clear();
+  sourceScanWarnings.clear();
+  changedSourceIndexPromises.clear();
+  pendingStaleCatalogs.clear();
+  pendingScanFallbacks.clear();
 }
 
 export function createKwonLookupIndexForTest({ kind, sourceHashes = {}, entries = [] } = {}) {

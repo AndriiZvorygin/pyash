@@ -11,7 +11,8 @@ import {
   clearKwonLookupIndexValidationCache,
   lookupKwonIndex,
   readKwonSourceLocators,
-  renderKwonLookupIndexPya
+  renderKwonLookupIndexPya,
+  takeKwonLookupWarnings
 } from "../program/library/translation/kwon_lookup_index.mjs";
 import { queryVocabLines } from "../command/vocab_query.mjs";
 import { loadOpenEnglishWordNetSenseRows } from "../program/library/translation/english_wordnet.mjs";
@@ -236,27 +237,46 @@ test("Open English WordNet sense ids resolve to one indexed JSON span", async ()
     assert.deepEqual(rows.map((row) => row.lemma).sort(), ["affection", "love"]);
     assert.equal(rows[0].gloss, "a strong positive emotion");
 
-    await writeFile(sourcePath, source.replace("strong positive", "changed"), "utf8");
-    clearKwonLookupIndexValidationCache();
-    await assert.rejects(
-      loadOpenEnglishWordNetSenseRows({ senseIds: [senseId], indexPath, root: directory }),
-      { code: "stale-kwon-lookup-index" }
+    const appendedSource = source.replace(
+      /\n\}\n$/u,
+      ',\n  "07558677-n": {\n    "definition": ["an additional emotion"],\n    "members": ["fondness"],\n    "partOfSpeech": "n"\n  }\n}\n'
     );
+    await writeFile(sourcePath, appendedSource, "utf8");
+    clearKwonLookupIndexValidationCache();
+    const warnings = [];
+    const indexed = await lookupKwonIndex({
+      kind: "open-wordnet",
+      key: senseId,
+      indexPath,
+      root: directory,
+      onWarning: (warning) => warnings.push(warning)
+    });
+    assert.equal(indexed.length, 1);
+    assert.match(warnings[0], /changed catalogs are scanned for this lookup/u);
+    assert.match(warnings[0], /node command\/vocab_lookup_index\.mjs/u);
+    const rowsAfterAppend = await loadOpenEnglishWordNetSenseRows({ senseIds: [senseId], indexPath, root: directory });
+    assert.equal(rowsAfterAppend[0].gloss, "a strong positive emotion");
   } finally {
     clearKwonLookupIndexValidationCache();
     await rm(directory, { recursive: true, force: true });
   }
 });
 
-test("indexed vocab queries keep exact entries and blacklist precedence", async () => {
+test("indexed vocab queries keep exact entries while stale indexes warn and remain usable", async () => {
   const directory = await mkdtemp(join(tmpdir(), "pyash-kwon-query-"));
+  clearKwonLookupIndexValidationCache();
   try {
     const sourceId = "caterer/pyac/lyac/kwon_en.json";
     const sourcePath = join(directory, sourceId);
     const blacklistSourceId = "caterer/pyac/lyac/dictionary_en.json";
     const blacklistSourcePath = join(directory, blacklistSourceId);
-    const source = "indexed source snapshot\n";
-    const blacklistSource = "indexed blacklist snapshot\n";
+    const sourceEntries = [
+      { pya: "pyan", en: "love" },
+      { pya: "pyanpu", en: "loved" },
+      { pya: "plak", en: "accordions" }
+    ];
+    const source = JSON.stringify(sourceEntries);
+    const blacklistSource = JSON.stringify({ en: { blacklist: { Xaccord: ["treaty", "coincidence"] } } });
     await mkdir(dirname(sourcePath), { recursive: true });
     await writeFile(sourcePath, source, "utf8");
     await mkdir(dirname(blacklistSourcePath), { recursive: true });
@@ -292,16 +312,42 @@ test("indexed vocab queries keep exact entries and blacklist precedence", async 
       writeFile(indexPaths.wordnet, renderKwonLookupIndexPya(wordnet), "utf8")
     ]);
 
-    assert.deepEqual(await queryVocabLines("accord", { indexPaths, root: directory }), [
+    await writeFile(sourcePath, JSON.stringify([...sourceEntries, { pya: "nyat", en: "freshword" }]), "utf8");
+    const warnings = [];
+    assert.deepEqual(await queryVocabLines("accord", {
+      indexPaths,
+      root: directory,
+      onWarning: (warning) => warnings.push(warning)
+    }), [
       JSON.stringify(["treaty", "coincidence"])
     ]);
     assert.deepEqual(await queryVocabLines("love", { indexPaths, root: directory }), ["pyan en love"]);
+    assert.deepEqual(await queryVocabLines("freshword", { indexPaths, root: directory }), ["nyat en freshword"]);
+    assert.equal(warnings.length, 2);
+    assert.ok(warnings.every((warning) => /node command\/vocab_lookup_index\.mjs/u.test(warning)));
+    const endWarnings = takeKwonLookupWarnings();
+    assert.equal(endWarnings.length, 1);
+    assert.match(endWarnings[0], /Changed catalogs are scanned for current results/u);
     assert.deepEqual(await queryVocabLines("lov", { indexPaths, root: directory }), [
       "pyan en love",
       "pyanpu en loved"
     ]);
     assert.deepEqual(await queryVocabLines("pyan", { indexPaths, root: directory }), ["pyan en love"]);
+
+    await writeFile(sourcePath, "{", "utf8");
+    clearKwonLookupIndexValidationCache();
+    const fallbackWarnings = [];
+    assert.deepEqual(await queryVocabLines("love", {
+      indexPaths,
+      root: directory,
+      onWarning: (warning) => fallbackWarnings.push(warning)
+    }), ["pyan en love"]);
+    assert.ok(fallbackWarnings.some((warning) => /using its indexed entries for now/u.test(warning)));
+    const fallbackEndWarnings = takeKwonLookupWarnings();
+    assert.equal(fallbackEndWarnings.length, 1);
+    assert.match(fallbackEndWarnings[0], /Live scan fallback/u);
   } finally {
+    clearKwonLookupIndexValidationCache();
     await rm(directory, { recursive: true, force: true });
   }
 });
@@ -488,25 +534,56 @@ test("kwon locator reads reject source paths outside the repository root", async
   }
 });
 
-test("kwon lookup indexes reject changed source catalogs", async () => {
+test("kwon lookup indexes warn and scan changed catalogs while retaining old and new records", async () => {
   const directory = await mkdtemp(join(tmpdir(), "pyash-kwon-stale-"));
+  clearKwonLookupIndexValidationCache();
   try {
     const sourcePath = join(directory, "records.pya");
-    await writeFile(sourcePath, "source version one\n", "utf8");
+    const source = 'su text "n:07558676-n" ob text "love" ya\n';
+    await writeFile(sourcePath, source, "utf8");
     const index = createKwonLookupIndexForTest({
       kind: "wordnet",
-      sourceHashes: { "records.pya": sha256(await readFile(sourcePath)) },
+      sourceHashes: { "records.pya": sha256(Buffer.from(source)) },
       entries: [["n:07558676-n", [{ sourceId: "records.pya", byteOffset: 0, lineNumber: 1, recordId: "n:07558676-n" }]]]
     });
     const indexPath = join(directory, "wordnet-index.pya");
     await writeFile(indexPath, renderKwonLookupIndexPya(index), "utf8");
-    await writeFile(sourcePath, "source version two\n", "utf8");
+    const currentSource = [
+      'su text "n:10000000-n" ob text "preexisting addition" ya',
+      source.trimEnd(),
+      'su text "n:07558677-n" ob text "fondness" ya',
+      ""
+    ].join("\n");
+    await writeFile(sourcePath, currentSource, "utf8");
 
-    await assert.rejects(
-      lookupKwonIndex({ kind: "wordnet", key: "n:07558676-n", indexPath, root: directory }),
-      (error) => error.code === "stale-kwon-lookup-index" && /rebuild the lookup indexes/u.test(error.message)
-    );
+    const warnings = [];
+    const matches = await lookupKwonIndex({
+      kind: "wordnet",
+      key: "n:07558676-n",
+      indexPath,
+      root: directory,
+      onWarning: (warning) => warnings.push(warning)
+    });
+    assert.equal(matches.length, 1);
+    assert.equal(matches[0].recordId, "n:07558676-n");
+    assert.ok(matches[0].byteOffset > 0);
+    const [record] = await readKwonSourceLocators(matches, { root: directory });
+    assert.equal(record.line, source.trimEnd());
+    const added = await lookupKwonIndex({
+      kind: "wordnet",
+      key: "n:07558677-n",
+      indexPath,
+      root: directory
+    });
+    assert.equal(added.length, 1);
+    assert.equal(added[0].recordId, "n:07558677-n");
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /records\.pya/u);
+    assert.match(warnings[0], /changed catalogs are scanned for this lookup/u);
+    assert.match(warnings[0], /node command\/vocab_lookup_index\.mjs/u);
+    assert.equal(takeKwonLookupWarnings().length, 1);
   } finally {
+    clearKwonLookupIndexValidationCache();
     await rm(directory, { recursive: true, force: true });
   }
 });

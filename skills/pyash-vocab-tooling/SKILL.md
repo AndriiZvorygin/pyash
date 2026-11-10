@@ -32,9 +32,11 @@ For several related terms, pass them in one `kwon term-one term-two` call to sha
 loaded indexes.
 
 The English, Pyac, and POS-qualified WordNet sidecar lookup indexes are generated from the
-canonical catalogs and checked against their source hashes. After editing those catalogs, run
-`node command/vocab_lookup_index.mjs`; a stale index reports which catalog changed and directs
-you to rebuild. The source catalogs remain the canonical records.
+canonical catalogs and checked against their source hashes. A stale index produces one warning
+after query results, with changed catalog paths and the rebuild command. Lookups scan changed
+sources in memory, so current vocabulary additions remain searchable while the persistent
+sidecar is stale. After editing catalogs, run `node command/vocab_lookup_index.mjs` to persist
+refreshed indexes. The source catalogs remain the canonical records.
 
 ## Canonical words over legacy aliases
 

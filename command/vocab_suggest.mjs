@@ -34,6 +34,7 @@ import {
 import { buildEnglishGrammarIndex, loadEnglishGrammarCatalog } from "../program/library/translation/english_grammar.mjs";
 import { loadVocabQueryData, queryVocabLines } from "./vocab_query.mjs";
 import { resolveEnglishAlias } from "../program/library/translation/english_aliases.mjs";
+import { takeKwonLookupWarnings } from "../program/library/translation/kwon_lookup_index.mjs";
 import {
   MOODS,
   ROLE_KEYS,
@@ -1990,5 +1991,7 @@ async function isMainModule() {
 
 if (await isMainModule()) {
   const { exitCode } = await runVocabSuggest(process.argv.slice(2));
+  const warnings = takeKwonLookupWarnings();
+  if (warnings.length > 0) process.stderr.write(`\n${warnings.join("\n\n")}\n`);
   if (exitCode > 0) process.exitCode = exitCode;
 }
