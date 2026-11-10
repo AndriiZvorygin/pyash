@@ -8,6 +8,7 @@ The command surface is:
 node command/criterion.mjs list
 node command/criterion.mjs inspect --benchmark meetingbank
 node command/criterion.mjs run --benchmark meetingbank --dataset /path/to/split.jsonl --model qwen3.5:9b,hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M --profile summary_direct --smoke
+node command/criterion.mjs throughput --model SparkLLM/Spark-X2.6-4B:q4_k_m --host-id mriczo --gpu-id gpu0
 node command/criterion.mjs report <run-id>
 node command/criterion.mjs runs [--model <text>] [--benchmark <text>] [--status <text>] [--host <text>] [--limit <count>] [--json]
 node command/criterion.mjs compare <run-a> <run-b>
@@ -27,6 +28,20 @@ between machines, so a local index cannot discover manifests saved only on
 another host. Open a listed run with `criterion report <run-id>`.
 
 Use `OLLAMA_BASE_URL` (or the existing `OLLAMA_HOST`) for the Ollama endpoint. A run uses the same profile and context length for every model in a comparison. `--resume` reuses completed sample rows and is the benchmark equivalent of `again`. Reports persist `runScope: smoke` for `--smoke`; unrestricted runs are labelled `runScope: full`.
+
+## Warm model throughput
+
+`criterion throughput` pins one installed Ollama model to a Housekeeper host
+and device. It submits through the durable queue even when other jobs are
+queued or running; the queue snapshot and observed target jobs are saved with
+the result. Two warmup calls are excluded, then five fixed prompts are
+measured serially with a 256-token output cap. The model is kept resident, and
+generation tok/s is computed from Ollama's generated-token count and eval
+duration, excluding queue wait. Each run writes `.pya`, JSON, JSONL, Markdown,
+and CSV artifacts under `criterion/results/` and appears in `criterion runs`
+on that host. Queue load, model, host, device, context, profile, prompt-set
+hash, per-prompt timings, and aggregate arithmetic/weighted tok/s are recorded
+for reproducibility. Do not call Ollama directly for a speed comparison.
 
 Ollama Criterion runs finish one model's sample batch before moving to the next. Requests keep each model resident for 30 minutes by default (`sampling.keep_alive` can override this), while Housekeeper may still reclaim it for an admitted capacity handoff. Cleanup unloads only the last model actually used; it does not issue unload requests for every comparison model. Direct Ollama cleanup checks `/api/ps` first and skips models that are already absent.
 
