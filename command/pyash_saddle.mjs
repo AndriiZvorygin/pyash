@@ -49,6 +49,7 @@ import {
 import { requestCodingDutyHub, resolveCodingDutyHub } from "../program/agent/coding_duty_client.mjs";
 import { createSaddleTerminalUi } from "../program/agent/coding_saddle_tui.mjs";
 import { createCodingSaddleTrace } from "../program/agent/coding_saddle_trace.mjs";
+import { rotateWorldNewspapers } from "../program/agent/newspaper_retention.mjs";
 import {
   ensureCodingSaddleHouse,
   resolveCodingSaddleHousePath,
@@ -407,6 +408,8 @@ export async function prepareSaddle({
   forget();
   await loadDefaultConfig({ cwd: resolvedRuntimeRoot, interpretFn: interpret, entryPath: path.join(resolvedRuntimeRoot, "saddle.pya") });
   await importSaddleTools();
+  const newspaperMaximumBytes = Number(configValue("newspaper maximum bytes", 524288000));
+  const newspaperSegmentMaximumBytes = Number(configValue("newspaper segment maximum bytes", 4194304));
   const housekeeperUrl = resolveSaddleHousekeeperUrl(resolvedRuntimeRoot);
   const configuredMindName = String(configValue("coding saddle mind", "mind")).trim();
   const useGlobalRecentPreference = worldRoot == null;
@@ -512,6 +515,9 @@ export async function prepareSaddle({
     cwd: resolvedCwd,
     runtimeRoot: resolvedRuntimeRoot,
     worldRoot: resolvedWorldRoot,
+    globalWorldRoot,
+    newspaperMaximumBytes,
+    newspaperSegmentMaximumBytes,
     mindName: selectedMind,
     model: resolvedModel,
     backend: resolvedBackend,
@@ -875,7 +881,8 @@ async function main() {
     sessionName,
     sessionFile,
     backend: config.backend,
-    model: config.model
+    model: config.model,
+    segmentMaximumBytes: config.newspaperSegmentMaximumBytes
   });
   process.once("exit", () => saddleTrace.close({ status: "process exit" }));
   let contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
@@ -1293,6 +1300,20 @@ async function main() {
       if (activeTurn) await activeTurn;
     }
     saddleTrace.close({ status: "closed" });
+    try {
+      const rotation = await rotateWorldNewspapers({
+        configRoot: config.runtimeRoot,
+        worldRoot: config.globalWorldRoot,
+        maximumBytes: config.newspaperMaximumBytes,
+        segmentMaximumBytes: config.newspaperSegmentMaximumBytes,
+        apply: true
+      });
+      if (!rotation.noChange && rotation.removedBytes > 0) {
+        writeLine(`[newspaper retention] removed ${rotation.removedBytes} bytes; retained ${rotation.retainedBytes} bytes in ${rotation.generatedParts} segments`);
+      }
+    } catch (error) {
+      writeLine(`[newspaper retention failed] ${error?.message ?? error}`);
+    }
     restoreActiveSaddleUi();
     writeLine("saddle closed");
   };
