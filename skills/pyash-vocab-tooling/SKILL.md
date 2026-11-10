@@ -31,6 +31,11 @@ indexes within their process; the `kwon` executable starts a fresh process for e
 For several related terms, pass them in one `kwon term-one term-two` call to share that process's
 loaded indexes.
 
+The English, Pyac, and POS-qualified WordNet sidecar lookup indexes are generated from the
+canonical catalogs and checked against their source hashes. After editing those catalogs, run
+`node command/vocab_lookup_index.mjs`; a stale index reports which catalog changed and directs
+you to rebuild. The source catalogs remain the canonical records.
+
 ## Canonical words over legacy aliases
 
 `vocab_suggest` accepts a word that resolves through the English dictionary

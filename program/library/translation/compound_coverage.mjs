@@ -8,10 +8,18 @@ import {
 } from "./compound_morphology.mjs";
 import { choosePyacCompoundCandidate } from "./pyac_complexity.mjs";
 import { buildCompoundAtomLinks } from "./compound_atom_links.mjs";
+import {
+  KWON_LOOKUP_INDEX_PATHS,
+  PYASH_REPOSITORY_ROOT,
+  lookupKwonIndex,
+  readKwonSourceHead,
+  readKwonSourceLocators
+} from "./kwon_lookup_index.mjs";
 
 export const DERIVED_COMPOUND_LEXICON_NAME = "translation_compounds_derived";
 export const DERIVED_COMPOUND_CURATED_NAME = "translation_compounds_derived_curated";
 export const WORDNET_VERIFIED_COMPOUNDS_URL = new URL("./compound_coverage_wordnet_verified.pya", import.meta.url);
+const WORDNET_VERIFIED_COMPOUNDS_SOURCE_ID = "program/library/translation/compound_coverage_wordnet_verified.pya";
 export const DERIVED_COMPOUND_STATUSES = Object.freeze([
   "accepted-delimited",
   "accepted-curated",
@@ -213,7 +221,9 @@ export async function loadWordNetVerifiedCompoundMatches({
   targets = [],
   pyashSequence = [],
   senseId = "",
-  senseIds = []
+  senseIds = [],
+  indexPaths = KWON_LOOKUP_INDEX_PATHS,
+  indexRoot = PYASH_REPOSITORY_ROOT
 } = {}) {
   const normalizedTarget = normalizeTerm(target);
   const normalizedTargets = new Set([
@@ -231,6 +241,47 @@ export async function loadWordNetVerifiedCompoundMatches({
     throw invalid("WordNet compound lookup requires a sense, target, or Pyac sequence");
   }
   try {
+    if (url instanceof URL && url.href === WORDNET_VERIFIED_COMPOUNDS_URL.href) {
+      let indexedLocators;
+      try {
+        const [targetLocators, senseLocators, sequenceLocators] = await Promise.all([
+          Promise.all([...normalizedTargets].map((key) => lookupKwonIndex({
+            kind: "english", key, indexPath: indexPaths.english, root: indexRoot
+          }))),
+          Promise.all([...selectedSenseIds].map((key) => lookupKwonIndex({
+            kind: "wordnet", key, indexPath: indexPaths.wordnet, root: indexRoot
+          }))),
+          sequence.length > 0
+            ? lookupKwonIndex({
+              kind: "pyac", key: sequence.join(" "), indexPath: indexPaths.pyac, root: indexRoot
+            }).then((rows) => [rows])
+            : []
+        ]);
+        indexedLocators = [...targetLocators.flat(), ...senseLocators.flat(), ...sequenceLocators.flat()]
+          .filter((locator) => locator?.sourceId === WORDNET_VERIFIED_COMPOUNDS_SOURCE_ID);
+      } catch (error) {
+        if (error?.code !== "ENOENT") throw error;
+      }
+      if (indexedLocators) {
+        const uniqueLocators = [...new Map(indexedLocators.map((locator) => [locator.byteOffset, locator])).values()];
+        if (uniqueLocators.length === 0) return [];
+        const [header] = await readKwonSourceHead(WORDNET_VERIFIED_COMPOUNDS_SOURCE_ID, { lineCount: 1, root: indexRoot });
+        const sourceRows = await readKwonSourceLocators(uniqueLocators, { root: indexRoot });
+        const filtered = [header, ...sourceRows.map((row) => row.line), "prah", ""].join("\n");
+        const entries = parseCompoundLexicon(filtered, {
+          name: DERIVED_COMPOUND_CURATED_NAME,
+          language: "canonical"
+        });
+        return entries.filter((entry) => (
+          (normalizedTargets.size > 0 && (
+            normalizedTargets.has(normalizeTerm(entry.target))
+            || (entry.aliases ?? []).some((alias) => normalizedTargets.has(normalizeTerm(alias)))
+          ))
+          || (sequence.length > 0 && entry.pyashSequence?.join(" ") === sequence.join(" "))
+          || (selectedSenseIds.size > 0 && selectedSenseIds.has(entry.senseId?.toLowerCase()))
+        ));
+      }
+    }
     const source = await readFile(url, "utf8");
     const lines = source.split(/\r?\n/u);
     const header = lines[0] ?? "";
