@@ -17,13 +17,13 @@ export const ENGLISH_WORDNET_SENSE_COMPOUNDS_MODEL = "qwen3.5:9b";
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_PROMPT_REVISION = "sense-translation-gloss-alternatives-v11";
 export const ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_PROMPT_REVISION = "sense-component-choice-v14";
 export const ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION = "sense-component-choice-v11";
-export const ENGLISH_WORDNET_SENSE_COMPOUNDS_MAX_OUTPUT_TOKENS = 1024;
+export const ENGLISH_WORDNET_SENSE_COMPOUNDS_MAX_OUTPUT_TOKENS = 2048;
 export const ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_MAX_OUTPUT_TOKENS = 256;
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_PARALLELISM = 8;
 export const ENGLISH_WORDNET_SENSE_COMPOUND_MAX_ATOMS = 2;
 
 const COMPOSITION_KINDS = new Set(["compound", "simple", "uncertain"]);
-const MAX_RESPONSE_CHARS = 24000;
+const MAX_RESPONSE_CHARS = 48000;
 const MAX_FAILURE_RESPONSE_CHARS = 2000;
 const MAX_SURFACE_CHARS = 300;
 const MAX_COMPONENT_CHARS = 180;
@@ -571,7 +571,7 @@ export function buildKwonLinkedAtomicChoices({
 function parseWordNetSenseTranslationPayload(value, { senseId, maxResponseChars = MAX_RESPONSE_CHARS } = {}) {
   const raw = String(value ?? "");
   if (raw.length > maxResponseChars) throw invalid("sense translation response exceeds its character limit");
-  const payload = extractBoundedJsonObject(raw);
+  const payload = extractBoundedJsonObject(raw, { maxResponseChars });
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw invalid("sense translation response has no bounded JSON object");
   }
@@ -581,7 +581,7 @@ function parseWordNetSenseTranslationPayload(value, { senseId, maxResponseChars 
     : typeof payload.message?.content === "string" ? payload.message.content : "";
   if (wrappedResponse) {
     if (wrappedResponse.length > maxResponseChars) throw invalid("wrapped sense translation response exceeds its character limit");
-    translationPayload = extractBoundedJsonObject(wrappedResponse);
+    translationPayload = extractBoundedJsonObject(wrappedResponse, { maxResponseChars });
   }
   if (!translationPayload || typeof translationPayload !== "object" || Array.isArray(translationPayload)) {
     throw invalid("wrapped sense translation response has no bounded JSON object");
@@ -1812,7 +1812,7 @@ export async function translateWordNetSenseWave({
       while (state.missingLanguages.length > 0 && state.attempt < attemptsLimit) {
         state.attempt += 1;
         const requestedLanguages = [...state.missingLanguages];
-        const attemptHandle = state.handleId + "-translate-" + state.attempt;
+        let attemptHandle = state.handleId + "-translate-" + state.attempt;
         let raw = "";
         try {
           const queued = await submit({
@@ -1825,6 +1825,7 @@ export async function translateWordNetSenseWave({
           if (text(queued?.status ?? queued?.ob?.text).toLowerCase() !== "queued") {
             throw invalid("Housekeeper did not queue sense translation", { handleId: attemptHandle });
           }
+          attemptHandle = text(queued?.handleId) || attemptHandle;
           submittedCount += 1;
           const value = await awaitHandle(attemptHandle);
           raw = typeof value === "object" && value !== null && typeof value.text === "string"
@@ -1919,7 +1920,8 @@ export function createQueuedMindWordNetSenseTranslationTransport({
         num_predict: Math.max(1, Math.trunc(Number(maxOutputTokens) || ENGLISH_WORDNET_SENSE_COMPOUNDS_MAX_OUTPUT_TOKENS))
       }
     };
-    const queuedHandle = `${id}-translate-${attempt}`;
+    const requestRevision = hash(stableJson(jobSpec)).slice(0, 12);
+    const queuedHandle = `${id}-${requestRevision}-translate-${attempt}`;
     recordExchangeJsonArtifact({ identity: queuedHandle, label: "request", producer: "gpu mind request", payload: { handleId: queuedHandle, job: jobSpec } });
     const start = await interpret(parse(
       `su name ${JSON.stringify(queuedHandle)} ob text ${JSON.stringify(JSON.stringify(jobSpec))} vyah start future be gpu mind do`

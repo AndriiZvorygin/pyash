@@ -355,7 +355,8 @@ function queueState(queue = {}) {
 }
 
 function isProcessedProgress(progress) {
-  return Boolean(text(progress?.senseId));
+  return Boolean(text(progress?.senseId))
+    && !["processing", "interrupted"].includes(text(progress?.status));
 }
 
 async function completedSenseIdsFromHistory({ artifactRoot, currentDirectory, sourceHash, currentProgress, readText }) {

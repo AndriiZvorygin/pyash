@@ -15,6 +15,7 @@ import {
   mergeWordNetSenseTranslationFailures,
   hasCompositionSourceTranslations,
   senseTranslationKey,
+  createQueuedMindWordNetSenseTranslationTransport,
   buildSenseCompoundWorklist,
   buildKwonLinkedAtomicChoices,
   componentGlossAlternatives,
@@ -68,6 +69,33 @@ test("sense translation prompt is scoped to one definition and comparison-langua
   assert.match(prompt, /A classifier, article, particle/u);
   assert.match(prompt, /compositionEvidence/u);
   assert.match(prompt, /For each part, provide up to three distinct concise English lexical glosses/u);
+});
+
+test("queued sense translation handles change when the job specification changes", async () => {
+  const submitWithLimit = async (maxOutputTokens) => {
+    const transport = createQueuedMindWordNetSenseTranslationTransport({
+      interpret: async () => ({ mood: "ya", ob: { text: "queued" } }),
+      parse: (sentence) => sentence,
+      maxOutputTokens
+    });
+    const result = await transport.submit({
+      sense: {
+        senseId: "n:00000010-n",
+        pos: "n",
+        lemma: "friendship",
+        gloss: "a relationship between friends"
+      },
+      handleId: "wordnet-sense-test",
+      languages: ["chinese"],
+      attempt: 1
+    });
+    return result.handleId;
+  };
+
+  const first = await submitWithLimit(1024);
+  const raised = await submitWithLimit(2048);
+  assert.notEqual(first, raised);
+  assert.equal(raised, await submitWithLimit(2048));
 });
 
 test("English source compounds come from WordNet lemmas without requesting an English translation", () => {
@@ -765,6 +793,31 @@ test("sense translation response parses bounded noisy JSON and keeps only reques
       { language: "chinese", surface: "甲乙", composition: "simple", components: [], compositionEvidence: "single lexical item" }
     ]
   }), { senseId: "n:00000010-n", languages: ["chinese"] }), /duplicate language/u);
+});
+
+test("sense translation parser applies its expanded bound to wrapped provider output", () => {
+  const senseId = "n:00000013-n";
+  const response = JSON.stringify({
+    model: "qwen3.5:9b",
+    response: JSON.stringify({
+      senseId,
+      translations: [{
+        language: "chinese",
+        surface: "甲",
+        composition: "simple",
+        compositionEvidence: "one lexical item",
+        components: []
+      }],
+      providerPadding: "x".repeat(13000)
+    })
+  });
+
+  const parsed = parseWordNetSenseTranslationResponsePartial(response, {
+    senseId,
+    languages: ["chinese"]
+  });
+  assert.deepEqual(parsed.translations.map((row) => row.language), ["chinese"]);
+  assert.deepEqual(parsed.failures, []);
 });
 
 test("partial sense parsing keeps valid languages and isolates malformed rows", () => {
@@ -1753,6 +1806,36 @@ test("translation wave queues a bounded wave before awaiting and repairs malform
   assert.equal(result.submittedCount, 3);
   assert.equal(result.completedCount, 2);
   assert.equal(result.failures.length, 0);
+});
+
+test("translation wave awaits the fingerprinted handle returned by Housekeeper", async () => {
+  let awaitedHandle = "";
+  const result = await translateWordNetSenseWave({
+    senses: [{ senseId: "n:00000012-n", pos: "n", lemma: "target", gloss: "a target" }],
+    wordNetHash: "source-hash",
+    languages: ["chinese"],
+    parallelism: 1,
+    submit: async () => ({ status: "queued", handleId: "target-2048-token-request" }),
+    awaitHandle: async (handleId) => {
+      awaitedHandle = handleId;
+      return JSON.stringify({
+        senseId: "n:00000012-n",
+        translations: [{
+          language: "chinese",
+          surface: "甲乙",
+          composition: "compound",
+          compositionEvidence: "first and second jointly express the target",
+          components: [
+            { surface: "甲", gloss: "first", role: "lexical" },
+            { surface: "乙", gloss: "second", role: "lexical" }
+          ]
+        }]
+      });
+    }
+  });
+
+  assert.equal(awaitedHandle, "target-2048-token-request");
+  assert.equal(result.completedCount, 1);
 });
 
 test("translation wave adds newly selected languages without retranslating compatible cached languages", async () => {

@@ -302,7 +302,7 @@ test("sense compound refinery links, composes, decides, and records one complete
       { attempt: 1, status: "compound" }
     ]);
     assert.equal(parseWordNetSenseTranslationCache(completeCache).bySense.get(sense.senseId).status, "complete");
-    assert.equal(buildProgram(worklistSource).sentences.find((sentence) => sentence.su?.text === "meta:minimum-tag-count")?.ob?.text, "1");
+    assert.equal(buildProgram(worklistSource).sentences.find((sentence) => sentence.su?.text === "meta:minimum-tag-count")?.ob?.text, "0");
     assert.equal(buildProgram(worklistSource).sentences.find((sentence) => sentence.su?.text === "meta:prompt-revision")?.ob?.text, "sense-translation-gloss-alternatives-v11");
     assert.match(candidateSource, /friendship/u);
     assert.match(completeProgress, /accepted/u);
@@ -388,31 +388,36 @@ test("sense compound refinery links, composes, decides, and records one complete
     assert.equal(compositionResponseCount, 2);
 
     const interruptedRunId = "sense-compound-interrupted-claim-test";
-    await assert.rejects(runWordNetSenseCompoundRefinery({
-      artifactRoot,
-      runId: interruptedRunId,
-      initialize: false,
-      configuration: { senseIds: [sense.senseId] },
-      dependencies: {
-        ...dependencies,
-        suggestVocabulary: async () => {
-          throw new Error("simulated stage interruption");
+    const interruptedArtifactRoot = await mkdtemp(path.join(os.tmpdir(), "pyash-sense-compound-interrupted-"));
+    try {
+      await assert.rejects(runWordNetSenseCompoundRefinery({
+        artifactRoot: interruptedArtifactRoot,
+        runId: interruptedRunId,
+        initialize: false,
+        configuration: {},
+        dependencies: {
+          ...dependencies,
+          suggestVocabulary: async () => {
+            throw new Error("simulated stage interruption");
+          }
         }
-      }
-    }));
-    const interruptedArtifactDirectory = path.join(artifactRoot, interruptedRunId);
-    const claimedProgress = await readFile(path.join(interruptedArtifactDirectory, "progress.pya"), "utf8");
-    assert.match(claimedProgress, /processing/u);
-    const resumedAfterInterruption = await runWordNetSenseCompoundRefinery({
-      artifactRoot,
-      runId: interruptedRunId,
-      initialize: false,
-      configuration: { senseIds: [sense.senseId] },
-      dependencies
-    });
-    assert.equal(resumedAfterInterruption.selectedSenseCount, 1);
-    const interruptedProgress = await readFile(path.join(interruptedArtifactDirectory, "progress.pya"), "utf8");
-    assert.match(interruptedProgress, /accepted/u);
+      }));
+      const interruptedArtifactDirectory = path.join(interruptedArtifactRoot, interruptedRunId);
+      const claimedProgress = await readFile(path.join(interruptedArtifactDirectory, "progress.pya"), "utf8");
+      assert.match(claimedProgress, /processing/u);
+      const resumedAfterInterruption = await runWordNetSenseCompoundRefinery({
+        artifactRoot: interruptedArtifactRoot,
+        runId: interruptedRunId,
+        initialize: false,
+        configuration: {},
+        dependencies
+      });
+      assert.equal(resumedAfterInterruption.selectedSenseCount, 1);
+      const interruptedProgress = await readFile(path.join(interruptedArtifactDirectory, "progress.pya"), "utf8");
+      assert.match(interruptedProgress, /accepted/u);
+    } finally {
+      await rm(interruptedArtifactRoot, { recursive: true, force: true });
+    }
 
     const failed = await runWordNetSenseCompoundRefinery({
       artifactRoot,
