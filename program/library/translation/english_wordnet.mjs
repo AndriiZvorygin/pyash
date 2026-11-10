@@ -1,10 +1,16 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { buildProgram } from "../../program.mjs";
 import { buildEnglishWordNetBridgeIndex } from "./english_wordnet_bridges.mjs";
+import {
+  KWON_LOOKUP_INDEX_PATHS,
+  PYASH_REPOSITORY_ROOT,
+  lookupKwonIndex,
+  readKwonSourceSpans
+} from "./kwon_lookup_index.mjs";
 
 export const ENGLISH_WORDNET_FORMAT = "english-wordnet-core-v1";
 export const OPEN_ENGLISH_WORDNET_FORMAT = "open-english-wordnet-2025-json-v1";
@@ -192,6 +198,39 @@ async function loadOpenEnglishWordNetJson(directory) {
   const parsed = parseOpenEnglishWordNetJsonFiles(files);
   const sourceHash = hash(files.map((file) => `${file.name}\u0000${file.source}`).join("\u0000"));
   return { ...parsed, sourceHash, path: resolve(directory) };
+}
+
+export async function loadOpenEnglishWordNetSenseRows({
+  senseIds = [],
+  indexPath = KWON_LOOKUP_INDEX_PATHS["open-wordnet"],
+  root = PYASH_REPOSITORY_ROOT
+} = {}) {
+  const selectedIds = [...new Set(senseIds
+    .filter((senseId) => typeof senseId === "string")
+    .map((senseId) => senseId.trim().toLowerCase())
+    .filter((senseId) => /^[anrvs]:[0-9]{8}-[anrvs]$/u.test(senseId)))];
+  if (selectedIds.length === 0) return [];
+  const indexed = await Promise.all(selectedIds.map((senseId) => lookupKwonIndex({
+    kind: "open-wordnet",
+    key: senseId,
+    indexPath,
+    root
+  })));
+  const locators = [...new Map(indexed.flat()
+    .filter((locator) => selectedIds.includes(locator.recordId))
+    .map((locator) => [`${locator.sourceId}\u0000${locator.byteOffset}`, locator])).values()];
+  if (locators.length === 0) return [];
+  const spans = await readKwonSourceSpans(locators, { root });
+  const rows = [];
+  for (const { locator, text } of spans) {
+    const synset = locator.recordId.slice(2);
+    const parsed = parseOpenEnglishWordNetJsonFiles([{
+      name: basename(locator.sourceId),
+      source: `{${JSON.stringify(synset)}:${text}}`
+    }]);
+    rows.push(...parsed.rows);
+  }
+  return [...new Map(rows.map((row) => [row.id, row])).values()];
 }
 
 function lookupVariants(value) {

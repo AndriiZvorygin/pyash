@@ -9,8 +9,10 @@ import { interpret } from "../program/bridge/index.mjs";
 import { builtInSignatures } from "../program/verbs/index.mjs";
 import { forget } from "../program/remember/index.mjs";
 import { buildProgram } from "../program/program.mjs";
+import { runWordNetSenseCompoundRefinerySweepCommand } from "../command/wordnet_sense_compound_refinery.mjs";
 import {
   resolveWordNetSenseCompoundMaximumSenses,
+  resolveWordNetSenseCompoundMaximumComponents,
   resolveWordNetSenseCompoundMinimumTagCount,
   resolveWordNetSenseCompoundSenseIds,
   runWordNetSenseCompoundRefinery
@@ -25,6 +27,11 @@ test("sense compound launch overrides cannot exceed the configured batch limit",
   assert.equal(resolveWordNetSenseCompoundMaximumSenses(64, 16), 16);
   assert.equal(resolveWordNetSenseCompoundMaximumSenses(64, 100000), 64);
   assert.throws(() => resolveWordNetSenseCompoundMaximumSenses(64, 0), /positive integer/u);
+});
+
+test("sense compound refinery config enforces the two-atom output limit", () => {
+  assert.equal(resolveWordNetSenseCompoundMaximumComponents(2), 2);
+  assert.throws(() => resolveWordNetSenseCompoundMaximumComponents(3), /two-atom limit/u);
 });
 
 test("sense compound launch can raise its minimum tag-count threshold", () => {
@@ -42,6 +49,39 @@ test("sense compound launch can select exact WordNet senses for a focused retry"
   ]);
   assert.throws(() => resolveWordNetSenseCompoundSenseIds([]), /nonempty array/u);
   assert.throws(() => resolveWordNetSenseCompoundSenseIds(["accord"]), /invalid WordNet sense id/u);
+});
+
+test("sense compound sweep batches an exact retry queue in groups of 64", async () => {
+  const senseIds = Array.from({ length: 130 }, (_, index) => `n:${String(index).padStart(8, "0")}-n`);
+  const batches = [];
+  let progress = 0;
+  const result = await runWordNetSenseCompoundRefinerySweepCommand({
+    configuration: { senseIds },
+    maximumBatches: 3,
+    artifactRoot: path.join(os.tmpdir(), "pyash-sense-compound-sweep-test"),
+    repositoryRoot: process.cwd(),
+    report: () => {},
+    dependencies: {
+      prepareAllocation: async () => ({ sourceHash: "test-source" }),
+      progressSignature: async () => String(progress),
+      runChunk: async ({ configuration }) => {
+        batches.push(configuration.senseIds);
+        progress += 1;
+        return {
+          selectedSenseCount: configuration.senseIds.length,
+          remainingSenseCount: 0,
+          candidateCount: 0,
+          result: {},
+          checkpointPath: ""
+        };
+      }
+    }
+  });
+
+  assert.deepEqual(batches.map((batch) => batch.length), [64, 64, 2]);
+  assert.deepEqual(batches.flat(), senseIds);
+  assert.equal(result.sweepComplete, true);
+  assert.equal(result.remainingSenseCount, 0);
 });
 
 test("sense compound refinery links, composes, decides, and records one complete sense", async () => {
@@ -262,7 +302,7 @@ test("sense compound refinery links, composes, decides, and records one complete
       { attempt: 1, status: "compound" }
     ]);
     assert.equal(parseWordNetSenseTranslationCache(completeCache).bySense.get(sense.senseId).status, "complete");
-    assert.equal(buildProgram(worklistSource).sentences.find((sentence) => sentence.su?.text === "meta:minimum-tag-count")?.ob?.text, "1");
+    assert.equal(buildProgram(worklistSource).sentences.find((sentence) => sentence.su?.text === "meta:minimum-tag-count")?.ob?.text, "0");
     assert.equal(buildProgram(worklistSource).sentences.find((sentence) => sentence.su?.text === "meta:prompt-revision")?.ob?.text, "sense-translation-gloss-alternatives-v11");
     assert.match(candidateSource, /friendship/u);
     assert.match(completeProgress, /accepted/u);
@@ -348,31 +388,36 @@ test("sense compound refinery links, composes, decides, and records one complete
     assert.equal(compositionResponseCount, 2);
 
     const interruptedRunId = "sense-compound-interrupted-claim-test";
-    await assert.rejects(runWordNetSenseCompoundRefinery({
-      artifactRoot,
-      runId: interruptedRunId,
-      initialize: false,
-      configuration: { senseIds: [sense.senseId] },
-      dependencies: {
-        ...dependencies,
-        suggestVocabulary: async () => {
-          throw new Error("simulated stage interruption");
+    const interruptedArtifactRoot = await mkdtemp(path.join(os.tmpdir(), "pyash-sense-compound-interrupted-"));
+    try {
+      await assert.rejects(runWordNetSenseCompoundRefinery({
+        artifactRoot: interruptedArtifactRoot,
+        runId: interruptedRunId,
+        initialize: false,
+        configuration: {},
+        dependencies: {
+          ...dependencies,
+          suggestVocabulary: async () => {
+            throw new Error("simulated stage interruption");
+          }
         }
-      }
-    }));
-    const interruptedArtifactDirectory = path.join(artifactRoot, interruptedRunId);
-    const claimedProgress = await readFile(path.join(interruptedArtifactDirectory, "progress.pya"), "utf8");
-    assert.match(claimedProgress, /processing/u);
-    const resumedAfterInterruption = await runWordNetSenseCompoundRefinery({
-      artifactRoot,
-      runId: interruptedRunId,
-      initialize: false,
-      configuration: { senseIds: [sense.senseId] },
-      dependencies
-    });
-    assert.equal(resumedAfterInterruption.selectedSenseCount, 1);
-    const interruptedProgress = await readFile(path.join(interruptedArtifactDirectory, "progress.pya"), "utf8");
-    assert.match(interruptedProgress, /accepted/u);
+      }));
+      const interruptedArtifactDirectory = path.join(interruptedArtifactRoot, interruptedRunId);
+      const claimedProgress = await readFile(path.join(interruptedArtifactDirectory, "progress.pya"), "utf8");
+      assert.match(claimedProgress, /processing/u);
+      const resumedAfterInterruption = await runWordNetSenseCompoundRefinery({
+        artifactRoot: interruptedArtifactRoot,
+        runId: interruptedRunId,
+        initialize: false,
+        configuration: {},
+        dependencies
+      });
+      assert.equal(resumedAfterInterruption.selectedSenseCount, 1);
+      const interruptedProgress = await readFile(path.join(interruptedArtifactDirectory, "progress.pya"), "utf8");
+      assert.match(interruptedProgress, /accepted/u);
+    } finally {
+      await rm(interruptedArtifactRoot, { recursive: true, force: true });
+    }
 
     const failed = await runWordNetSenseCompoundRefinery({
       artifactRoot,

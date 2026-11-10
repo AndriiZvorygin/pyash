@@ -21,6 +21,7 @@ import {
   ENGLISH_WORDNET_SENSE_COMPOUNDS_MAX_OUTPUT_TOKENS,
   ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_MAX_OUTPUT_TOKENS,
   ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_PROMPT_REVISION,
+  ENGLISH_WORDNET_SENSE_COMPOUND_MAX_ATOMS,
   ENGLISH_WORDNET_SENSE_TRANSLATION_CACHE_NAME,
   buildKwonLinkedAtomicChoices,
   buildSenseCompoundChoiceInput,
@@ -120,6 +121,17 @@ export function resolveWordNetSenseCompoundMinimumTagCount(configuredMinimum, re
     throw invalid("sense compound refinery minimumTagCount override must be a nonnegative integer");
   }
   return requested;
+}
+
+export function resolveWordNetSenseCompoundMaximumComponents(configuredMaximum) {
+  const configured = Number(configuredMaximum);
+  if (configured !== ENGLISH_WORDNET_SENSE_COMPOUND_MAX_ATOMS) {
+    throw invalid("sense compound refinery maximum-compound-components must match the current two-atom limit", {
+      configured,
+      maximum: ENGLISH_WORDNET_SENSE_COMPOUND_MAX_ATOMS
+    });
+  }
+  return configured;
 }
 
 export function resolveWordNetSenseCompoundSenseIds(requestedSenseIds) {
@@ -290,6 +302,7 @@ function parseConfig(source) {
   if (!Number.isSafeInteger(minimumTagCount) || minimumTagCount < 0) {
     throw invalid("sense compound refinery minimum-tag-count must be a nonnegative integer");
   }
+  const maximumCompoundComponents = resolveWordNetSenseCompoundMaximumComponents(values["maximum-compound-components"]);
   const requirePrincetonIntersectionText = text(values["require-princeton-intersection"] ?? "false").toLowerCase();
   if (!["true", "false"].includes(requirePrincetonIntersectionText)) {
     throw invalid("sense compound refinery require-princeton-intersection must be true or false");
@@ -319,6 +332,7 @@ function parseConfig(source) {
     parallelism: Number(values.parallelism) || ENGLISH_WORDNET_SENSE_COMPOUNDS_PARALLELISM,
     maximumSenses: Number(values["max-senses-per-launch"]) || 64,
     minimumTagCount,
+    maximumCompoundComponents,
     requirePrincetonIntersection: requirePrincetonIntersectionText === "true",
     worklistOrder,
     candidateRevision,
@@ -341,7 +355,8 @@ function queueState(queue = {}) {
 }
 
 function isProcessedProgress(progress) {
-  return Boolean(text(progress?.senseId));
+  return Boolean(text(progress?.senseId))
+    && !["processing", "interrupted"].includes(text(progress?.status));
 }
 
 async function completedSenseIdsFromHistory({ artifactRoot, currentDirectory, sourceHash, currentProgress, readText }) {
@@ -574,6 +589,7 @@ async function loadInventory({ context, dependencies }) {
     "component-choice-prompt-revision": context.config.choicePromptRevision,
     "worklist-order": context.config.worklistOrder,
     "minimum-tag-count": context.config.minimumTagCount,
+    "maximum-compound-components": context.config.maximumCompoundComponents,
     "require-princeton-intersection": context.config.requirePrincetonIntersection,
     "worklist-hash": dataHash,
     "eligible-sense-count": fullWorklist.length,
@@ -601,6 +617,7 @@ async function loadInventory({ context, dependencies }) {
     "atom-inventory-hash": atomInventoryHash,
     "eligible-sense-count": fullWorklist.length,
     "minimum-tag-count": context.config.minimumTagCount,
+    "maximum-compound-components": context.config.maximumCompoundComponents,
     "require-princeton-intersection": context.config.requirePrincetonIntersection,
     "selected-sense-count": pending.length,
     "remaining-sense-count": fullWorklist.filter((sense) => {

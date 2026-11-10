@@ -15,6 +15,7 @@ import {
   mergeWordNetSenseTranslationFailures,
   hasCompositionSourceTranslations,
   senseTranslationKey,
+  createQueuedMindWordNetSenseTranslationTransport,
   buildSenseCompoundWorklist,
   buildKwonLinkedAtomicChoices,
   componentGlossAlternatives,
@@ -43,6 +44,11 @@ test("sense translation prompt is scoped to one definition and comparison-langua
   });
 
   assert.match(prompt, /n:00000010-n/u);
+  assert.match(prompt, /PART OF SPEECH: n/u);
+  assert.match(prompt, /SENSE WORD: friendship/u);
+  assert.match(prompt, /SENSE LEMMAS: \["friendship"\]/u);
+  assert.match(prompt, /Use its definition to preserve this sense; translate the ordinary lexical meaning/u);
+  assert.match(prompt, /DEFINITION: a relationship between friends/u);
   assert.match(prompt, /a relationship between friends/u);
   assert.doesNotMatch(prompt, /their friendship lasted years/u);
   assert.doesNotMatch(prompt, /hfre|hlak|hbad/u);
@@ -63,6 +69,33 @@ test("sense translation prompt is scoped to one definition and comparison-langua
   assert.match(prompt, /A classifier, article, particle/u);
   assert.match(prompt, /compositionEvidence/u);
   assert.match(prompt, /For each part, provide up to three distinct concise English lexical glosses/u);
+});
+
+test("queued sense translation handles change when the job specification changes", async () => {
+  const submitWithLimit = async (maxOutputTokens) => {
+    const transport = createQueuedMindWordNetSenseTranslationTransport({
+      interpret: async () => ({ mood: "ya", ob: { text: "queued" } }),
+      parse: (sentence) => sentence,
+      maxOutputTokens
+    });
+    const result = await transport.submit({
+      sense: {
+        senseId: "n:00000010-n",
+        pos: "n",
+        lemma: "friendship",
+        gloss: "a relationship between friends"
+      },
+      handleId: "wordnet-sense-test",
+      languages: ["chinese"],
+      attempt: 1
+    });
+    return result.handleId;
+  };
+
+  const first = await submitWithLimit(1024);
+  const raised = await submitWithLimit(2048);
+  assert.notEqual(first, raised);
+  assert.equal(raised, await submitWithLimit(2048));
 });
 
 test("English source compounds come from WordNet lemmas without requesting an English translation", () => {
@@ -196,7 +229,7 @@ test("component-choice prompt offers gloss-linked atoms without binding choices 
 
   assert.match(input.prompt, /limited inventory of existing atoms/u);
   assert.match(input.prompt, /If fewer than two available atoms fit, return uncertain with an empty atoms array/u);
-  assert.match(input.prompt, /Choose two or three distinct atoms in Pyash head-final order/u);
+  assert.match(input.prompt, /Choose exactly two distinct atoms in Pyash head-final order/u);
   assert.match(input.prompt, /Atoms may be combined across gloss groups/u);
   assert.doesNotMatch(input.prompt, /single translation|same source part|TRANSLATION COMPONENT OPTIONS/u);
   assert.match(input.prompt, /Pyash compounds are head-final/u);
@@ -225,7 +258,7 @@ test("component-choice prompt offers gloss-linked atoms without binding choices 
   assert.doesNotMatch(input.prompt, /sourceLanguage|source language|translation|Chinese:|赋 \/ bestow|component choice\]/u);
   assert.doesNotMatch(input.prompt, /v:\d{8}-v|sense-compound-[a-f0-9]{12}/u);
   assert.equal(input.responseFormat.oneOf[0].properties.atoms.minItems, 2);
-  assert.equal(input.responseFormat.oneOf[0].properties.atoms.maxItems, 3);
+  assert.equal(input.responseFormat.oneOf[0].properties.atoms.maxItems, 2);
   assert.equal(input.responseFormat.oneOf[0].properties.translation, undefined);
   assert.equal(input.responseFormat.oneOf[1].properties.atoms.maxItems, 0);
 
@@ -352,7 +385,10 @@ test("component-choice response resolves only offered atoms and preserves head-f
     ]
   }];
   const choices = new Map([
-    ["friend", [atom("friend", "hfre", "a person attached by affection", "friend")]],
+    ["friend", [
+      atom("friend", "hfre", "a person attached by affection", "friend"),
+      atom("affection", "haff", "a feeling of fondness", "friend")
+    ]],
     ["companion", []],
     ["relationship", [
       atom("relationship", "hlak", "a relation between entities", "relationship"),
@@ -390,7 +426,11 @@ test("component-choice response resolves only offered atoms and preserves head-f
   assert.throws(() => parseSenseCompoundChoiceResponse(JSON.stringify({
     verdict: "compound",
     atoms: ["friend"]
-  }), { input }), /must select two or three atom words/u);
+  }), { input }), /must select exactly two atom words/u);
+  assert.throws(() => parseSenseCompoundChoiceResponse(JSON.stringify({
+    verdict: "compound",
+    atoms: ["friend", "relationship", "affection"]
+  }), { input }), /must select exactly two atom words/u);
   assert.throws(() => parseSenseCompoundChoiceResponse("not JSON", { input }), /no bounded JSON object/u);
   assert.throws(() => parseSenseCompoundChoiceResponse(JSON.stringify({
     model: "qwen3.5:9b",
@@ -454,11 +494,11 @@ test("an existing lexical target stays the mandatory head of a new sense compoun
   const input = buildSenseCompoundChoiceInput({ sense, translations, kwonCandidatesByGloss: choices });
 
   assert.match(input.prompt, /existing lexical head better \(pcac\)/u);
-  assert.match(input.prompt, /Choose one or two distinct modifier atoms/u);
+  assert.match(input.prompt, /Choose one distinct modifier atom/u);
   assert.match(input.prompt, /Keep that exact word as the final atom/u);
   assert.equal(input.sourceOptions.some((option) => option.pyashSequence[0] === "pcac"), false);
   assert.equal(input.responseFormat.oneOf[0].properties.atoms.minItems, 1);
-  assert.equal(input.responseFormat.oneOf[0].properties.atoms.maxItems, 2);
+  assert.equal(input.responseFormat.oneOf[0].properties.atoms.maxItems, 1);
 
   const parsed = parseSenseCompoundChoiceResponse(JSON.stringify({
     verdict: "compound",
@@ -480,7 +520,7 @@ test("an existing lexical target stays the mandatory head of a new sense compoun
   assert.equal(acceptedDecision({ ...candidate, status: "accepted-llm" }), true);
   assert.throws(() => parseSenseCompoundChoiceResponse(JSON.stringify({
     verdict: "compound",
-    atoms: ["health", "better"]
+    atoms: ["better"]
   }), { input }), /not an available atom/u);
 });
 
@@ -753,6 +793,31 @@ test("sense translation response parses bounded noisy JSON and keeps only reques
       { language: "chinese", surface: "甲乙", composition: "simple", components: [], compositionEvidence: "single lexical item" }
     ]
   }), { senseId: "n:00000010-n", languages: ["chinese"] }), /duplicate language/u);
+});
+
+test("sense translation parser applies its expanded bound to wrapped provider output", () => {
+  const senseId = "n:00000013-n";
+  const response = JSON.stringify({
+    model: "qwen3.5:9b",
+    response: JSON.stringify({
+      senseId,
+      translations: [{
+        language: "chinese",
+        surface: "甲",
+        composition: "simple",
+        compositionEvidence: "one lexical item",
+        components: []
+      }],
+      providerPadding: "x".repeat(13000)
+    })
+  });
+
+  const parsed = parseWordNetSenseTranslationResponsePartial(response, {
+    senseId,
+    languages: ["chinese"]
+  });
+  assert.deepEqual(parsed.translations.map((row) => row.language), ["chinese"]);
+  assert.deepEqual(parsed.failures, []);
 });
 
 test("partial sense parsing keeps valid languages and isolates malformed rows", () => {
@@ -1741,6 +1806,36 @@ test("translation wave queues a bounded wave before awaiting and repairs malform
   assert.equal(result.submittedCount, 3);
   assert.equal(result.completedCount, 2);
   assert.equal(result.failures.length, 0);
+});
+
+test("translation wave awaits the fingerprinted handle returned by Housekeeper", async () => {
+  let awaitedHandle = "";
+  const result = await translateWordNetSenseWave({
+    senses: [{ senseId: "n:00000012-n", pos: "n", lemma: "target", gloss: "a target" }],
+    wordNetHash: "source-hash",
+    languages: ["chinese"],
+    parallelism: 1,
+    submit: async () => ({ status: "queued", handleId: "target-2048-token-request" }),
+    awaitHandle: async (handleId) => {
+      awaitedHandle = handleId;
+      return JSON.stringify({
+        senseId: "n:00000012-n",
+        translations: [{
+          language: "chinese",
+          surface: "甲乙",
+          composition: "compound",
+          compositionEvidence: "first and second jointly express the target",
+          components: [
+            { surface: "甲", gloss: "first", role: "lexical" },
+            { surface: "乙", gloss: "second", role: "lexical" }
+          ]
+        }]
+      });
+    }
+  });
+
+  assert.equal(awaitedHandle, "target-2048-token-request");
+  assert.equal(result.completedCount, 1);
 });
 
 test("translation wave adds newly selected languages without retranslating compatible cached languages", async () => {

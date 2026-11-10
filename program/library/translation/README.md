@@ -51,6 +51,16 @@ Open English WordNet remains authoritative in
 `know/wordnet/open-english-wordnet-2025-json/`; this small projection lets
 `kwon <word-or-Pyac-atom>` show linked glosses and target anchors without loading the full
 dataset.
+Stable synset IDs can be queried directly, for example
+`kwon n:07558676-n`. Use the POS-qualified Open English WordNet ID (`a`, `n`, `r`, `v`, or
+`s`, followed by the eight-digit synset number and matching POS suffix). The result includes
+the source lemmas and gloss plus the recorded anchor, Pyac sequence, and link status. For
+agent-readable output, `node command/vocab_suggest.mjs n:07558676-n --map /tmp/love-synset.json`
+writes a `vocab-suggest-v3` map with `wordNetSenseLookups`; the `.pya` bridge and compound
+catalogs remain canonical. Catalog reads use asynchronous file I/O and query only matching
+sense, target, and alias rows before parsing them.
+`kwon` is a one-shot Node command, so multiple terms in one invocation share its loaded
+indexes; module callers also reuse process-local in-flight loads.
 The bounded sense-linking worker is configured in `english_wordnet_linker.pya`. Its
 `english_wordnet_linker.mjs` module emits one stable record per WordNet sense, accepts only
 targets present in the supplied inventory, and submits unresolved records through the existing
@@ -169,12 +179,19 @@ uncertain candidates remain durable evidence and do not enter the compound lexic
 synsets without an existing covered lemma or compound candidate stay explicitly unresolved for a
 later atom/compound generation pass.
 
+The verified compound catalog has at most one active Pyac sequence per WordNet synset. When
+multiple accepted rows exist for a synset, the shorter atom sequence wins. Equal-length candidates
+use the shared Pyac complexity rank: lower maximum glyph layer, then lower total layer rank. English
+target forms from the removed rows remain aliases on the selected record; the decision ledger
+retains the original candidate evidence.
+
 For those residual senses, run `node command/wordnet_sense_compound_refinery.mjs`. Its Pyash
 workflow is `wordnet_sense_compound_refinery.pya`; each launch selects up to 64 unlinked senses in
-configured tag-count order, starting at the highest count and including senses with at least two
+configured tag-count order, starting at the highest count and including senses with at least one
 WordNet tags. It asks the configured Qwen mind, through the configured GPU Housekeeper
-queue, for sense-specific translations and transparent compound parts in Chinese, French, Russian,
-and Hindi. This translation prompt contains one sense definition and no atom inventory. It requests
+queue, for sense-specific translations and transparent compound parts in Chinese, Hindi, Russian,
+German, Japanese, Korean, and Finnish. Missing language rows are requested and saved to the
+translation cache before composition. This translation prompt contains one sense definition and no atom inventory. It requests
 multiple concise English gloss alternatives when a source part has distinct context-fitting meanings.
 Translation splits of prefixes, suffixes, inflections, and grammatical material do not form lexical
 compounds; bound-affix decompositions remain uncertain. Slash-separated English part glosses are
@@ -182,9 +199,10 @@ kept as alternatives.
 
 Before composition, resolve existing compound and grammar coverage. A grammar-covered sense stays
 out of the lexical compound worklist. If an unlinked lexical sense already has an atomic target for
-its lemma, preserve that atom as the fixed final head and compose only one or two source-backed
-modifiers before it. The model cannot replace or repeat that head. Without an existing lexical head,
-the model selects the semantic head from its two or three source-backed atoms. Thus a new subtype of
+its lemma, preserve that atom as the fixed final head and compose exactly one source-backed
+modifier before it. The model cannot replace or repeat that head. Without an existing lexical head,
+the model selects the semantic head from exactly two source-backed atoms. Source-language translations
+may still decompose into three parts; the resulting Pyash compound is limited to two atoms. Thus a new subtype of
 `better` can keep `better` as its head, while a genuinely new lexical target gets the head its
 meaning requires.
 

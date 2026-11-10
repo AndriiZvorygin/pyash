@@ -1,6 +1,12 @@
 import { readFile } from "node:fs/promises";
 
 import { buildProgram } from "../../program.mjs";
+import {
+  KWON_LOOKUP_INDEX_PATHS,
+  lookupKwonIndex,
+  readKwonSourceHead,
+  readKwonSourceLocators
+} from "./kwon_lookup_index.mjs";
 
 export const ENGLISH_WORDNET_BRIDGE_FORMAT = "english-wordnet-bridge-v1";
 export const ENGLISH_WORDNET_BRIDGE_NAME = "translation_english_wordnet_bridges";
@@ -11,6 +17,7 @@ const CERTAINTIES = new Set(["deterministic", "contextual"]);
 const METADATA_KEYS = new Set(["format", "source", "source-hash", "mode"]);
 const SENSE_GLOSS_PREFIX = "sense-gloss:";
 const SENSE_LEMMA_PREFIX = "sense-lemma:";
+const BRIDGE_SOURCE_ID = "program/library/translation/english_wordnet_bridges.pya";
 
 export function canonicalWordNetTargetPartOfSpeech(value) {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
@@ -46,6 +53,370 @@ function invalid(message, details = {}) {
 
 function textAt(sentence, role) {
   return typeof sentence?.[role]?.text === "string" ? sentence[role].text.trim() : "";
+}
+
+function pyaTextKey(line) {
+  const prefix = 'su text "';
+  if (!line.startsWith(prefix)) return "";
+  const end = line.indexOf('"', prefix.length);
+  return end > prefix.length ? line.slice(prefix.length, end) : "";
+}
+
+function pyaNameValue(line, role) {
+  const match = line.match(new RegExp(`\\b${role} ("(?:\\\\.|[^"\\\\])*")`, "u"));
+  if (!match) return "";
+  try {
+    return JSON.parse(match[1]);
+  } catch {
+    return "";
+  }
+}
+
+function sourceFromMetadataKey(key) {
+  if (key.startsWith(SENSE_GLOSS_PREFIX)) return key.slice(SENSE_GLOSS_PREFIX.length);
+  if (!key.startsWith(SENSE_LEMMA_PREFIX)) return "";
+  const finalColon = key.lastIndexOf(":");
+  return finalColon > SENSE_LEMMA_PREFIX.length ? key.slice(SENSE_LEMMA_PREFIX.length, finalColon) : "";
+}
+
+function parsedSentenceLine(line) {
+  return buildProgram(line).sentences.find((sentence) => sentence?.mood === "ya") ?? null;
+}
+
+function senseIdFromLocatorKey(key) {
+  if (/^[anrvs]:[0-9]{8}-[anrvs]$/iu.test(key)) return key.toLowerCase();
+  if (key.startsWith(SENSE_GLOSS_PREFIX)) return key.slice(SENSE_GLOSS_PREFIX.length).toLowerCase();
+  if (!key.startsWith(SENSE_LEMMA_PREFIX)) return "";
+  const finalColon = key.lastIndexOf(":");
+  return finalColon > SENSE_LEMMA_PREFIX.length ? key.slice(SENSE_LEMMA_PREFIX.length, finalColon).toLowerCase() : "";
+}
+
+async function indexedBridgeSource({
+  terms,
+  senseIds,
+  resolveTarget,
+  resolveTargets,
+  relatedTargetsForSequence,
+  indexPaths = KWON_LOOKUP_INDEX_PATHS,
+  indexRoot
+}) {
+  const rootOptions = indexRoot ? { root: indexRoot } : {};
+  const selectedLocators = new Map();
+  const selectedSources = new Set();
+  const expandedTargets = new Set();
+  const queriedTargets = new Set();
+  const indexedRows = new Map();
+
+  const addLocators = (locators) => {
+    let changed = false;
+    for (const locator of locators ?? []) {
+      if (locator?.sourceId !== BRIDGE_SOURCE_ID) continue;
+      if (!selectedLocators.has(locator.byteOffset)) {
+        selectedLocators.set(locator.byteOffset, locator);
+        changed = true;
+      }
+      const source = senseIdFromLocatorKey(locator.recordId);
+      if (source && !selectedSources.has(source)) {
+        selectedSources.add(source);
+        changed = true;
+      }
+    }
+    return changed;
+  };
+
+  const [termResults, senseResults] = await Promise.all([
+    Promise.all(terms.map((key) => lookupKwonIndex({
+      kind: "english", key, indexPath: indexPaths.english, ...rootOptions
+    }))),
+    Promise.all(senseIds.map((key) => lookupKwonIndex({
+      kind: "wordnet", key, indexPath: indexPaths.wordnet, ...rootOptions
+    })))
+  ]);
+  addLocators([...termResults.flat(), ...senseResults.flat()]);
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const pendingSources = [...selectedSources].filter((source) => !indexedRows.has(`sense:${source}`));
+    if (pendingSources.length > 0) {
+      const results = await Promise.all(pendingSources.map((key) => lookupKwonIndex({
+        kind: "wordnet", key, indexPath: indexPaths.wordnet, ...rootOptions
+      })));
+      for (let index = 0; index < pendingSources.length; index += 1) {
+        indexedRows.set(`sense:${pendingSources[index]}`, true);
+        if (addLocators(results[index])) changed = true;
+      }
+    }
+
+    const newRows = [...selectedLocators.values()].filter((locator) => !indexedRows.has(`row:${locator.byteOffset}`));
+    if (newRows.length > 0) {
+      const sourceRows = await readKwonSourceLocators(newRows, rootOptions);
+      for (const { locator, line } of sourceRows) {
+        indexedRows.set(`row:${locator.byteOffset}`, line);
+        const sentence = parsedSentenceLine(line);
+        const key = textAt(sentence, "su");
+        const directSource = senseIdFromLocatorKey(key);
+        if (directSource && !selectedSources.has(directSource)) {
+          selectedSources.add(directSource);
+          changed = true;
+        }
+        if (key.startsWith("equivalence:")) {
+          for (const source of textAt(sentence, "ob").split(/\s+/u).map((value) => value.toLowerCase())) {
+            if (/^[anrvs]:[0-9]{8}-[anrvs]$/u.test(source) && !selectedSources.has(source)) {
+              selectedSources.add(source);
+              changed = true;
+            }
+          }
+        }
+      }
+    }
+
+    const targetNames = new Set([...indexedRows.values()]
+      .filter((line) => typeof line === "string")
+      .map((line) => parsedSentenceLine(line))
+      .filter((sentence) => /^[anrvs]:[0-9]{8}-[anrvs]$/iu.test(textAt(sentence, "su")) && typeof sentence?.ob?.name === "string")
+      .map((sentence) => sentence.ob.name.trim().toLowerCase())
+      .filter(Boolean));
+    const pendingTargets = [...targetNames].filter((target) => !expandedTargets.has(target));
+    if (pendingTargets.length > 0) {
+      pendingTargets.forEach((target) => expandedTargets.add(target));
+      let targetCandidates = new Set(pendingTargets);
+      if (typeof resolveTarget === "function" && typeof relatedTargetsForSequence === "function") {
+        const coverages = typeof resolveTargets === "function"
+          ? await resolveTargets(pendingTargets)
+          : await Promise.all(pendingTargets.map((target) => resolveTarget(target)));
+        for (const coverage of coverages) {
+          if (coverage?.pyashSequence?.length !== 1) continue;
+          for (const peer of relatedTargetsForSequence(coverage.pyashSequence) ?? []) {
+            if (typeof peer === "string" && peer.trim()) targetCandidates.add(peer.trim().toLowerCase());
+          }
+        }
+      }
+      const queryTargets = [...targetCandidates].filter((target) => !queriedTargets.has(target));
+      queryTargets.forEach((target) => queriedTargets.add(target));
+      if (queryTargets.length > 0) {
+        const results = await Promise.all(queryTargets.map((key) => lookupKwonIndex({
+          kind: "english", key, indexPath: indexPaths.english, ...rootOptions
+        })));
+        for (const result of results) if (addLocators(result)) changed = true;
+      }
+    }
+  }
+
+  const head = await readKwonSourceHead(BRIDGE_SOURCE_ID, { lineCount: 5, ...rootOptions });
+  const rows = [...indexedRows.entries()]
+    .filter(([key, value]) => key.startsWith("row:") && typeof value === "string")
+    .sort(([left], [right]) => Number(left.slice(4)) - Number(right.slice(4)))
+    .map(([, line]) => line);
+  return [...head, ...(selectedSources.size > 0 ? rows : []), "prah", ""].join("\n");
+}
+
+export async function loadEnglishWordNetBridgeSubset({
+  terms = [],
+  senseIds = [],
+  resolveTarget = null,
+  resolveTargets = null,
+  relatedTargetsForSequence = null,
+  configUrl = ENGLISH_WORDNET_BRIDGE_CONFIG_URL,
+  indexPaths = KWON_LOOKUP_INDEX_PATHS,
+  indexRoot
+} = {}) {
+  const normalizedTerms = new Set(terms
+    .filter((term) => typeof term === "string" && term.trim())
+    .map((term) => term.normalize("NFC").trim().toLowerCase()));
+  const selectedSources = new Set(senseIds
+    .filter((senseId) => typeof senseId === "string" && senseId.trim())
+    .map((senseId) => senseId.trim().toLowerCase()));
+  const selectedLines = new Set();
+  const targetNames = new Set();
+  const addBridgeLine = (line, sentence) => {
+    const sourceKey = textAt(sentence, "su").toLowerCase();
+    if (!/^[anrvs]:[^\s]+$/u.test(sourceKey)) return false;
+    selectedLines.add(line);
+    selectedSources.add(sourceKey);
+    const target = typeof sentence?.ob?.name === "string" ? sentence.ob.name.trim().toLowerCase() : "";
+    if (target) targetNames.add(target);
+    return true;
+  };
+
+  let lines;
+  if (configUrl instanceof URL && configUrl.href === ENGLISH_WORDNET_BRIDGE_CONFIG_URL.href) {
+    try {
+      const indexedSource = await indexedBridgeSource({
+        terms: [...normalizedTerms],
+        senseIds: [...selectedSources],
+        resolveTarget,
+        resolveTargets,
+        relatedTargetsForSequence,
+        indexPaths,
+        indexRoot
+      });
+      lines = indexedSource.split(/\r?\n/u);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+  }
+  if (!lines) lines = (await readFile(configUrl, "utf8")).split(/\r?\n/u);
+
+  let prefixEnd = 0;
+  for (; prefixEnd < lines.length; prefixEnd += 1) {
+    const line = lines[prefixEnd];
+    if (!line.trim()) continue;
+    const sentence = buildProgram(line).sentences[0];
+    const key = textAt(sentence, "su");
+    if (sentence?.mood === "def" || METADATA_KEYS.has(key)) {
+      selectedLines.add(line);
+      continue;
+    }
+    break;
+  }
+
+  const bridgeLinesBySource = new Map();
+  const bridgeLinesByTarget = new Map();
+  for (const line of lines.slice(prefixEnd)) {
+    const source = pyaTextKey(line).toLowerCase();
+    if (!/^[anrvs]:[^\s]+$/u.test(source)) continue;
+    bridgeLinesBySource.set(source, line);
+    const target = pyaNameValue(line, "ob name").trim().toLowerCase();
+    if (!target) continue;
+    const rows = bridgeLinesByTarget.get(target) ?? [];
+    rows.push(line);
+    bridgeLinesByTarget.set(target, rows);
+  }
+
+  for (const line of lines.slice(prefixEnd)) {
+    const key = pyaTextKey(line).toLowerCase();
+    if (selectedSources.has(key)) {
+      const sentence = parsedSentenceLine(line);
+      if (sentence) addBridgeLine(line, sentence);
+      continue;
+    }
+    if (!normalizedTerms.size) continue;
+    if (![...normalizedTerms].some((term) => (
+      line.includes(`ob name ${JSON.stringify(term)}`)
+      || line.includes(`ob text ${JSON.stringify(term)}`)
+    ))) continue;
+    const sentence = parsedSentenceLine(line);
+    if (!sentence) continue;
+    const rowKey = textAt(sentence, "su").toLowerCase();
+    if (/^[anrvs]:[^\s]+$/u.test(rowKey)
+      && typeof sentence.ob?.name === "string"
+      && normalizedTerms.has(sentence.ob.name.trim().toLowerCase())) {
+      addBridgeLine(line, sentence);
+      continue;
+    }
+    const lemmaSource = sourceFromMetadataKey(rowKey);
+    if (lemmaSource && rowKey.startsWith(SENSE_LEMMA_PREFIX)
+      && normalizedTerms.has(textAt(sentence, "ob").toLowerCase())) {
+      selectedSources.add(lemmaSource);
+      selectedLines.add(line);
+    }
+  }
+
+  // Lemma metadata can follow its bridge row in the catalog. Resolve all
+  // selected senses to their bridge rows before expanding same-anchor peers.
+  for (const line of lines.slice(prefixEnd)) {
+    if (!selectedSources.has(pyaTextKey(line).toLowerCase())) continue;
+    const sentence = parsedSentenceLine(line);
+    if (sentence) addBridgeLine(line, sentence);
+  }
+
+  const scannedTargets = new Set();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const targetCandidates = new Set(targetNames);
+    if (typeof resolveTarget === "function" && typeof relatedTargetsForSequence === "function") {
+      const targetList = [...targetNames];
+      const coverages = typeof resolveTargets === "function"
+        ? await resolveTargets(targetList)
+        : await Promise.all(targetList.map((target) => resolveTarget(target)));
+      for (const coverage of coverages) {
+        if (!Array.isArray(coverage?.pyashSequence) || coverage.pyashSequence.length === 0) continue;
+        for (const peer of relatedTargetsForSequence(coverage.pyashSequence) ?? []) {
+          if (typeof peer === "string" && peer.trim()) targetCandidates.add(peer.trim().toLowerCase());
+        }
+      }
+    }
+    for (const target of targetCandidates) {
+      if (scannedTargets.has(target)) continue;
+      scannedTargets.add(target);
+      for (const line of bridgeLinesByTarget.get(target) ?? []) {
+        const sentence = parsedSentenceLine(line);
+        if (!sentence || typeof sentence.ob?.name !== "string"
+          || sentence.ob.name.trim().toLowerCase() !== target) continue;
+        const sourceKey = textAt(sentence, "su").toLowerCase();
+        if (!/^[anrvs]:[^\s]+$/u.test(sourceKey)) continue;
+        if (!selectedSources.has(sourceKey)) changed = true;
+        addBridgeLine(line, sentence);
+      }
+    }
+
+    for (const line of lines.slice(prefixEnd)) {
+      const key = pyaTextKey(line).toLowerCase();
+      if (!key.startsWith("equivalence:") || !selectedSources.size
+        || ![...selectedSources].some((senseId) => line.includes(senseId))) continue;
+      const sentence = parsedSentenceLine(line);
+      if (!sentence) continue;
+      selectedLines.add(line);
+      for (const senseId of textAt(sentence, "ob").split(/\s+/u).filter(Boolean).map((item) => item.toLowerCase())) {
+        if (!selectedSources.has(senseId)) changed = true;
+        selectedSources.add(senseId);
+      }
+    }
+
+    for (const source of selectedSources) {
+      const line = bridgeLinesBySource.get(source);
+      if (line && !selectedLines.has(line)) {
+        const sentence = parsedSentenceLine(line);
+        if (sentence) addBridgeLine(line, sentence);
+      }
+    }
+  }
+
+  for (const line of lines.slice(prefixEnd)) {
+    const key = pyaTextKey(line).toLowerCase();
+    const sourceKey = sourceFromMetadataKey(key);
+    if (sourceKey && selectedSources.has(sourceKey)) selectedLines.add(line);
+  }
+  if (selectedSources.size === 0) {
+    return { entries: [], ambiguousTargets: [], bySense: new Map(), byTerm: new Map() };
+  }
+
+  const catalog = parseEnglishWordNetBridgeCatalog([...selectedLines, "prah", ""].join("\n"));
+  const targets = [...new Set(catalog.entries.map((entry) => entry.target))];
+  const targetCoverages = new Map();
+  if (typeof resolveTarget === "function") {
+    const coverages = typeof resolveTargets === "function"
+      ? await resolveTargets(targets)
+      : await Promise.all(targets.map((target) => resolveTarget(target)));
+    targets.forEach((target, index) => targetCoverages.set(target, coverages[index] ?? null));
+  }
+  const bridgeIndex = buildEnglishWordNetBridgeIndex({
+    entries: catalog.entries,
+    resolveTarget: typeof resolveTarget === "function" ? (target) => targetCoverages.get(target) : null
+  });
+  const indexedBySense = new Map(bridgeIndex.entries.map((entry) => [entry.source, entry]));
+  const byTerm = new Map();
+  const entries = catalog.entries.map((entry) => {
+    const indexed = indexedBySense.get(entry.source);
+    const linked = {
+      ...entry,
+      pyashSequence: [...(indexed?.pyashSequence ?? [])],
+      active: bridgeIndex.bySense.has(entry.source) && (indexed?.pyashSequence ?? []).length > 0,
+      targetKind: indexed?.targetKind ?? "atom",
+      targetId: indexed?.targetId ?? ""
+    };
+    for (const term of [...entry.lemmas, entry.target]) {
+      const key = term.normalize("NFC").trim().toLowerCase();
+      if (!key) continue;
+      const rows = byTerm.get(key) ?? [];
+      if (!rows.some((row) => row.source === linked.source)) rows.push(linked);
+      byTerm.set(key, rows);
+    }
+    return linked;
+  });
+  return { entries, ambiguousTargets: bridgeIndex.ambiguousTargets, bySense: bridgeIndex.bySense, byTerm };
 }
 
 function senseKey(value, index) {

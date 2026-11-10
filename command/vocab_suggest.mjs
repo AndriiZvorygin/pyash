@@ -1,18 +1,17 @@
 #!/usr/bin/env node
 
 import fs from "node:fs/promises";
-import { realpathSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildProgram } from "../program/program.mjs";
 import pyashWords from "../program/library/pyashWords.json" with { type: "json" };
 import { loadCoverage } from "./compound_coverage.mjs";
-import { loadWordNetVerifiedCompoundIndex } from "../program/library/translation/compound_coverage.mjs";
+import { loadWordNetVerifiedCompoundMatches } from "../program/library/translation/compound_coverage.mjs";
 import { loadAllCompoundAtomLinks } from "../program/library/translation/compound_lexicons.mjs";
 import { renderPyacSurface } from "../program/library/translation/pyash_surface.mjs";
 import {
   buildEnglishDictionaryAliases,
-  loadEnglishDictionaryBlacklist
+  parseEnglishDictionaryBlacklist
 } from "../program/library/translation/english_dictionary_aliases.mjs";
 import {
   buildEnglishLemmaIndex,
@@ -20,10 +19,11 @@ import {
   loadEnglishLemmaCatalog
 } from "../program/library/translation/english_lemmas.mjs";
 import { loadAnchorWordForms } from "../program/library/translation/anchor_words.mjs";
+import { loadEnglishWordNetBridgeSubset as loadEnglishWordNetBridgeSubsetFromSource } from "../program/library/translation/english_wordnet_bridges.mjs";
 import {
-  buildEnglishWordNetBridgeIndex,
-  loadEnglishWordNetBridges
-} from "../program/library/translation/english_wordnet_bridges.mjs";
+  loadEnglishWordNet,
+  loadOpenEnglishWordNetSenseRows
+} from "../program/library/translation/english_wordnet.mjs";
 import { loadEnglishWordNetCompoundGlosses } from "../program/library/translation/english_wordnet_compound_glosses.mjs";
 import {
   loadDefaultEnglish30kCoverage,
@@ -32,8 +32,9 @@ import {
   lookupEnglish30kCoverage
 } from "../program/library/translation/english30k_coverage.mjs";
 import { buildEnglishGrammarIndex, loadEnglishGrammarCatalog } from "../program/library/translation/english_grammar.mjs";
-import { queryVocabLines } from "./vocab_query.mjs";
+import { loadVocabQueryData, queryVocabLines } from "./vocab_query.mjs";
 import { resolveEnglishAlias } from "../program/library/translation/english_aliases.mjs";
+import { takeKwonLookupWarnings } from "../program/library/translation/kwon_lookup_index.mjs";
 import {
   MOODS,
   ROLE_KEYS,
@@ -49,6 +50,7 @@ import {
 function parseArgs(args) {
   const inputs = [];
   const textInputs = [];
+  const senseIds = [];
   let mapPath = null;
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
@@ -62,14 +64,14 @@ function parseArgs(args) {
       i += 1;
       continue;
     }
-    inputs.push(arg);
+    if (/^([anrvs]):[0-9]{8}-\1$/iu.test(arg)) senseIds.push(arg.toLowerCase());
+    else inputs.push(arg);
   }
-  return { inputs, textInputs, mapPath };
+  return { inputs, textInputs, senseIds: [...new Set(senseIds)], mapPath };
 }
 
 const checked = new Map();
 let acceptedCoveragePromise = null;
-let wordNetCompoundCoveragePromise = null;
 let curatedAcceptedCoveragePromise = null;
 let english30kCoveragePromise = null;
 let english30kSourcePromise = null;
@@ -78,9 +80,9 @@ let englishLemmaIndexPromise = null;
 let extendedEnglishResourcesPromise = null;
 let anchorWordFormsPromise = null;
 let compoundAtomLinksPromise = null;
-let englishWordNetBridgeLookupPromise = null;
-let englishWordNetBridgeFullLookupPromise = null;
-let englishWordNetCompoundGlossesPromise = null;
+let englishWordNetIndexPromise = null;
+const wordNetCompoundMatchPromises = new Map();
+const englishWordNetBridgeSubsetPromises = new Map();
 let fastAtomicIndex = null;
 let fastRootIndex = null;
 let fastAtomicByPyacIndex = null;
@@ -143,26 +145,25 @@ function isGrammarKeyword(token) {
   return GRAMMAR_KEYWORDS.has(String(token ?? "").toLowerCase());
 }
 
-function isPackedPyacCompound(value, maximumComponents = 3) {
+function packedPyacCompoundSequences(value, maximumComponents = 3) {
   const packed = String(value ?? "").trim().toLowerCase();
-  if (!/^[a-z0-9]+$/u.test(packed)) return false;
-  const memo = new Map();
-  const canSegment = (offset, count) => {
-    if (offset === packed.length) return count >= 2;
-    if (count >= maximumComponents) return false;
-    const key = `${offset}:${count}`;
-    if (memo.has(key)) return memo.get(key);
-    for (let end = offset + 1; end <= packed.length; end += 1) {
-      if (!PACKED_PYAC_ATOMS.has(packed.slice(offset, end))) continue;
-      if (canSegment(end, count + 1)) {
-        memo.set(key, true);
-        return true;
-      }
+  if (!/^[a-z0-9]+$/u.test(packed)) return [];
+  const sequences = [];
+  const visit = (offset, parts) => {
+    if (offset === packed.length) {
+      if (parts.length >= 2) sequences.push(parts);
+      return;
     }
-    memo.set(key, false);
-    return false;
+    if (parts.length >= maximumComponents || sequences.length >= 64) return;
+    for (let end = offset + 1; end <= packed.length; end += 1) {
+      const atom = packed.slice(offset, end);
+      if (!PACKED_PYAC_ATOMS.has(atom)) continue;
+      visit(end, [...parts, atom]);
+      if (sequences.length >= 64) break;
+    }
   };
-  return canSegment(0, 0);
+  visit(0, []);
+  return sequences;
 }
 
 function tokenizeName(name) {
@@ -267,12 +268,28 @@ async function loadDefaultAcceptedCompounds() {
   return acceptedCoveragePromise;
 }
 
-async function loadDefaultWordNetCompounds() {
-  if (!wordNetCompoundCoveragePromise) {
-    wordNetCompoundCoveragePromise = loadWordNetVerifiedCompoundIndex()
-      .then(parseAcceptedCompoundRecords);
+async function loadDefaultWordNetCompoundMatches(query) {
+  const key = query.senseId
+    ? `sense:${query.senseId.toLowerCase()}`
+    : query.senseIds
+      ? `senses:${[...query.senseIds].map((id) => id.toLowerCase()).sort().join(",")}`
+    : query.targets
+      ? `targets:${[...query.targets].map(normalizeCompoundTarget).sort().join(",")}`
+    : query.target
+      ? `target:${normalizeCompoundTarget(query.target)}`
+      : `pyac:${(query.pyashSequence ?? []).join(" ").toLowerCase()}`;
+  if (!wordNetCompoundMatchPromises.has(key)) {
+    wordNetCompoundMatchPromises.set(key, loadWordNetVerifiedCompoundMatches(query)
+      .then(parseAcceptedCompoundRecords));
   }
-  return wordNetCompoundCoveragePromise;
+  return wordNetCompoundMatchPromises.get(key);
+}
+
+async function loadDefaultEnglishWordNetIndex() {
+  if (!englishWordNetIndexPromise) {
+    englishWordNetIndexPromise = loadEnglishWordNet().then(({ index }) => index);
+  }
+  return englishWordNetIndexPromise;
 }
 
 async function loadDefaultCuratedAcceptedCompounds() {
@@ -343,68 +360,51 @@ function buildFastAtomicByPyacIndex() {
   return fastAtomicByPyacIndex;
 }
 
-function buildEnglishWordNetBridgeLookup(catalog, resolveTarget) {
-  const bridgeIndex = buildEnglishWordNetBridgeIndex({ entries: catalog.entries, resolveTarget });
-  const indexedBySense = new Map(bridgeIndex.entries.map((entry) => [entry.source, entry]));
-  const byTerm = new Map();
-  for (const entry of catalog.entries) {
-    if (!entry.gloss || !Array.isArray(entry.lemmas)) continue;
-    const indexed = indexedBySense.get(entry.source);
-    if (!indexed) continue;
-    const linked = {
-      ...entry,
-      pyashSequence: [...(indexed.pyashSequence ?? [])],
-      active: bridgeIndex.bySense.has(entry.source) && (indexed.pyashSequence ?? []).length > 0,
-      lemmas: [...entry.lemmas]
-    };
-    for (const term of [...entry.lemmas, entry.target]) {
-      for (const variant of english30kLookupVariants(term)) {
-        const key = normalizeCompoundTarget(variant);
-        const rows = byTerm.get(key) ?? [];
-        if (!rows.some((row) => row.source === linked.source)) rows.push(linked);
-        byTerm.set(key, rows);
-      }
-    }
-  }
-  return byTerm;
-}
-
-async function loadEnglishWordNetBridgeLookup({ includeCompounds = false } = {}) {
-  if (includeCompounds) {
-    if (!englishWordNetBridgeFullLookupPromise) {
-      englishWordNetBridgeFullLookupPromise = Promise.all([
-        loadEnglishWordNetBridges(),
-        loadDefaultAcceptedCompounds(),
-        loadDefaultCuratedAcceptedCompounds()
-      ]).then(([catalog, acceptedCompounds, curatedCompounds]) => {
-        const targetCompounds = new Map();
-        mergeCompoundRows(targetCompounds, acceptedCompounds);
-        mergeCompoundRows(targetCompounds, curatedCompounds);
-        return buildEnglishWordNetBridgeLookup(catalog, (target) => {
-          const compound = targetCompounds.get(normalizeCompoundTarget(target))?.[0];
-          if (compound) return { coverageType: "compound", pyashSequence: [...compound.pyash] };
-          const atomic = findAtomicEntry(target);
-          return atomic ? { coverageType: "atomic", pyashSequence: [atomic.pya] } : null;
-        });
-      }).catch((error) => {
-        if (error?.code === "ENOENT") return new Map();
-        throw error;
-      });
-    }
-    return englishWordNetBridgeFullLookupPromise;
-  }
-  if (!englishWordNetBridgeLookupPromise) {
-    englishWordNetBridgeLookupPromise = loadEnglishWordNetBridges().then((catalog) => (
-      buildEnglishWordNetBridgeLookup(catalog, (target) => {
+async function loadEnglishWordNetBridgeSubset({ terms = [], senseIds = [], includeCompounds = false } = {}) {
+  const normalizedTerms = [...new Set(terms.map(normalizeCompoundTarget).filter(Boolean))].sort();
+  const normalizedSenseIds = [...new Set(senseIds.map((senseId) => String(senseId).trim().toLowerCase()).filter(Boolean))].sort();
+  const key = `${includeCompounds ? "compound" : "atomic"}\u0000${normalizedTerms.join("\u0001")}\u0000${normalizedSenseIds.join("\u0001")}`;
+  if (!englishWordNetBridgeSubsetPromises.has(key)) {
+    const compoundTargets = new Map();
+    const resolveTargets = async (targets) => {
+      const normalizedTargets = [...new Set(targets.map(normalizeCompoundTarget).filter(Boolean))];
+      const unresolved = [];
+      for (const target of normalizedTargets) {
+        if (compoundTargets.has(target)) continue;
         const atomic = findAtomicEntry(target);
-        return atomic ? { coverageType: "atomic", pyashSequence: [atomic.pya] } : null;
-      })
-    )).catch((error) => {
-      if (error?.code === "ENOENT") return new Map();
-      throw error;
-    });
+        if (atomic) compoundTargets.set(target, { coverageType: "atomic", pyashSequence: [atomic.pya] });
+        else if (includeCompounds) unresolved.push(target);
+        else compoundTargets.set(target, null);
+      }
+      if (unresolved.length > 0) {
+        const [wordNet, curated] = await Promise.all([
+          loadDefaultWordNetCompoundMatches({ targets: unresolved }),
+          loadDefaultCuratedAcceptedCompounds()
+        ]);
+        for (const target of unresolved) {
+          const candidate = wordNet.get(target)?.[0] ?? curated.get(target)?.[0];
+          compoundTargets.set(target, candidate
+            ? { coverageType: "compound", pyashSequence: [...candidate.pyash] }
+            : null);
+        }
+      }
+      return normalizedTargets.map((target) => compoundTargets.get(target) ?? null);
+    };
+    const resolveTarget = async (target) => (await resolveTargets([target]))[0] ?? null;
+    englishWordNetBridgeSubsetPromises.set(key, loadEnglishWordNetBridgeSubsetFromSource({
+      terms: normalizedTerms,
+      senseIds: normalizedSenseIds,
+      resolveTarget,
+      resolveTargets,
+      relatedTargetsForSequence: (sequence) => {
+        if (sequence.length !== 1) return [];
+        return pyashWords
+          .filter((entry) => entry?.pya?.trim().toLowerCase() === sequence[0].toLowerCase())
+          .map((entry) => entry.en);
+      }
+    }));
   }
-  return englishWordNetBridgeLookupPromise;
+  return englishWordNetBridgeSubsetPromises.get(key);
 }
 
 function english30kSenseRank(entry, source) {
@@ -418,29 +418,28 @@ function english30kSenseRank(entry, source) {
 
 async function reportLinkedWordNetSenses(tokens, report) {
   if (!Array.isArray(tokens) || tokens.length === 0) return [];
-  let byTerm = await loadEnglishWordNetBridgeLookup();
-  if (byTerm.size === 0) return [];
-  const source = await loadDefaultEnglish30kSourceSafe();
+  const termsByToken = new Map(tokens.map((token) => {
+    const atomic = buildFastAtomicByPyacIndex().get(String(token).trim().toLowerCase());
+    const term = atomic?.en ?? token;
+    return [token, english30kLookupVariants(term)];
+  }));
+  const terms = [...new Set([...termsByToken.values()].flat().map(normalizeCompoundTarget))];
+  const [bridgeLookup, source] = await Promise.all([
+    loadEnglishWordNetBridgeSubset({ terms, includeCompounds: true }),
+    loadDefaultEnglish30kSourceSafe()
+  ]);
+  if (bridgeLookup.entries.length === 0) return [];
+  const matchesFor = (token, lookup) => {
+    const matches = new Map();
+    for (const term of termsByToken.get(token) ?? []) {
+      for (const entry of lookup.byTerm.get(normalizeCompoundTarget(term)) ?? []) matches.set(entry.source, entry);
+    }
+    return matches;
+  };
   const rows = [];
   const seen = new Set();
   for (const token of tokens) {
-    const atomic = buildFastAtomicByPyacIndex().get(String(token).trim().toLowerCase());
-    const terms = [atomic?.en ?? token];
-    const matches = new Map();
-    for (const term of terms) {
-      for (const variant of english30kLookupVariants(term)) {
-        for (const entry of byTerm.get(normalizeCompoundTarget(variant)) ?? []) matches.set(entry.source, entry);
-      }
-    }
-    if ([...matches.values()].some((entry) => entry.pyashSequence.length === 0)) {
-      byTerm = await loadEnglishWordNetBridgeLookup({ includeCompounds: true });
-      matches.clear();
-      for (const term of terms) {
-        for (const variant of english30kLookupVariants(term)) {
-          for (const entry of byTerm.get(normalizeCompoundTarget(variant)) ?? []) matches.set(entry.source, entry);
-        }
-      }
-    }
+    const matches = matchesFor(token, bridgeLookup);
     const ordered = [...matches.values()].sort((left, right) => (
       english30kSenseRank(left, source) - english30kSenseRank(right, source)
         || left.source.localeCompare(right.source)
@@ -465,6 +464,144 @@ async function reportLinkedWordNetSenses(tokens, report) {
     }
   }
   return rows;
+}
+
+async function reportWordNetSenseLookups(senseIds, report) {
+  if (senseIds.length === 0) return [];
+  const [bridgeLookup, compoundIndex] = await Promise.all([
+    loadEnglishWordNetBridgeSubset({ senseIds, includeCompounds: true }),
+    loadDefaultWordNetCompoundMatches({ senseIds })
+  ]);
+  const bridgesBySense = new Map(bridgeLookup.entries.map((entry) => [entry.source, entry]));
+  const compoundsBySense = new Map();
+  for (const rows of compoundIndex.values()) {
+    for (const row of rows) {
+      for (const link of row.senseLinks ?? []) {
+        const key = link.senseId.toLowerCase();
+        const links = compoundsBySense.get(key) ?? [];
+        links.push({ row, link });
+        compoundsBySense.set(key, links);
+      }
+    }
+  }
+  const compoundGlosses = compoundIndex.size > 0
+    ? (await loadEnglishWordNetCompoundGlosses({ senseIds })).records
+    : [];
+  const glossesBySense = new Map();
+  for (const gloss of compoundGlosses) {
+    const rows = glossesBySense.get(gloss.senseId.toLowerCase()) ?? [];
+    rows.push(gloss);
+    glossesBySense.set(gloss.senseId.toLowerCase(), rows);
+  }
+  const rawLookupIds = senseIds.filter((senseId) => {
+    const bridge = bridgesBySense.get(senseId);
+    const senseGlosses = glossesBySense.get(senseId) ?? [];
+    return !bridge?.gloss || !bridge?.lemmas?.length ? senseGlosses.length === 0 : false;
+  });
+  const rawWordNetRowsBySense = new Map();
+  let rawWordNetIndexUnavailable = false;
+  if (rawLookupIds.length > 0) {
+    try {
+      const rawRows = await loadOpenEnglishWordNetSenseRows({ senseIds: rawLookupIds });
+      for (const row of rawRows) {
+        const key = `${row.pos}:${row.synset}`.toLowerCase();
+        const rows = rawWordNetRowsBySense.get(key) ?? [];
+        rows.push(row);
+        rawWordNetRowsBySense.set(key, rows);
+      }
+    } catch (error) {
+      if (error?.code !== "ENOENT" && error?.code !== "stale-kwon-lookup-index") throw error;
+      rawWordNetIndexUnavailable = true;
+    }
+  }
+  let wordNetIndex = null;
+  const results = [];
+  for (const senseId of senseIds) {
+    const match = senseId.match(/^([anrvs]):([0-9]{8})-\1$/u);
+    const bridge = bridgesBySense.get(senseId);
+    const senseGlosses = glossesBySense.get(senseId) ?? [];
+    const compoundLinks = compoundsBySense.get(senseId) ?? [];
+    let rows = [];
+    if ((!bridge?.gloss || !bridge?.lemmas?.length) && senseGlosses.length === 0) {
+      rows = rawWordNetRowsBySense.get(senseId.toLowerCase()) ?? [];
+      if (rows.length === 0 && rawWordNetIndexUnavailable) {
+        wordNetIndex ??= await loadDefaultEnglishWordNetIndex();
+        rows = match ? wordNetIndex.bySynset.get(match[0]) ?? [] : [];
+      }
+    }
+    if (!match || (!bridge && senseGlosses.length === 0 && compoundLinks.length === 0 && rows.length === 0)) {
+      const result = { senseId, status: "not-found", links: [] };
+      results.push(result);
+      report(`${senseId}: WordNet synset not found`);
+      continue;
+    }
+    const lemmas = [...new Set([
+      ...(bridge?.lemmas ?? []),
+      ...senseGlosses.flatMap((gloss) => gloss.lemmas ?? []),
+      ...rows.map((row) => row.lemma)
+    ])].sort((left, right) => left.localeCompare(right));
+    const definitions = [...new Set([
+      bridge?.gloss,
+      ...senseGlosses.map((gloss) => gloss.definition),
+      ...rows.map((row) => row.gloss)
+    ].filter(Boolean))];
+    const links = [];
+    if (bridge) {
+      const sequence = [...(bridge.pyashSequence ?? [])];
+      links.push({
+        kind: sequence.length > 1 || bridge.targetKind === "compound" ? "compound" : "atom",
+        target: bridge.target,
+        targetPartOfSpeech: bridge.targetPartOfSpeech,
+        pyashSequence: sequence,
+        status: bridge.active ? "active" : sequence.length > 0 ? "withheld-collision" : "unresolved-target",
+        certainty: bridge.certainty,
+        evidence: bridge.evidence
+      });
+    }
+    for (const { row, link } of compoundLinks) {
+      links.push({
+        kind: "compound",
+        target: row.target,
+        targetPartOfSpeech: link.targetPartOfSpeech || senseId[0],
+        components: [...row.components],
+        pyashSequence: [...row.pyash],
+        status: row.status,
+        evidence: row.evidence ?? row.provenance
+      });
+    }
+    const uniqueLinks = [...new Map(links.map((link) => [
+      `${link.kind}\u0000${link.target}\u0000${link.pyashSequence.join(" ")}\u0000${link.status}`,
+      link
+    ])).values()];
+    const status = uniqueLinks.some((link) => link.status === "active" || link.status.startsWith("accepted-") || link.status === "repaired-llm")
+      ? "linked"
+      : uniqueLinks.length > 0
+        ? "withheld"
+        : "unlinked";
+    const result = {
+      senseId,
+      partOfSpeech: match[1],
+      lemmas,
+      definitions,
+      definition: definitions[0] ?? "",
+      status,
+      links: uniqueLinks
+    };
+    results.push(result);
+    report(`${senseId} [${match[1]}; ${lemmas.join(", ")}]: ${definitions.join(" | ")}`);
+    if (uniqueLinks.length === 0) {
+      report(`${senseId}: no Pyash sense link recorded`);
+      continue;
+    }
+    for (const link of uniqueLinks) {
+      const sequence = link.pyashSequence.length > 0
+        ? renderPyacSurface(link.pyashSequence.join(" "))
+        : "no Pyac sequence";
+      const components = link.components?.length ? ` [${link.components.join(" + ")}]` : "";
+      report(`${senseId}: linked ${link.kind} ${link.target}${components} -> ${sequence} (${link.status}${link.certainty ? `; ${link.certainty}` : ""})`);
+    }
+  }
+  return results;
 }
 
 function resolveGrammarRootEntries(grammar) {
@@ -527,12 +664,12 @@ async function loadExtendedEnglishResourcesSafe() {
   if (!extendedEnglishResourcesPromise) {
     extendedEnglishResourcesPromise = Promise.all([
       loadDefaultEnglishLemmaIndexSafe(),
-      loadEnglishDictionaryBlacklist()
+      loadVocabQueryData()
     ])
-      .then(([lemmaIndex, dictionary]) => lemmaIndex ? ({
+      .then(([lemmaIndex, vocabularyData]) => lemmaIndex ? ({
         lemmaIndex,
         dictionaryAliases: buildEnglishDictionaryAliases({
-          dictionary,
+          dictionary: parseEnglishDictionaryBlacklist({ en: { blacklist: vocabularyData.blacklist } }),
           atomicEntries: pyashWords
         })
       }) : null)
@@ -669,14 +806,16 @@ async function findFastEnglishCoverage(token) {
     .map((variant) => buildFastAtomicIndex().get(variant))
     .find(Boolean) ?? null;
   if (atomic && !grammar) {
-    const lemmaIndex = await loadDefaultEnglishLemmaIndexSafe();
+    const [lemmaIndex, source] = await Promise.all([
+      loadDefaultEnglishLemmaIndexSafe(),
+      loadDefaultEnglish30kSourceSafe()
+    ]);
     const resolved = lemmaIndex?.resolve(token);
     if (
       resolved &&
       ["anchor", "irregular", "inflectional", "derivational", "duplicate"].includes(resolved.kind) &&
       resolved.pyashSequence?.length
     ) {
-      const source = await loadDefaultEnglish30kSourceSafe();
       const row = sourceRowForToken(source, token);
       if (row) {
         return {
@@ -902,15 +1041,8 @@ async function addWordNetCompoundSenseGlosses(foundCompounds, report) {
     }
     return [];
   }
-  if (!englishWordNetCompoundGlossesPromise) {
-    englishWordNetCompoundGlossesPromise = loadEnglishWordNetCompoundGlosses()
-      .then(({ records }) => records)
-      .catch((error) => {
-        if (error?.code === "ENOENT") return [];
-        throw error;
-      });
-  }
-  const indexedGlosses = await englishWordNetCompoundGlossesPromise;
+  const senseIds = [...new Set(rows.flatMap((row) => (row.senseLinks ?? []).map((link) => link.senseId)))];
+  const indexedGlosses = (await loadEnglishWordNetCompoundGlosses({ senseIds })).records;
   const glossesBySenseAndTarget = new Map();
   for (const gloss of indexedGlosses) {
     const key = `${gloss.senseId}\u0000${normalizeCompoundTarget(gloss.target)}`;
@@ -1346,9 +1478,17 @@ async function resolveRootsAndTokens(inputs, textInputs) {
   return { roots, tokens };
 }
 
-export async function runVocabSuggest(args = process.argv.slice(2), { report = console.log } = {}) {
-  const { inputs, textInputs, mapPath } = parseArgs(args);
-  const { roots, tokens: resolvedTextInputs } = await resolveRootsAndTokens(inputs, textInputs);
+export async function runVocabSuggest(args = process.argv.slice(2), {
+  report = console.log,
+  includeStructured = null
+} = {}) {
+  const { inputs, textInputs, senseIds, mapPath } = parseArgs(args);
+  const resolved = await resolveRootsAndTokens(inputs, textInputs);
+  const shouldBuildStructured = includeStructured ?? (mapPath !== null || !await isMainModule());
+  const roots = senseIds.length > 0 && inputs.length === 0 && textInputs.length === 0
+    ? []
+    : resolved.roots;
+  const resolvedTextInputs = resolved.tokens;
   const occurrences = new Map();
   const acceptedCompounds = new Map();
   const foundCompounds = new Map();
@@ -1494,15 +1634,20 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
       okTextTokens.add(token);
       continue;
     }
-    if (isPackedPyacCompound(token)) {
-      mergeCompoundRows(acceptedCompounds, await loadDefaultWordNetCompounds());
+    // A valid English word can also split into short Pyac atoms (for example,
+    // love = lo + ve). Prefer its English reading before loading the full
+    // accepted-compound inventory to test a speculative packed reading.
+    const packedSequences = !fastRanked ? packedPyacCompoundSequences(token) : [];
+    const rankedEnglishWord = packedSequences.length > 0
+      ? sourceRowForToken(await loadDefaultEnglish30kSourceSafe(), token)
+      : null;
+    if (packedSequences.length > 0 && !rankedEnglishWord) {
+      for (const pyashSequence of packedSequences) {
+        mergeCompoundRows(acceptedCompounds, await loadDefaultWordNetCompoundMatches({ pyashSequence }));
+      }
+      await ensureCuratedAcceptedCompounds();
       packedPyacCompoundIndex = buildPackedPyacCompoundIndex(acceptedCompounds);
       let packedMatches = packedPyacCompoundIndex.get(token.toLowerCase());
-      if (!packedMatches?.length) {
-        await ensureCuratedAcceptedCompounds();
-        packedPyacCompoundIndex = buildPackedPyacCompoundIndex(acceptedCompounds);
-        packedMatches = packedPyacCompoundIndex.get(token.toLowerCase());
-      }
       if (!packedMatches?.length) {
         await ensureDefaultAcceptedCompounds();
         packedPyacCompoundIndex = buildPackedPyacCompoundIndex(acceptedCompounds);
@@ -1513,7 +1658,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
         if (!fastRanked || fastRanked.coverageType === "unresolved") continue;
       }
     }
-    mergeCompoundRows(acceptedCompounds, await loadDefaultWordNetCompounds());
+    mergeCompoundRows(acceptedCompounds, await loadDefaultWordNetCompoundMatches({ target: token }));
     const canonicalCompounds = acceptedCompounds.get(normalizeCompoundTarget(token));
     if (canonicalCompounds?.length) registerFoundCompound(foundCompounds, canonicalCompounds, "input", token);
     let ranked = fastRanked;
@@ -1594,6 +1739,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     }
   }
 
+  const wordNetSenseLookups = await reportWordNetSenseLookups(senseIds, report);
   const linkedWordNetSenses = await reportLinkedWordNetSenses(resolvedTextInputs, report);
   const wordNetCompoundSenses = await addWordNetCompoundSenseGlosses(foundCompounds, report);
 
@@ -1714,34 +1860,36 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     report(`${token}: grammar -> ${pyac} (English30k rank ${ranked.rank})`);
   }
 
-  const suggestionTokens = new Set([
-    ...resolvedTextInputs.flatMap(tokenizeName),
-    ...occurrences.keys(),
-    ...foundCompounds.keys(),
-    ...dictionaryMatches.keys(),
-    ...lemmaMatches.keys(),
-    ...rootMatches.keys(),
-    ...grammarMatches.keys(),
-    ...morphologyMatches.keys(),
-    ...compoundMorphologyMatches.keys(),
-    ...pyaGlossMatches.keys(),
-    ...okTextTokens
-  ]);
   const suggestionRecords = [];
-  for (const token of [...suggestionTokens].sort((left, right) => left.localeCompare(right))) {
-    suggestionRecords.push(await buildStructuredSuggestionRecord(token, {
-      occurrences,
-      foundCompounds,
-      dictionaryMatches,
-      lemmaMatches,
-      rootMatches,
-      grammarMatches,
-      morphologyMatches,
-      compoundMorphologyMatches,
-      pyaGlossMatches,
-      okTextTokens,
-      rankedCoverage
-    }));
+  if (shouldBuildStructured) {
+    const suggestionTokens = new Set([
+      ...resolvedTextInputs.flatMap(tokenizeName),
+      ...occurrences.keys(),
+      ...foundCompounds.keys(),
+      ...dictionaryMatches.keys(),
+      ...lemmaMatches.keys(),
+      ...rootMatches.keys(),
+      ...grammarMatches.keys(),
+      ...morphologyMatches.keys(),
+      ...compoundMorphologyMatches.keys(),
+      ...pyaGlossMatches.keys(),
+      ...okTextTokens
+    ]);
+    for (const token of [...suggestionTokens].sort((left, right) => left.localeCompare(right))) {
+      suggestionRecords.push(await buildStructuredSuggestionRecord(token, {
+        occurrences,
+        foundCompounds,
+        dictionaryMatches,
+        lemmaMatches,
+        rootMatches,
+        grammarMatches,
+        morphologyMatches,
+        compoundMorphologyMatches,
+        pyaGlossMatches,
+        okTextTokens,
+        rankedCoverage
+      }));
+    }
   }
 
   for (const suggestion of suggestionRecords) {
@@ -1752,8 +1900,9 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
   if (mapPath) {
     const records = Object.fromEntries(suggestionRecords.map((record) => [record.input, record]));
     await fs.writeFile(mapPath, JSON.stringify({
-      format: "vocab-suggest-v2",
+      format: "vocab-suggest-v3",
       records,
+      wordNetSenseLookups,
       foundCompounds: [...foundCompounds.entries()].map(([target, found]) => ({
         target: found.pyacSequenceQuery ? found.row.target : target,
         ...(found.pyacSequenceQuery ? {
@@ -1816,6 +1965,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
     compoundMorphologies: [...compoundMorphologyMatches.values()].flat(),
     linkedWordNetSenses,
     wordNetCompoundSenses,
+    wordNetSenseLookups,
     compoundAtomLinks: [...compoundAtomMatches.entries()].map(([token, links]) => ({
       token,
       compounds: links.map(({ compound, atom }) => ({
@@ -1830,16 +1980,18 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
   };
 }
 
-function isMainModule() {
+async function isMainModule() {
   if (!process.argv[1]) return false;
   try {
-    return realpathSync(process.argv[1]) === fileURLToPath(import.meta.url);
+    return await fs.realpath(process.argv[1]) === fileURLToPath(import.meta.url);
   } catch {
     return false;
   }
 }
 
-if (isMainModule()) {
+if (await isMainModule()) {
   const { exitCode } = await runVocabSuggest(process.argv.slice(2));
+  const warnings = takeKwonLookupWarnings();
+  if (warnings.length > 0) process.stderr.write(`\n${warnings.join("\n\n")}\n`);
   if (exitCode > 0) process.exitCode = exitCode;
 }

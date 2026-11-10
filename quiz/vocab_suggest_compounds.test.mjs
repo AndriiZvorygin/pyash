@@ -55,6 +55,16 @@ test("vocab_suggest recognizes repository accepted compounds for direct token ch
   assert.match(lines.join("\n"), /blueprint: found compound blue \+ print -> plun trat \(accepted-curated\)/u);
 });
 
+test("a ranked English word wins over an accidental packed Pyac segmentation", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["love"], {
+    report: (line) => lines.push(String(line))
+  });
+  assert.equal(result.missing, 0);
+  assert.ok(lines.some((line) => line.startsWith("love: root -> pyan")));
+  assert.ok(!result.foundCompounds.some((compound) => compound.inputSequence === "love"));
+});
+
 test("vocab_suggest exposes pre-sweep canonical WordNet compounds with their sense glosses", async () => {
   const lines = [];
   const result = await runVocabSuggest(["adequate"], {

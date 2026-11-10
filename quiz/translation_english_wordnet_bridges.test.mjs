@@ -1,9 +1,13 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
   buildEnglishWordNetBridgeIndex,
   loadEnglishWordNetBridges,
+  loadEnglishWordNetBridgeSubset,
   parseEnglishWordNetBridgeCatalog
 } from "../program/library/translation/english_wordnet_bridges.mjs";
 import { buildEnglishWordNetSenseBridgeIndex } from "../program/library/translation/english_wordnet_linker.mjs";
@@ -90,6 +94,48 @@ test("WordNet bridge catalog joins its linked sense gloss and lemmas", () => {
     gloss: "a gloss; an example",
     lemmas: ["sample", "sample word"]
   });
+});
+
+test("query-scoped WordNet bridge lookup retains same-anchor collision checks by part of speech", async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-wordnet-bridge-subset-"));
+  const configUrl = new URL(`file://${path.join(directory, "bridges.pya")}`);
+  try {
+    await fs.writeFile(configUrl, [
+      "su name translation_english_wordnet_bridges be map def",
+      'su text "format" ob text "english-wordnet-bridge-v1" ya',
+      'su text "source" ob text "fixture" ya',
+      'su text "n:00000001-n" ob name "shared" as text "n" with text "deterministic" via text "fixture" ya',
+      'su text "sense-gloss:n:00000001-n" ob text "first meaning" ya',
+      'su text "sense-lemma:n:00000001-n:1" ob text "first" ya',
+      'su text "n:00000002-n" ob name "shared" as text "n" with text "deterministic" via text "fixture" ya',
+      'su text "sense-gloss:n:00000002-n" ob text "second meaning" ya',
+      'su text "sense-lemma:n:00000002-n:1" ob text "second" ya',
+      'su text "v:00000003-v" ob name "shared" as text "v" with text "deterministic" via text "fixture" ya',
+      'su text "sense-gloss:v:00000003-v" ob text "verb meaning" ya',
+      'su text "sense-lemma:v:00000003-v:1" ob text "verb" ya',
+      "prah",
+      ""
+    ].join("\n"), "utf8");
+
+    const lookup = await loadEnglishWordNetBridgeSubset({
+      terms: ["first"],
+      configUrl,
+      resolveTarget: (target) => target === "shared"
+        ? { coverageType: "atomic", pyashSequence: ["shar"] }
+        : null
+    });
+
+    assert.deepEqual(lookup.entries.map((entry) => entry.source).sort(), [
+      "n:00000001-n",
+      "n:00000002-n",
+      "v:00000003-v"
+    ]);
+    assert.equal(lookup.entries.find((entry) => entry.source === "n:00000001-n").active, false);
+    assert.equal(lookup.entries.find((entry) => entry.source === "n:00000002-n").active, false);
+    assert.equal(lookup.entries.find((entry) => entry.source === "v:00000003-v").active, true);
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("WordNet bridge catalog rejects incomplete or orphaned gloss metadata", () => {

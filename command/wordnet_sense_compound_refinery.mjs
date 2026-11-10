@@ -194,13 +194,24 @@ export async function runWordNetSenseCompoundRefinerySweepCommand({
     const artifactDirectory = path.join(artifactRoot, runId);
     let batchCount = 0;
     let lastResult = null;
+    const requestedSenseIds = Array.isArray(configuration.senseIds)
+      ? [...new Set(configuration.senseIds.map((senseId) => String(senseId ?? "").trim()).filter(Boolean))]
+      : null;
+    const requestedBatchSize = Math.min(64, Math.max(1, Math.trunc(Number(configuration.maximumSenses) || 64)));
+    let requestedOffset = 0;
 
     while (batchCount < maximumBatches) {
       const before = await (dependencies.progressSignature ?? progressArtifactSignature)(artifactDirectory);
       const runChunk = dependencies.runChunk ?? runWordNetSenseCompoundRefineryChunk;
+      const chunkSenseIds = requestedSenseIds
+        ? requestedSenseIds.slice(requestedOffset, requestedOffset + requestedBatchSize)
+        : null;
+      if (requestedSenseIds && chunkSenseIds.length === 0) {
+        return { ...lastResult, batchCount, remainingSenseCount: 0, sweepComplete: true };
+      }
       lastResult = await runChunk({
         dependencies,
-        configuration,
+        configuration: chunkSenseIds ? { ...configuration, senseIds: chunkSenseIds } : configuration,
         requestedRunId: runId,
         repositoryRoot,
         artifactRoot,
@@ -213,7 +224,9 @@ export async function runWordNetSenseCompoundRefinerySweepCommand({
         batchCount,
         runId,
         selectedSenseCount: lastResult.selectedSenseCount,
-        remainingSenseCount: lastResult.remainingSenseCount,
+        remainingSenseCount: requestedSenseIds
+          ? requestedSenseIds.length - requestedOffset - lastResult.selectedSenseCount
+          : lastResult.remainingSenseCount,
         candidateCount: lastResult.candidateCount,
         promotedSenseCount: Number(lastResult.result?.["promoted-sense-count"] ?? 0),
         translationFailureCount: lastResult.translationFailureCount,
@@ -221,10 +234,20 @@ export async function runWordNetSenseCompoundRefinerySweepCommand({
         checkpointPath: lastResult.checkpointPath
       }));
 
-      if (lastResult.remainingSenseCount === 0) {
+      if (requestedSenseIds) {
+        if (lastResult.selectedSenseCount !== chunkSenseIds.length) {
+          throw new Error(`WordNet sense compound retry selected ${lastResult.selectedSenseCount} of ${chunkSenseIds.length} requested senses`);
+        }
+        requestedOffset += chunkSenseIds.length;
+        if (requestedOffset >= requestedSenseIds.length) {
+          return { ...lastResult, batchCount, remainingSenseCount: 0, sweepComplete: true };
+        }
+      }
+
+      if (!requestedSenseIds && lastResult.remainingSenseCount === 0) {
         return { ...lastResult, batchCount, sweepComplete: true };
       }
-      if (lastResult.selectedSenseCount === 0) {
+      if (!requestedSenseIds && lastResult.selectedSenseCount === 0) {
         throw new Error(`WordNet sense compound sweep has ${lastResult.remainingSenseCount} senses remaining but selected no work`);
       }
 
@@ -235,7 +258,10 @@ export async function runWordNetSenseCompoundRefinerySweepCommand({
       allocation = await prepareAllocation();
     }
 
-    throw new Error(`WordNet sense compound sweep reached its ${maximumBatches}-batch safety limit with ${lastResult?.remainingSenseCount ?? "unknown"} senses remaining`);
+    const remaining = requestedSenseIds
+      ? requestedSenseIds.length - requestedOffset
+      : lastResult?.remainingSenseCount ?? "unknown";
+    throw new Error(`WordNet sense compound sweep reached its ${maximumBatches}-batch safety limit with ${remaining} senses remaining`);
   } finally {
     await releaseLock();
   }

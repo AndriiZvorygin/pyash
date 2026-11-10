@@ -15,18 +15,20 @@ export const ENGLISH_WORDNET_SENSE_COMPOUNDS_LANGUAGES = Object.freeze([
 ]);
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_MODEL = "qwen3.5:9b";
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_PROMPT_REVISION = "sense-translation-gloss-alternatives-v11";
-export const ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_PROMPT_REVISION = "sense-component-choice-v13";
-export const ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION = "sense-component-choice-v10";
-export const ENGLISH_WORDNET_SENSE_COMPOUNDS_MAX_OUTPUT_TOKENS = 1024;
+export const ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_PROMPT_REVISION = "sense-component-choice-v14";
+export const ENGLISH_WORDNET_SENSE_COMPOUND_CANDIDATE_REVISION = "sense-component-choice-v11";
+export const ENGLISH_WORDNET_SENSE_COMPOUNDS_MAX_OUTPUT_TOKENS = 2048;
 export const ENGLISH_WORDNET_SENSE_COMPOUND_CHOICE_MAX_OUTPUT_TOKENS = 256;
 export const ENGLISH_WORDNET_SENSE_COMPOUNDS_PARALLELISM = 8;
+export const ENGLISH_WORDNET_SENSE_COMPOUND_MAX_ATOMS = 2;
 
 const COMPOSITION_KINDS = new Set(["compound", "simple", "uncertain"]);
-const MAX_RESPONSE_CHARS = 24000;
+const MAX_RESPONSE_CHARS = 48000;
 const MAX_FAILURE_RESPONSE_CHARS = 2000;
 const MAX_SURFACE_CHARS = 300;
 const MAX_COMPONENT_CHARS = 180;
-const MAX_COMPONENTS = 3;
+const MAX_TRANSLATION_COMPONENTS = 3;
+const MAX_COMPOUND_ATOMS = ENGLISH_WORDNET_SENSE_COMPOUND_MAX_ATOMS;
 const MAX_COMPONENT_CHOICES = 4;
 const MAX_SENSE_COMPOSITION_PROMPT_CHARS = 8000;
 const MAX_WORDNET_FALLBACK_SENSES = 4;
@@ -79,7 +81,7 @@ export function wordNetLemmaComponentTranslations(sense) {
   ].map((lemma) => text(lemma).replace(/_/gu, " ").toLowerCase()).filter(Boolean))];
   return lemmas.flatMap((lemma) => {
     const parts = lemma.split(/\s+/u).filter(Boolean);
-    if (parts.length < 2 || parts.length > MAX_COMPONENTS) return [];
+    if (parts.length < 2 || parts.length > MAX_TRANSLATION_COMPONENTS) return [];
     return [{
       language: "english",
       surface: lemma,
@@ -569,7 +571,7 @@ export function buildKwonLinkedAtomicChoices({
 function parseWordNetSenseTranslationPayload(value, { senseId, maxResponseChars = MAX_RESPONSE_CHARS } = {}) {
   const raw = String(value ?? "");
   if (raw.length > maxResponseChars) throw invalid("sense translation response exceeds its character limit");
-  const payload = extractBoundedJsonObject(raw);
+  const payload = extractBoundedJsonObject(raw, { maxResponseChars });
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw invalid("sense translation response has no bounded JSON object");
   }
@@ -579,7 +581,7 @@ function parseWordNetSenseTranslationPayload(value, { senseId, maxResponseChars 
     : typeof payload.message?.content === "string" ? payload.message.content : "";
   if (wrappedResponse) {
     if (wrappedResponse.length > maxResponseChars) throw invalid("wrapped sense translation response exceeds its character limit");
-    translationPayload = extractBoundedJsonObject(wrappedResponse);
+    translationPayload = extractBoundedJsonObject(wrappedResponse, { maxResponseChars });
   }
   if (!translationPayload || typeof translationPayload !== "object" || Array.isArray(translationPayload)) {
     throw invalid("wrapped sense translation response has no bounded JSON object");
@@ -636,7 +638,7 @@ export function parseWordNetSenseTranslationResponse(value, {
       if (composition === "simple") {
         throw invalid("multi-character Chinese translation must be decomposed", { index, language, surface, hanCharacterCount: han.length });
       }
-      if (components.length < 2 || components.length > MAX_COMPONENTS) {
+      if (components.length < 2 || components.length > MAX_TRANSLATION_COMPONENTS) {
         throw invalid("multi-character Chinese translation requires two or three decomposed parts", { index, language, surface, componentCount: components.length });
       }
       const joinedParts = components.map((component) => component.surface).join("").normalize("NFC");
@@ -644,13 +646,13 @@ export function parseWordNetSenseTranslationResponse(value, {
         throw invalid("Chinese decomposition parts must cover every character of the surface in written order", { index, language, surface, joinedParts });
       }
     }
-    if (components.length > MAX_COMPONENTS) {
+    if (components.length > MAX_TRANSLATION_COMPONENTS) {
       throw invalid("sense translation decomposition exceeds three components", { index, language, componentCount: components.length });
     }
-    if (composition === "compound" && (components.length < 2 || components.length > MAX_COMPONENTS)) {
+    if (composition === "compound" && (components.length < 2 || components.length > MAX_TRANSLATION_COMPONENTS)) {
       throw invalid("compound translations require two or three components", { index, language, componentCount: components.length });
     }
-    if (composition === "uncertain" && components.length !== 0 && (components.length < 2 || components.length > MAX_COMPONENTS)) {
+    if (composition === "uncertain" && components.length !== 0 && (components.length < 2 || components.length > MAX_TRANSLATION_COMPONENTS)) {
       throw invalid("uncertain translation decomposition must be empty or contain two or three parts", { index, language });
     }
     seen.add(language);
@@ -887,7 +889,7 @@ function sourceDecompositionChoices(
       || !text(translation?.surface)
       || !Array.isArray(translation?.components)
       || translation.components.length < 2
-      || translation.components.length > MAX_COMPONENTS) continue;
+      || translation.components.length > MAX_TRANSLATION_COMPONENTS) continue;
     const parts = translation.components.map((component, sourceIndex) => {
       const surface = text(component?.surface);
       const glossOptions = componentGlossAlternatives(component?.gloss).map((gloss) => {
@@ -961,7 +963,7 @@ export function buildSenseCompoundChoiceResponseFormat(input) {
           atoms: {
             type: "array",
             minItems: hasFixedHead ? 1 : 2,
-            maxItems: hasFixedHead ? MAX_COMPONENTS - 1 : MAX_COMPONENTS,
+            maxItems: hasFixedHead ? MAX_COMPOUND_ATOMS - 1 : MAX_COMPOUND_ATOMS,
             uniqueItems: true,
             items: { type: "string", enum: atoms }
           }
@@ -1027,8 +1029,8 @@ export function buildSenseCompoundChoiceInput({
   }
   const atomOptions = [...optionsByGloss.values()];
   const componentCountRule = targetHead
-    ? "The final compound has two or three atoms total, including the existing target head. Choose one or two distinct modifier atoms. The pipeline appends the target head."
-    : "Choose two or three distinct atoms in Pyash head-final order. A single atom is not a compound.";
+    ? "The final compound has exactly two atoms total, including the existing target head. Choose one distinct modifier atom. The pipeline appends the target head."
+    : "Choose exactly two distinct atoms in Pyash head-final order. A single atom is not a compound.";
   const minimumAtoms = targetHead ? 1 : 2;
   const renderPrompt = (groups, truncated) => [
     "Form one Pyash compound for the target meaning.",
@@ -1139,11 +1141,11 @@ export function parseSenseCompoundChoiceResponse(value, { input } = {}) {
   }
   if (verdict !== "compound") throw invalid("component-choice response verdict is unsupported", { verdict });
   const minimumAtoms = input.targetHead ? 1 : 2;
-  const maximumAtoms = input.targetHead ? MAX_COMPONENTS - 1 : MAX_COMPONENTS;
+  const maximumAtoms = input.targetHead ? MAX_COMPOUND_ATOMS - 1 : MAX_COMPOUND_ATOMS;
   if (atoms.length < minimumAtoms || atoms.length > maximumAtoms) {
     throw invalid(input.targetHead
-      ? "component-choice response must select one or two modifier atom words"
-      : "component-choice response must select two or three atom words");
+      ? "component-choice response must select exactly one modifier atom word"
+      : "component-choice response must select exactly two atom words");
   }
   if (new Set(atoms.map(normalized)).size !== atoms.length) {
     throw invalid("component-choice response repeats an atom word");
@@ -1272,7 +1274,7 @@ export function buildSenseDerivedCompoundCandidates({
       || !text(translation?.compositionEvidence)
       || !Array.isArray(translation?.components)
       || translation.components.length < 2
-      || translation.components.length > MAX_COMPONENTS) continue;
+      || translation.components.length > MAX_TRANSLATION_COMPONENTS) continue;
     const sourceComponents = translation.components.map((component) => ({
       surface: text(component?.surface),
       gloss: text(component?.gloss),
@@ -1291,6 +1293,7 @@ export function buildSenseDerivedCompoundCandidates({
         const headSense = candidateSense(selection[headIndex]);
         const order = [...selection.keys()].filter((index) => index !== headIndex).concat(headIndex);
         const ordered = order.map((index) => selection[index]);
+        if (ordered.length > MAX_COMPOUND_ATOMS) continue;
         const orderedSourceComponents = order.map((index) => sourceComponents[index]);
         const orderedPyash = ordered.map((candidate) => text(candidate.pyashSequence[0]));
         if (new Set(orderedPyash).size !== orderedPyash.length) continue;
@@ -1417,11 +1420,11 @@ export function buildSenseDerivedCompoundCandidateFromChoice({
     throw invalid("component-choice candidate requires a versioned advisory head policy");
   }
   const minimumModifiers = targetHead ? 1 : 2;
-  const maximumModifiers = targetHead ? MAX_COMPONENTS - 1 : MAX_COMPONENTS;
+  const maximumModifiers = targetHead ? MAX_COMPOUND_ATOMS - 1 : MAX_COMPOUND_ATOMS;
   if (selectedComponents.length < minimumModifiers || selectedComponents.length > maximumModifiers) {
     throw invalid(targetHead
-      ? "component-choice candidate requires one or two selected modifiers"
-      : "component-choice candidate requires two or three selected atoms");
+      ? "component-choice candidate requires exactly one selected modifier"
+      : "component-choice candidate requires exactly two selected atoms");
   }
   const selected = selectedComponents.map((component) => {
     const language = normalized(component?.language);
@@ -1640,7 +1643,7 @@ export function buildWordNetSenseTranslationResponseFormat(languages = ENGLISH_W
             compositionEvidence: { type: "string", maxLength: 500 },
             components: {
               type: "array",
-              maxItems: MAX_COMPONENTS,
+              maxItems: MAX_TRANSLATION_COMPONENTS,
               items: {
                 type: "object",
                 required: ["surface", "gloss", "role"],
@@ -1809,7 +1812,7 @@ export async function translateWordNetSenseWave({
       while (state.missingLanguages.length > 0 && state.attempt < attemptsLimit) {
         state.attempt += 1;
         const requestedLanguages = [...state.missingLanguages];
-        const attemptHandle = state.handleId + "-translate-" + state.attempt;
+        let attemptHandle = state.handleId + "-translate-" + state.attempt;
         let raw = "";
         try {
           const queued = await submit({
@@ -1822,6 +1825,7 @@ export async function translateWordNetSenseWave({
           if (text(queued?.status ?? queued?.ob?.text).toLowerCase() !== "queued") {
             throw invalid("Housekeeper did not queue sense translation", { handleId: attemptHandle });
           }
+          attemptHandle = text(queued?.handleId) || attemptHandle;
           submittedCount += 1;
           const value = await awaitHandle(attemptHandle);
           raw = typeof value === "object" && value !== null && typeof value.text === "string"
@@ -1916,7 +1920,8 @@ export function createQueuedMindWordNetSenseTranslationTransport({
         num_predict: Math.max(1, Math.trunc(Number(maxOutputTokens) || ENGLISH_WORDNET_SENSE_COMPOUNDS_MAX_OUTPUT_TOKENS))
       }
     };
-    const queuedHandle = `${id}-translate-${attempt}`;
+    const requestRevision = hash(stableJson(jobSpec)).slice(0, 12);
+    const queuedHandle = `${id}-${requestRevision}-translate-${attempt}`;
     recordExchangeJsonArtifact({ identity: queuedHandle, label: "request", producer: "gpu mind request", payload: { handleId: queuedHandle, job: jobSpec } });
     const start = await interpret(parse(
       `su name ${JSON.stringify(queuedHandle)} ob text ${JSON.stringify(JSON.stringify(jobSpec))} vyah start future be gpu mind do`

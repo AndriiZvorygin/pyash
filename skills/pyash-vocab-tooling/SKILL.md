@@ -17,6 +17,26 @@ Use this skill when adding new verbs/names or checking token validity.
   `node command/vocab_check.mjs examples/pyash`
 - Ask whether a word is used as a Pyash *name* anywhere:
   `node command/scan_pyashtoken.mjs <word>`
+- Inspect a stable Open English WordNet synset directly:
+  `kwon n:07558676-n`
+- Write machine-readable lookup output:
+  `node command/vocab_suggest.mjs n:07558676-n --map /tmp/love-synset.json`
+
+Synset IDs are POS-qualified (`a`, `n`, `r`, `v`, or `s`) and use the matching POS suffix,
+such as `n:07558676-n`. The lookup reports the source lemmas and gloss, linked Pyash anchor,
+Pyac sequence, and whether the link is active, withheld, or absent. The optional `vocab-suggest-v3`
+map is a query result for tooling; the `.pya` bridge and compound catalogs remain canonical.
+Vocabulary and synset file reads are asynchronous. Module callers reuse in-flight and loaded
+indexes within their process; the `kwon` executable starts a fresh process for each invocation.
+For several related terms, pass them in one `kwon term-one term-two` call to share that process's
+loaded indexes.
+
+The English, Pyac, and POS-qualified WordNet sidecar lookup indexes are generated from the
+canonical catalogs and checked against their source hashes. A stale index produces one warning
+after query results, with changed catalog paths and the rebuild command. Lookups scan changed
+sources in memory, so current vocabulary additions remain searchable while the persistent
+sidecar is stale. After editing catalogs, run `node command/vocab_lookup_index.mjs` to persist
+refreshed indexes. The source catalogs remain the canonical records.
 
 ## Canonical words over legacy aliases
 
