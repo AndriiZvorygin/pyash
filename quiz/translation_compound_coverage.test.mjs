@@ -1,4 +1,6 @@
 import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parse } from "../program/understand/index.mjs";
@@ -9,6 +11,7 @@ import {
   appendNovelCompoundSourceTerms,
   buildDerivedCompoundCoverage,
   loadCuratedCompoundDecompositions,
+  loadWordNetVerifiedCompoundMatches,
   loadWordNetVerifiedCompoundIndex,
   renderDerivedCompoundCoveragePya,
   renderDerivedCompoundCoverageRowPya,
@@ -58,6 +61,61 @@ const atomicEntries = [
   { en: "us", pya: "us" },
   { en: "covered", pya: "kwak" }
 ];
+
+test("WordNet compound batch lookup matches exact targets and aliases only", async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-wordnet-compound-lookup-"));
+  const url = path.join(directory, "compounds.pya");
+  const senseId = "n:00000001-n";
+  const selectedRecord = {
+    surface: "affection compound",
+    senseId,
+    targetPartOfSpeech: "n",
+    aliases: ["love"],
+    morphemes: ["care", "feeling"],
+    target: "affection",
+    gloss: "affection",
+    componentGlosses: ["care", "feeling"],
+    pyashSequence: ["care", "feel"],
+    componentLayers: [16, 16],
+    maxLayer: 16,
+    head: "feeling",
+    provenance: "fixture",
+    confidence: "fixture",
+    status: "accepted-llm"
+  };
+  const exactTargetRecord = {
+    ...selectedRecord,
+    surface: "love compound",
+    senseId: "n:00000003-n",
+    aliases: [],
+    target: "love"
+  };
+  const incidentalMention = {
+    senseId: "n:00000002-n",
+    records: [{
+      target: "unrelated",
+      gloss: "a malformed fixture row that mentions love",
+      aliases: [],
+      morphemes: ["only one"]
+    }]
+  };
+  const row = (key, value) => `su text ${JSON.stringify(key)} ob text ${JSON.stringify(JSON.stringify(value))} ya`;
+  try {
+    await fs.writeFile(url, [
+      "su name translation_compounds_derived_curated be map def",
+      row(senseId, { senseId, records: [selectedRecord] }),
+      row("n:00000003-n", { senseId: "n:00000003-n", records: [exactTargetRecord] }),
+      row("n:00000002-n", incidentalMention),
+      "prah",
+      ""
+    ].join("\n"), "utf8");
+
+    const matches = await loadWordNetVerifiedCompoundMatches({ url, targets: ["love", "affection"] });
+    assert.deepEqual(matches.map((entry) => entry.target).sort(), ["affection", "love"]);
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
 
 const layerIndex = {
   englishToPyash: new Map([

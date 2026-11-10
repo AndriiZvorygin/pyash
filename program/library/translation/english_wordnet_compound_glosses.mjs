@@ -119,8 +119,27 @@ export function parseEnglishWordNetCompoundGlosses(source) {
   return { format: "english-wordnet-compound-sense-glosses-v1", records };
 }
 
-export async function loadEnglishWordNetCompoundGlosses({ url = ENGLISH_WORDNET_COMPOUND_GLOSSES_URL } = {}) {
-  return parseEnglishWordNetCompoundGlosses(await readFile(url, "utf8"));
+export async function loadEnglishWordNetCompoundGlosses({
+  url = ENGLISH_WORDNET_COMPOUND_GLOSSES_URL,
+  senseIds = null
+} = {}) {
+  const source = await readFile(url, "utf8");
+  if (!Array.isArray(senseIds)) return parseEnglishWordNetCompoundGlosses(source);
+  const selectedIds = new Set(senseIds
+    .filter((senseId) => typeof senseId === "string" && senseId.trim())
+    .map((senseId) => senseId.trim().toLowerCase()));
+  const senseNeedles = [...selectedIds];
+  const lines = source.split(/\r?\n/u);
+  const selectedRows = lines.slice(2).filter((line) => (
+    senseNeedles.some((senseId) => line.includes(senseId))
+  ));
+  return parseEnglishWordNetCompoundGlosses([
+    lines[0] ?? "",
+    lines[1] ?? "",
+    ...selectedRows,
+    "prah",
+    ""
+  ].join("\n"));
 }
 
 export async function writeEnglishWordNetCompoundGlosses(records, { url = ENGLISH_WORDNET_COMPOUND_GLOSSES_URL } = {}) {

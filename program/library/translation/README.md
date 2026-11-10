@@ -51,6 +51,16 @@ Open English WordNet remains authoritative in
 `know/wordnet/open-english-wordnet-2025-json/`; this small projection lets
 `kwon <word-or-Pyac-atom>` show linked glosses and target anchors without loading the full
 dataset.
+Stable synset IDs can be queried directly, for example
+`kwon n:07558676-n`. Use the POS-qualified Open English WordNet ID (`a`, `n`, `r`, `v`, or
+`s`, followed by the eight-digit synset number and matching POS suffix). The result includes
+the source lemmas and gloss plus the recorded anchor, Pyac sequence, and link status. For
+agent-readable output, `node command/vocab_suggest.mjs n:07558676-n --map /tmp/love-synset.json`
+writes a `vocab-suggest-v3` map with `wordNetSenseLookups`; the `.pya` bridge and compound
+catalogs remain canonical. Catalog reads use asynchronous file I/O and query only matching
+sense, target, and alias rows before parsing them.
+`kwon` is a one-shot Node command, so multiple terms in one invocation share its loaded
+indexes; module callers also reuse process-local in-flight loads.
 The bounded sense-linking worker is configured in `english_wordnet_linker.pya`. Its
 `english_wordnet_linker.mjs` module emits one stable record per WordNet sense, accepts only
 targets present in the supplied inventory, and submits unresolved records through the existing

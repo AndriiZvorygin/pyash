@@ -48,6 +48,223 @@ function textAt(sentence, role) {
   return typeof sentence?.[role]?.text === "string" ? sentence[role].text.trim() : "";
 }
 
+function pyaTextKey(line) {
+  const prefix = 'su text "';
+  if (!line.startsWith(prefix)) return "";
+  const end = line.indexOf('"', prefix.length);
+  return end > prefix.length ? line.slice(prefix.length, end) : "";
+}
+
+function pyaNameValue(line, role) {
+  const match = line.match(new RegExp(`\\b${role} ("(?:\\\\.|[^"\\\\])*")`, "u"));
+  if (!match) return "";
+  try {
+    return JSON.parse(match[1]);
+  } catch {
+    return "";
+  }
+}
+
+function sourceFromMetadataKey(key) {
+  if (key.startsWith(SENSE_GLOSS_PREFIX)) return key.slice(SENSE_GLOSS_PREFIX.length);
+  if (!key.startsWith(SENSE_LEMMA_PREFIX)) return "";
+  const finalColon = key.lastIndexOf(":");
+  return finalColon > SENSE_LEMMA_PREFIX.length ? key.slice(SENSE_LEMMA_PREFIX.length, finalColon) : "";
+}
+
+function parsedSentenceLine(line) {
+  return buildProgram(line).sentences.find((sentence) => sentence?.mood === "ya") ?? null;
+}
+
+export async function loadEnglishWordNetBridgeSubset({
+  terms = [],
+  senseIds = [],
+  resolveTarget = null,
+  resolveTargets = null,
+  relatedTargetsForSequence = null,
+  configUrl = ENGLISH_WORDNET_BRIDGE_CONFIG_URL
+} = {}) {
+  const source = await readFile(configUrl, "utf8");
+  const lines = source.split(/\r?\n/u);
+  const normalizedTerms = new Set(terms
+    .filter((term) => typeof term === "string" && term.trim())
+    .map((term) => term.normalize("NFC").trim().toLowerCase()));
+  const selectedSources = new Set(senseIds
+    .filter((senseId) => typeof senseId === "string" && senseId.trim())
+    .map((senseId) => senseId.trim().toLowerCase()));
+  const selectedLines = new Set();
+  const targetNames = new Set();
+  const addBridgeLine = (line, sentence) => {
+    const sourceKey = textAt(sentence, "su").toLowerCase();
+    if (!/^[anrvs]:[^\s]+$/u.test(sourceKey)) return false;
+    selectedLines.add(line);
+    selectedSources.add(sourceKey);
+    const target = typeof sentence?.ob?.name === "string" ? sentence.ob.name.trim().toLowerCase() : "";
+    if (target) targetNames.add(target);
+    return true;
+  };
+
+  let prefixEnd = 0;
+  for (; prefixEnd < lines.length; prefixEnd += 1) {
+    const line = lines[prefixEnd];
+    if (!line.trim()) continue;
+    const sentence = buildProgram(line).sentences[0];
+    const key = textAt(sentence, "su");
+    if (sentence?.mood === "def" || METADATA_KEYS.has(key)) {
+      selectedLines.add(line);
+      continue;
+    }
+    break;
+  }
+
+  const bridgeLinesBySource = new Map();
+  const bridgeLinesByTarget = new Map();
+  for (const line of lines.slice(prefixEnd)) {
+    const source = pyaTextKey(line).toLowerCase();
+    if (!/^[anrvs]:[^\s]+$/u.test(source)) continue;
+    bridgeLinesBySource.set(source, line);
+    const target = pyaNameValue(line, "ob name").trim().toLowerCase();
+    if (!target) continue;
+    const rows = bridgeLinesByTarget.get(target) ?? [];
+    rows.push(line);
+    bridgeLinesByTarget.set(target, rows);
+  }
+
+  for (const line of lines.slice(prefixEnd)) {
+    const key = pyaTextKey(line).toLowerCase();
+    if (selectedSources.has(key)) {
+      const sentence = parsedSentenceLine(line);
+      if (sentence) addBridgeLine(line, sentence);
+      continue;
+    }
+    if (!normalizedTerms.size) continue;
+    if (![...normalizedTerms].some((term) => (
+      line.includes(`ob name ${JSON.stringify(term)}`)
+      || line.includes(`ob text ${JSON.stringify(term)}`)
+    ))) continue;
+    const sentence = parsedSentenceLine(line);
+    if (!sentence) continue;
+    const rowKey = textAt(sentence, "su").toLowerCase();
+    if (/^[anrvs]:[^\s]+$/u.test(rowKey)
+      && typeof sentence.ob?.name === "string"
+      && normalizedTerms.has(sentence.ob.name.trim().toLowerCase())) {
+      addBridgeLine(line, sentence);
+      continue;
+    }
+    const lemmaSource = sourceFromMetadataKey(rowKey);
+    if (lemmaSource && rowKey.startsWith(SENSE_LEMMA_PREFIX)
+      && normalizedTerms.has(textAt(sentence, "ob").toLowerCase())) {
+      selectedSources.add(lemmaSource);
+      selectedLines.add(line);
+    }
+  }
+
+  // Lemma metadata can follow its bridge row in the catalog. Resolve all
+  // selected senses to their bridge rows before expanding same-anchor peers.
+  for (const line of lines.slice(prefixEnd)) {
+    if (!selectedSources.has(pyaTextKey(line).toLowerCase())) continue;
+    const sentence = parsedSentenceLine(line);
+    if (sentence) addBridgeLine(line, sentence);
+  }
+
+  const scannedTargets = new Set();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const targetCandidates = new Set(targetNames);
+    if (typeof resolveTarget === "function" && typeof relatedTargetsForSequence === "function") {
+      const targetList = [...targetNames];
+      const coverages = typeof resolveTargets === "function"
+        ? await resolveTargets(targetList)
+        : await Promise.all(targetList.map((target) => resolveTarget(target)));
+      for (const coverage of coverages) {
+        if (!Array.isArray(coverage?.pyashSequence) || coverage.pyashSequence.length === 0) continue;
+        for (const peer of relatedTargetsForSequence(coverage.pyashSequence) ?? []) {
+          if (typeof peer === "string" && peer.trim()) targetCandidates.add(peer.trim().toLowerCase());
+        }
+      }
+    }
+    for (const target of targetCandidates) {
+      if (scannedTargets.has(target)) continue;
+      scannedTargets.add(target);
+      for (const line of bridgeLinesByTarget.get(target) ?? []) {
+        const sentence = parsedSentenceLine(line);
+        if (!sentence || typeof sentence.ob?.name !== "string"
+          || sentence.ob.name.trim().toLowerCase() !== target) continue;
+        const sourceKey = textAt(sentence, "su").toLowerCase();
+        if (!/^[anrvs]:[^\s]+$/u.test(sourceKey)) continue;
+        if (!selectedSources.has(sourceKey)) changed = true;
+        addBridgeLine(line, sentence);
+      }
+    }
+
+    for (const line of lines.slice(prefixEnd)) {
+      const key = pyaTextKey(line).toLowerCase();
+      if (!key.startsWith("equivalence:") || !selectedSources.size
+        || ![...selectedSources].some((senseId) => line.includes(senseId))) continue;
+      const sentence = parsedSentenceLine(line);
+      if (!sentence) continue;
+      selectedLines.add(line);
+      for (const senseId of textAt(sentence, "ob").split(/\s+/u).filter(Boolean).map((item) => item.toLowerCase())) {
+        if (!selectedSources.has(senseId)) changed = true;
+        selectedSources.add(senseId);
+      }
+    }
+
+    for (const source of selectedSources) {
+      const line = bridgeLinesBySource.get(source);
+      if (line && !selectedLines.has(line)) {
+        const sentence = parsedSentenceLine(line);
+        if (sentence) addBridgeLine(line, sentence);
+      }
+    }
+  }
+
+  for (const line of lines.slice(prefixEnd)) {
+    const key = pyaTextKey(line).toLowerCase();
+    const sourceKey = sourceFromMetadataKey(key);
+    if (sourceKey && selectedSources.has(sourceKey)) selectedLines.add(line);
+  }
+  if (selectedSources.size === 0) {
+    return { entries: [], ambiguousTargets: [], bySense: new Map(), byTerm: new Map() };
+  }
+
+  const catalog = parseEnglishWordNetBridgeCatalog([...selectedLines, "prah", ""].join("\n"));
+  const targets = [...new Set(catalog.entries.map((entry) => entry.target))];
+  const targetCoverages = new Map();
+  if (typeof resolveTarget === "function") {
+    const coverages = typeof resolveTargets === "function"
+      ? await resolveTargets(targets)
+      : await Promise.all(targets.map((target) => resolveTarget(target)));
+    targets.forEach((target, index) => targetCoverages.set(target, coverages[index] ?? null));
+  }
+  const bridgeIndex = buildEnglishWordNetBridgeIndex({
+    entries: catalog.entries,
+    resolveTarget: typeof resolveTarget === "function" ? (target) => targetCoverages.get(target) : null
+  });
+  const indexedBySense = new Map(bridgeIndex.entries.map((entry) => [entry.source, entry]));
+  const byTerm = new Map();
+  const entries = catalog.entries.map((entry) => {
+    const indexed = indexedBySense.get(entry.source);
+    const linked = {
+      ...entry,
+      pyashSequence: [...(indexed?.pyashSequence ?? [])],
+      active: bridgeIndex.bySense.has(entry.source) && (indexed?.pyashSequence ?? []).length > 0,
+      targetKind: indexed?.targetKind ?? "atom",
+      targetId: indexed?.targetId ?? ""
+    };
+    for (const term of [...entry.lemmas, entry.target]) {
+      const key = term.normalize("NFC").trim().toLowerCase();
+      if (!key) continue;
+      const rows = byTerm.get(key) ?? [];
+      if (!rows.some((row) => row.source === linked.source)) rows.push(linked);
+      byTerm.set(key, rows);
+    }
+    return linked;
+  });
+  return { entries, ambiguousTargets: bridgeIndex.ambiguousTargets, bySense: bridgeIndex.bySense, byTerm };
+}
+
 function senseKey(value, index) {
   const key = typeof value === "string" ? value.trim().toLowerCase() : "";
   if (!/^[anrvs]:[^\s]+$/u.test(key)) {

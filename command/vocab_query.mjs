@@ -10,7 +10,7 @@ async function loadJson(path) {
   return JSON.parse(text);
 }
 
-async function loadData() {
+export async function loadVocabQueryData() {
   if (cachedData) return cachedData;
   const here = dirname(fileURLToPath(import.meta.url));
   const repoRoot = resolve(here, "..");
@@ -41,7 +41,7 @@ export async function queryVocabLines(prefix) {
   const input = String(prefix ?? "").trim();
   if (!input) return [];
   const normalized = input.toLowerCase();
-  const { entries, blacklist } = await loadData();
+  const { entries, blacklist } = await loadVocabQueryData();
 
   const exactLines = new Set();
   for (const entry of entries) {
