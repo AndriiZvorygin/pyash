@@ -9,8 +9,9 @@ su text "max-senses-per-launch" ob num 64 ya
 su text "worklist-order" ob text "tag-count-descending" ya
 su text "minimum-tag-count" ob num 1 ya
 su text "require-princeton-intersection" ob text "true" ya
-su text "candidate-revision" ob text "sense-component-choice-v10" ya
-su text "component-choice-prompt-revision" ob text "sense-component-choice-v13" ya
+su text "maximum-compound-components" ob num 2 ya
+su text "candidate-revision" ob text "sense-component-choice-v11" ya
+su text "component-choice-prompt-revision" ob text "sense-component-choice-v14" ya
 su text "component-choice-max-attempts" ob num 2 ya
 su text "component-choice-max-output-tokens" ob num 256 ya
 su text "head-relation-policy" ob text "advisory" ya

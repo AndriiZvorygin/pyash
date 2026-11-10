@@ -9,8 +9,10 @@ import { interpret } from "../program/bridge/index.mjs";
 import { builtInSignatures } from "../program/verbs/index.mjs";
 import { forget } from "../program/remember/index.mjs";
 import { buildProgram } from "../program/program.mjs";
+import { runWordNetSenseCompoundRefinerySweepCommand } from "../command/wordnet_sense_compound_refinery.mjs";
 import {
   resolveWordNetSenseCompoundMaximumSenses,
+  resolveWordNetSenseCompoundMaximumComponents,
   resolveWordNetSenseCompoundMinimumTagCount,
   resolveWordNetSenseCompoundSenseIds,
   runWordNetSenseCompoundRefinery
@@ -25,6 +27,11 @@ test("sense compound launch overrides cannot exceed the configured batch limit",
   assert.equal(resolveWordNetSenseCompoundMaximumSenses(64, 16), 16);
   assert.equal(resolveWordNetSenseCompoundMaximumSenses(64, 100000), 64);
   assert.throws(() => resolveWordNetSenseCompoundMaximumSenses(64, 0), /positive integer/u);
+});
+
+test("sense compound refinery config enforces the two-atom output limit", () => {
+  assert.equal(resolveWordNetSenseCompoundMaximumComponents(2), 2);
+  assert.throws(() => resolveWordNetSenseCompoundMaximumComponents(3), /two-atom limit/u);
 });
 
 test("sense compound launch can raise its minimum tag-count threshold", () => {
@@ -42,6 +49,39 @@ test("sense compound launch can select exact WordNet senses for a focused retry"
   ]);
   assert.throws(() => resolveWordNetSenseCompoundSenseIds([]), /nonempty array/u);
   assert.throws(() => resolveWordNetSenseCompoundSenseIds(["accord"]), /invalid WordNet sense id/u);
+});
+
+test("sense compound sweep batches an exact retry queue in groups of 64", async () => {
+  const senseIds = Array.from({ length: 130 }, (_, index) => `n:${String(index).padStart(8, "0")}-n`);
+  const batches = [];
+  let progress = 0;
+  const result = await runWordNetSenseCompoundRefinerySweepCommand({
+    configuration: { senseIds },
+    maximumBatches: 3,
+    artifactRoot: path.join(os.tmpdir(), "pyash-sense-compound-sweep-test"),
+    repositoryRoot: process.cwd(),
+    report: () => {},
+    dependencies: {
+      prepareAllocation: async () => ({ sourceHash: "test-source" }),
+      progressSignature: async () => String(progress),
+      runChunk: async ({ configuration }) => {
+        batches.push(configuration.senseIds);
+        progress += 1;
+        return {
+          selectedSenseCount: configuration.senseIds.length,
+          remainingSenseCount: 0,
+          candidateCount: 0,
+          result: {},
+          checkpointPath: ""
+        };
+      }
+    }
+  });
+
+  assert.deepEqual(batches.map((batch) => batch.length), [64, 64, 2]);
+  assert.deepEqual(batches.flat(), senseIds);
+  assert.equal(result.sweepComplete, true);
+  assert.equal(result.remainingSenseCount, 0);
 });
 
 test("sense compound refinery links, composes, decides, and records one complete sense", async () => {

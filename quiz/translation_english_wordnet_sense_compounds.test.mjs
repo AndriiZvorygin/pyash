@@ -43,6 +43,11 @@ test("sense translation prompt is scoped to one definition and comparison-langua
   });
 
   assert.match(prompt, /n:00000010-n/u);
+  assert.match(prompt, /PART OF SPEECH: n/u);
+  assert.match(prompt, /SENSE WORD: friendship/u);
+  assert.match(prompt, /SENSE LEMMAS: \["friendship"\]/u);
+  assert.match(prompt, /Use its definition to preserve this sense; translate the ordinary lexical meaning/u);
+  assert.match(prompt, /DEFINITION: a relationship between friends/u);
   assert.match(prompt, /a relationship between friends/u);
   assert.doesNotMatch(prompt, /their friendship lasted years/u);
   assert.doesNotMatch(prompt, /hfre|hlak|hbad/u);
@@ -196,7 +201,7 @@ test("component-choice prompt offers gloss-linked atoms without binding choices 
 
   assert.match(input.prompt, /limited inventory of existing atoms/u);
   assert.match(input.prompt, /If fewer than two available atoms fit, return uncertain with an empty atoms array/u);
-  assert.match(input.prompt, /Choose two or three distinct atoms in Pyash head-final order/u);
+  assert.match(input.prompt, /Choose exactly two distinct atoms in Pyash head-final order/u);
   assert.match(input.prompt, /Atoms may be combined across gloss groups/u);
   assert.doesNotMatch(input.prompt, /single translation|same source part|TRANSLATION COMPONENT OPTIONS/u);
   assert.match(input.prompt, /Pyash compounds are head-final/u);
@@ -225,7 +230,7 @@ test("component-choice prompt offers gloss-linked atoms without binding choices 
   assert.doesNotMatch(input.prompt, /sourceLanguage|source language|translation|Chinese:|赋 \/ bestow|component choice\]/u);
   assert.doesNotMatch(input.prompt, /v:\d{8}-v|sense-compound-[a-f0-9]{12}/u);
   assert.equal(input.responseFormat.oneOf[0].properties.atoms.minItems, 2);
-  assert.equal(input.responseFormat.oneOf[0].properties.atoms.maxItems, 3);
+  assert.equal(input.responseFormat.oneOf[0].properties.atoms.maxItems, 2);
   assert.equal(input.responseFormat.oneOf[0].properties.translation, undefined);
   assert.equal(input.responseFormat.oneOf[1].properties.atoms.maxItems, 0);
 
@@ -352,7 +357,10 @@ test("component-choice response resolves only offered atoms and preserves head-f
     ]
   }];
   const choices = new Map([
-    ["friend", [atom("friend", "hfre", "a person attached by affection", "friend")]],
+    ["friend", [
+      atom("friend", "hfre", "a person attached by affection", "friend"),
+      atom("affection", "haff", "a feeling of fondness", "friend")
+    ]],
     ["companion", []],
     ["relationship", [
       atom("relationship", "hlak", "a relation between entities", "relationship"),
@@ -390,7 +398,11 @@ test("component-choice response resolves only offered atoms and preserves head-f
   assert.throws(() => parseSenseCompoundChoiceResponse(JSON.stringify({
     verdict: "compound",
     atoms: ["friend"]
-  }), { input }), /must select two or three atom words/u);
+  }), { input }), /must select exactly two atom words/u);
+  assert.throws(() => parseSenseCompoundChoiceResponse(JSON.stringify({
+    verdict: "compound",
+    atoms: ["friend", "relationship", "affection"]
+  }), { input }), /must select exactly two atom words/u);
   assert.throws(() => parseSenseCompoundChoiceResponse("not JSON", { input }), /no bounded JSON object/u);
   assert.throws(() => parseSenseCompoundChoiceResponse(JSON.stringify({
     model: "qwen3.5:9b",
@@ -454,11 +466,11 @@ test("an existing lexical target stays the mandatory head of a new sense compoun
   const input = buildSenseCompoundChoiceInput({ sense, translations, kwonCandidatesByGloss: choices });
 
   assert.match(input.prompt, /existing lexical head better \(pcac\)/u);
-  assert.match(input.prompt, /Choose one or two distinct modifier atoms/u);
+  assert.match(input.prompt, /Choose one distinct modifier atom/u);
   assert.match(input.prompt, /Keep that exact word as the final atom/u);
   assert.equal(input.sourceOptions.some((option) => option.pyashSequence[0] === "pcac"), false);
   assert.equal(input.responseFormat.oneOf[0].properties.atoms.minItems, 1);
-  assert.equal(input.responseFormat.oneOf[0].properties.atoms.maxItems, 2);
+  assert.equal(input.responseFormat.oneOf[0].properties.atoms.maxItems, 1);
 
   const parsed = parseSenseCompoundChoiceResponse(JSON.stringify({
     verdict: "compound",
@@ -480,7 +492,7 @@ test("an existing lexical target stays the mandatory head of a new sense compoun
   assert.equal(acceptedDecision({ ...candidate, status: "accepted-llm" }), true);
   assert.throws(() => parseSenseCompoundChoiceResponse(JSON.stringify({
     verdict: "compound",
-    atoms: ["health", "better"]
+    atoms: ["better"]
   }), { input }), /not an available atom/u);
 });
 
