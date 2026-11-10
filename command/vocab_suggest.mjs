@@ -1546,7 +1546,10 @@ export async function runVocabSuggest(args = process.argv.slice(2), { report = c
         const pyacSuffix = pyacAlternatives.length > 0
           ? ` Pyac: ${pyacAlternatives.join(" | ")}.`
           : "";
-        report(`${token} blocked, instead: ${blacklistValue}.${pyacSuffix}${locationSuffix}`);
+        const suggestionLabel = foundCompounds.has(token)
+          ? `${token}: dictionary alternatives: ${blacklistValue}.`
+          : `${token} blocked, instead: ${blacklistValue}.`;
+        report(`${suggestionLabel}${pyacSuffix}${locationSuffix}`);
       } else {
         const ranked = rankedCoverage.get(token);
         const rankSuffix = ranked
