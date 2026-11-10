@@ -28,6 +28,7 @@
     "trace": "node command/read_pya_trace.mjs",
     "criterion": "node command/criterion.mjs",
     "compile": "node command/run_pya_program.mjs --gross",
+    "artifacts:prune": "node command/prune_artifacts.mjs",
     "push:all": "bash command/push_all.sh",
     "smoke:wide-teaching-video": "bash command/smoke_wide_teaching_video.sh"
   },

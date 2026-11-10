@@ -108,6 +108,23 @@ per-turn/hash locator. The run newspaper records a `be checkpoint ya` linkage
 with the turn id, snapshot hash, and artifact filename. Replay verifies the
 content-addressed bytes; changing them is a `hash inconsistency`.
 
+### 3.2 Retention and garbage collection
+
+The operator cleaner uses a conservative 90-day default. Preview is the default;
+deletion requires an explicit apply action. It may remove only expired,
+date-shaped run directories and expired `.pya`/`text-*.txt` files inside
+`newspaper/` directories. Persistent artifact subdirectories and
+`world/holding/` are outside the deletion set.
+
+Content-addressed objects are collected only after expired run and newspaper
+entries have been removed and the workspace has been rescanned. A blob is
+eligible only when no retained tracked text source, newspaper, or artifact
+metadata/manifest contains its SHA-256, and removing planned expired run links
+would leave only the canonical store link. If any reference source or content
+store cannot be scanned, blob collection is disabled for that invocation.
+This cleanup policy does not rewrite or compact retained newspapers; replayable
+evidence remains immutable within the retention window.
+
 WorkTask review-loop compaction uses the existing work outcome newspaper path and
 appends one sentence-native context checkpoint at every live-context boundary:
 
