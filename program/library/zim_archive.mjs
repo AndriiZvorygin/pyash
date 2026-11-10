@@ -1058,7 +1058,7 @@ async function searchZimLibraryServer(sentence, { query, archives, archiveFilter
     mood: "ya",
     su: sentence?.to?.name ? { name: sentence.to.name } : (sentence?.su ?? { name: "ZIM search results" }),
     ob: { text: output },
-    from: { filename: archives[0]?.filename ? path.dirname(archives[0].filename) : "world/library/archive" },
+    from: { text: base },
     be: "search"
   };
 }

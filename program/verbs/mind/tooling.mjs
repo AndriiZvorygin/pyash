@@ -51,9 +51,33 @@ const TOOL_NON_CASE_FIELDS = new Set([
 ]);
 
 const TOOL_ARGUMENT_SCHEMA_ADAPTERS = {
+  "search": {
+    toolName: "search_zim_library",
+    description: "Search the configured Kiwix ZIM service for archives and entries. The tool resolves the host-configured endpoint, which may be remote; no local ZIM mount or server address is needed. Results include a usable full page URL from that service. Pass that returned URL unchanged to a retrieval tool. Search uses archived content and does not contact source websites.",
+    fields: {
+      ob: {
+        name: "query",
+        description: "Terms to find in the ZIM collection served by the configured Kiwix endpoint."
+      }
+    }
+  },
+  "search archive": {
+    toolName: "search_archive",
+    description: "Search one ZIM archive through the configured Kiwix service when its archive file is mounted in the configured local library. archive_path is a local archive path or library directory, not a URL. Search results include usable page URLs; pass returned locators unchanged. For remote-only archives, use search_zim_library. Searching archived content does not contact source websites.",
+    fields: {
+      in: {
+        name: "archive_path",
+        description: "A .zim file path or the configured archive directory for a local indexed search."
+      },
+      ob: {
+        name: "query",
+        description: "Terms to find in the local ZIM index."
+      }
+    }
+  },
   "read archive focus": {
     toolName: "read_archive_focus",
-    description: "Read a bounded passage from one ZIM entry. Copy entry_path exactly from a search result; focus is the symbol or phrase to find within that entry.",
+    description: "Read a bounded passage from one ZIM entry when its archive file is mounted in the configured local library. Copy entry_path exactly from search results; focus is the symbol or phrase to find within that entry. For remote-only archives, retrieve the full page URL returned by search instead.",
     fields: {
       from: {
         name: "archive_path",
