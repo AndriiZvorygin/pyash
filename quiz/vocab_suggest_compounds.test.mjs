@@ -55,6 +55,34 @@ test("vocab_suggest recognizes repository accepted compounds for direct token ch
   assert.match(lines.join("\n"), /blueprint: found compound blue \+ print -> plun trat \(accepted-curated\)/u);
 });
 
+test("vocab_suggest exposes pre-sweep canonical WordNet compounds with their sense glosses", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["adequate"], {
+    report: (line) => lines.push(String(line))
+  });
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.missing, 0);
+  assert.match(lines.join("\n"), /adequate: found compound satisfied \+ reached -> mwac hte2t \(accepted-llm\)/u);
+  assert.match(lines.join("\n"), /adequate: WordNet a:00051265-a \[adequate, equal\]: having the requisite qualities or resources to meet a task -> adequate \(mwac hte2t\)/u);
+  assert.equal(result.foundCompounds.some((compound) => compound.senseGlosses?.some((gloss) => (
+    gloss.senseId === "a:00051265-a" && gloss.definition === "having the requisite qualities or resources to meet a task"
+  ))), true);
+});
+
+test("vocab_suggest exposes current canonical WordNet compounds with their sense glosses", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["brighten"], {
+    report: (line) => lines.push(String(line))
+  });
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(result.missing, 0);
+  assert.match(lines.join("\n"), /brighten: found compound light \+ becoming -> kwan hbin \(accepted-llm\)/u);
+  assert.match(lines.join("\n"), /brighten: WordNet v:02777127-v \[brighten, clear, clear up, light up\]: become clear -> brighten \(kwan hbin\)/u);
+  assert.equal(result.foundCompounds.some((compound) => compound.senseGlosses?.some((gloss) => gloss.definition === "become clear")), true);
+});
+
 test("vocab_suggest reports the accepted include compound", async () => {
   const lines = [];
   const result = await runVocabSuggest(["include"], {
@@ -62,13 +90,10 @@ test("vocab_suggest reports the accepted include compound", async () => {
   });
   assert.equal(result.exitCode, 0);
   assert.equal(result.missing, 0);
-  assert.deepEqual(result.foundCompounds, [{
-    target: "include",
-    components: ["inside", "containing"],
-    pyash: ["lwak", "hzan"],
-    status: "accepted-curated",
-    locations: ["input"]
-  }]);
+  assert.equal(result.foundCompounds.some((compound) => (
+    compound.components?.join(" + ") === "inside + containing"
+    || compound.readings?.some((reading) => reading.components.join(" + ") === "inside + containing")
+  )), true);
   assert.match(lines.join("\n"), /include: found compound inside \+ containing -> lwak hzan \(accepted-curated\)/u);
 });
 
@@ -96,13 +121,10 @@ test("vocab_suggest reuses the accepted include compound for the involve inclusi
   });
   assert.equal(result.exitCode, 0);
   assert.equal(result.missing, 0);
-  assert.deepEqual(result.foundCompounds, [{
-    target: "include",
-    components: ["inside", "containing"],
-    pyash: ["lwak", "hzan"],
-    status: "accepted-curated",
-    locations: ["input"]
-  }]);
+  assert.equal(result.foundCompounds.some((compound) => (
+    compound.components?.join(" + ") === "inside + containing"
+    || compound.readings?.some((reading) => reading.components.join(" + ") === "inside + containing")
+  )), true);
   assert.match(lines.join("\n"), /involve: found compound inside \+ containing -> lwak hzan \(accepted-curated\)/u);
 });
 

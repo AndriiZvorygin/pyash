@@ -107,7 +107,7 @@ test("vocab_suggest returns separate English suggestions and Pyac mappings", asy
   assert.equal(bewildered.mappings.find((mapping) => mapping.word === "mystified")?.pyac, "hmi2f");
 });
 
-test("vocab_suggest uses exact blacklist alternatives before English prefix matches", async () => {
+test("vocab_suggest retains blacklist alternatives beside canonical compound readings", async () => {
   const lines = [];
   const result = await runVocabSuggest(["accord"], { report: (line) => lines.push(String(line)) });
   const accord = result.suggestionRecords.find((record) => record.input === "accord");
@@ -117,7 +117,9 @@ test("vocab_suggest uses exact blacklist alternatives before English prefix matc
   assert.doesNotMatch(lines.join("\n"), /accordions/u);
 
   const meet = await runVocabSuggest(["meet"], { report: () => {} });
-  assert.deepEqual(meet.suggestionRecords.find((record) => record.input === "meet").wordSuggestions, ["see", "visit"]);
+  const meetSuggestions = meet.suggestionRecords.find((record) => record.input === "meet");
+  assert.equal(meetSuggestions.suggestionSource, "blacklist");
+  assert.deepEqual(meetSuggestions.wordSuggestions.slice(-2), ["see", "visit"]);
 });
 
 test("compound prompt keeps distinct atom choices from every exact Kwon alternative", async () => {
