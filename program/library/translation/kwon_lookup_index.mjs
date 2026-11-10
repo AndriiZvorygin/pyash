@@ -1,18 +1,22 @@
 import { createHash } from "node:crypto";
-import { mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, open, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const KWON_LOOKUP_INDEX_FORMAT = "pyash-kwon-lookup-index-v3";
-export const KWON_LOOKUP_INDEX_KINDS = Object.freeze(["english", "pyac", "wordnet"]);
+export const KWON_LOOKUP_INDEX_FORMAT = "pyash-kwon-lookup-index-v4";
+export const KWON_LOOKUP_INDEX_KINDS = Object.freeze(["english", "pyac", "wordnet", "open-wordnet"]);
 const INDEX_ENTRY_PREFIX = "kwon-entry:";
+const OPEN_WORDNET_JSON_FILE = /^(?:adj|adv|noun|verb)\..+\.json$/u;
+const OPEN_WORDNET_CONFIG_PATH = "program/library/translation/english_wordnet.pya";
+const OPEN_WORDNET_CONFIG_FORMAT = "open-english-wordnet-2025-json-v1";
 
 const MODULE_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 export const PYASH_REPOSITORY_ROOT = resolve(MODULE_DIRECTORY, "../../..");
 export const KWON_LOOKUP_INDEX_PATHS = Object.freeze({
   english: resolve(MODULE_DIRECTORY, "kwon_english_index.pya"),
   pyac: resolve(MODULE_DIRECTORY, "kwon_pyac_index.pya"),
-  wordnet: resolve(MODULE_DIRECTORY, "kwon_wordnet_index.pya")
+  wordnet: resolve(MODULE_DIRECTORY, "kwon_wordnet_index.pya"),
+  "open-wordnet": resolve(MODULE_DIRECTORY, "kwon_open_wordnet_index.pya")
 });
 
 const SOURCE_PATHS = Object.freeze([
@@ -24,6 +28,7 @@ const SOURCE_PATHS = Object.freeze([
   "program/library/translation/english_grammar.pya",
   "program/library/translation/english_lemmas.pya",
   "program/library/translation/english_wordnet_bridges.pya",
+  "program/library/translation/english_wordnet.pya",
   "program/library/translation/english_wordnet_compound_glosses.pya",
   "program/library/translation/compound_coverage_wordnet_verified.pya",
   "program/library/translation/compound_coverage_curated.pya"
@@ -242,8 +247,76 @@ function scanPyaLines(buffer, sourceId, indexes) {
   }
 }
 
+function scanOpenWordNetJson(buffer, sourceId, indexes) {
+  let lineStart = 0;
+  let lineNumber = 1;
+  while (lineStart < buffer.length) {
+    const newline = buffer.indexOf(0x0a, lineStart);
+    const lineEnd = newline < 0 ? buffer.length : newline;
+    const line = buffer.subarray(lineStart, lineEnd).toString("utf8");
+    const match = line.match(/^\s*"([0-9]{8}-[anrsv])"\s*:\s*\{/u);
+    if (match) {
+      const braceOnLine = Buffer.from(line, "utf8").indexOf(0x7b);
+      const recordStart = lineStart + braceOnLine;
+      let depth = 0;
+      let inString = false;
+      let escaped = false;
+      let recordEnd = -1;
+      for (let cursor = recordStart; cursor < buffer.length; cursor += 1) {
+        const byte = buffer[cursor];
+        if (inString) {
+          if (escaped) escaped = false;
+          else if (byte === 0x5c) escaped = true;
+          else if (byte === 0x22) inString = false;
+          continue;
+        }
+        if (byte === 0x22) inString = true;
+        else if (byte === 0x7b) depth += 1;
+        else if (byte === 0x7d) {
+          depth -= 1;
+          if (depth === 0) {
+            recordEnd = cursor;
+            break;
+          }
+        }
+      }
+      if (recordEnd < recordStart) {
+        throw Object.assign(new Error(`Open English WordNet synset is incomplete in ${sourceId}:${lineNumber}`), {
+          code: "invalid-kwon-lookup-index"
+        });
+      }
+      const synset = match[1];
+      const partOfSpeech = synset.slice(-1);
+      const recordLength = recordEnd - recordStart + 1;
+      const recordSource = buffer.subarray(recordStart, recordEnd + 1).toString("utf8");
+      let record;
+      try {
+        record = JSON.parse(recordSource);
+      } catch (error) {
+        throw Object.assign(new Error(`Open English WordNet synset is malformed in ${sourceId}:${lineNumber}`), {
+          code: "invalid-kwon-lookup-index",
+          cause: error
+        });
+      }
+      if (record?.partOfSpeech === partOfSpeech && Array.isArray(record.members)) {
+        const senseId = `${partOfSpeech}:${synset}`;
+        addValue(indexes, "open-wordnet", senseId, {
+          sourceId,
+          byteOffset: recordStart,
+          lineNumber,
+          recordId: senseId,
+          recordLength
+        });
+      }
+    }
+    if (newline < 0) break;
+    lineStart = newline + 1;
+    lineNumber += 1;
+  }
+}
+
 function makeIndexes() {
-  return { english: new Map(), pyac: new Map(), wordnet: new Map() };
+  return { english: new Map(), pyac: new Map(), wordnet: new Map(), "open-wordnet": new Map() };
 }
 
 function createIndex(kind, entries, sourceHashes) {
@@ -274,6 +347,11 @@ export function renderKwonLookupIndexPya(index) {
         throw Object.assign(new Error(`kwon index posting source is not hashed: ${posting.sourceId}`), { code: "invalid-kwon-lookup-index" });
       }
       return posting;
+    }
+    if (Number.isSafeInteger(posting.recordLength)
+      && Number.isSafeInteger(posting.byteOffset)
+      && Number.isSafeInteger(posting.lineNumber)) {
+      return [3, sourceIndex, posting.byteOffset, posting.lineNumber, posting.recordId ?? "", posting.recordLength];
     }
     if (Number.isSafeInteger(posting.byteOffset) && Number.isSafeInteger(posting.lineNumber)) {
       return [0, sourceIndex, posting.byteOffset, posting.lineNumber, posting.recordId ?? ""];
@@ -443,6 +521,15 @@ function expandIndexPostings(postings, sourceIds) {
         inline: { pya: posting[4], en: posting[5], ...(posting[6] ? { hnuc: posting[6] } : {}) }
       };
     }
+    if (posting[0] === 3 && typeof sourceIds[posting[1]] === "string") {
+      return {
+        sourceId: sourceIds[posting[1]],
+        byteOffset: posting[2],
+        lineNumber: posting[3],
+        recordId: posting[4],
+        recordLength: posting[5]
+      };
+    }
     throw Object.assign(new Error("kwon lookup index contains an unknown compact posting"), { code: "invalid-kwon-lookup-index" });
   });
 }
@@ -588,6 +675,47 @@ export async function readKwonSourceLocators(locators, { root = PYASH_REPOSITORY
   return output;
 }
 
+export async function readKwonSourceSpans(locators, { root = PYASH_REPOSITORY_ROOT } = {}) {
+  const grouped = new Map();
+  for (const locator of locators ?? []) {
+    if (!locator
+      || typeof locator.sourceId !== "string"
+      || !Number.isSafeInteger(locator.byteOffset)
+      || !Number.isSafeInteger(locator.recordLength)
+      || locator.recordLength < 2
+      || locator.recordLength > 16 * 1024 * 1024) continue;
+    const rows = grouped.get(locator.sourceId) ?? [];
+    rows.push(locator);
+    grouped.set(locator.sourceId, rows);
+  }
+  const output = [];
+  for (const [sourceId, rows] of grouped) {
+    const handle = await open(resolveSourcePath(root, sourceId), "r");
+    try {
+      const fileSize = (await handle.stat()).size;
+      for (const locator of rows) {
+        if (locator.byteOffset + locator.recordLength > fileSize) {
+          throw Object.assign(new Error(`kwon index span is outside its source file: ${sourceId}`), {
+            code: "stale-kwon-lookup-index",
+            details: { sourceId, recordId: locator.recordId }
+          });
+        }
+        const bytes = await readAt(handle, locator.byteOffset, locator.recordLength);
+        if (bytes.length !== locator.recordLength) {
+          throw Object.assign(new Error(`kwon index span is truncated: ${sourceId}`), {
+            code: "stale-kwon-lookup-index",
+            details: { sourceId, recordId: locator.recordId }
+          });
+        }
+        output.push({ locator, text: bytes.toString("utf8") });
+      }
+    } finally {
+      await handle.close();
+    }
+  }
+  return output;
+}
+
 export async function readKwonSourceHead(sourceId, { lineCount = 1, root = PYASH_REPOSITORY_ROOT } = {}) {
   if (typeof sourceId !== "string" || !sourceId.trim()) throw new TypeError("sourceId is required");
   if (!Number.isSafeInteger(lineCount) || lineCount < 0) throw new TypeError("lineCount must be a nonnegative integer");
@@ -612,9 +740,68 @@ function addLocator(indexes, kind, key, locator) {
   addValue(indexes, kind, key, locator);
 }
 
+async function configuredOpenWordNetFiles(root, configSource) {
+  const { buildProgram } = await import("../../program.mjs");
+  const sentences = buildProgram(configSource).sentences;
+  const header = sentences.find((sentence) => (
+    sentence?.mood === "def"
+    && sentence?.be === "map"
+    && sentence?.su?.name === "translation_english_wordnet"
+  ));
+  if (!header) {
+    throw Object.assign(new Error("Open English WordNet config has no canonical map header"), {
+      code: "invalid-kwon-lookup-index"
+    });
+  }
+  const config = {};
+  for (const sentence of sentences) {
+    if (sentence?.mood !== "ya" || typeof sentence.su?.text !== "string") continue;
+    if (typeof sentence.ob?.text === "string") config[sentence.su.text] = sentence.ob.text;
+  }
+  if (config.format !== OPEN_WORDNET_CONFIG_FORMAT || !config.source) {
+    throw Object.assign(new Error("Open English WordNet config has an unsupported format or no source"), {
+      code: "invalid-kwon-lookup-index"
+    });
+  }
+  const directory = resolveSourcePath(root, config.source);
+  let names;
+  try {
+    names = (await readdir(directory)).filter((name) => OPEN_WORDNET_JSON_FILE.test(name)).sort(compareText);
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      throw Object.assign(new Error(`configured Open English WordNet source is unavailable: ${config.source}`), {
+        code: "missing-english-wordnet-source",
+        cause: error
+      });
+    }
+    throw error;
+  }
+  if (names.length === 0) {
+    throw Object.assign(new Error(`configured Open English WordNet source has no synset JSON files: ${config.source}`), {
+      code: "missing-english-wordnet-source"
+    });
+  }
+  const files = await Promise.all(names.map(async (name) => ({
+    name,
+    sourceId: relative(root, resolve(directory, name)).split(sep).join("/"),
+    source: await readFile(resolve(directory, name))
+  })));
+  const datasetHash = hash(Buffer.from(files
+    .map((file) => `${file.name}\u0000${file.source.toString("utf8")}`)
+    .join("\u0000")));
+  if (config["source-hash"] && config["source-hash"] !== datasetHash) {
+    throw Object.assign(new Error("Open English WordNet source hash does not match its Pyash configuration"), {
+      code: "stale-kwon-lookup-index",
+      details: { expected: config["source-hash"], actual: datasetHash }
+    });
+  }
+  return { config, directory, files };
+}
+
 export async function buildKwonLookupIndexes({ root = PYASH_REPOSITORY_ROOT, sourcePaths = SOURCE_PATHS } = {}) {
   const indexes = makeIndexes();
   const sourceHashes = {};
+  const openWordNetSourceHashes = {};
   const pyaSources = sourcePaths.filter((path) => path.endsWith(".pya"));
   const jsonSources = sourcePaths.filter((path) => path.endsWith(".json"));
   const sourceIds = [...pyaSources, ...jsonSources];
@@ -649,10 +836,20 @@ export async function buildKwonLookupIndexes({ root = PYASH_REPOSITORY_ROOT, sou
       }
     }
   }
+  if (sourcesById.has(OPEN_WORDNET_CONFIG_PATH)) {
+    const configSource = sourcesById.get(OPEN_WORDNET_CONFIG_PATH);
+    openWordNetSourceHashes[OPEN_WORDNET_CONFIG_PATH] = hash(configSource);
+    const { files } = await configuredOpenWordNetFiles(root, configSource.toString("utf8"));
+    for (const file of files) {
+      openWordNetSourceHashes[file.sourceId] = hash(file.source);
+      scanOpenWordNetJson(file.source, file.sourceId, indexes);
+    }
+  }
   return {
     english: createIndex("english", indexes.english, sourceHashes),
     pyac: createIndex("pyac", indexes.pyac, sourceHashes),
-    wordnet: createIndex("wordnet", indexes.wordnet, sourceHashes)
+    wordnet: createIndex("wordnet", indexes.wordnet, sourceHashes),
+    "open-wordnet": createIndex("open-wordnet", indexes["open-wordnet"], openWordNetSourceHashes)
   };
 }
 

@@ -8,11 +8,13 @@ import test from "node:test";
 import {
   createKwonLookupIndexForTest,
   buildKwonLookupIndexes,
+  clearKwonLookupIndexValidationCache,
   lookupKwonIndex,
   readKwonSourceLocators,
   renderKwonLookupIndexPya
 } from "../program/library/translation/kwon_lookup_index.mjs";
 import { queryVocabLines } from "../command/vocab_query.mjs";
+import { loadOpenEnglishWordNetSenseRows } from "../program/library/translation/english_wordnet.mjs";
 import {
   ENGLISH_WORDNET_BRIDGE_CONFIG_URL,
   loadEnglishWordNetBridgeSubset
@@ -133,6 +135,62 @@ test("kwon index builder indexes Pya sense, Pyac sequence, and dictionary record
     assert.ok(pyac.some((row) => row.recordId === "n:07558676-n"));
     assert.ok(wordnet.some((row) => row.recordId === "n:07558676-n"));
   } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("Open English WordNet sense ids resolve to one indexed JSON span", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pyash-kwon-open-wordnet-"));
+  try {
+    const configSourceId = "program/library/translation/english_wordnet.pya";
+    const sourceDirectory = "know/wordnet/open-english-wordnet-2025-json";
+    const sourceName = "noun.fixture.json";
+    const sourceId = `${sourceDirectory}/${sourceName}`;
+    const senseId = "n:07558676-n";
+    const source = `${JSON.stringify({
+      "07558676-n": {
+        definition: ["a strong positive emotion"],
+        members: ["love", "affection"],
+        partOfSpeech: "n"
+      }
+    }, null, 2)}\n`;
+    const corpusHash = sha256(Buffer.from(`${sourceName}\u0000${source}`));
+    const configSource = [
+      "su name translation_english_wordnet be map def",
+      'su text "format" ob text "open-english-wordnet-2025-json-v1" ya',
+      `su text "source" ob text ${JSON.stringify(sourceDirectory)} ya`,
+      `su text "source-hash" ob text ${JSON.stringify(corpusHash)} ya`,
+      "prah",
+      ""
+    ].join("\n");
+    const configPath = join(directory, configSourceId);
+    const sourcePath = join(directory, sourceId);
+    await mkdir(dirname(configPath), { recursive: true });
+    await mkdir(dirname(sourcePath), { recursive: true });
+    await Promise.all([
+      writeFile(configPath, configSource, "utf8"),
+      writeFile(sourcePath, source, "utf8")
+    ]);
+
+    const indexes = await buildKwonLookupIndexes({ root: directory, sourcePaths: [configSourceId] });
+    const indexPath = join(directory, "open-wordnet-index.pya");
+    await writeIndex(indexPath, indexes["open-wordnet"]);
+    const rows = await loadOpenEnglishWordNetSenseRows({
+      senseIds: [senseId],
+      indexPath,
+      root: directory
+    });
+    assert.deepEqual(rows.map((row) => row.lemma).sort(), ["affection", "love"]);
+    assert.equal(rows[0].gloss, "a strong positive emotion");
+
+    await writeFile(sourcePath, source.replace("strong positive", "changed"), "utf8");
+    clearKwonLookupIndexValidationCache();
+    await assert.rejects(
+      loadOpenEnglishWordNetSenseRows({ senseIds: [senseId], indexPath, root: directory }),
+      { code: "stale-kwon-lookup-index" }
+    );
+  } finally {
+    clearKwonLookupIndexValidationCache();
     await rm(directory, { recursive: true, force: true });
   }
 });

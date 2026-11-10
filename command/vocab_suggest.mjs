@@ -20,7 +20,10 @@ import {
 } from "../program/library/translation/english_lemmas.mjs";
 import { loadAnchorWordForms } from "../program/library/translation/anchor_words.mjs";
 import { loadEnglishWordNetBridgeSubset as loadEnglishWordNetBridgeSubsetFromSource } from "../program/library/translation/english_wordnet_bridges.mjs";
-import { loadEnglishWordNet } from "../program/library/translation/english_wordnet.mjs";
+import {
+  loadEnglishWordNet,
+  loadOpenEnglishWordNetSenseRows
+} from "../program/library/translation/english_wordnet.mjs";
 import { loadEnglishWordNetCompoundGlosses } from "../program/library/translation/english_wordnet_compound_glosses.mjs";
 import {
   loadDefaultEnglish30kCoverage,
@@ -489,6 +492,27 @@ async function reportWordNetSenseLookups(senseIds, report) {
     rows.push(gloss);
     glossesBySense.set(gloss.senseId.toLowerCase(), rows);
   }
+  const rawLookupIds = senseIds.filter((senseId) => {
+    const bridge = bridgesBySense.get(senseId);
+    const senseGlosses = glossesBySense.get(senseId) ?? [];
+    return !bridge?.gloss || !bridge?.lemmas?.length ? senseGlosses.length === 0 : false;
+  });
+  const rawWordNetRowsBySense = new Map();
+  let rawWordNetIndexUnavailable = false;
+  if (rawLookupIds.length > 0) {
+    try {
+      const rawRows = await loadOpenEnglishWordNetSenseRows({ senseIds: rawLookupIds });
+      for (const row of rawRows) {
+        const key = `${row.pos}:${row.synset}`.toLowerCase();
+        const rows = rawWordNetRowsBySense.get(key) ?? [];
+        rows.push(row);
+        rawWordNetRowsBySense.set(key, rows);
+      }
+    } catch (error) {
+      if (error?.code !== "ENOENT" && error?.code !== "stale-kwon-lookup-index") throw error;
+      rawWordNetIndexUnavailable = true;
+    }
+  }
   let wordNetIndex = null;
   const results = [];
   for (const senseId of senseIds) {
@@ -498,8 +522,11 @@ async function reportWordNetSenseLookups(senseIds, report) {
     const compoundLinks = compoundsBySense.get(senseId) ?? [];
     let rows = [];
     if ((!bridge?.gloss || !bridge?.lemmas?.length) && senseGlosses.length === 0) {
-      wordNetIndex ??= await loadDefaultEnglishWordNetIndex();
-      rows = match ? wordNetIndex.bySynset.get(`${match[1]}:${match[2]}`) ?? [] : [];
+      rows = rawWordNetRowsBySense.get(senseId.toLowerCase()) ?? [];
+      if (rows.length === 0 && rawWordNetIndexUnavailable) {
+        wordNetIndex ??= await loadDefaultEnglishWordNetIndex();
+        rows = match ? wordNetIndex.bySynset.get(match[0]) ?? [] : [];
+      }
     }
     if (!match || (!bridge && senseGlosses.length === 0 && compoundLinks.length === 0 && rows.length === 0)) {
       const result = { senseId, status: "not-found", links: [] };

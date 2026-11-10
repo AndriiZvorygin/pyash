@@ -60,6 +60,22 @@ test("vocab_suggest joins an exact compound synset to its gloss and Pyac compone
   assert.match(lines.join("\n"), /a:00006050-a: linked compound comparative \[degree \+ comparison\] -> tlut tras/u);
 });
 
+test("vocab_suggest reads an unlinked raw WordNet synset by indexed identity", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["a:00001740-a"], {
+    report: (line) => lines.push(String(line))
+  });
+  const [lookup] = result.wordNetSenseLookups;
+
+  assert.equal(lookup.senseId, "a:00001740-a");
+  assert.equal(lookup.partOfSpeech, "a");
+  assert.deepEqual(lookup.lemmas, ["able"]);
+  assert.match(lookup.definition, /having the necessary means or skill/u);
+  assert.equal(lookup.status, "unlinked");
+  assert.deepEqual(lookup.links, []);
+  assert.match(lines.join("\n"), /a:00001740-a \[a; able\]: .*necessary means or skill/u);
+});
+
 test("vocab_suggest distinguishes an unknown synset id from an unresolved vocabulary word", async () => {
   const lines = [];
   const result = await runVocabSuggest(["n:99999999-n"], {
