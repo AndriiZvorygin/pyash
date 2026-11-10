@@ -579,15 +579,19 @@ semantics.
 
 Vector quote payloads decode losslessly for the recovered fixed-width 16-bit
 numeric/letter header families, and the uint sort now also carries 64-bit
-scalars. Vector and date sentence values are executable catalog rows. A numeric
-vector travels as a uint quote whose vector thickness states how many elements
-it holds, and a date travels as a uint64 count of milliseconds since the Unix
-epoch; the legacy format reserves both the vector thickness and the 64-bit
-scalar thickness for this, so the encodings follow the legacy quote model
-rather than a new one. A one-element vector keeps the stable
-`unsupported-vector-width` reason, because its quote is identical to a numeric
-literal and the format cannot tell the two apart, and a non-numeric vector
-keeps `unsupported-vector-type`. The structural continuation decoder is
+scalars. Vector and date sentence values are executable catalog rows. The quote
+sort is the element type, so a numeric vector travels as a uint quote whose
+vector thickness states how many elements it holds, a boolean vector travels in
+the signed integer sort with the same rule, and a text vector travels as one
+letter-sort region per element, because the legacy quote sorts hold
+fixed-width elements and a text element is a string. A date travels as a
+uint64 count of milliseconds since the Unix epoch; the legacy format reserves
+the vector thickness, the 64-bit scalar thickness, and the sorts for this, so
+the encodings follow the legacy quote model rather than a new one. A
+one-element vector keeps the stable `unsupported-vector-width` reason, because
+its quote is identical to a numeric literal and the format cannot tell the two
+apart, and an element type without a proven quote encoding keeps
+`unsupported-vector-type`. The structural continuation decoder is
 available for lossless multi-vector evidence; it does not promote any other
 domain to execution.
 

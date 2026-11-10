@@ -14,4 +14,6 @@ ob num 2 be invert do
 ob num 2 from num 3 be exponential do
 ob num 9 from num 4 be remains do
 exists su name values ob ve num 1 2 3 be vector ya
+ob ve bool truth lie truth be vector ya
+ob ve text Name Age be vector ya
 exists su name start ob date 2025-05-01 be date ya

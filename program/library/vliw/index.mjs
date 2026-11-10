@@ -57,7 +57,11 @@ import {
   isVectorSentence,
   lowerVectorSentence
 } from "./vector.mjs";
-import { isUintVectorQuoteWord } from "./quotes.mjs";
+import {
+  isIntVectorQuoteWord,
+  isLetterQuoteWord,
+  isUintVectorQuoteWord
+} from "./quotes.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { deriveSentenceEffects, scheduleCodeletDependencies } from "./effects.mjs";
 
@@ -104,7 +108,8 @@ export function lowerParagraph(paragraph) {
 
 export function decodeCodelet(input) {
   const decoded = decodeLegacyCodelet(input);
-  const quoteItem = decoded.items.find((item) => item.kind === "quote");
+  const quoteItems = decoded.items.filter((item) => item.kind === "quote");
+  const quoteItem = quoteItems[0];
   if (quoteItem?.quote.word === dateCompatibility.quote) {
     try {
       return semanticDecode(
@@ -123,7 +128,12 @@ export function decodeCodelet(input) {
       throw error;
     }
   }
-  if (quoteItem && isUintVectorQuoteWord(quoteItem.quote.word)) {
+  if (
+    quoteItem &&
+    (isUintVectorQuoteWord(quoteItem.quote.word) ||
+      isIntVectorQuoteWord(quoteItem.quote.word) ||
+      (quoteItems.length > 1 && isLetterQuoteWord(quoteItem.quote.word)))
+  ) {
     try {
       return semanticDecode(
         decoded,

@@ -106,12 +106,15 @@ test("pyash mcp server loads the selected saddle tools map", async () => {
     assert.match(archiveFocusTool.description, /Read a bounded passage/u);
     assert.deepEqual(archiveFocusTool.inputSchema?.required, ["archive_path", "entry_path", "focus"]);
     assert.ok(descriptions.some((description) => description.includes('su name session plan ob text "input" fromstate text "coding saddle plan" be write can')));
-    const zimSearchTool = tools.find((tool) => /search/u.test(String(tool?.name ?? ""))
-      && /zim/u.test(String(tool?.description ?? "")));
+    const archiveSearchTool = tools.find((tool) => tool.name === "search_archive");
+    assert.ok(archiveSearchTool, "expected the archive-scoped ZIM search capability");
+    assert.match(archiveSearchTool.description, /archive file is mounted.*archive_path is a local archive path.*remote-only archives/u);
+    assert.deepEqual(archiveSearchTool.inputSchema?.required, ["archive_path", "query"]);
+    const zimSearchTool = tools.find((tool) => tool.name === "search_zim_library");
     assert.ok(zimSearchTool, "expected the query-only ZIM search capability");
-    assert.match(zimSearchTool.description, /zim/u);
-    assert.deepEqual(zimSearchTool.inputSchema?.required, ["ob"]);
-    assert.deepEqual(Object.keys(zimSearchTool.inputSchema?.properties ?? {}), ["ob"]);
+    assert.match(zimSearchTool.description, /configured Kiwix ZIM service.*resolves the host-configured endpoint.*usable full page URL.*Pass that returned URL unchanged/u);
+    assert.deepEqual(zimSearchTool.inputSchema?.required, ["query"]);
+    assert.deepEqual(Object.keys(zimSearchTool.inputSchema?.properties ?? {}), ["query"]);
     const downloadTool = tools.find((tool) => String(tool?.name ?? "").startsWith("be_download_as_wo_web_"));
     assert.ok(downloadTool, "expected web download capability in the saddle tools map");
     assert.deepEqual(downloadTool.inputSchema?.required, ["from", "to"]);

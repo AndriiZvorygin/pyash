@@ -237,6 +237,17 @@ The following are golden vectors, not new syntax:
    ya` MUST encode with the seven-word body `0061 8F1D 0001 0002 0003 245E
    217E`, and a width without a fixed legacy thickness MUST use the explicit
    length form.
+8. A boolean vector literal MUST travel in the signed integer sort with the
+   vector thickness that states its element count, so `ob ve bool truth lie
+   truth be vector ya` MUST encode with the seven-word body `0061 AF1D 0001
+   0000 0001 245E 217E`, where a truth is the non-zero element and a lie is
+   the zero element.
+9. A text vector literal MUST travel as one letter-sort region per element,
+   because the legacy quote sorts hold fixed-width elements and a text
+   element is a string, so `ob ve text Name Age be vector ya` MUST encode
+   with the fourteen-word body `3001 0E1D 0004 004E 0061 006D 0065 0E1D
+   0003 0041 0067 0065 245E 217E`. Every element MUST keep its exact
+   characters and its case.
 
 Conformance tests should compare sentence round-trips, exact golden bytes,
 malformed continuation/quote rejection, compatibility-table coverage,

@@ -35,12 +35,16 @@ test("saddle tools map exposes coding signatures", async () => {
   const searchSignature = joinSignatureWords(deriveSignatureFromCall(parse(searchLine)));
   const searchTool = buildToolSchemas("saddle tools").tools
     .find((tool) => tool.function.signature === searchSignature);
-  assert.deepEqual(searchTool.function.parameters.properties, { ob: { type: "string" } });
-  assert.deepEqual(searchTool.function.parameters.required, ["ob"]);
+  assert.equal(searchTool.function.name, "search_zim_library");
+  assert.match(searchTool.function.description, /configured Kiwix ZIM service.*resolves the host-configured endpoint.*usable full page URL.*Pass that returned URL unchanged/u);
+  assert.deepEqual(searchTool.function.parameters.properties, {
+    query: { type: "string", description: "Terms to find in the ZIM collection served by the configured Kiwix endpoint." }
+  });
+  assert.deepEqual(searchTool.function.parameters.required, ["query"]);
 
   const searchCall = buildToolSentence({
     capability: parse(searchLine),
-    args: { ob: "Pyash archive" }
+    args: { query: "Pyash archive" }
   });
   assert.equal(searchCall.be, "search");
   assert.equal(searchCall.ob.text, "Pyash archive");
@@ -51,13 +55,22 @@ test("saddle tools map exposes coding signatures", async () => {
   const searchArchiveSignature = joinSignatureWords(deriveSignatureFromCall(parse(searchArchiveLine)));
   const searchArchiveTool = buildToolSchemas("saddle tools").tools
     .find((tool) => tool.function.signature === searchArchiveSignature);
+  assert.equal(searchArchiveTool.function.name, "search_archive");
+  assert.match(searchArchiveTool.function.description, /archive file is mounted.*archive_path is a local archive path.*remote-only archives/u);
   assert.deepEqual(searchArchiveTool.function.parameters.properties, {
-    in: { type: "string" },
-    ob: { type: "string" }
+    archive_path: {
+      type: "string",
+      description: "A .zim file path or the configured archive directory for a local indexed search."
+    },
+    query: {
+      type: "string",
+      description: "Terms to find in the local ZIM index."
+    }
   });
+  assert.deepEqual(searchArchiveTool.function.parameters.required, ["archive_path", "query"]);
   const searchArchiveCall = buildToolSentence({
     capability: parse(searchArchiveLine),
-    args: { in: "world/library/archive/gpu-opencl-reference-2026-11.zim", ob: "OpenCL clCreateBuffer" }
+    args: { archive_path: "world/library/archive/gpu-opencl-reference-2026-11.zim", query: "OpenCL clCreateBuffer" }
   });
   assert.deepEqual(searchArchiveCall.in, { filename: "world/library/archive/gpu-opencl-reference-2026-11.zim" });
   assert.deepEqual(searchArchiveCall.ob, { text: "OpenCL clCreateBuffer" });
@@ -84,7 +97,7 @@ test("saddle tools map exposes coding signatures", async () => {
     }
   });
   assert.deepEqual(focusTool.function.parameters.required, ["archive_path", "entry_path", "focus"]);
-  assert.match(focusTool.function.description, /entry_path.*exactly from a search result.*focus.*within that entry/u);
+  assert.match(focusTool.function.description, /archive file is mounted.*entry_path exactly from search results.*focus.*within that entry/u);
   const focusCall = buildToolSentence({
     capability: focusCapability,
     args: {

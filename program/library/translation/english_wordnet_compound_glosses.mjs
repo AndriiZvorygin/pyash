@@ -6,6 +6,7 @@ import { buildProgram } from "../../program.mjs";
 
 export const ENGLISH_WORDNET_COMPOUND_GLOSSES_NAME = "translation_wordnet_compound_sense_glosses";
 export const ENGLISH_WORDNET_COMPOUND_GLOSSES_URL = new URL("./english_wordnet_compound_glosses.pya", import.meta.url);
+const ENGLISH_WORDNET_COMPOUND_GLOSSES_FORMAT = "english-wordnet-compound-sense-glosses-v2";
 
 function invalid(message) {
   const error = new Error(message);
@@ -56,18 +57,23 @@ export function buildEnglishWordNetCompoundGlosses(compoundRecords = [], decisio
 
 export function renderEnglishWordNetCompoundGlosses(records = []) {
   if (!Array.isArray(records)) throw invalid("WordNet compound gloss rendering requires rows");
+  const seen = new Set();
   const rows = records.map((record) => {
     const senseId = String(record?.senseId ?? "").trim();
     const target = String(record?.target ?? "").normalize("NFC").trim();
-    if (!senseId || !target || !String(record?.definition ?? "").trim()) {
-      throw invalid("WordNet compound gloss row requires a sense, target, and definition");
+    const decisionId = String(record?.decisionId ?? "").trim();
+    if (!senseId || !target || !String(record?.definition ?? "").trim() || !decisionId) {
+      throw invalid("WordNet compound gloss row requires a sense, target, definition, and decision identity");
     }
-    const key = `${senseId} | ${target} | ${record.definition}`;
+    if (seen.has(decisionId)) throw invalid("WordNet compound gloss decision identity is duplicated");
+    seen.add(decisionId);
+    // Keep English gloss text in the value; the Pyash key is an opaque record identity.
+    const key = decisionId;
     return `su text ${JSON.stringify(key)} ob text ${JSON.stringify(JSON.stringify(record))} ya`;
   });
   return [
     `su name ${ENGLISH_WORDNET_COMPOUND_GLOSSES_NAME} be map def`,
-    `su text "format" ob text "english-wordnet-compound-sense-glosses-v1" ya`,
+    `su text "format" ob text ${JSON.stringify(ENGLISH_WORDNET_COMPOUND_GLOSSES_FORMAT)} ya`,
     ...rows,
     "prah",
     ""
@@ -98,6 +104,10 @@ export function parseEnglishWordNetCompoundGlosses(source) {
     && sentence?.be === "map"
     && sentence?.su?.name === ENGLISH_WORDNET_COMPOUND_GLOSSES_NAME);
   if (!header) throw invalid("WordNet compound gloss index has no canonical map header");
+  const format = sentences.find((sentence) => sentence?.mood === "ya" && sentence?.su?.text === "format")?.ob?.text;
+  if (format !== ENGLISH_WORDNET_COMPOUND_GLOSSES_FORMAT) {
+    throw invalid("WordNet compound gloss index has an unsupported format");
+  }
   const records = [];
   const seen = new Set();
   for (const sentence of sentences) {
@@ -109,14 +119,15 @@ export function parseEnglishWordNetCompoundGlosses(source) {
     } catch (error) {
       throw invalid(`WordNet compound gloss row contains malformed JSON: ${error.message}`);
     }
-    const key = `${record?.senseId ?? ""} | ${record?.target ?? ""} | ${record?.definition ?? ""}`;
-    if (!record?.senseId || !record?.target || !record?.definition || sentence.su.text !== key || seen.has(key)) {
+    const decisionId = String(record?.decisionId ?? "").trim();
+    if (!record?.senseId || !record?.target || !record?.definition || !decisionId
+      || sentence.su.text !== decisionId || seen.has(decisionId)) {
       throw invalid("WordNet compound gloss row has an invalid or duplicate identity");
     }
-    seen.add(key);
+    seen.add(decisionId);
     records.push(record);
   }
-  return { format: "english-wordnet-compound-sense-glosses-v1", records };
+  return { format: ENGLISH_WORDNET_COMPOUND_GLOSSES_FORMAT, records };
 }
 
 export async function loadEnglishWordNetCompoundGlosses({ url = ENGLISH_WORDNET_COMPOUND_GLOSSES_URL } = {}) {

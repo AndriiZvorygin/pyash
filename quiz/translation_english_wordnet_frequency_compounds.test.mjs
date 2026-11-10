@@ -1059,9 +1059,17 @@ test("WordNet compound gloss index projects canonical senses and preserves defin
     verificationDecisionIds: [decision.candidateId]
   };
   const glosses = buildEnglishWordNetCompoundGlosses([record], [decision]);
-  const parsed = parseEnglishWordNetCompoundGlosses(renderEnglishWordNetCompoundGlosses(glosses));
+  const rendered = renderEnglishWordNetCompoundGlosses(glosses);
+  const parsed = parseEnglishWordNetCompoundGlosses(rendered);
 
   assert.equal(parsed.records.length, 1);
+  assert.equal(parsed.format, "english-wordnet-compound-sense-glosses-v2");
+  assert.ok(rendered.includes(`su text "${decision.candidateId}"`));
+  assert.ok(!rendered.includes(`su text "${decision.senseId} | ${decision.target} | become clear"`));
+  assert.throws(
+    () => parseEnglishWordNetCompoundGlosses(rendered.replace("glosses-v2", "glosses-v1")),
+    (error) => error?.code === "invalid-english-wordnet-compound-glosses"
+  );
   assert.deepEqual(parsed.records[0], {
     senseId: decision.senseId,
     target: decision.target,
@@ -1071,4 +1079,17 @@ test("WordNet compound gloss index projects canonical senses and preserves defin
     pyashSequence: ["kwan", "hbin"],
     decisionId: decision.candidateId
   });
+});
+
+test("WordNet compound gloss rows reject duplicate decision identities", () => {
+  const record = {
+    senseId: "v:02777127-v",
+    target: "brighten",
+    definition: "become clear",
+    decisionId: "sense-compound-111111111111111111111111"
+  };
+  assert.throws(
+    () => renderEnglishWordNetCompoundGlosses([record, { ...record }]),
+    (error) => error?.code === "invalid-english-wordnet-compound-glosses"
+  );
 });
