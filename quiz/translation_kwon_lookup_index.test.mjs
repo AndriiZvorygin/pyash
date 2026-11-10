@@ -21,7 +21,8 @@ import {
 } from "../program/library/translation/english_wordnet_bridges.mjs";
 import {
   ENGLISH_WORDNET_COMPOUND_GLOSSES_URL,
-  loadEnglishWordNetCompoundGlosses
+  loadEnglishWordNetCompoundGlosses,
+  renderEnglishWordNetCompoundGlosses
 } from "../program/library/translation/english_wordnet_compound_glosses.mjs";
 import {
   DERIVED_COMPOUND_CURATED_NAME,
@@ -103,6 +104,7 @@ test("kwon index builder indexes Pya sense, Pyac sequence, and dictionary record
     const jsonSourceId = "caterer/pyac/lyac/fixture.json";
     const pyaSource = [
       'su text "n:07558676-n" ob text "{\\"senseId\\":\\"n:07558676-n\\",\\"target\\":\\"love\\",\\"pyashSequence\\":[\\"pyan\\",\\"hmi\\"]}" ya',
+      'su text "decision:fixture-1" ob text "{\\"senseId\\":\\"v:01779085-v\\",\\"target\\":\\"love\\",\\"pyashSequence\\":[\\"pyan\\"]}" ya',
       'su text "sense-lemma:n:07558676-n:1" ob text "love" ya',
       "prah",
       ""
@@ -125,15 +127,66 @@ test("kwon index builder indexes Pya sense, Pyac sequence, and dictionary record
     };
     await Promise.all(Object.keys(paths).map((kind) => writeIndex(paths[kind], indexes[kind])));
 
-    const [english, pyac, wordnet] = await Promise.all([
+    const [english, pyac, wordnet, embeddedSense] = await Promise.all([
       lookupKwonIndex({ kind: "english", key: "love", indexPath: paths.english, root: directory }),
       lookupKwonIndex({ kind: "pyac", key: "pyanhmi", indexPath: paths.pyac, root: directory }),
-      lookupKwonIndex({ kind: "wordnet", key: "n:07558676-n", indexPath: paths.wordnet, root: directory })
+      lookupKwonIndex({ kind: "wordnet", key: "n:07558676-n", indexPath: paths.wordnet, root: directory }),
+      lookupKwonIndex({ kind: "wordnet", key: "v:01779085-v", indexPath: paths.wordnet, root: directory })
     ]);
     assert.ok(english.some((row) => row.sourceId === pyaSourceId && row.recordId === "sense-lemma:n:07558676-n:1"));
     assert.ok(english.some((row) => row.sourceId === jsonSourceId && row.inline?.pya === "pyan"));
     assert.ok(pyac.some((row) => row.recordId === "n:07558676-n"));
     assert.ok(wordnet.some((row) => row.recordId === "n:07558676-n"));
+    assert.equal(embeddedSense.length, 1);
+    assert.equal(embeddedSense[0].recordId, "decision:fixture-1");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("opaque compound gloss rows index their embedded sense id and load as a subset", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pyash-kwon-gloss-sense-index-"));
+  try {
+    const sourceId = "program/library/translation/english_wordnet_compound_glosses.pya";
+    const selected = {
+      senseId: "n:07558676-n",
+      target: "love compound",
+      partOfSpeech: "n",
+      lemmas: ["love compound"],
+      definition: "a selected compound sense",
+      pyashSequence: ["pyan", "hmi"],
+      decisionId: "decision-selected"
+    };
+    const unrelated = {
+      ...selected,
+      senseId: "v:01779085-v",
+      target: "another compound",
+      definition: "an unrelated compound sense",
+      decisionId: "decision-unrelated"
+    };
+    const source = renderEnglishWordNetCompoundGlosses([selected, unrelated]);
+    const sourcePath = join(directory, sourceId);
+    await mkdir(dirname(sourcePath), { recursive: true });
+    await writeFile(sourcePath, source, "utf8");
+
+    const indexes = await buildKwonLookupIndexes({ root: directory, sourcePaths: [sourceId] });
+    const indexPath = join(directory, "wordnet-index.pya");
+    await writeIndex(indexPath, indexes.wordnet);
+    const postings = await lookupKwonIndex({
+      kind: "wordnet",
+      key: selected.senseId,
+      indexPath,
+      root: directory
+    });
+    assert.equal(postings.length, 1);
+    assert.equal(postings[0].recordId, selected.decisionId);
+
+    const glosses = await loadEnglishWordNetCompoundGlosses({
+      senseIds: [selected.senseId],
+      indexPaths: { wordnet: indexPath },
+      indexRoot: directory
+    });
+    assert.deepEqual(glosses.records, [selected]);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

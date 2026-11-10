@@ -138,7 +138,7 @@ function wordNetIdsFrom(value, output = new Set()) {
   if (typeof value === "string") {
     for (const token of value.trim().split(/\s+/u)) {
       const match = token.match(/^([anrvs]):[0-9]{8}-\1$/iu);
-      if (match) output.add(match[1].toLowerCase());
+      if (match) output.add(token.toLowerCase());
     }
     return output;
   }

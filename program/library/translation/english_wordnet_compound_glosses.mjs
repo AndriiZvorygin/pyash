@@ -3,9 +3,16 @@ import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { buildProgram } from "../../program.mjs";
+import {
+  KWON_LOOKUP_INDEX_PATHS,
+  lookupKwonIndex,
+  readKwonSourceHead,
+  readKwonSourceLocators
+} from "./kwon_lookup_index.mjs";
 
 export const ENGLISH_WORDNET_COMPOUND_GLOSSES_NAME = "translation_wordnet_compound_sense_glosses";
 export const ENGLISH_WORDNET_COMPOUND_GLOSSES_URL = new URL("./english_wordnet_compound_glosses.pya", import.meta.url);
+const ENGLISH_WORDNET_COMPOUND_GLOSSES_SOURCE_ID = "program/library/translation/english_wordnet_compound_glosses.pya";
 const ENGLISH_WORDNET_COMPOUND_GLOSSES_FORMAT = "english-wordnet-compound-sense-glosses-v2";
 
 function invalid(message) {
@@ -136,8 +143,57 @@ export function parseEnglishWordNetCompoundGlosses(source) {
   return { format, records };
 }
 
-export async function loadEnglishWordNetCompoundGlosses({ url = ENGLISH_WORDNET_COMPOUND_GLOSSES_URL } = {}) {
-  return parseEnglishWordNetCompoundGlosses(await readFile(url, "utf8"));
+export async function loadEnglishWordNetCompoundGlosses({
+  url = ENGLISH_WORDNET_COMPOUND_GLOSSES_URL,
+  senseIds = null,
+  indexPaths = KWON_LOOKUP_INDEX_PATHS,
+  indexRoot
+} = {}) {
+  const rootOptions = indexRoot ? { root: indexRoot } : {};
+  if (url instanceof URL && url.href === ENGLISH_WORDNET_COMPOUND_GLOSSES_URL.href && Array.isArray(senseIds)) {
+    const selectedIds = new Set(senseIds
+      .filter((senseId) => typeof senseId === "string" && senseId.trim())
+      .map((senseId) => senseId.trim().toLowerCase()));
+    let indexedLocators;
+    try {
+      const results = await Promise.all([...selectedIds].map((senseId) => lookupKwonIndex({
+        kind: "wordnet", key: senseId, indexPath: indexPaths.wordnet, ...rootOptions
+      })));
+      indexedLocators = results.flat()
+        .filter((locator) => locator?.sourceId === ENGLISH_WORDNET_COMPOUND_GLOSSES_SOURCE_ID);
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    if (indexedLocators) {
+      const uniqueLocators = [...new Map(indexedLocators.map((locator) => [locator.byteOffset, locator])).values()];
+      const header = await readKwonSourceHead(ENGLISH_WORDNET_COMPOUND_GLOSSES_SOURCE_ID, { lineCount: 2, ...rootOptions });
+      const rows = uniqueLocators.length > 0
+        ? await readKwonSourceLocators(uniqueLocators, rootOptions)
+        : [];
+      return parseEnglishWordNetCompoundGlosses([
+        ...header,
+        ...rows.map((row) => row.line),
+        "prah",
+        ""
+      ].join("\n"));
+    }
+  }
+  const source = await readFile(url, "utf8");
+  if (!Array.isArray(senseIds)) return parseEnglishWordNetCompoundGlosses(source);
+  const selectedIds = new Set(senseIds
+    .filter((senseId) => typeof senseId === "string" && senseId.trim())
+    .map((senseId) => senseId.trim().toLowerCase()));
+  const lines = source.split(/\r?\n/u);
+  const selectedRows = lines.slice(2).filter((line) => (
+    [...selectedIds].some((senseId) => line.toLowerCase().includes(senseId))
+  ));
+  return parseEnglishWordNetCompoundGlosses([
+    lines[0] ?? "",
+    lines[1] ?? "",
+    ...selectedRows,
+    "prah",
+    ""
+  ].join("\n"));
 }
 
 export async function writeEnglishWordNetCompoundGlosses(records, { url = ENGLISH_WORDNET_COMPOUND_GLOSSES_URL } = {}) {
