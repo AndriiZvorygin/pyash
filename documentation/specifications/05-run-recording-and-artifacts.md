@@ -110,11 +110,12 @@ content-addressed bytes; changing them is a `hash inconsistency`.
 
 ### 3.2 Retention and garbage collection
 
-The operator cleaner uses a conservative 90-day default. Preview is the default;
-deletion requires an explicit apply action. It may remove only expired,
-date-shaped run directories and expired `.pya`/`text-*.txt` files inside
-`newspaper/` directories. Persistent artifact subdirectories and
-`world/holding/` are outside the deletion set.
+`configure/default.pya` sets `newspaper maximum age days` to 30. The operator
+cleaner previews by default; deletion requires an explicit apply action. It may
+remove expired, date-shaped run directories and expired `.pya`/`text-*.txt`
+files inside `newspaper/` directories. A run folder remains pinned while any
+newer retained newspaper names or references that run. Persistent artifact
+subdirectories and `world/holding/` are outside the deletion set.
 
 Content-addressed objects are collected only after expired run and newspaper
 entries have been removed and the workspace has been rescanned. A blob is

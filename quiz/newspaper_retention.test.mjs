@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { rotateWorldNewspapers, verifyNewspaperSet } from "../program/agent/newspaper_retention.mjs";
+import { readNewspaperLimits, rotateWorldNewspapers, verifyNewspaperSet } from "../program/agent/newspaper_retention.mjs";
 import { splitSentences } from "../program/library/sentenceSplitter.mjs";
 import { parse } from "../program/understand/index.mjs";
 
@@ -19,6 +19,11 @@ function mapRecord(id, payload = "") {
     ""
   ].join("\n");
 }
+
+test("default newspaper retention settings include a thirty-day maximum age", async () => {
+  const limits = await readNewspaperLimits(path.resolve("."));
+  assert.equal(limits.maximumAgeDays, 30);
+});
 
 async function makeWorld() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-newspaper-retention-"));

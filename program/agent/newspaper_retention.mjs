@@ -21,13 +21,17 @@ export async function readNewspaperLimits(configRoot = repoRoot) {
   }
   const maximumBytes = values.get("newspaper maximum bytes");
   const segmentMaximumBytes = values.get("newspaper segment maximum bytes");
+  const maximumAgeDays = values.get("newspaper maximum age days");
   if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1) {
     throw new Error("configure/default.pya must set a positive newspaper maximum bytes");
   }
   if (!Number.isSafeInteger(segmentMaximumBytes) || segmentMaximumBytes < 1 || segmentMaximumBytes > maximumBytes) {
     throw new Error("configure/default.pya must set newspaper segment maximum bytes within the total limit");
   }
-  return { maximumBytes, segmentMaximumBytes };
+  if (!Number.isSafeInteger(maximumAgeDays) || maximumAgeDays < 1) {
+    throw new Error("configure/default.pya must set a positive newspaper maximum age days");
+  }
+  return { maximumBytes, segmentMaximumBytes, maximumAgeDays };
 }
 
 async function newspaperDirectories(worldRoot) {
