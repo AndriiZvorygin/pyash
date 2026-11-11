@@ -503,6 +503,64 @@ test("indexed WordNet compound lookup matches English, Pyac, and sense keys", as
   }
 });
 
+test("WordNet compound lookup scans the catalog when an index posting points past EOF", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pyash-kwon-compound-stale-locator-"));
+  try {
+    const senseId = "n:07558676-n";
+    const sourceId = "program/library/translation/compound_coverage_wordnet_verified.pya";
+    const entry = {
+      id: "fixture-compound",
+      senseId,
+      targetPartOfSpeech: "n",
+      sourceMorphemes: ["love", "mind"],
+      componentGlosses: ["love", "mind"],
+      target: "love compound",
+      pyashSequence: ["pyan", "hmi"],
+      componentLayers: [16, 16],
+      maxLayer: 16,
+      provenance: "fixture",
+      confidence: "fixture",
+      status: "accepted-llm"
+    };
+    const source = renderDerivedCompoundCoveragePya([entry], { name: DERIVED_COMPOUND_CURATED_NAME });
+    await mkdir(join(directory, "program/library/translation"), { recursive: true });
+    await writeFile(join(directory, sourceId), source, "utf8");
+
+    const indexPaths = {
+      english: join(directory, "english-index.pya"),
+      pyac: join(directory, "pyac-index.pya"),
+      wordnet: join(directory, "wordnet-index.pya")
+    };
+    const sourceHashes = { [sourceId]: sha256(Buffer.from(source)) };
+    await Promise.all([
+      writeIndex(indexPaths.english, createKwonLookupIndexForTest({
+        kind: "english",
+        sourceHashes,
+        entries: [["love compound", [{
+          sourceId,
+          byteOffset: Buffer.byteLength(source) + 64,
+          lineNumber: 999,
+          recordId: senseId
+        }]]]
+      })),
+      writeIndex(indexPaths.pyac, createKwonLookupIndexForTest({ kind: "pyac", entries: [] })),
+      writeIndex(indexPaths.wordnet, createKwonLookupIndexForTest({ kind: "wordnet", entries: [] }))
+    ]);
+
+    const matches = await loadWordNetVerifiedCompoundMatches({
+      target: "love compound",
+      url: WORDNET_VERIFIED_COMPOUNDS_URL,
+      indexPaths,
+      indexRoot: directory
+    });
+    assert.equal(matches.length, 1);
+    assert.equal(matches[0].senseId, senseId);
+    assert.equal(matches[0].target, "love compound");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("kwon locator reads use UTF-8 byte offsets and return the complete source line", async () => {
   const directory = await mkdtemp(join(tmpdir(), "pyash-kwon-offset-"));
   try {

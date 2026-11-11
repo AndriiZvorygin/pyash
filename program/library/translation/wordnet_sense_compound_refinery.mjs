@@ -720,7 +720,64 @@ function collectComponentGlosses(translations) {
 }
 
 function normalizeGloss(value) {
-  return text(value).toLowerCase().replace(/[_-]+/gu, " ").replace(/\s+/gu, " ");
+  return text(value).toLowerCase().replace(/[_-]+/gu, " ").replace(/\s+/gu, " ").trim();
+}
+
+export async function runSenseCompoundChoiceWaves(senses, {
+  width = 1,
+  resolveWave,
+  dispatch
+} = {}) {
+  if (!Array.isArray(senses) || typeof resolveWave !== "function" || typeof dispatch !== "function") {
+    throw invalid("sense compound choice waves require senses, a resolver, and a dispatcher");
+  }
+  const batchWidth = Math.max(1, Math.trunc(Number(width) || 1));
+  const waves = [];
+  for (let offset = 0; offset < senses.length; offset += batchWidth) {
+    waves.push(senses.slice(offset, offset + batchWidth));
+  }
+  if (waves.length === 0) return;
+  const dispatchWave = async (wave, resolved) => {
+    const results = await Promise.allSettled(wave.map((sense) => dispatch(sense, resolved)));
+    const failed = results.find((result) => result.status === "rejected");
+    if (failed) return { error: failed.reason };
+    return { value: results.map((result) => result.value) };
+  };
+  let resolved = await resolveWave(waves[0]);
+  let pendingDispatch = dispatchWave(waves[0], resolved);
+  for (let index = 1; index < waves.length; index += 1) {
+    let nextResolved;
+    try {
+      nextResolved = await resolveWave(waves[index]);
+    } catch (error) {
+      await pendingDispatch;
+      throw error;
+    }
+    const previous = await pendingDispatch;
+    if (previous.error) throw previous.error;
+    pendingDispatch = dispatchWave(waves[index], nextResolved);
+  }
+  const final = await pendingDispatch;
+  if (final.error) throw final.error;
+}
+
+export async function runSenseCompoundVocabularyLookups(lookupGlosses, {
+  chunkSize = 8,
+  suggestVocabulary
+} = {}) {
+  if (!Array.isArray(lookupGlosses) || typeof suggestVocabulary !== "function") {
+    throw invalid("sense compound vocabulary lookups require terms and a suggester");
+  }
+  const width = Math.max(1, Math.trunc(Number(chunkSize) || 1));
+  const suggestionRecords = [];
+  const linkedWordNetSenses = [];
+  for (let offset = 0; offset < lookupGlosses.length; offset += width) {
+    const chunk = lookupGlosses.slice(offset, offset + width);
+    const result = await suggestVocabulary(chunk.flatMap((gloss) => ["--text", gloss]), { report: () => {} });
+    if (Array.isArray(result?.suggestionRecords)) suggestionRecords.push(...result.suggestionRecords);
+    if (Array.isArray(result?.linkedWordNetSenses)) linkedWordNetSenses.push(...result.linkedWordNetSenses);
+  }
+  return { suggestionRecords, linkedWordNetSenses };
 }
 
 async function composeCandidates({ context, worklist, translations }) {
@@ -738,25 +795,8 @@ async function composeCandidates({ context, worklist, translations }) {
     ]
   ]));
   const glosses = collectComponentGlosses(compositionSenses.flatMap((sense) => sourceTranslationsBySense.get(sense.senseId) ?? []));
-  const lookupGlosses = [...new Set(glosses.flatMap(componentGlossLookupAlternatives))];
-  let suggestionRecords = [];
-  let linkedWordNetSenses = [];
-  if (lookupGlosses.length > 0) {
-    const args = lookupGlosses.flatMap((gloss) => ["--text", gloss]);
-    const suggestions = await (context.dependencies.suggestVocabulary ?? runVocabSuggest)(args, { report: () => {} });
-    suggestionRecords = suggestions.suggestionRecords ?? [];
-    linkedWordNetSenses = suggestions.linkedWordNetSenses ?? [];
-  }
-  const choicesByLookupGloss = buildKwonLinkedAtomicChoices({
-    suggestions: suggestionRecords,
-    linkedWordNetSenses,
-    componentGlosses: lookupGlosses,
-    activeAtomEntries: context.linkedAtomicSenses,
-    layerByWord: context.layerIndex.byWord,
-    deprecatedSurfaces: context.deprecatedSurfaces,
-    wordnetIndex: context.allocation.wordnetIndex
-  });
-  const byGloss = mapComponentGlossChoices(glosses, choicesByLookupGloss);
+  const byGloss = new Map();
+  const choicesByLookupGlossCache = new Map();
   const compositionPath = join(context.artifactDirectory, "component-compositions.pya");
   const compositionSource = await readIfPresent(compositionPath);
   const oldCompositionRows = compositionSource.trim()
@@ -829,12 +869,12 @@ async function composeCandidates({ context, worklist, translations }) {
     candidatesById.set(candidate.id, candidate);
     return candidate;
   };
-  const composeOne = async (sense) => {
+  const composeOne = async (sense, waveByGloss) => {
     const sourceTranslations = sourceTranslationsBySense.get(sense.senseId) ?? [];
     const input = buildSenseCompoundChoiceInput({
       sense,
       translations: sourceTranslations,
-      kwonCandidatesByGloss: byGloss,
+      kwonCandidatesByGloss: waveByGloss,
       reservedTargetIds
     });
     const inputHash = input ? hash(input.prompt) : hash(stableJson({ senseId: sense.senseId, sourceTranslations, noAvailableAtoms: true }));
@@ -921,9 +961,45 @@ async function composeCandidates({ context, worklist, translations }) {
     await persistCompositions();
   };
   const compositionWidth = Math.max(1, Math.trunc(Number(context.config.parallelism) || 1));
-  for (let offset = 0; offset < compositionSenses.length; offset += compositionWidth) {
-    await Promise.all(compositionSenses.slice(offset, offset + compositionWidth).map(composeOne));
-  }
+  await runSenseCompoundChoiceWaves(compositionSenses, {
+    width: compositionWidth,
+    resolveWave: async (wave) => {
+      const waveGlosses = collectComponentGlosses(wave.flatMap((sense) => sourceTranslationsBySense.get(sense.senseId) ?? []));
+      const lookupGlosses = [...new Set(waveGlosses.flatMap(componentGlossLookupAlternatives))];
+      const uncachedLookupGlosses = lookupGlosses.filter((gloss) => !choicesByLookupGlossCache.has(normalizeGloss(gloss)));
+      if (uncachedLookupGlosses.length > 0) {
+        const { suggestionRecords, linkedWordNetSenses } = await runSenseCompoundVocabularyLookups(uncachedLookupGlosses, {
+          chunkSize: 8,
+          suggestVocabulary: context.dependencies.suggestVocabulary ?? runVocabSuggest
+        });
+        const resolvedChoices = buildKwonLinkedAtomicChoices({
+          suggestions: suggestionRecords,
+          linkedWordNetSenses,
+          componentGlosses: uncachedLookupGlosses,
+          activeAtomEntries: context.linkedAtomicSenses,
+          layerByWord: context.layerIndex.byWord,
+          deprecatedSurfaces: context.deprecatedSurfaces,
+          wordnetIndex: context.allocation.wordnetIndex
+        });
+        for (const gloss of uncachedLookupGlosses) {
+          choicesByLookupGlossCache.set(normalizeGloss(gloss), resolvedChoices.get(normalizeGloss(gloss)) ?? []);
+        }
+      }
+      const choicesByLookupGloss = new Map(lookupGlosses.map((gloss) => [
+        normalizeGloss(gloss), choicesByLookupGlossCache.get(normalizeGloss(gloss)) ?? []
+      ]));
+      const waveByGloss = mapComponentGlossChoices(waveGlosses, choicesByLookupGloss);
+      for (const [gloss, choices] of waveByGloss) {
+        const unique = new Map([...(byGloss.get(gloss) ?? []), ...choices].map((choice) => [
+          `${text(choice?.linkedSense?.source)}\u0000${(choice?.pyashSequence ?? []).join("+")}`,
+          choice
+        ]));
+        byGloss.set(gloss, [...unique.values()]);
+      }
+      return waveByGloss;
+    },
+    dispatch: composeOne
+  });
   await compositionWrite;
   context.compositionRecords = compositionRecords;
   const uniqueCandidates = [...candidatesById.values()].sort((left, right) => left.frequencyRank - right.frequencyRank
