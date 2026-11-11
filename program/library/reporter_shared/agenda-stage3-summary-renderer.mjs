@@ -4286,9 +4286,9 @@ export async function summarizeGroundedUnit({
         prompt: [
           `Conservative separate-procedural-phases repair attempt ${attempt}.${pass} of 3.`,
           "The bounded source contains a generic question about whether motions should be separate, a separate agenda-item transition, and a later receipt vote. Do not attach the agenda-item label to the generic question unless the same source sentence explicitly does so.",
-          "Keep procedural phases separate: report the generic question without an inferred object; report only that the later vote carried for the two items, without calling them correspondence unless the carried sentence itself does so; omit routine 'none/seeing none' transition wording unless needed for a complete fact.",
-          "Do not say a motion was moved, seconded, or carried when the source only asks for a motion and later says that the two items were received. Do not call the result a carried motion. Do not say the committee addressed or discussed the site plan when the source records only a procedural question about whether there were questions. Do not say a speaker called for a vote unless the source explicitly records that speech act. Do not infer who asked, answered, moved, or chaired the exchange. Do not import details from the agenda label into the question.",
-          pass > 1 ? "HARD RETRY: remove every moved, seconded, carried-motion, correspondence, addressed-site-plan, or called-for-a-vote claim that is not literally paired with the carried sentence; use impersonal wording such as 'a request to receive two items was followed by a carried result' and preserve the literal 'two items' scope." : "",
+          "Keep procedural phases separate: report the generic question as a question about whether separate motions were being used, without an inferred object or formal inquiry. Report the later source wording precisely: it records a request for a motion to receive two items of correspondence, followed by the statement that it was carried. Do not add mover or seconder details. Omit routine 'none/seeing none' transition wording unless needed for a complete fact.",
+          "Do not say a motion was moved or seconded when the source only requests a motion. Do not call the separate-motions question a formal inquiry, decision, or motion. Do not say the committee addressed or discussed the site plan when the source records only a procedural question about whether there were questions. Do not say a speaker called for a vote unless the source explicitly records that speech act. Do not infer who asked, answered, moved, or chaired the exchange. Do not import details from the agenda label into the question.",
+          pass > 1 ? "HARD RETRY: use only this conservative form: 'The source records a question about whether separate motions were being used. It then records a request for a motion to receive two items of correspondence, followed by the statement that it was carried.' You may omit the first sentence, but do not call the question a formal inquiry and do not say the motion was moved or seconded." : "",
           extraInstruction,
           "Return exactly one JSON object with summary, chapter text, confidence, and notes.",
           `AGENDA_LABEL: ${promptLabel}`,
@@ -4300,8 +4300,8 @@ export async function summarizeGroundedUnit({
         format: STAGE3_SUMMARY_RESPONSE_FORMAT,
       });
       const text = `${String(repaired?.summary || "")} ${String(repaired?.["chapter text"] || "")}`;
-      const unsupportedMotionClaim = /\b(?:carried|approved|adopted)\s+(?:a\s+)?motion\b|\b(?:motion\s+to\s+receive|address(?:ed|ing)?\s+(?:the\s+)?site\s+plan|site\s+plan\s+(?:was|is)\s+(?:addressed|discussed|considered|reviewed|covered)|(?:address(?:ed|ing)?|discuss(?:ed|ing)?|consider(?:ed|ing)?|review(?:ed|ing)?|cover(?:ed|ing)?|went\s+over)\b[^.?!]{0,80}\bsite\s+plan\b)\b/iu.test(text);
-      if (!unsupportedMotionClaim && !/\b(?:moved|seconded|correspondence|called\s+for\s+(?:a\s+)?vote)\b/iu.test(text)) return repaired;
+      const unsupportedMotionClaim = /\b(?:carried|approved|adopted)\s+(?:a\s+)?motion\b|\b(?:motion|request)\b[^.?!]{0,100}\b(?:was|were)\s+(?:moved|seconded)\b|\b(?:address(?:ed|ing)?|discuss(?:ed|ing)?|consider(?:ed|ing)?|review(?:ed|ing)?|cover(?:ed|ing)?|went\s+over)\b[^.?!]{0,80}\bsite\s+plan\b|\bsite\s+plan\b[^.?!]{0,80}\b(?:addressed|discussed|considered|reviewed|covered)\b/iu.test(text);
+      if (!unsupportedMotionClaim && !/\b(?:moved|seconded|called\s+for\s+(?:a\s+)?vote)\b/iu.test(text)) return repaired;
     }
     return repaired;
   };
@@ -5173,6 +5173,11 @@ export async function summarizeGroundedUnit({
           groundingAttempt,
           "Grounding repair: preserve the literal closed-meeting-agenda question, the open-agenda listing, the closed-session discussion condition, the open-agenda approval condition, and the separately carried minutes motion. Keep all procedural transitions impersonal and do not assign them to the chair or an addressee.",
         )
+        : separateProceduralPhasesOnly
+        ? await queryConservativeSeparateProceduralPhasesRepair(
+          groundingAttempt,
+          "Grounding repair: keep the separate-motions question generic and separate from the later receipt result; do not attach the site-plan label to the question, call the result a carried motion, call the items correspondence unless the carried sentence does so, or say the site plan was addressed.",
+        )
         : incompleteDeferralDefect
         ? await queryConservativeIncompleteDeferralRepair(groundingAttempt, auditFeedback, rejectedOutput)
         : negationDefect
@@ -5406,11 +5411,6 @@ export async function summarizeGroundedUnit({
           ? await queryConservativeAgendaTransitionRepair(
             groundingAttempt,
             "Grounding repair: keep this as a generic agenda-position transition only; omit any claimed seconder, motion, vote, or named speaker.",
-          )
-        : separateProceduralPhasesOnly
-          ? await queryConservativeSeparateProceduralPhasesRepair(
-            groundingAttempt,
-            "Grounding repair: keep the separate-motions question generic and separate from the later carried correspondence-receipt vote; do not attach the site-plan label to the question or add a speaker's call-for-vote action.",
           )
         : questionAnswerOnly
           ? await queryConservativeQuestionAnswerRepair(

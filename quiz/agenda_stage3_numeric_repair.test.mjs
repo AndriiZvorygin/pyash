@@ -5319,7 +5319,7 @@ test("stage3 guards generated prose against conflicting structured agenda dates"
   assert.match(source, /const finalNumericSpecificityDefect =/iu);
   assert.match(source, /stage3 final numeric-specificity repair/iu);
   assert.match(source, /const separateProceduralPhasesOnly =/iu);
-  assert.match(source, /HARD RETRY: remove every moved, seconded, carried-motion, correspondence, addressed-site-plan/iu);
+  assert.match(source, /HARD RETRY: use only this conservative form:.*separate motions were being used/iu);
   assert.match(source, /const unsupportedMotionClaim =/iu);
   assert.match(source, /const proceduralPairingDefect =/iu);
   assert.match(source, /queryProceduralFloorRepair\(groundingAttempt, auditFeedback, rejectedOutput\)/iu);
