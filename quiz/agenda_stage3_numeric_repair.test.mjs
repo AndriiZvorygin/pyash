@@ -1948,6 +1948,85 @@ test("stage3 keeps a generic minutes motion separate from a later minutes item",
   assert.match(repairPrompt, /generic motion.*ambiguous.*handoff-only/iu);
 });
 
+test("stage3 retries closed-minutes repairs that invert the procedural contrast", async (t) => {
+  let repairCalls = 0;
+  let repairedGood = false;
+  let retryPrompt = "";
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, options) => {
+    const request = JSON.parse(options.body);
+    const system = request.messages[0].content;
+    const prompt = request.messages[1].content;
+    let content;
+    if (prompt.includes("Conservative minutes-motion-scope repair")) {
+      repairCalls += 1;
+      retryPrompt = prompt;
+      repairedGood = repairCalls >= 3;
+      content = repairedGood
+        ? {
+          summary: "The excerpt records a question about whether closed-session minutes should be listed on a closed-meeting agenda, followed by an explanation that they are listed on the open agenda, discussion of them would require a closed session, and otherwise they can be approved on the open agenda; a motion to move the minutes was then carried.",
+          "chapter text": "Closed-session minutes and open-agenda procedure",
+          confidence: 0.9,
+          notes: "",
+        }
+        : {
+          summary: "A speaker questioned whether the minutes would appear on the open agenda, and they could be approved if there is no discussion.",
+          "chapter text": "Minutes approved without discussion",
+          confidence: 0.9,
+          notes: "",
+        };
+    } else if (prompt.includes("Check every concrete claim in CANDIDATE_SUMMARY")) {
+      content = repairedGood
+        ? { grounded: true, "unsupported claims": [], notes: "" }
+        : { grounded: false, "unsupported claims": ["The candidate inverts the closed-session/open-agenda procedural contrast."], notes: "The candidate uses unsupported question and conditional wording." };
+    } else if (prompt.includes("The prior audit is only an allegation")) {
+      content = repairedGood
+        ? { grounded: true, "unsupported claims": [], notes: "" }
+        : { grounded: false, "unsupported claims": ["The candidate inverts the closed-session/open-agenda procedural contrast."], notes: "The candidate uses unsupported question and conditional wording." };
+    } else if (system.includes("Audit one generated civic summary")) {
+      content = repairedGood
+        ? { grounded: true, "unsupported claims": [], notes: "" }
+        : { grounded: false, "unsupported claims": ["The candidate inverts the closed-session/open-agenda procedural contrast."], notes: "The candidate uses unsupported question and conditional wording." };
+    } else {
+      content = {
+        summary: "A speaker questioned whether the minutes would appear on the open agenda, and they could be approved if there is no discussion.",
+        "chapter text": "Minutes approved without discussion",
+        confidence: 0.9,
+        notes: "",
+      };
+    }
+    return {
+      ok: true,
+      async json() {
+        return { message: { content: JSON.stringify(content) } };
+      },
+    };
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const result = await summarizeGroundedUnit({
+    unit: {
+      "unit id": "ground_closed_minutes_contrast",
+      label: "4.b Minutes of the Closed Session of the Community Services Committee meeting held on March 19, 2025",
+      "source excerpt": "We now have Minutes of the closed session; would these not be on a closed meeting agenda?\nThrough you, I understand that they would be listed on the open agenda.\nIf there's any discussion of the minutes, you would need to go into closed to discuss that.\nBut otherwise, they can be approved on the open agenda.\nSo I'm looking for someone to move those.\nCouncillor Kukreja, any comments on the minutes or questions?\nSeeing none.\nThat's carried.",
+      "source rows": 8,
+      "duration seconds": 90,
+      substantive: true,
+    },
+    focus: "clear civic reporting",
+    llmModel: DEFAULT_TEXT_MODEL,
+    ollamaUrl: "http://ollama.invalid/api/chat",
+    semanticGroundingAudit: true,
+  });
+
+  assert.equal(repairCalls, 3);
+  assert.match(result.summary, /whether closed-session minutes should be listed/iu);
+  assert.match(result.summary, /discussion of them would require a closed session/iu);
+  assert.doesNotMatch(result.summary, /if there is no discussion|without discussion|a speaker questioned whether.*open agenda/iu);
+  assert.match(retryPrompt, /HARD RETRY/iu);
+  assert.match(retryPrompt, /do not invert the condition/iu);
+});
+
 test("stage3 uses a conservative LLM repair for consent-agenda ranges", async (t) => {
   let repaired = false;
   let repairPrompt = "";

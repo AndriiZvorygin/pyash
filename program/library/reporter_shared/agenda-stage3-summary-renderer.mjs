@@ -3853,30 +3853,48 @@ export async function summarizeGroundedUnit({
     seed: seed + 9000 + attempt,
     format: STAGE3_SUMMARY_RESPONSE_FORMAT,
   });
-  const queryConservativeMinutesMotionScopeRepair = async (attempt = 1, extraInstruction = "") => callOllamaJson({
-    ollamaUrl,
-    llmModel,
-    system: "Write one conservative source-grounded civic summary for a minutes item with a generic move-and-vote phrase. Return strict JSON only.",
-    prompt: [
-      `Conservative minutes-motion-scope repair attempt ${attempt} of 3.`,
-      "The prior output assigned a later minutes item or an unsupported receipt action to the current labeled minutes item. Start over from the literal source excerpt.",
-      MINUTES_MOTION_SCOPE_REPAIR_RULE,
-      closedMinutesProcedureOnly
-        ? "CLOSED-MINUTES PROCEDURAL REPAIR: preserve the complete contrast in this source. The question asks whether closed-session minutes should be on a closed-meeting agenda; the response says they would be listed on the open agenda, and explains that substantive discussion would require going into closed session. Summarize that exchange impersonally, without collapsing the question into only the answer. Do not say the minutes were approved without discussion; distinguish no substantive content debate from the recorded procedural discussion. Do not call the addressee a speaker, do not use 'a speaker questioned', do not attribute 'Seeing none' to the named addressee, and do not include any personal name unless the same source line explicitly pairs that name with a spoken claim. A safe form is: 'The excerpt records a question about placing closed-session minutes on a closed-meeting agenda, followed by an explanation that they are listed on the open agenda and that substantive discussion would require a closed session; a motion to move the minutes was then carried.'"
-        : "",
-      "Use the authoritative agenda label only to identify the current minutes committee. If a later named committee appears after a generic move-and-vote phrase and the current committee is not repeated with that motion, use the handoff-only form: 'The excerpt records a handoff to the [current committee] minutes without explicitly recording their presentation or approval.' Otherwise, a safe form is: 'The discussion returned to the [current committee] minutes, and a motion to move the minutes was carried.' Do not use received, approved, adopted, presented, or reported back unless the source explicitly pairs that word with the current labeled minutes.",
-      "If the source includes a later named committee and a later motion to receive its minutes, stop before that later committee and omit its content, motion, and outcome.",
-      "Never copy transcript speaker labels or infer a named mover, seconder, recipient, or chair.",
-      extraInstruction,
-      "Return exactly one JSON object with summary, chapter text, confidence, and notes.",
-      `AGENDA_LABEL: ${promptLabel}`,
-      `GROUNDED_SOURCE: ${String(unit?.["source excerpt"] || "").slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000))}`,
-    ].filter(Boolean).join("\n\n"),
-    maxOutputTokens: 520,
-    temperature: 0.2,
-    seed: seed + 9500 + attempt,
-    format: STAGE3_SUMMARY_RESPONSE_FORMAT,
-  });
+  const queryConservativeMinutesMotionScopeRepair = async (attempt = 1, extraInstruction = "") => {
+    let repaired = null;
+    for (let pass = 1; pass <= 3; pass += 1) {
+      const retryInstruction = pass > 1
+        ? "HARD RETRY: the previous repair still changed the source's procedural contrast. Do not say a speaker questioned whether the minutes would appear on the open agenda; do not say approval occurred 'if there is no discussion' or 'without discussion'; do not say a named addressee was asked for comments. State the literal closed-session/open-agenda distinction impersonally and keep the carried minutes motion separate."
+        : "";
+      repaired = await callOllamaJson({
+        ollamaUrl,
+        llmModel,
+        system: "Write one conservative source-grounded civic summary for a minutes item with a generic move-and-vote phrase. Return strict JSON only.",
+        prompt: [
+          `Conservative minutes-motion-scope repair attempt ${attempt}.${pass} of 3.`,
+          "The prior output assigned a later minutes item or an unsupported receipt action to the current labeled minutes item. Start over from the literal source excerpt.",
+          MINUTES_MOTION_SCOPE_REPAIR_RULE,
+          closedMinutesProcedureOnly
+            ? "CLOSED-MINUTES PROCEDURAL REPAIR: preserve the complete contrast in this source. The source asks whether closed-session minutes should be on a closed-meeting agenda; the response says they would be listed on the open agenda, says that discussion of the minutes would require going into closed session, and then says otherwise they can be approved on the open agenda. Summarize those two procedural cases impersonally. Do not invert the condition into 'if there is no discussion', do not use 'without discussion', do not say a speaker questioned whether the minutes would appear on the open agenda, do not call the addressee a speaker, do not attribute 'Seeing none' to the named addressee, and do not include a personal name unless the same source line explicitly pairs that name with a spoken claim. A safe form is: 'The excerpt records a question about whether closed-session minutes should be listed on a closed-meeting agenda, followed by an explanation that they are listed on the open agenda, discussion of them would require a closed session, and otherwise they can be approved on the open agenda; a motion to move the minutes was then carried.'"
+            : "",
+          "Use the authoritative agenda label only to identify the current minutes committee. If a later named committee appears after a generic move-and-vote phrase and the current committee is not repeated with that motion, use the handoff-only form: 'The excerpt records a handoff to the [current committee] minutes without explicitly recording their presentation or approval.' Otherwise, a safe form is: 'The discussion returned to the [current committee] minutes, and a motion to move the minutes was carried.' Do not use received, approved, adopted, presented, or reported back unless the source explicitly pairs that word with the current labeled minutes.",
+          "If the source includes a later named committee and a later motion to receive its minutes, stop before that later committee and omit its content, motion, and outcome.",
+          "Never copy transcript speaker labels or infer a named mover, seconder, recipient, or chair.",
+          retryInstruction,
+          extraInstruction,
+          "Return exactly one JSON object with summary, chapter text, confidence, and notes.",
+          `AGENDA_LABEL: ${promptLabel}`,
+          `GROUNDED_SOURCE: ${String(unit?.["source excerpt"] || "").slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000))}`,
+        ].filter(Boolean).join("\n\n"),
+        maxOutputTokens: 520,
+        temperature: pass >= 3 ? 0 : 0.2,
+        seed: seed + 9500 + attempt * 10 + pass,
+        format: STAGE3_SUMMARY_RESPONSE_FORMAT,
+      });
+      const repairedText = `${String(repaired?.summary || "")} ${String(repaired?.["chapter text"] || "")}`;
+      const closedMinutesRepairDefect = closedMinutesProcedureOnly && (
+        /\b(?:speaker|member|councillor|councilor)\b[\s\S]{0,90}\bquestion(?:ed|s)?\b[\s\S]{0,180}\b(?:open\s+agenda|appear|listed)\b/iu.test(repairedText)
+        || /\bif\s+(?:there['’]?s|there\s+is)\s+(?:any\s+)?discussion\b/iu.test(repairedText) === false && /\bif\s+there\s+is\s+no\s+discussion\b/iu.test(repairedText)
+        || /\bwithout\s+discussion\b/iu.test(repairedText)
+        || /\b(?:councillor|councilor)\s+\w+\s+was\s+asked\s+for\s+(?:comments?|questions?)\b/iu.test(repairedText)
+      );
+      if (!closedMinutesRepairDefect) return repaired;
+    }
+    return repaired;
+  };
   const queryConservativeConsentAgendaScopeRepair = async (attempt = 1, extraInstruction = "") => callOllamaJson({
     ollamaUrl,
     llmModel,
