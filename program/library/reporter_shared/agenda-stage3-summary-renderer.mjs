@@ -3859,6 +3859,20 @@ export async function summarizeGroundedUnit({
       const retryInstruction = pass > 1
         ? "HARD RETRY: the previous repair still changed the source's procedural contrast. Do not say a speaker questioned whether the minutes would appear on the open agenda; do not say approval occurred 'if there is no discussion' or 'without discussion'; do not say a named addressee was asked for comments. State the literal closed-session/open-agenda distinction impersonally and keep the carried minutes motion separate."
         : "";
+      const minutesRepairRules = closedMinutesProcedureOnly
+        ? [
+          "CLOSED-MINUTES REPAIR ONLY: use the source lines below as the complete evidence and ignore any generic minutes template.",
+          "The question asks whether the minutes would be on a CLOSED meeting agenda. Preserve that exact subject; it is not a question about whether they would be on an open agenda.",
+          "The answer has three separate propositions: the minutes would be listed on the OPEN agenda; discussion of the minutes would require going into a CLOSED session; otherwise the minutes could be approved on the OPEN agenda.",
+          "The source then records that someone was sought to move the minutes and that the motion was carried. Keep that motion separate from the three propositions.",
+          "Write one impersonal summary containing all four source-supported parts. Do not use speaker/member/councillor questioned or asked wording, do not invert the closed/open distinction, do not invert the condition, and do not replace the conditional 'discussion would require a closed session' with 'if there is no discussion' or 'without discussion'.",
+        ].join(" ")
+        : [
+          MINUTES_MOTION_SCOPE_REPAIR_RULE,
+          "Use the authoritative agenda label only to identify the current minutes committee. If a later named committee appears after a generic move-and-vote phrase and the current committee is not repeated with that motion, use the handoff-only form: 'The excerpt records a handoff to the [current committee] minutes without explicitly recording their presentation or approval.' Otherwise, a safe form is: 'The discussion returned to the [current committee] minutes, and a motion to move the minutes was carried.' Do not use received, approved, adopted, presented, or reported back unless the source explicitly pairs that word with the current labeled minutes.",
+          "If the source includes a later named committee and a later motion to receive its minutes, stop before that later committee and omit its content, motion, and outcome.",
+          "Never copy transcript speaker labels or infer a named mover, seconder, recipient, or chair.",
+        ].join(" ");
       repaired = await callOllamaJson({
         ollamaUrl,
         llmModel,
@@ -3867,13 +3881,7 @@ export async function summarizeGroundedUnit({
         prompt: [
           `Conservative minutes-motion-scope repair attempt ${attempt}.${pass} of 3.`,
           "The prior output assigned a later minutes item or an unsupported receipt action to the current labeled minutes item. Start over from the literal source excerpt.",
-          MINUTES_MOTION_SCOPE_REPAIR_RULE,
-          closedMinutesProcedureOnly
-            ? "CLOSED-MINUTES PROCEDURAL REPAIR: preserve the complete contrast in this source. The literal question is 'would these not be on a CLOSED meeting agenda?' Do not change that question into whether they would appear on an OPEN agenda. The response says they would be listed on the OPEN agenda, says that discussion of the minutes would require going into a CLOSED session, and then says otherwise they can be approved on the OPEN agenda. Summarize all of those procedural cases impersonally. Do not invert the condition into 'if there is no discussion', do not use 'without discussion', do not say a speaker asked or questioned whether the minutes would appear on the open agenda, do not call the addressee a speaker, do not attribute 'Seeing none' to the named addressee, and do not include a personal name unless the same source line explicitly pairs that name with a spoken claim. A safe form is: 'The excerpt records a question about whether closed-session minutes should be listed on a closed-meeting agenda, followed by an explanation that they are listed on the open agenda, discussion of them would require a closed session, and otherwise they can be approved on the open agenda; a motion to move the minutes was then carried.'"
-            : "",
-          "Use the authoritative agenda label only to identify the current minutes committee. If a later named committee appears after a generic move-and-vote phrase and the current committee is not repeated with that motion, use the handoff-only form: 'The excerpt records a handoff to the [current committee] minutes without explicitly recording their presentation or approval.' Otherwise, a safe form is: 'The discussion returned to the [current committee] minutes, and a motion to move the minutes was carried.' Do not use received, approved, adopted, presented, or reported back unless the source explicitly pairs that word with the current labeled minutes.",
-          "If the source includes a later named committee and a later motion to receive its minutes, stop before that later committee and omit its content, motion, and outcome.",
-          "Never copy transcript speaker labels or infer a named mover, seconder, recipient, or chair.",
+          minutesRepairRules,
           retryInstruction,
           extraInstruction,
           "Return exactly one JSON object with summary, chapter text, confidence, and notes.",
@@ -4198,6 +4206,29 @@ export async function summarizeGroundedUnit({
     maxOutputTokens: 720,
     temperature: 0.2,
     seed: seed + 9997 + attempt,
+    format: STAGE3_SUMMARY_RESPONSE_FORMAT,
+  });
+  const queryConservativeThroughChairRepair = async (attempt = 1, extraInstruction = "", rejectedClaims = "", rejectedOutput = "") => callOllamaJson({
+    ollamaUrl,
+    llmModel,
+    appendUniversalContract: false,
+    system: "Write one source-grounded civic summary that preserves routed responses without misattributing the chair. Return strict JSON only.",
+    prompt: [
+      `Conservative through-chair attribution repair attempt ${attempt} of 3.`,
+      "Start over from GROUNDED_SOURCE. A phrase such as 'Through Chair Kepki' or 'Through the chair' is a procedural channel or address, not evidence that Chair Kepki answered, explained, or made the response.",
+      "Keep the question and the response separate. Attribute the response to staff or another named person only when the same source block explicitly identifies that person as the respondent; otherwise use impersonal wording such as 'the response stated' or 'the discussion addressed'.",
+      "Preserve an explicitly recorded motion, vote, or carried outcome, but do not attach it to the chair or another unsupported actor.",
+      "Do not copy transcript speaker labels, unsupported names, or the rejected chair-as-respondent wording into either output field.",
+      extraInstruction,
+      rejectedClaims ? `INDEPENDENT_AUDIT_REJECTION: ${rejectedClaims}` : "",
+      rejectedOutput ? `REJECTED_CANDIDATE (UNTRUSTED): ${rejectedOutput}` : "",
+      "Return exactly one JSON object with summary, chapter text, confidence, and notes.",
+      `AGENDA_LABEL: ${promptLabel}`,
+      `GROUNDED_SOURCE: ${String(parentLiteralSourceExcerpt || parentRepairSourceExcerpt || semanticGroundingSourceExcerpt || unit?.["source excerpt"] || "").slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000))}`,
+    ].filter(Boolean).join("\n\n"),
+    maxOutputTokens: 620,
+    temperature: attempt >= 3 ? 0 : 0.1,
+    seed: seed + 10050 + attempt,
     format: STAGE3_SUMMARY_RESPONSE_FORMAT,
   });
   const queryConservativeRoleAttributionRepair = async (attempt = 1, extraInstruction = "", rejectedClaims = "", rejectedOutput = "") => {
@@ -4910,12 +4941,16 @@ export async function summarizeGroundedUnit({
         summary: normalizeText(summary),
         "chapter text": normalizeText(parsed?.["chapter text"] || ""),
       });
+      const generatedProse = `${summary} ${normalizeText(parsed?.["chapter text"] || "")}`;
       const actorAttributionConflict = /\b(?:candidate|summary|output)\b[\s\S]{0,220}\b(?:attribut(?:e|es|ed|ion)|assign(?:ed|s)?|named?)\b[\s\S]{0,400}\b(?:but|however|instead|unsupported|does\s+not|not\s+record|conflict|wrong|incorrect(?:ly)?|fails?\s+to\s+distinguish|delivered\s+by|presented\s+by|explicitly\s+identif(?:y|ies|ied))\b/iu.test(auditFeedback);
+      const throughChairAttributionDefect = /\b(?:through|via)\s+(?:the\s+)?(?:chair|mayor|warden)\b/iu.test(semanticGroundingSourceExcerpt)
+        && /\b(?:answered|responded|replied|explained|said|told)\s+by\s+(?:the\s+)?(?:chair|mayor|warden)\b/iu.test(generatedProse)
+        && (/(?:not|rather than|does not)\b[\s\S]{0,120}\b(?:answer|respond|reply|explain)/iu.test(auditFeedback)
+          || /\b(?:through|via)\s+(?:the\s+)?(?:chair|mayor|warden)\b[\s\S]{0,180}\b(?:not|rather than|does not)\b[\s\S]{0,100}\b(?:answer|respond|reply|explain)/iu.test(auditFeedback));
       const roleAttributionRepairOnly = !speakerHandoffCandidate
         && /\b(?:speaker|actor|role|attribution|addressee|council\s+member|councillor|mayor|staff)\b/iu.test(
         `${rejectedClaims} ${groundingAudit.notes || ""}`,
       ) && !proceduralFragmentOnly;
-    const generatedProse = `${summary} ${normalizeText(parsed?.["chapter text"] || "")}`;
       const sourceExplicitlyRecordsSeconding = /\b(?:seconded|seconder)\b/iu.test(semanticGroundingSourceExcerpt);
       const candidateClaimsSecondingWithoutSource = /\b(?:seconded|seconder)\b/iu.test(generatedProse)
         && !sourceExplicitlyRecordsSeconding;
@@ -5077,6 +5112,13 @@ export async function summarizeGroundedUnit({
         ? await queryConservativeRoleAttributionRepair(
           groundingAttempt,
           "Grounding repair: the source explicitly separates the mover from the seconder, but the audit disputes a mover name, spelling, or joint-action attribution. Omit all personal mover and seconder names and do not say that the participants moved the motion together. Preserve only impersonal source-supported motion subject, action, and disposition; do not merge the mover and seconder roles.",
+          auditFeedback,
+          rejectedOutput,
+        )
+        : throughChairAttributionDefect
+        ? await queryConservativeThroughChairRepair(
+          groundingAttempt,
+          "Grounding repair: preserve the answer content but treat 'Through Chair' as routing/address language, never as evidence that the chair answered. Use impersonal response wording unless the source explicitly identifies the respondent.",
           auditFeedback,
           rejectedOutput,
         )
