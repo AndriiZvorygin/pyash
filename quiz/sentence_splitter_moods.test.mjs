@@ -59,3 +59,13 @@ test("splitters and parser preserve quote markers inside JSON text blocks", () =
   assert.equal(parse(source).ob.text, payload);
   assert.equal(parse(source).be, "text");
 });
+
+test("a quoted-text marker inside an ordinary quoted value does not swallow the next record", () => {
+  const first = 'su name phrase ob text "quoted.text.Will" be text ya';
+  const second = "su name block ob text quoted.text.later body.text.quoted be text ya";
+  const source = `${first}\n${second}`;
+
+  assert.deepEqual(splitSentences(source), [first, second]);
+  assert.equal(parse(first).ob.text, "quoted.text.Will");
+  assert.equal(parse(second).ob.text, "later body");
+});

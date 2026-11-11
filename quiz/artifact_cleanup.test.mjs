@@ -137,6 +137,37 @@ test("stage manifest artifacts retain their run directory without being treated 
   assert.equal(report.runDirectories.some(item => item.path === referencedDirectory), false);
 });
 
+test("a malformed newspaper artifact locator is recovered only from its matching audit digest", async () => {
+  const root = await makeStore();
+  const runId = "20261110-008-audited-newspaper";
+  const bytes = Buffer.from("audited newspaper artifact");
+  const cas = await putCas(root, bytes);
+  const malformedArtifact = `exists su name newspaper-001 ob name evoke-0 from name newspaper to text "---text-stdin---y-ratio-0.42---max-width-ratio-0/newspaper/text-000001.txt as name text fromtext text " accordingto name sha256 by num ${cas.size} be artifact ya`;
+  const auditResult = `su name command audit 000001 as name result totext text "artifact newspaper-001 sha256:${cas.hash}" be command audit ya`;
+  await fs.writeFile(path.join(root, "newspaper", `${runId}.pya`), runNewspaper(runId, `${malformedArtifact}\n${auditResult}`, root));
+
+  const report = await cleanArtifactStore({ root });
+
+  assert.equal(report.blocked, false);
+  assert.equal(report.referencedContentAddressedObjects, 1);
+  assert.equal(report.contentAddressedObjects.some(item => item.filename === path.basename(cas.objectPath)), false);
+});
+
+test("a malformed newspaper artifact locator without a matching audit remains blocked", async () => {
+  const root = await makeStore();
+  const runId = "20261110-009-unaudited-newspaper";
+  const bytes = Buffer.from("unaudited newspaper artifact");
+  const cas = await putCas(root, bytes);
+  const malformedArtifact = `exists su name newspaper-001 ob name evoke-0 from name newspaper to text "---text-stdin---y-ratio-0.42---max-width-ratio-0/newspaper/text-000001.txt as name text fromtext text " accordingto name sha256 by num ${cas.size} be artifact ya`;
+  await fs.writeFile(path.join(root, "newspaper", `${runId}.pya`), runNewspaper(runId, malformedArtifact, root));
+
+  const report = await cleanArtifactStore({ root });
+
+  assert.equal(report.blocked, true);
+  assert.ok(report.blockers.some(item => item.includes("invalid SHA-256 reference")));
+  assert.equal(report.contentAddressedObjects.some(item => item.filename === path.basename(cas.objectPath)), true);
+});
+
 test("external newspaper run roots do not block local artifact cleanup", async () => {
   const root = await makeStore();
   const orphanId = "20261110-013-local-orphan";

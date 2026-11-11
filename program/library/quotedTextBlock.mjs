@@ -34,22 +34,46 @@ function jsonBlockEnd(text, contentStart, kind) {
 
 export function findQuotedTextBlock(text, fromIndex = 0) {
   const source = String(text ?? "");
-  const opener = /quoted\.([^.]+)\.(?:contents\s*)?/gu;
-  opener.lastIndex = fromIndex;
-  const match = opener.exec(source);
-  if (!match) return null;
+  let cursor = Math.max(0, fromIndex);
+  while (cursor < source.length) {
+    const quoteIndex = source.indexOf('"', cursor);
+    const markerIndex = source.indexOf("quoted.", cursor);
+    if (markerIndex < 0) return null;
+    if (quoteIndex >= 0 && quoteIndex < markerIndex) {
+      cursor = skipQuotedString(source, quoteIndex);
+      continue;
+    }
 
-  const contentStart = opener.lastIndex;
-  const kind = match[1];
-  const jsonEnd = jsonBlockEnd(source, contentStart, kind);
-  if (jsonEnd) {
-    return { start: match.index, contentStart, contentEnd: jsonEnd.contentEnd, end: jsonEnd.end, kind };
+    const match = /^quoted\.([^.]+)\.(?:contents\s*)?/u.exec(source.slice(markerIndex));
+    if (!match) {
+      cursor = markerIndex + 1;
+      continue;
+    }
+
+    const contentStart = markerIndex + match[0].length;
+    const kind = match[1];
+    const jsonEnd = jsonBlockEnd(source, contentStart, kind);
+    if (jsonEnd) {
+      return { start: markerIndex, contentStart, contentEnd: jsonEnd.contentEnd, end: jsonEnd.end, kind };
+    }
+
+    const suffix = `.${kind}.quoted`;
+    const close = source.indexOf(suffix, contentStart);
+    if (close < 0) return null;
+    return { start: markerIndex, contentStart, contentEnd: close, end: close + suffix.length, kind };
   }
+  return null;
+}
 
-  const suffix = `.${kind}.quoted`;
-  const close = source.indexOf(suffix, contentStart);
-  if (close < 0) return null;
-  return { start: match.index, contentStart, contentEnd: close, end: close + suffix.length, kind };
+function skipQuotedString(source, start) {
+  for (let index = start + 1; index < source.length; index += 1) {
+    if (source[index] === "\\") {
+      index += 1;
+    } else if (source[index] === '"') {
+      return index + 1;
+    }
+  }
+  return source.length;
 }
 
 export function replaceQuotedTextBlocks(text) {

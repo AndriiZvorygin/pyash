@@ -53,6 +53,30 @@ function addRunIdFromLocator(runIds, locator) {
   }
 }
 
+function auditedArtifactHashes(sentences) {
+  const hashesByAlias = new Map();
+  for (const sentence of sentences) {
+    if (sentence?.be !== "command audit" || sentence?.as?.name !== "result") continue;
+    const match = String(sentence?.totext?.text ?? "").match(/^artifact ([^\s]+) sha256:([a-f0-9]{64})$/u);
+    if (!match) continue;
+    const hashes = hashesByAlias.get(match[1]) ?? new Set();
+    hashes.add(match[2]);
+    hashesByAlias.set(match[1], hashes);
+  }
+  return hashesByAlias;
+}
+
+function legacyNewspaperArtifact(sentence, auditHashes) {
+  if (sentence?.accordingto?.name !== "sha256") return null;
+  const alias = String(sentence?.su?.name ?? "");
+  const hashes = auditHashes.get(alias);
+  if (hashes?.size !== 1) return null;
+  const rawLocator = String(sentence?.to?.text ?? "");
+  const filename = rawLocator.match(/(?:^|\/)(text-\d{6}\.[A-Za-z0-9]+)(?:\s|$)/u)?.[1];
+  if (!filename) return null;
+  return { hash: [...hashes][0], locator: `newspaper/${filename}` };
+}
+
 function isValidParsedSentence(sentence) {
   return sentence && typeof sentence === "object"
     && (MOODS.includes(sentence.mood) || (sentence.mood === "propose" && sentence.be === "command"));
@@ -175,17 +199,25 @@ async function readNewspaperReferences(root) {
     store.blockers.push(...fileBlockers);
     store.files.push(filename);
     if (isRunId(baseRunId)) store.runIds.add(baseRunId);
+    const auditHashes = auditedArtifactHashes(parsedSentences);
     for (const sentence of parsedSentences) {
       if (sentence.be === "run" && sentence?.su?.name) store.runIds.add(String(sentence.su.name));
       if (sentence.be !== "artifact") continue;
 
-      const locator = sentence?.to?.filename;
+      let locator = sentence?.to?.filename;
       addRunIdFromLocator(store.runIds, locator ?? sentence?.ob?.filename);
       if (sentence?.accordingto?.name && sentence.accordingto.name !== "sha256") {
         addRunIdFromLocator(store.runIds, sentence?.ob?.filename ?? locator);
         continue;
       }
-      const hash = String(sentence?.fromtext?.text ?? "").toLowerCase();
+      let hash = String(sentence?.fromtext?.text ?? "").toLowerCase();
+      if (!HASH_RE.test(hash) || typeof locator !== "string" || !locator.trim()) {
+        const recovered = legacyNewspaperArtifact(sentence, auditHashes);
+        if (recovered) {
+          hash = recovered.hash;
+          locator = recovered.locator;
+        }
+      }
       if (sentence?.accordingto?.name !== "sha256" || !HASH_RE.test(hash)) {
         store.blockers.push(`artifact record has an invalid SHA-256 reference: ${filename}`);
         continue;
