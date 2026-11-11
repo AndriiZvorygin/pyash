@@ -173,7 +173,7 @@ test("resumed sense compound runs continue newspaper evoke identities", async ()
   }
 });
 
-test("compound sweep continues across inventory rechecks until the backlog completes", async () => {
+test("compound sweep rechecks live work across chunks without rebuilding frequency allocation", async () => {
   const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "pyash-sense-sweep-"));
   const oldFixture = process.env.PYA_MIND_RESPONSE;
   delete process.env.PYA_MIND_RESPONSE;
@@ -208,7 +208,7 @@ test("compound sweep continues across inventory rechecks until the backlog compl
     assert.equal(result.sweepComplete, true);
     assert.equal(result.batchCount, 3);
     assert.equal(chunks, 3);
-    assert.equal(allocationReads, 3);
+    assert.equal(allocationReads, 1);
   } finally {
     if (oldFixture === undefined) delete process.env.PYA_MIND_RESPONSE;
     else process.env.PYA_MIND_RESPONSE = oldFixture;
