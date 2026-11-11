@@ -27,8 +27,8 @@ For remote instances, point `speaker host` to your remote endpoint (for example 
 
 Compose supports:
 
-- `SPEAKER_BIND_HOST` (default `0.0.0.0`; use `::` only when the published
-  endpoint and clients are configured for IPv6)
+- `SPEAKER_BIND_HOST` (default `::`; the IPv6 listener accepts IPv4-mapped
+  connections as well, so Docker's IPv4 and IPv6 published endpoints work)
 - `SPEAKER_BIND_PORT` (default `8010`)
 - `SPEAKER_PUBLISH_PORT` (default `8010`)
 - `SPEAKER_VOICES_DIR` (default `/workplace/world/voices`)
