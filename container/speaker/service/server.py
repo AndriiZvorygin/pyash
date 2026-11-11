@@ -231,6 +231,13 @@ def main() -> int:
     if ":" in str(args.host):
         class ThreadingHTTPServerV6(ThreadingHTTPServer):
             address_family = socket.AF_INET6
+
+            def server_bind(self):
+                # Reporters reach mriczo over IPv6, while Docker also publishes
+                # the service on IPv4.  Keep one listener usable from both
+                # address families instead of silently resetting one route.
+                self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+                super().server_bind()
         server = ThreadingHTTPServerV6((args.host, args.port), Handler)
     else:
         server = ThreadingHTTPServer((args.host, args.port), Handler)

@@ -1,4 +1,5 @@
 import importlib.util
+import base64
 import json
 import os
 import pathlib
@@ -6,6 +7,7 @@ import tempfile
 import threading
 import time
 import unittest
+from urllib.error import HTTPError
 from unittest.mock import patch
 
 # Keep service observations produced by tests out of the host's persistent state.
@@ -2810,6 +2812,7 @@ class HousekeeperComfyuiTests(unittest.TestCase):
     self.orig_runtime_action = server.runtime_action
     self.orig_request_comfyui_json = server.request_comfyui_json
     self.orig_poll_comfyui_history = server.poll_comfyui_history
+    self.orig_urlopen = server.urlopen
     server._PROFILES.clear()
     server._JOBS.clear()
 
@@ -2818,6 +2821,7 @@ class HousekeeperComfyuiTests(unittest.TestCase):
     server.runtime_action = self.orig_runtime_action
     server.request_comfyui_json = self.orig_request_comfyui_json
     server.poll_comfyui_history = self.orig_poll_comfyui_history
+    server.urlopen = self.orig_urlopen
     server._PROFILES.clear()
     server._JOBS.clear()
 
@@ -2879,6 +2883,116 @@ class HousekeeperComfyuiTests(unittest.TestCase):
     self.assertEqual(result["kind"], "comfyui-say")
     self.assertIn("history", result)
     self.assertTrue(server._PROFILES["qwen-say"]["loaded"])
+
+  def test_comfyui_hear_uploads_audio_from_housekeeper_network(self):
+    calls = []
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running",
+      "gpuExpected": True,
+      "gpuObserved": True,
+      "message": "running"
+    }
+
+    def fake_urlopen(request, timeout=0):
+      calls.append((request.full_url, request.data, request.headers, timeout))
+      class Response:
+        def __enter__(self):
+          return self
+        def __exit__(self, *_args):
+          return False
+        def read(self):
+          return b'{"name":"uploaded.opus","subfolder":"input"}'
+      return Response()
+
+    def fake_request(pathname, payload=None, timeout_sec=600):
+      if pathname == "/prompt":
+        self.assertEqual(payload["prompt"]["4"]["inputs"]["audio"], "input/uploaded.opus")
+        return {"prompt_id": "prompt-hear-1"}
+      if pathname == "/history/prompt-hear-1":
+        return {
+          "prompt-hear-1": {
+            "status": {"completed": True, "status_str": "success"},
+            "outputs": {"2": {"text": ["heard"], "timestamps": ["timed"]}}
+          }
+        }
+      raise AssertionError(pathname)
+
+    server.urlopen = fake_urlopen
+    server.request_comfyui_json = fake_request
+    result = server.execute_comfyui_job({
+      "runtimeName": "comfyui",
+      "profileName": "qwen-hear",
+      "jobSpec": {
+        "kind": "comfyui-hear",
+        "prompt": {"4": {"inputs": {"audio": "__pyash_housekeeper_audio__"}}},
+        "audioInput": {
+          "filename": "meeting.opus",
+          "contentType": "audio/ogg",
+          "dataBase64": base64.b64encode(b"audio-bytes").decode("ascii"),
+          "promptPath": "4.inputs.audio"
+        }
+      }
+    }, {"comfyui": {"runtimeName": "comfyui", "gpuExpected": True}})
+
+    self.assertEqual(result["promptId"], "prompt-hear-1")
+    self.assertEqual(len(calls), 1)
+    self.assertEqual(calls[0][0], "http://host.docker.internal:8188/upload/audio")
+    self.assertIn(b"audio-bytes", calls[0][1])
+
+  def test_comfyui_hear_falls_back_to_image_upload_route(self):
+    calls = []
+    server.parse_runtime_status = lambda _entry: {
+      "status": "running",
+      "gpuExpected": True,
+      "gpuObserved": True,
+      "message": "running"
+    }
+
+    def fake_urlopen(request, timeout=0):
+      calls.append((request.full_url, request.data, request.headers, timeout))
+      if len(calls) < 3:
+        raise HTTPError(request.full_url, 405, "Method Not Allowed", {}, None)
+      class Response:
+        def __enter__(self):
+          return self
+        def __exit__(self, *_args):
+          return False
+        def read(self):
+          return b'{"name":"uploaded.opus","subfolder":"input"}'
+      return Response()
+
+    def fake_request(pathname, payload=None, timeout_sec=600):
+      if pathname == "/prompt":
+        self.assertEqual(payload["prompt"]["4"]["inputs"]["audio"], "input/uploaded.opus")
+        return {"prompt_id": "prompt-hear-fallback"}
+      if pathname == "/history/prompt-hear-fallback":
+        return {"prompt-hear-fallback": {"status": {"completed": True}, "outputs": {"2": {"text": ["heard"]}}}}
+      raise AssertionError(pathname)
+
+    server.urlopen = fake_urlopen
+    server.request_comfyui_json = fake_request
+    result = server.execute_comfyui_job({
+      "runtimeName": "comfyui",
+      "profileName": "qwen-hear",
+      "jobSpec": {
+        "kind": "comfyui-hear",
+        "prompt": {"4": {"inputs": {"audio": "__pyash_housekeeper_audio__"}}},
+        "audioInput": {
+          "filename": "meeting.opus",
+          "contentType": "audio/ogg",
+          "dataBase64": base64.b64encode(b"audio-bytes").decode("ascii"),
+          "promptPath": "4.inputs.audio"
+        }
+      }
+    }, {"comfyui": {"runtimeName": "comfyui", "gpuExpected": True}})
+
+    self.assertEqual(result["promptId"], "prompt-hear-fallback")
+    self.assertEqual([call[0] for call in calls], [
+      "http://host.docker.internal:8188/upload/audio",
+      "http://host.docker.internal:8188/upload/audio",
+      "http://host.docker.internal:8188/upload/image",
+    ])
+    self.assertIn(b"audio-bytes", calls[-1][1])
 
   def test_comfyui_stopped_runtime_triggers_begin(self):
     actions = []

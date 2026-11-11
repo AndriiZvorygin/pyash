@@ -10,6 +10,7 @@ services:
     networks:
       - default
       - ollama
+      - comfyui
     restart: unless-stopped
     ports:
       - "${GPU_HOUSEKEEPER_PUBLISH_PORT:-18886}:18886"
@@ -40,6 +41,7 @@ services:
       - GPU_HOUSEKEEPER_STRATA_DEFAULT_CONTEXT_LENGTH=${GPU_HOUSEKEEPER_STRATA_DEFAULT_CONTEXT_LENGTH:-32768}
       - GPU_HOUSEKEEPER_STRATA_DEVICE_ID=${GPU_HOUSEKEEPER_STRATA_DEVICE_ID:-gpu0}
       - STRATA_API_KEY=${STRATA_API_KEY:-}
+      - COMFYUI_RUNTIME_URL=${COMFYUI_RUNTIME_URL:-http://comfyui:8188}
       - GPU_HOUSEKEEPER_IDLE_GRACE_SEC=${GPU_HOUSEKEEPER_IDLE_GRACE_SEC:-300}
       - GPU_HOUSEKEEPER_ALLOW_MODEL_PULL=${GPU_HOUSEKEEPER_ALLOW_MODEL_PULL:-false}
       - GPU_HOUSEKEEPER_MODEL_ALLOWLIST=${GPU_HOUSEKEEPER_MODEL_ALLOWLIST:-}
@@ -67,3 +69,6 @@ networks:
   ollama:
     external: true
     name: ${GPU_HOUSEKEEPER_OLLAMA_DOCKER_NETWORK:-hmas_default}
+  comfyui:
+    external: true
+    name: ${GPU_HOUSEKEEPER_COMFYUI_DOCKER_NETWORK:-comfyui_default}

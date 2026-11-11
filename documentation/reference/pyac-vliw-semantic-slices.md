@@ -239,3 +239,58 @@ codelet, and the date and vector literal families, so the two implementations
 agree on the bytes and on the values they compute. Its pack executor still
 covers the arithmetic slice only; it reports an unsupported operator for a
 codelet outside that slice rather than guessing.
+
+## The RISC-V destination
+
+A destination compiles a codelet into the machine code that computes the same
+result the interpreter produces: the quoted operands become immediates, the
+operator word becomes the instruction that computes the result, and the result
+leaves in the first argument register. The compiler is in
+`rust/pyac/src/backend/riscv.rs` and the image it builds is
+`rust/pyac-riscv/`.
+
+The compiled program keeps the interpreter's numeric semantics, including the
+saturation to `0xffff` that the JavaScript reference backend applies to
+addition, subtraction, and exponentiation. The backend emits no branches: a
+branchless program needs no label resolution, so the emitted words are the
+whole program.
+
+The evidence that the two agree is the golden codelet
+`0149 881D 0001 287E 881D 0001 245E 8A64 295E`. The interpreter runs it and
+answers `2`; the Rust backend compiles it and its executor answers `2`; and the
+image holds the machine code for the same result:
+
+```text
+0000000080000000 <pyac_body>:
+  addi t0, zero, 1
+  addi t1, zero, 1
+  add  t2, t0, t1
+  lui  t4, 0x10
+  addi t4, t4, -1
+  sltu t5, t4, t2
+  sub  t5, zero, t5
+  xori t6, t5, -1
+  and  t2, t2, t6
+  and  t4, t4, t5
+  or   t2, t2, t4
+  addi a0, t2, 0
+  ret
+```
+
+Building the image needs the bare-metal target:
+
+```bash
+rustup target add riscv64gc-unknown-none-elf
+cargo build --manifest-path rust/pyac-riscv/Cargo.toml --release \
+  --target riscv64gc-unknown-none-elf
+```
+
+The conformance tests are `rust/pyac/tests/riscv_backend.rs` and
+`quiz/vliw_riscv.test.mjs`, and the instruction encodings are pinned to the
+instruction set's own field layout in
+`rust/pyac/src/backend/riscv.rs`.
+
+The image is not executed here. The backend carries its own executor for the
+instruction subset it emits, and that executor is what proves the result
+matches the interpreter; running the image itself needs a RISC-V machine or
+emulator, which this repository does not yet depend on.

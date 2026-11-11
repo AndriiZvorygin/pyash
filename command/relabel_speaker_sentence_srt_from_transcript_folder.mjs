@@ -270,8 +270,12 @@ async function main() {
   // Canonicalize cue count/timeline to normalized sentence cues so downstream
   // timing-contract checks are stable even when diarize rows include malformed
   // tail rows or legacy drift.
-  const canonicalSrtPath = path.join(transcriptDir, `${resolvedPrefix}.merged.srt`);
-  const canonicalEntries = parseSrtEntries(canonicalSrtPath);
+  const canonicalSrtCandidates = [
+    path.join(transcriptDir, `${resolvedPrefix}.sentences.merged.srt`),
+    path.join(transcriptDir, `${resolvedPrefix}.merged.srt`),
+  ];
+  const canonicalSrtPath = canonicalSrtCandidates.find((candidate) => fs.existsSync(candidate)) || '';
+  const canonicalEntries = canonicalSrtPath ? parseSrtEntries(canonicalSrtPath) : [];
   if (canonicalEntries.length) {
     const aligned = [];
     let carrySpeakerKey = '';
