@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -137,6 +138,32 @@ test("configured thirty-day retention removes old logs and four-digit dated runs
   assert.equal(result.plan.runDirectories.some((item) => item.relative === "artifacts/20261001-1000-old-run"), true);
   assert.equal(result.plan.newspaperFiles.some((item) => item.relative === "newspaper/old-run.pya"), true);
   assert.equal(result.plan.newspaperFiles.some((item) => item.relative === "newspaper/current-run.pya"), false);
+});
+
+test("artifact retention CLI can preview one workspace using another checkout's config", (t) => {
+  const root = fixture(t);
+  const configRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pyash-retention-config-"));
+  t.after(() => fs.rmSync(configRoot, { recursive: true, force: true }));
+  const config = path.join(configRoot, "configure", "default.pya");
+  fs.mkdirSync(path.dirname(config), { recursive: true });
+  fs.writeFileSync(config, [
+    "exists su name newspaper maximum bytes ob num 1000 be default ya",
+    "exists su name newspaper segment maximum bytes ob num 500 be default ya",
+    "exists su name newspaper maximum age days ob num 30 be default ya",
+    "",
+  ].join("\n"));
+  const run = path.join(root, "artifacts", "20261001-1000-old-run");
+  fs.mkdirSync(run, { recursive: true });
+  fs.writeFileSync(path.join(run, "result.pya"), "old result");
+  setTreeTime(run, Date.parse("2026-10-01T00:00:00.000Z"));
+
+  const command = path.resolve("command/prune_artifacts.mjs");
+  const child = spawnSync(process.execPath, [command, "--root", root, "--config-root", configRoot, "--json"], { encoding: "utf8" });
+  assert.equal(child.status, 0, child.stderr);
+  const result = JSON.parse(child.stdout);
+  assert.equal(result.mode, "preview");
+  assert.equal(result.plan.retentionDays, 30);
+  assert.ok(result.plan.runDirectories.some((item) => item.relative === "artifacts/20261001-1000-old-run"));
 });
 
 test("a retained newspaper run reference protects an aged artifact directory", (t) => {

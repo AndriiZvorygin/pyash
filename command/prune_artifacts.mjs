@@ -614,7 +614,7 @@ export async function runConfiguredArtifactRetention({
 
 function usage() {
   return [
-    "Usage: node command/prune_artifacts.mjs [--apply] [--json]",
+    "Usage: node command/prune_artifacts.mjs [--root <workspace>] [--config-root <checkout>] [--apply] [--json]",
     "",
     `Default retention is ${ARTIFACT_RETENTION_DAYS} days. Preview is read-only; --apply deletes eligible data.`,
     "Only dated run directories, old newspaper .pya/text logs, and unreferenced SHA-256 objects are considered.",
@@ -622,11 +622,30 @@ function usage() {
 }
 
 function parseArgs(argv) {
-  const result = { apply: false, json: false };
-  for (const arg of argv) {
+  const result = { apply: false, json: false, root: repoRoot, configRoot: null };
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
     if (arg === "--apply") result.apply = true;
     else if (arg === "--json") result.json = true;
-    else if (arg === "--help" || arg === "-h") {
+    else if (arg === "--root") {
+      const root = argv[index + 1];
+      if (!root || root.startsWith("--")) throw new Error("--root requires a checkout path");
+      result.root = path.resolve(root);
+      index += 1;
+    } else if (arg.startsWith("--root=")) {
+      const root = arg.slice("--root=".length);
+      if (!root) throw new Error("--root requires a checkout path");
+      result.root = path.resolve(root);
+    } else if (arg === "--config-root") {
+      const configRoot = argv[index + 1];
+      if (!configRoot || configRoot.startsWith("--")) throw new Error("--config-root requires a checkout path");
+      result.configRoot = path.resolve(configRoot);
+      index += 1;
+    } else if (arg.startsWith("--config-root=")) {
+      const configRoot = arg.slice("--config-root=".length);
+      if (!configRoot) throw new Error("--config-root requires a checkout path");
+      result.configRoot = path.resolve(configRoot);
+    } else if (arg === "--help" || arg === "-h") {
       process.stdout.write(`${usage()}\n`);
       process.exit(0);
     } else throw new Error(`unknown argument: ${arg}`);
@@ -636,7 +655,11 @@ function parseArgs(argv) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const result = await runConfiguredArtifactRetention({ apply: args.apply });
+  const result = await runConfiguredArtifactRetention({
+    root: args.root,
+    configRoot: args.configRoot || args.root,
+    apply: args.apply
+  });
   if (args.json) {
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return;
