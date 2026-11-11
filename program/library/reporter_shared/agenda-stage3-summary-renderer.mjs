@@ -4736,11 +4736,6 @@ export async function summarizeGroundedUnit({
           dateRetry,
           "Structured-date repair: preserve the literal consent-agenda ranges and exceptions; omit later pulled-item outcomes.",
         )
-        : closedMinutesProcedureOnly
-        ? await queryConservativeMinutesMotionScopeRepair(
-          groundingAttempt,
-          "Grounding repair: keep the closed-session/open-agenda procedural exchange impersonal and separate from the later carried minutes motion. Omit every addressee-as-speaker claim, 'a speaker questioned' wording, and 'without discussion' wording.",
-        )
         : minutesMotionScopeOnly
         ? await queryConservativeMinutesMotionScopeRepair(
           dateRetry,
@@ -5120,6 +5115,11 @@ export async function summarizeGroundedUnit({
         ? await queryConservativeConsentAgendaScopeRepair(
           groundingAttempt,
           `Grounding repair: preserve the literal receive range, approval range, and exceptions; do not repeat any narrowed, expanded, or later pulled-item outcome. REJECTED_CLAIMS: ${rejectedClaims}. REJECTED_CANDIDATE: ${rejectedOutput}`,
+        )
+        : closedMinutesProcedureOnly
+        ? await queryConservativeMinutesMotionScopeRepair(
+          groundingAttempt,
+          "Grounding repair: keep the closed-session/open-agenda procedural exchange impersonal and separate from the later carried minutes motion. Omit every addressee-as-speaker claim, 'a speaker questioned' wording, and 'without discussion' wording.",
         )
         : minutesMotionScopeOnly
         ? await queryConservativeMinutesMotionScopeRepair(
