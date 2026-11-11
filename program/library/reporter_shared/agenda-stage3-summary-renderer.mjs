@@ -4229,26 +4229,35 @@ export async function summarizeGroundedUnit({
     seed: seed + 9997 + attempt,
     format: STAGE3_SUMMARY_RESPONSE_FORMAT,
   });
-  const queryConservativeSeparateProceduralPhasesRepair = async (attempt = 1, extraInstruction = "") => callOllamaJson({
-    ollamaUrl,
-    llmModel,
-    appendUniversalContract: false,
-    system: "Write one conservative source-grounded civic summary that keeps adjacent procedural phases separate. Return strict JSON only.",
-    prompt: [
-      `Conservative separate-procedural-phases repair attempt ${attempt} of 3.`,
-      "The bounded source contains a generic question about whether motions should be separate, a separate agenda-item transition, and a later motion or vote about receiving correspondence. Do not attach the agenda-item label to the generic question unless the same source sentence explicitly does so.",
-      "Keep procedural phases separate: report the generic question without an inferred object; report a carried receipt vote only with the source-supported correspondence scope; omit routine 'none/seeing none' transition wording unless needed for a complete fact.",
-      "Do not say a speaker called for a vote unless the source explicitly records that speech act. Do not infer who asked, answered, moved, or chaired the exchange. Do not import details from the agenda label into the question.",
-      extraInstruction,
-      "Return exactly one JSON object with summary, chapter text, confidence, and notes.",
-      `AGENDA_LABEL: ${promptLabel}`,
-      `GROUNDED_SOURCE: ${String(parentLiteralSourceExcerpt || parentRepairSourceExcerpt || semanticGroundingSourceExcerpt || unit?.["source excerpt"] || "").slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000))}`,
-    ].filter(Boolean).join("\n\n"),
-    maxOutputTokens: 520,
-    temperature: attempt >= 3 ? 0 : 0.1,
-    seed: seed + 10080 + attempt,
-    format: STAGE3_SUMMARY_RESPONSE_FORMAT,
-  });
+  const queryConservativeSeparateProceduralPhasesRepair = async (attempt = 1, extraInstruction = "") => {
+    let repaired = null;
+    for (let pass = 1; pass <= 3; pass += 1) {
+      repaired = await callOllamaJson({
+        ollamaUrl,
+        llmModel,
+        appendUniversalContract: false,
+        system: "Write one conservative source-grounded civic summary that keeps adjacent procedural phases separate. Return strict JSON only.",
+        prompt: [
+          `Conservative separate-procedural-phases repair attempt ${attempt}.${pass} of 3.`,
+          "The bounded source contains a generic question about whether motions should be separate, a separate agenda-item transition, and a later receipt vote. Do not attach the agenda-item label to the generic question unless the same source sentence explicitly does so.",
+          "Keep procedural phases separate: report the generic question without an inferred object; report only that the later vote carried for the two items, without calling them correspondence unless the carried sentence itself does so; omit routine 'none/seeing none' transition wording unless needed for a complete fact.",
+          "Do not say a motion was moved or seconded when the source only asks for a motion. Do not say a speaker called for a vote unless the source explicitly records that speech act. Do not infer who asked, answered, moved, or chaired the exchange. Do not import details from the agenda label into the question.",
+          pass > 1 ? "HARD RETRY: remove every moved, seconded, correspondence, or called-for-a-vote claim that is not literally paired with the carried sentence; use impersonal wording and the literal 'two items' scope." : "",
+          extraInstruction,
+          "Return exactly one JSON object with summary, chapter text, confidence, and notes.",
+          `AGENDA_LABEL: ${promptLabel}`,
+          `GROUNDED_SOURCE: ${String(parentLiteralSourceExcerpt || parentRepairSourceExcerpt || semanticGroundingSourceExcerpt || unit?.["source excerpt"] || "").slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000))}`,
+        ].filter(Boolean).join("\n\n"),
+        maxOutputTokens: 520,
+        temperature: pass >= 3 ? 0 : 0.1,
+        seed: seed + 10080 + attempt * 10 + pass,
+        format: STAGE3_SUMMARY_RESPONSE_FORMAT,
+      });
+      const text = `${String(repaired?.summary || "")} ${String(repaired?.["chapter text"] || "")}`;
+      if (!/\b(?:moved|seconded|correspondence|called\s+for\s+(?:a\s+)?vote)\b/iu.test(text)) return repaired;
+    }
+    return repaired;
+  };
   const queryConservativeThroughChairRepair = async (attempt = 1, extraInstruction = "", rejectedClaims = "", rejectedOutput = "") => callOllamaJson({
     ollamaUrl,
     llmModel,
