@@ -523,13 +523,27 @@ function firstContainerHandoffSource(rawSource = "") {
   return null;
 }
 
-function firstNextAgendaHandoffSource(rawSource = "") {
+function firstNextAgendaHandoffSource(rawSource = "", { currentLabel = "" } = {}) {
   const lines = String(rawSource || "")
     .split(/\r?\n/u)
     .map((line) => normalizeText(line))
     .filter(Boolean);
+  const normalizedCurrentLabel = normalizeText(currentLabel);
+  const currentIsAdditionalBusiness = /\badditional\s+business\b/iu.test(normalizedCurrentLabel);
+  const currentIsMinutes = /\bminutes\b/iu.test(normalizedCurrentLabel);
+  const explicitSectionHandoffPatterns = [
+    {
+      pattern: /\b(?:i['’]?ll|we['’]?ll|let['’]?s)\s+call\s+for\s+additional\s+business\b/iu,
+      skip: currentIsAdditionalBusiness,
+    },
+    {
+      pattern: /\bnext\s+item\s+is\s+(?:the\s+)?confirmation\s+of\s+(?:the\s+)?(?:community\s+services\s+)?minutes\b/iu,
+      skip: currentIsMinutes,
+    },
+  ];
   for (let index = 0; index < lines.length; index += 1) {
-    const handoffPattern = NEXT_AGENDA_HANDOFF_PATTERNS.find((pattern) => pattern.test(lines[index]));
+    const handoffPattern = NEXT_AGENDA_HANDOFF_PATTERNS.find((pattern) => pattern.test(lines[index]))
+      || explicitSectionHandoffPatterns.find((entry) => !entry.skip && entry.pattern.test(lines[index]))?.pattern;
     if (handoffPattern) {
       const match = handoffPattern.exec(lines[index]);
       const matchIndex = match?.index || 0;
@@ -556,7 +570,9 @@ export function scopeSourceAtStructuredHandoff(unit = {}, nextUnit = {}) {
       return { ...containerHandoff, changed: true };
     }
   }
-  const nextAgendaHandoff = firstNextAgendaHandoffSource(rawSource);
+  const nextAgendaHandoff = firstNextAgendaHandoffSource(rawSource, {
+    currentLabel: unit?.label || "",
+  });
   if (nextAgendaHandoff && nextAgendaHandoff.source.length < source.length) {
     return { ...nextAgendaHandoff, changed: true };
   }
@@ -5008,6 +5024,13 @@ export async function summarizeGroundedUnit({
           groundingAttempt,
           "Grounding repair: the source names separate individual remarks, not a collective speaker. Do not merge them into 'Directors discussed', 'staff noted', or another group action. Preserve supported topics in impersonal wording and omit the unsupported collective actor/action clause.",
           auditFeedback,
+          rejectedOutput,
+        )
+        : proceduralFragmentOnly
+        ? await queryConservativeProceduralFragmentRepair(
+          groundingAttempt,
+          "Grounding repair: start from the literal short procedural fragment and do not assign the call, transition, or terse response to a named or institutional actor unless the same source line explicitly does so.",
+          rejectedClaims,
           rejectedOutput,
         )
         : unsupportedProceduralActorGroundingDefect({

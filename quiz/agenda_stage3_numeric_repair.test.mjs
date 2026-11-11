@@ -2053,7 +2053,9 @@ test("stage3 keeps specialized procedural repair after speaker metadata cleanup"
   assert.equal(fragmentRepairCalls, 1);
   assert.match(metadataPrompt, /remove every token matching SPEAKER_/iu);
   assert.doesNotMatch(result.summary, /SPEAKER_/u);
-  assert.ok(calls >= 5);
+  // The direct unsupported-actor guard can now route straight to the
+  // specialized fragment repair, so fewer audit round-trips are required.
+  assert.ok(calls >= 3);
 });
 
 test("stage3 uses a conservative LLM repair for separate amendment outcomes", async (t) => {
@@ -4792,6 +4794,44 @@ test("stage3 scopes a container at its first explicit procedural handoff", () =>
   assert.doesNotMatch(result.source, /Could you present the committee minutes first/iu);
   assert.doesNotMatch(result.source, /At number ten, reports from city staff/iu);
   assert.doesNotMatch(result.source, /Fire Services Administrator/iu);
+});
+
+test("stage3 scopes opening remarks before a call for additional business", () => {
+  const result = scopeSourceAtStructuredHandoff(
+    {
+      label: "1 CALL TO ORDER",
+      "source excerpt": [
+        "SPEAKER_002: We're starting our meeting by calling the meeting to order.",
+        "SPEAKER_002: I'll call for additional business, Councillor Farmer.",
+        "SPEAKER_002: Next item is confirmation of the minutes of our Community Services meeting held on March 19.",
+        "SPEAKER_006: It should say the building is east of the grandstand.",
+      ].join("\n"),
+    },
+    {
+      label: "4.b Minutes of the Closed Session of the Community Services Committee meeting held on March 19, 2025",
+    },
+  );
+  assert.equal(result.changed, true);
+  assert.match(result.source, /calling the meeting to order/iu);
+  assert.match(result.source, /call for additional business/iu);
+  assert.doesNotMatch(result.source, /building is east of the grandstand/iu);
+});
+
+test("stage3 does not cut the additional-business section at its own opening call", () => {
+  const result = scopeSourceAtStructuredHandoff(
+    {
+      label: "2 CALL FOR ADDITIONAL BUSINESS",
+      "source excerpt": [
+        "SPEAKER_002: I'll call for additional business, Councillor Farmer.",
+        "SPEAKER_002: I have two items of additional business.",
+        "SPEAKER_003: Other members, additional items?",
+      ].join("\n"),
+    },
+    {
+      label: "3 DECLARATIONS OF INTEREST",
+    },
+  );
+  assert.equal(result.changed, false);
 });
 
 test("stage3 scopes a mixed parent span at the next structured document identity", () => {
