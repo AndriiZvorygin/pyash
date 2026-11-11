@@ -45,6 +45,15 @@ test("translation quizzes declare transitive WordNet requirements in their sourc
   }
 });
 
+test("raw vocab synset lookups declare their WordNet dataset requirement", () => {
+  const fileName = ["vocab_suggest", "synsets.test.mjs"].join("_");
+  const source = fs.readFileSync(path.join(repoRoot, "quiz", fileName), "utf8");
+  const outcome = classifyQuizFile(source, { fileName });
+
+  assert.equal(outcome.tier, "t2");
+  assert.ok(outcome.requirements.some((requirement) => requirement.id === "wordnet"));
+});
+
 test("a quiz that plays the whisper sample audio is tier t2", () => {
   const outcome = classifyQuizFile(`path.join(cwd, ${JSON.stringify(whisperSamplePath)})`);
   assert.equal(outcome.tier, "t2");

@@ -43,6 +43,18 @@ test("the scanner sees a map row key", () => {
   assert.deepEqual(scanFile(file), ["su text key"]);
 });
 
+test("the scanner does not treat generated Kwon lookup index data as Pyash names", () => {
+  const file = scratchFile(
+    "kwon_index.pya",
+    [
+      "su name kwon english lookup index be map def",
+      `su text "kind" ob text "english" ya`,
+      `su text "kwon-entry:realis mood, for declaring something, the most common ${WORD} of sentence." ob text "[]" ya`
+    ].join("\n")
+  );
+  assert.deepEqual(scanFile(file), []);
+});
+
 test("the scanner sees a key inside a quoted json block", () => {
   const file = scratchFile(
     "data.pya",
