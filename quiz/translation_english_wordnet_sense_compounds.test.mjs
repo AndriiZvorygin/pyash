@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -11,6 +14,7 @@ import {
   parseWordNetSenseTranslationResponse,
   parseWordNetSenseTranslationResponsePartial,
   parseWordNetSenseTranslationCache,
+  readWordNetSenseTranslationCacheFile,
   renderWordNetSenseTranslationCache,
   renderWordNetSenseTranslationCacheEntry,
   mergeWordNetSenseTranslationFailures,
@@ -919,6 +923,30 @@ test("sense translation cache resolves append-only updates to the latest durable
 
   assert.deepEqual(parsed.records, [second]);
   assert.equal(parsed.bySense.get(second.senseId).status, "complete");
+});
+
+test("streamed translation cache reads Pyash rows and resolves the latest append", async () => {
+  const first = {
+    id: senseTranslationKey({ senseId: "n:00000012-n", wordNetHash: "wordnet-hash", promptRevision: "sense-translation-v1" }),
+    senseId: "n:00000012-n",
+    wordNetHash: "wordnet-hash",
+    promptRevision: "sense-translation-v1",
+    status: "partial",
+    translations: [{ language: "chinese", surface: "朋友关系", composition: "compound", components: [] }]
+  };
+  const latest = { ...first, status: "complete" };
+  const directory = await mkdtemp(path.join(os.tmpdir(), "pyash-wordnet-cache-stream-"));
+  const cachePath = path.join(directory, "cache.pya");
+  try {
+    await writeFile(cachePath, `${renderWordNetSenseTranslationCache([first])}\n${renderWordNetSenseTranslationCacheEntry(latest)}`, "utf8");
+
+    const parsed = await readWordNetSenseTranslationCacheFile(cachePath);
+
+    assert.deepEqual(parsed.records, [latest]);
+    assert.equal(parsed.bySense.get(latest.senseId).status, "complete");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("sense compounds map only linked atom choices and put the WordNet head last", () => {
