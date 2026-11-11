@@ -124,10 +124,14 @@ test("coding saddle resumes the newest same-project transcript after a multi-day
       "exists su name mind backend be default ob name ollama command mind ya",
       'exists su name mind model ob text "qwen3.5:9b" be default ya',
       'exists su name coding saddle mind ob text "mind" be default ya',
+      "exists su name newspaper maximum bytes ob num 900000 be default ya",
+      "exists su name newspaper segment maximum bytes ob num 450000 be default ya",
       'exists su name mind be mind from name "http://localhost:11434" via state "qwen3.5:9b" ya'
     ].join("\n") + "\n", "utf8");
 
     const initial = await prepareSaddle({ cwd, runtimeRoot });
+    assert.equal(initial.newspaperMaximumBytes, 900000);
+    assert.equal(initial.newspaperSegmentMaximumBytes, 450000);
     const sessionDir = path.join(initial.agentHouse, "session");
     const olderFile = path.join(sessionDir, `${buildSessionNameForDate({ baseName: "coding", dateCompact: "20200101" })}.pya`);
     const latestFile = path.join(sessionDir, `${buildSessionNameForDate({ baseName: "coding", dateCompact: "20200102" })}.pya`);

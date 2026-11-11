@@ -159,3 +159,36 @@ test("coding saddle tracing records external house writes in its newspaper and a
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
 });
+
+test("coding saddle trace rolls complete records into date-sequenced bounded files", async () => {
+  const worldRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-trace-rotation-"));
+  const newspaper = path.join(worldRoot, "newspaper");
+  const trace = createCodingSaddleTrace({
+    worldRoot,
+    cwd: worldRoot,
+    now: new Date("2026-11-10T18:00:00.000Z"),
+    runId: "bounded-trace",
+    segmentMaximumBytes: 700
+  });
+  try {
+    for (let index = 0; index < 6; index += 1) {
+      trace.beginTurn({ input: `turn ${index} ${"x".repeat(100)}` });
+      trace.finishTurn({ status: "complete" });
+    }
+    trace.close();
+    const names = (await fs.readdir(newspaper)).filter((name) => name.endsWith(".pya")).sort();
+    assert.ok(names.length > 1);
+    for (const name of names) {
+      assert.match(name, /^20261110-\d{4}-coding-saddle\.pya$/u);
+      const source = await fs.readFile(path.join(newspaper, name), "utf8");
+      assert.ok(Buffer.byteLength(source) <= 700, `${name} exceeded its segment limit`);
+      for (const sentence of splitSentences(source, { includeThen: true })) {
+        assert.doesNotThrow(() => parse(sentence.trim()), `${name}: ${sentence}`);
+      }
+    }
+    assert.equal(path.basename(trace.journalPath), names.at(-1));
+  } finally {
+    trace.close();
+    await fs.rm(worldRoot, { recursive: true, force: true });
+  }
+});

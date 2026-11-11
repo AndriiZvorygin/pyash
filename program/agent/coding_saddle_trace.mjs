@@ -67,6 +67,7 @@ export function createCodingSaddleTrace({
   sessionFile = "",
   backend = "",
   model = "",
+  segmentMaximumBytes = 4 * 1024 * 1024,
   now = new Date(),
   pid = process.pid,
   runId: providedRunId = ""
@@ -76,8 +77,28 @@ export function createCodingSaddleTrace({
   const date = now instanceof Date ? now : new Date(now);
   const stamp = date.toISOString().replace(/[-:.]/g, "");
   const runId = stableRunId(providedRunId || `${stamp}-${pid}-coding-saddle`);
-  const journalPath = path.join(root, "newspaper", `${dayStamp(date)}-coding-saddle.pya`);
-  fs.mkdirSync(path.dirname(journalPath), { recursive: true });
+  const journalDirectory = path.join(root, "newspaper");
+  const journalDate = dayStamp(date);
+  const segmentLimit = Number(segmentMaximumBytes);
+  if (!Number.isSafeInteger(segmentLimit) || segmentLimit < 512) {
+    throw new Error("coding saddle newspaper segment limit must be at least 512 bytes");
+  }
+  fs.mkdirSync(journalDirectory, { recursive: true });
+  const existingSegments = fs.readdirSync(journalDirectory)
+    .map((name) => name.match(new RegExp(`^${journalDate}-(\\d{4})-coding-saddle\\.pya$`, "u")))
+    .filter(Boolean)
+    .map((match) => Number(match[1]))
+    .sort((a, b) => a - b);
+  let segmentNumber = existingSegments.at(-1) ?? 0;
+  let journalPath = segmentNumber
+    ? path.join(journalDirectory, `${journalDate}-${String(segmentNumber).padStart(4, "0")}-coding-saddle.pya`)
+    : "";
+  if (journalPath && fs.statSync(journalPath).size >= segmentLimit) journalPath = "";
+  const nextJournalPath = () => {
+    segmentNumber += 1;
+    return path.join(journalDirectory, `${journalDate}-${String(segmentNumber).padStart(4, "0")}-coding-saddle.pya`);
+  };
+  if (!journalPath) journalPath = nextJournalPath();
 
   let eventCounter = 0;
   let activeTurnId = "";
@@ -85,13 +106,28 @@ export function createCodingSaddleTrace({
   let activeModel = String(model ?? "");
   let activeSessionName = String(sessionName ?? "coding");
   let activeSessionFile = String(sessionFile ?? "");
+  let omittedRecordCount = 0;
   let closed = false;
   const pending = new Map();
 
   const append = (sentence) => {
     if (!sentence) return;
-    const line = typeof sentence === "string" ? sentence : sentenceToPyash(sentence);
-    fs.appendFileSync(journalPath, line.endsWith("\n") ? line : `${line}\n`, "utf8");
+    let line = typeof sentence === "string" ? sentence : sentenceToPyash(sentence);
+    let payload = line.endsWith("\n") ? line : `${line}\n`;
+    let bytes = Buffer.byteLength(payload, "utf8");
+    if (bytes > segmentLimit) {
+      omittedRecordCount += 1;
+      payload = mapBlock(`coding saddle oversized newspaper record ${runId} ${omittedRecordCount}`, [
+        ["original bytes", bytes],
+        ["sha256", crypto.createHash("sha256").update(payload).digest("hex")],
+        ["reason", "record exceeds configured segment maximum"]
+      ]);
+      bytes = Buffer.byteLength(payload, "utf8");
+    }
+    if (bytes > segmentLimit) throw new Error("newspaper segment limit is too small for its omission record");
+    const currentBytes = fs.existsSync(journalPath) ? fs.statSync(journalPath).size : 0;
+    if (currentBytes && currentBytes + bytes > segmentLimit) journalPath = nextJournalPath();
+    fs.appendFileSync(journalPath, payload, "utf8");
   };
   const exchangeRecord = (sentence) => append(sentence);
   // Keep workspace access rooted at the project while storing saddle run artifacts beside its newspaper.
@@ -143,7 +179,7 @@ export function createCodingSaddleTrace({
 
   return {
     runId,
-    journalPath,
+    get journalPath() { return journalPath; },
     beginTurn({
       input = "",
       turnId = crypto.randomUUID(),

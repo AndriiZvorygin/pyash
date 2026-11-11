@@ -125,6 +125,26 @@ store cannot be scanned, blob collection is disabled for that invocation.
 This cleanup policy does not rewrite or compact retained newspapers; replayable
 evidence remains immutable within the retention window.
 
+### 3.3 Newspaper-pinned artifact cleanup
+
+`npm run artifacts:clean` is the conservative, newspaper-driven collector. It
+is read-only by default; `npm run artifacts:clean -- --apply` removes only run
+directories and content-addressed objects that no parser-validated canonical
+newspaper references. A newspaper pins its run directory and every artifact
+record it declares until that newspaper is removed by the separate retention
+policy. The collector reads each Pyash sentence into its structured parse tree
+and recognizes artifact records by their `be artifact` fields; it does not
+grep arbitrary text for hash-shaped strings or interpret/execute newspaper
+sentences.
+
+Malformed artifact/run retention records, missing or size/hash-mismatched
+referenced blobs, and active run leases block destructive cleanup. Unknown
+artifact roots are reported and preserved; invalid canonical roots block the
+operation. The collector takes an artifact-store maintenance lock and rescans
+before deletion. Removing a content-addressed path only unlinks that path; any
+hardlinks outside the collector's run directories remain intact. Files outside
+recognized run directories and unknown artifact roots are preserved.
+
 WorkTask review-loop compaction uses the existing work outcome newspaper path and
 appends one sentence-native context checkpoint at every live-context boundary:
 
