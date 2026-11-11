@@ -18,6 +18,51 @@ import {
   stage3GenerationOrder,
   summarizeGroundedUnit,
 } from "../program/library/reporter_shared/agenda-stage3-summary-renderer.mjs";
+import { validateAgendaSummaryStrict } from "../program/library/reporter_shared/agenda-stage-contracts.mjs";
+
+test("stage3 contract accepts generated chapters for an oversized childless unit", () => {
+  const grounding = {
+    "grounded units": [{
+      "unit id": "ground_006",
+      "child chapters": [],
+    }],
+  };
+  const summary = {
+    "schema version": "agenda_summary_v1",
+    "source section grounding": "grounding.pya",
+    "transcript dir": "transcript",
+    prefix: "meeting",
+    focus: "focus",
+    "generated time": new Date().toISOString(),
+    sections: [{
+      index: 1,
+      "unit id": "ground_006",
+      "parent unit id": "",
+      "part index": 0,
+      "part total": 1,
+      heading: "8.a.2 Report",
+      summary: "A report was presented.",
+      "chapter text": "Part one",
+      chapters: [
+        {
+          "chapter id": "ground_006_chapter_01",
+          "parent unit id": "ground_006",
+          "ordering index": 1,
+          title: "Part one",
+          text: "A report was presented.",
+        },
+        {
+          "chapter id": "ground_006_chapter_02",
+          "parent unit id": "ground_006",
+          "ordering index": 2,
+          title: "Part two",
+          text: "A second report detail was presented.",
+        },
+      ],
+    }],
+  };
+  assert.doesNotThrow(() => validateAgendaSummaryStrict(grounding, summary));
+});
 
 test("stage3 grounding adjudication rechecks semantic allegations against literal source", async (t) => {
   let requestBody = null;

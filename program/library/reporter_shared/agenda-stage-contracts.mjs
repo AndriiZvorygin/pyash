@@ -430,7 +430,17 @@ export function validateAgendaSummaryStrict(sectionGrounding = {}, summary = {})
     const chapters = Array.isArray(s.chapters) ? s.chapters : [];
     const sourceUnit = units.find((u) => String(u["unit id"] || "") === unitId) || {};
     const expectedChapters = Array.isArray(sourceUnit["child chapters"]) ? sourceUnit["child chapters"] : [];
-    if (!expectedChapters.length && chapters.length) {
+    const generatedChildlessSplit = !expectedChapters.length
+      && chapters.length > 0
+      && chapters.every((chapter) => {
+        const chapterId = String(chapter?.["chapter id"] || "");
+        const prefix = `${unitId}_chapter_`;
+        const suffix = chapterId.startsWith(prefix) ? chapterId.slice(prefix.length) : "";
+        return String(chapter?.["parent unit id"] || "") === unitId
+          && /^\d+$/u.test(suffix)
+          && Number(suffix) >= 1;
+      });
+    if (!expectedChapters.length && chapters.length && !generatedChildlessSplit) {
       throw new Error(`stage3 defective: chapter count mismatch for section=${i + 1} expected=0 actual=${chapters.length}`);
     }
     const expectedById = new Map(expectedChapters.map((chapter) => [String(chapter?.["chapter id"] || ""), chapter]));
@@ -444,10 +454,10 @@ export function validateAgendaSummaryStrict(sectionGrounding = {}, summary = {})
       if (String(ch["parent unit id"] || "") !== unitId) {
         throw new Error(`stage3 defective: chapter parent mismatch at section=${i + 1} chapter=${ci + 1}`);
       }
-      if (!expected["chapter id"] || (chapterId !== String(expected["chapter id"] || "") && !/^.+_part_\d+$/u.test(chapterId))) {
+      if (!generatedChildlessSplit && (!expected["chapter id"] || (chapterId !== String(expected["chapter id"] || "") && !/^.+_part_\d+$/u.test(chapterId)))) {
         throw new Error(`stage3 defective: chapter id mismatch at section=${i + 1} chapter=${ci + 1}`);
       }
-      if (chapterId.endsWith(baseId) && !expectedById.has(chapterId) && !expectedById.has(baseId)) {
+      if (!generatedChildlessSplit && chapterId.endsWith(baseId) && !expectedById.has(chapterId) && !expectedById.has(baseId)) {
         throw new Error(`stage3 defective: unknown split chapter id at section=${i + 1} chapter=${ci + 1}`);
       }
       generatedBaseCounts.set(baseId, Number(generatedBaseCounts.get(baseId) || 0) + 1);
