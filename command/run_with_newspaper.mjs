@@ -9,6 +9,7 @@ import { splitSentences } from "../program/library/sentenceSplitter.mjs";
 import { sentenceToPyash } from "../program/beautiful.mjs";
 import { buildErrorSentence, surfaceErrorSentence } from "../program/error.mjs";
 import { commandResultIdentityProtocolSentence } from "../program/bridge/command_identity.mjs";
+import { registerArtifactRun } from "../program/library/artifact_store_lock.mjs";
 
 function readFlagValue(args, name) {
   const prefix = `${name}=`;
@@ -111,6 +112,7 @@ async function run() {
   const runTime = runTimeFlag || runStartDate.toISOString();
   const runId = runIdFlag || await buildRunId({ runTime, sourcePath: resolved, cwd: process.cwd() });
   const runRoot = normalizeRunRoot(path.resolve(process.cwd()));
+  await registerArtifactRun({ root: runRoot, runId });
   const newspaperLines = [];
   const pushLine = (line) => {
     if (line) newspaperLines.push(line);

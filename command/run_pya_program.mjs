@@ -22,6 +22,7 @@ import { setExchangeRecorder, clearExchangeRecorder, setExchangeStrict, setExcha
 import { recordArtifact } from "../program/bridge/exchange.mjs";
 import { setRunNewspaperLines, setRunToolEventRecorder, clearRunToolEventRecorder } from "../program/bridge/newspaper.mjs";
 import { closeMcpServers } from "../program/motor/mcp.mjs";
+import { registerArtifactRun } from "../program/library/artifact_store_lock.mjs";
 import { runRefinery } from "../program/bridge/refinery.mjs";
 import { resolveConfigBool, resolveConfigText } from "../program/configure/env.mjs";
 import { collectInputDeclarations } from "../program/runtime/input_ports.mjs";
@@ -455,6 +456,7 @@ async function main() {
   const runStartDate = new Date();
   const runTime = runTimeFlag || (timeZone ? formatIsoWithOffset(runStartDate, timeZone) : runStartDate.toISOString());
   const runId = runIdFlag || await buildRunId({ runTime, sourcePath: resolved, cwd: process.cwd() });
+  await registerArtifactRun({ root: runRoot, runId });
   doRemember({ mood: "ya", su: { name: "run id" }, ob: { text: String(runId) }, be: "text" });
   const newspaperLines = [];
   setRunNewspaperLines(newspaperLines);

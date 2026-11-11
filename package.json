@@ -29,6 +29,7 @@
     "criterion": "node command/criterion.mjs",
     "compile": "node command/run_pya_program.mjs --gross",
     "artifacts:prune": "node command/prune_artifacts.mjs",
+    "artifacts:clean": "node command/clean_artifacts.mjs",
     "push:all": "bash command/push_all.sh",
     "smoke:wide-teaching-video": "bash command/smoke_wide_teaching_video.sh"
   },

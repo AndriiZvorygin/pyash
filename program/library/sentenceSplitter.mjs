@@ -1,17 +1,10 @@
+import { replaceQuotedTextBlocks } from "./quotedTextBlock.mjs";
+
 const BASE_MOODS = new Set(["ya", "def", "do", "que", "prah", "ret", "can", "pi7"]);
 
 export function splitSentences(text, { includeThen = false } = {}) {
   const moods = includeThen ? new Set([...BASE_MOODS, "then"]) : BASE_MOODS;
-  const replacements = [];
-  const blockRegex = /quoted\.([^.]+)\.(?:contents\s*)?([\s\S]*?)\.\1\.quoted/g;
-  let working = text;
-  let match;
-  let blockIndex = 0;
-  while ((match = blockRegex.exec(text)) !== null) {
-    const placeholder = `__QUOTED_BLOCK_${blockIndex++}__`;
-    replacements.push({ placeholder, block: match[0] });
-    working = working.replace(match[0], placeholder);
-  }
+  const { working, replacements } = replaceQuotedTextBlocks(text);
 
   const sentences = [];
   let sentenceTokens = [];
@@ -91,16 +84,7 @@ export function splitSentences(text, { includeThen = false } = {}) {
 
 export function splitSentencesWithLines(text, { includeThen = false } = {}) {
   const moods = includeThen ? new Set([...BASE_MOODS, "then"]) : BASE_MOODS;
-  const replacements = [];
-  const blockRegex = /quoted\.([^.]+)\.(?:contents\s*)?([\s\S]*?)\.\1\.quoted/g;
-  let working = text;
-  let match;
-  let blockIndex = 0;
-  while ((match = blockRegex.exec(text)) !== null) {
-    const placeholder = `__QUOTED_BLOCK_${blockIndex++}__`;
-    replacements.push({ placeholder, block: match[0] });
-    working = working.replace(match[0], placeholder);
-  }
+  const { working, replacements } = replaceQuotedTextBlocks(text);
 
   const sentences = [];
   let sentenceTokens = [];

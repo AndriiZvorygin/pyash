@@ -49,6 +49,7 @@ import {
 import { requestCodingDutyHub, resolveCodingDutyHub } from "../program/agent/coding_duty_client.mjs";
 import { createSaddleTerminalUi } from "../program/agent/coding_saddle_tui.mjs";
 import { createCodingSaddleTrace } from "../program/agent/coding_saddle_trace.mjs";
+import { registerArtifactRun } from "../program/library/artifact_store_lock.mjs";
 import { rotateWorldNewspapers } from "../program/agent/newspaper_retention.mjs";
 import {
   ensureCodingSaddleHouse,
@@ -875,6 +876,9 @@ async function main() {
   let host = config.host;
   let sessionName = config.sessionName || SESSION_NAME;
   let sessionFile = config.sessionFile || "";
+  const saddleStartedAt = new Date();
+  const saddleRunId = `${saddleStartedAt.toISOString().replace(/[-:.]/g, "")}-${process.pid}-coding-saddle`;
+  const saddleArtifactLease = await registerArtifactRun({ root: config.worldRoot, runId: saddleRunId });
   const saddleTrace = createCodingSaddleTrace({
     worldRoot: config.worldRoot,
     cwd: config.cwd,
@@ -882,9 +886,14 @@ async function main() {
     sessionFile,
     backend: config.backend,
     model: config.model,
-    segmentMaximumBytes: config.newspaperSegmentMaximumBytes
+    segmentMaximumBytes: config.newspaperSegmentMaximumBytes,
+    now: saddleStartedAt,
+    runId: saddleRunId
   });
-  process.once("exit", () => saddleTrace.close({ status: "process exit" }));
+  process.once("exit", () => {
+    saddleTrace.close({ status: "process exit" });
+    saddleArtifactLease.cleanup();
+  });
   let contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
   let ollamaModelCatalog = [];
   let thinkSetting = config.thinkSetting;
