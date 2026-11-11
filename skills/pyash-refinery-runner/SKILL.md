@@ -34,11 +34,17 @@ Use this skill to work on refinery execution, ratify gates, and run newspaper be
 - For broad WordNet sense sweeps, honor the configured `max-senses-per-launch`
   limit (currently 64). Keep the stable run id, let each chunk complete through
   its composition and decision artifacts, then continue from the progress map.
-  Do not raise the limit to the full backlog. When repeating launches in one
-  sweep, refresh the allocation between chunks when accepted vocabulary changes
-  coverage, while preserving the same run id and progress artifacts. A stable
-  allocation snapshot should cover one chunk only. Ensure the Pyash refinery
-  definition is re-registered after runtime memory is cleared.
+  Do not raise the limit to the full backlog. Keep expensive source indexes and
+  the frequency allocation cached for the sweep while their source identities
+  remain stable. Refresh mutable compound coverage and progress at each chunk
+  boundary so accepted compounds leave later queues. Rebuild the allocation if
+  its underlying atom, bridge, frequency, or grammar sources change. Preserve
+  the same run id and progress artifacts. Ensure the Pyash refinery definition
+  is re-registered after runtime memory is cleared.
+- For large growing `.pya` ledgers, append updates under stable row identities
+  and resolve the latest row on resume instead of serializing the whole ledger
+  for every result. Keep parsed maps in sweep-scoped memory between bounded
+  chunks; the durable append log remains the recovery source after restart.
 
 ## Checkpoints and newspapers
 

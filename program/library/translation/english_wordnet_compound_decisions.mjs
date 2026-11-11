@@ -28,8 +28,7 @@ export function parseEnglishWordNetCompoundDecisions(source) {
     && sentence?.be === "map"
     && sentence?.su?.name === ENGLISH_WORDNET_COMPOUND_DECISIONS_NAME);
   if (!header) throw invalid("WordNet compound decisions have no canonical map header");
-  const rows = [];
-  const seen = new Set();
+  const rowsById = new Map();
   for (const [index, sentence] of sentences.entries()) {
     if (sentence?.mood !== "ya" || typeof sentence.su?.text !== "string") continue;
     const id = sentence.su.text;
@@ -51,15 +50,28 @@ export function parseEnglishWordNetCompoundDecisions(source) {
       || record.pyashSequence.length > 3) {
       throw invalid("WordNet compound decision record has an invalid identity, status, target, or sequence", { index, id });
     }
-    if (seen.has(id)) throw invalid("WordNet compound candidate decision is duplicated", { index, id });
-    seen.add(id);
-    rows.push({
+    rowsById.set(id, {
       ...record,
       ...(record.status !== status ? { coverageStatus: record.coverageStatus ?? record.status } : {}),
       status
     });
   }
+  const rows = [...rowsById.values()].sort((left, right) => left.candidateId.localeCompare(right.candidateId));
   return { format: "english-wordnet-compound-decisions-v1", rows, byId: new Map(rows.map((row) => [row.candidateId, row])) };
+}
+
+export function renderEnglishWordNetCompoundDecisionAppend(record) {
+  const id = String(record?.candidateId ?? "").trim();
+  const status = DECISION_STATUSES.has(record?.status) ? record.status : record?.verificationStatus;
+  if (!id || record?.candidateId !== id
+    || !DECISION_STATUSES.has(status)
+    || typeof record?.target !== "string"
+    || !Array.isArray(record.pyashSequence)
+    || record.pyashSequence.length < 2
+    || record.pyashSequence.length > 3) {
+    throw invalid("WordNet compound decision append has an invalid identity, status, target, or sequence", { id });
+  }
+  return `su text ${JSON.stringify(id)} ob text ${JSON.stringify(JSON.stringify(record))} ya\nprah\n`;
 }
 
 export function renderEnglishWordNetCompoundDecisions(records = []) {
