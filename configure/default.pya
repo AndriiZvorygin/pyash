@@ -54,6 +54,16 @@ su name mind configure be map def
   su name think ob bool lie ya
   su name max tool calls ob num 65535 ya
 prah
+su name agent delegation configure be map def
+  su name default allowed backends ob ve text "ollama" ya
+  su name zai allowed backends ob ve text "ollama" ya
+  su name openai allowed backends ob ve text "ollama" ya
+  su name minimax allowed backends ob ve text "ollama" ya
+  su name openrouter allowed backends ob ve text "ollama" ya
+  su name litellm allowed backends ob ve text "ollama" ya
+  su name vllm allowed backends ob ve text "ollama" ya
+  su name strata allowed backends ob ve text "ollama" ya
+prah
 exists su name draw host ob text "http://mriczo:8188" be default ya
 exists su name say host ob text "http://localhost:8188" be default ya
 exists su name say backend default ob text "comfyui" be default ya

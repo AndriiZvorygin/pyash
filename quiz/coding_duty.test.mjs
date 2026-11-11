@@ -8,6 +8,7 @@ import {
   acceptCodingDuty,
   addCodingDutyMessage,
   claimCodingDutyMessage,
+  claimCodingDutyMessagesAtBoundary,
   codingDutyOwner,
   completeCodingDutyMessage,
   createCodingDuty,
@@ -21,6 +22,7 @@ import {
   parseDutyWorkerUsers,
   readCodingDuty,
   readDutySessionText,
+  recordCodingDutyToolEvent,
   setCodingDutyPermission
 } from "../program/agent/coding_duty.mjs";
 import { addWorkTask, listAutonomousWorkTasks, listWorkTasks } from "../program/runtime/work/operator.mjs";
@@ -81,6 +83,55 @@ test("coding duty stores a shared conversation and resumes on an assigned worker
     assert.equal(task.taskId, created.taskId);
     assert.equal(task.workSpec.codingDuty.messages.at(-1).state, "pending");
     assert.equal((await listCodingDuties(root)).length, 1);
+  });
+});
+
+test("duty messages enter an active saddle after the selected safe boundary", async () => {
+  await withWorld(async (root) => {
+    const created = await makeDuty(root);
+    const active = await claimCodingDutyMessage(root, "worker-a");
+    const claimId = active.task.workSpec.codingDuty.claim.claimId;
+    const afterToolTask = await addCodingDutyMessage(root, created.taskId, "Inspect the tool result first.", {
+      delivery: "after-tool"
+    });
+    const afterToolId = afterToolTask.workSpec.codingDuty.messages.at(-1).id;
+    const afterTurnTask = await addCodingDutyMessage(root, created.taskId, "Then summarize the complete turn.", {
+      delivery: "after-turn"
+    });
+    const afterTurnId = afterTurnTask.workSpec.codingDuty.messages.at(-1).id;
+
+    await recordCodingDutyToolEvent(root, created.taskId, "worker-a", {
+      messageId: active.message.id,
+      claimId,
+      event: { stage: "call", toolName: "read" }
+    });
+    await recordCodingDutyToolEvent(root, created.taskId, "worker-a", {
+      messageId: active.message.id,
+      claimId,
+      event: { stage: "result", toolName: "read", toolText: "file contents" }
+    });
+
+    const afterToolDelivery = await claimCodingDutyMessagesAtBoundary(root, created.taskId, "worker-a", {
+      messageId: active.message.id,
+      claimId,
+      boundary: "tool-result"
+    });
+    assert.deepEqual(afterToolDelivery.map((message) => message.id), [afterToolId]);
+    assert.equal(afterToolDelivery[0].delivery, "after-tool");
+
+    const afterTurnPending = await readCodingDuty(root, created.taskId);
+    assert.equal(afterTurnPending.workSpec.codingDuty.messages.find((message) => message.id === afterTurnId).state, "pending");
+
+    const reread = await readCodingDuty(root, created.taskId);
+    assert.deepEqual(reread.workSpec.codingDuty.toolEvents.map((event) => event.stage), ["call", "result"]);
+    assert.equal(reread.workSpec.codingDuty.messages.find((message) => message.id === afterToolId).state, "delivered");
+
+    await completeCodingDutyMessage(root, created.taskId, "worker-a", active.message.id, claimId, "The child turn is complete.", {
+      sessionText: "completed session checkpoint\n"
+    });
+    const nextTurn = await claimCodingDutyMessage(root, "worker-a");
+    assert.equal(nextTurn.message.id, afterTurnId);
+    assert.equal(nextTurn.message.delivery, "after-turn");
   });
 });
 

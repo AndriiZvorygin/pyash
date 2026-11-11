@@ -75,6 +75,7 @@ textarea:focus, input:focus, select:focus { border-color: var(--accent); }
 .composer textarea { resize: vertical; min-height: 78px; }
 .composer-row, .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .composer-row { margin-top: 10px; }
+.composer-status { display: flex; align-items: center; gap: 12px; }
 .primary, .secondary, .icon-button { border: 1px solid var(--line); padding: 8px 13px; }
 .primary { background: var(--accent); color: #0d1b14; border-color: var(--accent); font-weight: 650; }
 .secondary, .icon-button { background: var(--panel-2); color: var(--text); }

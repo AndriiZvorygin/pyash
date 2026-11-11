@@ -12,6 +12,7 @@ import { resolveWorldAgentHouseDirectory } from "../library/agent_command_policy
 import { emitExchangeSentence, getExchangeSentenceId, recordArtifact } from "../bridge/exchange.mjs";
 import {
   buildSessionCheckpointSentence,
+  buildSessionMessageSentence,
   buildCompactSessionSnapshot,
   buildSessionTurnSentence,
   canonicalRequestHash,
@@ -416,6 +417,17 @@ export async function appendSessionEntry({
 } = {}) {
   if (!sessionFile || !role) return;
   const meta = metadata && typeof metadata === "object" ? metadata : {};
+  if (meta.record === "session-message") {
+    const sentence = buildSessionMessageSentence({
+      role: meta.messageRole ?? "user",
+      content,
+      turnId: meta.turnId,
+      metadata: meta,
+      timestamp: meta.createdAt || nowIso()
+    });
+    await fs.appendFile(sessionFile, `${sentenceToPyash(sentence)}\n`, "utf8");
+    return;
+  }
   if (meta.turnId) {
     const sentence = buildSessionTurnSentence({
       role,
@@ -506,6 +518,17 @@ function projectSessionMessages({ sentences = [], historyWindow = 50, includePen
   const replayEntries = [];
   const projectedEntries = [];
   for (const [index, sentence] of source.entries()) {
+    if (sentence?.be === "session message" && sentence?.su?.name === "session message") {
+      const messageRole = String(sentence?.as?.name ?? "").trim().toLowerCase();
+      if (SESSION_ROLE_NAMES.has(messageRole)) {
+        projectedEntries.push({
+          index,
+          turnId: sessionMessageTurnId(sentence),
+          message: { role: messageRole, content: sessionMessageContent(sentence) }
+        });
+      }
+      continue;
+    }
     const role = sessionMessageRole(sentence);
     if (!SESSION_ROLE_NAMES.has(role) || (sentence?.be !== "answer" && role !== "tool")) {
       replayEntries.push({ index, sentence });
@@ -547,7 +570,7 @@ function projectSessionMessages({ sentences = [], historyWindow = 50, includePen
   });
   const legacyMessages = projectedEntries.map((entry) => ({
     ...entry,
-    ordinal: Number(source[entry.index]?.by?.num) || null,
+    ordinal: turnsById.get(entry.turnId)?.ordinal ?? (Number(source[entry.index]?.by?.num) || null),
     timestamp: source[entry.index]?.during?.date ?? "",
     roleOrder: entry.message.role === "user" ? 0 : entry.message.role === "assistant" ? 1 : 2
   }));
@@ -567,6 +590,10 @@ function projectSessionMessages({ sentences = [], historyWindow = 50, includePen
     : [];
   const messages = [...replayMessages, ...legacyMessages, ...pendingMessages]
     .sort((left, right) => {
+      if (left.ordinal && right.ordinal && left.ordinal !== right.ordinal) {
+        return left.ordinal - right.ordinal;
+      }
+      if (left.ordinal && right.ordinal) return left.index - right.index || left.roleOrder - right.roleOrder;
       const leftTime = Date.parse(left.timestamp);
       const rightTime = Date.parse(right.timestamp);
       if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) return leftTime - rightTime;

@@ -108,6 +108,51 @@ test("session turn sentences use typed fields without JSON metadata blobs", () =
   assert.doesNotMatch(rendered, /session turn/);
 });
 
+test("after-tool messages link to the active turn and replay in the canonical session", async () => {
+  const { sessionFile } = await makeSession("after-tool-message");
+  const turn = await beginSessionTurn({
+    sessionFile,
+    userContent: "Inspect the code.",
+    request: { prompt: "Inspect the code." },
+    metadata: { timestamp: "2026-01-01T00:00:00.000Z" }
+  });
+  await appendSessionEntry({
+    sessionFile,
+    role: "session message",
+    content: "Check this tool result before you finish.",
+    metadata: {
+      record: "session-message",
+      messageRole: "user",
+      turnId: turn.turnId,
+      payloadId: "duty-message-7",
+      createdAt: "2026-01-01T00:00:01.000Z",
+      sender: "parent duty",
+      channelType: "after tool result"
+    }
+  });
+  await completeSessionTurn({
+    sessionFile,
+    turn,
+    responseText: "The tool result is accounted for.",
+    metadata: { timestamp: "2026-01-01T00:00:02.000Z" }
+  });
+
+  const content = await fs.readFile(sessionFile, "utf8");
+  assert.match(content, /su name session message/);
+  assert.match(content, /accordingto text "turn-/);
+  assert.match(content, /fromtext text "duty-message-7"/);
+  const messages = await readSessionMessages({ sessionFile, historyWindow: 10 });
+  assert.deepEqual(messages.messages.map((message) => message.content), [
+    "Inspect the code.",
+    "Check this tool result before you finish.",
+    "The tool result is accounted for."
+  ]);
+  const replay = await readSessionReplay({ sessionFile, historyWindow: 10 });
+  assert.equal(replay.turns.length, 1);
+  assert.equal(replay.turns[0].turnId, turn.turnId);
+  assert.equal(replay.turns[0].complete, true);
+});
+
 test("session turn identity falls back to the active exchange sentence id", async () => {
   const { sessionFile } = await makeSession("exchange-id");
   setExchangeSentenceId("evoke-exchange-42");

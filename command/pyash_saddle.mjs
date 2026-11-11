@@ -425,11 +425,17 @@ export async function prepareSaddle({
   const saddleStatePath = path.join(agentHouse, "conduct", "coding-saddle.pya");
   const saddleState = await readCodingSaddleState(saddleStatePath);
   const sessionDir = path.join(agentHouse, "session");
-  const storedSessionFile = saddleState.activeSessionFile ? path.resolve(saddleState.activeSessionFile) : "";
+  const requestedSessionName = String(process.env.PYA_SADDLE_SESSION_NAME ?? "").trim();
+  if (requestedSessionName && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/u.test(requestedSessionName)) {
+    throw new Error("PYA_SADDLE_SESSION_NAME must be a simple session name");
+  }
+  const storedSessionFile = !requestedSessionName && saddleState.activeSessionFile
+    ? path.resolve(saddleState.activeSessionFile)
+    : "";
   let sessionFile = storedSessionFile && await isPathWithin(sessionDir, storedSessionFile) ? storedSessionFile : "";
-  let sessionName = storedSessionFile && !sessionFile
+  let sessionName = requestedSessionName || (storedSessionFile && !sessionFile
     ? SESSION_NAME
-    : saddleState.activeSessionName || SESSION_NAME;
+    : saddleState.activeSessionName || SESSION_NAME);
   if (!sessionFile) {
     let recentHistoryIsEmpty = false;
     try {

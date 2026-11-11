@@ -11,6 +11,7 @@ const MAX_MESSAGES = 2000;
 const MAX_CONVERSATION_BYTES = 2 * 1024 * 1024;
 const MAX_SESSION_BYTES = 4 * 1024 * 1024;
 const MAX_ATTEMPTS = 3;
+const MAX_TOOL_EVENTS = 10000;
 
 function text(value) {
   return String(value ?? "").trim();
@@ -53,7 +54,10 @@ export function publicCodingDutyMessage(message) {
     text: String(message?.text ?? ""),
     createdAt: text(message?.createdAt),
     completedAt: text(message?.completedAt),
-    state: text(message?.state) || "complete"
+    state: text(message?.state) || "complete",
+    delivery: text(message?.delivery) || "after-turn",
+    deliveredAt: text(message?.deliveredAt),
+    deliveryBoundary: text(message?.deliveryBoundary)
   };
 }
 
@@ -88,7 +92,8 @@ export function codingDutyView(task, { includeMessages = true } = {}) {
     updatedAt: duty.updatedAt,
     lastError: duty.lastError,
     active: Boolean(duty.claim?.messageId),
-    messages: includeMessages ? duty.messages.map(publicCodingDutyMessage) : undefined
+    messages: includeMessages ? duty.messages.map(publicCodingDutyMessage) : undefined,
+    toolEvents: Array.isArray(duty.toolEvents) ? duty.toolEvents.slice(-100) : []
   };
 }
 
@@ -148,6 +153,7 @@ export async function createCodingDuty(worldRoot, {
         updatedAt: timestamp,
         lastError: "",
         claim: null,
+        toolEvents: [],
         messages: [{
           id: crypto.randomUUID(),
           role: "user",
@@ -209,7 +215,10 @@ export async function readCodingDuty(worldRoot, dutyId) {
   return task;
 }
 
-export async function addCodingDutyMessage(worldRoot, dutyId, value, { now = new Date() } = {}) {
+export async function addCodingDutyMessage(worldRoot, dutyId, value, {
+  now = new Date(),
+  delivery = "after-turn"
+} = {}) {
   const task = await readCodingDuty(worldRoot, dutyId);
   if (!task) return null;
   if (["accepted", "failed"].includes(task.status)) throw dutyError("duty is closed", 409);
@@ -221,6 +230,10 @@ export async function addCodingDutyMessage(worldRoot, dutyId, value, { now = new
     throw new Error("duty message is missing or too long");
   }
   const duty = codingDutyOf(task);
+  const deliveryMode = text(delivery).toLowerCase() || "after-turn";
+  if (!new Set(["after-tool", "after-turn"]).has(deliveryMode)) {
+    throw new Error("duty message delivery must be after-tool or after-turn");
+  }
   if (duty.messages.length >= MAX_MESSAGES) throw new Error("duty message limit reached");
   const timestamp = iso(now);
   const nextDuty = {
@@ -233,6 +246,7 @@ export async function addCodingDutyMessage(worldRoot, dutyId, value, { now = new
       createdAt: timestamp,
       completedAt: "",
       state: "pending",
+      delivery: deliveryMode,
       attempts: 0
     }]
   };
@@ -255,6 +269,81 @@ export async function addCodingDutyMessage(worldRoot, dutyId, value, { now = new
         : resumed.checkpoint.lastAction
     }
   });
+}
+
+function publicToolEvent(event) {
+  const stage = text(event?.stage).toLowerCase();
+  if (!new Set(["call", "result", "ratify", "context_compacted"]).has(stage)) {
+    throw new Error(`duty tool event stage is invalid: ${stage || "(empty)"}`);
+  }
+  const toolName = text(event?.toolName ?? event?.tool_name);
+  if (!toolName) throw new Error("duty tool event is missing its tool name");
+  const toolCall = event?.toolCall ?? event?.tool_call;
+  const argumentsText = String(toolCall?.function?.arguments ?? toolCall?.arguments ?? "");
+  return {
+    id: crypto.randomUUID(),
+    stage,
+    toolName,
+    arguments: argumentsText.slice(0, 8000),
+    result: String(event?.toolText ?? event?.tool_text ?? "").slice(0, 12000),
+    at: new Date().toISOString()
+  };
+}
+
+export async function recordCodingDutyToolEvent(worldRoot, dutyId, workerId, {
+  messageId,
+  claimId,
+  event
+} = {}) {
+  const task = await readCodingDuty(worldRoot, dutyId);
+  if (!task) return null;
+  const duty = assertDutyClaim(task, workerId, messageId, claimId);
+  const toolEvent = publicToolEvent(event);
+  const toolEvents = [...(Array.isArray(duty.toolEvents) ? duty.toolEvents : []), toolEvent];
+  if (toolEvents.length > MAX_TOOL_EVENTS) toolEvents.splice(0, toolEvents.length - MAX_TOOL_EVENTS);
+  return writeWorkTaskStatus(worldRoot, {
+    ...task,
+    workSpec: { ...task.workSpec, codingDuty: { ...duty, toolEvents, updatedAt: toolEvent.at } },
+    checkpoint: { ...task.checkpoint, lastAction: `coding duty ${toolEvent.stage} tool event recorded` }
+  });
+}
+
+export async function claimCodingDutyMessagesAtBoundary(worldRoot, dutyId, workerId, {
+  messageId,
+  claimId,
+  boundary,
+  now = new Date()
+} = {}) {
+  if (text(boundary).toLowerCase() !== "tool-result") {
+    throw new Error("active duty message boundary must be tool-result");
+  }
+  const task = await readCodingDuty(worldRoot, dutyId);
+  if (!task) return [];
+  const duty = assertDutyClaim(task, workerId, messageId, claimId);
+  const pending = duty.messages.filter((message) => message.role === "user"
+    && message.state === "pending"
+    && (text(message.delivery).toLowerCase() || "after-turn") === "after-tool");
+  if (!pending.length) return [];
+  const timestamp = iso(now);
+  const ids = new Set(pending.map((message) => message.id));
+  const messages = duty.messages.map((message) => ids.has(message.id)
+    ? {
+      ...message,
+      state: "delivered",
+      parentId: text(messageId),
+      deliveredAt: timestamp,
+      deliveryBoundary: "tool-result"
+    }
+    : message);
+  await writeWorkTaskStatus(worldRoot, {
+    ...task,
+    workSpec: {
+      ...task.workSpec,
+      codingDuty: { ...duty, messages, updatedAt: timestamp }
+    },
+    checkpoint: { ...task.checkpoint, lastAction: "parent input delivered after child tool result" }
+  });
+  return messages.filter((message) => ids.has(message.id)).map(publicCodingDutyMessage);
 }
 
 function leaseIsLive(claim, nowMs) {
@@ -391,6 +480,7 @@ export async function completeCodingDutyMessage(worldRoot, dutyId, workerId, mes
   }
   const timestamp = iso(now);
   const messages = duty.messages.map((entry) => entry.id === text(messageId)
+    || (entry.parentId === text(messageId) && entry.state === "delivered")
     ? { ...entry, state: "complete", completedAt: timestamp }
     : entry);
   messages.push({

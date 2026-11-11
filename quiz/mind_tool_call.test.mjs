@@ -168,6 +168,66 @@ test("mind tool calling executes allowed tool and returns final answer", async (
   }
 });
 
+test("queued saddle messages follow every tool result in the provider tool batch", async () => {
+  forget();
+  const capability = parse("su name plus num be plus ob num 1 to name num can");
+  const toolName = joinSignatureWords(deriveSignatureFromCall(capability));
+  await interpret(parse("su name tools be map def"));
+  await interpret(capability);
+  await interpret(parse("prah"));
+  const requests = [];
+  let boundaryMessageSent = false;
+  const responseText = await runToolChat({
+    sentence: parse('be write ob text "calculate" for name helper to name helper-out do'),
+    ob: {},
+    mindName: "helper",
+    model: "fixture-model",
+    dialogue: "helper after-tool message test",
+    callPrompt: "Calculate both values.",
+    resolvedConfigPrompt: "",
+    historyMessages: [],
+    toolMap: new Map([[toolName, capability]]),
+    tools: [{ function: { name: toolName } }],
+    toolBlock: "",
+    backendName: "test backend",
+    ollamaHost: "",
+    reasoningEffort: "",
+    mindDebug: false,
+    debugMind: () => {},
+    stream: true,
+    inputs: { inputText: "Calculate both values." },
+    onToolCall: async (event) => {
+      if (event.stage !== "result" || boundaryMessageSent) return undefined;
+      boundaryMessageSent = true;
+      return { saddleMessages: [{ id: "parent-message-1", text: "Check the results before replying." }] };
+    },
+    callStream: async ({ payload }) => {
+      requests.push(structuredClone(payload));
+      if (requests.length === 1) {
+        return {
+          message: {
+            role: "assistant",
+            content: "",
+            tool_calls: [
+              { id: "sum-a", function: { name: toolName, arguments: { ob: 2, to: "sum-a" } } },
+              { id: "sum-b", function: { name: toolName, arguments: { ob: 3, to: "sum-b" } } }
+            ]
+          }
+        };
+      }
+      return { message: { role: "assistant", content: "I checked both results." } };
+    }
+  });
+
+  assert.equal(responseText, "I checked both results.");
+  const nextMessages = requests[1].messages;
+  const assistantIndex = nextMessages.findIndex((message) => Array.isArray(message.tool_calls));
+  const firstToolIndex = nextMessages.findIndex((message) => message.role === "tool" && message.tool_call_id === "sum-a");
+  const secondToolIndex = nextMessages.findIndex((message) => message.role === "tool" && message.tool_call_id === "sum-b");
+  const injectedIndex = nextMessages.findIndex((message) => message.role === "user" && message.content === "Check the results before replying.");
+  assert.ok(assistantIndex < firstToolIndex && firstToolIndex < secondToolIndex && secondToolIndex < injectedIndex);
+});
+
 test("mind tool chat requests a user-facing summary instead of returning the last tool result", async () => {
   forget();
   resetMindLogs();

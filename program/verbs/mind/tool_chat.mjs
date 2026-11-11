@@ -423,11 +423,12 @@ export async function runToolChat({
   });
 
   const emitToolCall = async (payload) => {
-    if (typeof onToolCall !== "function") return;
+    if (typeof onToolCall !== "function") return undefined;
     try {
-      await onToolCall(payload);
+      return await onToolCall(payload);
     } catch {
       // Tool-call observers are best-effort and should not break response generation.
+      return undefined;
     }
   };
 
@@ -582,6 +583,7 @@ export async function runToolChat({
     }
     messages.push(assistantMessage);
     appendLog(dialogue, { role: "assistant", content: assistantMessage.content });
+    const messagesAfterToolBatch = [];
 
     for (const call of toolCalls) {
       if (typeof checkInterrupted === "function") {
@@ -754,7 +756,7 @@ export async function runToolChat({
               return status ? { exitCode: Number(status[1]), signal: null, timedOut: false } : null;
             })())
         : null;
-      await emitToolCall({
+      const observedResult = await emitToolCall({
         stage: "result", toolName, toolSentence, toolCall: call, toolText, resultSentence: surfacedTool,
         ...(commandOutcome ? { commandOutcome } : {})
       });
@@ -772,7 +774,17 @@ export async function runToolChat({
       toolMessage.tool_name = toolName;
       messages.push(toolMessage);
       appendLog(dialogue, { role: "tool", content: toolText });
+      if (Array.isArray(observedResult?.saddleMessages)) {
+        messagesAfterToolBatch.push(...observedResult.saddleMessages);
+      }
       lastToolText = toolText;
+    }
+
+    for (const queuedMessage of messagesAfterToolBatch) {
+      const content = String(queuedMessage?.text ?? "").trim();
+      if (!content) continue;
+      messages.push({ role: "user", content });
+      appendLog(dialogue, { role: "user", content });
     }
   }
 
