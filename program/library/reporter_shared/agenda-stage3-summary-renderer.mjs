@@ -4287,8 +4287,8 @@ export async function summarizeGroundedUnit({
           `Conservative separate-procedural-phases repair attempt ${attempt}.${pass} of 3.`,
           "The bounded source contains a generic question about whether motions should be separate, a separate agenda-item transition, and a later receipt vote. Do not attach the agenda-item label to the generic question unless the same source sentence explicitly does so.",
           "Keep procedural phases separate: report the generic question without an inferred object; report only that the later vote carried for the two items, without calling them correspondence unless the carried sentence itself does so; omit routine 'none/seeing none' transition wording unless needed for a complete fact.",
-          "Do not say a motion was moved or seconded when the source only asks for a motion. Do not say a speaker called for a vote unless the source explicitly records that speech act. Do not infer who asked, answered, moved, or chaired the exchange. Do not import details from the agenda label into the question.",
-          pass > 1 ? "HARD RETRY: remove every moved, seconded, correspondence, or called-for-a-vote claim that is not literally paired with the carried sentence; use impersonal wording and the literal 'two items' scope." : "",
+          "Do not say a motion was moved, seconded, or carried when the source only asks for a motion and later says that the two items were received. Do not call the result a carried motion. Do not say the committee addressed or discussed the site plan when the source records only a procedural question about whether there were questions. Do not say a speaker called for a vote unless the source explicitly records that speech act. Do not infer who asked, answered, moved, or chaired the exchange. Do not import details from the agenda label into the question.",
+          pass > 1 ? "HARD RETRY: remove every moved, seconded, carried-motion, correspondence, addressed-site-plan, or called-for-a-vote claim that is not literally paired with the carried sentence; use impersonal wording such as 'a request to receive two items was followed by a carried result' and preserve the literal 'two items' scope." : "",
           extraInstruction,
           "Return exactly one JSON object with summary, chapter text, confidence, and notes.",
           `AGENDA_LABEL: ${promptLabel}`,
@@ -4300,7 +4300,8 @@ export async function summarizeGroundedUnit({
         format: STAGE3_SUMMARY_RESPONSE_FORMAT,
       });
       const text = `${String(repaired?.summary || "")} ${String(repaired?.["chapter text"] || "")}`;
-      if (!/\b(?:moved|seconded|correspondence|called\s+for\s+(?:a\s+)?vote)\b/iu.test(text)) return repaired;
+      const unsupportedMotionClaim = /\b(?:carried|approved|adopted)\s+(?:a\s+)?motion\b|\b(?:motion\s+to\s+receive|address(?:ed|ing)?\s+(?:the\s+)?site\s+plan|site\s+plan\s+(?:was|is)\s+(?:addressed|discussed))\b/iu.test(text);
+      if (!unsupportedMotionClaim && !/\b(?:moved|seconded|correspondence|called\s+for\s+(?:a\s+)?vote)\b/iu.test(text)) return repaired;
     }
     return repaired;
   };
