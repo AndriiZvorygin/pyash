@@ -1,9 +1,21 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { sentenceToPyash } from "../beautiful.mjs";
 import { worldRootFromAgentHouse } from "./newspaper_log.mjs";
 
 const activeMindRuns = new Map();
+const activeMindAbortControllers = new Map();
+const mindInterruptContext = new AsyncLocalStorage();
+
+export function runWithMindInterruptSignal({ signal } = {}, action) {
+  if (typeof action !== "function") throw new TypeError("mind interrupt context requires an action");
+  return mindInterruptContext.run({ signal: signal ?? null }, action);
+}
+
+export function currentMindInterruptSignal() {
+  return mindInterruptContext.getStore()?.signal ?? null;
+}
 
 function sanitizeToken(value, fallback = "agent") {
   const text = String(value ?? "").trim().toLowerCase();
@@ -50,13 +62,36 @@ function parseInterruptTimestamp(text = "") {
   return Number.isFinite(value) ? value : null;
 }
 
-export async function beginActiveMindRun({ worldRoot, agentName } = {}) {
+export async function beginActiveMindRun({ worldRoot, agentName, controller = null } = {}) {
   if (!worldRoot) return async () => {};
   const key = activeKey(worldRoot, agentName);
   const next = (activeMindRuns.get(key) ?? 0) + 1;
   activeMindRuns.set(key, next);
-  await writeActiveFile(worldRoot, agentName, next);
+  if (controller?.signal && typeof controller.abort === "function") {
+    const controllers = activeMindAbortControllers.get(key) ?? new Set();
+    controllers.add(controller);
+    activeMindAbortControllers.set(key, controllers);
+  }
+  try {
+    await writeActiveFile(worldRoot, agentName, next);
+  } catch (error) {
+    const controllers = activeMindAbortControllers.get(key);
+    controllers?.delete(controller);
+    if (!controllers?.size) activeMindAbortControllers.delete(key);
+    const remaining = Math.max(0, (activeMindRuns.get(key) ?? 1) - 1);
+    if (remaining === 0) {
+      activeMindRuns.delete(key);
+      await fs.rm(activePath(worldRoot, agentName), { force: true }).catch(() => {});
+    } else {
+      activeMindRuns.set(key, remaining);
+      await writeActiveFile(worldRoot, agentName, remaining).catch(() => {});
+    }
+    throw error;
+  }
   return async () => {
+    const controllers = activeMindAbortControllers.get(key);
+    controllers?.delete(controller);
+    if (!controllers?.size) activeMindAbortControllers.delete(key);
     const current = activeMindRuns.get(key) ?? 0;
     const remaining = Math.max(0, current - 1);
     if (remaining === 0) {
@@ -94,7 +129,14 @@ export async function requestMindInterrupt({
   };
   const target = interruptPath(worldRoot, agentName);
   await fs.writeFile(target, `${sentenceToPyash(sentence)}\n`, "utf8");
-  return { requested: true, active: true, path: target };
+  const controllers = activeMindAbortControllers.get(activeKey(worldRoot, agentName));
+  let abortedRuns = 0;
+  for (const controller of controllers ?? []) {
+    if (controller.signal.aborted) continue;
+    controller.abort(String(reason).trim() || "stop");
+    abortedRuns += 1;
+  }
+  return { requested: true, active: true, path: target, abortedRuns };
 }
 
 export async function consumeMindInterrupt({

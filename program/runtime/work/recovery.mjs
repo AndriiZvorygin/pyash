@@ -252,9 +252,6 @@ export async function recoverOperationalWorkTask(worldRoot, taskId, {
   const replacement = /active writer|thread .* writer/iu.test(previousBlocker)
     && (Number(current.checkpoint?.recoveryCount) || 0) > 0;
   const oldWorktree = current.checkpoint?.workspace?.worktreePath || "";
-  const replacementPath = replacement
-    ? `${oldWorktree}-replacement-${(Number(current.checkpoint?.recoveryCount) || 0)}`
-    : "";
   const previousThreadId = current.checkpoint?.worker?.threadId || "";
   const abandonedTurn = current.checkpoint?.activeTurn?.state
     ? {
@@ -286,7 +283,7 @@ export async function recoverOperationalWorkTask(worldRoot, taskId, {
       activeTurn: {},
       blocker: "",
       workspace: replacement
-        ? { worktreePath: replacementPath, replacementOf: oldWorktree }
+        ? { worktreePath: "", mode: "shared-checkout", replacementOf: oldWorktree }
         : {},
       worker: replacement
         ? {
@@ -330,7 +327,7 @@ export async function recoverOperationalWorkTask(worldRoot, taskId, {
     reason,
     recoveryCount: next.checkpoint.recoveryCount,
     staleTurn: record.staleTurn,
-    replacementWorktree: replacementPath,
+    replacementCheckout: replacement,
     previousThreadId
   };
 }

@@ -40,7 +40,7 @@ if (!anchor || !form || !role) {
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, "..");
-const defaultPath = path.resolve(repoRoot, "program/verbs/exchange/translation/anchor_words.pya");
+const defaultPath = path.resolve(repoRoot, "program/library/translation/anchor_words.pya");
 const anchorPath = fileOverride ? path.resolve(fileOverride) : defaultPath;
 
 const text = await fs.readFile(anchorPath, "utf8");

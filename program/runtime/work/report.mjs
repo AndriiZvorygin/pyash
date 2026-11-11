@@ -148,7 +148,7 @@ export function renderWorkTaskReport(task) {
     lines.push("", "Revision instructions:", indent(review.revisionInstructions, "  ", 1800));
   }
   lines.push("", `Diff: ${diffStat(implementation.diff, changedFiles)}`);
-  lines.push(`Worktree: ${text(workspace.worktreePath) || "(not created)"}`);
+  lines.push(`Checkout: ${text(workspace.worktreePath) || "(not recorded)"}`);
   if (text(implementation.commit)) lines.push(`Commit: ${text(implementation.commit)}`);
   if (text(review.reviewedCommit || review.reviewedRevision)) {
     lines.push(`Reviewed implementation: ${text(review.reviewedCommit || review.reviewedRevision)}`);
@@ -161,7 +161,7 @@ export function renderWorkTaskReport(task) {
       lines.push(`Material reconciliation attempts: ${reconciliation.materialAttempts || 0}`);
       lines.push(`No-progress reconciliation attempts: ${reconciliation.noProgressAttempts || 0}`);
       lines.push(`Conflicts resolved: ${reconciliation.conflictsResolved || 0}`);
-      if (reconciliation.worktreePath) lines.push(`Reconciliation worktree: ${reconciliation.worktreePath}`);
+      if (reconciliation.worktreePath) lines.push(`Reconciliation checkout: ${reconciliation.worktreePath}`);
     }
   }
   const turnReconciliation = checkpoint.turnReconciliation || {};

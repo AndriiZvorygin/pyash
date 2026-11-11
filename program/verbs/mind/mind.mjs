@@ -33,6 +33,7 @@ import { recordMindAnswer } from "./series.mjs";
 import { resolveMindPrompt, resolveGenitiveText, resolvePromptFromName } from "./resolve_prompt.mjs";
 import { resolveHistoryContext } from "./history_context.mjs";
 import { runToolChat } from "./tool_chat.mjs";
+import { normalizeMindToolCallLimit } from "../../runtime/mind-limits.mjs";
 import { runGenerate } from "./generate.mjs";
 import { normalizeMindBackendName, resolveMindBackendHost } from "./backend.mjs";
 import { mindSignatureWords } from "./signatures.mjs";
@@ -164,14 +165,6 @@ function normalizeNumPredict(value) {
   return whole;
 }
 
-function normalizeMaxToolCalls(value) {
-  if (value === undefined || value === null) return null;
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return null;
-  const whole = Math.trunc(numeric);
-  return whole >= 0 ? whole : null;
-}
-
 function readMapText(map, keys = []) {
   for (const key of keys) {
     const text = entryText(map?.[key]);
@@ -285,6 +278,11 @@ async function ensureDefaultToolMapLoaded() {
 export async function mind_to_name_text(sentence, {
   inputs = [],
   onToolCall,
+  onAssistantDelta,
+  onUsage,
+  saddlePlanTool,
+  sessionContextSummary = "",
+  sessionPlan = "",
   sessionUserContent = "",
   sessionUserMetadata = null,
   sessionAssistantMetadata = null
@@ -328,9 +326,9 @@ export async function mind_to_name_text(sentence, {
   await ensureMindTuningLoaded(model);
   const modelTuning = resolveMindTuningForModel(model, { rememberFn: remember });
   const configuredThink = resolveConfigMapBool("mind configure", "think", { rememberFn: remember });
-  const configuredMaxToolCalls = normalizeMaxToolCalls(
+  const configuredMaxToolCalls = normalizeMindToolCallLimit(
     resolveConfigMapNum("mind configure", "max tool calls", { rememberFn: remember })
-  ) ?? 3;
+  );
   const configuredNumPredict = normalizeNumPredict(
     resolveConfigMapNum("mind configure", "max tokens", { rememberFn: remember })
     ?? resolveConfigMapNum("mind configure", "max output tokens", { rememberFn: remember })
@@ -344,6 +342,7 @@ export async function mind_to_name_text(sentence, {
   const effectiveModelTuning = (() => {
     const tuning = modelTuning && typeof modelTuning === "object" ? { ...modelTuning } : {};
     if (typeof configuredThink === "boolean") tuning.think = configuredThink;
+    if (typeof sentence?.think === "boolean") tuning.think = sentence.think;
     if (typeof tuning.think !== "boolean") tuning.think = false;
     if (configuredNumPredict !== null) tuning.numPredict = configuredNumPredict;
     if (callNumPredict !== null) tuning.numPredict = callNumPredict;
@@ -526,7 +525,15 @@ export async function mind_to_name_text(sentence, {
     ollamaHost: resolveConfigText("ollama host", { rememberFn: remember }),
     aiHost: resolveConfigText("ai host", { rememberFn: remember })
   });
-  const mindReasoningEffort = runtimeReasoningEffort || resolveConfigText("mind reasoning effort", { rememberFn: remember }) || null;
+  const callReasoningEffort = String(sentence?.reasoningEffort ?? "").trim();
+  const mindReasoningEffort = callReasoningEffort
+    || runtimeReasoningEffort
+    || resolveConfigText("mind reasoning effort", { rememberFn: remember })
+    || null;
+  const contextWindowValue = Number(sentence?.contextWindow);
+  const contextWindow = Number.isSafeInteger(contextWindowValue) && contextWindowValue > 0
+    ? contextWindowValue
+    : null;
   const mindDebug = resolveConfigBool("mind debug", { rememberFn: remember }) === true;
   const debugMind = (label, payload) => {
     if (!mindDebug) return;
@@ -575,6 +582,12 @@ export async function mind_to_name_text(sentence, {
       mindName,
       configPrompt: resolvedConfigPrompt
     });
+    if (String(sessionContextSummary ?? "").trim()) {
+      agentSystemPrompt = `${agentSystemPrompt}\n\nSESSION CONTEXT CHECKPOINT (older turns, retained for continuity):\n${String(sessionContextSummary).trim()}`;
+    }
+    if (String(sessionPlan ?? "").trim()) {
+      agentSystemPrompt = `${agentSystemPrompt}\n\nACTIVE SESSION PLAN (current task state):\n${String(sessionPlan).trim()}`;
+    }
     const namingPrompt = resolvedConfigPrompt ?? "";
     const sessionNameSeed = sessionNameHint ?? globalSessionNameHint ?? sessionNameFromFromtext;
     if (sessionFileOverride || sessionNameSeed || !historySeriesName) {
@@ -702,15 +715,10 @@ export async function mind_to_name_text(sentence, {
       return recordMindAnswer({ mindName, dialogue, callPrompt, responseText, outputName, historySeriesName, sessionTurn });
     }
   }
+  const backendUsesRequiredHousekeeper = process.env.PYA_GPU_MANAGER_REQUIRED === "true"
+    && ["ollama command mind", "strata command mind"].includes(String(backendName ?? "").trim().toLowerCase());
   if (toolMapName) {
-    if (aspect === "stream") {
-      throwErrorSentence({
-        name: "mind aspect invalid",
-        message: "mind stream is not supported with tools",
-        from: { name: "mind" },
-        raw: { aspect }
-      });
-    }
+    const streamToolTurns = aspect === "stream" && !backendUsesRequiredHousekeeper;
     const mockResponseRaw = resolveConfigText("mind response", { rememberFn: remember });
     responseText = await runToolChat({
       sentence,
@@ -728,6 +736,7 @@ export async function mind_to_name_text(sentence, {
       backendName,
       ollamaHost,
       reasoningEffort: mindReasoningEffort,
+      contextWindow,
       modelTuning: effectiveModelTuning,
       maxToolCalls: configuredMaxToolCalls,
       runtimeContext: {
@@ -743,7 +752,34 @@ export async function mind_to_name_text(sentence, {
       mindDebug,
       debugMind,
       inputs: { inputText, mockResponseRaw, imageInputs: inputs },
-      onToolCall,
+      onToolCall: async (event) => {
+        const boundary = await onToolCall?.(event);
+        if (event?.stage === "result" && sessionAgentEnabled && sessionFile && Array.isArray(boundary?.saddleMessages)) {
+          for (const message of boundary.saddleMessages) {
+            const content = String(message?.text ?? "").trim();
+            if (!content) continue;
+            await appendSessionEntry({
+              sessionFile,
+              role: "session message",
+              content,
+              metadata: {
+                record: "session-message",
+                messageRole: "user",
+                turnId: String(sessionTurn?.turnId ?? ""),
+                payloadId: String(message.id ?? ""),
+                createdAt: String(message.deliveredAt ?? ""),
+                sender: "parent duty",
+                channelType: "after tool result"
+              }
+            });
+          }
+        }
+        return boundary;
+      },
+      onAssistantDelta,
+      onUsage,
+      saddlePlanTool,
+      stream: streamToolTurns,
       checkInterrupted: assertNotInterrupted
     });
   } else {
@@ -776,6 +812,7 @@ export async function mind_to_name_text(sentence, {
         });
       }
       : null;
+    const streamGeneration = aspect === "stream" && !backendUsesRequiredHousekeeper;
     const { responseText: text, reply, stream } = await runGenerate({
       sentence,
       ob,
@@ -789,21 +826,34 @@ export async function mind_to_name_text(sentence, {
       backendName,
       ollamaHost,
       reasoningEffort: mindReasoningEffort,
+      contextWindow,
       modelTuning: effectiveModelTuning,
       mindDebug,
       debugMind,
       outputName,
       historySeriesName,
-      aspect,
+      aspect: streamGeneration ? "stream" : "complete",
       inputText,
       inputs,
       checkInterrupted: assertNotInterrupted,
+      onAssistantDelta,
+      onToolCall,
+      onUsage,
       onComplete: completeStreamSession,
       sessionTurn
     });
-    if (stream) return stream;
+    if (stream) {
+      return sessionTurn?.turnId
+        ? {
+          ...stream,
+          accordingto: { text: sessionTurn.turnId },
+          fromtext: { text: sessionTurn.requestHash ?? "" }
+        }
+        : stream;
+    }
     responseText = text ?? "";
     replyEnvelope = reply ?? null;
+    if (!streamGeneration && responseText) onAssistantDelta?.(responseText);
   }
 
   if (!responseText && String(outputName ?? "").trim().endsWith("_channel_out")) {

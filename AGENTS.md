@@ -4,11 +4,11 @@ This guide keeps contributions consistent for the Pyash codebase.
 
 ## Project Structure & Module Organization
 - `program/main.mjs` runs the REPL and wires the parser (`program/understand/`), bridge (`program/bridge/`), and memory helpers (`program/remember/`).
-- Interpreter behaviors live in `program/bridge/`, `program/program.mjs`, and `program/verbs/` (one verb per file, small and composable).
+- Interpreter behaviors live in `program/bridge/`, `program/program.mjs`, and `program/verbs/` (one verb family per file, small and composable; `quiz/verb_family_ownership.test.mjs` holds that rule).
 - Dispatch is signature-first: built-in verb signatures register via `program/verbs/index.mjs`, ceremonies register their signatures on `def`, and `program/bridge/signature.mjs` hosts the registry/lookups.
 - Output formatting sits in `program/beautiful.mjs`; Ollama network I/O is in `program/motor/ollama.mjs`.
 - Quizzes are under `quiz/*.test.mjs`; keep helpers near the code they cover.
-- Docs: `documentation/pyac.txt` (broader spec), `documentation/pyash.md` (design goals), `documentation/compositional-cases.md` (case grid). `program/configure/workplace.json` is example data/config; keep secrets out of the repo.
+- Docs: `documentation/specifications/00-index.md` is the normative spec index (start there); `documentation/specifications/01-sentence-and-grammar.md` and `02-core-execution.md` define the sentence model and dispatch contract. `documentation/pyac.txt` is the broader spec, `documentation/pyash.md` the design goals, `documentation/compositional-cases.md` the case grid. `program/configure/workplace.json` is example data/config; keep secrets out of the repo.
 - Ceremonies (`def...prah`) have speakable, multi-word names; bodies run in sandpits during invocation, and `this`/`ret` flow updates the caller’s evoke/targets and records sandpit traces.
 
 ## Build, Quiz, and Development Commands
@@ -19,6 +19,10 @@ This guide keeps contributions consistent for the Pyash codebase.
 - `node command/read_pya_trace.mjs path/to/file.pya` interprets Pyash text and dumps `{ memory, sandpits }` for inspection.
 - `node command/pya_to_json.mjs path/to/file.pya --pretty` converts `.pya` to JSON (`memory`, `sandpits`, and indexed names) for robust machine reads.
 - `node command/vocab_suggest.mjs examples/pyash` checks files for non-Pyash vocabulary and suggests replacements; `node command/vocab_suggest.mjs "word"` checks a proposed token without scanning files.
+- `node command/check_doc_prose.mjs` guards documentation against prose corrupted by bulk keyword replacement (a keyword between two lowercase words, or a duplicated alias such as `` `su` / `su` ``). Run it after any vocabulary or alias rename. <!-- prose-check: ignore -->
+- `node command/audit_examples.mjs` executes every `examples/pyash/*.pya` through the real runner and reports `passed` / `needs input` / `needs backend` / `failed`. Use it to catch example drift.
+  It runs one process per example and takes about twelve minutes, so it is **not** a per-change check: run it when a month has passed or a hundred commits have landed since the last one, whichever comes first (the CI workflow enforces the same cadence). It prints the summary and the failures only; the per-example detail lands in `examples/out/example-audit.json`.
+- `node command/example_audit_due.mjs --event push --last <sha>` reports whether the audit is due (`run=true` / `run=false` on the first line). It is the rule the CI workflow uses, and an unknown last audit makes it run rather than skip.
 - Use a Node version with native ESM and the built-in test runner; no extra deps.
 
 ## Coding Style & Naming Conventions
@@ -26,6 +30,8 @@ This guide keeps contributions consistent for the Pyash codebase.
 - Functions/vars use `camelCase`; files and verb modules use short, descriptive snake/dash names (e.g., `add_obj_num_to_num.mjs`).
 - Favor small, pure functions; reset shared state explicitly (e.g., `forget`) and keep side effects localized.
 - Keep things DRY: prefer composing or reusing helpers over copy-paste variants.
+- Async-first orchestration: use `async`/`await` and promises for I/O, lazy resource loading, queue/provider work, and pipeline stages; keep pure local transformations synchronous.
+- Reuse in-flight promises for process-local lazy resources and use `Promise.all` for independent reads when ordering and resource bounds remain deterministic.
 - Add brief, targeted comments only where behavior is non-obvious.
 - Keywordized compositional roles: use axis/context keywords (e.g., `fromtext`, `during`, `as`, `become`, `totext`) rather than storing raw contexts.
 - Run `vocab_suggest` for new Pyash sentence words (names, error names, verbs); quoted prompt text does not need Pyash vocabulary.
@@ -46,6 +52,9 @@ This guide keeps contributions consistent for the Pyash codebase.
 - Commits are short, imperative, and lower case (e.g., `added pretty printing tests`). Group related changes and avoid noise commits.
 - Make a git commit after every major change so history stays reviewable.
 - Unless the user explicitly says otherwise, a completed requested change must be committed and pushed to the configured remote workflow after validation. Preserve unrelated WIP and use the repository's dual-remote helper when applicable.
+- Remote commits on `dev` are a synchronization step, not a reason to stop or defer a push. Fetch both configured remotes, inspect their `dev` tips and local `dev` commits, then merge remote `dev` commits into the current `dev` branch; preserve local commits and make no force-pushes. If `origin/dev` and `github/dev` differ, merge both tips before publishing.
+- Do not create a side branch or worktree just to avoid synchronizing `dev`. Keep unrelated dirty files and active background work intact. Merge when the dirty paths do not conflict; if they overlap, preserve them with a recoverable patch or stash only when no active process is writing those files, then restore and resolve the work before continuing.
+- Resolve ordinary merge conflicts in favor of the combined intended changes, rerun the relevant tests, and continue to `bash command/push_all.sh`. If a push races with a new remote commit, fetch, merge that commit into `dev`, rerun the relevant checks, and retry. Do not report `ahead`/`behind` counts or a non-fast-forward rejection alone as a blocker; stop only for a concrete access, policy, or unresolvable-content problem and state the exact failed step.
 - PRs should describe behavior changes, list new verbs/grammar, and link issues. Include proof (screenshots/logs/transcripts) for REPL-facing changes.
 - Mention added tests and any known gaps. Call out external needs (e.g., Ollama server availability) so reviewers can reproduce.
 - When adding runnable examples, keep outputs in git-ignored locations (e.g., `examples/out/`) and commit the sources plus tests/docs together.
@@ -86,6 +95,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 - Do not introduce ad hoc `.json` state/config files. Prefer Pyash sentence files (`.pya`) unless a task explicitly requires JSON output.
 
 ## GPU/LLM Concurrency Rule
-- Never start more than one GPU/LLM-heavy pipeline run at the same time (ASR, diarize, agenda stage3, image generation, or full transcript pipelines).
-- Before launching any such run, check for active related processes and wait/stop them first.
-- Treat pipeline execution as single-flight: one meeting pipeline at a time per host.
+- Route GPU/LLM inference through Pyash GPU Housekeeper whenever it is available; do not bypass it with direct Ollama/model calls.
+- A non-empty Housekeeper queue is normal and is not a reason to stall, refuse, or wait before submitting independent work. Submit the bounded job and let Housekeeper perform admission, placement, concurrency control, and queueing across available hosts/devices.
+- Check active work when diagnosing a stalled job, when a task explicitly requires isolated performance measurements, or when no managed queue is available. Do not manually unload models or create competing unmanaged inference processes to make room.
+- Preserve declared dependencies between pipeline stages. Independent duties may run concurrently when Housekeeper admits them; same-device overlap remains governed by Housekeeper capacity/VRAM admission and the runtime's concurrency-safety declaration.

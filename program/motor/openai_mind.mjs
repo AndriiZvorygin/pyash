@@ -62,6 +62,8 @@ async function normalizeMessage(message = {}) {
 
   const toolCallId = asText(message.tool_call_id);
   if (toolCallId) out.tool_call_id = toolCallId;
+  const reasoningContent = asText(message.reasoning_content);
+  if (reasoningContent) out.reasoning_content = reasoningContent;
 
   if (Array.isArray(message.tool_calls) && message.tool_calls.length > 0) {
     out.tool_calls = message.tool_calls.map((item) => {
@@ -155,7 +157,9 @@ function parseChatCompletionsResponse(payload = {}) {
   const message = payload?.choices?.[0]?.message ?? {};
   const content = parseMessageContent(message);
   const toolCalls = normalizeToolCalls(message.tool_calls);
-  const outMessage = { content };
+  const outMessage = { role: asText(message.role) || "assistant", content };
+  const reasoningContent = asText(message.reasoning_content);
+  if (reasoningContent) outMessage.reasoning_content = reasoningContent;
   if (toolCalls.length > 0) outMessage.tool_calls = toolCalls;
   return {
     response: content,
@@ -164,8 +168,13 @@ function parseChatCompletionsResponse(payload = {}) {
   };
 }
 
-async function requestJson({ host, apiKey, body }) {
-  const endpoint = `${normalizeHost(host)}/v1/chat/completions`;
+function chatCompletionsEndpoint(host) {
+  const base = normalizeHost(host);
+  return /\/v\d+$/iu.test(base) ? `${base}/chat/completions` : `${base}/v1/chat/completions`;
+}
+
+async function requestJson({ host, apiKey, body, providerLabel = "OpenAI-compatible" }) {
+  const endpoint = chatCompletionsEndpoint(host);
   const res = await fetch(endpoint, {
     method: "POST",
     headers: {
@@ -184,13 +193,13 @@ async function requestJson({ host, apiKey, body }) {
   if (!res.ok) {
     const code = asText(parsed?.error?.code);
     const msg = asText(parsed?.error?.message || res.statusText || "request failed");
-    throw new Error(`openai request failed: status=${res.status}${code ? ` code=${code}` : ""} error=${msg}`);
+    throw new Error(`${providerLabel} request failed: status=${res.status}${code ? ` code=${code}` : ""} error=${msg}`);
   }
   return parseChatCompletionsResponse(parsed);
 }
 
-async function requestStream({ host, apiKey, body, onChunk }) {
-  const endpoint = `${normalizeHost(host)}/v1/chat/completions`;
+async function requestStream({ host, apiKey, body, onChunk, onToolCall, providerLabel = "OpenAI-compatible" }) {
+  const endpoint = chatCompletionsEndpoint(host);
   const res = await fetch(endpoint, {
     method: "POST",
     headers: {
@@ -209,30 +218,62 @@ async function requestStream({ host, apiKey, body, onChunk }) {
     }
     const code = asText(parsed?.error?.code);
     const msg = asText(parsed?.error?.message || res.statusText || "request failed");
-    throw new Error(`openai request failed: status=${res.status}${code ? ` code=${code}` : ""} error=${msg}`);
+    throw new Error(`${providerLabel} request failed: status=${res.status}${code ? ` code=${code}` : ""} error=${msg}`);
   }
   const decoder = new TextDecoder();
   let buffer = "";
+  let content = "";
+  let reasoningContent = "";
+  let usage = null;
+  const toolCalls = new Map();
+  const consumeLine = (lineRaw) => {
+    const line = String(lineRaw || "").trim();
+    if (!line || !line.startsWith("data:")) return;
+    const data = line.slice(5).trim();
+    if (!data || data === "[DONE]") return;
+    let payload;
+    try {
+      payload = JSON.parse(data);
+    } catch {
+      return;
+    }
+    if (payload?.usage && typeof payload.usage === "object") usage = payload.usage;
+    const delta = payload?.choices?.[0]?.delta ?? {};
+    if (typeof delta.reasoning_content === "string") reasoningContent += delta.reasoning_content;
+    const text = parseMessageContent({ content: delta.content });
+    if (text) {
+      content += text;
+      onChunk?.(text);
+    }
+    for (const fragment of Array.isArray(delta.tool_calls) ? delta.tool_calls : []) {
+      const index = Number.isSafeInteger(Number(fragment?.index)) ? Number(fragment.index) : toolCalls.size;
+      const current = toolCalls.get(index) ?? {
+        id: "",
+        type: "function",
+        function: { name: "", arguments: "" }
+      };
+      if (fragment?.id) current.id += asText(fragment.id);
+      if (fragment?.type) current.type = asText(fragment.type);
+      if (fragment?.function?.name) current.function.name += asText(fragment.function.name);
+      if (fragment?.function?.arguments) current.function.arguments += asText(fragment.function.arguments);
+      toolCalls.set(index, current);
+    }
+    const observed = payload?.choices?.[0]?.message?.observed_tool_events;
+    if (Array.isArray(observed)) for (const event of observed) onToolCall?.(event);
+  };
   for await (const rawChunk of res.body) {
     buffer += decoder.decode(rawChunk, { stream: true });
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
-    for (const lineRaw of lines) {
-      const line = String(lineRaw || "").trim();
-      if (!line || !line.startsWith("data:")) continue;
-      const data = line.slice(5).trim();
-      if (!data || data === "[DONE]") continue;
-      let payload;
-      try {
-        payload = JSON.parse(data);
-      } catch {
-        continue;
-      }
-      const delta = payload?.choices?.[0]?.delta ?? {};
-      const text = asText(delta?.content);
-      if (text && typeof onChunk === "function") onChunk(text);
-    }
+    for (const line of lines) consumeLine(line);
   }
+  buffer += decoder.decode();
+  if (buffer.trim()) consumeLine(buffer);
+  const message = { role: "assistant", content };
+  if (reasoningContent) message.reasoning_content = reasoningContent;
+  const completedToolCalls = [...toolCalls.entries()].sort(([a], [b]) => a - b).map(([, call]) => call);
+  if (completedToolCalls.length) message.tool_calls = completedToolCalls;
+  return { response: content, message, usage };
 }
 
 export {

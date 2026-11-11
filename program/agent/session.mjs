@@ -12,6 +12,7 @@ import { resolveWorldAgentHouseDirectory } from "../library/agent_command_policy
 import { emitExchangeSentence, getExchangeSentenceId, recordArtifact } from "../bridge/exchange.mjs";
 import {
   buildSessionCheckpointSentence,
+  buildSessionMessageSentence,
   buildCompactSessionSnapshot,
   buildSessionTurnSentence,
   canonicalRequestHash,
@@ -416,6 +417,17 @@ export async function appendSessionEntry({
 } = {}) {
   if (!sessionFile || !role) return;
   const meta = metadata && typeof metadata === "object" ? metadata : {};
+  if (meta.record === "session-message") {
+    const sentence = buildSessionMessageSentence({
+      role: meta.messageRole ?? "user",
+      content,
+      turnId: meta.turnId,
+      metadata: meta,
+      timestamp: meta.createdAt || nowIso()
+    });
+    await fs.appendFile(sessionFile, `${sentenceToPyash(sentence)}\n`, "utf8");
+    return;
+  }
   if (meta.turnId) {
     const sentence = buildSessionTurnSentence({
       role,
@@ -501,11 +513,22 @@ function sessionMessageTurnId(sentence) {
   return String(sentence?.accordingto?.text ?? sentence?.accordingto?.name ?? "");
 }
 
-function projectSessionMessages({ sentences = [], historyWindow = 50 } = {}) {
+function projectSessionMessages({ sentences = [], historyWindow = 50, includePending = false } = {}) {
   const source = Array.isArray(sentences) ? sentences : [];
   const replayEntries = [];
   const projectedEntries = [];
   for (const [index, sentence] of source.entries()) {
+    if (sentence?.be === "session message" && sentence?.su?.name === "session message") {
+      const messageRole = String(sentence?.as?.name ?? "").trim().toLowerCase();
+      if (SESSION_ROLE_NAMES.has(messageRole)) {
+        projectedEntries.push({
+          index,
+          turnId: sessionMessageTurnId(sentence),
+          message: { role: messageRole, content: sessionMessageContent(sentence) }
+        });
+      }
+      continue;
+    }
     const role = sessionMessageRole(sentence);
     if (!SESSION_ROLE_NAMES.has(role) || (sentence?.be !== "answer" && role !== "tool")) {
       replayEntries.push({ index, sentence });
@@ -524,6 +547,7 @@ function projectSessionMessages({ sentences = [], historyWindow = 50 } = {}) {
     sentences: replayEntries.map(({ sentence }) => sentence),
     historyWindow
   });
+  const turnsById = new Map(projected.turns.map((turn) => [turn.turnId, turn]));
   const usedReplayEntries = new Set();
   const replayMessages = projected.messages.map((message, messageIndex) => {
     const match = replayEntries.find((entry, index) => {
@@ -535,13 +559,47 @@ function projectSessionMessages({ sentences = [], historyWindow = 50 } = {}) {
       return !turnId || !entryTurnId || turnId === entryTurnId;
     });
     if (match) usedReplayEntries.add(replayEntries.indexOf(match));
+    const turn = turnsById.get(String(message.turnId ?? ""));
     return {
       index: match?.index ?? source.length + messageIndex,
+      ordinal: turn?.ordinal ?? (Number(match?.sentence?.by?.num) || null),
+      timestamp: turn?.timestamp || match?.sentence?.during?.date || "",
+      roleOrder: message.role === "user" ? 0 : message.role === "assistant" ? 1 : 2,
       message: { role: message.role, content: message.content }
     };
   });
-  const messages = [...replayMessages, ...projectedEntries]
-    .sort((left, right) => left.index - right.index)
+  const legacyMessages = projectedEntries.map((entry) => ({
+    ...entry,
+    ordinal: turnsById.get(entry.turnId)?.ordinal ?? (Number(source[entry.index]?.by?.num) || null),
+    timestamp: source[entry.index]?.during?.date ?? "",
+    roleOrder: entry.message.role === "user" ? 0 : entry.message.role === "assistant" ? 1 : 2
+  }));
+  const pendingMessages = includePending
+    ? projected.pendingTurns.filter((turn) => turn.hasUser).map((turn) => ({
+      index: replayEntries.find((entry) => sessionMessageTurnId(entry.sentence) === turn.turnId)?.index ?? source.length,
+      ordinal: turn.ordinal,
+      timestamp: turn.timestamp,
+      roleOrder: 0,
+      message: {
+        role: "user",
+        content: turn.userContent,
+        pending: true,
+        turnId: turn.turnId
+      }
+    }))
+    : [];
+  const messages = [...replayMessages, ...legacyMessages, ...pendingMessages]
+    .sort((left, right) => {
+      if (left.ordinal && right.ordinal && left.ordinal !== right.ordinal) {
+        return left.ordinal - right.ordinal;
+      }
+      if (left.ordinal && right.ordinal) return left.index - right.index || left.roleOrder - right.roleOrder;
+      const leftTime = Date.parse(left.timestamp);
+      const rightTime = Date.parse(right.timestamp);
+      if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) return leftTime - rightTime;
+      if (left.ordinal && right.ordinal && left.ordinal !== right.ordinal) return left.ordinal - right.ordinal;
+      return left.index - right.index || left.roleOrder - right.roleOrder;
+    })
     .map(({ message }) => message);
   const maxPairs = normalizeHistoryWindow(historyWindow, { defaultPairs: 50 });
   return {
@@ -577,6 +635,47 @@ export async function readSessionReplayWithFallback({
     sentences: [...yesterdaySentences, ...todaySentences],
     historyWindow
   });
+}
+
+// The base name of a session is the part of its file name after the date key.
+function sessionBaseName(sessionFile) {
+  const text = String(sessionFile ?? "");
+  const name = path.basename(text, path.extname(text) || ".pya");
+  const match = name.match(/^\d{8}-(.+)$/u);
+  return match ? match[1] : "";
+}
+
+// The turns of the whole live session.
+//
+// A live session spans the file for today and the file for yesterday, so a
+// turn ordinal has to be counted over both. Otherwise each day would hand
+// out the same ordinal, and with it the same turn id, and the two files
+// would then hold conflicting evidence for one id.
+async function sessionWindowTurns(sessionFile, replay) {
+  const baseName = sessionBaseName(sessionFile);
+  if (!baseName) return replay.turns;
+  const todayKey = formatCompactDate(new Date());
+  const sessionDir = path.dirname(sessionFile);
+  const files = [
+    path.join(sessionDir, sessionFilename({
+      sessionName: buildSessionNameForDate({ baseName, dateCompact: shiftCompactDate(todayKey, -1) })
+    })),
+    path.join(sessionDir, sessionFilename({
+      sessionName: buildSessionNameForDate({ baseName, dateCompact: todayKey })
+    }))
+  ];
+  const merged = new Map();
+  for (const turn of replay.turns) merged.set(turn.turnId, turn);
+  try {
+    for (const file of files) {
+      const window = await readSessionReplay({ sessionFile: file, historyWindow: 0 });
+      for (const turn of window.turns) merged.set(turn.turnId, turn);
+    }
+  } catch {
+    // A window that cannot be projected is already reported by the history
+    // read. Counting the file on its own keeps the write from failing twice.
+  }
+  return [...merged.values()];
 }
 
 async function appendReplaySentence(sessionFile, sentence) {
@@ -638,7 +737,7 @@ export async function beginSessionTurn({
   const requestValue = request && typeof request === "object" ? request : { value: request };
   const meta = metadata && typeof metadata === "object" ? metadata : {};
   const requestHash = canonicalRequestHash(requestValue);
-  const ordinal = nextSessionOrdinal(replay.turns);
+  const ordinal = nextSessionOrdinal(await sessionWindowTurns(sessionFile, replay));
   const payloadId = meta.payloadId || requestValue.payloadId || requestValue.inboundPayloadId;
   const exchangeSentenceId = payloadId
     ? ""
@@ -835,12 +934,13 @@ export async function appendAcceptedSessionCheckpoint({
   return { ...acceptedTurn, snapshotArtifact, sessionFile };
 }
 
-export async function readSessionMessages({ sessionFile, historyWindow = 50 } = {}) {
-  if (!sessionFile) return { messages: [], lastSystemModel: null };
+export async function readSessionMessages({ sessionFile, historyWindow = 50, includePending = false } = {}) {
+  if (!sessionFile) return { messages: [], pendingTurns: [], lastSystemModel: null };
   const sentences = await readSessionSentences({ sessionFile });
-  const projected = projectSessionMessages({ sentences, historyWindow });
+  const projected = projectSessionMessages({ sentences, historyWindow, includePending });
   return {
     messages: projected.messages,
+    pendingTurns: projected.pendingTurns,
     lastSystemModel: projected.lastSystemModel
   };
 }
@@ -858,11 +958,12 @@ export function buildSessionNameForDate({ baseName, dateCompact }) {
 export async function readSessionMessagesWithFallback({
   sessionDir,
   baseName,
-  historyWindow = 50
+  historyWindow = 50,
+  includePending = false
 } = {}) {
-  if (!sessionDir || !baseName) return { messages: [], lastSystemModel: null };
+  if (!sessionDir || !baseName) return { messages: [], pendingTurns: [], lastSystemModel: null };
   const maxPairs = normalizeHistoryWindow(historyWindow, { defaultPairs: 50 });
-  if (maxPairs <= 0) return { messages: [], lastSystemModel: null };
+  if (maxPairs <= 0) return { messages: [], pendingTurns: [], lastSystemModel: null };
   const todayKey = formatCompactDate(new Date());
   const todayName = buildSessionNameForDate({ baseName, dateCompact: todayKey });
   const todayFile = path.join(sessionDir, sessionFilename({ sessionName: todayName }));
@@ -875,10 +976,12 @@ export async function readSessionMessagesWithFallback({
   ]);
   const projected = projectSessionMessages({
     sentences: [...yesterdaySentences, ...todaySentences],
-    historyWindow
+    historyWindow,
+    includePending
   });
   return {
     messages: projected.messages,
+    pendingTurns: projected.pendingTurns,
     lastSystemModel: projected.lastSystemModel
   };
 }

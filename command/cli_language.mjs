@@ -137,10 +137,24 @@ function normalizeBindingTail(tail) {
   return normalized;
 }
 
-function forwardChild(entryPath, args, { input = undefined, interactive = false } = {}) {
+function forwardChild(entryPath, args, { input = undefined, interactive = false, stream = false } = {}) {
   const options = { cwd: process.cwd(), env: process.env, encoding: "utf8" };
   if (interactive) options.stdio = "inherit";
   else if (input !== undefined) options.input = input;
+  if (stream) {
+    return new Promise((resolve) => {
+      const child = spawn(process.execPath, [entryPath, ...args], {
+        cwd: process.cwd(),
+        env: process.env,
+        stdio: "inherit"
+      });
+      child.on("error", (error) => {
+        console.error(error.message);
+        resolve(1);
+      });
+      child.on("close", (status) => resolve(status ?? 1));
+    });
+  }
   const child = spawnSync(process.execPath, [entryPath, ...args], options);
   if (!interactive) {
     if (child.stdout) process.stdout.write(child.stdout);
@@ -174,13 +188,15 @@ async function runCommand(args) {
     }
     const program = sentence.from.filename;
     if (!(await ensureProgram(program))) return usage("run", `program unavailable: ${program}`);
-    return forwardChild(runnerPath, [...options, program, ...normalizeBindingTail(positional.slice(3))]);
+    return forwardChild(runnerPath, [...options, program, ...normalizeBindingTail(positional.slice(3))], {
+      stream: options.includes("--verbose")
+    });
   }
 
   const program = positional[0];
   if (!program) return usage("run", "program filename is required");
   if (!(await ensureProgram(program))) return usage("run", `program unavailable: ${program}`);
-  return forwardChild(runnerPath, args);
+  return forwardChild(runnerPath, args, { stream: options.includes("--verbose") });
 }
 
 async function compileCommand(args) {

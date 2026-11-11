@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { parse } from "../program/understand/index.mjs";
+import gpu from "../program/verbs/gpu.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { doRemember, forget } from "../program/remember/index.mjs";
 import { runGpuWorkerOnce } from "../program/runtime/gpu/worker.mjs";
@@ -66,7 +67,7 @@ test("gpu mind status and await follow durable duty lifecycle through worker", a
   assert.equal(submitted[0]?.profileName, "llama3.2");
   assert.equal(submitted[0]?.jobSpec?.kind, "ollama-generate");
   assert.equal(submitted[0]?.jobSpec?.prompt, "teach fractions briefly");
-  assert.equal(submitted[0]?.jobSpec?.resourceRequest?.vramRequiredMb, 12000);
+  assert.equal(submitted[0]?.jobSpec?.resourceRequest, undefined);
 
   const state = await readGpuHandleStatus(worldRoot, "gpu handle one");
   assert.equal(state?.status, "success");
@@ -78,6 +79,35 @@ test("gpu mind status and await follow durable duty lifecycle through worker", a
   assert.equal(awaited?.ob?.text, "success");
   assert.equal(awaited?.fromstate?.text, "ollama ok");
   assert.match(awaited?.result?.text, /Fractions are equal parts\./);
+});
+
+test("interpreted GPU await stays with the GPU lifecycle handler", async () => {
+  forget();
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-gpu-interpret-await-"));
+  const worldRoot = path.join(root, "world");
+  setWorldRoot(worldRoot);
+  await run('su name interpreted gpu handle ob text "queued prompt" vyah start future be gpu mind do');
+  await runGpuWorkerOnce({
+    worldRoot,
+    adapter: {
+      async submitJob() {
+        return { remoteJobId: "interpreted-remote-1" };
+      },
+      async getJobStatus() {
+        return {
+          status: "success",
+          message: "interpreted gpu ok",
+          result: { response: "interpreted result" },
+          finishedAt: new Date().toISOString()
+        };
+      }
+    },
+    maxPolls: 2
+  });
+  const awaited = await interpret(parse('accordingto text "interpreted gpu handle" vyah await be gpu do'));
+  assert.equal(awaited?.ob?.text, "success");
+  assert.equal(awaited?.vyah?.ve?.values?.[0], "await");
+  assert.equal(awaited?.result?.text, '{"response":"interpreted result"}');
 });
 
 test("gpu mind preserves an explicit VRAM request in the durable Housekeeper envelope", async () => {

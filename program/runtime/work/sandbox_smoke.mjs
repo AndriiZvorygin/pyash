@@ -17,12 +17,6 @@ async function git(cwd, ...args) {
   return execFileAsync("git", args, { cwd, maxBuffer: 4 * 1024 * 1024 });
 }
 
-async function removeWorktree(repository, worktree) {
-  try {
-    await git(repository, "worktree", "remove", "--force", worktree);
-  } catch {}
-}
-
 export async function runSandboxSmoke({
   repositoryRoot = process.cwd(),
   threadSandbox = "workspace-write",
@@ -32,7 +26,6 @@ export async function runSandboxSmoke({
 } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-sandbox-smoke-"));
   const repository = path.join(root, "fixture");
-  const worktree = path.join(root, "worktree");
   let client;
   try {
     await fs.mkdir(repository, { recursive: true });
@@ -43,24 +36,21 @@ export async function runSandboxSmoke({
     await fs.writeFile(path.join(repository, "test.mjs"), "import fs from \"node:fs\"; if (fs.readFileSync(\"smoke-result.txt\", \"utf8\") !== \"sandbox smoke passed\\n\") process.exit(1); console.log(\"smoke test passed\");\n", "utf8");
     await git(repository, "add", "SMOKE.md", "test.mjs");
     await git(repository, "commit", "-qm", "sandbox smoke fixture");
-    const revision = text((await git(repository, "rev-parse", "HEAD")).stdout);
-    await git(repository, "worktree", "add", "--detach", worktree, revision);
-
     const preflight = await inspectWorkExecutionPreflight({
       repositoryRoot,
-      worktreePath: worktree,
+      worktreePath: repository,
       threadSandbox,
       turnSandboxPolicy,
       model
     });
-    if (!preflight.ok) return { status: "blocked", phase: "preflight", preflight, repository, worktree };
+    if (!preflight.ok) return { status: "blocked", phase: "preflight", preflight, repository, checkout: repository };
 
     client = await spawnCodexAppServer({});
-    const started = await startCodexThread(client, { cwd: worktree, model, sandbox: threadSandbox });
+    const started = await startCodexThread(client, { cwd: repository, model, sandbox: threadSandbox });
     const threadId = threadIdFromResponse(started);
     const result = await runCodexTurn(client, {
       threadId,
-      cwd: worktree,
+      cwd: repository,
       model,
       approvalPolicy: "never",
       sandboxPolicy: turnSandboxPolicy,
@@ -68,10 +58,10 @@ export async function runSandboxSmoke({
       timeoutMs,
       input: [{
         type: "text",
-        text: "You are performing a disposable Pyash sandbox smoke test. Work only in the assigned worktree. Read SMOKE.md, create smoke-result.txt with exactly the requested contents, run node test.mjs, and report the file, command, output, and git status. Do not modify any other file and do not commit."
+        text: "You are performing a disposable Pyash sandbox smoke test in this temporary fixture repository. Read SMOKE.md, create smoke-result.txt with exactly the requested contents, run node test.mjs, and report the file, command, output, and git status. Do not modify any other file and do not commit."
       }]
     });
-    const smokeFile = path.join(worktree, "smoke-result.txt");
+    const smokeFile = path.join(repository, "smoke-result.txt");
     let contents = "";
     try {
       contents = await fs.readFile(smokeFile, "utf8");
@@ -81,7 +71,7 @@ export async function runSandboxSmoke({
         phase: "verification",
         sandbox: { thread: threadSandbox, turn: turnSandboxPolicy?.type || "workspaceWrite" },
         repository,
-        worktree,
+        checkout: repository,
         preflight,
         threadId,
         turnId: result.turnId,
@@ -90,15 +80,15 @@ export async function runSandboxSmoke({
         error: `smoke result missing: ${text(error?.message || error)}`
       };
     }
-    const test = await execFileAsync(process.execPath, ["test.mjs"], { cwd: worktree, maxBuffer: 1024 * 1024 });
-    const status = text((await git(worktree, "status", "--short")).stdout);
-    const diff = text((await git(worktree, "diff", "--no-ext-diff")).stdout);
+    const test = await execFileAsync(process.execPath, ["test.mjs"], { cwd: repository, maxBuffer: 1024 * 1024 });
+    const status = text((await git(repository, "status", "--short")).stdout);
+    const diff = text((await git(repository, "diff", "--no-ext-diff")).stdout);
     return {
       status: "passed",
       phase: "completed",
       sandbox: { thread: threadSandbox, turn: turnSandboxPolicy?.type || "workspaceWrite" },
       repository,
-      worktree,
+      checkout: repository,
       preflight,
       threadId,
       turnId: result.turnId,
@@ -114,14 +104,13 @@ export async function runSandboxSmoke({
       phase: "execution",
       sandbox: { thread: threadSandbox, turn: turnSandboxPolicy?.type || "workspaceWrite" },
       repository,
-      worktree,
+      checkout: repository,
       error: text(error?.message || error)
     };
   } finally {
     try {
       await client?.close?.();
     } catch {}
-    await removeWorktree(repository, worktree);
     await fs.rm(root, { recursive: true, force: true });
   }
 }

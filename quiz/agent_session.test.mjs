@@ -6,11 +6,14 @@ import fs from "node:fs/promises";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget, doRemember } from "../program/remember/index.mjs";
+import { deriveSignatureFromCall, joinSignatureWords } from "../program/bridge/signature.mjs";
+import { applyEnvDefaults } from "../program/configure/env.mjs";
 import { mind_to_name_text } from "../program/verbs/mind/mind.mjs";
 import {
   ensureSessionFile,
   appendSessionEntry,
   readSessionMessages,
+  readSessionReplay,
   normalizeHistoryWindow,
   beginSessionTurn,
   completeSessionTurn
@@ -196,6 +199,8 @@ test("session turn user record is durable before completion and pending tails st
 
   const history = await readSessionMessages({ sessionFile, historyWindow: 10 });
   assert.deepEqual(history.messages, []);
+  const saddleHistory = await readSessionMessages({ sessionFile, historyWindow: 10, includePending: true });
+  assert.deepEqual(saddleHistory.messages, [{ role: "user", content: "pending request", pending: true, turnId: started.turnId }]);
 
   const resumed = await beginSessionTurn({
     sessionFile,
@@ -271,6 +276,117 @@ test("ordinal fallback creates a new turn for a later identical request", async 
   assert.notEqual(second.turnId, first.turnId);
 });
 
+test("an exchange sentence id creates a new turn for a later identical request", async () => {
+  // An exchange sentence id names the position of a sentence in a run, not
+  // the exchange itself. Two runs that reach the same position must not
+  // claim one turn, so a repeated question is answered again.
+  const tempRoot = path.resolve("/tmp/pyash-agent-session-exchange-turn-test");
+  await fs.rm(tempRoot, { recursive: true, force: true });
+  await fs.mkdir(tempRoot, { recursive: true });
+  const sessionFile = await ensureSessionFile({
+    sessionDir: tempRoot,
+    sessionName: "exchange",
+    systemPrompt: "system",
+    model: "model"
+  });
+
+  const first = await beginSessionTurn({
+    sessionFile,
+    userContent: "repeatable request",
+    request: { prompt: "repeatable request" },
+    metadata: { exchangeSentenceId: "evoke-2" }
+  });
+  await completeSessionTurn({ sessionFile, turn: first, responseText: "first response" });
+  const second = await beginSessionTurn({
+    sessionFile,
+    userContent: "repeatable request",
+    request: { prompt: "repeatable request" },
+    metadata: { exchangeSentenceId: "evoke-2" }
+  });
+
+  assert.match(first.turnId, /evoke-2/);
+  assert.notEqual(second.turnId, first.turnId);
+  assert.equal(second.status, "pending");
+  assert.equal(second.ordinal, 2);
+});
+
+test("two runs at the same sentence position do not make the session defective", async () => {
+  // The audit ran the same session file from two different programs. Both
+  // reached the same sentence position, and the shared ledger reported
+  // conflicting evidence for the one turn id they both claimed.
+  const tempRoot = path.resolve("/tmp/pyash-agent-session-exchange-collision-test");
+  await fs.rm(tempRoot, { recursive: true, force: true });
+  await fs.mkdir(tempRoot, { recursive: true });
+  const sessionFile = await ensureSessionFile({
+    sessionDir: tempRoot,
+    sessionName: "collision",
+    systemPrompt: "system",
+    model: "model"
+  });
+
+  const first = await beginSessionTurn({
+    sessionFile,
+    userContent: "what tools do you have?",
+    request: { prompt: "what tools do you have?" },
+    metadata: { exchangeSentenceId: "evoke-2" }
+  });
+  await completeSessionTurn({ sessionFile, turn: first, responseText: "the tools" });
+  const second = await beginSessionTurn({
+    sessionFile,
+    userContent: "say hello",
+    request: { prompt: "say hello" },
+    metadata: { exchangeSentenceId: "evoke-2" }
+  });
+  await completeSessionTurn({ sessionFile, turn: second, responseText: "hello" });
+
+  const replay = await readSessionReplay({ sessionFile, historyWindow: 0 });
+  assert.equal(replay.turns.length, 2);
+  assert.equal(replay.turns[0].records.assistant.content, "the tools");
+  assert.equal(replay.turns[1].records.assistant.content, "hello");
+});
+
+test("a session keeps one ordinal across the files of a day", async () => {
+  // A live session spans the file for today and the file for yesterday, so
+  // the same ordinal must not be handed out twice in one session.
+  const tempRoot = path.resolve("/tmp/pyash-agent-session-window-ordinal-test");
+  await fs.rm(tempRoot, { recursive: true, force: true });
+  await fs.mkdir(tempRoot, { recursive: true });
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10).replace(/-/g, "");
+  const yesterdayDate = new Date(now);
+  yesterdayDate.setUTCDate(yesterdayDate.getUTCDate() - 1);
+  const yesterday = yesterdayDate.toISOString().slice(0, 10).replace(/-/g, "");
+  const yesterdayFile = await ensureSessionFile({
+    sessionDir: tempRoot,
+    sessionName: `${yesterday}-window`,
+    systemPrompt: "system",
+    model: "model"
+  });
+  const todayFile = await ensureSessionFile({
+    sessionDir: tempRoot,
+    sessionName: `${today}-window`,
+    systemPrompt: "system",
+    model: "model"
+  });
+
+  const first = await beginSessionTurn({
+    sessionFile: yesterdayFile,
+    userContent: "what tools do you have?",
+    request: { prompt: "what tools do you have?" },
+    metadata: { exchangeSentenceId: "evoke-2" }
+  });
+  await completeSessionTurn({ sessionFile: yesterdayFile, turn: first, responseText: "the tools" });
+  const second = await beginSessionTurn({
+    sessionFile: todayFile,
+    userContent: "what tools do you have?",
+    request: { prompt: "what tools do you have?" },
+    metadata: { exchangeSentenceId: "evoke-2" }
+  });
+
+  assert.notEqual(second.turnId, first.turnId);
+  assert.equal(second.ordinal, first.ordinal + 1);
+});
+
 test("completion resumes an assistant tail by adding only its missing checkpoint", async () => {
   const tempRoot = path.resolve("/tmp/pyash-agent-session-assistant-tail-test");
   await fs.rm(tempRoot, { recursive: true, force: true });
@@ -336,5 +452,68 @@ test("agent mind returns the durable response when a completed request is replay
   } finally {
     if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
     else process.env.PYA_MIND_RESPONSE = original;
+  }
+});
+
+test("after-tool duty input is persisted beside its active coding turn", async () => {
+  forget();
+  const original = process.env.PYA_MIND_RESPONSE;
+  const tmpRoot = await fs.mkdtemp(path.join("/tmp", "pyash-session-after-tool-"));
+  delete process.env.PYA_MIND_RESPONSE;
+  try {
+    doRemember({ mood: "ya", su: { name: "world root" }, be: "root", ob: { filename: tmpRoot } });
+    await interpret(parse("su name tools be map def"));
+    await interpret(parse("su name agent ob bool truth ya"));
+    await interpret(parse('su name session name ob text "after-tool" ya'));
+    const capability = parse("su name plus num be plus ob num 1 to name num can");
+    const toolName = joinSignatureWords(deriveSignatureFromCall(capability));
+    await interpret(capability);
+    await interpret(parse("prah"));
+    await interpret(parse('exists su name helper be mind via state "qwen3" fromstate text "ollama" ya'));
+    process.env.PYA_MIND_RESPONSE = JSON.stringify([
+      {
+        message: {
+          role: "assistant",
+          content: "",
+          tool_calls: [{
+            id: "duty-tool-call",
+            function: { name: toolName, arguments: { ob: 2, to: "sum" } }
+          }]
+        }
+      },
+      { message: { role: "assistant", content: "I checked the result." } }
+    ]);
+    applyEnvDefaults();
+    const sentence = parse(`be write ob text "calculate" for name helper to name text helper-out with name tools at filename "${tmpRoot}" do`);
+    const result = await mind_to_name_text(sentence, {
+      onToolCall: async (event) => event.stage === "result"
+        ? { saddleMessages: [{
+          id: "duty-message-after-tool",
+          text: "Check the calculated result before answering.",
+          deliveredAt: new Date().toISOString()
+        }] }
+        : undefined
+    });
+    assert.equal(result.ob.text, "I checked the result.");
+    const sessionDir = path.join(tmpRoot, "session");
+    const [sessionName] = (await fs.readdir(sessionDir)).filter((name) => name.endsWith(".pya"));
+    const sessionFile = path.join(sessionDir, sessionName);
+    const transcript = await fs.readFile(sessionFile, "utf8");
+    assert.match(transcript, /su name session message/);
+    assert.match(transcript, /duty-message-after-tool/);
+    const history = await readSessionMessages({ sessionFile, historyWindow: 10 });
+    assert.deepEqual(history.messages.map((message) => message.content), [
+      "calculate",
+      "Check the calculated result before answering.",
+      "I checked the result."
+    ]);
+    const replay = await readSessionReplay({ sessionFile, historyWindow: 10 });
+    assert.equal(replay.turns.length, 1);
+    assert.equal(replay.turns[0].complete, true);
+  } finally {
+    if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = original;
+    forget();
+    await fs.rm(tmpRoot, { recursive: true, force: true });
   }
 });

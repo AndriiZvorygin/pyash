@@ -7,7 +7,7 @@ from filename "../../module/chip_refinery.pya" ob name chip to name chip be impo
 exists su name confederation session chip style prompt ob text quoted.text.Create wise chips where each chip contains one full question and its full corresponding answer from this channeling session. Preserve complete question and answer units. Do not split a question away from its answer. Prefer chip boundaries at the beginning of each new question..text.quoted be text ya
 
 exists su name confederation session chip config be map def
-  su name kind ob text "pair" ya
+  su name sort ob text "pair" ya
   su name minimum chars ob num 350 ya
   su name first require patterns ob ve text "/\\?/u" "/\\bmy question is\\b/iu" "/\\bi was wondering\\b/iu" "/\\bcould you\\b/iu" "/\\bwould you\\b/iu" "/\\bcan you\\b/iu" ya
   su name first drop patterns ob ve text "/answers? my question/iu" "/^####\\s+\\w+\\s*\\n(?:No|Yes),?\\s+thank you/imu" "/^####\\s+\\w+\\s*\\nI think that that answers my question/imu" ya

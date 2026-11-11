@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { cutFromFilenameToNameItinerary, cutFromTextToNameItinerary } from "../program/verbs/itinerary_media.mjs";
+import { cutFromFilenameToNameItinerary, cutFromTextToNameItinerary } from "../program/verbs/itinerary/cut.mjs";
 
 test("cut groups rapid subtitle rows into target window cuts", async () => {
   const dir = path.resolve("quiz/sandpit");

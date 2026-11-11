@@ -6,6 +6,7 @@ import { throwErrorSentence } from "../error.mjs";
 
 let exchangeRecorder = null;
 let exchangeRunRoot = null;
+let exchangeArtifactRoot = null;
 let exchangeRunId = null;
 let exchangeSentenceId = null;
 const artifactByLocator = new Map();
@@ -25,9 +26,12 @@ function normalizeRunRoot(value) {
 
 function normalizePath(locator) {
   const runRoot = exchangeRunRoot ?? normalizeRunRoot(process.cwd());
-  const resolved = path.resolve(runRoot, locator);
+  const raw = String(locator);
+  const resolved = path.resolve(runRoot, raw);
   const relative = path.relative(runRoot, resolved);
   if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    // Preserve explicit external locators without allowing relative traversal.
+    if (path.isAbsolute(raw)) return resolved.replace(/[\\]+/g, "/");
     throwErrorSentence({
       name: "exchange defective",
       message: "exchange defective",
@@ -38,9 +42,12 @@ function normalizePath(locator) {
   return relative.replace(/[\\]+/g, "/");
 }
 
-export function setExchangeRecorder({ record, runRoot } = {}) {
+export function setExchangeRecorder({ record, runRoot, artifactRoot } = {}) {
   exchangeRecorder = typeof record === "function" ? record : null;
   exchangeRunRoot = runRoot ? normalizeRunRoot(runRoot) : null;
+  exchangeArtifactRoot = artifactRoot
+    ? normalizeRunRoot(artifactRoot)
+    : exchangeRunRoot;
   exchangeRunId = null;
   exchangeSentenceId = null;
   artifactByLocator.clear();
@@ -54,6 +61,7 @@ export function setExchangeRecorder({ record, runRoot } = {}) {
 export function clearExchangeRecorder() {
   exchangeRecorder = null;
   exchangeRunRoot = null;
+  exchangeArtifactRoot = null;
   exchangeRunId = null;
   exchangeSentenceId = null;
   artifactByLocator.clear();
@@ -65,7 +73,9 @@ export function clearExchangeRecorder() {
 }
 
 export function setExchangeRunRoot(runRoot) {
+  const priorRunRoot = exchangeRunRoot;
   exchangeRunRoot = runRoot ? normalizeRunRoot(runRoot) : null;
+  if (exchangeArtifactRoot === priorRunRoot) exchangeArtifactRoot = exchangeRunRoot;
 }
 
 export function setExchangeRunId(runId) {
@@ -114,6 +124,28 @@ function hashBytes(bytes) {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
+function safeArtifactSegment(value, fallback = "artifact") {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/gu, "-")
+    .replace(/^-+|-+$/gu, "") || fallback;
+}
+
+export function recordExchangeJsonArtifact({ identity, label, producer = "exchange", payload, directory = "mind" } = {}) {
+  if (!exchangeRecorder || !exchangeStrict || !exchangeRunId) return null;
+  const serialized = JSON.stringify(payload, null, 2);
+  if (typeof serialized !== "string") return null;
+  const bytes = Buffer.from(serialized, "utf8");
+  const digest = hashBytes(bytes);
+  const locator = path.join(
+    "artifacts",
+    safeArtifactSegment(exchangeRunId, "run"),
+    safeArtifactSegment(directory, "exchange"),
+    `${safeArtifactSegment(identity, "mind")}-${safeArtifactSegment(label, "payload")}-${digest}.json`
+  ).replace(/[\\]+/gu, "/");
+  return recordArtifact({ locator, producer, bytes, kind: "json" });
+}
+
 function artifactExtension(locator) {
   if (!locator) return "";
   try {
@@ -130,11 +162,19 @@ function contentAddressPath(hash, locator) {
   return parts.join("/");
 }
 
+function artifactRoot() {
+  return exchangeArtifactRoot ?? exchangeRunRoot ?? normalizeRunRoot(process.cwd());
+}
+
+function isRunArtifactLocator(locator) {
+  if (!exchangeRunId) return false;
+  return String(locator ?? "").replace(/[\\]+/g, "/").startsWith(`artifacts/${exchangeRunId}/`);
+}
+
 function writeContentAddressed({ hash, locator, bytes } = {}) {
   if (!hash || !bytes) return null;
   const rel = contentAddressPath(hash, locator);
-  const runRoot = exchangeRunRoot ?? normalizeRunRoot(process.cwd());
-  const abs = path.resolve(runRoot, rel);
+  const abs = path.resolve(artifactRoot(), rel);
   fs.mkdirSync(path.dirname(abs), { recursive: true });
   fs.writeFileSync(abs, bytes);
   return { relative: rel, absolute: abs };
@@ -177,10 +217,9 @@ function linkRunAlias({ name, target, locator } = {}) {
     // Already stored in this run folder; avoid duplicate alias files.
     return null;
   }
-  const runRoot = exchangeRunRoot ?? normalizeRunRoot(process.cwd());
   const alias = runAliasName({ artifactName: name, locator });
   const rel = ["artifacts", exchangeRunId, alias].join("/");
-  const abs = path.resolve(runRoot, rel);
+  const abs = path.resolve(artifactRoot(), rel);
   fs.mkdirSync(path.dirname(abs), { recursive: true });
   if (!fs.existsSync(abs)) {
     try {
@@ -198,8 +237,14 @@ function linkRunAlias({ name, target, locator } = {}) {
 
 function materializeLocator({ locator, target, bytes } = {}) {
   if (!locator || isUri(locator)) return null;
-  const runRoot = exchangeRunRoot ?? normalizeRunRoot(process.cwd());
+  const runRoot = isRunArtifactLocator(locator)
+    ? artifactRoot()
+    : exchangeRunRoot ?? normalizeRunRoot(process.cwd());
   const abs = path.resolve(runRoot, locator);
+  const relative = path.relative(runRoot, abs);
+  if (path.isAbsolute(locator) && (relative.startsWith("..") || path.isAbsolute(relative))) {
+    return fs.existsSync(abs) ? abs : null;
+  }
   fs.mkdirSync(path.dirname(abs), { recursive: true });
   if (fs.existsSync(abs)) return abs;
   if (target && path.resolve(target) !== abs) {
@@ -269,32 +314,27 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind, re
   if (existing) {
     artifactLocatorByName.set(existing, normalized);
     if (producer && kind !== "metadata") artifactLatestByProducer.set(String(producer), normalized);
-    if (hash) {
-      const priorHash = artifactHashes.get(existing);
-      if (priorHash && priorHash !== hash) {
-        throwErrorSentence({
-          name: "hash inconsistency",
-          message: `hash inconsistency at ${normalized}`,
-          from: { name: "exchange" },
-          raw: { locator: normalized }
-        });
+    const priorHash = artifactHashes.get(existing);
+    const changedVersion = hash && priorHash && priorHash !== hash;
+    if (!changedVersion) {
+      if (hash && !priorHash) artifactHashes.set(existing, hash);
+      if (hash && bytes) {
+        const written = writeContentAddressed({ hash, locator: normalized, bytes });
+        materializeLocator({ locator: normalized, target: written?.absolute, bytes });
+        linkRunAlias({ name: existing, target: written?.absolute, locator: normalized });
       }
-      if (!priorHash) artifactHashes.set(existing, hash);
+      return {
+        mood: "ya",
+        exists: true,
+        be: "artifact",
+        su: { name: existing },
+        ob: correlation,
+        to: { filename: normalized },
+        from: { name: producer }
+      };
     }
-    if (hash && bytes) {
-      const written = writeContentAddressed({ hash, locator: normalized, bytes });
-      materializeLocator({ locator: normalized, target: written?.absolute, bytes });
-      linkRunAlias({ name: existing, target: written?.absolute, locator: normalized });
-    }
-    return {
-      mood: "ya",
-      exists: true,
-      be: "artifact",
-      su: { name: existing },
-      ob: correlation,
-      to: { filename: normalized },
-      from: { name: producer }
-    };
+    // Fall through to a new artifact name for a changed snapshot. The
+    // filesystem locator can change; each artifact hash remains immutable.
   }
   const sentence = {
     mood: "ya",
@@ -308,7 +348,6 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind, re
   if (hash) {
     sentence.accordingto = { name: "sha256" };
     sentence.fromtext = { text: hash };
-    artifactHashes.set(sentence.su.name, hash);
     const written = writeContentAddressed({ hash, locator: normalized, bytes });
     materializeLocator({ locator: normalized, target: written?.absolute, bytes });
     linkRunAlias({ name: sentence.su.name, target: written?.absolute, locator: normalized });
@@ -319,10 +358,11 @@ export function recordArtifact({ locator, producer = "exchange", bytes, kind, re
   if (kind) {
     sentence.as = { name: kind };
   }
+  exchangeRecorder(sentence);
+  if (hash) artifactHashes.set(sentence.su.name, hash);
   artifactByLocator.set(normalized, sentence.su.name);
   artifactLocatorByName.set(sentence.su.name, normalized);
   if (producer && kind !== "metadata") artifactLatestByProducer.set(String(producer), normalized);
-  exchangeRecorder(sentence);
   return sentence;
 }
 
@@ -362,7 +402,10 @@ export function emitExchangeSentence(sentence) {
 export function hashLocator(locator) {
   if (!locator) return null;
   const normalized = normalizeLocator(locator);
-  const absPath = path.resolve(exchangeRunRoot ?? normalizeRunRoot(process.cwd()), normalized);
+  const runRoot = isRunArtifactLocator(normalized)
+    ? artifactRoot()
+    : exchangeRunRoot ?? normalizeRunRoot(process.cwd());
+  const absPath = path.resolve(runRoot, normalized);
   const bytes = fs.readFileSync(absPath);
   const hash = hashBytes(bytes);
   const size = bytes.length;

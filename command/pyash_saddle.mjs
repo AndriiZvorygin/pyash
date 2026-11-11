@@ -1,48 +1,331 @@
 #!/usr/bin/env node
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 import readline from "node:readline/promises";
+import { writeSync } from "node:fs";
+import fs from "node:fs/promises";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
-import { forget, remember, doRemember } from "../program/remember/index.mjs";
+import { allRemember, forget, remember, doRemember } from "../program/remember/index.mjs";
 import { setEntryModulePath } from "../program/bridge/modules.mjs";
 import { loadDefaultConfig } from "./run_pya_helpers.mjs";
 import { resolveConfigText } from "../program/configure/env.mjs";
-import { resolveAgentHouse, ensureAgentDirs } from "../program/agent/session.mjs";
+import {
+  ensureAgentDirs,
+  buildSessionNameForDate,
+  buildSessionNamePrefix,
+  listSessionFiles,
+  readSessionMessages,
+  readSessionMessagesWithFallback
+} from "../program/agent/session.mjs";
+import {
+  getCodingSaddleProfile,
+  readCodingSaddleState,
+  setCodingSaddleProfile,
+  writeCodingSaddleState
+} from "../program/agent/coding_saddle_state.mjs";
 import { mind_to_name_text } from "../program/verbs/mind/mind.mjs";
-import { requestMindInterrupt } from "../program/agent/interrupt.mjs";
+import {
+  beginActiveMindRun,
+  consumeMindInterrupt,
+  requestMindInterrupt,
+  runWithMindInterruptSignal
+} from "../program/agent/interrupt.mjs";
+import { startStreamTail } from "../program/verbs/mind/stream.mjs";
 import { queueDepth } from "../program/runtime/gpu/queue.mjs";
-import { dischargeOllamaMind } from "../program/motor/ollama_admin.mjs";
-import { fetchWebModels } from "./pyash_web_server.mjs";
+import { createGpuHousekeeperAdapter } from "../program/runtime/gpu/housekeeper_adapter.mjs";
+import { resolveGpuHousekeeperUrl } from "../program/runtime/gpu/managed-ollama.mjs";
+import {
+  formatZaiContextWindow,
+  getZaiCodexContextWindow,
+  getZaiContextWindowOptions,
+  getZaiModelContextLimit,
+  setZaiCodexContextWindow,
+  syncZaiCodexModelCatalog
+} from "../program/runtime/zai_coding_plan.mjs";
 import { requestCodingDutyHub, resolveCodingDutyHub } from "../program/agent/coding_duty_client.mjs";
+import { createSaddleTerminalUi } from "../program/agent/coding_saddle_tui.mjs";
+import { createCodingSaddleTrace } from "../program/agent/coding_saddle_trace.mjs";
+import { registerArtifactRun } from "../program/library/artifact_store_lock.mjs";
+import { rotateWorldNewspapers } from "../program/agent/newspaper_retention.mjs";
+import {
+  ensureCodingSaddleHouse,
+  resolveCodingSaddleHousePath,
+  seedCodingSaddleHouseGuide
+} from "../program/agent/coding_saddle_house.mjs";
+import {
+  clearCodingSaddlePlan,
+  formatCodingSaddlePlan,
+  readCodingSaddlePlan,
+  saddlePlanPath,
+  updateCodingSaddlePlan
+} from "../program/agent/coding_saddle_plan.mjs";
+import {
+  appendSaddleUsage,
+  formatSaddleUsageSummary,
+  readSaddleUsageSummary
+} from "../program/agent/coding_saddle_usage.mjs";
+import {
+  estimateSaddleInputTokens,
+  generateSaddleContextSummary,
+  measureSaddleContextPressure,
+  readSaddleContextCheckpoint,
+  saddleContextCheckpointPath,
+  shouldCompactSaddleContext,
+  writeSaddleContextCheckpoint,
+  SADDLE_COMPACTION_RECENT_PAIRS,
+  SADDLE_DEFAULT_HISTORY_PAIRS
+} from "../program/agent/coding_saddle_context.mjs";
+import { formatMindUsage, normalizeMindUsage, sumMindUsages } from "../program/verbs/mind/usage.mjs";
 import {
   buildSaddleMindSentence,
+  buildSaddleOllamaContextOptions,
+  buildSaddleStrataContextOptions,
+  buildSaddleWorktreeReviewCommand,
+  formatSaddleCompletionEvidence,
+  runSaddleTurnWithEvidence,
   createSaddleInputDecoder,
   DEFAULT_CODING_SADDLE_SYSTEM_PROMPT,
   discoverSaddleModels,
+  getSaddleOllamaModelContextLength,
+  formatSaddleBackendPicker,
   formatSaddleModelPicker,
   formatSaddleStatus,
+  listSaddleBackendOptions,
+  listSaddleMindNames,
   normalizeSaddleBackend,
   normalizeSaddleHost,
   normalizeSaddleModel,
+  normalizeSaddleThinkSelection,
+  resolveSaddleThinkSetting,
   resolveSaddleModelOption,
-  saddleToolEventLabel
+  resolveSaddleMindProfile,
+  parseSaddleMindCommand,
+  saddleToolEventLabel,
+  saddleSlashCommandCompletions,
+  startSaddleProgress
 } from "../program/agent/coding_saddle.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const AGENT_NAME = "coding saddle";
 const TOOL_MAP_NAME = "saddle tools";
 const SESSION_NAME = "coding";
+const RECENT_MODEL_SESSION = "__recent_model__";
+
+export function resolveSaddleProjectWorldRoot({ runtimeRoot, cwd } = {}) {
+  const resolvedRuntimeRoot = path.resolve(runtimeRoot || root);
+  const resolvedCwd = path.resolve(cwd || process.cwd());
+  if (resolvedCwd === resolvedRuntimeRoot) return path.join(resolvedRuntimeRoot, "world");
+  const projectId = createHash("sha256").update(resolvedCwd).digest("hex").slice(0, 24);
+  return path.join(resolvedRuntimeRoot, "world", "coding-saddle-projects", projectId);
+}
+
+function compactLocalDate(date) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}`;
+}
+
+async function findLatestOlderSessionFile({ sessionDir, sessionName }) {
+  let entries;
+  try {
+    entries = await fs.readdir(sessionDir, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return "";
+    throw error;
+  }
+
+  const today = buildSessionNamePrefix().slice(0, 8);
+  const yesterdayDate = new Date();
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterday = compactLocalDate(yesterdayDate);
+  const suffix = `${buildSessionNameForDate({ baseName: sessionName, dateCompact: "00000000" }).slice(8)}.pya`;
+  const candidates = entries
+    .filter((entry) => entry.isFile() && /^\d{8}/u.test(entry.name))
+    .map((entry) => ({ entry, date: entry.name.slice(0, 8) }))
+    .filter(({ entry, date }) => entry.name === `${date}${suffix}` && date < yesterday && date <= today)
+    .sort((left, right) => right.date.localeCompare(left.date));
+
+  for (const { entry } of candidates) {
+    const filename = path.join(sessionDir, entry.name);
+    const replay = await readSessionMessages({ sessionFile: filename, historyWindow: 1, includePending: true });
+    if (replay.messages.length || replay.pendingTurns.length) return filename;
+  }
+  return "";
+}
+
+function isRelativePathWithin(directory, target) {
+  const relative = path.relative(directory, target);
+  return relative !== ""
+    && relative !== ".."
+    && !relative.startsWith(`..${path.sep}`)
+    && !path.isAbsolute(relative);
+}
+
+async function isPathWithin(directory, target) {
+  const resolvedDirectory = path.resolve(directory);
+  const resolvedTarget = path.resolve(target);
+  if (isRelativePathWithin(resolvedDirectory, resolvedTarget)) return true;
+  try {
+    const [realDirectory, realTarget] = await Promise.all([
+      fs.realpath(resolvedDirectory),
+      fs.realpath(resolvedTarget)
+    ]);
+    return isRelativePathWithin(realDirectory, realTarget);
+  } catch (error) {
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") return false;
+    throw error;
+  }
+}
 
 function configValue(name, fallback = "") {
   return String(resolveConfigText(name, { rememberFn: remember }) ?? fallback).trim();
 }
 
+function resolveSaddleHousekeeperUrl(cwd = process.cwd()) {
+  return resolveGpuHousekeeperUrl({
+    managerUrl: configValue("gpu housekeeper url"),
+    cwd
+  });
+}
+
+function isLocalModelBackend(backend) {
+  return ["ollama", "strata"].includes(normalizeSaddleBackend(backend));
+}
+
+export async function withLocalModelsManaged(backend, housekeeperUrl, action) {
+  if (!isLocalModelBackend(backend)) return action();
+  const managerUrl = resolveGpuHousekeeperUrl({ managerUrl: housekeeperUrl });
+  if (!managerUrl) throw new Error("local saddle models require a configured GPU Housekeeper URL");
+
+  const keys = ["PYA_GPU_HOUSEKEEPER_URL", "PYA_GPU_MANAGER_REQUIRED", "PYA_GPU_MANAGER_ALLOW_DIRECT"];
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+  process.env.PYA_GPU_HOUSEKEEPER_URL = managerUrl;
+  process.env.PYA_GPU_MANAGER_REQUIRED = "true";
+  process.env.PYA_GPU_MANAGER_ALLOW_DIRECT = "false";
+  try {
+    return await action();
+  } finally {
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    }
+  }
+}
+
+const CONSERVATIVE_LOCAL_CONTEXT_BUDGET = 8192;
+
+export async function prepareSaddleContextForTurn({
+  agentHouse,
+  sessionName,
+  sessionFile,
+  backend,
+  model,
+  host,
+  contextWindow,
+  systemPrompt,
+  userInput,
+  housekeeperUrl,
+  loadHistory = loadSaddleSessionHistory,
+  summarize = generateSaddleContextSummary
+} = {}) {
+  const filename = saddleContextCheckpointPath({ agentHouse, sessionName, sessionFile });
+  const checkpoint = await readSaddleContextCheckpoint(filename);
+  const budget = Number.isSafeInteger(Number(contextWindow)) && Number(contextWindow) > 0
+    ? Number(contextWindow)
+    : isLocalModelBackend(backend) ? CONSERVATIVE_LOCAL_CONTEXT_BUDGET : null;
+  const compactionWindow = checkpoint.summary
+    ? Math.min(SADDLE_COMPACTION_RECENT_PAIRS, checkpoint.historyWindow ?? SADDLE_COMPACTION_RECENT_PAIRS)
+    : SADDLE_DEFAULT_HISTORY_PAIRS;
+  const activeWindow = checkpoint.providerHistoryWindow == null
+    ? compactionWindow
+    : Math.min(compactionWindow, checkpoint.providerHistoryWindow);
+  const recent = await loadHistory({ agentHouse, sessionName, sessionFile, historyWindow: activeWindow });
+  const estimatedInputTokens = estimateSaddleInputTokens({
+    messages: recent.messages,
+    systemPrompt: [systemPrompt, checkpoint.summary].filter(Boolean).join("\n"),
+    userInput,
+    toolSchema: "Pyash coding tools: read, write, repair, command, list, see, interpret javascript"
+  });
+  const reportedInputTokens = checkpoint.measurement === "provider usage"
+    && !(checkpoint.summary && activeWindow === 0)
+    ? checkpoint.lastInputTokens
+    : null;
+  const pressure = measureSaddleContextPressure({
+    contextBudget: budget,
+    providerInputTokens: reportedInputTokens,
+    estimatedInputTokens
+  });
+  let next = {
+    ...checkpoint,
+    contextBudget: budget,
+    historyWindow: checkpoint.summary ? compactionWindow : SADDLE_COMPACTION_RECENT_PAIRS
+  };
+  if (shouldCompactSaddleContext(pressure)) {
+    if (checkpoint.summary && activeWindow === 0) {
+      throw new Error(`context remains above the 80% limit with summary-only history (${formatSaddleContextPressure(pressure)}); shorten the active request or increase the context window`);
+    }
+    const nextHistoryWindow = checkpoint.summary
+      ? Math.max(0, Math.floor(activeWindow / 2))
+      : SADDLE_COMPACTION_RECENT_PAIRS;
+    // The checkpoint summary already covers history older than the active window.
+    // Re-loading 50 exchanges here duplicated that context and could make compaction
+    // itself larger than the request it was meant to repair.
+    const keepMessages = Math.min(recent.messages.length, nextHistoryWindow * 2);
+    const olderMessages = recent.messages.slice(0, Math.max(0, recent.messages.length - keepMessages));
+    const summaryMessages = olderMessages.length ? olderMessages : recent.messages;
+    const result = await withLocalModelsManaged(backend, housekeeperUrl, () => summarize({
+      backend,
+      model,
+      host,
+      contextWindow: budget,
+      priorSummary: checkpoint.summary,
+      messages: summaryMessages
+    }));
+    next = {
+      ...checkpoint,
+      summary: result.summary,
+      lastInputTokens: null,
+      contextBudget: budget,
+      measurement: pressure.source,
+      historyWindow: nextHistoryWindow,
+      compactedAt: new Date().toISOString()
+    };
+    await writeSaddleContextCheckpoint(filename, next);
+  }
+  const resolvedCompactionWindow = next.summary
+    ? Math.min(SADDLE_COMPACTION_RECENT_PAIRS, next.historyWindow ?? SADDLE_COMPACTION_RECENT_PAIRS)
+    : SADDLE_DEFAULT_HISTORY_PAIRS;
+  return {
+    filename,
+    checkpoint: next,
+    summary: next.summary,
+    historyWindow: Math.min(resolvedCompactionWindow, next.providerHistoryWindow ?? SADDLE_DEFAULT_HISTORY_PAIRS),
+    providerHistoryWindow: next.providerHistoryWindow,
+    pressure,
+    compacted: Boolean(next.compactedAt && next.compactedAt !== checkpoint.compactedAt)
+  };
+}
+
 function resolveSaddleHost(backend) {
   if (backend === "ollama") return configValue("ollama host", "http://localhost:11434");
+  if (backend === "zai") return "https://api.z.ai/api/coding/paas/v4";
   return configValue("ai host", configValue("ollama host", "http://localhost:11434"));
+}
+
+function resolveConfiguredSaddleMind(mindName) {
+  const profile = remember(mindName);
+  const usesGlobalDefaults = String(mindName).trim().toLowerCase() === "mind" && !profile?.fromstate;
+  const selectedProfile = usesGlobalDefaults ? { ...profile, as: undefined, from: undefined } : profile;
+  return resolveSaddleMindProfile({
+    mindName,
+    profile: selectedProfile,
+    defaultBackend: normalizeSaddleBackend(configValue("mind backend", "ollama")),
+    defaultModel: configValue("mind model", "qwen3.5:9b"),
+    hostForBackend: resolveSaddleHost
+  });
 }
 
 async function importSaddleTools() {
@@ -73,6 +356,24 @@ function configureSaddle({ cwd, runtimeRoot = cwd, worldRoot = path.join(cwd, "w
   });
   doRemember({
     mood: "ya",
+    su: { name: "agent cwd" },
+    be: "cwd",
+    ob: { filename: path.resolve(cwd) }
+  });
+  doRemember({
+    mood: "ya",
+    su: { name: "agent home file access" },
+    be: "truth",
+    ob: { boolean: true }
+  });
+  doRemember({
+    mood: "ya",
+    su: { name: "agent cwd strict relative paths" },
+    be: "truth",
+    ob: { boolean: true }
+  });
+  doRemember({
+    mood: "ya",
     su: { name: "coding saddle system" },
     be: "text",
     ob: { text: systemPrompt }
@@ -90,23 +391,123 @@ function configureSaddle({ cwd, runtimeRoot = cwd, worldRoot = path.join(cwd, "w
 
 export async function prepareSaddle({
   cwd = process.cwd(),
-  runtimeRoot = cwd,
-  worldRoot = path.join(runtimeRoot, "world"),
+  runtimeRoot = root,
+  worldRoot,
+  mindName = process.env.PYA_SADDLE_MIND,
   model = process.env.PYA_SADDLE_MODEL,
-  backend = process.env.PYA_SADDLE_BACKEND,
   host = process.env.PYA_SADDLE_HOST,
   systemPrompt = DEFAULT_CODING_SADDLE_SYSTEM_PROMPT
 } = {}) {
   const resolvedCwd = path.resolve(cwd);
   const resolvedRuntimeRoot = path.resolve(runtimeRoot);
-  const resolvedWorldRoot = path.resolve(worldRoot);
+  const resolvedWorldRoot = path.resolve(worldRoot || resolveSaddleProjectWorldRoot({
+    runtimeRoot: resolvedRuntimeRoot,
+    cwd: resolvedCwd
+  }));
+  const globalWorldRoot = path.join(resolvedRuntimeRoot, "world");
   setEntryModulePath(resolvedCwd);
   forget();
   await loadDefaultConfig({ cwd: resolvedRuntimeRoot, interpretFn: interpret, entryPath: path.join(resolvedRuntimeRoot, "saddle.pya") });
   await importSaddleTools();
-  const resolvedBackend = normalizeSaddleBackend(backend || configValue("mind backend", "ollama"));
-  const resolvedModel = normalizeSaddleModel(model || configValue("mind model", "qwen3.5:9b"));
-  const resolvedHost = normalizeSaddleHost(host || resolveSaddleHost(resolvedBackend));
+  const newspaperMaximumBytes = Number(configValue("newspaper maximum bytes", 524288000));
+  const newspaperSegmentMaximumBytes = Number(configValue("newspaper segment maximum bytes", 4194304));
+  const housekeeperUrl = resolveSaddleHousekeeperUrl(resolvedRuntimeRoot);
+  const configuredMindName = String(configValue("coding saddle mind", "mind")).trim();
+  const useGlobalRecentPreference = worldRoot == null;
+  const agentHouse = await ensureCodingSaddleHouse({ worldRoot: resolvedWorldRoot, cwd: resolvedCwd });
+  const globalAgentHouse = useGlobalRecentPreference
+    ? (resolvedWorldRoot === globalWorldRoot
+      ? agentHouse
+      : await ensureCodingSaddleHouse({ worldRoot: globalWorldRoot, cwd: resolvedRuntimeRoot }))
+    : resolveCodingSaddleHousePath({ worldRoot: globalWorldRoot, cwd: resolvedRuntimeRoot });
+  await ensureAgentDirs(agentHouse);
+  await seedCodingSaddleHouseGuide({ agentHouse, cwd: resolvedCwd });
+  const saddleStatePath = path.join(agentHouse, "conduct", "coding-saddle.pya");
+  const saddleState = await readCodingSaddleState(saddleStatePath);
+  const sessionDir = path.join(agentHouse, "session");
+  const requestedSessionName = String(process.env.PYA_SADDLE_SESSION_NAME ?? "").trim();
+  if (requestedSessionName && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/u.test(requestedSessionName)) {
+    throw new Error("PYA_SADDLE_SESSION_NAME must be a simple session name");
+  }
+  const storedSessionFile = !requestedSessionName && saddleState.activeSessionFile
+    ? path.resolve(saddleState.activeSessionFile)
+    : "";
+  let sessionFile = storedSessionFile && await isPathWithin(sessionDir, storedSessionFile) ? storedSessionFile : "";
+  let sessionName = requestedSessionName || (storedSessionFile && !sessionFile
+    ? SESSION_NAME
+    : saddleState.activeSessionName || SESSION_NAME);
+  if (!sessionFile) {
+    let recentHistoryIsEmpty = false;
+    try {
+      const recentHistory = await readSessionMessagesWithFallback({
+        sessionDir,
+        baseName: sessionName,
+        historyWindow: 1,
+        includePending: true
+      });
+      recentHistoryIsEmpty = !recentHistory.messages.length && !recentHistory.pendingTurns.length;
+    } catch {
+      // Keep the normal history renderer responsible for reporting a damaged recent transcript.
+    }
+    if (recentHistoryIsEmpty) {
+      sessionFile = await findLatestOlderSessionFile({ sessionDir, sessionName });
+      if (sessionFile) sessionName = path.basename(sessionFile, path.extname(sessionFile));
+    }
+  }
+  const sessionProfile = getCodingSaddleProfile(saddleState, { sessionName, sessionFile });
+  const recentModelStatePath = path.join(
+    useGlobalRecentPreference ? globalAgentHouse : agentHouse,
+    "conduct",
+    "coding-saddle-recent.pya"
+  );
+  const recentModelState = await readCodingSaddleState(recentModelStatePath);
+  let recentModelProfile = getCodingSaddleProfile(recentModelState, { sessionName: RECENT_MODEL_SESSION });
+  if (useGlobalRecentPreference && !Object.keys(recentModelProfile).length) {
+    const legacyStatePath = path.join(globalAgentHouse, "conduct", "coding-saddle.pya");
+    const legacyState = legacyStatePath === saddleStatePath
+      ? saddleState
+      : await readCodingSaddleState(legacyStatePath);
+    recentModelProfile = getCodingSaddleProfile(legacyState, {
+      sessionName: legacyState.activeSessionName || SESSION_NAME,
+      sessionFile: legacyState.activeSessionFile || ""
+    });
+  }
+  const savedProfile = Object.keys(sessionProfile).length ? sessionProfile : recentModelProfile;
+  const hasExplicitSelection = Boolean(String(mindName || model || host || "").trim());
+  const useSavedProfile = !hasExplicitSelection;
+  const selectionSource = hasExplicitSelection
+    ? "startup override"
+    : (useSavedProfile && sessionProfile.backend && sessionProfile.model)
+      ? "saved session state"
+      : (useSavedProfile && recentModelProfile.backend && recentModelProfile.model)
+        ? "recent model preference"
+      : "configured mind";
+  const selectedMind = String(
+    mindName
+    || (useSavedProfile && savedProfile.mindName)
+    || configuredMindName
+  ).trim();
+  const profileResolved = resolveConfiguredSaddleMind(selectedMind);
+  const resolvedBackend = normalizeSaddleBackend(
+    (useSavedProfile && savedProfile.backend)
+    || profileResolved.backend
+  );
+  const resolvedModel = normalizeSaddleModel(
+    model
+    || (useSavedProfile && savedProfile.model)
+    || profileResolved.model
+  );
+  const resolvedHost = normalizeSaddleHost(
+    host
+    || (useSavedProfile && savedProfile.host)
+    || profileResolved.host
+  );
+  const thinkSetting = resolveSaddleThinkSetting({
+    backend: resolvedBackend,
+    savedEffort: useSavedProfile ? savedProfile.reasoningEffort : "",
+    configuredEffort: configValue("mind reasoning effort")
+  });
+  const mindModels = new Map([[selectedMind, resolvedModel]]);
   configureSaddle({
     cwd: resolvedCwd,
     runtimeRoot: resolvedRuntimeRoot,
@@ -114,18 +515,35 @@ export async function prepareSaddle({
     model: resolvedModel,
     backend: resolvedBackend,
     host: resolvedHost,
+    thinkSetting,
     systemPrompt
   });
-  const agentHouse = resolveAgentHouse({ mindName: AGENT_NAME, rememberFn: remember });
-  await ensureAgentDirs(agentHouse);
   return {
     cwd: resolvedCwd,
     runtimeRoot: resolvedRuntimeRoot,
     worldRoot: resolvedWorldRoot,
+    globalWorldRoot,
+    newspaperMaximumBytes,
+    newspaperSegmentMaximumBytes,
+    mindName: selectedMind,
     model: resolvedModel,
     backend: resolvedBackend,
     host: resolvedHost,
+    thinkSetting,
+    sessionName,
+    sessionFile,
+    selectionSource,
+    defaultMindName: configuredMindName,
+    defaultProfile: resolveConfiguredSaddleMind(configuredMindName),
+    saddleState,
+    saddleStatePath,
+    recentModelState,
+    recentModelStatePath,
+    recentModelProfile,
+    housekeeperUrl,
+    mindModels,
     agentHouse,
+    sessionDir,
     systemPrompt
   };
 }
@@ -135,10 +553,20 @@ export async function runSaddleTurn({
   model,
   backend,
   host,
+  contextWindow,
+  think,
+  reasoningEffort,
   sessionName = SESSION_NAME,
   sessionFile = "",
+  historyWindow = 50,
+  sessionContextSummary = "",
   sessionUserMetadata = null,
+  onUsage,
   onToolCall,
+  onAssistantDelta,
+  saddlePlanTool,
+  sessionPlan = "",
+  housekeeperUrl = "",
   mindFn = mind_to_name_text
 } = {}) {
   const sentence = buildSaddleMindSentence({
@@ -146,48 +574,204 @@ export async function runSaddleTurn({
     model,
     backend,
     host,
+    contextWindow,
+    think,
+    reasoningEffort,
     mindName: AGENT_NAME,
     toolMapName: TOOL_MAP_NAME,
     sessionName,
-    sessionFile
+    sessionFile,
+    historyWindow,
+    stream: true
   });
-  return mindFn(sentence, {
-    onToolCall,
-    sessionUserContent: String(input ?? ""),
-    sessionUserMetadata
+  const emitUsage = (usage) => {
+    const normalized = normalizeMindUsage(usage);
+    if (!normalized) return null;
+    if (typeof onUsage !== "function") return normalized;
+    return onUsage(normalized);
+  };
+  return withLocalModelsManaged(backend, housekeeperUrl, async () => {
+    const result = await mindFn(sentence, {
+      onToolCall,
+      onAssistantDelta,
+      saddlePlanTool,
+      onUsage: emitUsage,
+      sessionUserContent: String(input ?? ""),
+      sessionUserMetadata,
+      sessionContextSummary,
+      sessionPlan
+    });
+    if (result?.be === "stream" && result?.ob?.kind === "mind") {
+      return waitForSaddleMindStream(result);
+    }
+    return result;
   });
 }
 
-async function dischargeSaddleModel(model, backend) {
-  if (normalizeSaddleBackend(backend) !== "ollama") return;
-  await dischargeOllamaMind(model, { rememberFn: remember, timeoutMs: 3000 });
+export async function waitForSaddleMindStream(stream, {
+  tailStream = startStreamTail
+} = {}) {
+  const filename = String(stream?.ob?.filename ?? "").trim();
+  if (!filename) throw new Error("mind stream is missing its output filename");
+  const resolvedFilename = path.resolve(filename);
+  try {
+    await fs.access(resolvedFilename);
+  } catch {
+    throw new Error(`mind stream output is unavailable: ${resolvedFilename}`);
+  }
+
+  const envelope = await new Promise((resolve, reject) => {
+    let terminal = null;
+    let stopTail = null;
+    let settled = false;
+    const finish = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      stopTail?.();
+      callback(value);
+    };
+    stopTail = tailStream({
+      filename: resolvedFilename,
+      onLine(line) {
+        let record;
+        try {
+          record = JSON.parse(line);
+        } catch {
+          return;
+        }
+        if (record?.type !== "terminal") return;
+        if (record.ok === false) {
+          finish(reject, new Error(record.error?.message || "mind stream failed"));
+          return;
+        }
+        terminal = record.envelope ?? null;
+      },
+      onEnd() {
+        if (!terminal) {
+          finish(reject, new Error("mind stream ended without a terminal response"));
+          return;
+        }
+        finish(resolve, terminal);
+      },
+      onError(error) {
+        finish(reject, error);
+      }
+    });
+  });
+  const text = String(envelope?.text ?? envelope?.response ?? envelope?.message?.content ?? "");
+  return {
+    ...stream,
+    ...(envelope?.createdAt ? { during: { date: String(envelope.createdAt) } } : {}),
+    ...(envelope?.model ? { as: { name: String(envelope.model) } } : {}),
+    be: "answer",
+    ob: { text }
+  };
+}
+
+export async function loadSaddleSessionHistory({
+  agentHouse,
+  sessionName = SESSION_NAME,
+  sessionFile = "",
+  historyWindow = 50
+} = {}) {
+  if (sessionFile) return readSessionMessages({ sessionFile, historyWindow, includePending: true });
+  return readSessionMessagesWithFallback({
+    sessionDir: path.join(agentHouse, "session"),
+    baseName: sessionName,
+    historyWindow,
+    includePending: true
+  });
+}
+
+export function renderSaddleSessionHistory(saddleUi, messages = [], session = "", detail = "") {
+  const history = Array.isArray(messages) ? messages : [];
+  const entries = [{
+    kind: "text",
+    text: `session: ${session || SESSION_NAME} | restored ${history.length} saved messages${detail ? ` | ${detail}` : ""}`
+  }];
+  for (const message of history) {
+    if (message?.role === "assistant") {
+      entries.push({ kind: "text", text: "saddle>" });
+      entries.push({ kind: "markdown", text: String(message.content ?? "") });
+    } else if (message?.role === "user") {
+      entries.push({ kind: "text", text: `you> ${String(message.content ?? "")}` });
+      if (message.pending) entries.push({ kind: "text", text: "[unfinished turn; no completed response was saved]" });
+    } else if (message?.role === "tool") {
+      entries.push({ kind: "text", text: `[tool] ${String(message.content ?? "")}` });
+    }
+  }
+  if (history.length) entries.push({ kind: "text", text: "--- end of saved history ---" });
+  if (typeof saddleUi.replaceItems === "function") {
+    saddleUi.replaceItems(entries);
+    return;
+  }
+  saddleUi.clearHistory();
+  for (const entry of entries) {
+    if (entry.kind === "markdown") saddleUi.writeMarkdown(entry.text);
+    else saddleUi.writeLine(entry.text);
+  }
+}
+
+export async function dischargeSaddleModel(model, backend, {
+  housekeeperUrl = "",
+  cwd = process.cwd(),
+  adapterFactory = createGpuHousekeeperAdapter
+} = {}) {
+  if (!isLocalModelBackend(backend)) return null;
+  const managerUrl = resolveGpuHousekeeperUrl({ managerUrl: housekeeperUrl, cwd });
+  if (!managerUrl) throw new Error("local saddle models require a configured GPU Housekeeper URL");
+  const result = await adapterFactory({ baseUrl: managerUrl }).discharge({ profileName: model });
+  if (result?.success === false) {
+    throw new Error(result.reason || `Housekeeper could not discharge ${model}`);
+  }
+  return result;
+}
+
+let activeSaddleUi = null;
+let activeSaddleResizeHandler = null;
+let activeSaddleOutputFailed = false;
+
+function handleSaddleOutputError(error) {
+  activeSaddleOutputFailed = true;
+  const detail = error?.code ? ` (${error.code})` : "";
+  try {
+    writeSync(2, `pyash saddle: terminal output failed${detail}; exiting cleanly\n`);
+  } catch {
+    // The diagnostic stream may share the same closed pipe.
+  }
+  process.exit(1);
 }
 
 function writeLine(text = "") {
-  process.stdout.write(`${String(text)}\n`);
+  if (activeSaddleUi) activeSaddleUi.writeLine(text);
+  else process.stdout.write(`${String(text)}\n`);
 }
 
-function clearRenderedInput(rows) {
-  const count = Math.max(1, Number(rows) || 1);
-  if (count > 1) process.stdout.write(`\u001b[${count - 1}A`);
-  for (let index = 0; index < count; index += 1) {
-    process.stdout.write("\u001b[2K\r");
-    if (index < count - 1) process.stdout.write("\u001b[1B");
-  }
-  if (count > 1) process.stdout.write(`\u001b[${count - 1}A`);
-  process.stdout.write("\r");
+function writeMarkdown(text = "") {
+  if (activeSaddleUi) activeSaddleUi.writeMarkdown(text);
+  else process.stdout.write(`${String(text)}\n`);
 }
 
-function renderInput(state, { rows = 1, clear = true, label = "pyash> " } = {}) {
-  if (clear) clearRenderedInput(rows);
-  const lines = String(state?.value ?? "").split("\n");
-  process.stdout.write(`${label}${lines.join("\n")}`);
-  const cursorLine = lines.length - 1;
-  const cursorColumn = String(lines[cursorLine] ?? "").length;
-  if (cursorLine > 0) process.stdout.write(`\u001b[${cursorLine}A`);
-  process.stdout.write(`\r\u001b[${label.length + (cursorLine === 0 ? cursorColumn : 0)}C`);
-  if (cursorLine > 0) process.stdout.write(`\u001b[${cursorLine}B\r\u001b[${label.length + cursorColumn}C`);
-  return lines.length;
+function formatSaddleHeaderUsage(rawUsage) {
+  const usage = normalizeMindUsage(rawUsage);
+  if (!usage) return "";
+  const count = (value) => new Intl.NumberFormat("en-US").format(value);
+  return `turn usage · input ${count(usage.inputTokens)} (cached ${count(usage.cachedInputTokens)}) · output ${count(usage.outputTokens)} (reasoning ${count(usage.reasoningOutputTokens)}) · total ${count(usage.totalTokens)}`;
+}
+
+function formatSaddleContextPressure(pressure = {}) {
+  if (!pressure?.available) return "context budget unavailable";
+  const count = (value) => new Intl.NumberFormat("en-US").format(value);
+  return `context ${count(pressure.tokens)}/${count(pressure.budget)} (${Math.round(pressure.ratio * 100)}%, ${pressure.source})`;
+}
+
+function restoreActiveSaddleUi() {
+  if (process.stdin.isTTY && process.stdin.isRaw) process.stdin.setRawMode(false);
+  if (process.stdin.isTTY) process.stdin.pause();
+  if (activeSaddleResizeHandler) process.stdout.off("resize", activeSaddleResizeHandler);
+  activeSaddleResizeHandler = null;
+  if (!activeSaddleOutputFailed) activeSaddleUi?.exit();
+  activeSaddleUi = null;
 }
 
 async function resumeDuty(dutyId) {
@@ -292,42 +876,322 @@ async function main() {
 
   const config = await prepareSaddle({ cwd: process.env.PYA_SADDLE_CWD || process.cwd() });
   let model = config.model;
+  let mindName = config.mindName;
+  const mindModels = config.mindModels;
   let backend = config.backend;
   let host = config.host;
+  let sessionName = config.sessionName || SESSION_NAME;
+  let sessionFile = config.sessionFile || "";
+  const saddleStartedAt = new Date();
+  const saddleRunId = `${saddleStartedAt.toISOString().replace(/[-:.]/g, "")}-${process.pid}-coding-saddle`;
+  const saddleArtifactLease = await registerArtifactRun({ root: config.worldRoot, runId: saddleRunId });
+  const saddleTrace = createCodingSaddleTrace({
+    worldRoot: config.worldRoot,
+    cwd: config.cwd,
+    sessionName,
+    sessionFile,
+    backend: config.backend,
+    model: config.model,
+    segmentMaximumBytes: config.newspaperSegmentMaximumBytes,
+    now: saddleStartedAt,
+    runId: saddleRunId
+  });
+  process.once("exit", () => {
+    saddleTrace.close({ status: "process exit" });
+    saddleArtifactLease.cleanup();
+  });
+  let contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
+  let ollamaModelCatalog = [];
+  let thinkSetting = config.thinkSetting;
   let busy = false;
   let closing = false;
+  let activeSubmitDone = null;
+  let backendPicker = null;
   let modelPicker = null;
+  let modelPickerTarget = null;
+  let modelPickerAllowCustom = false;
   let modelPickerLoading = false;
+  let contextPicker = null;
+  let thinkPicker = null;
+  let sessionPicker = null;
   let promptLabel = "pyash> ";
-  let renderedRows = 1;
+  let inputDecoder = null;
+  const queuedInputs = [];
+  const saddleUi = createSaddleTerminalUi({ onOutputError: handleSaddleOutputError });
+  activeSaddleUi = saddleUi;
+  saddleUi.enter();
+  process.once("exit", restoreActiveSaddleUi);
 
-  const showStatus = async () => {
-    const queue = await queueDepth(path.join(config.cwd, "world")).catch(() => ({ total: 0 }));
-    writeLine(formatSaddleStatus({ model, backend, host, cwd: config.cwd, queue, busy, session: SESSION_NAME }));
+  const saddleHousekeeper = () => createGpuHousekeeperAdapter({ baseUrl: config.housekeeperUrl });
+  const getOllamaContextOptions = async () => {
+    let modelContextLength = getSaddleOllamaModelContextLength({ models: ollamaModelCatalog, model });
+    if (!modelContextLength) {
+      try {
+        const catalog = await saddleHousekeeper().getOllamaModels();
+        ollamaModelCatalog = Array.isArray(catalog?.models) ? catalog.models : [];
+        modelContextLength = getSaddleOllamaModelContextLength({ models: ollamaModelCatalog, model });
+      } catch {
+        ollamaModelCatalog = [];
+      }
+    }
+    return {
+      modelContextLength,
+      options: buildSaddleOllamaContextOptions({ modelContextLength, currentContextLength: contextWindow })
+    };
   };
-  const prompt = ({ clear = true, label = promptLabel } = {}) => {
-    promptLabel = label;
-    renderedRows = renderInput({ value: "", cursor: 0 }, { rows: renderedRows, clear, label });
+  let queueSnapshot = null;
+  const sessionLabel = () => sessionFile
+    ? path.basename(sessionFile, path.extname(sessionFile))
+    : sessionName;
+  const activePlanFile = () => saddlePlanPath({
+    agentHouse: config.agentHouse,
+    sessionName,
+    sessionFile
+  });
+  const saddlePlanTool = async (input) => {
+    const plan = await updateCodingSaddlePlan(activePlanFile(), input);
+    return {
+      mood: "ya",
+      su: { name: "coding saddle plan result" },
+      be: "text",
+      ob: { text: formatCodingSaddlePlan(plan) }
+    };
   };
-  const showModelPicker = async () => {
+  const restoreSessionHistory = async ({ detail = "" } = {}) => {
+    try {
+      const replay = await loadSaddleSessionHistory({
+        agentHouse: config.agentHouse,
+        sessionName,
+        sessionFile,
+        historyWindow: 50
+      });
+      renderSaddleSessionHistory(saddleUi, replay.messages, sessionLabel(), detail);
+    } catch (error) {
+      saddleUi.clearHistory();
+      writeLine(`session history unavailable for ${sessionLabel()}: ${error.message}`);
+    }
+  };
+  const renderStatus = ({ report = false } = {}) => {
+    const status = formatSaddleStatus({
+      mindName,
+      model,
+      backend,
+      housekeeperUrl: config.housekeeperUrl,
+      contextWindow,
+      thinkMode: thinkSetting?.value,
+      host,
+      cwd: config.cwd,
+      queue: queueSnapshot,
+      busy,
+      session: sessionLabel()
+    });
+    saddleUi.setStatus(status);
+    if (report) writeLine(status);
+  };
+  const persistSelection = async ({ includeProfile = true } = {}) => {
+    let nextState = {
+      ...config.saddleState,
+      activeSessionName: sessionName,
+      activeSessionFile: sessionFile
+    };
+    if (includeProfile) {
+      nextState = setCodingSaddleProfile(nextState, { sessionName, sessionFile }, {
+        mindName,
+        backend,
+        model,
+        host,
+        reasoningEffort: thinkSetting?.reasoningEffort
+      });
+    }
+    config.saddleState = nextState;
+    await writeCodingSaddleState(config.saddleStatePath, nextState);
+    if (includeProfile) {
+      const recentState = setCodingSaddleProfile(
+        config.recentModelState,
+        { sessionName: RECENT_MODEL_SESSION },
+        {
+          mindName,
+          backend,
+          model,
+          host,
+          reasoningEffort: thinkSetting?.reasoningEffort
+        }
+      );
+      config.recentModelState = recentState;
+      config.recentModelProfile = getCodingSaddleProfile(recentState, { sessionName: RECENT_MODEL_SESSION });
+      await writeCodingSaddleState(config.recentModelStatePath, recentState);
+    }
+  };
+  const reportSelectionSaved = async () => {
+    try {
+      await persistSelection();
+      writeLine(`saved model selection for session: ${sessionLabel()}`);
+    } catch (error) {
+      writeLine(`model selection is active but could not be saved: ${error.message}`);
+    }
+  };
+  const showStatus = async ({ report = false } = {}) => {
+    queueSnapshot = isLocalModelBackend(backend)
+      ? await saddleHousekeeper().getQueue().catch(() => ({ available: false }))
+      : await queueDepth(path.join(config.cwd, "world")).catch(() => ({ total: 0 }));
+    renderStatus({ report });
+  };
+  const currentInputLabel = () => busy
+    ? (queuedInputs.length ? `queue ${queuedInputs.length + 1}> ` : "next> ")
+    : promptLabel;
+  const prompt = ({ label = promptLabel } = {}) => {
+    if (!busy) promptLabel = label;
+    saddleUi.setInput(inputDecoder?.getState() ?? { value: "", cursor: 0 }, currentInputLabel());
+  };
+  const dispatchQueuedInput = () => {
+    if (busy || closing) return;
+    const nextInput = queuedInputs.shift();
+    if (nextInput !== undefined) {
+      void submit(nextInput, { alreadyDisplayed: true });
+      return;
+    }
+    prompt();
+  };
+  const applyStrataContext = async (tokens) => {
+    busy = true;
+    saddleUi.setBusy(true);
+    writeLine(`Housekeeper is reconfiguring Strata to ${formatZaiContextWindow(tokens)} and restarting its lazy server...`);
+    prompt({ clear: false, label: "restarting Strata> " });
+    try {
+      const result = await saddleHousekeeper().setStrataContext({ contextLength: tokens });
+      contextWindow = Number(result.contextLength || tokens);
+      renderStatus();
+      writeLine(`Strata context: ${formatZaiContextWindow(contextWindow)}; Housekeeper verified the restart; model remains unloaded until its next request`);
+    } catch (error) {
+      writeLine(`Strata context change failed: ${error.message}`);
+    } finally {
+      busy = false;
+      saddleUi.setBusy(false);
+      promptLabel = "pyash> ";
+      dispatchQueuedInput();
+    }
+  };
+  const getBackendOptions = () => listSaddleBackendOptions({
+    minds: allRemember(),
+    defaultBackend: normalizeSaddleBackend(configValue("mind backend", "ollama")),
+    defaultModel: configValue("mind model", "qwen3.5:9b"),
+    hostForBackend: resolveSaddleHost,
+    currentBackend: backend,
+    currentMindName: mindName,
+    currentModel: model,
+    currentHost: host
+  });
+  const showBackendPicker = () => {
+    backendPicker = getBackendOptions();
+    modelPicker = null;
+    modelPickerTarget = null;
+    writeLine(formatSaddleBackendPicker({ backends: backendPicker }));
+    prompt({ clear: false, label: "select backend> " });
+  };
+  const showSessionPicker = async () => {
+    const files = await listSessionFiles(path.join(config.agentHouse, "session"));
+    const recentFiles = files.slice(-30).reverse();
+    sessionPicker = [
+      { model: "__daily_coding__", value: "__daily_coding__", label: "Daily coding session" },
+      ...recentFiles.map((filename) => ({
+        model: filename,
+        value: filename,
+        label: filename
+      }))
+    ];
+    writeLine("available conversation sessions:");
+    for (const [index, option] of sessionPicker.entries()) {
+      const selected = option.value === "__daily_coding__"
+        ? !sessionFile && sessionName === SESSION_NAME
+        : sessionFile && path.basename(sessionFile) === option.value;
+      writeLine(`${index + 1}. ${option.label}${selected ? " (current)" : ""}`);
+    }
+    writeLine("Choose a session file; the current backend and model are saved separately for each session.");
+    prompt({ clear: false, label: "select session> " });
+  };
+  const activateSession = async (selection) => {
+    await dischargeSaddleModel(model, backend, { housekeeperUrl: config.housekeeperUrl, cwd: config.runtimeRoot })
+      .catch((error) => writeLine(`discharge: ${error.message}`));
+    if (selection.value === "__daily_coding__") {
+      sessionName = SESSION_NAME;
+      sessionFile = "";
+    } else {
+      sessionName = path.basename(selection.value, path.extname(selection.value));
+      sessionFile = path.resolve(config.agentHouse, "session", selection.value);
+    }
+    const saved = getCodingSaddleProfile(config.saddleState, { sessionName, sessionFile });
+    if (Object.keys(saved).length) {
+      mindName = saved.mindName || config.defaultMindName;
+      const configured = resolveConfiguredSaddleMind(mindName);
+      backend = normalizeSaddleBackend(saved.backend || configured.backend);
+      model = normalizeSaddleModel(saved.model || configured.model);
+      host = normalizeSaddleHost(saved.host || configured.host);
+    } else {
+      const recent = config.recentModelProfile;
+      mindName = recent.mindName || config.defaultMindName;
+      const configured = resolveConfiguredSaddleMind(mindName);
+      backend = normalizeSaddleBackend(recent.backend || configured.backend);
+      model = normalizeSaddleModel(recent.model || configured.model);
+      host = normalizeSaddleHost(recent.host || configured.host);
+    }
+    mindModels.set(mindName, model);
+    contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
+    thinkSetting = resolveSaddleThinkSetting({
+      backend,
+      savedEffort: saved.reasoningEffort || config.recentModelProfile.reasoningEffort,
+      configuredEffort: configValue("mind reasoning effort")
+    });
+    await restoreSessionHistory();
+    configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
+    renderStatus();
+    try {
+      await persistSelection({ includeProfile: false });
+    } catch (error) {
+      writeLine(`session is active but could not be saved: ${error.message}`);
+    }
+    promptLabel = "pyash> ";
+    writeLine(`session: ${sessionLabel()} | mind: ${mindName} | backend: ${backend} | model: ${model}`);
+    prompt({ clear: false });
+  };
+  const showModelPicker = async (target = null) => {
+    const selection = target || { backend, host, model, mindName };
+    const targetBackend = normalizeSaddleBackend(selection.backend || backend);
+    const targetHost = normalizeSaddleHost(selection.host || host);
+    const targetModel = normalizeSaddleModel(selection.model || model);
     modelPickerLoading = true;
+    backendPicker = null;
+    modelPickerTarget = { ...selection, backend: targetBackend, host: targetHost, model: targetModel };
     writeLine("discovering models...");
     prompt({ clear: false, label: "model loading> " });
     const fallbackModels = String(process.env.PYA_SADDLE_MODELS || "")
       .split(",")
       .map((value) => value.trim())
       .filter(Boolean);
-    const discovered = await discoverSaddleModels({ backend, host, currentModel: model, fallbackModels });
-    const catalog = await fetchWebModels(model, backend).catch(() => ({ modelOptions: [], errors: {} }));
+    const discovered = await discoverSaddleModels({
+      backend: targetBackend,
+      host: targetHost,
+      housekeeperUrl: isLocalModelBackend(targetBackend) ? config.housekeeperUrl : "",
+      currentModel: targetModel,
+      fallbackModels
+    });
+    if (targetBackend === "ollama") ollamaModelCatalog = discovered.modelCatalog ?? [];
+    if (targetBackend === "zai" && discovered.available && discovered.catalogModels?.length) {
+      try {
+        const refreshed = syncZaiCodexModelCatalog({ models: discovered.catalogModels });
+        if (refreshed.updated) writeLine(`Codex Z.AI catalog refreshed: ${refreshed.models.length} models`);
+      } catch (error) {
+        writeLine(`Codex Z.AI catalog refresh failed: ${String(error?.message ?? error)}`);
+      }
+    }
     const discoveredOptions = discovered.models.map((entry) => ({
       model: entry,
       value: entry,
-      backend,
-      host,
-      label: backend === "ollama" ? entry : `${backend}: ${entry}`
+      backend: targetBackend,
+      host: targetHost,
+      mindName: selection.mindName || mindName,
+      label: entry
     }));
     const options = [
-      ...(Array.isArray(catalog.modelOptions) ? catalog.modelOptions : []),
       ...discoveredOptions
     ];
     modelPicker = [...new Map(options
@@ -335,44 +1199,159 @@ async function main() {
       .map((entry) => [entry.value || `${entry.backend || backend}::${entry.model}`, entry]))
       .values()];
     if (!modelPicker.length) {
-      modelPicker = [{ model, value: model, backend, host, label: model }];
+      modelPicker = [{ model: targetModel, value: targetModel, backend: targetBackend, host: targetHost, mindName: selection.mindName || mindName, label: targetModel }];
     }
+    modelPickerAllowCustom = ["openai", "litellm", "openrouter", "vllm"].includes(targetBackend);
     modelPickerLoading = false;
     writeLine(formatSaddleModelPicker({
       models: modelPicker,
-      currentModel: model,
-      currentBackend: backend,
-      error: discovered.available && !catalog.errors?.strata ? "" : [
-        discovered.available ? "" : discovered.error,
-        catalog.errors?.strata
-      ].filter(Boolean).join("; ")
+      currentModel: targetModel,
+      currentBackend: targetBackend,
+      error: discovered.available ? "" : discovered.error
     }));
+    if (modelPickerAllowCustom) writeLine("For this backend, you can also enter a model ID directly.");
     prompt({ clear: false, label: "select model> " });
+  };
+  const showContextPicker = async () => {
+    if (backend === "strata") {
+      try {
+        const status = await saddleHousekeeper().getStrataContext();
+        contextWindow = Number(status.contextLength || 0) || null;
+        contextPicker = buildSaddleStrataContextOptions({
+          options: status.options,
+          currentContextLength: status.contextLength,
+          defaultContextLength: status.defaultContextLength
+        });
+        if (!contextPicker.length) throw new Error("Housekeeper returned no supported context sizes");
+        writeLine(`Strata context for ${model}: current ${formatZaiContextWindow(contextWindow)}; default ${formatZaiContextWindow(status.defaultContextLength)}`);
+        writeLine("Choose a size. Housekeeper updates Strata's launch profile and restarts it while holding the GPU gate.");
+        for (const [index, option] of contextPicker.entries()) {
+          writeLine(`${index + 1}. ${option.label}${option.current ? " (current)" : ""}`);
+        }
+        prompt({ clear: false, label: "select context> " });
+        return;
+      } catch (error) {
+        writeLine(`Strata context selection unavailable: ${error.message}`);
+      }
+      prompt({ clear: false });
+      return;
+    }
+    if (backend === "zai") {
+      const maximum = getZaiModelContextLimit({ model });
+      const options = getZaiContextWindowOptions({ model });
+      contextPicker = options.map((tokens) => ({
+        model: String(tokens),
+        value: formatZaiContextWindow(tokens),
+        label: formatZaiContextWindow(tokens),
+        tokens
+      }));
+      writeLine(`context window for ${model}: current ${formatZaiContextWindow(contextWindow)}, model maximum ${formatZaiContextWindow(maximum)}`);
+      writeLine("Choose a size by number or label; this sets the client-side budget, not the provider's model limit.");
+    } else if (backend === "ollama") {
+      const contextOptions = await getOllamaContextOptions();
+      contextPicker = contextOptions.options;
+      writeLine(`Ollama context for ${model}: current ${contextWindow ? formatZaiContextWindow(contextWindow) : "Ollama default"}`);
+      writeLine(contextOptions.modelContextLength
+        ? `Model catalog maximum: ${formatZaiContextWindow(contextOptions.modelContextLength)}. Housekeeper still checks GPU memory when the request is submitted.`
+        : "Model context metadata unavailable; showing the conservative presets up to 64K. Larger contexts use more memory; default leaves Ollama unchanged.");
+      writeLine("Choose a request num_ctx preset. This does not change the model's default context.");
+    } else {
+      writeLine("Per-request context selection is supported here only for Ollama and Z.AI; Strata context is set at server launch.");
+      prompt({ clear: false });
+      return;
+    }
+    for (const [index, option] of contextPicker.entries()) {
+      writeLine(`${index + 1}. ${option.label}${option.tokens === contextWindow ? " (current)" : ""}`);
+    }
+    prompt({ clear: false, label: "select context> " });
+  };
+  const showThinkPicker = () => {
+    if (!["ollama", "strata", "minimax", "zai"].includes(backend)) {
+      writeLine("/think controls are available for Ollama, Strata, Z.AI, and MiniMax minds");
+      prompt({ clear: false });
+      return;
+    }
+    const options = backend === "ollama"
+      ? ["off", "on"]
+      : backend === "minimax"
+        ? ["low", "medium", "high", "xhigh", "max"]
+        : backend === "zai"
+          ? ["low", "high", "max"]
+          : ["none", "low", "medium", "high"];
+    thinkPicker = options.map((value) => ({ model: value, value, label: value }));
+    const defaultEffortLabel = backend === "minimax"
+      ? "provider default"
+      : backend === "zai"
+        ? "low (Pyash default)"
+        : "Strata default";
+    writeLine(backend === "ollama"
+      ? `thinking for ${model}: current ${thinkSetting?.value ?? "model default"}`
+      : `reasoning effort for ${model}: current ${thinkSetting?.value ?? defaultEffortLabel}`);
+    for (const [index, option] of thinkPicker.entries()) {
+      writeLine(`${index + 1}. ${option.label}${option.value === thinkSetting?.value ? " (current)" : ""}`);
+    }
+    writeLine(backend === "ollama"
+      ? "Choose whether to request thinking; model support varies."
+      : backend === "minimax"
+        ? "Choose MiniMax reasoning effort. MiniMax M3.1 Flash does not support disabling thinking."
+          : backend === "zai"
+            ? "Choose Z.AI Coding Plan reasoning effort for subsequent saddle requests."
+            : "Choose the Strata reasoning effort for subsequent requests.");
+    promptLabel = "select thinking> ";
+    prompt({ clear: false });
   };
   const shutdown = async () => {
     if (closing) return;
     closing = true;
     if (busy) {
+      saddleUi.setActivity("interrupt requested; waiting for the active turn to settle");
       await requestMindInterrupt({
-        worldRoot: path.join(config.cwd, "world"),
+        worldRoot: config.worldRoot,
         agentName: AGENT_NAME,
         source: "coding saddle",
         reason: "terminal exit"
       }).catch(() => {});
+      const activeTurn = activeSubmitDone;
+      if (activeTurn) await activeTurn;
     }
-    await dischargeSaddleModel(model, backend).catch((error) => writeLine(`discharge: ${error.message}`));
-    if (process.stdin.isRaw) process.stdin.setRawMode(false);
-    process.stdin.pause();
+    saddleTrace.close({ status: "closed" });
+    try {
+      const rotation = await rotateWorldNewspapers({
+        configRoot: config.runtimeRoot,
+        worldRoot: config.globalWorldRoot,
+        maximumBytes: config.newspaperMaximumBytes,
+        segmentMaximumBytes: config.newspaperSegmentMaximumBytes,
+        apply: true
+      });
+      if (!rotation.noChange && rotation.removedBytes > 0) {
+        writeLine(`[newspaper retention] removed ${rotation.removedBytes} bytes; retained ${rotation.retainedBytes} bytes in ${rotation.generatedParts} segments`);
+      }
+    } catch (error) {
+      writeLine(`[newspaper retention failed] ${error?.message ?? error}`);
+    }
+    restoreActiveSaddleUi();
     writeLine("saddle closed");
   };
-  const submit = async (value) => {
+  const submit = async (value, { alreadyDisplayed = false } = {}) => {
     const input = String(value ?? "");
-    if (!input.trim() || busy || closing) {
+    if (!input.trim() || closing) {
       prompt({ clear: false });
       return;
     }
+    saddleUi.scrollToBottom();
     if (input.trim() === "/exit" || input.trim() === "/quit") {
       await shutdown();
+      return;
+    }
+    if (busy) {
+      if (input.trim().startsWith("/")) {
+        writeLine("commands wait until the current response finishes; ordinary messages are queued");
+        prompt({ clear: false });
+        return;
+      }
+      queuedInputs.push(input);
+      writeLine(`[queued ${queuedInputs.length}] you> ${input}`);
+      prompt({ clear: false });
       return;
     }
     if (modelPickerLoading) {
@@ -380,56 +1359,332 @@ async function main() {
       prompt({ clear: false, label: "model loading> " });
       return;
     }
+    if (sessionPicker) {
+      const selected = resolveSaddleModelOption(input, sessionPicker);
+      if (!selected) {
+        writeLine("invalid session selection");
+        prompt({ clear: false, label: "select session> " });
+        return;
+      }
+      sessionPicker = null;
+      await activateSession(selected);
+      return;
+    }
+    if (backendPicker) {
+      const selected = resolveSaddleModelOption(input, backendPicker);
+      if (!selected) {
+        writeLine("invalid backend selection");
+        prompt({ clear: false, label: "select backend> " });
+        return;
+      }
+      await showModelPicker(selected);
+      return;
+    }
+    if (contextPicker) {
+      const selected = resolveSaddleModelOption(input, contextPicker);
+      if (!selected) {
+        writeLine("invalid context window selection");
+        prompt({ clear: false, label: "select context> " });
+        return;
+      }
+      if (backend === "strata") {
+        contextPicker = null;
+        await applyStrataContext(selected.tokens);
+        return;
+      }
+      if (backend === "zai") {
+        const saved = setZaiCodexContextWindow({ model, contextWindow: selected.tokens });
+        if (!saved.updated) {
+          contextPicker = null;
+          promptLabel = "pyash> ";
+          writeLine(`could not save context window: ${saved.reason}`);
+          prompt({ clear: false });
+          return;
+        }
+      }
+      contextWindow = selected.tokens == null ? null : Number(selected.tokens);
+      contextPicker = null;
+      promptLabel = "pyash> ";
+      renderStatus();
+      writeLine(backend === "zai"
+        ? `context window: ${formatZaiContextWindow(contextWindow)} for ${model}; saved for Pyash and future Codex sessions`
+        : `Ollama request context: ${contextWindow ? formatZaiContextWindow(contextWindow) : "provider default"} for ${model}; applies for this saddle session`);
+      prompt({ clear: false });
+      return;
+    }
+    if (thinkPicker) {
+      const selected = resolveSaddleModelOption(input, thinkPicker);
+      if (!selected) {
+        writeLine("invalid thinking selection");
+        prompt({ clear: false, label: "select thinking> " });
+        return;
+      }
+      thinkSetting = normalizeSaddleThinkSelection(selected.value, backend);
+      thinkPicker = null;
+      promptLabel = "pyash> ";
+      renderStatus();
+      writeLine(backend === "ollama"
+        ? `thinking: ${thinkSetting.value} for ${model}`
+        : `reasoning effort: ${thinkSetting.value} for ${model}`);
+      await reportSelectionSaved();
+      prompt({ clear: false });
+      return;
+    }
     if (modelPicker) {
-      const selected = resolveSaddleModelOption(input, modelPicker);
+      const selected = resolveSaddleModelOption(input, modelPicker)
+        || (modelPickerAllowCustom && input.trim()
+          ? {
+            model: input.trim(),
+            backend: modelPickerTarget?.backend,
+            host: modelPickerTarget?.host,
+            mindName: modelPickerTarget?.mindName
+          }
+          : null);
       if (!selected) {
         writeLine("invalid model selection");
         prompt({ clear: false, label: "select model> " });
         return;
       }
       modelPicker = null;
+      modelPickerAllowCustom = false;
+      const previousBackend = backend;
+      const previousEffort = thinkSetting?.value ?? "";
+      const nextBackend = normalizeSaddleBackend(selected.backend || modelPickerTarget?.backend || backend);
+      const nextMindName = String(selected.mindName || modelPickerTarget?.mindName || mindName).trim();
+      backend = nextBackend;
+      mindName = nextMindName;
+      host = normalizeSaddleHost(selected.host || modelPickerTarget?.host || host);
+      modelPickerTarget = null;
       model = normalizeSaddleModel(selected.model, model);
-      backend = normalizeSaddleBackend(selected.backend, backend);
-      host = normalizeSaddleHost(selected.host, host);
+      mindModels.set(mindName, model);
+      if (backend === "zai") {
+        contextWindow = Math.min(contextWindow || getZaiCodexContextWindow({ model }), getZaiModelContextLimit({ model }));
+      } else {
+        contextWindow = null;
+      }
+      thinkSetting = resolveSaddleThinkSetting({
+        backend,
+        savedEffort: backend === previousBackend ? previousEffort : "",
+        configuredEffort: configValue("mind reasoning effort")
+      });
       promptLabel = "pyash> ";
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
-      writeLine(`model: ${model} via ${backend}${host ? ` @ ${host}` : ""}`);
+      renderStatus();
+      writeLine(`mind: ${mindName} | backend: ${backend} | model: ${model}`);
+      await reportSelectionSaved();
       prompt({ clear: false });
       return;
     }
     if (input.trim() === "/help") {
-      writeLine("/status  /model <name>  /backend <name>  /host <url>  /discharge  /exit");
+      writeLine("/status  /session  /mind [name]  /model [backend|model-id]  /context [size]  /think [mode]  /plan [clear]  /host <url>  /usage  /discharge  /exit");
+      writeLine("Tab completes slash-command names; repeated Tab cycles matching commands.");
+      prompt({ clear: false });
+      return;
+    }
+    const planMatch = input.trim().match(/^\/plan(?:\s+(.+))?$/i);
+    if (planMatch) {
+      const requested = String(planMatch[1] ?? "").trim().toLowerCase();
+      if (requested === "clear") {
+        await clearCodingSaddlePlan(activePlanFile());
+        writeLine(`cleared plan for session ${sessionLabel()}`);
+      } else if (requested) {
+        writeLine("usage: /plan or /plan clear");
+      } else {
+        writeLine(formatCodingSaddlePlan(await readCodingSaddlePlan(activePlanFile())));
+      }
+      prompt({ clear: false });
+      return;
+    }
+    const sessionMatch = input.trim().match(/^\/session(?:\s+(.+))?$/i);
+    if (sessionMatch) {
+      const requested = String(sessionMatch[1] || "").trim();
+      if (!requested || requested.toLowerCase() === "list") {
+        await showSessionPicker();
+        return;
+      }
+      const files = await listSessionFiles(path.join(config.agentHouse, "session"));
+      const match = files.find((filename) => filename.toLowerCase() === requested.toLowerCase());
+      if (!match) {
+        writeLine(`unknown session file: ${requested}; use /session to list available sessions`);
+        prompt({ clear: false });
+        return;
+      }
+      await activateSession({ value: match });
+      return;
+    }
+    if (input.trim() === "/usage") {
+      const usage = await readSaddleUsageSummary({ worldRoot: config.worldRoot });
+      writeLine(formatSaddleUsageSummary(usage));
+      prompt({ clear: false });
+      return;
+    }
+    const mindCommand = parseSaddleMindCommand(input);
+    if (mindCommand?.type === "list") {
+      const names = listSaddleMindNames({ minds: allRemember(), activeMindName: AGENT_NAME });
+      writeLine(`available minds: ${names.map((name) => `${name}${name === mindName ? " (current)" : ""}`).join(", ")}`);
+      prompt({ clear: false });
+      return;
+    }
+    if (mindCommand?.type === "select") {
+      const nextMindName = mindCommand.mindName;
+      const available = listSaddleMindNames({ minds: allRemember(), activeMindName: AGENT_NAME });
+      if (!available.some((name) => name.toLowerCase() === nextMindName.toLowerCase())) {
+        writeLine(`unknown Pyash mind: ${nextMindName}; available: ${available.join(", ")}`);
+        prompt({ clear: false });
+        return;
+      }
+      const canonicalName = available.find((name) => name.toLowerCase() === nextMindName.toLowerCase());
+      await dischargeSaddleModel(model, backend, { housekeeperUrl: config.housekeeperUrl, cwd: config.runtimeRoot })
+        .catch((error) => writeLine(`discharge: ${error.message}`));
+      const nextProfile = resolveConfiguredSaddleMind(canonicalName);
+      const previousBackend = backend;
+      const previousEffort = thinkSetting?.value ?? "";
+      mindName = canonicalName;
+      backend = nextProfile.backend;
+      host = nextProfile.host;
+      model = normalizeSaddleModel(mindModels.get(mindName) || nextProfile.model);
+      contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
+      thinkSetting = resolveSaddleThinkSetting({
+        backend,
+        savedEffort: backend === previousBackend ? previousEffort : "",
+        configuredEffort: configValue("mind reasoning effort")
+      });
+      mindModels.set(mindName, model);
+      configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
+      renderStatus();
+      writeLine(`mind: ${mindName} | model: ${model}`);
+      await reportSelectionSaved();
       prompt({ clear: false });
       return;
     }
     if (input.trim() === "/model") {
-      await showModelPicker();
+      showBackendPicker();
+      return;
+    }
+    const contextMatch = input.trim().match(/^\/context(?:\s+(.+))?$/i);
+    if (contextMatch) {
+      if (!contextMatch[1]) {
+        await showContextPicker();
+        return;
+      }
+      if (backend === "strata") {
+        try {
+          const status = await saddleHousekeeper().getStrataContext();
+          const choices = buildSaddleStrataContextOptions({
+            options: status.options,
+            currentContextLength: status.contextLength,
+            defaultContextLength: status.defaultContextLength
+          });
+          const selected = resolveSaddleModelOption(contextMatch[1], choices);
+          if (!selected) {
+            writeLine(`unknown Strata context size; available: ${choices.map((choice) => choice.label).join(", ")}`);
+            prompt({ clear: false });
+            return;
+          }
+          await applyStrataContext(selected.tokens);
+        } catch (error) {
+          writeLine(`Strata context selection unavailable: ${error.message}`);
+          prompt({ clear: false });
+        }
+        return;
+      }
+      if (backend !== "zai" && backend !== "ollama") {
+        writeLine("per-request context selection is supported here only for Ollama and Z.AI");
+        prompt({ clear: false });
+        return;
+      }
+      const choices = backend === "zai"
+        ? getZaiContextWindowOptions({ model }).map((tokens) => ({
+          model: String(tokens),
+          value: formatZaiContextWindow(tokens),
+          label: formatZaiContextWindow(tokens),
+          tokens
+        }))
+        : (await getOllamaContextOptions()).options;
+      const selected = resolveSaddleModelOption(contextMatch[1], choices);
+      if (!selected) {
+        writeLine(`unknown context size; available: ${choices.map((choice) => choice.label).join(", ")}`);
+        prompt({ clear: false });
+        return;
+      }
+      if (backend === "zai") {
+        const saved = setZaiCodexContextWindow({ model, contextWindow: selected.tokens });
+        if (!saved.updated) {
+          writeLine(`could not save context window: ${saved.reason}`);
+          prompt({ clear: false });
+          return;
+        }
+      }
+      contextWindow = selected.tokens == null ? null : Number(selected.tokens);
+      renderStatus();
+      writeLine(backend === "zai"
+        ? `context window: ${formatZaiContextWindow(contextWindow)} for ${model}; saved for Pyash and future Codex sessions`
+        : `Ollama request context: ${contextWindow ? formatZaiContextWindow(contextWindow) : "provider default"} for ${model}; applies for this saddle session`);
+      prompt({ clear: false });
+      return;
+    }
+    const thinkMatch = input.trim().match(/^\/think(?:\s+(.+))?$/i);
+    if (thinkMatch) {
+      if (!thinkMatch[1]) {
+        showThinkPicker();
+        return;
+      }
+      const selected = normalizeSaddleThinkSelection(thinkMatch[1], backend);
+      if (!selected) {
+        writeLine(backend === "ollama"
+          ? "Ollama accepts /think on or /think off"
+          : backend === "strata"
+            ? "Strata accepts /think none, low, medium, high, on, or off"
+            : backend === "minimax"
+              ? "MiniMax accepts /think low, medium, high, xhigh, or max; thinking cannot be disabled for M3.1 Flash"
+              : backend === "zai"
+                ? "Z.AI accepts /think low, high, or max"
+                : "/think is available for Ollama, Strata, Z.AI, and MiniMax minds");
+        prompt({ clear: false });
+        return;
+      }
+      thinkSetting = selected;
+      promptLabel = "pyash> ";
+      renderStatus();
+      writeLine(backend === "ollama"
+        ? `thinking: ${selected.value} for ${model}`
+        : `reasoning effort: ${selected.value} for ${model}`);
+      prompt({ clear: false });
       return;
     }
     if (input.trim() === "/status") {
-      await showStatus();
+      await showStatus({ report: true });
       prompt({ clear: false });
       return;
     }
     if (input.trim() === "/discharge") {
-      await dischargeSaddleModel(model, backend).then(() => writeLine(`discharged: ${model}`)).catch((error) => writeLine(`discharge failed: ${error.message}`));
+      await dischargeSaddleModel(model, backend, { housekeeperUrl: config.housekeeperUrl, cwd: config.runtimeRoot })
+        .then(() => writeLine(`discharged through Housekeeper: ${model}`))
+        .catch((error) => writeLine(`discharge failed: ${error.message}`));
       prompt({ clear: false });
       return;
     }
     const modelMatch = input.trim().match(/^\/model\s+(.+)$/i);
     if (modelMatch) {
-      model = normalizeSaddleModel(modelMatch[1], model);
+      const requested = modelMatch[1].trim();
+      const targetBackend = getBackendOptions().find((entry) => [entry.backend, entry.label]
+        .some((value) => value.toLowerCase() === requested.toLowerCase()));
+      if (targetBackend) {
+        await showModelPicker(targetBackend);
+        return;
+      }
+      model = normalizeSaddleModel(requested, model);
+      mindModels.set(mindName, model);
+      contextWindow = backend === "zai" ? getZaiCodexContextWindow({ model }) : null;
+      thinkSetting = resolveSaddleThinkSetting({
+        backend,
+        savedEffort: thinkSetting?.value,
+        configuredEffort: configValue("mind reasoning effort")
+      });
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
+      renderStatus();
       writeLine(`model: ${model}`);
-      prompt({ clear: false });
-      return;
-    }
-    const backendMatch = input.trim().match(/^\/backend\s+(.+)$/i);
-    if (backendMatch) {
-      backend = normalizeSaddleBackend(backendMatch[1], backend);
-      host = resolveSaddleHost(backend);
-      configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
-      writeLine(`backend: ${backend} (${host})`);
+      await reportSelectionSaved();
       prompt({ clear: false });
       return;
     }
@@ -437,34 +1692,233 @@ async function main() {
     if (hostMatch) {
       host = normalizeSaddleHost(hostMatch[1], host);
       configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
+      renderStatus();
       writeLine(`host: ${host}`);
+      await reportSelectionSaved();
       prompt({ clear: false });
       return;
     }
 
+    let settleActiveSubmit;
+    const activeTurn = new Promise((resolve) => { settleActiveSubmit = resolve; });
+    activeSubmitDone = activeTurn;
+    const interruptController = new AbortController();
+    let finishActiveMindRun = async () => {};
     busy = true;
-    clearRenderedInput(renderedRows);
-    writeLine(`you> ${input}`);
-    writeLine(`saddle: queued ${model} via ${backend}`);
+    saddleUi.setBusy(true);
+    saddleUi.setUsage("");
+    if (!alreadyDisplayed) writeLine(`you> ${input}`);
+    saddleUi.setActivity(`working: ${model} via ${backend}${isLocalModelBackend(backend) ? " through GPU Housekeeper" : ""}`);
+    prompt({ clear: false });
+    const stopProgress = startSaddleProgress({
+      backend,
+      model,
+      onProgress: (line) => saddleUi.setActivity(line)
+    });
+    const turnUsages = [];
+    let contextTurn = null;
+    let responseStream = null;
+    let responseSegmentText = "";
+    let lastTurnStreamed = false;
+    let traceTurnId = "";
+    let traceStatus = "failed";
+    let traceError = "";
+    let sessionTurnId = "";
     try {
-      const result = await runSaddleTurn({
-        input,
-        model,
-        backend,
-        host,
-        onToolCall: async (event) => {
-          if (event?.stage === "call" || event?.stage === "result" || event?.stage === "ratify") {
-            writeLine(`${saddleToolEventLabel(event)}${event.toolText ? `: ${String(event.toolText).slice(0, 400)}` : ""}`);
-          }
-        }
+      finishActiveMindRun = await beginActiveMindRun({
+        worldRoot: config.worldRoot,
+        agentName: AGENT_NAME,
+        controller: interruptController
       });
+      traceTurnId = saddleTrace.beginTurn({ input, backend, model, sessionName, sessionFile });
+      contextTurn = await prepareSaddleContextForTurn({
+        agentHouse: config.agentHouse,
+        sessionName,
+        sessionFile,
+        backend,
+        model,
+        host,
+        contextWindow,
+        systemPrompt: config.systemPrompt,
+        userInput: input,
+        housekeeperUrl: config.housekeeperUrl
+      });
+      config.sessionContextSummary = contextTurn.summary;
+      config.sessionHistoryWindow = contextTurn.historyWindow;
+      const sessionPlan = formatCodingSaddlePlan(await readCodingSaddlePlan(activePlanFile()));
+      config.sessionPlan = sessionPlan === "No active plan for this session." ? "" : sessionPlan;
+      saddleUi.setUsage(formatSaddleContextPressure(contextTurn.pressure));
+      if (contextTurn.compacted) {
+        const retainedContext = contextTurn.historyWindow === 0
+          ? "summary only"
+          : `summary + latest ${contextTurn.historyWindow} exchanges`;
+        writeLine(`[context compacted] ${formatSaddleContextPressure(contextTurn.pressure)}; transcript retained; active context is ${retainedContext}`);
+      }
+      const turn = await runWithMindInterruptSignal({ signal: interruptController.signal }, () => runSaddleTurnWithEvidence({
+        input,
+        onTurnStart: () => {
+          responseStream = null;
+          responseSegmentText = "";
+          lastTurnStreamed = false;
+        },
+        onAssistantDelta: (delta) => {
+          const textDelta = String(delta ?? "");
+          if (!textDelta) return;
+          if (!responseStream) {
+            writeLine("saddle>");
+            responseStream = saddleUi.beginMarkdownStream();
+          }
+          lastTurnStreamed = true;
+          responseSegmentText += textDelta;
+          saddleUi.appendMarkdownStream(responseStream, textDelta);
+        },
+        runTurn: ({ input: turnInput, onToolCall, onAssistantDelta }) => runSaddleTurn({
+          input: turnInput,
+          model,
+          backend,
+          host,
+          housekeeperUrl: config.housekeeperUrl,
+          contextWindow,
+          sessionContextSummary: config.sessionContextSummary ?? "",
+          sessionPlan: config.sessionPlan ?? "",
+          historyWindow: config.sessionHistoryWindow ?? 50,
+          think: thinkSetting?.think,
+          reasoningEffort: thinkSetting?.reasoningEffort,
+          sessionName,
+          sessionFile,
+          saddlePlanTool,
+          onUsage: (usage) => {
+            turnUsages.push(usage);
+            return usage;
+          },
+          onToolCall,
+          onAssistantDelta
+        }),
+        onToolCall: async (event) => {
+          try {
+            saddleTrace.recordToolEvent(event);
+          } catch (error) {
+            writeLine(`[trace recording failed] ${error?.message ?? error}`);
+          }
+          if (event?.stage === "call" || event?.stage === "result" || event?.stage === "ratify" || event?.stage === "context_compacted") {
+            if (event?.stage === "context_compacted" && contextTurn) {
+              const suggestedWindow = Number(event.providerHistoryWindow);
+              if (Number.isSafeInteger(suggestedWindow) && suggestedWindow >= 0) {
+                contextTurn.providerHistoryWindow = Math.min(
+                  contextTurn.providerHistoryWindow ?? SADDLE_DEFAULT_HISTORY_PAIRS,
+                  suggestedWindow
+                );
+                contextTurn.historyWindow = Math.min(contextTurn.historyWindow, suggestedWindow);
+                config.sessionHistoryWindow = contextTurn.historyWindow;
+              }
+            }
+            responseStream = null;
+            responseSegmentText = "";
+            if (event?.stage === "context_compacted") {
+              writeLine(`[prompt trimmed] ${String(event.toolText ?? "").slice(0, 400)}`);
+            } else {
+              writeLine(`${saddleToolEventLabel(event)}${event.toolText ? `: ${String(event.toolText).slice(0, 400)}` : ""}`);
+            }
+          }
+        },
+        onFollowup: (assessment) => {
+          writeLine(`[saddle] completion check missing ${assessment.missing.join("; ")}; making one completion pass`);
+        },
+        onReview: async () => {
+          const review = await interpret({
+            mood: "do",
+            be: "command",
+            ob: { text: buildSaddleWorktreeReviewCommand() }
+          });
+          if (review?.be === "ratify") {
+            return `[review requires command approval] ${review.ob?.text ?? "approval required"}`;
+          }
+          if (review?.mood === "error" || review?.be === "error") {
+            throw new Error(review?.ob?.text ?? "Pyash command interpreter rejected the worktree review");
+          }
+          const output = review?.ob?.text ?? review?.ob?.wo ?? "";
+          return String(output).trim() || "[worktree review returned no output]";
+        }
+      }));
+      const result = turn.result;
+      sessionTurnId = String(result?.accordingto?.text ?? "");
       const text = result?.ob?.text ?? result?.fromstate?.text ?? result?.value?.text ?? "";
-      writeLine(`saddle> ${String(text).trim() || "(no response text)"}`);
+      if (turn.worktreeReview) {
+        writeLine("worktree review · inspect this before accepting or committing");
+        writeLine(turn.worktreeReview);
+      } else if (turn.assessment.required && turn.assessment.changeTools?.length) {
+        writeLine(`[worktree review unavailable] ${turn.worktreeReviewError || "the harness could not collect the Git review"}`);
+      }
+      const finalText = String(text).trim() || "(no response text)";
+      if (lastTurnStreamed && responseStream) {
+        if (responseSegmentText.trim() !== finalText) saddleUi.replaceMarkdownStream(responseStream, finalText);
+      } else {
+        writeLine("saddle>");
+        writeMarkdown(finalText);
+      }
+      const evidence = formatSaddleCompletionEvidence(turn.assessment);
+      if (evidence) writeLine(`${evidence}${turn.retryError ? ` retry failed: ${turn.retryError}` : ""}`);
+      const usage = sumMindUsages(turnUsages);
+      const reportedInputTokens = turnUsages
+        .map((entry) => Number(entry?.inputTokens))
+        .filter((value) => Number.isSafeInteger(value) && value > 0)
+        .reduce((maximum, value) => Math.max(maximum, value), 0);
+      if (contextTurn) {
+        const checkpoint = {
+          ...contextTurn.checkpoint,
+          lastInputTokens: reportedInputTokens || contextTurn.pressure.tokens,
+          contextBudget: contextTurn.pressure.budget ?? contextTurn.checkpoint.contextBudget,
+          measurement: reportedInputTokens ? "provider usage" : contextTurn.pressure.source,
+          historyWindow: contextTurn.checkpoint.historyWindow,
+          providerHistoryWindow: contextTurn.providerHistoryWindow
+        };
+        await writeSaddleContextCheckpoint(contextTurn.filename, checkpoint)
+          .catch((error) => writeLine(`context checkpoint save failed: ${error.message}`));
+        const contextAfterTurn = measureSaddleContextPressure({
+          contextBudget: checkpoint.contextBudget,
+          providerInputTokens: reportedInputTokens || null,
+          estimatedInputTokens: contextTurn.pressure.tokens
+        });
+        saddleUi.setUsage(`${formatSaddleHeaderUsage(usage) || "turn usage · not reported"} · ${formatSaddleContextPressure(contextAfterTurn)}`);
+      }
+      if (usage) {
+        writeLine(formatMindUsage(usage));
+        await appendSaddleUsage({
+          worldRoot: config.worldRoot,
+          turnId: result?.accordingto?.text ?? "",
+          mindName,
+          backend,
+          model,
+          usage
+        }).catch((error) => writeLine(`usage record failed: ${error.message}`));
+      }
+      traceStatus = "completed";
     } catch (error) {
-      writeLine(`saddle error> ${error?.message ?? error}`);
+      if (interruptController.signal.aborted) {
+        traceStatus = "interrupted";
+        traceError = "interrupted by user";
+        writeLine("interrupted");
+      } else {
+        traceError = String(error?.message ?? error);
+        writeLine(`saddle error> ${traceError}`);
+      }
     } finally {
+      await consumeMindInterrupt({ agentHouse: config.agentHouse, agentName: AGENT_NAME }).catch(() => {});
+      await finishActiveMindRun().catch((error) => writeLine(`[interrupt cleanup failed] ${error.message}`));
+      if (traceTurnId) {
+        try {
+          saddleTrace.finishTurn({ status: traceStatus, error: traceError, sessionTurnId });
+        } catch (error) {
+          writeLine(`[trace recording failed] ${error?.message ?? error}`);
+        }
+      }
+      stopProgress();
       busy = false;
-      prompt({ clear: false });
+      saddleUi.setBusy(false);
+      saddleUi.setActivity("ready");
+      settleActiveSubmit();
+      if (activeSubmitDone === activeTurn) activeSubmitDone = null;
+      dispatchQueuedInput();
     }
   };
 
@@ -473,33 +1927,44 @@ async function main() {
   process.stdin.resume();
   process.on("SIGINT", () => { shutdown().catch(() => {}); });
   process.on("SIGTERM", () => { shutdown().catch(() => {}); });
+  activeSaddleResizeHandler = () => saddleUi.draw();
+  process.stdout.on("resize", activeSaddleResizeHandler);
 
-  writeLine("Pyash coding saddle");
-  writeLine("Enter submits; Shift+Enter or Ctrl+J inserts a newline; Ctrl+C interrupts; Ctrl+D exits.");
   await showStatus();
-  const decoder = createSaddleInputDecoder({
+  writeLine(`[trace] newspaper: ${saddleTrace.journalPath} · artifacts: ${path.join(config.worldRoot, "artifacts", saddleTrace.runId)}`);
+  await restoreSessionHistory({ detail: `model selection source: ${config.selectionSource}` });
+  inputDecoder = createSaddleInputDecoder({
     onSubmit: submit,
     onCancel: async () => {
       if (!busy) return;
-      await requestMindInterrupt({
-        worldRoot: path.join(config.cwd, "world"),
+      const result = await requestMindInterrupt({
+        worldRoot: config.worldRoot,
         agentName: AGENT_NAME,
         source: "coding saddle",
         reason: "user interrupt"
-      }).catch(() => {});
-      writeLine("interrupt requested");
+      }).catch((error) => ({ requested: false, error }));
+      if (result.requested) {
+        writeLine(`interrupt sent; stopping the active saddle turn${result.abortedRuns ? ` (${result.abortedRuns} request)` : ""}`);
+      } else {
+        writeLine(`interrupt unavailable: ${result.error?.message ?? "no active mind run was registered"}`);
+      }
     },
     onExit: () => { shutdown().catch(() => {}); },
+    onScroll: (direction) => saddleUi.scrollBy(-direction),
+    onAutocomplete: saddleSlashCommandCompletions,
     onChange: (state) => {
-      if (!busy && !closing) renderedRows = renderInput(state, { rows: renderedRows, label: promptLabel });
+      if (!closing) {
+        saddleUi.setInput(state, currentInputLabel());
+      }
     }
   });
-  process.stdin.on("data", (chunk) => decoder.feed(chunk));
+  process.stdin.on("data", (chunk) => inputDecoder.feed(chunk));
   prompt();
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch((error) => {
+    restoreActiveSaddleUi();
     process.stderr.write(`${String(error?.stack ?? error)}\n`);
     process.exitCode = 1;
   });

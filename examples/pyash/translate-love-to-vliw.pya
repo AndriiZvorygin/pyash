@@ -1,0 +1,1 @@
+from filename "examples/translation/simple-english-wikipedia-love.txt" fromstate name english become name vliw to name map translation result be translation do

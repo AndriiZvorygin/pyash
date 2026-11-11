@@ -107,7 +107,7 @@ test("transcript renderer displays only Stage 3 chapters", () => {
   assert.match(html, /This chapter came from Stage 3/u);
   assert.equal((html.match(/class="chapter-summary"/gu) || []).length, 1);
   assert.equal((html.match(/class="section-chapters"/gu) || []).length, 0);
-  assert.match(html, /<ol class="toc-chapters"><li><a href="#chapter-ground-001-chapter-01">00:00:10 Stage 3 Chapter<\/a><\/li><\/ol>/u);
+  assert.match(html, /<ol class="toc-chapters"><li><a href="#chapter-ground-001-chapter-01">00:00:00 Stage 3 Chapter<\/a><\/li><\/ol>/u);
   assert.match(html, /The neighbourhood programme begins\./u);
   assert.doesNotMatch(html, /\bneighborhood\b|\bprogram\b/u);
   assert.match(
@@ -145,7 +145,7 @@ test("transcript renderer resolves interview self-identification to sentence-lev
     "Andrii Zvorygin",
     "Spiritual",
     "https://example.test",
-  ], { cwd: path.resolve("."), env: { ...process.env, PYA_PRESERVE_SPEAKER_NAMES: "1" }, stdio: "pipe" });
+  ], { cwd: path.resolve("."), env: { ...process.env, PYA_PRESERVE_SPEAKER_NAMES: "1", PYA_INTERVIEW_SPEAKER_ALIASES: "1" }, stdio: "pipe" });
   const html = fs.readFileSync(path.join(transcriptDir, "transcript-page.html"), "utf8");
   assert.equal((html.match(/class="transcript-entry"/gu) || []).length, 2);
   assert.equal((html.match(/<span class="speaker">Andrii Zvorygin:<\/span>/gu) || []).length, 1);

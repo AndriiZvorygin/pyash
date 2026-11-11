@@ -6,6 +6,8 @@ from filename "./module/mind_openai.pya" ob name litellm command mind be import 
 from filename "./module/mind_openai.pya" ob name openrouter command mind be import do
 from filename "./module/mind_openai.pya" ob name vllm command mind be import do
 from filename "./module/mind_strata.pya" ob name strata command mind be import do
+from filename "./module/mind_zai.pya" ob name zai command mind be import do
+from filename "./module/mind_minimax.pya" ob name minimax command mind be import do
 from filename "./module/mind_katago.pya" ob name katago command mind be import do
 from filename "./module/mind_katago.pya" ob name katago analyze be import do
 from filename "./module/verify.pya" ob name verify be import do
@@ -43,10 +45,24 @@ exists su name see default prompter ob la be see ko ob text "Describe the image.
 exists su name ai host ob text "http://localhost:11434" be default ya
 exists su name ollama host ob text "http://localhost:11434" be default ya
 exists su name mind model ob text "qwen3.5:9b" be default ya
+exists su name coding saddle mind ob text "mind" be default ya
+exists su name zai be mind from state "zai" from space "https://api.z.ai/api/coding/paas/v4" via state "glm-5.3" ya
+exists su name openai be mind from state "openai" from space "https://api.openai.com" via state "gpt-5.3-codex" ya
+exists su name minimax be mind from state "minimax" from space "https://api.minimax.io/v1" via state "MiniMax-M3.1-Flash" ya
 exists su name katago profile ob text "default" be default ya
 su name mind configure be map def
   su name think ob bool lie ya
-  su name max tool calls ob num 3 ya
+  su name max tool calls ob num 65535 ya
+prah
+su name agent delegation configure be map def
+  su name default allowed backends ob ve text "ollama" ya
+  su name zai allowed backends ob ve text "ollama" ya
+  su name openai allowed backends ob ve text "ollama" ya
+  su name minimax allowed backends ob ve text "ollama" ya
+  su name openrouter allowed backends ob ve text "ollama" ya
+  su name litellm allowed backends ob ve text "ollama" ya
+  su name vllm allowed backends ob ve text "ollama" ya
+  su name strata allowed backends ob ve text "ollama" ya
 prah
 exists su name draw host ob text "http://mriczo:8188" be default ya
 exists su name say host ob text "http://localhost:8188" be default ya
@@ -85,6 +101,8 @@ exists su name gpu exclusive classes ob ve text "mind" "draw" "hear" "qwen say" 
 exists su name gpu housekeeper url ob text "http://localhost:18886" be default ya
 exists su name provider auto discharge settle ms ob num 3000 be default ya
 exists su name newspaper enabled ob bool truth be default ya
+exists su name newspaper maximum bytes ob num 524288000 be default ya
+exists su name newspaper segment maximum bytes ob num 4194304 be default ya
 exists su name stream stdout ob bool lie be default ya
 exists su name newspaper mind auto ob bool lie be default ya
 su name session configure be map def
@@ -146,3 +164,32 @@ exists su name review mind brief be mind as name "qwen3.5:9b" fromtext name revi
 exists su name review mind long be mind as name "qwen3.5:9b" fromtext name review long prompter ya
 exists su hear be default ob name whisper command hear ya
 exists su name qwen say clip verify enabled ob bool truth be default ya
+exists su name zim cluster compression compound ob text "ksus mres" be default ya
+exists su name zim cluster writer module ob text "libzim" be default ya
+exists su name zim cluster compression codec ob text "zstd" be default ya
+exists su name zim website capture module ob text "zimit" be default ya
+exists su name zim retrieval module ob text "kiwix-serve" be default ya
+exists su name zim html folder writer module ob text "zimwriterfs" be default ya
+exists su name zim archive reader module ob text "zimdump" be default ya
+exists su name zim archive search module ob text "kiwix-search" be default ya
+exists su name zim archive library directory ob text "world/library/archive" be default ya
+exists su name zim archive service directory ob text "/srv/search/archive" be default ya
+exists su name zim archive search server ob text "http://[::1]:8091" be default ya
+exists su name archive focus page size bytes ob num 8388608 be default ya
+exists su name archive focus result size bytes ob num 16000 be default ya
+exists su name zim website capture image ob text "ghcr.io/openzim/zimit" be default ya
+exists su name zim archive default language ob text "eng" be default ya
+exists su name zim archive default creator ob text "Pyash" be default ya
+exists su name zim archive default publisher ob text "Pyash" be default ya
+exists su name web archive network ob bool truth be default ya
+su name web archive configure be map def
+  su name web archive prefix ob text "prefix" ya
+  su name web archive page maximum ob num 2000 ya
+  su name web archive page timeout seconds ob num 90 ya
+  su name web archive page interval seconds ob num 1 ya
+  su name web archive duration maximum seconds ob num 3600 ya
+  su name web archive size maximum bytes ob num 2147483648 ya
+  su name web archive workers ob num 1 ya
+  su name web archive behavior ob text "autoscroll,siteSpecific" ya
+  su name photograph filter ob ve text "[.](apng|avif|bmp|gif|heic|heif|ico|jpe?g|jxl|png|svg|tiff?|webp)([?#].*)?$" ya
+prah

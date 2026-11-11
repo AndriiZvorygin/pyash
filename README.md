@@ -1,11 +1,13 @@
 # Pyash
 
-Pyash is a sentence-based programming language and runtime for automation, tooling, and agent workflows. It treats grammar as the API surface: programs are made of typed sentences, the runtime dispatches them by signature, and the same program can be interpreted directly or compiled to JavaScript and C.
+Pyash is a sentence-based programming language, runtime, intelligence-work framework, and digital content curation and creation ecosystem. It treats grammar as the API surface: programs are made of typed sentences, the runtime dispatches them by signature, and the same program can be interpreted directly or compiled to JavaScript and C. Pyash is also the foundation layer for HelpOS.ca: it supplies the durable language, refinery, agent, artifact, content, and model-orchestration primitives that HelpOS workflows build on.
 
 In practice, this repo is both:
 
 - a language implementation, with parser, interpreter, compiler, memory model, and specs;
-- an execution platform for model/tool orchestration, artifact-producing pipelines, channels, and operational agent workflows.
+- an execution platform for large-scale intelligence work: model/tool orchestration, artifact-producing refineries, channels, durable agent workflows, and evaluation;
+- a digital content ecosystem for researching, curating, transforming, creating, validating, and publishing durable media and knowledge artifacts;
+- the Pyash-first foundation for HelpOS.ca and its evidence-preserving ingestion, review, and publishing workflows.
 
 Pyash sentences use a speakable subject-object-verb style such as `exists su name counter ob num 7 be number ya`. Verbs like `plus`, `subtract`, `multiply`, `divide`, `invert`, `giant`, `tiny`, `equally`, `understand`, `read`, `mind`, and `chip` route to concrete implementations based on case and type signatures rather than positional arguments.
 
@@ -22,6 +24,18 @@ Pyash is not just a parser or a small DSL. The repo currently spans:
 - mind/tool/MCP integration and run recording;
 - refinery-style pipelines that produce artifacts, newspapers, and stage outputs;
 - agent, channel, and operational command surfaces for longer-running workflows.
+
+## Current Architecture
+
+Pyash is the common layer between human meaning, intelligence work, and executable systems:
+
+- `.pya` is the durable program, configuration, workflow, and evidence format. A refinery job keeps its canonical outputs, stage checkpoints, queue decisions, and provenance in parser-readable Pyash artifacts.
+- Refineries turn source material into progressively stronger artifacts. A translation refinery, for example, moves from source text through sentence analysis, grammar and vocabulary coverage, sense selection, Pyash projection, and Pyac/VLIW lowering.
+- Model-backed work follows the existing Pyash duty and GPU Housekeeper path. The durable queue records the request and result while the Housekeeper owns model admission, GPU capacity, residency, routing, and provider-appropriate discharge.
+- HelpOS.ca is a primary application and integration surface for this foundation. Its domain workflows remain authoritative for publication and validation, while Pyash supplies the reusable orchestration, artifact, agent, content, and evaluation machinery.
+- Every substantial workflow should remain inspectable and resumable: a run has a stable identity, a job artifact folder, stage records, and newspaper evidence rather than an opaque provider transcript.
+
+This makes Pyash more than a general-purpose scripting language and more than a model wrapper. It is a compositional substrate for curating knowledge, creating digital content, building intelligence workflows, and replaying their evidence.
 
 If you want the conceptual framing, read `documentation/pyash.md`. If you want the normative behavior contract, start at `documentation/specifications/00-index.md`.
 
@@ -80,7 +94,8 @@ This is why the repo includes both small arithmetic examples and larger channels
 ## Requirements
 
 - Node 20+ (ESM + built-in test runner)
-- Optional: reachable Ollama HTTP server for `mind` (`OLLAMA_HOST`, default `http://localhost:11434`)
+- For model-backed work, a configured Pyash GPU Housekeeper (`PYA_GPU_HOUSEKEEPER_URL` or the `gpu housekeeper url` Pyash configuration value). The Housekeeper manages queued inference and provider lifecycle; Pyash workflows should use that managed path rather than creating a parallel queue.
+- Provider endpoints such as Ollama remain deployment details behind the managed runtime.
 - Environment variables are documented in `configure/env.example`
 
 ## Install And Quizzes
@@ -116,6 +131,26 @@ Run a program:
 ```bash
 ./run examples/pyash/add-basic.pya
 ```
+
+Run a source refinery toward the VLIW goal:
+
+```bash
+./run --verbose --newspaper --run-id love-paragraph-vliw \
+  examples/pyash/translate-love-to-vliw.pya
+```
+
+The one job produces a result map, `translation.pya`, a VLIW catalog, a `.pyac`
+pack, and checkpoint/newspaper evidence under the run artifact folder. Inspect
+the durable translation without rerunning the provider work:
+
+```bash
+node command/read_translation_refinery.mjs love-paragraph-vliw .
+node command/pya_to_json.mjs artifacts/love-paragraph-vliw/translation.pya --pretty
+```
+
+See `program/library/translation/README.md` for the source-to-VLIW
+pipeline contract and the distinction between canonical conversation/evidence
+artifacts and derived machine outputs.
 
 ## Downloading A Video For An Agent
 
@@ -192,6 +227,28 @@ See `documentation/container.md` for full container workflows including build, c
 - When a refinery is checkpointed, later stages should consume canonical outputs from the run root rather than from another stage’s scratch folder
 - `know/produce/` is for durable promoted outputs, not intermediates or scratch files
 
+### Artifact Retention
+
+Preview old run artifacts, newspaper logs, and content-addressed objects:
+
+```bash
+npm run artifacts:prune
+```
+
+The preview is read-only. To apply the default 90-day retention policy:
+
+```bash
+npm run artifacts:prune -- --apply
+```
+
+Only dated run directories and old `.pya`/`text-*.txt` newspaper logs are
+eligible. Shared `artifacts/sha256/` objects are removed only after the run/log
+pass, when no retained text record references their hash and no other hard link
+still points to the object. The cleaner skips persistent artifact directories,
+tracked files, locked runs, and `world/holding/`; an incomplete reference scan
+disables content-store deletion. Inspect the preview and warnings before using
+`--apply`.
+
 ## Stability Notes
 
 Stable enough for iteration:
@@ -230,6 +287,7 @@ Still evolving or fragile:
 - `program/verbs/exchange/compile.mjs` — JS/C compiler wiring
 - `program/verbs/exchange/helpers_c.mjs` — C runtime helpers for exchange, mind, CSV, and YAML
 - `program/verbs/mind/mind.mjs` — mind invocation and tool adapter
+- `program/runtime/gpu/` and `command/gpu_worker.mjs` — durable GPU duties and Housekeeper integration
 - `program/library/grammar/keywords.mjs` — canonical keyword lists
 - `command/read_pya_trace.mjs` — interpret a `.pya` file and dump `{ memory, sandpits }`
 - `command/run_pya_program.mjs` — run a `.pya` program and print `Outputs` and final `result`

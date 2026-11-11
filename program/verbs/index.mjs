@@ -2,6 +2,7 @@ import { plus, signatures as plusSignatures } from "./mathematics/plus.mjs";
 import { subtract, signatures as subtractSignatures } from "./mathematics/subtract.mjs";
 import { invert, signatures as invertSignatures } from "./mathematics/invert.mjs";
 import { exponential, signatures as exponentialSignatures } from "./mathematics/exponential.mjs";
+import { xor, signatures as xorSignatures } from "./mathematics/xor.mjs";
 import { multiply, signatures as multiplySignatures } from "./mathematics/multiply.mjs";
 import { divide, signatures as divideSignatures } from "./mathematics/divide.mjs";
 import { produce, signatures as produceSignatures } from "./mathematics/produce.mjs";
@@ -37,6 +38,7 @@ import musicSay, { signatures as musicSaySignatures } from "./music_say.mjs";
 import espeakSay, { signatures as espeakSaySignatures } from "./espeak_say.mjs";
 import hear, { signatures as hearSignatures } from "./hear.mjs";
 import command, { signatures as commandSignatures } from "./command.mjs";
+import terminal, { signatures as terminalSignatures } from "./terminal.mjs";
 import interpret, { signatures as interpretSignatures } from "./interpret.mjs";
 import discharge, { signatures as dischargeSignatures } from "./discharge.mjs";
 import begin, { signatures as beginSignatures } from "./begin.mjs";
@@ -46,6 +48,7 @@ import health, { signatures as healthSignatures } from "./health.mjs";
 import status, { signatures as statusSignatures } from "./status.mjs";
 import go, { signatures as goSignatures } from "./go.mjs";
 import copy, { signatures as copySignatures } from "./copy.mjs";
+import clusterCompress, { signatures as clusterCompressSignatures } from "./cluster_compress.mjs";
 import directory, { signatures as directorySignatures } from "./directory.mjs";
 import exists, { signatures as existsSignatures } from "./exists.mjs";
 import ecology, { signatures as ecologySignatures } from "./ecology.mjs";
@@ -77,7 +80,8 @@ import gather, { signatures as gatherSignatures } from "./gather.mjs";
 import cast, { signatures as castSignatures } from "./cast.mjs";
 import evoke, { signatures as evokeSignatures } from "./evoke.mjs";
 import guarantee, { signatures as guaranteeSignatures } from "./guarantee.mjs";
-import depart, { signatures as loopControlSignatures } from "./loop_control.mjs";
+import depart, { signatures as departSignatures } from "./loop_control/depart.mjs";
+import { signatures as continueSignatures } from "./loop_control/continue.mjs";
 import exportFact, { signatures as exportSignatures } from "./export.mjs";
 import repair, { signatures as repairSignatures } from "./repair.mjs";
 import establish, { signatures as establishSignatures } from "./establish.mjs";
@@ -86,7 +90,11 @@ import router, { signatures as routerSignatures } from "./router.mjs";
 import verify, { signatures as verifySignatures } from "./verify.mjs";
 import verifyHnucGrammar, { signatures as verifyHnucGrammarSignatures } from "./verify_hnuc_grammar.mjs";
 import concatenateFilename, { signatures as concatenateFilenameSignatures } from "./path_join.mjs";
-import itineraryMedia, { signatures as itineraryMediaSignatures } from "./itinerary_media.mjs";
+import { cut as itineraryCut, signatures as itineraryCutSignatures } from "./itinerary/cut.mjs";
+import { draw as itineraryDraw, signatures as itineraryDrawSignatures } from "./itinerary/draw.mjs";
+import { promptify as itineraryPromptify, signatures as itineraryPromptifySignatures } from "./itinerary/promptify.mjs";
+import { concatenate as itineraryConcatenate, signatures as itineraryConcatenateSignatures } from "./itinerary/concatenate.mjs";
+import { footnote as itineraryFootnote, signatures as itineraryFootnoteSignatures } from "./itinerary/footnote.mjs";
 import drawTextImage, { signatures as drawTextImageSignatures } from "./draw_text_image.mjs";
 import android, { signatures as androidSignatures } from "./android.mjs";
 import gpu, { signatures as gpuSignatures } from "./gpu.mjs";
@@ -105,6 +113,7 @@ export {
   subtract,
   invert,
   exponential,
+  xor,
   multiply,
   divide,
   produce,
@@ -140,6 +149,7 @@ export {
   espeakSay,
   hear,
   command,
+  terminal,
   interpret,
   discharge,
   begin,
@@ -149,6 +159,7 @@ export {
   status,
   go,
   copy,
+  clusterCompress,
   wait,
   sleep,
   session,
@@ -176,7 +187,11 @@ export {
   verify,
   verifyHnucGrammar,
   concatenateFilename,
-  itineraryMedia,
+  itineraryCut,
+  itineraryDraw,
+  itineraryPromptify,
+  itineraryConcatenate,
+  itineraryFootnote,
   drawTextImage,
   android,
   gpu,
@@ -199,6 +214,7 @@ export const builtInSignatures = [
   ...subtractSignatures,
   ...invertSignatures,
   ...exponentialSignatures,
+  ...xorSignatures,
   ...produceSignatures,
   ...neuronSignatures,
   ...twiceCrescentSignatures,
@@ -232,6 +248,7 @@ export const builtInSignatures = [
   ...espeakSaySignatures,
   ...hearSignatures,
   ...commandSignatures,
+  ...terminalSignatures,
   ...interpretSignatures,
   ...dischargeSignatures,
   ...beginSignatures,
@@ -241,6 +258,7 @@ export const builtInSignatures = [
   ...statusSignatures,
   ...goSignatures,
   ...copySignatures,
+  ...clusterCompressSignatures,
   ...directorySignatures,
   ...existsSignatures,
   ...ecologySignatures,
@@ -272,7 +290,8 @@ export const builtInSignatures = [
   ...castSignatures,
   ...evokeSignatures,
   ...guaranteeSignatures,
-  ...loopControlSignatures,
+  ...departSignatures,
+  ...continueSignatures,
   ...exportSignatures,
   ...repairSignatures,
   ...establishSignatures,
@@ -281,7 +300,11 @@ export const builtInSignatures = [
   ...verifySignatures,
   ...verifyHnucGrammarSignatures,
   ...concatenateFilenameSignatures,
-  ...itineraryMediaSignatures,
+  ...itineraryCutSignatures,
+  ...itineraryDrawSignatures,
+  ...itineraryPromptifySignatures,
+  ...itineraryConcatenateSignatures,
+  ...itineraryFootnoteSignatures,
   ...drawTextImageSignatures,
   ...androidSignatures,
   ...gpuSignatures,

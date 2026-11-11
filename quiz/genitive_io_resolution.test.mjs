@@ -18,7 +18,7 @@ test("resolve genitive for from/to filename in io cases", async () => {
   const commandResult = await run("ob text \"cat\" from filename of ob of target path be command do");
   const written = await fs.readFile("quiz/sandpit/genitive-io.txt", "utf8");
   assert.equal(written, "hello");
-  assert.equal(commandResult?.value?.text, "hello");
+  assert.equal(commandResult?.ob?.text, "hello");
 });
 
 test("genitive io fails fast when filename resolves to object marker", async () => {

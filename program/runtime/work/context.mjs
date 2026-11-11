@@ -231,7 +231,7 @@ function dutyFields(task, checkpoint) {
     promptField("Planner work order", checkpoint?.plan?.workOrder, { priority: 90, preferredBytes: 1400, minimumBytes: 96 }),
     promptField("Planner risks", checkpoint?.plan?.risks, { priority: 60, preferredBytes: 900, minimumBytes: 64 }),
     promptField("Repository", checkpoint?.workspace?.repository, { priority: 30, preferredBytes: 500, minimumBytes: 32 }),
-    promptField("Worktree", checkpoint?.workspace?.worktreePath, { priority: 30, preferredBytes: 700, minimumBytes: 32 })
+    promptField("Shared checkout", checkpoint?.workspace?.worktreePath, { priority: 30, preferredBytes: 700, minimumBytes: 32 })
   ];
 }
 

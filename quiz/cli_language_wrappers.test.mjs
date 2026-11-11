@@ -184,3 +184,32 @@ test("interpret rejects incomplete and malformed sentences", async () => {
     assert.match(result.stderr, /usage|sentence/i);
   }
 });
+
+test("interpret preserves typed wo selectors when dispatching a sentence", () => {
+  const result = invoke(wrappers.interpret, ["be status as wo runtime do"], { cwd: repoRoot });
+
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /su name result be map def/u);
+  assert.match(result.stdout, /su name model ob text "qwen3\.5:9b" ya/u);
+});
+
+test("interpret loads project defaults into the visible runtime scope", async () => {
+  const fixture = await makeFixture();
+  const configure = path.join(fixture.cwd, "configure");
+  await fs.mkdir(configure);
+  await fs.writeFile(
+    path.join(configure, "default.pya"),
+    'exists su name mind model ob text "config marker model" be default ya\n',
+    "utf8"
+  );
+  await fs.writeFile(
+    path.join(configure, "secret.pya"),
+    'exists su name mind backend ob name ollama command mind be default ya\n',
+    "utf8"
+  );
+
+  const result = invoke(wrappers.interpret, ["be status as wo runtime do"], { cwd: fixture.cwd });
+
+  assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+  assert.match(result.stdout, /config marker model/u);
+});

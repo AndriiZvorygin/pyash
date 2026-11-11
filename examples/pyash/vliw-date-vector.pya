@@ -1,0 +1,4 @@
+ob date 2025-05-01 be date ya
+ob ve num 1 2 3 be vector ya
+ob ve bool truth lie truth be vector ya
+ob ve text Name Age be vector ya

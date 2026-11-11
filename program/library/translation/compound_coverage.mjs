@@ -1,0 +1,734 @@
+import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
+
+import { loadCompoundLexicon, parseCompoundLexicon } from "./compound_lexicon.mjs";
+import {
+  analyzeCompoundMorphology,
+  buildCompoundMorphologyIndex
+} from "./compound_morphology.mjs";
+import { choosePyacCompoundCandidate } from "./pyac_complexity.mjs";
+import { buildCompoundAtomLinks } from "./compound_atom_links.mjs";
+import {
+  KWON_LOOKUP_INDEX_PATHS,
+  PYASH_REPOSITORY_ROOT,
+  lookupKwonIndex,
+  readKwonSourceHead,
+  readKwonSourceLocators
+} from "./kwon_lookup_index.mjs";
+
+export const DERIVED_COMPOUND_LEXICON_NAME = "translation_compounds_derived";
+export const DERIVED_COMPOUND_CURATED_NAME = "translation_compounds_derived_curated";
+export const WORDNET_VERIFIED_COMPOUNDS_URL = new URL("./compound_coverage_wordnet_verified.pya", import.meta.url);
+const WORDNET_VERIFIED_COMPOUNDS_SOURCE_ID = "program/library/translation/compound_coverage_wordnet_verified.pya";
+export const DERIVED_COMPOUND_STATUSES = Object.freeze([
+  "accepted-delimited",
+  "accepted-curated",
+  "candidate-closed"
+]);
+export const WORDNET_COMPOUND_PROVENANCE = "Open English WordNet multiword lemma";
+
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value).sort().map((key) => [key, stableValue(value[key])])
+    );
+  }
+  return value;
+}
+
+function stableJson(value) {
+  return JSON.stringify(stableValue(value));
+}
+
+function invalid(message, details = {}) {
+  const error = new Error(message);
+  error.code = "invalid-compound-coverage";
+  error.details = details;
+  return error;
+}
+
+function normalizeTerm(value) {
+  return typeof value === "string" ? value.normalize("NFC").trim().toLowerCase() : "";
+}
+
+function normalizeSourceSurfaces(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([, surface]) => typeof surface === "string" && surface.trim())
+      .map(([language, surface]) => [language, surface.normalize("NFC").trim()])
+      .sort(([left], [right]) => left.localeCompare(right))
+  );
+}
+
+function normalizeSourceMorphemesByLanguage(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([, parts]) => Array.isArray(parts) && parts.length > 0)
+      .map(([language, parts]) => [
+        language,
+        parts.map((part) => String(part).normalize("NFC").trim()).filter(Boolean)
+      ])
+      .filter(([, parts]) => parts.length > 0)
+      .sort(([left], [right]) => left.localeCompare(right))
+  );
+}
+
+function atomicMap(entries) {
+  if (!Array.isArray(entries)) throw invalid("atomic vocabulary must be an array");
+  const result = new Map();
+  for (const [index, entry] of entries.entries()) {
+    const english = normalizeTerm(entry?.en);
+    const pyash = typeof entry?.pya === "string" ? entry.pya.trim() : "";
+    if (!english) continue;
+    if (!pyash) throw invalid("atomic vocabulary rows require en and pya", { index });
+    if (!result.has(english)) result.set(english, pyash);
+  }
+  return result;
+}
+
+export function sourceTermsFromDictionaryRows({ language, surfaceField = language, rows, provenance } = {}) {
+  if (typeof language !== "string" || !language) throw invalid("dictionary source requires a language");
+  if (typeof surfaceField !== "string" || !surfaceField) throw invalid("dictionary source requires a surface field", { language });
+  if (!Array.isArray(rows)) throw invalid("dictionary source rows must be an array", { language });
+  return rows
+    .map((row) => {
+      const surface = typeof row?.[surfaceField] === "string" ? row[surfaceField].normalize("NFC").trim() : "";
+      return {
+        target: row?.en,
+        sourceSurfaces: { [language]: surface },
+        sourceMorphemesByLanguage: { [language]: surface.split(/[-_\s]+/u).filter(Boolean) },
+        provenance
+      };
+    })
+    .filter((row) => normalizeTerm(row.target) && typeof row.sourceSurfaces[language] === "string" && row.sourceSurfaces[language].trim());
+}
+
+export function sourceTermsFromEnglish30kRows(rows, { provenance = "pyachso2n/English30k.txt" } = {}) {
+  if (!Array.isArray(rows)) throw invalid("English30k compound source rows must be an array");
+  return rows
+    .map((row) => {
+      const word = typeof row?.word === "string" ? row.word.normalize("NFC").trim() : "";
+      if (!/^[a-z0-9]+$/iu.test(word)) return null;
+      return {
+        target: word,
+        sourceSurfaces: { english: word },
+        sourceMorphemesByLanguage: { english: [word] },
+        provenance
+      };
+    })
+    .filter(Boolean);
+}
+
+export function sourceTermsFromWordNetIndex(wordnetIndex, { provenance = WORDNET_COMPOUND_PROVENANCE } = {}) {
+  if (!(wordnetIndex?.bySynset instanceof Map)) {
+    throw invalid("WordNet compound source requires an indexed synset map");
+  }
+  const terms = new Map();
+  for (const senses of wordnetIndex.bySynset.values()) {
+    for (const sense of senses ?? []) {
+      const sourceSurface = typeof sense?.lemma === "string" ? sense.lemma.normalize("NFC").trim() : "";
+      const parts = sourceSurface.split(/[\s_-]+/u).filter(Boolean);
+      if (parts.length < 2) continue;
+      const target = parts.join(" ").toLowerCase();
+      if (!terms.has(target)) {
+        terms.set(target, {
+          target,
+          sourceSurfaces: { english: sourceSurface },
+          sourceMorphemesByLanguage: { english: parts },
+          provenance
+        });
+      }
+    }
+  }
+  return [...terms.values()].sort((left, right) => left.target.localeCompare(right.target));
+}
+
+export function appendNovelCompoundSourceTerms(sourceTerms, curatedDecompositions, additions) {
+  if (!Array.isArray(sourceTerms) || !Array.isArray(curatedDecompositions) || !Array.isArray(additions)) {
+    throw invalid("compound source merging requires arrays");
+  }
+  const seen = new Set([
+    ...sourceTerms.map((row) => normalizeTerm(row?.target)),
+    ...curatedDecompositions.map((row) => normalizeTerm(row?.target))
+  ].filter(Boolean));
+  const novel = [];
+  for (const row of additions) {
+    const target = normalizeTerm(row?.target);
+    if (!target || seen.has(target)) continue;
+    seen.add(target);
+    novel.push(row);
+  }
+  return novel;
+}
+
+export async function loadCuratedCompoundDecompositions({
+  url = new URL("./compound_coverage_curated.pya", import.meta.url),
+  wordnetUrl = WORDNET_VERIFIED_COMPOUNDS_URL
+} = {}) {
+  const [entries, wordnetEntries] = await Promise.all([
+    loadCompoundLexicon({
+      url,
+      name: DERIVED_COMPOUND_CURATED_NAME,
+      language: "canonical"
+    }),
+    loadWordNetVerifiedCompoundIndex({ url: wordnetUrl })
+  ]);
+  // Only rows explicitly marked for generic lookup may leave their synset lane.
+  const genericWordNetEntries = wordnetEntries.filter((entry) => entry.genericLookup === true);
+  const seenTargets = new Set();
+  return [...entries, ...genericWordNetEntries].filter((entry) => {
+    const target = normalizeTerm(entry.target);
+    if (!target || seenTargets.has(target)) return false;
+    seenTargets.add(target);
+    return true;
+  }).map((entry) => ({
+    target: entry.target,
+    ...(Array.isArray(entry.aliases) && entry.aliases.length > 0
+      ? { aliases: entry.aliases }
+      : {}),
+    sourceMorphemes: entry.sourceMorphemes ?? entry.morphemes,
+    componentGlosses: entry.componentGlosses ?? entry.morphemes,
+    ...(Array.isArray(entry.pyashSequence) ? { pyashSequence: entry.pyashSequence } : {}),
+    ...(Array.isArray(entry.componentLayers) ? { componentLayers: entry.componentLayers } : {}),
+    ...(entry.specificAtom ? { specificAtom: entry.specificAtom } : {}),
+    evidence: entry.evidence,
+    confidence: entry.confidence,
+    provenance: entry.provenance
+  }));
+}
+
+export async function loadWordNetVerifiedCompoundIndex({
+  url = WORDNET_VERIFIED_COMPOUNDS_URL
+} = {}) {
+  try {
+    return await loadCompoundLexicon({
+      url,
+      name: DERIVED_COMPOUND_CURATED_NAME,
+      language: "canonical"
+    });
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+export async function loadWordNetVerifiedCompoundMatches({
+  url = WORDNET_VERIFIED_COMPOUNDS_URL,
+  target = "",
+  targets = [],
+  pyashSequence = [],
+  senseId = "",
+  senseIds = [],
+  indexPaths = KWON_LOOKUP_INDEX_PATHS,
+  indexRoot = PYASH_REPOSITORY_ROOT
+} = {}) {
+  const normalizedTarget = normalizeTerm(target);
+  const normalizedTargets = new Set([
+    normalizedTarget,
+    ...(Array.isArray(targets) ? targets : []).map(normalizeTerm)
+  ].filter(Boolean));
+  const selectedSenseIds = new Set([
+    ...(typeof senseId === "string" && senseId.trim() ? [senseId] : []),
+    ...(Array.isArray(senseIds) ? senseIds : [])
+  ].filter((value) => typeof value === "string" && value.trim()).map((value) => value.trim().toLowerCase()));
+  const sequence = Array.isArray(pyashSequence)
+    ? pyashSequence.filter((word) => typeof word === "string" && word.trim()).map((word) => word.trim())
+    : [];
+  if (normalizedTargets.size === 0 && sequence.length < 2 && selectedSenseIds.size === 0) {
+    throw invalid("WordNet compound lookup requires a sense, target, or Pyac sequence");
+  }
+  try {
+    if (url instanceof URL && url.href === WORDNET_VERIFIED_COMPOUNDS_URL.href) {
+      let indexedLocators;
+      try {
+        const [targetLocators, senseLocators, sequenceLocators] = await Promise.all([
+          Promise.all([...normalizedTargets].map((key) => lookupKwonIndex({
+            kind: "english", key, indexPath: indexPaths.english, root: indexRoot
+          }))),
+          Promise.all([...selectedSenseIds].map((key) => lookupKwonIndex({
+            kind: "wordnet", key, indexPath: indexPaths.wordnet, root: indexRoot
+          }))),
+          sequence.length > 0
+            ? lookupKwonIndex({
+              kind: "pyac", key: sequence.join(" "), indexPath: indexPaths.pyac, root: indexRoot
+            }).then((rows) => [rows])
+            : []
+        ]);
+        indexedLocators = [...targetLocators.flat(), ...senseLocators.flat(), ...sequenceLocators.flat()]
+          .filter((locator) => locator?.sourceId === WORDNET_VERIFIED_COMPOUNDS_SOURCE_ID);
+      } catch (error) {
+        if (error?.code !== "ENOENT") throw error;
+      }
+      if (indexedLocators) {
+        const uniqueLocators = [...new Map(indexedLocators.map((locator) => [locator.byteOffset, locator])).values()];
+        if (uniqueLocators.length === 0) return [];
+        const [header] = await readKwonSourceHead(WORDNET_VERIFIED_COMPOUNDS_SOURCE_ID, { lineCount: 1, root: indexRoot });
+        const sourceRows = await readKwonSourceLocators(uniqueLocators, { root: indexRoot });
+        const locatorsResolved = sourceRows.length === uniqueLocators.length
+          && sourceRows.every((row) => row.line.startsWith("su text "));
+        if (locatorsResolved) {
+          const filtered = [header, ...sourceRows.map((row) => row.line), "prah", ""].join("\n");
+          const entries = parseCompoundLexicon(filtered, {
+            name: DERIVED_COMPOUND_CURATED_NAME,
+            language: "canonical"
+          });
+          return entries.filter((entry) => (
+            (normalizedTargets.size > 0 && (
+              normalizedTargets.has(normalizeTerm(entry.target))
+              || (entry.aliases ?? []).some((alias) => normalizedTargets.has(normalizeTerm(alias)))
+            ))
+            || (sequence.length > 0 && entry.pyashSequence?.join(" ") === sequence.join(" "))
+            || (selectedSenseIds.size > 0 && selectedSenseIds.has(entry.senseId?.toLowerCase()))
+          ));
+        }
+        // A stale posting can point beyond the current source file. Fall through
+        // to the bounded-by-query source scan rather than parsing an empty map.
+      }
+    }
+    const sourcePath = url instanceof URL && url.href === WORDNET_VERIFIED_COMPOUNDS_URL.href
+      ? resolve(indexRoot, WORDNET_VERIFIED_COMPOUNDS_SOURCE_ID)
+      : url;
+    const source = await readFile(sourcePath, "utf8");
+    const lines = source.split(/\r?\n/u);
+    const header = lines[0] ?? "";
+    const targetNeedles = [...normalizedTargets].map((value) => (
+      JSON.stringify(`\"target\":${JSON.stringify(value)}`).slice(1, -1)
+    ));
+    const aliasNeedles = [...normalizedTargets].map((value) => (
+      JSON.stringify(JSON.stringify(value)).slice(1, -1)
+    ));
+    const sequenceNeedle = sequence.length > 0
+      ? JSON.stringify(JSON.stringify(sequence)).slice(1, -1)
+      : "";
+    const keyPrefix = 'su text "';
+    const selected = lines.slice(1).filter((line) => (
+      targetNeedles.some((needle) => line.includes(needle))
+      || (aliasNeedles.length > 0 && (() => {
+        const aliasesMarker = '\\"aliases\\":[';
+        let start = line.indexOf(aliasesMarker);
+        while (start >= 0) {
+          const end = line.indexOf("]", start + aliasesMarker.length);
+          if (end < 0) return false;
+          const aliases = line.slice(start + aliasesMarker.length, end);
+          if (aliasNeedles.some((needle) => aliases.includes(needle))) return true;
+          start = line.indexOf(aliasesMarker, end + 1);
+        }
+        return false;
+      })())
+      || (sequenceNeedle && line.includes(sequenceNeedle))
+      || (() => {
+        if (selectedSenseIds.size === 0 || !line.startsWith(keyPrefix)) return false;
+        const keyEnd = line.indexOf('"', keyPrefix.length);
+        return keyEnd > keyPrefix.length && selectedSenseIds.has(line.slice(keyPrefix.length, keyEnd).toLowerCase());
+      })()
+    ));
+    if (selected.length === 0) return [];
+    const filtered = [header, ...selected, "prah", ""].join("\n");
+    const entries = parseCompoundLexicon(filtered, {
+      name: DERIVED_COMPOUND_CURATED_NAME,
+      language: "canonical"
+    });
+    return entries.filter((entry) => (
+      (normalizedTargets.size > 0 && (
+        normalizedTargets.has(normalizeTerm(entry.target))
+        || (entry.aliases ?? []).some((alias) => normalizedTargets.has(normalizeTerm(alias)))
+      ))
+      || (sequence.length > 0 && entry.pyashSequence?.join(" ") === sequence.join(" "))
+      || (selectedSenseIds.size > 0 && selectedSenseIds.has(entry.senseId?.toLowerCase()))
+    ));
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+export function segmentDelimitedCompound(term, atoms) {
+  const value = normalizeTerm(term);
+  if (!/[-_ ]/u.test(value)) return [];
+  const parts = value.split(/[-_ ]+/u).filter(Boolean);
+  if (parts.length < 2 || parts.some((part) => !atoms.has(part))) return [];
+  return [parts];
+}
+
+export function segmentClosedCompound(term, atoms, { minimumPartLength = 3, maximumParts = 3 } = {}) {
+  const value = normalizeTerm(term);
+  if (!/^[a-z0-9]+$/u.test(value)) return [];
+  const memo = new Map();
+  function segmentFrom(offset) {
+    if (offset === value.length) return [[]];
+    if (memo.has(offset)) return memo.get(offset);
+    const results = [];
+    for (let end = offset + minimumPartLength; end <= value.length; end += 1) {
+      const part = value.slice(offset, end);
+      if (!atoms.has(part)) continue;
+      for (const suffix of segmentFrom(end)) {
+        const candidate = [part, ...suffix];
+        if (candidate.length <= maximumParts) results.push(candidate);
+      }
+    }
+    memo.set(offset, results);
+    return results;
+  }
+  return segmentFrom(0).filter((parts) => parts.length >= 2);
+}
+
+function mergeSourceTerms(sourceTerms) {
+  if (!Array.isArray(sourceTerms)) throw invalid("compound source terms must be an array");
+  const merged = new Map();
+  for (const [index, source] of sourceTerms.entries()) {
+    const target = normalizeTerm(typeof source === "string" ? source : source?.target);
+    if (!target) throw invalid("compound source term requires a target", { index });
+    const current = merged.get(target) ?? {
+      target,
+      sourceSurfaces: {},
+      sourceMorphemesByLanguage: {},
+      provenance: new Set(),
+      evidence: new Set()
+    };
+    Object.assign(current.sourceSurfaces, normalizeSourceSurfaces(source?.sourceSurfaces));
+    Object.assign(current.sourceMorphemesByLanguage, normalizeSourceMorphemesByLanguage(source?.sourceMorphemesByLanguage));
+    const provenance = typeof source?.provenance === "string" ? source.provenance : "";
+    if (provenance) current.provenance.add(provenance);
+    const evidence = typeof source?.evidence === "string" ? source.evidence : "";
+    if (evidence) current.evidence.add(evidence);
+    merged.set(target, current);
+  }
+  return merged;
+}
+
+function curatedMap(curatedDecompositions) {
+  if (!Array.isArray(curatedDecompositions)) {
+    throw invalid("curated compound decompositions must be an array");
+  }
+  const result = new Map();
+  for (const [index, decomposition] of curatedDecompositions.entries()) {
+    const target = normalizeTerm(decomposition?.target);
+    const componentGlosses = Array.isArray(decomposition?.componentGlosses)
+      ? decomposition.componentGlosses.map(normalizeTerm).filter(Boolean)
+      : [];
+    const aliases = Array.isArray(decomposition?.aliases)
+      ? decomposition.aliases.map(normalizeTerm).filter((alias) => alias && alias !== target)
+      : [];
+    if (!target || componentGlosses.length < 2) {
+      throw invalid("curated compound requires a target and two components", { index });
+    }
+    if (result.has(target)) throw invalid("curated compound target is duplicated", { index, target });
+    result.set(target, {
+      target,
+      ...(aliases.length > 0 ? { aliases } : {}),
+      componentGlosses,
+      ...(Array.isArray(decomposition.pyashSequence) ? { pyashSequence: [...decomposition.pyashSequence] } : {}),
+      ...(Array.isArray(decomposition.componentLayers) ? { componentLayers: [...decomposition.componentLayers] } : {}),
+      ...(decomposition.specificAtom ? { specificAtom: normalizeTerm(decomposition.specificAtom) } : {}),
+      sourceMorphemes: Array.isArray(decomposition.sourceMorphemes)
+        ? decomposition.sourceMorphemes.map((part) => String(part).normalize("NFC").trim()).filter(Boolean)
+        : [...componentGlosses],
+      evidence: typeof decomposition.evidence === "string" ? decomposition.evidence : "curated semantic decomposition",
+      confidence: typeof decomposition.confidence === "string" ? decomposition.confidence : "curated"
+    });
+  }
+  return result;
+}
+
+function recordId(record) {
+  return `derived-compound-${createHash("sha256").update(stableJson({
+    target: record.target,
+    aliases: record.aliases,
+    sourceMorphemes: record.sourceMorphemes,
+    componentGlosses: record.componentGlosses,
+    specificAtom: record.specificAtom,
+    pyashSequence: record.pyashSequence,
+    sourceSurfaces: record.sourceSurfaces,
+    sourceMorphemesByLanguage: record.sourceMorphemesByLanguage
+  })).digest("hex").slice(0, 24)}`;
+}
+
+function makeRecord({
+  target,
+  aliases,
+  sourceMorphemes,
+  componentGlosses,
+  pyashSequence,
+  componentLayers,
+  sourceSurfaces,
+  sourceMorphemesByLanguage,
+  specificAtom,
+  status,
+  confidence,
+  evidence,
+  provenance,
+  layerIndex,
+  morphologyIndex,
+  atomicEntries
+}) {
+  const pyashWords = componentGlosses.map((gloss) => layerIndex?.englishToPyash?.get(gloss) ?? null);
+  const selected = Array.isArray(pyashSequence) && Array.isArray(componentLayers)
+    ? {
+      pyashSequence: [...pyashSequence],
+      componentLayers: [...componentLayers],
+      maxLayer: Math.max(...componentLayers)
+    }
+    : pyashWords.every(Boolean)
+      ? choosePyacCompoundCandidate([{ pyashSequence: pyashWords }], layerIndex)
+      : null;
+  if (!selected) return null;
+  const morphology = analyzeCompoundMorphology({
+    target,
+    componentGlosses,
+    morphologyIndex,
+    atomicEntries
+  });
+  const record = {
+    language: "canonical",
+    surface: target,
+    target,
+    ...(Array.isArray(aliases) && aliases.length > 0 ? { aliases: [...aliases] } : {}),
+    sourceMorphemes: [...sourceMorphemes],
+    morphemes: [...sourceMorphemes],
+    componentGlosses: [...componentGlosses],
+    ...(specificAtom ? { specificAtom } : {}),
+    pyashSequence: [...selected.pyashSequence],
+    componentLayers: [...selected.componentLayers],
+    maxLayer: selected.maxLayer,
+    head: componentGlosses.at(-1),
+    modifiers: componentGlosses.slice(0, -1),
+    ...morphology,
+    sourceSurfaces: normalizeSourceSurfaces(sourceSurfaces),
+    sourceMorphemesByLanguage: normalizeSourceMorphemesByLanguage(sourceMorphemesByLanguage),
+    confidence,
+    status,
+    ...(evidence ? { evidence } : {}),
+    ...(provenance ? { provenance } : { provenance: "derived-compound-coverage" })
+  };
+  return { ...record, id: recordId(record) };
+}
+
+export function buildDerivedCompoundCoverage({
+  atomicEntries,
+  sourceTerms = [],
+  curatedDecompositions = [],
+  morphologyEntries = [],
+  maximumCompoundComponents = 3,
+  layerIndex
+} = {}) {
+  if (!layerIndex?.englishToPyash || !layerIndex?.byWord) {
+    throw invalid("compound coverage requires English and Pyash layer indexes");
+  }
+  if (!Number.isSafeInteger(maximumCompoundComponents) || maximumCompoundComponents < 2) {
+    throw invalid("maximum compound components must be an integer of at least two", { maximumCompoundComponents });
+  }
+  const atoms = atomicMap(atomicEntries);
+  const morphologyIndex = buildCompoundMorphologyIndex({ atomicEntries, morphologyEntries });
+  const sources = mergeSourceTerms(sourceTerms);
+  const curated = curatedMap(curatedDecompositions);
+  const targets = new Set([...sources.keys(), ...curated.keys()]);
+  const records = [];
+  const existingAtomic = [];
+  const rejected = [];
+
+  for (const target of [...targets].sort()) {
+    if (atoms.has(target)) {
+      existingAtomic.push({ target, pyashWord: atoms.get(target), status: "existing-atomic" });
+      continue;
+    }
+    const source = sources.get(target) ?? {
+      target,
+      sourceSurfaces: {},
+      sourceMorphemesByLanguage: {},
+      provenance: new Set(),
+      evidence: new Set()
+    };
+    const curatedEntry = curated.get(target);
+    if (curatedEntry) {
+      const record = makeRecord({
+        target,
+        aliases: curatedEntry.aliases,
+        sourceMorphemes: curatedEntry.sourceMorphemes,
+        componentGlosses: curatedEntry.componentGlosses,
+        pyashSequence: curatedEntry.pyashSequence,
+        componentLayers: curatedEntry.componentLayers,
+        specificAtom: curatedEntry.specificAtom,
+        sourceSurfaces: source.sourceSurfaces,
+        sourceMorphemesByLanguage: source.sourceMorphemesByLanguage,
+        status: "accepted-curated",
+        confidence: curatedEntry.confidence,
+        evidence: curatedEntry.evidence,
+        provenance: [...source.provenance].sort().join("; ") || curatedEntry.provenance || "compound-coverage-curated.pya",
+        layerIndex,
+        morphologyIndex,
+        atomicEntries
+      });
+      if (record) records.push(record);
+      else rejected.push({ target, status: "rejected-missing-component", evidence: curatedEntry.evidence });
+      continue;
+    }
+
+    const delimited = segmentDelimitedCompound(target, atoms);
+    if (delimited.length) {
+      const parts = delimited[0];
+      const wordNetBoundaryCandidate = source.provenance.has(WORDNET_COMPOUND_PROVENANCE);
+      const record = makeRecord({
+        target,
+        sourceMorphemes: parts,
+        componentGlosses: parts,
+        sourceSurfaces: source.sourceSurfaces,
+        sourceMorphemesByLanguage: source.sourceMorphemesByLanguage,
+        status: wordNetBoundaryCandidate ? "candidate-closed" : "accepted-delimited",
+        confidence: wordNetBoundaryCandidate ? "wordnet-lexical-boundary" : "derived-boundary",
+        evidence: wordNetBoundaryCandidate
+          ? "Open English WordNet multiword lemma boundary; semantic composition requires review"
+          : "exact source delimiter and existing atomic components",
+        provenance: [...source.provenance].sort().join("; ") || "derived-compound-coverage",
+        layerIndex,
+        morphologyIndex,
+        atomicEntries
+      });
+      if (record) records.push(record);
+      else rejected.push({ target, status: "rejected-missing-component" });
+      continue;
+    }
+
+    const closed = segmentClosedCompound(target, atoms, { maximumParts: maximumCompoundComponents });
+    if (!closed.length) continue;
+    for (const parts of closed) {
+      const record = makeRecord({
+        target,
+        sourceMorphemes: parts,
+        componentGlosses: parts,
+        sourceSurfaces: source.sourceSurfaces,
+        sourceMorphemesByLanguage: source.sourceMorphemesByLanguage,
+        status: "candidate-closed",
+        confidence: "orthographic-candidate",
+        evidence: "closed-word segmentation requires semantic review",
+        provenance: [...source.provenance].sort().join("; ") || "derived-compound-coverage",
+        layerIndex,
+        morphologyIndex,
+        atomicEntries
+      });
+      if (record) records.push(record);
+    }
+  }
+
+  const linked = buildCompoundAtomLinks({ atomicEntries, compoundEntries: records });
+  const linkedRecords = linked.entries.map((record) => ({
+    ...record,
+    id: recordId(record)
+  }));
+  const finalLinks = buildCompoundAtomLinks({ atomicEntries, compoundEntries: linkedRecords });
+  finalLinks.entries.sort((left, right) => left.target.localeCompare(right.target) || left.id.localeCompare(right.id));
+  return {
+    records: finalLinks.entries,
+    accepted: finalLinks.entries.filter((record) => DERIVED_COMPOUND_STATUSES.slice(0, 2).includes(record.status)),
+    candidates: finalLinks.entries.filter((record) => record.status === "candidate-closed"),
+    existingAtomic,
+    rejected,
+    atomLinks: {
+      atomToCompounds: finalLinks.atomToCompounds,
+      compoundToAtom: finalLinks.compoundToAtom
+    }
+  };
+}
+
+export function resolveDerivedCompound(records, { language, surface, target } = {}) {
+  if (!Array.isArray(records)) throw invalid("compound resolver requires records");
+  const normalizedSurface = normalizeTerm(surface);
+  const normalizedTarget = normalizeTerm(target);
+  const matches = records.filter((record) => {
+    if (!DERIVED_COMPOUND_STATUSES.slice(0, 2).includes(record.status)) return false;
+    if (normalizedTarget && record.target !== normalizedTarget) return false;
+    if (normalizedSurface) {
+      const sourceSurface = language ? record.sourceSurfaces?.[language] : undefined;
+      if (normalizeTerm(sourceSurface) !== normalizedSurface && record.target !== normalizedSurface) return false;
+    }
+    return true;
+  });
+  if (matches.length === 1) return matches[0];
+  if (matches.length > 1) return { status: "ambiguous", candidates: matches };
+  return null;
+}
+
+function renderDerivedCompoundCoverageRow(entry) {
+  const payload = {
+    surface: entry.target,
+    ...(entry.senseId ? { senseId: entry.senseId } : {}),
+    ...(entry.targetPartOfSpeech ? { targetPartOfSpeech: entry.targetPartOfSpeech } : {}),
+    aliases: entry.aliases,
+    morphemes: entry.sourceMorphemes,
+    sourceMorphemes: entry.sourceMorphemes,
+    target: entry.target,
+    gloss: entry.target,
+    componentGlosses: entry.componentGlosses,
+    specificAtom: entry.specificAtom,
+    pyashSequence: entry.pyashSequence,
+    componentLayers: entry.componentLayers,
+    maxLayer: entry.maxLayer,
+    head: entry.head,
+    sourceSurfaces: entry.sourceSurfaces,
+    sourceMorphemesByLanguage: entry.sourceMorphemesByLanguage,
+    componentRoles: entry.componentRoles,
+    morphologyStatus: entry.morphologyStatus,
+    morphologySignals: entry.morphologySignals,
+    coverageStatus: entry.coverageStatus,
+    genericLookup: entry.genericLookup,
+    verificationStatus: entry.verificationStatus,
+    verificationHeadKind: entry.verificationHeadKind,
+    certainty: entry.certainty,
+    certaintyScore: entry.certaintyScore,
+    deterministicChecks: entry.deterministicChecks,
+    verificationAttempts: entry.verificationAttempts,
+    verifier: entry.verifier,
+    verificationRationale: entry.verificationRationale,
+    verificationEvidence: entry.verificationEvidence,
+    decisionRevision: entry.decisionRevision,
+    verificationDecisionId: entry.verificationDecisionId,
+    verificationDecisionIds: entry.verificationDecisionIds,
+    evidence: entry.evidence,
+    provenance: entry.provenance,
+    confidence: entry.confidence,
+    status: entry.status
+  };
+  return {
+    key: entry.senseId ?? entry.target,
+    payload
+  };
+}
+
+export function renderDerivedCompoundCoverageRowPya(entry) {
+  if (!entry || typeof entry !== "object") throw invalid("compound row renderer requires a record");
+  const { key, payload } = renderDerivedCompoundCoverageRow(entry);
+  return `su text ${JSON.stringify(key)} ob text ${JSON.stringify(JSON.stringify(payload))} ya`;
+}
+
+export function renderDerivedCompoundCoveragePya(
+  records,
+  { name = DERIVED_COMPOUND_LEXICON_NAME } = {}
+) {
+  if (!Array.isArray(records)) throw invalid("compound renderer requires records");
+  if (typeof name !== "string" || !name) throw invalid("compound renderer requires a map name");
+  const grouped = new Map();
+  for (const entry of records) {
+    const key = entry?.senseId ?? entry?.target;
+    if (typeof key !== "string" || !key) throw invalid("compound renderer requires a target or sense id");
+    const group = grouped.get(key) ?? [];
+    group.push(entry);
+    grouped.set(key, group);
+  }
+  const rows = [...grouped.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, entries]) => {
+      const payloads = entries
+        .slice()
+        .sort((left, right) => left.target.localeCompare(right.target) || left.id.localeCompare(right.id))
+        .map(renderDerivedCompoundCoverageRow)
+        .map((row) => row.payload);
+      const payload = entries[0].senseId
+        ? JSON.stringify({ senseId: entries[0].senseId, records: payloads })
+        : JSON.stringify(payloads[0]);
+      return `su text ${JSON.stringify(key)} ob text ${JSON.stringify(payload)} ya`;
+    });
+  return [`su name ${name} be map def`, ...rows, "prah", ""].join("\n");
+}

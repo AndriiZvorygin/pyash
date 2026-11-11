@@ -25,6 +25,7 @@ export function npToPyash(np = {}) {
     const embedded = sentenceToPyash(np.la);
     return `la ${embedded} ko`;
   }
+  if (typeof np.wo === "string" && np.wo) return `wo ${np.wo}`;
   if (np.name !== undefined) {
     if (Array.isArray(np.nameTypeWords) && np.nameTypeWords.length > 0) {
       return `name ${np.nameTypeWords.join(" ")} ${np.name}`;

@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 
-import { clearExchangeRecorder, recordArtifact, setExchangeRecorder, setExchangeRunId } from "../program/bridge/exchange.mjs";
+import { clearExchangeRecorder, normalizeLocator, recordArtifact, setExchangeRecorder, setExchangeRunId } from "../program/bridge/exchange.mjs";
 
 test("recordArtifact run aliases keep meaningful basename and extension", async () => {
   const runRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-exchange-alias-"));
@@ -79,5 +79,18 @@ test("recordArtifact materializes run-folder locator when missing", async () => 
     assert.equal(materialized, "hello-newspaper");
   } finally {
     clearExchangeRecorder();
+  }
+});
+
+test("normalizeLocator preserves absolute external files but rejects relative root escapes", async () => {
+  const runRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-exchange-locator-"));
+  const externalPath = path.join(os.tmpdir(), "pyash-external-note.md");
+  setExchangeRecorder({ record: () => {}, runRoot });
+  try {
+    assert.equal(normalizeLocator(externalPath), externalPath);
+    assert.throws(() => normalizeLocator("../outside.md"), /exchange defective/u);
+  } finally {
+    clearExchangeRecorder();
+    await fs.rm(runRoot, { recursive: true, force: true });
   }
 });

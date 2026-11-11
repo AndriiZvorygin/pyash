@@ -9,6 +9,7 @@ import {
 import { QUOTED_PLACEHOLDER, QUOTED_TEXT_PREFIX } from "./constants.mjs";
 import { tokenize } from "./tokenize.mjs";
 import { UNIT_TYPE_ALIASES, parseAllEnumeration, parseClause } from "./parse_tokens_helpers.mjs";
+import { findQuotedTextBlock } from "../library/quotedTextBlock.mjs";
 
 export class StrictParseError extends Error {
   constructor(message, details = {}) {
@@ -659,10 +660,10 @@ export function parse(line) {
   let quotedText = null;
   let working = line;
 
-  const blockMatch = working.match(/quoted\.([^.]+)\.(?:contents\s*)?([\s\S]*?)\.\1\.quoted/);
-  if (blockMatch) {
-    quotedText = blockMatch[2];
-    working = working.replace(blockMatch[0], ` ${QUOTED_PLACEHOLDER} `);
+  const block = findQuotedTextBlock(working);
+  if (block) {
+    quotedText = working.slice(block.contentStart, block.contentEnd);
+    working = `${working.slice(0, block.start)} ${QUOTED_PLACEHOLDER} ${working.slice(block.end)}`;
   }
 
   const tokens = tokenize(working.trim());

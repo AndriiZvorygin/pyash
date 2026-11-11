@@ -85,6 +85,20 @@ export function deriveTurnIdentity({
 } = {}) {
   const requestHash = canonicalRequestHash(request);
   const source = readSource({ payloadId, exchangeSentenceId });
+  const ordinal = Math.max(1, Math.trunc(Number(sessionOrdinal) || 1));
+  if (source?.kind === "exchange") {
+    // An exchange sentence id names the position of a sentence in a run, not
+    // the exchange itself, so it is only unique inside that run. Two runs
+    // that reach the same position must not claim one turn, so the turn
+    // carries the session-local ordinal and every ask gets its own turn.
+    return {
+      turnId: `turn-${source.kind}-${sourcePart(source.value)}-${String(ordinal).padStart(6, "0")}`,
+      requestHash,
+      ordinal,
+      source: source.kind,
+      sourceId: source.value
+    };
+  }
   if (source) {
     return {
       turnId: `turn-${source.kind}-${sourcePart(source.value)}-${sha256(source.value).slice(0, 8)}`,
@@ -94,7 +108,6 @@ export function deriveTurnIdentity({
       sourceId: source.value
     };
   }
-  const ordinal = Math.max(1, Math.trunc(Number(sessionOrdinal) || 1));
   return {
     turnId: `turn-${String(ordinal).padStart(6, "0")}-${requestHash.slice(0, 12)}`,
     requestHash,
@@ -358,6 +371,8 @@ function normalizeTurn(turn) {
     modern: turn.modern,
     legacy: turn.legacy,
     firstIndex: turn.firstIndex,
+    ordinal: Number(user?.metadata?.ordinal ?? user?.sentence?.by?.num) || null,
+    timestamp: String(user?.sentence?.during?.date ?? ""),
     requestHash: turn.requestHash || user?.requestHash || "",
     userContent: user?.content ?? "",
     responseText: assistant?.content ?? checkpoint?.responseText ?? "",
@@ -373,6 +388,14 @@ function normalizeTurn(turn) {
     checkpoint: checkpoint ?? null,
     records: turn.records
   };
+}
+
+function compareTurnsByConversationOrder(left, right) {
+  const leftTime = Date.parse(left.timestamp);
+  const rightTime = Date.parse(right.timestamp);
+  if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) return leftTime - rightTime;
+  if (left.ordinal && right.ordinal && left.ordinal !== right.ordinal) return left.ordinal - right.ordinal;
+  return left.firstIndex - right.firstIndex || left.turnId.localeCompare(right.turnId);
 }
 
 function stableTurnSnapshot(turn) {
@@ -450,7 +473,7 @@ function buildLiveMessages({ turns, recentTurns, originalTask }) {
 
 export function projectSessionReplay({ sentences = [], historyWindow = 50 } = {}) {
   const source = Array.isArray(sentences) ? sentences : [];
-  const turns = buildTurns(source).map(normalizeTurn);
+  const turns = buildTurns(source).map(normalizeTurn).sort(compareTurnsByConversationOrder);
   const completeTurns = turns.filter((turn) => turn.complete);
   const maxPairs = Math.max(0, Math.trunc(Number(historyWindow) || 0));
   const recentTurns = maxPairs > 0 ? completeTurns.slice(-maxPairs) : [];
@@ -524,6 +547,34 @@ export function buildSessionTurnSentence({
     if (normalizedRole === "agent") sentence.become = { text: String(metadata.channelType) };
     else sentence.fromstate = { text: String(metadata.channelType) };
   }
+  return sentence;
+}
+
+export function buildSessionMessageSentence({
+  role = "user",
+  content,
+  turnId,
+  metadata = {},
+  timestamp = ""
+} = {}) {
+  const normalizedTurnId = normalizeText(turnId);
+  const normalizedRole = normalizeText(role).toLowerCase();
+  if (!normalizedTurnId) throw new Error("session message requires a linked turn id");
+  if (!new Set(["user", "tool"]).has(normalizedRole)) {
+    throw new Error(`session message role is invalid: ${normalizedRole || "(empty)"}`);
+  }
+  const sentence = {
+    su: { name: "session message" },
+    ob: { text: String(content ?? "") },
+    as: { name: normalizedRole },
+    accordingto: { text: normalizedTurnId },
+    be: "session message",
+    mood: "ya"
+  };
+  if (metadata.payloadId) sentence.fromtext = { text: String(metadata.payloadId) };
+  if (metadata.sender) sentence.from = { name: String(metadata.sender) };
+  if (metadata.channelType) sentence.fromstate = { text: String(metadata.channelType) };
+  if (timestamp || metadata.createdAt) sentence.during = { date: String(timestamp || metadata.createdAt) };
   return sentence;
 }
 

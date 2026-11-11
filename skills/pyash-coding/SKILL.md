@@ -42,3 +42,10 @@ description: Write, read, and refactor Pyash code in the pyash repo. Use when ed
 
 - Create a minimal example under `examples/pyash/` and a matching quiz under `quiz/`.
 - Keep the example runnable via `./run` or `./compile` (as appropriate).
+
+## Coding saddle coordination
+
+- Duty messages may be delivered after a completed model turn or after a completed tool result. Tool-result delivery must wait until the provider's current tool-call batch has all its results; then append the message to the active session before the next model request.
+- Record an after-tool message as a linked session-message event in the existing agent-house `.pya` transcript. Do not append it as an unpaired user turn, which would appear as a second pending turn during replay.
+- Managed terminals are opaque PTYs. Apply command policy and project-root checks to the initial process launch; forward subsequent input bytes as given instead of parsing Tab, Enter, or command strings in the terminal layer.
+- A PTY child runs with its Unix account's privileges. Pyash tool roots and command policy do not create an OS jail for commands entered after launch; describe that boundary accurately.

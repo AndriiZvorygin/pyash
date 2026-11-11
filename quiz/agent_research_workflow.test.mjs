@@ -166,18 +166,11 @@ test("fixture research workflow records evidence, writes the report, and replays
   assert.ok(toolEvents.every((event) => event?.mood === "ya"));
   assert.ok(toolEvents.every((event) => event?.to?.la));
   assert.ok(newspaper.some((sentence) => sentence?.be === "artifact" && sentence?.to?.filename?.endsWith("report.md")));
-  const artifactHashes = newspaper
-    .filter((sentence) => sentence?.be === "artifact" && sentence?.fromtext?.text)
-    .map((sentence) => sentence.fromtext.text);
-  assert.ok(artifactHashes.length >= 2);
-  for (const hash of artifactHashes) {
-    await fs.access(path.join(cwd, "artifacts", "sha256", hash.slice(0, 2), hash.slice(2, 4), `${hash}.html`)).catch(async () => {
-      await fs.access(path.join(cwd, "artifacts", "sha256", hash.slice(0, 2), hash.slice(2, 4), `${hash}.md`)).catch(async () => {
-        await fs.access(path.join(cwd, "artifacts", "sha256", hash.slice(0, 2), hash.slice(2, 4), `${hash}.txt`)).catch(async () => {
-          await fs.access(path.join(cwd, "artifacts", "sha256", hash.slice(0, 2), hash.slice(2, 4), `${hash}.pya`));
-        });
-      });
-    });
+  const artifactEntries = newspaper.filter((sentence) => sentence?.be === "artifact" && sentence?.fromtext?.text);
+  assert.ok(artifactEntries.length >= 2);
+  for (const artifact of artifactEntries) {
+    assert.ok(artifact.to?.filename, "recorded artifact should declare its locator");
+    await fs.access(path.join(cwd, artifact.to.filename));
   }
 
   const resultPath = path.join(cwd, "artifacts", runId, "result.pya");
@@ -335,6 +328,45 @@ test("max tool calls counts each call in one model response and rejects the exce
   } finally {
     clearRunToolEventRecorder();
   }
+});
+
+test("default tool-call budget permits work across more than six rounds and twelve calls", async () => {
+  forget();
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-agent-research-default-limit-"));
+  doRemember({ mood: "ya", su: { name: "agent cwd" }, be: "cwd", ob: { filename: cwd } });
+  doRemember({ mood: "ya", su: { name: "agent sandbox" }, be: "truth", ob: { boolean: true } });
+  await interpret(parse("su name tools as wo sandpit be map def"));
+  await interpret(parse("su name agent ob bool truth ya"));
+  await interpret(parse("su name write one be write ob text input to filename \"one.txt\" can"));
+  await interpret(parse("prah"));
+  const { tools, toolMap } = buildToolSchemas("tools");
+  const writeTool = toolBySubject(tools, "write one");
+  const mockResponses = Array.from({ length: 13 }, (_, index) =>
+    toolResponse(writeTool.function.name, { ob: `write-${index + 1}` }, `write-${index + 1}`)
+  );
+  mockResponses.push({ message: { role: "assistant", content: "finished" } });
+  const result = await runToolChat({
+    sentence: parse('be write ob text "research" for name helper to name text out with name tools do'),
+    mindName: "helper",
+    model: "fixture",
+    dialogue: "helper research",
+    callPrompt: "write",
+    historyMessages: [],
+    toolMap,
+    tools,
+    toolBlock: "",
+    backendName: "",
+    ollamaHost: "",
+    reasoningEffort: "",
+    mindDebug: false,
+    debugMind: () => {},
+    inputs: {
+      mockResponseRaw: JSON.stringify(mockResponses)
+    }
+  });
+
+  assert.equal(result, "finished");
+  assert.equal(await fs.readFile(path.join(cwd, "one.txt"), "utf8"), "write-13");
 });
 
 test("bounded HTML markdown dispatch honors atmost byte", async () => {

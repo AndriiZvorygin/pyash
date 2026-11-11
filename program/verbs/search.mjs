@@ -5,6 +5,7 @@ import { remember, doRemember } from "../remember/index.mjs";
 import { resolveConfigText } from "../configure/env.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { normalizeSearxUrl, resolveSearchMotor } from "../library/web_search_endpoint.mjs";
+import { isClusterCompressFormat, searchZimArchive } from "../library/zim_archive.mjs";
 
 function resolveFilename(value, { rememberFn } = {}) {
   if (!value) return "";
@@ -199,10 +200,13 @@ async function listFiles(root) {
   return files;
 }
 
-export async function search(sentence, { remember: rememberFn = remember } = {}) {
+export async function search(sentence, { remember: rememberFn = remember, runtimeContext = null } = {}) {
   const webFlag = sentence?.fromstate?.wo === "web" || sentence?.fromstate?.text === "web";
   if (webFlag) {
     return searchWeb(sentence, { remember: rememberFn });
+  }
+  if (isClusterCompressFormat(sentence)) {
+    return searchZimArchive(sentence, { remember: rememberFn, runtimeContext });
   }
   const pattern = resolveText(sentence?.ob, { rememberFn });
   const target = resolveFilename(sentence?.in ?? sentence?.inside, { rememberFn });
@@ -293,5 +297,10 @@ export const signatures = [
   { signatureWords: ["be", "search", "inside", "filename", "ob", "text"], handler: search },
   { signatureWords: ["be", "search", "inside", "filename", "ob", "name", "text"], handler: search },
   { signatureWords: ["be", "search", "inside", "name", "filename", "ob", "text"], handler: search },
-  { signatureWords: ["be", "search", "inside", "name", "filename", "ob", "name", "text"], handler: search }
+  { signatureWords: ["be", "search", "inside", "name", "filename", "ob", "name", "text"], handler: search },
+  { signatureWords: ["be", "search", "as", "wo", "cluster-compress", "in", "filename", "ob", "text"], handler: search },
+  { signatureWords: ["be", "search", "as", "wo", "cluster-compress", "in", "filename", "ob", "name", "text"], handler: search },
+  { signatureWords: ["be", "search", "ob", "text", "inside", "filename", "as", "wo", "cluster-compress"], handler: search },
+  { signatureWords: ["be", "search", "ob", "text", "in", "filename", "fromstate", "wo", "zim"], handler: search },
+  { signatureWords: ["be", "search", "fromstate", "wo", "zim", "ob", "text"], handler: search }
 ];

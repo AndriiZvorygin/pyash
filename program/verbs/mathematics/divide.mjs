@@ -27,6 +27,16 @@ export async function divide_by_num_from_name_num_to_name_num(sentence, { rememb
 // Backwards-compatible export until dispatch switches to signature names.
 export const divide = divide_by_num_from_name_num_to_name_num;
 
+// Literal quotient: the ob operand is the numerator and the with operand is
+// the denominator, matching the operand order used by plus and exponential.
+export async function divide_obj_num_with_num(sentence, { remember }) {
+  const numerator = getOperand(sentence.ob, "ob", remember);
+  const denominator = getOperand(sentence.with, "with", remember);
+  if (denominator === 0) throw new Error("divide: with cannot be zero");
+
+  return { ob: numerator / denominator, be: sentence?.be ?? "number" };
+}
+
 export const signatures = [
   {
     signatureWords: ["be", "divide", "by", "num", "from", "name", "num", "to", "name", "num"],
@@ -75,5 +85,13 @@ export const signatures = [
   {
     signatureWords: ["be", "divide", "by", "name", "num", "ob", "num", "to", "name", "num"],
     handler: divide_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "divide", "ob", "num", "with", "num"],
+    handler: divide_obj_num_with_num
+  },
+  {
+    signatureWords: ["be", "divide", "ob", "name", "num", "with", "num"],
+    handler: divide_obj_num_with_num
   }
 ];

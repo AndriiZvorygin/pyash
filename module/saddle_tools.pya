@@ -8,6 +8,21 @@ su name command be command ob text input to name text out can
 su name interpret javascript be interpret as wo javascript ob text input can
 su name repair be repair ob text input to name map outcome can
 su name repair check be repair as wo check ob text input to name map outcome can
+su name terminal start be terminal as wo start ob text input can
+su name terminal start coding agent be terminal as wo start coding agent ob text input can
+su name terminal read be terminal as wo read ob text input can
+su name terminal write be terminal as wo write ob text input can
+su name terminal resize be terminal as wo resize ob text input can
+su name terminal status be terminal as wo status ob text input can
+su name terminal list be terminal as wo list ob text input can
+su name terminal close be terminal as wo close ob text input can
+su name session plan be write fromstate "coding saddle plan" ob text input can
+su name search be search ob text input fromstate wo zim can
+su name search archive be search as wo cluster-compress in filename input ob text input can
+su name read archive focus be read as wo cluster-compress from filename input ob text input by text input can
+su name download be download from filename input as wo web to filename input can
+su name download markdown be download from filename input as wo markdown to filename input can
+su name read markdown be read from filename input fromstate wo html become wo markdown atmost byte 65536 can
 prah
 
 exists su name saddle tools be export ya

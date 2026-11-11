@@ -23,9 +23,11 @@ function readArgValue(args, name, fallback = "") {
 function parseArgs(argv) {
   const args = argv.slice(2);
   const root = readArgValue(args, "--root", process.cwd());
+  const configRoot = readArgValue(args, "--config-root", root);
   const toolsMap = readArgValue(args, "--tools-map", DEFAULT_TOOLS_MAP);
   return {
     root: path.resolve(root),
+    configRoot: path.resolve(configRoot),
     toolsMap
   };
 }
@@ -56,6 +58,12 @@ function firstTextValue(ob = {}) {
 
 function serializeResult(result) {
   if (!result || typeof result !== "object") return { text: String(result ?? ""), sentence: result };
+  if (result.invoked === "read" && typeof result.result?.text === "string") {
+    return {
+      text: result.result.text,
+      sentence: result
+    };
+  }
   const pyash = sentenceToPyash(result);
   const text = firstTextValue(result.ob)
     || (typeof pyash === "string" ? pyash.trim() : "")
@@ -106,27 +114,39 @@ async function materializeToolsMapFromDefinition({ mapPath, toolsMap }) {
   });
 }
 
-async function ensureDefaultToolsMap({ cwd, toolsMap }) {
+function toolsMapDefinitionPath(cwd, toolsMap) {
+  const name = String(toolsMap ?? "").trim();
+  if (!/^[a-z0-9][a-z0-9 _-]*$/i.test(name)) return "";
+  const filename = `${name.replace(/ /g, "_")}.pya`;
+  const moduleRoot = path.resolve(cwd, "module");
+  const candidate = path.resolve(moduleRoot, filename);
+  return path.dirname(candidate) === moduleRoot ? candidate : "";
+}
+
+async function ensureToolsMap({ cwd, toolsMap }) {
   if (remember(toolsMap)?.be === "map") return;
-  if (toolsMap !== DEFAULT_TOOLS_MAP) return;
-  const mapPath = path.resolve(cwd, "module", "agent_tools.pya");
+  const mapPath = toolsMapDefinitionPath(cwd, toolsMap);
+  if (!mapPath) return;
   await materializeToolsMapFromDefinition({ mapPath, toolsMap });
 }
 
-export async function buildRuntime({ root, toolsMap = DEFAULT_TOOLS_MAP }) {
-  process.chdir(root);
+export async function buildRuntime({ root, configRoot = root, toolsMap = DEFAULT_TOOLS_MAP }) {
+  const workspaceRoot = path.resolve(root);
+  const resolvedConfigRoot = path.resolve(configRoot);
+  process.chdir(workspaceRoot);
   forget();
   clearSignatureHandlers();
   for (const sig of builtInSignatures) registerSignatureHandler(sig);
-  await loadDefaultConfig({ cwd: root, interpretFn: interpret, entryPath: root });
-  await ensureDefaultToolsMap({ cwd: root, toolsMap });
+  await loadDefaultConfig({ cwd: resolvedConfigRoot, interpretFn: interpret, entryPath: resolvedConfigRoot });
+  await ensureToolsMap({ cwd: resolvedConfigRoot, toolsMap });
   const built = buildToolSchemas(toolsMap);
   if (!built?.tools?.length) {
     throw new Error(`tools map not available: ${toolsMap}`);
   }
   const tools = toolListFromSchemas(built.tools);
   return {
-    root,
+    root: workspaceRoot,
+    configRoot: resolvedConfigRoot,
     toolsMap,
     tools,
     toolMap: built.toolMap

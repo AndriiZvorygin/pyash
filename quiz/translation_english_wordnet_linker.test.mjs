@@ -1,0 +1,1158 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import { buildProgram } from "../program/program.mjs";
+import { deriveSignatureFromCall } from "../program/bridge/signature/derive.mjs";
+import { joinSignatureWords } from "../program/bridge/signature/normalize.mjs";
+import { signatures as gpuSignatures } from "../program/verbs/gpu.mjs";
+import { buildEnglishWordNetIndex } from "../program/library/translation/english_wordnet.mjs";
+import {
+  applyEnglishWordNetSenseLinkResponse,
+  buildEnglishWordNetSenseAnchorCandidates,
+  buildEnglishWordNetSenseLinkInventory,
+  buildEnglishWordNetSenseLinkPrompt,
+  buildEnglishWordNetSenseLinkRecords,
+  createDefaultQueuedMindEnglishWordNetSenseLinkSubmitter,
+  createQueuedMindEnglishWordNetSenseLinkSubmitter,
+  estimateEnglishWordNetSenseLinkPromptTokens,
+  linkEnglishWordNetSense,
+  loadEnglishWordNetLinkerConfig,
+  parseEnglishWordNetSenseLinkResponse,
+  reconcileEnglishWordNetSenseLinks,
+  renderEnglishWordNetSenseLinksPya,
+  submitEnglishWordNetSenseLinks,
+  wordNetSenseLinkQueueHandle
+} from "../program/library/translation/english_wordnet_linker.mjs";
+import { parseEnglishWordNetBridgeCatalog } from "../program/library/translation/english_wordnet_bridges.mjs";
+import {
+  loadTranslationModelCard,
+  parseTranslationModelCards,
+  selectTranslationModelCard
+} from "../program/library/translation/translation_model_cards.mjs";
+
+function fixtureIndex() {
+  return buildEnglishWordNetIndex({
+    rows: [{
+      id: "v:alpha:florp",
+      pos: "v",
+      synset: "alpha",
+      senseKey: "alpha",
+      lemma: "florp",
+      gloss: "undergo an emotional sensation"
+    }, {
+      id: "v:beta:blorp",
+      pos: "v",
+      synset: "beta",
+      senseKey: "beta",
+      lemma: "blorp",
+      gloss: "a rare unresolved action"
+    }, {
+      id: "v:gamma:glorp",
+      pos: "v",
+      synset: "gamma",
+      senseKey: "gamma",
+      lemma: "glorp",
+      gloss: "touch or sense something"
+    }]
+  });
+}
+
+function resolver(word) {
+  return {
+    florp: { coverageType: "atomic", canonicalEnglish: "experience", pyashSequence: ["tyap"] },
+    experience: { coverageType: "atomic", pyashSequence: ["tyap"] },
+    touch: { coverageType: "atomic", pyashSequence: ["tcum"] },
+    sense: { coverageType: "atomic", pyashSequence: ["hyes"] }
+  }[word] ?? null;
+}
+
+function withChoice(records, {
+  target = "emotionally",
+  pyashSequence = ["xyek"],
+  evidence = "fixture sense choice"
+} = {}) {
+  return records.map((record) => ({
+    ...record,
+    candidates: [{ target, pyashSequence, evidence }]
+  }));
+}
+
+test("WordNet linker creates stable one-record-per-sense batches", () => {
+  const records = buildEnglishWordNetSenseLinkRecords({
+    wordnetIndex: fixtureIndex(),
+    resolveWord: resolver,
+    sourceTerms: ["florp", "blorp", "glorp"]
+  });
+  assert.equal(records.length, 3);
+  assert.deepEqual(records.map((record) => record.source), ["v:alpha", "v:beta", "v:gamma"]);
+  assert.equal(records[0].status, "accepted-edge");
+  assert.deepEqual(records[0].link.pyashSequence, ["tyap"]);
+  assert.deepEqual(records[0].edgeNode, { degree: 0, singleSenseLemmas: ["florp"] });
+  assert.equal(records[1].status, "review");
+  assert.equal(records[2].status, "review");
+  assert.equal(records[2].candidates.length, 0);
+  assert.equal(new Set(records.map((record) => record.id)).size, 3);
+});
+
+test("WordNet linker excludes grammar coverage with a sequence from direct and relation anchors", () => {
+  const index = buildEnglishWordNetIndex({
+    rows: [{
+      id: "n:source:source",
+      pos: "n",
+      synset: "source",
+      senseKey: "source",
+      lemma: "source",
+      gloss: "a source concept"
+    }, {
+      id: "n:grammar:grammarword",
+      pos: "n",
+      synset: "grammar",
+      senseKey: "grammarword",
+      lemma: "grammarword",
+      gloss: "a grammatical concept"
+    }],
+    relations: [{ source: "n:source", target: "n:grammar", relation: "hypernym" }]
+  });
+  const resolveWord = (word) => word === "grammarword"
+    ? { coverageType: "grammar", canonicalEnglish: "grammarword", pyashSequence: ["ya"] }
+    : null;
+  const direct = linkEnglishWordNetSense({
+    sense: { pos: "n", synset: "grammar", lemmas: ["grammarword"] },
+    sourceTerm: "grammarword",
+    wordnetIndex: index,
+    resolveWord
+  });
+  const related = buildEnglishWordNetSenseAnchorCandidates({
+    sense: { pos: "n", synset: "source", lemmas: ["source"] },
+    wordnetIndex: index,
+    resolveWord
+  });
+
+  assert.equal(direct.status, "review");
+  assert.deepEqual(direct.candidates, []);
+  assert.deepEqual(related, []);
+});
+
+test("WordNet links distinguish exact atom and accepted compound targets", () => {
+  const atomIndex = buildEnglishWordNetIndex({
+    rows: [{
+      id: "n:touch:touch",
+      pos: "n",
+      synset: "touch",
+      senseKey: "touch",
+      lemma: "touch",
+      gloss: "physical contact"
+    }]
+  });
+  const atom = linkEnglishWordNetSense({
+    sense: { pos: "n", synset: "touch", lemmas: ["touch"] },
+    sourceTerm: "touch",
+    wordnetIndex: atomIndex,
+    resolveWord: () => ({
+      coverageType: "atomic",
+      canonicalEnglish: "touch",
+      pyashSequence: ["tcum"]
+    })
+  });
+  assert.equal(atom.link.targetKind, "atom");
+  assert.equal(atom.link.targetId, "atom:tcum:n");
+
+  const compoundIndex = buildEnglishWordNetIndex({
+    rows: [{
+      id: "n:sexual-desire:sexual_desire",
+      pos: "n",
+      synset: "sexual-desire",
+      senseKey: "sexual-desire",
+      lemma: "sexual desire",
+      gloss: "strong sexual desire"
+    }]
+  });
+  const compound = linkEnglishWordNetSense({
+    sense: { pos: "n", synset: "sexual-desire", lemmas: ["sexual desire"] },
+    sourceTerm: "sexual desire",
+    wordnetIndex: compoundIndex,
+    resolveWord: () => ({
+      coverageType: "compound",
+      canonicalEnglish: "sexual desire",
+      id: "compound-sexual-desire",
+      pyashSequence: ["hjon", "twin"]
+    })
+  });
+  assert.equal(compound.link.targetKind, "compound");
+  assert.equal(compound.link.targetId, "compound:hjon+twin:n");
+});
+
+test("WordNet linker uses an exact source lemma dictionary alias before relation compounds", () => {
+  const index = buildEnglishWordNetIndex({
+    rows: [{
+      id: "n:kind:kind",
+      pos: "n",
+      synset: "kind",
+      senseKey: "kind",
+      lemma: "kind",
+      gloss: "a category of things"
+    }, {
+      id: "n:kind:sort",
+      pos: "n",
+      synset: "kind",
+      senseKey: "sort",
+      lemma: "sort",
+      gloss: "a category of things"
+    }, {
+      id: "n:kind:form",
+      pos: "n",
+      synset: "kind",
+      senseKey: "form",
+      lemma: "form",
+      gloss: "a category of things"
+    }]
+  });
+  const linked = linkEnglishWordNetSense({
+    sense: { pos: "n", synset: "kind", lemmas: ["kind", "sort", "form"] },
+    sourceTerm: "kinds",
+    wordnetIndex: index,
+    resolveWord: (word) => ({
+      kind: { coverageType: "dictionary-alias", canonicalEnglish: "sort", pyashSequence: ["nyit"] },
+      sort: { coverageType: "atomic", canonicalEnglish: "sort", pyashSequence: ["nyit"] },
+      form: { coverageType: "atomic", canonicalEnglish: "form", pyashSequence: ["hfam"] }
+    }[word] ?? null)
+  });
+  assert.equal(linked.status, "accepted-edge");
+  assert.equal(linked.link.target, "sort");
+  assert.deepEqual(linked.link.pyashSequence, ["nyit"]);
+  assert.match(linked.link.evidence, /existing Pyash dictionary alias|one meaning/u);
+});
+
+test("WordNet linker keeps a polysemous dictionary alias unresolved", () => {
+  const index = buildEnglishWordNetIndex({
+    rows: [{
+      id: "a:sexual-body:sexual",
+      pos: "a",
+      synset: "sexual-body",
+      senseKey: "sexual-body",
+      lemma: "sexual",
+      gloss: "having or involving sex"
+    }, {
+      id: "a:sexuality:sexual",
+      pos: "a",
+      synset: "sexuality",
+      senseKey: "sexuality",
+      lemma: "sexual",
+      gloss: "relating to sexuality"
+    }]
+  });
+  const linked = linkEnglishWordNetSense({
+    sense: { pos: "a", synset: "sexual-body", lemmas: ["sexual"] },
+    sourceTerm: "sexually",
+    wordnetIndex: index,
+    resolveWord: (word) => ({
+      sexually: {
+        coverageType: "dictionary-alias",
+        canonicalEnglish: "sexual",
+        pyashSequence: ["hjon"]
+      },
+      sexual: {
+        coverageType: "atomic",
+        canonicalEnglish: "sexual",
+        pyashSequence: ["hjon"]
+      }
+    }[word] ?? null)
+  });
+  assert.equal(linked.status, "review");
+  assert.equal(linked.link, undefined);
+  assert.equal(linked.candidates[0].target, "sexual");
+  assert.equal(linked.candidates[0].selectable, false);
+});
+
+test("WordNet sense anchors use covered relation targets only", () => {
+  const index = buildEnglishWordNetIndex({
+    rows: [{
+      id: "n:action:action",
+      pos: "n",
+      synset: "action",
+      senseKey: "action",
+      lemma: "action",
+      gloss: "something done"
+    }, {
+      id: "n:activity:activity",
+      pos: "n",
+      synset: "activity",
+      senseKey: "activity",
+      lemma: "activity",
+      gloss: "an action"
+    }],
+    relations: [{
+      source: "n:action",
+      target: "n:activity",
+      relation: "hypernym"
+    }]
+  });
+  const anchors = buildEnglishWordNetSenseAnchorCandidates({
+    sense: { pos: "n", synset: "action", lemmas: ["action"] },
+    wordnetIndex: index,
+    resolveWord: (word) => word === "activity"
+      ? { canonicalEnglish: "activity", pyashSequence: ["twot"] }
+      : null
+  });
+  assert.deepEqual(anchors.map((anchor) => anchor.target), ["activity"]);
+  assert.deepEqual(anchors[0].pyashSequence, ["twot"]);
+  assert.match(anchors[0].evidence, /hypernym/u);
+  assert.equal(anchors[0].selectable, false);
+
+  const acceptedCompoundAnchors = buildEnglishWordNetSenseAnchorCandidates({
+    sense: { pos: "n", synset: "action", lemmas: ["action"] },
+    wordnetIndex: index,
+    resolveWord: (word) => word === "activity"
+      ? { coverageType: "compound", canonicalEnglish: "activity", id: "compound-activity", pyashSequence: ["twa", "twot"] }
+      : null
+  });
+  assert.equal(acceptedCompoundAnchors[0].targetKind, "compound");
+  assert.equal(acceptedCompoundAnchors[0].targetId, "compound:twa+twot:n");
+  assert.equal(acceptedCompoundAnchors[0].selectable, true);
+});
+
+test("WordNet sense anchors compose a covered multiword relation instead of losing a component", () => {
+  const index = buildEnglishWordNetIndex({
+    rows: [{
+      id: "n:lust:lust",
+      pos: "n",
+      synset: "lust",
+      senseKey: "lust",
+      lemma: "lust",
+      gloss: "a strong sexual desire"
+    }, {
+      id: "n:sexual-desire:sexual desire",
+      pos: "n",
+      synset: "sexual-desire",
+      senseKey: "sexual desire",
+      lemma: "sexual desire",
+      gloss: "sexual desire"
+    }, {
+      id: "n:sexual-activity:sexual activity",
+      pos: "n",
+      synset: "sexual-activity",
+      senseKey: "sexual activity",
+      lemma: "sexual activity",
+      gloss: "sexual activity"
+    }, {
+      id: "n:sex-activity:sex activity",
+      pos: "n",
+      synset: "sex-activity",
+      senseKey: "sex activity",
+      lemma: "sex activity",
+      gloss: "sexual activity"
+    }],
+    relations: [{
+      source: "n:lust",
+      target: "n:sexual-desire",
+      relation: "hypernym"
+    }, {
+      source: "n:lust",
+      target: "n:sexual-activity",
+      relation: "domain_topic"
+    }, {
+      source: "n:lust",
+      target: "n:sex-activity",
+      relation: "domain_topic"
+    }]
+  });
+  const anchors = buildEnglishWordNetSenseAnchorCandidates({
+    sense: { pos: "n", synset: "lust", lemmas: ["lust"] },
+    wordnetIndex: index,
+    resolveWord: (word) => ({
+      sexual: { canonicalEnglish: "sexual", pyashSequence: ["hjon"] },
+      activity: { canonicalEnglish: "activity", pyashSequence: ["twot"] },
+      desire: { canonicalEnglish: "desire", pyashSequence: ["twin"] }
+    }[word] ?? null)
+  });
+  assert.deepEqual(anchors.map((anchor) => anchor.target), ["sexual activity", "sexual desire"]);
+  assert.deepEqual(anchors[0].pyashSequence, ["hjon", "twot"]);
+  assert.deepEqual(anchors[1].pyashSequence, ["hjon", "twin"]);
+  assert.equal(anchors[1].kind, "compound-composition");
+  assert.deepEqual(anchors[1].componentTargets, ["sexual", "desire"]);
+  assert.match(anchors[1].evidence, /composed from covered components sexual desire/u);
+  assert.equal(anchors[1].selectable, false);
+});
+
+test("WordNet sense anchors do not compose compounds longer than three atoms", () => {
+  const index = buildEnglishWordNetIndex({
+    rows: [{
+      id: "n:source:source",
+      pos: "n",
+      synset: "source",
+      senseKey: "source",
+      lemma: "source",
+      gloss: "a source concept"
+    }, {
+      id: "n:target:one",
+      pos: "n",
+      synset: "target",
+      senseKey: "one",
+      lemma: "one two three four",
+      gloss: "a four part concept"
+    }],
+    relations: [{ source: "n:source", target: "n:target", relation: "similar" }]
+  });
+  const anchors = buildEnglishWordNetSenseAnchorCandidates({
+    sense: { pos: "n", synset: "source", lemmas: ["source"] },
+    wordnetIndex: index,
+    resolveWord: (word) => (["one", "two", "three", "four"].includes(word)
+      ? { coverageType: "atomic", canonicalEnglish: word, pyashSequence: [word] }
+      : null)
+  });
+  assert.equal(anchors.some((anchor) => anchor.kind === "compound-composition"), false);
+});
+
+test("WordNet sense anchors include convergent vocab suggestions with Pyac mappings", () => {
+  const index = buildEnglishWordNetIndex({
+    rows: [{
+      id: "s:confused:baffled",
+      pos: "s",
+      synset: "confused",
+      senseKey: "baffled",
+      lemma: "baffled",
+      gloss: "perplexed"
+    }, {
+      id: "s:confused:bewildered",
+      pos: "s",
+      synset: "confused",
+      senseKey: "bewildered",
+      lemma: "bewildered",
+      gloss: "perplexed"
+    }, {
+      id: "s:confused:confused",
+      pos: "s",
+      synset: "confused",
+      senseKey: "confused",
+      lemma: "confused",
+      gloss: "perplexed"
+    }]
+  });
+  const anchors = buildEnglishWordNetSenseAnchorCandidates({
+    sense: { pos: "s", synset: "confused", lemmas: ["baffled", "bewildered", "confused"] },
+    wordnetIndex: index,
+    resolveWord: (word) => ({
+      mystified: { canonicalEnglish: "mystified", pyashSequence: ["hmi2f"] },
+      confusion: { canonicalEnglish: "confusion", pyashSequence: ["hbun"] }
+    }[word] ?? null),
+    suggestionRecords: [{
+      input: "baffled",
+      mappings: [{ word: "mystified", pyacSequence: ["hmi2f"], rank: 7439 }]
+    }, {
+      input: "bewildered",
+      mappings: [{ word: "mystified", pyacSequence: ["hmi2f"], rank: 13450 }]
+    }, {
+      input: "confused",
+      mappings: [{ word: "confusion", pyacSequence: ["hbun"], rank: 2061 }]
+    }]
+  });
+  assert.deepEqual(anchors.map((anchor) => anchor.target), ["mystified"]);
+  assert.equal(anchors.find((anchor) => anchor.target === "mystified").support, 2);
+  assert.deepEqual(anchors.find((anchor) => anchor.target === "mystified").pyashSequence, ["hmi2f"]);
+});
+
+test("WordNet linker accepts a leaf node mapped to an existing compound", () => {
+  const index = buildEnglishWordNetIndex({
+    rows: [{
+      id: "n:compound:ledger_house",
+      pos: "n",
+      synset: "compound",
+      senseKey: "compound",
+      lemma: "ledger house",
+      gloss: "a house for ledgers"
+    }]
+  });
+  const records = buildEnglishWordNetSenseLinkRecords({
+    wordnetIndex: index,
+    resolveWord: () => ({
+      coverageType: "compound",
+      canonicalEnglish: "ledger house",
+      pyashSequence: ["ledger", "house"]
+    })
+  });
+  assert.equal(records[0].status, "accepted-edge");
+  assert.deepEqual(records[0].link.pyashSequence, ["ledger", "house"]);
+  assert.equal(records[0].link.target, "ledger house");
+  assert.equal(records[0].link.targetKind, "compound");
+  assert.equal(records[0].link.targetId, "compound:ledger+house:n");
+});
+
+test("WordNet linker inventory includes accepted compounds and excludes compound candidates", () => {
+  const inventory = buildEnglishWordNetSenseLinkInventory({
+    records: [],
+    baseInventory: { entries: [], grammar: [] },
+    compoundRecords: [{
+      target: "ledger house",
+      status: "accepted-curated",
+      pyashSequence: ["ledger", "house"]
+    }, {
+      target: "candidate house",
+      status: "candidate-closed",
+      pyashSequence: ["candidate", "house"]
+    }]
+  });
+  assert.deepEqual(inventory.entries, [{
+    english: "ledger house",
+    pyash: ["ledger", "house"],
+    targetKind: "compound",
+    targetId: "compound:ledger+house"
+  }]);
+});
+
+test("WordNet linker prompt stays bounded to supplied senses and per-sense choices", () => {
+  const records = buildEnglishWordNetSenseLinkRecords({
+    wordnetIndex: fixtureIndex(),
+    resolveWord: resolver,
+    sourceTerms: ["blorp"]
+  });
+  const inventory = buildEnglishWordNetSenseLinkInventory({
+    records,
+    baseInventory: { entries: [{ english: "emotionally", pyash: ["xyek"] }], grammar: [] }
+  });
+  const prompt = buildEnglishWordNetSenseLinkPrompt({ records, inventory });
+  assert.match(prompt, /bounded Pyash WordNet sense-linking worker/u);
+  assert.match(prompt, /same meaning as the synset definition/u);
+  assert.match(prompt, /WordNet examples after semicolons are omitted/u);
+  assert.match(prompt, /A sense row with no choices cannot be accepted/u);
+  assert.match(prompt, /For reject or uncertain, set targetEnglish to an empty string/u);
+  assert.doesNotMatch(prompt, /omit targetEnglish/u);
+  assert.match(prompt, /v:beta/u);
+  assert.match(prompt, /"choices":\[\]/u);
+  assert.doesNotMatch(prompt, /emotionally/u);
+  assert.doesNotMatch(prompt, /AUTHORITATIVE ENGLISH ANCHOR INVENTORY/u);
+  assert.doesNotMatch(prompt, /AUTHORITATIVE PYASH GRAMMAR INVENTORY/u);
+  assert.doesNotMatch(prompt, /SOURCE CONTEXT BY TERM/u);
+  assert.doesNotMatch(prompt, /original source sentence supports/u);
+  assert.doesNotMatch(prompt, /"pyash":"xyek"/u);
+  assert.doesNotMatch(prompt, /ollama/u);
+  assert.ok(prompt.length <= 12000);
+  assert.ok(estimateEnglishWordNetSenseLinkPromptTokens(prompt) < 4000);
+});
+
+test("ambiguous source words keep every sense choice beside the original sentence", () => {
+  const index = buildEnglishWordNetIndex({
+    rows: [{
+      id: "n:show-exhibit:show",
+      pos: "n",
+      synset: "show-exhibit",
+      senseKey: "show-exhibit",
+      lemma: "show",
+      gloss: "something shown to the public"
+    }, {
+      id: "n:show-exhibit:exhibit",
+      pos: "n",
+      synset: "show-exhibit",
+      senseKey: "show-exhibit",
+      lemma: "exhibit",
+      gloss: "something shown to the public"
+    }, {
+      id: "v:show-demonstrate:show",
+      pos: "v",
+      synset: "show-demonstrate",
+      senseKey: "show-demonstrate",
+      lemma: "show",
+      gloss: "give evidence of"
+    }, {
+      id: "v:show-demonstrate:demonstrate",
+      pos: "v",
+      synset: "show-demonstrate",
+      senseKey: "show-demonstrate",
+      lemma: "demonstrate",
+      gloss: "give evidence of"
+    }]
+  });
+  const records = buildEnglishWordNetSenseLinkRecords({
+    wordnetIndex: index,
+    sourceTerms: ["shows"],
+    resolveWord: (word) => ({
+      exhibit: { coverageType: "atomic", canonicalEnglish: "exhibit", pyashSequence: ["sren"] },
+      demonstrate: { coverageType: "atomic", canonicalEnglish: "demonstrate", pyashSequence: ["tyap"] }
+    }[word] ?? null)
+  });
+  assert.equal(records.length, 2);
+  assert.deepEqual(records.map((record) => record.status), ["review", "review"]);
+  const prompt = buildEnglishWordNetSenseLinkPrompt({
+    records,
+    inventory: buildEnglishWordNetSenseLinkInventory({ records }),
+    context: [{
+      term: "shows",
+      sentences: ["Love is a mix of feelings and actions that shows a deep liking."]
+    }, {
+      term: "other",
+      sentences: ["background-only context must stay outside this decision duty"]
+    }]
+  });
+  assert.match(prompt, /"word":"shows"/u);
+  assert.match(prompt, /"sourceSentences":\["Love is a mix of feelings and actions that shows a deep liking\."\]/u);
+  assert.match(prompt, /"targetEnglish":"exhibit"/u);
+  assert.match(prompt, /"targetEnglish":"demonstrate"/u);
+  assert.match(prompt, /Choose targetEnglish only from the choices listed on that same sense row/u);
+  assert.doesNotMatch(prompt, /background-only context/u);
+});
+
+test("WordNet linker splits oversized sense batches without truncating identities", async () => {
+  const records = Array.from({ length: 120 }, (_, index) => ({
+    id: `sense-${String(index).padStart(3, "0")}`,
+    status: "review",
+    pos: "n",
+    gloss: "a deliberately compact sense gloss used to exercise bounded batching",
+    lemmas: [`term-${index}`],
+    candidates: [{
+      target: `inventory-${index}`,
+      pyashSequence: [`word-${index}`]
+    }]
+  }));
+  const requests = [];
+  const queued = await submitEnglishWordNetSenseLinks({
+    records,
+    inventory: {
+      entries: Array.from({ length: 500 }, (_, index) => ({
+        english: `inventory-${index}`,
+        pyash: [`word-${index}`]
+      })),
+      grammar: []
+    },
+    sourceHash: "oversized-source",
+    submit: async (request) => {
+      requests.push(request);
+      return { status: "queued" };
+    }
+  });
+  assert.ok(requests.length > 1);
+  assert.equal(queued.queues.length, requests.length);
+  assert.ok(requests.every((request) => request.prompt.length <= 12000));
+  assert.ok(requests.every((request) => estimateEnglishWordNetSenseLinkPromptTokens(request.prompt) < 4000));
+  assert.ok(requests.every((request) => request.candidates.length <= 4));
+  for (const record of records) {
+    assert.equal(requests.filter((request) => request.prompt.includes(`\"id\":\"${record.id}\"`)).length, 1);
+  }
+});
+
+test("WordNet linker keeps every sense for one source word in one decision duty", async () => {
+  const records = Array.from({ length: 6 }, (_, index) => ({
+    id: `shows-sense-${index}`,
+    source: `n:shows-${index}`,
+    sourceTerms: ["shows"],
+    status: "review",
+    pos: "n",
+    gloss: `sense ${index} shown in a public context`,
+    lemmas: ["show"],
+    candidates: [{
+      target: `anchor-${index}`,
+      pyashSequence: [`word-${index}`]
+    }]
+  }));
+  const requests = [];
+  await submitEnglishWordNetSenseLinks({
+    records,
+    inventory: {
+      entries: records.map((record, index) => ({
+        english: `anchor-${index}`,
+        pyash: [`word-${index}`]
+      })),
+      grammar: []
+    },
+    sourceHash: "same-source-word",
+    maxDutySenses: 2,
+    submit: async (request) => {
+      requests.push(request);
+      return { status: "queued" };
+    }
+  });
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].candidates.length, records.length);
+  assert.ok(requests[0].prompt.includes('"word":"shows"'));
+});
+
+test("WordNet linker submits one durable future queue duty for pending senses", async () => {
+  const records = withChoice(buildEnglishWordNetSenseLinkRecords({
+    wordnetIndex: fixtureIndex(),
+    resolveWord: resolver,
+    sourceTerms: ["blorp"]
+  }));
+  const inventory = { entries: [{ english: "emotionally", pyash: ["xyek"] }], grammar: [] };
+  const requests = [];
+  const queued = await submitEnglishWordNetSenseLinks({
+    records,
+    inventory,
+    sourceHash: "fixture-source",
+    submit: async (request) => {
+      requests.push(request);
+      return { status: "queued" };
+    }
+  });
+  assert.equal(requests.length, 1);
+  assert.equal(queued.submitted, true);
+  assert.equal(queued.queue.senseCount, 1);
+  assert.equal(queued.records[0].queue.status, "queued");
+  assert.equal(wordNetSenseLinkQueueHandle({ sourceHash: "fixture-source", records }), queued.handleId);
+});
+
+test("WordNet linker skips pending senses without candidate choices", async () => {
+  const records = [{
+    id: "sense-without-choice",
+    status: "review",
+    sourceTerms: ["unused"],
+    candidates: []
+  }, {
+    id: "sense-with-choice",
+    status: "review",
+    sourceTerms: ["used"],
+    candidates: [{ target: "anchor", pyashSequence: ["word"] }]
+  }, {
+    id: "sense-with-evidence-only",
+    status: "review",
+    sourceTerms: ["evidence"],
+    candidates: [{ target: "related", pyashSequence: ["near"], selectable: false }]
+  }];
+  const requests = [];
+  const queued = await submitEnglishWordNetSenseLinks({
+    records,
+    sourceHash: "choice-filter-source",
+    submit: async (request) => {
+      requests.push(request);
+      return { status: "queued" };
+    }
+  });
+  assert.equal(requests.length, 1);
+  assert.deepEqual(requests[0].candidates.map((record) => record.id), ["sense-with-choice"]);
+  assert.deepEqual(queued.skipped.map((record) => record.id), ["sense-without-choice", "sense-with-evidence-only"]);
+  assert.equal(queued.records.find((record) => record.id === "sense-without-choice").queue, undefined);
+  assert.equal(queued.records.find((record) => record.id === "sense-with-evidence-only").queue, undefined);
+  assert.equal(queued.records.find((record) => record.id === "sense-with-choice").queue.status, "queued");
+});
+
+test("WordNet linker accepts only a supplied sense choice and renders native Pyash bridges", () => {
+  const records = withChoice(buildEnglishWordNetSenseLinkRecords({
+    wordnetIndex: fixtureIndex(),
+    resolveWord: resolver,
+    sourceTerms: ["blorp"]
+  }));
+  const inventory = { entries: [], grammar: [] };
+  const response = parseEnglishWordNetSenseLinkResponse(JSON.stringify({
+    verdict: "complete",
+    senses: [{
+      id: records[0].id,
+      status: "accept",
+      targetEnglish: "emotionally",
+      rationale: "the supplied gloss describes an emotional state"
+    }]
+  }), { records, inventory });
+  assert.equal(response.valid, true);
+  const applied = applyEnglishWordNetSenseLinkResponse(records, response);
+  const source = renderEnglishWordNetSenseLinksPya({
+    records: applied.records,
+    source: "fixture WordNet",
+    sourceHash: "fixture-source"
+  });
+  const parsed = parseEnglishWordNetBridgeCatalog(source);
+  assert.deepEqual(parsed.entries, [{
+    source: "v:beta",
+    target: "emotionally",
+    targetPartOfSpeech: "v",
+    certainty: "contextual",
+    evidence: "Housekeeper WordNet sense link: the supplied gloss describes an emotional state",
+    gloss: "a rare unresolved action",
+    lemmas: ["blorp"]
+  }]);
+  assert.equal(parseEnglishWordNetSenseLinkResponse(JSON.stringify({
+    verdict: "complete",
+    senses: [{
+      id: records[0].id,
+      status: "accept",
+      targetEnglish: "outside",
+      rationale: "unsupported"
+    }]
+  }), { records, inventory }).valid, false);
+  assert.equal(parseEnglishWordNetSenseLinkResponse(JSON.stringify({
+    verdict: "complete",
+    senses: [{
+      id: records[0].id,
+      status: "reject",
+      rationale: "no supported link"
+    }]
+  }), { records, inventory }).valid, false);
+  assert.equal(parseEnglishWordNetSenseLinkResponse(JSON.stringify({
+    verdict: "complete",
+    senses: [{
+      id: records[0].id,
+      status: "reject",
+      targetEnglish: "",
+      rationale: "no supported link"
+    }]
+  }), { records, inventory }).valid, true);
+  const emptyChoiceRecords = buildEnglishWordNetSenseLinkRecords({
+    wordnetIndex: fixtureIndex(),
+    resolveWord: resolver,
+    sourceTerms: ["blorp"]
+  });
+  const emptyChoiceResponse = parseEnglishWordNetSenseLinkResponse(JSON.stringify({
+    verdict: "complete",
+    senses: [{
+      id: emptyChoiceRecords[0].id,
+      status: "accept",
+      targetEnglish: "emotionally",
+      rationale: "unsupported without a row choice"
+    }]
+  }), { records: emptyChoiceRecords, inventory });
+  assert.equal(emptyChoiceResponse.valid, false);
+  assert.match(emptyChoiceResponse.reason, /sense choices/u);
+  const sequenceResponse = parseEnglishWordNetSenseLinkResponse(JSON.stringify({
+    verdict: "complete",
+    senses: [{
+      id: records[0].id,
+      status: "accept",
+      targetEnglish: "emotionally",
+      pyashSequence: ["xyek"],
+      rationale: "the model attempted to lower the answer"
+    }]
+  }), { records, inventory });
+  assert.equal(sequenceResponse.valid, false);
+  assert.match(sequenceResponse.reason, /Pyash sequence is derived/u);
+});
+
+test("WordNet bridge rendering preserves hyphenated compound targets", () => {
+  const source = renderEnglishWordNetSenseLinksPya({
+    records: [{
+      source: "v:identity",
+      pos: "v",
+      gloss: "mistake one thing for another",
+      lemmas: ["confuse"],
+      status: "accepted-deterministic",
+      link: {
+        target: "identity-confusion",
+        pyashSequence: ["hdif", "hbun"],
+        targetKind: "compound",
+        targetId: "compound:hdif+hbun",
+        targetPartOfSpeech: "v",
+        certainty: "deterministic",
+        evidence: "fixture frequency link"
+      }
+    }],
+    source: "fixture WordNet",
+    sourceHash: "fixture-source"
+  });
+  assert.match(source, /ob name "identity-confusion"/u);
+  assert.equal(parseEnglishWordNetBridgeCatalog(source).entries[0].target, "identity-confusion");
+});
+
+test("WordNet bridge renderer quotes Pyash role words as English targets", () => {
+  const source = renderEnglishWordNetSenseLinksPya({
+    records: [{
+      source: "r:00111558-r",
+      pos: "r",
+      synset: "00111558-r",
+      status: "accepted-edge",
+      link: {
+        target: "within",
+        pyashSequence: ["lwah"],
+        targetKind: "atom",
+        targetId: "atom:lwah",
+        targetPartOfSpeech: "r",
+        certainty: "deterministic",
+        evidence: "unique WordNet edge"
+      }
+    }],
+    source: "fixture WordNet",
+    sourceHash: "fixture-source"
+  });
+  const parsed = parseEnglishWordNetBridgeCatalog(source);
+  assert.equal(parsed.entries[0].target, "within");
+  assert.match(source, /ob name "within"/u);
+});
+
+test("WordNet linker recovers one bounded noisy JSON object and rejects malformed output", () => {
+  const records = withChoice(buildEnglishWordNetSenseLinkRecords({
+    wordnetIndex: fixtureIndex(),
+    resolveWord: resolver,
+    sourceTerms: ["blorp"]
+  }));
+  const inventory = { entries: [], grammar: [] };
+  const row = {
+    id: records[0].id,
+    status: "accept",
+    targetEnglish: "emotionally",
+    rationale: "the supplied gloss describes an emotional state"
+  };
+  const noisy = parseEnglishWordNetSenseLinkResponse(
+    `worker preface\n\`\`\`json\n${JSON.stringify({ verdict: "complete", senses: [row] })}\n\`\`\`\nworker tail`,
+    { records, inventory }
+  );
+  assert.equal(noisy.valid, true);
+  assert.equal(noisy.links[0].id, records[0].id);
+  assert.equal(parseEnglishWordNetSenseLinkResponse(
+    '{"verdict":"complete","senses":[',
+    { records, inventory }
+  ).valid, false);
+});
+
+test("WordNet linker automatically repairs malformed model decisions and applies them", async () => {
+  const records = withChoice(buildEnglishWordNetSenseLinkRecords({
+    wordnetIndex: fixtureIndex(),
+    resolveWord: resolver,
+    sourceTerms: ["blorp"]
+  })).map((record) => ({
+    ...record,
+    queue: { handleId: "english-wordnet-link-reconcile", status: "queued" }
+  }));
+  const inventory = { entries: [], grammar: [] };
+  const repaired = JSON.stringify({
+    verdict: "complete",
+    senses: [{
+      id: records[0].id,
+      status: "accept",
+      targetEnglish: "emotionally",
+      rationale: "the supplied gloss describes an emotional state"
+    }]
+  });
+  const submitted = [];
+  const settled = await reconcileEnglishWordNetSenseLinks({
+    records,
+    inventory,
+    sourceHash: "reconcile-source",
+    queues: [{ handleId: "english-wordnet-link-reconcile", senseCount: 1 }],
+    awaitHandle: async (handleId) => handleId.endsWith("-retry-2")
+      ? repaired
+      : JSON.stringify({ verdict: "complete", senses: [{ id: records[0].id, status: "accept", rationale: "missing mapping" }] }),
+    submit: async (request) => {
+      submitted.push(request);
+      return { status: "queued" };
+    }
+  });
+  assert.equal(submitted.length, 1);
+  assert.match(submitted[0].handleId, /-retry-2$/u);
+  assert.equal(settled.queues[0].outcome, "applied");
+  assert.equal(settled.records[0].status, "accepted-llm");
+  assert.deepEqual(settled.records[0].link.pyashSequence, ["xyek"]);
+});
+
+test("WordNet linker keeps valid rows during bounded partial recovery", async () => {
+  const records = [
+    {
+      id: "sense-valid",
+      pos: "n",
+      status: "review",
+      candidates: [{ target: "emotionally", pyashSequence: ["xyek"] }],
+      queue: { handleId: "english-wordnet-link-partial", status: "queued" }
+    },
+    {
+      id: "sense-malformed",
+      pos: "n",
+      status: "review",
+      candidates: [],
+      queue: { handleId: "english-wordnet-link-partial", status: "queued" }
+    }
+  ];
+  const settled = await reconcileEnglishWordNetSenseLinks({
+    records,
+    inventory: { entries: [{ english: "emotionally", pyash: ["xyek"] }], grammar: [] },
+    sourceHash: "partial-source",
+    queues: [{ handleId: "english-wordnet-link-partial", senseCount: 2 }],
+    maxRepairAttempts: 0,
+    awaitHandle: async () => JSON.stringify({
+      verdict: "complete",
+      senses: [
+        {
+          id: "sense-valid",
+          status: "accept",
+          targetEnglish: "emotionally",
+          rationale: "the supplied inventory supports the target"
+        },
+        {
+          id: "sense-malformed",
+          status: "accept",
+          rationale: "the provider omitted the required mapping"
+        }
+      ]
+    }),
+    submit: async () => ({ status: "queued" })
+  });
+  assert.equal(settled.queues[0].outcome, "partial");
+  assert.equal(settled.records.find((record) => record.id === "sense-valid").status, "accepted-llm");
+  assert.equal(settled.records.find((record) => record.id === "sense-malformed").status, "uncertain-llm");
+});
+
+test("WordNet linker extracts the nested response from an Ollama envelope", () => {
+  const records = withChoice(buildEnglishWordNetSenseLinkRecords({
+    wordnetIndex: fixtureIndex(),
+    resolveWord: resolver,
+    sourceTerms: ["blorp"]
+  }));
+  const inventory = { entries: [], grammar: [] };
+  const response = parseEnglishWordNetSenseLinkResponse(JSON.stringify({
+    model: "qwen3.5:9b",
+    response: JSON.stringify({
+      verdict: "complete",
+      senses: [{
+        id: records[0].id,
+        status: "accept",
+        targetEnglish: "emotionally",
+        rationale: "the supplied gloss describes an emotional state"
+      }]
+    }),
+    done: true
+  }), { records, inventory });
+  assert.equal(response.valid, true);
+  assert.equal(response.links[0].target, "emotionally");
+});
+
+test("WordNet linker rejects an empty completed provider response", () => {
+  const records = buildEnglishWordNetSenseLinkRecords({
+    wordnetIndex: fixtureIndex(),
+    resolveWord: resolver,
+    sourceTerms: ["blorp"]
+  });
+  const response = parseEnglishWordNetSenseLinkResponse(
+    JSON.stringify({ verdict: "complete", senses: [] }),
+    { records, inventory: { entries: [], grammar: [] } }
+  );
+  assert.equal(response.valid, false);
+  assert.equal(response.reason, "response senses must contain at least one decision");
+});
+
+test("WordNet linker matches string-backed sense choices to response sequences", () => {
+  const records = withChoice(buildEnglishWordNetSenseLinkRecords({
+    wordnetIndex: fixtureIndex(),
+    resolveWord: resolver,
+    sourceTerms: ["blorp"]
+  }), { pyashSequence: "xyek" });
+  const response = parseEnglishWordNetSenseLinkResponse(JSON.stringify({
+    verdict: "complete",
+    senses: [{
+      id: records[0].id,
+      status: "accept",
+      targetEnglish: "emotionally",
+      rationale: "the supplied gloss describes an emotional state"
+    }]
+  }), {
+    records,
+    inventory: { entries: [], grammar: [] }
+  });
+  assert.equal(response.valid, true);
+});
+
+test("WordNet linker configuration is durable Pyash workflow data", async () => {
+  const config = await loadEnglishWordNetLinkerConfig();
+  assert.deepEqual(config, {
+    format: "english-wordnet-linker-v1",
+    queueIntent: "mind",
+    queueLane: "durable",
+    model: "qwen3.5:9b",
+    maxBatch: 200,
+    maxDutySenses: 4,
+    modelSweepMode: "pilot",
+    modelSweepPilotLimit: 12,
+    modelSweepPilotMultipleChoiceLimit: 2,
+    promptMaxChars: 12000,
+    promptMaxTokens: 3900,
+    maxOutputTokens: 1024,
+    selectionFormat: "english-wordnet-sense-selection-v1",
+    selectionMaxOutputTokens: 512,
+    edgeMaxDegree: 1,
+    anchorMaxCandidates: 8,
+    vocabSuggestionMinSupport: 2,
+    sweepBatchSize: 1000,
+    modelCard: {
+      model: "qwen3.5:9b",
+      provider: "ollama",
+      contextWindowTokens: 32768,
+      safeInputTokens: 3900,
+      safeOutputTokens: 8192,
+      cardSource: "Ollama model metadata with bounded Pyash translation input policy"
+    }
+  });
+});
+
+test("translation model card keeps input and output budgets below the model context window", async () => {
+  const card = await loadTranslationModelCard();
+  assert.equal(card.model, "qwen3.5:9b");
+  assert.equal(card.provider, "ollama");
+  assert.equal(card.contextWindowTokens, 32768);
+  assert.equal(card.safeInputTokens, 3900);
+  assert.equal(card.safeOutputTokens, 8192);
+  const parsed = parseTranslationModelCards([
+    "su name translation_model_cards be map def",
+    "su text \"format\" ob text \"translation-model-cards-v1\" ya",
+    "su text \"model:test:context-window-tokens\" ob num 100 ya",
+    "su text \"model:test:safe-input-tokens\" ob num 90 ya",
+    "su text \"model:test:safe-output-tokens\" ob num 8 ya",
+    "prah"
+  ].join("\n"));
+  assert.deepEqual(selectTranslationModelCard(parsed.cards, "test"), {
+    model: "test",
+    provider: "",
+    contextWindowTokens: 100,
+    safeInputTokens: 90,
+    safeOutputTokens: 8,
+    cardSource: ""
+  });
+});
+
+test("default WordNet linker submitter uses the existing future GPU duty", async () => {
+  let sentence = "";
+  const submit = createQueuedMindEnglishWordNetSenseLinkSubmitter({
+    parse: (value) => value,
+    interpret: async (value) => {
+      sentence = value;
+      return { ob: { text: "queued" } };
+    }
+  });
+  const response = await submit({ handleId: "english-wordnet-link-test", prompt: "review" });
+  assert.equal(response.status, "queued");
+  assert.match(sentence, /vyah start future be gpu mind do/u);
+  assert.match(sentence, /english-wordnet-link-test/u);
+  const encodedSpec = sentence.match(/ob text (".*") vyah start future be gpu mind do/u)?.[1];
+  const spec = JSON.parse(JSON.parse(encodedSpec));
+  assert.deepEqual(spec.format.required, ["verdict", "senses"]);
+  assert.ok(spec.format.properties.senses);
+  assert.deepEqual(spec.format.properties.senses.items.required, ["id", "status", "targetEnglish", "rationale"]);
+  assert.equal(spec.format.properties.senses.items.properties.targetEnglish.type, "string");
+  assert.equal(spec.options.num_predict, 1024);
+});
+
+test("WordNet linker pins its configured model in the GPU mind job spec", async () => {
+  let sentence = "";
+  const submit = createQueuedMindEnglishWordNetSenseLinkSubmitter({
+    parse: (value) => value,
+    model: "qwen3.5:9b",
+    interpret: async (value) => {
+      sentence = value;
+      return { ob: { text: "queued" } };
+    }
+  });
+  const response = await submit({ handleId: "english-wordnet-link-qwen", prompt: "choose an anchor" });
+  assert.equal(response.status, "queued");
+  assert.match(sentence, /vyah start future be gpu mind do/u);
+  assert.doesNotMatch(sentence, /to name "qwen3\.5:9b"/u);
+  const encodedSpec = sentence.match(/ob text (".*") vyah start future be gpu mind do/u)?.[1];
+  const spec = JSON.parse(JSON.parse(encodedSpec));
+  assert.equal(spec.model, "qwen3.5:9b");
+  const sentenceObject = buildProgram(sentence).sentences[0];
+  const derivedSignature = joinSignatureWords(deriveSignatureFromCall(sentenceObject));
+  assert.ok(gpuSignatures.some(({ signatureWords }) => joinSignatureWords(signatureWords) === derivedSignature));
+});
+
+test("WordNet linker prompt uses only the definition before gloss examples", () => {
+  const prompt = buildEnglishWordNetSenseLinkPrompt({
+    records: [{
+      id: "sense-definition-only",
+      source: "n:example",
+      pos: "n",
+      synset: "example",
+      lemmas: ["sample"],
+      gloss: "a thing characteristic of its kind; misleading example about an unrelated sense",
+      candidates: [{ target: "sample", evidence: "same-synset lemma with existing atom coverage" }]
+    }]
+  });
+  assert.match(prompt, /a thing characteristic of its kind/u);
+  assert.doesNotMatch(prompt, /misleading example about an unrelated sense/u);
+});
+
+test("default WordNet linker factory resolves the existing Pyash runtime adapters", async () => {
+  const submit = await createDefaultQueuedMindEnglishWordNetSenseLinkSubmitter({
+    parse: (value) => value,
+    interpret: async () => ({ ob: { text: "queued" } })
+  });
+  const response = await submit({ handleId: "english-wordnet-link-factory-test", prompt: "review" });
+  assert.equal(response.status, "queued");
+});

@@ -14,6 +14,7 @@ import { read_fromstate_lobster } from "./read_lobster.mjs";
 import { read_fromstate_systemd } from "./read_systemd.mjs";
 import { isWorldToolsActive, resolveWorldPath, resolveWorldPlace, resolveWorldPlaceDir } from "../../library/world.mjs";
 import { resolveAgentPath } from "../../library/agent_cwd.mjs";
+import { readZimArchive } from "../../library/zim_archive.mjs";
 
 function decodeHtmlEntities(text) {
   return text
@@ -28,7 +29,7 @@ function stripHtmlTags(text) {
   return String(text ?? "").replace(/<[^>]*>/g, "");
 }
 
-function htmlToMarkdown(html) {
+export function htmlToMarkdown(html) {
   let text = String(html ?? "");
   text = text.replace(/<script[\s\S]*?<\/script>/gi, "");
   text = text.replace(/<style[\s\S]*?<\/style>/gi, "");
@@ -71,10 +72,16 @@ function extractReadLimits(sentence) {
 export async function read_from_filename(sentence = {}) {
   let { from } = sentence;
   if (from?.filename) {
-    const { resolved, outside } = resolveAgentPath(from.filename, { rememberFn: remember });
-    if (!outside && resolved) {
-      from = { ...from, filename: resolved };
+    const { resolved, outside, agentCwd } = resolveAgentPath(from.filename, { rememberFn: remember, access: "read" });
+    if (outside) {
+      throwErrorSentence({
+        name: "read defective",
+        message: `read defective: path is outside allowed file roots${agentCwd ? ` (${agentCwd})` : ""}`,
+        from: { name: "read" },
+        raw: { filename: from.filename }
+      });
     }
+    if (resolved) from = { ...from, filename: resolved };
   }
   if (isWorldToolsActive({ rememberFn: remember })) {
     const { resolved, outside, root } = resolveWorldPath(from?.filename ?? "", { rememberFn: remember });
@@ -125,11 +132,16 @@ export async function read_tail_from_filename(sentence) {
       raw: { sentence }
     });
   }
-  let targetPath = path.resolve(String(filename));
-  const agentResolved = resolveAgentPath(filename, { rememberFn: remember });
-  if (!agentResolved.outside && agentResolved.resolved) {
-    targetPath = agentResolved.resolved;
+  const agentResolved = resolveAgentPath(filename, { rememberFn: remember, access: "read" });
+  if (agentResolved.outside) {
+    throwErrorSentence({
+      name: "read defective",
+      message: `read defective: path is outside allowed file roots (${agentResolved.agentCwd})`,
+      from: { name: "read" },
+      raw: { filename }
+    });
   }
+  let targetPath = agentResolved.resolved || path.resolve(String(filename));
   if (isWorldToolsActive({ rememberFn: remember })) {
     if (filename === ".activity.pya") {
       const place = resolveWorldPlace({ rememberFn: remember }) ?? "commons";
@@ -233,6 +245,10 @@ export async function read_fromstate_html(sentence = {}) {
   return { ob: { text: markdown }, be: "markdown" };
 }
 
+export async function read_fromstate_zim(sentence = {}, options = {}) {
+  return readZimArchive(sentence, options);
+}
+
 export default async function read({ from }) {
   const fromType = detectType(from);
   if (fromType === "filename") {
@@ -295,5 +311,14 @@ export const signatures = [
   { signatureWords: ["be", "read", "become", "wo", "markdown", "from", "filename", "fromstate", "wo", "html"], handler: read_fromstate_html },
   { signatureWords: ["be", "read", "become", "wo", "markdown", "from", "filename", "fromstate", "wo", "html", "to", "name", "text"], handler: read_fromstate_html },
   { signatureWords: ["be", "read", "atmost", "byte", "become", "wo", "markdown", "from", "filename", "fromstate", "wo", "html"], handler: read_fromstate_html },
-  { signatureWords: ["be", "read", "atmost", "byte", "become", "wo", "markdown", "from", "filename", "fromstate", "wo", "html", "to", "name", "text"], handler: read_fromstate_html }
+  { signatureWords: ["be", "read", "atmost", "byte", "become", "wo", "markdown", "from", "filename", "fromstate", "wo", "html", "to", "name", "text"], handler: read_fromstate_html },
+  { signatureWords: ["be", "read", "as", "wo", "cluster-compress", "from", "filename"], handler: read_fromstate_zim },
+  { signatureWords: ["be", "read", "from", "filename", "fromstate", "wo", "zim"], handler: read_fromstate_zim },
+  { signatureWords: ["be", "read", "from", "filename", "fromstate", "wo", "zim", "to", "name", "text"], handler: read_fromstate_zim },
+  { signatureWords: ["be", "read", "from", "filename", "fromstate", "wo", "zim", "ob", "text", "to", "name", "text"], handler: read_fromstate_zim },
+  { signatureWords: ["be", "read", "from", "filename", "fromstate", "wo", "cluster-compress"], handler: read_fromstate_zim },
+  { signatureWords: ["be", "read", "as", "wo", "cluster-compress", "from", "filename", "ob", "text"], handler: read_fromstate_zim },
+  { signatureWords: ["be", "read", "as", "wo", "cluster-compress", "by", "text", "from", "filename", "ob", "text"], handler: read_fromstate_zim },
+  { signatureWords: ["be", "read", "as", "wo", "cluster-compress", "by", "text", "from", "filename", "ob", "text", "to", "name", "text"], handler: read_fromstate_zim },
+  { signatureWords: ["be", "read", "from", "filename", "fromstate", "wo", "zim", "ob", "text"], handler: read_fromstate_zim }
 ];

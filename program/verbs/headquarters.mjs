@@ -16,10 +16,6 @@ import {
   runFixtureMailWorkflow
 } from "../agent/channels/fixture_mail.mjs";
 import {
-  runChannelPollOnce,
-  runChannelInputOnce
-} from "../agent/channels/index.mjs";
-import {
   projectHeadquartersBriefing,
   recordHeadquartersBriefing
 } from "../agent/headquarters/briefing.mjs";
@@ -28,6 +24,14 @@ import { findWorkTaskEnvelope } from "../runtime/work/queue.mjs";
 import { workTaskStatusDir } from "../runtime/work/status.mjs";
 
 const CHANNEL_TYPE = "fixture-mail";
+
+// The channel runtime is loaded on demand. A static import closes a cycle:
+// the channel runtime imports the bridge, the bridge registers the verb
+// registry, and the registry holds this module. Loading it here keeps the
+// registry importable on its own.
+async function channelRuntime() {
+  return import("../agent/channels/index.mjs");
+}
 const DEFAULT_OWNER = "correspondence worker";
 
 function valueText(value) {
@@ -131,6 +135,7 @@ export async function headquarters(sentence, { remember: rememberFn = remember }
     warmStart: false,
     roomLanes: { [inboxIdentity]: `${CHANNEL_TYPE}_${inboxIdentity}` }
   };
+  const { runChannelPollOnce } = await channelRuntime();
   const poll = await runChannelPollOnce({
     agentName: owner,
     channelType: CHANNEL_TYPE,
@@ -139,6 +144,7 @@ export async function headquarters(sentence, { remember: rememberFn = remember }
     agentHouse
   });
   let workflow = null;
+  const { runChannelInputOnce } = await channelRuntime();
   const input = await runChannelInputOnce({
     agentName: owner,
     channelType: CHANNEL_TYPE,

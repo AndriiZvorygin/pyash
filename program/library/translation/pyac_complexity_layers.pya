@@ -1,0 +1,8 @@
+su name translation_pyac_complexity_layers be map def
+su text "format" ob text "pyac-complexity-layers-v1" ya
+su text "layer:16" ob text "{\"layer\":16,\"glyphCount\":16,\"wordList\":\"16GlyphWordList.txt\",\"source\":\"pyachso2n\",\"wordGlyphs\":\"acfhiklmnpstuwy\",\"features\":\"base-unvoiced\",\"adds\":\"acfhiklmnpstuwy\",\"sourceHash\":\"f86667f9c2fc59d19cf69140d1b4853e4ee6128cfe6bf9228a38616010399064\"}" ya
+su text "layer:19" ob text "{\"layer\":19,\"glyphCount\":19,\"wordList\":\"19GlyphWordList.txt\",\"source\":\"pyachso2n\",\"wordGlyphs\":\"acefhiklmnoprstuwy\",\"features\":\"vowel-and-r-extension\",\"adds\":\"eor\",\"sourceHash\":\"cff73bb09f461403def1e51f579f65a48edbbe1b58793573bee4852d6eb5ebd6\"}" ya
+su text "layer:24" ob text "{\"layer\":24,\"glyphCount\":24,\"wordList\":\"24GlyphWordList.txt\",\"source\":\"pyachso2n\",\"wordGlyphs\":\"abcdefghijklmnoprstuwyz\",\"features\":\"voiced-consonant-extension\",\"adds\":\"bdgjz\",\"sourceHash\":\"dc72b61885fa8b0ad52de4a12fc7a90204259054b4b114c294efe9662f74c92f\"}" ya
+su text "layer:28" ob text "{\"layer\":28,\"glyphCount\":28,\"wordList\":\"28GlyphWordList.txt\",\"source\":\"pyachso2n\",\"wordGlyphs\":\"6abcdefghijklmnopqrstuvwxyz\",\"features\":\"schwa-and-extended-consonant\",\"adds\":\"6qvx\",\"sourceHash\":\"1ed23277f934f826e522b180ca4bc6a3b8fdfe136164f56f9e3e59f247873d11\"}" ya
+su text "layer:32" ob text "{\"layer\":32,\"glyphCount\":32,\"wordList\":\"32GlyphWordList.txt\",\"source\":\"pyachso2n\",\"wordGlyphs\":\"12678abcdefghijklmnopqrstuvwxyz\",\"features\":\"tones-and-clicks\",\"adds\":\"1278\",\"sourceHash\":\"d26c30bbd66c898f0f1948a4a6d054b9c4534b9341bf228b75101d9be63c3a5b\"}" ya
+prah

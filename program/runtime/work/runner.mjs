@@ -917,7 +917,7 @@ export async function runWorkBackgroundOnce({
       reason: recovery.reason,
       recoveryCount: recovery.recoveryCount,
       staleTurn: recovery.staleTurn,
-      replacementWorktree: recovery.replacementWorktree,
+      replacementCheckout: recovery.replacementCheckout,
       previousThreadId: recovery.previousThreadId,
       phase: selected.status
     }, { now });
@@ -928,7 +928,7 @@ export async function runWorkBackgroundOnce({
       reason: recovery.reason,
       previousBlocker: recovery.previousBlocker,
       recoveryCount: recovery.recoveryCount,
-      replacementWorktree: recovery.replacementWorktree,
+      replacementCheckout: recovery.replacementCheckout,
       previousThreadId: recovery.previousThreadId,
       capacity,
       pacing: admission.pacing,

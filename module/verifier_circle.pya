@@ -112,7 +112,7 @@ ob text "" to name text reaction be text do
 ob text "" to name text decision line be text do
 ob text "FAIL" to name text verify loop decision be text do
 ob num 0 to name num verify loop score be plus do
-ob text "{\"result\":\"\",\"decision\":\"FAIL\"}" to name num produce be import do
+ob text "{\"result\":\"\",\"decision\":\"FAIL\"}" to name map produce be import do
 fromindex num 1 toindex num of ob of attempts be verifier round do
 ob text "FAIL" to decision of produce be text do
 ob name sketch to result of produce be text do
@@ -130,7 +130,7 @@ ob text "" to name text reaction be text do
 ob text "" to name text decision line be text do
 ob text "FAIL" to name text verify loop decision be text do
 ob num 0 to name num verify loop score be plus do
-ob text "{\"result\":\"\",\"decision\":\"FAIL\"}" to name num produce be import do
+ob text "{\"result\":\"\",\"decision\":\"FAIL\"}" to name map produce be import do
 fromindex num 1 toindex num of ob of attempts be verifier round do
 ob text "FAIL" to decision of produce be text do
 ob name sketch to result of produce be text do
@@ -148,7 +148,7 @@ ob text "" to name text reaction be text do
 ob text "" to name text decision line be text do
 ob text "FAIL" to name text verify loop decision be text do
 ob num 0 to name num verify loop score be plus do
-ob text "{\"result\":\"\",\"decision\":\"FAIL\"}" to name num produce be import do
+ob text "{\"result\":\"\",\"decision\":\"FAIL\"}" to name map produce be import do
 fromindex num 1 toindex num of ob of attempts be verifier round do
 ob text "FAIL" to decision of produce be text do
 ob name sketch to result of produce be text do
@@ -166,7 +166,7 @@ ob text "" to name text reaction be text do
 ob text "" to name text decision line be text do
 ob text "FAIL" to name text verify loop decision be text do
 ob num 0 to name num verify loop score be plus do
-ob text "{\"result\":\"\",\"decision\":\"FAIL\"}" to name num produce be import do
+ob text "{\"result\":\"\",\"decision\":\"FAIL\"}" to name map produce be import do
 fromindex num 1 toindex num of ob of attempts be verifier round do
 ob text "FAIL" to decision of produce be text do
 ob name sketch to result of produce be text do

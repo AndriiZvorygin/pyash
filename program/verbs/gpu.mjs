@@ -116,15 +116,19 @@ function withMindResourceRequest(jobSpec = {}) {
   const resourceRequest = existing && typeof existing === "object" && !Array.isArray(existing)
     ? { ...existing }
     : {};
-  const declaredVram = Number(resourceRequest.vramRequiredMb ?? resourceRequest.vram_required_mb);
-  const configuredVram = Number.parseInt(String(
-    process.env.PYA_OLLAMA_VRAM_REQUIRED_MB || process.env.PYA_GPU_VRAM_REQUIRED_MB || "12000"
-  ), 10);
-  resourceRequest.vramRequiredMb = Number.isFinite(declaredVram) && declaredVram > 0
-    ? Math.trunc(declaredVram)
-    : (Number.isFinite(configuredVram) && configuredVram > 0 ? configuredVram : 12000);
+  if (resourceRequest.vramRequiredMb === undefined && resourceRequest.vram_required_mb === undefined) {
+    const configured = Number.parseInt(String(
+      process.env.PYA_OLLAMA_VRAM_REQUIRED_MB || process.env.PYA_GPU_VRAM_REQUIRED_MB || ""
+    ), 10);
+    if (Number.isFinite(configured) && configured > 0) resourceRequest.vramRequiredMb = configured;
+  } else if (resourceRequest.vramRequiredMb === undefined) {
+    resourceRequest.vramRequiredMb = resourceRequest.vram_required_mb;
+  }
   delete resourceRequest.vram_required_mb;
-  return { ...jobSpec, resourceRequest };
+  const normalized = { ...jobSpec };
+  if (Object.keys(resourceRequest).length) normalized.resourceRequest = resourceRequest;
+  else delete normalized.resourceRequest;
+  return normalized;
 }
 
 function defaultRuntimeForIntent(intent, jobSpec = {}, sentence = {}) {

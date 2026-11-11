@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { resolveFilenameFromCase } from "../program/verbs/itinerary_media.mjs";
+import { resolveFilenameFromCase } from "../program/verbs/itinerary/media.mjs";
 import { doRemember, forget, remember } from "../program/remember/index.mjs";
 import { state } from "../program/bridge/state.mjs";
 

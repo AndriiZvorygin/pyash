@@ -127,18 +127,20 @@ test("factuality preflight verifies version, tags, warmup, and a real sample req
   assert.deepEqual(result.requests.map(request => request.kind), ["warmup", "meeting"]);
 });
 
-test("factuality lane discharges each Ollama model without stopping Ollama", async () => {
+test("direct Criterion discharge never loads a model that is already absent", async () => {
   const requests = [];
   const result = await dischargeOllamaModels({
     baseUrl: "http://ollama.test",
     models: ["qwen3.5:9b"],
     fetchImpl: async (url, options) => {
-      requests.push({ url, body: JSON.parse(options.body) });
+      requests.push({ url, body: options?.body ? JSON.parse(options.body) : null });
+      if (url.endsWith("/api/ps")) return { ok: true, json: async () => ({ models: [] }) };
       return { ok: true, json: async () => ({}) };
     }
   });
   assert.equal(result.status, "ok");
-  assert.deepEqual(requests[0].body, { model: "qwen3.5:9b", prompt: "", stream: false, keep_alive: 0 });
+  assert.deepEqual(requests.map(request => request.url), ["http://ollama.test/api/ps"]);
+  assert.equal(result.results[0].status, "already-unloaded");
 });
 
 test("factuality discharge verifies that Ollama released the requested model", async () => {
@@ -157,6 +159,7 @@ test("factuality discharge verifies that Ollama released the requested model", a
     }
   });
   assert.equal(result.verified, true);
+  assert.equal(requests.filter(request => request.url.endsWith("/api/generate")).length, 1);
   assert.ok(requests.some(request => request.url.endsWith("/api/ps")));
 });
 
@@ -230,6 +233,60 @@ test("factuality pilot is resumable, hides references, and writes a ROUGE-free r
   assert.equal(run.judge.discharge.status, "not-managed-by-adapter");
 });
 
+test("managed factuality pilot uses Housekeeper for catalog metadata and every inference call", async () => {
+  const root = await tempRoot();
+  const datasetPath = path.join(root, "meetingbank.jsonl");
+  await fs.writeFile(datasetPath, `${JSON.stringify({ id: "m1", transcript: "Chair: The council approved the motion.", summary: "The council approved the motion." })}\n`, "utf8");
+  const model = "SparkLLM/Spark-X2.6-4B:q4_k_m";
+  const judgeModel = "hf.co/mradermacher/UniRRM-8B-GGUF:Q4_K_M";
+  const queuedCalls = [];
+  const managedModels = new Set([model, judgeModel]);
+  const nativeJudge = JSON.stringify({ evaluations: [{ response_id: "Response1", final_score: 5, criterion: {
+    faithfulness_score: 5,
+    completeness_score: 5,
+    decision_action_score: 5,
+    relevance_score: 5,
+    conciseness_score: 5,
+    publication_suitability_score: 5,
+    confidence: 5,
+    claims: [{ claim: "The council approved the motion.", status: "supported", evidence: "The council approved the motion.", transcript_turn_ids: ["turn-1"] }],
+    omitted_important_items: [],
+    reasoning: "Directly grounded.",
+    final_verdict: "supported"
+  } }] });
+  const run = await runMeetingBankFactualityPilot({
+    root,
+    datasetPath,
+    models: [model],
+    selectionCount: 1,
+    runId: "factuality-housekeeper-test",
+    gpuHousekeeperUrl: "http://housekeeper.test:18886",
+    fetchImpl: async url => { throw new Error(`direct inference/runtime call forbidden: ${url}`); },
+    queuedOllamaExecutorFactory: () => ({
+      metadataProvider: async ({ model: requestedModel }) => managedModels.has(requestedModel)
+        ? { model: requestedModel, modelDigest: `digest-${requestedModel}`, quantization: "Q4_K_M", managedBy: "gpu-housekeeper" }
+        : { model: requestedModel, metadataError: "model absent from Housekeeper catalog" },
+      executor: async request => {
+        queuedCalls.push({ model: request.model, operation: request.operation ?? "generate" });
+        return {
+          text: request.operation === "judge" ? nativeJudge : request.prompt === "Reply with exactly OK." ? "OK" : "The council approved the motion.",
+          timing: { totalElapsedMs: 1 },
+          metadata: { managedBy: "gpu-housekeeper" }
+        };
+      },
+      dischargeModels: async requestedModels => ({ status: "ok", verifiedByHousekeeper: true, results: requestedModels.map(name => ({ model: name, status: "ok" })) })
+    }),
+    smoke: true
+  });
+
+  assert.equal(run.status, "completed");
+  assert.equal(run.results[0].status, "ok");
+  assert.deepEqual(run.ollama.models.map(entry => [entry.requestedModel, entry.available]), [[model, true], [judgeModel, true]]);
+  assert.equal(queuedCalls.filter(call => call.operation === "preflight").length, 2);
+  assert.equal(queuedCalls.filter(call => call.operation === "generate").length, 1);
+  assert.equal(queuedCalls.filter(call => call.operation === "judge").length, 1);
+});
+
 test("factuality pilot completes every generation batch before judging", async () => {
   const root = await tempRoot();
   const datasetPath = path.join(root, "meetingbank.jsonl");
@@ -263,9 +320,8 @@ test("factuality pilot completes every generation batch before judging", async (
     root, datasetPath, models, selectionCount: 1, runId: "factuality-model-major-test", fetchImpl, generationRunner, judgeExecutor, smoke: true
   });
   assert.deepEqual(events, [
-    `generate:${models[0]}`, `discharge:${models[0]}`,
-    `generate:${models[1]}`, `discharge:${models[1]}`,
-    `discharge:${models[0]}`, `discharge:${models[1]}`,
+    `generate:${models[0]}`,
+    `generate:${models[1]}`,
     `judge:${models[0]}`, `judge:${models[1]}`
   ]);
   assert.equal(run.execution.generationCompletedForAllModelsBeforeJudging, true);
@@ -290,6 +346,49 @@ test("factuality resume reuses a complete model-major generation checkpoint", as
     fetchImpl: ollamaFetch(), judgeExecutor,
     generationRunner: async () => { throw new Error("generation should not run for a complete checkpoint"); }
   });
+  assert.equal(run.generationReuse[model].reused, true);
+  assert.equal(run.results[0].status, "ok");
+});
+
+test("factuality resume retries an existing failed judge row", async () => {
+  const root = await tempRoot();
+  const datasetPath = path.join(root, "meetingbank.jsonl");
+  await fs.writeFile(datasetPath, `${JSON.stringify({ id: "m1", transcript: "Chair: The council approved the motion.", summary: "The council approved the motion." })}\n`, "utf8");
+  const model = MEETINGBANK_FACTUALITY_MODELS[0];
+  const runId = "factuality-failed-judge-resume-test";
+  const generationRunId = `${runId}-generation-${sha256(model).slice(0, 12)}`;
+  await fs.mkdir(path.join(root, "criterion", "results"), { recursive: true });
+  await fs.writeFile(path.join(root, "criterion", "results", `${generationRunId}.jsonl`), `${JSON.stringify({ model, sampleId: "m1", status: "ok", output: "The council approved the motion.", outputHash: "saved-summary", metrics: { totalElapsedMs: 10 } })}\n`, "utf8");
+  await fs.writeFile(path.join(root, "criterion", "results", `${runId}.jsonl`), `${JSON.stringify({
+    runId,
+    identity: `${model}\u0000m1`,
+    model,
+    sampleId: "m1",
+    status: "transport-error",
+    judge: { status: "transport-error", attempts: [{ status: "transport-error" }] },
+    error: "transient scorer failure"
+  })}\n`, "utf8");
+  let judgeCalls = 0;
+  const judgeExecutor = async () => {
+    judgeCalls += 1;
+    return { text: JSON.stringify({ evaluations: [{ response_id: "Response1", final_score: 5, criterion: {
+      faithfulness_score: 5, completeness_score: 5, decision_action_score: 5, relevance_score: 5, conciseness_score: 5, publication_suitability_score: 5, confidence: 5,
+      claims: [{ claim: "The council approved the motion.", status: "supported", evidence: "The council approved the motion.", transcript_turn_ids: ["turn-1"] }]
+    } }] }) };
+  };
+  const run = await runMeetingBankFactualityPilot({
+    root,
+    datasetPath,
+    models: [model],
+    selectionCount: 1,
+    runId,
+    resume: true,
+    fetchImpl: ollamaFetch(),
+    judgeExecutor,
+    generationRunner: async () => { throw new Error("generation checkpoint should be reused"); },
+    smoke: true
+  });
+  assert.equal(judgeCalls, 1);
   assert.equal(run.generationReuse[model].reused, true);
   assert.equal(run.results[0].status, "ok");
 });

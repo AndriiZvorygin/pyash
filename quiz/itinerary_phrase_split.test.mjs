@@ -1,36 +1,37 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { splitTextPhrases, cutFromTextToNameItinerary } from "../program/verbs/itinerary_media.mjs";
+import { splitProsePhrases } from "../program/library/prose_segmentation.mjs";
+import { cutFromTextToNameItinerary } from "../program/verbs/itinerary/cut.mjs";
 import { splitItineraryCutsIntoPhrases } from "../command/itinerary_split_phrases.mjs";
 
 test("phrase splitter splits on commas", () => {
-  const out = splitTextPhrases("Food prices rise, families adapt");
+  const out = splitProsePhrases("Food prices rise, families adapt");
   assert.deepEqual(out, ["Food prices rise", "families adapt"]);
 });
 
 test("phrase splitter splits on periods", () => {
-  const out = splitTextPhrases("Food prices rise. Local gardens help.");
+  const out = splitProsePhrases("Food prices rise. Local gardens help.");
   assert.deepEqual(out, ["Food prices rise", "Local gardens help"]);
 });
 
 test("phrase splitter splits on newlines", () => {
-  const out = splitTextPhrases("Food prices rise\nfamilies adapt\nLocal gardens help");
+  const out = splitProsePhrases("Food prices rise\nfamilies adapt\nLocal gardens help");
   assert.deepEqual(out, ["Food prices rise", "families adapt", "Local gardens help"]);
 });
 
 test("phrase splitter handles mixed delimiters in order", () => {
-  const out = splitTextPhrases("Food prices rise, families adapt.\nLocal gardens help");
+  const out = splitProsePhrases("Food prices rise, families adapt.\nLocal gardens help");
   assert.deepEqual(out, ["Food prices rise", "families adapt", "Local gardens help"]);
 });
 
 test("phrase splitter drops empties from repeated delimiters", () => {
-  const out = splitTextPhrases("Food prices rise,,...\n\n families adapt");
+  const out = splitProsePhrases("Food prices rise,,...\n\n families adapt");
   assert.deepEqual(out, ["Food prices rise", "families adapt"]);
 });
 
 test("phrase splitter trims whitespace", () => {
-  const out = splitTextPhrases("  Food prices rise  ,   families adapt   .   Local gardens help   ");
+  const out = splitProsePhrases("  Food prices rise  ,   families adapt   .   Local gardens help   ");
   assert.deepEqual(out, ["Food prices rise", "families adapt", "Local gardens help"]);
 });
 

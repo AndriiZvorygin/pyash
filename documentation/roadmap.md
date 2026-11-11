@@ -30,12 +30,14 @@ command/repair policy, checkpoints, newspapers, GPU/provider queue, and
 discharge lifecycle. It is not a second agent framework, model host, GPU queue,
 tool registry, or task system.
 
-The first tranche is `roadmap-pyash-coding-saddle-core`: a raw ANSI terminal
-session with model/backend/queue status, Enter-to-submit, Shift+Enter or
-`Ctrl+J` multiline input, `Ctrl+C` interruption, and `Ctrl+D` exit. The
-launched repository is the default bounded coding root, while the canonical
-session remains under the coding-saddle agent house as `.pya` state. Existing
-tools enforce the repository command and file policy.
+The first tranche is `roadmap-pyash-coding-saddle-core`: a full-screen ANSI
+terminal session with pinned model/backend/queue status, a scrollable
+conversation, a docked input, Enter-to-submit, Shift+Enter or `Ctrl+J`
+multiline input, `PageUp`/`PageDown` conversation scrolling, `Ctrl+C`
+interruption, and `Ctrl+D` exit. Assistant Markdown is rendered as styled
+terminal output. The launched repository is the default bounded coding root,
+while the canonical session remains under the coding-saddle agent house as
+`.pya` state. Existing tools enforce the repository command and file policy.
 
 The interactive work-handoff slice exposes the Pyash-native **duty** concept
 through the existing durable `WorkTask` status artifact. The authenticated web
@@ -47,9 +49,10 @@ autonomous Sol/Luna planner, reviewer, or `automation/roadmap` integration
 contract; those remain separate and must be explicitly connected through their
 existing lifecycle if a later tranche requires it.
 
-Launch with `node command/pyash_saddle.mjs`. The terminal surface is kept
-dependency-free so the same Pyash provider and GPU lifecycle remain in charge
-of Ollama, Strata, and other configured backends.
+Launch with `node command/pyash_saddle.mjs`. The terminal UI uses the existing
+Markdown parser and does not change the Pyash provider or GPU lifecycle for
+Ollama, Strata, and other configured backends. Its alternate screen is restored
+on exit; interactive redraws do not remain in ordinary shell scrollback.
 
 Nice-to-have:
 * “Agent mode” defaults (auto-enable newspaper when mind/tools appear).

@@ -1,5 +1,7 @@
 import { resolveProfile } from "./ollama.mjs";
 import { stripThinking } from "./metrics.mjs";
+import { createGpuHousekeeperAdapter } from "../gpu/housekeeper_adapter.mjs";
+import { submitManagedGpuJob } from "../gpu/managed-ollama.mjs";
 
 export const DEFAULT_STRATA_BASE_URL = "http://127.0.0.1:8081";
 
@@ -141,59 +143,127 @@ export function createStrataExecutor({
   baseUrl = process.env.STRATA_HOST ?? DEFAULT_STRATA_BASE_URL,
   housekeeperUrl = process.env.PYA_GPU_HOUSEKEEPER_URL ?? "",
   vramRequiredMb = process.env.PYA_CRITERION_STRATA_VRAM_REQUIRED_MB ?? process.env.PYASH_STRATA_VRAM_REQUIRED_MIB ?? null,
-  apiKey = process.env.STRATA_API_KEY || "pyash-local",
   fetchImpl = globalThis.fetch,
-  requestTimeoutMs
+  requestTimeoutMs,
+  pollIntervalMs = Number(process.env.PYA_GPU_MANAGER_POLL_MS || 500)
 } = {}) {
-  let preparation = null;
-  let prepared = false;
+  const normalizedHousekeeperUrl = String(housekeeperUrl ?? "").trim().replace(/\/+$/u, "");
+  const normalizedVram = Number(vramRequiredMb) > 0 ? Math.trunc(Number(vramRequiredMb)) : 20000;
+  const metadataHousekeeper = normalizedHousekeeperUrl
+    ? createGpuHousekeeperAdapter({ baseUrl: normalizedHousekeeperUrl })
+    : null;
+  let used = false;
+  let closed = false;
 
-  async function ensureCapacity() {
-    if (!preparation) {
-      preparation = postHousekeeper({
-        housekeeperUrl,
-        pathname: "/capacity/prepare",
-        payload: {
-          runtimeName: "strata",
-          jobSpec: {
-            resourceRequest: Number(vramRequiredMb) > 0 ? { vramRequiredMb: Math.trunc(Number(vramRequiredMb)) } : {}
-          }
-        },
-        fetchImpl
-      }).then(result => {
-        if (result?.prepared !== true) throw new Error(result?.error || "GPU Housekeeper did not prepare Strata capacity");
-        prepared = true;
-        return result;
-      });
-    }
-    return preparation;
-  }
-
-  const executor = async input => {
-    await ensureCapacity();
-    return runStrataChat({ ...input, baseUrl, apiKey, fetchImpl, requestTimeoutMs });
+  const executor = async ({
+    model,
+    prompt,
+    profile = "summary_direct",
+    contextLength,
+    sampling = {}
+  } = {}) => {
+    used = true;
+    const settings = resolveProfile(profile, { ...sampling, contextLength });
+    const startedAtMs = Date.now();
+    const payload = {
+      model,
+      messages: [{ role: "user", content: String(prompt ?? "") }],
+      stream: false,
+      ...(settings.temperature === null ? {} : { temperature: settings.temperature }),
+      ...(settings.top_p === null ? {} : { top_p: settings.top_p }),
+      ...(settings.top_k === null ? {} : { top_k: settings.top_k }),
+      ...(sampling.max_tokens || sampling.num_predict
+        ? { max_tokens: Number(sampling.max_tokens ?? sampling.num_predict) }
+        : {})
+    };
+    const response = await submitManagedGpuJob({
+      runtimeName: "strata",
+      profileName: model,
+      managerUrl: normalizedHousekeeperUrl,
+      providerUrl: baseUrl,
+      fetchImpl,
+      timeoutMs: Number(requestTimeoutMs || process.env.PYA_GPU_MANAGER_TIMEOUT_MS || 1800000),
+      pollIntervalMs,
+      vramRequiredMb: normalizedVram,
+      jobSpec: {
+        kind: "strata-chat",
+        payload
+      }
+    });
+    const finishedAtMs = Date.now();
+    const message = response?.choices?.[0]?.message ?? {};
+    const rawText = typeof message.content === "string"
+      ? message.content
+      : String(response?.response ?? "");
+    return {
+      text: stripThinking(rawText),
+      thinking: message.reasoning_content ?? response?.thinking ?? "",
+      payload: response,
+      timing: timingFromResponse(response, Math.max(0, finishedAtMs - startedAtMs)),
+      request: { endpoint: `${normalizedHousekeeperUrl}/submit`, model, runtime: "strata" },
+      effectiveThink: false,
+      reasoningMode: settings.reasoningMode,
+      startedAt: new Date(startedAtMs).toISOString(),
+      finishedAt: new Date(finishedAtMs).toISOString(),
+      metadata: {
+        engine: "strata",
+        runtime: "strata",
+        managedBy: "gpu-housekeeper",
+        housekeeperUrl: normalizedHousekeeperUrl,
+        resourceRequest: { vramRequiredMb: normalizedVram }
+      }
+    };
   };
 
-  const metadataProvider = async ({ model }) => ({
-    model,
-    engine: "strata",
-    runtime: "strata",
-    baseUrl: normalizeBaseUrl(baseUrl),
-    modelDigest: null,
-    quantization: null
-  });
+  const metadataProvider = async ({ model }) => {
+    try {
+      const response = metadataHousekeeper ? await metadataHousekeeper.getStrataModels() : {};
+      const listed = Array.isArray(response?.models)
+        ? response.models.find(entry => entry?.name === model || entry?.id === model)
+        : null;
+      return {
+        model,
+        engine: "strata",
+        runtime: "strata",
+        managedBy: "gpu-housekeeper",
+        housekeeperUrl: normalizedHousekeeperUrl,
+        baseUrl: normalizeBaseUrl(baseUrl),
+        modelDigest: listed?.digest ?? null,
+        quantization: listed?.details?.quantization_level ?? listed?.details?.quantization ?? null,
+        contextLength: listed?.details?.context_length ?? null
+      };
+    } catch (error) {
+      return {
+        model,
+        engine: "strata",
+        runtime: "strata",
+        managedBy: "gpu-housekeeper",
+        housekeeperUrl: normalizedHousekeeperUrl,
+        baseUrl: normalizeBaseUrl(baseUrl),
+        modelDigest: null,
+        quantization: null,
+        metadataError: String(error?.message ?? error)
+      };
+    }
+  };
 
   async function close() {
-    if (!prepared) return { status: "not-prepared" };
+    if (closed) return { status: "already-closed" };
+    closed = true;
+    if (!used) return { status: "not-used" };
     try {
-      const result = await postHousekeeper({ housekeeperUrl, pathname: "/discharge", payload: { runtimeName: "strata" }, fetchImpl });
+      const result = await postHousekeeper({
+        housekeeperUrl: normalizedHousekeeperUrl,
+        pathname: "/discharge",
+        payload: { runtimeName: "strata" },
+        fetchImpl
+      });
       return { status: result?.success === false ? "failed" : "ok", ...result };
-    } finally {
-      prepared = false;
-      preparation = null;
+    } catch (error) {
+      return { status: "failed", error: String(error?.message ?? error) };
     }
   }
 
-  return { executor, metadataProvider, ensureCapacity, close };
+  return { executor, metadataProvider, close };
 }
 

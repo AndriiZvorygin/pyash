@@ -3,16 +3,27 @@ import fsSync from "node:fs";
 import path from "node:path";
 import { remember } from "../../remember/index.mjs";
 import { recordArtifact, recordExchange } from "../../bridge/exchange.mjs";
-import { throwErrorSentence } from "../../error.mjs";
+import { isErrorSentence, throwErrorSentence } from "../../error.mjs";
 import { getEffectiveVyahAspect } from "../../library/grammar/vyah.mjs";
 import { resolveConfigBool } from "../../configure/env.mjs";
-import { ensureAgentPathDir, resolveAgentCwd, resolveAgentPath } from "../../library/agent_cwd.mjs";
+import { ensureAgentPathDir, resolveAgentPath } from "../../library/agent_cwd.mjs";
 import { appendWorldActivity, isWorldToolsActive, resolveWorldAgent, resolveWorldPath, resolveWorldPlace, resolveWorldPlaceDir } from "../../library/world.mjs";
 import { renderWriteValue, normalizeNewlines } from "./write_helpers.mjs";
 import { startFileTail, makeStreamIncrementalWriter } from "./write_stream.mjs";
 import { resolveKeyboardCommand, sendKeyboardText } from "./write_keyboard.mjs";
+import { writeClusterCompress } from "../../library/zim_archive.mjs";
 
-export default async function write(sentence, { remember: rememberFn = remember } = {}) {
+function reportPostWriteFailure({ target, stage, error }) {
+  const detail = String(error?.message ?? error ?? "unknown error");
+  // File persistence is the write operation; bookkeeping must not turn it into a false failure.
+  console.error(`[write warning] file saved at ${target}; ${stage} failed: ${detail}`);
+}
+
+export default async function write(sentence, { remember: rememberFn = remember, runtimeContext = null } = {}) {
+  const requestedFormat = String(sentence?.as?.wo ?? sentence?.become?.wo ?? sentence?.become?.name ?? "").trim().toLowerCase();
+  if (requestedFormat === "cluster-compress" || requestedFormat === "zim") {
+    return writeClusterCompress(sentence, { remember: rememberFn, runtimeContext });
+  }
   const modifiers = Array.isArray(sentence?.vyah?.ve?.values) ? sentence.vyah.ve.values : [];
   const aspect = getEffectiveVyahAspect(modifiers, { verb: "write", caseKey: "vyah" });
   const aspectKey = aspect === "stream" ? "stream" : "eval";
@@ -165,10 +176,7 @@ export default async function write(sentence, { remember: rememberFn = remember 
     }
   } else if (target) {
     const worldMode = isWorldToolsActive({ rememberFn });
-    const agentCwd = resolveAgentCwd({ rememberFn });
-    if (agentCwd && !path.isAbsolute(String(target))) {
-      target = path.resolve(agentCwd, String(target));
-    } else if (worldMode) {
+    if (worldMode) {
       const place = resolveWorldPlace({ rememberFn }) ?? "commons";
       const placeDir = resolveWorldPlaceDir(place, { rememberFn });
       if (!placeDir) {
@@ -191,7 +199,7 @@ export default async function write(sentence, { remember: rememberFn = remember 
       }
       target = resolvedTarget;
     }
-    const { resolved, outside, agentCwd: resolvedAgentCwd } = resolveAgentPath(target, { rememberFn });
+    const { resolved, outside, agentCwd: resolvedAgentCwd } = resolveAgentPath(target, { rememberFn, access: "write" });
     if (outside) {
       throwErrorSentence({
         name: "write defective",
@@ -207,9 +215,14 @@ export default async function write(sentence, { remember: rememberFn = remember 
     }
     await fs.writeFile(target, normalized, "utf8");
     const buffer = Buffer.from(normalized, "utf8");
-    const artifact = recordArtifact({ locator: target, producer: "exchange", bytes: buffer });
-    if (artifact?.su?.name) {
-      recordExchange({ artifactName: artifact.su.name, op: "write", producer: "exchange" });
+    try {
+      const artifact = recordArtifact({ locator: target, producer: "exchange", bytes: buffer });
+      if (artifact?.su?.name) {
+        recordExchange({ artifactName: artifact.su.name, op: "write", producer: "exchange" });
+      }
+    } catch (error) {
+      if (isErrorSentence(error)) throw error;
+      reportPostWriteFailure({ target, stage: "exchange bookkeeping", error });
     }
     if (worldMode) {
       const agent = resolveWorldAgent({ rememberFn }) ?? "agent";
@@ -217,16 +230,20 @@ export default async function write(sentence, { remember: rememberFn = remember 
       const placeDir = resolveWorldPlaceDir(place, { rememberFn });
       if (placeDir) {
         const rel = path.relative(placeDir, target);
-        await appendWorldActivity({
-          placeDir,
-          sentence: {
-            mood: "ya",
-            su: { name: agent },
-            to: { filename: rel },
-            at: { date: new Date().toISOString() },
-            be: "write"
-          }
-        });
+        try {
+          await appendWorldActivity({
+            placeDir,
+            sentence: {
+              mood: "ya",
+              su: { name: agent },
+              to: { filename: rel },
+              at: { date: new Date().toISOString() },
+              be: "write"
+            }
+          });
+        } catch (error) {
+          reportPostWriteFailure({ target, stage: "world activity recording", error });
+        }
       }
     }
   } else {
@@ -296,6 +313,13 @@ export const signatures = [
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "vec", "text"], handler: write },
   { signatureWords: ["be", "write", "become", "text", "ob", "name", "vec", "bool"], handler: write },
   { signatureWords: ["be", "write", "ob", "text", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "as", "wo", "cluster-compress", "ob", "text", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "as", "wo", "cluster-compress", "ob", "filename", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "as", "wo", "cluster-compress", "from", "text", "fromstate", "wo", "text", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "as", "wo", "cluster-compress", "from", "filename", "fromstate", "wo", "text", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "as", "wo", "cluster-compress", "from", "filename", "fromstate", "wo", "html", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "as", "wo", "cluster-compress", "from", "filename", "fromstate", "wo", "web", "to", "filename"], handler: write },
+  { signatureWords: ["be", "write", "as", "wo", "cluster-compress", "from", "filename", "fromstate", "wo", "warc", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "ob", "num", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "ob", "date", "to", "filename"], handler: write },
   { signatureWords: ["be", "write", "ob", "bool", "to", "filename"], handler: write },

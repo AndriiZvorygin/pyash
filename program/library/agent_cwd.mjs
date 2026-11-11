@@ -1,5 +1,6 @@
 import path from "node:path";
 import fs from "node:fs/promises";
+import os from "node:os";
 import {
   collectLicensedRoots,
   listWorldDeclaredAgentHouses,
@@ -45,38 +46,62 @@ export function resolveAgentCwd({ rememberFn } = {}) {
   return path.resolve(String(raw));
 }
 
-export function resolveAgentPath(target, { rememberFn } = {}) {
-  const raw = target ?? "";
+function isContained(root, candidate) {
+  const relative = path.relative(path.resolve(root), path.resolve(candidate));
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+export function resolveAgentPath(target, { rememberFn, access = "workspace" } = {}) {
+  const raw = String(target ?? "");
+  const isHomeRelative = raw === "~" || raw.startsWith(`~${path.sep}`) || raw.startsWith("~/");
+  const expanded = isHomeRelative
+    ? (raw === "~" ? os.homedir() : path.join(os.homedir(), raw.slice(2)))
+    : raw;
   const agentCwd = resolveAgentCwd({ rememberFn });
   if (!agentCwd) {
-    return { resolved: path.resolve(String(raw)), agentCwd: null, outside: false };
+    return { resolved: path.resolve(expanded), agentCwd: null, outside: false, roots: [] };
   }
-  const resolved = path.isAbsolute(String(raw))
-    ? path.resolve(String(raw))
-    : path.resolve(agentCwd, String(raw));
+
+  const homeAccessFact = rememberFn?.("agent home file access")?.ob?.boolean === true;
+  const homeAccessOperations = new Set(["read", "write", "list", "repair"]);
+  const allowHome = homeAccessFact && homeAccessOperations.has(String(access));
+  const invalidTilde = raw.startsWith("~") && !isHomeRelative;
+  const explicitHomePath = isHomeRelative || (path.isAbsolute(raw) && isContained(os.homedir(), raw));
+  const resolved = path.isAbsolute(expanded)
+    ? path.resolve(expanded)
+    : path.resolve(agentCwd, expanded);
+
   const worldRoot = rememberFn?.("world root")?.ob?.filename
     ? path.resolve(String(rememberFn("world root").ob.filename))
     : path.resolve("world");
   const agentName = resolveRememberedAgentName(rememberFn) ?? inferAgentNameFromCwd(agentCwd, worldRoot);
+  const strictRelativePaths = rememberFn?.("agent cwd strict relative paths")?.ob?.boolean === true;
+  let roots;
   if (!agentName) {
-    const roots = [agentCwd];
-    const outside = !roots.some((root) => {
-      const relative = path.relative(root, resolved);
-      return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-    });
-    return { resolved, agentCwd, outside, roots };
+    roots = [agentCwd];
+  } else {
+    const policy = resolveWorldAgentDirectoryLicense({ worldRoot, agentName });
+    const capability = access === "read" || access === "list" ? "read" : "write";
+    const licensedRoots = collectLicensedRoots(policy, capability);
+    roots = licensedRoots.length ? licensedRoots : [agentCwd];
   }
-  const policy = resolveWorldAgentDirectoryLicense({
-    worldRoot,
-    agentName
-  });
-  const writeRoots = collectLicensedRoots(policy, "write");
-  const roots = writeRoots.length ? writeRoots : [agentCwd];
-  const outside = !roots.some((root) => {
-    const relative = path.relative(root, resolved);
-    return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-  });
-  return { resolved, agentCwd, outside, roots };
+  if (strictRelativePaths && !roots.some((root) => path.resolve(root) === path.resolve(agentCwd))) {
+    roots.push(agentCwd);
+  }
+  if (allowHome && !roots.some((root) => path.resolve(root) === path.resolve(os.homedir()))) {
+    roots.push(os.homedir());
+  }
+
+  const relativeEscapesCwd = strictRelativePaths
+    && !path.isAbsolute(raw)
+    && !isHomeRelative
+    && !isContained(agentCwd, resolved);
+  const restrictedHomePath = strictRelativePaths && explicitHomePath && !allowHome && !isContained(agentCwd, resolved);
+  const outside = invalidTilde
+    || restrictedHomePath
+    || relativeEscapesCwd
+    || !roots.some((root) => isContained(root, resolved));
+  return { resolved, agentCwd, outside, roots, explicitHomePath, access };
 }
 
 export async function ensureAgentPathDir(resolved, { agentCwd, outside } = {}) {

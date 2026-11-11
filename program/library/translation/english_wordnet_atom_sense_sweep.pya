@@ -1,0 +1,12 @@
+su name translation be map def
+su text "format" ob text "english-wordnet-atom-sense-sweep-v1" ya
+su text "prompt-revision" ob text "atom-general-pos-gloss-choice-v8" ya
+su text "model" ob text "qwen3.5:9b" ya
+su text "batch-max-items" ob num 24 ya
+su text "batch-max-chars" ob num 10000 ya
+su text "max-output-tokens" ob num 2048 ya
+su text "max-attempts" ob num 2 ya
+su text "parallelism" ob num 8 ya
+su text "ordering" ob text "English30k atom rank ascending, then Pyac identity; candidate rank ascending and Princeton tag count descending" ya
+su text "select only a supplied POS-matched WordNet sense with broad ordinary general-language fit; exact spelling and lemma matches do not prove semantic fit; do not infer specialist domains from bare labels; preserve no-fit and uncertainty without activating links" ya
+prah

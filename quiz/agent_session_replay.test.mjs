@@ -15,6 +15,7 @@ import {
   beginSessionTurn,
   completeSessionTurn,
   ensureSessionFile,
+  readSessionMessages,
   readSessionMessagesWithFallback,
   readSessionReplay
 } from "../program/agent/session.mjs";
@@ -107,6 +108,51 @@ test("session turn sentences use typed fields without JSON metadata blobs", () =
   assert.doesNotMatch(rendered, /session turn/);
 });
 
+test("after-tool messages link to the active turn and replay in the canonical session", async () => {
+  const { sessionFile } = await makeSession("after-tool-message");
+  const turn = await beginSessionTurn({
+    sessionFile,
+    userContent: "Inspect the code.",
+    request: { prompt: "Inspect the code." },
+    metadata: { timestamp: "2026-01-01T00:00:00.000Z" }
+  });
+  await appendSessionEntry({
+    sessionFile,
+    role: "session message",
+    content: "Check this tool result before you finish.",
+    metadata: {
+      record: "session-message",
+      messageRole: "user",
+      turnId: turn.turnId,
+      payloadId: "duty-message-7",
+      createdAt: "2026-01-01T00:00:01.000Z",
+      sender: "parent duty",
+      channelType: "after tool result"
+    }
+  });
+  await completeSessionTurn({
+    sessionFile,
+    turn,
+    responseText: "The tool result is accounted for.",
+    metadata: { timestamp: "2026-01-01T00:00:02.000Z" }
+  });
+
+  const content = await fs.readFile(sessionFile, "utf8");
+  assert.match(content, /su name session message/);
+  assert.match(content, /accordingto text "turn-/);
+  assert.match(content, /fromtext text "duty-message-7"/);
+  const messages = await readSessionMessages({ sessionFile, historyWindow: 10 });
+  assert.deepEqual(messages.messages.map((message) => message.content), [
+    "Inspect the code.",
+    "Check this tool result before you finish.",
+    "The tool result is accounted for."
+  ]);
+  const replay = await readSessionReplay({ sessionFile, historyWindow: 10 });
+  assert.equal(replay.turns.length, 1);
+  assert.equal(replay.turns[0].turnId, turn.turnId);
+  assert.equal(replay.turns[0].complete, true);
+});
+
 test("session turn identity falls back to the active exchange sentence id", async () => {
   const { sessionFile } = await makeSession("exchange-id");
   setExchangeSentenceId("evoke-exchange-42");
@@ -144,6 +190,21 @@ test("replay projector rejects a checkpoint that disagrees with its assistant re
     () => projectSessionReplay({ sentences }),
     (error) => error?.message.startsWith("session replay defective")
   );
+});
+
+test("session response and checkpoint round-trip shell prompts containing dollar-backtick", async () => {
+  const { sessionFile } = await makeSession("quoted-dollar-backtick");
+  const responseText = "The prompt was `htaf@mriczo:~/Desktop/0$` — with no command.\n\nWhat should we inspect next?";
+  const turn = await beginSessionTurn({
+    sessionFile,
+    userContent: "Review this prompt",
+    request: { prompt: "Review this prompt" }
+  });
+  await completeSessionTurn({ sessionFile, turn, responseText });
+
+  const replay = await readSessionReplay({ sessionFile, historyWindow: 5 });
+  assert.equal(replay.messages.at(-1)?.content, responseText);
+  assert.equal(replay.turns.at(-1)?.complete, true);
 });
 
 test("legacy adjacent turns project with synthetic ids without rewriting the transcript", async () => {
@@ -240,6 +301,36 @@ test("live projection keeps the original task beside the bounded latest pair wit
   const projected = projectSessionReplay({ sentences, historyWindow: 1 });
   assert.deepEqual(projected.messages.map((entry) => entry.content), ["task-1", "task-3", "answer-3"]);
   assert.equal(projected.messages.filter((entry) => entry.content === "task-1").length, 1);
+});
+
+test("session replay orders interleaved records by durable turn ordinal", async () => {
+  const root = path.resolve("/tmp/pyash-agent-session-order-test");
+  await fs.rm(root, { recursive: true, force: true });
+  const sessionFile = await ensureSessionFile({
+    sessionDir: root,
+    sessionName: "ordered",
+    systemPrompt: "system",
+    model: "model"
+  });
+  const makeTurn = (ordinal) => {
+    const turnId = `ordered-${ordinal}`;
+    const requestHash = canonicalRequestHash({ ordinal });
+    return [
+      buildSessionTurnSentence({ role: "user", content: `question-${ordinal}`, turnId, requestHash, ordinal }),
+      buildSessionTurnSentence({ role: "assistant", content: `answer-${ordinal}`, turnId, requestHash, ordinal }),
+      buildSessionCheckpointSentence({ turnId, requestHash, responseText: `answer-${ordinal}`, ordinal })
+    ];
+  };
+  try {
+    await fs.appendFile(sessionFile, [...makeTurn(2), ...makeTurn(1)]
+      .map((sentence) => sentenceToPyash(sentence)).join("\n") + "\n", "utf8");
+    const history = await readSessionMessages({ sessionFile, historyWindow: 10 });
+    assert.deepEqual(history.messages.map((entry) => entry.content), [
+      "question-1", "answer-1", "question-2", "answer-2"
+    ]);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
 });
 
 test("verify loop promotes its successful verifier disposition into the generator session ledger", async () => {

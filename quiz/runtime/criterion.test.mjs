@@ -15,7 +15,7 @@ import { loadSuiteSamples } from "../../program/runtime/criterion/datasets.mjs";
 import { contextLengthBucket, ollamaTiming, percentile, rougeScores } from "../../program/runtime/criterion/metrics.mjs";
 import { runNightmare, runReverie } from "../../program/runtime/criterion/suites.mjs";
 import { runCriterionRefinery } from "../../program/runtime/criterion/refinery.mjs";
-import { createQueuedOllamaExecutor, runOllamaChat } from "../../program/runtime/criterion/ollama.mjs";
+import { createQueuedOllamaExecutor, resolveConfiguredGpuHousekeeperUrl, runOllamaChat } from "../../program/runtime/criterion/ollama.mjs";
 import { createStrataExecutor } from "../../program/runtime/criterion/strata.mjs";
 import { discoverDeepSWETasks, parseDeepSWEResult, resolvePierModelName, runDeepSWE, selectDeepSWETasks } from "../../program/runtime/criterion/deepswe.mjs";
 import { loadRun, renderRunCsv, renderRunMarkdown } from "../../program/runtime/criterion/report.mjs";
@@ -50,6 +50,17 @@ test("criterion metrics calculate ROUGE, percentiles, and Ollama speeds", () => 
   assert.equal(timing.totalElapsedMs, 800);
 });
 
+test("queued Ollama executor resolves the configured Pyash Housekeeper before localhost", () => {
+  const rememberFn = (name) => name === "gpu housekeeper url"
+    ? { ob: { text: "http://mriczo:8090" } }
+    : null;
+  assert.equal(resolveConfiguredGpuHousekeeperUrl({ env: {}, rememberFn }), "http://mriczo:8090");
+  assert.equal(resolveConfiguredGpuHousekeeperUrl({
+    env: { PYA_GPU_HOUSEKEEPER_URL: "http://override:8090" },
+    rememberFn
+  }), "http://override:8090");
+});
+
 test("Ollama adapter uses one configured profile and keeps thinking out of scored text", async () => {
   let request = null;
   const response = {
@@ -68,6 +79,7 @@ test("Ollama adapter uses one configured profile and keeps thinking out of score
   assert.equal(request.url, "http://example.test/api/chat");
   assert.equal(request.body.think, true);
   assert.equal(request.body.options.num_ctx, 65536);
+  assert.equal(request.body.keep_alive, 1800);
   assert.equal(result.text, "final answer");
   assert.equal(result.timing.outputTokens, 3);
 });
@@ -99,10 +111,50 @@ test("queued Ollama Criterion adapter uses the durable GPU lane and housekeeper 
   assert.equal(requests[0].jobSpec.kind, "ollama-chat");
   assert.equal(requests[0].jobSpec.resourceRequest.vramRequiredMb, 22000);
   assert.equal(requests[0].jobSpec.payload.model, "qwen3.8:27b");
+  assert.equal(requests[0].jobSpec.payload.keep_alive, 1800);
 
-  await adapter.dischargeModels(["qwen3.8:27b"]);
-  assert.equal(requests[1].jobSpec.kind, "ollama-generate");
-  assert.equal(requests[1].jobSpec.payload.keep_alive, 0);
+  await adapter.executor({ model: "qwen3.8:9b", prompt: "Second model.", identity: "sample-2" });
+  await adapter.dischargeModels(["qwen3.8:27b", "qwen3.8:9b"]);
+  await adapter.dischargeModels(["qwen3.8:27b", "qwen3.8:9b"]);
+  assert.equal(requests.length, 3, "cleanup must issue at most one unload for the model used last");
+  assert.equal(requests[2].jobSpec.kind, "ollama-generate");
+  assert.equal(requests[2].jobSpec.payload.model, "qwen3.8:9b");
+  assert.equal(requests[2].jobSpec.payload.keep_alive, 0);
+});
+
+test("queued Ollama metadata stays on the housekeeper lane", async () => {
+  const root = await tempRoot();
+  let metadataCalls = 0;
+  const adapter = createQueuedOllamaExecutor({
+    root,
+    runId: "queued-ollama-metadata-test",
+    housekeeperUrl: "http://housekeeper:8090",
+    housekeeperAdapter: {
+      getOllamaModels: async () => {
+        metadataCalls += 1;
+        return {
+          models: [{
+            name: "qwen3.5:9b",
+            digest: "digest-qwen35",
+            details: { quantization_level: "Q4_K_M", parameter_size: "9.7B", context_length: 262144 }
+          }]
+        };
+      }
+    }
+  });
+
+  const metadata = await adapter.metadataProvider({ model: "qwen3.5:9b", baseUrl: "http://ollama-must-not-be-used" });
+  assert.equal(metadataCalls, 1);
+  assert.deepEqual(metadata, {
+    model: "qwen3.5:9b",
+    modelDigest: "digest-qwen35",
+    quantization: "Q4_K_M",
+    parameterSize: "9.7B",
+    contextLength: 262144,
+    engine: "ollama",
+    managedBy: "gpu-housekeeper",
+    housekeeperUrl: "http://housekeeper:8090"
+  });
 });
 
 test("criterion language surface is registered as be criterion do", () => {
@@ -147,13 +199,14 @@ test("criterion native DeepSWE cases select the external Pier runner", () => {
   assert.ok(criterionSignatures.some(({ signatureWords }) => JSON.stringify(signatureWords) === JSON.stringify(deriveSignatureFromCall(sentence))));
 });
 
-test("Strata Criterion adapter prepares capacity, sends OpenAI-compatible work, and discharges", async () => {
+test("Strata Criterion adapter submits work and discharge through the Housekeeper", async () => {
   const calls = [];
   const response = (value, status = 200) => ({
     ok: status >= 200 && status < 300,
     status,
     statusText: status === 200 ? "OK" : "error",
-    async text() { return JSON.stringify(value); }
+    async text() { return JSON.stringify(value); },
+    async json() { return value; }
   });
   const adapter = createStrataExecutor({
     baseUrl: "http://strata:8081",
@@ -161,8 +214,12 @@ test("Strata Criterion adapter prepares capacity, sends OpenAI-compatible work, 
     vramRequiredMb: 20000,
     fetchImpl: async (url, options) => {
       calls.push({ url, options, body: options?.body ? JSON.parse(options.body) : null });
-      if (url.endsWith("/capacity/prepare")) return response({ prepared: true, deviceId: "gpu0" });
-      if (url.endsWith("/v1/chat/completions")) return response({ choices: [{ message: { content: "strata summary" } }], usage: { prompt_tokens: 12, completion_tokens: 4 } });
+      if (url.endsWith("/submit")) return response({ remoteJobId: "strata-job-1" });
+      if (url.endsWith("/job/strata-job-1")) return response({
+        status: "success",
+        result: { choices: [{ message: { content: "strata summary" } }], usage: { prompt_tokens: 12, completion_tokens: 4 }
+        }
+      });
       if (url.endsWith("/discharge")) return response({ success: true, status: "discharged" });
       return response({ error: "unexpected endpoint" }, 404);
     }
@@ -174,14 +231,15 @@ test("Strata Criterion adapter prepares capacity, sends OpenAI-compatible work, 
   assert.equal(result.timing.outputTokens, 4);
   await adapter.close();
   assert.deepEqual(calls.map(call => call.url), [
-    "http://housekeeper:8090/capacity/prepare",
-    "http://strata:8081/v1/chat/completions",
+    "http://housekeeper:8090/submit",
+    "http://housekeeper:8090/job/strata-job-1",
     "http://housekeeper:8090/discharge"
   ]);
   assert.equal(calls[0].body.runtimeName, "strata");
+  assert.equal(calls[0].body.jobSpec.kind, "strata-chat");
   assert.equal(calls[0].body.jobSpec.resourceRequest.vramRequiredMb, 20000);
-  assert.equal(calls[1].body.model, "qwen3.5:9b");
-  assert.equal(calls[1].body.temperature, 0.2);
+  assert.equal(calls[0].body.jobSpec.payload.model, "qwen3.5:9b");
+  assert.equal(calls[0].body.jobSpec.payload.temperature, 0.2);
 });
 
 test("DeepSWE task selection and verifier parsing are deterministic", () => {
@@ -418,6 +476,28 @@ test("criterion run compares models and writes replayable artifacts", async () =
   assert.match(run.replayCommand, /--resume/);
   assert.equal(run.results[0].pass, null);
   assert.equal(run.runScope, "full");
+});
+
+test("criterion completes every sample for one model before switching models", async () => {
+  const root = await tempRoot();
+  const dataset = await writeJson(root, "ordered.json", [
+    { id: "m1", transcript: "First transcript.", summary: "First." },
+    { id: "m2", transcript: "Second transcript.", summary: "Second." }
+  ]);
+  const calls = [];
+  await runCriterion({
+    benchmark: "meetingbank",
+    datasetPath: dataset,
+    models: ["model-a", "model-b"],
+    runId: "model-batched-order",
+    root,
+    executor: async ({ model, sample }) => {
+      calls.push(`${model}:${sample.id}`);
+      return { text: "Summary.", timing: {} };
+    },
+    metadataProvider
+  });
+  assert.deepEqual(calls, ["model-a:m1", "model-a:m2", "model-b:m1", "model-b:m2"]);
 });
 
 test("criterion smoke runs are labelled separately from full aggregates", async () => {

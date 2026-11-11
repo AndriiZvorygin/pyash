@@ -69,6 +69,28 @@ The scheduling authority that selects which agent acts next.
 
 **MVP:** all concepts above.
 
+### 2.11 GI-OS storage boundary
+
+Pyash separates its shared system installation from mutable world and home data:
+
+| Area | GI-OS role | Current location / status |
+| --- | --- | --- |
+| Pyash root | Shared system installation: runtime, modules, and libraries | Repository root; `program/library/` contains shared libraries |
+| Home volume | Per-user and per-agent writable data | Target home root is `world/home/`; current agent-house path is `world/house/<agent>/` |
+| World library place | Shared, mutable knowledge and refinement artifacts | `world/library/` |
+
+Model workers should have read-only access to the shared system libraries and
+write access only to their home and explicitly authorized world locations.
+They consume shared libraries in place; model jobs do not make private copies
+of the Pyash library tree or a separate repository checkout. Updating shared
+system libraries is a trusted, versioned maintenance operation.
+
+The read-only worker boundary is an architectural requirement. The current
+runtime's tools and filesystem policies enforce parts of it, but this spec does
+not assert that every model process is already isolated by a complete OS-level
+sandbox. `world/home/` names the GI-OS home-volume model; it is not a claim that
+the current `world/house/<agent>/` layout has been migrated.
+
 ---
 
 ## 3. World directory layout
@@ -448,6 +470,7 @@ Tools appear via place listing.
   * `world/library/text/` (normalized text extraction)
   * `world/library/abridged/` (deterministic reduction output)
   * `world/library/summarized/` (summary/distillation output)
+  * `world/library/archive/` (published, searchable ZIM archive collection)
 * when fresh content hash matches latest cached hash, heavy refinement steps MAY be skipped and prior staged outputs reused
 
 **MVP:** one full tool loop

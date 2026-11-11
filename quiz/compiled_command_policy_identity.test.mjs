@@ -68,7 +68,7 @@ test("compiled policy extraction preserves scope precedence and legacy keys", ()
   });
 });
 
-async function runScenario(runner, sourceText, { sentinel = false } = {}) {
+async function runScenario(runner, sourceText, { sentinel = false, gitRepository = false } = {}) {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-compiled-command-policy-"));
   const sourcePath = path.join(tmpDir, "scenario.pya");
   const runId = `compiled-command-policy-${runner}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -78,6 +78,14 @@ async function runScenario(runner, sourceText, { sentinel = false } = {}) {
     : [typeof sentinel === "string" ? sentinel : (sentinel ? "blocked-sentinel" : null)].filter(Boolean);
   for (const sentinelName of sentinelNames) {
     await fs.writeFile(path.join(tmpDir, sentinelName), "keep\n", "utf8");
+  }
+  if (gitRepository) {
+    await execFileAsync("git", ["init", "-q"], { cwd: tmpDir });
+    await execFileAsync("git", ["config", "user.email", "policy-test@example.invalid"], { cwd: tmpDir });
+    await execFileAsync("git", ["config", "user.name", "Policy Test"], { cwd: tmpDir });
+    await fs.writeFile(path.join(tmpDir, "story.txt"), "charismatics filled the grove\n", "utf8");
+    await execFileAsync("git", ["add", "story.txt"], { cwd: tmpDir });
+    await execFileAsync("git", ["commit", "-qm", "fixture story"], { cwd: tmpDir });
   }
 
   let exitCode = 0;
@@ -153,6 +161,37 @@ test("compiled allow emits request/policy/result audits and deterministic artifa
     assert.equal(await fs.readFile(path.join(result.tmpDir, "artifacts/second.txt"), "utf8"), "second");
     assert.equal(parsePolicyRecords(result.newspaper).filter(sentence => sentence.be === "command audit").length, 4, runner);
     await replayScenario(result);
+  });
+});
+
+test("git log with a format option is read-only and runs without an approval prompt", async t => {
+  await forEachRunner(t, async runner => {
+    const command = 'git log -S "charismatics filled the grove" --format=\'%h %ad %s\' --date=short';
+    const result = await runScenario(runner, [
+      policySource({ mode: "ask" }),
+      `ob text ${JSON.stringify(command)} to name text history be command do`,
+      ""
+    ].join("\n"), { gitRepository: true });
+
+    assert.equal(result.exitCode, 0, runner);
+    const policyLine = result.newspaper.split(/\r?\n/u).find(line => line.includes("as name policy")
+      && line.includes("accordingto name allow") && line.includes("by name read_only"));
+    assert.ok(policyLine, `${runner}: expected read-only allow audit`);
+    assert.doesNotMatch(result.newspaper, /be ratify do/u, runner);
+  });
+});
+
+test("compiled classifier keeps the format executable behind destructive approval", async t => {
+  await forEachRunner(t, async runner => {
+    const result = await runScenario(runner, [
+      policySource({ mode: "ask" }),
+      'ob text "format /dev/sda" be command do',
+      ""
+    ].join("\n"));
+
+    if (runner === "run") assert.equal(result.exitCode, 0, runner);
+    else assert.notEqual(result.exitCode, 0, runner);
+    assert.match(result.newspaper, /approve command \(destructive\): format \/dev\/sda/u, runner);
   });
 });
 

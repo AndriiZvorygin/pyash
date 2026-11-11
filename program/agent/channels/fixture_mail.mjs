@@ -3,7 +3,6 @@ import path from "node:path";
 import crypto from "node:crypto";
 
 import { parse } from "../../understand/index.mjs";
-import { interpret as interpretPyash } from "../../bridge/index.mjs";
 import { doRemember, remember } from "../../remember/index.mjs";
 import { worldNewspaperLogPath } from "../newspaper_log.mjs";
 import { recordArtifact } from "../../bridge/exchange.mjs";
@@ -21,6 +20,15 @@ const FIXTURE_CHANNEL_TYPE = "fixture-mail";
 const DEFAULT_OWNER = "correspondence worker";
 const CHIEF_OF_STAFF = "chief of staff";
 const CLASSIFICATIONS = new Set(["information", "work", "draft-response", "escalation"]);
+
+// The bridge is loaded on demand. A static import closes a cycle: the bridge
+// registers the built-in verb signatures, the verb registry holds this
+// module, and the registry is what the bridge reads. Loading it here keeps
+// the registry importable on its own.
+async function interpretPyash(...args) {
+  const { interpret } = await import("../../bridge/index.mjs");
+  return interpret(...args);
+}
 
 function text(value) {
   return String(value ?? "").trim();
@@ -103,7 +111,7 @@ export async function readFixtureMailPlan(policyPath) {
     escalationTarget: text(fields["escalation target"]) || CHIEF_OF_STAFF,
     escalationReason: text(fields["escalation reason"]) || "decision requirement plus deadline",
     escalationClassification: text(fields["escalation classification"]) || "escalation",
-    kind: text(fields["work kind"]) || "correspondence",
+    kind: text(fields["work sort"]) || "correspondence",
     acceptanceText: text(fields.acceptance) || "Preserve source evidence; propose no external send or mutation.",
     promptPrefix: text(fields["prompt prefix"]) || "Review",
     defaultPriority: numberField("default priority", 50),

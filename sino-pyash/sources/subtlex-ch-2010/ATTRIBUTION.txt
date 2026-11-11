@@ -1,0 +1,7 @@
+SUBTLEX-CH character frequency data
+
+Original work: Qing Cai and Marc Brysbaert (2010), “SUBTLEX-CH: Chinese Word and Character Frequencies Based on Film Subtitles,” PLOS ONE 5(6): e10729.
+Article: https://doi.org/10.1371/journal.pone.0010729
+Dataset page: https://www.ugent.be/plone_portal/pp/experimentele-psychologie/en/research/documents/subtlexch/overview.htm
+
+The article states that it is distributed under the Creative Commons Attribution License. The PLOS notice for the article does not specify a version. Keep the authors and article citation with this dataset and any adapted frequency table.

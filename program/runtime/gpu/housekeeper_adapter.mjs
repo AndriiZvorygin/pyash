@@ -45,7 +45,9 @@ async function requestJson({ baseUrl = "", pathname = "", method = "GET", body, 
     } catch {
       detail = "";
     }
-    throw new Error(`gpu housekeeper adapter defective (${response.status}): ${detail || response.statusText || "request failed"}`);
+    const error = new Error(`gpu housekeeper adapter defective (${response.status}): ${detail || response.statusText || "request failed"}`);
+    error.statusCode = response.status;
+    throw error;
   }
   return parseJsonOrThrow(response);
 }
@@ -63,11 +65,12 @@ export function createGpuHousekeeperAdapter({ baseUrl = "", hostId = "", usernam
       });
     },
 
-    async getSnapshot() {
+    async getSnapshot({ timeoutMs = 5000 } = {}) {
       return requestJson({
         baseUrl: rootUrl,
         pathname: "/snapshot",
-        method: "GET"
+        method: "GET",
+        timeoutMs
       });
     },
 
@@ -93,6 +96,25 @@ export function createGpuHousekeeperAdapter({ baseUrl = "", hostId = "", usernam
         baseUrl: rootUrl,
         pathname: "/runtime/strata/models",
         method: "GET",
+        timeoutMs
+      });
+    },
+
+    async getStrataContext({ timeoutMs = 5000 } = {}) {
+      return requestJson({
+        baseUrl: rootUrl,
+        pathname: "/runtime/strata/context",
+        method: "GET",
+        timeoutMs
+      });
+    },
+
+    async setStrataContext({ contextLength, timeoutMs = 240000 } = {}) {
+      return requestJson({
+        baseUrl: rootUrl,
+        pathname: "/runtime/strata/context",
+        method: "POST",
+        body: { contextLength: Number(contextLength) },
         timeoutMs
       });
     },

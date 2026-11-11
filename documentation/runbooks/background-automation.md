@@ -1,9 +1,11 @@
 # Background Roadmap Automation
 
 Pyash's unattended roadmap lane is deliberately separate from `master`.
-Hourly work starts from `automation/roadmap`, follows weekly Codex pacing, and
-can advance only that branch after the configured Luna reviewer accepts a task. The daily digest is the
-only routine email.
+Hourly work serializes through the existing repository checkout, selects
+`automation/roadmap`, follows weekly Codex pacing, and can advance only that
+branch after the configured Luna reviewer accepts a task. When the checkout is
+clean, the runner restores the branch that was checked out before the wake. The
+daily digest is the only routine email.
 
 ## Private configuration
 
@@ -87,7 +89,7 @@ node command/work_supervisor.mjs roadmap
 node command/work_supervisor.mjs roadmap --json
 ```
 
-Packages are grouped as `ACTIVE`, `QUEUED`, `CANDIDATE`, `BLOCKED / NEEDS DECISION`, or `COMPLETE`. The active package is enriched from its durable task checkpoint, including the planner's work order, Luna's pass count, worktree, commit, and blocker. The catalog is intentionally limited to substantial roadmap increments.
+Packages are grouped as `ACTIVE`, `QUEUED`, `CANDIDATE`, `BLOCKED / NEEDS DECISION`, or `COMPLETE`. The active package is enriched from its durable task checkpoint, including the planner's work order, Luna's pass count, shared checkout, commit, and blocker. The catalog is intentionally limited to substantial roadmap increments.
 
 Luna roadmap review is explicit and occasional, not part of every hourly wake:
 
@@ -100,7 +102,7 @@ Refresh is appropriate when fewer than three credible candidates remain, depende
 
 ## Automation baseline policy
 
-`master` remains human-controlled. Before a new autonomous task is based, the runner synchronizes `automation/roadmap` with local `master`, preserving both histories. An active task is never rebased or restarted; its existing worktree and checkpoint continue untouched. When an accepted task is based on the previous automation tip, integration fast-forwards it; when the automation branch has advanced, integration cherry-picks the complete task history from the recorded base revision through the task tip. Merge or cherry-pick conflicts block the task for human attention.
+`master` remains human-controlled. Before a new autonomous task is based, the runner synchronizes `automation/roadmap` with local `master`, preserving both histories. Tasks use the existing checkout under a cross-process lease; no checkout is created per task. A dirty checkout defers the queue before a task is claimed. Active task commits and checkpoints remain on `automation/roadmap` so a later wake can resume them. Merge or cherry-pick conflicts block the task for human attention.
 
 Inspect or perform synchronization explicitly with:
 
@@ -124,7 +126,7 @@ implementer's conversational thread. Role models and reasoning levels can be ove
 
 ## Codex execution preflight
 
-Before a background task is claimed, Pyash checks the selected repository/worktree, writable access, Git, Node, Codex App Server initialization, and the configured thread sandbox. The supervisor repeats the check against the task worktree before opening manager or worker turns. A failed check is recorded as an infrastructure deferral in scheduler health and newspaper history; it does not make a roadmap task defective or claim the next task.
+Before a background task is claimed, Pyash checks the selected repository checkout, writable access, clean Git state, Node, Codex App Server initialization, and the configured thread sandbox. The supervisor repeats the check before opening manager or worker turns. A failed check is recorded as an infrastructure deferral in scheduler health and newspaper history; it does not make a roadmap task defective or claim the next task.
 
 Run the disposable smoke explicitly with:
 
@@ -132,7 +134,7 @@ Run the disposable smoke explicitly with:
 node command/work_supervisor.mjs sandbox-smoke --repository /home/htaf/pyash --json
 ```
 
-The normal `workspace-write`/`workspaceWrite` mode currently cannot execute shell operations on this host because its bubblewrap network namespace setup fails with `RTM_NEWADDR: Operation not permitted`, even though the repository and worktrees are writable. Until the host sandbox capability is repaired, the private cron environment uses `danger-full-access`/`dangerFullAccess` as an explicit fallback. Pyash still pins every task to its assigned worktree, limits the prompt/work order, integrates only onto `automation/roadmap`, and never updates `master` automatically. The fallback must be revalidated with `sandbox-smoke` after host or Codex changes.
+The normal `workspace-write`/`workspaceWrite` mode currently cannot execute shell operations on this host because its bubblewrap network namespace setup fails with `RTM_NEWADDR: Operation not permitted`, even though the repository is writable. Until the host sandbox capability is repaired, the private cron environment uses `danger-full-access`/`dangerFullAccess` as an explicit fallback. Pyash serializes task runs against the shared checkout, limits the prompt/work order, integrates only onto `automation/roadmap`, and never updates `master` automatically. The fallback must be revalidated with `sandbox-smoke` after host or Codex changes.
 
 Set `PYA_BACKGROUND_EXECUTION_BLOCKED=truth` to keep hourly implementation wakes globally deferred while preserving daily digest operation. Remove that gate only after the smoke passes.
 
@@ -140,8 +142,8 @@ Long-running manager or worker turns use bounded progress-aware timeouts. The de
 `PYA_CODEX_TURN_INACTIVITY_TIMEOUT_MS=900000` (15 minutes without meaningful App Server activity)
 and `PYA_CODEX_TURN_HARD_TIMEOUT_MS=1800000` (30 minutes maximum). The legacy
 `PYA_CODEX_TURN_TIMEOUT_MS=900000` remains the fallback inactivity value. These settings change only
-how long Pyash waits for a turn and do not remove the worktree or task-scope controls. A timeout
-records partial App Server output and a fresh worktree evidence snapshot; known remote turn IDs
+how long Pyash waits for a turn and do not remove the checkout lease or task-scope controls. A timeout
+records partial App Server output and a fresh checkout evidence snapshot; known remote turn IDs
 remain ambiguous and are not replayed automatically.
 
 The daily digest has an independent lock and durable health artifact. A digest generation failure is
@@ -158,7 +160,7 @@ recipient, cron block, and lock availability:
 command/check_background_automation.sh
 ```
 
-To disable scheduling without touching tasks, worktrees, checkpoints, reports,
+To disable scheduling without touching tasks, checkpoints, reports,
 or branches:
 
 ```bash

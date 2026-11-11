@@ -6,16 +6,20 @@ import { collectMachineMetadata } from "./machine.mjs";
 import { aggregateSampleResults, compareExpectedFacts, contextLengthBucket, parseJsonOutput, rougeScores, sha256, stripThinking, tokenize } from "./metrics.mjs";
 import { DEFAULT_PROFILES, readOllamaMetadata, runOllamaChat, resolveProfile } from "./ollama.mjs";
 import { loadRun, writeRunArtifacts } from "./report.mjs";
+import { scoreTranslationSample } from "./translation.mjs";
 
 export const DEFAULT_MODELS = Object.freeze([
   "qwen3.5:9b",
   "hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M"
 ]);
 
-function normalizeModels(models) {
+export const DEFAULT_TRANSLATION_MODELS = Object.freeze(["qwen3.5:9b"]);
+
+function normalizeModels(models, suiteKey) {
   if (Array.isArray(models) && models.length) return models.map(String).filter(Boolean);
   const fromEnv = String(process.env.PYA_CRITERION_MODELS ?? "").split(",").map(value => value.trim()).filter(Boolean);
-  return fromEnv.length ? fromEnv : [...DEFAULT_MODELS];
+  if (fromEnv.length) return fromEnv;
+  return suiteKey === "flores-200" ? [...DEFAULT_TRANSLATION_MODELS] : [...DEFAULT_MODELS];
 }
 
 function estimateContextTokens(sample) {
@@ -58,6 +62,7 @@ export function scoreSample({ suiteKey, sample, output }) {
     return { accuracy: output ? (stripThinking(output).match(answerPattern)?.[1]?.toUpperCase() === sample.expectedAnswer.toUpperCase() ? 1 : 0) : 0, schemaValidity: output ? 1 : 0 };
   }
   if (suiteKey === "helpos-local") return structuredHelpOSScore(sample, output);
+  if (suiteKey === "flores-200") return scoreTranslationSample(sample, stripThinking(output));
   if (suiteKey === "qmsum") {
     return {
       ...referenceRougeScores(sample.reference, output),
@@ -153,6 +158,7 @@ function macroAggregates(groups, models, groupKey) {
         rouge1: average("rouge1"),
         rouge2: average("rouge2"),
         rougeL: average("rougeL"),
+        chrf: average("chrf"),
         averageLatencyMs: average("averageLatencyMs"),
         qualityPerSecond: average("qualityPerSecond"),
         failureCount: rows.reduce((sum, row) => sum + row.aggregate.failureCount, 0)
@@ -169,7 +175,7 @@ function buildSuiteMetadata(key, catalog) {
   return {
     name: catalog.name,
     version: catalog.version,
-    sourceUrls: [catalog.sourceUrl, catalog.utilityUrl, catalog.mirrorUrl, catalog.taskSourceUrl, catalog.v2SourceUrl].filter(Boolean),
+    sourceUrls: [catalog.sourceUrl, catalog.datasetUrl, catalog.utilityUrl, catalog.mirrorUrl, catalog.taskSourceUrl, catalog.v2SourceUrl].filter(Boolean),
     licenseUrls: [catalog.licenseUrl].filter(Boolean),
     key
   };
@@ -219,7 +225,7 @@ export async function runCriterion({
   const selectedSamples = limit === null || limit === undefined ? sampleSelection : sampleSelection.slice(0, Math.max(0, Number(limit)));
   const resolvedProfile = resolveProfile(profile, { ...sampling, contextLength });
   const resolvedContextLength = resolvedProfile.contextLength === null ? null : Number(resolvedProfile.contextLength);
-  const resolvedModels = normalizeModels(models);
+  const resolvedModels = normalizeModels(models, suiteKey);
   const id = String(runId ?? `${suiteKey}-${now().toISOString().replace(/[-:.TZ]/gu, "").slice(0, 14)}-${sha256(`${suiteKey}:${now().toISOString()}`).slice(0, 8)}`);
   const runStartedAt = now().toISOString();
   const outputJsonl = path.resolve(root, "criterion", "results", `${id}.jsonl`);
@@ -346,8 +352,9 @@ export async function runCriterion({
     modelMetadata: modelMetadata[model],
     aggregate: aggregateSampleResults(results.filter(row => row.model === model))
   }));
-  const evaluationAggregates = ["meetingbank", "qmsum"].includes(suiteKey)
-    ? groupedAggregates(results, resolvedModels, "evaluationMode")
+  const evaluationGroupKey = suiteKey === "flores-200" ? "direction" : "evaluationMode";
+  const evaluationAggregates = ["meetingbank", "qmsum", "flores-200"].includes(suiteKey)
+    ? groupedAggregates(results, resolvedModels, evaluationGroupKey)
     : [];
   const taskAggregates = suiteKey === "longbench-summary" ? groupedAggregates(results, resolvedModels, "task") : [];
   const categoryAggregates = suiteKey === "mmlu-pro" ? groupedAggregates(results, resolvedModels, "category") : [];

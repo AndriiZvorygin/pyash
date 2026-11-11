@@ -7,6 +7,75 @@ qwen3.5:9b
 hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M
 ```
 
+## Warm Qwen throughput across GPU hosts
+
+Matched warm throughput measurements were recorded on 2026-11-02 for
+`qwen3.5:9b` Q4_K_M, digest
+`6488c96fa5faab64bb65cbd30d4289e20e6130ef535a93ef9a49f42eda893ea7`.
+Each direct and Housekeeper run used the same five prompts (sample IDs
+`12, 37, 270, 495, 837`), in order. Their ordered `(sample ID, prompt SHA-256)`
+set hashes to
+`e5320b9f7dabeb2a574c3c4b18807b656f26d3a48d5dd946e379c4b13c3d770c`, and all
+six result files matched it. Request settings were `num_ctx=32768`,
+`temperature=0.2`, `top_p=0.8`, `top_k=20`, `think=false`, and
+`keep_alive=1800`. Each run made two unmeasured warmups (a two-token ping, then
+sample 12), followed by the five sequential measured calls. No model was
+switched or unloaded between warmup and measurement.
+
+Tokens/second is Ollama `eval_count / eval_duration`; it measures generation
+throughput, not Housekeeper queue wait or total request latency. The direct
+and Housekeeper rows were run serially on each same host. Housekeeper jobs
+were pinned to the listed device and their completed job records verified the
+execution host, device, and `forwarded=false`.
+
+| Host and accelerator | Power limit | Direct mean / weighted tok/s | Housekeeper mean / weighted tok/s | Housekeeper mean delta |
+| --- | ---: | ---: | ---: | ---: |
+| mriczo, RTX 3090 24 GB | 250 W | 104.84 / 104.69 | 104.58 / 103.77 | -0.25% |
+| Mac Studio, M1 Ultra 64 GB unified memory | n/a | 61.12 / 60.81 | 61.17 / 60.92 | +0.08% |
+| SWAC, RTX 3060 12 GB | 110 W | 43.61 / 43.59 | 43.29 / 42.98 | -0.74% |
+
+The small differences are within the variation of this five-prompt run; they
+show no material Housekeeper generation-throughput penalty. Interpret the
+cross-host differences as hardware/runtime results, not a Housekeeper ranking.
+The Mac Studio Housekeeper and SWAC container were refreshed to GitHub
+`master` at `e94958459` before their measured runs. An initial unpinned SWAC
+submission was automatically forwarded to mriczo and excluded; the recorded
+SWAC jobs used routing depth 1 and were verified local.
+
+## FLORES-200 translation
+
+Criterion also provides a local-dataset `flores-200` suite for comparing
+translation models with the same prompts and greedy `translation_direct`
+profile. Keep the FLORES export outside the repository and normalize each row
+to JSON/JSONL/CSV fields named `id`, `source_language`, `target_language`,
+`source`, and `reference` (an optional `references` array is supported):
+
+```json
+{"id":"eng-fra-1","source_language":"eng_Latn","target_language":"fra_Latn","source":"Hello world.","reference":"Bonjour le monde."}
+```
+
+Run a bounded comparison through the normal Criterion/Ollama or housekeeper
+path:
+
+```bash
+node command/criterion.mjs inspect --benchmark flores-200
+node command/criterion.mjs run \
+  --benchmark flores-200 \
+  --dataset "$PYA_BENCHMARK_CACHE/flores-200/devtest.jsonl" \
+  --model "qwen3.5:9b" \
+  --profile translation_direct \
+  --limit 100 --resume --json
+```
+
+FLORES runs default to `qwen3.5:9b` when `--model` and
+`PYA_CRITERION_MODELS` are unset. Use the existing housekeeper lane for live
+translation work by setting `PYA_GPU_HOUSEKEEPER_URL`; pass a comma-separated
+model list explicitly when a comparison is intended.
+
+The suite reports chrF on the 0–100 scale and groups results by language
+direction. It does not download FLORES or commit model outputs; the supplied
+dataset path and revision remain part of the replayable run metadata.
+
 Endpoint selection is external configuration:
 
 ```bash
@@ -89,10 +158,11 @@ be criterion do
 ```
 
 Use `from state "ollama"` and the Ollama endpoint for an Ollama run. Strata
-Criterion runs require `PYA_GPU_HOUSEKEEPER_URL`; the adapter requests capacity
-before the first sample and discharges Strata after the run through the existing
-Housekeeper API. `as state "summary_direct"` remains a legacy profile-only form
-when no `via state` model is present.
+Criterion runs require `PYA_GPU_HOUSEKEEPER_URL`; each `strata-chat` sample is
+submitted to the Housekeeper, which owns admission, model loading, the bounded
+wait for the provider result, and provider-specific discharge. Criterion never
+posts chat requests to the Strata endpoint. `as state "summary_direct"` remains
+a legacy profile-only form when no `via state` model is present.
 
 ```bash
 node command/criterion.mjs list

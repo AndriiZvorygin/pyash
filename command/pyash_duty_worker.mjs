@@ -163,6 +163,18 @@ export async function processDutyAssignment(config, repositories, assignment, {
         host: duty.host,
         sessionFile: localSessionFile,
         sessionUserMetadata: { payloadId: message.id },
+        onToolCall: async (event) => {
+          const boundary = await postJson(`${config.hubUrl}/api/duty-workers/event`, {
+            workerId: config.workerId,
+            dutyId: duty.id,
+            messageId: message.id,
+            claimId: assignment.claimId,
+            event
+          }, { token: config.token, fetchFn });
+          return boundary.saddleMessages?.length
+            ? { saddleMessages: boundary.saddleMessages }
+            : undefined;
+        },
         mindFn
       });
       output = String(result?.ob?.text ?? result?.fromstate?.text ?? result?.value?.text ?? "").trim();

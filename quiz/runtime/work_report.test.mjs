@@ -44,7 +44,7 @@ test("work report renders durable plan, evidence, review, and diff stat", () => 
   assert.match(report, /node --test quiz\/parity\.test\.mjs: PASS/);
   assert.match(report, /Luna review:\n  ACCEPT/);
   assert.match(report, /Diff: 1 file changed, \+1 -1/);
-  assert.match(report, /Worktree: \/tmp\/worktrees\/report-task/);
+  assert.match(report, /Checkout: \/tmp\/worktrees\/report-task/);
 });
 
 test("work report identifies the independent Luna reviewer", () => {

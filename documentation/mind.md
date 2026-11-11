@@ -12,17 +12,82 @@ This document defines how a **mind** (an LLM endpoint) is configured, how Pyash 
 
 The default backend remains Ollama. Optional OpenAI-compatible backends use the same conversation and tool-call payloads through the OpenAI Chat Completions API.
 
-Durable `be gpu mind` jobs include a Housekeeper `resourceRequest.vramRequiredMb` by default (12,000 MiB). Set `PYA_OLLAMA_VRAM_REQUIRED_MB` or `PYA_GPU_VRAM_REQUIRED_MB` to adjust the default, or provide `resourceRequest.vramRequiredMb` in the job map. This declaration lets the Housekeeper safely reclaim idle managed runtimes before loading the requested model.
+## Optional MiniMax Mind
+
+MiniMax is selectable per mind and does not change Pyash's Ollama default. Put a MiniMax API or M Plan key in the ignored `configure/secret.pya` file (mode `600`):
+
+```pya
+exists su name minimax api key ob text "<MiniMax API key>" be default ya
+```
+
+The existing fact name `minimax key` is also accepted; `minimax api key` is preferred for new configuration.
+
+`configure/default.pya` provides the named `minimax` mind using `https://api.minimax.io/v1` and `MiniMax-M3.1-Flash`. The shared Chat Completions adapter calls `/v1/chat/completions`; streaming, tools, and image inputs use Pyash's existing OpenAI-compatible request shape. The model picker queries `/v1/models` with the same key. The key can instead be supplied through `MINIMAX_API_KEY`.
+
+The equivalent Pyash mind declaration is:
+
+```pya
+exists su name minimax be mind
+  from state "minimax"
+  from space "https://api.minimax.io/v1"
+  via state "MiniMax-M3.1-Flash"
+ya
+```
+
+Select it in the coding saddle with `/mind minimax`; use `/model` to choose from the account's model catalog. MiniMax M3.1 Flash always uses reasoning; `/think low|medium|high|xhigh|max` selects its reasoning effort rather than disabling thinking. `pyash configure mind --backend minimax` also offers those levels and saves the chosen setting.
+
+MiniMax setup references: [Chat Completions API](https://platform.minimax.io/docs/api-reference/text-chat-openai), [OpenAI-compatible Text API](https://platform.minimax.io/docs/api-reference/text-openai-api), and [List Models](https://platform.minimax.io/docs/api-reference/models/openai/list-models).
+
+## Z.AI GLM Coding Plan
+
+Pyash exposes `zai` as an optional coding mind using Z.AI's OpenAI-compatible GLM Coding Plan Chat Completions endpoint. Store credentials as local Pyash facts in the ignored `configure/secret.pya`, with file mode `600`:
+
+```pya
+exists su name zai api key ob text "<standard Z.AI API key>" be default ya
+exists su name zai coding api key ob text "<GLM Coding Plan key>" be default ya
+```
+
+The standard API key is used for the regular model API. The distinct Coding Plan key is used by the Pyash `zai` mind at `https://api.z.ai/api/coding/paas/v4`; it does not fall back to the standard API key.
+
+On this host, the regular Codex CLI also has a separate `zai` profile. Start it with `codex --profile zai`; plain `codex` keeps using the existing OpenAI default. Its auth command reads the Coding Plan key from `configure/secret.pya`, so the credential is not duplicated in `~/.codex`. In the Pyash coding saddle, `/mind` lists configured Pyash minds and `/mind zai` or `/mind openai` selects one. `/model` now lists configured backends first, then models for the selected backend. `/model <backend>` jumps directly to that backend's model list; `/model <model-id>` remains a direct model override. Local backends show the GPU Housekeeper route rather than the provider endpoint. OpenAI currently offers its configured model and accepts a typed model ID; it does not fetch an OpenAI catalog.
+
+Pyash sends the selected GLM model, conversation, and Pyash tool schemas to the Coding Plan Chat Completions endpoint. Streaming turns consume SSE text and tool-call deltas directly; tool execution remains in Pyash's own mind loop. The coding saddle keeps its configured default mind unless you select another one with `/mind`.
+
+To add a named Z.AI mind relay without changing the global default:
+
+```sh
+node command/pyash.mjs configure mind --non-interactive --relay zai-coder --backend zai --host https://api.z.ai/api/coding/paas/v4 --model glm-5.3 --set-default lie --test-now lie
+```
+
+Select Z.AI for the coding saddle without changing Pyash's global default:
+
+```sh
+PYA_SADDLE_MIND=zai node command/pyash_saddle.mjs
+```
+
+This selects the Pyash mind named `zai`, whose default endpoint is `https://api.z.ai/api/coding/paas/v4`. Override the starting mind with `/mind` or `PYA_SADDLE_MIND`; `/model` selects a model for the active mind. Other minds continue using their existing configuration. GLM-5.3 is text-only; the model uses Pyash tools through the existing mind tool loop.
+
+For Ollama inference, omit `resourceRequest.vramRequiredMb` to let each Housekeeper estimate cold-load demand from that host's installed model size and effective context. NVIDIA hosts use 1.10 times installed model size, 256 MiB fixed runtime headroom, and 160 MiB per 4K context, calibrated against deployed Qwen 3.5 9B Q4_K_M measurements at 4K and 32K context. Other memory backends retain their prior conservative estimate until they have independent measurements. See [GPU Housekeeper VRAM calibration](reference/gpu-housekeeper-vram-calibration.md). Use the Housekeeper `/snapshot` for actual residency evidence: `ollamaRunningModels.models[].sizeVram` is Ollama's model-resident figure, while `processVramMb` is the full NVIDIA compute-process allocation when one model is resident. The device's `vramUsedMb` includes all GPU users. Set `resourceRequest.vramRequiredMb` in the job map when a measured or specialized requirement is known; it overrides the estimate. `PYA_OLLAMA_VRAM_REQUIRED_MB` and `PYA_GPU_VRAM_REQUIRED_MB` remain explicit global overrides. Ollama model provisioning/pulls require an explicit VRAM request (and RAM/disk requests when pulling).
 
 ## Optional Local Strata Backend
 
 Pyash can use Strata as a selectable local backend without changing the default Ollama profile. Configure it with the backend key `strata`; its default host is `http://127.0.0.1:8081` and its OpenAI-compatible model alias is `strata`.
 
 ```sh
-./run pyash configure mind --backend strata --host http://127.0.0.1:8081 --model strata
+node command/pyash.mjs configure mind --backend strata --host http://127.0.0.1:8081 --model strata
 ```
 
 Pyash sends requests to `http://127.0.0.1:8081/v1/chat/completions`. The Strata runner uses a local placeholder bearer token by default so it never falls through to Codex OAuth; if Strata API-key auth is enabled, provide that key through `STRATA_API_KEY` outside the repository.
+
+In the coding saddle, `/think none|low|medium|high` controls Strata's
+per-request reasoning effort; `off` and `on` are aliases for `none` and
+`high`. `/context` reads the supported Strata sizes from Housekeeper. Choosing
+one updates only `--max-context` in the configured Strata launch profile, then
+restarts the lazy server while holding the GPU gate. The model stays unloaded
+until the next request. For Ollama, `/context` selects a request-level
+`num_ctx` preset (4K through 64K), and `/think on|off` sends Ollama's boolean
+thinking option. These saddle overrides apply for the current interactive
+session only; no selection keeps the existing provider/model defaults.
 
 ### GPU manager handoff
 
@@ -68,12 +133,31 @@ Register the same loopback API with the Housekeeper in `container/gpu-housekeepe
 
 ```dotenv
 GPU_HOUSEKEEPER_STRATA_RUNTIME_URL=http://127.0.0.1:8081
+GPU_HOUSEKEEPER_STRATA_CONTEXT_CONFIG_PATH=/path/to/Strata/strata-iq2_xs-housekeeper.json
+GPU_HOUSEKEEPER_STRATA_CONTEXT_SYSTEMD_UNIT=strata-iq2-xs.service
+GPU_HOUSEKEEPER_STRATA_CONTEXT_AGENT_SOCKET=/run/user/1000/pyash-strata-context-agent.sock
+GPU_HOUSEKEEPER_STRATA_CONTEXT_OPTIONS=8192,16384,32768,65536
+GPU_HOUSEKEEPER_STRATA_DEFAULT_CONTEXT_LENGTH=32768
+GPU_HOUSEKEEPER_STRATA_DEVICE_ID=gpu0
 ```
 
+Install the host-side user service once, then recreate the Housekeeper:
+
 ```sh
+container/gpu-housekeeper/command/install-strata-context-agent.sh
 cd container/gpu-housekeeper/service
-docker compose -p gpu-housekeeper --env-file .env -f compose.gpu.yaml up -d --no-build --force-recreate gpu-housekeeper
+docker compose -p gpu-housekeeper --env-file .env -f compose.gpu.yaml up -d --build --force-recreate gpu-housekeeper
 ```
+
+The agent accepts requests only over its owner-only Unix socket. Housekeeper
+holds the GPU execution gate, checks Strata has no in-flight work, and sends
+the allowlisted context change through a short-lived helper container. The host
+agent updates only `--max-context`, restarts the configured user unit, and
+verifies the reported limit; rollback restores the previous profile if restart
+or verification fails. Leave the context-control settings unset to disable
+this operation. `GET /runtime/strata/context` reports the active size and
+allowlist; `POST /runtime/strata/context` accepts only an allowlisted
+`contextLength`. Requests fail as busy if the GPU gate or Strata API is active.
 
 The manager then loads Strata for queued Strata jobs and checks its status before admitting another managed GPU runtime. It unloads Strata only after its status API confirms zero in-flight requests and the configured 300-second idle grace has elapsed; it verifies `loaded:false` and rechecks actual free VRAM before admitting the next runtime. The Housekeeper uses a short-lived host-network helper container to reach Strata's loopback API, so Strata itself remains bound to `127.0.0.1`. If Strata API-key authentication is enabled, put the same key in the Housekeeper environment as `STRATA_API_KEY`; never commit it.
 

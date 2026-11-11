@@ -1,10 +1,20 @@
 import { buildProgram } from "../../program.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { remember, doRemember } from "../../remember/index.mjs";
-import { resolveTranslationSource, resolveTranslationTarget } from "./translation/registry.mjs";
-import { matchGlossToPyash } from "./translation/reverse_pairs.mjs";
-import { loadAnchorWordForms } from "./translation/anchor_words.mjs";
-import { normalizeAnchorSentence, applyTemplatePairs } from "./translation/helpers.mjs";
+import { emitExchangeSentence } from "../../bridge/exchange.mjs";
+import { resolveTranslationSource, resolveTranslationTarget } from "../../library/translation/registry.mjs";
+import { matchGlossToPyash } from "../../library/translation/reverse_pairs.mjs";
+import { translatePyacToEnglishPyash } from "../../library/translation/pyac_to_english_pyash.mjs";
+import { loadAnchorWordForms } from "../../library/translation/anchor_words.mjs";
+import { normalizeAnchorSentence, applyTemplatePairs } from "../../library/translation/helpers.mjs";
+import {
+  analyzeDefaultEnglishSentence,
+  resolveEnglishSentence
+} from "../../library/translation/english_sentence.mjs";
+import {
+  createDefaultQueuedMindEnglishSentenceVerifier,
+  verifyEnglishSentenceCandidates
+} from "../../library/translation/english_sentence_verification.mjs";
 import {
   loadEnglishTranslationPairs,
   loadRussianTranslationPairs,
@@ -18,7 +28,22 @@ import {
   loadChineseTranslationTemplates,
   loadInterlinguaTranslationTemplates,
   loadHindiTranslationTemplates
-} from "./translation/pairs.mjs";
+} from "../../library/translation/pairs.mjs";
+
+let englishSentenceVerifierPromise = null;
+
+async function resolveDefaultEnglishSentence(source) {
+  const analysis = await analyzeDefaultEnglishSentence(source);
+  if (analysis.status === "resolved" || analysis.candidates.length === 0) return analysis;
+  if (!englishSentenceVerifierPromise) {
+    englishSentenceVerifierPromise = createDefaultQueuedMindEnglishSentenceVerifier();
+  }
+  const invoke = await englishSentenceVerifierPromise;
+  return resolveEnglishSentence(source, {
+    analyze: async () => analysis,
+    verify: (request) => verifyEnglishSentenceCandidates({ ...request, invoke })
+  });
+}
 
 export async function translation_from_text_to_name_text(sentence) {
   const sourceName = sentence?.ob?.name ?? sentence?.from?.name;
@@ -38,33 +63,54 @@ export async function translation_from_text_to_name_text(sentence) {
   let translation = "";
   let sentences = [];
 
-  if (sourceAdapter) {
+  if (sourceLang === "pyac") {
+    const decoded = translatePyacToEnglishPyash(sourceText);
+    sentences = decoded.records.map((record) => record.sentence);
+    if (targetLang === "pyash") {
+      translation = decoded.englishPyash;
+    } else if (targetLang === "english" || !targetLang) {
+      translation = decoded.english;
+    } else {
+      throw new Error(`translation: Pyac source supports english or pyash targets, got ${targetLang}`);
+    }
+  } else if (sourceAdapter) {
     let anchorForms = null;
     try {
       anchorForms = await loadAnchorWordForms();
     } catch {
       anchorForms = null;
     }
-    sentences = sourceText
+    const sourceLines = sourceText
       .replaceAll("\\n", "\n")
       .split("\n")
       .map(l => l.trim())
-      .filter(Boolean)
-      .flatMap((line) => {
-        const useReverse = sourceAdapter.name !== "russian"
-          && sourceAdapter.name !== "chinese"
-          && sourceAdapter.name !== "interlingua"
-          && sourceAdapter.name !== "hindi"
-          && sourceAdapter.name !== "javascript"
-          && sourceAdapter.name !== "whisper-english";
-        const matched = useReverse ? matchGlossToPyash(line, { language: sourceAdapter.name }) : null;
-        if (matched) {
-          const program = buildProgram(matched);
-          return program.sentences.map((sentence) => normalizeAnchorSentence(sentence, anchorForms));
-        }
-        const parsed = sourceAdapter.toPyash(line);
-        return parsed ? [normalizeAnchorSentence(parsed, anchorForms)] : [];
-      });
+      .filter(Boolean);
+    sentences = [];
+    for (const line of sourceLines) {
+      const useReverse = sourceAdapter.name !== "russian"
+        && sourceAdapter.name !== "chinese"
+        && sourceAdapter.name !== "interlingua"
+        && sourceAdapter.name !== "hindi"
+        && sourceAdapter.name !== "javascript"
+        && sourceAdapter.name !== "whisper-english";
+      const matched = useReverse ? matchGlossToPyash(line, { language: sourceAdapter.name }) : null;
+      if (matched) {
+        const program = buildProgram(matched);
+        sentences.push(...program.sentences.map((sentence) => normalizeAnchorSentence(sentence, anchorForms)));
+        continue;
+      }
+      const parsed = sourceAdapter.toPyash(line);
+      if (parsed) {
+        sentences.push(sourceAdapter.name === "whisper-english"
+          ? parsed
+          : normalizeAnchorSentence(parsed, anchorForms));
+        continue;
+      }
+      if (sourceAdapter.name === "english") {
+        const analyzed = await resolveDefaultEnglishSentence(line);
+        if (analyzed.sentence) sentences.push(analyzed.sentence);
+      }
+    }
     translation = sentences
       .map(s => sentenceToPyash(s) ?? JSON.stringify(s))
       .join("\n");
@@ -191,9 +237,80 @@ export async function translation_from_text_to_name_text(sentence) {
   return { ob: { text: translation, sentences }, be: sentence?.become?.name ?? outputLang };
 }
 
+export async function translation_from_filename_to_vliw(sentence, options = {}) {
+  const sourcePath = sentence?.from?.filename;
+  const sourceLanguage = String(sentence?.fromstate?.name ?? "english").trim().toLowerCase();
+  const target = String(sentence?.become?.name ?? sentence?.tostate?.name ?? "").trim().toLowerCase();
+  const outputName = sentence?.to?.name;
+  if (!sourcePath) throw new Error("translation source-to-VLIW operation requires a source filename");
+  if (target !== "vliw") throw new Error(`translation source-to-VLIW operation requires vliw target, got ${target || "unknown"}`);
+  if (!outputName) throw new Error("translation source-to-VLIW operation requires a map output name");
+
+  const { runTranslationVliwJob } = await import("../../library/translation/translation_to_vliw_job.mjs");
+  const verbose = process.env.PYA_RUN_VERBOSE === "1";
+  const log = (message) => {
+    if (verbose) console.error(`[translation] ${message}`);
+  };
+  const output = await runTranslationVliwJob({
+    sourcePath,
+    language: sourceLanguage,
+    cwd: options.cwd ?? process.cwd(),
+    runId: options.runId ?? process.env.PYA_RUN_ID ?? null,
+    dependencies: options.translationDependencies ?? null,
+    onEvoke: (actionSentence) => emitExchangeSentence({
+      mood: "ya",
+      be: "evoke",
+      ob: { la: actionSentence }
+    }),
+    onStage: (stage) => log(`stage: ${stage}`),
+    onCheckpoint: (checkpointSentence) => emitExchangeSentence(checkpointSentence),
+    onRetry: (retrySentence) => emitExchangeSentence(retrySentence)
+  });
+  log(`run: ${output.result.runId}`);
+  const fact = {
+    mood: "ya",
+    su: { name: outputName },
+    be: "map",
+    ob: {
+      map: {
+        goal: { text: output.result.goal },
+        runId: { text: output.result.runId },
+        source: { text: output.result.source },
+        artifactFolder: { text: output.result.artifactFolder },
+        translation: { text: output.result.translation },
+        catalog: { text: output.result.catalog },
+        pack: { text: output.result.pack },
+        sentences: { text: JSON.stringify(output.result.sentences ?? [], null, 2) }
+      }
+    }
+  };
+  doRemember(fact);
+  return fact;
+}
+
 export default translation_from_text_to_name_text;
 
 export const signatures = [
+  {
+    signatureWords: ["be", "translation", "become", "name", "vliw", "from", "filename", "fromstate", "name", "english", "to", "name", "map"],
+    handler: translation_from_filename_to_vliw
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "pyac", "to", "name", "num"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "pyash", "from", "text", "fromstate", "name", "pyac", "to", "name", "text"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "english", "from", "text", "fromstate", "name", "pyac", "to", "name", "num"],
+    handler: translation_from_text_to_name_text
+  },
+  {
+    signatureWords: ["be", "translation", "become", "name", "english", "from", "text", "fromstate", "name", "pyac", "to", "name", "text"],
+    handler: translation_from_text_to_name_text
+  },
   {
     signatureWords: ["be", "translation", "become", "name", "text", "from", "text", "fromstate", "name", "text", "to", "name", "text"],
     handler: translation_from_text_to_name_text

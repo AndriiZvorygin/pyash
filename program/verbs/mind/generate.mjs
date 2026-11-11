@@ -100,6 +100,7 @@ export async function runGenerate({
   backendName,
   ollamaHost,
   reasoningEffort,
+  contextWindow,
   modelTuning,
   mindDebug,
   debugMind,
@@ -109,6 +110,9 @@ export async function runGenerate({
   inputText,
   inputs = [],
   checkInterrupted,
+  onAssistantDelta,
+  onToolCall,
+  onUsage,
   onComplete,
   sessionTurn = null
 } = {}) {
@@ -133,6 +137,21 @@ export async function runGenerate({
     const configured = resolveConfigNum("mind keep alive", { rememberFn: remember });
     const keepAlive = Number.isFinite(Number(configured)) ? Math.max(0, Math.trunc(Number(configured))) : 300;
     payload.keep_alive = keepAlive;
+  };
+  const applyToolMapName = (payload) => {
+    const name = String(toolMapName ?? "").trim();
+    if (name) payload.toolMapName = name;
+  };
+  const applyContextWindow = (payload) => {
+    const value = Number(contextWindow);
+    if (backendName === "ollama command mind" && Number.isSafeInteger(value) && value > 0) {
+      payload.options = {
+        ...(payload.options && typeof payload.options === "object" ? payload.options : {}),
+        num_ctx: value
+      };
+    } else if (backendName === "zai command mind" && Number.isSafeInteger(value) && value > 0) {
+      payload.contextWindow = value;
+    }
   };
   const visionInputs = Array.isArray(inputs) ? inputs.map(normalizeVisionInput).filter(Boolean) : [];
   const messages = [];
@@ -167,8 +186,10 @@ export async function runGenerate({
     const streamStdoutEnabled = resolveStreamStdoutEnabled({ rememberFn: remember });
     const requestPayload = { mode: "chat", model, messages, stream: true };
     requestPayload.prompt = buildPromptText(messages);
+    applyToolMapName(requestPayload);
     if (ollamaHost) requestPayload.host = ollamaHost;
     if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
+    applyContextWindow(requestPayload);
     applyKeepAlive(requestPayload);
     applySampling(requestPayload);
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
@@ -190,25 +211,23 @@ export async function runGenerate({
     (async () => {
       const streamedChunks = [];
       let terminalPayload = null;
+      let processReport = "";
       try {
         const mockResponse = nextMockGenerateResponse(mockResponseRaw);
         if (mockResponse) {
           const mockEnvelope = normalizeMindReply(mockResponse);
           const finalText = mockEnvelope.text;
-          const chunks = String(finalText ?? "")
-            .split(/\s+/)
-            .filter(Boolean)
-            .map(word => `${word} `);
-          for (const chunk of chunks) {
-            streamedChunks.push(chunk);
-            writeStreamChunk(streamOutputPath, chunk);
+          if (finalText) {
+            streamedChunks.push(finalText);
+            writeStreamChunk(streamOutputPath, finalText);
             signalFirstRecord?.();
-            if (streamStdoutEnabled) {
-              process.stdout.write(chunk);
-            }
+            onAssistantDelta?.(finalText);
+            if (streamStdoutEnabled) process.stdout.write(finalText);
           }
           terminalPayload = { ...mockEnvelope, response: finalText, done: true };
           const envelope = requireMindReplyText(mergeMindReplyChunks(streamedChunks, terminalPayload));
+          onUsage?.(envelope.metadata);
+          for (const event of terminalPayload?.message?.observed_tool_events ?? []) onToolCall?.(event);
           recordMindReply({ targetName: mindName, envelope });
           if (mindDebug) {
             // eslint-disable-next-line no-console
@@ -238,14 +257,20 @@ export async function runGenerate({
                   terminalPayload = chunk.envelope ?? {};
                   return;
                 }
+                if (chunk?.type === "event") {
+                  onToolCall?.(chunk.event);
+                  return;
+                }
                 const textChunk = chunk?.type === "chunk" ? chunk.text : chunk;
                 if (typeof textChunk !== "string") throw new Error("mind stream malformed chunk");
                 streamedChunks.push(textChunk);
                 writeStreamChunk(streamOutputPath, textChunk);
                 signalFirstRecord?.();
+                onAssistantDelta?.(textChunk);
                 if (streamStdoutEnabled) process.stdout.write(textChunk);
               },
-              onEnd: () => {
+              onEnd: (report) => {
+                processReport = String(report ?? "");
                 stop();
                 resolve();
               },
@@ -255,8 +280,13 @@ export async function runGenerate({
               }
             });
           });
-          if (!terminalPayload) throw new Error("mind stream missing terminal reply");
+          if (!terminalPayload) {
+            const detail = processReport ? `\n${processReport.trimEnd()}` : "";
+            throw new Error(`mind stream missing terminal reply${detail}`);
+          }
           const envelope = requireMindReplyText(mergeMindReplyChunks(streamedChunks, terminalPayload));
+          onUsage?.(envelope.metadata);
+          for (const event of terminalPayload?.message?.observed_tool_events ?? []) onToolCall?.(event);
           recordMindReply({ targetName: mindName, envelope });
           if (mindDebug) {
             // eslint-disable-next-line no-console
@@ -312,8 +342,10 @@ export async function runGenerate({
   if (mockResponse) {
     const requestPayload = { mode: "chat", model, messages, stream: false };
     requestPayload.prompt = buildPromptText(messages);
+    applyToolMapName(requestPayload);
     if (ollamaHost) requestPayload.host = ollamaHost;
     if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
+    applyContextWindow(requestPayload);
     applyKeepAlive(requestPayload);
     applySampling(requestPayload);
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
@@ -325,6 +357,7 @@ export async function runGenerate({
     requestPayload.prompt = buildPromptText(messages);
     if (ollamaHost) requestPayload.host = ollamaHost;
     if (reasoningEffort) requestPayload.reasoningEffort = reasoningEffort;
+    applyContextWindow(requestPayload);
     applyKeepAlive(requestPayload);
     applySampling(requestPayload);
     recordMindJson({ targetName: mindName, label: "request", payload: requestPayload });
@@ -368,6 +401,7 @@ export async function runGenerate({
     }
     reply = normalizeMindReply(backendResponse ?? {});
     responseText = reply.text;
+    onUsage?.(reply.metadata);
     if (!responseText) {
       if (backendErrorText) {
         throwErrorSentence({

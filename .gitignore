@@ -20,6 +20,7 @@ know/**
 !know/produce/
 !know/produce/.gitkeep
 node_modules/
+rust/**/target/
 log/
 world/
 !world/
@@ -27,6 +28,12 @@ world/*
 !world/conduct/
 world/conduct/*
 !world/conduct/import.pya
+!world/library/
+world/library/*
+!world/library/.gitkeep
+!world/library/archive
+!world/library/archive/
+world/library/archive/*
 !world/house/
 world/house/*
 !world/house/base/
@@ -55,6 +62,7 @@ quiz/sandpit/
 documentation/parity/
 configure/secret.pya
 configure/secret/
+configure/.env
 .configure/secret/
 configure/workplace.pya
 configure/container.pya

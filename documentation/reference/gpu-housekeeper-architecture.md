@@ -67,13 +67,16 @@ It:
 7. writes terminal handle status back to Pyash holding,
 8. acks success/fail in the durable queue.
 
-`PYA_GPU_WORKER_CONCURRENCY` controls bounded coordinator fan-out and is
-clamped to a small finite range. It is a dispatch concurrency limit, not a
-permission to overlap arbitrary work on one GPU. The housekeeper remains the
-authority for host/device admission; with peer federation configured, separate
-slots can be routed to separate GPU hosts or devices. The default worker value
-is `2` so independent duties can make progress without turning the worker into
-an unbounded scheduler.
+The worker reads the entry Housekeeper's snapshot and uses its local device
+slots plus its configured federation peers to set bounded coordinator fan-out.
+Each configured peer contributes one dispatch slot; the worker does not probe
+peers itself. It refreshes the topology every minute and retries failed
+discovery after five seconds. A single worker therefore dispatches up to the
+entry Housekeeper's declared host/device capacity (with a 64-slot safety
+ceiling), rather than using a fixed default of two. `PYA_GPU_WORKER_CONCURRENCY`
+remains an explicit override. This controls dispatch fan-out, not permission to
+overlap unsafe work on one GPU: Housekeeper remains authoritative for
+host/device admission and routes independent duties to available devices.
 
 The worker talks to one configured entry housekeeper URL at a time; the entry
 housekeeper performs the peer selection rather than making the worker a second
@@ -88,9 +91,11 @@ the claim is treated as abandoned: its handle is marked `fail`, the runtime
 file moves to `produce/fail`, and any stale matching lease is released. A claim
 whose handle is already terminal success is moved to `produce/success` instead.
 This keeps an interrupted worker from blocking the queue while avoiding an
-automatic replay of a remote job whose outcome is ambiguous. The stale age can
-be tuned with `PYA_GPU_RUNTIME_STALE_MS` when an unusually long-running job
-needs a larger recovery window.
+automatic replay while a known remote job is still available. If polling
+returns `404` because a Housekeeper restarted before durable job records were
+deployed, the worker resubmits the same durable envelope a bounded number of
+times. The stale age can be tuned with `PYA_GPU_RUNTIME_STALE_MS` when an
+unusually long-running job needs a larger recovery window.
 
 ### 2.3 GPU Housekeeper
 
@@ -103,6 +108,8 @@ needs a larger recovery window.
 - `GET /runtime/<runtimeName>`
 - `GET /runtime/ollama/models`
 - `GET /runtime/strata/models`
+- `GET /runtime/strata/context`
+- `POST /runtime/strata/context` (allowlisted launch-context update under the exclusive GPU gate)
 - `POST /capacity/preview`
 - `POST /capacity/prepare` (Strata pre-load admission and idle-runtime handoff)
 - `POST /submit`
@@ -112,10 +119,20 @@ needs a larger recovery window.
 - `POST /runtime/stop`
 - `POST /runtime/restart`
 
-The housekeeper does not own a durable job queue; `world/holding/gpu/` owns
-that. `/submit` registers an execution record, admits it through a gate for its
-physical device, and `/job/<remoteJobId>` exposes transient status so
-`gpu_worker` can copy the final result back into the Pyash handle. Default
+`world/holding/gpu/` remains the durable duty queue and source of truth for
+unclaimed work. Once `/submit` accepts a duty, the Housekeeper atomically
+records its execution envelope and state as a `.pya` file beneath
+`GPU_HOUSEKEEPER_PYA_DIR/jobs/` before acknowledging it. On restart, queued
+jobs are restored and interrupted local running jobs return to `queued`, then
+resume with the same `remoteJobId`; forwarded job references and terminal
+results are restored for polling as well. Replayed submissions are deduplicated
+by `handleId` and matching job content, returning the original remote ID;
+reusing a handle for different content is rejected. This durable execution journal lets
+the Housekeeper restart without requiring its accepted queue to drain, while
+the caller-side holding spool remains authoritative for the duty itself.
+`/submit` admits work through a gate for its physical device, and
+`/job/<remoteJobId>` exposes status so `gpu_worker` can copy the final result
+back into the Pyash handle. Default
 runtimes are exclusive per device. A runtime may set `concurrencySafe` in the
 host-local runtime registry to opt into shared same-device execution; that
 choice is still subject to its declared VRAM request and live capacity checks.
@@ -125,8 +142,11 @@ peer cannot receive an unsupported `ollama-ensure-model` job.
 Different physical devices can execute concurrently without sharing a gate.
 
 `/queue` lists queued and running jobs with `source` metadata and the selected
-`executionHostId`; `/job/<id>` includes the same source record plus the Pyash
-handle and runtime/profile. `source.hostId` and `source.workerId` are reported
+`executionHostId` and `deviceId`; `/job/<id>` includes the same source record,
+assigned device, Pyash handle, and runtime/profile. Device assignments are
+preserved when a job is forwarded to a peer, so the receiving host queues it on
+the GPU whose capacity was previewed by the origin. `source.hostId` and
+`source.workerId` are reported
 by the submitting worker; `source.username` is the submitting OS account, and
 `source.peerAddress` is the TCP peer address observed by the first housekeeper.
 The username defaults to the current OS account and can be explicitly set with
@@ -135,6 +155,61 @@ The username defaults to the current OS account and can be explicitly set with
 submitting Pyash host. Source identity is diagnostic metadata, not an
 authentication claim. For compatibility, `queueDepth` retains its existing
 running-job count; `queuedCount` and `runningCount` provide explicit counts.
+In `/queue`, those counts include visible forwarded proxy jobs; the additive
+`localQueuedCount` and `localRunningCount` fields isolate work consuming this
+host's capacity. `/snapshot` reports local counts in `queuedCount` and
+`runningCount`. The soft cap compares against the local queued count.
+
+`GPU_HOUSEKEEPER_SOFT_QUEUE_CAP` defaults to 500 waiting local jobs per host.
+This is an observational threshold only: it never rejects a submission or
+changes route eligibility. `/queue` and `/snapshot` expose the current local
+queued/running counts, cap, and `queueOverSoftCap`; crossing the threshold logs
+one warning until the queue returns below it. `queueMetrics` aggregates the
+latest 500 submitted/started/finished transition samples and reports average,
+p95, peak, and over-cap sample counts. These are event samples, not a
+time-weighted queue average.
+
+Completed calls are stored as `.pya` observations beneath the configured
+`GPU_HOUSEKEEPER_PYA_DIR`, capped at 500 call and 500 queue observations per
+host. `/snapshot` exposes rolling per-runtime/model/job-kind `modelCallEstimates`
+with successful-call average duration, generation tokens/second, and
+sample/failure counts. Ollama generation throughput is calculated from
+`eval_count / eval_duration`, so prompt processing, model loading, and
+Housekeeper queue time do not distort the generation rate. Execution duration
+covers runtime job execution after the device gate is acquired; time waiting
+for that gate is represented separately by queue transitions.
+
+Routing considers only immediately executable candidates when any exist.
+For the same runtime/model/job kind, it first compares live generation
+throughput when every candidate has at least three successful throughput
+samples. Otherwise, an exact-model configured throughput prior is used; for
+other models, configured host priority is used. These performance rankings
+precede warmth/capacity score, while capacity eligibility, GPU residency
+guards, and device admission remain authoritative. A busy host is not selected
+over an idle host, allowing successive jobs to spread concurrently to the next
+fastest available machines. If no peer has an immediate slot, the existing
+local durable-queue behavior remains unchanged. The selected policy and
+candidate diagnostics are included in job route metadata.
+
+Each host reads its calibration from `routing.pya` in the configured
+`GPU_HOUSEKEEPER_PYA_DIR`, alongside the other Pyash state artifacts:
+
+```text
+su name gpu housekeeper routing configuration be json map def
+su name schema version ob num 1 ya
+su name route priority ob num 300 ya
+su name throughput prior model ob text "qwen3.5:9b" ya
+su name throughput prior tokens per second ob num 104.5806 ya
+prah
+```
+
+The current fleet is calibrated with the warm `qwen3.5:9b` Housekeeper
+benchmark: Mriczo RTX 3090 `104.5806` tokens/s (priority `300`), Mac Studio
+`61.1725` tokens/s (priority `200`), and SWAC RTX 3060 `43.2859` tokens/s
+(priority `100`). These are fallback priors, not claims that every model scales
+identically; three or more live same-model observations supersede them. Re-run
+the same warm benchmark after material driver, model, or power-limit changes
+and update each host's `routing.pya`.
 
 The default managed runtimes are:
 
@@ -149,13 +224,17 @@ Runtime configuration can be overridden with `GPU_HOUSEKEEPER_RUNTIME_REGISTRY`.
 The runtime registry is also the safety boundary for automatic memory
 reclamation. A runtime being present in the registry means that the
 housekeeper is allowed to inspect and manage its configured container; it does
-not mean that the housekeeper may terminate arbitrary host processes. Automatic
-reclamation requires both a runtime-specific `activityProbe` and a supported
-`dischargeKind`. ComfyUI uses its empty-queue probe and `/interrupt`, queue-clear,
-and `/free` hooks. Ollama uses the Housekeeper job ledger plus recent container
-inference access logs; discharge sends `keep_alive: 0` and verifies `/api/ps` is
-empty. Unknown activity, failed telemetry, and managed runtimes without a safe
-hook remain untouched. The Strata pre-load hook requests admission through
+not mean that the housekeeper may terminate arbitrary host processes. A
+background idle reaper checks every 30 seconds by default and discharges
+registered resident runtimes once their provider-specific idle probe has
+exceeded `GPU_HOUSEKEEPER_IDLE_GRACE_SEC` (300 seconds by default). It takes the
+device's exclusive execution gate and rechecks activity and residency before
+using an existing provider hook. Queued jobs do not count as provider activity;
+jobs actually executing do. ComfyUI uses its empty-queue probe and `/interrupt`,
+queue-clear, and `/free` hooks. Ollama uses recent container inference access
+logs and Housekeeper execution state; discharge sends `keep_alive: 0` and
+verifies `/api/ps` is empty. Unknown activity, failed telemetry, and managed
+runtimes without a safe hook remain untouched. The Strata pre-load hook requests admission through
 `/capacity/prepare`, which takes the device gate and performs capacity checks
 before Strata allocates model VRAM. For reverse handoff, the optional Strata
 runtime entry queries its status through a short-lived host-network helper
@@ -212,15 +291,22 @@ image raises its minimum; for example, swac's RTX 3060 uses the documented
 Ollama model availability is exposed separately from model execution. An
 explicit `ollama-ensure-model` job can check an exact provider tag and return
 its digest, size and model metadata through the same queue, device gate and
-runtime lifecycle. It does not pull by default. Pulling is an explicit,
-allowlisted operation controlled on the host by
-`GPU_HOUSEKEEPER_ALLOW_MODEL_PULL=true` and
-`GPU_HOUSEKEEPER_MODEL_ALLOWLIST=<exact tags>`, and requires declared VRAM,
-RAM and model-store disk capacity. The housekeeper starts the registered
-Ollama container when needed and uses Ollama's own `/api/pull`; Criterion or a
-Pyash caller never copies model files between hosts or manages model
-residency itself. A missing model therefore produces a structured
-`not-installed` or `not-authorized` result instead of an implicit download.
+runtime lifecycle. It does not pull by default. Pulling is an explicit
+host-opted-in operation requiring `GPU_HOUSEKEEPER_ALLOW_MODEL_PULL=true` and
+either an exact-tag allowlist or `GPU_HOUSEKEEPER_MODEL_ALLOWLIST=*`. A pull
+request declares VRAM admission and either `modelSizeEstimateMb` or the legacy
+absolute `diskRequiredMb`. For a size estimate, Housekeeper requires the
+estimate plus 25% headroom (at least 1 GiB); it also requires 2 GiB available
+RAM by default, unless the request raises that floor with `ramRequiredMb`.
+The host checks free space on the Ollama model-store filesystem before
+pulling. The Housekeeper starts the registered Ollama runtime when needed and
+uses Ollama's own `/api/pull`; Criterion or a Pyash caller never copies model
+files between hosts or manages model residency itself. Set `targetHostId` to a
+configured local or peer host to pin installation there; the entry Housekeeper
+validates the target and routes only to that host. Without it, the entry
+Housekeeper applies its normal federation routing. A missing model therefore produces a
+structured `not-installed` or `not-authorized` result instead of an implicit
+download.
 
 The model catalog is queried from Ollama `/api/tags` and is available at
 `GET /runtime/ollama/models` and in `/snapshot`. Matching is exact, including
@@ -291,7 +377,10 @@ Jobs may declare an optional memory request in their `jobSpec`:
 request that already fits is admitted without a provider probe. If it does not
 fit, the housekeeper considers only managed runtimes with an explicit safe
 discharge hook and a provider-specific idle result. The default idle grace is
-300 seconds and can be set with `GPU_HOUSEKEEPER_IDLE_GRACE_SEC`. ComfyUI is
+300 seconds and can be set with `GPU_HOUSEKEEPER_IDLE_GRACE_SEC`. A background
+reaper checks registered runtimes every 30 seconds, releasing idle residency
+even without a new request; tune this with
+`GPU_HOUSEKEEPER_IDLE_REAPER_INTERVAL_SEC`. ComfyUI is
 discharged without stopping its container, using its existing API hooks. The
 housekeeper rechecks memory after each successful discharge and fails closed if
 the request still does not fit. If capacity is blocked only because a managed
@@ -500,13 +589,33 @@ are separate projections over durable Pyash state, not competing schedulers.
 
 ## 8. Configuration and operational notes
 
+### IPv6 network allocation and endpoint order
+
+Each Linux host receives its own IPv6 `/64`. The Docker daemon's built-in
+`bridge` IPAM range carries that host prefix; `container/gpu-housekeeper/command/begin.sh`
+derives the Housekeeper's `/80` using the Kwon-assigned Pyash word
+`housekeeper_WORD = 0x49C6` (`nrap`). Thus mriczo's `...:e8c1::/64` yields
+`...:e8c1:49c6::/80`, while SWAC's `...:e929::/64` yields
+`...:e929:49c6::/80`. The Compose network is dual-stack, retaining automatic
+IPv4 allocation while adding the host-specific IPv6 slice.
+
+Federation endpoint alternatives use `|` ordering within a host entry. Put
+IPv6 first and a verified IPv4 endpoint second. Housekeeper falls through
+only when its read-only peer probe fails; an endpoint that responds with a
+capacity or runtime decision remains authoritative. It never retries a job
+submission over another endpoint, avoiding duplicate execution after an
+ambiguous POST failure. Endpoint order selects the peer transport path and
+does not override the throughput-aware host scheduler. Validate each route
+from inside the Housekeeper container, since host-level IPv6 reachability
+does not guarantee container-network reachability.
+
 Peer configuration is host-local deployment configuration, not durable Pyash
 state. The value is a semicolon-separated allowlist of normalized host IDs and
-URLs:
+URLs. A peer may have ordered fallback URLs separated by `|`:
 
 ```sh
 GPU_HOUSEKEEPER_HOST_ID=mriczo
-GPU_HOUSEKEEPER_PEERS='swac=http://swac:8090'
+GPU_HOUSEKEEPER_PEERS='swac=http://swac:18886'
 GPU_HOUSEKEEPER_ACCEPT_FORWARDED=true
 ```
 
@@ -514,7 +623,7 @@ The first live pair is configured symmetrically:
 
 ```sh
 # mriczo
-GPU_HOUSEKEEPER_PEERS='swac=http://swac:8090'
+GPU_HOUSEKEEPER_PEERS='swac=http://swac:18886'
 
 # swac
 GPU_HOUSEKEEPER_PEERS='mriczo=http://mriczo:18886'
@@ -540,10 +649,11 @@ Start a local worker against configured housekeeper:
 node command/gpu_worker.mjs --world world
 ```
 
-For independent queued duties, the same worker can use a bounded coordinator:
+For independent queued duties, the worker automatically sizes its bounded
+coordinator to the reachable GPU devices. Set an override only when needed:
 
 ```sh
-PYA_GPU_WORKER_CONCURRENCY=2 \
+PYA_GPU_WORKER_CONCURRENCY=4 \
 PYA_GPU_HOUSEKEEPER_URL=http://mriczo:18886 \
 node command/gpu_worker.mjs --world world --once
 ```

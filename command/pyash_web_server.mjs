@@ -33,6 +33,8 @@ import {
   parseDutyWebUsers,
   publicCodingDutyMessage,
   publicDutyWorker,
+  recordCodingDutyToolEvent,
+  claimCodingDutyMessagesAtBoundary,
   readCodingDuty,
   readDutySessionText,
   setCodingDutyPermission
@@ -960,6 +962,46 @@ export async function createWebServer({
         jsonResponse(res, 200, { ok: true, duty: renderDuty(codingDutyView(duty)) });
         return;
       }
+      if (req.method === "POST" && pathname === "/api/duty-workers/event") {
+        const body = await readJsonBody(req, 32 * 1024);
+        const workerId = String(body.workerId ?? "").trim();
+        const ownerId = dutyWorkerUsers.get(workerId);
+        if (!workerIdForRequest(req, dutyWorkerTokens, workerId) || !ownerId) {
+          errorResponse(res, 401, "worker authentication failed", "duty_worker_unauthorized");
+          return;
+        }
+        const event = body.event && typeof body.event === "object" ? body.event : null;
+        if (!event || !["call", "result", "ratify", "context_compacted"].includes(String(event.stage ?? ""))) {
+          errorResponse(res, 400, "worker tool event is invalid", "duty_tool_event_invalid");
+          return;
+        }
+        const recorded = await dutyExclusive(async () => {
+          const task = await recordCodingDutyToolEvent(dutyWorldRoot, body.dutyId, workerId, {
+            messageId: body.messageId,
+            claimId: body.claimId,
+            event
+          });
+          if (!task) return null;
+          const saddleMessages = event.stage === "result"
+            ? await claimCodingDutyMessagesAtBoundary(dutyWorldRoot, body.dutyId, workerId, {
+              messageId: body.messageId,
+              claimId: body.claimId,
+              boundary: "tool-result"
+            })
+            : [];
+          return { task, saddleMessages };
+        });
+        if (!recorded) {
+          errorResponse(res, 404, "duty not found", "duty_not_found");
+          return;
+        }
+        jsonResponse(res, 200, {
+          ok: true,
+          saddleMessages: recorded.saddleMessages,
+          toolEvents: codingDutyView(recorded.task, { includeMessages: false }).toolEvents
+        });
+        return;
+      }
       if (req.method === "POST" && pathname === "/api/duty-workers/failure") {
         const body = await readJsonBody(req, 64 * 1024);
         const workerId = String(body.workerId ?? "").trim();
@@ -1006,7 +1048,7 @@ export async function createWebServer({
           const task = await dutyExclusive(async () => {
             const current = await readCodingDuty(dutyWorldRoot, dutyId);
             if (!current || codingDutyOwner(current) !== ownerId) return null;
-            return addCodingDutyMessage(dutyWorldRoot, dutyId, body.message);
+            return addCodingDutyMessage(dutyWorldRoot, dutyId, body.message, { delivery: body.delivery });
           });
           if (!task) {
             errorResponse(res, 404, "duty not found", "duty_not_found");

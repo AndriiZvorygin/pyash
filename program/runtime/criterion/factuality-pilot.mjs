@@ -317,10 +317,61 @@ export async function preflightOllama({ baseUrl, models, sample, fetchImpl = glo
   return result;
 }
 
+async function preflightHousekeeperModels({ models, metadataProvider, baseUrl, now = () => new Date() } = {}) {
+  const result = {
+    status: "ok",
+    baseUrl: resolveOllamaBaseUrl(baseUrl),
+    managedBy: "gpu-housekeeper",
+    startedAt: now().toISOString(),
+    version: null,
+    models: [],
+    requests: []
+  };
+  for (const model of models) {
+    const metadata = await metadataProvider({ model });
+    const available = Boolean(metadata?.modelDigest) && !metadata?.metadataError;
+    result.models.push({
+      requestedModel: model,
+      resolvedModel: available ? model : null,
+      available,
+      digest: metadata?.modelDigest ?? null,
+      quantization: metadata?.quantization ?? null,
+      parameterSize: metadata?.parameterSize ?? null,
+      contextLength: metadata?.contextLength ?? null
+    });
+    if (!available) {
+      result.status = "failed";
+      result.error = metadata?.metadataError ?? `requested Ollama model unavailable through Housekeeper: ${model}`;
+      break;
+    }
+  }
+  return result;
+}
+
 export async function dischargeOllamaModels({ baseUrl, models, fetchImpl = globalThis.fetch, verifyRelease = false, waitMs = 30000, pollMs = 250 } = {}) {
   const base = resolveOllamaBaseUrl(baseUrl);
   const results = [];
-  for (const model of models) {
+  const requestedModels = unique((models ?? []).map(model => text(model)));
+  let residentModels;
+  try {
+    const ps = await fetchJson(`${base}/api/ps`, {}, fetchImpl);
+    residentModels = new Set((ps.models ?? []).map(row => text(row.name ?? row.model)).filter(Boolean));
+  } catch (error) {
+    const reason = `Ollama residency check failed; refusing unload requests: ${text(error?.message ?? error)}`;
+    return {
+      baseUrl: base,
+      results: requestedModels.map(model => ({ model, status: "failed", error: reason })),
+      status: requestedModels.length ? "partial" : "ok",
+      verified: false,
+      verificationError: reason
+    };
+  }
+
+  for (const model of requestedModels) {
+    if (!residentModels.has(model)) {
+      results.push({ model, status: "already-unloaded" });
+      continue;
+    }
     try {
       const response = await fetchImpl(`${base}/api/generate`, {
         method: "POST",
@@ -333,10 +384,10 @@ export async function dischargeOllamaModels({ baseUrl, models, fetchImpl = globa
       results.push({ model, status: "failed", error: text(error?.message ?? error) });
     }
   }
-  if (!verifyRelease || results.some(result => result.status !== "ok")) {
-    return { baseUrl: base, results, status: results.every(result => result.status === "ok") ? "ok" : "partial", verified: false };
+  if (!verifyRelease || results.some(result => result.status === "failed")) {
+    return { baseUrl: base, results, status: results.every(result => result.status !== "failed") ? "ok" : "partial", verified: false };
   }
-  const wanted = new Set(models.map(String));
+  const wanted = new Set(requestedModels);
   const deadline = Date.now() + Math.max(1, Number(waitMs) || 30000);
   let lastLoaded = [];
   while (Date.now() <= deadline) {
@@ -405,6 +456,7 @@ export async function runMeetingBankFactualityPilot({
   judgeMaxOutputTokens = JUDGE_MAX_OUTPUT_TOKENS,
   judgeContextLength = JUDGE_CONTEXT_LENGTH,
   resume = false, smoke = false, fetchImpl = globalThis.fetch, generationRunner = null, judgeExecutor = null,
+  queuedOllamaExecutorFactory = createQueuedOllamaExecutor,
   now = () => new Date()
 } = {}) {
   if (!datasetPath) throw new Error("MeetingBank factuality pilot requires --dataset <meetingbank test file>");
@@ -413,12 +465,16 @@ export async function runMeetingBankFactualityPilot({
   const selection = selectMeetingBankJudgePilotSamples(loaded.samples, { count: smoke ? Math.min(5, selectionCount) : selectionCount, seed: selectionSeed });
   if (!selection.length) throw new Error("MeetingBank factuality pilot selected no samples");
   const ollamaModels = judgeExecutor || judgeEngine !== "ollama" ? models : [...models, judgeModel];
-  const ollama = await preflightOllama({ baseUrl, models: ollamaModels, sample: selection[0], fetchImpl, probeModels: false });
-  if (ollama.status !== "ok") throw new Error(`Ollama preflight failed: ${ollama.error}`);
-  const metadataProvider = async ({ model }) => ({ ...(await readOllamaMetadata({ model, baseUrl: ollama.baseUrl, fetchImpl })), requestedModel: model, resolvedModel: model });
   const managedOllama = gpuHousekeeperUrl
-    ? createQueuedOllamaExecutor({ root, runId: id, housekeeperUrl: gpuHousekeeperUrl, gpuId, vramRequiredMb: process.env.PYA_CRITERION_OLLAMA_VRAM_REQUIRED_MB })
+    ? queuedOllamaExecutorFactory({ root, runId: id, housekeeperUrl: gpuHousekeeperUrl, gpuId, vramRequiredMb: process.env.PYA_CRITERION_OLLAMA_VRAM_REQUIRED_MB })
     : null;
+  const metadataProvider = managedOllama
+    ? managedOllama.metadataProvider
+    : async ({ model }) => ({ ...(await readOllamaMetadata({ model, baseUrl, fetchImpl })), requestedModel: model, resolvedModel: model });
+  const ollama = managedOllama
+    ? await preflightHousekeeperModels({ models: ollamaModels, metadataProvider, baseUrl, now })
+    : await preflightOllama({ baseUrl, models: ollamaModels, sample: selection[0], fetchImpl, probeModels: false });
+  if (ollama.status !== "ok") throw new Error(`Ollama preflight failed: ${ollama.error}`);
   const generationExecutor = managedOllama
     ? input => managedOllama.executor({ ...input, model: input.model })
     : input => reliableExecutor({ input: { ...input, model: input.model }, baseUrl: ollama.baseUrl, fetchImpl });

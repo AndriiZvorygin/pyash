@@ -223,7 +223,10 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
 
   if (mergedObj !== undefined) {
     const normalizedObj = typeof mergedObj === "object" ? mergedObj : { num: mergedObj };
-    const evokeWithResult = { ...(state.currentEvokeRef || finalEvoke), ob: normalizedObj };
+    // The loop restores the caller's evoke reference before this merge. Use
+    // the loop's captured evoke so a nested loop cannot write its result into
+    // the caller's `to` target.
+    const evokeWithResult = { ...finalEvoke, ob: normalizedObj };
     memory.doRemember(evokeWithResult);
 
     const targetName = evokeWithResult.to?.name ?? updatedTarget?.su?.name;

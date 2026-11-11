@@ -17,6 +17,15 @@ test("command classifier assigns stable classes", () => {
   assert.equal(classifyCommandText("curl -s https://example.com"), "network");
   assert.equal(classifyCommandText("kill -9 123"), "process_control");
   assert.equal(classifyCommandText("rm -rf /tmp/demo"), "destructive");
+  assert.equal(classifyCommandText("format /dev/sda"), "destructive");
+  assert.equal(classifyCommandText("echo safe; format /dev/sda"), "destructive");
+  assert.equal(classifyCommandText("zimwriterfs --name site input output"), "write_local");
+  assert.equal(classifyCommandText("warc2zim capture.warc --output output"), "write_local");
+  assert.equal(classifyCommandText("zimdump list archive.zim"), "read_only");
+  assert.equal(classifyCommandText("kiwix-search archive.zim phrase"), "read_only");
+  assert.equal(classifyCommandText("docker run ghcr.io/openzim/zimit"), "process_control");
+  assert.equal(classifyCommandText("git log -S \"charismatics filled the grove\" --format='%h %ad %s' --date=short"), "read_only");
+  assert.equal(classifyCommandText("git log --output=/tmp/log.txt --format=%h"), "unknown");
   assert.equal(classifyCommandText("noop :()"), "unknown");
   assert.equal(classifyCommandText("noop x:(){ :|:& };:"), "destructive");
   assert.equal(classifyCommandText(""), "unknown");

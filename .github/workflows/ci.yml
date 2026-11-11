@@ -2,19 +2,124 @@ name: CI
 
 on:
   push:
-    branches: [ "*" ]
-  pull_request:
-    branches: [ "*" ]
+    branches: [master, dev]
+  workflow_dispatch:
 
 jobs:
-  test:
+  dev-checks:
+    name: Focused checks (dev)
+    if: github.ref == 'refs/heads/dev' && github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Bootstrap external toolchains
+        run: npm run bootstrap -- --with-whisper
+      - name: Provision the sibling dictionary checkout
+        run: |
+          for attempt in 1 2 3; do
+            if git clone --depth 1 https://gitlab.com/pyac/pyachso2n.git ../pyachso2n; then
+              exit 0
+            fi
+            rm -rf ../pyachso2n
+            if [ "$attempt" = "3" ]; then
+              echo "the sibling dictionary checkout could not be cloned"
+              exit 1
+            fi
+            sleep 10
+          done
+      - name: Install python worker dependencies
+        run: python3 -m pip install --quiet numpy || python3 -m pip install --quiet --break-system-packages numpy
+      - name: Run smoke tests
+        run: npm run test:ci:smoke
+      - name: Run GPU Housekeeper tests
+        run: npm run test:gpu-housekeeper
+      - name: Check documentation prose
+        run: npm run doc:prose
+      - name: Check import graph
+        run: npm run imports:check
+      - name: Run quiz tests changed on dev
+        shell: bash
+        run: |
+          git fetch --no-tags origin master
+          base="$(git merge-base origin/master "$GITHUB_SHA")"
+          tests=()
+          while IFS= read -r -d '' file; do
+            if [[ "$file" == quiz/*.test.mjs ]] && [[ -f "$file" ]]; then
+              tests+=("$file")
+            fi
+          done < <(git diff --name-only -z "$base" "$GITHUB_SHA")
+
+          if ((${#tests[@]})); then
+            printf 'Running focused tests:\n'
+            printf '  %s\n' "${tests[@]}"
+            node --test --test-concurrency=1 "${tests[@]}"
+          else
+            echo "No quiz test files changed since the master merge-base; smoke and static checks passed."
+          fi
+
+  master-focused-checks:
+    name: Focused checks (master)
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
       - name: Install dependencies
-        run: npm install
-      - name: Run tests
-        run: npm run test:ci
+        run: npm ci
+      - name: Run smoke tests
+        run: npm run test:ci:smoke
+      - name: Run GPU Housekeeper tests
+        run: npm run test:gpu-housekeeper
+      - name: Check documentation prose
+        run: npm run doc:prose
+      - name: Check import graph
+        run: npm run imports:check
+      - name: Check house-facing surface
+        run: npm run house:api:check
+
+  rust:
+    name: Rust checks
+    if: github.ref == 'refs/heads/master' || github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the pinned Rust toolchain
+        run: |
+          rustup show active-toolchain || rustup toolchain install
+          rustup component add rustfmt
+      - name: Check formatting
+        run: cargo fmt --manifest-path rust/pyac/Cargo.toml -- --check
+      - name: Run the crate tests
+        run: cargo test --manifest-path rust/pyac/Cargo.toml
+
+  zim-toolchain:
+    name: Optional ZIM toolchain
+    if: vars.PYA_ENABLE_ZIM_TOOLS == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install ZIM tools and build the image
+        env:
+          PYA_ENABLE_ZIM_TOOLS: truth
+        run: npm run setup:zim
+      - name: Verify real archive creation, reading, and search
+        env:
+          PYA_ENABLE_ZIM_TOOLS: truth
+        run: node --test quiz/cluster_compress.test.mjs quiz/cluster_compress_live.test.mjs quiz/zim_tools_setup.test.mjs

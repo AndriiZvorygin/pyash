@@ -11,7 +11,7 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { allRemember, forget } from "../program/remember/index.mjs";
 import { buildProgram } from "../program/program.mjs";
-import { transpileProgram } from "../program/verbs/exchange/compile/transpile_program.mjs";
+import { transpileProgram } from "../program/library/compile/transpile_program.mjs";
 import { sentenceToPyash } from "../program/beautiful.mjs";
 import { splitSentences } from "../program/library/sentenceSplitter.mjs";
 import { buildWorkTask } from "../program/runtime/work/contract.mjs";

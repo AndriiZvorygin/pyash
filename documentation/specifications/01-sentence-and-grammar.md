@@ -8,6 +8,27 @@ Purpose: define canonical sentence shape, case meaning, and parse/emit invariant
 su name <subject> <cases...> be <verb> <mood>
 ```
 
+## 1.1 Surface-layer case rules
+
+Pyash and Pyac expose the same sentence roles through different surfaces:
+
+- readable Pyash uses prepositions and role words before their noun phrases;
+  `ob` introduces the primary object, while `for someone` introduces a
+  benefactive phrase;
+- Pyac uses the VLIW-compatible lexical words and puts case markers at the end
+  of their phrases as suffixes, such as `ka` for the accusative phrase and
+  `pwah` for the benefactive phrase;
+- the readable projection must keep `ob` attached to object content. Forms such
+  as `ob for ...` are invalid because `for` is another preposition rather than
+  the contents of the object phrase.
+
+For example, the same structure is rendered as:
+
+```text
+Pyash: ya su love be exhibit ob a deep admiration for someone or something.
+Pyac:  ... ka ... pwah ...
+```
+
 ## 2. Core keyword meanings
 
 | Keyword | Meaning | How to apply |

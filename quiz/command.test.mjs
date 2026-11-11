@@ -7,6 +7,8 @@ import path from "node:path";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { command } from "../program/verbs/command.mjs";
+import { runWithMindInterruptSignal } from "../program/agent/interrupt.mjs";
+import { startStreamTail } from "../program/verbs/mind/stream.mjs";
 
 function assertCommandSucceeded(result) {
   assert.equal(result?.be, "command");
@@ -47,6 +49,90 @@ test("command direct node uses process exec path when PATH is empty", async () =
   } finally {
     if (priorPath === undefined) delete process.env.PATH;
     else process.env.PATH = priorPath;
+  }
+});
+
+test("command subprocess is terminated by the active saddle interrupt signal", async () => {
+  const controller = new AbortController();
+  const startedAt = Date.now();
+  const commandPromise = runWithMindInterruptSignal({ signal: controller.signal }, () => command({
+    mood: "do",
+    be: "command",
+    ob: { text: "sleep 1" }
+  }, { remember: () => null }));
+
+  setTimeout(() => controller.abort("test interrupt"), 50);
+  await assert.rejects(commandPromise, /command defective/u);
+  assert.ok(Date.now() - startedAt < 700, "the command runner should stop before its natural exit");
+});
+
+test("streaming command closes its stream when the active saddle interrupt signal fires", async () => {
+  const controller = new AbortController();
+  const streamName = `interrupt-stream-${process.pid}-${Date.now()}`;
+  const result = await runWithMindInterruptSignal({ signal: controller.signal }, () => command({
+    mood: "do",
+    be: "command",
+    su: { name: streamName },
+    ob: { text: "sleep 1" },
+    vyah: { ve: { type: "name", values: ["stream"] } }
+  }, { remember: () => null }));
+  const streamPath = result?.ob?.filename;
+  assert.ok(streamPath);
+
+  try {
+    controller.abort("test stream interrupt");
+    const deadline = Date.now() + 600;
+    let content = "";
+    while (Date.now() < deadline) {
+      content = await fs.readFile(streamPath, "utf8").catch(() => "");
+      if (content.includes("[PYA_STREAM_END]")) break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.match(content, /\[PYA_STREAM_END\]/u);
+  } finally {
+    await fs.rm(streamPath, { force: true });
+  }
+});
+
+test("streaming command persists process diagnostics for a failed child", async () => {
+  const streamName = `failed-stream-${process.pid}-${Date.now()}`;
+  const result = await command({
+    mood: "do",
+    be: "command",
+    su: { name: streamName },
+    ob: { text: "node -e \"process.stderr.write('provider-error-marker'); process.exit(7)\"" },
+    vyah: { ve: { type: "name", values: ["stream"] } }
+  }, { remember: () => null });
+  const streamPath = result?.ob?.filename;
+  const processPath = streamPath.replace(/\.stream\.txt$/u, ".process.txt");
+
+  try {
+    const processReport = await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error("stream did not close")), 3000);
+      const stop = startStreamTail({
+        filename: streamPath,
+        onLine: () => {},
+        onEnd: (report) => {
+          clearTimeout(timeout);
+          stop();
+          resolve(report);
+        },
+        onError: (error) => {
+          clearTimeout(timeout);
+          stop();
+          reject(error);
+        }
+      });
+    });
+
+    assert.match(processReport, /status: 7/u);
+    assert.match(processReport, /signal: none/u);
+    assert.match(processReport, /stdout bytes: 0/u);
+    assert.match(processReport, /provider-error-marker/u);
+    assert.equal(await fs.readFile(processPath, "utf8"), processReport);
+  } finally {
+    await fs.rm(streamPath, { force: true });
+    await fs.rm(processPath, { force: true });
   }
 });
 
@@ -159,7 +245,52 @@ test("command timeout surfaces as command defective instead of empty success", a
   const sentence = parse("ob text \"sleep 1\" be command do");
   await assert.rejects(
     () => command(sentence, { remember: rememberFn }),
-    /command defective: status=0 signal=SIGKILL stderr=\"timeout after 10ms\"/
+    /command defective: status=unknown signal=SIGKILL[\s\S]*timed out: true[\s\S]*timeout after 10ms/u
+  );
+});
+
+test("command failure exposes command, working directory, and both output streams", async () => {
+  const cmd = "node -e \"process.stdout.write('stdout-marker\\n'); process.stderr.write('stderr-marker\\n'); process.exit(7)\"";
+  await assert.rejects(
+    () => command({ mood: "do", be: "command", ob: { text: cmd } }, { remember: () => null }),
+    (error) => {
+      assert.match(error.message, /command defective: status=7 signal=/u);
+      assert.ok(error.message.includes(`command: ${cmd}`));
+      assert.ok(error.message.includes(`working directory: ${process.cwd()}`));
+      assert.match(error.message, /stdout:\nstdout-marker/u);
+      assert.match(error.message, /stderr:\nstderr-marker/u);
+      assert.equal(error.sentence.ob.raw.status, 7);
+      assert.equal(error.sentence.ob.raw.stdout, "stdout-marker\n");
+      assert.equal(error.sentence.ob.raw.stderr, "stderr-marker\n");
+      return true;
+    }
+  );
+});
+
+test("command failure says explicitly when stdout and stderr are empty", async () => {
+  const cmd = "node -e \"process.exit(3)\"";
+  await assert.rejects(
+    () => command({ mood: "do", be: "command", ob: { text: cmd } }, { remember: () => null }),
+    (error) => {
+      assert.match(error.message, /status=3/u);
+      assert.match(error.message, /stdout:\n<empty>/u);
+      assert.match(error.message, /stderr:\n<empty>/u);
+      return true;
+    }
+  );
+});
+
+test("command failure bounds long output while retaining its beginning and tail", async () => {
+  const cmd = `node -e "process.stdout.write('START' + 'x'.repeat(6000) + 'END'); process.exit(4)"`;
+  await assert.rejects(
+    () => command({ mood: "do", be: "command", ob: { text: cmd } }, { remember: () => null }),
+    (error) => {
+      assert.match(error.message, /START/u);
+      assert.match(error.message, /characters omitted; showing output tail/u);
+      assert.match(error.message, /END/u);
+      assert.ok(error.message.length < 6000, `diagnostic should be bounded, got ${error.message.length} chars`);
+      return true;
+    }
   );
 });
 

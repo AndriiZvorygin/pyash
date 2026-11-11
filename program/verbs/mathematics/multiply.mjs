@@ -81,6 +81,15 @@ export async function multiply_by_num_from_name_num_to_name_num(sentence, { reme
 
 export const multiply = multiply_by_num_from_name_num_to_name_num;
 
+// Literal product: the ob operand is the left factor and the with operand is
+// the right factor, matching the operand order used by plus and exponential.
+export async function multiply_obj_num_with_num(sentence, { remember }) {
+  const left = getOperand(sentence.ob, "ob", remember);
+  const right = getOperand(sentence.with, "with", remember);
+
+  return { ob: left * right, be: sentence?.be ?? "number" };
+}
+
 export const signatures = [
   {
     signatureWords: ["be", "multiply", "by", "num", "from", "name", "num", "to", "name", "num"],
@@ -125,5 +134,13 @@ export const signatures = [
   {
     signatureWords: ["be", "multiply", "by", "name", "num", "from", "name", "num", "to", "name", "num"],
     handler: multiply_by_num_from_name_num_to_name_num
+  },
+  {
+    signatureWords: ["be", "multiply", "ob", "num", "with", "num"],
+    handler: multiply_obj_num_with_num
+  },
+  {
+    signatureWords: ["be", "multiply", "ob", "name", "num", "with", "num"],
+    handler: multiply_obj_num_with_num
   }
 ];

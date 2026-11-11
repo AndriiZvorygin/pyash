@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
+import os from "node:os";
 
 import { remember } from "../remember/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
@@ -183,13 +184,6 @@ function resolveRepairRoots({ rememberFn = remember } = {}) {
     resolveConfigMapText("repair configure", "cwd", { rememberFn })
     ?? resolveConfigMapText("sandbox configure", "cwd", { rememberFn })
     ?? null;
-  if (configuredRoots) {
-    return {
-      baseRoot: path.resolve(String(configuredCwd ?? process.cwd())),
-      roots: normalizeRoots(configuredRoots)
-    };
-  }
-
   const sandboxEnabled = rememberFn("agent sandbox")?.ob?.boolean === true;
   const agentCwd =
     rememberFn("agent cwd")?.ob?.filename
@@ -199,11 +193,18 @@ function resolveRepairRoots({ rememberFn = remember } = {}) {
     const worldRoot = resolveWorldRoot({ rememberFn });
     const agentName = path.basename(path.resolve(String(agentCwd)));
     const license = resolveWorldAgentDirectoryLicense({ worldRoot, agentName });
+    const homeAccess = rememberFn("agent home file access")?.ob?.boolean === true;
+    const strictRelativePaths = rememberFn("agent cwd strict relative paths")?.ob?.boolean === true;
     if (license) {
       const writeRoots = collectLicensedRoots(license, "write");
       return {
         baseRoot: path.resolve(String(agentCwd)),
-        roots: normalizeRoots(writeRoots.length ? writeRoots : [agentCwd])
+        roots: normalizeRoots([
+          agentCwd,
+          ...(writeRoots.length ? writeRoots : []),
+          ...(homeAccess ? [os.homedir()] : [])
+        ]),
+        strictRelativePaths
       };
     }
     const sharedRoots = resolveConfigMapSeries("agent command configure", "shared roots", { rememberFn })
@@ -217,7 +218,21 @@ function resolveRepairRoots({ rememberFn = remember } = {}) {
       ?? path.join(worldRoot, "library", "processed");
     return {
       baseRoot: path.resolve(String(agentCwd)),
-      roots: normalizeRoots([agentCwd, ...sharedRoots, ...projectRoots, processedRoot])
+      roots: normalizeRoots([
+        agentCwd,
+        ...sharedRoots,
+        ...projectRoots,
+        processedRoot,
+        ...(homeAccess ? [os.homedir()] : [])
+      ]),
+      strictRelativePaths
+    };
+  }
+
+  if (configuredRoots) {
+    return {
+      baseRoot: path.resolve(String(configuredCwd ?? process.cwd())),
+      roots: normalizeRoots(configuredRoots)
     };
   }
 
@@ -227,7 +242,7 @@ function resolveRepairRoots({ rememberFn = remember } = {}) {
   };
 }
 
-function resolveSafePath(targetPath, { baseRoot, allowedRoots, realRoots }) {
+function resolveSafePath(targetPath, { baseRoot, allowedRoots, realRoots, strictRelativePaths = false }) {
   if (!targetPath || typeof targetPath !== "string") {
     throwRepairError("repair path defective", "repair path defective: missing target path", { targetPath });
   }
@@ -235,7 +250,19 @@ function resolveSafePath(targetPath, { baseRoot, allowedRoots, realRoots }) {
     throwRepairError("repair path defective", "repair path defective: invalid target path", { targetPath });
   }
 
-  const absolute = path.resolve(baseRoot, targetPath);
+  const raw = targetPath.trim();
+  const tildePath = raw === "~" || raw.startsWith("~/") || raw.startsWith(`~${path.sep}`);
+  if (raw.startsWith("~") && !tildePath) {
+    throwRepairError("repair path defective", `repair path defective: unsupported home path (${targetPath})`, { targetPath });
+  }
+  const expanded = tildePath
+    ? (raw === "~" ? os.homedir() : path.join(os.homedir(), raw.slice(2)))
+    : raw;
+  const isRelative = !path.isAbsolute(expanded) && !tildePath;
+  const absolute = path.resolve(baseRoot, expanded);
+  if (strictRelativePaths && isRelative && !isWithin(baseRoot, absolute)) {
+    throwRepairError("repair path defective", `repair path defective: relative path escapes project directory (${targetPath})`, { targetPath });
+  }
   const inAllowed = (allowedRoots ?? []).some((root) => isWithin(root, absolute));
   if (!inAllowed) {
     throwRepairError("repair path defective", `repair path defective: outside workspace (${targetPath})`, { targetPath });
@@ -335,9 +362,9 @@ function resolveFileIntent(filePatch) {
   return { targetPath: newPath, mode: "updated" };
 }
 
-async function planFilePatch(filePatch, { baseRoot, allowedRoots, realRoots }) {
+async function planFilePatch(filePatch, { baseRoot, allowedRoots, realRoots, strictRelativePaths }) {
   const intent = resolveFileIntent(filePatch);
-  const safePath = resolveSafePath(intent.targetPath, { baseRoot, allowedRoots, realRoots });
+  const safePath = resolveSafePath(intent.targetPath, { baseRoot, allowedRoots, realRoots, strictRelativePaths });
   const exists = fs.existsSync(safePath);
 
   if ((intent.mode === "updated" || intent.mode === "deleted") && !exists) {
@@ -442,7 +469,12 @@ export async function repair(sentence, { remember: rememberFn = remember } = {})
 
   const records = [];
   for (const patchFile of patches) {
-    records.push(await planFilePatch(patchFile, { baseRoot, allowedRoots, realRoots }));
+    records.push(await planFilePatch(patchFile, {
+      baseRoot,
+      allowedRoots,
+      realRoots,
+      strictRelativePaths: roots.strictRelativePaths
+    }));
   }
 
   if (!checkMode) {

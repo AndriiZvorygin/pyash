@@ -1,0 +1,8 @@
+[toolchain]
+channel = "1.99.1"
+profile = "minimal"
+# The minimal profile omits rustfmt, so the `cargo fmt --check` step that
+# documentation/reference/pyac-vliw-database.md tells developers to run
+# failed for anyone who followed the pin. Name the component the repository
+# actually uses, so the pin installs everything the workflow needs.
+components = ["rustfmt"]

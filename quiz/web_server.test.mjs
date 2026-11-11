@@ -518,6 +518,44 @@ test("coding duties persist on the hub and only assigned authenticated workers c
     assert.equal(assignment.duty.id, id);
     assert.match(assignment.sessionText, /coding saddle/u);
 
+    const queuedInput = await fetch(`${base}/api/duties/${encodeURIComponent(id)}/messages`, {
+      method: "POST",
+      headers: { ...userHeaders, "content-type": "application/json" },
+      body: JSON.stringify({ message: "Inspect the next tool result before answering.", delivery: "after-tool" })
+    });
+    assert.equal(queuedInput.status, 202);
+
+    const toolCall = await fetch(`${base}/api/duty-workers/event`, {
+      method: "POST",
+      headers: workerHeaders,
+      body: JSON.stringify({
+        workerId: "worker-a",
+        dutyId: id,
+        messageId: assignment.message.id,
+        claimId: assignment.claimId,
+        event: { stage: "call", toolName: "read", toolCall: { function: { arguments: "{}" } } }
+      })
+    });
+    assert.equal(toolCall.status, 200);
+    assert.deepEqual((await toolCall.json()).saddleMessages, []);
+
+    const toolResult = await fetch(`${base}/api/duty-workers/event`, {
+      method: "POST",
+      headers: workerHeaders,
+      body: JSON.stringify({
+        workerId: "worker-a",
+        dutyId: id,
+        messageId: assignment.message.id,
+        claimId: assignment.claimId,
+        event: { stage: "result", toolName: "read", toolText: "the requested source" }
+      })
+    });
+    assert.equal(toolResult.status, 200);
+    const boundary = (await toolResult.json()).saddleMessages;
+    assert.equal(boundary.length, 1);
+    assert.equal(boundary[0].text, "Inspect the next tool result before answering.");
+    assert.equal(boundary[0].deliveryBoundary, "tool-result");
+
     const result = await fetch(`${base}/api/duty-workers/result`, {
       method: "POST",
       headers: workerHeaders,
@@ -527,13 +565,15 @@ test("coding duties persist on the hub and only assigned authenticated workers c
         messageId: assignment.message.id,
         claimId: assignment.claimId,
         text: "The existing saddle is persisted on the hub.",
-        sessionText: assignment.sessionText
+        sessionText: `${assignment.sessionText}\nsu name user ob text "Inspect the next tool result before answering." ya\n`
       })
     });
     assert.equal(result.status, 200);
     const completed = (await result.json()).duty;
     assert.equal(completed.messages.at(-1).parentId, assignment.message.id);
     assert.match(completed.messages.at(-1).html, /persisted on the hub/u);
+    assert.deepEqual(completed.toolEvents.map((event) => event.stage), ["call", "result"]);
+    assert.equal(completed.messages.find((entry) => entry.text === "Inspect the next tool result before answering.").state, "complete");
 
     const ownDuties = await fetch(`${base}/api/duties`, { headers: userHeaders });
     assert.equal((await ownDuties.json()).duties.length, 1);

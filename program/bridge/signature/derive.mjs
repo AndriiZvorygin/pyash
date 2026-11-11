@@ -169,7 +169,7 @@ export function deriveSignatureFromDefinition(sentence) {
   return makeSignatureWords({ be: verb, cases });
 }
 
-function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
+function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "", referenceValue = null) {
   if (value == null) return [];
   if (value.la) return ["la"];
 
@@ -202,6 +202,12 @@ function caseTypeWordsWithMemory(value, remember, verb = "", caseKey = "") {
   if (value.hollow) return ["hollow"];
 
   if (value.name) {
+    if (verb === "text" && caseKey === "to") return ["name", "text"];
+    if (verb === "plus" && caseKey === "to" && referenceValue) {
+      const referenceType = caseTypeWordsWithMemory(referenceValue, remember, verb, "ob");
+      if (referenceType.length === 1 && referenceType[0] === "text") return ["name", "text"];
+      if (referenceType.length === 1 && referenceType[0] === "num") return ["name", "num"];
+    }
     if (caseKey === "fromtext") {
       const inferred = remember ? remember(value.name) : null;
       if (inferred?.ob?.text !== undefined || inferred?.ob?.filename !== undefined || inferred?.ob?.num !== undefined) {
@@ -385,7 +391,7 @@ export function deriveSignatureFromCall(sentence, { remember } = {}) {
     if (isMindWrite && (key === "fromtext" || key === "accordingto")) continue;
     if (isSession && (key === "fromtext" || key === "accordingto")) continue;
     const signatureCaseKey = key;
-    const typeWords = caseTypeWordsWithMemory(value, remember, verb, signatureCaseKey);
+    const typeWords = caseTypeWordsWithMemory(value, remember, verb, signatureCaseKey, sentence.ob);
     if (typeWords.length === 0) {
       console.error("derive-signature-fail", { key, value, verb });
       throwErrorSentence({

@@ -1,0 +1,24 @@
+su name translation_wordnet_sense_compound_config be map def
+su text "format" ob text "translation-wordnet-sense-compound-refinery-v2" ya
+su text "model" ob text "qwen3.5:9b" ya
+su text "comparison-languages" ob text "chinese,hindi,russian,german,japanese,korean,finnish" ya
+su text "prompt-revision" ob text "sense-translation-gloss-alternatives-v11" ya
+su text "max-output-tokens" ob num 2048 ya
+su text "parallelism" ob num 8 ya
+su text "max-senses-per-launch" ob num 64 ya
+su text "worklist-order" ob text "english30k-rank" ya
+su text "minimum-tag-count" ob num 0 ya
+su text "require-princeton-intersection" ob text "true" ya
+su text "maximum-compound-components" ob num 2 ya
+su text "candidate-revision" ob text "sense-component-choice-v11" ya
+su text "component-choice-prompt-revision" ob text "sense-component-choice-v14" ya
+su text "component-choice-max-attempts" ob num 2 ya
+su text "component-choice-max-output-tokens" ob num 256 ya
+su text "head-relation-policy" ob text "advisory" ya
+prah
+su name translation wordnet sense compounds be refinery def
+su name select unresolved senses to name map sense worklist be translation stage do
+su name translate missing sense definitions from name map sense worklist to name map sense translations be translation stage do
+su name compose sense compounds from ve name map sense worklist name map sense translations to name map sense compound candidates be translation stage do
+su name verify sense compounds from name map sense compound candidates to name map sense compound decisions be translation stage do
+prah

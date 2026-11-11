@@ -475,7 +475,7 @@ For each error:
 
 For each artifact:
 - `artifact id`
-- `artifact kind`
+- `artifact sort`
 - `artifact origin` (embedded sentence, if available)
 - `artifact order` (1-based, appearance order)
 
@@ -520,7 +520,7 @@ su name failure 1 prah
 
 su name artifact entry 1 be json map def
 su name artifact id ob text "<hash>" ya
-su name artifact kind ob text "<kind>" ya
+su name artifact sort ob text "<sort>" ya
 su name artifact origin ob la <sentence> ko ya
 su name artifact order ob num 1 ya
 su name artifact entry 1 prah

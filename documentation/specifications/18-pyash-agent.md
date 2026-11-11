@@ -13,6 +13,21 @@ Purpose: define agent loop, session/memory storage, scheduler hooks, and channel
 
 Session files stay in agent house; operational logs go to world newspaper.
 
+### Shared system libraries and home data
+
+The GI-OS storage model keeps reusable Pyash runtime libraries in the system
+installation at `program/library/`, shared once and exposed read-only to model
+workers. Agent homes hold mutable, agent-specific state and outputs; workers
+use the shared libraries in place instead of copying them into an agent home,
+task directory, or separate repository checkout.
+
+The OS-level home-volume name is `world/home/`. The current agent-house
+implementation remains `world/house/<agent>/`; the conceptual name does not
+change the active path. `world/library/` is the mutable shared-knowledge place,
+not the installed system-library tree. The read-only access rule is the target
+architecture; current runtime and tool policies enforce only the boundaries
+they explicitly implement.
+
 ## 2. Session model
 
 Session key: `yyyymmdd-<name>` (name sanitized to alnum + underscore).
@@ -35,10 +50,11 @@ su name agent ob text "<response>" fromtext text "<request hash>" accordingto te
 su name checkpoint ob text "<response>" fromtext text "<request hash>" accordingto text "<turn id>" by num <ordinal> vyah success be checkpoint ya
 ```
 
-The same `accordingto` turn id identifies all three records. Payload ids and
-exchange sentence ids are preferred; otherwise the id combines a session-local
-ordinal with a canonical request hash. Timestamps are audit fields only and do
-not participate in identity or snapshot hashes. A user record is appended before
+The same `accordingto` turn id identifies all three records. A payload id names
+one work item; an exchange sentence id names a run position and adds the session
+ordinal. Otherwise the id is a session ordinal and a canonical request hash.
+Timestamps are audit fields only and do not participate in identity or snapshot
+hashes. A user record is appended before
 mind invocation. Pending tails remain auditable but are omitted from resumed
 history; a successful checkpoint is required before a pair enters prompt history.
 Completed turns replay from their recorded response without appending a second

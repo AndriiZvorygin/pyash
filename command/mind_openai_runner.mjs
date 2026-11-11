@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
+import { StringDecoder } from "node:string_decoder";
 import { fileURLToPath } from "node:url";
 import {
   resolveHost,
@@ -11,17 +12,25 @@ import {
   requestStream
 } from "../program/motor/openai_mind.mjs";
 import { submitManagedGpuJob } from "../program/runtime/gpu/managed-ollama.mjs";
+import {
+  resolveZaiApiKey,
+  resolveZaiCodingApiKey,
+  resolveZaiCodingHost
+} from "../program/runtime/zai_coding_plan.mjs";
+import { resolveMiniMaxApiKey } from "../program/runtime/minimax.mjs";
 
 function parseArgs(argv) {
   const args = argv.slice(2);
   const stream = args.includes("--stream");
   const strata = args.includes("--strata");
+  const zaiCoding = args.includes("--zai-coding");
+  const minimax = args.includes("--minimax");
   const managed = args.includes("--managed");
   const payloadIndex = args.indexOf("--payload");
   const payloadFileIndex = args.indexOf("--payload-file");
   const payload = payloadIndex !== -1 ? args[payloadIndex + 1] ?? "" : null;
   const payloadFile = payloadFileIndex !== -1 ? args[payloadFileIndex + 1] ?? "" : null;
-  return { stream, strata, managed, payload, payloadFile };
+  return { stream, strata, managed, zaiCoding, minimax, payload, payloadFile };
 }
 
 function readStdin() {
@@ -33,7 +42,7 @@ function readStdin() {
 }
 
 async function parsePayload() {
-  const { stream, strata, managed, payload: payloadArg, payloadFile } = parseArgs(process.argv);
+  const { stream, strata, managed, zaiCoding, minimax, payload: payloadArg, payloadFile } = parseArgs(process.argv);
   let raw = "";
   if (payloadArg != null) raw = payloadArg;
   else if (payloadFile) raw = await fs.promises.readFile(payloadFile, "utf8");
@@ -46,7 +55,7 @@ async function parsePayload() {
     throw new Error(`mind_openai_runner: invalid JSON payload (${err?.message ?? err})`);
   }
   payload.stream = stream || payload.stream === true;
-  return { payload, strata, managed };
+  return { payload, strata, managed, zaiCoding, minimax };
 }
 
 function textPart(part) {
@@ -113,6 +122,18 @@ function clipText(value, limit = 4000) {
   return `${text.slice(0, limit)}...`;
 }
 
+function writeMindStreamRecord(record) {
+  process.stdout.write(`${JSON.stringify(record)}\n`);
+}
+
+function writeMindStreamText(text) {
+  if (text) writeMindStreamRecord({ type: "chunk", text: String(text) });
+}
+
+function writeMindStreamTerminal(envelope) {
+  writeMindStreamRecord({ type: "terminal", ok: true, envelope: envelope ?? {} });
+}
+
 function normalizeCodexToolName(item = {}) {
   return String(item?.tool ?? item?.tool_name ?? item?.name ?? item?.type ?? "tool").trim() || "tool";
 }
@@ -168,6 +189,11 @@ function mapCodexEvents(events = []) {
         observedToolEvents.push({
           stage: "result",
           toolName: "command",
+          commandOutcome: {
+            exitCode: Number.isFinite(exitCode) ? exitCode : null,
+            signal: item?.signal ?? null,
+            timedOut: item?.timed_out === true
+          },
           toolText: clipText(`exit=${Number.isFinite(exitCode) ? exitCode : "unknown"}${output ? ` output=${output}` : ""}`)
         });
       }
@@ -219,40 +245,86 @@ function tomlArray(values = []) {
   return `[${out.map((value) => tomlString(value)).join(", ")}]`;
 }
 
-async function runCodexFallback(payload = {}, { stream = false } = {}) {
+async function runCodexFallback(payload = {}, { stream = false, codexHome = "" } = {}) {
   const model = String(payload?.model || "gpt-5-codex").trim() || "gpt-5-codex";
   const prompt = buildCodexPrompt(payload);
   const runnerDir = path.dirname(fileURLToPath(import.meta.url));
+  const installRoot = path.resolve(runnerDir, "..");
   const mcpServerPath = path.resolve(runnerDir, "pyash_mcp_server.mjs");
-  const mcpServerArgs = [mcpServerPath, "--root", process.cwd(), "--tools-map", "agent tools"];
+  const toolsMapName = String(payload?.toolMapName ?? payload?.toolMap ?? "agent tools").trim() || "agent tools";
+  const mcpServerArgs = [
+    mcpServerPath,
+    "--root", process.cwd(),
+    "--config-root", installRoot,
+    "--tools-map", toolsMapName
+  ];
   const args = [
     "exec",
     "--json",
+    "--disable", "shell_tool",
+    "--cd", process.cwd(),
     "-c", `mcp_servers.pyash.command=${tomlString("node")}`,
     "-c", `mcp_servers.pyash.args=${tomlArray(mcpServerArgs)}`,
+    "-c", `mcp_servers.pyash.default_tools_approval_mode=${tomlString("approve")}`,
+    "-c", "mcp_servers.pyash.required=true",
     "--model", model,
     "--color", "never",
     "--ephemeral",
     prompt
   ];
-  const proc = spawnSync("codex", args, {
-    encoding: "utf8",
-    env: process.env,
-    maxBuffer: 16 * 1024 * 1024
+  const proc = spawn("codex", args, {
+    env: codexHome ? { ...process.env, CODEX_HOME: codexHome } : process.env,
+    stdio: ["ignore", "pipe", "pipe"]
   });
-  if (proc.error) throw proc.error;
-  if (proc.status !== 0) {
-    const stderr = String(proc.stderr || "").trim();
-    throw new Error(`codex exec failed: status=${proc.status}${stderr ? ` stderr=${JSON.stringify(stderr)}` : ""}`);
+  const decoder = new StringDecoder("utf8");
+  let stdoutBuffer = "";
+  let stdout = "";
+  let stderr = "";
+  const events = [];
+  const consumeLine = (rawLine) => {
+    const line = String(rawLine ?? "").trim();
+    if (!line) return;
+    stdout += `${line}\n`;
+    const parsed = parseJsonLines(line);
+    for (const event of parsed) {
+      events.push(event);
+      if (!stream) continue;
+      const mapped = mapCodexEvents([event]);
+      for (const toolEvent of mapped.observedToolEvents) {
+        writeMindStreamRecord({ type: "event", event: toolEvent });
+      }
+      if (String(event?.type) === "item.completed" && String(event?.item?.type) === "agent_message") {
+        writeMindStreamText(mapped.responseText);
+      }
+    }
+  };
+  proc.stdout.on("data", (chunk) => {
+    stdoutBuffer += decoder.write(chunk);
+    const lines = stdoutBuffer.split(/\r?\n/u);
+    stdoutBuffer = lines.pop() ?? "";
+    for (const line of lines) consumeLine(line);
+  });
+  proc.stderr.on("data", (chunk) => { stderr += String(chunk); });
+  const exit = await new Promise((resolve, reject) => {
+    proc.once("error", reject);
+    proc.once("close", (code, signal) => resolve({ code, signal }));
+  });
+  stdoutBuffer += decoder.end();
+  if (stdoutBuffer.trim()) consumeLine(stdoutBuffer);
+  if (exit.code !== 0) {
+    const diagnostic = stderr.trim();
+    throw new Error(`codex exec failed: status=${exit.code ?? "unknown"} signal=${exit.signal ?? ""}${diagnostic ? ` stderr=${JSON.stringify(diagnostic)}` : ""}`);
   }
-  const events = parseJsonLines(proc.stdout);
   const { responseText, observedToolEvents } = mapCodexEvents(events);
   if (stream) {
-    const chunks = responseText.split(/\s+/).filter(Boolean);
-    for (const chunk of chunks) {
-      process.stdout.write(`${JSON.stringify(`${chunk} `)}\n`);
+    if (!responseText && stdout) {
+      const completed = events.filter((event) => event?.type === "item.completed" && event?.item?.type === "agent_message").at(-1);
+      if (completed) writeMindStreamText(mapCodexEvents([completed]).responseText);
     }
-    process.stdout.write("[STREAM_END]\n");
+    writeMindStreamTerminal({
+      response: responseText,
+      message: { role: "assistant", content: responseText }
+    });
     return null;
   }
   return {
@@ -265,24 +337,56 @@ async function runCodexFallback(payload = {}, { stream = false } = {}) {
 }
 
 async function main() {
-  const { payload, strata, managed } = await parsePayload();
+  const { payload, strata, managed, zaiCoding, minimax } = await parsePayload();
 
   if (process.env.PYA_COMMAND_RESPONSE) {
     process.stdout.write(`${process.env.PYA_COMMAND_RESPONSE}\n`);
     return;
   }
 
-  const host = resolveHost(payload);
+  const host = zaiCoding ? resolveZaiCodingHost(payload.host) : resolveHost(payload);
+  let hostName = "";
+  try {
+    hostName = new URL(host).hostname.toLowerCase();
+  } catch {
+    // resolveHost validation reports malformed endpoints in the request path.
+  }
+  const explicitApiKey = String(payload.apiKey ?? "").trim();
+  const minimaxApiKey = explicitApiKey || (minimax ? resolveMiniMaxApiKey() : "");
+  if (minimax && !minimaxApiKey) {
+    throw new Error('MiniMax API key missing: add `exists su name minimax api key ob text "..." be default ya` (or `minimax key`) to configure/secret.pya, or set MINIMAX_API_KEY');
+  }
+  const usesZaiApi = !strata && !zaiCoding && hostName === "api.z.ai";
+  const zaiApiKey = usesZaiApi ? resolveZaiApiKey() : "";
+  if (usesZaiApi && !explicitApiKey && !zaiApiKey) {
+    throw new Error("Z.AI API key missing: add `exists su name zai api key ob text \"...\" be default ya` to configure/secret.pya");
+  }
+  const zaiCodingApiKey = zaiCoding ? resolveZaiCodingApiKey() : "";
+  if (zaiCoding && !zaiCodingApiKey) {
+    throw new Error("Z.AI Coding Plan key missing: add `exists su name zai coding api key ob text \"...\" be default ya` to configure/secret.pya");
+  }
+  const providerPayload = !explicitApiKey && usesZaiApi
+    ? { ...payload, apiKey: zaiApiKey }
+    : payload;
   const strataKey = [payload.apiKey, process.env.STRATA_API_KEY]
     .map((value) => String(value ?? "").trim())
     .find(Boolean);
-  const apiKey = strata ? (strataKey || "pyash-local") : resolveApiKey({ host, payload });
+  const apiKey = minimax
+    ? minimaxApiKey
+    : zaiCoding
+      ? zaiCodingApiKey
+      : strata
+        ? (strataKey || "pyash-local")
+        : resolveApiKey({ host, payload: providerPayload });
   if (!apiKey && !strata) {
     const fallback = await runCodexFallback(payload, { stream: payload.stream === true });
     if (fallback) process.stdout.write(`${JSON.stringify(fallback)}\n`);
     return;
   }
   const body = await buildChatCompletionsRequest(payload);
+  if (zaiCoding && payload.stream === true && Array.isArray(body.tools) && body.tools.length > 0) {
+    body.tool_stream = true;
+  }
 
   if (strata && managed) {
     const managedBody = { ...body, stream: false };
@@ -300,8 +404,8 @@ async function main() {
     });
     if (payload.stream === true) {
       const text = String(result?.choices?.[0]?.message?.content ?? result?.response ?? "");
-      if (text) process.stdout.write(`${JSON.stringify(text)}\n`);
-      process.stdout.write("[STREAM_END]\n");
+      writeMindStreamText(text);
+      writeMindStreamTerminal(result);
     } else {
       process.stdout.write(`${JSON.stringify(result)}\n`);
     }
@@ -309,23 +413,37 @@ async function main() {
   }
 
   if (payload.stream === true) {
-    await requestStream({
+    const result = await requestStream({
       host,
       apiKey,
       body,
+      providerLabel: minimax ? "MiniMax" : zaiCoding ? "Z.AI Coding Plan" : undefined,
       onChunk: (chunk) => {
-        process.stdout.write(`${JSON.stringify(String(chunk))}\n`);
+        writeMindStreamText(chunk);
       }
     });
-    process.stdout.write("[STREAM_END]\n");
+    writeMindStreamTerminal(result);
     return;
   }
 
-  const result = await requestJson({ host, apiKey, body });
+  const result = await requestJson({
+    host,
+    apiKey,
+    body,
+    providerLabel: minimax ? "MiniMax" : zaiCoding ? "Z.AI Coding Plan" : undefined
+  });
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }
 
 main().catch((err) => {
-  process.stderr.write(`${err?.message ?? String(err)}\n`);
-  process.exit(1);
+  const message = err?.message ?? String(err);
+  if (parseArgs(process.argv).stream) {
+    writeMindStreamRecord({
+      type: "terminal",
+      ok: false,
+      error: { name: err?.name ?? "Error", message }
+    });
+  }
+  process.stderr.write(`${message}\n`);
+  process.exitCode = 1;
 });

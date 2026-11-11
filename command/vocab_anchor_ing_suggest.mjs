@@ -59,7 +59,7 @@ function buildBaseCandidates(lower) {
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
 const lyacRoot = resolve(repoRoot, "caterer/pyac/lyac");
-const anchorPath = resolve(repoRoot, "program/verbs/exchange/translation/anchor_words.pya");
+const anchorPath = resolve(repoRoot, "program/library/translation/anchor_words.pya");
 
 const [kwonEn, pyashWords, pyackwon, dictionaryEn, anchorForms] = await Promise.all([
   loadJson(resolve(lyacRoot, "kwon_en.json")),

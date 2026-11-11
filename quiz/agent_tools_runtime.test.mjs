@@ -74,7 +74,7 @@ test("agent tools runtime (fixtures ok)", async () => {
 
     // command (fixture)
     const cmdRes = await interpret(parse('be command ob text "echo hello" to name text out do'));
-    assert.equal(cmdRes?.value?.text, "cmd-ok");
+    assert.equal(cmdRes?.ob?.text, "cmd-ok");
 
     // download + search (fixtures)
     const downloadRes = await interpret(parse('be download from filename "https://example.com" as wo web to filename "downloaded.html" do'));

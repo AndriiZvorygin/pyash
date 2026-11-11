@@ -15,7 +15,7 @@ test("compile converts json text to pyash json map defs", async () => {
 
   const json = JSON.stringify({
     name: "Ada",
-    pets: [{ kind: "cat" }]
+    pets: [{ sort: "cat" }]
   });
 
   await run(

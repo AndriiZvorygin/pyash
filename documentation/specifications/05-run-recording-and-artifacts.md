@@ -64,10 +64,14 @@ its command identity graph:
 
 The request evoke record precedes policy audits. A declared `to filename`
 output is written first and then recorded as an artifact and exchange
-operation. If a later command reuses an artifact locator, content addressing,
-aliasing, and hash-consistency rules remain unchanged: no duplicate artifact
-declaration is required, but that command's exchange operation still carries
-its own request identity.
+operation. A locator identifies a filesystem path, which may be rewritten.
+Repeated recording of identical bytes at the same locator reuses the latest
+artifact declaration. Rewriting that path with different bytes creates a new
+artifact declaration and content-addressed snapshot; earlier snapshots remain
+immutable and replay-verifiable. Each command's exchange operation still
+carries its own request identity. Replay reports `hash inconsistency` when
+content-addressed evidence no longer matches its recorded hash, not merely
+because a working file was edited later.
 
 Command policy audits from the interpreter and compiled JavaScript/C backends
 are sentence-native records with `fromtext text <ISO-8601 timestamp>`. Their
@@ -103,6 +107,43 @@ generator/verifier evidence. It is recorded with an immutable content hash and a
 per-turn/hash locator. The run newspaper records a `be checkpoint ya` linkage
 with the turn id, snapshot hash, and artifact filename. Replay verifies the
 content-addressed bytes; changing them is a `hash inconsistency`.
+
+### 3.2 Retention and garbage collection
+
+The operator cleaner uses a conservative 90-day default. Preview is the default;
+deletion requires an explicit apply action. It may remove only expired,
+date-shaped run directories and expired `.pya`/`text-*.txt` files inside
+`newspaper/` directories. Persistent artifact subdirectories and
+`world/holding/` are outside the deletion set.
+
+Content-addressed objects are collected only after expired run and newspaper
+entries have been removed and the workspace has been rescanned. A blob is
+eligible only when no retained tracked text source, newspaper, or artifact
+metadata/manifest contains its SHA-256, and removing planned expired run links
+would leave only the canonical store link. If any reference source or content
+store cannot be scanned, blob collection is disabled for that invocation.
+This cleanup policy does not rewrite or compact retained newspapers; replayable
+evidence remains immutable within the retention window.
+
+### 3.3 Newspaper-pinned artifact cleanup
+
+`npm run artifacts:clean` is the conservative, newspaper-driven collector. It
+is read-only by default; `npm run artifacts:clean -- --apply` removes only run
+directories and content-addressed objects that no parser-validated canonical
+newspaper references. A newspaper pins its run directory and every artifact
+record it declares until that newspaper is removed by the separate retention
+policy. The collector reads each Pyash sentence into its structured parse tree
+and recognizes artifact records by their `be artifact` fields; it does not
+grep arbitrary text for hash-shaped strings or interpret/execute newspaper
+sentences.
+
+Malformed artifact/run retention records, missing or size/hash-mismatched
+referenced blobs, and active run leases block destructive cleanup. Unknown
+artifact roots are reported and preserved; invalid canonical roots block the
+operation. The collector takes an artifact-store maintenance lock and rescans
+before deletion. Removing a content-addressed path only unlinks that path; any
+hardlinks outside the collector's run directories remain intact. Files outside
+recognized run directories and unknown artifact roots are preserved.
 
 WorkTask review-loop compaction uses the existing work outcome newspaper path and
 appends one sentence-native context checkpoint at every live-context boundary:

@@ -23,7 +23,7 @@ test("compile runtime json import to C matches interpreter map defs", async () =
 
   const json = JSON.stringify({
     name: "Ada",
-    pets: [{ kind: "cat" }, { kind: "dog" }],
+    pets: [{ sort: "cat" }, { sort: "dog" }],
     tags: [true, false]
   });
 

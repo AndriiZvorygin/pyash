@@ -45,7 +45,7 @@ test("native refinery runs file-backed child program with bound inputs and retur
     const stored = remember("native result");
     assert.equal(stored?.be, "map");
     assert.equal(stored?.ob?.map?.produce?.text, "hello from child\n");
-    assert.equal(stored?.ob?.map?.kind?.text, "write");
+    assert.equal(stored?.ob?.map?.sort?.text, "write");
     assert.equal(stored?.ob?.map?.passing?.boolean, true);
     assert.match(String(stored?.ob?.map?.["artifacts folder"]?.filename ?? ""), /artifacts\/parent-run\/native-refinery\//u);
     assert.match(String(stored?.ob?.map?.["result file"]?.filename ?? ""), /result\.pya$/u);

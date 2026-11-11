@@ -22,6 +22,7 @@ import { setExchangeRecorder, clearExchangeRecorder, setExchangeStrict, setExcha
 import { recordArtifact } from "../program/bridge/exchange.mjs";
 import { setRunNewspaperLines, setRunToolEventRecorder, clearRunToolEventRecorder } from "../program/bridge/newspaper.mjs";
 import { closeMcpServers } from "../program/motor/mcp.mjs";
+import { registerArtifactRun } from "../program/library/artifact_store_lock.mjs";
 import { runRefinery } from "../program/bridge/refinery.mjs";
 import { resolveConfigBool, resolveConfigText } from "../program/configure/env.mjs";
 import { collectInputDeclarations } from "../program/runtime/input_ports.mjs";
@@ -180,6 +181,13 @@ function shouldForceTextExternalization({ sentence, pathKey } = {}) {
   return false;
 }
 
+function shouldExternalizeNewspaperText({ sentence, pathKey, bytes } = {}) {
+  const key = String(pathKey ?? "");
+  if (sentence?.be === "checkpoint" && key === "fromtext.text") return false;
+  return shouldForceTextExternalization({ sentence, pathKey })
+    || bytes.length > NEWSPAPER_TEXT_ARTIFACT_THRESHOLD;
+}
+
 function rewriteSentenceTextForNewspaper(sentence, {
   runId,
   nextTextArtifactIndex
@@ -200,8 +208,7 @@ function rewriteSentenceTextForNewspaper(sentence, {
       const childPath = pathKey ? `${pathKey}.${key}` : key;
       if (key === "text" && typeof entry === "string" && entry.length > 0) {
         const bytes = Buffer.from(entry, "utf8");
-        const force = shouldForceTextExternalization({ sentence, pathKey: childPath });
-        if (force || bytes.length > NEWSPAPER_TEXT_ARTIFACT_THRESHOLD) {
+        if (shouldExternalizeNewspaperText({ sentence, pathKey: childPath, bytes })) {
           const idx = typeof nextTextArtifactIndex === "function" ? nextTextArtifactIndex() : 1;
           const relLocator = path.join(
             "artifacts",
@@ -449,6 +456,7 @@ async function main() {
   const runStartDate = new Date();
   const runTime = runTimeFlag || (timeZone ? formatIsoWithOffset(runStartDate, timeZone) : runStartDate.toISOString());
   const runId = runIdFlag || await buildRunId({ runTime, sourcePath: resolved, cwd: process.cwd() });
+  await registerArtifactRun({ root: runRoot, runId });
   doRemember({ mood: "ya", su: { name: "run id" }, ob: { text: String(runId) }, be: "text" });
   const newspaperLines = [];
   setRunNewspaperLines(newspaperLines);
@@ -456,10 +464,11 @@ async function main() {
   let toolCounter = 0;
   const pushNewspaper = (line) => {
     if (!line) return;
-    let nextLine = line;
+    const sourceSentence = typeof line === "object" ? line : null;
+    let nextLine = sourceSentence ? sentenceToPyash(sourceSentence) : line;
     if ((useNewspaper || useAgain)) {
       try {
-        const parsed = parse(String(line).trim());
+        const parsed = sourceSentence ?? parse(String(line).trim());
         if (parsed?.mood) {
           const rewritten = rewriteSentenceTextForNewspaper(parsed, {
             runId,
@@ -472,7 +481,7 @@ async function main() {
         }
       } catch {
         // Keep the run alive even if newspaper formatting/externalization overflows.
-        nextLine = String(line);
+        nextLine = sourceSentence ? sentenceToPyash(sourceSentence) : String(line);
       }
       newspaperLines.push(nextLine);
     }
@@ -552,7 +561,7 @@ async function main() {
   if (useNewspaper) {
     setExchangeRecorder({
       runRoot,
-      record: (sentence) => pushNewspaper(sentenceToPyash(sentence))
+      record: (sentence) => pushNewspaper(sentence)
     });
     setExchangeRunId(runId);
     setExchangeStrict(true);
@@ -646,10 +655,10 @@ async function main() {
       pushNewspaper(`ob la ${embedded} ko be evoke ya`);
     },
     onCheckpoint: (checkpointSentence) => {
-      pushNewspaper(sentenceToPyash(checkpointSentence));
+      pushNewspaper(checkpointSentence);
     },
     onRetry: (retrySentence) => {
-      pushNewspaper(sentenceToPyash(retrySentence));
+      pushNewspaper(retrySentence);
     },
     onResult: (res) => {
       const resultSentence = toResultSentence(res, null);

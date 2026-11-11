@@ -6,6 +6,7 @@ import { interpret } from "../program/bridge/index.mjs";
 import { forget, doRemember } from "../program/remember/index.mjs";
 import { setExchangeRecorder, clearExchangeRecorder } from "../program/bridge/exchange.mjs";
 import { jsonObjectFromMapName } from "../program/verbs/exchange/json_map_export.mjs";
+import { mind_to_name_text, resetMindLogs } from "../program/verbs/mind/mind.mjs";
 
 function buildMapIndex(records) {
   const index = new Map();
@@ -89,6 +90,46 @@ test("mind configure map think overrides model tuning think", async () => {
     const payload = decodeMindPayload(records, "mind");
     assert.equal(payload.model, "glm-4.7-flash:latest");
     assert.equal(payload.think, true);
+  } finally {
+    clearExchangeRecorder();
+  }
+});
+
+test("per-call Ollama context and think settings override defaults", async () => {
+  forget();
+  resetMindLogs();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "mind response" }, ob: { text: "ok" }, be: "default" });
+  const records = [];
+  setExchangeRecorder({ record: (sentence) => records.push(sentence) });
+  try {
+    await mind_to_name_text({
+      mood: "do", be: "write", for: { name: "helper" }, ob: { text: "hello" }, to: { name: "text" },
+      fromstate: { text: "ollama" }, contextWindow: 16384, think: false
+    });
+    const payload = decodeMindPayload(records, "helper");
+    assert.equal(payload.options?.num_ctx, 16384);
+    assert.equal(payload.think, false);
+  } finally {
+    clearExchangeRecorder();
+  }
+});
+
+test("per-call reasoning effort is forwarded for Strata minds", async () => {
+  forget();
+  resetMindLogs();
+  doRemember({ mood: "ya", su: { name: "provider auto discharge" }, ob: { boolean: false }, be: "default" });
+  doRemember({ mood: "ya", su: { name: "mind response" }, ob: { text: "ok" }, be: "default" });
+  const records = [];
+  setExchangeRecorder({ record: (sentence) => records.push(sentence) });
+  try {
+    await mind_to_name_text({
+      mood: "do", be: "write", for: { name: "helper" }, ob: { text: "hello" }, to: { name: "text" },
+      fromstate: { text: "strata" }, reasoningEffort: "low", contextWindow: 65536
+    });
+    const payload = decodeMindPayload(records, "helper");
+    assert.equal(payload.reasoningEffort, "low");
+    assert.equal(payload.contextWindow, undefined);
   } finally {
     clearExchangeRecorder();
   }
@@ -225,6 +266,26 @@ test("mind request payload includes keep_alive default", async () => {
     assert.equal(payload.keep_alive, 300);
   } finally {
     clearExchangeRecorder();
+  }
+});
+
+test("mind request payload forwards the selected tools map", async () => {
+  forget();
+  const previousCommandResponse = process.env.PYA_COMMAND_RESPONSE;
+  process.env.PYA_COMMAND_RESPONSE = JSON.stringify({ response: "map handoff test" });
+  await interpret(parse('from filename "./module/mind_zai.pya" ob name zai command mind be import do'));
+  await interpret(parse('from filename "./module/saddle_tools.pya" ob name saddle tools to name saddle tools be import do'));
+  doRemember({ mood: "ya", su: { name: "mind backend" }, ob: { name: "zai command mind" }, be: "default" });
+  const records = [];
+  setExchangeRecorder({ record: (sentence) => records.push(sentence) });
+  try {
+    await interpret(parse('su name answer ob text "hello" for name mind to name text out with name saddle tools be write do'));
+    const payload = decodeMindPayload(records, "mind");
+    assert.equal(payload.toolMapName, "saddle tools");
+  } finally {
+    clearExchangeRecorder();
+    if (previousCommandResponse === undefined) delete process.env.PYA_COMMAND_RESPONSE;
+    else process.env.PYA_COMMAND_RESPONSE = previousCommandResponse;
   }
 });
 

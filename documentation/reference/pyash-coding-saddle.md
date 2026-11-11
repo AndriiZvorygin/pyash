@@ -7,6 +7,9 @@ session `.pya`; the host worker runs the existing mind and saddle tools inside
 that repository. `WorkTask` is the internal persistence contract, not the user
 vocabulary.
 
+See the [Coding Saddle Capability Standard](coding-saddle-capability-standard.md)
+for the user-facing baseline, current gaps, and acceptance evidence.
+
 ## Run
 
 From the repository root, start a local interactive coding session:
@@ -15,15 +18,60 @@ From the repository root, start a local interactive coding session:
 node command/pyash_saddle.mjs
 ```
 
-The default model/backend/host come from `configure/default.pya`. Local
-overrides may be supplied through `PYA_SADDLE_MODEL`, `PYA_SADDLE_BACKEND`,
-`PYA_SADDLE_HOST`, and `PYA_SADDLE_CWD`; these select an existing provider and
-coding root, they do not start a separate model runtime.
+The default mind/model/host come from `configure/default.pya`. Select another
+configured Pyash mind interactively with `/mind <name>`. Local startup
+overrides may be supplied through `PYA_SADDLE_MIND`, `PYA_SADDLE_MODEL`,
+`PYA_SADDLE_HOST`, and `PYA_SADDLE_CWD`; these select an existing Pyash mind
+and coding root, they do not start a separate model runtime.
+
+For the Z.AI GLM Coding Plan, add `exists su name zai coding api key ob text
+"<your key>" be default ya` to the ignored, permission-restricted
+`configure/secret.pya`, then launch with
+`PYA_SADDLE_MIND=zai node command/pyash_saddle.mjs`. The Z.AI mind uses the
+Coding Plan OpenAI Chat Completions endpoint at
+`https://api.z.ai/api/coding/paas/v4`; the saddle streams SSE text and tool-call
+deltas while Pyash's mind loop executes its tools. See
+[`mind.md`](../mind.md#zai-glm-coding-plan) for details.
+
+For a Z.AI mind, `/model` queries the account's Coding Plan model catalog. When
+the lookup succeeds, Pyash also refreshes the local Codex `zai` profile's
+`model_catalog_json` file from the returned IDs. Codex itself reads that local
+catalog, so open Pyash's `/model` picker before starting regular Codex when you
+want its model selector refreshed. A failed lookup leaves the configured model
+available and reports the discovery error.
+
+Use `/context` to select a client context budget up to the active model's
+verified maximum, or `/context 128K` to set one directly. GLM-4.5/4.5-Air are
+capped at 128K; GLM-4.6/4.7, GLM-5/5.1, and GLM-5-Turbo at 200K; and GLM-5.2,
+GLM-5.3, GLM-5.3-Flash, and GLM-5.3-FlashX at 1M. Newly listed models without
+a verified limit are capped at 128K. Pyash applies the selection to its Z.AI
+turns and writes `model_context_window` into the local `zai.config.toml`
+profile for future regular Codex sessions. Restart an already-running Codex
+session to load the change. This controls the client's context budget; it does
+not change the model's provider-side context limit. The Coding Plan model-list
+endpoint supplies model IDs only, so context ceilings are tracked separately
+from discovery.
+
+For Ollama, `/context` selects a per-request `num_ctx` preset (4K, 8K, 16K,
+32K, or 64K); `/context default` removes the override and returns to Ollama's
+configured default. This applies to both tool and non-tool turns for the
+current saddle session. Larger contexts consume more memory and must fit the
+selected model and host. Strata's context is not a per-request API setting: it
+is chosen when its server launches, so `/context` reports that limitation
+rather than changing or restarting a Housekeeper-managed server.
+
+Use `/think` to pick the supported reasoning mode. Ollama accepts `on` or
+`off` and sends its boolean `think` request option. Strata accepts `none`,
+`low`, `medium`, or `high` (with `off`/`on` aliases) and sends the documented
+OpenAI-compatible `reasoning_effort` field. Z.AI Coding Plan defaults to `low`
+and shows the effective effort in `/status`; an explicit `/think` selection is
+saved with the active saddle session. MiniMax keeps its provider default until
+an effort is selected.
 
 The web app adds a **Duty** mode beside ordinary chat. Choose an online worker
 and one of its advertised directories, select the model in the existing model
 control, then create a duty with a concise objective and first instruction.
-Later messages append to that same duty and session. The model/backend/host
+Later messages append to that same duty and session. The mind/model/host
 choice is fixed when the duty is created. Use **Accept duty** only after
 reviewing the result; acceptance is an operator decision, not an automatic
 claim that tests or integration succeeded.
@@ -37,16 +85,87 @@ implicitly. There is no sudo access.
 
 ## Controls
 
-Enter submits the current request. Shift+Enter inserts a newline on terminals
+Enter submits the current request. While a response is active, the editor stays
+available and Enter queues the drafted message for sequential delivery; the
+prompt shows `next>` or `queue N>`. Slash commands wait until the current
+response finishes. Shift+Enter inserts a newline on terminals
 that report the standard modified-key sequence; `Ctrl+J` is the portable
-newline fallback. `Ctrl+C` writes the existing Pyash mind-interrupt signal and
-`Ctrl+D` exits. `/status`, `/model <name>`, `/backend <name>`, `/host <url>`,
-`/discharge`, and `/exit` are local saddle commands.
+newline fallback. `Tab` completes slash-command names, and repeated Tab cycles
+matching commands; it does not complete command arguments. `PageUp` and
+`PageDown` scroll the conversation; new events
+continue to appear while the view is scrolled. `Ctrl+C` writes the existing
+Pyash mind-interrupt signal and `Ctrl+D` exits. The terminal uses a full-screen
+alternate buffer and restores the shell screen on exit, so its live redraws do
+not remain in normal shell scrollback. Assistant Markdown is rendered with
+terminal styling; tool output remains plain text. `/status`, `/session`,
+`/mind [name]`, `/model <name>`, `/plan`, `/host <url>`, `/discharge`, and
+`/exit` are local saddle commands. `/session`
+lists conversation files; select one to resume it, or use
+`/session <filename>` directly. `/mind` lists configured Pyash minds;
+`/mind zai` and `/mind openai` switch the active mind. `/model` changes the
+model within that mind. `/plan` shows the current session's coding plan and
+`/plan clear` removes that session's plan. For substantial multi-step work the
+model can update an ordered plan through the saddle tool map; completed steps
+must include validation evidence. Plans are stored in session-isolated
+`conduct/coding-saddle-plan-<session-key>.pya` files.
+
+Web duty messages can be set to arrive after the current model turn or after
+the next completed tool result. The after-tool boundary is applied after the
+current provider tool-call batch has returned all its results, preserving the
+provider's tool-call protocol. The worker appends that message to the active
+agent-house session as a linked session message before requesting the next
+model response.
+
+When the selected backend exposes OpenAI-compatible server-sent events, the
+saddle renders assistant text as it arrives and continues to show progress and
+tool events separately. Z.AI Coding Plan, MiniMax, and other SSE-capable
+Chat Completions backends stream response deltas. Housekeeper-managed
+Ollama/Strata requests remain buffered by their current job transport.
+
+Context compaction is automatic at 80% of the selected context budget. The
+saddle prefers the previous provider-reported input-token count and otherwise
+uses a conservative character-based estimate. It writes a continuity summary
+to a session-isolated `.pya` checkpoint, keeps up to the latest 12 exchanges in
+the active prompt, and reduces that window further if pressure remains high.
+The durable transcript remains unchanged. When a local backend has no
+configured context size, the estimate uses a conservative 8K-token budget.
+
+For recognized code-change turns, completion requires a successful edit and a
+relevant validation command run afterward with structured exit code `0`, no
+signal, and no timeout. The saddle reports the command and its observed result;
+missing or failed evidence leaves the task marked incomplete.
 
 ## Durable state
 
-Conversation records use the existing coding-saddle agent house and session
-files. A web duty is represented by the existing durable work-status `.pya`
+Conversation records use a readable project-named coding-saddle house beneath
+the existing per-project world root. The world root remains scoped to the exact
+resolved launch directory; its `.pya` project manifest records that directory,
+and `conduct/agent.pya` maps `coding saddle` to the house. On first use, the
+legacy `house/coding saddle` is moved only when that destination is absent or
+empty. If both locations contain data, startup stops with both paths rather
+than merging or overwriting either house. An `identity/HOUSE.md` guide explains
+the house directories and is injected with the other identity files; an
+existing user-authored guide is preserved.
+
+Opening the saddle from another directory starts with that directory's session
+history rather than replaying a different project's transcript. Relative file
+tool paths resolve from the saddle's project working directory. `~/...` and
+explicit absolute paths under the user's home are enabled for saddle read,
+write, list, and repair tools. Unprefixed relative paths cannot escape the
+project directory with `..`. Shell commands still run from the project
+directory under the existing command sandbox; the file-tool home permission
+does not widen command roots. A project's selected conversation and its
+backend/model choice are saved in `conduct/coding-saddle.pya`, separately from
+transcript history. The most recently selected backend, model, host, and
+reasoning effort are stored separately as a fallback for a fresh project
+session; a saved selection for the current project session takes precedence.
+Transcript model records are historical evidence only and never override the
+saved selection at startup. The saddle prompt directs the agent, after verified
+coding work, to record durable project decisions in the active house's
+`memory/MEMORY.md` (using its absolute house path) with the validation command
+and session or artifact evidence reference. Routine task notes and unverified
+claims do not belong there. The Knowledge Core remains a separate,
+evidence-oriented knowledge system. A web duty is represented by the existing durable work-status `.pya`
 artifact with `kind: coding-duty` metadata and a session file in its owner's
 web assistant area. It does not introduce another queue, model registry, or
 runtime. User messages are durable and worker claims are leased; a worker
@@ -60,6 +179,44 @@ different worker hosts can process independent duties concurrently. Model
 requests continue through the selected existing backend and its normal queue.
 The terminal and browser are projections, not authoritative transcript or
 queue stores.
+
+## Managed terminals and child coding saddles
+
+The saddle tool map includes `terminal start`, `terminal read`, `terminal
+write`, `terminal resize`, `terminal status`, `terminal list`, and `terminal
+close`. A generic terminal starts one command in a persistent PTY under the
+selected project root. Reads return output with a cursor; writes forward the
+provided PTY input as-is, including control keys and line endings. The PTY layer
+does not interpret Tab, Enter, or command text. Pyash command policy checks the
+initial launch. A process then runs as the worker's Unix account, with that
+account's ordinary operating-system permissions; Pyash tool-root policy does
+not turn a PTY into an OS jail.
+
+Direct PTY launches and input/output evidence are appended to
+`<world-root>/house/coding saddle/terminal/<terminal-id>.pya`. PTY output is
+bounded in memory and each event file has an 8 MiB persistence limit. Input
+contents are not copied into the evidence file; the event records its byte
+count and SHA-256. A detached manager keeps live PTYs available across saddle
+tool calls. A manager restart ends its live PTYs; the `.pya` event files remain
+as audit evidence and do not claim that a process can be restored after restart.
+The manager's Unix socket is placed in an owner-only directory under the
+system temporary directory and scoped to the world and project roots.
+
+`terminal start coding agent` starts another `pyash_saddle.mjs` process in a
+PTY using an existing configured Pyash mind. It assigns a unique `child-*`
+session name under that project's coding-saddle house. The canonical child
+transcript is `<agent-house>/session/<YYYYMMDD>-child-<id>.pya`; after-tool
+messages use linked session-message records in this same file. Use the returned
+terminal ID to read or write to that child. Parent backend permissions are in `agent delegation configure` in
+`configure/default.pya`. The default allows Ollama children. A parent-specific
+`<backend> allowed models` vector can narrow which child models are permitted.
+The child process still uses its configured provider lifecycle and tool map.
+
+After a code-edit turn, the terminal shows a bounded, read-only Git status and
+diff before the completion evidence. It includes the current shared worktree,
+so pre-existing edits can appear alongside this turn's changes. Credential-like
+files are excluded from diff contents; review the paths and diff before
+accepting or committing the work.
 
 ## Host Workers
 

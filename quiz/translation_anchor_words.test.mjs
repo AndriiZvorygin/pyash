@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { resolveEnglishAlias } from "../program/verbs/exchange/translation/english_aliases.mjs";
+import { resolveEnglishAlias } from "../program/library/translation/english_aliases.mjs";
 
 test("translation anchor words map schedule vocabulary to calendar anchor", () => {
   assert.equal(resolveEnglishAlias("schedule"), "calendar");

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import fs from "node:fs/promises";
 
-import { drawFromNameItinerary } from "../program/verbs/itinerary_media.mjs";
+import { drawFromNameItinerary } from "../program/verbs/itinerary/draw.mjs";
 import { forget, doRemember } from "../program/remember/index.mjs";
 import { setExchangeRecorder, clearExchangeRecorder } from "../program/bridge/exchange.mjs";
 

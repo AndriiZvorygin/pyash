@@ -112,6 +112,27 @@ export async function subtract_obj_num_from_name_vec_at_num(sentence, { remember
 
 export const subtract = subtract_by_num_from_name_num_to_name_num;
 
+function literalNumber(v, label, remember) {
+  if (v == null) throw new Error(`subtract: ${label} is required`);
+  if (typeof v === "number") return v;
+  if (typeof v.num === "number") return v.num;
+  if (typeof v.name === "string" && remember) {
+    const found = remember(v.name);
+    if (typeof found?.ob?.num === "number") return found.ob.num;
+    if (typeof found?.ob === "number") return found.ob;
+  }
+  throw new Error(`subtract: ${label} is not a number`);
+}
+
+// Literal minus: the ob operand is the minuend and the from operand is the
+// subtrahend, matching the operand order used by plus, remains, and exponential.
+export async function subtract_obj_num_from_num(sentence, { remember }) {
+  const minuend = literalNumber(sentence.ob, "ob num", remember);
+  const subtrahend = literalNumber(sentence.from, "from num", remember);
+
+  return { ob: minuend - subtrahend, be: sentence?.be ?? "number" };
+}
+
 export const signatures = [
   {
     signatureWords: ["be", "subtract", "ob", "second", "from", "date"],
@@ -256,5 +277,13 @@ export const signatures = [
   {
     signatureWords: ["be", "subtract", "at", "num", "from", "name", "vec", "num", "ob", "num"],
     handler: subtract_obj_num_from_name_vec_at_num
+  },
+  {
+    signatureWords: ["be", "subtract", "from", "num", "ob", "num"],
+    handler: subtract_obj_num_from_num
+  },
+  {
+    signatureWords: ["be", "subtract", "ob", "num", "from", "num"],
+    handler: subtract_obj_num_from_num
   }
 ];

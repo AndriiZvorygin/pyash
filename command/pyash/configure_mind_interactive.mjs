@@ -1,8 +1,13 @@
 import readline from "node:readline/promises";
 import {
+  fetchZaiCodingPlanModels,
+  syncZaiCodexModelCatalog
+} from "../../program/runtime/zai_coding_plan.mjs";
+import {
   MIND_BACKEND_CHOICES,
   looksLikeOllamaBackend,
   fetchOllamaModels,
+  fetchMiniMaxModels,
   fetchCodexModels,
   resolveModelSelection,
   resolveReasoningEffortSelection,
@@ -76,7 +81,7 @@ export function createCollectMindInteractive(deps) {
       printer.header("A.1 Mind Relay");
       printer.why("Channel and agent responses require a configured mind relay backend.");
       printer.how("Choose a provider by number or short name; Pyash maps it to the full backend command.");
-      printer.examples("1 | ollama | strata | openai-api | openai-codex | openrouter");
+      printer.examples("1 | ollama | strata | openai-api | openai-codex | openrouter | zai");
       textOut("- providers:");
       for (const line of formatNumberedRows(MIND_BACKEND_CHOICES.map((item) => `${item.key} (${item.label})`), { columns: 2 })) {
         textOut(`  ${line}`);
@@ -89,12 +94,18 @@ export function createCollectMindInteractive(deps) {
       if (selectedChoice?.key === "openai-api") {
         textOut("- auth note: openai-api expects OPENAI_API_KEY in runtime environment.");
       }
+      if (selectedChoice?.key === "minimax") {
+        textOut("- auth note: add `minimax api key` (also accepts `minimax key`) to configure/secret.pya, or set MINIMAX_API_KEY.");
+      }
       if (selectedChoice?.key === "openai-codex") {
         textOut("- auth note: openai-codex can run Codex OAuth now via codex app-server.");
       }
       if (selectedChoice?.key === "strata") {
         textOut("- auth note: Strata is local; set STRATA_API_KEY only if its API key is enabled.");
         textOut("- GPU note: Strata calls the local Pyash GPU Housekeeper before each model load.");
+      }
+      if (selectedChoice?.key === "zai") {
+        textOut("- auth note: configure `zai coding api key` in configure/secret.pya; Pyash uses the Coding Plan OpenAI-compatible Chat Completions endpoint with streaming.");
       }
 
       printer.header("B.1 Provider Endpoint");
@@ -197,6 +208,44 @@ export function createCollectMindInteractive(deps) {
         } else {
           textOut(`- model listing unavailable (${discovered.error})`);
         }
+      } else if (source === "zai") {
+        printer.header("C.1 Z.AI Coding Plan Models");
+        printer.why("The account model catalog determines which Z.AI models are selectable.");
+        printer.how("Pyash queries the Coding Plan models endpoint using the key in configure/secret.pya.");
+        printer.examples("glm-5.3-flash");
+        const discovered = await fetchZaiCodingPlanModels({ host });
+        if (discovered.ok) {
+          discoveredModels.push(...discovered.models);
+          if (discovered.models.includes(defaultMindModelForSource(source))) {
+            discoveredDefaultModel = defaultMindModelForSource(source);
+          }
+          textOut(`- found ${discovered.models.length} model(s):`);
+          for (const line of formatNumberedRows(discovered.models, { columns: 2 })) {
+            textOut(`  ${line}`);
+          }
+          const refreshed = syncZaiCodexModelCatalog({ models: discovered.models });
+          if (refreshed.updated) textOut(`- refreshed Codex Z.AI catalog (${refreshed.models.length} models)`);
+        } else {
+          textOut(`- model listing unavailable (${discovered.error})`);
+        }
+      } else if (source === "minimax") {
+        printer.header("C.1 MiniMax Models");
+        printer.why("The authenticated MiniMax model catalog determines which model IDs are selectable.");
+        printer.how("Pyash queries the OpenAI-compatible /v1/models endpoint using the MiniMax key in configure/secret.pya.");
+        printer.examples("MiniMax-M3.1-Flash");
+        const discovered = await fetchMiniMaxModels({ host });
+        if (discovered.ok) {
+          discoveredModels.push(...discovered.models);
+          if (discovered.models.includes(defaultMindModelForSource(source))) {
+            discoveredDefaultModel = defaultMindModelForSource(source);
+          }
+          textOut(`- found ${discovered.models.length} model(s):`);
+          for (const line of formatNumberedRows(discovered.models, { columns: 2 })) {
+            textOut(`  ${line}`);
+          }
+        } else {
+          textOut(`- model listing unavailable (${discovered.error})`);
+        }
       }
 
       printer.header("D.1 Default Model");
@@ -210,15 +259,19 @@ export function createCollectMindInteractive(deps) {
       const model = resolveModelSelection(modelInput, { fallback: defaultModel, models: discoveredModels });
       textOut(`- selected model ${model}`);
       let reasoningEffort = "";
-      if (source === "openai-codex") {
-        const selectedModelInfo = codexModelById.get(model) ?? null;
-        const optionsRaw = Array.isArray(selectedModelInfo?.reasoningEffort)
-          ? selectedModelInfo.reasoningEffort
-          : [];
+      if (source === "openai-codex" || source === "minimax") {
+        const selectedModelInfo = source === "openai-codex" ? codexModelById.get(model) ?? null : null;
+        const optionsRaw = source === "minimax"
+          ? ["low", "medium", "high", "xhigh", "max"]
+          : Array.isArray(selectedModelInfo?.reasoningEffort)
+            ? selectedModelInfo.reasoningEffort
+            : [];
         const options = Array.from(new Set(optionsRaw.map((item) => String(item ?? "").trim()).filter(Boolean)));
         if (options.length > 0) {
           printer.header("D.2 Reasoning Effort");
-          printer.why("Some Codex models expose reasoning levels as submodel controls.");
+          printer.why(source === "minimax"
+            ? "MiniMax exposes reasoning effort as a Chat Completions request setting."
+            : "Some Codex models expose reasoning levels as submodel controls.");
           printer.how("Choose one of the listed levels by number or name.");
           printer.examples(options.join(" | "));
           textOut("- reasoning levels:");
@@ -228,7 +281,7 @@ export function createCollectMindInteractive(deps) {
           const defaultReasoningEffort = String(
             selectedModelInfo?.defaultReasoningEffort
             || (priorSource === source ? prior.reasoningEffort : "")
-            || options[0]
+            || (source === "minimax" ? "medium" : options[0])
           ).trim();
           const reasoningInput = await ask("Reasoning effort (name or number)", defaultReasoningEffort);
           reasoningEffort = resolveReasoningEffortSelection(reasoningInput, {

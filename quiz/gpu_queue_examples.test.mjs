@@ -5,8 +5,7 @@ import fs from "node:fs/promises";
 import { parse } from "../program/understand/index.mjs";
 
 const examples = [
-  "examples/pyash/teaching-video-gpu-queue-mind-duty.pya",
-  "examples/pyash/wide-teaching-video-gpu-queue-mind-duty.pya"
+  "examples/pyash/teaching-video-gpu-queue-mind-duty.pya"
 ];
 
 test("queued teaching-video examples use GPU future duties", async () => {
