@@ -266,12 +266,7 @@ not replace the current sentence/paragraph interpreter. The only
 conforming future implementation is one that can prove the sentence result
 and the legacy encoding bytes agree.
 
-## 8. Non-goals and implementation references
-
-This specification does not add HNUCs, alter parser vocabulary, define the
-catalog/container database, require a GPU, introduce a model server or queue,
-or connect codelet execution to WorkTask/review/integration machinery. It also
-does not replace the current sentence/paragraph interpreter.
+## 9. Implementation references
 
 The proven numeric-plus, quote, fixed-slot, typed-literal, named-fact, database,
 and facade slices are documented with their fixtures and implementation paths
