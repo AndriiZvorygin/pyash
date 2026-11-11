@@ -2604,8 +2604,8 @@ export async function summarizeGroundedUnit({
   const questionAnswerOnly = routineQuestionTransitionOnly
     || (/\?/u.test(sourceForSpeechActChecks)
       && /\b(?:is\s+this|did|does|would|could|why|how|what|where|when)\b/iu.test(sourceForSpeechActChecks));
-  const separateProceduralPhasesOnly = /\bare\s+we\s+doing\s+separate\s+motions?\b/iu.test(sourceForSpeechActChecks)
-    && /\b(?:receive|receiv(?:e|ed|ing)|correspondence)\b/iu.test(sourceForSpeechActChecks)
+  const separateProceduralPhasesOnly = /\b(?:are\s+we\s+doing\s+separate\s+motions?|separate\s+motions?|one\s+motion\s+for\s+both)\b/iu.test(sourceForSpeechActChecks)
+    && /\b(?:receive|receiv(?:e|ed|ing)|correspondence|two\s+items|those\s+two\s+are\s+received)\b/iu.test(sourceForSpeechActChecks)
     && /\b(?:carried|approved|adopted)\b/iu.test(sourceForSpeechActChecks)
     && /\b(?:site\s+plan|next\s+item)\b/iu.test(sourceForSpeechActChecks);
   const shortAgendaTransitionOnly = !proceduralSelfReportOnly
@@ -4300,7 +4300,7 @@ export async function summarizeGroundedUnit({
         format: STAGE3_SUMMARY_RESPONSE_FORMAT,
       });
       const text = `${String(repaired?.summary || "")} ${String(repaired?.["chapter text"] || "")}`;
-      const unsupportedMotionClaim = /\b(?:carried|approved|adopted)\s+(?:a\s+)?motion\b|\b(?:motion\s+to\s+receive|address(?:ed|ing)?\s+(?:the\s+)?site\s+plan|site\s+plan\s+(?:was|is)\s+(?:addressed|discussed))\b/iu.test(text);
+      const unsupportedMotionClaim = /\b(?:carried|approved|adopted)\s+(?:a\s+)?motion\b|\b(?:motion\s+to\s+receive|address(?:ed|ing)?\s+(?:the\s+)?site\s+plan|site\s+plan\s+(?:was|is)\s+(?:addressed|discussed|considered|reviewed|covered)|(?:address(?:ed|ing)?|discuss(?:ed|ing)?|consider(?:ed|ing)?|review(?:ed|ing)?|cover(?:ed|ing)?|went\s+over)\b[^.?!]{0,80}\bsite\s+plan\b)\b/iu.test(text);
       if (!unsupportedMotionClaim && !/\b(?:moved|seconded|correspondence|called\s+for\s+(?:a\s+)?vote)\b/iu.test(text)) return repaired;
     }
     return repaired;
