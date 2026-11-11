@@ -3058,6 +3058,11 @@ export async function summarizeGroundedUnit({
   };
   const queryConservativeUnsupportedEvidenceSpecificityRepair = async (attempt = 1, rejectedClaims = "", rejectedOutput = "") => {
     let repaired = null;
+    const rejection = String(rejectedClaims || "");
+    const rejectedReserveAction = /\b(?:reserve|withdraw(?:n|al)?|draw(?:n)?\s+from)\b/iu.test(rejection)
+      && /\b(?:does\s+not|doesn't|not|absent|unsupported|lack(?:s|ing)?)\b[\s\S]{0,180}\b(?:reserve|withdraw(?:n|al)?|draw(?:n)?\s+from)\b/iu.test(rejection);
+    const rejectedGrantAction = /\bgrant(?:s)?\b/iu.test(rejection)
+      && /\b(?:approved|awarded|funded|withdrawn|allocated|issued|completed|authorized|specific\s+grant|grant\s+approval)\b/iu.test(rejection);
     for (let pass = 1; pass <= 3; pass += 1) {
       repaired = await callOllamaJson({
         ollamaUrl,
@@ -3090,7 +3095,13 @@ export async function summarizeGroundedUnit({
         format: STAGE3_SUMMARY_RESPONSE_FORMAT,
       });
       const repairedText = `${String(repaired?.summary || "")} ${String(repaired?.["chapter text"] || "")}`;
-      if (!unsupportedEvidenceSpecificityGroundingDefect(repairedText)) return repaired;
+      const retainedRejectedReserveAction = rejectedReserveAction
+        && /\b(?:reserve|withdraw(?:n|al)?|draw(?:n)?\s+from)\b/iu.test(repairedText);
+      const retainedRejectedGrantAction = rejectedGrantAction
+        && /\bgrant(?:s)?\b[^.?!]{0,120}\b(?:approved|awarded|funded|withdrawn|allocated|issued|completed|authorized)\b/iu.test(repairedText);
+      if (!retainedRejectedReserveAction
+        && !retainedRejectedGrantAction
+        && !unsupportedEvidenceSpecificityGroundingDefect(repairedText)) return repaired;
     }
     return repaired;
   };
