@@ -208,6 +208,12 @@ adapters and rejects other semantic codelets explicitly. The host language,
 OpenCL, or another
 backend is an implementation choice behind this boundary.
 
+A destination compiles a codelet into the machine code that computes the same
+result the interpreter produces. The compiled program MUST agree with
+interpreted execution on every value, including the saturation the numeric
+semantics apply, and a destination MUST reject a codelet it cannot compile
+rather than approximate it.
+
 ## 7. Compatibility examples
 
 The following are golden vectors, not new syntax:
@@ -248,6 +254,11 @@ The following are golden vectors, not new syntax:
    with the fourteen-word body `3001 0E1D 0004 004E 0061 006D 0065 0E1D
    0003 0041 0067 0065 245E 217E`. Every element MUST keep its exact
    characters and its case.
+10. A destination MUST compile a codelet into machine code that computes the
+    interpreter's result. The golden codelet `0149 881D 0001 287E 881D 0001
+    245E 8A64 295E` MUST compile to a program that leaves the result `2` in
+    the first argument register, and an image that holds that program MUST be
+    an executable whose entry point runs the program and stops.
 
 Conformance tests should compare sentence round-trips, exact golden bytes,
 malformed continuation/quote rejection, compatibility-table coverage,

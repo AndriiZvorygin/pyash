@@ -150,11 +150,7 @@ pub struct LiteralRegion {
 
 /// The layout of a decoded literal codelet.
 struct LiteralLayout {
-    name_words: Vec<u16>,
     regions: Vec<LiteralRegion>,
-    accusative_offset: usize,
-    realis_offset: usize,
-    used_words: usize,
 }
 
 /// The payload span of a quote region: the words the quote owns after its
@@ -200,18 +196,17 @@ fn read_regions(
             expected: 0,
             actual: 0,
         })?;
-    let (name_words, nominative_slot) =
-        if quote_offset > 1 && words[quote_offset - 1] == NOMINATIVE_CASE {
-            (words[1..quote_offset - 1].to_vec(), Some(quote_offset - 1))
-        } else if quote_offset == 1 {
-            (Vec::new(), None)
-        } else {
-            return Err(SemanticError::InvalidShape {
-                index: quote_offset,
-                expected: NOMINATIVE_CASE,
-                actual: words[quote_offset],
-            });
-        };
+    let nominative_slot = if quote_offset > 1 && words[quote_offset - 1] == NOMINATIVE_CASE {
+        Some(quote_offset - 1)
+    } else if quote_offset == 1 {
+        None
+    } else {
+        return Err(SemanticError::InvalidShape {
+            index: quote_offset,
+            expected: NOMINATIVE_CASE,
+            actual: words[quote_offset],
+        });
+    };
     if quote_offset >= WORDS_PER_CODELET || !accepts_quote(words[quote_offset]) {
         return Err(SemanticError::InvalidShape {
             index: quote_offset,
@@ -302,13 +297,7 @@ fn read_regions(
         }
     }
 
-    Ok(LiteralLayout {
-        name_words,
-        regions,
-        accusative_offset,
-        realis_offset,
-        used_words,
-    })
+    Ok(LiteralLayout { regions })
 }
 
 pub fn decode_date(words: &[u16; WORDS_PER_CODELET]) -> Result<DateInstruction, SemanticError> {

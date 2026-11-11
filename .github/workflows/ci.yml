@@ -99,9 +99,15 @@ jobs:
           rustup show active-toolchain || rustup toolchain install
           rustup component add rustfmt
       - name: Check formatting
-        run: cargo fmt --manifest-path rust/pyac/Cargo.toml -- --check
+        run: |
+          cargo fmt --manifest-path rust/pyac/Cargo.toml -- --check
+          cargo fmt --manifest-path rust/pyac-riscv/Cargo.toml -- --check
       - name: Run the crate tests
         run: cargo test --manifest-path rust/pyac/Cargo.toml
+      - name: Add the bare-metal target
+        run: rustup target add riscv64gc-unknown-none-elf
+      - name: Build the RISC-V image
+        run: cargo build --manifest-path rust/pyac-riscv/Cargo.toml --release --target riscv64gc-unknown-none-elf
 
   zim-toolchain:
     name: Optional ZIM toolchain
