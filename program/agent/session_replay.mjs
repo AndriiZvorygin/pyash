@@ -550,6 +550,34 @@ export function buildSessionTurnSentence({
   return sentence;
 }
 
+export function buildSessionMessageSentence({
+  role = "user",
+  content,
+  turnId,
+  metadata = {},
+  timestamp = ""
+} = {}) {
+  const normalizedTurnId = normalizeText(turnId);
+  const normalizedRole = normalizeText(role).toLowerCase();
+  if (!normalizedTurnId) throw new Error("session message requires a linked turn id");
+  if (!new Set(["user", "tool"]).has(normalizedRole)) {
+    throw new Error(`session message role is invalid: ${normalizedRole || "(empty)"}`);
+  }
+  const sentence = {
+    su: { name: "session message" },
+    ob: { text: String(content ?? "") },
+    as: { name: normalizedRole },
+    accordingto: { text: normalizedTurnId },
+    be: "session message",
+    mood: "ya"
+  };
+  if (metadata.payloadId) sentence.fromtext = { text: String(metadata.payloadId) };
+  if (metadata.sender) sentence.from = { name: String(metadata.sender) };
+  if (metadata.channelType) sentence.fromstate = { text: String(metadata.channelType) };
+  if (timestamp || metadata.createdAt) sentence.during = { date: String(timestamp || metadata.createdAt) };
+  return sentence;
+}
+
 export function buildSessionCheckpointSentence({
   turnId,
   requestHash,

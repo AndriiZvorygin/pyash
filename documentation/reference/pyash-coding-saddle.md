@@ -109,6 +109,13 @@ model can update an ordered plan through the saddle tool map; completed steps
 must include validation evidence. Plans are stored in session-isolated
 `conduct/coding-saddle-plan-<session-key>.pya` files.
 
+Web duty messages can be set to arrive after the current model turn or after
+the next completed tool result. The after-tool boundary is applied after the
+current provider tool-call batch has returned all its results, preserving the
+provider's tool-call protocol. The worker appends that message to the active
+agent-house session as a linked session message before requesting the next
+model response.
+
 When the selected backend exposes OpenAI-compatible server-sent events, the
 saddle renders assistant text as it arrives and continues to show progress and
 tool events separately. Z.AI Coding Plan, MiniMax, and other SSE-capable
@@ -172,6 +179,38 @@ different worker hosts can process independent duties concurrently. Model
 requests continue through the selected existing backend and its normal queue.
 The terminal and browser are projections, not authoritative transcript or
 queue stores.
+
+## Managed terminals and child coding saddles
+
+The saddle tool map includes `terminal start`, `terminal read`, `terminal
+write`, `terminal resize`, `terminal status`, `terminal list`, and `terminal
+close`. A generic terminal starts one command in a persistent PTY under the
+selected project root. Reads return output with a cursor; writes forward the
+provided PTY input as-is, including control keys and line endings. The PTY layer
+does not interpret Tab, Enter, or command text. Pyash command policy checks the
+initial launch. A process then runs as the worker's Unix account, with that
+account's ordinary operating-system permissions; Pyash tool-root policy does
+not turn a PTY into an OS jail.
+
+Direct PTY launches and input/output evidence are appended to
+`<world-root>/house/coding saddle/terminal/<terminal-id>.pya`. PTY output is
+bounded in memory and each event file has an 8 MiB persistence limit. Input
+contents are not copied into the evidence file; the event records its byte
+count and SHA-256. A detached manager keeps live PTYs available across saddle
+tool calls. A manager restart ends its live PTYs; the `.pya` event files remain
+as audit evidence and do not claim that a process can be restored after restart.
+The manager's Unix socket is placed in an owner-only directory under the
+system temporary directory and scoped to the world and project roots.
+
+`terminal start coding agent` starts another `pyash_saddle.mjs` process in a
+PTY using an existing configured Pyash mind. It assigns a unique `child-*`
+session name under that project's coding-saddle house. The canonical child
+transcript is `<agent-house>/session/<YYYYMMDD>-child-<id>.pya`; after-tool
+messages use linked session-message records in this same file. Use the returned
+terminal ID to read or write to that child. Parent backend permissions are in `agent delegation configure` in
+`configure/default.pya`. The default allows Ollama children. A parent-specific
+`<backend> allowed models` vector can narrow which child models are permitted.
+The child process still uses its configured provider lifecycle and tool map.
 
 After a code-edit turn, the terminal shows a bounded, read-only Git status and
 diff before the completion evidence. It includes the current shared worktree,

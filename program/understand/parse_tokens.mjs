@@ -356,7 +356,9 @@ export function parseTokens(
       const genitive = parseGenitiveChain(i);
       if (genitive) {
         consume(i, genitive.endIndex);
-        slot.genitive = { chain: genitive.chain };
+        if (slot) {
+          slot.genitive = { chain: genitive.chain };
+        }
         i = genitive.endIndex;
         continue;
       }
@@ -416,7 +418,9 @@ export function parseTokens(
       const genitive = parseGenitiveChain(i);
       if (genitive) {
         consume(i, genitive.endIndex);
-        slot.genitive = { chain: genitive.chain };
+        if (slot) {
+          slot.genitive = { chain: genitive.chain };
+        }
         i = genitive.endIndex;
         continue;
       }

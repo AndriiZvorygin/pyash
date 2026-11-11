@@ -752,7 +752,30 @@ export async function mind_to_name_text(sentence, {
       mindDebug,
       debugMind,
       inputs: { inputText, mockResponseRaw, imageInputs: inputs },
-      onToolCall,
+      onToolCall: async (event) => {
+        const boundary = await onToolCall?.(event);
+        if (event?.stage === "result" && sessionAgentEnabled && sessionFile && Array.isArray(boundary?.saddleMessages)) {
+          for (const message of boundary.saddleMessages) {
+            const content = String(message?.text ?? "").trim();
+            if (!content) continue;
+            await appendSessionEntry({
+              sessionFile,
+              role: "session message",
+              content,
+              metadata: {
+                record: "session-message",
+                messageRole: "user",
+                turnId: String(sessionTurn?.turnId ?? ""),
+                payloadId: String(message.id ?? ""),
+                createdAt: String(message.deliveredAt ?? ""),
+                sender: "parent duty",
+                channelType: "after tool result"
+              }
+            });
+          }
+        }
+        return boundary;
+      },
       onAssistantDelta,
       onUsage,
       saddlePlanTool,

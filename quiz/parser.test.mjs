@@ -51,6 +51,19 @@ test("parses typed name in name <type> <literal> order", () => {
   assert.deepEqual(s.to.nameTypeWords, ["text"]);
 });
 
+test("ignores a genitive chain without a role slot", () => {
+  assert.deepEqual(parse("text of foo ya"), { mood: "ya" });
+  assert.deepEqual(parse("ve of foo ya"), { mood: "ya" });
+});
+
+test("keeps genitive chains attached to their role slot", () => {
+  assert.deepEqual(parse("ob num of ob of this be number ya"), {
+    mood: "ya",
+    ob: { genitive: { chain: ["this", "ob", "num"] } },
+    be: "number"
+  });
+});
+
 test("parses itinerary typed name in name <type> <literal> order", () => {
   const s = parse("from name itinerary teaching cuts be topic ya");
   assert.equal(s.from.name, "teaching cuts");

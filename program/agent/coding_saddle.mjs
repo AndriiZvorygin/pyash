@@ -343,7 +343,7 @@ export async function runSaddleTurnWithEvidence({ input, runTurn, onToolCall, on
       onAssistantDelta,
       onToolCall: async (event) => {
         events.push(event);
-        await onToolCall?.(event);
+        return onToolCall?.(event);
       }
     });
   };

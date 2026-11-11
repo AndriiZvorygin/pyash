@@ -6,6 +6,8 @@ import fs from "node:fs/promises";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget, doRemember } from "../program/remember/index.mjs";
+import { deriveSignatureFromCall, joinSignatureWords } from "../program/bridge/signature.mjs";
+import { applyEnvDefaults } from "../program/configure/env.mjs";
 import { mind_to_name_text } from "../program/verbs/mind/mind.mjs";
 import {
   ensureSessionFile,
@@ -450,5 +452,68 @@ test("agent mind returns the durable response when a completed request is replay
   } finally {
     if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
     else process.env.PYA_MIND_RESPONSE = original;
+  }
+});
+
+test("after-tool duty input is persisted beside its active coding turn", async () => {
+  forget();
+  const original = process.env.PYA_MIND_RESPONSE;
+  const tmpRoot = await fs.mkdtemp(path.join("/tmp", "pyash-session-after-tool-"));
+  delete process.env.PYA_MIND_RESPONSE;
+  try {
+    doRemember({ mood: "ya", su: { name: "world root" }, be: "root", ob: { filename: tmpRoot } });
+    await interpret(parse("su name tools be map def"));
+    await interpret(parse("su name agent ob bool truth ya"));
+    await interpret(parse('su name session name ob text "after-tool" ya'));
+    const capability = parse("su name plus num be plus ob num 1 to name num can");
+    const toolName = joinSignatureWords(deriveSignatureFromCall(capability));
+    await interpret(capability);
+    await interpret(parse("prah"));
+    await interpret(parse('exists su name helper be mind via state "qwen3" fromstate text "ollama" ya'));
+    process.env.PYA_MIND_RESPONSE = JSON.stringify([
+      {
+        message: {
+          role: "assistant",
+          content: "",
+          tool_calls: [{
+            id: "duty-tool-call",
+            function: { name: toolName, arguments: { ob: 2, to: "sum" } }
+          }]
+        }
+      },
+      { message: { role: "assistant", content: "I checked the result." } }
+    ]);
+    applyEnvDefaults();
+    const sentence = parse(`be write ob text "calculate" for name helper to name text helper-out with name tools at filename "${tmpRoot}" do`);
+    const result = await mind_to_name_text(sentence, {
+      onToolCall: async (event) => event.stage === "result"
+        ? { saddleMessages: [{
+          id: "duty-message-after-tool",
+          text: "Check the calculated result before answering.",
+          deliveredAt: new Date().toISOString()
+        }] }
+        : undefined
+    });
+    assert.equal(result.ob.text, "I checked the result.");
+    const sessionDir = path.join(tmpRoot, "session");
+    const [sessionName] = (await fs.readdir(sessionDir)).filter((name) => name.endsWith(".pya"));
+    const sessionFile = path.join(sessionDir, sessionName);
+    const transcript = await fs.readFile(sessionFile, "utf8");
+    assert.match(transcript, /su name session message/);
+    assert.match(transcript, /duty-message-after-tool/);
+    const history = await readSessionMessages({ sessionFile, historyWindow: 10 });
+    assert.deepEqual(history.messages.map((message) => message.content), [
+      "calculate",
+      "Check the calculated result before answering.",
+      "I checked the result."
+    ]);
+    const replay = await readSessionReplay({ sessionFile, historyWindow: 10 });
+    assert.equal(replay.turns.length, 1);
+    assert.equal(replay.turns[0].complete, true);
+  } finally {
+    if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
+    else process.env.PYA_MIND_RESPONSE = original;
+    forget();
+    await fs.rm(tmpRoot, { recursive: true, force: true });
   }
 });

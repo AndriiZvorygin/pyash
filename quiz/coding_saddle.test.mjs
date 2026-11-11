@@ -1102,6 +1102,31 @@ test("coding saddle selects named Pyash minds without changing global defaults",
   }
 });
 
+test("coding saddle honors a validated explicit child session identity", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-child-session-"));
+  const runtimeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const worldRoot = path.join(root, "world");
+  const prior = process.env.PYA_SADDLE_SESSION_NAME;
+  process.env.PYA_SADDLE_SESSION_NAME = "child-session-7f4a";
+  try {
+    const config = await prepareSaddle({ cwd: root, runtimeRoot, worldRoot, mindName: "mind" });
+    assert.equal(config.sessionName, "child-session-7f4a");
+    assert.equal(config.sessionFile, "");
+    assert.equal(config.sessionDir, path.join(config.agentHouse, "session"));
+
+    process.env.PYA_SADDLE_SESSION_NAME = "../escape";
+    await assert.rejects(
+      prepareSaddle({ cwd: root, runtimeRoot, worldRoot, mindName: "mind" }),
+      /PYA_SADDLE_SESSION_NAME must be a simple session name/u
+    );
+  } finally {
+    if (prior === undefined) delete process.env.PYA_SADDLE_SESSION_NAME;
+    else process.env.PYA_SADDLE_SESSION_NAME = prior;
+    forget();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
 test("coding saddle status exposes selected Pyash mind and queue state", () => {
   const status = formatSaddleStatus({
     mindName: "stratahelper",

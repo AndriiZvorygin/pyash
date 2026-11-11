@@ -5,6 +5,8 @@ const messages = document.querySelector("#messages");
 const chatForm = document.querySelector("#chat-form");
 const messageInput = document.querySelector("#message");
 const chatState = document.querySelector("#chat-state");
+const dutyDeliveryControl = document.querySelector("#duty-delivery-control");
+const dutyDeliverySelect = document.querySelector("#duty-delivery");
 const health = document.querySelector("#health");
 const sessionSelect = document.querySelector("#session-select");
 const modelSelect = document.querySelector("#model-select");
@@ -145,6 +147,7 @@ function setConversationMode(mode) {
   sessionSelect.disabled = conversationMode === "duty";
   newSessionButton.disabled = conversationMode === "duty";
   messageInput.placeholder = conversationMode === "duty" ? "Send a follow-up to this duty..." : "Ask Pyash...";
+  dutyDeliveryControl.hidden = conversationMode !== "duty";
   updateChatReadiness();
 }
 
@@ -490,13 +493,13 @@ async function updateDutyPermission() {
   }
 }
 
-async function submitDutyMessage(message) {
+async function submitDutyMessage(message, delivery = "after-turn") {
   const dutyId = currentDuty;
   dutyPollGeneration += 1;
   const data = await requestJson(`/api/duties/${encodeURIComponent(dutyId)}/messages`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ message })
+    body: JSON.stringify({ message, delivery })
   });
   const latestUser = [...(data.duty.messages || [])].reverse().find((entry) => entry.role === "user");
   await loadDuty(dutyId);
@@ -584,8 +587,11 @@ chatForm.addEventListener("submit", async (event) => {
   chatState.textContent = "Working...";
   try {
     if (conversationMode === "duty") {
-      await submitDutyMessage(message);
-      chatState.textContent = "Follow-up sent to duty";
+      const delivery = dutyDeliverySelect.value || "after-turn";
+      await submitDutyMessage(message, delivery);
+      chatState.textContent = delivery === "after-tool"
+        ? "Follow-up queued for the next tool result"
+        : "Follow-up queued after the current turn";
       return;
     }
     const requestedModel = modelSelect.value;

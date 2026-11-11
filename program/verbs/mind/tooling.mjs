@@ -51,6 +51,46 @@ const TOOL_NON_CASE_FIELDS = new Set([
 ]);
 
 const TOOL_ARGUMENT_SCHEMA_ADAPTERS = {
+  "terminal start": {
+    toolName: "terminal_start",
+    description: "Start a process in a persistent PTY under the current Pyash project policy. Pass request as an object with command, args (array), optional cwd, columns, and rows. Read and write the process after this call; input is opaque PTY data.",
+    fields: { ob: { name: "request", type: "object", description: "Command, argument array, and optional licensed working directory and dimensions." } }
+  },
+  "terminal start coding agent": {
+    toolName: "terminal_start_coding_agent",
+    description: "Start an independent coding saddle in a persistent PTY. Pass request as an object with mind (configured Pyash mind name), optional model, cwd, and instruction. The parent mind's backend and model delegation allowlists are enforced. Use the returned terminal id with terminal_read and terminal_write to communicate with the child.",
+    fields: { ob: { name: "request", type: "object", description: "Child mind, optional model and cwd, and initial instruction." } }
+  },
+  "terminal read": {
+    toolName: "terminal_read",
+    description: "Read output from a persistent PTY. Pass request as an object with id and optional after cursor and maxBytes.",
+    fields: { ob: { name: "request", type: "object", description: "Terminal id and output cursor." } }
+  },
+  "terminal write": {
+    toolName: "terminal_write",
+    description: "Write opaque bytes to a persistent PTY. Encode Tab as \\t and Enter as \\r. Pass request as an object with id and input; the input is forwarded unchanged.",
+    fields: { ob: { name: "request", type: "object", description: "Terminal id and raw input string." } }
+  },
+  "terminal resize": {
+    toolName: "terminal_resize",
+    description: "Resize a persistent PTY. Pass request as an object with id, columns, and rows.",
+    fields: { ob: { name: "request", type: "object", description: "Terminal id and positive dimensions." } }
+  },
+  "terminal status": {
+    toolName: "terminal_status",
+    description: "Get the current state of a persistent PTY. Pass request as an object with id.",
+    fields: { ob: { name: "request", type: "object", description: "Terminal id." } }
+  },
+  "terminal list": {
+    toolName: "terminal_list",
+    description: "List PTY sessions owned by this Pyash runtime. Pass an empty request object.",
+    fields: { ob: { name: "request", type: "object", description: "Empty object." } }
+  },
+  "terminal close": {
+    toolName: "terminal_close",
+    description: "Request process termination for a persistent PTY. Pass request as an object with id and optional signal.",
+    fields: { ob: { name: "request", type: "object", description: "Terminal id and optional signal." } }
+  },
   "search": {
     toolName: "search_zim_library",
     description: "Search the configured Kiwix ZIM service for archives and entries. The tool resolves the host-configured endpoint, which may be remote; no local ZIM mount or server address is needed. Results include a usable full page URL from that service. Pass that returned URL unchanged to a retrieval tool. Search uses archived content and does not contact source websites.",
@@ -266,7 +306,7 @@ export function buildToolSchemas(toolMapName) {
       const field = argumentSchemaAdapter?.fields[caseKey];
       const argumentName = field?.name ?? caseKey;
       properties[argumentName] = {
-        type: toolSchemaType(typeWords),
+        type: field?.type ?? toolSchemaType(typeWords),
         ...(field?.description ? { description: field.description } : {})
       };
       required.push(argumentName);
@@ -346,6 +386,11 @@ export function buildToolSentence({ capability, args }) {
   for (const [argumentName, argValue] of Object.entries(argObject)) {
     const caseKey = aliasedCaseKeys.get(argumentName) ?? argumentName;
     if (!capabilityCaseKeys.has(caseKey)) continue;
+    const field = argumentSchemaAdapter?.fields[caseKey];
+    if (field?.type === "object" && argValue && typeof argValue === "object" && !Array.isArray(argValue)) {
+      call[caseKey] = { text: JSON.stringify(argValue) };
+      continue;
+    }
     const typeWords = toolTypeWordsFromValue(capability?.[caseKey], caseKey);
     const hasName = typeWords.includes("name");
     const isNum = typeWords.includes("num");

@@ -10,7 +10,7 @@ import { forget, doRemember } from "../program/remember/index.mjs";
 import { setExchangeRecorder, clearExchangeRecorder } from "../program/bridge/exchange.mjs";
 import { mind_to_name_text, resetMindLogs } from "../program/verbs/mind/mind.mjs";
 import { jsonObjectFromMapName } from "../program/verbs/exchange/json_map_export.mjs";
-import { buildToolSentence } from "../program/verbs/mind/tooling.mjs";
+import { buildToolSchemas, buildToolSentence } from "../program/verbs/mind/tooling.mjs";
 
 function buildMapIndex(records) {
   const index = new Map();
@@ -342,6 +342,28 @@ test("tool sentence builder extracts filename from object args", () => {
   assert.equal(toolSentence?.be, "see");
   assert.equal(toolSentence?.from?.filename, "/workplace/world/house/pyash-agent/artifacts/20260212/sample.png");
   assert.equal(toolSentence?.ob?.text, "Describe the image.");
+});
+
+test("terminal tools expose structured request objects and preserve PTY input", () => {
+  forget();
+  const start = parse("su name terminal start be terminal as wo start ob text input can");
+  const write = parse("su name terminal write be terminal as wo write ob text input can");
+  doRemember({ mood: "ya", su: { name: "saddle tools" }, be: "map", ob: { map: { start, write } } });
+
+  const schemas = buildToolSchemas("saddle tools");
+  const startSchema = schemas.tools.find((tool) => tool.function.name === "terminal_start");
+  assert.equal(startSchema.function.parameters.properties.request.type, "object");
+  const startSentence = buildToolSentence({
+    capability: start,
+    args: { request: { command: "apt-get", args: ["install", "ripgrep"] } }
+  });
+  assert.deepEqual(JSON.parse(startSentence.ob.text), { command: "apt-get", args: ["install", "ripgrep"] });
+
+  const writeSentence = buildToolSentence({
+    capability: write,
+    args: { request: { id: "terminal-one", input: "choice\t\r" } }
+  });
+  assert.deepEqual(JSON.parse(writeSentence.ob.text), { id: "terminal-one", input: "choice\t\r" });
 });
 
 test("tool sentence builder keeps explicit prompt for see tool", () => {
