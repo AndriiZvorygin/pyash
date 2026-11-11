@@ -255,7 +255,10 @@ export async function runWordNetSenseCompoundRefinerySweepCommand({
       if (before === after) {
         throw new Error(`WordNet sense compound sweep made no durable progress; ${lastResult.remainingSenseCount} senses remain in ${artifactDirectory}`);
       }
-      allocation = await prepareAllocation();
+      // Exact queued sense IDs are a frozen input set. The chunk reloads live
+      // bridge and compound links, so rebuilding the full frequency allocation
+      // between these chunks only creates a long gap before the next GPU wave.
+      if (!requestedSenseIds) allocation = await prepareAllocation();
     }
 
     const remaining = requestedSenseIds

@@ -57,6 +57,7 @@ test("sense compound sweep batches an exact retry queue in groups of 64", async 
   const senseIds = Array.from({ length: 130 }, (_, index) => `n:${String(index).padStart(8, "0")}-n`);
   const batches = [];
   let progress = 0;
+  let allocationReads = 0;
   const result = await runWordNetSenseCompoundRefinerySweepCommand({
     configuration: { senseIds },
     maximumBatches: 3,
@@ -64,7 +65,10 @@ test("sense compound sweep batches an exact retry queue in groups of 64", async 
     repositoryRoot: process.cwd(),
     report: () => {},
     dependencies: {
-      prepareAllocation: async () => ({ sourceHash: "test-source" }),
+      prepareAllocation: async () => {
+        allocationReads += 1;
+        return { sourceHash: "test-source" };
+      },
       progressSignature: async () => String(progress),
       runChunk: async ({ configuration }) => {
         batches.push(configuration.senseIds);
@@ -82,6 +86,7 @@ test("sense compound sweep batches an exact retry queue in groups of 64", async 
 
   assert.deepEqual(batches.map((batch) => batch.length), [64, 64, 2]);
   assert.deepEqual(batches.flat(), senseIds);
+  assert.equal(allocationReads, 1);
   assert.equal(result.sweepComplete, true);
   assert.equal(result.remainingSenseCount, 0);
 });
