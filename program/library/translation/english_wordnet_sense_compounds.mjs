@@ -767,8 +767,13 @@ export function parseWordNetSenseTranslationResponsePartial(value, {
   };
 }
 
-function createTranslationCacheParseState() {
-  return { metadata: {}, recordsById: new Map(), hasHeader: false };
+function createTranslationCacheParseState(senseIds = null) {
+  return {
+    metadata: {},
+    recordsById: new Map(),
+    hasHeader: false,
+    selectedSenseIds: Array.isArray(senseIds) ? new Set(senseIds.map(text).filter(Boolean)) : null
+  };
 }
 
 function addTranslationCacheSentences(sentences, state, indexOffset = 0) {
@@ -798,6 +803,7 @@ function addTranslationCacheSentences(sentences, state, indexOffset = 0) {
       || !Array.isArray(record.translations)) {
       throw invalid("sense translation cache row has an invalid identity", { index: rowIndex, id: sentence.su.text });
     }
+    if (state.selectedSenseIds && !state.selectedSenseIds.has(record.senseId)) continue;
     // The cache is an append-only Pyash map: a later row with the same stable
     // sense key records an updated partial/complete translation.
     state.recordsById.set(record.id, record);
@@ -823,22 +829,22 @@ export function parseWordNetSenseTranslationCache(source) {
   return finishTranslationCacheParse(state);
 }
 
-export async function readWordNetSenseTranslationCacheFile(filePath) {
+export async function readWordNetSenseTranslationCacheFile(filePath, { senseIds = null } = {}) {
   try {
     if ((await stat(filePath)).size === 0) {
-      const empty = createTranslationCacheParseState();
+      const empty = createTranslationCacheParseState(senseIds);
       empty.hasHeader = true;
       return finishTranslationCacheParse(empty);
     }
   } catch (error) {
     if (error?.code === "ENOENT") {
-      const empty = createTranslationCacheParseState();
+      const empty = createTranslationCacheParseState(senseIds);
       empty.hasHeader = true;
       return finishTranslationCacheParse(empty);
     }
     throw error;
   }
-  const state = createTranslationCacheParseState();
+  const state = createTranslationCacheParseState(senseIds);
   const input = createReadStream(filePath, { encoding: "utf8" });
   const lines = createInterface({ input, crlfDelay: Infinity });
   let sentenceOffset = 0;
