@@ -1,5 +1,16 @@
 import { QUOTED_TEXT_PREFIX } from "./constants.mjs";
 
+const JSON_STRING_ESCAPES = {
+  "\"": "\"",
+  "\\": "\\",
+  "/": "/",
+  b: "\b",
+  f: "\f",
+  n: "\n",
+  r: "\r",
+  t: "\t"
+};
+
 export function tokenize(line) {
   const tokens = [];
   let current = "";
@@ -10,11 +21,15 @@ export function tokenize(line) {
 
     if (inQuote) {
       if (ch === "\\" && i + 1 < line.length) {
-        // allow escapes for quotes/backslashes inside text tokens
         const next = line[i + 1];
-        if (next === '"' || next === "\\") {
-          current += next;
-          i++;
+        if (Object.hasOwn(JSON_STRING_ESCAPES, next)) {
+          current += JSON_STRING_ESCAPES[next];
+          i += 1;
+          continue;
+        }
+        if (next === "u" && /^[\da-f]{4}$/iu.test(line.slice(i + 2, i + 6))) {
+          current += String.fromCharCode(Number.parseInt(line.slice(i + 2, i + 6), 16));
+          i += 5;
           continue;
         }
       }

@@ -605,6 +605,24 @@ test("coding saddle does not add a completion pass to general advice", async () 
   assert.equal(turn.assessment.required, false);
 });
 
+test("coding saddle does not require code changes for a read-only terminal check", async () => {
+  const input = "Call terminal_start exactly once with this request JSON: {\"command\":\"/usr/bin/printf\",\"args\":[\"SPARKX_PTY_OK\\n\"]}. Then call terminal_read with the returned id, after 0, maxBytes 1024. Verify exitCode is 0 and output is exactly SPARKX_PTY_OK followed by one newline. Do not modify files or start another process.";
+  let calls = 0;
+
+  assert.equal(isSaddleCodeChangeRequest(input), false);
+  const turn = await runSaddleTurnWithEvidence({
+    input,
+    runTurn: async () => {
+      calls += 1;
+      return { ob: { text: "The process exited successfully." } };
+    }
+  });
+
+  assert.equal(calls, 1);
+  assert.equal(turn.retried, false);
+  assert.equal(turn.assessment.required, false);
+});
+
 test("coding saddle reports incomplete when the corrective pass still has no successful check", async () => {
   let calls = 0;
   const turn = await runSaddleTurnWithEvidence({

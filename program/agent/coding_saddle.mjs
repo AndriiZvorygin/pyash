@@ -139,6 +139,9 @@ export function isSaddleCodeChangeRequest(input = "") {
   const text = String(input ?? "").replace(
     /\b(?:i|we)\s+(?:just\s+)?(?:did|made|completed|finished)\s+(?:an?\s+)?(?:add|build|change|create|edit|fix|generate|implement|make|modify|patch|refactor|remove|rewrite|update|write)\b/giu,
     " "
+  ).replace(
+    /\b(?:do\s+not|don't|never|without)\s+(?:(?:please|just)\s+)?(?:add|build|change|create|edit|fix|generate|implement|make|modify|patch|refactor|remove|rewrite|update|write)\b/giu,
+    " "
   );
   const statusInquiry = /^\s*(?:(?:can|could)\s+you\s+)?(?:see|check|verify|confirm|test)\s+(?:if|whether)\b/iu.test(text);
   const requestedFollowupChange = /\b(?:and|then|if so|if not|otherwise)\s+(?:please\s+)?(?:add|build|change|create|edit|fix|implement|make|modify|patch|refactor|remove|rewrite|update|write)\b/iu.test(text);

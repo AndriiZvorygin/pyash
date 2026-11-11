@@ -18,6 +18,12 @@ test("supports escaped quotes inside text", () => {
   assert.equal(s.with.text, 'say "hi"');
 });
 
+test("decodes JSON escapes in quoted text tokens", () => {
+  const s = parse('exists su name note with text "line one\\nline two\\t\\u263A" be topic ya');
+
+  assert.equal(s.with.text, "line one\nline two\t☺");
+});
+
 test("parses minimal declarative sentence", () => {
   const s = parse("su hello be test ya");
 
