@@ -352,6 +352,24 @@ function unsupportedEvidenceSpecificityGroundingDefect(text = "") {
   return sourceGap && candidateSpecificClaim;
 }
 
+function sourceExplicitlySupportsEvidenceSpecificity(source = "", candidate = "", audit = "") {
+  const sourceText = String(source || "");
+  const candidateText = String(candidate || "");
+  const auditText = String(audit || "");
+  const sourceLines = sourceText.split(/\n+/u).map((line) => line.trim()).filter(Boolean);
+  const hasReserveAction = sourceLines.some((line) =>
+    /\b(?:reserve|withdraw(?:n|al)?|draw(?:n)?\s+from)\b/iu.test(line) && /(?:\$|\b\d[\d,]*\b)/u.test(line));
+  const hasApprovedGrantAction = /\b(?:approved|awarded|funded|allocated|issued)\b[\s\S]{0,120}\bgrant(?:s)?\b/iu.test(sourceText)
+    || /\bgrant(?:s)?\b[\s\S]{0,120}\b(?:approved|awarded|funded|allocated|issued)\b/iu.test(sourceText);
+  const auditMentionsReserve = /\b(?:reserve|withdraw(?:n|al)?|draw(?:n)?\s+from)\b/iu.test(auditText);
+  const auditMentionsGrant = /\bgrant(?:s)?\b/iu.test(auditText);
+  const candidateClaimsCompletedAction = /\b(?:completed|constructed|built|finished|delivered)\b/iu.test(candidateText);
+  const sourceRecordsCompletedAction = /\b(?:completed|constructed|built|finished|delivered)\b/iu.test(sourceText);
+  if (candidateClaimsCompletedAction && !sourceRecordsCompletedAction) return false;
+  return (auditMentionsReserve && hasReserveAction)
+    || (auditMentionsGrant && hasApprovedGrantAction);
+}
+
 function fragmentedTranscriptGroundingDefect(text = "") {
   const evidence = String(text || "");
   return /\b(?:fragmented\s+(?:speech|source|transcript|lines?)|fragmentary\s+(?:speech|source|transcript|lines?)|transcript\s+fragments?|source\s+(?:fragment|ends?|is\s+truncated)|ASR\s+(?:fragment|line))\b/iu.test(evidence)
@@ -2368,6 +2386,20 @@ async function auditAndAdjudicateGroundedSummary({
       grounded: true,
       unsupportedClaims: [],
       notes: `minimal literal-source tie-breaker accepted the candidate${finalLiteralCheck.notes ? `: ${finalLiteralCheck.notes}` : ""}`,
+    };
+  }
+  const finalAuditEvidence = [
+    ...(Array.isArray(normalizedAudit.unsupportedClaims) ? normalizedAudit.unsupportedClaims : []),
+    ...(Array.isArray(normalizedAdjudication.unsupportedClaims) ? normalizedAdjudication.unsupportedClaims : []),
+    normalizedAudit.notes,
+    normalizedAdjudication.notes,
+  ].filter(Boolean).join(" | ");
+  if (unsupportedEvidenceSpecificityGroundingDefect(finalAuditEvidence)
+    && sourceExplicitlySupportsEvidenceSpecificity(sourceExcerpt, summary, finalAuditEvidence)) {
+    return {
+      grounded: true,
+      unsupportedClaims: [],
+      notes: "literal source contains the disputed amount/program action; specificity allegation was rejected by source evidence",
     };
   }
   if (ordinalMotionSequence) {
@@ -5196,7 +5228,8 @@ export async function summarizeGroundedUnit({
       const genericPluralActorDefect = genericPluralActorGroundingDefect(auditFeedback);
       const unsupportedQualifierDefect = unsupportedQualifierGroundingDefect(auditFeedback)
         && !institutionalActorDefect;
-      const unsupportedEvidenceSpecificityDefect = unsupportedEvidenceSpecificityGroundingDefect(auditFeedback);
+      const unsupportedEvidenceSpecificityDefect = unsupportedEvidenceSpecificityGroundingDefect(auditFeedback)
+        && !sourceExplicitlySupportsEvidenceSpecificity(semanticGroundingSourceExcerpt, generatedProse, auditFeedback);
       const fragmentedTranscriptDefect = fragmentedTranscriptGroundingDefect(auditFeedback)
         && !institutionalActorDefect;
       const presentationDiscussionDefect = presentationDiscussionGroundingDefect(auditFeedback)
@@ -5551,7 +5584,8 @@ export async function summarizeGroundedUnit({
         && /\b(?:speakers|participants|members|officials)\b/iu.test(finalGeneratedProse);
       const finalUnsupportedQualifierDefect = unsupportedQualifierGroundingDefect(finalAuditFeedback)
         && /\b(?:new|updated|current|redesigned|digital|expanded|improved)\b/iu.test(finalGeneratedProse);
-      const finalUnsupportedEvidenceSpecificityDefect = unsupportedEvidenceSpecificityGroundingDefect(finalAuditFeedback);
+      const finalUnsupportedEvidenceSpecificityDefect = unsupportedEvidenceSpecificityGroundingDefect(finalAuditFeedback)
+        && !sourceExplicitlySupportsEvidenceSpecificity(semanticGroundingSourceExcerpt, finalGeneratedProse, finalAuditFeedback);
       const finalConditionalRecommendationDefect = (conditionalDeferralRecommendationSource(semanticGroundingSourceExcerpt)
         || (/\b(?:would|could)\s+recommend\b/iu.test(semanticGroundingSourceExcerpt)
           && /\b(?:deferr|postpon|refer|recommend|action|matter)\w*/iu.test(semanticGroundingSourceExcerpt)))
