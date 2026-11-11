@@ -118,6 +118,71 @@ test("hash-shaped text in a parsed Pyash fact is not treated as an artifact refe
   assert.equal(plan.contentAddressedObjects.some(item => item.path === object.objectPath), true);
 });
 
+test("stage manifest artifacts retain their run directory without being treated as CAS references", async () => {
+  const root = await makeStore();
+  const newspaperRunId = "20261110-011-stage-manifest";
+  const referencedRunId = "20261110-012-manifest-target";
+  const newspaperDirectory = await writeRunDir(root, newspaperRunId);
+  const referencedDirectory = await writeRunDir(root, referencedRunId);
+  await fs.writeFile(path.join(root, "newspaper", `${newspaperRunId}.pya`), [
+    `exists su name ${newspaperRunId} from time 2026-11-10T00:00:00Z be run ya`,
+    `su name cut itinerary manifest ob filename ${JSON.stringify(path.join(root, "artifacts", referencedRunId, "cuts.series.pya"))} accordingto name cut-stage-001 be artifact ya`
+  ].join("\n"));
+
+  const report = await cleanArtifactStore({ root });
+
+  assert.equal(report.blocked, false);
+  assert.equal(report.contentAddressedObjects.length, 0);
+  assert.equal(report.runDirectories.some(item => item.path === newspaperDirectory), false);
+  assert.equal(report.runDirectories.some(item => item.path === referencedDirectory), false);
+});
+
+test("external newspaper run roots do not block local artifact cleanup", async () => {
+  const root = await makeStore();
+  const orphanId = "20261110-013-local-orphan";
+  const orphanDirectory = await writeRunDir(root, orphanId);
+  await fs.writeFile(path.join(root, "newspaper", "20261110-014-external-run.pya"), [
+    "exists su name 20261110-014-external-run from time 2026-11-10T00:00:00Z be run ya",
+    "ob filename /workplace be run root ya",
+    "exists su name malformed ob text \"missing sha reference\" be artifact ya"
+  ].join("\n"));
+
+  const report = await cleanArtifactStore({ root });
+
+  assert.equal(report.blocked, false);
+  assert.equal(report.externalArtifactRoots.includes("/workplace"), true);
+  assert.equal(report.runDirectories.some(item => item.path === orphanDirectory), true);
+});
+
+test("apply cleans verified stores while preserving a store with unresolved newspaper references", async () => {
+  const root = await makeStore();
+  const worldRoot = path.join(root, "world");
+  await fs.mkdir(path.join(worldRoot, "artifacts", "sha256"), { recursive: true });
+  await fs.mkdir(path.join(worldRoot, "newspaper"), { recursive: true });
+  const blockedRun = "20261110-015-blocked-store";
+  const safeRun = "20261110-016-safe-store";
+  const blockedDirectory = await writeRunDir(root, "20261110-017-main-orphan");
+  const safeDirectory = await writeRunDir(worldRoot, "20261110-018-world-orphan");
+  const safeCas = await putCas(worldRoot, Buffer.from("safe unreferenced CAS"));
+  await fs.writeFile(path.join(root, "newspaper", `${blockedRun}.pya`), runNewspaper(
+    blockedRun,
+    `exists su name artifact-001 ob name evoke-0 from name test to filename "artifacts/${blockedRun}/artifact.txt" fromtext text "bad-hash" accordingto name sha256 by num 3 be artifact ya`,
+    root
+  ));
+  await fs.writeFile(path.join(worldRoot, "newspaper", `${safeRun}.pya`), runNewspaper(safeRun));
+
+  const report = await cleanArtifactStore({ root, apply: true });
+
+  assert.equal(report.applied, true);
+  assert.equal(report.blocked, true);
+  assert.deepEqual(report.blockedStoreRoots, [root]);
+  assert.equal(report.removedRunDirectories.length, 1);
+  assert.equal(report.removedContentAddressedObjects.length, 1);
+  assert.equal(await exists(blockedDirectory), true);
+  assert.equal(await exists(safeDirectory), false);
+  assert.equal(await exists(safeCas.objectPath), false);
+});
+
 test("newspapers pin shared CAS objects and complete run directories until the last newspaper is removed", async () => {
   const root = await makeStore();
   const firstId = "20261110-001-first";
@@ -161,7 +226,7 @@ test("malformed newspapers and hash mismatches block destructive cleanup", async
   const runId = "20261110-001-uncertain";
   const directory = await writeRunDir(root, runId);
   const cas = await putCas(root, Buffer.from("damaged object"));
-  await fs.writeFile(path.join(root, "newspaper", `${runId}.pya`), `this damaged declaration says be artifact ya\n${runNewspaper(runId, artifactSentence({
+  await fs.writeFile(path.join(root, "newspaper", `${runId}.pya`), `exists su name damaged ob name artifact be artifact ya\n${runNewspaper(runId, artifactSentence({
     hash: cas.hash,
     size: cas.size,
     runId

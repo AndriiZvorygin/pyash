@@ -28,7 +28,8 @@ function printPathSummary(label, paths, limit = 12) {
 
 try {
   const report = await cleanArtifactStore(optionsFromArgs(process.argv.slice(2)));
-  console.log(`artifact cleanup ${report.applied ? "applied" : "dry-run"}`);
+  const mode = report.applied ? (report.blocked ? "partially applied" : "applied") : "dry-run";
+  console.log(`artifact cleanup ${mode}`);
   console.log(`root: ${report.root}`);
   printPathSummary("artifact stores scanned", report.storeRoots);
   console.log(`newspapers scanned: ${report.newspaperFiles.length}`);
@@ -36,6 +37,18 @@ try {
   console.log(`unreferenced content-addressed objects: ${report.contentAddressedObjects.length} (${report.contentAddressedObjects.reduce((sum, entry) => sum + entry.bytes, 0)} bytes)`);
   console.log(`referenced content-addressed objects: ${report.referencedContentAddressedObjects}`);
   printPathSummary("unknown artifact roots preserved", report.unknownArtifactRoots);
+  printPathSummary("blocked artifact stores preserved", report.blockedStoreRoots ?? []);
+  const blockersByStore = report.blockersByStore ?? {};
+  for (const storeRoot of report.storeRoots) {
+    const runDirectories = report.runDirectories.filter(item => item.storeRoot === storeRoot);
+    const casObjects = report.contentAddressedObjects.filter(item => item.storeRoot === storeRoot);
+    const blockedCount = (blockersByStore[storeRoot] ?? []).length;
+    console.log(`store: ${storeRoot} · ${blockedCount ? `blocked (${blockedCount} issues)` : "clear"} · run dirs ${runDirectories.length} (${runDirectories.reduce((sum, item) => sum + item.bytes, 0)} bytes) · unreferenced CAS ${casObjects.length} (${casObjects.reduce((sum, item) => sum + item.bytes, 0)} bytes)`);
+  }
+  if (report.applied) {
+    console.log(`run directories removed: ${report.removedRunDirectories.length} (${report.removedRunDirectories.reduce((sum, item) => sum + item.bytes, 0)} logical bytes)`);
+    console.log(`CAS entries removed: ${report.removedContentAddressedObjects.length} (${report.removedContentAddressedObjects.reduce((sum, item) => sum + item.bytes, 0)} logical bytes)`);
+  }
   printPathSummary("external artifact roots not modified", report.externalArtifactRoots);
   printPathSummary("missing newspaper references", report.missingReferences);
   console.log(`malformed CAS paths preserved: ${report.malformedContentAddressedPaths.length}`);
@@ -45,9 +58,8 @@ try {
     for (const item of report.skippedContentAddressedObjects) console.error(`preserved: ${item.filename} (${item.reason})`);
   }
   if (report.removedExternalHardlinkCounts?.length) {
-    for (const item of report.removedExternalHardlinkCounts) {
-      console.warn(`CAS entry removed but ${item.remainingLinks} external hardlink(s) remain: ${item.filename}`);
-    }
+    const remainingLinks = report.removedExternalHardlinkCounts.reduce((sum, item) => sum + item.remainingLinks, 0);
+    console.warn(`CAS paths with surviving external hardlinks: ${report.removedExternalHardlinkCounts.length} (${remainingLinks} links remain; their storage is not reclaimed by unlinking these CAS paths)`);
   }
   if (report.blocked) process.exitCode = 2;
 } catch (error) {

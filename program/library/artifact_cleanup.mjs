@@ -6,10 +6,12 @@ import path from "node:path";
 import { parse } from "../understand/index.mjs";
 import { MOODS } from "./grammar/keywords.mjs";
 import { acquireArtifactStoreLock, activeRunMarkerDirectory } from "./artifact_store_lock.mjs";
+import { splitSentences } from "./sentenceSplitter.mjs";
 
 const HASH_RE = /^[a-f0-9]{64}$/u;
 const RUN_ID_RE = /^(?:\d{8}-\d{3,4}-[A-Za-z0-9._-]+|\d{8}T\d{6,}(?:Z)?-\d+-[A-Za-z0-9._-]+)$/u;
 const KNOWN_ARTIFACT_ROOTS = new Set(["sha256", ".active-runs", ".maintenance-lock"]);
+const PYA_SENTENCE_PREFIX = /^(?:exists|su|ob|from|to|as|via|through|with|be|at|during|when|while|la|ko|prah|ret|can|pi7|que|def|do|ya|vyah)\b/u;
 
 function processIsAlive(pid) {
   if (!Number.isInteger(pid) || pid < 1) return false;
@@ -114,7 +116,7 @@ async function readNewspaperReferences(root) {
     const resolved = path.resolve(storeRoot);
     let store = result.stores.get(resolved);
     if (!store) {
-      store = { root: resolved, runIds: new Set(), references: new Map(), files: [] };
+      store = { root: resolved, runIds: new Set(), references: new Map(), files: [], blockers: [] };
       result.stores.set(resolved, store);
     }
     return store;
@@ -128,19 +130,23 @@ async function readNewspaperReferences(root) {
     let artifactRoot = path.resolve(file.artifactRoot);
     let declaredArtifactRoot = null;
     const parsedSentences = [];
-    // Historical saddle newspapers can include plain transcript/tool-output lines;
-    // parse physical Pyash facts and fail closed specifically on damaged retention records.
-    for (const rawLine of content.split(/\r?\n/u)) {
-      const line = rawLine.trim();
-      if (!line) continue;
+    const fileBlockers = [];
+    // Split the complete newspaper as Pyash, then parse only candidate sentences.
+    // Newspapers may interleave plain transcript/tool output with structured facts.
+    for (const rawSentence of splitSentences(content, { includeThen: true })) {
+      const sentenceText = rawSentence.trim();
+      if (!sentenceText) continue;
+      if (!PYA_SENTENCE_PREFIX.test(sentenceText)) {
+        continue;
+      }
       let sentence;
       try {
-        sentence = parse(line);
+        sentence = parse(sentenceText);
       } catch {
         sentence = null;
       }
       if (!isValidParsedSentence(sentence)) {
-        if (looksLikeRetentionRecord(line)) result.blockers.push(`malformed newspaper retention record: ${filename}`);
+        if (looksLikeRetentionRecord(sentenceText)) fileBlockers.push(`malformed newspaper retention record: ${filename}`);
         continue;
       }
       parsedCount += 1;
@@ -153,10 +159,10 @@ async function readNewspaperReferences(root) {
         declaredArtifactRoot = resolved;
       }
       if (sentence.be === "run" && !sentence?.su?.name) {
-        result.blockers.push(`run record has no run id: ${filename}`);
+        fileBlockers.push(`run record has no run id: ${filename}`);
       }
       if (sentence.be === "run root" && !sentence?.ob?.filename) {
-        result.blockers.push(`run-root record has no filename: ${filename}`);
+        fileBlockers.push(`run-root record has no filename: ${filename}`);
       }
     }
     if (declaredArtifactRoot) artifactRoot = declaredArtifactRoot;
@@ -166,6 +172,7 @@ async function readNewspaperReferences(root) {
       continue;
     }
     const store = storeFor(artifactRoot);
+    store.blockers.push(...fileBlockers);
     store.files.push(filename);
     if (isRunId(baseRunId)) store.runIds.add(baseRunId);
     for (const sentence of parsedSentences) {
@@ -173,21 +180,25 @@ async function readNewspaperReferences(root) {
       if (sentence.be !== "artifact") continue;
 
       const locator = sentence?.to?.filename;
-      addRunIdFromLocator(store.runIds, locator);
+      addRunIdFromLocator(store.runIds, locator ?? sentence?.ob?.filename);
+      if (sentence?.accordingto?.name && sentence.accordingto.name !== "sha256") {
+        addRunIdFromLocator(store.runIds, sentence?.ob?.filename ?? locator);
+        continue;
+      }
       const hash = String(sentence?.fromtext?.text ?? "").toLowerCase();
       if (sentence?.accordingto?.name !== "sha256" || !HASH_RE.test(hash)) {
-        result.blockers.push(`artifact record has an invalid SHA-256 reference: ${filename}`);
+        store.blockers.push(`artifact record has an invalid SHA-256 reference: ${filename}`);
         continue;
       }
       if (typeof locator !== "string" || !locator.trim()) {
-        result.blockers.push(`artifact record has no filename locator: ${filename}`);
+        store.blockers.push(`artifact record has no filename locator: ${filename}`);
         continue;
       }
       const extension = artifactExtension(locator);
       const key = `${hash}${extension}`;
       const size = Number(sentence?.by?.num);
       if (!Number.isSafeInteger(size) || size < 0) {
-        result.blockers.push(`artifact record has an invalid byte size: ${filename}:${key}`);
+        store.blockers.push(`artifact record has an invalid byte size: ${filename}:${key}`);
         continue;
       }
       const reference = store.references.get(key) ?? { hash, extension, expectedSizes: new Set(), newspapers: new Set() };
@@ -196,7 +207,7 @@ async function readNewspaperReferences(root) {
       store.references.set(key, reference);
     }
     if (content.trim() && parsedCount === 0) {
-      result.blockers.push(`malformed newspaper contains no parseable sentences: ${filename}`);
+      store.blockers.push(`malformed newspaper contains no parseable sentences: ${filename}`);
     }
     result.files.push(filename);
   }
@@ -385,10 +396,13 @@ async function buildReport(root) {
   const activeRuns = [];
   const staleRunMarkers = [];
   const blockers = [...newspapers.blockers];
+  const blockedStoreRoots = new Set();
+  const blockersByStore = {};
 
   for (const invalidPath of stores.invalid) blockers.push(`artifact root is not a real directory: ${invalidPath}`);
   for (const storeRoot of stores.roots) {
     const store = newspapers.stores.get(storeRoot) ?? { runIds: new Set(), references: new Map() };
+    const storeBlockers = [...(store.blockers ?? [])];
     const runResult = await listRunDirectories(storeRoot, store.runIds);
     runDirectories.push(...runResult.candidates);
     unknownArtifactRoots.push(...runResult.unknown.map(name => path.join(storeRoot, "artifacts", name)));
@@ -396,19 +410,19 @@ async function buildReport(root) {
     const cas = await walkCasObjects(storeRoot);
     malformedContentAddressedPaths.push(...cas.malformed);
     invalidContentAddressedRoots.push(...cas.invalidRoots);
-    for (const invalidRoot of cas.invalidRoots) blockers.push(`CAS root is not a real directory: ${invalidRoot}`);
+    for (const invalidRoot of cas.invalidRoots) storeBlockers.push(`CAS root is not a real directory: ${invalidRoot}`);
     const objectByKey = new Map(cas.objects.map(object => [`${object.hash}${object.extension}`, object]));
     for (const [key, reference] of store.references) {
       const object = objectByKey.get(key);
       if (!object) {
         missingReferences.push(`${storeRoot}:${key}`);
-        blockers.push(`newspaper references missing content-addressed artifact: ${storeRoot}:${key}`);
+        storeBlockers.push(`newspaper references missing content-addressed artifact: ${storeRoot}:${key}`);
         continue;
       }
       if (reference.expectedSizes.size > 1) {
-        blockers.push(`conflicting newspaper artifact sizes: ${storeRoot}:${key}`);
+        storeBlockers.push(`conflicting newspaper artifact sizes: ${storeRoot}:${key}`);
       } else if (reference.expectedSizes.size === 1 && !reference.expectedSizes.has(object.bytes)) {
-        blockers.push(`referenced artifact size mismatch: ${storeRoot}:${key}`);
+        storeBlockers.push(`referenced artifact size mismatch: ${storeRoot}:${key}`);
       }
       referencedCas.push(object);
     }
@@ -419,9 +433,14 @@ async function buildReport(root) {
     const activity = await activeMarkers(storeRoot);
     activeRuns.push(...activity.active);
     staleRunMarkers.push(...activity.stale);
-    if (activity.invalid) blockers.push(`active run marker root is not a real directory: ${activeRunMarkerDirectory(storeRoot)}`);
+    if (activity.invalid) storeBlockers.push(`active run marker root is not a real directory: ${activeRunMarkerDirectory(storeRoot)}`);
     if (activity.active.length > 0) {
-      blockers.push(`active run lease(s) in ${storeRoot}: ${activity.active.map(item => item.pid).join(", ")}`);
+      storeBlockers.push(`active run lease(s) in ${storeRoot}: ${activity.active.map(item => item.pid).join(", ")}`);
+    }
+    if (storeBlockers.length > 0) {
+      blockedStoreRoots.add(storeRoot);
+      blockersByStore[storeRoot] = [...new Set(storeBlockers)];
+      blockers.push(...storeBlockers);
     }
   }
 
@@ -441,6 +460,9 @@ async function buildReport(root) {
     unknownArtifactRoots,
     activeRuns,
     staleRunMarkers,
+    globalBlockers: [...new Set(newspapers.blockers.concat(stores.invalid.map(invalidPath => `artifact root is not a real directory: ${invalidPath}`)))],
+    blockedStoreRoots: [...blockedStoreRoots].sort(),
+    blockersByStore,
     blockers: [...new Set(blockers)],
     blocked: blockers.length > 0
   };
@@ -452,6 +474,9 @@ function emptyReport(root, { blocked = false, blockers = [] } = {}) {
     storeRoots: [],
     applied: false,
     blocked,
+    globalBlockers: [],
+    blockedStoreRoots: [],
+    blockersByStore: {},
     blockers,
     runDirectories: [],
     contentAddressedObjects: [],
@@ -476,16 +501,31 @@ export async function cleanArtifactStore({ root = process.cwd(), apply = false }
   const resolvedRoot = path.resolve(root);
   const report = await buildReport(resolvedRoot);
   report.applied = false;
-  if (!apply || report.blocked) return report;
+  if (!apply || report.globalBlockers.length > 0) return report;
+
+  const markStoreBlocked = (storeRoot, message) => {
+    report.blockedStoreRoots = [...new Set([...report.blockedStoreRoots, storeRoot])].sort();
+    report.blockersByStore[storeRoot] = [...new Set([...(report.blockersByStore[storeRoot] ?? []), message])];
+    report.blockers = [...new Set([...report.blockers, message])];
+    report.blocked = true;
+  };
+  let blockedStores = new Set(report.blockedStoreRoots);
+  let eligibleRoots = report.storeRoots.filter(storeRoot => !blockedStores.has(storeRoot));
+  if (eligibleRoots.length === 0) return report;
 
   const verifiedCas = new Map();
   report.skippedContentAddressedObjects = [];
   for (const object of report.referencedContentAddressedObjectsList) {
+    if (!eligibleRoots.includes(object.storeRoot) || blockedStores.has(object.storeRoot)) continue;
     if (await hashFile(object.path) !== object.hash) {
-      report.blockers.push(`referenced artifact hash mismatch: ${object.storeRoot}:${object.filename}`);
+      markStoreBlocked(object.storeRoot, `referenced artifact hash mismatch: ${object.storeRoot}:${object.filename}`);
+      blockedStores.add(object.storeRoot);
     }
   }
+  eligibleRoots = eligibleRoots.filter(storeRoot => !blockedStores.has(storeRoot));
+  if (eligibleRoots.length === 0) return report;
   for (const object of report.contentAddressedObjects) {
+    if (!eligibleRoots.includes(object.storeRoot)) continue;
     const stat = await fs.lstat(object.path);
     if (await hashFile(object.path) !== object.hash) {
       report.skippedContentAddressedObjects.push({ filename: object.path, reason: "content-address hash mismatch" });
@@ -493,22 +533,29 @@ export async function cleanArtifactStore({ root = process.cwd(), apply = false }
     }
     verifiedCas.set(object.path, { dev: stat.dev, ino: stat.ino, size: stat.size, mtimeMs: stat.mtimeMs });
   }
-  if (report.blockers.length > 0) {
-    report.blocked = true;
-    return report;
-  }
 
-  const verifiedRunDirectories = new Set(report.runDirectories.map(item => item.path));
+  const verifiedRunDirectories = new Set(report.runDirectories
+    .filter(item => eligibleRoots.includes(item.storeRoot))
+    .map(item => item.path));
   const releases = [];
   try {
-    for (const storeRoot of report.storeRoots) releases.push(await acquireArtifactStoreLock(storeRoot));
+    for (const storeRoot of eligibleRoots) releases.push(await acquireArtifactStoreLock(storeRoot));
     const current = await buildReport(resolvedRoot);
     current.applied = false;
-    if (current.blocked) return current;
+    if (current.globalBlockers.length > 0) return current;
+    const currentBlockedStores = new Set(current.blockedStoreRoots);
+    const currentEligibleRoots = eligibleRoots.filter(storeRoot => !currentBlockedStores.has(storeRoot));
+    if (currentEligibleRoots.length === 0) return current;
 
-    for (const marker of current.staleRunMarkers) await fs.rm(marker, { force: true });
+    for (const storeRoot of currentEligibleRoots) {
+      const markerRoot = activeRunMarkerDirectory(storeRoot);
+      for (const marker of current.staleRunMarkers) {
+        if (path.dirname(marker) === markerRoot) await fs.rm(marker, { force: true });
+      }
+    }
+    current.removedRunDirectories = [];
     for (const directory of current.runDirectories) {
-      if (!verifiedRunDirectories.has(directory.path)) continue;
+      if (!currentEligibleRoots.includes(directory.storeRoot) || !verifiedRunDirectories.has(directory.path)) continue;
       const stat = await fs.lstat(directory.path);
       if (!stat.isDirectory() || stat.isSymbolicLink()) {
         current.blockers.push(`run artifact root changed during cleanup: ${directory.path}`);
@@ -516,11 +563,14 @@ export async function cleanArtifactStore({ root = process.cwd(), apply = false }
         return current;
       }
       await fs.rm(directory.path, { recursive: true, force: false });
+      current.removedRunDirectories.push({ path: directory.path, bytes: directory.bytes });
     }
 
     current.skippedContentAddressedObjects = report.skippedContentAddressedObjects;
+    current.removedContentAddressedObjects = [];
     current.removedExternalHardlinkCounts = [];
     for (const object of current.contentAddressedObjects) {
+      if (!currentEligibleRoots.includes(object.storeRoot)) continue;
       const verified = verifiedCas.get(object.path);
       if (!verified) continue;
       let stat;
@@ -542,6 +592,7 @@ export async function cleanArtifactStore({ root = process.cwd(), apply = false }
         current.removedExternalHardlinkCounts.push({ filename: object.path, remainingLinks: stat.nlink - 1 });
       }
       await fs.unlink(object.path);
+      current.removedContentAddressedObjects.push({ path: object.path, bytes: object.bytes });
     }
     current.applied = true;
     return current;

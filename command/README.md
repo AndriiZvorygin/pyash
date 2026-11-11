@@ -22,7 +22,7 @@ Utility scripts for working with Pyash from the shell:
 - `run_pya_program.mjs [--full] [--gross] [--result] <path>` — run a `.pya` program, print Outputs/Result (or JSON with `--gross`). Use `--result` to print the final result sentence in non-`--full` mode.
 - `read_pya_trace.mjs [--gross] <path>` — interpret a `.pya` file and show memory/sandpit traces (beautiful by default).
 - `pya_to_json.mjs <path> [--memory-only] [--pretty]` — interpret a `.pya` file and print JSON (`memory`, `sandpits`, and `index` by `su name`).
-- `clean_artifacts.mjs [--root <path>] [--apply]` — preview newspaper-pinned run/CAS cleanup; deletion is opt-in and blocked by invalid references or active runs.
+- `clean_artifacts.mjs [--root <path>] [--apply]` — preview newspaper-pinned run/CAS cleanup; deletion is opt-in. Apply cleans independently verified artifact stores and preserves any store with malformed references or active runs.
 - `list_pyash_words.mjs` — print a comma-separated list of English entries from `pyashWords.json`.
 - `anchor_words_add.mjs --anchor <name> --form <text> --role <role>` — append a new anchor word mapping to `anchor_words.pya`.
 - `vocab_suggest.mjs "word"` — check a proposed token/phrase; pass a file/dir to scan `.pya` files.
