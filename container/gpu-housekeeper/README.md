@@ -91,9 +91,15 @@ The Linux Compose service also joins the Ollama container's existing Docker
 network (`GPU_HOUSEKEEPER_OLLAMA_DOCKER_NETWORK`, default `hmas_default`) and
 uses `http://ollama:11434` by default. This avoids routing telemetry through a
 host-published port. Set the network variable in `service/.env` when the
-Ollama Compose project uses a different network. Peer snapshot probes default
-to a 5-second timeout, which accommodates measured snapshot work while still
-bounding failed-host detection.
+Ollama Compose project uses a different network. The service joins the
+ComfyUI network as well (`GPU_HOUSEKEEPER_COMFYUI_DOCKER_NETWORK`, default
+`comfyui_default`) and uses `http://comfyui:8188` through
+`COMFYUI_RUNTIME_URL`. This is required for housekeeper-side ComfyUI audio
+uploads; it avoids relying on a host-published `mriczo:8188` route from the
+Housekeeper container. On hosts with different Compose names, set both values
+in `service/.env` and ensure the named external network already exists.
+Peer snapshot probes default to a 5-second timeout, which accommodates
+measured snapshot work while still bounding failed-host detection.
 
 Keep a peer on its known working IPv4 endpoint until its IPv6 route has passed
 the same container-originated health check. SWAC's assigned `e929` prefix does
