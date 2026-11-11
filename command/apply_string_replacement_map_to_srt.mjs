@@ -21,6 +21,22 @@ function loadReplacementMap(metaPath) {
     .sort((a, b) => b[0].length - a[0].length);
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
+
+function replacementPattern(from) {
+  const source = String(from || '');
+  if (!source) return null;
+  // Replacement maps contain both whole-word spelling corrections and
+  // multi-word names.  Word boundaries keep a replacement from matching
+  // inside the replacement it just produced (for example `program` inside
+  // `programme`), making normalization idempotent across pipeline retries.
+  const left = /^[\p{L}\p{N}_]/u.test(source) ? '(?<![\\p{L}\\p{N}_])' : '';
+  const right = /[\p{L}\p{N}_]$/u.test(source) ? '(?![\\p{L}\\p{N}_])' : '';
+  return new RegExp(`${left}${escapeRegExp(source)}${right}`, 'gu');
+}
+
 function isCueIndexLine(line) {
   return /^\d+\s*$/u.test(line);
 }
@@ -33,7 +49,8 @@ function applyReplacements(text, replacements) {
   let out = text;
   for (const [from, to] of replacements) {
     if (!from || from === to) continue;
-    out = out.split(from).join(to);
+    const pattern = replacementPattern(from);
+    if (pattern) out = out.replace(pattern, () => to);
   }
   return out;
 }
@@ -54,6 +71,10 @@ function main() {
     if (!line || isCueIndexLine(line) || isTimeLine(line)) return line;
     return applyReplacements(line, replacements);
   });
+
+  // Emit one canonical terminal newline.  Without this, retrying the stage
+  // keeps appending a blank line and makes an unchanged SRT look modified.
+  while (outLines.length && outLines[outLines.length - 1] === '') outLines.pop();
 
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(outputPath, `${outLines.join("\n")}\n`, "utf8");

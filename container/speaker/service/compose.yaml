@@ -9,6 +9,9 @@ services:
     user: "${PYASH_UID}:${PYASH_GID}"
     working_dir: /workplace
     entrypoint: ["python3", "/service/server.py"]
+    # The reporter normally reaches mriczo over IPv6, while Docker also
+    # publishes an IPv4 endpoint. The service's IPv6 listener is explicitly
+    # dual-stack, so both routes remain usable.
     command: ["--host", "${SPEAKER_BIND_HOST:-::}", "--port", "${SPEAKER_BIND_PORT:-8010}"]
     ports:
       - "${SPEAKER_PUBLISH_PORT:-8010}:${SPEAKER_BIND_PORT:-8010}"

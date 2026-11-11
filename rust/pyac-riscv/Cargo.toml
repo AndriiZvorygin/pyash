@@ -1,0 +1,18 @@
+[package]
+name = "pyac-riscv"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+publish = false
+
+[[bin]]
+name = "pyac-riscv"
+path = "src/main.rs"
+
+# The compiler runs on the host: the build step turns the golden codelet into
+# machine code, and the image itself needs no runtime dependency.
+[build-dependencies]
+pyac = { path = "../pyac" }
+
+[profile.release]
+panic = "abort"

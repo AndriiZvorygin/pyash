@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 import argparse
+import base64
+import binascii
+import copy
 import json
 import math
 import os
@@ -2210,6 +2213,23 @@ def submit_job(
         "accepted": False,
         "error": "comfyui jobSpec.prompt must be map"
       }
+    audio_input = job_spec.get("audioInput")
+    if audio_input is not None:
+      if kind != "comfyui-hear" or not isinstance(audio_input, dict):
+        return {
+          "accepted": False,
+          "error": "comfyui jobSpec.audioInput is only valid for comfyui-hear and must be a map"
+        }
+      if not normalize_text(audio_input.get("promptPath")):
+        return {
+          "accepted": False,
+          "error": "comfyui jobSpec.audioInput.promptPath is required"
+        }
+      if not normalize_text(audio_input.get("dataBase64")):
+        return {
+          "accepted": False,
+          "error": "comfyui jobSpec.audioInput.dataBase64 is required"
+        }
 
   if runtime_lower == "katago":
     if not isinstance(job_spec, dict):
@@ -4213,6 +4233,116 @@ def request_comfyui_json(pathname: str, payload: Optional[Dict[str, Any]] = None
   return {"value": parsed}
 
 
+MAX_COMFYUI_AUDIO_BYTES = 64 * 1024 * 1024
+
+
+def set_nested_value(target: Dict[str, Any], dotted_path: str, value: Any) -> None:
+  parts = [part for part in str(dotted_path or "").split(".") if part]
+  if not parts:
+    raise RuntimeError("comfyui audio prompt path is required")
+  current: Any = target
+  for part in parts[:-1]:
+    if not isinstance(current, dict):
+      raise RuntimeError("comfyui audio prompt path is invalid")
+    child = current.get(part)
+    if not isinstance(child, dict):
+      child = {}
+      current[part] = child
+    current = child
+  if not isinstance(current, dict):
+    raise RuntimeError("comfyui audio prompt path is invalid")
+  current[parts[-1]] = value
+
+
+def upload_comfyui_audio(audio_input: Dict[str, Any]) -> str:
+  """Upload caller-provided audio from the housekeeper's provider network."""
+  if not isinstance(audio_input, dict):
+    raise RuntimeError("comfyui audioInput must be a map")
+  encoded = normalize_text(audio_input.get("dataBase64"))
+  if not encoded:
+    raise RuntimeError("comfyui audioInput.dataBase64 is required")
+  try:
+    audio_bytes = base64.b64decode(encoded, validate=True)
+  except (ValueError, TypeError, binascii.Error) as err:
+    raise RuntimeError(f"comfyui audioInput.dataBase64 is invalid: {err}") from err
+  if not audio_bytes:
+    raise RuntimeError("comfyui audioInput is empty")
+  if len(audio_bytes) > MAX_COMFYUI_AUDIO_BYTES:
+    raise RuntimeError("comfyui audioInput exceeds the 64 MiB limit")
+
+  raw_name = normalize_text(audio_input.get("filename")) or "audio.opus"
+  safe_name = Path(raw_name.replace("\\", "/")).name
+  safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", safe_name).strip("._") or "audio.opus"
+  content_type = normalize_text(audio_input.get("contentType")) or "application/octet-stream"
+  if any(char in content_type for char in "\r\n"):
+    raise RuntimeError("comfyui audioInput.contentType is invalid")
+  # ComfyUI versions differ in which upload route/field they expose for
+  # audio. Keep the same compatibility order as the direct runner, while
+  # making every attempt from the Housekeeper's provider network.
+  targets = [
+    ("/upload/audio", "audio"),
+    ("/upload/audio", "image"),
+    ("/upload/image", "image"),
+  ]
+  failures: List[str] = []
+  for endpoint, field in targets:
+    boundary = f"----pyash-housekeeper-{uuid.uuid4().hex}"
+    fields = [
+      ("type", "input"),
+      ("overwrite", "true"),
+    ]
+    chunks: List[bytes] = []
+    for name, value in fields:
+      chunks.extend([
+        f"--{boundary}\r\n".encode("utf-8"),
+        f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"),
+        value.encode("utf-8"),
+        b"\r\n",
+      ])
+    chunks.extend([
+      f"--{boundary}\r\n".encode("utf-8"),
+      f'Content-Disposition: form-data; name="{field}"; filename="{safe_name}"\r\n'.encode("utf-8"),
+      f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"),
+      audio_bytes,
+      b"\r\n",
+      f"--{boundary}--\r\n".encode("utf-8"),
+    ])
+    body = b"".join(chunks)
+    url = f"{comfyui_runtime_url().rstrip('/')}{endpoint}"
+    req = Request(
+      url,
+      data=body,
+      headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+    )
+    try:
+      with urlopen(req, timeout=120) as response:
+        raw = response.read().decode("utf-8")
+    except HTTPError as err:
+      detail = ""
+      try:
+        detail = err.read().decode("utf-8")
+      except Exception:
+        detail = str(err)
+      failures.append(f"{endpoint} ({field}) {err.code}: {detail}")
+      continue
+    except URLError as err:
+      raise RuntimeError(f"comfyui audio upload failed: {err.reason}") from err
+    try:
+      payload = json.loads(raw or "{}")
+    except Exception:
+      failures.append(f"{endpoint} ({field}) returned invalid JSON")
+      continue
+    uploaded = normalize_text(payload.get("name") or payload.get("filename") or payload.get("file")) if isinstance(payload, dict) else ""
+    if not uploaded:
+      failures.append(f"{endpoint} ({field}) returned no filename")
+      continue
+    subfolder = normalize_text(payload.get("subfolder")) if isinstance(payload, dict) else ""
+    clean_subfolder = subfolder.strip("/\\")
+    return f"{clean_subfolder}/{uploaded}" if clean_subfolder else uploaded
+  detail = "; ".join(failures) or "no compatible upload route"
+  raise RuntimeError(f"comfyui audio upload failed: {detail}")
+
+
 def request_ollama_json(pathname: str, payload: Optional[Dict[str, Any]] = None, timeout_sec: int = 600) -> Dict[str, Any]:
   base = ollama_runtime_url().rstrip("/")
   url = f"{base}/{pathname.lstrip('/')}"
@@ -5446,7 +5576,14 @@ def execute_comfyui_job_once(job: Dict[str, Any], runtime_registry: Dict[str, Di
     raise RuntimeError(f"unsupported comfyui job kind: {kind or 'missing'}")
 
   ensure_runtime_ready(runtime_registry, runtime_name)
-  prompt = normalize_comfyui_prompt(job_spec)
+  prompt = copy.deepcopy(normalize_comfyui_prompt(job_spec))
+  audio_input = job_spec.get("audioInput")
+  if audio_input is not None:
+    if kind != "comfyui-hear":
+      raise RuntimeError("comfyui audioInput is only supported for comfyui-hear")
+    prompt_path = normalize_text(audio_input.get("promptPath")) if isinstance(audio_input, dict) else ""
+    uploaded_audio = upload_comfyui_audio(audio_input)
+    set_nested_value(prompt, prompt_path, uploaded_audio)
   client_id = normalize_text(job_spec.get("clientId")) or f"pyash-{uuid.uuid4().hex[:12]}"
   queued = request_comfyui_json("/prompt", {"client_id": client_id, "prompt": prompt}, timeout_sec=30)
   if queued.get("error"):

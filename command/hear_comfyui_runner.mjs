@@ -36,6 +36,15 @@ function resolveHost(opts) {
   return opts.host ?? process.env.PYA_HEAR_QWEN_HOST ?? process.env.PYA_DRAW_HOST ?? "http://localhost:8188";
 }
 
+function isLocalProviderHost(host = "") {
+  try {
+    const parsed = new URL(String(host ?? ""));
+    return ["localhost", "127.0.0.1", "::1"].includes(parsed.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
 function resolveBackend(opts) {
   return opts.backend ?? process.env.PYA_HEAR_QWEN_BACKEND ?? "comfyui";
 }
@@ -202,6 +211,15 @@ function normalizeText(value) {
   return String(value);
 }
 
+function audioContentType(inputPath = "") {
+  const ext = path.extname(String(inputPath ?? "")).toLowerCase();
+  if (ext === ".wav") return "audio/wav";
+  if (ext === ".opus") return "audio/ogg";
+  if (ext === ".mp3") return "audio/mpeg";
+  if (ext === ".m4a") return "audio/mp4";
+  return "application/octet-stream";
+}
+
 function collectStrings(value, out = []) {
   if (value === null || value === undefined) return out;
   if (typeof value === "string") {
@@ -272,11 +290,7 @@ async function requestText(url) {
 async function tryUploadAudio(host, inputPath) {
   const filename = path.basename(inputPath);
   const bytes = await fs.readFile(inputPath);
-  const ext = path.extname(filename).toLowerCase();
-  const mime = ext === ".wav" ? "audio/wav"
-    : ext === ".opus" ? "audio/ogg"
-    : ext === ".mp3" ? "audio/mpeg"
-    : "application/octet-stream";
+  const mime = audioContentType(filename);
   const blob = new Blob([bytes], { type: mime });
   const targets = [
     { endpoint: "/upload/audio", field: "audio" },
@@ -379,12 +393,32 @@ async function main() {
   const returnTimestampsPath =
     mapping.returnTimestampsPath || detectPath(workflow, promptObject, { nodeType: "Qwen3ASRTranscribe", inputName: "return_timestamps" });
 
-  const uploadedAudio = await tryUploadAudio(host, inputPath);
-  if (!uploadedAudio && /^https?:\/\//iu.test(host)) {
-    throw new Error(`hear_comfyui_runner: failed to upload audio input to ${host}`);
+  const managerUrl = resolveGpuHousekeeperUrl({
+    managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || "",
+    ollamaUrl: host,
+  });
+  let audioInput = null;
+  if (managerUrl) {
+    const bytes = await fs.readFile(inputPath);
+    audioInput = {
+      filename: path.basename(inputPath),
+      contentType: audioContentType(inputPath),
+      dataBase64: bytes.toString("base64"),
+      promptPath: audioInputPath,
+    };
+    // The housekeeper replaces this marker after uploading the bytes from its
+    // own provider network. The caller never contacts ComfyUI directly.
+    setAtPath(promptObject, audioInputPath, "__pyash_housekeeper_audio__");
+  } else {
+    if (/^https?:\/\//iu.test(host) && !isLocalProviderHost(host)) {
+      throw new Error("hear_comfyui_runner: GPU housekeeper URL is required for a remote ComfyUI provider");
+    }
+    const uploadedAudio = await tryUploadAudio(host, inputPath);
+    if (!uploadedAudio && /^https?:\/\//iu.test(host)) {
+      throw new Error(`hear_comfyui_runner: failed to upload audio input to ${host}`);
+    }
+    setAtPath(promptObject, audioInputPath, uploadedAudio || inputPath);
   }
-  const audioValue = uploadedAudio || inputPath;
-  setAtPath(promptObject, audioInputPath, audioValue);
 
   const language = String(opts.language ?? "").trim();
   if (languagePath && language) setAtPath(promptObject, languagePath, language);
@@ -392,10 +426,6 @@ async function main() {
   if (contextPath) setAtPath(promptObject, contextPath, context);
   if (returnTimestampsPath) setAtPath(promptObject, returnTimestampsPath, Boolean(opts.returnTimestamps));
 
-  const managerUrl = resolveGpuHousekeeperUrl({
-    managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || "",
-    ollamaUrl: host,
-  });
   let promptId = "";
   let historyEntry;
   if (managerUrl) {
@@ -408,6 +438,7 @@ async function main() {
         kind: "comfyui-hear",
         resourceRequest: { vramRequiredMb: Number.parseInt(String(process.env.PYA_COMFYUI_VRAM_REQUIRED_MB || "12000"), 10) || 12000 },
         prompt: promptObject,
+        ...(audioInput ? { audioInput } : {}),
         clientId: `pyash-${crypto.randomBytes(6).toString("hex")}`,
         timeoutSec: Math.ceil(resolvePollTimeoutMs() / 1000),
       },
