@@ -5070,7 +5070,12 @@ export async function summarizeGroundedUnit({
       if (numericConflictDefect) numericConflictRepairActive = true;
       if (numericSpecificityDefect) numericSpecificityRepairActive = true;
       if (deferralSubjectDefect) deferralObjectRepairActive = true;
-      parsed = incompleteDeferralDefect
+      parsed = closedMinutesProcedureOnly
+        ? await queryConservativeMinutesMotionScopeRepair(
+          groundingAttempt,
+          "Grounding repair: preserve the literal closed-meeting-agenda question, the open-agenda listing, the closed-session discussion condition, the open-agenda approval condition, and the separately carried minutes motion. Keep all procedural transitions impersonal and do not assign them to the chair or an addressee.",
+        )
+        : incompleteDeferralDefect
         ? await queryConservativeIncompleteDeferralRepair(groundingAttempt, auditFeedback, rejectedOutput)
         : negationDefect
         ? await queryConservativeNegationRepair(groundingAttempt, auditFeedback, rejectedOutput)
@@ -5233,11 +5238,6 @@ export async function summarizeGroundedUnit({
         ? await queryConservativeConsentAgendaScopeRepair(
           groundingAttempt,
           `Grounding repair: preserve the literal receive range, approval range, and exceptions; do not repeat any narrowed, expanded, or later pulled-item outcome. REJECTED_CLAIMS: ${rejectedClaims}. REJECTED_CANDIDATE: ${rejectedOutput}`,
-        )
-        : closedMinutesProcedureOnly
-        ? await queryConservativeMinutesMotionScopeRepair(
-          groundingAttempt,
-          "Grounding repair: keep the closed-session/open-agenda procedural exchange impersonal and separate from the later carried minutes motion. Omit every addressee-as-speaker claim, 'a speaker questioned' wording, and 'without discussion' wording.",
         )
         : minutesMotionScopeOnly
         ? await queryConservativeMinutesMotionScopeRepair(
