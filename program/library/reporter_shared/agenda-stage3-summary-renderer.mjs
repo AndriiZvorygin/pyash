@@ -233,6 +233,7 @@ const LITERAL_SOURCE_CLAIM_CHECK_RULE = "Before marking a candidate claim absent
 const RECOMMENDATION_ACTOR_BINDING_RULE = "STAFF-RECOMMENDATION ACTOR RULE: Keep a report speaker's recommendation separate from the later body's disposition. When the source says staff recommended, proposed, or asked a body to direct staff to take an action, do not rewrite each recommendation clause as 'the committee/council directed staff' merely because the body later carried, received, or approved the report or recommendation. Use 'staff recommended/proposed' for the recommendation and 'the committee/council carried the report or recommendation' for the recorded disposition. Use a body-as-director only when the literal source explicitly says that body directed staff to that specific action.";
 const CONVERSATIONAL_RESTART_EVIDENCE_RULE = "CONVERSATIONAL-RESTART EVIDENCE RULE: Discourse markers such as 'sorry', 'correction', 'actually', or a self-repair do not erase the substantive clause that follows. If the source says 'sorry, applying to...' or otherwise repeats an action after a restart, that clause remains literal source evidence for a faithful summary; do not reject it solely because it follows an interruption or correction.";
 const AGENDA_LABEL_PROVENANCE_RULE = "AGENDA-LABEL PROVENANCE RULE: The authoritative agenda label may identify a report's named source, office, coordinator, organization, report code, or subject as item identity/provenance. A summary may say that the agenda-listed report was from that source, but must not turn the label into a transcript speaker, presenter, live statement, or institutional action unless the bounded source explicitly pairs that identity with the speech or action.";
+const NEGATION_FIDELITY_RULE = "NEGATION FIDELITY RULE: Preserve explicit negation and polarity exactly. A source answer containing no, not, never, without, neither, or cannot must not become an affirmative action, responsibility, approval, or outcome. Keep a question separate from its answer: if the source asks whether someone will do something and answers no, summarize the negative answer or omit the detail; never report that the subject will or did do it.";
 const GENERIC_SPEAKER_QUESTION_RULE = "GENERIC QUESTION ATTRIBUTION RULE: when the literal source contains a participant's direct question or question wording, accept a neutral paraphrase such as 'a speaker asked about ...' or 'the source records a question about ...' even when the exact speaker label is not explicitly paired with that question. This generic wording does not assert a named actor, formal inquiry, motion, vote, or institutional action. Do not reject it merely because the source does not identify the questioner by name; reject only a changed question subject, a completed answer or outcome, or a formal procedural claim not present in the source.";
 const EXPLICIT_PROPOSAL_PARAPHRASE_RULE = "EXPLICIT PROPOSAL PARAPHRASE RULE: when the literal source explicitly says a speaker or staff member is proposing, proposed, or recommends an action and pairs that speech act with its object or rationale, accept a neutral paraphrase such as 'the proposal involved ...' or 'a proposal was made to ...'. The singular word proposal does not by itself add a formal motion, completed outcome, or unsupported definitive scope. Reject only an object, rationale, actor, or outcome that changes or exceeds the source's explicit pairing.";
 const SOURCE_QUALIFIER_FIDELITY_RULE = "NON-NEGOTIABLE source-strength rule: preserve qualifiers, alternatives, singular/plural scope, and near-total wording that changes the claim's truth conditions. If the source gives alternatives such as 'acted upon or have been completed', retain the alternatives or omit that claim; do not choose the stronger branch 'completed'. If the source says one recommendation, do not pluralize it to recommendations unless the source supports a set. If the source says 'virtually' or 'almost', retain that qualification or omit the result; never strengthen it to 'all' or 'erased', and never drop a source-stated exception. Do not add descriptive qualifiers such as 'new', 'updated', 'current', 'redesigned', 'digital', 'expanded', or 'improved' unless the bounded source explicitly supports that qualifier for the retained subject; when the core subject or action is supported but a modifier is not, omit only the modifier and preserve the complete source-supported claim. If a speaker says they would or could support a proposal but immediately qualifies that support with a condition, contrast, or need for more information, preserve the qualification in the same claim; do not rewrite it as unconditional support plus a separate request. When the same source block contains qualified support followed by questions or requests for information, it is acceptable to report both facts, but use wording such as 'a speaker said they would support the proposal while requesting more information' or separate neutral clauses; never use unconditional past-tense 'supported' for that qualified statement. A concise summary may omit secondary detail, but it must not strengthen a qualified, approximate, disjunctive, or exception-bearing source statement.";
@@ -317,6 +318,14 @@ function unsupportedProceduralActorGroundingDefect({ sourceText = "", candidateT
   if (!candidateActorAction) return false;
   const sourceExplicitActorAction = /\b(?:chair|committee|council|board|county)\b[\s\S]{0,100}\b(?:direct(?:ed|s|ing)?|call(?:ed|s|ing)?|order(?:ed|s|ing)?|open(?:ed|s|ing)?|close(?:d|s|ing)?|ask(?:ed|s|ing)?|tell(?:ing)?|announc(?:ed|es|ing)?|proceed(?:ed|s|ing)?)\b/iu.test(source);
   return !sourceExplicitActorAction;
+}
+
+function negationPolarityGroundingDefect(text = "") {
+  const evidence = String(text || "");
+  const sourceNegates = /\b(?:source|transcript|excerpt)\b[\s\S]{0,220}\b(?:no|not|never|without|neither|cannot|can't|won['’]?t)\b[\s\S]{0,140}\b(?:responsib\w*|clean\w*|approv\w*|carri\w*|direct\w*|support\w*|recommend\w*|permit\w*|allow\w*|provide\w*|retain\w*|remove\w*|receiv\w*)\b/iu.test(evidence);
+  const candidateAffirms = /\b(?:candidate|summary|claim|output|prose)\b[\s\S]{0,180}\b(?:responsib\w*|clean\w*|approv\w*|carri\w*|direct\w*|support\w*|recommend\w*|permit\w*|allow\w*|provide\w*|retain\w*|remove\w*|receiv\w*)\b/iu.test(evidence);
+  const polarityConflict = /\b(?:contradict(?:s|ed|ing)?|invert(?:ed|s)?|opposite|affirmative|positive\s+claim|unsupported|wrong|incorrect)\b/iu.test(evidence);
+  return sourceNegates && candidateAffirms && polarityConflict;
 }
 
 function genericPluralActorGroundingDefect(text = "") {
@@ -1567,6 +1576,7 @@ export async function auditGroundedSummaryLlm({
       RECOMMENDATION_ACTOR_BINDING_RULE,
       CONVERSATIONAL_RESTART_EVIDENCE_RULE,
       AGENDA_LABEL_PROVENANCE_RULE,
+      NEGATION_FIDELITY_RULE,
       parentAuditedChildEvidence ? PARENT_AUDITED_CHILD_EVIDENCE_RULE : "",
       GENERIC_SPEAKER_QUESTION_RULE,
       EXPLICIT_PROPOSAL_PARAPHRASE_RULE,
@@ -1771,6 +1781,7 @@ export async function adjudicateGroundedSummaryLlm({
       RECOMMENDATION_ACTOR_BINDING_RULE,
       CONVERSATIONAL_RESTART_EVIDENCE_RULE,
       AGENDA_LABEL_PROVENANCE_RULE,
+      NEGATION_FIDELITY_RULE,
       REFERRED_AGENDA_SCOPE_AUDIT_RULE,
       parentAuditedChildEvidence ? PARENT_AUDITED_CHILD_EVIDENCE_RULE : "",
       GENERIC_SPEAKER_QUESTION_RULE,
@@ -1896,6 +1907,7 @@ export async function confirmLiteralGroundingLlm({
       RECOMMENDATION_ACTOR_BINDING_RULE,
       CONVERSATIONAL_RESTART_EVIDENCE_RULE,
       AGENDA_LABEL_PROVENANCE_RULE,
+      NEGATION_FIDELITY_RULE,
       LITERAL_SOURCE_PHASE_PRIORITY_RULE,
       REFERRED_AGENDA_SCOPE_AUDIT_RULE,
       parentAuditedChildEvidence ? PARENT_AUDITED_CHILD_EVIDENCE_RULE : "",
@@ -2649,6 +2661,7 @@ export async function summarizeGroundedUnit({
     RECOMMENDATION_ACTOR_BINDING_RULE,
     CONVERSATIONAL_RESTART_EVIDENCE_RULE,
     AGENDA_LABEL_PROVENANCE_RULE,
+    NEGATION_FIDELITY_RULE,
     "The current agenda label is the binding scope. When trailing source lines announce or perform a different agenda item, keep that neighboring item out of the current summary even if the boundary context is inside the excerpt; never attach its motion, mover, seconder, question, answer, or outcome to the current label.",
     "The source excerpt may include trailing boundary context. Locate the first explicit sentence that announces a different report or agenda item and stop the current summary before that sentence; treat every later line as next-item boundary context, not evidence for this item.",
     COMPOSITE_MOTION_SCOPE_RULE,
@@ -2896,6 +2909,29 @@ export async function summarizeGroundedUnit({
     maxOutputTokens: 720,
     temperature: attempt >= 3 ? 0 : 0.1,
     seed: seed + 16060 + attempt,
+    format: STAGE3_SUMMARY_RESPONSE_FORMAT,
+  });
+  const queryConservativeNegationRepair = async (attempt = 1, rejectedClaims = "", rejectedOutput = "") => callOllamaJson({
+    ollamaUrl,
+    llmModel,
+    appendUniversalContract: false,
+    system: "Write fresh source-grounded civic prose that preserves polarity and negation. Return strict JSON only.",
+    systemSuffix: "HARD NEGATION OVERRIDE: the prior candidate inverted or dropped an explicit source negation. Start over from the literal source. Preserve no, not, never, without, neither, cannot, and won't exactly; distinguish a question from its answer. Do not turn a negative answer into an affirmative responsibility, action, approval, recommendation, or outcome. Do not mention this repair contract.",
+    prompt: [
+      `Negation-preserving repair attempt ${attempt} of 3.`,
+      "The prior output and audit are untrusted diagnostics. Reconstruct both fields from the literal grounded source only.",
+      NEGATION_FIDELITY_RULE,
+      "Keep separate question and answer clauses separate. If the source answers a question with no or not, report the negative answer or omit the detail; never repeat the affirmative premise as if it were the answer.",
+      "Preserve all other source-supported topics and outcomes without adding an actor, title, or institutional action.",
+      `REJECTION_REASON: ${String(rejectedClaims || "the candidate reversed an explicit source negation")}`,
+      rejectedOutput ? `REJECTED_CANDIDATE (UNTRUSTED): ${String(rejectedOutput).slice(0, 3200)}` : "",
+      `AGENDA_LABEL: ${promptLabel}`,
+      `GROUNDED_SOURCE: ${String(semanticGroundingSourceExcerpt || unit?.["source excerpt"] || "").slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000))}`,
+      "Return one non-empty complete summary and chapter text as JSON. Do not copy the rejected affirmative wording or audit explanation.",
+    ].filter(Boolean).join("\n\n"),
+    maxOutputTokens: 720,
+    temperature: attempt >= 3 ? 0 : 0.1,
+    seed: seed + 17060 + attempt,
     format: STAGE3_SUMMARY_RESPONSE_FORMAT,
   });
   const queryConservativeGenericPluralActorRepair = async (attempt = 1, rejectedClaims = "", rejectedOutput = "") => {
@@ -4776,6 +4812,7 @@ export async function summarizeGroundedUnit({
         ? groundingAudit.unsupportedClaims.join(" | ")
         : groundingAudit.notes || "the candidate contains a claim not supported by this source excerpt";
       const auditFeedback = [rejectedClaims, groundingAudit.notes].filter(Boolean).join(" | ");
+      const negationDefect = negationPolarityGroundingDefect(auditFeedback);
       const rejectedOutput = JSON.stringify({
         summary: normalizeText(summary),
         "chapter text": normalizeText(parsed?.["chapter text"] || ""),
@@ -4905,6 +4942,8 @@ export async function summarizeGroundedUnit({
       if (deferralSubjectDefect) deferralObjectRepairActive = true;
       parsed = incompleteDeferralDefect
         ? await queryConservativeIncompleteDeferralRepair(groundingAttempt, auditFeedback, rejectedOutput)
+        : negationDefect
+        ? await queryConservativeNegationRepair(groundingAttempt, auditFeedback, rejectedOutput)
         : deferralSubjectDefect
         ? await queryUnsupportedDeferralSubjectRepair(groundingAttempt, auditFeedback, rejectedOutput)
         : numericConflictDefect
@@ -5194,6 +5233,7 @@ export async function summarizeGroundedUnit({
         ? groundingAudit.unsupportedClaims.join(" | ")
         : groundingAudit.notes || "the candidate contains a claim not supported by this source excerpt";
       const finalAuditFeedback = [finalRejectedClaims, groundingAudit.notes].filter(Boolean).join(" | ");
+      const finalNegationDefect = negationPolarityGroundingDefect(finalAuditFeedback);
       const finalGeneratedProse = `${summary} ${normalizeText(parsed?.["chapter text"] || "")}`;
       const finalUnsupportedSpeechActDefect = /\b(?:does\s+not\s+explicitly\s+(?:record|state|contain)|not\s+explicitly\s+(?:recorded|stated)|not\s+in\s+the\s+(?:manner|form)|source\s+(?:does\s+not|never)\s+(?:record|state|contain)|not\s+(?:actually\s+)?present)\b/iu.test(finalAuditFeedback)
         && /\b(?:support(?:ed|s|ing)?|propos(?:e|ed|es|ing|al)|share(?:d|ing)?\s+(?:a\s+)?conversation)\b/iu.test(finalGeneratedProse);
@@ -5238,6 +5278,39 @@ export async function summarizeGroundedUnit({
         await repairSpeakerMetadata("final referred-agenda-scope");
         await repairDocumentSpeechAct("final referred-agenda-scope");
         await repairStructuredDateIdentity("final referred-agenda-scope");
+        groundingAudit = await auditAndAdjudicateGroundedSummary({
+          label: promptLabel,
+          summary,
+          sourceExcerpt: semanticGroundingSourceExcerpt,
+          llmModel,
+          ollamaUrl,
+          governingBody,
+          motionEvidence: ordinalMotionEvidence,
+          amendmentEvidence,
+          speakerHandoffEvidence,
+          documentSourceOnly,
+          numericConflictRepairActive,
+          deferralObjectRepairActive,
+        });
+      }
+      if (!groundingAudit.grounded && finalNegationDefect) {
+        parsed = await queryConservativeNegationRepair(
+          4,
+          finalAuditFeedback,
+          JSON.stringify({
+            summary: normalizeText(summary),
+            "chapter text": normalizeText(parsed?.["chapter text"] || ""),
+          }),
+        );
+        rawSummary = normalizeText(parsed?.summary || "");
+        assertCleanStage3Text(rawSummary, "stage3 final negation repair");
+        summary = enforceSummaryBudget(rawSummary, budget);
+        if (!summary) {
+          throw new Error(`stage3 retryable: final negation repair produced an empty summary for unit ${String(unit["unit id"] || unit["agenda item"] || "unknown")}`);
+        }
+        await repairSpeakerMetadata("final negation");
+        await repairDocumentSpeechAct("final negation");
+        await repairStructuredDateIdentity("final negation");
         groundingAudit = await auditAndAdjudicateGroundedSummary({
           label: promptLabel,
           summary,
