@@ -187,7 +187,9 @@ export async function runWordNetSenseCompoundRefinerySweepCommand({
   const releaseLock = await acquireRunLock(artifactRoot);
   try {
     const prepareAllocation = dependencies.prepareAllocation ?? prepareWordNetFrequencyAllocation;
-    let allocation = await prepareAllocation();
+    // Frequency allocation inputs are fixed for this run. Individual chunks
+    // reload live bridge/compound links and progress from their durable files.
+    const allocation = await prepareAllocation();
     const runId = requestedRunId
       ? sanitizeRunId(requestedRunId)
       : wordNetSenseCompoundRunId({ sourceHash: allocation.sourceHash });
@@ -255,7 +257,6 @@ export async function runWordNetSenseCompoundRefinerySweepCommand({
       if (before === after) {
         throw new Error(`WordNet sense compound sweep made no durable progress; ${lastResult.remainingSenseCount} senses remain in ${artifactDirectory}`);
       }
-      allocation = await prepareAllocation();
     }
 
     const remaining = requestedSenseIds
