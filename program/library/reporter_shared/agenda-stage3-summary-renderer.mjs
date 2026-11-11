@@ -2596,6 +2596,10 @@ export async function summarizeGroundedUnit({
   const questionAnswerOnly = routineQuestionTransitionOnly
     || (/\?/u.test(sourceForSpeechActChecks)
       && /\b(?:is\s+this|did|does|would|could|why|how|what|where|when)\b/iu.test(sourceForSpeechActChecks));
+  const separateProceduralPhasesOnly = /\bare\s+we\s+doing\s+separate\s+motions?\b/iu.test(sourceForSpeechActChecks)
+    && /\b(?:receive|receiv(?:e|ed|ing)|correspondence)\b/iu.test(sourceForSpeechActChecks)
+    && /\b(?:carried|approved|adopted)\b/iu.test(sourceForSpeechActChecks)
+    && /\b(?:site\s+plan|next\s+item)\b/iu.test(sourceForSpeechActChecks);
   const shortAgendaTransitionOnly = !proceduralSelfReportOnly
     && String(unit?.["source excerpt"] || "").length <= 400
     && /\b(?:through|we['’]?re\s+at|moving\s+(?:through|to)|back\s+to)\b/iu.test(String(unit?.["source excerpt"] || ""));
@@ -4225,6 +4229,26 @@ export async function summarizeGroundedUnit({
     seed: seed + 9997 + attempt,
     format: STAGE3_SUMMARY_RESPONSE_FORMAT,
   });
+  const queryConservativeSeparateProceduralPhasesRepair = async (attempt = 1, extraInstruction = "") => callOllamaJson({
+    ollamaUrl,
+    llmModel,
+    appendUniversalContract: false,
+    system: "Write one conservative source-grounded civic summary that keeps adjacent procedural phases separate. Return strict JSON only.",
+    prompt: [
+      `Conservative separate-procedural-phases repair attempt ${attempt} of 3.`,
+      "The bounded source contains a generic question about whether motions should be separate, a separate agenda-item transition, and a later motion or vote about receiving correspondence. Do not attach the agenda-item label to the generic question unless the same source sentence explicitly does so.",
+      "Keep procedural phases separate: report the generic question without an inferred object; report a carried receipt vote only with the source-supported correspondence scope; omit routine 'none/seeing none' transition wording unless needed for a complete fact.",
+      "Do not say a speaker called for a vote unless the source explicitly records that speech act. Do not infer who asked, answered, moved, or chaired the exchange. Do not import details from the agenda label into the question.",
+      extraInstruction,
+      "Return exactly one JSON object with summary, chapter text, confidence, and notes.",
+      `AGENDA_LABEL: ${promptLabel}`,
+      `GROUNDED_SOURCE: ${String(parentLiteralSourceExcerpt || parentRepairSourceExcerpt || semanticGroundingSourceExcerpt || unit?.["source excerpt"] || "").slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000))}`,
+    ].filter(Boolean).join("\n\n"),
+    maxOutputTokens: 520,
+    temperature: attempt >= 3 ? 0 : 0.1,
+    seed: seed + 10080 + attempt,
+    format: STAGE3_SUMMARY_RESPONSE_FORMAT,
+  });
   const queryConservativeThroughChairRepair = async (attempt = 1, extraInstruction = "", rejectedClaims = "", rejectedOutput = "") => callOllamaJson({
     ollamaUrl,
     llmModel,
@@ -5323,6 +5347,11 @@ export async function summarizeGroundedUnit({
           ? await queryConservativeAgendaTransitionRepair(
             groundingAttempt,
             "Grounding repair: keep this as a generic agenda-position transition only; omit any claimed seconder, motion, vote, or named speaker.",
+          )
+        : separateProceduralPhasesOnly
+          ? await queryConservativeSeparateProceduralPhasesRepair(
+            groundingAttempt,
+            "Grounding repair: keep the separate-motions question generic and separate from the later carried correspondence-receipt vote; do not attach the site-plan label to the question or add a speaker's call-for-vote action.",
           )
         : questionAnswerOnly
           ? await queryConservativeQuestionAnswerRepair(
