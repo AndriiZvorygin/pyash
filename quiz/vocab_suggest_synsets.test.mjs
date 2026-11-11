@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 
 import { runVocabSuggest } from "../command/vocab_suggest.mjs";
 
+// Requires know/wordnet/open-english-wordnet-2025-json for raw synsets without curated bridges.
 test("vocab_suggest looks up a WordNet synset by its stable POS-qualified identity", async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-vocab-synset-"));
   const mapPath = path.join(directory, "lookup.json");

@@ -31,6 +31,7 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 
 const NAME_ROLES = ["su", "ob", "to", "from", "with", "via", "by"];
 const QUOTED_BLOCK_REGEX = /quoted\.([^.]+)\.(?:contents\s*)?([\s\S]*?)\.\1\.quoted/g;
+const GENERATED_KWON_INDEX_HEADER = /^su name kwon (?:english|pyac|wordnet|open-wordnet) lookup index be map def\s*$/mu;
 const JS_MAP_ROW_KEY_REGEX = /\{\s*key:\s*"([^"]*)"/gu;
 const JS_NAME_FRAGMENT_REGEX = /\b(?:su|ob)\s+name\s+([^'"`\n]*)/gu;
 const JS_SENTENCE_NAME_REGEX = /\b(?:su|ob|to|from|with|via|by)\s*:\s*\{\s*name\s*:\s*"([^"]*)"/gu;
@@ -90,6 +91,10 @@ function scanSentence(text, word) {
 }
 
 function scanPyashFile(relative, source, word) {
+  // Kwon lookup sidecars are generated query tables. Their internal index keys
+  // can contain English search terms, which are data rather than Pyash names.
+  if (GENERATED_KWON_INDEX_HEADER.test(source)) return [];
+
   const hits = [];
   const lines = splitSentencesWithLines(source, { includeThen: true });
   for (const entry of lines) {
