@@ -113,9 +113,12 @@ content-addressed bytes; changing them is a `hash inconsistency`.
 `configure/default.pya` sets `newspaper maximum age days` to 30. The operator
 cleaner previews by default; deletion requires an explicit apply action. It may
 remove expired, date-shaped run directories and expired `.pya`/`text-*.txt`
-files inside `newspaper/` directories. A run folder remains pinned while any
-newer retained newspaper names or references that run. Persistent artifact
-subdirectories and `world/holding/` are outside the deletion set.
+files inside `newspaper/` directories. The configured 500 MiB newspaper cap is
+combined across the repository-level `newspaper/`, `world/newspaper/`, and each
+saddle project's `world/coding-saddle-projects/*/newspaper/` directory. A run
+folder remains pinned while any newer retained newspaper names or references
+that run. Persistent artifact subdirectories and `world/holding/` are outside
+the deletion set.
 
 Content-addressed objects are collected only after expired run and newspaper
 entries have been removed and the workspace has been rescanned. A blob is

@@ -27,11 +27,13 @@ test("default newspaper retention settings include a thirty-day maximum age", as
 
 async function makeWorld() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-newspaper-retention-"));
+  const topLevel = path.join(root, "newspaper");
   const operational = path.join(root, "world", "newspaper");
   const saddle = path.join(root, "world", "coding-saddle-projects", "project-1", "newspaper");
+  await fs.mkdir(topLevel, { recursive: true });
   await fs.mkdir(operational, { recursive: true });
   await fs.mkdir(saddle, { recursive: true });
-  return { root, worldRoot: path.join(root, "world"), operational, saddle };
+  return { root, topLevel, worldRoot: path.join(root, "world"), operational, saddle };
 }
 
 async function parseablePyaFiles(directories) {
@@ -52,15 +54,19 @@ async function parseablePyaFiles(directories) {
 
 test("newspaper rotation keeps the newest complete Pyash records under both configured caps", async () => {
   const fixture = await makeWorld();
+  const topLevelPath = path.join(fixture.topLevel, "20261108-repo.pya");
   const oldPath = path.join(fixture.operational, "20261109-old.pya");
   const newPath = path.join(fixture.saddle, "20261110-coding-saddle.pya");
+  const topLevelContent = Array.from({ length: 5 }, (_, index) => mapRecord(`repo-${index}`, "r".repeat(38))).join("");
   const oldContent = Array.from({ length: 7 }, (_, index) => mapRecord(`old-${index}`, "o".repeat(38))).join("");
   const newContent = [
     ...Array.from({ length: 7 }, (_, index) => mapRecord(`new-${index}`, "n".repeat(38))),
     "su name note ob text quoted.text.\nbe json map def\n.text.quoted ya\n"
   ].join("");
+  await fs.writeFile(topLevelPath, topLevelContent);
   await fs.writeFile(oldPath, oldContent);
   await fs.writeFile(newPath, newContent);
+  await fs.utimes(topLevelPath, new Date("2026-11-11T12:00:00Z"), new Date("2026-11-11T12:00:00Z"));
   await fs.utimes(oldPath, new Date("2026-11-09T12:00:00Z"), new Date("2026-11-09T12:00:00Z"));
   await fs.utimes(newPath, new Date("2026-11-10T12:00:00Z"), new Date("2026-11-10T12:00:00Z"));
   const session = path.join(fixture.worldRoot, "coding-saddle-projects", "project-1", "house", "house", "session");
@@ -79,6 +85,7 @@ test("newspaper rotation keeps the newest complete Pyash records under both conf
       apply: true
     });
     assert.ok(result.beforeBytes > 1050);
+    assert.equal(result.beforeBytes, Buffer.byteLength(topLevelContent + oldContent + newContent));
     assert.ok(result.retainedBytes <= 1050);
     assert.ok(result.generatedParts > 1);
     const verification = await verifyNewspaperSet({
@@ -87,17 +94,19 @@ test("newspaper rotation keeps the newest complete Pyash records under both conf
       segmentMaximumBytes: 300
     });
     assert.equal(verification.files, result.generatedParts);
+    assert.equal(verification.totalBytes, result.retainedBytes);
     assert.ok(verification.recordCount > 1);
     assert.equal(await fs.readFile(path.join(session, "history.pya"), "utf8"), "canonical history\n");
     assert.equal(await fs.readFile(path.join(artifactNewspaper, "run.pya"), "utf8"), "artifact newspaper\n");
 
-    const parts = await parseablePyaFiles([fixture.operational, fixture.saddle]);
+    const parts = await parseablePyaFiles([fixture.topLevel, fixture.operational, fixture.saddle]);
     assert.ok(parts.length > 1);
     for (const part of parts) {
       assert.match(part.name, /^\d{8}-\d{4}-.+\.pya$/u);
       assert.ok(part.bytes <= 300, `${part.name}: ${part.bytes}`);
     }
-    assert.ok(parts.some((part) => part.source.includes("record-new-6")), "newest record was retained");
+    assert.ok(parts.some((part) => part.source.includes("record-repo-4")), "newest top-level newspaper records are retained");
+    assert.equal((await fs.readdir(fixture.topLevel)).some((name) => name === "20261108-repo.pya"), false);
     assert.ok(!parts.some((part) => part.source.includes("record-old-0")), "oldest records were pruned first");
     assert.equal(parts.reduce((sum, part) => sum + part.bytes, 0), result.retainedBytes);
   } finally {

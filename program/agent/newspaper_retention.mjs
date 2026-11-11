@@ -34,8 +34,11 @@ export async function readNewspaperLimits(configRoot = repoRoot) {
   return { maximumBytes, segmentMaximumBytes, maximumAgeDays };
 }
 
-async function newspaperDirectories(worldRoot) {
-  const directories = [path.join(worldRoot, "newspaper")];
+async function newspaperDirectories(worldRoot, repositoryRoot) {
+  const directories = [
+    path.join(repositoryRoot, "newspaper"),
+    path.join(worldRoot, "newspaper")
+  ];
   const projects = path.join(worldRoot, "coding-saddle-projects");
   let entries = [];
   try {
@@ -49,9 +52,9 @@ async function newspaperDirectories(worldRoot) {
   return directories;
 }
 
-async function newspaperFiles(worldRoot) {
+async function newspaperFiles(worldRoot, repositoryRoot) {
   const files = [];
-  for (const directory of await newspaperDirectories(worldRoot)) {
+  for (const directory of await newspaperDirectories(worldRoot, repositoryRoot)) {
     let entries = [];
     try {
       entries = await fs.readdir(directory, { withFileTypes: true });
@@ -70,12 +73,14 @@ async function newspaperFiles(worldRoot) {
   return files;
 }
 
-export async function verifyNewspaperSet({ worldRoot, maximumBytes, segmentMaximumBytes } = {}) {
+export async function verifyNewspaperSet({ worldRoot, repositoryRoot, maximumBytes, segmentMaximumBytes } = {}) {
   if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1
     || !Number.isSafeInteger(segmentMaximumBytes) || segmentMaximumBytes < 1 || segmentMaximumBytes > maximumBytes) {
     throw new Error("invalid newspaper verification limits");
   }
-  const files = await newspaperFiles(path.resolve(String(worldRoot || path.join(repoRoot, "world"))));
+  const resolvedWorldRoot = path.resolve(String(worldRoot || path.join(repoRoot, "world")));
+  const resolvedRepositoryRoot = path.resolve(String(repositoryRoot || path.dirname(resolvedWorldRoot)));
+  const files = await newspaperFiles(resolvedWorldRoot, resolvedRepositoryRoot);
   const totalBytes = files.reduce((sum, file) => sum + file.bytes, 0);
   if (totalBytes > maximumBytes) throw new Error(`newspaper total exceeds cap: ${totalBytes}/${maximumBytes}`);
   let recordCount = 0;
@@ -268,7 +273,8 @@ export async function rotateWorldNewspapers({
     throw new Error("invalid newspaper retention limits");
   }
   const resolvedWorldRoot = path.resolve(String(worldRoot || path.join(repoRoot, "world")));
-  const files = await newspaperFiles(resolvedWorldRoot);
+  const resolvedRepositoryRoot = path.dirname(resolvedWorldRoot);
+  const files = await newspaperFiles(resolvedWorldRoot, resolvedRepositoryRoot);
   const beforeBytes = files.reduce((sum, file) => sum + file.bytes, 0);
   const canonicalNames = files.every((file) => /^\d{8}-\d{4}-.+\.pya$/u.test(file.name));
   if (beforeBytes <= maximum && files.every((file) => file.bytes <= segmentMaximum) && canonicalNames) {
@@ -350,6 +356,7 @@ export async function rotateWorldNewspapers({
     }
     const verification = await verifyNewspaperSet({
       worldRoot: resolvedWorldRoot,
+      repositoryRoot: resolvedRepositoryRoot,
       maximumBytes: maximum,
       segmentMaximumBytes: segmentMaximum
     });
