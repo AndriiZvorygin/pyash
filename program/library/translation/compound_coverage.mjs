@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 
 import { loadCompoundLexicon, parseCompoundLexicon } from "./compound_lexicon.mjs";
 import {
@@ -267,22 +268,31 @@ export async function loadWordNetVerifiedCompoundMatches({
         if (uniqueLocators.length === 0) return [];
         const [header] = await readKwonSourceHead(WORDNET_VERIFIED_COMPOUNDS_SOURCE_ID, { lineCount: 1, root: indexRoot });
         const sourceRows = await readKwonSourceLocators(uniqueLocators, { root: indexRoot });
-        const filtered = [header, ...sourceRows.map((row) => row.line), "prah", ""].join("\n");
-        const entries = parseCompoundLexicon(filtered, {
-          name: DERIVED_COMPOUND_CURATED_NAME,
-          language: "canonical"
-        });
-        return entries.filter((entry) => (
-          (normalizedTargets.size > 0 && (
-            normalizedTargets.has(normalizeTerm(entry.target))
-            || (entry.aliases ?? []).some((alias) => normalizedTargets.has(normalizeTerm(alias)))
-          ))
-          || (sequence.length > 0 && entry.pyashSequence?.join(" ") === sequence.join(" "))
-          || (selectedSenseIds.size > 0 && selectedSenseIds.has(entry.senseId?.toLowerCase()))
-        ));
+        const locatorsResolved = sourceRows.length === uniqueLocators.length
+          && sourceRows.every((row) => row.line.startsWith("su text "));
+        if (locatorsResolved) {
+          const filtered = [header, ...sourceRows.map((row) => row.line), "prah", ""].join("\n");
+          const entries = parseCompoundLexicon(filtered, {
+            name: DERIVED_COMPOUND_CURATED_NAME,
+            language: "canonical"
+          });
+          return entries.filter((entry) => (
+            (normalizedTargets.size > 0 && (
+              normalizedTargets.has(normalizeTerm(entry.target))
+              || (entry.aliases ?? []).some((alias) => normalizedTargets.has(normalizeTerm(alias)))
+            ))
+            || (sequence.length > 0 && entry.pyashSequence?.join(" ") === sequence.join(" "))
+            || (selectedSenseIds.size > 0 && selectedSenseIds.has(entry.senseId?.toLowerCase()))
+          ));
+        }
+        // A stale posting can point beyond the current source file. Fall through
+        // to the bounded-by-query source scan rather than parsing an empty map.
       }
     }
-    const source = await readFile(url, "utf8");
+    const sourcePath = url instanceof URL && url.href === WORDNET_VERIFIED_COMPOUNDS_URL.href
+      ? resolve(indexRoot, WORDNET_VERIFIED_COMPOUNDS_SOURCE_ID)
+      : url;
+    const source = await readFile(sourcePath, "utf8");
     const lines = source.split(/\r?\n/u);
     const header = lines[0] ?? "";
     const targetNeedles = [...normalizedTargets].map((value) => (

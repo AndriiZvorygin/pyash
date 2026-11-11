@@ -15,6 +15,8 @@ import {
   resolveWordNetSenseCompoundMaximumComponents,
   resolveWordNetSenseCompoundMinimumTagCount,
   resolveWordNetSenseCompoundSenseIds,
+  runSenseCompoundChoiceWaves,
+  runSenseCompoundVocabularyLookups,
   runWordNetSenseCompoundRefinery
 } from "../program/library/translation/wordnet_sense_compound_refinery.mjs";
 import {
@@ -82,6 +84,59 @@ test("sense compound sweep batches an exact retry queue in groups of 64", async 
   assert.deepEqual(batches.flat(), senseIds);
   assert.equal(result.sweepComplete, true);
   assert.equal(result.remainingSenseCount, 0);
+});
+
+test("sense compound choice waves resolve one lookahead while bounded provider work runs", async () => {
+  const events = [];
+  const senses = Array.from({ length: 17 }, (_, index) => ({ senseId: `n:${String(index).padStart(8, "0")}-n` }));
+  let resolveWaveIndex = 0;
+  let activeDispatches = 0;
+  let maximumActiveDispatches = 0;
+
+  await runSenseCompoundChoiceWaves(senses, {
+    width: 8,
+    resolveWave: async (wave) => {
+      const waveIndex = resolveWaveIndex++;
+      events.push(`resolve:${waveIndex}:${wave.length}`);
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      return new Map(wave.map((sense) => [sense.senseId, sense.senseId]));
+    },
+    dispatch: async (sense, choices) => {
+      assert.equal(choices.get(sense.senseId), sense.senseId);
+      activeDispatches += 1;
+      maximumActiveDispatches = Math.max(maximumActiveDispatches, activeDispatches);
+      events.push(`start:${sense.senseId}`);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      activeDispatches -= 1;
+      events.push(`finish:${sense.senseId}`);
+    }
+  });
+
+  assert.deepEqual(events.filter((event) => event.startsWith("resolve:")), ["resolve:0:8", "resolve:1:8", "resolve:2:1"]);
+  assert.ok(events.indexOf("resolve:1:8") < events.indexOf("finish:n:00000000-n"));
+  assert.equal(maximumActiveDispatches, 8);
+  assert.equal(activeDispatches, 0);
+});
+
+test("sense compound vocabulary lookup splits large gloss waves into bounded calls", async () => {
+  const terms = Array.from({ length: 19 }, (_, index) => `gloss ${index}`);
+  const calls = [];
+
+  const result = await runSenseCompoundVocabularyLookups(terms, {
+    chunkSize: 8,
+    suggestVocabulary: async (args) => {
+      const chunk = args.filter((value) => value !== "--text");
+      calls.push(chunk);
+      return {
+        suggestionRecords: chunk.map((term) => ({ term })),
+        linkedWordNetSenses: chunk.map((term) => ({ term, senseId: `n:${term}` }))
+      };
+    }
+  });
+
+  assert.deepEqual(calls.map((call) => call.length), [8, 8, 3]);
+  assert.deepEqual(result.suggestionRecords.map((record) => record.term), terms);
+  assert.deepEqual(result.linkedWordNetSenses.map((record) => record.term), terms);
 });
 
 test("sense compound refinery links, composes, decides, and records one complete sense", async () => {
