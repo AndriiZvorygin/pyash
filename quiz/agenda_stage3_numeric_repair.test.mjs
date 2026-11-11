@@ -5318,6 +5318,9 @@ test("stage3 guards generated prose against conflicting structured agenda dates"
   assert.match(source, /stage3 final unsupported-speech-act repair/iu);
   assert.match(source, /const finalNumericSpecificityDefect =/iu);
   assert.match(source, /stage3 final numeric-specificity repair/iu);
+  assert.match(source, /const NUMERIC_PLACEHOLDER_PATTERN =/iu);
+  assert.match(source, /queryConservativeNumericPlaceholderRepair/iu);
+  assert.match(source, /stage3 final numeric-placeholder repair/iu);
   assert.match(source, /const separateProceduralPhasesOnly =/iu);
   assert.match(source, /HARD RETRY: use only this conservative form:.*separate motions were being used/iu);
   assert.match(source, /const unsupportedMotionClaim =/iu);

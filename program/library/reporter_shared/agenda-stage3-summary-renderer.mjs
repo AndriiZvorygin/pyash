@@ -747,6 +747,7 @@ const SPELLED_STREET_ORDINAL = new RegExp(`\\b${ORDINAL_WORD}\\s+(?:Avenue|Stree
 const NUMERIC_WORD_TOKEN = "(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|sixteenth|seventeenth|eighteenth|nineteenth|twentieth|thirtieth)";
 const SPELLED_NUMBER_PHRASE = new RegExp(`\\b${NUMERIC_WORD_TOKEN}(?:[ -]+(?:and[ -]+)?${NUMERIC_WORD_TOKEN})*\\b`, "giu");
 const MIXED_MAGNITUDE_NUMBER = new RegExp(`\\b\\d+\\s+(?:hundred|thousand)(?:\\s+and\\s+(?:\\d+|${NUMERIC_WORD_TOKEN}))?\\b`, "giu");
+const NUMERIC_PLACEHOLDER_PATTERN = /\\b(?:a|an|the)\\s+(?:certain|particular|specific)\\s+(?:value|amount|number|figure|ratio|quantity|count)\\b|\\b(?:about|approximately|over|under)\\s+(?:a|an|the)\\s+(?:certain|particular|specific)\\b/iu;
 
 function numericFidelityDefects(text = "") {
   const value = String(text || "");
@@ -3453,6 +3454,44 @@ export async function summarizeGroundedUnit({
     }
     throw new Error(`stage3 retryable: numeric-specificity repair retained an unsupported unspecified claim for unit ${String(unit["unit id"] || unit["agenda item"] || "unknown")}`);
   };
+  const queryConservativeNumericPlaceholderRepair = async (attempt = 1, rejectedClaims = "", rejectedOutput = "") => {
+    let repaired = null;
+    const sourceWithNumericDetail = String(semanticGroundingSourceExcerpt || unit?.["source excerpt"] || "")
+      .slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000));
+    for (let refreshAttempt = 1; refreshAttempt <= 4; refreshAttempt += 1) {
+      repaired = await callOllamaJson({
+        ollamaUrl,
+        llmModel,
+        appendUniversalContract: false,
+        system: "Write fresh source-grounded civic prose that preserves explicit numeric detail and never replaces it with a placeholder. Return strict JSON only.",
+        systemSuffix: "HARD NUMERIC-PLACEHOLDER OVERRIDE: never write a placeholder such as 'a certain value', 'a certain ratio', 'a specific amount', or 'an unspecified number'. When the bounded source explicitly pairs a number, amount, date, year, ratio, count, or range with a subject, copy that exact source-supported detail in Arabic digits. If a pairing is genuinely ambiguous, omit that numeric claim rather than inventing or generalizing it. Do not mention this repair contract or the rejected candidate.",
+        prompt: [
+          `Explicit-numeric-placeholder repair attempt ${refreshAttempt} after grounding attempt ${attempt}.`,
+          "Discard the rejected candidate and rebuild from GROUNDED_SOURCE only.",
+          "The rejected prose used a placeholder for a value or ratio, or generalized away an explicit source figure. Preserve every exact numeric detail that the bounded source clearly pairs with its subject, using Arabic digits and the source's own qualifiers (for example, 'approximately', 'more than', or a range). Keep separate figures attached to their original subjects; do not merge, calculate, reconcile, or transfer figures across projects or sentences.",
+          "Never use 'a certain value', 'a certain ratio', 'a specific amount', 'an unspecified number', or similar placeholder language. Do not call an explicit value unknown, unclear, or not given. If the source pairing is not clear, omit that one numeric claim while retaining other independently supported prose.",
+          SOURCE_QUALIFIER_FIDELITY_RULE,
+          UNIVERSAL_BOUNDED_SOURCE_PROSE_RULE,
+          refreshAttempt === 1
+            ? `REJECTION_REASON: ${String(rejectedClaims || "").trim() || "(none supplied; preserve explicit source figures)"}`
+            : "Fresh retry: discard every prior candidate and audit wording; regenerate from the literal source only.",
+          refreshAttempt === 1 && rejectedOutput ? `REJECTED_CANDIDATE: ${String(rejectedOutput).slice(0, 3200)}` : "",
+          "Return one non-empty complete source-grounded summary and chapter text. Do not copy the rejected candidate, audit prose, or placeholder wording.",
+          `AGENDA_LABEL: ${promptLabel}`,
+          `GROUNDED_SOURCE: ${sourceWithNumericDetail}`,
+          "FINAL OUTPUT CHECK: no numeric placeholder, unspecified/unknown/unclear wording for an explicit source figure, invented calculation, transferred amount, or audit fragment. Every retained number must be copied from its clear source pairing.",
+        ].filter(Boolean).join("\n\n"),
+        maxOutputTokens: 720,
+        temperature: refreshAttempt >= 3 ? 0 : 0.1,
+        seed: seed + 10075 + attempt + refreshAttempt,
+        format: STAGE3_SUMMARY_RESPONSE_FORMAT,
+      });
+      const repairedText = `${String(repaired?.summary || "")} ${String(repaired?.["chapter text"] || "")}`;
+      if (!NUMERIC_PLACEHOLDER_PATTERN.test(repairedText)
+        && !/\b(?:unspecified|unknown|unclear|not\s+(?:specified|given|provided))\b/iu.test(repairedText)) return repaired;
+    }
+    throw new Error(`stage3 retryable: numeric-placeholder repair retained placeholder wording for unit ${String(unit["unit id"] || unit["agenda item"] || "unknown")}`);
+  };
   const queryUnsupportedSecondingRepair = async (attempt = 1) => {
     let repaired = null;
     for (let refreshAttempt = 1; refreshAttempt <= 4; refreshAttempt += 1) {
@@ -5090,6 +5129,8 @@ export async function summarizeGroundedUnit({
           || /\b(?:explicit(?:ly)?\s+(?:stated|provided|identified)|source\s+(?:provides|contains|explicitly)|exact\s+(?:figures|amounts|values)|specific\s+amounts?)\b/iu.test(auditFeedback)
           || (auditNumericValues.length > 0 && /\b(?:source|candidate|amount|number|figure|value|numeric|budget|financial)\b/iu.test(auditFeedback))
         );
+      const numericPlaceholderDefect = NUMERIC_PLACEHOLDER_PATTERN.test(generatedProse)
+        || (NUMERIC_PLACEHOLDER_PATTERN.test(auditFeedback) && /\b(?:candidate|summary|prose|claim|placeholder|specific\s+figures?|exact\s+(?:figures?|amounts?|values?))\b/iu.test(auditFeedback));
       const parentScopeDefect = Boolean(parentOverviewGenerationContract)
         && /\b(?:not\s+supported|unsupported|no\s+(?:mention|record|statement)|does\s+not\s+(?:mention|record|state)|scope|broader|narrower)\b/iu.test(auditFeedback);
       const questionScopeDefect = Boolean(parentOverviewGenerationContract)
@@ -5184,6 +5225,8 @@ export async function summarizeGroundedUnit({
         ? await queryConservativeNegationRepair(groundingAttempt, auditFeedback, rejectedOutput)
         : deferralSubjectDefect
         ? await queryUnsupportedDeferralSubjectRepair(groundingAttempt, auditFeedback, rejectedOutput)
+        : numericPlaceholderDefect
+        ? await queryConservativeNumericPlaceholderRepair(groundingAttempt, auditFeedback, rejectedOutput)
         : numericConflictDefect
         ? await queryConservativeNumericConflictRepair(groundingAttempt, auditFeedback, rejectedOutput)
         : conditionalRelationshipDefect
@@ -5510,6 +5553,8 @@ export async function summarizeGroundedUnit({
       const finalNumericConflictDefect = /\b(?:contradict(?:ed|s|ing|ory|ion)?|conflict(?:ed|s|ing)?|ambig(?:uous|uity)|uncertain|mismatch|discrepanc(?:y|ies)?|ASR)\b/iu.test(finalAuditFeedback)
         && /\b(?:numeric|number|date|year|amount|budget|expenditure|financial|ordinal|figure|value|requirement|cost)\b/iu.test(`${finalGeneratedProse} ${finalAuditFeedback}`)
         && /(?:\d[\d,]*(?:\.\d+)?|\b(?:19|20)\d{2}\b)/u.test(finalAuditFeedback);
+      const finalNumericPlaceholderDefect = NUMERIC_PLACEHOLDER_PATTERN.test(finalGeneratedProse)
+        || (NUMERIC_PLACEHOLDER_PATTERN.test(finalAuditFeedback) && /\b(?:candidate|summary|prose|claim|placeholder|specific\s+figures?|exact\s+(?:figures?|amounts?|values?))\b/iu.test(finalAuditFeedback));
       const finalNumericSpecificityDefect = /\b(?:unspecified|unknown|unclear|not\s+(?:specified|given|provided))\b/iu.test(finalGeneratedProse)
         && /\b(?:amount|budget|requirement|year|date|quantity|cost|figure|number|value|financial)\b/iu.test(finalGeneratedProse)
         && /\b(?:explicit(?:ly)?|exact|specific|source|provided|stated|figure|amount|number|value|numeric)\b/iu.test(finalAuditFeedback)
@@ -5867,6 +5912,39 @@ export async function summarizeGroundedUnit({
         await repairSpeakerMetadata("final causal-relationship");
         await repairDocumentSpeechAct("final causal-relationship");
         await repairStructuredDateIdentity("final causal-relationship");
+        groundingAudit = await auditAndAdjudicateGroundedSummary({
+          label: promptLabel,
+          summary,
+          sourceExcerpt: semanticGroundingSourceExcerpt,
+          llmModel,
+          ollamaUrl,
+          governingBody,
+          motionEvidence: ordinalMotionEvidence,
+          amendmentEvidence,
+          speakerHandoffEvidence,
+          documentSourceOnly,
+          numericConflictRepairActive,
+          deferralObjectRepairActive,
+        });
+      }
+      if (!groundingAudit.grounded && finalNumericPlaceholderDefect) {
+        parsed = await queryConservativeNumericPlaceholderRepair(
+          4,
+          finalAuditFeedback,
+          JSON.stringify({
+            summary: normalizeText(summary),
+            "chapter text": normalizeText(parsed?.["chapter text"] || ""),
+          }),
+        );
+        rawSummary = normalizeText(parsed?.summary || "");
+        assertCleanStage3Text(rawSummary, "stage3 final numeric-placeholder repair");
+        summary = enforceSummaryBudget(rawSummary, budget);
+        if (!summary) {
+          throw new Error(`stage3 retryable: final numeric-placeholder repair produced an empty summary for unit ${String(unit["unit id"] || unit["agenda item"] || "unknown")}`);
+        }
+        await repairSpeakerMetadata("final numeric-placeholder");
+        await repairDocumentSpeechAct("final numeric-placeholder");
+        await repairStructuredDateIdentity("final numeric-placeholder");
         groundingAudit = await auditAndAdjudicateGroundedSummary({
           label: promptLabel,
           summary,
