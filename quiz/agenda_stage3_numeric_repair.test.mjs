@@ -5216,11 +5216,16 @@ test("stage3 guards generated prose against conflicting structured agenda dates"
   assert.match(source, /queryConservativeGenericPluralActorRepair/iu);
   assert.match(source, /finalGenericPluralActorDefect/iu);
   assert.match(source, /function unsupportedQualifierGroundingDefect\(text = ""\)/iu);
+  assert.match(source, /function unsupportedEvidenceSpecificityGroundingDefect\(text = ""\)/iu);
+  assert.match(source, /HARD UNSUPPORTED-EVIDENCE-SPECIFICITY OVERRIDE[\s\S]*only lists or names a programme[\s\S]*grant was approved/iu);
   assert.match(source, /Do not add descriptive qualifiers such as 'new', 'updated', 'current'/iu);
   assert.match(source, /HARD UNSUPPORTED-QUALIFIER OVERRIDE.*Remove only that unsupported modifier/iu);
   assert.match(source, /const unsupportedQualifierDefect = unsupportedQualifierGroundingDefect\(auditFeedback\)/iu);
+  assert.match(source, /const unsupportedEvidenceSpecificityDefect = unsupportedEvidenceSpecificityGroundingDefect\(auditFeedback\)/iu);
+  assert.match(source, /queryConservativeUnsupportedEvidenceSpecificityRepair/iu);
   assert.match(source, /queryConservativeUnsupportedQualifierRepair/iu);
   assert.match(source, /finalUnsupportedQualifierDefect/iu);
+  assert.match(source, /finalUnsupportedEvidenceSpecificityDefect/iu);
   assert.match(source, /const PARENT_AUDITED_CHILD_EVIDENCE_RULE =/iu);
   assert.match(source, /const FRAGMENTED_TRANSCRIPT_GROUNDING_RULE =/iu);
   assert.match(source, /adjacent lines in the same bounded source/iu);

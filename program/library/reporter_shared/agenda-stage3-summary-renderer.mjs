@@ -344,6 +344,14 @@ function unsupportedQualifierGroundingDefect(text = "") {
     && /\b(?:does\s+not\s+(?:explicitly\s+)?(?:state|record|say|label|call)|not\s+explicitly\s+(?:state|record|said|labelled|labeled)|unsupported|adds?\s+(?:the\s+)?(?:qualifier|descriptor|modifier|word)|changes?\s+the\s+(?:claim|truth)|not\s+present|absent)\b/iu.test(evidence);
 }
 
+function unsupportedEvidenceSpecificityGroundingDefect(text = "") {
+  const evidence = String(text || "");
+  const sourceGap = /\b(?:source|transcript|excerpt|provided\s+text|bounded\s+source)\b[\s\S]{0,420}\b(?:does\s+not|doesn't|never|not)\b[\s\S]{0,180}\b(?:mention|confirm|record|state|detail|specif|support|establish|list(?:s|ed)?\s+only|general(?:ly)?)\b/iu.test(evidence)
+    || /\blist(?:s|ed)?\b[\s\S]{0,180}\b(?:but|yet)\b[\s\S]{0,120}\b(?:does\s+not|doesn't|not)\b[\s\S]{0,120}\b(?:confirm|detail|establish|support)\b/iu.test(evidence);
+  const candidateSpecificClaim = /\b(?:candidate|summary|claim|output|prose|draft)\b[\s\S]{0,480}\b(?:specific|approved|adopted|withdraw(?:n|al)?|reserve|grant(?:s)?|fund(?:ed|ing)?|awarded|allocated|issued|project(?:s)?|action(?:s)?|amount|completed|confirmed|authorized|committed)\b/iu.test(evidence);
+  return sourceGap && candidateSpecificClaim;
+}
+
 function fragmentedTranscriptGroundingDefect(text = "") {
   const evidence = String(text || "");
   return /\b(?:fragmented\s+(?:speech|source|transcript|lines?)|fragmentary\s+(?:speech|source|transcript|lines?)|transcript\s+fragments?|source\s+(?:fragment|ends?|is\s+truncated)|ASR\s+(?:fragment|line))\b/iu.test(evidence)
@@ -3047,6 +3055,44 @@ export async function summarizeGroundedUnit({
     }
     return repaired;
   };
+  const queryConservativeUnsupportedEvidenceSpecificityRepair = async (attempt = 1, rejectedClaims = "", rejectedOutput = "") => {
+    let repaired = null;
+    for (let pass = 1; pass <= 3; pass += 1) {
+      repaired = await callOllamaJson({
+        ollamaUrl,
+        llmModel,
+        appendUniversalContract: false,
+        system: "Write fresh source-grounded civic prose that does not turn a programme name into a completed financial or institutional action. Return strict JSON only.",
+        systemSuffix: [
+          "HARD UNSUPPORTED-EVIDENCE-SPECIFICITY OVERRIDE: the audit says the prior output asserted a specific amount, reserve withdrawal, grant, approval, allocation, award, project result, or other completed action that the bounded source does not explicitly state.",
+          "Start over from the literal bounded source. If the source only lists or names a programme, report, category, or grant title, say only that the source listed or described it; do not say that a grant was approved, awarded, funded, withdrawn, allocated, or completed. If an amount or reserve action is absent, omit it. Preserve a source-supported presentation, discussion, recommendation, or generic programme description without inventing its status.",
+          "Do not copy the rejected claim or audit wording. When a specific detail is unsupported, omit that detail rather than weakening it into a different specific claim. Keep separate listed programme names separate and do not infer that any one was acted on.",
+          pass > 1
+            ? "The preceding repair retained unsupported specificity. Discard it completely and regenerate from literal source nouns and actions only; a shorter neutral summary is preferred to an invented approval or financial action."
+            : "",
+        ].filter(Boolean).join(" "),
+        prompt: [
+          `Unsupported-evidence-specificity repair attempt ${attempt}.${pass} of 3.`,
+          "The rejected candidate and audit are diagnostic context, not source evidence.",
+          "Preserve only what the bounded source explicitly states. A programme title, grant name, budget heading, or general description is not proof that money was withdrawn, a grant was approved, a project was completed, or an action was authorized. Do not add a reserve draw, grant award, approval, allocation, completion, or amount unless the same source explicitly records it.",
+          "If the source names several programmes, use a neutral sentence such as 'The report described several programmes, including ...' only when those names are literally present. Do not turn names into specific approved grants or completed projects. Keep any source-supported recommendation or report framing separate from the listed names.",
+          "Return one non-empty complete summary and chapter text. Omit disputed specifics rather than guessing, and do not mention this repair or audit.",
+          `REJECTION_REASON: ${String(rejectedClaims || "").trim() || "the candidate contains a specific action or status absent from the bounded source"}`,
+          rejectedOutput ? `REJECTED_CANDIDATE (UNTRUSTED): ${String(rejectedOutput).slice(0, 3200)}` : "",
+          `AGENDA_LABEL: ${promptLabel}`,
+          `GROUNDED_SOURCE: ${String(semanticGroundingSourceExcerpt || unit?.["source excerpt"] || "").slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000))}`,
+          "FINAL OUTPUT CHECK: no unsupported reserve withdrawal, grant approval or award, allocation, completed project, authorized action, or amount; retain only literal source-supported description, discussion, recommendation, or status.",
+        ].filter(Boolean).join("\n\n"),
+        maxOutputTokens: 720,
+        temperature: pass >= 3 ? 0 : 0.1,
+        seed: seed + 18080 + attempt * 10 + pass,
+        format: STAGE3_SUMMARY_RESPONSE_FORMAT,
+      });
+      const repairedText = `${String(repaired?.summary || "")} ${String(repaired?.["chapter text"] || "")}`;
+      if (!unsupportedEvidenceSpecificityGroundingDefect(repairedText)) return repaired;
+    }
+    return repaired;
+  };
   const queryConservativeFragmentedSourceRepair = async (attempt = 1, rejectedClaims = "", rejectedOutput = "") => {
     let repaired = null;
     for (let pass = 1; pass <= 3; pass += 1) {
@@ -5097,6 +5143,7 @@ export async function summarizeGroundedUnit({
       const genericPluralActorDefect = genericPluralActorGroundingDefect(auditFeedback);
       const unsupportedQualifierDefect = unsupportedQualifierGroundingDefect(auditFeedback)
         && !institutionalActorDefect;
+      const unsupportedEvidenceSpecificityDefect = unsupportedEvidenceSpecificityGroundingDefect(auditFeedback);
       const fragmentedTranscriptDefect = fragmentedTranscriptGroundingDefect(auditFeedback)
         && !institutionalActorDefect;
       const presentationDiscussionDefect = presentationDiscussionGroundingDefect(auditFeedback)
@@ -5145,6 +5192,8 @@ export async function summarizeGroundedUnit({
         ? await queryConservativeReferredAgendaScopeRepair(groundingAttempt, auditFeedback, rejectedOutput)
         : unsupportedSpeechActDefect
         ? await queryConservativeUnsupportedSpeechActRepair(groundingAttempt, auditFeedback, rejectedOutput)
+        : unsupportedEvidenceSpecificityDefect
+        ? await queryConservativeUnsupportedEvidenceSpecificityRepair(groundingAttempt, auditFeedback, rejectedOutput)
         : presentationDiscussionDefect
         ? await queryConservativePresentationFramingRepair(groundingAttempt, auditFeedback, rejectedOutput)
         : separateDiscussionDefect
@@ -5447,6 +5496,7 @@ export async function summarizeGroundedUnit({
         && /\b(?:speakers|participants|members|officials)\b/iu.test(finalGeneratedProse);
       const finalUnsupportedQualifierDefect = unsupportedQualifierGroundingDefect(finalAuditFeedback)
         && /\b(?:new|updated|current|redesigned|digital|expanded|improved)\b/iu.test(finalGeneratedProse);
+      const finalUnsupportedEvidenceSpecificityDefect = unsupportedEvidenceSpecificityGroundingDefect(finalAuditFeedback);
       const finalConditionalRecommendationDefect = (conditionalDeferralRecommendationSource(semanticGroundingSourceExcerpt)
         || (/\b(?:would|could)\s+recommend\b/iu.test(semanticGroundingSourceExcerpt)
           && /\b(?:deferr|postpon|refer|recommend|action|matter)\w*/iu.test(semanticGroundingSourceExcerpt)))
@@ -5618,6 +5668,39 @@ export async function summarizeGroundedUnit({
         await repairSpeakerMetadata("final unsupported-qualifier");
         await repairDocumentSpeechAct("final unsupported-qualifier");
         await repairStructuredDateIdentity("final unsupported-qualifier");
+        groundingAudit = await auditAndAdjudicateGroundedSummary({
+          label: promptLabel,
+          summary,
+          sourceExcerpt: semanticGroundingSourceExcerpt,
+          llmModel,
+          ollamaUrl,
+          governingBody,
+          motionEvidence: ordinalMotionEvidence,
+          amendmentEvidence,
+          speakerHandoffEvidence,
+          documentSourceOnly,
+          numericConflictRepairActive,
+          deferralObjectRepairActive,
+        });
+      }
+      if (!groundingAudit.grounded && finalUnsupportedEvidenceSpecificityDefect) {
+        parsed = await queryConservativeUnsupportedEvidenceSpecificityRepair(
+          4,
+          finalAuditFeedback,
+          JSON.stringify({
+            summary: normalizeText(summary),
+            "chapter text": normalizeText(parsed?.["chapter text"] || ""),
+          }),
+        );
+        rawSummary = normalizeText(parsed?.summary || "");
+        assertCleanStage3Text(rawSummary, "stage3 final unsupported-evidence-specificity repair");
+        summary = enforceSummaryBudget(rawSummary, budget);
+        if (!summary) {
+          throw new Error(`stage3 retryable: final unsupported-evidence-specificity repair produced an empty summary for unit ${String(unit["unit id"] || unit["agenda item"] || "unknown")}`);
+        }
+        await repairSpeakerMetadata("final unsupported-evidence-specificity");
+        await repairDocumentSpeechAct("final unsupported-evidence-specificity");
+        await repairStructuredDateIdentity("final unsupported-evidence-specificity");
         groundingAudit = await auditAndAdjudicateGroundedSummary({
           label: promptLabel,
           summary,
