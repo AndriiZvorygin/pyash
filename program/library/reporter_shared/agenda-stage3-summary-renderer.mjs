@@ -3857,7 +3857,7 @@ export async function summarizeGroundedUnit({
     let repaired = null;
     for (let pass = 1; pass <= 3; pass += 1) {
       const retryInstruction = pass > 1
-        ? "HARD RETRY: the previous repair still changed the source's procedural contrast. Keep 'if there is any discussion of the minutes, the matter would need to go into a closed session' explicitly conditional; do not state that discussion requires closed as an absolute fact and do not invert the condition. Do not say a speaker questioned whether the minutes would appear on the open agenda; do not say approval occurred 'if there is no discussion' or 'without discussion'; do not say a named addressee was asked for comments; do not call this a formal motion to move the minutes when the source only records a request for a mover and a carried vote. State the literal closed-session/open-agenda distinction impersonally and report the vote neutrally."
+        ? "HARD RETRY: the previous repair still changed the source's procedural contrast. Keep 'if there is any discussion of the minutes, the matter would need to go into a closed session' explicitly conditional; do not state that discussion requires closed as an absolute fact and do not invert the condition. Use past or neutral impersonal wording, never 'a speaker asks', 'a speaker confirms', 'a councillor asks', or a named addressee. Do not say a speaker questioned whether the minutes would appear on the open agenda; do not say approval occurred 'if there is no discussion' or 'without discussion'; do not say a named addressee was asked for comments; do not call this a formal motion to move the minutes when the source only records a request for a mover and a carried vote. State the literal closed-session/open-agenda distinction impersonally and report the vote neutrally."
         : "";
       const minutesRepairRules = closedMinutesProcedureOnly
         ? [
@@ -3865,7 +3865,7 @@ export async function summarizeGroundedUnit({
           "The question asks whether the minutes would be on a CLOSED meeting agenda. Preserve that exact subject; it is not a question about whether they would be on an open agenda.",
           "The answer has three separate propositions: the minutes would be listed on the OPEN agenda; discussion of the minutes would require going into a CLOSED session; otherwise the minutes could be approved on the OPEN agenda.",
           "The source then records that someone was sought to move the minutes and that the vote was carried. Keep that procedural vote separate from the three propositions; do not invent formal motion wording that the bounded source does not state.",
-          "Write one impersonal summary containing all four source-supported parts. Preserve the condition explicitly as 'if there is any discussion of the minutes, the matter would need to go into a closed session'. Do not use speaker/member/councillor questioned or asked wording, do not invert the closed/open distinction, do not turn the condition into an absolute fact, and do not replace it with 'if there is no discussion' or 'without discussion'.",
+          "Write one impersonal summary containing all four source-supported parts. Preserve the condition explicitly as 'if there is any discussion of the minutes, the matter would need to go into a closed session'. Do not use speaker/member/councillor questioned or asked wording, do not name an addressee, do not use present-tense verbs such as asks or confirms, do not invert the closed/open distinction, do not turn the condition into an absolute fact, and do not replace it with 'if there is no discussion' or 'without discussion'.",
         ].join(" ")
         : [
           MINUTES_MOTION_SCOPE_REPAIR_RULE,
@@ -3905,6 +3905,11 @@ export async function summarizeGroundedUnit({
       );
       const closedMinutesFormalMotionDefect = closedMinutesProcedureOnly
         && /\bmotion\s+to\s+move\s+(?:the\s+)?minutes\b[\s\S]{0,80}\b(?:carried|approved|adopted)\b/iu.test(repairedText);
+      const closedMinutesGenericActorDefect = closedMinutesProcedureOnly && (
+        /\b(?:a|another|the)\s+(?:speaker|councillor|councilor|member)\b/iu.test(repairedText)
+        || /\b(?:councillor|councilor)\s+[A-Z][A-Za-z'-]+\b/u.test(repairedText)
+        || /\b(?:asks?|confirms?|explains?|states?|says?)\b/iu.test(repairedText)
+      );
       const closedMinutesRepairDefect = closedMinutesProcedureOnly && (
         /\b(?:speaker|member|councillor|councilor)\b[\s\S]{0,90}\b(?:question(?:ed|s)?|asked)\b[\s\S]{0,180}\b(?:open\s+agenda|appear|listed)\b/iu.test(repairedText)
         || /\bif\s+(?:there['’]?s|there\s+is)\s+(?:any\s+)?discussion\b/iu.test(repairedText) === false && /\bif\s+there\s+is\s+no\s+discussion\b/iu.test(repairedText)
@@ -3913,6 +3918,7 @@ export async function summarizeGroundedUnit({
         || closedMinutesContrastIncomplete
         || closedMinutesConditionalDefect
         || closedMinutesFormalMotionDefect
+        || closedMinutesGenericActorDefect
       );
       if (!closedMinutesRepairDefect) return repaired;
     }
