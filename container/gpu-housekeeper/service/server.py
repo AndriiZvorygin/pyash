@@ -4276,56 +4276,71 @@ def upload_comfyui_audio(audio_input: Dict[str, Any]) -> str:
   content_type = normalize_text(audio_input.get("contentType")) or "application/octet-stream"
   if any(char in content_type for char in "\r\n"):
     raise RuntimeError("comfyui audioInput.contentType is invalid")
-  boundary = f"----pyash-housekeeper-{uuid.uuid4().hex}"
-  fields = [
-    ("type", "input"),
-    ("overwrite", "true"),
+  # ComfyUI versions differ in which upload route/field they expose for
+  # audio. Keep the same compatibility order as the direct runner, while
+  # making every attempt from the Housekeeper's provider network.
+  targets = [
+    ("/upload/audio", "audio"),
+    ("/upload/audio", "image"),
+    ("/upload/image", "image"),
   ]
-  chunks: List[bytes] = []
-  for name, value in fields:
+  failures: List[str] = []
+  for endpoint, field in targets:
+    boundary = f"----pyash-housekeeper-{uuid.uuid4().hex}"
+    fields = [
+      ("type", "input"),
+      ("overwrite", "true"),
+    ]
+    chunks: List[bytes] = []
+    for name, value in fields:
+      chunks.extend([
+        f"--{boundary}\r\n".encode("utf-8"),
+        f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"),
+        value.encode("utf-8"),
+        b"\r\n",
+      ])
     chunks.extend([
       f"--{boundary}\r\n".encode("utf-8"),
-      f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"),
-      value.encode("utf-8"),
+      f'Content-Disposition: form-data; name="{field}"; filename="{safe_name}"\r\n'.encode("utf-8"),
+      f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"),
+      audio_bytes,
       b"\r\n",
+      f"--{boundary}--\r\n".encode("utf-8"),
     ])
-  chunks.extend([
-    f"--{boundary}\r\n".encode("utf-8"),
-    f'Content-Disposition: form-data; name="audio"; filename="{safe_name}"\r\n'.encode("utf-8"),
-    f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"),
-    audio_bytes,
-    b"\r\n",
-    f"--{boundary}--\r\n".encode("utf-8"),
-  ])
-  body = b"".join(chunks)
-  url = f"{comfyui_runtime_url().rstrip('/')}/upload/audio"
-  req = Request(
-    url,
-    data=body,
-    headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
-  )
-  try:
-    with urlopen(req, timeout=120) as response:
-      raw = response.read().decode("utf-8")
-  except HTTPError as err:
-    detail = ""
+    body = b"".join(chunks)
+    url = f"{comfyui_runtime_url().rstrip('/')}{endpoint}"
+    req = Request(
+      url,
+      data=body,
+      headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+    )
     try:
-      detail = err.read().decode("utf-8")
+      with urlopen(req, timeout=120) as response:
+        raw = response.read().decode("utf-8")
+    except HTTPError as err:
+      detail = ""
+      try:
+        detail = err.read().decode("utf-8")
+      except Exception:
+        detail = str(err)
+      failures.append(f"{endpoint} ({field}) {err.code}: {detail}")
+      continue
+    except URLError as err:
+      raise RuntimeError(f"comfyui audio upload failed: {err.reason}") from err
+    try:
+      payload = json.loads(raw or "{}")
     except Exception:
-      detail = str(err)
-    raise RuntimeError(f"comfyui audio upload failed {err.code}: {detail}") from err
-  except URLError as err:
-    raise RuntimeError(f"comfyui audio upload failed: {err.reason}") from err
-  try:
-    payload = json.loads(raw or "{}")
-  except Exception as err:
-    raise RuntimeError("comfyui audio upload returned invalid JSON") from err
-  uploaded = normalize_text(payload.get("name") or payload.get("filename") or payload.get("file")) if isinstance(payload, dict) else ""
-  if not uploaded:
-    raise RuntimeError("comfyui audio upload returned no filename")
-  subfolder = normalize_text(payload.get("subfolder")) if isinstance(payload, dict) else ""
-  clean_subfolder = subfolder.strip("/\\")
-  return f"{clean_subfolder}/{uploaded}" if clean_subfolder else uploaded
+      failures.append(f"{endpoint} ({field}) returned invalid JSON")
+      continue
+    uploaded = normalize_text(payload.get("name") or payload.get("filename") or payload.get("file")) if isinstance(payload, dict) else ""
+    if not uploaded:
+      failures.append(f"{endpoint} ({field}) returned no filename")
+      continue
+    subfolder = normalize_text(payload.get("subfolder")) if isinstance(payload, dict) else ""
+    clean_subfolder = subfolder.strip("/\\")
+    return f"{clean_subfolder}/{uploaded}" if clean_subfolder else uploaded
+  detail = "; ".join(failures) or "no compatible upload route"
+  raise RuntimeError(f"comfyui audio upload failed: {detail}")
 
 
 def request_ollama_json(pathname: str, payload: Optional[Dict[str, Any]] = None, timeout_sec: int = 600) -> Dict[str, Any]:
