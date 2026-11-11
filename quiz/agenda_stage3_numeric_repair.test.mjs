@@ -1964,7 +1964,7 @@ test("stage3 retries closed-minutes repairs that invert the procedural contrast"
       repairedGood = repairCalls >= 3;
       content = repairedGood
         ? {
-          summary: "The excerpt records a question about whether closed-session minutes should be listed on a closed-meeting agenda, followed by an explanation that they are listed on the open agenda, discussion of them would require a closed session, and otherwise they can be approved on the open agenda; a motion to move the minutes was then carried.",
+          summary: "The excerpt records a question about whether closed-session minutes should be listed on a closed-meeting agenda, followed by an explanation that they are listed on the open agenda, that if there is any discussion of the minutes the matter would need to go into a closed session, and that otherwise they can be approved on the open agenda; a vote on the minutes was carried.",
           "chapter text": "Closed-session minutes and open-agenda procedure",
           confidence: 0.9,
           notes: "",
@@ -2021,7 +2021,7 @@ test("stage3 retries closed-minutes repairs that invert the procedural contrast"
 
   assert.equal(repairCalls, 3);
   assert.match(result.summary, /whether closed-session minutes should be listed/iu);
-  assert.match(result.summary, /discussion of them would require a closed session/iu);
+  assert.match(result.summary, /if there is any discussion of the minutes.*closed session/iu);
   assert.doesNotMatch(result.summary, /if there is no discussion|without discussion|a speaker questioned whether.*open agenda/iu);
   assert.match(retryPrompt, /HARD RETRY/iu);
   assert.match(retryPrompt, /do not invert the condition/iu);

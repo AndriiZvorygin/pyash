@@ -3857,15 +3857,15 @@ export async function summarizeGroundedUnit({
     let repaired = null;
     for (let pass = 1; pass <= 3; pass += 1) {
       const retryInstruction = pass > 1
-        ? "HARD RETRY: the previous repair still changed the source's procedural contrast. Do not say a speaker questioned whether the minutes would appear on the open agenda; do not say approval occurred 'if there is no discussion' or 'without discussion'; do not say a named addressee was asked for comments. State the literal closed-session/open-agenda distinction impersonally and keep the carried minutes motion separate."
+        ? "HARD RETRY: the previous repair still changed the source's procedural contrast. Keep 'if there is any discussion of the minutes, the matter would need to go into a closed session' explicitly conditional; do not state that discussion requires closed as an absolute fact and do not invert the condition. Do not say a speaker questioned whether the minutes would appear on the open agenda; do not say approval occurred 'if there is no discussion' or 'without discussion'; do not say a named addressee was asked for comments; do not call this a formal motion to move the minutes when the source only records a request for a mover and a carried vote. State the literal closed-session/open-agenda distinction impersonally and report the vote neutrally."
         : "";
       const minutesRepairRules = closedMinutesProcedureOnly
         ? [
           "CLOSED-MINUTES REPAIR ONLY: use the source lines below as the complete evidence and ignore any generic minutes template.",
           "The question asks whether the minutes would be on a CLOSED meeting agenda. Preserve that exact subject; it is not a question about whether they would be on an open agenda.",
           "The answer has three separate propositions: the minutes would be listed on the OPEN agenda; discussion of the minutes would require going into a CLOSED session; otherwise the minutes could be approved on the OPEN agenda.",
-          "The source then records that someone was sought to move the minutes and that the motion was carried. Keep that motion separate from the three propositions.",
-          "Write one impersonal summary containing all four source-supported parts. Do not use speaker/member/councillor questioned or asked wording, do not invert the closed/open distinction, do not invert the condition, and do not replace the conditional 'discussion would require a closed session' with 'if there is no discussion' or 'without discussion'.",
+          "The source then records that someone was sought to move the minutes and that the vote was carried. Keep that procedural vote separate from the three propositions; do not invent formal motion wording that the bounded source does not state.",
+          "Write one impersonal summary containing all four source-supported parts. Preserve the condition explicitly as 'if there is any discussion of the minutes, the matter would need to go into a closed session'. Do not use speaker/member/councillor questioned or asked wording, do not invert the closed/open distinction, do not turn the condition into an absolute fact, and do not replace it with 'if there is no discussion' or 'without discussion'.",
         ].join(" ")
         : [
           MINUTES_MOTION_SCOPE_REPAIR_RULE,
@@ -3899,12 +3899,20 @@ export async function summarizeGroundedUnit({
         || !/\bdiscussion\b[\s\S]{0,120}\bclosed\s+session\b/iu.test(repairedText)
         || !/\b(?:otherwise|approv(?:e|ed|al))\b[\s\S]{0,120}\bopen\s+agenda\b/iu.test(repairedText)
       );
+      const closedMinutesConditionalDefect = closedMinutesProcedureOnly && (
+        !/\bif\b[\s\S]{0,100}\bdiscussion\b[\s\S]{0,120}\b(?:would|need(?:s)?|go(?:ing)?\s+into)\b[\s\S]{0,80}\bclosed\s+session\b/iu.test(repairedText)
+        || /\bdiscussion\b[\s\S]{0,80}\bwould\s+require\s+going\s+into\s+(?:a\s+)?closed\b/iu.test(repairedText)
+      );
+      const closedMinutesFormalMotionDefect = closedMinutesProcedureOnly
+        && /\bmotion\s+to\s+move\s+(?:the\s+)?minutes\b[\s\S]{0,80}\b(?:carried|approved|adopted)\b/iu.test(repairedText);
       const closedMinutesRepairDefect = closedMinutesProcedureOnly && (
         /\b(?:speaker|member|councillor|councilor)\b[\s\S]{0,90}\b(?:question(?:ed|s)?|asked)\b[\s\S]{0,180}\b(?:open\s+agenda|appear|listed)\b/iu.test(repairedText)
         || /\bif\s+(?:there['’]?s|there\s+is)\s+(?:any\s+)?discussion\b/iu.test(repairedText) === false && /\bif\s+there\s+is\s+no\s+discussion\b/iu.test(repairedText)
         || /\bwithout\s+discussion\b/iu.test(repairedText)
         || /\b(?:councillor|councilor)\s+\w+\s+was\s+asked\s+for\s+(?:comments?|questions?)\b/iu.test(repairedText)
         || closedMinutesContrastIncomplete
+        || closedMinutesConditionalDefect
+        || closedMinutesFormalMotionDefect
       );
       if (!closedMinutesRepairDefect) return repaired;
     }
