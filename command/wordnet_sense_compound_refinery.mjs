@@ -2,7 +2,6 @@
 
 import fs from "node:fs/promises";
 import path from "node:path";
-import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 import { prepareWordNetFrequencyAllocation } from "./wordnet_frequency_allocate.mjs";
@@ -64,6 +63,7 @@ export async function runWordNetSenseCompoundRefineryCommand({
   const releaseLock = await acquireRunLock(artifactRoot);
   try {
     const allocation = await (dependencies.prepareAllocation ?? prepareWordNetFrequencyAllocation)();
+    const sweepState = dependencies.sweepState ?? {};
     return await runWordNetSenseCompoundRefineryChunk({
       dependencies,
       configuration,
@@ -71,7 +71,8 @@ export async function runWordNetSenseCompoundRefineryCommand({
       repositoryRoot,
       artifactRoot,
       report,
-      allocation
+      allocation,
+      sweepState
     });
   } finally {
     await releaseLock();
@@ -85,7 +86,8 @@ async function runWordNetSenseCompoundRefineryChunk({
   repositoryRoot,
   artifactRoot,
   report,
-  allocation
+  allocation,
+  sweepState = {}
 }) {
   const runId = requestedRunId
     ? sanitizeRunId(requestedRunId)
@@ -93,7 +95,10 @@ async function runWordNetSenseCompoundRefineryChunk({
   let checkpointPath = "";
   const newspaperPath = path.join(repositoryRoot, "newspaper", `${sanitizeRunId(runId)}.pya`);
   let newspaperWrite = Promise.resolve();
-  let evokeIndex = await nextNewspaperEvokeIndex(newspaperPath);
+  if (sweepState.newspaperPath !== newspaperPath || !Number.isSafeInteger(sweepState.evokeIndex)) {
+    sweepState.newspaperPath = newspaperPath;
+    sweepState.evokeIndex = await nextNewspaperEvokeIndex(newspaperPath);
+  }
   const appendNewspaper = (sentence) => {
     if (!sentence) return;
     const safe = { ...sentence };
@@ -118,9 +123,9 @@ async function runWordNetSenseCompoundRefineryChunk({
       artifactRoot,
       runId,
       configuration,
-      dependencies: { ...dependencies, prepareAllocation: async () => allocation },
+      dependencies: { ...dependencies, prepareAllocation: async () => allocation, sweepState },
       onEvoke: (actionSentence) => {
-        const sentenceId = `evoke-${evokeIndex++}`;
+        const sentenceId = `evoke-${sweepState.evokeIndex++}`;
         setExchangeSentenceId(sentenceId);
         appendNewspaper({
           mood: "ya",
@@ -157,16 +162,17 @@ async function runWordNetSenseCompoundRefineryChunk({
 }
 
 async function progressArtifactSignature(artifactDirectory) {
-  const hash = createHash("sha256");
+  const signatures = [];
   for (const filename of ["worklist.pya", "progress.pya"]) {
-    hash.update(filename);
     try {
-      hash.update(await fs.readFile(path.join(artifactDirectory, filename)));
+      const metadata = await fs.stat(path.join(artifactDirectory, filename));
+      signatures.push(`${filename}:${metadata.size}:${metadata.mtimeMs}`);
     } catch (error) {
       if (error?.code !== "ENOENT") throw error;
+      signatures.push(`${filename}:missing`);
     }
   }
-  return hash.digest("hex");
+  return signatures.join("\n");
 }
 
 export async function runWordNetSenseCompoundRefinerySweepCommand({
@@ -194,6 +200,7 @@ export async function runWordNetSenseCompoundRefinerySweepCommand({
       ? sanitizeRunId(requestedRunId)
       : wordNetSenseCompoundRunId({ sourceHash: allocation.sourceHash });
     const artifactDirectory = path.join(artifactRoot, runId);
+    const sweepState = { runId, artifactDirectory };
     let batchCount = 0;
     let lastResult = null;
     const requestedSenseIds = Array.isArray(configuration.senseIds)
@@ -211,6 +218,8 @@ export async function runWordNetSenseCompoundRefinerySweepCommand({
       if (requestedSenseIds && chunkSenseIds.length === 0) {
         return { ...lastResult, batchCount, remainingSenseCount: 0, sweepComplete: true };
       }
+      const previousBatchCompletedAt = sweepState.previousBatchCompletedAt ?? null;
+      sweepState.firstProviderSubmissionAt = null;
       lastResult = await runChunk({
         dependencies,
         configuration: chunkSenseIds ? { ...configuration, senseIds: chunkSenseIds } : configuration,
@@ -218,9 +227,15 @@ export async function runWordNetSenseCompoundRefinerySweepCommand({
         repositoryRoot,
         artifactRoot,
         report: () => {},
-        allocation
+        allocation,
+        sweepState
       });
       batchCount += 1;
+      const firstProviderSubmissionAt = sweepState.firstProviderSubmissionAt;
+      const rolloverToFirstSubmissionMs = previousBatchCompletedAt && firstProviderSubmissionAt
+        ? Math.max(0, firstProviderSubmissionAt - previousBatchCompletedAt)
+        : null;
+      sweepState.previousBatchCompletedAt = Date.now();
       report(JSON.stringify({
         event: "wordnet-sense-compound-batch-complete",
         batchCount,
@@ -232,6 +247,7 @@ export async function runWordNetSenseCompoundRefinerySweepCommand({
         candidateCount: lastResult.candidateCount,
         promotedSenseCount: Number(lastResult.result?.["promoted-sense-count"] ?? 0),
         translationFailureCount: lastResult.translationFailureCount,
+        rolloverToFirstSubmissionMs,
         artifactDirectory,
         checkpointPath: lastResult.checkpointPath
       }));
