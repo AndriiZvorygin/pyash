@@ -23,6 +23,12 @@ test("sentence-level speaker mode disables aggregate small-panel relabeling", ()
   assert.doesNotMatch(DIARIZER, /reassignReport\s*=\s*applySmallPanelReassign/u);
 });
 
+test("long-cue expansion preserves valid millisecond bounds for tiny source spans", () => {
+  assert.match(DIARIZER, /duration < pieces\.length \* 0\.001/u);
+  assert.match(DIARIZER, /const end = i === pieces\.length - 1\s*\n\s*\? until\s*\n\s*: since \+ \(duration \* cumulative\) \/ total/u);
+  assert.doesNotMatch(DIARIZER, /Math\.max\(cursor \+ 0\.06, cursor \+ span\)/u);
+});
+
 test("the shared speaker policy defaults to anonymous sentence-level output", () => {
   const policy = readRepoFile("program/library/reporter_shared/speaker-diarization-policy.mjs");
   assert.match(policy, /SPEAKER_DIARIZATION_POLICY_VERSION = "sentence-cue-anonymous-v1"/u);
