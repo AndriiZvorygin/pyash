@@ -27,7 +27,8 @@ For remote instances, point `speaker host` to your remote endpoint (for example 
 
 Compose supports:
 
-- `SPEAKER_BIND_HOST` (default `::`)
+- `SPEAKER_BIND_HOST` (default `0.0.0.0`; use `::` only when the published
+  endpoint and clients are configured for IPv6)
 - `SPEAKER_BIND_PORT` (default `8010`)
 - `SPEAKER_PUBLISH_PORT` (default `8010`)
 - `SPEAKER_VOICES_DIR` (default `/workplace/world/voices`)
