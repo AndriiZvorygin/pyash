@@ -314,6 +314,102 @@ test("stage3 repairs merged discussion scope across separate transcript remarks"
   assert.ok(requests.some((body) => /Do not compress facts from separate blocks/iu.test(body.messages?.[1]?.content || "")));
 });
 
+test("stage3 preserves presentation framing when an audit rejects discussion wording", async (t) => {
+  const requests = [];
+  let groundingAudits = 0;
+  let presentationRepairs = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    requests.push(body);
+    const system = body.messages?.[0]?.content || "";
+    if (/^Audit one generated civic summary/iu.test(system)
+      || /^Adjudicate a disputed civic-summary/iu.test(system)
+      || /^Perform one final literal-source/iu.test(system)) {
+      groundingAudits += 1;
+      return {
+        ok: true,
+        async json() {
+          return {
+            message: {
+              content: JSON.stringify(groundingAudits === 1
+                ? {
+                  grounded: false,
+                  "unsupported claims": ["The source does not record 'discussion regarding' the profile's development; it records a presentation. The candidate frames this as recorded discussion."],
+                  notes: "The source records a presentation rather than discussion of the profile's development.",
+                }
+                : groundingAudits <= 3
+                  ? {
+                    grounded: false,
+                    "unsupported claims": ["The source does not record 'discussion regarding' the profile's development; it records a presentation. The candidate frames this as recorded discussion."],
+                    notes: "The source records a presentation rather than discussion of the profile's development.",
+                  }
+                  : { grounded: true, "unsupported claims": [], notes: "" }),
+            },
+          };
+        },
+      };
+    }
+    if (/preserves presentation framing/iu.test(system)) {
+      presentationRepairs += 1;
+      return {
+        ok: true,
+        async json() {
+          return {
+            message: {
+              content: JSON.stringify({
+                summary: "The presentation described a community profile developed with more than three dozen local members.",
+                "chapter text": "Presentation describes a community profile",
+                confidence: 0.9,
+                notes: "",
+              }),
+            },
+          };
+        },
+      };
+    }
+    if (/^Produce strict JSON only/iu.test(system)) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            message: {
+              content: JSON.stringify({
+                summary: "The committee discussed a community profile developed with more than three dozen local members.",
+                "chapter text": "Discussion covers a community profile",
+                confidence: 0.9,
+                notes: "",
+              }),
+            },
+          };
+        },
+      };
+    }
+    throw new Error(`unexpected stage3 test request: ${system}`);
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const result = await summarizeGroundedUnit({
+    unit: {
+      "unit id": "ground_presentation_framing",
+      label: "8.b Community profile presentation",
+      "source excerpt": "The presenter described a community profile developed through collaboration among more than three dozen local members.",
+      "source rows": 12,
+      "duration seconds": 600,
+      substantive: true,
+    },
+    focus: "newsworthy factual civic reporting",
+    llmModel: DEFAULT_TEXT_MODEL,
+    ollamaUrl: "http://ollama.invalid/api/chat",
+    semanticGroundingAudit: true,
+  });
+
+  assert.equal(presentationRepairs, 1);
+  assert.match(result.summary, /presentation described a community profile/iu);
+  assert.ok(requests.some((body) => /Never call a presentation.*discussion/iu.test(body.messages?.[0]?.content || "")));
+  assert.ok(requests.some((body) => /Do not replace that speech act with 'discussed'/iu.test(body.messages?.[1]?.content || "")));
+});
+
 test("stage3 treats attachment prose as document content rather than meeting dialogue", async (t) => {
   let requestBody = null;
   const originalFetch = globalThis.fetch;

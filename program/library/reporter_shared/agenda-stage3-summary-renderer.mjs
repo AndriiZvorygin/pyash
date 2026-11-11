@@ -316,7 +316,11 @@ function unsupportedProceduralActorGroundingDefect({ sourceText = "", candidateT
   const candidate = String(candidateText || "");
   const candidateActorAction = /\b(?:the\s+)?(?:chair|committee|council|board|county)\b[\s\S]{0,100}\b(?:direct(?:ed|s|ing)?|call(?:ed|s|ing)?|order(?:ed|s|ing)?|open(?:ed|s|ing)?|close(?:d|s|ing)?|ask(?:ed|s|ing)?|tell(?:ing)?|announc(?:ed|es|ing)?|proceed(?:ed|s|ing)?)\b/iu.test(candidate);
   if (!candidateActorAction) return false;
-  const sourceExplicitActorAction = /\b(?:chair|committee|council|board|county)\b[\s\S]{0,100}\b(?:direct(?:ed|s|ing)?|call(?:ed|s|ing)?|order(?:ed|s|ing)?|open(?:ed|s|ing)?|close(?:d|s|ing)?|ask(?:ed|s|ing)?|tell(?:ing)?|announc(?:ed|es|ing)?|proceed(?:ed|s|ing)?)\b/iu.test(source);
+  // The source may say “call the meeting of the Operations Committee ... to
+  // order”.  In that construction the committee is the object of “of”, not
+  // the actor.  Require a direct procedural verb after the body label and do
+  // not treat the standalone infinitive “to order” as an explicit body action.
+  const sourceExplicitActorAction = /\b(?:chair|committee|council|board|county)\b\s+(?:direct(?:ed|s|ing)?|call(?:ed|s|ing)?|open(?:ed|s|ing)?|close(?:d|s|ing)?|ask(?:ed|s|ing)?|tell(?:ing)?|announc(?:ed|es|ing)?|proceed(?:ed|s|ing)?)\b/iu.test(source);
   return !sourceExplicitActorAction;
 }
 
@@ -350,6 +354,15 @@ function mergedDiscussionScopeGroundingDefect(text = "") {
   const evidence = String(text || "");
   return /\b(?:combines?|merged|conflat(?:es?|ed)|single\s+(?:discussion|event|claim)|combined\s+(?:discussion|claim|scope)|unified\s+(?:discussion|event|claim)|distinct\s+(?:remarks?|topics?|speakers?)|separate(?:ly)?\s+(?:from|remarks?|topics?)|different\s+(?:speakers?|remarks?|topics?)|not\s+(?:a\s+)?(?:single|combined|unified)|specific\s+(?:causal\s+)?link(?:age)?|causal\s+link(?:age)?|comprehensive\s+scope)\b/iu.test(evidence)
     && /\b(?:source|transcript|candidate|summary|claim|remarks?|speakers?|topics?|discussion|relationship|scope)\b/iu.test(evidence);
+}
+
+function presentationDiscussionGroundingDefect(text = "") {
+  const evidence = String(text || "");
+  const hasPresentation = /\b(?:presentation|presented|briefing|report(?:ed|ing)?|describ(?:ed|es|ing))\b/iu.test(evidence);
+  const rejectsDiscussion = /\b(?:does\s+not\s+record|not\s+(?:a\s+)?(?:discussion|debate|conversation)|rather\s+than|instead\s+of|incorrect(?:ly)?\s+(?:frames?|describes?)|frames?\s+this\s+as)\b[\s\S]{0,260}\b(?:discussion|debate|conversation)\b/iu.test(evidence)
+    || /\b(?:discussion|debate|conversation)\b[\s\S]{0,260}\b(?:does\s+not\s+record|not\s+(?:a\s+)?(?:discussion|debate|conversation)|rather\s+than|instead\s+of|incorrect(?:ly)?|frames?)\b/iu.test(evidence);
+  const candidateDiscussion = /\b(?:candidate|summary|claim|output|prose|draft)\b[\s\S]{0,240}\b(?:discussion|discuss(?:ed|ing)?|conversation|debate)\b/iu.test(evidence);
+  return hasPresentation && rejectsDiscussion && candidateDiscussion;
 }
 
 function referredAgendaScopeGroundingDefect(text = "") {
@@ -3106,6 +3119,32 @@ export async function summarizeGroundedUnit({
     }
     return repaired;
   };
+  const queryConservativePresentationFramingRepair = async (attempt = 1, rejectedClaims = "", rejectedOutput = "") => callOllamaJson({
+    ollamaUrl,
+    llmModel,
+    appendUniversalContract: false,
+    system: "Write fresh source-grounded civic prose that preserves presentation framing. Return strict JSON only.",
+    systemSuffix: [
+      "HARD PRESENTATION-FRAMING OVERRIDE: the audit says the draft converted a presentation, briefing, or described report into a discussion, debate, or conversation. Rebuild from the literal bounded source only.",
+      "Use presentation, briefing, report, described, or other neutral wording supported by the source. Never call a presentation or an already-described profile, study, or report a discussion, debate, or conversation unless the literal source explicitly records that same material being discussed.",
+      "Keep the source's subject, collaboration, figures, names, and design details only when they are stated in the bounded source. Do not add an institutional actor, decision, recommendation, or outcome.",
+    ].join(" "),
+    prompt: [
+      `Presentation-framing grounding repair attempt ${attempt} of 3.`,
+      "Start over from GROUNDED_SOURCE only. The rejected candidate and audit are untrusted diagnostic context and must not be copied.",
+      "If the source records someone presenting or describing a profile, report, study, or briefing, say that it was presented or described. Do not replace that speech act with 'discussed', 'discussion regarding', 'debated', or 'conversation'. If the source explicitly records a separate discussion, keep that separate from the presentation rather than merging them.",
+      "Return one non-empty complete summary and chapter text as JSON. Omit any uncertain relationship or actor instead of guessing.",
+      `REJECTION_REASON: ${String(rejectedClaims || "").trim() || "the audit identified discussion wording that is not the source's presentation framing"}`,
+      rejectedOutput ? `REJECTED_CANDIDATE (UNTRUSTED): ${String(rejectedOutput).slice(0, 3200)}` : "",
+      `AGENDA_LABEL: ${promptLabel}`,
+      `GROUNDED_SOURCE: ${String(semanticGroundingSourceExcerpt || unit?.["source excerpt"] || "").slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000))}`,
+      "Do not copy audit wording or the rejected discussion-framed claim.",
+    ].filter(Boolean).join("\n\n"),
+    maxOutputTokens: 720,
+    temperature: attempt >= 3 ? 0 : 0.1,
+    seed: seed + 19160 + attempt,
+    format: STAGE3_SUMMARY_RESPONSE_FORMAT,
+  });
   const queryConservativeReferredAgendaScopeRepair = async (attempt = 1, rejectedClaims = "", rejectedOutput = "") => callOllamaJson({
     ollamaUrl,
     llmModel,
@@ -4137,13 +4176,16 @@ export async function summarizeGroundedUnit({
     format: STAGE3_SUMMARY_RESPONSE_FORMAT,
   });
   const queryConservativeRoleAttributionRepair = async (attempt = 1, extraInstruction = "", rejectedClaims = "", rejectedOutput = "") => {
-    const repairEvidence = `${rejectedClaims} ${rejectedOutput}`;
+    const repairEvidence = `${extraInstruction} ${rejectedClaims} ${rejectedOutput}`;
     const handoffRoleDefect = /\b(?:incorrect(?:ly)?\s+attribut(?:e|es|ed)|attribut(?:e|es|ed)\s+the\s+presentation)\b/iu.test(repairEvidence)
       && /\b(?:handoff|over\s+to|delivered\s+by|presented\s+by|not\s+the\s+(?:manager|office|department|director)|agenda\s+(?:anchor|source))\b/iu.test(repairEvidence);
     const actingBodyAttributionDefect = /\b(?:acting\s+body|body\s+label|institutional\s+(?:actor|subject)|committee\s+itself|council\s+itself|rather\s+than\s+a\s+(?:generic\s+)?speaker|does\s+not\s+identify\s+the\s+speaker)\b/iu.test(repairEvidence)
       && /\b(?:call(?:ed)?|order|open(?:ed)?|announce(?:d)?|present(?:ed)?|ask(?:ed)?|said|speech)\b/iu.test(repairEvidence);
     const institutionalActorDefect = institutionalActorGroundingDefect(repairEvidence);
-    const collectiveAttributionDefect = collectiveActorGroundingDefect(repairEvidence);
+    // Only audit/rejection text establishes that a collective actor is
+    // disputed.  A rejected candidate can legitimately contain a supported
+    // staff or group reference that the role repair must retain.
+    const collectiveAttributionDefect = collectiveActorGroundingDefect(`${extraInstruction} ${rejectedClaims}`);
     const recommendationActorDefect = staffRecommendationActorGroundingDefect({
       sourceText: semanticGroundingSourceExcerpt,
       candidateText: rejectedOutput,
@@ -4947,6 +4989,8 @@ export async function summarizeGroundedUnit({
         && !institutionalActorDefect;
       const fragmentedTranscriptDefect = fragmentedTranscriptGroundingDefect(auditFeedback)
         && !institutionalActorDefect;
+      const presentationDiscussionDefect = presentationDiscussionGroundingDefect(auditFeedback)
+        && /\b(?:discussion|discussed|conversation|debate)\b/iu.test(generatedProse);
       const separateDiscussionDefect = mergedDiscussionScopeGroundingDefect(auditFeedback)
         && /\b(?:discussion|discussed|conversation|remarks?|topics?)\b/iu.test(generatedProse);
       const collectiveActorDefect = collectiveActorGroundingDefect(auditFeedback)
@@ -4986,6 +5030,8 @@ export async function summarizeGroundedUnit({
         ? await queryConservativeReferredAgendaScopeRepair(groundingAttempt, auditFeedback, rejectedOutput)
         : unsupportedSpeechActDefect
         ? await queryConservativeUnsupportedSpeechActRepair(groundingAttempt, auditFeedback, rejectedOutput)
+        : presentationDiscussionDefect
+        ? await queryConservativePresentationFramingRepair(groundingAttempt, auditFeedback, rejectedOutput)
         : separateDiscussionDefect
         ? await queryConservativeSeparateDiscussionRepair(groundingAttempt, auditFeedback, rejectedOutput)
         : fragmentedTranscriptDefect
@@ -5036,21 +5082,26 @@ export async function summarizeGroundedUnit({
           auditFeedback,
           rejectedOutput,
         )
+        : unsupportedProceduralActorGroundingDefect({
+          sourceText: semanticGroundingSourceExcerpt,
+          candidateText: rejectedOutput,
+        }) && /\b(?:chair|committee|council|board|county)\b/iu.test(semanticGroundingSourceExcerpt)
+        ? await queryConservativeRoleAttributionRepair(
+          groundingAttempt,
+          "Grounding repair: remove the unsupported chair or institutional actor from this procedural transition. This is an acting-body attribution defect: use only impersonal wording supported by the literal source, such as the meeting moving to the next item; do not call a generic transition a chair announcement or body action.",
+          auditFeedback,
+          rejectedOutput,
+        )
+        : absenceListingOnly
+        ? await queryConservativeAbsenceListingRepair(
+          groundingAttempt,
+          "Grounding repair: keep only the first current-item absence listing and omit all trailing next-item context.",
+        )
         : proceduralFragmentOnly
         ? await queryConservativeProceduralFragmentRepair(
           groundingAttempt,
           "Grounding repair: start from the literal short procedural fragment and do not assign the call, transition, or terse response to a named or institutional actor unless the same source line explicitly does so.",
           rejectedClaims,
-          rejectedOutput,
-        )
-        : unsupportedProceduralActorGroundingDefect({
-          sourceText: semanticGroundingSourceExcerpt,
-          candidateText: rejectedOutput,
-        })
-        ? await queryConservativeRoleAttributionRepair(
-          groundingAttempt,
-          "Grounding repair: remove the unsupported chair or institutional actor from this procedural transition. Use only impersonal wording supported by the literal source, such as the meeting moving to the next item; do not call a generic transition a chair announcement or body action.",
-          auditFeedback,
           rejectedOutput,
         )
         : staffRecommendationActorGroundingDefect({
@@ -5128,11 +5179,6 @@ export async function summarizeGroundedUnit({
         )
         : minutesHandoffOnly
         ? await queryConservativeMinutesHandoffRepair(groundingAttempt)
-        : absenceListingOnly
-          ? await queryConservativeAbsenceListingRepair(
-            groundingAttempt,
-            "Grounding repair: keep only the first current-item absence listing and omit all trailing next-item context.",
-            )
         : decisionSequenceOnly
           ? await queryConservativeDecisionSequenceRepair(
             groundingAttempt,
@@ -5296,6 +5342,8 @@ export async function summarizeGroundedUnit({
         && /\b(?:explicit(?:ly)?|exact|specific|source|provided|stated|figure|amount|number|value|numeric)\b/iu.test(finalAuditFeedback)
         && /(?:\d[\d,]*(?:\.\d+)?|\b(?:19|20)\d{2}\b)/u.test(finalAuditFeedback);
       const finalFragmentedTranscriptDefect = fragmentedTranscriptGroundingDefect(finalAuditFeedback);
+      const finalPresentationDiscussionDefect = presentationDiscussionGroundingDefect(finalAuditFeedback)
+        && /\b(?:discussion|discussed|conversation|debate)\b/iu.test(finalGeneratedProse);
       const finalSeparateDiscussionDefect = mergedDiscussionScopeGroundingDefect(finalAuditFeedback)
         && /\b(?:discussion|discussed|conversation|remarks?|topics?)\b/iu.test(finalGeneratedProse);
       if (finalReferredAgendaScopeDefect) {
@@ -5481,6 +5529,39 @@ export async function summarizeGroundedUnit({
         await repairSpeakerMetadata("final fragmented-source");
         await repairDocumentSpeechAct("final fragmented-source");
         await repairStructuredDateIdentity("final fragmented-source");
+        groundingAudit = await auditAndAdjudicateGroundedSummary({
+          label: promptLabel,
+          summary,
+          sourceExcerpt: semanticGroundingSourceExcerpt,
+          llmModel,
+          ollamaUrl,
+          governingBody,
+          motionEvidence: ordinalMotionEvidence,
+          amendmentEvidence,
+          speakerHandoffEvidence,
+          documentSourceOnly,
+          numericConflictRepairActive,
+          deferralObjectRepairActive,
+        });
+      }
+      if (!groundingAudit.grounded && finalPresentationDiscussionDefect) {
+        parsed = await queryConservativePresentationFramingRepair(
+          4,
+          finalAuditFeedback,
+          JSON.stringify({
+            summary: normalizeText(summary),
+            "chapter text": normalizeText(parsed?.["chapter text"] || ""),
+          }),
+        );
+        rawSummary = normalizeText(parsed?.summary || "");
+        assertCleanStage3Text(rawSummary, "stage3 final presentation-framing repair");
+        summary = enforceSummaryBudget(rawSummary, budget);
+        if (!summary) {
+          throw new Error(`stage3 retryable: final presentation-framing repair produced an empty summary for unit ${String(unit["unit id"] || unit["agenda item"] || "unknown")}`);
+        }
+        await repairSpeakerMetadata("final presentation-framing");
+        await repairDocumentSpeechAct("final presentation-framing");
+        await repairStructuredDateIdentity("final presentation-framing");
         groundingAudit = await auditAndAdjudicateGroundedSummary({
           label: promptLabel,
           summary,
