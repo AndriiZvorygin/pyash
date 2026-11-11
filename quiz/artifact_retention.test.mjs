@@ -242,6 +242,10 @@ test("locked and recently modified dated runs are retained", (t) => {
 test("an incomplete reference scan disables content-store collection", (t) => {
   const root = fixture(t);
   const object = addContentObject(root);
+  const oldRun = path.join(root, "artifacts", "20260101-001-old-run");
+  fs.mkdirSync(oldRun, { recursive: true });
+  fs.writeFileSync(path.join(oldRun, "result.pya"), "old run");
+  setTreeTime(oldRun, OLD);
   const oversized = path.join(root, "newspaper", "oversized.pya");
   fs.mkdirSync(path.dirname(oversized), { recursive: true });
   const descriptor = fs.openSync(oversized, "w");
@@ -250,6 +254,8 @@ test("an incomplete reference scan disables content-store collection", (t) => {
 
   const plan = createArtifactRetentionPlan({ root, now: NOW });
   assert.equal(plan.scan.complete, false);
+  assert.ok(plan.scan.issues.some((issue) => issue.includes("retained newspaper exceeds scan limit")));
+  assert.equal(plan.runDirectories.some((item) => item.path === oldRun), false);
   assert.equal(plan.contentStore.deletionDisabled, true);
   assert.equal(plan.contentStore.eligibleObjects, 0);
   assert.equal(fs.existsSync(object), true);

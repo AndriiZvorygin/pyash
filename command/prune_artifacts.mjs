@@ -264,6 +264,12 @@ function retainedRunReferences(root, newspaperRoots, expiredPaths, state) {
       if (!entry.isFile() || path.extname(entry.name).toLowerCase() !== ".pya" || expiredPaths.has(filename)) continue;
       let source;
       try {
+        const stat = fs.statSync(filename);
+        if (stat.size > MAX_REFERENCE_FILE_BYTES) {
+          addIssue(state, `retained newspaper exceeds scan limit: ${path.relative(root, filename)}`);
+          complete = false;
+          continue;
+        }
         source = fs.readFileSync(filename, "utf8");
       } catch (error) {
         addIssue(state, `cannot read retained newspaper ${path.relative(root, filename)}: ${error.code || error.message}`);
