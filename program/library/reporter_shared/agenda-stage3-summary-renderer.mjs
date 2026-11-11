@@ -3885,11 +3885,17 @@ export async function summarizeGroundedUnit({
         format: STAGE3_SUMMARY_RESPONSE_FORMAT,
       });
       const repairedText = `${String(repaired?.summary || "")} ${String(repaired?.["chapter text"] || "")}`;
+      const closedMinutesContrastIncomplete = closedMinutesProcedureOnly && (
+        !/\b(?:listed|appear(?:ed)?|be)\b[\s\S]{0,40}\bopen\s+agenda\b/iu.test(repairedText)
+        || !/\bdiscussion\b[\s\S]{0,120}\bclosed\s+session\b/iu.test(repairedText)
+        || !/\b(?:otherwise|approv(?:e|ed|al))\b[\s\S]{0,120}\bopen\s+agenda\b/iu.test(repairedText)
+      );
       const closedMinutesRepairDefect = closedMinutesProcedureOnly && (
-        /\b(?:speaker|member|councillor|councilor)\b[\s\S]{0,90}\bquestion(?:ed|s)?\b[\s\S]{0,180}\b(?:open\s+agenda|appear|listed)\b/iu.test(repairedText)
+        /\b(?:speaker|member|councillor|councilor)\b[\s\S]{0,90}\b(?:question(?:ed|s)?|asked)\b[\s\S]{0,180}\b(?:open\s+agenda|appear|listed)\b/iu.test(repairedText)
         || /\bif\s+(?:there['’]?s|there\s+is)\s+(?:any\s+)?discussion\b/iu.test(repairedText) === false && /\bif\s+there\s+is\s+no\s+discussion\b/iu.test(repairedText)
         || /\bwithout\s+discussion\b/iu.test(repairedText)
         || /\b(?:councillor|councilor)\s+\w+\s+was\s+asked\s+for\s+(?:comments?|questions?)\b/iu.test(repairedText)
+        || closedMinutesContrastIncomplete
       );
       if (!closedMinutesRepairDefect) return repaired;
     }
