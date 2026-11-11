@@ -34,6 +34,20 @@ const MAX_SENSE_COMPOSITION_PROMPT_CHARS = 8000;
 const MAX_WORDNET_FALLBACK_SENSES = 4;
 const DIRECT_COMPONENT_MAPPING_KINDS = new Set(["root", "lemma", "dictionary-alias", "gloss", "wordnet-synset", "vocab-suggest-sense"]);
 const DIRECT_COMPONENT_COVERAGE_TYPES = new Set(["atomic", "root", "lemma", "alias", "dictionary-alias"]);
+const serializedInterpreterQueues = new WeakMap();
+
+function serializedInterpreter(interpret) {
+  let queue = serializedInterpreterQueues.get(interpret);
+  if (!queue) {
+    queue = { tail: Promise.resolve() };
+    serializedInterpreterQueues.set(interpret, queue);
+  }
+  return (sentence) => {
+    const result = queue.tail.then(() => interpret(sentence), () => interpret(sentence));
+    queue.tail = result.then(() => undefined, () => undefined);
+    return result;
+  };
+}
 
 function invalid(message, details = {}) {
   const error = new Error(message);
@@ -1903,6 +1917,7 @@ export function createQueuedMindWordNetSenseTranslationTransport({
   if (typeof interpret !== "function" || typeof parse !== "function") {
     throw invalid("queued sense translator requires Pyash interpret and parse functions");
   }
+  const runInterpret = serializedInterpreter(interpret);
   return {
     model,
     async submit({ sense, languages = ENGLISH_WORDNET_SENSE_COMPOUNDS_LANGUAGES, handleId, attempt = 1, repairReason = "" } = {}) {
@@ -1923,13 +1938,13 @@ export function createQueuedMindWordNetSenseTranslationTransport({
     const requestRevision = hash(stableJson(jobSpec)).slice(0, 12);
     const queuedHandle = `${id}-${requestRevision}-translate-${attempt}`;
     recordExchangeJsonArtifact({ identity: queuedHandle, label: "request", producer: "gpu mind request", payload: { handleId: queuedHandle, job: jobSpec } });
-    const start = await interpret(parse(
+    const start = await runInterpret(parse(
       `su name ${JSON.stringify(queuedHandle)} ob text ${JSON.stringify(JSON.stringify(jobSpec))} vyah start future be gpu mind do`
     ));
     return { status: text(start?.ob?.text), handleId: queuedHandle, response: start };
     },
     async await(handleId) {
-    const completed = await interpret(parse(
+    const completed = await runInterpret(parse(
       `accordingto text ${JSON.stringify(text(handleId))} during num ${Math.max(1000, Math.trunc(Number(timeoutMs) || 1800000))} vyah await be gpu do`
     ));
     recordExchangeJsonArtifact({ identity: handleId, label: "response", producer: "gpu mind response", payload: { handleId: text(handleId), status: text(completed?.ob?.text), result: completed?.result ?? null } });
@@ -1949,6 +1964,7 @@ export function createQueuedMindSenseCompoundChoiceTransport({
   if (typeof interpret !== "function" || typeof parse !== "function") {
     throw invalid("queued component chooser requires Pyash interpret and parse functions");
   }
+  const runInterpret = serializedInterpreter(interpret);
   const waitMs = Math.max(1000, Math.trunc(Number(timeoutMs) || 1800000));
   return async ({ input, handleId, attempt = 1 } = {}) => {
     if (!input?.prompt || !input?.responseFormat) throw invalid("queued component chooser requires a prepared prompt");
@@ -1967,13 +1983,13 @@ export function createQueuedMindSenseCompoundChoiceTransport({
     };
     const queuedHandle = `${id}-compose-${Math.max(1, Math.trunc(Number(attempt) || 1))}`;
     recordExchangeJsonArtifact({ identity: queuedHandle, label: "request", producer: "gpu mind request", payload: { handleId: queuedHandle, job: jobSpec } });
-    const started = await interpret(parse(
+    const started = await runInterpret(parse(
       `su name ${JSON.stringify(queuedHandle)} ob text ${JSON.stringify(JSON.stringify(jobSpec))} vyah start future be gpu mind do`
     ));
     if (text(started?.ob?.text) !== "queued") {
       throw invalid("Housekeeper did not queue component-choice prompt", { handleId: queuedHandle, response: started });
     }
-    const completed = await interpret(parse(
+    const completed = await runInterpret(parse(
       `accordingto text ${JSON.stringify(queuedHandle)} during num ${waitMs} vyah await be gpu do`
     ));
     recordExchangeJsonArtifact({ identity: queuedHandle, label: "response", producer: "gpu mind response", payload: { handleId: queuedHandle, status: text(completed?.ob?.text), result: completed?.result ?? null } });

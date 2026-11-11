@@ -6,7 +6,7 @@ su text "prompt-revision" ob text "sense-translation-gloss-alternatives-v11" ya
 su text "max-output-tokens" ob num 2048 ya
 su text "parallelism" ob num 8 ya
 su text "max-senses-per-launch" ob num 64 ya
-su text "worklist-order" ob text "tag-count-descending" ya
+su text "worklist-order" ob text "english30k-rank" ya
 su text "minimum-tag-count" ob num 0 ya
 su text "require-princeton-intersection" ob text "true" ya
 su text "maximum-compound-components" ob num 2 ya

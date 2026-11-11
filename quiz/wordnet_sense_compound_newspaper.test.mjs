@@ -132,6 +132,57 @@ test("direct sense compound runs save mind prompts and responses as linked artif
   }
 });
 
+test("concurrent sense jobs serialize shared Pyash interpreter access while queueing all jobs first", async () => {
+  const events = [];
+  let active = 0;
+  let maximumActive = 0;
+  const interpret = async (sentence) => {
+    active += 1;
+    maximumActive = Math.max(maximumActive, active);
+    const line = String(sentence);
+    const kind = line.includes("start future") ? "start" : "await";
+    const handleId = kind === "start"
+      ? line.match(/su name "([^"]+)"/u)?.[1]
+      : line.match(/accordingto text "([^"]+)"/u)?.[1];
+    events.push(`${kind}:${handleId}`);
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    active -= 1;
+    return kind === "start"
+      ? { mood: "ya", ob: { text: "queued" } }
+      : { mood: "ya", ob: { text: "success" }, result: { text: "queued response" } };
+  };
+  const parseSentence = (sentence) => sentence;
+  const translate = createQueuedMindWordNetSenseTranslationTransport({
+    interpret,
+    parse: parseSentence,
+    model: "test-model"
+  });
+  const choose = createQueuedMindSenseCompoundChoiceTransport({
+    interpret,
+    parse: parseSentence,
+    model: "test-model"
+  });
+  const translationJobs = ["translation-a", "translation-b"].map(async (handleId) => {
+    const queued = await translate.submit({
+      sense: { senseId: handleId, pos: "n", lemma: handleId, gloss: "a test meaning" },
+      languages: ["chinese"],
+      handleId
+    });
+    return translate.await(queued.handleId);
+  });
+  const choiceJobs = ["choice-a", "choice-b"].map((handleId) => choose({
+    input: { prompt: "Choose a compound.", responseFormat: { type: "object" } },
+    handleId
+  }));
+
+  await Promise.all([...translationJobs, ...choiceJobs]);
+
+  assert.equal(maximumActive, 1);
+  assert.equal(events.filter((event) => event.startsWith("start:")).length, 4);
+  const firstAwait = events.findIndex((event) => event.startsWith("await:"));
+  assert.equal(events.slice(0, firstAwait).filter((event) => event.startsWith("start:")).length, 4);
+});
+
 test("resumed sense compound runs continue newspaper evoke identities", async () => {
   const repositoryRoot = await mkdtemp(path.join(os.tmpdir(), "pyash-sense-resume-newspaper-"));
   const artifactRoot = path.join(repositoryRoot, "artifacts");
