@@ -250,6 +250,10 @@ ComfyUI jobs use:
 - `comfyui-prompt`
 
 The housekeeper submits a prompt to ComfyUI, polls history, and returns the prompt history result.
+For `comfyui-hear`, Pyash carries the bounded audio input as part of the queued
+job. The housekeeper performs the provider upload from its own network before
+submitting the prompt, so reporter hosts do not upload directly to the remote
+ComfyUI port.
 
 ### 3.4 KataGo
 
