@@ -16,6 +16,14 @@ const EXPONENTIAL: u16 = 0x8c29;
 const REMAINS: u16 = 0xe82a;
 const INVERT: u16 = 0xaad2;
 
+/// The legacy golden codelet: one plus one.
+///
+/// The golden is the shared fixture for every implementation of the numeric
+/// semantics, so a destination compiles the same bytes the interpreter runs.
+pub const GOLDEN_NUMERIC_PLUS_CODELET: [u16; WORDS_PER_CODELET] = [
+    0x0149, 0x881d, 0x0001, 0x287e, 0x881d, 0x0001, 0x245e, 0x8a64, 0x295e, 0, 0, 0, 0, 0, 0, 0,
+];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NumericOperator {
     Plus,
@@ -301,9 +309,7 @@ pub fn execute_numeric_invert_codelet(
 mod tests {
     use super::*;
 
-    const ONE_PLUS: [u16; WORDS_PER_CODELET] = [
-        0x0149, 0x881d, 0x0001, 0x287e, 0x881d, 0x0001, 0x245e, 0x8a64, 0x295e, 0, 0, 0, 0, 0, 0, 0,
-    ];
+    const ONE_PLUS: [u16; WORDS_PER_CODELET] = GOLDEN_NUMERIC_PLUS_CODELET;
 
     #[test]
     fn decodes_and_executes_the_shared_fixture() {

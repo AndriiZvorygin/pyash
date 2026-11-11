@@ -1,9 +1,14 @@
 #![forbid(unsafe_code)]
 
+pub mod backend;
 pub mod catalog;
 pub mod literal;
 pub mod semantic;
 
+pub use backend::riscv::{
+    BackendError, RiscvProgram, compile_and_execute_numeric_arithmetic, compile_numeric_arithmetic,
+    compile_numeric_invert, execute,
+};
 pub use catalog::{CatalogError, PyacCatalog, parse_catalog_pya};
 pub use literal::{
     DateInstruction, VectorElements, VectorInstruction, decode_date, decode_quote_header,
@@ -11,11 +16,11 @@ pub use literal::{
     format_date, index_word,
 };
 pub use semantic::{
-    NumericArithmeticInstruction, NumericInvertInstruction, NumericOperator,
-    NumericPlusInstruction, SemanticError, decode_numeric_arithmetic, decode_numeric_invert,
-    decode_numeric_plus, execute_numeric_arithmetic, execute_numeric_arithmetic_codelet,
-    execute_numeric_invert, execute_numeric_invert_codelet, execute_numeric_plus,
-    execute_numeric_plus_codelet,
+    GOLDEN_NUMERIC_PLUS_CODELET, NumericArithmeticInstruction, NumericInvertInstruction,
+    NumericOperator, NumericPlusInstruction, SemanticError, decode_numeric_arithmetic,
+    decode_numeric_invert, decode_numeric_plus, execute_numeric_arithmetic,
+    execute_numeric_arithmetic_codelet, execute_numeric_invert, execute_numeric_invert_codelet,
+    execute_numeric_plus, execute_numeric_plus_codelet,
 };
 
 use std::fmt::{Display, Formatter};
