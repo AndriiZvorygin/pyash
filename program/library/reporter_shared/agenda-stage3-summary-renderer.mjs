@@ -2496,6 +2496,9 @@ export async function summarizeGroundedUnit({
     && /\b(?:pass|hand)\w*\s+(?:it\s+|them\s+)?back\s+to\b|\bback\s+to\s+you\b/iu.test(String(unit?.["source excerpt"] || ""))
     && !/\b(?:motion|moved|move|vote|carried|approved|adopt(?:ed)?|receiv(?:e|ed)|recommend(?:ed|s)?)\b/iu.test(String(unit?.["source excerpt"] || ""));
   const minutesMotionSource = String(unit?.["source excerpt"] || "");
+  const closedMinutesProcedureOnly = /\bminutes\b/iu.test(promptLabel)
+    && /\bclosed\s+session\b[\s\S]{0,260}\bopen\s+agenda\b/iu.test(minutesMotionSource)
+    && /\b(?:seeing\s+none|looking\s+for\s+someone\s+to\s+move)\b/iu.test(minutesMotionSource);
   const minutesMotionScopeOnly = /\bminutes\b/iu.test(promptLabel)
     && (
       ( /\b(?:back|pass|hand)\w*\s+(?:it\s+|them\s+)?(?:back\s+)?to\b[^.\n]{0,160}\bminutes\b/iu.test(minutesMotionSource)
@@ -3819,6 +3822,9 @@ export async function summarizeGroundedUnit({
       `Conservative minutes-motion-scope repair attempt ${attempt} of 3.`,
       "The prior output assigned a later minutes item or an unsupported receipt action to the current labeled minutes item. Start over from the literal source excerpt.",
       MINUTES_MOTION_SCOPE_REPAIR_RULE,
+      closedMinutesProcedureOnly
+        ? "CLOSED-MINUTES PROCEDURAL REPAIR: this source contains a procedural question about whether closed-session minutes belong on the open agenda, an explanation that substantive discussion would require a closed session, and a later request for a mover followed by a carried motion. Summarize that exchange impersonally. Do not say the minutes were approved without discussion; distinguish no substantive content debate from the recorded procedural discussion. Do not call the addressee a speaker, do not use 'a speaker questioned', do not attribute 'Seeing none' to the named addressee, and do not include any personal name unless the same source line explicitly pairs that name with a spoken claim. A safe form is: 'The excerpt records a procedural discussion about listing closed-session minutes on the open agenda and notes that substantive discussion would require a closed session; a motion to move the minutes was then carried.'"
+        : "",
       "Use the authoritative agenda label only to identify the current minutes committee. If a later named committee appears after a generic move-and-vote phrase and the current committee is not repeated with that motion, use the handoff-only form: 'The excerpt records a handoff to the [current committee] minutes without explicitly recording their presentation or approval.' Otherwise, a safe form is: 'The discussion returned to the [current committee] minutes, and a motion to move the minutes was carried.' Do not use received, approved, adopted, presented, or reported back unless the source explicitly pairs that word with the current labeled minutes.",
       "If the source includes a later named committee and a later motion to receive its minutes, stop before that later committee and omit its content, motion, and outcome.",
       "Never copy transcript speaker labels or infer a named mover, seconder, recipient, or chair.",
@@ -4729,6 +4735,11 @@ export async function summarizeGroundedUnit({
         ? await queryConservativeConsentAgendaScopeRepair(
           dateRetry,
           "Structured-date repair: preserve the literal consent-agenda ranges and exceptions; omit later pulled-item outcomes.",
+        )
+        : closedMinutesProcedureOnly
+        ? await queryConservativeMinutesMotionScopeRepair(
+          groundingAttempt,
+          "Grounding repair: keep the closed-session/open-agenda procedural exchange impersonal and separate from the later carried minutes motion. Omit every addressee-as-speaker claim, 'a speaker questioned' wording, and 'without discussion' wording.",
         )
         : minutesMotionScopeOnly
         ? await queryConservativeMinutesMotionScopeRepair(
