@@ -232,6 +232,7 @@ const FRAGMENTED_TRANSCRIPT_GROUNDING_RULE = "FRAGMENTED-TRANSCRIPT GROUNDING RU
 const LITERAL_SOURCE_CLAIM_CHECK_RULE = "Before marking a candidate claim absent, compare its concrete wording and ordinary paraphrases against the complete GROUNDED_SOURCE, including every line before a handoff. If the source explicitly states the claim, it is grounded even when it appears in a list or beside other actions; do not report it as absent. Generic presentation framing is a faithful paraphrase when the source speaker presents a report; do not reject it merely because the candidate says 'the presentation described' instead of repeating the speaker's wording. Generic actor compression such as 'one councillor' and 'another speaker' is acceptable when the source clearly supports two distinct participants performing the described actions; do not require names when the candidate does not assert unsupported roles. A wrong or noisy body label that appears only in GROUNDED_SOURCE is not a candidate defect; reject it only when the candidate itself asserts the wrong body. If your notes say that the source explicitly contains or supports the candidate claim, return grounded=true and leave unsupported claims empty. ${FRAGMENTED_TRANSCRIPT_GROUNDING_RULE}";
 const RECOMMENDATION_ACTOR_BINDING_RULE = "STAFF-RECOMMENDATION ACTOR RULE: Keep a report speaker's recommendation separate from the later body's disposition. When the source says staff recommended, proposed, or asked a body to direct staff to take an action, do not rewrite each recommendation clause as 'the committee/council directed staff' merely because the body later carried, received, or approved the report or recommendation. Use 'staff recommended/proposed' for the recommendation and 'the committee/council carried the report or recommendation' for the recorded disposition. Use a body-as-director only when the literal source explicitly says that body directed staff to that specific action.";
 const CONVERSATIONAL_RESTART_EVIDENCE_RULE = "CONVERSATIONAL-RESTART EVIDENCE RULE: Discourse markers such as 'sorry', 'correction', 'actually', or a self-repair do not erase the substantive clause that follows. If the source says 'sorry, applying to...' or otherwise repeats an action after a restart, that clause remains literal source evidence for a faithful summary; do not reject it solely because it follows an interruption or correction.";
+const AGENDA_LABEL_PROVENANCE_RULE = "AGENDA-LABEL PROVENANCE RULE: The authoritative agenda label may identify a report's named source, office, coordinator, organization, report code, or subject as item identity/provenance. A summary may say that the agenda-listed report was from that source, but must not turn the label into a transcript speaker, presenter, live statement, or institutional action unless the bounded source explicitly pairs that identity with the speech or action.";
 const GENERIC_SPEAKER_QUESTION_RULE = "GENERIC QUESTION ATTRIBUTION RULE: when the literal source contains a participant's direct question or question wording, accept a neutral paraphrase such as 'a speaker asked about ...' or 'the source records a question about ...' even when the exact speaker label is not explicitly paired with that question. This generic wording does not assert a named actor, formal inquiry, motion, vote, or institutional action. Do not reject it merely because the source does not identify the questioner by name; reject only a changed question subject, a completed answer or outcome, or a formal procedural claim not present in the source.";
 const EXPLICIT_PROPOSAL_PARAPHRASE_RULE = "EXPLICIT PROPOSAL PARAPHRASE RULE: when the literal source explicitly says a speaker or staff member is proposing, proposed, or recommends an action and pairs that speech act with its object or rationale, accept a neutral paraphrase such as 'the proposal involved ...' or 'a proposal was made to ...'. The singular word proposal does not by itself add a formal motion, completed outcome, or unsupported definitive scope. Reject only an object, rationale, actor, or outcome that changes or exceeds the source's explicit pairing.";
 const SOURCE_QUALIFIER_FIDELITY_RULE = "NON-NEGOTIABLE source-strength rule: preserve qualifiers, alternatives, singular/plural scope, and near-total wording that changes the claim's truth conditions. If the source gives alternatives such as 'acted upon or have been completed', retain the alternatives or omit that claim; do not choose the stronger branch 'completed'. If the source says one recommendation, do not pluralize it to recommendations unless the source supports a set. If the source says 'virtually' or 'almost', retain that qualification or omit the result; never strengthen it to 'all' or 'erased', and never drop a source-stated exception. Do not add descriptive qualifiers such as 'new', 'updated', 'current', 'redesigned', 'digital', 'expanded', or 'improved' unless the bounded source explicitly supports that qualifier for the retained subject; when the core subject or action is supported but a modifier is not, omit only the modifier and preserve the complete source-supported claim. If a speaker says they would or could support a proposal but immediately qualifies that support with a condition, contrast, or need for more information, preserve the qualification in the same claim; do not rewrite it as unconditional support plus a separate request. When the same source block contains qualified support followed by questions or requests for information, it is acceptable to report both facts, but use wording such as 'a speaker said they would support the proposal while requesting more information' or separate neutral clauses; never use unconditional past-tense 'supported' for that qualified statement. A concise summary may omit secondary detail, but it must not strengthen a qualified, approximate, disjunctive, or exception-bearing source statement.";
@@ -307,6 +308,15 @@ function staffRecommendationActorGroundingDefect({ sourceText = "", candidateTex
   const sourceHasExplicitBodyDirection = /\b(?:committee|council|board|county)\b[\s\S]{0,140}\bdirect(?:ed|s|ing)?\s+staff\b/iu.test(source);
   const candidateAssignsBodyDirection = /\b(?:committee|council|board|county)\b[\s\S]{0,100}\bdirect(?:ed|s|ing)?\s+staff\b/iu.test(candidate);
   return sourceHasStaffRecommendation && !sourceHasExplicitBodyDirection && candidateAssignsBodyDirection;
+}
+
+function unsupportedProceduralActorGroundingDefect({ sourceText = "", candidateText = "" } = {}) {
+  const source = String(sourceText || "");
+  const candidate = String(candidateText || "");
+  const candidateActorAction = /\b(?:the\s+)?(?:chair|committee|council|board|county)\b[\s\S]{0,100}\b(?:direct(?:ed|s|ing)?|call(?:ed|s|ing)?|order(?:ed|s|ing)?|open(?:ed|s|ing)?|close(?:d|s|ing)?|ask(?:ed|s|ing)?|tell(?:ing)?|announc(?:ed|es|ing)?|proceed(?:ed|s|ing)?)\b/iu.test(candidate);
+  if (!candidateActorAction) return false;
+  const sourceExplicitActorAction = /\b(?:chair|committee|council|board|county)\b[\s\S]{0,100}\b(?:direct(?:ed|s|ing)?|call(?:ed|s|ing)?|order(?:ed|s|ing)?|open(?:ed|s|ing)?|close(?:d|s|ing)?|ask(?:ed|s|ing)?|tell(?:ing)?|announc(?:ed|es|ing)?|proceed(?:ed|s|ing)?)\b/iu.test(source);
+  return !sourceExplicitActorAction;
 }
 
 function genericPluralActorGroundingDefect(text = "") {
@@ -1556,6 +1566,7 @@ export async function auditGroundedSummaryLlm({
       LITERAL_SOURCE_CLAIM_CHECK_RULE,
       RECOMMENDATION_ACTOR_BINDING_RULE,
       CONVERSATIONAL_RESTART_EVIDENCE_RULE,
+      AGENDA_LABEL_PROVENANCE_RULE,
       parentAuditedChildEvidence ? PARENT_AUDITED_CHILD_EVIDENCE_RULE : "",
       GENERIC_SPEAKER_QUESTION_RULE,
       EXPLICIT_PROPOSAL_PARAPHRASE_RULE,
@@ -1759,6 +1770,7 @@ export async function adjudicateGroundedSummaryLlm({
       LITERAL_SOURCE_CLAIM_CHECK_RULE,
       RECOMMENDATION_ACTOR_BINDING_RULE,
       CONVERSATIONAL_RESTART_EVIDENCE_RULE,
+      AGENDA_LABEL_PROVENANCE_RULE,
       REFERRED_AGENDA_SCOPE_AUDIT_RULE,
       parentAuditedChildEvidence ? PARENT_AUDITED_CHILD_EVIDENCE_RULE : "",
       GENERIC_SPEAKER_QUESTION_RULE,
@@ -1883,6 +1895,7 @@ export async function confirmLiteralGroundingLlm({
       "Return grounded=false only for a claim that is absent, contradicted, or changes the source's actor, action, outcome, timing, amount, location, or relationship. Do not reject a claim for style, generic framing, conservative omission, or because the source uses a different but equivalent grammatical subject.",
       RECOMMENDATION_ACTOR_BINDING_RULE,
       CONVERSATIONAL_RESTART_EVIDENCE_RULE,
+      AGENDA_LABEL_PROVENANCE_RULE,
       LITERAL_SOURCE_PHASE_PRIORITY_RULE,
       REFERRED_AGENDA_SCOPE_AUDIT_RULE,
       parentAuditedChildEvidence ? PARENT_AUDITED_CHILD_EVIDENCE_RULE : "",
@@ -2208,6 +2221,16 @@ async function auditAndAdjudicateGroundedSummary({
   numericConflictRepairActive = false,
   deferralObjectRepairActive = false,
 }) {
+  if (unsupportedProceduralActorGroundingDefect({
+    sourceText: sourceExcerpt,
+    candidateText: summary,
+  })) {
+    return {
+      grounded: false,
+      unsupportedClaims: ["the candidate assigns a procedural announcement or transition to an unsupported chair or body actor"],
+      notes: "Use impersonal transition wording unless the source explicitly pairs the actor with that procedural action.",
+    };
+  }
   if (staffRecommendationActorGroundingDefect({
     sourceText: sourceExcerpt,
     candidateText: summary,
@@ -2625,6 +2648,7 @@ export async function summarizeGroundedUnit({
     SOURCE_QUALIFIER_FIDELITY_RULE,
     RECOMMENDATION_ACTOR_BINDING_RULE,
     CONVERSATIONAL_RESTART_EVIDENCE_RULE,
+    AGENDA_LABEL_PROVENANCE_RULE,
     "The current agenda label is the binding scope. When trailing source lines announce or perform a different agenda item, keep that neighboring item out of the current summary even if the boundary context is inside the excerpt; never attach its motion, mover, seconder, question, answer, or outcome to the current label.",
     "The source excerpt may include trailing boundary context. Locate the first explicit sentence that announces a different report or agenda item and stop the current summary before that sentence; treat every later line as next-item boundary context, not evidence for this item.",
     COMPOSITE_MOTION_SCOPE_RULE,
@@ -4062,6 +4086,10 @@ export async function summarizeGroundedUnit({
       sourceText: semanticGroundingSourceExcerpt,
       candidateText: rejectedOutput,
     });
+    const proceduralActorDefect = unsupportedProceduralActorGroundingDefect({
+      sourceText: semanticGroundingSourceExcerpt,
+      candidateText: rejectedOutput,
+    });
     const repaired = await callOllamaJson({
     ollamaUrl,
     llmModel,
@@ -4079,6 +4107,9 @@ export async function summarizeGroundedUnit({
         : "",
       recommendationActorDefect
         ? "HARD STAFF-RECOMMENDATION OVERRIDE: the source records staff or a report recommending or proposing the action, while the rejected prose assigned that recommendation to the committee or council. Rewrite with 'staff recommended/proposed' and reserve the committee/council for the later recorded report or recommendation disposition. Never say the body directed staff to each recommendation clause unless the source explicitly does so."
+        : "",
+      proceduralActorDefect
+        ? "HARD PROCEDURAL-ACTOR OVERRIDE: the rejected prose assigned a chair, committee, council, board, or county actor to a procedural announcement or transition that the source does not explicitly pair with that actor. Use impersonal wording such as 'the meeting moved to the next item' or omit the transition; do not invent a chair or body speech act."
         : "",
       collectiveAttributionDefect
         ? "HARD COLLECTIVE-ATTRIBUTION OVERRIDE: the audit distinguishes individually attributed remarks from an unsupported collective or generic actor. Do not merge those remarks into Directors, staff, a team, a group, a committee, or another aggregate subject. Do not use generic staff or another aggregate actor when the source does not pair it with the retained claim. Use impersonal source wording or omit the disputed actor/action clause."
@@ -4937,6 +4968,16 @@ export async function summarizeGroundedUnit({
         ? await queryConservativeRoleAttributionRepair(
           groundingAttempt,
           "Grounding repair: the source names separate individual remarks, not a collective speaker. Do not merge them into 'Directors discussed', 'staff noted', or another group action. Preserve supported topics in impersonal wording and omit the unsupported collective actor/action clause.",
+          auditFeedback,
+          rejectedOutput,
+        )
+        : unsupportedProceduralActorGroundingDefect({
+          sourceText: semanticGroundingSourceExcerpt,
+          candidateText: rejectedOutput,
+        })
+        ? await queryConservativeRoleAttributionRepair(
+          groundingAttempt,
+          "Grounding repair: remove the unsupported chair or institutional actor from this procedural transition. Use only impersonal wording supported by the literal source, such as the meeting moving to the next item; do not call a generic transition a chair announcement or body action.",
           auditFeedback,
           rejectedOutput,
         )
