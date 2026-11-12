@@ -512,7 +512,7 @@ export async function runToolChat({
         requestPayload = buildRequestPayload();
         continue;
       }
-      onUsage?.(response?.usage ?? response?.metadata);
+      onUsage?.(response?.usage ?? response?.metadata ?? response);
       recordMindJson({ targetName: mindName, label: "response", payload: stripContext(response) });
       if (mindDebug) {
         // eslint-disable-next-line no-console

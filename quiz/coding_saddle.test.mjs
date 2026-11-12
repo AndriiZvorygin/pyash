@@ -714,6 +714,7 @@ test("coding saddle builds a Pyash mind call with backend and session context", 
 
 test("coding saddle delegates turns to the existing mind engine", async () => {
   let observed = null;
+  let observedUsage = null;
   const result = await runSaddleTurn({
     input: "run the focused test",
     model: "SparkLLM/Spark-X2.6-4B:q4_k_m",
@@ -722,11 +723,17 @@ test("coding saddle delegates turns to the existing mind engine", async () => {
     contextWindow: 1048576,
     think: false,
     housekeeperUrl: "http://housekeeper:18886",
+    onUsage: (usage) => { observedUsage = usage; },
     mindFn: async (sentence, options) => {
       assert.equal(process.env.PYA_GPU_HOUSEKEEPER_URL, "http://housekeeper:18886");
       assert.equal(process.env.PYA_GPU_MANAGER_REQUIRED, "true");
       assert.equal(process.env.PYA_GPU_MANAGER_ALLOW_DIRECT, "false");
       observed = { sentence, options };
+      options.onUsage({
+        prompt_eval_count: 23,
+        prompt_eval_cached_count: 5,
+        eval_count: 4
+      });
       return { mood: "ya", be: "text", ob: { text: "done" } };
     }
   });
@@ -738,6 +745,14 @@ test("coding saddle delegates turns to the existing mind engine", async () => {
   assert.equal(observed.sentence.contextWindow, 1048576);
   assert.equal(observed.sentence.think, false);
   assert.equal(observed.options.sessionUserContent, "run the focused test");
+  assert.deepEqual(observedUsage, {
+    inputTokens: 23,
+    cachedInputTokens: 5,
+    cacheWriteInputTokens: 0,
+    outputTokens: 4,
+    reasoningOutputTokens: 0,
+    totalTokens: 27
+  });
 });
 
 test("duty saddle keeps runtime root separate from its persistent world root", async () => {
@@ -1000,7 +1015,7 @@ test("coding saddle keeps histories per project while reusing the recent model p
   }
 });
 
-test("coding saddle refuses to merge a legacy project house into an existing project-named house", async () => {
+test("coding saddle archives a populated legacy house when a project house already has data", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-house-conflict-"));
   const runtimeRoot = path.join(root, "runtime");
   const cwd = path.join(root, "projects", "biography");
@@ -1019,17 +1034,29 @@ test("coding saddle refuses to merge a legacy project house into an existing pro
     const worldRoot = resolveSaddleProjectWorldRoot({ runtimeRoot, cwd });
     const legacyHouse = path.join(worldRoot, "house", "coding saddle");
     const projectHouse = resolveCodingSaddleHousePath({ worldRoot, cwd });
+    const existingArchive = path.join(path.dirname(legacyHouse), "coding saddle legacy");
+    await fs.mkdir(existingArchive, { recursive: true });
+    await fs.writeFile(path.join(existingArchive, "prior.md"), "prior archive\n", "utf8");
     await fs.mkdir(path.join(legacyHouse, "identity"), { recursive: true });
     await fs.mkdir(path.join(projectHouse, "identity"), { recursive: true });
+    await fs.writeFile(path.join(legacyHouse, "identity", "shared.md"), "legacy version\n", "utf8");
     await fs.writeFile(path.join(legacyHouse, "identity", "legacy.md"), "keep legacy\n", "utf8");
+    await fs.writeFile(path.join(projectHouse, "identity", "shared.md"), "project version\n", "utf8");
     await fs.writeFile(path.join(projectHouse, "identity", "current.md"), "keep current\n", "utf8");
 
-    await assert.rejects(
-      prepareSaddle({ cwd, runtimeRoot }),
-      /coding saddle house migration conflict/
-    );
-    assert.equal(await fs.readFile(path.join(legacyHouse, "identity", "legacy.md"), "utf8"), "keep legacy\n");
+    const prepared = await prepareSaddle({ cwd, runtimeRoot });
+    const legacyArchive = path.join(path.dirname(legacyHouse), "coding saddle legacy 2");
+    assert.equal(prepared.agentHouse, projectHouse);
+    assert.equal(await fs.readFile(path.join(projectHouse, "identity", "shared.md"), "utf8"), "project version\n");
     assert.equal(await fs.readFile(path.join(projectHouse, "identity", "current.md"), "utf8"), "keep current\n");
+    assert.equal(await fs.readFile(path.join(legacyArchive, "identity", "shared.md"), "utf8"), "legacy version\n");
+    assert.equal(await fs.readFile(path.join(legacyArchive, "identity", "legacy.md"), "utf8"), "keep legacy\n");
+    assert.equal(await fs.readFile(path.join(existingArchive, "prior.md"), "utf8"), "prior archive\n");
+    await assert.rejects(fs.access(legacyHouse), { code: "ENOENT" });
+
+    const repeated = await prepareSaddle({ cwd, runtimeRoot });
+    assert.equal(repeated.agentHouse, projectHouse);
+    assert.equal(await fs.readFile(path.join(legacyArchive, "identity", "legacy.md"), "utf8"), "keep legacy\n");
   } finally {
     for (const key of envKeys) {
       if (previousEnv[key] === undefined) delete process.env[key];

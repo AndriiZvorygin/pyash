@@ -1885,7 +1885,7 @@ async function main() {
         writeLine(formatMindUsage(usage));
         await appendSaddleUsage({
           worldRoot: config.worldRoot,
-          turnId: result?.accordingto?.text ?? "",
+          turnId: sessionTurnId || traceTurnId,
           mindName,
           backend,
           model,

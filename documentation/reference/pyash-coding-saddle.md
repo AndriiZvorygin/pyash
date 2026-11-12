@@ -129,6 +129,10 @@ to a session-isolated `.pya` checkpoint, keeps up to the latest 12 exchanges in
 the active prompt, and reduces that window further if pressure remains high.
 The durable transcript remains unchanged. When a local backend has no
 configured context size, the estimate uses a conservative 8K-token budget.
+After each turn, the terminal reports provider-reported input, cached input,
+output, and total tokens when available. Ollama prompt/evaluation counters are
+normalized into the same display and the durable usage ledger in the world
+newspaper; a provider that supplies no counters remains marked as unreported.
 
 For recognized code-change turns, completion requires a successful edit and a
 relevant validation command run afterward with structured exit code `0`, no
@@ -141,11 +145,13 @@ Conversation records use a readable project-named coding-saddle house beneath
 the existing per-project world root. The world root remains scoped to the exact
 resolved launch directory; its `.pya` project manifest records that directory,
 and `conduct/agent.pya` maps `coding saddle` to the house. On first use, the
-legacy `house/coding saddle` is moved only when that destination is absent or
-empty. If both locations contain data, startup stops with both paths rather
-than merging or overwriting either house. An `identity/HOUSE.md` guide explains
-the house directories and is injected with the other identity files; an
-existing user-authored guide is preserved.
+legacy `house/coding saddle` is moved when the project house is absent or empty.
+If both locations contain data, the project house remains active and the
+legacy house is preserved beside it as `house/coding saddle legacy` (or the
+next numbered archive name if that path already exists). Their contents are
+never merged, so conflicting identity or session records remain intact. An
+`identity/HOUSE.md` guide explains the house directories and is injected with
+the other identity files; an existing user-authored guide is preserved.
 
 Opening the saddle from another directory starts with that directory's session
 history rather than replaying a different project's transcript. Relative file

@@ -36,6 +36,18 @@ test("mind usage normalization accepts provider token vocabularies and derives t
     reasoningOutputTokens: 0,
     totalTokens: 9
   });
+  assert.deepEqual(normalizeMindUsage({
+    prompt_eval_count: 3397,
+    prompt_eval_cached_count: 1200,
+    eval_count: 70
+  }), {
+    inputTokens: 3397,
+    cachedInputTokens: 1200,
+    cacheWriteInputTokens: 0,
+    outputTokens: 70,
+    reasoningOutputTokens: 0,
+    totalTokens: 3467
+  });
 });
 
 test("coding saddle usage records are durable, replayable, and idempotent", async () => {

@@ -65,6 +65,41 @@ test("mind tool chat ignores prose that is not an explicit allowed tool call", (
   );
 });
 
+test("mind tool chat forwards top-level provider usage metadata to the saddle", async () => {
+  let usage;
+  await runToolChat({
+    sentence: parse('be write ob text "question" for name helper to name text helper-out do'),
+    ob: {},
+    mindName: "helper",
+    model: "fixture-model",
+    dialogue: "helper provider usage test",
+    callPrompt: "Answer briefly.",
+    resolvedConfigPrompt: "Answer the current request.",
+    historyMessages: [],
+    toolMap: new Map(),
+    tools: [],
+    toolBlock: "",
+    backendName: "ollama command mind",
+    mindDebug: false,
+    debugMind: () => {},
+    inputs: { inputText: "Answer briefly." },
+    onUsage: (value) => { usage = value; },
+    callBackend: async () => ({
+      message: { content: "Done." },
+      prompt_eval_count: 23,
+      prompt_eval_cached_count: 5,
+      eval_count: 4
+    })
+  });
+
+  assert.deepEqual(usage, {
+    message: { content: "Done." },
+    prompt_eval_count: 23,
+    prompt_eval_cached_count: 5,
+    eval_count: 4
+  });
+});
+
 test("structured tool schemas replace duplicate tool descriptions but retain fallback text", async () => {
   const base = {
     sentence: parse('be write ob text "question" for name helper to name text helper-out do'),
