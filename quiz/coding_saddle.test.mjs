@@ -391,8 +391,13 @@ test("coding saddle explains archive focus tool arguments", () => {
   assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`search_archive(archive_path, query)`"));
 });
 
+test("coding saddle handles greetings directly without exposing runtime script names", () => {
+  assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /For greetings and casual conversation, answer directly .*make no tool calls/u);
+  assert.doesNotMatch(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /mind_ollama_runner|mind_openai_runner/u);
+  assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /Do not invoke the agent runtime or a second model through shell tools/u);
+});
+
 test("coding saddle completion evidence requires a successful edit and a later command check", () => {
-  assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /Never launch .*mind_ollama_runner\.mjs.*structured request payload/u);
   for (const guidance of [
     "documentation and reference research",
     "`search_zim_library(query)` first",
