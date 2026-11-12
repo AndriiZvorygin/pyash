@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -84,13 +85,31 @@ async function reclaimStaleRunLock(lockPath, recoveryPath) {
   }
 }
 
+export function processStateFromProcStat(source) {
+  const close = String(source ?? "").lastIndexOf(")");
+  if (close < 0) return "";
+  return String(source).slice(close + 1).trim().split(/\s+/u)[0] || "";
+}
+
+export function processStateIsAlive(state) {
+  return state !== "Z" && state !== "X";
+}
+
 function processIsAlive(pid) {
   try {
     process.kill(pid, 0);
+    try {
+      const state = processStateFromProcStat(requireProcStat(pid));
+      if (!processStateIsAlive(state)) return false;
+    } catch {}
     return true;
   } catch (error) {
     return error?.code !== "ESRCH";
   }
+}
+
+function requireProcStat(pid) {
+  return fsSync.readFileSync(`/proc/${pid}/stat`, "utf8");
 }
 
 async function nextNewspaperEvokeIndex(newspaperPath) {

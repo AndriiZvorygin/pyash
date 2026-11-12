@@ -4,7 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { runWordNetSenseCompoundRefinerySweepCommand } from "../command/wordnet_sense_compound_refinery.mjs";
+import {
+  processStateFromProcStat,
+  processStateIsAlive,
+  runWordNetSenseCompoundRefinerySweepCommand
+} from "../command/wordnet_sense_compound_refinery.mjs";
 
 async function temporaryRoot(t) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-sense-compound-lock-"));
@@ -22,6 +26,15 @@ function completedChunk() {
     result: { "promoted-sense-count": 0 }
   };
 }
+
+test("compound sweep lock liveness treats zombie and exited Linux processes as dead", () => {
+  assert.equal(processStateFromProcStat("123 (node worker) Z 1 2 3"), "Z");
+  assert.equal(processStateFromProcStat("123 (node) X 1 2 3"), "X");
+  assert.equal(processStateFromProcStat("123 (node) S 1 2 3"), "S");
+  assert.equal(processStateIsAlive("Z"), false);
+  assert.equal(processStateIsAlive("X"), false);
+  assert.equal(processStateIsAlive("S"), true);
+});
 
 test("compound sweep reclaims a lock whose owner process has exited", async (t) => {
   const root = await temporaryRoot(t);

@@ -402,6 +402,7 @@ export function mergeManagedCrontab(existing, { nodeBin = process.execPath } = {
     entry("0", "3", "run-nightly-refinery.mjs", " owen"),
     entry("0", "4", "run-nightly-refinery.mjs", " grey"),
     entry("0", "5,6", "run-watchdog.mjs"),
+    `0 */4 * * * cd ${PYASH_ROOT} && ${nodeBin} ${path.join(PROGRAM_DIR, "run-wordnet-sweep-watchdog.mjs")} >> ${path.join(ARTIFACT_ROOT, "cron.log")} 2>&1`,
     end,
   ];
   return `${[...kept, ...(kept.length ? [""] : []), ...block].join("\n")}\n`;

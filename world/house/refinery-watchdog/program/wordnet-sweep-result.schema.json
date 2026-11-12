@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["status", "root_cause", "diagnosis", "changed_files", "tests", "resume_action", "remaining_risks"],
+  "properties": {
+    "status": { "type": "string", "enum": ["recovered", "healthy", "complete", "blocked", "failed"] },
+    "root_cause": { "type": "string" },
+    "diagnosis": { "type": "array", "items": { "type": "string" } },
+    "changed_files": { "type": "array", "items": { "type": "string" } },
+    "tests": { "type": "array", "items": { "type": "string" } },
+    "resume_action": { "type": "string" },
+    "remaining_risks": { "type": "array", "items": { "type": "string" } }
+  }
+}
