@@ -7,7 +7,7 @@ import { remember } from "../remember/index.mjs";
 import { resolveConfigMapSeries } from "../configure/env.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { resolveWorldRoot } from "../library/world.mjs";
-import { classifyCommandText } from "../library/command_policy.mjs";
+import { classifyCommandText, isInternalMindRunnerCommandText } from "../library/command_policy.mjs";
 import { resolveSaddleMindProfile, normalizeSaddleBackend, normalizeSaddleModel } from "../agent/coding_saddle.mjs";
 import { requestManagedTerminal } from "../agent/managed_terminal_ipc.mjs";
 import { resolveRatifyDecision } from "../agent/ratify_policy.mjs";
@@ -111,6 +111,9 @@ export function resolveChildAgentTarget({
 
 async function authorizeLaunch({ sentence, command, args, cwd, runtimeContext, rememberFn }) {
   const commandText = [command, ...args].map(shellQuote).join(" ");
+  if (isInternalMindRunnerCommandText(commandText)) {
+    throw new Error("terminal command denied: internal Pyash mind runner must use the mind tool");
+  }
   const commandClass = classifyCommandText(commandText);
   const policy = resolveCommandPolicy({ sentence, cmdClass: commandClass, rememberFn });
   if (shouldDeny({ sentence, policy, commandClass })) {

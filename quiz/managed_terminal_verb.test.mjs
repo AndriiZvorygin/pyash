@@ -21,7 +21,7 @@ async function withProject(run) {
   }
 }
 
-function rememberFor({ project, world, runtimeRoot, minds = {}, delegation = {} }) {
+function rememberFor({ project, world, runtimeRoot, minds = {}, delegation = {}, commandMode = null }) {
   const facts = new Map([
     ["world root", { ob: { filename: world } }],
     ["agent sandbox", { ob: { boolean: true } }],
@@ -35,6 +35,10 @@ function rememberFor({ project, world, runtimeRoot, minds = {}, delegation = {} 
     ["ollama host", { ob: { text: "http://ollama.test" } }]
   ]);
   if (runtimeRoot) facts.set("run root", { ob: { filename: runtimeRoot } });
+  if (commandMode) facts.set("command configure", { ob: { map: {
+    "policy mode": { ob: { wo: commandMode } },
+    "classifier enabled": { ob: { bool: true } }
+  } } });
   for (const [name, profile] of Object.entries(minds)) facts.set(name, profile);
   return (name) => facts.get(name) ?? null;
 }
@@ -66,6 +70,17 @@ test("terminal launch is restricted to the licensed project working directory", 
       cwd: temporary
     }), { remember, requestTerminal, runtimeContext: { agentName: "mind", backend: "ollama" } }), /outside the agent's active project root/u);
     assert.equal(calls.length, 1);
+  });
+});
+
+test("terminal hard-denies internal mind runners even when command mode allows", async () => {
+  await withProject(async ({ project, world }) => {
+    const remember = rememberFor({ project, world, commandMode: "allow" });
+    await assert.rejects(() => terminal(terminalSentence("start", {
+      command: "node",
+      args: ["../pyac/pyash-dev/command/mind_ollama_runner.mjs"],
+      cwd: project
+    }), { remember }), /internal Pyash mind runner/u);
   });
 });
 

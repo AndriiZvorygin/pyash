@@ -8,6 +8,7 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget } from "../program/remember/index.mjs";
 import { command, classifyCommandText, resolveCommandPolicy } from "../program/verbs/command.mjs";
+import { isInternalMindRunnerCommandText } from "../program/library/command_policy.mjs";
 import { withCommandResumeIdentity } from "../program/bridge/command_identity.mjs";
 import { clearExchangeRecorder, setExchangeRecorder } from "../program/bridge/exchange.mjs";
 
@@ -29,6 +30,31 @@ test("command classifier assigns stable classes", () => {
   assert.equal(classifyCommandText("noop :()"), "unknown");
   assert.equal(classifyCommandText("noop x:(){ :|:& };:"), "destructive");
   assert.equal(classifyCommandText(""), "unknown");
+});
+
+test("internal mind runner invocations are recognized without matching ordinary node commands", () => {
+  assert.equal(isInternalMindRunnerCommandText("node command/mind_ollama_runner.mjs"), true);
+  assert.equal(isInternalMindRunnerCommandText("PYA_COMMAND_TIMEOUT_MS=900000 node ../pyac/pyash-dev/command/mind_ollama_runner.mjs"), true);
+  assert.equal(isInternalMindRunnerCommandText("/usr/bin/node /home/pyash/command/mind_openai_runner.mjs"), true);
+  assert.equal(isInternalMindRunnerCommandText("node command/pyash_saddle.mjs"), false);
+  assert.equal(isInternalMindRunnerCommandText("printf 'node command/mind_ollama_runner.mjs'"), false);
+});
+
+test("command policy hard-denies internal mind runners even when command mode allows", async () => {
+  forget();
+  await interpret(parse("su name command configure be map def"));
+  await interpret(parse("su name policy mode ob wo allow ya"));
+  await interpret(parse("su name classifier enabled ob bool truth ya"));
+  await interpret(parse("prah"));
+
+  await assert.rejects(
+    () => command({ mood: "do", be: "command", ob: { text: "PYA_COMMAND_TIMEOUT_MS=900000 node command/mind_ollama_runner.mjs" } }),
+    (error) => {
+      assert.equal(error?.sentence?.su?.name, "command policy defective");
+      assert.match(error?.sentence?.ob?.text ?? "", /internal Pyash mind runner/u);
+      return true;
+    }
+  );
 });
 
 test("command policy resolver reads command configure map", async () => {
