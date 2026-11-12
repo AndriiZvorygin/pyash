@@ -8,7 +8,7 @@ import { renderSayValue } from "../say.mjs";
 import { resolveConfigBool, resolveConfigText } from "../../configure/env.mjs";
 import { getEffectiveVyahAspect } from "../../library/grammar/vyah.mjs";
 import { makeStream } from "../../library/runtimePrimitives.mjs";
-import { classifyCommandText, isInternalMindRunnerCommandText } from "../../library/command_policy.mjs";
+import { classifyCommandText } from "../../library/command_policy.mjs";
 import { emitExchangeSentence } from "../../bridge/exchange.mjs";
 import { resolveCommandText, canRunDirect, splitCommand, resolveDirectProgram, resolveShellCommand } from "./classify.mjs";
 import { resolveCommandPolicy, shouldRequireRatify, shouldDeny, isNetworkDenied, buildCommandResumeToken } from "./policy.mjs";
@@ -168,15 +168,6 @@ export async function command(sentence, { remember: rememberFn = remember, runti
   const auditedCommandClass = policy.classifierEnabled ? commandClass : "unknown";
   const commandEnv = buildAllowedEnv({ allowlist: sandbox.envAllowlist, cwd: sandbox.cwd, runRoot: sandbox.runRoot });
   if (!resumed) emitExchangeSentence(commandRequestSentence({ requestIdentity, sentence }));
-  if (isInternalMindRunnerCommandText(cmd)) {
-    emitCommandAudit({ requestIdentity, stage: "policy", commandClass: auditedCommandClass, policy, decision: "deny", sentence, rememberFn });
-    throwErrorSentence({
-      name: "command policy defective",
-      message: "command policy defective: internal Pyash mind runner cannot be launched through command",
-      from: { la: sentence },
-      raw: { class: commandClass, mode: policy.mode }
-    });
-  }
   if (shouldDeny({ sentence, policy, commandClass })) {
     emitCommandAudit({ requestIdentity, stage: "policy", commandClass: auditedCommandClass, policy, decision: "deny", sentence, rememberFn });
     throwErrorSentence({
