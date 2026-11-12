@@ -334,7 +334,10 @@ async function importSaddleTools() {
   await interpret(sentence);
 }
 
-function configureSaddle({ cwd, runtimeRoot = cwd, worldRoot = path.join(cwd, "world"), model, backend, host, systemPrompt }) {
+function configureSaddle({ cwd, runtimeRoot, worldRoot, model, backend, host, systemPrompt }) {
+  if (!cwd || !runtimeRoot || !worldRoot) {
+    throw new Error("coding saddle requires explicit project, runtime, and world roots");
+  }
   const toolMap = remember(TOOL_MAP_NAME);
   if (toolMap?.be === "map") {
     doRemember({
@@ -386,6 +389,18 @@ function configureSaddle({ cwd, runtimeRoot = cwd, worldRoot = path.join(cwd, "w
     fromstate: { text: backend },
     from: { text: host },
     fromtext: { text: systemPrompt }
+  });
+}
+
+export function configureSaddleSelection(config, selection = {}) {
+  configureSaddle({
+    cwd: config.cwd,
+    runtimeRoot: config.runtimeRoot,
+    worldRoot: config.worldRoot,
+    model: selection.model ?? config.model,
+    backend: selection.backend ?? config.backend,
+    host: selection.host ?? config.host,
+    systemPrompt: config.systemPrompt
   });
 }
 
@@ -525,6 +540,7 @@ export async function prepareSaddle({
     globalWorldRoot,
     newspaperMaximumBytes,
     newspaperSegmentMaximumBytes,
+    systemPrompt,
     mindName: selectedMind,
     model: resolvedModel,
     backend: resolvedBackend,
@@ -1142,7 +1158,7 @@ async function main() {
       configuredEffort: configValue("mind reasoning effort")
     });
     await restoreSessionHistory();
-    configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
+    configureSaddleSelection(config, { model, backend, host });
     renderStatus();
     try {
       await persistSelection({ includeProfile: false });
@@ -1468,7 +1484,7 @@ async function main() {
         configuredEffort: configValue("mind reasoning effort")
       });
       promptLabel = "pyash> ";
-      configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
+      configureSaddleSelection(config, { model, backend, host });
       renderStatus();
       writeLine(`mind: ${mindName} | backend: ${backend} | model: ${model}`);
       await reportSelectionSaved();
@@ -1550,7 +1566,7 @@ async function main() {
         configuredEffort: configValue("mind reasoning effort")
       });
       mindModels.set(mindName, model);
-      configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
+      configureSaddleSelection(config, { model, backend, host });
       renderStatus();
       writeLine(`mind: ${mindName} | model: ${model}`);
       await reportSelectionSaved();
@@ -1681,7 +1697,7 @@ async function main() {
         savedEffort: thinkSetting?.value,
         configuredEffort: configValue("mind reasoning effort")
       });
-      configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
+      configureSaddleSelection(config, { model, backend, host });
       renderStatus();
       writeLine(`model: ${model}`);
       await reportSelectionSaved();
@@ -1691,7 +1707,7 @@ async function main() {
     const hostMatch = input.trim().match(/^\/host\s+(.+)$/i);
     if (hostMatch) {
       host = normalizeSaddleHost(hostMatch[1], host);
-      configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
+      configureSaddleSelection(config, { model, backend, host });
       renderStatus();
       writeLine(`host: ${host}`);
       await reportSelectionSaved();

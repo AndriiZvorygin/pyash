@@ -55,6 +55,7 @@ import {
 } from "../program/agent/coding_saddle.mjs";
 import {
   dischargeSaddleModel,
+  configureSaddleSelection,
   loadSaddleSessionHistory,
   prepareSaddle,
   renderSaddleSessionHistory,
@@ -62,6 +63,7 @@ import {
   runSaddleTurn,
   waitForSaddleMindStream
 } from "../command/pyash_saddle.mjs";
+import { rewriteRunRootCommandPath } from "../program/verbs/command/sandbox.mjs";
 
 test("coding saddle reloads named and explicitly selected session history", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-history-"));
@@ -913,6 +915,18 @@ test("coding saddle loads its configured mind when launched from another project
     assert.equal(config.backend, "ollama");
     assert.equal(config.model, "qwen3.5:9b");
     assert.equal(remember("run root")?.ob?.filename, runtimeRoot);
+
+    configureSaddleSelection(config, { model: "replacement-model" });
+    assert.equal(remember("run root")?.ob?.filename, runtimeRoot);
+    assert.equal(remember("world root")?.ob?.filename, worldRoot);
+    assert.equal(remember("coding saddle system")?.ob?.text, config.systemPrompt);
+    const command = rewriteRunRootCommandPath(
+      "PYA_COMMAND_TIMEOUT_MS=900000 node command/mind_ollama_runner.mjs",
+      { cwd }
+    );
+    const runnerPath = command.match(/\bnode\s+(\S+)/u)?.[1];
+    assert.ok(runnerPath);
+    assert.equal(path.resolve(cwd, runnerPath), path.join(runtimeRoot, "command", "mind_ollama_runner.mjs"));
   } finally {
     for (const key of envKeys) {
       if (previousEnv[key] === undefined) delete process.env[key];
