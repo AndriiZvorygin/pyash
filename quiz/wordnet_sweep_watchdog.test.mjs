@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   buildRecoveryCodexArgs,
   buildCodexEnvironment,
@@ -10,6 +11,8 @@ import {
   shouldInvokeCodexRecovery,
 } from "../world/house/refinery-watchdog/program/run-wordnet-sweep-watchdog.mjs";
 import { mergeManagedCrontab } from "../world/house/refinery-watchdog/program/watchdog-lib.mjs";
+
+const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 async function makeSweepFixture({ remaining = 12, ageMs = 60_000, withLock = true } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-wordnet-watchdog-"));
@@ -132,5 +135,7 @@ test("Codex recovery is pinned to Luna xhigh and the cron merge schedules every 
   assert.equal(codexEnv.PATH.split(path.delimiter)[0], path.dirname(process.execPath));
   const crontab = mergeManagedCrontab("# keep this\n11 1 * * * true\n", { nodeBin: "/usr/bin/node" });
   assert.match(crontab, /^11 1 \* \* \* true$/mu);
-  assert.match(crontab, /^0 \*\/4 \* \* \* cd \/home\/htaf\/pyash && \/usr\/bin\/node .*run-wordnet-sweep-watchdog\.mjs/mu);
+  assert.ok(crontab.includes(
+    `0 */4 * * * cd ${REPOSITORY_ROOT} && /usr/bin/node ${path.join(REPOSITORY_ROOT, "world/house/refinery-watchdog/program/run-wordnet-sweep-watchdog.mjs")} >> ${path.join(REPOSITORY_ROOT, "world/house/refinery-watchdog/artifacts/cron.log")} 2>&1`,
+  ));
 });
