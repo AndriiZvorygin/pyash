@@ -129,7 +129,7 @@ export function createManagedTerminalManager({
       startingSessions += 1;
       try {
         if (!await authorizeLaunch({ command: program, args: argumentsList, cwd: directory })) {
-          throw new Error("terminal command denied by Pyash command policy");
+          throw new Error("terminal working directory denied by Pyash project boundary");
         }
         const size = {
           columns: positiveInteger(columns, 80, 500),

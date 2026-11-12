@@ -93,7 +93,7 @@ test("managed terminal rejects launches outside the authorized project", async (
     command: "apt-get",
     args: ["install", "ripgrep"],
     cwd: "/outside"
-  }), /terminal command denied/u);
+  }), /terminal working directory denied/u);
   assert.equal(spawned, false);
 });
 

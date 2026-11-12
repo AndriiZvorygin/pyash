@@ -58,16 +58,21 @@ function inside(target, root) {
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
-async function resolveProjectDirectory(requested, sandbox) {
+async function resolveTerminalProjectRoot(sandbox) {
+  const projectRoot = await fs.realpath(sandbox.cwd).catch(() => null);
+  if (!projectRoot || !(await fs.stat(projectRoot).catch(() => null))?.isDirectory()) {
+    throw new Error("terminal project working directory is unavailable");
+  }
+  return projectRoot;
+}
+
+async function resolveProjectDirectory(requested, sandbox, projectRoot) {
   const raw = normalized(requested) || sandbox.cwd;
   const candidate = path.resolve(sandbox.cwd, raw);
-  const [realCandidate, realRoots] = await Promise.all([
-    fs.realpath(candidate),
-    Promise.all(sandbox.writableRoots.map((root) => fs.realpath(root).catch(() => "")))
-  ]);
+  const realCandidate = await fs.realpath(candidate);
   const stat = await fs.stat(realCandidate);
-  if (!stat.isDirectory() || !realRoots.some((root) => root && inside(realCandidate, root))) {
-    throw new Error("terminal working directory is outside the agent's licensed project roots");
+  if (!stat.isDirectory() || !inside(realCandidate, projectRoot)) {
+    throw new Error("terminal working directory is outside the agent's active project root");
   }
   return realCandidate;
 }
@@ -169,7 +174,8 @@ async function startChildAgent({
       : hostFallback
   });
   const sandbox = resolveSandboxSettings({ sentence, rememberFn });
-  const cwd = await resolveProjectDirectory(request.cwd, sandbox);
+  const projectRoot = await resolveTerminalProjectRoot(sandbox);
+  const cwd = await resolveProjectDirectory(request.cwd, sandbox, projectRoot);
   const worldRoot = resolveWorldRoot({ rememberFn }) ?? path.join(sandbox.runRoot, "world");
   const childSession = sessionName();
   const environment = {
@@ -187,7 +193,7 @@ async function startChildAgent({
     runtimeContext,
     rememberFn
   });
-  const started = await requestTerminal(worldRoot, sandbox.runRoot, {
+  const started = await requestTerminal(worldRoot, projectRoot, {
     action: "start",
     command: process.execPath,
     args: [SADDLE_ENTRY],
@@ -203,7 +209,7 @@ async function startChildAgent({
       requestTerminal,
       sleepFn,
       worldRoot,
-      projectRoot: sandbox.runRoot,
+      projectRoot,
       terminalId: started.id,
       instruction: initialInstruction
     });
@@ -267,13 +273,14 @@ export async function terminal(sentence, {
 
   const sandbox = resolveSandboxSettings({ sentence, rememberFn });
   const worldRoot = resolveWorldRoot({ rememberFn }) ?? path.join(sandbox.runRoot, "world");
+  const projectRoot = await resolveTerminalProjectRoot(sandbox);
   if (action === "start") {
     const command = normalized(request.command);
     const args = Array.isArray(request.args) ? request.args.map((value) => String(value)) : [];
     if (!command) throw new Error("terminal start requires a command");
-    const cwd = await resolveProjectDirectory(request.cwd, sandbox);
+    const cwd = await resolveProjectDirectory(request.cwd, sandbox, projectRoot);
     await authorizeLaunch({ sentence, command, args, cwd, runtimeContext, rememberFn });
-    const result = await requestTerminal(worldRoot, sandbox.runRoot, {
+    const result = await requestTerminal(worldRoot, projectRoot, {
       action,
       command,
       args,
@@ -283,11 +290,11 @@ export async function terminal(sentence, {
     });
     return jsonResult(action, result);
   }
-  if (action === "list") return jsonResult(action, { sessions: await requestTerminal(worldRoot, sandbox.runRoot, { action }) });
+  if (action === "list") return jsonResult(action, { sessions: await requestTerminal(worldRoot, projectRoot, { action }) });
 
   const id = normalized(request.id);
   if (!id) throw new Error(`terminal ${action} requires a terminal id`);
-  const result = await requestTerminal(worldRoot, sandbox.runRoot, { ...request, action, id });
+  const result = await requestTerminal(worldRoot, projectRoot, { ...request, action, id });
   return jsonResult(action, result);
 }
 

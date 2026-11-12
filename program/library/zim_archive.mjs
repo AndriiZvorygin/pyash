@@ -1030,6 +1030,12 @@ async function searchZimLibraryServer(sentence, { query, archives, archiveFilter
     fail(sentence, "zim search server invalid", "zim archive search server must be a valid HTTP URL", { endpoint: base, error: error.message });
   }
   endpoint.searchParams.set("pattern", query);
+  if (archiveFilter) {
+    endpoint.searchParams.set("books.name", archiveFilter);
+  } else {
+    const language = String(resolveConfigText("zim archive default language", { rememberFn }) ?? "eng").trim() || "eng";
+    endpoint.searchParams.set("books.filter.lang", language);
+  }
   endpoint.searchParams.set("format", "xml");
   let response;
   try {

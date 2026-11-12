@@ -402,11 +402,13 @@ test("coding saddle completion evidence requires a successful edit and a later c
     "publisher per-site request limits do not apply",
     "Do not construct, normalize, or replace archive paths or URLs",
     "pass a locator returned by a tool unchanged",
+    "If search returns an error, do not guess a local archive path",
+    "When the user supplies a URL and asks for current or news content",
     "`search_archive(archive_path, query)`",
     "`read_archive_focus(archive_path, entry_path, focus)`",
     "Focused reads require the exact `entry_path` returned by search",
     "Ground claims in retrieved page text",
-    "Use the original live website only"
+    "Use the original live website when"
   ]) {
     assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes(guidance), `missing ZIM guidance: ${guidance}`);
   }
