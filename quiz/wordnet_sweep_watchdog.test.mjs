@@ -50,6 +50,28 @@ test("a live sweep with recent durable artifacts is healthy", async () => {
   }
 });
 
+test("the watchdog recognizes its documented resume entry point as the sweep owner", async () => {
+  const fixture = await makeSweepFixture();
+  try {
+    const status = await inspectWordnetSweep({
+      repositoryRoot: fixture.root,
+      artifactDirectory: fixture.artifacts,
+      lockPath: fixture.lockPath,
+      readProcess: () => ({
+        alive: true,
+        cwd: fixture.root,
+        command: ["/usr/bin/node", "world/house/refinery-watchdog/program/resume-wordnet-sweep.mjs"],
+      }),
+    });
+    assert.equal(status.state, "healthy");
+    assert.equal(status.active, true);
+    assert.equal(status.conflictingLiveLock, false);
+    assert.equal(shouldInvokeCodexRecovery(status), false);
+  } finally {
+    await fixture.cleanup();
+  }
+});
+
 test("a live sweep without durable progress beyond four hours is stalled", async () => {
   const fixture = await makeSweepFixture({ ageMs: 5 * 60 * 60 * 1000 });
   try {
@@ -112,7 +134,7 @@ test("a live lock owned by another command is an incident, never treated as this
   }
 });
 
-test("Codex recovery is pinned to Luna xhigh and the cron merge schedules every four hours", () => {
+test("Codex recovery is pinned to Luna xhigh and the cron merge schedules hourly checks", () => {
   const args = buildRecoveryCodexArgs({ prompt: "recover", outputPath: "/tmp/result.json", schemaPath: "/tmp/schema.json" });
   assert.deepEqual(args.slice(0, 7), [
     "exec",
@@ -136,6 +158,6 @@ test("Codex recovery is pinned to Luna xhigh and the cron merge schedules every 
   const crontab = mergeManagedCrontab("# keep this\n11 1 * * * true\n", { nodeBin: "/usr/bin/node" });
   assert.match(crontab, /^11 1 \* \* \* true$/mu);
   assert.ok(crontab.includes(
-    `0 */4 * * * cd ${REPOSITORY_ROOT} && /usr/bin/node ${path.join(REPOSITORY_ROOT, "world/house/refinery-watchdog/program/run-wordnet-sweep-watchdog.mjs")} >> ${path.join(REPOSITORY_ROOT, "world/house/refinery-watchdog/artifacts/cron.log")} 2>&1`,
+    `0 * * * * cd ${REPOSITORY_ROOT} && /usr/bin/node ${path.join(REPOSITORY_ROOT, "world/house/refinery-watchdog/program/run-wordnet-sweep-watchdog.mjs")} >> ${path.join(REPOSITORY_ROOT, "world/house/refinery-watchdog/artifacts/cron.log")} 2>&1`,
   ));
 });

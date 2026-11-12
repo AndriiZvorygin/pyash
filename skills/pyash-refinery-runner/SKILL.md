@@ -45,6 +45,11 @@ Use this skill to work on refinery execution, ratify gates, and run newspaper be
   and resolve the latest row on resume instead of serializing the whole ledger
   for every result. Keep parsed maps in sweep-scoped memory between bounded
   chunks; the durable append log remains the recovery source after restart.
+- For unattended multi-hour or multi-day resumes, run the refinery under a
+  supervisor that outlives the recovery agent (prefer a transient
+  `systemd --user` service when available). A `nohup` child can still be reaped
+  with the Codex process. Verify the service main PID owns the refinery lock
+  and that new durable artifacts appear after the recovery agent exits.
 
 ## Checkpoints and newspapers
 

@@ -14,4 +14,4 @@ if (installed.status !== 0) {
   process.stderr.write(installed.stderr || "failed to install refinery watchdog crontab\n");
   process.exit(installed.status ?? 1);
 }
-process.stdout.write("installed refinery watchdog entries for the nightly reporters, 05:00/06:00 checks, and the WordNet sweep every four hours\n");
+process.stdout.write("installed refinery watchdog entries for the nightly reporters, 05:00/06:00 checks, and hourly WordNet sweep checks\n");

@@ -52,8 +52,9 @@ function processMatchesSweep(processInfo, root) {
   if (!processInfo?.alive || path.resolve(processInfo.cwd || "") !== path.resolve(root)) return false;
   return (processInfo.command || []).some((part, index, all) => {
     const value = String(part || "");
-    if (value.endsWith("command/wordnet_sense_compound_refinery.mjs")) return true;
-    return value === "wordnet_sense_compound_refinery.mjs"
+    if (value.endsWith("command/wordnet_sense_compound_refinery.mjs")
+      || value.endsWith("world/house/refinery-watchdog/program/resume-wordnet-sweep.mjs")) return true;
+    return (value === "wordnet_sense_compound_refinery.mjs" || value === "resume-wordnet-sweep.mjs")
       && all.slice(0, index).some((prior) => String(prior).endsWith("/node"));
   });
 }
@@ -188,7 +189,7 @@ function recoveryPrompt(incidentPath, artifactDir) {
     "First read AGENTS.md, skills/pyash-refinery-runner/SKILL.md, and skills/pyash-gpu-management/SKILL.md. Inspect current process, lock, the latest worklist/progress, recent logs, Housekeeper queue/job evidence, and memory before changing anything.",
     "If the run is active and has recent durable progress or an active Housekeeper duty, report healthy and do not start, stop, or duplicate it.",
     `If it is complete, report complete. If it stopped or is demonstrably stalled, identify the cause from evidence. Make only the smallest general fix required, add or run a focused regression test, then resume this exact run with \`node ${path.relative(PYASH_ROOT, path.join(PROGRAM_DIR, "resume-wordnet-sweep.mjs"))}\` from the repository root. This entry point reads the run id from the durable .pya context and passes it explicitly to the existing refinery API.`,
-    `Launch recovery in the background and append output to the run log; do not wait for the multi-day sweep to finish: \`env -u PYA_MIND_RESPONSE -u PYA_HEAR_FIXTURE -u PYA_PIPER_FIXTURE -u PYA_GPU_HOUSEKEEPER_FIXTURE nohup node ${path.relative(PYASH_ROOT, path.join(PROGRAM_DIR, "resume-wordnet-sweep.mjs"))} >> ${path.relative(PYASH_ROOT, path.join(SWEEP_ROOT, "sweep-supervised.log"))} 2>&1 < /dev/null &\`. Capture the child PID and verify its exact command owns the sweep lock and begins producing durable artifacts.`,
+    `Launch recovery so it survives the Codex process. Prefer a transient systemd user service when the user manager is available: use a stable unit name derived from the run id, set WorkingDirectory to ${PYASH_ROOT}, append stdout and stderr to ${path.relative(PYASH_ROOT, path.join(SWEEP_ROOT, "sweep-supervised.log"))}, and run the existing resume entry point with every PYA_*_FIXTURE variable and PYA_MIND_RESPONSE unset. Do not rely on a nohup child of the Codex shell. Keep a supervisor alive until the sweep exits only when systemd user services are unavailable. Capture the service main PID and verify it owns the sweep lock and begins producing durable artifacts after the Codex process exits. Do not wait for the multi-day sweep to finish.`,
     "In addition to the explicit unset list in the launch command, remove any other PYA_*_FIXTURE variables from the recovery environment. Inference must go through GPU Housekeeper; never call Ollama or a provider directly.",
     "Do not delete, truncate, rewrite, or regenerate accepted ledgers, progress, translation, composition, candidate, checkpoint, or newspaper evidence. Do not launch another run id. Do not kill any unrelated process. If an exact sweep process is wedged, determine whether a Housekeeper duty is still running before using a graceful stop and resume.",
     "Preserve unrelated dirty files. Keep changes within the sweep implementation and focused tests. Do not perform vocabulary edits, broad refactors, or destructive Git operations. Follow the repository contribution instructions for any code change.",
