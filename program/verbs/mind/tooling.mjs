@@ -101,6 +101,19 @@ const TOOL_ARGUMENT_SCHEMA_ADAPTERS = {
       }
     }
   },
+  "web search": {
+    toolName: "web_search",
+    description: "Search the configured live web search motor for current information or news. Returns up to five results with full source URLs and descriptions. This searches the web and is separate from the offline ZIM archive search.",
+    fields: { ob: { name: "query", description: "Terms to search on the live web." } }
+  },
+  "web search source": {
+    toolName: "web_search_source",
+    description: "Search a specific live search service API and return up to five source URLs and descriptions. For Yago, pass its POST /search endpoint; Pyash reads the bearer key from yago api key in configure/secret.pya or YAGO_API_KEY. For YaCy, pass its JSON endpoint ending in /yacysearch.json. Use this when the user names a search service; do not download the search homepage and infer its query syntax.",
+    fields: {
+      ob: { name: "query", description: "Terms to search." },
+      from: { name: "search_url", description: "Search API endpoint URL. For Yago, use /search; for YaCy, use /yacysearch.json." }
+    }
+  },
   "search archive": {
     toolName: "search_archive",
     description: "Search one ZIM archive through the configured Kiwix service when its archive file is mounted in the configured local library. archive_path is a local archive path or library directory, not a URL. Search results include usable page URLs; pass returned locators unchanged. For remote-only archives, use search_zim_library. Searching archived content does not contact source websites.",
@@ -448,4 +461,34 @@ export function buildToolSentence({ capability, args }) {
   }
 
   return call;
+}
+
+export function formatWebSearchToolResult(surfacedTool) {
+  const entries = surfacedTool?.ob?.map && typeof surfacedTool.ob.map === "object"
+    ? surfacedTool.ob.map
+    : {};
+  const metadata = entries.metadata ?? {};
+  const results = Object.entries(entries)
+    .filter(([key, value]) => key !== "metadata" && value?.from?.filename)
+    .sort(([, left], [, right]) => Number(left?.atindex?.num ?? 0) - Number(right?.atindex?.num ?? 0));
+  const status = String(metadata.searchStatus?.text ?? "response received").toUpperCase();
+  const lines = [
+    `Web search status: ${status}.`,
+    `Result records returned: ${results.length}.`
+  ];
+  if (!results.length) {
+    lines.push("No result records were returned; this response contains no titles or source URLs.");
+  }
+  if (metadata.searchTotalResults?.text) lines.push(`Reported total: ${metadata.searchTotalResults.text}.`);
+  if (metadata.searchIssues?.text) lines.push(`Search issues: ${metadata.searchIssues.text}.`);
+  for (const [index, [, entry]] of results.entries()) {
+    lines.push(`${index + 1}. ${entry?.ob?.text ?? "Untitled result"}`);
+    lines.push(`URL: ${entry.from.filename}`);
+    const description = String(entry?.as?.text ?? "").trim();
+    if (description) {
+      const clipped = description.length > 600 ? `${description.slice(0, 597)}...` : description;
+      lines.push(`Description: ${clipped}`);
+    }
+  }
+  return lines.join("\n");
 }

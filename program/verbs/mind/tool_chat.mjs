@@ -7,7 +7,7 @@ import { mapDefChainFromName } from "./map_helpers.mjs";
 import { mapSentenceToPyash } from "../exchange/json_map.mjs";
 import { recordMindJson, stripContext } from "./logging.mjs";
 import { appendLog } from "./history.mjs";
-import { buildToolSentence } from "./tooling.mjs";
+import { buildToolSentence, formatWebSearchToolResult } from "./tooling.mjs";
 import { deriveSignatureFromCall, joinSignatureWords } from "../../bridge/signature.mjs";
 import { resolveRatifyDecision } from "../../agent/ratify_policy.mjs";
 import { submitRunToolEvent } from "../../bridge/newspaper.mjs";
@@ -714,6 +714,9 @@ export async function runToolChat({
           const errorName = String(surfacedTool.su?.name ?? "").trim();
           const errorMessage = String(surfacedTool.ob?.text ?? "tool failed").trim();
           toolText = [errorName, errorMessage].filter(Boolean).join(": ");
+        }
+        if (!toolText && (toolName === "web_search" || toolName === "web_search_source")) {
+          toolText = formatWebSearchToolResult(surfacedTool);
         }
         const mapName = surfacedTool.ob?.name;
         const mapFact = mapName ? remember(mapName) : null;

@@ -99,12 +99,121 @@ function buildFoundMap({ question, motorUrl, limit, results }) {
   return map;
 }
 
-async function fetchJson(url) {
-  const res = await fetch(url);
+function isYaCyJsonEndpoint(value) {
+  try {
+    return new URL(String(value ?? "")).pathname.replace(/\/+$/u, "").endsWith("/yacysearch.json");
+  } catch {
+    return false;
+  }
+}
+
+function isYagoSearchEndpoint(value) {
+  try {
+    const url = new URL(String(value ?? ""));
+    return url.pathname.replace(/\/+$/u, "") === "/search";
+  } catch {
+    return false;
+  }
+}
+
+function normalizeYaCyUrl(endpoint, question, limit) {
+  const url = new URL(endpoint);
+  url.searchParams.set("query", question);
+  url.searchParams.set("maximumRecords", String(limit));
+  url.searchParams.set("contentdom", "text");
+  return url.toString();
+}
+
+function normalizeYaCyPayload(payload, limit) {
+  const channels = Array.isArray(payload?.channels) ? payload.channels : [];
+  const channel = channels[0] ?? {};
+  const items = Array.isArray(channel.items) ? channel.items : [];
+  return {
+    complete: payload?.complete === true,
+    totalResults: channel.totalResults ?? null,
+    failures: Array.isArray(channel.partialFailures)
+      ? channel.partialFailures.map((failure) => {
+        const reason = String(failure?.reason ?? "").toLowerCase();
+        const source = String(failure?.source ?? "").toLowerCase();
+        if (source === "local-search" && /deadline|timeout|timed out/u.test(reason)) return "local search timed out";
+        if (source === "fuzzy-stage" && /deadline|timeout|timed out/u.test(reason)) return "fuzzy search timed out";
+        if (/deadline|timeout|timed out/u.test(reason)) return "search peer timed out";
+        if (/status \d{3}|invalid response/u.test(reason)) return "search peer returned an error";
+        return "search peer unavailable";
+      })
+      : [],
+    results: items.slice(0, limit).map((item) => ({
+      url: String(item?.link ?? item?.url ?? ""),
+      title: String(item?.title ?? ""),
+      abstract: String(item?.description ?? item?.abstract ?? ""),
+      branch: String(item?.category ?? ""),
+      motor: "yacy"
+    })).filter((item) => item.url)
+  };
+}
+
+function normalizeYagoPayload(payload, limit) {
+  const results = Array.isArray(payload?.results) ? payload.results : [];
+  return {
+    status: String(payload?.status ?? "response received").toLowerCase(),
+    totalResults: payload?.total_results ?? payload?.totalResults ?? null,
+    results: results.slice(0, limit).map((item) => ({
+      url: String(item?.url ?? item?.link ?? ""),
+      title: String(item?.title ?? ""),
+      abstract: String(item?.content ?? item?.description ?? item?.snippet ?? ""),
+      branch: "",
+      motor: "yago"
+    })).filter((item) => item.url)
+  };
+}
+
+function resolveYagoApiKey(rememberFn) {
+  return String(process.env.YAGO_API_KEY ?? resolveConfigText("yago api key", { rememberFn }) ?? "").trim();
+}
+
+function retryAfterMilliseconds(value) {
+  const retryAfter = String(value ?? "").trim();
+  if (/^\d+(?:\.\d+)?$/u.test(retryAfter)) return Math.min(5000, Number(retryAfter) * 1000);
+  const date = Date.parse(retryAfter);
+  if (Number.isFinite(date)) return Math.min(5000, Math.max(0, date - Date.now()));
+  return 1000;
+}
+
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function fetchJson(url, options) {
+  const res = await fetch(url, options);
   if (!res.ok) {
     throw new Error(`status ${res.status}`);
   }
   return res.json();
+}
+
+async function fetchYagoSearch(url, apiKey, body) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const response = await fetch(url, {
+      method: "POST",
+      redirect: "error",
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json",
+        accept: "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+    if (response.status === 409) {
+      if (attempt === 0) {
+        await wait(retryAfterMilliseconds(response.headers.get("retry-after")));
+        continue;
+      }
+      return { incompleteReason: "search sources did not complete" };
+    }
+    if (!response.ok) throw new Error(`status ${response.status}`);
+    return { payload: await response.json() };
+  }
+  return { incompleteReason: "search sources did not complete" };
 }
 
 async function searchWeb(sentence, { remember: rememberFn = remember } = {}) {
@@ -136,14 +245,55 @@ async function searchWeb(sentence, { remember: rememberFn = remember } = {}) {
 
   let payload;
   const fixture = await loadFixture();
+  let yacyResult = null;
+  let yagoResult = null;
   if (fixture) {
     payload = JSON.parse(fixture);
   } else {
-    const url = normalizeSearxUrl(motorUrl, question, limit);
+    const yacyEndpoint = isYaCyJsonEndpoint(motorUrl);
+    const yagoEndpoint = !yacyEndpoint && isYagoSearchEndpoint(motorUrl);
+    let url;
+    let options;
+    let yagoApiKey = "";
+    if (yacyEndpoint) {
+      url = normalizeYaCyUrl(motorUrl, question, limit);
+    } else if (yagoEndpoint) {
+      yagoApiKey = resolveYagoApiKey(rememberFn);
+      if (!yagoApiKey) {
+        throwErrorSentence({
+          name: "web search api key lost",
+          message: "web search api key lost: add yago api key to configure/secret.pya or set YAGO_API_KEY",
+          from: { name: "search" },
+          raw: { motor: motorUrl }
+        });
+      }
+      url = motorUrl;
+    } else {
+      url = normalizeSearxUrl(motorUrl, question, limit);
+    }
     try {
-      payload = await fetchJson(url);
+      if (yagoEndpoint) {
+        const yagoResponse = await fetchYagoSearch(url, yagoApiKey, { query: question, max_results: limit });
+        payload = yagoResponse.payload ?? {};
+        yagoResult = yagoResponse.incompleteReason
+          ? { status: "incomplete", totalResults: null, results: [], failures: [yagoResponse.incompleteReason] }
+          : normalizeYagoPayload(payload, limit);
+      } else {
+        payload = await fetchJson(url, options);
+      }
+      if (yacyEndpoint) yacyResult = normalizeYaCyPayload(payload, limit);
     } catch (err) {
-      const hint = "hint: set web search motor in configure/container.pya or configure/secret.pya and run container/pyash/command/begin.sh --restart to start searxng, or set web search motor explicitly";
+      if (yagoEndpoint && /status 401|status 403/u.test(String(err?.message ?? ""))) {
+        throwErrorSentence({
+          name: "web search authentication failed",
+          message: "web search authentication failed: Yago rejected the Search API key; check yago api key in configure/secret.pya",
+          from: { name: "search" },
+          raw: { motor: motorUrl, status: String(err.message).match(/status \d+/u)?.[0] }
+        });
+      }
+      const hint = yagoEndpoint
+        ? "hint: verify the Yago /search endpoint and yago api key in configure/secret.pya"
+        : "hint: set web search motor in configure/container.pya or configure/secret.pya and run container/pyash/command/begin.sh --restart to start searxng, or set web search motor explicitly";
       throwErrorSentence({
         name: "web search defective",
         message: `web search defective: ${err?.message ?? "request failed"}; ${hint}`,
@@ -152,8 +302,8 @@ async function searchWeb(sentence, { remember: rememberFn = remember } = {}) {
       });
     }
   }
-  const rawResults = Array.isArray(payload?.results) ? payload.results : [];
-  const normalized = rawResults.slice(0, limit).map((result) => {
+  const rawResults = yacyResult ? yacyResult.results : yagoResult ? yagoResult.results : Array.isArray(payload?.results) ? payload.results : [];
+  const normalized = yacyResult || yagoResult ? rawResults : rawResults.slice(0, limit).map((result) => {
     const url = result?.url ?? result?.link ?? "";
     const title = result?.title ?? "";
     const abstract = result?.content ?? result?.summary ?? "";
@@ -169,6 +319,42 @@ async function searchWeb(sentence, { remember: rememberFn = remember } = {}) {
   }).filter(entry => entry.url);
 
   const map = buildFoundMap({ question, motorUrl, limit, results: normalized });
+  if (yacyResult) {
+    const status = yacyResult.complete ? "complete" : normalized.length ? "partial" : "incomplete";
+    const summaryParts = [`Search status: ${status}`, `${normalized.length} result${normalized.length === 1 ? "" : "s"} returned`];
+    if (yacyResult.totalResults != null) summaryParts.push(`reported total: ${yacyResult.totalResults}`);
+    const failureCounts = new Map();
+    for (const failure of yacyResult.failures) {
+      failureCounts.set(failure, (failureCounts.get(failure) ?? 0) + 1);
+    }
+    if (yacyResult.failures.length) {
+      summaryParts.push(`issues: ${[...failureCounts]
+        .map(([reason, count]) => `${reason}${count > 1 ? ` (${count})` : ""}`)
+        .join("; ")}`);
+    }
+    map.metadata.searchStatus = { text: status };
+    if (yacyResult.totalResults != null) map.metadata.searchTotalResults = { text: String(yacyResult.totalResults) };
+    if (failureCounts.size) map.metadata.searchIssues = { text: [...failureCounts]
+      .map(([reason, count]) => `${reason}${count > 1 ? ` (${count})` : ""}`)
+      .join("; ") };
+    map.metadata.as = { text: summaryParts.join("; ") };
+  }
+  if (yagoResult) {
+    const status = ["partial", "incomplete"].includes(yagoResult.status) ? yagoResult.status : "response received";
+    const summaryParts = [`Search status: ${status}`, `${normalized.length} result${normalized.length === 1 ? "" : "s"} returned`];
+    if (yagoResult.totalResults != null) summaryParts.push(`reported total: ${yagoResult.totalResults}`);
+    if (yagoResult.failures?.length) {
+      const counts = new Map();
+      for (const failure of yagoResult.failures) counts.set(failure, (counts.get(failure) ?? 0) + 1);
+      const issues = [...counts].map(([reason, count]) => `${reason}${count > 1 ? ` (${count})` : ""}`).join("; ");
+      map.metadata.searchIssues = { text: issues };
+      summaryParts.push(`issues: ${issues}`);
+    }
+    map.metadata.searchStatus = { text: status };
+    map.metadata.via = { name: "yago" };
+    if (yagoResult.totalResults != null) map.metadata.searchTotalResults = { text: String(yagoResult.totalResults) };
+    map.metadata.as = { text: summaryParts.join("; ") };
+  }
   const targetName = sentence?.su?.name ?? sentence?.to?.name ?? null;
   if (targetName) {
     return {

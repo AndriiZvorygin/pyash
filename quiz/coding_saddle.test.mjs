@@ -378,16 +378,18 @@ test("coding saddle shows elapsed progress and explicit tool event labels", () =
   assert.equal(saddleToolEventLabel({ stage: "result", toolName: "repair" }), "[tool result] repair");
 });
 
-test("coding saddle explains archive focus tool arguments", () => {
+test("coding saddle explains separate archive and live web search paths", () => {
   assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`read_archive_focus(archive_path, entry_path, focus)`"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("Focused reads require the exact `entry_path` returned by search"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("tool resolves the host-configured Kiwix endpoint"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("agents do not need to know the server address or where ZIM files are mounted."));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("pass a locator returned by a tool unchanged to the next tool."));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("returned full `page` URL to the download tool"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("Wikipedia, Wiktionary, Wikibooks, Wikiversity, Wikisource, DevDocs"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("publisher per-site request limits do not apply"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("host-configured Kiwix endpoint, which may be remote"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("Pass returned locators unchanged"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("For remote archive pages, pass the returned full page URL to download"));
   assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`search_zim_library(query)`"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`web_search(query)`"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`web_search_source(query, search_url)`"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("Yago uses POST `/search`"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("YaCy uses `/yacysearch.json`"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("never claim titles or URLs that are absent"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("or describe an incomplete zero-result response as complete"));
   assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`search_archive(archive_path, query)`"));
 });
 
@@ -400,22 +402,25 @@ test("coding saddle handles greetings directly without exposing runtime script n
 test("coding saddle completion evidence requires a successful edit and a later command check", () => {
   for (const guidance of [
     "documentation and reference research",
-    "`search_zim_library(query)` first",
     "host-configured Kiwix endpoint",
-    "agents do not need to know the server address",
-    "full `page` URL",
-    "publisher per-site request limits do not apply",
-    "Do not construct, normalize, or replace archive paths or URLs",
-    "pass a locator returned by a tool unchanged",
-    "If search returns an error, do not guess a local archive path",
-    "When the user supplies a URL and asks for current or news content",
+    "Agents do not need to know the server address",
+    "Pass returned locators unchanged",
+    "`web_search(query)`",
+    "`web_search_source(query, search_url)`",
+    "Yago uses POST `/search` and the configured bearer key",
+    "YaCy uses `/yacysearch.json`",
+    "A search homepage is not search evidence",
+    "do not download it to infer API syntax",
+    "do not use ZIM search for live queries",
+    "never claim titles or URLs that are absent",
+    "or describe an incomplete zero-result response as complete",
+    "Download a user-supplied URL directly only when the user asks for its contents",
+    "For remote archive pages, pass the returned full page URL to download",
     "`search_archive(archive_path, query)`",
     "`read_archive_focus(archive_path, entry_path, focus)`",
-    "Focused reads require the exact `entry_path` returned by search",
-    "Ground claims in retrieved page text",
-    "Use the original live website when"
+    "Ground claims in retrieved page text"
   ]) {
-    assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes(guidance), `missing ZIM guidance: ${guidance}`);
+    assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes(guidance), `missing retrieval guidance: ${guidance}`);
   }
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /name the target file before editing/u);
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /After the final edit/u);

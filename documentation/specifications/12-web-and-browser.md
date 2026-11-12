@@ -27,6 +27,44 @@ Optional source override:
 from filename "https://search.example/"
 ```
 
+YaCy's JSON API can be selected as the source endpoint:
+```pyash
+su name found
+ob text "technology /date"
+fromstate wo web
+from filename "https://search.example/yacysearch.json"
+by num 5
+be search do
+```
+
+When the source path ends in `/yacysearch.json`, search sends the query using
+YaCy's `query`, `maximumRecords`, and `contentdom=text` parameters and converts
+the returned channel items into the same ranked result map. The result metadata
+records `complete`, `partial`, or `incomplete` status. An incomplete response
+with zero items is not evidence that the search had no matches. Peer failure
+details are reduced to safe summary text; the API may expose peer addresses in
+diagnostics.
+
+Yago's authenticated agent API can also be selected as the source endpoint:
+```pyash
+su name found
+ob text "technology news"
+fromstate wo web
+from filename "https://yago.example/search"
+by num 5
+be search do
+```
+
+Yago search uses `POST /search` with JSON `{ "query": "...", "max_results": 5 }`
+and `Authorization: Bearer ...`. Use a key with the `search:read` scope. The key
+is read from `yago api key` in `configure/secret.pya` or `YAGO_API_KEY`; result
+records are normalized from the Tavily-compatible `results` array. Yago uses
+HTTP 409 with `Retry-After` when no rows were found and at least one source
+failed. Pyash retries once, then reports an incomplete zero-result response if
+the source failure persists. The saddle should use the service API guide for
+the endpoint and ask for explicit configuration when the key is missing. It
+should never download the search homepage to infer API behavior.
+
 ## 3. Search output model
 
 Per result entry should include:

@@ -18,6 +18,8 @@ su name terminal list be terminal as wo list ob text input can
 su name terminal close be terminal as wo close ob text input can
 su name session plan be write fromstate "coding saddle plan" ob text input can
 su name search be search ob text input fromstate wo zim can
+su name web search be search ob text input fromstate wo web by num 5 can
+su name web search source be search ob text input from filename input fromstate wo web by num 5 can
 su name search archive be search as wo cluster-compress in filename input ob text input can
 su name read archive focus be read as wo cluster-compress from filename input ob text input by text input can
 su name download be download from filename input as wo web to filename input can
