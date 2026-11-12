@@ -41,3 +41,9 @@ Keep it to 5–10 bullet points. Avoid long prose.
 - Tool name mismatch (signature changes vs tool map).
 - Argument shape mismatch (case key order or type words).
 - Tool map not passed (`with name <map>` missing).
+- A Pyash mind backend module invokes its provider runner through the generic `command` verb. Keep that internal runtime path working; reject a model-requested runner launch at the `runToolChat` boundary and reject PTY launches in the terminal verb instead of globally denying the command used by mind modules.
+- When changing that boundary, add a fixture-free integration test with a local fake provider HTTP endpoint. Invoke the imported mind backend module and verify the runner reaches the endpoint and returns the response. Keep a separate test that a model tool call cannot launch the internal runner.
+
+## Provider-runner regression check
+
+Run `node --test quiz/mind_runner_command_integration.test.mjs quiz/mind_tool_call.test.mjs quiz/managed_terminal_verb.test.mjs` after changing provider-runner or terminal restrictions. The integration test uses a local HTTP stub, starts the real Pyash runner process, and leaves `PYA_MIND_RESPONSE` and `PYA_COMMAND_RESPONSE` unset.
