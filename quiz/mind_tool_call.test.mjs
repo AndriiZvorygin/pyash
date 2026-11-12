@@ -65,6 +65,57 @@ test("mind tool chat ignores prose that is not an explicit allowed tool call", (
   );
 });
 
+test("structured tool schemas replace duplicate tool descriptions but retain fallback text", async () => {
+  const base = {
+    sentence: parse('be write ob text "question" for name helper to name text helper-out do'),
+    ob: {},
+    mindName: "helper",
+    model: "fixture-model",
+    dialogue: "helper compact tool prompt test",
+    callPrompt: "Use the requested capability.",
+    resolvedConfigPrompt: "Answer the current request.",
+    historyMessages: [],
+    toolMap: new Map(),
+    backendName: "ollama command mind",
+    mindDebug: false,
+    debugMind: () => {},
+    inputs: { inputText: "Use the requested capability." }
+  };
+  const schema = [{ type: "function", function: {
+    name: "be_read_from_filename",
+    description: "Read a file by filename.",
+    parameters: { type: "object", properties: { from: { type: "string" } }, required: ["from"] }
+  } }];
+  let structuredPayload;
+  await runToolChat({
+    ...base,
+    tools: schema,
+    toolBlock: "TOOLS: be_read_from_filename reads a file by filename.",
+    callBackend: async ({ payload }) => {
+      structuredPayload = payload;
+      return { message: { content: "Done." } };
+    }
+  });
+
+  assert.equal(structuredPayload.tools[0].function.name, "be_read_from_filename");
+  assert.match(structuredPayload.prompt, /Use supplied tools for requested actions/u);
+  assert.doesNotMatch(structuredPayload.prompt, /TOOLS:/u);
+  assert.doesNotMatch(structuredPayload.prompt, /be_read_from_filename/u);
+  assert.doesNotMatch(structuredPayload.prompt, /reads a file by filename/u);
+
+  let fallbackPayload;
+  await runToolChat({
+    ...base,
+    tools: [],
+    toolBlock: "TOOLS: legacy textual capability description",
+    callBackend: async ({ payload }) => {
+      fallbackPayload = payload;
+      return { message: { content: "Done." } };
+    }
+  });
+  assert.match(fallbackPayload.prompt, /TOOLS: legacy textual capability description/u);
+});
+
 test("mind tool calls cannot shell-launch provider runner adapters", async () => {
   forget();
   resetMindLogs();
