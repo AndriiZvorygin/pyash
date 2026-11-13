@@ -303,14 +303,20 @@ The existing Pyash compile verb accepts a persisted PyAC pack as a C source:
 from filename "program.pyac" fromstate pyac tostate c to filename "program.c" be compile do
 ```
 
-This path validates the pack header, decodes codelets in order, and emits C
-only for numeric `plus`, arithmetic (`subtract`, `multiply`, `divide`, `xor`,
-`exponential`, and `remains`), and numeric `invert`. The generated executable
-prints one result per codelet in pack order. Division and remainder by zero
-fail visibly at execution. Malformed packs and codelets outside this initial C
-slice fail compilation instead of becoming placeholder code.
+This path validates the pack header, decodes each 16-word codelet, schedules
+named-state dependencies, and emits executable C for every semantic currently
+accepted by the VLIW executor: typed and named number/text literals, boolean
+literals, numeric `plus` and arithmetic (`subtract`, `multiply`, `divide`,
+`xor`, `exponential`, and `remains`), numeric `invert`, named queries, dates,
+and numeric, boolean, and text vectors. Named numeric subtraction updates its
+named value before later codelets query it. The generated executable prints
+one JSON fact per codelet in source-pack order, matching the reference
+executor. Division and remainder by zero fail visibly at execution. Malformed
+packs and codelets without a VLIW semantic adapter fail compilation rather
+than becoming placeholder code.
 
-The conformance quiz persists a one-paragraph pack, compiles it through this
-Pyash surface, runs the generated C executable, and compares its output with
-`executeCodelets`. This initial path does not add mutable named state or
-paragraph boundaries to the flat `.pyac` container.
+The conformance quiz persists packs, compiles them through this Pyash surface,
+runs the generated C executable, and compares its JSON facts with
+`executeCodelets`. Named values are mutable during execution; the flat `.pyac`
+container still carries a sequence of codelets rather than paragraph
+boundaries.
