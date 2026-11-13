@@ -37,6 +37,7 @@ Non-normative quick lookup documents:
 - cheat sheet
 - index map
 - implementation map
+- `pyash-vliw-compiler-architecture.md` — end-to-end source, section, pack, and backend view.
 - `pyac-vliw-database.md` — searchable catalog and executable `.pyac` design.
 
 ### `documentation/recipes/spec-archive/`

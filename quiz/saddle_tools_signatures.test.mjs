@@ -19,6 +19,8 @@ test("saddle tools map exposes coding signatures", async () => {
     "su name repair check be repair as wo check ob text input to name map outcome can",
     "su name session plan be write fromstate \"coding saddle plan\" ob text input can",
     "su name search be search ob text input fromstate wo zim can",
+    "su name web search be search ob text input fromstate wo web by num 5 can",
+    "su name web search source be search ob text input from filename input fromstate wo web by num 5 can",
     "su name search archive be search as wo cluster-compress in filename input ob text input can",
     "su name read archive focus be read as wo cluster-compress from filename input ob text input by text input can",
     "su name download be download from filename input as wo web to filename input can",
@@ -50,6 +52,34 @@ test("saddle tools map exposes coding signatures", async () => {
   assert.equal(searchCall.ob.text, "Pyash archive");
   assert.deepEqual(searchCall.fromstate, { text: "zim", wo: "zim" });
   assert.equal(searchCall.in, undefined);
+
+  const webSearchLine = capabilityLines.find((line) => line.startsWith("su name web search be"));
+  const webSearchSignature = joinSignatureWords(deriveSignatureFromCall(parse(webSearchLine)));
+  const webSearchTool = buildToolSchemas("saddle tools").tools
+    .find((tool) => tool.function.signature === webSearchSignature);
+  assert.equal(webSearchTool.function.name, "web_search");
+  assert.match(webSearchTool.function.description, /live web search motor.*current information or news.*up to five results/u);
+  assert.deepEqual(webSearchTool.function.parameters.properties, {
+    query: { type: "string", description: "Terms to search on the live web." }
+  });
+
+  const webSourceLine = capabilityLines.find((line) => line.startsWith("su name web search source "));
+  const webSourceSignature = joinSignatureWords(deriveSignatureFromCall(parse(webSourceLine)));
+  const webSourceTool = buildToolSchemas("saddle tools").tools
+    .find((tool) => tool.function.signature === webSourceSignature);
+  assert.equal(webSourceTool.function.name, "web_search_source");
+  assert.match(webSourceTool.function.description, /Yago.*POST \/search.*bearer key.*YaCy.*\/yacysearch\.json/u);
+  assert.deepEqual(webSourceTool.function.parameters.properties, {
+    query: { type: "string", description: "Terms to search." },
+    search_url: { type: "string", description: "Search API endpoint URL. For Yago, use /search; for YaCy, use /yacysearch.json." }
+  });
+  const webSourceCall = buildToolSentence({
+    capability: buildToolSchemas("saddle tools").toolMap.get(webSourceTool.function.name),
+    args: { query: "technology news", search_url: "https://yago.zvorygin.ca/yacysearch.json" }
+  });
+  assert.deepEqual(webSourceCall.from, { filename: "https://yago.zvorygin.ca/yacysearch.json" });
+  assert.deepEqual(webSourceCall.fromstate, { text: "web", wo: "web" });
+  assert.equal(webSourceCall.by.num, 5);
 
   const searchArchiveLine = capabilityLines.find((line) => line.startsWith("su name search archive "));
   const searchArchiveSignature = joinSignatureWords(deriveSignatureFromCall(parse(searchArchiveLine)));

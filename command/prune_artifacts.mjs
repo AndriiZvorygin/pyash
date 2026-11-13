@@ -3,15 +3,19 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { parse } from "../program/understand/index.mjs";
+import { splitSentences } from "../program/library/sentenceSplitter.mjs";
+import { readNewspaperLimits } from "../program/agent/newspaper_retention.mjs";
 
-export const ARTIFACT_RETENTION_DAYS = 90;
+export const ARTIFACT_RETENTION_DAYS = 30;
 
-const RUN_DIRECTORY_PATTERN = /^(?:\d{8}-\d{3}-.+|\d{8}T\d{9}Z-\d+-.+)$/u;
+const RUN_DIRECTORY_PATTERN = /^(?:\d{8}-(?:\d{3,4}-)?[A-Za-z0-9][A-Za-z0-9._-]*|\d{8}T\d{6,}(?:Z)?-\d+-.+)$/u;
 const LOG_EXTENSIONS = new Set([".pya"]);
 const TEXT_EXTENSIONS = new Set([
   ".csv", ".js", ".json", ".log", ".md", ".mjs", ".pya", ".sh",
   ".srt", ".toml", ".txt", ".yaml", ".yml",
 ]);
+const PYA_SENTENCE_PREFIX = /^(?:exists|su|ob|from|to|as|via|through|with|be|at|during|when|while|la|ko|prah|ret|can|pi7|que|def|do|ya|vyah)\b/u;
 const SHA256_PATTERN = /\b[a-f0-9]{64}\b/giu;
 const CONTENT_OBJECT_PATTERN = /^([a-f0-9]{64})(?:\.[a-z0-9._-]+)?$/iu;
 const SKIP_DIRECTORY_NAMES = new Set([".cache", "node_modules", "target"]);
@@ -225,8 +229,85 @@ function collectNewspaperCandidates(root, roots, cutoffMs, tracked) {
   return { candidates, issues };
 }
 
-function collectRunCandidates(root, artifactRoots, cutoffMs, trackedDirectories, state) {
+function normalizeRunReference(value) {
+  const id = String(value ?? "").replaceAll("\\", "/").split("/")[0];
+  return RUN_DIRECTORY_PATTERN.test(id) ? id : "";
+}
+
+function artifactRunReference(value) {
+  const normalized = String(value ?? "").replaceAll("\\", "/");
+  const match = normalized.match(/(?:^|\/)artifacts\/([^/]+)(?:\/|$)/u);
+  return normalizeRunReference(match?.[1]);
+}
+
+function retainedRunReferences(root, newspaperRoots, expiredPaths, state) {
+  const references = new Set();
+  const stack = [...newspaperRoots];
+  let complete = true;
+  while (stack.length) {
+    const directory = stack.pop();
+    let entries;
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true });
+    } catch (error) {
+      addIssue(state, `cannot inspect retained newspapers ${path.relative(root, directory)}: ${error.code || error.message}`);
+      complete = false;
+      continue;
+    }
+    for (const entry of entries) {
+      const filename = path.join(directory, entry.name);
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) {
+        stack.push(filename);
+        continue;
+      }
+      if (!entry.isFile() || path.extname(entry.name).toLowerCase() !== ".pya" || expiredPaths.has(filename)) continue;
+      let source;
+      try {
+        const stat = fs.statSync(filename);
+        if (stat.size > MAX_REFERENCE_FILE_BYTES) {
+          addIssue(state, `retained newspaper exceeds scan limit: ${path.relative(root, filename)}`);
+          complete = false;
+          continue;
+        }
+        source = fs.readFileSync(filename, "utf8");
+      } catch (error) {
+        addIssue(state, `cannot read retained newspaper ${path.relative(root, filename)}: ${error.code || error.message}`);
+        complete = false;
+        continue;
+      }
+      const baseReference = normalizeRunReference(path.basename(filename, ".pya"));
+      if (baseReference) references.add(baseReference);
+      for (const rawSentence of splitSentences(source, { includeThen: true })) {
+        const sentenceText = rawSentence.trim();
+        if (!sentenceText || !PYA_SENTENCE_PREFIX.test(sentenceText)) continue;
+        let sentence;
+        try {
+          sentence = parse(sentenceText);
+        } catch {
+          if (/\bbe\s+(?:run|artifact)\b/u.test(sentenceText)) {
+            addIssue(state, `cannot parse retained newspaper run reference: ${path.relative(root, filename)}`);
+            complete = false;
+          }
+          continue;
+        }
+        if (sentence?.be === "run") {
+          const reference = normalizeRunReference(sentence?.su?.name);
+          if (reference) references.add(reference);
+        }
+        if (sentence?.be === "artifact") {
+          const reference = artifactRunReference(sentence?.to?.filename ?? sentence?.ob?.filename);
+          if (reference) references.add(reference);
+        }
+      }
+    }
+  }
+  return { references, complete };
+}
+
+function collectRunCandidates(root, artifactRoots, cutoffMs, trackedDirectories, retainedRuns, state) {
   const candidates = [];
+  if (!retainedRuns.complete) return candidates;
   for (const artifactRoot of artifactRoots) {
     let entries;
     try {
@@ -240,6 +321,7 @@ function collectRunCandidates(root, artifactRoots, cutoffMs, trackedDirectories,
       const directory = path.join(artifactRoot, entry.name);
       if (isInHolding(root, directory)) continue;
       if (trackedDirectories.has(directory)) continue;
+      if (retainedRuns.references.has(entry.name)) continue;
       const info = inspectTree(root, directory);
       if (info.error) {
         addIssue(state, `cannot inspect run directory ${info.error}`);
@@ -366,9 +448,11 @@ export function createArtifactRetentionPlan({
   const tracked = trackedFiles(workspace, state);
   const trackedText = trackedTextFiles(tracked);
   const trackedDirectories = trackedDirectoryIndex(tracked);
-  const runDirectories = collectRunCandidates(workspace, state.artifactRoots, cutoffMs, trackedDirectories, state);
   const newspaperResult = collectNewspaperCandidates(workspace, state.newspaperRoots, cutoffMs, tracked);
   for (const issue of newspaperResult.issues) addIssue(state, issue);
+  const expiredNewspaperPaths = new Set(newspaperResult.candidates.map((item) => item.path));
+  const retainedRuns = retainedRunReferences(workspace, state.newspaperRoots, expiredNewspaperPaths, state);
+  const runDirectories = collectRunCandidates(workspace, state.artifactRoots, cutoffMs, trackedDirectories, retainedRuns, state);
 
   const removedPaths = new Set([
     ...runDirectories.map((item) => item.path),
@@ -450,7 +534,29 @@ export function applyArtifactRetention({ root, now = Date.now(), retentionDays =
   const cutoffMs = new Date(plan.cutoff).getTime();
   const removed = [];
   const failures = [];
+  const runPaths = new Set(plan.runDirectories.map((item) => item.path));
+  const removedLinksByInode = new Map();
 
+  for (const candidate of plan.newspaperFiles) {
+    if (hasExcludedAncestor(candidate.path, runPaths)) continue;
+    try {
+      const stat = fs.lstatSync(candidate.path);
+      const inode = `${candidate.dev}:${candidate.ino}`;
+      const alreadyUnlinked = removedLinksByInode.get(inode) ?? 0;
+      const expectedLinks = candidate.nlink - alreadyUnlinked;
+      if (!stat.isFile() || stat.mtimeMs !== candidate.mtimeMs || stat.size !== candidate.size
+        || stat.dev !== candidate.dev || stat.ino !== candidate.ino || stat.nlink !== expectedLinks
+        || stat.mtimeMs >= cutoffMs) {
+        failures.push(`newspaper changed since preview: ${candidate.relative}`);
+        continue;
+      }
+      fs.unlinkSync(candidate.path);
+      removedLinksByInode.set(inode, alreadyUnlinked + 1);
+      removed.push(candidate.relative);
+    } catch (error) {
+      failures.push(`cannot remove ${candidate.relative}: ${error.code || error.message}`);
+    }
+  }
   for (const candidate of plan.runDirectories) {
     if (!safeToDeleteRun(plan.root, candidate, cutoffMs)) {
       failures.push(`run directory changed or became active: ${candidate.relative}`);
@@ -464,26 +570,13 @@ export function applyArtifactRetention({ root, now = Date.now(), retentionDays =
     }
   }
 
-  for (const candidate of plan.newspaperFiles) {
-    try {
-      const stat = fs.lstatSync(candidate.path);
-      if (!stat.isFile() || stat.mtimeMs !== candidate.mtimeMs || stat.size !== candidate.size
-        || stat.dev !== candidate.dev || stat.ino !== candidate.ino || stat.nlink !== candidate.nlink
-        || stat.mtimeMs >= cutoffMs) {
-        failures.push(`newspaper changed since preview: ${candidate.relative}`);
-        continue;
-      }
-      fs.unlinkSync(candidate.path);
-      removed.push(candidate.relative);
-    } catch (error) {
-      failures.push(`cannot remove ${candidate.relative}: ${error.code || error.message}`);
-    }
-  }
-
-  // Re-scan after the log/run deletion pass. Failed deletions remain references.
-  const contentPlan = createArtifactRetentionPlan({ ...options, includeExpiredReferences: true });
   const removedContentObjects = [];
-  if (contentPlan.scan.complete) {
+  let contentPlan = null;
+  // A complete initial scan is required before the post-delete reference pass.
+  if (plan.scan.complete) {
+    contentPlan = createArtifactRetentionPlan({ ...options, includeExpiredReferences: true });
+  }
+  if (contentPlan?.scan.complete) {
     for (const candidate of contentPlan.contentObjects) {
       try {
         const stat = fs.lstatSync(candidate.path);
@@ -503,16 +596,31 @@ export function applyArtifactRetention({ root, now = Date.now(), retentionDays =
   return {
     mode: "apply",
     plan,
-    contentStorePlan: contentPlan.contentStore,
+    contentStorePlan: contentPlan?.contentStore ?? plan.contentStore,
     removed,
     removedContentObjects,
     failures,
   };
 }
 
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+export async function runConfiguredArtifactRetention({
+  root = repoRoot,
+  configRoot = root,
+  now = Date.now(),
+  apply = false
+} = {}) {
+  const { maximumAgeDays } = await readNewspaperLimits(configRoot);
+  const options = { root, now, retentionDays: maximumAgeDays };
+  return apply
+    ? applyArtifactRetention(options)
+    : { mode: "preview", plan: createArtifactRetentionPlan(options) };
+}
+
 function usage() {
   return [
-    "Usage: node command/prune_artifacts.mjs [--apply] [--json]",
+    "Usage: node command/prune_artifacts.mjs [--root <workspace>] [--config-root <checkout>] [--apply] [--json]",
     "",
     `Default retention is ${ARTIFACT_RETENTION_DAYS} days. Preview is read-only; --apply deletes eligible data.`,
     "Only dated run directories, old newspaper .pya/text logs, and unreferenced SHA-256 objects are considered.",
@@ -520,11 +628,30 @@ function usage() {
 }
 
 function parseArgs(argv) {
-  const result = { apply: false, json: false };
-  for (const arg of argv) {
+  const result = { apply: false, json: false, root: repoRoot, configRoot: null };
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
     if (arg === "--apply") result.apply = true;
     else if (arg === "--json") result.json = true;
-    else if (arg === "--help" || arg === "-h") {
+    else if (arg === "--root") {
+      const root = argv[index + 1];
+      if (!root || root.startsWith("--")) throw new Error("--root requires a checkout path");
+      result.root = path.resolve(root);
+      index += 1;
+    } else if (arg.startsWith("--root=")) {
+      const root = arg.slice("--root=".length);
+      if (!root) throw new Error("--root requires a checkout path");
+      result.root = path.resolve(root);
+    } else if (arg === "--config-root") {
+      const configRoot = argv[index + 1];
+      if (!configRoot || configRoot.startsWith("--")) throw new Error("--config-root requires a checkout path");
+      result.configRoot = path.resolve(configRoot);
+      index += 1;
+    } else if (arg.startsWith("--config-root=")) {
+      const configRoot = arg.slice("--config-root=".length);
+      if (!configRoot) throw new Error("--config-root requires a checkout path");
+      result.configRoot = path.resolve(configRoot);
+    } else if (arg === "--help" || arg === "-h") {
       process.stdout.write(`${usage()}\n`);
       process.exit(0);
     } else throw new Error(`unknown argument: ${arg}`);
@@ -532,11 +659,13 @@ function parseArgs(argv) {
   return result;
 }
 
-function main() {
+async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const result = args.apply
-    ? applyArtifactRetention()
-    : { mode: "preview", plan: createArtifactRetentionPlan() };
+  const result = await runConfiguredArtifactRetention({
+    root: args.root,
+    configRoot: args.configRoot || args.root,
+    apply: args.apply
+  });
   if (args.json) {
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return;
@@ -562,10 +691,8 @@ function main() {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))) {
-  try {
-    main();
-  } catch (error) {
+  main().catch((error) => {
     process.stderr.write(`[artifact-retention] error ${String(error?.stack || error?.message || error)}\n`);
     process.exitCode = 1;
-  }
+  });
 }

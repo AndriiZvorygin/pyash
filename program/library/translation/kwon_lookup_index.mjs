@@ -34,13 +34,7 @@ const SOURCE_PATHS = Object.freeze([
   "program/library/translation/compound_coverage_curated.pya"
 ]);
 
-const sourceValidationPromises = new Map();
 const postingIdentityIndexes = new WeakMap();
-const staleIndexWarnings = new Set();
-const sourceScanWarnings = new Set();
-const changedSourceIndexPromises = new Map();
-const pendingStaleCatalogs = new Set();
-const pendingScanFallbacks = new Map();
 
 function compareText(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -348,30 +342,6 @@ function makeIndexes() {
   return { english: new Map(), pyac: new Map(), wordnet: new Map(), "open-wordnet": new Map() };
 }
 
-function scanChangedSource(kind, sourceId, source) {
-  const indexes = { [kind]: new Map() };
-  if (sourceId.endsWith(".pya")) scanPyaLines(source, sourceId, indexes);
-  else if (kind === "open-wordnet" && OPEN_WORDNET_JSON_FILE.test(sourceId.split(/[\\/]/u).at(-1) ?? "")) {
-    scanOpenWordNetJson(source, sourceId, indexes);
-  } else scanJsonCatalog(source, sourceId, indexes);
-  return indexes[kind];
-}
-
-async function currentSourceIndex(kind, staleSource, root) {
-  const cacheKey = `${resolve(root)}\u0000${kind}\u0000${staleSource.relativePath}`;
-  const cached = changedSourceIndexPromises.get(cacheKey);
-  if (cached?.validationHash === staleSource.actual) return cached.promise;
-  const source = await readFile(resolveSourcePath(root, staleSource.relativePath));
-  const pending = Promise.resolve().then(() => scanChangedSource(kind, staleSource.relativePath, source));
-  changedSourceIndexPromises.set(cacheKey, { validationHash: staleSource.actual, promise: pending });
-  try {
-    return await pending;
-  } catch (error) {
-    if (changedSourceIndexPromises.get(cacheKey)?.promise === pending) changedSourceIndexPromises.delete(cacheKey);
-    throw error;
-  }
-}
-
 function createIndex(kind, entries, sourceHashes) {
   return {
     format: KWON_LOOKUP_INDEX_FORMAT,
@@ -529,7 +499,9 @@ async function indexHeader(handle, fileSize) {
     if (!parsed) continue;
     metadata[parsed.key] = parsed.values;
   }
-  if (metadata.format !== KWON_LOOKUP_INDEX_FORMAT || !KWON_LOOKUP_INDEX_KINDS.includes(metadata.kind) || dataStart === 0) {
+  if (metadata.format !== KWON_LOOKUP_INDEX_FORMAT
+    || !KWON_LOOKUP_INDEX_KINDS.includes(metadata.kind)
+    || dataStart === 0) {
     throw Object.assign(new Error("kwon lookup index has an invalid header"), { code: "invalid-kwon-lookup-index" });
   }
   const sourceHashes = metadata["source hashes"] ?? {};
@@ -587,71 +559,8 @@ function expandIndexPostings(postings, sourceIds) {
   });
 }
 
-async function validateSourceHashes(sourceHashes, root) {
-  const entries = Object.entries(sourceHashes).sort(([left], [right]) => compareText(left, right));
-  const cacheKey = `${resolve(root)}\u0000${entries.map(([path, digest]) => `${path}:${digest}`).join("\u0001")}`;
-  if (sourceValidationPromises.has(cacheKey)) return sourceValidationPromises.get(cacheKey);
-  const pending = Promise.all(entries.map(async ([relativePath, expected]) => {
-    let source;
-    try {
-      source = await readFile(resolveSourcePath(root, relativePath));
-    } catch (error) {
-      return { relativePath, expected, unavailable: error.code ?? error.message };
-    }
-    const actual = hash(source);
-    return actual === expected ? null : { relativePath, expected, actual };
-  })).then((results) => results.filter(Boolean));
-  sourceValidationPromises.set(cacheKey, pending);
-  try {
-    return await pending;
-  } catch (error) {
-    sourceValidationPromises.delete(cacheKey);
-    throw error;
-  }
-}
-
-function warnStaleIndex({ kind, indexPath, root, staleSources, onWarning }) {
-  if (staleSources.length === 0) return;
-  const paths = staleSources.map(({ relativePath }) => relativePath);
-  for (const path of paths) pendingStaleCatalogs.add(path);
-  const warningKey = `${resolve(root)}\u0000${resolve(indexPath)}\u0000${paths.join("\u0001")}`;
-  if (staleIndexWarnings.has(warningKey)) return;
-  staleIndexWarnings.add(warningKey);
-  const unavailable = staleSources.some((source) => source.unavailable);
-  const details = paths.join(", ");
-  const message = `kwon ${kind} lookup index is stale${details ? ` for ${details}` : ""}; changed catalogs are scanned for this lookup, with indexed entries as fallback if a source is unavailable${unavailable ? " (one or more source files are unavailable)" : ""}. Persist refreshed indexes with: node command/vocab_lookup_index.mjs`;
-  if (typeof onWarning === "function") onWarning(message);
-}
-
-function warnSourceScanFallback({ kind, indexPath, root, sourceId, error, onWarning }) {
-  const warningKey = `${resolve(root)}\u0000${resolve(indexPath)}\u0000${kind}\u0000${sourceId}`;
-  if (sourceScanWarnings.has(warningKey)) return;
-  sourceScanWarnings.add(warningKey);
-  pendingScanFallbacks.set(sourceId, error.message);
-  const message = `kwon ${kind} lookup could not scan changed catalog ${sourceId}; using its indexed entries for now (${error.message}). Rebuild with: node command/vocab_lookup_index.mjs`;
-  if (typeof onWarning === "function") onWarning(message);
-}
-
 export function takeKwonLookupWarnings() {
-  if (pendingStaleCatalogs.size === 0 && pendingScanFallbacks.size === 0) return [];
-  const warnings = [];
-  if (pendingStaleCatalogs.size > 0) {
-    warnings.push(
-      `Warning: Kwon lookup indexes are stale for ${[...pendingStaleCatalogs].sort(compareText).join(", ")}. `
-      + "Changed catalogs are scanned for current results; failed scans retain their indexed entries. "
-      + "Persist refreshed indexes with: node command/vocab_lookup_index.mjs"
-    );
-  }
-  if (pendingScanFallbacks.size > 0) {
-    warnings[0] = `${warnings[0] ?? "Warning: Kwon used indexed entries for changed catalogs."}\n`
-      + `Live scan fallback: ${[...pendingScanFallbacks]
-        .sort(([left], [right]) => compareText(left, right))
-        .map(([sourceId, reason]) => `${sourceId} (${reason})`)
-        .join(", ")}.`;
-  }
-  pendingStaleCatalogs.clear();
-  pendingScanFallbacks.clear();
-  return warnings;
+  return [];
 }
 
 export async function lookupKwonIndex({
@@ -659,8 +568,7 @@ export async function lookupKwonIndex({
   key,
   prefix = false,
   indexPath = KWON_LOOKUP_INDEX_PATHS[kind],
-  root = PYASH_REPOSITORY_ROOT,
-  onWarning
+  root = PYASH_REPOSITORY_ROOT
 } = {}) {
   if (!KWON_LOOKUP_INDEX_KINDS.includes(kind)) throw new TypeError(`unsupported kwon index kind: ${kind}`);
   const normalized = kind === "english" ? normalizeEnglish(key) : normalizePyac(key);
@@ -670,8 +578,6 @@ export async function lookupKwonIndex({
     const fileSize = (await handle.stat()).size;
     const header = await indexHeader(handle, fileSize);
     if (header.kind !== kind) throw Object.assign(new Error(`kwon index kind mismatch: expected ${kind}, found ${header.kind}`), { code: "invalid-kwon-lookup-index" });
-    const staleSources = await validateSourceHashes(header.sourceHashes, root);
-    warnStaleIndex({ kind, indexPath, root, staleSources, onWarning });
     let low = header.dataStart;
     let high = fileSize;
     let searchSteps = 0;
@@ -724,25 +630,7 @@ export async function lookupKwonIndex({
       if (matchesKey) matches.push(...expandIndexPostings(parsed.values, header.sourceIds));
       else if (compareText(rowKey, normalized) > 0 && (!prefix || !rowKey.startsWith(normalized))) break;
     }
-    const changedSources = staleSources.filter((source) => !source.unavailable);
-    const changedSourceIds = new Set(changedSources.map((source) => source.relativePath));
-    if (changedSourceIds.size === 0) return matches;
-    let currentMatches = matches;
-    for (const source of changedSources) {
-      try {
-        const entries = await currentSourceIndex(kind, source, root);
-        const replacement = [];
-        for (const [entryKey, postings] of entries) {
-          const matchesKey = prefix ? entryKey.startsWith(normalized) : entryKey === normalized;
-          if (matchesKey) replacement.push(...postings);
-        }
-        currentMatches = currentMatches.filter((match) => match?.sourceId !== source.relativePath);
-        currentMatches.push(...replacement);
-      } catch (error) {
-        warnSourceScanFallback({ kind, indexPath, root, sourceId: source.relativePath, error, onWarning });
-      }
-    }
-    return currentMatches;
+    return matches;
   } finally {
     await handle.close();
   }
@@ -750,17 +638,17 @@ export async function lookupKwonIndex({
 
 export async function readKwonSourceLocators(locators, { root = PYASH_REPOSITORY_ROOT } = {}) {
   const grouped = new Map();
-  for (const locator of locators ?? []) {
+  const output = new Array((locators ?? []).length);
+  for (const [index, locator] of (locators ?? []).entries()) {
     if (!locator || typeof locator.sourceId !== "string" || !Number.isSafeInteger(locator.byteOffset)) continue;
     const rows = grouped.get(locator.sourceId) ?? [];
-    rows.push(locator);
+    rows.push({ locator, index });
     grouped.set(locator.sourceId, rows);
   }
-  const output = [];
   for (const [sourceId, rows] of grouped) {
     const handle = await open(resolveSourcePath(root, sourceId), "r");
     try {
-      for (const locator of rows) {
+      for (const { locator, index } of rows) {
         const parts = [];
         let cursor = locator.byteOffset;
         for (;;) {
@@ -775,13 +663,16 @@ export async function readKwonSourceLocators(locators, { root = PYASH_REPOSITORY
           cursor += chunk.length;
           if (cursor - locator.byteOffset > 1024 * 1024) throw new Error("kwon source row exceeds one MiB");
         }
-        output.push({ locator, line: Buffer.concat(parts).toString("utf8").replace(/\r$/u, "") });
+        const line = Buffer.concat(parts).toString("utf8").replace(/\r$/u, "");
+        const actualRecordId = fieldString(line, "su text ");
+        if (locator.recordId && actualRecordId !== locator.recordId) continue;
+        output[index] = { locator, line };
       }
     } finally {
       await handle.close();
     }
   }
-  return output;
+  return output.filter(Boolean);
 }
 
 export async function readKwonSourceSpans(locators, { root = PYASH_REPOSITORY_ROOT } = {}) {
@@ -964,12 +855,7 @@ export async function writeKwonLookupIndexes({ root = PYASH_REPOSITORY_ROOT, pat
 }
 
 export function clearKwonLookupIndexValidationCache() {
-  sourceValidationPromises.clear();
-  staleIndexWarnings.clear();
-  sourceScanWarnings.clear();
-  changedSourceIndexPromises.clear();
-  pendingStaleCatalogs.clear();
-  pendingScanFallbacks.clear();
+  // Lookup is snapshot-only; retained as a no-op for existing callers.
 }
 
 export function createKwonLookupIndexForTest({ kind, sourceHashes = {}, entries = [] } = {}) {

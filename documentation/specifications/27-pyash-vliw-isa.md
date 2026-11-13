@@ -1,8 +1,9 @@
 # Pyash VLIW ISA and lowering contract
 
-Status: design specification. This document defines the encoding and execution
-boundary for a future Pyash VLIW backend. It does not change the current
-interpreter, parser, or sentence ABI.
+Status: normative design specification. This document defines the encoding and
+execution boundary for Pyash VLIW. Partial implementations are linked in the
+implementation references; they do not change the current interpreter, parser,
+or sentence ABI.
 
 ## 1. Scope and authority
 
@@ -186,7 +187,32 @@ unfulfilled dependencies, duplicate writers, invalid types, and unsupported
 effects. It MUST NOT turn an execution failure into a different successful
 sentence.
 
-## 6. Conceptual interfaces
+## 6. Target capabilities and lowering
+
+The portable semantic core is a **minimum contract, not a performance ceiling**.
+Each target profile declares its capabilities. For an operation, a backend MAY
+select a native implementation, lower it to simpler operations, or report it
+unavailable. It SHOULD select the fastest valid implementation and MAY compile
+multiple variants for runtime target selection.
+
+A fallback MUST preserve the operation's specified values, effects, and order.
+Numerical approximation is allowed only when the operation contract declares a
+tolerance. If no implementation meets the contract, the backend MUST reject
+the operation. Capability selection MUST be explicit; similar instruction
+names alone do not establish equivalent semantics.
+
+This resembles importing a library contract: the source names an operation;
+the backend resolves it to a target-native implementation or a valid fallback.
+For example, vector arithmetic may use SIMD or GPU vector instructions, with a
+scalar loop as fallback; matrix operations may use a matrix unit or a sequence
+of multiply-accumulates. Fallback availability does not promise equal speed.
+
+Extensions let x86-64, RISC-V profiles, NVIDIA PTX, AMD GFX ISA, and future
+VLIW ASIC targets use their own capabilities. They do not add identities or
+reuse reserved bits in the legacy 16-word codelet: an operation absent from its
+mapping needs an explicit, versioned encoding before that format can carry it.
+
+## 7. Conceptual interfaces
 
 These signatures describe the semantic boundary. The JavaScript reference
 facade below implements the currently proven subset:
@@ -208,13 +234,15 @@ adapters and rejects other semantic codelets explicitly. The host language,
 OpenCL, or another
 backend is an implementation choice behind this boundary.
 
-A destination compiles a codelet into the machine code that computes the same
-result the interpreter produces. The compiled program MUST agree with
-interpreted execution on every value, including the saturation the numeric
-semantics apply, and a destination MUST reject a codelet it cannot compile
-rather than approximate it.
+A destination compiles a codelet into machine code that computes the result the
+interpreter produces. It MAY use native target capabilities or lower operations
+to simpler instructions, but the compiled program MUST preserve interpreted
+results, including the saturation the numeric semantics apply, and all
+observable effects. An explicitly approximate semantic operation is permitted
+only under its declared tolerance. If neither native nor fallback lowering
+satisfies the contract, the destination MUST reject the codelet.
 
-## 7. Compatibility examples
+## 8. Compatibility examples
 
 The following are golden vectors, not new syntax:
 
@@ -266,21 +294,23 @@ dependency scheduling, single-writer enforcement, and interpreted versus
 decoded result paragraphs. Tests must include at least one source-language
 adapter and one unsupported-value rejection.
 
-## 8. Non-goals
+## 9. Non-goals
 
 This specification does not add HNUCs, alter parser vocabulary, define the
 catalog/container database, require a GPU, introduce a model server or queue,
 or connect codelet execution to WorkTask/review/integration machinery. The
 database contract is defined in
 `documentation/reference/pyac-vliw-database.md`. This specification also does
-not replace the current sentence/paragraph interpreter. The only
-conforming future implementation is one that can prove the sentence result
-and the legacy encoding bytes agree.
+not replace the current sentence/paragraph interpreter. A conforming
+implementation must prove that the sentence result and legacy encoding bytes
+agree.
 
-## 9. Implementation references
+## 10. Implementation references
 
-The proven numeric-plus, quote, fixed-slot, typed-literal, named-fact, database,
-and facade slices are documented with their fixtures and implementation paths
-in `documentation/reference/pyac-vliw-semantic-slices.md`. The normative
+The end-to-end architecture and current implementation map are in
+`documentation/reference/pyash-vliw-compiler-architecture.md`. The proven
+numeric-plus, quote, fixed-slot, typed-literal, named-fact, database, and facade
+slices are documented with their fixtures and implementation paths in
+`documentation/reference/pyac-vliw-semantic-slices.md`. The normative
 requirements above remain the authority; the reference notes identify the
 currently executable subset and its explicit unsupported cases.

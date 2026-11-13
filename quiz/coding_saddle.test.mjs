@@ -55,6 +55,7 @@ import {
 } from "../program/agent/coding_saddle.mjs";
 import {
   dischargeSaddleModel,
+  configureSaddleSelection,
   loadSaddleSessionHistory,
   prepareSaddle,
   renderSaddleSessionHistory,
@@ -62,6 +63,7 @@ import {
   runSaddleTurn,
   waitForSaddleMindStream
 } from "../command/pyash_saddle.mjs";
+import { rewriteRunRootCommandPath } from "../program/verbs/command/sandbox.mjs";
 
 test("coding saddle reloads named and explicitly selected session history", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-history-"));
@@ -376,37 +378,43 @@ test("coding saddle shows elapsed progress and explicit tool event labels", () =
   assert.equal(saddleToolEventLabel({ stage: "result", toolName: "repair" }), "[tool result] repair");
 });
 
-test("coding saddle explains archive focus tool arguments", () => {
+test("coding saddle routes live search, archives, project commands, and interactive processes separately", () => {
   assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`read_archive_focus(archive_path, entry_path, focus)`"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("Focused reads require the exact `entry_path` returned by search"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("tool resolves the host-configured Kiwix endpoint"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("agents do not need to know the server address or where ZIM files are mounted."));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("pass a locator returned by a tool unchanged to the next tool."));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("returned full `page` URL to the download tool"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("Wikipedia, Wiktionary, Wikibooks, Wikiversity, Wikisource, DevDocs"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("publisher per-site request limits do not apply"));
   assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`search_zim_library(query)`"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`web_search(query)`"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`web_search_source(query, search_url)`"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("technology RSS-feed discovery"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`command_session_start`"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("Search, URL retrieval, API requests, and ordinary commands do not need a command session"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("A tool error is a result for the active task"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("Do not claim titles or URLs absent from tool results"));
   assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`search_archive(archive_path, query)`"));
 });
 
+test("coding saddle handles greetings directly without exposing runtime script names", () => {
+  assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /For greetings and casual conversation, answer directly .*make no tool calls/u);
+  assert.doesNotMatch(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /mind_ollama_runner|mind_openai_runner/u);
+  assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /Do not invoke the agent runtime or a second model through shell tools/u);
+});
+
 test("coding saddle completion evidence requires a successful edit and a later command check", () => {
-  assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /Never launch .*mind_ollama_runner\.mjs.*structured request payload/u);
   for (const guidance of [
     "documentation and reference research",
-    "`search_zim_library(query)` first",
-    "host-configured Kiwix endpoint",
-    "agents do not need to know the server address",
-    "full `page` URL",
-    "publisher per-site request limits do not apply",
-    "Do not construct, normalize, or replace archive paths or URLs",
-    "pass a locator returned by a tool unchanged",
+    "configured Kiwix service, which may be remote",
+    "Pass returned URLs unchanged",
+    "`web_search(query)`",
+    "`web_search_source(query, search_url)`",
+    "For a named search service",
+    "`command_session_start` only when the user needs a long-running interactive process",
+    "Search, URL retrieval, API requests, and ordinary commands do not need a command session",
+    "A tool error is a result for the active task",
+    "do not repeat an unchanged failing call",
+    "Do not claim titles or URLs absent from tool results",
     "`search_archive(archive_path, query)`",
     "`read_archive_focus(archive_path, entry_path, focus)`",
-    "Focused reads require the exact `entry_path` returned by search",
-    "Ground claims in retrieved page text",
-    "Use the original live website only"
+    "ground claims in retrieved page text"
   ]) {
-    assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes(guidance), `missing ZIM guidance: ${guidance}`);
+    assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes(guidance), `missing retrieval guidance: ${guidance}`);
   }
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /name the target file before editing/u);
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /After the final edit/u);
@@ -605,6 +613,24 @@ test("coding saddle does not add a completion pass to general advice", async () 
   assert.equal(turn.assessment.required, false);
 });
 
+test("coding saddle does not require code changes for a read-only command session check", async () => {
+  const input = "Call command_session_start exactly once with this request JSON: {\"command\":\"/usr/bin/printf\",\"args\":[\"SPARKX_PTY_OK\\n\"]}. Then call command_session_read with the returned id, after 0, maxBytes 1024. Verify exitCode is 0 and output is exactly SPARKX_PTY_OK followed by one newline. Do not modify files or start another process.";
+  let calls = 0;
+
+  assert.equal(isSaddleCodeChangeRequest(input), false);
+  const turn = await runSaddleTurnWithEvidence({
+    input,
+    runTurn: async () => {
+      calls += 1;
+      return { ob: { text: "The process exited successfully." } };
+    }
+  });
+
+  assert.equal(calls, 1);
+  assert.equal(turn.retried, false);
+  assert.equal(turn.assessment.required, false);
+});
+
 test("coding saddle reports incomplete when the corrective pass still has no successful check", async () => {
   let calls = 0;
   const turn = await runSaddleTurnWithEvidence({
@@ -696,6 +722,7 @@ test("coding saddle builds a Pyash mind call with backend and session context", 
 
 test("coding saddle delegates turns to the existing mind engine", async () => {
   let observed = null;
+  let observedUsage = null;
   const result = await runSaddleTurn({
     input: "run the focused test",
     model: "SparkLLM/Spark-X2.6-4B:q4_k_m",
@@ -704,11 +731,17 @@ test("coding saddle delegates turns to the existing mind engine", async () => {
     contextWindow: 1048576,
     think: false,
     housekeeperUrl: "http://housekeeper:18886",
+    onUsage: (usage) => { observedUsage = usage; },
     mindFn: async (sentence, options) => {
       assert.equal(process.env.PYA_GPU_HOUSEKEEPER_URL, "http://housekeeper:18886");
       assert.equal(process.env.PYA_GPU_MANAGER_REQUIRED, "true");
       assert.equal(process.env.PYA_GPU_MANAGER_ALLOW_DIRECT, "false");
       observed = { sentence, options };
+      options.onUsage({
+        prompt_eval_count: 23,
+        prompt_eval_cached_count: 5,
+        eval_count: 4
+      });
       return { mood: "ya", be: "text", ob: { text: "done" } };
     }
   });
@@ -720,6 +753,14 @@ test("coding saddle delegates turns to the existing mind engine", async () => {
   assert.equal(observed.sentence.contextWindow, 1048576);
   assert.equal(observed.sentence.think, false);
   assert.equal(observed.options.sessionUserContent, "run the focused test");
+  assert.deepEqual(observedUsage, {
+    inputTokens: 23,
+    cachedInputTokens: 5,
+    cacheWriteInputTokens: 0,
+    outputTokens: 4,
+    reasoningOutputTokens: 0,
+    totalTokens: 27
+  });
 });
 
 test("duty saddle keeps runtime root separate from its persistent world root", async () => {
@@ -880,6 +921,18 @@ test("coding saddle loads its configured mind when launched from another project
     assert.equal(config.backend, "ollama");
     assert.equal(config.model, "qwen3.5:9b");
     assert.equal(remember("run root")?.ob?.filename, runtimeRoot);
+
+    configureSaddleSelection(config, { model: "replacement-model" });
+    assert.equal(remember("run root")?.ob?.filename, runtimeRoot);
+    assert.equal(remember("world root")?.ob?.filename, worldRoot);
+    assert.equal(remember("coding saddle system")?.ob?.text, config.systemPrompt);
+    const command = rewriteRunRootCommandPath(
+      "PYA_COMMAND_TIMEOUT_MS=900000 node command/mind_ollama_runner.mjs",
+      { cwd }
+    );
+    const runnerPath = command.match(/\bnode\s+(\S+)/u)?.[1];
+    assert.ok(runnerPath);
+    assert.equal(path.resolve(cwd, runnerPath), path.join(runtimeRoot, "command", "mind_ollama_runner.mjs"));
   } finally {
     for (const key of envKeys) {
       if (previousEnv[key] === undefined) delete process.env[key];
@@ -982,7 +1035,7 @@ test("coding saddle keeps histories per project while reusing the recent model p
   }
 });
 
-test("coding saddle refuses to merge a legacy project house into an existing project-named house", async () => {
+test("coding saddle archives a populated legacy house when a project house already has data", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-house-conflict-"));
   const runtimeRoot = path.join(root, "runtime");
   const cwd = path.join(root, "projects", "biography");
@@ -1001,17 +1054,29 @@ test("coding saddle refuses to merge a legacy project house into an existing pro
     const worldRoot = resolveSaddleProjectWorldRoot({ runtimeRoot, cwd });
     const legacyHouse = path.join(worldRoot, "house", "coding saddle");
     const projectHouse = resolveCodingSaddleHousePath({ worldRoot, cwd });
+    const existingArchive = path.join(path.dirname(legacyHouse), "coding saddle legacy");
+    await fs.mkdir(existingArchive, { recursive: true });
+    await fs.writeFile(path.join(existingArchive, "prior.md"), "prior archive\n", "utf8");
     await fs.mkdir(path.join(legacyHouse, "identity"), { recursive: true });
     await fs.mkdir(path.join(projectHouse, "identity"), { recursive: true });
+    await fs.writeFile(path.join(legacyHouse, "identity", "shared.md"), "legacy version\n", "utf8");
     await fs.writeFile(path.join(legacyHouse, "identity", "legacy.md"), "keep legacy\n", "utf8");
+    await fs.writeFile(path.join(projectHouse, "identity", "shared.md"), "project version\n", "utf8");
     await fs.writeFile(path.join(projectHouse, "identity", "current.md"), "keep current\n", "utf8");
 
-    await assert.rejects(
-      prepareSaddle({ cwd, runtimeRoot }),
-      /coding saddle house migration conflict/
-    );
-    assert.equal(await fs.readFile(path.join(legacyHouse, "identity", "legacy.md"), "utf8"), "keep legacy\n");
+    const prepared = await prepareSaddle({ cwd, runtimeRoot });
+    const legacyArchive = path.join(path.dirname(legacyHouse), "coding saddle legacy 2");
+    assert.equal(prepared.agentHouse, projectHouse);
+    assert.equal(await fs.readFile(path.join(projectHouse, "identity", "shared.md"), "utf8"), "project version\n");
     assert.equal(await fs.readFile(path.join(projectHouse, "identity", "current.md"), "utf8"), "keep current\n");
+    assert.equal(await fs.readFile(path.join(legacyArchive, "identity", "shared.md"), "utf8"), "legacy version\n");
+    assert.equal(await fs.readFile(path.join(legacyArchive, "identity", "legacy.md"), "utf8"), "keep legacy\n");
+    assert.equal(await fs.readFile(path.join(existingArchive, "prior.md"), "utf8"), "prior archive\n");
+    await assert.rejects(fs.access(legacyHouse), { code: "ENOENT" });
+
+    const repeated = await prepareSaddle({ cwd, runtimeRoot });
+    assert.equal(repeated.agentHouse, projectHouse);
+    assert.equal(await fs.readFile(path.join(legacyArchive, "identity", "legacy.md"), "utf8"), "keep legacy\n");
   } finally {
     for (const key of envKeys) {
       if (previousEnv[key] === undefined) delete process.env[key];

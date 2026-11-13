@@ -5,9 +5,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createCodingSaddleTrace } from "../program/agent/coding_saddle_trace.mjs";
+import { recordMindJson, resetMindDebugCounters } from "../program/verbs/mind/logging.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget } from "../program/remember/index.mjs";
 import { splitSentences } from "../program/library/sentenceSplitter.mjs";
+import { pyaFileToJson } from "../program/library/pya_to_json.mjs";
 import { parse } from "../program/understand/index.mjs";
 
 test("coding saddle records tool arguments and results as artifacts linked from its Pyash newspaper", async () => {
@@ -189,6 +191,44 @@ test("coding saddle trace rolls complete records into date-sequenced bounded fil
     assert.equal(path.basename(trace.journalPath), names.at(-1));
   } finally {
     trace.close();
+    await fs.rm(worldRoot, { recursive: true, force: true });
+  }
+});
+
+test("coding saddle newspaper parses nested mind maps and multiline quoted content", async () => {
+  const worldRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-trace-mind-json-"));
+  const trace = createCodingSaddleTrace({ worldRoot, cwd: worldRoot, runId: "mind-json-trace" });
+  resetMindDebugCounters();
+  try {
+    recordMindJson({
+      targetName: "coding saddle regression",
+      label: "request",
+      payload: {
+        messages: [{ role: "user", content: "first line\nquoted.text.inside.text.quoted\nlast line" }],
+        tools: [{
+          type: "function",
+          function: { parameters: { type: "object", properties: { ob: { type: "string" } } } }
+        }]
+      }
+    });
+    trace.close();
+
+    const parsed = await pyaFileToJson(trace.journalPath);
+    const roleBoundaryMap = parsed.memory.find((sentence) =>
+      sentence.su?.name === "coding saddle regression request 1 tools 1 function parameters properties ob"
+    );
+    assert.equal(roleBoundaryMap?.ob?.map?.type?.text, "string");
+    const messageSeries = parsed.memory.find((sentence) =>
+      sentence.su?.name === "coding saddle regression request 1 messages"
+    );
+    assert.equal(
+      messageSeries?.ob?.series?.[0]?.ob?.text,
+      "first line\nquoted.text.inside.text.quoted\nlast line"
+    );
+  } finally {
+    resetMindDebugCounters();
+    trace.close();
+    forget();
     await fs.rm(worldRoot, { recursive: true, force: true });
   }
 });

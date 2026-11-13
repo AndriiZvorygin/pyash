@@ -356,7 +356,9 @@ export function parseTokens(
       const genitive = parseGenitiveChain(i);
       if (genitive) {
         consume(i, genitive.endIndex);
-        slot.genitive = { chain: genitive.chain };
+        if (slot) {
+          slot.genitive = { chain: genitive.chain };
+        }
         i = genitive.endIndex;
         continue;
       }
@@ -416,7 +418,9 @@ export function parseTokens(
       const genitive = parseGenitiveChain(i);
       if (genitive) {
         consume(i, genitive.endIndex);
-        slot.genitive = { chain: genitive.chain };
+        if (slot) {
+          slot.genitive = { chain: genitive.chain };
+        }
         i = genitive.endIndex;
         continue;
       }
@@ -668,5 +672,16 @@ export function parse(line) {
 
   const tokens = tokenize(working.trim());
   if (tokens.length === 0) return null;
-  return parseTokens(tokens, { allowMoodless: false, quotedText });
+  try {
+    return parseTokens(tokens, { allowMoodless: false, quotedText });
+  } catch (error) {
+    if (error && typeof error === "object") {
+      error.parseDiagnostic = {
+        ...(error.parseDiagnostic ?? {}),
+        sourceText: String(line),
+        parseAttempt: "primary"
+      };
+    }
+    throw error;
+  }
 }

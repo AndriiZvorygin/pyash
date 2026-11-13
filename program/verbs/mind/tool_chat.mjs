@@ -7,7 +7,7 @@ import { mapDefChainFromName } from "./map_helpers.mjs";
 import { mapSentenceToPyash } from "../exchange/json_map.mjs";
 import { recordMindJson, stripContext } from "./logging.mjs";
 import { appendLog } from "./history.mjs";
-import { buildToolSentence } from "./tooling.mjs";
+import { buildToolSentence, formatWebSearchToolResult } from "./tooling.mjs";
 import { deriveSignatureFromCall, joinSignatureWords } from "../../bridge/signature.mjs";
 import { resolveRatifyDecision } from "../../agent/ratify_policy.mjs";
 import { submitRunToolEvent } from "../../bridge/newspaper.mjs";
@@ -169,21 +169,8 @@ function normalizeVisionInput(input) {
   };
 }
 
-function buildToolUseDirective(tools = []) {
-  const names = Array.isArray(tools)
-    ? tools
-      .map((entry) => String(entry?.function?.name ?? "").trim())
-      .filter(Boolean)
-    : [];
-  const list = names.length ? names.join(", ") : "(none)";
-  return [
-    "TOOL USAGE RULES:",
-    "- You can call tools in this turn.",
-    `- Available tool function names: ${list}.`,
-    "- Do not claim tools are unavailable when a matching tool exists.",
-    "- If user asks to search/download/read files/execute commands, call the matching tool first.",
-    "- If a tool fails, report the failure reason and continue with best effort."
-  ].join("\n");
+function buildToolUseDirective() {
+  return "Use supplied tools for requested actions; report tool failures truthfully.";
 }
 
 function toolNames(tools = [], toolMap = null) {
@@ -392,8 +379,8 @@ export async function runToolChat({
 
   const messages = [];
   if (resolvedConfigPrompt) messages.push({ role: "system", content: resolvedConfigPrompt });
-  if (toolBlock) messages.push({ role: "system", content: toolBlock });
-  if (tools?.length) messages.push({ role: "system", content: buildToolUseDirective(tools) });
+  if (tools?.length) messages.push({ role: "system", content: buildToolUseDirective() });
+  else if (toolBlock) messages.push({ role: "system", content: toolBlock });
   let historyStart = messages.length;
   if (historyMessages.length) messages.push(...historyMessages);
   let historyEnd = messages.length;
@@ -525,7 +512,7 @@ export async function runToolChat({
         requestPayload = buildRequestPayload();
         continue;
       }
-      onUsage?.(response?.usage ?? response?.metadata);
+      onUsage?.(response?.usage ?? response?.metadata ?? response);
       recordMindJson({ targetName: mindName, label: "response", payload: stripContext(response) });
       if (mindDebug) {
         // eslint-disable-next-line no-console
@@ -698,7 +685,12 @@ export async function runToolChat({
             from: { name: "coding saddle plan" }
           }));
         } else {
-          throw err;
+          toolResult = surfaceErrorSentence(buildErrorSentence({
+            name: "tool execution failed",
+            message: err?.message || String(err),
+            from: { name: toolName || "tool" },
+            raw: { toolName: toolName || "unknown", signature: toolSignature || "unknown" }
+          }));
         }
       }
       const surfacedTool = (() => {
@@ -726,7 +718,13 @@ export async function runToolChat({
         if (surfacedTool.be === "error") {
           const errorName = String(surfacedTool.su?.name ?? "").trim();
           const errorMessage = String(surfacedTool.ob?.text ?? "tool failed").trim();
-          toolText = [errorName, errorMessage].filter(Boolean).join(": ");
+          toolText = [
+            [errorName, errorMessage].filter(Boolean).join(": "),
+            "This call failed. Do not claim it succeeded or repeat the same call unchanged; use another suitable tool if possible, otherwise state the blocker."
+          ].filter(Boolean).join("\n");
+        }
+        if (!toolText && (toolName === "web_search" || toolName === "web_search_source")) {
+          toolText = formatWebSearchToolResult(surfacedTool);
         }
         const mapName = surfacedTool.ob?.name;
         const mapFact = mapName ? remember(mapName) : null;

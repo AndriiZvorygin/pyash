@@ -3,6 +3,9 @@
 The normative encoding and execution boundary is
 `documentation/specifications/27-pyash-vliw-isa.md`. This reference records the
 currently proven semantic slices and their fixtures.
+For the full source-to-pack-to-backend picture and the distinction between
+current support and target architecture, see
+[`pyash-vliw-compiler-architecture.md`](pyash-vliw-compiler-architecture.md).
 
 ## Numeric plus
 
@@ -294,3 +297,49 @@ The image is not executed here. The backend carries its own executor for the
 instruction subset it emits, and that executor is what proves the result
 matches the interpreter; running the image itself needs a RISC-V machine or
 emulator, which this repository does not yet depend on.
+
+## Pyash source through a persisted `.pyac` pack
+
+The existing compile verb can lower a one-paragraph Pyash source file into the
+fixed-width PyAC VLIW pack, then compile that pack to C:
+
+```pyash
+from filename "examples/pyash/vliw-constant-arithmetic.pya" fromstate pyash tostate pyac to filename "examples/out/vliw-constant-arithmetic.pyac" be compile do
+from filename "examples/out/vliw-constant-arithmetic.pyac" fromstate pyac tostate c to filename "examples/out/vliw-constant-arithmetic.c" be compile do
+```
+
+The first compile fails with the source sentence number if a sentence cannot
+be lowered, and it requires a destination filename so the binary pack is
+persisted. The current flat pack does not preserve paragraph boundaries.
+`examples/pyash/compile-vliw-constant-arithmetic.pya` is a runnable build
+driver; its source fixture uses three independent constant arithmetic
+sentences.
+
+```bash
+./run examples/pyash/compile-vliw-constant-arithmetic.pya
+cc -std=c11 -Wall -Werror -o examples/out/vliw-constant-arithmetic examples/out/vliw-constant-arithmetic.c
+./examples/out/vliw-constant-arithmetic
+```
+
+The executable prints `42`, `40`, and `42`, one result per codelet.
+`examples/out/` is ignored by Git.
+
+## C from a persisted `.pyac` pack
+
+The existing Pyash compile verb accepts a persisted PyAC pack as a C source:
+
+```pyash
+from filename "program.pyac" fromstate pyac tostate c to filename "program.c" be compile do
+```
+
+This path validates the pack header, decodes codelets in order, and emits C
+only for numeric `plus`, arithmetic (`subtract`, `multiply`, `divide`, `xor`,
+`exponential`, and `remains`), and numeric `invert`. The generated executable
+prints one result per codelet in pack order. Division and remainder by zero
+fail visibly at execution. Malformed packs and codelets outside this initial C
+slice fail compilation instead of becoming placeholder code.
+
+The conformance quiz persists a one-paragraph pack, compiles it through this
+Pyash surface, runs the generated C executable, and compares its output with
+`executeCodelets`. This initial path does not add mutable named state or
+paragraph boundaries to the flat `.pyac` container.

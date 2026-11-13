@@ -2,6 +2,17 @@ import { parse as parseRaw } from "./parse_tokens.mjs";
 import { MOODS } from "../library/grammar/keywords.mjs";
 import { matchGlossToPyash } from "../library/translation/reverse_pairs.mjs";
 
+function attachParseSource(error, sourceText, parseAttempt, originalSourceText) {
+  if (!error || typeof error !== "object") return error;
+  error.parseDiagnostic = {
+    ...(error.parseDiagnostic ?? {}),
+    sourceText: String(sourceText),
+    parseAttempt,
+    ...(originalSourceText !== undefined ? { originalSourceText: String(originalSourceText) } : {})
+  };
+  return error;
+}
+
 export function parse(line) {
   let result = null;
   let error = null;
@@ -14,8 +25,12 @@ export function parse(line) {
   if (result?.mood && MOODS.includes(result.mood)) return result;
   const fallback = matchGlossToPyash(line);
   if (fallback) {
-    return parseRaw(fallback);
+    try {
+      return parseRaw(fallback);
+    } catch (fallbackError) {
+      throw attachParseSource(fallbackError, fallback, "dictionary-fallback", line);
+    }
   }
-  if (error) throw error;
+  if (error) throw attachParseSource(error, line, "primary");
   return result;
 }

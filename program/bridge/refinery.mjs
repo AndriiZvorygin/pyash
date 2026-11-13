@@ -233,14 +233,46 @@ function readLocalSlotFacts(localWrites) {
 
 function normalizeRefineryError(errorLike, { refineryName, platformName, actionSentence } = {}) {
   const surfaced = surfaceErrorSentence(errorLike?.sentence ?? errorLike);
-  if (surfaced?.mood && surfaced?.be) return surfaced;
+  const parseDiagnostic = errorLike?.parseDiagnostic ?? errorLike?.cause?.parseDiagnostic;
+  if (surfaced?.mood && surfaced?.be) {
+    return appendParseDiagnostic(surfaced, parseDiagnostic, platformName);
+  }
   const message = String(errorLike?.message ?? surfaced?.message ?? "platform execution failed");
+  const diagnosticMessage = parseDiagnostic
+    ? `; stage ${JSON.stringify(platformName ?? "unknown")}; parse diagnostic ${JSON.stringify(compactParseDiagnostic(parseDiagnostic))}`
+    : "";
   return surfaceErrorSentence(buildErrorSentence({
     name: "platform defective",
-    message: `platform defective: ${message}`,
+    message: `platform defective: ${message}${diagnosticMessage}`,
     from: { name: refineryName || "refinery" },
     raw: { platform: platformName, action: actionSentence }
   }));
+}
+
+function compactParseDiagnostic(diagnostic) {
+  const sourceText = String(diagnostic?.sourceText ?? "");
+  const sourceLimit = 8192;
+  return {
+    ...diagnostic,
+    sourceLength: sourceText.length,
+    sourceText: sourceText.length > sourceLimit
+      ? `${sourceText.slice(0, sourceLimit)}… [truncated]`
+      : sourceText,
+    ...(sourceText.length > sourceLimit ? { sourceTruncated: true } : {})
+  };
+}
+
+function appendParseDiagnostic(sentence, diagnostic, platformName) {
+  if (!diagnostic) return sentence;
+  const suffix = `; stage ${JSON.stringify(platformName ?? "unknown")}; parse diagnostic ${JSON.stringify(compactParseDiagnostic(diagnostic))}`;
+  if (String(sentence?.ob?.text ?? "").includes("parse diagnostic")) return sentence;
+  return {
+    ...sentence,
+    ob: {
+      ...(sentence.ob ?? {}),
+      text: `${String(sentence?.ob?.text ?? "platform execution failed")}${suffix}`
+    }
+  };
 }
 
 function restoreExportFacts(exportFacts = []) {

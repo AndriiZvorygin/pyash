@@ -10,6 +10,8 @@ import { sentenceLineNumbersFromText, inlineSourceMap } from "./source_map.mjs";
 import { expandModulesForCompile } from "./module_imports.mjs";
 import { transpileProgram } from "./transpile_program.mjs";
 import { resolveCompiledCommandPolicy } from "../command_policy.mjs";
+import { compilePyacPackToC } from "./pyac_to_c.mjs";
+import { encodePyacPack, lowerSentence } from "../vliw/index.mjs";
 
 function resolveStateValue(value) {
   if (!value) return "";
@@ -33,6 +35,79 @@ export async function compile_from_filename_to_filename(sentence) {
     sentence?.ob?.filename ??
     sentence?.filename;
   const sourceFilename = resolveSandboxPath(sourceFilenameRaw);
+
+  const sourceState = String(
+    sentence?.fromstate?.name ??
+    sentence?.fromstate?.wo ??
+    sentence?.fromstate ??
+    ""
+  ).toLowerCase();
+  const targetState = String(
+    sentence?.tostate?.name ??
+    sentence?.tostate?.wo ??
+    sentence?.become?.name ??
+    sentence?.become?.wo ??
+    "javascript"
+  ).toLowerCase();
+
+  if (sourceState === "pyac") {
+    if (targetState !== "c") {
+      throwErrorSentence({
+        name: "compile error",
+        message: `compile: PyAC VLIW input currently supports C output, not ${targetState || "an unspecified target"}`,
+        from: { name: "compile" }
+      });
+    }
+    if (!sourceFilename) {
+      throwErrorSentence({
+        name: "compile error",
+        message: "compile: PyAC VLIW input requires a filename",
+        from: { name: "compile" }
+      });
+    }
+
+    let packBytes;
+    try {
+      packBytes = await fs.readFile(sourceFilename);
+    } catch (err) {
+      if (err?.code === "ENOENT") {
+        throwErrorSentence({
+          name: "file or directory unavailable error",
+          message: `file or directory unavailable: ${sourceFilename}`,
+          from: { name: "compile" }
+        });
+      }
+      throw err;
+    }
+
+    let body;
+    try {
+      body = compilePyacPackToC(packBytes);
+    } catch (error) {
+      throwErrorSentence({
+        name: "compile error",
+        message: error?.message ?? `compile: PyAC VLIW lowering failed (${String(error)})`,
+        from: { name: "compile" },
+        raw: { code: error?.code ?? null, details: error?.details ?? null }
+      });
+    }
+
+    const targetFilenameRaw = sentence?.to?.filename;
+    const targetFilename = resolveSandboxPath(targetFilenameRaw);
+    if (targetFilename) await fs.writeFile(targetFilename, body, "utf8");
+
+    const wrappedText = `quoted.c.\n${body}.c.quoted`;
+    const targetName = sentence?.to?.name ?? sentence?.totext?.name ?? sentence?.su?.name;
+    if (targetName) {
+      doRemember({
+        su: { name: targetName },
+        be: "c",
+        ob: { text: wrappedText },
+        mood: "ya"
+      });
+    }
+    return { ob: { text: wrappedText }, be: "c" };
+  }
 
   let sourceText = sentence?.fromtext?.text ?? sentence?.from?.text ?? sentence?.text ?? sentence?.ob?.text;
 
@@ -63,22 +138,76 @@ export async function compile_from_filename_to_filename(sentence) {
     });
   }
 
-  const sourceState = String(
-    sentence?.fromstate?.name ??
-    sentence?.fromstate?.wo ??
-    sentence?.fromstate ??
-    ""
-  ).toLowerCase();
   if (!sourceState || sourceState === "pyash") {
     sourceText = sourceText.replaceAll("\\n", "\n");
   }
-  const targetState = String(
-    sentence?.tostate?.name ??
-    sentence?.tostate?.wo ??
-    sentence?.become?.name ??
-    sentence?.become?.wo ??
-    "javascript"
-  ).toLowerCase();
+
+  if (targetState === "pyac") {
+    if (sourceState && sourceState !== "pyash") {
+      throwErrorSentence({
+        name: "compile error",
+        message: `compile: PyAC output currently requires Pyash input, not ${sourceState}`,
+        from: { name: "compile" }
+      });
+    }
+    const targetFilename = resolveSandboxPath(sentence?.to?.filename);
+    if (!targetFilename) {
+      throwErrorSentence({
+        name: "compile error",
+        message: "compile: PyAC output requires a destination filename",
+        from: { name: "compile" }
+      });
+    }
+
+    let codelets;
+    try {
+      const program = buildProgram(sourceText);
+      if (program.sentences.length === 0) {
+        throw new Error("source contains no Pyash sentences");
+      }
+      codelets = [];
+      for (const [index, pyaSentence] of program.sentences.entries()) {
+        try {
+          codelets.push(...lowerSentence(pyaSentence));
+        } catch (error) {
+          throw new Error(`Pyash sentence ${index + 1} cannot be lowered to PyAC: ${error?.message ?? String(error)}`, {
+            cause: error
+          });
+        }
+      }
+    } catch (error) {
+      throwErrorSentence({
+        name: "compile error",
+        message: `compile: Pyash to PyAC failed: ${error?.message ?? String(error)}`,
+        from: { name: "compile" },
+        raw: { code: error?.code ?? null, details: error?.details ?? null }
+      });
+    }
+
+    let pack;
+    try {
+      pack = encodePyacPack(codelets);
+    } catch (error) {
+      throwErrorSentence({
+        name: "compile error",
+        message: `compile: PyAC pack encoding failed: ${error?.message ?? String(error)}`,
+        from: { name: "compile" },
+        raw: { code: error?.code ?? null, details: error?.details ?? null }
+      });
+    }
+    await fs.writeFile(targetFilename, pack);
+
+    const targetName = sentence?.to?.name ?? sentence?.su?.name;
+    if (targetName) {
+      doRemember({
+        su: { name: targetName },
+        be: "pyac",
+        ob: { filename: targetFilename },
+        mood: "ya"
+      });
+    }
+    return { ob: { filename: targetFilename }, be: "pyac" };
+  }
 
   if (sourceState === "markdown" && (targetState === "html" || targetState === "pdf")) {
     const targetFilenameRaw = sentence?.to?.filename;

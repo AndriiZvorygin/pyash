@@ -5,7 +5,8 @@ import path from "node:path";
 import test from "node:test";
 
 import { parse } from "../program/understand/index.mjs";
-import { resolveChildAgentTarget, terminal } from "../program/verbs/terminal.mjs";
+import { resolveChildAgentTarget, commandSession } from "../program/verbs/command_session.mjs";
+import { requestManagedTerminal } from "../program/agent/managed_terminal_ipc.mjs";
 
 async function withProject(run) {
   const temporary = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-terminal-verb-"));
@@ -20,7 +21,7 @@ async function withProject(run) {
   }
 }
 
-function rememberFor({ project, world, minds = {}, delegation = {} }) {
+function rememberFor({ project, world, runtimeRoot, minds = {}, delegation = {}, commandMode = null }) {
   const facts = new Map([
     ["world root", { ob: { filename: world } }],
     ["agent sandbox", { ob: { boolean: true } }],
@@ -33,40 +34,114 @@ function rememberFor({ project, world, minds = {}, delegation = {} }) {
     ["agent delegation configure", { ob: { map: delegation } }],
     ["ollama host", { ob: { text: "http://ollama.test" } }]
   ]);
+  if (runtimeRoot) facts.set("run root", { ob: { filename: runtimeRoot } });
+  if (commandMode) facts.set("command configure", { ob: { map: {
+    "policy mode": { ob: { wo: commandMode } },
+    "classifier enabled": { ob: { bool: true } }
+  } } });
   for (const [name, profile] of Object.entries(minds)) facts.set(name, profile);
   return (name) => facts.get(name) ?? null;
 }
 
-function terminalSentence(action, request = {}) {
-  return parse(`su name terminal be terminal as wo ${action} ob text ${JSON.stringify(JSON.stringify(request))} do`);
+function commandSessionSentence(action, request = {}) {
+  return parse(`su name command session be command session as wo ${action} ob text ${JSON.stringify(JSON.stringify(request))} do`);
 }
 
-test("terminal launch is restricted to the licensed project working directory", async () => {
+test("command session launch is restricted to the licensed project working directory", async () => {
   await withProject(async ({ project, temporary, world }) => {
-    const remember = rememberFor({ project, world });
+    const runtimeRoot = path.join(temporary, "pyash-runtime");
+    const remember = rememberFor({ project, world, runtimeRoot });
     const calls = [];
     const requestTerminal = async (...args) => {
       calls.push(args);
       return { id: "terminal-1", status: "running" };
     };
-    const started = await terminal(terminalSentence("start", {
+    const started = await commandSession(commandSessionSentence("start", {
       command: process.execPath,
       args: ["-e", "process.stdout.write('ready')"]
     }), { remember, requestTerminal, runtimeContext: { agentName: "mind", backend: "ollama" } });
     assert.equal(JSON.parse(started.ob.text).id, "terminal-1");
     assert.equal(calls.length, 1);
+    assert.equal(calls[0][1], project, "terminal manager scope must follow the agent project, not Pyash runtime");
 
-    await assert.rejects(() => terminal(terminalSentence("start", {
+    await assert.rejects(() => commandSession(commandSessionSentence("start", {
       command: process.execPath,
       args: [],
       cwd: temporary
-    }), { remember, requestTerminal, runtimeContext: { agentName: "mind", backend: "ollama" } }), /outside the agent's licensed project roots/u);
+    }), { remember, requestTerminal, runtimeContext: { agentName: "mind", backend: "ollama" } }), /outside the agent's active project root/u);
     assert.equal(calls.length, 1);
   });
 });
 
-test("child coding agents obey parent backend and model allowlists and receive a separate session", async () => {
+test("command session hard-denies internal mind runners even when command mode allows", async () => {
   await withProject(async ({ project, world }) => {
+    const remember = rememberFor({ project, world, commandMode: "allow" });
+    await assert.rejects(() => commandSession(commandSessionSentence("start", {
+      command: "node",
+      args: ["../pyac/pyash-dev/command/mind_ollama_runner.mjs"],
+      cwd: project
+    }), { remember }), /internal Pyash mind runner/u);
+  });
+});
+
+test("command session starts a real PTY in the project when the Pyash runtime is elsewhere", async () => {
+  await withProject(async ({ project, temporary, world }) => {
+    const runtimeRoot = path.join(temporary, "pyash-runtime");
+    const remember = rememberFor({ project, world, runtimeRoot });
+    let started;
+    try {
+      const result = await commandSession(commandSessionSentence("start", {
+        command: process.execPath,
+        args: ["-e", "process.stdout.write('PROJECT_TERMINAL_ROOT_OK\\n')"],
+        cwd: project
+      }), { remember, runtimeContext: { agentName: "mind", backend: "ollama" } });
+      started = JSON.parse(result.ob.text);
+
+      let read;
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        const response = await commandSession(commandSessionSentence("read", {
+          id: started.id,
+          after: 0,
+          maxBytes: 4096
+        }), { remember, runtimeContext: { agentName: "mind", backend: "ollama" } });
+        read = JSON.parse(response.ob.text);
+        if (read.status !== "running") break;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+
+      assert.equal(read.status, "exited");
+      assert.equal(read.exitCode, 0);
+      assert.match(read.output, /PROJECT_TERMINAL_ROOT_OK/u);
+    } finally {
+      await requestManagedTerminal(world, project, { action: "shutdown" }).catch(() => {});
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  });
+});
+
+test("Pyash size and finish actions route to the existing PTY operations", async () => {
+  await withProject(async ({ project, world }) => {
+    const remember = rememberFor({ project, world });
+    const calls = [];
+    const requestTerminal = async (_world, _project, request) => {
+      calls.push(request);
+      return { status: "ok" };
+    };
+    const runtimeContext = { agentName: "mind", backend: "ollama" };
+
+    await commandSession(commandSessionSentence("size", { id: "session-one", columns: 100, rows: 40 }), {
+      remember, requestTerminal, runtimeContext
+    });
+    await commandSession(commandSessionSentence("finish", { id: "session-one" }), {
+      remember, requestTerminal, runtimeContext
+    });
+
+    assert.deepEqual(calls.map((call) => call.action), ["resize", "close"]);
+  });
+});
+
+test("child coding agents obey parent backend and model allowlists and receive a separate session", async () => {
+  await withProject(async ({ project, temporary, world }) => {
     const minds = {
       mind: {
         mood: "ya", be: "mind", su: { name: "mind" },
@@ -82,16 +157,18 @@ test("child coding agents obey parent backend and model allowlists and receive a
       "zai allowed backends": { ve: { values: ["ollama"] } },
       "zai allowed models": { ve: { values: ["qwen3.5:9b"] } }
     };
-    const remember = rememberFor({ project, world, minds, delegation });
+    const remember = rememberFor({ project, world, runtimeRoot: path.join(temporary, "pyash-runtime"), minds, delegation });
     const requests = [];
-    const requestTerminal = async (_world, _root, request) => {
+    const managerRoots = [];
+    const requestTerminal = async (_world, root, request) => {
+      managerRoots.push(root);
       requests.push(request);
       if (request.action === "start") return { id: "child-terminal", status: "running" };
       if (request.action === "read") return { id: request.id, status: "running", cursor: 5, output: "session: child\npyash> " };
       if (request.action === "write") return { id: request.id, status: "running" };
       throw new Error(`unexpected terminal action: ${request.action}`);
     };
-    const started = await terminal(terminalSentence("start coding agent", {
+    const started = await commandSession(commandSessionSentence("start program agent", {
       mind: "mind",
       cwd: project,
       instruction: "Inspect the parser and report findings."
@@ -109,14 +186,15 @@ test("child coding agents obey parent backend and model allowlists and receive a
     assert.equal(result.instructionState, "sent");
     assert.equal(requests[0].env.PYA_SADDLE_SESSION_NAME, result.sessionName);
     assert.equal(requests[0].env.PYA_SADDLE_MODEL, "qwen3.5:9b");
+    assert.ok(managerRoots.every((root) => root === project), "child terminal lifecycle must use one project-scoped manager");
     assert.equal(requests.at(-1).input, "Inspect the parser and report findings.\r");
 
-    await assert.rejects(() => terminal(terminalSentence("start coding agent", { mind: "zai" }), {
+    await assert.rejects(() => commandSession(commandSessionSentence("start program agent", { mind: "zai" }), {
       remember,
       requestTerminal,
       runtimeContext: { agentName: "zai", backend: "zai" }
     }), /child backend zai is not allowed/u);
-    await assert.rejects(() => terminal(terminalSentence("start coding agent", {
+    await assert.rejects(() => commandSession(commandSessionSentence("start program agent", {
       mind: "mind", model: "qwen3.5:27b"
     }), {
       remember,

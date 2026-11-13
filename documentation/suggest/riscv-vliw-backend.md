@@ -1,10 +1,11 @@
 # What Should the Pyash VLIW Backend Compile To?
 
-**Status:** proposal awaiting review. It describes a destination for the VLIW
-codelet format, shows one semantic compiled all the way to a RISC-V image, and
-asks what the backend contract should say before a second destination is added.
-It changes no behaviour beyond the one prototype described here, and it
-schedules no work.
+**Status:** historical prototype note. The Rust RISC-V code generator and
+bare-metal image described here are implemented for a narrow arithmetic slice;
+the open review questions below record the original design discussion, not the
+current backend roadmap. See
+[`pyash-vliw-compiler-architecture.md`](../reference/pyash-vliw-compiler-architecture.md)
+for current status and the planned readable NASM and RISC-V assembly targets.
 
 ## Purpose
 
