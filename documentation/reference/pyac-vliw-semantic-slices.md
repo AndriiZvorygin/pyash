@@ -294,3 +294,23 @@ The image is not executed here. The backend carries its own executor for the
 instruction subset it emits, and that executor is what proves the result
 matches the interpreter; running the image itself needs a RISC-V machine or
 emulator, which this repository does not yet depend on.
+
+## C from a persisted `.pyac` pack
+
+The existing Pyash compile verb accepts a persisted PyAC pack as a C source:
+
+```pyash
+from filename "program.pyac" fromstate pyac tostate c to filename "program.c" be compile do
+```
+
+This path validates the pack header, decodes codelets in order, and emits C
+only for numeric `plus`, arithmetic (`subtract`, `multiply`, `divide`, `xor`,
+`exponential`, and `remains`), and numeric `invert`. The generated executable
+prints one result per codelet in pack order. Division and remainder by zero
+fail visibly at execution. Malformed packs and codelets outside this initial C
+slice fail compilation instead of becoming placeholder code.
+
+The conformance quiz persists a one-paragraph pack, compiles it through this
+Pyash surface, runs the generated C executable, and compares its output with
+`executeCodelets`. This initial path does not add mutable named state or
+paragraph boundaries to the flat `.pyac` container.
