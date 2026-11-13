@@ -1,8 +1,9 @@
 # Pyash VLIW ISA and lowering contract
 
-Status: design specification. This document defines the encoding and execution
-boundary for a future Pyash VLIW backend. It does not change the current
-interpreter, parser, or sentence ABI.
+Status: normative design specification. This document defines the encoding and
+execution boundary for Pyash VLIW. Partial implementations are linked in the
+implementation references; they do not change the current interpreter, parser,
+or sentence ABI.
 
 ## 1. Scope and authority
 
@@ -273,14 +274,16 @@ catalog/container database, require a GPU, introduce a model server or queue,
 or connect codelet execution to WorkTask/review/integration machinery. The
 database contract is defined in
 `documentation/reference/pyac-vliw-database.md`. This specification also does
-not replace the current sentence/paragraph interpreter. The only
-conforming future implementation is one that can prove the sentence result
-and the legacy encoding bytes agree.
+not replace the current sentence/paragraph interpreter. A conforming
+implementation must prove that the sentence result and legacy encoding bytes
+agree.
 
 ## 9. Implementation references
 
-The proven numeric-plus, quote, fixed-slot, typed-literal, named-fact, database,
-and facade slices are documented with their fixtures and implementation paths
-in `documentation/reference/pyac-vliw-semantic-slices.md`. The normative
+The end-to-end architecture and current implementation map are in
+`documentation/reference/pyash-vliw-compiler-architecture.md`. The proven
+numeric-plus, quote, fixed-slot, typed-literal, named-fact, database, and facade
+slices are documented with their fixtures and implementation paths in
+`documentation/reference/pyac-vliw-semantic-slices.md`. The normative
 requirements above remain the authority; the reference notes identify the
 currently executable subset and its explicit unsupported cases.

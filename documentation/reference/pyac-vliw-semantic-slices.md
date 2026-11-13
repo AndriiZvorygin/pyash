@@ -3,6 +3,9 @@
 The normative encoding and execution boundary is
 `documentation/specifications/27-pyash-vliw-isa.md`. This reference records the
 currently proven semantic slices and their fixtures.
+For the full source-to-pack-to-backend picture and the distinction between
+current support and target architecture, see
+[`pyash-vliw-compiler-architecture.md`](pyash-vliw-compiler-architecture.md).
 
 ## Numeric plus
 
