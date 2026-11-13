@@ -2,9 +2,22 @@
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
-import { spawn, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { readPyaTextValues } from "../../../../program/library/pya_config.mjs";
+import { createQueuedOllamaExecutor } from "../../../../program/runtime/criterion/ollama.mjs";
+import { resolveConfiguredGpuHousekeeperUrl } from "../../../../program/runtime/gpu/configured-endpoints.mjs";
+import { createGpuHousekeeperAdapter } from "../../../../program/runtime/gpu/housekeeper_adapter.mjs";
+import {
+  buildSweepPostRestartReviewPrompt,
+  buildSweepRecoveryPrompt,
+  buildSweepResumeCommand,
+  mayResumeSweep,
+  mayReviewRestartedSweep,
+  parseSweepPostRestartReview,
+  parseSweepRecoveryDecision,
+  readSweepRecoveryConfig,
+} from "./wordnet-sweep-recovery.mjs";
 import { parse } from "../../../../program/understand/index.mjs";
 
 const PROGRAM_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -18,6 +31,7 @@ const SWEEP_ROOT = path.join(PYASH_ROOT, "artifacts", SWEEP_RUN_ID);
 const SWEEP_LOCK = path.join(PYASH_ROOT, "artifacts", ".wordnet-sense-compound-refinery.lock");
 const WATCHDOG_LOCK = "/tmp/wordnet-sense-compound-watchdog.lock";
 const STALE_AFTER_MS = 4 * 60 * 60 * 1000;
+const RECOVERY_TIMEOUT_MS = 3 * 60 * 1000;
 const ACTIVITY_FILES = [
   "progress.pya",
   "worklist.pya",
@@ -29,13 +43,6 @@ const ACTIVITY_FILES = [
   "compound-candidates.pya",
   "sweep-supervised.log",
 ];
-const FIXTURE_ENV = [
-  "PYA_MIND_RESPONSE",
-  "PYA_HEAR_FIXTURE",
-  "PYA_PIPER_FIXTURE",
-  "PYA_GPU_HOUSEKEEPER_FIXTURE",
-];
-
 function readLinuxProcess(pid) {
   try {
     const command = fs.readFileSync(`/proc/${pid}/cmdline`, "utf8").split("\0").filter(Boolean);
@@ -143,12 +150,245 @@ export async function inspectWordnetSweep({
   };
 }
 
-export function shouldInvokeCodexRecovery(inspection) {
+export function shouldInvokeRecovery(inspection) {
   return ["stopped", "stalled", "lock_conflict"].includes(inspection?.state);
 }
 
 function pyaText(value) {
   return String(value ?? "").replace(/\\/gu, "\\\\").replace(/"/gu, "\\\"").replace(/[\r\n]+/gu, " ").trim();
+}
+
+function pyaFacts(values) {
+  return `${Object.entries(values)
+    .map(([name, value]) => `exists su name ${name} ob text "${pyaText(value)}" be text ya`)
+    .join("\n")}\n`;
+}
+
+async function appendPyaFacts(filePath, values) {
+  await fsp.mkdir(path.dirname(filePath), { recursive: true });
+  await fsp.appendFile(filePath, pyaFacts(values), "utf8");
+}
+
+async function readFileTail(filePath, maxBytes = 12_000) {
+  let handle;
+  try {
+    handle = await fsp.open(filePath, "r");
+    const stat = await handle.stat();
+    const length = Math.min(maxBytes, stat.size);
+    const buffer = Buffer.alloc(length);
+    await handle.read(buffer, 0, length, stat.size - length);
+    return buffer.toString("utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return "";
+    throw error;
+  } finally {
+    await handle?.close();
+  }
+}
+
+async function readFileFromOffset(filePath, offset, maxBytes = 256_000) {
+  let handle;
+  try {
+    handle = await fsp.open(filePath, "r");
+    const stat = await handle.stat();
+    const savedOffset = Math.max(0, Math.min(stat.size, Number(offset) || 0));
+    const start = Math.max(savedOffset, stat.size - maxBytes);
+    const length = Math.max(0, stat.size - start);
+    const buffer = Buffer.alloc(length);
+    await handle.read(buffer, 0, length, start);
+    return buffer.toString("utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return "";
+    throw error;
+  } finally {
+    await handle?.close();
+  }
+}
+
+function latestBatchEvent(logTail) {
+  const events = String(logTail ?? "").split(/\r?\n/u).flatMap((line) => {
+    try {
+      const value = JSON.parse(line);
+      return value?.event === "wordnet-sense-compound-batch-complete" ? [value] : [];
+    } catch {
+      return [];
+    }
+  });
+  return events.at(-1) ?? null;
+}
+
+function batchEvidence(event) {
+  if (!event) return "No completed batch event found in the recent sweep log.";
+  return JSON.stringify({
+    batchCount: event.batchCount,
+    selectedSenseCount: event.selectedSenseCount,
+    remainingSenseCount: event.remainingSenseCount,
+    candidateCount: event.candidateCount,
+    promotedSenseCount: event.promotedSenseCount,
+    translationFailureCount: event.translationFailureCount,
+    rolloverToFirstSubmissionMs: event.rolloverToFirstSubmissionMs,
+  }, null, 2);
+}
+
+async function inspectHousekeeper(model) {
+  const url = String(process.env.PYA_GPU_HOUSEKEEPER_URL || resolveConfiguredGpuHousekeeperUrl({ cwd: PYASH_ROOT })).trim();
+  if (!url) throw new Error("configured GPU Housekeeper URL is missing");
+  const adapter = createGpuHousekeeperAdapter({ baseUrl: url });
+  const [health, queue, catalog] = await Promise.all([
+    adapter.getHealth(),
+    adapter.getQueue(),
+    adapter.getOllamaModels(),
+  ]);
+  const models = Array.isArray(catalog) ? catalog : catalog?.models ?? [];
+  const modelNames = models.map((entry) => typeof entry === "string" ? entry : entry?.name ?? entry?.model ?? "");
+  const matchingSweepDuties = (Array.isArray(queue?.jobs) ? queue.jobs : [])
+    .filter((job) => /^wordnet-sense-/u.test(String(job?.handleId ?? ""))
+      && ["queued", "running", "pending", "active"].includes(String(job?.status ?? "").toLowerCase()))
+    .map((job) => ({ handleId: String(job.handleId), status: String(job.status).toLowerCase() }));
+  return {
+    url,
+    host: new URL(url).host,
+    healthy: health?.status === "ok",
+    queued: Number(queue?.queuedCount ?? queue?.queueDepth ?? 0),
+    running: Number(queue?.runningCount ?? 0),
+    activeSweepDuties: matchingSweepDuties.slice(0, 8),
+    activeSweepDutyCount: matchingSweepDuties.length,
+    modelAvailable: modelNames.includes(model),
+    modelNames,
+    error: "",
+  };
+}
+
+async function submitRecoveryModel({ model, prompt, identity, operation = "wordnet-sweep-recovery" }) {
+  const executor = createQueuedOllamaExecutor({
+    root: PYASH_ROOT,
+    runId: `wordnet-sweep-recovery-${SWEEP_RUN_ID}`,
+    housekeeperUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || resolveConfiguredGpuHousekeeperUrl({ cwd: PYASH_ROOT }),
+    timeoutMs: RECOVERY_TIMEOUT_MS,
+    pollMs: 250,
+  });
+  const result = await executor.executor({
+    model,
+    prompt,
+    profile: "baseline",
+    sampling: { format: "json", think: false, temperature: 0, top_p: 1, top_k: 0, num_predict: 512, keep_alive: 300 },
+    identity,
+    operation,
+  });
+  return {
+    text: result.text,
+    handleId: result.request?.handleId ?? "",
+    managedBy: result.metadata?.managedBy ?? "",
+    startedAt: result.startedAt ?? "",
+    finishedAt: result.finishedAt ?? "",
+  };
+}
+
+async function persistModelTurn(directory, prefix, prompt, result) {
+  await fsp.mkdir(directory, { recursive: true });
+  await Promise.all([
+    fsp.writeFile(path.join(directory, `${prefix}-prompt.txt`), `${prompt}\n`, "utf8"),
+    fsp.writeFile(path.join(directory, `${prefix}-response.txt`), `${result.text}\n`, "utf8"),
+  ]);
+}
+
+async function pendingPostRestartReviews() {
+  let entries;
+  try {
+    entries = await fsp.readdir(ARTIFACT_ROOT, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  }
+  const pending = [];
+  const fields = [
+    "WordNet recovery review state",
+    "WordNet recovery decision at",
+    "WordNet recovery reason",
+    "WordNet recovery restart verified at",
+    "WordNet recovery remaining at restart",
+    "WordNet recovery log bytes at restart",
+  ];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const incidentDirectory = path.join(ARTIFACT_ROOT, entry.name);
+    const recoveryPath = path.join(incidentDirectory, "recovery-decision.pya");
+    try {
+      const values = readPyaTextValues(recoveryPath, fields);
+      if (values[fields[0]] !== "pending") continue;
+      pending.push({
+        directory: incidentDirectory,
+        failureEvidence: await fsp.readFile(path.join(incidentDirectory, "failure-evidence.txt"), "utf8").catch(() => ""),
+        recovery: {
+          reviewState: values[fields[0]],
+          decisionAt: values[fields[1]],
+          reason: values[fields[2]],
+          restartVerifiedAt: values[fields[3]],
+          remainingAtRestart: Number(values[fields[4]]) || null,
+          logBytesAtRestart: Number(values[fields[5]]) || 0,
+        },
+      });
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+  }
+  return pending;
+}
+
+async function runPendingPostRestartReview({ inspection, context, housekeeper }) {
+  if (!inspection.active || inspection.state !== "healthy" || !housekeeper.healthy || !housekeeper.modelAvailable) return false;
+  const pending = await pendingPostRestartReviews();
+  for (const entry of pending) {
+    const freshLog = await readFileFromOffset(
+      path.join(SWEEP_ROOT, "sweep-supervised.log"),
+      entry.recovery.logBytesAtRestart,
+    );
+    const event = latestBatchEvent(freshLog);
+    if (!mayReviewRestartedSweep({ inspection, recovery: entry.recovery, latestBatchEvent: event })) continue;
+    const prompt = buildSweepPostRestartReviewPrompt({
+      inspection,
+      context,
+      recovery: entry.recovery,
+      recentFailure: entry.failureEvidence,
+      recentProgress: batchEvidence(event),
+    });
+    await persistModelTurn(entry.directory, "post-restart-review", prompt, { text: "" });
+    try {
+      const result = await submitRecoveryModel({
+        model: context.model,
+        prompt,
+        identity: `post-restart-review-${inspection.runId}-${entry.recovery.restartVerifiedAt}`,
+        operation: "wordnet-sweep-post-restart-review",
+      });
+      await persistModelTurn(entry.directory, "post-restart-review", prompt, result);
+      const review = parseSweepPostRestartReview(result.text);
+      await appendPyaFacts(path.join(entry.directory, "post-restart-review.pya"), {
+        "WordNet review run id": inspection.runId,
+        "WordNet review model": context.model,
+        "WordNet review Housekeeper host": housekeeper.host,
+        "WordNet review Housekeeper handle": result.handleId,
+        "WordNet review completed at": result.finishedAt || new Date().toISOString(),
+        "WordNet review root cause": review.rootCause,
+        "WordNet review confidence": review.confidence,
+        "WordNet review evidence": review.evidence.join(" | "),
+        "WordNet review fix plan": review.fixPlan,
+        "WordNet review test plan": review.testPlan.join(" | "),
+        "WordNet review state": "plan-recorded",
+        "WordNet review coding turn state": "pending",
+        "WordNet review coding turn artifact": "post-restart-review.pya",
+      });
+      await appendPyaFacts(path.join(entry.directory, "recovery-decision.pya"), {
+        "WordNet recovery review state": "reviewed",
+      });
+    } catch (error) {
+      await appendPyaFacts(path.join(entry.directory, "recovery-decision.pya"), {
+        "WordNet recovery review state": "review-failed",
+        "WordNet recovery review error": error.message,
+      });
+    }
+    return true;
+  }
+  return false;
 }
 
 function incidentPya(inspection, checkedAt) {
@@ -167,103 +407,22 @@ function incidentPya(inspection, checkedAt) {
     "lock path": inspection.lockPath,
   };
   for (const [name, value] of [
-    ["codex exit code", inspection.codexExitCode],
-    ["codex signal", inspection.codexSignal],
-    ["codex timed out", inspection.codexTimedOut],
-    ["codex error", inspection.codexError],
-    ["codex status", inspection.codexStatus],
+    ["recovery model", inspection.recoveryModel],
+    ["Housekeeper host", inspection.housekeeperHost],
+    ["Housekeeper handle", inspection.housekeeperHandle],
+    ["Housekeeper queued", inspection.housekeeperQueued],
+    ["Housekeeper running", inspection.housekeeperRunning],
+    ["recovery assessment", inspection.recoveryAssessment],
+    ["recovery reason", inspection.recoveryReason],
     ["root cause", inspection.rootCause],
-    ["diagnosis", inspection.diagnosis],
+    ["fix plan", inspection.fixPlan],
+    ["test plan", inspection.testPlan],
+    ["recovery error", inspection.recoveryError],
     ["resume action", inspection.resumeAction],
   ]) {
     if (value !== undefined && value !== "") facts[name] = value;
   }
   return `${Object.entries(facts).map(([name, value]) => `exists su name ${name} ob text "${pyaText(value)}" be text ya`).join("\n")}\n`;
-}
-
-function recoveryPrompt(incidentPath, artifactDir) {
-  return [
-    "You are the unattended recovery operator for one active Pyash WordNet compound-sense sweep.",
-    `Read the durable conversation context at ${path.join(HOUSE_ROOT, "conduct", "wordnet-sweep-recovery.pya")} and incident ${incidentPath}.`,
-    `Target run id: ${SWEEP_RUN_ID}. Target artifacts: ${SWEEP_ROOT}. Newspaper: ${path.join(PYASH_ROOT, "newspaper", `${SWEEP_RUN_ID}.pya`)}.`,
-    "First read AGENTS.md, skills/pyash-refinery-runner/SKILL.md, and skills/pyash-gpu-management/SKILL.md. Inspect current process, lock, the latest worklist/progress, recent logs, Housekeeper queue/job evidence, and memory before changing anything.",
-    "If the run is active and has recent durable progress or an active Housekeeper duty, report healthy and do not start, stop, or duplicate it.",
-    `If it is complete, report complete. If it stopped or is demonstrably stalled, identify the cause from evidence. Make only the smallest general fix required, add or run a focused regression test, then resume this exact run with \`node ${path.relative(PYASH_ROOT, path.join(PROGRAM_DIR, "resume-wordnet-sweep.mjs"))}\` from the repository root. This entry point reads the run id from the durable .pya context and passes it explicitly to the existing refinery API.`,
-    `Launch recovery so it survives the Codex process. Prefer a transient systemd user service when the user manager is available: use a stable unit name derived from the run id, set WorkingDirectory to ${PYASH_ROOT}, append stdout and stderr to ${path.relative(PYASH_ROOT, path.join(SWEEP_ROOT, "sweep-supervised.log"))}, and run the existing resume entry point with every PYA_*_FIXTURE variable and PYA_MIND_RESPONSE unset. Do not rely on a nohup child of the Codex shell. Keep a supervisor alive until the sweep exits only when systemd user services are unavailable. Capture the service main PID and verify it owns the sweep lock and begins producing durable artifacts after the Codex process exits. Do not wait for the multi-day sweep to finish.`,
-    "In addition to the explicit unset list in the launch command, remove any other PYA_*_FIXTURE variables from the recovery environment. Inference must go through GPU Housekeeper; never call Ollama or a provider directly.",
-    "Do not delete, truncate, rewrite, or regenerate accepted ledgers, progress, translation, composition, candidate, checkpoint, or newspaper evidence. Do not launch another run id. Do not kill any unrelated process. If an exact sweep process is wedged, determine whether a Housekeeper duty is still running before using a graceful stop and resume.",
-    "Preserve unrelated dirty files. Keep changes within the sweep implementation and focused tests. Do not perform vocabulary edits, broad refactors, or destructive Git operations. Follow the repository contribution instructions for any code change.",
-    "After recovery, independently verify the sweep process owns the lock and has started or resumed. Return the required JSON status and precise evidence in the supplied schema. If credentials, provider access, or safe recovery are unavailable, report blocked with the exact reason.",
-    `Codex incident evidence is under ${artifactDir}.`,
-  ].join("\n");
-}
-
-export function buildCodexEnvironment(source = process.env) {
-  const env = { ...source };
-  for (const name of FIXTURE_ENV) delete env[name];
-  for (const name of Object.keys(env)) {
-    if (name === "PYA_MIND_RESPONSE" || /^PYA_.*FIXTURE$/u.test(name)) delete env[name];
-  }
-  env.PATH = [path.dirname(process.execPath), String(source.PATH || "")].filter(Boolean).join(path.delimiter);
-  return env;
-}
-
-function codexPath() {
-  const candidates = [
-    process.env.CODEX_BIN,
-    "/home/htaf/.nvm/versions/node/v24.22.1/bin/codex",
-    "/home/htaf/.local/bin/codex",
-    "/usr/local/bin/codex",
-    "/usr/bin/codex",
-  ].filter(Boolean);
-  return candidates.find((candidate) => fs.existsSync(candidate)) || "codex";
-}
-
-export function buildRecoveryCodexArgs({ prompt, outputPath, schemaPath = path.join(PROGRAM_DIR, "wordnet-sweep-result.schema.json") }) {
-  return [
-    "exec",
-    "--model", "gpt-6-luna",
-    "--config", 'model_reasoning_effort="xhigh"',
-    "--sandbox", "danger-full-access",
-    "--config", 'approval_policy="never"',
-    "--json",
-    "--cd", PYASH_ROOT,
-    "--output-schema", schemaPath,
-    "--output-last-message", outputPath,
-    prompt,
-  ];
-}
-
-function runCodex({ args, logPath, timeoutMs = 8 * 60 * 60 * 1000 }) {
-  return new Promise((resolve) => {
-    const child = spawn(codexPath(), args, {
-      cwd: PYASH_ROOT,
-      env: buildCodexEnvironment(),
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    const log = fs.createWriteStream(logPath, { flags: "a" });
-    let timedOut = false;
-    let forceTimer = null;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill("SIGTERM");
-      forceTimer = setTimeout(() => child.kill("SIGKILL"), 30_000);
-      forceTimer.unref();
-    }, timeoutMs);
-    for (const stream of [child.stdout, child.stderr]) stream.on("data", (chunk) => log.write(chunk));
-    child.on("error", (error) => {
-      clearTimeout(timer);
-      if (forceTimer) clearTimeout(forceTimer);
-      log.end();
-      resolve({ code: 1, signal: "", timedOut, error: error.message });
-    });
-    child.on("close", (code, signal) => {
-      clearTimeout(timer);
-      if (forceTimer) clearTimeout(forceTimer);
-      log.end();
-      resolve({ code: code ?? 1, signal: signal ?? "", timedOut, error: "" });
-    });
-  });
 }
 
 function acquireWatchdogLock() {
@@ -290,54 +449,227 @@ async function recordStatus(directory, state, details) {
   process.stdout.write(`[wordnet-sweep-watchdog] ${state} run=${SWEEP_RUN_ID} artifact=${directory}\n`);
 }
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForResumedSweep({ attempts = 45, pollMs = 1000 } = {}) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const status = await inspectWordnetSweep();
+    if (status.state === "healthy" && status.active) return status;
+    if (status.state === "complete") return status;
+    await delay(pollMs);
+  }
+  return inspectWordnetSweep();
+}
+
+async function startSameSweep(inspection, decision, housekeeper, context, artifactDirectory, checkedAt) {
+  const sweepLogPath = path.join(SWEEP_ROOT, "sweep-supervised.log");
+  let logBytesAtRestart = 0;
+  try { logBytesAtRestart = (await fsp.stat(sweepLogPath)).size; } catch {}
+  const resume = buildSweepResumeCommand({
+    runId: inspection.runId,
+    repositoryRoot: PYASH_ROOT,
+    resumeEntryPoint: path.join(PROGRAM_DIR, "resume-wordnet-sweep.mjs"),
+    artifactDirectory: SWEEP_ROOT,
+    housekeeperUrl: housekeeper.url,
+  });
+  const existingSession = spawnSync("tmux", ["has-session", "-t", resume.sessionName], { cwd: PYASH_ROOT, encoding: "utf8" });
+  if (existingSession.status === 0) {
+    throw new Error(`persistent tmux session ${resume.sessionName} already exists; refusing duplicate resume`);
+  }
+  const launched = spawnSync("tmux", resume.tmuxArgs, { cwd: PYASH_ROOT, encoding: "utf8", timeout: 15_000 });
+  if (launched.status !== 0) throw new Error(`tmux resume launch failed: ${(launched.stderr || launched.error?.message || "unknown tmux error").trim()}`);
+  const after = await waitForResumedSweep();
+  if (after.state !== "healthy" || !after.active) {
+    throw new Error(`resume process did not acquire the sweep lock within the verification window (state=${after.state})`);
+  }
+  const decisionPath = path.join(artifactDirectory, "recovery-decision.pya");
+  await appendPyaFacts(decisionPath, {
+    "WordNet recovery state": "resume-verified",
+    "WordNet recovery review state": "pending",
+    "WordNet recovery decision at": checkedAt.toISOString(),
+    "WordNet recovery restart verified at": new Date().toISOString(),
+    "WordNet recovery remaining at restart": after.remainingSenseCount,
+    "WordNet recovery log bytes at restart": logBytesAtRestart,
+    "WordNet recovery process id": after.processId,
+    "WordNet recovery lock path": after.lockPath,
+    "WordNet recovery tmux session": resume.sessionName,
+    "WordNet recovery log path": resume.logPath,
+    "WordNet recovery Housekeeper host": housekeeper.host,
+    "WordNet recovery Housekeeper queued": housekeeper.queued,
+    "WordNet recovery Housekeeper running": housekeeper.running,
+    "WordNet recovery root cause hypothesis": decision.rootCauseHypothesis,
+    "WordNet recovery fix plan": decision.fixPlan,
+    "WordNet recovery test plan": decision.testPlan,
+    "WordNet recovery verified process uses resume entry point": after.active ? "true" : "false",
+    "WordNet recovery model": context.model,
+  });
+  return after;
+}
+
+async function writeRecoveryTurn({ artifactDirectory, inspection, context, housekeeper, failureEvidence }) {
+  const resumeCommand = `node ${path.relative(PYASH_ROOT, path.join(PROGRAM_DIR, "resume-wordnet-sweep.mjs"))}`;
+  const prompt = buildSweepRecoveryPrompt({
+    inspection,
+    context,
+    housekeeper: { ...housekeeper, error: housekeeper.error || "" },
+    recentFailure: failureEvidence,
+    resumeCommand,
+  });
+  await fsp.writeFile(path.join(artifactDirectory, "spark-x-recovery-prompt.txt"), `${prompt}\n`, "utf8");
+  const result = await submitRecoveryModel({
+    model: context.model,
+    prompt,
+    identity: `recovery-${inspection.runId}-${path.basename(artifactDirectory)}`,
+  });
+  await fsp.writeFile(path.join(artifactDirectory, "spark-x-recovery-response.txt"), `${result.text}\n`, "utf8");
+  const decision = parseSweepRecoveryDecision(result.text);
+  await appendPyaFacts(path.join(artifactDirectory, "recovery-decision.pya"), {
+    "WordNet recovery state": "decision-recorded",
+    "WordNet recovery run id": inspection.runId,
+    "WordNet recovery model": context.model,
+    "WordNet recovery Housekeeper host": housekeeper.host,
+    "WordNet recovery Housekeeper handle": result.handleId,
+    "WordNet recovery managed by": result.managedBy,
+    "WordNet recovery started at": result.startedAt,
+    "WordNet recovery completed at": result.finishedAt,
+    "WordNet recovery assessment": decision.assessment,
+    "WordNet recovery action": decision.action,
+    "WordNet recovery reason": decision.reason,
+    "WordNet recovery root cause hypothesis": decision.rootCauseHypothesis,
+    "WordNet recovery fix plan": decision.fixPlan,
+    "WordNet recovery test plan": decision.testPlan,
+    "WordNet recovery remaining at decision": inspection.remainingSenseCount,
+    "WordNet recovery Housekeeper queued": housekeeper.queued,
+    "WordNet recovery Housekeeper running": housekeeper.running,
+  });
+  return { decision, result, prompt };
+}
+
+async function runRecovery() {
+  const checkedAt = new Date();
+  const inspection = await inspectWordnetSweep({ nowMs: checkedAt.getTime() });
+  const timestamp = checkedAt.toISOString().replace(/[-:.]/gu, "");
+  const artifactDirectory = path.join(ARTIFACT_ROOT, `${timestamp}-${inspection.state}`);
+  if (!shouldInvokeRecovery(inspection)) {
+    const config = readSweepRecoveryConfig();
+    let housekeeper;
+    try {
+      housekeeper = await inspectHousekeeper(config.model);
+      const reviewed = await runPendingPostRestartReview({
+        inspection,
+        context: { ...config.context, model: config.model },
+        housekeeper,
+      });
+      await recordStatus(artifactDirectory, reviewed ? "post_restart_review_recorded" : inspection.state, {
+        ...inspection,
+        recoveryModel: reviewed ? config.model : "",
+        housekeeperHost: housekeeper.host,
+        housekeeperHandle: "see per-incident post-restart-review.pya",
+      });
+    } catch (error) {
+      await recordStatus(artifactDirectory, inspection.state, { ...inspection, recoveryError: error.message });
+    }
+    return;
+  }
+
+  await fsp.mkdir(artifactDirectory, { recursive: true });
+  const incidentPath = path.join(artifactDirectory, "incident.pya");
+  const failureEvidence = await readFileTail(path.join(SWEEP_ROOT, "sweep-supervised.log"));
+  await Promise.all([
+    fsp.writeFile(incidentPath, incidentPya(inspection, checkedAt.toISOString()), "utf8"),
+    fsp.writeFile(path.join(artifactDirectory, "failure-evidence.txt"), `${failureEvidence}\n`, "utf8"),
+  ]);
+
+  const config = readSweepRecoveryConfig();
+  try {
+    const housekeeper = await inspectHousekeeper(config.model);
+    if (!housekeeper.healthy || !housekeeper.modelAvailable) {
+      throw new Error(`Housekeeper is not ready for ${config.model} (healthy=${housekeeper.healthy}, modelAvailable=${housekeeper.modelAvailable})`);
+    }
+    const context = { ...config.context, model: config.model };
+    const { decision, result } = await writeRecoveryTurn({
+      artifactDirectory,
+      inspection,
+      context,
+      housekeeper,
+      failureEvidence,
+    });
+    let after = await inspectWordnetSweep();
+    let finalState = "recovery_wait";
+    let recoveryError = "";
+    let finalHousekeeper = housekeeper;
+    if (mayResumeSweep({
+      inspection,
+      decision,
+      housekeeperHealthy: housekeeper.healthy,
+      housekeeperHasActiveSweepDuty: housekeeper.activeSweepDuties.length > 0,
+    })) {
+      const beforeLaunch = await inspectWordnetSweep();
+      finalHousekeeper = await inspectHousekeeper(config.model);
+      if (beforeLaunch.state !== "stopped"
+        || beforeLaunch.remainingSenseCount !== inspection.remainingSenseCount
+        || !finalHousekeeper.healthy
+        || finalHousekeeper.activeSweepDuties.length > 0) {
+        after = beforeLaunch;
+        finalState = "recovery_decision_stale";
+      } else {
+        try {
+          after = await startSameSweep(inspection, decision, finalHousekeeper, context, artifactDirectory, checkedAt);
+          finalState = "recovery_resumed";
+        } catch (error) {
+          recoveryError = error.message;
+          after = await inspectWordnetSweep();
+          finalState = "recovery_failed";
+        }
+      }
+    } else if (decision.action === "blocked" || inspection.state === "lock_conflict") {
+      finalState = "recovery_blocked";
+    }
+    await recordStatus(path.join(artifactDirectory, "final"), finalState, {
+      ...after,
+      state: finalState,
+      recoveryModel: config.model,
+      housekeeperHost: finalHousekeeper.host,
+      housekeeperHandle: result.handleId,
+      housekeeperQueued: finalHousekeeper.queued,
+      housekeeperRunning: finalHousekeeper.running,
+      recoveryAssessment: decision.assessment,
+      recoveryReason: decision.reason,
+      rootCause: decision.rootCauseHypothesis,
+      fixPlan: decision.fixPlan,
+      testPlan: decision.testPlan,
+      resumeAction: decision.action,
+      recoveryError,
+    });
+    if (finalState === "recovery_failed") process.exitCode = 1;
+  } catch (error) {
+    await appendPyaFacts(path.join(artifactDirectory, "recovery-decision.pya"), {
+      "WordNet recovery state": "recovery-failed",
+      "WordNet recovery model": config.model,
+      "WordNet recovery error": error.message,
+    });
+    await recordStatus(path.join(artifactDirectory, "final"), "recovery_failed", {
+      ...inspection,
+      state: "recovery_failed",
+      recoveryModel: config.model,
+      recoveryError: error.message,
+    });
+    process.exitCode = 1;
+  }
+}
+
 async function run() {
+  for (const name of Object.keys(process.env)) {
+    if (name === "PYA_MIND_RESPONSE" || /^PYA_.*FIXTURE$/u.test(name)) delete process.env[name];
+  }
   if (process.argv.includes("--locked")) return runLocked();
   process.exitCode = acquireWatchdogLock();
 }
 
 async function runLocked() {
-  const checkedAt = new Date();
-  const inspection = await inspectWordnetSweep({ nowMs: checkedAt.getTime() });
-  const timestamp = checkedAt.toISOString().replace(/[-:.]/gu, "");
-  const artifactDir = path.join(ARTIFACT_ROOT, `${timestamp}-${inspection.state}`);
-  if (!shouldInvokeCodexRecovery(inspection)) {
-    await recordStatus(artifactDir, inspection.state, inspection);
-    return;
-  }
-
-  await fsp.mkdir(artifactDir, { recursive: true });
-  const incidentPath = path.join(artifactDir, "incident.pya");
-  const promptPath = path.join(artifactDir, "codex-prompt.txt");
-  const outputPath = path.join(artifactDir, "codex-result.json");
-  const logPath = path.join(artifactDir, "codex.jsonl");
-  await fsp.writeFile(incidentPath, incidentPya(inspection, checkedAt.toISOString()), "utf8");
-  const prompt = recoveryPrompt(incidentPath, artifactDir);
-  await fsp.writeFile(promptPath, `${prompt}\n`, "utf8");
-  const codex = await runCodex({
-    args: buildRecoveryCodexArgs({ prompt, outputPath }),
-    logPath,
-  });
-
-  let result = null;
-  try {
-    result = JSON.parse(await fsp.readFile(outputPath, "utf8"));
-  } catch {}
-  const after = await inspectWordnetSweep();
-  const recovered = after.state === "healthy" || after.state === "complete";
-  const finalState = codex.code === 0 && recovered ? after.state : "recovery_failed";
-  await recordStatus(path.join(artifactDir, "final"), finalState, {
-    ...after,
-    state: finalState,
-    codexExitCode: codex.code,
-    codexSignal: codex.signal,
-    codexTimedOut: codex.timedOut,
-    codexError: codex.error,
-    codexStatus: result?.status ?? "missing-result",
-    rootCause: result?.root_cause ?? "",
-    diagnosis: (result?.diagnosis ?? []).join("; "),
-    resumeAction: result?.resume_action ?? "",
-  });
-  if (finalState === "recovery_failed") process.exitCode = 1;
+  await runRecovery();
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

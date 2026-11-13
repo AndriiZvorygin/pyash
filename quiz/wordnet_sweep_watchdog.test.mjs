@@ -5,12 +5,14 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
-  buildRecoveryCodexArgs,
-  buildCodexEnvironment,
   inspectWordnetSweep,
-  shouldInvokeCodexRecovery,
+  shouldInvokeRecovery,
 } from "../world/house/refinery-watchdog/program/run-wordnet-sweep-watchdog.mjs";
-import { mergeManagedCrontab } from "../world/house/refinery-watchdog/program/watchdog-lib.mjs";
+import { readSweepRecoveryConfig } from "../world/house/refinery-watchdog/program/wordnet-sweep-recovery.mjs";
+import {
+  mergeManagedCrontab,
+  parseKwonLookupIndexRefreshSchedule
+} from "../world/house/refinery-watchdog/program/watchdog-lib.mjs";
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -44,7 +46,7 @@ test("a live sweep with recent durable artifacts is healthy", async () => {
     });
     assert.equal(status.state, "healthy");
     assert.equal(status.remainingSenseCount, 12);
-    assert.equal(shouldInvokeCodexRecovery(status), false);
+    assert.equal(shouldInvokeRecovery(status), false);
   } finally {
     await fixture.cleanup();
   }
@@ -66,7 +68,7 @@ test("the watchdog recognizes its documented resume entry point as the sweep own
     assert.equal(status.state, "healthy");
     assert.equal(status.active, true);
     assert.equal(status.conflictingLiveLock, false);
-    assert.equal(shouldInvokeCodexRecovery(status), false);
+    assert.equal(shouldInvokeRecovery(status), false);
   } finally {
     await fixture.cleanup();
   }
@@ -86,7 +88,7 @@ test("a live sweep without durable progress beyond four hours is stalled", async
       }),
     });
     assert.equal(status.state, "stalled");
-    assert.equal(shouldInvokeCodexRecovery(status), true);
+    assert.equal(shouldInvokeRecovery(status), true);
   } finally {
     await fixture.cleanup();
   }
@@ -109,9 +111,9 @@ test("a stopped incomplete sweep requests recovery while a completed one does no
       readProcess: () => ({ alive: false, command: [], cwd: "" }),
     });
     assert.equal(stoppedStatus.state, "stopped");
-    assert.equal(shouldInvokeCodexRecovery(stoppedStatus), true);
+    assert.equal(shouldInvokeRecovery(stoppedStatus), true);
     assert.equal(completeStatus.state, "complete");
-    assert.equal(shouldInvokeCodexRecovery(completeStatus), false);
+    assert.equal(shouldInvokeRecovery(completeStatus), false);
   } finally {
     await Promise.all([stopped.cleanup(), complete.cleanup()]);
   }
@@ -128,36 +130,30 @@ test("a live lock owned by another command is an incident, never treated as this
     });
     assert.equal(status.state, "lock_conflict");
     assert.equal(status.active, false);
-    assert.equal(shouldInvokeCodexRecovery(status), true);
+    assert.equal(shouldInvokeRecovery(status), true);
   } finally {
     await fixture.cleanup();
   }
 });
 
-test("Codex recovery is pinned to Luna xhigh and the cron merge schedules hourly checks", () => {
-  const args = buildRecoveryCodexArgs({ prompt: "recover", outputPath: "/tmp/result.json", schemaPath: "/tmp/schema.json" });
-  assert.deepEqual(args.slice(0, 7), [
-    "exec",
-    "--model", "gpt-6-luna",
-    "--config", 'model_reasoning_effort="xhigh"',
-    "--sandbox", "danger-full-access",
-  ]);
-  assert.ok(args.includes('approval_policy="never"'));
-  const codexEnv = buildCodexEnvironment({
-    PYA_MIND_RESPONSE: "fixture",
-    PYA_GPU_HOUSEKEEPER_FIXTURE: "fixture",
-    PYA_OTHER_FIXTURE: "fixture",
-    PYA_GPU_HOUSEKEEPER_URL: "http://housekeeper.invalid",
-    HOME: "/home/htaf",
-  });
-  assert.equal(codexEnv.PYA_MIND_RESPONSE, undefined);
-  assert.equal(codexEnv.PYA_GPU_HOUSEKEEPER_FIXTURE, undefined);
-  assert.equal(codexEnv.PYA_OTHER_FIXTURE, undefined);
-  assert.equal(codexEnv.PYA_GPU_HOUSEKEEPER_URL, "http://housekeeper.invalid");
-  assert.equal(codexEnv.PATH.split(path.delimiter)[0], path.dirname(process.execPath));
+test("recovery uses its Pyash-selected Spark-X model and the cron merge schedules hourly checks", () => {
+  const config = readSweepRecoveryConfig();
+  assert.equal(config.model, "SparkLLM/Spark-X2.6-4B:q4_k_m");
+  assert.match(config.context.resumeProcedure, /same run id/u);
+  assert.match(config.context.resumeProcedure, /Housekeeper queue for every model call/u);
+  assert.match(config.context.postRestartReview, /root cause/u);
   const crontab = mergeManagedCrontab("# keep this\n11 1 * * * true\n", { nodeBin: "/usr/bin/node" });
   assert.match(crontab, /^11 1 \* \* \* true$/mu);
   assert.ok(crontab.includes(
     `0 * * * * cd ${REPOSITORY_ROOT} && /usr/bin/node ${path.join(REPOSITORY_ROOT, "world/house/refinery-watchdog/program/run-wordnet-sweep-watchdog.mjs")} >> ${path.join(REPOSITORY_ROOT, "world/house/refinery-watchdog/artifacts/cron.log")} 2>&1`,
   ));
+  assert.ok(crontab.includes(
+    `17 * * * * /usr/bin/flock -n /tmp/pyash-kwon-lookup-index-refresh.lock /usr/bin/node ${path.join(REPOSITORY_ROOT, "command/vocab_lookup_index.mjs")} >> ${path.join(REPOSITORY_ROOT, "world/house/refinery-watchdog/artifacts/cron.log")} 2>&1`,
+  ));
+});
+
+test("Kwon index refresh schedule is managed through its Pyash calendar value", () => {
+  assert.equal(parseKwonLookupIndexRefreshSchedule("minute 17 every hour"), "17 * * * *");
+  assert.equal(parseKwonLookupIndexRefreshSchedule("disabled"), null);
+  assert.throws(() => parseKwonLookupIndexRefreshSchedule("whenever"), /invalid kwon lookup index refresh schedule/u);
 });
