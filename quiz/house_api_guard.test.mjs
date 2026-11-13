@@ -10,6 +10,7 @@ import {
   declaredHouseModules,
   declaredHouseRepositories,
   findHouseImports,
+  houseFiles,
 } from "../command/check_house_api.mjs";
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -129,6 +130,13 @@ test("every declared module of this repository exists", () => {
   assert.ok(declared.length > 0, "the house surface must be declared");
   const missing = declared.filter((name) => !fs.existsSync(path.join(REPO, name)));
   assert.deepEqual(missing, []);
+});
+
+test("every local house import is in the declared repository API", () => {
+  const report = checkHouseApi({ root: REPO, files: houseFiles(REPO), repositories: [] });
+  assert.deepEqual(report.missingDeclared, []);
+  assert.deepEqual(report.broken, []);
+  assert.deepEqual(report.undeclared, []);
 });
 
 test("the published house repositories are declared with their address", () => {
