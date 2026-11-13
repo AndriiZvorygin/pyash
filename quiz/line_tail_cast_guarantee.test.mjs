@@ -24,6 +24,14 @@ test("cast parses bounded numeric value and returns hollow when out of range", a
   assert.equal(remember("bounded")?.ob?.hollow, true);
 });
 
+test("cast retains its numeric range when writing to an existing target", async () => {
+  forget();
+  await run("ob num 0 to name num score be plus do");
+  await run('ob text "score 0.9 ready" from num 0 to num 1 become name num to name num score be cast do');
+
+  assert.equal(remember("score")?.ob?.num, 0.9);
+});
+
 test("guarantee passes on truth and fails on lie", async () => {
   forget();
   await run("ob bool truth be guarantee do");

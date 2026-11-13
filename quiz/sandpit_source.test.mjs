@@ -54,3 +54,20 @@ test("sandpit first sentence is the source of truth for returned registers", asy
   assert.equal(remember("fromindex"), undefined, "fromindex should remain attached to the invoke only");
   assert.equal(remember("toindex"), undefined, "toindex should remain attached to the invoke only");
 });
+
+test("ceremony returns its declared target after a later false conditional", async () => {
+  forget();
+
+  await run("su name worker ob text input to name text output be ceremony def");
+  await run('ob text "candidate" to name text output be text do');
+  await run('ob num 2 be tiny from num 1 then ob text "stale" to name text output be text do');
+  await run("prah");
+  await interpret({
+    mood: "do",
+    be: "worker",
+    ob: { text: "task" },
+    to: { name: "verify platform draft 1", nameTypeWords: ["text"] }
+  });
+
+  assert.equal(remember("verify platform draft 1")?.ob?.text, "candidate");
+});

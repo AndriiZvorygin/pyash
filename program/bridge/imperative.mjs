@@ -671,6 +671,8 @@ export async function handleImperative({
     // `command` writes its output into the register named by `to`; passing the
     // target fact's current ob instead would erase the destination name.
     be === "command" ||
+    // `cast` also uses `to.num` as its upper bound, so preserve the full slot.
+    be === "cast" ||
     be === "mind" ||
     be === "say" ||
     be === "import" ||

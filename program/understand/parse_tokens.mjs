@@ -189,7 +189,11 @@ export function parseTokens(
       const subTokens = words.slice(i + 1);
       // Re-attach the mood token so nested clauses retain their own mood word
       if (mood && appendMoodToThen) subTokens.push(mood);
-      const subline = subTokens.join(" ");
+      const subline = subTokens
+        .map((token) => token.startsWith(QUOTED_TEXT_PREFIX)
+          ? JSON.stringify(token.slice(QUOTED_TEXT_PREFIX.length))
+          : token)
+        .join(" ");
       s.consequence = parse(subline);
       break;
     }

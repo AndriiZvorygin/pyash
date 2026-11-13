@@ -103,7 +103,7 @@ const TOOL_ARGUMENT_SCHEMA_ADAPTERS = {
   },
   "web search": {
     toolName: "web_search",
-    description: "Search the configured live web search motor for current information, news, or pages such as technology RSS feed listings. Use this for ordinary live internet searches; it uses the configured search service and needs no shell or API endpoint. Returns up to five results with full source URLs and descriptions. For offline documentation use search_zim_library; use web_search_source only when the user names a specific search service.",
+    description: "Search the configured live web search motor for current information or news. It can also find pages such as technology RSS feed listings. Use this for ordinary live internet searches; it uses the configured search service and needs no shell or API endpoint. Returns up to five results with full source URLs and descriptions. For offline documentation use search_zim_library; use web_search_source only when the user names a specific search service.",
     fields: { ob: { name: "query", description: "Terms to search on the live web." } }
   },
   "web search source": {

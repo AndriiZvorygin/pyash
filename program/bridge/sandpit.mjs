@@ -259,7 +259,10 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
   const defTargetName = memory.allRemember()[defEntry.index]?.to?.name;
   const callerTarget = to?.name ? memory.remember(to.name) : null;
   let lastResult;
+  let returnedExplicitly = false;
   let updatedTarget = null;
+  let updatedTargetWasWritten = false;
+  let bodyStartIndex = 0;
   let evoke = sentence;
   const inheritedClause = prevEvokeRef?.from?.la ?? prevEvoke?.from?.la ?? null;
   const evokeSeed = { ...sentence };
@@ -273,6 +276,7 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
   if (defTargetName && callerTarget) {
     memory.doRemember({ ...cloneSentenceValue(callerTarget), su: { name: defTargetName } });
   }
+  bodyStartIndex = memory.allRemember().length;
   state.currentEvokeRef = evokeSeed;
   state.lastCondition = true;
 
@@ -280,11 +284,44 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
     for (const step of body) {
       // Avoid mutating definition body sentences across invocations.
       lastResult = await interpret(cloneSentence(step));
+      returnedExplicitly = lastResult?.returned === "evoke";
       if (lastResult?.sentence?.be === "error" || lastResult?.be === "error") break;
     }
   } finally {
     const sandpit = [state.currentEvokeRef, ...memory.allRemember()];
-    updatedTarget = to?.name ? rememberNonControl(memory, to.name) : null;
+    const bodyFacts = memory.allRemember().slice(bodyStartIndex);
+    const findBodyTarget = (name) => {
+      if (!name) return null;
+      for (let i = bodyFacts.length - 1; i >= 0; i -= 1) {
+        const fact = bodyFacts[i];
+        if (
+          fact?.su?.name !== name ||
+          fact.mood === "do" ||
+          fact.mood === "ret" ||
+          fact.mood === "def" ||
+          fact.mood === "prah"
+        ) continue;
+        return fact;
+      }
+      return null;
+    };
+    const callerTargetWrite = findBodyTarget(to?.name);
+    const declaredTargetWrite = returnedExplicitly || defTargetName === to?.name
+      ? null
+      : findBodyTarget(defTargetName);
+    if (callerTargetWrite) {
+      updatedTarget = callerTargetWrite;
+      updatedTargetWasWritten = true;
+    } else if (declaredTargetWrite && to?.name) {
+      updatedTarget = {
+        ...(callerTarget ? cloneSentenceValue(callerTarget) : {}),
+        ...cloneSentenceValue(declaredTargetWrite),
+        su: { name: to.name }
+      };
+      updatedTargetWasWritten = true;
+    } else {
+      updatedTarget = to?.name ? rememberNonControl(memory, to.name) : null;
+    }
     recordSandpitTrace(sandpit);
     memory.popMemoryContext();
     state.executingBody = false;
@@ -317,7 +354,9 @@ export async function runDefinitionBody({ defEntry, sentence, state, memory, int
     updatedTarget?.be === "csv map";
   const mergedObj = targetLooksMap
     ? (updatedTarget?.ob ?? mainTarget?.ob ?? preferredVal ?? evoke.ob)
-    : (preferredVal ?? updatedTarget?.ob ?? mainTarget?.ob ?? evoke.ob);
+    : (updatedTargetWasWritten && !returnedExplicitly
+      ? (updatedTarget?.ob ?? preferredVal ?? mainTarget?.ob ?? evoke.ob)
+      : (preferredVal ?? updatedTarget?.ob ?? mainTarget?.ob ?? evoke.ob));
   const effectiveObj = mergedObj; // avoid unconditional defaults for non-numeric signatures
   const inferredBe = inferObjectBe(effectiveObj);
   const preferredStructuredBe = (

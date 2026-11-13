@@ -25,6 +25,12 @@ test("decodes JSON escapes in quoted text tokens", () => {
   assert.equal(s.with.text, "line one\nline two\t☺");
 });
 
+test("preserves escaped newlines in quoted conditional consequences", () => {
+  const s = parse('ob num 2 from num 2 be equally then ob text "approved\\n0.9" to name text output be text do');
+
+  assert.equal(s.consequence.ob.text, "approved\n0.9");
+});
+
 test("includes the exact source and clause position when a subordinate clause is unclosed", () => {
   const source = 'la su name broken clause be text ya';
 
