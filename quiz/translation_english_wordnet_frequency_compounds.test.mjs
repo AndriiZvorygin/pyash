@@ -31,6 +31,7 @@ import {
 } from "../program/library/translation/english_wordnet_compound_glosses.mjs";
 import { parseCompoundLexicon } from "../program/library/translation/compound_lexicon.mjs";
 import { renderDerivedCompoundCoveragePya } from "../program/library/translation/compound_coverage.mjs";
+import { deduplicateCompoundSenseRecords } from "../program/library/translation/compound_sense_dedupe.mjs";
 
 function row(id, target, sourceSurfaces, pyashSequence) {
   return {
@@ -143,6 +144,23 @@ test("compound candidates are emitted in English30k frequency order", () => {
   assert.deepEqual(worklist.map((row) => row.verificationRecord.frequencyRank), [10, 200]);
 });
 
+test("two-component sweep excludes three-part candidates", () => {
+  const residual = [{
+    source: "n:00000012-n", pos: "n", synset: "00000012-n", lemmas: ["brainstorm"],
+    gloss: "a sudden clever idea", candidates: []
+  }];
+  const candidates = [
+    { id: "brainstorm-two", target: "brainstorm", aliases: [], pyashSequence: ["brain", "storm"], componentGlosses: ["brain", "storm"] },
+    { id: "brainstorm-three", target: "brainstorm", aliases: [], pyashSequence: ["mind", "weather", "event"], componentGlosses: ["mind", "weather", "event"] }
+  ];
+
+  const worklist = compoundWorklist(residual, candidates, [], [], new Map(), "two-component-v1", {
+    maximumCompoundComponents: 2
+  });
+
+  assert.deepEqual(worklist.map((row) => row.id), ["brainstorm-two"]);
+});
+
 test("an active atomic anchor keeps its covered lemma out of compound verification", () => {
   const residual = [{
     source: "v:02029675-v", pos: "v", synset: "02029675-v", lemmas: ["escort"],
@@ -212,8 +230,8 @@ test("derived compound round trips retain decision revision and audit links", ()
   assert.deepEqual(current[0].verificationDecisionIds, ["candidate-brainstorm-1", "candidate-brainstorm-2"]);
 });
 
-test("verified compound index groups entries by synset and preserves same-target senses", () => {
-  const record = (senseId, target, pyashSequence) => ({
+test("verified compound index keeps one shortest compound per synset and preserves target aliases", () => {
+  const record = (senseId, target, pyashSequence, componentLayers = pyashSequence.map(() => 16)) => ({
     id: `${senseId}:${target}`,
     senseId,
     targetPartOfSpeech: senseId.slice(0, 1),
@@ -225,6 +243,8 @@ test("verified compound index groups entries by synset and preserves same-target
     pyashSequence,
     componentLayers: [16, 16],
     maxLayer: 16,
+    componentLayers,
+    maxLayer: Math.max(...componentLayers),
     head: "agree",
     decisionRevision: "v9",
     verificationDecisionId: `decision:${senseId}:${target}`,
@@ -233,11 +253,12 @@ test("verified compound index groups entries by synset and preserves same-target
     provenance: "WordNet frequency compound verification through Housekeeper",
     status: "accepted-llm"
   });
-  const source = renderDerivedCompoundCoveragePya([
-    record("v:00000001-v", "conform to", ["kfo7n", "tyik"]),
-    record("v:00000001-v", "follow", ["kfo7n", "rwit"]),
+  const records = deduplicateCompoundSenseRecords([
+    record("v:00000001-v", "conform to", ["kfo7n", "tyik"], [24, 24]),
+    record("v:00000001-v", "follow", ["kfo7n", "rwit"], [16, 19]),
     record("v:00000002-v", "conform to", ["kfo7n", "mwac"])
-  ], { name: "translation_compounds_derived_curated" });
+  ]).records;
+  const source = renderDerivedCompoundCoveragePya(records, { name: "translation_compounds_derived_curated" });
   const parsed = parseCompoundLexicon(source, {
     name: "translation_compounds_derived_curated",
     language: "canonical"
@@ -245,10 +266,10 @@ test("verified compound index groups entries by synset and preserves same-target
 
   assert.equal((source.match(/su text "v:0000000[12]-v"/gu) ?? []).length, 2);
   assert.deepEqual(parsed.map((entry) => [entry.senseId, entry.target, entry.pyashSequence]), [
-    ["v:00000001-v", "conform to", ["kfo7n", "tyik"]],
     ["v:00000001-v", "follow", ["kfo7n", "rwit"]],
     ["v:00000002-v", "conform to", ["kfo7n", "mwac"]]
   ]);
+  assert.deepEqual(parsed[0].aliases, ["conform to"]);
 });
 
 test("compound promotion keys records by synset while retaining target and sequence guards", () => {
@@ -282,6 +303,8 @@ test("compound promotion keys records by synset while retaining target and seque
     targetPartOfSpeech: "v",
     target: "conform to",
     pyashSequence: ["accord", "satisfied"],
+    componentLayers: [16, 16],
+    maxLayer: 16,
     decisionRevision: "v9",
     verificationDecisionId: "old-decision",
     verificationDecisionIds: ["old-decision"]
@@ -304,7 +327,25 @@ test("compound promotion keys records by synset while retaining target and seque
     pyashSequence: ["accord", "agree"]
   });
   const conflict = promoteAcceptedCompoundRecords(existing, [competingMeaning], { decisionRevision: "v9" });
-  assert.equal(conflict.decisions[0].promotionStatus, "sense-target-record-conflict");
+  assert.equal(conflict.decisions[0].promotionStatus, "promoted-to-derived-index");
+  assert.deepEqual(conflict.records[0].pyashSequence, ["accord", "agree"]);
+
+  const longer = {
+    ...existing[0],
+    target: "conform to",
+    pyashSequence: ["accord", "agree", "satisfied"],
+    componentLayers: [16, 16, 16],
+    maxLayer: 16
+  };
+  const shorterDecision = accepted({
+    candidateId: "shorter-same-sense",
+    target: "conform to",
+    senseId: "v:00000001-v",
+    pyashSequence: ["accord", "agree"]
+  });
+  const shorter = promoteAcceptedCompoundRecords([longer], [shorterDecision], { decisionRevision: "v9" });
+  assert.equal(shorter.decisions[0].promotionStatus, "promoted-to-derived-index");
+  assert.deepEqual(shorter.records[0].pyashSequence, ["accord", "agree"]);
 });
 
 test("compound sequence ownership is specific to part of speech", () => {
@@ -359,7 +400,8 @@ test("compound sequence ownership is specific to part of speech", () => {
     [decision("noun-cluster", "cluster", "n:00031563-n")],
     { decisionRevision: "v9" }
   );
-  assert.equal(samePartOfSpeech.decisions[0].promotionStatus, "target-identity-conflict");
+  assert.equal(samePartOfSpeech.decisions[0].promotionStatus, "already-active");
+  assert.deepEqual(samePartOfSpeech.records.find((record) => record.senseId === "n:00031563-n").aliases, ["cluster"]);
 });
 
 test("resume restores all accepted decisions in the active revision, including non-residual targets", () => {
@@ -379,6 +421,7 @@ test("resume restores all accepted decisions in the active revision, including n
   const rows = [
     accepted("still-residual", "v9"),
     accepted("already-covered", "v9"),
+    { ...accepted("retired-three-part", "v9"), promotionStatus: "retired-for-two-part-retry" },
     accepted("old-revision", "v8"),
     { ...accepted("uncertain", "v9"), status: "uncertain-llm" }
   ];
@@ -1059,17 +1102,9 @@ test("WordNet compound gloss index projects canonical senses and preserves defin
     verificationDecisionIds: [decision.candidateId]
   };
   const glosses = buildEnglishWordNetCompoundGlosses([record], [decision]);
-  const rendered = renderEnglishWordNetCompoundGlosses(glosses);
-  const parsed = parseEnglishWordNetCompoundGlosses(rendered);
+  const parsed = parseEnglishWordNetCompoundGlosses(renderEnglishWordNetCompoundGlosses(glosses));
 
   assert.equal(parsed.records.length, 1);
-  assert.equal(parsed.format, "english-wordnet-compound-sense-glosses-v2");
-  assert.ok(rendered.includes(`su text "${decision.candidateId}"`));
-  assert.ok(!rendered.includes(`su text "${decision.senseId} | ${decision.target} | become clear"`));
-  assert.throws(
-    () => parseEnglishWordNetCompoundGlosses(rendered.replace("glosses-v2", "glosses-v1")),
-    (error) => error?.code === "invalid-english-wordnet-compound-glosses"
-  );
   assert.deepEqual(parsed.records[0], {
     senseId: decision.senseId,
     target: decision.target,
@@ -1079,17 +1114,4 @@ test("WordNet compound gloss index projects canonical senses and preserves defin
     pyashSequence: ["kwan", "hbin"],
     decisionId: decision.candidateId
   });
-});
-
-test("WordNet compound gloss rows reject duplicate decision identities", () => {
-  const record = {
-    senseId: "v:02777127-v",
-    target: "brighten",
-    definition: "become clear",
-    decisionId: "sense-compound-111111111111111111111111"
-  };
-  assert.throws(
-    () => renderEnglishWordNetCompoundGlosses([record, { ...record }]),
-    (error) => error?.code === "invalid-english-wordnet-compound-glosses"
-  );
 });

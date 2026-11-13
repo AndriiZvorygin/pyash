@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -9,9 +9,15 @@ import {
   WORDNET_VERIFIED_COMPOUNDS_URL
 } from "../program/library/translation/compound_coverage.mjs";
 import {
+  loadEnglishWordNetCompoundGlosses,
   buildEnglishWordNetCompoundGlosses,
-  upsertEnglishWordNetCompoundGlosses
+  mergeEnglishWordNetCompoundGlosses,
+  writeEnglishWordNetCompoundGlosses
 } from "../program/library/translation/english_wordnet_compound_glosses.mjs";
+import {
+  compareCompoundSenseRecords,
+  deduplicateCompoundSenseRecords
+} from "../program/library/translation/compound_sense_dedupe.mjs";
 import { loadCompoundLexicon } from "../program/library/translation/compound_lexicon.mjs";
 import {
   canonicalWordNetTargetPartOfSpeech,
@@ -20,6 +26,7 @@ import {
 import {
   ENGLISH_WORDNET_COMPOUND_DECISIONS_URL,
   loadEnglishWordNetCompoundDecisions,
+  renderEnglishWordNetCompoundDecisionAppend,
   renderEnglishWordNetCompoundDecisions
 } from "../program/library/translation/english_wordnet_compound_decisions.mjs";
 import { parseEnglishWordNetFrequencyAllocationConfig } from "../program/library/translation/english_wordnet_frequency.mjs";
@@ -111,7 +118,9 @@ export function acceptedDecisionsForRevision(records = [], decisionRevision = ""
   const revision = String(decisionRevision ?? "").trim();
   if (!revision) throw new TypeError("compound decision revision is required");
   return records.filter((record) => (
-    String(record?.decisionRevision ?? "").trim() === revision && acceptedDecision(record)
+    String(record?.decisionRevision ?? "").trim() === revision
+    && acceptedDecision(record)
+    && !String(record?.promotionStatus ?? "").startsWith("retired-")
   ));
 }
 
@@ -279,21 +288,12 @@ export function acceptedDecision(record) {
   );
 }
 
-function senseTargetKey(record) {
-  const senseId = String(record?.senseId ?? record?.verificationSenseId ?? "").trim();
-  const target = String(record?.target ?? "").trim().toLowerCase();
-  return senseId && target ? `${senseId}\u0000${target}` : "";
+function compoundSenseId(record) {
+  return String(record?.senseId ?? record?.verificationSenseId ?? "").trim();
 }
 
-export function promoteAcceptedCompoundRecords(existingRecords, decisions, { usedTargetIds = [], decisionRevision = "" } = {}) {
-  if (!Array.isArray(existingRecords) || !Array.isArray(decisions)) {
-    throw new TypeError("compound promotion requires existing records and decisions");
-  }
-  const records = existingRecords.map((record) => ({ ...record }));
-  const recordsBySenseTarget = new Map(records
-    .map((record, index) => [senseTargetKey(record), index])
-    .filter(([key]) => Boolean(key)));
-  const sequenceOwners = new Map();
+function buildSequenceOwners(records) {
+  const owners = new Map();
   for (const record of records) {
     const target = String(record.target ?? "").trim().toLowerCase();
     const partOfSpeech = canonicalWordNetTargetPartOfSpeech(
@@ -301,89 +301,205 @@ export function promoteAcceptedCompoundRecords(existingRecords, decisions, { use
     );
     const key = englishWordNetTargetId("compound", sequence(record.pyashSequence), partOfSpeech);
     if (!key) continue;
-    const owners = sequenceOwners.get(key) ?? new Set();
-    owners.add(target);
-    sequenceOwners.set(key, owners);
+    const targets = owners.get(key) ?? new Set();
+    targets.add(target);
+    owners.set(key, targets);
   }
+  return owners;
+}
+
+function buildPromotedCompoundRecord(decision, { senseId, target, targetPartOfSpeech, pyashSequence, decisionRevision }) {
+  const componentLayers = Array.isArray(decision.componentLayers) ? decision.componentLayers : [];
+  return {
+    senseId,
+    targetPartOfSpeech,
+    decisionRevision,
+    verificationDecisionId: decision.candidateId,
+    verificationDecisionIds: decision.candidateId ? [decision.candidateId] : [],
+    verificationStatus: decision.status,
+    ...(decision.coverageStatus ? { coverageStatus: decision.coverageStatus } : {}),
+    id: target,
+    surface: target,
+    target,
+    aliases: Array.isArray(decision.aliases) ? decision.aliases : [],
+    morphemes: Array.isArray(decision.morphemes) ? decision.morphemes : decision.sourceMorphemes,
+    sourceMorphemes: Array.isArray(decision.sourceMorphemes) ? decision.sourceMorphemes : decision.morphemes,
+    componentGlosses: Array.isArray(decision.componentGlosses) ? decision.componentGlosses : [],
+    head: decision.head ?? decision.componentGlosses?.at(-1),
+    modifiers: Array.isArray(decision.modifiers) ? decision.modifiers : decision.componentGlosses?.slice(0, -1) ?? [],
+    pyashSequence,
+    componentLayers,
+    maxLayer: Number.isInteger(decision.maxLayer)
+      ? decision.maxLayer
+      : componentLayers.length ? Math.max(...componentLayers) : undefined,
+    sourceSurfaces: decision.sourceSurfaces ?? {},
+    sourceMorphemesByLanguage: decision.sourceMorphemesByLanguage ?? {},
+    componentRoles: Array.isArray(decision.componentRoles) ? decision.componentRoles : [],
+    morphologyStatus: decision.morphologyStatus ?? "lexical-compound",
+    morphologySignals: Array.isArray(decision.morphologySignals) ? decision.morphologySignals : [],
+    confidence: String(decision.confidence ?? "verified-wordnet-compound"),
+    ...(decision.verificationRationale ? { verificationRationale: decision.verificationRationale } : {}),
+    provenance: "WordNet frequency compound verification through Housekeeper",
+    status: decision.status
+  };
+}
+
+function mergeAliasesForSense(winner, rows) {
+  const target = String(winner.target ?? "").trim().toLowerCase();
+  const aliases = new Set();
+  for (const row of rows) {
+    const rowTarget = String(row?.target ?? "").trim();
+    if (rowTarget && rowTarget.toLowerCase() !== target) aliases.add(rowTarget);
+    for (const alias of Array.isArray(row?.aliases) ? row.aliases : []) {
+      const value = String(alias ?? "").trim();
+      if (value && value.toLowerCase() !== target) aliases.add(value);
+    }
+  }
+  return [...aliases];
+}
+
+function mergeDecisionIdsForSequence(winner, rows) {
+  const winnerSequence = sequence(winner.pyashSequence).join(" ");
+  const ids = new Set();
+  for (const row of rows) {
+    if (sequence(row.pyashSequence).join(" ") !== winnerSequence) continue;
+    if (typeof row.verificationDecisionId === "string" && row.verificationDecisionId) {
+      ids.add(row.verificationDecisionId);
+    }
+    for (const id of Array.isArray(row.verificationDecisionIds) ? row.verificationDecisionIds : []) {
+      if (typeof id === "string" && id) ids.add(id);
+    }
+  }
+  return [...ids];
+}
+
+export function promoteAcceptedCompoundRecords(existingRecords, decisions, { usedTargetIds = [], decisionRevision = "" } = {}) {
+  if (!Array.isArray(existingRecords) || !Array.isArray(decisions)) {
+    throw new TypeError("compound promotion requires existing records and decisions");
+  }
+  const deduped = deduplicateCompoundSenseRecords(existingRecords);
+  const records = deduped.records.map((record) => ({ ...record }));
+  const recordsBySense = new Map(records
+    .map((record, index) => [compoundSenseId(record), index])
+    .filter(([senseId]) => Boolean(senseId)));
+  let sequenceOwners = buildSequenceOwners(records);
   const reservedTargetIds = new Set(usedTargetIds);
-  const promotions = [];
-  const updatedDecisions = decisions.map((decision) => {
+  const promotionsBySense = new Set();
+  const affectedSenseIds = new Set(deduped.removals.map((row) => row.senseId));
+  const rawDecisions = decisions.map((decision) => {
     if (!acceptedDecision(decision)) return decision;
     const target = String(decision.target ?? "").trim().toLowerCase();
-    const senseId = String(decision.senseId ?? decision.verificationSenseId ?? "").trim();
+    const senseId = compoundSenseId(decision);
     if (!senseId) return { ...decision, promotionStatus: "missing-sense-id" };
+    if (!target) return { ...decision, promotionStatus: "missing-target" };
     const targetPartOfSpeech = canonicalWordNetTargetPartOfSpeech(
       decision.targetPartOfSpeech || senseId.slice(0, 1)
     );
     const pyashSequence = sequence(decision.pyashSequence);
     const targetId = englishWordNetTargetId("compound", pyashSequence, targetPartOfSpeech);
     if (!targetId) return { ...decision, promotionStatus: "missing-target-part-of-speech" };
-    const key = senseTargetKey({ senseId, target });
-    const existingIndex = recordsBySenseTarget.get(key);
+    const record = buildPromotedCompoundRecord(decision, {
+      senseId,
+      target,
+      targetPartOfSpeech,
+      pyashSequence,
+      decisionRevision
+    });
+    affectedSenseIds.add(senseId);
+    const existingIndex = recordsBySense.get(senseId);
     if (existingIndex !== undefined) {
       const existing = records[existingIndex];
       const sameSequence = sequence(existing.pyashSequence).join(" ") === pyashSequence.join(" ");
       if (sameSequence) {
-        const ids = [...new Set([
-          ...(Array.isArray(existing.verificationDecisionIds) ? existing.verificationDecisionIds : []),
-          ...(existing.verificationDecisionId ? [existing.verificationDecisionId] : []),
-          decision.candidateId
-        ])];
         records[existingIndex] = {
           ...existing,
           decisionRevision,
-          aliases: [...new Set([...(existing.aliases ?? []), ...(decision.aliases ?? [])])],
-          verificationDecisionIds: ids
+          aliases: mergeAliasesForSense(existing, [existing, record]),
+          verificationDecisionIds: mergeDecisionIdsForSequence(existing, [existing, record])
+        };
+        return { ...decision, promotionStatus: "already-active" };
+      }
+
+      let order;
+      try {
+        order = compareCompoundSenseRecords(record, existing);
+      } catch {
+        return { ...decision, promotionStatus: "missing-component-layers-for-sense-tie" };
+      }
+      if (order >= 0) {
+        records[existingIndex] = {
+          ...existing,
+          aliases: mergeAliasesForSense(existing, [existing, record])
+        };
+        return {
+          ...decision,
+          promotionStatus: pyashSequence.length > sequence(existing.pyashSequence).length
+            ? "longer-sequence-superseded"
+            : "same-length-compound-not-selected"
         };
       }
-      return { ...decision, promotionStatus: sameSequence ? "already-active" : "sense-target-record-conflict" };
+
+      const owners = sequenceOwners.get(targetId) ?? new Set();
+      if (reservedTargetIds.has(targetId) || [...owners].some((owner) => owner !== target)) {
+        return { ...decision, promotionStatus: "target-identity-conflict" };
+      }
+      records[existingIndex] = {
+        ...record,
+        aliases: mergeAliasesForSense(record, [record, existing])
+      };
+      sequenceOwners = buildSequenceOwners(records);
+      promotionsBySense.add(senseId);
+      return { ...decision, promotionStatus: "promoted-to-derived-index" };
     }
+
     const owners = sequenceOwners.get(targetId) ?? new Set();
     if (reservedTargetIds.has(targetId) || [...owners].some((owner) => owner !== target)) {
       return { ...decision, promotionStatus: "target-identity-conflict" };
     }
     owners.add(target);
     sequenceOwners.set(targetId, owners);
-    const record = {
-      senseId,
-      targetPartOfSpeech,
-      decisionRevision,
-      verificationDecisionId: decision.candidateId,
-      verificationDecisionIds: [decision.candidateId],
-      verificationStatus: decision.status,
-      ...(decision.coverageStatus ? { coverageStatus: decision.coverageStatus } : {}),
-      id: target,
-      surface: target,
-      target,
-      aliases: Array.isArray(decision.aliases) ? decision.aliases : [],
-      morphemes: Array.isArray(decision.morphemes) ? decision.morphemes : decision.sourceMorphemes,
-      sourceMorphemes: Array.isArray(decision.sourceMorphemes) ? decision.sourceMorphemes : decision.morphemes,
-      componentGlosses: Array.isArray(decision.componentGlosses) ? decision.componentGlosses : [],
-      head: decision.head ?? decision.componentGlosses?.at(-1),
-      modifiers: Array.isArray(decision.modifiers) ? decision.modifiers : decision.componentGlosses?.slice(0, -1) ?? [],
-      pyashSequence,
-      componentLayers: Array.isArray(decision.componentLayers) ? decision.componentLayers : [],
-      maxLayer: decision.maxLayer,
-      sourceSurfaces: decision.sourceSurfaces ?? {},
-      sourceMorphemesByLanguage: decision.sourceMorphemesByLanguage ?? {},
-      componentRoles: Array.isArray(decision.componentRoles) ? decision.componentRoles : [],
-      morphologyStatus: decision.morphologyStatus ?? "lexical-compound",
-      morphologySignals: Array.isArray(decision.morphologySignals) ? decision.morphologySignals : [],
-      confidence: String(decision.confidence ?? "verified-wordnet-compound"),
-      ...(decision.verificationRationale ? { verificationRationale: decision.verificationRationale } : {}),
-      provenance: "WordNet frequency compound verification through Housekeeper",
-      status: decision.status
-    };
-    recordsBySenseTarget.set(key, records.length);
+    recordsBySense.set(senseId, records.length);
     records.push(record);
-    promotions.push(record);
+    promotionsBySense.add(senseId);
     return { ...decision, promotionStatus: "promoted-to-derived-index" };
   });
+
+  const updatedDecisions = rawDecisions.map((decision) => {
+    if (!acceptedDecision(decision)) return decision;
+    if ([
+      "missing-sense-id",
+      "missing-target",
+      "missing-target-part-of-speech",
+      "target-identity-conflict",
+      "missing-component-layers-for-sense-tie"
+    ].includes(decision.promotionStatus)) return decision;
+    const senseId = compoundSenseId(decision);
+    const activeIndex = recordsBySense.get(senseId);
+    if (activeIndex === undefined) return decision;
+    const active = records[activeIndex];
+    const decisionSequence = sequence(decision.pyashSequence).join(" ");
+    if (decisionSequence === sequence(active.pyashSequence).join(" ")) {
+      return {
+        ...decision,
+        promotionStatus: decision.promotionStatus === "promoted-to-derived-index"
+          ? decision.promotionStatus
+          : "already-active"
+      };
+    }
+    return {
+      ...decision,
+      promotionStatus: sequence(decision.pyashSequence).length > sequence(active.pyashSequence).length
+        ? "longer-sequence-superseded"
+        : "same-length-compound-not-selected"
+    };
+  });
+  const promotions = records.filter((record) => promotionsBySense.has(compoundSenseId(record)));
   return {
     decisions: updatedDecisions,
     promotions,
     records,
     activeCount: records.length,
+    affectedSenseIds: [...affectedSenseIds],
     conflicts: updatedDecisions.filter((record) => String(record.promotionStatus ?? "").includes("conflict"))
   };
 }
@@ -392,13 +508,27 @@ export async function promoteAcceptedCompounds(decisions, {
   usedTargetIds = [],
   decisionRevision = "",
   readExisting = readVerifiedWordNetCompounds,
-  writeRecords = writeVerifiedWordNetCompounds
+  writeRecords = writeVerifiedWordNetCompounds,
+  readGlosses = loadEnglishWordNetCompoundGlosses,
+  writeGlosses = writeEnglishWordNetCompoundGlosses,
+  readDecisionRows = async () => (await loadEnglishWordNetCompoundDecisions()).rows
 } = {}) {
   const existing = await readExisting();
   const promoted = promoteAcceptedCompoundRecords(existing, decisions, { usedTargetIds, decisionRevision });
   await writeRecords(promoted.records);
-  const glosses = buildEnglishWordNetCompoundGlosses(promoted.promotions, decisions);
-  if (glosses.length > 0) await upsertEnglishWordNetCompoundGlosses(glosses);
+  if (promoted.affectedSenseIds.length > 0) {
+    const affectedSenseIds = new Set(promoted.affectedSenseIds);
+    const [currentGlosses, decisionRows] = await Promise.all([readGlosses(), readDecisionRows()]);
+    const decisionsById = new Map([...decisionRows, ...decisions]
+      .filter((decision) => typeof decision?.candidateId === "string" && decision.candidateId)
+      .map((decision) => [decision.candidateId, decision]));
+    const replacements = buildEnglishWordNetCompoundGlosses(
+      promoted.records.filter((record) => affectedSenseIds.has(record.senseId)),
+      [...decisionsById.values()]
+    );
+    const retained = currentGlosses.records.filter((record) => !affectedSenseIds.has(record.senseId));
+    await writeGlosses(mergeEnglishWordNetCompoundGlosses(retained, replacements));
+  }
   const { records: _records, ...result } = promoted;
   return result;
 }
@@ -434,9 +564,18 @@ export async function runWordNetFrequencyCompoundSweep({ artifactRoot = ARTIFACT
   try {
     const resumedAccepted = acceptedDecisionsForRevision([...decisionsById.values()], decisionRevision);
     if (resumedAccepted.length > 0) {
-      const restored = await promoteAcceptedCompounds(resumedAccepted, { usedTargetIds, decisionRevision });
-      for (const decision of restored.decisions) decisionsById.set(decision.candidateId, decision);
-      await atomicWrite(decisionsPath, renderEnglishWordNetCompoundDecisions([...decisionsById.values()]));
+      const restored = await promoteAcceptedCompounds(resumedAccepted, {
+        usedTargetIds,
+        decisionRevision,
+        readDecisionRows: async () => [...decisionsById.values()]
+      });
+      for (const decision of restored.decisions) {
+        const previous = decisionsById.get(decision.candidateId);
+        if (stableJson(previous) !== stableJson(decision)) {
+          decisionsById.set(decision.candidateId, decision);
+          await appendFile(decisionsPath, renderEnglishWordNetCompoundDecisionAppend(decision), "utf8");
+        }
+      }
     } else {
       await promoteAcceptedCompounds([], { usedTargetIds, decisionRevision });
     }
@@ -451,7 +590,8 @@ export async function runWordNetFrequencyCompoundSweep({ artifactRoot = ARTIFACT
       completedCandidateCount: completedIds.size,
       remainingCandidateCount: groups.reduce((count, group) => count + group.length, 0),
       completedGroups,
-      batchSize
+      batchSize,
+      parallelism: allocationConfig["compound-verification-parallelism"]
     }));
 
     while (groups.length > 0) {
@@ -468,6 +608,7 @@ export async function runWordNetFrequencyCompoundSweep({ artifactRoot = ARTIFACT
       const verification = JSON.parse(await verifyCompoundRecords(batchRecords, {
         mode: "summary",
         mindName: "mind",
+        parallelism: allocationConfig["compound-verification-parallelism"],
         onRecord: async ({ record }) => {
           const previous = decisionsById.get(candidateId(record));
           const decision = wordNetCompoundDecisionRecord({
@@ -484,12 +625,21 @@ export async function runWordNetFrequencyCompoundSweep({ artifactRoot = ARTIFACT
           const id = decision.candidateId;
           decisionsById.set(id, decision);
           batchAdded.push(decision);
-          await atomicWrite(decisionsPath, renderEnglishWordNetCompoundDecisions([...decisionsById.values()]));
+          await appendFile(decisionsPath, renderEnglishWordNetCompoundDecisionAppend(decision), "utf8");
         }
       }));
-      const promoted = await promoteAcceptedCompounds(batchAdded, { usedTargetIds, decisionRevision });
-      for (const decision of promoted.decisions) decisionsById.set(decision.candidateId, decision);
-      await atomicWrite(decisionsPath, renderEnglishWordNetCompoundDecisions([...decisionsById.values()]));
+      const promoted = await promoteAcceptedCompounds(batchAdded, {
+        usedTargetIds,
+        decisionRevision,
+        readDecisionRows: async () => [...decisionsById.values()]
+      });
+      for (const decision of promoted.decisions) {
+        const previous = decisionsById.get(decision.candidateId);
+        decisionsById.set(decision.candidateId, decision);
+        if (stableJson(previous) !== stableJson(decision)) {
+          await appendFile(decisionsPath, renderEnglishWordNetCompoundDecisionAppend(decision), "utf8");
+        }
+      }
       const batchFile = join(directory, `batch-${String(batchIndex).padStart(4, "0")}.pya`);
       await atomicWrite(batchFile, renderMapPya({
         name: "translation_wordnet_compound_verification_batch",
@@ -524,6 +674,7 @@ export async function runWordNetFrequencyCompoundSweep({ artifactRoot = ARTIFACT
         completedGroups,
         batchCount: batchIndex,
         batchSize,
+        parallelism: allocationConfig["compound-verification-parallelism"],
         accepted: [...decisionsById.values()].filter((row) => row.decisionRevision === decisionRevision && acceptedDecision(row)).length,
         promoted: selectCurrentRevisionCompounds(await readVerifiedWordNetCompounds(), decisionRevision).length,
         linkedAcceptedDecisions: [...decisionsById.values()].filter((row) => row.decisionRevision === decisionRevision && acceptedDecision(row) && ["promoted-to-derived-index", "already-active"].includes(row.promotionStatus)).length,
@@ -547,6 +698,7 @@ export async function runWordNetFrequencyCompoundSweep({ artifactRoot = ARTIFACT
       completedGroups,
       batchCount: batchIndex,
       batchSize,
+      parallelism: allocationConfig["compound-verification-parallelism"],
       accepted: [...decisionsById.values()].filter((row) => row.decisionRevision === decisionRevision && acceptedDecision(row)).length,
       promoted: selectCurrentRevisionCompounds(await readVerifiedWordNetCompounds(), decisionRevision).length,
       linkedAcceptedDecisions: [...decisionsById.values()].filter((row) => row.decisionRevision === decisionRevision && acceptedDecision(row) && ["promoted-to-derived-index", "already-active"].includes(row.promotionStatus)).length,

@@ -573,9 +573,61 @@ export function parseEnglishWordNetBridgeCatalog(source) {
   return {
     format: ENGLISH_WORDNET_BRIDGE_FORMAT,
     source: metadata.source,
+    sourceHash: metadata["source-hash"] ?? "",
     mode: metadata.mode || "sense-level semantic bridge",
     entries
   };
+}
+
+export function renderEnglishWordNetBridgeCatalog({ source, sourceHash = "", mode = "sense-level semantic bridge", entries = [] } = {}) {
+  if (typeof source !== "string" || !source.trim() || !Array.isArray(entries)) {
+    throw invalid("WordNet bridge renderer requires provenance and an entries array");
+  }
+  const equivalenceGroups = new Map();
+  for (const entry of entries) {
+    const group = typeof entry?.equivalenceGroup === "string" ? entry.equivalenceGroup.trim() : "";
+    if (!group) continue;
+    const members = equivalenceGroups.get(group) ?? [];
+    members.push(entry);
+    equivalenceGroups.set(group, members);
+  }
+  const activeGroups = new Map([...equivalenceGroups]
+    .filter(([, members]) => members.length > 1));
+  const lines = [
+    `su name ${ENGLISH_WORDNET_BRIDGE_NAME} be map def`,
+    `su text "format" ob text ${JSON.stringify(ENGLISH_WORDNET_BRIDGE_FORMAT)} ya`,
+    `su text "source" ob text ${JSON.stringify(source)} ya`,
+    ...(sourceHash ? [`su text "source-hash" ob text ${JSON.stringify(sourceHash)} ya`] : []),
+    `su text "mode" ob text ${JSON.stringify(mode || "sense-level semantic bridge")} ya`
+  ];
+  for (const entry of entries) {
+    const sourceId = typeof entry?.source === "string" ? entry.source.trim().toLowerCase() : "";
+    const target = typeof entry?.target === "string" ? entry.target.trim().toLowerCase() : "";
+    const targetPartOfSpeech = canonicalWordNetTargetPartOfSpeech(entry?.targetPartOfSpeech);
+    const certainty = typeof entry?.certainty === "string" ? entry.certainty.trim() : "";
+    const evidence = typeof entry?.evidence === "string" ? entry.evidence.trim() : "";
+    if (!sourceId || !target || !WORDNET_POS.has(targetPartOfSpeech) || !CERTAINTIES.has(certainty) || !evidence) {
+      throw invalid("WordNet bridge renderer received an invalid sense assignment", { source: sourceId });
+    }
+    lines.push(`su text ${JSON.stringify(sourceId)} ob name ${JSON.stringify(target)} as text ${JSON.stringify(targetPartOfSpeech)} with text ${JSON.stringify(certainty)} via text ${JSON.stringify(evidence)} ya`);
+    if (typeof entry.gloss === "string" && entry.gloss.trim()) {
+      lines.push(`su text ${JSON.stringify(`${SENSE_GLOSS_PREFIX}${sourceId}`)} ob text ${JSON.stringify(entry.gloss)} ya`);
+    }
+    for (const [index, lemma] of (Array.isArray(entry.lemmas) ? entry.lemmas : []).entries()) {
+      if (typeof lemma !== "string" || !lemma.trim()) continue;
+      lines.push(`su text ${JSON.stringify(`${SENSE_LEMMA_PREFIX}${sourceId}:${index + 1}`)} ob text ${JSON.stringify(lemma.trim().toLowerCase())} ya`);
+    }
+  }
+  for (const [group, members] of activeGroups) {
+    const evidence = String(members[0]?.equivalenceEvidence ?? "").trim();
+    if (!evidence) throw invalid("WordNet bridge equivalence group requires evidence", { group });
+    const sources = members.map((entry) => String(entry.source).trim().toLowerCase());
+    lines.push(`su text ${JSON.stringify(`equivalence:${group}`)} ob text ${JSON.stringify(sources.join(" "))} via text ${JSON.stringify(evidence)} ya`);
+  }
+  lines.push("prah", "");
+  const rendered = lines.join("\n");
+  parseEnglishWordNetBridgeCatalog(rendered);
+  return rendered;
 }
 
 export function buildEnglishWordNetBridgeIndex({ entries = [], resolveTarget = null } = {}) {

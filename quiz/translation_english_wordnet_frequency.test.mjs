@@ -16,6 +16,7 @@ import {
 import { buildSenseCompoundWorklist } from "../program/library/translation/english_wordnet_sense_compounds.mjs";
 import {
   parseEnglishWordNetCompoundDecisions,
+  renderEnglishWordNetCompoundDecisionAppend,
   renderEnglishWordNetCompoundDecisions
 } from "../program/library/translation/english_wordnet_compound_decisions.mjs";
 import {
@@ -459,9 +460,11 @@ test("frequency allocation configuration versions compound verification", async 
   const config = parseEnglishWordNetFrequencyAllocationConfig(
     await readFile(ENGLISH_WORDNET_FREQUENCY_ALLOCATION_CONFIG_URL, "utf8")
   );
-  assert.equal(config["compound-verification-revision"], "wordnet-modifier-literalness-v10");
+  assert.equal(config["compound-verification-revision"], "wordnet-two-component-literalness-v11");
   assert.equal(config["compound-head-relation-policy"], "advisory");
   assert.equal(config["compound-verification-batch-size"], 64);
+  assert.equal(config["maximum-compound-components"], 2);
+  assert.equal(config["compound-verification-parallelism"], 8);
   assert.equal(config["compound-candidate-source"], "english30k-closed-wordnet-multiword-existing-atoms-v1");
   assert.equal(config["compound-candidate-order"], "english30k-rank-ascending-princeton-tag-count-descending");
   assert.equal(config["atom-coverage-format"], "english-wordnet-atom-coverage-v1");
@@ -797,4 +800,27 @@ test("compound decision evidence round-trips as a native Pyash map", () => {
   const parsed = parseEnglishWordNetCompoundDecisions(renderEnglishWordNetCompoundDecisions(rows));
   assert.deepEqual(parsed.rows, rows);
   assert.equal(parsed.byId.get(rows[0].candidateId).status, "accepted-llm");
+});
+
+test("appended Pyash decision rows preserve history and resolve to the latest candidate revision", () => {
+  const previous = {
+    candidateId: "derived-compound-456",
+    target: "exception",
+    pyashSequence: ["hsap", "lyun"],
+    status: "rejected-llm",
+    decisionRevision: "wordnet-modifier-literalness-v10"
+  };
+  const updated = {
+    ...previous,
+    status: "accepted-llm",
+    decisionRevision: "wordnet-two-component-literalness-v11",
+    promotionStatus: "promoted-to-derived-index"
+  };
+  const source = renderEnglishWordNetCompoundDecisions([previous])
+    + renderEnglishWordNetCompoundDecisionAppend(updated);
+  const parsed = parseEnglishWordNetCompoundDecisions(source);
+
+  assert.equal(parsed.rows.length, 1);
+  assert.deepEqual(parsed.byId.get(previous.candidateId), updated);
+  assert.match(source, /prah\nsu text/u);
 });

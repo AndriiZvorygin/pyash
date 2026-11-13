@@ -14,10 +14,11 @@ su text "atom-coverage-scope" ob text "every distinct Pyac identity in pyashWord
 su text "atom-coverage-batch-size" ob num 500 ya
 su text "atom-unlinked-policy" ob text "preserve candidate senses and explicit coverage status; defer unsupported links to a later sense-candidate stage" ya
 su text "allocation-batch-size" ob num 1000 ya
-su text "maximum-compound-components" ob num 3 ya
+su text "maximum-compound-components" ob num 2 ya
 su text "compound-candidate-source" ob text "english30k-closed-wordnet-multiword-existing-atoms-v1" ya
 su text "compound-candidate-order" ob text "english30k-rank-ascending-princeton-tag-count-descending" ya
 su text "compound-verification-batch-size" ob num 64 ya
-su text "compound-verification-revision" ob text "wordnet-modifier-literalness-v10" ya
+su text "compound-verification-parallelism" ob num 8 ya
+su text "compound-verification-revision" ob text "wordnet-two-component-literalness-v11" ya
 su text "compound-head-relation-policy" ob text "advisory" ya
 prah

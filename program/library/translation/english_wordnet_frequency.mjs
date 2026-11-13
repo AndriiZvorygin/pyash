@@ -680,6 +680,9 @@ export function parseEnglishWordNetFrequencyAllocationConfig(source) {
     || metadata["compound-candidate-source"] !== "english30k-closed-wordnet-multiword-existing-atoms-v1"
     || metadata["compound-candidate-order"] !== "english30k-rank-ascending-princeton-tag-count-descending"
     || !Number.isSafeInteger(metadata["compound-verification-batch-size"])
+    || !Number.isSafeInteger(metadata["compound-verification-parallelism"])
+    || metadata["compound-verification-parallelism"] < 1
+    || metadata["compound-verification-parallelism"] > 64
     || !String(metadata["compound-verification-revision"] ?? "").trim()
     || metadata["compound-head-relation-policy"] !== "advisory"
     || !String(metadata["alias-target-policy"] ?? "").trim()) {
