@@ -51,45 +51,45 @@ const TOOL_NON_CASE_FIELDS = new Set([
 ]);
 
 const TOOL_ARGUMENT_SCHEMA_ADAPTERS = {
-  "terminal start": {
-    toolName: "terminal_start",
-    description: "Start a process in a persistent PTY under the current Pyash project policy. Pass request as an object with command, args (array), optional cwd, columns, and rows. Read and write the process after this call; input is opaque PTY data.",
-    fields: { ob: { name: "request", type: "object", description: "Command, argument array, and optional licensed working directory and dimensions." } }
+  "command session start": {
+    toolName: "command_session_start",
+    description: "Start a long-running interactive command session only when the user needs to keep a process open and interact with it. This is not for web search, API calls, URL retrieval, or ordinary one-shot commands; use web_search, web_search_source, download, or command for those. The working directory defaults to the agent's active project root. Pass request with command, args (array), and optional cwd, columns, rows.",
+    fields: { ob: { name: "request", type: "object", description: "Command, argument array, and optional in-project working directory and dimensions." } }
   },
-  "terminal start coding agent": {
-    toolName: "terminal_start_coding_agent",
-    description: "Start an independent coding saddle in a persistent PTY. Pass request as an object with mind (configured Pyash mind name), optional model, cwd, and instruction. The parent mind's backend and model delegation allowlists are enforced. Use the returned terminal id with terminal_read and terminal_write to communicate with the child.",
-    fields: { ob: { name: "request", type: "object", description: "Child mind, optional model and cwd, and initial instruction." } }
+  "command session start coding agent": {
+    toolName: "command_session_start_coding_agent",
+    description: "Start an independent coding saddle only when the user explicitly asks to delegate work to a child coding session. Do not use it for web search, API calls, URL retrieval, or routine commands. Pass request with mind (configured Pyash mind name), optional model, cwd, and instruction. The parent mind's backend and model delegation allowlists are enforced. Use the returned id with command_session_read and command_session_write to communicate with the child.",
+    fields: { ob: { name: "request", type: "object", description: "Child mind, optional in-project working directory and model, and initial instruction." } }
   },
-  "terminal read": {
-    toolName: "terminal_read",
-    description: "Read output from a persistent PTY. Pass request as an object with id and optional after cursor and maxBytes.",
-    fields: { ob: { name: "request", type: "object", description: "Terminal id and output cursor." } }
+  "command session read": {
+    toolName: "command_session_read",
+    description: "Read output from an already-started command session. Use the exact id returned by command_session_start. Pass request with id and optional after cursor and maxBytes.",
+    fields: { ob: { name: "request", type: "object", description: "Command session id and output cursor." } }
   },
-  "terminal write": {
-    toolName: "terminal_write",
-    description: "Write opaque bytes to a persistent PTY. Encode Tab as \\t and Enter as \\r. Pass request as an object with id and input; the input is forwarded unchanged.",
-    fields: { ob: { name: "request", type: "object", description: "Terminal id and raw input string." } }
+  "command session write": {
+    toolName: "command_session_write",
+    description: "Send input to an already-started command session. Use the exact id returned by command_session_start. Encode Tab as \\t and Enter as \\r; input is forwarded unchanged.",
+    fields: { ob: { name: "request", type: "object", description: "Command session id and input string." } }
   },
-  "terminal resize": {
-    toolName: "terminal_resize",
-    description: "Resize a persistent PTY. Pass request as an object with id, columns, and rows.",
-    fields: { ob: { name: "request", type: "object", description: "Terminal id and positive dimensions." } }
+  "command session resize": {
+    toolName: "command_session_resize",
+    description: "Resize an already-started command session. Pass request with its id, columns, and rows.",
+    fields: { ob: { name: "request", type: "object", description: "Command session id, columns, and rows." } }
   },
-  "terminal status": {
-    toolName: "terminal_status",
-    description: "Get the current state of a persistent PTY. Pass request as an object with id.",
-    fields: { ob: { name: "request", type: "object", description: "Terminal id." } }
+  "command session status": {
+    toolName: "command_session_status",
+    description: "Get the current state of an already-started command session. Pass request with its id.",
+    fields: { ob: { name: "request", type: "object", description: "Command session id." } }
   },
-  "terminal list": {
-    toolName: "terminal_list",
-    description: "List PTY sessions owned by this Pyash runtime. Pass an empty request object.",
+  "command session list": {
+    toolName: "command_session_list",
+    description: "List command sessions owned by this Pyash runtime. Use only when the user asks about active command sessions or after starting one; this is not a search or health-check tool.",
     fields: { ob: { name: "request", type: "object", description: "Empty object." } }
   },
-  "terminal close": {
-    toolName: "terminal_close",
-    description: "Request process termination for a persistent PTY. Pass request as an object with id and optional signal.",
-    fields: { ob: { name: "request", type: "object", description: "Terminal id and optional signal." } }
+  "command session close": {
+    toolName: "command_session_close",
+    description: "Close an already-started command session when the user asks or its task is complete. Pass request with its id and optional signal.",
+    fields: { ob: { name: "request", type: "object", description: "Command session id and optional signal." } }
   },
   "search": {
     toolName: "search_zim_library",
@@ -103,7 +103,7 @@ const TOOL_ARGUMENT_SCHEMA_ADAPTERS = {
   },
   "web search": {
     toolName: "web_search",
-    description: "Search the configured live web search motor for current information or news. Returns up to five results with full source URLs and descriptions. This searches the web and is separate from the offline ZIM archive search.",
+    description: "Search the configured live web search motor for current information, news, or pages such as technology RSS feed listings. Use this for ordinary live internet searches; it uses the configured search service and needs no shell or API endpoint. Returns up to five results with full source URLs and descriptions. For offline documentation use search_zim_library; use web_search_source only when the user names a specific search service.",
     fields: { ob: { name: "query", description: "Terms to search on the live web." } }
   },
   "web search source": {

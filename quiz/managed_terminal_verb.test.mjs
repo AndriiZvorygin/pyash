@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { parse } from "../program/understand/index.mjs";
-import { resolveChildAgentTarget, terminal } from "../program/verbs/terminal.mjs";
+import { resolveChildAgentTarget, commandSession as terminal } from "../program/verbs/command_session.mjs";
 import { requestManagedTerminal } from "../program/agent/managed_terminal_ipc.mjs";
 
 async function withProject(run) {
@@ -44,7 +44,7 @@ function rememberFor({ project, world, runtimeRoot, minds = {}, delegation = {},
 }
 
 function terminalSentence(action, request = {}) {
-  return parse(`su name terminal be terminal as wo ${action} ob text ${JSON.stringify(JSON.stringify(request))} do`);
+  return parse(`su name command session be command session as wo ${action} ob text ${JSON.stringify(JSON.stringify(request))} do`);
 }
 
 test("terminal launch is restricted to the licensed project working directory", async () => {

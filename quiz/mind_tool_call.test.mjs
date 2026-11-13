@@ -203,6 +203,58 @@ test("mind tool calls cannot shell-launch provider runner adapters", async () =>
   assert.match(rejected?.toolText ?? "", /active saddle already runs the selected model/u);
 });
 
+test("project-root tool errors return to the model without ending the turn", async () => {
+  forget();
+  resetMindLogs();
+
+  const capability = parse("su name command session start be command session as wo start ob text input can");
+  const events = [];
+  const responseText = await runToolChat({
+    sentence: parse('be write ob text "start a process" for name helper to name helper-out do'),
+    ob: {},
+    mindName: "helper",
+    model: "fixture-model",
+    dialogue: "helper recoverable project guard",
+    callPrompt: "Start the requested process.",
+    resolvedConfigPrompt: "Use the supplied command session tool.",
+    historyMessages: [],
+    toolMap: new Map([["command_session_start", capability]]),
+    tools: [{ type: "function", function: {
+      name: "command_session_start",
+      parameters: { type: "object", properties: { request: { type: "object" } }, required: ["request"] }
+    } }],
+    toolBlock: "",
+    backendName: "ollama command mind",
+    mindDebug: false,
+    debugMind: () => {},
+    onToolCall: async (event) => events.push(event),
+    stream: false,
+    inputs: {
+      inputText: "Start the requested process.",
+      mockResponseRaw: JSON.stringify([
+        {
+          message: {
+            content: "",
+            tool_calls: [{
+              id: "outside-project-session",
+              function: {
+                name: "command_session_start",
+                arguments: { request: { command: "node", args: ["-e", ""], cwd: "/tmp" } }
+              }
+            }]
+          }
+        },
+        { message: { content: "The process was not started because its directory is outside the active project." } }
+      ])
+    }
+  });
+
+  assert.equal(responseText, "The process was not started because its directory is outside the active project.");
+  const result = events.find((event) => event.stage === "result");
+  assert.match(result?.toolText ?? "", /outside the agent's active project root/u);
+  assert.match(result?.toolText ?? "", /Do not claim it succeeded/u);
+});
+
 test("mind tool chat preserves repeated explicit calls for the call limit", () => {
   const call = JSON.stringify({ name: "search", arguments: { input: "Pyash" } });
   const calls = extractExplicitToolCalls(

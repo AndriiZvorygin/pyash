@@ -8,14 +8,14 @@ su name command be command ob text input to name text out can
 su name interpret javascript be interpret as wo javascript ob text input can
 su name repair be repair ob text input to name map outcome can
 su name repair check be repair as wo check ob text input to name map outcome can
-su name terminal start be terminal as wo start ob text input can
-su name terminal start coding agent be terminal as wo start coding agent ob text input can
-su name terminal read be terminal as wo read ob text input can
-su name terminal write be terminal as wo write ob text input can
-su name terminal resize be terminal as wo resize ob text input can
-su name terminal status be terminal as wo status ob text input can
-su name terminal list be terminal as wo list ob text input can
-su name terminal close be terminal as wo close ob text input can
+su name command session start be command session as wo start ob text input can
+su name command session start coding agent be command session as wo start coding agent ob text input can
+su name command session read be command session as wo read ob text input can
+su name command session write be command session as wo write ob text input can
+su name command session resize be command session as wo resize ob text input can
+su name command session status be command session as wo status ob text input can
+su name command session list be command session as wo list ob text input can
+su name command session close be command session as wo close ob text input can
 su name session plan be write fromstate "coding saddle plan" ob text input can
 su name search be search ob text input fromstate wo zim can
 su name web search be search ob text input fromstate wo web by num 5 can

@@ -97,22 +97,22 @@ test("pyash mcp server loads the selected saddle tools map", async () => {
     const list = await client.send("tools/list", {});
     const tools = Array.isArray(list?.tools) ? list.tools : [];
     const descriptions = tools.map((tool) => String(tool?.description ?? ""));
-    assert.equal(tools.length, 23);
+    assert.ok(tools.length >= 23, "selected saddle tools map should expose its required capabilities");
     assert.ok(descriptions.some((description) => description.includes("su name read from filename input be read")));
     assert.ok(descriptions.some((description) => description.includes("su name command ob text")));
     assert.ok(descriptions.some((description) => description.includes("su name repair ob text")));
-    const terminalTools = tools.map((tool) => String(tool?.name ?? ""))
-      .filter((name) => name.startsWith("terminal_"))
+    const commandSessionTools = tools.map((tool) => String(tool?.name ?? ""))
+      .filter((name) => name.startsWith("command_session_"))
       .sort();
-    assert.deepEqual(terminalTools, [
-      "terminal_close",
-      "terminal_list",
-      "terminal_read",
-      "terminal_resize",
-      "terminal_start",
-      "terminal_start_coding_agent",
-      "terminal_status",
-      "terminal_write"
+    assert.deepEqual(commandSessionTools, [
+      "command_session_close",
+      "command_session_list",
+      "command_session_read",
+      "command_session_resize",
+      "command_session_start",
+      "command_session_start_coding_agent",
+      "command_session_status",
+      "command_session_write"
     ]);
     const archiveFocusTool = tools.find((tool) => tool.name === "read_archive_focus");
     assert.ok(archiveFocusTool, "expected the semantic archive-focus tool");

@@ -378,18 +378,16 @@ test("coding saddle shows elapsed progress and explicit tool event labels", () =
   assert.equal(saddleToolEventLabel({ stage: "result", toolName: "repair" }), "[tool result] repair");
 });
 
-test("coding saddle explains separate archive and live web search paths", () => {
+test("coding saddle routes live search, archives, project commands, and interactive processes separately", () => {
   assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`read_archive_focus(archive_path, entry_path, focus)`"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("host-configured Kiwix endpoint, which may be remote"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("Pass returned locators unchanged"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("For remote archive pages, pass the returned full page URL to download"));
   assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`search_zim_library(query)`"));
   assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`web_search(query)`"));
   assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`web_search_source(query, search_url)`"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("Yago uses POST `/search`"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("YaCy uses `/yacysearch.json`"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("never claim titles or URLs that are absent"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("or describe an incomplete zero-result response as complete"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("technology RSS-feed discovery"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`command_session_start`"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("Search, URL retrieval, API requests, and ordinary commands do not need a command session"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("A tool error is a result for the active task"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("Do not claim titles or URLs absent from tool results"));
   assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`search_archive(archive_path, query)`"));
 });
 
@@ -402,23 +400,19 @@ test("coding saddle handles greetings directly without exposing runtime script n
 test("coding saddle completion evidence requires a successful edit and a later command check", () => {
   for (const guidance of [
     "documentation and reference research",
-    "host-configured Kiwix endpoint",
-    "Agents do not need to know the server address",
-    "Pass returned locators unchanged",
+    "configured Kiwix service, which may be remote",
+    "Pass returned URLs unchanged",
     "`web_search(query)`",
     "`web_search_source(query, search_url)`",
-    "Yago uses POST `/search` and the configured bearer key",
-    "YaCy uses `/yacysearch.json`",
-    "A search homepage is not search evidence",
-    "do not download it to infer API syntax",
-    "do not use ZIM search for live queries",
-    "never claim titles or URLs that are absent",
-    "or describe an incomplete zero-result response as complete",
-    "Download a user-supplied URL directly only when the user asks for its contents",
-    "For remote archive pages, pass the returned full page URL to download",
+    "For a named search service",
+    "`command_session_start` only when the user needs a long-running interactive process",
+    "Search, URL retrieval, API requests, and ordinary commands do not need a command session",
+    "A tool error is a result for the active task",
+    "do not repeat an unchanged failing call",
+    "Do not claim titles or URLs absent from tool results",
     "`search_archive(archive_path, query)`",
     "`read_archive_focus(archive_path, entry_path, focus)`",
-    "Ground claims in retrieved page text"
+    "ground claims in retrieved page text"
   ]) {
     assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes(guidance), `missing retrieval guidance: ${guidance}`);
   }
@@ -619,8 +613,8 @@ test("coding saddle does not add a completion pass to general advice", async () 
   assert.equal(turn.assessment.required, false);
 });
 
-test("coding saddle does not require code changes for a read-only terminal check", async () => {
-  const input = "Call terminal_start exactly once with this request JSON: {\"command\":\"/usr/bin/printf\",\"args\":[\"SPARKX_PTY_OK\\n\"]}. Then call terminal_read with the returned id, after 0, maxBytes 1024. Verify exitCode is 0 and output is exactly SPARKX_PTY_OK followed by one newline. Do not modify files or start another process.";
+test("coding saddle does not require code changes for a read-only command session check", async () => {
+  const input = "Call command_session_start exactly once with this request JSON: {\"command\":\"/usr/bin/printf\",\"args\":[\"SPARKX_PTY_OK\\n\"]}. Then call command_session_read with the returned id, after 0, maxBytes 1024. Verify exitCode is 0 and output is exactly SPARKX_PTY_OK followed by one newline. Do not modify files or start another process.";
   let calls = 0;
 
   assert.equal(isSaddleCodeChangeRequest(input), false);

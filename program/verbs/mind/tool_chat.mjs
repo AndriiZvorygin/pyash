@@ -685,7 +685,12 @@ export async function runToolChat({
             from: { name: "coding saddle plan" }
           }));
         } else {
-          throw err;
+          toolResult = surfaceErrorSentence(buildErrorSentence({
+            name: "tool execution failed",
+            message: err?.message || String(err),
+            from: { name: toolName || "tool" },
+            raw: { toolName: toolName || "unknown", signature: toolSignature || "unknown" }
+          }));
         }
       }
       const surfacedTool = (() => {
@@ -713,7 +718,10 @@ export async function runToolChat({
         if (surfacedTool.be === "error") {
           const errorName = String(surfacedTool.su?.name ?? "").trim();
           const errorMessage = String(surfacedTool.ob?.text ?? "tool failed").trim();
-          toolText = [errorName, errorMessage].filter(Boolean).join(": ");
+          toolText = [
+            [errorName, errorMessage].filter(Boolean).join(": "),
+            "This call failed. Do not claim it succeeded or repeat the same call unchanged; use another suitable tool if possible, otherwise state the blocker."
+          ].filter(Boolean).join("\n");
         }
         if (!toolText && (toolName === "web_search" || toolName === "web_search_source")) {
           toolText = formatWebSearchToolResult(surfacedTool);
