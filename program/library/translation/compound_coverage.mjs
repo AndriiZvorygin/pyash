@@ -285,8 +285,7 @@ export async function loadWordNetVerifiedCompoundMatches({
             || (selectedSenseIds.size > 0 && selectedSenseIds.has(entry.senseId?.toLowerCase()))
           ));
         }
-        // A stale posting can point beyond the current source file. Fall through
-        // to the bounded-by-query source scan rather than parsing an empty map.
+        return [];
       }
     }
     const sourcePath = url instanceof URL && url.href === WORDNET_VERIFIED_COMPOUNDS_URL.href

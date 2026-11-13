@@ -138,6 +138,7 @@ test("kwon index builder indexes Pya sense, Pyac sequence, and dictionary record
     assert.ok(english.some((row) => row.sourceId === jsonSourceId && row.inline?.pya === "pyan"));
     assert.ok(pyac.some((row) => row.recordId === "n:07558676-n"));
     assert.ok(wordnet.some((row) => row.recordId === "n:07558676-n"));
+    assert.equal(typeof wordnet.find((row) => row.recordId === "n:07558676-n")?.byteOffset, "number");
     assert.equal(embeddedSense.length, 1);
     assert.equal(embeddedSense[0].recordId, "decision:fixture-1");
   } finally {
@@ -193,7 +194,7 @@ test("opaque compound gloss rows index their embedded sense id and load as a sub
   }
 });
 
-test("Open English WordNet sense ids resolve to one indexed JSON span", async () => {
+test("Open English WordNet sense ids stay on the stored index snapshot while the source grows", async () => {
   const directory = await mkdtemp(join(tmpdir(), "pyash-kwon-open-wordnet-"));
   try {
     const configSourceId = "program/library/translation/english_wordnet.pya";
@@ -252,8 +253,13 @@ test("Open English WordNet sense ids resolve to one indexed JSON span", async ()
       onWarning: (warning) => warnings.push(warning)
     });
     assert.equal(indexed.length, 1);
-    assert.match(warnings[0], /changed catalogs are scanned for this lookup/u);
-    assert.match(warnings[0], /node command\/vocab_lookup_index\.mjs/u);
+    assert.equal(warnings.length, 0);
+    assert.deepEqual(await lookupKwonIndex({
+      kind: "open-wordnet",
+      key: "n:07558677-n",
+      indexPath,
+      root: directory
+    }), []);
     const rowsAfterAppend = await loadOpenEnglishWordNetSenseRows({ senseIds: [senseId], indexPath, root: directory });
     assert.equal(rowsAfterAppend[0].gloss, "a strong positive emotion");
   } finally {
@@ -262,7 +268,7 @@ test("Open English WordNet sense ids resolve to one indexed JSON span", async ()
   }
 });
 
-test("indexed vocab queries keep exact entries while stale indexes warn and remain usable", async () => {
+test("indexed vocab queries use the stored snapshot without scanning changed catalogs", async () => {
   const directory = await mkdtemp(join(tmpdir(), "pyash-kwon-query-"));
   clearKwonLookupIndexValidationCache();
   try {
@@ -322,12 +328,10 @@ test("indexed vocab queries keep exact entries while stale indexes warn and rema
       JSON.stringify(["treaty", "coincidence"])
     ]);
     assert.deepEqual(await queryVocabLines("love", { indexPaths, root: directory }), ["pyan en love"]);
-    assert.deepEqual(await queryVocabLines("freshword", { indexPaths, root: directory }), ["nyat en freshword"]);
-    assert.equal(warnings.length, 2);
-    assert.ok(warnings.every((warning) => /node command\/vocab_lookup_index\.mjs/u.test(warning)));
+    assert.deepEqual(await queryVocabLines("freshword", { indexPaths, root: directory }), []);
+    assert.equal(warnings.length, 0);
     const endWarnings = takeKwonLookupWarnings();
-    assert.equal(endWarnings.length, 1);
-    assert.match(endWarnings[0], /Changed catalogs are scanned for current results/u);
+    assert.equal(endWarnings.length, 0);
     assert.deepEqual(await queryVocabLines("lov", { indexPaths, root: directory }), [
       "pyan en love",
       "pyanpu en loved"
@@ -342,10 +346,9 @@ test("indexed vocab queries keep exact entries while stale indexes warn and rema
       root: directory,
       onWarning: (warning) => fallbackWarnings.push(warning)
     }), ["pyan en love"]);
-    assert.ok(fallbackWarnings.some((warning) => /using its indexed entries for now/u.test(warning)));
+    assert.equal(fallbackWarnings.length, 0);
     const fallbackEndWarnings = takeKwonLookupWarnings();
-    assert.equal(fallbackEndWarnings.length, 1);
-    assert.match(fallbackEndWarnings[0], /Live scan fallback/u);
+    assert.equal(fallbackEndWarnings.length, 0);
   } finally {
     clearKwonLookupIndexValidationCache();
     await rm(directory, { recursive: true, force: true });
@@ -503,7 +506,7 @@ test("indexed WordNet compound lookup matches English, Pyac, and sense keys", as
   }
 });
 
-test("WordNet compound lookup scans the catalog when an index posting points past EOF", async () => {
+test("WordNet compound lookup returns no hit when an indexed snapshot locator is invalid", async () => {
   const directory = await mkdtemp(join(tmpdir(), "pyash-kwon-compound-stale-locator-"));
   try {
     const senseId = "n:07558676-n";
@@ -553,9 +556,7 @@ test("WordNet compound lookup scans the catalog when an index posting points pas
       indexPaths,
       indexRoot: directory
     });
-    assert.equal(matches.length, 1);
-    assert.equal(matches[0].senseId, senseId);
-    assert.equal(matches[0].target, "love compound");
+    assert.equal(matches.length, 0);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -592,17 +593,16 @@ test("kwon locator reads reject source paths outside the repository root", async
   }
 });
 
-test("kwon lookup indexes warn and scan changed catalogs while retaining old and new records", async () => {
+test("kwon Pya postings skip a stale offset instead of returning another row", async () => {
   const directory = await mkdtemp(join(tmpdir(), "pyash-kwon-stale-"));
   clearKwonLookupIndexValidationCache();
   try {
     const sourcePath = join(directory, "records.pya");
     const source = 'su text "n:07558676-n" ob text "love" ya\n';
     await writeFile(sourcePath, source, "utf8");
-    const index = createKwonLookupIndexForTest({
-      kind: "wordnet",
-      sourceHashes: { "records.pya": sha256(Buffer.from(source)) },
-      entries: [["n:07558676-n", [{ sourceId: "records.pya", byteOffset: 0, lineNumber: 1, recordId: "n:07558676-n" }]]]
+    const { wordnet: index } = await buildKwonLookupIndexes({
+      root: directory,
+      sourcePaths: ["records.pya"]
     });
     const indexPath = join(directory, "wordnet-index.pya");
     await writeFile(indexPath, renderKwonLookupIndexPya(index), "utf8");
@@ -624,22 +624,17 @@ test("kwon lookup indexes warn and scan changed catalogs while retaining old and
     });
     assert.equal(matches.length, 1);
     assert.equal(matches[0].recordId, "n:07558676-n");
-    assert.ok(matches[0].byteOffset > 0);
     const [record] = await readKwonSourceLocators(matches, { root: directory });
-    assert.equal(record.line, source.trimEnd());
+    assert.equal(record, undefined);
     const added = await lookupKwonIndex({
       kind: "wordnet",
       key: "n:07558677-n",
       indexPath,
       root: directory
     });
-    assert.equal(added.length, 1);
-    assert.equal(added[0].recordId, "n:07558677-n");
-    assert.equal(warnings.length, 1);
-    assert.match(warnings[0], /records\.pya/u);
-    assert.match(warnings[0], /changed catalogs are scanned for this lookup/u);
-    assert.match(warnings[0], /node command\/vocab_lookup_index\.mjs/u);
-    assert.equal(takeKwonLookupWarnings().length, 1);
+    assert.equal(added.length, 0);
+    assert.equal(warnings.length, 0);
+    assert.equal(takeKwonLookupWarnings().length, 0);
   } finally {
     clearKwonLookupIndexValidationCache();
     await rm(directory, { recursive: true, force: true });

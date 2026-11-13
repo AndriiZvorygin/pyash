@@ -5,3 +5,4 @@ exists su name grey county nightly clock ob text "04:00 America/Toronto daily" b
 exists su name refinery watchdog first clock ob text "05:00 America/Toronto daily" be text ya
 exists su name refinery watchdog second clock ob text "06:00 America/Toronto daily" be text ya
 exists su name WordNet sweep watchdog schedule ob text "00:00, 04:00, 08:00, 12:00, 16:00, 20:00 America/Toronto daily" be text ya
+exists su name kwon lookup index refresh schedule ob text "minute 17 every hour" be text ya

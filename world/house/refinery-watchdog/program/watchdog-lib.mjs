@@ -11,6 +11,8 @@ export const PYASH_ROOT = path.resolve(HOUSE_ROOT, "../../..");
 export const ARTIFACT_ROOT = path.join(HOUSE_ROOT, "artifacts");
 export const WATCHDOG_LOCK = "/tmp/refinery-watchdog.lock";
 export const PIPELINE_LOCK = "/tmp/municipal-reporter-pipeline.lock";
+const CALENDAR_PATH = path.join(HOUSE_ROOT, "conduct", "calendar.pya");
+const KWON_LOOKUP_REFRESH_SCHEDULE = "kwon lookup index refresh schedule";
 
 export const REPORTERS = Object.freeze({
   andrii: Object.freeze({
@@ -396,6 +398,8 @@ export function mergeManagedCrontab(existing, { nodeBin = process.execPath } = {
   }
   while (kept.length && !kept[kept.length - 1].trim()) kept.pop();
   const entry = (minute, hour, program, suffix = "") => `${minute} ${hour} * * * cd ${PYASH_ROOT} && ${nodeBin} ${path.join(PROGRAM_DIR, program)}${suffix} >> ${path.join(ARTIFACT_ROOT, "cron.log")} 2>&1`;
+  const refreshSchedule = readPyaTextValues(CALENDAR_PATH, [KWON_LOOKUP_REFRESH_SCHEDULE])[KWON_LOOKUP_REFRESH_SCHEDULE];
+  const refreshCron = parseKwonLookupIndexRefreshSchedule(refreshSchedule);
   const block = [
     start,
     entry("0", "2", "run-nightly-refinery.mjs", " andrii"),
@@ -403,9 +407,22 @@ export function mergeManagedCrontab(existing, { nodeBin = process.execPath } = {
     entry("0", "4", "run-nightly-refinery.mjs", " grey"),
     entry("0", "5,6", "run-watchdog.mjs"),
     `0 * * * * cd ${PYASH_ROOT} && ${nodeBin} ${path.join(PROGRAM_DIR, "run-wordnet-sweep-watchdog.mjs")} >> ${path.join(ARTIFACT_ROOT, "cron.log")} 2>&1`,
-    end,
+    ...(refreshCron ? [
+      `${refreshCron} /usr/bin/flock -n /tmp/pyash-kwon-lookup-index-refresh.lock ${nodeBin} ${path.join(PYASH_ROOT, "command/vocab_lookup_index.mjs")} >> ${path.join(ARTIFACT_ROOT, "cron.log")} 2>&1`
+    ] : []),
+    end
   ];
   return `${[...kept, ...(kept.length ? [""] : []), ...block].join("\n")}\n`;
+}
+
+export function parseKwonLookupIndexRefreshSchedule(value) {
+  const text = String(value ?? "").trim().toLowerCase();
+  if (text === "disabled") return null;
+  const match = text.match(/^minute\s+(\d{1,2})\s+every hour$/u);
+  if (!match || Number(match[1]) > 59) {
+    throw new Error(`invalid ${KWON_LOOKUP_REFRESH_SCHEDULE}: ${String(value ?? "")}`);
+  }
+  return `${Number(match[1])} * * * *`;
 }
 
 export async function sendMatrixAlert(message, { stream = false } = {}) {
