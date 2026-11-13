@@ -199,12 +199,27 @@ than the contract above:
   64 MiB GPU request, and evaluates candidate/example pairs in a CUDA kernel.
   Failed or timed-out jobs are surfaced with their durable handle; the
   production adapter has no local CPU scoring fallback.
+- A bounded Pyash source surface is now available in
+  `examples/pyash/vliw-u16-addition.pya`. Its named maps declare the function,
+  instruction records, and input/expected-output cases; named series select
+  the instruction order and training/held-out cases. The parser in
+  `program/library/vliw/source.mjs` consumes the normal Pyash sentence parser
+  and returns the existing normalized function contract plus case arrays. It
+  rejects malformed references and sentence shapes rather than executing or
+  silently skipping them. The current profile is still only two U16 inputs,
+  one U16 output, and straight-line `plus`, `subtract`, or `xor` instructions.
 
 This profile is not the legacy 16-word codelet encoding, does not lower
 arbitrary Pyash sentences, and does not establish compatibility with a target
 ISA. The named slots are ephemeral function-local values, not the pending
 `.data`/symbol-table container contract. Keep these boundaries explicit until
 the canonical sentence-to-codelet path and semantic conformance fixtures exist.
+
+The source parser and CPU contract are covered by:
+
+```bash
+node --test quiz/vliw_function_source.test.mjs quiz/vliw_functions.test.mjs quiz/vliw_evolution.test.mjs quiz/vliw_housekeeper.test.mjs
+```
 
 ## Implementation Milestones
 
