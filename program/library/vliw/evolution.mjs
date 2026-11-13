@@ -1,9 +1,11 @@
 import {
   MAX_FUNCTION_INSTRUCTIONS,
   compareVliwFitness,
-  normalizeVliwFunction
+  normalizeVliwFunction,
+  scoreVliwFunction
 } from "./functions.mjs";
 import { createHousekeeperVliwBatchEvaluator } from "./housekeeper.mjs";
+import { parseVliwFunctionSource, renderVliwFunctionSource } from "./source.mjs";
 
 export const MAX_VLIW_POPULATION = 256;
 export const MAX_VLIW_GENERATIONS = 31;
@@ -92,8 +94,16 @@ function normalizeBatchScores(candidates, scores) {
     if (values.some((value) => !Number.isInteger(value) || value < 0)) {
       throw new Error(`VLIW batch evaluator returned an invalid fitness for ${candidate.id}`);
     }
+    let outputs = null;
+    if (Array.isArray(score.outputs)) {
+      outputs = score.outputs.map(Number);
+      if (outputs.some((value) => !Number.isInteger(value) || value < 0 || value > 0xffff)) {
+        throw new Error(`VLIW batch evaluator returned invalid outputs for ${candidate.id}`);
+      }
+    }
     return {
       candidate,
+      outputs,
       fitness: {
         incorrectCount: values[0],
         totalAbsoluteError: values[1],
@@ -193,6 +203,8 @@ export async function evolveVliwFunction({
     candidate: champion.candidate,
     trainingFitness: champion.fitness,
     heldoutFitness: heldout.fitness,
+    trainingOutputs: champion.outputs,
+    heldoutOutputs: heldout.outputs,
     validated: heldout.fitness.incorrectCount === 0
   };
 }
@@ -205,4 +217,70 @@ export async function evolveVliwFunctionThroughHousekeeper({
     ...options,
     evaluateBatch: createHousekeeperVliwBatchEvaluator(housekeeper)
   });
+}
+
+function verifyReferenceOutputs(candidate, cases, expectedFitness, actualOutputs, label) {
+  const reference = scoreVliwFunction(candidate, cases);
+  const referenceOutputs = reference.results.map(({ actual }) => actual);
+  if (!Array.isArray(actualOutputs) || actualOutputs.length !== referenceOutputs.length
+    || actualOutputs.some((value, index) => value !== referenceOutputs[index])) {
+    throw new Error(`Housekeeper ${label} outputs disagree with the CPU reference`);
+  }
+  const referenceFitness = {
+    incorrectCount: reference.incorrectCount,
+    totalAbsoluteError: reference.totalAbsoluteError,
+    instructionCount: reference.instructionCount
+  };
+  if (compareVliwFitness(referenceFitness, expectedFitness) !== 0) {
+    throw new Error(`Housekeeper ${label} fitness disagrees with the CPU reference`);
+  }
+  return { fitness: referenceFitness, outputs: referenceOutputs };
+}
+
+/** Parse, evolve through Housekeeper, and compare exact per-case outputs with the CPU reference. */
+export async function evolveVliwFunctionSourceThroughHousekeeper({
+  sourceText,
+  functionName = "",
+  housekeeper = {},
+  ...options
+} = {}) {
+  const source = parseVliwFunctionSource(sourceText, { functionName });
+  const result = await evolveVliwFunctionThroughHousekeeper({
+    ...options,
+    housekeeper,
+    template: source.definition,
+    trainingCases: source.trainingCases,
+    heldoutCases: source.heldoutCases
+  });
+  const cpuTraining = verifyReferenceOutputs(
+    result.candidate,
+    source.trainingCases,
+    result.trainingFitness,
+    result.trainingOutputs,
+    "training"
+  );
+  const cpuHeldout = verifyReferenceOutputs(
+    result.candidate,
+    source.heldoutCases,
+    result.heldoutFitness,
+    result.heldoutOutputs,
+    "held-out"
+  );
+  return {
+    ...result,
+    validated: result.validated
+      && cpuTraining.fitness.incorrectCount === 0
+      && cpuHeldout.fitness.incorrectCount === 0,
+    cpuReference: {
+      trainingFitness: cpuTraining.fitness,
+      trainingOutputs: cpuTraining.outputs,
+      heldoutFitness: cpuHeldout.fitness,
+      heldoutOutputs: cpuHeldout.outputs
+    },
+    candidateSourcePya: renderVliwFunctionSource({
+      definition: result.candidate,
+      trainingCases: source.trainingCases,
+      heldoutCases: source.heldoutCases
+    })
+  };
 }

@@ -1,6 +1,7 @@
 import { splitSentences } from "../sentenceSplitter.mjs";
 import { parse } from "../../understand/index.mjs";
-import { normalizeVliwFunction } from "./functions.mjs";
+import { sentenceToPyash } from "../../beautiful.mjs";
+import { normalizeVliwFunction, scoreVliwFunction } from "./functions.mjs";
 
 export class VliwFunctionSourceError extends Error {
   constructor(message, details = {}) {
@@ -222,4 +223,72 @@ export function parseVliwFunctionSource(sourceText, { functionName = "" } = {}) 
   const heldoutCases = resolveSeries(blocks, heldoutSeriesName, "held-out case")
     .map((caseName) => loadCase(blocks, caseName, definition.inputSlots));
   return { definition, trainingCases, heldoutCases };
+}
+
+function renderFact(name, ob) {
+  return sentenceToPyash({ mood: "ya", su: { name }, ob });
+}
+
+function renderMap(name, entries) {
+  return [
+    `su name ${name} be map def`,
+    ...entries.map(([key, ob]) => `  ${renderFact(key, ob)}`),
+    "prah"
+  ];
+}
+
+function renderSeries(name, references) {
+  return [
+    `su name ${name} be series def`,
+    ...references.map((reference) => `  ${sentenceToPyash({ mood: "ya", su: { name: reference } })}`),
+    "prah"
+  ];
+}
+
+/** Render a normalized function and its cases into the same parseable Pyash source surface. */
+export function renderVliwFunctionSource({ definition: rawDefinition, trainingCases, heldoutCases } = {}) {
+  const definition = normalizeVliwFunction(rawDefinition);
+  if (!Array.isArray(trainingCases) || trainingCases.length === 0) {
+    fail("rendering VLIW source requires training cases");
+  }
+  if (!Array.isArray(heldoutCases) || heldoutCases.length === 0) {
+    fail("rendering VLIW source requires held-out cases");
+  }
+  scoreVliwFunction(definition, trainingCases);
+  scoreVliwFunction(definition, heldoutCases);
+
+  const instructionNames = definition.instructions.map((_, index) => (
+    `vliw instruction ${String(index + 1).padStart(3, "0")}`
+  ));
+  const trainingNames = trainingCases.map((_, index) => `vliw training case ${String(index + 1).padStart(3, "0")}`);
+  const heldoutNames = heldoutCases.map((_, index) => `vliw heldout case ${String(index + 1).padStart(3, "0")}`);
+  const lines = [
+    ...renderMap("vliw function source", [
+      ["function name", { text: definition.name }],
+      ["slots", { ve: { type: "text", values: definition.slots } }],
+      ["input slots", { ve: { type: "text", values: definition.inputSlots } }],
+      ["output slot", { name: definition.outputSlot }],
+      ["instruction series", { name: "vliw function instructions" }],
+      ["training case series", { name: "vliw function training" }],
+      ["heldout case series", { name: "vliw function heldout" }]
+    ]),
+    ...renderSeries("vliw function instructions", instructionNames),
+    ...definition.instructions.flatMap((instruction, index) => renderMap(instructionNames[index], [
+      ["op", { text: instruction.op }],
+      ["target", { name: instruction.target }],
+      ["left", { name: instruction.left }],
+      ["right", { name: instruction.right }]
+    ])),
+    ...renderSeries("vliw function training", trainingNames),
+    ...trainingCases.flatMap((testCase, index) => renderMap(trainingNames[index], [
+      ...definition.inputSlots.map((slot) => [slot, { num: testCase.values[slot] }]),
+      ["expected", { num: testCase.expected }]
+    ])),
+    ...renderSeries("vliw function heldout", heldoutNames),
+    ...heldoutCases.flatMap((testCase, index) => renderMap(heldoutNames[index], [
+      ...definition.inputSlots.map((slot) => [slot, { num: testCase.values[slot] }]),
+      ["expected", { num: testCase.expected }]
+    ]))
+  ];
+  return `${lines.join("\n")}\n`;
 }
