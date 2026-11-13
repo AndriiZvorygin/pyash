@@ -121,6 +121,31 @@ export function parseWordNetSenseIndex(source) {
   return { bySynset, bySenseKey };
 }
 
+async function readPinnedWordNet31SenseIndex(root, config) {
+  const sourceId = config.get("wordnet-31-index");
+  const expectedHash = config.get("wordnet-31-index-hash");
+  if (!sourceId || !expectedHash) throw new Error("SUMO crosswalk requires a pinned WordNet 3.1 sense index");
+  const source = await readFile(resolve(root, sourceId));
+  const actualHash = sha256(source);
+  if (actualHash !== expectedHash) {
+    throw Object.assign(new Error("WordNet 3.1 sense index does not match the pinned crosswalk input"), {
+      code: "stale-sumo-source",
+      details: { sourceId, expected: expectedHash, actual: actualHash }
+    });
+  }
+  return {
+    ...parseWordNetSenseIndex(source.toString("utf8")),
+    sourceId,
+    sourceHash: actualHash
+  };
+}
+
+export async function loadPinnedWordNet31SenseIndex({ root = SUMO_REPOSITORY_ROOT } = {}) {
+  const source = await readFile(resolve(root, SUMO_CROSSWALK_CONFIG_PATH), "utf8");
+  const config = mapValues(source, "sumo_wordnet_source");
+  return readPinnedWordNet31SenseIndex(root, config);
+}
+
 export function parseSumoWordNetMappingLine(line) {
   const source = String(line).trim();
   if (!/^\d{8}\s/u.test(source)) return null;
@@ -307,18 +332,10 @@ export async function loadPinnedSumoWordNetCatalog({ root = SUMO_REPOSITORY_ROOT
   }
   const hashes = JSON.parse(config.get("source-hashes") ?? "{}");
   const sources = await checkPinnedFiles(root, hashes);
-  const wordNet31SourceId = config.get("wordnet-31-index");
-  const wordNet31Hash = config.get("wordnet-31-index-hash");
-  const wordNet31Source = await readFile(resolve(root, wordNet31SourceId));
-  if (sha256(wordNet31Source) !== wordNet31Hash) {
-    throw Object.assign(new Error("WordNet 3.1 sense index does not match the pinned crosswalk input"), {
-      code: "stale-sumo-source",
-      details: { sourceId: wordNet31SourceId, expected: wordNet31Hash, actual: sha256(wordNet31Source) }
-    });
-  }
+  const wordNet31 = await readPinnedWordNet31SenseIndex(root, config);
   const oewn = await loadOpenEnglishWordNetCrosswalk(root, config.get("open-wordnet-config"));
   const sense30 = parseWordNetSenseIndex(sources.get("know/sumo/WordNetMappings/index.sense").toString("utf8"));
-  const sense31 = parseWordNetSenseIndex(wordNet31Source.toString("utf8"));
+  const sense31 = wordNet31;
   const termFormats = parseKifEnglishTermFormats(sources.get("know/sumo/domainEnglishFormat.kif").toString("utf8"));
   const mappingRows = SUMO_WORDNET_MAPPINGS.flatMap((name) => (
     sources.get(`know/sumo/WordNetMappings/${name}`).toString("utf8").split(/\r?\n/u)
@@ -342,7 +359,7 @@ export async function loadPinnedSumoWordNetCatalog({ root = SUMO_REPOSITORY_ROOT
       sumoSource: config.get("sumo-source"),
       sumoCommit: config.get("sumo-commit"),
       mappingVersion: "WordNet 3.0",
-      wordNet31Index: wordNet31SourceId,
+      wordNet31Index: wordNet31.sourceId,
       openWordNet: "Open English WordNet 2025",
       openWordNetSourceHash: oewn.sourceHash,
       sourceHashes: Object.fromEntries([...sources].map(([sourceId, source]) => [sourceId, sha256(source)])),
