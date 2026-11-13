@@ -5,8 +5,10 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+  buildRecoveryDecisionFacts,
   inspectWordnetSweep,
   pyaFacts,
+  resolveActiveWordNetSweepDuties,
   shouldInvokeRecovery,
 } from "../world/house/refinery-watchdog/program/run-wordnet-sweep-watchdog.mjs";
 import { readSweepRecoveryConfig } from "../world/house/refinery-watchdog/program/wordnet-sweep-recovery.mjs";
@@ -56,6 +58,54 @@ test("a live sweep with recent durable artifacts is healthy", async () => {
 test("watchdog Pyash facts must preserve the requested subject name when parsed", () => {
   assert.match(pyaFacts({ "WordNet recovery restart verified time": "2026-11-13T05:17:32Z" }), /restart verified time/u);
   assert.throws(() => pyaFacts({ "WordNet recovery restart verified at": "2026-11-13T05:17:32Z" }), /does not round-trip/u);
+});
+
+test("recovery decision facts serialize every recorded Housekeeper detail with valid Pyash names", () => {
+  const facts = buildRecoveryDecisionFacts({
+    inspection: { runId: "run-1", remainingSenseCount: 42 },
+    context: { model: "Spark-X" },
+    housekeeper: { host: "mriczo", queued: 0, running: 1 },
+    result: {
+      handleId: "handle-1",
+      managedBy: "gpu-housekeeper",
+      startedAt: "2026-11-13T14:00:01Z",
+      finishedAt: "2026-11-13T14:00:02Z"
+    },
+    decision: {
+      assessment: "stopped",
+      action: "resume",
+      reason: "stopped safely",
+      rootCauseHypothesis: "heap exhausted",
+      fixPlan: "resume same run",
+      testPlan: "verify lock"
+    }
+  });
+
+  assert.equal(facts["WordNet recovery manager"], "gpu-housekeeper");
+  assert.equal(facts["WordNet recovery action"], "resume");
+  assert.doesNotThrow(() => pyaFacts(facts));
+});
+
+test("Housekeeper terminal job status clears stale running WordNet queue entries", async () => {
+  const duties = await resolveActiveWordNetSweepDuties([
+    { handleId: "wordnet-sense-done", remoteJobId: "done", status: "running" },
+    { handleId: "wordnet-sense-live", remoteJobId: "live", status: "running" },
+    { handleId: "other-work", remoteJobId: "other", status: "running" }
+  ], async ({ remoteJobId }) => ({ status: remoteJobId === "done" ? "success" : "running" }));
+
+  assert.deepEqual(duties, [
+    { handleId: "wordnet-sense-live", remoteJobId: "live", status: "running" }
+  ]);
+});
+
+test("Housekeeper status lookup failure keeps a WordNet duty active for safety", async () => {
+  const duties = await resolveActiveWordNetSweepDuties([
+    { handleId: "wordnet-sense-unknown", remoteJobId: "unknown", status: "running" }
+  ], async () => { throw new Error("status unavailable"); });
+
+  assert.equal(duties.length, 1);
+  assert.equal(duties[0].status, "running");
+  assert.match(duties[0].statusCheckError, /status unavailable/u);
 });
 
 test("the watchdog recognizes its documented resume entry point as the sweep owner", async () => {

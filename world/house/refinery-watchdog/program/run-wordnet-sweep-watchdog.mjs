@@ -156,6 +156,36 @@ export function shouldInvokeRecovery(inspection) {
   return ["stopped", "stalled", "lock_conflict"].includes(inspection?.state);
 }
 
+export async function resolveActiveWordNetSweepDuties(jobs = [], getJobStatus = async () => null) {
+  const activeStatuses = new Set(["queued", "running", "pending", "active"]);
+  const terminalStatuses = new Set(["success", "succeeded", "complete", "completed", "failed", "failure", "error", "cancelled", "canceled", "expired", "rejected"]);
+  const candidates = (Array.isArray(jobs) ? jobs : []).filter((job) => (
+    /^wordnet-sense-/u.test(String(job?.handleId ?? ""))
+    && activeStatuses.has(String(job?.status ?? "").toLowerCase())
+  ));
+  const resolved = await Promise.all(candidates.map(async (job) => {
+    const handleId = String(job.handleId);
+    const remoteJobId = String(job.remoteJobId ?? "");
+    const queuedStatus = String(job.status).toLowerCase();
+    if (!remoteJobId) return { handleId, status: queuedStatus };
+    try {
+      const remote = await getJobStatus({ remoteJobId });
+      const status = String(remote?.status ?? remote?.state ?? "").toLowerCase();
+      if (terminalStatuses.has(status)) return null;
+      if (activeStatuses.has(status)) return { handleId, remoteJobId, status };
+      return {
+        handleId,
+        remoteJobId,
+        status: queuedStatus,
+        statusCheckError: `unrecognized remote job status: ${status || "empty"}`
+      };
+    } catch (error) {
+      return { handleId, remoteJobId, status: queuedStatus, statusCheckError: error.message };
+    }
+  }));
+  return resolved.filter(Boolean);
+}
+
 function pyaText(value) {
   return String(value ?? "").replace(/\\/gu, "\\\\").replace(/"/gu, "\\\"").replace(/[\r\n]+/gu, " ").trim();
 }
@@ -169,6 +199,28 @@ export function pyaFacts(values) {
     return sentence;
   });
   return `${records.join("\n")}\n`;
+}
+
+export function buildRecoveryDecisionFacts({ inspection = {}, context = {}, housekeeper = {}, result = {}, decision = {} } = {}) {
+  return {
+    "WordNet recovery state": "decision-recorded",
+    "WordNet recovery run id": inspection.runId,
+    "WordNet recovery model": context.model,
+    "WordNet recovery Housekeeper host": housekeeper.host,
+    "WordNet recovery Housekeeper handle": result.handleId,
+    "WordNet recovery manager": result.managedBy,
+    "WordNet recovery start time": result.startedAt,
+    "WordNet recovery completion time": result.finishedAt,
+    "WordNet recovery assessment": decision.assessment,
+    "WordNet recovery action": decision.action,
+    "WordNet recovery reason": decision.reason,
+    "WordNet recovery root cause hypothesis": decision.rootCauseHypothesis,
+    "WordNet recovery fix plan": decision.fixPlan,
+    "WordNet recovery test plan": decision.testPlan,
+    "WordNet recovery remaining sense count": inspection.remainingSenseCount,
+    "WordNet recovery Housekeeper queued": housekeeper.queued,
+    "WordNet recovery Housekeeper running": housekeeper.running,
+  };
 }
 
 async function appendPyaFacts(filePath, values) {
@@ -248,10 +300,10 @@ async function inspectHousekeeper(model) {
   ]);
   const models = Array.isArray(catalog) ? catalog : catalog?.models ?? [];
   const modelNames = models.map((entry) => typeof entry === "string" ? entry : entry?.name ?? entry?.model ?? "");
-  const matchingSweepDuties = (Array.isArray(queue?.jobs) ? queue.jobs : [])
-    .filter((job) => /^wordnet-sense-/u.test(String(job?.handleId ?? ""))
-      && ["queued", "running", "pending", "active"].includes(String(job?.status ?? "").toLowerCase()))
-    .map((job) => ({ handleId: String(job.handleId), status: String(job.status).toLowerCase() }));
+  const matchingSweepDuties = await resolveActiveWordNetSweepDuties(
+    queue?.jobs,
+    ({ remoteJobId }) => adapter.getJobStatus({ remoteJobId })
+  );
   return {
     url,
     host: new URL(url).host,
@@ -551,25 +603,13 @@ async function writeRecoveryTurn({ artifactDirectory, inspection, context, house
   });
   await fsp.writeFile(path.join(artifactDirectory, "spark-x-recovery-response.txt"), `${result.text}\n`, "utf8");
   const decision = parseSweepRecoveryDecision(result.text);
-  await appendPyaFacts(path.join(artifactDirectory, "recovery-decision.pya"), {
-    "WordNet recovery state": "decision-recorded",
-    "WordNet recovery run id": inspection.runId,
-    "WordNet recovery model": context.model,
-    "WordNet recovery Housekeeper host": housekeeper.host,
-    "WordNet recovery Housekeeper handle": result.handleId,
-    "WordNet recovery managed by": result.managedBy,
-    "WordNet recovery start time": result.startedAt,
-    "WordNet recovery completion time": result.finishedAt,
-    "WordNet recovery assessment": decision.assessment,
-    "WordNet recovery action": decision.action,
-    "WordNet recovery reason": decision.reason,
-    "WordNet recovery root cause hypothesis": decision.rootCauseHypothesis,
-    "WordNet recovery fix plan": decision.fixPlan,
-    "WordNet recovery test plan": decision.testPlan,
-    "WordNet recovery remaining at decision": inspection.remainingSenseCount,
-    "WordNet recovery Housekeeper queued": housekeeper.queued,
-    "WordNet recovery Housekeeper running": housekeeper.running,
-  });
+  await appendPyaFacts(path.join(artifactDirectory, "recovery-decision.pya"), buildRecoveryDecisionFacts({
+    inspection,
+    context,
+    housekeeper,
+    result,
+    decision
+  }));
   return { decision, result, prompt };
 }
 
