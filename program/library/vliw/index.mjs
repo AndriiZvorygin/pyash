@@ -342,7 +342,12 @@ export {
   deriveSentenceEffects,
   scheduleCodeletDependencies
 } from "./effects.mjs";
-export { parseVliwFunctionSource, VliwFunctionSourceError } from "./source.mjs";
+export {
+  parseVliwFunctionSource,
+  renderVliwFunctionSource,
+  VliwFunctionSourceError
+} from "./source.mjs";
+export { evolveVliwFunctionSourceThroughHousekeeper } from "./evolution.mjs";
 export {
   PYAC_MAGIC,
   PYAC_FORMAT_VERSION,

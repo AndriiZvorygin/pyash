@@ -208,6 +208,11 @@ than the contract above:
   rejects malformed references and sentence shapes rather than executing or
   silently skipping them. The current profile is still only two U16 inputs,
   one U16 output, and straight-line `plus`, `subtract`, or `xor` instructions.
+- `evolveVliwFunctionSourceThroughHousekeeper` runs that source through the
+  existing seeded evolution loop, then checks every returned training and
+  held-out output against the CPU reference. The result includes a parseable
+  `candidateSourcePya` string so the selected function can be retained in the
+  same map/series source format. A Housekeeper/CPU mismatch is a hard error.
 
 This profile is not the legacy 16-word codelet encoding, does not lower
 arbitrary Pyash sentences, and does not establish compatibility with a target
