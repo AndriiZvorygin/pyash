@@ -1,0 +1,2 @@
+from filename "examples/pyash/vliw-constant-arithmetic.pya" fromstate pyash tostate pyac to filename "examples/out/vliw-constant-arithmetic.pyac" be compile do
+from filename "examples/out/vliw-constant-arithmetic.pyac" fromstate pyac tostate c to filename "examples/out/vliw-constant-arithmetic.c" be compile do

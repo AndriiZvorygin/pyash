@@ -295,6 +295,32 @@ instruction subset it emits, and that executor is what proves the result
 matches the interpreter; running the image itself needs a RISC-V machine or
 emulator, which this repository does not yet depend on.
 
+## Pyash source through a persisted `.pyac` pack
+
+The existing compile verb can lower a one-paragraph Pyash source file into the
+fixed-width PyAC VLIW pack, then compile that pack to C:
+
+```pyash
+from filename "examples/pyash/vliw-constant-arithmetic.pya" fromstate pyash tostate pyac to filename "examples/out/vliw-constant-arithmetic.pyac" be compile do
+from filename "examples/out/vliw-constant-arithmetic.pyac" fromstate pyac tostate c to filename "examples/out/vliw-constant-arithmetic.c" be compile do
+```
+
+The first compile fails with the source sentence number if a sentence cannot
+be lowered, and it requires a destination filename so the binary pack is
+persisted. The current flat pack does not preserve paragraph boundaries.
+`examples/pyash/compile-vliw-constant-arithmetic.pya` is a runnable build
+driver; its source fixture uses three independent constant arithmetic
+sentences.
+
+```bash
+./run examples/pyash/compile-vliw-constant-arithmetic.pya
+cc -std=c11 -Wall -Werror -o examples/out/vliw-constant-arithmetic examples/out/vliw-constant-arithmetic.c
+./examples/out/vliw-constant-arithmetic
+```
+
+The executable prints `42`, `40`, and `42`, one result per codelet.
+`examples/out/` is ignored by Git.
+
 ## C from a persisted `.pyac` pack
 
 The existing Pyash compile verb accepts a persisted PyAC pack as a C source:

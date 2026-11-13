@@ -11,6 +11,7 @@ import { expandModulesForCompile } from "./module_imports.mjs";
 import { transpileProgram } from "./transpile_program.mjs";
 import { resolveCompiledCommandPolicy } from "../command_policy.mjs";
 import { compilePyacPackToC } from "./pyac_to_c.mjs";
+import { encodePyacPack, lowerSentence } from "../vliw/index.mjs";
 
 function resolveStateValue(value) {
   if (!value) return "";
@@ -139,6 +140,73 @@ export async function compile_from_filename_to_filename(sentence) {
 
   if (!sourceState || sourceState === "pyash") {
     sourceText = sourceText.replaceAll("\\n", "\n");
+  }
+
+  if (targetState === "pyac") {
+    if (sourceState && sourceState !== "pyash") {
+      throwErrorSentence({
+        name: "compile error",
+        message: `compile: PyAC output currently requires Pyash input, not ${sourceState}`,
+        from: { name: "compile" }
+      });
+    }
+    const targetFilename = resolveSandboxPath(sentence?.to?.filename);
+    if (!targetFilename) {
+      throwErrorSentence({
+        name: "compile error",
+        message: "compile: PyAC output requires a destination filename",
+        from: { name: "compile" }
+      });
+    }
+
+    let codelets;
+    try {
+      const program = buildProgram(sourceText);
+      if (program.sentences.length === 0) {
+        throw new Error("source contains no Pyash sentences");
+      }
+      codelets = [];
+      for (const [index, pyaSentence] of program.sentences.entries()) {
+        try {
+          codelets.push(...lowerSentence(pyaSentence));
+        } catch (error) {
+          throw new Error(`Pyash sentence ${index + 1} cannot be lowered to PyAC: ${error?.message ?? String(error)}`, {
+            cause: error
+          });
+        }
+      }
+    } catch (error) {
+      throwErrorSentence({
+        name: "compile error",
+        message: `compile: Pyash to PyAC failed: ${error?.message ?? String(error)}`,
+        from: { name: "compile" },
+        raw: { code: error?.code ?? null, details: error?.details ?? null }
+      });
+    }
+
+    let pack;
+    try {
+      pack = encodePyacPack(codelets);
+    } catch (error) {
+      throwErrorSentence({
+        name: "compile error",
+        message: `compile: PyAC pack encoding failed: ${error?.message ?? String(error)}`,
+        from: { name: "compile" },
+        raw: { code: error?.code ?? null, details: error?.details ?? null }
+      });
+    }
+    await fs.writeFile(targetFilename, pack);
+
+    const targetName = sentence?.to?.name ?? sentence?.su?.name;
+    if (targetName) {
+      doRemember({
+        su: { name: targetName },
+        be: "pyac",
+        ob: { filename: targetFilename },
+        mood: "ya"
+      });
+    }
+    return { ob: { filename: targetFilename }, be: "pyac" };
   }
 
   if (sourceState === "markdown" && (targetState === "html" || targetState === "pdf")) {
