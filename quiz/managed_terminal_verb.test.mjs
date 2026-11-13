@@ -5,7 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { parse } from "../program/understand/index.mjs";
-import { resolveChildAgentTarget, commandSession as terminal } from "../program/verbs/command_session.mjs";
+import { resolveChildAgentTarget, commandSession } from "../program/verbs/command_session.mjs";
 import { requestManagedTerminal } from "../program/agent/managed_terminal_ipc.mjs";
 
 async function withProject(run) {
@@ -43,11 +43,11 @@ function rememberFor({ project, world, runtimeRoot, minds = {}, delegation = {},
   return (name) => facts.get(name) ?? null;
 }
 
-function terminalSentence(action, request = {}) {
+function commandSessionSentence(action, request = {}) {
   return parse(`su name command session be command session as wo ${action} ob text ${JSON.stringify(JSON.stringify(request))} do`);
 }
 
-test("terminal launch is restricted to the licensed project working directory", async () => {
+test("command session launch is restricted to the licensed project working directory", async () => {
   await withProject(async ({ project, temporary, world }) => {
     const runtimeRoot = path.join(temporary, "pyash-runtime");
     const remember = rememberFor({ project, world, runtimeRoot });
@@ -56,7 +56,7 @@ test("terminal launch is restricted to the licensed project working directory", 
       calls.push(args);
       return { id: "terminal-1", status: "running" };
     };
-    const started = await terminal(terminalSentence("start", {
+    const started = await commandSession(commandSessionSentence("start", {
       command: process.execPath,
       args: ["-e", "process.stdout.write('ready')"]
     }), { remember, requestTerminal, runtimeContext: { agentName: "mind", backend: "ollama" } });
@@ -64,7 +64,7 @@ test("terminal launch is restricted to the licensed project working directory", 
     assert.equal(calls.length, 1);
     assert.equal(calls[0][1], project, "terminal manager scope must follow the agent project, not Pyash runtime");
 
-    await assert.rejects(() => terminal(terminalSentence("start", {
+    await assert.rejects(() => commandSession(commandSessionSentence("start", {
       command: process.execPath,
       args: [],
       cwd: temporary
@@ -73,10 +73,10 @@ test("terminal launch is restricted to the licensed project working directory", 
   });
 });
 
-test("terminal hard-denies internal mind runners even when command mode allows", async () => {
+test("command session hard-denies internal mind runners even when command mode allows", async () => {
   await withProject(async ({ project, world }) => {
     const remember = rememberFor({ project, world, commandMode: "allow" });
-    await assert.rejects(() => terminal(terminalSentence("start", {
+    await assert.rejects(() => commandSession(commandSessionSentence("start", {
       command: "node",
       args: ["../pyac/pyash-dev/command/mind_ollama_runner.mjs"],
       cwd: project
@@ -84,13 +84,13 @@ test("terminal hard-denies internal mind runners even when command mode allows",
   });
 });
 
-test("terminal starts a real PTY in the project when the Pyash runtime is elsewhere", async () => {
+test("command session starts a real PTY in the project when the Pyash runtime is elsewhere", async () => {
   await withProject(async ({ project, temporary, world }) => {
     const runtimeRoot = path.join(temporary, "pyash-runtime");
     const remember = rememberFor({ project, world, runtimeRoot });
     let started;
     try {
-      const result = await terminal(terminalSentence("start", {
+      const result = await commandSession(commandSessionSentence("start", {
         command: process.execPath,
         args: ["-e", "process.stdout.write('PROJECT_TERMINAL_ROOT_OK\\n')"],
         cwd: project
@@ -99,7 +99,7 @@ test("terminal starts a real PTY in the project when the Pyash runtime is elsewh
 
       let read;
       for (let attempt = 0; attempt < 40; attempt += 1) {
-        const response = await terminal(terminalSentence("read", {
+        const response = await commandSession(commandSessionSentence("read", {
           id: started.id,
           after: 0,
           maxBytes: 4096
@@ -116,6 +116,27 @@ test("terminal starts a real PTY in the project when the Pyash runtime is elsewh
       await requestManagedTerminal(world, project, { action: "shutdown" }).catch(() => {});
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
+  });
+});
+
+test("Pyash size and finish actions route to the existing PTY operations", async () => {
+  await withProject(async ({ project, world }) => {
+    const remember = rememberFor({ project, world });
+    const calls = [];
+    const requestTerminal = async (_world, _project, request) => {
+      calls.push(request);
+      return { status: "ok" };
+    };
+    const runtimeContext = { agentName: "mind", backend: "ollama" };
+
+    await commandSession(commandSessionSentence("size", { id: "session-one", columns: 100, rows: 40 }), {
+      remember, requestTerminal, runtimeContext
+    });
+    await commandSession(commandSessionSentence("finish", { id: "session-one" }), {
+      remember, requestTerminal, runtimeContext
+    });
+
+    assert.deepEqual(calls.map((call) => call.action), ["resize", "close"]);
   });
 });
 
@@ -147,7 +168,7 @@ test("child coding agents obey parent backend and model allowlists and receive a
       if (request.action === "write") return { id: request.id, status: "running" };
       throw new Error(`unexpected terminal action: ${request.action}`);
     };
-    const started = await terminal(terminalSentence("start coding agent", {
+    const started = await commandSession(commandSessionSentence("start program agent", {
       mind: "mind",
       cwd: project,
       instruction: "Inspect the parser and report findings."
@@ -168,12 +189,12 @@ test("child coding agents obey parent backend and model allowlists and receive a
     assert.ok(managerRoots.every((root) => root === project), "child terminal lifecycle must use one project-scoped manager");
     assert.equal(requests.at(-1).input, "Inspect the parser and report findings.\r");
 
-    await assert.rejects(() => terminal(terminalSentence("start coding agent", { mind: "zai" }), {
+    await assert.rejects(() => commandSession(commandSessionSentence("start program agent", { mind: "zai" }), {
       remember,
       requestTerminal,
       runtimeContext: { agentName: "zai", backend: "zai" }
     }), /child backend zai is not allowed/u);
-    await assert.rejects(() => terminal(terminalSentence("start coding agent", {
+    await assert.rejects(() => commandSession(commandSessionSentence("start program agent", {
       mind: "mind", model: "qwen3.5:27b"
     }), {
       remember,

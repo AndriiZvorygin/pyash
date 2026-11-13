@@ -190,8 +190,8 @@ queue stores.
 
 The Pyash-facing tool map uses the compositional name `command session` for a
 persistent interactive process. Its operations are `command session start`,
-`command session read`, `command session write`, `command session resize`,
-`command session status`, `command session list`, and `command session close`.
+`command session read`, `command session write`, `command session size`,
+`command session status`, `command session list`, and `command session finish`.
 Use `command` for one-shot commands and `web_search` or `web_search_source` for
 searches; command sessions are for processes the user needs to keep open and
 interact with. A command session starts one command in a persistent PTY under
@@ -215,7 +215,7 @@ as audit evidence and do not claim that a process can be restored after restart.
 The manager's Unix socket is placed in an owner-only directory under the
 system temporary directory and scoped to the world and project roots.
 
-`command session start coding agent` starts another `pyash_saddle.mjs` process
+`command session start program agent` starts another `pyash_saddle.mjs` process
 in a PTY using an existing configured Pyash mind. It assigns a unique `child-*`
 session name under that project's coding-saddle house. The canonical child
 transcript is `<agent-house>/session/<YYYYMMDD>-child-<id>.pya`; after-tool

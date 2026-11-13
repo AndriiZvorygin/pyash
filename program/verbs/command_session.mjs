@@ -139,7 +139,8 @@ async function authorizeLaunch({ sentence, command, args, cwd, runtimeContext, r
 }
 
 function actionOf(sentence) {
-  return normalized(sentence?.as?.wo ?? sentence?.as?.text ?? sentence?.as?.name).toLowerCase();
+  const action = normalized(sentence?.as?.wo ?? sentence?.as?.text ?? sentence?.as?.name).toLowerCase();
+  return action === "size" ? "resize" : action === "finish" ? "close" : action;
 }
 
 function sessionName() {
@@ -217,7 +218,7 @@ async function startChildAgent({
       instruction: initialInstruction
     });
   }
-  return jsonResult("start coding agent", {
+  return jsonResult("start program agent", {
     ...started,
     mind: target.mindName,
     backend: target.backend,
@@ -261,7 +262,7 @@ export async function commandSession(sentence, {
   sleepFn = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 } = {}) {
   const action = actionOf(sentence);
-  if (!new Set(["start", "start coding agent", "read", "write", "resize", "status", "list", "close"]).has(action)) {
+  if (!new Set(["start", "start program agent", "read", "write", "resize", "status", "list", "close"]).has(action)) {
     throwErrorSentence({
       name: "command session action invalid",
       message: `command session action invalid: ${action || "(empty)"}`,
@@ -270,7 +271,7 @@ export async function commandSession(sentence, {
     });
   }
   const request = requestObject(sentence);
-  if (action === "start coding agent") {
+  if (action === "start program agent") {
     return startChildAgent({ sentence, request, runtimeContext, rememberFn, requestTerminal, sleepFn });
   }
 
@@ -305,11 +306,11 @@ export default commandSession;
 
 export const signatures = [
   { signatureWords: ["be", "command", "session", "as", "wo", "start", "ob", "text"], handler: commandSession },
-  { signatureWords: ["be", "command", "session", "as", "wo", "start", "coding", "agent", "ob", "text"], handler: commandSession },
+  { signatureWords: ["be", "command", "session", "as", "wo", "start", "program", "agent", "ob", "text"], handler: commandSession },
   { signatureWords: ["be", "command", "session", "as", "wo", "read", "ob", "text"], handler: commandSession },
   { signatureWords: ["be", "command", "session", "as", "wo", "write", "ob", "text"], handler: commandSession },
-  { signatureWords: ["be", "command", "session", "as", "wo", "resize", "ob", "text"], handler: commandSession },
+  { signatureWords: ["be", "command", "session", "as", "wo", "size", "ob", "text"], handler: commandSession },
   { signatureWords: ["be", "command", "session", "as", "wo", "status", "ob", "text"], handler: commandSession },
   { signatureWords: ["be", "command", "session", "as", "wo", "list", "ob", "text"], handler: commandSession },
-  { signatureWords: ["be", "command", "session", "as", "wo", "close", "ob", "text"], handler: commandSession }
+  { signatureWords: ["be", "command", "session", "as", "wo", "finish", "ob", "text"], handler: commandSession }
 ];

@@ -105,12 +105,12 @@ test("pyash mcp server loads the selected saddle tools map", async () => {
       .filter((name) => name.startsWith("command_session_"))
       .sort();
     assert.deepEqual(commandSessionTools, [
-      "command_session_close",
+      "command_session_finish",
       "command_session_list",
       "command_session_read",
-      "command_session_resize",
+      "command_session_size",
       "command_session_start",
-      "command_session_start_coding_agent",
+      "command_session_start_program_agent",
       "command_session_status",
       "command_session_write"
     ]);

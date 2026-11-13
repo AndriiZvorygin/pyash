@@ -56,8 +56,8 @@ const TOOL_ARGUMENT_SCHEMA_ADAPTERS = {
     description: "Start a long-running interactive command session only when the user needs to keep a process open and interact with it. This is not for web search, API calls, URL retrieval, or ordinary one-shot commands; use web_search, web_search_source, download, or command for those. The working directory defaults to the agent's active project root. Pass request with command, args (array), and optional cwd, columns, rows.",
     fields: { ob: { name: "request", type: "object", description: "Command, argument array, and optional in-project working directory and dimensions." } }
   },
-  "command session start coding agent": {
-    toolName: "command_session_start_coding_agent",
+  "command session start program agent": {
+    toolName: "command_session_start_program_agent",
     description: "Start an independent coding saddle only when the user explicitly asks to delegate work to a child coding session. Do not use it for web search, API calls, URL retrieval, or routine commands. Pass request with mind (configured Pyash mind name), optional model, cwd, and instruction. The parent mind's backend and model delegation allowlists are enforced. Use the returned id with command_session_read and command_session_write to communicate with the child.",
     fields: { ob: { name: "request", type: "object", description: "Child mind, optional in-project working directory and model, and initial instruction." } }
   },
@@ -71,8 +71,8 @@ const TOOL_ARGUMENT_SCHEMA_ADAPTERS = {
     description: "Send input to an already-started command session. Use the exact id returned by command_session_start. Encode Tab as \\t and Enter as \\r; input is forwarded unchanged.",
     fields: { ob: { name: "request", type: "object", description: "Command session id and input string." } }
   },
-  "command session resize": {
-    toolName: "command_session_resize",
+  "command session size": {
+    toolName: "command_session_size",
     description: "Resize an already-started command session. Pass request with its id, columns, and rows.",
     fields: { ob: { name: "request", type: "object", description: "Command session id, columns, and rows." } }
   },
@@ -86,8 +86,8 @@ const TOOL_ARGUMENT_SCHEMA_ADAPTERS = {
     description: "List command sessions owned by this Pyash runtime. Use only when the user asks about active command sessions or after starting one; this is not a search or health-check tool.",
     fields: { ob: { name: "request", type: "object", description: "Empty object." } }
   },
-  "command session close": {
-    toolName: "command_session_close",
+  "command session finish": {
+    toolName: "command_session_finish",
     description: "Close an already-started command session when the user asks or its task is complete. Pass request with its id and optional signal.",
     fields: { ob: { name: "request", type: "object", description: "Command session id and optional signal." } }
   },
