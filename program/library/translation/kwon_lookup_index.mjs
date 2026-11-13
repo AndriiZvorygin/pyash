@@ -4,11 +4,14 @@ import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const KWON_LOOKUP_INDEX_FORMAT = "pyash-kwon-lookup-index-v4";
-export const KWON_LOOKUP_INDEX_KINDS = Object.freeze(["english", "pyac", "wordnet", "open-wordnet"]);
+export const KWON_LOOKUP_INDEX_KINDS = Object.freeze(["english", "pyac", "wordnet", "open-wordnet", "sumo"]);
+const CORE_LOOKUP_INDEX_KINDS = Object.freeze(["english", "pyac", "wordnet", "open-wordnet"]);
 const INDEX_ENTRY_PREFIX = "kwon-entry:";
 const OPEN_WORDNET_JSON_FILE = /^(?:adj|adv|noun|verb)\..+\.json$/u;
 const OPEN_WORDNET_CONFIG_PATH = "program/library/translation/english_wordnet.pya";
 const OPEN_WORDNET_CONFIG_FORMAT = "open-english-wordnet-2025-json-v1";
+const SUMO_PYASH_LINKS_PATH = "program/library/translation/sumo_pyash_links.pya";
+const SUMO_GENERATED_CATALOG_PATH = "know/sumo/pyash_wordnet_mappings.pya";
 
 const MODULE_DIRECTORY = dirname(fileURLToPath(import.meta.url));
 export const PYASH_REPOSITORY_ROOT = resolve(MODULE_DIRECTORY, "../../..");
@@ -16,7 +19,8 @@ export const KWON_LOOKUP_INDEX_PATHS = Object.freeze({
   english: resolve(MODULE_DIRECTORY, "kwon_english_index.pya"),
   pyac: resolve(MODULE_DIRECTORY, "kwon_pyac_index.pya"),
   wordnet: resolve(MODULE_DIRECTORY, "kwon_wordnet_index.pya"),
-  "open-wordnet": resolve(MODULE_DIRECTORY, "kwon_open_wordnet_index.pya")
+  "open-wordnet": resolve(MODULE_DIRECTORY, "kwon_open_wordnet_index.pya"),
+  sumo: resolve(PYASH_REPOSITORY_ROOT, "know/sumo/kwon_sumo_index.pya")
 });
 
 const SOURCE_PATHS = Object.freeze([
@@ -68,7 +72,7 @@ function resolveSourcePath(root, sourceId) {
 }
 
 function addValue(indexes, kind, key, value) {
-  const normalizedKey = kind === "english" ? normalizeEnglish(key) : normalizePyac(key);
+  const normalizedKey = kind === "english" || kind === "sumo" ? normalizeEnglish(key) : normalizePyac(key);
   if (!normalizedKey) return;
   const index = indexes[kind];
   if (!index) return;
@@ -165,7 +169,7 @@ function englishTermsFrom(value, output = new Set()) {
     return output;
   }
   for (const [key, item] of Object.entries(value)) {
-    if (["target", "surface", "lemma", "canonicalEnglish", "targetEnglish", "english", "en"].includes(key)
+    if (["target", "surface", "lemma", "canonicalEnglish", "targetEnglish", "english", "en", "label"].includes(key)
       && typeof item === "string") output.add(item);
     else if (key === "aliases" && Array.isArray(item)) {
       for (const alias of item) if (typeof alias === "string") output.add(alias);
@@ -193,7 +197,7 @@ function pyacSequencesFrom(value, output = []) {
   return output;
 }
 
-function indexPyaRow(indexes, locator, line) {
+function indexPyaRow(indexes, locator, line, enabledKinds = null) {
   const key = fieldString(line, "su text ");
   const targetName = fieldString(line, "ob name ");
   const textValue = fieldString(line, "ob text ");
@@ -208,12 +212,35 @@ function indexPyaRow(indexes, locator, line) {
   if (key && key.startsWith("sense-lemma:")) {
     if (typeof payload === "string") english.add(payload);
   }
-  for (const term of english) addValue(indexes, "english", term, locator);
+  if (!enabledKinds || enabledKinds.has("english")) {
+    for (const term of english) addValue(indexes, "english", term, locator);
+  }
+  if (!enabledKinds || enabledKinds.has("sumo")) {
+    if (payload && typeof payload === "object") {
+      for (const sumoId of [payload.sumoId, ...(Array.isArray(payload.sumoIds) ? payload.sumoIds : [])]) {
+        if (typeof sumoId !== "string" || !sumoId) continue;
+        addValue(indexes, "sumo", sumoId, locator);
+        addValue(indexes, "sumo", `sumo:${sumoId}`, locator);
+      }
+      if (typeof payload.wordNet30Id === "string") addValue(indexes, "sumo", payload.wordNet30Id, locator);
+      for (const senseId of payload.openEnglishWordNetIds ?? []) {
+        if (typeof senseId === "string") addValue(indexes, "sumo", senseId, locator);
+      }
+    }
+    if (key?.startsWith("sumo:")) addValue(indexes, "sumo", key, locator);
+    for (const term of english) addValue(indexes, "sumo", term, locator);
+  }
   for (const sequence of pyacSequencesFrom(payload ?? {})) {
     const spaced = normalizePyac(sequence.join(" "));
     const packed = normalizePyac(sequence.join(""));
-    if (spaced) addValue(indexes, "pyac", spaced, locator);
-    if (packed) addValue(indexes, "pyac", packed, locator);
+    if (!enabledKinds || enabledKinds.has("pyac")) {
+      if (spaced) addValue(indexes, "pyac", spaced, locator);
+      if (packed) addValue(indexes, "pyac", packed, locator);
+    }
+    if (!enabledKinds || enabledKinds.has("sumo")) {
+      if (spaced) addValue(indexes, "sumo", spaced, locator);
+      if (packed) addValue(indexes, "sumo", packed, locator);
+    }
   }
   const ids = wordNetIdsFrom(completeValue);
   if (key && /^([anrvs]):[0-9]{8}-\1$/iu.test(key)) ids.add(key.toLowerCase());
@@ -225,10 +252,12 @@ function indexPyaRow(indexes, locator, line) {
     const lemmaSource = lemmaId ? `${lemmaId[1]}:${lemmaId[2]}-${lemmaId[1]}` : "";
     for (const id of [glossSource, lemmaSource, compoundId?.[0]?.split(/\s/u)[0]]) if (id) ids.add(id.toLowerCase());
   }
-  for (const id of ids) addValue(indexes, "wordnet", id, locator);
+  if (!enabledKinds || enabledKinds.has("wordnet")) {
+    for (const id of ids) addValue(indexes, "wordnet", id, locator);
+  }
 }
 
-function scanPyaLines(buffer, sourceId, indexes) {
+function scanPyaLines(buffer, sourceId, indexes, enabledKinds = null) {
   let start = 0;
   let lineNumber = 1;
   while (start < buffer.length) {
@@ -239,7 +268,7 @@ function scanPyaLines(buffer, sourceId, indexes) {
     if (line.startsWith("su text ")) {
       const key = fieldString(line, "su text ") ?? "";
       const locator = { sourceId, byteOffset: start, lineNumber, recordId: key };
-      indexPyaRow(indexes, locator, line);
+      indexPyaRow(indexes, locator, line, enabledKinds);
     }
     if (newline < 0) break;
     start = newline + 1;
@@ -339,7 +368,7 @@ function scanJsonCatalog(buffer, sourceId, indexes) {
 }
 
 function makeIndexes() {
-  return { english: new Map(), pyac: new Map(), wordnet: new Map(), "open-wordnet": new Map() };
+  return { english: new Map(), pyac: new Map(), wordnet: new Map(), "open-wordnet": new Map(), sumo: new Map() };
 }
 
 function createIndex(kind, entries, sourceHashes) {
@@ -571,7 +600,7 @@ export async function lookupKwonIndex({
   root = PYASH_REPOSITORY_ROOT
 } = {}) {
   if (!KWON_LOOKUP_INDEX_KINDS.includes(kind)) throw new TypeError(`unsupported kwon index kind: ${kind}`);
-  const normalized = kind === "english" ? normalizeEnglish(key) : normalizePyac(key);
+  const normalized = kind === "english" || kind === "sumo" ? normalizeEnglish(key) : normalizePyac(key);
   if (!normalized) return [];
   const handle = await open(indexPath, "r");
   try {
@@ -810,7 +839,7 @@ export async function buildKwonLookupIndexes({ root = PYASH_REPOSITORY_ROOT, sou
   for (const sourceId of pyaSources) {
     const source = sourcesById.get(sourceId);
     sourceHashes[sourceId] = hash(source);
-    scanPyaLines(source, sourceId, indexes);
+    scanPyaLines(source, sourceId, indexes, new Set(CORE_LOOKUP_INDEX_KINDS));
   }
   for (const sourceId of jsonSources) {
     const source = sourcesById.get(sourceId);
@@ -834,8 +863,47 @@ export async function buildKwonLookupIndexes({ root = PYASH_REPOSITORY_ROOT, sou
   };
 }
 
+export async function buildKwonSumoLookupIndex({
+  root = PYASH_REPOSITORY_ROOT,
+  sourcePaths = [SUMO_PYASH_LINKS_PATH, SUMO_GENERATED_CATALOG_PATH]
+} = {}) {
+  const indexes = makeIndexes();
+  const sourceHashes = {};
+  for (const sourceId of sourcePaths) {
+    let source;
+    try {
+      source = await readFile(resolve(root, sourceId));
+    } catch (error) {
+      if (error?.code === "ENOENT" && sourceId === SUMO_GENERATED_CATALOG_PATH) continue;
+      throw error;
+    }
+    sourceHashes[sourceId] = hash(source);
+    scanPyaLines(source, sourceId, indexes, new Set(["sumo"]));
+  }
+  return createIndex("sumo", indexes.sumo, sourceHashes);
+}
+
+export async function writeKwonSumoLookupIndex({
+  root = PYASH_REPOSITORY_ROOT,
+  path = KWON_LOOKUP_INDEX_PATHS.sumo
+} = {}) {
+  const index = await buildKwonSumoLookupIndex({ root });
+  await mkdir(dirname(path), { recursive: true });
+  const temporary = `${path}.${process.pid}.tmp`;
+  try {
+    await writeFile(temporary, renderKwonLookupIndexPya(index), "utf8");
+    await rename(temporary, path);
+  } catch (error) {
+    await rm(temporary, { force: true });
+    throw error;
+  }
+  clearKwonLookupIndexValidationCache();
+  return path;
+}
+
 export async function writeKwonLookupIndexes({ root = PYASH_REPOSITORY_ROOT, paths = KWON_LOOKUP_INDEX_PATHS } = {}) {
   const indexes = await buildKwonLookupIndexes({ root });
+  indexes.sumo = await buildKwonSumoLookupIndex({ root });
   const temporaryPaths = [];
   try {
     for (const kind of KWON_LOOKUP_INDEX_KINDS) {

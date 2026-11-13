@@ -1,0 +1,14 @@
+su name sumo_wordnet_source be map def
+su text "format" ob text "sumo-wordnet-source-v1" ya
+su text "sumo-source" ob text "know/sumo" ya
+su text "sumo-source-url" ob text "https://github.com/ontologyportal/sumo" ya
+su text "sumo-commit" ob text "f0c126842d098a312e390479b38ecfbac018f8ed" ya
+su text "mapping-version" ob text "WordNet 3.0" ya
+su text "source-hashes" ob text "{\"know/sumo/WordNetMappings/WordNetMappings30-adj.txt\":\"32953b30c24dad25010b9a2c9c6c3e24dd28b0c628311caba88cc0cd492192f0\",\"know/sumo/WordNetMappings/WordNetMappings30-adv.txt\":\"1da1405d618ad38288a74481a91f891be106a238a50e7c70416b213cb9b937c3\",\"know/sumo/WordNetMappings/WordNetMappings30-noun.txt\":\"b52c4ce4b7369c51145a38892b7748bb8edb9ef8fac530b16514fac28d13a7f8\",\"know/sumo/WordNetMappings/WordNetMappings30-verb.txt\":\"99467ba4d7d1cfbc681303b0c0a7283fc1a99514732d9a34cb2b4eb7ffb76528\",\"know/sumo/WordNetMappings/index.sense\":\"68b3a468cddfd8e92134b9b0624339a02a1b837159243c297c5f138a3d618392\",\"know/sumo/domainEnglishFormat.kif\":\"c43850d4f6b5f7cfa144865cec1d38d0de7c58d9e6cbe73611d1455c221fd21d\"}" ya
+su text "wordnet-31-index" ob text "know/wordnet/princeton-wordnet-3.1/index.sense" ya
+su text "wordnet-31-index-hash" ob text "a09db263da96dbb3273064c60546530dee5927a2e5a39c90fb576cdbebbb1a22" ya
+su text "open-wordnet-config" ob text "program/library/translation/english_wordnet.pya" ya
+su text "license" ob text "SUMO ontology and WordNet mapping data are distributed under GNU GPL terms; the WordNet 3.0 data retain the Princeton University license and notices." ya
+su text "citation" ob text "Niles and Pease (2003), Linking Lexicons and Ontologies: Mapping WordNet to the Suggested Upper Merged Ontology, IEEE International Conference on Information and Knowledge Engineering, pp. 412-416; SUMO WordNetMappings README notice." ya
+su text "use" ob text "read-only external source; preserve source identifiers and mapping relation; do not copy SUMO definitions into Pyash records" ya
+prah

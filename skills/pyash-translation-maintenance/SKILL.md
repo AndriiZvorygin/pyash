@@ -34,6 +34,24 @@ Use this skill when editing translation pairs/templates, adapters, or anchor wor
   postposing English prepositions, and do not treat Pyac suffix order as
   readable Pyash word order.
 
+## External lexical and ontology evidence
+
+- Keep each dataset's version and role explicit in `.pya` configuration. In this
+  repository Open English WordNet 2025 is the canonical English lexical source;
+  Princeton WordNet 3.1 supplies supplementary frequency counts, and SUMO's
+  published mappings target WordNet 3.0.
+- Never join synsets from different WordNet versions by numeric offset. Crosswalk
+  through a shared lexical sense key, verify the target synset and lemma, and
+  retain `unique`, `ambiguous`, or `unmatched` status. Preserve original source
+  IDs even after a successful crosswalk.
+- Preserve ontology mapping relations as typed evidence. In SUMO's mapping
+  notation `=` is equivalence, `+` is subsumption, and `@` is instance-of;
+  `:`, `[`, and `]` are their complements. A `+` mapping is not an exact alias.
+- Keep licensed external ontology sources read-only and outside tracked catalogs
+  when practical. Store source URLs, revisions, hashes, and license/citation
+  notices in `.pya`; author Pyash definitions and relations separately instead
+  of copying ontology definitions wholesale.
+
 ## Phrase-list translation
 
 - Detect coordination at the phrase level in subject, object, oblique, and
