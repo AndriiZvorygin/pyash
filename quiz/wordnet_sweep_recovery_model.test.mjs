@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildSweepPostRestartReviewIdentity,
   buildSweepRecoveryPrompt,
   buildSweepPostRestartReviewPrompt,
   buildSweepResumeCommand,
+  isPostRestartReviewPending,
   mayReviewRestartedSweep,
   mayResumeSweep,
   parseSweepPostRestartReview,
@@ -87,6 +89,9 @@ test("post-restart review prompt compares the original failure to fresh batch ev
   assert.match(prompt, /batchCount=12/u);
   assert.match(prompt, /focused regression tests/u);
   assert.match(prompt, /Do not edit files/u);
+  assert.match(prompt, /"activeProcess": false/u);
+  assert.match(prompt, /"lockPath"/u);
+  assert.match(prompt, /an active process is not an absent lock/u);
 });
 
 test("post-restart review parses noisy JSON and rejects malformed fields", () => {
@@ -103,6 +108,35 @@ test("post-restart review parses noisy JSON and rejects malformed fields", () =>
   assert.throws(() => parseSweepPostRestartReview(
     '{"root_cause":"x","confidence":"certain","evidence":[],"fix_plan":"x","test_plan":[]}'
   ), /unsupported post-restart review confidence/u);
+});
+
+test("post-restart review recovers only a missing outer brace and leaves truncated values rejected", () => {
+  const complete = '{"root_cause":"index header","confidence":"high","evidence":["sweep resumed"],"fix_plan":"none","test_plan":["node --test quiz/index.test.mjs"]}';
+  assert.deepEqual(parseSweepPostRestartReview(complete.slice(0, -1)), {
+    rootCause: "index header",
+    confidence: "high",
+    evidence: ["sweep resumed"],
+    fixPlan: "none",
+    testPlan: ["node --test quiz/index.test.mjs"]
+  });
+  assert.throws(() => parseSweepPostRestartReview(
+    '{"root_cause":"truncated value,"confidence":"high","evidence":[],"fix_plan":"none","test_plan":[]'
+  ), /expected a JSON object/u);
+});
+
+test("a post-restart review parse failure stays eligible for a later retry", () => {
+  assert.equal(isPostRestartReviewPending("pending"), true);
+  assert.equal(isPostRestartReviewPending("retry-pending"), true);
+  assert.equal(isPostRestartReviewPending("review-failed"), true);
+  assert.equal(isPostRestartReviewPending("reviewed"), false);
+});
+
+test("post-restart Housekeeper retries receive distinct idempotency identities", () => {
+  const base = { runId: inspection.runId, restartVerifiedAt: "2026-11-13T05:17:32Z" };
+  assert.notEqual(
+    buildSweepPostRestartReviewIdentity({ ...base, attemptId: "attempt-one" }),
+    buildSweepPostRestartReviewIdentity({ ...base, attemptId: "attempt-two" })
+  );
 });
 
 test("only a stopped incomplete run with healthy Housekeeper evidence can resume", () => {
@@ -151,6 +185,8 @@ test("post-restart review waits for a fresh batch on the resumed active run", ()
   const recovery = { reviewState: "pending", remainingAtRestart: 54_000 };
   const activeInspection = { state: "healthy", active: true };
   assert.equal(mayReviewRestartedSweep({ inspection: activeInspection, recovery, latestBatchEvent: { remainingSenseCount: 53_936 } }), true);
+  assert.equal(mayReviewRestartedSweep({ inspection: activeInspection, recovery: { ...recovery, reviewState: "retry-pending" }, latestBatchEvent: { remainingSenseCount: 53_936 } }), true);
+  assert.equal(mayReviewRestartedSweep({ inspection: activeInspection, recovery: { ...recovery, reviewState: "review-failed" }, latestBatchEvent: { remainingSenseCount: 53_936 } }), true);
   assert.equal(mayReviewRestartedSweep({ inspection: activeInspection, recovery, latestBatchEvent: { remainingSenseCount: 54_000 } }), false);
   assert.equal(mayReviewRestartedSweep({ inspection: activeInspection, recovery: { ...recovery, reviewState: "reviewed" }, latestBatchEvent: { remainingSenseCount: 53_936 } }), false);
   assert.equal(mayReviewRestartedSweep({ inspection: { state: "stopped", active: false }, recovery, latestBatchEvent: { remainingSenseCount: 53_936 } }), false);

@@ -6,6 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   inspectWordnetSweep,
+  pyaFacts,
   shouldInvokeRecovery,
 } from "../world/house/refinery-watchdog/program/run-wordnet-sweep-watchdog.mjs";
 import { readSweepRecoveryConfig } from "../world/house/refinery-watchdog/program/wordnet-sweep-recovery.mjs";
@@ -50,6 +51,11 @@ test("a live sweep with recent durable artifacts is healthy", async () => {
   } finally {
     await fixture.cleanup();
   }
+});
+
+test("watchdog Pyash facts must preserve the requested subject name when parsed", () => {
+  assert.match(pyaFacts({ "WordNet recovery restart verified time": "2026-11-13T05:17:32Z" }), /restart verified time/u);
+  assert.throws(() => pyaFacts({ "WordNet recovery restart verified at": "2026-11-13T05:17:32Z" }), /does not round-trip/u);
 });
 
 test("the watchdog recognizes its documented resume entry point as the sweep owner", async () => {

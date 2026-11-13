@@ -640,3 +640,17 @@ test("kwon Pya postings skip a stale offset instead of returning another row", a
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("kwon lookup reports a missing snapshot header as an invalid index", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pyash-kwon-invalid-header-"));
+  const indexPath = join(directory, "invalid-index.pya");
+  try {
+    await writeFile(indexPath, "prah\n", "utf8");
+    await assert.rejects(
+      lookupKwonIndex({ kind: "english", key: "python", indexPath, root: directory }),
+      (error) => error.code === "invalid-kwon-lookup-index" && /invalid header/u.test(error.message)
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

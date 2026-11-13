@@ -9,11 +9,13 @@ import { createQueuedOllamaExecutor } from "../../../../program/runtime/criterio
 import { resolveConfiguredGpuHousekeeperUrl } from "../../../../program/runtime/gpu/configured-endpoints.mjs";
 import { createGpuHousekeeperAdapter } from "../../../../program/runtime/gpu/housekeeper_adapter.mjs";
 import {
+  buildSweepPostRestartReviewIdentity,
   buildSweepPostRestartReviewPrompt,
   buildSweepRecoveryPrompt,
   buildSweepResumeCommand,
   mayResumeSweep,
   mayReviewRestartedSweep,
+  isPostRestartReviewPending,
   parseSweepPostRestartReview,
   parseSweepRecoveryDecision,
   readSweepRecoveryConfig,
@@ -158,10 +160,15 @@ function pyaText(value) {
   return String(value ?? "").replace(/\\/gu, "\\\\").replace(/"/gu, "\\\"").replace(/[\r\n]+/gu, " ").trim();
 }
 
-function pyaFacts(values) {
-  return `${Object.entries(values)
-    .map(([name, value]) => `exists su name ${name} ob text "${pyaText(value)}" be text ya`)
-    .join("\n")}\n`;
+export function pyaFacts(values) {
+  const records = Object.entries(values).map(([name, value]) => {
+    const sentence = `exists su name ${name} ob text "${pyaText(value)}" be text ya`;
+    if (parse(sentence)?.su?.name !== name) {
+      throw new Error(`wordnet sweep watchdog fact name does not round-trip through Pyash: ${name}`);
+    }
+    return sentence;
+  });
+  return `${records.join("\n")}\n`;
 }
 
 async function appendPyaFacts(filePath, values) {
@@ -271,7 +278,7 @@ async function submitRecoveryModel({ model, prompt, identity, operation = "wordn
     model,
     prompt,
     profile: "baseline",
-    sampling: { format: "json", think: false, temperature: 0, top_p: 1, top_k: 0, num_predict: 512, keep_alive: 300 },
+    sampling: { format: "json", think: false, temperature: 0, top_p: 1, top_k: 0, num_predict: 1024, keep_alive: 300 },
     identity,
     operation,
   });
@@ -303,11 +310,11 @@ async function pendingPostRestartReviews() {
   const pending = [];
   const fields = [
     "WordNet recovery review state",
-    "WordNet recovery decision at",
+    "WordNet recovery decision time",
     "WordNet recovery reason",
-    "WordNet recovery restart verified at",
-    "WordNet recovery remaining at restart",
-    "WordNet recovery log bytes at restart",
+    "WordNet recovery restart verified time",
+    "WordNet recovery restart remaining",
+    "WordNet recovery restart log offset",
   ];
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
@@ -315,7 +322,7 @@ async function pendingPostRestartReviews() {
     const recoveryPath = path.join(incidentDirectory, "recovery-decision.pya");
     try {
       const values = readPyaTextValues(recoveryPath, fields);
-      if (values[fields[0]] !== "pending") continue;
+      if (!isPostRestartReviewPending(values[fields[0]])) continue;
       pending.push({
         directory: incidentDirectory,
         failureEvidence: await fsp.readFile(path.join(incidentDirectory, "failure-evidence.txt"), "utf8").catch(() => ""),
@@ -352,22 +359,31 @@ async function runPendingPostRestartReview({ inspection, context, housekeeper })
       recentFailure: entry.failureEvidence,
       recentProgress: batchEvidence(event),
     });
-    await persistModelTurn(entry.directory, "post-restart-review", prompt, { text: "" });
+    const attemptId = new Date().toISOString().replace(/[-:.]/gu, "");
+    const attemptPrefix = `post-restart-review-${attemptId}`;
+    await persistModelTurn(entry.directory, attemptPrefix, prompt, { text: "" });
+    let responseReceived = false;
     try {
       const result = await submitRecoveryModel({
         model: context.model,
         prompt,
-        identity: `post-restart-review-${inspection.runId}-${entry.recovery.restartVerifiedAt}`,
+        identity: buildSweepPostRestartReviewIdentity({
+          runId: inspection.runId,
+          restartVerifiedAt: entry.recovery.restartVerifiedAt,
+          attemptId,
+        }),
         operation: "wordnet-sweep-post-restart-review",
       });
-      await persistModelTurn(entry.directory, "post-restart-review", prompt, result);
+      responseReceived = true;
+      await persistModelTurn(entry.directory, attemptPrefix, prompt, result);
       const review = parseSweepPostRestartReview(result.text);
       await appendPyaFacts(path.join(entry.directory, "post-restart-review.pya"), {
+        "WordNet review attempt id": attemptId,
         "WordNet review run id": inspection.runId,
         "WordNet review model": context.model,
         "WordNet review Housekeeper host": housekeeper.host,
         "WordNet review Housekeeper handle": result.handleId,
-        "WordNet review completed at": result.finishedAt || new Date().toISOString(),
+        "WordNet review completion time": result.finishedAt || new Date().toISOString(),
         "WordNet review root cause": review.rootCause,
         "WordNet review confidence": review.confidence,
         "WordNet review evidence": review.evidence.join(" | "),
@@ -380,27 +396,37 @@ async function runPendingPostRestartReview({ inspection, context, housekeeper })
       await appendPyaFacts(path.join(entry.directory, "recovery-decision.pya"), {
         "WordNet recovery review state": "reviewed",
       });
+      return "recorded";
     } catch (error) {
+      const failurePath = path.join(entry.directory, `${attemptPrefix}-${responseReceived ? "parse-error" : "housekeeper-error"}.txt`);
+      await fsp.writeFile(failurePath, `${error.message}\n`, "utf8");
+      if (!responseReceived) {
+        await fsp.writeFile(
+          path.join(entry.directory, `${attemptPrefix}-response.txt`),
+          `HOUSEKEEPER ERROR: ${error.message}\n`,
+          "utf8",
+        );
+      }
       await appendPyaFacts(path.join(entry.directory, "recovery-decision.pya"), {
-        "WordNet recovery review state": "review-failed",
+        "WordNet recovery review state": "retry-pending",
         "WordNet recovery review error": error.message,
       });
+      return "retry-pending";
     }
-    return true;
   }
-  return false;
+  return "none";
 }
 
 function incidentPya(inspection, checkedAt) {
   const facts = {
-    "checked at": checkedAt,
+    "check time": checkedAt,
     "run id": inspection.runId,
     "state": inspection.state,
     "process id": inspection.processId ?? "",
     "active process": inspection.active ? "true" : "false",
     "live lock conflict": inspection.conflictingLiveLock ? "true" : "false",
     "last activity file": inspection.lastActivityFile,
-    "last activity at": inspection.lastActivityAt,
+    "last activity time": inspection.lastActivityAt,
     "idle milliseconds": inspection.idleMs ?? "unknown",
     "remaining senses": inspection.remainingSenseCount ?? "unknown",
     "artifact directory": inspection.artifactDirectory,
@@ -422,7 +448,7 @@ function incidentPya(inspection, checkedAt) {
   ]) {
     if (value !== undefined && value !== "") facts[name] = value;
   }
-  return `${Object.entries(facts).map(([name, value]) => `exists su name ${name} ob text "${pyaText(value)}" be text ya`).join("\n")}\n`;
+  return pyaFacts(facts);
 }
 
 function acquireWatchdogLock() {
@@ -488,10 +514,10 @@ async function startSameSweep(inspection, decision, housekeeper, context, artifa
   await appendPyaFacts(decisionPath, {
     "WordNet recovery state": "resume-verified",
     "WordNet recovery review state": "pending",
-    "WordNet recovery decision at": checkedAt.toISOString(),
-    "WordNet recovery restart verified at": new Date().toISOString(),
-    "WordNet recovery remaining at restart": after.remainingSenseCount,
-    "WordNet recovery log bytes at restart": logBytesAtRestart,
+    "WordNet recovery decision time": checkedAt.toISOString(),
+    "WordNet recovery restart verified time": new Date().toISOString(),
+    "WordNet recovery restart remaining": after.remainingSenseCount,
+    "WordNet recovery restart log offset": logBytesAtRestart,
     "WordNet recovery process id": after.processId,
     "WordNet recovery lock path": after.lockPath,
     "WordNet recovery tmux session": resume.sessionName,
@@ -532,8 +558,8 @@ async function writeRecoveryTurn({ artifactDirectory, inspection, context, house
     "WordNet recovery Housekeeper host": housekeeper.host,
     "WordNet recovery Housekeeper handle": result.handleId,
     "WordNet recovery managed by": result.managedBy,
-    "WordNet recovery started at": result.startedAt,
-    "WordNet recovery completed at": result.finishedAt,
+    "WordNet recovery start time": result.startedAt,
+    "WordNet recovery completion time": result.finishedAt,
     "WordNet recovery assessment": decision.assessment,
     "WordNet recovery action": decision.action,
     "WordNet recovery reason": decision.reason,
@@ -557,14 +583,17 @@ async function runRecovery() {
     let housekeeper;
     try {
       housekeeper = await inspectHousekeeper(config.model);
-      const reviewed = await runPendingPostRestartReview({
+      const reviewState = await runPendingPostRestartReview({
         inspection,
         context: { ...config.context, model: config.model },
         housekeeper,
       });
-      await recordStatus(artifactDirectory, reviewed ? "post_restart_review_recorded" : inspection.state, {
+      const status = reviewState === "recorded"
+        ? "post_restart_review_recorded"
+        : reviewState === "retry-pending" ? "post_restart_review_pending" : inspection.state;
+      await recordStatus(artifactDirectory, status, {
         ...inspection,
-        recoveryModel: reviewed ? config.model : "",
+        recoveryModel: reviewState !== "none" ? config.model : "",
         housekeeperHost: housekeeper.host,
         housekeeperHandle: "see per-incident post-restart-review.pya",
       });
