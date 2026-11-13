@@ -23,11 +23,15 @@ crontab calls the runner directly so it does not contend with itself.
 
 ## Promotion gate
 
-Each run fetches `master` and `dev` from the configured push remotes (by
-default, `origin` and `github`). It stops if those remotes disagree. In a
-disposable Git worktree it merges `dev` into `master`, installs dependencies,
-and runs `npm run test:ci` against that exact candidate. Existing checkouts,
-including a dirty local `master` worktree, are not checked out or modified.
+Each run fetches `master` and `dev` from the source remote and every configured
+push remote (by default, `origin` and `github`). It records those branch tips,
+then merges all fetched `master` tips followed by all fetched `dev` tips into a
+disposable candidate worktree. This joins commits that arrived on different
+remotes and promotes one tested history to every configured remote. A real
+merge conflict leaves the candidate for review. The runner installs
+dependencies and runs `npm run test:ci` against that exact candidate. Existing
+checkouts, including a dirty local `master` worktree, are not checked out or
+modified.
 
 If the full suite fails, Codex `gpt-6-luna` at `xhigh` gets at most two repair
 attempts in that isolated candidate. Each attempt is followed by a complete
@@ -58,7 +62,8 @@ artifacts/local-master-safety/<UTC-run-id>/
 ```
 
 Each run contains `run.log`, per-attempt full-suite logs, Codex JSONL/stderr
-traces and final messages, and `result.pya`. A verified repair includes
+traces and final messages, and `result.pya`. The result records every fetched
+branch tip in `remote branch inputs`. A verified repair includes
 `verified-repair.patch` and `candidate-commit.txt`; a successful promotion
 includes `promoted-commit.txt`. The result records source master/dev commits,
 promoted commit, pushed remotes, and any preserved worktree.
