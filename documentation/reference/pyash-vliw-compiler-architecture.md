@@ -102,6 +102,92 @@ backend/prototype; it does not replace the planned RISC-V assembly emitter. Each
 backend needs an explicit target ABI, data layout, calling convention, and
 conformance path before it can claim native execution support.
 
+## Evolutionary Function Workloads
+
+**Status:** design contract; no GPU evolutionary-function runtime is implied.
+
+The useful unit for evolutionary programming is a small, typed function, not
+the whole Pyash interpreter or the host-side evolution loop. Pyash sentences
+remain the function's semantic source; its VLIW body is the candidate evaluated
+by a reference executor or a target backend.
+
+### Lwonprom Evidence
+
+The current Lwonprom C implementation is a source of patterns and seed
+functions, not an existing GPU evaluator:
+
+- In `Lwonprom/program/lwonprom.c`, an individual is a `Paragraph` of Pyash
+  lines. `TrainingSequence`
+  holds input and expected-output phrases. `program_quiz` applies a candidate
+  to each training input through `knowledge_interpret`, and `health_assess`
+  combines output deviation with a program-length economy term.
+- `population_quiz` evaluates candidates serially. `evolve_generation` ranks
+  them, then refreshes the population by retaining champions, mutating copies,
+  and introducing new individuals. This host orchestration is separable from
+  the embarrassingly parallel candidate-by-example evaluation workload.
+- `Lwonprom/program/math.c` provides small seed operations: saturating 16-bit
+  addition, saturating 64-bit subtraction, 64-bit multiply/divide/XOR/complement,
+  and repeated-multiply exponentiation. Their current edge semantics are not
+  all safe to inherit: division by zero has no guard, unsigned overflow behavior
+  is implicit in the C types, and exponentiation has no work bound. The
+  candidate contract below requires those cases to be made explicit first.
+- The current `Lwonprom/program/lwonprom.cl` kernels are experimental stubs,
+  not a parallel port of the population/evaluation loop. Do not use their
+  existence as evidence that GPU evolution is implemented.
+
+### Candidate Contract
+
+An accepted candidate has a closed, versioned function contract:
+
+| Property | Required contract |
+| --- | --- |
+| Signature | Explicit parameter names, value types/widths, return shape, and calling convention. |
+| Semantics | Defined integer overflow, saturation/wrapping, signedness, division-by-zero, and comparison behavior; identical in the reference executor and every backend. |
+| Effects | Deterministic and side-effect-free during evaluation. Random mutation is seeded and performed by the host evolution process, not by the candidate. No I/O, network, clock, model call, or undeclared memory access. |
+| State | Locals and writable state are declared with fixed extents. Until the named-data/symbol contract is implemented, candidate functions must stay within the currently supported stateless subset. |
+| Control flow | A finite control-flow graph with cyclomatic complexity at most 9. No recursion or unbounded loops. Loops are accepted only with a statically verifiable iteration bound. |
+| Work bound | A profile-supplied instruction/step budget and fixed input extent. Statically reject candidates whose worst-case work exceeds the budget; enforce a runtime step counter in the reference evaluator. |
+| VLIW representation | A function body may span multiple codelets. The 16-word codelet is an encoding unit, not a function-size limit or a register file. Grammatical cases describe operand roles; the target ABI maps values to virtual/physical registers or memory. |
+
+Define cyclomatic complexity from the candidate CFG itself as `M = E - N + 2P`
+(edges, nodes, and connected components), and require `M <= 9`. Do not rely on
+a source-language complexity tool's displayed score unless its exact metric is
+known to match this definition. Complexity is a hard admission gate; fitness
+must not reward a semantically incorrect function for being small.
+
+### Evaluation and GPU Boundary
+
+The evaluation input is a deterministic set of `(arguments, expected result)`
+examples, analogous to Lwonprom's `TrainingSequence`. Each candidate/example
+pair is independent and can be executed in parallel. A first evaluator should:
+
+1. Reject malformed signatures, unsupported effects, unbounded control flow,
+   and budget violations before dispatch.
+2. Execute each valid candidate against every example with the reference
+   semantics and record output, exact-match status, and consumed steps.
+3. Reduce per-example results into a fitness record. Correctness is primary;
+   code size and measured work may break ties among correct candidates.
+4. Keep mutation, champion selection, durable job control, and artifact
+   persistence in the host/Pyash layer. A GPU backend batches candidate/example
+   execution and returns bounded results; it does not own session state or
+   replace the Pyash scheduler.
+
+The initial GPU-eligible subset should be pure integer functions over fixed
+input/output buffers. Use one logical work item per candidate/example pair,
+then reduce results per candidate. Keep candidate code and test vectors
+resident across a batch where the backend allows it. Any target-specific
+optimization remains behind the same semantic conformance tests, with a
+correct fallback for devices lacking that feature.
+
+The function instruction budget and maximum input extent are profile values
+that still need calibration against the actual VLIW executor and target
+hardware; they are deliberately not guessed here. Before enabling GPU
+evaluation, the project still needs a VLIW representation for function
+signatures and bounded control flow, plus the typed named-data/symbol contract
+for locals. The first implementation slice should be a CPU reference evaluator
+for bounded candidate semantics, using existing VLIW operations where
+representable and explicit tests for the arithmetic operations above.
+
 ## Implementation Milestones
 
 1. **Vocabulary and declarations:** confirm the data/variable senses and
