@@ -4393,5 +4393,89 @@ class HousekeeperIdleReaperTests(unittest.TestCase):
     discharge.assert_not_called()
 
 
+class HousekeeperVliwEvaluatorTests(unittest.TestCase):
+  def valid_job_spec(self):
+    return {
+      "kind": "vliw-batch-evaluate",
+      "resourceRequest": {"vramRequiredMb": 64},
+      "payload": {
+        "schemaVersion": 1,
+        "slots": ["left", "right", "sum"],
+        "inputSlots": ["left", "right"],
+        "outputSlot": "sum",
+        "cases": [{"values": {"left": 2, "right": 3}, "expected": 5}],
+        "candidates": [{
+          "id": "add",
+          "instructions": [{"op": "plus", "target": "sum", "left": "left", "right": "right"}]
+        }]
+      }
+    }
+
+  def test_submit_accepts_valid_vliw_batch_and_rejects_unbounded_or_invalid_jobs(self):
+    temp_dir = tempfile.TemporaryDirectory(prefix="gpu-housekeeper-vliw-submit-")
+    previous = os.environ.get("GPU_HOUSEKEEPER_PYA_DIR")
+    os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = temp_dir.name
+    server._JOBS.clear()
+    route = {"selected": {"hostId": "mriczo", "deviceId": "gpu0", "score": 1, "reason": "test"}}
+    try:
+      with patch.object(server, "select_route", return_value=route):
+        accepted = server.submit_job({
+          "handleId": "vliw-valid",
+          "runtimeName": "vliw",
+          "profileName": "vliw-batch-evaluator",
+          "jobSpec": self.valid_job_spec()
+        }, {"vliw": dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])}, "mriczo")
+
+        invalid = self.valid_job_spec()
+        invalid["payload"]["candidates"][0]["instructions"][0]["op"] = "multiply"
+        rejected = server.submit_job({
+          "handleId": "vliw-invalid",
+          "runtimeName": "vliw",
+          "profileName": "vliw-batch-evaluator",
+          "jobSpec": invalid
+        }, {"vliw": dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])}, "mriczo")
+
+      self.assertTrue(accepted["accepted"])
+      self.assertFalse(rejected["accepted"])
+      self.assertIn("unsupported VLIW operation", rejected["error"])
+    finally:
+      server._JOBS.clear()
+      if previous is None:
+        os.environ.pop("GPU_HOUSEKEEPER_PYA_DIR", None)
+      else:
+        os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = previous
+      temp_dir.cleanup()
+
+  def test_vliw_runtime_requires_a_visible_nvidia_device(self):
+    runtime = dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])
+    with patch.object(server, "parse_nvidia_smi", return_value={
+      "available": True, "devices": [{"deviceId": "gpu0"}]
+    }):
+      available = server.parse_runtime_status(runtime)
+    with patch.object(server, "parse_nvidia_smi", return_value={"available": False, "devices": []}):
+      unavailable = server.parse_runtime_status(runtime)
+
+    self.assertEqual(available["status"], "running")
+    self.assertTrue(available["gpuObserved"])
+    self.assertEqual(unavailable["status"], "stopped")
+    self.assertFalse(unavailable["gpuObserved"])
+
+  def test_vliw_dispatch_calls_cuda_batch_evaluator_not_placeholder(self):
+    job = {
+      "remoteJobId": "vliw-dispatch",
+      "runtimeName": "vliw",
+      "profileName": "vliw-batch-evaluator",
+      "deviceId": "gpu1",
+      "jobSpec": self.valid_job_spec()
+    }
+    result = {"candidateCount": 1, "scores": [{"id": "add", "incorrectCount": 0}]}
+    with patch.object(server, "ensure_capacity_for_job", return_value={"decision": "fits"}), \
+         patch.object(server.vliw_evaluator, "score_vliw_batch", return_value=result) as evaluate:
+      actual = server.execute_job(job, {"vliw": dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])})
+
+    self.assertEqual(actual, result)
+    evaluate.assert_called_once_with(job["jobSpec"]["payload"], "gpu1")
+
+
 if __name__ == "__main__":
   unittest.main()

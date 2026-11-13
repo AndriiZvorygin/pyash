@@ -23,6 +23,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import unquote
 from urllib.request import Request, urlopen
 import kubernetes_runtime
+import vliw_evaluator
 
 _JOBS: Dict[str, Dict[str, Any]] = {}
 _PROFILES: Dict[str, Dict[str, Any]] = {}
@@ -176,6 +177,20 @@ DEFAULT_RUNTIME_REGISTRY = {
     "activityProbe": "provider-owned",
     "dischargeKind": "huggingface",
     "concurrencySafe": False
+  },
+  "vliw": {
+    "runtimeName": "vliw",
+    "containerName": "",
+    "runtimeMode": "housekeeper-vliw",
+    "gpuExpected": True,
+    "deviceId": "",
+    "minimumVramRequiredMb": 64,
+    "beginAction": [],
+    "stopAction": [],
+    "restartAction": [],
+    "activityProbe": "housekeeper-vliw",
+    "dischargeKind": "",
+    "concurrencySafe": True
   }
 }
 
@@ -2268,6 +2283,23 @@ def submit_job(
         "error": "huggingface jobSpec.payload must be map"
       }
 
+  if runtime_lower == "vliw":
+    if not isinstance(job_spec, dict):
+      return {"accepted": False, "error": "vliw jobSpec must be map"}
+    if normalize_text(job_spec.get("kind")).lower() != "vliw-batch-evaluate":
+      return {"accepted": False, "error": "vliw jobSpec.kind must be vliw-batch-evaluate"}
+    if not isinstance(job_spec.get("payload"), dict):
+      return {"accepted": False, "error": "vliw-batch-evaluate jobSpec.payload must be map"}
+    if not isinstance(job_spec.get("resourceRequest"), dict):
+      return {"accepted": False, "error": "vliw jobSpec.resourceRequest must declare GPU capacity"}
+    try:
+      request = job_resource_request({"jobSpec": job_spec})
+      if request is None:
+        raise RuntimeError("resourceRequest.vramRequiredMb is required")
+      vliw_evaluator.prepare_vliw_batch(job_spec["payload"])
+    except (RuntimeError, ValueError) as err:
+      return {"accepted": False, "error": normalize_text(err)}
+
   runtime_registry = runtime_registry or Handler.runtime_registry
   selected_host = normalize_text(host_id) or normalize_text(Handler.host_id)
   source = normalize_job_source(payload, source_address)
@@ -2582,6 +2614,22 @@ def parse_runtime_status(runtime_entry: Dict[str, Any]) -> Dict[str, Any]:
   container_name = normalize_text(runtime_entry.get("containerName"))
   gpu_expected = bool(runtime_entry.get("gpuExpected", False))
   runtime_mode = normalize_text(runtime_entry.get("runtimeMode")).lower()
+
+  if runtime_mode == "housekeeper-vliw":
+    telemetry = parse_nvidia_smi()
+    devices = telemetry.get("devices") if isinstance(telemetry, dict) else []
+    available = bool(telemetry.get("available") and isinstance(devices, list) and devices)
+    return {
+      "runtimeName": runtime_name,
+      "status": "running" if available else "stopped",
+      "containerName": "",
+      "runtimeMode": runtime_mode,
+      "gpuExpected": True,
+      "gpuObserved": available,
+      "loaded": False,
+      "deviceCount": len(devices) if available else 0,
+      "message": "Housekeeper VLIW CUDA evaluator available" if available else "Housekeeper has no visible NVIDIA CUDA device"
+    }
 
   if runtime_mode == "kubernetes-ollama":
     try:
@@ -5683,6 +5731,13 @@ def execute_job(
     return execute_katago_job(job, runtime_registry)
   if runtime_name == "huggingface":
     return execute_huggingface_job(job, runtime_registry)
+  if runtime_name == "vliw":
+    if normalize_text(job_spec.get("kind")).lower() != "vliw-batch-evaluate":
+      raise RuntimeError("unsupported vliw job kind")
+    payload = job_spec.get("payload")
+    if not isinstance(payload, dict):
+      raise RuntimeError("vliw batch payload must be a map")
+    return vliw_evaluator.score_vliw_batch(payload, execution_device_id(job))
 
   sleep_ms = 200
   if isinstance(job.get("jobSpec"), dict):
@@ -5715,6 +5770,7 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
       discharge_kind = normalize_text(item.get("dischargeKind")).lower()
       runtime_mode = normalize_text(item.get("runtimeMode")).lower()
       action_driver = normalize_text(item.get("actionDriver")).lower()
+      housekeeper_vliw = runtime_name == "vliw" and runtime_mode == "housekeeper-vliw"
       external_strata = runtime_name == "strata" and discharge_kind == "strata"
       native_ollama = runtime_name == "ollama" and runtime_mode == "native-ollama"
       kubernetes_ollama = (
@@ -5722,7 +5778,7 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
         and runtime_mode == "kubernetes-ollama"
         and action_driver == "kubernetes"
       )
-      if not runtime_name or (not container_name and not external_strata and not native_ollama and not kubernetes_ollama):
+      if not runtime_name or (not container_name and not external_strata and not native_ollama and not kubernetes_ollama and not housekeeper_vliw):
         continue
       try:
         default_context_length = max(0, min(1_000_000, int(item.get("defaultContextLength") or 0)))
@@ -5778,6 +5834,7 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
 
   if not registry:
     registry = {key: dict(value) for key, value in DEFAULT_RUNTIME_REGISTRY.items()}
+  registry.setdefault("vliw", dict(DEFAULT_RUNTIME_REGISTRY["vliw"]))
   if normalize_text(os.environ.get("GPU_HOUSEKEEPER_STRATA_RUNTIME_URL")):
     registry.setdefault("strata", {
       "runtimeName": "strata",

@@ -104,7 +104,9 @@ conformance path before it can claim native execution support.
 
 ## Evolutionary Function Workloads
 
-**Status:** design contract; no GPU evolutionary-function runtime is implied.
+**Status:** the contract remains normative. A bounded numeric-function
+evaluator now runs through Housekeeper, but it is not yet a general Pyash
+sentence/codelet executor.
 
 The useful unit for evolutionary programming is a small, typed function, not
 the whole Pyash interpreter or the host-side evolution loop. Pyash sentences
@@ -179,14 +181,30 @@ resident across a batch where the backend allows it. Any target-specific
 optimization remains behind the same semantic conformance tests, with a
 correct fallback for devices lacking that feature.
 
-The function instruction budget and maximum input extent are profile values
-that still need calibration against the actual VLIW executor and target
-hardware; they are deliberately not guessed here. Before enabling GPU
-evaluation, the project still needs a VLIW representation for function
-signatures and bounded control flow, plus the typed named-data/symbol contract
-for locals. The first implementation slice should be a CPU reference evaluator
-for bounded candidate semantics, using existing VLIW operations where
-representable and explicit tests for the arithmetic operations above.
+### Implemented Housekeeper Subset
+
+The current experimental `vliw-batch-evaluate` profile is deliberately narrower
+than the contract above:
+
+- Functions have exactly two unsigned 16-bit inputs, named fixed-width slots,
+  one unsigned 16-bit output, and at most 31 straight-line instructions.
+- Its tested operations are saturating unsigned addition, floor-at-zero
+  unsigned subtraction, and 16-bit XOR. It has no branches, loops, calls, or
+  side effects, so its control-flow complexity is one.
+- The host reference semantics live in `program/library/vliw/functions.mjs`.
+  `program/library/vliw/evolution.mjs` performs deterministic seeded mutation
+  on the host; `evolveVliwFunctionThroughHousekeeper` sends every training and
+  held-out batch through the durable Pyash `gpu vliw` duty.
+- Housekeeper validates the bounded batch, admits it against the declared
+  64 MiB GPU request, and evaluates candidate/example pairs in a CUDA kernel.
+  Failed or timed-out jobs are surfaced with their durable handle; the
+  production adapter has no local CPU scoring fallback.
+
+This profile is not the legacy 16-word codelet encoding, does not lower
+arbitrary Pyash sentences, and does not establish compatibility with a target
+ISA. The named slots are ephemeral function-local values, not the pending
+`.data`/symbol-table container contract. Keep these boundaries explicit until
+the canonical sentence-to-codelet path and semantic conformance fixtures exist.
 
 ## Implementation Milestones
 
