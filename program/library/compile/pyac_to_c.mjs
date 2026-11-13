@@ -1,5 +1,10 @@
-import { decodeCodelet, scheduleCodeletDependencies } from "../vliw/index.mjs";
+import {
+  decodeCodelet,
+  decodePyashProgramOrNull,
+  scheduleCodeletDependencies
+} from "../vliw/index.mjs";
 import { decodePyacPack } from "../vliw/database.mjs";
+import { transpileProgram } from "./transpile_program.mjs";
 
 const VECTOR_CAPACITY = 16;
 
@@ -331,6 +336,22 @@ export function compilePyacPackToC(input) {
       `compile: invalid PyAC pack: ${error?.message ?? String(error)}`,
       { cause: error?.code ?? null, details: error?.details ?? null }
     );
+  }
+
+  const hasExistingSemanticAdapter = pack.codelets.some((words) => {
+    try {
+      decodeCodelet(words);
+      return true;
+    } catch (error) {
+      if (error?.name !== "VliwCodeletError") throw error;
+      return false;
+    }
+  });
+  const pyashProgram = hasExistingSemanticAdapter
+    ? null
+    : decodePyashProgramOrNull(pack.codelets);
+  if (pyashProgram) {
+    return transpileProgram(pyashProgram, { lang: "c" });
   }
 
   const codelets = pack.codelets.map((words, index) => {

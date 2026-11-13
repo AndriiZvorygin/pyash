@@ -343,6 +343,12 @@ export {
   scheduleCodeletDependencies
 } from "./effects.mjs";
 export {
+  decodePyashProgram,
+  decodePyashProgramOrNull,
+  lowerPyashProgram,
+  lowerPyashSentence
+} from "./sentence.mjs";
+export {
   PYAC_MAGIC,
   PYAC_FORMAT_VERSION,
   PYAC_WORD_BITS,
