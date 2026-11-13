@@ -112,6 +112,10 @@ Use this skill to work on refinery execution, ratify gates, and run newspaper be
 5. If the refinery is file-backed, inspect its latest stage artifact before
    rerunning. Confirm the stage that failed, isolate it with a focused test,
    then rerun the complete example end to end.
+6. When a Pyash parse error occurs inside a refinery, retain the exact source
+   sentence and parser position on the thrown error. Surface both with the
+   refinery stage name so the newspaper identifies the generated input that
+   violated the grammar; a generic parser message alone is insufficient.
 
 ## Key files
 

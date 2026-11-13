@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { parse } from "../program/understand/index.mjs";
+import { parse as parseRaw } from "../program/understand/parse_tokens.mjs";
 
 test("parses quoted text tokens", () => {
   const s = parse('exists su name prompt with text "hello world" be topic ya');
@@ -22,6 +23,25 @@ test("decodes JSON escapes in quoted text tokens", () => {
   const s = parse('exists su name note with text "line one\\nline two\\t\\u263A" be topic ya');
 
   assert.equal(s.with.text, "line one\nline two\t☺");
+});
+
+test("includes the exact source and clause position when a subordinate clause is unclosed", () => {
+  const source = 'la su name broken clause be text ya';
+
+  for (const parser of [parse, parseRaw]) {
+    assert.throws(() => parser(source), (error) => {
+      assert.equal(error.message, "subordinate clause missing ko");
+      assert.deepEqual(error.parseDiagnostic, {
+        kind: "unclosed-subordinate-clause",
+        sourceText: source,
+        parseAttempt: "primary",
+        clauseStartIndex: 0,
+        unmatchedDepth: 1,
+        clauseTokenCount: 6
+      });
+      return true;
+    });
+  }
 });
 
 test("parses minimal declarative sentence", () => {

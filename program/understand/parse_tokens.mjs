@@ -672,5 +672,16 @@ export function parse(line) {
 
   const tokens = tokenize(working.trim());
   if (tokens.length === 0) return null;
-  return parseTokens(tokens, { allowMoodless: false, quotedText });
+  try {
+    return parseTokens(tokens, { allowMoodless: false, quotedText });
+  } catch (error) {
+    if (error && typeof error === "object") {
+      error.parseDiagnostic = {
+        ...(error.parseDiagnostic ?? {}),
+        sourceText: String(line),
+        parseAttempt: "primary"
+      };
+    }
+    throw error;
+  }
 }
