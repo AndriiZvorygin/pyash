@@ -13,6 +13,7 @@
 !container/gpu-housekeeper/
 !container/gpu-housekeeper/service/
 !container/gpu-housekeeper/service/server.py
+!container/gpu-housekeeper/service/vliw_evaluator.py
 !module/
 !module/**
 !program/

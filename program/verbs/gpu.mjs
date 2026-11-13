@@ -137,6 +137,7 @@ function defaultRuntimeForIntent(intent, jobSpec = {}, sentence = {}) {
   if (intent === "mind") return "ollama";
   if (intent === "draw" || intent === "say" || intent === "hear") return "comfyui";
   if (intent === "katago") return "katago";
+  if (intent === "vliw") return "vliw";
   return "";
 }
 
@@ -153,6 +154,7 @@ function defaultProfileForIntent(intent, jobSpec = {}, sentence = {}, { remember
     const profile = String(configured?.ob?.text ?? configured?.ob?.name ?? "").trim();
     return String(jobSpec.profileName ?? jobSpec.katagoProfile ?? "").trim() || profile || "default";
   }
+  if (intent === "vliw") return String(jobSpec.profileName ?? "vliw-batch-evaluator").trim();
   return String(jobSpec.model ?? jobSpec.workflow ?? intent).trim() || intent;
 }
 
@@ -392,6 +394,8 @@ export const signatures = [
   { signatureWords: ["be", "gpu", "katago", "ob", "text", "vyah", "start"], handler: gpu },
   { signatureWords: ["be", "gpu", "katago", "ob", "text", "to", "name", "vyah", "start"], handler: gpu },
   { signatureWords: ["be", "gpu", "katago", "ob", "map", "vyah", "start"], handler: gpu },
+  { signatureWords: ["be", "gpu", "vliw", "ob", "text", "vyah", "start"], handler: gpu },
+  { signatureWords: ["be", "gpu", "vliw", "ob", "map", "vyah", "start"], handler: gpu },
   { signatureWords: ["be", "gpu", "status", "accordingto", "text"], handler: gpu },
   { signatureWords: ["be", "gpu", "await", "accordingto", "text"], handler: gpu },
   { signatureWords: ["be", "gpu", "await", "accordingto", "text", "during", "num"], handler: gpu },
