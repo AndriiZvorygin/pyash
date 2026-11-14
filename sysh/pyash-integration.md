@@ -9,12 +9,14 @@ overrunning its line buffer.
 
 ## Dispatch model
 
-Sysh's original `src/search.asm` performs textual dictionary lookup: it finds
-one token by name and returns that word's code address. That remains useful as
-historical interpreter behavior, but it is not the dispatch contract for
-Pyash sentences.
+Sysh's original `src/search.asm` performs dictionary lookup over textual word
+names and returns a code address. Its lookup-and-call structure is a useful
+assembly-runtime skeleton for VLIW execution. The generated backend should
+adapt that dictionary to canonical Pyash sentence representations rather than
+look up English spellings or a single source token. Canonical vocabulary and
+case identities provide the lookup terms.
 
-The Pyash-facing operation lookup is a sentence pattern, matching the existing
+The operation lookup is a sentence pattern, matching the existing
 signature-first interpreter in `program/bridge/signature/`:
 
 ```text
@@ -25,7 +27,27 @@ For example, a numeric addition pattern is distinguished by its `plus` verb,
 the `from` and `to` cases, and their numeric value types. Runtime values are
 inputs to the selected operation; they are not part of its dispatch identity.
 The same verb with a different case or value type resolves to a different
-pattern.
+pattern. A generated assembly dictionary may encode these patterns in the
+canonical VLIW vocabulary representation, but its entries must be derived from
+the existing Pyash signature contract rather than define a parallel dispatch
+meaning.
+
+## VLIW execution flow
+
+The program instruction pointer addresses the current 16-word VLIW codelet.
+The execution loop decodes its canonical sentence fields into the verb, mood,
+and active case/value registers. It then looks up the handler code address for
+the sentence pattern and calls that handler using the target's calling
+convention. The handler interprets the register state as the Pyash sentence,
+executes it, and returns; the loop advances the program instruction pointer to
+the next codelet. The program instruction pointer and the handler address are
+distinct: one locates the VLIW instruction, while the other selects its
+implementation.
+
+This follows Sysh's existing lookup-then-indirect-call shape (`codeGet`, then
+`call eax`) while replacing its single-word textual match with canonical
+sentence-pattern dispatch. It does not require a hardware interrupt; dispatch
+is a normal software execution step.
 
 ## Case registers
 
@@ -72,14 +94,15 @@ Equal patterns with different runtime values share a dispatch key, while a
 changed case or type selects a different pattern.
 
 `lookupSyshSentencePattern` resolves that key through Pyash's existing
-signature-handler and ceremony registries; it does not add a second dispatch
-table.
+signature-handler and ceremony registries. An assembly backend can emit a
+dictionary of corresponding handler addresses, with entries generated from
+those same signatures.
 
 ## Integration boundary
 
 The existing Pyash signature registry is the authority for sentence-pattern
-lookup. A future Sysh execution backend should consume or generate dispatch
-entries from those signatures rather than maintain a parallel word dictionary
-for operation selection. Sysh's stack and register conventions can inform the
-backend calling convention, but they do not redefine Pyash cases, signatures,
-HNUCs, or the VLIW codelet layout.
+lookup. A Sysh-based execution backend uses its assembly structure and
+lookup/call conventions, while deriving its canonical pattern dictionary from
+those signatures. Sysh's stack and register conventions can inform the backend
+calling convention, but they do not redefine Pyash cases, signatures, HNUCs,
+or the VLIW codelet layout.
