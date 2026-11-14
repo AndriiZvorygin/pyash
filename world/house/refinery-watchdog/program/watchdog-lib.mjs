@@ -13,6 +13,7 @@ export const WATCHDOG_LOCK = "/tmp/refinery-watchdog.lock";
 export const PIPELINE_LOCK = "/tmp/municipal-reporter-pipeline.lock";
 const CALENDAR_PATH = path.join(HOUSE_ROOT, "conduct", "calendar.pya");
 const KWON_LOOKUP_REFRESH_SCHEDULE = "kwon lookup index refresh schedule";
+const WORDNET_SWEEP_WATCHDOG_SCHEDULE = "WordNet sweep watchdog schedule";
 
 export const REPORTERS = Object.freeze({
   andrii: Object.freeze({
@@ -400,19 +401,34 @@ export function mergeManagedCrontab(existing, { nodeBin = process.execPath } = {
   const entry = (minute, hour, program, suffix = "") => `${minute} ${hour} * * * cd ${PYASH_ROOT} && ${nodeBin} ${path.join(PROGRAM_DIR, program)}${suffix} >> ${path.join(ARTIFACT_ROOT, "cron.log")} 2>&1`;
   const refreshSchedule = readPyaTextValues(CALENDAR_PATH, [KWON_LOOKUP_REFRESH_SCHEDULE])[KWON_LOOKUP_REFRESH_SCHEDULE];
   const refreshCron = parseKwonLookupIndexRefreshSchedule(refreshSchedule);
+  const sweepSchedule = readPyaTextValues(CALENDAR_PATH, [WORDNET_SWEEP_WATCHDOG_SCHEDULE])[WORDNET_SWEEP_WATCHDOG_SCHEDULE];
+  const wordnetSweepCron = parseWordNetSweepWatchdogSchedule(sweepSchedule);
   const block = [
     start,
     entry("0", "2", "run-nightly-refinery.mjs", " andrii"),
     entry("0", "3", "run-nightly-refinery.mjs", " owen"),
     entry("0", "4", "run-nightly-refinery.mjs", " grey"),
     entry("0", "5,6", "run-watchdog.mjs"),
-    `0 * * * * cd ${PYASH_ROOT} && ${nodeBin} ${path.join(PROGRAM_DIR, "run-wordnet-sweep-watchdog.mjs")} >> ${path.join(ARTIFACT_ROOT, "cron.log")} 2>&1`,
+    ...(wordnetSweepCron ? [
+      `${wordnetSweepCron} cd ${PYASH_ROOT} && ${nodeBin} ${path.join(PROGRAM_DIR, "run-wordnet-sweep-watchdog.mjs")} >> ${path.join(ARTIFACT_ROOT, "cron.log")} 2>&1`
+    ] : []),
     ...(refreshCron ? [
       `${refreshCron} /usr/bin/flock -n /tmp/pyash-kwon-lookup-index-refresh.lock ${nodeBin} ${path.join(PYASH_ROOT, "command/vocab_lookup_index.mjs")} >> ${path.join(ARTIFACT_ROOT, "cron.log")} 2>&1`
     ] : []),
     end
   ];
   return `${[...kept, ...(kept.length ? [""] : []), ...block].join("\n")}\n`;
+}
+
+export function parseWordNetSweepWatchdogSchedule(value) {
+  const text = String(value ?? "").trim().toLowerCase();
+  if (text === "disabled") return null;
+  const match = text.match(/^every\s+(\d{1,2})\s+minutes?$/u);
+  const minutes = Number(match?.[1]);
+  if (!match || minutes < 1 || minutes > 59) {
+    throw new Error("invalid " + WORDNET_SWEEP_WATCHDOG_SCHEDULE + ": " + String(value ?? ""));
+  }
+  return minutes === 1 ? "* * * * *" : "*/" + minutes + " * * * *";
 }
 
 export function parseKwonLookupIndexRefreshSchedule(value) {
