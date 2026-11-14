@@ -83,6 +83,10 @@ test("one explicit Pyash hello-world program compiles to JS, C, VLIW C, and VLIW
     assert.match(assembly, /pattern_dispatch_table:/);
     assert.match(assembly, /call codeGet/);
     assert.match(assembly, /call eax/);
+    assert.match(assembly, /word 0 is the boundary bitmap, words 1-15 are payload/);
+    assert.match(assembly, /pattern id, value pointer, byte length, VLIW byte advance/);
+    assert.match(assembly, /EAX = this sentence's canonical pattern id/);
+    assert.match(assembly, /Linux i386 syscall number for write/);
     assert.equal(await assembleAndRun(asmPath, directory, "hello-nasm"), "Hello, world!\n");
   });
 });
