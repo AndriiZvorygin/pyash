@@ -1,5 +1,6 @@
 import { decodeCodelet } from "../vliw/index.mjs";
 import { decodePyacPack } from "../vliw/database.mjs";
+import { decodePyashProgramOrNull } from "../vliw/sentence.mjs";
 import { prepareSyshSentencePattern } from "./sysh_sentence_pattern.mjs";
 
 export class PyacNasmCompileError extends Error {
@@ -19,7 +20,25 @@ function dataBytes(bytes) {
   return bytes.length === 0 ? "0" : Array.from(bytes).join(", ");
 }
 
-function lowerTextCodelet(words, codeletIndex) {
+function patternKeyFor(sentence, codeletIndex) {
+  let pattern;
+  try {
+    pattern = prepareSyshSentencePattern(sentence);
+  } catch (error) {
+    fail("unsupported-sentence", `PyAC sentence ${codeletIndex} has no NASM dispatch pattern (${error.message})`, {
+      codeletIndex
+    });
+  }
+  if (pattern.unmappedCaseFields.length > 0) {
+    fail("unmapped-sentence-case", `PyAC sentence ${codeletIndex} has unmapped sentence cases`, {
+      codeletIndex,
+      fields: pattern.unmappedCaseFields
+    });
+  }
+  return pattern.patternKey;
+}
+
+function lowerLegacyTextCodelet(words, codeletIndex) {
   let decoded;
   try {
     decoded = decodeCodelet(words);
@@ -29,50 +48,125 @@ function lowerTextCodelet(words, codeletIndex) {
       cause: error?.code ?? null
     });
   }
-
   if (decoded.semantic !== "typed-literal" || decoded.sentence?.be !== "text" || typeof decoded.sentence?.ob?.text !== "string") {
-    fail(
-      "unsupported-codelet",
-      `PyAC codelet ${codeletIndex} has no NASM lowering (${decoded.semantic})`,
-      { codeletIndex, semantic: decoded.semantic ?? null }
-    );
-  }
-
-  const pattern = prepareSyshSentencePattern(decoded.sentence);
-  if (pattern.unmappedCaseFields.length > 0) {
-    fail("unmapped-sentence-case", `PyAC codelet ${codeletIndex} has unmapped sentence cases`, {
+    fail("unsupported-codelet", `PyAC codelet ${codeletIndex} has no NASM lowering (${decoded.semantic})`, {
       codeletIndex,
-      fields: pattern.unmappedCaseFields
+      semantic: decoded.semantic ?? null
     });
   }
-
   return {
     words: Array.from(words),
-    patternKey: pattern.patternKey,
-    text: Buffer.from(decoded.sentence.ob.text, "utf8")
+    patternKey: patternKeyFor(decoded.sentence, codeletIndex),
+    handler: "sysh_text_handler",
+    label: `text_value_${codeletIndex}`,
+    text: Buffer.from(decoded.sentence.ob.text, "utf8"),
+    advanceBytes: 32
   };
 }
 
-function assemblyFor(codelets) {
-  const patternKeys = [...new Set(codelets.map((codelet) => codelet.patternKey))].sort();
+function sentenceGroups(vectors) {
+  const groups = [];
+  let group = [];
+  for (const [index, vector] of vectors.entries()) {
+    group.push(vector);
+    if (vector[0] & 1) {
+      groups.push(group);
+      group = [];
+    }
+    if (index === vectors.length - 1 && group.length > 0) {
+      fail("missing-continuation", "PyAC VLIW program ends in an incomplete sentence");
+    }
+  }
+  return groups;
+}
+
+function lowerNamedTextProgram(sentences, groups) {
+  if (groups.length !== sentences.length) {
+    fail("sentence-vector-count", "PyAC sentence count does not match its VLIW codelet groups", {
+      sentences: sentences.length,
+      groups: groups.length
+    });
+  }
+
+  const variables = new Map();
+  const instructions = [];
+  for (const [index, sentence] of sentences.entries()) {
+    const words = groups[index].flatMap((vector) => Array.from(vector));
+    const patternKey = patternKeyFor(sentence, index);
+    if (
+      sentence?.mood === "ya" &&
+      sentence?.be === "text" &&
+      typeof sentence?.su?.name === "string" &&
+      typeof sentence?.ob?.text === "string"
+    ) {
+      if (variables.has(sentence.su.name)) {
+        fail("duplicate-declaration", `PyAC NASM slice does not yet support reassignment of ${sentence.su.name}`, {
+          codeletIndex: index,
+          name: sentence.su.name
+        });
+      }
+      const label = `text_value_${index}`;
+      const text = Buffer.from(sentence.ob.text, "utf8");
+      variables.set(sentence.su.name, { label, textLength: text.length });
+      instructions.push({
+        words,
+        patternKey,
+        handler: "sysh_declare_text_handler",
+        label,
+        text,
+        advanceBytes: groups[index].length * 32
+      });
+      continue;
+    }
+
+    if (sentence?.mood === "do" && sentence?.be === "write" && typeof sentence?.ob?.name === "string") {
+      const variable = variables.get(sentence.ob.name);
+      if (!variable) {
+        fail("unfulfilled-reference", `PyAC NASM sentence ${index} writes an undeclared text name (${sentence.ob.name})`, {
+          codeletIndex: index,
+          name: sentence.ob.name
+        });
+      }
+      instructions.push({
+        words,
+        patternKey,
+        handler: "sysh_text_line_handler",
+        label: variable.label,
+        text: null,
+        textLength: variable.textLength,
+        advanceBytes: groups[index].length * 32
+      });
+      continue;
+    }
+
+    fail("unsupported-codelet", `PyAC sentence ${index} has no NASM lowering (${sentence?.be ?? "unknown"})`, {
+      codeletIndex: index,
+      semantic: sentence?.be ?? null
+    });
+  }
+  return instructions;
+}
+
+function assemblyFor(instructions, programVectors = instructions.map((instruction) => [instruction.words])) {
+  const patternKeys = [...new Set(instructions.map((instruction) => instruction.patternKey))].sort();
   const patternIds = new Map(patternKeys.map((key, index) => [key, index + 1]));
-  const codeletLines = codelets.flatMap((codelet) => [
-    `    dw ${codelet.words.map((word) => `0x${word.toString(16).padStart(4, "0")}`).join(", ")}`
+  const codeletLines = programVectors.flatMap((group) => group.map((vector) =>
+    `    dw ${Array.from(vector).map((word) => `0x${word.toString(16).padStart(4, "0")}`).join(", ")}`
+  ));
+  const textLines = instructions.flatMap((instruction) => instruction.text === null
+    ? []
+    : [`${instruction.label}: db ${dataBytes(instruction.text)}`]);
+  const instructionLines = instructions.map((instruction) => [
+    `    dd ${patternIds.get(instruction.patternKey)}, ${instruction.label}, ${instruction.textLength ?? instruction.text.length}, ${instruction.advanceBytes}`
   ]);
-  const textLines = codelets.flatMap((codelet, index) => [
-    `text_value_${index}: db ${dataBytes(codelet.text)}`
-  ]);
-  const instructionLines = codelets.map((codelet, index) => [
-    `    dd ${patternIds.get(codelet.patternKey)}, text_value_${index}, ${codelet.text.length}`
-  ]);
-  const dispatchLines = patternKeys.map((key, index) => [
-    `    ; ${key}`,
-    `    dd ${index + 1}, sysh_text_handler`
-  ]);
+  const dispatchLines = patternKeys.map((key, index) => {
+    const handler = instructions.find((instruction) => instruction.patternKey === key).handler;
+    return [`    ; ${key}`, `    dd ${index + 1}, ${handler}`];
+  });
 
   return [
     "; Generated by Pyash from canonical 16-word VLIW codelets.",
-    "; First NASM slice: text literals, dispatched by Pyash sentence signature.",
+    "; Sentence patterns dispatch through a Sysh-shaped lookup and handler call.",
     "bits 32",
     "",
     "section .rodata",
@@ -81,6 +175,7 @@ function assemblyFor(codelets) {
     ...codeletLines,
     "",
     ...textLines,
+    "newline: db 10",
     "",
     "section .data",
     "pattern_dispatch_table:",
@@ -94,7 +189,7 @@ function assemblyFor(codelets) {
     "_start:",
     "    mov esi, vliw_program             ; program instruction pointer",
     "    mov edi, instruction_dispatch_table",
-    `    mov ecx, ${codelets.length}`,
+    `    mov ecx, ${instructions.length}`,
     "execution_loop:",
     "    test ecx, ecx",
     "    jz execution_done",
@@ -106,13 +201,13 @@ function assemblyFor(codelets) {
     "    test eax, eax",
     "    jz dispatch_error",
     "    push dword [edi + 8]             ; text byte length",
-    "    push dword [edi + 4]             ; accusative text value",
+    "    push dword [edi + 4]             ; text value or named state",
     "    call eax                         ; Sysh-style indirect handler call",
     "    pop edi",
     "    pop esi",
     "    pop ecx",
-    "    add esi, 32                      ; advance one 16-word codelet",
-    "    add edi, 12",
+    "    add esi, [edi + 12]              ; advance by this sentence's VLIW vectors",
+    "    add edi, 16",
     "    dec ecx",
     "    jmp execution_loop",
     "execution_done:",
@@ -144,10 +239,28 @@ function assemblyFor(codelets) {
     "    pop ebx",
     "    ret",
     "",
-    "; Sysh areaSay convention: caller pushes length, then message; callee clears both.",
+    "; Caller pushes length then pointer; handlers consume both arguments.",
+    "sysh_declare_text_handler:",
+    "    pop eax",
+    "    pop ebx",
+    "    pop ebx",
+    "    push eax",
+    "    ret",
     "sysh_text_handler:",
     "    mov edx, [esp + 8]",
     "    mov ecx, [esp + 4]",
+    "    call sysh_say",
+    "    pop eax",
+    "    pop ebx",
+    "    pop ebx",
+    "    push eax",
+    "    ret",
+    "sysh_text_line_handler:",
+    "    mov edx, [esp + 8]",
+    "    mov ecx, [esp + 4]",
+    "    call sysh_say",
+    "    mov edx, 1",
+    "    mov ecx, newline",
     "    call sysh_say",
     "    pop eax",
     "    pop ebx",
@@ -172,11 +285,24 @@ export function compilePyacPackToNasm(input) {
       cause: error?.code ?? null
     });
   }
+  if (pack.codelets.length === 0) fail("empty-program", "PyAC NASM compilation requires at least one codelet");
 
-  if (pack.codelets.length === 0) {
-    fail("empty-program", "PyAC NASM compilation requires at least one codelet");
+  const hasLegacySemanticAdapter = pack.codelets.some((words) => {
+    try {
+      decodeCodelet(words);
+      return true;
+    } catch (error) {
+      if (error?.name !== "VliwCodeletError") throw error;
+      return false;
+    }
+  });
+  if (!hasLegacySemanticAdapter) {
+    const program = decodePyashProgramOrNull(pack.codelets);
+    if (!program) fail("unsupported-program", "PyAC NASM input is not a supported Pyash sentence program");
+    const groups = sentenceGroups(pack.codelets);
+    return assemblyFor(lowerNamedTextProgram(program, groups), groups);
   }
 
-  const codelets = pack.codelets.map(lowerTextCodelet);
-  return assemblyFor(codelets);
+  const instructions = pack.codelets.map(lowerLegacyTextCodelet);
+  return assemblyFor(instructions, pack.codelets.map((vector) => [vector]));
 }

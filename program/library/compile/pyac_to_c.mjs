@@ -319,11 +319,24 @@ function cSourceFor(codelets) {
     ...[...stateSlots.values()].map((index) => `  pya_value pya_state_${index} = {0};`),
     ...codelets.map((_, index) => `  pya_value pya_result_${index} = {0};`),
     ...statements.map((statement) => `  ${statement}`),
-    ...codelets.map((_, index) => `  pya_print_value(&pya_result_${index});`),
+    ...codelets.flatMap((codelet, index) => (
+      codelet.semantic === "named-literal" ? [] : [`  pya_print_value(&pya_result_${index});`]
+    )),
     "  return 0;",
     "}",
     ""
   ].join("\n");
+}
+
+function restoreInitialNamedDeclarations(sentences) {
+  const declared = new Set();
+  return sentences.map((sentence) => {
+    const name = sentence?.su?.name;
+    if (sentence?.mood !== "ya" || typeof name !== "string") return sentence;
+    if (declared.has(name)) return sentence;
+    declared.add(name);
+    return { ...sentence, exists: true };
+  });
 }
 
 export function compilePyacPackToC(input) {
@@ -351,7 +364,7 @@ export function compilePyacPackToC(input) {
     ? null
     : decodePyashProgramOrNull(pack.codelets);
   if (pyashProgram) {
-    return transpileProgram(pyashProgram, { lang: "c" });
+    return transpileProgram(restoreInitialNamedDeclarations(pyashProgram), { lang: "c" });
   }
 
   const codelets = pack.codelets.map((words, index) => {

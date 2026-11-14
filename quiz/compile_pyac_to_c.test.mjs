@@ -11,6 +11,7 @@ import { interpret } from "../program/bridge/index.mjs";
 import { forget } from "../program/remember/index.mjs";
 import {
   encodePyacPack,
+  decodeCodelet,
   executeCodelets,
   lowerParagraph
 } from "../program/library/vliw/index.mjs";
@@ -89,6 +90,9 @@ test("compile the executable VLIW semantic slices to C with named state", async 
   ];
   const codelets = lowerParagraph(paragraph);
   const expectedFacts = await executeCodelets(codelets);
+  const visibleFacts = expectedFacts.filter((_, index) => (
+    decodeCodelet(codelets[index].words).semantic !== "named-literal"
+  ));
 
   await withTempDirectory(async (directory) => {
     const packPath = path.join(directory, "semantic-slices.pyac");
@@ -105,7 +109,7 @@ test("compile the executable VLIW semantic slices to C with named state", async 
     const { stdout } = await execFileAsync(executablePath, [], { timeout: 120000 });
     assert.deepEqual(
       stdout.trim().split(/\r?\n/).map((line) => JSON.parse(line)),
-      expectedFacts
+      visibleFacts
     );
   });
 });

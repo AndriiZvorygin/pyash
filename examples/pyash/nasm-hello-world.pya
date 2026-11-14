@@ -1,2 +1,2 @@
-ob text "Hello, " be text ya
-ob text "world!" be text ya
+exists su name text ob text "Hello, world!" be text ya
+ob name text be write do

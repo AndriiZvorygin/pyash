@@ -12,7 +12,8 @@ import { interpret } from "../program/bridge/index.mjs";
 import { forget } from "../program/remember/index.mjs";
 import {
   encodePyacPack,
-  lowerParagraph
+  lowerParagraph,
+  lowerPyashProgram
 } from "../program/library/vliw/index.mjs";
 import { compilePyacPackToNasm } from "../program/library/compile/pyac_to_nasm.mjs";
 
@@ -27,34 +28,62 @@ async function withTempDirectory(run) {
   }
 }
 
-test("compile Pyash text codelets through VLIW to a Sysh-shaped NASM hello world", async () => {
+async function compileAndRun(sourcePath, executablePath, compiler, args) {
+  await execFileAsync(compiler, [...args, "-o", executablePath, sourcePath], { timeout: 120000 });
+  return (await execFileAsync(executablePath, [], { timeout: 120000 })).stdout;
+}
+
+async function assembleAndRun(assemblyPath, directory, executableName) {
+  const objectPath = path.join(directory, `${executableName}.o`);
+  const executablePath = path.join(directory, executableName);
+  await execFileAsync("nasm", ["-f", "elf", "-o", objectPath, assemblyPath], { timeout: 120000 });
+  await execFileAsync("ld", ["-m", "elf_i386", "-o", executablePath, objectPath], { timeout: 120000 });
+  return (await execFileAsync(executablePath, [], { timeout: 120000 })).stdout;
+}
+
+test("one explicit Pyash hello-world program compiles to JS, C, VLIW C, and VLIW NASM", async () => {
   forget();
   const source = await fs.readFile("examples/pyash/nasm-hello-world.pya", "utf8");
   const { sentences } = buildProgram(source);
-  const codelets = lowerParagraph(sentences);
-  const pack = encodePyacPack(codelets);
 
   await withTempDirectory(async (directory) => {
-    const packPath = path.join(directory, "hello.pyac");
-    const asmPath = path.join(directory, "hello.asm");
-    const objectPath = path.join(directory, "hello.o");
-    const executablePath = path.join(directory, "hello");
-    await fs.writeFile(packPath, pack);
+    const jsPath = path.join(directory, "hello.mjs");
+    const regularCPath = path.join(directory, "hello.c");
+    const sourcePath = path.resolve("examples/pyash/nasm-hello-world.pya");
+    forget();
+    await interpret(parse(
+      `from filename "${sourcePath}" fromstate pyash tostate javascript to filename "${jsPath}" be compile do`
+    ));
+    assert.equal((await execFileAsync("node", [jsPath])).stdout, "Hello, world!\n");
+    forget();
+    await interpret(parse(
+      `from filename "${sourcePath}" fromstate pyash tostate c to filename "${regularCPath}" be compile do`
+    ));
+    assert.equal(await compileAndRun(regularCPath, path.join(directory, "hello-c"), "cc", ["-std=c11"]), "Hello, world!\n");
 
+    const vectors = lowerPyashProgram(sentences).vectors;
+    assert.ok(vectors.every((vector) => vector.length === 16));
+    const packPath = path.join(directory, "hello.pyac");
+    const cPath = path.join(directory, "hello-vliw.c");
+    const asmPath = path.join(directory, "hello-vliw.asm");
+    await fs.writeFile(packPath, encodePyacPack(vectors));
+
+    forget();
+    await interpret(parse(
+      `from filename "${packPath}" fromstate pyac tostate c to filename "${cPath}" be compile do`
+    ));
+    assert.equal(await compileAndRun(cPath, path.join(directory, "hello-vliw-c"), "cc", ["-std=c11"]), "Hello, world!\n");
+
+    forget();
     await interpret(parse(
       `from filename "${packPath}" fromstate pyac tostate nasm to filename "${asmPath}" be compile do`
     ));
-
     const assembly = await fs.readFile(asmPath, "utf8");
     assert.match(assembly, /vliw_program:/);
     assert.match(assembly, /pattern_dispatch_table:/);
     assert.match(assembly, /call codeGet/);
     assert.match(assembly, /call eax/);
-
-    await execFileAsync("nasm", ["-f", "elf", "-o", objectPath, asmPath], { timeout: 120000 });
-    await execFileAsync("ld", ["-m", "elf_i386", "-o", executablePath, objectPath], { timeout: 120000 });
-    const { stdout } = await execFileAsync(executablePath, [], { timeout: 120000 });
-    assert.equal(stdout, "Hello, world!");
+    assert.equal(await assembleAndRun(asmPath, directory, "hello-nasm"), "Hello, world!\n");
   });
 });
 
@@ -64,4 +93,17 @@ test("NASM VLIW compiler rejects semantics without a target handler", () => {
     () => compilePyacPackToNasm(encodePyacPack(codelets)),
     (error) => error.code === "unsupported-codelet" && /numeric-plus/.test(error.message)
   );
+});
+
+test("NASM legacy anonymous text literals keep their original concatenated output", async () => {
+  const codelets = lowerParagraph([
+    parse('ob text "Hello, " be text ya'),
+    parse('ob text "world!" be text ya')
+  ]);
+  const assembly = compilePyacPackToNasm(encodePyacPack(codelets));
+  await withTempDirectory(async (directory) => {
+    const assemblyPath = path.join(directory, "legacy-hello.asm");
+    await fs.writeFile(assemblyPath, assembly);
+    assert.equal(await assembleAndRun(assemblyPath, directory, "legacy-hello"), "Hello, world!");
+  });
 });
