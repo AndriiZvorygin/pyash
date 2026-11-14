@@ -12,6 +12,8 @@ import { transpileProgram } from "./transpile_program.mjs";
 import { resolveCompiledCommandPolicy } from "../command_policy.mjs";
 import { compilePyacPackToC } from "./pyac_to_c.mjs";
 import { compilePyacPackToNasm } from "./pyac_to_nasm.mjs";
+import { lowerPyashProgram } from "../vliw/sentence.mjs";
+import { encodePyacPack } from "../vliw/database.mjs";
 
 function resolveStateValue(value) {
   if (!value) return "";
@@ -142,6 +144,47 @@ export async function compile_from_filename_to_filename(sentence) {
 
   if (!sourceState || sourceState === "pyash") {
     sourceText = sourceText.replaceAll("\\n", "\n");
+  }
+
+  if ((!sourceState || sourceState === "pyash") && targetState === "pyac") {
+    const targetFilenameRaw = sentence?.to?.filename;
+    const targetFilename = resolveSandboxPath(targetFilenameRaw);
+    if (!targetFilename) {
+      throwErrorSentence({
+        name: "compile error",
+        message: "compile: Pyash to PyAC requires a destination filename",
+        from: { name: "compile" }
+      });
+    }
+
+    let packBytes;
+    try {
+      const { sentences } = buildProgram(sourceText);
+      const vectors = lowerPyashProgram(sentences).vectors;
+      if (vectors.length === 0) {
+        throw new Error("Pyash source contains no executable sentences");
+      }
+      packBytes = encodePyacPack(vectors);
+    } catch (error) {
+      throwErrorSentence({
+        name: "compile error",
+        message: "compile: Pyash source cannot be lowered to PyAC (" + (error?.message ?? String(error)) + ")",
+        from: { name: "compile" },
+        raw: { code: error?.code ?? null }
+      });
+    }
+
+    await fs.writeFile(targetFilename, packBytes);
+    const targetName = sentence?.to?.name ?? sentence?.totext?.name ?? sentence?.su?.name;
+    if (targetName) {
+      doRemember({
+        mood: "ya",
+        su: { name: targetName },
+        be: "filename",
+        ob: { filename: targetFilename }
+      });
+    }
+    return { ob: { filename: targetFilename }, be: "filename" };
   }
 
   if (sourceState === "markdown" && (targetState === "html" || targetState === "pdf")) {

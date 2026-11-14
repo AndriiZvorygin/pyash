@@ -1,3 +1,5 @@
 /bin/sysh
+/bin/pyac-run
 /bin/sysh.o
+/bin/pyac-run.o
 /src/*.o

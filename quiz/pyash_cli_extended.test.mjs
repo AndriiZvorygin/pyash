@@ -88,7 +88,9 @@ test("pyash compile infers C output for PyAC and accepts the shortest unique pre
     const assemblyPath = path.join(directory, "hello.asm");
     const assemblyResult = runCli(["compile", "from", sourcePath, "to", assemblyPath]);
     assert.equal(assemblyResult.status, 0, assemblyResult.stderr);
-    assert.match(await fs.readFile(assemblyPath, "utf8"), /vliw_program:/);
+    const assembly = await fs.readFile(assemblyPath, "utf8");
+    assert.match(assembly, /call sysh_say/);
+    assert.doesNotMatch(assembly, /vliw_program:|pattern_dispatch_table:|call codeGet/);
   });
 });
 

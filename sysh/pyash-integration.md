@@ -32,7 +32,35 @@ canonical VLIW vocabulary representation, but its entries must be derived from
 the existing Pyash signature contract rather than define a parallel dispatch
 meaning.
 
-## VLIW execution flow
+## Two VLIW execution paths
+
+PyAC has two deliberately separate consumers. Both use the same `.pyac`
+sentence encoding, but they execute it at different times:
+
+| Path | When sentence patterns resolve | What runs | Entry point |
+| --- | --- | --- | --- |
+| Runtime interpreter | While the program runs | Sysh-style VLIW decode and pattern dispatch | `./run program.pyac` or `pyash run program.pyac` |
+| Ahead-of-time compiler | While compiling | Target-native instructions selected during compilation | `./compile from filename program.pyac fromstate pyac to filename program.asm tostate nasm be compile do` |
+
+The runtime interpreter reads its `.pyac` file from disk; it does not embed
+the program in the executable. Build the 32-bit Linux NASM interpreter with:
+
+```sh
+bash sysh/build-vliw-interpreter.sh
+```
+
+This produces the ignored binary `sysh/bin/pyac-run`. The regular `run`
+command dispatches `.pyac` files to that binary. Its initial supported slice
+is a named ASCII text declaration followed by one or more `write` sentences.
+Malformed packs and unsupported sentence patterns fail visibly. Runtime input
+bindings, mutable variables, and general-purpose operations are not part of
+this initial interpreter slice.
+
+To lower the shared Pyash hello-world source into the runtime format, use
+`./compile from filename examples/pyash/nasm-hello-world.pya fromstate pyash
+to filename examples/out/nasm-hello-world.pyac tostate pyac be compile do`.
+
+## Runtime interpreter dispatch model
 
 The program instruction pointer addresses the current 16-word VLIW codelet.
 The execution loop decodes its canonical sentence fields into the verb, mood,
@@ -49,23 +77,30 @@ This follows Sysh's existing lookup-then-indirect-call shape (`codeGet`, then
 sentence-pattern dispatch. It does not require a hardware interrupt; dispatch
 is a normal software execution step.
 
-## First NASM slice
+The interpreter's VLIW instruction pointer addresses the current 16-word
+codelet. It gathers continuation vectors until the completion bit closes a
+sentence, decodes the canonical verb, mood, and case/value registers, then
+dispatches the recognized sentence pattern to its operation handler. This
+runtime loop is the Sysh/Forth-inspired interpreter path.
 
-The executable slice accepts named text declarations followed by an explicit
-`write` of that variable. It embeds the original 16-word VLIW vectors,
-including continuation vectors for longer sentences, and emits a
-signature-derived dispatch table plus Sysh-style handler calls. Declarations
-initialize data and produce no output; only `write` emits the text and a
-newline. The earlier anonymous text-literal display slice remains available
-for legacy packs. Other VLIW semantics fail compilation until they have an
-explicit NASM handler.
+## Ahead-of-time compilation
 
-`examples/pyash/nasm-hello-world.pya` is the first source fixture. Its message
-is declared as a named text value and then explicitly written. The integration
-quiz compiles that same source through the regular JavaScript and C targets,
-lowers it to a `.pyac` pack, compiles the pack to both C and NASM, assembles
-with `nasm -f elf`, links with `ld -m elf_i386`, and verifies each executable
-prints exactly `Hello, world!` followed by a newline.
+The NASM AOT backend decodes supported `.pyac` sentence patterns at compile
+time and emits direct target instructions. Its output contains static text
+constants and direct calls to the output helper; it does not embed the VLIW
+stream, interpreter loop, `codeGet` lookup, or a runtime dispatch table. The
+declaration is resolved as static data, while each `write` becomes native
+output instructions. Unsupported semantics fail compilation until the
+backend has an explicit lowering for them. The existing C backend is a
+separate AOT target and remains unchanged by the runtime interpreter.
+
+`examples/pyash/nasm-hello-world.pya` is the shared source fixture. Its message
+is declared as a named text value and then explicitly written. It can be
+compiled to `.pyac`, interpreted by `./run`, or compiled to the existing C and
+NASM AOT targets. The integration quizzes verify that the runtime interpreter
+and each compiled executable print exactly `Hello, world!` followed by a
+newline. The NASM AOT output is assembled with `nasm -f elf` and linked with
+`ld -m elf_i386`.
 
 ## Case registers
 

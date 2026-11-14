@@ -6,14 +6,12 @@ import fs from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import { buildProgram } from "../program/program.mjs";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget } from "../program/remember/index.mjs";
 import {
   encodePyacPack,
-  lowerParagraph,
-  lowerPyashProgram
+  lowerParagraph
 } from "../program/library/vliw/index.mjs";
 import { compilePyacPackToNasm } from "../program/library/compile/pyac_to_nasm.mjs";
 
@@ -41,10 +39,9 @@ async function assembleAndRun(assemblyPath, directory, executableName) {
   return (await execFileAsync(executablePath, [], { timeout: 120000 })).stdout;
 }
 
-test("one explicit Pyash hello-world program compiles to JS, C, VLIW C, and VLIW NASM", async () => {
+test("one explicit Pyash hello-world program compiles to JS, C, VLIW C, and direct VLIW NASM", async () => {
   forget();
   const source = await fs.readFile("examples/pyash/nasm-hello-world.pya", "utf8");
-  const { sentences } = buildProgram(source);
 
   await withTempDirectory(async (directory) => {
     const jsPath = path.join(directory, "hello.mjs");
@@ -61,12 +58,16 @@ test("one explicit Pyash hello-world program compiles to JS, C, VLIW C, and VLIW
     ));
     assert.equal(await compileAndRun(regularCPath, path.join(directory, "hello-c"), "cc", ["-std=c11"]), "Hello, world!\n");
 
-    const vectors = lowerPyashProgram(sentences).vectors;
-    assert.ok(vectors.every((vector) => vector.length === 16));
     const packPath = path.join(directory, "hello.pyac");
     const cPath = path.join(directory, "hello-vliw.c");
     const asmPath = path.join(directory, "hello-vliw.asm");
-    await fs.writeFile(packPath, encodePyacPack(vectors));
+    forget();
+    await interpret(parse(
+      `from filename "${sourcePath}" fromstate pyash to filename "${packPath}" tostate pyac be compile do`
+    ));
+    const pack = new Uint8Array(await fs.readFile(packPath));
+    assert.equal(new TextDecoder().decode(pack.slice(0, 8)), "PYACVLIW");
+    assert.equal((pack.byteLength - 32) % 32, 0);
 
     forget();
     await interpret(parse(
@@ -79,14 +80,10 @@ test("one explicit Pyash hello-world program compiles to JS, C, VLIW C, and VLIW
       `from filename "${packPath}" fromstate pyac tostate nasm to filename "${asmPath}" be compile do`
     ));
     const assembly = await fs.readFile(asmPath, "utf8");
-    assert.match(assembly, /vliw_program:/);
-    assert.match(assembly, /pattern_dispatch_table:/);
-    assert.match(assembly, /call codeGet/);
-    assert.match(assembly, /call eax/);
-    assert.match(assembly, /word 0 is the boundary bitmap, words 1-15 are payload/);
-    assert.match(assembly, /pattern id, value pointer, byte length, VLIW byte advance/);
-    assert.match(assembly, /EAX = this sentence's canonical pattern id/);
-    assert.match(assembly, /Linux i386 syscall number for write/);
+    assert.match(assembly, /ahead-of-time 32-bit x86 code/);
+    assert.match(assembly, /call sysh_say/);
+    assert.match(assembly, /UTF-8 byte length/);
+    assert.doesNotMatch(assembly, /vliw_program:|pattern_dispatch_table:|call codeGet|call eax/);
     assert.equal(await assembleAndRun(asmPath, directory, "hello-nasm"), "Hello, world!\n");
   });
 });
