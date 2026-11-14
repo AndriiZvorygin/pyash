@@ -35,7 +35,8 @@ const MOOD_ENTRIES = Object.freeze({
   def: "declarative_mood_",
   prah: "paragraph_",
   que: "interrogative_mood_",
-  then: "conditional_mood_"
+  then: "conditional_mood_",
+  ret: "return"
 });
 const MOOD_BY_WORD = new Map(
   Object.entries(MOOD_ENTRIES).map(([mood, english]) => [wordForEntry(english), mood])
@@ -48,6 +49,18 @@ for (const entry of pyashWords) {
 }
 
 const THIS_WORD = encodePyacWord("tsah");
+const TYPE_ENTRY_BY_SURFACE = Object.freeze({
+  num: "number_",
+  number: "number_",
+  bool: "boolean_",
+  boolean: "boolean_",
+  text: "text_"
+});
+const TYPE_SURFACE_BY_WORD = new Map([
+  [wordForEntry("number_"), "num"],
+  [wordForEntry("boolean_"), "bool"],
+  [wordForEntry("text_"), "text"]
+]);
 
 function wordForEntry(english) {
   const entry = pyashWords.find((candidate) => candidate.en === english);
@@ -67,14 +80,15 @@ function nameWord(token, role) {
   if (token === "this") return THIS_WORD;
   if (token === "fromindex") return wordForEntry("multiplicative_case_");
   if (token === "toindex") return wordForEntry("toindex_");
+  if (ROLE_ENTRIES[token]) return wordForEntry(ROLE_ENTRIES[token]);
   const entry = lookupLegacyName(token);
-  if (!entry?.hnuc) {
-    throw invalid("unrepresentable-name", `VLIW ${role} name has no vocabulary HNUC`, {
-      role,
-      token
-    });
-  }
-  return Number.parseInt(entry.hnuc, 16);
+  if (entry?.hnuc) return Number.parseInt(entry.hnuc, 16);
+  const typeEntry = TYPE_ENTRY_BY_SURFACE[String(token).toLowerCase()];
+  if (typeEntry) return wordForEntry(typeEntry);
+  throw invalid("unrepresentable-name", `VLIW ${role} name has no vocabulary HNUC`, {
+    role,
+    token
+  });
 }
 
 function nameWords(value, role) {
@@ -82,6 +96,19 @@ function nameWords(value, role) {
     throw invalid("invalid-name", `VLIW ${role} requires a non-empty name`);
   }
   return value.trim().split(/\s+/u).map((token) => nameWord(token, role));
+}
+
+function typeWords(values, role) {
+  return (Array.isArray(values) ? values : []).map((token) => {
+    const entryName = TYPE_ENTRY_BY_SURFACE[String(token).trim().toLowerCase()];
+    if (!entryName) {
+      throw invalid("unsupported-name-type", `VLIW ${role} name type has no vocabulary HNUC`, {
+        role,
+        token
+      });
+    }
+    return wordForEntry(entryName);
+  });
 }
 
 function encodeValue(value, role) {
@@ -98,8 +125,12 @@ function encodeValue(value, role) {
     if (chars.length === 0) throw invalid("unsupported-value", `VLIW ${role} text quote cannot be empty`);
     return [PARAGRAPH_LETTER_QUOTE_WORD, chars.length, ...chars];
   }
+  if (typeof value?.boolean === "boolean") {
+    return [wordForEntry(value.boolean ? "truth" : "lie")];
+  }
   if (typeof value?.name === "string") {
-    return [NAME_TYPE, ...nameWords(value.name, role)];
+    const types = typeWords(value.nameTypeWords, role);
+    return [NAME_TYPE, ...types, ...(types.length ? [NAME_TYPE] : []), ...nameWords(value.name, role)];
   }
   if (Array.isArray(value?.genitive?.chain) && value.genitive.chain.length > 0) {
     const encoded = [];
@@ -115,7 +146,8 @@ function encodeValue(value, role) {
 }
 
 function encodeClause(sentence, { conditional = false } = {}) {
-  if (!sentence || typeof sentence !== "object" || typeof sentence.be !== "string") {
+  const isReturn = sentence?.mood === "ret" && sentence.be === undefined;
+  if (!sentence || typeof sentence !== "object" || (!isReturn && typeof sentence.be !== "string")) {
     throw invalid("unsupported-sentence", "VLIW sentence requires a verb and a parsed Pyash sentence");
   }
 
@@ -129,14 +161,19 @@ function encodeClause(sentence, { conditional = false } = {}) {
     boundaries.push(words.length);
   }
 
-  const verb = lookupLegacyName(sentence.be);
-  if (!verb?.hnuc) {
-    throw invalid("unrepresentable-verb", `VLIW verb has no vocabulary HNUC (${sentence.be})`, {
-      verb: sentence.be
-    });
+  if (!isReturn) {
+    const verbTokens = String(sentence.be).trim().split(/\s+/u);
+    const verbs = verbTokens.map((token) => lookupLegacyName(token));
+    const missingIndex = verbs.findIndex((verb) => !verb?.hnuc);
+    if (missingIndex >= 0) {
+      throw invalid("unrepresentable-verb", `VLIW verb has no vocabulary HNUC (${verbTokens[missingIndex]})`, {
+        verb: sentence.be,
+        token: verbTokens[missingIndex]
+      });
+    }
+    words.push(...verbs.map((verb) => Number.parseInt(verb.hnuc, 16)));
   }
-  words.push(Number.parseInt(verb.hnuc, 16));
-  const mood = conditional ? "then" : sentence.mood;
+  const mood = isReturn ? "ret" : conditional ? "then" : sentence.mood;
   const moodEntry = MOOD_ENTRIES[mood];
   if (!moodEntry) throw invalid("unsupported-mood", `VLIW sentence mood is unsupported (${mood})`, { mood });
   words.push(wordForEntry(moodEntry));
@@ -148,6 +185,26 @@ function encodeSentenceWords(sentence) {
   if (sentence?.exists === true) {
     // `exists` is declaration sugar; the named typed fact carries the same
     // declaration semantics in the legacy quote/case representation.
+  }
+  if (sentence?.alternative) {
+    if (!sentence.consequence) {
+      throw invalid("unsupported-branch", "VLIW alternative requires a conditional consequence");
+    }
+    if ([sentence.consequence, sentence.alternative].some((branch) => branch?.consequence || branch?.alternative)) {
+      throw invalid("nested-branch", "VLIW first milestone does not encode nested conditional branches");
+    }
+    const clauses = [
+      encodeClause(sentence, { conditional: true }),
+      encodeClause(sentence.consequence),
+      encodeClause(sentence.alternative)
+    ];
+    const words = [];
+    const boundaries = new Set();
+    for (const clause of clauses) {
+      for (const offset of clause.boundaries) boundaries.add(words.length + offset);
+      words.push(...clause.words);
+    }
+    return { words, boundaries };
   }
   const clauses = [];
   let current = sentence;
@@ -246,6 +303,8 @@ function wordName(word, role) {
   if (word === THIS_WORD) return "this";
   if (word === wordForEntry("multiplicative_case_")) return "fromindex";
   if (word === wordForEntry("toindex_")) return "toindex";
+  if (ROLE_BY_WORD.has(word)) return ROLE_BY_WORD.get(word);
+  if (TYPE_SURFACE_BY_WORD.has(word)) return TYPE_SURFACE_BY_WORD.get(word);
   const entry = ENTRIES_BY_HNUC.get(word);
   if (entry?.en && !entry.en.endsWith("_")) return entry.en;
   throw invalid("unrepresentable-name", `VLIW ${role} HNUC has no recoverable vocabulary name`, {
@@ -272,8 +331,18 @@ function decodeValue(items, role) {
     throw invalid("unsupported-value", `VLIW ${role} value mixes quote payloads and lexical words`);
   }
   if (words[0] === NAME_TYPE) {
-    if (words.length < 2) throw invalid("unsupported-value", `VLIW ${role} name phrase is empty`);
-    return { name: words.slice(1).map((word) => wordName(word, role)).join(" ") };
+    const typeMarker = words.indexOf(NAME_TYPE, 1);
+    const encodedTypes = typeMarker < 0 ? [] : words.slice(1, typeMarker);
+    const nameStart = typeMarker < 0 ? 1 : typeMarker + 1;
+    if (nameStart >= words.length) throw invalid("unsupported-value", `VLIW ${role} name phrase is empty`);
+    const nameTypeWords = encodedTypes.map((word) => TYPE_SURFACE_BY_WORD.get(word));
+    if (nameTypeWords.some((type) => !type)) {
+      throw invalid("unsupported-name-type", `VLIW ${role} name type has no recoverable surface`);
+    }
+    return {
+      name: words.slice(nameStart).map((word) => wordName(word, role)).join(" "),
+      ...(nameTypeWords.length ? { nameTypeWords } : {})
+    };
   }
   const genitiveParts = [];
   let segment = [];
@@ -303,7 +372,7 @@ function decodeValue(items, role) {
 }
 
 function sentenceFromClause(fields, verb, mood) {
-  return { ...fields, be: verb, mood };
+  return { ...fields, ...(verb !== undefined ? { be: verb } : {}), mood };
 }
 
 function decodeClauseItems(items, boundaryOffsets) {
@@ -319,11 +388,18 @@ function decodeClauseItems(items, boundaryOffsets) {
       continue;
     }
     if (isBoundary && item.kind === "word" && MOOD_BY_WORD.has(item.word)) {
-      if (pending.length !== 1 || pending[0].kind !== "word") {
+      const mood = MOOD_BY_WORD.get(item.word);
+      if (mood === "ret" && pending.length === 0) {
+        return {
+          sentence: sentenceFromClause(fields, undefined, mood),
+          nextIndex: item.offset + 1
+        };
+      }
+      if (pending.length < 1 || pending.some((entry) => entry.kind !== "word")) {
         throw invalid("unsupported-sentence", "VLIW sentence must end each clause with one verb and one mood");
       }
       return {
-        sentence: sentenceFromClause(fields, wordName(pending[0].word, "verb"), MOOD_BY_WORD.get(item.word)),
+        sentence: sentenceFromClause(fields, pending.map((entry) => wordName(entry.word, "verb")).join(" "), mood),
         nextIndex: item.offset + 1
       };
     }
@@ -345,6 +421,23 @@ function decodeSentenceGroup(vectors) {
     if (start < 0) break;
   }
   if (clauses.length === 0) throw invalid("unsupported-sentence", "VLIW codelet contains no Pyash clause");
+  if (
+    clauses.length === 3
+    && clauses[0].mood === "then"
+    && clauses[1].mood !== "then"
+    && clauses[2].mood !== "then"
+  ) {
+    const [condition, consequence, alternative] = clauses;
+    if (consequence.mood !== alternative.mood) {
+      throw invalid("branch-mood-mismatch", "VLIW conditional branches must have matching moods");
+    }
+    return {
+      ...condition,
+      mood: consequence.mood,
+      consequence,
+      alternative
+    };
+  }
   let sentence = clauses.at(-1);
   for (let index = clauses.length - 2; index >= 0; index -= 1) {
     const condition = clauses[index];

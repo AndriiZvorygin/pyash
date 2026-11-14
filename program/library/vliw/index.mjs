@@ -375,6 +375,15 @@ export {
   lowerPyashSentence
 } from "./sentence.mjs";
 export {
+  MAX_PYASH_PROGRAMLET_COMPLEXITY,
+  MAX_PYASH_PROGRAMLET_SENTENCES,
+  compilePyashProgramSource,
+  decodePyashProgramPack,
+  executePyashProgramPack,
+  evolvePyashProgramSource,
+  mutatePyashProgramSource
+} from "./programlet.mjs";
+export {
   PYAC_MAGIC,
   PYAC_FORMAT_VERSION,
   PYAC_WORD_BITS,
