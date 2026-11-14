@@ -144,6 +144,7 @@ const installRoot = path.resolve(path.dirname(__filename), "..", "..");
 const runProgramPath = path.join(installRoot, "command", "run_pya_program.mjs");
 const saddlePath = path.join(installRoot, "command", "pyash_saddle.mjs");
 const replPath = path.join(installRoot, "program", "main.mjs");
+const vocabSuggestPath = path.join(installRoot, "command", "vocab_suggest.mjs");
 const codexAccountPath = path.join(installRoot, "command", "codex_account.mjs");
 
 const MATRIX_CATERER_NAME = "matrix";
@@ -495,6 +496,9 @@ export async function main() {
   if (first === "codex") return void process.exit(await codexCommand(args.slice(1), { installRoot }));
   if (first === "agent") return void process.exit(await agentCommand(args.slice(1)));
   if (first === "verify") return void await verifyCommand(args.slice(1));
+  if (first === "dict" || first === "dictionary") {
+    return void process.exit(await runNodeScript(vocabSuggestPath, args.slice(1)));
+  }
   const code=await runNodeScript(runProgramPath,args);
   process.exit(code);
 }
