@@ -75,6 +75,8 @@ import { createConfigureAgentCommand } from "./configure_agent_command.mjs";
 import { createConfigureMindCommand } from "./configure_mind_command.mjs";
 import { createVerifyCommand } from "./verify_command.mjs";
 import { createAgentCommand } from "./agent_command.mjs";
+import { resolvePyashCommand } from "./command_names.mjs";
+import { compileInvocation, translatePyacToPyash } from "./file_commands.mjs";
 import { projectCodexRunToPyash } from "./agent_codex_projection.mjs";
 import {
   MIND_BACKEND_CHOICES,
@@ -143,6 +145,8 @@ const __filename = fileURLToPath(import.meta.url);
 const installRoot = path.resolve(path.dirname(__filename), "..", "..");
 const runProgramPath = path.join(installRoot, "command", "run_pya_program.mjs");
 const saddlePath = path.join(installRoot, "command", "pyash_saddle.mjs");
+const compileLanguagePath = path.join(installRoot, "command", "cli_language.mjs");
+const vocabSuggestPath = path.join(installRoot, "command", "vocab_suggest.mjs");
 const replPath = path.join(installRoot, "program", "main.mjs");
 const codexAccountPath = path.join(installRoot, "command", "codex_account.mjs");
 
@@ -478,9 +482,17 @@ export async function main() {
   const args=process.argv.slice(2);
   const first=args[0] ?? "";
   if (!first || first === "--help" || first === "-h" || first === "help") return void textOut(usage());
-  if (first === "run") return void process.exit(await runNodeScript(runProgramPath, args.slice(1)));
-  if (first === "saddle") return void process.exit(await runNodeScript(saddlePath, args.slice(1)));
-  if (first === "resume") {
+  const resolved = resolvePyashCommand(first);
+  if (resolved.ambiguous.length > 1) {
+    console.error(`ambiguous pyash command '${first}'; choose one: ${resolved.ambiguous.join(", ")}`);
+    process.exitCode = 2;
+    return;
+  }
+  const command = resolved.command;
+  if (command === "help") return void textOut(usage());
+  if (command === "run") return void process.exit(await runNodeScript(runProgramPath, args.slice(1)));
+  if (command === "saddle") return void process.exit(await runNodeScript(saddlePath, args.slice(1)));
+  if (command === "resume") {
     if (!args[1]) {
       textOut("Usage: pyash resume <duty-id>");
       process.exitCode = 2;
@@ -488,13 +500,33 @@ export async function main() {
     }
     return void process.exit(await runNodeScript(saddlePath, ["resume", args[1]]));
   }
-  if (first === "repl") return void process.exit(await runNodeScript(replPath, []));
-  if (first === "configure") return void await configureMenu(args.slice(1));
-  if (first === "calendar") return void await calendarCommand(args.slice(1));
-  if (first === "channel") return void await channelCommand(args.slice(1));
-  if (first === "codex") return void process.exit(await codexCommand(args.slice(1), { installRoot }));
-  if (first === "agent") return void process.exit(await agentCommand(args.slice(1)));
-  if (first === "verify") return void await verifyCommand(args.slice(1));
+  if (command === "repl") return void process.exit(await runNodeScript(replPath, []));
+  if (command === "configure") return void await configureMenu(args.slice(1));
+  if (command === "calendar") return void await calendarCommand(args.slice(1));
+  if (command === "channel") return void await channelCommand(args.slice(1));
+  if (command === "codex") return void process.exit(await codexCommand(args.slice(1), { installRoot }));
+  if (command === "agent") return void process.exit(await agentCommand(args.slice(1)));
+  if (command === "verify") return void await verifyCommand(args.slice(1));
+  if (command === "compile") {
+    try {
+      return void process.exit(await runNodeScript(compileLanguagePath, compileInvocation("compile", args.slice(1))));
+    } catch (error) {
+      console.error(error.message);
+      process.exitCode = 2;
+      return;
+    }
+  }
+  if (command === "translate") {
+    try {
+      const result = await translatePyacToPyash("translate", args.slice(1));
+      textOut(`translated ${result.codeletCount} PyAC codelets: ${result.source} -> ${result.destination}`);
+    } catch (error) {
+      console.error(error.message);
+      process.exitCode = 1;
+    }
+    return;
+  }
+  if (command === "dictionary") return void process.exit(await runNodeScript(vocabSuggestPath, args.slice(1)));
   const code=await runNodeScript(runProgramPath,args);
   process.exit(code);
 }
