@@ -147,7 +147,12 @@ function encodeValue(value, role) {
 
 function encodeClause(sentence, { conditional = false } = {}) {
   const isReturn = sentence?.mood === "ret" && sentence.be === undefined;
-  if (!sentence || typeof sentence !== "object" || (!isReturn && typeof sentence.be !== "string")) {
+  const isParagraphEnd = sentence?.mood === "prah" && sentence.be === undefined;
+  if (
+    !sentence
+    || typeof sentence !== "object"
+    || (!isReturn && !isParagraphEnd && typeof sentence.be !== "string")
+  ) {
     throw invalid("unsupported-sentence", "VLIW sentence requires a verb and a parsed Pyash sentence");
   }
 
@@ -161,7 +166,7 @@ function encodeClause(sentence, { conditional = false } = {}) {
     boundaries.push(words.length);
   }
 
-  if (!isReturn) {
+  if (!isReturn && !isParagraphEnd) {
     const verbTokens = String(sentence.be).trim().split(/\s+/u);
     const verbs = verbTokens.map((token) => lookupLegacyName(token));
     const missingIndex = verbs.findIndex((verb) => !verb?.hnuc);
@@ -389,7 +394,7 @@ function decodeClauseItems(items, boundaryOffsets) {
     }
     if (isBoundary && item.kind === "word" && MOOD_BY_WORD.has(item.word)) {
       const mood = MOOD_BY_WORD.get(item.word);
-      if (mood === "ret" && pending.length === 0) {
+      if ((mood === "ret" || mood === "prah") && pending.length === 0) {
         return {
           sentence: sentenceFromClause(fields, undefined, mood),
           nextIndex: item.offset + 1

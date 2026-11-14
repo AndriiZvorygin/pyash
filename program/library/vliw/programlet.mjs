@@ -100,7 +100,11 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
       continue;
     }
     if (sentence.mood === "prah") {
-      if (!activeDefinition || sentence.su?.name !== activeDefinition || sentence.be !== "ceremony") {
+      if (
+        !activeDefinition
+        || (sentence.su?.name && sentence.su.name !== activeDefinition)
+        || (sentence.be && sentence.be !== "ceremony")
+      ) {
         fail("Pyash programlet paragraph must close the active ceremony definition", { sentence: index + 1 });
       }
       if (!activeDefinitionReturns) {

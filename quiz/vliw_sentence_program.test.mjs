@@ -26,6 +26,11 @@ test("ordinary Pyash ceremony source round-trips through the fixed-width PyAC pa
   assert.deepEqual(decoded, sentences);
   assert.ok(lowered.vectors.length > sentences.length);
   assert.ok(lowered.vectors.every((vector) => vector.length === 16));
+  assert.deepEqual(decoded.filter(({ mood }) => mood === "prah"), [
+    { mood: "prah" },
+    { mood: "prah" },
+    { mood: "prah" }
+  ]);
 });
 
 test("ordinary Pyash is-even program executes from its compiled PyAC pack", async () => {

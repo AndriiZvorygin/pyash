@@ -162,10 +162,11 @@ must not reward a semantically incorrect function for being small.
 The first ordinary-Pyash programlet proof uses `equally number` (the accepted
 Pyash compound for “even”) from
 [`vliw-is-even.pya`](../../examples/pyash/vliw-is-even.pya). The source defines
-small `truth` and `lie` ceremonies and an `equally number` ceremony. It uses
-the existing `remains` and `equally` verbs, a Pyash conditional with both
-branches, typed named output, and `ret` mood. It is not translated into a
-private instruction-map language.
+small `truth` and `lie` ceremonies and an `equally number` ceremony. Bare
+`prah` sentences close those definitions; the active definition supplies the
+association. It uses the existing `remains` and `equally` verbs, a Pyash
+conditional with both branches, typed named output, and `ret` mood. It is not
+translated into a private instruction-map language.
 
 `program/library/vliw/programlet.mjs` provides the bounded v1 host surface:
 
