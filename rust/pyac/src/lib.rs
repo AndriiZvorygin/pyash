@@ -17,10 +17,10 @@ pub use literal::{
 };
 pub use semantic::{
     GOLDEN_NUMERIC_PLUS_CODELET, NumericArithmeticInstruction, NumericInvertInstruction,
-    NumericOperator, NumericPlusInstruction, SemanticError, decode_numeric_arithmetic,
-    decode_numeric_invert, decode_numeric_plus, execute_numeric_arithmetic,
-    execute_numeric_arithmetic_codelet, execute_numeric_invert, execute_numeric_invert_codelet,
-    execute_numeric_plus, execute_numeric_plus_codelet,
+    NumericOperandCase, NumericOperator, NumericPlusInstruction, SemanticError,
+    decode_numeric_arithmetic, decode_numeric_invert, decode_numeric_plus,
+    execute_numeric_arithmetic, execute_numeric_arithmetic_codelet, execute_numeric_invert,
+    execute_numeric_invert_codelet, execute_numeric_plus, execute_numeric_plus_codelet,
 };
 
 use std::fmt::{Display, Formatter};
@@ -292,7 +292,7 @@ mod tests {
     use super::*;
 
     const ONE_PLUS: [u16; WORDS_PER_CODELET] = [
-        0x0149, 0x881d, 0x0001, 0x287e, 0x881d, 0x0001, 0x245e, 0x8a64, 0x295e, 0, 0, 0, 0, 0, 0, 0,
+        0x0149, 0x881d, 0x0001, 0x245e, 0x881d, 0x0001, 0x243e, 0x8a64, 0x295e, 0, 0, 0, 0, 0, 0, 0,
     ];
 
     #[test]

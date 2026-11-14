@@ -13,6 +13,8 @@ import { forget } from "../program/remember/index.mjs";
 import {
   decodePyacPack,
   encodePyacPack,
+  decodeCodelet,
+  decodePyashProgram,
   executeCodelets,
   lowerParagraph
 } from "../program/library/vliw/index.mjs";
@@ -54,27 +56,25 @@ test("compile Pyash arithmetic source through PyAC to an executable", async () =
     });
 
     const { stdout } = await execFileAsync(executablePath, [], { timeout: 120000 });
-    assert.deepEqual(stdout.trim().split(/\r?\n/).map(Number), [42, 40, 42]);
+    assert.deepEqual(
+      stdout.trim().split(/\r?\n/).map((line) => JSON.parse(line).ob.num),
+      [42, 40, 42]
+    );
   });
 });
 
-test("Pyash to PyAC reports the source sentence that cannot be lowered", async () => {
+test("Pyash to PyAC lowers sentences outside the semantic codelet adapters", async () => {
   forget();
   await withTempDirectory(async (directory) => {
     const sourcePath = path.join(directory, "unsupported.pya");
     const packPath = path.join(directory, "unsupported.pyac");
     await fs.writeFile(sourcePath, 'ob text "hello" be write do\n', "utf8");
 
-    await assert.rejects(
-      () => interpret(parse(
-        `from filename "${sourcePath}" fromstate pyash tostate pyac to filename "${packPath}" be compile do`
-      )),
-      (error) => (
-        error.sentence?.su?.name === "compile error" &&
-        /Pyash sentence 1 cannot be lowered to PyAC/.test(error.message)
-      )
-    );
-    await assert.rejects(() => fs.access(packPath), { code: "ENOENT" });
+    await interpret(parse(
+      `from filename "${sourcePath}" fromstate pyash tostate pyac to filename "${packPath}" be compile do`
+    ));
+    const pack = decodePyacPack(await fs.readFile(packPath));
+    assert.deepEqual(decodePyashProgram(pack.codelets), [parse('ob text "hello" be write do')]);
   });
 });
 
@@ -116,8 +116,51 @@ test("compile persisted constant-arithmetic PyAC pack to C and run it", async ()
 
     const { stdout } = await execFileAsync(executablePath, [], { timeout: 120000 });
     assert.deepEqual(
-      stdout.trim().split(/\r?\n/).map(Number),
-      expectedFacts.map((fact) => fact.ob.num)
+      stdout.trim().split(/\r?\n/).map((line) => JSON.parse(line)),
+      expectedFacts
+    );
+  });
+});
+
+test("compile the executable VLIW semantic slices to C with named state", async () => {
+  forget();
+  const paragraph = [
+    parse("ob num 42 be number ya"),
+    parse('ob text "hello" be text ya'),
+    parse("ob bool truth ya"),
+    parse("su name collector ob num 9 be number ya"),
+    parse("ob num 2 from name collector be subtract do"),
+    parse("su name collector ob what que"),
+    parse('su name answer ob text "hello Ω" be text ya'),
+    parse("su name answer ob what que"),
+    parse("su name letter ob bool lie ya"),
+    parse("ob date 2025-05-01 be date ya"),
+    parse("ob ve num 1 2 3 be vector ya"),
+    parse("ob ve bool truth lie truth be vector ya"),
+    parse("ob ve text Ada Turing be vector ya")
+  ];
+  const codelets = lowerParagraph(paragraph);
+  const expectedFacts = await executeCodelets(codelets);
+  const visibleFacts = expectedFacts.filter((_, index) => (
+    decodeCodelet(codelets[index].words).semantic !== "named-literal"
+  ));
+
+  await withTempDirectory(async (directory) => {
+    const packPath = path.join(directory, "semantic-slices.pyac");
+    const cPath = path.join(directory, "semantic-slices.c");
+    const executablePath = path.join(directory, "semantic-slices");
+    await fs.writeFile(packPath, encodePyacPack(codelets));
+    await interpret(parse(
+      `from filename "${packPath}" fromstate pyac tostate c to filename "${cPath}" be compile do`
+    ));
+    await execFileAsync("cc", ["-std=c11", "-Wall", "-Werror", "-o", executablePath, cPath], {
+      timeout: 120000
+    });
+
+    const { stdout } = await execFileAsync(executablePath, [], { timeout: 120000 });
+    assert.deepEqual(
+      stdout.trim().split(/\r?\n/).map((line) => JSON.parse(line)),
+      visibleFacts
     );
   });
 });
@@ -146,7 +189,33 @@ test("compiled PyAC division by zero fails visibly like the reference executor",
   });
 });
 
-test("PyAC compile rejects malformed packs and unsupported codelets", async () => {
+test("compiled named arithmetic rejects a nonnumeric state value", async () => {
+  forget();
+  const codelets = lowerParagraph([
+    parse('su name collector ob text "letters" be text ya'),
+    parse("ob num 2 from name collector be subtract do")
+  ]);
+  await assert.rejects(() => executeCodelets(codelets), (error) => error.code === "unfulfilled-reference");
+
+  await withTempDirectory(async (directory) => {
+    const packPath = path.join(directory, "invalid-state.pyac");
+    const cPath = path.join(directory, "invalid-state.c");
+    const executablePath = path.join(directory, "invalid-state");
+    await fs.writeFile(packPath, encodePyacPack(codelets));
+    await interpret(parse(
+      `from filename "${packPath}" fromstate pyac tostate c to filename "${cPath}" be compile do`
+    ));
+    await execFileAsync("cc", ["-std=c11", "-Wall", "-Werror", "-o", executablePath, cPath], {
+      timeout: 120000
+    });
+    await assert.rejects(
+      () => execFileAsync(executablePath, [], { timeout: 120000 }),
+      (error) => error.code === 1 && /unfulfilled-reference/.test(error.stderr)
+    );
+  });
+});
+
+test("PyAC compile rejects malformed packs and malformed codelets", async () => {
   forget();
   await withTempDirectory(async (directory) => {
     const packPath = path.join(directory, "invalid.pyac");

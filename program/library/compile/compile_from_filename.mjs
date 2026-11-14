@@ -11,7 +11,8 @@ import { expandModulesForCompile } from "./module_imports.mjs";
 import { transpileProgram } from "./transpile_program.mjs";
 import { resolveCompiledCommandPolicy } from "../command_policy.mjs";
 import { compilePyacPackToC } from "./pyac_to_c.mjs";
-import { encodePyacPack, lowerSentence } from "../vliw/index.mjs";
+import { compilePyacPackToNasm } from "./pyac_to_nasm.mjs";
+import { encodePyacPack, lowerPyashProgram, lowerSentence } from "../vliw/index.mjs";
 
 function resolveStateValue(value) {
   if (!value) return "";
@@ -20,6 +21,22 @@ function resolveStateValue(value) {
   if (value?.text) return String(value.text);
   if (value?.name) return String(value.name);
   return "";
+}
+
+function lowerPyashSourceToPyac(sentences) {
+  const semanticCodelets = [];
+  try {
+    for (const sentence of sentences) {
+      semanticCodelets.push(...lowerSentence(sentence));
+    }
+    return semanticCodelets;
+  } catch (error) {
+    if (error?.code !== "unsupported-sentence" && error?.code !== "literal-width") throw error;
+  }
+
+  // The semantic codelet adapters cover proven slices; other representable
+  // Pyash sentences use the sentence-vector encoding consumed by the runtime.
+  return lowerPyashProgram(sentences).vectors;
 }
 
 export async function compile_from_filename_to_filename(sentence) {
@@ -51,10 +68,10 @@ export async function compile_from_filename_to_filename(sentence) {
   ).toLowerCase();
 
   if (sourceState === "pyac") {
-    if (targetState !== "c") {
+    if (targetState !== "c" && targetState !== "nasm") {
       throwErrorSentence({
         name: "compile error",
-        message: `compile: PyAC VLIW input currently supports C output, not ${targetState || "an unspecified target"}`,
+        message: `compile: PyAC VLIW input currently supports C and NASM output, not ${targetState || "an unspecified target"}`,
         from: { name: "compile" }
       });
     }
@@ -82,7 +99,9 @@ export async function compile_from_filename_to_filename(sentence) {
 
     let body;
     try {
-      body = compilePyacPackToC(packBytes);
+      body = targetState === "nasm"
+        ? compilePyacPackToNasm(packBytes)
+        : compilePyacPackToC(packBytes);
     } catch (error) {
       throwErrorSentence({
         name: "compile error",
@@ -96,17 +115,17 @@ export async function compile_from_filename_to_filename(sentence) {
     const targetFilename = resolveSandboxPath(targetFilenameRaw);
     if (targetFilename) await fs.writeFile(targetFilename, body, "utf8");
 
-    const wrappedText = `quoted.c.\n${body}.c.quoted`;
+    const wrappedText = `quoted.${targetState}.\n${body}.${targetState}.quoted`;
     const targetName = sentence?.to?.name ?? sentence?.totext?.name ?? sentence?.su?.name;
     if (targetName) {
       doRemember({
         su: { name: targetName },
-        be: "c",
+        be: targetState,
         ob: { text: wrappedText },
         mood: "ya"
       });
     }
-    return { ob: { text: wrappedText }, be: "c" };
+    return { ob: { text: wrappedText }, be: targetState };
   }
 
   let sourceText = sentence?.fromtext?.text ?? sentence?.from?.text ?? sentence?.text ?? sentence?.ob?.text;
@@ -159,22 +178,15 @@ export async function compile_from_filename_to_filename(sentence) {
       });
     }
 
-    let codelets;
+    let pack;
     try {
       const program = buildProgram(sourceText);
       if (program.sentences.length === 0) {
         throw new Error("source contains no Pyash sentences");
       }
-      codelets = [];
-      for (const [index, pyaSentence] of program.sentences.entries()) {
-        try {
-          codelets.push(...lowerSentence(pyaSentence));
-        } catch (error) {
-          throw new Error(`Pyash sentence ${index + 1} cannot be lowered to PyAC: ${error?.message ?? String(error)}`, {
-            cause: error
-          });
-        }
-      }
+      const vectors = lowerPyashSourceToPyac(program.sentences);
+      if (vectors.length === 0) throw new Error("Pyash source contains no executable sentences");
+      pack = encodePyacPack(vectors);
     } catch (error) {
       throwErrorSentence({
         name: "compile error",
@@ -184,20 +196,9 @@ export async function compile_from_filename_to_filename(sentence) {
       });
     }
 
-    let pack;
-    try {
-      pack = encodePyacPack(codelets);
-    } catch (error) {
-      throwErrorSentence({
-        name: "compile error",
-        message: `compile: PyAC pack encoding failed: ${error?.message ?? String(error)}`,
-        from: { name: "compile" },
-        raw: { code: error?.code ?? null, details: error?.details ?? null }
-      });
-    }
     await fs.writeFile(targetFilename, pack);
 
-    const targetName = sentence?.to?.name ?? sentence?.su?.name;
+    const targetName = sentence?.to?.name ?? sentence?.totext?.name ?? sentence?.su?.name;
     if (targetName) {
       doRemember({
         su: { name: targetName },

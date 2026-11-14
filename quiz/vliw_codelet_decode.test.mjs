@@ -15,7 +15,7 @@ import {
 } from "../program/library/vliw/quotes.mjs";
 
 const onePlusOneWords = [
-  0x0149, 0x881d, 0x0001, 0x287e, 0x881d, 0x0001, 0x245e, 0x8a64,
+  0x0149, 0x881d, 0x0001, 0x245e, 0x881d, 0x0001, 0x243e, 0x8a64,
   0x295e, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000
 ];
 
@@ -53,7 +53,7 @@ test("generic codelet decoding preserves words, quotes, and lexical lookup", () 
     { kind: "word", offset: 8 }
   ]);
   assert.equal(decoded.items[0].entry, null);
-  assert.equal(decoded.items[2].entry.pya, "yu");
+  assert.equal(decoded.items[2].entry.pya, "ka");
   assert.equal(decoded.items[5].entry.pya, "plus");
   assert.deepEqual(decoded.items[1].quote.payload, [1]);
   assert.equal(decoded.items[1].quote.value, 1);
@@ -63,7 +63,7 @@ test("generic codelet decoding preserves words, quotes, and lexical lookup", () 
 test("generic rendering exposes a lossless diagnostic Pyash-like surface", () => {
   assert.equal(
     renderLegacyCodelet(onePlusOneWords),
-    "0x0149 num 1 yu num 1 ka plus tu"
+    "0x0149 num 1 ka num 1 ma plus tu"
   );
 });
 

@@ -89,7 +89,16 @@ function normalizeNamedLiteralSentence(sentence) {
   if (!sentence || typeof sentence !== "object") {
     throw encodingError("unsupported-sentence", "named literals require a sentence object");
   }
-  exactKeys(sentence, ["be", "mood", "ob", "su"], "named literal sentence");
+  const keys = Object.keys(sentence).sort();
+  const expectedKeys = sentence.exists === true
+    ? ["be", "exists", "mood", "ob", "su"]
+    : ["be", "mood", "ob", "su"];
+  if (keys.length !== expectedKeys.length || keys.some((key, index) => key !== expectedKeys[index])) {
+    throw encodingError("unsupported-sentence", "named literal sentence has an unsupported shape", {
+      keys,
+      expected: expectedKeys
+    });
+  }
   if (sentence.mood !== "ya" || !["number", "text"].includes(sentence.be)) {
     throw encodingError("unsupported-sentence", "named literals require mood ya and type number or text", {
       mood: sentence.mood,

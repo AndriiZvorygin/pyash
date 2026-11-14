@@ -1,11 +1,15 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { renderPyashCommandPrefixes } from "./command_names.mjs";
 
 export function usage({ DEFAULT_MATRIX_APPSERVICE_REGISTRATION }) {
   return [
     "Usage:",
     "  pyash run <file.pya> [run flags...]",
     "  pyash <file.pya> [run flags...]",
+    "  pyash compile from <source> to <destination>",
+    "  pyash translate from <source.pyac> to <destination.pya>",
+    "  pyash dictionary [Kwon arguments...]",
     "  pyash repl",
     "  pyash resume <duty-id>",
     "  pyash configure",
@@ -33,9 +37,12 @@ export function usage({ DEFAULT_MATRIX_APPSERVICE_REGISTRATION }) {
     "  pyash agent <name> --codex [--status] [--root <path>] [--tools-map <name>] [--codex-home <auto|global|agent|path>] [--no-mcp] [-- <codex args...>]",
     "  pyash verify <file.pya> [--root <path>] [--json]",
     "  pyash verify --text \"<pyash sentences>\" [--json]",
+    `  Shortest unique command prefixes: ${renderPyashCommandPrefixes()}`,
     "",
     "Notes:",
     "  - Recommended onboarding route is: pyash configure intro",
+    "  - compile supports PyAC to .c/.asm and Pyash to .c/.js/.mjs, inferred from extensions",
+    "  - translate currently decodes .pyac to .pya; dictionary forwards arguments to local Kwon",
     "  - Canonical configure route is: pyash configure channel <caterer>",
     "  - Channel config writes managed blocks to configure/secret.pya",
     `  - Matrix appservice default registration path is ${DEFAULT_MATRIX_APPSERVICE_REGISTRATION}`,

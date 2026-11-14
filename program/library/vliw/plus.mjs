@@ -12,16 +12,16 @@ export const NUMERIC_PLUS_USED_WORD_COUNT = 9;
 export { CODELET_WORD_COUNT } from "./codelets.mjs";
 
 const HEAD_WORD = LEGACY_NUMERIC_PLUS_WORDS.head;
-const INSTRUMENTAL_CASE_WORD = LEGACY_NUMERIC_PLUS_WORDS.instrumentalCase;
-const ACCUSATIVE_CASE_WORD = LEGACY_NUMERIC_PLUS_WORDS.accusativeCase;
+const OB_CASE_WORD = LEGACY_NUMERIC_PLUS_WORDS.obCase;
+const TO_CASE_WORD = LEGACY_NUMERIC_PLUS_WORDS.toCase;
 const PLUS_WORD = LEGACY_NUMERIC_PLUS_WORDS.plus;
 const DEONTIC_MOOD_WORD = LEGACY_NUMERIC_PLUS_WORDS.deonticMood;
 
 export const numericPlusCompatibility = Object.freeze({
   head: HEAD_WORD,
   numberQuote: NUMBER_QUOTE_WORD,
-  instrumentalCase: INSTRUMENTAL_CASE_WORD,
-  accusativeCase: ACCUSATIVE_CASE_WORD,
+  obCase: OB_CASE_WORD,
+  toCase: TO_CASE_WORD,
   plus: PLUS_WORD,
   deonticMood: DEONTIC_MOOD_WORD
 });
@@ -88,8 +88,8 @@ function wordsToBytes(words) {
 function validateCodeletMarkers(decoded) {
   const markers = [
     [0, HEAD_WORD, "head"],
-    [3, INSTRUMENTAL_CASE_WORD, "instrumental case"],
-    [6, ACCUSATIVE_CASE_WORD, "accusative case"],
+    [3, OB_CASE_WORD, "ob accusative case"],
+    [6, TO_CASE_WORD, "to destination case"],
     [7, PLUS_WORD, "plus verb"],
     [8, DEONTIC_MOOD_WORD, "deontic mood"]
   ];
@@ -129,10 +129,10 @@ export function lowerNumericPlusSentence(sentence) {
     HEAD_WORD,
     NUMBER_QUOTE_WORD,
     normalized.ob.num,
-    INSTRUMENTAL_CASE_WORD,
+    OB_CASE_WORD,
     NUMBER_QUOTE_WORD,
     normalized.to.num,
-    ACCUSATIVE_CASE_WORD,
+    TO_CASE_WORD,
     PLUS_WORD,
     DEONTIC_MOOD_WORD
   ]);

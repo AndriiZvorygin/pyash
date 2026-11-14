@@ -16,14 +16,16 @@ ob num 1 to num 1 be plus do
 ```
 
 The JavaScript reference backend accepts unsigned 16-bit `ob num A to num B`
-plus, preserving the legacy instrumental and accusative operands. Numeric plus
-saturates at `0xFFFF`, subtract floors at zero, divide returns the integer
-quotient, and divide by zero is an explicit execution error.
+plus. Each typed operand phrase is encoded in `quoteType, value, case-HNUC`
+order. The `ob` phrase ends in its accusative HNUC; the second phrase ends in
+the HNUC for its actual case, such as destination (`to`) or source (`from`).
+Numeric plus saturates at `0xFFFF`, subtract floors at zero, divide returns the
+integer quotient, and divide by zero is an explicit execution error.
 
 The fixed 16-word codelet has this nine-word prefix:
 
 ```text
-0149 881D A 287E 881D B 245E 8A64 295E
+0149 881D A 245E 881D B 243E 8A64 295E
 ```
 
 Seven zero words complete the vector. The decoder validates markers, numeric
@@ -117,8 +119,12 @@ slot 7 names the operation, and the head word at slot 0 is the legacy parse
 index for that shape:
 
 ```text
-0149 881D A 287E 881D B 245E operator 295E
+0149 881D A 245E 881D B case-HNUC operator 295E
 ```
+
+For example, `to` is `0x243E` and `from` is `0x313E`; neither is inferred from
+the operator or replaced by a generic case marker. A named operand uses its
+type HNUC, name HNUC value, and grammatical-case HNUC in that same order.
 
 `arithmetic.mjs` covers `subtract` (`0xABD2`), `multiply` (`0xEC90`),
 `divide` (`0x8893`), `xor` (`0xA810`), `exponential` (`0x8C29`), and `remains`
@@ -155,8 +161,8 @@ phrase-closing case word or a codelet-ending mood word. The legacy VM reads a
 slot as a boundary when its bit equals bit 0, so the head carries the
 completion bit plus one bit per boundary slot. `indexWordFor` in
 `program/library/vliw/codelets.mjs` computes that word, and the legacy golden
-vectors agree with it: the numeric plus head `0x0149` marks the instrumental,
-accusative, and deontic slots, and the named-literal head `0x0065` marks the
+vectors agree with it: the numeric plus head `0x0149` marks the accusative,
+destination, and deontic slots, and the named-literal head `0x0065` marks the
 nominative, accusative, and realis slots.
 
 ## Date literals
@@ -259,7 +265,7 @@ branchless program needs no label resolution, so the emitted words are the
 whole program.
 
 The evidence that the two agree is the golden codelet
-`0149 881D 0001 287E 881D 0001 245E 8A64 295E`. The interpreter runs it and
+`0149 881D 0001 245E 881D 0001 243E 8A64 295E`. The interpreter runs it and
 answers `2`; the Rust backend compiles it and its executor answers `2`; and the
 image holds the machine code for the same result:
 
@@ -332,14 +338,20 @@ The existing Pyash compile verb accepts a persisted PyAC pack as a C source:
 from filename "program.pyac" fromstate pyac tostate c to filename "program.c" be compile do
 ```
 
-This path validates the pack header, decodes codelets in order, and emits C
-only for numeric `plus`, arithmetic (`subtract`, `multiply`, `divide`, `xor`,
-`exponential`, and `remains`), and numeric `invert`. The generated executable
-prints one result per codelet in pack order. Division and remainder by zero
-fail visibly at execution. Malformed packs and codelets outside this initial C
-slice fail compilation instead of becoming placeholder code.
+This path validates the pack header, decodes each 16-word codelet, schedules
+named-state dependencies, and emits executable C for every semantic currently
+accepted by the VLIW executor: typed and named number/text literals, boolean
+literals, numeric `plus` and arithmetic (`subtract`, `multiply`, `divide`,
+`xor`, `exponential`, and `remains`), numeric `invert`, named queries, dates,
+and numeric, boolean, and text vectors. Named numeric subtraction updates its
+named value before later codelets query it. The generated executable prints
+one JSON fact per codelet in source-pack order, matching the reference
+executor. Division and remainder by zero fail visibly at execution. Malformed
+packs and codelets without a VLIW semantic adapter fail compilation rather
+than becoming placeholder code.
 
-The conformance quiz persists a one-paragraph pack, compiles it through this
-Pyash surface, runs the generated C executable, and compares its output with
-`executeCodelets`. This initial path does not add mutable named state or
-paragraph boundaries to the flat `.pyac` container.
+The conformance quiz persists packs, compiles them through this Pyash surface,
+runs the generated C executable, and compares its JSON facts with
+`executeCodelets`. Named values are mutable during execution; the flat `.pyac`
+container still carries a sequence of codelets rather than paragraph
+boundaries.
