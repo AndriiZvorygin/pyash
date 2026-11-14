@@ -1775,6 +1775,9 @@ su text "sense-lemma:a:02188427-a:1" ob text "insincere" ya
 su text "a:02190501-a" ob name "singular" as text "a" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: Definition refers to grammatical number, matching adjective 'singular'." ya
 su text "sense-gloss:a:02190501-a" ob text "grammatical number category referring to a single item or unit" ya
 su text "sense-lemma:a:02190501-a:1" ob text "singular" ya
+su text "a:02190618-a" ob name "plural_number" as text "n" with text "contextual" via text "This WordNet plural sense defines the grammatical number category for two or more items, matching the accepted Pyash atom plural_number." ya
+su text "sense-gloss:a:02190618-a" ob text "grammatical number category referring to two or more items or units" ya
+su text "sense-lemma:a:02190618-a:1" ob text "plural" ya
 su text "a:02191250-a" ob name "cardinal" as text "a" with text "deterministic" via text "frequency-first anchor allocation: exact lemma cardinal at English30k rank 2954; Princeton WordNet 3.1 tag count 0 (sense key cardinal%3:00:00::)" ya
 su text "sense-gloss:a:02191250-a" ob text "being or denoting a numerical quantity but not order; cardinal numbers" ya
 su text "sense-lemma:a:02191250-a:1" ob text "cardinal" ya
