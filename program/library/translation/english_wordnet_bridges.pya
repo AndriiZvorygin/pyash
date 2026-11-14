@@ -23113,21 +23113,6 @@ su text "sense-lemma:n:13765409-n:1" ob text "2" ya
 su text "sense-lemma:n:13765409-n:2" ob text "deuce" ya
 su text "sense-lemma:n:13765409-n:3" ob text "ii" ya
 su text "sense-lemma:n:13765409-n:4" ob text "two" ya
-su text "n:13765745-n" ob name "dual_number" as text "n" with text "contextual" via text "Pyash dual_number denotes an exact two-member quantity; this WordNet pair sense means two items of the same kind." ya
-su text "sense-gloss:n:13765745-n" ob text "two items of the same kind" ya
-su text "sense-lemma:n:13765745-n:1" ob text "brace" ya
-su text "sense-lemma:n:13765745-n:2" ob text "couple" ya
-su text "sense-lemma:n:13765745-n:3" ob text "couplet" ya
-su text "sense-lemma:n:13765745-n:4" ob text "distich" ya
-su text "sense-lemma:n:13765745-n:5" ob text "duad" ya
-su text "sense-lemma:n:13765745-n:6" ob text "duet" ya
-su text "sense-lemma:n:13765745-n:7" ob text "duo" ya
-su text "sense-lemma:n:13765745-n:8" ob text "dyad" ya
-su text "sense-lemma:n:13765745-n:9" ob text "pair" ya
-su text "sense-lemma:n:13765745-n:10" ob text "span" ya
-su text "sense-lemma:n:13765745-n:11" ob text "twain" ya
-su text "sense-lemma:n:13765745-n:12" ob text "twosome" ya
-su text "sense-lemma:n:13765745-n:13" ob text "yoke" ya
 su text "n:13766184-n" ob name "three" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma three at English30k rank 173; Princeton WordNet 3.1 tag count 19 (sense key three%1:23:00::)" ya
 su text "sense-gloss:n:13766184-n" ob text "the cardinal number that is the sum of one and one and one" ya
 su text "sense-lemma:n:13766184-n:1" ob text "3" ya
@@ -33387,6 +33372,9 @@ su text "sense-gloss:s:02187907-s" ob text "not pretended; sincerely felt or exp
 su text "sense-lemma:s:02187907-s:1" ob text "genuine" ya
 su text "sense-lemma:s:02187907-s:2" ob text "true" ya
 su text "sense-lemma:s:02187907-s:3" ob text "unfeigned" ya
+su text "s:02190774-s" ob name "dual_number" as text "n" with text "contextual" via text "This WordNet sense directly defines the grammatical category dual: exactly two items or units; it matches the accepted Pyash atom dual_number." ya
+su text "sense-gloss:s:02190774-s" ob text "a grammatical number category referring to two items or units as opposed to one item (singular) or more than two items (plural); ancient Greek had the dual form but it has merged with the plural form in modern Greek" ya
+su text "sense-lemma:s:02190774-s:1" ob text "dual" ya
 su text "s:02193771-s" ob name "zero" as text "s" with text "deterministic" via text "frequency-first anchor allocation: exact lemma zero at English30k rank 11487; Princeton WordNet 3.1 tag count 5 (sense key zero%5:00:00:cardinal:00)" ya
 su text "sense-gloss:s:02193771-s" ob text "indicating the absence of any or all units under consideration; a zero score" ya
 su text "sense-lemma:s:02193771-s:1" ob text "0" ya
