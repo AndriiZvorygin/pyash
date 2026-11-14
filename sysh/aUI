@@ -1,0 +1,35 @@
+num	lowki   aUI
+0 5	none    * y (pronounced like ü in German fünf): 'negative'
+1 4	aware   * o (pronounced like o in port): 'life'
+2 20  	desire  * t: 'toward'
+  11		* h: 'question' (desire)
+  C	and	* b: 'together'
+3 6   	choice  * q (pronounced like eu in French jeune): 'condition'
+  23  	free    * x (pronounced [x]): 'relation'
+  D		* c (pronounced [ʃ]): 'being' (quality-free)
+  3		* u (pronounced like u in bush): 'human'
+4 F   	hold    * f: 'this'
+5 9   	hear    * I (pronounced like ee in sleep): 'sound'
+6 A   	say	    * U (pronounced like oo in soon): 'mind'
+7 1   	move    * e (pronounced like e in bend): 'movement'
+  7   	        * A (pronounced like a in water): 'time'
+8 2   	light   * i (pronounced like i in win): 'light'
+  18  straight	* r: 'positive'
+9 8   	matter  * E (pronounced like ai in hair): 'matter'
+  14  round   * l: 'round'
+A 10  	mid     * g: 'inside'
+  E   		* d: 'through' (mid-aware)
+  12  	        * j (pronounced [ʒ]): 'equal' (number-mid)
+B 13  	more    * k: 'above'
+C 17  	less    * p: 'before'
+  24	        * z: 'part'
+D 15  quality * m: 'quality'
+E 16  number  * n: 'quantity'
+
+F 0   area    * a (pronounced like a in about): 'space'
+
+10 22  fire    * w: 'power'
+11 21  air     * v: 'active'
+12 B   liquid  * O (pronounced like o in go): 'feeling'
+13 19  solid   * s: 'thing'
+
