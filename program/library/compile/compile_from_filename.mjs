@@ -11,6 +11,7 @@ import { expandModulesForCompile } from "./module_imports.mjs";
 import { transpileProgram } from "./transpile_program.mjs";
 import { resolveCompiledCommandPolicy } from "../command_policy.mjs";
 import { compilePyacPackToC } from "./pyac_to_c.mjs";
+import { compilePyacPackToNasm } from "./pyac_to_nasm.mjs";
 
 function resolveStateValue(value) {
   if (!value) return "";
@@ -50,10 +51,10 @@ export async function compile_from_filename_to_filename(sentence) {
   ).toLowerCase();
 
   if (sourceState === "pyac") {
-    if (targetState !== "c") {
+    if (targetState !== "c" && targetState !== "nasm") {
       throwErrorSentence({
         name: "compile error",
-        message: `compile: PyAC VLIW input currently supports C output, not ${targetState || "an unspecified target"}`,
+        message: `compile: PyAC VLIW input currently supports C and NASM output, not ${targetState || "an unspecified target"}`,
         from: { name: "compile" }
       });
     }
@@ -81,7 +82,9 @@ export async function compile_from_filename_to_filename(sentence) {
 
     let body;
     try {
-      body = compilePyacPackToC(packBytes);
+      body = targetState === "nasm"
+        ? compilePyacPackToNasm(packBytes)
+        : compilePyacPackToC(packBytes);
     } catch (error) {
       throwErrorSentence({
         name: "compile error",
@@ -95,17 +98,17 @@ export async function compile_from_filename_to_filename(sentence) {
     const targetFilename = resolveSandboxPath(targetFilenameRaw);
     if (targetFilename) await fs.writeFile(targetFilename, body, "utf8");
 
-    const wrappedText = `quoted.c.\n${body}.c.quoted`;
+    const wrappedText = `quoted.${targetState}.\n${body}.${targetState}.quoted`;
     const targetName = sentence?.to?.name ?? sentence?.totext?.name ?? sentence?.su?.name;
     if (targetName) {
       doRemember({
         su: { name: targetName },
-        be: "c",
+        be: targetState,
         ob: { text: wrappedText },
         mood: "ya"
       });
     }
-    return { ob: { text: wrappedText }, be: "c" };
+    return { ob: { text: wrappedText }, be: targetState };
   }
 
   let sourceText = sentence?.fromtext?.text ?? sentence?.from?.text ?? sentence?.text ?? sentence?.ob?.text;

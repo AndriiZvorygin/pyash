@@ -49,6 +49,22 @@ This follows Sysh's existing lookup-then-indirect-call shape (`codeGet`, then
 sentence-pattern dispatch. It does not require a hardware interrupt; dispatch
 is a normal software execution step.
 
+## First NASM slice
+
+The initial executable backend is deliberately small: it accepts anonymous
+text-literal codelets (`be text`, with an `ob text` value), embeds their
+original 16-word vectors, and emits a signature-derived dispatch table plus a
+Sysh-style handler call. The handler renders each text result to standard
+output. This is a result-display convention for the bootstrap example; it does
+not add or claim support for a VLIW `write` operation. Other VLIW semantics
+fail compilation until they have an explicit NASM handler.
+
+`examples/pyash/nasm-hello-world.pya` is the first source fixture. Its message
+is split across two text codelets to fit the existing fixed-width VLIW layout.
+The integration quiz lowers that source to a `.pyac` pack, compiles it with
+`fromstate pyac tostate nasm`, assembles with `nasm -f elf`, links with
+`ld -m elf_i386`, and verifies the executable prints `Hello, world!`.
+
 ## Case registers
 
 Each of the 36 canonical cells in the compositional case grid has a distinct
