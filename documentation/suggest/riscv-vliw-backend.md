@@ -42,7 +42,7 @@ The chain is four steps, and each one has a check:
 
 ```text
 ob num 1 to num 1 be plus do        the sentence
-  -> 0149 881D 0001 287E 881D 0001 245E 8A64 295E   the codelet
+  -> 0149 881D 0001 245E 881D 0001 243E 8A64 295E   the codelet
   -> 13 machine instructions         the compiled program
   -> an ELF64 RISC-V executable      the image
   -> 2                              the result the interpreter also gives

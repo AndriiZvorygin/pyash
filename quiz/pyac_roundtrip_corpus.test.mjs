@@ -48,7 +48,7 @@ test("PyAC corpus round-trips supported rows through VLIW and canonical Pyash", 
   const plus = executable.find((record) => record.semantic === "numeric-plus");
   assert.equal(
     renderLegacyNumericPlusCodelet(decodedPack.codelets[plus.packIndex]),
-    "hyikdoyu hyikdoka plustu"
+    "hyikdoka hyikdoma plustu"
   );
 
   for (const record of executable) {

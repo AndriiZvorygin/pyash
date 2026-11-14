@@ -18,8 +18,11 @@ test("decoded instructions expose stable read and write effects", () => {
   assert.deepEqual(update, {
     reads: ["collector"],
     writes: ["collector"],
-    sideEffect: false
+    sideEffect: false,
+    orderedWrites: ["collector"]
   });
+  const query = deriveSentenceEffects(parse("su name collector ob what que"));
+  assert.deepEqual(query, { reads: ["collector"], writes: [], sideEffect: false });
 });
 
 test("dependency analysis reports unresolved references without changing execution order", () => {
@@ -77,6 +80,16 @@ test("dependency scheduling preserves observable side-effect order", () => {
   assert.deepEqual(
     scheduleCodeletDependencies([first, second]).map((entry) => entry.index),
     [0, 1]
+  );
+});
+
+test("dependency scheduling orders initialization, named mutation, and query", () => {
+  const declaration = { sentence: parse("su name collector ob num 10 be number ya") };
+  const mutation = { sentence: parse("ob num 3 from name collector be subtract do") };
+  const query = { sentence: parse("su name collector ob what que") };
+  assert.deepEqual(
+    scheduleCodeletDependencies([declaration, mutation, query]).map((entry) => entry.index),
+    [0, 1, 2]
   );
 });
 

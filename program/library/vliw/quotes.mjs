@@ -47,8 +47,8 @@ const quoteSortNames = new Map([
 
 export const LEGACY_NUMERIC_PLUS_WORDS = Object.freeze({
   head: 0x0149,
-  instrumentalCase: 0x287e,
-  accusativeCase: 0x245e,
+  obCase: 0x245e,
+  toCase: 0x243e,
   number: 0x327e,
   plus: 0x8a64,
   deonticMood: 0x295e
@@ -459,8 +459,8 @@ function normalizePlusWords(words) {
   }
   const markers = [
     [0, LEGACY_NUMERIC_PLUS_WORDS.head, "head"],
-    [3, LEGACY_NUMERIC_PLUS_WORDS.instrumentalCase, "instrumental case"],
-    [6, LEGACY_NUMERIC_PLUS_WORDS.accusativeCase, "accusative case"],
+    [3, LEGACY_NUMERIC_PLUS_WORDS.obCase, "ob accusative case"],
+    [6, LEGACY_NUMERIC_PLUS_WORDS.toCase, "to destination case"],
     [7, LEGACY_NUMERIC_PLUS_WORDS.plus, "plus"],
     [8, LEGACY_NUMERIC_PLUS_WORDS.deonticMood, "deontic mood"]
   ];
@@ -484,8 +484,8 @@ export function renderLegacyNumericPlusCodelet(words) {
     throw quoteError("invalid-codelet", "numeric-plus quote boundaries do not match the legacy layout");
   }
   const numberWord = requireLegacyWord(LEGACY_NUMERIC_PLUS_WORDS.number, "number");
-  const firstCase = requireLegacyWord(LEGACY_NUMERIC_PLUS_WORDS.instrumentalCase, "instrumental case");
-  const secondCase = requireLegacyWord(LEGACY_NUMERIC_PLUS_WORDS.accusativeCase, "accusative case");
+  const firstCase = requireLegacyWord(LEGACY_NUMERIC_PLUS_WORDS.obCase, "ob accusative case");
+  const secondCase = requireLegacyWord(LEGACY_NUMERIC_PLUS_WORDS.toCase, "to destination case");
   const plus = requireLegacyWord(LEGACY_NUMERIC_PLUS_WORDS.plus, "verb");
   const mood = requireLegacyWord(LEGACY_NUMERIC_PLUS_WORDS.deonticMood, "mood");
   return [
