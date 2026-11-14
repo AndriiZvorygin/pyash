@@ -7,8 +7,13 @@ import {
 } from "../program/library/compile/sysh_case_registers.mjs";
 import {
   prepareSyshSentencePattern,
+  lookupSyshSentencePattern,
   SYSH_CONTROL_REGISTER_LAYOUT
 } from "../program/library/compile/sysh_sentence_pattern.mjs";
+import {
+  clearSignatureHandlers,
+  registerSignatureHandler
+} from "../program/bridge/signature.mjs";
 import { parse } from "../program/understand/index.mjs";
 
 test("Sysh assigns stable virtual registers to grid cells and core cases", () => {
@@ -67,6 +72,27 @@ test("Sysh dispatch pattern uses the Pyash verb, case, and value-type signature"
     differentPattern.caseRegisters.map(({ keyword, index }) => [keyword, index]),
     [["to", 2], ["ob", 37]].sort((left, right) => left[1] - right[1])
   );
+});
+
+test("Sysh sentence-pattern lookup resolves through the existing Pyash handler registry", () => {
+  const sentence = parse("from num 2 to num 3 be plus do");
+  const handler = () => "matched";
+  const pattern = prepareSyshSentencePattern(sentence);
+  registerSignatureHandler({ signatureWords: pattern.signatureWords, handler });
+
+  try {
+    assert.equal(lookupSyshSentencePattern(sentence).handler, handler);
+    assert.equal(
+      lookupSyshSentencePattern(parse("from num 20 to num 30 be plus do")).handler,
+      handler
+    );
+    assert.equal(
+      lookupSyshSentencePattern(parse("ob num 2 to num 3 be plus do")).handler,
+      null
+    );
+  } finally {
+    clearSignatureHandlers();
+  }
 });
 
 test("inline Pyash compounds fit two words in 32-bit and four in 64-bit registers", () => {

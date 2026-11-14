@@ -1,6 +1,8 @@
 import {
   deriveSignatureFromCall,
-  joinSignatureWords
+  joinSignatureWords,
+  lookupSignature,
+  lookupSignatureHandler
 } from "../../bridge/signature.mjs";
 import { syshCaseRegisterForKeyword } from "./sysh_case_registers.mjs";
 
@@ -48,5 +50,14 @@ export function prepareSyshSentencePattern(sentence, { remember } = {}) {
     )),
     caseRegisters: Object.freeze(caseRegisters),
     unmappedCaseFields: Object.freeze(unmappedCaseFields.sort())
+  });
+}
+
+export function lookupSyshSentencePattern(sentence, options = {}) {
+  const pattern = prepareSyshSentencePattern(sentence, options);
+  return Object.freeze({
+    ...pattern,
+    handler: lookupSignatureHandler(pattern.patternKey) ?? null,
+    ceremony: lookupSignature(pattern.patternKey) ?? null
   });
 }

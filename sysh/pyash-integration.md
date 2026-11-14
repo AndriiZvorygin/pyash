@@ -71,6 +71,10 @@ for the active case slots, and its `controlRegisters` carry verb and mood.
 Equal patterns with different runtime values share a dispatch key, while a
 changed case or type selects a different pattern.
 
+`lookupSyshSentencePattern` resolves that key through Pyash's existing
+signature-handler and ceremony registries; it does not add a second dispatch
+table.
+
 ## Integration boundary
 
 The existing Pyash signature registry is the authority for sentence-pattern
