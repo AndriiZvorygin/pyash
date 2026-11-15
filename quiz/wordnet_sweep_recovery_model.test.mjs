@@ -165,6 +165,7 @@ test("resume command uses the persistent tmux supervisor, fixture-free environme
     }
   });
   assert.equal(command.sessionName, "wordnet-sense-compounds-test");
+  assert.match(command.shellCommand, /--max-old-space-size=3072/u);
   assert.deepEqual(command.tmuxArgs.slice(0, 6), ["new-session", "-d", "-s", "wordnet-sense-compounds-test", "-c", "/repo"]);
   assert.match(command.shellCommand, /resume-wordnet-sweep\.mjs/u);
   assert.match(command.shellCommand, /PYA_MIND_RESPONSE/u);

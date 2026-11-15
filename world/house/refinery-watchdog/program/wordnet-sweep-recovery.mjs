@@ -6,6 +6,7 @@ const PROGRAM_DIR = path.dirname(fileURLToPath(import.meta.url));
 const HOUSE_ROOT = path.resolve(PROGRAM_DIR, "..");
 const CONTEXT_PATH = path.join(HOUSE_ROOT, "conduct", "wordnet-sweep-recovery.pya");
 const DEFAULT_RECOVERY_MODEL = "SparkLLM/Spark-X2.6-4B:q4_k_m";
+const SWEEP_NODE_MAX_OLD_SPACE_SIZE_MB = 3072;
 const RECOVERY_CONTEXT_NAMES = Object.freeze([
   "WordNet sweep recovery model",
   "WordNet sweep conversation context",
@@ -270,6 +271,7 @@ export function buildSweepResumeCommand({
     ...fixtureNames.flatMap((name) => ["-u", name]),
     ...(text(housekeeperUrl) ? [`PYA_GPU_HOUSEKEEPER_URL=${text(housekeeperUrl)}`] : []),
     nodeBin,
+    `--max-old-space-size=${SWEEP_NODE_MAX_OLD_SPACE_SIZE_MB}`,
     resumePath
   ];
   const shellCommand = `exec ${envArgs.map(shellQuote).join(" ")} >> ${shellQuote(logPath)} 2>&1`;

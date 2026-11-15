@@ -1297,9 +1297,6 @@ su text "sense-lemma:a:01594522-a:1" ob text "noble" ya
 su text "a:01604915-a" ob name "north" as text "a" with text "deterministic" via text "frequency-first anchor allocation: exact lemma north at English30k rank 544; Princeton WordNet 3.1 tag count 7 (sense key north%3:00:00::)" ya
 su text "sense-gloss:a:01604915-a" ob text "situated in or facing or moving toward or coming from the north; artists like north light; the north portico" ya
 su text "sense-lemma:a:01604915-a:1" ob text "north" ya
-su text "a:01610335-a" ob name "answer" as text "a" with text "deterministic" via text "frequency-first anchor allocation: exact lemma northern at English30k rank 2639; Princeton WordNet 3.1 tag count 15 (sense key northern%3:00:02::)" ya
-su text "sense-gloss:a:01610335-a" ob text "in or characteristic of a region of the United States north of (approximately) the Mason-Dixon line; Northern liberals; northern industry; northern cities" ya
-su text "sense-lemma:a:01610335-a:1" ob text "northern" ya
 su text "a:01611230-a" ob name "southern" as text "a" with text "deterministic" via text "frequency-first anchor allocation: exact lemma southern at English30k rank 2911; Princeton WordNet 3.1 tag count 30 (sense key southern%3:00:02::)" ya
 su text "sense-gloss:a:01611230-a" ob text "in or characteristic of a region of the United States south of (approximately) the Mason-Dixon line; southern hospitality; southern cooking; southern plantations" ya
 su text "sense-lemma:a:01611230-a:1" ob text "southern" ya
@@ -1778,6 +1775,9 @@ su text "sense-lemma:a:02188427-a:1" ob text "insincere" ya
 su text "a:02190501-a" ob name "singular" as text "a" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: Definition refers to grammatical number, matching adjective 'singular'." ya
 su text "sense-gloss:a:02190501-a" ob text "grammatical number category referring to a single item or unit" ya
 su text "sense-lemma:a:02190501-a:1" ob text "singular" ya
+su text "a:02190618-a" ob name "plural_number" as text "n" with text "contextual" via text "This WordNet plural sense defines the grammatical number category for two or more items, matching the accepted Pyash atom plural_number." ya
+su text "sense-gloss:a:02190618-a" ob text "grammatical number category referring to two or more items or units" ya
+su text "sense-lemma:a:02190618-a:1" ob text "plural" ya
 su text "a:02191250-a" ob name "cardinal" as text "a" with text "deterministic" via text "frequency-first anchor allocation: exact lemma cardinal at English30k rank 2954; Princeton WordNet 3.1 tag count 0 (sense key cardinal%3:00:00::)" ya
 su text "sense-gloss:a:02191250-a" ob text "being or denoting a numerical quantity but not order; cardinal numbers" ya
 su text "sense-lemma:a:02191250-a:1" ob text "cardinal" ya
@@ -2236,10 +2236,6 @@ su text "a:02690390-a" ob name "carboxyl" as text "a" with text "contextual" via
 su text "sense-gloss:a:02690390-a" ob text "relating to or containing the carboxyl group or carboxyl radical" ya
 su text "sense-lemma:a:02690390-a:1" ob text "carboxyl" ya
 su text "sense-lemma:a:02690390-a:2" ob text "carboxylic" ya
-su text "a:02691460-a" ob name "virginia" as text "a" with text "deterministic" via text "frequency-first anchor allocation: exact lemma caroline at English30k rank 5191; Princeton WordNet 3.1 tag count 0 (sense key caroline%3:01:00::)" ya
-su text "sense-gloss:a:02691460-a" ob text "of or relating to the life and times of kings Charles I or Charles II of England" ya
-su text "sense-lemma:a:02691460-a:1" ob text "carolean" ya
-su text "sense-lemma:a:02691460-a:2" ob text "caroline" ya
 su text "a:02691878-a" ob name "carotid" as text "a" with text "deterministic" via text "leaf/edge WordNet node a:02691878-a has one meaning for lemma carotid and existing Pyash coverage; active through sweep wordnet-sense-sweep-4c07194f363e-81b5bbefa3b0-d1 (source 4c07194f363e9c870dc925b8cab26f9af93899f6bd91a29b9a1422c1f66d95ba)" ya
 su text "sense-gloss:a:02691878-a" ob text "of or relating to either of the two major arteries supplying blood to the head and neck" ya
 su text "sense-lemma:a:02691878-a:1" ob text "carotid" ya
@@ -3302,9 +3298,6 @@ su text "sense-lemma:a:02982552-a:2" ob text "tyrolese" ya
 su text "a:02982737-a" ob name "viennese" as text "a" with text "deterministic" via text "leaf/edge WordNet node a:02982737-a has one meaning for lemma viennese and existing Pyash coverage; active through sweep wordnet-sense-sweep-4c07194f363e-81b5bbefa3b0-d1 (source 4c07194f363e9c870dc925b8cab26f9af93899f6bd91a29b9a1422c1f66d95ba)" ya
 su text "sense-gloss:a:02982737-a" ob text "of or relating to or characteristic of Vienna or its inhabitants" ya
 su text "sense-lemma:a:02982737-a:1" ob text "viennese" ya
-su text "a:02983014-a" ob name "corn" as text "a" with text "deterministic" via text "frequency-first anchor allocation: exact lemma egyptian at English30k rank 3814; Princeton WordNet 3.1 tag count 0 (sense key egyptian%3:01:00::)" ya
-su text "sense-gloss:a:02983014-a" ob text "of or relating to or characteristic of Egypt or its people or their language" ya
-su text "sense-lemma:a:02983014-a:1" ob text "egyptian" ya
 su text "a:02983217-a" ob name "hindustan" as text "a" with text "deterministic" via text "frequency-first anchor allocation: exact lemma hindustani at English30k rank 20393; Princeton WordNet 3.1 tag count 0 (sense key hindustani%3:01:00::)" ya
 su text "sense-gloss:a:02983217-a" ob text "of or relating to or characteristic of Hindustan or its people or language" ya
 su text "sense-lemma:a:02983217-a:1" ob text "hindustani" ya
@@ -3598,9 +3591,6 @@ su text "sense-lemma:a:03056254-a:1" ob text "arabic" ya
 su text "a:03057136-a" ob name "australia" as text "a" with text "deterministic" via text "frequency-first anchor allocation: exact lemma australian at English30k rank 7796; Princeton WordNet 3.1 tag count 0 (sense key australian%3:01:00::)" ya
 su text "sense-gloss:a:03057136-a" ob text "of or relating to or characteristic of Australia or its inhabitants or its languages; Australian deserts; Australian aborigines" ya
 su text "sense-lemma:a:03057136-a:1" ob text "australian" ya
-su text "a:03058094-a" ob name "aids" as text "a" with text "deterministic" via text "frequency-first anchor allocation: exact lemma bantu at English30k rank 22704; Princeton WordNet 3.1 tag count 0 (sense key bantu%3:01:00::)" ya
-su text "sense-gloss:a:03058094-a" ob text "of or relating to the African people who speak one of the Bantoid languages or to their culture; the Bantu population of Sierra Leone" ya
-su text "sense-lemma:a:03058094-a:1" ob text "bantu" ya
 su text "a:03059100-a" ob name "bengal" as text "a" with text "deterministic" via text "frequency-first anchor allocation: exact lemma bengali at English30k rank 18910; Princeton WordNet 3.1 tag count 0 (sense key bengali%3:01:00::)" ya
 su text "sense-gloss:a:03059100-a" ob text "of or relating to or characteristic of Bengal or its people; Bengali hills" ya
 su text "sense-lemma:a:03059100-a:1" ob text "bengali" ya
@@ -3693,9 +3683,6 @@ su text "a:03077608-a" ob name "philippines" as text "a" with text "deterministi
 su text "sense-gloss:a:03077608-a" ob text "of or relating to or characteristic of the Philippines or its people or customs; the Philippine President; our Filipino cook" ya
 su text "sense-lemma:a:03077608-a:1" ob text "filipino" ya
 su text "sense-lemma:a:03077608-a:2" ob text "philippine" ya
-su text "a:03077876-a" ob name "flamingo" as text "a" with text "deterministic" via text "frequency-first anchor allocation: exact lemma flemish at English30k rank 10644; Princeton WordNet 3.1 tag count 0 (sense key flemish%3:01:00::)" ya
-su text "sense-gloss:a:03077876-a" ob text "of or relating to Flanders or its people or language or culture; the Flemish population of Belgium; Flemish painters" ya
-su text "sense-lemma:a:03077876-a:1" ob text "flemish" ya
 su text "a:03080970-a" ob name "gothic" as text "a" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-8e6cfa8e95f6-743c899084-atom-gloss-choice-v1; rationale: The label 'gothic' most commonly refers to the general adjective relating to the Goths or their culture, matching the first candidate." ya
 su text "sense-gloss:a:03080970-a" ob text "of or relating to the Goths" ya
 su text "sense-lemma:a:03080970-a:1" ob text "gothic" ya
@@ -17738,12 +17725,6 @@ su text "sense-gloss:n:08346380-n" ob text "an assembly (including one or more j
 su text "sense-lemma:n:08346380-n:1" ob text "court" ya
 su text "sense-lemma:n:08346380-n:2" ob text "judicature" ya
 su text "sense-lemma:n:08346380-n:3" ob text "tribunal" ya
-su text "n:08357080-n" ob name "ic" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma ic at English30k rank 28303; Princeton WordNet 3.1 tag count 0 (sense key ic%1:14:00::)" ya
-su text "sense-gloss:n:08357080-n" ob text "a group of government agencies and organizations that carry out intelligence activities for the United States government; headed by the Director of Central Intelligence" ya
-su text "sense-lemma:n:08357080-n:1" ob text "ic" ya
-su text "sense-lemma:n:08357080-n:2" ob text "intelligence community" ya
-su text "sense-lemma:n:08357080-n:3" ob text "national intelligence community" ya
-su text "sense-lemma:n:08357080-n:4" ob text "united states intelligence community" ya
 su text "n:08374919-n" ob name "quorum" as text "n" with text "contextual" via text "The anchor 'quorum' is semantically equivalent to the WordNet definition of a gathering of the minimal number of members; model qwen3.5:9b; sense-link sweep wordnet-sense-sweep-4c07194f363e-9059730cda6d-d1-model-qwen3-5-9b-definition-anchor-v1 (source 4c07194f363e9c870dc925b8cab26f9af93899f6bd91a29b9a1422c1f66d95ba)" ya
 su text "sense-gloss:n:08374919-n" ob text "a gathering of the minimal number of members of an organization to conduct business" ya
 su text "sense-lemma:n:08374919-n:1" ob text "quorum" ya
@@ -19008,9 +18989,6 @@ su text "sense-lemma:n:09739991-n:1" ob text "lebanese" ya
 su text "n:09740363-n" ob name "libya" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma libyan at English30k rank 16742; Princeton WordNet 3.1 tag count 0 (sense key libyan%1:18:00::)" ya
 su text "sense-gloss:n:09740363-n" ob text "a native or inhabitant of Libya" ya
 su text "sense-lemma:n:09740363-n:1" ob text "libyan" ya
-su text "n:09741675-n" ob name "pecuniary" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma malian at English30k rank 29217; Princeton WordNet 3.1 tag count 0 (sense key malian%1:18:00::)" ya
-su text "sense-gloss:n:09741675-n" ob text "a native or inhabitant of Mali" ya
-su text "sense-lemma:n:09741675-n:1" ob text "malian" ya
 su text "n:09741795-n" ob name "mauritania" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma mauritanian at English30k rank 29112; Princeton WordNet 3.1 tag count 0 (sense key mauritanian%1:18:00::)" ya
 su text "sense-gloss:n:09741795-n" ob text "a native or inhabitant of Mauritania" ya
 su text "sense-lemma:n:09741795-n:1" ob text "mauritanian" ya
@@ -33394,6 +33372,9 @@ su text "sense-gloss:s:02187907-s" ob text "not pretended; sincerely felt or exp
 su text "sense-lemma:s:02187907-s:1" ob text "genuine" ya
 su text "sense-lemma:s:02187907-s:2" ob text "true" ya
 su text "sense-lemma:s:02187907-s:3" ob text "unfeigned" ya
+su text "s:02190774-s" ob name "dual_number" as text "n" with text "contextual" via text "This WordNet sense directly defines the grammatical category dual: exactly two items or units; it matches the accepted Pyash atom dual_number." ya
+su text "sense-gloss:s:02190774-s" ob text "a grammatical number category referring to two items or units as opposed to one item (singular) or more than two items (plural); ancient Greek had the dual form but it has merged with the plural form in modern Greek" ya
+su text "sense-lemma:s:02190774-s:1" ob text "dual" ya
 su text "s:02193771-s" ob name "zero" as text "s" with text "deterministic" via text "frequency-first anchor allocation: exact lemma zero at English30k rank 11487; Princeton WordNet 3.1 tag count 5 (sense key zero%5:00:00:cardinal:00)" ya
 su text "sense-gloss:s:02193771-s" ob text "indicating the absence of any or all units under consideration; a zero score" ya
 su text "sense-lemma:s:02193771-s:1" ob text "0" ya

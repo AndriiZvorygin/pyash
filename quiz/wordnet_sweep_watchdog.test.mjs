@@ -14,7 +14,8 @@ import {
 import { readSweepRecoveryConfig } from "../world/house/refinery-watchdog/program/wordnet-sweep-recovery.mjs";
 import {
   mergeManagedCrontab,
-  parseKwonLookupIndexRefreshSchedule
+  parseKwonLookupIndexRefreshSchedule,
+  parseWordNetSweepWatchdogSchedule
 } from "../world/house/refinery-watchdog/program/watchdog-lib.mjs";
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -192,7 +193,7 @@ test("a live lock owned by another command is an incident, never treated as this
   }
 });
 
-test("recovery uses its Pyash-selected Spark-X model and the cron merge schedules hourly checks", () => {
+test("recovery uses its Pyash-selected Spark-X model and the cron merge schedules WordNet checks from the Pyash calendar", () => {
   const config = readSweepRecoveryConfig();
   assert.equal(config.model, "SparkLLM/Spark-X2.6-4B:q4_k_m");
   assert.match(config.context.resumeProcedure, /same run id/u);
@@ -201,11 +202,18 @@ test("recovery uses its Pyash-selected Spark-X model and the cron merge schedule
   const crontab = mergeManagedCrontab("# keep this\n11 1 * * * true\n", { nodeBin: "/usr/bin/node" });
   assert.match(crontab, /^11 1 \* \* \* true$/mu);
   assert.ok(crontab.includes(
-    `0 * * * * cd ${REPOSITORY_ROOT} && /usr/bin/node ${path.join(REPOSITORY_ROOT, "world/house/refinery-watchdog/program/run-wordnet-sweep-watchdog.mjs")} >> ${path.join(REPOSITORY_ROOT, "world/house/refinery-watchdog/artifacts/cron.log")} 2>&1`,
+    `*/10 * * * * cd ${REPOSITORY_ROOT} && /usr/bin/node ${path.join(REPOSITORY_ROOT, "world/house/refinery-watchdog/program/run-wordnet-sweep-watchdog.mjs")} >> ${path.join(REPOSITORY_ROOT, "world/house/refinery-watchdog/artifacts/cron.log")} 2>&1`,
   ));
   assert.ok(crontab.includes(
     `17 * * * * /usr/bin/flock -n /tmp/pyash-kwon-lookup-index-refresh.lock /usr/bin/node ${path.join(REPOSITORY_ROOT, "command/vocab_lookup_index.mjs")} >> ${path.join(REPOSITORY_ROOT, "world/house/refinery-watchdog/artifacts/cron.log")} 2>&1`,
   ));
+});
+
+test("WordNet watchdog schedule is managed through its Pyash calendar value", () => {
+  assert.equal(parseWordNetSweepWatchdogSchedule("every 10 minutes"), "*/10 * * * *");
+  assert.equal(parseWordNetSweepWatchdogSchedule("every 1 minute"), "* * * * *");
+  assert.equal(parseWordNetSweepWatchdogSchedule("disabled"), null);
+  assert.throws(() => parseWordNetSweepWatchdogSchedule("hourly"), /invalid WordNet sweep watchdog schedule/u);
 });
 
 test("Kwon index refresh schedule is managed through its Pyash calendar value", () => {
