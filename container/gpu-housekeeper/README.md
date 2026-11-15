@@ -119,6 +119,62 @@ to itself or its configured peers. A common layout is a Linux NVIDIA host as
 the entry Housekeeper, with additional Linux hosts and an Apple Silicon Mac as
 peers.
 
+Federation routes whole jobs across hosts and lets separate devices run jobs
+concurrently. Each host keeps its own GPU memory, models, and runtime; the
+fleet does not combine VRAM or split one model across machines. A job runs on a
+host only when that host has the requested runtime/model and can admit the
+work.
+
+### Bring up a remote Linux peer over SSH
+
+Use a named, key-authenticated account on each GPU host; root SSH is not
+needed. Before connecting, have an administrator prepare the host's NVIDIA
+driver, Docker NVIDIA support, Docker IPv6 bridge prefix, and the Ollama and
+ComfyUI networks. The deployment account needs a checkout of the intended
+Pyash revision, write access to its host-local `service/.env` and state path,
+and permission to run Docker Compose and inspect Docker networks. `begin.sh`
+does not install host packages or configure the GPU driver/daemon.
+
+On a remote Linux host, log in and check those permissions before starting the
+service:
+
+```sh
+ssh gpuadmin@swac
+cd /path/to/pyash
+id
+docker info >/dev/null
+docker compose version
+nvidia-smi
+docker network inspect bridge
+docker network inspect hmas_default
+docker network inspect comfyui_default
+container/gpu-housekeeper/command/begin.sh
+```
+
+Replace `gpuadmin` and the checkout path with the account and path for that
+host. If Docker commands require `sudo`, either run the deployment through an
+authorized administrator account or have the administrator grant the intended
+deployment account Docker access. Membership in the `docker` group grants
+root-equivalent control of a rootful Docker host. The Housekeeper container
+also mounts `/var/run/docker.sock` so it can manage registered runtime
+containers; run it only on hosts and networks trusted with that level of
+control. Restrict API access at the host firewall as described above.
+
+For Apple Silicon, SSH as the account that should own Ollama, model files, and
+the user LaunchAgent, then run the installer from that account's checkout:
+
+```sh
+ssh ai@macstudio
+cd /path/to/pyash
+GPU_HOUSEKEEPER_BIND_HOST=YOUR_TRUSTED_OVERLAY_IP \
+  container/gpu-housekeeper/command/install-macos.sh
+```
+
+Replace the example SSH account and checkout path for the Mac. The installer
+is user-scoped and does not need `sudo`. If no user LaunchAgent domain is
+available in a headless session, its detached fallback does not survive a
+reboot; see [Apple Silicon peer](#apple-silicon-peer).
+
 1. Install and verify each host independently using its platform instructions
    above. Each peer must be reachable from the entry Housekeeper on its
    Housekeeper port (normally `18886`). Ollama and other runtime ports do not
@@ -157,9 +213,12 @@ peers.
    with a separate URL per GPU host.
 
 Routing is capacity- and runtime-aware, not round-robin. The Housekeeper skips
-busy or ineligible hosts when another peer can run immediately; if all hosts
-are busy, the accepted job waits in the Housekeeper queue. Live same-model
-throughput samples and configured routing priors rank eligible hosts. See
+busy or ineligible hosts when another peer can run immediately. If no peer can
+start now but the entry host is eligible, it keeps the accepted job queued
+there; if no host supports the request, it reports that no route is available.
+Live throughput
+samples for the same model and job kind, plus matching routing priors, rank
+eligible hosts. See
 [throughput-aware routing](#throughput-aware-routing) for the host-local
 `routing.pya` calibration. Peer health uses a circuit breaker; its failure
 count and cooldown are configurable with `GPU_HOUSEKEEPER_PEER_FAILURE_LIMIT`
@@ -170,6 +229,76 @@ usual single-entry layout, remote peers do not need a reciprocal list unless
 they will also receive worker submissions that should route onward. For
 host-specific IPv6 allocation and ordered endpoint fallback, see
 [Host-specific Docker IPv6 and peer routing](#host-specific-docker-ipv6-and-peer-routing).
+
+## Inspect host features and installed models
+
+Query each Housekeeper directly to build the fleet inventory. The endpoints
+are local to the addressed host; the entry host's model catalog is not a
+combined catalog for all peers:
+
+```sh
+curl -fsS http://swac:18886/runtime
+curl -fsS http://swac:18886/runtime/ollama/models
+curl -fsS http://swac:18886/snapshot
+curl -fsS http://macstudio:18886/runtime/strata/models
+```
+
+`/runtime` shows which registered runtimes are available on that host and
+their current status. `/runtime/ollama/models` lists the exact installed tags,
+digests, sizes, and Ollama metadata such as parameter size, quantization,
+family, and context length. `/runtime/strata/models` lists the Strata catalog
+when Strata is configured. `/snapshot` adds accelerator type and memory,
+loaded model residency, model load/call observations, execution slots, peer
+health, and Housekeeper protocol capabilities. Run the catalog request on
+each host to see which exact model tags are installed where.
+
+Ollama's catalog metadata describes the package and quantization; it does not
+score answer quality or certify vision, tool-call, or other task behavior.
+Use the model documentation and a task-matched Criterion evaluation for
+those decisions.
+
+The available managed job features depend on each host's runtime registry:
+
+| Runtime | Managed jobs | How to confirm availability |
+| --- | --- | --- |
+| `ollama` | Text generation and chat, including Pyash mind requests | `/runtime` reports the runtime; `/runtime/ollama/models` lists installed tags. |
+| `comfyui` | Image drawing and configured audio/prompt workflows | Check the ComfyUI entry in `/runtime`; its workflows are deployment-specific. |
+| `katago` | Go analysis and runtime lifecycle operations | Check the KataGo entry in `/runtime`. |
+| `huggingface` | The configured Criterion sequence-to-sequence service | Check the Hugging Face entry in `/runtime`. |
+| `strata` | Strata chat/model work on a configured Strata host | Check `/runtime` and `/runtime/strata/models`. |
+| Kubernetes-managed Ollama | Ollama jobs through the opt-in Kubernetes runtime profile | `/snapshot` reports `capabilities.kubernetesRuntimeControl`; `/runtime` shows `runtimeMode`. |
+
+Treat runtime status and an installed model tag as separate checks: the
+runtime may be configured but stopped, and a model may be installed on one
+host but absent from another. Housekeeper does not copy weights between hosts
+or silently pull missing models. Model pulls are explicit, require host-side
+authorization, and can be pinned to a host with `targetHostId`; see
+[model installation and provisioning](#model-installation-and-provisioning).
+
+Model choice and host choice are separate. A Pyash request names its runtime
+and model; federation chooses an eligible host for that request. It does not
+replace the requested model with a different model based on prompt quality.
+To compare answer quality, run the same task-specific Criterion suite, data,
+and profile for each candidate model; see the
+[Criterion benchmark reference](../../documentation/reference/criterion-benchmarks.md).
+For example, with the FLORES-200 translation dataset prepared as described in
+that reference:
+
+```sh
+PYA_GPU_HOUSEKEEPER_URL=http://mriczo:18886 \
+  node command/criterion.mjs run \
+    --benchmark flores-200 \
+    --dataset "$PYA_BENCHMARK_CACHE/flores-200/devtest.jsonl" \
+    --model "qwen3.5:9b,hf.co/empero-ai/Qwen3.8-9B-Distill-GGUF:Q4_K_M" \
+    --profile translation_direct \
+    --limit 100 --resume
+```
+
+Criterion reports task metrics for the selected suite. This does not select a
+different model automatically; choose the model tag in the Pyash mind/runtime
+configuration after reviewing quality, context and memory needs, and measured
+speed. For the Housekeeper's host decision for a requested model, use the warm
+throughput procedure below.
 
 ## Troubleshooting
 
@@ -303,6 +432,8 @@ the peer list until its Housekeeper is online and that route is verified.
 deployment file when starting from a separate checkout. Credentials should
 remain in Pyash secret configuration, not in this peer-routing file.
 
+### Model installation and provisioning
+
 To install or refresh from a checkout on the Mac:
 
 ```sh
@@ -413,12 +544,16 @@ available device is apple0.
 
 When the Housekeeper host runs in an IPv4-only Docker bridge and cannot route
 to the Mac's overlay IPv6 address, use `command/macstudio-peer-tunnel.sh` as a
-user systemd service. It binds SSH forwarding to the Docker default bridge
-gateway only and forwards to Mac loopback; do not bind this relay to all host
+user systemd service. The SSH account (default `ai@macstudio`) must accept
+key-based login and be allowed to forward to `127.0.0.1:18886`; set
+`GPU_HOUSEKEEPER_TUNNEL_SSH_TARGET` if the account or host differs. The local
+Linux account running the tunnel needs Docker access so the script can inspect
+the bridge gateway. The script binds SSH forwarding to that Docker gateway
+only and forwards to Mac loopback; do not bind this relay to all host
 interfaces. Set the local peer URL to
 `macstudio=http://DOCKER_BRIDGE_GATEWAY:18887`. The tunnel requires working
-key-based SSH to `ai@macstudio` and can be started by a user service without
-sudo. A user unit can use:
+key-based SSH and can be started by a user service without `sudo`. A user
+unit can use:
 
 ```ini
 [Unit]
@@ -447,8 +582,9 @@ profile and does not change the Linux defaults.
 ## Throughput-aware routing
 
 Federated Housekeepers route to the fastest immediately available host. Live
-Ollama generation throughput from at least three successful same-model calls
-takes precedence. Until comparable samples exist, configure each host with a
+Ollama generation throughput from at least three successful samples for the
+same runtime, exact model tag, and job kind on every candidate takes
+precedence. Until comparable samples exist, configure each host with a
 benchmark-derived fallback. The current warm `qwen3.5:9b` Housekeeper results
 are:
 
@@ -458,9 +594,68 @@ are:
 | Mac Studio M1 Ultra | 200 | `qwen3.5:9b` | 61.1725 |
 | SWAC RTX 3060 | 100 | `qwen3.5:9b` | 43.2859 |
 
+### Measure comparable model throughput
+
+Use Criterion's fixed warm-throughput run to compare the same exact Ollama
+tag across hosts. The target host's Housekeeper URL and `--host-id` must match,
+and the tagged model must already be installed there. Run during a quiet
+window so other inference or queue work does not distort the results:
+
+```sh
+node command/criterion.mjs throughput \
+  --model qwen3.5:9b \
+  --host-id swac \
+  --gpu-housekeeper-url http://swac:18886
+```
+
+Run the same command for each host, changing only the host ID and its direct
+Housekeeper URL. Criterion uses a fixed 32K context, performs two excluded
+warmups, then measures five sequential prompts. It reports arithmetic-mean
+and weighted generation tokens per second; these measure token generation,
+not cold-load time, queue delay, or model quality. It records the model digest,
+queue state, machine metadata, and results under `criterion/results/`.
+
+The command verifies that the URL's `/snapshot` host ID matches `--host-id`,
+but a federated Housekeeper can still forward submitted work. Confirm the
+completed jobs ran on the host being measured before using the result as that
+host's prior. Check the job's route/execution host and confirm that host's
+`modelCallEstimates` sample count increased in `/snapshot`. Do not compare runs
+with different model digests, contexts, runtime settings, active workloads,
+or benchmark versions. For task quality, use the same Criterion evaluation
+suite/profile and compare its quality metrics separately from throughput.
+
 Store the corresponding `route priority`, `throughput prior model`, and
 `throughput prior tokens per second` fields in each host's `routing.pya` under
 its configured `GPU_HOUSEKEEPER_PYA_DIR`. A busy or capacity-blocked host is
 skipped so work can run concurrently on the next eligible host; when all hosts
 are busy, existing queue behavior is retained. Update priors after re-running
 the same benchmark following material model, driver, or power-limit changes.
+Measured generation throughput from at least three successful calls for the
+same runtime, model tag, and job kind on every candidate takes precedence over
+static priors. Otherwise, the throughput prior is used when every candidate
+has a valid prior for that exact model; if not, differing configured host
+priorities rank them, followed by warmth/capacity observations when priorities
+tie. The Housekeeper ranks only hosts that support the requested runtime/model
+and can admit that request now. If no peer has an immediate slot, it queues
+locally when the entry host is eligible; if no host is eligible, it reports a
+no-route or capacity failure.
+
+The route priority and throughput prior live in a Pyash record, not JSON. The
+default Linux file is `container/gpu-housekeeper/service/state/routing.pya`;
+the default Mac file is
+`~/.local/share/pyash-gpu-housekeeper/state/routing.pya`. Set the prior to the
+benchmark's `arithmeticMeanTokensPerSecond` for that exact model tag:
+
+```pya
+su name gpu housekeeper routing configuration be json map def
+su name schema version ob num 1 ya
+su name route priority ob num 200 ya
+su name throughput prior model ob text "qwen3.5:9b" ya
+su name throughput prior tokens per second ob num 61.1725 ya
+prah
+```
+
+The example uses the recorded Mac Studio value. Use each host's own measured
+value and desired fallback priority. A prior is considered only when its model
+tag matches the requested model. A route priority is a final configured rank;
+it does not make an ineligible or busy host executable.
