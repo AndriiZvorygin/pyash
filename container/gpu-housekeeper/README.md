@@ -1,5 +1,197 @@
 # GPU Housekeeper
 
+The GPU Housekeeper is Pyash's host-side service for managed GPU runtimes. A
+Pyash process records GPU duties in its local durable queue; a long-running
+`command/gpu_worker.mjs` submits ready duties to one Housekeeper URL. The
+Housekeeper checks device capacity, manages registered runtimes, runs the job,
+and returns its result to the worker. In a multi-host deployment, the entry
+Housekeeper can route eligible work to configured peer Housekeepers.
+
+This page is the operator guide. For implementation details, see the
+[architecture reference](../../documentation/reference/gpu-housekeeper-architecture.md);
+for measured NVIDIA admission estimates see the
+[VRAM calibration](../../documentation/reference/gpu-housekeeper-vram-calibration.md).
+
+## Choose a deployment
+
+| Host | Setup path | Notes |
+| --- | --- | --- |
+| Linux with NVIDIA GPU | `service/compose.gpu.yaml` through `command/begin.sh` | Requires Docker's NVIDIA GPU support, the existing Ollama and ComfyUI Docker networks, and an IPv6 prefix on Docker's built-in `bridge` network. |
+| Apple Silicon macOS | `command/install-macos.sh` | Installs a user-scoped native Ollama and Housekeeper service; Docker and `sudo` are not used. See [Apple Silicon peer](#apple-silicon-peer). |
+| Kubernetes-managed runtime | [Kubernetes pilot guide](kubernetes/README.md) | Opt-in runtime integration for the documented K3s pilot. |
+
+The Housekeeper API uses port `18886` by default and has no authentication.
+Keep it on loopback or a trusted private/overlay network and restrict inbound
+access with the host firewall. Do not publish it to the public internet.
+
+## Set up one Linux NVIDIA host
+
+Before starting, verify the host can see its NVIDIA GPU, Docker can pass that
+GPU to containers, and the Ollama and ComfyUI Docker networks used by this
+Compose profile already exist. The default runtime containers must be present
+for Housekeeper to manage them, but they do not need to stay running. The
+default networks are `hmas_default` and `comfyui_default`; set the corresponding
+network variables if your Compose projects use different names. Docker's built-in
+`bridge` network must have an IPv6 IPAM prefix. `command/begin.sh` derives the
+Housekeeper subnet from that prefix and stops with an actionable error if
+IPv6 is not configured.
+
+Set host-local options in the ignored file
+`container/gpu-housekeeper/service/.env`. For example:
+
+```dotenv
+GPU_HOUSEKEEPER_HOST_ID=mriczo
+GPU_HOUSEKEEPER_OLLAMA_DOCKER_NETWORK=hmas_default
+GPU_HOUSEKEEPER_COMFYUI_DOCKER_NETWORK=comfyui_default
+```
+
+Use a unique, stable host ID. Keep this file for deployment settings, not
+credentials or Pyash secrets. Model pulls are disabled by default; enabling
+them requires the explicit allowlist settings described below.
+
+From the repository root, start or refresh the service:
+
+```sh
+container/gpu-housekeeper/command/begin.sh
+```
+
+The script builds and starts the Compose service, publishes port `18886`, and
+persists Housekeeper job and observation records under
+`container/gpu-housekeeper/service/state` by default. Set
+`GPU_HOUSEKEEPER_DATA_DIR` in `service/.env` to move that host-side state. Check
+the service from the host:
+
+```sh
+curl -fsS http://127.0.0.1:18886/health
+curl -fsS http://127.0.0.1:18886/runtime
+curl -fsS http://127.0.0.1:18886/snapshot
+curl -fsS http://127.0.0.1:18886/queue
+```
+
+`/health` should return an `ok` status. `/runtime` lists registered runtime
+health, `/snapshot` reports host and device capacity, and `/queue` shows work
+already accepted by this Housekeeper. Stop it with
+`container/gpu-housekeeper/command/stop.sh`; its bind-mounted state remains on
+the host.
+
+## Send Pyash work to the Housekeeper
+
+From the Pyash repository, point the GPU worker at the entry Housekeeper and
+keep the worker running while duties are queued:
+
+```sh
+export PYA_GPU_HOUSEKEEPER_URL=http://mriczo:18886
+node command/gpu_worker.mjs --world world
+```
+
+The URL may instead be stored in local Pyash configuration as `gpu housekeeper
+url`; `PYA_GPU_HOUSEKEEPER_URL` overrides that setting. The worker watches the
+selected Pyash world's durable GPU queue. Its `--world` path must match the
+world root used by the Pyash program (the repository's default is `world`).
+
+A `.pya` program can enqueue a mind duty under a named handle, then wait for
+the result:
+
+```pya
+su name sample mind duty ob text "Reply with the word ready." vyah start future be gpu mind do
+accordingto text "sample mind duty" during num 120000 vyah await be gpu do
+```
+
+Run it with `node command/run_pya_program.mjs path/to/file.pya` in a second
+terminal with the same `PYA_GPU_HOUSEKEEPER_URL` setting, or configure the URL
+in Pyash. Ensure the selected mind model is already installed; Linux model
+pulls are disabled by default. Use
+`accordingto text "sample mind duty" vyah status be gpu do` to read its current
+handle state. The Pyash handle is the end-to-end result; `/queue` is the
+Housekeeper's accepted/executing job view. A duty can stay in Pyash's local
+queue until a worker claims it.
+
+The worker can process one batch and exit with `--once`. For normal use, omit
+that option so it continues polling. It discovers dispatch slots from the
+Housekeeper topology; `PYA_GPU_WORKER_CONCURRENCY` is an optional override for
+worker dispatch fan-out. Housekeeper still controls admission on each device.
+
+## Configure multiple GPU hosts
+
+Run one Housekeeper per GPU host and give each a unique `GPU_HOUSEKEEPER_HOST_ID`.
+The Pyash worker still uses one entry URL; the entry Housekeeper routes work
+to itself or its configured peers. A common layout is a Linux NVIDIA host as
+the entry Housekeeper, with additional Linux hosts and an Apple Silicon Mac as
+peers.
+
+1. Install and verify each host independently using its platform instructions
+   above. Each peer must be reachable from the entry Housekeeper on its
+   Housekeeper port (normally `18886`). Ollama and other runtime ports do not
+   need to be exposed to the Pyash worker.
+2. On the Linux entry host, add peer IDs and URLs to
+   `container/gpu-housekeeper/service/.env`. Entries are separated by
+   semicolons:
+
+   ```dotenv
+   GPU_HOUSEKEEPER_HOST_ID=mriczo
+   GPU_HOUSEKEEPER_PEERS=swac=http://swac:18886;macstudio=http://macstudio:18886
+   ```
+
+   For an Apple Silicon peer, bind its Housekeeper to a trusted overlay
+   address with `GPU_HOUSEKEEPER_BIND_HOST` when running
+   `command/install-macos.sh`. Ollama remains loopback-bound on the Mac. The
+   peer URL must resolve and be reachable from the Linux Housekeeper
+   container, not only from the Linux host. If IPv6 is used, put literals in
+   brackets, for example `macstudio=http://[2001:db8::20]:18886`.
+3. Re-run `container/gpu-housekeeper/command/begin.sh` on the Linux host so
+   Compose loads the peer configuration. If the Mac's bind address or
+   installer settings change, re-run its installer as described in the
+   [Apple Silicon section](#apple-silicon-peer).
+4. Verify each peer from the entry Housekeeper container, then inspect
+   `federation.peerHealth` in `/snapshot`:
+
+   ```sh
+   docker exec gpu-housekeeper python3 -c 'import urllib.request; print(urllib.request.urlopen("http://swac:18886/health", timeout=5).read().decode())'
+   curl -fsS http://127.0.0.1:18886/snapshot
+   ```
+
+   Replace the example URL with each configured peer URL. A host-level `curl`
+   alone does not prove the container can resolve or route to that peer.
+5. Point each Pyash worker at the entry Housekeeper URL, for example
+   `PYA_GPU_HOUSEKEEPER_URL=http://mriczo:18886`; do not configure the worker
+   with a separate URL per GPU host.
+
+Routing is capacity- and runtime-aware, not round-robin. The Housekeeper skips
+busy or ineligible hosts when another peer can run immediately; if all hosts
+are busy, the accepted job waits in the Housekeeper queue. Live same-model
+throughput samples and configured routing priors rank eligible hosts. See
+[throughput-aware routing](#throughput-aware-routing) for the host-local
+`routing.pya` calibration. Peer health uses a circuit breaker; its failure
+count and cooldown are configurable with `GPU_HOUSEKEEPER_PEER_FAILURE_LIMIT`
+and `GPU_HOUSEKEEPER_PEER_COOLDOWN_SEC`.
+
+Keep the peer list on each Housekeeper that will act as an entry point. In the
+usual single-entry layout, remote peers do not need a reciprocal list unless
+they will also receive worker submissions that should route onward. For
+host-specific IPv6 allocation and ordered endpoint fallback, see
+[Host-specific Docker IPv6 and peer routing](#host-specific-docker-ipv6-and-peer-routing).
+
+## Troubleshooting
+
+- **`/health` does not respond:** check `docker ps` and
+  `docker logs --tail 100 gpu-housekeeper`. Confirm the host firewall permits
+  trusted clients to reach the configured Housekeeper port.
+- **A Pyash duty remains queued:** make sure `gpu_worker.mjs` is running,
+  points at the intended URL, and uses the same `--world` as the Pyash
+  program. Check the handle with `vyah status` in Pyash and the Housekeeper
+  queue with `curl http://127.0.0.1:18886/queue`.
+- **A peer is missing or unhealthy:** confirm its ID and URL in
+  `GPU_HOUSEKEEPER_PEERS`; test name resolution and `/health` from inside the
+  Housekeeper container. Check the peer circuit-breaker details in
+  `/snapshot`.
+- **Linux startup reports no IPv6 Docker subnet:** configure IPv6 on Docker's
+  built-in `bridge` network, including its `fixed-cidr-v6`, then rerun
+  `command/begin.sh`. See the detailed [IPv6 and peer routing notes](#host-specific-docker-ipv6-and-peer-routing).
+- **A job cannot fit or a model is unavailable:** inspect `/snapshot` for
+  available device memory and runtime state. Model downloads are opt-in and
+  require both host authorization and job admission fields; see the model
+  provisioning section below and the [VRAM calibration](../../documentation/reference/gpu-housekeeper-vram-calibration.md).
+
 ## Kubernetes GPU worker pilot
 
 The initial heterogeneous-cluster pilot keeps the existing Housekeeper

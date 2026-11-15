@@ -1,5 +1,6 @@
 # Documentation Index
 
+- [GPU Housekeeper operator guide](../container/gpu-housekeeper/README.md) — setup, Pyash worker usage, multi-host federation, and operations.
 - `documentation/design.md` — architecture overview and module layout.
 - `documentation/reference.md` — how to run the REPL, traces, and helper scripts.
 - `documentation/state.md` — current scope, goals, and known edges.
