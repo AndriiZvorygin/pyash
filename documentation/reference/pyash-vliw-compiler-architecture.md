@@ -157,6 +157,52 @@ backend/prototype; it does not replace the planned RISC-V assembly emitter. Each
 backend needs an explicit target ABI, data layout, calling convention, and
 conformance path before it can claim native execution support.
 
+## Parallel Execution and CPU/GPU Dispatch
+
+GPU execution is a target choice for work that is both safe to parallelize and
+predicted to benefit from the device. "Compute-heavy" alone is not the rule:
+large, regular memory-bandwidth workloads can benefit too, while a short,
+serial or irregular workload may remain faster on the CPU.
+
+The compiler and runtime make different parts of the decision:
+
+| Stage | Evidence used | Decision |
+| --- | --- | --- |
+| Semantic eligibility | VLIW read/write effects, dependencies, side effects, control-flow bounds, and target operation support | Whether parallel execution preserves the program's meaning and can be executed safely |
+| Profitability estimate | Work-item count, estimated operations per item, bytes read/written, access regularity, branch divergence, per-item state/register pressure, and whether data is already device-resident | Whether CPU or GPU is expected to finish sooner |
+| Runtime dispatch | Actual input sizes, available devices, measured per-device costs, and current availability | Select the eligible backend for this invocation, with a correct CPU fallback where supported |
+
+The runtime cost estimate should account for:
+
+```text
+CPU: scheduling + execution + memory cost
+GPU: launch/dispatch + required host/device transfers
+     + device execution + synchronization/result transfer
+```
+
+Transfers already avoided by keeping data resident are not charged again.
+Profitability should use measured target profiles and a margin that avoids
+dispatching marginal workloads to the GPU. If CPU and GPU are both correct,
+choose the measured faster path; if the estimate is uncertain, use the
+characterized baseline rather than assume the GPU wins. Input cardinality and
+residency are runtime facts, so compile-time analysis alone cannot make the
+final choice.
+
+VLIW remains the semantic program and value representation: grammatical
+cases and quote payloads express arguments, paragraph/ceremony structure
+delimits multi-sentence programs, and results are returned as VLIW sentence
+values. No second language-level argument or result stream is required.
+Device buffers and their layout are implementation details of a backend; they
+do not change the Pyash call contract or the frozen flat `.pyac` v1 format.
+
+Natural data-parallel workload families include image/frame transforms,
+audio-window processing, bulk table transforms and statistics, large-scale
+matching/ranking, particle or cellular simulations, parameter sweeps, and
+candidate-program fitness evaluation. These are candidates, not automatic GPU
+wins: each must meet the semantic and measured-cost checks above. Small
+FizzBuzz runs are useful for correctness and control-flow conformance, not as
+a representative GPU throughput benchmark.
+
 ## Evolutionary Function Workloads
 
 **Status:** the contract remains normative. A bounded numeric-function
@@ -201,7 +247,7 @@ An accepted candidate has a closed, versioned function contract:
 | Signature | Explicit parameter names, value types/widths, return shape, and calling convention. |
 | Semantics | Defined integer overflow, saturation/wrapping, signedness, division-by-zero, and comparison behavior; identical in the reference executor and every backend. |
 | Effects | Deterministic and side-effect-free during evaluation. Random mutation is seeded and performed by the host evolution process, not by the candidate. No I/O, network, clock, model call, or undeclared memory access. |
-| State | Locals and writable state are declared with fixed extents. Until the named-data/symbol contract is implemented, candidate functions must stay within the currently supported stateless subset. |
+| State | Locals and writable state are declared with fixed extents. Invocation-local unsigned 16-bit numeric slots are implemented in the Pyash programlet; target evaluators must account for their per-work-item state and preserve frame isolation. Other types and bulk pages remain future work. |
 | Control flow | A finite control-flow graph with cyclomatic complexity at most 9. No recursion or unbounded loops. Loops are accepted only with a statically verifiable iteration bound. |
 | Work bound | A profile-supplied instruction/step budget and fixed input extent. Statically reject candidates whose worst-case work exceeds the budget; enforce a runtime step counter in the reference evaluator. |
 | VLIW representation | A function body may span multiple codelets. The 16-word codelet is an encoding unit, not a function-size limit or a register file. Grammatical cases describe operand roles; the target ABI maps values to virtual/physical registers or memory. |
