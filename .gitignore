@@ -21,6 +21,7 @@ know/**
 !know/produce/.gitkeep
 node_modules/
 rust/**/target/
+rust/pyac-browser/web/pkg/
 log/
 world/
 !world/

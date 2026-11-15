@@ -88,6 +88,38 @@ impl Display for NumericPackExecutionError {
 
 impl std::error::Error for NumericPackExecutionError {}
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PyacValue {
+    Unsigned(u64),
+    Signed(i64),
+    DateEpochMs(u64),
+    Vector(VectorElements),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PackExecutionError {
+    pub index: usize,
+    pub source: SemanticError,
+}
+
+impl PackExecutionError {
+    pub fn code(&self) -> &'static str {
+        self.source.code()
+    }
+}
+
+impl Display for PackExecutionError {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "PyAC codelet {} failed: {}",
+            self.index, self.source
+        )
+    }
+}
+
+impl std::error::Error for PackExecutionError {}
+
 impl PyacError {
     pub fn code(&self) -> &'static str {
         match self {
@@ -283,6 +315,38 @@ pub fn execute_numeric_arithmetic_pack(
         .map(|(index, codelet)| {
             execute_numeric_arithmetic_codelet(codelet)
                 .map_err(|source| NumericPackExecutionError { index, source })
+        })
+        .collect()
+}
+
+pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionError> {
+    use semantic::{NumericCodeletValue, execute_numeric_codelet};
+
+    pack.codelets
+        .iter()
+        .enumerate()
+        .map(|(index, codelet)| {
+            let unsupported = || PackExecutionError {
+                index,
+                source: SemanticError::UnsupportedCodelet,
+            };
+
+            if let Some(result) = execute_numeric_codelet(codelet) {
+                return result
+                    .map(|value| match value {
+                        NumericCodeletValue::Unsigned(value) => PyacValue::Unsigned(value),
+                        NumericCodeletValue::Signed(value) => PyacValue::Signed(value),
+                    })
+                    .map_err(|source| PackExecutionError { index, source });
+            }
+
+            if let Ok(value) = execute_date_codelet(codelet) {
+                return Ok(PyacValue::DateEpochMs(value));
+            }
+            if let Ok(value) = execute_vector_codelet(codelet) {
+                return Ok(PyacValue::Vector(value));
+            }
+            Err(unsupported())
         })
         .collect()
 }

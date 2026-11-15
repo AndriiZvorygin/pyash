@@ -127,6 +127,7 @@ pub enum SemanticError {
     UnsupportedBound {
         actual: u16,
     },
+    UnsupportedCodelet,
     DivisionByZero,
 }
 
@@ -138,6 +139,7 @@ impl SemanticError {
             Self::UnsupportedOperator { .. } => "unsupported-operator",
             Self::UnsupportedCase { .. } => "unsupported-case",
             Self::UnsupportedBound { .. } => "unsupported-sentence",
+            Self::UnsupportedCodelet => "unsupported-codelet",
             Self::DivisionByZero => "division-by-zero",
         }
     }
@@ -176,6 +178,7 @@ impl std::fmt::Display for SemanticError {
                     "numeric invert only supports a zero bound, got {actual}"
                 )
             }
+            Self::UnsupportedCodelet => formatter.write_str("the codelet family is unsupported"),
             Self::DivisionByZero => formatter.write_str("numeric division cannot divide by zero"),
         }
     }
@@ -344,6 +347,28 @@ pub fn execute_numeric_invert_codelet(
 ) -> Result<i64, SemanticError> {
     let instruction = decode_numeric_invert(words)?;
     Ok(execute_numeric_invert(&instruction))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum NumericCodeletValue {
+    Unsigned(u64),
+    Signed(i64),
+}
+
+pub(crate) fn execute_numeric_codelet(
+    words: &[u16; WORDS_PER_CODELET],
+) -> Option<Result<NumericCodeletValue, SemanticError>> {
+    if words[7] == INVERT || words[6] == DATIVE_CASE {
+        return Some(execute_numeric_invert_codelet(words).map(NumericCodeletValue::Signed));
+    }
+    if words[1] == NUMBER_QUOTE
+        && words[3] == ACCUSATIVE_CASE
+        && words[4] == NUMBER_QUOTE
+        && words[8] == DEONTIC_MOOD
+    {
+        return Some(execute_numeric_arithmetic_codelet(words).map(NumericCodeletValue::Unsigned));
+    }
+    None
 }
 
 #[cfg(test)]

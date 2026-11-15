@@ -168,20 +168,20 @@ input/output and persistence must be supplied through web APIs or a narrow
 host interface; the WASM target does not provide ordinary operating-system
 services such as filesystem access.
 
-For workloads that pass the semantic-eligibility and profitability checks
-below, the WASM runtime may dispatch a batch of independent work items through
-Rust's `wgpu` API to browser WebGPU compute shaders. The host runtime remains
-responsible for interpreting the program and managing its data; the GPU kernel
-implements only the eligible parallel operation, with results returned in the
-existing VLIW value representation. This does not execute arbitrary Rust or
-arbitrary VLIW directly on the GPU, and it does not change the VLIW argument,
-result, or `.pyac` format contracts.
+For an explicitly requested pack that passes semantic eligibility, the WASM
+host can dispatch a batch of independent numeric operations through Rust's
+`wgpu` API to browser WebGPU compute shaders. The host remains responsible for
+interpreting the program and managing its data; the kernel implements only the
+eligible operation, with results returned in the existing VLIW value
+representation. This prototype does not automatically choose WebGPU based on
+profitability, execute arbitrary Rust or VLIW on the GPU, or change the VLIW
+argument, result, or `.pyac` format contracts.
 
 ```text
 browser program (.pyac)
   -> Rust/WASM runtime on CPU
-  -> optional eligibility + profitability decision
-  -> WebGPU compute kernel (WGSL) for a supported parallel batch
+  -> explicit WebGPU request + eligibility validation
+  -> WebGPU compute kernel (WGSL) for a supported numeric batch
   -> VLIW sentence values returned to the runtime
 ```
 
@@ -194,12 +194,40 @@ durable inference or GPU work. The browser pathway is for work intentionally
 deployed to and executed on the user's device. Small workloads should normally
 stay on the CPU when dispatch and transfer costs outweigh parallel execution.
 
-This is an architectural pathway, not a claim that the Rust interpreter,
-browser bindings, or WebGPU VLIW kernels are implemented. Before enabling it,
-define the supported runtime subset and host APIs, then require CPU/GPU result
-parity tests and benchmark dispatch thresholds on representative browsers and
-devices. WebGL2 may serve graphics fallback needs, but it is not treated here
-as an equivalent general compute backend.
+The first runnable browser slice is implemented under `rust/pyac-browser/`.
+The Rust pack executor handles the codelet families currently supported by
+`rust/pyac`; browser tests verify the WASM CPU path, WebGPU parity for numeric
+arithmetic batches, and CPU fallback when WebGPU is unavailable. This remains
+a subset runtime, not arbitrary Pyash execution. The WebGPU action is explicit:
+the measured arithmetic workload has not established a stable profitable
+automatic dispatch threshold on the tested browser, so ordinary pack execution
+stays on WASM CPU. WebGL2 may serve graphics fallback needs, but it is not
+treated here as an equivalent general compute backend.
+
+### Browser Pathway Implementation Roadmap
+
+The first deliverable is browser execution for the Rust crate's explicitly
+supported PyAC subset, not arbitrary Pyash programs. Completion means a browser
+can load a `.pyac` pack, execute supported codelets through WASM, return
+deterministic results or explicit unsupported-operation errors, and optionally
+execute an eligible batch through WebGPU without changing pack or sentence
+semantics. Whether that batch is faster is measured separately before any
+automatic dispatch policy is enabled.
+
+| Stage | Work | Exit evidence | Status |
+| --- | --- | --- | --- |
+| 1. WASM portability | Build the existing `rust/pyac` crate for `wasm32-unknown-unknown`; keep OS and browser APIs outside the semantic core | Native Rust tests pass and the WASM target checks in CI | Complete |
+| 2. Pack execution contract | Add one deterministic pack dispatcher for Rust-supported codelet families; preserve per-codelet errors and typed results | Mixed supported packs match individual codelet results; unsupported codelets fail at their exact index | Complete |
+| 3. Browser CPU slice | Add a browser host that loads a pack through a user-selected file or fixture and invokes the WASM executor | Chromium smoke checks the result/error path without filesystem permission assumptions | Complete |
+| 4. WebGPU batch path | Add optional `wgpu` compute for independent numeric arithmetic codelets; decode and unsupported work remain on CPU | Chromium smoke checks exact CPU/GPU parity and no-WebGPU fallback; smoke benchmarks warm batches of 1,024 to 131,072 codelets | Prototype complete; no auto-dispatch threshold is enabled because a stable crossover has not been established |
+| 5. Deployment and maintenance | Document secure-context, browser/device, build, and smoke-test requirements; keep hardware checks separate from ordinary CI | CPU and WASM checks run in CI; local smoke reports adapter availability and measurements | Complete |
+
+Keep the browser host thin and the Rust semantic core reusable by native
+targets. Do not add a browser-specific Pyash grammar, change the `.pyac` v1
+format, or claim full-language support as part of this roadmap. The `wgpu`
+dependency is target-specific to WASM and runtime use remains optional; do not
+automatically dispatch until a representative workload demonstrates a stable
+win over the CPU path.
 
 ## Parallel Execution and CPU/GPU Dispatch
 
