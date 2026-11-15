@@ -148,6 +148,8 @@ PyAC -> C source -> host C compiler -> native executable       (implemented subs
 PyAC -> NASM source -> NASM/linker -> native executable         (target)
 PyAC -> RISC-V assembly -> RISC-V assembler/linker -> ELF       (target)
 PyAC -> direct RISC-V instruction encoding -> ELF               (narrow prototype)
+PyAC -> Rust/WASM interpreter -> browser CPU                    (browser pathway)
+eligible parallel work -> WebGPU/WGSL compute kernel             (optional browser target)
 PyAC -> LLVM IR or other backends                               (later targets)
 ```
 
@@ -156,6 +158,48 @@ source-language syntax. The direct RISC-V encoder remains a useful independent
 backend/prototype; it does not replace the planned RISC-V assembly emitter. Each
 backend needs an explicit target ABI, data layout, calling convention, and
 conformance path before it can claim native execution support.
+
+### Browser-Deployed Program Pathway
+
+Browser deployment keeps `.pya`, VLIW sentences, and the `.pyac` pack as the
+program contract. A Rust runtime can be compiled to `wasm32-unknown-unknown`
+and interpret supported PyAC programs on the browser CPU. Browser-specific
+input/output and persistence must be supplied through web APIs or a narrow
+host interface; the WASM target does not provide ordinary operating-system
+services such as filesystem access.
+
+For workloads that pass the semantic-eligibility and profitability checks
+below, the WASM runtime may dispatch a batch of independent work items through
+Rust's `wgpu` API to browser WebGPU compute shaders. The host runtime remains
+responsible for interpreting the program and managing its data; the GPU kernel
+implements only the eligible parallel operation, with results returned in the
+existing VLIW value representation. This does not execute arbitrary Rust or
+arbitrary VLIW directly on the GPU, and it does not change the VLIW argument,
+result, or `.pyac` format contracts.
+
+```text
+browser program (.pyac)
+  -> Rust/WASM runtime on CPU
+  -> optional eligibility + profitability decision
+  -> WebGPU compute kernel (WGSL) for a supported parallel batch
+  -> VLIW sentence values returned to the runtime
+```
+
+WebGPU is an optional, browser-managed device path, not a replacement for the
+GPU Housekeeper. A browser runtime must detect WebGPU availability and retain a
+correct WASM CPU fallback; WebGPU availability and device limits vary by
+browser and machine, and WebGPU requires a secure context such as HTTPS or
+localhost. Native Housekeeper jobs remain the path for centrally managed,
+durable inference or GPU work. The browser pathway is for work intentionally
+deployed to and executed on the user's device. Small workloads should normally
+stay on the CPU when dispatch and transfer costs outweigh parallel execution.
+
+This is an architectural pathway, not a claim that the Rust interpreter,
+browser bindings, or WebGPU VLIW kernels are implemented. Before enabling it,
+define the supported runtime subset and host APIs, then require CPU/GPU result
+parity tests and benchmark dispatch thresholds on representative browsers and
+devices. WebGL2 may serve graphics fallback needs, but it is not treated here
+as an equivalent general compute backend.
 
 ## Parallel Execution and CPU/GPU Dispatch
 
