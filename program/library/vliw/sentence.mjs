@@ -17,6 +17,7 @@ const CONDITIONAL_MOOD = wordForEntry("conditional_mood_");
 const ROLE_ENTRIES = Object.freeze({
   su: "nominative_case_",
   ob: "accusative_case_",
+  as: "essive_case_",
   from: "source_case_",
   to: "destination_case_",
   by: "instrumental_case_",

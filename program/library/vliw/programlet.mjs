@@ -4,6 +4,10 @@ import { interpret } from "../../bridge/index.mjs";
 import { allRemember, doRemember, forget, remember } from "../../remember/index.mjs";
 import { decodePyashProgram, lowerPyashProgram } from "./sentence.mjs";
 import { decodePyacPack, encodePyacPack } from "./database.mjs";
+import {
+  isNamedNumericSlotDeclaration,
+  namedNumericSlotKind
+} from "../named_numeric_slot.mjs";
 
 export const MAX_PYASH_PROGRAMLET_SENTENCES = 31;
 export const MAX_PYASH_PROGRAMLET_COMPLEXITY = 9;
@@ -86,6 +90,8 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
   const calls = new Map([...definitions].map((name) => [name, new Set()]));
   let activeDefinition = null;
   let activeDefinitionReturns = false;
+  let activeDefinitionHasAction = false;
+  let activeSlots = new Map();
   for (const [index, sentence] of sentences.entries()) {
     if (sentence?.fromindex !== undefined || sentence?.toindex !== undefined || sentence?.atindex !== undefined) {
       fail("Pyash programlet v1 does not admit loops", { sentence: index + 1 });
@@ -97,6 +103,8 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
       }
       activeDefinition = sentence.su.name;
       activeDefinitionReturns = false;
+      activeDefinitionHasAction = false;
+      activeSlots = new Map();
       continue;
     }
     if (sentence.mood === "prah") {
@@ -111,13 +119,30 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
         fail(`Pyash programlet ceremony ${activeDefinition} must return a value`, { sentence: index + 1 });
       }
       activeDefinition = null;
+      activeDefinitionHasAction = false;
+      activeSlots = new Map();
       continue;
     }
     if (activeDefinition) {
       if (activeDefinitionReturns) {
         fail(`Pyash programlet ceremony ${activeDefinition} has sentences after ret`, { sentence: index + 1 });
       }
-      if (sentence.mood === "do") {
+      if (sentence.mood === "ya") {
+        if (activeDefinitionHasAction) {
+          fail("Pyash programlet local numeric slots must be declared before actions", { sentence: index + 1 });
+        }
+        if (!isNamedNumericSlotDeclaration(sentence)) {
+          fail("Pyash programlet body only admits initialized numeric variable or constant quantity declarations", {
+            sentence: index + 1
+          });
+        }
+        const slotName = sentence.su.name;
+        if (activeSlots.has(slotName)) {
+          fail(`Pyash programlet redeclares local numeric slot: ${slotName}`, { sentence: index + 1 });
+        }
+        activeSlots.set(slotName, namedNumericSlotKind(sentence));
+      } else if (sentence.mood === "do") {
+        activeDefinitionHasAction = true;
         visitSentence(sentence, (action) => {
           if (action.mood !== "do") {
             fail("Pyash programlet conditional branches must be do sentences", { sentence: index + 1 });
@@ -125,6 +150,15 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
           const isCall = definitions.has(action.be);
           if (!PURE_BUILTIN_VERBS.has(action.be) && !isCall) {
             fail(`Pyash programlet rejects effectful or unknown verb: ${action.be}`, { sentence: index + 1 });
+          }
+          const targetSlot = action.to?.name ? activeSlots.get(action.to.name) : null;
+          if (targetSlot === "constant") {
+            fail(`constant quantity is read-only: ${action.to.name}`, { sentence: index + 1 });
+          }
+          if (targetSlot === "variable" && outputType(action) !== "num") {
+            fail(`numeric variable slot requires a typed num destination: ${action.to.name}`, {
+              sentence: index + 1
+            });
           }
           if (isCall) {
             if (!action.to?.name || outputType(action) !== signatures.get(action.be)) {

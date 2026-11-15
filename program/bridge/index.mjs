@@ -25,6 +25,11 @@ import { builtInSignatures } from "../verbs/index.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { applyEnvDefaults } from "../configure/env.mjs";
 import { isEvidenceSentence, normalizeClaimSentence, normalizeEvidence } from "../library/knowledge_core.mjs";
+import {
+  isNamedNumericSlotDeclaration,
+  namedNumericSlotKind,
+  namedNumericSlotWriteError
+} from "../library/named_numeric_slot.mjs";
 
 function resolveFillCount(by, remember) {
   if (!by) return null;
@@ -179,6 +184,37 @@ export async function interpret(sentence, { runtimeContext = null } = {}) {
   if (sentence.obj) delete sentence.obj;
 
   const { mood, be, su, ob, to, from } = sentence;
+  const recordingDefinitionBody = state.definitionStack.length > 0 && !state.executingBody;
+  const writeTargetName = recordingDefinitionBody
+    ? null
+    : mood === "do" ? to?.name : mood === "ya" ? su?.name : null;
+  const writeTarget = writeTargetName ? remember(writeTargetName) : null;
+  const slotKind = namedNumericSlotKind(writeTarget);
+  const localSlotShadow = Boolean(
+    mood === "ya"
+    && state.executingBody
+    && hasMemoryContext()
+    && isNamedNumericSlotDeclaration(sentence)
+  );
+  if (slotKind === "constant" && !localSlotShadow) {
+    throwErrorSentence({
+      name: "constant quantity write",
+      message: `constant quantity is read-only: ${writeTargetName}`,
+      from: { name: "interpret" },
+      raw: sentence
+    });
+  }
+  if ((mood === "ya" || mood === "do") && slotKind === "variable") {
+    const message = namedNumericSlotWriteError(writeTarget, sentence);
+    if (message) {
+      throwErrorSentence({
+        name: "variable defective",
+        message: `${message}: ${writeTargetName}`,
+        from: { name: "interpret" },
+        raw: sentence
+      });
+    }
+  }
   if (mood === "pe") return { skipped: true };
   const isMapDef = mood === "def" && (be === "map" || be === "json map" || be === "csv map" || be === "series");
   const isMapPrah = mood === "prah" && (be === "map" || be === "json map" || be === "csv map" || be === "series");
@@ -373,7 +409,13 @@ export async function interpret(sentence, { runtimeContext = null } = {}) {
         Object.assign(sentence, normalized);
       }
       const name = su?.name;
-      if (name && !sentence.exists && sentence.be !== "export" && !remember(name)) {
+      if (
+        name
+        && !sentence.exists
+        && !isNamedNumericSlotDeclaration(sentence)
+        && sentence.be !== "export"
+        && !remember(name)
+      ) {
         const pyash = sentenceToPyash(sentence);
         throwErrorSentence({
           name: "variable as not exists",

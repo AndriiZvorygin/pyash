@@ -37,21 +37,40 @@ facts from which conclusions may be drawn”), linked to the Pyash compound
 `n:05866043-n` (“a quantity that can assume any of a set of values”) also has
 the accepted compound `hnuc prif` (“number + variable”). Each declaration
 sentence supplies the semantic facts needed to identify a named variable; the
-compiler derives its symbol/index records. The exact storage layout and
-binary representation and runtime implementation remain future format work;
-the hosted memory behavior below is the intended semantic contract.
+compiler derives its symbol/index records. The hosted programlet currently
+implements only invocation-local unsigned 16-bit numeric slots; indexed
+storage and broader runtime support remain future format work.
 
 ### Hosted PyashForth Memory Direction
 
 The first PyashForth runtime is hosted on Linux; MCU platform support follows
-after the language and image contracts stabilize. Its initial memory profile
-is local to each ceremony invocation, adapting Lwonprom's per-recipe variable
-pile rather than adding program-wide mutable state:
+after the language and image contracts stabilize. The first implemented
+memory slice is local to each ceremony invocation, adapting Lwonprom's
+per-recipe variable pile rather than adding program-wide mutable state:
+
+```text
+exists su name count ob num 0 as name variable be number ya
+ob num 1 to name num count be plus do
+su name count ret
+```
+
+`as name variable` declares a mutable numeric local, and
+`as name permanently number` declares a read-only constant quantity. The
+declaration value initializes the slot. Locals are limited to unsigned
+16-bit numbers, must be declared before actions, and are available only in
+that ceremony invocation. A typed `to name num <slot>` action updates the
+slot in place; the slot disappears on return. The implementation reuses the
+existing `as` sentence field and vocabulary compounds, so the v1 codelet
+layout remains unchanged. See
+[`vliw-programlet-local-slots.pya`](../../examples/pyash/vliw-programlet-local-slots.pya)
+and `quiz/vliw_programlet_local_slots.test.mjs`.
+
+The intended broader memory profile is:
 
 | Memory item | Hosted runtime contract |
 | --- | --- |
-| Named constants | Read-only values in the immutable program image |
-| Named variables | Typed slots initialized by declarations and updated in place during one invocation |
+| Named constant quantities | Read-only numeric slots initialized by declarations in one invocation |
+| Named variables | Unsigned 16-bit numeric slots initialized by declarations and updated in place during one invocation |
 | Local bulk memory | Named pages reserved by a separate Pyash allocation sentence; zero-filled or initialized from a quoted payload |
 | Lifetime | Slots and writable pages are discarded when the invocation returns |
 | Logical page | 16 VLIW codelets, or 512 bytes; independent of Linux's physical VM page size |
@@ -66,10 +85,10 @@ packed image. Debug/replay history is separate from the live slot value.
 
 The quote parser currently extracts the payload but drops the block kind, the
 VLIW sentence encoder currently emits text as a paragraph-letter quote, and
-the assembly runtime remains a named-text-and-write proof. The general
-quote-kind and mutable-page behavior above is a target contract, not current
-runtime capability. Vocabulary lookup found the existing variable and
-constant-quantity concepts. `initialize` has the relevant WordNet sense
+the assembly runtime remains a named-text-and-write proof. General quote-kind,
+mutable-page, and non-numeric slot behavior remain target contracts, not
+current runtime capabilities. Vocabulary lookup found the existing variable
+and constant-quantity concepts. `initialize` has the relevant WordNet sense
 `v:00700896` (“assign an initial value to a computer program”), linked to
 Open English WordNet 2025 `v:00702662-v`, but `pyash dict initialize` still
 reports no direct Pyash suggestion. The allocation term also needs a reviewed
@@ -109,7 +128,7 @@ senses and the canonical Pyash vocabulary before assigning them VLIW meaning.
 | --- | --- | --- |
 | Pyash `.pya` source | Canonical sentence and paragraph semantics | Implemented language/interpreter surface |
 | Searchable `.pya` VLIW catalog | Semantic identity, provenance, and query/replay view | Separate from a program's source file and from its packed bytes |
-| `.pyac` pack | Header plus deterministic fixed-width codelet bytes | Version 1 is a flat codelet sequence; no data/code sections or mutable variable store; a future indexed image is not implemented |
+| `.pyac` pack | Header plus deterministic fixed-width codelet bytes | Version 1 is a flat codelet sequence; no embedded data/code sections or mutable variable store; the interpreter allocates implemented numeric locals per invocation |
 | JavaScript VLIW facade | Reference lowering, decoding, effects, and supported execution | Partial semantic coverage, including the canonical Pyash programlet v1 slice below |
 | C output from `.pyac` | Compile supported codelets to C, then use the host C compiler | Verified arithmetic and invert subset; not a general Pyash-to-C replacement |
 | Rust and RISC-V | Decode/execute supported PyAC semantics; direct RISC-V instruction/ELF prototype | Narrow subset; the generated RISC-V image is not emulator-executed |
@@ -307,16 +326,17 @@ node --test quiz/vliw_function_source.test.mjs quiz/vliw_functions.test.mjs quiz
 
 ## Implementation Milestones
 
-1. **Vocabulary and declarations:** confirm the data/variable senses and
-   review constant-storage and page-allocation terms through
-   Kwon/vocabulary tooling; do not assign new HNUCs as a shortcut.
-2. **Invocation-local memory:** define declaration and allocation sentence
-   shapes, typed slot layout, initialization, bounds, quote-kind preservation,
-   and cleanup on return.
+1. **Vocabulary and declarations:** complete for the implemented numeric
+   scalar slice: existing variable and constant-quantity compounds are used;
+   page-allocation terms remain deferred.
+2. **Invocation-local memory:** numeric initialization, typed writes,
+   constant rejection, per-invocation isolation, and cleanup on return are
+   implemented for unsigned 16-bit slots. Page allocation, other value types,
+   and quote-kind preservation remain future work.
 3. **Section and symbol contract:** define how declarations and actions are
    indexed in a future versioned PyAC image while preserving v1 compatibility.
-4. **Mutable execution:** implement local typed storage, reads/writes, and
-   dependency effects; prove parity with interpreted Pyash.
+4. **Broader mutable execution:** extend storage beyond numeric scalars and
+   prove parity for each newly supported type and dependency effect.
 5. **Assembly backends:** emit NASM and RISC-V assembly from decoded PyAC,
    assemble/link them, and compare native results with the reference executor.
 6. **Broader coverage:** expand supported sentence families and add LLVM or
@@ -332,7 +352,12 @@ sentences from Pyash to `.pyac`, emits C, compiles it with `cc`, and prints
 ./run examples/pyash/compile-vliw-constant-arithmetic.pya
 cc -std=c11 -Wall -Werror -o examples/out/vliw-constant-arithmetic examples/out/vliw-constant-arithmetic.c
 ./examples/out/vliw-constant-arithmetic
+./run examples/pyash/vliw-programlet-local-slots.pya
 ```
+
+The local-slot example prints `1`; its focused regression coverage verifies
+fresh values across invocations, in-place writes, typed destinations, and
+read-only constant quantities.
 
 The relevant contracts and implementation evidence are in
 [`27-pyash-vliw-isa.md`](../specifications/27-pyash-vliw-isa.md),

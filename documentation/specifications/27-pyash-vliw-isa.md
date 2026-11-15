@@ -194,13 +194,40 @@ only for instructions proven independent by these rules.
 
 ### Hosted PyashForth memory profile
 
-The first hosted PyashForth runtime uses invocation-local storage, following
-Lwonprom's recipe-local variable pile. This profile does not add program-wide
-mutable variables:
+The hosted JavaScript programlet v1 now implements the first scalar-memory
+slice, following Lwonprom's recipe-local variable pile. This profile does not
+add program-wide mutable variables. A ceremony body may declare initialized
+unsigned 16-bit numeric locals before its actions:
+
+```text
+exists su name count ob num 0 as name variable be number ya
+exists su name limit ob num 5 as name permanently number be number ya
+ob num 1 to name num count be plus do
+su name count ret
+```
+
+`as name variable` marks a mutable local; `as name permanently number` marks
+a read-only constant quantity. The initializer is the declaration's `ob num`
+value, so no separate initialization opcode or vocabulary is introduced.
+Writes to a mutable slot must use a typed `to name num <slot>` destination.
+Declarations follow the containing `ceremony def` and precede its action
+sentences. Each invocation gets a fresh slot frame; writes replace the live
+slot value while diagnostic history retains the write, and the frame is
+discarded when the invocation returns. Constant writes and invalid slot types
+fail explicitly.
+
+This implemented slice is intentionally narrow: numeric values in the range
+0 through 65535, local to one ceremony invocation. It does not yet implement
+logical pages, quoted-payload initialization, other slot types, or an indexed
+program image. The v1 pack remains a flat codelet stream; runtime slots are
+created by the interpreter rather than stored in a new `.pyac` section.
+
+The broader intended memory profile remains:
 
 - Each ceremony invocation receives its own frame of named typed slots.
   Declarations initialize slots; writes update the slot in place rather than
-  appending replacement declaration sentences. Constants are read-only.
+  appending replacement declaration sentences. Constant quantities are
+  read-only. The implemented subset is limited to unsigned 16-bit numbers.
 - A frame may reserve zero-initialized logical data pages or initialize pages
   from a quoted payload. A logical page is sixteen 32-byte VLIW codelets, or
   512 bytes. This is a Pyash runtime unit, not a claim about the host or target
@@ -212,11 +239,10 @@ mutable variables:
   contents. A quote does not allocate writable memory by itself; a separate
   allocation sentence supplies the named extent and initialization behavior.
 
-These are semantic requirements, not a claim that the current parser, flat
-v1 pack, or assembly runtime already implements them. The runtime must reject
-unsupported declaration or allocation forms visibly. Exact Pyash sentence
-spelling remains subject to vocabulary review; this contract does not assign
-new vocabulary identities or HNUCs.
+The page and quote requirements above remain future work. The current slot
+surface reuses existing vocabulary compounds and does not assign new HNUCs.
+The programlet compiler rejects unsupported declaration and allocation forms
+visibly.
 
 The executor MUST expose deterministic failure for malformed codelets,
 unfulfilled dependencies, duplicate writers, invalid types, and unsupported

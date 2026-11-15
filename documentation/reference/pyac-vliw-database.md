@@ -62,9 +62,11 @@ the header in source order. The file width equals the header width plus
 version, word layout, reserved field, truncation, or extra data.
 
 This v1 layout remains frozen as a flat codelet stream. It has no contents
-directory, symbol table, data section, quote-kind descriptor, or mutable
-variable store. Do not reinterpret its reserved header field or codelet words
-to add those features.
+directory, symbol table, data section, quote-kind descriptor, or embedded
+mutable variable store. The hosted programlet interpreter currently allocates
+its narrow invocation-local numeric slots at execution time; that runtime
+behavior does not add a storage section to this container. Do not reinterpret
+its reserved header field or codelet words to add those features.
 
 ### Future indexed program image
 
