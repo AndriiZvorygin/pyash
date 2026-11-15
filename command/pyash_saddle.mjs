@@ -730,8 +730,10 @@ export async function dischargeSaddleModel(model, backend, {
 let activeSaddleUi = null;
 let activeSaddleResizeHandler = null;
 let activeSaddleOutputFailed = false;
+let saddleOutputHandlersInstalled = false;
 
 function handleSaddleOutputError(error) {
+  if (activeSaddleOutputFailed) return;
   activeSaddleOutputFailed = true;
   const detail = error?.code ? ` (${error.code})` : "";
   try {
@@ -740,6 +742,13 @@ function handleSaddleOutputError(error) {
     // The diagnostic stream may share the same closed pipe.
   }
   process.exit(1);
+}
+
+function installSaddleOutputErrorHandlers() {
+  if (saddleOutputHandlersInstalled) return;
+  saddleOutputHandlersInstalled = true;
+  process.stdout.on("error", handleSaddleOutputError);
+  process.stderr.on("error", handleSaddleOutputError);
 }
 
 function writeLine(text = "") {
@@ -864,6 +873,7 @@ async function resumeDuty(dutyId) {
 }
 
 async function main() {
+  installSaddleOutputErrorHandlers();
   if (process.argv[2] === "resume") {
     await resumeDuty(process.argv[3]);
     return;
@@ -917,7 +927,7 @@ async function main() {
   let promptLabel = "pyash> ";
   let inputDecoder = null;
   const queuedInputs = [];
-  const saddleUi = createSaddleTerminalUi({ onOutputError: handleSaddleOutputError });
+  const saddleUi = createSaddleTerminalUi();
   activeSaddleUi = saddleUi;
   saddleUi.enter();
   process.once("exit", restoreActiveSaddleUi);
