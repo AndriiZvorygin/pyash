@@ -61,6 +61,28 @@ the header in source order. The file width equals the header width plus
 `count * 32`; trailing bytes are invalid. A reader rejects an unknown magic,
 version, word layout, reserved field, truncation, or extra data.
 
+This v1 layout remains frozen as a flat codelet stream. It has no contents
+directory, symbol table, data section, quote-kind descriptor, or mutable
+variable store. Do not reinterpret its reserved header field or codelet words
+to add those features.
+
+### Future indexed program image
+
+A later, explicitly versioned `.pyac` image may use a book-like contents
+directory and symbol index to locate code, immutable constants, quote payloads,
+and initialization records for invocation-local writable pages. The directory
+may include quote-kind metadata external to each payload, preserving
+`quoted.<kind>` without changing the payload bytes or legacy codelet encoding.
+Named declarations and allocation sentences provide semantic references;
+the image index provides deterministic lookup. Image-relative offsets or
+stable identifiers are appropriate; runtime pointers and host addresses are
+not.
+
+This is a design direction, not a second current container contract: no v2
+version number, byte offsets, or section encoding is assigned here. A future
+version must preserve v1 decoding and define deterministic hashes and bounds
+checks for every directory and payload entry before implementation.
+
 `.pyc` remains associated with Python bytecode. `.hdes` is available for a
 future semantic descriptor/HNUC store. PyAC executable codelets use `.pyac`.
 
@@ -82,6 +104,10 @@ Each row carries:
 
 The catalog records the SHA-256 of the complete `.pyac` pack. Opening a
 database verifies that hash before query or replay operations continue.
+
+The searchable `.pya` catalog is a semantic/provenance index, not the
+executable image's future contents directory. It may help locate and inspect
+records, but execution and loading must use the validated `.pyac` image.
 
 Record identity is derived from the canonical sentence and exact codelet
 bytes. Equal canonical semantics and equal bytes receive equal identities;

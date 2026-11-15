@@ -102,6 +102,17 @@ fields, with the quote sort describing interpretation. Type compatibility is
 checked by the decoder. A quote is therefore a typed value encoding, not a
 license to hide an unrepresentable sentence.
 
+The source form `quoted.<kind> ... .<kind>.quoted` is a block delimiter and
+payload annotation, distinct from the legacy quote sort. Parsing must retain
+the block kind as semantic metadata alongside the payload; it must not fold
+the delimiters into the payload or silently discard the kind. The kind is
+external to the payload, consistent with the legacy quote model's separation
+of value bytes and type information. The flat v1 `.pyac` container has no
+general block-kind descriptor, so a v1 pack cannot claim a lossless round-trip
+for arbitrary quote kinds. A future indexed container may carry that metadata
+in its own quote descriptor, inside the `.pyac` image, without changing the
+legacy 16-bit codelet words or allocating new HNUCs.
+
 ### 4.2 VLIW shape
 
 The legacy codelet is a vector of sixteen 16-bit words: 256 bits / 32 bytes.
@@ -168,7 +179,7 @@ before values become visible to dependent codelets.
 The execution model has:
 
 - code in immutable/constant codelet storage;
-- globally addressable working/output storage for references;
+- working/output storage addressed by stable references;
 - a program queue for ready work rather than a mandatory program counter;
 - worker-local stacks for function-call frames; and
 - a completion/history record sufficient to diagnose or replay a codelet.
@@ -180,6 +191,32 @@ explicit continuation/jump reference and a bounded termination rule. A
 function call enqueues its body with a local frame and rejoins only after its
 declared outputs are fulfilled. Speculative or parallel execution is valid
 only for instructions proven independent by these rules.
+
+### Hosted PyashForth memory profile
+
+The first hosted PyashForth runtime uses invocation-local storage, following
+Lwonprom's recipe-local variable pile. This profile does not add program-wide
+mutable variables:
+
+- Each ceremony invocation receives its own frame of named typed slots.
+  Declarations initialize slots; writes update the slot in place rather than
+  appending replacement declaration sentences. Constants are read-only.
+- A frame may reserve zero-initialized logical data pages or initialize pages
+  from a quoted payload. A logical page is sixteen 32-byte VLIW codelets, or
+  512 bytes. This is a Pyash runtime unit, not a claim about the host or target
+  operating system's physical page size.
+- Frame slots and writable pages live only for that invocation and are
+  discarded on return. Any diagnostic history is separate from runtime state
+  and cannot become an unbounded variable store.
+- Long `quoted.<kind>` payloads preserve their kind separately from their
+  contents. A quote does not allocate writable memory by itself; a separate
+  allocation sentence supplies the named extent and initialization behavior.
+
+These are semantic requirements, not a claim that the current parser, flat
+v1 pack, or assembly runtime already implements them. The runtime must reject
+unsupported declaration or allocation forms visibly. Exact Pyash sentence
+spelling remains subject to vocabulary review; this contract does not assign
+new vocabulary identities or HNUCs.
 
 The executor MUST expose deterministic failure for malformed codelets,
 unfulfilled dependencies, duplicate writers, invalid types, and unsupported
@@ -320,6 +357,12 @@ malformed continuation/quote rejection, compatibility-table coverage,
 dependency scheduling, single-writer enforcement, and interpreted versus
 decoded result paragraphs. Tests must include at least one source-language
 adapter and one unsupported-value rejection.
+
+The hosted PyashForth memory profile additionally requires conformance cases
+for quote-kind and payload round-trips, per-invocation slot isolation, constant
+write rejection, zero initialization, page-bound checks, and frame cleanup on
+return. These cases are acceptance requirements for the future runtime; they
+do not imply current implementation coverage.
 
 ## 9. Non-goals
 

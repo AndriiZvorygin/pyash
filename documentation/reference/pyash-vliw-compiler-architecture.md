@@ -38,7 +38,43 @@ facts from which conclusions may be drawn”), linked to the Pyash compound
 the accepted compound `hnuc prif` (“number + variable”). Each declaration
 sentence supplies the semantic facts needed to identify a named variable; the
 compiler derives its symbol/index records. The exact storage layout and
-mutability/runtime contract remain future format work.
+binary representation and runtime implementation remain future format work;
+the hosted memory behavior below is the intended semantic contract.
+
+### Hosted PyashForth Memory Direction
+
+The first PyashForth runtime is hosted on Linux; MCU platform support follows
+after the language and image contracts stabilize. Its initial memory profile
+is local to each ceremony invocation, adapting Lwonprom's per-recipe variable
+pile rather than adding program-wide mutable state:
+
+| Memory item | Hosted runtime contract |
+| --- | --- |
+| Named constants | Read-only values in the immutable program image |
+| Named variables | Typed slots initialized by declarations and updated in place during one invocation |
+| Local bulk memory | Named pages reserved by a separate Pyash allocation sentence; zero-filled or initialized from a quoted payload |
+| Lifetime | Slots and writable pages are discarded when the invocation returns |
+| Logical page | 16 VLIW codelets, or 512 bytes; independent of Linux's physical VM page size |
+
+`quoted.<kind> ... .<kind>.quoted` carries a long payload. Its kind is retained
+as metadata external to the payload, and the payload itself remains exact. A
+quote does not allocate or imply mutability. In a future indexed `.pyac`
+image, a quote descriptor can associate its kind, encoding, and extent with
+the named payload. A writable page initialized from a quote belongs to the
+invocation frame; runtime writes do not rewrite the source declaration or
+packed image. Debug/replay history is separate from the live slot value.
+
+The quote parser currently extracts the payload but drops the block kind, the
+VLIW sentence encoder currently emits text as a paragraph-letter quote, and
+the assembly runtime remains a named-text-and-write proof. The general
+quote-kind and mutable-page behavior above is a target contract, not current
+runtime capability. Vocabulary lookup found the existing variable and
+constant-quantity concepts. `initialize` has the relevant WordNet sense
+`v:00700896` (“assign an initial value to a computer program”), linked to
+Open English WordNet 2025 `v:00702662-v`, but `pyash dict initialize` still
+reports no direct Pyash suggestion. The allocation term also needs a reviewed
+Pyash spelling. Select and validate source sentence vocabulary before
+implementing those forms rather than inventing a word or HNUC here.
 
 The code section contains action sentences. Their verbs, moods, cases, value
 types, and dependencies must survive VLIW lowering. A codelet may be emitted
@@ -73,7 +109,7 @@ senses and the canonical Pyash vocabulary before assigning them VLIW meaning.
 | --- | --- | --- |
 | Pyash `.pya` source | Canonical sentence and paragraph semantics | Implemented language/interpreter surface |
 | Searchable `.pya` VLIW catalog | Semantic identity, provenance, and query/replay view | Separate from a program's source file and from its packed bytes |
-| `.pyac` pack | Header plus deterministic fixed-width codelet bytes | Version 1 is a flat codelet sequence; no data/code sections or mutable variable store |
+| `.pyac` pack | Header plus deterministic fixed-width codelet bytes | Version 1 is a flat codelet sequence; no data/code sections or mutable variable store; a future indexed image is not implemented |
 | JavaScript VLIW facade | Reference lowering, decoding, effects, and supported execution | Partial semantic coverage, including the canonical Pyash programlet v1 slice below |
 | C output from `.pyac` | Compile supported codelets to C, then use the host C compiler | Verified arithmetic and invert subset; not a general Pyash-to-C replacement |
 | Rust and RISC-V | Decode/execute supported PyAC semantics; direct RISC-V instruction/ELF prototype | Narrow subset; the generated RISC-V image is not emulator-executed |
@@ -272,15 +308,18 @@ node --test quiz/vliw_function_source.test.mjs quiz/vliw_functions.test.mjs quiz
 ## Implementation Milestones
 
 1. **Vocabulary and declarations:** confirm the data/variable senses and
-   select any missing atoms or compounds through Kwon/vocabulary tooling.
-2. **Section and symbol contract:** define how declaration sentences and action
-   sentences are distinguished, how the symbol index is derived, and how a
-   versioned PyAC representation preserves v1 compatibility.
-3. **Mutable execution:** implement typed named storage, initialization,
-   reads/writes, and dependency effects; prove parity with interpreted Pyash.
-4. **Assembly backends:** emit NASM and RISC-V assembly from decoded PyAC,
+   review constant-storage and page-allocation terms through
+   Kwon/vocabulary tooling; do not assign new HNUCs as a shortcut.
+2. **Invocation-local memory:** define declaration and allocation sentence
+   shapes, typed slot layout, initialization, bounds, quote-kind preservation,
+   and cleanup on return.
+3. **Section and symbol contract:** define how declarations and actions are
+   indexed in a future versioned PyAC image while preserving v1 compatibility.
+4. **Mutable execution:** implement local typed storage, reads/writes, and
+   dependency effects; prove parity with interpreted Pyash.
+5. **Assembly backends:** emit NASM and RISC-V assembly from decoded PyAC,
    assemble/link them, and compare native results with the reference executor.
-5. **Broader coverage:** expand supported sentence families and add LLVM or
+6. **Broader coverage:** expand supported sentence families and add LLVM or
    other destinations only behind the same semantic conformance tests.
 
 ## Current Reproducible Slice
