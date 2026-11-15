@@ -4,7 +4,16 @@ import {
   indexWordFor,
   VliwCodeletError
 } from "./codelets.mjs";
-import { lookupLegacyName, lookupLegacyWord, NUMBER_QUOTE_WORD } from "./quotes.mjs";
+import {
+  decodeQuote,
+  decodeQuoteHeader,
+  lookupLegacyName,
+  lookupLegacyWord,
+  NUMBER_QUOTE_WORD,
+  uintQuoteWord,
+  vectorThicknessFor,
+  VECTOR_THICK_LONG
+} from "./quotes.mjs";
 import { VliwEncodingError } from "./plus.mjs";
 
 const LEGACY_HEAD_WORD = 0x0149;
@@ -151,13 +160,42 @@ export function normalizeNumericArithmeticSentence(sentence) {
   }
   const role = operandRole(sentence);
   exactKeys(sentence, ["be", "mood", "ob", role].sort(), "numeric arithmetic sentence");
-  exactKeys(sentence.ob, ["num"], "numeric arithmetic ob operand");
-  const left = readNumber(sentence.ob.num, "left operand");
+  const obKeys = Object.keys(sentence.ob).sort();
+  let ob;
+  if (obKeys.length === 1 && obKeys[0] === "num") {
+    ob = { num: readNumber(sentence.ob.num, "left operand") };
+  } else if (obKeys.length === 1 && obKeys[0] === "ve") {
+    const vector = sentence.ob.ve;
+    if (vector?.type !== "num" || !Array.isArray(vector.values)) {
+      throw encodingError("unsupported-vector-type", "numeric arithmetic requires an unsigned numeric vector", {
+        vector
+      });
+    }
+    if (vector.values.length < 2) {
+      throw encodingError("unsupported-vector-width", "numeric arithmetic requires at least two vector elements", {
+        count: vector.values.length
+      });
+    }
+    ob = {
+      ve: {
+        type: "num",
+        values: vector.values.map((value, index) => readNumber(value, `vector element ${index + 1}`))
+      }
+    };
+  } else {
+    throw encodingError("unsupported-sentence", "numeric arithmetic ob operand has an unsupported shape", {
+      keys: obKeys,
+      expected: ["num"]
+    });
+  }
   const right = normalizeOperand(sentence[role], role, sentence.be);
+  if (ob.ve && typeof right.name === "string") {
+    throw encodingError("unsupported-sentence", "numeric vector arithmetic requires a scalar numeric operand");
+  }
   return {
     mood: "do",
     be: sentence.be,
-    ob: { num: left },
+    ob,
     [role]: right
   };
 }
@@ -167,6 +205,21 @@ export function isNumericArithmeticSentence(sentence) {
 }
 
 export function isNumericArithmeticCodelet(words, usedWords) {
+  if (!words || !Number.isInteger(usedWords)) return false;
+  try {
+    const firstQuote = decodeQuote(words, 1);
+    const header = decodeQuoteHeader(words[1]);
+    const isVector = header.sortName === "uint" && header.scalarBytes === 2 && header.vectorThick !== 0;
+    if (isVector) {
+      const caseOffset = usedWords - 3;
+      return words[firstQuote.nextOffset] === ACCUSATIVE_CASE_WORD &&
+        ROLE_BY_CASE_WORD.has(words[caseOffset]) &&
+        words[usedWords - 1] === DEONTIC_MOOD_WORD &&
+        OPERATOR_BY_WORD.has(words[usedWords - 2]);
+    }
+  } catch {
+    return false;
+  }
   return words?.[3] === ACCUSATIVE_CASE_WORD &&
     ROLE_BY_CASE_WORD.has(words?.[usedWords - 3]) &&
     words?.[usedWords - 1] === DEONTIC_MOOD_WORD &&
@@ -221,10 +274,23 @@ export function lowerNumericArithmeticSentence(sentence) {
   const role = operandRole(normalized);
   const words = new Uint16Array(CODELET_WORD_COUNT);
   const roleValue = normalized[role];
+  const obWords = normalized.ob.ve
+    ? [
+      uintQuoteWord({
+        vectorThick: vectorThicknessFor(normalized.ob.ve.values.length),
+        scalarBytes: 2
+      }),
+      ...(vectorThicknessFor(normalized.ob.ve.values.length) === VECTOR_THICK_LONG
+        ? [normalized.ob.ve.values.length]
+        : []),
+      ...normalized.ob.ve.values
+    ]
+    : [NUMBER_QUOTE_WORD, normalized.ob.num];
   const roleWords = typeof roleValue.name === "string"
     ? [NAME_TYPE_WORD, ...legacyNameWords(roleValue.name)]
     : [NUMBER_QUOTE_WORD, roleValue.num];
-  const roleCaseOffset = 4 + roleWords.length;
+  const accusativeOffset = 1 + obWords.length;
+  const roleCaseOffset = accusativeOffset + 1 + roleWords.length;
   const operatorOffset = roleCaseOffset + 1;
   const moodOffset = operatorOffset + 1;
   const usedWords = moodOffset + 1;
@@ -236,9 +302,8 @@ export function lowerNumericArithmeticSentence(sentence) {
     });
   }
   words.set([
-    indexWordFor([3, roleCaseOffset, moodOffset]),
-    NUMBER_QUOTE_WORD,
-    normalized.ob.num,
+    indexWordFor([accusativeOffset, roleCaseOffset, moodOffset]),
+    ...obWords,
     ACCUSATIVE_CASE_WORD,
     ...roleWords,
     CASE_WORDS[role],
@@ -255,7 +320,14 @@ export function lowerNumericArithmeticSentence(sentence) {
 
 export function decodeNumericArithmeticCodelet(input) {
   const decoded = decodeLegacy(input);
-  markerAt(decoded, 3, ACCUSATIVE_CASE_WORD, "ob accusative case");
+  const obQuote = decoded.items.find((candidate) => candidate.offset === 1);
+  if (obQuote?.kind !== "quote") {
+    throw encodingError("malformed-codelet", "numeric arithmetic codelet has no ob quote");
+  }
+  const obHeader = decodeQuoteHeader(obQuote.quote.word);
+  const vectorOb = obHeader.sortName === "uint" && obHeader.scalarBytes === 2 && obHeader.vectorThick !== 0;
+  const accusativeOffset = obQuote.quote.nextOffset;
+  markerAt(decoded, accusativeOffset, ACCUSATIVE_CASE_WORD, "ob accusative case");
   const moodOffset = decoded.usedWords - 1;
   const operatorOffset = moodOffset - 1;
   const roleCaseOffset = operatorOffset - 1;
@@ -267,8 +339,11 @@ export function decodeNumericArithmeticCodelet(input) {
       actual: roleItem?.word
     });
   }
-  const left = decodeNumberQuote(decoded, 1, "ob operand");
-  if (decoded.items.find((candidate) => candidate.offset === 1)?.quote.nextOffset !== 3) {
+  const leftValue = obQuote.quote.value;
+  if (vectorOb && (!Array.isArray(leftValue) || leftValue.length < 2)) {
+    throw encodingError("malformed-codelet", "numeric arithmetic ob vector has an invalid width");
+  }
+  if (!vectorOb && obQuote.quote.nextOffset !== 3) {
     throw encodingError("malformed-codelet", "numeric arithmetic ob quote has an invalid boundary");
   }
   if (decoded.usedWords !== moodOffset + 1) {
@@ -277,7 +352,7 @@ export function decodeNumericArithmeticCodelet(input) {
       actual: decoded.usedWords
     });
   }
-  const expectedHead = indexWordFor([3, roleCaseOffset, moodOffset]);
+  const expectedHead = indexWordFor([accusativeOffset, roleCaseOffset, moodOffset]);
   markerAt(decoded, 0, expectedHead, "index/head");
   markerAt(decoded, moodOffset, DEONTIC_MOOD_WORD, "deontic mood");
   const operatorItem = decoded.items.find((candidate) => candidate.offset === operatorOffset);
@@ -293,7 +368,8 @@ export function decodeNumericArithmeticCodelet(input) {
       be
     });
   }
-  const rightQuote = decoded.items.find((candidate) => candidate.offset === 4);
+  const rightOffset = accusativeOffset + 1;
+  const rightQuote = decoded.items.find((candidate) => candidate.offset === rightOffset);
   let right;
   if (rightQuote?.kind === "quote" && rightQuote.quote.word === NUMBER_QUOTE_WORD) {
     if (rightQuote.quote.nextOffset !== roleCaseOffset) {
@@ -323,7 +399,9 @@ export function decodeNumericArithmeticCodelet(input) {
   return {
     mood: "do",
     be,
-    ob: { num: left },
+    ob: vectorOb
+      ? { ve: { type: "num", values: leftValue } }
+      : { num: decodeNumberQuote(decoded, 1, "ob operand") },
     [role]: right
   };
 }
@@ -334,7 +412,7 @@ function saturate(value) {
 }
 
 function calculate(be, left, right) {
-  if (be === "plus") return left + right;
+  if (be === "plus") return Math.min(left + right, 0xffff);
   if (be === "subtract") return Math.max(left - right, 0);
   if (be === "multiply") return left * right;
   if (be === "divide") {
@@ -353,6 +431,15 @@ function calculate(be, left, right) {
 export async function executeNumericArithmeticCodelet(input, { state } = {}) {
   const sentence = decodeNumericArithmeticCodelet(input);
   const role = operandRole(sentence);
+  if (sentence.ob.ve) {
+    const values = sentence.ob.ve.values.map((left) => calculate(sentence.be, left, sentence[role].num));
+    return {
+      su: { name: "result" },
+      ob: { ve: { type: "num", values } },
+      be: "vector",
+      mood: "ya"
+    };
+  }
   if (typeof sentence[role].name === "string") {
     const target = state?.get(sentence[role].name);
     if (!target || !Number.isFinite(target.ob?.num)) {

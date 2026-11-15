@@ -32,16 +32,19 @@ prints warmed end-to-end CPU/WebGPU medians from seven alternating samples for
 batches from 1,024 to 131,072 codelets, including pack decode,
 transfer/dispatch/readback, and result JSON.
 
-The GPU implementation currently supports only numeric arithmetic operations
-whose results fit the Rust semantics: saturating 16-bit add/subtract,
-16-bit-operand multiply, nonzero division/remainder, XOR, and saturating
-exponentiation. Invert, dates, vectors, malformed codelets, division by zero,
-and mixed semantic families are intentionally handled or rejected by the CPU
-dispatcher rather than sent to the shader. There is no automatic dispatch
-threshold; use the explicit GPU action for eligible batches. On the current
-host/browser run, no tested batch size beat WASM CPU, so automatic dispatch is
-intentionally withheld. Rerun the smoke on a target device before making a
-device-specific dispatch decision.
+The GPU implementation supports scalar numeric arithmetic and elementwise
+arithmetic over unsigned-16 numeric vectors with a scalar right operand:
+saturating add/subtract, uint16-operand multiply, nonzero division/remainder,
+XOR, and saturating exponentiation. Vector widths two through eight fit the
+sentence's 16-word codelet. Multiplication returns unsigned-32 vector elements
+to preserve the full product. Each vector element is dispatched as one GPU
+work item, then reconstructed in source codelet order. Invert, dates, literal
+vectors, malformed codelets, division by zero, and mixed semantic families are
+intentionally handled or rejected by the CPU dispatcher rather than sent to
+the shader. There is no automatic dispatch threshold; use the explicit GPU
+action for eligible batches. On the current host/browser run, no tested batch
+size beat WASM CPU, so automatic dispatch is intentionally withheld. Rerun the
+smoke on a target device before making a device-specific dispatch decision.
 
 `build.sh` writes generated bindings under `web/pkg/` and the compiled WASM
 under Cargo's ignored `target/` directory. Neither is source-controlled.

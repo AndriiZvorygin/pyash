@@ -1,5 +1,6 @@
 use pyac::{
     GOLDEN_NUMERIC_PLUS_CODELET, PyacValue, VectorElements, decode_pack, encode_pack, execute_pack,
+    index_word,
 };
 use serde_json::{Value, json};
 use wasm_bindgen::prelude::*;
@@ -81,6 +82,69 @@ pub fn numeric_batch_demo_pack_bytes() -> Vec<u8> {
     .expect("numeric batch fixture encodes")
 }
 
+#[wasm_bindgen]
+pub fn vector_arithmetic_demo_pack_bytes() -> Vec<u8> {
+    let vectors = [
+        (&[1, 2, 3, 4][..], 2, 0x243e, 0x8a64),
+        (&[u16::MAX, 3][..], u16::MAX, 0x243e, 0xec90),
+        (&[9, 4][..], 2, 0x243e, 0xabd2),
+        (&[8, 9][..], 2, 0x490f, 0x8893),
+        (&[7, 9][..], 3, 0x243e, 0xa810),
+        (&[2, 3][..], 3, 0x313e, 0x8c29),
+        (&[9, 10][..], 4, 0x313e, 0xe82a),
+        (&[1, 2, 3, 4, 5][..], 1, 0x243e, 0xabd2),
+        (&[u16::MAX, 3][..], 2, 0x243e, 0x8a64),
+    ];
+    encode_pack(
+        &vectors
+            .iter()
+            .map(|(values, operand, case_word, operator)| {
+                numeric_vector_arithmetic_codelet(values, *operand, *case_word, *operator)
+            })
+            .collect::<Vec<_>>(),
+    )
+    .expect("vector arithmetic fixture encodes")
+}
+
+fn numeric_vector_arithmetic_codelet(
+    values: &[u16],
+    operand: u16,
+    case_word: u16,
+    operator: u16,
+) -> [u16; pyac::WORDS_PER_CODELET] {
+    let explicit = !matches!(values.len(), 2 | 3 | 4 | 8);
+    let quote = match (values.len(), explicit) {
+        (2, _) => 0x891d,
+        (3, _) => 0x8f1d,
+        (4, _) => 0x8a1d,
+        (8, _) => 0x8c1d,
+        (_, true) => 0x8e1d,
+        _ => panic!("fixture vector width is not representable"),
+    };
+    let mut words = [0; pyac::WORDS_PER_CODELET];
+    let mut offset = 1;
+    words[offset] = quote;
+    offset += 1;
+    if explicit {
+        words[offset] = values.len() as u16;
+        offset += 1;
+    }
+    words[offset..offset + values.len()].copy_from_slice(values);
+    offset += values.len();
+    let accusative_offset = offset;
+    words[offset] = 0x245e;
+    offset += 1;
+    words[offset] = 0x881d;
+    words[offset + 1] = operand;
+    offset += 2;
+    let case_offset = offset;
+    words[offset] = case_word;
+    words[offset + 1] = operator;
+    words[offset + 2] = 0x295e;
+    words[0] = index_word(&[accusative_offset, case_offset, offset + 2]);
+    words
+}
+
 pub(crate) fn value_to_json(value: &PyacValue) -> Value {
     match value {
         PyacValue::Unsigned(value) => json!({ "type": "unsigned", "value": value }),
@@ -94,6 +158,9 @@ fn vector_to_json(values: &VectorElements) -> Value {
     match values {
         VectorElements::Numbers(values) => {
             json!({ "type": "vector", "elementType": "unsigned-16", "values": values })
+        }
+        VectorElements::Numbers32(values) => {
+            json!({ "type": "vector", "elementType": "unsigned-32", "values": values })
         }
         VectorElements::Booleans(values) => {
             json!({ "type": "vector", "elementType": "boolean", "values": values })
@@ -157,6 +224,28 @@ mod tests {
                 { "type": "unsigned", "value": 1 },
                 { "type": "unsigned", "value": 65535 },
                 { "type": "unsigned", "value": 0 }
+            ])
+        );
+    }
+
+    #[test]
+    fn wasm_api_executes_numeric_vector_arithmetic_with_promoted_products() {
+        let response: Value = serde_json::from_str(&run_pack(&vector_arithmetic_demo_pack_bytes()))
+            .expect("response is valid JSON");
+
+        assert_eq!(response["ok"], true);
+        assert_eq!(
+            response["values"],
+            json!([
+                { "type": "vector", "elementType": "unsigned-16", "values": [3, 4, 5, 6] },
+                { "type": "vector", "elementType": "unsigned-32", "values": [4294836225u32, 196605] },
+                { "type": "vector", "elementType": "unsigned-16", "values": [7, 2] },
+                { "type": "vector", "elementType": "unsigned-16", "values": [4, 4] },
+                { "type": "vector", "elementType": "unsigned-16", "values": [4, 10] },
+                { "type": "vector", "elementType": "unsigned-16", "values": [8, 27] },
+                { "type": "vector", "elementType": "unsigned-16", "values": [1, 2] },
+                { "type": "vector", "elementType": "unsigned-16", "values": [0, 1, 2, 3, 4] },
+                { "type": "vector", "elementType": "unsigned-16", "values": [65535, 5] }
             ])
         );
     }

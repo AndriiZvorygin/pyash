@@ -51,6 +51,33 @@ The decoder accepts unsigned numeric, single-character, and paragraph-letter
 payloads. Surface number rendering currently covers legacy zero through twenty;
 larger numbers remain structured until compound surface composition is added.
 
+## Numeric vector arithmetic
+
+Numeric arithmetic may take an existing unsigned numeric vector in `ob` and a
+scalar numeric operand in one of the operator's supported grammatical cases:
+
+```pyash
+ob ve num 1 2 3 4 to num 2 be plus do
+```
+
+The vector quote remains the legacy quote with its count in vector thickness
+(or its explicit length word); it is followed by the accusative case, the
+scalar quote and value, the scalar operand's case, operator, and deontic mood.
+The example encodes as:
+
+```text
+0A41 8A1D 0001 0002 0003 0004 245E 881D 0002 243E 8A64 295E
+```
+
+The Rust CPU interpreter and browser WebGPU path apply the scalar arithmetic
+semantics independently to each element. A single operation codelet supports
+vector widths two through eight, constrained by its other sentence fields and
+the 16-word slot. Multiplication returns unsigned-32 vector elements so the
+full product of two uint16 values is retained; other current operators return
+unsigned-16 elements. The JS reference path has matching lowering, decoding,
+and execution. Existing vector quote support described above is the data
+representation; this arithmetic sentence is the operation over that data.
+
 ## Generic fixed-slot decoding
 
 `program/library/vliw/codelets.mjs` losslessly decodes the existing 16-word slot,

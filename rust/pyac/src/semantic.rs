@@ -1,4 +1,5 @@
 use crate::WORDS_PER_CODELET;
+use crate::literal::{UINT_SORT_DENOTE, VectorElements, decode_quote_header, index_word};
 
 const HEAD: u16 = 0x0149;
 const NUMBER_QUOTE: u16 = 0x881d;
@@ -93,6 +94,14 @@ pub struct NumericArithmeticInstruction {
     pub operand_case: NumericOperandCase,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NumericVectorArithmeticInstruction {
+    pub operator: NumericOperator,
+    pub elements: Vec<u16>,
+    pub operand: u16,
+    pub operand_case: NumericOperandCase,
+}
+
 /// The legacy invert codelet carries the value in the accusative phrase and
 /// the bound it is inverted about in the dative phrase. Pyash inverts a
 /// number by negating it, so the bound is fixed at zero.
@@ -127,6 +136,10 @@ pub enum SemanticError {
     UnsupportedBound {
         actual: u16,
     },
+    UnsupportedVectorWidth {
+        actual: usize,
+        maximum: usize,
+    },
     UnsupportedCodelet,
     DivisionByZero,
 }
@@ -139,6 +152,7 @@ impl SemanticError {
             Self::UnsupportedOperator { .. } => "unsupported-operator",
             Self::UnsupportedCase { .. } => "unsupported-case",
             Self::UnsupportedBound { .. } => "unsupported-sentence",
+            Self::UnsupportedVectorWidth { .. } => "unsupported-vector-width",
             Self::UnsupportedCodelet => "unsupported-codelet",
             Self::DivisionByZero => "division-by-zero",
         }
@@ -178,6 +192,10 @@ impl std::fmt::Display for SemanticError {
                     "numeric invert only supports a zero bound, got {actual}"
                 )
             }
+            Self::UnsupportedVectorWidth { actual, maximum } => write!(
+                formatter,
+                "numeric vector arithmetic width {actual} is outside the supported range 2..={maximum}"
+            ),
             Self::UnsupportedCodelet => formatter.write_str("the codelet family is unsupported"),
             Self::DivisionByZero => formatter.write_str("numeric division cannot divide by zero"),
         }
@@ -249,6 +267,79 @@ pub fn decode_numeric_arithmetic(
     })
 }
 
+/// Decode elementwise arithmetic over the established unsigned vector quote.
+/// The right operand remains a scalar quote in its ordinary case position.
+pub fn decode_numeric_vector_arithmetic(
+    words: &[u16; WORDS_PER_CODELET],
+) -> Result<NumericVectorArithmeticInstruction, SemanticError> {
+    let header = decode_quote_header(words[1]).ok_or(SemanticError::UnsupportedCodelet)?;
+    if header.sort != UINT_SORT_DENOTE || header.scalar_bytes != 2 || header.vector_thickness == 0 {
+        return Err(SemanticError::UnsupportedCodelet);
+    }
+    let count = if header.explicit_vector_length {
+        usize::from(words[2])
+    } else {
+        header
+            .vector_words
+            .ok_or(SemanticError::UnsupportedCodelet)?
+    };
+    if !(2..=8).contains(&count) {
+        return Err(SemanticError::UnsupportedVectorWidth {
+            actual: count,
+            maximum: 8,
+        });
+    }
+
+    let payload_start = if header.explicit_vector_length { 3 } else { 2 };
+    let payload_end = payload_start + count;
+    let accusative_offset = payload_end;
+    let right_quote_offset = accusative_offset + 1;
+    let operand_offset = right_quote_offset + 1;
+    let case_offset = operand_offset + 1;
+    let operator_offset = case_offset + 1;
+    let mood_offset = operator_offset + 1;
+    if mood_offset >= WORDS_PER_CODELET {
+        return Err(SemanticError::UnsupportedVectorWidth {
+            actual: count,
+            maximum: 8,
+        });
+    }
+
+    expect(words, accusative_offset, ACCUSATIVE_CASE)?;
+    expect(words, right_quote_offset, NUMBER_QUOTE)?;
+    expect(words, mood_offset, DEONTIC_MOOD)?;
+    let operand_case = NumericOperandCase::from_word(words[case_offset]).ok_or(
+        SemanticError::UnsupportedCase {
+            actual: words[case_offset],
+        },
+    )?;
+    let operator = NumericOperator::from_word(words[operator_offset]).ok_or(
+        SemanticError::UnsupportedOperator {
+            actual: words[operator_offset],
+        },
+    )?;
+    expect(
+        words,
+        0,
+        index_word(&[accusative_offset, case_offset, mood_offset]),
+    )?;
+    for (index, actual) in words.iter().enumerate().skip(mood_offset + 1) {
+        if *actual != 0 {
+            return Err(SemanticError::NonzeroTail {
+                index,
+                actual: *actual,
+            });
+        }
+    }
+
+    Ok(NumericVectorArithmeticInstruction {
+        operator,
+        elements: words[payload_start..payload_end].to_vec(),
+        operand: words[operand_offset],
+        operand_case,
+    })
+}
+
 pub fn execute_numeric_plus(instruction: &NumericPlusInstruction) -> u16 {
     instruction.ob.saturating_add(instruction.to)
 }
@@ -274,28 +365,51 @@ fn saturating_power(base: u16, exponent: u16) -> u64 {
 pub fn execute_numeric_arithmetic(
     instruction: &NumericArithmeticInstruction,
 ) -> Result<u64, SemanticError> {
-    match instruction.operator {
-        NumericOperator::Plus => Ok(u64::from(
-            instruction.ob.saturating_add(instruction.operand),
-        )),
-        NumericOperator::Subtract => Ok(u64::from(
-            instruction.ob.saturating_sub(instruction.operand),
-        )),
-        NumericOperator::Multiply => Ok(u64::from(instruction.ob) * u64::from(instruction.operand)),
+    execute_numeric_pair(instruction.operator, instruction.ob, instruction.operand)
+}
+
+fn execute_numeric_pair(
+    operator: NumericOperator,
+    left: u16,
+    right: u16,
+) -> Result<u64, SemanticError> {
+    match operator {
+        NumericOperator::Plus => Ok(u64::from(left.saturating_add(right))),
+        NumericOperator::Subtract => Ok(u64::from(left.saturating_sub(right))),
+        NumericOperator::Multiply => Ok(u64::from(left) * u64::from(right)),
         NumericOperator::Divide => {
-            if instruction.operand == 0 {
+            if right == 0 {
                 return Err(SemanticError::DivisionByZero);
             }
-            Ok(u64::from(instruction.ob / instruction.operand))
+            Ok(u64::from(left / right))
         }
-        NumericOperator::Xor => Ok(u64::from(instruction.ob ^ instruction.operand)),
-        NumericOperator::Exponential => Ok(saturating_power(instruction.ob, instruction.operand)),
+        NumericOperator::Xor => Ok(u64::from(left ^ right)),
+        NumericOperator::Exponential => Ok(saturating_power(left, right)),
         NumericOperator::Remains => {
-            if instruction.operand == 0 {
+            if right == 0 {
                 return Err(SemanticError::DivisionByZero);
             }
-            Ok(u64::from(instruction.ob % instruction.operand))
+            Ok(u64::from(left % right))
         }
+    }
+}
+
+pub fn execute_numeric_vector_arithmetic(
+    instruction: &NumericVectorArithmeticInstruction,
+) -> Result<VectorElements, SemanticError> {
+    let values = instruction
+        .elements
+        .iter()
+        .map(|left| execute_numeric_pair(instruction.operator, *left, instruction.operand))
+        .collect::<Result<Vec<_>, _>>()?;
+    if instruction.operator == NumericOperator::Multiply {
+        Ok(VectorElements::Numbers32(
+            values.into_iter().map(|value| value as u32).collect(),
+        ))
+    } else {
+        Ok(VectorElements::Numbers(
+            values.into_iter().map(|value| value as u16).collect(),
+        ))
     }
 }
 
@@ -353,11 +467,19 @@ pub fn execute_numeric_invert_codelet(
 pub(crate) enum NumericCodeletValue {
     Unsigned(u64),
     Signed(i64),
+    Vector(VectorElements),
 }
 
 pub(crate) fn execute_numeric_codelet(
     words: &[u16; WORDS_PER_CODELET],
 ) -> Option<Result<NumericCodeletValue, SemanticError>> {
+    if looks_like_numeric_vector_arithmetic(words) {
+        return Some(
+            decode_numeric_vector_arithmetic(words)
+                .and_then(|instruction| execute_numeric_vector_arithmetic(&instruction))
+                .map(NumericCodeletValue::Vector),
+        );
+    }
     if words[7] == INVERT || words[6] == DATIVE_CASE {
         return Some(execute_numeric_invert_codelet(words).map(NumericCodeletValue::Signed));
     }
@@ -369,6 +491,38 @@ pub(crate) fn execute_numeric_codelet(
         return Some(execute_numeric_arithmetic_codelet(words).map(NumericCodeletValue::Unsigned));
     }
     None
+}
+
+fn looks_like_numeric_vector_arithmetic(words: &[u16; WORDS_PER_CODELET]) -> bool {
+    let Some(header) = decode_quote_header(words[1]) else {
+        return false;
+    };
+    if header.sort != UINT_SORT_DENOTE || header.scalar_bytes != 2 || header.vector_thickness == 0 {
+        return false;
+    }
+    let count = if header.explicit_vector_length {
+        usize::from(words[2])
+    } else {
+        header.vector_words.unwrap_or(0)
+    };
+    if !(2..=8).contains(&count) {
+        return false;
+    }
+    let payload_end = (if header.explicit_vector_length { 3 } else { 2 }) + count;
+    let case_offset = payload_end + 3;
+    let operator_offset = case_offset + 1;
+    let mood_offset = operator_offset + 1;
+    words.get(payload_end) == Some(&ACCUSATIVE_CASE)
+        && words.get(payload_end + 1) == Some(&NUMBER_QUOTE)
+        && words
+            .get(case_offset)
+            .and_then(|word| NumericOperandCase::from_word(*word))
+            .is_some()
+        && words
+            .get(operator_offset)
+            .and_then(|word| NumericOperator::from_word(*word))
+            .is_some()
+        && words.get(mood_offset) == Some(&DEONTIC_MOOD)
 }
 
 #[cfg(test)]

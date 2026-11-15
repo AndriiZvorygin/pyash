@@ -17,10 +17,12 @@ pub use literal::{
 };
 pub use semantic::{
     GOLDEN_NUMERIC_PLUS_CODELET, NumericArithmeticInstruction, NumericInvertInstruction,
-    NumericOperandCase, NumericOperator, NumericPlusInstruction, SemanticError,
-    decode_numeric_arithmetic, decode_numeric_invert, decode_numeric_plus,
+    NumericOperandCase, NumericOperator, NumericPlusInstruction,
+    NumericVectorArithmeticInstruction, SemanticError, decode_numeric_arithmetic,
+    decode_numeric_invert, decode_numeric_plus, decode_numeric_vector_arithmetic,
     execute_numeric_arithmetic, execute_numeric_arithmetic_codelet, execute_numeric_invert,
     execute_numeric_invert_codelet, execute_numeric_plus, execute_numeric_plus_codelet,
+    execute_numeric_vector_arithmetic,
 };
 
 use std::fmt::{Display, Formatter};
@@ -336,6 +338,7 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
                     .map(|value| match value {
                         NumericCodeletValue::Unsigned(value) => PyacValue::Unsigned(value),
                         NumericCodeletValue::Signed(value) => PyacValue::Signed(value),
+                        NumericCodeletValue::Vector(value) => PyacValue::Vector(value),
                     })
                     .map_err(|source| PackExecutionError { index, source });
             }

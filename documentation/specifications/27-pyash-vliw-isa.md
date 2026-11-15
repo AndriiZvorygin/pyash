@@ -372,7 +372,16 @@ The following are golden vectors, not new syntax:
    with the fourteen-word body `3001 0E1D 0004 004E 0061 006D 0065 0E1D
    0003 0041 0067 0065 245E 217E`. Every element MUST keep its exact
    characters and its case.
-10. A destination MUST compile a codelet into machine code that computes the
+10. Numeric vector arithmetic MUST reuse the unsigned vector quote as its
+    accusative operand, followed by a scalar numeric quote in its grammatical
+    case, the operator, and deontic mood. Thus `ob ve num 1 2 3 4 to num 2 be
+    plus do` MUST encode as `0A41 8A1D 0001 0002 0003 0004 245E 881D 0002
+    243E 8A64 295E` and compute `[3, 4, 5, 6]`. Fixed and explicit-length
+    quotes MUST retain their legacy layouts. The complete arithmetic sentence
+    MUST fit within one 16-word codelet; supported vector widths are two
+    through eight. Elementwise operations MUST preserve scalar arithmetic
+    semantics, with multiplication promoted to unsigned 32-bit vector results.
+11. A destination MUST compile a codelet into machine code that computes the
     interpreter's result. The golden codelet `0149 881D 0001 245E 881D 0001
     243E 8A64 295E` MUST compile to a program that leaves the result `2` in
     the first argument register, and an image that holds that program MUST be

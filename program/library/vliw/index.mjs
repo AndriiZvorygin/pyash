@@ -104,7 +104,7 @@ export function lowerSentence(sentence) {
   if (isNumericInvertSentence(sentence)) {
     return [lowerNumericInvertSentence(sentence)];
   }
-  if (isNumericArithmeticSentence(sentence) && sentence.be !== "plus") {
+  if (isNumericArithmeticSentence(sentence) && (sentence.be !== "plus" || sentence.ob?.ve !== undefined)) {
     return [lowerNumericArithmeticSentence(sentence)];
   }
   return [lowerNumericPlusSentence(sentence)];
@@ -131,6 +131,25 @@ export function decodeCodelet(input) {
     } catch (error) {
       if (error instanceof VliwEncodingError && error.code === "malformed-codelet") {
         throw new VliwCodeletError("unsupported-codelet", "date codelet is malformed", {
+          cause: error.code,
+          details: error.details,
+          items: decoded.items
+        });
+      }
+      throw error;
+    }
+  }
+  if (quoteItem && isUintVectorQuoteWord(quoteItem.quote.word) &&
+      isNumericArithmeticCodelet(decoded.words, decoded.usedWords)) {
+    try {
+      return semanticDecode(
+        decoded,
+        "numeric-arithmetic",
+        decodeNumericArithmeticCodelet(decoded.words)
+      );
+    } catch (error) {
+      if (error instanceof VliwEncodingError && error.code === "malformed-codelet") {
+        throw new VliwCodeletError("unsupported-codelet", "numeric vector arithmetic codelet is malformed", {
           cause: error.code,
           details: error.details,
           items: decoded.items

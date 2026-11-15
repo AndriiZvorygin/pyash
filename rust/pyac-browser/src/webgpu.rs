@@ -1,7 +1,10 @@
 use std::{cell::RefCell, rc::Rc};
 
 use futures_channel::oneshot;
-use pyac::{NumericOperator, PyacValue, decode_numeric_arithmetic, decode_pack};
+use pyac::{
+    NumericOperator, PyacValue, VectorElements, decode_numeric_arithmetic,
+    decode_numeric_vector_arithmetic, decode_pack,
+};
 use serde_json::json;
 use wasm_bindgen::prelude::*;
 use wgpu::util::DeviceExt;
@@ -28,14 +31,58 @@ pub async fn run_pack_webgpu(pack_bytes: &[u8]) -> Result<String, JsValue> {
     }
 
     let context = gpu_context().await?;
-    let input_byte_len = pack
-        .codelets
+    enum OutputShape {
+        Scalar,
+        Vector16(usize),
+        Vector32(usize),
+    }
+    let mut input_words = Vec::new();
+    let mut output_shapes = Vec::with_capacity(pack.codelets.len());
+    for (index, codelet) in pack.codelets.iter().enumerate() {
+        if let Ok(instruction) = decode_numeric_vector_arithmetic(codelet) {
+            if matches!(
+                instruction.operator,
+                NumericOperator::Divide | NumericOperator::Remains
+            ) && instruction.operand == 0
+            {
+                return Err(js_error(format!(
+                    "codelet {index}: numeric division cannot divide by zero"
+                )));
+            }
+            for element in &instruction.elements {
+                input_words.push(operator_id(instruction.operator));
+                input_words.push(u32::from(*element));
+                input_words.push(u32::from(instruction.operand));
+            }
+            output_shapes.push(if instruction.operator == NumericOperator::Multiply {
+                OutputShape::Vector32(instruction.elements.len())
+            } else {
+                OutputShape::Vector16(instruction.elements.len())
+            });
+        } else {
+            let instruction = decode_numeric_arithmetic(codelet)
+                .map_err(|error| js_error(format!("codelet {index}: {error}")))?;
+            if matches!(
+                instruction.operator,
+                NumericOperator::Divide | NumericOperator::Remains
+            ) && instruction.operand == 0
+            {
+                return Err(js_error(format!(
+                    "codelet {index}: numeric division cannot divide by zero"
+                )));
+            }
+            input_words.push(operator_id(instruction.operator));
+            input_words.push(u32::from(instruction.ob));
+            input_words.push(u32::from(instruction.operand));
+            output_shapes.push(OutputShape::Scalar);
+        }
+    }
+    let work_item_count = input_words.len() / 3;
+    let input_byte_len = input_words
         .len()
-        .checked_mul(12)
+        .checked_mul(4)
         .ok_or_else(|| js_error("numeric pack input size overflowed"))?;
-    let output_bytes = pack
-        .codelets
-        .len()
+    let output_bytes = work_item_count
         .checked_mul(4)
         .ok_or_else(|| js_error("numeric pack output size overflowed"))?;
     let limits = context.device.limits();
@@ -45,29 +92,11 @@ pub async fn run_pack_webgpu(pack_bytes: &[u8]) -> Result<String, JsValue> {
             "numeric pack exceeds this browser GPU's storage-buffer limit",
         ));
     }
-    let workgroups = pack.codelets.len().div_ceil(64);
+    let workgroups = work_item_count.div_ceil(64);
     if workgroups > limits.max_compute_workgroups_per_dimension as usize {
         return Err(js_error(
             "numeric pack exceeds the browser GPU dispatch limit",
         ));
-    }
-
-    let mut input_words = Vec::with_capacity(input_byte_len / 4);
-    for (index, codelet) in pack.codelets.iter().enumerate() {
-        let instruction = decode_numeric_arithmetic(codelet)
-            .map_err(|error| js_error(format!("codelet {index}: {error}")))?;
-        if matches!(
-            instruction.operator,
-            NumericOperator::Divide | NumericOperator::Remains
-        ) && instruction.operand == 0
-        {
-            return Err(js_error(format!(
-                "codelet {index}: numeric division cannot divide by zero"
-            )));
-        }
-        input_words.push(operator_id(instruction.operator));
-        input_words.push(u32::from(instruction.ob));
-        input_words.push(u32::from(instruction.operand));
     }
 
     let mut input_bytes = Vec::with_capacity(input_words.len() * 4);
@@ -149,13 +178,36 @@ pub async fn run_pack_webgpu(pack_bytes: &[u8]) -> Result<String, JsValue> {
     let mapped = output_slice
         .get_mapped_range()
         .map_err(|error| js_error(format!("GPU readback mapping failed: {error}")))?;
-    let output_values = mapped
+    let work_values = mapped
         .chunks_exact(4)
         .map(|bytes| u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
-        .map(|value| PyacValue::Unsigned(u64::from(value)))
         .collect::<Vec<_>>();
     drop(mapped);
     readback_buffer.unmap();
+    let mut cursor = 0;
+    let output_values = output_shapes
+        .into_iter()
+        .map(|shape| match shape {
+            OutputShape::Scalar => {
+                let value = work_values[cursor];
+                cursor += 1;
+                PyacValue::Unsigned(u64::from(value))
+            }
+            OutputShape::Vector16(length) => {
+                let values = work_values[cursor..cursor + length]
+                    .iter()
+                    .map(|value| *value as u16)
+                    .collect();
+                cursor += length;
+                PyacValue::Vector(VectorElements::Numbers(values))
+            }
+            OutputShape::Vector32(length) => {
+                let values = work_values[cursor..cursor + length].to_vec();
+                cursor += length;
+                PyacValue::Vector(VectorElements::Numbers32(values))
+            }
+        })
+        .collect::<Vec<_>>();
 
     Ok(json!({
         "ok": true,
