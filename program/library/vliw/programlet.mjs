@@ -1,6 +1,5 @@
 import { splitSentences, splitSentencesWithLines } from "../sentenceSplitter.mjs";
 import { parse } from "../../understand/index.mjs";
-import { interpret } from "../../bridge/index.mjs";
 import { allRemember, doRemember, forget, remember } from "../../remember/index.mjs";
 import { decodePyashProgram, lowerPyashProgram } from "./sentence.mjs";
 import { decodePyacPack, encodePyacPack } from "./database.mjs";
@@ -289,6 +288,9 @@ export async function executePyashProgramPack(pack, { outputName = "" } = {}) {
       fail("Pyash programlet invocation must write to its declared output name");
     }
 
+    // Compile loads VLIW while the bridge is registering built-in signatures.
+    // Load the bridge only when reference execution begins to avoid that cycle.
+    const { interpret } = await import("../../bridge/index.mjs");
     for (const sentence of sentences.slice(0, -1)) await interpret(clone(sentence));
     const initial = defaultOutputFact(invocation);
     doRemember({ mood: "ya", su: { name: destination }, ...initial });

@@ -15,9 +15,9 @@ const contentTypes = new Map([
   [".wasm", "application/wasm"],
 ]);
 
-async function benchmarkBrowserBatches(page) {
-  return page.evaluate(async () => {
-    const { numeric_batch_demo_pack_bytes, run_pack, run_pack_webgpu } = await import("./pkg/pyac_browser.js");
+async function benchmarkBrowserBatches(page, moduleUrl) {
+  return page.evaluate(async (url) => {
+    const { numeric_batch_demo_pack_bytes, run_pack, run_pack_webgpu } = await import(url);
     const seed = numeric_batch_demo_pack_bytes();
     const sourceCount = new DataView(seed.buffer, seed.byteOffset, seed.byteLength).getUint32(16, true);
     const makePack = (count) => {
@@ -75,7 +75,7 @@ async function benchmarkBrowserBatches(page) {
       });
     }
     return measurements;
-  });
+  }, moduleUrl);
 }
 
 const server = createServer((request, response) => {
@@ -95,6 +95,7 @@ const server = createServer((request, response) => {
 
 await new Promise((resolveListen) => server.listen(0, "127.0.0.1", resolveListen));
 const { port } = server.address();
+const generatedModuleUrl = `http://127.0.0.1:${port}/pkg/pyac_browser.js`;
 const executablePath = process.env.PYA_CHROMIUM_PATH
   ?? (existsSync("/snap/bin/chromium") ? "/snap/bin/chromium" : undefined);
 const browser = await chromium.launch({
@@ -166,18 +167,21 @@ try {
   let measurements = [];
   if (selectedBackendResult.backend === "webgpu") {
     assert.ok(selectedBackendResult.device, "WebGPU response reports its adapter");
-    measurements = await benchmarkBrowserBatches(page);
+    measurements = await benchmarkBrowserBatches(page, generatedModuleUrl);
   } else {
     assert.match(selectedBackendStatus, /WebGPU unavailable/);
   }
 
-  const vectorParity = await page.evaluate(async (gpuAvailable) => {
-    const { run_pack, run_pack_webgpu, vector_arithmetic_demo_pack_bytes } = await import("./pkg/pyac_browser.js");
+  const vectorParity = await page.evaluate(async ({ gpuAvailable, moduleUrl }) => {
+    const { run_pack, run_pack_webgpu, vector_arithmetic_demo_pack_bytes } = await import(moduleUrl);
     const bytes = vector_arithmetic_demo_pack_bytes();
     const cpu = JSON.parse(run_pack(bytes));
     const gpu = gpuAvailable ? JSON.parse(await run_pack_webgpu(bytes)) : null;
     return { cpu, gpu };
-  }, selectedBackendResult.backend === "webgpu");
+  }, {
+    gpuAvailable: selectedBackendResult.backend === "webgpu",
+    moduleUrl: generatedModuleUrl,
+  });
   assert.equal(vectorParity.cpu.ok, true);
   assert.deepEqual(vectorParity.cpu.values, [
     { type: "vector", elementType: "unsigned-16", values: [3, 4, 5, 6] },
