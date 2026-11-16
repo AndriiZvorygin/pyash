@@ -83,7 +83,7 @@ test("switching Ollama models from a project cwd resolves the runner and complet
             type: "function",
             function: {
               name: "be_command_ob_text_to_name_text",
-              arguments: JSON.stringify({ ob: "PYA_COMMAND_TIMEOUT_MS=900000 node ./command/mind_ollama_runner.mjs" })
+              arguments: JSON.stringify({ ob: "PYA_COMMAND_TIMEOUT_MS=900000 node ../../pyac/pyash/command/mind_ollama_runner.mjs" })
             }
           }]
         };
