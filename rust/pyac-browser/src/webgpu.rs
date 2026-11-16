@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use futures_channel::oneshot;
 use pyac::{
-    NumericOperator, PyacValue, VectorElements, decode_numeric_arithmetic,
+    NumericOperator, NumericVectorOperand, PyacValue, VectorElements, decode_numeric_arithmetic,
     decode_numeric_vector_arithmetic, decode_pack,
 };
 use serde_json::json;
@@ -43,16 +43,23 @@ pub async fn run_pack_webgpu(pack_bytes: &[u8]) -> Result<String, JsValue> {
             if matches!(
                 instruction.operator,
                 NumericOperator::Divide | NumericOperator::Remains
-            ) && instruction.operand == 0
+            ) && match &instruction.operand {
+                NumericVectorOperand::Scalar(value) => *value == 0,
+                NumericVectorOperand::Vector(values) => values.contains(&0),
+            }
             {
                 return Err(js_error(format!(
                     "codelet {index}: numeric division cannot divide by zero"
                 )));
             }
-            for element in &instruction.elements {
+            for (index, element) in instruction.elements.iter().enumerate() {
                 input_words.push(operator_id(instruction.operator));
                 input_words.push(u32::from(*element));
-                input_words.push(u32::from(instruction.operand));
+                let operand = match &instruction.operand {
+                    NumericVectorOperand::Scalar(value) => *value,
+                    NumericVectorOperand::Vector(values) => values[index],
+                };
+                input_words.push(u32::from(operand));
             }
             output_shapes.push(if instruction.operator == NumericOperator::Multiply {
                 OutputShape::Vector32(instruction.elements.len())

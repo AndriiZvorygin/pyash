@@ -95,15 +95,19 @@ pub fn vector_arithmetic_demo_pack_bytes() -> Vec<u8> {
         (&[1, 2, 3, 4, 5][..], 1, 0x243e, 0xabd2),
         (&[u16::MAX, 3][..], 2, 0x243e, 0x8a64),
     ];
-    encode_pack(
-        &vectors
-            .iter()
-            .map(|(values, operand, case_word, operator)| {
-                numeric_vector_arithmetic_codelet(values, *operand, *case_word, *operator)
-            })
-            .collect::<Vec<_>>(),
-    )
-    .expect("vector arithmetic fixture encodes")
+    let mut codelets = vectors
+        .iter()
+        .map(|(values, operand, case_word, operator)| {
+            numeric_vector_arithmetic_codelet(values, *operand, *case_word, *operator)
+        })
+        .collect::<Vec<_>>();
+    codelets.push(numeric_vector_vector_arithmetic_codelet(
+        &[1, 2, 3, 4],
+        &[5, 6, 7, 8],
+        0x243e,
+        0x8a64,
+    ));
+    encode_pack(&codelets).expect("vector arithmetic fixture encodes")
 }
 
 fn numeric_vector_arithmetic_codelet(
@@ -137,6 +141,40 @@ fn numeric_vector_arithmetic_codelet(
     words[offset] = 0x881d;
     words[offset + 1] = operand;
     offset += 2;
+    let case_offset = offset;
+    words[offset] = case_word;
+    words[offset + 1] = operator;
+    words[offset + 2] = 0x295e;
+    words[0] = index_word(&[accusative_offset, case_offset, offset + 2]);
+    words
+}
+
+fn numeric_vector_vector_arithmetic_codelet(
+    left: &[u16],
+    right: &[u16],
+    case_word: u16,
+    operator: u16,
+) -> [u16; pyac::WORDS_PER_CODELET] {
+    assert_eq!(left.len(), right.len());
+    let quote = match left.len() {
+        2 => 0x891d,
+        3 => 0x8f1d,
+        4 => 0x8a1d,
+        _ => panic!("fixture vector width is not representable in a codelet"),
+    };
+    let mut words = [0; pyac::WORDS_PER_CODELET];
+    let mut offset = 1;
+    words[offset] = quote;
+    offset += 1;
+    words[offset..offset + left.len()].copy_from_slice(left);
+    offset += left.len();
+    let accusative_offset = offset;
+    words[offset] = 0x245e;
+    offset += 1;
+    words[offset] = quote;
+    offset += 1;
+    words[offset..offset + right.len()].copy_from_slice(right);
+    offset += right.len();
     let case_offset = offset;
     words[offset] = case_word;
     words[offset + 1] = operator;
@@ -245,7 +283,8 @@ mod tests {
                 { "type": "vector", "elementType": "unsigned-16", "values": [8, 27] },
                 { "type": "vector", "elementType": "unsigned-16", "values": [1, 2] },
                 { "type": "vector", "elementType": "unsigned-16", "values": [0, 1, 2, 3, 4] },
-                { "type": "vector", "elementType": "unsigned-16", "values": [65535, 5] }
+                { "type": "vector", "elementType": "unsigned-16", "values": [65535, 5] },
+                { "type": "vector", "elementType": "unsigned-16", "values": [6, 8, 10, 12] }
             ])
         );
     }

@@ -53,8 +53,9 @@ larger numbers remain structured until compound surface composition is added.
 
 ## Numeric vector arithmetic
 
-Numeric arithmetic may take an existing unsigned numeric vector in `ob` and a
-scalar numeric operand in one of the operator's supported grammatical cases:
+Numeric arithmetic may take an existing unsigned numeric vector in `ob` and
+either a scalar numeric operand or an equal-width unsigned numeric vector in
+one of the operator's supported grammatical cases:
 
 ```pyash
 ob ve num 1 2 3 4 to num 2 be plus do
@@ -71,12 +72,14 @@ The example encodes as:
 
 The Rust CPU interpreter and browser WebGPU path apply the scalar arithmetic
 semantics independently to each element. A single operation codelet supports
-vector widths two through eight, constrained by its other sentence fields and
-the 16-word slot. Multiplication returns unsigned-32 vector elements so the
-full product of two uint16 values is retained; other current operators return
-unsigned-16 elements. The JS reference path has matching lowering, decoding,
-and execution. Existing vector quote support described above is the data
-representation; this arithmetic sentence is the operation over that data.
+scalar-vector widths two through eight and vector-vector widths two through
+four, constrained by the existing quote layouts and 16-word slot. Vector
+operands must have equal widths. Multiplication returns unsigned-32 vector
+elements so the full product of two uint16 values is retained; other current
+operators return unsigned-16 elements. The JS reference path has matching
+lowering, decoding, and execution. Existing vector quote support described
+above is the data representation; this arithmetic sentence is the operation
+over that data.
 
 ## Generic fixed-slot decoding
 

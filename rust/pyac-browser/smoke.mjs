@@ -189,6 +189,7 @@ try {
     { type: "vector", elementType: "unsigned-16", values: [1, 2] },
     { type: "vector", elementType: "unsigned-16", values: [0, 1, 2, 3, 4] },
     { type: "vector", elementType: "unsigned-16", values: [65535, 5] },
+    { type: "vector", elementType: "unsigned-16", values: [6, 8, 10, 12] },
   ]);
   if (vectorParity.gpu) {
     assert.equal(vectorParity.gpu.backend, "webgpu");

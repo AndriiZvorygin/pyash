@@ -49,6 +49,47 @@ test("numeric vector operations preserve scalar arithmetic semantics elementwise
   assert.deepEqual(wideProductResult.ob.ve.values, [4294836225, 196605]);
 });
 
+test("numeric vector arithmetic applies the existing operand case elementwise", async () => {
+  const cases = [
+    ["ob ve num 1 2 3 4 to ve num 5 6 7 8 be plus do", [6, 8, 10, 12]],
+    ["ob ve num 9 8 7 from ve num 2 3 4 be subtract do", [7, 5, 3]],
+    ["ob ve num 3 4 with ve num 5 6 be multiply do", [15, 24]],
+    ["ob ve num 8 9 with ve num 2 3 be divide do", [4, 3]],
+    ["ob ve num 7 9 to ve num 3 4 be xor do", [4, 13]],
+    ["ob ve num 2 3 from ve num 3 2 be exponential do", [8, 9]],
+    ["ob ve num 20 21 by ve num 4 5 be remains do", [0, 1]]
+  ];
+
+  for (const [source, values] of cases) {
+    const [codelet] = lowerSentence(parse(source));
+    assert.deepEqual(decodeCodelet(codelet.words).sentence, parse(source), source);
+    if (source === cases[0][0]) {
+      assert.deepEqual(Array.from(codelet.words.slice(0, codelet.usedWords)), [
+        0x5041, 0x8a1d, 1, 2, 3, 4, 0x245e, 0x8a1d, 5, 6, 7, 8, 0x243e, 0x8a64, 0x295e
+      ]);
+    }
+    const [result] = await executeCodelets([codelet]);
+    assert.deepEqual(result.ob.ve.values, values, source);
+  }
+
+  const [wideProduct] = lowerSentence(parse(
+    "ob ve num 65535 3 to ve num 65535 65535 be multiply do"
+  ));
+  const [wideProductResult] = await executeCodelets([wideProduct]);
+  assert.deepEqual(wideProductResult.ob.ve.values, [4294836225, 196605]);
+});
+
+test("numeric vector-vector arithmetic rejects mismatched or unencodable widths", async () => {
+  assert.throws(
+    () => lowerSentence(parse("ob ve num 1 2 to ve num 3 4 5 be plus do")),
+    (error) => error.code === "unsupported-vector-width"
+  );
+  assert.throws(
+    () => lowerSentence(parse("ob ve num 1 2 3 4 5 to ve num 6 7 8 9 10 be plus do")),
+    (error) => error.code === "codelet-overflow"
+  );
+});
+
 test("numeric vector arithmetic respects fixed and explicit quote widths", async () => {
   const [eight] = lowerSentence(parse("ob ve num 1 2 3 4 5 6 7 8 to num 1 be plus do"));
   assert.equal(eight.usedWords, 16);

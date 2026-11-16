@@ -373,14 +373,17 @@ The following are golden vectors, not new syntax:
    0003 0041 0067 0065 245E 217E`. Every element MUST keep its exact
    characters and its case.
 10. Numeric vector arithmetic MUST reuse the unsigned vector quote as its
-    accusative operand, followed by a scalar numeric quote in its grammatical
-    case, the operator, and deontic mood. Thus `ob ve num 1 2 3 4 to num 2 be
-    plus do` MUST encode as `0A41 8A1D 0001 0002 0003 0004 245E 881D 0002
-    243E 8A64 295E` and compute `[3, 4, 5, 6]`. Fixed and explicit-length
-    quotes MUST retain their legacy layouts. The complete arithmetic sentence
-    MUST fit within one 16-word codelet; supported vector widths are two
-    through eight. Elementwise operations MUST preserve scalar arithmetic
-    semantics, with multiplication promoted to unsigned 32-bit vector results.
+    accusative operand, followed by a scalar numeric quote or an equal-width
+    unsigned vector quote in its grammatical case, the operator, and deontic
+    mood. Thus `ob ve num 1 2 3 4 to num 2 be plus do` MUST encode as `0A41
+    8A1D 0001 0002 0003 0004 245E 881D 0002 243E 8A64 295E` and compute `[3,
+    4, 5, 6]`; `ob ve num 1 2 3 4 to ve num 5 6 7 8 be plus do` MUST compute
+    `[6, 8, 10, 12]`. Fixed and explicit-length quotes MUST retain their
+    legacy layouts. Scalar-vector operations MUST fit one 16-word codelet and
+    support widths two through eight; vector-vector operations MUST use equal
+    widths two through four so both quotes and all sentence markers fit one
+    codelet. Elementwise operations MUST preserve scalar arithmetic semantics,
+    with multiplication promoted to unsigned 32-bit vector results.
 11. A destination MUST compile a codelet into machine code that computes the
     interpreter's result. The golden codelet `0149 881D 0001 245E 881D 0001
     243E 8A64 295E` MUST compile to a program that leaves the result `2` in

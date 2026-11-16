@@ -120,6 +120,25 @@ function legacyNameWords(name) {
 }
 
 function normalizeOperand(value, role, be) {
+  if (value && Object.keys(value).length === 1 && Object.hasOwn(value, "ve")) {
+    const vector = value.ve;
+    if (vector?.type !== "num" || !Array.isArray(vector.values)) {
+      throw encodingError("unsupported-vector-type", `numeric arithmetic ${role} operand must be an unsigned numeric vector`, {
+        vector
+      });
+    }
+    if (vector.values.length < 2) {
+      throw encodingError("unsupported-vector-width", "numeric arithmetic requires at least two vector elements", {
+        count: vector.values.length
+      });
+    }
+    return {
+      ve: {
+        type: "num",
+        values: vector.values.map((item, index) => readNumber(item, `${role} vector element ${index + 1}`))
+      }
+    };
+  }
   if (value && Object.keys(value).length === 1 && Number.isInteger(value.num)) {
     return { num: readNumber(value.num, role) };
   }
@@ -189,8 +208,17 @@ export function normalizeNumericArithmeticSentence(sentence) {
     });
   }
   const right = normalizeOperand(sentence[role], role, sentence.be);
+  if (right.ve && !ob.ve) {
+    throw encodingError("unsupported-sentence", "numeric vector arithmetic requires a vector ob operand");
+  }
+  if (ob.ve && right.ve && ob.ve.values.length !== right.ve.values.length) {
+    throw encodingError("unsupported-vector-width", "numeric vector operands must have equal widths", {
+      left: ob.ve.values.length,
+      right: right.ve.values.length
+    });
+  }
   if (ob.ve && typeof right.name === "string") {
-    throw encodingError("unsupported-sentence", "numeric vector arithmetic requires a scalar numeric operand");
+    throw encodingError("unsupported-sentence", "numeric vector arithmetic does not support named operands");
   }
   return {
     mood: "do",
@@ -286,7 +314,15 @@ export function lowerNumericArithmeticSentence(sentence) {
       ...normalized.ob.ve.values
     ]
     : [NUMBER_QUOTE_WORD, normalized.ob.num];
-  const roleWords = typeof roleValue.name === "string"
+  const roleWords = roleValue.ve
+    ? [
+      uintQuoteWord({ vectorThick: vectorThicknessFor(roleValue.ve.values.length), scalarBytes: 2 }),
+      ...(vectorThicknessFor(roleValue.ve.values.length) === VECTOR_THICK_LONG
+        ? [roleValue.ve.values.length]
+        : []),
+      ...roleValue.ve.values
+    ]
+    : typeof roleValue.name === "string"
     ? [NAME_TYPE_WORD, ...legacyNameWords(roleValue.name)]
     : [NUMBER_QUOTE_WORD, roleValue.num];
   const accusativeOffset = 1 + obWords.length;
@@ -376,6 +412,19 @@ export function decodeNumericArithmeticCodelet(input) {
       throw encodingError("malformed-codelet", "numeric arithmetic right quote has an invalid boundary");
     }
     right = { num: rightQuote.quote.value };
+  } else if (rightQuote?.kind === "quote") {
+    const header = decodeQuoteHeader(rightQuote.quote.word);
+    if (header.sortName !== "uint" || header.scalarBytes !== 2 || header.vectorThick === 0 ||
+        !Array.isArray(rightQuote.quote.value) || rightQuote.quote.value.length < 2) {
+      throw encodingError("malformed-codelet", "numeric arithmetic right vector quote is invalid");
+    }
+    if (rightQuote.quote.nextOffset !== roleCaseOffset) {
+      throw encodingError("malformed-codelet", "numeric arithmetic right vector quote has an invalid boundary", {
+        nextOffset: rightQuote.quote.nextOffset,
+        roleCaseOffset
+      });
+    }
+    right = { ve: { type: "num", values: rightQuote.quote.value } };
   } else {
     const nameItems = decoded.items.filter((candidate) => (
       candidate.kind === "word" && candidate.offset > 4 && candidate.offset < roleCaseOffset
@@ -395,6 +444,15 @@ export function decodeNumericArithmeticCodelet(input) {
       throw encodingError("unsupported-codelet", `named ${role} operands are not supported for ${be}`);
     }
     right = { name: nameItems.map((item) => lookupLegacyWord(item.word).en).join(" ") };
+  }
+  if (vectorOb && right.ve && right.ve.values.length !== leftValue.length) {
+    throw encodingError("unsupported-vector-width", "numeric vector operands must have equal widths", {
+      left: leftValue.length,
+      right: right.ve.values.length
+    });
+  }
+  if (!vectorOb && right.ve) {
+    throw encodingError("unsupported-codelet", "numeric vector arithmetic requires a vector ob operand");
   }
   return {
     mood: "do",
@@ -432,7 +490,12 @@ export async function executeNumericArithmeticCodelet(input, { state } = {}) {
   const sentence = decodeNumericArithmeticCodelet(input);
   const role = operandRole(sentence);
   if (sentence.ob.ve) {
-    const values = sentence.ob.ve.values.map((left) => calculate(sentence.be, left, sentence[role].num));
+    const right = sentence[role];
+    const values = sentence.ob.ve.values.map((left, index) => calculate(
+      sentence.be,
+      left,
+      right.ve ? right.ve.values[index] : right.num
+    ));
     return {
       su: { name: "result" },
       ob: { ve: { type: "num", values } },
