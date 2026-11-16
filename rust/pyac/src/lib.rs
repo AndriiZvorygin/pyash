@@ -16,11 +16,12 @@ pub use literal::{
     format_date, index_word,
 };
 pub use semantic::{
-    GOLDEN_NUMERIC_PLUS_CODELET, NumericArithmeticInstruction, NumericInvertInstruction,
-    NumericOperandCase, NumericOperator, NumericPlusInstruction,
+    ConditionalNumberInstruction, GOLDEN_NUMERIC_PLUS_CODELET, NumericArithmeticInstruction,
+    NumericInvertInstruction, NumericOperandCase, NumericOperator, NumericPlusInstruction,
     NumericVectorArithmeticInstruction, NumericVectorOperand, SemanticError,
-    decode_numeric_arithmetic, decode_numeric_invert, decode_numeric_plus,
-    decode_numeric_vector_arithmetic, execute_numeric_arithmetic,
+    decode_conditional_number, decode_numeric_arithmetic, decode_numeric_invert,
+    decode_numeric_plus, decode_numeric_vector_arithmetic, execute_conditional_number,
+    execute_conditional_number_codelets, execute_numeric_arithmetic,
     execute_numeric_arithmetic_codelet, execute_numeric_invert, execute_numeric_invert_codelet,
     execute_numeric_plus, execute_numeric_plus_codelet, execute_numeric_vector_arithmetic,
 };
@@ -322,36 +323,63 @@ pub fn execute_numeric_arithmetic_pack(
 }
 
 pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionError> {
-    use semantic::{NumericCodeletValue, execute_numeric_codelet};
+    use semantic::{
+        NumericCodeletValue, execute_conditional_number_codelets, execute_numeric_codelet,
+    };
 
-    pack.codelets
-        .iter()
-        .enumerate()
-        .map(|(index, codelet)| {
-            let unsupported = || PackExecutionError {
-                index,
+    let mut values = Vec::new();
+    let mut index = 0;
+    while index < pack.codelets.len() {
+        let start = index;
+        while index < pack.codelets.len() && pack.codelets[index][0] & 1 == 0 {
+            index += 1;
+        }
+        if index == pack.codelets.len() {
+            return Err(PackExecutionError {
+                index: start,
                 source: SemanticError::UnsupportedCodelet,
-            };
+            });
+        }
 
+        let group = &pack.codelets[start..=index];
+        if group.len() > 1 {
+            values.push(
+                execute_conditional_number_codelets(group)
+                    .map(|value| PyacValue::Unsigned(u64::from(value)))
+                    .map_err(|source| PackExecutionError {
+                        index: start,
+                        source,
+                    })?,
+            );
+        } else {
+            let codelet = &group[0];
             if let Some(result) = execute_numeric_codelet(codelet) {
-                return result
-                    .map(|value| match value {
-                        NumericCodeletValue::Unsigned(value) => PyacValue::Unsigned(value),
-                        NumericCodeletValue::Signed(value) => PyacValue::Signed(value),
-                        NumericCodeletValue::Vector(value) => PyacValue::Vector(value),
-                    })
-                    .map_err(|source| PackExecutionError { index, source });
+                values.push(
+                    result
+                        .map(|value| match value {
+                            NumericCodeletValue::Unsigned(value) => PyacValue::Unsigned(value),
+                            NumericCodeletValue::Signed(value) => PyacValue::Signed(value),
+                            NumericCodeletValue::Vector(value) => PyacValue::Vector(value),
+                        })
+                        .map_err(|source| PackExecutionError {
+                            index: start,
+                            source,
+                        })?,
+                );
+            } else if let Ok(value) = execute_date_codelet(codelet) {
+                values.push(PyacValue::DateEpochMs(value));
+            } else if let Ok(value) = execute_vector_codelet(codelet) {
+                values.push(PyacValue::Vector(value));
+            } else {
+                return Err(PackExecutionError {
+                    index: start,
+                    source: SemanticError::UnsupportedCodelet,
+                });
             }
-
-            if let Ok(value) = execute_date_codelet(codelet) {
-                return Ok(PyacValue::DateEpochMs(value));
-            }
-            if let Ok(value) = execute_vector_codelet(codelet) {
-                return Ok(PyacValue::Vector(value));
-            }
-            Err(unsupported())
-        })
-        .collect()
+        }
+        index += 1;
+    }
+    Ok(values)
 }
 
 #[cfg(test)]

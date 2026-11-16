@@ -228,6 +228,22 @@ test("ordinary Pyash is-even program executes from its compiled PyAC pack", asyn
   }
 });
 
+test("numeric equality conditional lowers to the Rust interpreter fixture", () => {
+  const sentence = parse(
+    "ob num 5 be equally from num 5 then ob num 7 be number else ob num 9 be number ya"
+  );
+  const lowered = lowerPyashProgram([sentence]);
+
+  assert.deepEqual(lowered.vectors, [
+    Uint16Array.from([
+      0xd6b6, 0x881d, 5, 0x245e, 0x881d, 5, 0x313e, 0x4809, 0x29be, 0x881d, 7, 0x245e, 0xea30,
+      0x217e, 0x881d, 9
+    ]),
+    Uint16Array.from([0x000b, 0x245e, 0xea30, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+  ]);
+  assert.deepEqual(decodePyashProgram(lowered.vectors), [sentence]);
+});
+
 test("programlet mutations are deterministic and evolution validates held-out cases", async () => {
   const left = mutatePyashProgramSource(source, { seed: 41 });
   const right = mutatePyashProgramSource(source, { seed: 41 });

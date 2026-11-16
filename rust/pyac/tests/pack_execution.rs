@@ -19,6 +19,18 @@ const VECTOR: [u16; WORDS_PER_CODELET] = [
     0x0061, 0x8f1d, 1, 2, 3, 0x245e, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
+// Lowered from: ob num 5 be equally from num 5 then ob num 7 be number
+// else ob num 9 be number ya
+const EQUALS_BRANCH: [[u16; WORDS_PER_CODELET]; 2] = [
+    [
+        0xd6b6, 0x881d, 5, 0x245e, 0x881d, 5, 0x313e, 0x4809, 0x29be, 0x881d, 7, 0x245e, 0xea30,
+        0x217e, 0x881d, 9,
+    ],
+    [
+        0x000b, 0x245e, 0xea30, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ],
+];
+
 #[test]
 fn executes_mixed_supported_codelet_families_in_pack_order() {
     let bytes = encode_pack(&[PLUS, INVERT, DATE, VECTOR]).expect("pack fits");
@@ -44,6 +56,43 @@ fn mixed_pack_failure_reports_the_original_codelet_index() {
     assert_eq!(error.index, 1);
     assert_eq!(error.source, SemanticError::UnsupportedCodelet);
     assert_eq!(error.code(), "unsupported-codelet");
+}
+
+#[test]
+fn executes_a_pyash_equal_conditional_and_selects_one_numeric_arm() {
+    let equal_pack = encode_pack(&EQUALS_BRANCH).expect("conditional pack fits");
+    assert_eq!(
+        execute_pack(&decode_pack(&equal_pack).expect("conditional pack decodes")),
+        Ok(vec![PyacValue::Unsigned(7)])
+    );
+
+    let mut unequal = EQUALS_BRANCH;
+    unequal[0][5] = 4;
+    let unequal_pack = encode_pack(&unequal).expect("conditional pack fits");
+    assert_eq!(
+        execute_pack(&decode_pack(&unequal_pack).expect("conditional pack decodes")),
+        Ok(vec![PyacValue::Unsigned(9)])
+    );
+
+    let mut followed_by_plus = EQUALS_BRANCH.to_vec();
+    followed_by_plus.push(PLUS);
+    let mixed_pack = encode_pack(&followed_by_plus).expect("mixed pack fits");
+    assert_eq!(
+        execute_pack(&decode_pack(&mixed_pack).expect("mixed pack decodes")),
+        Ok(vec![PyacValue::Unsigned(7), PyacValue::Unsigned(2)])
+    );
+}
+
+#[test]
+fn conditional_pack_rejects_an_unimplemented_predicate_shape() {
+    let mut unsupported = EQUALS_BRANCH;
+    unsupported[0][7] = 0x8a64;
+    let bytes = encode_pack(&unsupported).expect("pack fits");
+    let error = execute_pack(&decode_pack(&bytes).expect("pack decodes"))
+        .expect_err("arithmetic is not a conditional predicate");
+
+    assert_eq!(error.index, 0);
+    assert_eq!(error.code(), "malformed-branch");
 }
 
 fn vector_arithmetic(elements: &[u16], operand: u16, operator: u16) -> [u16; WORDS_PER_CODELET] {

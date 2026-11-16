@@ -10,6 +10,10 @@ const COMITATIVE_CASE: u16 = 0x490f;
 const INSTRUMENTAL_CASE: u16 = 0x287e;
 const DATIVE_CASE: u16 = 0x207e;
 const DEONTIC_MOOD: u16 = 0x295e;
+const REALIS_MOOD: u16 = 0x217e;
+const CONDITIONAL_MOOD: u16 = 0x29be;
+const NUMBER_VERB: u16 = 0xea30;
+const EQUALLY: u16 = 0x4809;
 
 const PLUS: u16 = 0x8a64;
 const SUBTRACT: u16 = 0xabd2;
@@ -122,6 +126,13 @@ pub struct NumericPlusInstruction {
     pub to: u16,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConditionalNumberInstruction {
+    pub condition: bool,
+    pub consequence: u16,
+    pub alternative: u16,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SemanticError {
     InvalidShape {
@@ -146,6 +157,12 @@ pub enum SemanticError {
         actual: usize,
         maximum: usize,
     },
+    InvalidBranchShape {
+        index: usize,
+        expected: u16,
+        actual: u16,
+    },
+    UnsupportedBranch,
     VectorWidthMismatch {
         left: usize,
         right: usize,
@@ -163,6 +180,8 @@ impl SemanticError {
             Self::UnsupportedCase { .. } => "unsupported-case",
             Self::UnsupportedBound { .. } => "unsupported-sentence",
             Self::UnsupportedVectorWidth { .. } => "unsupported-vector-width",
+            Self::InvalidBranchShape { .. } => "malformed-branch",
+            Self::UnsupportedBranch => "unsupported-branch",
             Self::VectorWidthMismatch { .. } => "vector-width-mismatch",
             Self::UnsupportedCodelet => "unsupported-codelet",
             Self::DivisionByZero => "division-by-zero",
@@ -207,6 +226,17 @@ impl std::fmt::Display for SemanticError {
                 formatter,
                 "numeric vector arithmetic width {actual} is outside the supported range 2..={maximum}"
             ),
+            Self::InvalidBranchShape {
+                index,
+                expected,
+                actual,
+            } => write!(
+                formatter,
+                "conditional branch word {index} expected 0x{expected:04x}, got 0x{actual:04x}"
+            ),
+            Self::UnsupportedBranch => {
+                formatter.write_str("the conditional branch shape is not supported")
+            }
             Self::VectorWidthMismatch { left, right } => write!(
                 formatter,
                 "numeric vector arithmetic requires equal operand widths, got {left} and {right}"
@@ -412,6 +442,105 @@ pub fn decode_numeric_vector_arithmetic(
 
 pub fn execute_numeric_plus(instruction: &NumericPlusInstruction) -> u16 {
     instruction.ob.saturating_add(instruction.to)
+}
+
+/// Decode a Pyash conditional with an inline numeric equality test and two
+/// inline numeric-literal arms. The input vectors are one completion-marked
+/// sentence group, as emitted by the reference VLIW sentence encoder.
+pub fn decode_conditional_number(
+    codelets: &[[u16; WORDS_PER_CODELET]],
+) -> Result<ConditionalNumberInstruction, SemanticError> {
+    if codelets.len() < 2
+        || codelets.first().is_some_and(|codelet| codelet[0] & 1 != 0)
+        || codelets
+            .iter()
+            .take(codelets.len() - 1)
+            .any(|codelet| codelet[0] & 1 != 0)
+        || codelets.last().is_some_and(|codelet| codelet[0] & 1 == 0)
+    {
+        return Err(SemanticError::UnsupportedBranch);
+    }
+
+    let final_head = codelets.last().expect("non-empty branch group")[0];
+    let last_slot = (1..WORDS_PER_CODELET)
+        .rev()
+        .find(|slot| final_head & (1 << slot) != 0)
+        .ok_or(SemanticError::UnsupportedBranch)?;
+    if codelets.last().expect("non-empty branch group")[last_slot + 1..]
+        .iter()
+        .any(|word| *word != 0)
+    {
+        return Err(SemanticError::UnsupportedBranch);
+    }
+
+    let mut words = Vec::with_capacity((codelets.len() - 1) * (WORDS_PER_CODELET - 1) + last_slot);
+    let mut boundaries = Vec::new();
+    for (vector_index, codelet) in codelets.iter().enumerate() {
+        let completion = codelet[0] & 1 != 0;
+        let end_slot = if vector_index + 1 == codelets.len() {
+            last_slot
+        } else {
+            WORDS_PER_CODELET - 1
+        };
+        for slot in 1..=end_slot {
+            words.push(codelet[slot]);
+            if (codelet[0] & (1 << slot) != 0) == completion {
+                boundaries.push(vector_index * (WORDS_PER_CODELET - 1) + slot);
+            }
+        }
+    }
+
+    const EXPECTED_BOUNDARIES: [usize; 7] = [3, 6, 8, 11, 13, 16, 18];
+    if words.len() != 18 || boundaries != EXPECTED_BOUNDARIES {
+        return Err(SemanticError::UnsupportedBranch);
+    }
+
+    for (index, expected) in [
+        (0, NUMBER_QUOTE),
+        (2, ACCUSATIVE_CASE),
+        (3, NUMBER_QUOTE),
+        (5, SOURCE_CASE),
+        (6, EQUALLY),
+        (7, CONDITIONAL_MOOD),
+        (8, NUMBER_QUOTE),
+        (10, ACCUSATIVE_CASE),
+        (11, NUMBER_VERB),
+        (12, REALIS_MOOD),
+        (13, NUMBER_QUOTE),
+        (15, ACCUSATIVE_CASE),
+        (16, NUMBER_VERB),
+        (17, REALIS_MOOD),
+    ] {
+        let actual = words[index];
+        if actual != expected {
+            return Err(SemanticError::InvalidBranchShape {
+                index,
+                expected,
+                actual,
+            });
+        }
+    }
+
+    Ok(ConditionalNumberInstruction {
+        condition: words[1] == words[4],
+        consequence: words[9],
+        alternative: words[14],
+    })
+}
+
+pub fn execute_conditional_number(instruction: &ConditionalNumberInstruction) -> u16 {
+    if instruction.condition {
+        instruction.consequence
+    } else {
+        instruction.alternative
+    }
+}
+
+pub fn execute_conditional_number_codelets(
+    codelets: &[[u16; WORDS_PER_CODELET]],
+) -> Result<u16, SemanticError> {
+    let instruction = decode_conditional_number(codelets)?;
+    Ok(execute_conditional_number(&instruction))
 }
 
 /// Saturating exponentiation, matching the JavaScript reference backend:

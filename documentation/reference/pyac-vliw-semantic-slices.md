@@ -164,6 +164,22 @@ comes from `from` or `by`, because in those two verbs `to` is the result
 target. The result saturates into the unsigned 16-bit range, and a zero
 divisor is a `division-by-zero` execution error.
 
+## Conditional numeric selection
+
+The Rust pack interpreter executes the first conditional slice emitted by the
+JavaScript sentence encoder:
+
+```pyash
+ob num 5 be equally from num 5 then ob num 7 be number else ob num 9 be number ya
+```
+
+The condition and both numeric-literal arms form one completion-marked codelet
+group. The executor evaluates the inline equality and returns only the selected
+unsigned result. This slice establishes branch grouping and selection in the
+CPU interpreter; it does not yet add nested branches, named predicates,
+side-effecting arms, or conditional RISC-V code generation. Its golden codelets
+and true/false coverage are in `rust/pyac/tests/pack_execution.rs`.
+
 ## Numeric invert
 
 The legacy invert codelet carries the value in the accusative phrase and the
