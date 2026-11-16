@@ -5,8 +5,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parse } from "../program/understand/index.mjs";
-import { lowerPyashProgram, decodePyashProgram } from "../program/library/vliw/sentence.mjs";
+import { lowerPyashProgram, lowerPyashSentence, decodePyashProgram } from "../program/library/vliw/sentence.mjs";
 import { decodeLegacyCodeletSequence } from "../program/library/vliw/codelets.mjs";
+import {
+  NUMBER_QUOTE_WORD,
+  PARAGRAPH_LETTER_QUOTE_WORD,
+  QUOTED_GRAMMAR_WORD
+} from "../program/library/vliw/quotes.mjs";
 import { encodePyacPack, decodePyacPack } from "../program/library/vliw/database.mjs";
 import {
   compilePyashProgramSource,
@@ -18,6 +23,24 @@ import {
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const source = await fs.readFile(path.join(root, "examples/pyash/vliw-is-even.pya"), "utf8");
+
+function indexedVectors(words, boundaryOffsets) {
+  const chunks = [];
+  for (let offset = 0; offset < words.length; offset += 15) {
+    chunks.push({ offset, words: words.slice(offset, offset + 15) });
+  }
+  return chunks.map(({ offset, words: chunk }, index) => {
+    const complete = index === chunks.length - 1;
+    const vector = new Uint16Array(16);
+    for (let wordIndex = 0; wordIndex < chunk.length; wordIndex += 1) {
+      vector[wordIndex + 1] = chunk[wordIndex];
+      const isBoundary = boundaryOffsets.has(offset + wordIndex + 1);
+      if (isBoundary === complete) vector[0] |= 1 << (wordIndex + 1);
+    }
+    if (complete) vector[0] |= 1;
+    return vector;
+  });
+}
 
 test("ordinary Pyash ceremony source round-trips through the fixed-width PyAC pack", () => {
   const sentences = source.split(/\n/u).filter((line) => line.trim()).map(parse);
@@ -87,14 +110,72 @@ test("the long-quote threshold is fourteen inline words and fifteen raw words", 
   }
 });
 
-test("typed quoted blocks preserve their kind outside the quote-sort bits", () => {
+test("typed quoted blocks use paired zi frames and preserve their quote kind", () => {
   const payload = "raw typed payload ".repeat(5);
   const sentence = parse(`ob text quoted.pyash.${payload}.pyash.quoted be text ya`);
   const lowered = lowerPyashProgram([sentence]);
+  const words = lowered.sentences[0].words;
+  const tagWords = [PARAGRAPH_LETTER_QUOTE_WORD, 5, 0x0070, 0x0079, 0x0061, 0x0073, 0x0068];
 
   assert.deepEqual(sentence.quoteKinds, { ob: "pyash" });
-  assert.equal(lowered.vectors[1][0], payload.charCodeAt(0));
+  assert.equal(words[0], QUOTED_GRAMMAR_WORD);
+  assert.equal(words[1], 0);
+  assert.deepEqual(words.slice(2, 2 + tagWords.length), tagWords);
+  assert.equal(words[2 + tagWords.length], 0);
+  const closeMarker = words.lastIndexOf(QUOTED_GRAMMAR_WORD);
+  assert.deepEqual(words.slice(closeMarker - tagWords.length - 2, closeMarker + 1), [
+    0, ...tagWords, 0, QUOTED_GRAMMAR_WORD
+  ]);
+  assert.equal(words.includes(0xee1d), false);
   assert.deepEqual(decodePyashProgram(lowered.vectors), [sentence]);
+});
+
+test("long quote kind tags and payloads continue through indexed and raw codelets", () => {
+  const kind = "typed-label-12345";
+  const sentence = parse(`ob text quoted.${kind}.payload.${kind}.quoted be text ya`);
+  const lowered = lowerPyashProgram([sentence]);
+
+  assert.equal(lowered.sentences[0].words[0], QUOTED_GRAMMAR_WORD);
+  assert.equal(lowered.sentences[0].words.filter((word) => word === QUOTED_GRAMMAR_WORD).length, 2);
+  assert.ok(lowered.vectors.length >= 3);
+  assert.deepEqual(decodePyashProgram(lowered.vectors), [sentence]);
+});
+
+test("quote frames accept an optional length and reject unverified hashes", () => {
+  const sentence = parse("ob text quoted.pyash.payload.pyash.quoted be text ya");
+  const lowered = lowerPyashSentence(sentence);
+  const tagEnd = 2 + 2 + "pyash".length;
+  const lengthField = [NUMBER_QUOTE_WORD, "payload".length];
+  const withLength = [
+    ...lowered.words.slice(0, tagEnd),
+    ...lengthField,
+    ...lowered.words.slice(tagEnd)
+  ];
+  const shiftedBoundaries = new Set(
+    lowered.boundaryOffsets.map((offset) => offset >= tagEnd ? offset + lengthField.length : offset)
+  );
+
+  assert.deepEqual(
+    decodePyashProgram(indexedVectors(withLength, shiftedBoundaries)),
+    [sentence]
+  );
+
+  const hashField = [PARAGRAPH_LETTER_QUOTE_WORD, 3, 0x0068, 0x0061, 0x0073];
+  const withHash = [
+    ...lowered.words.slice(0, tagEnd),
+    ...lengthField,
+    ...hashField,
+    ...lowered.words.slice(tagEnd)
+  ];
+  const hashBoundaries = new Set(
+    lowered.boundaryOffsets.map((offset) => offset >= tagEnd
+      ? offset + lengthField.length + hashField.length
+      : offset)
+  );
+  assert.throws(
+    () => decodePyashProgram(indexedVectors(withHash, hashBoundaries)),
+    (error) => error.code === "unsupported-quote-hash-profile"
+  );
 });
 
 test("long quote length may cross an indexed codelet boundary", () => {

@@ -5,6 +5,7 @@ import {
   LETTER_QUOTE_WORD,
   NUMBER_QUOTE_WORD,
   PARAGRAPH_LETTER_QUOTE_WORD,
+  QUOTED_GRAMMAR_WORD,
   UINT_SORT_DENOTE,
   VECTOR_THICK_LONG,
   isIntVectorQuoteWord,
@@ -133,6 +134,30 @@ function textWords(value, role) {
   };
 }
 
+function quoteKindFrame(value, payload, role) {
+  const tag = textWords(value, `${role} quote kind`);
+  const tagStart = 2;
+  const payloadStart = tagStart + tag.words.length + 1;
+  const closingTagStart = payloadStart + payload.words.length + 1;
+  const words = [
+    QUOTED_GRAMMAR_WORD,
+    0,
+    ...tag.words,
+    0,
+    ...payload.words,
+    0,
+    ...tag.words,
+    0,
+    QUOTED_GRAMMAR_WORD
+  ];
+  const rawQuotes = [
+    ...tag.rawQuotes.map((quote) => ({ ...quote, payloadStart: tagStart + quote.payloadStart })),
+    ...payload.rawQuotes.map((quote) => ({ ...quote, payloadStart: payloadStart + quote.payloadStart })),
+    ...tag.rawQuotes.map((quote) => ({ ...quote, payloadStart: closingTagStart + quote.payloadStart }))
+  ];
+  return { words, rawQuotes };
+}
+
 function encodeVectorValue(vector, role) {
   if (!vector || typeof vector !== "object" || !Array.isArray(vector.values)) {
     throw invalid("unsupported-vector", `VLIW ${role} vector requires a typed values list`);
@@ -246,21 +271,7 @@ function encodeClause(sentence, { conditional = false } = {}) {
       if (typeof sentence[role]?.text !== "string" || typeof quoteKind !== "string" || !quoteKind) {
         throw invalid("invalid-quote-kind", `VLIW ${role} quote kind requires a text value and non-empty kind`);
       }
-      const kind = textWords(quoteKind, `${role} quote kind`);
-      const prefixWords = [NAME_TYPE, ...kind.words];
-      value = {
-        words: [...prefixWords, ...value.words],
-        rawQuotes: [
-          ...kind.rawQuotes.map((quote) => ({
-            ...quote,
-            payloadStart: 1 + quote.payloadStart
-          })),
-          ...value.rawQuotes.map((quote) => ({
-            ...quote,
-            payloadStart: prefixWords.length + quote.payloadStart
-          }))
-        ]
-      };
+      value = quoteKindFrame(quoteKind, value, role);
     }
     const valueStart = words.length;
     words.push(...value.words);
@@ -429,17 +440,22 @@ function wordName(word, role) {
 
 function decodeValue(items, role) {
   if (
-    items.length >= 3 &&
-    items[0].kind === "word" &&
-    items[0].word === NAME_TYPE &&
-    items[1].kind === "quote" &&
-    items[1].quote.family === "paragraph-letter"
+    items.length === 1
+    && items[0].kind === "tagged-quote"
   ) {
-    const value = decodeValue(items.slice(2), role);
-    if (typeof value.text !== "string") {
+    const frame = items[0];
+    if (frame.hashQuote) {
+      throw invalid("unsupported-quote-hash-profile", "VLIW quote hash has no configured verification profile", {
+        role
+      });
+    }
+    if (typeof frame.quote.value !== "string") {
       throw invalid("invalid-quote-kind", `VLIW ${role} quote kind does not annotate a text payload`);
     }
-    return { quotedKind: items[1].quote.value, quotedValue: value };
+    return {
+      quotedKind: frame.tag,
+      quotedValue: { text: frame.quote.value }
+    };
   }
   if (items.length === 1 && items[0].kind === "quote") {
     const { word, value } = items[0].quote;

@@ -137,6 +137,9 @@ payload by its quote header and length. It does not scan arbitrary payload
 words for a matching tag. If present, the payload length is checked against
 the decoded payload extent. Before producers emit a hash, a versioned profile
 MUST specify its algorithm and the canonical payload bytes it covers.
+Until such a profile is configured, the structural decoder can read a hash
+field but the sentence decoder rejects hash-bearing frames rather than
+silently treating an unverified digest as valid.
 Decoding restores the tag's quote kind to the sentence's `quoteKinds` map.
 This framing allocates no legacy quote-sort value or new HNUC; the flat v1
 `.pyac` container preserves the frame in its codelet words.

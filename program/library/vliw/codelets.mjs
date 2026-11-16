@@ -1,7 +1,9 @@
 import {
   QUOTE_DENOTE,
   QUOTE_DENOTE_MASK,
+  NUMBER_QUOTE_WORD,
   PARAGRAPH_LETTER_QUOTE_WORD,
+  QUOTED_GRAMMAR_WORD,
   decodeQuoteHeader,
   decodeQuote,
   lookupLegacyWord,
@@ -105,6 +107,97 @@ function validateZeroTail(words, offset) {
   }
 }
 
+function invalidQuoteFrame(message, details = {}) {
+  return codeletError("invalid-quote-frame", message, details);
+}
+
+function decodeQuoteFrame(words, offset) {
+  const tagStart = offset + 2;
+  let tagQuote;
+  try {
+    tagQuote = decodeQuoteItem(words, tagStart);
+  } catch (error) {
+    throw invalidQuoteFrame("tagged quote frame has an invalid opening tag", {
+      offset,
+      cause: error.code
+    });
+  }
+  if (tagQuote.family !== "paragraph-letter" || typeof tagQuote.value !== "string" || !tagQuote.value) {
+    throw invalidQuoteFrame("quote frame tag must be a non-empty text quote", { offset });
+  }
+
+  const tagWords = Array.from(words.slice(tagStart, tagQuote.nextOffset));
+  const optionalQuotes = [];
+  let cursor = tagQuote.nextOffset;
+  while (cursor < words.length && words[cursor] !== 0) {
+    if (optionalQuotes.length === 2) {
+      throw invalidQuoteFrame("quote frame has more than two optional fields", { offset });
+    }
+    const optional = decodeQuoteItem(words, cursor);
+    optionalQuotes.push(optional);
+    cursor = optional.nextOffset;
+  }
+  if (cursor >= words.length) throw invalidQuoteFrame("quote frame is missing its payload delimiter", { offset });
+
+  let payloadLength;
+  if (optionalQuotes.length > 0) {
+    const lengthQuote = optionalQuotes[0];
+    if (lengthQuote.word !== NUMBER_QUOTE_WORD || !Number.isInteger(lengthQuote.value) || lengthQuote.value < 1) {
+      throw invalidQuoteFrame("first optional quote frame field must be a positive uint16 payload length", {
+        offset
+      });
+    }
+    payloadLength = lengthQuote.value;
+  }
+
+  const payloadStart = cursor + 1;
+  const payloadQuote = decodeQuoteItem(words, payloadStart);
+  if (payloadQuote.family !== "paragraph-letter" || typeof payloadQuote.value !== "string") {
+    throw invalidQuoteFrame("quote frame payload must be a text quote", { offset });
+  }
+  if (payloadLength !== undefined && payloadLength !== payloadQuote.payloadWords) {
+    throw invalidQuoteFrame("quote frame payload length does not match its typed quote", {
+      offset,
+      declaredLength: payloadLength,
+      actualLength: payloadQuote.payloadWords
+    });
+  }
+
+  cursor = payloadQuote.nextOffset;
+  if (words[cursor] !== 0) throw invalidQuoteFrame("quote frame is missing its closing tag delimiter", { offset });
+  const closingTagStart = cursor + 1;
+  let closingTag;
+  try {
+    closingTag = decodeQuoteItem(words, closingTagStart);
+  } catch (error) {
+    throw invalidQuoteFrame("tagged quote frame has an invalid closing tag", {
+      offset,
+      cause: error.code
+    });
+  }
+  const closingTagWords = Array.from(words.slice(closingTagStart, closingTag.nextOffset));
+  if (closingTagWords.length !== tagWords.length || closingTagWords.some((word, index) => word !== tagWords[index])) {
+    throw codeletError("mismatched-quote-frame", "tagged quote frame closing tag does not match its opener", {
+      offset
+    });
+  }
+  cursor = closingTag.nextOffset;
+  if (words[cursor] !== 0 || words[cursor + 1] !== QUOTED_GRAMMAR_WORD) {
+    throw invalidQuoteFrame("tagged quote frame must close with zero and zi", { offset });
+  }
+
+  return {
+    kind: "tagged-quote",
+    offset,
+    tag: tagQuote.value,
+    tagWords,
+    quote: payloadQuote,
+    payloadLength,
+    hashQuote: optionalQuotes[1],
+    nextOffset: cursor + 2
+  };
+}
+
 function decodeWordSequence(words) {
   const items = [];
   let offset = 0;
@@ -114,6 +207,17 @@ function decodeWordSequence(words) {
     if (word === 0) {
       validateZeroTail(words, offset);
       return { words, items, usedWords: offset };
+    }
+
+    if (
+      word === QUOTED_GRAMMAR_WORD
+      && words[offset + 1] === 0
+      && words[offset + 2] === PARAGRAPH_LETTER_QUOTE_WORD
+    ) {
+      const frame = decodeQuoteFrame(words, offset);
+      items.push(frame);
+      offset = frame.nextOffset;
+      continue;
     }
 
     if ((word & 0x001f) === QUOTE_DENOTE) {
@@ -331,6 +435,9 @@ export function renderLegacyCodelet(input) {
   return decoded.items.map((item) => {
     if (item.kind === "quote") {
       return renderQuote(item.quote);
+    }
+    if (item.kind === "tagged-quote") {
+      return `tagged-quote ${JSON.stringify(item.tag)} ${JSON.stringify(item.quote.value)}`;
     }
     return item.entry?.pya ?? `0x${item.word.toString(16).padStart(4, "0")}`;
   }).join(" ");

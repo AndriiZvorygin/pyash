@@ -123,6 +123,20 @@ test("deriveSignatureFromCall carries fromstate/become for understand with text 
   ]);
 });
 
+test("deriveSignatureFromCall does not treat quote type as a grammatical case", () => {
+  const sentence = parse(
+    "from text quoted.pyash.su name values ob ve num 1 2 be vector ya.pyash.quoted to state c to text output be compile do"
+  );
+
+  assert.deepEqual(sentence.quoteKinds, { from: "pyash" });
+  assert.deepEqual(deriveSignatureFromCall(sentence, { remember: () => undefined }), [
+    "be", "compile",
+    "become", "name", "c",
+    "from", "text",
+    "to", "text"
+  ]);
+});
+
 test("deriveSignatureFromCall defaults unknown name to name num", () => {
   const sentence = {
     mood: "do",
