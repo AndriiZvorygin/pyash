@@ -1,5 +1,8 @@
 import {
   QUOTE_DENOTE,
+  QUOTE_DENOTE_MASK,
+  PARAGRAPH_LETTER_QUOTE_WORD,
+  decodeQuoteHeader,
   decodeQuote,
   lookupLegacyWord,
   QuoteEncodingError
@@ -132,42 +135,182 @@ function decodeWordSequence(words) {
   return { words, items, usedWords: words.length };
 }
 
+function freshQuoteScan() {
+  return { explicitLength: null, payloadWords: 0 };
+}
+
+function scanQuoteWord(word, state) {
+  if (state.payloadWords > 0) {
+    state.payloadWords -= 1;
+    return null;
+  }
+  if (state.explicitLength) {
+    const quote = state.explicitLength;
+    state.explicitLength = null;
+    if (quote.word === PARAGRAPH_LETTER_QUOTE_WORD && word > 14) {
+      return word;
+    }
+    state.payloadWords = word * (quote.scalarBytes / 2);
+    return null;
+  }
+  if ((word & QUOTE_DENOTE_MASK) !== QUOTE_DENOTE) return null;
+
+  let header;
+  try {
+    header = decodeQuoteHeader(word);
+  } catch {
+    return null;
+  }
+  if (header.explicitVectorLength) {
+    state.explicitLength = header;
+    return null;
+  }
+  if (header.vectorWords !== null && header.scalarBytes !== null) {
+    state.payloadWords = header.vectorWords * (header.scalarBytes / 2);
+  }
+  return null;
+}
+
+function appendIndexedVector(group, vector, effectiveSlots = CODELET_WORD_COUNT - 1) {
+  const completion = Boolean(vector[0] & INDEX_COMPLETION_BIT);
+  const logicalBase = group.words.length - 1;
+  for (let slot = 1; slot <= effectiveSlots; slot += 1) {
+    group.words.push(vector[slot]);
+    if (Boolean(vector[0] & (1 << slot)) === completion) {
+      group.boundaryOffsets.add(logicalBase + slot);
+    }
+  }
+}
+
+function decodeIndexedGroup(group) {
+  const decoded = decodeWordSequence(new Uint16Array(group.words));
+  return {
+    ...decoded,
+    vectors: group.vectors,
+    indexWords: group.indexWords,
+    boundaryOffsets: group.boundaryOffsets,
+    vectorCount: group.vectors.length,
+    continued: group.vectors.length > 1,
+    complete: true
+  };
+}
+
 export function decodeLegacyCodelet(input) {
   return decodeWordSequence(normalizeCodeletWords(input));
 }
 
-export function decodeLegacyCodeletSequence(input) {
+export function decodeLegacyCodeletGroups(input) {
   const vectors = normalizeCodeletSequence(input);
-  const indexWords = vectors.map((vector) => vector[0]);
-  const finalVector = indexWords.findIndex((word) => (word & 0x0001) === 1);
+  const groups = [];
+  let group = null;
+  let quoteScan = freshQuoteScan();
 
-  if (finalVector === -1) {
-    throw codeletError("missing-continuation", "codelet sequence has no final vector", {
-      vectorCount: vectors.length,
-      indexWords
+  for (let vectorIndex = 0; vectorIndex < vectors.length;) {
+    const vector = vectors[vectorIndex];
+    if (!group) {
+      group = {
+        vectors: [],
+        indexWords: [],
+        words: [vector[0]],
+        boundaryOffsets: new Set()
+      };
+      quoteScan = freshQuoteScan();
+    }
+    group.vectors.push(vector);
+    group.indexWords.push(vector[0]);
+
+    let blockLength = null;
+    let lengthSlot = CODELET_WORD_COUNT - 1;
+    for (let slot = 1; slot < CODELET_WORD_COUNT; slot += 1) {
+      blockLength = scanQuoteWord(vector[slot], quoteScan);
+      if (blockLength !== null) {
+        lengthSlot = slot;
+        for (let tail = slot + 1; tail < CODELET_WORD_COUNT; tail += 1) {
+          if (vector[tail] !== 0) {
+            throw codeletError("malformed-blockquote", "indexed quote header has data after its raw-block length", {
+              vector: vectorIndex,
+              slot: tail,
+              actual: vector[tail]
+            });
+          }
+        }
+        break;
+      }
+    }
+
+    appendIndexedVector(group, vector, lengthSlot);
+    vectorIndex += 1;
+
+    if (blockLength !== null) {
+      const rawVectorCount = Math.ceil(blockLength / CODELET_WORD_COUNT);
+      if (vectorIndex + rawVectorCount > vectors.length) {
+        throw codeletError("missing-blockquote", "long quote is missing one or more raw payload vectors", {
+          requiredVectors: rawVectorCount,
+          availableVectors: vectors.length - vectorIndex,
+          payloadWords: blockLength
+        });
+      }
+      let remaining = blockLength;
+      for (let rawIndex = 0; rawIndex < rawVectorCount; rawIndex += 1) {
+        const raw = vectors[vectorIndex];
+        group.vectors.push(raw);
+        const used = Math.min(remaining, CODELET_WORD_COUNT);
+        for (let slot = 0; slot < used; slot += 1) group.words.push(raw[slot]);
+        for (let slot = used; slot < CODELET_WORD_COUNT; slot += 1) {
+          if (raw[slot] !== 0) {
+            throw codeletError("nonzero-blockquote-padding", "raw quote's final vector has nonzero padding", {
+              vector: vectorIndex,
+              slot,
+              actual: raw[slot]
+            });
+          }
+        }
+        remaining -= used;
+        vectorIndex += 1;
+      }
+      quoteScan = freshQuoteScan();
+      continue;
+    }
+
+    if (vector[0] & INDEX_COMPLETION_BIT) {
+      groups.push(decodeIndexedGroup(group));
+      group = null;
+    }
+  }
+
+  if (group) {
+    throw codeletError("missing-continuation", "codelet sequence has no final indexed vector", {
+      vectorCount: group.vectors.length,
+      indexWords: group.indexWords,
+      completedGroups: groups.length
     });
   }
-  if (finalVector !== vectors.length - 1) {
+  return groups;
+}
+
+export function decodeLegacyCodeletSequence(input) {
+  let groups;
+  try {
+    groups = decodeLegacyCodeletGroups(input);
+  } catch (error) {
+    if (error?.code === "missing-continuation" && error.details?.completedGroups > 0) {
+      throw codeletError("trailing-continuation", "codelet sequence contains data after its final vector", {
+        groupCount: error.details.completedGroups,
+        vectorCount: input.length
+      });
+    }
+    throw error;
+  }
+  if (groups.length === 0) {
+    throw codeletError("missing-continuation", "codelet sequence has no final indexed vector");
+  }
+  if (groups.length > 1) {
     throw codeletError("trailing-continuation", "codelet sequence contains data after its final vector", {
-      finalVector,
-      vectorCount: vectors.length,
-      indexWords
+      groupCount: groups.length,
+      vectorCount: input.length
     });
   }
-
-  const flattened = [vectors[0][0]];
-  for (const vector of vectors) {
-    flattened.push(...vector.slice(1));
-  }
-  const decoded = decodeWordSequence(new Uint16Array(flattened));
-  return {
-    ...decoded,
-    vectors,
-    indexWords,
-    vectorCount: vectors.length,
-    continued: vectors.length > 1,
-    complete: true
-  };
+  return groups[0];
 }
 
 function renderQuote(quote) {

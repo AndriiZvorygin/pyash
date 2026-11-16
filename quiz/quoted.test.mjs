@@ -20,5 +20,6 @@ test("captures quoted bash block", () => {
   );
 
   assert.equal(s.with.text, 'echo "hi" | wc -l ');
+  assert.deepEqual(s.quoteKinds, { with: "bash" });
   assert.equal(s.be, "run");
 });

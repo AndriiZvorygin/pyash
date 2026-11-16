@@ -107,11 +107,12 @@ payload annotation, distinct from the legacy quote sort. Parsing must retain
 the block kind as semantic metadata alongside the payload; it must not fold
 the delimiters into the payload or silently discard the kind. The kind is
 external to the payload, consistent with the legacy quote model's separation
-of value bytes and type information. The flat v1 `.pyac` container has no
-general block-kind descriptor, so a v1 pack cannot claim a lossless round-trip
-for arbitrary quote kinds. A future indexed container may carry that metadata
-in its own quote descriptor, inside the `.pyac` image, without changing the
-legacy 16-bit codelet words or allocating new HNUCs.
+of value bytes and type information. In the VLIW sentence stream, a non-default
+kind is encoded before its value as the existing `name_` HNUC followed by a
+paragraph-letter quote containing the kind. This inline metadata prefix uses
+no quote-sort values or new HNUCs, and the decoder restores it to the sentence's
+`quoteKinds` map rather than adding it to the payload text. The flat v1 `.pyac`
+container therefore preserves the kind in its codelet words.
 
 ### 4.2 VLIW shape
 
@@ -121,6 +122,29 @@ whether a word is a phrase, case, verb, mood, or continuation according to
 the legacy index format. The remaining words hold quote denotations, content,
 case/phrase markers, the verb, mood, and zero/unassigned tail words where the
 codelet ends early.
+
+Long paragraph quotes follow the original Lwonprom blockquote framing. A
+paragraph-letter quote carries the legacy `L` vector-thickness flag and an
+explicit 16-bit payload-word count. For payloads larger than 28 bytes (more
+than fourteen 16-bit letter units), the indexed codelet stream ends that
+prefix immediately after the quote header and count. The quote data then
+occupies `ceil(payload_words / 16)` raw 16-word vectors: those vectors have no
+index word, so all sixteen words are available to the quote. Unused words in
+the final raw vector are zero. The next vector resumes the ordinary indexed
+stream, where the following grammatical case, verb, mood, or sentence begins.
+The count, not a scan for an index-like word or a terminator, determines the
+raw extent. A decoder MUST skip exactly that many vectors and MUST reject a
+missing block or nonzero final padding. Short paragraph quotes remain inline
+in the indexed stream.
+
+Ordinary vectors use indexed continuation, not raw blockquote vectors.
+Numeric and boolean vector quote headers identify their element type and
+fixed/explicit element count; their elements may cross any number of indexed
+codelets. Text vectors retain one typed letter quote per element and use the
+same indexed continuation for the vector as a whole. A text element that is
+itself a long paragraph quote uses the long-quote framing above. Decoding MUST
+preserve element order, zero-valued elements, and the distinction between a
+vector and a scalar.
 
 The index has two required properties from the legacy VM:
 
@@ -372,7 +396,15 @@ The following are golden vectors, not new syntax:
    with the fourteen-word body `3001 0E1D 0004 004E 0061 006D 0065 0E1D
    0003 0041 0067 0065 245E 217E`. Every element MUST keep its exact
    characters and its case.
-10. Numeric vector arithmetic MUST reuse the unsigned vector quote as its
+   The vector may continue across indexed codelets without consuming an
+   element as an index word.
+10. A paragraph-letter quote longer than 28 bytes MUST use the legacy `L`
+    blockquote form: indexed quote header and exact payload-word count,
+    followed by the required number of raw 16-word vectors with no index
+    words, then indexed continuation. The raw extent and zero-padding rules
+    above are normative; encoding a long paragraph quote as ordinary indexed
+    payload is not conforming.
+11. Numeric vector arithmetic MUST reuse the unsigned vector quote as its
     accusative operand, followed by a scalar numeric quote or an equal-width
     unsigned vector quote in its grammatical case, the operator, and deontic
     mood. Thus `ob ve num 1 2 3 4 to num 2 be plus do` MUST encode as `0A41
@@ -384,7 +416,7 @@ The following are golden vectors, not new syntax:
     widths two through four so both quotes and all sentence markers fit one
     codelet. Elementwise operations MUST preserve scalar arithmetic semantics,
     with multiplication promoted to unsigned 32-bit vector results.
-11. A destination MUST compile a codelet into machine code that computes the
+12. A destination MUST compile a codelet into machine code that computes the
     interpreter's result. The golden codelet `0149 881D 0001 245E 881D 0001
     243E 8A64 295E` MUST compile to a program that leaves the result `2` in
     the first argument register, and an image that holds that program MUST be
