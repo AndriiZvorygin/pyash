@@ -1,5 +1,6 @@
-const MAX_SLOTS = 16;
-export const MAX_FUNCTION_INSTRUCTIONS = 31;
+export const DEFAULT_VLIW_FUNCTION_STEP_BUDGET = 65_536;
+export const MAX_VLIW_FUNCTION_STEP_BUDGET = 10_000_000;
+export const MAX_VLIW_FUNCTION_BYTES = 1_048_576;
 const OPERATIONS = new Set(["plus", "subtract", "xor"]);
 
 export class VliwFunctionError extends Error {
@@ -39,8 +40,8 @@ export function normalizeVliwFunction(definition = {}) {
   }
   const name = normalizeName(definition.name, "function name");
   const slots = definition.slots;
-  if (!Array.isArray(slots) || slots.length < 2 || slots.length > MAX_SLOTS) {
-    fail("slot-limit", `function slots must contain 2 through ${MAX_SLOTS} names`);
+  if (!Array.isArray(slots) || slots.length < 2) {
+    fail("slot-limit", "function must declare at least two named slots");
   }
   const normalizedSlots = slots.map((slot) => normalizeName(slot, "slot name"));
   if (new Set(normalizedSlots).size !== normalizedSlots.length) {
@@ -58,9 +59,16 @@ export function normalizeVliwFunction(definition = {}) {
   const outputSlot = normalizeName(definition.outputSlot, "output slot");
   if (!slotSet.has(outputSlot)) fail("signature-slot", "output slot must be declared", { outputSlot });
 
+  const stepBudget = Number(definition.stepBudget ?? DEFAULT_VLIW_FUNCTION_STEP_BUDGET);
+  if (!Number.isSafeInteger(stepBudget) || stepBudget < 1 || stepBudget > MAX_VLIW_FUNCTION_STEP_BUDGET) {
+    fail("step-budget", `stepBudget must be an integer from 1 through ${MAX_VLIW_FUNCTION_STEP_BUDGET}`);
+  }
   const instructions = definition.instructions;
-  if (!Array.isArray(instructions) || instructions.length < 1 || instructions.length > MAX_FUNCTION_INSTRUCTIONS) {
-    fail("instruction-limit", `function must contain 1 through ${MAX_FUNCTION_INSTRUCTIONS} instructions`);
+  if (!Array.isArray(instructions) || instructions.length < 1) {
+    fail("instruction-limit", "function must contain at least one instruction");
+  }
+  if (instructions.length > stepBudget) {
+    fail("step-budget", `function requires ${instructions.length} steps but stepBudget is ${stepBudget}`);
   }
   const normalizedInstructions = instructions.map((instruction, index) => {
     if (!instruction || typeof instruction !== "object" || Array.isArray(instruction)) {
@@ -77,14 +85,22 @@ export function normalizeVliwFunction(definition = {}) {
     return { op, target, left, right };
   });
 
-  return {
+  const normalized = {
     schemaVersion: 1,
     name,
     slots: normalizedSlots,
     inputSlots: normalizedInputs,
     outputSlot,
+    stepBudget,
     instructions: normalizedInstructions
   };
+  const serializedBytes = new TextEncoder().encode(JSON.stringify(normalized)).byteLength;
+  if (serializedBytes > MAX_VLIW_FUNCTION_BYTES) {
+    fail("function-size", `function exceeds the ${MAX_VLIW_FUNCTION_BYTES}-byte safety limit`, {
+      serializedBytes
+    });
+  }
+  return normalized;
 }
 
 function applyOperation(op, left, right) {

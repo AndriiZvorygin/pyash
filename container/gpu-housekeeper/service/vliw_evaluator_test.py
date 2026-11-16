@@ -36,18 +36,33 @@ class VliwBatchValidationTests(unittest.TestCase):
     self.assertEqual(prepared["candidates"][0]["instructions"], [(1, 2, 0, 1)])
     self.assertEqual(prepared["cases"], [([2, 3, 0], 5), ([65535, 1, 0], 65535)])
 
-  def test_batch_rejects_missing_cases_and_oversized_programs(self):
+  def test_batch_rejects_missing_cases_and_respects_configured_step_budget(self):
     no_cases = self.valid_payload()
     no_cases["cases"] = []
     with self.assertRaisesRegex(ValueError, "at least one case"):
       vliw.prepare_vliw_batch(no_cases)
 
-    too_many = self.valid_payload()
-    too_many["candidates"][0]["instructions"] = [
+    large = self.valid_payload()
+    large["slots"].extend(f"scratch-{index}" for index in range(17))
+    large["candidates"][0]["instructions"] = [
       {"op": "plus", "target": "sum", "left": "left", "right": "right"}
-    ] * (vliw.MAX_INSTRUCTIONS + 1)
-    with self.assertRaisesRegex(ValueError, "instruction limit"):
+    ] * 40
+    self.assertEqual(len(vliw.prepare_vliw_batch(large)["candidates"][0]["instructions"]), 40)
+
+    too_many = {**large, "stepBudget": 32}
+    with self.assertRaisesRegex(ValueError, "requires 40 steps but stepBudget is 32"):
       vliw.prepare_vliw_batch(too_many)
+
+  def test_batch_rejects_invalid_step_budgets_and_oversized_payloads(self):
+    invalid_budget = self.valid_payload()
+    invalid_budget["stepBudget"] = 0
+    with self.assertRaisesRegex(ValueError, "stepBudget must be an integer"):
+      vliw.prepare_vliw_batch(invalid_budget)
+
+    oversized = self.valid_payload()
+    oversized["padding"] = "x" * vliw.MAX_BATCH_BYTES
+    with self.assertRaisesRegex(ValueError, "payload exceeds"):
+      vliw.prepare_vliw_batch(oversized)
 
   def test_batch_rejects_unknown_slots_and_operators(self):
     unknown_slot = self.valid_payload()

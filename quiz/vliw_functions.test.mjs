@@ -35,11 +35,19 @@ test("named-slot VLIW function supports saturating subtract and 16-bit xor", () 
   assert.equal(executeVliwFunction(xor, { left: 0xffff, right: 0x00ff }), 0xff00);
 });
 
-test("function validation rejects unbounded instruction and unresolved slot references", () => {
+test("function validation admits larger slot and instruction tables but enforces its step budget", () => {
+  const slots = ["left", "right", "sum", ...Array.from({ length: 17 }, (_, index) => `slot ${index}`)];
+  const instructions = Array(40).fill(numberPlus.instructions[0]);
+  assert.equal(normalizeVliwFunction({
+    ...numberPlus,
+    slots,
+    instructions
+  }).instructions.length, 40);
   assert.throws(() => normalizeVliwFunction({
     ...numberPlus,
-    instructions: Array(32).fill(numberPlus.instructions[0])
-  }), /1 through 31 instructions/u);
+    stepBudget: 12,
+    instructions
+  }), /requires 40 steps but stepBudget is 12/u);
   assert.throws(() => normalizeVliwFunction({
     ...numberPlus,
     instructions: [{ ...numberPlus.instructions[0], right: "missing" }]

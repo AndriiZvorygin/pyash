@@ -6,6 +6,8 @@ import { readGpuHandleStatus } from "../../runtime/gpu/handle_status.mjs";
 
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_POLL_INTERVAL_MS = 1000;
+const MEBIBYTE = 1024 * 1024;
+const CUDA_CONTEXT_RESERVE_BYTES = 32 * MEBIBYTE;
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -28,6 +30,26 @@ function readResult(status, handleId) {
   } catch (error) {
     throw new Error(`VLIW Housekeeper job ${handleId} returned invalid JSON: ${error.message}`);
   }
+}
+
+function estimateVramMb(batch) {
+  const slots = Array.isArray(batch?.slots) ? batch.slots.length : 0;
+  const cases = Array.isArray(batch?.cases) ? batch.cases.length : 0;
+  const candidates = Array.isArray(batch?.candidates) ? batch.candidates : [];
+  const maxInstructions = candidates.reduce((max, candidate) => (
+    Math.max(max, Array.isArray(candidate?.instructions) ? candidate.instructions.length : 0)
+  ), 0);
+  const pairs = cases * candidates.length;
+  const scratchBytes = pairs * slots * 4;
+  const candidateBytes = candidates.length * (2 + maxInstructions * 4) * 4;
+  const caseBytes = cases * (slots + 1) * 4;
+  const resultBytes = pairs * 4;
+  const estimatedBytes = CUDA_CONTEXT_RESERVE_BYTES
+    + scratchBytes
+    + candidateBytes
+    + caseBytes
+    + resultBytes;
+  return Math.max(64, Math.ceil(estimatedBytes * 1.25 / MEBIBYTE));
 }
 
 export function createHousekeeperVliwBatchEvaluator({
@@ -54,7 +76,7 @@ export function createHousekeeperVliwBatchEvaluator({
       kind: "vliw-batch-evaluate",
       profileName: "vliw-batch-evaluator",
       resourceRequest: {
-        vramRequiredMb: 64,
+        vramRequiredMb: estimateVramMb(batch),
         ...(String(deviceId).trim() ? { deviceId: String(deviceId).trim() } : {})
       },
       payload: batch

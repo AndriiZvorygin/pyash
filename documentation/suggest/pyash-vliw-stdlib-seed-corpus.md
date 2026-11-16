@@ -27,9 +27,9 @@ stable function's meaning.
 
 | Area | Present evidence | Gap before use as a seed family |
 | --- | --- | --- |
-| Numeric VLIW operations | `plus`, `subtract`, `multiply`, `divide`, `xor`, `exponential`, and `remains` have codelet adapters; `invert` has a separate adapter | The source-level programlet evaluator currently admits only `remains`, `equally`, `plus`, and `subtract` |
+| Numeric VLIW operations | `plus`, `subtract`, `multiply`, `divide`, `xor`, `exponential`, and `remains` have codelet adapters; `invert` has a separate adapter | Each operation still needs explicit interpreter/codelet/backend parity cases before a seed family can claim it |
 | Boolean values | Truth/lie literals have codelets and ordinary Pyash boolean examples exist | The programlet evaluator currently admits boolean output values, but not `and`, `or`, `not`, or boolean `xor` operations |
-| Comparison | The `equally` verb is used by the current parity programlet | Its lexical phrase is not a polished public function name; comparator behavior needs a focused shared contract and conformance cases |
+| Comparison | `equally`, `tiny`, and `giant` are admitted by the source-level programlet for predicates and branches | Their numeric semantics need focused cross-backend conformance cases; public function names should use reviewed Pyash vocabulary |
 | Vectors | Numeric, boolean, and text vector literals have encoding and decode tests | The programlet ABI currently handles scalar `num` and `bool` outputs only |
 | Evolution | `evolvePyashProgramSource` scores deterministic candidates through the reference interpreter and validates held-out cases | Mutation currently changes numeric case literals only; it does not yet evolve operators or sentence structure |
 
@@ -66,8 +66,9 @@ Each seed should be an ordinary `.pya` function with:
 - A reviewed Pyash ceremony name and explicit typed input/output signature.
 - Defined behavior for boundary values and error cases, inherited from or
   composed out of existing Pyash primitives.
-- A small body with cyclomatic complexity at most 9 and a statically bounded
-  amount of work.
+- A small, reviewable body; complexity at most 9 is a seed-quality target, not
+  a Pyash or VLIW language limit. Execution is bounded by the programlet step
+  budget.
 - Known-answer training cases and a separate held-out set. Cases stay in the
   repository's Pyash data surfaces rather than becoming canonical ad hoc JSON.
 - A successful source-to-`.pyac` lowering, decode round-trip, and reference
@@ -106,9 +107,11 @@ reproducible `.pya` source so it can be reviewed before promotion.
 
 The current programlet evaluator is a CPU reference path using Pyash's
 process-global interpreter memory, so it evaluates candidates sequentially.
-The legacy Housekeeper VLIW batch evaluator is a separate slot/op profile.
-Neither fact prevents defining the source-level library; they do constrain
-which functions can currently be certified as evolutionary candidates or GPU
-workloads. See the
+Each invocation defaults to 65,536 interpreted steps and can be configured up
+to 10,000,000. The Housekeeper batch evaluator is a separate straight-line
+numeric slot profile; its slots and instruction list are no longer capped at
+16 and 31 respectively, while candidate/case, payload, and device-memory
+safety limits remain. Neither backend currently provides parity for every
+Pyash value family or control-flow form. See the
 [`VLIW compiler architecture`](../reference/pyash-vliw-compiler-architecture.md)
 for the implemented programlet slice and backend boundaries.

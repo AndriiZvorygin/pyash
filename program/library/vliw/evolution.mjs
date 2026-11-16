@@ -1,5 +1,6 @@
 import {
-  MAX_FUNCTION_INSTRUCTIONS,
+  DEFAULT_VLIW_FUNCTION_STEP_BUDGET,
+  MAX_VLIW_FUNCTION_STEP_BUDGET,
   compareVliwFitness,
   normalizeVliwFunction,
   scoreVliwFunction
@@ -37,6 +38,7 @@ function candidateFrom(template, id, instructions) {
     slots: [...template.slots],
     inputSlots: [...template.inputSlots],
     outputSlot: template.outputSlot,
+    stepBudget: template.stepBudget ?? DEFAULT_VLIW_FUNCTION_STEP_BUDGET,
     instructions: instructions.map((instruction) => ({ ...instruction }))
   };
 }
@@ -50,7 +52,7 @@ function initialPopulation(template, populationSize, random) {
     [{ op, target: template.outputSlot, left, right }]
   ));
   while (population.length < populationSize) {
-    const count = 1 + Math.floor(random() * Math.min(5, MAX_FUNCTION_INSTRUCTIONS));
+    const count = 1 + Math.floor(random() * 5);
     const instructions = Array.from({ length: count }, () => ({
       op: choose(random, firstOps),
       target: choose(random, template.slots),
@@ -65,7 +67,10 @@ function initialPopulation(template, populationSize, random) {
 function mutate(parent, template, id, random) {
   const instructions = parent.instructions.map((instruction) => ({ ...instruction }));
   const mutation = random();
-  if (mutation < 0.18 && instructions.length < MAX_FUNCTION_INSTRUCTIONS) {
+  if (mutation < 0.18 && instructions.length < Math.min(
+    template.stepBudget ?? DEFAULT_VLIW_FUNCTION_STEP_BUDGET,
+    MAX_VLIW_FUNCTION_STEP_BUDGET
+  )) {
     instructions.splice(Math.floor(random() * (instructions.length + 1)), 0, {
       op: choose(random, ["plus", "subtract", "xor"]),
       target: choose(random, template.slots),
@@ -135,6 +140,7 @@ function batchPayload(template, cases, candidates) {
     slots: template.slots,
     inputSlots: template.inputSlots,
     outputSlot: template.outputSlot,
+    stepBudget: template.stepBudget ?? DEFAULT_VLIW_FUNCTION_STEP_BUDGET,
     cases,
     candidates: candidates.map((candidate) => ({ id: candidate.id, instructions: candidate.instructions }))
   };

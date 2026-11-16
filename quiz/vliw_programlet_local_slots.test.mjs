@@ -16,6 +16,7 @@ import {
 import { interpret } from "../program/bridge/index.mjs";
 import { parse } from "../program/understand/index.mjs";
 import {
+  DEFAULT_PYASH_PROGRAMLET_STEP_BUDGET,
   compilePyashProgramSource,
   decodePyashProgramPack,
   executePyashProgramPack
@@ -90,6 +91,77 @@ test("PyAC programlet requires a typed destination when writing a numeric local"
     () => compilePyashProgramSource(untypedDestination, { invocation: localCounterInvocation }),
     /numeric variable slot requires a typed num destination: count/u
   );
+});
+
+test("PyAC programlets admit long bodies and complexity above the old profile cap", async () => {
+  const longBody = [
+    "su name count twice to name num answer be ceremony def",
+    ...Array.from({ length: 36 }, () => "ob num 1 to name num answer be plus do"),
+    "su name answer ret",
+    "su name count twice be ceremony prah"
+  ].join("\n");
+  const longCompiled = compilePyashProgramSource(longBody, {
+    invocation: "to name num answer be count twice do"
+  });
+  assert.ok(longCompiled.sentences.length > 31);
+  assert.deepEqual((await executePyashProgramPack(longCompiled.pack)).output, { num: 36 });
+
+  const branchBody = [
+    "su name count once to name num answer be ceremony def",
+    ...Array.from({ length: 11 }, () => (
+      "ob num 1 be equally from num 1 then ob num 1 to name num answer be plus do"
+    )),
+    "su name answer ret",
+    "su name count once be ceremony prah"
+  ].join("\n");
+  const branchCompiled = compilePyashProgramSource(branchBody, {
+    invocation: "to name num answer be count once do"
+  });
+  assert.equal(branchCompiled.complexity, 12);
+  assert.deepEqual((await executePyashProgramPack(branchCompiled.pack)).output, { num: 11 });
+});
+
+test("PyAC programlets execute fromindex/toindex loops under a per-run step budget", async () => {
+  const loopSource = [
+    "su name count once fromindex num 0 to name num answer be ceremony def",
+    "ob num 1 to name num answer be plus do",
+    "su name answer ret",
+    "su name count once be ceremony prah"
+  ].join("\n");
+  const compiled = compilePyashProgramSource(loopSource, {
+    invocation: "fromindex num 1 toindex num 4 to name num answer be count once do"
+  });
+  assert.equal(DEFAULT_PYASH_PROGRAMLET_STEP_BUDGET, 65_536);
+  assert.deepEqual((await executePyashProgramPack(compiled.pack)).output, { num: 3 });
+  await assert.rejects(
+    executePyashProgramPack(compiled.pack, { stepBudget: 5 }),
+    /execution step budget exhausted \(5\)/u
+  );
+});
+
+test("PyAC programlets admit existing multiply and scalar comparison primitives", async () => {
+  const arithmeticSource = [
+    "su name multiply once to name num answer be ceremony def",
+    "exists su name count ob num 6 as name permanently number be number ya",
+    "from name count by num 7 to name num answer be multiply do",
+    "su name answer ret",
+    "su name multiply once be ceremony prah"
+  ].join("\n");
+  const arithmetic = compilePyashProgramSource(arithmeticSource, {
+    invocation: "to name num answer be multiply once do"
+  });
+  assert.deepEqual((await executePyashProgramPack(arithmetic.pack)).output, { num: 42 });
+
+  const conditionalSource = [
+    "su name count once to name num answer be ceremony def",
+    "ob num 3 be tiny from num 5 then ob num 2 to name num answer be plus do",
+    "su name answer ret",
+    "su name count once be ceremony prah"
+  ].join("\n");
+  const conditional = compilePyashProgramSource(conditionalSource, {
+    invocation: "to name num answer be count once do"
+  });
+  assert.deepEqual((await executePyashProgramPack(conditional.pack)).output, { num: 2 });
 });
 
 test("interpreter rejects a write to a declared constant quantity", async () => {

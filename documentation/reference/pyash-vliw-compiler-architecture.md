@@ -349,8 +349,8 @@ An accepted candidate has a closed, versioned function contract:
 | Semantics | Defined integer overflow, saturation/wrapping, signedness, division-by-zero, and comparison behavior; identical in the reference executor and every backend. |
 | Effects | Deterministic and side-effect-free during evaluation. Random mutation is seeded and performed by the host evolution process, not by the candidate. No I/O, network, clock, model call, or undeclared memory access. |
 | State | Locals and writable state are declared with fixed extents. Invocation-local unsigned 16-bit numeric slots are implemented in the Pyash programlet; target evaluators must account for their per-work-item state and preserve frame isolation. Other types and bulk pages remain future work. |
-| Control flow | A finite control-flow graph with cyclomatic complexity at most 9. No recursion or unbounded loops. Loops are accepted only with a statically verifiable iteration bound. |
-| Work bound | A profile-supplied instruction/step budget and fixed input extent. Statically reject candidates whose worst-case work exceeds the budget; enforce a runtime step counter in the reference evaluator. |
+| Control flow | Finite branches, bounded `fromindex`/`toindex` loops, and acyclic ceremony calls. Recursion is rejected. Complexity at most 9 is a seed-quality target, not a language ceiling. |
+| Work bound | A per-invocation step budget, default 65,536 and configurable up to 10,000,000. The reference interpreter enforces it at runtime; straight-line candidates are also checked against the declared budget before dispatch. |
 | VLIW representation | A function body may span multiple codelets. The 16-word codelet is an encoding unit, not a function-size limit or a register file. Grammatical cases describe operand roles; the target ABI maps values to virtual/physical registers or memory. |
 
 Define cyclomatic complexity from the candidate CFG itself as `M = E - N + 2P`
@@ -384,16 +384,19 @@ translated into a private instruction-map language.
   complexity. A separate held-out set is required for a candidate to be
   reported as validated.
 
-This v1 gate accepts named ceremony definitions, bounded acyclic ceremony
-calls, `ret`, and the pure built-ins `remains`, `equally`, `plus`, and
-`subtract`. It rejects loops, recursion, effects/unknown verbs, unsupported
-sentence forms, more than 31 sentences, and cyclomatic complexity above 9.
+This source-level gate accepts named ceremony definitions, `fromindex`/
+`toindex` loops, acyclic ceremony calls, `ret`, numeric locals, scalar
+`num`/`bool` results, arithmetic verbs `remains`, `plus`, `subtract`,
+`multiply`, `divide`, `exponential`, `invert`, and `xor`, and scalar
+`equally`/`tiny`/`giant` comparisons. It rejects recursion, effects/unknown
+verbs, and unsupported sentence forms. It has no sentence-count or
+cyclomatic-complexity ceiling; the runtime step budget is the execution bound.
 Candidate evaluation is sequential because the current Pyash reference
 interpreter has process-global memory. It uses deterministic seeded host
 mutation and CPU reference execution; this does **not** yet dispatch ordinary
-Pyash programlets to Housekeeper or execute them on a GPU. The existing
-Housekeeper VLIW batch evaluator below remains its separate legacy slot/op
-profile.
+Pyash programlets to Housekeeper or execute their control-flow graphs on a
+GPU. The existing Housekeeper VLIW batch evaluator below remains its separate
+straight-line numeric slot/op profile.
 
 The source-to-pack-to-decoded-interpreter proof and deterministic evolution
 checks are covered by:
@@ -429,10 +432,13 @@ correct fallback for devices lacking that feature.
 ### Implemented Housekeeper Subset
 
 The current experimental `vliw-batch-evaluate` profile is deliberately narrower
-than the contract above:
+than the source-level contract above:
 
-- Functions have exactly two unsigned 16-bit inputs, named fixed-width slots,
-  one unsigned 16-bit output, and at most 31 straight-line instructions.
+- Functions have exactly two unsigned 16-bit inputs, a named slot table, one
+  unsigned 16-bit output, and straight-line instructions. The prior 16-slot
+  and 31-instruction ceilings are removed. The profile defaults to 65,536
+  steps (maximum 10,000,000), with a 1 MiB normalized function limit, 16 MiB
+  batch limit, 512 MiB scratch limit, and existing candidate/case/pair caps.
 - Its tested operations are saturating unsigned addition, floor-at-zero
   unsigned subtraction, and 16-bit XOR. It has no branches, loops, calls, or
   side effects, so its control-flow complexity is one.
@@ -444,7 +450,7 @@ than the contract above:
   64 MiB GPU request, and evaluates candidate/example pairs in a CUDA kernel.
   Failed or timed-out jobs are surfaced with their durable handle; the
   production adapter has no local CPU scoring fallback.
-- A bounded Pyash source surface is now available in
+- A bounded Pyash map/series source surface is available in
   `examples/pyash/vliw-u16-addition.pya`. Its named maps declare the function,
   instruction records, and input/expected-output cases; named series select
   the instruction order and training/held-out cases. The parser in
@@ -452,7 +458,9 @@ than the contract above:
   and returns the existing normalized function contract plus case arrays. It
   rejects malformed references and sentence shapes rather than executing or
   silently skipping them. The current profile is still only two U16 inputs,
-  one U16 output, and straight-line `plus`, `subtract`, or `xor` instructions.
+  one U16 output, and straight-line `plus`, `subtract`, or `xor` instructions;
+  it does not yet represent branches, loops, calls, text/date/vector slots, or
+  ordinary `.pyac` programlet execution on CUDA.
 - `evolveVliwFunctionSourceThroughHousekeeper` runs that source through the
   existing seeded evolution loop, then checks every returned training and
   held-out output against the CPU reference. The result includes a parseable

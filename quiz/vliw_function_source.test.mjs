@@ -60,6 +60,7 @@ test("Pyash VLIW source lowers named maps and series to the normalized function 
     slots: ["left", "right", "sum"],
     inputSlots: ["left", "right"],
     outputSlot: "sum",
+    stepBudget: 65536,
     instructions: [{ op: "plus", target: "sum", left: "left", right: "right" }]
   });
   assert.deepEqual(source.trainingCases, [

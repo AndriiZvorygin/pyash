@@ -400,8 +400,8 @@ export {
   lowerPyashSentence
 } from "./sentence.mjs";
 export {
-  MAX_PYASH_PROGRAMLET_COMPLEXITY,
-  MAX_PYASH_PROGRAMLET_SENTENCES,
+  DEFAULT_PYASH_PROGRAMLET_STEP_BUDGET,
+  MAX_PYASH_PROGRAMLET_STEP_BUDGET,
   compilePyashProgramSource,
   decodePyashProgramPack,
   executePyashProgramPack,

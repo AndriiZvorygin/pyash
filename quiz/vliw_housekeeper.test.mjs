@@ -141,3 +141,28 @@ test("VLIW evaluator surfaces a failed Housekeeper handle instead of scoring loc
 
   await assert.rejects(evaluator(batch), /VLIW Housekeeper job vliw-failed-batch failed: CUDA device unavailable/u);
 });
+
+test("VLIW Housekeeper VRAM requests scale with batch scratch and buffer sizes", async () => {
+  let submittedSpec;
+  const evaluator = createHousekeeperVliwBatchEvaluator({
+    worldRoot: "/tmp/vliw-housekeeper-vram-test",
+    makeHandleId: () => "vliw-large-batch-vram",
+    async submitDuty(call) {
+      submittedSpec = JSON.parse(call.ob.text);
+    },
+    async readStatus() {
+      return { status: "success", result: JSON.stringify({ schemaVersion: 1, scores: [] }) };
+    }
+  });
+  const largeBatch = {
+    ...batch,
+    slots: ["left", "right", ...Array.from({ length: 4094 }, (_, index) => `scratch-${index}`)],
+    cases: Array.from({ length: 2048 }, () => ({
+      values: { left: 1, right: 2 },
+      expected: 3
+    }))
+  };
+
+  await evaluator(largeBatch);
+  assert.ok(submittedSpec.resourceRequest.vramRequiredMb > 64);
+});

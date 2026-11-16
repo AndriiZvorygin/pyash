@@ -168,6 +168,16 @@ function validateCeremonySequenceDeps(name) {
 
 export async function interpret(sentence, { runtimeContext = null } = {}) {
   if (!sentence) return;
+  if (state.programStepBudget) {
+    if (state.programStepBudget.remaining <= 0) {
+      const error = new Error(
+        `Pyash execution step budget exhausted (${state.programStepBudget.limit})`
+      );
+      error.name = "PyashExecutionBudgetError";
+      throw error;
+    }
+    state.programStepBudget.remaining -= 1;
+  }
   if (state.pendingCondition != null && sentence.mood !== "then") {
     const allowed = state.pendingCondition === true;
     state.pendingCondition = null;

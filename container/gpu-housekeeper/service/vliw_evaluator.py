@@ -1,6 +1,7 @@
 """Bounded CUDA evaluator for batches of named-slot Pyash VLIW functions."""
 
 import ctypes
+import json
 import math
 import re
 from typing import Any, Dict, List, Tuple
@@ -8,8 +9,10 @@ from typing import Any, Dict, List, Tuple
 MAX_CANDIDATES = 256
 MAX_CASES = 4096
 MAX_PAIRS = 262144
-MAX_SLOTS = 16
-MAX_INSTRUCTIONS = 31
+MAX_BATCH_BYTES = 16 * 1024 * 1024
+MAX_SCRATCH_BYTES = 512 * 1024 * 1024
+DEFAULT_STEP_BUDGET = 65_536
+MAX_STEP_BUDGET = 10_000_000
 OPCODES = {"plus": 1, "subtract": 2, "xor": 3}
 
 _PTX = r"""
@@ -20,105 +23,105 @@ _PTX = r"""
   .param .u64 candidates_ptr,
   .param .u64 cases_ptr,
   .param .u64 results_ptr,
+  .param .u64 scratch_ptr,
   .param .u32 candidate_count,
   .param .u32 case_count,
-  .param .u32 slot_count
+  .param .u32 slot_count,
+  .param .u32 candidate_stride
 )
 {
   .reg .pred %p<8>;
   .reg .b32 %r<24>;
   .reg .b64 %rd<16>;
-  .local .align 4 .b8 local_slots[64];
 
   ld.param.u64 %rd0, [candidates_ptr];
   ld.param.u64 %rd1, [cases_ptr];
   ld.param.u64 %rd2, [results_ptr];
+  ld.param.u64 %rd3, [scratch_ptr];
   ld.param.u32 %r0, [candidate_count];
   ld.param.u32 %r1, [case_count];
   ld.param.u32 %r2, [slot_count];
-  mov.u32 %r3, %ctaid.x;
-  mov.u32 %r4, %ntid.x;
-  mov.u32 %r5, %tid.x;
-  mad.lo.u32 %r6, %r3, %r4, %r5;
-  mul.lo.u32 %r7, %r0, %r1;
-  setp.ge.u32 %p0, %r6, %r7;
+  ld.param.u32 %r3, [candidate_stride];
+  mov.u32 %r4, %ctaid.x;
+  mov.u32 %r5, %ntid.x;
+  mov.u32 %r6, %tid.x;
+  mad.lo.u32 %r7, %r4, %r5, %r6;
+  mul.lo.u32 %r8, %r0, %r1;
+  setp.ge.u32 %p0, %r7, %r8;
   @%p0 bra DONE;
 
-  div.u32 %r8, %r6, %r1;
-  rem.u32 %r9, %r6, %r1;
-  mul.lo.u32 %r10, %r8, 126;
-  mul.wide.u32 %rd3, %r10, 4;
-  add.u64 %rd4, %rd0, %rd3;
-  ld.global.u32 %r11, [%rd4];
-  ld.global.u32 %r12, [%rd4+4];
+  div.u32 %r9, %r7, %r1;
+  rem.u32 %r10, %r7, %r1;
+  mul.lo.u32 %r11, %r9, %r3;
+  mul.wide.u32 %rd4, %r11, 4;
+  add.u64 %rd5, %rd0, %rd4;
+  ld.global.u32 %r12, [%rd5];
+  ld.global.u32 %r13, [%rd5+4];
 
-  add.u32 %r13, %r2, 1;
-  mul.lo.u32 %r14, %r9, %r13;
-  mul.wide.u32 %rd5, %r14, 4;
-  add.u64 %rd6, %rd1, %rd5;
-  mov.u32 %r15, 0;
+  add.u32 %r14, %r2, 1;
+  mul.lo.u32 %r15, %r10, %r14;
+  mul.wide.u32 %rd6, %r15, 4;
+  add.u64 %rd7, %rd1, %rd6;
+  mul.lo.u32 %r16, %r7, %r2;
+  mul.wide.u32 %rd8, %r16, 4;
+  add.u64 %rd9, %rd3, %rd8;
+  mov.u32 %r17, 0;
 LOAD_SLOT:
-  setp.ge.u32 %p1, %r15, %r2;
+  setp.ge.u32 %p1, %r17, %r2;
   @%p1 bra LOAD_DONE;
-  mul.wide.u32 %rd7, %r15, 4;
-  add.u64 %rd8, %rd6, %rd7;
-  ld.global.u32 %r16, [%rd8];
-  mul.wide.u32 %rd9, %r15, 4;
-  mov.u64 %rd10, local_slots;
-  add.u64 %rd10, %rd10, %rd9;
-  st.local.u32 [%rd10], %r16;
-  add.u32 %r15, %r15, 1;
+  mul.wide.u32 %rd10, %r17, 4;
+  add.u64 %rd11, %rd7, %rd10;
+  ld.global.u32 %r18, [%rd11];
+  add.u64 %rd12, %rd9, %rd10;
+  st.global.u32 [%rd12], %r18;
+  add.u32 %r17, %r17, 1;
   bra LOAD_SLOT;
 LOAD_DONE:
-  mov.u32 %r15, 0;
+  mov.u32 %r17, 0;
 INSTRUCTION:
-  setp.ge.u32 %p2, %r15, %r11;
+  setp.ge.u32 %p2, %r17, %r12;
   @%p2 bra RETURN_VALUE;
-  mul.lo.u32 %r17, %r15, 16;
-  add.u32 %r17, %r17, 2;
-  mul.wide.u32 %rd11, %r17, 4;
-  add.u64 %rd12, %rd4, %rd11;
+  mul.lo.u32 %r18, %r17, 4;
+  add.u32 %r18, %r18, 2;
+  mul.wide.u32 %rd10, %r18, 4;
+  add.u64 %rd11, %rd5, %rd10;
+  ld.global.u32 %r19, [%rd11];
+  ld.global.u32 %r20, [%rd11+4];
+  ld.global.u32 %r21, [%rd11+8];
+  ld.global.u32 %r22, [%rd11+12];
+  mul.wide.u32 %rd10, %r21, 4;
+  add.u64 %rd12, %rd9, %rd10;
+  ld.global.u32 %r23, [%rd12];
+  mul.wide.u32 %rd10, %r22, 4;
+  add.u64 %rd12, %rd9, %rd10;
   ld.global.u32 %r18, [%rd12];
-  ld.global.u32 %r19, [%rd12+4];
-  ld.global.u32 %r20, [%rd12+8];
-  ld.global.u32 %r21, [%rd12+12];
-  mul.wide.u32 %rd13, %r20, 4;
-  mov.u64 %rd14, local_slots;
-  add.u64 %rd14, %rd14, %rd13;
-  ld.local.u32 %r22, [%rd14];
-  mul.wide.u32 %rd13, %r21, 4;
-  mov.u64 %rd14, local_slots;
-  add.u64 %rd14, %rd14, %rd13;
-  ld.local.u32 %r23, [%rd14];
-  setp.eq.u32 %p3, %r18, 1;
+  setp.eq.u32 %p3, %r19, 1;
   @%p3 bra OP_PLUS;
-  setp.eq.u32 %p3, %r18, 2;
+  setp.eq.u32 %p3, %r19, 2;
   @%p3 bra OP_SUBTRACT;
-  xor.b32 %r22, %r22, %r23;
+  xor.b32 %r23, %r23, %r18;
   bra STORE_RESULT;
 OP_PLUS:
-  add.u32 %r22, %r22, %r23;
-  min.u32 %r22, %r22, 65535;
+  add.u32 %r23, %r23, %r18;
+  min.u32 %r23, %r23, 65535;
   bra STORE_RESULT;
 OP_SUBTRACT:
-  setp.ge.u32 %p4, %r22, %r23;
-  sub.u32 %r22, %r22, %r23;
-  @!%p4 mov.u32 %r22, 0;
+  setp.ge.u32 %p4, %r23, %r18;
+  sub.u32 %r23, %r23, %r18;
+  @!%p4 mov.u32 %r23, 0;
 STORE_RESULT:
-  mul.wide.u32 %rd13, %r19, 4;
-  mov.u64 %rd14, local_slots;
-  add.u64 %rd14, %rd14, %rd13;
-  st.local.u32 [%rd14], %r22;
-  add.u32 %r15, %r15, 1;
+  mul.wide.u32 %rd10, %r20, 4;
+  add.u64 %rd12, %rd9, %rd10;
+  st.global.u32 [%rd12], %r23;
+  add.u32 %r17, %r17, 1;
   bra INSTRUCTION;
 RETURN_VALUE:
-  mul.wide.u32 %rd13, %r12, 4;
-  mov.u64 %rd14, local_slots;
-  add.u64 %rd14, %rd14, %rd13;
-  ld.local.u32 %r22, [%rd14];
-  mul.wide.u32 %rd13, %r6, 4;
-  add.u64 %rd14, %rd2, %rd13;
-  st.global.u32 [%rd14], %r22;
+  mul.wide.u32 %rd10, %r13, 4;
+  add.u64 %rd12, %rd9, %rd10;
+  ld.global.u32 %r23, [%rd12];
+  mul.wide.u32 %rd10, %r7, 4;
+  add.u64 %rd12, %rd2, %rd10;
+  st.global.u32 [%rd12], %r23;
 DONE:
   ret;
 }
@@ -155,9 +158,15 @@ def prepare_vliw_batch(payload: Any) -> Dict[str, Any]:
   raw = _require_map(payload, "vliw batch payload")
   if raw.get("schemaVersion") != 1:
     raise ValueError("vliw batch schemaVersion must be 1")
+  encoded_size = len(json.dumps(raw, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+  if encoded_size > MAX_BATCH_BYTES:
+    raise ValueError(f"VLIW batch payload exceeds the {MAX_BATCH_BYTES}-byte safety limit")
+  step_budget = raw.get("stepBudget", DEFAULT_STEP_BUDGET)
+  if isinstance(step_budget, bool) or not isinstance(step_budget, int) or not 1 <= step_budget <= MAX_STEP_BUDGET:
+    raise ValueError(f"stepBudget must be an integer from 1 through {MAX_STEP_BUDGET}")
   slot_names = raw.get("slots")
-  if not isinstance(slot_names, list) or not 2 <= len(slot_names) <= MAX_SLOTS:
-    raise ValueError(f"slots must contain 2 through {MAX_SLOTS} names")
+  if not isinstance(slot_names, list) or len(slot_names) < 2:
+    raise ValueError("slots must contain at least two names")
   normalized_slots = [str(item).strip() for item in slot_names]
   if any(not item for item in normalized_slots) or len(set(normalized_slots)) != len(normalized_slots):
     raise ValueError("slot names must be non-empty and unique")
@@ -181,6 +190,9 @@ def prepare_vliw_batch(payload: Any) -> Dict[str, Any]:
     raise ValueError(f"candidate limit is {MAX_CANDIDATES}")
   if len(cases_raw) * len(candidates_raw) > MAX_PAIRS:
     raise ValueError(f"candidate/case pair limit is {MAX_PAIRS}")
+  scratch_bytes = len(cases_raw) * len(candidates_raw) * len(normalized_slots) * 4
+  if scratch_bytes > MAX_SCRATCH_BYTES:
+    raise ValueError(f"VLIW batch scratch requirement exceeds the {MAX_SCRATCH_BYTES}-byte device safety limit")
 
   cases: List[Tuple[List[int], int]] = []
   for case_index, case_value in enumerate(cases_raw):
@@ -204,8 +216,8 @@ def prepare_vliw_batch(payload: Any) -> Dict[str, Any]:
     instructions_raw = candidate.get("instructions")
     if not isinstance(instructions_raw, list) or not instructions_raw:
       raise ValueError(f"candidate {candidate_id} must contain at least one instruction")
-    if len(instructions_raw) > MAX_INSTRUCTIONS:
-      raise ValueError(f"candidate {candidate_id} exceeds the {MAX_INSTRUCTIONS}-instruction limit")
+    if len(instructions_raw) > step_budget:
+      raise ValueError(f"candidate {candidate_id} requires {len(instructions_raw)} steps but stepBudget is {step_budget}")
     instructions = []
     for instruction_index, instruction_value in enumerate(instructions_raw):
       instruction = _require_map(instruction_value, f"candidate {candidate_id} instruction {instruction_index + 1}")
@@ -224,6 +236,7 @@ def prepare_vliw_batch(payload: Any) -> Dict[str, Any]:
     "slotNames": normalized_slots,
     "inputSlots": input_slots,
     "outputSlot": output_slot,
+    "stepBudget": step_budget,
     "cases": cases,
     "candidates": candidates
   }
@@ -265,7 +278,8 @@ def evaluate_vliw_batch_cuda(prepared: Dict[str, Any], device_id: str = "gpu0") 
   candidate_count = len(prepared["candidates"])
   case_count = len(prepared["cases"])
   slot_count = len(prepared["slotNames"])
-  candidate_stride = 2 + MAX_INSTRUCTIONS * 4
+  max_instructions = max(len(candidate["instructions"]) for candidate in prepared["candidates"])
+  candidate_stride = 2 + max_instructions * 4
   candidate_words = [0] * (candidate_count * candidate_stride)
   for candidate_index, candidate in enumerate(prepared["candidates"]):
     base = candidate_index * candidate_stride
@@ -306,24 +320,33 @@ def evaluate_vliw_batch_cuda(prepared: Dict[str, Any], device_id: str = "gpu0") 
       _check_cuda(driver.cuMemcpyHtoD_v2(address, ctypes.cast(array, ptr), size), "host-to-device copy")
       return address
 
+    def allocate(size):
+      address = u64()
+      _check_cuda(driver.cuMemAlloc_v2(ctypes.byref(address), size), "device allocation")
+      device_candidates.append(address)
+      return address
+
     candidates_address = allocate_and_copy(candidate_array)
     cases_address = allocate_and_copy(case_array)
-    results_address = u64()
-    _check_cuda(driver.cuMemAlloc_v2(ctypes.byref(results_address), ctypes.sizeof(result_array)), "result allocation")
-    device_candidates.append(results_address)
+    results_address = allocate(ctypes.sizeof(result_array))
+    scratch_address = allocate(pair_count * slot_count * ctypes.sizeof(u32))
     candidate_arg = u64(candidates_address.value)
     cases_arg = u64(cases_address.value)
     results_arg = u64(results_address.value)
+    scratch_arg = u64(scratch_address.value)
     candidate_count_arg = u32(candidate_count)
     case_count_arg = u32(case_count)
     slot_count_arg = u32(slot_count)
-    kernel_arguments = (ptr * 6)(
+    candidate_stride_arg = u32(candidate_stride)
+    kernel_arguments = (ptr * 8)(
       ctypes.cast(ctypes.byref(candidate_arg), ptr),
       ctypes.cast(ctypes.byref(cases_arg), ptr),
       ctypes.cast(ctypes.byref(results_arg), ptr),
+      ctypes.cast(ctypes.byref(scratch_arg), ptr),
       ctypes.cast(ctypes.byref(candidate_count_arg), ptr),
       ctypes.cast(ctypes.byref(case_count_arg), ptr),
-      ctypes.cast(ctypes.byref(slot_count_arg), ptr)
+      ctypes.cast(ctypes.byref(slot_count_arg), ptr),
+      ctypes.cast(ctypes.byref(candidate_stride_arg), ptr)
     )
     block_size = 128
     grid_size = math.ceil(pair_count / block_size)
@@ -368,6 +391,7 @@ def score_vliw_batch(payload: Any, device_id: str = "gpu0") -> Dict[str, Any]:
   return {
     "schemaVersion": 1,
     "deviceId": str(device_id),
+    "stepBudget": prepared["stepBudget"],
     "caseCount": len(prepared["cases"]),
     "candidateCount": len(prepared["candidates"]),
     "scores": scores

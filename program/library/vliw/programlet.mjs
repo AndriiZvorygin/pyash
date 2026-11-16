@@ -3,15 +3,28 @@ import { parse } from "../../understand/index.mjs";
 import { allRemember, doRemember, forget, remember } from "../../remember/index.mjs";
 import { decodePyashProgram, lowerPyashProgram } from "./sentence.mjs";
 import { decodePyacPack, encodePyacPack } from "./database.mjs";
+import { state as bridgeState } from "../../bridge/state.mjs";
 import {
   isNamedNumericSlotDeclaration,
   namedNumericSlotKind
 } from "../named_numeric_slot.mjs";
 
-export const MAX_PYASH_PROGRAMLET_SENTENCES = 31;
-export const MAX_PYASH_PROGRAMLET_COMPLEXITY = 9;
+export const DEFAULT_PYASH_PROGRAMLET_STEP_BUDGET = 65_536;
+export const MAX_PYASH_PROGRAMLET_STEP_BUDGET = 10_000_000;
 
-const PURE_BUILTIN_VERBS = new Set(["remains", "equally", "plus", "subtract"]);
+const PURE_BUILTIN_VERBS = new Set([
+  "remains",
+  "equally",
+  "tiny",
+  "giant",
+  "plus",
+  "subtract",
+  "multiply",
+  "divide",
+  "exponential",
+  "invert",
+  "xor"
+]);
 
 function fail(message, details = {}) {
   const error = new Error(message);
@@ -66,9 +79,6 @@ function outputType(sentence) {
 }
 
 function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
-  if (sentences.length > MAX_PYASH_PROGRAMLET_SENTENCES) {
-    fail(`Pyash programlet exceeds ${MAX_PYASH_PROGRAMLET_SENTENCES} sentences`, { sentenceCount: sentences.length });
-  }
   const definitionNames = sentences
     .filter((sentence) => sentence?.mood === "def" && sentence.be === "ceremony")
     .map((sentence) => sentence.su?.name)
@@ -92,13 +102,10 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
   let activeDefinitionHasAction = false;
   let activeSlots = new Map();
   for (const [index, sentence] of sentences.entries()) {
-    if (sentence?.fromindex !== undefined || sentence?.toindex !== undefined || sentence?.atindex !== undefined) {
-      fail("Pyash programlet v1 does not admit loops", { sentence: index + 1 });
-    }
     if (sentence.mood === "def") {
       if (activeDefinition) fail("Pyash programlet ceremony definitions cannot be nested", { sentence: index + 1 });
       if (sentence.be !== "ceremony" || !sentence.su?.name) {
-        fail("Pyash programlet v1 admits named ceremony definitions only", { sentence: index + 1, be: sentence.be });
+        fail("Pyash programlet admits named ceremony definitions only", { sentence: index + 1, be: sentence.be });
       }
       activeDefinition = sentence.su.name;
       activeDefinitionReturns = false;
@@ -206,7 +213,7 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
   const visited = new Set();
   const visitCall = (name) => {
     if (visiting.has(name)) {
-      fail("Pyash programlet v1 does not admit recursive ceremony calls", { ceremony: name });
+      fail("Pyash programlet does not admit recursive ceremony calls", { ceremony: name });
     }
     if (visited.has(name)) return;
     visiting.add(name);
@@ -217,12 +224,17 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
   for (const name of definitions) visitCall(name);
 
   const complexity = programComplexity(sentences);
-  if (complexity > MAX_PYASH_PROGRAMLET_COMPLEXITY) {
-    fail(`Pyash programlet cyclomatic complexity must be at most ${MAX_PYASH_PROGRAMLET_COMPLEXITY}`, {
-      complexity
+  return { definitions, complexity };
+}
+
+function normalizeStepBudget(value = DEFAULT_PYASH_PROGRAMLET_STEP_BUDGET) {
+  const budget = Number(value);
+  if (!Number.isSafeInteger(budget) || budget < 1 || budget > MAX_PYASH_PROGRAMLET_STEP_BUDGET) {
+    fail(`Pyash programlet stepBudget must be an integer from 1 through ${MAX_PYASH_PROGRAMLET_STEP_BUDGET}`, {
+      stepBudget: value
     });
   }
-  return { definitions, complexity };
+  return budget;
 }
 
 function parseInvocation(invocation) {
@@ -274,11 +286,17 @@ function defaultOutputFact(invocation) {
 }
 
 /** Execute a self-contained .pyac program in a clean reference-interpreter scope. */
-export async function executePyashProgramPack(pack, { outputName = "" } = {}) {
+export async function executePyashProgramPack(pack, {
+  outputName = "",
+  stepBudget = DEFAULT_PYASH_PROGRAMLET_STEP_BUDGET
+} = {}) {
   if (allRemember().length > 0) {
     fail("Pyash programlet reference execution requires an empty interpreter memory");
   }
+  const limit = normalizeStepBudget(stepBudget);
   forget();
+  const previousBudget = bridgeState.programStepBudget;
+  bridgeState.programStepBudget = { limit, remaining: limit };
   try {
     const sentences = decodePyashProgramPack(pack);
     const invocation = sentences.at(-1);
@@ -298,6 +316,7 @@ export async function executePyashProgramPack(pack, { outputName = "" } = {}) {
     const output = remember(destination)?.ob;
     return { output, execution, complexity: programComplexity(sentences.slice(0, -1)) };
   } finally {
+    bridgeState.programStepBudget = previousBudget;
     forget();
   }
 }
@@ -372,7 +391,7 @@ function compareFitness(left, right) {
     || left.sourceText.localeCompare(right.sourceText);
 }
 
-async function scoreSource(sourceText, { functionName, cases, outputName }) {
+async function scoreSource(sourceText, { functionName, cases, outputName, stepBudget }) {
   const results = [];
   let vectorCount = 0;
   let complexity = 0;
@@ -385,7 +404,7 @@ async function scoreSource(sourceText, { functionName, cases, outputName }) {
     const compiled = compilePyashProgramSource(sourceText, { invocation });
     vectorCount = compiled.vectorCount;
     complexity = compiled.complexity;
-    const actual = await executePyashProgramPack(compiled.pack, { outputName });
+    const actual = await executePyashProgramPack(compiled.pack, { outputName, stepBudget });
     const value = actual.output?.boolean;
     results.push({ input, expected: testCase.expected, actual: typeof value === "boolean" ? value : null });
   }
@@ -406,7 +425,8 @@ export async function evolvePyashProgramSource({
   populationSize = 24,
   generations = 8,
   seed = 1,
-  outputName = "answer"
+  outputName = "answer",
+  stepBudget = DEFAULT_PYASH_PROGRAMLET_STEP_BUDGET
 } = {}) {
   if (!Array.isArray(trainingCases) || !trainingCases.length) fail("Pyash programlet evolution requires training cases");
   if (!Array.isArray(heldoutCases) || !heldoutCases.length) fail("Pyash programlet evolution requires held-out cases");
@@ -427,7 +447,7 @@ export async function evolvePyashProgramSource({
   for (let generation = 0; generation < generations; generation += 1) {
     const ranked = [];
     for (const candidate of population) {
-      ranked.push(await scoreSource(candidate, { functionName, cases: trainingCases, outputName }));
+      ranked.push(await scoreSource(candidate, { functionName, cases: trainingCases, outputName, stepBudget }));
     }
     ranked.sort(compareFitness);
     champion = ranked[0];
@@ -444,12 +464,14 @@ export async function evolvePyashProgramSource({
   const trainingFitness = await scoreSource(champion.sourceText, {
     functionName,
     cases: trainingCases,
-    outputName
+    outputName,
+    stepBudget
   });
   const heldoutFitness = await scoreSource(champion.sourceText, {
     functionName,
     cases: heldoutCases,
-    outputName
+    outputName,
+    stepBudget
   });
   const compiled = compilePyashProgramSource(champion.sourceText);
   return {
