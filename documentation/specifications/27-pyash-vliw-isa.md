@@ -108,11 +108,38 @@ the block kind as semantic metadata alongside the payload; it must not fold
 the delimiters into the payload or silently discard the kind. The kind is
 external to the payload, consistent with the legacy quote model's separation
 of value bytes and type information. In the VLIW sentence stream, a non-default
-kind is encoded before its value as the existing `name_` HNUC followed by a
-paragraph-letter quote containing the kind. This inline metadata prefix uses
-no quote-sort values or new HNUCs, and the decoder restores it to the sentence's
-`quoteKinds` map rather than adding it to the payload text. The flat v1 `.pyac`
-container therefore preserves the kind in its codelet words.
+kind uses the paired `zi` frame:
+
+```text
+zi 0 tag [length-quote] [hash-quote] 0 payload 0 tag 0 zi
+```
+
+`zi` is the existing `quoted_` HNUC (`0x229E`). The tag is a complete,
+self-delimiting typed quote value carrying the source quote kind (a text quote
+when the kind is textual); its full encoded words are repeated unchanged at
+close. It is framing metadata, not the legacy quote-sort field. Each optional
+field is a complete, properly typed quote value. No optional fields means
+neither length nor hash; one means the payload length in 16-bit words; two
+means payload length followed by hash. Thus a hash is never present without
+the length field. Each value's quote header and length determine its extent,
+so hashes need not have a fixed width. The length field is an unsigned 16-bit
+number quote (`0x881D` followed by the word count).
+The zero after `zi` distinguishes a frame from zero padding: a following zero
+means padding, while a nonzero tag begins the frame. The zero before `payload`
+ends the tag and optional-field prefix, and the payload uses its ordinary
+typed quote encoding. The closing zero and repeated tag must be followed by
+`zi`.
+
+Within this frame, the decoder interprets zero words as delimiters; outside
+the frame, zero words retain their existing padding meaning. It parses the
+tag and optional typed fields by their declared extents, then parses the
+payload by its quote header and length. It does not scan arbitrary payload
+words for a matching tag. If present, the payload length is checked against
+the decoded payload extent. Before producers emit a hash, a versioned profile
+MUST specify its algorithm and the canonical payload bytes it covers.
+Decoding restores the tag's quote kind to the sentence's `quoteKinds` map.
+This framing allocates no legacy quote-sort value or new HNUC; the flat v1
+`.pyac` container preserves the frame in its codelet words.
 
 ### 4.2 VLIW shape
 
