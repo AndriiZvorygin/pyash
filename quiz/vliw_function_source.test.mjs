@@ -80,8 +80,8 @@ test("Pyash VLIW source cases score through the CPU reference implementation", (
 
 test("Pyash VLIW source rejects unsupported instruction records and dangling references", () => {
   assert.throws(
-    () => parseVliwFunctionSource(fixtureText.replace('ob text "plus"', 'ob text "multiply"')),
-    /unsupported VLIW operation: multiply/u
+    () => parseVliwFunctionSource(fixtureText.replace('ob text "plus"', 'ob text "not-a-vliw-operation"')),
+    /unsupported VLIW operation: not-a-vliw-operation/u
   );
   assert.throws(
     () => parseVliwFunctionSource(fixtureText.replace("su name addition instruction 001 ya", "su name missing instruction ya")),

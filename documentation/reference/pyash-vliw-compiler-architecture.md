@@ -435,13 +435,19 @@ The current experimental `vliw-batch-evaluate` profile is deliberately narrower
 than the source-level contract above:
 
 - Functions have exactly two unsigned 16-bit inputs, a named slot table, one
-  unsigned 16-bit output, and straight-line instructions. The prior 16-slot
+  unsigned 32-bit result slot, and straight-line instructions. The prior 16-slot
   and 31-instruction ceilings are removed. The profile defaults to 65,536
   steps (maximum 10,000,000), with a 1 MiB normalized function limit, 16 MiB
   batch limit, 512 MiB scratch limit, and existing candidate/case/pair caps.
-- Its tested operations are saturating unsigned addition, floor-at-zero
-  unsigned subtraction, and 16-bit XOR. It has no branches, loops, calls, or
-  side effects, so its control-flow complexity is one.
+- Its CUDA kernel supports saturating unsigned-16 addition and subtraction,
+  unsigned-16 XOR, full unsigned-32 multiplication results, unsigned-16
+  division/remainder, saturating unsigned-16 exponentiation, and unsigned
+  `equally`, `tiny`, and `giant` predicates encoded as 0/1. Every operation
+  requires unsigned-16 operands; multiply may return unsigned-32, but a later
+  operation rejects that result if it exceeds unsigned-16 range. Division
+  and remainder by zero fail the Housekeeper job explicitly. It has no
+  branches, loops, calls, or side effects, so its control-flow complexity is
+  one.
 - The host reference semantics live in `program/library/vliw/functions.mjs`.
   `program/library/vliw/evolution.mjs` performs deterministic seeded mutation
   on the host; `evolveVliwFunctionThroughHousekeeper` sends every training and
@@ -450,6 +456,12 @@ than the source-level contract above:
   64 MiB GPU request, and evaluates candidate/example pairs in a CUDA kernel.
   Failed or timed-out jobs are surfaced with their durable handle; the
   production adapter has no local CPU scoring fallback.
+- `executeNumericPyacPackThroughHousekeeper` is the canonical `.pyac` bridge
+  for this subset: Pyash's numeric-arithmetic codelet decoder validates each
+  16-word record, the host groups scalar codelets into independent CUDA batches,
+  and every returned value is checked against the CPU codelet executor. It
+  rejects vector, control-flow, declaration, and non-arithmetic codelets before
+  submission rather than pretending to execute the whole pack.
 - A bounded Pyash map/series source surface is available in
   `examples/pyash/vliw-u16-addition.pya`. Its named maps declare the function,
   instruction records, and input/expected-output cases; named series select
@@ -458,9 +470,10 @@ than the source-level contract above:
   and returns the existing normalized function contract plus case arrays. It
   rejects malformed references and sentence shapes rather than executing or
   silently skipping them. The current profile is still only two U16 inputs,
-  one U16 output, and straight-line `plus`, `subtract`, or `xor` instructions;
-  it does not yet represent branches, loops, calls, text/date/vector slots, or
-  ordinary `.pyac` programlet execution on CUDA.
+  named scalar slots, and straight-line instructions; its canonical `.pyac`
+  bridge supports scalar arithmetic codelets only. It does not yet represent
+  branches, loops, calls, text/date/vector slots, or ordinary multi-sentence
+  `.pyac` programlet execution on CUDA.
 - `evolveVliwFunctionSourceThroughHousekeeper` runs that source through the
   existing seeded evolution loop, then checks every returned training and
   held-out output against the CPU reference. The result includes a parseable

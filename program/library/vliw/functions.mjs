@@ -1,7 +1,10 @@
 export const DEFAULT_VLIW_FUNCTION_STEP_BUDGET = 65_536;
 export const MAX_VLIW_FUNCTION_STEP_BUDGET = 10_000_000;
 export const MAX_VLIW_FUNCTION_BYTES = 1_048_576;
-const OPERATIONS = new Set(["plus", "subtract", "xor"]);
+const OPERATIONS = new Set([
+  "plus", "subtract", "xor", "multiply", "divide", "remains", "exponential",
+  "equally", "tiny", "giant"
+]);
 
 export class VliwFunctionError extends Error {
   constructor(code, message, details = {}) {
@@ -25,6 +28,13 @@ function normalizeName(value, role) {
 function uint16(value, role) {
   if (!Number.isInteger(value) || value < 0 || value > 0xffff) {
     fail("numeric-range", `${role} must be an unsigned 16-bit integer`, { role, value });
+  }
+  return value;
+}
+
+function uint32(value, role) {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffffff) {
+    fail("numeric-range", `${role} must be an unsigned 32-bit integer`, { role, value });
   }
   return value;
 }
@@ -104,9 +114,33 @@ export function normalizeVliwFunction(definition = {}) {
 }
 
 function applyOperation(op, left, right) {
+  if (!Number.isInteger(left) || left < 0 || left > 0xffff
+    || !Number.isInteger(right) || right < 0 || right > 0xffff) {
+    fail("numeric-range", `${op} requires unsigned 16-bit operands`, { left, right });
+  }
   if (op === "plus") return Math.min(0xffff, left + right);
   if (op === "subtract") return Math.max(0, left - right);
-  return (left ^ right) & 0xffff;
+  if (op === "xor") return (left ^ right) & 0xffff;
+  if (op === "multiply") return left * right;
+  if (op === "divide" || op === "remains") {
+    if (right === 0) fail("division-by-zero", `${op} failed: division by zero`);
+    return op === "divide" ? Math.floor(left / right) : left % right;
+  }
+  if (op === "exponential") {
+    let result = 1;
+    let factor = left;
+    let exponent = right;
+    while (exponent > 0) {
+      if (exponent & 1) result = Math.min(0xffff, result * factor);
+      exponent >>>= 1;
+      if (exponent > 0) factor = Math.min(0xffff, factor * factor);
+    }
+    return result;
+  }
+  if (op === "equally") return Number(left === right);
+  if (op === "tiny") return Number(left < right);
+  if (op === "giant") return Number(left > right);
+  fail("unsupported-operation", `unsupported VLIW operation: ${op}`);
 }
 
 export function executeVliwFunction(definition, inputValues = {}) {
@@ -141,7 +175,7 @@ export function scoreVliwFunction(definition, cases = []) {
     if (!testCase || typeof testCase !== "object" || Array.isArray(testCase)) {
       fail("invalid-case", `case ${index + 1} must be a map`);
     }
-    const expected = uint16(testCase.expected, `case ${index + 1} expected`);
+    const expected = uint32(testCase.expected, `case ${index + 1} expected`);
     const actual = executeVliwFunction(fn, testCase.values);
     return { actual, expected, absoluteError: Math.abs(actual - expected) };
   });

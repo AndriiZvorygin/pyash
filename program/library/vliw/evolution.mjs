@@ -102,7 +102,7 @@ function normalizeBatchScores(candidates, scores) {
     let outputs = null;
     if (Array.isArray(score.outputs)) {
       outputs = score.outputs.map(Number);
-      if (outputs.some((value) => !Number.isInteger(value) || value < 0 || value > 0xffff)) {
+      if (outputs.some((value) => !Number.isInteger(value) || value < 0 || value > 0xffffffff)) {
         throw new Error(`VLIW batch evaluator returned invalid outputs for ${candidate.id}`);
       }
     }

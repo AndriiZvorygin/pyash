@@ -4427,7 +4427,7 @@ class HousekeeperVliwEvaluatorTests(unittest.TestCase):
         }, {"vliw": dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])}, "mriczo")
 
         invalid = self.valid_job_spec()
-        invalid["payload"]["candidates"][0]["instructions"][0]["op"] = "multiply"
+        invalid["payload"]["candidates"][0]["instructions"][0]["op"] = "not-a-vliw-operation"
         rejected = server.submit_job({
           "handleId": "vliw-invalid",
           "runtimeName": "vliw",

@@ -35,6 +35,44 @@ test("named-slot VLIW function supports saturating subtract and 16-bit xor", () 
   assert.equal(executeVliwFunction(xor, { left: 0xffff, right: 0x00ff }), 0xff00);
 });
 
+test("named-slot VLIW function matches PyAC scalar arithmetic widths and edge semantics", () => {
+  const run = (op, left, right) => executeVliwFunction({
+    ...numberPlus,
+    instructions: [{ op, target: "sum", left: "left", right: "right" }]
+  }, { left, right });
+
+  assert.equal(run("multiply", 0xffff, 0xffff), 4_294_836_225);
+  assert.equal(run("divide", 9, 4), 2);
+  assert.equal(run("remains", 9, 4), 1);
+  assert.equal(run("exponential", 2, 20), 0xffff);
+  assert.equal(run("equally", 4, 4), 1);
+  assert.equal(run("equally", 4, 5), 0);
+  assert.equal(run("tiny", 4, 5), 1);
+  assert.equal(run("giant", 5, 4), 1);
+  assert.throws(() => run("divide", 9, 0), /division by zero/u);
+  assert.throws(() => run("remains", 9, 0), /division by zero/u);
+});
+
+test("multiply results may be returned as U32 but cannot be silently narrowed as operands", () => {
+  const multiply = {
+    ...numberPlus,
+    instructions: [{ op: "multiply", target: "sum", left: "left", right: "right" }]
+  };
+  assert.deepEqual(scoreVliwFunction(multiply, [
+    { values: { left: 0xffff, right: 0xffff }, expected: 4_294_836_225 }
+  ]).results, [{ actual: 4_294_836_225, expected: 4_294_836_225, absoluteError: 0 }]);
+
+  assert.throws(() => executeVliwFunction({
+    ...numberPlus,
+    slots: ["left", "right", "product", "sum"],
+    outputSlot: "sum",
+    instructions: [
+      { op: "multiply", target: "product", left: "left", right: "right" },
+      { op: "plus", target: "sum", left: "product", right: "right" }
+    ]
+  }, { left: 0xffff, right: 0xffff }), /unsigned 16-bit operands/u);
+});
+
 test("function validation admits larger slot and instruction tables but enforces its step budget", () => {
   const slots = ["left", "right", "sum", ...Array.from({ length: 17 }, (_, index) => `slot ${index}`)];
   const instructions = Array(40).fill(numberPlus.instructions[0]);

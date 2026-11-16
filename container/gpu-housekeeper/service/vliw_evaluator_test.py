@@ -72,8 +72,33 @@ class VliwBatchValidationTests(unittest.TestCase):
 
     unknown_op = self.valid_payload()
     unknown_op["candidates"][0]["instructions"][0]["op"] = "multiply"
-    with self.assertRaisesRegex(ValueError, "unsupported VLIW operation"):
-      vliw.prepare_vliw_batch(unknown_op)
+    self.assertEqual(
+      vliw.prepare_vliw_batch(unknown_op)["candidates"][0]["instructions"],
+      [(4, 2, 0, 1)]
+    )
+
+  def test_batch_lowers_the_pyac_scalar_operation_subset(self):
+    operations = [
+      "plus", "subtract", "xor", "multiply", "divide", "remains",
+      "exponential", "equally", "tiny", "giant"
+    ]
+    for opcode, operation in enumerate(operations, start=1):
+      with self.subTest(operation=operation):
+        payload = self.valid_payload()
+        payload["candidates"][0]["instructions"][0]["op"] = operation
+        self.assertEqual(
+          vliw.prepare_vliw_batch(payload)["candidates"][0]["instructions"][0][0],
+          opcode
+        )
+
+  def test_batch_accepts_u32_expected_values_for_multiply_results(self):
+    payload = self.valid_payload()
+    payload["cases"][0]["expected"] = 4_294_836_225
+    self.assertEqual(vliw.prepare_vliw_batch(payload)["cases"][0][1], 4_294_836_225)
+
+    payload["cases"][0]["expected"] = 4_294_967_296
+    with self.assertRaisesRegex(ValueError, "unsigned 32-bit integer"):
+      vliw.prepare_vliw_batch(payload)
 
 
 if __name__ == "__main__":

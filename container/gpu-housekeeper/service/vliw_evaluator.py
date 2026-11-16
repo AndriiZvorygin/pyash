@@ -13,7 +13,18 @@ MAX_BATCH_BYTES = 16 * 1024 * 1024
 MAX_SCRATCH_BYTES = 512 * 1024 * 1024
 DEFAULT_STEP_BUDGET = 65_536
 MAX_STEP_BUDGET = 10_000_000
-OPCODES = {"plus": 1, "subtract": 2, "xor": 3}
+OPCODES = {
+  "plus": 1,
+  "subtract": 2,
+  "xor": 3,
+  "multiply": 4,
+  "divide": 5,
+  "remains": 6,
+  "exponential": 7,
+  "equally": 8,
+  "tiny": 9,
+  "giant": 10,
+}
 
 _PTX = r"""
 .version 7.0
@@ -24,6 +35,7 @@ _PTX = r"""
   .param .u64 cases_ptr,
   .param .u64 results_ptr,
   .param .u64 scratch_ptr,
+  .param .u64 errors_ptr,
   .param .u32 candidate_count,
   .param .u32 case_count,
   .param .u32 slot_count,
@@ -31,13 +43,14 @@ _PTX = r"""
 )
 {
   .reg .pred %p<8>;
-  .reg .b32 %r<24>;
+  .reg .b32 %r<32>;
   .reg .b64 %rd<16>;
 
   ld.param.u64 %rd0, [candidates_ptr];
   ld.param.u64 %rd1, [cases_ptr];
   ld.param.u64 %rd2, [results_ptr];
   ld.param.u64 %rd3, [scratch_ptr];
+  ld.param.u64 %rd13, [errors_ptr];
   ld.param.u32 %r0, [candidate_count];
   ld.param.u32 %r1, [case_count];
   ld.param.u32 %r2, [slot_count];
@@ -49,6 +62,10 @@ _PTX = r"""
   mul.lo.u32 %r8, %r0, %r1;
   setp.ge.u32 %p0, %r7, %r8;
   @%p0 bra DONE;
+
+  mul.wide.u32 %rd14, %r7, 4;
+  add.u64 %rd15, %rd13, %rd14;
+  st.global.u32 [%rd15], 0;
 
   div.u32 %r9, %r7, %r1;
   rem.u32 %r10, %r7, %r1;
@@ -95,12 +112,32 @@ INSTRUCTION:
   mul.wide.u32 %rd10, %r22, 4;
   add.u64 %rd12, %rd9, %rd10;
   ld.global.u32 %r18, [%rd12];
+  setp.gt.u32 %p5, %r23, 65535;
+  @%p5 bra INVALID_OPERAND;
+  setp.gt.u32 %p5, %r18, 65535;
+  @%p5 bra INVALID_OPERAND;
   setp.eq.u32 %p3, %r19, 1;
   @%p3 bra OP_PLUS;
   setp.eq.u32 %p3, %r19, 2;
   @%p3 bra OP_SUBTRACT;
-  xor.b32 %r23, %r23, %r18;
-  bra STORE_RESULT;
+  setp.eq.u32 %p3, %r19, 3;
+  @%p3 bra OP_XOR;
+  setp.eq.u32 %p3, %r19, 4;
+  @%p3 bra OP_MULTIPLY;
+  setp.eq.u32 %p3, %r19, 5;
+  @%p3 bra OP_DIVIDE;
+  setp.eq.u32 %p3, %r19, 6;
+  @%p3 bra OP_REMAINS;
+  setp.eq.u32 %p3, %r19, 7;
+  @%p3 bra OP_EXPONENTIAL;
+  setp.eq.u32 %p3, %r19, 8;
+  @%p3 bra OP_EQUALLY;
+  setp.eq.u32 %p3, %r19, 9;
+  @%p3 bra OP_TINY;
+  setp.eq.u32 %p3, %r19, 10;
+  @%p3 bra OP_GIANT;
+  mov.u32 %r24, 3;
+  bra OP_ERROR;
 OP_PLUS:
   add.u32 %r23, %r23, %r18;
   min.u32 %r23, %r23, 65535;
@@ -109,6 +146,68 @@ OP_SUBTRACT:
   setp.ge.u32 %p4, %r23, %r18;
   sub.u32 %r23, %r23, %r18;
   @!%p4 mov.u32 %r23, 0;
+  bra STORE_RESULT;
+OP_XOR:
+  xor.b32 %r23, %r23, %r18;
+  bra STORE_RESULT;
+OP_MULTIPLY:
+  mul.lo.u32 %r23, %r23, %r18;
+  bra STORE_RESULT;
+OP_DIVIDE:
+  setp.eq.u32 %p4, %r18, 0;
+  @%p4 bra DIVISION_BY_ZERO;
+  div.u32 %r23, %r23, %r18;
+  bra STORE_RESULT;
+OP_REMAINS:
+  setp.eq.u32 %p4, %r18, 0;
+  @%p4 bra DIVISION_BY_ZERO;
+  rem.u32 %r23, %r23, %r18;
+  bra STORE_RESULT;
+OP_EXPONENTIAL:
+  mov.u32 %r24, 1;
+  mov.u32 %r25, %r23;
+  mov.u32 %r26, %r18;
+POWER_LOOP:
+  setp.eq.u32 %p4, %r26, 0;
+  @%p4 bra POWER_DONE;
+  and.b32 %r27, %r26, 1;
+  setp.eq.u32 %p4, %r27, 0;
+  @%p4 bra POWER_SKIP_MULTIPLY;
+  mul.lo.u32 %r24, %r24, %r25;
+  min.u32 %r24, %r24, 65535;
+POWER_SKIP_MULTIPLY:
+  shr.u32 %r26, %r26, 1;
+  setp.eq.u32 %p4, %r26, 0;
+  @%p4 bra POWER_DONE;
+  mul.lo.u32 %r25, %r25, %r25;
+  min.u32 %r25, %r25, 65535;
+  bra POWER_LOOP;
+POWER_DONE:
+  mov.u32 %r23, %r24;
+  bra STORE_RESULT;
+OP_EQUALLY:
+  setp.eq.u32 %p4, %r23, %r18;
+  mov.u32 %r23, 0;
+  @%p4 mov.u32 %r23, 1;
+  bra STORE_RESULT;
+OP_TINY:
+  setp.lt.u32 %p4, %r23, %r18;
+  mov.u32 %r23, 0;
+  @%p4 mov.u32 %r23, 1;
+  bra STORE_RESULT;
+OP_GIANT:
+  setp.gt.u32 %p4, %r23, %r18;
+  mov.u32 %r23, 0;
+  @%p4 mov.u32 %r23, 1;
+  bra STORE_RESULT;
+DIVISION_BY_ZERO:
+  mov.u32 %r24, 2;
+  bra OP_ERROR;
+INVALID_OPERAND:
+  mov.u32 %r24, 1;
+OP_ERROR:
+  st.global.u32 [%rd15], %r24;
+  bra DONE;
 STORE_RESULT:
   mul.wide.u32 %rd10, %r20, 4;
   add.u64 %rd12, %rd9, %rd10;
@@ -150,6 +249,18 @@ def _uint16(value: Any, label: str) -> int:
     raise ValueError(f"{label} must be an unsigned 16-bit integer")
   if number < 0 or number > 0xFFFF or str(number) != str(value).strip():
     raise ValueError(f"{label} must be an unsigned 16-bit integer")
+  return number
+
+
+def _uint32(value: Any, label: str) -> int:
+  if isinstance(value, bool):
+    raise ValueError(f"{label} must be an unsigned 32-bit integer")
+  try:
+    number = int(value)
+  except (TypeError, ValueError):
+    raise ValueError(f"{label} must be an unsigned 32-bit integer")
+  if number < 0 or number > 0xFFFFFFFF or str(number) != str(value).strip():
+    raise ValueError(f"{label} must be an unsigned 32-bit integer")
   return number
 
 
@@ -203,7 +314,7 @@ def prepare_vliw_batch(payload: Any) -> Dict[str, Any]:
       if name not in values:
         raise ValueError(f"case {case_index + 1} is missing input slot {name}")
       row[slots[name]] = _uint16(values[name], f"case {case_index + 1} {name}")
-    cases.append((row, _uint16(case.get("expected"), f"case {case_index + 1} expected")))
+    cases.append((row, _uint32(case.get("expected"), f"case {case_index + 1} expected")))
 
   candidates = []
   candidate_ids = set()
@@ -299,6 +410,7 @@ def evaluate_vliw_batch_cuda(prepared: Dict[str, Any], device_id: str = "gpu0") 
   case_array = (u32 * len(case_words))(*case_words)
   pair_count = candidate_count * case_count
   result_array = (u32 * pair_count)()
+  error_array = (u32 * pair_count)()
   context = ptr()
   module = ptr()
   device_candidates = []
@@ -330,19 +442,22 @@ def evaluate_vliw_batch_cuda(prepared: Dict[str, Any], device_id: str = "gpu0") 
     cases_address = allocate_and_copy(case_array)
     results_address = allocate(ctypes.sizeof(result_array))
     scratch_address = allocate(pair_count * slot_count * ctypes.sizeof(u32))
+    errors_address = allocate(ctypes.sizeof(error_array))
     candidate_arg = u64(candidates_address.value)
     cases_arg = u64(cases_address.value)
     results_arg = u64(results_address.value)
     scratch_arg = u64(scratch_address.value)
+    errors_arg = u64(errors_address.value)
     candidate_count_arg = u32(candidate_count)
     case_count_arg = u32(case_count)
     slot_count_arg = u32(slot_count)
     candidate_stride_arg = u32(candidate_stride)
-    kernel_arguments = (ptr * 8)(
+    kernel_arguments = (ptr * 9)(
       ctypes.cast(ctypes.byref(candidate_arg), ptr),
       ctypes.cast(ctypes.byref(cases_arg), ptr),
       ctypes.cast(ctypes.byref(results_arg), ptr),
       ctypes.cast(ctypes.byref(scratch_arg), ptr),
+      ctypes.cast(ctypes.byref(errors_arg), ptr),
       ctypes.cast(ctypes.byref(candidate_count_arg), ptr),
       ctypes.cast(ctypes.byref(case_count_arg), ptr),
       ctypes.cast(ctypes.byref(slot_count_arg), ptr),
@@ -356,6 +471,14 @@ def evaluate_vliw_batch_cuda(prepared: Dict[str, Any], device_id: str = "gpu0") 
     ), "kernel launch")
     _check_cuda(driver.cuCtxSynchronize(), "kernel synchronization")
     _check_cuda(driver.cuMemcpyDtoH_v2(ctypes.cast(result_array, ptr), results_address, ctypes.sizeof(result_array)), "device-to-host copy")
+    _check_cuda(driver.cuMemcpyDtoH_v2(ctypes.cast(error_array, ptr), errors_address, ctypes.sizeof(error_array)), "device error readback")
+    for pair_index, error_code in enumerate(error_array):
+      if error_code == 1:
+        raise ValueError(f"VLIW candidate/case pair {pair_index + 1} used an operand outside unsigned 16-bit range")
+      if error_code == 2:
+        raise ZeroDivisionError(f"VLIW candidate/case pair {pair_index + 1} divided by zero")
+      if error_code:
+        raise RuntimeError(f"VLIW candidate/case pair {pair_index + 1} used unsupported opcode {error_code - 2}")
   finally:
     for address in reversed(device_candidates):
       driver.cuMemFree_v2(address)

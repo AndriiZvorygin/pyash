@@ -44,11 +44,13 @@ function estimateVramMb(batch) {
   const candidateBytes = candidates.length * (2 + maxInstructions * 4) * 4;
   const caseBytes = cases * (slots + 1) * 4;
   const resultBytes = pairs * 4;
+  const errorBytes = pairs * 4;
   const estimatedBytes = CUDA_CONTEXT_RESERVE_BYTES
     + scratchBytes
     + candidateBytes
     + caseBytes
-    + resultBytes;
+    + resultBytes
+    + errorBytes;
   return Math.max(64, Math.ceil(estimatedBytes * 1.25 / MEBIBYTE));
 }
 
