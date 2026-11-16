@@ -14,7 +14,7 @@ import { resolveCommandText, canRunDirect, splitCommand, resolveDirectProgram, r
 import { resolveCommandPolicy, shouldRequireRatify, shouldDeny, isNetworkDenied, buildCommandResumeToken } from "./policy.mjs";
 import { emitCommandAudit, commandRequestSentence, resolveCommandIdentity, commandResultSentence, rememberCommandResult, recordCommandOutput } from "./audit.mjs";
 import { rewriteRunRootCommandPath, resolveSandboxSettings, buildAllowedEnv, validateSandboxWritePolicy } from "./sandbox.mjs";
-import { resolveStreamOutputPath, parseCommandTimeoutOverride, isInlineTimeoutOverrideEnabled, startFileTail, runCommandText } from "./execute.mjs";
+import { resolveStreamOutputPath, parseCommandTimeoutOverride, isInlineTimeoutOverrideEnabled, isInternalMindRunnerCommand, startFileTail, runCommandText } from "./execute.mjs";
 import { currentMindInterruptSignal } from "../../agent/interrupt.mjs";
 
 const commandStreamProcesses = new Map();
@@ -231,6 +231,15 @@ export async function command(sentence, { remember: rememberFn = remember, runti
     if (resolved !== undefined && resolved !== null) {
       input = String(resolved);
     }
+  }
+  const hasRunnerArgumentPayload = /(?:^|\s)--payload(?:-file)?(?:\s|$)/u.test(cmd);
+  if (isInternalMindRunnerCommand(cmd) && !String(input ?? "").trim() && !hasRunnerArgumentPayload) {
+    throwErrorSentence({
+      name: "command defective",
+      message: "command defective: internal mind runner requires a structured request payload on stdin",
+      from: { la: sentence },
+      raw: { command: cmd, stdin: "missing" }
+    });
   }
   if (aspect === "stream") {
     const streamName = sentence?.su?.name;

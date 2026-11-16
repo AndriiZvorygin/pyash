@@ -52,6 +52,19 @@ test("command direct node uses process exec path when PATH is empty", async () =
   }
 });
 
+test("internal mind runner rejects a missing stdin request before spawning", async () => {
+  const commandText = "PYA_COMMAND_TIMEOUT_MS=900000 node ../../pyac/pyash/command/mind_ollama_runner.mjs";
+  await assert.rejects(
+    () => command({ mood: "do", be: "command", ob: { text: commandText } }, { remember: () => null }),
+    (error) => {
+      assert.match(error.message, /internal mind runner requires a structured request payload on stdin/u);
+      assert.doesNotMatch(error.message, /mind_ollama_runner: missing request payload/u);
+      assert.equal(error.sentence?.ob?.raw?.command, commandText);
+      return true;
+    }
+  );
+});
+
 test("command subprocess is terminated by the active saddle interrupt signal", async () => {
   const controller = new AbortController();
   const startedAt = Date.now();

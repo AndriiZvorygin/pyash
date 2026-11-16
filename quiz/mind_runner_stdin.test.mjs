@@ -9,6 +9,10 @@ import path from "node:path";
 import { enqueueInputEnvelope, queueDepth } from "../program/runtime/gpu/queue.mjs";
 import { readGpuHandleStatus, writeGpuHandleStatus } from "../program/runtime/gpu/handle_status.mjs";
 import { runGpuWorkerOnce } from "../program/runtime/gpu/worker.mjs";
+import { parse } from "../program/understand/index.mjs";
+import { interpret } from "../program/bridge/index.mjs";
+import { doRemember, forget } from "../program/remember/index.mjs";
+import { prepareSaddleContextForTurn, runSaddleTurn } from "../command/pyash_saddle.mjs";
 
 function runWithStdin(script, payload, env = {}) {
   return new Promise((resolve, reject) => {
@@ -37,6 +41,105 @@ test("mind ollama runner reads stdin payload when spawned as child process", asy
   });
   const res = await runWithStdin("command/mind_ollama_runner.mjs", payload);
   assert.equal(/missing request payload/i.test(res.stderr), false);
+});
+
+test("first turn after switching Ollama models compacts history and forwards both requests through stdin", async () => {
+  const calls = [];
+  const manager = http.createServer(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const body = Buffer.concat(chunks).toString("utf8");
+    calls.push({ method: req.method, path: req.url, body: body ? JSON.parse(body) : null });
+    res.setHeader("content-type", "application/json");
+    if (req.method === "POST" && req.url === "/submit") {
+      res.end(JSON.stringify({ remoteJobId: "ceremony-runner-job" }));
+      return;
+    }
+    if (req.method === "GET" && req.url === "/job/ceremony-runner-job") {
+      res.end(JSON.stringify({
+        status: "success",
+        result: { message: { role: "assistant", content: "ceremony model reply" } }
+      }));
+      return;
+    }
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: "not found" }));
+  });
+  await new Promise((resolve) => manager.listen(0, "127.0.0.1", resolve));
+  const address = manager.address();
+  const usageDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-ollama-ceremony-usage-"));
+  const agentHouse = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-ollama-ceremony-house-"));
+  const worldRoot = path.join(usageDir, "world");
+  const projectRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-ollama-saddle-project-"));
+  const envKeys = ["PYA_COMMAND_RESPONSE", "PYA_GPU_MANAGER_REQUIRED", "PYA_GPU_HOUSEKEEPER_URL", "PYA_GPU_MANAGER_POLL_MS", "PYA_OLLAMA_USAGE_DIR", "PYA_WORLD_ROOT"];
+  const previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]]));
+  process.env.PYA_GPU_MANAGER_REQUIRED = "true";
+  process.env.PYA_GPU_HOUSEKEEPER_URL = `http://127.0.0.1:${address.port}`;
+  process.env.PYA_GPU_MANAGER_POLL_MS = "1";
+  process.env.PYA_OLLAMA_USAGE_DIR = usageDir;
+  process.env.PYA_WORLD_ROOT = worldRoot;
+  delete process.env.PYA_COMMAND_RESPONSE;
+  forget();
+  doRemember({ mood: "ya", su: { name: "run root" }, be: "default", ob: { filename: process.cwd() } });
+  doRemember({ mood: "ya", su: { name: "world root" }, be: "root", ob: { filename: worldRoot } });
+  doRemember({ mood: "ya", su: { name: "agent cwd" }, be: "cwd", ob: { filename: projectRoot } });
+  doRemember({ mood: "ya", su: { name: "agent sandbox" }, be: "truth", ob: { boolean: true } });
+  doRemember({ mood: "ya", su: { name: "agent name" }, be: "text", ob: { text: "coding saddle" } });
+
+  try {
+    await interpret(parse('from filename "./module/mind_ollama.pya" ob name mind to name ollama command mind be import do'));
+    await interpret(parse('from filename "./module/saddle_tools.pya" ob name saddle tools to name saddle tools be import do'));
+    await interpret(parse('exists su name coding saddle be mind as name "qwen-scenario" ya'));
+    const sessionName = `stdin-scenario-${process.pid}-${Date.now()}`;
+    const context = await prepareSaddleContextForTurn({
+      agentHouse,
+      sessionName,
+      backend: "ollama",
+      model: "qwen-scenario",
+      host: "http://127.0.0.1:1",
+      contextWindow: 100,
+      systemPrompt: "Coding saddle scenario",
+      userInput: "first request after switching to qwen-scenario",
+      housekeeperUrl: `http://127.0.0.1:${address.port}`,
+      loadHistory: async () => ({
+        messages: Array.from({ length: 24 }, (_, index) => ({
+          role: index % 2 ? "assistant" : "user",
+          content: `older conversation detail ${index} ` + "confirmed model-switch scenario fact ".repeat(3)
+        }))
+      })
+    });
+    assert.equal(context.compacted, true);
+
+    const result = await runSaddleTurn({
+      input: "verify model switch payload",
+      model: "qwen-scenario",
+      backend: "ollama",
+      host: "http://127.0.0.1:1",
+      housekeeperUrl: `http://127.0.0.1:${address.port}`,
+      sessionContextSummary: context.summary,
+      historyWindow: context.historyWindow,
+      sessionName
+    });
+
+    assert.equal(result?.ob?.text, "ceremony model reply", JSON.stringify(result));
+    const submissions = calls.filter((call) => call.method === "POST" && call.path === "/submit"
+      && call.body.jobSpec?.payload?.model === "qwen-scenario");
+    const compactedHistory = submissions.find((call) => JSON.stringify(call.body.jobSpec.payload).includes("Create a compact continuity note"));
+    const selectedModelTurn = submissions.find((call) => JSON.stringify(call.body.jobSpec.payload).includes("verify model switch payload"));
+    assert.ok(compactedHistory, "compaction should call the newly selected model with old history");
+    assert.ok(JSON.stringify(compactedHistory.body.jobSpec.payload).includes("older conversation detail"));
+    assert.ok(selectedModelTurn, "the first turn should also reach the newly selected model");
+  } finally {
+    forget();
+    for (const key of envKeys) {
+      if (previousEnv[key] === undefined) delete process.env[key];
+      else process.env[key] = previousEnv[key];
+    }
+    await new Promise((resolve) => manager.close(resolve));
+    await fs.rm(usageDir, { recursive: true, force: true });
+    await fs.rm(agentHouse, { recursive: true, force: true });
+    await fs.rm(projectRoot, { recursive: true, force: true });
+  }
 });
 
 test("mind openai runner reads stdin payload when spawned as child process", async () => {
