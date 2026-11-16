@@ -2,8 +2,8 @@ use std::{cell::RefCell, rc::Rc};
 
 use futures_channel::oneshot;
 use pyac::{
-    NumericOperator, NumericVectorOperand, PyacValue, VectorElements, decode_numeric_arithmetic,
-    decode_numeric_vector_arithmetic, decode_pack,
+    NumericOperator, NumericVectorOperand, PyacValue, VectorElements, decode_conditional_number,
+    decode_numeric_arithmetic, decode_numeric_vector_arithmetic, decode_pack,
 };
 use serde_json::json;
 use wasm_bindgen::prelude::*;
@@ -38,7 +38,34 @@ pub async fn run_pack_webgpu(pack_bytes: &[u8]) -> Result<String, JsValue> {
     }
     let mut input_words = Vec::new();
     let mut output_shapes = Vec::with_capacity(pack.codelets.len());
-    for (index, codelet) in pack.codelets.iter().enumerate() {
+    let mut codelet_index = 0;
+    while codelet_index < pack.codelets.len() {
+        let start = codelet_index;
+        while codelet_index < pack.codelets.len() && pack.codelets[codelet_index][0] & 1 == 0 {
+            codelet_index += 1;
+        }
+        if codelet_index == pack.codelets.len() {
+            return Err(js_error(format!(
+                "codelet {start}: incomplete sentence group has no completion marker"
+            )));
+        }
+
+        let group = &pack.codelets[start..=codelet_index];
+        codelet_index += 1;
+        if group.len() > 1 {
+            let instruction = decode_conditional_number(group)
+                .map_err(|error| js_error(format!("codelet {start}: {error}")))?;
+            input_words.extend_from_slice(&[
+                EQUAL_SELECT_OPERATOR,
+                u32::from(instruction.left) | (u32::from(instruction.right) << 16),
+                u32::from(instruction.consequence) | (u32::from(instruction.alternative) << 16),
+            ]);
+            output_shapes.push(OutputShape::Scalar);
+            continue;
+        }
+
+        let index = start;
+        let codelet = &group[0];
         if let Ok(instruction) = decode_numeric_vector_arithmetic(codelet) {
             if matches!(
                 instruction.operator,
@@ -46,8 +73,7 @@ pub async fn run_pack_webgpu(pack_bytes: &[u8]) -> Result<String, JsValue> {
             ) && match &instruction.operand {
                 NumericVectorOperand::Scalar(value) => *value == 0,
                 NumericVectorOperand::Vector(values) => values.contains(&0),
-            }
-            {
+            } {
                 return Err(js_error(format!(
                     "codelet {index}: numeric division cannot divide by zero"
                 )));
@@ -288,6 +314,8 @@ fn operator_id(operator: NumericOperator) -> u32 {
         NumericOperator::Remains => 6,
     }
 }
+
+const EQUAL_SELECT_OPERATOR: u32 = 7;
 
 fn js_error(message: impl AsRef<str>) -> JsValue {
     JsValue::from_str(message.as_ref())

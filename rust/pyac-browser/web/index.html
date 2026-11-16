@@ -29,12 +29,13 @@
         <button id="demo" type="button" disabled>Run one-plus-one demo</button>
         <button id="cpu-batch" type="button" disabled>Run numeric batch on WASM CPU</button>
         <button id="gpu-demo" type="button" disabled>Run numeric batch on WebGPU</button>
+        <button id="conditional-demo" type="button" disabled>Run equality branch on WebGPU</button>
         <label>Open pack <input id="pack" type="file" accept=".pyac,application/octet-stream" disabled /></label>
         <button id="gpu-pack" type="button" disabled>Try selected pack on WebGPU</button>
       </div>
       <div id="status" role="status">Loading WebAssembly runtime…</div>
       <pre id="result" aria-live="polite">No result yet.</pre>
-      <p class="note">WebGPU handles only numeric arithmetic packs in this prototype. Other supported packs run on the WASM CPU. The GPU path is optional and may be slower for small packs.</p>
+      <p class="note">WebGPU handles numeric arithmetic and the bounded equality branch with two numeric-literal arms. Other supported packs run on the WASM CPU. The GPU path is optional and may be slower for small packs.</p>
     </main>
     <script type="module" src="./app.js"></script>
   </body>

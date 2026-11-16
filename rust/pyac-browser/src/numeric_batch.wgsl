@@ -58,6 +58,13 @@ fn main(@builtin(global_invocation_id) invocation: vec3<u32>) {
     case 6u: {
       result = left % right;
     }
+    case 7u: {
+      let condition_left = left & 65535u;
+      let condition_right = left >> 16u;
+      let consequence = right & 65535u;
+      let alternative = right >> 16u;
+      result = select(alternative, consequence, condition_left == condition_right);
+    }
     default: {
       result = 0u;
     }

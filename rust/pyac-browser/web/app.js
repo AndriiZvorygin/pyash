@@ -1,5 +1,6 @@
 import init, {
   numeric_batch_demo_pack_bytes,
+  conditional_number_demo_pack_bytes,
   run_demo_pack,
   run_pack,
   run_pack_webgpu,
@@ -8,6 +9,7 @@ import init, {
 const demoButton = document.querySelector("#demo");
 const cpuBatchButton = document.querySelector("#cpu-batch");
 const gpuDemoButton = document.querySelector("#gpu-demo");
+const conditionalDemoButton = document.querySelector("#conditional-demo");
 const packInput = document.querySelector("#pack");
 const gpuPackButton = document.querySelector("#gpu-pack");
 const status = document.querySelector("#status");
@@ -25,6 +27,7 @@ try {
   demoButton.disabled = false;
   cpuBatchButton.disabled = false;
   gpuDemoButton.disabled = false;
+  conditionalDemoButton.disabled = false;
   packInput.disabled = false;
   status.textContent = "WASM runtime ready.";
 } catch (error) {
@@ -47,6 +50,7 @@ async function tryWebGpu(packBytes) {
 }
 
 gpuDemoButton.addEventListener("click", () => tryWebGpu(numeric_batch_demo_pack_bytes()));
+conditionalDemoButton.addEventListener("click", () => tryWebGpu(conditional_number_demo_pack_bytes()));
 
 packInput.addEventListener("change", async () => {
   const file = packInput.files?.[0];

@@ -128,7 +128,8 @@ pub struct NumericPlusInstruction {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConditionalNumberInstruction {
-    pub condition: bool,
+    pub left: u16,
+    pub right: u16,
     pub consequence: u16,
     pub alternative: u16,
 }
@@ -522,14 +523,15 @@ pub fn decode_conditional_number(
     }
 
     Ok(ConditionalNumberInstruction {
-        condition: words[1] == words[4],
+        left: words[1],
+        right: words[4],
         consequence: words[9],
         alternative: words[14],
     })
 }
 
 pub fn execute_conditional_number(instruction: &ConditionalNumberInstruction) -> u16 {
-    if instruction.condition {
+    if instruction.left == instruction.right {
         instruction.consequence
     } else {
         instruction.alternative

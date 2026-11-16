@@ -200,6 +200,38 @@ try {
     assert.deepEqual(vectorParity.gpu.values, vectorParity.cpu.values);
   }
 
+  const conditionalParity = await page.evaluate(async ({ gpuAvailable, moduleUrl }) => {
+    const {
+      conditional_number_demo_pack_bytes,
+      conditional_number_alternative_demo_pack_bytes,
+      run_pack,
+      run_pack_webgpu,
+    } = await import(moduleUrl);
+    const fixtures = [
+      { bytes: conditional_number_demo_pack_bytes(), expected: 7 },
+      { bytes: conditional_number_alternative_demo_pack_bytes(), expected: 9 },
+    ];
+    const results = [];
+    for (const fixture of fixtures) {
+      const cpu = JSON.parse(run_pack(fixture.bytes));
+      const gpu = gpuAvailable ? JSON.parse(await run_pack_webgpu(fixture.bytes)) : null;
+      results.push({ cpu, gpu, expected: fixture.expected });
+    }
+    return results;
+  }, {
+    gpuAvailable: selectedBackendResult.backend === "webgpu",
+    moduleUrl: generatedModuleUrl,
+  });
+  for (const { cpu, gpu, expected } of conditionalParity) {
+    assert.equal(cpu.ok, true);
+    assert.equal(cpu.values[0].value, expected);
+    assert.equal(cpu.values[1].value, 2, "following codelet remains in pack order");
+    if (gpu) {
+      assert.equal(gpu.backend, "webgpu");
+      assert.deepEqual(gpu.values, cpu.values);
+    }
+  }
+
   const fallbackContext = await browser.newContext();
   await fallbackContext.addInitScript(() => {
     Object.defineProperty(navigator, "gpu", { configurable: true, value: undefined });
@@ -227,7 +259,7 @@ try {
   assert.equal(invalidResult.error.code, "truncated-pack");
   assert.deepEqual(pageErrors, []);
 
-  process.stdout.write(`browser smoke passed: WASM demo -> unsigned 2; numeric batch parity -> ${selectedBackendResult.backend}${selectedBackendResult.device ? ` (${selectedBackendResult.device})` : ""}${selectedBackendResult.backend === "wasm-cpu" ? ` (${selectedBackendStatus})` : ""}; vector arithmetic CPU${vectorParity.gpu ? "/WebGPU parity" : " fixture"}; forced no-WebGPU -> WASM CPU fallback; malformed upload -> truncated-pack\n`);
+  process.stdout.write(`browser smoke passed: WASM demo -> unsigned 2; numeric batch parity -> ${selectedBackendResult.backend}${selectedBackendResult.device ? ` (${selectedBackendResult.device})` : ""}${selectedBackendResult.backend === "wasm-cpu" ? ` (${selectedBackendStatus})` : ""}; vector arithmetic CPU${vectorParity.gpu ? "/WebGPU parity" : " fixture"}; conditional equality true/false CPU${conditionalParity[0].gpu ? "/WebGPU parity" : " fixture"}; forced no-WebGPU -> WASM CPU fallback; malformed upload -> truncated-pack\n`);
   if (measurements.length) process.stdout.write(`warm batch benchmark (ms, median of 7 alternating samples, includes JSON result encoding): ${JSON.stringify(measurements)}\n`);
 } finally {
   await browser.close();

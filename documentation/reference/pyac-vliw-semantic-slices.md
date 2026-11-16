@@ -166,19 +166,22 @@ divisor is a `division-by-zero` execution error.
 
 ## Conditional numeric selection
 
-The Rust pack interpreter executes the first conditional slice emitted by the
-JavaScript sentence encoder:
+The Rust pack interpreter and browser WebGPU path execute the first
+conditional slice emitted by the JavaScript sentence encoder:
 
 ```pyash
 ob num 5 be equally from num 5 then ob num 7 be number else ob num 9 be number ya
 ```
 
-The condition and both numeric-literal arms form one completion-marked codelet
-group. The executor evaluates the inline equality and returns only the selected
-unsigned result. This slice establishes branch grouping and selection in the
-CPU interpreter; it does not yet add nested branches, named predicates,
-side-effecting arms, or conditional RISC-V code generation. Its golden codelets
-and true/false coverage are in `rust/pyac/tests/pack_execution.rs`.
+The condition and both numeric-literal arms form one completion-marked,
+two-codelet group. The CPU executor evaluates the inline equality; WebGPU
+validates the same group through the Rust semantic decoder, then compares the
+two operands and selects an arm in WGSL. Both return only the selected unsigned
+result. This remains one bounded branch shape: nested branches, named
+predicates, side-effecting arms, and conditional RISC-V code generation are
+not implemented. CPU true/false coverage is in
+`rust/pyac/tests/pack_execution.rs`; browser CPU/GPU parity coverage is in
+`rust/pyac-browser/smoke.mjs`.
 
 ## Numeric invert
 

@@ -110,6 +110,34 @@ pub fn vector_arithmetic_demo_pack_bytes() -> Vec<u8> {
     encode_pack(&codelets).expect("vector arithmetic fixture encodes")
 }
 
+#[wasm_bindgen]
+pub fn conditional_number_demo_pack_bytes() -> Vec<u8> {
+    conditional_number_pack(false)
+}
+
+#[wasm_bindgen]
+pub fn conditional_number_alternative_demo_pack_bytes() -> Vec<u8> {
+    conditional_number_pack(true)
+}
+
+fn conditional_number_pack(unequal: bool) -> Vec<u8> {
+    let mut branch = [
+        [
+            0xd6b6, 0x881d, 5, 0x245e, 0x881d, 5, 0x313e, 0x4809, 0x29be, 0x881d, 7, 0x245e,
+            0xea30, 0x217e, 0x881d, 9,
+        ],
+        [
+            0x000b, 0x245e, 0xea30, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ],
+    ];
+    if unequal {
+        branch[0][5] = 4;
+    }
+    let mut codelets = branch.to_vec();
+    codelets.push(GOLDEN_NUMERIC_PLUS_CODELET);
+    encode_pack(&codelets).expect("conditional number fixture encodes")
+}
+
 fn numeric_vector_arithmetic_codelet(
     values: &[u16],
     operand: u16,
@@ -264,6 +292,31 @@ mod tests {
                 { "type": "unsigned", "value": 0 }
             ])
         );
+    }
+
+    #[test]
+    fn conditional_fixture_executes_in_pack_order_on_the_cpu_reference() {
+        for (bytes, expected) in [
+            (
+                conditional_number_demo_pack_bytes(),
+                json!([
+                    { "type": "unsigned", "value": 7 },
+                    { "type": "unsigned", "value": 2 }
+                ]),
+            ),
+            (
+                conditional_number_alternative_demo_pack_bytes(),
+                json!([
+                    { "type": "unsigned", "value": 9 },
+                    { "type": "unsigned", "value": 2 }
+                ]),
+            ),
+        ] {
+            let response: Value =
+                serde_json::from_str(&run_pack(&bytes)).expect("response is valid JSON");
+            assert_eq!(response["ok"], true);
+            assert_eq!(response["values"], expected);
+        }
     }
 
     #[test]

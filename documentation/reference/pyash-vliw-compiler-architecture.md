@@ -169,19 +169,20 @@ host interface; the WASM target does not provide ordinary operating-system
 services such as filesystem access.
 
 For an explicitly requested pack that passes semantic eligibility, the WASM
-host can dispatch a batch of independent numeric operations through Rust's
-`wgpu` API to browser WebGPU compute shaders. The host remains responsible for
-interpreting the program and managing its data; the kernel implements only the
-eligible operation, with results returned in the existing VLIW value
-representation. This prototype does not automatically choose WebGPU based on
-profitability, execute arbitrary Rust or VLIW on the GPU, or change the VLIW
-argument, result, or `.pyac` format contracts.
+host can dispatch independent numeric operations and the bounded inline-number
+equality conditional through Rust's `wgpu` API to browser WebGPU compute
+shaders. The Rust semantic decoder validates the conditional group; WGSL
+executes its comparison and selection. The host remains responsible for
+interpreting the rest of the program and managing its data; results return in
+the existing VLIW value representation. This prototype does not automatically
+choose WebGPU based on profitability, execute arbitrary Rust or VLIW on the
+GPU, or change the VLIW argument, result, or `.pyac` format contracts.
 
 ```text
 browser program (.pyac)
   -> Rust/WASM runtime on CPU
   -> explicit WebGPU request + eligibility validation
-  -> WebGPU compute kernel (WGSL) for a supported numeric batch
+  -> WebGPU compute kernel (WGSL) for supported numeric work and bounded selection
   -> VLIW sentence values returned to the runtime
 ```
 
@@ -197,12 +198,40 @@ stay on the CPU when dispatch and transfer costs outweigh parallel execution.
 The first runnable browser slice is implemented under `rust/pyac-browser/`.
 The Rust pack executor handles the codelet families currently supported by
 `rust/pyac`; browser tests verify the WASM CPU path, WebGPU parity for numeric
-arithmetic batches, and CPU fallback when WebGPU is unavailable. This remains
-a subset runtime, not arbitrary Pyash execution. The WebGPU action is explicit:
+arithmetic batches and a bounded equality branch, and CPU fallback when WebGPU
+is unavailable. This remains a subset runtime, not arbitrary Pyash execution.
+The WebGPU action is explicit:
 the measured arithmetic workload has not established a stable profitable
 automatic dispatch threshold on the tested browser, so ordinary pack execution
 stays on WASM CPU. WebGL2 may serve graphics fallback needs, but it is not
 treated here as an equivalent general compute backend.
+
+#### Current GPU Capability Boundary
+
+The current Rust/WebGPU interpreter is a parallel numeric executor, not a
+general VLIW interpreter running wholly on the GPU. The host decodes and
+validates supported sentence shapes, packs independent work items, and
+reconstructs typed results. WGSL executes arithmetic or conditional selection
+for each work item.
+
+| Capability | Current WebGPU support | Remaining work for broader VLIW coverage |
+| --- | --- | --- |
+| Numeric scalar operations | Unsigned arithmetic: saturating add/subtract, multiply, nonzero divide/remainder, XOR, exponentiation | Add operations only where normative Pyash semantics define them |
+| Numeric vectors | Elementwise unsigned-16 vectors, widths 2-8 with scalar right operand or widths 2-4 with equal-width vector operand; multiply results widen to unsigned-32 | Vector predicates/masks, wider or dynamic vectors, device-resident inputs/outputs |
+| Conditional execution | One flat equality predicate with two inline unsigned-number result arms | Other predicates, named operands, compound predicates, nested branches, conditional side effects |
+| Loops and calls | Not dispatched to WebGPU | Bounded loop lowering, function/call frames, explicit control-flow/dependency representation |
+| State and memory | Per-work-item input/output buffers; no mutable named VLIW state | Named slots, read/write semantics, alias rules, bounds, host/device residency and lifetime |
+| Other value families | Date, text, boolean, and standalone literal decoding remain CPU-side | GPU lowering only where parallel execution is useful; otherwise retain explicit CPU operations in mixed plans |
+| Coordination | Independent work items in one dispatch | Ordered multi-stage programs, reductions, barriers, atomics, cross-workgroup dependencies |
+| Dispatch policy | User-selected GPU action; CPU fallback when unavailable or ineligible | Device checks and a measured model for transfer, launch, occupancy, and data residency costs |
+
+This table defines the implementation boundary, not a requirement that every
+Pyash operation run on a GPU. A practical complete runtime needs semantic
+parity and an explicit mixed CPU/GPU plan; text handling, filesystem access,
+and other serial or host-bound work should remain on the host when that is the
+right execution target. Each new GPU slice should match the Rust CPU reference
+for values and errors, then be benchmarked end to end before automatic
+dispatch is considered.
 
 ### Browser Pathway Implementation Roadmap
 
@@ -219,7 +248,7 @@ automatic dispatch policy is enabled.
 | 1. WASM portability | Build the existing `rust/pyac` crate for `wasm32-unknown-unknown`; keep OS and browser APIs outside the semantic core | Native Rust tests pass and the WASM target checks in CI | Complete |
 | 2. Pack execution contract | Add one deterministic pack dispatcher for Rust-supported codelet families; preserve per-codelet errors and typed results | Mixed supported packs match individual codelet results; unsupported codelets fail at their exact index | Complete |
 | 3. Browser CPU slice | Add a browser host that loads a pack through a user-selected file or fixture and invokes the WASM executor | Chromium smoke checks the result/error path without filesystem permission assumptions | Complete |
-| 4. WebGPU batch path | Add optional `wgpu` compute for independent numeric arithmetic codelets; decode and unsupported work remain on CPU | Chromium smoke checks exact CPU/GPU parity and no-WebGPU fallback; smoke benchmarks warm batches of 1,024 to 131,072 codelets | Prototype complete; no auto-dispatch threshold is enabled because a stable crossover has not been established |
+| 4. WebGPU batch path | Add optional `wgpu` compute for independent numeric arithmetic and the bounded equality-selection group; pack decoding and unsupported work remain on CPU | Chromium smoke checks exact CPU/GPU parity for arithmetic, vectors, both equality outcomes, and no-WebGPU fallback; smoke benchmarks warm arithmetic batches of 1,024 to 131,072 codelets | Prototype complete; no auto-dispatch threshold is enabled because a stable crossover has not been established |
 | 5. Deployment and maintenance | Document secure-context, browser/device, build, and smoke-test requirements; keep hardware checks separate from ordinary CI | CPU and WASM checks run in CI; local smoke reports adapter availability and measurements | Complete |
 
 Keep the browser host thin and the Rust semantic core reusable by native
