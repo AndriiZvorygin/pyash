@@ -30,7 +30,7 @@ function appendBoundedTail(current, chunk, limit = FAILURE_OUTPUT_LIMIT) {
   return `${current}${String(chunk ?? "")}`.slice(-limit);
 }
 
-function formatStreamProcessReport({ cmd, cwd, status, signal, stdoutBytes, stderr, stderrBytes, launchError }) {
+function formatStreamProcessReport({ cmd, cwd, status, signal, stdoutBytes, stderr, stderrBytes, launchError, stdinError }) {
   const lines = [
     `status: ${Number.isInteger(status) ? status : "unknown"}`,
     `signal: ${signal || "none"}`,
@@ -41,6 +41,7 @@ function formatStreamProcessReport({ cmd, cwd, status, signal, stdoutBytes, stde
     `stderr truncated: ${stderrBytes > Buffer.byteLength(stderr, "utf8")}`
   ];
   if (launchError) lines.push(`launch error: ${launchError}`);
+  if (stdinError) lines.push(`stdin error: ${stdinError}`);
   lines.push(`stderr:\n${stderr.trim() ? boundedDiagnosticText(stderr, FAILURE_OUTPUT_LIMIT) : "<empty>"}`);
   return `${lines.join("\n")}\n`;
 }
@@ -66,7 +67,8 @@ function formatCommandFailure({
   maxOutputBytes,
   stdout,
   stderr,
-  launchError
+  launchError,
+  stdinError
 }) {
   const statusText = Number.isInteger(status) ? String(status) : "unknown";
   const signalText = signal ? String(signal) : "none";
@@ -85,6 +87,7 @@ function formatCommandFailure({
     `aborted: ${aborted === true}`
   ];
   if (launchError) details.push(`launch error: ${String(launchError)}`);
+  if (stdinError) details.push(`stdin error: ${String(stdinError)}`);
   details.push(stream("stdout", stdout), stream("stderr", stderr));
   return details.join("\n");
 }
@@ -271,6 +274,36 @@ export async function command(sentence, { remember: rememberFn = remember, runti
     let stdoutBytes = 0;
     let processReportWritten = false;
     let abortTimer = null;
+    let stdinError = "";
+    let stdinClosed = false;
+    let stopStreamInput = null;
+    const stopInput = () => {
+      stopStreamInput?.();
+      stopStreamInput = null;
+    };
+    const recordStdinError = (error) => {
+      stdinClosed = true;
+      stdinError = error?.code === "EPIPE"
+        ? "EPIPE: child closed stdin before the request was accepted"
+        : String(error?.message ?? error);
+      stopInput();
+    };
+    const writeInput = (value) => {
+      if (stdinClosed) return;
+      try {
+        proc.stdin.write(value);
+      } catch (error) {
+        recordStdinError(error);
+      }
+    };
+    const endInput = () => {
+      if (stdinClosed) return;
+      try {
+        proc.stdin.end();
+      } catch (error) {
+        recordStdinError(error);
+      }
+    };
     const writeProcessReport = ({ status = proc.exitCode, signal = proc.signalCode, launchError = "" } = {}) => {
       if (processReportWritten) return;
       processReportWritten = true;
@@ -282,7 +315,8 @@ export async function command(sentence, { remember: rememberFn = remember, runti
         stdoutBytes,
         stderr,
         stderrBytes,
-        launchError
+        launchError,
+        stdinError
       }), "utf8");
     };
     const abortProcess = () => {
@@ -306,8 +340,10 @@ export async function command(sentence, { remember: rememberFn = remember, runti
       stdoutBytes += data.length;
       outStream.write(data);
     });
+    proc.stdin.on("error", recordStdinError);
     proc.on("close", (status) => {
       cleanupSignal();
+      stopInput();
       writeProcessReport({ status, signal: proc.signalCode });
       if (status && status !== 0) {
         // eslint-disable-next-line no-console
@@ -319,6 +355,7 @@ export async function command(sentence, { remember: rememberFn = remember, runti
     });
     proc.on("error", (error) => {
       cleanupSignal();
+      stopInput();
       writeProcessReport({ status: null, signal: proc.signalCode, launchError: error?.message ?? String(error) });
       outStream.write(`\n${STREAM_END_TOKEN}\n`);
       outStream.end();
@@ -328,30 +365,30 @@ export async function command(sentence, { remember: rememberFn = remember, runti
     else interruptSignal?.addEventListener?.("abort", abortProcess, { once: true });
     const streamInput = sentence?.from?.name ? rememberFn?.(sentence.from.name) : null;
     if (streamInput?.be === "stream" && streamInput.ob?.filename) {
-      const stopTail = startFileTail({
+      stopStreamInput = startFileTail({
         filename: streamInput.ob.filename,
         onLine: (line) => {
           const trimmed = String(line ?? "").trim();
           if (!trimmed) return;
           if (trimmed.includes(STREAM_END_TOKEN) || trimmed.includes("[BLANK_AUDIO]")) {
-            proc.stdin.end();
-            stopTail();
+            endInput();
+            stopInput();
             return;
           }
-          proc.stdin.write(`${trimmed}\n`);
+          writeInput(`${trimmed}\n`);
         }
       });
     } else if (streamInput?.be === "stream" && Array.isArray(streamInput.ob?.ve?.values)) {
       for (const value of streamInput.ob.ve.values) {
-        proc.stdin.write(String(value ?? ""));
-        proc.stdin.write("\n");
+        writeInput(String(value ?? ""));
+        writeInput("\n");
       }
-      proc.stdin.end();
+      endInput();
     } else if (input !== null && input !== undefined) {
-      proc.stdin.write(input);
-      proc.stdin.end();
+      writeInput(input);
+      endInput();
     } else {
-      proc.stdin.end();
+      endInput();
     }
     commandStreamProcesses.set(streamName, { proc });
     return makeStream({
@@ -441,13 +478,16 @@ export async function command(sentence, { remember: rememberFn = remember, runti
       policySource: policy.source,
       status: res.status ?? null,
       signal: res.signal ?? null,
+      stdinError: res.stdinError?.message ?? "",
       timedOut: res.timedOut === true,
       stdoutLength: stdout.length,
       stderrLength: stderr.length,
       stderr: stderr.slice(0, 200)
     })}`);
   }
-  const failed = Boolean(res.status) || Boolean(res.signal) || res.timedOut === true || res.exceededOutputLimit === true;
+  const stdinError = res.stdinError?.message ?? "";
+  const failed = Boolean(res.status) || Boolean(res.signal) || Boolean(stdinError)
+    || res.timedOut === true || res.exceededOutputLimit === true;
   if (failed) {
     emitCommandAudit({
       requestIdentity,
@@ -472,7 +512,8 @@ export async function command(sentence, { remember: rememberFn = remember, runti
         timeoutMs: effectiveTimeoutMs,
         maxOutputBytes: sandbox.maxOutputBytes,
         stdout: res.stdout,
-        stderr: res.stderr
+        stderr: res.stderr,
+        stdinError
       }),
       from: { la: sentence },
       raw: {
@@ -481,6 +522,7 @@ export async function command(sentence, { remember: rememberFn = remember, runti
         timedOut: res.timedOut === true,
         exceededOutputLimit: res.exceededOutputLimit === true,
         stderr: res.stderr ?? "",
+        stdinError,
         stdout: res.stdout ?? "",
         command: cmd,
         cwd: sandbox.cwd,
