@@ -43,8 +43,13 @@ test("mind ollama runner reads stdin payload when spawned as child process", asy
   assert.equal(/missing request payload/i.test(res.stderr), false);
 });
 
-test("first turn after switching Ollama models compacts history and forwards both requests through stdin", async () => {
+test("switching Ollama models from a project cwd resolves the runner and completes the first turn", async () => {
+  const previousModel = "qwen3.5:9b";
+  const selectedModel = "SparkLLM/Spark-X2.6-4B:q4_k_m";
+  const directRunnerPrompt = "runner path from external project cwd";
   const calls = [];
+  const jobs = new Map();
+  let nextJobId = 0;
   const manager = http.createServer(async (req, res) => {
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
@@ -52,13 +57,40 @@ test("first turn after switching Ollama models compacts history and forwards bot
     calls.push({ method: req.method, path: req.url, body: body ? JSON.parse(body) : null });
     res.setHeader("content-type", "application/json");
     if (req.method === "POST" && req.url === "/submit") {
-      res.end(JSON.stringify({ remoteJobId: "ceremony-runner-job" }));
+      const remoteJobId = `ceremony-runner-job-${++nextJobId}`;
+      jobs.set(remoteJobId, calls.at(-1).body.jobSpec.payload);
+      res.end(JSON.stringify({ remoteJobId }));
       return;
     }
-    if (req.method === "GET" && req.url === "/job/ceremony-runner-job") {
+    if (req.method === "GET" && req.url.startsWith("/job/ceremony-runner-job-")) {
+      const remoteJobId = req.url.slice("/job/".length);
+      const payload = jobs.get(remoteJobId);
+      const messages = Array.isArray(payload?.messages) ? payload.messages : [];
+      const text = messages.map((message) => String(message?.content ?? "")).join("\n");
+      let message = { role: "assistant", content: "ceremony model reply" };
+      if (text.includes("Create a compact continuity note")) {
+        message = { role: "assistant", content: "Compacted scenario history." };
+      } else if (text.includes(directRunnerPrompt)) {
+        message = { role: "assistant", content: "External project runner path verified." };
+      } else if (messages.some((entry) => entry?.role === "tool")) {
+        message = { role: "assistant", content: "I answered directly after the internal runner request was blocked." };
+      } else if (messages.some((entry) => entry?.role === "user" && entry?.content === "what do you think?")) {
+        message = {
+          role: "assistant",
+          content: "",
+          tool_calls: [{
+            id: "selected-model-runner-attempt",
+            type: "function",
+            function: {
+              name: "be_command_ob_text_to_name_text",
+              arguments: JSON.stringify({ ob: "PYA_COMMAND_TIMEOUT_MS=900000 node ./command/mind_ollama_runner.mjs" })
+            }
+          }]
+        };
+      }
       res.end(JSON.stringify({
         status: "success",
-        result: { message: { role: "assistant", content: "ceremony model reply" } }
+        result: { message }
       }));
       return;
     }
@@ -89,17 +121,34 @@ test("first turn after switching Ollama models compacts history and forwards bot
   try {
     await interpret(parse('from filename "./module/mind_ollama.pya" ob name mind to name ollama command mind be import do'));
     await interpret(parse('from filename "./module/saddle_tools.pya" ob name saddle tools to name saddle tools be import do'));
-    await interpret(parse('exists su name coding saddle be mind as name "qwen-scenario" ya'));
+    await interpret(parse(`exists su name coding saddle be mind as name "${previousModel}" ya`));
+    await interpret(parse(`exists su name coding saddle be mind as name "${selectedModel}" ya`));
+    const runnerResult = await interpret({
+      mood: "do",
+      be: "command",
+      ob: { text: "PYA_COMMAND_TIMEOUT_MS=900000 node ./command/mind_ollama_runner.mjs" },
+      fromtext: { text: JSON.stringify({
+        mode: "chat",
+        model: selectedModel,
+        host: "http://127.0.0.1:1",
+        messages: [{ role: "user", content: directRunnerPrompt }]
+      }) }
+    });
+    assert.equal(JSON.parse(runnerResult?.ob?.text ?? "{}").message?.content, "External project runner path verified.");
+    const directRunnerSubmission = calls.find((call) => call.method === "POST" && call.path === "/submit"
+      && call.body.jobSpec?.payload?.messages?.[0]?.content?.startsWith("runner path from external project cwd"));
+    assert.equal(directRunnerSubmission?.body?.jobSpec?.payload?.messages?.[0]?.content?.length, directRunnerPrompt.length);
+
     const sessionName = `stdin-scenario-${process.pid}-${Date.now()}`;
     const context = await prepareSaddleContextForTurn({
       agentHouse,
       sessionName,
       backend: "ollama",
-      model: "qwen-scenario",
+      model: selectedModel,
       host: "http://127.0.0.1:1",
       contextWindow: 100,
       systemPrompt: "Coding saddle scenario",
-      userInput: "first request after switching to qwen-scenario",
+      userInput: `first request after switching to ${selectedModel}`,
       housekeeperUrl: `http://127.0.0.1:${address.port}`,
       loadHistory: async () => ({
         messages: Array.from({ length: 24 }, (_, index) => ({
@@ -110,22 +159,25 @@ test("first turn after switching Ollama models compacts history and forwards bot
     });
     assert.equal(context.compacted, true);
 
+    const turnEvents = [];
     const result = await runSaddleTurn({
-      input: "verify model switch payload",
-      model: "qwen-scenario",
+      input: "what do you think?",
+      model: selectedModel,
       backend: "ollama",
       host: "http://127.0.0.1:1",
       housekeeperUrl: `http://127.0.0.1:${address.port}`,
       sessionContextSummary: context.summary,
       historyWindow: context.historyWindow,
-      sessionName
+      sessionName,
+      onToolCall: async (event) => turnEvents.push(event)
     });
 
-    assert.equal(result?.ob?.text, "ceremony model reply", JSON.stringify(result));
+    assert.equal(result?.ob?.text, "I answered directly after the internal runner request was blocked.", JSON.stringify(result));
+    assert.match(turnEvents.find((event) => event.stage === "result")?.toolText ?? "", /internal adapters, not shell entry points/u);
     const submissions = calls.filter((call) => call.method === "POST" && call.path === "/submit"
-      && call.body.jobSpec?.payload?.model === "qwen-scenario");
+      && call.body.jobSpec?.payload?.model === selectedModel);
     const compactedHistory = submissions.find((call) => JSON.stringify(call.body.jobSpec.payload).includes("Create a compact continuity note"));
-    const selectedModelTurn = submissions.find((call) => JSON.stringify(call.body.jobSpec.payload).includes("verify model switch payload"));
+    const selectedModelTurn = submissions.find((call) => JSON.stringify(call.body.jobSpec.payload).includes("what do you think?"));
     assert.ok(compactedHistory, "compaction should call the newly selected model with old history");
     assert.ok(JSON.stringify(compactedHistory.body.jobSpec.payload).includes("older conversation detail"));
     assert.ok(selectedModelTurn, "the first turn should also reach the newly selected model");
