@@ -389,6 +389,18 @@ function configureSaddle({ cwd, runtimeRoot = cwd, worldRoot = path.join(cwd, "w
   });
 }
 
+export function configureSaddleForSelection(config, selection = {}) {
+  configureSaddle({
+    cwd: config.cwd,
+    runtimeRoot: config.runtimeRoot,
+    worldRoot: config.worldRoot,
+    model: selection.model ?? config.model,
+    backend: selection.backend ?? config.backend,
+    host: selection.host ?? config.host,
+    systemPrompt: config.systemPrompt
+  });
+}
+
 export async function prepareSaddle({
   cwd = process.cwd(),
   runtimeRoot = root,
@@ -1152,7 +1164,7 @@ async function main() {
       configuredEffort: configValue("mind reasoning effort")
     });
     await restoreSessionHistory();
-    configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
+    configureSaddleForSelection(config, { model, backend, host });
     renderStatus();
     try {
       await persistSelection({ includeProfile: false });
@@ -1478,7 +1490,7 @@ async function main() {
         configuredEffort: configValue("mind reasoning effort")
       });
       promptLabel = "pyash> ";
-      configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
+      configureSaddleForSelection(config, { model, backend, host });
       renderStatus();
       writeLine(`mind: ${mindName} | backend: ${backend} | model: ${model}`);
       await reportSelectionSaved();
@@ -1560,7 +1572,7 @@ async function main() {
         configuredEffort: configValue("mind reasoning effort")
       });
       mindModels.set(mindName, model);
-      configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
+      configureSaddleForSelection(config, { model, backend, host });
       renderStatus();
       writeLine(`mind: ${mindName} | model: ${model}`);
       await reportSelectionSaved();
@@ -1691,7 +1703,7 @@ async function main() {
         savedEffort: thinkSetting?.value,
         configuredEffort: configValue("mind reasoning effort")
       });
-      configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
+      configureSaddleForSelection(config, { model, backend, host });
       renderStatus();
       writeLine(`model: ${model}`);
       await reportSelectionSaved();
@@ -1701,7 +1713,7 @@ async function main() {
     const hostMatch = input.trim().match(/^\/host\s+(.+)$/i);
     if (hostMatch) {
       host = normalizeSaddleHost(hostMatch[1], host);
-      configureSaddle({ cwd: config.cwd, model, backend, host, systemPrompt: config.systemPrompt });
+      configureSaddleForSelection(config, { model, backend, host });
       renderStatus();
       writeLine(`host: ${host}`);
       await reportSelectionSaved();

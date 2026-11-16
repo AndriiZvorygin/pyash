@@ -11,8 +11,8 @@ import { readGpuHandleStatus, writeGpuHandleStatus } from "../program/runtime/gp
 import { runGpuWorkerOnce } from "../program/runtime/gpu/worker.mjs";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
-import { doRemember, forget } from "../program/remember/index.mjs";
-import { prepareSaddleContextForTurn, runSaddleTurn } from "../command/pyash_saddle.mjs";
+import { doRemember, forget, remember } from "../program/remember/index.mjs";
+import { configureSaddleForSelection, prepareSaddleContextForTurn, runSaddleTurn } from "../command/pyash_saddle.mjs";
 
 function runWithStdin(script, payload, env = {}) {
   return new Promise((resolve, reject) => {
@@ -122,7 +122,16 @@ test("switching Ollama models from a project cwd resolves the runner and complet
     await interpret(parse('from filename "./module/mind_ollama.pya" ob name mind to name ollama command mind be import do'));
     await interpret(parse('from filename "./module/saddle_tools.pya" ob name saddle tools to name saddle tools be import do'));
     await interpret(parse(`exists su name coding saddle be mind as name "${previousModel}" ya`));
-    await interpret(parse(`exists su name coding saddle be mind as name "${selectedModel}" ya`));
+    configureSaddleForSelection({
+      cwd: projectRoot,
+      runtimeRoot: process.cwd(),
+      worldRoot,
+      model: previousModel,
+      backend: "ollama",
+      host: "http://127.0.0.1:1",
+      systemPrompt: "Coding saddle model-switch scenario"
+    }, { model: selectedModel });
+    assert.equal(path.resolve(remember("run root")?.ob?.filename ?? ""), process.cwd());
     const runnerResult = await interpret({
       mood: "do",
       be: "command",
