@@ -875,6 +875,8 @@ function isCsiFinal(value) {
 
 export function createSaddleInputDecoder({
   onSubmit,
+  onQueue,
+  shouldQueue,
   onCancel,
   onExit,
   onChange,
@@ -909,6 +911,22 @@ export function createSaddleInputDecoder({
     if (typeof onSubmit === "function") {
       Promise.resolve(onSubmit(value)).catch(() => undefined);
     }
+  };
+  const queue = () => {
+    const value = state.value;
+    if (!value.trim() || typeof onQueue !== "function") return false;
+    let accepted = false;
+    try {
+      accepted = onQueue(value) !== false;
+    } catch {
+      return false;
+    }
+    if (!accepted) return false;
+    resetCompletion();
+    state.value = "";
+    state.cursor = 0;
+    changed();
+    return true;
   };
   const autocomplete = () => {
     let choices = [];
@@ -1037,6 +1055,7 @@ export function createSaddleInputDecoder({
       return;
     }
     if (char === "\t") {
+      if (shouldQueue?.({ ...state }) === true && queue()) return;
       autocomplete();
       return;
     }

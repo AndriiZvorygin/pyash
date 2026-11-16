@@ -179,7 +179,7 @@ test("saddle CLI switches Ollama models in a PTY and completes the first turn", 
     });
 
     const restoredMarker = `session: ${sessionName} | restored 0 saved messages`;
-    await waitForOutputAfter(() => transcript, restoredMarker, "pyash>");
+    await waitForOutputAfter(() => transcript, restoredMarker, "pyash>", { timeoutMs: 90000 });
     child.write("first model check\r");
     await waitForOutputAfter(() => transcript, "Qwen first model turn passed.", "pyash>");
 

@@ -939,6 +939,8 @@ async function main() {
   let promptLabel = "pyash> ";
   let inputDecoder = null;
   const queuedInputs = [];
+  const pendingAfterToolInputs = [];
+  let queuedInputSequence = 0;
   const saddleUi = createSaddleTerminalUi();
   activeSaddleUi = saddleUi;
   saddleUi.enter();
@@ -1059,7 +1061,11 @@ async function main() {
     renderStatus({ report });
   };
   const currentInputLabel = () => busy
-    ? (queuedInputs.length ? `queue ${queuedInputs.length + 1}> ` : "next> ")
+    ? (queuedInputs.length
+      ? `queue ${queuedInputs.length + 1}> `
+      : pendingAfterToolInputs.length
+        ? `after tool ${pendingAfterToolInputs.length + 1}> `
+        : "next> ")
     : promptLabel;
   const prompt = ({ label = promptLabel } = {}) => {
     if (!busy) promptLabel = label;
@@ -1067,9 +1073,13 @@ async function main() {
   };
   const dispatchQueuedInput = () => {
     if (busy || closing) return;
+    if (pendingAfterToolInputs.length) {
+      queuedInputs.push(...pendingAfterToolInputs.splice(0));
+    }
+    queuedInputs.sort((left, right) => left.sequence - right.sequence);
     const nextInput = queuedInputs.shift();
     if (nextInput !== undefined) {
-      void submit(nextInput, { alreadyDisplayed: true });
+      void submit(nextInput.text, { alreadyDisplayed: true });
       return;
     }
     prompt();
@@ -1371,8 +1381,8 @@ async function main() {
         prompt({ clear: false });
         return;
       }
-      queuedInputs.push(input);
-      writeLine(`[queued ${queuedInputs.length}] you> ${input}`);
+      pendingAfterToolInputs.push({ text: input, sequence: ++queuedInputSequence });
+      writeLine(`[after next tool result] you> ${input}`);
       prompt({ clear: false });
       return;
     }
@@ -1817,6 +1827,9 @@ async function main() {
           onAssistantDelta
         }),
         onToolCall: async (event) => {
+          const messagesAfterTool = event?.stage === "result"
+            ? pendingAfterToolInputs.splice(0)
+            : [];
           try {
             saddleTrace.recordToolEvent(event);
           } catch (error) {
@@ -1841,6 +1854,12 @@ async function main() {
             } else {
               writeLine(`${saddleToolEventLabel(event)}${event.toolText ? `: ${String(event.toolText).slice(0, 400)}` : ""}`);
             }
+          }
+          if (messagesAfterTool.length) {
+            const deliveredAt = new Date().toISOString();
+            return {
+              saddleMessages: messagesAfterTool.map(({ text }) => ({ text, deliveredAt }))
+            };
           }
         },
         onFollowup: (assessment) => {
@@ -1944,6 +1963,19 @@ async function main() {
     }
   };
 
+  const queueInputUntilTurnEnd = (value) => {
+    const input = String(value ?? "");
+    if (!busy || closing || !input.trim()) return false;
+    if (input.trim().startsWith("/")) {
+      writeLine("commands wait until the current response finishes; ordinary messages are queued");
+      return false;
+    }
+    queuedInputs.push({ text: input, sequence: ++queuedInputSequence });
+    writeLine(`[queued until the current turn finishes] you> ${input}`);
+    prompt({ clear: false });
+    return true;
+  };
+
   process.stdin.setEncoding("utf8");
   process.stdin.setRawMode(true);
   process.stdin.resume();
@@ -1957,6 +1989,8 @@ async function main() {
   await restoreSessionHistory({ detail: `model selection source: ${config.selectionSource}` });
   inputDecoder = createSaddleInputDecoder({
     onSubmit: submit,
+    onQueue: queueInputUntilTurnEnd,
+    shouldQueue: () => busy,
     onCancel: async () => {
       if (!busy) return;
       const result = await requestMindInterrupt({
