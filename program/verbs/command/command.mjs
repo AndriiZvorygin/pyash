@@ -488,6 +488,8 @@ export async function command(sentence, { remember: rememberFn = remember, runti
       status: res.status ?? null,
       signal: res.signal ?? null,
       stdinError: res.stdinError?.message ?? "",
+      internalMindRunner: isInternalMindRunnerCommand(cmd),
+      stdinInputBytes: input === null || input === undefined ? null : Buffer.byteLength(String(input), "utf8"),
       timedOut: res.timedOut === true,
       stdoutLength: stdout.length,
       stderrLength: stderr.length,

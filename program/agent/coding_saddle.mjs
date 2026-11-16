@@ -4,8 +4,9 @@ import {
   fetchZaiCodingPlanModels
 } from "../runtime/zai_coding_plan.mjs";
 import { fetchMiniMaxModels } from "../runtime/minimax.mjs";
+import { OLLAMA_CONTEXT_PRESETS } from "../runtime/ollama_context.mjs";
 
-export const SADDLE_OLLAMA_CONTEXT_PRESETS = [4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576];
+export const SADDLE_OLLAMA_CONTEXT_PRESETS = OLLAMA_CONTEXT_PRESETS;
 const SADDLE_OLLAMA_FALLBACK_CONTEXT_LIMIT = 65536;
 
 const SADDLE_SLASH_COMMANDS = [

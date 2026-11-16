@@ -47,6 +47,7 @@ test("switching Ollama models from a project cwd resolves the runner and complet
   const previousModel = "qwen3.5:9b";
   const selectedModel = "SparkLLM/Spark-X2.6-4B:q4_k_m";
   const directRunnerPrompt = "runner path from external project cwd";
+  const modelSwitchSystemPrompt = `Coding saddle model-switch scenario\n${"large-context ".repeat(25000)}`;
   const calls = [];
   const jobs = new Map();
   let nextJobId = 0;
@@ -129,7 +130,7 @@ test("switching Ollama models from a project cwd resolves the runner and complet
       model: previousModel,
       backend: "ollama",
       host: "http://127.0.0.1:1",
-      systemPrompt: "Coding saddle model-switch scenario"
+      systemPrompt: modelSwitchSystemPrompt
     }, { model: selectedModel });
     assert.equal(path.resolve(remember("run root")?.ob?.filename ?? ""), process.cwd());
     const runnerResult = await interpret({
@@ -190,6 +191,9 @@ test("switching Ollama models from a project cwd resolves the runner and complet
     assert.ok(compactedHistory, "compaction should call the newly selected model with old history");
     assert.ok(JSON.stringify(compactedHistory.body.jobSpec.payload).includes("older conversation detail"));
     assert.ok(selectedModelTurn, "the first turn should also reach the newly selected model");
+    assert.ok(selectedModelTurn.body.jobSpec.payload.messages.some((message) =>
+      message?.role === "system" && message.content.includes(modelSwitchSystemPrompt)),
+    "the model-switch request must preserve the complete large stdin payload");
   } finally {
     forget();
     for (const key of envKeys) {
@@ -340,6 +344,71 @@ test("manager-required mind calls submit to the GPU Housekeeper without contacti
     assert.equal(calls[0].body.jobSpec.kind, "ollama-chat");
     assert.equal(calls[0].body.jobSpec.payload.tools[0].function.name, "be_search");
     assert.equal(calls[0].body.jobSpec.payload.model, "qwen3.5:9b");
+  } finally {
+    await new Promise((resolve) => manager.close(resolve));
+    await fs.rm(usageDir, { recursive: true, force: true });
+  }
+});
+
+test("manager-required Ollama retries a reported context overflow at a fitting request window", async () => {
+  const calls = [];
+  let nextJobId = 0;
+  const manager = http.createServer(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const bodyText = Buffer.concat(chunks).toString("utf8");
+    const body = bodyText ? JSON.parse(bodyText) : null;
+    calls.push({ method: req.method, path: req.url, body });
+    res.setHeader("content-type", "application/json");
+    if (req.method === "POST" && req.url === "/submit") {
+      res.end(JSON.stringify({ remoteJobId: `context-retry-job-${++nextJobId}` }));
+      return;
+    }
+    if (req.method === "GET" && req.url === "/job/context-retry-job-1") {
+      res.end(JSON.stringify({
+        status: "failed",
+        error: {
+          message: "Ollama inference request failed: ollama request failed 400: {\"error\":\"request (66958 tokens) exceeds the available context size (32768 tokens), try increasing it\"}"
+        }
+      }));
+      return;
+    }
+    if (req.method === "GET" && req.url === "/job/context-retry-job-2") {
+      res.end(JSON.stringify({
+        status: "success",
+        result: { message: { role: "assistant", content: "context retry succeeded" } }
+      }));
+      return;
+    }
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: "not found" }));
+  });
+  await new Promise((resolve) => manager.listen(0, "127.0.0.1", resolve));
+  const address = manager.address();
+  const usageDir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-context-retry-usage-"));
+  try {
+    const payload = JSON.stringify({
+      mode: "chat",
+      model: "SparkLLM/Spark-X2.6-4B:q4_k_m",
+      host: "http://127.0.0.1:1",
+      messages: [{ role: "user", content: "first request after switching models" }]
+    });
+    const result = await runWithStdin("command/mind_ollama_runner.mjs", payload, {
+      PYA_GPU_MANAGER_REQUIRED: "true",
+      PYA_GPU_HOUSEKEEPER_URL: `http://127.0.0.1:${address.port}`,
+      PYA_GPU_MANAGER_POLL_MS: "1",
+      PYA_GPU_MANAGER_TIMEOUT_MS: "5000",
+      PYA_OLLAMA_USAGE_DIR: usageDir
+    });
+
+    assert.equal(result.code, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout.trim()), {
+      message: { role: "assistant", content: "context retry succeeded" }
+    });
+    const submissions = calls.filter((call) => call.method === "POST" && call.path === "/submit");
+    assert.equal(submissions.length, 2);
+    assert.equal(submissions[0].body.jobSpec.payload.options?.num_ctx, undefined);
+    assert.equal(submissions[1].body.jobSpec.payload.options.num_ctx, 131072);
   } finally {
     await new Promise((resolve) => manager.close(resolve));
     await fs.rm(usageDir, { recursive: true, force: true });
