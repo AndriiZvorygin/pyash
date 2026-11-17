@@ -74,6 +74,23 @@ already accepted by this Housekeeper. Stop it with
 `container/gpu-housekeeper/command/stop.sh`; its bind-mounted state remains on
 the host.
 
+Housekeeper opens its HTTP listener before restoring durable jobs. While the
+queue is restoring, `/health` returns `503` with `ready: false`, and `/submit`
+returns a retryable `503` with `Retry-After: 2`. Clients retry the same
+`handleId`, so startup does not create duplicate jobs. Docker's healthcheck
+tracks readiness separately from the container process state. Housekeeper-to-
+Housekeeper submissions retry for five minutes by default; set
+`GPU_HOUSEKEEPER_SUBMIT_RETRY_SECONDS` in `service/.env` to change that window.
+
+Only queued and running jobs are restored into Housekeeper's active state.
+Active records live under `state/jobs/active/`; completed and failed records
+remain under `state/jobs/` for debugging and are not loaded during normal
+startup. On the first startup after upgrading from the flat layout, Housekeeper
+scans existing job records once to migrate active work; it leaves terminal
+records in place. Later restarts scan only the active directory. A client that
+already has a terminal job ID can still fetch its archived result through
+`/job/<id>`, which reads that one record on demand.
+
 ## Send Pyash work to the Housekeeper
 
 From the Pyash repository, point the GPU worker at the entry Housekeeper and

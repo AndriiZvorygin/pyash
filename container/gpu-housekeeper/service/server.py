@@ -27,6 +27,13 @@ import kubernetes_runtime
 _JOBS: Dict[str, Dict[str, Any]] = {}
 _PROFILES: Dict[str, Dict[str, Any]] = {}
 _LOCK = threading.Lock()
+_STARTUP_LOCK = threading.Lock()
+_STARTUP_STATUS: Dict[str, Any] = {
+  "state": "ready",
+  "ready": True,
+  "restoredJobs": 0,
+  "error": ""
+}
 # Kept for compatibility with older imports; device locks below are the
 # execution boundary used by the current housekeeper.
 _EXECUTION_LOCK = threading.Lock()
@@ -50,6 +57,13 @@ _STRATA_MODEL_CATALOG_CACHE: Dict[str, Any] = {
   "error": "not observed"
 }
 _PEER_HEALTH: Dict[str, Dict[str, Any]] = {}
+
+
+class PeerRequestError(RuntimeError):
+  def __init__(self, message: str, *, status_code: Optional[int] = None, retryable: bool = False) -> None:
+    super().__init__(message)
+    self.status_code = status_code
+    self.retryable = retryable
 
 
 class DeviceExecutionGate:
@@ -102,6 +116,7 @@ DEFAULT_IDLE_REAPER_INTERVAL_SECONDS = 30
 DEFAULT_CAPACITY_WAIT_SECONDS = 1800
 DEFAULT_CAPACITY_POLL_SECONDS = 2
 DEFAULT_PEER_TIMEOUT_MS = 5000
+DEFAULT_PEER_SUBMIT_RETRY_SECONDS = 300
 DEFAULT_PEER_FAILURE_LIMIT = 3
 DEFAULT_PEER_COOLDOWN_SECONDS = 60
 DEFAULT_PEER_HEALTH_INTERVAL_SECONDS = 15
@@ -334,22 +349,78 @@ def write_pya_observation(prefix: str, map_root: str, record: Dict[str, Any], re
   return path
 
 
-def durable_job_path(remote_job_id: str) -> Path:
+def durable_job_archive_path(remote_job_id: str) -> Path:
   job_id = normalize_text(remote_job_id)
   if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", job_id):
     raise ValueError("invalid durable job id")
   return pya_loading_dir() / "jobs" / f"{job_id}.pya"
 
 
+def active_durable_job_path(remote_job_id: str) -> Path:
+  archive_path = durable_job_archive_path(remote_job_id)
+  return archive_path.parent / "active" / archive_path.name
+
+
+def durable_job_path(remote_job_id: str) -> Path:
+  """Return the current active record, falling back to its terminal archive."""
+  active_path = active_durable_job_path(remote_job_id)
+  return active_path if active_path.is_file() else durable_job_archive_path(remote_job_id)
+
+
+def set_startup_status(state: str, *, restored_jobs: Optional[int] = None, error: str = "") -> None:
+  normalized_state = normalize_text(state).lower() or "starting"
+  with _STARTUP_LOCK:
+    if restored_jobs is None:
+      restored_jobs = int(_STARTUP_STATUS.get("restoredJobs") or 0)
+    _STARTUP_STATUS.update({
+      "state": normalized_state,
+      "ready": normalized_state == "ready",
+      "restoredJobs": max(0, int(restored_jobs)),
+      "error": normalize_text(error)
+    })
+
+
+def startup_status() -> Dict[str, Any]:
+  with _STARTUP_LOCK:
+    return dict(_STARTUP_STATUS)
+
+
+def write_active_job_migration_marker(active_dir: Path) -> None:
+  marker = active_dir / ".legacy-flat-jobs-migrated-v1"
+  if marker.exists():
+    return
+  temporary_path = active_dir / f".{marker.name}.{uuid.uuid4().hex}.tmp"
+  try:
+    with temporary_path.open("x", encoding="utf-8") as stream:
+      stream.write("legacy flat job scan completed\n")
+      stream.flush()
+      os.fsync(stream.fileno())
+    os.replace(temporary_path, marker)
+    directory_fd = os.open(active_dir, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    try:
+      os.fsync(directory_fd)
+    finally:
+      os.close(directory_fd)
+  finally:
+    try:
+      temporary_path.unlink()
+    except FileNotFoundError:
+      pass
+
+
 def persist_durable_job(job: Dict[str, Any]) -> Path:
-  """Atomically persist the accepted job envelope and its current state."""
+  """Persist active jobs separately from terminal records kept for diagnostics."""
   remote_job_id = normalize_text(job.get("remoteJobId"))
-  path = durable_job_path(remote_job_id)
+  archive_path = durable_job_archive_path(remote_job_id)
+  active_path = active_durable_job_path(remote_job_id)
+  status = normalize_text(job.get("status")).lower()
+  path = active_path if status in {"queued", "running"} else archive_path
   record = json.dumps(job, ensure_ascii=False, separators=(",", ":"))
   lines = [
     f"su name {JOB_RECORD_ROOT} be json map def",
     "su name schema version ob num 1 ya",
     f"su name remote job id ob text {json.dumps(remote_job_id)} ya",
+    f"su name status ob text {json.dumps(status)} ya",
     f"su name job record ob text {json.dumps(record, ensure_ascii=False)} ya",
     "prah",
     ""
@@ -372,6 +443,18 @@ def persist_durable_job(job: Dict[str, Any]) -> Path:
       os.fsync(directory_fd)
     finally:
       os.close(directory_fd)
+    if path == archive_path:
+      try:
+        active_path.unlink()
+        directory_fd = os.open(active_path.parent, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+        try:
+          os.fsync(directory_fd)
+        finally:
+          os.close(directory_fd)
+      except FileNotFoundError:
+        pass
+      except OSError as err:
+        print(f"[gpu-housekeeper] could not remove terminal job from active queue {remote_job_id}: {normalize_text(err)}", flush=True)
   finally:
     if temporary_path is not None:
       try:
@@ -405,40 +488,72 @@ def read_durable_job(path: Path) -> Optional[Dict[str, Any]]:
 
 
 def restore_persisted_jobs() -> List[str]:
-  """Restore durable jobs, returning local jobs that should be resumed."""
+  """Restore queued work only; keep terminal records on disk without loading them."""
   jobs_dir = pya_loading_dir() / "jobs"
-  try:
-    paths = sorted(jobs_dir.glob("job-*.pya"), key=lambda item: item.name)
-  except OSError as err:
-    print(f"[gpu-housekeeper] durable queue scan failed: {normalize_text(err)}", flush=True)
-    return []
+  active_dir = jobs_dir / "active"
+  active_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+  marker = active_dir / ".legacy-flat-jobs-migrated-v1"
+  if not marker.is_file():
+    try:
+      legacy_paths = jobs_dir.glob("job-*.pya")
+      for path in legacy_paths:
+        active_path = active_dir / path.name
+        if active_path.exists():
+          continue
+        job = read_durable_job(path)
+        if not job:
+          print(f"[gpu-housekeeper] ignoring invalid legacy durable job record: {path.name}", flush=True)
+          continue
+        status = normalize_text(job.get("status")).lower()
+        if status not in {"queued", "running"}:
+          continue
+        remote_job_id = normalize_text(job.get("remoteJobId"))
+        if status == "running" and not bool(job.get("forwarded", False)):
+          job["status"] = "queued"
+          job["message"] = "resuming interrupted job after Housekeeper restart"
+          job["startedAt"] = ""
+        try:
+          persist_durable_job(job)
+        except OSError as err:
+          raise RuntimeError(f"could not migrate active durable job {remote_job_id}: {normalize_text(err)}") from err
+      write_active_job_migration_marker(active_dir)
+    except OSError as err:
+      raise RuntimeError(f"durable queue migration failed: {normalize_text(err)}") from err
 
   resumed: List[str] = []
   restored = 0
-  for path in paths:
-    job = read_durable_job(path)
-    if not job:
-      print(f"[gpu-housekeeper] ignoring invalid durable job record: {path.name}", flush=True)
-      continue
-    remote_job_id = normalize_text(job.get("remoteJobId"))
-    status = normalize_text(job.get("status")).lower()
-    forwarded = bool(job.get("forwarded", False))
-    if not forwarded and status in {"queued", "running"}:
-      if status == "running":
-        job["status"] = "queued"
-        job["message"] = "resuming interrupted job after Housekeeper restart"
-        job["startedAt"] = ""
-      try:
-        persist_durable_job(job)
-      except OSError as err:
-        print(f"[gpu-housekeeper] could not checkpoint resumed job {remote_job_id}: {normalize_text(err)}", flush=True)
+  try:
+    for path in active_dir.glob("job-*.pya"):
+      job = read_durable_job(path)
+      if not job:
+        print(f"[gpu-housekeeper] ignoring invalid active durable job record: {path.name}", flush=True)
         continue
-      resumed.append(remote_job_id)
-    with _LOCK:
-      _JOBS[remote_job_id] = job
-    restored += 1
+      remote_job_id = normalize_text(job.get("remoteJobId"))
+      status = normalize_text(job.get("status")).lower()
+      forwarded = bool(job.get("forwarded", False))
+      if status not in {"queued", "running"}:
+        try:
+          persist_durable_job(job)
+        except OSError as err:
+          print(f"[gpu-housekeeper] could not archive terminal active record {remote_job_id}: {normalize_text(err)}", flush=True)
+        continue
+      if not forwarded and status in {"queued", "running"}:
+        if status == "running":
+          job["status"] = "queued"
+          job["message"] = "resuming interrupted job after Housekeeper restart"
+          job["startedAt"] = ""
+        try:
+          persist_durable_job(job)
+        except OSError as err:
+          raise RuntimeError(f"could not checkpoint resumed job {remote_job_id}: {normalize_text(err)}") from err
+        resumed.append(remote_job_id)
+      with _LOCK:
+        _JOBS[remote_job_id] = job
+      restored += 1
+  except OSError as err:
+    raise RuntimeError(f"active durable queue scan failed: {normalize_text(err)}") from err
   print(
-    f"[gpu-housekeeper] durable queue restored: {restored} jobs; resuming {len(resumed)} local jobs",
+    f"[gpu-housekeeper] active queue restored: {restored} jobs; resuming {len(resumed)} local jobs",
     flush=True
   )
   return resumed
@@ -761,11 +876,18 @@ def project_strata_profile_residency(
   return projected
 
 
-def json_response(handler: BaseHTTPRequestHandler, code: int, payload: Dict[str, Any]) -> None:
+def json_response(
+  handler: BaseHTTPRequestHandler,
+  code: int,
+  payload: Dict[str, Any],
+  headers: Optional[Dict[str, str]] = None
+) -> None:
   body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
   handler.send_response(code)
   handler.send_header("Content-Type", "application/json")
   handler.send_header("Content-Length", str(len(body)))
+  for name, value in (headers or {}).items():
+    handler.send_header(name, value)
   handler.end_headers()
   handler.wfile.write(body)
 
@@ -1251,6 +1373,15 @@ def peer_health_interval_seconds() -> int:
   return max(5, min(300, value))
 
 
+def peer_submit_retry_seconds() -> int:
+  raw = normalize_text(os.environ.get("GPU_HOUSEKEEPER_SUBMIT_RETRY_SECONDS"))
+  try:
+    value = int(raw) if raw else DEFAULT_PEER_SUBMIT_RETRY_SECONDS
+  except ValueError:
+    value = DEFAULT_PEER_SUBMIT_RETRY_SECONDS
+  return max(1, min(3600, value))
+
+
 def peer_health_snapshot() -> Dict[str, Dict[str, Any]]:
   now = time.time()
   with _LOCK:
@@ -1619,9 +1750,17 @@ def peer_request_json(base_url: str, pathname: str, payload: Optional[Dict[str, 
       detail = err.read().decode("utf-8")
     except Exception:
       detail = str(err)
-    raise RuntimeError(f"peer request failed {err.code}: {detail}")
+    raise PeerRequestError(
+      f"peer request failed {err.code}: {detail}",
+      status_code=err.code,
+      retryable=err.code in {502, 503, 504}
+    )
   except URLError as err:
-    raise RuntimeError(f"peer request failed: {err.reason}")
+    raise PeerRequestError(f"peer request failed: {err.reason}", retryable=True)
+  except (TimeoutError, socket.timeout) as err:
+    raise PeerRequestError(f"peer request timed out: {normalize_text(err)}", retryable=True)
+  except OSError as err:
+    raise PeerRequestError(f"peer transport failed: {normalize_text(err)}", retryable=True)
   try:
     parsed = json.loads(raw or "{}")
   except Exception as err:
@@ -1629,6 +1768,21 @@ def peer_request_json(base_url: str, pathname: str, payload: Optional[Dict[str, 
   if not isinstance(parsed, dict):
     raise RuntimeError("peer returned a non-map response")
   return parsed
+
+
+def peer_submit_request_json(base_url: str, payload: Dict[str, Any], timeout_ms: int) -> Dict[str, Any]:
+  """Retry the same idempotent forwarded submission while a peer restarts."""
+  deadline = time.monotonic() + peer_submit_retry_seconds()
+  delay_seconds = 0.5
+  while True:
+    try:
+      return peer_request_json(base_url, "/submit", payload, timeout_ms=timeout_ms)
+    except PeerRequestError as err:
+      remaining = deadline - time.monotonic()
+      if not err.retryable or remaining <= 0:
+        raise
+      time.sleep(min(delay_seconds, remaining))
+      delay_seconds = min(5.0, delay_seconds * 2)
 
 
 def peer_route_candidate(
@@ -2103,7 +2257,7 @@ def forward_job_to_peer(payload: Dict[str, Any], job: Dict[str, Any], route: Dic
       "visitedHosts": list(dict.fromkeys([*visited, normalize_text(Handler.host_id)]))
     }
   }
-  peer_result = peer_request_json(peer_url, "/submit", forwarded_payload, timeout_ms=peer_timeout_ms())
+  peer_result = peer_submit_request_json(peer_url, forwarded_payload, timeout_ms=peer_timeout_ms())
   peer_job_id = normalize_text(peer_result.get("remoteJobId"))
   if not peer_result.get("accepted") or not peer_job_id:
     return {
@@ -2553,26 +2707,32 @@ def job_status(remote_job_id: str) -> Optional[Dict[str, Any]]:
   refresh_forwarded_job(remote_job_id)
   with _LOCK:
     job = _JOBS.get(remote_job_id)
-    if not job:
+  if not job:
+    try:
+      archived = read_durable_job(durable_job_archive_path(remote_job_id))
+    except ValueError:
+      archived = None
+    if not archived or normalize_text(archived.get("status")).lower() not in {"success", "fail"}:
       return None
-    return {
-      "remoteJobId": job.get("remoteJobId") or remote_job_id,
-      "handleId": job.get("handleId") or "",
-      "runtimeName": job.get("runtimeName") or "",
-      "profileName": job.get("profileName") or "",
-      "status": job.get("status") or "queued",
-      "message": job.get("message") or "",
-      "result": job.get("result"),
-      "error": job.get("error"),
-      "submittedAt": job.get("submittedAt") or "",
-      "startedAt": job.get("startedAt") or "",
-      "finishedAt": job.get("finishedAt") or "",
-      "executionHostId": job.get("executionHostId") or "",
-      "deviceId": job.get("deviceId") or "",
-      "source": job.get("source") or {"hostId": "unknown"},
-      "route": job.get("route") or {},
-      "forwarded": bool(job.get("forwarded", False))
-    }
+    job = archived
+  return {
+    "remoteJobId": job.get("remoteJobId") or remote_job_id,
+    "handleId": job.get("handleId") or "",
+    "runtimeName": job.get("runtimeName") or "",
+    "profileName": job.get("profileName") or "",
+    "status": job.get("status") or "queued",
+    "message": job.get("message") or "",
+    "result": job.get("result"),
+    "error": job.get("error"),
+    "submittedAt": job.get("submittedAt") or "",
+    "startedAt": job.get("startedAt") or "",
+    "finishedAt": job.get("finishedAt") or "",
+    "executionHostId": job.get("executionHostId") or "",
+    "deviceId": job.get("deviceId") or "",
+    "source": job.get("source") or {"hostId": "unknown"},
+    "route": job.get("route") or {},
+    "forwarded": bool(job.get("forwarded", False))
+  }
 
 
 def discharge(payload: Dict[str, Any], runtime_registry: Optional[Dict[str, Dict[str, Any]]] = None) -> Dict[str, Any]:
@@ -6169,10 +6329,22 @@ class Handler(BaseHTTPRequestHandler):
 
   def do_GET(self) -> None:
     if self.path == "/health":
+      startup = startup_status()
+      if not startup["ready"]:
+        state = startup.get("state") or "starting"
+        json_response(self, 503, {
+          "status": state,
+          "ready": False,
+          "startup": startup,
+          "timestamp": utc_now_iso()
+        }, headers={"Retry-After": "2"})
+        return
       telemetry = parse_nvidia_smi()
       status = "ok" if telemetry["available"] else "degraded"
       json_response(self, 200, {
         "status": status,
+        "ready": True,
+        "startup": startup,
         "timestamp": utc_now_iso()
       })
       return
@@ -6263,6 +6435,17 @@ class Handler(BaseHTTPRequestHandler):
       return
 
     if self.path == "/submit":
+      startup = startup_status()
+      if not startup["ready"]:
+        state = startup.get("state") or "starting"
+        json_response(self, 503, {
+          "accepted": False,
+          "code": "housekeeper_starting",
+          "error": "Housekeeper is restoring its durable queue",
+          "retryAfterSeconds": 2,
+          "startup": startup
+        }, headers={"Retry-After": "2"})
+        return
       payload = read_json_body(self)
       result = submit_job(payload, self.runtime_registry, self.host_id, self.client_address[0])
       if result.get("accepted"):
@@ -6348,26 +6531,7 @@ def main() -> None:
   args = parse_server_args()
 
   Handler.host_id = normalize_text(args.host_id) or "gpu-housekeeper"
-  Handler.runtime_registry = load_runtime_registry()
-  restored_job_ids = restore_persisted_jobs()
-
-  threading.Thread(
-    target=ollama_gpu_watchdog_loop,
-    args=(Handler.runtime_registry,),
-    name="ollama-gpu-residency-watchdog",
-    daemon=True
-  ).start()
-  threading.Thread(
-    target=idle_runtime_reaper_loop,
-    args=(Handler.runtime_registry,),
-    name="gpu-idle-runtime-reaper",
-    daemon=True
-  ).start()
-  threading.Thread(
-    target=peer_health_monitor_loop,
-    name="gpu-peer-health-monitor",
-    daemon=True
-  ).start()
+  set_startup_status("starting", restored_jobs=0)
 
   listen_hosts = list(dict.fromkeys([args.host, *args.also_host]))
   servers = []
@@ -6378,25 +6542,66 @@ def main() -> None:
     for server in servers:
       server.server_close()
     raise
-  server = servers[0]
-  for extra_server in servers[1:]:
+
+  listener_threads = []
+  try:
+    for server in servers:
+      listener = threading.Thread(
+        target=server.serve_forever,
+        name=f"housekeeper-listener-{server.server_address[0]}",
+        daemon=True
+      )
+      listener.start()
+      listener_threads.append(listener)
+
+    def initialize_housekeeper() -> None:
+      set_startup_status("restoring")
+      try:
+        Handler.runtime_registry = load_runtime_registry()
+        restored_job_ids = restore_persisted_jobs()
+        threading.Thread(
+          target=ollama_gpu_watchdog_loop,
+          args=(Handler.runtime_registry,),
+          name="ollama-gpu-residency-watchdog",
+          daemon=True
+        ).start()
+        threading.Thread(
+          target=idle_runtime_reaper_loop,
+          args=(Handler.runtime_registry,),
+          name="gpu-idle-runtime-reaper",
+          daemon=True
+        ).start()
+        threading.Thread(
+          target=peer_health_monitor_loop,
+          name="gpu-peer-health-monitor",
+          daemon=True
+        ).start()
+        for remote_job_id in restored_job_ids:
+          start_registered_job(remote_job_id, Handler.runtime_registry)
+        set_startup_status("ready", restored_jobs=len(minimal_jobs()))
+        ollama_entry = Handler.runtime_registry.get("ollama") or {}
+        if normalize_text(ollama_entry.get("runtimeMode")).lower() == "native-ollama":
+          threading.Thread(
+            target=ensure_runtime_ready,
+            args=(Handler.runtime_registry, "ollama"),
+            name="gpu-housekeeper-native-ollama-startup",
+            daemon=True
+          ).start()
+      except Exception as err:
+        message = normalize_text(err) or "unknown startup error"
+        set_startup_status("failed", error=message)
+        print(f"[gpu-housekeeper] startup failed: {message}", flush=True)
+
     threading.Thread(
-      target=extra_server.serve_forever,
-      name=f"housekeeper-listener-{extra_server.server_address[0]}",
+      target=initialize_housekeeper,
+      name="gpu-housekeeper-startup-restore",
       daemon=True
     ).start()
-  ollama_entry = Handler.runtime_registry.get("ollama") or {}
-  try:
-    for remote_job_id in restored_job_ids:
-      start_registered_job(remote_job_id, Handler.runtime_registry)
-    if normalize_text(ollama_entry.get("runtimeMode")).lower() == "native-ollama":
-      ensure_runtime_ready(Handler.runtime_registry, "ollama")
-    server.serve_forever()
+    listener_threads[0].join()
   finally:
-    for extra_server in servers[1:]:
-      extra_server.shutdown()
-      extra_server.server_close()
-    server.server_close()
+    for server in servers:
+      server.shutdown()
+      server.server_close()
 
 
 if __name__ == "__main__":

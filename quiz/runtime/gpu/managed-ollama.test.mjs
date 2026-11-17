@@ -13,11 +13,12 @@ import {
 } from "../../../program/runtime/gpu/managed-ollama.mjs";
 import { resolveTextModel, resolveVisionModel } from "../../../program/runtime/gpu/text-model.mjs";
 
-function response(payload, status = 200) {
+function response(payload, status = 200, headers = {}) {
   return {
     ok: status >= 200 && status < 300,
     status,
     statusText: status === 200 ? "OK" : "error",
+    headers: { get(name) { return headers[String(name).toLowerCase()] || null; } },
     async json() { return payload; },
     async text() { return JSON.stringify(payload); },
   };
@@ -149,6 +150,37 @@ test("generic ComfyUI jobs use the same manager queue and return the remote resu
     processId: process.pid,
   });
   assert.equal(calls[0].body.jobSpec.resourceRequest.vramRequiredMb, 12000);
+});
+
+test("managed GPU submit retries transport failures and readiness responses with the same handle", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options = {}) => {
+    const body = options.body ? JSON.parse(options.body) : null;
+    calls.push({ url, body });
+    if (url.endsWith("/submit")) {
+      const attempt = calls.filter((call) => call.url.endsWith("/submit")).length;
+      if (attempt === 1) throw new Error("connection refused");
+      if (attempt === 2) return response({ code: "housekeeper_starting" }, 503, { "retry-after": "0.05" });
+      return response({ accepted: true, remoteJobId: "job-retried" });
+    }
+    return response({ status: "success", result: { text: "done" } });
+  };
+
+  const result = await submitManagedGpuJob({
+    runtimeName: "comfyui",
+    profileName: "test-profile",
+    managerUrl: "http://test-housekeeper:8090",
+    handleId: "stable-retry-handle",
+    jobSpec: { kind: "test-job" },
+    fetchImpl,
+    pollIntervalMs: 1,
+  });
+
+  const submits = calls.filter((call) => call.url.endsWith("/submit"));
+  assert.equal(submits.length, 3);
+  assert.deepEqual(submits.map((call) => call.body), [submits[0].body, submits[0].body, submits[0].body]);
+  assert.equal(submits[0].body.handleId, "stable-retry-handle");
+  assert.equal(result.remoteJobId, "job-retried");
 });
 
 test("Ollama model provisioning uses one exact queued housekeeper job", async () => {

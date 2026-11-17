@@ -9,6 +9,7 @@ import threading
 import time
 import unittest
 from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 from unittest.mock import patch
 
 # Keep service observations produced by tests out of the host's persistent state.
@@ -38,6 +39,21 @@ class HousekeeperServerConfigTests(unittest.TestCase):
     with patch.dict(os.environ, {"GPU_HOUSEKEEPER_PEER_HEALTH_INTERVAL_SEC": ""}, clear=False):
       self.assertEqual(server.peer_health_interval_seconds(), 15)
 
+  def test_peer_submit_retries_startup_with_the_original_idempotency_payload(self):
+    payload = {"handleId": "forwarded-stable-handle", "runtimeName": "ollama"}
+    with patch.object(server, "peer_submit_retry_seconds", return_value=1), \
+         patch.object(server.time, "sleep"), \
+         patch.object(server, "peer_request_json", side_effect=[
+           server.PeerRequestError("peer starting", status_code=503, retryable=True),
+           {"accepted": True, "remoteJobId": "job-peer"}
+         ]) as peer_request:
+      result = server.peer_submit_request_json("http://peer:18886", payload, timeout_ms=100)
+
+    self.assertEqual(result["remoteJobId"], "job-peer")
+    self.assertEqual(peer_request.call_count, 2)
+    self.assertIs(peer_request.call_args_list[0].args[2], payload)
+    self.assertIs(peer_request.call_args_list[1].args[2], payload)
+
   def test_ipv4_and_ipv6_housekeeper_listeners_bind_same_port(self):
     ipv4 = server.create_housekeeper_server("0.0.0.0", 0)
     ipv6 = None
@@ -55,6 +71,45 @@ class HousekeeperServerConfigTests(unittest.TestCase):
       ipv4.server_close()
       if ipv6 is not None:
         ipv6.server_close()
+
+  def test_listener_reports_retryable_startup_until_queue_restore_finishes(self):
+    previous = server.startup_status()
+    server.set_startup_status("restoring", restored_jobs=0)
+    listener = server.create_housekeeper_server("127.0.0.1", 0)
+    thread = threading.Thread(target=listener.serve_forever, daemon=True)
+    thread.start()
+    root = f"http://127.0.0.1:{listener.server_address[1]}"
+    try:
+      with self.assertRaises(HTTPError) as health_error:
+        urlopen(f"{root}/health", timeout=2)
+      self.assertEqual(health_error.exception.code, 503)
+      self.assertEqual(health_error.exception.headers.get("Retry-After"), "2")
+      self.assertFalse(json.loads(health_error.exception.read())[
+        "ready"
+      ])
+
+      request = Request(
+        f"{root}/submit",
+        data=b'{"handleId":"same-handle"}',
+        headers={"Content-Type": "application/json"},
+        method="POST"
+      )
+      with patch.object(server, "submit_job") as submit_job:
+        with self.assertRaises(HTTPError) as submit_error:
+          urlopen(request, timeout=2)
+      self.assertEqual(submit_error.exception.code, 503)
+      self.assertEqual(submit_error.exception.headers.get("Retry-After"), "2")
+      self.assertEqual(json.loads(submit_error.exception.read())["code"], "housekeeper_starting")
+      submit_job.assert_not_called()
+    finally:
+      listener.shutdown()
+      listener.server_close()
+      thread.join(timeout=2)
+      server.set_startup_status(
+        previous["state"],
+        restored_jobs=previous["restoredJobs"],
+        error=previous["error"]
+      )
 
   def test_model_size_estimate_rounds_up_to_a_whole_mib(self):
     request = server.job_resource_request({
@@ -154,7 +209,7 @@ class HousekeeperDurableQueueTests(unittest.TestCase):
     self.assertIn("different job content", mismatched["error"])
     self.assertEqual(len(server._JOBS), 1)
 
-  def test_restart_restores_queued_interrupted_terminal_and_forwarded_jobs(self):
+  def test_restart_restores_active_jobs_and_keeps_terminal_records_archived(self):
     base = {
       "runtimeName": "test-runtime", "profileName": "test-profile",
       "jobSpec": {"kind": "test-job", "payload": {"value": 7}},
@@ -178,9 +233,67 @@ class HousekeeperDurableQueueTests(unittest.TestCase):
     self.assertEqual(server._JOBS["job-interrupted"]["status"], "queued")
     self.assertEqual(server._JOBS["job-interrupted"]["startedAt"], "")
     self.assertIn("resuming interrupted job", server._JOBS["job-interrupted"]["message"])
+    self.assertNotIn("job-complete", server._JOBS)
     self.assertEqual(server.job_status("job-complete")["result"], {"text": "done"})
+    self.assertTrue(server.durable_job_archive_path("job-complete").is_file())
     self.assertTrue(server._JOBS["job-forwarded"]["forwarded"])
     self.assertEqual(server._JOBS["job-forwarded"]["peerJobId"], "job-peer-1")
+
+  def test_completed_archive_is_not_read_after_active_job_migration(self):
+    base = {
+      "runtimeName": "test-runtime", "profileName": "test-profile",
+      "jobSpec": {"kind": "test-job"}, "submittedAt": "now",
+      "startedAt": "", "finishedAt": "", "source": {"hostId": "test"},
+      "forwarded": False
+    }
+    server.persist_durable_job({**base, "remoteJobId": "job-active", "status": "queued"})
+    server.persist_durable_job({
+      **base, "remoteJobId": "job-terminal", "status": "success", "result": {"text": "kept"}
+    })
+    active_dir = pathlib.Path(self.temp_dir.name) / "jobs" / "active"
+    (active_dir / ".legacy-flat-jobs-migrated-v1").write_text("done\n", encoding="utf-8")
+    server._JOBS.clear()
+    original_reader = server.read_durable_job
+    inspected = []
+
+    def active_only_reader(path):
+      inspected.append(path)
+      self.assertEqual(path.parent, active_dir)
+      return original_reader(path)
+
+    with patch.object(server, "read_durable_job", side_effect=active_only_reader):
+      resumed = server.restore_persisted_jobs()
+
+    self.assertEqual(resumed, ["job-active"])
+    self.assertEqual(set(server._JOBS), {"job-active"})
+    self.assertTrue(server.durable_job_archive_path("job-terminal").is_file())
+    self.assertTrue(inspected)
+
+  def test_upgrade_migrates_legacy_active_records_and_leaves_history_in_place(self):
+    base = {
+      "runtimeName": "test-runtime", "profileName": "test-profile",
+      "jobSpec": {"kind": "test-job"}, "submittedAt": "now",
+      "startedAt": "", "finishedAt": "", "source": {"hostId": "test"},
+      "forwarded": False
+    }
+    server.persist_durable_job({
+      **base, "remoteJobId": "job-legacy-active", "status": "running", "message": "running",
+      "startedAt": "before restart"
+    })
+    legacy_active = server.active_durable_job_path("job-legacy-active")
+    legacy_active.replace(server.durable_job_archive_path("job-legacy-active"))
+    server.persist_durable_job({
+      **base, "remoteJobId": "job-legacy-terminal", "status": "fail", "message": "kept for debug"
+    })
+    server._JOBS.clear()
+
+    resumed = server.restore_persisted_jobs()
+
+    self.assertEqual(resumed, ["job-legacy-active"])
+    self.assertEqual(server._JOBS["job-legacy-active"]["status"], "queued")
+    self.assertTrue(server.active_durable_job_path("job-legacy-active").is_file())
+    self.assertTrue(server.durable_job_archive_path("job-legacy-terminal").is_file())
+    self.assertNotIn("job-legacy-terminal", server._JOBS)
 
   def test_terminal_execution_state_is_persisted_for_same_remote_id(self):
     job = {
