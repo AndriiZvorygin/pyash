@@ -56,12 +56,36 @@ function timeoutSignal(timeoutMs) {
   return controller.signal;
 }
 
-async function requestJson({ fetchImpl, url, method = "GET", body, timeoutMs }) {
+function abortError(signal) {
+  const reason = signal?.reason;
+  if (reason instanceof Error) return reason;
+  const error = new Error(text(reason) || "request aborted");
+  error.name = "AbortError";
+  return error;
+}
+
+function requestSignal(timeoutMs, signal) {
+  const timeout = timeoutSignal(timeoutMs);
+  if (!signal) return timeout;
+  if (typeof AbortSignal?.any === "function") return AbortSignal.any([timeout, signal]);
+  const controller = new AbortController();
+  const abortFrom = (source) => controller.abort(source.reason);
+  for (const source of [timeout, signal]) {
+    if (source.aborted) {
+      abortFrom(source);
+      break;
+    }
+    source.addEventListener("abort", () => abortFrom(source), { once: true });
+  }
+  return controller.signal;
+}
+
+async function requestJson({ fetchImpl, url, method = "GET", body, timeoutMs, signal }) {
   const response = await fetchImpl(url, {
     method,
     headers: { "content-type": "application/json" },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    signal: timeoutSignal(timeoutMs),
+    signal: requestSignal(timeoutMs, signal),
   });
   if (!response.ok) {
     let detail = "";
@@ -78,6 +102,7 @@ function remoteJobId(result = {}) {
 function terminalStatus(value = "") {
   const status = text(value).toLowerCase();
   if (["success", "succeeded", "complete", "completed", "done"].includes(status)) return "success";
+  if (["cancel", "cancelled", "canceled"].includes(status)) return "cancelled";
   if (["fail", "failed", "error", "defective"].includes(status)) return "fail";
   return "";
 }
@@ -95,6 +120,76 @@ function defaultHandleId(model, messages) {
   return `managed-ollama-${digest}-${Date.now().toString(36)}`;
 }
 
+async function cancelHousekeeperJob({ fetchImpl, managerUrl, remoteJobId = "", handleId = "" } = {}) {
+  const body = {
+    ...(text(remoteJobId) ? { remoteJobId: text(remoteJobId) } : {}),
+    ...(text(handleId) ? { handleId: text(handleId) } : {}),
+  };
+  if (!Object.keys(body).length) return null;
+  const base = text(managerUrl).replace(/\/+$/u, "");
+  const cancellation = await requestJson({
+    fetchImpl,
+    url: `${base}/cancel`,
+    method: "POST",
+    body,
+    timeoutMs: 5000,
+  });
+  if (!cancellation?.accepted) {
+    throw new Error(`gpu-managed job cancellation was rejected: ${text(cancellation?.error || "unknown error")}`);
+  }
+  if (terminalStatus(cancellation.status)) return cancellation;
+  const resolvedId = text(remoteJobId || cancellation.remoteJobId);
+  if (!resolvedId) return cancellation;
+  const deadline = Date.now() + 10000;
+  while (Date.now() < deadline) {
+    const status = await requestJson({
+      fetchImpl,
+      url: `${base}/job/${encodeURIComponent(resolvedId)}`,
+      timeoutMs: Math.min(1000, Math.max(100, deadline - Date.now())),
+    });
+    if (terminalStatus(status?.status)) return status;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`gpu-managed job ${resolvedId} did not stop after cancellation was requested`);
+}
+
+async function waitForManagedJob({ fetchImpl, managerUrl, remoteId, timeoutMs, pollIntervalMs, signal, label }) {
+  const deadline = Date.now() + Math.max(1000, Number(timeoutMs) || 3600000);
+  while (Date.now() <= deadline) {
+    if (signal?.aborted) throw abortError(signal);
+    const status = await requestJson({
+      fetchImpl,
+      url: `${managerUrl}/job/${encodeURIComponent(remoteId)}`,
+      timeoutMs: Math.min(30000, Math.max(1000, deadline - Date.now())),
+      signal,
+    });
+    const terminal = terminalStatus(status?.status);
+    if (terminal === "success") return resultContent(status);
+    if (terminal === "fail") {
+      throw new Error(`${label} failed: ${text(status?.error?.message || status?.error || status?.message || "unknown error")}`);
+    }
+    if (terminal === "cancelled") throw new Error(`${label} was cancelled`);
+    const waitMs = Math.max(50, Number(pollIntervalMs) || 500);
+    if (signal) {
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          signal.removeEventListener("abort", onAbort);
+          resolve();
+        }, waitMs);
+        const onAbort = () => {
+          clearTimeout(timer);
+          reject(abortError(signal));
+        };
+        if (signal.aborted) onAbort();
+        else signal.addEventListener("abort", onAbort, { once: true });
+      });
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+  }
+  throw new Error(`${label} timed out after ${timeoutMs}ms`);
+}
+
 /** Submit a non-Ollama GPU job to the housekeeper and wait for its result. */
 export async function submitManagedGpuJob({
   runtimeName,
@@ -110,6 +205,7 @@ export async function submitManagedGpuJob({
   dischargeAllowed = true,
   handleId = "",
   fetchImpl = globalThis.fetch,
+  signal,
   timeoutMs = Number.parseInt(String(process.env.PYA_GPU_MANAGER_TIMEOUT_MS || "3600000"), 10) || 3600000,
   pollIntervalMs = Number.parseInt(String(process.env.PYA_GPU_MANAGER_POLL_MS || "500"), 10) || 500,
   vramRequiredMb,
@@ -146,39 +242,49 @@ export async function submitManagedGpuJob({
   const normalizedJobSpec = { ...jobSpec };
   if (Object.keys(resourceRequest).length) normalizedJobSpec.resourceRequest = resourceRequest;
   else delete normalizedJobSpec.resourceRequest;
-  const submit = await requestJson({
-    fetchImpl,
-    url: `${resolvedManager}/submit`,
-    method: "POST",
-    timeoutMs,
-    body: {
-      handleId: text(handleId) || `managed-${normalizedRuntime}-${Date.now().toString(36)}`,
-      ...sourceFields({ hostId, username, workerId }),
-      runtimeName: normalizedRuntime,
-      profileName: normalizedProfile,
-      dischargeAllowed: dischargeAllowed !== false,
-      ...(text(deviceId) ? { deviceId: text(deviceId) } : {}),
-      ...(text(targetHostId) ? { targetHostId: text(targetHostId).toLowerCase() } : {}),
-      jobSpec: normalizedJobSpec,
-    },
-  });
-  const id = remoteJobId(submit);
-  if (!id) throw new Error(`gpu-managed ${normalizedRuntime} submit returned no remote job id`);
-  const deadline = Date.now() + Math.max(1000, Number(timeoutMs) || 3600000);
-  while (Date.now() <= deadline) {
-    const status = await requestJson({
+  const resolvedHandleId = text(handleId) || `managed-${normalizedRuntime}-${Date.now().toString(36)}`;
+  let id = "";
+  try {
+    const submit = await requestJson({
       fetchImpl,
-      url: `${resolvedManager}/job/${encodeURIComponent(id)}`,
-      timeoutMs: Math.min(30000, Math.max(1000, deadline - Date.now())),
+      url: `${resolvedManager}/submit`,
+      method: "POST",
+      timeoutMs,
+      signal,
+      body: {
+        handleId: resolvedHandleId,
+        ...sourceFields({ hostId, username, workerId }),
+        runtimeName: normalizedRuntime,
+        profileName: normalizedProfile,
+        dischargeAllowed: dischargeAllowed !== false,
+        ...(text(deviceId) ? { deviceId: text(deviceId) } : {}),
+        ...(text(targetHostId) ? { targetHostId: text(targetHostId).toLowerCase() } : {}),
+        jobSpec: normalizedJobSpec,
+      },
     });
-    const terminal = terminalStatus(status?.status);
-    if (terminal === "success") return { ...resultContent(status), remoteJobId: id };
-    if (terminal === "fail") {
-      throw new Error(`gpu-managed ${normalizedRuntime} job failed: ${text(status?.error?.message || status?.error || status?.message || "unknown error")}`);
+    id = remoteJobId(submit);
+    if (!id) throw new Error(`gpu-managed ${normalizedRuntime} submit returned no remote job id`);
+    const result = await waitForManagedJob({
+      fetchImpl,
+      managerUrl: resolvedManager,
+      remoteId: id,
+      timeoutMs,
+      pollIntervalMs,
+      signal,
+      label: `gpu-managed ${normalizedRuntime} job`,
+    });
+    return { ...result, remoteJobId: id };
+  } catch (error) {
+    if (signal?.aborted) {
+      try {
+        await cancelHousekeeperJob({ fetchImpl, managerUrl: resolvedManager, remoteJobId: id, handleId: resolvedHandleId });
+      } catch (cancelError) {
+        throw new Error(`gpu-managed job cancellation failed: ${text(cancelError?.message || cancelError)}`, { cause: cancelError });
+      }
+      throw abortError(signal);
     }
-    await new Promise((resolve) => setTimeout(resolve, Math.max(50, Number(pollIntervalMs) || 500)));
+    throw error;
   }
-  throw new Error(`gpu-managed ${normalizedRuntime} job timed out after ${timeoutMs}ms`);
 }
 
 /** Check or explicitly provision an exact Ollama tag through gpu-housekeeper. */
@@ -272,6 +378,7 @@ export async function requestManagedOllamaChat({
   dischargeAllowed = true,
   requireManager = envFlag(env.PYA_GPU_MANAGER_REQUIRED, false),
   allowDirect = envFlag(env.PYA_GPU_MANAGER_ALLOW_DIRECT, false),
+  signal,
 } = {}) {
   if (typeof fetchImpl !== "function") throw new Error("managed Ollama requires fetch");
   const normalizedModel = resolveTextModel(model, { env, cwd, runtimePath });
@@ -315,48 +422,57 @@ export async function requestManagedOllamaChat({
       method: "POST",
       body: payload,
       timeoutMs,
+      signal,
     });
     return direct;
   }
 
-  const submit = await requestJson({
-    fetchImpl,
-    url: `${resolvedManager}/submit`,
-    method: "POST",
-    timeoutMs,
-    body: {
-      handleId: defaultHandleId(normalizedModel, payload.messages),
-      ...sourceFields({ hostId, username, workerId }),
-      runtimeName: "ollama",
-      profileName: normalizedModel,
-      dischargeAllowed: dischargeAllowed !== false,
-      ...(text(deviceId) ? { deviceId: text(deviceId) } : {}),
-      jobSpec: {
-        kind: "ollama-chat",
-        ...(Number(vramRequiredMb) > 0 ? { resourceRequest: { vramRequiredMb: Math.trunc(Number(vramRequiredMb)) } } : {}),
-        payload,
-      },
-    },
-  });
-  const id = remoteJobId(submit);
-  if (!id) {
-    if (submit?.message?.content || submit?.response) return submit;
-    throw new Error("gpu-managed Ollama submit returned no remote job id");
-  }
-
-  const deadline = Date.now() + Math.max(1000, Number(timeoutMs) || 1800000);
-  while (Date.now() <= deadline) {
-    const status = await requestJson({
+  const handleId = defaultHandleId(normalizedModel, payload.messages);
+  let id = "";
+  try {
+    const submit = await requestJson({
       fetchImpl,
-      url: `${resolvedManager}/job/${encodeURIComponent(id)}`,
-      timeoutMs: Math.min(30000, Math.max(1000, deadline - Date.now())),
+      url: `${resolvedManager}/submit`,
+      method: "POST",
+      timeoutMs,
+      signal,
+      body: {
+        handleId,
+        ...sourceFields({ hostId, username, workerId }),
+        runtimeName: "ollama",
+        profileName: normalizedModel,
+        dischargeAllowed: dischargeAllowed !== false,
+        ...(text(deviceId) ? { deviceId: text(deviceId) } : {}),
+        jobSpec: {
+          kind: "ollama-chat",
+          ...(Number(vramRequiredMb) > 0 ? { resourceRequest: { vramRequiredMb: Math.trunc(Number(vramRequiredMb)) } } : {}),
+          payload,
+        },
+      },
     });
-    const terminal = terminalStatus(status?.status);
-    if (terminal === "success") return resultContent(status);
-    if (terminal === "fail") {
-      throw new Error(`gpu-managed Ollama job failed: ${text(status?.error?.message || status?.message || "unknown error")}`);
+    id = remoteJobId(submit);
+    if (!id) {
+      if (submit?.message?.content || submit?.response) return submit;
+      throw new Error("gpu-managed Ollama submit returned no remote job id");
     }
-    await new Promise((resolve) => setTimeout(resolve, Math.max(50, Number(pollIntervalMs) || 500)));
+    return await waitForManagedJob({
+      fetchImpl,
+      managerUrl: resolvedManager,
+      remoteId: id,
+      timeoutMs,
+      pollIntervalMs,
+      signal,
+      label: "gpu-managed Ollama job",
+    });
+  } catch (error) {
+    if (signal?.aborted) {
+      try {
+        await cancelHousekeeperJob({ fetchImpl, managerUrl: resolvedManager, remoteJobId: id, handleId });
+      } catch (cancelError) {
+        throw new Error(`gpu-managed Ollama cancellation failed: ${text(cancelError?.message || cancelError)}`, { cause: cancelError });
+      }
+      throw abortError(signal);
+    }
+    throw error;
   }
-  throw new Error(`gpu-managed Ollama job timed out after ${timeoutMs}ms`);
 }

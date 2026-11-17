@@ -188,6 +188,19 @@ test("coding saddle sends on Enter and keeps Shift+Enter as a newline", async ()
   assert.equal(decoder.getState().value, "");
 });
 
+test("coding saddle Tab queues active input and clears the editor", () => {
+  const queued = [];
+  const decoder = createSaddleInputDecoder({
+    onQueue: (value) => queued.push(value),
+    shouldQueue: () => true
+  });
+
+  decoder.feed("keep for later\t");
+
+  assert.deepEqual(queued, ["keep for later"]);
+  assert.equal(decoder.getState().value, "");
+});
+
 test("coding saddle bracketed paste preserves multiline text without sending", async () => {
   const submitted = [];
   const decoder = createSaddleInputDecoder({ onSubmit: (value) => submitted.push(value) });

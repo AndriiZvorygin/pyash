@@ -77,6 +77,38 @@ test("manager-required Ollama requests fail closed before any direct provider ca
   assert.equal(providerCalls, 0);
 });
 
+test("aborting a managed Ollama chat cancels its Housekeeper job and waits for terminal status", async () => {
+  const controller = new AbortController();
+  const calls = [];
+  let statusReads = 0;
+  const fetchImpl = async (url, options = {}) => {
+    calls.push({ url, body: options.body ? JSON.parse(options.body) : null });
+    if (url.endsWith("/submit")) return response({ remoteJobId: "cancel-me" });
+    if (url.endsWith("/job/cancel-me")) {
+      statusReads += 1;
+      return response({ status: statusReads === 1 ? "running" : "cancelled" });
+    }
+    if (url.endsWith("/cancel")) return response({ accepted: true, status: "cancelling", remoteJobId: "cancel-me" });
+    throw new Error(`unexpected URL ${url}`);
+  };
+
+  const pending = requestManagedOllamaChat({
+    model: "qwen3.5:9b",
+    messages: [{ role: "user", content: "hold" }],
+    ollamaUrl: "http://ollama.invalid:11434",
+    managerUrl: "http://housekeeper.invalid:18886",
+    fetchImpl,
+    signal: controller.signal,
+    pollIntervalMs: 1000,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  controller.abort(new Error("steering input"));
+
+  await assert.rejects(pending, /steering input/u);
+  assert.equal(calls.some((call) => call.url.endsWith("/cancel")), true);
+  assert.ok(statusReads >= 2, "the client must observe terminal cancellation before rejecting");
+});
+
 test("text and vision models are loaded from declarative pya configuration", async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-model-config-"));
   const runtimePath = path.join(dir, "runtime.pya");

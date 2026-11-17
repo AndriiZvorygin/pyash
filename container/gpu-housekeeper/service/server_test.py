@@ -7,7 +7,9 @@ import tempfile
 import threading
 import time
 import unittest
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 from unittest.mock import patch
 
 # Keep service observations produced by tests out of the host's persistent state.
@@ -86,14 +88,94 @@ class HousekeeperDurableQueueTests(unittest.TestCase):
     self.temp_dir = tempfile.TemporaryDirectory(prefix="gpu-housekeeper-durable-queue-")
     os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = self.temp_dir.name
     server._JOBS.clear()
+    server._JOB_CANCEL_EVENTS.clear()
 
   def tearDown(self):
     server._JOBS.clear()
+    server._JOB_CANCEL_EVENTS.clear()
     if self.original_pya_dir is None:
       os.environ.pop("GPU_HOUSEKEEPER_PYA_DIR", None)
     else:
       os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = self.original_pya_dir
     self.temp_dir.cleanup()
+
+  def test_cancel_by_handle_stops_a_running_job_and_marks_a_queued_job_terminal(self):
+    running_id = "running-cancel-target"
+    queued_id = "queued-cancel-target"
+    event = threading.Event()
+    with server._LOCK:
+      server._JOBS[running_id] = {
+        "remoteJobId": running_id, "handleId": "running-handle", "status": "running",
+        "message": "running", "runtimeName": "ollama"
+      }
+      server._JOB_CANCEL_EVENTS[running_id] = event
+      server._JOBS[queued_id] = {
+        "remoteJobId": queued_id, "handleId": "queued-handle", "status": "queued",
+        "message": "queued", "runtimeName": "ollama"
+      }
+      server._JOB_CANCEL_EVENTS[queued_id] = threading.Event()
+
+    with patch.object(server, "persist_durable_job"):
+      running = server.cancel_job({"handleId": "running-handle"})
+      queued = server.cancel_job({"remoteJobId": queued_id})
+
+    self.assertTrue(running["accepted"])
+    self.assertEqual(running["status"], "cancelling")
+    self.assertTrue(event.is_set())
+    self.assertEqual(queued["status"], "cancelled")
+    self.assertEqual(server.job_status(queued_id)["status"], "cancelled")
+
+  def test_cancel_route_accepts_a_running_job_over_http(self):
+    remote_job_id = "http-running-cancel-target"
+    event = threading.Event()
+    with server._LOCK:
+      server._JOBS[remote_job_id] = {
+        "remoteJobId": remote_job_id, "handleId": "http-cancel-handle", "status": "running",
+        "message": "running", "runtimeName": "ollama"
+      }
+      server._JOB_CANCEL_EVENTS[remote_job_id] = event
+    listener = server.create_housekeeper_server("127.0.0.1", 0)
+    listener_thread = threading.Thread(target=listener.serve_forever, daemon=True)
+    listener_thread.start()
+    request = Request(
+      f"http://127.0.0.1:{listener.server_address[1]}/cancel",
+      data=json.dumps({"remoteJobId": remote_job_id}).encode("utf-8"),
+      headers={"Content-Type": "application/json"},
+      method="POST"
+    )
+    try:
+      with patch.object(server, "persist_durable_job"):
+        with urlopen(request, timeout=2) as response:
+          payload = json.loads(response.read().decode("utf-8"))
+      self.assertTrue(payload["accepted"])
+      self.assertEqual(payload["status"], "cancelling")
+      self.assertTrue(event.is_set())
+    finally:
+      listener.shutdown()
+      listener.server_close()
+      listener_thread.join(timeout=2)
+
+  def test_cancelled_durable_job_is_not_resumed_after_restart(self):
+    remote_job_id = "job-cancelled-before-restart"
+    server.persist_durable_job({
+      "remoteJobId": remote_job_id,
+      "handleId": "restart-cancel-handle",
+      "runtimeName": "test-runtime",
+      "profileName": "test-profile",
+      "jobSpec": {"kind": "test-job"},
+      "status": "running",
+      "message": "cancellation requested",
+      "submittedAt": "now",
+      "startedAt": "before restart",
+      "finishedAt": "",
+      "source": {"hostId": "test-host"},
+      "forwarded": False,
+      "cancelRequested": True,
+    })
+
+    self.assertEqual(server.restore_persisted_jobs(), [])
+    self.assertEqual(server.job_status(remote_job_id)["status"], "cancelled")
+    self.assertEqual(server.read_durable_job(server.durable_job_path(remote_job_id))["status"], "cancelled")
 
   def test_submit_persists_job_envelope_before_accepting(self):
     payload = {
@@ -397,6 +479,59 @@ class HousekeeperOllamaTests(unittest.TestCase):
     server._JOBS.clear()
     server.reset_ollama_model_catalog_cache()
     server.reset_strata_model_catalog_cache()
+
+  def test_cancelled_ollama_request_closes_the_active_provider_socket(self):
+    request_started = threading.Event()
+    release_provider = threading.Event()
+    cancel_event = threading.Event()
+    errors = []
+
+    class SlowProvider(BaseHTTPRequestHandler):
+      def do_POST(self):
+        self.rfile.read(int(self.headers.get("Content-Length", "0")))
+        request_started.set()
+        release_provider.wait(5)
+        try:
+          self.send_response(200)
+          self.send_header("Content-Type", "application/json")
+          self.end_headers()
+          self.wfile.write(b'{"message":{"content":"late response"}}')
+        except OSError:
+          pass
+
+      def log_message(self, _format, *_args):
+        pass
+
+    provider = ThreadingHTTPServer(("127.0.0.1", 0), SlowProvider)
+    provider_thread = threading.Thread(target=provider.serve_forever, daemon=True)
+    provider_thread.start()
+
+    def make_request():
+      try:
+        server.request_ollama_json(
+          "/api/chat",
+          {"model": "test-model", "messages": []},
+          timeout_sec=5,
+          cancel_event=cancel_event
+        )
+      except Exception as err:
+        errors.append(err)
+
+    request_thread = threading.Thread(target=make_request, daemon=True)
+    try:
+      with patch.object(server, "ollama_runtime_url", return_value=f"http://127.0.0.1:{provider.server_address[1]}"):
+        request_thread.start()
+        self.assertTrue(request_started.wait(2), "mock provider never received the request")
+        cancel_event.set()
+        request_thread.join(1)
+      self.assertFalse(request_thread.is_alive(), "cancellation did not interrupt the blocked provider request")
+      self.assertEqual(len(errors), 1)
+      self.assertIsInstance(errors[0], server.CancelledJobError)
+    finally:
+      release_provider.set()
+      provider.shutdown()
+      provider.server_close()
+      provider_thread.join(timeout=2)
 
   def tearDown(self):
     if self.original_pya_dir is None:
@@ -1242,7 +1377,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
       "gpuObserved": True,
       "message": "running"
     }
-    server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600: (
+    server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600, cancel_event=None: (
       {"models": [{"name": "qwen-test", "size": 1000, "size_vram": 1000}]} if pathname == "/api/ps" else {"response": "ok"}
     )
     server.ollama_model_catalog = lambda force=False: {
@@ -1262,7 +1397,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
     server.execute_registered_job(submitted["remoteJobId"], {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
 
     status = server.job_status(submitted["remoteJobId"])
-    self.assertEqual(status["status"], "success")
+    self.assertEqual(status["status"], "success", status)
     self.assertEqual(status["result"], {"response": "ok"})
     self.assertEqual(server.queue_depth(), 0)
 
