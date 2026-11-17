@@ -27,8 +27,13 @@ dependencies = [
 name = "pyac"
 version = "0.1.0"
 dependencies = [
+ "pyac-vliw-core",
  "serde_json",
 ]
+
+[[package]]
+name = "pyac-vliw-core"
+version = "0.1.0"
 
 [[package]]
 name = "quote"

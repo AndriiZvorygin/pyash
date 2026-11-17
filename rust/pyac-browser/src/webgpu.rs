@@ -1,15 +1,15 @@
 use std::{cell::RefCell, rc::Rc};
 
 use futures_channel::oneshot;
-use pyac::{
-    NumericOperator, NumericVectorOperand, PyacValue, VectorElements, decode_conditional_number,
-    decode_numeric_arithmetic, decode_numeric_vector_arithmetic, decode_pack,
-};
+use pyac::{PyacValue, VectorElements, decode_pack};
 use serde_json::json;
 use wasm_bindgen::prelude::*;
 use wgpu::util::DeviceExt;
 
 use crate::value_to_json;
+
+const RESULT_WORDS: usize = 32;
+const RESULT_STRIDE: usize = 4 + RESULT_WORDS;
 
 thread_local! {
     static GPU_CONTEXT: RefCell<Option<Rc<GpuContext>>> = const { RefCell::new(None) };
@@ -31,138 +31,62 @@ pub async fn run_pack_webgpu(pack_bytes: &[u8]) -> Result<String, JsValue> {
     }
 
     let context = gpu_context().await?;
-    enum OutputShape {
-        Scalar,
-        Vector16(usize),
-        Vector32(usize),
-    }
-    let mut input_words = Vec::new();
-    let mut output_shapes = Vec::with_capacity(pack.codelets.len());
-    let mut codelet_index = 0;
-    while codelet_index < pack.codelets.len() {
-        let start = codelet_index;
-        while codelet_index < pack.codelets.len() && pack.codelets[codelet_index][0] & 1 == 0 {
-            codelet_index += 1;
-        }
-        if codelet_index == pack.codelets.len() {
-            return Err(js_error(format!(
-                "codelet {start}: incomplete sentence group has no completion marker"
-            )));
-        }
-
-        let group = &pack.codelets[start..=codelet_index];
-        codelet_index += 1;
-        if group.len() > 1 {
-            let instruction = decode_conditional_number(group)
-                .map_err(|error| js_error(format!("codelet {start}: {error}")))?;
-            input_words.extend_from_slice(&[
-                EQUAL_SELECT_OPERATOR,
-                u32::from(instruction.left) | (u32::from(instruction.right) << 16),
-                u32::from(instruction.consequence) | (u32::from(instruction.alternative) << 16),
-            ]);
-            output_shapes.push(OutputShape::Scalar);
-            continue;
-        }
-
-        let index = start;
-        let codelet = &group[0];
-        if let Ok(instruction) = decode_numeric_vector_arithmetic(codelet) {
-            if matches!(
-                instruction.operator,
-                NumericOperator::Divide | NumericOperator::Remains
-            ) && match &instruction.operand {
-                NumericVectorOperand::Scalar(value) => *value == 0,
-                NumericVectorOperand::Vector(values) => values.contains(&0),
-            } {
-                return Err(js_error(format!(
-                    "codelet {index}: numeric division cannot divide by zero"
-                )));
-            }
-            for (index, element) in instruction.elements.iter().enumerate() {
-                input_words.push(operator_id(instruction.operator));
-                input_words.push(u32::from(*element));
-                let operand = match &instruction.operand {
-                    NumericVectorOperand::Scalar(value) => *value,
-                    NumericVectorOperand::Vector(values) => values[index],
-                };
-                input_words.push(u32::from(operand));
-            }
-            output_shapes.push(if instruction.operator == NumericOperator::Multiply {
-                OutputShape::Vector32(instruction.elements.len())
-            } else {
-                OutputShape::Vector16(instruction.elements.len())
-            });
-        } else {
-            let instruction = decode_numeric_arithmetic(codelet)
-                .map_err(|error| js_error(format!("codelet {index}: {error}")))?;
-            if matches!(
-                instruction.operator,
-                NumericOperator::Divide | NumericOperator::Remains
-            ) && instruction.operand == 0
-            {
-                return Err(js_error(format!(
-                    "codelet {index}: numeric division cannot divide by zero"
-                )));
-            }
-            input_words.push(operator_id(instruction.operator));
-            input_words.push(u32::from(instruction.ob));
-            input_words.push(u32::from(instruction.operand));
-            output_shapes.push(OutputShape::Scalar);
-        }
-    }
-    let work_item_count = input_words.len() / 3;
-    let input_byte_len = input_words
+    let input_words = pack
+        .codelets
+        .iter()
+        .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
+        .collect::<Vec<_>>();
+    let input_bytes_len = input_words
         .len()
         .checked_mul(4)
-        .ok_or_else(|| js_error("numeric pack input size overflowed"))?;
-    let output_bytes = work_item_count
+        .ok_or_else(|| js_error("VLIW input buffer size overflowed"))?;
+    let output_words_len = pack
+        .codelets
+        .len()
+        .checked_mul(RESULT_STRIDE)
+        .ok_or_else(|| js_error("VLIW output buffer size overflowed"))?;
+    let output_bytes_len = output_words_len
         .checked_mul(4)
-        .ok_or_else(|| js_error("numeric pack output size overflowed"))?;
+        .ok_or_else(|| js_error("VLIW output buffer size overflowed"))?;
     let limits = context.device.limits();
     let max_storage_bytes = limits.max_storage_buffer_binding_size as usize;
-    if input_byte_len > max_storage_bytes || output_bytes > max_storage_bytes {
+    if input_bytes_len > max_storage_bytes || output_bytes_len > max_storage_bytes {
         return Err(js_error(
-            "numeric pack exceeds this browser GPU's storage-buffer limit",
+            "VLIW pack exceeds this browser GPU's storage-buffer limit",
         ));
     }
-    let workgroups = work_item_count.div_ceil(64);
+    let workgroups = pack.codelets.len().div_ceil(64);
     if workgroups > limits.max_compute_workgroups_per_dimension as usize {
-        return Err(js_error(
-            "numeric pack exceeds the browser GPU dispatch limit",
-        ));
+        return Err(js_error("VLIW pack exceeds the browser GPU dispatch limit"));
     }
 
-    let mut input_bytes = Vec::with_capacity(input_words.len() * 4);
-    for word in input_words {
-        input_bytes.extend_from_slice(&word.to_le_bytes());
-    }
-
-    let execution_errors = context
-        .device
-        .push_error_scope(wgpu::ErrorFilter::Validation);
+    let input_bytes = input_words
+        .iter()
+        .flat_map(|word| word.to_le_bytes())
+        .collect::<Vec<_>>();
     let input_buffer = context
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("PyAC numeric input"),
+            label: Some("Pyash VLIW codelets"),
             contents: &input_bytes,
             usage: wgpu::BufferUsages::STORAGE,
         });
     let output_buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("PyAC numeric output"),
-        size: output_bytes as u64,
+        label: Some("Pyash VLIW results"),
+        size: output_bytes_len as u64,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
     });
     let readback_buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("PyAC numeric readback"),
-        size: output_bytes as u64,
+        label: Some("Pyash VLIW result readback"),
+        size: output_bytes_len as u64,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
     let bind_group = context
         .device
         .create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("PyAC numeric bindings"),
+            label: Some("Pyash VLIW bindings"),
             layout: &context.pipeline.get_bind_group_layout(0),
             entries: &[
                 wgpu::BindGroupEntry {
@@ -175,28 +99,28 @@ pub async fn run_pack_webgpu(pack_bytes: &[u8]) -> Result<String, JsValue> {
                 },
             ],
         });
-
     let mut encoder = context
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("PyAC numeric batch"),
+            label: Some("Pyash VLIW pack execution"),
         });
     {
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("PyAC numeric batch"),
+            label: Some("Pyash shared VLIW interpreter"),
             timestamp_writes: None,
         });
         pass.set_pipeline(&context.pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
         pass.dispatch_workgroups(workgroups as u32, 1, 1);
     }
-    encoder.copy_buffer_to_buffer(&output_buffer, 0, &readback_buffer, 0, output_bytes as u64);
+    encoder.copy_buffer_to_buffer(
+        &output_buffer,
+        0,
+        &readback_buffer,
+        0,
+        output_bytes_len as u64,
+    );
     context.queue.submit([encoder.finish()]);
-    if let Some(error) = execution_errors.pop().await {
-        return Err(js_error(format!(
-            "WebGPU dispatch validation failed: {error}"
-        )));
-    }
 
     let output_slice = readback_buffer.slice(..);
     let (sender, receiver) = oneshot::channel();
@@ -207,48 +131,84 @@ pub async fn run_pack_webgpu(pack_bytes: &[u8]) -> Result<String, JsValue> {
         .await
         .map_err(|_| js_error("GPU readback callback was cancelled"))?
         .map_err(|error| js_error(format!("GPU readback failed: {error}")))?;
-
     let mapped = output_slice
         .get_mapped_range()
-        .map_err(|error| js_error(format!("GPU readback mapping failed: {error}")))?;
-    let work_values = mapped
+        .map_err(|error| js_error(format!("GPU result map failed: {error}")))?;
+    let output_words = mapped
         .chunks_exact(4)
         .map(|bytes| u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
         .collect::<Vec<_>>();
     drop(mapped);
     readback_buffer.unmap();
-    let mut cursor = 0;
-    let output_values = output_shapes
-        .into_iter()
-        .map(|shape| match shape {
-            OutputShape::Scalar => {
-                let value = work_values[cursor];
-                cursor += 1;
-                PyacValue::Unsigned(u64::from(value))
-            }
-            OutputShape::Vector16(length) => {
-                let values = work_values[cursor..cursor + length]
-                    .iter()
-                    .map(|value| *value as u16)
-                    .collect();
-                cursor += length;
-                PyacValue::Vector(VectorElements::Numbers(values))
-            }
-            OutputShape::Vector32(length) => {
-                let values = work_values[cursor..cursor + length].to_vec();
-                cursor += length;
-                PyacValue::Vector(VectorElements::Numbers32(values))
-            }
-        })
-        .collect::<Vec<_>>();
 
+    let values = decode_results(&pack.codelets, &output_words)?;
     Ok(json!({
         "ok": true,
         "backend": "webgpu",
         "device": context.adapter_name,
-        "values": output_values.iter().map(value_to_json).collect::<Vec<_>>(),
+        "values": values.iter().map(value_to_json).collect::<Vec<_>>(),
     })
     .to_string())
+}
+
+fn decode_results(
+    codelets: &[[u16; pyac::WORDS_PER_CODELET]],
+    output: &[u32],
+) -> Result<Vec<PyacValue>, JsValue> {
+    let mut values = Vec::new();
+    let mut index = 0;
+    while index < codelets.len() {
+        if index > 0 && codelets[index - 1][0] & 1 == 0 {
+            index += 1;
+            continue;
+        }
+        let offset = index * RESULT_STRIDE;
+        let result = output
+            .get(offset..offset + RESULT_STRIDE)
+            .ok_or_else(|| js_error(format!("codelet {index}: GPU result is truncated")))?;
+        if result[1] != 0 {
+            return Err(js_error(format!(
+                "codelet {index}: shared VLIW core error {}",
+                result[1]
+            )));
+        }
+        let length = result[2] as usize;
+        let data = &result[4..];
+        let value = match result[0] {
+            pyac_vliw_core::VALUE_UNSIGNED => {
+                PyacValue::Unsigned(u64::from(data[0]) | (u64::from(data[1]) << 32))
+            }
+            pyac_vliw_core::VALUE_SIGNED => {
+                PyacValue::Signed((u64::from(data[0]) | (u64::from(data[1]) << 32)) as i64)
+            }
+            pyac_vliw_core::VALUE_DATE => {
+                PyacValue::DateEpochMs(u64::from(data[0]) | (u64::from(data[1]) << 32))
+            }
+            pyac_vliw_core::VALUE_VECTOR_U16 if length <= RESULT_WORDS => PyacValue::Vector(
+                VectorElements::Numbers(data[..length].iter().map(|value| *value as u16).collect()),
+            ),
+            pyac_vliw_core::VALUE_VECTOR_U32 if length <= RESULT_WORDS => {
+                PyacValue::Vector(VectorElements::Numbers32(data[..length].to_vec()))
+            }
+            pyac_vliw_core::VALUE_VECTOR_BOOL if length <= RESULT_WORDS => PyacValue::Vector(
+                VectorElements::Booleans(data[..length].iter().map(|value| *value != 0).collect()),
+            ),
+            kind => {
+                return Err(js_error(format!(
+                    "codelet {index}: invalid shared VLIW result kind/length ({kind}/{length})"
+                )));
+            }
+        };
+        values.push(value);
+        let consumed = result[3] as usize;
+        if consumed == 0 || index + consumed > codelets.len() {
+            return Err(js_error(format!(
+                "codelet {index}: shared VLIW core returned an invalid group length"
+            )));
+        }
+        index += consumed;
+    }
+    Ok(values)
 }
 
 async fn gpu_context() -> Result<Rc<GpuContext>, JsValue> {
@@ -276,20 +236,20 @@ async fn gpu_context() -> Result<Rc<GpuContext>, JsValue> {
         .map_err(|error| js_error(format!("WebGPU device unavailable: {error}")))?;
     let pipeline_errors = device.push_error_scope(wgpu::ErrorFilter::Validation);
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("PyAC numeric batch WGSL"),
-        source: wgpu::ShaderSource::Wgsl(include_str!("numeric_batch.wgsl").into()),
+        label: Some("Pyash generated shared VLIW WGSL"),
+        source: wgpu::ShaderSource::Wgsl(include_str!("vliw_kernel.wgsl").into()),
     });
     let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-        label: Some("PyAC numeric batch pipeline"),
+        label: Some("Pyash VLIW interpreter pipeline"),
         layout: None,
         module: &shader,
-        entry_point: Some("main"),
+        entry_point: Some("execute_pyac_pack"),
         compilation_options: Default::default(),
         cache: None,
     });
     if let Some(error) = pipeline_errors.pop().await {
         return Err(js_error(format!(
-            "WebGPU pipeline validation failed: {error}"
+            "WebGPU VLIW pipeline validation failed: {error}"
         )));
     }
     let context = Rc::new(GpuContext {
@@ -302,20 +262,6 @@ async fn gpu_context() -> Result<Rc<GpuContext>, JsValue> {
     GPU_CONTEXT.with(|stored| *stored.borrow_mut() = Some(Rc::clone(&context)));
     Ok(context)
 }
-
-fn operator_id(operator: NumericOperator) -> u32 {
-    match operator {
-        NumericOperator::Plus => 0,
-        NumericOperator::Subtract => 1,
-        NumericOperator::Multiply => 2,
-        NumericOperator::Divide => 3,
-        NumericOperator::Xor => 4,
-        NumericOperator::Exponential => 5,
-        NumericOperator::Remains => 6,
-    }
-}
-
-const EQUAL_SELECT_OPERATOR: u32 = 7;
 
 fn js_error(message: impl AsRef<str>) -> JsValue {
     JsValue::from_str(message.as_ref())

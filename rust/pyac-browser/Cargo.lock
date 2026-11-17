@@ -357,6 +357,7 @@ checksum = "3d595e54a326bc53c1c197b32d295e14b169e3cfeaa8dc82b529f947fba6bcf5"
 name = "pyac"
 version = "0.1.0"
 dependencies = [
+ "pyac-vliw-core",
  "serde_json",
 ]
 
@@ -366,11 +367,16 @@ version = "0.1.0"
 dependencies = [
  "futures-channel",
  "pyac",
+ "pyac-vliw-core",
  "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wgpu",
 ]
+
+[[package]]
+name = "pyac-vliw-core"
+version = "0.1.0"
 
 [[package]]
 name = "quote"

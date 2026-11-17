@@ -131,6 +131,8 @@ senses and the canonical Pyash vocabulary before assigning them VLIW meaning.
 | `.pyac` pack | Header plus deterministic fixed-width codelet bytes | Version 1 is a flat codelet sequence; no embedded data/code sections or mutable variable store; the interpreter allocates implemented numeric locals per invocation |
 | JavaScript VLIW facade | Reference lowering, decoding, effects, and supported execution | Partial semantic coverage, including the canonical Pyash programlet v1 slice below |
 | C output from `.pyac` | Compile supported codelets to C, then use the host C compiler | Verified arithmetic and invert subset; not a general Pyash-to-C replacement |
+| Shared Rust VLIW core | `rust/pyac-vliw-core`, a `no_std` semantic implementation called by the Rust CPU pack interpreter and GPU kernels | Current supported codelet families plus bounded named-slot candidate functions; not yet full Pyash interpreter parity |
+| Rust-GPU native | Rust-GPU compiles that same core to Vulkan SPIR-V for the native Housekeeper worker | Requires an NVIDIA discrete GPU and Vulkan; execution is explicitly bounded to the supported core operations |
 | Rust and RISC-V | Decode/execute supported PyAC semantics; direct RISC-V instruction/ELF prototype | Narrow subset; the generated RISC-V image is not emulator-executed |
 
 The general Pyash-to-JavaScript/C compiler is a distinct route. Its existence
@@ -153,6 +155,22 @@ eligible parallel work -> WebGPU/WGSL compute kernel             (optional brows
 PyAC -> LLVM IR or other backends                               (later targets)
 ```
 
+The GPU implementation has one semantic source: `rust/pyac-vliw-core`. The
+stable Rust CPU pack interpreter calls it directly; Rust-GPU compiles it to
+Vulkan SPIR-V for the native worker and to WGSL for the browser pack path. The
+native Housekeeper's `pyac-pack-execute` and `vliw-batch-evaluate` jobs both
+dispatch this same core. The candidate-batch form preserves the evolutionary
+programmer's existing named-slot API without retaining the separate Python
+PTX evaluator. It is not a second set of GPU semantics.
+
+This is semantic parity for the currently implemented bounded VLIW slice, not
+for all Pyash. The Rust CPU pack API retains its compatibility fallback for
+families outside the shared core; the GPU worker rejects unsupported codelet
+groups explicitly rather than silently substituting another implementation.
+See
+[`rust/pyac-gpu/README.md`](../../rust/pyac-gpu/README.md) for builds and the
+RTX smoke test.
+
 NASM and RISC-V assembly are intended readable compiler outputs, not new
 source-language syntax. The direct RISC-V encoder remains a useful independent
 backend/prototype; it does not replace the planned RISC-V assembly emitter. Each
@@ -169,14 +187,12 @@ host interface; the WASM target does not provide ordinary operating-system
 services such as filesystem access.
 
 For an explicitly requested pack that passes semantic eligibility, the WASM
-host can dispatch independent numeric operations and the bounded inline-number
-equality conditional through Rust's `wgpu` API to browser WebGPU compute
-shaders. The Rust semantic decoder validates the conditional group; WGSL
-executes its comparison and selection. The host remains responsible for
-interpreting the rest of the program and managing its data; results return in
-the existing VLIW value representation. This prototype does not automatically
-choose WebGPU based on profitability, execute arbitrary Rust or VLIW on the
-GPU, or change the VLIW argument, result, or `.pyac` format contracts.
+host dispatches the generated WGSL kernel through Rust's `wgpu` API. That WGSL
+is generated from the same Rust-GPU source and shared semantic core as the
+native Vulkan shader; it is not a hand-maintained parallel implementation.
+The host still validates and groups codelets, manages buffers, and reconstructs
+typed results. This does not automatically choose WebGPU by profitability or
+execute arbitrary Pyash on the GPU.
 
 ```text
 browser program (.pyac)
@@ -196,10 +212,11 @@ deployed to and executed on the user's device. Small workloads should normally
 stay on the CPU when dispatch and transfer costs outweigh parallel execution.
 
 The first runnable browser slice is implemented under `rust/pyac-browser/`.
-The Rust pack executor handles the codelet families currently supported by
-`rust/pyac`; browser tests verify the WASM CPU path, WebGPU parity for numeric
-arithmetic batches and a bounded equality branch, and CPU fallback when WebGPU
-is unavailable. This remains a subset runtime, not arbitrary Pyash execution.
+The Rust pack executor and generated WGSL kernel consume the shared core's
+supported codelet semantics; browser tests verify the WASM CPU path, WebGPU
+parity for numeric arithmetic batches and a bounded equality branch, and CPU
+fallback when WebGPU is unavailable. This remains a subset runtime, not
+arbitrary Pyash execution.
 The WebGPU action is explicit:
 the measured arithmetic workload has not established a stable profitable
 automatic dispatch threshold on the tested browser, so ordinary pack execution
@@ -208,20 +225,20 @@ treated here as an equivalent general compute backend.
 
 #### Current GPU Capability Boundary
 
-The current Rust/WebGPU interpreter is a parallel numeric executor, not a
-general VLIW interpreter running wholly on the GPU. The host decodes and
-validates supported sentence shapes, packs independent work items, and
-reconstructs typed results. WGSL executes arithmetic or conditional selection
-for each work item.
+The current implementation is one Rust semantic core with CPU, native Vulkan,
+and browser WGSL targets. For canonical `.pyac` packs, the host still groups
+codelets and reconstructs typed values while the GPU executes supported
+sentence groups. Native Housekeeper candidate batches use the same core to
+evaluate independent named-slot candidate/case pairs.
 
 | Capability | Current WebGPU support | Remaining work for broader VLIW coverage |
 | --- | --- | --- |
-| Numeric scalar operations | Unsigned arithmetic: saturating add/subtract, multiply, nonzero divide/remainder, XOR, exponentiation | Add operations only where normative Pyash semantics define them |
-| Numeric vectors | Elementwise unsigned-16 vectors, widths 2-8 with scalar right operand or widths 2-4 with equal-width vector operand; multiply results widen to unsigned-32 | Vector predicates/masks, wider or dynamic vectors, device-resident inputs/outputs |
-| Conditional execution | One flat equality predicate with two inline unsigned-number result arms | Other predicates, named operands, compound predicates, nested branches, conditional side effects |
-| Loops and calls | Not dispatched to WebGPU | Bounded loop lowering, function/call frames, explicit control-flow/dependency representation |
-| State and memory | Per-work-item input/output buffers; no mutable named VLIW state | Named slots, read/write semantics, alias rules, bounds, host/device residency and lifetime |
-| Other value families | Date, text, boolean, and standalone literal decoding remain CPU-side | GPU lowering only where parallel execution is useful; otherwise retain explicit CPU operations in mixed plans |
+| Numeric scalar operations | Shared-core unsigned arithmetic: saturating add/subtract, multiply, nonzero divide/remainder, XOR, exponentiation; named-slot candidates also support equality/order comparisons | Additional operations only where normative Pyash semantics define them |
+| Numeric vectors | Shared-core elementwise unsigned-16 vectors, widths 2-8 with scalar right operand or widths 2-4 with equal-width vector operand; multiply results widen to unsigned-32 | Vector predicates/masks, wider or dynamic vectors, device-resident inputs/outputs |
+| Conditional execution | Canonical `.pyac` path supports one flat equality predicate with two inline unsigned-number result arms | Other predicates, named operands in pack conditionals, compound predicates, nested branches, conditional side effects |
+| Loops and calls | Not in the GPU codelet slice; named-slot evolutionary functions are bounded straight-line candidates | Bounded loop lowering, function/call frames, explicit control-flow/dependency representation |
+| State and memory | Native candidate batches use bounded named slots initialized per case; `.pyac` pack path uses per-work-item buffers | General mutable named VLIW state, alias rules, host/device residency and lifetime |
+| Other value families | Date and supported numeric/bool vector results are interpreted by the shared core; text vectors remain on the Rust CPU fallback | GPU lowering only where parallel execution is useful; otherwise retain explicit CPU operations in mixed plans |
 | Coordination | Independent work items in one dispatch | Ordered multi-stage programs, reductions, barriers, atomics, cross-workgroup dependencies |
 | Dispatch policy | User-selected GPU action; CPU fallback when unavailable or ineligible | Device checks and a measured model for transfer, launch, occupancy, and data residency costs |
 
@@ -438,8 +455,9 @@ than the source-level contract above:
   unsigned 32-bit result slot, and straight-line instructions. The prior 16-slot
   and 31-instruction ceilings are removed. The profile defaults to 65,536
   steps (maximum 10,000,000), with a 1 MiB normalized function limit, 16 MiB
-  batch limit, 512 MiB scratch limit, and existing candidate/case/pair caps.
-- Its CUDA kernel supports saturating unsigned-16 addition and subtraction,
+  batch limit, 64 MiB scratch/candidate-buffer limits, and existing
+  candidate/case/pair caps.
+- The shared Rust core's named-slot evaluator supports saturating unsigned-16 addition and subtraction,
   unsigned-16 XOR, full unsigned-32 multiplication results, unsigned-16
   division/remainder, saturating unsigned-16 exponentiation, and unsigned
   `equally`, `tiny`, and `giant` predicates encoded as 0/1. Every operation
@@ -452,16 +470,15 @@ than the source-level contract above:
   `program/library/vliw/evolution.mjs` performs deterministic seeded mutation
   on the host; `evolveVliwFunctionThroughHousekeeper` sends every training and
   held-out batch through the durable Pyash `gpu vliw` duty.
-- Housekeeper validates the bounded batch, admits it against the declared
-  64 MiB GPU request, and evaluates candidate/example pairs in a CUDA kernel.
-  Failed or timed-out jobs are surfaced with their durable handle; the
+- The native Housekeeper worker compiles the same shared Rust core to Vulkan
+  SPIR-V. It evaluates candidate/example pairs in that kernel; host-side Rust
+  validates and lowers the bounded batch and calculates fitness from returned
+  values. Failed or timed-out jobs are surfaced with their durable handle; the
   production adapter has no local CPU scoring fallback.
-- `executeNumericPyacPackThroughHousekeeper` is the canonical `.pyac` bridge
-  for this subset: Pyash's numeric-arithmetic codelet decoder validates each
-  16-word record, the host groups scalar codelets into independent CUDA batches,
-  and every returned value is checked against the CPU codelet executor. It
-  rejects vector, control-flow, declaration, and non-arithmetic codelets before
-  submission rather than pretending to execute the whole pack.
+- `createHousekeeperVliwPackExecutor` submits original `.pyac` pack bytes to the
+  Rust-GPU worker. The worker executes supported codelet groups with the same
+  shared core; it fails explicitly on a GPU-unsupported group. The browser
+  WGSL target is generated from that Rust-GPU source as well.
 - A bounded Pyash map/series source surface is available in
   `examples/pyash/vliw-u16-addition.pya`. Its named maps declare the function,
   instruction records, and input/expected-output cases; named series select
@@ -471,9 +488,9 @@ than the source-level contract above:
   rejects malformed references and sentence shapes rather than executing or
   silently skipping them. The current profile is still only two U16 inputs,
   named scalar slots, and straight-line instructions; its canonical `.pyac`
-  bridge supports scalar arithmetic codelets only. It does not yet represent
-  branches, loops, calls, text/date/vector slots, or ordinary multi-sentence
-  `.pyac` programlet execution on CUDA.
+  bridge remains limited by the Rust core's supported codelet families. It does
+  not yet represent general mutable data sections, arbitrary loops/calls, or
+  full Pyash interpreter behavior on the GPU.
 - `evolveVliwFunctionSourceThroughHousekeeper` runs that source through the
   existing seeded evolution loop, then checks every returned training and
   held-out output against the CPU reference. The result includes a parseable

@@ -153,7 +153,7 @@ try {
   assert.equal(cpuBatch.backend, "wasm-cpu");
 
   await page.locator("#gpu-demo").click();
-  await page.waitForFunction(() => document.querySelector("#status").textContent !== "Submitting numeric pack to WebGPU…");
+  await page.waitForFunction(() => document.querySelector("#status").textContent !== "Submitting VLIW pack to WebGPU…");
   const selectedBackendResult = JSON.parse(await page.locator("#result").textContent());
   const selectedBackendStatus = await page.locator("#status").textContent();
   assert.equal(selectedBackendResult.ok, true);

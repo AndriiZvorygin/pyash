@@ -40,7 +40,7 @@ cpuBatchButton.addEventListener("click", () => {
 });
 
 async function tryWebGpu(packBytes) {
-  status.textContent = "Submitting numeric pack to WebGPU…";
+  status.textContent = "Submitting VLIW pack to WebGPU…";
   try {
     showResponse(await run_pack_webgpu(packBytes));
   } catch (error) {

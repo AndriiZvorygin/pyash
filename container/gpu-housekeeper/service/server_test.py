@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import pathlib
+import struct
 import tempfile
 import threading
 import time
@@ -4393,25 +4394,33 @@ class HousekeeperIdleReaperTests(unittest.TestCase):
     discharge.assert_not_called()
 
 
-class HousekeeperVliwEvaluatorTests(unittest.TestCase):
+class HousekeeperVliwPackTests(unittest.TestCase):
   def valid_job_spec(self):
+    pack = b"PYACVLIW" + struct.pack("<HHHHIIII", 1, 16, 16, 32, 1, 32, 64, 0) + bytes(32)
+    return {
+      "kind": "pyac-pack-execute",
+      "resourceRequest": {"vramRequiredMb": 64},
+      "payload": {"packBase64": base64.b64encode(pack).decode("ascii")}
+    }
+
+  def valid_batch_job_spec(self):
     return {
       "kind": "vliw-batch-evaluate",
       "resourceRequest": {"vramRequiredMb": 64},
       "payload": {
         "schemaVersion": 1,
-        "slots": ["left", "right", "sum"],
+        "slots": ["left", "right", "product"],
         "inputSlots": ["left", "right"],
-        "outputSlot": "sum",
-        "cases": [{"values": {"left": 2, "right": 3}, "expected": 5}],
+        "outputSlot": "product",
+        "cases": [{"values": {"left": 7, "right": 6}, "expected": 42}],
         "candidates": [{
-          "id": "add",
-          "instructions": [{"op": "plus", "target": "sum", "left": "left", "right": "right"}]
+          "id": "candidate-001",
+          "instructions": [{"op": "multiply", "target": "product", "left": "left", "right": "right"}]
         }]
       }
     }
 
-  def test_submit_accepts_valid_vliw_batch_and_rejects_unbounded_or_invalid_jobs(self):
+  def test_submit_accepts_a_valid_pyac_pack_and_rejects_invalid_pack_bytes(self):
     temp_dir = tempfile.TemporaryDirectory(prefix="gpu-housekeeper-vliw-submit-")
     previous = os.environ.get("GPU_HOUSEKEEPER_PYA_DIR")
     os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = temp_dir.name
@@ -4422,22 +4431,30 @@ class HousekeeperVliwEvaluatorTests(unittest.TestCase):
         accepted = server.submit_job({
           "handleId": "vliw-valid",
           "runtimeName": "vliw",
-          "profileName": "vliw-batch-evaluator",
+          "profileName": "pyac-vliw-rust-gpu",
           "jobSpec": self.valid_job_spec()
         }, {"vliw": dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])}, "mriczo")
 
+        batch_accepted = server.submit_job({
+          "handleId": "vliw-valid-batch",
+          "runtimeName": "vliw",
+          "profileName": "vliw-batch-evaluator",
+          "jobSpec": self.valid_batch_job_spec()
+        }, {"vliw": dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])}, "mriczo")
+
         invalid = self.valid_job_spec()
-        invalid["payload"]["candidates"][0]["instructions"][0]["op"] = "not-a-vliw-operation"
+        invalid["payload"]["packBase64"] = "not valid base64"
         rejected = server.submit_job({
           "handleId": "vliw-invalid",
           "runtimeName": "vliw",
-          "profileName": "vliw-batch-evaluator",
+          "profileName": "pyac-vliw-rust-gpu",
           "jobSpec": invalid
         }, {"vliw": dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])}, "mriczo")
 
       self.assertTrue(accepted["accepted"])
+      self.assertTrue(batch_accepted["accepted"])
       self.assertFalse(rejected["accepted"])
-      self.assertIn("unsupported VLIW operation", rejected["error"])
+      self.assertIn("base64 is invalid", rejected["error"])
     finally:
       server._JOBS.clear()
       if previous is None:
@@ -4460,21 +4477,36 @@ class HousekeeperVliwEvaluatorTests(unittest.TestCase):
     self.assertEqual(unavailable["status"], "stopped")
     self.assertFalse(unavailable["gpuObserved"])
 
-  def test_vliw_dispatch_calls_cuda_batch_evaluator_not_placeholder(self):
+  def test_vliw_dispatch_calls_the_rust_gpu_pack_worker(self):
     job = {
       "remoteJobId": "vliw-dispatch",
       "runtimeName": "vliw",
-      "profileName": "vliw-batch-evaluator",
+      "profileName": "pyac-vliw-rust-gpu",
       "deviceId": "gpu1",
       "jobSpec": self.valid_job_spec()
     }
-    result = {"candidateCount": 1, "scores": [{"id": "add", "incorrectCount": 0}]}
+    result = {"ok": True, "backend": "rust-gpu-vulkan", "values": []}
     with patch.object(server, "ensure_capacity_for_job", return_value={"decision": "fits"}), \
-         patch.object(server.vliw_evaluator, "score_vliw_batch", return_value=result) as evaluate:
+         patch.object(server, "execute_vliw_pack_gpu", return_value=result) as execute:
       actual = server.execute_job(job, {"vliw": dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])})
 
     self.assertEqual(actual, result)
-    evaluate.assert_called_once_with(job["jobSpec"]["payload"], "gpu1")
+    execute.assert_called_once_with(job)
+
+  def test_vliw_batch_dispatch_calls_the_shared_rust_gpu_worker(self):
+    job = {
+      "remoteJobId": "vliw-batch-dispatch",
+      "runtimeName": "vliw",
+      "profileName": "vliw-batch-evaluator",
+      "jobSpec": self.valid_batch_job_spec()
+    }
+    result = {"schemaVersion": 1, "scores": [{"id": "candidate-001", "outputs": [42]}]}
+    with patch.object(server, "ensure_capacity_for_job", return_value={"decision": "fits"}), \
+         patch.object(server, "execute_vliw_batch_gpu", return_value=result) as execute:
+      actual = server.execute_job(job, {"vliw": dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])})
+
+    self.assertEqual(actual, result)
+    execute.assert_called_once_with(job)
 
 
 if __name__ == "__main__":

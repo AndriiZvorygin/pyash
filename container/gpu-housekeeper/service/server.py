@@ -23,7 +23,6 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import unquote
 from urllib.request import Request, urlopen
 import kubernetes_runtime
-import vliw_evaluator
 
 _JOBS: Dict[str, Dict[str, Any]] = {}
 _PROFILES: Dict[str, Dict[str, Any]] = {}
@@ -110,6 +109,10 @@ DEFAULT_OLLAMA_MODEL_STORE_PATH = "/root/.ollama"
 DEFAULT_OLLAMA_GPU_STARTUP_GRACE_SECONDS = 60
 DEFAULT_OLLAMA_MIN_GPU_MODEL_FRACTION = 0.99
 DEFAULT_OLLAMA_GPU_WATCHDOG_INTERVAL_SECONDS = 300
+MAX_VLIW_PACK_BYTES = 16 * 1024 * 1024
+MAX_VLIW_BATCH_BYTES = 16 * 1024 * 1024
+VLIW_PACK_HEADER_BYTES = 32
+VLIW_PACK_CODELET_BYTES = 32
 OLLAMA_VRAM_DEFAULT_WEIGHT_HEADROOM = 1.20
 OLLAMA_VRAM_DEFAULT_FIXED_HEADROOM_MB = 512
 OLLAMA_VRAM_DEFAULT_PER_4K_CONTEXT_MB = 512
@@ -2138,6 +2141,91 @@ def forward_job_to_peer(payload: Dict[str, Any], job: Dict[str, Any], route: Dic
   }
 
 
+def decode_vliw_pack_payload(job_spec: Dict[str, Any]) -> bytes:
+  payload = job_spec.get("payload") if isinstance(job_spec, dict) else None
+  if not isinstance(payload, dict):
+    raise ValueError("pyac-pack-execute jobSpec.payload must be map")
+  encoded = normalize_text(payload.get("packBase64"))
+  if not encoded:
+    raise ValueError("pyac-pack-execute payload.packBase64 is required")
+  if len(encoded) > ((MAX_VLIW_PACK_BYTES + 2) // 3) * 4:
+    raise ValueError("PyAC pack exceeds the 16 MiB Housekeeper limit")
+  try:
+    pack = base64.b64decode(encoded, validate=True)
+  except (binascii.Error, ValueError) as err:
+    raise ValueError(f"PyAC pack base64 is invalid: {normalize_text(err)}") from err
+  if len(pack) > MAX_VLIW_PACK_BYTES:
+    raise ValueError("PyAC pack exceeds the 16 MiB Housekeeper limit")
+  if len(pack) < VLIW_PACK_HEADER_BYTES or pack[:8] != b"PYACVLIW":
+    raise ValueError("PyAC pack has an invalid or truncated header")
+  version = int.from_bytes(pack[8:10], "little")
+  word_bits = int.from_bytes(pack[10:12], "little")
+  words_per_codelet = int.from_bytes(pack[12:14], "little")
+  header_bytes = int.from_bytes(pack[14:16], "little")
+  codelet_count = int.from_bytes(pack[16:20], "little")
+  codelet_bytes = int.from_bytes(pack[20:24], "little")
+  total_bytes = int.from_bytes(pack[24:28], "little")
+  reserved = int.from_bytes(pack[28:32], "little")
+  if (version, word_bits, words_per_codelet, header_bytes, codelet_bytes, reserved) != (1, 16, 16, 32, 32, 0):
+    raise ValueError("PyAC pack declares an unsupported VLIW layout")
+  expected_bytes = VLIW_PACK_HEADER_BYTES + codelet_count * VLIW_PACK_CODELET_BYTES
+  if codelet_count == 0 or total_bytes != expected_bytes or len(pack) != expected_bytes:
+    raise ValueError("PyAC pack header length does not match its codelet payload")
+  return pack
+
+
+def run_vliw_gpu_worker(worker_input: bytes) -> Dict[str, Any]:
+  worker_path = normalize_text(os.environ.get("GPU_HOUSEKEEPER_VLIW_WORKER")) or "/service/pyac-vliw-gpu-worker"
+  shader_path = normalize_text(os.environ.get("GPU_HOUSEKEEPER_VLIW_SPIRV_PATH")) or "/service/pyac_vliw_gpu_kernel.spv"
+  env = os.environ.copy()
+  env["PYAC_VLIW_SPIRV_PATH"] = shader_path
+  try:
+    completed = subprocess.run(
+      [worker_path],
+      input=worker_input,
+      stdout=subprocess.PIPE,
+      stderr=subprocess.PIPE,
+      timeout=max(1, int(os.environ.get("GPU_HOUSEKEEPER_VLIW_TIMEOUT_SEC", "1800"))),
+      env=env,
+      check=False
+    )
+  except (OSError, subprocess.TimeoutExpired) as err:
+    raise RuntimeError(f"Rust VLIW GPU worker could not execute: {normalize_text(err)}") from err
+  stdout = completed.stdout.decode("utf-8", errors="replace").strip()
+  stderr = completed.stderr.decode("utf-8", errors="replace").strip()
+  if completed.returncode != 0:
+    raise RuntimeError(stderr or f"Rust VLIW GPU worker exited {completed.returncode}")
+  try:
+    result = json.loads(stdout)
+  except json.JSONDecodeError as err:
+    raise RuntimeError(f"Rust VLIW GPU worker returned invalid JSON: {normalize_text(err)}") from err
+  if not isinstance(result, dict):
+    raise RuntimeError("Rust VLIW GPU worker returned a non-map result")
+  return result
+
+
+def execute_vliw_pack_gpu(job: Dict[str, Any]) -> Dict[str, Any]:
+  job_spec = job.get("jobSpec") if isinstance(job.get("jobSpec"), dict) else {}
+  result = run_vliw_gpu_worker(decode_vliw_pack_payload(job_spec))
+  if result.get("ok") is not True or not isinstance(result.get("values"), list):
+    raise RuntimeError("Rust VLIW GPU worker returned an invalid pack result")
+  return result
+
+
+def execute_vliw_batch_gpu(job: Dict[str, Any]) -> Dict[str, Any]:
+  job_spec = job.get("jobSpec") if isinstance(job.get("jobSpec"), dict) else {}
+  payload = job_spec.get("payload")
+  if not isinstance(payload, dict):
+    raise ValueError("vliw-batch-evaluate payload must be a map")
+  encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+  if len(encoded) > MAX_VLIW_BATCH_BYTES:
+    raise ValueError(f"VLIW batch payload exceeds the {MAX_VLIW_BATCH_BYTES}-byte Housekeeper limit")
+  result = run_vliw_gpu_worker(encoded)
+  if result.get("schemaVersion") != 1 or not isinstance(result.get("scores"), list):
+    raise RuntimeError("Rust VLIW GPU worker returned an invalid candidate batch result")
+  return result
+
+
 def submit_job(
   payload: Dict[str, Any],
   runtime_registry: Optional[Dict[str, Dict[str, Any]]] = None,
@@ -2286,17 +2374,24 @@ def submit_job(
   if runtime_lower == "vliw":
     if not isinstance(job_spec, dict):
       return {"accepted": False, "error": "vliw jobSpec must be map"}
-    if normalize_text(job_spec.get("kind")).lower() != "vliw-batch-evaluate":
-      return {"accepted": False, "error": "vliw jobSpec.kind must be vliw-batch-evaluate"}
-    if not isinstance(job_spec.get("payload"), dict):
-      return {"accepted": False, "error": "vliw-batch-evaluate jobSpec.payload must be map"}
+    kind = normalize_text(job_spec.get("kind")).lower()
+    if kind not in {"pyac-pack-execute", "vliw-batch-evaluate"}:
+      return {"accepted": False, "error": "unsupported vliw jobSpec.kind"}
     if not isinstance(job_spec.get("resourceRequest"), dict):
       return {"accepted": False, "error": "vliw jobSpec.resourceRequest must declare GPU capacity"}
     try:
       request = job_resource_request({"jobSpec": job_spec})
       if request is None:
         raise RuntimeError("resourceRequest.vramRequiredMb is required")
-      vliw_evaluator.prepare_vliw_batch(job_spec["payload"])
+      if kind == "pyac-pack-execute":
+        decode_vliw_pack_payload(job_spec)
+      else:
+        batch_payload = job_spec.get("payload")
+        if not isinstance(batch_payload, dict):
+          raise ValueError("vliw-batch-evaluate payload must be a map")
+        batch_size = len(json.dumps(batch_payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
+        if batch_size > MAX_VLIW_BATCH_BYTES:
+          raise ValueError(f"VLIW batch payload exceeds the {MAX_VLIW_BATCH_BYTES}-byte Housekeeper limit")
     except (RuntimeError, ValueError) as err:
       return {"accepted": False, "error": normalize_text(err)}
 
@@ -2628,7 +2723,7 @@ def parse_runtime_status(runtime_entry: Dict[str, Any]) -> Dict[str, Any]:
       "gpuObserved": available,
       "loaded": False,
       "deviceCount": len(devices) if available else 0,
-      "message": "Housekeeper VLIW CUDA evaluator available" if available else "Housekeeper has no visible NVIDIA CUDA device"
+      "message": "Rust VLIW Vulkan worker available" if available else "Housekeeper has no visible NVIDIA GPU device"
     }
 
   if runtime_mode == "kubernetes-ollama":
@@ -5732,12 +5827,12 @@ def execute_job(
   if runtime_name == "huggingface":
     return execute_huggingface_job(job, runtime_registry)
   if runtime_name == "vliw":
-    if normalize_text(job_spec.get("kind")).lower() != "vliw-batch-evaluate":
-      raise RuntimeError("unsupported vliw job kind")
-    payload = job_spec.get("payload")
-    if not isinstance(payload, dict):
-      raise RuntimeError("vliw batch payload must be a map")
-    return vliw_evaluator.score_vliw_batch(payload, execution_device_id(job))
+    kind = normalize_text(job_spec.get("kind")).lower()
+    if kind == "pyac-pack-execute":
+      return execute_vliw_pack_gpu(job)
+    if kind == "vliw-batch-evaluate":
+      return execute_vliw_batch_gpu(job)
+    raise RuntimeError("unsupported vliw job kind")
 
   sleep_ms = 200
   if isinstance(job.get("jobSpec"), dict):

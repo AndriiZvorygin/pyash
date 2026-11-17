@@ -393,7 +393,7 @@ export {
   VliwFunctionSourceError
 } from "./source.mjs";
 export { evolveVliwFunctionSourceThroughHousekeeper } from "./evolution.mjs";
-export { executeNumericPyacPackThroughHousekeeper } from "./cuda_batch.mjs";
+export { createHousekeeperVliwPackExecutor } from "./rust_gpu_pack.mjs";
 export {
   decodePyashProgram,
   decodePyashProgramOrNull,

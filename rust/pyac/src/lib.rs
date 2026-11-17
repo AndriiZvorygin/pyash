@@ -327,9 +327,54 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
         NumericCodeletValue, execute_conditional_number_codelets, execute_numeric_codelet,
     };
 
+    let words = pack
+        .codelets
+        .iter()
+        .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
+        .collect::<Vec<_>>();
     let mut values = Vec::new();
     let mut index = 0;
     while index < pack.codelets.len() {
+        let shared = pyac_vliw_core::interpret_group(&words, index, pack.codelets.len());
+        if shared.error == pyac_vliw_core::ERROR_DIVISION_BY_ZERO {
+            return Err(PackExecutionError {
+                index,
+                source: SemanticError::DivisionByZero,
+            });
+        }
+        if shared.error == 0 && shared.value_kind != 0 {
+            let value = match shared.value_kind {
+                pyac_vliw_core::VALUE_UNSIGNED => PyacValue::Unsigned(
+                    u64::from(shared.values[0]) | (u64::from(shared.values[1]) << 32),
+                ),
+                pyac_vliw_core::VALUE_SIGNED => {
+                    PyacValue::Signed(i64::from(shared.values[0] as i32))
+                }
+                pyac_vliw_core::VALUE_DATE => PyacValue::DateEpochMs(
+                    u64::from(shared.values[0]) | (u64::from(shared.values[1]) << 32),
+                ),
+                pyac_vliw_core::VALUE_VECTOR_U16 => PyacValue::Vector(VectorElements::Numbers(
+                    shared.values[..shared.length as usize]
+                        .iter()
+                        .map(|value| *value as u16)
+                        .collect(),
+                )),
+                pyac_vliw_core::VALUE_VECTOR_U32 => PyacValue::Vector(VectorElements::Numbers32(
+                    shared.values[..shared.length as usize].to_vec(),
+                )),
+                pyac_vliw_core::VALUE_VECTOR_BOOL => PyacValue::Vector(VectorElements::Booleans(
+                    shared.values[..shared.length as usize]
+                        .iter()
+                        .map(|value| *value != 0)
+                        .collect(),
+                )),
+                _ => unreachable!("shared VLIW core returned an unknown value kind"),
+            };
+            values.push(value);
+            index += shared.consumed_codelets as usize;
+            continue;
+        }
+
         let start = index;
         while index < pack.codelets.len() && pack.codelets[index][0] & 1 == 0 {
             index += 1;

@@ -7,7 +7,7 @@ import { readGpuHandleStatus } from "../../runtime/gpu/handle_status.mjs";
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_POLL_INTERVAL_MS = 1000;
 const MEBIBYTE = 1024 * 1024;
-const CUDA_CONTEXT_RESERVE_BYTES = 32 * MEBIBYTE;
+const GPU_CONTEXT_RESERVE_BYTES = 32 * MEBIBYTE;
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -45,7 +45,7 @@ function estimateVramMb(batch) {
   const caseBytes = cases * (slots + 1) * 4;
   const resultBytes = pairs * 4;
   const errorBytes = pairs * 4;
-  const estimatedBytes = CUDA_CONTEXT_RESERVE_BYTES
+  const estimatedBytes = GPU_CONTEXT_RESERVE_BYTES
     + scratchBytes
     + candidateBytes
     + caseBytes

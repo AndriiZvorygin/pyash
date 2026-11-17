@@ -4,6 +4,8 @@ set -euo pipefail
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 target="$root/target/wasm32-unknown-unknown/release/pyac_browser.wasm"
 
+"$root/../pyac-gpu/build-kernels.sh"
+
 if ! command -v wasm-bindgen >/dev/null 2>&1; then
   echo "wasm-bindgen CLI is missing; follow rust/pyac-browser/README.md to install the lockfile-matched version" >&2
   exit 1
