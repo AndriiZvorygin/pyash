@@ -57,18 +57,46 @@ function timeoutSignal(timeoutMs) {
 }
 
 async function requestJson({ fetchImpl, url, method = "GET", body, timeoutMs }) {
-  const response = await fetchImpl(url, {
-    method,
-    headers: { "content-type": "application/json" },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    signal: timeoutSignal(timeoutMs),
-  });
+  let response;
+  try {
+    response = await fetchImpl(url, {
+      method,
+      headers: { "content-type": "application/json" },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: timeoutSignal(timeoutMs),
+    });
+  } catch (cause) {
+    const error = new Error(`gpu-managed Ollama transport failed: ${text(cause?.message || cause)}`, { cause });
+    error.retryableTransport = true;
+    throw error;
+  }
   if (!response.ok) {
     let detail = "";
     try { detail = text(await response.text()); } catch { /* diagnostic only */ }
-    throw new Error(`gpu-managed Ollama request failed (${response.status}): ${detail || response.statusText || url}`);
+    const error = new Error(`gpu-managed Ollama request failed (${response.status}): ${detail || response.statusText || url}`);
+    error.statusCode = response.status;
+    const retryAfter = Number.parseFloat(String(response.headers?.get?.("retry-after") || ""));
+    if (Number.isFinite(retryAfter) && retryAfter > 0) error.retryAfterMs = Math.ceil(retryAfter * 1000);
+    throw error;
   }
   return response.json();
+}
+
+async function requestJsonWithRetry(options) {
+  const deadline = Date.now() + Math.max(1000, Number(options.timeoutMs) || 3600000);
+  let delayMs = 250;
+  while (true) {
+    const remainingMs = deadline - Date.now();
+    try {
+      return await requestJson({ ...options, timeoutMs: Math.min(30000, Math.max(1000, remainingMs)) });
+    } catch (error) {
+      const retryable = error?.retryableTransport === true || [502, 503, 504].includes(error?.statusCode);
+      if (!retryable || Date.now() >= deadline) throw error;
+      const waitMs = Math.min(deadline - Date.now(), error.retryAfterMs || delayMs);
+      await new Promise((resolve) => setTimeout(resolve, Math.max(50, waitMs)));
+      delayMs = Math.min(5000, delayMs * 2);
+    }
+  }
 }
 
 function remoteJobId(result = {}) {
@@ -146,7 +174,7 @@ export async function submitManagedGpuJob({
   const normalizedJobSpec = { ...jobSpec };
   if (Object.keys(resourceRequest).length) normalizedJobSpec.resourceRequest = resourceRequest;
   else delete normalizedJobSpec.resourceRequest;
-  const submit = await requestJson({
+  const submit = await requestJsonWithRetry({
     fetchImpl,
     url: `${resolvedManager}/submit`,
     method: "POST",
@@ -319,7 +347,7 @@ export async function requestManagedOllamaChat({
     return direct;
   }
 
-  const submit = await requestJson({
+  const submit = await requestJsonWithRetry({
     fetchImpl,
     url: `${resolvedManager}/submit`,
     method: "POST",

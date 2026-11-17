@@ -12,6 +12,12 @@ services:
       - ollama
       - comfyui
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import json,urllib.request; response=urllib.request.urlopen('http://127.0.0.1:18886/health', timeout=4); assert json.load(response).get('ready') is True"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 180s
     ports:
       - "${GPU_HOUSEKEEPER_PUBLISH_PORT:-18886}:18886"
     runtime: nvidia
@@ -26,6 +32,7 @@ services:
       - GPU_HOUSEKEEPER_HOST_ID=${GPU_HOUSEKEEPER_HOST_ID:-gpu-housekeeper}
       - GPU_HOUSEKEEPER_PEERS=${GPU_HOUSEKEEPER_PEERS:-}
       - GPU_HOUSEKEEPER_PEER_TIMEOUT_MS=${GPU_HOUSEKEEPER_PEER_TIMEOUT_MS:-5000}
+      - GPU_HOUSEKEEPER_SUBMIT_RETRY_SECONDS=${GPU_HOUSEKEEPER_SUBMIT_RETRY_SECONDS:-300}
       - GPU_HOUSEKEEPER_PEER_FAILURE_LIMIT=${GPU_HOUSEKEEPER_PEER_FAILURE_LIMIT:-3}
       - GPU_HOUSEKEEPER_PEER_COOLDOWN_SEC=${GPU_HOUSEKEEPER_PEER_COOLDOWN_SEC:-60}
       - GPU_HOUSEKEEPER_PEER_HEALTH_INTERVAL_SEC=${GPU_HOUSEKEEPER_PEER_HEALTH_INTERVAL_SEC:-15}

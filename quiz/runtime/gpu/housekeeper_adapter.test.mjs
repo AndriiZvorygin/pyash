@@ -4,11 +4,12 @@ import os from "node:os";
 
 import { createGpuHousekeeperAdapter } from "../../../program/runtime/gpu/housekeeper_adapter.mjs";
 
-function makeJsonResponse({ status = 200, body = {} } = {}) {
+function makeJsonResponse({ status = 200, body = {}, headers = {} } = {}) {
   return {
     ok: status >= 200 && status < 300,
     status,
     statusText: status === 200 ? "OK" : "ERR",
+    headers: { get(name) { return headers[String(name).toLowerCase()] || null; } },
     async json() {
       return body;
     },
@@ -188,6 +189,36 @@ test("housekeeper adapter submitJob posts expected payload", async () => {
         }
       });
       assert.deepEqual(result, { remoteJobId: "job-abc", accepted: true });
+    }
+  );
+});
+
+test("housekeeper adapter retries submit startup failures with the same handle", async () => {
+  await withMockFetch(
+    async (_call, index) => {
+      if (index === 0) throw new Error("connection refused");
+      if (index === 1) return makeJsonResponse({
+        status: 503,
+        body: { code: "housekeeper_starting" },
+        headers: { "retry-after": "0.05" }
+      });
+      return makeJsonResponse({ body: { remoteJobId: "job-retried", accepted: true } });
+    },
+    async (calls) => {
+      const adapter = createGpuHousekeeperAdapter({ baseUrl: "http://housekeeper:18886" });
+      const result = await adapter.submitJob({
+        handleId: "adapter-retry-handle",
+        runtimeName: "ollama",
+        profileName: "test-model",
+        jobSpec: { kind: "ollama-chat" }
+      });
+
+      assert.equal(calls.length, 3);
+      const submitted = calls.map((call) => JSON.parse(call.options.body));
+      assert.deepEqual(submitted[1], submitted[0]);
+      assert.deepEqual(submitted[2], submitted[0]);
+      assert.equal(submitted[0].handleId, "adapter-retry-handle");
+      assert.equal(result.remoteJobId, "job-retried");
     }
   );
 });
