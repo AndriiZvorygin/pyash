@@ -310,7 +310,7 @@ test("saddle PTY steers on Enter, queues on Tab, and continues after switching O
     const queuedTurn = submissions.find((payload) => getUserTexts(payload).includes("deliver after turn end"));
     assert.ok(queuedTurn,
       "Tab input should be submitted as the next turn after the current answer completes");
-    await waitForOutput(() => transcript, "Tab queued message was sent in its own turn.");
+    await waitForSaddleTurn(() => transcript, "Tab queued message was sent in its own turn.");
 
     child.write(`/model ${alternateModel}\r`);
     await waitForOutput(() => transcript, `model: ${alternateModel}`);
