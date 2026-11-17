@@ -131,7 +131,7 @@ senses and the canonical Pyash vocabulary before assigning them VLIW meaning.
 | `.pyac` pack | Header plus deterministic fixed-width codelet bytes | Version 1 is a flat codelet sequence; no embedded data/code sections or mutable variable store; the interpreter allocates implemented numeric locals per invocation |
 | JavaScript VLIW facade | Reference lowering, decoding, effects, and supported execution | Partial semantic coverage, including the canonical Pyash programlet v1 slice below |
 | C output from `.pyac` | Compile supported codelets to C, then use the host C compiler | Verified arithmetic and invert subset; not a general Pyash-to-C replacement |
-| Shared Rust VLIW core | `rust/pyac-vliw-core`, a `no_std` semantic implementation called by the Rust CPU pack interpreter and GPU kernels | Current canonical `.pyac` codelet families; not yet full Pyash interpreter parity |
+| Shared Rust VLIW core | `rust/pyac-vliw-core`, a `no_std` semantic implementation called by the Rust CPU pack interpreter and GPU kernels | Canonical codelet families plus one bounded local-number programlet path; not yet full Pyash interpreter parity |
 | Rust-GPU native | Rust-GPU compiles that same core to Vulkan SPIR-V for the native Housekeeper worker | Requires an NVIDIA discrete GPU and Vulkan; execution is explicitly bounded to the supported core operations |
 | Rust and RISC-V | Decode/execute supported PyAC semantics; direct RISC-V instruction/ELF prototype | Narrow subset; the generated RISC-V image is not emulator-executed |
 
@@ -139,6 +139,13 @@ The general Pyash-to-JavaScript/C compiler is a distinct route. Its existence
 does not mean arbitrary Pyash programs already pass through VLIW. Likewise,
 the searchable `.pya` catalog is a semantic/provenance projection; `.pyac` is
 the executable byte projection.
+
+The JavaScript programlet is the current semantic reference for pure functions.
+The Rust inventory and per-feature parity status are maintained in
+[`pyac-vliw-semantic-slices.md`](pyac-vliw-semantic-slices.md). The first Rust
+program-level slice executes one canonical ceremony with uint16 local
+quantities, `plus` writes, `ret`, `prah`, and a direct invocation. It does not
+claim nested-call, programlet-branch, loop, or GPU frame parity.
 
 ## Backend Direction
 
@@ -456,11 +463,12 @@ resident across a batch where the backend allows it. Any target-specific
 optimization remains behind the same semantic conformance tests, with a
 correct fallback for devices lacking that feature.
 
-The native GPU worker executes canonical `.pyac` packs through the shared core
-and fails explicitly for unsupported codelet groups. The browser WGSL target
-is generated from the same Rust-GPU source. The separate JavaScript named-slot
-experimentation utilities are host-side only and do not define Rust `.pyac`
-semantics or a Housekeeper job format.
+The native GPU worker executes supported canonical `.pyac` codelet packs
+through the shared core and fails explicitly for unsupported codelet groups.
+The browser WGSL target is generated from the same Rust-GPU source. The
+program-level local-frame evaluator is currently wired through the Rust CPU
+pack executor; neither GPU runtime accepts the removed named-slot candidate
+batch format or claims programlet-frame execution yet.
 
 ## Implementation Milestones
 

@@ -45,6 +45,56 @@ const TINY_BOOLEAN_BRANCH: [[u16; WORDS_PER_CODELET]; 2] = [
     [0x0003, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
 ];
 
+// Lowered from the canonical Pyash local-variable flow in
+// examples/pyash/vliw-programlet-local-slots.pya, narrowed to one ceremony
+// and a direct final invocation (no nested calls in this parity slice).
+const LOCAL_NUMBER_PROGRAMLET: [[u16; WORDS_PER_CODELET]; 6] = [
+    [
+        0x0a11, 0x225e, 0xaa90, 0x8918, 0x24de, 0x225e, 0x327e, 0x225e, 0x4930, 0x243e, 0xe8c9,
+        0x5217, 0, 0, 0, 0,
+    ],
+    [
+        0x0a49, 0x225e, 0xaa90, 0x24de, 0x881d, 0, 0x245e, 0x225e, 0xc8c4, 0x414f, 0xea30, 0x217e,
+        0, 0, 0, 0,
+    ],
+    [
+        0x0509, 0x881d, 1, 0x245e, 0x225e, 0x327e, 0x225e, 0xaa90, 0x243e, 0x8a64, 0x295e, 0, 0, 0,
+        0, 0,
+    ],
+    [
+        0x0019, 0x225e, 0xaa90, 0x24de, 0xa828, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ],
+    [
+        0x0051, 0x225e, 0xaa90, 0x8918, 0x24de, 0xe8c9, 0x4e27, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ],
+    [
+        0x0121, 0x225e, 0x327e, 0x225e, 0x4930, 0x243e, 0xaa90, 0x8918, 0x295e, 0, 0, 0, 0, 0, 0, 0,
+    ],
+];
+
+fn run_numeric_programlet(
+    codelets: &[[u16; WORDS_PER_CODELET]],
+    slots: &mut [pyac_vliw_core::NumericLocalSlot],
+) -> pyac_vliw_core::CoreResult {
+    let words = codelets
+        .iter()
+        .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
+        .collect::<Vec<_>>();
+    let scratch_len = words.len();
+    let mut sentence_words = vec![0; scratch_len];
+    let mut sentence_boundaries = vec![0; scratch_len];
+    let mut symbols = vec![0; scratch_len];
+    pyac_vliw_core::execute_numeric_programlet(
+        &words,
+        codelets.len(),
+        pyac_vliw_core::DEFAULT_PROGRAMLET_STEP_BUDGET,
+        &mut sentence_words,
+        &mut sentence_boundaries,
+        &mut symbols,
+        slots,
+    )
+}
+
 #[test]
 fn executes_mixed_supported_codelet_families_in_pack_order() {
     let bytes = encode_pack(&[PLUS, INVERT, DATE, VECTOR, TRUTH]).expect("pack fits");
@@ -60,6 +110,40 @@ fn executes_mixed_supported_codelet_families_in_pack_order() {
             PyacValue::Boolean(true),
         ])
     );
+}
+
+#[test]
+fn executes_canonical_numeric_local_declaration_write_and_return() {
+    let bytes = encode_pack(&LOCAL_NUMBER_PROGRAMLET).expect("programlet pack fits");
+    let pack = decode_pack(&bytes).expect("programlet pack decodes");
+    let mut slots = vec![pyac_vliw_core::NumericLocalSlot::EMPTY; pack.codelets.len()];
+    let result = run_numeric_programlet(&LOCAL_NUMBER_PROGRAMLET, &mut slots);
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.values[0], 1);
+    let repeated = run_numeric_programlet(&LOCAL_NUMBER_PROGRAMLET, &mut slots);
+    assert_eq!(repeated.error, 0, "{repeated:?}");
+    assert_eq!(
+        repeated.values[0], 1,
+        "each invocation starts with a fresh local frame"
+    );
+
+    assert_eq!(execute_pack(&pack), Ok(vec![PyacValue::Unsigned(1)]));
+}
+
+#[test]
+fn canonical_programlet_rejects_constant_writes_and_frame_overflow() {
+    let mut constant_write = LOCAL_NUMBER_PROGRAMLET;
+    constant_write[1] = [
+        0x1449, 0x225e, 0xaa90, 0x24de, 0x881d, 0, 0x245e, 0x225e, 0x0b50, 0xea30, 0x414f, 0xea30,
+        0x217e, 0, 0, 0,
+    ];
+    let mut slots = [pyac_vliw_core::NumericLocalSlot::EMPTY; 6];
+    let result = run_numeric_programlet(&constant_write, &mut slots);
+    assert_eq!(result.error, pyac_vliw_core::ERROR_CONSTANT_WRITE);
+
+    let mut no_frame = [];
+    let result = run_numeric_programlet(&LOCAL_NUMBER_PROGRAMLET, &mut no_frame);
+    assert_eq!(result.error, pyac_vliw_core::ERROR_FRAME_CAPACITY);
 }
 
 #[test]

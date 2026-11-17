@@ -20,6 +20,9 @@ pub const ERROR_DIVISION_BY_ZERO: u32 = 2;
 pub const ERROR_MALFORMED: u32 = 3;
 pub const ERROR_VECTOR_WIDTH: u32 = 4;
 pub const ERROR_BRANCH: u32 = 5;
+pub const ERROR_FRAME_CAPACITY: u32 = 6;
+pub const ERROR_CONSTANT_WRITE: u32 = 7;
+pub const ERROR_STEP_BUDGET: u32 = 8;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CoreResult {
@@ -88,6 +91,34 @@ const EXPONENTIAL: u32 = 0x8c29;
 const REMAINS: u32 = 0xe82a;
 const INVERT: u32 = 0xaad2;
 const QUOTE_DENOTE: u32 = 0x001d;
+const NAME_TYPE: u32 = 0x225e;
+const NUMBER_TYPE: u32 = 0x327e;
+const VARIABLE: u32 = 0xc8c4;
+const PERMANENTLY: u32 = 0x0b50;
+const CEREMONY: u32 = 0xe8c9;
+const MOOD_DEFINITION: u32 = 0x5217;
+const MOOD_PARAGRAPH: u32 = 0x4e27;
+const MOOD_RETURN: u32 = 0xa828;
+const ESSIVE: u32 = 0x414f;
+pub const DEFAULT_PROGRAMLET_STEP_BUDGET: u32 = 65_536;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NumericLocalSlot {
+    pub name_offset: u32,
+    pub name_length: u32,
+    pub value: u32,
+    pub kind: u32,
+}
+
+impl NumericLocalSlot {
+    pub const EMPTY: Self = Self {
+        name_offset: 0,
+        name_length: 0,
+        value: 0,
+        kind: 0,
+    };
+}
 
 fn word(words: &[u32], codelet: usize, slot: usize) -> u32 {
     words[codelet * CODELET_WORDS + slot]
@@ -641,6 +672,576 @@ pub fn interpret_group(words: &[u32], start: usize, codelet_count: usize) -> Cor
         return result;
     }
     CoreResult::failure(ERROR_UNSUPPORTED, 1)
+}
+
+#[derive(Clone, Copy)]
+struct SentenceField {
+    role: u32,
+    start: usize,
+    length: usize,
+}
+
+impl SentenceField {
+    const EMPTY: Self = Self {
+        role: 0,
+        start: 0,
+        length: 0,
+    };
+}
+
+#[derive(Clone, Copy)]
+struct ParsedSentence {
+    fields: [SentenceField; 8],
+    field_count: usize,
+    verb_start: usize,
+    verb_length: usize,
+    mood: u32,
+}
+
+impl ParsedSentence {
+    const fn empty() -> Self {
+        Self {
+            fields: [SentenceField::EMPTY; 8],
+            field_count: 0,
+            verb_start: 0,
+            verb_length: 0,
+            mood: 0,
+        }
+    }
+
+    fn field(&self, role: u32) -> Option<SentenceField> {
+        let mut index = 0;
+        while index < self.field_count {
+            if self.fields[index].role == role {
+                return Some(self.fields[index]);
+            }
+            index += 1;
+        }
+        None
+    }
+}
+
+#[derive(Clone, Copy)]
+struct NameSpan {
+    start: usize,
+    length: usize,
+}
+
+fn collect_sentence(
+    words: &[u32],
+    codelet_count: usize,
+    start: usize,
+    tokens: &mut [u32],
+    boundaries: &mut [u8],
+) -> Result<(usize, usize), u32> {
+    if start >= codelet_count || codelet_count > words.len() / CODELET_WORDS {
+        return Err(ERROR_MALFORMED);
+    }
+    let mut token_count = 0;
+    let mut codelet = start;
+    loop {
+        if codelet >= codelet_count {
+            return Err(ERROR_MALFORMED);
+        }
+        let header = word(words, codelet, 0);
+        let complete = header & 1 != 0;
+        let mut last_boundary = 0;
+        let mut slot = 1;
+        while slot < CODELET_WORDS {
+            if (header & (1 << slot) != 0) == complete {
+                last_boundary = slot;
+            }
+            slot += 1;
+        }
+        if complete && last_boundary == 0 {
+            return Err(ERROR_MALFORMED);
+        }
+        let last_slot = if complete {
+            last_boundary
+        } else {
+            CODELET_WORDS - 1
+        };
+        slot = 1;
+        while slot <= last_slot {
+            if token_count >= tokens.len() || token_count >= boundaries.len() {
+                return Err(ERROR_FRAME_CAPACITY);
+            }
+            let value = word(words, codelet, slot);
+            if value > MAX_U16 {
+                return Err(ERROR_MALFORMED);
+            }
+            tokens[token_count] = value;
+            boundaries[token_count] = u8::from((header & (1 << slot) != 0) == complete);
+            token_count += 1;
+            slot += 1;
+        }
+        codelet += 1;
+        if complete {
+            return Ok((token_count, codelet));
+        }
+    }
+}
+
+fn parse_sentence(tokens: &[u32], boundaries: &[u8], length: usize) -> Result<ParsedSentence, u32> {
+    if length == 0 || length > tokens.len() || length > boundaries.len() {
+        return Err(ERROR_MALFORMED);
+    }
+    let mut parsed = ParsedSentence::empty();
+    let mut value_start = 0;
+    let mut index = 0;
+    while index < length {
+        if boundaries[index] == 0 {
+            index += 1;
+            continue;
+        }
+        let token = tokens[index];
+        if matches!(token, NOMINATIVE | ACCUSATIVE | ESSIVE | DESTINATION) {
+            if value_start >= index || parsed.field_count == parsed.fields.len() {
+                return Err(ERROR_MALFORMED);
+            }
+            let mut prior = 0;
+            while prior < parsed.field_count {
+                if parsed.fields[prior].role == token {
+                    return Err(ERROR_MALFORMED);
+                }
+                prior += 1;
+            }
+            parsed.fields[parsed.field_count] = SentenceField {
+                role: token,
+                start: value_start,
+                length: index - value_start,
+            };
+            parsed.field_count += 1;
+            value_start = index + 1;
+        } else if matches!(
+            token,
+            MOOD_DEFINITION | REALIS | DEONTIC | MOOD_RETURN | MOOD_PARAGRAPH
+        ) {
+            if parsed.mood != 0 {
+                return Err(ERROR_MALFORMED);
+            }
+            parsed.mood = token;
+            parsed.verb_start = value_start;
+            parsed.verb_length = index - value_start;
+            if parsed.verb_length == 0 && token != MOOD_RETURN {
+                return Err(ERROR_MALFORMED);
+            }
+            if parsed.verb_length > 0 && token == MOOD_RETURN {
+                return Err(ERROR_MALFORMED);
+            }
+            if index + 1 != length {
+                return Err(ERROR_MALFORMED);
+            }
+            return Ok(parsed);
+        } else {
+            return Err(ERROR_UNSUPPORTED);
+        }
+        index += 1;
+    }
+    Err(ERROR_MALFORMED)
+}
+
+fn name_span(tokens: &[u32], field: SentenceField, typed_number: bool) -> Result<NameSpan, u32> {
+    let end = field
+        .start
+        .checked_add(field.length)
+        .ok_or(ERROR_MALFORMED)?;
+    if field.length < 2 || end > tokens.len() || tokens[field.start] != NAME_TYPE {
+        return Err(ERROR_MALFORMED);
+    }
+    let mut marker = field.start + 1;
+    while marker < end && tokens[marker] != NAME_TYPE {
+        marker += 1;
+    }
+    let name_start = if marker < end {
+        if !typed_number || marker != field.start + 2 || tokens[field.start + 1] != NUMBER_TYPE {
+            return Err(ERROR_MALFORMED);
+        }
+        marker + 1
+    } else {
+        if typed_number {
+            return Err(ERROR_MALFORMED);
+        }
+        field.start + 1
+    };
+    if name_start >= end {
+        return Err(ERROR_MALFORMED);
+    }
+    Ok(NameSpan {
+        start: name_start,
+        length: end - name_start,
+    })
+}
+
+fn number_value(tokens: &[u32], field: SentenceField) -> Result<u32, u32> {
+    if field.length != 2 || tokens[field.start] != NUMBER_QUOTE {
+        return Err(ERROR_MALFORMED);
+    }
+    let value = tokens[field.start + 1];
+    if value > MAX_U16 {
+        return Err(ERROR_MALFORMED);
+    }
+    Ok(value)
+}
+
+fn names_equal(left: &[u32], left_span: NameSpan, right: &[u32], right_span: NameSpan) -> bool {
+    if left_span.length != right_span.length
+        || left_span.start + left_span.length > left.len()
+        || right_span.start + right_span.length > right.len()
+    {
+        return false;
+    }
+    let mut index = 0;
+    while index < left_span.length {
+        if left[left_span.start + index] != right[right_span.start + index] {
+            return false;
+        }
+        index += 1;
+    }
+    true
+}
+
+fn store_name(
+    source: &[u32],
+    span: NameSpan,
+    storage: &mut [u32],
+    used: &mut usize,
+) -> Result<NameSpan, u32> {
+    let end = span.start.checked_add(span.length).ok_or(ERROR_MALFORMED)?;
+    let stored_end = used.checked_add(span.length).ok_or(ERROR_FRAME_CAPACITY)?;
+    if end > source.len() || stored_end > storage.len() {
+        return Err(ERROR_FRAME_CAPACITY);
+    }
+    let start = *used;
+    storage[start..stored_end].copy_from_slice(&source[span.start..end]);
+    *used = stored_end;
+    Ok(NameSpan {
+        start,
+        length: span.length,
+    })
+}
+
+fn find_local_slot(
+    source: &[u32],
+    span: NameSpan,
+    storage: &[u32],
+    slots: &[NumericLocalSlot],
+) -> Option<usize> {
+    let mut index = 0;
+    while index < slots.len() {
+        let slot = slots[index];
+        if slot.kind != 0
+            && names_equal(
+                source,
+                span,
+                storage,
+                NameSpan {
+                    start: slot.name_offset as usize,
+                    length: slot.name_length as usize,
+                },
+            )
+        {
+            return Some(index);
+        }
+        index += 1;
+    }
+    None
+}
+
+fn is_ceremony_definition(sentence: &ParsedSentence, tokens: &[u32]) -> bool {
+    sentence.mood == MOOD_DEFINITION
+        && sentence.verb_length == 1
+        && tokens[sentence.verb_start] == CEREMONY
+}
+
+/// Returns whether the first canonical Pyash sentence is a ceremony
+/// definition. Recognition scans index-marked case and mood boundaries without
+/// imposing a separate function-name length limit.
+pub fn is_numeric_programlet(words: &[u32], codelet_count: usize) -> bool {
+    if codelet_count == 0 || codelet_count > words.len() / CODELET_WORDS {
+        return false;
+    }
+    let mut has_su = false;
+    let mut has_to = false;
+    let mut previous_word = 0;
+    let mut previous_boundary = false;
+    let mut codelet = 0;
+    loop {
+        if codelet >= codelet_count {
+            return false;
+        }
+        let header = word(words, codelet, 0);
+        let complete = header & 1 != 0;
+        let mut last_boundary = 0;
+        let mut slot = 1;
+        while slot < CODELET_WORDS {
+            if (header & (1 << slot) != 0) == complete {
+                last_boundary = slot;
+            }
+            slot += 1;
+        }
+        if complete && last_boundary == 0 {
+            return false;
+        }
+        let last_slot = if complete {
+            last_boundary
+        } else {
+            CODELET_WORDS - 1
+        };
+        slot = 1;
+        while slot <= last_slot {
+            let value = word(words, codelet, slot);
+            let boundary = (header & (1 << slot) != 0) == complete;
+            if boundary && value == NOMINATIVE {
+                has_su = true;
+            } else if boundary && value == DESTINATION {
+                has_to = true;
+            } else if boundary && value == MOOD_DEFINITION {
+                return complete
+                    && slot == last_slot
+                    && has_su
+                    && has_to
+                    && previous_word == CEREMONY
+                    && !previous_boundary;
+            }
+            previous_word = value;
+            previous_boundary = boundary;
+            slot += 1;
+        }
+        codelet += 1;
+        if complete {
+            return false;
+        }
+    }
+}
+
+/// Execute one canonical Pyash ceremony with uint16 local quantities and a
+/// final direct invocation. All frame and parsing memory is supplied by the
+/// caller; no private instruction or named-slot wire format is introduced.
+/// This first Rust slice supports `plus` writes, local `ret`, and `prah`; calls,
+/// branches, and loops are deliberately left to later parity slices.
+pub fn execute_numeric_programlet(
+    words: &[u32],
+    codelet_count: usize,
+    step_budget: u32,
+    sentence_words: &mut [u32],
+    sentence_boundaries: &mut [u8],
+    symbol_words: &mut [u32],
+    slots: &mut [NumericLocalSlot],
+) -> CoreResult {
+    if codelet_count == 0 || codelet_count > words.len() / CODELET_WORDS {
+        return CoreResult::failure(ERROR_MALFORMED, 0);
+    }
+    if step_budget == 0 {
+        return CoreResult::failure(ERROR_STEP_BUDGET, 0);
+    }
+    let mut slot_index = 0;
+    while slot_index < slots.len() {
+        slots[slot_index] = NumericLocalSlot::EMPTY;
+        slot_index += 1;
+    }
+
+    let mut symbol_used = 0usize;
+    let mut routine_name = NameSpan {
+        start: 0,
+        length: 0,
+    };
+    let mut result_value = 0u32;
+    let mut has_returned = false;
+    let mut action_started = false;
+    let mut state = 0u32;
+    let mut codelet = 0usize;
+    let mut steps = 0u32;
+    while codelet < codelet_count {
+        if steps >= step_budget {
+            return CoreResult::failure(ERROR_STEP_BUDGET, steps);
+        }
+        steps += 1;
+        let (length, next_codelet) = match collect_sentence(
+            words,
+            codelet_count,
+            codelet,
+            sentence_words,
+            sentence_boundaries,
+        ) {
+            Ok(group) => group,
+            Err(error) => return CoreResult::failure(error, steps),
+        };
+        let sentence = match parse_sentence(sentence_words, sentence_boundaries, length) {
+            Ok(sentence) => sentence,
+            Err(error) => return CoreResult::failure(error, steps),
+        };
+
+        if state == 0 {
+            if !is_ceremony_definition(&sentence, sentence_words) || sentence.field_count != 2 {
+                return CoreResult::failure(ERROR_UNSUPPORTED, steps);
+            }
+            let Some(su) = sentence.field(NOMINATIVE) else {
+                return CoreResult::failure(ERROR_MALFORMED, steps);
+            };
+            let Some(output) = sentence.field(DESTINATION) else {
+                return CoreResult::failure(ERROR_MALFORMED, steps);
+            };
+            let routine = match name_span(sentence_words, su, false) {
+                Ok(name) => name,
+                Err(error) => return CoreResult::failure(error, steps),
+            };
+            if name_span(sentence_words, output, true).is_err() {
+                return CoreResult::failure(ERROR_MALFORMED, steps);
+            }
+            routine_name = match store_name(sentence_words, routine, symbol_words, &mut symbol_used)
+            {
+                Ok(name) => name,
+                Err(error) => return CoreResult::failure(error, steps),
+            };
+            state = 1;
+        } else if state == 1
+            && sentence.mood == REALIS
+            && sentence.verb_length == 1
+            && sentence_words[sentence.verb_start] == NUMBER_VERB
+        {
+            if action_started || sentence.field_count != 3 {
+                return CoreResult::failure(ERROR_MALFORMED, steps);
+            }
+            let (Some(su), Some(ob), Some(as_field)) = (
+                sentence.field(NOMINATIVE),
+                sentence.field(ACCUSATIVE),
+                sentence.field(ESSIVE),
+            ) else {
+                return CoreResult::failure(ERROR_MALFORMED, steps);
+            };
+            let name = match name_span(sentence_words, su, false) {
+                Ok(name) => name,
+                Err(error) => return CoreResult::failure(error, steps),
+            };
+            let value = match number_value(sentence_words, ob) {
+                Ok(value) => value,
+                Err(error) => return CoreResult::failure(error, steps),
+            };
+            let marker = &sentence_words[as_field.start..as_field.start + as_field.length];
+            let kind = if marker == [NAME_TYPE, VARIABLE] {
+                1
+            } else if marker == [NAME_TYPE, PERMANENTLY, NUMBER_VERB] {
+                2
+            } else {
+                return CoreResult::failure(ERROR_UNSUPPORTED, steps);
+            };
+            if find_local_slot(sentence_words, name, symbol_words, slots).is_some() {
+                return CoreResult::failure(ERROR_MALFORMED, steps);
+            }
+            let Some(slot) = slots.iter_mut().find(|slot| slot.kind == 0) else {
+                return CoreResult::failure(ERROR_FRAME_CAPACITY, steps);
+            };
+            let stored = match store_name(sentence_words, name, symbol_words, &mut symbol_used) {
+                Ok(name) => name,
+                Err(error) => return CoreResult::failure(error, steps),
+            };
+            slot.name_offset = stored.start as u32;
+            slot.name_length = stored.length as u32;
+            slot.value = value;
+            slot.kind = kind;
+        } else if state == 1 && sentence.mood == DEONTIC {
+            action_started = true;
+            if sentence.field_count != 2
+                || sentence.verb_length != 1
+                || sentence_words[sentence.verb_start] != PLUS
+            {
+                return CoreResult::failure(ERROR_UNSUPPORTED, steps);
+            }
+            let (Some(ob), Some(to)) = (sentence.field(ACCUSATIVE), sentence.field(DESTINATION))
+            else {
+                return CoreResult::failure(ERROR_MALFORMED, steps);
+            };
+            let value = match number_value(sentence_words, ob) {
+                Ok(value) => value,
+                Err(error) => return CoreResult::failure(error, steps),
+            };
+            let target = match name_span(sentence_words, to, true) {
+                Ok(name) => name,
+                Err(error) => return CoreResult::failure(error, steps),
+            };
+            let Some(index) = find_local_slot(sentence_words, target, symbol_words, slots) else {
+                return CoreResult::failure(ERROR_MALFORMED, steps);
+            };
+            if slots[index].kind == 2 {
+                return CoreResult::failure(ERROR_CONSTANT_WRITE, steps);
+            }
+            slots[index].value = match number_operator(PLUS, value, slots[index].value) {
+                Ok(value) => value,
+                Err(error) => return CoreResult::failure(error, steps),
+            };
+        } else if state == 1 && sentence.mood == MOOD_RETURN {
+            if sentence.field_count != 1 || sentence.verb_length != 0 {
+                return CoreResult::failure(ERROR_MALFORMED, steps);
+            }
+            let Some(return_field) = sentence.field(NOMINATIVE) else {
+                return CoreResult::failure(ERROR_MALFORMED, steps);
+            };
+            let return_name = match name_span(sentence_words, return_field, false) {
+                Ok(name) => name,
+                Err(error) => return CoreResult::failure(error, steps),
+            };
+            let Some(index) = find_local_slot(sentence_words, return_name, symbol_words, slots)
+            else {
+                return CoreResult::failure(ERROR_MALFORMED, steps);
+            };
+            result_value = slots[index].value;
+            has_returned = true;
+            state = 2;
+        } else if state == 2 && sentence.mood == MOOD_PARAGRAPH {
+            if !has_returned
+                || sentence.field_count != 1
+                || sentence.verb_length != 1
+                || sentence_words[sentence.verb_start] != CEREMONY
+            {
+                return CoreResult::failure(ERROR_MALFORMED, steps);
+            }
+            let Some(su) = sentence.field(NOMINATIVE) else {
+                return CoreResult::failure(ERROR_MALFORMED, steps);
+            };
+            let closing_name = match name_span(sentence_words, su, false) {
+                Ok(name) => name,
+                Err(error) => return CoreResult::failure(error, steps),
+            };
+            if !names_equal(sentence_words, closing_name, symbol_words, routine_name) {
+                return CoreResult::failure(ERROR_MALFORMED, steps);
+            }
+            state = 3;
+        } else if state == 3 && sentence.mood == DEONTIC {
+            if next_codelet != codelet_count
+                || sentence.field_count != 1
+                || sentence.verb_length != routine_name.length
+            {
+                return CoreResult::failure(ERROR_MALFORMED, steps);
+            }
+            let Some(output) = sentence.field(DESTINATION) else {
+                return CoreResult::failure(ERROR_MALFORMED, steps);
+            };
+            if name_span(sentence_words, output, true).is_err() {
+                return CoreResult::failure(ERROR_MALFORMED, steps);
+            }
+            if !names_equal(
+                sentence_words,
+                NameSpan {
+                    start: sentence.verb_start,
+                    length: sentence.verb_length,
+                },
+                symbol_words,
+                routine_name,
+            ) {
+                return CoreResult::failure(ERROR_MALFORMED, steps);
+            }
+            state = 4;
+        } else {
+            return CoreResult::failure(ERROR_UNSUPPORTED, steps);
+        }
+        codelet = next_codelet;
+    }
+
+    if state != 4 {
+        return CoreResult::failure(ERROR_MALFORMED, steps);
+    }
+    CoreResult::scalar(VALUE_UNSIGNED, result_value, 0, codelet_count as u32)
 }
 
 #[cfg(test)]

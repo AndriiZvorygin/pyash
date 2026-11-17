@@ -30,6 +30,11 @@ non-discrete GPU is a hard failure; the worker does not silently switch to a
 second semantics implementation. Named-slot candidate evaluation is not part
 of the Rust VLIW interpreter or its Housekeeper runtime.
 
+The Rust CPU pack executor additionally supports one canonical numeric
+programlet with invocation-local declarations, `plus` writes, and return. The
+current GPU kernel still executes supported codelet groups independently; it
+does not yet provide the program-level frame needed for that programlet slice.
+
 The GPU Housekeeper Compose service builds the worker into its image and mounts
 the host NVIDIA Vulkan ICD manifest read-only. The default manifest path is
 `/usr/share/vulkan/icd.d/nvidia_icd.json`; set `NVIDIA_VULKAN_ICD_PATH` when the

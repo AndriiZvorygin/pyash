@@ -170,6 +170,11 @@ pub enum SemanticError {
     },
     UnsupportedCodelet,
     DivisionByZero,
+    MalformedProgramlet,
+    UnsupportedProgramlet,
+    ProgramletFrameCapacity,
+    ProgramletConstantWrite,
+    ProgramletStepBudget,
 }
 
 impl SemanticError {
@@ -186,6 +191,11 @@ impl SemanticError {
             Self::VectorWidthMismatch { .. } => "vector-width-mismatch",
             Self::UnsupportedCodelet => "unsupported-codelet",
             Self::DivisionByZero => "division-by-zero",
+            Self::MalformedProgramlet => "malformed-programlet",
+            Self::UnsupportedProgramlet => "unsupported-programlet",
+            Self::ProgramletFrameCapacity => "programlet-frame-capacity",
+            Self::ProgramletConstantWrite => "programlet-constant-write",
+            Self::ProgramletStepBudget => "programlet-step-budget",
         }
     }
 }
@@ -244,6 +254,21 @@ impl std::fmt::Display for SemanticError {
             ),
             Self::UnsupportedCodelet => formatter.write_str("the codelet family is unsupported"),
             Self::DivisionByZero => formatter.write_str("numeric division cannot divide by zero"),
+            Self::MalformedProgramlet => {
+                formatter.write_str("the canonical Pyash programlet is malformed")
+            }
+            Self::UnsupportedProgramlet => {
+                formatter.write_str("the canonical Pyash programlet form is not supported")
+            }
+            Self::ProgramletFrameCapacity => {
+                formatter.write_str("the programlet runtime frame capacity was exceeded")
+            }
+            Self::ProgramletConstantWrite => {
+                formatter.write_str("a programlet attempted to write a constant quantity")
+            }
+            Self::ProgramletStepBudget => {
+                formatter.write_str("the programlet execution step budget was exhausted")
+            }
         }
     }
 }
