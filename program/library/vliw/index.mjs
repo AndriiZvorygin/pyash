@@ -33,10 +33,18 @@ import {
 import {
   decodeNumericArithmeticCodelet,
   executeNumericArithmeticCodelet,
+  isNumericArithmeticCodelet,
   isNumericArithmeticSentence,
   lowerNumericArithmeticSentence,
   numericArithmeticCompatibility
 } from "./arithmetic.mjs";
+import {
+  decodeNamedQueryCodelet,
+  executeNamedQueryCodelet,
+  isNamedQuerySentence,
+  lowerNamedQuerySentence,
+  namedQueryCompatibility
+} from "./named_query.mjs";
 import {
   decodeNumericInvertCodelet,
   executeNumericInvertCodelet,
@@ -75,6 +83,9 @@ function semanticDecode(decoded, semantic, sentence) {
 }
 
 export function lowerSentence(sentence) {
+  if (isNamedQuerySentence(sentence)) {
+    return [lowerNamedQuerySentence(sentence)];
+  }
   if (isDateSentence(sentence)) {
     return [lowerDateSentence(sentence)];
   }
@@ -143,6 +154,20 @@ export function decodeCodelet(input) {
     } catch (error) {
       if (error instanceof VliwEncodingError && error.code === "malformed-codelet") {
         throw new VliwCodeletError("unsupported-codelet", "vector codelet is malformed", {
+          cause: error.code,
+          details: error.details,
+          items: decoded.items
+        });
+      }
+      throw error;
+    }
+  }
+  if (decoded.words[decoded.usedWords - 1] === namedQueryCompatibility.interrogativeMood) {
+    try {
+      return semanticDecode(decoded, "named-query", decodeNamedQueryCodelet(decoded.words));
+    } catch (error) {
+      if (error instanceof VliwEncodingError && error.code === "malformed-codelet") {
+        throw new VliwCodeletError("unsupported-codelet", "named query codelet is malformed", {
           cause: error.code,
           details: error.details,
           items: decoded.items
@@ -233,6 +258,24 @@ export function decodeCodelet(input) {
       throw error;
     }
   }
+  if (isNumericArithmeticCodelet(decoded.words, decoded.usedWords)) {
+    try {
+      return semanticDecode(
+        decoded,
+        "numeric-arithmetic",
+        decodeNumericArithmeticCodelet(decoded.words)
+      );
+    } catch (error) {
+      if (error instanceof VliwEncodingError && error.code === "malformed-codelet") {
+        throw new VliwCodeletError("unsupported-codelet", "numeric arithmetic codelet is malformed", {
+          cause: error.code,
+          details: error.details,
+          items: decoded.items
+        });
+      }
+      throw error;
+    }
+  }
   if (
     decoded.words[0] === numericArithmeticCompatibility.head &&
     decoded.words[7] === numericInvertCompatibility.invert
@@ -246,27 +289,6 @@ export function decodeCodelet(input) {
     } catch (error) {
       if (error instanceof VliwEncodingError && error.code === "malformed-codelet") {
         throw new VliwCodeletError("unsupported-codelet", "numeric invert codelet is malformed", {
-          cause: error.code,
-          details: error.details,
-          items: decoded.items
-        });
-      }
-      throw error;
-    }
-  }
-  if (
-    decoded.words[0] === numericArithmeticCompatibility.head &&
-    decoded.words[7] !== numericArithmeticCompatibility.operators.plus
-  ) {
-    try {
-      return semanticDecode(
-        decoded,
-        "numeric-arithmetic",
-        decodeNumericArithmeticCodelet(decoded.words)
-      );
-    } catch (error) {
-      if (error instanceof VliwEncodingError && error.code === "malformed-codelet") {
-        throw new VliwCodeletError("unsupported-codelet", "numeric arithmetic codelet is malformed", {
           cause: error.code,
           details: error.details,
           items: decoded.items
@@ -305,6 +327,7 @@ export async function executeCodelets(codelets) {
 
   const scheduled = scheduleCodeletDependencies(codelets);
   const results = new Array(codelets.length);
+  const state = new Map();
   for (const entry of scheduled) {
     const codelet = entry.instruction;
     const words = codelet?.words ?? codelet;
@@ -312,12 +335,15 @@ export async function executeCodelets(codelets) {
     let result;
     if (decoded.semantic === "named-literal") {
       result = await executeNamedLiteralCodelet(words);
+      state.set(result.su.name, structuredClone(result));
+    } else if (decoded.semantic === "named-query") {
+      result = await executeNamedQueryCodelet(words, state);
     } else if (decoded.semantic === "boolean-literal") {
       result = await executeBooleanLiteralCodelet(words);
     } else if (decoded.semantic === "typed-literal") {
       result = await executeTypedLiteralCodelet(words);
     } else if (decoded.semantic === "numeric-arithmetic") {
-      result = await executeNumericArithmeticCodelet(words);
+      result = await executeNumericArithmeticCodelet(words, { state });
     } else if (decoded.semantic === "numeric-invert") {
       result = await executeNumericInvertCodelet(words);
     } else if (decoded.semantic === "date") {
@@ -348,6 +374,12 @@ export {
   VliwFunctionSourceError
 } from "./source.mjs";
 export { evolveVliwFunctionSourceThroughHousekeeper } from "./evolution.mjs";
+export {
+  decodePyashProgram,
+  decodePyashProgramOrNull,
+  lowerPyashProgram,
+  lowerPyashSentence
+} from "./sentence.mjs";
 export {
   PYAC_MAGIC,
   PYAC_FORMAT_VERSION,

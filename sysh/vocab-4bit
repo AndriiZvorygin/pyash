@@ -1,0 +1,95 @@
+.
+0 e   none
+1 a   aware
+2 u   desire  and
+3 i   free    or
+
+4 h   hold    point   heart
+5 s   say
+6 j   hear
+7 f    move
+
+
+B n   number
+
+C l   light   communication
+D r   matter
+
+8 p   less
+A k   more
+E t   quality
+name	    la	light-aware
+call	    fru	move-matter-desire	     
+length	    kna	more-number-none
+start	    pna less-number-none
+permission  hri	hold-matter-free
+meta	    ti	quality-free
+variable    fni	move-number-free
+constant    na	number-aware
+define	    lma	light-matter-desire
+type	    nte	number-quality-none
+function    
+
+rpa;ku matter-less-aware-more-desire
+
+0 a 1 c	2 o 3 e	4 C 5 z	6 j 7 v	8 d 9 b	A g B n	C h D l	E k F m
+0 a 1 c	2 o 3 e	4 C 5 s	6 j 7 f	8 t 9 p	A k B n	C h D l	E r F m
+00 .
+0 a (low-mid a)
+
+? pronounces first 0, then sets (last-letter-zero flag) and silent for rest ?
+
+;   :, mov, push, pop, cmp, jz, jnz, jl, jg, jmp, call, ret, add, sub, rep, mul
+
+	    default between consonants y (mid-central-vowel)
+
+hex  asm    lBQ-G!  sysh
+1    :	    3	    c 	    
+5    push   z	    s
+6    pop    j	    j
+465  mov    #jz	    cjs
+C65  rep    hjz	    hjs
+3    cmp    e	    e
+7    jmp    v	    f
+B07  jz	    nav	    naf
+107  jnz    3av	    caf
+A7   jl     gv	    kaf
+97   jg     bv	    paf
+2    call   o	    o
+12   ret    3o	    co	    (head home)
+AB   add    gn	    kn
+9B   sub    bn	    pn
+BAB  mul    ngn	    nkn
+B9B  div    nbn	    npn
+
+letter	    aware-number	    cn
+word	    desire-number	    on
+phrase	    free-number		    en
+sentence    point-number	    Cn
+paragraph   wise-number		    sn 
+essay	    hear-number		    jn
+story	    move-number		    fn
+heap	    area-number		    hn
+list	    light-number	    ln
+
+
+
+; uses registers: 
+;   eax, ebx, ecx, edx, esp, ebp, flags 
+
+0 
+1 aware  (print register)
+2 desire (get contents)
+3 free   (thread)
+
+read
+negate
+write
+move
+
+subleq
+
+4
+5
+6
+7

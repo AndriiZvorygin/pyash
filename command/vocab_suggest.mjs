@@ -1754,10 +1754,19 @@ export async function runVocabSuggest(args = process.argv.slice(2), {
   }
 
   const wordNetSenseLookups = await reportWordNetSenseLookups(senseIds, report);
-  const linkedWordNetSenses = await reportLinkedWordNetSenses(resolvedTextInputs, report);
-  const wordNetCompoundSenses = await addWordNetCompoundSenseGlosses(foundCompounds, report);
+  const linkedWordNetLines = [];
+  const linkedWordNetSenses = await reportLinkedWordNetSenses(resolvedTextInputs, (line) => linkedWordNetLines.push(line));
+  const wordNetCompoundLines = [];
+  const wordNetCompoundSenses = await addWordNetCompoundSenseGlosses(foundCompounds, (line) => wordNetCompoundLines.push(line));
+  const wordNetCompoundSenseLines = new Set(wordNetCompoundSenses.map((entry) => (
+    `${entry.input}: WordNet ${entry.senseId} [${entry.lemmas.join(", ")}]: ${entry.definition} -> ${entry.target} (${entry.pyac})`
+  )));
+  for (const line of wordNetCompoundLines) {
+    if (!wordNetCompoundSenseLines.has(line)) report(line);
+  }
   const sumoLookups = await reportSumoLookups([...resolvedTextInputs, ...sumoIds, ...senseIds], report);
 
+  const foundCompoundLines = [];
   for (const [target, found] of [...foundCompounds.entries()].sort(([left], [right]) => left.localeCompare(right))) {
     const locationSuffix = [...found.locations]
       .map(name => name.replace(`${process.cwd()}/`, ""))
@@ -1769,8 +1778,48 @@ export async function runVocabSuggest(args = process.argv.slice(2), {
         ? `; specific atom ${specificAtom.english} -> ${specificAtom.pyash}`
         : "";
       const englishTargetSuffix = found.pyacSequenceQuery ? `; English target ${row.target}` : "";
-      report(`${target}: found compound ${row.components.join(" + ")} -> ${row.pyash.join(" ")} (${row.status})${specificSuffix}${englishTargetSuffix}${locationSuffix ? ` (${locationSuffix})` : ""}`);
+      foundCompoundLines.push({
+        token: target,
+        sequence: row.pyash.join(" "),
+        line: `${target}: found compound ${row.components.join(" + ")} -> ${row.pyash.join(" ")} (${row.status})${specificSuffix}${englishTargetSuffix}${locationSuffix ? ` (${locationSuffix})` : ""}`
+      });
     }
+  }
+
+  const wordNetOutputRows = [
+    ...linkedWordNetSenses.map((entry, index) => ({
+      token: entry.input,
+      sequence: entry.pyashSequence.join(" "),
+      line: linkedWordNetLines[index]
+    })),
+    ...wordNetCompoundSenses.map((entry) => ({
+      token: entry.input,
+      sequence: entry.pyashSequence.join(" "),
+      line: `${entry.input}: WordNet ${entry.senseId} [${entry.lemmas.join(", ")}]: ${entry.definition} -> ${entry.target} (${entry.pyac})`
+    }))
+  ];
+  const linkedWordNetGroups = new Map();
+  wordNetOutputRows.forEach((entry) => {
+    const key = `${entry.token}\u0000${entry.sequence}`;
+    const group = linkedWordNetGroups.get(key) ?? { token: entry.token, sequence: entry.sequence, lines: [] };
+    group.lines.push(entry.line);
+    linkedWordNetGroups.set(key, group);
+  });
+  const foundCompoundsByTokenAndSequence = new Map();
+  for (const found of foundCompoundLines) {
+    const key = `${found.token}\u0000${found.sequence}`;
+    foundCompoundsByTokenAndSequence.set(key, [...(foundCompoundsByTokenAndSequence.get(key) ?? []), found]);
+  }
+  const emittedFoundCompounds = new Set();
+  for (const [key, group] of linkedWordNetGroups) {
+    for (const line of group.lines) report(line);
+    for (const found of foundCompoundsByTokenAndSequence.get(key) ?? []) {
+      report(found.line);
+      emittedFoundCompounds.add(found);
+    }
+  }
+  for (const found of foundCompoundLines) {
+    if (!emittedFoundCompounds.has(found)) report(found.line);
   }
 
   if (occurrences.size > 0) {

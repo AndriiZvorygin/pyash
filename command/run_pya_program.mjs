@@ -394,6 +394,35 @@ async function main() {
 
   const resolved = path.resolve(filePath);
   setEntryModulePath(resolved);
+
+  if (path.extname(resolved).toLowerCase() === ".pyac") {
+    if (runtimeBindingWords.length > 0) {
+      console.error("PyAC runtime currently accepts a program file only; runtime input bindings are not supported yet.");
+      process.exit(1);
+    }
+    const interpreterPath = path.join(root, "sysh", "bin", "pyac-run");
+    try {
+      await fs.access(interpreterPath);
+    } catch {
+      console.error(`PyAC interpreter is not built: ${interpreterPath}`);
+      console.error("Build it with: bash sysh/build-vliw-interpreter.sh");
+      process.exit(1);
+    }
+    const child = spawn(interpreterPath, [resolved], { stdio: "inherit" });
+    const exitCode = await new Promise((resolve, reject) => {
+      child.once("error", reject);
+      child.once("close", (code, signal) => {
+        if (signal) {
+          reject(new Error(`PyAC interpreter terminated by ${signal}`));
+          return;
+        }
+        resolve(code ?? 1);
+      });
+    });
+    process.exitCode = exitCode;
+    return;
+  }
+
   let text;
   let readFromFile = true;
   try {

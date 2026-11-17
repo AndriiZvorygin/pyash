@@ -1,9 +1,8 @@
 # Pyash VLIW ISA and lowering contract
 
-Status: normative design specification. This document defines the encoding and
-execution boundary for Pyash VLIW. Partial implementations are linked in the
-implementation references; they do not change the current interpreter, parser,
-or sentence ABI.
+Status: design specification. This document defines the encoding and execution
+boundary for a future Pyash VLIW backend. It does not change the current
+interpreter, parser, or sentence ABI.
 
 ## 1. Scope and authority
 
@@ -190,27 +189,29 @@ sentence.
 ## 6. Target capabilities and lowering
 
 The portable semantic core is a **minimum contract, not a performance ceiling**.
-Each target profile declares its capabilities. For an operation, a backend MAY
-select a native implementation, lower it to simpler operations, or report it
-unavailable. It SHOULD select the fastest valid implementation and MAY compile
-multiple variants for runtime target selection.
+Each target profile MUST declare its capabilities. An operation may be native,
+lowered to supported operations, or unavailable. A backend SHOULD select the
+fastest valid implementation and MAY emit variants for runtime target
+selection. Capability selection MUST be explicit and reproducible; similar
+instruction names do not establish equivalent semantics.
 
-A fallback MUST preserve the operation's specified values, effects, and order.
-Numerical approximation is allowed only when the operation contract declares a
-tolerance. If no implementation meets the contract, the backend MUST reject
-the operation. Capability selection MUST be explicit; similar instruction
-names alone do not establish equivalent semantics.
+A fallback MUST preserve specified results, effects, and ordering. Numerical
+approximation is valid only within a tolerance declared by the operation's
+contract. A backend MUST reject an operation when no implementation meets its
+contract.
 
-This resembles importing a library contract: the source names an operation;
-the backend resolves it to a target-native implementation or a valid fallback.
-For example, vector arithmetic may use SIMD or GPU vector instructions, with a
-scalar loop as fallback; matrix operations may use a matrix unit or a sequence
-of multiply-accumulates. Fallback availability does not promise equal speed.
+| Operation need | Possible native implementation | Possible fallback |
+| --- | --- | --- |
+| Integer multiply | Target multiply instruction | Shift/add sequence when the type and cost policy permit it |
+| Vector arithmetic | Vector or SIMD instruction | Scalar operations over the elements |
+| Matrix multiply | Target matrix/tensor unit | Vectorized or scalar multiply-accumulate |
+| Population count | Target bit-count instruction | Shift-and-count sequence or lookup implementation |
 
-Extensions let x86-64, RISC-V profiles, NVIDIA PTX, AMD GFX ISA, and future
-VLIW ASIC targets use their own capabilities. They do not add identities or
-reuse reserved bits in the legacy 16-word codelet: an operation absent from its
-mapping needs an explicit, versioned encoding before that format can carry it.
+These are implementation choices, not new Pyash syntax or performance
+guarantees. Targets such as x86-64, RISC-V, NVIDIA PTX, AMD GFX ISA, and future
+VLIW ASICs may provide their own implementations. Capabilities do not allocate
+identities or reuse reserved bits in the legacy 16-word codelet; an operation
+absent from its mapping requires an explicit, versioned encoding.
 
 ## 7. Conceptual interfaces
 
@@ -246,10 +247,9 @@ satisfies the contract, the destination MUST reject the codelet.
 
 The following are golden vectors, not new syntax:
 
-1. The legacy README example `hyikdoyu hyikdoka plustu` MUST retain the
-   documented bytes
-   `0149 881D 0001 287E 881D 0001 245E 8A64 295E` and the result `tyutdoka li`
-   when run through the legacy-compatible surface.
+1. The numeric-plus sentence `ob num 1 to num 1 be plus do` MUST encode each
+   operand as quote type, value, then its grammatical-case HNUC, producing
+   `0149 881D 0001 245E 881D 0001 243E 8A64 295E` and result `2`.
 2. The legacy single-codelet form
    `0051 291D E928 28BE 245E E948 295E 0000 0000 0000 0000 0000 0000 0000 0000`
    MUST decode with its head, phrases, verb/mood, and unused tail intact.
@@ -283,8 +283,8 @@ The following are golden vectors, not new syntax:
    0003 0041 0067 0065 245E 217E`. Every element MUST keep its exact
    characters and its case.
 10. A destination MUST compile a codelet into machine code that computes the
-    interpreter's result. The golden codelet `0149 881D 0001 287E 881D 0001
-    245E 8A64 295E` MUST compile to a program that leaves the result `2` in
+    interpreter's result. The golden codelet `0149 881D 0001 245E 881D 0001
+    243E 8A64 295E` MUST compile to a program that leaves the result `2` in
     the first argument register, and an image that holds that program MUST be
     an executable whose entry point runs the program and stops.
 
@@ -301,16 +301,14 @@ catalog/container database, require a GPU, introduce a model server or queue,
 or connect codelet execution to WorkTask/review/integration machinery. The
 database contract is defined in
 `documentation/reference/pyac-vliw-database.md`. This specification also does
-not replace the current sentence/paragraph interpreter. A conforming
-implementation must prove that the sentence result and legacy encoding bytes
-agree.
+not replace the current sentence/paragraph interpreter. The only
+conforming future implementation is one that can prove the sentence result
+and the legacy encoding bytes agree.
 
 ## 10. Implementation references
 
-The end-to-end architecture and current implementation map are in
-`documentation/reference/pyash-vliw-compiler-architecture.md`. The proven
-numeric-plus, quote, fixed-slot, typed-literal, named-fact, database, and facade
-slices are documented with their fixtures and implementation paths in
-`documentation/reference/pyac-vliw-semantic-slices.md`. The normative
+The proven numeric-plus, quote, fixed-slot, typed-literal, named-fact, database,
+and facade slices are documented with their fixtures and implementation paths
+in `documentation/reference/pyac-vliw-semantic-slices.md`. The normative
 requirements above remain the authority; the reference notes identify the
 currently executable subset and its explicit unsupported cases.

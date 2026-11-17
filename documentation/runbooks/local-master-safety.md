@@ -1,9 +1,9 @@
 # Local Dev-to-Master Maintainer
 
-The local maintainer promotes `dev` into `master` only after the exact proposed
-merge passes Pyash's full CI-tier test suite. It also synchronizes accepted
-`master` revisions back into `dev`, so the two branches converge after a green
-run.
+The local maintainer promotes the configured development branches into
+`master` only after the exact proposed merge passes Pyash's full CI-tier test
+suite. It also synchronizes accepted `master` revisions back into `dev`, so
+the mainline branches converge after a green run.
 
 ## Install and operate
 
@@ -23,15 +23,18 @@ crontab calls the runner directly so it does not contend with itself.
 
 ## Promotion gate
 
-Each run fetches `master` and `dev` from the source remote and every configured
-push remote (by default, `origin` and `github`). It records those branch tips,
-then merges all fetched `master` tips followed by all fetched `dev` tips into a
-disposable candidate worktree. This joins commits that arrived on different
-remotes and promotes one tested history to every configured remote. A real
-merge conflict leaves the candidate for review. The runner installs
-dependencies and runs `npm run test:ci` against that exact candidate. Existing
-checkouts, including a dirty local `master` worktree, are not checked out or
-modified.
+Each run fetches `master`, `dev`, and `dev-vliw-backend` from the source remote
+and every configured push remote (by default, `origin` and `github`). The two
+development source branches are configurable with
+`PYA_MASTER_SAFETY_DEV_BRANCH` and `PYA_MASTER_SAFETY_ADDITIONAL_SOURCE_BRANCHES`.
+It records every branch tip, then merges all fetched `master` tips followed by
+all fetched development branch tips into a disposable candidate worktree. This
+joins commits that arrived on different remotes and promotes one tested
+history to `master` and `dev` on every configured remote; it leaves the source
+feature branch unchanged. A real merge conflict leaves the candidate for
+review. The runner installs dependencies and runs `npm run test:ci` against
+that exact candidate. Existing checkouts, including a dirty local `master`
+worktree, are not checked out or modified.
 
 If the full suite fails, Codex `gpt-6-luna` at `xhigh` gets at most two repair
 attempts in that isolated candidate. Each attempt is followed by a complete
@@ -70,6 +73,7 @@ promoted commit, pushed remotes, and any preserved worktree.
 
 Optional environment overrides include `PYA_MASTER_SAFETY_REMOTE`,
 `PYA_MASTER_SAFETY_BRANCH`, `PYA_MASTER_SAFETY_DEV_BRANCH`,
+`PYA_MASTER_SAFETY_ADDITIONAL_SOURCE_BRANCHES`,
 `PYA_MASTER_SAFETY_PUSH_REMOTES`, `PYA_MASTER_SAFETY_MODEL`,
 `PYA_MASTER_SAFETY_REASONING`, `PYA_MASTER_SAFETY_MAX_REPAIRS` (0–2),
 `PYA_MASTER_SAFETY_REPOSITORY`, and `PYA_MASTER_SAFETY_CODEX_BIN`.

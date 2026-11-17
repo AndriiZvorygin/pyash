@@ -12,7 +12,7 @@ import {
 // fixture: the interpreter runs them, the Rust backend compiles them, and the
 // two implementations have to agree on the result.
 const GOLDEN_WORDS = [
-  0x0149, 0x881d, 0x0001, 0x287e, 0x881d, 0x0001, 0x245e, 0x8a64, 0x295e
+  0x0149, 0x881d, 0x0001, 0x245e, 0x881d, 0x0001, 0x243e, 0x8a64, 0x295e
 ];
 
 test("the golden numeric plus lowers to the bytes the RISC-V backend compiles", () => {

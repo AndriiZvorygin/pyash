@@ -1775,6 +1775,9 @@ su text "sense-lemma:a:02188427-a:1" ob text "insincere" ya
 su text "a:02190501-a" ob name "singular" as text "a" with text "contextual" via text "atom-target sense selection; model qwen3.5:9b; run wordnet-atom-sense-7b57d7f0a479-33ace2b4e6-atom-pos-gloss-choice-v3; rationale: Definition refers to grammatical number, matching adjective 'singular'." ya
 su text "sense-gloss:a:02190501-a" ob text "grammatical number category referring to a single item or unit" ya
 su text "sense-lemma:a:02190501-a:1" ob text "singular" ya
+su text "a:02190618-a" ob name "plural_number" as text "n" with text "contextual" via text "This WordNet plural sense defines the grammatical number category for two or more items, matching the accepted Pyash atom plural_number." ya
+su text "sense-gloss:a:02190618-a" ob text "grammatical number category referring to two or more items or units" ya
+su text "sense-lemma:a:02190618-a:1" ob text "plural" ya
 su text "a:02191250-a" ob name "cardinal" as text "a" with text "deterministic" via text "frequency-first anchor allocation: exact lemma cardinal at English30k rank 2954; Princeton WordNet 3.1 tag count 0 (sense key cardinal%3:00:00::)" ya
 su text "sense-gloss:a:02191250-a" ob text "being or denoting a numerical quantity but not order; cardinal numbers" ya
 su text "sense-lemma:a:02191250-a:1" ob text "cardinal" ya
@@ -33369,6 +33372,9 @@ su text "sense-gloss:s:02187907-s" ob text "not pretended; sincerely felt or exp
 su text "sense-lemma:s:02187907-s:1" ob text "genuine" ya
 su text "sense-lemma:s:02187907-s:2" ob text "true" ya
 su text "sense-lemma:s:02187907-s:3" ob text "unfeigned" ya
+su text "s:02190774-s" ob name "dual_number" as text "n" with text "contextual" via text "This WordNet sense directly defines the grammatical category dual: exactly two items or units; it matches the accepted Pyash atom dual_number." ya
+su text "sense-gloss:s:02190774-s" ob text "a grammatical number category referring to two items or units as opposed to one item (singular) or more than two items (plural); ancient Greek had the dual form but it has merged with the plural form in modern Greek" ya
+su text "sense-lemma:s:02190774-s:1" ob text "dual" ya
 su text "s:02193771-s" ob name "zero" as text "s" with text "deterministic" via text "frequency-first anchor allocation: exact lemma zero at English30k rank 11487; Princeton WordNet 3.1 tag count 5 (sense key zero%5:00:00:cardinal:00)" ya
 su text "sense-gloss:s:02193771-s" ob text "indicating the absence of any or all units under consideration; a zero score" ya
 su text "sense-lemma:s:02193771-s:1" ob text "0" ya

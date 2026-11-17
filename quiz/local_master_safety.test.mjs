@@ -10,12 +10,13 @@ import { pyaFileToJson } from "../program/library/pya_to_json.mjs";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (name) => fs.readFileSync(path.join(repoRoot, "command", name), "utf8");
 
-test("local maintainer tests the dev-to-master candidate in an isolated worktree", () => {
+test("local maintainer tests configured development branches in an isolated worktree", () => {
   const runner = read("run_local_master_safety.sh");
-  assert.match(runner, /refs\/heads\/\$DEV_BRANCH:refs\/remotes\/\$remote_name\/\$DEV_BRANCH/u);
+  assert.match(runner, /refs\/heads\/\$source_branch:refs\/remotes\/\$remote_name\/\$source_branch/u);
+  assert.match(runner, /PYA_MASTER_SAFETY_ADDITIONAL_SOURCE_BRANCHES:-dev-vliw-backend/u);
   assert.match(runner, /worktree add -b "\$BRANCH_NAME" "\$WORKTREE" "\$BASE_SHA"/u);
   assert.match(runner, /merge --no-edit "\$merge_sha"/u);
-  assert.match(runner, /for branch_name in "\$BRANCH" "\$DEV_BRANCH"/u);
+  assert.match(runner, /for branch_name in "\$BRANCH" "\$\{source_branch_names\[@\]\}"/u);
   assert.match(runner, /remote branch tips selected for merge/u);
   assert.doesNotMatch(runner, /FINAL_STATUS=remote-divergence/u);
   assert.match(runner, /npm run test:ci/u);
@@ -156,6 +157,11 @@ test("runner completes a local fake-master run and emits a parseable result map"
   git(["add", "dev-change.txt"]);
   git(["commit", "--quiet", "-m", "fixture dev change"]);
   const devCommit = git(["rev-parse", "HEAD"]);
+  git(["checkout", "-b", "dev-vliw-backend"]);
+  fs.writeFileSync(path.join(repository, "vliw-change.txt"), "bounded vliw ready\n");
+  git(["add", "vliw-change.txt"]);
+  git(["commit", "--quiet", "-m", "fixture vliw change"]);
+  const vliwCommit = git(["rev-parse", "HEAD"]);
   git(["checkout", "master"]);
   execFileSync("git", ["clone", "--bare", "--quiet", repository, bare], { stdio: "pipe" });
   git(["remote", "add", "github", bare]);
@@ -198,10 +204,13 @@ exit 2
     assert.equal(resultMap.status.text, "promoted");
     assert.equal(resultMap["test summary"].text, "tests 5; pass 5; fail 0; skipped 0; todo 0; duration_ms 12.5");
     assert.match(resultMap["tier summary"].text, /gating 10 files/u);
+    assert.equal(resultMap["source branch list"].text, "dev dev-vliw-backend");
     assert.equal(resultMap["source dev commit"].text, devCommit);
-    assert.equal(resultMap["promoted commit"].text, devCommit);
-    assert.equal(git(["--git-dir", bare, "rev-parse", "refs/heads/master"]), devCommit);
-    assert.equal(git(["--git-dir", bare, "rev-parse", "refs/heads/dev"]), devCommit);
+    assert.equal(resultMap["promoted commit"].text, vliwCommit);
+    assert.equal(git(["--git-dir", bare, "rev-parse", "refs/heads/master"]), vliwCommit);
+    assert.equal(git(["--git-dir", bare, "rev-parse", "refs/heads/dev"]), vliwCommit);
+    assert.equal(git(["--git-dir", bare, "rev-parse", "refs/heads/dev-vliw-backend"]), vliwCommit);
+    git(["merge-base", "--is-ancestor", devCommit, vliwCommit]);
     assert.equal(fs.existsSync(resultMap["worktree path"].text), false);
     assert.match(fs.readFileSync(path.join(artifactDir, "run.log"), "utf8"), /promoted tested commit/u);
   } finally {
@@ -209,7 +218,7 @@ exit 2
   }
 });
 
-test("runner merges divergent master and dev tips from both remotes before promotion", async () => {
+test("runner merges divergent master, dev, and VLIW tips from both remotes before promotion", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pyash-master-safety-divergent-remotes-"));
   const repository = path.join(tempRoot, "repo");
   const originBare = path.join(tempRoot, "origin.git");
@@ -243,6 +252,12 @@ test("runner merges divergent master and dev tips from both remotes before promo
   git(["commit", "--quiet", "-m", "origin dev change"]);
   const originDev = git(["rev-parse", "HEAD"]);
 
+  git(["checkout", "--quiet", "-b", "origin-vliw", commonBase]);
+  fs.writeFileSync(path.join(repository, "origin-vliw.txt"), "origin vliw\n");
+  git(["add", "origin-vliw.txt"]);
+  git(["commit", "--quiet", "-m", "origin vliw change"]);
+  const originVliw = git(["rev-parse", "HEAD"]);
+
   git(["checkout", "--quiet", "-b", "github-master", commonBase]);
   fs.writeFileSync(path.join(repository, "github-master.txt"), "github master\n");
   git(["add", "github-master.txt"]);
@@ -254,6 +269,12 @@ test("runner merges divergent master and dev tips from both remotes before promo
   git(["add", "github-dev.txt"]);
   git(["commit", "--quiet", "-m", "github dev change"]);
   const githubDev = git(["rev-parse", "HEAD"]);
+
+  git(["checkout", "--quiet", "-b", "github-vliw", commonBase]);
+  fs.writeFileSync(path.join(repository, "github-vliw.txt"), "github vliw\n");
+  git(["add", "github-vliw.txt"]);
+  git(["commit", "--quiet", "-m", "github vliw change"]);
+  const githubVliw = git(["rev-parse", "HEAD"]);
   git(["checkout", "--quiet", "master"]);
 
   for (const bare of [originBare, githubBare]) {
@@ -261,8 +282,10 @@ test("runner merges divergent master and dev tips from both remotes before promo
   }
   git(["--git-dir", originBare, "update-ref", "refs/heads/master", originMaster]);
   git(["--git-dir", originBare, "update-ref", "refs/heads/dev", originDev]);
+  git(["--git-dir", originBare, "update-ref", "refs/heads/dev-vliw-backend", originVliw]);
   git(["--git-dir", githubBare, "update-ref", "refs/heads/master", githubMaster]);
   git(["--git-dir", githubBare, "update-ref", "refs/heads/dev", githubDev]);
+  git(["--git-dir", githubBare, "update-ref", "refs/heads/dev-vliw-backend", githubVliw]);
   git(["remote", "add", "origin", originBare]);
   git(["remote", "add", "github", githubBare]);
 
@@ -304,13 +327,19 @@ exit 2
     assert.equal(resultMap.status.text, "promoted");
     assert.match(resultMap["remote branch inputs"].text, new RegExp(`github/master=${githubMaster}`, "u"));
     assert.match(resultMap["remote branch inputs"].text, new RegExp(`origin/dev=${originDev}`, "u"));
+    assert.match(resultMap["remote branch inputs"].text, new RegExp(`github/dev-vliw-backend=${githubVliw}`, "u"));
+    assert.match(resultMap["remote branch inputs"].text, new RegExp(`origin/dev-vliw-backend=${originVliw}`, "u"));
     for (const remote of [originBare, githubBare]) {
       assert.equal(git(["--git-dir", remote, "rev-parse", "refs/heads/master"]), promoted);
       assert.equal(git(["--git-dir", remote, "rev-parse", "refs/heads/dev"]), promoted);
     }
-    for (const input of [originMaster, originDev, githubMaster, githubDev]) {
+    assert.equal(git(["--git-dir", originBare, "rev-parse", "refs/heads/dev-vliw-backend"]), originVliw);
+    assert.equal(git(["--git-dir", githubBare, "rev-parse", "refs/heads/dev-vliw-backend"]), githubVliw);
+    for (const input of [originMaster, originDev, originVliw, githubMaster, githubDev, githubVliw]) {
       git(["merge-base", "--is-ancestor", input, promoted]);
     }
+    assert.equal(git(["--git-dir", originBare, "show", `${promoted}:origin-vliw.txt`]), "origin vliw");
+    assert.equal(git(["--git-dir", githubBare, "show", `${promoted}:github-vliw.txt`]), "github vliw");
     assert.equal(fs.existsSync(resultMap["worktree path"].text), false);
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
@@ -341,6 +370,7 @@ test("runner gives Codex failure evidence inside its worktree and verifies a rep
   fs.writeFileSync(path.join(repository, "dev-change.txt"), "ready\n");
   git(["add", "dev-change.txt"]);
   git(["commit", "--quiet", "-m", "fixture dev change"]);
+  git(["branch", "dev-vliw-backend"]);
   git(["checkout", "master"]);
   execFileSync("git", ["clone", "--bare", "--quiet", repository, bare], { stdio: "pipe" });
   git(["remote", "add", "github", bare]);
@@ -407,6 +437,7 @@ printf '{"type":"turn.completed"}\\n'
     const result = await pyaFileToJson(path.join(artifactDir, "result.pya"));
     const resultMap = result.memory[0]?.ob?.map;
     assert.equal(resultMap.status.text, "promoted");
+    assert.equal(resultMap["source branch list"].text, "dev dev-vliw-backend");
     assert.ok(resultMap["candidate commit"].text);
     assert.equal(resultMap["promoted commit"].text, resultMap["candidate commit"].text);
     assert.equal(git(["--git-dir", bare, "rev-parse", "refs/heads/master"]), resultMap["promoted commit"].text);
