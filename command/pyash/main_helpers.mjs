@@ -9,7 +9,7 @@ export function usage({ DEFAULT_MATRIX_APPSERVICE_REGISTRATION }) {
     "  pyash <file.pya> [run flags...]",
     "  pyash compile from <source> to <destination>",
     "  pyash translate from <source.pyac> to <destination.pya>",
-    "  pyash dictionary [vocabulary arguments...] (alias: dict)",
+    "  pyash dictionary [vocabulary arguments...] (alias: dict; to zh: Chinese and Pinyin)",
     "  pyash repl",
     "  pyash resume <duty-id>",
     "  pyash configure",

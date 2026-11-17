@@ -1,0 +1,20 @@
+su name translation_chinese_character_atom_refinery_config be map def
+su text "format" ob text "chinese-character-atom-refinery-v1" ya
+su text "frequency-source" ob text "SUBTLEX-CH primary; Jun Da separate supplemental rank" ya
+su text "translation-sources" ob text "CC-CEDICT, Unicode Unihan, local Shuowen, Analects contexts as attestations" ya
+su text "model" ob text "qwen3.5:9b" ya
+su text "prompt-revision" ob text "frequency-ranked-character-atom-review-v1" ya
+su text "generation-limit" ob num 128 ya
+su text "housekeeper-duties-per-pass" ob num 4 ya
+su text "housekeeper-parallelism" ob num 4 ya
+su text "max-output-tokens" ob num 2048 ya
+su text "atom-promotion" ob text "manual-review-only" ya
+prah
+su name translation chinese character atoms be refinery def
+su name build ranked character worklist to name map character worklist be translation stage do
+su name prepare existing atom matches from name map character worklist to name map atom match candidates be translation stage do
+su name review ambiguous atom matches from ve name map character worklist name map atom match candidates to name map atom match decisions be translation stage do
+su name prepare translations for missing meanings from ve name map character worklist name map atom match decisions to name map translation candidates be translation stage do
+su name generate atom proposals from ve name map character worklist name map atom match decisions name map translation candidates to name map atom proposals be translation stage do
+su name record character link review from ve name map atom match decisions name map translation candidates name map atom proposals to name map character review be translation stage do
+prah
