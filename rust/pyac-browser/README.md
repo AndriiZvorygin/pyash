@@ -3,7 +3,7 @@
 This small browser host runs the codelet families currently supported by the
 Rust `pyac` crate. The WASM CPU executor handles mixed supported packs. An
 optional WebGPU path accelerates numeric arithmetic codelets and the bounded
-equality conditional described below; unsupported or unavailable GPU work
+comparison conditionals described below; unsupported or unavailable GPU work
 falls back to WASM CPU.
 
 ```bash
@@ -41,14 +41,14 @@ widths two through eight fit the sentence's 16-word codelet; vector-right
 operations fit widths two through four. Multiplication returns
 unsigned-32 vector elements to preserve the full product. Each vector element
 is dispatched as one GPU work item, then reconstructed in source codelet
-order. It also supports one exact conditional shape: an inline unsigned-number
-equality predicate with two inline unsigned-number result arms, encoded as one
-two-codelet completion-marked group. Mixed packs can combine those groups with
-supported arithmetic codelets, preserving result order. The Rust decoder
-validates the branch's VLIW boundaries and shape; WGSL performs the equality
-and selects the result arm. This is not general GPU control flow: nested
-branches, other predicates, named values, loops, calls, and side-effecting
-arms remain unsupported. Invert, dates, standalone literal vectors,
+order. It supports bounded conditional shapes with an inline unsigned-number
+`equally`, `tiny`, or `giant` predicate. Arms may return unsigned-number values
+or scalar `truth`/`lie` booleans. These are encoded as completion-marked
+two-codelet groups. Mixed packs can combine those groups with supported
+arithmetic codelets, preserving result order. The Rust decoder validates the
+branch boundaries and shape; WGSL performs the comparison and selection. This
+is not general GPU control flow: nested branches, named values, loops, calls,
+and side-effecting arms remain unsupported. Invert, dates, standalone literal vectors,
 malformed codelets, and division by zero are handled or rejected by the CPU
 dispatcher rather than sent to the shader. There is no automatic dispatch
 threshold; use the explicit GPU action for eligible batches. On the current

@@ -19,6 +19,10 @@ const VECTOR: [u16; WORDS_PER_CODELET] = [
     0x0061, 0x8f1d, 1, 2, 3, 0x245e, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
+const TRUTH: [u16; WORDS_PER_CODELET] = [
+    0x0015, 0x6909, 0x245e, 0xea30, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+
 // Lowered from: ob num 5 be equally from num 5 then ob num 7 be number
 // else ob num 9 be number ya
 const EQUALS_BRANCH: [[u16; WORDS_PER_CODELET]; 2] = [
@@ -31,9 +35,19 @@ const EQUALS_BRANCH: [[u16; WORDS_PER_CODELET]; 2] = [
     ],
 ];
 
+const TINY_BOOLEAN_BRANCH: [[u16; WORDS_PER_CODELET]; 2] = [
+    // Exact lowering of: ob num 3 be tiny from num 5 then ob bool truth
+    // be boolean else ob bool lie be boolean ya.
+    [
+        0xaab6, 0x881d, 3, 0x245e, 0x881d, 5, 0x313e, 0x6c0d, 0x29be, 0x6909, 0x245e, 0x7271,
+        0x217e, 0x680d, 0x245e, 0x7271,
+    ],
+    [0x0003, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+];
+
 #[test]
 fn executes_mixed_supported_codelet_families_in_pack_order() {
-    let bytes = encode_pack(&[PLUS, INVERT, DATE, VECTOR]).expect("pack fits");
+    let bytes = encode_pack(&[PLUS, INVERT, DATE, VECTOR, TRUTH]).expect("pack fits");
     let pack = decode_pack(&bytes).expect("pack decodes");
 
     assert_eq!(
@@ -43,6 +57,7 @@ fn executes_mixed_supported_codelet_families_in_pack_order() {
             PyacValue::Signed(-5),
             PyacValue::DateEpochMs(1_746_057_600_000),
             PyacValue::Vector(VectorElements::Numbers(vec![1, 2, 3])),
+            PyacValue::Boolean(true),
         ])
     );
 }
@@ -81,6 +96,19 @@ fn executes_a_pyash_equal_conditional_and_selects_one_numeric_arm() {
         execute_pack(&decode_pack(&mixed_pack).expect("mixed pack decodes")),
         Ok(vec![PyacValue::Unsigned(7), PyacValue::Unsigned(2)])
     );
+}
+
+#[test]
+fn executes_a_pyash_comparison_branch_with_boolean_results() {
+    let bytes = encode_pack(&TINY_BOOLEAN_BRANCH).expect("boolean branch pack fits");
+    let result = execute_pack(&decode_pack(&bytes).expect("boolean branch pack decodes"));
+    assert_eq!(result, Ok(vec![PyacValue::Boolean(true)]));
+
+    let mut false_branch = TINY_BOOLEAN_BRANCH;
+    false_branch[0][2] = 7;
+    let bytes = encode_pack(&false_branch).expect("false boolean branch pack fits");
+    let result = execute_pack(&decode_pack(&bytes).expect("false boolean branch pack decodes"));
+    assert_eq!(result, Ok(vec![PyacValue::Boolean(false)]));
 }
 
 #[test]

@@ -188,6 +188,7 @@ fn decode_results(
             pyac_vliw_core::VALUE_SIGNED => {
                 PyacValue::Signed((u64::from(data[0]) | (u64::from(data[1]) << 32)) as i64)
             }
+            pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(data[0] != 0),
             pyac_vliw_core::VALUE_DATE => {
                 PyacValue::DateEpochMs(u64::from(data[0]) | (u64::from(data[1]) << 32))
             }
@@ -222,6 +223,7 @@ fn value_json(value: &PyacValue) -> Value {
     match value {
         PyacValue::Unsigned(value) => json!({"type": "unsigned", "value": value}),
         PyacValue::Signed(value) => json!({"type": "signed", "value": value}),
+        PyacValue::Boolean(value) => json!({"type": "boolean", "value": value}),
         PyacValue::DateEpochMs(value) => json!({"type": "date-epoch-ms", "value": value}),
         PyacValue::Vector(VectorElements::Numbers(values)) => {
             json!({"type": "vector", "elementType": "unsigned-16", "values": values})

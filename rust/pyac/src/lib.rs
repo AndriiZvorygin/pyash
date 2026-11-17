@@ -95,6 +95,7 @@ impl std::error::Error for NumericPackExecutionError {}
 pub enum PyacValue {
     Unsigned(u64),
     Signed(i64),
+    Boolean(bool),
     DateEpochMs(u64),
     Vector(VectorElements),
 }
@@ -350,6 +351,7 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
                 pyac_vliw_core::VALUE_SIGNED => {
                     PyacValue::Signed(i64::from(shared.values[0] as i32))
                 }
+                pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(shared.values[0] != 0),
                 pyac_vliw_core::VALUE_DATE => PyacValue::DateEpochMs(
                     u64::from(shared.values[0]) | (u64::from(shared.values[1]) << 32),
                 ),

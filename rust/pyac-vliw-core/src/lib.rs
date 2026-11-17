@@ -13,6 +13,7 @@ pub const VALUE_DATE: u32 = 3;
 pub const VALUE_VECTOR_U16: u32 = 4;
 pub const VALUE_VECTOR_U32: u32 = 5;
 pub const VALUE_VECTOR_BOOL: u32 = 6;
+pub const VALUE_BOOLEAN: u32 = 7;
 
 pub const ERROR_UNSUPPORTED: u32 = 1;
 pub const ERROR_DIVISION_BY_ZERO: u32 = 2;
@@ -72,7 +73,12 @@ const DEONTIC: u32 = 0x295e;
 const REALIS: u32 = 0x217e;
 const CONDITIONAL: u32 = 0x29be;
 const NUMBER_VERB: u32 = 0xea30;
+const BOOLEAN_VERB: u32 = 0x7271;
 const EQUALLY: u32 = 0x4809;
+const TINY: u32 = 0x6c0d;
+const GIANT: u32 = 0x69b3;
+const TRUTH: u32 = 0x6909;
+const LIE: u32 = 0x680d;
 const PLUS: u32 = 0x8a64;
 const SUBTRACT: u32 = 0xabd2;
 const MULTIPLY: u32 = 0xec90;
@@ -189,6 +195,26 @@ fn invert(words: &[u32], codelet: usize) -> Option<CoreResult> {
         } else {
             0
         },
+        1,
+    ))
+}
+
+fn boolean_literal(words: &[u32], codelet: usize) -> Option<CoreResult> {
+    let value = word(words, codelet, 1);
+    if !matches!(value, TRUTH | LIE)
+        || word(words, codelet, 2) != ACCUSATIVE
+        || !matches!(word(words, codelet, 3), NUMBER_VERB | BOOLEAN_VERB)
+        || word(words, codelet, 4) != REALIS
+    {
+        return None;
+    }
+    if word(words, codelet, 0) != 0x15 || !zero_tail(words, codelet, 5) {
+        return Some(CoreResult::failure(ERROR_MALFORMED, 1));
+    }
+    Some(CoreResult::scalar(
+        VALUE_BOOLEAN,
+        u32::from(value == TRUTH),
+        0,
         1,
     ))
 }
@@ -498,11 +524,49 @@ fn conditional(words: &[u32], start: usize, group_len: usize) -> CoreResult {
         }
         vector_index += 1;
     }
+    let mut i = 0;
+    if logical_len == 16 {
+        let expected = [3usize, 6, 8, 10, 12, 14, 16];
+        if boundary_count != expected.len() {
+            return CoreResult::failure(ERROR_BRANCH, 2);
+        }
+        while i < expected.len() {
+            if boundaries[i] != expected[i] {
+                return CoreResult::failure(ERROR_BRANCH, 2);
+            }
+            i += 1;
+        }
+        if !matches!(logical[6], EQUALLY | TINY | GIANT)
+            || logical[0] != NUMBER_QUOTE
+            || logical[2] != ACCUSATIVE
+            || logical[3] != NUMBER_QUOTE
+            || logical[5] != SOURCE
+            || logical[7] != CONDITIONAL
+            || !matches!(logical[8], TRUTH | LIE)
+            || logical[9] != ACCUSATIVE
+            || !matches!(logical[10], NUMBER_VERB | BOOLEAN_VERB)
+            || logical[11] != REALIS
+            || !matches!(logical[12], TRUTH | LIE)
+            || logical[13] != ACCUSATIVE
+            || !matches!(logical[14], NUMBER_VERB | BOOLEAN_VERB)
+            || logical[15] != REALIS
+        {
+            return CoreResult::failure(ERROR_BRANCH, 2);
+        }
+        let predicate = match logical[6] {
+            EQUALLY => logical[1] == logical[4],
+            TINY => logical[1] < logical[4],
+            GIANT => logical[1] > logical[4],
+            _ => false,
+        };
+        let value = if predicate { logical[8] } else { logical[12] };
+        return CoreResult::scalar(VALUE_BOOLEAN, u32::from(value == TRUTH), 0, 2);
+    }
+
     let expected = [3usize, 6, 8, 11, 13, 16, 18];
     if logical_len != 18 || boundary_count != expected.len() {
         return CoreResult::failure(ERROR_BRANCH, 2);
     }
-    let mut i = 0;
     while i < expected.len() {
         if boundaries[i] != expected[i] {
             return CoreResult::failure(ERROR_BRANCH, 2);
@@ -514,7 +578,6 @@ fn conditional(words: &[u32], start: usize, group_len: usize) -> CoreResult {
         (2, ACCUSATIVE),
         (3, NUMBER_QUOTE),
         (5, SOURCE),
-        (6, EQUALLY),
         (7, CONDITIONAL),
         (8, NUMBER_QUOTE),
         (10, ACCUSATIVE),
@@ -532,11 +595,13 @@ fn conditional(words: &[u32], start: usize, group_len: usize) -> CoreResult {
         }
         i += 1;
     }
-    let value = if logical[1] == logical[4] {
-        logical[9]
-    } else {
-        logical[14]
+    let predicate = match logical[6] {
+        EQUALLY => logical[1] == logical[4],
+        TINY => logical[1] < logical[4],
+        GIANT => logical[1] > logical[4],
+        _ => return CoreResult::failure(ERROR_BRANCH, 2),
     };
+    let value = if predicate { logical[9] } else { logical[14] };
     if value > MAX_U16 {
         return CoreResult::failure(ERROR_MALFORMED, 2);
     }
@@ -567,6 +632,9 @@ pub fn interpret_group(words: &[u32], start: usize, codelet_count: usize) -> Cor
         return result;
     }
     if let Some(result) = arithmetic(words, start) {
+        return result;
+    }
+    if let Some(result) = boolean_literal(words, start) {
         return result;
     }
     if let Some(result) = literal(words, start) {
@@ -734,6 +802,165 @@ mod tests {
         assert_eq!(result.error, 0);
         assert_eq!(result.value_kind, VALUE_UNSIGNED);
         assert_eq!(result.values[0], 7);
+        assert_eq!(result.consumed_codelets, 2);
+    }
+
+    #[test]
+    fn returns_typed_pyash_boolean_literals() {
+        let truth = [
+            0x0015,
+            0x6909,
+            ACCUSATIVE,
+            NUMBER_VERB,
+            REALIS,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ];
+        let lie = [
+            0x0015,
+            0x680d,
+            ACCUSATIVE,
+            NUMBER_VERB,
+            REALIS,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ];
+
+        let result = interpret(&[truth]);
+        assert_eq!(result.error, 0);
+        assert_eq!(result.value_kind, VALUE_BOOLEAN);
+        assert_eq!(result.values[0], 1);
+
+        let result = interpret(&[lie]);
+        assert_eq!(result.error, 0);
+        assert_eq!(result.value_kind, VALUE_BOOLEAN);
+        assert_eq!(result.values[0], 0);
+
+        let boolean_verb = [
+            0x0015,
+            TRUTH,
+            ACCUSATIVE,
+            BOOLEAN_VERB,
+            REALIS,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ];
+        let result = interpret(&[boolean_verb]);
+        assert_eq!(result.error, 0);
+        assert_eq!(result.value_kind, VALUE_BOOLEAN);
+        assert_eq!(result.values[0], 1);
+    }
+
+    #[test]
+    fn conditional_uses_all_three_pyash_numeric_comparators() {
+        for (operator, left, right, expected) in [
+            (EQUALLY, 5, 5, 7),
+            (EQUALLY, 4, 5, 9),
+            (TINY, 3, 5, 7),
+            (TINY, 5, 3, 9),
+            (GIANT, 5, 3, 7),
+            (GIANT, 3, 5, 9),
+        ] {
+            let branch = [
+                [
+                    0xd6b6,
+                    NUMBER_QUOTE,
+                    left,
+                    ACCUSATIVE,
+                    NUMBER_QUOTE,
+                    right,
+                    SOURCE,
+                    operator,
+                    CONDITIONAL,
+                    NUMBER_QUOTE,
+                    7,
+                    ACCUSATIVE,
+                    NUMBER_VERB,
+                    REALIS,
+                    NUMBER_QUOTE,
+                    9,
+                ],
+                [
+                    0x000b,
+                    ACCUSATIVE,
+                    NUMBER_VERB,
+                    REALIS,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                ],
+            ];
+            let result = interpret(&branch);
+            assert_eq!(result.error, 0, "operator 0x{operator:04x}");
+            assert_eq!(result.value_kind, VALUE_UNSIGNED);
+            assert_eq!(result.values[0], expected, "operator 0x{operator:04x}");
+        }
+    }
+
+    #[test]
+    fn returns_a_boolean_from_a_canonical_comparison_branch() {
+        let codelets = [
+            [
+                0xaab6,
+                NUMBER_QUOTE,
+                3,
+                ACCUSATIVE,
+                NUMBER_QUOTE,
+                5,
+                SOURCE,
+                TINY,
+                CONDITIONAL,
+                TRUTH,
+                ACCUSATIVE,
+                BOOLEAN_VERB,
+                REALIS,
+                LIE,
+                ACCUSATIVE,
+                BOOLEAN_VERB,
+            ],
+            [0x0003, REALIS, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        ];
+        let result = interpret(&codelets);
+
+        assert_eq!(result.error, 0);
+        assert_eq!(result.value_kind, VALUE_BOOLEAN);
+        assert_eq!(result.values[0], 1);
         assert_eq!(result.consumed_codelets, 2);
     }
 }

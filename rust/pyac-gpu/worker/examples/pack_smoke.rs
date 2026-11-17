@@ -8,6 +8,28 @@ fn scalar(left: u16, right: u16, case: u16, operator: u16) -> [u16; WORDS_PER_CO
     ]
 }
 
+fn conditional(left: u16, right: u16, operator: u16) -> [[u16; WORDS_PER_CODELET]; 2] {
+    [
+        [
+            0xd6b6, 0x881d, left, 0x245e, 0x881d, right, 0x313e, operator, 0x29be, 0x881d, 7,
+            0x245e, 0xea30, 0x217e, 0x881d, 9,
+        ],
+        [
+            0x000b, 0x245e, 0xea30, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ],
+    ]
+}
+
+fn boolean_conditional(left: u16, right: u16, operator: u16) -> [[u16; WORDS_PER_CODELET]; 2] {
+    [
+        [
+            0xaab6, 0x881d, left, 0x245e, 0x881d, right, 0x313e, operator, 0x29be, 0x6909, 0x245e,
+            0x7271, 0x217e, 0x680d, 0x245e, 0x7271,
+        ],
+        [0x0003, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    ]
+}
+
 fn main() {
     let invert = [
         0x0149, 0x881d, 5, 0x245e, 0x881d, 0, 0x207e, 0xaad2, 0x295e, 0, 0, 0, 0, 0, 0, 0,
@@ -34,16 +56,17 @@ fn main() {
         date,
         vector,
         vector_plus,
+        [
+            0x0015, 0x6909, 0x245e, 0x7271, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ],
+        [
+            0x0015, 0x680d, 0x245e, 0x7271, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ],
     ];
-    codelets.extend_from_slice(&[
-        [
-            0xd6b6, 0x881d, 5, 0x245e, 0x881d, 5, 0x313e, 0x4809, 0x29be, 0x881d, 7, 0x245e,
-            0xea30, 0x217e, 0x881d, 9,
-        ],
-        [
-            0x000b, 0x245e, 0xea30, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        ],
-    ]);
+    codelets.extend_from_slice(&conditional(5, 5, 0x4809));
+    codelets.extend_from_slice(&conditional(3, 5, 0x6c0d));
+    codelets.extend_from_slice(&conditional(3, 5, 0x69b3));
+    codelets.extend_from_slice(&boolean_conditional(3, 5, 0x6c0d));
 
     let bytes = encode_pack(&codelets).expect("smoke pack encodes");
     io::stdout()

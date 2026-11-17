@@ -212,7 +212,7 @@ stay on the CPU when dispatch and transfer costs outweigh parallel execution.
 The first runnable browser slice is implemented under `rust/pyac-browser/`.
 The Rust pack executor and generated WGSL kernel consume the shared core's
 supported codelet semantics; browser tests verify the WASM CPU path, WebGPU
-parity for numeric arithmetic batches and a bounded equality branch, and CPU
+parity for numeric arithmetic batches and bounded comparison branches, and CPU
 fallback when WebGPU is unavailable. This remains a subset runtime, not
 arbitrary Pyash execution.
 The WebGPU action is explicit:
@@ -232,7 +232,8 @@ sentence groups.
 | --- | --- | --- |
 | Numeric scalar operations | Shared-core unsigned arithmetic: saturating add/subtract, multiply, nonzero divide/remainder, XOR, exponentiation | Additional operations only where normative Pyash semantics define them |
 | Numeric vectors | Shared-core elementwise unsigned-16 vectors, widths 2-8 with scalar right operand or widths 2-4 with equal-width vector operand; multiply results widen to unsigned-32 | Vector predicates/masks, wider or dynamic vectors, device-resident inputs/outputs |
-| Conditional execution | Canonical `.pyac` path supports one flat equality predicate with two inline unsigned-number result arms | Other predicates, named operands in pack conditionals, compound predicates, nested branches, conditional side effects |
+| Conditional execution | Canonical `.pyac` path supports flat `equally`, `tiny`, or `giant` numeric predicates with numeric or `truth`/`lie` literal arms | Named operands in predicates, compound/nested branches, ceremony-call arms, conditional side effects |
+| Scalar boolean values | `truth`/`lie` literals and bounded comparison branches return typed booleans | Boolean-producing calls and boolean local slots in a shared function frame |
 | Loops and calls | Not in the current GPU codelet slice | Bounded loop lowering, function/call frames, explicit control-flow/dependency representation |
 | State and memory | `.pyac` execution uses per-work-item input/output buffers; mutable named state is not part of this pack version | General mutable VLIW state, alias rules, host/device residency and lifetime |
 | Other value families | Date and supported numeric/bool vector results are interpreted by the shared core; text vectors remain on the Rust CPU fallback | GPU lowering only where parallel execution is useful; otherwise retain explicit CPU operations in mixed plans |
@@ -246,6 +247,18 @@ and other serial or host-bound work should remain on the host when that is the
 right execution target. Each new GPU slice should match the Rust CPU reference
 for values and errors, then be benchmarked end to end before automatic
 dispatch is considered.
+
+The shared Rust core now covers the scalar pure-operation vocabulary used by
+programlets (`plus`, `subtract`, `multiply`, `divide`, `exponential`,
+`invert`, `xor`, and `remains`), all three numeric comparison predicates, and
+typed `truth`/`lie` results for canonical literal and flat conditional forms.
+This is codelet-level semantic coverage, not full Pyash program execution.
+The Rust `.pyac` pack executor and GPU kernel do not yet execute the
+programlet-level ceremony contract: invocation-local declarations and writes,
+call frames and returned call values, or bounded `fromindex`/`toindex` loops.
+Those behaviors remain available through the JavaScript reference interpreter;
+the Rust parity work must interpret the same canonical Pyash sentence/codelet
+encoding rather than add a private slot instruction format.
 
 ### Browser Pathway Implementation Roadmap
 
@@ -262,7 +275,7 @@ automatic dispatch policy is enabled.
 | 1. WASM portability | Build the existing `rust/pyac` crate for `wasm32-unknown-unknown`; keep OS and browser APIs outside the semantic core | Native Rust tests pass and the WASM target checks in CI | Complete |
 | 2. Pack execution contract | Add one deterministic pack dispatcher for Rust-supported codelet families; preserve per-codelet errors and typed results | Mixed supported packs match individual codelet results; unsupported codelets fail at their exact index | Complete |
 | 3. Browser CPU slice | Add a browser host that loads a pack through a user-selected file or fixture and invokes the WASM executor | Chromium smoke checks the result/error path without filesystem permission assumptions | Complete |
-| 4. WebGPU batch path | Add optional `wgpu` compute for independent numeric arithmetic and the bounded equality-selection group; pack decoding and unsupported work remain on CPU | Chromium smoke checks exact CPU/GPU parity for arithmetic, vectors, both equality outcomes, and no-WebGPU fallback; smoke benchmarks warm arithmetic batches of 1,024 to 131,072 codelets | Prototype complete; no auto-dispatch threshold is enabled because a stable crossover has not been established |
+| 4. WebGPU batch path | Add optional `wgpu` compute for independent numeric arithmetic and bounded comparison-selection groups; pack decoding and unsupported work remain on CPU | Chromium smoke checks exact CPU/GPU parity for arithmetic, vectors, equality outcomes, and no-WebGPU fallback; native Vulkan smoke covers all comparison operators and typed boolean results | Prototype complete; no auto-dispatch threshold is enabled because a stable crossover has not been established |
 | 5. Deployment and maintenance | Document secure-context, browser/device, build, and smoke-test requirements; keep hardware checks separate from ordinary CI | CPU and WASM checks run in CI; local smoke reports adapter availability and measurements | Complete |
 
 Keep the browser host thin and the Rust semantic core reusable by native

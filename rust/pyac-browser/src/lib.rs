@@ -215,6 +215,7 @@ pub(crate) fn value_to_json(value: &PyacValue) -> Value {
     match value {
         PyacValue::Unsigned(value) => json!({ "type": "unsigned", "value": value }),
         PyacValue::Signed(value) => json!({ "type": "signed", "value": value }),
+        PyacValue::Boolean(value) => json!({ "type": "boolean", "value": value }),
         PyacValue::DateEpochMs(value) => json!({ "type": "date-epoch-ms", "value": value }),
         PyacValue::Vector(values) => vector_to_json(values),
     }
@@ -251,6 +252,21 @@ mod tests {
         assert_eq!(response["ok"], true);
         assert_eq!(response["values"][0]["type"], "unsigned");
         assert_eq!(response["values"][0]["value"], 2);
+    }
+
+    #[test]
+    fn wasm_api_preserves_scalar_boolean_type() {
+        let truth = [
+            0x0015, 0x6909, 0x245e, 0xea30, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        let pack = encode_pack(&[truth]).expect("boolean pack encodes");
+        let response: Value =
+            serde_json::from_str(&run_pack(&pack)).expect("response is valid JSON");
+
+        assert_eq!(
+            response["values"][0],
+            json!({ "type": "boolean", "value": true })
+        );
     }
 
     #[test]
@@ -317,6 +333,26 @@ mod tests {
             assert_eq!(response["ok"], true);
             assert_eq!(response["values"], expected);
         }
+    }
+
+    #[test]
+    fn comparison_branch_preserves_the_encoded_boolean_type() {
+        let branch = [
+            [
+                0xaab6, 0x881d, 3, 0x245e, 0x881d, 5, 0x313e, 0x6c0d, 0x29be, 0x6909, 0x245e,
+                0x7271, 0x217e, 0x680d, 0x245e, 0x7271,
+            ],
+            [0x0003, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        ];
+        let bytes = encode_pack(&branch).expect("boolean comparison pack encodes");
+        let response: Value =
+            serde_json::from_str(&run_pack(&bytes)).expect("response is valid JSON");
+
+        assert_eq!(response["ok"], true);
+        assert_eq!(
+            response["values"],
+            json!([{ "type": "boolean", "value": true }])
+        );
     }
 
     #[test]

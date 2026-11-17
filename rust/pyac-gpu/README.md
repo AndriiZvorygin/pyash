@@ -40,7 +40,8 @@ X11 runtime libraries required by NVIDIA's Vulkan ICD.
 
 This is a shared implementation for the supported VLIW slice, not full Pyash
 interpreter parity. The `.pyac` path covers the Rust core's currently decoded
-scalar, date, numeric/bool vector, and bounded equality-conditional groups.
+scalar numeric and boolean values, dates, numeric/bool vectors, and bounded
+numeric-comparison conditionals.
 Text-vector handling and broader Pyash control flow remain outside this GPU
 slice. See
 [`pyash-vliw-compiler-architecture.md`](../../documentation/reference/pyash-vliw-compiler-architecture.md)

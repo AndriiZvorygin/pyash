@@ -181,6 +181,7 @@ fn decode_results(
             pyac_vliw_core::VALUE_SIGNED => {
                 PyacValue::Signed((u64::from(data[0]) | (u64::from(data[1]) << 32)) as i64)
             }
+            pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(data[0] != 0),
             pyac_vliw_core::VALUE_DATE => {
                 PyacValue::DateEpochMs(u64::from(data[0]) | (u64::from(data[1]) << 32))
             }
