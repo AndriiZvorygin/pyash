@@ -43,7 +43,7 @@ fn executes_words_recovered_from_the_catalog_fixture() {
 fn executes_the_corpus_numeric_pack_in_source_order() {
     fn arithmetic_codelet(ob: u16, to: u16, operator: u16) -> [u16; WORDS_PER_CODELET] {
         [
-            0x0149, 0x881d, ob, 0x287e, 0x881d, to, 0x245e, operator, 0x295e, 0, 0, 0, 0, 0, 0, 0,
+            0x0149, 0x881d, ob, 0x245e, 0x881d, to, 0x243e, operator, 0x295e, 0, 0, 0, 0, 0, 0, 0,
         ]
     }
 

@@ -65,6 +65,92 @@ test("mind tool chat ignores prose that is not an explicit allowed tool call", (
   );
 });
 
+test("mind tool chat forwards top-level provider usage metadata to the saddle", async () => {
+  let usage;
+  await runToolChat({
+    sentence: parse('be write ob text "question" for name helper to name text helper-out do'),
+    ob: {},
+    mindName: "helper",
+    model: "fixture-model",
+    dialogue: "helper provider usage test",
+    callPrompt: "Answer briefly.",
+    resolvedConfigPrompt: "Answer the current request.",
+    historyMessages: [],
+    toolMap: new Map(),
+    tools: [],
+    toolBlock: "",
+    backendName: "ollama command mind",
+    mindDebug: false,
+    debugMind: () => {},
+    inputs: { inputText: "Answer briefly." },
+    onUsage: (value) => { usage = value; },
+    callBackend: async () => ({
+      message: { content: "Done." },
+      prompt_eval_count: 23,
+      prompt_eval_cached_count: 5,
+      eval_count: 4
+    })
+  });
+
+  assert.deepEqual(usage, {
+    message: { content: "Done." },
+    prompt_eval_count: 23,
+    prompt_eval_cached_count: 5,
+    eval_count: 4
+  });
+});
+
+test("structured tool schemas replace duplicate tool descriptions but retain fallback text", async () => {
+  const base = {
+    sentence: parse('be write ob text "question" for name helper to name text helper-out do'),
+    ob: {},
+    mindName: "helper",
+    model: "fixture-model",
+    dialogue: "helper compact tool prompt test",
+    callPrompt: "Use the requested capability.",
+    resolvedConfigPrompt: "Answer the current request.",
+    historyMessages: [],
+    toolMap: new Map(),
+    backendName: "ollama command mind",
+    mindDebug: false,
+    debugMind: () => {},
+    inputs: { inputText: "Use the requested capability." }
+  };
+  const schema = [{ type: "function", function: {
+    name: "be_read_from_filename",
+    description: "Read a file by filename.",
+    parameters: { type: "object", properties: { from: { type: "string" } }, required: ["from"] }
+  } }];
+  let structuredPayload;
+  await runToolChat({
+    ...base,
+    tools: schema,
+    toolBlock: "TOOLS: be_read_from_filename reads a file by filename.",
+    callBackend: async ({ payload }) => {
+      structuredPayload = payload;
+      return { message: { content: "Done." } };
+    }
+  });
+
+  assert.equal(structuredPayload.tools[0].function.name, "be_read_from_filename");
+  assert.match(structuredPayload.prompt, /Use supplied tools for requested actions/u);
+  assert.doesNotMatch(structuredPayload.prompt, /TOOLS:/u);
+  assert.doesNotMatch(structuredPayload.prompt, /be_read_from_filename/u);
+  assert.doesNotMatch(structuredPayload.prompt, /reads a file by filename/u);
+
+  let fallbackPayload;
+  await runToolChat({
+    ...base,
+    tools: [],
+    toolBlock: "TOOLS: legacy textual capability description",
+    callBackend: async ({ payload }) => {
+      fallbackPayload = payload;
+      return { message: { content: "Done." } };
+    }
+  });
+  assert.match(fallbackPayload.prompt, /TOOLS: legacy textual capability description/u);
+});
+
 test("mind tool calls cannot shell-launch provider runner adapters", async () => {
   forget();
   resetMindLogs();
@@ -115,6 +201,58 @@ test("mind tool calls cannot shell-launch provider runner adapters", async () =>
   const rejected = events.find((event) => event.stage === "result");
   assert.match(rejected?.toolText ?? "", /internal adapters, not shell entry points/u);
   assert.match(rejected?.toolText ?? "", /active saddle already runs the selected model/u);
+});
+
+test("project-root tool errors return to the model without ending the turn", async () => {
+  forget();
+  resetMindLogs();
+
+  const capability = parse("su name command session start be command session as wo start ob text input can");
+  const events = [];
+  const responseText = await runToolChat({
+    sentence: parse('be write ob text "start a process" for name helper to name helper-out do'),
+    ob: {},
+    mindName: "helper",
+    model: "fixture-model",
+    dialogue: "helper recoverable project guard",
+    callPrompt: "Start the requested process.",
+    resolvedConfigPrompt: "Use the supplied command session tool.",
+    historyMessages: [],
+    toolMap: new Map([["command_session_start", capability]]),
+    tools: [{ type: "function", function: {
+      name: "command_session_start",
+      parameters: { type: "object", properties: { request: { type: "object" } }, required: ["request"] }
+    } }],
+    toolBlock: "",
+    backendName: "ollama command mind",
+    mindDebug: false,
+    debugMind: () => {},
+    onToolCall: async (event) => events.push(event),
+    stream: false,
+    inputs: {
+      inputText: "Start the requested process.",
+      mockResponseRaw: JSON.stringify([
+        {
+          message: {
+            content: "",
+            tool_calls: [{
+              id: "outside-project-session",
+              function: {
+                name: "command_session_start",
+                arguments: { request: { command: "node", args: ["-e", ""], cwd: "/tmp" } }
+              }
+            }]
+          }
+        },
+        { message: { content: "The process was not started because its directory is outside the active project." } }
+      ])
+    }
+  });
+
+  assert.equal(responseText, "The process was not started because its directory is outside the active project.");
+  const result = events.find((event) => event.stage === "result");
+  assert.match(result?.toolText ?? "", /outside the agent's active project root/u);
+  assert.match(result?.toolText ?? "", /Do not claim it succeeded/u);
 });
 
 test("mind tool chat preserves repeated explicit calls for the call limit", () => {

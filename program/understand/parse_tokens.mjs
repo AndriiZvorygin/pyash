@@ -189,7 +189,11 @@ export function parseTokens(
       const subTokens = words.slice(i + 1);
       // Re-attach the mood token so nested clauses retain their own mood word
       if (mood && appendMoodToThen) subTokens.push(mood);
-      const subline = subTokens.join(" ");
+      const subline = subTokens
+        .map((token) => token.startsWith(QUOTED_TEXT_PREFIX)
+          ? JSON.stringify(token.slice(QUOTED_TEXT_PREFIX.length))
+          : token)
+        .join(" ");
       s.consequence = parse(subline);
       break;
     }
@@ -356,7 +360,9 @@ export function parseTokens(
       const genitive = parseGenitiveChain(i);
       if (genitive) {
         consume(i, genitive.endIndex);
-        slot.genitive = { chain: genitive.chain };
+        if (slot) {
+          slot.genitive = { chain: genitive.chain };
+        }
         i = genitive.endIndex;
         continue;
       }
@@ -416,7 +422,9 @@ export function parseTokens(
       const genitive = parseGenitiveChain(i);
       if (genitive) {
         consume(i, genitive.endIndex);
-        slot.genitive = { chain: genitive.chain };
+        if (slot) {
+          slot.genitive = { chain: genitive.chain };
+        }
         i = genitive.endIndex;
         continue;
       }
@@ -668,5 +676,16 @@ export function parse(line) {
 
   const tokens = tokenize(working.trim());
   if (tokens.length === 0) return null;
-  return parseTokens(tokens, { allowMoodless: false, quotedText });
+  try {
+    return parseTokens(tokens, { allowMoodless: false, quotedText });
+  } catch (error) {
+    if (error && typeof error === "object") {
+      error.parseDiagnostic = {
+        ...(error.parseDiagnostic ?? {}),
+        sourceText: String(line),
+        parseAttempt: "primary"
+      };
+    }
+    throw error;
+  }
 }

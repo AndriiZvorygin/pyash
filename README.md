@@ -235,11 +235,17 @@ Preview old run artifacts, newspaper logs, and content-addressed objects:
 npm run artifacts:prune
 ```
 
-The preview is read-only. To apply the default 90-day retention policy:
+The preview is read-only. The configured default keeps the most recent 30 days;
+apply that policy with:
 
 ```bash
 npm run artifacts:prune -- --apply
 ```
+
+Pass `--root /path/to/pyash` when the cleaner code and the checkout to clean are
+different; `--config-root` can select the policy checkout separately during a
+staged rollout. See the [artifact retention runbook](documentation/reference/artifact-retention-runbook.md)
+for the distinction between newspaper rotation and scheduled age-based cleanup.
 
 Only dated run directories and old `.pya`/`text-*.txt` newspaper logs are
 eligible. Shared `artifacts/sha256/` objects are removed only after the run/log

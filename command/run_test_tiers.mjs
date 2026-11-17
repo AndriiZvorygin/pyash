@@ -14,10 +14,11 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync, spawn } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { readPyaTextValues } from "../program/library/pya_config.mjs";
+import { runNodeTestBatches } from "./test_batches.mjs";
 import { classifyQuizFile } from "./quiz_tiers.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -137,21 +138,10 @@ if (notGated.length > 0) {
 }
 console.log("");
 
-const child = spawn(process.execPath, ["--test", ...gated.map((entry) => entry.file)], {
+const result = await runNodeTestBatches(gated.map((entry) => entry.file), {
   cwd: root,
-  stdio: "inherit",
+  label: "gated quiz suite",
   env: { ...process.env, PYASH_INCLUDE_HOUSE_TESTS: "0" }
 });
-
-child.on("error", (error) => {
-  console.error(error);
-  process.exit(1);
-});
-
-child.on("exit", (code, signal) => {
-  if (signal) {
-    process.kill(process.pid, signal);
-    return;
-  }
-  process.exit(code ?? 1);
-});
+if (result.signal) process.kill(process.pid, result.signal);
+else process.exit(result.code ?? 1);

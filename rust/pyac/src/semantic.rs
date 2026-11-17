@@ -2,8 +2,11 @@ use crate::WORDS_PER_CODELET;
 
 const HEAD: u16 = 0x0149;
 const NUMBER_QUOTE: u16 = 0x881d;
-const INSTRUMENTAL_CASE: u16 = 0x287e;
 const ACCUSATIVE_CASE: u16 = 0x245e;
+const SOURCE_CASE: u16 = 0x313e;
+const DESTINATION_CASE: u16 = 0x243e;
+const COMITATIVE_CASE: u16 = 0x490f;
+const INSTRUMENTAL_CASE: u16 = 0x287e;
 const DATIVE_CASE: u16 = 0x207e;
 const DEONTIC_MOOD: u16 = 0x295e;
 
@@ -21,7 +24,7 @@ const INVERT: u16 = 0xaad2;
 /// The golden is the shared fixture for every implementation of the numeric
 /// semantics, so a destination compiles the same bytes the interpreter runs.
 pub const GOLDEN_NUMERIC_PLUS_CODELET: [u16; WORDS_PER_CODELET] = [
-    0x0149, 0x881d, 0x0001, 0x287e, 0x881d, 0x0001, 0x245e, 0x8a64, 0x295e, 0, 0, 0, 0, 0, 0, 0,
+    0x0149, 0x881d, 0x0001, 0x245e, 0x881d, 0x0001, 0x243e, 0x8a64, 0x295e, 0, 0, 0, 0, 0, 0, 0,
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,6 +36,26 @@ pub enum NumericOperator {
     Xor,
     Exponential,
     Remains,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NumericOperandCase {
+    From,
+    To,
+    With,
+    By,
+}
+
+impl NumericOperandCase {
+    fn from_word(word: u16) -> Option<Self> {
+        match word {
+            SOURCE_CASE => Some(Self::From),
+            DESTINATION_CASE => Some(Self::To),
+            COMITATIVE_CASE => Some(Self::With),
+            INSTRUMENTAL_CASE => Some(Self::By),
+            _ => None,
+        }
+    }
 }
 
 impl NumericOperator {
@@ -66,7 +89,8 @@ impl NumericOperator {
 pub struct NumericArithmeticInstruction {
     pub operator: NumericOperator,
     pub ob: u16,
-    pub to: u16,
+    pub operand: u16,
+    pub operand_case: NumericOperandCase,
 }
 
 /// The legacy invert codelet carries the value in the accusative phrase and
@@ -97,6 +121,9 @@ pub enum SemanticError {
     UnsupportedOperator {
         actual: u16,
     },
+    UnsupportedCase {
+        actual: u16,
+    },
     UnsupportedBound {
         actual: u16,
     },
@@ -109,6 +136,7 @@ impl SemanticError {
             Self::InvalidShape { .. } => "malformed-codelet",
             Self::NonzeroTail { .. } => "nonzero-tail",
             Self::UnsupportedOperator { .. } => "unsupported-operator",
+            Self::UnsupportedCase { .. } => "unsupported-case",
             Self::UnsupportedBound { .. } => "unsupported-sentence",
             Self::DivisionByZero => "division-by-zero",
         }
@@ -138,6 +166,10 @@ impl std::fmt::Display for SemanticError {
                     "numeric arithmetic operator 0x{actual:04x} is unsupported"
                 )
             }
+            Self::UnsupportedCase { actual } => write!(
+                formatter,
+                "numeric arithmetic has an unsupported operand case 0x{actual:04x}"
+            ),
             Self::UnsupportedBound { actual } => {
                 write!(
                     formatter,
@@ -177,9 +209,12 @@ pub fn decode_numeric_plus(
             actual: instruction.operator.word(),
         });
     }
+    if instruction.operand_case != NumericOperandCase::To {
+        return Err(SemanticError::UnsupportedCase { actual: words[6] });
+    }
     Ok(NumericPlusInstruction {
         ob: instruction.ob,
-        to: instruction.to,
+        to: instruction.operand,
     })
 }
 
@@ -188,9 +223,10 @@ pub fn decode_numeric_arithmetic(
 ) -> Result<NumericArithmeticInstruction, SemanticError> {
     expect(words, 0, HEAD)?;
     expect(words, 1, NUMBER_QUOTE)?;
-    expect(words, 3, INSTRUMENTAL_CASE)?;
+    expect(words, 3, ACCUSATIVE_CASE)?;
     expect(words, 4, NUMBER_QUOTE)?;
-    expect(words, 6, ACCUSATIVE_CASE)?;
+    let operand_case = NumericOperandCase::from_word(words[6])
+        .ok_or(SemanticError::UnsupportedCase { actual: words[6] })?;
     expect(words, 8, DEONTIC_MOOD)?;
     let operator = NumericOperator::from_word(words[7])
         .ok_or(SemanticError::UnsupportedOperator { actual: words[7] })?;
@@ -205,7 +241,8 @@ pub fn decode_numeric_arithmetic(
     Ok(NumericArithmeticInstruction {
         operator,
         ob: words[2],
-        to: words[5],
+        operand: words[5],
+        operand_case,
     })
 }
 
@@ -235,22 +272,26 @@ pub fn execute_numeric_arithmetic(
     instruction: &NumericArithmeticInstruction,
 ) -> Result<u64, SemanticError> {
     match instruction.operator {
-        NumericOperator::Plus => Ok(u64::from(instruction.ob.saturating_add(instruction.to))),
-        NumericOperator::Subtract => Ok(u64::from(instruction.ob.saturating_sub(instruction.to))),
-        NumericOperator::Multiply => Ok(u64::from(instruction.ob) * u64::from(instruction.to)),
+        NumericOperator::Plus => Ok(u64::from(
+            instruction.ob.saturating_add(instruction.operand),
+        )),
+        NumericOperator::Subtract => Ok(u64::from(
+            instruction.ob.saturating_sub(instruction.operand),
+        )),
+        NumericOperator::Multiply => Ok(u64::from(instruction.ob) * u64::from(instruction.operand)),
         NumericOperator::Divide => {
-            if instruction.to == 0 {
+            if instruction.operand == 0 {
                 return Err(SemanticError::DivisionByZero);
             }
-            Ok(u64::from(instruction.ob / instruction.to))
+            Ok(u64::from(instruction.ob / instruction.operand))
         }
-        NumericOperator::Xor => Ok(u64::from(instruction.ob ^ instruction.to)),
-        NumericOperator::Exponential => Ok(saturating_power(instruction.ob, instruction.to)),
+        NumericOperator::Xor => Ok(u64::from(instruction.ob ^ instruction.operand)),
+        NumericOperator::Exponential => Ok(saturating_power(instruction.ob, instruction.operand)),
         NumericOperator::Remains => {
-            if instruction.to == 0 {
+            if instruction.operand == 0 {
                 return Err(SemanticError::DivisionByZero);
             }
-            Ok(u64::from(instruction.ob % instruction.to))
+            Ok(u64::from(instruction.ob % instruction.operand))
         }
     }
 }
@@ -337,10 +378,10 @@ mod tests {
             HEAD,
             NUMBER_QUOTE,
             ob,
-            INSTRUMENTAL_CASE,
+            ACCUSATIVE_CASE,
             NUMBER_QUOTE,
             to,
-            ACCUSATIVE_CASE,
+            DESTINATION_CASE,
             operator.word(),
             DEONTIC_MOOD,
             0,

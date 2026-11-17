@@ -194,6 +194,62 @@ test("gpu draw accepts explicit ComfyUI job spec and submits through worker", as
   assert.equal(awaited?.fromstate?.text, "draw ok");
 });
 
+test("gpu VLIW batch is durably submitted to its dedicated Housekeeper runtime", async () => {
+  forget();
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-gpu-vliw-handle-"));
+  const worldRoot = path.join(root, "world");
+  setWorldRoot(worldRoot);
+
+  const spec = JSON.stringify({
+    kind: "vliw-batch-evaluate",
+    resourceRequest: { vramRequiredMb: 64, deviceId: "gpu0" },
+    payload: {
+      schemaVersion: 1,
+      slots: ["left", "right", "sum"],
+      inputSlots: ["left", "right"],
+      outputSlot: "sum",
+      cases: [{ values: { left: 2, right: 3 }, expected: 5 }],
+      candidates: [{
+        id: "add",
+        instructions: [{ op: "plus", target: "sum", left: "left", right: "right" }]
+      }]
+    }
+  });
+  const queued = await run(`su name vliw batch handle ob text ${JSON.stringify(spec)} vyah start future be gpu vliw do`);
+  assert.equal(queued?.ob?.text, "queued");
+
+  const submitted = [];
+  await runGpuWorkerOnce({
+    worldRoot,
+    adapter: {
+      async submitJob(job) {
+        submitted.push(job);
+        return { remoteJobId: "remote-vliw-batch" };
+      },
+      async getJobStatus() {
+        return {
+          status: "success",
+          message: "vliw batch scored on CUDA",
+          result: { scores: [{ id: "add", incorrectCount: 0, totalAbsoluteError: 0, instructionCount: 1 }] },
+          finishedAt: new Date().toISOString()
+        };
+      }
+    },
+    maxPolls: 2
+  });
+
+  assert.equal(submitted.length, 1);
+  assert.equal(submitted[0]?.runtimeName, "vliw");
+  assert.equal(submitted[0]?.profileName, "vliw-batch-evaluator");
+  assert.equal(submitted[0]?.jobSpec?.kind, "vliw-batch-evaluate");
+  assert.equal(submitted[0]?.jobSpec?.resourceRequest?.vramRequiredMb, 64);
+  assert.equal(submitted[0]?.jobSpec?.payload?.candidates?.[0]?.id, "add");
+
+  const awaited = await run('accordingto text "vliw batch handle" during num 2000 vyah await be gpu do');
+  assert.deepEqual(awaited?.vyah?.ve?.values, ["await", "success"]);
+  assert.match(awaited?.fromstate?.text, /scored on CUDA/u);
+});
+
 test("gpu await timeout includes worker startup hint", async () => {
   forget();
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-gpu-await-timeout-"));

@@ -1,0 +1,168 @@
+Sush 
+human speakable programming language
+a self documenting language
+generates indexes, graphs, and other representations of the program.
+program text is human readable.
+
+section Interface:
+
+what does it look like?
+here to we subject go do (postposition syntax)
+or 
+we here go (forth plain SOV syntax)
+
+modifiable syntax
+selectable syntax
+
+native language compatability
+
+base-langauge  SOV 
+dictionary allows transparent native access (in English, C or other)
+
+user interface:
+keyboard interface
+multiple screens or points of interaction, aware point of move gfb
+
+upgrades from forth:
+
+; stack view
+a .s stack view, that displays the strings therein, or a sample of where they
+point.
+
+implement options
+address of data followed by address of display or interperting function.
+or address contents interpertation function (intelligent guess at how to
+display) (do this one! AI algorithms and context implementable, more human)
+
+; shortmem  (J p D ( low and area ))
+for accessing short term memory or registers
+args shortmem-number idea
+
+shortmem-number is translated to register name 1 = eax, 2 = ebx and so on
+idea be just whatever next item there is
+
+; or programming
+can use this function
+or that function
+or make your own
+allows for different approaches,
+user customizable approaches,
+or random approaches,
+or genetic or evolutionary algorithms.
+
+potential implementation:
+
+pointer has function section, and version section.
+from dictionary index, 
+
+or from function index,
+pointing to version index,
+from version index 
+pointing to version and version info
+with 0th version being the default
+
+note unixy implementation:
+folder for function contents
+index.txt 0.txt 0.info.txt 1.txt 1.info.txt n.txt n.info.txt 
+index.zjn 0.zjn 1.info.zjn 1.zjn 1.info.zjn n.zjn n.info.zjn
+
+z j n = s sh n
+
+related-goals 
+ease-of-transfer(folder) 
+ease-of-access(filesystem)
+ease-of-readability(txt)
+
+potentially the can just be translated 
+into the native language to generate .txt 
+for this, can add two functions
+txt-generate or see  ( generates txt from a .zjn file )
+bin-generate 
+
+
+; function checking
+functions are tested for level of correctness for input and output.
+test files made comparing inputs and outputs.
+
+; auto version creation
+based on test files,
+a function is created to conform to that input/ output pattern.
+args: input-of-function output-of-function
+a potential way to insure correct pattern the version is then tested with a seperate test file,
+and assigned a correctness percentage.
+
+; version info
+a background process collects information on function versions.
+info-points of correctness, speed, size, or idea.
+
+; function optimization
+a current desire based on info-points,
+can be satisfied by sourcing versions.
+
+i.e. if someone wants somefunction fast, 
+version info can be sourced and the fastest selected
+
+also versions that do not have any benefits are removed
+
+; default function selection
+based on which version has the best of all the info-points
+
+user customizable preference for correctness or speed etc.
+
+
+#############################
+graphics interface:
+########################
+window or tab split
+graphics displayed in section
+
+graphic functions recieve display area (two diagonal corners) as argument
+with result of 
+string of pixels delimited by width size
+or pixel packets of changes [corner1,corner2,function]
+
+essentially a function that converts ordinary functions into graphic functions
+Check how fractals are generated,
+specific graphics functions, can generate between two points (like a line,
+circle, etc)
+
+i prefer bottom up design.
+well see what to do next, once we get there.
+we have the destination in mind.
+
+me or i get  (retrieves for user)
+you or thee get (retrieves for computer, implying storage )
+we or us get  (retrieves for computer(s) and user)
+
+a graphics layout, with landmarks, and maps of the system,
+concept hierarchies.
+large processes can be trees,
+large memory usage can be rocks.
+a forest of experience.
+can build a house, for a users home,
+and sync up with other peoples 
+
+can start with labels instead of graphics, or have it as one of the views.
+
+
+################################
+#services
+############################3
+
+function optimization service:
+-----------------------------
+version creation
+function creation 
+version testing
+function testing (symbolizing)
+
+network involvement,
+background process,
+sharing of optimal functions and versions.
+desire to reproduce self of computer,
+by providing wide spread use of self-made function or version.
+
+network polling for function version popularity,
+by querying for function default versions
+
+each function and version with unique identifiers

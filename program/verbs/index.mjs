@@ -38,7 +38,7 @@ import musicSay, { signatures as musicSaySignatures } from "./music_say.mjs";
 import espeakSay, { signatures as espeakSaySignatures } from "./espeak_say.mjs";
 import hear, { signatures as hearSignatures } from "./hear.mjs";
 import command, { signatures as commandSignatures } from "./command.mjs";
-import terminal, { signatures as terminalSignatures } from "./terminal.mjs";
+import commandSession, { signatures as commandSessionSignatures } from "./command_session.mjs";
 import interpret, { signatures as interpretSignatures } from "./interpret.mjs";
 import discharge, { signatures as dischargeSignatures } from "./discharge.mjs";
 import begin, { signatures as beginSignatures } from "./begin.mjs";
@@ -149,7 +149,7 @@ export {
   espeakSay,
   hear,
   command,
-  terminal,
+  commandSession,
   interpret,
   discharge,
   begin,
@@ -248,7 +248,7 @@ export const builtInSignatures = [
   ...espeakSaySignatures,
   ...hearSignatures,
   ...commandSignatures,
-  ...terminalSignatures,
+  ...commandSessionSignatures,
   ...interpretSignatures,
   ...dischargeSignatures,
   ...beginSignatures,

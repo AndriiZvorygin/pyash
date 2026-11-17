@@ -612,7 +612,7 @@ pub fn compile_numeric_arithmetic(
     let mut emitter = Emitter::new();
 
     emitter.load_immediate(T0, u64::from(instruction.ob))?;
-    emitter.load_immediate(T1, u64::from(instruction.to))?;
+    emitter.load_immediate(T1, u64::from(instruction.operand))?;
 
     match instruction.operator {
         NumericOperator::Plus => emitter.saturating_add(T2, T0, T1),
@@ -627,7 +627,7 @@ pub fn compile_numeric_arithmetic(
             ),
         ),
         NumericOperator::Divide => {
-            if instruction.to == 0 {
+            if instruction.operand == 0 {
                 return Err(BackendError::DivisionByZero);
             }
             emitter.emit(
@@ -651,7 +651,7 @@ pub fn compile_numeric_arithmetic(
         ),
         NumericOperator::Exponential => emitter.saturating_power(T2, T0, T1),
         NumericOperator::Remains => {
-            if instruction.to == 0 {
+            if instruction.operand == 0 {
                 return Err(BackendError::DivisionByZero);
             }
             emitter.emit(
@@ -793,26 +793,36 @@ pub fn compile_and_execute_numeric_arithmetic(
 mod tests {
     use super::*;
     use crate::semantic::{
-        NumericArithmeticInstruction, execute_numeric_arithmetic,
+        NumericArithmeticInstruction, NumericOperandCase, execute_numeric_arithmetic,
         execute_numeric_arithmetic_codelet, execute_numeric_invert_codelet,
     };
 
     const HEAD: u16 = 0x0149;
     const NUMBER_QUOTE: u16 = 0x881d;
-    const INSTRUMENTAL_CASE: u16 = 0x287e;
     const ACCUSATIVE_CASE: u16 = 0x245e;
+    const SOURCE_CASE: u16 = 0x313e;
+    const DESTINATION_CASE: u16 = 0x243e;
     const DATIVE_CASE: u16 = 0x207e;
     const DEONTIC_MOOD: u16 = 0x295e;
 
     fn arithmetic_codelet(operator: u16, ob: u16, to: u16) -> [u16; WORDS_PER_CODELET] {
+        arithmetic_codelet_with_case(operator, ob, to, DESTINATION_CASE)
+    }
+
+    fn arithmetic_codelet_with_case(
+        operator: u16,
+        ob: u16,
+        to: u16,
+        operand_case: u16,
+    ) -> [u16; WORDS_PER_CODELET] {
         [
             HEAD,
             NUMBER_QUOTE,
             ob,
-            INSTRUMENTAL_CASE,
+            ACCUSATIVE_CASE,
             NUMBER_QUOTE,
             to,
-            ACCUSATIVE_CASE,
+            operand_case,
             operator,
             DEONTIC_MOOD,
             0,
@@ -983,7 +993,8 @@ mod tests {
             NumericArithmeticInstruction {
                 operator: NumericOperator::Plus,
                 ob: 7,
-                to: 3,
+                operand: 3,
+                operand_case: NumericOperandCase::To,
             }
         );
         assert_eq!(execute_numeric_arithmetic(&instruction), Ok(10));
@@ -991,5 +1002,14 @@ mod tests {
             compile_and_execute_numeric_arithmetic(&codelet).expect("the backend runs it"),
             execute_numeric_arithmetic(&instruction).expect("the interpreter runs it")
         );
+    }
+
+    #[test]
+    fn semantic_decode_retains_the_from_case_hnuc() {
+        let codelet = arithmetic_codelet_with_case(0xabd2, 9, 4, SOURCE_CASE);
+        let instruction = decode_numeric_arithmetic(&codelet).expect("from-case codelet decodes");
+        assert_eq!(instruction.operand_case, NumericOperandCase::From);
+        assert_eq!(execute_numeric_arithmetic(&instruction), Ok(5));
+        assert_eq!(compile_and_execute_numeric_arithmetic(&codelet), Ok(5));
     }
 }

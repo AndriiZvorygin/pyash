@@ -3,6 +3,8 @@
 Status: design and reference implementation contract. This document defines
 the searchable catalog and compiled VLIW container built on the sentence-first
 lowering contract in `documentation/specifications/27-pyash-vliw-isa.md`.
+For the wider compiler flow and backend status, see
+[`pyash-vliw-compiler-architecture.md`](pyash-vliw-compiler-architecture.md).
 
 ## 1. Purpose and boundary
 

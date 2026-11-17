@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { appendFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
 import { buildProgram } from "../../program.mjs";
@@ -37,7 +39,8 @@ import {
   createQueuedMindWordNetSenseTranslationTransport,
   parseSenseCompoundChoiceResponse,
   parseWordNetSenseTranslationCache,
-  renderWordNetSenseTranslationCache,
+  readWordNetSenseTranslationCacheFile,
+  renderWordNetSenseTranslationCacheEntry,
   translateWordNetSenseWave
 } from "./english_wordnet_sense_compounds.mjs";
 import {
@@ -50,7 +53,8 @@ import { DEFAULT_ATOM_WORD_LAYER_DIRECTORY } from "./atom_word_generation.mjs";
 import { loadEnglishLemmaCatalog } from "./english_lemmas.mjs";
 import {
   ENGLISH_WORDNET_COMPOUND_DECISIONS_URL,
-  loadEnglishWordNetCompoundDecisions,
+  createEnglishWordNetCompoundDecisionOffsetIndex,
+  renderEnglishWordNetCompoundDecisionAppend,
   renderEnglishWordNetCompoundDecisions
 } from "./english_wordnet_compound_decisions.mjs";
 import { runVocabSuggest } from "../../../command/vocab_suggest.mjs";
@@ -150,8 +154,22 @@ function text(value) {
   return typeof value === "string" ? value.normalize("NFC").trim() : "";
 }
 
+function normalizeTranslationLanguage(value) {
+  return text(value).toLowerCase().replace(/[_-]+/gu, " ").replace(/\s+/gu, " ").trim();
+}
+
 function hash(value) {
   return createHash("sha256").update(String(value ?? "")).digest("hex");
+}
+
+async function hashFile(filePath) {
+  return new Promise((resolveHash, reject) => {
+    const digest = createHash("sha256");
+    const stream = createReadStream(filePath);
+    stream.on("data", (chunk) => digest.update(chunk));
+    stream.once("error", reject);
+    stream.once("end", () => resolveHash(digest.digest("hex")));
+  });
 }
 
 function stableJson(value) {
@@ -198,15 +216,7 @@ function renderRowsPya(name, format, records = [], metadata = {}) {
   return lines.join("\n");
 }
 
-function parseRowsPya(source, expectedName) {
-  const sentences = buildProgram(source).sentences;
-  const header = sentences.find((sentence) => sentence?.mood === "def"
-    && sentence?.be === "map"
-    && sentence?.su?.name === expectedName);
-  if (!header) throw invalid("sense compound artifact has no expected Pyash map", { expectedName });
-  const records = [];
-  const seen = new Set();
-  const legacyMetadataKeys = new Set([
+const LEGACY_METADATA_KEYS = new Set([
     "source-hash",
     "translation-cache-hash",
     "atom-inventory-hash",
@@ -237,25 +247,113 @@ function parseRowsPya(source, expectedName) {
     "pending-component-choice-count",
     "accepted-component-choice-percent",
     "candidate-hash"
-  ]);
+]);
+
+function addRowsFromSentences(sentences, expectedName, {
+  allowUpdates,
+  recordsById,
+  hasHeader,
+  mapRecord,
+  filterRecord
+}, indexOffset = 0) {
   for (const [index, sentence] of sentences.entries()) {
+    if (sentence?.mood === "def" && sentence?.be === "map" && sentence?.su?.name === expectedName) {
+      hasHeader.value = true;
+      continue;
+    }
     if (sentence?.mood !== "ya" || typeof sentence.su?.text !== "string") continue;
     if (sentence.su.text === "format" || sentence.su.text.startsWith("meta:")
-      || legacyMetadataKeys.has(sentence.su.text)) continue;
-    if (typeof sentence.ob?.text !== "string") throw invalid("sense compound artifact row is missing JSON text", { index });
+      || LEGACY_METADATA_KEYS.has(sentence.su.text)) continue;
+    const rowIndex = indexOffset + index;
+    if (typeof sentence.ob?.text !== "string") throw invalid("sense compound artifact row is missing JSON text", { index: rowIndex });
     let record;
     try {
       record = JSON.parse(sentence.ob.text);
     } catch (error) {
-      throw invalid("sense compound artifact row is malformed", { index, cause: error.message });
+      throw invalid("sense compound artifact row is malformed", { index: rowIndex, cause: error.message });
     }
-    if (record?.id !== sentence.su.text || seen.has(record.id)) {
-      throw invalid("sense compound artifact row identity is mismatched or duplicated", { index, id: sentence.su.text });
+    if (record?.id !== sentence.su.text || (!allowUpdates && recordsById.has(record.id))) {
+      throw invalid("sense compound artifact row identity is mismatched or duplicated", { index: rowIndex, id: sentence.su.text });
     }
-    seen.add(record.id);
-    records.push(record);
+    if (filterRecord && !filterRecord(record)) continue;
+    recordsById.set(record.id, mapRecord ? mapRecord(record) : record);
   }
-  return records;
+}
+
+function parseRowsPya(source, expectedName, { allowUpdates = false, mapRecord } = {}) {
+  const sentences = buildProgram(source).sentences;
+  const recordsById = new Map();
+  const hasHeader = { value: false };
+  addRowsFromSentences(sentences, expectedName, { allowUpdates, recordsById, hasHeader, mapRecord });
+  if (!hasHeader.value) throw invalid("sense compound artifact has no expected Pyash map", { expectedName });
+  return [...recordsById.values()];
+}
+
+async function readRowsPyaFile(artifactPath, expectedName, {
+  allowUpdates = false,
+  mapRecord,
+  filterRecord,
+  asMap = false
+} = {}) {
+  try {
+    if ((await stat(artifactPath)).size === 0) return asMap ? new Map() : [];
+  } catch (error) {
+    if (error?.code === "ENOENT") return asMap ? new Map() : [];
+    throw error;
+  }
+  const recordsById = new Map();
+  const hasHeader = { value: false };
+  const input = createReadStream(artifactPath, { encoding: "utf8" });
+  const lines = createInterface({ input, crlfDelay: Infinity });
+  let sentenceOffset = 0;
+  for await (const line of lines) {
+    const sentences = buildProgram(line).sentences;
+    addRowsFromSentences(sentences, expectedName, {
+      allowUpdates,
+      recordsById,
+      hasHeader,
+      mapRecord,
+      filterRecord
+    }, sentenceOffset);
+    sentenceOffset += sentences.length;
+  }
+  if (!hasHeader.value) throw invalid("sense compound artifact has no expected Pyash map", { expectedName });
+  return asMap ? recordsById : [...recordsById.values()];
+}
+
+function renderArtifactRow(record) {
+  const id = text(record?.id ?? record?.senseId ?? record?.candidateId);
+  if (!id) throw invalid("sense compound artifact row has no stable identity");
+  return `su text ${JSON.stringify(id)} ob text ${JSON.stringify(JSON.stringify(record))} ya\n`;
+}
+
+async function appendArtifactRows(context, artifactPath, name, format, records, metadata = {}, renderRecord = renderArtifactRow) {
+  const sweepState = context.sweepState;
+  const initialized = sweepState?.initializedArtifacts ?? (sweepState.initializedArtifacts = new Set());
+  const metadataByPath = sweepState.artifactMetadata ?? (sweepState.artifactMetadata = new Map());
+  if (!initialized.has(artifactPath)) {
+    let exists = false;
+    try {
+      const info = await stat(artifactPath);
+      exists = info.size > 0;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    if (!exists) {
+      await atomicWrite(artifactPath, renderRowsPya(name, format, [], metadata));
+      metadataByPath.set(artifactPath, stableJson(metadata));
+    }
+    initialized.add(artifactPath);
+  }
+  const updates = records.map(renderRecord);
+  const metadataSignature = stableJson(metadata);
+  if (Object.keys(metadata).length > 0 && metadataByPath.get(artifactPath) !== metadataSignature) {
+    for (const [key, value] of Object.entries(metadata)) {
+      updates.push(`su text ${JSON.stringify(`meta:${key}`)} ob text ${JSON.stringify(String(value))} ya\n`);
+    }
+    metadataByPath.set(artifactPath, metadataSignature);
+  }
+  if (updates.length > 0) await appendFile(artifactPath, updates.join(""), "utf8");
 }
 
 async function atomicWrite(path, contents) {
@@ -344,6 +442,12 @@ function modelName(row) {
   return text(typeof row === "string" ? row : row?.name ?? row?.model);
 }
 
+function markProviderSubmission(context) {
+  if (context.sweepState.firstProviderSubmissionAt === null) {
+    context.sweepState.firstProviderSubmissionAt = Date.now();
+  }
+}
+
 function queueState(queue = {}) {
   const jobs = Array.isArray(queue.jobs) ? queue.jobs : Array.isArray(queue.items) ? queue.items : [];
   const queued = Number(queue.queueDepth ?? queue.depth ?? jobs.length);
@@ -376,7 +480,7 @@ async function completedSenseIdsFromHistory({ artifactRoot, currentDirectory, so
       || !SENSE_COMPOUND_RUN_DIRECTORY.test(entry.name)) continue;
     const source = await readText(join(artifactRoot, entry.name, "progress.pya"));
     if (!source) continue;
-    for (const record of parseRowsPya(source, PROGRESS_NAME)) {
+    for (const record of parseRowsPya(source, PROGRESS_NAME, { allowUpdates: true })) {
       if (isProcessedProgress(record)) completed.add(record.senseId);
     }
   }
@@ -437,15 +541,28 @@ async function ensureRefinery({ interpretFn = interpret } = {}) {
 
 async function loadInventory({ context, dependencies }) {
   const allocation = context.allocation ?? await (dependencies.prepareAllocation ?? prepareWordNetFrequencyAllocation)();
-  const bridgeCatalog = await (dependencies.loadBridges ?? loadEnglishWordNetBridges)();
-  const bridgeIndex = (dependencies.buildBridgeIndex ?? buildEnglishWordNetBridgeIndex)({
-    entries: bridgeCatalog.entries,
-    resolveTarget: allocation.resolveWord
-  });
-  const layerIndex = await (dependencies.loadLayerIndex ?? (() => loadPyacWordLayerIndex({
-    directory: DEFAULT_ATOM_WORD_LAYER_DIRECTORY
-  })) )();
-  const lemmaCatalog = await (dependencies.loadLemmaCatalog ?? loadEnglishLemmaCatalog)();
+  const sweepState = context.sweepState;
+  let inventory = sweepState.inventory;
+  if (!inventory || inventory.sourceHash !== allocation.sourceHash) {
+    const [bridgeCatalog, layerIndex, lemmaCatalog] = await Promise.all([
+      (dependencies.loadBridges ?? loadEnglishWordNetBridges)(),
+      (dependencies.loadLayerIndex ?? (() => loadPyacWordLayerIndex({
+        directory: DEFAULT_ATOM_WORD_LAYER_DIRECTORY
+      })) )(),
+      (dependencies.loadLemmaCatalog ?? loadEnglishLemmaCatalog)()
+    ]);
+    inventory = {
+      sourceHash: allocation.sourceHash,
+      bridgeIndex: (dependencies.buildBridgeIndex ?? buildEnglishWordNetBridgeIndex)({
+        entries: bridgeCatalog.entries,
+        resolveTarget: allocation.resolveWord
+      }),
+      layerIndex,
+      lemmaCatalog
+    };
+    sweepState.inventory = inventory;
+  }
+  const { bridgeIndex, layerIndex, lemmaCatalog } = inventory;
   const deprecatedSurfaces = lemmaCatalog.entries
     .filter((entry) => entry.status === "deprecated-duplicate")
     .map((entry) => entry.surface);
@@ -504,12 +621,15 @@ async function loadInventory({ context, dependencies }) {
     }
   }
   const progressPath = join(context.artifactDirectory, "progress.pya");
-  const translationPath = join(context.artifactDirectory, "sense-translations.pya");
-  const progressSource = await (dependencies.readFile ?? readIfPresent)(progressPath);
-  const translationSource = await (dependencies.readFile ?? readIfPresent)(translationPath);
-  const progressRecords = progressSource ? parseRowsPya(progressSource, PROGRESS_NAME) : [];
-  const progressBySense = new Map(progressRecords.map((record) => [record.senseId, record]));
-  for (const progress of progressRecords) {
+  let progressBySense = sweepState.progressBySense;
+  if (!(progressBySense instanceof Map)) {
+    const progressSource = await (dependencies.readFile ?? readIfPresent)(progressPath);
+    const progressRecords = progressSource ? parseRowsPya(progressSource, PROGRESS_NAME, { allowUpdates: true }) : [];
+    progressBySense = new Map(progressRecords.map((record) => [record.senseId, record]));
+  } else {
+    progressBySense = new Map(progressBySense);
+  }
+  for (const progress of progressBySense.values()) {
     if (progress.status !== "processing") continue;
     progressBySense.set(progress.senseId, {
       ...progress,
@@ -517,24 +637,20 @@ async function loadInventory({ context, dependencies }) {
       interruptedRunId: progress.claimRunId ?? ""
     });
   }
-  const completedSenseIds = await completedSenseIdsFromHistory({
-    artifactRoot: dirname(context.artifactDirectory),
-    currentDirectory: context.artifactDirectory,
-    sourceHash: allocation.sourceHash,
-    currentProgress: [...progressBySense.values()],
-    readText: dependencies.readFile ?? readIfPresent
-  });
+  if (!(sweepState.completedHistoricalSenseIds instanceof Set)) {
+    sweepState.completedHistoricalSenseIds = await completedSenseIdsFromHistory({
+      artifactRoot: dirname(context.artifactDirectory),
+      currentDirectory: context.artifactDirectory,
+      sourceHash: allocation.sourceHash,
+      currentProgress: [],
+      readText: dependencies.readFile ?? readIfPresent
+    });
+  }
+  const completedSenseIds = new Set(sweepState.completedHistoricalSenseIds);
+  for (const progress of progressBySense.values()) {
+    if (isProcessedProgress(progress)) completedSenseIds.add(progress.senseId);
+  }
   for (const senseId of requestedSenseSet ?? []) completedSenseIds.delete(senseId);
-  const parsedTranslationState = translationSource
-    ? parseWordNetSenseTranslationCache(translationSource)
-    : { records: [], bySense: new Map() };
-  const currentTranslations = parsedTranslationState.records.filter((record) => (
-    record.wordNetHash === allocation.sourceHash
-  ));
-  const translationState = {
-    records: currentTranslations,
-    bySense: new Map(currentTranslations.map((record) => [record.senseId, record]))
-  };
   const atomInventoryHash = hash(stableJson({
     linkedAtomicSenses: linkedAtomicSenses.map((entry) => [
       entry.source, entry.target, entry.pyashSequence, entry.targetId
@@ -564,11 +680,7 @@ async function loadInventory({ context, dependencies }) {
     });
   }
   const claimedProgress = [...progressBySense.values()];
-  await atomicWrite(join(context.artifactDirectory, "progress.pya"), renderRowsPya(
-    PROGRESS_NAME,
-    "wordnet-sense-compound-progress-v1",
-    claimedProgress
-  ));
+  await appendArtifactRows(context, progressPath, PROGRESS_NAME, "wordnet-sense-compound-progress-v1", pending.map((sense) => progressBySense.get(sense.senseId)));
   const dataHash = hash(stableJson({
     sourceHash: allocation.sourceHash,
     coverageHash: allocation.coverageHash,
@@ -604,8 +716,9 @@ async function loadInventory({ context, dependencies }) {
   context.deprecatedSurfaces = deprecatedSurfaces;
   context.layerIndex = layerIndex;
   context.progressRecords = claimedProgress;
+  sweepState.progressBySense = progressBySense;
   context.completedSenseIds = completedSenseIds;
-  context.translationState = translationState;
+  context.translationState = null;
   context.fullWorklist = fullWorklist;
   context.atomInventoryHash = atomInventoryHash;
   context.worklist = pending;
@@ -632,8 +745,24 @@ async function loadInventory({ context, dependencies }) {
 
 async function translateSelected({ context, worklist }) {
   const selected = context.worklist ?? parseRowsPya(await readFile(worklist["worklist-path"], "utf8"), WORKLIST_NAME);
-  const cached = context.translationState?.records ?? [];
   const cachePath = join(context.artifactDirectory, "sense-translations.pya");
+  const selectedSenseIds = new Set(selected.map((sense) => sense.senseId));
+  let translationCache;
+  if (typeof context.dependencies.readFile === "function") {
+    const source = await context.dependencies.readFile(cachePath);
+    translationCache = source
+      ? parseWordNetSenseTranslationCache(source)
+      : { records: [], bySense: new Map() };
+  } else {
+    translationCache = await readWordNetSenseTranslationCacheFile(cachePath, { senseIds: [...selectedSenseIds] });
+  }
+  const cached = translationCache.records.filter((record) => selectedSenseIds.has(record.senseId)
+    && record.wordNetHash === context.allocation.sourceHash);
+  context.translationState = {
+    sourceHash: context.allocation.sourceHash,
+    records: cached,
+    bySense: new Map(cached.map((record) => [record.senseId, record]))
+  };
   const transport = context.dependencies.translationTransport
     ?? createQueuedMindWordNetSenseTranslationTransport({
       interpret: context.interpretFn,
@@ -642,23 +771,54 @@ async function translateSelected({ context, worklist }) {
       maxOutputTokens: context.config.maxOutputTokens
     });
   context.translationFailurePath = join(context.artifactDirectory, "translation-failures.pya");
-  const previousFailureSource = await readIfPresent(context.translationFailurePath);
-  let failureRows = previousFailureSource.trim()
-    ? parseRowsPya(previousFailureSource, TRANSLATION_FAILURES_NAME)
-    : [];
+  const failureIndex = await readRowsPyaFile(context.translationFailurePath, TRANSLATION_FAILURES_NAME, {
+    allowUpdates: true,
+    asMap: true,
+    filterRecord: (record) => selectedSenseIds.has(record.senseId)
+  });
   let failureWrite = Promise.resolve();
-  const persistFailures = () => {
+  const persistFailures = (rows = []) => {
     failureWrite = failureWrite.then(async () => {
-      const failureContent = renderRowsPya(TRANSLATION_FAILURES_NAME, "wordnet-sense-translation-failures-v1", failureRows, {
+      await appendArtifactRows(context, context.translationFailurePath, TRANSLATION_FAILURES_NAME, "wordnet-sense-translation-failures-v1", rows, {
         "prompt-revision": context.config.promptRevision,
-        "model": context.config.model,
-        "failure-count": failureRows.length,
-        "failed-sense-count": new Set(failureRows.filter((row) => row.status === "failed").map((row) => row.senseId)).size
+        "model": context.config.model
       });
-      await atomicWrite(context.translationFailurePath, failureContent);
-      return failureContent;
     });
     return failureWrite;
+  };
+  const updateFailureRows = async (newRows, options = {}) => {
+    const changedRows = [];
+    for (const row of newRows) {
+      const merged = mergeWordNetSenseTranslationFailures(
+        failureIndex.has(text(row?.id)) ? [failureIndex.get(text(row.id))] : [],
+        [row]
+      )[0];
+      if (!merged) continue;
+      const previous = failureIndex.get(merged.id);
+      failureIndex.set(merged.id, merged);
+      if (stableJson(previous ?? null) !== stableJson(merged)) changedRows.push(merged);
+    }
+    if (options.resolvedTranslations?.length) {
+      const resolvedByKey = new Map();
+      for (const record of options.resolvedTranslations) {
+        for (const translation of record?.translations ?? []) {
+          resolvedByKey.set(`${text(record.senseId)}\u0000${normalizeTranslationLanguage(translation?.language)}`, text(record.id));
+        }
+      }
+      for (const [id, row] of failureIndex) {
+        const key = `${text(row.senseId)}\u0000${normalizeTranslationLanguage(row.language)}`;
+        if (!resolvedByKey.has(key)) continue;
+        const recovered = {
+          ...row,
+          status: "recovered",
+          ...(resolvedByKey.get(key) ? { recoveredByTranslationId: resolvedByKey.get(key) } : {})
+        };
+        if (stableJson(row) === stableJson(recovered)) continue;
+        failureIndex.set(id, recovered);
+        changedRows.push(recovered);
+      }
+    }
+    if (changedRows.length > 0) await persistFailures(changedRows);
   };
   const response = await translateWordNetSenseWave({
     senses: selected,
@@ -668,46 +828,53 @@ async function translateSelected({ context, worklist }) {
     promptRevision: context.config.promptRevision,
     parallelism: context.config.parallelism,
     maxAttempts: 2,
-    submit: transport.submit,
+    submit: async (...args) => {
+      markProviderSubmission(context);
+      return transport.submit(...args);
+    },
     awaitHandle: transport.await,
-    onCache: async (records) => {
-      await atomicWrite(cachePath, renderWordNetSenseTranslationCache(records, {
-        "source-hash": worklist["source-hash"],
-        "prompt-revision": context.config.promptRevision,
-        model: context.config.model
-      }));
+    onCacheEntry: async (record) => {
+      await appendArtifactRows(context, cachePath, ENGLISH_WORDNET_SENSE_TRANSLATION_CACHE_NAME,
+        "english-wordnet-sense-compounds-v1", [record], {
+          "source-hash": worklist["source-hash"],
+          "prompt-revision": context.config.promptRevision,
+          model: context.config.model
+        }, renderWordNetSenseTranslationCacheEntry);
+      const recordsBySense = context.translationState?.bySense
+        ?? new Map(cached.map((row) => [row.senseId, row]));
+      recordsBySense.set(record.senseId, record);
+      context.translationState = { sourceHash: worklist["source-hash"], records: cached, bySense: recordsBySense };
     },
     onFailure: async (failure) => {
-      failureRows = mergeWordNetSenseTranslationFailures(failureRows, [failure]);
-      await persistFailures();
+      await updateFailureRows([failure]);
     }
   });
   if (response.records.length === 0) {
-    await atomicWrite(cachePath, renderWordNetSenseTranslationCache(cached, {
-      "source-hash": worklist["source-hash"],
-      "prompt-revision": context.config.promptRevision,
-      model: context.config.model
-    }));
+    await appendArtifactRows(context, cachePath, ENGLISH_WORDNET_SENSE_TRANSLATION_CACHE_NAME,
+      "english-wordnet-sense-compounds-v1", [], {
+        "source-hash": worklist["source-hash"],
+        "prompt-revision": context.config.promptRevision,
+        model: context.config.model
+      });
   }
   context.translationState = { records: response.records, bySense: new Map(response.records.map((record) => [record.senseId, record])) };
-  failureRows = mergeWordNetSenseTranslationFailures(failureRows, response.failures, {
+  context.translationState.sourceHash = worklist["source-hash"];
+  await updateFailureRows(response.failures, {
     resolvedTranslations: response.records
   });
   await persistFailures();
   context.translationFailures = response.failures;
-  const content = await readFile(cachePath, "utf8");
-  const failureContent = await readFile(context.translationFailurePath, "utf8");
   const failedSenseIds = [...new Set(response.failures.map((failure) => failure.senseId))];
   context.translationFailedSenseCount = failedSenseIds.length;
   return {
     "translation-cache-path": cachePath,
-    "translation-cache-hash": hash(content),
+    "translation-cache-hash": await hashFile(cachePath),
     "translated-count": response.completedCount,
     "submitted-count": response.submittedCount,
     "failed-count": failedSenseIds.length,
     "failed-language-count": response.failures.length,
     "failure-path": context.translationFailurePath,
-    "failure-hash": hash(failureContent),
+    "failure-hash": await hashFile(context.translationFailurePath),
     "failure-sense-ids": failedSenseIds,
     "partial-sense-ids": response.records.filter((record) => record.status !== "complete").map((record) => record.senseId)
   };
@@ -780,12 +947,29 @@ export async function runSenseCompoundVocabularyLookups(lookupGlosses, {
   return { suggestionRecords, linkedWordNetSenses };
 }
 
+function compactCompositionCacheRecord(record) {
+  return {
+    id: record.id,
+    senseId: record.senseId,
+    attempt: record.attempt,
+    sourceHash: record.sourceHash,
+    atomInventoryHash: record.atomInventoryHash,
+    translationCacheHash: record.translationCacheHash,
+    candidateRevision: record.candidateRevision,
+    promptRevision: record.promptRevision,
+    inputHash: record.inputHash,
+    status: record.status,
+    ...(record.status === "compound" && record.response ? { response: record.response } : {})
+  };
+}
+
 async function composeCandidates({ context, worklist, translations }) {
   const selected = context.worklist ?? parseRowsPya(await readFile(worklist["worklist-path"], "utf8"), WORKLIST_NAME);
   const cachePath = translations["translation-cache-path"];
-  const cacheRows = context.translationState?.records
-    ?? parseWordNetSenseTranslationCache(await readFile(cachePath, "utf8")).records;
-  const cacheBySense = new Map(cacheRows.map((record) => [record.senseId, record]));
+  const cacheBySense = context.translationState?.bySense
+    ?? (await readWordNetSenseTranslationCacheFile(cachePath, {
+      senseIds: selected.map((sense) => sense.senseId)
+    })).bySense;
   const compositionSenses = selected.filter((sense) => hasCompositionSourceTranslations(sense, cacheBySense.get(sense.senseId)));
   const sourceTranslationsBySense = new Map(compositionSenses.map((sense) => [
     sense.senseId,
@@ -798,29 +982,39 @@ async function composeCandidates({ context, worklist, translations }) {
   const byGloss = new Map();
   const choicesByLookupGlossCache = new Map();
   const compositionPath = join(context.artifactDirectory, "component-compositions.pya");
-  const compositionSource = await readIfPresent(compositionPath);
-  const oldCompositionRows = compositionSource.trim()
-    ? parseRowsPya(compositionSource, COMPOSITION_NAME)
-    : [];
-  const compositionById = new Map(oldCompositionRows.map((row) => [row.id, row]));
+  const selectedSenseIds = new Set(selected.map((sense) => sense.senseId));
+  const oldCompositionsById = await readRowsPyaFile(compositionPath, COMPOSITION_NAME, {
+    allowUpdates: true,
+    mapRecord: compactCompositionCacheRecord,
+    filterRecord: (record) => selectedSenseIds.has(record.senseId),
+    asMap: true
+  });
+  const compositionBySense = new Map();
+  for (const row of oldCompositionsById.values()) {
+    const rows = compositionBySense.get(row.senseId) ?? [];
+    rows.push(row);
+    compositionBySense.set(row.senseId, rows);
+  }
+  const rememberComposition = (record) => {
+    const rows = compositionBySense.get(record.senseId) ?? [];
+    rows.push(compactCompositionCacheRecord(record));
+    compositionBySense.set(record.senseId, rows);
+  };
   const compositionRecords = [];
   const candidatesById = new Map();
   let compositionCallCount = 0;
   let compositionFailureCount = 0;
   let compositionWrite = Promise.resolve();
-  const persistCompositions = () => {
+  const persistCompositions = (rows = []) => {
     compositionWrite = compositionWrite.then(async () => {
-      const rows = [...compositionById.values()].sort((left, right) => left.senseId.localeCompare(right.senseId)
-        || Number(left.attempt ?? 0) - Number(right.attempt ?? 0)
-        || left.id.localeCompare(right.id));
-      const contents = renderRowsPya(COMPOSITION_NAME, "wordnet-sense-compound-component-compositions-v3", rows, {
+      await appendArtifactRows(context, compositionPath, COMPOSITION_NAME,
+        "wordnet-sense-compound-component-compositions-v3", rows, {
         "source-hash": worklist["source-hash"],
         "translation-cache-hash": translations["translation-cache-hash"],
         "atom-inventory-hash": worklist["atom-inventory-hash"],
         "candidate-revision": context.config.candidateRevision,
         "prompt-revision": context.config.choicePromptRevision
       });
-      await atomicWrite(compositionPath, contents);
     });
     return compositionWrite;
   };
@@ -837,16 +1031,14 @@ async function composeCandidates({ context, worklist, translations }) {
     && record.senseId === sense.senseId
     && record.sourceHash === worklist["source-hash"]
     && record.atomInventoryHash === worklist["atom-inventory-hash"]
-    && record.translationCacheHash === translationCacheHash
     && record.candidateRevision === context.config.candidateRevision
     && record.promptRevision === context.config.choicePromptRevision
     && record.inputHash === inputHash
     && ["compound", "uncertain", "no-available-decomposition"].includes(record.status));
-  const matchingAttempts = (sense, inputHash) => [...compositionById.values()]
+  const matchingAttempts = (sense, inputHash) => (compositionBySense.get(sense.senseId) ?? [])
     .filter((record) => record.senseId === sense.senseId
       && record.sourceHash === worklist["source-hash"]
       && record.atomInventoryHash === worklist["atom-inventory-hash"]
-      && record.translationCacheHash === translationCacheHash
       && record.candidateRevision === context.config.candidateRevision
       && record.promptRevision === context.config.choicePromptRevision
       && record.inputHash === inputHash)
@@ -904,9 +1096,9 @@ async function composeCandidates({ context, worklist, translations }) {
         return;
       }
       const row = { ...common, status: "no-available-decomposition", response: "" };
-      compositionById.set(row.id, row);
+      rememberComposition(row);
       compositionRecords.push(row);
-      await persistCompositions();
+      await persistCompositions([row]);
       return;
     }
     if (prior) {
@@ -927,6 +1119,7 @@ async function composeCandidates({ context, worklist, translations }) {
     let row;
     try {
       compositionCallCount += 1;
+      markProviderSubmission(context);
       rawResponse = await compositionTransport({
         sense,
         input,
@@ -956,9 +1149,9 @@ async function composeCandidates({ context, worklist, translations }) {
         response: String(rawResponse).slice(0, 4000)
       };
     }
-    compositionById.set(row.id, row);
+    rememberComposition(row);
     compositionRecords.push(row);
-    await persistCompositions();
+    await persistCompositions([row]);
   };
   const compositionWidth = Math.max(1, Math.trunc(Number(context.config.parallelism) || 1));
   await runSenseCompoundChoiceWaves(compositionSenses, {
@@ -1101,7 +1294,9 @@ async function updateProgress(context, worklistRows, candidateRows, decisions) {
   }
   context.progressRecords = [...bySense.values()];
   const path = join(context.artifactDirectory, "progress.pya");
-  await atomicWrite(path, renderRowsPya(PROGRESS_NAME, "wordnet-sense-compound-progress-v1", context.progressRecords));
+  const updatedRecords = worklistRows.map((sense) => bySense.get(sense.senseId)).filter(Boolean);
+  await appendArtifactRows(context, path, PROGRESS_NAME, "wordnet-sense-compound-progress-v1", updatedRecords);
+  context.sweepState.progressBySense = bySense;
   const remainingCount = (context.fullWorklist ?? []).filter((sense) => {
     const progress = bySense.get(sense.senseId);
     return !context.completedSenseIds?.has(sense.senseId) && !isProcessedProgress(progress);
@@ -1181,20 +1376,46 @@ async function recordAndPromoteChoices({ context, candidates }) {
   if (!decisionRevision) throw invalid("WordNet compound decision revision is not configured");
   const decisionsPath = context.dependencies.decisionsPath
     ?? fileURLToPath(ENGLISH_WORDNET_COMPOUND_DECISIONS_URL);
-  const decisionState = context.dependencies.loadDecisions
-    ? await context.dependencies.loadDecisions()
-    : await loadEnglishWordNetCompoundDecisions();
-  const decisionsById = new Map(decisionState.rows.map((record) => [record.candidateId, record]));
-  const persistDecisions = async () => {
-    const rows = [...decisionsById.values()];
+  const sweepState = context.sweepState;
+  const candidateIds = candidateRows.map((candidate) => candidate.id);
+  let decisionById;
+  if (context.dependencies.loadDecisions) {
+    const decisionState = await context.dependencies.loadDecisions({ candidateIds });
+    const candidateIdSet = new Set(candidateIds);
+    decisionById = new Map(decisionState.rows
+      .filter((record) => candidateIdSet.has(record.candidateId))
+      .map((record) => [record.candidateId, record]));
+  } else {
+    if (!sweepState.decisionOffsetIndex) {
+      sweepState.decisionOffsetIndex = await createEnglishWordNetCompoundDecisionOffsetIndex({ url: decisionsPath });
+    }
+    decisionById = (await sweepState.decisionOffsetIndex.load(candidateIds)).byId;
+  }
+  const decisionsById = decisionById;
+  const persistDecisions = async (rows) => {
+    if (rows.length === 0) return;
     if (typeof context.dependencies.saveDecisions === "function") {
-      await context.dependencies.saveDecisions(rows, decisionsPath);
+      await context.dependencies.saveDecisions([...decisionsById.values()], decisionsPath);
       return;
     }
-    await atomicWrite(decisionsPath, renderEnglishWordNetCompoundDecisions(rows));
+    let exists = false;
+    let appendOffset = 0;
+    try {
+      const metadata = await stat(decisionsPath);
+      exists = metadata.size > 0;
+      appendOffset = metadata.size;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    if (!exists) {
+      await atomicWrite(decisionsPath, renderEnglishWordNetCompoundDecisions([]));
+      appendOffset = (await stat(decisionsPath)).size;
+    }
+    await appendFile(decisionsPath, rows.map(renderEnglishWordNetCompoundDecisionAppend).join(""), "utf8");
+    sweepState.decisionOffsetIndex?.noteAppended(rows, appendOffset);
   };
   const usedTargetIds = allocatedTargetIds(context.allocation);
-  let decisionsChanged = false;
+  const newDecisions = [];
   for (const candidate of candidateRows) {
     const prior = decisionsById.get(candidate.id);
     if (prior?.decisionRevision === decisionRevision && !context.config.senseIds?.includes(candidate.senseId)) continue;
@@ -1210,15 +1431,20 @@ async function recordAndPromoteChoices({ context, candidates }) {
       decision.verificationRationale = "The selected atoms failed deterministic source, sense, or order evidence validation.";
     }
     decisionsById.set(decision.candidateId, decision);
-    decisionsChanged = true;
+    newDecisions.push(decision);
   }
   const candidateDecisions = candidateRows.map((candidate) => decisionsById.get(candidate.id)).filter(Boolean);
-  if (decisionsChanged) await persistDecisions();
+  await persistDecisions(newDecisions);
   const accepted = candidateDecisions.filter((record) => acceptedDecision(record));
   if (accepted.length > 0) {
     const promoted = await (context.dependencies.promoteAccepted ?? promoteAcceptedCompounds)(accepted, { usedTargetIds, decisionRevision });
-    for (const decision of promoted.decisions) decisionsById.set(decision.candidateId, decision);
-    await persistDecisions();
+    const changedPromotions = [];
+    for (const decision of promoted.decisions) {
+      const previous = decisionsById.get(decision.candidateId);
+      decisionsById.set(decision.candidateId, decision);
+      if (stableJson(previous ?? null) !== stableJson(decision)) changedPromotions.push(decision);
+    }
+    await persistDecisions(changedPromotions);
   }
   const completed = candidateRows.map((candidate) => decisionsById.get(candidate.id)).filter(Boolean);
   const progress = await updateProgress(context, context.worklist ?? [], candidateRows, completed);
@@ -1388,12 +1614,21 @@ async function runInitializedRefinery({
   const stableRunId = runId || wordNetSenseCompoundRunId({ sourceHash: allocation.sourceHash, promptRevision: config.promptRevision });
   const artifactDirectory = join(resolve(artifactRoot), stableRunId);
   await mkdir(artifactDirectory, { recursive: true });
+  const sweepState = dependencies.sweepState ?? {};
+  if (sweepState.artifactDirectory && sweepState.artifactDirectory !== artifactDirectory) {
+    throw invalid("sweep state cannot be reused for another artifact directory", {
+      expected: artifactDirectory,
+      actual: sweepState.artifactDirectory
+    });
+  }
+  sweepState.artifactDirectory = artifactDirectory;
   const context = {
     config,
     dependencies,
     allocation,
     runId: stableRunId,
     artifactDirectory,
+    sweepState,
     interpretFn,
     parseFn,
     translationState: null,

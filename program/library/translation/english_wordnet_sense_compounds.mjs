@@ -1,4 +1,7 @@
 import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { stat } from "node:fs/promises";
+import { createInterface } from "node:readline";
 
 import { buildProgram } from "../../program.mjs";
 import { recordExchangeJsonArtifact } from "../../bridge/exchange.mjs";
@@ -764,46 +767,102 @@ export function parseWordNetSenseTranslationResponsePartial(value, {
   };
 }
 
-export function parseWordNetSenseTranslationCache(source) {
-  if (typeof source !== "string") throw invalid("sense translation cache must be Pyash text");
-  const sentences = buildProgram(source).sentences;
-  const header = sentences.find((sentence) => sentence?.mood === "def"
-    && sentence?.be === "map"
-    && sentence?.su?.name === ENGLISH_WORDNET_SENSE_TRANSLATION_CACHE_NAME);
-  if (!header) throw invalid("sense translation cache has no canonical map header");
-  const metadata = {};
-  const records = [];
-  const ids = new Set();
+function createTranslationCacheParseState(senseIds = null) {
+  return {
+    metadata: {},
+    recordsById: new Map(),
+    hasHeader: false,
+    selectedSenseIds: Array.isArray(senseIds) ? new Set(senseIds.map(text).filter(Boolean)) : null
+  };
+}
+
+function addTranslationCacheSentences(sentences, state, indexOffset = 0) {
   for (const [index, sentence] of sentences.entries()) {
-    if (sentence?.mood !== "ya" || typeof sentence.su?.text !== "string") continue;
-    if (sentence.su.text.startsWith("meta:")) {
-      metadata[sentence.su.text.slice("meta:".length)] = sentence.ob?.text ?? "";
+    if (sentence?.mood === "def" && sentence?.be === "map"
+      && sentence?.su?.name === ENGLISH_WORDNET_SENSE_TRANSLATION_CACHE_NAME) {
+      state.hasHeader = true;
       continue;
     }
-    if (typeof sentence.ob?.text !== "string") throw invalid("sense translation cache row requires JSON text", { index });
+    if (sentence?.mood !== "ya" || typeof sentence.su?.text !== "string") continue;
+    if (sentence.su.text === "format") continue;
+    if (sentence.su.text.startsWith("meta:")) {
+      state.metadata[sentence.su.text.slice("meta:".length)] = sentence.ob?.text ?? "";
+      continue;
+    }
+    const rowIndex = indexOffset + index;
+    if (typeof sentence.ob?.text !== "string") throw invalid("sense translation cache row requires JSON text", { index: rowIndex });
     let record;
     try {
       record = JSON.parse(sentence.ob.text);
     } catch (error) {
-      throw invalid("sense translation cache row contains malformed JSON", { index, cause: error.message });
+      throw invalid("sense translation cache row contains malformed JSON", { index: rowIndex, cause: error.message });
     }
     if (record?.id !== sentence.su.text
       || record.id !== senseTranslationKey(record)
       || !text(record.senseId)
-      || !Array.isArray(record.translations)
-      || ids.has(record.id)) {
-      throw invalid("sense translation cache row has an invalid or duplicated identity", { index, id: sentence.su.text });
+      || !Array.isArray(record.translations)) {
+      throw invalid("sense translation cache row has an invalid identity", { index: rowIndex, id: sentence.su.text });
     }
-    ids.add(record.id);
-    records.push(record);
+    if (state.selectedSenseIds && !state.selectedSenseIds.has(record.senseId)) continue;
+    // The cache is an append-only Pyash map: a later row with the same stable
+    // sense key records an updated partial/complete translation.
+    state.recordsById.set(record.id, record);
   }
+}
+
+function finishTranslationCacheParse(state) {
+  if (!state.hasHeader) throw invalid("sense translation cache has no canonical map header");
+  const records = [...state.recordsById.values()];
   records.sort((left, right) => left.senseId.localeCompare(right.senseId));
   return {
     format: ENGLISH_WORDNET_SENSE_COMPOUNDS_FORMAT,
-    metadata,
+    metadata: state.metadata,
     records,
     bySense: new Map(records.map((record) => [record.senseId, record]))
   };
+}
+
+export function parseWordNetSenseTranslationCache(source) {
+  if (typeof source !== "string") throw invalid("sense translation cache must be Pyash text");
+  const state = createTranslationCacheParseState();
+  addTranslationCacheSentences(buildProgram(source).sentences, state);
+  return finishTranslationCacheParse(state);
+}
+
+export async function readWordNetSenseTranslationCacheFile(filePath, { senseIds = null } = {}) {
+  try {
+    if ((await stat(filePath)).size === 0) {
+      const empty = createTranslationCacheParseState(senseIds);
+      empty.hasHeader = true;
+      return finishTranslationCacheParse(empty);
+    }
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      const empty = createTranslationCacheParseState(senseIds);
+      empty.hasHeader = true;
+      return finishTranslationCacheParse(empty);
+    }
+    throw error;
+  }
+  const state = createTranslationCacheParseState(senseIds);
+  const input = createReadStream(filePath, { encoding: "utf8" });
+  const lines = createInterface({ input, crlfDelay: Infinity });
+  let sentenceOffset = 0;
+  for await (const line of lines) {
+    const sentences = buildProgram(line).sentences;
+    addTranslationCacheSentences(sentences, state, sentenceOffset);
+    sentenceOffset += sentences.length;
+  }
+  return finishTranslationCacheParse(state);
+}
+
+export function renderWordNetSenseTranslationCacheEntry(record) {
+  const id = text(record?.id);
+  if (!id || id !== senseTranslationKey(record) || !text(record?.senseId)
+    || !Array.isArray(record?.translations)) {
+    throw invalid("sense translation cache entry has an invalid identity", { id });
+  }
+  return `su text ${JSON.stringify(id)} ob text ${JSON.stringify(JSON.stringify(record))} ya\n`;
 }
 
 export function renderWordNetSenseTranslationCache(records = [], metadata = {}) {
@@ -819,7 +878,7 @@ export function renderWordNetSenseTranslationCache(records = [], metadata = {}) 
       throw invalid("sense translation cache renderer received an invalid or duplicate identity", { id });
     }
     seen.add(id);
-    lines.push(`su text ${JSON.stringify(id)} ob text ${JSON.stringify(JSON.stringify(record))} ya`);
+    lines.push(renderWordNetSenseTranslationCacheEntry(record).trimEnd());
   }
   lines.push("prah", "");
   return lines.join("\n");
@@ -1687,6 +1746,7 @@ export async function translateWordNetSenseWave({
   submit,
   awaitHandle,
   onCache,
+  onCacheEntry,
   onFailure
 } = {}) {
   if (!Array.isArray(senses) || typeof submit !== "function" || typeof awaitHandle !== "function") {
@@ -1701,8 +1761,10 @@ export async function translateWordNetSenseWave({
   let cacheWrite = Promise.resolve();
   const cacheSnapshot = () => [...cache.values()].sort((left, right) => left.senseId.localeCompare(right.senseId));
   const persistRecord = (record) => {
-    if (typeof onCache !== "function") return Promise.resolve();
-    cacheWrite = cacheWrite.then(() => onCache(cacheSnapshot(), record));
+    if (typeof onCacheEntry !== "function" && typeof onCache !== "function") return Promise.resolve();
+    cacheWrite = cacheWrite.then(() => typeof onCacheEntry === "function"
+      ? onCacheEntry(record)
+      : onCache(cacheSnapshot(), record));
     return cacheWrite;
   };
   const describeError = (error) => {

@@ -77,6 +77,7 @@ BASE_SHA=''
 DEV_SHA=''
 TEST_SUMMARY=''
 TIER_SUMMARY=''
+MERGE_INPUTS=''
 finish() {
   local exit_code=$?
   trap - EXIT
@@ -101,6 +102,9 @@ write_result() {
     printf 'su name source commit ob text "%s" ya\n' "$BASE_SHA"
     printf 'su name source dev branch ob text "%s" ya\n' "$DEV_BRANCH"
     printf 'su name source dev commit ob text "%s" ya\n' "$DEV_SHA"
+    if [[ -n "$MERGE_INPUTS" ]]; then
+      printf 'su name remote branch inputs ob text "%s" ya\n' "$MERGE_INPUTS"
+    fi
     printf 'su name push remotes ob text "%s" ya\n' "$PUSH_REMOTES"
     printf 'su name codex model ob text "%s" ya\n' "$MODEL"
     printf 'su name reasoning effort ob text "%s" ya\n' "$REASONING"
@@ -141,6 +145,7 @@ if (( ${#push_remote_names[@]} == 0 )); then
   exit 2
 fi
 declare -A fetched_remotes=()
+remote_names=()
 for remote_name in "$REMOTE" "${push_remote_names[@]}"; do
   if ! [[ "$remote_name" =~ ^[A-Za-z0-9._-]+$ ]]; then
     printf 'invalid git remote name: %s\n' "$remote_name" >&2
@@ -157,34 +162,38 @@ for remote_name in "$REMOTE" "${push_remote_names[@]}"; do
     "+refs/heads/$BRANCH:refs/remotes/$remote_name/$BRANCH" \
     "+refs/heads/$DEV_BRANCH:refs/remotes/$remote_name/$DEV_BRANCH"
   fetched_remotes[$remote_name]=1
+  remote_names+=("$remote_name")
 done
 
 BASE_SHA=$(git -C "$REPOSITORY" rev-parse "refs/remotes/$REMOTE/$BRANCH")
 DEV_SHA=$(git -C "$REPOSITORY" rev-parse "refs/remotes/$REMOTE/$DEV_BRANCH")
-for push_remote in "${push_remote_names[@]}"; do
-  remote_master=$(git -C "$REPOSITORY" rev-parse "refs/remotes/$push_remote/$BRANCH")
-  remote_dev=$(git -C "$REPOSITORY" rev-parse "refs/remotes/$push_remote/$DEV_BRANCH")
-  if [[ "$remote_master" != "$BASE_SHA" || "$remote_dev" != "$DEV_SHA" ]]; then
-    printf 'remote branch refs disagree; refusing to test or promote\n'
-    printf '%s: %s=%s %s=%s\n' "$REMOTE" "$BRANCH" "$BASE_SHA" "$DEV_BRANCH" "$DEV_SHA"
-    printf '%s: %s=%s %s=%s\n' "$push_remote" "$BRANCH" "$remote_master" "$DEV_BRANCH" "$remote_dev"
-    FINAL_STATUS=remote-divergence
-    exit 1
-  fi
+for branch_name in "$BRANCH" "$DEV_BRANCH"; do
+  for remote_name in "${remote_names[@]}"; do
+    branch_sha=$(git -C "$REPOSITORY" rev-parse "refs/remotes/$remote_name/$branch_name")
+    if [[ -n "$MERGE_INPUTS" ]]; then MERGE_INPUTS+=" "; fi
+    MERGE_INPUTS+="$remote_name/$branch_name=$branch_sha"
+  done
 done
+printf 'remote branch tips selected for merge: %s\n' "$MERGE_INPUTS"
 
 SHORT_SHA=${DEV_SHA:0:12}
 BRANCH_NAME="local-$BRANCH-safety/$SHORT_SHA-$RUN_ID"
 WORKTREE="$WORKTREE_PARENT/.pyash-$BRANCH-safety-$RUN_ID"
 printf 'testing proposed merge: %s %s + %s %s\nworktree: %s\n' "$REMOTE" "$BASE_SHA" "$DEV_BRANCH" "$DEV_SHA" "$WORKTREE"
 git -C "$REPOSITORY" worktree add -b "$BRANCH_NAME" "$WORKTREE" "$BASE_SHA"
-if ! git -C "$WORKTREE" -c user.name='Pyash Maintainer' -c user.email='pyash-maintainer@localhost' \
-  merge --no-edit "$DEV_SHA"; then
-  printf 'dev/master merge conflict; preserving the candidate worktree for review\n'
-  KEEP_WORKTREE=1
-  FINAL_STATUS=merge-conflict
-  exit 1
-fi
+for branch_name in "$BRANCH" "$DEV_BRANCH"; do
+  for remote_name in "${remote_names[@]}"; do
+    merge_sha=$(git -C "$REPOSITORY" rev-parse "refs/remotes/$remote_name/$branch_name")
+    printf 'merging %s/%s at %s into candidate\n' "$remote_name" "$branch_name" "$merge_sha"
+    if ! git -C "$WORKTREE" -c user.name='Pyash Maintainer' -c user.email='pyash-maintainer@localhost' \
+      merge --no-edit "$merge_sha"; then
+      printf 'branch tip merge conflict; preserving the candidate worktree for review\n'
+      KEEP_WORKTREE=1
+      FINAL_STATUS=merge-conflict
+      exit 1
+    fi
+  done
+done
 CANDIDATE_COMMIT=$(git -C "$WORKTREE" rev-parse HEAD)
 printf 'proposed merge commit: %s\n' "$CANDIDATE_COMMIT"
 
@@ -278,7 +287,7 @@ if [[ "$FINAL_STATUS" == passed ]]; then
       printf 'verified repair is recorded on the tested merge candidate\n'
     fi
   fi
-  printf 'full CI-tier suite passed for %s + %s\n' "$BASE_SHA" "$DEV_SHA"
+  printf 'full CI-tier suite passed for all fetched branch tips\n'
 fi
 
 if [[ "$FINAL_STATUS" == passed ]]; then

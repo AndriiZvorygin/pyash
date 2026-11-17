@@ -232,17 +232,21 @@ test("compound sweep rechecks live work across chunks without rebuilding frequen
   const signatures = ["before", "after-one", "after-one", "after-two", "after-two"];
   let chunks = 0;
   let allocationReads = 0;
+  const sweepStates = [];
+  const reports = [];
 
   try {
     const result = await runWordNetSenseCompoundRefinerySweepCommand({
       repositoryRoot,
       artifactRoot: path.join(repositoryRoot, "artifacts"),
       runId: "sense-compound-sweep-test",
-      report: () => {},
+      report: (line) => reports.push(JSON.parse(line)),
       dependencies: {
         prepareAllocation: async () => ({ sourceHash: `test-source-${++allocationReads}` }),
         progressSignature: async () => signatures.shift(),
-        runChunk: async () => {
+        runChunk: async ({ sweepState }) => {
+          sweepStates.push(sweepState);
+          if (chunks > 0) sweepState.firstProviderSubmissionAt = sweepState.previousBatchCompletedAt + 7;
           const remainingSenseCount = remainingCounts[chunks];
           chunks += 1;
           return {
@@ -260,6 +264,12 @@ test("compound sweep rechecks live work across chunks without rebuilding frequen
     assert.equal(result.batchCount, 3);
     assert.equal(chunks, 3);
     assert.equal(allocationReads, 1);
+    assert.ok(sweepStates[0]);
+    assert.equal(sweepStates[1], sweepStates[0]);
+    assert.equal(sweepStates[2], sweepStates[0]);
+    assert.equal(reports[0].rolloverToFirstSubmissionMs, null);
+    assert.equal(reports[1].rolloverToFirstSubmissionMs, 7);
+    assert.equal(reports[2].rolloverToFirstSubmissionMs, 7);
   } finally {
     if (oldFixture === undefined) delete process.env.PYA_MIND_RESPONSE;
     else process.env.PYA_MIND_RESPONSE = oldFixture;

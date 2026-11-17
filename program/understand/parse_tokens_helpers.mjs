@@ -57,5 +57,13 @@ export function parseClause(words, startIdx, { parseTokens, quotedText }) {
     }
     clauseTokens.push(word);
   }
-  throw new Error("subordinate clause missing ko");
+  const error = new Error("subordinate clause missing ko");
+  error.code = "pyash-subordinate-clause-missing-ko";
+  error.parseDiagnostic = {
+    kind: "unclosed-subordinate-clause",
+    clauseStartIndex: startIdx,
+    unmatchedDepth: depth,
+    clauseTokenCount: clauseTokens.length
+  };
+  throw error;
 }

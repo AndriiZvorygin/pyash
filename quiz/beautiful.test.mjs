@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 
 import { npToPyash, sentenceToPyash } from "../program/beautiful.mjs";
 import { parse } from "../program/understand/index.mjs";
+import { pyaTextToJson } from "../program/library/pya_to_json.mjs";
 
 test("npToPyash renders {name: X}", () => {
   assert.equal(npToPyash({ name: "collector" }), "name collector");
@@ -95,4 +96,32 @@ test("sentenceToPyash preserves typed as selectors for CLI round trips", () => {
 
   assert.match(rendered, /as wo cluster-compress/u);
   assert.deepEqual(parse(rendered)?.as, parsed.as);
+});
+
+test("sentenceToPyash quotes map names that contain grammar role words", async () => {
+  const name = "coding saddle request 1 tools 1 function parameters properties ob";
+  const source = [
+    sentenceToPyash({ mood: "def", su: { name }, be: "json map" }),
+    sentenceToPyash({ mood: "ya", su: { name: "type" }, ob: { text: "string" }, be: "text" }),
+    sentenceToPyash({ mood: "prah", su: { name } })
+  ].join("\n");
+
+  const result = await pyaTextToJson(source);
+  const map = result.memory.find((sentence) => sentence.su?.name === name);
+
+  assert.ok(map, `expected map named ${name}`);
+  assert.equal(map.be, "json map");
+  assert.equal(map.ob.map.type.text, "string");
+});
+
+test("sentenceToPyash preserves multiline text containing its quote terminator", () => {
+  const text = "first line\nquoted.text.inside.text.quoted\nlast line";
+  const rendered = sentenceToPyash({
+    mood: "ya",
+    su: { name: "prompt" },
+    ob: { text },
+    be: "text"
+  });
+
+  assert.equal(parse(rendered)?.ob?.text, text);
 });

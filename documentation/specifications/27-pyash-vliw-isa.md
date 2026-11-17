@@ -186,7 +186,34 @@ unfulfilled dependencies, duplicate writers, invalid types, and unsupported
 effects. It MUST NOT turn an execution failure into a different successful
 sentence.
 
-## 6. Conceptual interfaces
+## 6. Target capabilities and lowering
+
+The portable semantic core is a **minimum contract, not a performance ceiling**.
+Each target profile MUST declare its capabilities. An operation may be native,
+lowered to supported operations, or unavailable. A backend SHOULD select the
+fastest valid implementation and MAY emit variants for runtime target
+selection. Capability selection MUST be explicit and reproducible; similar
+instruction names do not establish equivalent semantics.
+
+A fallback MUST preserve specified results, effects, and ordering. Numerical
+approximation is valid only within a tolerance declared by the operation's
+contract. A backend MUST reject an operation when no implementation meets its
+contract.
+
+| Operation need | Possible native implementation | Possible fallback |
+| --- | --- | --- |
+| Integer multiply | Target multiply instruction | Shift/add sequence when the type and cost policy permit it |
+| Vector arithmetic | Vector or SIMD instruction | Scalar operations over the elements |
+| Matrix multiply | Target matrix/tensor unit | Vectorized or scalar multiply-accumulate |
+| Population count | Target bit-count instruction | Shift-and-count sequence or lookup implementation |
+
+These are implementation choices, not new Pyash syntax or performance
+guarantees. Targets such as x86-64, RISC-V, NVIDIA PTX, AMD GFX ISA, and future
+VLIW ASICs may provide their own implementations. Capabilities do not allocate
+identities or reuse reserved bits in the legacy 16-word codelet; an operation
+absent from its mapping requires an explicit, versioned encoding.
+
+## 7. Conceptual interfaces
 
 These signatures describe the semantic boundary. The JavaScript reference
 facade below implements the currently proven subset:
@@ -208,20 +235,21 @@ adapters and rejects other semantic codelets explicitly. The host language,
 OpenCL, or another
 backend is an implementation choice behind this boundary.
 
-A destination compiles a codelet into the machine code that computes the same
-result the interpreter produces. The compiled program MUST agree with
-interpreted execution on every value, including the saturation the numeric
-semantics apply, and a destination MUST reject a codelet it cannot compile
-rather than approximate it.
+A destination compiles a codelet into machine code that computes the result the
+interpreter produces. It MAY use native target capabilities or lower operations
+to simpler instructions, but the compiled program MUST preserve interpreted
+results, including the saturation the numeric semantics apply, and all
+observable effects. An explicitly approximate semantic operation is permitted
+only under its declared tolerance. If neither native nor fallback lowering
+satisfies the contract, the destination MUST reject the codelet.
 
-## 7. Compatibility examples
+## 8. Compatibility examples
 
 The following are golden vectors, not new syntax:
 
-1. The legacy README example `hyikdoyu hyikdoka plustu` MUST retain the
-   documented bytes
-   `0149 881D 0001 287E 881D 0001 245E 8A64 295E` and the result `tyutdoka li`
-   when run through the legacy-compatible surface.
+1. The numeric-plus sentence `ob num 1 to num 1 be plus do` MUST encode each
+   operand as quote type, value, then its grammatical-case HNUC, producing
+   `0149 881D 0001 245E 881D 0001 243E 8A64 295E` and result `2`.
 2. The legacy single-codelet form
    `0051 291D E928 28BE 245E E948 295E 0000 0000 0000 0000 0000 0000 0000 0000`
    MUST decode with its head, phrases, verb/mood, and unused tail intact.
@@ -255,8 +283,8 @@ The following are golden vectors, not new syntax:
    0003 0041 0067 0065 245E 217E`. Every element MUST keep its exact
    characters and its case.
 10. A destination MUST compile a codelet into machine code that computes the
-    interpreter's result. The golden codelet `0149 881D 0001 287E 881D 0001
-    245E 8A64 295E` MUST compile to a program that leaves the result `2` in
+    interpreter's result. The golden codelet `0149 881D 0001 245E 881D 0001
+    243E 8A64 295E` MUST compile to a program that leaves the result `2` in
     the first argument register, and an image that holds that program MUST be
     an executable whose entry point runs the program and stops.
 
@@ -266,7 +294,7 @@ dependency scheduling, single-writer enforcement, and interpreted versus
 decoded result paragraphs. Tests must include at least one source-language
 adapter and one unsupported-value rejection.
 
-## 8. Non-goals
+## 9. Non-goals
 
 This specification does not add HNUCs, alter parser vocabulary, define the
 catalog/container database, require a GPU, introduce a model server or queue,
@@ -277,7 +305,7 @@ not replace the current sentence/paragraph interpreter. The only
 conforming future implementation is one that can prove the sentence result
 and the legacy encoding bytes agree.
 
-## 9. Implementation references
+## 10. Implementation references
 
 The proven numeric-plus, quote, fixed-slot, typed-literal, named-fact, database,
 and facade slices are documented with their fixtures and implementation paths

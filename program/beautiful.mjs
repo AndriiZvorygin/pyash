@@ -18,6 +18,13 @@ for (const ctxKey of COMPOSITIONAL_CONTEXT_ORDER) {
 }
 
 const CASE_ORDER = ["su", "ob", "vyah", "fromindex", "atindex", "toindex", ...COMPOSITIONAL_PREPS];
+const NAME_BOUNDARIES = new Set([...CASE_ORDER, "be", "then", "else", "ta", "ret"]);
+
+function renderName(value) {
+  const name = String(value ?? "");
+  const needsQuotes = name.split(/\s+/u).some((part) => NAME_BOUNDARIES.has(part));
+  return needsQuotes ? JSON.stringify(name) : name;
+}
 
 // Render a NP like { name: "collector" } or { num: 7 }
 export function npToPyash(np = {}) {
@@ -28,9 +35,9 @@ export function npToPyash(np = {}) {
   if (typeof np.wo === "string" && np.wo) return `wo ${np.wo}`;
   if (np.name !== undefined) {
     if (Array.isArray(np.nameTypeWords) && np.nameTypeWords.length > 0) {
-      return `name ${np.nameTypeWords.join(" ")} ${np.name}`;
+      return `name ${np.nameTypeWords.join(" ")} ${renderName(np.name)}`;
     }
-    return `name ${np.name}`;
+    return `name ${renderName(np.name)}`;
   }
   if (np.hollow) return "hollow";
   if (np.boolean !== undefined) return `bool ${np.boolean ? "truth" : "lie"}`;
@@ -61,6 +68,9 @@ export function npToPyash(np = {}) {
         .replace(/\\r/gu, "\n");
     })();
     if (typeof renderText === "string" && /[\n\r]/.test(renderText)) {
+      if (renderText.includes(".text.quoted")) {
+        return `text ${JSON.stringify(renderText)}`;
+      }
       return `text quoted.text.${renderText}.text.quoted`;
     }
     return `text ${JSON.stringify(np.text)}`;

@@ -105,6 +105,8 @@ This stores parsed sentences and JSON under `output`; memory keeps the command, 
 - JavaScript: `from filename "quiz/sandpit/compile.txt" to state javascript to filename "quiz/sandpit/compile-output.js" be compile do`
 - Inline to JS text: see `examples/pyash/compile-text-to-js-text.pya`
 - Inline to C text: see `examples/pyash/compile-text-to-c-text.pya`
+- Pyash to a persisted PyAC VLIW pack, then C and native executable: run `./run examples/pyash/compile-vliw-constant-arithmetic.pya`, then compile `examples/out/vliw-constant-arithmetic.c`; see the [end-to-end VLIW compiler architecture](reference/pyash-vliw-compiler-architecture.md) and [semantic-slice evidence](reference/pyac-vliw-semantic-slices.md).
+- PyAC VLIW pack to C source: `from filename "program.pyac" fromstate pyac tostate c to filename "program.c" be compile do`; see `documentation/reference/pyac-vliw-semantic-slices.md` for the supported codelets.
 - Translate Pyash text to English text: see `examples/pyash/translate-text-to-english.pya`
 - Translate English text back to Pyash sentences: see `examples/pyash/translate-plus-to-english.pya` and related translation examples.
 - Translate simple JavaScript assignments/arithmetic back to Pyash sentences: see `examples/pyash/translate-javascript-to-pyash.pya`.

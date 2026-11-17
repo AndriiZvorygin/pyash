@@ -10,6 +10,9 @@ import { sentenceLineNumbersFromText, inlineSourceMap } from "./source_map.mjs";
 import { expandModulesForCompile } from "./module_imports.mjs";
 import { transpileProgram } from "./transpile_program.mjs";
 import { resolveCompiledCommandPolicy } from "../command_policy.mjs";
+import { compilePyacPackToC } from "./pyac_to_c.mjs";
+import { compilePyacPackToNasm } from "./pyac_to_nasm.mjs";
+import { encodePyacPack, lowerPyashProgram, lowerSentence } from "../vliw/index.mjs";
 
 function resolveStateValue(value) {
   if (!value) return "";
@@ -18,6 +21,22 @@ function resolveStateValue(value) {
   if (value?.text) return String(value.text);
   if (value?.name) return String(value.name);
   return "";
+}
+
+function lowerPyashSourceToPyac(sentences) {
+  const semanticCodelets = [];
+  try {
+    for (const sentence of sentences) {
+      semanticCodelets.push(...lowerSentence(sentence));
+    }
+    return semanticCodelets;
+  } catch (error) {
+    if (error?.code !== "unsupported-sentence" && error?.code !== "literal-width") throw error;
+  }
+
+  // The semantic codelet adapters cover proven slices; other representable
+  // Pyash sentences use the sentence-vector encoding consumed by the runtime.
+  return lowerPyashProgram(sentences).vectors;
 }
 
 export async function compile_from_filename_to_filename(sentence) {
@@ -33,6 +52,81 @@ export async function compile_from_filename_to_filename(sentence) {
     sentence?.ob?.filename ??
     sentence?.filename;
   const sourceFilename = resolveSandboxPath(sourceFilenameRaw);
+
+  const sourceState = String(
+    sentence?.fromstate?.name ??
+    sentence?.fromstate?.wo ??
+    sentence?.fromstate ??
+    ""
+  ).toLowerCase();
+  const targetState = String(
+    sentence?.tostate?.name ??
+    sentence?.tostate?.wo ??
+    sentence?.become?.name ??
+    sentence?.become?.wo ??
+    "javascript"
+  ).toLowerCase();
+
+  if (sourceState === "pyac") {
+    if (targetState !== "c" && targetState !== "nasm") {
+      throwErrorSentence({
+        name: "compile error",
+        message: `compile: PyAC VLIW input currently supports C and NASM output, not ${targetState || "an unspecified target"}`,
+        from: { name: "compile" }
+      });
+    }
+    if (!sourceFilename) {
+      throwErrorSentence({
+        name: "compile error",
+        message: "compile: PyAC VLIW input requires a filename",
+        from: { name: "compile" }
+      });
+    }
+
+    let packBytes;
+    try {
+      packBytes = await fs.readFile(sourceFilename);
+    } catch (err) {
+      if (err?.code === "ENOENT") {
+        throwErrorSentence({
+          name: "file or directory unavailable error",
+          message: `file or directory unavailable: ${sourceFilename}`,
+          from: { name: "compile" }
+        });
+      }
+      throw err;
+    }
+
+    let body;
+    try {
+      body = targetState === "nasm"
+        ? compilePyacPackToNasm(packBytes)
+        : compilePyacPackToC(packBytes);
+    } catch (error) {
+      throwErrorSentence({
+        name: "compile error",
+        message: error?.message ?? `compile: PyAC VLIW lowering failed (${String(error)})`,
+        from: { name: "compile" },
+        raw: { code: error?.code ?? null, details: error?.details ?? null }
+      });
+    }
+
+    const targetFilenameRaw = sentence?.to?.filename;
+    const targetFilename = resolveSandboxPath(targetFilenameRaw);
+    if (targetFilename) await fs.writeFile(targetFilename, body, "utf8");
+
+    const wrappedText = `quoted.${targetState}.\n${body}.${targetState}.quoted`;
+    const targetName = sentence?.to?.name ?? sentence?.totext?.name ?? sentence?.su?.name;
+    if (targetName) {
+      doRemember({
+        su: { name: targetName },
+        be: targetState,
+        ob: { text: wrappedText },
+        mood: "ya"
+      });
+    }
+    return { ob: { text: wrappedText }, be: targetState };
+  }
 
   let sourceText = sentence?.fromtext?.text ?? sentence?.from?.text ?? sentence?.text ?? sentence?.ob?.text;
 
@@ -63,22 +157,58 @@ export async function compile_from_filename_to_filename(sentence) {
     });
   }
 
-  const sourceState = String(
-    sentence?.fromstate?.name ??
-    sentence?.fromstate?.wo ??
-    sentence?.fromstate ??
-    ""
-  ).toLowerCase();
   if (!sourceState || sourceState === "pyash") {
     sourceText = sourceText.replaceAll("\\n", "\n");
   }
-  const targetState = String(
-    sentence?.tostate?.name ??
-    sentence?.tostate?.wo ??
-    sentence?.become?.name ??
-    sentence?.become?.wo ??
-    "javascript"
-  ).toLowerCase();
+
+  if (targetState === "pyac") {
+    if (sourceState && sourceState !== "pyash") {
+      throwErrorSentence({
+        name: "compile error",
+        message: `compile: PyAC output currently requires Pyash input, not ${sourceState}`,
+        from: { name: "compile" }
+      });
+    }
+    const targetFilename = resolveSandboxPath(sentence?.to?.filename);
+    if (!targetFilename) {
+      throwErrorSentence({
+        name: "compile error",
+        message: "compile: PyAC output requires a destination filename",
+        from: { name: "compile" }
+      });
+    }
+
+    let pack;
+    try {
+      const program = buildProgram(sourceText);
+      if (program.sentences.length === 0) {
+        throw new Error("source contains no Pyash sentences");
+      }
+      const vectors = lowerPyashSourceToPyac(program.sentences);
+      if (vectors.length === 0) throw new Error("Pyash source contains no executable sentences");
+      pack = encodePyacPack(vectors);
+    } catch (error) {
+      throwErrorSentence({
+        name: "compile error",
+        message: `compile: Pyash to PyAC failed: ${error?.message ?? String(error)}`,
+        from: { name: "compile" },
+        raw: { code: error?.code ?? null, details: error?.details ?? null }
+      });
+    }
+
+    await fs.writeFile(targetFilename, pack);
+
+    const targetName = sentence?.to?.name ?? sentence?.totext?.name ?? sentence?.su?.name;
+    if (targetName) {
+      doRemember({
+        su: { name: targetName },
+        be: "pyac",
+        ob: { filename: targetFilename },
+        mood: "ya"
+      });
+    }
+    return { ob: { filename: targetFilename }, be: "pyac" };
+  }
 
   if (sourceState === "markdown" && (targetState === "html" || targetState === "pdf")) {
     const targetFilenameRaw = sentence?.to?.filename;

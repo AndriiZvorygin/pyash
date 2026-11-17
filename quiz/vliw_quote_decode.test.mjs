@@ -15,7 +15,7 @@ import {
 import { decodeNumericPlusCodelet } from "../program/library/vliw/plus.mjs";
 
 const onePlusOneWords = [
-  0x0149, 0x881d, 0x0001, 0x287e, 0x881d, 0x0001, 0x245e, 0x8a64,
+  0x0149, 0x881d, 0x0001, 0x245e, 0x881d, 0x0001, 0x243e, 0x8a64,
   0x295e, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000
 ];
 
@@ -110,8 +110,8 @@ test("legacy HNUC lookup returns Pyash spellings", () => {
   assert.equal(lookupLegacyWord(0x0149), null);
 });
 
-test("legacy numeric plus renders the historical Pyash surface", () => {
-  assert.equal(renderLegacyNumericPlusCodelet(onePlusOneWords), "hyikdoyu hyikdoka plustu");
+test("legacy numeric plus renders each Pyash case HNUC", () => {
+  assert.equal(renderLegacyNumericPlusCodelet(onePlusOneWords), "hyikdoka hyikdoma plustu");
   assert.deepEqual(decodeNumericPlusCodelet(onePlusOneWords), {
     mood: "do",
     ob: { num: 1 },

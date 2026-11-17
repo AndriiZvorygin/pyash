@@ -14,7 +14,10 @@ test("local maintainer tests the dev-to-master candidate in an isolated worktree
   const runner = read("run_local_master_safety.sh");
   assert.match(runner, /refs\/heads\/\$DEV_BRANCH:refs\/remotes\/\$remote_name\/\$DEV_BRANCH/u);
   assert.match(runner, /worktree add -b "\$BRANCH_NAME" "\$WORKTREE" "\$BASE_SHA"/u);
-  assert.match(runner, /merge --no-edit "\$DEV_SHA"/u);
+  assert.match(runner, /merge --no-edit "\$merge_sha"/u);
+  assert.match(runner, /for branch_name in "\$BRANCH" "\$DEV_BRANCH"/u);
+  assert.match(runner, /remote branch tips selected for merge/u);
+  assert.doesNotMatch(runner, /FINAL_STATUS=remote-divergence/u);
   assert.match(runner, /npm run test:ci/u);
   assert.match(runner, /git -C "\$WORKTREE" push --atomic "\$push_remote"/u);
   assert.match(runner, /\$PROMOTED_COMMIT:refs\/heads\/\$BRANCH/u);
@@ -201,6 +204,114 @@ exit 2
     assert.equal(git(["--git-dir", bare, "rev-parse", "refs/heads/dev"]), devCommit);
     assert.equal(fs.existsSync(resultMap["worktree path"].text), false);
     assert.match(fs.readFileSync(path.join(artifactDir, "run.log"), "utf8"), /promoted tested commit/u);
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("runner merges divergent master and dev tips from both remotes before promotion", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pyash-master-safety-divergent-remotes-"));
+  const repository = path.join(tempRoot, "repo");
+  const originBare = path.join(tempRoot, "origin.git");
+  const githubBare = path.join(tempRoot, "github.git");
+  const fakeBin = path.join(tempRoot, "bin");
+  fs.mkdirSync(path.join(repository, "command"), { recursive: true });
+  fs.mkdirSync(fakeBin);
+
+  const git = (args, cwd = repository) =>
+    execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe" }).trim();
+  git(["init", "--quiet"]);
+  git(["config", "user.name", "Safety Fixture"]);
+  git(["config", "user.email", "safety-fixture@example.test"]);
+  fs.copyFileSync(path.join(repoRoot, "command", "run_local_master_safety.sh"), path.join(repository, "command", "run_local_master_safety.sh"));
+  fs.chmodSync(path.join(repository, "command", "run_local_master_safety.sh"), 0o755);
+  fs.writeFileSync(path.join(repository, ".gitignore"), "artifacts/\n");
+  fs.writeFileSync(path.join(repository, "base.txt"), "common base\n");
+  git(["add", "."]);
+  git(["commit", "--quiet", "-m", "fixture common base"]);
+  git(["branch", "-M", "master"]);
+  const commonBase = git(["rev-parse", "HEAD"]);
+
+  fs.writeFileSync(path.join(repository, "origin-master.txt"), "origin master\n");
+  git(["add", "origin-master.txt"]);
+  git(["commit", "--quiet", "-m", "origin master change"]);
+  const originMaster = git(["rev-parse", "HEAD"]);
+
+  git(["checkout", "--quiet", "-b", "dev", commonBase]);
+  fs.writeFileSync(path.join(repository, "origin-dev.txt"), "origin dev\n");
+  git(["add", "origin-dev.txt"]);
+  git(["commit", "--quiet", "-m", "origin dev change"]);
+  const originDev = git(["rev-parse", "HEAD"]);
+
+  git(["checkout", "--quiet", "-b", "github-master", commonBase]);
+  fs.writeFileSync(path.join(repository, "github-master.txt"), "github master\n");
+  git(["add", "github-master.txt"]);
+  git(["commit", "--quiet", "-m", "github master change"]);
+  const githubMaster = git(["rev-parse", "HEAD"]);
+
+  git(["checkout", "--quiet", "-b", "github-dev", commonBase]);
+  fs.writeFileSync(path.join(repository, "github-dev.txt"), "github dev\n");
+  git(["add", "github-dev.txt"]);
+  git(["commit", "--quiet", "-m", "github dev change"]);
+  const githubDev = git(["rev-parse", "HEAD"]);
+  git(["checkout", "--quiet", "master"]);
+
+  for (const bare of [originBare, githubBare]) {
+    execFileSync("git", ["clone", "--bare", "--quiet", repository, bare], { stdio: "pipe" });
+  }
+  git(["--git-dir", originBare, "update-ref", "refs/heads/master", originMaster]);
+  git(["--git-dir", originBare, "update-ref", "refs/heads/dev", originDev]);
+  git(["--git-dir", githubBare, "update-ref", "refs/heads/master", githubMaster]);
+  git(["--git-dir", githubBare, "update-ref", "refs/heads/dev", githubDev]);
+  git(["remote", "add", "origin", originBare]);
+  git(["remote", "add", "github", githubBare]);
+
+  const fakeNpm = path.join(fakeBin, "npm");
+  fs.writeFileSync(fakeNpm, `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == ci ]]; then exit 0; fi
+if [[ "$1 $2" == "run test:ci" ]]; then
+  printf '  gating 10 files, reporting 2 without gating, excluding 1\\n'
+  printf '# tests 5\\n# pass 5\\n# fail 0\\n# skipped 0\\n# todo 0\\n# duration_ms 12.5\\n'
+  exit 0
+fi
+exit 2
+`);
+  fs.chmodSync(fakeNpm, 0o755);
+
+  try {
+    execFileSync("bash", [path.join(repository, "command", "run_local_master_safety.sh")], {
+      cwd: repository,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: `${fakeBin}:${process.env.PATH}`,
+        PYA_MASTER_SAFETY_REMOTE: "github",
+        PYA_MASTER_SAFETY_BRANCH: "master",
+        PYA_MASTER_SAFETY_REPOSITORY: repository,
+        PYA_MASTER_SAFETY_WORKTREE_PARENT: tempRoot,
+        PYA_MASTER_SAFETY_CODEX_BIN: "/bin/true",
+        PYA_MASTER_SAFETY_LOCK: path.join(tempRoot, "safety.lock")
+      },
+      stdio: "pipe"
+    });
+    const runRoot = path.join(repository, "artifacts", "local-master-safety");
+    const [runId] = fs.readdirSync(runRoot);
+    const artifactDir = path.join(runRoot, runId);
+    const result = await pyaFileToJson(path.join(artifactDir, "result.pya"));
+    const resultMap = result.memory[0]?.ob?.map;
+    const promoted = resultMap["promoted commit"].text;
+    assert.equal(resultMap.status.text, "promoted");
+    assert.match(resultMap["remote branch inputs"].text, new RegExp(`github/master=${githubMaster}`, "u"));
+    assert.match(resultMap["remote branch inputs"].text, new RegExp(`origin/dev=${originDev}`, "u"));
+    for (const remote of [originBare, githubBare]) {
+      assert.equal(git(["--git-dir", remote, "rev-parse", "refs/heads/master"]), promoted);
+      assert.equal(git(["--git-dir", remote, "rev-parse", "refs/heads/dev"]), promoted);
+    }
+    for (const input of [originMaster, originDev, githubMaster, githubDev]) {
+      git(["merge-base", "--is-ancestor", input, promoted]);
+    }
+    assert.equal(fs.existsSync(resultMap["worktree path"].text), false);
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }

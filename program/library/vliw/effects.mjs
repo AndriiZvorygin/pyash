@@ -14,31 +14,38 @@ function dependencyError(code, message, details = {}) {
 export function deriveSentenceEffects(sentence) {
   const reads = new Set();
   const writes = new Set();
-  addName(writes, sentence?.su);
+  const orderedWrites = new Set();
+  if (sentence?.mood === "que") addName(reads, sentence?.su);
+  else addName(writes, sentence?.su);
 
   for (const field of CASE_FIELDS) {
     const value = sentence?.[field];
     if (!value || typeof value !== "object") continue;
+    if (sentence?.mood === "que" && field === "ob" && value.name === "what") continue;
     if (field === "to" && sentence?.be !== "remains") {
       addName(writes, value);
       if (["plus", "subtract", "multiply", "divide", "invert"].includes(sentence?.be)) {
         addName(reads, value);
+        addName(orderedWrites, value);
       }
       continue;
     }
     if (field === "from" && ["subtract", "plus", "multiply", "divide"].includes(sentence?.be)) {
       addName(writes, value);
       addName(reads, value);
+      addName(orderedWrites, value);
       continue;
     }
     addName(reads, value);
   }
 
-  return {
+  const effects = {
     reads: [...reads].sort(),
     writes: [...writes].sort(),
     sideEffect: ["command", "read", "write", "repair", "interpret"].includes(sentence?.be)
   };
+  if (orderedWrites.size) effects.orderedWrites = [...orderedWrites].sort();
+  return effects;
 }
 
 export function analyzeCodeletDependencies(instructions) {
@@ -73,6 +80,7 @@ export function scheduleCodeletDependencies(instructions) {
       instruction,
       reads: effects.reads,
       writes: effects.writes,
+      orderedWrites: effects.orderedWrites ?? [],
       sideEffect: effects.sideEffect,
       dependencies: new Set()
     };
@@ -80,27 +88,43 @@ export function scheduleCodeletDependencies(instructions) {
   const writers = new Map();
   for (const entry of analysis) {
     for (const name of entry.writes) {
-      if (writers.has(name)) {
+      if (!writers.has(name)) writers.set(name, []);
+      writers.get(name).push(entry);
+    }
+  }
+
+  for (const [name, entries] of writers) {
+    for (let index = 1; index < entries.length; index += 1) {
+      const previous = entries[index - 1];
+      const current = entries[index];
+      if (!current.orderedWrites.includes(name)) {
         throw dependencyError("duplicate-writer", "multiple codelets write " + name, {
           name,
-          first: writers.get(name),
-          second: entry.index
+          first: previous.index,
+          second: current.index
         });
       }
-      writers.set(name, entry.index);
+      current.dependencies.add(previous.index);
     }
   }
 
   for (const entry of analysis) {
     for (const name of entry.reads) {
-      const writer = writers.get(name);
-      if (writer === undefined) {
+      const candidates = (writers.get(name) ?? []).filter((writer) => writer.index !== entry.index);
+      const prior = candidates.filter((writer) => writer.index < entry.index);
+      const producer = prior.at(-1) ?? candidates[0];
+      if (!producer) {
         throw dependencyError("unfulfilled-dependency", "codelet reads unfulfilled reference " + name, {
           name,
           index: entry.index
         });
       }
-      if (writer !== entry.index) entry.dependencies.add(writer);
+      entry.dependencies.add(producer.index);
+      for (const writer of candidates) {
+        if (writer.index > Math.max(entry.index, producer.index)) {
+          writer.dependencies.add(entry.index);
+        }
+      }
     }
   }
 
@@ -132,6 +156,7 @@ export function scheduleCodeletDependencies(instructions) {
     instruction: entry.instruction,
     reads: entry.reads,
     writes: entry.writes,
+    orderedWrites: entry.orderedWrites,
     dependencies: [...entry.dependencies].sort((left, right) => left - right),
     sideEffect: entry.sideEffect
   }));

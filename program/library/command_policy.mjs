@@ -1,6 +1,7 @@
 const WORD = (value) => ({ kind: "word", value });
 const SEQUENCE = (...values) => ({ kind: "sequence", values });
 const COMMAND = (value) => ({ kind: "command", value });
+const INTERNAL_MIND_RUNNER_COMMAND = /^(?:(?:[A-Z_][A-Z0-9_]*=(?:"[^"]*"|'[^']*'|[^\s]+)\s+)*)?(?:env\s+)?(?:(?:[A-Z_][A-Z0-9_]*=(?:"[^"]*"|'[^']*'|[^\s]+)\s+)*)(?:\S*[/\\])?node(?:\s+)(?:[^"'\s;&|]*[/\\])?mind_(?:ollama|openai)_runner\.mjs"?(?=\s|$)/iu;
 
 // This declarative table is the single classifier contract for the interpreter
 // and generated JavaScript/C runtimes.
@@ -140,6 +141,10 @@ export function classifyCommandText(commandText) {
     if (hasContractRule(cmd, entry.rules)) return entry.name;
   }
   return "unknown";
+}
+
+export function isInternalMindRunnerCommandText(commandText) {
+  return INTERNAL_MIND_RUNNER_COMMAND.test(String(commandText ?? "").trim());
 }
 
 export function normalizeCommandPolicyMode(value, fallback = "ask") {

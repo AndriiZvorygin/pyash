@@ -12,7 +12,7 @@ async function run(line) {
 test("extract returns source tail starting at since marker", async () => {
   forget();
   await run(`from text ${JSON.stringify("alpha # Session\nbeta\ngamma")} since text "# Session" to name text output be extract do`);
-  assert.equal(remember("output")?.ob?.text, "# Session\\nbeta\\ngamma");
+  assert.equal(remember("output")?.ob?.text, "# Session\nbeta\ngamma");
 });
 
 test("extract resolves named source and named markers", async () => {
@@ -21,13 +21,13 @@ test("extract resolves named source and named markers", async () => {
   await run('ob text "START" to name text begin marker be text do');
   await run('ob text "END" to name text stop marker be text do');
   await run('from name text source since name text begin marker until name text stop marker to name text output be extract do');
-  assert.equal(remember("output")?.ob?.text, "START\\nbody\\n");
+  assert.equal(remember("output")?.ob?.text, "START\nbody\n");
 });
 
 test("extract returns source head until marker", async () => {
   forget();
   await run(`from text ${JSON.stringify("preface\n# Session\nbody")} until text "# Session" to name text output be extract do`);
-  assert.equal(remember("output")?.ob?.text, "preface\\n");
+  assert.equal(remember("output")?.ob?.text, "preface\n");
 });
 
 test("extract errors when since marker is missing", async () => {

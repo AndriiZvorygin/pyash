@@ -61,6 +61,11 @@ catalogs remain canonical. Catalog reads use asynchronous file I/O and query onl
 sense, target, and alias rows before parsing them.
 `kwon` is a one-shot Node command, so multiple terms in one invocation share its loaded
 indexes; module callers also reuse process-local in-flight loads.
+SUMO's WordNet 3.0 mappings are available as versioned, relation-preserving evidence through
+`node command/sumo_wordnet_import.mjs`; the importer crosswalks by sense key through WordNet
+3.1 into Open English WordNet 2025 and keeps its generated catalog and index under ignored
+`know/sumo/`. See [SUMO and WordNet evidence in Kwon](../../../documentation/reference/sumo-wordnet-integration.md)
+for the source pins, lookup examples, mapping semantics, and license notice.
 The bounded sense-linking worker is configured in `english_wordnet_linker.pya`. Its
 `english_wordnet_linker.mjs` module emits one stable record per WordNet sense, accepts only
 targets present in the supplied inventory, and submits unresolved records through the existing

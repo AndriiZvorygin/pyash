@@ -32,11 +32,16 @@ For several related terms, pass them in one `kwon term-one term-two` call to sha
 loaded indexes.
 
 The English, Pyac, and POS-qualified WordNet sidecar lookup indexes are generated from the
-canonical catalogs and checked against their source hashes. A stale index produces one warning
-after query results, with changed catalog paths and the rebuild command. Lookups scan changed
-sources in memory, so current vocabulary additions remain searchable while the persistent
-sidecar is stale. After editing catalogs, run `node command/vocab_lookup_index.mjs` to persist
-refreshed indexes. The source catalogs remain the canonical records.
+canonical catalogs. Normal queries use the current sidecar postings without hashing or scanning
+source catalogs, so lookup remains fast while vocabulary grows. Results can lag the canonical
+catalogs until the next refresh; if a rewrite moves a stored byte offset, Kwon skips the row when
+its record identity no longer matches instead of returning a different record.
+
+Indexes refresh hourly from the schedule in
+`world/house/refinery-watchdog/conduct/calendar.pya`, under `kwon lookup index refresh schedule`
+(default: `minute 17 every hour`). Set that value to `disabled` to remove the refresh, then apply
+the calendar with `node world/house/refinery-watchdog/program/install-cron.mjs`. To refresh
+immediately, run `node command/vocab_lookup_index.mjs`. The source catalogs remain canonical.
 
 ## Canonical words over legacy aliases
 

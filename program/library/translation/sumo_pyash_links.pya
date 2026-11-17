@@ -1,0 +1,3 @@
+su name sumo_pyash_links be map def
+su text "pyash:command-session" ob text "{\"kind\":\"pyash-concept\",\"label\":\"command-session\",\"aliases\":[\"interactive command session\"],\"definition\":\"A persistent interactive channel for input and output with a running command process.\",\"pyashSequence\":[\"myin\",\"cyen\"],\"sumoRelations\":[{\"sumoId\":\"ComputerTerminal\",\"relation\":\"uses-interface\"},{\"sumoId\":\"ComputerProcess\",\"relation\":\"manages-process\"},{\"sumoId\":\"ConsoleApplication\",\"relation\":\"runs-program-in-console\"}],\"provenance\":\"Pyash command-session runtime contract\"}" ya
+prah

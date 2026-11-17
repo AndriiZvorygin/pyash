@@ -8,8 +8,8 @@ su name better compare judge to name text decision be ceremony def
   ob name text better compare judge request for name mind to name text better compare judge raw be write do
   ob name text better compare judge raw atmost num 1 to name text better compare judge line be line tail do
   ob text "" to name text better compare decision be text do
-  ob name text better compare judge line from text "/^\s*A\b/i" be resemble then ob text "A" to name text better compare decision be text do
-  ob name text better compare judge line from text "/^\s*B\b/i" be resemble then ob text "B" to name text better compare decision be text do
+  ob name text better compare judge line from text "/^\\s*A\\b/i" be resemble then ob text "A" to name text better compare decision be text do
+  ob name text better compare judge line from text "/^\\s*B\\b/i" be resemble then ob text "B" to name text better compare decision be text do
   ob name text better compare decision be equally from text "" then ob bool lie fromtext text "better-compare-judge-defective" be guarantee do
   su name better compare decision ret
 prah

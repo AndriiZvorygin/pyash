@@ -145,10 +145,15 @@ test("sense compound vocabulary lookup splits large gloss waves into bounded cal
 });
 
 test("sense compound refinery links, composes, decides, and records one complete sense", async () => {
-  const artifactRows = (source) => buildProgram(source).sentences
+  const artifactRows = (source) => [...buildProgram(source).sentences
     .filter((sentence) => String(sentence.su?.text ?? "").startsWith("component-composition-")
       && typeof sentence.ob?.text === "string")
-    .map((sentence) => JSON.parse(sentence.ob.text));
+    .reduce((rows, sentence) => {
+      const record = JSON.parse(sentence.ob.text);
+      rows.set(record.id, record);
+      return rows;
+    }, new Map())
+    .values()];
   const artifactRoot = await mkdtemp(path.join(os.tmpdir(), "pyash-sense-compounds-"));
   const priorFixture = process.env.PYA_MIND_RESPONSE;
   delete process.env.PYA_MIND_RESPONSE;
@@ -502,9 +507,14 @@ test("sense compound refinery links, composes, decides, and records one complete
     assert.match(failureArtifact, /sense translation response has no bounded JSON object/u);
     const languageFailures = buildProgram(failureArtifact).sentences
       .filter((sentence) => sentence.su?.text?.startsWith("translation-failure-") && typeof sentence.ob?.text === "string")
-      .map((sentence) => JSON.parse(sentence.ob.text));
-    assert.deepEqual(languageFailures.map((row) => row.language).sort(), [...ENGLISH_WORDNET_SENSE_COMPOUNDS_LANGUAGES].sort());
-    assert.ok(languageFailures.every((row) => row.status === "failed" && row.attemptErrors.length === 2));
+      .reduce((rows, sentence) => {
+        rows.set(sentence.su.text, JSON.parse(sentence.ob.text));
+        return rows;
+      }, new Map())
+      .values();
+    const latestLanguageFailures = [...languageFailures];
+    assert.deepEqual(latestLanguageFailures.map((row) => row.language).sort(), [...ENGLISH_WORDNET_SENSE_COMPOUNDS_LANGUAGES].sort());
+    assert.ok(latestLanguageFailures.every((row) => row.status === "failed" && row.attemptErrors.length === 2));
 
     const partialHandles = new Map();
     const partialRun = await runWordNetSenseCompoundRefinery({

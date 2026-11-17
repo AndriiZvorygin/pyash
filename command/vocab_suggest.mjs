@@ -35,6 +35,7 @@ import { buildEnglishGrammarIndex, loadEnglishGrammarCatalog } from "../program/
 import { loadVocabQueryData, queryVocabLines } from "./vocab_query.mjs";
 import { resolveEnglishAlias } from "../program/library/translation/english_aliases.mjs";
 import { takeKwonLookupWarnings } from "../program/library/translation/kwon_lookup_index.mjs";
+import { formatSumoEvidence, lookupSumoEvidence } from "../program/library/translation/sumo_lookup.mjs";
 import {
   MOODS,
   ROLE_KEYS,
@@ -51,6 +52,7 @@ function parseArgs(args) {
   const inputs = [];
   const textInputs = [];
   const senseIds = [];
+  const sumoIds = [];
   let mapPath = null;
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
@@ -65,9 +67,10 @@ function parseArgs(args) {
       continue;
     }
     if (/^([anrvs]):[0-9]{8}-\1$/iu.test(arg)) senseIds.push(arg.toLowerCase());
+    else if (/^sumo:[A-Za-z][A-Za-z0-9_]*$/u.test(arg)) sumoIds.push(arg);
     else inputs.push(arg);
   }
-  return { inputs, textInputs, senseIds: [...new Set(senseIds)], mapPath };
+  return { inputs, textInputs, senseIds: [...new Set(senseIds)], sumoIds: [...new Set(sumoIds)], mapPath };
 }
 
 const checked = new Map();
@@ -602,6 +605,17 @@ async function reportWordNetSenseLookups(senseIds, report) {
     }
   }
   return results;
+}
+
+async function reportSumoLookups(keys, report) {
+  const result = await lookupSumoEvidence(keys);
+  for (const record of result.records) {
+    const formatted = formatSumoEvidence(record);
+    if (formatted) report(formatted);
+  }
+  if (result.truncated) report(`SUMO lookup: showing ${result.records.length} of ${result.total} exact matches`);
+  if (result.warning) report(result.warning);
+  return result.records;
 }
 
 function resolveGrammarRootEntries(grammar) {
@@ -1482,10 +1496,10 @@ export async function runVocabSuggest(args = process.argv.slice(2), {
   report = console.log,
   includeStructured = null
 } = {}) {
-  const { inputs, textInputs, senseIds, mapPath } = parseArgs(args);
+  const { inputs, textInputs, senseIds, sumoIds, mapPath } = parseArgs(args);
   const resolved = await resolveRootsAndTokens(inputs, textInputs);
   const shouldBuildStructured = includeStructured ?? (mapPath !== null || !await isMainModule());
-  const roots = senseIds.length > 0 && inputs.length === 0 && textInputs.length === 0
+  const roots = (senseIds.length > 0 || sumoIds.length > 0) && inputs.length === 0 && textInputs.length === 0
     ? []
     : resolved.roots;
   const resolvedTextInputs = resolved.tokens;
@@ -1740,9 +1754,19 @@ export async function runVocabSuggest(args = process.argv.slice(2), {
   }
 
   const wordNetSenseLookups = await reportWordNetSenseLookups(senseIds, report);
-  const linkedWordNetSenses = await reportLinkedWordNetSenses(resolvedTextInputs, report);
-  const wordNetCompoundSenses = await addWordNetCompoundSenseGlosses(foundCompounds, report);
+  const linkedWordNetLines = [];
+  const linkedWordNetSenses = await reportLinkedWordNetSenses(resolvedTextInputs, (line) => linkedWordNetLines.push(line));
+  const wordNetCompoundLines = [];
+  const wordNetCompoundSenses = await addWordNetCompoundSenseGlosses(foundCompounds, (line) => wordNetCompoundLines.push(line));
+  const wordNetCompoundSenseLines = new Set(wordNetCompoundSenses.map((entry) => (
+    `${entry.input}: WordNet ${entry.senseId} [${entry.lemmas.join(", ")}]: ${entry.definition} -> ${entry.target} (${entry.pyac})`
+  )));
+  for (const line of wordNetCompoundLines) {
+    if (!wordNetCompoundSenseLines.has(line)) report(line);
+  }
+  const sumoLookups = await reportSumoLookups([...resolvedTextInputs, ...sumoIds, ...senseIds], report);
 
+  const foundCompoundLines = [];
   for (const [target, found] of [...foundCompounds.entries()].sort(([left], [right]) => left.localeCompare(right))) {
     const locationSuffix = [...found.locations]
       .map(name => name.replace(`${process.cwd()}/`, ""))
@@ -1754,8 +1778,48 @@ export async function runVocabSuggest(args = process.argv.slice(2), {
         ? `; specific atom ${specificAtom.english} -> ${specificAtom.pyash}`
         : "";
       const englishTargetSuffix = found.pyacSequenceQuery ? `; English target ${row.target}` : "";
-      report(`${target}: found compound ${row.components.join(" + ")} -> ${row.pyash.join(" ")} (${row.status})${specificSuffix}${englishTargetSuffix}${locationSuffix ? ` (${locationSuffix})` : ""}`);
+      foundCompoundLines.push({
+        token: target,
+        sequence: row.pyash.join(" "),
+        line: `${target}: found compound ${row.components.join(" + ")} -> ${row.pyash.join(" ")} (${row.status})${specificSuffix}${englishTargetSuffix}${locationSuffix ? ` (${locationSuffix})` : ""}`
+      });
     }
+  }
+
+  const wordNetOutputRows = [
+    ...linkedWordNetSenses.map((entry, index) => ({
+      token: entry.input,
+      sequence: entry.pyashSequence.join(" "),
+      line: linkedWordNetLines[index]
+    })),
+    ...wordNetCompoundSenses.map((entry) => ({
+      token: entry.input,
+      sequence: entry.pyashSequence.join(" "),
+      line: `${entry.input}: WordNet ${entry.senseId} [${entry.lemmas.join(", ")}]: ${entry.definition} -> ${entry.target} (${entry.pyac})`
+    }))
+  ];
+  const linkedWordNetGroups = new Map();
+  wordNetOutputRows.forEach((entry) => {
+    const key = `${entry.token}\u0000${entry.sequence}`;
+    const group = linkedWordNetGroups.get(key) ?? { token: entry.token, sequence: entry.sequence, lines: [] };
+    group.lines.push(entry.line);
+    linkedWordNetGroups.set(key, group);
+  });
+  const foundCompoundsByTokenAndSequence = new Map();
+  for (const found of foundCompoundLines) {
+    const key = `${found.token}\u0000${found.sequence}`;
+    foundCompoundsByTokenAndSequence.set(key, [...(foundCompoundsByTokenAndSequence.get(key) ?? []), found]);
+  }
+  const emittedFoundCompounds = new Set();
+  for (const [key, group] of linkedWordNetGroups) {
+    for (const line of group.lines) report(line);
+    for (const found of foundCompoundsByTokenAndSequence.get(key) ?? []) {
+      report(found.line);
+      emittedFoundCompounds.add(found);
+    }
+  }
+  for (const found of foundCompoundLines) {
+    if (!emittedFoundCompounds.has(found)) report(found.line);
   }
 
   if (occurrences.size > 0) {
@@ -1903,6 +1967,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), {
       format: "vocab-suggest-v3",
       records,
       wordNetSenseLookups,
+      sumoLookups,
       foundCompounds: [...foundCompounds.entries()].map(([target, found]) => ({
         target: found.pyacSequenceQuery ? found.row.target : target,
         ...(found.pyacSequenceQuery ? {
@@ -1966,6 +2031,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), {
     linkedWordNetSenses,
     wordNetCompoundSenses,
     wordNetSenseLookups,
+    sumoLookups,
     compoundAtomLinks: [...compoundAtomMatches.entries()].map(([token, links]) => ({
       token,
       compounds: links.map(({ compound, atom }) => ({

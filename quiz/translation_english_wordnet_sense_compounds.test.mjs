@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -11,7 +14,9 @@ import {
   parseWordNetSenseTranslationResponse,
   parseWordNetSenseTranslationResponsePartial,
   parseWordNetSenseTranslationCache,
+  readWordNetSenseTranslationCacheFile,
   renderWordNetSenseTranslationCache,
+  renderWordNetSenseTranslationCacheEntry,
   mergeWordNetSenseTranslationFailures,
   hasCompositionSourceTranslations,
   senseTranslationKey,
@@ -900,6 +905,48 @@ test("sense translation cache round-trips by stable sense and prompt identity", 
 
   assert.deepEqual(parsed.records, [record]);
   assert.equal(parsed.bySense.get(record.senseId).id, record.id);
+});
+
+test("sense translation cache resolves append-only updates to the latest durable record", () => {
+  const first = {
+    id: senseTranslationKey({ senseId: "n:00000011-n", wordNetHash: "wordnet-hash", promptRevision: "sense-translation-v1" }),
+    senseId: "n:00000011-n",
+    wordNetHash: "wordnet-hash",
+    promptRevision: "sense-translation-v1",
+    status: "partial",
+    translations: [{ language: "chinese", surface: "朋友关系", composition: "compound", components: [] }]
+  };
+  const second = { ...first, status: "complete", translations: [...first.translations, { language: "hindi", surface: "मित्रता", composition: "simple", components: [] }] };
+  const source = `${renderWordNetSenseTranslationCache([first])}\n${renderWordNetSenseTranslationCacheEntry(second)}\n`;
+
+  const parsed = parseWordNetSenseTranslationCache(source);
+
+  assert.deepEqual(parsed.records, [second]);
+  assert.equal(parsed.bySense.get(second.senseId).status, "complete");
+});
+
+test("streamed translation cache reads Pyash rows and resolves the latest append", async () => {
+  const first = {
+    id: senseTranslationKey({ senseId: "n:00000012-n", wordNetHash: "wordnet-hash", promptRevision: "sense-translation-v1" }),
+    senseId: "n:00000012-n",
+    wordNetHash: "wordnet-hash",
+    promptRevision: "sense-translation-v1",
+    status: "partial",
+    translations: [{ language: "chinese", surface: "朋友关系", composition: "compound", components: [] }]
+  };
+  const latest = { ...first, status: "complete" };
+  const directory = await mkdtemp(path.join(os.tmpdir(), "pyash-wordnet-cache-stream-"));
+  const cachePath = path.join(directory, "cache.pya");
+  try {
+    await writeFile(cachePath, `${renderWordNetSenseTranslationCache([first])}\n${renderWordNetSenseTranslationCacheEntry(latest)}`, "utf8");
+
+    const parsed = await readWordNetSenseTranslationCacheFile(cachePath);
+
+    assert.deepEqual(parsed.records, [latest]);
+    assert.equal(parsed.bySense.get(latest.senseId).status, "complete");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("sense compounds map only linked atom choices and put the WordNet head last", () => {
@@ -1962,6 +2009,38 @@ test("translation wave caches valid languages and retries only invalid languages
   assert.equal(result.completedCount, 1);
   assert.deepEqual(failureEvents.map(({ language, attempts }) => [language, attempts]), [["hindi", 1]]);
   assert.deepEqual(result.failures, []);
+});
+
+test("translation wave supports durable per-record cache appends without full snapshots", async () => {
+  const sense = { senseId: "n:00000075-n", pos: "n", lemma: "friendship", gloss: "a relationship between friends" };
+  const entries = [];
+  let snapshots = 0;
+  const result = await translateWordNetSenseWave({
+    senses: [sense],
+    wordNetHash: "source-hash",
+    languages: ["chinese"],
+    submit: async () => ({ status: "queued" }),
+    awaitHandle: async () => JSON.stringify({
+      senseId: sense.senseId,
+      translations: [{
+        language: "chinese",
+        surface: "朋友关系",
+        composition: "compound",
+        compositionEvidence: "friend + relationship",
+        components: [
+          { surface: "朋友", gloss: "friend", role: "lexical" },
+          { surface: "关系", gloss: "relationship", role: "lexical" }
+        ]
+      }]
+    }),
+    onCache: async () => { snapshots += 1; },
+    onCacheEntry: async (record) => entries.push(record)
+  });
+
+  assert.equal(snapshots, 0);
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].senseId, sense.senseId);
+  assert.deepEqual(result.records, entries);
 });
 
 test("translation wave retains partial translations and diagnoses each exhausted language", async () => {

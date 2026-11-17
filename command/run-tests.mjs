@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
+import { runNodeTestBatches } from "./test_batches.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -61,20 +61,11 @@ if (files.length === 0) {
 // clean clone can run the suite without the quizzes having to know about it.
 fs.mkdirSync(path.join(root, "artifacts"), { recursive: true });
 
-const child = spawn(process.execPath, ["--test", ...files, ...process.argv.slice(2)], {
+const result = await runNodeTestBatches(files, {
   cwd: root,
-  stdio: "inherit",
   env: process.env,
+  label: "quiz suite",
+  nodeArgs: process.argv.slice(2),
 });
-
-child.on("error", (error) => {
-  console.error(error);
-  process.exit(1);
-});
-child.on("exit", (code, signal) => {
-  if (signal) {
-    process.kill(process.pid, signal);
-    return;
-  }
-  process.exit(code ?? 1);
-});
+if (result.signal) process.kill(process.pid, result.signal);
+else process.exit(result.code ?? 1);

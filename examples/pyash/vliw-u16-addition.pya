@@ -1,0 +1,47 @@
+su name addition be map def
+  su name function name ob text "u16 addition" ya
+  su name slots ob ve text left right sum ya
+  su name input slots ob ve text left right ya
+  su name output slot ob name sum ya
+  su name instruction series ob name addition instructions ya
+  su name training case series ob name addition training ya
+  su name heldout case series ob name addition heldout ya
+prah
+
+su name addition instruction 001 be map def
+  su name op ob text "plus" ya
+  su name target ob name sum ya
+  su name left ob name left ya
+  su name right ob name right ya
+prah
+
+su name addition instructions be series def
+  su name addition instruction 001 ya
+prah
+
+su name addition training 001 be map def
+  su name left ob num 2 ya
+  su name right ob num 3 ya
+  su name expected ob num 5 ya
+prah
+
+su name addition training 002 be map def
+  su name left ob num 17 ya
+  su name right ob num 25 ya
+  su name expected ob num 42 ya
+prah
+
+su name addition training be series def
+  su name addition training 001 ya
+  su name addition training 002 ya
+prah
+
+su name addition heldout 001 be map def
+  su name left ob num 64000 ya
+  su name right ob num 2000 ya
+  su name expected ob num 65535 ya
+prah
+
+su name addition heldout be series def
+  su name addition heldout 001 ya
+prah
