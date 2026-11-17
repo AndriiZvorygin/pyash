@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>PyAC Browser Runtime</title>
+    <style>
+      :root { color: #172b36; background: #e8eee8; font: 16px/1.5 ui-monospace, monospace; }
+      body { max-width: 760px; margin: 8vh auto; padding: 0 24px; }
+      main { padding: clamp(24px, 5vw, 48px); background: #fbfaf4; border: 1px solid #b5c1b5; box-shadow: 12px 12px 0 #c5d0c5; }
+      h1 { margin: 0; font: 700 clamp(2rem, 7vw, 4rem)/0.95 system-ui, sans-serif; letter-spacing: -0.06em; }
+      p { max-width: 62ch; }
+      button, input { font: inherit; }
+      button { padding: 10px 14px; color: #f8f7ed; background: #235747; border: 0; cursor: pointer; }
+      button:hover { background: #173d33; }
+      .controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin: 26px 0; }
+      #status { min-height: 1.5em; color: #3d6053; }
+      pre { min-height: 5em; overflow: auto; padding: 18px; color: #e9f1e7; background: #172b36; white-space: pre-wrap; }
+      .note { color: #53675f; font-size: 0.86rem; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p>PyAC · browser runtime · WASM + optional WebGPU</p>
+      <h1>Run a codelet pack.</h1>
+      <p>This demo runs the currently supported Rust PyAC codelet subset in WebAssembly. Choose a local <code>.pyac</code> pack, or run the built-in one-plus-one fixture.</p>
+      <div class="controls">
+        <button id="demo" type="button" disabled>Run one-plus-one demo</button>
+        <button id="cpu-batch" type="button" disabled>Run numeric batch on WASM CPU</button>
+        <button id="gpu-demo" type="button" disabled>Run numeric batch on WebGPU</button>
+        <button id="conditional-demo" type="button" disabled>Run equality branch on WebGPU</button>
+        <label>Open pack <input id="pack" type="file" accept=".pyac,application/octet-stream" disabled /></label>
+        <button id="gpu-pack" type="button" disabled>Try selected pack on WebGPU</button>
+      </div>
+      <div id="status" role="status">Loading WebAssembly runtime…</div>
+      <pre id="result" aria-live="polite">No result yet.</pre>
+      <p class="note">WebGPU handles numeric arithmetic and the bounded equality branch with two numeric-literal arms. Other supported packs run on the WASM CPU. The GPU path is optional and may be slower for small packs.</p>
+    </main>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

@@ -1,6 +1,10 @@
-const MAX_SLOTS = 16;
-export const MAX_FUNCTION_INSTRUCTIONS = 31;
-const OPERATIONS = new Set(["plus", "subtract", "xor"]);
+export const DEFAULT_VLIW_FUNCTION_STEP_BUDGET = 65_536;
+export const MAX_VLIW_FUNCTION_STEP_BUDGET = 10_000_000;
+export const MAX_VLIW_FUNCTION_BYTES = 1_048_576;
+const OPERATIONS = new Set([
+  "plus", "subtract", "xor", "multiply", "divide", "remains", "exponential",
+  "equally", "tiny", "giant"
+]);
 
 export class VliwFunctionError extends Error {
   constructor(code, message, details = {}) {
@@ -28,6 +32,13 @@ function uint16(value, role) {
   return value;
 }
 
+function uint32(value, role) {
+  if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffffff) {
+    fail("numeric-range", `${role} must be an unsigned 32-bit integer`, { role, value });
+  }
+  return value;
+}
+
 export function normalizeVliwFunction(definition = {}) {
   if (!definition || typeof definition !== "object" || Array.isArray(definition)) {
     fail("invalid-function", "VLIW function definition must be a map");
@@ -39,8 +50,8 @@ export function normalizeVliwFunction(definition = {}) {
   }
   const name = normalizeName(definition.name, "function name");
   const slots = definition.slots;
-  if (!Array.isArray(slots) || slots.length < 2 || slots.length > MAX_SLOTS) {
-    fail("slot-limit", `function slots must contain 2 through ${MAX_SLOTS} names`);
+  if (!Array.isArray(slots) || slots.length < 2) {
+    fail("slot-limit", "function must declare at least two named slots");
   }
   const normalizedSlots = slots.map((slot) => normalizeName(slot, "slot name"));
   if (new Set(normalizedSlots).size !== normalizedSlots.length) {
@@ -58,9 +69,16 @@ export function normalizeVliwFunction(definition = {}) {
   const outputSlot = normalizeName(definition.outputSlot, "output slot");
   if (!slotSet.has(outputSlot)) fail("signature-slot", "output slot must be declared", { outputSlot });
 
+  const stepBudget = Number(definition.stepBudget ?? DEFAULT_VLIW_FUNCTION_STEP_BUDGET);
+  if (!Number.isSafeInteger(stepBudget) || stepBudget < 1 || stepBudget > MAX_VLIW_FUNCTION_STEP_BUDGET) {
+    fail("step-budget", `stepBudget must be an integer from 1 through ${MAX_VLIW_FUNCTION_STEP_BUDGET}`);
+  }
   const instructions = definition.instructions;
-  if (!Array.isArray(instructions) || instructions.length < 1 || instructions.length > MAX_FUNCTION_INSTRUCTIONS) {
-    fail("instruction-limit", `function must contain 1 through ${MAX_FUNCTION_INSTRUCTIONS} instructions`);
+  if (!Array.isArray(instructions) || instructions.length < 1) {
+    fail("instruction-limit", "function must contain at least one instruction");
+  }
+  if (instructions.length > stepBudget) {
+    fail("step-budget", `function requires ${instructions.length} steps but stepBudget is ${stepBudget}`);
   }
   const normalizedInstructions = instructions.map((instruction, index) => {
     if (!instruction || typeof instruction !== "object" || Array.isArray(instruction)) {
@@ -77,20 +95,52 @@ export function normalizeVliwFunction(definition = {}) {
     return { op, target, left, right };
   });
 
-  return {
+  const normalized = {
     schemaVersion: 1,
     name,
     slots: normalizedSlots,
     inputSlots: normalizedInputs,
     outputSlot,
+    stepBudget,
     instructions: normalizedInstructions
   };
+  const serializedBytes = new TextEncoder().encode(JSON.stringify(normalized)).byteLength;
+  if (serializedBytes > MAX_VLIW_FUNCTION_BYTES) {
+    fail("function-size", `function exceeds the ${MAX_VLIW_FUNCTION_BYTES}-byte safety limit`, {
+      serializedBytes
+    });
+  }
+  return normalized;
 }
 
 function applyOperation(op, left, right) {
+  if (!Number.isInteger(left) || left < 0 || left > 0xffff
+    || !Number.isInteger(right) || right < 0 || right > 0xffff) {
+    fail("numeric-range", `${op} requires unsigned 16-bit operands`, { left, right });
+  }
   if (op === "plus") return Math.min(0xffff, left + right);
   if (op === "subtract") return Math.max(0, left - right);
-  return (left ^ right) & 0xffff;
+  if (op === "xor") return (left ^ right) & 0xffff;
+  if (op === "multiply") return left * right;
+  if (op === "divide" || op === "remains") {
+    if (right === 0) fail("division-by-zero", `${op} failed: division by zero`);
+    return op === "divide" ? Math.floor(left / right) : left % right;
+  }
+  if (op === "exponential") {
+    let result = 1;
+    let factor = left;
+    let exponent = right;
+    while (exponent > 0) {
+      if (exponent & 1) result = Math.min(0xffff, result * factor);
+      exponent >>>= 1;
+      if (exponent > 0) factor = Math.min(0xffff, factor * factor);
+    }
+    return result;
+  }
+  if (op === "equally") return Number(left === right);
+  if (op === "tiny") return Number(left < right);
+  if (op === "giant") return Number(left > right);
+  fail("unsupported-operation", `unsupported VLIW operation: ${op}`);
 }
 
 export function executeVliwFunction(definition, inputValues = {}) {
@@ -125,7 +175,7 @@ export function scoreVliwFunction(definition, cases = []) {
     if (!testCase || typeof testCase !== "object" || Array.isArray(testCase)) {
       fail("invalid-case", `case ${index + 1} must be a map`);
     }
-    const expected = uint16(testCase.expected, `case ${index + 1} expected`);
+    const expected = uint32(testCase.expected, `case ${index + 1} expected`);
     const actual = executeVliwFunction(fn, testCase.values);
     return { actual, expected, absoluteError: Math.abs(actual - expected) };
   });

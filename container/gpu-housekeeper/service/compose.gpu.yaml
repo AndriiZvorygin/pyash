@@ -53,6 +53,8 @@ services:
       - GPU_HOUSEKEEPER_ALLOW_MODEL_PULL=${GPU_HOUSEKEEPER_ALLOW_MODEL_PULL:-false}
       - GPU_HOUSEKEEPER_MODEL_ALLOWLIST=${GPU_HOUSEKEEPER_MODEL_ALLOWLIST:-}
       - GPU_HOUSEKEEPER_OLLAMA_MODEL_STORE_PATH=${GPU_HOUSEKEEPER_OLLAMA_MODEL_STORE_PATH:-/root/.ollama}
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
+      - VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
       - GPU_HOUSEKEEPER_OLLAMA_CATALOG_TTL_SEC=${GPU_HOUSEKEEPER_OLLAMA_CATALOG_TTL_SEC:-30}
       - GPU_HOUSEKEEPER_OLLAMA_GPU_STARTUP_GRACE_SEC=${GPU_HOUSEKEEPER_OLLAMA_GPU_STARTUP_GRACE_SEC:-60}
       - GPU_HOUSEKEEPER_OLLAMA_GPU_GUARD_POLL_SEC=${GPU_HOUSEKEEPER_OLLAMA_GPU_GUARD_POLL_SEC:-1}
@@ -62,6 +64,12 @@ services:
       - GPU_HOUSEKEEPER_PYA_DIR=/var/lib/pyash/gpu-housekeeper
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - type: bind
+        source: ${NVIDIA_VULKAN_ICD_PATH:-/usr/share/vulkan/icd.d/nvidia_icd.json}
+        target: /usr/share/vulkan/icd.d/nvidia_icd.json
+        read_only: true
+        bind:
+          create_host_path: false
       - ${GPU_HOUSEKEEPER_DATA_DIR:-./state}:/var/lib/pyash/gpu-housekeeper
       - ${GPU_HOUSEKEEPER_KUBERNETES_CREDENTIALS_DIR:-./state/kubernetes}:/run/kubernetes:ro
     extra_hosts:

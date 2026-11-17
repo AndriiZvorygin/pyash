@@ -16,6 +16,10 @@ export const UINT_SORT_DENOTE = 4;
 export const INT_SORT_DENOTE = 5;
 export const VECTOR_THICK_LONG = 6;
 
+const quotedGrammarEntry = pyashWords.find((entry) => entry.en === "quoted_");
+if (!quotedGrammarEntry) throw new Error("VLIW quote framing requires the quoted_ HNUC");
+export const QUOTED_GRAMMAR_WORD = Number.parseInt(quotedGrammarEntry.hnuc, 16);
+
 const NAME_LITERAL_MASK = 0x0020;
 const POINTED_MASK = 0x0040;
 const SEQUENCE_MASK = 0x0080;
@@ -42,7 +46,8 @@ const quoteSortNames = new Map([
   [3, "binary"],
   [4, "uint"],
   [5, "int"],
-  [6, "float"]
+  [6, "float"],
+  [7, "function"]
 ]);
 
 export const LEGACY_NUMERIC_PLUS_WORDS = Object.freeze({

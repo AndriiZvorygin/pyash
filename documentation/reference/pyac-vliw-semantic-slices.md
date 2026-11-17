@@ -54,6 +54,36 @@ The decoder accepts unsigned numeric, single-character, and paragraph-letter
 payloads. Surface number rendering currently covers legacy zero through twenty;
 larger numbers remain structured until compound surface composition is added.
 
+## Numeric vector arithmetic
+
+Numeric arithmetic may take an existing unsigned numeric vector in `ob` and
+either a scalar numeric operand or an equal-width unsigned numeric vector in
+one of the operator's supported grammatical cases:
+
+```pyash
+ob ve num 1 2 3 4 to num 2 be plus do
+```
+
+The vector quote remains the legacy quote with its count in vector thickness
+(or its explicit length word); it is followed by the accusative case, the
+scalar quote and value, the scalar operand's case, operator, and deontic mood.
+The example encodes as:
+
+```text
+0A41 8A1D 0001 0002 0003 0004 245E 881D 0002 243E 8A64 295E
+```
+
+The Rust CPU interpreter and browser WebGPU path apply the scalar arithmetic
+semantics independently to each element. A single operation codelet supports
+scalar-vector widths two through eight and vector-vector widths two through
+four, constrained by the existing quote layouts and 16-word slot. Vector
+operands must have equal widths. Multiplication returns unsigned-32 vector
+elements so the full product of two uint16 values is retained; other current
+operators return unsigned-16 elements. The JS reference path has matching
+lowering, decoding, and execution. Existing vector quote support described
+above is the data representation; this arithmetic sentence is the operation
+over that data.
+
 ## Generic fixed-slot decoding
 
 `program/library/vliw/codelets.mjs` losslessly decodes the existing 16-word slot,
@@ -136,6 +166,25 @@ word is normative but no legacy sentence exists for them. The right operand
 comes from `from` or `by`, because in those two verbs `to` is the result
 target. The result saturates into the unsigned 16-bit range, and a zero
 divisor is a `division-by-zero` execution error.
+
+## Conditional numeric selection
+
+The Rust pack interpreter and browser WebGPU path execute the first
+conditional slice emitted by the JavaScript sentence encoder:
+
+```pyash
+ob num 5 be equally from num 5 then ob num 7 be number else ob num 9 be number ya
+```
+
+The condition and both numeric-literal arms form one completion-marked,
+two-codelet group. The CPU executor evaluates the inline equality; WebGPU
+validates the same group through the Rust semantic decoder, then compares the
+two operands and selects an arm in WGSL. Both return only the selected unsigned
+result. This remains one bounded branch shape: nested branches, named
+predicates, side-effecting arms, and conditional RISC-V code generation are
+not implemented. CPU true/false coverage is in
+`rust/pyac/tests/pack_execution.rs`; browser CPU/GPU parity coverage is in
+`rust/pyac-browser/smoke.mjs`.
 
 ## Numeric invert
 
@@ -243,11 +292,66 @@ paragraph-letter text; and numeric, boolean, and text vector literals, plus
 date literals. Valid but unknown codelets decode losslessly and are then
 rejected explicitly.
 
-The Rust crate in `rust/pyac/` mirrors the numeric operator set, the invert
-codelet, and the date and vector literal families, so the two implementations
-agree on the bytes and on the values they compute. Its pack executor still
-covers the arithmetic slice only; it reports an unsupported operator for a
-codelet outside that slice rather than guessing.
+The Rust CPU pack executor and GPU targets share the scalar operator set, the
+invert codelet, and the date and vector literal families. Their bounded
+programlet path also supports scalar numeric and boolean control flow below;
+unsupported program forms remain explicit errors rather than guesses.
+
+## Bounded scalar programlets
+
+The shared VLIW semantics runtime, CPU pack executor, native Vulkan shader, and
+browser WebGPU path run this ordinary Pyash shape:
+
+```pyash
+su name count once to name num answer be ceremony def
+exists su name count ob num 0 as name variable be number ya
+ob num 1 to name num count be plus do
+su name count ret
+su name count once be ceremony prah
+to name num answer be count once do
+```
+
+The `exists` marker is source syntax; the canonical codelet carries the named
+declaration, typed initializer, `as name variable`, and `ya` mood. The runtime
+reads that sentence structure from the existing 16-word codelets and uses
+bounded invocation-local frames. Constants reject writes. No `.pyac` version
+change, slot opcode, or alternate candidate format is involved.
+
+The shared Rust runtime now executes nested ceremony calls, typed numeric and
+boolean arguments/locals/results, the pure scalar operator set, comparisons
+against literals/arguments/locals, one-level conditional actions with an
+optional alternative, and bounded `fromindex`/`toindex` traversal. Calls have a
+maximum depth of 8 and at most 8 arguments; each invocation has at most 64
+local slots and 64 codelets, under the 65,536-step default budget. The same
+runtime source is compiled for the Rust CPU executor, Vulkan SPIR-V, and the
+WGSL target. Date and vector codelets remain supported by the ordinary shared
+codelet interpreter, but date/vector values are not programlet-local types;
+text-bearing programlet values and arbitrary effects remain unsupported.
+
+Conformance tests are in `rust/pyac/tests/pack_execution.rs`; GPU worker result
+decoding is covered in `rust/pyac-gpu/worker/src/main.rs` tests. The source-level
+reference fixture is `examples/pyash/vliw-programlet-local-slots.pya`.
+
+## Pure-program semantics inventory
+
+This inventory separates behaviors already admitted by the JavaScript Pyash
+programlet reference from the slices currently implemented in the shared Rust
+core and Rust pack executor.
+
+| Semantic family | Pyash reference behavior | Shared Rust CPU/GPU status | Remaining parity work |
+| --- | --- | --- | --- |
+| Scalar values | unsigned/signed `num` and `bool` literals/results | codelet values plus typed numeric/boolean programlet arguments, locals, and returns on CPU and GPU | wider integer widths and additional local value families |
+| Pure scalar verbs | `plus`, `subtract`, `multiply`, `divide`, `exponential`, `invert`, `xor`, `remains` | shared codelet semantics and bounded programlet writes; negative signed operands are rejected where the existing arithmetic contract is unsigned | additional verbs only where Pyash defines deterministic pure semantics |
+| Comparisons | `equally`, `tiny`, `giant` | shared codelet predicates and programlet comparisons against literals, arguments, and locals, including signed and boolean values | compound/nested conditions and short-circuit logic |
+| Local quantities | initialized numeric/boolean variables and constant quantities; typed writes; constants reject writes; frame discarded at return | CPU and GPU execute typed declarations, operator writes, boolean writes, local `ret`, and frame isolation | date/vector/text locals and shared mutable program state |
+| Ceremony calls | typed outputs and bounded calls; each call gets a fresh frame | nested calls execute with up to 8 arguments and call depth 8; depth overflow is an explicit error | broader signatures, general recursion semantics, and larger configurable limits |
+| Branches | conditional sentences with true and optional alternative action | one-level programlet predicates over literal/argument/local values select numeric or boolean actions | nested branches and multi-statement branch bodies |
+| Loops | bounded `fromindex`/`toindex` traversal under the programlet step budget | loop index is available as a typed argument; zero-width ranges skip execution; execution is bounded by the step budget | nested-loop conformance and wider iteration/index types |
+| Effects | rejects effectful or unknown verbs | no general programlet effects; unsupported sentence forms fail | keep host effects outside pure core unless explicitly specified |
+
+The legacy named-slot candidate map format is not a Pyash sentence encoding and
+is not accepted by the Rust pack or Housekeeper runtime. The executable
+programlet contract above is the canonical sentence/codelet path.
 
 ## The RISC-V destination
 

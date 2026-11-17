@@ -330,6 +330,8 @@ The following error names are stable and MUST be supported:
 * `depend defective`
 * `again defective`
 * `evoke clause defective`
+* `constant quantity write`
+* `variable defective`
 
 Additional error names MAY be introduced by later specifications.
 

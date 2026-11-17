@@ -1,6 +1,6 @@
 # Specifications Index
 
-Purpose: normative spec set for Pyash. This folder is intentionally compact: <=24 files, each <=16KB.
+Purpose: normative spec set for Pyash. This folder is intentionally compact: <=25 files, each <=16KB.
 
 ## Core order
 
@@ -30,6 +30,7 @@ Purpose: normative spec set for Pyash. This folder is intentionally compact: <=2
 21. `26-criterion.md` — benchmark, stress, simulation, and replayable result contracts.
 22. `26-headquarters-fixture-mail.md` — Headquarters fixture-mail vertical slice.
 23. `27-pyash-vliw-isa.md` — sentence-first lowering, legacy word encoding, and codelet execution contract.
+24. `28-pyash-vliw-targets.md` — target capabilities, lowering choices, and compatibility examples.
 
 ## Reference docs (non-normative)
 

@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import pathlib
+import struct
 import tempfile
 import threading
 import time
@@ -141,14 +142,101 @@ class HousekeeperDurableQueueTests(unittest.TestCase):
     self.temp_dir = tempfile.TemporaryDirectory(prefix="gpu-housekeeper-durable-queue-")
     os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = self.temp_dir.name
     server._JOBS.clear()
+    server._JOB_CANCEL_EVENTS.clear()
 
   def tearDown(self):
     server._JOBS.clear()
+    server._JOB_CANCEL_EVENTS.clear()
     if self.original_pya_dir is None:
       os.environ.pop("GPU_HOUSEKEEPER_PYA_DIR", None)
     else:
       os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = self.original_pya_dir
     self.temp_dir.cleanup()
+
+  def test_cancel_job_by_handle_sets_the_running_job_cancellation_event(self):
+    remote_job_id = "running-cancel-target"
+    cancel_event = threading.Event()
+    with server._LOCK:
+      server._JOBS[remote_job_id] = {
+        "remoteJobId": remote_job_id,
+        "handleId": "stable-handle",
+        "status": "running",
+        "message": "running",
+        "runtimeName": "ollama",
+      }
+      server._JOB_CANCEL_EVENTS[remote_job_id] = cancel_event
+
+    with patch.object(server, "persist_durable_job"):
+      result = server.cancel_job({"handleId": "stable-handle"})
+
+    self.assertTrue(result["accepted"])
+    self.assertEqual(result["status"], "cancelling")
+    self.assertTrue(cancel_event.is_set())
+    self.assertEqual(server.job_status(remote_job_id)["status"], "running")
+
+  def test_cancel_http_endpoint_accepts_a_running_housekeeper_job(self):
+    remote_job_id = "http-running-cancel-target"
+    cancel_event = threading.Event()
+    with server._LOCK:
+      server._JOBS[remote_job_id] = {
+        "remoteJobId": remote_job_id,
+        "handleId": "http-stable-handle",
+        "status": "running",
+        "message": "running",
+        "runtimeName": "ollama",
+      }
+      server._JOB_CANCEL_EVENTS[remote_job_id] = cancel_event
+    listener = server.create_housekeeper_server("127.0.0.1", 0)
+    listener_thread = threading.Thread(target=listener.serve_forever, daemon=True)
+    listener_thread.start()
+    request = Request(
+      f"http://127.0.0.1:{listener.server_address[1]}/cancel",
+      data=json.dumps({"remoteJobId": remote_job_id}).encode("utf-8"),
+      headers={"Content-Type": "application/json"},
+      method="POST",
+    )
+    try:
+      with patch.object(server, "persist_durable_job"):
+        with urlopen(request, timeout=2) as response:
+          result = json.loads(response.read().decode("utf-8"))
+      self.assertTrue(result["accepted"])
+      self.assertEqual(result["status"], "cancelling")
+      self.assertTrue(cancel_event.is_set())
+    finally:
+      listener.shutdown()
+      listener.server_close()
+      listener_thread.join(timeout=2)
+
+  def test_cancel_requested_durable_job_is_not_resumed_after_restart(self):
+    remote_job_id = "job-cancelled-before-restart"
+    job = {
+      "remoteJobId": remote_job_id,
+      "handleId": "restart-cancel-handle",
+      "runtimeName": "test-runtime",
+      "profileName": "test-profile",
+      "jobSpec": {"kind": "test-job"},
+      "deviceId": "gpu0",
+      "status": "running",
+      "message": "cancellation requested",
+      "submittedAt": "now",
+      "startedAt": "before restart",
+      "finishedAt": "",
+      "source": {"hostId": "test-host"},
+      "forwarded": False,
+      "cancelRequested": True,
+    }
+    server.persist_durable_job(job)
+
+    resumed = server.restore_persisted_jobs()
+
+    self.assertEqual(resumed, [])
+    self.assertNotIn(remote_job_id, server._JOBS)
+    archive = server.durable_job_archive_path(remote_job_id)
+    self.assertTrue(archive.is_file(), f"cancelled archive missing: {archive}")
+    archived_job = server.read_durable_job(archive)
+    self.assertIsNotNone(archived_job)
+    self.assertEqual(archived_job["status"], "cancelled")
+    self.assertEqual(server.job_status(remote_job_id)["status"], "cancelled")
 
   def test_submit_persists_job_envelope_before_accepting(self):
     payload = {
@@ -508,6 +596,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.original_watchdog_interval_env = os.environ.get("GPU_HOUSEKEEPER_OLLAMA_GPU_WATCHDOG_INTERVAL_SEC")
     server._PROFILES.clear()
     server._JOBS.clear()
+    server._JOB_CANCEL_EVENTS.clear()
     server.reset_ollama_model_catalog_cache()
     server.reset_strata_model_catalog_cache()
 
@@ -548,6 +637,60 @@ class HousekeeperOllamaTests(unittest.TestCase):
     server.reset_strata_model_catalog_cache()
     server._PROFILES.clear()
     server._JOBS.clear()
+    server._JOB_CANCEL_EVENTS.clear()
+
+  def test_cancelled_ollama_request_closes_the_active_provider_socket(self):
+    request_started = threading.Event()
+    release_provider = threading.Event()
+    errors = []
+
+    class SlowProvider(server.BaseHTTPRequestHandler):
+      def do_POST(self):
+        self.rfile.read(int(self.headers.get("Content-Length", "0")))
+        request_started.set()
+        release_provider.wait(5)
+        try:
+          self.send_response(200)
+          self.send_header("Content-Type", "application/json")
+          self.end_headers()
+          self.wfile.write(b'{"message":{"content":"late response"}}')
+        except OSError:
+          pass
+
+      def log_message(self, _format, *_args):
+        pass
+
+    provider = server.ThreadingHTTPServer(("127.0.0.1", 0), SlowProvider)
+    provider_thread = threading.Thread(target=provider.serve_forever, daemon=True)
+    provider_thread.start()
+    cancel_event = threading.Event()
+
+    def make_request():
+      try:
+        server.request_ollama_json(
+          "/api/chat",
+          {"model": "test-model", "messages": []},
+          timeout_sec=5,
+          cancel_event=cancel_event,
+        )
+      except Exception as err:
+        errors.append(err)
+
+    request_thread = threading.Thread(target=make_request, daemon=True)
+    try:
+      with patch.object(server, "ollama_runtime_url", return_value=f"http://127.0.0.1:{provider.server_address[1]}"):
+        request_thread.start()
+        self.assertTrue(request_started.wait(2), "mock provider never received the request")
+        cancel_event.set()
+        request_thread.join(1)
+      self.assertFalse(request_thread.is_alive(), "cancel did not interrupt the blocked Ollama request")
+      self.assertEqual(len(errors), 1)
+      self.assertIsInstance(errors[0], server.CancelledJobError)
+    finally:
+      release_provider.set()
+      provider.shutdown()
+      provider.server_close()
+      provider_thread.join(timeout=2)
 
   def test_strata_catalog_reports_only_models_returned_by_managed_runtime(self):
     calls = []
@@ -1355,7 +1498,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
       "gpuObserved": True,
       "message": "running"
     }
-    server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600: (
+    server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600, cancel_event=None: (
       {"models": [{"name": "qwen-test", "size": 1000, "size_vram": 1000}]} if pathname == "/api/ps" else {"response": "ok"}
     )
     server.ollama_model_catalog = lambda force=False: {
@@ -4506,25 +4649,16 @@ class HousekeeperIdleReaperTests(unittest.TestCase):
     discharge.assert_not_called()
 
 
-class HousekeeperVliwEvaluatorTests(unittest.TestCase):
+class HousekeeperVliwPackTests(unittest.TestCase):
   def valid_job_spec(self):
+    pack = b"PYACVLIW" + struct.pack("<HHHHIIII", 1, 16, 16, 32, 1, 32, 64, 0) + bytes(32)
     return {
-      "kind": "vliw-batch-evaluate",
+      "kind": "pyac-pack-execute",
       "resourceRequest": {"vramRequiredMb": 64},
-      "payload": {
-        "schemaVersion": 1,
-        "slots": ["left", "right", "sum"],
-        "inputSlots": ["left", "right"],
-        "outputSlot": "sum",
-        "cases": [{"values": {"left": 2, "right": 3}, "expected": 5}],
-        "candidates": [{
-          "id": "add",
-          "instructions": [{"op": "plus", "target": "sum", "left": "left", "right": "right"}]
-        }]
-      }
+      "payload": {"packBase64": base64.b64encode(pack).decode("ascii")}
     }
 
-  def test_submit_accepts_valid_vliw_batch_and_rejects_unbounded_or_invalid_jobs(self):
+  def test_submit_accepts_a_valid_pyac_pack_and_rejects_invalid_pack_bytes(self):
     temp_dir = tempfile.TemporaryDirectory(prefix="gpu-housekeeper-vliw-submit-")
     previous = os.environ.get("GPU_HOUSEKEEPER_PYA_DIR")
     os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = temp_dir.name
@@ -4535,22 +4669,33 @@ class HousekeeperVliwEvaluatorTests(unittest.TestCase):
         accepted = server.submit_job({
           "handleId": "vliw-valid",
           "runtimeName": "vliw",
-          "profileName": "vliw-batch-evaluator",
+          "profileName": "pyac-vliw-rust-gpu",
           "jobSpec": self.valid_job_spec()
         }, {"vliw": dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])}, "mriczo")
 
         invalid = self.valid_job_spec()
-        invalid["payload"]["candidates"][0]["instructions"][0]["op"] = "multiply"
+        invalid["payload"]["packBase64"] = "not valid base64"
         rejected = server.submit_job({
           "handleId": "vliw-invalid",
           "runtimeName": "vliw",
-          "profileName": "vliw-batch-evaluator",
+          "profileName": "pyac-vliw-rust-gpu",
           "jobSpec": invalid
+        }, {"vliw": dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])}, "mriczo")
+
+        removed_batch = self.valid_job_spec()
+        removed_batch["kind"] = "vliw-batch-evaluate"
+        rejected_batch = server.submit_job({
+          "handleId": "vliw-removed-batch",
+          "runtimeName": "vliw",
+          "profileName": "vliw-batch-evaluator",
+          "jobSpec": removed_batch
         }, {"vliw": dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])}, "mriczo")
 
       self.assertTrue(accepted["accepted"])
       self.assertFalse(rejected["accepted"])
-      self.assertIn("unsupported VLIW operation", rejected["error"])
+      self.assertIn("base64 is invalid", rejected["error"])
+      self.assertFalse(rejected_batch["accepted"])
+      self.assertIn("unsupported vliw jobSpec.kind", rejected_batch["error"])
     finally:
       server._JOBS.clear()
       if previous is None:
@@ -4573,22 +4718,21 @@ class HousekeeperVliwEvaluatorTests(unittest.TestCase):
     self.assertEqual(unavailable["status"], "stopped")
     self.assertFalse(unavailable["gpuObserved"])
 
-  def test_vliw_dispatch_calls_cuda_batch_evaluator_not_placeholder(self):
+  def test_vliw_dispatch_calls_the_rust_gpu_pack_worker(self):
     job = {
       "remoteJobId": "vliw-dispatch",
       "runtimeName": "vliw",
-      "profileName": "vliw-batch-evaluator",
+      "profileName": "pyac-vliw-rust-gpu",
       "deviceId": "gpu1",
       "jobSpec": self.valid_job_spec()
     }
-    result = {"candidateCount": 1, "scores": [{"id": "add", "incorrectCount": 0}]}
+    result = {"ok": True, "backend": "rust-gpu-vulkan", "values": []}
     with patch.object(server, "ensure_capacity_for_job", return_value={"decision": "fits"}), \
-         patch.object(server.vliw_evaluator, "score_vliw_batch", return_value=result) as evaluate:
+         patch.object(server, "execute_vliw_pack_gpu", return_value=result) as execute:
       actual = server.execute_job(job, {"vliw": dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])})
 
     self.assertEqual(actual, result)
-    evaluate.assert_called_once_with(job["jobSpec"]["payload"], "gpu1")
-
+    execute.assert_called_once_with(job)
 
 if __name__ == "__main__":
   unittest.main()

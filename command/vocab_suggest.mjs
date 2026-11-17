@@ -1754,6 +1754,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), {
   }
 
   const wordNetSenseLookups = await reportWordNetSenseLookups(senseIds, report);
+
   const linkedWordNetLines = [];
   const linkedWordNetSenses = await reportLinkedWordNetSenses(resolvedTextInputs, (line) => linkedWordNetLines.push(line));
   const wordNetCompoundLines = [];
@@ -1764,6 +1765,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), {
   for (const line of wordNetCompoundLines) {
     if (!wordNetCompoundSenseLines.has(line)) report(line);
   }
+
   const sumoLookups = await reportSumoLookups([...resolvedTextInputs, ...sumoIds, ...senseIds], report);
 
   const foundCompoundLines = [];

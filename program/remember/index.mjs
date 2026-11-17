@@ -5,6 +5,10 @@ import { clearModuleCache } from "../bridge/modules.mjs";
 import { clearRefineries } from "../bridge/refinery.mjs";
 import { resetCommandIdentity } from "../bridge/command_identity.mjs";
 import { isEvidenceSentence } from "../library/knowledge_core.mjs";
+import {
+  isNamedNumericSlotDeclaration,
+  namedNumericSlotKind
+} from "../library/named_numeric_slot.mjs";
 
 let memory = [];
 let history = []; // optional, for debugging / REPL
@@ -256,8 +260,8 @@ export function doRemember(sentence) {
 
   // Sandpits run in a temporary memory context (see `pushMemoryContext`). In that mode we must not
   // splice the shared memory array because doing so would corrupt the global `definitionIndex`
-  // (which is not context-scoped today). Sandpit semantics can rely on `remember()` scanning from
-  // the end for last-write-wins, so appending is sufficient.
+  // (which is not context-scoped today). A declared numeric variable is the exception: its frame
+  // slot is replaced in place, while history still records each write.
   const isSandpit = contextStack.length > 0;
 
   // For non-def/prah sentences with a subject, replace the most recent
@@ -267,6 +271,36 @@ export function doRemember(sentence) {
   // preserve chronological order after the triggering command.
   const isDefinitionRecording = state.definitionStack.length > 0 && !state.executingBody;
   const preserveEvidence = isEvidenceSentence(sentence);
+  if (
+    isSandpit
+    && !isDefinitionRecording
+    && !preserveEvidence
+    && subjName
+    && !sentence.exists
+    && !isDef
+    && !isPrah
+    && sentence.mood !== "then"
+    && sentence.mood !== "do"
+  ) {
+    for (let i = memory.length - 1; i >= 0; i -= 1) {
+      const existing = memory[i];
+      if (existing.su?.name !== subjName) continue;
+      if (existing.mood === "do") continue;
+      if (existing.mood === "def" || existing.mood === "prah") break;
+      if (isEvidenceSentence(existing)) continue;
+      if (namedNumericSlotKind(existing) !== "variable") break;
+
+      memory[i] = {
+        ...existing,
+        ...sentence,
+        su: sentence.su ?? existing.su,
+        as: existing.as
+      };
+      history.push(sentence);
+      return;
+    }
+  }
+
   if (!isSandpit && !isDefinitionRecording && !preserveEvidence && subjName && !isDef && !isPrah && sentence.mood !== "then" && sentence.mood !== "do") {
     for (let i = memory.length - 1; i >= 0; i--) {
       const existing = memory[i];
@@ -281,8 +315,16 @@ export function doRemember(sentence) {
     }
   }
 
+  const storedSentence = sentence.exists
+    && isSandpit
+    && state.executingBody
+    && isNamedNumericSlotDeclaration(sentence)
+    ? { ...sentence }
+    : sentence;
+  if (storedSentence !== sentence) delete storedSentence.exists;
+
   const idx = memory.length;
-  memory.push(sentence);
+  memory.push(storedSentence);
   if (isDef && subjName) {
     upsertDefinition(subjName, idx, undefined, sentence.signatureWords ?? null);
   }

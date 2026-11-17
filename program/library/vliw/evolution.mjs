@@ -1,11 +1,9 @@
 import {
-  MAX_FUNCTION_INSTRUCTIONS,
+  DEFAULT_VLIW_FUNCTION_STEP_BUDGET,
+  MAX_VLIW_FUNCTION_STEP_BUDGET,
   compareVliwFitness,
-  normalizeVliwFunction,
-  scoreVliwFunction
+  normalizeVliwFunction
 } from "./functions.mjs";
-import { createHousekeeperVliwBatchEvaluator } from "./housekeeper.mjs";
-import { parseVliwFunctionSource, renderVliwFunctionSource } from "./source.mjs";
 
 export const MAX_VLIW_POPULATION = 256;
 export const MAX_VLIW_GENERATIONS = 31;
@@ -37,6 +35,7 @@ function candidateFrom(template, id, instructions) {
     slots: [...template.slots],
     inputSlots: [...template.inputSlots],
     outputSlot: template.outputSlot,
+    stepBudget: template.stepBudget ?? DEFAULT_VLIW_FUNCTION_STEP_BUDGET,
     instructions: instructions.map((instruction) => ({ ...instruction }))
   };
 }
@@ -50,7 +49,7 @@ function initialPopulation(template, populationSize, random) {
     [{ op, target: template.outputSlot, left, right }]
   ));
   while (population.length < populationSize) {
-    const count = 1 + Math.floor(random() * Math.min(5, MAX_FUNCTION_INSTRUCTIONS));
+    const count = 1 + Math.floor(random() * 5);
     const instructions = Array.from({ length: count }, () => ({
       op: choose(random, firstOps),
       target: choose(random, template.slots),
@@ -65,7 +64,10 @@ function initialPopulation(template, populationSize, random) {
 function mutate(parent, template, id, random) {
   const instructions = parent.instructions.map((instruction) => ({ ...instruction }));
   const mutation = random();
-  if (mutation < 0.18 && instructions.length < MAX_FUNCTION_INSTRUCTIONS) {
+  if (mutation < 0.18 && instructions.length < Math.min(
+    template.stepBudget ?? DEFAULT_VLIW_FUNCTION_STEP_BUDGET,
+    MAX_VLIW_FUNCTION_STEP_BUDGET
+  )) {
     instructions.splice(Math.floor(random() * (instructions.length + 1)), 0, {
       op: choose(random, ["plus", "subtract", "xor"]),
       target: choose(random, template.slots),
@@ -97,7 +99,7 @@ function normalizeBatchScores(candidates, scores) {
     let outputs = null;
     if (Array.isArray(score.outputs)) {
       outputs = score.outputs.map(Number);
-      if (outputs.some((value) => !Number.isInteger(value) || value < 0 || value > 0xffff)) {
+      if (outputs.some((value) => !Number.isInteger(value) || value < 0 || value > 0xffffffff)) {
         throw new Error(`VLIW batch evaluator returned invalid outputs for ${candidate.id}`);
       }
     }
@@ -135,14 +137,14 @@ function batchPayload(template, cases, candidates) {
     slots: template.slots,
     inputSlots: template.inputSlots,
     outputSlot: template.outputSlot,
+    stepBudget: template.stepBudget ?? DEFAULT_VLIW_FUNCTION_STEP_BUDGET,
     cases,
     candidates: candidates.map((candidate) => ({ id: candidate.id, instructions: candidate.instructions }))
   };
 }
 
 /**
- * Run bounded semantic mutation/search. `evaluateBatch` is the platform seam:
- * production callers submit this batch through Pyash's durable Housekeeper queue.
+ * Run bounded host-side mutation/search through a caller-provided batch evaluator.
  */
 export async function evolveVliwFunction({
   template: rawTemplate,
@@ -154,7 +156,7 @@ export async function evolveVliwFunction({
   seed = 1
 } = {}) {
   if (typeof evaluateBatch !== "function") {
-    throw new Error("VLIW evolution requires a Housekeeper-backed evaluateBatch callback");
+    throw new Error("VLIW evolution requires an evaluateBatch callback");
   }
   const template = normalizeVliwFunction({ ...rawTemplate, instructions: rawTemplate?.instructions ?? [{
     op: "plus",
@@ -206,81 +208,5 @@ export async function evolveVliwFunction({
     trainingOutputs: champion.outputs,
     heldoutOutputs: heldout.outputs,
     validated: heldout.fitness.incorrectCount === 0
-  };
-}
-
-export async function evolveVliwFunctionThroughHousekeeper({
-  housekeeper = {},
-  ...options
-} = {}) {
-  return evolveVliwFunction({
-    ...options,
-    evaluateBatch: createHousekeeperVliwBatchEvaluator(housekeeper)
-  });
-}
-
-function verifyReferenceOutputs(candidate, cases, expectedFitness, actualOutputs, label) {
-  const reference = scoreVliwFunction(candidate, cases);
-  const referenceOutputs = reference.results.map(({ actual }) => actual);
-  if (!Array.isArray(actualOutputs) || actualOutputs.length !== referenceOutputs.length
-    || actualOutputs.some((value, index) => value !== referenceOutputs[index])) {
-    throw new Error(`Housekeeper ${label} outputs disagree with the CPU reference`);
-  }
-  const referenceFitness = {
-    incorrectCount: reference.incorrectCount,
-    totalAbsoluteError: reference.totalAbsoluteError,
-    instructionCount: reference.instructionCount
-  };
-  if (compareVliwFitness(referenceFitness, expectedFitness) !== 0) {
-    throw new Error(`Housekeeper ${label} fitness disagrees with the CPU reference`);
-  }
-  return { fitness: referenceFitness, outputs: referenceOutputs };
-}
-
-/** Parse, evolve through Housekeeper, and compare exact per-case outputs with the CPU reference. */
-export async function evolveVliwFunctionSourceThroughHousekeeper({
-  sourceText,
-  functionName = "",
-  housekeeper = {},
-  ...options
-} = {}) {
-  const source = parseVliwFunctionSource(sourceText, { functionName });
-  const result = await evolveVliwFunctionThroughHousekeeper({
-    ...options,
-    housekeeper,
-    template: source.definition,
-    trainingCases: source.trainingCases,
-    heldoutCases: source.heldoutCases
-  });
-  const cpuTraining = verifyReferenceOutputs(
-    result.candidate,
-    source.trainingCases,
-    result.trainingFitness,
-    result.trainingOutputs,
-    "training"
-  );
-  const cpuHeldout = verifyReferenceOutputs(
-    result.candidate,
-    source.heldoutCases,
-    result.heldoutFitness,
-    result.heldoutOutputs,
-    "held-out"
-  );
-  return {
-    ...result,
-    validated: result.validated
-      && cpuTraining.fitness.incorrectCount === 0
-      && cpuHeldout.fitness.incorrectCount === 0,
-    cpuReference: {
-      trainingFitness: cpuTraining.fitness,
-      trainingOutputs: cpuTraining.outputs,
-      heldoutFitness: cpuHeldout.fitness,
-      heldoutOutputs: cpuHeldout.outputs
-    },
-    candidateSourcePya: renderVliwFunctionSource({
-      definition: result.candidate,
-      trainingCases: source.trainingCases,
-      heldoutCases: source.heldoutCases
-    })
   };
 }

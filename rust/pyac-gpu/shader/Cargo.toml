@@ -1,0 +1,12 @@
+[package]
+name = "pyac-vliw-gpu-kernel"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+glam = { version = "0.34", default-features = false }
+pyac-vliw-core = { path = "../../pyac-vliw-core" }
+spirv-std = "0.11.0"
+
+[workspace]

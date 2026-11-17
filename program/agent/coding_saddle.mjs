@@ -4,8 +4,9 @@ import {
   fetchZaiCodingPlanModels
 } from "../runtime/zai_coding_plan.mjs";
 import { fetchMiniMaxModels } from "../runtime/minimax.mjs";
+import { OLLAMA_CONTEXT_PRESETS } from "../runtime/ollama_context.mjs";
 
-export const SADDLE_OLLAMA_CONTEXT_PRESETS = [4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576];
+export const SADDLE_OLLAMA_CONTEXT_PRESETS = OLLAMA_CONTEXT_PRESETS;
 const SADDLE_OLLAMA_FALLBACK_CONTEXT_LIMIT = 65536;
 
 const SADDLE_SLASH_COMMANDS = [
@@ -881,6 +882,8 @@ function isCsiFinal(value) {
 
 export function createSaddleInputDecoder({
   onSubmit,
+  onQueue,
+  shouldQueue,
   onCancel,
   onExit,
   onChange,
@@ -915,6 +918,22 @@ export function createSaddleInputDecoder({
     if (typeof onSubmit === "function") {
       Promise.resolve(onSubmit(value)).catch(() => undefined);
     }
+  };
+  const queue = () => {
+    const value = state.value;
+    if (!value.trim() || typeof onQueue !== "function") return false;
+    let accepted = false;
+    try {
+      accepted = onQueue(value) !== false;
+    } catch {
+      return false;
+    }
+    if (!accepted) return false;
+    resetCompletion();
+    state.value = "";
+    state.cursor = 0;
+    changed();
+    return true;
   };
   const autocomplete = () => {
     let choices = [];
@@ -1043,6 +1062,7 @@ export function createSaddleInputDecoder({
       return;
     }
     if (char === "\t") {
+      if (shouldQueue?.({ ...state }) === true && queue()) return;
       autocomplete();
       return;
     }
