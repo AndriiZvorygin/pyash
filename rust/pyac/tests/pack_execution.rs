@@ -72,18 +72,17 @@ const LOCAL_NUMBER_PROGRAMLET: [[u16; WORDS_PER_CODELET]; 6] = [
     ],
 ];
 
-fn run_numeric_programlet(
+fn run_numeric_programlet<const SLOT_COUNT: usize>(
     codelets: &[[u16; WORDS_PER_CODELET]],
-    slots: &mut [pyac_vliw_core::NumericLocalSlot],
+    slots: &mut [pyac_vliw_core::NumericLocalSlot; SLOT_COUNT],
 ) -> pyac_vliw_core::CoreResult {
     let words = codelets
         .iter()
         .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
         .collect::<Vec<_>>();
-    let scratch_len = words.len();
-    let mut sentence_words = vec![0; scratch_len];
-    let mut sentence_boundaries = vec![0; scratch_len];
-    let mut symbols = vec![0; scratch_len];
+    let mut sentence_words = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
+    let mut sentence_boundaries = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
+    let mut symbols = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
     pyac_vliw_core::execute_numeric_programlet(
         &words,
         codelets.len(),
@@ -116,7 +115,7 @@ fn executes_mixed_supported_codelet_families_in_pack_order() {
 fn executes_canonical_numeric_local_declaration_write_and_return() {
     let bytes = encode_pack(&LOCAL_NUMBER_PROGRAMLET).expect("programlet pack fits");
     let pack = decode_pack(&bytes).expect("programlet pack decodes");
-    let mut slots = vec![pyac_vliw_core::NumericLocalSlot::EMPTY; pack.codelets.len()];
+    let mut slots = [pyac_vliw_core::NumericLocalSlot::EMPTY; 64];
     let result = run_numeric_programlet(&LOCAL_NUMBER_PROGRAMLET, &mut slots);
     assert_eq!(result.error, 0, "{result:?}");
     assert_eq!(result.values[0], 1);

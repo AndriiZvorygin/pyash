@@ -289,15 +289,15 @@ paragraph-letter text; and numeric, boolean, and text vector literals, plus
 date literals. Valid but unknown codelets decode losslessly and are then
 rejected explicitly.
 
-The Rust crate in `rust/pyac/` mirrors the numeric operator set, the invert
-codelet, and the date and vector literal families, so the two implementations
-agree on the bytes and on the values they compute. Its pack executor also
-executes the bounded local-number programlet slice below; unsupported program
-forms remain explicit errors rather than guesses.
+The Rust CPU pack executor and GPU targets share the numeric operator set, the
+invert codelet, and the date and vector literal families. They also execute the
+bounded local-number programlet slice below; unsupported program forms remain
+explicit errors rather than guesses.
 
 ## Canonical local-number programlets
 
-The Rust shared core and CPU pack executor now run this ordinary Pyash shape:
+The shared VLIW semantics runtime, CPU pack executor, native Vulkan shader, and
+browser WebGPU path run this ordinary Pyash shape:
 
 ```pyash
 su name count once to name num answer be ceremony def
@@ -309,12 +309,12 @@ to name num answer be count once do
 ```
 
 The `exists` marker is source syntax; the canonical codelet carries the named
-declaration, typed initializer, `as name variable`, and `ya` mood. The Rust
-runtime reads that sentence structure directly from the existing 16-word
-codelets. It creates a caller-bounded invocation frame, updates the named
-uint16 value using the existing `plus` semantics, reads the named return, and
-emits the final typed numeric result. Constants using `as name permanently
-number` are recognized and reject writes. No `.pyac` version change, slot
+declaration, typed initializer, `as name variable`, and `ya` mood. The runtime
+reads that sentence structure from the existing 16-word codelets. It creates a
+bounded invocation frame, updates the named uint16 value using existing `plus`
+semantics, reads the named return, and emits the final typed numeric result.
+Constants using `as name permanently number` reject writes. GPU dispatch is
+bounded to 64 codelets and 64 local slots. No `.pyac` version change, slot
 opcode, or alternate candidate format is involved.
 
 This Rust slice is intentionally limited to one defined numeric ceremony, its
@@ -322,9 +322,8 @@ local numeric declarations, `plus` writes to typed `to name num` destinations,
 a local-name `ret`, its matching `prah`, and one final direct invocation. It
 does not yet execute nested ceremony calls, comparisons/conditionals inside a
 programlet, or `fromindex`/`toindex` loops. Those remain source-level JavaScript
-reference semantics, not Rust parity claims. The shared-core entry point takes
-caller-provided sentence, symbol, and frame storage, so memory limits are
-explicit for no-std/target callers. Tests are in
+reference semantics, not Rust parity claims. The runtime uses fixed caller-owned
+scratch and frame arrays, making target limits explicit. Tests are in
 `rust/pyac/tests/pack_execution.rs`; the source-level reference fixture is
 `examples/pyash/vliw-programlet-local-slots.pya`.
 
@@ -334,12 +333,12 @@ This inventory separates behaviors already admitted by the JavaScript Pyash
 programlet reference from the slices currently implemented in the shared Rust
 core and Rust pack executor.
 
-| Semantic family | Pyash reference behavior | Shared Rust / CPU pack status | Remaining parity work |
+| Semantic family | Pyash reference behavior | Shared Rust CPU/GPU status | Remaining parity work |
 | --- | --- | --- | --- |
-| Scalar values | unsigned `num` and `bool` literals/results | codelet literals and numeric results; programlet output currently `num` | boolean programlet frames/results |
+| Scalar values | unsigned `num` and `bool` literals/results | codelet literals and numeric results; bounded programlet output is `num` on CPU and GPU | boolean programlet frames/results |
 | Pure scalar verbs | `plus`, `subtract`, `multiply`, `divide`, `exponential`, `invert`, `xor`, `remains` | scalar codelet semantics shared; `plus` mutates a declared local in the current programlet slice | other pure verbs as local writes/expressions |
-| Comparisons | `equally`, `tiny`, `giant` | shared codelet predicates and bounded literal conditional selection | named/local predicate values in a programlet |
-| Local quantities | initialized uint16 variables and constant quantities; typed writes; constants reject writes; frame discarded at return | one routine supports variable/constant declarations, `plus` write, local `ret`, and frame isolation | broader operators/types and GPU program-level frame dispatch |
+| Comparisons | `equally`, `tiny`, `giant` | shared codelet predicates and bounded literal conditional selection; not yet available inside a programlet | named/local predicate values in a programlet |
+| Local quantities | initialized uint16 variables and constant quantities; typed writes; constants reject writes; frame discarded at return | CPU and GPU run variable/constant declarations, `plus` write, local `ret`, and frame isolation | broader operators/types and program-level control flow |
 | Ceremony calls | typed outputs and acyclic, nonrecursive calls; each call gets a fresh frame | not implemented in Rust programlet execution | call graph validation and nested frames/returns |
 | Branches | one-level conditional sentences with two `do` branches | literal numeric/boolean conditional codelet groups | branches over locals and effects inside a programlet |
 | Loops | bounded `fromindex`/`toindex` traversal under the programlet step budget | not implemented in Rust programlet execution | index state, iteration bounds, and budget conformance |

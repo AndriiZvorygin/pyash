@@ -33,7 +33,10 @@ prints warmed end-to-end CPU/WebGPU medians from seven alternating samples for
 batches from 1,024 to 131,072 codelets, including pack decode,
 transfer/dispatch/readback, and result JSON.
 
-The GPU implementation supports scalar numeric arithmetic and elementwise
+The GPU implementation also executes the bounded numeric Pyash programlet
+fixture through the same whole-program WGSL entry point as native Vulkan; the
+browser smoke checks CPU/WGSL result parity when WebGPU is available. It
+supports scalar numeric arithmetic and elementwise
 arithmetic over unsigned-16 numeric vectors with scalar or same-width vector
 operands: saturating add/subtract, uint16-operand multiply, nonzero
 division/remainder, XOR, and saturating exponentiation. Scalar-right vector

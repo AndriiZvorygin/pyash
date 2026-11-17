@@ -33,6 +33,18 @@ async fn run_pack(codelets: &[[u16; pyac::WORDS_PER_CODELET]]) -> Result<Value, 
         return Ok(json!({"ok": true, "backend": "rust-gpu-vulkan", "values": []}));
     }
 
+    let input_words = codelets
+        .iter()
+        .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
+        .collect::<Vec<_>>();
+    let programlet = pyac_vliw_core::is_numeric_programlet(&input_words, codelets.len());
+    let result_records = if programlet { 1 } else { codelets.len() };
+    let entry_point = if programlet {
+        "execute_pyac_programlet"
+    } else {
+        "execute_pyac_pack"
+    };
+
     let mut instance_descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
     instance_descriptor.backends = wgpu::Backends::VULKAN;
     let instance = wgpu::Instance::new(instance_descriptor);
@@ -75,16 +87,12 @@ async fn run_pack(codelets: &[[u16; pyac::WORDS_PER_CODELET]]) -> Result<Value, 
         label: Some("Pyash VLIW pack interpreter"),
         layout: None,
         module: &shader,
-        entry_point: Some("execute_pyac_pack"),
+        entry_point: Some(entry_point),
         compilation_options: Default::default(),
         cache: None,
     });
 
-    let input_words = codelets
-        .iter()
-        .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
-        .collect::<Vec<_>>();
-    let output_words = codelets.len() * RESULT_STRIDE;
+    let output_words = result_records * RESULT_STRIDE;
     let input_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("Pyash VLIW codelets"),
         contents: bytemuck::cast_slice(&input_words),
@@ -126,7 +134,12 @@ async fn run_pack(codelets: &[[u16; pyac::WORDS_PER_CODELET]]) -> Result<Value, 
         });
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
-        pass.dispatch_workgroups(codelets.len().div_ceil(64) as u32, 1, 1);
+        let workgroups = if programlet {
+            1
+        } else {
+            codelets.len().div_ceil(64) as u32
+        };
+        pass.dispatch_workgroups(workgroups, 1, 1);
     }
     encoder.copy_buffer_to_buffer(&output_buffer, 0, &readback, 0, (output_words * 4) as u64);
     queue.submit([encoder.finish()]);
@@ -148,7 +161,11 @@ async fn run_pack(codelets: &[[u16; pyac::WORDS_PER_CODELET]]) -> Result<Value, 
         .map_err(|error| format!("Vulkan result map failed: {error}"))?;
     let output = bytemuck::try_cast_slice::<u8, u32>(&mapped)
         .map_err(|error| format!("GPU result buffer was not u32 aligned: {error}"))?;
-    let values = decode_results(codelets, output)?;
+    let values = if programlet {
+        decode_programlet_result(codelets.len(), output)?
+    } else {
+        decode_results(codelets, output)?
+    };
     drop(mapped);
     readback.unmap();
 
@@ -158,6 +175,31 @@ async fn run_pack(codelets: &[[u16; pyac::WORDS_PER_CODELET]]) -> Result<Value, 
         "device": adapter_info.name,
         "values": values.iter().map(value_json).collect::<Vec<_>>(),
     }))
+}
+
+fn decode_programlet_result(
+    codelet_count: usize,
+    output: &[u32],
+) -> Result<Vec<PyacValue>, String> {
+    if output.len() < RESULT_STRIDE {
+        return Err("programlet: GPU result is truncated".to_owned());
+    }
+    if output[1] != 0 {
+        return Err(format!(
+            "programlet: shared VLIW runtime error {}",
+            output[1]
+        ));
+    }
+    if output[0] != pyac_vliw_core::VALUE_UNSIGNED
+        || output[2] != 1
+        || output[3] as usize != codelet_count
+    {
+        return Err(format!(
+            "programlet: invalid GPU result record (kind={}, length={}, consumed={}, expected={codelet_count})",
+            output[0], output[2], output[3]
+        ));
+    }
+    Ok(vec![PyacValue::Unsigned(u64::from(output[4]))])
 }
 
 fn decode_results(

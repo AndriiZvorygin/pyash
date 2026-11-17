@@ -5,6 +5,9 @@ extern crate std;
 
 pub const CODELET_WORDS: usize = 16;
 pub const RESULT_WORDS: usize = 32;
+pub const MAX_PROGRAMLET_CODELETS: usize = 64;
+pub const PROGRAMLET_SCRATCH_WORDS: usize = MAX_PROGRAMLET_CODELETS * (CODELET_WORDS - 1);
+pub const MAX_PROGRAMLET_LOCAL_SLOTS: usize = 64;
 const MAX_U16: u32 = 65_535;
 
 pub const VALUE_UNSIGNED: u32 = 1;
@@ -23,6 +26,7 @@ pub const ERROR_BRANCH: u32 = 5;
 pub const ERROR_FRAME_CAPACITY: u32 = 6;
 pub const ERROR_CONSTANT_WRITE: u32 = 7;
 pub const ERROR_STEP_BUDGET: u32 = 8;
+pub const ERROR_PROGRAM_CAPACITY: u32 = 9;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CoreResult {
@@ -44,7 +48,7 @@ impl CoreResult {
         }
     }
 
-    const fn failure(error: u32, consumed_codelets: u32) -> Self {
+    pub const fn failure(error: u32, consumed_codelets: u32) -> Self {
         Self {
             error,
             consumed_codelets,
@@ -731,8 +735,8 @@ fn collect_sentence(
     words: &[u32],
     codelet_count: usize,
     start: usize,
-    tokens: &mut [u32],
-    boundaries: &mut [u8],
+    tokens: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+    boundaries: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
 ) -> Result<(usize, usize), u32> {
     if start >= codelet_count || codelet_count > words.len() / CODELET_WORDS {
         return Err(ERROR_MALFORMED);
@@ -771,7 +775,7 @@ fn collect_sentence(
                 return Err(ERROR_MALFORMED);
             }
             tokens[token_count] = value;
-            boundaries[token_count] = u8::from((header & (1 << slot) != 0) == complete);
+            boundaries[token_count] = u32::from((header & (1 << slot) != 0) == complete);
             token_count += 1;
             slot += 1;
         }
@@ -782,7 +786,11 @@ fn collect_sentence(
     }
 }
 
-fn parse_sentence(tokens: &[u32], boundaries: &[u8], length: usize) -> Result<ParsedSentence, u32> {
+fn parse_sentence(
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    boundaries: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    length: usize,
+) -> Result<ParsedSentence, u32> {
     if length == 0 || length > tokens.len() || length > boundaries.len() {
         return Err(ERROR_MALFORMED);
     }
@@ -841,7 +849,11 @@ fn parse_sentence(tokens: &[u32], boundaries: &[u8], length: usize) -> Result<Pa
     Err(ERROR_MALFORMED)
 }
 
-fn name_span(tokens: &[u32], field: SentenceField, typed_number: bool) -> Result<NameSpan, u32> {
+fn name_span(
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    field: SentenceField,
+    typed_number: bool,
+) -> Result<NameSpan, u32> {
     let end = field
         .start
         .checked_add(field.length)
@@ -873,7 +885,10 @@ fn name_span(tokens: &[u32], field: SentenceField, typed_number: bool) -> Result
     })
 }
 
-fn number_value(tokens: &[u32], field: SentenceField) -> Result<u32, u32> {
+fn number_value(
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    field: SentenceField,
+) -> Result<u32, u32> {
     if field.length != 2 || tokens[field.start] != NUMBER_QUOTE {
         return Err(ERROR_MALFORMED);
     }
@@ -884,7 +899,12 @@ fn number_value(tokens: &[u32], field: SentenceField) -> Result<u32, u32> {
     Ok(value)
 }
 
-fn names_equal(left: &[u32], left_span: NameSpan, right: &[u32], right_span: NameSpan) -> bool {
+fn names_equal<const WORDS: usize>(
+    left: &[u32; WORDS],
+    left_span: NameSpan,
+    right: &[u32; WORDS],
+    right_span: NameSpan,
+) -> bool {
     if left_span.length != right_span.length
         || left_span.start + left_span.length > left.len()
         || right_span.start + right_span.length > right.len()
@@ -902,9 +922,9 @@ fn names_equal(left: &[u32], left_span: NameSpan, right: &[u32], right_span: Nam
 }
 
 fn store_name(
-    source: &[u32],
+    source: &[u32; PROGRAMLET_SCRATCH_WORDS],
     span: NameSpan,
-    storage: &mut [u32],
+    storage: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
     used: &mut usize,
 ) -> Result<NameSpan, u32> {
     let end = span.start.checked_add(span.length).ok_or(ERROR_MALFORMED)?;
@@ -913,7 +933,11 @@ fn store_name(
         return Err(ERROR_FRAME_CAPACITY);
     }
     let start = *used;
-    storage[start..stored_end].copy_from_slice(&source[span.start..end]);
+    let mut index = 0;
+    while index < span.length {
+        storage[start + index] = source[span.start + index];
+        index += 1;
+    }
     *used = stored_end;
     Ok(NameSpan {
         start,
@@ -921,11 +945,11 @@ fn store_name(
     })
 }
 
-fn find_local_slot(
-    source: &[u32],
+fn find_local_slot<const SLOTS: usize>(
+    source: &[u32; PROGRAMLET_SCRATCH_WORDS],
     span: NameSpan,
-    storage: &[u32],
-    slots: &[NumericLocalSlot],
+    storage: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    slots: &[NumericLocalSlot; SLOTS],
 ) -> Option<usize> {
     let mut index = 0;
     while index < slots.len() {
@@ -948,7 +972,10 @@ fn find_local_slot(
     None
 }
 
-fn is_ceremony_definition(sentence: &ParsedSentence, tokens: &[u32]) -> bool {
+fn is_ceremony_definition(
+    sentence: &ParsedSentence,
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+) -> bool {
     sentence.mood == MOOD_DEFINITION
         && sentence.verb_length == 1
         && tokens[sentence.verb_start] == CEREMONY
@@ -1020,17 +1047,20 @@ pub fn is_numeric_programlet(words: &[u32], codelet_count: usize) -> bool {
 /// caller; no private instruction or named-slot wire format is introduced.
 /// This first Rust slice supports `plus` writes, local `ret`, and `prah`; calls,
 /// branches, and loops are deliberately left to later parity slices.
-pub fn execute_numeric_programlet(
+pub fn execute_numeric_programlet<const SLOTS: usize>(
     words: &[u32],
     codelet_count: usize,
     step_budget: u32,
-    sentence_words: &mut [u32],
-    sentence_boundaries: &mut [u8],
-    symbol_words: &mut [u32],
-    slots: &mut [NumericLocalSlot],
+    sentence_words: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+    sentence_boundaries: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+    symbol_words: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+    slots: &mut [NumericLocalSlot; SLOTS],
 ) -> CoreResult {
     if codelet_count == 0 || codelet_count > words.len() / CODELET_WORDS {
         return CoreResult::failure(ERROR_MALFORMED, 0);
+    }
+    if codelet_count > MAX_PROGRAMLET_CODELETS {
+        return CoreResult::failure(ERROR_PROGRAM_CAPACITY, 0);
     }
     if step_budget == 0 {
         return CoreResult::failure(ERROR_STEP_BUDGET, 0);
@@ -1118,10 +1148,16 @@ pub fn execute_numeric_programlet(
                 Ok(value) => value,
                 Err(error) => return CoreResult::failure(error, steps),
             };
-            let marker = &sentence_words[as_field.start..as_field.start + as_field.length];
-            let kind = if marker == [NAME_TYPE, VARIABLE] {
+            let kind = if as_field.length == 2
+                && sentence_words[as_field.start] == NAME_TYPE
+                && sentence_words[as_field.start + 1] == VARIABLE
+            {
                 1
-            } else if marker == [NAME_TYPE, PERMANENTLY, NUMBER_VERB] {
+            } else if as_field.length == 3
+                && sentence_words[as_field.start] == NAME_TYPE
+                && sentence_words[as_field.start + 1] == PERMANENTLY
+                && sentence_words[as_field.start + 2] == NUMBER_VERB
+            {
                 2
             } else {
                 return CoreResult::failure(ERROR_UNSUPPORTED, steps);
@@ -1129,17 +1165,21 @@ pub fn execute_numeric_programlet(
             if find_local_slot(sentence_words, name, symbol_words, slots).is_some() {
                 return CoreResult::failure(ERROR_MALFORMED, steps);
             }
-            let Some(slot) = slots.iter_mut().find(|slot| slot.kind == 0) else {
+            let mut slot_index = 0;
+            while slot_index < slots.len() && slots[slot_index].kind != 0 {
+                slot_index += 1;
+            }
+            if slot_index == slots.len() {
                 return CoreResult::failure(ERROR_FRAME_CAPACITY, steps);
-            };
+            }
             let stored = match store_name(sentence_words, name, symbol_words, &mut symbol_used) {
                 Ok(name) => name,
                 Err(error) => return CoreResult::failure(error, steps),
             };
-            slot.name_offset = stored.start as u32;
-            slot.name_length = stored.length as u32;
-            slot.value = value;
-            slot.kind = kind;
+            slots[slot_index].name_offset = stored.start as u32;
+            slots[slot_index].name_length = stored.length as u32;
+            slots[slot_index].value = value;
+            slots[slot_index].kind = kind;
         } else if state == 1 && sentence.mood == DEONTIC {
             action_started = true;
             if sentence.field_count != 2

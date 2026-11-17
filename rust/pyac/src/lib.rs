@@ -334,18 +334,11 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
         .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
         .collect::<Vec<_>>();
     if pyac_vliw_core::is_numeric_programlet(&words, pack.codelets.len()) {
-        let scratch_len = pack
-            .codelets
-            .len()
-            .checked_mul(WORDS_PER_CODELET - 1)
-            .ok_or(PackExecutionError {
-                index: 0,
-                source: SemanticError::MalformedProgramlet,
-            })?;
-        let mut sentence_words = vec![0; scratch_len];
-        let mut sentence_boundaries = vec![0; scratch_len];
-        let mut symbol_words = vec![0; scratch_len];
-        let mut slots = vec![pyac_vliw_core::NumericLocalSlot::EMPTY; pack.codelets.len()];
+        let mut sentence_words = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
+        let mut sentence_boundaries = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
+        let mut symbol_words = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
+        let mut slots =
+            [pyac_vliw_core::NumericLocalSlot::EMPTY; pyac_vliw_core::MAX_PROGRAMLET_LOCAL_SLOTS];
         let result = pyac_vliw_core::execute_numeric_programlet(
             &words,
             pack.codelets.len(),
@@ -361,6 +354,7 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
                 pyac_vliw_core::ERROR_FRAME_CAPACITY => SemanticError::ProgramletFrameCapacity,
                 pyac_vliw_core::ERROR_CONSTANT_WRITE => SemanticError::ProgramletConstantWrite,
                 pyac_vliw_core::ERROR_STEP_BUDGET => SemanticError::ProgramletStepBudget,
+                pyac_vliw_core::ERROR_PROGRAM_CAPACITY => SemanticError::ProgramletProgramCapacity,
                 pyac_vliw_core::ERROR_UNSUPPORTED => SemanticError::UnsupportedProgramlet,
                 _ => SemanticError::MalformedProgramlet,
             };

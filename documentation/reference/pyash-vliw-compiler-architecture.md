@@ -131,7 +131,7 @@ senses and the canonical Pyash vocabulary before assigning them VLIW meaning.
 | `.pyac` pack | Header plus deterministic fixed-width codelet bytes | Version 1 is a flat codelet sequence; no embedded data/code sections or mutable variable store; the interpreter allocates implemented numeric locals per invocation |
 | JavaScript VLIW facade | Reference lowering, decoding, effects, and supported execution | Partial semantic coverage, including the canonical Pyash programlet v1 slice below |
 | C output from `.pyac` | Compile supported codelets to C, then use the host C compiler | Verified arithmetic and invert subset; not a general Pyash-to-C replacement |
-| Shared VLIW semantics runtime | `rust/pyac-vliw-core/src/semantics_runtime.rs`, compiled as a `no_std` Rust library and called by the CPU pack interpreter and GPU kernels | Canonical codelet families plus one bounded local-number programlet path; not yet full Pyash interpreter parity |
+| Shared VLIW semantics runtime | `rust/pyac-vliw-core/src/semantics_runtime.rs`, compiled as a `no_std` Rust library and called by the CPU pack interpreter and GPU kernels | Canonical codelet families plus one bounded local-number programlet path on CPU and GPU; not yet full Pyash interpreter parity |
 | Rust-GPU native | Rust-GPU compiles that same semantics runtime to Vulkan SPIR-V for the native Housekeeper worker | Requires an NVIDIA discrete GPU and Vulkan; execution is explicitly bounded to the supported operations |
 | Rust and RISC-V | Decode/execute supported PyAC semantics; direct RISC-V instruction/ELF prototype | Narrow subset; the generated RISC-V image is not emulator-executed |
 
@@ -144,8 +144,8 @@ The JavaScript programlet is the current semantic reference for pure functions.
 The Rust inventory and per-feature parity status are maintained in
 [`pyac-vliw-semantic-slices.md`](pyac-vliw-semantic-slices.md). The first Rust
 program-level slice executes one canonical ceremony with uint16 local
-quantities, `plus` writes, `ret`, `prah`, and a direct invocation. It does not
-claim nested-call, programlet-branch, loop, or GPU frame parity.
+quantities, `plus` writes, `ret`, `prah`, and a direct invocation on CPU and
+GPU. It does not claim nested-call, programlet-branch, or loop parity.
 
 ## Backend Direction
 
@@ -171,8 +171,9 @@ does not accept a second named-slot candidate format.
 
 This is semantic parity for the currently implemented bounded VLIW slice, not
 for all Pyash. The Rust CPU pack API retains its compatibility fallback for
-families outside the semantics runtime; the GPU worker rejects unsupported codelet
-groups explicitly rather than silently substituting another implementation.
+families outside the semantics runtime; the GPU worker rejects unsupported
+codelet groups explicitly rather than silently substituting another
+implementation.
 See
 [`rust/pyac-gpu/README.md`](../../rust/pyac-gpu/README.md) for builds and the
 RTX smoke test.
@@ -219,10 +220,12 @@ stay on the CPU when dispatch and transfer costs outweigh parallel execution.
 
 The first runnable browser slice is implemented under `rust/pyac-browser/`.
 The Rust pack executor and generated WGSL kernel consume the semantics runtime's
-supported codelet semantics; browser tests verify the WASM CPU path, WebGPU
-parity for numeric arithmetic batches and bounded comparison branches, and CPU
-fallback when WebGPU is unavailable. This remains a subset runtime, not
-arbitrary Pyash execution.
+supported codelet and bounded numeric-programlet semantics; browser tests verify
+the WASM CPU path, WebGPU codelet parity for numeric arithmetic batches and
+bounded comparison branches, numeric-programlet CPU/WGSL parity when WebGPU is
+available, and CPU fallback when WebGPU is unavailable. The native hardware
+smoke exercises the Vulkan counterpart on the RTX 3090. This remains a subset
+runtime, not arbitrary Pyash execution.
 The WebGPU action is explicit:
 the measured arithmetic workload has not established a stable profitable
 automatic dispatch threshold on the tested browser, so ordinary pack execution
@@ -232,9 +235,11 @@ treated here as an equivalent general compute backend.
 #### Current GPU Capability Boundary
 
 The current implementation is one shared VLIW semantics runtime with CPU,
-native Vulkan, and browser WGSL targets. For canonical `.pyac` packs, the host still groups
-codelets and reconstructs typed values while the GPU executes supported
-sentence groups.
+native Vulkan, and browser WGSL targets. Ordinary codelet packs still execute
+as sentence groups. A recognized numeric programlet selects a separate
+whole-program entrypoint with one invocation-local frame and one typed result.
+That initial programlet route is bounded to 64 codelets and 64 local slots; it
+is a correctness slice, not yet a batched evolutionary-candidate kernel.
 
 | Capability | Current WebGPU support | Remaining work for broader VLIW coverage |
 | --- | --- | --- |
@@ -242,8 +247,9 @@ sentence groups.
 | Numeric vectors | Shared-runtime elementwise unsigned-16 vectors, widths 2-8 with scalar right operand or widths 2-4 with equal-width vector operand; multiply results widen to unsigned-32 | Vector predicates/masks, wider or dynamic vectors, device-resident inputs/outputs |
 | Conditional execution | Canonical `.pyac` path supports flat `equally`, `tiny`, or `giant` numeric predicates with numeric or `truth`/`lie` literal arms | Named operands in predicates, compound/nested branches, ceremony-call arms, conditional side effects |
 | Scalar boolean values | `truth`/`lie` literals and bounded comparison branches return typed booleans | Boolean-producing calls and boolean local slots in a shared function frame |
-| Loops and calls | Not in the current GPU codelet slice | Bounded loop lowering, function/call frames, explicit control-flow/dependency representation |
-| State and memory | `.pyac` execution uses per-work-item input/output buffers; mutable named state is not part of this pack version | General mutable VLIW state, alias rules, host/device residency and lifetime |
+| Program-level numeric locals | Whole-program dispatch supports uint16 variable/constant declarations, `plus` writes, `ret`, and invocation-local frame reset | Other local operators/types, branch state, nested calls, and loop state |
+| Loops and calls | Not in the current GPU programlet slice | Bounded loop lowering, function/call frames, explicit control-flow/dependency representation |
+| State and memory | Numeric programlets use one isolated local frame per GPU invocation; `.pyac` v1 has no general shared mutable store | General mutable VLIW state, alias rules, host/device residency and lifetime |
 | Other value families | Date and supported numeric/bool vector results are interpreted by the semantics runtime; text vectors remain on the Rust CPU fallback | GPU lowering only where parallel execution is useful; otherwise retain explicit CPU operations in mixed plans |
 | Coordination | Independent work items in one dispatch | Ordered multi-stage programs, reductions, barriers, atomics, cross-workgroup dependencies |
 | Dispatch policy | User-selected GPU action; CPU fallback when unavailable or ineligible | Device checks and a measured model for transfer, launch, occupancy, and data residency costs |
@@ -256,17 +262,17 @@ right execution target. Each new GPU slice should match the Rust CPU reference
 for values and errors, then be benchmarked end to end before automatic
 dispatch is considered.
 
-The shared Rust core now covers the scalar pure-operation vocabulary used by
+The shared Rust core covers the scalar pure-operation vocabulary used by
 programlets (`plus`, `subtract`, `multiply`, `divide`, `exponential`,
 `invert`, `xor`, and `remains`), all three numeric comparison predicates, and
 typed `truth`/`lie` results for canonical literal and flat conditional forms.
-This is codelet-level semantic coverage, not full Pyash program execution.
-The Rust `.pyac` pack executor and GPU kernel do not yet execute the
-programlet-level ceremony contract: invocation-local declarations and writes,
-call frames and returned call values, or bounded `fromindex`/`toindex` loops.
-Those behaviors remain available through the JavaScript reference interpreter;
-the Rust parity work must interpret the same canonical Pyash sentence/codelet
-encoding rather than add a private slot instruction format.
+The CPU pack executor and GPU targets also execute the bounded numeric
+programlet slice described above: local uint16 declarations, `plus` writes,
+`ret`, and a direct invocation, with frame isolation. GPU dispatch is capped at
+64 codelets and 64 local slots. This is still a subset of Pyash execution;
+nested calls, local comparisons/branches, and loops remain available only in
+the JavaScript reference interpreter. Rust continues to interpret the same
+canonical Pyash sentence/codelet encoding rather than a private slot format.
 
 ### Browser Pathway Implementation Roadmap
 
@@ -464,12 +470,11 @@ resident across a batch where the backend allows it. Any target-specific
 optimization remains behind the same semantic conformance tests, with a
 correct fallback for devices lacking that feature.
 
-The native GPU worker executes supported canonical `.pyac` codelet packs
-through the semantics runtime and fails explicitly for unsupported codelet groups.
-The browser WGSL target is generated from the same Rust-GPU source. The
-program-level local-frame evaluator is currently wired through the Rust CPU
-pack executor; neither GPU runtime accepts the removed named-slot candidate
-batch format or claims programlet-frame execution yet.
+The native GPU worker executes supported canonical `.pyac` codelet packs and
+the bounded numeric programlet slice through the semantics runtime, failing
+explicitly for unsupported shapes. The browser WGSL target is generated from
+the same Rust-GPU source and its host selects the same programlet entrypoint.
+Neither GPU runtime accepts the removed named-slot candidate batch format.
 
 ## Implementation Milestones
 

@@ -20,6 +20,7 @@ struct GpuContext {
     device: wgpu::Device,
     queue: wgpu::Queue,
     pipeline: wgpu::ComputePipeline,
+    programlet_pipeline: wgpu::ComputePipeline,
     adapter_name: String,
 }
 
@@ -30,19 +31,19 @@ pub async fn run_pack_webgpu(pack_bytes: &[u8]) -> Result<String, JsValue> {
         return Ok(json!({ "ok": true, "backend": "webgpu", "values": [] }).to_string());
     }
 
-    let context = gpu_context().await?;
     let input_words = pack
         .codelets
         .iter()
         .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
         .collect::<Vec<_>>();
+    let programlet = pyac_vliw_core::is_numeric_programlet(&input_words, pack.codelets.len());
+    let result_records = if programlet { 1 } else { pack.codelets.len() };
+    let context = gpu_context().await?;
     let input_bytes_len = input_words
         .len()
         .checked_mul(4)
         .ok_or_else(|| js_error("VLIW input buffer size overflowed"))?;
-    let output_words_len = pack
-        .codelets
-        .len()
+    let output_words_len = result_records
         .checked_mul(RESULT_STRIDE)
         .ok_or_else(|| js_error("VLIW output buffer size overflowed"))?;
     let output_bytes_len = output_words_len
@@ -55,10 +56,19 @@ pub async fn run_pack_webgpu(pack_bytes: &[u8]) -> Result<String, JsValue> {
             "VLIW pack exceeds this browser GPU's storage-buffer limit",
         ));
     }
-    let workgroups = pack.codelets.len().div_ceil(64);
+    let workgroups = if programlet {
+        1
+    } else {
+        pack.codelets.len().div_ceil(64)
+    };
     if workgroups > limits.max_compute_workgroups_per_dimension as usize {
         return Err(js_error("VLIW pack exceeds the browser GPU dispatch limit"));
     }
+    let pipeline = if programlet {
+        &context.programlet_pipeline
+    } else {
+        &context.pipeline
+    };
 
     let input_bytes = input_words
         .iter()
@@ -87,7 +97,7 @@ pub async fn run_pack_webgpu(pack_bytes: &[u8]) -> Result<String, JsValue> {
         .device
         .create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Pyash VLIW bindings"),
-            layout: &context.pipeline.get_bind_group_layout(0),
+            layout: &pipeline.get_bind_group_layout(0),
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -109,7 +119,7 @@ pub async fn run_pack_webgpu(pack_bytes: &[u8]) -> Result<String, JsValue> {
             label: Some("Pyash shared VLIW interpreter"),
             timestamp_writes: None,
         });
-        pass.set_pipeline(&context.pipeline);
+        pass.set_pipeline(pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
         pass.dispatch_workgroups(workgroups as u32, 1, 1);
     }
@@ -141,7 +151,11 @@ pub async fn run_pack_webgpu(pack_bytes: &[u8]) -> Result<String, JsValue> {
     drop(mapped);
     readback_buffer.unmap();
 
-    let values = decode_results(&pack.codelets, &output_words)?;
+    let values = if programlet {
+        decode_programlet_result(pack.codelets.len(), &output_words)?
+    } else {
+        decode_results(&pack.codelets, &output_words)?
+    };
     Ok(json!({
         "ok": true,
         "backend": "webgpu",
@@ -149,6 +163,31 @@ pub async fn run_pack_webgpu(pack_bytes: &[u8]) -> Result<String, JsValue> {
         "values": values.iter().map(value_to_json).collect::<Vec<_>>(),
     })
     .to_string())
+}
+
+fn decode_programlet_result(
+    codelet_count: usize,
+    output: &[u32],
+) -> Result<Vec<PyacValue>, JsValue> {
+    let result = output
+        .get(..RESULT_STRIDE)
+        .ok_or_else(|| js_error("programlet: GPU result is truncated"))?;
+    if result[1] != 0 {
+        return Err(js_error(format!(
+            "programlet: shared VLIW runtime error {}",
+            result[1]
+        )));
+    }
+    if result[0] != pyac_vliw_core::VALUE_UNSIGNED
+        || result[2] != 1
+        || result[3] as usize != codelet_count
+    {
+        return Err(js_error(format!(
+            "programlet: invalid GPU result record (kind={}, length={}, consumed={}, expected={codelet_count})",
+            result[0], result[2], result[3]
+        )));
+    }
+    Ok(vec![PyacValue::Unsigned(u64::from(result[4]))])
 }
 
 fn decode_results(
@@ -248,6 +287,14 @@ async fn gpu_context() -> Result<Rc<GpuContext>, JsValue> {
         compilation_options: Default::default(),
         cache: None,
     });
+    let programlet_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some("Pyash VLIW programlet interpreter pipeline"),
+        layout: None,
+        module: &shader,
+        entry_point: Some("execute_pyac_programlet"),
+        compilation_options: Default::default(),
+        cache: None,
+    });
     if let Some(error) = pipeline_errors.pop().await {
         return Err(js_error(format!(
             "WebGPU VLIW pipeline validation failed: {error}"
@@ -258,6 +305,7 @@ async fn gpu_context() -> Result<Rc<GpuContext>, JsValue> {
         device,
         queue,
         pipeline,
+        programlet_pipeline,
         adapter_name,
     });
     GPU_CONTEXT.with(|stored| *stored.borrow_mut() = Some(Rc::clone(&context)));

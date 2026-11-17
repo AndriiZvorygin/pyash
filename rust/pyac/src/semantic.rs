@@ -175,6 +175,7 @@ pub enum SemanticError {
     ProgramletFrameCapacity,
     ProgramletConstantWrite,
     ProgramletStepBudget,
+    ProgramletProgramCapacity,
 }
 
 impl SemanticError {
@@ -196,6 +197,7 @@ impl SemanticError {
             Self::ProgramletFrameCapacity => "programlet-frame-capacity",
             Self::ProgramletConstantWrite => "programlet-constant-write",
             Self::ProgramletStepBudget => "programlet-step-budget",
+            Self::ProgramletProgramCapacity => "programlet-program-capacity",
         }
     }
 }
@@ -268,6 +270,9 @@ impl std::fmt::Display for SemanticError {
             }
             Self::ProgramletStepBudget => {
                 formatter.write_str("the programlet execution step budget was exhausted")
+            }
+            Self::ProgramletProgramCapacity => {
+                formatter.write_str("the programlet exceeds the supported codelet capacity")
             }
         }
     }
