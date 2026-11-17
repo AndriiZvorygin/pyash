@@ -110,7 +110,6 @@ DEFAULT_OLLAMA_GPU_STARTUP_GRACE_SECONDS = 60
 DEFAULT_OLLAMA_MIN_GPU_MODEL_FRACTION = 0.99
 DEFAULT_OLLAMA_GPU_WATCHDOG_INTERVAL_SECONDS = 300
 MAX_VLIW_PACK_BYTES = 16 * 1024 * 1024
-MAX_VLIW_BATCH_BYTES = 16 * 1024 * 1024
 VLIW_PACK_HEADER_BYTES = 32
 VLIW_PACK_CODELET_BYTES = 32
 OLLAMA_VRAM_DEFAULT_WEIGHT_HEADROOM = 1.20
@@ -2212,20 +2211,6 @@ def execute_vliw_pack_gpu(job: Dict[str, Any]) -> Dict[str, Any]:
   return result
 
 
-def execute_vliw_batch_gpu(job: Dict[str, Any]) -> Dict[str, Any]:
-  job_spec = job.get("jobSpec") if isinstance(job.get("jobSpec"), dict) else {}
-  payload = job_spec.get("payload")
-  if not isinstance(payload, dict):
-    raise ValueError("vliw-batch-evaluate payload must be a map")
-  encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-  if len(encoded) > MAX_VLIW_BATCH_BYTES:
-    raise ValueError(f"VLIW batch payload exceeds the {MAX_VLIW_BATCH_BYTES}-byte Housekeeper limit")
-  result = run_vliw_gpu_worker(encoded)
-  if result.get("schemaVersion") != 1 or not isinstance(result.get("scores"), list):
-    raise RuntimeError("Rust VLIW GPU worker returned an invalid candidate batch result")
-  return result
-
-
 def submit_job(
   payload: Dict[str, Any],
   runtime_registry: Optional[Dict[str, Dict[str, Any]]] = None,
@@ -2375,7 +2360,7 @@ def submit_job(
     if not isinstance(job_spec, dict):
       return {"accepted": False, "error": "vliw jobSpec must be map"}
     kind = normalize_text(job_spec.get("kind")).lower()
-    if kind not in {"pyac-pack-execute", "vliw-batch-evaluate"}:
+    if kind != "pyac-pack-execute":
       return {"accepted": False, "error": "unsupported vliw jobSpec.kind"}
     if not isinstance(job_spec.get("resourceRequest"), dict):
       return {"accepted": False, "error": "vliw jobSpec.resourceRequest must declare GPU capacity"}
@@ -2383,15 +2368,7 @@ def submit_job(
       request = job_resource_request({"jobSpec": job_spec})
       if request is None:
         raise RuntimeError("resourceRequest.vramRequiredMb is required")
-      if kind == "pyac-pack-execute":
-        decode_vliw_pack_payload(job_spec)
-      else:
-        batch_payload = job_spec.get("payload")
-        if not isinstance(batch_payload, dict):
-          raise ValueError("vliw-batch-evaluate payload must be a map")
-        batch_size = len(json.dumps(batch_payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
-        if batch_size > MAX_VLIW_BATCH_BYTES:
-          raise ValueError(f"VLIW batch payload exceeds the {MAX_VLIW_BATCH_BYTES}-byte Housekeeper limit")
+      decode_vliw_pack_payload(job_spec)
     except (RuntimeError, ValueError) as err:
       return {"accepted": False, "error": normalize_text(err)}
 
@@ -5830,8 +5807,6 @@ def execute_job(
     kind = normalize_text(job_spec.get("kind")).lower()
     if kind == "pyac-pack-execute":
       return execute_vliw_pack_gpu(job)
-    if kind == "vliw-batch-evaluate":
-      return execute_vliw_batch_gpu(job)
     raise RuntimeError("unsupported vliw job kind")
 
   sleep_ms = 200

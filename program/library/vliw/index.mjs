@@ -392,7 +392,6 @@ export {
   renderVliwFunctionSource,
   VliwFunctionSourceError
 } from "./source.mjs";
-export { evolveVliwFunctionSourceThroughHousekeeper } from "./evolution.mjs";
 export { createHousekeeperVliwPackExecutor } from "./rust_gpu_pack.mjs";
 export {
   decodePyashProgram,

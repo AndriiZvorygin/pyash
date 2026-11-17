@@ -2,11 +2,8 @@ import {
   DEFAULT_VLIW_FUNCTION_STEP_BUDGET,
   MAX_VLIW_FUNCTION_STEP_BUDGET,
   compareVliwFitness,
-  normalizeVliwFunction,
-  scoreVliwFunction
+  normalizeVliwFunction
 } from "./functions.mjs";
-import { createHousekeeperVliwBatchEvaluator } from "./housekeeper.mjs";
-import { parseVliwFunctionSource, renderVliwFunctionSource } from "./source.mjs";
 
 export const MAX_VLIW_POPULATION = 256;
 export const MAX_VLIW_GENERATIONS = 31;
@@ -147,8 +144,7 @@ function batchPayload(template, cases, candidates) {
 }
 
 /**
- * Run bounded semantic mutation/search. `evaluateBatch` is the platform seam:
- * production callers submit this batch through Pyash's durable Housekeeper queue.
+ * Run bounded host-side mutation/search through a caller-provided batch evaluator.
  */
 export async function evolveVliwFunction({
   template: rawTemplate,
@@ -160,7 +156,7 @@ export async function evolveVliwFunction({
   seed = 1
 } = {}) {
   if (typeof evaluateBatch !== "function") {
-    throw new Error("VLIW evolution requires a Housekeeper-backed evaluateBatch callback");
+    throw new Error("VLIW evolution requires an evaluateBatch callback");
   }
   const template = normalizeVliwFunction({ ...rawTemplate, instructions: rawTemplate?.instructions ?? [{
     op: "plus",
@@ -212,81 +208,5 @@ export async function evolveVliwFunction({
     trainingOutputs: champion.outputs,
     heldoutOutputs: heldout.outputs,
     validated: heldout.fitness.incorrectCount === 0
-  };
-}
-
-export async function evolveVliwFunctionThroughHousekeeper({
-  housekeeper = {},
-  ...options
-} = {}) {
-  return evolveVliwFunction({
-    ...options,
-    evaluateBatch: createHousekeeperVliwBatchEvaluator(housekeeper)
-  });
-}
-
-function verifyReferenceOutputs(candidate, cases, expectedFitness, actualOutputs, label) {
-  const reference = scoreVliwFunction(candidate, cases);
-  const referenceOutputs = reference.results.map(({ actual }) => actual);
-  if (!Array.isArray(actualOutputs) || actualOutputs.length !== referenceOutputs.length
-    || actualOutputs.some((value, index) => value !== referenceOutputs[index])) {
-    throw new Error(`Housekeeper ${label} outputs disagree with the CPU reference`);
-  }
-  const referenceFitness = {
-    incorrectCount: reference.incorrectCount,
-    totalAbsoluteError: reference.totalAbsoluteError,
-    instructionCount: reference.instructionCount
-  };
-  if (compareVliwFitness(referenceFitness, expectedFitness) !== 0) {
-    throw new Error(`Housekeeper ${label} fitness disagrees with the CPU reference`);
-  }
-  return { fitness: referenceFitness, outputs: referenceOutputs };
-}
-
-/** Parse, evolve through Housekeeper, and compare exact per-case outputs with the CPU reference. */
-export async function evolveVliwFunctionSourceThroughHousekeeper({
-  sourceText,
-  functionName = "",
-  housekeeper = {},
-  ...options
-} = {}) {
-  const source = parseVliwFunctionSource(sourceText, { functionName });
-  const result = await evolveVliwFunctionThroughHousekeeper({
-    ...options,
-    housekeeper,
-    template: source.definition,
-    trainingCases: source.trainingCases,
-    heldoutCases: source.heldoutCases
-  });
-  const cpuTraining = verifyReferenceOutputs(
-    result.candidate,
-    source.trainingCases,
-    result.trainingFitness,
-    result.trainingOutputs,
-    "training"
-  );
-  const cpuHeldout = verifyReferenceOutputs(
-    result.candidate,
-    source.heldoutCases,
-    result.heldoutFitness,
-    result.heldoutOutputs,
-    "held-out"
-  );
-  return {
-    ...result,
-    validated: result.validated
-      && cpuTraining.fitness.incorrectCount === 0
-      && cpuHeldout.fitness.incorrectCount === 0,
-    cpuReference: {
-      trainingFitness: cpuTraining.fitness,
-      trainingOutputs: cpuTraining.outputs,
-      heldoutFitness: cpuHeldout.fitness,
-      heldoutOutputs: cpuHeldout.outputs
-    },
-    candidateSourcePya: renderVliwFunctionSource({
-      definition: result.candidate,
-      trainingCases: source.trainingCases,
-      heldoutCases: source.heldoutCases
-    })
   };
 }

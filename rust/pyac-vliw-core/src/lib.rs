@@ -19,21 +19,6 @@ pub const ERROR_DIVISION_BY_ZERO: u32 = 2;
 pub const ERROR_MALFORMED: u32 = 3;
 pub const ERROR_VECTOR_WIDTH: u32 = 4;
 pub const ERROR_BRANCH: u32 = 5;
-pub const ERROR_FUNCTION_OPCODE: u32 = 6;
-pub const ERROR_FUNCTION_OPERAND: u32 = 7;
-pub const ERROR_FUNCTION_DIVISION_BY_ZERO: u32 = 8;
-
-pub const FUNCTION_PLUS: u32 = 1;
-pub const FUNCTION_SUBTRACT: u32 = 2;
-pub const FUNCTION_XOR: u32 = 3;
-pub const FUNCTION_MULTIPLY: u32 = 4;
-pub const FUNCTION_DIVIDE: u32 = 5;
-pub const FUNCTION_REMAINS: u32 = 6;
-pub const FUNCTION_EXPONENTIAL: u32 = 7;
-pub const FUNCTION_EQUALLY: u32 = 8;
-pub const FUNCTION_TINY: u32 = 9;
-pub const FUNCTION_GIANT: u32 = 10;
-
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CoreResult {
@@ -42,117 +27,6 @@ pub struct CoreResult {
     pub length: u32,
     pub consumed_codelets: u32,
     pub values: [u32; RESULT_WORDS],
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct FunctionResult {
-    pub value: u32,
-    pub error: u32,
-}
-
-impl FunctionResult {
-    const fn failure(error: u32) -> Self {
-        Self { value: 0, error }
-    }
-}
-
-fn function_operation(op: u32, left: u32, right: u32) -> Result<u32, u32> {
-    if left > MAX_U16 || right > MAX_U16 {
-        return Err(ERROR_FUNCTION_OPERAND);
-    }
-    match op {
-        FUNCTION_PLUS => Ok((left + right).min(MAX_U16)),
-        FUNCTION_SUBTRACT => Ok(if left >= right { left - right } else { 0 }),
-        FUNCTION_XOR => Ok(left ^ right),
-        FUNCTION_MULTIPLY => Ok(left * right),
-        FUNCTION_DIVIDE if right == 0 => Err(ERROR_FUNCTION_DIVISION_BY_ZERO),
-        FUNCTION_DIVIDE => Ok(left / right),
-        FUNCTION_REMAINS if right == 0 => Err(ERROR_FUNCTION_DIVISION_BY_ZERO),
-        FUNCTION_REMAINS => Ok(left % right),
-        FUNCTION_EXPONENTIAL => {
-            let mut result = 1u32;
-            let mut factor = left;
-            let mut exponent = right;
-            while exponent > 0 {
-                if exponent & 1 != 0 {
-                    result = (result * factor).min(MAX_U16);
-                }
-                exponent >>= 1;
-                if exponent > 0 {
-                    factor = (factor * factor).min(MAX_U16);
-                }
-            }
-            Ok(result)
-        }
-        FUNCTION_EQUALLY => Ok(u32::from(left == right)),
-        FUNCTION_TINY => Ok(u32::from(left < right)),
-        FUNCTION_GIANT => Ok(u32::from(left > right)),
-        _ => Err(ERROR_FUNCTION_OPCODE),
-    }
-}
-
-/// Execute one already-validated named-slot function candidate against a case.
-/// Instructions are flat `(opcode, target, left, right)` u32 records.
-pub fn execute_function_candidate(
-    instructions: &[u32],
-    instruction_start: usize,
-    instruction_count: usize,
-    output_slot: usize,
-    case_values: &[u32],
-    case_start: usize,
-    slot_count: usize,
-    scratch: &mut [u32],
-    scratch_start: usize,
-    step_budget: usize,
-) -> FunctionResult {
-    if instruction_count == 0
-        || instruction_count > step_budget
-        || slot_count < 2
-        || output_slot >= slot_count
-        || instruction_start > instructions.len()
-        || instruction_count > (instructions.len() - instruction_start) / 4
-        || case_start > case_values.len()
-        || slot_count > case_values.len() - case_start
-        || scratch_start > scratch.len()
-        || slot_count > scratch.len() - scratch_start
-    {
-        return FunctionResult::failure(ERROR_MALFORMED);
-    }
-
-    let mut slot = 0;
-    while slot < slot_count {
-        let value = case_values[case_start + slot];
-        if value > MAX_U16 {
-            return FunctionResult::failure(ERROR_FUNCTION_OPERAND);
-        }
-        scratch[scratch_start + slot] = value;
-        slot += 1;
-    }
-
-    let mut instruction = 0;
-    while instruction < instruction_count {
-        let start = instruction_start + instruction * 4;
-        let op = instructions[start];
-        let target = instructions[start + 1] as usize;
-        let left_slot = instructions[start + 2] as usize;
-        let right_slot = instructions[start + 3] as usize;
-        if target >= slot_count || left_slot >= slot_count || right_slot >= slot_count {
-            return FunctionResult::failure(ERROR_MALFORMED);
-        }
-        let left = scratch[scratch_start + left_slot];
-        let right = scratch[scratch_start + right_slot];
-        match function_operation(op, left, right) {
-            Ok(value) => scratch[scratch_start + target] = value,
-            Err(error) => return FunctionResult::failure(error),
-        }
-        instruction += 1;
-    }
-
-    FunctionResult {
-        value: scratch[scratch_start + output_slot],
-        error: 0,
-    }
 }
 
 impl CoreResult {
@@ -861,57 +735,5 @@ mod tests {
         assert_eq!(result.value_kind, VALUE_UNSIGNED);
         assert_eq!(result.values[0], 7);
         assert_eq!(result.consumed_codelets, 2);
-    }
-
-    #[test]
-    fn executes_named_slot_function_with_shared_operator_semantics() {
-        let instructions = [FUNCTION_MULTIPLY, 2, 0, 1, FUNCTION_PLUS, 2, 2, 1];
-        let mut scratch = [0; 3];
-        let result = execute_function_candidate(
-            &instructions,
-            0,
-            2,
-            2,
-            &[7, 6, 0],
-            0,
-            3,
-            &mut scratch,
-            0,
-            8,
-        );
-        assert_eq!(
-            result,
-            FunctionResult {
-                value: 48,
-                error: 0
-            }
-        );
-    }
-
-    #[test]
-    fn named_slot_function_reports_invalid_operands_and_division_by_zero() {
-        let mut scratch = [0; 3];
-        let divide = [FUNCTION_DIVIDE, 2, 0, 1];
-        assert_eq!(
-            execute_function_candidate(&divide, 0, 1, 2, &[9, 0, 0], 0, 3, &mut scratch, 0, 4,)
-                .error,
-            ERROR_FUNCTION_DIVISION_BY_ZERO
-        );
-        assert_eq!(
-            execute_function_candidate(
-                &divide,
-                0,
-                1,
-                2,
-                &[65_536, 1, 0],
-                0,
-                3,
-                &mut scratch,
-                0,
-                4,
-            )
-            .error,
-            ERROR_FUNCTION_OPERAND
-        );
     }
 }

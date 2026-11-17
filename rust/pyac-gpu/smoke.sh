@@ -14,12 +14,7 @@ cargo run --quiet --manifest-path "$root/rust/pyac-gpu/worker/Cargo.toml" \
   --example pack_smoke > "$tmp/pack.pyac"
 PYAC_VLIW_SPIRV_PATH="$shader" "$worker" < "$tmp/pack.pyac" > "$tmp/pack-result.json"
 
-cat > "$tmp/batch.json" <<'JSON'
-{"schemaVersion":1,"slots":["left","right","value"],"inputSlots":["left","right"],"outputSlot":"value","cases":[{"values":{"left":5,"right":2},"expected":0},{"values":{"left":3,"right":4},"expected":0},{"values":{"left":9,"right":4},"expected":0}],"candidates":[{"id":"plus","instructions":[{"op":"plus","target":"value","left":"left","right":"right"}]},{"id":"subtract","instructions":[{"op":"subtract","target":"value","left":"left","right":"right"}]},{"id":"xor","instructions":[{"op":"xor","target":"value","left":"left","right":"right"}]},{"id":"multiply","instructions":[{"op":"multiply","target":"value","left":"left","right":"right"}]},{"id":"divide","instructions":[{"op":"divide","target":"value","left":"left","right":"right"}]},{"id":"remains","instructions":[{"op":"remains","target":"value","left":"left","right":"right"}]},{"id":"exponential","instructions":[{"op":"exponential","target":"value","left":"left","right":"right"}]},{"id":"equally","instructions":[{"op":"equally","target":"value","left":"left","right":"right"}]},{"id":"tiny","instructions":[{"op":"tiny","target":"value","left":"left","right":"right"}]},{"id":"giant","instructions":[{"op":"giant","target":"value","left":"left","right":"right"}]}]}
-JSON
-PYAC_VLIW_SPIRV_PATH="$shader" "$worker" < "$tmp/batch.json" > "$tmp/batch-result.json"
-
-node --input-type=module - "$tmp/pack-result.json" "$tmp/batch-result.json" <<'NODE'
+node --input-type=module - "$tmp/pack-result.json" <<'NODE'
 import assert from "node:assert/strict";
 import fs from "node:fs";
 
@@ -40,20 +35,5 @@ assert.deepEqual(pack.values, [
   { type: "unsigned", value: 7 }
 ]);
 
-const batch = JSON.parse(fs.readFileSync(process.argv[3], "utf8"));
-assert.equal(batch.backend, "rust-gpu-vulkan");
-const outputs = Object.fromEntries(batch.scores.map(({ id, outputs }) => [id, outputs]));
-assert.deepEqual(outputs, {
-  plus: [7, 7, 13],
-  subtract: [3, 0, 5],
-  xor: [7, 7, 13],
-  multiply: [10, 12, 36],
-  divide: [2, 0, 2],
-  remains: [1, 3, 1],
-  exponential: [25, 81, 6561],
-  equally: [0, 0, 0],
-  tiny: [0, 1, 0],
-  giant: [1, 0, 1]
-});
-console.log(`Rust-GPU smoke passed on ${pack.device}: PyAC pack plus all 10 named-slot operators.`);
+console.log(`Rust-GPU smoke passed on ${pack.device}: canonical PyAC pack execution.`);
 NODE

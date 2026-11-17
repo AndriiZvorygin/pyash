@@ -154,7 +154,7 @@ function defaultProfileForIntent(intent, jobSpec = {}, sentence = {}, { remember
     const profile = String(configured?.ob?.text ?? configured?.ob?.name ?? "").trim();
     return String(jobSpec.profileName ?? jobSpec.katagoProfile ?? "").trim() || profile || "default";
   }
-  if (intent === "vliw") return String(jobSpec.profileName ?? "vliw-batch-evaluator").trim();
+  if (intent === "vliw") return String(jobSpec.profileName ?? "pyac-vliw-rust-gpu").trim();
   return String(jobSpec.model ?? jobSpec.workflow ?? intent).trim() || intent;
 }
 
