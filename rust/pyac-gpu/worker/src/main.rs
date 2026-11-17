@@ -190,16 +190,19 @@ fn decode_programlet_result(
             output[1]
         ));
     }
-    if output[0] != pyac_vliw_core::VALUE_UNSIGNED
-        || output[2] != 1
-        || output[3] as usize != codelet_count
-    {
+    if output[2] != 1 || output[3] as usize != codelet_count {
         return Err(format!(
             "programlet: invalid GPU result record (kind={}, length={}, consumed={}, expected={codelet_count})",
             output[0], output[2], output[3]
         ));
     }
-    Ok(vec![PyacValue::Unsigned(u64::from(output[4]))])
+    let value = match output[0] {
+        pyac_vliw_core::VALUE_UNSIGNED => PyacValue::Unsigned(u64::from(output[4])),
+        pyac_vliw_core::VALUE_SIGNED => PyacValue::Signed(i64::from(output[4] as i32)),
+        pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(output[4] != 0),
+        kind => return Err(format!("programlet: unsupported GPU result kind {kind}")),
+    };
+    Ok(vec![value])
 }
 
 fn decode_results(
@@ -279,5 +282,50 @@ fn value_json(value: &PyacValue) -> Value {
         PyacValue::Vector(VectorElements::Texts(values)) => {
             json!({"type": "vector", "elementType": "text", "values": values})
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn result_record(kind: u32, value: u32) -> [u32; RESULT_STRIDE] {
+        let mut output = [0; RESULT_STRIDE];
+        output[0] = kind;
+        output[2] = 1;
+        output[3] = 6;
+        output[4] = value;
+        output
+    }
+
+    #[test]
+    fn decodes_supported_typed_programlet_results() {
+        assert_eq!(
+            decode_programlet_result(6, &result_record(pyac_vliw_core::VALUE_UNSIGNED, 17))
+                .unwrap(),
+            vec![PyacValue::Unsigned(17)]
+        );
+        assert_eq!(
+            decode_programlet_result(
+                6,
+                &result_record(pyac_vliw_core::VALUE_SIGNED, (-5i32) as u32)
+            )
+            .unwrap(),
+            vec![PyacValue::Signed(-5)]
+        );
+        assert_eq!(
+            decode_programlet_result(6, &result_record(pyac_vliw_core::VALUE_BOOLEAN, 1)).unwrap(),
+            vec![PyacValue::Boolean(true)]
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_programlet_result_metadata_and_types() {
+        let mut output = result_record(pyac_vliw_core::VALUE_UNSIGNED, 17);
+        output[2] = 2;
+        assert!(decode_programlet_result(6, &output).is_err());
+
+        let output = result_record(pyac_vliw_core::VALUE_DATE, 17);
+        assert!(decode_programlet_result(6, &output).is_err());
     }
 }

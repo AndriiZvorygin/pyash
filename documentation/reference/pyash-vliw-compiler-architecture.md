@@ -131,7 +131,7 @@ senses and the canonical Pyash vocabulary before assigning them VLIW meaning.
 | `.pyac` pack | Header plus deterministic fixed-width codelet bytes | Version 1 is a flat codelet sequence; no embedded data/code sections or mutable variable store; the interpreter allocates implemented numeric locals per invocation |
 | JavaScript VLIW facade | Reference lowering, decoding, effects, and supported execution | Partial semantic coverage, including the canonical Pyash programlet v1 slice below |
 | C output from `.pyac` | Compile supported codelets to C, then use the host C compiler | Verified arithmetic and invert subset; not a general Pyash-to-C replacement |
-| Shared VLIW semantics runtime | `rust/pyac-vliw-core/src/semantics_runtime.rs`, compiled as a `no_std` Rust library and called by the CPU pack interpreter and GPU kernels | Canonical codelet families plus one bounded local-number programlet path on CPU and GPU; not yet full Pyash interpreter parity |
+| Shared VLIW semantics runtime | `rust/pyac-vliw-core/src/semantics_runtime.rs`, compiled as a `no_std` Rust library and called by the CPU pack interpreter and GPU kernels | Canonical codelet families plus bounded scalar programlets with nested calls, branches, loops, signed/unsigned numbers, and booleans; not full Pyash interpreter parity |
 | Rust-GPU native | Rust-GPU compiles that same semantics runtime to Vulkan SPIR-V for the native Housekeeper worker | Requires an NVIDIA discrete GPU and Vulkan; execution is explicitly bounded to the supported operations |
 | Rust and RISC-V | Decode/execute supported PyAC semantics; direct RISC-V instruction/ELF prototype | Narrow subset; the generated RISC-V image is not emulator-executed |
 
@@ -140,12 +140,13 @@ does not mean arbitrary Pyash programs already pass through VLIW. Likewise,
 the searchable `.pya` catalog is a semantic/provenance projection; `.pyac` is
 the executable byte projection.
 
-The JavaScript programlet is the current semantic reference for pure functions.
-The Rust inventory and per-feature parity status are maintained in
-[`pyac-vliw-semantic-slices.md`](pyac-vliw-semantic-slices.md). The first Rust
-program-level slice executes one canonical ceremony with uint16 local
-quantities, `plus` writes, `ret`, `prah`, and a direct invocation on CPU and
-GPU. It does not claim nested-call, programlet-branch, or loop parity.
+The JavaScript programlet is the semantic reference for pure functions. The
+Rust inventory and per-feature parity status are maintained in
+[`pyac-vliw-semantic-slices.md`](pyac-vliw-semantic-slices.md). The shared Rust
+runtime now covers bounded nested calls, typed scalar locals and arguments,
+comparison branches, and indexed loops on the CPU, Vulkan, and generated WGSL
+targets. The supported value boundary is still scalar numeric/boolean inside
+programlets; this does not claim full Pyash interpreter parity.
 
 ## Backend Direction
 
@@ -236,19 +237,20 @@ treated here as an equivalent general compute backend.
 
 The current implementation is one shared VLIW semantics runtime with CPU,
 native Vulkan, and browser WGSL targets. Ordinary codelet packs still execute
-as sentence groups. A recognized numeric programlet selects a separate
-whole-program entrypoint with one invocation-local frame and one typed result.
-That initial programlet route is bounded to 64 codelets and 64 local slots; it
-is a correctness slice, not yet a batched evolutionary-candidate kernel.
+as sentence groups. A recognized programlet selects a separate whole-program
+entrypoint with bounded caller-owned frames and one typed result. Programlets
+are bounded to 64 codelets, 64 local slots per frame, 8 arguments, call depth
+8, and the 65,536-step default budget. This is a correctness slice, not yet a
+batched evolutionary-candidate kernel.
 
 | Capability | Current WebGPU support | Remaining work for broader VLIW coverage |
 | --- | --- | --- |
-| Numeric scalar operations | Shared-runtime unsigned arithmetic: saturating add/subtract, multiply, nonzero divide/remainder, XOR, exponentiation | Additional operations only where normative Pyash semantics define them |
+| Numeric scalar operations | Shared-runtime arithmetic and bounded local writes for `plus`, `subtract`, `multiply`, `divide`, `exponential`, `invert`, `xor`, and `remains`; signed/unsigned comparison and unsigned-domain restrictions follow the current semantics | Additional operations only where normative Pyash semantics define them |
 | Numeric vectors | Shared-runtime elementwise unsigned-16 vectors, widths 2-8 with scalar right operand or widths 2-4 with equal-width vector operand; multiply results widen to unsigned-32 | Vector predicates/masks, wider or dynamic vectors, device-resident inputs/outputs |
-| Conditional execution | Canonical `.pyac` path supports flat `equally`, `tiny`, or `giant` numeric predicates with numeric or `truth`/`lie` literal arms | Named operands in predicates, compound/nested branches, ceremony-call arms, conditional side effects |
-| Scalar boolean values | `truth`/`lie` literals and bounded comparison branches return typed booleans | Boolean-producing calls and boolean local slots in a shared function frame |
-| Program-level numeric locals | Whole-program dispatch supports uint16 variable/constant declarations, `plus` writes, `ret`, and invocation-local frame reset | Other local operators/types, branch state, nested calls, and loop state |
-| Loops and calls | Not in the current GPU programlet slice | Bounded loop lowering, function/call frames, explicit control-flow/dependency representation |
+| Conditional execution | Codelet predicates plus one-level programlet branches over literals, arguments, or locals; numeric and boolean actions, optional alternative | Nested branches and multi-statement branch bodies |
+| Scalar boolean values | Typed boolean arguments, local declarations/writes, comparisons, nested call results, and `ret` | Date/vector/text locals and general aggregate values |
+| Programlet calls and locals | Nested call frames, typed scalar arguments/returns, numeric and boolean locals, constant-write rejection; max 8 arguments and depth 8 | General recursive semantics, configurable frame sizes, and shared program state |
+| Loops | Bounded `fromindex`/`toindex` traversal, loop-index argument, zero-width skip, and per-invocation step budget | Nested-loop conformance and larger/dynamic iteration spaces |
 | State and memory | Numeric programlets use one isolated local frame per GPU invocation; `.pyac` v1 has no general shared mutable store | General mutable VLIW state, alias rules, host/device residency and lifetime |
 | Other value families | Date and supported numeric/bool vector results are interpreted by the semantics runtime; text vectors remain on the Rust CPU fallback | GPU lowering only where parallel execution is useful; otherwise retain explicit CPU operations in mixed plans |
 | Coordination | Independent work items in one dispatch | Ordered multi-stage programs, reductions, barriers, atomics, cross-workgroup dependencies |
@@ -264,15 +266,12 @@ dispatch is considered.
 
 The shared Rust core covers the scalar pure-operation vocabulary used by
 programlets (`plus`, `subtract`, `multiply`, `divide`, `exponential`,
-`invert`, `xor`, and `remains`), all three numeric comparison predicates, and
-typed `truth`/`lie` results for canonical literal and flat conditional forms.
-The CPU pack executor and GPU targets also execute the bounded numeric
-programlet slice described above: local uint16 declarations, `plus` writes,
-`ret`, and a direct invocation, with frame isolation. GPU dispatch is capped at
-64 codelets and 64 local slots. This is still a subset of Pyash execution;
-nested calls, local comparisons/branches, and loops remain available only in
-the JavaScript reference interpreter. Rust continues to interpret the same
-canonical Pyash sentence/codelet encoding rather than a private slot format.
+`invert`, `xor`, and `remains`), all three numeric comparison predicates,
+typed numeric/boolean values, bounded nested calls, conditional actions, and
+`fromindex`/`toindex` loops. The CPU executor and both GPU targets interpret the
+same canonical Pyash sentence/codelet encoding rather than a private slot
+format. Programlet-local dates, vectors, text, nested branches, and general
+effects remain outside the current slice.
 
 ### Browser Pathway Implementation Roadmap
 

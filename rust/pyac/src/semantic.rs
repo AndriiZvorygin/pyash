@@ -176,6 +176,7 @@ pub enum SemanticError {
     ProgramletConstantWrite,
     ProgramletStepBudget,
     ProgramletProgramCapacity,
+    ProgramletCallDepth,
 }
 
 impl SemanticError {
@@ -198,6 +199,7 @@ impl SemanticError {
             Self::ProgramletConstantWrite => "programlet-constant-write",
             Self::ProgramletStepBudget => "programlet-step-budget",
             Self::ProgramletProgramCapacity => "programlet-program-capacity",
+            Self::ProgramletCallDepth => "programlet-call-depth",
         }
     }
 }
@@ -273,6 +275,9 @@ impl std::fmt::Display for SemanticError {
             }
             Self::ProgramletProgramCapacity => {
                 formatter.write_str("the programlet exceeds the supported codelet capacity")
+            }
+            Self::ProgramletCallDepth => {
+                formatter.write_str("the programlet call depth exceeded the supported limit")
             }
         }
     }

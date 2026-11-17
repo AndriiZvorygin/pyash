@@ -14,6 +14,7 @@ export const MAX_PYASH_PROGRAMLET_STEP_BUDGET = 10_000_000;
 
 const PURE_BUILTIN_VERBS = new Set([
   "remains",
+  "boolean",
   "equally",
   "tiny",
   "giant",
@@ -41,7 +42,16 @@ function clone(value) {
 
 function parseSource(sourceText) {
   if (typeof sourceText !== "string" || !sourceText.trim()) fail("Pyash programlet source must be non-empty text");
-  const sentences = splitSentences(sourceText).map((source, index) => {
+  const sourceSentences = [];
+  for (const source of splitSentences(sourceText)) {
+    const previous = sourceSentences.at(-1);
+    if (previous && previous.split(/\s+/u).includes("then") && /^else(?:\s|$)/u.test(source.trim())) {
+      sourceSentences[sourceSentences.length - 1] = `${previous} ${source}`;
+    } else {
+      sourceSentences.push(source);
+    }
+  }
+  const sentences = sourceSentences.map((source, index) => {
     try {
       return parse(source);
     } catch (error) {
@@ -76,6 +86,35 @@ function outputType(sentence) {
   if (["bool", "boolean"].includes(types[0])) return "bool";
   if (["num", "number"].includes(types[0])) return "num";
   return null;
+}
+
+function programletLocalDeclaration(sentence) {
+  if (isNamedNumericSlotDeclaration(sentence)) {
+    return { type: "num", kind: namedNumericSlotKind(sentence) };
+  }
+  const chain = sentence?.ob?.genitive?.chain;
+  const inherited = Array.isArray(chain)
+    && chain.length === 3
+    && chain[0] === "this"
+    && ["ob", "fromindex"].includes(chain[1]);
+  const inheritedType = inherited ? chain[2] : null;
+  const isNumber = sentence?.be === "number" || sentence?.be === "num";
+  const isBoolean = sentence?.be === "boolean" || sentence?.be === "bool";
+  const marker = namedNumericSlotKind(sentence)
+    ?? (sentence?.as?.name === "permanently boolean" ? "constant" : null);
+  const initializedByType = isNumber
+    ? Number.isInteger(sentence?.ob?.num) && sentence.ob.num >= 0 && sentence.ob.num <= 0xffff
+      || inheritedType === "num"
+    : isBoolean
+      ? typeof sentence?.ob?.boolean === "boolean" || inheritedType === "bool"
+      : false;
+  if (!(
+    sentence?.mood === "ya"
+    && sentence?.su?.name
+    && initializedByType
+    && marker
+  )) return null;
+  return { type: isBoolean ? "bool" : "num", kind: marker };
 }
 
 function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
@@ -137,16 +176,17 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
         if (activeDefinitionHasAction) {
           fail("Pyash programlet local numeric slots must be declared before actions", { sentence: index + 1 });
         }
-        if (!isNamedNumericSlotDeclaration(sentence)) {
-          fail("Pyash programlet body only admits initialized numeric variable or constant quantity declarations", {
+        const localDeclaration = programletLocalDeclaration(sentence);
+        if (!localDeclaration) {
+          fail("Pyash programlet body only admits initialized numeric or boolean local declarations", {
             sentence: index + 1
           });
         }
         const slotName = sentence.su.name;
         if (activeSlots.has(slotName)) {
-          fail(`Pyash programlet redeclares local numeric slot: ${slotName}`, { sentence: index + 1 });
+          fail(`Pyash programlet redeclares local slot: ${slotName}`, { sentence: index + 1 });
         }
-        activeSlots.set(slotName, namedNumericSlotKind(sentence));
+        activeSlots.set(slotName, localDeclaration);
       } else if (sentence.mood === "do") {
         activeDefinitionHasAction = true;
         visitSentence(sentence, (action) => {
@@ -158,16 +198,20 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
             fail(`Pyash programlet rejects effectful or unknown verb: ${action.be}`, { sentence: index + 1 });
           }
           const targetSlot = action.to?.name ? activeSlots.get(action.to.name) : null;
-          if (targetSlot === "constant") {
+          if (targetSlot?.kind === "constant") {
             fail(`constant quantity is read-only: ${action.to.name}`, { sentence: index + 1 });
           }
-          if (targetSlot === "variable" && outputType(action) !== "num") {
-            fail(`numeric variable slot requires a typed num destination: ${action.to.name}`, {
+          if (targetSlot?.kind === "variable" && outputType(action) !== targetSlot.type) {
+            const message = targetSlot.type === "num"
+              ? `numeric variable slot requires a typed num destination: ${action.to.name}`
+              : `boolean variable slot requires a typed bool destination: ${action.to.name}`;
+            fail(message, {
               sentence: index + 1
             });
           }
           if (isCall) {
-            if (!action.to?.name || outputType(action) !== signatures.get(action.be)) {
+            if (!action.to?.name || outputType(action) !== signatures.get(action.be)
+              || (targetSlot?.type && targetSlot.type !== outputType(action))) {
               fail(`Pyash programlet call to ${action.be} has an incompatible output signature`, {
                 sentence: index + 1
               });

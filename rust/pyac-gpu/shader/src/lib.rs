@@ -3,8 +3,9 @@
 use glam::UVec3;
 use pyac_vliw_core::{
     CODELET_WORDS, CoreResult, DEFAULT_PROGRAMLET_STEP_BUDGET, ERROR_MALFORMED,
-    ERROR_PROGRAM_CAPACITY, ERROR_UNSUPPORTED, MAX_PROGRAMLET_CODELETS, MAX_PROGRAMLET_LOCAL_SLOTS,
-    NumericLocalSlot, PROGRAMLET_SCRATCH_WORDS, RESULT_WORDS, execute_numeric_programlet,
+    ERROR_PROGRAM_CAPACITY, ERROR_UNSUPPORTED, MAX_PROGRAMLET_CALL_DEPTH,
+    MAX_PROGRAMLET_CODELETS, PROGRAMLET_SCRATCH_WORDS, ProgramletFrame, RESULT_WORDS,
+    execute_numeric_programlet,
     interpret_group, is_numeric_programlet,
 };
 use spirv_std::spirv;
@@ -76,7 +77,7 @@ pub fn execute_pyac_programlet(
             let mut sentence_words = [0u32; PROGRAMLET_SCRATCH_WORDS];
             let mut sentence_boundaries = [0u32; PROGRAMLET_SCRATCH_WORDS];
             let mut symbol_words = [0u32; PROGRAMLET_SCRATCH_WORDS];
-            let mut slots = [NumericLocalSlot::EMPTY; MAX_PROGRAMLET_LOCAL_SLOTS];
+            let mut frames = [ProgramletFrame::EMPTY; MAX_PROGRAMLET_CALL_DEPTH];
             execute_numeric_programlet(
                 input,
                 codelet_count,
@@ -84,7 +85,7 @@ pub fn execute_pyac_programlet(
                 &mut sentence_words,
                 &mut sentence_boundaries,
                 &mut symbol_words,
-                &mut slots,
+                &mut frames,
             )
         }
     };

@@ -33,11 +33,20 @@ non-discrete GPU is a hard failure; the worker does not silently switch to a
 second semantics implementation. Named-slot candidate evaluation is not part
 of the Rust VLIW interpreter or its Housekeeper runtime.
 
-The CPU pack executor, native Vulkan shader, and browser WGSL path support the
-same bounded numeric programlet slice: invocation-local uint16 declarations,
-`plus` writes, and a numeric return. GPU execution is capped at 64 codelets and
-64 local slots per program. The smoke script verifies both a successful return
-and rejection of a write to a constant quantity on the discrete GPU.
+The CPU pack executor, native Vulkan shader, and browser WGSL target use the
+same bounded scalar programlet runtime: typed numeric/boolean locals and
+arguments, nested calls, scalar operators, local comparisons/branches, bounded
+`fromindex`/`toindex` loops, and typed returns. Limits are 64 codelets, 64
+locals per frame, 8 arguments, call depth 8, and the 65,536-step default
+budget. Date/vector literals remain supported as ordinary codelet groups, not
+as programlet-local values. Text values and general effects are outside this
+programlet slice.
+
+The smoke script currently verifies ordinary pack execution, one local-number
+programlet return, and rejection of a write to a constant quantity on the
+discrete GPU. CPU conformance tests cover nested calls, branches, loops, and
+typed values; a Housekeeper-managed end-to-end GPU matrix for those cases is
+still needed before claiming hardware runtime parity for the full slice.
 
 The GPU Housekeeper Compose service builds the worker into its image and mounts
 the host NVIDIA Vulkan ICD manifest read-only. The default manifest path is

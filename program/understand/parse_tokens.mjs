@@ -81,8 +81,10 @@ export function parseTokens(
     const elseIndex = words.findIndex((token) => token === "else");
     if (elseIndex > 0) {
       const altStart = words[elseIndex + 1] === "if" ? elseIndex + 2 : elseIndex + 1;
-      const mainTokens = [...words.slice(0, elseIndex), mood];
-      const altTokens = [...words.slice(altStart), mood];
+      const mainTokens = words.slice(0, elseIndex);
+      const altTokens = words.slice(altStart);
+      if (!MOODS.includes(mainTokens.at(-1))) mainTokens.push(mood);
+      if (!MOODS.includes(altTokens.at(-1))) altTokens.push(mood);
       if (mainTokens.length > 1 && altTokens.length > 1) {
         const primary = parseTokens(mainTokens, { allowMoodless: false, quotedText, quotedKind });
         const alternative = parseTokens(altTokens, { allowMoodless: false, quotedText, quotedKind });

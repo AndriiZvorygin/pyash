@@ -8,7 +8,9 @@ pub const RESULT_WORDS: usize = 32;
 pub const MAX_PROGRAMLET_CODELETS: usize = 64;
 pub const PROGRAMLET_SCRATCH_WORDS: usize = MAX_PROGRAMLET_CODELETS * (CODELET_WORDS - 1);
 pub const MAX_PROGRAMLET_LOCAL_SLOTS: usize = 64;
+pub const MAX_PROGRAMLET_CALL_DEPTH: usize = 8;
 const MAX_U16: u32 = 65_535;
+pub const MAX_PROGRAMLET_ARGUMENTS: usize = 8;
 
 pub const VALUE_UNSIGNED: u32 = 1;
 pub const VALUE_SIGNED: u32 = 2;
@@ -17,6 +19,7 @@ pub const VALUE_VECTOR_U16: u32 = 4;
 pub const VALUE_VECTOR_U32: u32 = 5;
 pub const VALUE_VECTOR_BOOL: u32 = 6;
 pub const VALUE_BOOLEAN: u32 = 7;
+const VALUE_NUMBER: u32 = 8;
 
 pub const ERROR_UNSUPPORTED: u32 = 1;
 pub const ERROR_DIVISION_BY_ZERO: u32 = 2;
@@ -27,6 +30,7 @@ pub const ERROR_FRAME_CAPACITY: u32 = 6;
 pub const ERROR_CONSTANT_WRITE: u32 = 7;
 pub const ERROR_STEP_BUDGET: u32 = 8;
 pub const ERROR_PROGRAM_CAPACITY: u32 = 9;
+pub const ERROR_CALL_DEPTH: u32 = 10;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CoreResult {
@@ -97,6 +101,7 @@ const INVERT: u32 = 0xaad2;
 const QUOTE_DENOTE: u32 = 0x001d;
 const NAME_TYPE: u32 = 0x225e;
 const NUMBER_TYPE: u32 = 0x327e;
+const BOOLEAN_TYPE: u32 = 0x538f;
 const VARIABLE: u32 = 0xc8c4;
 const PERMANENTLY: u32 = 0x0b50;
 const CEREMONY: u32 = 0xe8c9;
@@ -104,6 +109,10 @@ const MOOD_DEFINITION: u32 = 0x5217;
 const MOOD_PARAGRAPH: u32 = 0x4e27;
 const MOOD_RETURN: u32 = 0xa828;
 const ESSIVE: u32 = 0x414f;
+const FROM_INDEX: u32 = 0x6357;
+const TO_INDEX: u32 = 0x4e4f;
+const GENITIVE_CASE: u32 = 0x215e;
+const THIS_WORD: u32 = 0x4a57;
 pub const DEFAULT_PROGRAMLET_STEP_BUDGET: u32 = 65_536;
 
 #[repr(C)]
@@ -113,6 +122,7 @@ pub struct NumericLocalSlot {
     pub name_length: u32,
     pub value: u32,
     pub kind: u32,
+    pub value_kind: u32,
 }
 
 impl NumericLocalSlot {
@@ -121,6 +131,73 @@ impl NumericLocalSlot {
         name_length: 0,
         value: 0,
         kind: 0,
+        value_kind: 0,
+    };
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ProgramletArgument {
+    pub role: u32,
+    pub value: u32,
+    pub value_kind: u32,
+}
+
+impl ProgramletArgument {
+    pub const EMPTY: Self = Self {
+        role: 0,
+        value: 0,
+        value_kind: 0,
+    };
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ProgramletFrame {
+    pub slots: [NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
+    pub arguments: [ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
+    pub argument_count: u32,
+    pub routine_start: u32,
+    pub routine_end: u32,
+    pub program_counter: u32,
+    pub routine_name_offset: u32,
+    pub routine_name_length: u32,
+    pub return_name_offset: u32,
+    pub return_name_length: u32,
+    pub result_value: u32,
+    pub expected_kind: u32,
+    pub result_kind: u32,
+    pub state: u32,
+    pub action_started: u32,
+    pub has_returned: u32,
+    pub loop_active: u32,
+    pub loop_remaining: u32,
+    pub loop_end: u32,
+    pub loop_has_end: u32,
+}
+
+impl ProgramletFrame {
+    pub const EMPTY: Self = Self {
+        slots: [NumericLocalSlot::EMPTY; MAX_PROGRAMLET_LOCAL_SLOTS],
+        arguments: [ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS],
+        argument_count: 0,
+        routine_start: 0,
+        routine_end: 0,
+        program_counter: 0,
+        routine_name_offset: 0,
+        routine_name_length: 0,
+        return_name_offset: 0,
+        return_name_length: 0,
+        result_value: 0,
+        expected_kind: 0,
+        result_kind: 0,
+        state: 0,
+        action_started: 0,
+        has_returned: 0,
+        loop_active: 0,
+        loop_remaining: 0,
+        loop_end: 0,
+        loop_has_end: 0,
     };
 }
 
@@ -731,6 +808,10 @@ struct NameSpan {
     length: usize,
 }
 
+impl NameSpan {
+    const EMPTY: Self = Self { start: 0, length: 0 };
+}
+
 fn collect_sentence(
     words: &[u32],
     codelet_count: usize,
@@ -790,99 +871,229 @@ fn parse_sentence(
     tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
     boundaries: &[u32; PROGRAMLET_SCRATCH_WORDS],
     length: usize,
-) -> Result<ParsedSentence, u32> {
-    if length == 0 || length > tokens.len() || length > boundaries.len() {
-        return Err(ERROR_MALFORMED);
+    parsed: &mut ParsedSentence,
+) -> u32 {
+    parse_sentence_range(tokens, boundaries, 0, length, parsed)
+}
+
+fn parse_sentence_range(
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    boundaries: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    start: usize,
+    end: usize,
+    parsed: &mut ParsedSentence,
+) -> u32 {
+    if start >= end || end > tokens.len() || end > boundaries.len() {
+        return ERROR_MALFORMED;
     }
-    let mut parsed = ParsedSentence::empty();
-    let mut value_start = 0;
-    let mut index = 0;
-    while index < length {
+    let mut result = ParsedSentence::empty();
+    let mut value_start = start;
+    let mut index = start;
+    while index < end {
         if boundaries[index] == 0 {
             index += 1;
             continue;
         }
         let token = tokens[index];
-        if matches!(token, NOMINATIVE | ACCUSATIVE | ESSIVE | DESTINATION) {
-            if value_start >= index || parsed.field_count == parsed.fields.len() {
-                return Err(ERROR_MALFORMED);
+        if matches!(
+            token,
+            NOMINATIVE
+                | ACCUSATIVE
+                | ESSIVE
+                | DESTINATION
+                | SOURCE
+                | COMITATIVE
+                | INSTRUMENTAL
+                | FROM_INDEX
+                | TO_INDEX
+        ) {
+            if value_start >= index || result.field_count == result.fields.len() {
+                return ERROR_MALFORMED;
             }
             let mut prior = 0;
-            while prior < parsed.field_count {
-                if parsed.fields[prior].role == token {
-                    return Err(ERROR_MALFORMED);
+            while prior < result.field_count {
+                if result.fields[prior].role == token {
+                    return ERROR_MALFORMED;
                 }
                 prior += 1;
             }
-            parsed.fields[parsed.field_count] = SentenceField {
+            result.fields[result.field_count] = SentenceField {
                 role: token,
                 start: value_start,
                 length: index - value_start,
             };
-            parsed.field_count += 1;
+            result.field_count += 1;
             value_start = index + 1;
         } else if matches!(
             token,
             MOOD_DEFINITION | REALIS | DEONTIC | MOOD_RETURN | MOOD_PARAGRAPH
         ) {
-            if parsed.mood != 0 {
-                return Err(ERROR_MALFORMED);
+            if result.mood != 0 {
+                return ERROR_MALFORMED;
             }
-            parsed.mood = token;
-            parsed.verb_start = value_start;
-            parsed.verb_length = index - value_start;
-            if parsed.verb_length == 0 && token != MOOD_RETURN {
-                return Err(ERROR_MALFORMED);
+            result.mood = token;
+            result.verb_start = value_start;
+            result.verb_length = index - value_start;
+            if result.verb_length == 0 && token != MOOD_RETURN {
+                return ERROR_MALFORMED;
             }
-            if parsed.verb_length > 0 && token == MOOD_RETURN {
-                return Err(ERROR_MALFORMED);
+            if result.verb_length > 0 && token == MOOD_RETURN {
+                return ERROR_MALFORMED;
             }
-            if index + 1 != length {
-                return Err(ERROR_MALFORMED);
+            if index + 1 != end {
+                return ERROR_MALFORMED;
             }
-            return Ok(parsed);
+            *parsed = result;
+            return 0;
         } else {
-            return Err(ERROR_UNSUPPORTED);
+            return ERROR_UNSUPPORTED;
         }
         index += 1;
     }
-    Err(ERROR_MALFORMED)
+    ERROR_MALFORMED
+}
+
+fn contains_marked_token(
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    boundaries: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    length: usize,
+    target: u32,
+) -> bool {
+    let mut index = 0;
+    while index < length {
+        if boundaries[index] != 0 && tokens[index] == target {
+            return true;
+        }
+        index += 1;
+    }
+    false
 }
 
 fn name_span(
     tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
     field: SentenceField,
     typed_number: bool,
-) -> Result<NameSpan, u32> {
-    let end = field
-        .start
-        .checked_add(field.length)
-        .ok_or(ERROR_MALFORMED)?;
+    name: &mut NameSpan,
+) -> u32 {
+    let Some(end) = field.start.checked_add(field.length) else {
+        return ERROR_MALFORMED;
+    };
     if field.length < 2 || end > tokens.len() || tokens[field.start] != NAME_TYPE {
-        return Err(ERROR_MALFORMED);
+        return ERROR_MALFORMED;
     }
     let mut marker = field.start + 1;
     while marker < end && tokens[marker] != NAME_TYPE {
         marker += 1;
     }
     let name_start = if marker < end {
-        if !typed_number || marker != field.start + 2 || tokens[field.start + 1] != NUMBER_TYPE {
-            return Err(ERROR_MALFORMED);
+        if !typed_number
+            || marker != field.start + 2
+            || !matches!(tokens[field.start + 1], NUMBER_TYPE | BOOLEAN_TYPE)
+        {
+            return ERROR_MALFORMED;
         }
         marker + 1
     } else {
         if typed_number {
-            return Err(ERROR_MALFORMED);
+            return ERROR_MALFORMED;
         }
         field.start + 1
     };
     if name_start >= end {
-        return Err(ERROR_MALFORMED);
+        return ERROR_MALFORMED;
     }
-    Ok(NameSpan {
+    *name = NameSpan {
         start: name_start,
         length: end - name_start,
-    })
+    };
+    0
+}
+
+fn typed_output_name(
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    field: SentenceField,
+    name: &mut NameSpan,
+    kind: &mut u32,
+) -> u32 {
+    if field.length < 4 || tokens[field.start] != NAME_TYPE || tokens[field.start + 2] != NAME_TYPE
+    {
+        return ERROR_MALFORMED;
+    }
+    let output_kind = match tokens[field.start + 1] {
+        NUMBER_TYPE => VALUE_NUMBER,
+        BOOLEAN_TYPE => VALUE_BOOLEAN,
+        _ => return ERROR_UNSUPPORTED,
+    };
+    *name = NameSpan {
+        start: field.start + 3,
+        length: field.length - 3,
+    };
+    *kind = output_kind;
+    0
+}
+
+#[derive(Clone, Copy)]
+struct ProgramletNumber {
+    bits: u32,
+    kind: u32,
+}
+
+impl ProgramletNumber {
+    const EMPTY: Self = Self { bits: 0, kind: 0 };
+}
+
+fn number_kind_matches(expected: u32, actual: u32) -> bool {
+    if expected == VALUE_NUMBER {
+        matches!(actual, VALUE_NUMBER | VALUE_UNSIGNED | VALUE_SIGNED)
+    } else {
+        expected == actual
+    }
+}
+
+fn compare_programlet_numbers(
+    left: ProgramletNumber,
+    right: ProgramletNumber,
+) -> u32 {
+    match (left.kind == VALUE_SIGNED, right.kind == VALUE_SIGNED) {
+        (true, true) => compare_signed(left.bits as i32, right.bits as i32),
+        (true, false) => {
+            let left = left.bits as i32;
+            if left < 0 {
+                0
+            } else {
+                compare_unsigned(left as u32, right.bits)
+            }
+        }
+        (false, true) => {
+            let signed_right = right.bits as i32;
+            if signed_right < 0 {
+                2
+            } else {
+                compare_unsigned(left.bits, signed_right as u32)
+            }
+        }
+        (false, false) => compare_unsigned(left.bits, right.bits),
+    }
+}
+
+fn compare_signed(left: i32, right: i32) -> u32 {
+    if left < right {
+        0
+    } else if left > right {
+        2
+    } else {
+        1
+    }
+}
+
+fn compare_unsigned(left: u32, right: u32) -> u32 {
+    if left < right {
+        0
+    } else if left > right {
+        2
+    } else {
+        1
+    }
 }
 
 fn number_value(
@@ -897,6 +1108,719 @@ fn number_value(
         return Err(ERROR_MALFORMED);
     }
     Ok(value)
+}
+
+fn argument_value(
+    arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
+    role: u32,
+    value: &mut ProgramletNumber,
+) -> bool {
+    let mut index = 0;
+    while index < arguments.len() {
+        let argument = arguments[index];
+        if argument.role == role {
+            *value = ProgramletNumber {
+                bits: argument.value,
+                kind: argument.value_kind,
+            };
+            return true;
+        }
+        index += 1;
+    }
+    false
+}
+
+fn write_programlet_call_result(
+    symbols: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    return_name: NameSpan,
+    expected_kind: u32,
+    result: ProgramletNumber,
+    slots: &mut [NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
+) -> Result<(), u32> {
+    if !number_kind_matches(expected_kind, result.kind) {
+        return Err(ERROR_UNSUPPORTED);
+    }
+    let mut target_slot = find_local_slot(symbols, return_name, symbols, slots);
+    if target_slot.is_none() {
+        let mut slot_index = 0;
+        while slot_index < MAX_PROGRAMLET_LOCAL_SLOTS && slots[slot_index].kind != 0 {
+            slot_index += 1;
+        }
+        if slot_index == MAX_PROGRAMLET_LOCAL_SLOTS {
+            return Err(ERROR_FRAME_CAPACITY);
+        }
+        slots[slot_index].name_offset = return_name.start as u32;
+        slots[slot_index].name_length = return_name.length as u32;
+        slots[slot_index].kind = if expected_kind == VALUE_BOOLEAN { 3 } else { 1 };
+        target_slot = Some(slot_index);
+    }
+    let target_slot = target_slot.unwrap_or(0);
+    if slots[target_slot].kind == 2 || slots[target_slot].kind == 4 {
+        return Err(ERROR_CONSTANT_WRITE);
+    }
+    if (slots[target_slot].kind == 3) != (expected_kind == VALUE_BOOLEAN) {
+        return Err(ERROR_UNSUPPORTED);
+    }
+    slots[target_slot].value = result.bits;
+    slots[target_slot].value_kind = result.kind;
+    Ok(())
+}
+
+fn set_loop_index_argument(
+    arguments: &mut [ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
+    value: u32,
+) -> Result<(), u32> {
+    let mut empty_index = arguments.len();
+    let mut index = 0;
+    while index < arguments.len() {
+        if arguments[index].role == FROM_INDEX {
+            arguments[index].value = value;
+            arguments[index].value_kind = VALUE_UNSIGNED;
+            return Ok(());
+        }
+        if arguments[index].role == 0 && empty_index == arguments.len() {
+            empty_index = index;
+        }
+        index += 1;
+    }
+    if empty_index == arguments.len() {
+        return Err(ERROR_FRAME_CAPACITY);
+    }
+    arguments[empty_index] = ProgramletArgument {
+        role: FROM_INDEX,
+        value,
+        value_kind: VALUE_UNSIGNED,
+    };
+    Ok(())
+}
+
+fn resolve_programlet_value(
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    field: SentenceField,
+    symbols: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
+    slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
+    value: &mut ProgramletNumber,
+) -> u32 {
+    if field.length == 2 && tokens[field.start] == NUMBER_QUOTE {
+        let bits = match number_value(tokens, field) {
+            Ok(bits) => bits,
+            Err(error) => return error,
+        };
+        *value = ProgramletNumber {
+            bits,
+            kind: VALUE_UNSIGNED,
+        };
+        return 0;
+    }
+    if field.length == 1 && matches!(tokens[field.start], TRUTH | LIE) {
+        *value = ProgramletNumber {
+            bits: u32::from(tokens[field.start] == TRUTH),
+            kind: VALUE_BOOLEAN,
+        };
+        return 0;
+    }
+    if field.length == 5
+        && tokens[field.start] == THIS_WORD
+        && tokens[field.start + 1] == GENITIVE_CASE
+        && tokens[field.start + 3] == GENITIVE_CASE
+    {
+        let mut argument = ProgramletNumber::EMPTY;
+        if !argument_value(arguments, tokens[field.start + 2], &mut argument) {
+            return ERROR_MALFORMED;
+        }
+        let expected_kind = match tokens[field.start + 4] {
+            NUMBER_TYPE => VALUE_NUMBER,
+            BOOLEAN_TYPE => VALUE_BOOLEAN,
+            _ => return ERROR_UNSUPPORTED,
+        };
+        if !number_kind_matches(expected_kind, argument.kind) {
+            return ERROR_UNSUPPORTED;
+        }
+        *value = argument;
+        return 0;
+    }
+    if tokens[field.start] != NAME_TYPE {
+        return ERROR_UNSUPPORTED;
+    }
+    let typed_number = field.length >= 4
+        && tokens[field.start + 1] == NUMBER_TYPE
+        && tokens[field.start + 2] == NAME_TYPE;
+    let typed_boolean = field.length >= 4
+        && tokens[field.start + 1] == BOOLEAN_TYPE
+        && tokens[field.start + 2] == NAME_TYPE;
+    if field.length > 2 && !typed_number && !typed_boolean {
+        return ERROR_UNSUPPORTED;
+    }
+    let mut name = NameSpan::EMPTY;
+    let name_error = name_span(tokens, field, typed_number || typed_boolean, &mut name);
+    if name_error != 0 {
+        return name_error;
+    }
+    let Some(index) = find_local_slot(tokens, name, symbols, slots) else {
+        return ERROR_MALFORMED;
+    };
+    let slot = slots[index];
+    if typed_number && !number_kind_matches(VALUE_NUMBER, slot.value_kind) {
+        return ERROR_UNSUPPORTED;
+    }
+    if typed_boolean && slot.value_kind != VALUE_BOOLEAN {
+        return ERROR_UNSUPPORTED;
+    }
+    if !matches!(
+        slot.value_kind,
+        VALUE_UNSIGNED | VALUE_SIGNED | VALUE_BOOLEAN
+    ) {
+        return ERROR_UNSUPPORTED;
+    }
+    *value = ProgramletNumber {
+        bits: slot.value,
+        kind: slot.value_kind,
+    };
+    0
+}
+
+fn capture_programlet_arguments(
+    sentence: &ParsedSentence,
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    symbols: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
+    slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
+    captured: &mut [ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
+    captured_count: &mut u32,
+) -> Result<(), u32> {
+    *captured = [ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS];
+    let mut count = 0usize;
+    let mut index = 0;
+    while index < sentence.field_count {
+        let field = sentence.fields[index];
+        if !matches!(field.role, NOMINATIVE | DESTINATION | FROM_INDEX | TO_INDEX) {
+            if count == MAX_PROGRAMLET_ARGUMENTS {
+                return Err(ERROR_FRAME_CAPACITY);
+            }
+            let mut value = ProgramletNumber::EMPTY;
+            let value_error =
+                resolve_programlet_value(tokens, field, symbols, arguments, slots, &mut value);
+            if value_error != 0 {
+                return Err(value_error);
+            }
+            captured[count] = ProgramletArgument {
+                role: field.role,
+                value: value.bits,
+                value_kind: value.kind,
+            };
+            count += 1;
+        }
+        index += 1;
+    }
+    *captured_count = count as u32;
+    Ok(())
+}
+
+fn validate_programlet_arguments(
+    words: &[u32],
+    codelet_count: usize,
+    routine_start: usize,
+    tokens: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+    boundaries: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+    arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
+    argument_count: u32,
+) -> Result<(), u32> {
+    if argument_count as usize > arguments.len() {
+        return Err(ERROR_FRAME_CAPACITY);
+    }
+    let definition_at = routine_start.checked_sub(1).ok_or(ERROR_MALFORMED)?;
+    let (length, _) = collect_sentence(words, codelet_count, definition_at, tokens, boundaries)?;
+    let mut definition = ParsedSentence::empty();
+    let parse_error = parse_sentence(tokens, boundaries, length, &mut definition);
+    if parse_error != 0 {
+        return Err(parse_error);
+    }
+    if !is_ceremony_definition(&definition, tokens) {
+        return Err(ERROR_MALFORMED);
+    }
+
+    let mut formal_count = 0usize;
+    let mut field_index = 0;
+    while field_index < definition.field_count {
+        let formal = definition.fields[field_index];
+        if !matches!(
+            formal.role,
+            NOMINATIVE | DESTINATION | FROM_INDEX | TO_INDEX
+        ) {
+            if formal_count >= MAX_PROGRAMLET_ARGUMENTS {
+                return Err(ERROR_FRAME_CAPACITY);
+            }
+            let expected_kind = if formal.length == 2 && tokens[formal.start] == NUMBER_QUOTE {
+                VALUE_NUMBER
+            } else if formal.length == 1 && matches!(tokens[formal.start], TRUTH | LIE) {
+                VALUE_BOOLEAN
+            } else {
+                return Err(ERROR_UNSUPPORTED);
+            };
+            let mut argument_index = 0;
+            while argument_index < argument_count as usize
+                && arguments[argument_index].role != formal.role
+            {
+                argument_index += 1;
+            }
+            if argument_index == argument_count as usize {
+                return Err(ERROR_MALFORMED);
+            }
+            let argument = arguments[argument_index];
+            if !number_kind_matches(expected_kind, argument.value_kind) {
+                return Err(ERROR_UNSUPPORTED);
+            }
+            formal_count += 1;
+        }
+        field_index += 1;
+    }
+    if formal_count != argument_count as usize {
+        return Err(ERROR_MALFORMED);
+    }
+    Ok(())
+}
+
+fn loop_iterations(
+    sentence: &ParsedSentence,
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+) -> Result<u32, u32> {
+    let start = sentence
+        .field(FROM_INDEX)
+        .map(|field| number_value(tokens, field))
+        .transpose()?;
+    let end = sentence
+        .field(TO_INDEX)
+        .map(|field| number_value(tokens, field))
+        .transpose()?;
+    if end.is_some() && start.is_none() {
+        return Err(ERROR_MALFORMED);
+    }
+    Ok(match (start, end) {
+        (Some(start), Some(end)) => start.abs_diff(end),
+        (Some(start), None) => start,
+        _ => 0,
+    })
+}
+
+fn comparison_operand(
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    start: usize,
+    end: usize,
+    symbols: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
+    slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
+    value: &mut ProgramletNumber,
+) -> u32 {
+    let Some(length) = end.checked_sub(start) else {
+        return ERROR_MALFORMED;
+    };
+    let field = SentenceField {
+        role: 0,
+        start,
+        length,
+    };
+    let error = resolve_programlet_value(tokens, field, symbols, arguments, slots, value);
+    if error != 0 {
+        return error;
+    }
+    if !matches!(value.kind, VALUE_UNSIGNED | VALUE_SIGNED | VALUE_BOOLEAN) {
+        return ERROR_UNSUPPORTED;
+    }
+    0
+}
+
+fn programlet_branch(
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    boundaries: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    length: usize,
+    symbols: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
+    slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
+    selected_action: &mut ParsedSentence,
+    has_selected_action: &mut bool,
+) -> u32 {
+    let mut conditional_at = None;
+    let mut index = 0;
+    while index < length {
+        if boundaries[index] != 0 && tokens[index] == CONDITIONAL {
+            conditional_at = Some(index);
+            break;
+        }
+        index += 1;
+    }
+    let Some(conditional_at) = conditional_at else {
+        return ERROR_UNSUPPORTED;
+    };
+    let mut accusative_at = None;
+    let mut source_at = None;
+    index = 0;
+    while index < conditional_at {
+        if boundaries[index] != 0 {
+            if tokens[index] == ACCUSATIVE {
+                accusative_at = Some(index);
+            } else if tokens[index] == SOURCE {
+                source_at = Some(index);
+            }
+        }
+        index += 1;
+    }
+    let Some(accusative_at) = accusative_at else {
+        return ERROR_MALFORMED;
+    };
+    let Some(source_at) = source_at else {
+        return ERROR_MALFORMED;
+    };
+    if source_at <= accusative_at || source_at + 2 != conditional_at {
+        return ERROR_UNSUPPORTED;
+    }
+    let mut left = ProgramletNumber::EMPTY;
+    let left_error = comparison_operand(
+        tokens,
+        0,
+        accusative_at,
+        symbols,
+        arguments,
+        slots,
+        &mut left,
+    );
+    if left_error != 0 {
+        return left_error;
+    }
+    let mut right = ProgramletNumber::EMPTY;
+    let right_error = comparison_operand(
+        tokens,
+        accusative_at + 1,
+        source_at,
+        symbols,
+        arguments,
+        slots,
+        &mut right,
+    );
+    if right_error != 0 {
+        return right_error;
+    }
+    if (left.kind == VALUE_BOOLEAN) != (right.kind == VALUE_BOOLEAN) {
+        return ERROR_UNSUPPORTED;
+    }
+    let ordering = compare_programlet_numbers(left, right);
+    let predicate = match tokens[source_at + 1] {
+        EQUALLY => ordering == 1,
+        TINY => ordering == 0,
+        GIANT => ordering == 2,
+        _ => return ERROR_UNSUPPORTED,
+    };
+
+    let mut first_mood = conditional_at + 1;
+    while first_mood < length
+        && (boundaries[first_mood] == 0
+            || !matches!(
+                tokens[first_mood],
+                REALIS | DEONTIC | MOOD_RETURN | MOOD_PARAGRAPH
+            ))
+    {
+        first_mood += 1;
+    }
+    if first_mood == length || tokens[first_mood] != DEONTIC {
+        return ERROR_UNSUPPORTED;
+    }
+    let mut first_action = ParsedSentence::empty();
+    let first_action_error = parse_sentence_range(
+        tokens,
+        boundaries,
+        conditional_at + 1,
+        first_mood + 1,
+        &mut first_action,
+    );
+    if first_action_error != 0 {
+        return first_action_error;
+    }
+    let has_alternative = first_mood + 1 < length;
+    let alternative = if has_alternative {
+        let mut alternative = ParsedSentence::empty();
+        let error = parse_sentence_range(
+            tokens,
+            boundaries,
+            first_mood + 1,
+            length,
+            &mut alternative,
+        );
+        if error != 0 {
+            return error;
+        }
+        alternative
+    } else {
+        ParsedSentence::empty()
+    };
+    if first_action.mood != DEONTIC || (has_alternative && alternative.mood != DEONTIC) {
+        return ERROR_UNSUPPORTED;
+    }
+    *has_selected_action = predicate || has_alternative;
+    *selected_action = if predicate { first_action } else { alternative };
+    0
+}
+
+fn read_optional_programlet_number(
+    present: bool,
+    field: SentenceField,
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    symbols: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
+    slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
+    value: &mut ProgramletNumber,
+) -> u32 {
+    if !present {
+        return 0;
+    }
+    let error = resolve_programlet_value(tokens, field, symbols, arguments, slots, value);
+    if error != 0 {
+        return error;
+    }
+    if !matches!(value.kind, VALUE_UNSIGNED | VALUE_SIGNED) {
+        return ERROR_UNSUPPORTED;
+    }
+    0
+}
+
+fn unsigned_programlet_operand(present: bool, value: ProgramletNumber) -> Result<u32, u32> {
+    if !present {
+        return Ok(0);
+    }
+    if value.kind == VALUE_SIGNED && (value.bits as i32) < 0 {
+        return Err(ERROR_UNSUPPORTED);
+    }
+    if value.bits > MAX_U16 {
+        return Err(ERROR_MALFORMED);
+    }
+    Ok(value.bits)
+}
+
+fn first_present_operand(
+    first_present: bool,
+    first: u32,
+    second_present: bool,
+    second: u32,
+) -> Result<u32, u32> {
+    if first_present {
+        Ok(first)
+    } else if second_present {
+        Ok(second)
+    } else {
+        Err(ERROR_MALFORMED)
+    }
+}
+
+fn apply_programlet_number_action(
+    sentence: &ParsedSentence,
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    symbols: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
+    slots: &mut [NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
+) -> Result<(), u32> {
+    if sentence.verb_length != 1 {
+        return Err(ERROR_UNSUPPORTED);
+    }
+    let Some(to) = sentence.field(DESTINATION) else {
+        return Err(ERROR_MALFORMED);
+    };
+    let mut target_name = NameSpan::EMPTY;
+    let name_error = name_span(tokens, to, true, &mut target_name);
+    if name_error != 0 {
+        return Err(name_error);
+    }
+    let Some(target_index) = find_local_slot(tokens, target_name, symbols, slots) else {
+        return Err(ERROR_MALFORMED);
+    };
+    match slots[target_index].kind {
+        1 => {}
+        2 | 4 => return Err(ERROR_CONSTANT_WRITE),
+        _ => return Err(ERROR_UNSUPPORTED),
+    }
+
+    let ob = sentence.field(ACCUSATIVE);
+    let from = sentence.field(SOURCE);
+    let by = sentence.field(INSTRUMENTAL);
+    let with = sentence.field(COMITATIVE);
+    let mut ob_value = ProgramletNumber::EMPTY;
+    let mut from_value = ProgramletNumber::EMPTY;
+    let mut by_value = ProgramletNumber::EMPTY;
+    let mut with_value = ProgramletNumber::EMPTY;
+    let ob_present = ob.is_some();
+    let from_present = from.is_some();
+    let by_present = by.is_some();
+    let with_present = with.is_some();
+    let ob_error = read_optional_programlet_number(
+        ob_present,
+        ob.unwrap_or(SentenceField::EMPTY),
+        tokens,
+        symbols,
+        arguments,
+        slots,
+        &mut ob_value,
+    );
+    let from_error = read_optional_programlet_number(
+        from_present,
+        from.unwrap_or(SentenceField::EMPTY),
+        tokens,
+        symbols,
+        arguments,
+        slots,
+        &mut from_value,
+    );
+    let by_error = read_optional_programlet_number(
+        by_present,
+        by.unwrap_or(SentenceField::EMPTY),
+        tokens,
+        symbols,
+        arguments,
+        slots,
+        &mut by_value,
+    );
+    let with_error = read_optional_programlet_number(
+        with_present,
+        with.unwrap_or(SentenceField::EMPTY),
+        tokens,
+        symbols,
+        arguments,
+        slots,
+        &mut with_value,
+    );
+    if ob_error != 0 {
+        return Err(ob_error);
+    }
+    if from_error != 0 {
+        return Err(from_error);
+    }
+    if by_error != 0 {
+        return Err(by_error);
+    }
+    if with_error != 0 {
+        return Err(with_error);
+    }
+    let operator = tokens[sentence.verb_start];
+
+    if operator == INVERT {
+        if from_present || by_present || with_present {
+            return Err(ERROR_UNSUPPORTED);
+        }
+        if !ob_present {
+            return Err(ERROR_MALFORMED);
+        }
+        let operand = ob_value;
+        let signed = if operand.kind == VALUE_SIGNED {
+            operand.bits as i32
+        } else if operand.bits <= MAX_U16 {
+            operand.bits as i32
+        } else {
+            return Err(ERROR_UNSUPPORTED);
+        };
+        let Some(result) = signed.checked_neg() else {
+            return Err(ERROR_UNSUPPORTED);
+        };
+        slots[target_index].value = result as u32;
+        slots[target_index].value_kind = VALUE_SIGNED;
+        return Ok(());
+    }
+
+    let ob_bits = unsigned_programlet_operand(ob_present, ob_value)?;
+    let from_bits = unsigned_programlet_operand(from_present, from_value)?;
+    let by_bits = unsigned_programlet_operand(by_present, by_value)?;
+    let with_bits = unsigned_programlet_operand(with_present, with_value)?;
+
+    let (left, right) = match operator {
+        PLUS if !from_present => {
+            if !ob_present {
+                return Err(ERROR_MALFORMED);
+            }
+            (slots[target_index].value, ob_bits)
+        }
+        PLUS if ob_present => (ob_bits, from_bits),
+        PLUS => return Err(ERROR_MALFORMED),
+        SUBTRACT if from_present && ob_present => (from_bits, ob_bits),
+        SUBTRACT if ob_present => (slots[target_index].value, ob_bits),
+        MULTIPLY | DIVIDE => (
+            first_present_operand(ob_present, ob_bits, from_present, from_bits)?,
+            first_present_operand(by_present, by_bits, with_present, with_bits)?,
+        ),
+        EXPONENTIAL => {
+            if !ob_present {
+                return Err(ERROR_MALFORMED);
+            }
+            (
+                ob_bits,
+                first_present_operand(from_present, from_bits, by_present, by_bits)?,
+            )
+        }
+        XOR => {
+            if !ob_present {
+                return Err(ERROR_MALFORMED);
+            }
+            (
+                ob_bits,
+                if with_present {
+                    with_bits
+                } else {
+                    first_present_operand(from_present, from_bits, by_present, by_bits)?
+                },
+            )
+        }
+        REMAINS => {
+            if !ob_present {
+                return Err(ERROR_MALFORMED);
+            }
+            (
+                ob_bits,
+                first_present_operand(from_present, from_bits, by_present, by_bits)?,
+            )
+        }
+        _ => return Err(ERROR_UNSUPPORTED),
+    };
+    slots[target_index].value = number_operator(operator, left, right)?;
+    slots[target_index].value_kind = VALUE_UNSIGNED;
+    Ok(())
+}
+
+fn apply_programlet_boolean_action(
+    sentence: &ParsedSentence,
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    symbols: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
+    slots: &mut [NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
+) -> Result<(), u32> {
+    let Some(to) = sentence.field(DESTINATION) else {
+        return Err(ERROR_MALFORMED);
+    };
+    let mut target_name = NameSpan::EMPTY;
+    let mut target_kind = 0;
+    let output_error = typed_output_name(tokens, to, &mut target_name, &mut target_kind);
+    if output_error != 0 {
+        return Err(output_error);
+    }
+    if target_kind != VALUE_BOOLEAN {
+        return Err(ERROR_UNSUPPORTED);
+    }
+    let Some(target_index) = find_local_slot(tokens, target_name, symbols, slots) else {
+        return Err(ERROR_MALFORMED);
+    };
+    match slots[target_index].kind {
+        3 => {}
+        4 => return Err(ERROR_CONSTANT_WRITE),
+        _ => return Err(ERROR_UNSUPPORTED),
+    }
+    let Some(ob) = sentence.field(ACCUSATIVE) else {
+        return Err(ERROR_MALFORMED);
+    };
+    let mut value = ProgramletNumber::EMPTY;
+    let error = resolve_programlet_value(tokens, ob, symbols, arguments, slots, &mut value);
+    if error != 0 {
+        return Err(error);
+    }
+    if value.kind != VALUE_BOOLEAN {
+        return Err(ERROR_UNSUPPORTED);
+    }
+    slots[target_index].value = value.bits;
+    slots[target_index].value_kind = VALUE_BOOLEAN;
+    Ok(())
 }
 
 fn names_equal<const WORDS: usize>(
@@ -926,11 +1850,16 @@ fn store_name(
     span: NameSpan,
     storage: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
     used: &mut usize,
-) -> Result<NameSpan, u32> {
-    let end = span.start.checked_add(span.length).ok_or(ERROR_MALFORMED)?;
-    let stored_end = used.checked_add(span.length).ok_or(ERROR_FRAME_CAPACITY)?;
+    stored: &mut NameSpan,
+) -> u32 {
+    let Some(end) = span.start.checked_add(span.length) else {
+        return ERROR_MALFORMED;
+    };
+    let Some(stored_end) = used.checked_add(span.length) else {
+        return ERROR_FRAME_CAPACITY;
+    };
     if end > source.len() || stored_end > storage.len() {
-        return Err(ERROR_FRAME_CAPACITY);
+        return ERROR_FRAME_CAPACITY;
     }
     let start = *used;
     let mut index = 0;
@@ -939,10 +1868,11 @@ fn store_name(
         index += 1;
     }
     *used = stored_end;
-    Ok(NameSpan {
+    *stored = NameSpan {
         start,
         length: span.length,
-    })
+    };
+    0
 }
 
 fn find_local_slot<const SLOTS: usize>(
@@ -979,6 +1909,140 @@ fn is_ceremony_definition(
     sentence.mood == MOOD_DEFINITION
         && sentence.verb_length == 1
         && tokens[sentence.verb_start] == CEREMONY
+}
+
+fn find_programlet_routine(
+    words: &[u32],
+    codelet_count: usize,
+    target: NameSpan,
+    sentence_words: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+    sentence_boundaries: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+    symbol_words: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+    symbol_used: &mut usize,
+    routine_name: &mut NameSpan,
+    routine_start: &mut usize,
+    routine_end: &mut usize,
+    routine_kind: &mut u32,
+) -> u32 {
+    let mut cursor = 0;
+    while cursor < codelet_count {
+        let (length, next_codelet) = match collect_sentence(
+            words,
+            codelet_count,
+            cursor,
+            sentence_words,
+            sentence_boundaries,
+        ) {
+            Ok(group) => group,
+            Err(error) => return error,
+        };
+        let mut sentence = ParsedSentence::empty();
+        let parse_error =
+            parse_sentence(sentence_words, sentence_boundaries, length, &mut sentence);
+        if parse_error != 0 {
+            return parse_error;
+        }
+        if !is_ceremony_definition(&sentence, sentence_words) {
+            cursor = next_codelet;
+            continue;
+        }
+        let Some(su) = sentence.field(NOMINATIVE) else {
+            return ERROR_MALFORMED;
+        };
+        let Some(output) = sentence.field(DESTINATION) else {
+            return ERROR_MALFORMED;
+        };
+        let mut ignored_name = NameSpan::EMPTY;
+        let mut output_kind = 0;
+        let output_error =
+            typed_output_name(sentence_words, output, &mut ignored_name, &mut output_kind);
+        if output_error != 0 {
+            return output_error;
+        }
+        let mut source_name = NameSpan::EMPTY;
+        let name_error = name_span(sentence_words, su, false, &mut source_name);
+        if name_error != 0 {
+            return name_error;
+        }
+        let matches_target = names_equal(sentence_words, source_name, symbol_words, target);
+        let stored_name = if matches_target {
+            let mut stored = NameSpan::EMPTY;
+            let error = store_name(sentence_words, source_name, symbol_words, symbol_used, &mut stored);
+            if error != 0 {
+                return error;
+            }
+            stored
+        } else {
+            NameSpan {
+                start: 0,
+                length: 0,
+            }
+        };
+        let body_start = next_codelet;
+        cursor = body_start;
+        loop {
+            if cursor >= codelet_count {
+                return ERROR_MALFORMED;
+            }
+            let (body_length, body_next) = match collect_sentence(
+                words,
+                codelet_count,
+                cursor,
+                sentence_words,
+                sentence_boundaries,
+            ) {
+                Ok(group) => group,
+                Err(error) => return error,
+            };
+            let is_branch = contains_marked_token(
+                sentence_words,
+                sentence_boundaries,
+                body_length,
+                CONDITIONAL,
+            );
+            let mut body_sentence = ParsedSentence::empty();
+            if !is_branch {
+                let error = parse_sentence(
+                    sentence_words,
+                    sentence_boundaries,
+                    body_length,
+                    &mut body_sentence,
+                );
+                if error != 0 {
+                    return error;
+                }
+            }
+            if !is_branch && is_ceremony_definition(&body_sentence, sentence_words) {
+                return ERROR_MALFORMED;
+            }
+            if !is_branch && body_sentence.mood == MOOD_PARAGRAPH {
+                if matches_target {
+                    let closing_su = match body_sentence.field(NOMINATIVE) {
+                        Some(field) => field,
+                        None => return ERROR_MALFORMED,
+                    };
+                    let mut closing_name = NameSpan::EMPTY;
+                    let name_error =
+                        name_span(sentence_words, closing_su, false, &mut closing_name);
+                    if name_error != 0 {
+                        return name_error;
+                    }
+                    if !names_equal(sentence_words, closing_name, symbol_words, stored_name) {
+                        return ERROR_MALFORMED;
+                    }
+                    *routine_name = stored_name;
+                    *routine_start = body_start;
+                    *routine_end = body_next;
+                    *routine_kind = output_kind;
+                    return 0;
+                }
+                cursor = body_next;
+                break;
+            }
+            cursor = body_next;
+        }
+    }
+    ERROR_UNSUPPORTED
 }
 
 /// Returns whether the first canonical Pyash sentence is a ceremony
@@ -1042,19 +2106,16 @@ pub fn is_numeric_programlet(words: &[u32], codelet_count: usize) -> bool {
     }
 }
 
-/// Execute one canonical Pyash ceremony with uint16 local quantities and a
-/// final direct invocation. All frame and parsing memory is supplied by the
-/// caller; no private instruction or named-slot wire format is introduced.
-/// This first Rust slice supports `plus` writes, local `ret`, and `prah`; calls,
-/// branches, and loops are deliberately left to later parity slices.
-pub fn execute_numeric_programlet<const SLOTS: usize>(
+/// Execute a canonical Pyash numeric programlet using bounded local call frames.
+/// All memory is caller-owned so the same interpreter can run in Rust-GPU.
+pub fn execute_numeric_programlet(
     words: &[u32],
     codelet_count: usize,
     step_budget: u32,
     sentence_words: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
     sentence_boundaries: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
     symbol_words: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
-    slots: &mut [NumericLocalSlot; SLOTS],
+    frames: &mut [ProgramletFrame; MAX_PROGRAMLET_CALL_DEPTH],
 ) -> CoreResult {
     if codelet_count == 0 || codelet_count > words.len() / CODELET_WORDS {
         return CoreResult::failure(ERROR_MALFORMED, 0);
@@ -1065,28 +2126,16 @@ pub fn execute_numeric_programlet<const SLOTS: usize>(
     if step_budget == 0 {
         return CoreResult::failure(ERROR_STEP_BUDGET, 0);
     }
-    let mut slot_index = 0;
-    while slot_index < slots.len() {
-        slots[slot_index] = NumericLocalSlot::EMPTY;
-        slot_index += 1;
+    let mut frame_index = 0;
+    while frame_index < frames.len() {
+        frames[frame_index] = ProgramletFrame::EMPTY;
+        frame_index += 1;
     }
-
     let mut symbol_used = 0usize;
-    let mut routine_name = NameSpan {
-        start: 0,
-        length: 0,
-    };
-    let mut result_value = 0u32;
-    let mut has_returned = false;
-    let mut action_started = false;
-    let mut state = 0u32;
+
+    let mut invocation_start = 0;
     let mut codelet = 0usize;
-    let mut steps = 0u32;
     while codelet < codelet_count {
-        if steps >= step_budget {
-            return CoreResult::failure(ERROR_STEP_BUDGET, steps);
-        }
-        steps += 1;
         let (length, next_codelet) = match collect_sentence(
             words,
             codelet_count,
@@ -1095,42 +2144,270 @@ pub fn execute_numeric_programlet<const SLOTS: usize>(
             sentence_boundaries,
         ) {
             Ok(group) => group,
-            Err(error) => return CoreResult::failure(error, steps),
+            Err(error) => return CoreResult::failure(error, 0),
         };
-        let sentence = match parse_sentence(sentence_words, sentence_boundaries, length) {
-            Ok(sentence) => sentence,
-            Err(error) => return CoreResult::failure(error, steps),
-        };
+        if !contains_marked_token(sentence_words, sentence_boundaries, length, CONDITIONAL) {
+            let mut parsed = ParsedSentence::empty();
+            let parse_error =
+                parse_sentence(sentence_words, sentence_boundaries, length, &mut parsed);
+            if parse_error != 0 {
+                return CoreResult::failure(parse_error, 0);
+            }
+        }
+        invocation_start = codelet;
+        codelet = next_codelet;
+    }
 
-        if state == 0 {
-            if !is_ceremony_definition(&sentence, sentence_words) || sentence.field_count != 2 {
-                return CoreResult::failure(ERROR_UNSUPPORTED, steps);
+    let (invocation_length, _) = match collect_sentence(
+        words,
+        codelet_count,
+        invocation_start,
+        sentence_words,
+        sentence_boundaries,
+    ) {
+        Ok(group) => group,
+        Err(error) => return CoreResult::failure(error, 0),
+    };
+    let mut invocation = ParsedSentence::empty();
+    let parse_error = parse_sentence(
+        sentence_words,
+        sentence_boundaries,
+        invocation_length,
+        &mut invocation,
+    );
+    if parse_error != 0 {
+        return CoreResult::failure(parse_error, 0);
+    }
+    if invocation.mood != DEONTIC || invocation.field_count == 0 {
+        return CoreResult::failure(ERROR_UNSUPPORTED, 0);
+    }
+    let Some(output) = invocation.field(DESTINATION) else {
+        return CoreResult::failure(ERROR_MALFORMED, 0);
+    };
+    let mut output_name = NameSpan::EMPTY;
+    let mut output_kind = 0;
+    let output_error = typed_output_name(
+        sentence_words,
+        output,
+        &mut output_name,
+        &mut output_kind,
+    );
+    if output_error != 0 {
+        return CoreResult::failure(output_error, 0);
+    }
+    let mut stored_output_name = NameSpan::EMPTY;
+    let name_error = store_name(
+        sentence_words,
+        output_name,
+        symbol_words,
+        &mut symbol_used,
+        &mut stored_output_name,
+    );
+    if name_error != 0 {
+        return CoreResult::failure(name_error, 0);
+    }
+    let loop_remaining = match loop_iterations(&invocation, sentence_words) {
+        Ok(iterations) => iterations,
+        Err(error) => return CoreResult::failure(error, 0),
+    };
+    let mut invocation_arguments = [ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS];
+    let mut invocation_argument_count = 0;
+    if let Err(error) = capture_programlet_arguments(
+        &invocation,
+        sentence_words,
+        symbol_words,
+        &[ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS],
+        &[NumericLocalSlot::EMPTY; MAX_PROGRAMLET_LOCAL_SLOTS],
+        &mut invocation_arguments,
+        &mut invocation_argument_count,
+    ) {
+        return CoreResult::failure(error, 0);
+    }
+    let loop_cursor = match invocation
+        .field(FROM_INDEX)
+        .map(|field| number_value(sentence_words, field))
+        .transpose()
+    {
+        Ok(value) => value,
+        Err(error) => return CoreResult::failure(error, 0),
+    };
+    let loop_end = match invocation
+        .field(TO_INDEX)
+        .map(|field| number_value(sentence_words, field))
+        .transpose()
+    {
+        Ok(value) => value,
+        Err(error) => return CoreResult::failure(error, 0),
+    };
+    if let Some(cursor) = loop_cursor
+        && let Err(error) = set_loop_index_argument(&mut invocation_arguments, cursor)
+    {
+        return CoreResult::failure(error, 0);
+    }
+    let mut target = NameSpan::EMPTY;
+    let name_error = store_name(
+        sentence_words,
+        NameSpan {
+            start: invocation.verb_start,
+            length: invocation.verb_length,
+        },
+        symbol_words,
+        &mut symbol_used,
+        &mut target,
+    );
+    if name_error != 0 {
+        return CoreResult::failure(name_error, 0);
+    }
+    let mut routine_name = NameSpan::EMPTY;
+    let mut routine_start = 0;
+    let mut routine_end = 0;
+    let mut routine_kind = 0;
+    let routine_error = find_programlet_routine(
+        words,
+        codelet_count,
+        target,
+        sentence_words,
+        sentence_boundaries,
+        symbol_words,
+        &mut symbol_used,
+        &mut routine_name,
+        &mut routine_start,
+        &mut routine_end,
+        &mut routine_kind,
+    );
+    if routine_error != 0 {
+        return CoreResult::failure(routine_error, 0);
+    }
+    if let Err(error) = validate_programlet_arguments(
+        words,
+        codelet_count,
+        routine_start,
+        sentence_words,
+        sentence_boundaries,
+        &invocation_arguments,
+        invocation_argument_count,
+    ) {
+        return CoreResult::failure(error, 0);
+    }
+    if !number_kind_matches(output_kind, routine_kind) {
+        return CoreResult::failure(ERROR_UNSUPPORTED, 0);
+    }
+    frames[0] = ProgramletFrame {
+        routine_start: routine_start as u32,
+        routine_end: routine_end as u32,
+        program_counter: routine_start as u32,
+        routine_name_offset: routine_name.start as u32,
+        routine_name_length: routine_name.length as u32,
+        arguments: invocation_arguments,
+        argument_count: invocation_argument_count,
+        state: 1,
+        expected_kind: routine_kind,
+        loop_active: u32::from(invocation.field(FROM_INDEX).is_some()),
+        loop_remaining,
+        loop_end: loop_end.unwrap_or(0),
+        loop_has_end: u32::from(loop_end.is_some()),
+        ..ProgramletFrame::EMPTY
+    };
+    frames[0].slots[0] = NumericLocalSlot {
+        name_offset: stored_output_name.start as u32,
+        name_length: stored_output_name.length as u32,
+        value: 0,
+        kind: if output_kind == VALUE_BOOLEAN { 3 } else { 1 },
+        value_kind: if output_kind == VALUE_BOOLEAN {
+            VALUE_BOOLEAN
+        } else {
+            VALUE_UNSIGNED
+        },
+    };
+    if frames[0].loop_active != 0 && frames[0].loop_remaining == 0 {
+        let mut output = ProgramletNumber::EMPTY;
+        let has_output = argument_value(&frames[0].arguments, ACCUSATIVE, &mut output);
+        let (value, kind) = if has_output {
+            if !number_kind_matches(frames[0].expected_kind, output.kind) {
+                return CoreResult::failure(ERROR_UNSUPPORTED, 0);
             }
-            let Some(su) = sentence.field(NOMINATIVE) else {
-                return CoreResult::failure(ERROR_MALFORMED, steps);
+            (output.bits, output.kind)
+        } else if frames[0].expected_kind == VALUE_BOOLEAN {
+            (0, VALUE_BOOLEAN)
+        } else {
+            (0, VALUE_UNSIGNED)
+        };
+        return CoreResult::scalar(kind, value, 0, codelet_count as u32);
+    }
+
+    let mut depth = 1usize;
+    let mut steps = 0u32;
+    while depth > 0 {
+        if steps >= step_budget {
+            return CoreResult::failure(ERROR_STEP_BUDGET, steps);
+        }
+        let frame_index = depth - 1;
+        let frame = frames[frame_index];
+        let pc = frame.program_counter as usize;
+        if pc >= frame.routine_end as usize {
+            return CoreResult::failure(ERROR_MALFORMED, steps);
+        }
+        let (length, next_codelet) = match collect_sentence(
+            words,
+            codelet_count,
+            pc,
+            sentence_words,
+            sentence_boundaries,
+        ) {
+            Ok(group) => group,
+            Err(error) => return CoreResult::failure(error, steps),
+        };
+        frames[frame_index].program_counter = next_codelet as u32;
+        let sentence =
+            if contains_marked_token(sentence_words, sentence_boundaries, length, CONDITIONAL) {
+                if steps >= step_budget {
+                    return CoreResult::failure(ERROR_STEP_BUDGET, steps);
+                }
+                steps += 1;
+                frames[frame_index].action_started = 1;
+                let mut action = ParsedSentence::empty();
+                let mut has_selected_action = false;
+                let branch_error = programlet_branch(
+                    sentence_words,
+                    sentence_boundaries,
+                    length,
+                    symbol_words,
+                    &frames[frame_index].arguments,
+                    &frames[frame_index].slots,
+                    &mut action,
+                    &mut has_selected_action,
+                );
+                if branch_error != 0 {
+                    return CoreResult::failure(branch_error, steps);
+                }
+                if !has_selected_action {
+                    continue;
+                }
+                if steps >= step_budget {
+                    return CoreResult::failure(ERROR_STEP_BUDGET, steps);
+                }
+                steps += 1;
+                action
+            } else {
+                let mut sentence = ParsedSentence::empty();
+                let parse_error =
+                    parse_sentence(sentence_words, sentence_boundaries, length, &mut sentence);
+                if parse_error != 0 {
+                    return CoreResult::failure(parse_error, steps);
+                }
+                steps += 1;
+                sentence
             };
-            let Some(output) = sentence.field(DESTINATION) else {
-                return CoreResult::failure(ERROR_MALFORMED, steps);
-            };
-            let routine = match name_span(sentence_words, su, false) {
-                Ok(name) => name,
-                Err(error) => return CoreResult::failure(error, steps),
-            };
-            if name_span(sentence_words, output, true).is_err() {
-                return CoreResult::failure(ERROR_MALFORMED, steps);
-            }
-            routine_name = match store_name(sentence_words, routine, symbol_words, &mut symbol_used)
-            {
-                Ok(name) => name,
-                Err(error) => return CoreResult::failure(error, steps),
-            };
-            state = 1;
-        } else if state == 1
+
+        if frame.state == 1
             && sentence.mood == REALIS
             && sentence.verb_length == 1
-            && sentence_words[sentence.verb_start] == NUMBER_VERB
+            && matches!(
+                sentence_words[sentence.verb_start],
+                NUMBER_VERB | BOOLEAN_VERB
+            )
         {
-            if action_started || sentence.field_count != 3 {
+            if frame.action_started != 0 || sentence.field_count != 3 {
                 return CoreResult::failure(ERROR_MALFORMED, steps);
             }
             let (Some(su), Some(ob), Some(as_field)) = (
@@ -1140,96 +2417,350 @@ pub fn execute_numeric_programlet<const SLOTS: usize>(
             ) else {
                 return CoreResult::failure(ERROR_MALFORMED, steps);
             };
-            let name = match name_span(sentence_words, su, false) {
-                Ok(name) => name,
-                Err(error) => return CoreResult::failure(error, steps),
+            let mut name = NameSpan::EMPTY;
+            let name_error = name_span(sentence_words, su, false, &mut name);
+            if name_error != 0 {
+                return CoreResult::failure(name_error, steps);
+            }
+            let value_kind = if sentence_words[sentence.verb_start] == BOOLEAN_VERB {
+                VALUE_BOOLEAN
+            } else {
+                VALUE_NUMBER
             };
-            let value = match number_value(sentence_words, ob) {
-                Ok(value) => value,
-                Err(error) => return CoreResult::failure(error, steps),
+            let expected_verb = if value_kind == VALUE_BOOLEAN {
+                BOOLEAN_VERB
+            } else {
+                NUMBER_VERB
             };
+            let mut value = ProgramletNumber::EMPTY;
+            let value_error = resolve_programlet_value(
+                sentence_words,
+                ob,
+                symbol_words,
+                &frames[frame_index].arguments,
+                &frames[frame_index].slots,
+                &mut value,
+            );
+            if value_error != 0 {
+                return CoreResult::failure(value_error, steps);
+            }
+            if !number_kind_matches(value_kind, value.kind) {
+                return CoreResult::failure(ERROR_UNSUPPORTED, steps);
+            }
             let kind = if as_field.length == 2
                 && sentence_words[as_field.start] == NAME_TYPE
                 && sentence_words[as_field.start + 1] == VARIABLE
             {
-                1
+                if value_kind == VALUE_BOOLEAN { 3 } else { 1 }
             } else if as_field.length == 3
                 && sentence_words[as_field.start] == NAME_TYPE
                 && sentence_words[as_field.start + 1] == PERMANENTLY
-                && sentence_words[as_field.start + 2] == NUMBER_VERB
+                && sentence_words[as_field.start + 2] == expected_verb
             {
-                2
+                if value_kind == VALUE_BOOLEAN { 4 } else { 2 }
             } else {
                 return CoreResult::failure(ERROR_UNSUPPORTED, steps);
             };
-            if find_local_slot(sentence_words, name, symbol_words, slots).is_some() {
-                return CoreResult::failure(ERROR_MALFORMED, steps);
-            }
-            let mut slot_index = 0;
-            while slot_index < slots.len() && slots[slot_index].kind != 0 {
-                slot_index += 1;
-            }
-            if slot_index == slots.len() {
-                return CoreResult::failure(ERROR_FRAME_CAPACITY, steps);
-            }
-            let stored = match store_name(sentence_words, name, symbol_words, &mut symbol_used) {
-                Ok(name) => name,
-                Err(error) => return CoreResult::failure(error, steps),
+            let slot_index = if let Some(existing) = find_local_slot(
+                sentence_words,
+                name,
+                symbol_words,
+                &frames[frame_index].slots,
+            ) {
+                existing
+            } else {
+                let mut free = 0;
+                while free < MAX_PROGRAMLET_LOCAL_SLOTS && frames[frame_index].slots[free].kind != 0
+                {
+                    free += 1;
+                }
+                if free == MAX_PROGRAMLET_LOCAL_SLOTS {
+                    return CoreResult::failure(ERROR_FRAME_CAPACITY, steps);
+                }
+                let mut stored = NameSpan::EMPTY;
+                let name_error = store_name(
+                    sentence_words,
+                    name,
+                    symbol_words,
+                    &mut symbol_used,
+                    &mut stored,
+                );
+                if name_error != 0 {
+                    return CoreResult::failure(name_error, steps);
+                }
+                frames[frame_index].slots[free].name_offset = stored.start as u32;
+                frames[frame_index].slots[free].name_length = stored.length as u32;
+                free
             };
-            slots[slot_index].name_offset = stored.start as u32;
-            slots[slot_index].name_length = stored.length as u32;
-            slots[slot_index].value = value;
-            slots[slot_index].kind = kind;
-        } else if state == 1 && sentence.mood == DEONTIC {
-            action_started = true;
-            if sentence.field_count != 2
-                || sentence.verb_length != 1
-                || sentence_words[sentence.verb_start] != PLUS
-            {
+            frames[frame_index].slots[slot_index].value = value.bits;
+            frames[frame_index].slots[slot_index].kind = kind;
+            frames[frame_index].slots[slot_index].value_kind = value.kind;
+        } else if frame.state == 1
+            && sentence.mood == DEONTIC
+            && sentence.verb_length == 1
+            && matches!(
+                sentence_words[sentence.verb_start],
+                PLUS | SUBTRACT | MULTIPLY | DIVIDE | EXPONENTIAL | XOR | REMAINS | INVERT
+            )
+        {
+            frames[frame_index].action_started = 1;
+            if let Err(error) = apply_programlet_number_action(
+                &sentence,
+                sentence_words,
+                symbol_words,
+                &frames[frame_index].arguments,
+                &mut frames[frame_index].slots,
+            ) {
+                return CoreResult::failure(error, steps);
+            }
+        } else if frame.state == 1
+            && sentence.mood == DEONTIC
+            && sentence.verb_length == 1
+            && sentence_words[sentence.verb_start] == BOOLEAN_VERB
+        {
+            frames[frame_index].action_started = 1;
+            if let Err(error) = apply_programlet_boolean_action(
+                &sentence,
+                sentence_words,
+                symbol_words,
+                &frames[frame_index].arguments,
+                &mut frames[frame_index].slots,
+            ) {
+                return CoreResult::failure(error, steps);
+            }
+        } else if frame.state == 1 && sentence.mood == DEONTIC {
+            frames[frame_index].action_started = 1;
+            if sentence.field_count == 0 {
                 return CoreResult::failure(ERROR_UNSUPPORTED, steps);
             }
-            let (Some(ob), Some(to)) = (sentence.field(ACCUSATIVE), sentence.field(DESTINATION))
-            else {
+            let Some(output) = sentence.field(DESTINATION) else {
                 return CoreResult::failure(ERROR_MALFORMED, steps);
             };
-            let value = match number_value(sentence_words, ob) {
-                Ok(value) => value,
-                Err(error) => return CoreResult::failure(error, steps),
-            };
-            let target = match name_span(sentence_words, to, true) {
-                Ok(name) => name,
-                Err(error) => return CoreResult::failure(error, steps),
-            };
-            let Some(index) = find_local_slot(sentence_words, target, symbol_words, slots) else {
-                return CoreResult::failure(ERROR_MALFORMED, steps);
-            };
-            if slots[index].kind == 2 {
-                return CoreResult::failure(ERROR_CONSTANT_WRITE, steps);
+            let mut return_name = NameSpan::EMPTY;
+            let mut return_kind = 0;
+            let output_error = typed_output_name(
+                sentence_words,
+                output,
+                &mut return_name,
+                &mut return_kind,
+            );
+            if output_error != 0 {
+                return CoreResult::failure(output_error, steps);
             }
-            slots[index].value = match number_operator(PLUS, value, slots[index].value) {
+            let mut stored_return_name = NameSpan::EMPTY;
+            let name_error = store_name(
+                sentence_words,
+                return_name,
+                symbol_words,
+                &mut symbol_used,
+                &mut stored_return_name,
+            );
+            if name_error != 0 {
+                return CoreResult::failure(name_error, steps);
+            }
+            let call_loop_remaining = match loop_iterations(&sentence, sentence_words) {
+                Ok(iterations) => iterations,
+                Err(error) => return CoreResult::failure(error, steps),
+            };
+            let mut call_name = NameSpan::EMPTY;
+            let name_error = store_name(
+                sentence_words,
+                NameSpan {
+                    start: sentence.verb_start,
+                    length: sentence.verb_length,
+                },
+                symbol_words,
+                &mut symbol_used,
+                &mut call_name,
+            );
+            if name_error != 0 {
+                return CoreResult::failure(name_error, steps);
+            }
+            let mut call_arguments = [ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS];
+            let mut call_argument_count = 0;
+            if let Err(error) = capture_programlet_arguments(
+                &sentence,
+                sentence_words,
+                symbol_words,
+                &frames[frame_index].arguments,
+                &frames[frame_index].slots,
+                &mut call_arguments,
+                &mut call_argument_count,
+            ) {
+                return CoreResult::failure(error, steps);
+            }
+            let call_loop_cursor = match sentence
+                .field(FROM_INDEX)
+                .map(|field| number_value(sentence_words, field))
+                .transpose()
+            {
                 Ok(value) => value,
                 Err(error) => return CoreResult::failure(error, steps),
             };
-        } else if state == 1 && sentence.mood == MOOD_RETURN {
+            let call_loop_end = match sentence
+                .field(TO_INDEX)
+                .map(|field| number_value(sentence_words, field))
+                .transpose()
+            {
+                Ok(value) => value,
+                Err(error) => return CoreResult::failure(error, steps),
+            };
+            if let Some(cursor) = call_loop_cursor
+                && let Err(error) = set_loop_index_argument(&mut call_arguments, cursor)
+            {
+                return CoreResult::failure(error, steps);
+            }
+            let mut called_name = NameSpan::EMPTY;
+            let mut called_start = 0;
+            let mut called_end = 0;
+            let mut called_kind = 0;
+            let routine_error = find_programlet_routine(
+                words,
+                codelet_count,
+                call_name,
+                sentence_words,
+                sentence_boundaries,
+                symbol_words,
+                &mut symbol_used,
+                &mut called_name,
+                &mut called_start,
+                &mut called_end,
+                &mut called_kind,
+            );
+            if routine_error != 0 {
+                return CoreResult::failure(routine_error, steps);
+            }
+            if let Err(error) = validate_programlet_arguments(
+                words,
+                codelet_count,
+                called_start,
+                sentence_words,
+                sentence_boundaries,
+                &call_arguments,
+                call_argument_count,
+            ) {
+                return CoreResult::failure(error, steps);
+            }
+            if !number_kind_matches(return_kind, called_kind) {
+                return CoreResult::failure(ERROR_UNSUPPORTED, steps);
+            }
+            if sentence.field(FROM_INDEX).is_some() && call_loop_remaining == 0 {
+                let mut result = ProgramletNumber::EMPTY;
+                if !argument_value(&call_arguments, ACCUSATIVE, &mut result) {
+                    result.kind = if called_kind == VALUE_BOOLEAN {
+                        VALUE_BOOLEAN
+                    } else {
+                        VALUE_UNSIGNED
+                    };
+                }
+                if let Err(error) = write_programlet_call_result(
+                    symbol_words,
+                    stored_return_name,
+                    called_kind,
+                    result,
+                    &mut frames[frame_index].slots,
+                ) {
+                    return CoreResult::failure(error, steps);
+                }
+            } else {
+                if depth == MAX_PROGRAMLET_CALL_DEPTH {
+                    return CoreResult::failure(ERROR_CALL_DEPTH, steps);
+                }
+                frames[depth] = ProgramletFrame {
+                    routine_start: called_start as u32,
+                    routine_end: called_end as u32,
+                    program_counter: called_start as u32,
+                    routine_name_offset: called_name.start as u32,
+                    routine_name_length: called_name.length as u32,
+                    arguments: call_arguments,
+                    argument_count: call_argument_count,
+                    return_name_offset: stored_return_name.start as u32,
+                    return_name_length: stored_return_name.length as u32,
+                    state: 1,
+                    expected_kind: called_kind,
+                    loop_active: u32::from(sentence.field(FROM_INDEX).is_some()),
+                    loop_remaining: call_loop_remaining,
+                    loop_end: call_loop_end.unwrap_or(0),
+                    loop_has_end: u32::from(call_loop_end.is_some()),
+                    ..ProgramletFrame::EMPTY
+                };
+                frames[depth].slots[0] = NumericLocalSlot {
+                    name_offset: stored_return_name.start as u32,
+                    name_length: stored_return_name.length as u32,
+                    value: 0,
+                    kind: if return_kind == VALUE_BOOLEAN { 3 } else { 1 },
+                    value_kind: if return_kind == VALUE_BOOLEAN {
+                        VALUE_BOOLEAN
+                    } else {
+                        VALUE_UNSIGNED
+                    },
+                };
+                depth += 1;
+            }
+        } else if frame.state == 1 && sentence.mood == MOOD_RETURN {
             if sentence.field_count != 1 || sentence.verb_length != 0 {
                 return CoreResult::failure(ERROR_MALFORMED, steps);
             }
-            let Some(return_field) = sentence.field(NOMINATIVE) else {
+            if let Some(return_field) = sentence.field(NOMINATIVE) {
+                let mut return_name = NameSpan::EMPTY;
+                let name_error = name_span(sentence_words, return_field, false, &mut return_name);
+                if name_error != 0 {
+                    return CoreResult::failure(name_error, steps);
+                }
+                let Some(index) = find_local_slot(
+                    sentence_words,
+                    return_name,
+                    symbol_words,
+                    &frames[frame_index].slots,
+                ) else {
+                    return CoreResult::failure(ERROR_MALFORMED, steps);
+                };
+                frames[frame_index].result_value = frames[frame_index].slots[index].value;
+                frames[frame_index].result_kind = frames[frame_index].slots[index].value_kind;
+            } else if let Some(return_field) = sentence.field(ACCUSATIVE) {
+                if return_field.length == 1
+                    && matches!(sentence_words[return_field.start], TRUTH | LIE)
+                {
+                    frames[frame_index].result_value =
+                        u32::from(sentence_words[return_field.start] == TRUTH);
+                    frames[frame_index].result_kind = VALUE_BOOLEAN;
+                } else if return_field.length == 2
+                    && sentence_words[return_field.start] == NUMBER_QUOTE
+                {
+                    frames[frame_index].result_value = sentence_words[return_field.start + 1];
+                    frames[frame_index].result_kind = VALUE_UNSIGNED;
+                } else if return_field.length >= 2
+                    && sentence_words[return_field.start] == NAME_TYPE
+                {
+                    let mut return_name = NameSpan::EMPTY;
+                    let name_error =
+                        name_span(sentence_words, return_field, false, &mut return_name);
+                    if name_error != 0 {
+                        return CoreResult::failure(name_error, steps);
+                    }
+                    let Some(index) = find_local_slot(
+                        sentence_words,
+                        return_name,
+                        symbol_words,
+                        &frames[frame_index].slots,
+                    ) else {
+                        return CoreResult::failure(ERROR_MALFORMED, steps);
+                    };
+                    frames[frame_index].result_value = frames[frame_index].slots[index].value;
+                    frames[frame_index].result_kind = frames[frame_index].slots[index].value_kind;
+                } else {
+                    return CoreResult::failure(ERROR_UNSUPPORTED, steps);
+                }
+            } else {
                 return CoreResult::failure(ERROR_MALFORMED, steps);
-            };
-            let return_name = match name_span(sentence_words, return_field, false) {
-                Ok(name) => name,
-                Err(error) => return CoreResult::failure(error, steps),
-            };
-            let Some(index) = find_local_slot(sentence_words, return_name, symbol_words, slots)
-            else {
-                return CoreResult::failure(ERROR_MALFORMED, steps);
-            };
-            result_value = slots[index].value;
-            has_returned = true;
-            state = 2;
-        } else if state == 2 && sentence.mood == MOOD_PARAGRAPH {
-            if !has_returned
+            }
+            if !number_kind_matches(frame.expected_kind, frames[frame_index].result_kind) {
+                return CoreResult::failure(ERROR_UNSUPPORTED, steps);
+            }
+            frames[frame_index].has_returned = 1;
+            frames[frame_index].state = 2;
+        } else if frame.state == 2 && sentence.mood == MOOD_PARAGRAPH {
+            if frame.has_returned == 0
                 || sentence.field_count != 1
                 || sentence.verb_length != 1
                 || sentence_words[sentence.verb_start] != CEREMONY
@@ -1239,49 +2770,82 @@ pub fn execute_numeric_programlet<const SLOTS: usize>(
             let Some(su) = sentence.field(NOMINATIVE) else {
                 return CoreResult::failure(ERROR_MALFORMED, steps);
             };
-            let closing_name = match name_span(sentence_words, su, false) {
-                Ok(name) => name,
-                Err(error) => return CoreResult::failure(error, steps),
+            let mut closing_name = NameSpan::EMPTY;
+            let name_error = name_span(sentence_words, su, false, &mut closing_name);
+            if name_error != 0 {
+                return CoreResult::failure(name_error, steps);
+            }
+            let routine_name = NameSpan {
+                start: frame.routine_name_offset as usize,
+                length: frame.routine_name_length as usize,
             };
             if !names_equal(sentence_words, closing_name, symbol_words, routine_name) {
                 return CoreResult::failure(ERROR_MALFORMED, steps);
             }
-            state = 3;
-        } else if state == 3 && sentence.mood == DEONTIC {
-            if next_codelet != codelet_count
-                || sentence.field_count != 1
-                || sentence.verb_length != routine_name.length
-            {
-                return CoreResult::failure(ERROR_MALFORMED, steps);
+            if frame.loop_active != 0 && frame.loop_remaining > 1 {
+                frames[frame_index].loop_remaining -= 1;
+                let mut current = ProgramletNumber::EMPTY;
+                if argument_value(&frame.arguments, FROM_INDEX, &mut current) {
+                    let next = if frame.loop_has_end != 0 {
+                        if current.bits < frame.loop_end {
+                            current.bits + 1
+                        } else {
+                            current.bits - 1
+                        }
+                    } else {
+                        current.bits - 1
+                    };
+                    if let Err(error) =
+                        set_loop_index_argument(&mut frames[frame_index].arguments, next)
+                    {
+                        return CoreResult::failure(error, steps);
+                    }
+                }
+                frames[frame_index].program_counter = frame.routine_start;
+                frames[frame_index].state = 1;
+                frames[frame_index].action_started = 0;
+                frames[frame_index].has_returned = 0;
+                frames[frame_index].result_value = 0;
+                frames[frame_index].result_kind = 0;
+                let mut slot_index = 1;
+                while slot_index < MAX_PROGRAMLET_LOCAL_SLOTS {
+                    frames[frame_index].slots[slot_index] = NumericLocalSlot::EMPTY;
+                    slot_index += 1;
+                }
+                continue;
             }
-            let Some(output) = sentence.field(DESTINATION) else {
-                return CoreResult::failure(ERROR_MALFORMED, steps);
+            if depth == 1 {
+                return CoreResult::scalar(
+                    frame.result_kind,
+                    frame.result_value,
+                    0,
+                    codelet_count as u32,
+                );
+            }
+            let caller_index = depth - 2;
+            let return_name = NameSpan {
+                start: frame.return_name_offset as usize,
+                length: frame.return_name_length as usize,
             };
-            if name_span(sentence_words, output, true).is_err() {
-                return CoreResult::failure(ERROR_MALFORMED, steps);
-            }
-            if !names_equal(
-                sentence_words,
-                NameSpan {
-                    start: sentence.verb_start,
-                    length: sentence.verb_length,
-                },
+            if let Err(error) = write_programlet_call_result(
                 symbol_words,
-                routine_name,
+                return_name,
+                frame.expected_kind,
+                ProgramletNumber {
+                    bits: frame.result_value,
+                    kind: frame.result_kind,
+                },
+                &mut frames[caller_index].slots,
             ) {
-                return CoreResult::failure(ERROR_MALFORMED, steps);
+                return CoreResult::failure(error, steps);
             }
-            state = 4;
+            frames[depth - 1] = ProgramletFrame::EMPTY;
+            depth -= 1;
         } else {
             return CoreResult::failure(ERROR_UNSUPPORTED, steps);
         }
-        codelet = next_codelet;
     }
-
-    if state != 4 {
-        return CoreResult::failure(ERROR_MALFORMED, steps);
-    }
-    CoreResult::scalar(VALUE_UNSIGNED, result_value, 0, codelet_count as u32)
+    CoreResult::failure(ERROR_MALFORMED, steps)
 }
 
 #[cfg(test)]

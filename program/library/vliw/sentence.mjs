@@ -68,6 +68,13 @@ const TYPE_ENTRY_BY_SURFACE = Object.freeze({
   boolean: "boolean_",
   text: "text_"
 });
+const OPERATOR_ENTRY_BY_SURFACE = Object.freeze({
+  divide: "divisions",
+  xor: "exclusive_or"
+});
+const OPERATOR_SURFACE_BY_WORD = new Map(
+  Object.entries(OPERATOR_ENTRY_BY_SURFACE).map(([surface, entry]) => [wordForEntry(entry), surface])
+);
 const TYPE_SURFACE_BY_WORD = new Map([
   [wordForEntry("number_"), "num"],
   [wordForEntry("boolean_"), "bool"],
@@ -264,8 +271,12 @@ function encodeClause(sentence, { conditional = false } = {}) {
   const boundaries = [];
   const rawQuotes = [];
   for (const role of FIELD_ORDER) {
-    if (sentence[role] === undefined) continue;
-    let value = encodeValue(sentence[role], role);
+    const returnValue = isReturn && sentence.ret?.role === role
+      ? { name: sentence.ret.name }
+      : undefined;
+    const fieldValue = sentence[role] ?? returnValue;
+    if (fieldValue === undefined) continue;
+    let value = encodeValue(fieldValue, role);
     const quoteKind = sentence.quoteKinds?.[role];
     if (quoteKind !== undefined) {
       if (typeof sentence[role]?.text !== "string" || typeof quoteKind !== "string" || !quoteKind) {
@@ -286,7 +297,7 @@ function encodeClause(sentence, { conditional = false } = {}) {
 
   if (!isReturn && !isParagraphEnd) {
     const verbTokens = String(sentence.be).trim().split(/\s+/u);
-    const verbs = verbTokens.map((token) => lookupLegacyName(token));
+    const verbs = verbTokens.map((token) => lookupLegacyName(OPERATOR_ENTRY_BY_SURFACE[token] ?? token));
     const missingIndex = verbs.findIndex((verb) => !verb?.hnuc);
     if (missingIndex >= 0) {
       throw invalid("unrepresentable-verb", `VLIW verb has no vocabulary HNUC (${verbTokens[missingIndex]})`, {
@@ -430,6 +441,7 @@ function wordName(word, role) {
   if (word === wordForEntry("toindex_")) return "toindex";
   if (ROLE_BY_WORD.has(word)) return ROLE_BY_WORD.get(word);
   if (TYPE_SURFACE_BY_WORD.has(word)) return TYPE_SURFACE_BY_WORD.get(word);
+  if (role === "verb" && OPERATOR_SURFACE_BY_WORD.has(word)) return OPERATOR_SURFACE_BY_WORD.get(word);
   const entry = ENTRIES_BY_HNUC.get(word);
   if (entry?.en && !entry.en.endsWith("_")) return entry.en;
   throw invalid("unrepresentable-name", `VLIW ${role} HNUC has no recoverable vocabulary name`, {

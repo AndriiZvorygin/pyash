@@ -337,8 +337,8 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
         let mut sentence_words = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
         let mut sentence_boundaries = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
         let mut symbol_words = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
-        let mut slots =
-            [pyac_vliw_core::NumericLocalSlot::EMPTY; pyac_vliw_core::MAX_PROGRAMLET_LOCAL_SLOTS];
+        let mut frames =
+            [pyac_vliw_core::ProgramletFrame::EMPTY; pyac_vliw_core::MAX_PROGRAMLET_CALL_DEPTH];
         let result = pyac_vliw_core::execute_numeric_programlet(
             &words,
             pack.codelets.len(),
@@ -346,7 +346,7 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
             &mut sentence_words,
             &mut sentence_boundaries,
             &mut symbol_words,
-            &mut slots,
+            &mut frames,
         );
         if result.error != 0 {
             let source = match result.error {
@@ -355,12 +355,17 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
                 pyac_vliw_core::ERROR_CONSTANT_WRITE => SemanticError::ProgramletConstantWrite,
                 pyac_vliw_core::ERROR_STEP_BUDGET => SemanticError::ProgramletStepBudget,
                 pyac_vliw_core::ERROR_PROGRAM_CAPACITY => SemanticError::ProgramletProgramCapacity,
+                pyac_vliw_core::ERROR_CALL_DEPTH => SemanticError::ProgramletCallDepth,
                 pyac_vliw_core::ERROR_UNSUPPORTED => SemanticError::UnsupportedProgramlet,
                 _ => SemanticError::MalformedProgramlet,
             };
             return Err(PackExecutionError { index: 0, source });
         }
-        return Ok(vec![PyacValue::Unsigned(u64::from(result.values[0]))]);
+        return Ok(vec![match result.value_kind {
+            pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(result.values[0] != 0),
+            pyac_vliw_core::VALUE_SIGNED => PyacValue::Signed(i64::from(result.values[0] as i32)),
+            _ => PyacValue::Unsigned(u64::from(result.values[0])),
+        }]);
     }
 
     let mut values = Vec::new();

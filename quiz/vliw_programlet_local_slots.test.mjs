@@ -139,6 +139,98 @@ test("PyAC programlets execute fromindex/toindex loops under a per-run step budg
   );
 });
 
+test("PyAC programlets preserve inline else arms after sentence splitting", () => {
+  const branchSource = [
+    "su name count once to name num answer be ceremony def",
+    "exists su name count ob num 5 as name variable be number ya",
+    "ob name count be tiny from num 5 then ob num 1 to name num answer be plus do else ob num 2 to name num answer be plus do",
+    "su name answer ret",
+    "su name count once be ceremony prah"
+  ].join("\n");
+  const compiled = compilePyashProgramSource(branchSource, {
+    invocation: "to name num answer be count once do"
+  });
+  const branch = decodePyashProgramPack(compiled.pack).find((sentence) => sentence.consequence);
+
+  assert.equal(branch?.consequence?.be, "plus");
+  assert.equal(branch?.alternative?.be, "plus");
+});
+
+test("PyAC programlets forward case arguments through nested calls and ret", () => {
+  const source = [
+    "su name plus two ob num 0 to name num answer be ceremony def",
+    "exists su name count ob num of ob of this as name variable be number ya",
+    "ob num 2 to name num count be plus do",
+    "this ob name count ret",
+    "su name plus two be ceremony prah",
+    "su name count twice ob num 0 to name num answer be ceremony def",
+    "exists su name count ob num of ob of this as name variable be number ya",
+    "ob name count to name num count be plus two do",
+    "this ob name count ret",
+    "su name count twice be ceremony prah"
+  ].join("\n");
+  const compiled = compilePyashProgramSource(source, {
+    invocation: "ob num 5 to name num answer be count twice do"
+  });
+  const decoded = decodePyashProgramPack(compiled.pack);
+
+  assert.deepEqual(decoded[1].ob, { genitive: { chain: ["this", "ob", "num"] } });
+  assert.deepEqual(decoded[3].ob, { name: "count" });
+  assert.equal(decoded[3].mood, "ret");
+  assert.equal(decoded[7].be, "plus two");
+  assert.deepEqual(decoded[7].ob, { name: "count" });
+});
+
+test("PyAC programlets accept mutable boolean locals and typed boolean writes", () => {
+  const source = [
+    "su name count once ob bool lie to name bool answer be ceremony def",
+    "exists su name count ob bool truth as name variable be boolean ya",
+    "ob bool lie to name bool count be boolean do",
+    "this ob name count ret",
+    "su name count once be ceremony prah"
+  ].join("\n");
+  const compiled = compilePyashProgramSource(source, {
+    invocation: "ob bool truth to name bool answer be count once do"
+  });
+  const decoded = decodePyashProgramPack(compiled.pack);
+  assert.equal(decoded[1].be, "boolean");
+  assert.equal(decoded[2].to.nameTypeWords[0], "bool");
+  assert.equal(decoded[3].ob.name, "count");
+});
+
+test("PyAC programlets bind the active fromindex register into a local", () => {
+  const source = [
+    "su name count once fromindex num 0 to name num answer be ceremony def",
+    "exists su name count ob num of fromindex of this as name variable be number ya",
+    "su name count ret",
+    "su name count once be ceremony prah"
+  ].join("\n");
+  const compiled = compilePyashProgramSource(source, {
+    invocation: "fromindex num 1 toindex num 4 to name num answer be count once do"
+  });
+  const decoded = decodePyashProgramPack(compiled.pack);
+  assert.deepEqual(decoded[1].ob, { genitive: { chain: ["this", "fromindex", "num"] } });
+});
+
+test("PyAC programlet skips a nested callee body for an empty loop range", async () => {
+  const source = [
+    "su name count once fromindex num 0 to name num answer be ceremony def",
+    "exists su name count ob num 0 as name variable be number ya",
+    "ob num 1 to name num count be plus do",
+    "su name count ret",
+    "su name count once be ceremony prah",
+    "su name count twice to name num answer be ceremony def",
+    "to name num answer be count once fromindex num 2 toindex num 2 do",
+    "su name answer ret",
+    "su name count twice be ceremony prah"
+  ].join("\n");
+  const compiled = compilePyashProgramSource(source, {
+    invocation: "to name num answer be count twice do"
+  });
+
+  assert.deepEqual((await executePyashProgramPack(compiled.pack)).output, { num: 0 });
+});
+
 test("PyAC programlets admit existing multiply and scalar comparison primitives", async () => {
   const arithmeticSource = [
     "su name multiply once to name num answer be ceremony def",
@@ -162,6 +254,32 @@ test("PyAC programlets admit existing multiply and scalar comparison primitives"
     invocation: "to name num answer be count once do"
   });
   assert.deepEqual((await executePyashProgramPack(conditional.pack)).output, { num: 2 });
+});
+
+test("PyAC programlets lower the complete advertised numeric operator set", () => {
+  const operators = [
+    "plus",
+    "subtract",
+    "multiply",
+    "divide",
+    "exponential",
+    "remains",
+    "xor",
+    "invert"
+  ];
+  for (const operator of operators) {
+    const source = [
+      "su name count once to name num answer be ceremony def",
+      "exists su name count ob num 3 as name variable be number ya",
+      `ob name count to name num answer be ${operator} do`,
+      "su name answer ret",
+      "su name count once be ceremony prah"
+    ].join("\n");
+    assert.doesNotThrow(
+      () => compilePyashProgramSource(source, { invocation: "to name num answer be count once do" }),
+      `${operator} must have a canonical VLIW word mapping`
+    );
+  }
 });
 
 test("interpreter rejects a write to a declared constant quantity", async () => {
