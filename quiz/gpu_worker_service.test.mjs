@@ -47,8 +47,9 @@ test("default config and system service connect the local GPU queue", async () =
   assert.match(begin, /\/queue/u);
   assert.match(begin, /localRunningCount/u);
   assert.match(begin, /queued jobs are durable and will resume/u);
-  assert.match(softRestart, /maintenance\/drain/u);
-  assert.match(softRestart, /maintenance\/resume/u);
+  assert.match(softRestart, /maintenance\/\{path\}/u);
+  assert.match(softRestart, /docker exec gpu-housekeeper/u);
+  assert.match(softRestart, /http:\/\/127\.0\.0\.1:18886\/maintenance/u);
   assert.match(softRestart, /acceptingJobs/u);
   assert.match(softRestart, /localRunningCount/u);
   assert.doesNotMatch(softRestart, /localQueuedCount[^\n]*== 0/u);

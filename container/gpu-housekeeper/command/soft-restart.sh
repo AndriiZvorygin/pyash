@@ -12,11 +12,28 @@ if [[ ! "$TIMEOUT_SEC" =~ ^[0-9]+$ || ! "$POLL_SEC" =~ ^[0-9]+$ ]] || (( POLL_SE
   exit 2
 fi
 
+maintenance_post() {
+  docker exec gpu-housekeeper python3 -c '
+import json, sys
+from urllib.request import Request, urlopen
+
+path = sys.argv[1]
+request = Request(
+  f"http://127.0.0.1:18886/maintenance/{path}",
+  data=b"{}",
+  headers={"Content-Type": "application/json"},
+  method="POST",
+)
+with urlopen(request, timeout=3) as response:
+  print(json.dumps(json.load(response)))
+' "$1"
+}
+
 resume_on_failure() {
   local status=$?
   if [[ "$drain_active" == "true" && $status -ne 0 ]]; then
     echo "soft restart stopped before restart; resuming dispatch" >&2
-    curl -fsS --max-time 3 -X POST "$BASE_URL/maintenance/resume" >/dev/null || true
+    maintenance_post resume >/dev/null || true
   fi
   return "$status"
 }
@@ -27,7 +44,7 @@ if ! curl -fsS --max-time 3 "$BASE_URL/health" >/dev/null; then
   exit 1
 fi
 
-drain_result="$(curl -fsS --max-time 3 -X POST "$BASE_URL/maintenance/drain")"
+drain_result="$(maintenance_post drain)"
 drain_active=true
 printf '%s\n' "$drain_result" | python3 -c '
 import json, sys
