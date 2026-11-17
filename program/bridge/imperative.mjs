@@ -130,7 +130,7 @@ export function resolveIoGenitives(sentence, { state, memory } = {}) {
   }
 }
 
-function resolveTypedGenitives(sentence, { state, memory } = {}) {
+export function resolveTypedGenitives(sentence, { state, memory } = {}) {
   if (!sentence || typeof sentence !== "object") return;
   const skipKeys = new Set(["mood", "be", "exists", "signatureWords", "signature", "ret", "this", "consequence", "alternative"]);
   const copyResolvedCaseObject = (target, resolved) => {
@@ -674,6 +674,7 @@ export async function handleImperative({
     be === "mind" ||
     be === "say" ||
     be === "import" ||
+    be === "boolean" ||
     be === "text" ||
     be === "write" ||
     be === "evoke" ||

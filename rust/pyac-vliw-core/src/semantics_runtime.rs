@@ -809,7 +809,10 @@ struct NameSpan {
 }
 
 impl NameSpan {
-    const EMPTY: Self = Self { start: 0, length: 0 };
+    const EMPTY: Self = Self {
+        start: 0,
+        length: 0,
+    };
 }
 
 fn collect_sentence(
@@ -1050,10 +1053,7 @@ fn number_kind_matches(expected: u32, actual: u32) -> bool {
     }
 }
 
-fn compare_programlet_numbers(
-    left: ProgramletNumber,
-    right: ProgramletNumber,
-) -> u32 {
+fn compare_programlet_numbers(left: ProgramletNumber, right: ProgramletNumber) -> u32 {
     match (left.kind == VALUE_SIGNED, right.kind == VALUE_SIGNED) {
         (true, true) => compare_signed(left.bits as i32, right.bits as i32),
         (true, false) => {
@@ -1238,6 +1238,40 @@ fn resolve_programlet_value(
             return ERROR_UNSUPPORTED;
         }
         *value = argument;
+        return 0;
+    }
+    let typed_name_genitive = field.length == 4
+        && tokens[field.start] == NAME_TYPE
+        && tokens[field.start + 2] == GENITIVE_CASE;
+    let bare_name_genitive = field.length == 3 && tokens[field.start + 1] == GENITIVE_CASE;
+    let genitive_type = if typed_name_genitive {
+        tokens[field.start + 3]
+    } else if bare_name_genitive {
+        tokens[field.start + 2]
+    } else {
+        0
+    };
+    if matches!(genitive_type, NUMBER_TYPE | BOOLEAN_TYPE) {
+        let expected_kind = if genitive_type == NUMBER_TYPE {
+            VALUE_NUMBER
+        } else {
+            VALUE_BOOLEAN
+        };
+        let name = NameSpan {
+            start: field.start,
+            length: if typed_name_genitive { 2 } else { 1 },
+        };
+        let Some(index) = find_local_slot(tokens, name, symbols, slots) else {
+            return ERROR_UNSUPPORTED;
+        };
+        let slot = slots[index];
+        if !number_kind_matches(expected_kind, slot.value_kind) {
+            return ERROR_UNSUPPORTED;
+        }
+        *value = ProgramletNumber {
+            bits: slot.value,
+            kind: slot.value_kind,
+        };
         return 0;
     }
     if tokens[field.start] != NAME_TYPE {
@@ -1538,13 +1572,8 @@ fn programlet_branch(
     let has_alternative = first_mood + 1 < length;
     let alternative = if has_alternative {
         let mut alternative = ParsedSentence::empty();
-        let error = parse_sentence_range(
-            tokens,
-            boundaries,
-            first_mood + 1,
-            length,
-            &mut alternative,
-        );
+        let error =
+            parse_sentence_range(tokens, boundaries, first_mood + 1, length, &mut alternative);
         if error != 0 {
             return error;
         }
@@ -1967,7 +1996,13 @@ fn find_programlet_routine(
         let matches_target = names_equal(sentence_words, source_name, symbol_words, target);
         let stored_name = if matches_target {
             let mut stored = NameSpan::EMPTY;
-            let error = store_name(sentence_words, source_name, symbol_words, symbol_used, &mut stored);
+            let error = store_name(
+                sentence_words,
+                source_name,
+                symbol_words,
+                symbol_used,
+                &mut stored,
+            );
             if error != 0 {
                 return error;
             }
@@ -2186,12 +2221,8 @@ pub fn execute_numeric_programlet(
     };
     let mut output_name = NameSpan::EMPTY;
     let mut output_kind = 0;
-    let output_error = typed_output_name(
-        sentence_words,
-        output,
-        &mut output_name,
-        &mut output_kind,
-    );
+    let output_error =
+        typed_output_name(sentence_words, output, &mut output_name, &mut output_kind);
     if output_error != 0 {
         return CoreResult::failure(output_error, 0);
     }
@@ -2538,12 +2569,8 @@ pub fn execute_numeric_programlet(
             };
             let mut return_name = NameSpan::EMPTY;
             let mut return_kind = 0;
-            let output_error = typed_output_name(
-                sentence_words,
-                output,
-                &mut return_name,
-                &mut return_kind,
-            );
+            let output_error =
+                typed_output_name(sentence_words, output, &mut return_name, &mut return_kind);
             if output_error != 0 {
                 return CoreResult::failure(output_error, steps);
             }

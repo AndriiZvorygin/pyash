@@ -315,6 +315,9 @@ export function decodePyashProgramPack(pack) {
   const sentences = decodePyashProgram(decodedPack.codelets);
   const invocationIndex = sentences.at(-1)?.mood === "do" ? sentences.length - 1 : -1;
   validatePureProgram(sentences, { invocationIndex });
+  for (const sentence of sentences) {
+    if (programletLocalDeclaration(sentence)) sentence.exists = true;
+  }
   return sentences;
 }
 

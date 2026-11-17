@@ -37,6 +37,7 @@ test("PyAC programlet keeps numeric variable markers and initializes each call f
 
   assert.deepEqual(declaration, {
     mood: "ya",
+    exists: true,
     su: { name: "count" },
     ob: { num: 0 },
     as: { name: "variable" },
@@ -181,7 +182,7 @@ test("PyAC programlets forward case arguments through nested calls and ret", () 
   assert.deepEqual(decoded[7].ob, { name: "count" });
 });
 
-test("PyAC programlets accept mutable boolean locals and typed boolean writes", () => {
+test("PyAC programlets accept mutable boolean locals and typed boolean writes", async () => {
   const source = [
     "su name count once ob bool lie to name bool answer be ceremony def",
     "exists su name count ob bool truth as name variable be boolean ya",
@@ -196,6 +197,7 @@ test("PyAC programlets accept mutable boolean locals and typed boolean writes", 
   assert.equal(decoded[1].be, "boolean");
   assert.equal(decoded[2].to.nameTypeWords[0], "bool");
   assert.equal(decoded[3].ob.name, "count");
+  assert.deepEqual((await executePyashProgramPack(compiled.pack)).output, { boolean: false });
 });
 
 test("PyAC programlets bind the active fromindex register into a local", () => {

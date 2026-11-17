@@ -340,6 +340,7 @@ core and Rust pack executor.
 | Scalar values | unsigned/signed `num` and `bool` literals/results | codelet values plus typed numeric/boolean programlet arguments, locals, and returns on CPU and GPU | wider integer widths and additional local value families |
 | Pure scalar verbs | `plus`, `subtract`, `multiply`, `divide`, `exponential`, `invert`, `xor`, `remains` | shared codelet semantics and bounded programlet writes; negative signed operands are rejected where the existing arithmetic contract is unsigned | additional verbs only where Pyash defines deterministic pure semantics |
 | Comparisons | `equally`, `tiny`, `giant` | shared codelet predicates and programlet comparisons against literals, arguments, and locals, including signed and boolean values | compound/nested conditions and short-circuit logic |
+| Boolean composition | `not`, `and`, `or` over boolean-producing sentences, as specified in `documentation/specifications/02-core-execution.md` | ordinary Pyash interpreter supports these sentences | no VLIW sentence encoder or shared Rust codelet/programlet implementation yet |
 | Local quantities | initialized numeric/boolean variables and constant quantities; typed writes; constants reject writes; frame discarded at return | CPU and GPU execute typed declarations, operator writes, boolean writes, local `ret`, and frame isolation | date/vector/text locals and shared mutable program state |
 | Ceremony calls | typed outputs and bounded calls; each call gets a fresh frame | nested calls execute with up to 8 arguments and call depth 8; depth overflow is an explicit error | broader signatures, general recursion semantics, and larger configurable limits |
 | Branches | conditional sentences with true and optional alternative action | one-level programlet predicates over literal/argument/local values select numeric or boolean actions | nested branches and multi-statement branch bodies |
@@ -349,6 +350,44 @@ core and Rust pack executor.
 The legacy named-slot candidate map format is not a Pyash sentence encoding and
 is not accepted by the Rust pack or Housekeeper runtime. The executable
 programlet contract above is the canonical sentence/codelet path.
+
+## Parity completion plan
+
+The parity target is the pure-program subset defined by the Pyash execution
+specification and encoded by canonical `.pyac` input, with the same typed
+results on the JavaScript interpreter, Rust CPU executor, native Vulkan, and
+browser WebGPU. The JavaScript interpreter is an implementation under test,
+not the authority for expected behavior: known implementation defects must be
+fixed to match the spec rather than copied into the other backends. Host
+effects are outside this pure subset; valid pure semantics are not excluded
+merely because one backend is harder to implement. Every runtime rejection
+must also preserve the same documented error category and boundary.
+
+Work proceeds in these slices, with each completed slice backed by differential
+fixtures before the next one expands the surface:
+
+| Slice | Scope and exit evidence | Status |
+| --- | --- | --- |
+| 0. Contract inventory | Record each spec-defined pure semantic, its encoding, and current JS/Rust CPU/Vulkan/WebGPU coverage; identify every remaining gap in the inventory above. | Initial inventory recorded. The audit found spec-defined `not`/`and`/`or` boolean composition has no VLIW encoding/runtime path; finish the per-semantic and error-category audit before claiming parity. |
+| 1. Hardware conformance harness | Submit canonical packs through Housekeeper, require Vulkan backend/device identity, and compare exact spec-derived typed outputs for nested calls, branches, loops, booleans, scalar arithmetic, vectors, and capacity cases. | Harness added; 15 cases passed on the RTX 3090 through Housekeeper using the branch-built worker and shader. The temporary worker/shader overlay was restored afterward; rerun after deployment for reproducible service validation. |
+| 2. Differential semantic fixes | For every mismatch against the spec, add a minimal Pyash fixture and make JS reference, Rust CPU, Vulkan, and WebGPU agree on value, frame/side-effect boundary, and error category. Include boundary capacities and forwarded typed cases. | Spec-derived expected values and 15-case fixtures added. JS typed-genitive and loop-bound behavior plus Rust local-root genitive handling were corrected; CPU tests pass and Vulkan passed before the final shape-narrowing edit. Browser parity remains blocked by shader validation and must be re-run after that is fixed. |
+| 3. Bounded GPU execution and shader structure | Preserve the shared 65,536-step contract while structuring execution into device-safe resumable work; prove successful completion below the limit and the same step-budget error at the limit without GPU hangs. Keep generated WGSL within browser parser limits. | Pending. Chromium/Naga rejects the current generated WGSL at its 127-level nesting/chaining limit during module creation, before either browser GPU pipeline can run. The checked-in pre-change WGSL fails the same way, so this is a pre-existing browser-target gap, not introduced by the genitive fix. |
+| 4. Remaining pure value/control-flow parity | Implement every spec-defined pure behavior still missing from shared Rust semantics, including boolean composition and any typed local/control forms confirmed by the contract audit, with minimized cross-backend fixtures. | Pending the completed Slice 0 audit and shader-structure work. |
+| 5. Completion audit | Run the full differential matrix against JS, Rust CPU, native Vulkan via Housekeeper, and browser WebGPU; verify effectful/unsupported forms reject consistently and confirm resource/error boundaries. | Not started. |
+
+The generated WGSL currently lowers the whole programlet interpreter into one
+very large entrypoint (about 92,000 lines in the current generated file). Its
+state arrays and control-flow joins produce nesting beyond Chromium/Naga's
+limit. A viable Slice 3 design should reduce per-dispatch live state and
+separate bounded execution steps, rather than weakening the smoke assertion or
+reducing the semantic step budget.
+
+The earlier Vulkan timeout observation came from a worker image built from the
+separate `dev` checkout, not from `dev-vliw-backend`; it is a risk signal, not
+branch-valid evidence. Do not lower the shared step budget or silently fall
+back to CPU to make a GPU test pass. Browser tests must treat an available raw
+WebGPU adapter and a successfully created VLIW pipeline as separate facts; a
+CPU fallback does not count as GPU parity.
 
 ## The RISC-V destination
 

@@ -726,6 +726,18 @@ fn forwards_a_case_argument_from_one_programlet_to_a_nested_call() {
     assert_eq!(result.error, 0, "{result:?}");
     assert_eq!(result.values[0], 7);
     assert_eq!(execute_pack(&pack), Ok(vec![PyacValue::Unsigned(7)]));
+
+    let mut local_genitive_argument = FORWARDED_CASE_ARGUMENT_PROGRAMLET;
+    local_genitive_argument[7] = [
+        0x1211, 0xaa90, 0x215e, 0x327e, 0x245e, 0x225e, 0x327e, 0x225e, 0xaa90, 0x243e, 0x8a64,
+        0xaa0a, 0x295e, 0, 0, 0,
+    ];
+    let result = run_numeric_programlet(
+        &local_genitive_argument,
+        pyac_vliw_core::DEFAULT_PROGRAMLET_STEP_BUDGET,
+    );
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.values[0], 7);
 }
 
 #[test]

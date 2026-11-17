@@ -152,6 +152,7 @@ export async function invokeLoop({ defEntry, sentence, state, memory, interpret,
     let currentUntil = untilSeed;
 
     while (true) {
+      if (currentUntil != null ? currentIndex === currentUntil : currentIndex === 0) break;
       state.loopControl = null;
       state.currentEvokeRef.fromindex = currentIndex;
       state.currentEvokeRef.toindex = currentUntil ?? state.currentEvokeRef.toindex;
