@@ -61,6 +61,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 
 ## Scope Discipline
 - Only do the work explicitly requested by the user; avoid expanding scope or tackling adjacent tasks unless asked.
+- Before treating concurrent changes as a blocker, identify their worktree and branch with `git worktree list --porcelain` and path-scoped `git status`. Changes confined to another worktree or branch do not block the current task. Preserve unrelated dirty paths in the current worktree and continue when the requested paths do not overlap; pause only for an actual same-file conflict, destructive operation, or a dependency that makes safe progress unclear.
 - If a needed prerequisite is discovered, pause and confirm before proceeding beyond the requested scope.
 - Keep changes tightly focused to what was asked; defer opportunistic refactors/cleanup unless explicitly approved.
 - When the user points to a proven example/refinery as the source of truth, port that flow directly first and only apply explicit deltas; do not re-implement from scratch unless the user asks for redesign.

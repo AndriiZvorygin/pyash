@@ -74,6 +74,19 @@ already accepted by this Housekeeper. Stop it with
 `container/gpu-housekeeper/command/stop.sh`; its bind-mounted state remains on
 the host.
 
+To rebuild or restart without interrupting active work, use the soft restart:
+
+```sh
+container/gpu-housekeeper/command/soft-restart.sh
+```
+
+It pauses dispatch while continuing to accept and durably queue jobs, waits for
+currently running local jobs to finish, then rebuilds/restarts Housekeeper.
+Queued jobs resume after startup. If draining times out or the restart fails,
+the script resumes dispatch on the still-running service when possible. Set
+`GPU_HOUSEKEEPER_DRAIN_TIMEOUT_SEC` to adjust the default one-hour timeout;
+`GPU_HOUSEKEEPER_DRAIN_POLL_SEC` controls status polling.
+
 Housekeeper opens its HTTP listener before restoring durable jobs. While the
 queue is restoring, `/health` returns `503` with `ready: false`, and `/submit`
 returns a retryable `503` with `Retry-After: 2`. Clients retry the same
