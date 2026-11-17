@@ -110,12 +110,19 @@ function taskHandle(runId, key) {
   return `chinese-character-atom-${runId.slice(-12)}-${sha256(key).slice(0, 16)}`;
 }
 
+export function nextChineseCharacterDutyWave(pending, cursor, { parallelism = 1, dutiesRemaining = 0 } = {}) {
+  const dutyCapacity = Math.max(0, Math.trunc(Number(dutiesRemaining) || 0));
+  const waveCapacity = Math.min(Math.max(1, Math.trunc(Number(parallelism) || 1)), dutyCapacity);
+  return pending.slice(cursor, cursor + waveCapacity);
+}
+
 function promptTask(record, kind, concept = "") {
   const key = kind === "match" ? matchTaskKey(record) : taskKey(record.id, kind, concept);
   if (kind === "match") return {
     key,
     recordId: record.id,
     kind,
+    record,
     candidateFingerprint: matchFingerprint(record),
     prompt: buildChineseCharacterAtomReviewPrompt(record)
   };
@@ -267,11 +274,13 @@ async function createHousekeeperSubmitter(config) {
   ).trim();
   if (!housekeeperUrl) throw new Error("Chinese character atom refinery requires the configured GPU Housekeeper URL");
   const housekeeper = createGpuHousekeeperAdapter({ baseUrl: housekeeperUrl });
+  process.stderr.write(`[chinese-character-atom] checking Housekeeper ${new URL(housekeeperUrl).host}\n`);
   const [queue, availableModels] = await Promise.all([housekeeper.getQueue(), housekeeper.getOllamaModels()]);
   const models = Array.isArray(availableModels) ? availableModels : availableModels?.models ?? [];
   if (!models.map(modelName).includes(config.model)) {
     throw new Error(`configured Housekeeper does not advertise model ${config.model}`);
   }
+  process.stderr.write(`[chinese-character-atom] Housekeeper model ${config.model} is available\n`);
   return {
     submit: await createDefaultQueuedMindTranslationVocabularySubmitter({
       model: config.model,
@@ -340,9 +349,11 @@ async function persistCheckpoint(context) {
 
 async function dispatchTasks(tasks, context) {
   const pending = tasks.filter((task) => !context.checkpoint.tasks.get(task.key)?.result);
+  process.stderr.write(`[chinese-character-atom] ${pending.length} model duties pending\n`);
   let cursor = 0;
   while (cursor < pending.length && context.dutiesRemaining > 0) {
-    const wave = pending.slice(cursor, cursor + Math.min(context.parallelism, context.dutiesRemaining));
+    const wave = nextChineseCharacterDutyWave(pending, cursor, context);
+    if (wave.length === 0) throw new Error("Chinese character refinery duty wave made no progress");
     cursor += wave.length;
     context.housekeeper ??= await createHousekeeperSubmitter(context.config);
     const submissions = await Promise.allSettled(wave.map(async (task) => {
@@ -360,6 +371,7 @@ async function dispatchTasks(tasks, context) {
       }
       return { task, handleId, submitted: true };
     }));
+    process.stderr.write(`[chinese-character-atom] received ${submissions.length} Housekeeper submission responses\n`);
     const submissionErrors = [];
     const awaiting = [];
     submissions.forEach((submission, index) => {
@@ -383,6 +395,7 @@ async function dispatchTasks(tasks, context) {
       const response = await awaitTranslationGpuDuty(handleId);
       return { task, handleId, result: responseFor(task, response) };
     }));
+    process.stderr.write(`[chinese-character-atom] received ${completions.length} Housekeeper duty results\n`);
     const completionErrors = [];
     for (const completion of completions) {
       if (completion.status === "rejected") {
@@ -441,6 +454,7 @@ async function runStage(sentence, context) {
   } else if (stage === "review ambiguous atom matches") {
     const worklist = mapValue("character worklist").records ?? context.worklist;
     const candidateRows = mapValue("atom match candidates").records ?? [];
+    process.stderr.write(`[chinese-character-atom] hydrating ${worklist.length} records from ${candidateRows.length} candidate rows\n`);
     const records = hydrateMatchCandidates(worklist, candidateRows);
     const proposals = await buildChineseCharacterAtomProposals(records, context.inputs, {
       generationLimit: context.config.generationLimit,
@@ -449,11 +463,14 @@ async function runStage(sentence, context) {
       noFitCharacters: noFitCharacterIds(context.checkpoint.tasks),
       specificityReassignments: specificityReassignmentIds(records, context.checkpoint.tasks)
     });
-    await dispatchTasks(matchTasksFor(proposals, context.checkpoint.tasks), context);
+    process.stderr.write(`[chinese-character-atom] prepared ${proposals.length} match decisions\n`);
+    const matchTasks = matchTasksFor(proposals, context.checkpoint.tasks);
+    process.stderr.write(`[chinese-character-atom] selected ${matchTasks.length} ambiguous match duties\n`);
+    await dispatchTasks(matchTasks, context);
     const decisions = attachCheckpointResults(proposals, context.checkpoint.tasks);
     artifactPath = await writeStageArtifact(context, "atom-match-decisions.pya", "translation_chinese_character_atom_match_decisions", decisions);
     result = { sourceHash: context.inputs.sourceHash, count: decisions.length, records: decisions };
-  } else if (stage === "prepare translations for missing meanings") {
+  } else if (stage === "prepare missing meaning translations") {
     const records = mapValue("atom match decisions").records ?? context.worklist;
     await dispatchTasks(translationTasksFor(records, context.checkpoint.tasks), context);
     const translations = attachCheckpointResults(records, context.checkpoint.tasks)
@@ -562,6 +579,7 @@ export async function runChineseCharacterAtomRefinery() {
     checkpoint,
     dutiesRemaining: config.dutiesPerPass,
     dutiesThisPass: 0,
+    parallelism: config.parallelism,
     housekeeper: null,
     worklist: []
   };

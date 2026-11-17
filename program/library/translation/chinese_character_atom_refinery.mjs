@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import pyashWords from "../pyashWords.json" with { type: "json" };
 import { buildProgram } from "../../program.mjs";
 import { buildAtomWordProposal, loadAtomWordGenerationInputs } from "./atom_word_generation.mjs";
+import { parseEnglishGrammarCatalog } from "./english_grammar.mjs";
 
 const execFileAsync = promisify(execFile);
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -117,6 +118,22 @@ function invalid(message, details = {}) {
   return error;
 }
 
+function parseProviderJsonResponse(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    if (typeof value.response === "string") return parseProviderJsonResponse(value.response);
+    if (typeof value.message?.content === "string") return parseProviderJsonResponse(value.message.content);
+    return value;
+  }
+  if (typeof value !== "string") return value;
+  const parsed = JSON.parse(value);
+  if (typeof parsed === "string") return parseProviderJsonResponse(parsed);
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    if (typeof parsed.response === "string") return parseProviderJsonResponse(parsed.response);
+    if (typeof parsed.message?.content === "string") return parseProviderJsonResponse(parsed.message.content);
+  }
+  return parsed;
+}
+
 function text(value) {
   return typeof value === "string" ? value.normalize("NFC").trim() : "";
 }
@@ -188,8 +205,8 @@ export function parseJundaCharacterFrequency(source) {
   return result;
 }
 
-export function parseUnihanCharacterData(readingsSource, dictionaryIndicesSource) {
-  if (typeof readingsSource !== "string" || typeof dictionaryIndicesSource !== "string") {
+export function parseUnihanCharacterData(readingsSource, otherMappingsSource) {
+  if (typeof readingsSource !== "string" || typeof otherMappingsSource !== "string") {
     throw invalid("Unihan sources must be text");
   }
   const characters = new Map();
@@ -199,7 +216,7 @@ export function parseUnihanCharacterData(readingsSource, dictionaryIndicesSource
     characters.set(character, row);
     return row;
   };
-  for (const line of dictionaryIndicesSource.split(/\r?\n/u)) {
+  for (const line of otherMappingsSource.split(/\r?\n/u)) {
     const match = line.match(/^(U\+[0-9A-F]+)\tkTGH\t2013:(\d+)$/u);
     if (!match) continue;
     const row = getCharacter(match[1]);
@@ -267,27 +284,16 @@ export function parseChineseCharacterAtomLinks(source) {
 
 export function parseEnglishGrammarTargets(source) {
   if (typeof source !== "string") throw invalid("English grammar catalog must be Pyash text");
-  const targets = [];
-  for (const sentence of buildProgram(source).sentences) {
-    if (sentence?.mood !== "ya" || typeof sentence.su?.text !== "string" || typeof sentence.ob?.text !== "string") continue;
-    let entry;
-    try {
-      entry = JSON.parse(sentence.ob.text);
-    } catch (error) {
-      throw invalid("English grammar target row is malformed", { surface: sentence.su.text, cause: error.message });
-    }
-    if (!Array.isArray(entry.components) || !Array.isArray(entry.pyashSequence)) continue;
-    if (entry.pyashSequence.length !== 1) continue;
-    targets.push({
+  return parseEnglishGrammarCatalog(source).entries
+    .filter((entry) => entry.pyashSequence.length === 1)
+    .map((entry) => ({
       id: `grammar:${entry.components.join("+")}`,
       kind: "grammar",
-      english: text(entry.surface ?? sentence.su.text),
+      english: entry.surface,
       pya: entry.pyashSequence[0],
       components: entry.components,
-      evidence: text(entry.evidence)
-    });
-  }
-  return targets;
+      evidence: entry.evidence
+    }));
 }
 
 export function parseSubtlexSourceDescription(source) {
@@ -358,11 +364,11 @@ export async function loadChineseCharacterAtomRefineryInputs({
   paths = CHINESE_CHARACTER_ATOM_SOURCE_PATHS,
   atomGenerationInputs
 } = {}) {
-  const [subtlexSource, unihanReadings, unihanIndices, cedictSource, shuowenSource, analectsSource,
+  const [subtlexSource, unihanReadings, unihanOtherMappings, cedictSource, shuowenSource, analectsSource,
     kwonSource, acceptedLinksSource, grammarSource] = await Promise.all([
     fs.readFile(paths.subtlex, "utf8"),
     readUnihanFile(paths.unihanArchive, "Unihan_Readings.txt"),
-    readUnihanFile(paths.unihanArchive, "Unihan_DictionaryIndices.txt"),
+    readUnihanFile(paths.unihanArchive, "Unihan_OtherMappings.txt"),
     fs.readFile(paths.cedict, "utf8"),
     fs.readFile(paths.shuowen, "utf8"),
     fs.readFile(paths.analectsWenYen, "utf8"),
@@ -388,7 +394,7 @@ export async function loadChineseCharacterAtomRefineryInputs({
     if (error?.code !== "ENOENT") throw error;
   }
   const junda = jundaSource ? parseJundaCharacterFrequency(jundaSource) : new Map();
-  const unihan = parseUnihanCharacterData(unihanReadings, unihanIndices);
+  const unihan = parseUnihanCharacterData(unihanReadings, unihanOtherMappings);
   const cedict = parseCedictSingleCharacterGlosses(cedictSource);
   const acceptedLinks = parsePyaJsonMap(acceptedLinksSource);
   const grammarTargets = parseEnglishGrammarTargets(grammarSource);
@@ -398,7 +404,7 @@ export async function loadChineseCharacterAtomRefineryInputs({
     subtlex: hash(normalizedSubtlexSource),
     junda: jundaSource ? hash(jundaSource) : "unavailable-local-only",
     unihanReadings: hash(unihanReadings),
-    unihanIndices: hash(unihanIndices),
+    unihanOtherMappings: hash(unihanOtherMappings),
     cedict: hash(cedictSource),
     shuowen: hash(shuowenSource),
     analects: hash(analectsSource),
@@ -453,34 +459,70 @@ function atomTargets(atomEntries, grammarTargets) {
   return [...atoms, ...grammarTargets];
 }
 
-function candidateEnglishPhrases(terms, targets) {
-  const exact = new Map();
-  const normalizedTerms = unique(terms.map(normalizeEnglish));
-  for (const target of targets) {
+function atomTargetIndex(targets) {
+  const exactByAlias = new Map();
+  const exactByToken = new Map();
+  const tokensByPrefix = new Map();
+  const firstIndexById = new Map();
+  for (const [index, target] of targets.entries()) {
+    const id = `${target.kind}:${target.pya}`;
+    if (!firstIndexById.has(id)) firstIndexById.set(id, index);
     const aliases = [target.english, ...(target.kind === "grammar" ? [target.english.replace(/_$/u, "")] : [])]
       .map(normalizeEnglish).filter(Boolean);
-    if (aliases.some((alias) => normalizedTerms.includes(alias))) exact.set(`${target.kind}:${target.pya}`, target);
+    for (const alias of aliases) {
+      const matches = exactByAlias.get(alias) ?? new Map();
+      matches.set(id, { target, index });
+      exactByAlias.set(alias, matches);
+    }
+    const labels = unique(normalizeEnglish(target.english).split(" ").filter((token) => token.length >= 4));
+    for (const token of labels) {
+      const row = { target, index, token };
+      const tokenRows = exactByToken.get(token) ?? [];
+      tokenRows.push(row);
+      exactByToken.set(token, tokenRows);
+      for (let length = 4; length <= token.length; length += 1) {
+        const prefix = token.slice(0, length);
+        const prefixRows = tokensByPrefix.get(prefix) ?? [];
+        prefixRows.push(row);
+        tokensByPrefix.set(prefix, prefixRows);
+      }
+    }
   }
-  return [...exact.values()];
+  return { targets, exactByAlias, exactByToken, tokensByPrefix, firstIndexById };
 }
 
-function lexicalCandidateTargets(terms, targets, exactTargets) {
+function candidateEnglishPhrases(terms, targetIndex) {
+  const exact = new Map();
+  const normalizedTerms = unique(terms.map(normalizeEnglish));
+  for (const term of normalizedTerms) {
+    for (const [id, candidate] of targetIndex.exactByAlias.get(term) ?? []) {
+      if (!exact.has(id) || exact.get(id).index < candidate.index) exact.set(id, candidate);
+    }
+  }
+  return [...exact.entries()]
+    .sort(([left], [right]) => targetIndex.firstIndexById.get(left) - targetIndex.firstIndexById.get(right))
+    .map(([, candidate]) => candidate.target);
+}
+
+function lexicalCandidateTargets(terms, targetIndex, exactTargets) {
   const exactIds = new Set(exactTargets.map((target) => `${target.kind}:${target.pya}`));
   const heads = unique(terms.flatMap((term) => normalizeEnglish(term).split(" ")))
     .filter((token) => token.length >= 4);
-  const ranked = [];
-  for (const [index, target] of targets.entries()) {
-    if (exactIds.has(`${target.kind}:${target.pya}`)) continue;
-    const labels = unique(normalizeEnglish(target.english).split(" ")).filter((token) => token.length >= 4);
-    let score = 0;
-    for (const head of heads) {
-      for (const label of labels) {
-        if (head === label) score += 4;
-        else if (head.startsWith(label) || label.startsWith(head)) score += 2;
-      }
+  const scores = new Map();
+  const addScore = (row, score) => {
+    if (exactIds.has(`${row.target.kind}:${row.target.pya}`)) return;
+    scores.set(row.index, (scores.get(row.index) ?? 0) + score);
+  };
+  for (const head of heads) {
+    for (const row of targetIndex.exactByToken.get(head) ?? []) addScore(row, 4);
+    for (let length = 4; length < head.length; length += 1) {
+      for (const row of targetIndex.exactByToken.get(head.slice(0, length)) ?? []) addScore(row, 2);
     }
-    if (score > 0) ranked.push({ target, score, index });
+    for (const row of targetIndex.tokensByPrefix.get(head) ?? []) {
+      if (row.token !== head) addScore(row, 2);
+    }
   }
+  const ranked = [...scores.entries()].map(([index, score]) => ({ target: targetIndex.targets[index], score, index }));
   ranked.sort((left, right) => right.score - left.score
     || (left.target.kind === right.target.kind ? 0 : left.target.kind === "atom" ? -1 : 1)
     || left.index - right.index);
@@ -515,6 +557,7 @@ export function buildChineseCharacterAtomWorklist(inputs, { includeMapped = true
   }
   const mappings = oneCharacterMappings(inputs.kwonRows, inputs.acceptedLinks);
   const targets = atomTargets(inputs.atomEntries, inputs.grammarTargets ?? []);
+  const targetIndex = atomTargetIndex(targets);
   const records = [];
   for (const [character, unihan] of inputs.unihan) {
     const cedictRows = inputs.cedict.get(character) ?? [];
@@ -523,8 +566,8 @@ export function buildChineseCharacterAtomWorklist(inputs, { includeMapped = true
     if (existingMappings.length > 0 && !includeMapped) continue;
     if (existingMappings.length > 0 && !explicitContrast) continue;
     const english = englishHeads(cedictRows, unihan.unihanDefinition ?? "");
-    const exactTargets = candidateEnglishPhrases(english, targets);
-    const lexicalTargets = lexicalCandidateTargets(english, targets, exactTargets);
+    const exactTargets = candidateEnglishPhrases(english, targetIndex);
+    const lexicalTargets = lexicalCandidateTargets(english, targetIndex, exactTargets);
     const frequency = inputs.subtlex.get(character) ?? null;
     const currentLinkIsGeneric = explicitContrast && existingMappings.some((mapping) => (
       english.some((term) => normalizeEnglish(term) === normalizeEnglish(mapping.english))
@@ -634,9 +677,12 @@ export function buildChineseCharacterAtomReviewPrompt(record) {
 }
 
 export function parseChineseCharacterAtomReviewResponse(value, record) {
+  if (!record || !Array.isArray(record.existingAtomCandidates)) {
+    throw invalid("atom review response requires its candidate record", { id: record?.id });
+  }
   let response;
   try {
-    response = typeof value === "string" ? JSON.parse(value) : value;
+    response = parseProviderJsonResponse(value);
   } catch (error) {
     throw invalid("atom review response is malformed JSON", { id: record?.id, cause: error.message });
   }
@@ -658,6 +704,21 @@ export function parseChineseCharacterAtomReviewResponse(value, record) {
   if (response.verdict === "select" && matches.length === 0) {
     throw invalid("select atom review response must contain a supplied target", { id: record?.id });
   }
+  if (record.specificityConflict || record.specificityReviewRequired) {
+    const genericTargets = new Set((record.existingMappings ?? [])
+      .filter((mapping) => (record.englishCandidates ?? []).some((english) => (
+        normalizeEnglish(english) === normalizeEnglish(mapping.english)
+      )))
+      .flatMap((mapping) => record.existingAtomCandidates
+        .filter((target) => target.pya === mapping.pya)
+        .map((target) => `${target.kind}:${target.pya}`)));
+    if (matches.some((match) => genericTargets.has(match.targetId))) {
+      throw invalid("atom review selected a generic mapped target despite an explicit specificity conflict", {
+        id: record?.id,
+        targets: matches.map((match) => match.targetId).filter((targetId) => genericTargets.has(targetId))
+      });
+    }
+  }
   return {
     verdict: response.verdict,
     matches,
@@ -668,7 +729,7 @@ export function parseChineseCharacterAtomReviewResponse(value, record) {
 export function parseChineseCharacterTranslationResponse(value, record) {
   let response;
   try {
-    response = typeof value === "string" ? JSON.parse(value) : value;
+    response = parseProviderJsonResponse(value);
   } catch (error) {
     throw invalid("Chinese character translation response is malformed JSON", { id: record?.id, cause: error.message });
   }
@@ -697,7 +758,7 @@ export function parseChineseCharacterTranslationResponse(value, record) {
 export function parseChineseCharacterPhoneticResponse(value, record) {
   let response;
   try {
-    response = typeof value === "string" ? JSON.parse(value) : value;
+    response = parseProviderJsonResponse(value);
   } catch (error) {
     throw invalid("Chinese character phonetic response is malformed JSON", { id: record?.id, cause: error.message });
   }
@@ -794,14 +855,15 @@ export async function buildChineseCharacterAtomProposals(records, inputs, {
   const selected = records.filter((record) => record.status !== "already-mapped")
     .slice(0, Math.max(1, Math.trunc(Number(generationLimit) || 128)));
   const targets = atomTargets(inputs.atomEntries, inputs.grammarTargets ?? []);
+  const targetIndex = atomTargetIndex(targets);
   const proposals = [];
   for (const record of selected) {
     const translatedMeanings = translationsByCharacter.get(record.id)?.translations ?? [];
     const translatedEnglish = unique(translatedMeanings.map((row) => row.english));
-    const exactTranslatedTargets = candidateEnglishPhrases(translatedEnglish, targets);
+    const exactTranslatedTargets = candidateEnglishPhrases(translatedEnglish, targetIndex);
     const relatedTranslatedTargets = exactTranslatedTargets.length > 0
       ? []
-      : lexicalCandidateTargets(translatedEnglish, targets, exactTranslatedTargets);
+      : lexicalCandidateTargets(translatedEnglish, targetIndex, exactTranslatedTargets);
     const allowSpecificityReassignment = record.specificityConflict
       && specificityReassignments.has(record.id)
       && translatedMeanings.length > 0;
@@ -820,6 +882,7 @@ export async function buildChineseCharacterAtomProposals(records, inputs, {
         allowNewAtomAfterNoFit ? [] : (record.exactAtomCandidates ?? []),
         exactTranslatedTargets
       ),
+      specificityReviewRequired: Boolean(record.specificityReviewRequired || record.specificityConflict),
       specificityConflict: record.specificityConflict && !allowSpecificityReassignment,
       englishCandidates: unique([...(record.englishCandidates ?? []), ...translatedEnglish])
     };
