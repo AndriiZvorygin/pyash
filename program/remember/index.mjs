@@ -6,6 +6,7 @@ import { clearRefineries } from "../bridge/refinery.mjs";
 import { resetCommandIdentity } from "../bridge/command_identity.mjs";
 import { isEvidenceSentence } from "../library/knowledge_core.mjs";
 import {
+  isNamedBooleanSlotDeclaration,
   isNamedNumericSlotDeclaration,
   namedNumericSlotKind
 } from "../library/named_numeric_slot.mjs";
@@ -260,8 +261,8 @@ export function doRemember(sentence) {
 
   // Sandpits run in a temporary memory context (see `pushMemoryContext`). In that mode we must not
   // splice the shared memory array because doing so would corrupt the global `definitionIndex`
-  // (which is not context-scoped today). A declared numeric variable is the exception: its frame
-  // slot is replaced in place, while history still records each write.
+  // (which is not context-scoped today). Declared variable slots are updated within the active
+  // frame, while history still records each write.
   const isSandpit = contextStack.length > 0;
 
   // For non-def/prah sentences with a subject, replace the most recent
@@ -284,9 +285,9 @@ export function doRemember(sentence) {
   ) {
     for (let i = memory.length - 1; i >= 0; i -= 1) {
       const existing = memory[i];
+      if (existing.mood === "def" || existing.mood === "prah") break;
       if (existing.su?.name !== subjName) continue;
       if (existing.mood === "do") continue;
-      if (existing.mood === "def" || existing.mood === "prah") break;
       if (isEvidenceSentence(existing)) continue;
       if (namedNumericSlotKind(existing) !== "variable") break;
 
@@ -318,7 +319,7 @@ export function doRemember(sentence) {
   const storedSentence = sentence.exists
     && isSandpit
     && state.executingBody
-    && isNamedNumericSlotDeclaration(sentence)
+    && (isNamedNumericSlotDeclaration(sentence) || isNamedBooleanSlotDeclaration(sentence))
     ? { ...sentence }
     : sentence;
   if (storedSentence !== sentence) delete storedSentence.exists;

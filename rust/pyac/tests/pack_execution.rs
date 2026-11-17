@@ -797,6 +797,13 @@ fn executes_bounded_fromindex_toindex_programlet_loops() {
 
     let exhausted = run_numeric_programlet(&LOOPING_NUMERIC_PROGRAMLET, 5);
     assert_eq!(exhausted.error, pyac_vliw_core::ERROR_STEP_BUDGET);
+
+    let exhausted_at_six = run_numeric_programlet(&LOOPING_NUMERIC_PROGRAMLET, 6);
+    assert_eq!(exhausted_at_six.error, pyac_vliw_core::ERROR_STEP_BUDGET);
+
+    let exact_budget = run_numeric_programlet(&LOOPING_NUMERIC_PROGRAMLET, 7);
+    assert_eq!(exact_budget.error, 0, "{exact_budget:?}");
+    assert_eq!(exact_budget.values[0], 3);
 }
 
 #[test]

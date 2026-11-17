@@ -9,6 +9,7 @@ import { produce, signatures as produceSignatures } from "./mathematics/produce.
 import { neuron, signatures as neuronSignatures } from "./mathematics/neuron.mjs";
 import { twiceCrescent, signatures as twiceCrescentSignatures } from "./mathematics/twice_crescent.mjs";
 import { remains, signatures as remainsSignatures } from "./mathematics/remains.mjs";
+import boolean, { signatures as booleanSignatures } from "./boolean.mjs";
 import chip, { signatures as chipSignatures } from "./mathematics/chip.mjs";
 import grossChip, { signatures as grossChipSignatures } from "./gross_chip.mjs";
 import wiseChip, { signatures as wiseChipSignatures } from "./wise_chip.mjs";
@@ -120,6 +121,7 @@ export {
   neuron,
   twiceCrescent,
   remains,
+  boolean,
   chip,
   grossChip,
   wiseChip,
@@ -219,6 +221,7 @@ export const builtInSignatures = [
   ...neuronSignatures,
   ...twiceCrescentSignatures,
   ...remainsSignatures,
+  ...booleanSignatures,
   ...chipSignatures,
   ...grossChipSignatures,
   ...wiseChipSignatures,

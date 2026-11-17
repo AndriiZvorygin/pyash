@@ -26,6 +26,7 @@ import { throwErrorSentence } from "../error.mjs";
 import { applyEnvDefaults } from "../configure/env.mjs";
 import { isEvidenceSentence, normalizeClaimSentence, normalizeEvidence } from "../library/knowledge_core.mjs";
 import {
+  isNamedBooleanSlotDeclaration,
   isNamedNumericSlotDeclaration,
   namedNumericSlotKind,
   namedNumericSlotWriteError
@@ -204,7 +205,7 @@ export async function interpret(sentence, { runtimeContext = null } = {}) {
     mood === "ya"
     && state.executingBody
     && hasMemoryContext()
-    && isNamedNumericSlotDeclaration(sentence)
+    && (isNamedNumericSlotDeclaration(sentence) || isNamedBooleanSlotDeclaration(sentence))
   );
   if (slotKind === "constant" && !localSlotShadow) {
     throwErrorSentence({
@@ -423,6 +424,7 @@ export async function interpret(sentence, { runtimeContext = null } = {}) {
         name
         && !sentence.exists
         && !isNamedNumericSlotDeclaration(sentence)
+        && !isNamedBooleanSlotDeclaration(sentence)
         && sentence.be !== "export"
         && !remember(name)
       ) {

@@ -809,7 +809,10 @@ struct NameSpan {
 }
 
 impl NameSpan {
-    const EMPTY: Self = Self { start: 0, length: 0 };
+    const EMPTY: Self = Self {
+        start: 0,
+        length: 0,
+    };
 }
 
 fn collect_sentence(
@@ -1050,10 +1053,7 @@ fn number_kind_matches(expected: u32, actual: u32) -> bool {
     }
 }
 
-fn compare_programlet_numbers(
-    left: ProgramletNumber,
-    right: ProgramletNumber,
-) -> u32 {
+fn compare_programlet_numbers(left: ProgramletNumber, right: ProgramletNumber) -> u32 {
     match (left.kind == VALUE_SIGNED, right.kind == VALUE_SIGNED) {
         (true, true) => compare_signed(left.bits as i32, right.bits as i32),
         (true, false) => {
@@ -1249,9 +1249,6 @@ fn resolve_programlet_value(
     let typed_boolean = field.length >= 4
         && tokens[field.start + 1] == BOOLEAN_TYPE
         && tokens[field.start + 2] == NAME_TYPE;
-    if field.length > 2 && !typed_number && !typed_boolean {
-        return ERROR_UNSUPPORTED;
-    }
     let mut name = NameSpan::EMPTY;
     let name_error = name_span(tokens, field, typed_number || typed_boolean, &mut name);
     if name_error != 0 {
@@ -1538,13 +1535,8 @@ fn programlet_branch(
     let has_alternative = first_mood + 1 < length;
     let alternative = if has_alternative {
         let mut alternative = ParsedSentence::empty();
-        let error = parse_sentence_range(
-            tokens,
-            boundaries,
-            first_mood + 1,
-            length,
-            &mut alternative,
-        );
+        let error =
+            parse_sentence_range(tokens, boundaries, first_mood + 1, length, &mut alternative);
         if error != 0 {
             return error;
         }
@@ -1920,6 +1912,7 @@ fn find_programlet_routine(
     symbol_words: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
     symbol_used: &mut usize,
     routine_name: &mut NameSpan,
+    routine_output_name: &mut NameSpan,
     routine_start: &mut usize,
     routine_end: &mut usize,
     routine_kind: &mut u32,
@@ -1952,10 +1945,14 @@ fn find_programlet_routine(
         let Some(output) = sentence.field(DESTINATION) else {
             return ERROR_MALFORMED;
         };
-        let mut ignored_name = NameSpan::EMPTY;
+        let mut declared_output_name = NameSpan::EMPTY;
         let mut output_kind = 0;
-        let output_error =
-            typed_output_name(sentence_words, output, &mut ignored_name, &mut output_kind);
+        let output_error = typed_output_name(
+            sentence_words,
+            output,
+            &mut declared_output_name,
+            &mut output_kind,
+        );
         if output_error != 0 {
             return output_error;
         }
@@ -1965,9 +1962,34 @@ fn find_programlet_routine(
             return name_error;
         }
         let matches_target = names_equal(sentence_words, source_name, symbol_words, target);
+        let stored_output_name = if matches_target {
+            let mut stored = NameSpan::EMPTY;
+            let error = store_name(
+                sentence_words,
+                declared_output_name,
+                symbol_words,
+                symbol_used,
+                &mut stored,
+            );
+            if error != 0 {
+                return error;
+            }
+            stored
+        } else {
+            NameSpan {
+                start: 0,
+                length: 0,
+            }
+        };
         let stored_name = if matches_target {
             let mut stored = NameSpan::EMPTY;
-            let error = store_name(sentence_words, source_name, symbol_words, symbol_used, &mut stored);
+            let error = store_name(
+                sentence_words,
+                source_name,
+                symbol_words,
+                symbol_used,
+                &mut stored,
+            );
             if error != 0 {
                 return error;
             }
@@ -2031,6 +2053,7 @@ fn find_programlet_routine(
                         return ERROR_MALFORMED;
                     }
                     *routine_name = stored_name;
+                    *routine_output_name = stored_output_name;
                     *routine_start = body_start;
                     *routine_end = body_next;
                     *routine_kind = output_kind;
@@ -2186,25 +2209,10 @@ pub fn execute_numeric_programlet(
     };
     let mut output_name = NameSpan::EMPTY;
     let mut output_kind = 0;
-    let output_error = typed_output_name(
-        sentence_words,
-        output,
-        &mut output_name,
-        &mut output_kind,
-    );
+    let output_error =
+        typed_output_name(sentence_words, output, &mut output_name, &mut output_kind);
     if output_error != 0 {
         return CoreResult::failure(output_error, 0);
-    }
-    let mut stored_output_name = NameSpan::EMPTY;
-    let name_error = store_name(
-        sentence_words,
-        output_name,
-        symbol_words,
-        &mut symbol_used,
-        &mut stored_output_name,
-    );
-    if name_error != 0 {
-        return CoreResult::failure(name_error, 0);
     }
     let loop_remaining = match loop_iterations(&invocation, sentence_words) {
         Ok(iterations) => iterations,
@@ -2259,6 +2267,7 @@ pub fn execute_numeric_programlet(
         return CoreResult::failure(name_error, 0);
     }
     let mut routine_name = NameSpan::EMPTY;
+    let mut routine_output_name = NameSpan::EMPTY;
     let mut routine_start = 0;
     let mut routine_end = 0;
     let mut routine_kind = 0;
@@ -2271,6 +2280,7 @@ pub fn execute_numeric_programlet(
         symbol_words,
         &mut symbol_used,
         &mut routine_name,
+        &mut routine_output_name,
         &mut routine_start,
         &mut routine_end,
         &mut routine_kind,
@@ -2309,8 +2319,8 @@ pub fn execute_numeric_programlet(
         ..ProgramletFrame::EMPTY
     };
     frames[0].slots[0] = NumericLocalSlot {
-        name_offset: stored_output_name.start as u32,
-        name_length: stored_output_name.length as u32,
+        name_offset: routine_output_name.start as u32,
+        name_length: routine_output_name.length as u32,
         value: 0,
         kind: if output_kind == VALUE_BOOLEAN { 3 } else { 1 },
         value_kind: if output_kind == VALUE_BOOLEAN {
@@ -2336,11 +2346,8 @@ pub fn execute_numeric_programlet(
     }
 
     let mut depth = 1usize;
-    let mut steps = 0u32;
+    let mut steps = 1u32;
     while depth > 0 {
-        if steps >= step_budget {
-            return CoreResult::failure(ERROR_STEP_BUDGET, steps);
-        }
         let frame_index = depth - 1;
         let frame = frames[frame_index];
         let pc = frame.program_counter as usize;
@@ -2395,7 +2402,12 @@ pub fn execute_numeric_programlet(
                 if parse_error != 0 {
                     return CoreResult::failure(parse_error, steps);
                 }
-                steps += 1;
+                if sentence.mood != MOOD_PARAGRAPH {
+                    if steps >= step_budget {
+                        return CoreResult::failure(ERROR_STEP_BUDGET, steps);
+                    }
+                    steps += 1;
+                }
                 sentence
             };
 
@@ -2538,12 +2550,8 @@ pub fn execute_numeric_programlet(
             };
             let mut return_name = NameSpan::EMPTY;
             let mut return_kind = 0;
-            let output_error = typed_output_name(
-                sentence_words,
-                output,
-                &mut return_name,
-                &mut return_kind,
-            );
+            let output_error =
+                typed_output_name(sentence_words, output, &mut return_name, &mut return_kind);
             if output_error != 0 {
                 return CoreResult::failure(output_error, steps);
             }
@@ -2611,6 +2619,7 @@ pub fn execute_numeric_programlet(
                 return CoreResult::failure(error, steps);
             }
             let mut called_name = NameSpan::EMPTY;
+            let mut called_output_name = NameSpan::EMPTY;
             let mut called_start = 0;
             let mut called_end = 0;
             let mut called_kind = 0;
@@ -2623,6 +2632,7 @@ pub fn execute_numeric_programlet(
                 symbol_words,
                 &mut symbol_used,
                 &mut called_name,
+                &mut called_output_name,
                 &mut called_start,
                 &mut called_end,
                 &mut called_kind,
@@ -2685,8 +2695,8 @@ pub fn execute_numeric_programlet(
                     ..ProgramletFrame::EMPTY
                 };
                 frames[depth].slots[0] = NumericLocalSlot {
-                    name_offset: stored_return_name.start as u32,
-                    name_length: stored_return_name.length as u32,
+                    name_offset: called_output_name.start as u32,
+                    name_length: called_output_name.length as u32,
                     value: 0,
                     kind: if return_kind == VALUE_BOOLEAN { 3 } else { 1 },
                     value_kind: if return_kind == VALUE_BOOLEAN {
