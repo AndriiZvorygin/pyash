@@ -311,10 +311,10 @@ These entries come from the lwonprom noun-phrase and grammatical-case
 construction. The catalog supplies composition evidence while canonical lemma,
 alias, and compound indexes remain authoritative.
 
-Chinese character-to-atom links are single-valued: keep only the atom for a
-character's most frequent use and drop links for its secondary senses. Multiple
-links for a polysemous character make reverse lookup and round-trip translation
-ambiguous.
+Chinese character-to-atom links are one-to-one. Rank competing characters for
+each atom by frequency of that relevant use. The highest-frequency use claims
+it; others fall back to their next relevant use or remain unlinked. This
+preserves round-trip precision.
 
 ---
 

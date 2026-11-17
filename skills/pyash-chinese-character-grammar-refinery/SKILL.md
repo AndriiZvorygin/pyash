@@ -13,7 +13,7 @@ This workflow finds links only to existing entries in `program/library/translati
 - The pinned UD Chinese-GSDSimp train/dev/test files add modern POS-tagged attestations. POS tags are imperfect and only bound candidates; a candidate also needs an exact CC-CEDICT gloss match to an existing English grammar entry.
 - Existing grammar entries qualify only when their Pyash sequence has one word and `classifyPyacWord` identifies it as `SHORT_GRAMMAR` or `LONG_GRAMMAR`. Root-shaped words and multiword grammar sequences are not targets in this first pass.
 - Keep Classical Analects contexts separate by witness. Context is attestation evidence; do not treat a passage as a standalone gloss.
-- A Chinese character may link to at most one Pyash atom. Keep the target for its most frequent use and drop secondary-sense links; polysemy must not create multiple atom links because that makes reverse lookup and round-trip translation ambiguous. Apply this invariant across grammar and lexical character-link work.
+- Character-to-atom assignments are one-to-one: neither a Chinese character nor a Pyash atom may appear twice. Rank links by frequency of the relevant Chinese use. When characters compete for one atom, the highest-frequency use claims it; others fall back to their next relevant use or remain unlinked. Apply this across grammar and lexical character-link work to preserve reverse and round-trip precision.
 
 ## Run and resume
 
