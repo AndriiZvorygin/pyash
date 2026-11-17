@@ -6,4 +6,4 @@ rust-version = "1.85"
 publish = false
 
 [lib]
-path = "src/lib.rs"
+path = "src/semantics_runtime.rs"

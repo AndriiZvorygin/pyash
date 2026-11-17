@@ -131,8 +131,8 @@ senses and the canonical Pyash vocabulary before assigning them VLIW meaning.
 | `.pyac` pack | Header plus deterministic fixed-width codelet bytes | Version 1 is a flat codelet sequence; no embedded data/code sections or mutable variable store; the interpreter allocates implemented numeric locals per invocation |
 | JavaScript VLIW facade | Reference lowering, decoding, effects, and supported execution | Partial semantic coverage, including the canonical Pyash programlet v1 slice below |
 | C output from `.pyac` | Compile supported codelets to C, then use the host C compiler | Verified arithmetic and invert subset; not a general Pyash-to-C replacement |
-| Shared Rust VLIW core | `rust/pyac-vliw-core`, a `no_std` semantic implementation called by the Rust CPU pack interpreter and GPU kernels | Canonical codelet families plus one bounded local-number programlet path; not yet full Pyash interpreter parity |
-| Rust-GPU native | Rust-GPU compiles that same core to Vulkan SPIR-V for the native Housekeeper worker | Requires an NVIDIA discrete GPU and Vulkan; execution is explicitly bounded to the supported core operations |
+| Shared VLIW semantics runtime | `rust/pyac-vliw-core/src/semantics_runtime.rs`, compiled as a `no_std` Rust library and called by the CPU pack interpreter and GPU kernels | Canonical codelet families plus one bounded local-number programlet path; not yet full Pyash interpreter parity |
+| Rust-GPU native | Rust-GPU compiles that same semantics runtime to Vulkan SPIR-V for the native Housekeeper worker | Requires an NVIDIA discrete GPU and Vulkan; execution is explicitly bounded to the supported operations |
 | Rust and RISC-V | Decode/execute supported PyAC semantics; direct RISC-V instruction/ELF prototype | Narrow subset; the generated RISC-V image is not emulator-executed |
 
 The general Pyash-to-JavaScript/C compiler is a distinct route. Its existence
@@ -162,7 +162,8 @@ eligible parallel work -> WebGPU/WGSL compute kernel             (optional brows
 PyAC -> LLVM IR or other backends                               (later targets)
 ```
 
-The GPU implementation has one semantic source: `rust/pyac-vliw-core`. The
+The GPU implementation has one semantic source:
+`rust/pyac-vliw-core/src/semantics_runtime.rs`. The
 stable Rust CPU pack interpreter calls it directly; Rust-GPU compiles it to
 Vulkan SPIR-V for the native worker and to WGSL for the browser pack path. The
 native Housekeeper accepts canonical `pyac-pack-execute` jobs only; its worker
@@ -170,7 +171,7 @@ does not accept a second named-slot candidate format.
 
 This is semantic parity for the currently implemented bounded VLIW slice, not
 for all Pyash. The Rust CPU pack API retains its compatibility fallback for
-families outside the shared core; the GPU worker rejects unsupported codelet
+families outside the semantics runtime; the GPU worker rejects unsupported codelet
 groups explicitly rather than silently substituting another implementation.
 See
 [`rust/pyac-gpu/README.md`](../../rust/pyac-gpu/README.md) for builds and the
@@ -193,7 +194,7 @@ services such as filesystem access.
 
 For an explicitly requested pack that passes semantic eligibility, the WASM
 host dispatches the generated WGSL kernel through Rust's `wgpu` API. That WGSL
-is generated from the same Rust-GPU source and shared semantic core as the
+is generated from the same Rust-GPU source and shared semantics runtime as the
 native Vulkan shader; it is not a hand-maintained parallel implementation.
 The host still validates and groups codelets, manages buffers, and reconstructs
 typed results. This does not automatically choose WebGPU by profitability or
@@ -217,7 +218,7 @@ deployed to and executed on the user's device. Small workloads should normally
 stay on the CPU when dispatch and transfer costs outweigh parallel execution.
 
 The first runnable browser slice is implemented under `rust/pyac-browser/`.
-The Rust pack executor and generated WGSL kernel consume the shared core's
+The Rust pack executor and generated WGSL kernel consume the semantics runtime's
 supported codelet semantics; browser tests verify the WASM CPU path, WebGPU
 parity for numeric arithmetic batches and bounded comparison branches, and CPU
 fallback when WebGPU is unavailable. This remains a subset runtime, not
@@ -230,20 +231,20 @@ treated here as an equivalent general compute backend.
 
 #### Current GPU Capability Boundary
 
-The current implementation is one Rust semantic core with CPU, native Vulkan,
-and browser WGSL targets. For canonical `.pyac` packs, the host still groups
+The current implementation is one shared VLIW semantics runtime with CPU,
+native Vulkan, and browser WGSL targets. For canonical `.pyac` packs, the host still groups
 codelets and reconstructs typed values while the GPU executes supported
 sentence groups.
 
 | Capability | Current WebGPU support | Remaining work for broader VLIW coverage |
 | --- | --- | --- |
-| Numeric scalar operations | Shared-core unsigned arithmetic: saturating add/subtract, multiply, nonzero divide/remainder, XOR, exponentiation | Additional operations only where normative Pyash semantics define them |
-| Numeric vectors | Shared-core elementwise unsigned-16 vectors, widths 2-8 with scalar right operand or widths 2-4 with equal-width vector operand; multiply results widen to unsigned-32 | Vector predicates/masks, wider or dynamic vectors, device-resident inputs/outputs |
+| Numeric scalar operations | Shared-runtime unsigned arithmetic: saturating add/subtract, multiply, nonzero divide/remainder, XOR, exponentiation | Additional operations only where normative Pyash semantics define them |
+| Numeric vectors | Shared-runtime elementwise unsigned-16 vectors, widths 2-8 with scalar right operand or widths 2-4 with equal-width vector operand; multiply results widen to unsigned-32 | Vector predicates/masks, wider or dynamic vectors, device-resident inputs/outputs |
 | Conditional execution | Canonical `.pyac` path supports flat `equally`, `tiny`, or `giant` numeric predicates with numeric or `truth`/`lie` literal arms | Named operands in predicates, compound/nested branches, ceremony-call arms, conditional side effects |
 | Scalar boolean values | `truth`/`lie` literals and bounded comparison branches return typed booleans | Boolean-producing calls and boolean local slots in a shared function frame |
 | Loops and calls | Not in the current GPU codelet slice | Bounded loop lowering, function/call frames, explicit control-flow/dependency representation |
 | State and memory | `.pyac` execution uses per-work-item input/output buffers; mutable named state is not part of this pack version | General mutable VLIW state, alias rules, host/device residency and lifetime |
-| Other value families | Date and supported numeric/bool vector results are interpreted by the shared core; text vectors remain on the Rust CPU fallback | GPU lowering only where parallel execution is useful; otherwise retain explicit CPU operations in mixed plans |
+| Other value families | Date and supported numeric/bool vector results are interpreted by the semantics runtime; text vectors remain on the Rust CPU fallback | GPU lowering only where parallel execution is useful; otherwise retain explicit CPU operations in mixed plans |
 | Coordination | Independent work items in one dispatch | Ordered multi-stage programs, reductions, barriers, atomics, cross-workgroup dependencies |
 | Dispatch policy | User-selected GPU action; CPU fallback when unavailable or ineligible | Device checks and a measured model for transfer, launch, occupancy, and data residency costs |
 
@@ -464,7 +465,7 @@ optimization remains behind the same semantic conformance tests, with a
 correct fallback for devices lacking that feature.
 
 The native GPU worker executes supported canonical `.pyac` codelet packs
-through the shared core and fails explicitly for unsupported codelet groups.
+through the semantics runtime and fails explicitly for unsupported codelet groups.
 The browser WGSL target is generated from the same Rust-GPU source. The
 program-level local-frame evaluator is currently wired through the Rust CPU
 pack executor; neither GPU runtime accepts the removed named-slot candidate

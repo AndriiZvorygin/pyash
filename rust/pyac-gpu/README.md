@@ -1,9 +1,10 @@
 # Rust-GPU VLIW Targets
 
 The VLIW GPU targets share the semantic implementation in
-`rust/pyac-vliw-core`. Rust-GPU compiles it into one Vulkan SPIR-V module for
-the native Housekeeper worker and generated WGSL for the browser pack runtime.
-Keep behavior changes in the shared Rust core; do not add a parallel CUDA/PTX
+`rust/pyac-vliw-core/src/semantics_runtime.rs`. Rust-GPU compiles it into one
+Vulkan SPIR-V module for the native Housekeeper worker and generated WGSL for
+the browser pack runtime. Keep behavior changes in the shared semantics
+runtime; do not add a parallel CUDA/PTX
 or hand-maintained WGSL implementation.
 
 ## Build and smoke-test
