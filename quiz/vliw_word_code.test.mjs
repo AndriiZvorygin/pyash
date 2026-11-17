@@ -2,8 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  classifyPyacWord,
   decodePyacWord,
-  encodePyacWord
+  encodePyacWord,
+  WORD_CODE_TYPES
 } from "../program/library/vliw/word_code.mjs";
 import {
   decodePhraseVliw,
@@ -31,6 +33,13 @@ test("lwonprom word encoding produces the canonical Pyac word numbers", () => {
 test("lwonprom final-consonant aliases share their encoded slot", () => {
   assert.equal(encodePyacWord("hmas"), encodePyacWord("hmaz"));
   assert.equal(decodePyacWord(encodePyacWord("hmaz")), "hmas");
+});
+
+test("Pyac word classification distinguishes grammar forms from lexical roots", () => {
+  assert.equal(classifyPyacWord("sa"), WORD_CODE_TYPES.SHORT_GRAMMAR);
+  assert.equal(classifyPyacWord("fluh"), WORD_CODE_TYPES.LONG_GRAMMAR);
+  assert.equal(classifyPyacWord("fyif"), WORD_CODE_TYPES.LONG_ROOT);
+  assert.equal(classifyPyacWord("hnan"), WORD_CODE_TYPES.SHORT_ROOT);
 });
 
 test("phrase VLIW roundtrip preserves Pyac words and phrase markers", () => {

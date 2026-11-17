@@ -45,6 +45,12 @@ that a character maps to a particular Pyash atom.
 
 Citation and access: Yonghong Ke (2024), [ACL Anthology 2024.ccl-1.64](https://aclanthology.org/2024.ccl-1.64/). The paper informs segmentation methodology; it does not supply the text edition for our *Analects* corpus.
 
+## Function-character candidate list
+
+[`function-characters-24.pya`](sources/classical-chinese/function-characters-24.pya) preserves 24 characters selected in section 4.3 of Yu Ningyi, Rao Gaoqi, and Xun Endong (2015), [“An Attempt to Ancient Chinese Extraction based on Statistical and Rule based Methods”](https://cips-cl.org/static/anthology/CCL-2015/CCL-15-112.pdf). The authors used these characters as features in a Classical-versus-modern text classifier and note that modern words can contain the same characters. This is a candidate seed list, not an annotated grammar lexicon or an exhaustive inventory of Classical Chinese function words. The grammar refinery therefore checks attestations and dictionary senses before asking the model to consider an existing Pyash grammar target.
+
+The modern POS backup is the pinned [UD Chinese-GSDSimp](https://universaldependencies.org/treebanks/zh_gsdsimp/) snapshot documented in [`SOURCES.md`](SOURCES.md). Its automatically converted UPOS annotations include manual corrections but can tag lexical words as particles; the refinery uses POS to bound candidate evidence and requires a direct CC-CEDICT grammar-target gloss match. Neither the 24-character list nor modern POS by itself establishes a character-to-grammar link.
+
 ## Acquired idiom reference
 
 [`dict_idioms_2020_20260929.zip`](sources/classical-chinese/moe-idioms/dict_idioms_2020_20260929.zip) is the official Taiwan Ministry of Education text-data archive for the *Dictionary of Chinese Idioms*, downloaded unchanged on 2026-10-31. The archive contains one XLSX file, `dict_idioms_2020_20260929.xlsx`. SHA-256: `33dc230ceb126cccfe3dc6e17e3b38b99618b8d6c6ff85ee911493065dc2850e`.

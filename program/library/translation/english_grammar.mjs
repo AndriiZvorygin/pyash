@@ -5,6 +5,9 @@ import { buildProgram } from "../../program.mjs";
 
 export const ENGLISH_GRAMMAR_FORMAT = "english-grammar-v1";
 export const ENGLISH_GRAMMAR_NAME = "translation_english_grammar";
+export const ENGLISH_GRAMMAR_CHINESE_CHARACTER_LINK_PREFIX = "chinese-character-link:";
+
+const HAN = /\p{Script=Han}/u;
 
 function sourceHash(value) {
   return createHash("sha256").update(value).digest("hex");
@@ -95,6 +98,40 @@ function normalizeEntry(payload, surface, index) {
   };
 }
 
+function normalizeChineseCharacterLink(payload, key, index) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw invalid("Chinese grammar character link must be a JSON object", { index, key });
+  }
+  const character = typeof payload.character === "string" ? payload.character.normalize("NFC").trim() : "";
+  const components = Array.isArray(payload.components) ? payload.components.map((word) => String(word).trim()) : [];
+  const sources = Array.isArray(payload.sources) ? payload.sources.map((source) => String(source).trim()).filter(Boolean) : [];
+  const pya = typeof payload.pya === "string" ? payload.pya.trim() : "";
+  const targetId = typeof payload.targetId === "string" ? payload.targetId.trim() : "";
+  const english = typeof payload.english === "string" ? normalizeEnglishGrammarSurface(payload.english) : "";
+  const rationale = typeof payload.rationale === "string" ? payload.rationale.trim() : "";
+  const source = typeof payload.source === "string" ? payload.source.trim() : "";
+  if ([...character].length !== 1 || !HAN.test(character) || !pya || !targetId || !english
+    || components.length === 0 || components.some((component) => !component)
+    || payload.status !== "accepted" || payload.confidence !== "high"
+    || !["base", "marked", "same-sense"].includes(payload.relation)
+    || !rationale || !source || sources.length === 0) {
+    throw invalid("Chinese grammar character link has invalid or incomplete fields", { index, key });
+  }
+  return {
+    character,
+    targetId,
+    pya,
+    components,
+    english,
+    relation: payload.relation,
+    confidence: "high",
+    status: "accepted",
+    source,
+    sources,
+    rationale
+  };
+}
+
 export function parseEnglishGrammarCatalog(source, {
   name = ENGLISH_GRAMMAR_NAME
 } = {}) {
@@ -119,10 +156,16 @@ export function parseEnglishGrammarCatalog(source, {
   }
 
   const entries = [];
+  const chineseCharacterLinks = [];
   const seen = new Set();
   for (const [index, sentence] of sentences.entries()) {
     if (sentence?.mood !== "ya" || typeof sentence.su?.text !== "string") continue;
     if (["format", "source", "source-hash"].includes(sentence.su.text)) continue;
+    if (sentence.su.text.startsWith(ENGLISH_GRAMMAR_CHINESE_CHARACTER_LINK_PREFIX)) {
+      const link = normalizeChineseCharacterLink(parsePayload(sentence, index), sentence.su.text, index);
+      chineseCharacterLinks.push(link);
+      continue;
+    }
     const entry = normalizeEntry(parsePayload(sentence, index), sentence.su.text, index);
     if (seen.has(entry.surface)) throw invalid("English grammar surface is duplicated", { index, surface: entry.surface });
     seen.add(entry.surface);
@@ -133,8 +176,39 @@ export function parseEnglishGrammarCatalog(source, {
     name,
     source: metadata.source ?? "",
     sourceHash: metadata["source-hash"] ?? sourceHash(source),
-    entries
+    entries,
+    chineseCharacterLinks
   };
+}
+
+export function renderEnglishGrammarChineseCharacterLinks(source, links = []) {
+  if (typeof source !== "string" || !Array.isArray(links)) {
+    throw invalid("English grammar link rendering requires source text and link rows");
+  }
+  const catalog = parseEnglishGrammarCatalog(source);
+  const seen = new Set(catalog.chineseCharacterLinks.map((link) => `${link.character}\u0000${link.targetId}`));
+  const rows = [];
+  for (const [index, payload] of links.entries()) {
+    const key = `${ENGLISH_GRAMMAR_CHINESE_CHARACTER_LINK_PREFIX}${payload?.character ?? ""}:${payload?.targetId ?? index}`;
+    const link = normalizeChineseCharacterLink(payload, key, index);
+    const identity = `${link.character}\u0000${link.targetId}`;
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    const id = createHash("sha256").update(identity).digest("hex").slice(0, 12);
+    rows.push(`su text ${JSON.stringify(`${ENGLISH_GRAMMAR_CHINESE_CHARACTER_LINK_PREFIX}${id}`)} ob text ${JSON.stringify(JSON.stringify(link))} ya`);
+  }
+  if (rows.length === 0) return source;
+  const lines = source.split(/\r?\n/u);
+  let terminator = -1;
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (/^\s*prah\s*$/u.test(lines[index])) {
+      terminator = index;
+      break;
+    }
+  }
+  if (terminator < 0) throw invalid("English grammar source has no closing prah");
+  lines.splice(terminator, 0, ...rows);
+  return lines.join("\n");
 }
 
 export async function loadEnglishGrammarCatalog({
