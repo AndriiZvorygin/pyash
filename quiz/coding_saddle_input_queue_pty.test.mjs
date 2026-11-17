@@ -15,8 +15,14 @@ const planToolName = "be_write_fromstate_text_ob_text";
 
 function deferred() {
   let resolve;
-  const promise = new Promise((done) => { resolve = done; });
-  return { promise, resolve };
+  let settled = false;
+  const promise = new Promise((done) => {
+    resolve = (value) => {
+      settled = true;
+      done(value);
+    };
+  });
+  return { promise, resolve, get settled() { return settled; } };
 }
 
 function waitFor(predicate, label, timeoutMs = 30000) {
@@ -112,7 +118,7 @@ function makeFinalResponse(content) {
   return { status: "success", result: { message: { role: "assistant", content } } };
 }
 
-test("saddle PTY sends Enter input after the next tool result and Tab input after the turn", async () => {
+test("saddle PTY interrupts and steers on Enter while Tab waits for the turn to end", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-input-queue-pty-"));
   const projectRoot = path.join(tempRoot, "project");
   const projectWorldRoot = resolveSaddleProjectWorldRoot({ runtimeRoot, cwd: projectRoot });
@@ -121,6 +127,9 @@ test("saddle PTY sends Enter input after the next tool result and Tab input afte
   const submissions = [];
   const jobs = new Map();
   const heldMarkers = new Set();
+  const cancellations = [];
+  const cancellationCompletions = [];
+  let replacementSubmittedBeforeCancellation = false;
   let nextJobId = 0;
 
   const housekeeper = http.createServer(async (req, res) => {
@@ -150,17 +159,30 @@ test("saddle PTY sends Enter input after the next tool result and Tab input afte
       const remoteJobId = `pty-input-job-${++nextJobId}`;
       const payload = body?.jobSpec?.payload ?? {};
       const userTexts = getUserTexts(payload);
-      const heldMarker = ["start enter scenario", "start tab scenario", "start no-tool enter scenario"]
+      if (userTexts.some((text) => text.includes("add the first detail"))) {
+        const activeSteerJob = [...jobs.values()].find((job) => job.heldMarker === "start steer scenario");
+        if (!activeSteerJob?.cancellationConfirmed) replacementSubmittedBeforeCancellation = true;
+      }
+      const heldMarker = ["start steer scenario", "start tab scenario"]
         .find((marker) => userTexts.includes(marker) && !heldMarkers.has(marker));
       const heldResponse = heldMarker ? deferred() : null;
       if (heldMarker) heldMarkers.add(heldMarker);
       submissions.push(payload);
       jobs.set(remoteJobId, {
+        remoteJobId,
         payload,
         response: heldResponse,
         heldMarker
       });
       res.end(JSON.stringify({ remoteJobId }));
+      return;
+    }
+    if (req.method === "POST" && req.url === "/cancel") {
+      const remoteJobId = String(body?.remoteJobId ?? "");
+      cancellations.push(remoteJobId);
+      const job = jobs.get(remoteJobId);
+      if (job) job.cancelRequested = true;
+      res.end(JSON.stringify({ accepted: true, cancelled: false, status: "cancelling", remoteJobId }));
       return;
     }
     if (req.method === "GET" && req.url.startsWith("/job/pty-input-job-")) {
@@ -171,22 +193,28 @@ test("saddle PTY sends Enter input after the next tool result and Tab input afte
         res.end(JSON.stringify({ error: "job not found" }));
         return;
       }
+      if (job.cancelRequested) {
+        job.cancellationConfirmed = true;
+        cancellationCompletions.push(remoteJobId);
+        res.end(JSON.stringify({ status: "cancelled", remoteJobId }));
+        return;
+      }
       let result;
       if (job.response) {
         result = await job.response.promise;
-      } else if (job.heldMarker === "start enter scenario") {
-        result = makePlanToolResponse("enter-plan-call");
+      } else if (job.heldMarker === "start steer scenario") {
+        result = makeFinalResponse("The original request completed without being interrupted.");
       } else if (job.heldMarker === "start tab scenario") {
         result = makePlanToolResponse("tab-plan-call");
       } else if (getUserTexts(job.payload).includes("start tab scenario")
         && job.payload.messages?.some((message) => message?.role === "tool")) {
         result = { status: "success", result: { message: { role: "assistant", content: "Tab message stayed queued until this turn completed." } } };
-      } else if (getUserTexts(job.payload).includes("deliver after no tool")) {
-        result = makeFinalResponse("Enter input survived a turn without a tool call.");
+      } else if (getUserTexts(job.payload).some((text) => text.includes("start steer scenario")
+        && text.includes("add the first detail")
+        && text.includes("add the second detail"))) {
+        result = makeFinalResponse("The restarted turn used the original request and both new details.");
       } else if (getUserTexts(job.payload).includes("deliver after turn end")) {
         result = { status: "success", result: { message: { role: "assistant", content: "Tab queued message was sent in its own turn." } } };
-      } else if (getUserTexts(job.payload).includes("deliver after tool result")) {
-        result = { status: "success", result: { message: { role: "assistant", content: "Enter message followed the tool result." } } };
       } else {
         result = { status: "success", result: { message: { role: "assistant", content: "Context summary recorded." } } };
       }
@@ -241,26 +269,24 @@ test("saddle PTY sends Enter input after the next tool result and Tab input afte
     });
 
     await waitForOutput(() => transcript, `session: ${sessionName} | restored 0 saved messages`, 90000);
-    child.write("start enter scenario\r");
+    child.write("start steer scenario\r");
     await waitFor(() => submissions.length === 1, "first held provider request");
-    child.write("deliver after tool result\r");
-    await waitFor(() => {
-      const output = stripTerminalControlSequences(transcript);
-      return output.includes("[queued 1] you> deliver after tool result")
-        || output.includes("[after next tool result] you> deliver after tool result");
-    }, "Enter input to be accepted while the first model call is in flight");
-    const firstHeldJob = [...jobs.values()].find((job) => job.heldMarker === "start enter scenario");
+    const firstHeldJob = [...jobs.values()].find((job) => job.heldMarker === "start steer scenario");
     assert.ok(firstHeldJob?.response, "first model response must be held while Enter is pressed");
-    firstHeldJob.response.resolve(makePlanToolResponse("enter-plan-call"));
-    await waitForSaddleTurn(() => transcript, "Enter message followed the tool result.");
-
-    const firstFollowup = submissions.find((payload) => getUserTexts(payload).includes("deliver after tool result"));
-    assert.ok(firstFollowup, "Enter follow-up request must reach the model");
-    const enterTexts = getUserTexts(firstFollowup);
-    const toolMessageIndex = firstFollowup.messages.findIndex((message) => message?.role === "tool");
-    const enterMessageIndex = firstFollowup.messages.findIndex((message) => message?.role === "user" && message.content === "deliver after tool result");
-    assert.ok(enterTexts.includes("deliver after tool result"), "Enter should inject its message into the model continuation");
-    assert.ok(enterMessageIndex > toolMessageIndex, "Enter input should follow the completed tool result in model context");
+    child.write("add the first detail\radd the second detail\r");
+    await waitFor(() => submissions.length === 2, "replacement provider request after Enter steers", 10000);
+    await waitFor(() => cancellations.includes(firstHeldJob.remoteJobId), "the active Housekeeper inference job to be cancelled");
+    await waitFor(() => cancellationCompletions.includes(firstHeldJob.remoteJobId), "the active Housekeeper inference job to stop");
+    assert.equal(replacementSubmittedBeforeCancellation, false,
+      "the replacement request must wait until the interrupted Housekeeper job reaches a terminal state");
+    assert.equal(firstHeldJob.response.settled, false,
+      "Enter must interrupt generation without waiting for the held response or a tool result");
+    const steeredRequest = submissions[1];
+    const steeredUserMessage = getUserTexts(steeredRequest).find((text) => text.includes("start steer scenario"));
+    assert.ok(steeredUserMessage, "the replacement request must retain the original user request");
+    assert.ok(steeredUserMessage.includes("add the first detail"), "the first Enter message must reach the replacement request");
+    assert.ok(steeredUserMessage.includes("add the second detail"), "the second Enter message must reach the replacement request");
+    await waitForSaddleTurn(() => transcript, "The restarted turn used the original request and both new details.");
 
     child.write("start tab scenario\r");
     await waitFor(() => submissions.some((payload) => getUserTexts(payload).includes("start tab scenario")), "second held provider request");
@@ -282,17 +308,6 @@ test("saddle PTY sends Enter input after the next tool result and Tab input afte
     assert.ok(queuedTurn,
       "Tab input should be submitted as the next turn after the current answer completes");
     await waitForOutput(() => transcript, "Tab queued message was sent in its own turn.");
-
-    child.write("start no-tool enter scenario\r");
-    await waitFor(() => submissions.some((payload) => getUserTexts(payload).includes("start no-tool enter scenario")), "no-tool provider request");
-    child.write("deliver after no tool\r");
-    await waitForOutput(() => transcript, "[after next tool result] you> deliver after no tool");
-    const noToolHeldJob = [...jobs.values()].find((job) => job.heldMarker === "start no-tool enter scenario");
-    assert.ok(noToolHeldJob?.response, "no-tool response must be held while Enter is pressed");
-    noToolHeldJob.response.resolve(makeFinalResponse("Current turn completed without a tool call."));
-    await waitForSaddleTurn(() => transcript, "Current turn completed without a tool call.");
-    await waitFor(() => submissions.some((payload) => getUserTexts(payload).includes("deliver after no tool")), "Enter fallback turn after a no-tool response");
-    await waitForOutput(() => transcript, "Enter input survived a turn without a tool call.");
 
     assert.doesNotMatch(stripTerminalControlSequences(transcript), /EPIPE|missing request payload|command defective: status=1/u);
     assert.equal(childExit, null, "saddle should remain open after both queue paths complete");

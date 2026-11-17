@@ -474,7 +474,7 @@ function resolveContextRetryWindow(error, payload, options) {
   });
 }
 
-async function runHousekeeperManagedMind(payload) {
+async function runHousekeeperManagedMind(payload, { signal } = {}) {
   if (payload?.stream) {
     throw new Error("mind_ollama_runner: streaming cannot bypass the required GPU Housekeeper queue");
   }
@@ -502,6 +502,7 @@ async function runHousekeeperManagedMind(payload) {
       managerUrl,
       timeoutMs,
       pollIntervalMs,
+      signal,
       env: { ...process.env, PYA_GPU_MANAGER_REQUIRED: "true", PYA_GPU_MANAGER_ALLOW_DIRECT: "false" }
     });
     try {
@@ -535,6 +536,7 @@ async function runHousekeeperManagedMind(payload) {
     providerUrl: resolveHost(payload),
     timeoutMs,
     pollIntervalMs,
+    signal,
     jobSpec: { kind: "ollama-generate", payload: request }
   });
 }
@@ -603,7 +605,7 @@ async function normalizeChatMessages(rawMessages) {
   return { messages: out, images };
 }
 
-async function main() {
+async function run(signal) {
   dns.setDefaultResultOrder("ipv4first");
   const args = parseArgs(process.argv);
   let stdin = await readStdin();
@@ -633,7 +635,7 @@ async function main() {
   let response;
   try {
     response = requireHousekeeper
-      ? await runHousekeeperManagedMind(payload)
+      ? await runHousekeeperManagedMind(payload, { signal })
       : useGpuQueue
         ? await runQueuedGpuMind(payload)
       : (mode === "chat" ? await runChat(payload) : await runGenerate(payload));
@@ -675,6 +677,19 @@ async function main() {
   }
   if (payload?.stream) return;
   process.stdout.write(`${JSON.stringify(response)}\n`);
+}
+
+async function main() {
+  const controller = new AbortController();
+  const interrupt = () => controller.abort(new Error("mind_ollama_runner interrupted"));
+  process.once("SIGINT", interrupt);
+  process.once("SIGTERM", interrupt);
+  try {
+    await run(controller.signal);
+  } finally {
+    process.removeListener("SIGINT", interrupt);
+    process.removeListener("SIGTERM", interrupt);
+  }
 }
 
 main().catch(err => {

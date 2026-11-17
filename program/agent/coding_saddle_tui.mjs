@@ -293,7 +293,7 @@ function renderHistory(items, width, color) {
 }
 
 function footerHelpLines(width) {
-  return wrapPlainLine("Enter send/after next tool result · Tab queue to turn end (idle: /cmds) · Shift+Enter/Ctrl+J newline · paste keeps newlines · PgUp/PgDn scroll · Esc/Ctrl+C interrupt · Ctrl+D exit", width);
+  return wrapPlainLine("Enter send; during a response it interrupts and steers · Tab queue to turn end · Shift+Enter/Ctrl+J newline · paste keeps newlines · PgUp/PgDn scroll · Esc/Ctrl+C stop · Ctrl+D exit", width);
 }
 
 function statusDisplayLines(value, width, height, usage = "") {

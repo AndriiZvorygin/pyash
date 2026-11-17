@@ -191,7 +191,7 @@ test("coding saddle screen keeps progress fixed, scrolls conversation, resizes, 
   ui.draw();
   assert.ok(writes.join("").includes("PgUp"));
   assert.ok(writes.join("").includes("PgDn"));
-  assert.ok(writes.join("").includes("Enter send/after next tool result"));
+  assert.ok(stripTerminalControlSequences(writes.join("")).includes("interrupts and steers"));
   assert.ok(writes.join("").includes("Tab queue to turn end"));
   assert.ok(writes.join("").includes("paste keeps newlines"));
   assert.match(writes[0], /\u001b\[\?1049h/u);

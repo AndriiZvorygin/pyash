@@ -939,12 +939,16 @@ async function main() {
   let promptLabel = "pyash> ";
   let inputDecoder = null;
   const queuedInputs = [];
-  const pendingAfterToolInputs = [];
   let queuedInputSequence = 0;
   const saddleUi = createSaddleTerminalUi();
   activeSaddleUi = saddleUi;
   saddleUi.enter();
   process.once("exit", restoreActiveSaddleUi);
+  const pendingSteeringInputs = [];
+  let activeTurnInput = "";
+  let activeInterruptController = null;
+  let activeSteeringInterruptRequested = false;
+  let steeringInterruptPromise = null;
 
   const saddleHousekeeper = () => createGpuHousekeeperAdapter({ baseUrl: config.housekeeperUrl });
   const getOllamaContextOptions = async () => {
@@ -1061,20 +1065,29 @@ async function main() {
     renderStatus({ report });
   };
   const currentInputLabel = () => busy
-    ? (queuedInputs.length
-      ? `queue ${queuedInputs.length + 1}> `
-      : pendingAfterToolInputs.length
-        ? `after tool ${pendingAfterToolInputs.length + 1}> `
-        : "next> ")
+    ? (activeInterruptController
+      ? `steer ${pendingSteeringInputs.length + 1}> `
+      : `queue ${queuedInputs.length + 1}> `)
     : promptLabel;
   const prompt = ({ label = promptLabel } = {}) => {
     if (!busy) promptLabel = label;
     saddleUi.setInput(inputDecoder?.getState() ?? { value: "", cursor: 0 }, currentInputLabel());
   };
-  const dispatchQueuedInput = () => {
+  const dispatchQueuedInput = async () => {
     if (busy || closing) return;
-    if (pendingAfterToolInputs.length) {
-      queuedInputs.push(...pendingAfterToolInputs.splice(0));
+    if (steeringInterruptPromise) await steeringInterruptPromise;
+    if (busy || closing) return;
+    if (pendingSteeringInputs.length) {
+      const steering = pendingSteeringInputs.splice(0).sort((left, right) => left.sequence - right.sequence);
+      const original = steering[0].originalInput;
+      const additions = steering.map(({ text }) => text).join("\n\n");
+      const combined = [
+        "The previous response was interrupted after the user added context. Respond to the original request using that added context.",
+        `Original user message:\n${original}`,
+        `Additional context:\n${additions}`
+      ].join("\n\n");
+      void submit(combined, { alreadyDisplayed: true });
+      return;
     }
     queuedInputs.sort((left, right) => left.sequence - right.sequence);
     const nextInput = queuedInputs.shift();
@@ -1100,7 +1113,7 @@ async function main() {
       busy = false;
       saddleUi.setBusy(false);
       promptLabel = "pyash> ";
-      dispatchQueuedInput();
+      void dispatchQueuedInput();
     }
   };
   const getBackendOptions = () => listSaddleBackendOptions({
@@ -1377,12 +1390,43 @@ async function main() {
     }
     if (busy) {
       if (input.trim().startsWith("/")) {
-        writeLine("commands wait until the current response finishes; ordinary messages are queued");
+        writeLine("commands wait until the current response finishes; Enter steers now and Tab queues to turn end");
         prompt({ clear: false });
         return;
       }
-      pendingAfterToolInputs.push({ text: input, sequence: ++queuedInputSequence });
-      writeLine(`[after next tool result] you> ${input}`);
+      if (!activeInterruptController || !activeTurnInput) {
+        queuedInputs.push({ text: input, sequence: ++queuedInputSequence });
+        writeLine(`[queued until saddle is ready] you> ${input}`);
+        prompt({ clear: false });
+        return;
+      }
+      pendingSteeringInputs.push({
+        text: input,
+        originalInput: activeTurnInput,
+        sequence: ++queuedInputSequence
+      });
+      writeLine(`[steer now] you> ${input}`);
+      if (!activeSteeringInterruptRequested) {
+        activeSteeringInterruptRequested = true;
+        const controller = activeInterruptController;
+        let interruptPromise;
+        interruptPromise = requestMindInterrupt({
+          worldRoot: config.worldRoot,
+          agentName: AGENT_NAME,
+          source: "coding saddle",
+          reason: "user steering input"
+        }).then((result) => {
+          if (!result.requested && controller && !controller.signal.aborted) {
+            controller.abort("user steering input");
+          }
+        }).catch((error) => {
+          if (controller && !controller.signal.aborted) controller.abort("user steering input");
+          writeLine(`steer interrupt note: ${error?.message ?? error}`);
+        }).finally(() => {
+          if (steeringInterruptPromise === interruptPromise) steeringInterruptPromise = null;
+        });
+        steeringInterruptPromise = interruptPromise;
+      }
       prompt({ clear: false });
       return;
     }
@@ -1735,6 +1779,9 @@ async function main() {
     const activeTurn = new Promise((resolve) => { settleActiveSubmit = resolve; });
     activeSubmitDone = activeTurn;
     const interruptController = new AbortController();
+    activeInterruptController = interruptController;
+    activeTurnInput = input;
+    activeSteeringInterruptRequested = false;
     let finishActiveMindRun = async () => {};
     busy = true;
     saddleUi.setBusy(true);
@@ -1827,9 +1874,6 @@ async function main() {
           onAssistantDelta
         }),
         onToolCall: async (event) => {
-          const messagesAfterTool = event?.stage === "result"
-            ? pendingAfterToolInputs.splice(0)
-            : [];
           try {
             saddleTrace.recordToolEvent(event);
           } catch (error) {
@@ -1854,12 +1898,6 @@ async function main() {
             } else {
               writeLine(`${saddleToolEventLabel(event)}${event.toolText ? `: ${String(event.toolText).slice(0, 400)}` : ""}`);
             }
-          }
-          if (messagesAfterTool.length) {
-            const deliveredAt = new Date().toISOString();
-            return {
-              saddleMessages: messagesAfterTool.map(({ text }) => ({ text, deliveredAt }))
-            };
           }
         },
         onFollowup: (assessment) => {
@@ -1946,6 +1984,9 @@ async function main() {
     } finally {
       await consumeMindInterrupt({ agentHouse: config.agentHouse, agentName: AGENT_NAME }).catch(() => {});
       await finishActiveMindRun().catch((error) => writeLine(`[interrupt cleanup failed] ${error.message}`));
+      if (activeInterruptController === interruptController) activeInterruptController = null;
+      activeTurnInput = "";
+      activeSteeringInterruptRequested = false;
       if (traceTurnId) {
         try {
           saddleTrace.finishTurn({ status: traceStatus, error: traceError, sessionTurnId });
@@ -1959,7 +2000,7 @@ async function main() {
       saddleUi.setActivity("ready");
       settleActiveSubmit();
       if (activeSubmitDone === activeTurn) activeSubmitDone = null;
-      dispatchQueuedInput();
+      void dispatchQueuedInput();
     }
   };
 

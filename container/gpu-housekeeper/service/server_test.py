@@ -142,14 +142,101 @@ class HousekeeperDurableQueueTests(unittest.TestCase):
     self.temp_dir = tempfile.TemporaryDirectory(prefix="gpu-housekeeper-durable-queue-")
     os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = self.temp_dir.name
     server._JOBS.clear()
+    server._JOB_CANCEL_EVENTS.clear()
 
   def tearDown(self):
     server._JOBS.clear()
+    server._JOB_CANCEL_EVENTS.clear()
     if self.original_pya_dir is None:
       os.environ.pop("GPU_HOUSEKEEPER_PYA_DIR", None)
     else:
       os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = self.original_pya_dir
     self.temp_dir.cleanup()
+
+  def test_cancel_job_by_handle_sets_the_running_job_cancellation_event(self):
+    remote_job_id = "running-cancel-target"
+    cancel_event = threading.Event()
+    with server._LOCK:
+      server._JOBS[remote_job_id] = {
+        "remoteJobId": remote_job_id,
+        "handleId": "stable-handle",
+        "status": "running",
+        "message": "running",
+        "runtimeName": "ollama",
+      }
+      server._JOB_CANCEL_EVENTS[remote_job_id] = cancel_event
+
+    with patch.object(server, "persist_durable_job"):
+      result = server.cancel_job({"handleId": "stable-handle"})
+
+    self.assertTrue(result["accepted"])
+    self.assertEqual(result["status"], "cancelling")
+    self.assertTrue(cancel_event.is_set())
+    self.assertEqual(server.job_status(remote_job_id)["status"], "running")
+
+  def test_cancel_http_endpoint_accepts_a_running_housekeeper_job(self):
+    remote_job_id = "http-running-cancel-target"
+    cancel_event = threading.Event()
+    with server._LOCK:
+      server._JOBS[remote_job_id] = {
+        "remoteJobId": remote_job_id,
+        "handleId": "http-stable-handle",
+        "status": "running",
+        "message": "running",
+        "runtimeName": "ollama",
+      }
+      server._JOB_CANCEL_EVENTS[remote_job_id] = cancel_event
+    listener = server.create_housekeeper_server("127.0.0.1", 0)
+    listener_thread = threading.Thread(target=listener.serve_forever, daemon=True)
+    listener_thread.start()
+    request = Request(
+      f"http://127.0.0.1:{listener.server_address[1]}/cancel",
+      data=json.dumps({"remoteJobId": remote_job_id}).encode("utf-8"),
+      headers={"Content-Type": "application/json"},
+      method="POST",
+    )
+    try:
+      with patch.object(server, "persist_durable_job"):
+        with urlopen(request, timeout=2) as response:
+          result = json.loads(response.read().decode("utf-8"))
+      self.assertTrue(result["accepted"])
+      self.assertEqual(result["status"], "cancelling")
+      self.assertTrue(cancel_event.is_set())
+    finally:
+      listener.shutdown()
+      listener.server_close()
+      listener_thread.join(timeout=2)
+
+  def test_cancel_requested_durable_job_is_not_resumed_after_restart(self):
+    remote_job_id = "job-cancelled-before-restart"
+    job = {
+      "remoteJobId": remote_job_id,
+      "handleId": "restart-cancel-handle",
+      "runtimeName": "test-runtime",
+      "profileName": "test-profile",
+      "jobSpec": {"kind": "test-job"},
+      "deviceId": "gpu0",
+      "status": "running",
+      "message": "cancellation requested",
+      "submittedAt": "now",
+      "startedAt": "before restart",
+      "finishedAt": "",
+      "source": {"hostId": "test-host"},
+      "forwarded": False,
+      "cancelRequested": True,
+    }
+    server.persist_durable_job(job)
+
+    resumed = server.restore_persisted_jobs()
+
+    self.assertEqual(resumed, [])
+    self.assertNotIn(remote_job_id, server._JOBS)
+    archive = server.durable_job_archive_path(remote_job_id)
+    self.assertTrue(archive.is_file(), f"cancelled archive missing: {archive}")
+    archived_job = server.read_durable_job(archive)
+    self.assertIsNotNone(archived_job)
+    self.assertEqual(archived_job["status"], "cancelled")
+    self.assertEqual(server.job_status(remote_job_id)["status"], "cancelled")
 
   def test_submit_persists_job_envelope_before_accepting(self):
     payload = {
@@ -509,6 +596,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.original_watchdog_interval_env = os.environ.get("GPU_HOUSEKEEPER_OLLAMA_GPU_WATCHDOG_INTERVAL_SEC")
     server._PROFILES.clear()
     server._JOBS.clear()
+    server._JOB_CANCEL_EVENTS.clear()
     server.reset_ollama_model_catalog_cache()
     server.reset_strata_model_catalog_cache()
 
@@ -549,6 +637,60 @@ class HousekeeperOllamaTests(unittest.TestCase):
     server.reset_strata_model_catalog_cache()
     server._PROFILES.clear()
     server._JOBS.clear()
+    server._JOB_CANCEL_EVENTS.clear()
+
+  def test_cancelled_ollama_request_closes_the_active_provider_socket(self):
+    request_started = threading.Event()
+    release_provider = threading.Event()
+    errors = []
+
+    class SlowProvider(server.BaseHTTPRequestHandler):
+      def do_POST(self):
+        self.rfile.read(int(self.headers.get("Content-Length", "0")))
+        request_started.set()
+        release_provider.wait(5)
+        try:
+          self.send_response(200)
+          self.send_header("Content-Type", "application/json")
+          self.end_headers()
+          self.wfile.write(b'{"message":{"content":"late response"}}')
+        except OSError:
+          pass
+
+      def log_message(self, _format, *_args):
+        pass
+
+    provider = server.ThreadingHTTPServer(("127.0.0.1", 0), SlowProvider)
+    provider_thread = threading.Thread(target=provider.serve_forever, daemon=True)
+    provider_thread.start()
+    cancel_event = threading.Event()
+
+    def make_request():
+      try:
+        server.request_ollama_json(
+          "/api/chat",
+          {"model": "test-model", "messages": []},
+          timeout_sec=5,
+          cancel_event=cancel_event,
+        )
+      except Exception as err:
+        errors.append(err)
+
+    request_thread = threading.Thread(target=make_request, daemon=True)
+    try:
+      with patch.object(server, "ollama_runtime_url", return_value=f"http://127.0.0.1:{provider.server_address[1]}"):
+        request_thread.start()
+        self.assertTrue(request_started.wait(2), "mock provider never received the request")
+        cancel_event.set()
+        request_thread.join(1)
+      self.assertFalse(request_thread.is_alive(), "cancel did not interrupt the blocked Ollama request")
+      self.assertEqual(len(errors), 1)
+      self.assertIsInstance(errors[0], server.CancelledJobError)
+    finally:
+      release_provider.set()
+      provider.shutdown()
+      provider.server_close()
+      provider_thread.join(timeout=2)
 
   def test_strata_catalog_reports_only_models_returned_by_managed_runtime(self):
     calls = []
@@ -1356,7 +1498,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
       "gpuObserved": True,
       "message": "running"
     }
-    server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600: (
+    server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600, cancel_event=None: (
       {"models": [{"name": "qwen-test", "size": 1000, "size_vram": 1000}]} if pathname == "/api/ps" else {"response": "ok"}
     )
     server.ollama_model_catalog = lambda force=False: {
