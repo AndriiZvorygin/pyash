@@ -453,6 +453,7 @@ function ollamaOptions(payload) {
   return options;
 }
 
+
 function resolveContextRetryWindow(error, payload, options) {
   const message = String(error?.message ?? error);
   const match = message.match(/request\s*\((\d+)\s*tokens?\).*?available context size\s*\((\d+)\s*tokens?\)/iu);
@@ -473,6 +474,7 @@ function resolveContextRetryWindow(error, payload, options) {
     currentContextLength: currentContext
   });
 }
+
 
 async function runHousekeeperManagedMind(payload, { signal } = {}) {
   if (payload?.stream) {

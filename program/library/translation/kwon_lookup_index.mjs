@@ -7,7 +7,6 @@ export const KWON_LOOKUP_INDEX_FORMAT = "pyash-kwon-lookup-index-v4";
 export const KWON_LOOKUP_INDEX_KINDS = Object.freeze(["english", "pyac", "wordnet", "open-wordnet", "sumo"]);
 
 const CORE_LOOKUP_INDEX_KINDS = Object.freeze(["english", "pyac", "wordnet", "open-wordnet"]);
-
 const INDEX_ENTRY_PREFIX = "kwon-entry:";
 const OPEN_WORDNET_JSON_FILE = /^(?:adj|adv|noun|verb)\..+\.json$/u;
 const OPEN_WORDNET_CONFIG_PATH = "program/library/translation/english_wordnet.pya";
@@ -41,7 +40,6 @@ const SOURCE_PATHS = Object.freeze([
 ]);
 
 const postingIdentityIndexes = new WeakMap();
-const changedSourceIndexPromises = new Map();
 
 function compareText(left, right) {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -220,9 +218,7 @@ function indexPyaRow(indexes, locator, line, enabledKinds = null) {
   }
   if (!enabledKinds || enabledKinds.has("sumo")) {
     if (payload && typeof payload === "object") {
-
       if (typeof payload.label === "string") addValue(indexes, "sumo", payload.label, locator);
-
       for (const sumoId of [payload.sumoId, ...(Array.isArray(payload.sumoIds) ? payload.sumoIds : [])]) {
         if (typeof sumoId !== "string" || !sumoId) continue;
         addValue(indexes, "sumo", sumoId, locator);
@@ -375,32 +371,6 @@ function scanJsonCatalog(buffer, sourceId, indexes) {
 
 function makeIndexes() {
   return { english: new Map(), pyac: new Map(), wordnet: new Map(), "open-wordnet": new Map(), sumo: new Map() };
-
-}
-
-function scanChangedSource(kind, sourceId, source) {
-  const indexes = { [kind]: new Map() };
-  if (sourceId.endsWith(".pya")) scanPyaLines(source, sourceId, indexes);
-  else if (kind === "open-wordnet" && OPEN_WORDNET_JSON_FILE.test(sourceId.split(/[\\/]/u).at(-1) ?? "")) {
-    scanOpenWordNetJson(source, sourceId, indexes);
-  } else scanJsonCatalog(source, sourceId, indexes);
-  return indexes[kind];
-}
-
-async function currentSourceIndex(kind, staleSource, root) {
-  const cacheKey = `${resolve(root)}\u0000${kind}\u0000${staleSource.relativePath}`;
-  const cached = changedSourceIndexPromises.get(cacheKey);
-  if (cached?.validationHash === staleSource.actual) return cached.promise;
-  const source = await readFile(resolveSourcePath(root, staleSource.relativePath));
-  const pending = Promise.resolve().then(() => scanChangedSource(kind, staleSource.relativePath, source));
-  changedSourceIndexPromises.set(cacheKey, { validationHash: staleSource.actual, promise: pending });
-  try {
-    return await pending;
-  } catch (error) {
-    if (changedSourceIndexPromises.get(cacheKey)?.promise === pending) changedSourceIndexPromises.delete(cacheKey);
-    throw error;
-  }
-
 }
 
 function createIndex(kind, entries, sourceHashes) {
@@ -859,26 +829,6 @@ async function configuredOpenWordNetFiles(root, configSource) {
   return { config, directory, files };
 }
 
-export async function buildKwonSumoLookupIndex({
-  root = PYASH_REPOSITORY_ROOT,
-  sourcePaths = [SUMO_PYASH_LINKS_PATH, SUMO_GENERATED_CATALOG_PATH]
-} = {}) {
-  const indexes = makeIndexes();
-  const sourceHashes = {};
-  for (const sourceId of sourcePaths) {
-    let source;
-    try {
-      source = await readFile(resolve(root, sourceId));
-    } catch (error) {
-      if (error?.code === "ENOENT") continue;
-      throw error;
-    }
-    sourceHashes[sourceId] = hash(source);
-    scanPyaLines(source, sourceId, indexes, new Set(["sumo"]));
-  }
-  return createIndex("sumo", indexes.sumo, sourceHashes);
-}
-
 export async function buildKwonLookupIndexes({ root = PYASH_REPOSITORY_ROOT, sourcePaths = SOURCE_PATHS } = {}) {
   const indexes = makeIndexes();
   const sourceHashes = {};
@@ -893,7 +843,6 @@ export async function buildKwonLookupIndexes({ root = PYASH_REPOSITORY_ROOT, sou
     sourceHashes[sourceId] = hash(source);
 
     scanPyaLines(source, sourceId, indexes, new Set(CORE_LOOKUP_INDEX_KINDS));
-
   }
   for (const sourceId of jsonSources) {
     const source = sourcesById.get(sourceId);
@@ -913,8 +862,7 @@ export async function buildKwonLookupIndexes({ root = PYASH_REPOSITORY_ROOT, sou
     english: createIndex("english", indexes.english, sourceHashes),
     pyac: createIndex("pyac", indexes.pyac, sourceHashes),
     wordnet: createIndex("wordnet", indexes.wordnet, sourceHashes),
-    "open-wordnet": createIndex("open-wordnet", indexes["open-wordnet"], openWordNetSourceHashes),
-    sumo: await buildKwonSumoLookupIndex({ root })
+    "open-wordnet": createIndex("open-wordnet", indexes["open-wordnet"], openWordNetSourceHashes)
   };
 }
 

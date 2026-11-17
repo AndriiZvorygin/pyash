@@ -188,6 +188,7 @@ test("coding saddle sends on Enter and keeps Shift+Enter as a newline", async ()
   assert.equal(decoder.getState().value, "");
 });
 
+
 test("coding saddle sends with Enter and queues to turn end with Tab while busy", () => {
   let busy = true;
   const submitted = [];
@@ -209,6 +210,7 @@ test("coding saddle sends with Enter and queues to turn end with Tab while busy"
   busy = false;
   decoder.feed("/m\t");
   assert.equal(decoder.getState().value, "/mind ");
+
 });
 
 test("coding saddle bracketed paste preserves multiline text without sending", async () => {

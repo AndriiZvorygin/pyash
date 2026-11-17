@@ -26,6 +26,10 @@ Utility scripts for working with Pyash from the shell:
 - `list_pyash_words.mjs` — print a comma-separated list of English entries from `pyashWords.json`.
 - `anchor_words_add.mjs --anchor <name> --form <text> --role <role>` — append a new anchor word mapping to `anchor_words.pya`.
 - `vocab_suggest.mjs "word"` — check a proposed token/phrase; pass a file/dir to scan `.pya` files.
+- `pyash dict <pyash-word> to zh` — show the linked Chinese form, Hanyu Pinyin, and its English gloss or compound breakdown.
+- `generate_kwon_chinese_pinyin_index.mjs` — refresh the compact Chinese Pinyin projection from the adjacent CC-CEDICT source, Kwon vocabulary, and accepted compounds.
+- `generate_kwon_chinese_single_atom_csv.mjs` — export Kwon one-character, one-atom mappings with Mandarin Pinyin and Cantonese Jyutping from the local Unihan archive.
+- `chinese_character_atom_refinery.mjs` — prepare frequency-ranked character-to-atom reviews, queue bounded ambiguity/translation/phonetic duties through GPU Housekeeper, and resume from local Pyash checkpoints.
 - `vocab_atom_suggest.mjs "concept"` — propose a non-overlapping lexical atom from weighted phonetic evidence.
 - `vocab_grammar_suggest.mjs "concept"` — propose a non-overlapping trailing-underscore grammar word from the same evidence.
 - `english30k_coverage.mjs [summary|covered|unresolved|candidates|pya]` — measure ranked Gutenberg English30k coverage against executable Pyash atoms, aliases, grammar mappings, and accepted compounds; `candidates` emits bounded compound candidates for the existing verifier.

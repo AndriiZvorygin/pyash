@@ -945,8 +945,10 @@ async function main() {
   let promptLabel = "pyash> ";
   let inputDecoder = null;
   const queuedInputs = [];
+
   let queuedInputSequence = 0;
-  const saddleUi = createSaddleTerminalUi();
+  const saddleUi = createSaddleTerminalUi({ onOutputError: handleSaddleOutputError });
+
   activeSaddleUi = saddleUi;
   saddleUi.enter();
   process.once("exit", restoreActiveSaddleUi);
@@ -1424,11 +1426,13 @@ async function main() {
           source: "coding saddle",
           reason: "user steering input"
         }).then((result) => {
+
           if (!result.requested && controller && !controller.signal.aborted) {
             controller.abort("user steering input");
           }
         }).catch((error) => {
           if (controller && !controller.signal.aborted) controller.abort("user steering input");
+
           writeLine(`steer interrupt note: ${error?.message ?? error}`);
         }).finally(() => {
           if (steeringInterruptPromise === interruptPromise) steeringInterruptPromise = null;
@@ -2023,10 +2027,12 @@ async function main() {
   const queueInputUntilTurnEnd = (value) => {
     const input = String(value ?? "");
     if (!busy || closing || !input.trim()) return false;
+
     if (input.trim().startsWith("/")) {
       writeLine("commands wait until the current response finishes; ordinary messages are queued");
       return false;
     }
+
     queuedInputs.push({ text: input, sequence: ++queuedInputSequence });
     writeLine(`[queued until the current turn finishes] you> ${input}`);
     prompt({ clear: false });
