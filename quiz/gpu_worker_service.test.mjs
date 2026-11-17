@@ -36,6 +36,7 @@ test("default config and system service connect the local GPU queue", async () =
   assert.match(service, /^WorkingDirectory=\/home\/htaf\/pyash$/mu);
   assert.match(service, /^Environment=PYA_GPU_HOUSEKEEPER_URL=http:\/\/localhost:18886$/mu);
   assert.match(compose, /"--port", "18886"/u);
+  assert.match(compose, /build:\s*\n\s+context: \.\.\/\.\.\/\.\.\s*\n\s+dockerfile: container\/gpu-housekeeper\/Dockerfile\s*\n\s+network: host/u);
   assert.match(compose, /GPU_HOUSEKEEPER_PUBLISH_PORT:-18886\}:18886/u);
   assert.match(compose, /enable_ipv6: true/u);
   assert.match(compose, /GPU_HOUSEKEEPER_IPV6_SUBNET/u);

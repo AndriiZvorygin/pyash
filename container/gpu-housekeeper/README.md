@@ -55,7 +55,9 @@ From the repository root, start or refresh the service:
 container/gpu-housekeeper/command/begin.sh
 ```
 
-The script builds and starts the Compose service, publishes port `18886`, and
+Image build steps use the host network so package registries remain reachable
+when Docker bridge DNS is unavailable; the running service still uses its
+configured Compose networks. The script builds and starts the service, publishes port `18886`, and
 persists Housekeeper job and observation records under
 `container/gpu-housekeeper/service/state` by default. Set
 `GPU_HOUSEKEEPER_DATA_DIR` in `service/.env` to move that host-side state. Check
