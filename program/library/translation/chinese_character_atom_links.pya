@@ -1,3 +1,4 @@
 su name translation_chinese_character_atom_links be map def
 su text "meta:format" ob text "chinese-character-atom-links-v1" ya
+su text "link:你:hnan" ob text "{\"character\":\"你\",\"english\":\"you\",\"pya\":\"hnan\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
 prah

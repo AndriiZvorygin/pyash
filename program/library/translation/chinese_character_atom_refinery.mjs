@@ -16,15 +16,17 @@ const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)
 export const CHINESE_CHARACTER_ATOM_REFINERY_FORMAT = "chinese-character-atom-refinery-v1";
 export const CHINESE_CHARACTER_ATOM_LINKS_NAME = "translation_chinese_character_atom_links";
 export const CHINESE_CHARACTER_ATOM_REFINERY_NAME = "translation chinese character atoms";
+export const CHINESE_CHARACTER_ATOM_FIRST_PASS_REFINERY_NAME = "translation chinese character atom first pass";
 export const CHINESE_CHARACTER_ATOM_REFINERY_CONFIG_URL = new URL("./chinese_character_atom_refinery.pya", import.meta.url);
 export const DEFAULT_CHINESE_CHARACTER_ATOM_ARTIFACT_ROOT = path.join(REPOSITORY_ROOT, "artifacts", "chinese-character-atom-refinery");
 
 export const CHINESE_CHARACTER_ATOM_MATCH_RESPONSE_FORMAT = Object.freeze({
   type: "object",
   additionalProperties: false,
-  required: ["verdict", "matches", "rationale"],
+  required: ["verdict", "confidence", "matches", "rationale"],
   properties: {
     verdict: { type: "string", enum: ["select", "no-fit", "uncertain"] },
+    confidence: { type: "string", enum: ["high", "medium", "low"] },
     matches: {
       type: "array",
       maxItems: 8,
@@ -563,15 +565,18 @@ export function buildChineseCharacterAtomWorklist(inputs, { includeMapped = true
     const cedictRows = inputs.cedict.get(character) ?? [];
     const existingMappings = mappings.get(character) ?? [];
     const explicitContrast = hasExplicitContrast(cedictRows);
+    const relatedCharacters = counterpartRows(character, cedictRows, inputs.subtlex, inputs.junda);
     if (existingMappings.length > 0 && !includeMapped) continue;
     if (existingMappings.length > 0 && !explicitContrast) continue;
     const english = englishHeads(cedictRows, unihan.unihanDefinition ?? "");
     const exactTargets = candidateEnglishPhrases(english, targetIndex);
     const lexicalTargets = lexicalCandidateTargets(english, targetIndex, exactTargets);
     const frequency = inputs.subtlex.get(character) ?? null;
-    const currentLinkIsGeneric = explicitContrast && existingMappings.some((mapping) => (
-      english.some((term) => normalizeEnglish(term) === normalizeEnglish(mapping.english))
-    ));
+    const currentLinkIsGeneric = explicitContrast
+      && relatedCharacters.some((related) => related.rankRelation === "less-frequent")
+      && existingMappings.some((mapping) => (
+        english.some((term) => normalizeEnglish(term) === normalizeEnglish(mapping.english))
+      ));
     records.push({
       id: `zh-char-${character.codePointAt(0).toString(16).toLowerCase()}`,
       character,
@@ -593,7 +598,7 @@ export function buildChineseCharacterAtomWorklist(inputs, { includeMapped = true
       existingMappings,
       existingAtomCandidates: exactTargets.length > 0 ? exactTargets : lexicalTargets,
       exactAtomCandidates: exactTargets,
-      relatedCharacters: counterpartRows(character, cedictRows, inputs.subtlex, inputs.junda),
+      relatedCharacters,
       specificityConflict: currentLinkIsGeneric,
       reviewPriority: currentLinkIsGeneric ? 0 : 1,
       status: existingMappings.length > 0
@@ -653,7 +658,8 @@ export function buildChineseCharacterAtomReviewPrompt(record) {
   return [
     "Choose only among the supplied Pyash targets. Do not invent a target or treat a shared broad English gloss as identical meaning.",
     "Prefer the more frequent unmarked Chinese character for a base atom. A lower-frequency character with added register, respect, politeness, or another semantic qualifier needs a correspondingly specific target; report no-fit if none is supplied.",
-    "Return JSON with verdict (select, no-fit, or uncertain), matches (targetId, relation, rationale), and rationale. relation is base, marked, or same-sense.",
+    "Return JSON with verdict (select, no-fit, or uncertain), confidence (high, medium, or low), matches (targetId, relation, rationale), and rationale. relation is base, marked, or same-sense.",
+    "Set confidence high only when dictionary evidence directly supports one unmarked standalone sense and one base lexical atom. Use medium or low when senses compete, a register is marked, a grammar target remains equally plausible, or the evidence is indirect. The first pass automatically links only a single high-confidence base atom match.",
     `Character: ${record.character}`,
     `SUBTLEX-CH rank: ${record.frequency?.subtlexRank ?? "unknown"}`,
     `Jun Da modern-text rank (separate source, supplemental): ${record.frequency?.jundaRank ?? "unknown"}`,
@@ -687,6 +693,7 @@ export function parseChineseCharacterAtomReviewResponse(value, record) {
     throw invalid("atom review response is malformed JSON", { id: record?.id, cause: error.message });
   }
   if (!response || !["select", "no-fit", "uncertain"].includes(response.verdict)
+    || !["high", "medium", "low"].includes(response.confidence)
     || !Array.isArray(response.matches) || typeof response.rationale !== "string") {
     throw invalid("atom review response does not match the expected contract", { id: record?.id });
   }
@@ -721,9 +728,70 @@ export function parseChineseCharacterAtomReviewResponse(value, record) {
   }
   return {
     verdict: response.verdict,
+    confidence: response.confidence,
     matches,
     rationale: text(response.rationale).slice(0, 500)
   };
+}
+
+export function highConfidenceChineseCharacterAtomLinks(records = [], existingLinks = []) {
+  if (!Array.isArray(records) || !Array.isArray(existingLinks)) {
+    throw invalid("automatic character linking requires record and link arrays");
+  }
+  const existing = new Set(existingLinks
+    .filter((link) => link.status === "accepted")
+    .map((link) => `${text(link.character)}\u0000${text(link.pya)}`));
+  const withdrawn = new Set(existingLinks
+    .filter((link) => link.status === "withdrawn")
+    .map((link) => `${text(link.character)}\u0000${text(link.pya)}`));
+  const linkedCharacters = new Set(existingLinks
+    .filter((link) => link.status === "accepted")
+    .map((link) => text(link.character)));
+  const result = [];
+  for (const record of records) {
+    const decision = record?.modelMatch;
+    const matches = decision?.matches ?? [];
+    const modelSelected = decision?.verdict === "select"
+      && decision?.confidence === "high"
+      && matches.length === 1
+      && matches[0]?.relation === "base";
+    if (!modelSelected) continue;
+    if (record.specificityConflict || record.specificityReviewRequired) continue;
+    const frequencySource = Number.isSafeInteger(record.frequency?.subtlexRank)
+      ? "subtlexRank"
+      : Number.isSafeInteger(record.frequency?.jundaRank) ? "jundaRank" : "";
+    const currentRank = frequencySource ? record.frequency[frequencySource] : null;
+    const hasMoreFrequentRelatedCharacter = Number.isSafeInteger(currentRank) && currentRank > 0
+      && (record.relatedCharacters ?? []).some((related) => {
+        const relatedRank = Number(related?.[frequencySource]);
+        return Number.isSafeInteger(relatedRank) && relatedRank > 0 && relatedRank < currentRank;
+      });
+    if (hasMoreFrequentRelatedCharacter) continue;
+    const targetId = text(matches[0]?.targetId);
+    const exactCandidates = record?.exactAtomCandidates ?? [];
+    const target = (record.existingAtomCandidates ?? []).find((candidate) => (
+      `${candidate.kind}:${candidate.pya}` === targetId && candidate.kind === "atom"
+    ));
+    if (!target || !exactCandidates.some((candidate) => (
+      candidate.kind === target.kind && candidate.pya === target.pya
+    ))) continue;
+    if ((record.existingMappings ?? []).some((mapping) => mapping.pya === target.pya)) continue;
+    const character = text(record.character);
+    const key = `${character}\u0000${text(target.pya)}`;
+    if ([...character].length !== 1 || !HAN.test(character)
+      || linkedCharacters.has(character) || existing.has(key) || withdrawn.has(key)) continue;
+    result.push({
+      character,
+      english: text(target.english),
+      pya: text(target.pya),
+      status: "accepted",
+      confidence: "high",
+      source: "chinese-character-atom-refinery"
+    });
+    existing.add(key);
+    linkedCharacters.add(character);
+  }
+  return result;
 }
 
 export function parseChineseCharacterTranslationResponse(value, record) {

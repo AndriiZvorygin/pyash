@@ -5,28 +5,28 @@ description: "Maintain and run the frequency-ranked Chinese character to Pyash a
 
 # Pyash Chinese Character Atom Refinery
 
-Use this workflow for single-character lexical atoms. It produces candidate vocabulary and link records for human review; it never promotes model output automatically.
+The refinery keeps its full translation and atom-generation contract. Its default first pass only considers links to existing Pyash atoms; the later stages remain available through the full pass.
 
 ## Run and resume
 
-- Configure the model, prompt revision, character limit, Housekeeper duty limit, and concurrency in `program/library/translation/chinese_character_atom_refinery.pya`.
-- Run `node command/chinese_character_atom_refinery.mjs`. The command initializes Pyash, registers the configured `.pya` refinery graph, and routes every model request through `vyah start future be gpu mind do` plus `vyah await`.
+- Select `refinery-pass` in `program/library/translation/chinese_character_atom_refinery.pya`. `first-pass` is the default; set it to `full` to run the complete six-stage graph, including missing-meaning translation and atom proposal generation.
+- Configure the model, prompt revision, character limit, Housekeeper duty limit, and concurrency in the same `.pya` file.
+- Run `node command/chinese_character_atom_refinery.mjs`. The command registers both Pyash graphs and runs the configured graph. Every model request goes through `vyah start future be gpu mind do` and `vyah await`.
 - The run processes at most `housekeeper-duties-per-pass` model duties. Independent duties are submitted in Housekeeper-managed waves bounded by `housekeeper-parallelism`.
-- Resume the same source/config run by rerunning the command. It reads the parser-readable `checkpoint.pya`; source or model/prompt identity changes create a new run folder.
-- Inspect `review.pya` and the stage artifacts under the ignored `artifacts/chinese-character-atom-refinery/<run-id>/` folder. Do not commit prompts, queue records, model responses, or checkpoint history.
+- Resume the same source/config run by rerunning the command. It reads the parser-readable `checkpoint.pya`; source or model/prompt/pass identity changes create a new run folder.
+- Inspect `review.pya` and stage artifacts under ignored `artifacts/chinese-character-atom-refinery/<run-id>/` for abstentions and diagnostics. Do not commit prompts, queue records, model responses, or checkpoint history.
 
-## Evidence and decisions
+## First pass and evidence
 
-- Rank by SUBTLEX-CH first. Use Jun Da only as a separate supplemental rank for characters absent from SUBTLEX-CH; never merge the frequency scores.
-- Compare exact English glosses against existing lexical atoms and grammar targets before considering ranked related targets. Ask Housekeeper to choose only when the exact match is ambiguous, a ranked related candidate needs semantic review, or an inherited mapping conflicts with a marked sense.
-- If no dictionary translation exists, queue a translation from CC-CEDICT, Unihan, the local *Shuowen Jiezi*, and bounded *Analects* contexts. Use classical contexts as attestation evidence, not as standalone definitions.
-- If the exact English concept lacks generator phonetics, request evidence for that exact concept. Feed it to the existing deterministic atom generator only as unpromoted candidate evidence. Do not replace it with a near-synonym.
-- Frequency is a prior only among semantically compatible meanings. For example, 你 is informal “you” and is much more frequent than courteous 您; the ordinary form may fit base atom `hnan`, while 您 needs a reviewed target that represents its added register. Do not collapse both characters to one atom from the shared broad gloss.
-- Preserve unresolved, uncertain, and no-fit records in the local review artifact. A Housekeeper selection is evidence for review, never acceptance.
+- The first pass builds the same frequency-ranked worklist and existing atom candidates as the full graph. It asks Qwen to review every candidate-bearing character, including rows with one exact candidate, then records the response and eligible links.
+- Automatically link only a Qwen result with `verdict: select`, `confidence: high`, exactly one `relation: base` match, and an exact match to one existing lexical atom. Grammar-only targets, ranked related candidates, multiple targets, lower confidence, no-fit, uncertain, and specificity-conflict cases remain unlinked for later processing.
+- SUBTLEX-CH ranks take precedence. Use Jun Da only as a separate supplemental rank when SUBTLEX-CH is missing; never merge the frequency scores. A lower-frequency related character cannot be promoted when a more-frequent counterpart is identified.
+- Frequency is a prior only among semantically compatible meanings. For example, 你 may fit the common base atom `hnan`; courteous 您 must not be linked to that generic atom from a shared broad gloss. Any honorific compound belongs to later work.
+- In the full pass, missing translations still use CC-CEDICT, Unihan, local *Shuowen*, and bounded *Analects* contexts. Treat classical contexts as attestations, not standalone definitions. If an exact concept lacks generator phonetics, request evidence for that concept and feed it to the existing deterministic generator as unpromoted candidate evidence.
 
 ## Promotion
 
-- Add only approved character links to `program/library/translation/chinese_character_atom_links.pya` using accepted `link:<character>:<atom>` rows.
+- The first pass writes eligible links to `program/library/translation/chinese_character_atom_links.pya` using accepted `link:<character>:<atom>` rows. It does not generate compounds or new root atoms.
 - Record `withdraw:<character>:<atom>` when an inherited Kwon mapping is wrong; this suppresses that projection without editing the acquired Kwon source.
-- Add a genuinely new root atom to `program/library/pyashWords.json` only after its English meaning and generator evidence are reviewed. Keep the compact accepted link catalog as the promoted vocabulary record; keep full decision history in ignored run artifacts.
-- The `pyash dict ... to zh` projection and Chinese CSV/index generators consume the accepted link catalog. Preserve source attribution in `sino-pyash/SOURCES.md` and historical-source caveats in `sino-pyash/CLASSICAL-CORPUS.md`.
+- Keep the compact accepted link catalog as the promoted vocabulary record; keep full decision history in ignored run artifacts. The `pyash dict ... to zh` projection and Chinese CSV/index generators consume the accepted link catalog.
+- Preserve source attribution in `sino-pyash/SOURCES.md` and historical-source caveats in `sino-pyash/CLASSICAL-CORPUS.md`.

@@ -21,17 +21,21 @@ import {
   buildChineseCharacterPhoneticEvidencePrompt,
   buildChineseCharacterTranslationPrompt,
   CHINESE_CHARACTER_ATOM_MATCH_RESPONSE_FORMAT,
+  CHINESE_CHARACTER_ATOM_FIRST_PASS_REFINERY_NAME,
   CHINESE_CHARACTER_ATOM_REFINERY_CONFIG_URL,
   CHINESE_CHARACTER_ATOM_REFINERY_NAME,
+  CHINESE_CHARACTER_ATOM_SOURCE_PATHS,
   CHINESE_CHARACTER_PHONETIC_RESPONSE_FORMAT,
   CHINESE_CHARACTER_TRANSLATION_RESPONSE_FORMAT,
   DEFAULT_CHINESE_CHARACTER_ATOM_ARTIFACT_ROOT,
+  highConfidenceChineseCharacterAtomLinks,
   loadChineseCharacterAtomRefineryInputs,
   parseChineseCharacterAtomCheckpointPya,
   parseChineseCharacterAtomReviewResponse,
   parseChineseCharacterPhoneticResponse,
   parseChineseCharacterTranslationResponse,
   renderChineseCharacterAtomCheckpointPya,
+  renderChineseCharacterAtomLinksPya,
   renderChineseCharacterAtomRefineryPya
 } from "../program/library/translation/chinese_character_atom_refinery.mjs";
 import { createDefaultQueuedMindTranslationVocabularySubmitter } from "../program/library/translation/translation_vocabulary_queue.mjs";
@@ -60,6 +64,7 @@ function readConfig(source) {
   }
   return {
     model: String(values.get("model") ?? "").trim(),
+    refineryPass: String(values.get("refinery-pass") ?? "full").trim(),
     promptRevision: String(values.get("prompt-revision") ?? "").trim(),
     generationLimit: Math.max(1, Math.trunc(Number(values.get("generation-limit") ?? 128))),
     dutiesPerPass: Math.max(0, Math.trunc(Number(values.get("housekeeper-duties-per-pass") ?? 4))),
@@ -136,14 +141,16 @@ function promptTask(record, kind, concept = "") {
   };
 }
 
-function matchTasksFor(records, checkpointTasks) {
+export function buildChineseCharacterAtomMatchTasks(records, checkpointTasks, { requireEveryCandidate = false } = {}) {
   const tasks = [];
   for (const proposal of records) {
     const record = proposal;
     const matchTask = currentMatchTask(record, checkpointTasks);
     const candidateCount = proposal.existingAtomCandidates?.length ?? 0;
     const exactCount = proposal.exactAtomCandidates?.length ?? 0;
-    const needsChoice = !matchTask?.result && (proposal.specificityConflict
+    const needsChoice = !matchTask?.result && (requireEveryCandidate
+      ? candidateCount > 0
+      : proposal.specificityConflict
       || (candidateCount > 0 && (exactCount !== 1 || candidateCount > 1)));
     if (needsChoice) tasks.push(promptTask(proposal, "match"));
   }
@@ -300,7 +307,7 @@ function responseFor(task, response) {
     const responseError = String(error?.message ?? error).slice(0, 500);
     const rawResponse = String(response ?? "").slice(0, 2000);
     if (task.kind === "match") {
-      return { verdict: "uncertain", matches: [], rationale: "Housekeeper response did not meet the review contract.", responseError, rawResponse };
+      return { verdict: "uncertain", confidence: "low", matches: [], rationale: "Housekeeper response did not meet the review contract.", responseError, rawResponse };
     }
     if (task.kind === "translation") {
       return { verdict: "uncertain", translations: [], responseError, rawResponse };
@@ -419,11 +426,12 @@ async function dispatchTasks(tasks, context) {
 }
 
 async function ensureRefinery() {
-  if (getRefinery(CHINESE_CHARACTER_ATOM_REFINERY_NAME)) return;
+  if (getRefinery(CHINESE_CHARACTER_ATOM_REFINERY_NAME)
+    && getRefinery(CHINESE_CHARACTER_ATOM_FIRST_PASS_REFINERY_NAME)) return;
   const source = await fs.readFile(CHINESE_CHARACTER_ATOM_REFINERY_CONFIG_URL, "utf8");
   for (const sentence of buildProgram(source).sentences) await interpret(sentence);
-  if (!getRefinery(CHINESE_CHARACTER_ATOM_REFINERY_NAME)) {
-    throw new Error("Chinese character atom refinery definition was not registered");
+  for (const name of [CHINESE_CHARACTER_ATOM_REFINERY_NAME, CHINESE_CHARACTER_ATOM_FIRST_PASS_REFINERY_NAME]) {
+    if (!getRefinery(name)) throw new Error(`Chinese character atom refinery definition was not registered: ${name}`);
   }
 }
 
@@ -456,16 +464,20 @@ async function runStage(sentence, context) {
     const candidateRows = mapValue("atom match candidates").records ?? [];
     process.stderr.write(`[chinese-character-atom] hydrating ${worklist.length} records from ${candidateRows.length} candidate rows\n`);
     const records = hydrateMatchCandidates(worklist, candidateRows);
-    const proposals = await buildChineseCharacterAtomProposals(records, context.inputs, {
-      generationLimit: context.config.generationLimit,
-      translationsByCharacter: translationsByCharacter(context.checkpoint.tasks),
-      phoneticsByConcept: phoneticsByConcept(context.checkpoint.tasks),
-      noFitCharacters: noFitCharacterIds(context.checkpoint.tasks),
-      specificityReassignments: specificityReassignmentIds(records, context.checkpoint.tasks)
-    });
+    const proposals = context.config.refineryPass === "first-pass"
+      ? records.filter((record) => record.status !== "already-mapped" && record.existingAtomCandidates.length > 0)
+        .slice(0, context.config.generationLimit)
+      : await buildChineseCharacterAtomProposals(records, context.inputs, {
+        generationLimit: context.config.generationLimit,
+        translationsByCharacter: translationsByCharacter(context.checkpoint.tasks),
+        phoneticsByConcept: phoneticsByConcept(context.checkpoint.tasks),
+        noFitCharacters: noFitCharacterIds(context.checkpoint.tasks),
+        specificityReassignments: specificityReassignmentIds(records, context.checkpoint.tasks)
+      });
     process.stderr.write(`[chinese-character-atom] prepared ${proposals.length} match decisions\n`);
-    const matchTasks = matchTasksFor(proposals, context.checkpoint.tasks);
-    process.stderr.write(`[chinese-character-atom] selected ${matchTasks.length} ambiguous match duties\n`);
+    const firstPass = context.config.refineryPass === "first-pass";
+    const matchTasks = buildChineseCharacterAtomMatchTasks(proposals, context.checkpoint.tasks, { requireEveryCandidate: firstPass });
+    process.stderr.write(`[chinese-character-atom] selected ${matchTasks.length} ${firstPass ? "candidate match" : "ambiguous match"} duties\n`);
     await dispatchTasks(matchTasks, context);
     const decisions = attachCheckpointResults(proposals, context.checkpoint.tasks);
     artifactPath = await writeStageArtifact(context, "atom-match-decisions.pya", "translation_chinese_character_atom_match_decisions", decisions);
@@ -488,7 +500,7 @@ async function runStage(sentence, context) {
       noFitCharacters: noFitCharacterIds(context.checkpoint.tasks),
       specificityReassignments: specificityReassignmentIds(records, context.checkpoint.tasks)
     });
-    await dispatchTasks(matchTasksFor(proposals, context.checkpoint.tasks), context);
+    await dispatchTasks(buildChineseCharacterAtomMatchTasks(proposals, context.checkpoint.tasks), context);
     proposals = await buildChineseCharacterAtomProposals(records, context.inputs, {
       generationLimit: context.config.generationLimit,
       translationsByCharacter: completedTranslations,
@@ -508,12 +520,15 @@ async function runStage(sentence, context) {
     artifactPath = await writeStageArtifact(context, "atom-proposals.pya", "translation_chinese_character_atom_proposals", reviewed);
     result = { sourceHash: context.inputs.sourceHash, count: reviewed.length, records: reviewed };
   } else if (stage === "record character link review") {
-    const proposalRows = mapValue("atom proposals").records ?? [];
+    const firstPass = context.config.refineryPass === "first-pass";
+    const proposalRows = firstPass
+      ? mapValue("atom match decisions").records ?? []
+      : mapValue("atom proposals").records ?? [];
     const matchRows = mapValue("atom match decisions").records ?? [];
     const translationRows = mapValue("translation candidates").records ?? [];
     const matchById = new Map(matchRows.map((record) => [record.id, record]));
     const translationById = new Map(translationRows.map((record) => [record.id, record.translationReview]));
-    const proposals = proposalRows.map((record) => ({
+    let proposals = proposalRows.map((record) => ({
       ...record,
       ...(!record.modelMatch && matchById.get(record.id)?.modelMatch
         ? { modelMatch: matchById.get(record.id).modelMatch }
@@ -522,6 +537,23 @@ async function runStage(sentence, context) {
         ? { translationReview: translationById.get(record.id) }
         : {})
     }));
+    let promotedLinks = [];
+    if (firstPass) {
+      promotedLinks = highConfidenceChineseCharacterAtomLinks(proposals, context.inputs.acceptedLinks);
+      if (promotedLinks.length > 0) {
+        const acceptedLinks = [...context.inputs.acceptedLinks, ...promotedLinks];
+        await atomicWrite(
+          CHINESE_CHARACTER_ATOM_SOURCE_PATHS.acceptedLinks,
+          renderChineseCharacterAtomLinksPya(acceptedLinks)
+        );
+        context.inputs.acceptedLinks = acceptedLinks;
+      }
+      const promotedByCharacter = new Map(promotedLinks.map((link) => [link.character, link]));
+      proposals = proposals.map((record) => {
+        const link = promotedByCharacter.get(record.character);
+        return link ? { ...record, promotion: { status: "accepted", pya: link.pya, confidence: link.confidence } } : record;
+      });
+    }
     artifactPath = path.join(context.artifactDirectory, "review.pya");
     await atomicWrite(artifactPath, renderChineseCharacterAtomRefineryPya(proposals, {
       sourceHash: context.inputs.sourceHash,
@@ -534,6 +566,7 @@ async function runStage(sentence, context) {
       standardCharacterCount: context.inputs.unihan.size,
       worklistCount: context.worklist.length,
       processedCount: proposals.length,
+      ...(firstPass ? { promotedLinkCount: promotedLinks.length, acceptedLinksPath: CHINESE_CHARACTER_ATOM_SOURCE_PATHS.acceptedLinks } : {}),
       reviewPath: artifactPath,
       records: proposals
     };
@@ -548,14 +581,18 @@ export async function runChineseCharacterAtomRefinery() {
   const configSource = await fs.readFile(CHINESE_CHARACTER_ATOM_REFINERY_CONFIG_URL, "utf8");
   const config = readConfig(configSource);
   if (!config.model || !config.promptRevision) throw new Error("Chinese character atom refinery config must name a model and prompt revision");
+  if (!["first-pass", "full"].includes(config.refineryPass)) {
+    throw new Error(`unsupported Chinese character atom refinery pass: ${config.refineryPass}`);
+  }
   await initializePyashRuntime();
   const inputs = await loadChineseCharacterAtomRefineryInputs();
   const configHash = sha256(JSON.stringify({
+    refineryPass: config.refineryPass,
     model: config.model,
     promptRevision: config.promptRevision,
     maxOutputTokens: config.maxOutputTokens
   })).slice(0, 10);
-  const runId = `chinese-character-atom-${inputs.sourceHash.slice(0, 16)}-${config.promptRevision}-${configHash}`;
+  const runId = `chinese-character-atom-${config.refineryPass}-${inputs.sourceHash.slice(0, 16)}-${config.promptRevision}-${configHash}`;
   const artifactDirectory = path.join(DEFAULT_CHINESE_CHARACTER_ATOM_ARTIFACT_ROOT, runId);
   const checkpointPath = path.join(artifactDirectory, "checkpoint.pya");
   let checkpoint = { runId, sourceHash: inputs.sourceHash, tasks: new Map() };
@@ -585,7 +622,9 @@ export async function runChineseCharacterAtomRefinery() {
   };
   await ensureRefinery();
   const refineryResult = await runRefinery({
-    name: CHINESE_CHARACTER_ATOM_REFINERY_NAME,
+    name: config.refineryPass === "first-pass"
+      ? CHINESE_CHARACTER_ATOM_FIRST_PASS_REFINERY_NAME
+      : CHINESE_CHARACTER_ATOM_REFINERY_NAME,
     interpret: (sentence) => runStage(sentence, context),
     runId,
     checkpointEnabled: false
@@ -603,11 +642,17 @@ export async function runChineseCharacterAtomRefinery() {
     `characters needing work: ${review.worklistCount}`,
     `prepared this pass: ${proposals.length}`,
     `Housekeeper duties this pass: ${context.dutiesThisPass}/${config.dutiesPerPass}`,
+    ...(review.promotedLinkCount !== undefined ? [`promoted links this pass: ${review.promotedLinkCount}`] : []),
     ...(context.housekeeper ? [`Housekeeper: ${context.housekeeper.housekeeperHost}; queue before pass: ${context.housekeeper.queue.queued} queued, ${context.housekeeper.queue.running} running`] : []),
     `review artifact: ${review.reviewPath}`,
     `checkpoint: ${checkpointPath}`,
     ...Object.entries(proposals.reduce((counts, row) => {
-      counts[row.stageStatus] = (counts[row.stageStatus] ?? 0) + 1;
+      const status = row.promotion?.status === "accepted"
+        ? "accepted"
+        : row.modelMatch
+          ? `${row.modelMatch.verdict}/${row.modelMatch.confidence}`
+          : row.stageStatus ?? row.status ?? "unreviewed";
+      counts[status] = (counts[status] ?? 0) + 1;
       return counts;
     }, {})).map(([status, count]) => `${status}: ${count}`)
   ].join("\n") + "\n");
