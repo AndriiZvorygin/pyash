@@ -676,6 +676,7 @@ export async function runToolChat({
       const capability = toolMap.get(toolName);
       const toolSentence = buildToolSentence({
         capability,
+        toolName,
         args: call?.function?.arguments ?? call?.arguments
       });
       const toolSignatureWords = deriveSignatureFromCall(capability, { remember });

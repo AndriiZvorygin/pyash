@@ -83,8 +83,8 @@ test("switching Ollama models from a project cwd resolves the runner and complet
             id: "selected-model-runner-attempt",
             type: "function",
             function: {
-              name: "be_command_ob_text_to_name_text",
-              arguments: JSON.stringify({ ob: "PYA_COMMAND_TIMEOUT_MS=900000 node ../../pyac/pyash/command/mind_ollama_runner.mjs" })
+              name: "bash",
+              arguments: JSON.stringify({ command: "PYA_COMMAND_TIMEOUT_MS=900000 node ../../pyac/pyash/command/mind_ollama_runner.mjs" })
             }
           }]
         };
@@ -121,7 +121,7 @@ test("switching Ollama models from a project cwd resolves the runner and complet
 
   try {
     await interpret(parse('from filename "./module/mind_ollama.pya" ob name mind to name ollama command mind be import do'));
-    await interpret(parse('from filename "./module/saddle_tools.pya" ob name saddle tools to name saddle tools be import do'));
+    await interpret(parse('from filename "./module/saddle_bash_tools.pya" ob name saddle command tools to name saddle command tools be import do'));
     await interpret(parse(`exists su name coding saddle be mind as name "${previousModel}" ya`));
     configureSaddleSelection({
       cwd: projectRoot,

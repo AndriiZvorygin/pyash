@@ -111,7 +111,7 @@ import {
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const AGENT_NAME = "coding saddle";
-const TOOL_MAP_NAME = "saddle tools";
+const TOOL_MAP_NAME = "saddle command tools";
 const SESSION_NAME = "coding";
 const RECENT_MODEL_SESSION = "__recent_model__";
 
@@ -328,9 +328,9 @@ function resolveConfiguredSaddleMind(mindName) {
   });
 }
 
-async function importSaddleTools() {
-  const modulePath = path.join(root, "module", "saddle_tools.pya");
-  const sentence = parse(`from filename ${JSON.stringify(modulePath)} ob name saddle tools to name saddle tools be import do`);
+async function importSaddleBashTools() {
+  const modulePath = path.join(root, "module", "saddle_bash_tools.pya");
+  const sentence = parse(`from filename ${JSON.stringify(modulePath)} ob name saddle command tools to name saddle command tools be import do`);
   await interpret(sentence);
 }
 
@@ -425,7 +425,7 @@ export async function prepareSaddle({
   setEntryModulePath(resolvedCwd);
   forget();
   await loadDefaultConfig({ cwd: resolvedRuntimeRoot, interpretFn: interpret, entryPath: path.join(resolvedRuntimeRoot, "saddle.pya") });
-  await importSaddleTools();
+  await importSaddleBashTools();
   const newspaperMaximumBytes = Number(configValue("newspaper maximum bytes", 524288000));
   const newspaperSegmentMaximumBytes = Number(configValue("newspaper segment maximum bytes", 4194304));
   const housekeeperUrl = resolveSaddleHousekeeperUrl(resolvedRuntimeRoot);

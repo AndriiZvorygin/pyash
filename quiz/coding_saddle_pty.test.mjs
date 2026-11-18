@@ -52,14 +52,13 @@ function waitForOutputAfter(getOutput, marker, needle, { timeoutMs = 30000 } = {
   });
 }
 
-test("saddle CLI switches Ollama models in a PTY and completes the first turn", async () => {
+test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-pty-"));
   const projectRoot = path.join(tempRoot, "project");
   const projectWorldRoot = resolveSaddleProjectWorldRoot({ runtimeRoot, cwd: projectRoot });
   const usageDir = path.join(tempRoot, "usage");
   const sessionName = `pty-model-switch-${process.pid}-${Date.now()}`;
-  const runnerPath = path.relative(projectRoot, path.join(runtimeRoot, "command", "mind_ollama_runner.mjs"));
-  const internalRunnerCommand = `PYA_COMMAND_TIMEOUT_MS=900000 node ${runnerPath.split(path.sep).join("/")}`;
+  const bashMarker = "SADDLE_BASH_PTY_OK";
   const submissions = [];
   const jobs = new Map();
   let nextJobId = 0;
@@ -112,17 +111,17 @@ test("saddle CLI switches Ollama models in a PTY and completes the first turn", 
       if (payload.model === firstModel) {
         message = { role: "assistant", content: "Qwen first model turn passed." };
       } else if (hasToolResult) {
-        message = { role: "assistant", content: "Spark first turn passed after the internal runner call was blocked." };
+        message = { role: "assistant", content: "Spark first turn passed after the Bash command returned its output." };
       } else {
         message = {
           role: "assistant",
           content: "",
           tool_calls: [{
-            id: "pty-internal-runner-attempt",
+            id: "pty-bash-command",
             type: "function",
             function: {
-              name: "be_command_ob_text_to_name_text",
-              arguments: JSON.stringify({ ob: internalRunnerCommand })
+              name: "bash",
+              arguments: JSON.stringify({ command: `printf '${bashMarker}\\n'` })
             }
           }]
         };
@@ -158,6 +157,12 @@ test("saddle CLI switches Ollama models in a PTY and completes the first turn", 
   for (const key of ["PYA_MIND_RESPONSE", "PYA_COMMAND_RESPONSE", "PYA_HEAR_FIXTURE", "PYA_PIPER_FIXTURE"]) {
     delete env[key];
   }
+  const baseIdentityDir = path.join(projectWorldRoot, "house", "base", "identity");
+  await fs.mkdir(baseIdentityDir, { recursive: true });
+  await fs.copyFile(
+    path.join(runtimeRoot, "world", "house", "base", "identity", "TOOLS.md"),
+    path.join(baseIdentityDir, "TOOLS.md")
+  );
 
   let transcript = "";
   let child = null;
@@ -187,7 +192,7 @@ test("saddle CLI switches Ollama models in a PTY and completes the first turn", 
     const selectionMarker = `saved model selection for session: ${sessionName}`;
     await waitForOutputAfter(() => transcript, selectionMarker, "pyash>");
     child.write("hi\r");
-    await waitForOutput(() => transcript, "Spark first turn passed after the internal runner call was blocked.");
+    await waitForOutput(() => transcript, "Spark first turn passed after the Bash command returned its output.");
 
     const cleanTranscript = stripTerminalControlSequences(transcript);
     assert.match(cleanTranscript, new RegExp(`model: ${secondModel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
@@ -195,17 +200,24 @@ test("saddle CLI switches Ollama models in a PTY and completes the first turn", 
     assert.ok(submissions.some((payload) => payload.model === firstModel), "the initial Ollama model must reach Housekeeper");
     assert.ok(submissions.some((payload) => payload.model === secondModel && payload.messages?.some((message) => message?.content === "hi")),
       "the newly selected Ollama model must receive the first user turn");
-    assert.ok(submissions.some((payload) => payload.model === secondModel
-      && payload.messages?.some((message) => message?.role === "tool"
-        && String(message.content).includes("internal adapters, not shell entry points"))),
-    "the CLI must pass the blocked runner attempt result back to the selected model");
+    const secondModelSubmissions = submissions.filter((payload) => payload.model === secondModel);
+    assert.ok(secondModelSubmissions.length > 0);
+    assert.deepEqual(secondModelSubmissions[0].tools.map((tool) => tool.function?.name), ["bash"],
+      "the selected model must receive exactly one Bash tool");
+    const secondModelContext = secondModelSubmissions[0].messages.map((message) => String(message?.content ?? "")).join("\n");
+    assert.match(secondModelContext, /Bash-only Saddle/u, "the agent-home tool guide must reach the model context");
+    assert.match(secondModelContext, /pyash run --gross --no-newspaper/u,
+      "the model context must include the documented Pyash web-search workflow");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(bashMarker))),
+    "the real command runner output must be returned to the selected model");
     assert.ok(submissions.some((payload) => payload.model === secondModel && payload.options?.num_ctx === 131072),
       "the selected model must retry at the first supported context preset that fits the provider error");
     const commandDebugLines = cleanTranscript.match(/\[command debug\] \{[^\r\n]*\}/gu) ?? [];
-    assert.ok(commandDebugLines.length >= 3, "PTY transcript should include debug records for backend runner commands");
+    assert.ok(commandDebugLines.length >= 1, "PTY transcript should include a debug record for the Bash command");
     const commandDebug = commandDebugLines.map((line) => JSON.parse(line.slice("[command debug] ".length)));
-    assert.ok(commandDebug.some((record) => record.internalMindRunner === true && record.stdinInputBytes > 0),
-      "backend runner command must receive its structured stdin payload");
+    assert.ok(commandDebug.some((record) => record.cmd.includes(bashMarker) && record.status === 0
+      && record.internalMindRunner === false), "Bash scenario must finish successfully through the command runner");
     assert.equal(childExit, null, "the saddle should remain open after both model turns");
   } finally {
     if (child && !childExit) {

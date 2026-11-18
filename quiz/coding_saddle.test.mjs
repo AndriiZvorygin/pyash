@@ -403,17 +403,12 @@ test("coding saddle shows elapsed progress and explicit tool event labels", () =
   assert.equal(saddleToolEventLabel({ stage: "result", toolName: "repair" }), "[tool result] repair");
 });
 
-test("coding saddle routes live search, archives, project commands, and interactive processes separately", () => {
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`read_archive_focus(archive_path, entry_path, focus)`"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`search_zim_library(query)`"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`web_search(query)`"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`web_search_source(query, search_url)`"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("technology RSS-feed discovery"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`command_session_start`"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("Search, URL retrieval, API requests, and ordinary commands do not need a command session"));
+test("coding saddle routes work through its Bash tool and agent-home workflows", () => {
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("use `bash(command)`"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("active agent house's `identity/TOOLS.md`"));
   assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("A tool error is a result for the active task"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("Do not claim titles or URLs absent from tool results"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`search_archive(archive_path, query)`"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("do not invent titles or URLs"));
+  assert.doesNotMatch(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /search_zim_library|web_search|command_session_start|read_archive_focus/u);
 });
 
 test("coding saddle handles greetings directly without exposing runtime script names", () => {
@@ -424,20 +419,11 @@ test("coding saddle handles greetings directly without exposing runtime script n
 
 test("coding saddle completion evidence requires a successful edit and a later command check", () => {
   for (const guidance of [
-    "documentation and reference research",
-    "configured Kiwix service, which may be remote",
-    "Pass returned URLs unchanged",
-    "`web_search(query)`",
-    "`web_search_source(query, search_url)`",
-    "For a named search service",
-    "`command_session_start` only when the user needs a long-running interactive process",
-    "Search, URL retrieval, API requests, and ordinary commands do not need a command session",
+    "use `bash(command)`",
+    "active agent house's `identity/TOOLS.md`",
     "A tool error is a result for the active task",
     "do not repeat an unchanged failing call",
-    "Do not claim titles or URLs absent from tool results",
-    "`search_archive(archive_path, query)`",
-    "`read_archive_focus(archive_path, entry_path, focus)`",
-    "ground claims in retrieved page text"
+    "Ground claims in command output and retrieved page text"
   ]) {
     assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes(guidance), `missing retrieval guidance: ${guidance}`);
   }
@@ -734,7 +720,7 @@ test("coding saddle builds a Pyash mind call with backend and session context", 
 
   assert.equal(sentence.be, "write");
   assert.equal(sentence.for.name, "coding saddle");
-  assert.equal(sentence.with.name, "saddle tools");
+  assert.equal(sentence.with.name, "saddle command tools");
   assert.equal(sentence.fromstate.text, "ollama");
   assert.equal(sentence.from.text, "http://mriczo:11434");
   assert.equal(sentence.contextWindow, 131072);
