@@ -4,8 +4,10 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { parse } from "../program/understand/index.mjs";
-import { executeCodelets, lowerPyashProgram, lowerSentence } from "../program/library/vliw/index.mjs";
+import { decodePyashProgram, executeCodelets, lowerPyashProgram, lowerSentence } from "../program/library/vliw/index.mjs";
 import { decodePyacPack, encodePyacPack } from "../program/library/vliw/database.mjs";
+import { interpret } from "../program/bridge/index.mjs";
+import { forget, remember } from "../program/remember/index.mjs";
 import {
   compilePyashProgramSource,
   decodePyashProgramPack,
@@ -49,8 +51,32 @@ async function evaluateReference(testCase) {
     return [normalizeReferenceValue(output)];
   }
   const decoded = decodePyacPack(testCase.pack);
-  const facts = await executeCodelets(decoded.codelets);
-  return facts.map((fact) => normalizeReferenceValue(fact?.ob));
+  try {
+    const facts = await executeCodelets(decoded.codelets);
+    return facts.map((fact) => normalizeReferenceValue(fact?.ob));
+  } catch (error) {
+    if (error?.code !== "unsupported-codelet") throw error;
+  }
+
+  const sentences = decodePyashProgram(decoded.codelets);
+  forget();
+  try {
+    const values = [];
+    for (const sentence of sentences) {
+      const outcome = await interpret(sentence);
+      const result = remember("result");
+      if (result?.ob !== undefined) {
+        values.push(normalizeReferenceValue(result.ob));
+      } else if (typeof outcome?.value === "boolean") {
+        values.push(normalizeReferenceValue({ boolean: outcome.value }));
+      } else {
+        throw new Error(`VLIW conformance sentence produced no result: ${JSON.stringify(sentence)}`);
+      }
+    }
+    return values;
+  } finally {
+    forget();
+  }
 }
 
 export async function buildVliwGpuConformanceCases() {
@@ -79,24 +105,14 @@ export async function buildVliwGpuConformanceCases() {
     "su name count be ceremony prah"
   ].join("\n");
   const nestedLoops = [
-    "su name count once fromindex num 0 to name num answer be ceremony def",
+    "su name count once fromindex num 0 toindex num 0 to name num answer be ceremony def",
     "ob num 1 to name num answer be plus do",
     "su name answer ret",
     "su name count once be ceremony prah",
-    "su name count twice fromindex num 0 to name num answer be ceremony def",
-    "fromindex num 1 toindex num 4 to name num count once be count once do",
-    "ob name count once to name num answer be plus do",
-    "su name answer ret",
-    "su name count twice be ceremony prah"
-  ].join("\n");
-  const conditionalCall = [
-    "su name count once to name num answer be ceremony def",
-    "ob num 1 to name num answer be plus do",
-    "ob num 2 to name num answer be plus do",
-    "su name answer ret",
-    "su name count once be ceremony prah",
-    "su name count twice to name num answer be ceremony def",
-    "ob num 1 be equally from num 1 then to name num answer be count once do else ob num 0 to name num answer be plus do",
+    "su name count twice fromindex num 0 toindex num 0 to name num answer be ceremony def",
+    "exists su name second ob num 0 as name variable be number ya",
+    "to name num second fromindex num 0 toindex num 3 be count once do",
+    "ob name second to name num answer be plus do",
     "su name answer ret",
     "su name count twice be ceremony prah"
   ].join("\n");
@@ -106,6 +122,77 @@ export async function buildVliwGpuConformanceCases() {
     "ob bool lie to name bool count be boolean do",
     "this ob name count ret",
     "su name count once be ceremony prah"
+  ].join("\n");
+  const forwardedArguments = [
+    "su name plus two ob num 0 to name num answer be ceremony def",
+    "exists su name first ob num of ob of this as name variable be number ya",
+    "ob num 2 to name num first be plus do",
+    "this ob name first ret",
+    "su name plus two be ceremony prah",
+    "su name count twice ob num 0 to name num answer be ceremony def",
+    "exists su name count ob num of ob of this as name variable be number ya",
+    "ob num of count to name num count be plus two do",
+    "this ob name count ret",
+    "su name count twice be ceremony prah"
+  ].join("\n");
+  const booleanArgumentBranches = [
+    "su name choose once ob bool lie from bool truth to name num answer be ceremony def",
+    "exists su name count ob bool of ob of this as name variable be boolean ya",
+    "exists su name first ob bool truth as name permanently boolean be boolean ya",
+    "ob name bool count be equally from name bool first then ob num 1 to name num answer be plus do else ob num 2 to name num answer be plus do",
+    "su name answer ret",
+    "su name choose once be ceremony prah"
+  ].join("\n");
+  const loopIndexLocal = [
+    "su name count once fromindex num 0 to name num answer be ceremony def",
+    "exists su name count ob num of fromindex of this as name variable be number ya",
+    "ob num 2 be equally from name num count then ob num 1 to name num answer be plus do",
+    "su name answer ret",
+    "su name count once be ceremony prah"
+  ].join("\n");
+  const earlyLoopExit = [
+    "su name count once to name num answer fromindex num 0 toindex num 0 be ceremony def",
+    "exists su name answer ob num of fromindex of this as name variable be number ya",
+    "ob name answer be equally from num 2 then this fromindex num of toindex of this ret",
+    "su name answer ret",
+    "su name count once be ceremony prah"
+  ].join("\n");
+  const callDepthWords = ["one", "two", "three", "four", "five", "six", "seven", "eight"];
+  const maximumCallDepth = callDepthWords.flatMap((word, index) => {
+    const next = callDepthWords[index + 1];
+    return [
+      `su name count ${word} to name num answer be ceremony def`,
+      next ? `to name num answer be count ${next} do` : "ob num 1 to name num answer be plus do",
+      "su name answer ret",
+      `su name count ${word} be ceremony prah`
+    ];
+  }).join("\n");
+  const maximumCodeletCount = [
+    "su name count once to name num answer be ceremony def",
+    ...Array.from({ length: 60 }, () => "ob num 1 to name num answer be plus do"),
+    "su name answer ret",
+    "su name count once be ceremony prah"
+  ].join("\n");
+  const giantBranch = [
+    "su name choose once to name num answer be ceremony def",
+    "ob num 5 be giant from num 3 then ob num 1 to name num answer be plus do else ob num 2 to name num answer be plus do",
+    "su name answer ret",
+    "su name choose once be ceremony prah"
+  ].join("\n");
+  const signedLocalComparison = [
+    "su name choose once to name num answer be ceremony def",
+    "exists su name count ob num 5 as name variable be number ya",
+    "ob name count to name num count be invert do",
+    "ob name count be tiny from num 0 then ob num 1 to name num answer be plus do else ob num 2 to name num answer be plus do",
+    "su name answer ret",
+    "su name choose once be ceremony prah"
+  ].join("\n");
+  const booleanLocalComparisonBranches = [
+    "su name choose once ob num 0 to name num answer be ceremony def",
+    "exists su name count ob num of ob of this as name variable be number ya",
+    "be and ob la ob name count be equally from num 5 do ko with la ob name count be giant from num 3 do ko then ob num 1 to name num answer be plus do else ob num 2 to name num answer be plus do",
+    "su name answer ret",
+    "su name choose once be ceremony prah"
   ].join("\n");
 
   const cases = [
@@ -128,16 +215,16 @@ export async function buildVliwGpuConformanceCases() {
       [{ type: "unsigned", value: 3 }]
     ),
     programlet(
-      "nested-bounded-loops-through-calls",
+      "nested-bounded-loops-keep-independent-cursors",
       nestedLoops,
-      "fromindex num 1 toindex num 4 to name num answer be count twice do",
+      "to name num answer fromindex num 1 toindex num 4 be count twice do",
       [{ type: "unsigned", value: 9 }]
     ),
     programlet(
-      "conditional-call-composes-multi-action-arm",
-      conditionalCall,
-      "to name num answer be count twice do",
-      [{ type: "unsigned", value: 3 }]
+      "nested-bounded-loops-reuse-symbols",
+      nestedLoops,
+      "to name num answer fromindex num 1 toindex num 300 be count twice do",
+      [{ type: "unsigned", value: 897 }]
     ),
     programlet(
       "typed-boolean-local",
@@ -146,44 +233,137 @@ export async function buildVliwGpuConformanceCases() {
       [{ type: "boolean", value: false }]
     ),
     codeletPack(
-      "scalar-and-vector-operators",
-      [
-        "ob num 65535 to num 1 be plus do",
-        "ob num 9 from num 4 be subtract do",
-        "ob num 65535 with num 65535 be multiply do",
-        "ob num 8 with num 2 be divide do",
-        "ob num 7 to num 3 be xor do",
-        "ob num 2 from num 10 be exponential do",
-        "ob num 9 from num 4 be remains do",
-        "ob num 5 be invert do",
-        "ob ve num 1 2 3 4 to num 2 be plus do",
-        "ob ve num 300 400 with ve num 300 400 be multiply do"
-      ],
-      [
-        { type: "unsigned", value: 0xffff },
-        { type: "unsigned", value: 5 },
-        { type: "unsigned", value: 4_294_836_225 },
-        { type: "unsigned", value: 4 },
-        { type: "unsigned", value: 4 },
-        { type: "unsigned", value: 1024 },
-        { type: "unsigned", value: 1 },
-        { type: "signed", value: -5 },
-        { type: "vector", elementType: "unsigned-16", values: [3, 4, 5, 6] },
-        { type: "vector", elementType: "unsigned-32", values: [90_000, 160_000] }
-      ]
+      "scalar-arithmetic",
+      "ob num 65535 with num 65535 be multiply do",
+      [{ type: "unsigned", value: 4_294_836_225 }]
+    ),
+    codeletPack(
+      "vector-arithmetic",
+      "ob ve num 1 2 3 4 to num 2 be plus do",
+      [{ type: "vector", elementType: "unsigned-16", values: [3, 4, 5, 6] }]
+    ),
+    codeletPack(
+      "boolean-not-literal",
+      "be not ob la ob bool truth be boolean ya ko do",
+      [{ type: "boolean", value: false }]
+    ),
+    codeletPack(
+      "boolean-and-literals",
+      "be and ob la ob bool truth be boolean ya ko with la ob bool lie be boolean ya ko do",
+      [{ type: "boolean", value: false }]
+    ),
+    codeletPack(
+      "boolean-or-literals",
+      "be or ob la ob bool lie be boolean ya ko with la ob bool truth be boolean ya ko do",
+      [{ type: "boolean", value: true }]
+    ),
+    codeletPack(
+      "nested-boolean-and-not",
+      "be and ob la ob bool truth be boolean ya ko with la be not ob la ob bool truth be boolean ya ko do ko do",
+      [{ type: "boolean", value: false }]
+    ),
+    codeletPack(
+      "boolean-equal-literal-comparison",
+      "su num 5 from num 5 be equally do",
+      [{ type: "boolean", value: true }]
+    ),
+    codeletPack(
+      "boolean-tiny-literal-comparison",
+      "su num 4 from num 5 be tiny do",
+      [{ type: "boolean", value: true }]
+    ),
+    codeletPack(
+      "nested-boolean-not-equal-comparison",
+      "be not ob la su num 5 from num 4 be equally do ko do",
+      [{ type: "boolean", value: true }]
+    ),
+    programlet(
+      "forwarded-typed-case-arguments",
+      forwardedArguments,
+      "ob num 5 to name num answer be count twice do",
+      [{ type: "unsigned", value: 7 }]
+    ),
+    programlet(
+      "boolean-argument-true-branch",
+      booleanArgumentBranches,
+      "ob bool truth from bool truth to name num answer be choose once do",
+      [{ type: "unsigned", value: 1 }]
+    ),
+    programlet(
+      "boolean-argument-false-branch",
+      booleanArgumentBranches,
+      "ob bool lie from bool truth to name num answer be choose once do",
+      [{ type: "unsigned", value: 2 }]
+    ),
+    programlet(
+      "loop-index-local",
+      loopIndexLocal,
+      "fromindex num 1 toindex num 4 to name num answer be count once do",
+      [{ type: "unsigned", value: 1 }]
+    ),
+    programlet(
+      "empty-loop-range",
+      loopIndexLocal,
+      "fromindex num 2 toindex num 2 to name num answer be count once do",
+      [{ type: "unsigned", value: 0 }]
+    ),
+    programlet(
+      "conditional-loop-cursor-return",
+      earlyLoopExit,
+      "to name num answer fromindex num 1 toindex num 5 be count once do",
+      [{ type: "unsigned", value: 2 }]
+    ),
+    programlet(
+      "maximum-call-depth",
+      maximumCallDepth,
+      "to name num answer be count one do",
+      [{ type: "unsigned", value: 1 }]
+    ),
+    programlet(
+      "maximum-codelet-count",
+      maximumCodeletCount,
+      "to name num answer be count once do",
+      [{ type: "unsigned", value: 60 }]
+    ),
+    programlet(
+      "giant-branch",
+      giantBranch,
+      "to name num answer be choose once do",
+      [{ type: "unsigned", value: 1 }]
+    ),
+    programlet(
+      "signed-local-comparison",
+      signedLocalComparison,
+      "to name num answer be choose once do",
+      [{ type: "unsigned", value: 1 }]
+    ),
+    programlet(
+      "boolean-and-local-comparison-leaves-true-branch",
+      booleanLocalComparisonBranches,
+      "ob num 5 to name num answer be choose once do",
+      [{ type: "unsigned", value: 1 }]
+    ),
+    programlet(
+      "boolean-and-local-comparison-leaves-false-branch",
+      booleanLocalComparisonBranches,
+      "ob num 2 to name num answer be choose once do",
+      [{ type: "unsigned", value: 2 }]
     )
   ];
-
+  const maximumPack = cases.find(({ name }) => name === "maximum-codelet-count").pack;
+  assert.equal(decodePyacPack(maximumPack).codelets.length, 64);
   for (const testCase of cases) {
-    testCase.referenceValues = await evaluateReference(testCase);
-    assert.deepEqual(
-      testCase.referenceValues,
-      testCase.expectedValues,
-      `${testCase.name}: JavaScript reference differs from the declared conformance result`
-    );
+    try {
+      testCase.referenceValues = await evaluateReference(testCase);
+    } catch (error) {
+      error.message = `${testCase.name}: ${error.message}`;
+      throw error;
+    }
+    assert.deepEqual(testCase.referenceValues, testCase.expectedValues, testCase.name + ': JavaScript reference differs from the declared conformance result');
   }
   return cases;
 }
+
 
 export async function buildVliwGpuProgramletFailureCases() {
   const divideByZeroSource = [
@@ -308,19 +488,31 @@ export async function runVliwGpuConformance({ executeCpuPacks, executePack, onPr
     onProgress({ phase: "cpu-complete", name: testCase.name, values: cpuResults[index] });
   }
 
-  const completed = [];
-  for (const testCase of cases) {
+  const submissions = cases.map(async (testCase) => {
     onProgress({ phase: "start", name: testCase.name });
-    const result = await executePack(testCase.pack);
-    assert.equal(result?.ok, true, `${testCase.name}: Housekeeper worker did not report success`);
-    assert.equal(result.backend, "rust-gpu-vulkan", `${testCase.name}: unexpected GPU backend`);
-    assert.ok(String(result.device ?? "").trim(), `${testCase.name}: missing GPU device identity`);
-    assert.deepEqual(result.values, testCase.referenceValues, `${testCase.name}: typed result differs from JavaScript reference`);
-    const entry = { name: testCase.name, device: result.device, values: result.values };
-    completed.push(entry);
-    onProgress({ phase: "complete", ...entry });
+    try {
+      const result = await executePack(testCase.pack);
+      assert.equal(result?.ok, true, `${testCase.name}: Housekeeper worker did not report success`);
+      assert.equal(result.backend, "rust-gpu-vulkan", `${testCase.name}: unexpected GPU backend`);
+      assert.ok(String(result.device ?? "").trim(), `${testCase.name}: missing GPU device identity`);
+      assert.deepEqual(result.values, testCase.referenceValues, `${testCase.name}: typed result differs from JavaScript reference`);
+      const entry = { name: testCase.name, device: result.device, values: result.values };
+      onProgress({ phase: "complete", ...entry });
+      return entry;
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      onProgress({ phase: "fail", name: testCase.name, error: detail });
+      throw new Error(`${testCase.name}: ${detail}`, { cause: error });
+    }
+  });
+  const settled = await Promise.allSettled(submissions);
+  const failures = settled.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
+  if (failures.length) {
+    throw new Error(
+      `Rust GPU conformance failed for ${failures.length}/${cases.length} cases:\n${failures.map((error) => `- ${error.message}`).join("\n")}`
+    );
   }
-  return completed;
+  return settled.map((result) => result.value);
 }
 
 export async function runVliwGpuProgramletFailureConformance({

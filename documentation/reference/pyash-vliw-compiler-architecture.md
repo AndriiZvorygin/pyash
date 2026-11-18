@@ -344,6 +344,30 @@ wins: each must meet the semantic and measured-cost checks above. Small
 FizzBuzz runs are useful for correctness and control-flow conformance, not as
 a representative GPU throughput benchmark.
 
+### Rust VLIW CPU/GPU Optimization Goal
+
+Correctness is the gate for optimization: first pass the complete supported GPU
+conformance matrix through Housekeeper, with exact typed outputs and explicit
+backend/device identity. Keep that matrix as the regression baseline while
+measuring the Rust CPU executor and native Vulkan path on the same canonical
+`.pyac` inputs.
+
+Measurements must separate cold startup and pipeline creation, warm execution,
+host/device transfers, dispatch and synchronization, and Housekeeper queue
+wait. A single tiny pack primarily measures fixed overhead; throughput claims
+must also use repeatable batches of independent packs or programlet invocations
+large enough to amortize that overhead. Report end-to-end latency alongside
+those component timings so a faster kernel is not mistaken for a faster job.
+
+The conformance runner uses a resident Vulkan device and cached pipelines so
+the correctness matrix does not repeatedly load and unload GPU state. After
+that correctness gate, evaluate further optimizations such as batching packs
+within a dispatch and reducing transfers or scratch-state traffic. Keep the
+semantic step budget and supported cases intact; do not count CPU fallback as
+GPU success. An optimization is accepted only when the full conformance matrix
+still passes and repeated measurements show a benefit on a representative
+workload, with any small-workload regression made explicit.
+
 ## Evolutionary Function Workloads
 
 **Status:** the contract remains normative. A bounded numeric-function

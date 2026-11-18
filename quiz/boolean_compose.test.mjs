@@ -34,3 +34,19 @@ test("and/or combine boolean sentences", async () => {
   const orRes = await run(`be or ob la be exists ob filename "${file}" do ko with la be exists ob filename "${missing}" do ko do`);
   assert.equal(orRes?.value?.boolean ?? orRes?.ob?.boolean, true);
 });
+
+test("comparison booleans remain available to boolean composition", async () => {
+  forget();
+  const comparison = await run("su num 5 from num 5 be equally do");
+  assert.equal(comparison?.value, true);
+
+  const negated = await run(
+    "be not ob la su num 5 from num 5 be equally do ko do"
+  );
+  assert.equal(negated?.value?.boolean ?? negated?.ob?.boolean, false);
+
+  const conjunction = await run(
+    "be and ob la su num 5 from num 5 be equally do ko with la ob bool lie be boolean ya ko do"
+  );
+  assert.equal(conjunction?.value?.boolean ?? conjunction?.ob?.boolean, false);
+});
