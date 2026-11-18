@@ -4,6 +4,7 @@ services:
     build:
       context: ../..
       dockerfile: container/pyac-vliw-runtime/Dockerfile
+      network: host
     image: liberit/pyac-vliw-runtime:latest
     restart: "no"
     networks:

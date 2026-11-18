@@ -26,18 +26,30 @@ test("Rust GPU conformance matrix compiles the supported typed and control-flow 
     "nested-calls-and-isolated-locals",
     "numeric-branch",
     "bounded-loop",
+    "nested-bounded-loops-keep-independent-cursors",
+    "nested-bounded-loops-reuse-symbols",
     "typed-boolean-local",
     "scalar-arithmetic",
     "vector-arithmetic",
+    "boolean-not-literal",
+    "boolean-and-literals",
+    "boolean-or-literals",
+    "nested-boolean-and-not",
+    "boolean-equal-literal-comparison",
+    "boolean-tiny-literal-comparison",
+    "nested-boolean-not-equal-comparison",
     "forwarded-typed-case-arguments",
     "boolean-argument-true-branch",
     "boolean-argument-false-branch",
     "loop-index-local",
     "empty-loop-range",
+    "conditional-loop-cursor-return",
     "maximum-call-depth",
     "maximum-codelet-count",
     "giant-branch",
-    "signed-local-comparison"
+    "signed-local-comparison",
+    "boolean-and-local-comparison-leaves-true-branch",
+    "boolean-and-local-comparison-leaves-false-branch"
   ]);
   for (const testCase of cases) {
     assert.ok(decodePyacPack(testCase.pack).codelets.length > 0, `${testCase.name} lowers to PyAC`);
@@ -78,7 +90,7 @@ test("Rust GPU conformance matrix checks backend identity and exact typed output
   assert.deepEqual(submissions, cases.map(({ name }) => name));
   assert.deepEqual(progress, cases.flatMap(() => ["start", "complete"]));
   assert.equal(completed.length, cases.length);
-  assert.equal(completed.at(-1).name, "signed-local-comparison");
+  assert.equal(completed.at(-1).name, "boolean-and-local-comparison-leaves-false-branch");
 });
 
 test("Rust GPU conformance matrix rejects wrong device or semantic results", async () => {

@@ -29,12 +29,12 @@ container:
 1. From the repository root, run
    `container/pyac-vliw-runtime/command/deploy.sh`. It builds the separate
    image and creates the
-   stopped runtime container if absent. If Housekeeper still advertises the
-   older direct-worker mode, the script stops there without changing the
-   running service.
+   stopped runtime container if absent. If Housekeeper does not advertise
+   `pyacVliwRuntimeProtocol: 1` in `/snapshot`, the script stops there without
+   changing the running service.
 2. Deploy the updated Housekeeper image once in a planned maintenance window.
-   Confirm `GET /runtime/vliw` reports `runtimeMode: rust-vliw-http`, then rerun
-   `container/pyac-vliw-runtime/command/deploy.sh`.
+   Rerun `container/pyac-vliw-runtime/command/deploy.sh` after the snapshot
+   advertises protocol v1.
 
 On later code or shader updates, rerunning
 `container/pyac-vliw-runtime/command/deploy.sh` builds the
@@ -61,3 +61,7 @@ ICD JSON at `/usr/share/vulkan/icd.d/nvidia_icd.json` (or set
 `NVIDIA_VULKAN_ICD_PATH`). The HTTP API is unauthenticated and must remain on
 this trusted internal network; do not publish port `18887` to the host or
 internet.
+
+The runtime stage uses Ubuntu 24.04's Vulkan loader. The older Ubuntu 22.04
+loader could not initialize the host's NVIDIA Vulkan ICD on Mriczo, even
+though CUDA devices and the ICD libraries were visible inside the container.

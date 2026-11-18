@@ -43,6 +43,18 @@ export function buildVliwGpuConformanceCases() {
     "su name answer ret",
     "su name count be ceremony prah"
   ].join("\n");
+  const nestedLoops = [
+    "su name count once fromindex num 0 toindex num 0 to name num answer be ceremony def",
+    "ob num 1 to name num answer be plus do",
+    "su name answer ret",
+    "su name count once be ceremony prah",
+    "su name count twice fromindex num 0 toindex num 0 to name num answer be ceremony def",
+    "exists su name second ob num 0 as name variable be number ya",
+    "to name num second fromindex num 0 toindex num 3 be count once do",
+    "ob name second to name num answer be plus do",
+    "su name answer ret",
+    "su name count twice be ceremony prah"
+  ].join("\n");
   const booleanLocal = [
     "su name count once ob bool lie to name bool answer be ceremony def",
     "exists su name count ob bool truth as name variable be boolean ya",
@@ -77,6 +89,13 @@ export function buildVliwGpuConformanceCases() {
     "su name answer ret",
     "su name count once be ceremony prah"
   ].join("\n");
+  const earlyLoopExit = [
+    "su name count once to name num answer fromindex num 0 toindex num 0 be ceremony def",
+    "exists su name answer ob num of fromindex of this as name variable be number ya",
+    "ob name answer be equally from num 2 then this fromindex num of toindex of this ret",
+    "su name answer ret",
+    "su name count once be ceremony prah"
+  ].join("\n");
   const callDepthWords = ["one", "two", "three", "four", "five", "six", "seven", "eight"];
   const maximumCallDepth = callDepthWords.flatMap((word, index) => {
     const next = callDepthWords[index + 1];
@@ -107,6 +126,13 @@ export function buildVliwGpuConformanceCases() {
     "su name answer ret",
     "su name choose once be ceremony prah"
   ].join("\n");
+  const booleanLocalComparisonBranches = [
+    "su name choose once ob num 0 to name num answer be ceremony def",
+    "exists su name count ob num of ob of this as name variable be number ya",
+    "be and ob la ob name count be equally from num 5 do ko with la ob name count be giant from num 3 do ko then ob num 1 to name num answer be plus do else ob num 2 to name num answer be plus do",
+    "su name answer ret",
+    "su name choose once be ceremony prah"
+  ].join("\n");
 
   const cases = [
     programlet(
@@ -128,6 +154,18 @@ export function buildVliwGpuConformanceCases() {
       [{ type: "unsigned", value: 3 }]
     ),
     programlet(
+      "nested-bounded-loops-keep-independent-cursors",
+      nestedLoops,
+      "to name num answer fromindex num 1 toindex num 4 be count twice do",
+      [{ type: "unsigned", value: 9 }]
+    ),
+    programlet(
+      "nested-bounded-loops-reuse-symbols",
+      nestedLoops,
+      "to name num answer fromindex num 1 toindex num 300 be count twice do",
+      [{ type: "unsigned", value: 897 }]
+    ),
+    programlet(
       "typed-boolean-local",
       booleanLocal,
       "ob bool truth to name bool answer be count once do",
@@ -142,6 +180,41 @@ export function buildVliwGpuConformanceCases() {
       "vector-arithmetic",
       "ob ve num 1 2 3 4 to num 2 be plus do",
       [{ type: "vector", elementType: "unsigned-16", values: [3, 4, 5, 6] }]
+    ),
+    codeletPack(
+      "boolean-not-literal",
+      "be not ob la ob bool truth be boolean ya ko do",
+      [{ type: "boolean", value: false }]
+    ),
+    codeletPack(
+      "boolean-and-literals",
+      "be and ob la ob bool truth be boolean ya ko with la ob bool lie be boolean ya ko do",
+      [{ type: "boolean", value: false }]
+    ),
+    codeletPack(
+      "boolean-or-literals",
+      "be or ob la ob bool lie be boolean ya ko with la ob bool truth be boolean ya ko do",
+      [{ type: "boolean", value: true }]
+    ),
+    codeletPack(
+      "nested-boolean-and-not",
+      "be and ob la ob bool truth be boolean ya ko with la be not ob la ob bool truth be boolean ya ko do ko do",
+      [{ type: "boolean", value: false }]
+    ),
+    codeletPack(
+      "boolean-equal-literal-comparison",
+      "su num 5 from num 5 be equally do",
+      [{ type: "boolean", value: true }]
+    ),
+    codeletPack(
+      "boolean-tiny-literal-comparison",
+      "su num 4 from num 5 be tiny do",
+      [{ type: "boolean", value: true }]
+    ),
+    codeletPack(
+      "nested-boolean-not-equal-comparison",
+      "be not ob la su num 5 from num 4 be equally do ko do",
+      [{ type: "boolean", value: true }]
     ),
     programlet(
       "forwarded-typed-case-arguments",
@@ -174,6 +247,12 @@ export function buildVliwGpuConformanceCases() {
       [{ type: "unsigned", value: 0 }]
     ),
     programlet(
+      "conditional-loop-cursor-return",
+      earlyLoopExit,
+      "to name num answer fromindex num 1 toindex num 5 be count once do",
+      [{ type: "unsigned", value: 2 }]
+    ),
+    programlet(
       "maximum-call-depth",
       maximumCallDepth,
       "to name num answer be count one do",
@@ -196,6 +275,18 @@ export function buildVliwGpuConformanceCases() {
       signedLocalComparison,
       "to name num answer be choose once do",
       [{ type: "unsigned", value: 1 }]
+    ),
+    programlet(
+      "boolean-and-local-comparison-leaves-true-branch",
+      booleanLocalComparisonBranches,
+      "ob num 5 to name num answer be choose once do",
+      [{ type: "unsigned", value: 1 }]
+    ),
+    programlet(
+      "boolean-and-local-comparison-leaves-false-branch",
+      booleanLocalComparisonBranches,
+      "ob num 2 to name num answer be choose once do",
+      [{ type: "unsigned", value: 2 }]
     )
   ];
   const maximumPack = cases.find(({ name }) => name === "maximum-codelet-count").pack;

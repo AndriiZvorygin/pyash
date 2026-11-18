@@ -24,6 +24,8 @@ const RAW_BLOCKQUOTE_MIN_WORDS = 15;
 const NAME_TYPE = wordForEntry("name_");
 const GENITIVE_CASE = wordForEntry("genitive_case_");
 const CONDITIONAL_MOOD = wordForEntry("conditional_mood_");
+const DEPENDENT_CLAUSE = wordForEntry("dependent_clause_");
+const CLAUSE_TAIL = wordForEntry("clause_tail_");
 
 const ROLE_ENTRIES = Object.freeze({
   su: "nominative_case_",
@@ -70,7 +72,10 @@ const TYPE_ENTRY_BY_SURFACE = Object.freeze({
 });
 const OPERATOR_ENTRY_BY_SURFACE = Object.freeze({
   divide: "divisions",
-  xor: "exclusive_or"
+  xor: "exclusive_or",
+  not: "negatory_quantifier_",
+  and: "and_",
+  or: "and_or_"
 });
 const OPERATOR_SURFACE_BY_WORD = new Map(
   Object.entries(OPERATOR_ENTRY_BY_SURFACE).map(([surface, entry]) => [wordForEntry(entry), surface])
@@ -219,6 +224,17 @@ function encodeVectorValue(vector, role) {
 }
 
 function encodeValue(value, role) {
+  if (value?.la && typeof value.la === "object") {
+    const nested = encodeClause(value.la);
+    return {
+      words: [DEPENDENT_CLAUSE, ...nested.words, CLAUSE_TAIL],
+      boundaries: nested.boundaries.map((offset) => offset + 1),
+      rawQuotes: nested.rawQuotes.map((quote) => ({
+        ...quote,
+        payloadStart: quote.payloadStart + 1
+      }))
+    };
+  }
   if (Number.isInteger(value?.num)) {
     if (value.num < 0 || value.num > 0xffff) {
       throw invalid("unsupported-value", `VLIW ${role} number must be an unsigned 16-bit integer`, {
@@ -272,7 +288,13 @@ function encodeClause(sentence, { conditional = false } = {}) {
   const rawQuotes = [];
   for (const role of FIELD_ORDER) {
     const returnValue = isReturn && sentence.ret?.role === role
-      ? { name: sentence.ret.name }
+      ? sentence.ret.name
+        ? { name: sentence.ret.name }
+        : sentence.ret.num !== undefined
+          ? { num: sentence.ret.num }
+          : sentence.ret.genitive
+            ? { genitive: sentence.ret.genitive }
+            : undefined
       : undefined;
     const fieldValue = sentence[role] ?? returnValue;
     if (fieldValue === undefined) continue;
@@ -286,6 +308,7 @@ function encodeClause(sentence, { conditional = false } = {}) {
     }
     const valueStart = words.length;
     words.push(...value.words);
+    boundaries.push(...(value.boundaries ?? []).map((offset) => valueStart + offset));
     rawQuotes.push(...value.rawQuotes.map((quote) => ({
       ...quote,
       payloadStart: valueStart + quote.payloadStart
@@ -450,7 +473,20 @@ function wordName(word, role) {
   });
 }
 
-function decodeValue(items, role) {
+function decodeValue(items, role, boundaryOffsets) {
+  if (
+    items.length >= 3
+    && items[0].kind === "word"
+    && items[0].word === DEPENDENT_CLAUSE
+    && items.at(-1).kind === "word"
+    && items.at(-1).word === CLAUSE_TAIL
+  ) {
+    const nested = decodeClauseItems(items.slice(1, -1), boundaryOffsets);
+    if (nested.nextIndex !== items.at(-1).offset) {
+      throw invalid("malformed-dependent-clause", `VLIW ${role} dependent clause has trailing content`);
+    }
+    return { la: nested.sentence };
+  }
   if (
     items.length === 1
     && items[0].kind === "tagged-quote"
@@ -556,12 +592,29 @@ function decodeClauseItems(items, boundaryOffsets) {
   const fields = {};
   const quoteKinds = {};
   let pending = [];
-  for (const item of items) {
+  let cursor = 0;
+  while (cursor < items.length) {
+    const item = items[cursor];
+    if (item.kind === "word" && item.word === DEPENDENT_CLAUSE) {
+      let depth = 1;
+      let tail = cursor + 1;
+      for (; tail < items.length; tail += 1) {
+        if (items[tail].kind !== "word") continue;
+        if (items[tail].word === DEPENDENT_CLAUSE) depth += 1;
+        else if (items[tail].word === CLAUSE_TAIL && --depth === 0) break;
+      }
+      if (tail >= items.length) {
+        throw invalid("malformed-dependent-clause", "VLIW dependent clause is missing its clause tail");
+      }
+      pending.push(...items.slice(cursor, tail + 1));
+      cursor = tail + 1;
+      continue;
+    }
     const isBoundary = boundaryOffsets.has(item.offset);
     if (isBoundary && item.kind === "word" && ROLE_BY_WORD.has(item.word)) {
       const role = ROLE_BY_WORD.get(item.word);
       if (Object.hasOwn(fields, role)) throw invalid("duplicate-case", `VLIW sentence repeats the ${role} case`);
-      const value = decodeValue(pending, role);
+      const value = decodeValue(pending, role, boundaryOffsets);
       if (Object.hasOwn(value, "quotedKind")) {
         fields[role] = value.quotedValue;
         quoteKinds[role] = value.quotedKind;
@@ -569,6 +622,7 @@ function decodeClauseItems(items, boundaryOffsets) {
         fields[role] = value;
       }
       pending = [];
+      cursor += 1;
       continue;
     }
     if (isBoundary && item.kind === "word" && MOOD_BY_WORD.has(item.word)) {
@@ -593,6 +647,7 @@ function decodeClauseItems(items, boundaryOffsets) {
       };
     }
     pending.push(item);
+    cursor += 1;
   }
   throw invalid("unsupported-sentence", "VLIW sentence is missing a marked mood boundary");
 }
@@ -621,7 +676,7 @@ function decodeSentenceGroup(decoded) {
     }
     return {
       ...condition,
-      mood: consequence.mood,
+      mood: "do",
       consequence,
       alternative
     };
@@ -634,7 +689,7 @@ function decodeSentenceGroup(decoded) {
     }
     sentence = {
       ...condition,
-      mood: sentence.mood,
+      mood: "do",
       consequence: sentence
     };
   }

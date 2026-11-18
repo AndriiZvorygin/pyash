@@ -169,9 +169,7 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
       continue;
     }
     if (activeDefinition) {
-      if (activeDefinitionReturns) {
-        fail(`Pyash programlet ceremony ${activeDefinition} has sentences after ret`, { sentence: index + 1 });
-      }
+      activeDefinitionReturns = false;
       if (sentence.mood === "ya") {
         if (activeDefinitionHasAction) {
           fail("Pyash programlet local numeric slots must be declared before actions", { sentence: index + 1 });
@@ -190,11 +188,29 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
       } else if (sentence.mood === "do") {
         activeDefinitionHasAction = true;
         visitSentence(sentence, (action) => {
+          if (action.mood === "ret") {
+            const registerValue = action.fromindex ?? (
+              action.ret?.role === "fromindex"
+                ? action.ret
+                : undefined
+            );
+            const hasRegisterValue = registerValue === undefined
+              || Number.isInteger(registerValue.num)
+              || Array.isArray(registerValue.genitive?.chain);
+            if (!hasRegisterValue) {
+              fail("Pyash programlet conditional return only supports an explicit fromindex update", {
+                sentence: index + 1
+              });
+            }
+            return;
+          }
           if (action.mood !== "do") {
             fail("Pyash programlet conditional branches must be do sentences", { sentence: index + 1 });
           }
           const isCall = definitions.has(action.be);
-          if (!PURE_BUILTIN_VERBS.has(action.be) && !isCall) {
+          const isBooleanPredicate = (action.consequence || action.alternative)
+            && ["not", "and", "or"].includes(action.be);
+          if (!PURE_BUILTIN_VERBS.has(action.be) && !isCall && !isBooleanPredicate) {
             fail(`Pyash programlet rejects effectful or unknown verb: ${action.be}`, { sentence: index + 1 });
           }
           const targetSlot = action.to?.name ? activeSlots.get(action.to.name) : null;
@@ -219,8 +235,13 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
             calls.get(activeDefinition).add(action.be);
           }
         });
+        if (sentence.consequence?.mood === "ret" && sentence.alternative?.mood === "ret") {
+          activeDefinitionReturns = true;
+        }
       } else if (sentence.mood === "ret") {
-        activeDefinitionReturns = true;
+        activeDefinitionReturns = sentence.consequence && sentence.alternative
+          ? sentence.consequence.mood === "ret" && sentence.alternative.mood === "ret"
+          : !sentence.consequence && !sentence.alternative;
       } else {
         fail(`Pyash programlet ceremony body does not admit ${sentence.mood} sentences`, { sentence: index + 1 });
       }

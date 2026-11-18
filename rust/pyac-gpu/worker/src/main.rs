@@ -4,7 +4,6 @@ use std::path::PathBuf;
 
 use pyac::{PyacValue, VectorElements, decode_pack};
 use serde_json::{Value, json};
-use wgpu::util::DeviceExt;
 
 const RESULT_WORDS: usize = 32;
 const RESULT_STRIDE: usize = 4 + RESULT_WORDS;
@@ -65,10 +64,37 @@ async fn run_pack(codelets: &[[u16; pyac::WORDS_PER_CODELET]]) -> Result<Value, 
         ));
     }
 
+    let required_features = wgpu::Features::PASSTHROUGH_SHADERS;
+    if !adapter.features().contains(required_features) {
+        return Err("Vulkan adapter lacks SPIR-V passthrough support".to_owned());
+    }
     let (device, queue) = adapter
-        .request_device(&wgpu::DeviceDescriptor::default())
+        .request_device(&wgpu::DeviceDescriptor {
+            required_features,
+            ..Default::default()
+        })
         .await
         .map_err(|error| format!("Vulkan device unavailable: {error}"))?;
+
+    let input_buffer_internal_scope = device.push_error_scope(wgpu::ErrorFilter::Internal);
+    let input_buffer_oom_scope = device.push_error_scope(wgpu::ErrorFilter::OutOfMemory);
+    let input_buffer_validation_scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
+    let input_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Pyash VLIW codelets"),
+        size: std::mem::size_of_val(input_words.as_slice()) as u64,
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let input_buffer_validation_error = input_buffer_validation_scope.pop().await;
+    let input_buffer_oom_error = input_buffer_oom_scope.pop().await;
+    let input_buffer_internal_error = input_buffer_internal_scope.pop().await;
+    if let Some(error) = input_buffer_validation_error
+        .or(input_buffer_oom_error)
+        .or(input_buffer_internal_error)
+    {
+        return Err(format!("Vulkan VLIW input buffer creation failed: {error}"));
+    }
+    queue.write_buffer(&input_buffer, 0, bytemuck::cast_slice(&input_words));
 
     let shader_path = std::env::var_os("PYAC_VLIW_SPIRV_PATH")
         .map(PathBuf::from)
@@ -79,25 +105,92 @@ async fn run_pack(codelets: &[[u16; pyac::WORDS_PER_CODELET]]) -> Result<Value, 
         .map_err(|error| format!("could not read {}: {error}", shader_path.display()))?;
     let shader_words = bytemuck::try_cast_slice::<u8, u32>(&shader_bytes)
         .map_err(|error| format!("SPIR-V file is not aligned u32 data: {error}"))?;
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("Pyash shared VLIW interpreter SPIR-V"),
-        source: wgpu::ShaderSource::SpirV(Cow::Owned(shader_words.to_vec())),
+    let shader_internal_scope = device.push_error_scope(wgpu::ErrorFilter::Internal);
+    let shader_oom_scope = device.push_error_scope(wgpu::ErrorFilter::OutOfMemory);
+    let shader_validation_scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
+    // SAFETY: the image build generates this module from our shader crate and validates it
+    // for Vulkan 1.2; the entry points and workgroup sizes are fixed by that crate.
+    let shader = unsafe {
+        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
+            label: Some("Pyash shared VLIW interpreter SPIR-V"),
+            entry_points: Cow::Owned(vec![
+                wgpu::PassthroughShaderEntryPoint {
+                    name: Cow::Borrowed("execute_pyac_pack"),
+                    workgroup_size: (64, 1, 1),
+                },
+                wgpu::PassthroughShaderEntryPoint {
+                    name: Cow::Borrowed("execute_pyac_programlet"),
+                    workgroup_size: (64, 1, 1),
+                },
+            ]),
+            spirv: Some(Cow::Owned(shader_words.to_vec())),
+            ..Default::default()
+        })
+    };
+    let shader_validation_error = shader_validation_scope.pop().await;
+    let shader_oom_error = shader_oom_scope.pop().await;
+    let shader_internal_error = shader_internal_scope.pop().await;
+    if let Some(error) = shader_validation_error
+        .or(shader_oom_error)
+        .or(shader_internal_error)
+    {
+        return Err(format!(
+            "Vulkan VLIW shader module creation failed: {error}"
+        ));
+    }
+
+    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("Pyash VLIW storage bindings"),
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: true },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Storage { read_only: false },
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ],
     });
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("Pyash VLIW pipeline layout"),
+        bind_group_layouts: &[Some(&bind_group_layout)],
+        immediate_size: 0,
+    });
+    let pipeline_internal_scope = device.push_error_scope(wgpu::ErrorFilter::Internal);
+    let pipeline_oom_scope = device.push_error_scope(wgpu::ErrorFilter::OutOfMemory);
+    let pipeline_validation_scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
     let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         label: Some("Pyash VLIW pack interpreter"),
-        layout: None,
+        layout: Some(&pipeline_layout),
         module: &shader,
         entry_point: Some(entry_point),
         compilation_options: Default::default(),
         cache: None,
     });
+    let pipeline_validation_error = pipeline_validation_scope.pop().await;
+    let pipeline_oom_error = pipeline_oom_scope.pop().await;
+    let pipeline_internal_error = pipeline_internal_scope.pop().await;
+    if let Some(error) = pipeline_validation_error
+        .or(pipeline_oom_error)
+        .or(pipeline_internal_error)
+    {
+        return Err(format!("Vulkan VLIW pipeline creation failed: {error}"));
+    }
 
     let output_words = result_records * RESULT_STRIDE;
-    let input_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("Pyash VLIW codelets"),
-        contents: bytemuck::cast_slice(&input_words),
-        usage: wgpu::BufferUsages::STORAGE,
-    });
     let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Pyash VLIW results"),
         size: (output_words * 4) as u64,
@@ -112,7 +205,7 @@ async fn run_pack(codelets: &[[u16; pyac::WORDS_PER_CODELET]]) -> Result<Value, 
     });
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("Pyash VLIW pack bindings"),
-        layout: &pipeline.get_bind_group_layout(0),
+        layout: &bind_group_layout,
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,

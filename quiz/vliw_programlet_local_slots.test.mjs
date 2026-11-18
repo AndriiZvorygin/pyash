@@ -258,6 +258,36 @@ test("PyAC programlets admit existing multiply and scalar comparison primitives"
   assert.deepEqual((await executePyashProgramPack(conditional.pack)).output, { num: 2 });
 });
 
+test("PyAC boolean branches compose local comparison leaves", async () => {
+  const source = [
+    "su name choose once ob num 0 to name num answer be ceremony def",
+    "exists su name count ob num of ob of this as name variable be number ya",
+    "be and ob la ob name count be equally from num 5 do ko with la ob name count be giant from num 3 do ko then ob num 1 to name num answer be plus do else ob num 2 to name num answer be plus do",
+    "su name answer ret",
+    "su name choose once be ceremony prah"
+  ].join("\n");
+  const trueBranch = compilePyashProgramSource(source, {
+    invocation: "ob num 5 to name num answer be choose once do"
+  });
+  const falseBranch = compilePyashProgramSource(source, {
+    invocation: "ob num 2 to name num answer be choose once do"
+  });
+
+  assert.deepEqual((await executePyashProgramPack(trueBranch.pack)).output, { num: 1 });
+  assert.deepEqual((await executePyashProgramPack(falseBranch.pack)).output, { num: 2 });
+
+  const unsupportedAction = source.replace(
+    " then ob num 1 to name num answer be plus do else ob num 2 to name num answer be plus do",
+    " do"
+  );
+  assert.throws(
+    () => compilePyashProgramSource(unsupportedAction, {
+      invocation: "ob num 5 to name num answer be choose once do"
+    }),
+    /rejects effectful or unknown verb: and/u
+  );
+});
+
 test("PyAC programlets lower the complete advertised numeric operator set", () => {
   const operators = [
     "plus",
@@ -347,4 +377,23 @@ test("local variable updates replace one frame slot and disappear on return", ()
   }
   assert.equal(remember("count"), undefined);
   forget();
+});
+
+test("conditional fromindex return updates the loop cursor and preserves the final result", async () => {
+  const source = [
+    "su name count once to name num answer fromindex num 0 toindex num 0 be ceremony def",
+    "exists su name answer ob num of fromindex of this as name variable be number ya",
+    "ob name answer be equally from num 2 then this fromindex num of toindex of this ret",
+    "su name answer ret",
+    "su name count once be ceremony prah"
+  ].join("\n");
+  const invocation = "to name num answer fromindex num 1 toindex num 5 be count once do";
+  const compiled = compilePyashProgramSource(source, { invocation });
+  const decoded = decodePyashProgramPack(compiled.pack);
+  const branch = decoded.find((sentence) => sentence.consequence?.mood === "ret");
+
+  assert.equal(branch?.mood, "do");
+  assert.deepEqual(branch?.consequence?.fromindex?.genitive?.chain, ["this", "toindex", "num"]);
+  const { output } = await executePyashProgramPack(compiled.pack);
+  assert.deepEqual(output, { num: 2 });
 });

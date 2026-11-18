@@ -60,8 +60,8 @@ if ! docker inspect pyac-vliw-runtime >/dev/null 2>&1; then
   compose create pyac-vliw-runtime
 fi
 
-runtime_json="$(curl -fsS --max-time 5 "$HOUSEKEEPER_URL/runtime/vliw" 2>/dev/null || true)"
-runtime_mode="$(printf '%s' "$runtime_json" | python3 -c '
+snapshot_json="$(curl -fsS --max-time 5 "$HOUSEKEEPER_URL/snapshot" 2>/dev/null || true)"
+runtime_protocol="$(printf '%s' "$snapshot_json" | python3 -c '
 import json
 import sys
 
@@ -69,11 +69,12 @@ try:
   value = json.load(sys.stdin)
 except Exception:
   value = {}
-print(value.get("runtimeMode", ""))
+capabilities = value.get("capabilities") if isinstance(value.get("capabilities"), dict) else {}
+print(capabilities.get("pyacVliwRuntimeProtocol", ""))
 ' 2>/dev/null || true)"
-if [[ "$runtime_mode" != "rust-vliw-http" ]]; then
+if [[ "$runtime_protocol" != "1" ]]; then
   trap - EXIT
-  echo "VLIW runtime image built and container prepared. Upgrade the Housekeeper route, then rerun this script." >&2
+  echo "VLIW runtime image built and container prepared. Housekeeper does not advertise VLIW runtime protocol v1; upgrade its route, then rerun this script." >&2
   exit 0
 fi
 
