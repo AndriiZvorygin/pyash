@@ -1,4 +1,33 @@
 su name translation_chinese_character_atom_links be map def
 su text "meta:format" ob text "chinese-character-atom-links-v1" ya
-su text "link:你:hnan" ob text "{\"character\":\"你\",\"english\":\"you\",\"pya\":\"hnan\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:你:hnan" ob text "{\"key\":\"link:你:hnan\",\"character\":\"你\",\"english\":\"you\",\"pya\":\"hnan\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:他:htit" ob text "{\"key\":\"link:他:htit\",\"character\":\"他\",\"english\":\"it\",\"pya\":\"htit\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:什:hkam" ob text "{\"key\":\"link:什:hkam\",\"character\":\"什\",\"english\":\"what\",\"pya\":\"hkam\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:没:swak" ob text "{\"key\":\"link:没:swak\",\"character\":\"没\",\"english\":\"sink\",\"pya\":\"swak\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:想:hcik" ob text "{\"key\":\"link:想:hcik\",\"character\":\"想\",\"english\":\"think\",\"pya\":\"hcik\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:道:psip" ob text "{\"key\":\"link:道:psip\",\"character\":\"道\",\"english\":\"principle\",\"pya\":\"psip\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:看:hsat" ob text "{\"key\":\"link:看:hsat\",\"character\":\"看\",\"english\":\"see\",\"pya\":\"hsat\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:知:hkut" ob text "{\"key\":\"link:知:hkut\",\"character\":\"知\",\"english\":\"know\",\"pya\":\"hkut\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:还:hyac" ob text "{\"key\":\"link:还:hyac\",\"character\":\"还\",\"english\":\"also\",\"pya\":\"hyac\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:里:grin" ob text "{\"key\":\"link:里:grin\",\"character\":\"里\",\"english\":\"neighborhood\",\"pya\":\"grin\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:都:hsut" ob text "{\"key\":\"link:都:hsut\",\"character\":\"都\",\"english\":\"all\",\"pya\":\"hsut\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:子:hpas" ob text "{\"key\":\"link:子:hpas\",\"character\":\"子\",\"english\":\"son\",\"pya\":\"hpas\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:时:hkac" ob text "{\"key\":\"link:时:hkac\",\"character\":\"时\",\"english\":\"when\",\"pya\":\"hkac\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:样:hfam" ob text "{\"key\":\"link:样:hfam\",\"character\":\"样\",\"english\":\"form\",\"pya\":\"hfam\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:下:hcic" ob text "{\"key\":\"link:下:hcic\",\"character\":\"下\",\"english\":\"down\",\"pya\":\"hcic\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:现:tcuc" ob text "{\"key\":\"link:现:tcuc\",\"character\":\"现\",\"english\":\"appear\",\"pya\":\"tcuc\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:怎:kyan" ob text "{\"key\":\"link:怎:kyan\",\"character\":\"怎\",\"english\":\"how\",\"pya\":\"kyan\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:起:cwas" ob text "{\"key\":\"link:起:cwas\",\"character\":\"起\",\"english\":\"begin\",\"pya\":\"cwas\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:天:tcin" ob text "{\"key\":\"link:天:tcin\",\"character\":\"天\",\"english\":\"day\",\"pya\":\"tcin\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:谢:kyaf" ob text "{\"key\":\"link:谢:kyaf\",\"character\":\"谢\",\"english\":\"thank\",\"pya\":\"kyaf\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:只:htun" ob text "{\"key\":\"link:只:htun\",\"character\":\"只\",\"english\":\"only\",\"pya\":\"htun\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:家:hcas" ob text "{\"key\":\"link:家:hcas\",\"character\":\"家\",\"english\":\"house\",\"pya\":\"hcas\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:意:hcik" ob text "{\"key\":\"link:意:hcik\",\"character\":\"意\",\"english\":\"think\",\"pya\":\"hcik\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:话:pyac" ob text "{\"key\":\"link:话:pyac\",\"character\":\"话\",\"english\":\"language\",\"pya\":\"pyac\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:回:hwit" ob text "{\"key\":\"link:回:hwit\",\"character\":\"回\",\"english\":\"return\",\"pya\":\"hwit\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:然:tyak" ob text "{\"key\":\"link:然:tyak\",\"character\":\"然\",\"english\":\"thus\",\"pya\":\"tyak\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:打:nyat" ob text "{\"key\":\"link:打:nyat\",\"character\":\"打\",\"english\":\"attack\",\"pya\":\"nyat\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:地:kcec" ob text "{\"key\":\"link:地:kcec\",\"character\":\"地\",\"english\":\"region\",\"pya\":\"kcec\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:前:hpam" ob text "{\"key\":\"link:前:hpam\",\"character\":\"前\",\"english\":\"first\",\"pya\":\"hpam\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
+su text "link:行:hkin" ob text "{\"key\":\"link:行:hkin\",\"character\":\"行\",\"english\":\"go\",\"pya\":\"hkin\",\"status\":\"accepted\",\"confidence\":\"high\",\"source\":\"chinese-character-atom-refinery\"}" ya
 prah

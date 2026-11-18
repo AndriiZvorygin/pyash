@@ -399,6 +399,7 @@ export async function loadChineseCharacterAtomRefineryInputs({
   const unihan = parseUnihanCharacterData(unihanReadings, unihanOtherMappings);
   const cedict = parseCedictSingleCharacterGlosses(cedictSource);
   const acceptedLinks = parsePyaJsonMap(acceptedLinksSource);
+  const grammarCatalog = parseEnglishGrammarCatalog(grammarSource);
   const grammarTargets = parseEnglishGrammarTargets(grammarSource);
   const generation = atomGenerationInputs ?? await loadAtomWordGenerationInputs();
   const normalizedSubtlexSource = stripSubtlexMetadata(subtlexSource);
@@ -426,6 +427,7 @@ export async function loadChineseCharacterAtomRefineryInputs({
     kwonRows,
     acceptedLinks,
     grammarTargets,
+    grammarCharacterLinks: grammarCatalog.chineseCharacterLinks,
     atomEntries: pyashWords,
     generation,
     sourceHashes,
@@ -558,10 +560,14 @@ export function buildChineseCharacterAtomWorklist(inputs, { includeMapped = true
     throw invalid("Chinese character worklist requires parsed source inputs");
   }
   const mappings = oneCharacterMappings(inputs.kwonRows, inputs.acceptedLinks);
+  const grammarLinkedCharacters = new Set((inputs.grammarCharacterLinks ?? [])
+    .map((link) => text(link.character))
+    .filter(Boolean));
   const targets = atomTargets(inputs.atomEntries, inputs.grammarTargets ?? []);
   const targetIndex = atomTargetIndex(targets);
   const records = [];
   for (const [character, unihan] of inputs.unihan) {
+    if (grammarLinkedCharacters.has(character)) continue;
     const cedictRows = inputs.cedict.get(character) ?? [];
     const existingMappings = mappings.get(character) ?? [];
     const explicitContrast = hasExplicitContrast(cedictRows);
