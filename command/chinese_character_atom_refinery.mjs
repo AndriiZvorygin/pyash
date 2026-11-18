@@ -442,7 +442,7 @@ async function runStage(sentence, context) {
   let artifactPath;
   process.stderr.write(`[chinese-character-atom] stage ${stage}\n`);
   if (stage === "build ranked character worklist") {
-    context.worklist = buildChineseCharacterAtomWorklist(context.inputs);
+    context.worklist = buildChineseCharacterAtomWorklist(context.inputs, { includeMapped: false });
     artifactPath = await writeStageArtifact(context, "worklist.pya", "translation_chinese_character_atom_worklist", context.worklist);
     result = { sourceHash: context.inputs.sourceHash, count: context.worklist.length, records: context.worklist };
   } else if (stage === "prepare existing atom matches") {

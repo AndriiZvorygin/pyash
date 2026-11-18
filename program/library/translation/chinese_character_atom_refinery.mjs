@@ -1076,7 +1076,7 @@ export async function generateChineseCharacterAtomReview({
   outputPath = path.join(DEFAULT_CHINESE_CHARACTER_ATOM_ARTIFACT_ROOT, "review.pya")
 } = {}) {
   const loaded = inputs ?? await loadChineseCharacterAtomRefineryInputs();
-  const worklist = buildChineseCharacterAtomWorklist(loaded);
+  const worklist = buildChineseCharacterAtomWorklist(loaded, { includeMapped: false });
   const proposals = await buildChineseCharacterAtomProposals(worklist, loaded, { generationLimit });
   const content = renderChineseCharacterAtomRefineryPya(proposals, {
     sourceHash: loaded.sourceHash,
