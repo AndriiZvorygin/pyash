@@ -34,10 +34,12 @@ import {
   parseChineseCharacterAtomReviewResponse,
   parseChineseCharacterPhoneticResponse,
   parseChineseCharacterTranslationResponse,
+  reconcileChineseCharacterAtomLinkConflicts,
   renderChineseCharacterAtomCheckpointPya,
   renderChineseCharacterAtomLinksPya,
   renderChineseCharacterAtomRefineryPya
 } from "../program/library/translation/chinese_character_atom_refinery.mjs";
+import { removeEnglishGrammarChineseCharacterLinks } from "../program/library/translation/english_grammar.mjs";
 import { createDefaultQueuedMindTranslationVocabularySubmitter } from "../program/library/translation/translation_vocabulary_queue.mjs";
 import { awaitTranslationGpuDuty } from "../program/library/translation/translation_to_vliw_job.mjs";
 
@@ -162,7 +164,7 @@ function translationTasksFor(records, checkpointTasks) {
   for (const record of records) {
     const translation = checkpointTasks.get(taskKey(record.id, "translation"))?.result;
     const match = latestMatchTask(record.id, checkpointTasks)?.result;
-    const translationRequiredAfterReview = record.specificityConflict && match && match.verdict !== "select";
+    const translationRequiredAfterReview = record.specificityConflict && match && match.verdict !== "match";
     if ((record.englishCandidates.length === 0 || translationRequiredAfterReview) && !translation) {
       tasks.push(promptTask(record, "translation"));
     }
@@ -203,7 +205,7 @@ function specificityReassignmentIds(records, tasks) {
     const translations = tasks.get(taskKey(record.id, "translation"))?.result?.translations ?? [];
     if (translations.length === 0) return false;
     return [...tasks.values()].some((task) => task.recordId === record.id
-      && task.kind === "match" && task.status === "completed" && task.result?.verdict !== "select");
+      && task.kind === "match" && task.status === "completed" && task.result?.verdict !== "match");
   }).map((record) => record.id));
 }
 
@@ -261,6 +263,50 @@ async function atomicWrite(filename, contents) {
   const temporary = `${filename}.${process.pid}.tmp`;
   await fs.writeFile(temporary, contents, "utf8");
   await fs.rename(temporary, filename);
+}
+
+function activeCharacterAtomLinks(inputs) {
+  const kwonLinks = (inputs.kwonRows ?? []).flatMap((row) => {
+    const character = String(row?.zh ?? "").trim();
+    const pya = String(row?.pya ?? "").trim();
+    const english = String(row?.en ?? "").trim();
+    if ([...character].length !== 1 || !/\p{Script=Han}/u.test(character)
+      || !pya || pya.split(/\s+/u).length !== 1 || !english) return [];
+    return [{ character, pya, english, status: "accepted", source: "kwon" }];
+  });
+  const grammarLinks = (inputs.grammarCharacterLinks ?? []).map((link) => ({
+    character: link.character,
+    pya: link.pya,
+    english: link.english,
+    status: "accepted",
+    source: link.source
+  }));
+  return [...kwonLinks, ...grammarLinks, ...(inputs.acceptedLinks ?? [])];
+}
+
+async function reconcileExistingLinks(inputs) {
+  const reconciliation = reconcileChineseCharacterAtomLinkConflicts(inputs);
+  const acceptedLinksChanged = JSON.stringify(reconciliation.acceptedLinks) !== JSON.stringify(inputs.acceptedLinks);
+  let grammarLinksChanged = false;
+  if (reconciliation.grammarCharactersToRemove.length > 0) {
+    const grammarSource = await fs.readFile(CHINESE_CHARACTER_ATOM_SOURCE_PATHS.englishGrammar, "utf8");
+    const cleaned = removeEnglishGrammarChineseCharacterLinks(grammarSource, {
+      sourceTag: "chinese-character-grammar-refinery",
+      characters: reconciliation.grammarCharactersToRemove
+    });
+    grammarLinksChanged = cleaned !== grammarSource;
+    if (grammarLinksChanged) {
+      await atomicWrite(CHINESE_CHARACTER_ATOM_SOURCE_PATHS.englishGrammar, cleaned);
+    }
+  }
+  if (acceptedLinksChanged) {
+    await atomicWrite(CHINESE_CHARACTER_ATOM_SOURCE_PATHS.acceptedLinks,
+      renderChineseCharacterAtomLinksPya(reconciliation.acceptedLinks));
+  }
+  return {
+    grammarLinksRemoved: grammarLinksChanged ? reconciliation.grammarCharactersToRemove.length : 0,
+    rootLinksWithdrawn: acceptedLinksChanged ? reconciliation.withdrawn.length : 0
+  };
 }
 
 async function initializePyashRuntime() {
@@ -442,7 +488,10 @@ async function runStage(sentence, context) {
   let artifactPath;
   process.stderr.write(`[chinese-character-atom] stage ${stage}\n`);
   if (stage === "build ranked character worklist") {
-    context.worklist = buildChineseCharacterAtomWorklist(context.inputs, { includeMapped: false });
+    context.worklist = buildChineseCharacterAtomWorklist(context.inputs, {
+      includeMapped: false,
+      rootAtomsOnly: context.config.refineryPass === "first-pass"
+    });
     artifactPath = await writeStageArtifact(context, "worklist.pya", "translation_chinese_character_atom_worklist", context.worklist);
     result = { sourceHash: context.inputs.sourceHash, count: context.worklist.length, records: context.worklist };
   } else if (stage === "prepare existing atom matches") {
@@ -539,7 +588,7 @@ async function runStage(sentence, context) {
     }));
     let promotedLinks = [];
     if (firstPass) {
-      promotedLinks = highConfidenceChineseCharacterAtomLinks(proposals, context.inputs.acceptedLinks);
+      promotedLinks = highConfidenceChineseCharacterAtomLinks(proposals, activeCharacterAtomLinks(context.inputs));
       if (promotedLinks.length > 0) {
         const acceptedLinks = [...context.inputs.acceptedLinks, ...promotedLinks];
         await atomicWrite(
@@ -585,7 +634,16 @@ export async function runChineseCharacterAtomRefinery() {
     throw new Error(`unsupported Chinese character atom refinery pass: ${config.refineryPass}`);
   }
   await initializePyashRuntime();
-  const inputs = await loadChineseCharacterAtomRefineryInputs();
+  const initialInputs = await loadChineseCharacterAtomRefineryInputs();
+  const linkRepairs = config.refineryPass === "first-pass"
+    ? await reconcileExistingLinks(initialInputs)
+    : { grammarLinksRemoved: 0, rootLinksWithdrawn: 0 };
+  if (linkRepairs.grammarLinksRemoved || linkRepairs.rootLinksWithdrawn) {
+    process.stdout.write(`reconciled existing links: removed ${linkRepairs.grammarLinksRemoved} grammar duplicates, withdrew ${linkRepairs.rootLinksWithdrawn} lower-frequency atom links\n`);
+  }
+  const inputs = linkRepairs.grammarLinksRemoved || linkRepairs.rootLinksWithdrawn
+    ? await loadChineseCharacterAtomRefineryInputs()
+    : initialInputs;
   const configHash = sha256(JSON.stringify({
     refineryPass: config.refineryPass,
     model: config.model,

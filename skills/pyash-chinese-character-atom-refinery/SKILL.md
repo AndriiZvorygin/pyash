@@ -18,10 +18,11 @@ The refinery keeps its full translation and atom-generation contract. Its defaul
 
 ## First pass and evidence
 
-- The first pass builds the same frequency-ranked worklist and existing atom candidates as the full graph. It asks Qwen to review every candidate-bearing character, including rows with one exact candidate, then records the response and eligible links.
-- Automatically link only a Qwen result with `verdict: select`, `confidence: high`, exactly one `relation: base` match, and an exact match to one existing lexical atom. Grammar-only targets, ranked related candidates, multiple targets, lower confidence, no-fit, uncertain, and specificity-conflict cases remain unlinked for later processing.
-- SUBTLEX-CH ranks take precedence. Use Jun Da only as a separate supplemental rank when SUBTLEX-CH is missing; never merge the frequency scores. A lower-frequency related character cannot be promoted when a more-frequent counterpart is identified.
-- Frequency is a prior only among semantically compatible meanings. For example, 你 may fit the common base atom `hnan`; courteous 您 must not be linked to that generic atom from a shared broad gloss. Any honorific compound belongs to later work.
+- The first pass filters out characters already linked by Kwon, the promoted atom catalog, or the grammar catalog. Its target list contains root atoms only; it excludes grammar-catalog targets and underscored grammar atoms. It asks Qwen to rank all candidate-bearing characters, including rows with one candidate, by semantic fit only.
+- Qwen returns `verdict: match` with ordered supported targets. The deterministic allocator accepts high or medium confidence, ignores marked meanings, and tries each remaining target in ranked order. It assigns at most one character to each Pyash atom and one atom to each character.
+- Allocate by SUBTLEX-CH rank first. Use Jun Da only when SUBTLEX-CH is missing, as a separate supplemental order; never combine the scores. A more frequent character claims a shared target before a less frequent one, which then tries its next ranked semantic candidate.
+- Reconcile existing promoted conflicts before a first-pass run: keep the promoted root mapping when the same character also has a generated grammar link, and keep the higher-frequency character when multiple promoted characters claim the same atom.
+- For example, 你 may fit the common base atom `hnan`; courteous 您 should not get that generic atom from a shared broad gloss. Any honorific compound belongs to later work.
 - In the full pass, missing translations still use CC-CEDICT, Unihan, local *Shuowen*, and bounded *Analects* contexts. Treat classical contexts as attestations, not standalone definitions. If an exact concept lacks generator phonetics, request evidence for that concept and feed it to the existing deterministic generator as unpromoted candidate evidence.
 
 ## Promotion

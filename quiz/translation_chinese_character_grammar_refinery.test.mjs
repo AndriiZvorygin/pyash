@@ -299,7 +299,8 @@ test("grammar link rendering enforces one-to-one assignments and can remove one 
     link("乙", you, "human-curated")
   ]);
   const cleanedSource = removeEnglishGrammarChineseCharacterLinks(generatedSource, {
-    sourceTag: "chinese-character-grammar-refinery"
+    sourceTag: "chinese-character-grammar-refinery",
+    characters: ["甲"]
   });
   const remaining = parseEnglishGrammarCatalog(cleanedSource).chineseCharacterLinks;
   assert.deepEqual(remaining.map((row) => [row.character, row.pya]), [["乙", you.pya]]);

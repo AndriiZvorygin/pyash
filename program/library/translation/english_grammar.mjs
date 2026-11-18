@@ -250,12 +250,14 @@ export function renderEnglishGrammarChineseCharacterLinks(source, links = []) {
 }
 
 export function removeEnglishGrammarChineseCharacterLinks(source, {
-  sourceTag = ""
+  sourceTag = "",
+  characters = []
 } = {}) {
   if (typeof source !== "string" || !sourceTag) {
     throw invalid("English grammar link removal requires source text and a source tag");
   }
   const newline = source.includes("\r\n") ? "\r\n" : "\n";
+  const selectedCharacters = new Set(characters.map((character) => String(character ?? "").trim()).filter(Boolean));
   const rows = source.split(newline);
   const retained = rows.filter((row, index) => {
     if (!row.trim() || /^\s*#/u.test(row)) return true;
@@ -267,7 +269,9 @@ export function removeEnglishGrammarChineseCharacterLinks(source, {
     if (sentence?.mood !== "ya" || !String(sentence.su?.text ?? "").startsWith(ENGLISH_GRAMMAR_CHINESE_CHARACTER_LINK_PREFIX)) {
       return true;
     }
-    return parsePayload(sentence, index).source !== sourceTag;
+    const payload = parsePayload(sentence, index);
+    return payload.source !== sourceTag
+      || (selectedCharacters.size > 0 && !selectedCharacters.has(payload.character));
   });
   return retained.join(newline);
 }
