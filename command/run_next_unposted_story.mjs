@@ -495,10 +495,15 @@ function eligibleUpcomingAgendaStates(states, timezone, cfg = {}) {
 
 function pickCandidate(states, timezone, cfg = {}) {
   const now = nowLocalDate(timezone);
-  const notPostedPastVideo = states.filter((s) => !s.posted_transcript && s.since_date instanceof Date);
+  const backfill = /^(1|true|yes|on)$/iu.test(String(cfg.backfill || ""));
+  const skipped = skippedMeetingIds(cfg);
+  const notPostedPastVideo = states
+    .filter((s) => !s.posted_transcript && s.since_date instanceof Date)
+    .filter((s) => !skipped.has(String(s?.row?.payload?.meeting_id || "").trim()));
 
   const pastWithVideo = notPostedPastVideo
     .filter((s) => s.has_video && s.since_date < now)
+    .filter((s) => !backfill || historicalBackfillEligible(s, cfg))
     .sort((a, b) => b.since_date - a.since_date);
   const recentPastMaxAgeDays = Math.max(0, Number(cfg.prefer_past_video_max_age_days || 14));
   const recentPastCutoff = new Date(now.getTime() - recentPastMaxAgeDays * 24 * 60 * 60 * 1000);
@@ -510,12 +515,30 @@ function pickCandidate(states, timezone, cfg = {}) {
   const imminentUpcomingWithAgenda = upcomingWithAgenda.filter((s) => s.since_date <= imminentAgendaCutoff);
   const laterUpcomingWithAgenda = upcomingWithAgenda.filter((s) => s.since_date > imminentAgendaCutoff);
   const preferPastVideo = !/^(0|false|no)$/iu.test(String(cfg.prefer_past_video_before_agenda || "1"));
+  if (backfill && pastWithVideo.length) {
+    return { mode: 'past_video', state: [...pastWithVideo].sort((a, b) => a.since_date - b.since_date)[0] };
+  }
   if (imminentUpcomingWithAgenda.length) return { mode: 'upcoming_agenda', state: imminentUpcomingWithAgenda[0] };
   if (preferPastVideo && recentPastWithVideo.length) return { mode: 'past_video', state: recentPastWithVideo[0] };
   if (laterUpcomingWithAgenda.length) return { mode: 'upcoming_agenda', state: laterUpcomingWithAgenda[0] };
   if (pastWithVideo.length) return { mode: 'past_video', state: pastWithVideo[0] };
 
   return null;
+}
+
+function historicalBackfillEligible(state, cfg = {}) {
+  const payload = state?.row?.payload || {};
+  if (String(payload.source || "") === "youtube-live") return true;
+  if (String(payload.source || "") !== "youtube-video") return false;
+  const minimumSeconds = Math.max(0, Number(cfg.backfill_regular_min_duration_seconds || 600));
+  return Number(payload.duration_seconds || 0) >= minimumSeconds;
+}
+
+function skippedMeetingIds(cfg = {}) {
+  const raw = [cfg.skip_meeting_ids, process.env.NEXT_STORY_SKIP_IDS]
+    .filter(Boolean)
+    .join(",");
+  return new Set(raw.split(/[\s,]+/u).map((value) => value.trim()).filter(Boolean));
 }
 
 async function urlExists(url) {
@@ -624,6 +647,7 @@ async function pickCandidateWithRemoteProbe(states, timezone, cfg) {
   const pastWithVideo = states
     .filter((s) => s.since_date instanceof Date)
     .filter((s) => s.has_video && s.since_date < now)
+    .filter((s) => !/^(1|true|yes|on)$/iu.test(String(cfg.backfill || "")) || historicalBackfillEligible(s, cfg))
     .sort((a, b) => b.since_date - a.since_date)
     .map((s) => ({ mode: 'past_video', state: s }));
   const preferPastVideo = !/^(0|false|no)$/iu.test(String(cfg.prefer_past_video_before_agenda || "1"));
@@ -635,8 +659,14 @@ async function pickCandidateWithRemoteProbe(states, timezone, cfg) {
   const imminentAgendaCutoff = new Date(now.getTime() + imminentAgendaDays * 24 * 60 * 60 * 1000);
   const imminentUpcomingWithAgenda = upcomingWithAgenda.filter((c) => c.state.since_date <= imminentAgendaCutoff);
   const laterUpcomingWithAgenda = upcomingWithAgenda.filter((c) => c.state.since_date > imminentAgendaCutoff);
+  const backfill = /^(1|true|yes|on)$/iu.test(String(cfg.backfill || ""));
+  const skipped = skippedMeetingIds(cfg);
   const ordered = preferPastVideo
-    ? [...imminentUpcomingWithAgenda, ...recentPastWithVideo, ...laterUpcomingWithAgenda, ...stalePastWithVideo]
+    ? (backfill
+      ? [...pastWithVideo]
+        .filter((candidate) => !skipped.has(String(candidate?.state?.row?.payload?.meeting_id || "").trim()))
+        .sort((a, b) => a.state.since_date - b.state.since_date)
+      : [...imminentUpcomingWithAgenda, ...recentPastWithVideo, ...laterUpcomingWithAgenda, ...stalePastWithVideo])
     : [...upcomingWithAgenda, ...pastWithVideo];
   const cache = new Map();
 
@@ -654,7 +684,12 @@ async function pickCandidateWithRemoteProbe(states, timezone, cfg) {
       continue;
     }
 
-    const directPosted = await isPostedByDirectTranscriptProbe(candidate.state, cfg, cache);
+    // Historical backfill deliberately trusts local publish artifacts.  A
+    // date-only remote URL cannot distinguish two videos published on the
+    // same day, and would incorrectly suppress valid historical candidates.
+    const directPosted = backfill
+      ? { posted_transcript: false, posted_agenda: false }
+      : await isPostedByDirectTranscriptProbe(candidate.state, cfg, cache);
     // If transcript URL probing fails (moved/cleaned page), but we have a
     // confirmed local transcript publish response and the discussion post URL
     // is still live, treat transcript as already posted to avoid duplicate picks.
@@ -859,6 +894,9 @@ async function main() {
   if (!rows.length) throw new Error('no meetings in monthly cache');
 
   const localStates = rows.map((row) => meetingState(row, cfg.meetings_dir, cfg.base_prefix));
+  cfg.backfill = /^(1|true|yes|on)$/iu.test(String(
+    cfg.backfill || process.env.NEXT_STORY_BACKFILL || process.env.ANDRII_BACKFILL || "",
+  ));
   const remotePostedKeys = await fetchRemotePostedKeys(cfg);
   if (remotePostedKeys.size > 0) {
     log(`[next-story] remote transcript body/date keys found: ${remotePostedKeys.size}`);
