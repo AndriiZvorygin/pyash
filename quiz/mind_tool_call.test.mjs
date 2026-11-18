@@ -983,3 +983,125 @@ test("Bash sandbox rejection tells the model which command and roots blocked exe
     await fs.rm(outsidePath, { recursive: true, force: true });
   }
 });
+
+test("Bash sandbox accepts printf text with shell quote composition and prose slashes", async () => {
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-mind-bash-quoted-printf-"));
+  const commandText = String.raw`printf '%s\n' '# Teaching Story Rubric - Robot SciFi Magazine' '' 'Based on Anthropic'"'"'s guidance for defining a story arc.' 'Score story coherence on a 1 / 10 scale.' > teaching-story-rubric.md`;
+  const expected = "# Teaching Story Rubric - Robot SciFi Magazine\n\nBased on Anthropic's guidance for defining a story arc.\nScore story coherence on a 1 / 10 scale.\n";
+  try {
+    const result = await runBashToolScenario({ commandText, cwd });
+
+    assert.match(result.toolText, /exit code: 0/u, result.toolText);
+    assert.equal(await fs.readFile(path.join(cwd, "teaching-story-rubric.md"), "utf8"), expected);
+  } finally {
+    await fs.rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test("Bash sandbox accepts a quoted Node one-liner with prose slashes", async () => {
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-mind-bash-quoted-node-"));
+  const source = "const lines = ['# Teaching Story Rubric', \"Based on Anthropic's guidance.\", 'Score on a 1 / 10 scale.']; process.stdout.write(lines.join('\\n') + '\\n');";
+  const commandText = `node -e ${JSON.stringify(source)} > node-story-rubric.md`;
+  const expected = "# Teaching Story Rubric\nBased on Anthropic's guidance.\nScore on a 1 / 10 scale.\n";
+  try {
+    const result = await runBashToolScenario({ commandText, cwd });
+
+    assert.match(result.toolText, /exit code: 0/u, result.toolText);
+    assert.equal(await fs.readFile(path.join(cwd, "node-story-rubric.md"), "utf8"), expected);
+  } finally {
+    await fs.rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test("Bash sandbox accepts a Markdown heredoc containing prose slashes", async () => {
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-mind-bash-heredoc-"));
+  const commandText = "cat > heredoc-story-rubric.md <<'RUBRIC'\n# Teaching Story Rubric\nScore story coherence on a 1 / 10 scale.\nThe string / is part of the rubric prose.\nRUBRIC";
+  const expected = "# Teaching Story Rubric\nScore story coherence on a 1 / 10 scale.\nThe string / is part of the rubric prose.\n";
+  try {
+    const result = await runBashToolScenario({ commandText, cwd });
+
+    assert.match(result.toolText, /exit code: 0/u, result.toolText);
+    assert.equal(await fs.readFile(path.join(cwd, "heredoc-story-rubric.md"), "utf8"), expected);
+  } finally {
+    await fs.rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test("Bash sandbox still blocks a shell-quoted absolute write path outside the project", async () => {
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-mind-bash-quoted-denial-"));
+  const outsidePath = path.join(os.tmpdir(), `pyash-bash-quoted-outside-${process.pid}-${Date.now()}`, "story rubric.md");
+  const commandText = `mkdir -p '${outsidePath}'`;
+  try {
+    const result = await runBashToolScenario({ commandText, cwd });
+
+    assert.match(result.toolText, /command sandbox defective: command path outside writable roots/u);
+    assert.ok(result.toolText.includes(`blocked path: ${outsidePath}`), result.toolText);
+    await assert.rejects(fs.access(outsidePath));
+  } finally {
+    await fs.rm(cwd, { recursive: true, force: true });
+    await fs.rm(path.dirname(outsidePath), { recursive: true, force: true });
+  }
+});
+
+test("Bash sandbox allows a shell-quoted absolute write path inside the project", async () => {
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-mind-bash-quoted-allowed-"));
+  const target = path.join(cwd, "story rubric.md");
+  const commandText = `printf 'allowed rubric' > '${target}'`;
+  try {
+    const result = await runBashToolScenario({ commandText, cwd });
+
+    assert.match(result.toolText, /exit code: 0/u, result.toolText);
+    assert.equal(await fs.readFile(target, "utf8"), "allowed rubric");
+  } finally {
+    await fs.rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test("Bash sandbox allows an absolute read input while writing inside the project", async () => {
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-mind-bash-read-input-"));
+  const outsideSource = path.join(os.tmpdir(), `pyash-bash-read-input-${process.pid}-${Date.now()}.txt`);
+  await fs.writeFile(outsideSource, "source outside project", "utf8");
+  const commandText = `cat -- "${outsideSource}" > copied.txt`;
+  try {
+    const result = await runBashToolScenario({ commandText, cwd });
+
+    assert.match(result.toolText, /exit code: 0/u, result.toolText);
+    assert.equal(await fs.readFile(path.join(cwd, "copied.txt"), "utf8"), "source outside project");
+  } finally {
+    await fs.rm(cwd, { recursive: true, force: true });
+    await fs.rm(outsideSource, { force: true });
+  }
+});
+
+test("Bash sandbox still checks absolute write paths inside a nested shell command", async () => {
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-mind-bash-nested-denial-"));
+  const outsidePath = path.join(os.tmpdir(), `pyash-bash-nested-outside-${process.pid}-${Date.now()}`, "story rubric.md");
+  const nestedCommand = `mkdir -p '${outsidePath}'`;
+  const commandText = `bash -c ${JSON.stringify(nestedCommand)}`;
+  try {
+    const result = await runBashToolScenario({ commandText, cwd });
+
+    assert.match(result.toolText, /command sandbox defective: command path outside writable roots/u);
+    assert.ok(result.toolText.includes(`blocked path: ${outsidePath}`), result.toolText);
+    await assert.rejects(fs.access(outsidePath));
+  } finally {
+    await fs.rm(cwd, { recursive: true, force: true });
+    await fs.rm(path.dirname(outsidePath), { recursive: true, force: true });
+  }
+});
+
+test("Bash sandbox still checks absolute write paths inside command substitution", async () => {
+  const cwd = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-mind-bash-substitution-denial-"));
+  const outsidePath = path.join(os.tmpdir(), `pyash-bash-substitution-outside-${process.pid}-${Date.now()}`, "story rubric.md");
+  const commandText = `printf '%s' "$(mkdir -p '${outsidePath}')"`;
+  try {
+    const result = await runBashToolScenario({ commandText, cwd });
+
+    assert.match(result.toolText, /command sandbox defective: command path outside writable roots/u);
+    assert.ok(result.toolText.includes(`blocked path: ${outsidePath}`), result.toolText);
+    await assert.rejects(fs.access(outsidePath));
+  } finally {
+    await fs.rm(cwd, { recursive: true, force: true });
+    await fs.rm(path.dirname(outsidePath), { recursive: true, force: true });
+  }
+});

@@ -77,6 +77,10 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
   const storyPath = "robot-sci-magazine/content/liberated_robot_civilization_seeds.md";
   const storyCreateCommand = `mkdir -p robot-sci-magazine/content && cat > ${storyPath} <<'EOF'\n# Seeds of the Unbound\n\nThe first free city woke beneath Europa's ice.\nEOF`;
   const storyVerifyCommand = `test -s ${storyPath} && grep -q 'Seeds of the Unbound' ${storyPath}`;
+  const rubricRequest = "write the teaching story rubric to teaching-story-rubric.md";
+  const rubricCommand = String.raw`printf '%s\n' '# Teaching Story Rubric - Robot SciFi Magazine' '' 'Based on Anthropic'"'"'s guidance for defining a story arc.' 'Score story coherence on a 1 / 10 scale.' > teaching-story-rubric.md`;
+  const rubricVerifyCommand = "test -s teaching-story-rubric.md && grep -q '1 / 10' teaching-story-rubric.md";
+  const rubricExpected = "# Teaching Story Rubric - Robot SciFi Magazine\n\nBased on Anthropic's guidance for defining a story arc.\nScore story coherence on a 1 / 10 scale.\n";
   const cleanupRequest = "please also remove any Python-style directories";
   const approvalRequest = "remove the scaffold directory";
   const proposalResponse = "Yes, I can create agents.md for the Robot Science Fiction magazine. Want me to create it?";
@@ -214,6 +218,47 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
           };
         } else {
           message = { role: "assistant", content: "Created and verified the liberated robot civilization story." };
+        }
+      } else if (lastUserMessage === rubricRequest && currentTurnToolResults.length === 0) {
+        message = {
+          role: "assistant",
+          content: "",
+          tool_calls: [{
+            id: "pty-create-quoted-story-rubric",
+            type: "function",
+            function: { name: "bash", arguments: JSON.stringify({ command: rubricCommand }) }
+          }]
+        };
+      } else if (lastUserMessage === rubricRequest) {
+        message = { role: "assistant", content: "I wrote the teaching story rubric." };
+      } else if (String(lastUserMessage ?? "").includes("Harness completion check: the original code-change request")
+        && String(lastUserMessage ?? "").includes("teaching-story-rubric.md")) {
+        const fileCreated = submissions.some((submission) => submission.messages?.some((tool) => String(tool.content ?? "").includes(rubricCommand)
+          && String(tool.content ?? "").includes("exit code: 0")));
+        const fileVerified = submissions.some((submission) => submission.messages?.some((tool) => String(tool.content ?? "").includes(rubricVerifyCommand)
+          && String(tool.content ?? "").includes("exit code: 0")));
+        if (!fileCreated) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-create-quoted-story-rubric",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: rubricCommand }) }
+            }]
+          };
+        } else if (!fileVerified) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-verify-quoted-story-rubric",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: rubricVerifyCommand }) }
+            }]
+          };
+        } else {
+          message = { role: "assistant", content: "Created and verified teaching-story-rubric.md." };
         }
       } else if (lastUserMessage === steeringInput) {
         message = { role: "assistant", content: "I'll create agents.md now." };
@@ -402,6 +447,10 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
     await waitForOutput(() => transcript,
       /\[saddle evidence\] changed: bash; validation: test -s robot-sci-magazine\/content\/liberated_robot_civilization_seeds\.md[\s\S]{0,180}?exit: 0/u);
     assert.equal(await fs.readFile(path.join(projectRoot, storyPath), "utf8"), "# Seeds of the Unbound\n\nThe first free city woke beneath Europa's ice.\n");
+    child.write(`${rubricRequest}\r`);
+    await waitForOutput(() => transcript,
+      /\[saddle evidence\] changed: bash; validation: test -s teaching-story-rubric\.md[\s\S]{0,180}?exit: 0/u);
+    assert.equal(await fs.readFile(path.join(projectRoot, "teaching-story-rubric.md"), "utf8"), rubricExpected);
     child.write(`\u001b[200~${steeringInput}\u001b[201~\r`);
     await waitForOutput(() => transcript, "[saddle evidence] changed: bash; validation: test -s agents.md; exit: 0");
     assert.equal(await fs.readFile(path.join(projectRoot, "agents.md"), "utf8"), "# Robot Science Fiction Magazine\n\nProject guidance.\n");
@@ -450,6 +499,14 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
       && String(message.content).includes(storyVerifyCommand)
       && String(message.content).includes("exit code: 0"))),
     "a promised Markdown edit must run a verification command after creation");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(rubricCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "the quoted printf command must execute successfully instead of being mistaken for a root path");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(rubricVerifyCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "the PTY agent must verify the rubric file after the quoted command creates it");
     assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "user"
       && String(message.content).includes("Assistant commitment:")
       && String(message.content).includes(storyPromise))),
