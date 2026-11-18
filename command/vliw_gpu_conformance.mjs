@@ -298,19 +298,32 @@ export async function runVliwGpuConformance({ executePack, onProgress = () => {}
   if (typeof executePack !== "function") {
     throw new TypeError("VLIW GPU conformance requires a Housekeeper pack executor");
   }
-  const completed = [];
-  for (const testCase of buildVliwGpuConformanceCases()) {
+  const cases = buildVliwGpuConformanceCases();
+  const submissions = cases.map(async (testCase) => {
     onProgress({ phase: "start", name: testCase.name });
-    const result = await executePack(testCase.pack);
-    assert.equal(result?.ok, true, `${testCase.name}: Housekeeper worker did not report success`);
-    assert.equal(result.backend, "rust-gpu-vulkan", `${testCase.name}: unexpected GPU backend`);
-    assert.ok(String(result.device ?? "").trim(), `${testCase.name}: missing GPU device identity`);
-    assert.deepEqual(result.values, testCase.expectedValues, `${testCase.name}: typed result mismatch`);
-    const entry = { name: testCase.name, device: result.device, values: result.values };
-    completed.push(entry);
-    onProgress({ phase: "complete", ...entry });
+    try {
+      const result = await executePack(testCase.pack);
+      assert.equal(result?.ok, true, `${testCase.name}: Housekeeper worker did not report success`);
+      assert.equal(result.backend, "rust-gpu-vulkan", `${testCase.name}: unexpected GPU backend`);
+      assert.ok(String(result.device ?? "").trim(), `${testCase.name}: missing GPU device identity`);
+      assert.deepEqual(result.values, testCase.expectedValues, `${testCase.name}: typed result mismatch`);
+      const entry = { name: testCase.name, device: result.device, values: result.values };
+      onProgress({ phase: "complete", ...entry });
+      return entry;
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      onProgress({ phase: "fail", name: testCase.name, error: detail });
+      throw new Error(`${testCase.name}: ${detail}`, { cause: error });
+    }
+  });
+  const settled = await Promise.allSettled(submissions);
+  const failures = settled.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
+  if (failures.length) {
+    throw new Error(
+      `Rust GPU conformance failed for ${failures.length}/${cases.length} cases:\n${failures.map((error) => `- ${error.message}`).join("\n")}`
+    );
   }
-  return completed;
+  return settled.map((result) => result.value);
 }
 
 async function main() {
@@ -323,10 +336,11 @@ async function main() {
   const completed = await runVliwGpuConformance({
     executePack,
     onProgress(event) {
-      if (event.phase === "start") console.log(`Queueing Rust GPU conformance case: ${event.name}`);
+      if (event.phase === "start") console.log(`Submitting Rust GPU conformance case: ${event.name}`);
       if (event.phase === "complete") {
         console.log(`PASS ${event.name} on ${event.device}: ${JSON.stringify(event.values)}`);
       }
+      if (event.phase === "fail") console.error(`FAIL ${event.name}: ${event.error}`);
     }
   });
   console.log(`Rust GPU Housekeeper conformance passed: ${completed.length} cases.`);

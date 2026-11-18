@@ -1,5 +1,8 @@
+#[path = "../gpu.rs"]
+mod gpu_worker;
+
 use std::net::SocketAddr;
-use std::process::Stdio;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -12,8 +15,6 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use serde::Deserialize;
 use serde_json::{Value, json};
-use tokio::io::AsyncWriteExt;
-use tokio::process::Command;
 use tokio::sync::Semaphore;
 use tokio::time::timeout;
 
@@ -23,10 +24,10 @@ const DEFAULT_TIMEOUT_SECONDS: u64 = 1800;
 
 #[derive(Clone)]
 struct RuntimeState {
-    worker_path: Arc<String>,
-    shader_path: Arc<String>,
+    gpu: Arc<gpu_worker::GpuRuntime>,
     worker_timeout: Duration,
     workers: Arc<Semaphore>,
+    gpu_execution: Arc<std::sync::Mutex<()>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -100,23 +101,18 @@ fn decode_request(request: ExecuteRequest) -> Result<(String, Vec<u8>), ApiError
 }
 
 async fn health(State(state): State<RuntimeState>) -> impl IntoResponse {
-    let worker_ready = std::path::Path::new(state.worker_path.as_str()).is_file();
-    let shader_ready = std::path::Path::new(state.shader_path.as_str()).is_file();
-    let ready = worker_ready && shader_ready;
-    let status = if ready {
-        StatusCode::OK
-    } else {
-        StatusCode::SERVICE_UNAVAILABLE
-    };
     (
-        status,
+        StatusCode::OK,
         Json(json!({
-            "status": if ready { "ok" } else { "starting" },
-            "ready": ready,
+            "status": "ok",
+            "ready": true,
             "protocolVersion": 1,
-            "workerReady": worker_ready,
-            "shaderReady": shader_ready,
-            "availableWorkers": state.workers.available_permits()
+            "workerReady": true,
+            "shaderReady": true,
+            "gpuReady": true,
+            "device": state.gpu.device_name(),
+            "availableWorkers": state.workers.available_permits(),
+            "executionMode": "resident"
         })),
     )
 }
@@ -131,25 +127,17 @@ async fn execute(
         message: "VLIW runtime is shutting down".to_owned(),
     })?;
 
-    let mut child = Command::new(state.worker_path.as_str())
-        .env("PYAC_VLIW_SPIRV_PATH", state.shader_path.as_str())
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
-        .map_err(|error| ApiError {
-            status: StatusCode::SERVICE_UNAVAILABLE,
-            message: format!("could not start the Rust VLIW GPU worker: {error}"),
-        })?;
-
-    if let Some(mut stdin) = child.stdin.take() {
-        stdin.write_all(&pack).await.map_err(|error| ApiError {
-            status: StatusCode::INTERNAL_SERVER_ERROR,
-            message: format!("could not send PyAC pack to the GPU worker: {error}"),
-        })?;
-    }
-    let output = timeout(state.worker_timeout, child.wait_with_output())
+    // WGPU error-scope guards are not Send. Keep the GPU future on one blocking
+    // thread, and serialize device-global error scopes while Housekeeper queues work.
+    let gpu = Arc::clone(&state.gpu);
+    let gpu_execution = Arc::clone(&state.gpu_execution);
+    let execution = tokio::task::spawn_blocking(move || {
+        let _gpu_execution = gpu_execution
+            .lock()
+            .map_err(|_| "VLIW GPU execution lock was poisoned".to_owned())?;
+        pollster::block_on(gpu.execute_pack(&pack))
+    });
+    let result = timeout(state.worker_timeout, execution)
         .await
         .map_err(|_| ApiError {
             status: StatusCode::GATEWAY_TIMEOUT,
@@ -157,32 +145,12 @@ async fn execute(
         })?
         .map_err(|error| ApiError {
             status: StatusCode::INTERNAL_SERVER_ERROR,
-            message: format!("could not collect VLIW worker output: {error}"),
-        })?;
-
-    if !output.status.success() {
-        let detail = String::from_utf8_lossy(&output.stderr).trim().to_owned();
-        return Err(ApiError {
+            message: format!("VLIW GPU execution task failed: {error}"),
+        })?
+        .map_err(|error| ApiError {
             status: StatusCode::UNPROCESSABLE_ENTITY,
-            message: if detail.is_empty() {
-                format!("Rust VLIW GPU worker exited {}", output.status)
-            } else {
-                detail
-            },
-        });
-    }
-    let result: Value = serde_json::from_slice(&output.stdout).map_err(|error| ApiError {
-        status: StatusCode::BAD_GATEWAY,
-        message: format!("Rust VLIW GPU worker returned invalid JSON: {error}"),
-    })?;
-    if result.get("ok") != Some(&Value::Bool(true))
-        || !result.get("values").is_some_and(Value::is_array)
-    {
-        return Err(ApiError {
-            status: StatusCode::BAD_GATEWAY,
-            message: "Rust VLIW GPU worker returned an invalid result".to_owned(),
-        });
-    }
+            message: error,
+        })?;
     Ok(Json(result))
 }
 
@@ -207,20 +175,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let host = std::env::var("PYAC_VLIW_RUNTIME_HOST").unwrap_or_else(|_| "0.0.0.0".to_owned());
     let port = env_u16("PYAC_VLIW_RUNTIME_PORT", 18887);
     let workers = env_u16("PYAC_VLIW_RUNTIME_CONCURRENCY", 1) as usize;
+    let shader_path = std::env::var_os("PYAC_VLIW_SPIRV_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/service/pyac_vliw_gpu_kernel.spv"));
+    let gpu = Arc::new(
+        gpu_worker::GpuRuntime::new(&shader_path)
+            .await
+            .map_err(std::io::Error::other)?,
+    );
     let state = RuntimeState {
-        worker_path: Arc::new(
-            std::env::var("PYAC_VLIW_WORKER_PATH")
-                .unwrap_or_else(|_| "/service/pyac-vliw-gpu-worker".to_owned()),
-        ),
-        shader_path: Arc::new(
-            std::env::var("PYAC_VLIW_SPIRV_PATH")
-                .unwrap_or_else(|_| "/service/pyac_vliw_gpu_kernel.spv".to_owned()),
-        ),
+        gpu,
         worker_timeout: Duration::from_secs(env_u64(
             "PYAC_VLIW_RUNTIME_TIMEOUT_SEC",
             DEFAULT_TIMEOUT_SECONDS,
         )),
         workers: Arc::new(Semaphore::new(workers)),
+        gpu_execution: Arc::new(std::sync::Mutex::new(())),
     };
     let app = Router::new()
         .route("/health", get(health))

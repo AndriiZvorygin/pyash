@@ -68,27 +68,36 @@ test("JavaScript implementation matches the spec-derived programlet expectations
   }
 });
 
-test("Rust GPU conformance matrix checks backend identity and exact typed outputs", async () => {
+test("Rust GPU conformance submits the whole matrix before awaiting exact typed outputs", async () => {
   const cases = buildVliwGpuConformanceCases();
   const submissions = [];
   const progress = [];
-  const completed = await runVliwGpuConformance({
+  const releases = new Map();
+  const run = runVliwGpuConformance({
     onProgress(event) { progress.push(event.phase); },
-    async executePack(pack) {
+    executePack(pack) {
       const testCase = cases.find((candidate) => Buffer.from(candidate.pack).equals(Buffer.from(pack)));
       assert.ok(testCase, "only declared conformance packs are submitted");
       submissions.push(testCase.name);
-      return {
-        ok: true,
-        backend: "rust-gpu-vulkan",
-        device: "fixture Vulkan GPU",
-        values: testCase.expectedValues
-      };
+      return new Promise((resolve) => releases.set(testCase.name, () => resolve({
+          ok: true,
+          backend: "rust-gpu-vulkan",
+          device: "fixture Vulkan GPU",
+          values: testCase.expectedValues
+        })));
     }
   });
 
+  assert.deepEqual(submissions, cases.map(({ name }) => name), "every case is submitted without waiting for an earlier result");
+  assert.deepEqual(progress, cases.map(() => "start"), "all cases start before any result completes");
+  for (const testCase of [...cases].reverse()) releases.get(testCase.name)();
+  const completed = await run;
+
   assert.deepEqual(submissions, cases.map(({ name }) => name));
-  assert.deepEqual(progress, cases.flatMap(() => ["start", "complete"]));
+  assert.deepEqual(progress, [
+    ...cases.map(() => "start"),
+    ...[...cases].reverse().map(() => "complete")
+  ]);
   assert.equal(completed.length, cases.length);
   assert.equal(completed.at(-1).name, "boolean-and-local-comparison-leaves-false-branch");
 });
