@@ -9,6 +9,7 @@ import { mapSentenceToPyash } from "../exchange/json_map.mjs";
 import { recordMindJson, stripContext } from "./logging.mjs";
 import { appendLog } from "./history.mjs";
 import { buildToolSentence, formatWebSearchToolResult } from "./tooling.mjs";
+import { formatRatifyToolResult } from "./tool_result.mjs";
 import { deriveSignatureFromCall, joinSignatureWords } from "../../bridge/signature.mjs";
 import { resolveRatifyDecision } from "../../agent/ratify_policy.mjs";
 import { submitRunToolEvent } from "../../bridge/newspaper.mjs";
@@ -876,6 +877,8 @@ export async function runToolChat({
           ].filter(Boolean).join("\n");
         } else if (String(toolName ?? "").toLowerCase() === "bash" && surfacedTool.be === "command") {
           toolText = formatCommandToolSuccess({ toolSentence, surfacedTool });
+        } else if (surfacedTool.be === "ratify") {
+          toolText = formatRatifyToolResult(toolName, surfacedTool);
         }
         if (!toolText) toolText = formatCommandSessionResult(toolName, surfacedTool);
         if (!toolText && (toolName === "web_search" || toolName === "web_search_source")) {

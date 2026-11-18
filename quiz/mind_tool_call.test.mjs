@@ -66,6 +66,69 @@ test("mind tool chat ignores prose that is not an explicit allowed tool call", (
   );
 });
 
+test("Bash approval results give the model concise pretty JSON instead of escaped Pyash", async () => {
+  forget();
+  resetMindLogs();
+  await interpret(parse("su name command configure be map def"));
+  await interpret(parse("su name policy mode ob wo ask ya"));
+  await interpret(parse("su name classifier enabled ob bool truth ya"));
+  await interpret(parse("prah"));
+
+  const capability = parse("su name command be command ob text input to name text out can");
+  const requests = [];
+  const events = [];
+  const responses = [
+    {
+      message: {
+        role: "assistant",
+        content: "",
+        tool_calls: [{
+          id: "remove-magazine",
+          type: "function",
+          function: { name: "bash", arguments: { command: "rm -rf magaiize" } }
+        }]
+      }
+    },
+    { message: { role: "assistant", content: "The removal needs approval." } }
+  ];
+
+  const answer = await runToolChat({
+    sentence: parse('be write ob text "remove the scaffold" for name helper to name helper-out do'),
+    ob: {},
+    mindName: "helper",
+    model: "fixture-model",
+    dialogue: "helper readable approval result test",
+    callPrompt: "Use the requested command.",
+    resolvedConfigPrompt: "Run the requested task.",
+    historyMessages: [],
+    toolMap: new Map([["bash", capability]]),
+    tools: [{ type: "function", function: { name: "bash", parameters: { type: "object" } } }],
+    toolBlock: "",
+    backendName: "test backend",
+    mindDebug: false,
+    debugMind: () => {},
+    onToolCall: async (event) => events.push(event),
+    stream: false,
+    inputs: { inputText: "Remove magaiize." },
+    callBackend: async ({ payload }) => {
+      requests.push(structuredClone(payload));
+      return responses.shift();
+    }
+  });
+
+  assert.equal(answer, "The removal needs approval.");
+  const result = events.find((event) => event.stage === "result");
+  const approval = JSON.parse(result.toolText);
+  assert.equal(approval.status, "approval_required");
+  assert.equal(approval.command, "rm -rf magaiize");
+  assert.equal(approval.command_class, "destructive");
+  assert.match(approval.request, /^command request \d{6}$/u);
+  assert.doesNotMatch(result.toolText, /fromtext|resume token|\\\\/u);
+
+  const toolMessage = requests[1].messages.find((message) => message.role === "tool");
+  assert.deepEqual(JSON.parse(toolMessage.content), approval);
+});
+
 test("mind tool chat forwards top-level provider usage metadata to the saddle", async () => {
   let usage;
   await runToolChat({

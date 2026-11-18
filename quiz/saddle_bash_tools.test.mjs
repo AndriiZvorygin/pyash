@@ -64,7 +64,7 @@ test("Bash tool-call labels show a bounded one-line command snippet", () => {
     stage: "call",
     toolName: "bash",
     toolSentence: { ob: { text: "mkdir -p ./magazine\nprintf ready" } }
-  }), '[tool call] bash: "mkdir -p ./magazine printf ready"');
+  }), "[tool call] bash: mkdir -p ./magazine printf ready");
 
   const longCommand = "x".repeat(500);
   const label = saddleToolEventLabel({
@@ -74,6 +74,36 @@ test("Bash tool-call labels show a bounded one-line command snippet", () => {
   });
   assert.ok(label.length < 240);
   assert.match(label, /characters omitted/u);
+});
+
+test("Bash approval results render as readable structured JSON without the resume token", () => {
+  const token = {
+    kind: "command",
+    class: "destructive",
+    text: "rm -rf magaiize",
+    requestIdentity: "command request 000008",
+    sentence: { mood: "do", be: "command", ob: { text: "rm -rf magaiize" } }
+  };
+  const preview = saddleToolEventPreview({
+    stage: "result",
+    toolName: "bash",
+    toolSentence: { ob: { text: "rm -rf magaiize" } },
+    resultSentence: {
+      mood: "do",
+      be: "ratify",
+      su: { name: "command approval" },
+      ob: { text: "approve command (destructive): rm -rf magaiize" },
+      to: { name: "command request 000008" },
+      fromtext: { text: JSON.stringify(token) }
+    },
+    toolText: 'su name command approval ob text "approve command ..."'
+  });
+
+  assert.match(preview, /"status": "approval_required"/u);
+  assert.match(preview, /"request": "command request 000008"/u);
+  assert.match(preview, /"command_class": "destructive"/u);
+  assert.match(preview, /"command": "rm -rf magaiize"/u);
+  assert.doesNotMatch(preview, /\\\\|resume token|issuedAt/u);
 });
 
 test("Bash result previews preserve exit status and stderr while keeping sandbox blocks distinct", () => {

@@ -61,6 +61,8 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
   const bashMarker = "SADDLE_BASH_PTY_OK";
   const stderrMarker = "SADDLE_BASH_STDERR_PTY";
   const cleanupRequest = "please also remove any Python-style directories";
+  const approvalRequest = "approval display check";
+  const approvalCommand = "rm -rf ./magaiize";
   const cleanupDirectory = path.join(projectRoot, "magaiize", "src", "__pycache__");
   const removePythonDirectoryCommand = "find ./magaiize -type d -name '__pycache__' -empty -prune -exec rmdir {} +";
   const verifyPythonDirectoriesCommand = "find ./magaiize -type d \\( -name '__pycache__' -o -name '.pytest_cache' \\) -print";
@@ -163,6 +165,18 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
         };
       } else if (hasStderrToolResult) {
         message = { role: "assistant", content: "Spark received the failing Bash command's stderr and exit code 7." };
+      } else if (lastUserMessage === approvalRequest && currentTurnToolResults.length === 0) {
+        message = {
+          role: "assistant",
+          content: "",
+          tool_calls: [{
+            id: "pty-bash-approval-command",
+            type: "function",
+            function: { name: "bash", arguments: JSON.stringify({ command: approvalCommand }) }
+          }]
+        };
+      } else if (currentTurnToolResults.some((tool) => String(tool.content ?? "").includes('"status": "approval_required"'))) {
+        message = { role: "assistant", content: "Spark received a readable approval request and did not retry the command." };
       } else if (hasToolResult) {
         message = { role: "assistant", content: "Spark first turn passed after the Bash command returned its output." };
       } else {
@@ -251,6 +265,8 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
     await waitForOutputAfter(() => transcript, "exit code 7.", "pyash>");
     child.write(`${cleanupRequest}\r`);
     await waitForOutputAfter(() => transcript, "Removed Python-style cache directories and verified none remain.", "pyash>");
+    child.write(`${approvalRequest}\r`);
+    await waitForOutputAfter(() => transcript, "Spark received a readable approval request and did not retry the command.", "pyash>");
     const cleanupTranscript = stripTerminalControlSequences(transcript);
     await assert.rejects(fs.access(cleanupDirectory), cleanupTranscript.slice(-10000));
 
@@ -275,9 +291,9 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
       && String(message.content).includes(stderrMarker)
       && /status=7/u.test(String(message.content)))),
     "the failed command's exit status and stderr must reach the model after the real process exits");
-    assert.match(cleanTranscript, /\[tool call\] bash: "printf 'SADDLE_BASH_PTY_OK/u,
+    assert.match(cleanTranscript, /\[tool call\] bash: printf 'SADDLE_BASH_PTY_OK/u,
       "PTY transcript must identify the command behind a Bash tool call");
-    assert.match(cleanTranscript, new RegExp(`\\[tool result\\] bash:[\\s\\S]*exit code: 7[\\s\\S]*stderr: ${stderrMarker}`),
+    assert.match(cleanTranscript, new RegExp(`\\[tool result\\] bash[\\s\\S]*exit code: 7[\\s\\S]*stderr: ${stderrMarker}`),
       "PTY result preview must include the exit status and captured stderr");
     assert.ok(submissions.some((payload) => payload.model === secondModel && payload.options?.num_ctx === 131072),
       "the selected model must retry at the first supported context preset that fits the provider error");
@@ -287,6 +303,15 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
     assert.ok(submissions.some((payload) => payload.model === secondModel && payload.messages?.some((message) => message?.role === "tool"
       && String(message.content).includes(verifyPythonDirectoriesCommand))),
     "the action continuation must run a verification command after deletion");
+    assert.ok(submissions.some((payload) => payload.model === secondModel && payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes('"status": "approval_required"')
+      && String(message.content).includes('"command": "rm -rf ./magaiize"')
+      && !String(message.content).includes("fromtext"))),
+    "the model must receive concise structured approval data without the opaque Pyash resume token");
+    assert.match(cleanTranscript, /\[tool result\] bash[\s\S]*"status": "approval_required"[\s\S]*"command": "rm -rf \.\/magaiize"/u,
+      "PTY output must pretty-print the approval state and command");
+    assert.doesNotMatch(cleanTranscript, /\\\\"kind\\\\":\\\\"command/u,
+      "PTY output must not show the resume token's escaped JSON");
     assert.match(cleanTranscript, /completion check missing a successful tool call that performs or checks the requested action/u);
     assert.match(cleanTranscript, /completion check missing a successful verification command after the final change/u);
     assert.match(cleanTranscript, /\[saddle evidence\] action complete/u);

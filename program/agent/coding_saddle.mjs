@@ -5,6 +5,7 @@ import {
 } from "../runtime/zai_coding_plan.mjs";
 import { fetchMiniMaxModels } from "../runtime/minimax.mjs";
 import { OLLAMA_CONTEXT_PRESETS } from "../runtime/ollama_context.mjs";
+import { formatRatifyToolResult } from "../verbs/mind/tool_result.mjs";
 
 export const SADDLE_OLLAMA_CONTEXT_PRESETS = OLLAMA_CONTEXT_PRESETS;
 const SADDLE_OLLAMA_FALLBACK_CONTEXT_LIMIT = 65536;
@@ -1199,12 +1200,12 @@ export function saddleToolEventLabel(event = {}) {
   if (!stage) return `[tool] ${tool}`;
   const label = stage === "CALL" ? "tool call" : stage === "RESULT" ? "tool result" : stage === "RATIFY" ? "tool approval" : `tool ${stage.toLowerCase()}`;
   const command = String(event.toolSentence?.ob?.text ?? event.toolSentence?.ob?.wo ?? "").trim();
-  if (tool.toLowerCase() !== "bash" || !command) return `[${label}] ${tool}`;
+  if (tool.toLowerCase() !== "bash" || stage !== "CALL" || !command) return `[${label}] ${tool}`;
   const oneLine = command.replace(/\s+/gu, " ");
   const snippet = oneLine.length > 110
     ? `${oneLine.slice(0, 90)}…[${oneLine.length - 90} characters omitted]`
     : oneLine;
-  return `[${label}] ${tool}: ${JSON.stringify(snippet)}`;
+  return `[${label}] ${tool}: ${snippet}`;
 }
 
 function previewDiagnosticValue(value, maximum = 180) {
@@ -1225,6 +1226,10 @@ export function saddleToolEventPreview(event = {}) {
   }
 
   const result = event.resultSentence;
+  if (result?.be === "ratify") {
+    const approval = formatRatifyToolResult(event.toolName, result);
+    if (approval) return `${label}\n${approval}`;
+  }
   const raw = result?.ob?.raw && typeof result.ob.raw === "object" ? result.ob.raw : {};
   if (result?.be === "command") {
     return [
