@@ -1,12 +1,13 @@
 ---
 name: pyash-mcp-tool-debug
-description: "Diagnose Pyash MCP tool misbehavior by reproducing against a fresh JSON-RPC server, tracing ceremony dispatch, and checking imperative `to`-target contracts."
+description: "Diagnose Pyash MCP tool misbehavior or opaque errors by reproducing against a fresh JSON-RPC server, tracing ceremony dispatch, and checking imperative `to`-target contracts."
 ---
 
 # Pyash MCP Tool Debug
 
 Use this skill when an MCP tool call (`be_*` tool) returns stale, wrong, or
-inherited results even though the underlying verb module looks correct.
+inherited results, or gives the model too little information to recover from a
+failure.
 
 ## Repeatable workflow
 
@@ -45,3 +46,12 @@ Encode the failing tool sequence as a JSON-RPC quiz that spawns the real
 server (`quiz/read_tool_after_command.test.mjs` is the template): call the
 polluting tool first, then the broken one, and assert the second call's
 content does not contain the first call's output.
+
+For filesystem failures, use a temporary project containing the exact path
+collision (for example, a regular file where a directory is expected). Call
+write, list, and read through `buildRuntime` plus `handleToolsCall`; assert the
+write/list error names the blocking component, its actual type, the expected
+type, and safe next steps, then verify read still returns the original file.
+When the failure appears in saddle, also execute the capability through
+`runToolChat` and inspect the next request prompt. An MCP response assertion
+alone does not prove the saddle model received the diagnostic.
