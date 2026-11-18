@@ -8,7 +8,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as pty from "node-pty";
 import { stripTerminalControlSequences } from "../program/agent/coding_saddle_tui.mjs";
-import { buildSaddleSteeringInput } from "../program/agent/coding_saddle.mjs";
+import {
+  buildSaddleSteeringInput,
+  DEFAULT_CODING_SADDLE_SYSTEM_PROMPT
+} from "../program/agent/coding_saddle.mjs";
 import { resolveSaddleProjectWorldRoot } from "../command/pyash_saddle.mjs";
 
 const runtimeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -375,6 +378,14 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
     assert.match(secondModelContext, /Bash-only Saddle/u, "the agent-home tool guide must reach the model context");
     assert.match(secondModelContext, /pyash run --gross --no-newspaper/u,
       "the model context must include the documented Pyash web-search workflow");
+    assert.ok(secondModelSubmissions.some((payload) => {
+      const messages = Array.isArray(payload.messages) ? payload.messages : [];
+      return messages.some((message) => message?.role === "user"
+          && String(message.content).includes("Previous user request:")
+          && String(message.content).includes(continuationContext))
+        && messages.some((message) => message?.role === "system"
+          && String(message.content).includes(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT));
+    }), "the selected model request must include both the resumed task prefix and Saddle system prompt");
     assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
       && String(message.content).includes(bashMarker))),
     "the real command runner output must be returned to the selected model");
