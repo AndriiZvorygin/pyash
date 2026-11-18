@@ -33,6 +33,9 @@ Pyash command.
 - **Sentence** is the existing flat Pyash object with `mood`, `be`, and case
   keywords. Its case values are typed semantic values, not display text.
 - **Paragraph** is an ordered list of sentences.
+- **Independent section** is one named, top-level pure programlet delimited by
+  the Pyash compound `myocpfun`; sections share no writable state or implicit
+  dependencies and may be dispatched independently.
 - **Semantic instruction** is one sentence together with its normalized read,
   write, control, and effect information.
 - **Codelet** is one self-contained independent clause/sentence lowered to a
@@ -245,6 +248,36 @@ explicit continuation/jump reference and a bounded termination rule. A
 function call enqueues its body with a local frame and rejoins only after its
 declared outputs are fulfilled. Speculative or parallel execution is valid
 only for instructions proven independent by these rules.
+
+### Independent named sections
+
+A sectioned source packet uses matching `myocpfun` paragraph boundaries around
+each self-contained programlet:
+
+```text
+su name first be myocpfun def
+... programlet definition and invocation ...
+su name first be myocpfun prah
+su name second be myocpfun def
+... independent programlet definition and invocation ...
+su name second be myocpfun prah
+```
+
+Section names MUST be unique, HNUC-encodable, and at most eight HNUC words;
+the packet supports at most 64 sections, with at most 64 codelets in each
+section body. Each section MUST be a valid pure programlet and MUST not read
+or write another section's local state. The
+boundaries lower to ordinary codelets inside the existing flat v1 `.pyac`
+stream; this does not add a container section table or change codelet bytes.
+The source ordinal is retained as `sectionIndex` for identity, not as a result
+ordering constraint. Executors MAY schedule independent sections in any order
+and MUST return each result as its section completes. Thus result order is
+completion order, while the included source ordinal and Pyash name allow
+consumers to associate each value with its section. The JavaScript reference
+interpreter is serial and therefore completes sections in source order; Rust
+CPU and Vulkan executors may complete them in a different order. Any
+dependency between sections disqualifies them from this independent section
+form and must be expressed within an ordered programlet instead.
 
 ### Hosted PyashForth memory profile
 

@@ -6,10 +6,14 @@ extern crate std;
 pub const CODELET_WORDS: usize = 16;
 pub const RESULT_WORDS: usize = 32;
 pub const MAX_PROGRAMLET_CODELETS: usize = 64;
+pub const MAX_PROGRAMLET_SECTIONS: usize = 64;
+pub const MAX_PROGRAMLET_SECTION_NAME_WORDS: usize = 8;
 pub const PROGRAMLET_SCRATCH_WORDS: usize = MAX_PROGRAMLET_CODELETS * (CODELET_WORDS - 1);
 pub const MAX_PROGRAMLET_LOCAL_SLOTS: usize = 64;
 pub const MAX_PROGRAMLET_CALL_DEPTH: usize = 8;
+const MAX_BOOLEAN_EXPRESSION_DEPTH: usize = 8;
 const MAX_U16: u32 = 65_535;
+const SYMBOL_NAME_SEPARATOR: u32 = MAX_U16 + 1;
 pub const MAX_PROGRAMLET_ARGUMENTS: usize = 8;
 
 pub const VALUE_UNSIGNED: u32 = 1;
@@ -31,6 +35,24 @@ pub const ERROR_CONSTANT_WRITE: u32 = 7;
 pub const ERROR_STEP_BUDGET: u32 = 8;
 pub const ERROR_PROGRAM_CAPACITY: u32 = 9;
 pub const ERROR_CALL_DEPTH: u32 = 10;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ProgramletSection {
+    pub codelet_start: u32,
+    pub codelet_count: u32,
+    pub name_length: u32,
+    pub name_words: [u32; MAX_PROGRAMLET_SECTION_NAME_WORDS],
+}
+
+impl ProgramletSection {
+    pub const EMPTY: Self = Self {
+        codelet_start: 0,
+        codelet_count: 0,
+        name_length: 0,
+        name_words: [0; MAX_PROGRAMLET_SECTION_NAME_WORDS],
+    };
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CoreResult {
@@ -88,8 +110,13 @@ const BOOLEAN_VERB: u32 = 0x7271;
 const EQUALLY: u32 = 0x4809;
 const TINY: u32 = 0x6c0d;
 const GIANT: u32 = 0x69b3;
+const NEGATORY_QUANTIFIER: u32 = 0x30de;
+const AND_GRAMMAR: u32 = 0x24be;
+const OR_GRAMMAR: u32 = 0x263e;
 const TRUTH: u32 = 0x6909;
 const LIE: u32 = 0x680d;
+const DEPENDENT_CLAUSE: u32 = 0x257e;
+const CLAUSE_TAIL: u32 = 0x305e;
 const PLUS: u32 = 0x8a64;
 const SUBTRACT: u32 = 0xabd2;
 const MULTIPLY: u32 = 0xec90;
@@ -105,6 +132,8 @@ const BOOLEAN_TYPE: u32 = 0x538f;
 const VARIABLE: u32 = 0xc8c4;
 const PERMANENTLY: u32 = 0x0b50;
 const CEREMONY: u32 = 0xe8c9;
+const SECTION_MODULE: u32 = 0xec01;
+const SECTION_PART: u32 = 0x6a84;
 const MOOD_DEFINITION: u32 = 0x5217;
 const MOOD_PARAGRAPH: u32 = 0x4e27;
 const MOOD_RETURN: u32 = 0xa828;
@@ -734,6 +763,12 @@ pub fn interpret_group(words: &[u32], start: usize, codelet_count: usize) -> Cor
         return CoreResult::failure(ERROR_MALFORMED, (codelet_count - start) as u32);
     }
     let group_len = end - start + 1;
+    if let Some(result) = boolean_composition(words, start, codelet_count) {
+        return result;
+    }
+    if let Some(result) = boolean_comparison(words, start, codelet_count) {
+        return result;
+    }
     if group_len > 1 {
         return conditional(words, start, group_len);
     }
@@ -803,6 +838,29 @@ impl ParsedSentence {
 }
 
 #[derive(Clone, Copy)]
+struct BooleanEvalFrame {
+    start: usize,
+    end: usize,
+    right_start: usize,
+    right_end: usize,
+    state: u32,
+    operator: u32,
+    left_value: u32,
+}
+
+impl BooleanEvalFrame {
+    const EMPTY: Self = Self {
+        start: 0,
+        end: 0,
+        right_start: 0,
+        right_end: 0,
+        state: 0,
+        operator: 0,
+        left_value: 0,
+    };
+}
+
+#[derive(Clone, Copy)]
 struct NameSpan {
     start: usize,
     length: usize,
@@ -822,16 +880,41 @@ fn collect_sentence(
     tokens: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
     boundaries: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
 ) -> Result<(usize, usize), u32> {
-    if start >= codelet_count || codelet_count > words.len() / CODELET_WORDS {
+    collect_sentence_at(
+        words,
+        codelet_count,
+        0,
+        codelet_count,
+        start,
+        tokens,
+        boundaries,
+    )
+}
+
+fn collect_sentence_at(
+    words: &[u32],
+    total_codelet_count: usize,
+    base_codelet: usize,
+    window_codelet_count: usize,
+    start: usize,
+    tokens: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+    boundaries: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+) -> Result<(usize, usize), u32> {
+    if start >= window_codelet_count
+        || base_codelet > total_codelet_count
+        || window_codelet_count > total_codelet_count - base_codelet
+        || total_codelet_count > words.len() / CODELET_WORDS
+    {
         return Err(ERROR_MALFORMED);
     }
     let mut token_count = 0;
     let mut codelet = start;
     loop {
-        if codelet >= codelet_count {
+        if codelet >= window_codelet_count {
             return Err(ERROR_MALFORMED);
         }
-        let header = word(words, codelet, 0);
+        let absolute_codelet = base_codelet + codelet;
+        let header = word(words, absolute_codelet, 0);
         let complete = header & 1 != 0;
         let mut last_boundary = 0;
         let mut slot = 1;
@@ -854,7 +937,7 @@ fn collect_sentence(
             if token_count >= tokens.len() || token_count >= boundaries.len() {
                 return Err(ERROR_FRAME_CAPACITY);
             }
-            let value = word(words, codelet, slot);
+            let value = word(words, absolute_codelet, slot);
             if value > MAX_U16 {
                 return Err(ERROR_MALFORMED);
             }
@@ -893,6 +976,16 @@ fn parse_sentence_range(
     let mut value_start = start;
     let mut index = start;
     while index < end {
+        if tokens[index] == DEPENDENT_CLAUSE {
+            let Some(tail) = clause_tail(tokens, index, end) else {
+                return ERROR_MALFORMED;
+            };
+            index = tail + 1;
+            continue;
+        }
+        if tokens[index] == CLAUSE_TAIL {
+            return ERROR_MALFORMED;
+        }
         if boundaries[index] == 0 {
             index += 1;
             continue;
@@ -929,7 +1022,7 @@ fn parse_sentence_range(
             value_start = index + 1;
         } else if matches!(
             token,
-            MOOD_DEFINITION | REALIS | DEONTIC | MOOD_RETURN | MOOD_PARAGRAPH
+            MOOD_DEFINITION | REALIS | DEONTIC | CONDITIONAL | MOOD_RETURN | MOOD_PARAGRAPH
         ) {
             if result.mood != 0 {
                 return ERROR_MALFORMED;
@@ -954,6 +1047,366 @@ fn parse_sentence_range(
         index += 1;
     }
     ERROR_MALFORMED
+}
+
+fn clause_tail(
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    start: usize,
+    end: usize,
+) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut index = start;
+    while index < end {
+        if tokens[index] == DEPENDENT_CLAUSE {
+            depth += 1;
+        } else if tokens[index] == CLAUSE_TAIL {
+            if depth == 0 {
+                return None;
+            }
+            depth -= 1;
+            if depth == 0 {
+                return Some(index);
+            }
+        }
+        index += 1;
+    }
+    None
+}
+
+fn embedded_clause_range(
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    field: SentenceField,
+) -> Result<(usize, usize), u32> {
+    let Some(end) = field.start.checked_add(field.length) else {
+        return Err(ERROR_MALFORMED);
+    };
+    if field.length < 3 || tokens[field.start] != DEPENDENT_CLAUSE {
+        return Err(ERROR_UNSUPPORTED);
+    }
+    let Some(tail) = clause_tail(tokens, field.start, end) else {
+        return Err(ERROR_MALFORMED);
+    };
+    if tail + 1 != end {
+        return Err(ERROR_MALFORMED);
+    }
+    Ok((field.start + 1, tail))
+}
+
+fn evaluate_boolean_leaf(
+    sentence: &ParsedSentence,
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+) -> Result<bool, u32> {
+    let symbols = [0; PROGRAMLET_SCRATCH_WORDS];
+    let arguments = [ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS];
+    let slots = [NumericLocalSlot::EMPTY; MAX_PROGRAMLET_LOCAL_SLOTS];
+    evaluate_boolean_leaf_with_env(sentence, tokens, &symbols, &arguments, &slots)
+}
+
+fn evaluate_boolean_leaf_with_env(
+    sentence: &ParsedSentence,
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    symbols: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
+    slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
+) -> Result<bool, u32> {
+    if sentence.mood == REALIS
+        && sentence.verb_length == 1
+        && tokens[sentence.verb_start] == BOOLEAN_VERB
+    {
+        if sentence.field_count != 1 {
+            return Err(ERROR_UNSUPPORTED);
+        }
+        let Some(value) = sentence.field(ACCUSATIVE) else {
+            return Err(ERROR_MALFORMED);
+        };
+        if value.length != 1 {
+            return Err(ERROR_UNSUPPORTED);
+        }
+        return match tokens[value.start] {
+            TRUTH => Ok(true),
+            LIE => Ok(false),
+            _ => Err(ERROR_UNSUPPORTED),
+        };
+    }
+    if matches!(sentence.mood, DEONTIC | CONDITIONAL) && sentence.verb_length == 1 {
+        let comparator = tokens[sentence.verb_start];
+        if matches!(comparator, EQUALLY | TINY | GIANT) {
+            let left_field = sentence
+                .field(NOMINATIVE)
+                .or_else(|| sentence.field(ACCUSATIVE))
+                .ok_or(ERROR_MALFORMED)?;
+            let right_field = sentence.field(SOURCE).ok_or(ERROR_MALFORMED)?;
+            let mut left = ProgramletNumber::EMPTY;
+            let left_end = left_field
+                .start
+                .checked_add(left_field.length)
+                .ok_or(ERROR_MALFORMED)?;
+            let left_error = comparison_operand(
+                tokens,
+                left_field.start,
+                left_end,
+                symbols,
+                arguments,
+                slots,
+                &mut left,
+            );
+            if left_error != 0 {
+                return Err(left_error);
+            }
+            let mut right = ProgramletNumber::EMPTY;
+            let right_end = right_field
+                .start
+                .checked_add(right_field.length)
+                .ok_or(ERROR_MALFORMED)?;
+            let right_error = comparison_operand(
+                tokens,
+                right_field.start,
+                right_end,
+                symbols,
+                arguments,
+                slots,
+                &mut right,
+            );
+            if right_error != 0 {
+                return Err(right_error);
+            }
+            if (left.kind == VALUE_BOOLEAN) != (right.kind == VALUE_BOOLEAN) {
+                return Err(ERROR_UNSUPPORTED);
+            }
+            if comparator != EQUALLY && left.kind == VALUE_BOOLEAN {
+                return Err(ERROR_UNSUPPORTED);
+            }
+            let ordering = compare_programlet_numbers(left, right);
+            return Ok(match comparator {
+                EQUALLY => ordering == 1,
+                TINY => ordering == 0,
+                GIANT => ordering == 2,
+                _ => return Err(ERROR_UNSUPPORTED),
+            });
+        }
+    }
+    Err(ERROR_UNSUPPORTED)
+}
+
+fn evaluate_boolean_expression(
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    boundaries: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    start: usize,
+    end: usize,
+) -> Result<bool, u32> {
+    let symbols = [0; PROGRAMLET_SCRATCH_WORDS];
+    let arguments = [ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS];
+    let slots = [NumericLocalSlot::EMPTY; MAX_PROGRAMLET_LOCAL_SLOTS];
+    evaluate_boolean_expression_with_env(
+        tokens, boundaries, start, end, &symbols, &arguments, &slots,
+    )
+}
+
+fn evaluate_boolean_expression_with_env(
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    boundaries: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    start: usize,
+    end: usize,
+    symbols: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
+    slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
+) -> Result<bool, u32> {
+    let mut stack = [BooleanEvalFrame::EMPTY; MAX_BOOLEAN_EXPRESSION_DEPTH];
+    stack[0].start = start;
+    stack[0].end = end;
+    let mut depth = 1usize;
+    let mut returned_value = 0u32;
+    let mut has_returned_value = false;
+
+    while depth > 0 || has_returned_value {
+        if has_returned_value {
+            if depth == 0 {
+                return Ok(returned_value != 0);
+            }
+            let parent_index = depth - 1;
+            let parent = &mut stack[parent_index];
+            if parent.state == 1 {
+                parent.left_value = returned_value;
+                let short_circuit = (parent.operator == AND_GRAMMAR && returned_value == 0)
+                    || (parent.operator == OR_GRAMMAR && returned_value != 0);
+                if parent.operator == NEGATORY_QUANTIFIER {
+                    returned_value = u32::from(returned_value == 0);
+                    depth -= 1;
+                } else if short_circuit {
+                    returned_value = u32::from(parent.operator == OR_GRAMMAR);
+                    depth -= 1;
+                } else {
+                    parent.state = 2;
+                    let (right_start, right_end) = (parent.right_start, parent.right_end);
+                    if depth == stack.len() {
+                        return Err(ERROR_FRAME_CAPACITY);
+                    }
+                    stack[depth] = BooleanEvalFrame {
+                        start: right_start,
+                        end: right_end,
+                        ..BooleanEvalFrame::EMPTY
+                    };
+                    depth += 1;
+                    has_returned_value = false;
+                }
+            } else if parent.state == 2 {
+                depth -= 1;
+            } else {
+                return Err(ERROR_MALFORMED);
+            }
+            continue;
+        }
+
+        let frame_index = depth - 1;
+        let frame = stack[frame_index];
+        let mut sentence = ParsedSentence::empty();
+        let parse_error =
+            parse_sentence_range(tokens, boundaries, frame.start, frame.end, &mut sentence);
+        if parse_error != 0 {
+            return Err(parse_error);
+        }
+
+        let operator =
+            if matches!(sentence.mood, DEONTIC | CONDITIONAL) && sentence.verb_length == 1 {
+                tokens[sentence.verb_start]
+            } else {
+                0
+            };
+        if !matches!(operator, NEGATORY_QUANTIFIER | AND_GRAMMAR | OR_GRAMMAR) {
+            returned_value = u32::from(evaluate_boolean_leaf_with_env(
+                &sentence, tokens, symbols, arguments, slots,
+            )?);
+            depth -= 1;
+            has_returned_value = true;
+            continue;
+        }
+
+        let expected_fields = if operator == NEGATORY_QUANTIFIER {
+            1
+        } else {
+            2
+        };
+        if !matches!(sentence.mood, DEONTIC | CONDITIONAL)
+            || sentence.field_count != expected_fields
+        {
+            return Err(ERROR_UNSUPPORTED);
+        }
+        let Some(left) = sentence.field(ACCUSATIVE) else {
+            return Err(ERROR_MALFORMED);
+        };
+        let (left_start, left_end) = embedded_clause_range(tokens, left)?;
+        let mut right_range = (0usize, 0usize);
+        if operator != NEGATORY_QUANTIFIER {
+            let Some(right) = sentence.field(COMITATIVE) else {
+                return Err(ERROR_MALFORMED);
+            };
+            right_range = embedded_clause_range(tokens, right)?;
+        } else if sentence.field(COMITATIVE).is_some() {
+            return Err(ERROR_UNSUPPORTED);
+        }
+
+        stack[frame_index].state = 1;
+        stack[frame_index].operator = operator;
+        stack[frame_index].right_start = right_range.0;
+        stack[frame_index].right_end = right_range.1;
+        if depth == stack.len() {
+            return Err(ERROR_FRAME_CAPACITY);
+        }
+        stack[depth] = BooleanEvalFrame {
+            start: left_start,
+            end: left_end,
+            ..BooleanEvalFrame::EMPTY
+        };
+        depth += 1;
+    }
+
+    Err(ERROR_MALFORMED)
+}
+
+fn boolean_composition(words: &[u32], start: usize, codelet_count: usize) -> Option<CoreResult> {
+    let mut tokens = [0; PROGRAMLET_SCRATCH_WORDS];
+    let mut boundaries = [0; PROGRAMLET_SCRATCH_WORDS];
+    let Ok((length, next_codelet)) =
+        collect_sentence(words, codelet_count, start, &mut tokens, &mut boundaries)
+    else {
+        return None;
+    };
+    let mut sentence = ParsedSentence::empty();
+    if parse_sentence(&tokens, &boundaries, length, &mut sentence) != 0
+        || sentence.mood != DEONTIC
+        || sentence.verb_length != 1
+        || !matches!(
+            tokens[sentence.verb_start],
+            NEGATORY_QUANTIFIER | AND_GRAMMAR | OR_GRAMMAR
+        )
+    {
+        return None;
+    }
+    match evaluate_boolean_expression(&tokens, &boundaries, 0, length) {
+        Ok(value) => Some(CoreResult::scalar(
+            VALUE_BOOLEAN,
+            u32::from(value),
+            0,
+            (next_codelet - start) as u32,
+        )),
+        Err(error) => Some(CoreResult::failure(error, (next_codelet - start) as u32)),
+    }
+}
+
+fn boolean_comparison(words: &[u32], start: usize, codelet_count: usize) -> Option<CoreResult> {
+    let mut tokens = [0; PROGRAMLET_SCRATCH_WORDS];
+    let mut boundaries = [0; PROGRAMLET_SCRATCH_WORDS];
+    let Ok((length, next_codelet)) =
+        collect_sentence(words, codelet_count, start, &mut tokens, &mut boundaries)
+    else {
+        return None;
+    };
+    let mut sentence = ParsedSentence::empty();
+    if parse_sentence(&tokens, &boundaries, length, &mut sentence) != 0
+        || sentence.mood != DEONTIC
+        || sentence.verb_length != 1
+        || !matches!(tokens[sentence.verb_start], EQUALLY | TINY | GIANT)
+    {
+        return None;
+    }
+    match evaluate_boolean_leaf(&sentence, &tokens) {
+        Ok(value) => Some(CoreResult::scalar(
+            VALUE_BOOLEAN,
+            u32::from(value),
+            0,
+            (next_codelet - start) as u32,
+        )),
+        Err(error) => Some(CoreResult::failure(error, (next_codelet - start) as u32)),
+    }
+}
+
+fn next_sentence_is_paragraph_end(
+    words: &[u32],
+    codelet_count: usize,
+    base_codelet: usize,
+    start: usize,
+    routine_end: usize,
+    tokens: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+    boundaries: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+) -> Result<bool, u32> {
+    if start >= routine_end {
+        return Ok(false);
+    }
+    let (length, _) = collect_sentence_at(
+        words,
+        base_codelet + codelet_count,
+        base_codelet,
+        codelet_count,
+        start,
+        tokens,
+        boundaries,
+    )?;
+    let mut next = ParsedSentence::empty();
+    let error = parse_sentence(tokens, boundaries, length, &mut next);
+    if error != 0 {
+        return Err(error);
+    }
+    Ok(next.mood == MOOD_PARAGRAPH)
 }
 
 fn contains_marked_token(
@@ -1170,10 +1623,18 @@ fn set_loop_index_argument(
     arguments: &mut [ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     value: u32,
 ) -> Result<(), u32> {
+    set_loop_register_argument(arguments, FROM_INDEX, value)
+}
+
+fn set_loop_register_argument(
+    arguments: &mut [ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
+    role: u32,
+    value: u32,
+) -> Result<(), u32> {
     let mut empty_index = arguments.len();
     let mut index = 0;
     while index < arguments.len() {
-        if arguments[index].role == FROM_INDEX {
+        if arguments[index].role == role {
             arguments[index].value = value;
             arguments[index].value_kind = VALUE_UNSIGNED;
             return Ok(());
@@ -1187,7 +1648,7 @@ fn set_loop_index_argument(
         return Err(ERROR_FRAME_CAPACITY);
     }
     arguments[empty_index] = ProgramletArgument {
-        role: FROM_INDEX,
+        role,
         value,
         value_kind: VALUE_UNSIGNED,
     };
@@ -1238,6 +1699,40 @@ fn resolve_programlet_value(
             return ERROR_UNSUPPORTED;
         }
         *value = argument;
+        return 0;
+    }
+    let typed_name_genitive = field.length == 4
+        && tokens[field.start] == NAME_TYPE
+        && tokens[field.start + 2] == GENITIVE_CASE;
+    let bare_name_genitive = field.length == 3 && tokens[field.start + 1] == GENITIVE_CASE;
+    let genitive_type = if typed_name_genitive {
+        tokens[field.start + 3]
+    } else if bare_name_genitive {
+        tokens[field.start + 2]
+    } else {
+        0
+    };
+    if matches!(genitive_type, NUMBER_TYPE | BOOLEAN_TYPE) {
+        let expected_kind = if genitive_type == NUMBER_TYPE {
+            VALUE_NUMBER
+        } else {
+            VALUE_BOOLEAN
+        };
+        let name = NameSpan {
+            start: field.start,
+            length: if typed_name_genitive { 2 } else { 1 },
+        };
+        let Some(index) = find_local_slot(tokens, name, symbols, slots) else {
+            return ERROR_UNSUPPORTED;
+        };
+        let slot = slots[index];
+        if !number_kind_matches(expected_kind, slot.value_kind) {
+            return ERROR_UNSUPPORTED;
+        }
+        *value = ProgramletNumber {
+            bits: slot.value,
+            kind: slot.value_kind,
+        };
         return 0;
     }
     if tokens[field.start] != NAME_TYPE {
@@ -1316,6 +1811,7 @@ fn capture_programlet_arguments(
 
 fn validate_programlet_arguments(
     words: &[u32],
+    base_codelet: usize,
     codelet_count: usize,
     routine_start: usize,
     tokens: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
@@ -1327,7 +1823,15 @@ fn validate_programlet_arguments(
         return Err(ERROR_FRAME_CAPACITY);
     }
     let definition_at = routine_start.checked_sub(1).ok_or(ERROR_MALFORMED)?;
-    let (length, _) = collect_sentence(words, codelet_count, definition_at, tokens, boundaries)?;
+    let (length, _) = collect_sentence_at(
+        words,
+        base_codelet + codelet_count,
+        base_codelet,
+        codelet_count,
+        definition_at,
+        tokens,
+        boundaries,
+    )?;
     let mut definition = ParsedSentence::empty();
     let parse_error = parse_sentence(tokens, boundaries, length, &mut definition);
     if parse_error != 0 {
@@ -1449,63 +1953,84 @@ fn programlet_branch(
     let Some(conditional_at) = conditional_at else {
         return ERROR_UNSUPPORTED;
     };
-    let mut accusative_at = None;
-    let mut source_at = None;
-    index = 0;
-    while index < conditional_at {
-        if boundaries[index] != 0 {
-            if tokens[index] == ACCUSATIVE {
-                accusative_at = Some(index);
-            } else if tokens[index] == SOURCE {
-                source_at = Some(index);
-            }
+    if conditional_at == 0 {
+        return ERROR_MALFORMED;
+    }
+    let predicate = if matches!(
+        tokens[conditional_at - 1],
+        NEGATORY_QUANTIFIER | AND_GRAMMAR | OR_GRAMMAR
+    ) {
+        match evaluate_boolean_expression_with_env(
+            tokens,
+            boundaries,
+            0,
+            conditional_at + 1,
+            symbols,
+            arguments,
+            slots,
+        ) {
+            Ok(value) => value,
+            Err(error) => return error,
         }
-        index += 1;
-    }
-    let Some(accusative_at) = accusative_at else {
-        return ERROR_MALFORMED;
-    };
-    let Some(source_at) = source_at else {
-        return ERROR_MALFORMED;
-    };
-    if source_at <= accusative_at || source_at + 2 != conditional_at {
-        return ERROR_UNSUPPORTED;
-    }
-    let mut left = ProgramletNumber::EMPTY;
-    let left_error = comparison_operand(
-        tokens,
-        0,
-        accusative_at,
-        symbols,
-        arguments,
-        slots,
-        &mut left,
-    );
-    if left_error != 0 {
-        return left_error;
-    }
-    let mut right = ProgramletNumber::EMPTY;
-    let right_error = comparison_operand(
-        tokens,
-        accusative_at + 1,
-        source_at,
-        symbols,
-        arguments,
-        slots,
-        &mut right,
-    );
-    if right_error != 0 {
-        return right_error;
-    }
-    if (left.kind == VALUE_BOOLEAN) != (right.kind == VALUE_BOOLEAN) {
-        return ERROR_UNSUPPORTED;
-    }
-    let ordering = compare_programlet_numbers(left, right);
-    let predicate = match tokens[source_at + 1] {
-        EQUALLY => ordering == 1,
-        TINY => ordering == 0,
-        GIANT => ordering == 2,
-        _ => return ERROR_UNSUPPORTED,
+    } else {
+        let mut accusative_at = None;
+        let mut source_at = None;
+        index = 0;
+        while index < conditional_at {
+            if boundaries[index] != 0 {
+                if tokens[index] == ACCUSATIVE {
+                    accusative_at = Some(index);
+                } else if tokens[index] == SOURCE {
+                    source_at = Some(index);
+                }
+            }
+            index += 1;
+        }
+        let Some(accusative_at) = accusative_at else {
+            return ERROR_MALFORMED;
+        };
+        let Some(source_at) = source_at else {
+            return ERROR_MALFORMED;
+        };
+        if source_at <= accusative_at || source_at + 2 != conditional_at {
+            return ERROR_UNSUPPORTED;
+        }
+        let mut left = ProgramletNumber::EMPTY;
+        let left_error = comparison_operand(
+            tokens,
+            0,
+            accusative_at,
+            symbols,
+            arguments,
+            slots,
+            &mut left,
+        );
+        if left_error != 0 {
+            return left_error;
+        }
+        let mut right = ProgramletNumber::EMPTY;
+        let right_error = comparison_operand(
+            tokens,
+            accusative_at + 1,
+            source_at,
+            symbols,
+            arguments,
+            slots,
+            &mut right,
+        );
+        if right_error != 0 {
+            return right_error;
+        }
+        if (left.kind == VALUE_BOOLEAN) != (right.kind == VALUE_BOOLEAN) {
+            return ERROR_UNSUPPORTED;
+        }
+        let ordering = compare_programlet_numbers(left, right);
+        match tokens[source_at + 1] {
+            EQUALLY => ordering == 1,
+            TINY => ordering == 0,
+            GIANT => ordering == 2,
+            _ => return ERROR_UNSUPPORTED,
+        }
     };
 
     let mut first_mood = conditional_at + 1;
@@ -1518,7 +2043,7 @@ fn programlet_branch(
     {
         first_mood += 1;
     }
-    if first_mood == length || tokens[first_mood] != DEONTIC {
+    if first_mood == length || !matches!(tokens[first_mood], DEONTIC | MOOD_RETURN) {
         return ERROR_UNSUPPORTED;
     }
     let mut first_action = ParsedSentence::empty();
@@ -1544,7 +2069,9 @@ fn programlet_branch(
     } else {
         ParsedSentence::empty()
     };
-    if first_action.mood != DEONTIC || (has_alternative && alternative.mood != DEONTIC) {
+    if !matches!(first_action.mood, DEONTIC | MOOD_RETURN)
+        || (has_alternative && !matches!(alternative.mood, DEONTIC | MOOD_RETURN))
+    {
         return ERROR_UNSUPPORTED;
     }
     *has_selected_action = predicate || has_alternative;
@@ -1847,10 +2374,48 @@ fn store_name(
     let Some(end) = span.start.checked_add(span.length) else {
         return ERROR_MALFORMED;
     };
-    let Some(stored_end) = used.checked_add(span.length) else {
+    if end > source.len() {
+        return ERROR_FRAME_CAPACITY;
+    }
+    if *used > storage.len() {
+        return ERROR_FRAME_CAPACITY;
+    }
+    let mut cursor = 0;
+    while cursor < *used {
+        let entry_start = cursor;
+        while cursor < *used && storage[cursor] != SYMBOL_NAME_SEPARATOR {
+            cursor += 1;
+        }
+        if cursor == *used {
+            return ERROR_MALFORMED;
+        }
+        let entry_length = cursor - entry_start;
+        if entry_length == span.length
+            && names_equal(
+                source,
+                span,
+                storage,
+                NameSpan {
+                    start: entry_start,
+                    length: entry_length,
+                },
+            )
+        {
+            *stored = NameSpan {
+                start: entry_start,
+                length: entry_length,
+            };
+            return 0;
+        }
+        cursor += 1;
+    }
+    let Some(entry_length) = span.length.checked_add(1) else {
         return ERROR_FRAME_CAPACITY;
     };
-    if end > source.len() || stored_end > storage.len() {
+    let Some(stored_end) = used.checked_add(entry_length) else {
+        return ERROR_FRAME_CAPACITY;
+    };
+    if stored_end > storage.len() {
         return ERROR_FRAME_CAPACITY;
     }
     let start = *used;
@@ -1859,6 +2424,7 @@ fn store_name(
         storage[start + index] = source[span.start + index];
         index += 1;
     }
+    storage[start + span.length] = SYMBOL_NAME_SEPARATOR;
     *used = stored_end;
     *stored = NameSpan {
         start,
@@ -1905,6 +2471,7 @@ fn is_ceremony_definition(
 
 fn find_programlet_routine(
     words: &[u32],
+    base_codelet: usize,
     codelet_count: usize,
     target: NameSpan,
     sentence_words: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
@@ -1919,8 +2486,10 @@ fn find_programlet_routine(
 ) -> u32 {
     let mut cursor = 0;
     while cursor < codelet_count {
-        let (length, next_codelet) = match collect_sentence(
+        let (length, next_codelet) = match collect_sentence_at(
             words,
+            base_codelet + codelet_count,
+            base_codelet,
             codelet_count,
             cursor,
             sentence_words,
@@ -2006,8 +2575,10 @@ fn find_programlet_routine(
             if cursor >= codelet_count {
                 return ERROR_MALFORMED;
             }
-            let (body_length, body_next) = match collect_sentence(
+            let (body_length, body_next) = match collect_sentence_at(
                 words,
+                base_codelet + codelet_count,
+                base_codelet,
                 codelet_count,
                 cursor,
                 sentence_words,
@@ -2072,7 +2643,14 @@ fn find_programlet_routine(
 /// definition. Recognition scans index-marked case and mood boundaries without
 /// imposing a separate function-name length limit.
 pub fn is_numeric_programlet(words: &[u32], codelet_count: usize) -> bool {
-    if codelet_count == 0 || codelet_count > words.len() / CODELET_WORDS {
+    is_numeric_programlet_at(words, 0, codelet_count)
+}
+
+pub fn is_numeric_programlet_at(words: &[u32], base_codelet: usize, codelet_count: usize) -> bool {
+    if codelet_count == 0
+        || base_codelet > words.len() / CODELET_WORDS
+        || codelet_count > words.len() / CODELET_WORDS - base_codelet
+    {
         return false;
     }
     let mut has_su = false;
@@ -2084,7 +2662,8 @@ pub fn is_numeric_programlet(words: &[u32], codelet_count: usize) -> bool {
         if codelet >= codelet_count {
             return false;
         }
-        let header = word(words, codelet, 0);
+        let absolute_codelet = base_codelet + codelet;
+        let header = word(words, absolute_codelet, 0);
         let complete = header & 1 != 0;
         let mut last_boundary = 0;
         let mut slot = 1;
@@ -2104,7 +2683,7 @@ pub fn is_numeric_programlet(words: &[u32], codelet_count: usize) -> bool {
         };
         slot = 1;
         while slot <= last_slot {
-            let value = word(words, codelet, slot);
+            let value = word(words, absolute_codelet, slot);
             let boundary = (header & (1 << slot) != 0) == complete;
             if boundary && value == NOMINATIVE {
                 has_su = true;
@@ -2129,6 +2708,194 @@ pub fn is_numeric_programlet(words: &[u32], codelet_count: usize) -> bool {
     }
 }
 
+fn is_programlet_section_verb(
+    sentence: &ParsedSentence,
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+) -> bool {
+    sentence.verb_length == 2
+        && tokens[sentence.verb_start] == SECTION_MODULE
+        && tokens[sentence.verb_start + 1] == SECTION_PART
+}
+
+fn section_names_equal(
+    left: &[u32; MAX_PROGRAMLET_SECTION_NAME_WORDS],
+    left_length: usize,
+    right: &[u32; MAX_PROGRAMLET_SECTION_NAME_WORDS],
+    right_length: usize,
+) -> bool {
+    left_length == right_length && left[..left_length] == right[..right_length]
+}
+
+pub fn has_programlet_section_header(words: &[u32], codelet_count: usize) -> bool {
+    if codelet_count == 0 || codelet_count > words.len() / CODELET_WORDS {
+        return false;
+    }
+    let mut sentence_words = [0u32; PROGRAMLET_SCRATCH_WORDS];
+    let mut sentence_boundaries = [0u32; PROGRAMLET_SCRATCH_WORDS];
+    let Ok((length, _)) = collect_sentence(
+        words,
+        codelet_count,
+        0,
+        &mut sentence_words,
+        &mut sentence_boundaries,
+    ) else {
+        return false;
+    };
+    let mut sentence = ParsedSentence::empty();
+    parse_sentence(&sentence_words, &sentence_boundaries, length, &mut sentence) == 0
+        && sentence.mood == MOOD_DEFINITION
+        && is_programlet_section_verb(&sentence, &sentence_words)
+}
+
+/// Scan a flat PyAC packet for independent, named `myoc pfun` programlet
+/// sections. Returned codelet ranges exclude both section boundary sentences.
+/// Each section name is its sequence of HNUC words, not display text.
+pub fn scan_numeric_programlet_sections(
+    words: &[u32],
+    codelet_count: usize,
+    sections: &mut [ProgramletSection],
+) -> Result<usize, u32> {
+    if codelet_count == 0 || codelet_count > words.len() / CODELET_WORDS {
+        return Err(ERROR_MALFORMED);
+    }
+    let mut sentence_words = [0u32; PROGRAMLET_SCRATCH_WORDS];
+    let mut sentence_boundaries = [0u32; PROGRAMLET_SCRATCH_WORDS];
+    let mut section_count = 0usize;
+    let mut cursor = 0usize;
+
+    while cursor < codelet_count {
+        if section_count >= sections.len() || section_count >= MAX_PROGRAMLET_SECTIONS {
+            return Err(ERROR_PROGRAM_CAPACITY);
+        }
+        let section_start = cursor;
+        let (header_length, body_start) = collect_sentence(
+            words,
+            codelet_count,
+            cursor,
+            &mut sentence_words,
+            &mut sentence_boundaries,
+        )?;
+        let mut header = ParsedSentence::empty();
+        let error = parse_sentence(
+            &sentence_words,
+            &sentence_boundaries,
+            header_length,
+            &mut header,
+        );
+        if error != 0 {
+            return Err(error);
+        }
+        if header.mood != MOOD_DEFINITION || !is_programlet_section_verb(&header, &sentence_words) {
+            return Err(ERROR_MALFORMED);
+        }
+        let Some(section_subject) = header.field(NOMINATIVE) else {
+            return Err(ERROR_MALFORMED);
+        };
+        let mut section_name = NameSpan::EMPTY;
+        let error = name_span(&sentence_words, section_subject, false, &mut section_name);
+        if error != 0 {
+            return Err(error);
+        }
+        if section_name.length > MAX_PROGRAMLET_SECTION_NAME_WORDS {
+            return Err(ERROR_FRAME_CAPACITY);
+        }
+        let mut name_words = [0u32; MAX_PROGRAMLET_SECTION_NAME_WORDS];
+        let mut name_index = 0usize;
+        while name_index < section_name.length {
+            let value = sentence_words[section_name.start + name_index];
+            if value == 0 || value > MAX_U16 {
+                return Err(ERROR_MALFORMED);
+            }
+            name_words[name_index] = value;
+            name_index += 1;
+        }
+        let mut prior_index = 0usize;
+        while prior_index < section_count {
+            let previous = sections[prior_index];
+            if section_names_equal(
+                &previous.name_words,
+                previous.name_length as usize,
+                &name_words,
+                section_name.length,
+            ) {
+                return Err(ERROR_MALFORMED);
+            }
+            prior_index += 1;
+        }
+
+        cursor = body_start;
+        let body_start_codelet = cursor;
+        loop {
+            if cursor >= codelet_count {
+                return Err(ERROR_MALFORMED);
+            }
+            let (sentence_length, next_codelet) = collect_sentence(
+                words,
+                codelet_count,
+                cursor,
+                &mut sentence_words,
+                &mut sentence_boundaries,
+            )?;
+            let mut sentence = ParsedSentence::empty();
+            let error = parse_sentence(
+                &sentence_words,
+                &sentence_boundaries,
+                sentence_length,
+                &mut sentence,
+            );
+            if error != 0 {
+                return Err(error);
+            }
+            if is_programlet_section_verb(&sentence, &sentence_words) {
+                if sentence.mood != MOOD_PARAGRAPH {
+                    return Err(ERROR_MALFORMED);
+                }
+                let Some(closing_subject) = sentence.field(NOMINATIVE) else {
+                    return Err(ERROR_MALFORMED);
+                };
+                let mut closing_name = NameSpan::EMPTY;
+                let error = name_span(&sentence_words, closing_subject, false, &mut closing_name);
+                if error != 0 {
+                    return Err(error);
+                }
+                let mut names_match = closing_name.length == section_name.length;
+                let mut closing_index = 0usize;
+                while names_match && closing_index < closing_name.length {
+                    names_match = name_words[closing_index]
+                        == sentence_words[closing_name.start + closing_index];
+                    closing_index += 1;
+                }
+                if !names_match {
+                    return Err(ERROR_MALFORMED);
+                }
+                let body_count = cursor.saturating_sub(body_start_codelet);
+                if body_count == 0 || body_count > MAX_PROGRAMLET_CODELETS {
+                    return Err(ERROR_PROGRAM_CAPACITY);
+                }
+                let body_word_start = body_start_codelet * CODELET_WORDS;
+                let body_word_end = cursor * CODELET_WORDS;
+                if !is_numeric_programlet(&words[body_word_start..body_word_end], body_count) {
+                    return Err(ERROR_UNSUPPORTED);
+                }
+                sections[section_count] = ProgramletSection {
+                    codelet_start: body_start_codelet as u32,
+                    codelet_count: body_count as u32,
+                    name_length: section_name.length as u32,
+                    name_words,
+                };
+                section_count += 1;
+                cursor = next_codelet;
+                break;
+            }
+            cursor = next_codelet;
+        }
+        if cursor <= section_start {
+            return Err(ERROR_MALFORMED);
+        }
+    }
+    Ok(section_count)
+}
+
 /// Execute a canonical Pyash numeric programlet using bounded local call frames.
 /// All memory is caller-owned so the same interpreter can run in Rust-GPU.
 pub fn execute_numeric_programlet(
@@ -2140,7 +2907,32 @@ pub fn execute_numeric_programlet(
     symbol_words: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
     frames: &mut [ProgramletFrame; MAX_PROGRAMLET_CALL_DEPTH],
 ) -> CoreResult {
-    if codelet_count == 0 || codelet_count > words.len() / CODELET_WORDS {
+    execute_numeric_programlet_at(
+        words,
+        0,
+        codelet_count,
+        step_budget,
+        sentence_words,
+        sentence_boundaries,
+        symbol_words,
+        frames,
+    )
+}
+
+pub fn execute_numeric_programlet_at(
+    words: &[u32],
+    base_codelet: usize,
+    codelet_count: usize,
+    step_budget: u32,
+    sentence_words: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+    sentence_boundaries: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+    symbol_words: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+    frames: &mut [ProgramletFrame; MAX_PROGRAMLET_CALL_DEPTH],
+) -> CoreResult {
+    if codelet_count == 0
+        || base_codelet > words.len() / CODELET_WORDS
+        || codelet_count > words.len() / CODELET_WORDS - base_codelet
+    {
         return CoreResult::failure(ERROR_MALFORMED, 0);
     }
     if codelet_count > MAX_PROGRAMLET_CODELETS {
@@ -2159,8 +2951,10 @@ pub fn execute_numeric_programlet(
     let mut invocation_start = 0;
     let mut codelet = 0usize;
     while codelet < codelet_count {
-        let (length, next_codelet) = match collect_sentence(
+        let (length, next_codelet) = match collect_sentence_at(
             words,
+            base_codelet + codelet_count,
+            base_codelet,
             codelet_count,
             codelet,
             sentence_words,
@@ -2181,8 +2975,10 @@ pub fn execute_numeric_programlet(
         codelet = next_codelet;
     }
 
-    let (invocation_length, _) = match collect_sentence(
+    let (invocation_length, _) = match collect_sentence_at(
         words,
+        base_codelet + codelet_count,
+        base_codelet,
         codelet_count,
         invocation_start,
         sentence_words,
@@ -2207,10 +3003,9 @@ pub fn execute_numeric_programlet(
     let Some(output) = invocation.field(DESTINATION) else {
         return CoreResult::failure(ERROR_MALFORMED, 0);
     };
-    let mut output_name = NameSpan::EMPTY;
+    let mut _output_name = NameSpan::EMPTY;
     let mut output_kind = 0;
-    let output_error =
-        typed_output_name(sentence_words, output, &mut output_name, &mut output_kind);
+    let output_error = typed_output_name(sentence_words, output, &mut _output_name, &mut output_kind);
     if output_error != 0 {
         return CoreResult::failure(output_error, 0);
     }
@@ -2252,6 +3047,11 @@ pub fn execute_numeric_programlet(
     {
         return CoreResult::failure(error, 0);
     }
+    if let Some(end) = loop_end
+        && let Err(error) = set_loop_register_argument(&mut invocation_arguments, TO_INDEX, end)
+    {
+        return CoreResult::failure(error, 0);
+    }
     let mut target = NameSpan::EMPTY;
     let name_error = store_name(
         sentence_words,
@@ -2273,6 +3073,7 @@ pub fn execute_numeric_programlet(
     let mut routine_kind = 0;
     let routine_error = find_programlet_routine(
         words,
+        base_codelet,
         codelet_count,
         target,
         sentence_words,
@@ -2290,6 +3091,7 @@ pub fn execute_numeric_programlet(
     }
     if let Err(error) = validate_programlet_arguments(
         words,
+        base_codelet,
         codelet_count,
         routine_start,
         sentence_words,
@@ -2354,8 +3156,10 @@ pub fn execute_numeric_programlet(
         if pc >= frame.routine_end as usize {
             return CoreResult::failure(ERROR_MALFORMED, steps);
         }
-        let (length, next_codelet) = match collect_sentence(
+        let (length, next_codelet) = match collect_sentence_at(
             words,
+            base_codelet + codelet_count,
+            base_codelet,
             codelet_count,
             pc,
             sentence_words,
@@ -2618,6 +3422,11 @@ pub fn execute_numeric_programlet(
             {
                 return CoreResult::failure(error, steps);
             }
+            if let Some(end) = call_loop_end
+                && let Err(error) = set_loop_register_argument(&mut call_arguments, TO_INDEX, end)
+            {
+                return CoreResult::failure(error, steps);
+            }
             let mut called_name = NameSpan::EMPTY;
             let mut called_output_name = NameSpan::EMPTY;
             let mut called_start = 0;
@@ -2625,6 +3434,7 @@ pub fn execute_numeric_programlet(
             let mut called_kind = 0;
             let routine_error = find_programlet_routine(
                 words,
+                base_codelet,
                 codelet_count,
                 call_name,
                 sentence_words,
@@ -2642,6 +3452,7 @@ pub fn execute_numeric_programlet(
             }
             if let Err(error) = validate_programlet_arguments(
                 words,
+                base_codelet,
                 codelet_count,
                 called_start,
                 sentence_words,
@@ -2708,6 +3519,7 @@ pub fn execute_numeric_programlet(
                 depth += 1;
             }
         } else if frame.state == 1 && sentence.mood == MOOD_RETURN {
+            let from_index_return = sentence.field(FROM_INDEX);
             if sentence.field_count != 1 || sentence.verb_length != 0 {
                 return CoreResult::failure(ERROR_MALFORMED, steps);
             }
@@ -2761,14 +3573,62 @@ pub fn execute_numeric_programlet(
                 } else {
                     return CoreResult::failure(ERROR_UNSUPPORTED, steps);
                 }
+            } else if from_index_return.is_some() {
+                let output = frames[frame_index].slots[0];
+                if !number_kind_matches(frame.expected_kind, output.value_kind) {
+                    return CoreResult::failure(ERROR_UNSUPPORTED, steps);
+                }
+                frames[frame_index].result_value = output.value;
+                frames[frame_index].result_kind = output.value_kind;
             } else {
                 return CoreResult::failure(ERROR_MALFORMED, steps);
+            }
+            if let Some(return_field) = from_index_return {
+                let mut returned_index = ProgramletNumber::EMPTY;
+                let error = resolve_programlet_value(
+                    sentence_words,
+                    return_field,
+                    symbol_words,
+                    &frames[frame_index].arguments,
+                    &frames[frame_index].slots,
+                    &mut returned_index,
+                );
+                if error != 0 {
+                    return CoreResult::failure(error, steps);
+                }
+                if returned_index.kind != VALUE_UNSIGNED {
+                    return CoreResult::failure(ERROR_UNSUPPORTED, steps);
+                }
+                if let Err(error) =
+                    set_loop_index_argument(&mut frames[frame_index].arguments, returned_index.bits)
+                {
+                    return CoreResult::failure(error, steps);
+                }
+                if frames[frame_index].loop_active != 0 {
+                    frames[frame_index].loop_remaining = if frames[frame_index].loop_has_end != 0 {
+                        returned_index.bits.abs_diff(frames[frame_index].loop_end)
+                    } else {
+                        returned_index.bits
+                    };
+                }
             }
             if !number_kind_matches(frame.expected_kind, frames[frame_index].result_kind) {
                 return CoreResult::failure(ERROR_UNSUPPORTED, steps);
             }
+            let next_is_paragraph = match next_sentence_is_paragraph_end(
+                words,
+                codelet_count,
+                base_codelet,
+                next_codelet,
+                frame.routine_end as usize,
+                sentence_words,
+                sentence_boundaries,
+            ) {
+                Ok(value) => value,
+                Err(error) => return CoreResult::failure(error, steps),
+            };
             frames[frame_index].has_returned = 1;
-            frames[frame_index].state = 2;
+            frames[frame_index].state = if next_is_paragraph { 2 } else { 1 };
         } else if frame.state == 2 && sentence.mood == MOOD_PARAGRAPH {
             if frame.has_returned == 0
                 || sentence.field_count != 1
@@ -2817,11 +3677,6 @@ pub fn execute_numeric_programlet(
                 frames[frame_index].has_returned = 0;
                 frames[frame_index].result_value = 0;
                 frames[frame_index].result_kind = 0;
-                let mut slot_index = 1;
-                while slot_index < MAX_PROGRAMLET_LOCAL_SLOTS {
-                    frames[frame_index].slots[slot_index] = NumericLocalSlot::EMPTY;
-                    slot_index += 1;
-                }
                 continue;
             }
             if depth == 1 {
@@ -2862,12 +3717,116 @@ pub fn execute_numeric_programlet(
 mod tests {
     use super::*;
 
+    fn append_sentence(words: &mut std::vec::Vec<u32>, tokens: &[u32], boundaries: &[usize]) {
+        assert!(tokens.len() < CODELET_WORDS);
+        let mut codelet = [0u32; CODELET_WORDS];
+        codelet[0] = 1;
+        for token_index in boundaries {
+            codelet[0] |= 1 << (token_index + 1);
+        }
+        codelet[1..=tokens.len()].copy_from_slice(tokens);
+        words.extend(codelet);
+    }
+
+    fn append_test_section(words: &mut std::vec::Vec<u32>, name: u32) {
+        append_sentence(
+            words,
+            &[
+                NAME_TYPE,
+                name,
+                NOMINATIVE,
+                SECTION_MODULE,
+                SECTION_PART,
+                MOOD_DEFINITION,
+            ],
+            &[2, 5],
+        );
+        append_sentence(
+            words,
+            &[
+                NAME_TYPE,
+                0x4321,
+                NOMINATIVE,
+                NAME_TYPE,
+                NUMBER_TYPE,
+                NAME_TYPE,
+                0x5678,
+                DESTINATION,
+                CEREMONY,
+                MOOD_DEFINITION,
+            ],
+            &[2, 7, 9],
+        );
+        append_sentence(
+            words,
+            &[
+                NAME_TYPE,
+                name,
+                NOMINATIVE,
+                SECTION_MODULE,
+                SECTION_PART,
+                MOOD_PARAGRAPH,
+            ],
+            &[2, 5],
+        );
+    }
+
     fn interpret(codelets: &[[u32; CODELET_WORDS]]) -> CoreResult {
         let words = codelets
             .iter()
             .flat_map(|codelet| codelet.iter().copied())
             .collect::<std::vec::Vec<_>>();
         interpret_group(&words, 0, codelets.len())
+    }
+
+    #[test]
+    fn scans_named_programlet_sections_as_independent_body_ranges() {
+        let mut words = std::vec::Vec::new();
+        append_test_section(&mut words, 0x1111);
+        append_test_section(&mut words, 0x2222);
+        let mut sections = [ProgramletSection::EMPTY; MAX_PROGRAMLET_SECTIONS];
+
+        let count =
+            scan_numeric_programlet_sections(&words, words.len() / CODELET_WORDS, &mut sections)
+                .unwrap();
+
+        assert_eq!(count, 2);
+        assert_eq!(sections[0].codelet_start, 1);
+        assert_eq!(sections[0].codelet_count, 1);
+        assert_eq!(sections[0].name_length, 1);
+        assert_eq!(sections[0].name_words[0], 0x1111);
+        assert_eq!(sections[1].codelet_start, 4);
+        assert_eq!(sections[1].codelet_count, 1);
+        assert_eq!(sections[1].name_words[0], 0x2222);
+    }
+
+    #[test]
+    fn rejects_duplicate_or_mismatched_programlet_section_names() {
+        let mut duplicate = std::vec::Vec::new();
+        append_test_section(&mut duplicate, 0x1111);
+        append_test_section(&mut duplicate, 0x1111);
+        let mut sections = [ProgramletSection::EMPTY; MAX_PROGRAMLET_SECTIONS];
+        assert_eq!(
+            scan_numeric_programlet_sections(
+                &duplicate,
+                duplicate.len() / CODELET_WORDS,
+                &mut sections,
+            ),
+            Err(ERROR_MALFORMED)
+        );
+
+        let mut mismatched = std::vec::Vec::new();
+        append_test_section(&mut mismatched, 0x1111);
+        let close = mismatched.len() - CODELET_WORDS;
+        mismatched[close + 2] = 0x2222;
+        assert_eq!(
+            scan_numeric_programlet_sections(
+                &mismatched,
+                mismatched.len() / CODELET_WORDS,
+                &mut sections,
+            ),
+            Err(ERROR_MALFORMED)
+        );
     }
 
     #[test]
@@ -3088,6 +4047,225 @@ mod tests {
             0,
         ];
         let result = interpret(&[boolean_verb]);
+        assert_eq!(result.error, 0);
+        assert_eq!(result.value_kind, VALUE_BOOLEAN);
+        assert_eq!(result.values[0], 1);
+    }
+
+    #[test]
+    fn composes_boolean_literals_in_nested_pyash_clauses() {
+        let not_truth = [
+            0x02a9,
+            DEPENDENT_CLAUSE,
+            TRUTH,
+            ACCUSATIVE,
+            BOOLEAN_VERB,
+            REALIS,
+            CLAUSE_TAIL,
+            ACCUSATIVE,
+            NEGATORY_QUANTIFIER,
+            DEONTIC,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ];
+        let and_truth_lie = [
+            [
+                0xab56,
+                DEPENDENT_CLAUSE,
+                TRUTH,
+                ACCUSATIVE,
+                BOOLEAN_VERB,
+                REALIS,
+                CLAUSE_TAIL,
+                ACCUSATIVE,
+                DEPENDENT_CLAUSE,
+                LIE,
+                ACCUSATIVE,
+                BOOLEAN_VERB,
+                REALIS,
+                CLAUSE_TAIL,
+                COMITATIVE,
+                AND_GRAMMAR,
+            ],
+            [0x0003, DEONTIC, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        ];
+        let or_lie_truth = [
+            [
+                0xab56,
+                DEPENDENT_CLAUSE,
+                LIE,
+                ACCUSATIVE,
+                BOOLEAN_VERB,
+                REALIS,
+                CLAUSE_TAIL,
+                ACCUSATIVE,
+                DEPENDENT_CLAUSE,
+                TRUTH,
+                ACCUSATIVE,
+                BOOLEAN_VERB,
+                REALIS,
+                CLAUSE_TAIL,
+                COMITATIVE,
+                OR_GRAMMAR,
+            ],
+            [0x0003, DEONTIC, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        ];
+        let nested_and_not = [
+            [
+                0x5756,
+                DEPENDENT_CLAUSE,
+                TRUTH,
+                ACCUSATIVE,
+                BOOLEAN_VERB,
+                REALIS,
+                CLAUSE_TAIL,
+                ACCUSATIVE,
+                DEPENDENT_CLAUSE,
+                DEPENDENT_CLAUSE,
+                TRUTH,
+                ACCUSATIVE,
+                BOOLEAN_VERB,
+                REALIS,
+                CLAUSE_TAIL,
+                ACCUSATIVE,
+            ],
+            [
+                0x0055,
+                NEGATORY_QUANTIFIER,
+                DEONTIC,
+                CLAUSE_TAIL,
+                COMITATIVE,
+                AND_GRAMMAR,
+                DEONTIC,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+            ],
+        ];
+
+        let flat_not = not_truth
+            .iter()
+            .map(|word| *word as u32)
+            .collect::<std::vec::Vec<_>>();
+        let mut tokens = [0; PROGRAMLET_SCRATCH_WORDS];
+        let mut boundaries = [0; PROGRAMLET_SCRATCH_WORDS];
+        let (length, _) = collect_sentence(&flat_not, 1, 0, &mut tokens, &mut boundaries)
+            .expect("nested not sentence collects");
+        let mut root = ParsedSentence::empty();
+        assert_eq!(parse_sentence(&tokens, &boundaries, length, &mut root), 0);
+        let (child_start, child_end) =
+            embedded_clause_range(&tokens, root.field(ACCUSATIVE).expect("not has ob"))
+                .expect("not ob contains a clause");
+        let mut child = ParsedSentence::empty();
+        assert_eq!(
+            parse_sentence_range(&tokens, &boundaries, child_start, child_end, &mut child),
+            0
+        );
+        assert_eq!(evaluate_boolean_leaf(&child, &tokens), Ok(true));
+        assert_eq!(
+            evaluate_boolean_expression(&tokens, &boundaries, 0, length),
+            Ok(false)
+        );
+
+        let result = interpret(&[not_truth]);
+        assert_eq!(result.error, 0);
+        assert_eq!(result.value_kind, VALUE_BOOLEAN);
+        assert_eq!(result.values[0], 0);
+
+        let result = interpret(&and_truth_lie);
+        assert_eq!(result.error, 0);
+        assert_eq!(result.value_kind, VALUE_BOOLEAN);
+        assert_eq!(result.values[0], 0);
+        assert_eq!(result.consumed_codelets, 2);
+
+        let result = interpret(&or_lie_truth);
+        assert_eq!(result.error, 0);
+        assert_eq!(result.value_kind, VALUE_BOOLEAN);
+        assert_eq!(result.values[0], 1);
+        assert_eq!(result.consumed_codelets, 2);
+
+        let result = interpret(&nested_and_not);
+        assert_eq!(result.error, 0);
+        assert_eq!(result.value_kind, VALUE_BOOLEAN);
+        assert_eq!(result.values[0], 0);
+        assert_eq!(result.consumed_codelets, 2);
+    }
+
+    #[test]
+    fn compares_literal_values_as_boolean_expression_leaves() {
+        let equally = [
+            0x0149,
+            NUMBER_QUOTE,
+            5,
+            0x24de,
+            NUMBER_QUOTE,
+            5,
+            SOURCE,
+            EQUALLY,
+            DEONTIC,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ];
+        let tiny = [
+            0x0149,
+            NUMBER_QUOTE,
+            4,
+            0x24de,
+            NUMBER_QUOTE,
+            5,
+            SOURCE,
+            TINY,
+            DEONTIC,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        ];
+        let not_unequal = [[
+            0x2a91,
+            DEPENDENT_CLAUSE,
+            NUMBER_QUOTE,
+            5,
+            0x24de,
+            NUMBER_QUOTE,
+            4,
+            SOURCE,
+            EQUALLY,
+            DEONTIC,
+            CLAUSE_TAIL,
+            ACCUSATIVE,
+            NEGATORY_QUANTIFIER,
+            DEONTIC,
+            0,
+            0,
+        ]];
+
+        for (codelet, expected) in [(equally, true), (tiny, true)] {
+            let result = interpret(&[codelet]);
+            assert_eq!(result.error, 0);
+            assert_eq!(result.value_kind, VALUE_BOOLEAN);
+            assert_eq!(result.values[0], u32::from(expected));
+        }
+
+        let result = interpret(&not_unequal);
         assert_eq!(result.error, 0);
         assert_eq!(result.value_kind, VALUE_BOOLEAN);
         assert_eq!(result.values[0], 1);

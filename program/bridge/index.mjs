@@ -17,7 +17,7 @@ import {
 import { sentenceToPyash } from "../beautiful.mjs";
 import { handleCondition } from "./conditions.mjs";
 import { handleThisBinding, handleReturn } from "./returns.mjs";
-import { handleImperative } from "./imperative.mjs";
+import { handleImperative, resolveTypedGenitives } from "./imperative.mjs";
 import { state } from "./state.mjs";
 import { startRefinery, recordPlatform, endRefinery, isInsideRefinery } from "./refinery.mjs";
 import { deriveSignatureFromDefinition, registerSignature, registerSignatureHandler } from "./signature.mjs";
@@ -189,6 +189,9 @@ export async function interpret(sentence, { runtimeContext = null } = {}) {
   }
   applyEnvDefaults({ rememberFn: remember, doRememberFn: doRemember });
   applyDynamicDefaults(sentence);
+  if (sentence.mood === "ya" && sentence.ob?.genitive?.chain?.[0] === "this") {
+    resolveTypedGenitives(sentence, { state, memory: { remember } });
+  }
   if (sentence.subj && !sentence.su) sentence.su = sentence.subj;
   if (sentence.obj && !sentence.ob) sentence.ob = sentence.obj;
   if (sentence.subj) delete sentence.subj;
@@ -200,7 +203,9 @@ export async function interpret(sentence, { runtimeContext = null } = {}) {
     ? null
     : mood === "do" ? to?.name : mood === "ya" ? su?.name : null;
   const writeTarget = writeTargetName ? remember(writeTargetName) : null;
-  const slotKind = namedNumericSlotKind(writeTarget);
+  const slotKind = ["number", "num"].includes(writeTarget?.be)
+    ? namedNumericSlotKind(writeTarget)
+    : null;
   const localSlotShadow = Boolean(
     mood === "ya"
     && state.executingBody

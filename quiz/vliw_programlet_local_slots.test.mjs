@@ -37,6 +37,7 @@ test("PyAC programlet keeps numeric variable markers and initializes each call f
 
   assert.deepEqual(declaration, {
     mood: "ya",
+    exists: true,
     su: { name: "count" },
     ob: { num: 0 },
     as: { name: "variable" },
@@ -95,6 +96,62 @@ test("PyAC programlet rejects writes to a declared boolean constant", () => {
       invocation: "ob bool truth to name bool answer be inspect once do"
     }),
     /constant quantity is read-only: enabled/u
+  );
+});
+
+test("PyAC packet sections compile and execute as independent named sections", async () => {
+  const source = [
+    "su name one be myocpfun def",
+    "su name one to name num answer be ceremony def",
+    "ob num 2 to name num answer be plus do",
+    "su name answer ret",
+    "su name one be ceremony prah",
+    "to name num answer be one do",
+    "su name one be myocpfun prah",
+    "su name two be myocpfun def",
+    "su name two to name num answer be ceremony def",
+    "ob num 5 to name num answer be plus do",
+    "su name answer ret",
+    "su name two be ceremony prah",
+    "to name num answer be two do",
+    "su name two be myocpfun prah"
+  ].join("\n");
+  const compiled = compilePyashProgramSource(source);
+
+  assert.deepEqual(compiled.sections.map(({ name }) => name), ["one", "two"]);
+  assert.equal(compiled.sections.length, 2);
+  const result = await executePyashProgramPack(compiled.pack);
+  assert.deepEqual(result.sections.map(({ name, output }) => [name, output]), [
+    ["one", { num: 2 }],
+    ["two", { num: 5 }]
+  ]);
+  assert.deepEqual(result.completionOrder, result.sections.map(({ index }) => index));
+});
+
+test("PyAC packet sections reject duplicate names and unclosed boundaries", () => {
+  const section = [
+    "su name one be myocpfun def",
+    "su name one to name num answer be ceremony def",
+    "ob num 1 to name num answer be plus do",
+    "su name answer ret",
+    "su name one be ceremony prah",
+    "to name num answer be one do",
+    "su name one be myocpfun prah"
+  ];
+  assert.throws(
+    () => compilePyashProgramSource([...section, ...section].join("\n")),
+    /section names must be unique/u
+  );
+  assert.throws(
+    () => compilePyashProgramSource(section.slice(0, -1).join("\n")),
+    /missing its matching paragraph terminator/u
+  );
+  const longSectionName = section
+    .map((sentence) => sentence.replaceAll("name one", "name one two three four five six seven eight nine"))
+    .join("\n");
+  assert.throws(
+    () => compilePyashProgramSource(longSectionName),
+    /section name exceeds 8 HNUC words/u
   );
 });
 
@@ -194,18 +251,18 @@ test("PyAC programlets reject nested conditionals before lowering can lose a bra
   );
 });
 
-test("PyAC programlets reject compound predicates instead of dropping a comparison", () => {
+test("PyAC programlets execute compound predicates without dropping a comparison", async () => {
   const compoundPredicate = [
     "su name count once to name bool answer be ceremony def",
-    "ob num 1 be tiny from num 3 and ob num 4 be tiny from num 2 then ob bool truth to name bool answer be boolean do",
+    "be and ob la ob num 1 be tiny from num 3 do ko with la ob num 4 be tiny from num 2 do ko then ob bool truth to name bool answer be boolean do else ob bool lie to name bool answer be boolean do",
     "su name answer ret",
     "su name count once be ceremony prah"
   ].join("\n");
 
-  assert.throws(
-    () => compilePyashProgramSource(compoundPredicate, { invocation: "to name bool answer be count once do" }),
-    /compound conditional predicates are not admitted/u
-  );
+  const compiled = compilePyashProgramSource(compoundPredicate, {
+    invocation: "to name bool answer be count once do"
+  });
+  assert.deepEqual((await executePyashProgramPack(compiled.pack)).output, { boolean: false });
 });
 
 test("PyAC programlet signatures reject value families the Rust frame ABI cannot carry", () => {
@@ -456,6 +513,36 @@ test("PyAC programlets admit existing multiply and scalar comparison primitives"
   assert.deepEqual((await executePyashProgramPack(conditional.pack)).output, { num: 2 });
 });
 
+test("PyAC boolean branches compose local comparison leaves", async () => {
+  const source = [
+    "su name choose once ob num 0 to name num answer be ceremony def",
+    "exists su name count ob num of ob of this as name variable be number ya",
+    "be and ob la ob name count be equally from num 5 do ko with la ob name count be giant from num 3 do ko then ob num 1 to name num answer be plus do else ob num 2 to name num answer be plus do",
+    "su name answer ret",
+    "su name choose once be ceremony prah"
+  ].join("\n");
+  const trueBranch = compilePyashProgramSource(source, {
+    invocation: "ob num 5 to name num answer be choose once do"
+  });
+  const falseBranch = compilePyashProgramSource(source, {
+    invocation: "ob num 2 to name num answer be choose once do"
+  });
+
+  assert.deepEqual((await executePyashProgramPack(trueBranch.pack)).output, { num: 1 });
+  assert.deepEqual((await executePyashProgramPack(falseBranch.pack)).output, { num: 2 });
+
+  const unsupportedAction = source.replace(
+    " then ob num 1 to name num answer be plus do else ob num 2 to name num answer be plus do",
+    " do"
+  );
+  assert.throws(
+    () => compilePyashProgramSource(unsupportedAction, {
+      invocation: "ob num 5 to name num answer be choose once do"
+    }),
+    /rejects effectful or unknown verb: and/u
+  );
+});
+
 test("PyAC programlets lower the complete advertised numeric operator set", () => {
   const operators = [
     "plus",
@@ -559,4 +646,23 @@ test("local variable updates replace one frame slot and disappear on return", ()
   }
   assert.equal(remember("count"), undefined);
   forget();
+});
+
+test("conditional fromindex return updates the loop cursor and preserves the final result", async () => {
+  const source = [
+    "su name count once to name num answer fromindex num 0 toindex num 0 be ceremony def",
+    "exists su name answer ob num of fromindex of this as name variable be number ya",
+    "ob name answer be equally from num 2 then this fromindex num of toindex of this ret",
+    "su name answer ret",
+    "su name count once be ceremony prah"
+  ].join("\n");
+  const invocation = "to name num answer fromindex num 1 toindex num 5 be count once do";
+  const compiled = compilePyashProgramSource(source, { invocation });
+  const decoded = decodePyashProgramPack(compiled.pack);
+  const branch = decoded.find((sentence) => sentence.consequence?.mood === "ret");
+
+  assert.equal(branch?.mood, "do");
+  assert.deepEqual(branch?.consequence?.fromindex?.genitive?.chain, ["this", "toindex", "num"]);
+  const { output } = await executePyashProgramPack(compiled.pack);
+  assert.deepEqual(output, { num: 2 });
 });

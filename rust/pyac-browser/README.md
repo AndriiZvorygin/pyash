@@ -1,10 +1,10 @@
 # PyAC Browser Runtime
 
 This small browser host runs the codelet families currently supported by the
-Rust `pyac` crate. The WASM CPU executor handles mixed supported packs. An
-optional WebGPU path accelerates numeric arithmetic codelets and the bounded
-comparison conditionals described below; unsupported or unavailable GPU work
-falls back to WASM CPU.
+Rust `pyac` crate. The WASM CPU executor handles mixed supported packs. The
+WebGPU path is intended to accelerate supported codelet packs and bounded
+scalar programlets; until the generated module passes browser validation, the
+GPU action reports the failure and falls back to WASM CPU.
 
 ```bash
 cd rust/pyac-browser
@@ -33,31 +33,41 @@ prints warmed end-to-end CPU/WebGPU medians from seven alternating samples for
 batches from 1,024 to 131,072 codelets, including pack decode,
 transfer/dispatch/readback, and result JSON.
 
-The GPU implementation also executes the bounded numeric Pyash programlet
-fixture through the same whole-program WGSL entry point as native Vulkan; the
-browser smoke checks CPU/WGSL result parity when WebGPU is available. It
-supports scalar numeric arithmetic and elementwise
-arithmetic over unsigned-16 numeric vectors with scalar or same-width vector
-operands: saturating add/subtract, uint16-operand multiply, nonzero
-division/remainder, XOR, and saturating exponentiation. Scalar-right vector
-widths two through eight fit the sentence's 16-word codelet; vector-right
-operations fit widths two through four. Multiplication returns
+The generated GPU implementation is intended to execute bounded scalar
+numeric/boolean programlets through the shared semantic runtime and
+whole-program WGSL entry point used by native Vulkan. That admitted subset
+includes typed arguments and local values, typed genitive resolution, nested
+calls, scalar arithmetic, local comparisons, single-level branch selection,
+and bounded `fromindex`/`toindex` loops. Limits are 64 codelets, 64 locals per
+frame, 8 arguments, call depth 8, and 65,536 steps. The browser smoke uses the
+same spec-derived 15-case matrix against WASM CPU and WebGPU and asserts both
+against fixed expected values, not the JavaScript interpreter.
+
+Current browser limitation: Chromium/Naga rejects the generated WGSL module at
+its 127-level statement-nesting/chaining limit before creating either GPU
+pipeline. This also prevents the ordinary WebGPU codelet pipeline from
+starting because both entry points share one shader module. The checked-in
+pre-change shader has the same failure. WASM CPU execution remains available;
+WebGPU browser parity is pending the bounded/shader-structure slice and is not
+claimed as working until `node smoke.mjs` completes with actual WebGPU results.
+
+The ordinary pack path additionally supports scalar numeric arithmetic and
+elementwise arithmetic over unsigned-16 numeric vectors with scalar or
+same-width vector operands: saturating add/subtract, uint16-operand multiply,
+nonzero division/remainder, XOR, and saturating exponentiation. Scalar-right
+vector widths two through eight fit the sentence's 16-word codelet;
+vector-right operations fit widths two through four. Multiplication returns
 unsigned-32 vector elements to preserve the full product. Each vector element
 is dispatched as one GPU work item, then reconstructed in source codelet
-order. It supports bounded conditional shapes with an inline unsigned-number
-`equally`, `tiny`, or `giant` predicate. Arms may return unsigned-number values
-or scalar `truth`/`lie` booleans. These are encoded as completion-marked
-two-codelet groups. Mixed packs can combine those groups with supported
-arithmetic codelets, preserving result order. The Rust decoder validates the
-branch boundaries and shape; WGSL performs the comparison and selection. This
-is not general GPU control flow: nested branches, named values, loops, calls,
-and side-effecting arms remain unsupported. Invert, dates, standalone literal vectors,
-malformed codelets, and division by zero are handled or rejected by the CPU
-dispatcher rather than sent to the shader. There is no automatic dispatch
-threshold; use the explicit GPU action for eligible batches. On the current
-host/browser run, no tested batch size beat WASM CPU, so automatic dispatch is
-intentionally withheld. Rerun the smoke on a target device before making a
-device-specific dispatch decision.
+order. Bounded conditional groups support inline unsigned-number `equally`,
+`tiny`, or `giant` predicates and return unsigned-number or scalar boolean
+values. Mixed packs preserve result order. Nested/compound conditions,
+multi-action branch bodies, general side effects, text/date/vector programlet
+locals, and recursion remain outside the admitted programlet subset. There is
+no automatic dispatch threshold; use the explicit GPU action for eligible
+batches. On the current host/browser run, no tested batch size beat WASM CPU,
+so automatic dispatch is intentionally withheld. Rerun the smoke on a target
+device before making a device-specific dispatch decision.
 
 `build.sh` writes generated bindings under `web/pkg/` and the compiled WASM
 under Cargo's ignored `target/` directory. Neither is source-controlled.

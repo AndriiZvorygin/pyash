@@ -1,6 +1,6 @@
 use pyac::{
     PyacValue, SemanticError, VectorElements, WORDS_PER_CODELET, decode_pack, encode_pack,
-    execute_pack, index_word,
+    execute_pack, execute_pack_sections, index_word,
 };
 
 const PLUS: [u16; WORDS_PER_CODELET] = [
@@ -303,6 +303,37 @@ const LOOP_CURSOR_PROGRAMLET: [[u16; WORDS_PER_CODELET]; 5] = [
     ],
 ];
 
+// Lowered from a loop body that explicitly returns `fromindex 5` when the
+// current index reaches 2. The loop supervisor must stop at that returned
+// bound and retain the current index as the result.
+const LOOP_EARLY_RETURN_PROGRAMLET: [[u16; WORDS_PER_CODELET]; 7] = [
+    [
+        0x6dee, 0x225e, 0xaa90, 0x8918, 0x24de, 0x225e, 0x327e, 0x225e, 0x4930, 0x243e, 0x881d, 0,
+        0x6357, 0x881d, 0, 0x4e4f,
+    ],
+    [
+        0x0005, 0xe8c9, 0x5217, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ],
+    [
+        0x5209, 0x225e, 0x4930, 0x24de, 0x4a57, 0x215e, 0x6357, 0x215e, 0x327e, 0x245e, 0x225e,
+        0xc8c4, 0x414f, 0xea30, 0x217e, 0,
+    ],
+    [
+        0xc149, 0x225e, 0x4930, 0x245e, 0x881d, 2, 0x313e, 0x4809, 0x29be, 0x4a57, 0x215e, 0x4e4f,
+        0x215e, 0x327e, 0x6357, 0xa828,
+    ],
+    [
+        0x0019, 0x225e, 0x4930, 0x24de, 0xa828, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ],
+    [
+        0x0051, 0x225e, 0xaa90, 0x8918, 0x24de, 0xe8c9, 0x4e27, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ],
+    [
+        0x4921, 0x225e, 0x327e, 0x225e, 0x4930, 0x243e, 0x881d, 1, 0x6357, 0x881d, 5, 0x4e4f,
+        0xaa90, 0x8918, 0x295e, 0,
+    ],
+];
+
 const EMPTY_NESTED_LOOP_PROGRAMLET: [[u16; WORDS_PER_CODELET]; 10] = [
     [
         0x5211, 0x225e, 0xaa90, 0x8918, 0x24de, 0x225e, 0x327e, 0x225e, 0x4930, 0x243e, 0x881d, 0,
@@ -341,6 +372,54 @@ const EMPTY_NESTED_LOOP_PROGRAMLET: [[u16; WORDS_PER_CODELET]; 10] = [
     ],
 ];
 
+// Lowered from nested bounded loops: count twice calls count once three times
+// for each of its own three iterations. The inner call stores its return in
+// `second`, distinct from the callee's declared output name `answer`.
+const NESTED_BOUNDED_LOOP_PROGRAMLET: [[u16; WORDS_PER_CODELET]; 13] = [
+    [
+        0x6dee, 0x225e, 0xaa90, 0x8918, 0x24de, 0x225e, 0x327e, 0x225e, 0x4930, 0x243e, 0x881d, 0,
+        0x6357, 0x881d, 0, 0x4e4f,
+    ],
+    [5, 0xe8c9, 0x5217, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [
+        0x0509, 0x881d, 1, 0x245e, 0x225e, 0x327e, 0x225e, 0x4930, 0x243e, 0x8a64, 0x295e, 0, 0, 0,
+        0, 0,
+    ],
+    [
+        0x0019, 0x225e, 0x4930, 0x24de, 0xa828, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ],
+    [
+        0x0051, 0x225e, 0xaa90, 0x8918, 0x24de, 0xe8c9, 0x4e27, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ],
+    [
+        0x6dee, 0x225e, 0xaa90, 0x892a, 0x24de, 0x225e, 0x327e, 0x225e, 0x4930, 0x243e, 0x881d, 0,
+        0x6357, 0x881d, 0, 0x4e4f,
+    ],
+    [5, 0xe8c9, 0x5217, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [
+        0x0a49, 0x225e, 0xa86a, 0x24de, 0x881d, 0, 0x245e, 0x225e, 0xc8c4, 0x414f, 0xea30, 0x217e,
+        0, 0, 0, 0,
+    ],
+    [
+        0x4921, 0x225e, 0x327e, 0x225e, 0xa86a, 0x243e, 0x881d, 0, 0x6357, 0x881d, 3, 0x4e4f,
+        0xaa90, 0x8918, 0x295e, 0,
+    ],
+    [
+        0x0509, 0x225e, 0xa86a, 0x245e, 0x225e, 0x327e, 0x225e, 0x4930, 0x243e, 0x8a64, 0x295e, 0,
+        0, 0, 0, 0,
+    ],
+    [
+        0x0019, 0x225e, 0x4930, 0x24de, 0xa828, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ],
+    [
+        0x0051, 0x225e, 0xaa90, 0x892a, 0x24de, 0xe8c9, 0x4e27, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ],
+    [
+        0x4921, 0x225e, 0x327e, 0x225e, 0x4930, 0x243e, 0x881d, 1, 0x6357, 0x881d, 4, 0x4e4f,
+        0xaa90, 0x892a, 0x295e, 0,
+    ],
+];
+
 const LOCAL_COMPARISON_BRANCH_PROGRAMLET: [[u16; WORDS_PER_CODELET]; 8] = [
     [
         0x0a11, 0x225e, 0xaa90, 0x8918, 0x24de, 0x225e, 0x327e, 0x225e, 0x4930, 0x243e, 0xe8c9,
@@ -369,6 +448,39 @@ const LOCAL_COMPARISON_BRANCH_PROGRAMLET: [[u16; WORDS_PER_CODELET]; 8] = [
     ],
     [
         0x0121, 0x225e, 0x327e, 0x225e, 0x4930, 0x243e, 0xaa90, 0x8918, 0x295e, 0, 0, 0, 0, 0, 0, 0,
+    ],
+];
+
+const BOOLEAN_LOCAL_COMPARISON_BRANCH_PROGRAMLET: [[u16; WORDS_PER_CODELET]; 8] = [
+    [
+        0x5091, 0x225e, 0xaaa2, 0x8918, 0x24de, 0x881d, 0, 0x245e, 0x225e, 0x327e, 0x225e, 0x4930,
+        0x243e, 0xe8c9, 0x5217, 0,
+    ],
+    [
+        0x5209, 0x225e, 0xaa90, 0x24de, 0x4a57, 0x215e, 0x245e, 0x215e, 0x327e, 0x245e, 0x225e,
+        0xc8c4, 0x414f, 0xea30, 0x217e, 0,
+    ],
+    [
+        0x756e, 0x257e, 0x225e, 0xaa90, 0x245e, 0x881d, 5, 0x313e, 0x4809, 0x295e, 0x305e, 0x245e,
+        0x257e, 0x225e, 0xaa90, 0x245e,
+    ],
+    [
+        0xed56, 0x881d, 3, 0x313e, 0x69b3, 0x295e, 0x305e, 0x490f, 0x24be, 0x29be, 0x881d, 1,
+        0x245e, 0x225e, 0x327e, 0x225e,
+    ],
+    [
+        0x5095, 0x4930, 0x243e, 0x8a64, 0x295e, 0x881d, 2, 0x245e, 0x225e, 0x327e, 0x225e, 0x4930,
+        0x243e, 0x8a64, 0x295e, 0,
+    ],
+    [
+        0x0019, 0x225e, 0x4930, 0x24de, 0xa828, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ],
+    [
+        0x0051, 0x225e, 0xaaa2, 0x8918, 0x24de, 0xe8c9, 0x4e27, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ],
+    [
+        0x0909, 0x881d, 5, 0x245e, 0x225e, 0x327e, 0x225e, 0x4930, 0x243e, 0xaaa2, 0x8918, 0x295e,
+        0, 0, 0, 0,
     ],
 ];
 
@@ -726,6 +838,18 @@ fn forwards_a_case_argument_from_one_programlet_to_a_nested_call() {
     assert_eq!(result.error, 0, "{result:?}");
     assert_eq!(result.values[0], 7);
     assert_eq!(execute_pack(&pack), Ok(vec![PyacValue::Unsigned(7)]));
+
+    let mut local_genitive_argument = FORWARDED_CASE_ARGUMENT_PROGRAMLET;
+    local_genitive_argument[7] = [
+        0x1211, 0xaa90, 0x215e, 0x327e, 0x245e, 0x225e, 0x327e, 0x225e, 0xaa90, 0x243e, 0x8a64,
+        0xaa0a, 0x295e, 0, 0, 0,
+    ];
+    let result = run_numeric_programlet(
+        &local_genitive_argument,
+        pyac_vliw_core::DEFAULT_PROGRAMLET_STEP_BUDGET,
+    );
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.values[0], 7);
 }
 
 #[test]
@@ -824,6 +948,20 @@ fn exposes_the_current_loop_index_and_skips_equal_bounds() {
 }
 
 #[test]
+fn explicit_fromindex_return_updates_loop_supervisor_state() {
+    let bytes = encode_pack(&LOOP_EARLY_RETURN_PROGRAMLET).expect("programlet pack fits");
+    let pack = decode_pack(&bytes).expect("programlet pack decodes");
+    let result = run_numeric_programlet(
+        &LOOP_EARLY_RETURN_PROGRAMLET,
+        pyac_vliw_core::DEFAULT_PROGRAMLET_STEP_BUDGET,
+    );
+
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.values[0], 2, "cursor 2 returns the loop to bound 5");
+    assert_eq!(execute_pack(&pack), Ok(vec![PyacValue::Unsigned(2)]));
+}
+
+#[test]
 fn nested_empty_loop_skips_the_callee_body() {
     let result = run_numeric_programlet(
         &EMPTY_NESTED_LOOP_PROGRAMLET,
@@ -837,6 +975,35 @@ fn nested_empty_loop_skips_the_callee_body() {
 }
 
 #[test]
+fn nested_bounded_loops_keep_independent_frame_cursors() {
+    let bytes = encode_pack(&NESTED_BOUNDED_LOOP_PROGRAMLET).expect("nested loop pack fits");
+    let pack = decode_pack(&bytes).expect("nested loop pack decodes");
+    let result = run_numeric_programlet(
+        &NESTED_BOUNDED_LOOP_PROGRAMLET,
+        pyac_vliw_core::DEFAULT_PROGRAMLET_STEP_BUDGET,
+    );
+
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(
+        result.values[0], 9,
+        "three inner iterations per outer iteration"
+    );
+    assert_eq!(execute_pack(&pack), Ok(vec![PyacValue::Unsigned(9)]));
+
+    let mut repeated_calls = NESTED_BOUNDED_LOOP_PROGRAMLET;
+    repeated_calls[12][10] = 300;
+    let repeated = run_numeric_programlet(
+        &repeated_calls,
+        pyac_vliw_core::DEFAULT_PROGRAMLET_STEP_BUDGET,
+    );
+    assert_eq!(repeated.error, 0, "{repeated:?}");
+    assert_eq!(
+        repeated.values[0], 897,
+        "299 outer iterations times 3 inner iterations"
+    );
+}
+
+#[test]
 fn evaluates_programlet_comparisons_against_local_slots() {
     let result = run_numeric_programlet(
         &LOCAL_COMPARISON_BRANCH_PROGRAMLET,
@@ -844,6 +1011,46 @@ fn evaluates_programlet_comparisons_against_local_slots() {
     );
     assert_eq!(result.error, 0, "{result:?}");
     assert_eq!(result.values[0], 1);
+}
+
+#[test]
+fn composes_local_comparison_leaves_in_programlet_branches() {
+    let run_core = |programlet: &[[u16; WORDS_PER_CODELET]; 8]| {
+        let words = programlet
+            .iter()
+            .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
+            .collect::<Vec<_>>();
+        let mut sentence_words = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
+        let mut sentence_boundaries = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
+        let mut symbols = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
+        let mut frames =
+            [pyac_vliw_core::ProgramletFrame::EMPTY; pyac_vliw_core::MAX_PROGRAMLET_CALL_DEPTH];
+        pyac_vliw_core::execute_numeric_programlet(
+            &words,
+            programlet.len(),
+            pyac_vliw_core::DEFAULT_PROGRAMLET_STEP_BUDGET,
+            &mut sentence_words,
+            &mut sentence_boundaries,
+            &mut symbols,
+            &mut frames,
+        )
+    };
+    let direct = run_core(&BOOLEAN_LOCAL_COMPARISON_BRANCH_PROGRAMLET);
+    assert_eq!(direct.error, 0, "{direct:?}");
+    assert_eq!(direct.values[0], 1);
+    let bytes = encode_pack(&BOOLEAN_LOCAL_COMPARISON_BRANCH_PROGRAMLET)
+        .expect("boolean comparison branch pack fits");
+    let pack = decode_pack(&bytes).expect("boolean comparison branch pack decodes");
+    assert_eq!(execute_pack(&pack), Ok(vec![PyacValue::Unsigned(1)]));
+
+    let mut false_branch = BOOLEAN_LOCAL_COMPARISON_BRANCH_PROGRAMLET;
+    false_branch[7][2] = 2;
+    let direct_false = run_core(&false_branch);
+    assert_eq!(direct_false.error, 0, "{direct_false:?}");
+    assert_eq!(direct_false.values[0], 2);
+    let bytes = encode_pack(&false_branch).expect("false branch pack fits");
+    let pack = decode_pack(&bytes).expect("false branch pack decodes");
+    assert_eq!(execute_pack(&pack), Ok(vec![PyacValue::Unsigned(2)]));
 }
 
 #[test]
@@ -1179,4 +1386,134 @@ fn mixed_pack_preserves_semantic_errors_with_their_codelet_index() {
     let error = execute_pack(&pack).expect_err("division by zero fails");
     assert_eq!(error.index, 1);
     assert_eq!(error.source, SemanticError::DivisionByZero);
+}
+
+#[test]
+fn boolean_composition_executes_nested_boolean_facts() {
+    let not_truth = [
+        0x02a9, 0x257e, 0x6909, 0x245e, 0x7271, 0x217e, 0x305e, 0x245e, 0x30de, 0x295e, 0, 0, 0, 0,
+        0, 0,
+    ];
+    let and_truth_lie = [
+        [
+            0xab56, 0x257e, 0x6909, 0x245e, 0x7271, 0x217e, 0x305e, 0x245e, 0x257e, 0x680d, 0x245e,
+            0x7271, 0x217e, 0x305e, 0x490f, 0x24be,
+        ],
+        [0x0003, 0x295e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    ];
+    let or_lie_truth = [
+        [
+            0xab56, 0x257e, 0x680d, 0x245e, 0x7271, 0x217e, 0x305e, 0x245e, 0x257e, 0x6909, 0x245e,
+            0x7271, 0x217e, 0x305e, 0x490f, 0x263e,
+        ],
+        [0x0003, 0x295e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    ];
+
+    let not_pack = decode_pack(&encode_pack(&[not_truth]).expect("not pack encodes"))
+        .expect("not pack decodes");
+    assert_eq!(execute_pack(&not_pack), Ok(vec![PyacValue::Boolean(false)]));
+
+    let and_pack = decode_pack(&encode_pack(&and_truth_lie).expect("and pack encodes"))
+        .expect("and pack decodes");
+    assert_eq!(execute_pack(&and_pack), Ok(vec![PyacValue::Boolean(false)]));
+
+    let or_pack = decode_pack(&encode_pack(&or_lie_truth).expect("or pack encodes"))
+        .expect("or pack decodes");
+    assert_eq!(execute_pack(&or_pack), Ok(vec![PyacValue::Boolean(true)]));
+}
+
+#[test]
+fn literal_comparisons_execute_as_boolean_pack_results() {
+    let equally = [
+        0x0149, 0x881d, 5, 0x24de, 0x881d, 5, 0x313e, 0x4809, 0x295e, 0, 0, 0, 0, 0, 0, 0,
+    ];
+    let tiny = [
+        0x0149, 0x881d, 4, 0x24de, 0x881d, 5, 0x313e, 0x6c0d, 0x295e, 0, 0, 0, 0, 0, 0, 0,
+    ];
+    let not_unequal = [
+        0x2a91, 0x257e, 0x881d, 5, 0x24de, 0x881d, 4, 0x313e, 0x4809, 0x295e, 0x305e, 0x245e,
+        0x30de, 0x295e, 0, 0,
+    ];
+
+    for (codelet, expected) in [(equally, true), (tiny, true), (not_unequal, true)] {
+        let bytes = encode_pack(&[codelet]).expect("comparison pack encodes");
+        let pack = decode_pack(&bytes).expect("comparison pack decodes");
+        assert_eq!(execute_pack(&pack), Ok(vec![PyacValue::Boolean(expected)]));
+    }
+}
+
+#[test]
+fn combined_boolean_sentences_keep_codelet_boundaries() {
+    let not_truth = [
+        0x02a9, 0x257e, 0x6909, 0x245e, 0x7271, 0x217e, 0x305e, 0x245e, 0x30de, 0x295e, 0, 0, 0, 0,
+        0, 0,
+    ];
+    let equally = [
+        0x0149, 0x881d, 5, 0x24de, 0x881d, 5, 0x313e, 0x4809, 0x295e, 0, 0, 0, 0, 0, 0, 0,
+    ];
+    let not_unequal = [
+        0x2a91, 0x257e, 0x881d, 5, 0x24de, 0x881d, 4, 0x313e, 0x4809, 0x295e, 0x305e, 0x245e,
+        0x30de, 0x295e, 0, 0,
+    ];
+    let bytes = encode_pack(&[not_truth, equally, not_unequal]).expect("combined pack encodes");
+    let pack = decode_pack(&bytes).expect("combined pack decodes");
+
+    assert_eq!(
+        execute_pack(&pack),
+        Ok(vec![
+            PyacValue::Boolean(false),
+            PyacValue::Boolean(true),
+            PyacValue::Boolean(true),
+        ])
+    );
+}
+
+#[test]
+fn executes_independent_named_programlet_sections_and_preserves_hnuc_labels() {
+    fn section_marker(name: u16, mood: u16) -> [u16; WORDS_PER_CODELET] {
+        let mut codelet = [0; WORDS_PER_CODELET];
+        codelet[0] = 0x0049;
+        codelet[1..7].copy_from_slice(&[0x225e, name, 0x24de, 0xec01, 0x6a84, mood]);
+        codelet
+    }
+
+    let mut second_programlet = LOCAL_NUMBER_PROGRAMLET;
+    second_programlet[2][2] = 2;
+
+    let mut codelets = Vec::new();
+    for (name, programlet) in [
+        (0xaa90, &LOCAL_NUMBER_PROGRAMLET),
+        (0xa86a, &second_programlet),
+    ] {
+        codelets.push(section_marker(name, 0x5217));
+        codelets.extend(*programlet);
+        codelets.push(section_marker(name, 0x4e27));
+    }
+    let bytes = encode_pack(&codelets).expect("sectioned pack encodes");
+    let pack = decode_pack(&bytes).expect("sectioned pack decodes");
+
+    let sections = execute_pack_sections(&pack).expect("CPU shared runtime executes sections");
+    assert_eq!(sections.len(), 2);
+    let sections_by_index = sections
+        .iter()
+        .map(|section| (section.section_index, section))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    assert_eq!(
+        sections_by_index.keys().copied().collect::<Vec<_>>(),
+        vec![0, 1]
+    );
+    assert_eq!(sections_by_index.get(&0).unwrap().name_words, vec![0xaa90]);
+    assert_eq!(sections_by_index.get(&1).unwrap().name_words, vec![0xa86a]);
+    assert_eq!(
+        sections_by_index.get(&0).unwrap().value,
+        PyacValue::Unsigned(1)
+    );
+    assert_eq!(
+        sections_by_index.get(&1).unwrap().value,
+        PyacValue::Unsigned(2)
+    );
+    assert_eq!(
+        execute_pack(&pack),
+        Ok(vec![PyacValue::Unsigned(1), PyacValue::Unsigned(2)])
+    );
 }

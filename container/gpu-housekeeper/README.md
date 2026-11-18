@@ -17,6 +17,7 @@ for measured NVIDIA admission estimates see the
 | Host | Setup path | Notes |
 | --- | --- | --- |
 | Linux with NVIDIA GPU | `service/compose.gpu.yaml` through `command/begin.sh` | Requires Docker's NVIDIA GPU support, the existing Ollama and ComfyUI Docker networks, and an IPv6 prefix on Docker's built-in `bridge` network. |
+| Rust PyAC VLIW runtime | [Standalone runtime guide](../pyac-vliw-runtime/README.md) | Separate Rust/WGPU service; Housekeeper remains the scheduler and controls its lifecycle. |
 | Apple Silicon macOS | `command/install-macos.sh` | Installs a user-scoped native Ollama and Housekeeper service; Docker and `sudo` are not used. See [Apple Silicon peer](#apple-silicon-peer). |
 | Kubernetes-managed runtime | [Kubernetes pilot guide](kubernetes/README.md) | Opt-in runtime integration for the documented K3s pilot. |
 
@@ -298,6 +299,7 @@ The available managed job features depend on each host's runtime registry:
 | `katago` | Go analysis and runtime lifecycle operations | Check the KataGo entry in `/runtime`. |
 | `huggingface` | The configured Criterion sequence-to-sequence service | Check the Hugging Face entry in `/runtime`. |
 | `strata` | Strata chat/model work on a configured Strata host | Check `/runtime` and `/runtime/strata/models`. |
+| `vliw` | Canonical `pyac-pack-execute` jobs through the Rust/WGPU service | `/runtime/vliw` must report `runtimeMode: rust-vliw-http` and protocol v1. |
 | Kubernetes-managed Ollama | Ollama jobs through the opt-in Kubernetes runtime profile | `/snapshot` reports `capabilities.kubernetesRuntimeControl`; `/runtime` shows `runtimeMode`. |
 
 Treat runtime status and an installed model tag as separate checks: the
