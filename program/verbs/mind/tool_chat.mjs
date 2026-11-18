@@ -1,3 +1,4 @@
+import path from "node:path";
 import { remember } from "../../remember/index.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
 import { buildErrorSentence, throwErrorSentence, surfaceErrorSentence } from "../../error.mjs";
@@ -171,6 +172,92 @@ function normalizeVisionInput(input) {
 
 function buildToolUseDirective() {
   return "Use supplied tools for requested actions; report tool failures truthfully.";
+}
+
+function cleanTerminalOutput(value) {
+  return String(value ?? "")
+    .replace(/\u001b(?:\[[0-?]*[ -/]*[@-~]|\][^\u0007]*(?:\u0007|\u001b\\))/gu, "")
+    .replace(/\r\n?/gu, "\n")
+    .trimEnd();
+}
+
+function formatCommandSessionResult(toolName, surfacedTool) {
+  if (!String(toolName ?? "").startsWith("command_session_")) return "";
+  const raw = surfacedTool?.ob?.text;
+  if (typeof raw !== "string") return "";
+  let result;
+  try {
+    result = JSON.parse(raw);
+  } catch {
+    return "";
+  }
+  if (!result || typeof result !== "object" || Array.isArray(result)) return "";
+  const action = String(result.action ?? toolName.replace(/^command_session_/u, "")).trim();
+  const lines = [`Command session ${action} result:`];
+
+  if (action === "list") {
+    const sessions = Array.isArray(result.sessions) ? result.sessions : [];
+    lines.push(`Retained sessions: ${sessions.length}.`);
+    for (const session of sessions) {
+      const details = [
+        session?.id ? `id ${session.id}` : "id unavailable",
+        session?.status ? `status ${session.status}` : "status unavailable",
+        session?.command ? `command ${session.command}` : "command unavailable",
+        session?.cwd ? `working directory ${session.cwd}` : "working directory unavailable"
+      ];
+      if (session?.exitCode !== null && session?.exitCode !== undefined) details.push(`exit code ${session.exitCode}`);
+      lines.push(`- ${details.join("; ")}`);
+    }
+    if (!sessions.length) lines.push("No retained command sessions.");
+    return lines.join("\n");
+  }
+
+  if (result.id) lines.push(`Session ID: ${result.id}`);
+  if (result.status) lines.push(`Status: ${result.status}`);
+  if (result.command) lines.push(`Command: ${result.command}`);
+  if (Array.isArray(result.args) && result.args.length) lines.push(`Arguments: ${JSON.stringify(result.args)}`);
+  if (result.cwd) lines.push(`Working directory: ${result.cwd}`);
+  if (result.exitCode !== null && result.exitCode !== undefined) {
+    const outcome = Number(result.exitCode) === 0 ? "success" : "failure";
+    lines.push(`Exit code: ${result.exitCode} (${outcome})`);
+  }
+  const signal = String(result.signal ?? "").trim();
+  if (signal && signal !== "0") lines.push(`Signal: ${signal}`);
+  if (Number.isSafeInteger(result.outputBytes)) lines.push(`Total terminal output captured: ${result.outputBytes} bytes.`);
+  if (Number.isSafeInteger(result.cursor)) lines.push(`Output cursor: ${result.cursor}.`);
+
+  if (typeof result.output === "string") {
+    const output = cleanTerminalOutput(result.output);
+    lines.push("Terminal output:");
+    lines.push(output || "<empty>");
+    if (result.truncated === true) lines.push("Output note: earlier terminal output was truncated from this read.");
+  } else if (result.outputReadError) {
+    lines.push(`Could not attach terminal output to the start result: ${result.outputReadError}`);
+    lines.push(`Read the session with command_session_read using id ${result.id} and after 0.`);
+  } else if (result.status === "running") {
+    lines.push(`No terminal output was included in this response. Read session ${result.id} with command_session_read and after 0.`);
+  }
+  if (result.persistenceError) lines.push(`Session event persistence error: ${result.persistenceError}`);
+  if (result.persistenceTruncated === true) lines.push("Session event persistence reached its retention limit.");
+  return lines.join("\n");
+}
+
+function formatDirectoryList(toolName, toolSentence, surfacedTool) {
+  if (!String(toolName ?? "").startsWith("be_list_from_filename")) return "";
+  const values = surfacedTool?.ob?.ve?.values;
+  if (!Array.isArray(values)) return "";
+  const from = toolSentence?.from;
+  const requested = String(from?.filename ?? from?.text ?? from?.name ?? from?.wo ?? ".").trim() || ".";
+  const projectRootRaw = remember("agent cwd")?.ob?.filename
+    ?? remember("agent cwd")?.ob?.text
+    ?? process.cwd();
+  const directory = path.isAbsolute(requested)
+    ? path.resolve(requested)
+    : path.resolve(String(projectRootRaw), requested);
+  const lines = [`Directory: ${directory}`, `Entries (${values.length}):`];
+  if (values.length) lines.push(...values.map((value) => `- ${String(value)}`));
+  else lines.push("<empty>");
+  return lines.join("\n");
 }
 
 function toolNames(tools = [], toolMap = null) {
@@ -723,6 +810,7 @@ export async function runToolChat({
             "This call failed. Do not claim it succeeded or repeat the same call unchanged; use another suitable tool if possible, otherwise state the blocker."
           ].filter(Boolean).join("\n");
         }
+        if (!toolText) toolText = formatCommandSessionResult(toolName, surfacedTool);
         if (!toolText && (toolName === "web_search" || toolName === "web_search_source")) {
           toolText = formatWebSearchToolResult(surfacedTool);
         }
@@ -731,7 +819,8 @@ export async function runToolChat({
         if (!toolText && surfacedTool.be === "read" && typeof surfacedTool.ob?.text === "string") {
           toolText = surfacedTool.ob.text;
         } else if (!toolText && surfacedTool.be === "list" && Array.isArray(surfacedTool.ob?.ve?.values)) {
-          toolText = surfacedTool.ob.ve.values.join("\n");
+          toolText = formatDirectoryList(toolName, toolSentence, surfacedTool)
+            || surfacedTool.ob.ve.values.join("\n");
         } else if (!toolText && mapFact && (mapFact.be === "json map" || mapFact.be === "map" || mapFact.be === "csv map")) {
           toolText = mapDefChainFromName(mapName, { rememberFn: remember });
         } else if (!toolText && surfacedTool.ob?.map && (surfacedTool.be === "json map" || surfacedTool.be === "map" || surfacedTool.be === "csv map")) {

@@ -284,7 +284,7 @@ export async function commandSession(sentence, {
     if (!command) throw new Error("command session start requires a command");
     const cwd = await resolveProjectDirectory(request.cwd, sandbox, projectRoot);
     await authorizeLaunch({ sentence, command, args, cwd, runtimeContext, rememberFn });
-    const result = await requestTerminal(worldRoot, projectRoot, {
+    let result = await requestTerminal(worldRoot, projectRoot, {
       action,
       command,
       args,
@@ -292,6 +292,25 @@ export async function commandSession(sentence, {
       columns: request.columns,
       rows: request.rows
     });
+    if (result?.id && result.status !== "running") {
+      try {
+        const output = await requestTerminal(worldRoot, projectRoot, {
+          action: "read",
+          id: result.id,
+          after: 0,
+          maxBytes: 65536
+        });
+        result = {
+          ...result,
+          output: String(output?.output ?? ""),
+          chunks: Array.isArray(output?.chunks) ? output.chunks : [],
+          cursor: Number.isSafeInteger(output?.cursor) ? output.cursor : result.cursor,
+          truncated: output?.truncated === true
+        };
+      } catch (error) {
+        result = { ...result, outputReadError: String(error?.message ?? error) };
+      }
+    }
     return jsonResult(action, result);
   }
   if (action === "list") return jsonResult(action, { sessions: await requestTerminal(worldRoot, projectRoot, { action }) });

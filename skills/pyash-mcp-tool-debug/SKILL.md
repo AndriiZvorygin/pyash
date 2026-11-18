@@ -55,3 +55,10 @@ type, and safe next steps, then verify read still returns the original file.
 When the failure appears in saddle, also execute the capability through
 `runToolChat` and inspect the next request prompt. An MCP response assertion
 alone does not prove the saddle model received the diagnostic.
+
+For command-session failures, run a real PTY command that emits distinct output
+and exits nonzero, then drive start/read and a directory list through
+`runToolChat`. Assert the following model request contains the command, working
+directory, exit code, terminal output, and resolved list directory. Test a fast
+exit separately: `command_session_start` should attach already captured output
+when the process has exited before the start response is built.
