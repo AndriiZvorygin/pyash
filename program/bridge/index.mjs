@@ -203,9 +203,7 @@ export async function interpret(sentence, { runtimeContext = null } = {}) {
     ? null
     : mood === "do" ? to?.name : mood === "ya" ? su?.name : null;
   const writeTarget = writeTargetName ? remember(writeTargetName) : null;
-  const slotKind = ["number", "num"].includes(writeTarget?.be)
-    ? namedNumericSlotKind(writeTarget)
-    : null;
+  const slotKind = namedNumericSlotKind(writeTarget);
   const localSlotShadow = Boolean(
     mood === "ya"
     && state.executingBody

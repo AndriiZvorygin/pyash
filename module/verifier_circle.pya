@@ -40,6 +40,7 @@ prah
 su name verifier trying by name text judge target for name text generator target ob name text task to name text output atleast num 0 atmost num 0 be ceremony def
 ob text of ob of this to name text task be text do
 ob num of atmost of this to name num attempts be plus do
+ob num 1 to name num attempts be plus do
 ob num of atleast of this to name num verify threshold be plus do
 ob num 0 to name num using tools be plus do
 ob text "" to name text tools map be text do
@@ -56,6 +57,7 @@ prah
 su name verifier trying by name mind judge target for name mind generator target ob name text task to name text output atleast num 0 atmost num 0 be ceremony def
 ob text of ob of this to name text task be text do
 ob num of atmost of this to name num attempts be plus do
+ob num 1 to name num attempts be plus do
 ob num of atleast of this to name num verify threshold be plus do
 ob num 0 to name num using tools be plus do
 ob text "" to name text tools map be text do
@@ -72,6 +74,7 @@ prah
 su name verifier trying by name text judge target for name text generator target ob name text task to name text output atleast num 0 atmost num 0 with name map be ceremony def
 ob text of ob of this to name text task be text do
 ob num of atmost of this to name num attempts be plus do
+ob num 1 to name num attempts be plus do
 ob num of atleast of this to name num verify threshold be plus do
 ob num 1 to name num using tools be plus do
 ob name of with of this to name text tools map be text do
@@ -88,6 +91,7 @@ prah
 su name verifier trying by name mind judge target for name mind generator target ob name text task to name text output atleast num 0 atmost num 0 with name map be ceremony def
 ob text of ob of this to name text task be text do
 ob num of atmost of this to name num attempts be plus do
+ob num 1 to name num attempts be plus do
 ob num of atleast of this to name num verify threshold be plus do
 ob num 1 to name num using tools be plus do
 ob name of with of this to name text tools map be text do
@@ -104,6 +108,7 @@ prah
 su name verifier trying by name text judge target for name text generator target ob name text task to name map produce atleast num 0 atmost num 0 be ceremony def
 ob text of ob of this to name text task be text do
 ob num of atmost of this to name num attempts be plus do
+ob num 1 to name num attempts be plus do
 ob num of atleast of this to name num verify threshold be plus do
 ob num 0 to name num using tools be plus do
 ob text "" to name text tools map be text do
@@ -122,6 +127,7 @@ prah
 su name verifier trying by name mind judge target for name mind generator target ob name text task to name map produce atleast num 0 atmost num 0 be ceremony def
 ob text of ob of this to name text task be text do
 ob num of atmost of this to name num attempts be plus do
+ob num 1 to name num attempts be plus do
 ob num of atleast of this to name num verify threshold be plus do
 ob num 0 to name num using tools be plus do
 ob text "" to name text tools map be text do
@@ -140,6 +146,7 @@ prah
 su name verifier trying by name text judge target for name text generator target ob name text task to name map produce atleast num 0 atmost num 0 with name map be ceremony def
 ob text of ob of this to name text task be text do
 ob num of atmost of this to name num attempts be plus do
+ob num 1 to name num attempts be plus do
 ob num of atleast of this to name num verify threshold be plus do
 ob num 1 to name num using tools be plus do
 ob name of with of this to name text tools map be text do
@@ -158,6 +165,7 @@ prah
 su name verifier trying by name mind judge target for name mind generator target ob name text task to name map produce atleast num 0 atmost num 0 with name map be ceremony def
 ob text of ob of this to name text task be text do
 ob num of atmost of this to name num attempts be plus do
+ob num 1 to name num attempts be plus do
 ob num of atleast of this to name num verify threshold be plus do
 ob num 1 to name num using tools be plus do
 ob name of with of this to name text tools map be text do

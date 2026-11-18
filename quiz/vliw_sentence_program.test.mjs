@@ -241,7 +241,7 @@ test("numeric equality conditional lowers to the Rust interpreter fixture", () =
     ]),
     Uint16Array.from([0x000b, 0x245e, 0xea30, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
   ]);
-  assert.deepEqual(decodePyashProgram(lowered.vectors), [sentence]);
+  assert.deepEqual(decodePyashProgram(lowered.vectors), [{ ...sentence, mood: "do" }]);
 });
 
 test("programlet mutations are deterministic and evolution validates held-out cases", async () => {
