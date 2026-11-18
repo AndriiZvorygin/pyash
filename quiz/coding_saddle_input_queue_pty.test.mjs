@@ -11,6 +11,9 @@ import { resolveSaddleProjectWorldRoot } from "../command/pyash_saddle.mjs";
 
 const runtimeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const model = "qwen3.5:9b";
+
+const alternateModel = "llama3.2:3b";
+
 const planToolName = "be_write_fromstate_text_ob_text";
 
 function deferred() {
@@ -118,7 +121,9 @@ function makeFinalResponse(content) {
   return { status: "success", result: { message: { role: "assistant", content } } };
 }
 
-test("saddle PTY interrupts and steers on Enter while Tab waits for the turn to end", async () => {
+
+test("saddle PTY steers on Enter, queues on Tab, and continues after switching Ollama models", async () => {
+
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-input-queue-pty-"));
   const projectRoot = path.join(tempRoot, "project");
   const projectWorldRoot = resolveSaddleProjectWorldRoot({ runtimeRoot, cwd: projectRoot });
@@ -152,7 +157,9 @@ test("saddle PTY interrupts and steers on Enter while Tab waits for the turn to 
       return;
     }
     if (req.method === "GET" && req.url === "/runtime/ollama/models") {
-      res.end(JSON.stringify({ models: [{ name: model }] }));
+
+      res.end(JSON.stringify({ models: [{ name: model }, { name: alternateModel }] }));
+
       return;
     }
     if (req.method === "POST" && req.url === "/submit") {
@@ -213,6 +220,10 @@ test("saddle PTY interrupts and steers on Enter while Tab waits for the turn to 
         && text.includes("add the first detail")
         && text.includes("add the second detail"))) {
         result = makeFinalResponse("The restarted turn used the original request and both new details.");
+
+      } else if (getUserTexts(job.payload).includes("model switch scenario")) {
+        result = makeFinalResponse("The switched Ollama model completed a new request.");
+
       } else if (getUserTexts(job.payload).includes("deliver after turn end")) {
         result = { status: "success", result: { message: { role: "assistant", content: "Tab queued message was sent in its own turn." } } };
       } else {
@@ -307,7 +318,18 @@ test("saddle PTY interrupts and steers on Enter while Tab waits for the turn to 
     const queuedTurn = submissions.find((payload) => getUserTexts(payload).includes("deliver after turn end"));
     assert.ok(queuedTurn,
       "Tab input should be submitted as the next turn after the current answer completes");
-    await waitForOutput(() => transcript, "Tab queued message was sent in its own turn.");
+
+    await waitForSaddleTurn(() => transcript, "Tab queued message was sent in its own turn.");
+
+    child.write(`/model ${alternateModel}\r`);
+    await waitForOutput(() => transcript, `model: ${alternateModel}`);
+    child.write("model switch scenario\r");
+    await waitFor(() => submissions.some((payload) => getUserTexts(payload).includes("model switch scenario")),
+      "managed request after switching Ollama models");
+    const switchedModelRequest = submissions.find((payload) => getUserTexts(payload).includes("model switch scenario"));
+    assert.equal(switchedModelRequest.model, alternateModel);
+    await waitForSaddleTurn(() => transcript, "The switched Ollama model completed a new request.");
+
 
     assert.doesNotMatch(stripTerminalControlSequences(transcript), /EPIPE|missing request payload|command defective: status=1/u);
     assert.equal(childExit, null, "saddle should remain open after both queue paths complete");

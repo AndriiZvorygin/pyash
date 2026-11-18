@@ -8,7 +8,8 @@ import {
   buildEnglishWordNetBridgeIndex,
   loadEnglishWordNetBridges,
   loadEnglishWordNetBridgeSubset,
-  parseEnglishWordNetBridgeCatalog
+  parseEnglishWordNetBridgeCatalog,
+  renderEnglishWordNetBridgeCatalog
 } from "../program/library/translation/english_wordnet_bridges.mjs";
 import { buildEnglishWordNetSenseBridgeIndex } from "../program/library/translation/english_wordnet_linker.mjs";
 import {
@@ -25,7 +26,7 @@ test("WordNet bridge rows have a lightweight gloss and lemma lookup", async () =
   assert.ok(catalog.entries.length > 6000);
   // The lemma scan deprecated the duplicate "dressing" atom, invalidating one old derived compound link.
   assert.equal(catalog.entries.filter((entry) => entry.evidence.includes("active through sweep wordnet-sense-sweep-4c07194f363e-81b5bbefa3b0-d1")).length, 721);
-  assert.equal(catalog.entries.filter((entry) => entry.evidence.includes("sense-link sweep wordnet-sense-sweep-4c07194f363e-9059730cda6d-d1-model-qwen3-5-9b-definition-anchor-v1")).length, 956);
+  assert.equal(catalog.entries.filter((entry) => entry.evidence.includes("sense-link sweep wordnet-sense-sweep-4c07194f363e-9059730cda6d-d1-model-qwen3-5-9b-definition-anchor-v1")).length, 955);
   assert.ok(catalog.entries.filter((entry) => entry.evidence.startsWith("frequency-first anchor allocation")).length > 1000);
   assert.equal(catalog.entries.find((entry) => entry.source === "n:06850196-n"), undefined);
   assert.deepEqual(catalog.entries.find((entry) => entry.source === "a:00005204-a"), {
@@ -629,4 +630,39 @@ test("bridge catalog persists equivalence evidence as native Pyash rows", () => 
     "prah"
   ].join("\n"));
   assert.deepEqual(parsed.entries.map((entry) => entry.equivalenceGroup), ["touch-kind", "touch-kind"]);
+});
+
+test("bridge catalog rendering keeps surviving senses valid when one equivalence member is retired", () => {
+  const parsed = parseEnglishWordNetBridgeCatalog([
+    "su name translation_english_wordnet_bridges be map def",
+    'su text "format" ob text "english-wordnet-bridge-v1" ya',
+    'su text "source" ob text "fixture" ya',
+    'su text "source-hash" ob text "fixture-hash" ya',
+    'su text "mode" ob text "sense-level semantic bridge" ya',
+    'su text "equivalence:touch-kind" ob text "n:first n:second" via text "same tactile meaning" ya',
+    'su text "n:first" ob name "touch" as text "n" with text "contextual" via text "first evidence" ya',
+    'su text "sense-gloss:n:first" ob text "first gloss" ya',
+    'su text "sense-lemma:n:first:1" ob text "first" ya',
+    'su text "n:second" ob name "touch" as text "n" with text "contextual" via text "second evidence" ya',
+    'su text "sense-gloss:n:second" ob text "second gloss" ya',
+    'su text "sense-lemma:n:second:1" ob text "second" ya',
+    "prah"
+  ].join("\n"));
+
+  const rendered = renderEnglishWordNetBridgeCatalog({
+    ...parsed,
+    entries: parsed.entries.filter((entry) => entry.source !== "n:first")
+  });
+  const roundTrip = parseEnglishWordNetBridgeCatalog(rendered);
+
+  assert.equal(roundTrip.sourceHash, "fixture-hash");
+  assert.deepEqual(roundTrip.entries, [{
+    source: "n:second",
+    target: "touch",
+    targetPartOfSpeech: "n",
+    certainty: "contextual",
+    evidence: "second evidence",
+    gloss: "second gloss",
+    lemmas: ["second"]
+  }]);
 });

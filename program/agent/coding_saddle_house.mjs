@@ -41,6 +41,40 @@ async function directoryIsEmpty(directory) {
   }
 }
 
+async function archiveLegacyHouse(source) {
+  const base = `${path.basename(source)} legacy`;
+  let suffix = 0;
+  for (;;) {
+    const archive = path.join(path.dirname(source), suffix === 0 ? base : `${base} ${suffix + 1}`);
+    try {
+      await fs.lstat(archive);
+      suffix += 1;
+      continue;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+    try {
+      await fs.rename(source, archive);
+      return archive;
+    } catch (error) {
+      if (error?.code === "EEXIST" || error?.code === "ENOTEMPTY") {
+        suffix += 1;
+        continue;
+      }
+      if (error?.code === "ENOENT") {
+        // Another saddle startup may have moved the same legacy directory.
+        try {
+          await fs.lstat(source);
+        } catch (sourceError) {
+          if (sourceError?.code === "ENOENT") return archive;
+          throw sourceError;
+        }
+      }
+      throw error;
+    }
+  }
+}
+
 async function resolvesToSameDirectory(left, right) {
   try {
     const [resolvedLeft, resolvedRight] = await Promise.all([
@@ -113,7 +147,8 @@ async function migrateLegacyHouse({ worldRoot, destination }) {
     }
 
     if (destinationExists && !(await directoryIsEmpty(destination)) && !(await directoryIsEmpty(source))) {
-      throw new Error(`coding saddle house migration conflict: legacy ${source} and destination ${destination} both contain data`);
+      await archiveLegacyHouse(source);
+      return;
     }
     if (destinationExists && !(await directoryIsEmpty(destination))) {
       return;

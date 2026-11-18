@@ -209,19 +209,29 @@ function expandCue(cue) {
   const text = String(cue?.text || '').trim();
   const since = Number(cue?.since || 0);
   const until = Number(cue?.until || since);
-  const duration = Math.max(0.06, until - since);
+  const duration = Math.max(0, until - since);
   const words = text.split(/\s+/u).filter(Boolean).length;
   const pieces = splitCueTextForDiarize(text);
   const looksTooLong = duration > 18 || words > 90;
   if (!looksTooLong || pieces.length <= 1) return [cue];
 
+  // A malformed upstream transcript can put a very long paragraph into a
+  // tiny, but otherwise valid, cue.  Do not force a six-hundredths minimum
+  // onto every split: once the accumulated minimum exceeds the source span,
+  // the last cue would run backwards.  Keep the original cue when there is
+  // not enough millisecond precision to represent every child cue safely.
+  if (!(duration > 0) || duration < pieces.length * 0.001) return [cue];
+
   const weighted = pieces.map((p) => Math.max(1, p.split(/\s+/u).filter(Boolean).length));
   const total = weighted.reduce((a, b) => a + b, 0);
   const out = [];
   let cursor = since;
+  let cumulative = 0;
   for (let i = 0; i < pieces.length; i += 1) {
-    const span = (duration * weighted[i]) / total;
-    const end = i === pieces.length - 1 ? until : Math.max(cursor + 0.06, cursor + span);
+    cumulative += weighted[i];
+    const end = i === pieces.length - 1
+      ? until
+      : since + (duration * cumulative) / total;
     out.push({
       index: Number(cue?.index || 0),
       since: cursor,

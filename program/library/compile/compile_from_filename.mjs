@@ -12,8 +12,7 @@ import { transpileProgram } from "./transpile_program.mjs";
 import { resolveCompiledCommandPolicy } from "../command_policy.mjs";
 import { compilePyacPackToC } from "./pyac_to_c.mjs";
 import { compilePyacPackToNasm } from "./pyac_to_nasm.mjs";
-import { lowerPyashProgram } from "../vliw/sentence.mjs";
-import { encodePyacPack } from "../vliw/database.mjs";
+import { encodePyacPack, lowerPyashProgram, lowerSentence } from "../vliw/index.mjs";
 
 function resolveStateValue(value) {
   if (!value) return "";
@@ -22,6 +21,22 @@ function resolveStateValue(value) {
   if (value?.text) return String(value.text);
   if (value?.name) return String(value.name);
   return "";
+}
+
+function lowerPyashSourceToPyac(sentences) {
+  const semanticCodelets = [];
+  try {
+    for (const sentence of sentences) {
+      semanticCodelets.push(...lowerSentence(sentence));
+    }
+    return semanticCodelets;
+  } catch (error) {
+    if (error?.code !== "unsupported-sentence" && error?.code !== "literal-width") throw error;
+  }
+
+  // The semantic codelet adapters cover proven slices; other representable
+  // Pyash sentences use the sentence-vector encoding consumed by the runtime.
+  return lowerPyashProgram(sentences).vectors;
 }
 
 export async function compile_from_filename_to_filename(sentence) {
@@ -146,45 +161,53 @@ export async function compile_from_filename_to_filename(sentence) {
     sourceText = sourceText.replaceAll("\\n", "\n");
   }
 
-  if ((!sourceState || sourceState === "pyash") && targetState === "pyac") {
-    const targetFilenameRaw = sentence?.to?.filename;
-    const targetFilename = resolveSandboxPath(targetFilenameRaw);
+  if (targetState === "pyac") {
+    if (sourceState && sourceState !== "pyash") {
+      throwErrorSentence({
+        name: "compile error",
+        message: `compile: PyAC output currently requires Pyash input, not ${sourceState}`,
+        from: { name: "compile" }
+      });
+    }
+    const targetFilename = resolveSandboxPath(sentence?.to?.filename);
     if (!targetFilename) {
       throwErrorSentence({
         name: "compile error",
-        message: "compile: Pyash to PyAC requires a destination filename",
+        message: "compile: PyAC output requires a destination filename",
         from: { name: "compile" }
       });
     }
 
-    let packBytes;
+    let pack;
     try {
-      const { sentences } = buildProgram(sourceText);
-      const vectors = lowerPyashProgram(sentences).vectors;
-      if (vectors.length === 0) {
-        throw new Error("Pyash source contains no executable sentences");
+      const program = buildProgram(sourceText);
+      if (program.sentences.length === 0) {
+        throw new Error("source contains no Pyash sentences");
       }
-      packBytes = encodePyacPack(vectors);
+      const vectors = lowerPyashSourceToPyac(program.sentences);
+      if (vectors.length === 0) throw new Error("Pyash source contains no executable sentences");
+      pack = encodePyacPack(vectors);
     } catch (error) {
       throwErrorSentence({
         name: "compile error",
-        message: "compile: Pyash source cannot be lowered to PyAC (" + (error?.message ?? String(error)) + ")",
+        message: `compile: Pyash to PyAC failed: ${error?.message ?? String(error)}`,
         from: { name: "compile" },
-        raw: { code: error?.code ?? null }
+        raw: { code: error?.code ?? null, details: error?.details ?? null }
       });
     }
 
-    await fs.writeFile(targetFilename, packBytes);
+    await fs.writeFile(targetFilename, pack);
+
     const targetName = sentence?.to?.name ?? sentence?.totext?.name ?? sentence?.su?.name;
     if (targetName) {
       doRemember({
-        mood: "ya",
         su: { name: targetName },
-        be: "filename",
-        ob: { filename: targetFilename }
+        be: "pyac",
+        ob: { filename: targetFilename },
+        mood: "ya"
       });
     }
-    return { ob: { filename: targetFilename }, be: "filename" };
+    return { ob: { filename: targetFilename }, be: "pyac" };
   }
 
   if (sourceState === "markdown" && (targetState === "html" || targetState === "pdf")) {

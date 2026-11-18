@@ -61,6 +61,7 @@ export async function verifyCompoundRecords(records, {
   mode = "summary",
   mindName = "mind",
   outputPath = "",
+  parallelism = 1,
   onRecord
 } = {}) {
   if (outputPath && mode !== "pya") {
@@ -84,6 +85,7 @@ export async function verifyCompoundRecords(records, {
     const result = await verifyCompoundCoverage(records, {
       invoke,
       verifierName: mindName,
+      parallelism,
       onRecord: async (event) => {
         if (checkpoint) await checkpoint.append(event.record);
         if (typeof onRecord === "function") await onRecord(event);

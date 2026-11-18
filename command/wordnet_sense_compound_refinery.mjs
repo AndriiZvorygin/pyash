@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,16 +23,93 @@ const ARTIFACT_ROOT = path.join(REPOSITORY_ROOT, "artifacts");
 async function acquireRunLock(artifactRoot = ARTIFACT_ROOT) {
   await fs.mkdir(artifactRoot, { recursive: true });
   const lockPath = path.join(artifactRoot, ".wordnet-sense-compound-refinery.lock");
-  let handle;
+  const recoveryPath = `${lockPath}.recovery`;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      const handle = await fs.open(lockPath, "wx");
+      await handle.writeFile(`${process.pid}\n`, "utf8");
+      await handle.close();
+      return () => fs.rm(lockPath, { force: true });
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      if (await reclaimStaleRunLock(lockPath, recoveryPath)) continue;
+      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  }
+  throw new Error("a WordNet sense compound refinery run is already active");
+}
+
+async function reclaimStaleRunLock(lockPath, recoveryPath) {
+  let recoveryHandle;
   try {
-    handle = await fs.open(lockPath, "wx");
+    recoveryHandle = await fs.open(recoveryPath, "wx");
   } catch (error) {
-    if (error?.code === "EEXIST") throw new Error("a WordNet sense compound refinery run is already active");
+    if (error?.code === "EEXIST") return false;
     throw error;
   }
-  await handle.writeFile(`${process.pid}\n`, "utf8");
-  await handle.close();
-  return () => fs.rm(lockPath, { force: true });
+  try {
+    await recoveryHandle.writeFile(`${process.pid}\n`, "utf8");
+    let originalContent;
+    let originalStat;
+    try {
+      [originalContent, originalStat] = await Promise.all([
+        fs.readFile(lockPath, "utf8"),
+        fs.stat(lockPath)
+      ]);
+    } catch (error) {
+      if (error?.code === "ENOENT") return true;
+      throw error;
+    }
+    const ownerPid = Number(originalContent.trim());
+    if (!Number.isSafeInteger(ownerPid) || ownerPid < 1 || processIsAlive(ownerPid)) return false;
+
+    let currentContent;
+    let currentStat;
+    try {
+      [currentContent, currentStat] = await Promise.all([
+        fs.readFile(lockPath, "utf8"),
+        fs.stat(lockPath)
+      ]);
+    } catch (error) {
+      if (error?.code === "ENOENT") return true;
+      throw error;
+    }
+    if (currentContent !== originalContent
+      || currentStat.dev !== originalStat.dev
+      || currentStat.ino !== originalStat.ino) return false;
+    await fs.rm(lockPath, { force: true });
+    return true;
+  } finally {
+    await recoveryHandle.close();
+    await fs.rm(recoveryPath, { force: true });
+  }
+}
+
+export function processStateFromProcStat(source) {
+  const close = String(source ?? "").lastIndexOf(")");
+  if (close < 0) return "";
+  return String(source).slice(close + 1).trim().split(/\s+/u)[0] || "";
+}
+
+export function processStateIsAlive(state) {
+  return state !== "Z" && state !== "X";
+}
+
+function processIsAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    try {
+      const state = processStateFromProcStat(requireProcStat(pid));
+      if (!processStateIsAlive(state)) return false;
+    } catch {}
+    return true;
+  } catch (error) {
+    return error?.code !== "ESRCH";
+  }
+}
+
+function requireProcStat(pid) {
+  return fsSync.readFileSync(`/proc/${pid}/stat`, "utf8");
 }
 
 async function nextNewspaperEvokeIndex(newspaperPath) {

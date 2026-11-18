@@ -8,6 +8,7 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget } from "../program/remember/index.mjs";
 import { command, classifyCommandText, resolveCommandPolicy } from "../program/verbs/command.mjs";
+import { isInternalMindRunnerCommandText } from "../program/library/command_policy.mjs";
 import { withCommandResumeIdentity } from "../program/bridge/command_identity.mjs";
 import { clearExchangeRecorder, setExchangeRecorder } from "../program/bridge/exchange.mjs";
 
@@ -29,6 +30,14 @@ test("command classifier assigns stable classes", () => {
   assert.equal(classifyCommandText("noop :()"), "unknown");
   assert.equal(classifyCommandText("noop x:(){ :|:& };:"), "destructive");
   assert.equal(classifyCommandText(""), "unknown");
+});
+
+test("internal mind runner invocations are recognized without matching ordinary node commands", () => {
+  assert.equal(isInternalMindRunnerCommandText("node command/mind_ollama_runner.mjs"), true);
+  assert.equal(isInternalMindRunnerCommandText("PYA_COMMAND_TIMEOUT_MS=900000 node ../pyac/pyash-dev/command/mind_ollama_runner.mjs"), true);
+  assert.equal(isInternalMindRunnerCommandText("/usr/bin/node /home/pyash/command/mind_openai_runner.mjs"), true);
+  assert.equal(isInternalMindRunnerCommandText("node command/pyash_saddle.mjs"), false);
+  assert.equal(isInternalMindRunnerCommandText("printf 'node command/mind_ollama_runner.mjs'"), false);
 });
 
 test("command policy resolver reads command configure map", async () => {

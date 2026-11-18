@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
@@ -10,8 +11,10 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget } from "../program/remember/index.mjs";
 import {
+  decodePyacPack,
   encodePyacPack,
   decodeCodelet,
+  decodePyashProgram,
   executeCodelets,
   lowerParagraph
 } from "../program/library/vliw/index.mjs";
@@ -26,6 +29,54 @@ async function withTempDirectory(run) {
     await fs.rm(directory, { recursive: true, force: true });
   }
 }
+
+test("compile Pyash arithmetic source through PyAC to an executable", async () => {
+  forget();
+  const sourcePath = fileURLToPath(new URL(
+    "../examples/pyash/vliw-constant-arithmetic.pya",
+    import.meta.url
+  ));
+
+  await withTempDirectory(async (directory) => {
+    const packPath = path.join(directory, "program.pyac");
+    const cPath = path.join(directory, "program.c");
+    const executablePath = path.join(directory, "program");
+
+    await interpret(parse(
+      `from filename "${sourcePath}" fromstate pyash tostate pyac to filename "${packPath}" be compile do`
+    ));
+    const pack = decodePyacPack(await fs.readFile(packPath));
+    assert.equal(pack.codelets.length, 3);
+
+    await interpret(parse(
+      `from filename "${packPath}" fromstate pyac tostate c to filename "${cPath}" be compile do`
+    ));
+    await execFileAsync("cc", ["-std=c11", "-Wall", "-Werror", "-o", executablePath, cPath], {
+      timeout: 120000
+    });
+
+    const { stdout } = await execFileAsync(executablePath, [], { timeout: 120000 });
+    assert.deepEqual(
+      stdout.trim().split(/\r?\n/).map((line) => JSON.parse(line).ob.num),
+      [42, 40, 42]
+    );
+  });
+});
+
+test("Pyash to PyAC lowers sentences outside the semantic codelet adapters", async () => {
+  forget();
+  await withTempDirectory(async (directory) => {
+    const sourcePath = path.join(directory, "unsupported.pya");
+    const packPath = path.join(directory, "unsupported.pyac");
+    await fs.writeFile(sourcePath, 'ob text "hello" be write do\n', "utf8");
+
+    await interpret(parse(
+      `from filename "${sourcePath}" fromstate pyash tostate pyac to filename "${packPath}" be compile do`
+    ));
+    const pack = decodePyacPack(await fs.readFile(packPath));
+    assert.deepEqual(decodePyashProgram(pack.codelets), [parse('ob text "hello" be write do')]);
+  });
+});
 
 test("compile persisted constant-arithmetic PyAC pack to C and run it", async () => {
   forget();

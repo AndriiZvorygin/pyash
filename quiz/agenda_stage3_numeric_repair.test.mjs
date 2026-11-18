@@ -18,6 +18,51 @@ import {
   stage3GenerationOrder,
   summarizeGroundedUnit,
 } from "../program/library/reporter_shared/agenda-stage3-summary-renderer.mjs";
+import { validateAgendaSummaryStrict } from "../program/library/reporter_shared/agenda-stage-contracts.mjs";
+
+test("stage3 contract accepts generated chapters for an oversized childless unit", () => {
+  const grounding = {
+    "grounded units": [{
+      "unit id": "ground_006",
+      "child chapters": [],
+    }],
+  };
+  const summary = {
+    "schema version": "agenda_summary_v1",
+    "source section grounding": "grounding.pya",
+    "transcript dir": "transcript",
+    prefix: "meeting",
+    focus: "focus",
+    "generated time": new Date().toISOString(),
+    sections: [{
+      index: 1,
+      "unit id": "ground_006",
+      "parent unit id": "",
+      "part index": 0,
+      "part total": 1,
+      heading: "8.a.2 Report",
+      summary: "A report was presented.",
+      "chapter text": "Part one",
+      chapters: [
+        {
+          "chapter id": "ground_006_chapter_01",
+          "parent unit id": "ground_006",
+          "ordering index": 1,
+          title: "Part one",
+          text: "A report was presented.",
+        },
+        {
+          "chapter id": "ground_006_chapter_02",
+          "parent unit id": "ground_006",
+          "ordering index": 2,
+          title: "Part two",
+          text: "A second report detail was presented.",
+        },
+      ],
+    }],
+  };
+  assert.doesNotThrow(() => validateAgendaSummaryStrict(grounding, summary));
+});
 
 test("stage3 grounding adjudication rechecks semantic allegations against literal source", async (t) => {
   let requestBody = null;
@@ -312,6 +357,102 @@ test("stage3 repairs merged discussion scope across separate transcript remarks"
   assert.match(result.summary, /collective-agreement requirements/iu);
   assert.ok(requests.some((body) => /SEPARATE-REMARKS SCOPE RULE/iu.test(body.messages?.[1]?.content || "")));
   assert.ok(requests.some((body) => /Do not compress facts from separate blocks/iu.test(body.messages?.[1]?.content || "")));
+});
+
+test("stage3 preserves presentation framing when an audit rejects discussion wording", async (t) => {
+  const requests = [];
+  let groundingAudits = 0;
+  let presentationRepairs = 0;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, options) => {
+    const body = JSON.parse(options.body);
+    requests.push(body);
+    const system = body.messages?.[0]?.content || "";
+    if (/^Audit one generated civic summary/iu.test(system)
+      || /^Adjudicate a disputed civic-summary/iu.test(system)
+      || /^Perform one final literal-source/iu.test(system)) {
+      groundingAudits += 1;
+      return {
+        ok: true,
+        async json() {
+          return {
+            message: {
+              content: JSON.stringify(groundingAudits === 1
+                ? {
+                  grounded: false,
+                  "unsupported claims": ["The source does not record 'discussion regarding' the profile's development; it records a presentation. The candidate frames this as recorded discussion."],
+                  notes: "The source records a presentation rather than discussion of the profile's development.",
+                }
+                : groundingAudits <= 3
+                  ? {
+                    grounded: false,
+                    "unsupported claims": ["The source does not record 'discussion regarding' the profile's development; it records a presentation. The candidate frames this as recorded discussion."],
+                    notes: "The source records a presentation rather than discussion of the profile's development.",
+                  }
+                  : { grounded: true, "unsupported claims": [], notes: "" }),
+            },
+          };
+        },
+      };
+    }
+    if (/preserves presentation framing/iu.test(system)) {
+      presentationRepairs += 1;
+      return {
+        ok: true,
+        async json() {
+          return {
+            message: {
+              content: JSON.stringify({
+                summary: "The presentation described a community profile developed with more than three dozen local members.",
+                "chapter text": "Presentation describes a community profile",
+                confidence: 0.9,
+                notes: "",
+              }),
+            },
+          };
+        },
+      };
+    }
+    if (/^Produce strict JSON only/iu.test(system)) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            message: {
+              content: JSON.stringify({
+                summary: "The committee discussed a community profile developed with more than three dozen local members.",
+                "chapter text": "Discussion covers a community profile",
+                confidence: 0.9,
+                notes: "",
+              }),
+            },
+          };
+        },
+      };
+    }
+    throw new Error(`unexpected stage3 test request: ${system}`);
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const result = await summarizeGroundedUnit({
+    unit: {
+      "unit id": "ground_presentation_framing",
+      label: "8.b Community profile presentation",
+      "source excerpt": "The presenter described a community profile developed through collaboration among more than three dozen local members.",
+      "source rows": 12,
+      "duration seconds": 600,
+      substantive: true,
+    },
+    focus: "newsworthy factual civic reporting",
+    llmModel: DEFAULT_TEXT_MODEL,
+    ollamaUrl: "http://ollama.invalid/api/chat",
+    semanticGroundingAudit: true,
+  });
+
+  assert.equal(presentationRepairs, 1);
+  assert.match(result.summary, /presentation described a community profile/iu);
+  assert.ok(requests.some((body) => /Never call a presentation.*discussion/iu.test(body.messages?.[0]?.content || "")));
+  assert.ok(requests.some((body) => /Do not replace that speech act with 'discussed'/iu.test(body.messages?.[1]?.content || "")));
 });
 
 test("stage3 treats attachment prose as document content rather than meeting dialogue", async (t) => {
@@ -1852,6 +1993,85 @@ test("stage3 keeps a generic minutes motion separate from a later minutes item",
   assert.match(repairPrompt, /generic motion.*ambiguous.*handoff-only/iu);
 });
 
+test("stage3 retries closed-minutes repairs that invert the procedural contrast", async (t) => {
+  let repairCalls = 0;
+  let repairedGood = false;
+  let retryPrompt = "";
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, options) => {
+    const request = JSON.parse(options.body);
+    const system = request.messages[0].content;
+    const prompt = request.messages[1].content;
+    let content;
+    if (prompt.includes("Conservative minutes-motion-scope repair")) {
+      repairCalls += 1;
+      retryPrompt = prompt;
+      repairedGood = repairCalls >= 3;
+      content = repairedGood
+        ? {
+          summary: "The excerpt records a question about whether closed-session minutes should be listed on a closed-meeting agenda, followed by an explanation that they are listed on the open agenda, that if there is any discussion of the minutes the matter would need to go into a closed session, and that otherwise they can be approved on the open agenda; a vote on the minutes was carried.",
+          "chapter text": "Closed-session minutes and open-agenda procedure",
+          confidence: 0.9,
+          notes: "",
+        }
+        : {
+          summary: "A speaker questioned whether the minutes would appear on the open agenda, and they could be approved if there is no discussion.",
+          "chapter text": "Minutes approved without discussion",
+          confidence: 0.9,
+          notes: "",
+        };
+    } else if (prompt.includes("Check every concrete claim in CANDIDATE_SUMMARY")) {
+      content = repairedGood
+        ? { grounded: true, "unsupported claims": [], notes: "" }
+        : { grounded: false, "unsupported claims": ["The candidate inverts the closed-session/open-agenda procedural contrast."], notes: "The candidate uses unsupported question and conditional wording." };
+    } else if (prompt.includes("The prior audit is only an allegation")) {
+      content = repairedGood
+        ? { grounded: true, "unsupported claims": [], notes: "" }
+        : { grounded: false, "unsupported claims": ["The candidate inverts the closed-session/open-agenda procedural contrast."], notes: "The candidate uses unsupported question and conditional wording." };
+    } else if (system.includes("Audit one generated civic summary")) {
+      content = repairedGood
+        ? { grounded: true, "unsupported claims": [], notes: "" }
+        : { grounded: false, "unsupported claims": ["The candidate inverts the closed-session/open-agenda procedural contrast."], notes: "The candidate uses unsupported question and conditional wording." };
+    } else {
+      content = {
+        summary: "A speaker questioned whether the minutes would appear on the open agenda, and they could be approved if there is no discussion.",
+        "chapter text": "Minutes approved without discussion",
+        confidence: 0.9,
+        notes: "",
+      };
+    }
+    return {
+      ok: true,
+      async json() {
+        return { message: { content: JSON.stringify(content) } };
+      },
+    };
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const result = await summarizeGroundedUnit({
+    unit: {
+      "unit id": "ground_closed_minutes_contrast",
+      label: "4.b Minutes of the Closed Session of the Community Services Committee meeting held on March 19, 2025",
+      "source excerpt": "We now have Minutes of the closed session; would these not be on a closed meeting agenda?\nThrough you, I understand that they would be listed on the open agenda.\nIf there's any discussion of the minutes, you would need to go into closed to discuss that.\nBut otherwise, they can be approved on the open agenda.\nSo I'm looking for someone to move those.\nCouncillor Kukreja, any comments on the minutes or questions?\nSeeing none.\nThat's carried.",
+      "source rows": 8,
+      "duration seconds": 90,
+      substantive: true,
+    },
+    focus: "clear civic reporting",
+    llmModel: DEFAULT_TEXT_MODEL,
+    ollamaUrl: "http://ollama.invalid/api/chat",
+    semanticGroundingAudit: true,
+  });
+
+  assert.equal(repairCalls, 3);
+  assert.match(result.summary, /whether closed-session minutes should be listed/iu);
+  assert.match(result.summary, /if there is any discussion of the minutes.*closed session/iu);
+  assert.doesNotMatch(result.summary, /if there is no discussion|without discussion|a speaker questioned whether.*open agenda/iu);
+  assert.match(retryPrompt, /HARD RETRY/iu);
+  assert.match(retryPrompt, /do not invert the condition/iu);
+});
+
 test("stage3 uses a conservative LLM repair for consent-agenda ranges", async (t) => {
   let repaired = false;
   let repairPrompt = "";
@@ -2053,7 +2273,9 @@ test("stage3 keeps specialized procedural repair after speaker metadata cleanup"
   assert.equal(fragmentRepairCalls, 1);
   assert.match(metadataPrompt, /remove every token matching SPEAKER_/iu);
   assert.doesNotMatch(result.summary, /SPEAKER_/u);
-  assert.ok(calls >= 5);
+  // The direct unsupported-actor guard can now route straight to the
+  // specialized fragment repair, so fewer audit round-trips are required.
+  assert.ok(calls >= 3);
 });
 
 test("stage3 uses a conservative LLM repair for separate amendment outcomes", async (t) => {
@@ -4794,6 +5016,44 @@ test("stage3 scopes a container at its first explicit procedural handoff", () =>
   assert.doesNotMatch(result.source, /Fire Services Administrator/iu);
 });
 
+test("stage3 scopes opening remarks before a call for additional business", () => {
+  const result = scopeSourceAtStructuredHandoff(
+    {
+      label: "1 CALL TO ORDER",
+      "source excerpt": [
+        "SPEAKER_002: We're starting our meeting by calling the meeting to order.",
+        "SPEAKER_002: I'll call for additional business, Councillor Farmer.",
+        "SPEAKER_002: Next item is confirmation of the minutes of our Community Services meeting held on March 19.",
+        "SPEAKER_006: It should say the building is east of the grandstand.",
+      ].join("\n"),
+    },
+    {
+      label: "4.b Minutes of the Closed Session of the Community Services Committee meeting held on March 19, 2025",
+    },
+  );
+  assert.equal(result.changed, true);
+  assert.match(result.source, /calling the meeting to order/iu);
+  assert.match(result.source, /call for additional business/iu);
+  assert.doesNotMatch(result.source, /building is east of the grandstand/iu);
+});
+
+test("stage3 does not cut the additional-business section at its own opening call", () => {
+  const result = scopeSourceAtStructuredHandoff(
+    {
+      label: "2 CALL FOR ADDITIONAL BUSINESS",
+      "source excerpt": [
+        "SPEAKER_002: I'll call for additional business, Councillor Farmer.",
+        "SPEAKER_002: I have two items of additional business.",
+        "SPEAKER_003: Other members, additional items?",
+      ].join("\n"),
+    },
+    {
+      label: "3 DECLARATIONS OF INTEREST",
+    },
+  );
+  assert.equal(result.changed, false);
+});
+
 test("stage3 scopes a mixed parent span at the next structured document identity", () => {
   const result = scopeSourceAtStructuredHandoff(
     {
@@ -5001,11 +5261,16 @@ test("stage3 guards generated prose against conflicting structured agenda dates"
   assert.match(source, /queryConservativeGenericPluralActorRepair/iu);
   assert.match(source, /finalGenericPluralActorDefect/iu);
   assert.match(source, /function unsupportedQualifierGroundingDefect\(text = ""\)/iu);
+  assert.match(source, /function unsupportedEvidenceSpecificityGroundingDefect\(text = ""\)/iu);
+  assert.match(source, /HARD UNSUPPORTED-EVIDENCE-SPECIFICITY OVERRIDE[\s\S]*only lists or names a programme[\s\S]*grant was approved/iu);
   assert.match(source, /Do not add descriptive qualifiers such as 'new', 'updated', 'current'/iu);
   assert.match(source, /HARD UNSUPPORTED-QUALIFIER OVERRIDE.*Remove only that unsupported modifier/iu);
   assert.match(source, /const unsupportedQualifierDefect = unsupportedQualifierGroundingDefect\(auditFeedback\)/iu);
+  assert.match(source, /const unsupportedEvidenceSpecificityDefect = unsupportedEvidenceSpecificityGroundingDefect\(auditFeedback\)/iu);
+  assert.match(source, /queryConservativeUnsupportedEvidenceSpecificityRepair/iu);
   assert.match(source, /queryConservativeUnsupportedQualifierRepair/iu);
   assert.match(source, /finalUnsupportedQualifierDefect/iu);
+  assert.match(source, /finalUnsupportedEvidenceSpecificityDefect/iu);
   assert.match(source, /const PARENT_AUDITED_CHILD_EVIDENCE_RULE =/iu);
   assert.match(source, /const FRAGMENTED_TRANSCRIPT_GROUNDING_RULE =/iu);
   assert.match(source, /adjacent lines in the same bounded source/iu);
@@ -5098,6 +5363,12 @@ test("stage3 guards generated prose against conflicting structured agenda dates"
   assert.match(source, /stage3 final unsupported-speech-act repair/iu);
   assert.match(source, /const finalNumericSpecificityDefect =/iu);
   assert.match(source, /stage3 final numeric-specificity repair/iu);
+  assert.match(source, /const NUMERIC_PLACEHOLDER_PATTERN =/iu);
+  assert.match(source, /queryConservativeNumericPlaceholderRepair/iu);
+  assert.match(source, /stage3 final numeric-placeholder repair/iu);
+  assert.match(source, /const separateProceduralPhasesOnly =/iu);
+  assert.match(source, /HARD RETRY: use only this conservative form:.*separate motions were being used/iu);
+  assert.match(source, /const unsupportedMotionClaim =/iu);
   assert.match(source, /const proceduralPairingDefect =/iu);
   assert.match(source, /queryProceduralFloorRepair\(groundingAttempt, auditFeedback, rejectedOutput\)/iu);
   assert.match(source, /conflicting numeric\/date\/year readings.*never choose.*disputed numeric detail/iu);

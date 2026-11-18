@@ -334,7 +334,10 @@ async function importSaddleTools() {
   await interpret(sentence);
 }
 
-function configureSaddle({ cwd, runtimeRoot = cwd, worldRoot = path.join(cwd, "world"), model, backend, host, systemPrompt }) {
+function configureSaddle({ cwd, runtimeRoot, worldRoot, model, backend, host, systemPrompt }) {
+  if (!cwd || !runtimeRoot || !worldRoot) {
+    throw new Error("coding saddle requires explicit project, runtime, and world roots");
+  }
   const toolMap = remember(TOOL_MAP_NAME);
   if (toolMap?.be === "map") {
     doRemember({
@@ -389,7 +392,9 @@ function configureSaddle({ cwd, runtimeRoot = cwd, worldRoot = path.join(cwd, "w
   });
 }
 
-export function configureSaddleForSelection(config, selection = {}) {
+
+export function configureSaddleSelection(config, selection = {}) {
+
   configureSaddle({
     cwd: config.cwd,
     runtimeRoot: config.runtimeRoot,
@@ -537,6 +542,7 @@ export async function prepareSaddle({
     globalWorldRoot,
     newspaperMaximumBytes,
     newspaperSegmentMaximumBytes,
+    systemPrompt,
     mindName: selectedMind,
     model: resolvedModel,
     backend: resolvedBackend,
@@ -939,8 +945,10 @@ async function main() {
   let promptLabel = "pyash> ";
   let inputDecoder = null;
   const queuedInputs = [];
+
   let queuedInputSequence = 0;
-  const saddleUi = createSaddleTerminalUi();
+  const saddleUi = createSaddleTerminalUi({ onOutputError: handleSaddleOutputError });
+
   activeSaddleUi = saddleUi;
   saddleUi.enter();
   process.once("exit", restoreActiveSaddleUi);
@@ -1187,7 +1195,9 @@ async function main() {
       configuredEffort: configValue("mind reasoning effort")
     });
     await restoreSessionHistory();
-    configureSaddleForSelection(config, { model, backend, host });
+
+    configureSaddleSelection(config, { model, backend, host });
+
     renderStatus();
     try {
       await persistSelection({ includeProfile: false });
@@ -1416,11 +1426,13 @@ async function main() {
           source: "coding saddle",
           reason: "user steering input"
         }).then((result) => {
+
           if (!result.requested && controller && !controller.signal.aborted) {
             controller.abort("user steering input");
           }
         }).catch((error) => {
           if (controller && !controller.signal.aborted) controller.abort("user steering input");
+
           writeLine(`steer interrupt note: ${error?.message ?? error}`);
         }).finally(() => {
           if (steeringInterruptPromise === interruptPromise) steeringInterruptPromise = null;
@@ -1544,7 +1556,9 @@ async function main() {
         configuredEffort: configValue("mind reasoning effort")
       });
       promptLabel = "pyash> ";
-      configureSaddleForSelection(config, { model, backend, host });
+
+      configureSaddleSelection(config, { model, backend, host });
+
       renderStatus();
       writeLine(`mind: ${mindName} | backend: ${backend} | model: ${model}`);
       await reportSelectionSaved();
@@ -1626,7 +1640,9 @@ async function main() {
         configuredEffort: configValue("mind reasoning effort")
       });
       mindModels.set(mindName, model);
-      configureSaddleForSelection(config, { model, backend, host });
+
+      configureSaddleSelection(config, { model, backend, host });
+
       renderStatus();
       writeLine(`mind: ${mindName} | model: ${model}`);
       await reportSelectionSaved();
@@ -1757,7 +1773,9 @@ async function main() {
         savedEffort: thinkSetting?.value,
         configuredEffort: configValue("mind reasoning effort")
       });
-      configureSaddleForSelection(config, { model, backend, host });
+
+      configureSaddleSelection(config, { model, backend, host });
+
       renderStatus();
       writeLine(`model: ${model}`);
       await reportSelectionSaved();
@@ -1767,7 +1785,9 @@ async function main() {
     const hostMatch = input.trim().match(/^\/host\s+(.+)$/i);
     if (hostMatch) {
       host = normalizeSaddleHost(hostMatch[1], host);
-      configureSaddleForSelection(config, { model, backend, host });
+
+      configureSaddleSelection(config, { model, backend, host });
+
       renderStatus();
       writeLine(`host: ${host}`);
       await reportSelectionSaved();
@@ -1964,7 +1984,7 @@ async function main() {
         writeLine(formatMindUsage(usage));
         await appendSaddleUsage({
           worldRoot: config.worldRoot,
-          turnId: result?.accordingto?.text ?? "",
+          turnId: sessionTurnId || traceTurnId,
           mindName,
           backend,
           model,
@@ -2007,10 +2027,12 @@ async function main() {
   const queueInputUntilTurnEnd = (value) => {
     const input = String(value ?? "");
     if (!busy || closing || !input.trim()) return false;
+
     if (input.trim().startsWith("/")) {
       writeLine("commands wait until the current response finishes; ordinary messages are queued");
       return false;
     }
+
     queuedInputs.push({ text: input, sequence: ++queuedInputSequence });
     writeLine(`[queued until the current turn finishes] you> ${input}`);
     prompt({ clear: false });

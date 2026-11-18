@@ -61,7 +61,7 @@ test("coding saddle refuses a project-world manifest from a different resolved p
   }
 });
 
-test("coding saddle house migration stops without merging two populated houses", async () => {
+test("coding saddle house migration archives a populated legacy house beside the active project house", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-house-conflict-"));
   const worldRoot = path.join(root, "world");
   const cwd = path.join(root, "projects", "client");
@@ -73,12 +73,12 @@ test("coding saddle house migration stops without merging two populated houses",
   await fs.writeFile(path.join(destination, "new.md"), "new state\n", "utf8");
 
   try {
-    await assert.rejects(
-      ensureCodingSaddleHouse({ worldRoot, cwd }),
-      new RegExp(`migration conflict: legacy ${legacy.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")} and destination ${destination.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}`)
-    );
-    assert.equal(await fs.readFile(path.join(legacy, "old.md"), "utf8"), "old state\n");
+    assert.equal(await ensureCodingSaddleHouse({ worldRoot, cwd }), destination);
+    const archive = path.join(path.dirname(legacy), "coding saddle legacy");
+    assert.equal(await fs.readFile(path.join(archive, "old.md"), "utf8"), "old state\n");
     assert.equal(await fs.readFile(path.join(destination, "new.md"), "utf8"), "new state\n");
+    await assert.rejects(fs.access(legacy), { code: "ENOENT" });
+    assert.equal(await ensureCodingSaddleHouse({ worldRoot, cwd }), destination);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

@@ -28,7 +28,9 @@ export function buildSentenceDiarizationEnv(base = {}, env = process.env) {
 }
 
 export function isDefaultSpeakerLabel(label) {
-  return /^(?:SPEAKER_\d{3}|SPEAKER_UNKNOWN)$/iu.test(String(label || "").trim());
+  // Anonymous labels are zero-padded to three digits for ordinary meetings,
+  // but long recordings can legitimately create identities above 999.
+  return /^(?:SPEAKER_\d+|SPEAKER_UNKNOWN)$/iu.test(String(label || "").trim());
 }
 
 export function speakerArtifactUsesDefaultLabels(filePath) {

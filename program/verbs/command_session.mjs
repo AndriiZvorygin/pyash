@@ -7,7 +7,7 @@ import { remember } from "../remember/index.mjs";
 import { resolveConfigMapSeries } from "../configure/env.mjs";
 import { throwErrorSentence } from "../error.mjs";
 import { resolveWorldRoot } from "../library/world.mjs";
-import { classifyCommandText } from "../library/command_policy.mjs";
+import { classifyCommandText, isInternalMindRunnerCommandText } from "../library/command_policy.mjs";
 import { resolveSaddleMindProfile, normalizeSaddleBackend, normalizeSaddleModel } from "../agent/coding_saddle.mjs";
 import { requestManagedTerminal } from "../agent/managed_terminal_ipc.mjs";
 import { resolveRatifyDecision } from "../agent/ratify_policy.mjs";
@@ -25,15 +25,15 @@ function normalized(value) {
 
 function requestObject(sentence) {
   const raw = sentence?.ob?.text;
-  if (typeof raw !== "string") throw new Error("terminal request must be a JSON object string");
+  if (typeof raw !== "string") throw new Error("command session request must be a JSON object string");
   let value;
   try {
     value = JSON.parse(raw);
   } catch {
-    throw new Error("terminal request is malformed JSON");
+    throw new Error("command session request is malformed JSON");
   }
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("terminal request must be a JSON object");
+    throw new Error("command session request must be a JSON object");
   }
   return value;
 }
@@ -41,7 +41,7 @@ function requestObject(sentence) {
 function jsonResult(action, result) {
   return {
     mood: "ya",
-    su: { name: "terminal result" },
+    su: { name: "command session result" },
     be: "text",
     ob: { text: JSON.stringify({ action, ...result }) }
   };
@@ -58,16 +58,21 @@ function inside(target, root) {
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
-async function resolveProjectDirectory(requested, sandbox) {
+async function resolveTerminalProjectRoot(sandbox) {
+  const projectRoot = await fs.realpath(sandbox.cwd).catch(() => null);
+  if (!projectRoot || !(await fs.stat(projectRoot).catch(() => null))?.isDirectory()) {
+    throw new Error("command session project working directory is unavailable");
+  }
+  return projectRoot;
+}
+
+async function resolveProjectDirectory(requested, sandbox, projectRoot) {
   const raw = normalized(requested) || sandbox.cwd;
   const candidate = path.resolve(sandbox.cwd, raw);
-  const [realCandidate, realRoots] = await Promise.all([
-    fs.realpath(candidate),
-    Promise.all(sandbox.writableRoots.map((root) => fs.realpath(root).catch(() => "")))
-  ]);
+  const realCandidate = await fs.realpath(candidate);
   const stat = await fs.stat(realCandidate);
-  if (!stat.isDirectory() || !realRoots.some((root) => root && inside(realCandidate, root))) {
-    throw new Error("terminal working directory is outside the agent's licensed project roots");
+  if (!stat.isDirectory() || !inside(realCandidate, projectRoot)) {
+    throw new Error("command session working directory is outside the agent's active project root; omit cwd to use the active project root");
   }
   return realCandidate;
 }
@@ -106,22 +111,25 @@ export function resolveChildAgentTarget({
 
 async function authorizeLaunch({ sentence, command, args, cwd, runtimeContext, rememberFn }) {
   const commandText = [command, ...args].map(shellQuote).join(" ");
+  if (isInternalMindRunnerCommandText(commandText)) {
+    throw new Error("command session denied: internal Pyash mind runner must use the mind tool");
+  }
   const commandClass = classifyCommandText(commandText);
   const policy = resolveCommandPolicy({ sentence, cmdClass: commandClass, rememberFn });
   if (shouldDeny({ sentence, policy, commandClass })) {
-    throw new Error(`terminal command denied by command policy: ${commandClass}`);
+    throw new Error(`command session denied by command policy: ${commandClass}`);
   }
   if (shouldRequireRatify({ sentence, policy, commandClass })) {
     const mindName = normalized(runtimeContext?.agentName);
     const decision = await resolveRatifyDecision({
       mindName,
-      toolName: "terminal start",
-      toolSignature: "terminal start",
-      subjectName: "terminal start",
+      toolName: "command session start",
+      toolSignature: "command session start",
+      subjectName: "command session start",
       rememberFn
     });
     if (decision?.decision !== "truth") {
-      throw new Error(`terminal command needs an existing ratify allow rule (${commandClass})`);
+      throw new Error(`command session needs an existing ratify allow rule (${commandClass})`);
     }
   }
   const sandbox = resolveSandboxSettings({ sentence, rememberFn });
@@ -131,7 +139,8 @@ async function authorizeLaunch({ sentence, command, args, cwd, runtimeContext, r
 }
 
 function actionOf(sentence) {
-  return normalized(sentence?.as?.wo ?? sentence?.as?.text ?? sentence?.as?.name).toLowerCase();
+  const action = normalized(sentence?.as?.wo ?? sentence?.as?.text ?? sentence?.as?.name).toLowerCase();
+  return action === "size" ? "resize" : action === "finish" ? "close" : action;
 }
 
 function sessionName() {
@@ -169,7 +178,8 @@ async function startChildAgent({
       : hostFallback
   });
   const sandbox = resolveSandboxSettings({ sentence, rememberFn });
-  const cwd = await resolveProjectDirectory(request.cwd, sandbox);
+  const projectRoot = await resolveTerminalProjectRoot(sandbox);
+  const cwd = await resolveProjectDirectory(request.cwd, sandbox, projectRoot);
   const worldRoot = resolveWorldRoot({ rememberFn }) ?? path.join(sandbox.runRoot, "world");
   const childSession = sessionName();
   const environment = {
@@ -187,7 +197,7 @@ async function startChildAgent({
     runtimeContext,
     rememberFn
   });
-  const started = await requestTerminal(worldRoot, sandbox.runRoot, {
+  const started = await requestTerminal(worldRoot, projectRoot, {
     action: "start",
     command: process.execPath,
     args: [SADDLE_ENTRY],
@@ -203,12 +213,12 @@ async function startChildAgent({
       requestTerminal,
       sleepFn,
       worldRoot,
-      projectRoot: sandbox.runRoot,
+      projectRoot,
       terminalId: started.id,
       instruction: initialInstruction
     });
   }
-  return jsonResult("start coding agent", {
+  return jsonResult("start program agent", {
     ...started,
     mind: target.mindName,
     backend: target.backend,
@@ -242,38 +252,39 @@ async function deliverInitialInstruction({ requestTerminal, sleepFn, worldRoot, 
     if (output.status !== "running") return "child exited before its prompt was ready";
     await sleepFn(CHILD_READY_POLL_MS);
   }
-  return "terminal started; initial instruction can be sent with terminal write";
+  return "command session started; send the initial instruction with command_session_write";
 }
 
-export async function terminal(sentence, {
+export async function commandSession(sentence, {
   remember: rememberFn = remember,
   runtimeContext = null,
   requestTerminal = requestManagedTerminal,
   sleepFn = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 } = {}) {
   const action = actionOf(sentence);
-  if (!new Set(["start", "start coding agent", "read", "write", "resize", "status", "list", "close"]).has(action)) {
+  if (!new Set(["start", "start program agent", "read", "write", "resize", "status", "list", "close"]).has(action)) {
     throwErrorSentence({
-      name: "terminal action invalid",
-      message: `terminal action invalid: ${action || "(empty)"}`,
-      from: { name: "terminal" },
+      name: "command session action invalid",
+      message: `command session action invalid: ${action || "(empty)"}`,
+      from: { name: "command session" },
       raw: { sentence }
     });
   }
   const request = requestObject(sentence);
-  if (action === "start coding agent") {
+  if (action === "start program agent") {
     return startChildAgent({ sentence, request, runtimeContext, rememberFn, requestTerminal, sleepFn });
   }
 
   const sandbox = resolveSandboxSettings({ sentence, rememberFn });
   const worldRoot = resolveWorldRoot({ rememberFn }) ?? path.join(sandbox.runRoot, "world");
+  const projectRoot = await resolveTerminalProjectRoot(sandbox);
   if (action === "start") {
     const command = normalized(request.command);
     const args = Array.isArray(request.args) ? request.args.map((value) => String(value)) : [];
-    if (!command) throw new Error("terminal start requires a command");
-    const cwd = await resolveProjectDirectory(request.cwd, sandbox);
+    if (!command) throw new Error("command session start requires a command");
+    const cwd = await resolveProjectDirectory(request.cwd, sandbox, projectRoot);
     await authorizeLaunch({ sentence, command, args, cwd, runtimeContext, rememberFn });
-    const result = await requestTerminal(worldRoot, sandbox.runRoot, {
+    const result = await requestTerminal(worldRoot, projectRoot, {
       action,
       command,
       args,
@@ -283,23 +294,23 @@ export async function terminal(sentence, {
     });
     return jsonResult(action, result);
   }
-  if (action === "list") return jsonResult(action, { sessions: await requestTerminal(worldRoot, sandbox.runRoot, { action }) });
+  if (action === "list") return jsonResult(action, { sessions: await requestTerminal(worldRoot, projectRoot, { action }) });
 
   const id = normalized(request.id);
-  if (!id) throw new Error(`terminal ${action} requires a terminal id`);
-  const result = await requestTerminal(worldRoot, sandbox.runRoot, { ...request, action, id });
+  if (!id) throw new Error(`command session ${action} requires a session id`);
+  const result = await requestTerminal(worldRoot, projectRoot, { ...request, action, id });
   return jsonResult(action, result);
 }
 
-export default terminal;
+export default commandSession;
 
 export const signatures = [
-  { signatureWords: ["be", "terminal", "as", "wo", "start", "ob", "text"], handler: terminal },
-  { signatureWords: ["be", "terminal", "as", "wo", "start", "coding", "agent", "ob", "text"], handler: terminal },
-  { signatureWords: ["be", "terminal", "as", "wo", "read", "ob", "text"], handler: terminal },
-  { signatureWords: ["be", "terminal", "as", "wo", "write", "ob", "text"], handler: terminal },
-  { signatureWords: ["be", "terminal", "as", "wo", "resize", "ob", "text"], handler: terminal },
-  { signatureWords: ["be", "terminal", "as", "wo", "status", "ob", "text"], handler: terminal },
-  { signatureWords: ["be", "terminal", "as", "wo", "list", "ob", "text"], handler: terminal },
-  { signatureWords: ["be", "terminal", "as", "wo", "close", "ob", "text"], handler: terminal }
+  { signatureWords: ["be", "command", "session", "as", "wo", "start", "ob", "text"], handler: commandSession },
+  { signatureWords: ["be", "command", "session", "as", "wo", "start", "program", "agent", "ob", "text"], handler: commandSession },
+  { signatureWords: ["be", "command", "session", "as", "wo", "read", "ob", "text"], handler: commandSession },
+  { signatureWords: ["be", "command", "session", "as", "wo", "write", "ob", "text"], handler: commandSession },
+  { signatureWords: ["be", "command", "session", "as", "wo", "size", "ob", "text"], handler: commandSession },
+  { signatureWords: ["be", "command", "session", "as", "wo", "status", "ob", "text"], handler: commandSession },
+  { signatureWords: ["be", "command", "session", "as", "wo", "list", "ob", "text"], handler: commandSession },
+  { signatureWords: ["be", "command", "session", "as", "wo", "finish", "ob", "text"], handler: commandSession }
 ];

@@ -65,6 +65,9 @@ test("mind tool adapter sends non-empty tools array for with name map", async ()
     assert.equal(tool.signature, "be plus ob num to name num");
     assert.ok(tool.parameters?.properties?.to, "tool should include to");
     assert.ok(!tool.parameters?.properties?.ob, "tool should not include ob when fixed");
+    assert.doesNotMatch(String(payload.prompt ?? ""), /TOOLS:\n/u, "structured schemas should not be repeated as prompt text");
+    assert.doesNotMatch(String(payload.prompt ?? ""), /be_plus_ob_num_to_name_num/u, "tool names should come from the schema");
+    assert.match(String(payload.prompt ?? ""), /Use supplied tools for requested actions/u);
   } finally {
     clearExchangeRecorder();
     if (original === undefined) delete process.env.PYA_MIND_RESPONSE;
@@ -216,10 +219,9 @@ test("mind tool adapter loads default tools for with wo tools", async () => {
     assert.ok(names.includes("be_write_ob_text_to_filename"), "default tools should include write");
     assert.ok(names.includes("be_repair_ob_text_to_name_map"), "default tools should include repair");
     assert.ok(names.includes("be_repair_as_wo_check_ob_text_to_name_map"), "default tools should include repair check");
-    assert.ok(
-      String(payload.prompt ?? "").includes("TOOL USAGE RULES:"),
-      "chat prompt should include tool usage directive"
-    );
+    assert.match(String(payload.prompt ?? ""), /Use supplied tools for requested actions/u);
+    assert.doesNotMatch(String(payload.prompt ?? ""), /Available tool function names:/u);
+    assert.doesNotMatch(String(payload.prompt ?? ""), /be_read_from_filename/u);
   } finally {
     process.chdir(originalCwd);
     await fs.rm(tmpCwd, { recursive: true, force: true });
@@ -344,14 +346,14 @@ test("tool sentence builder extracts filename from object args", () => {
   assert.equal(toolSentence?.ob?.text, "Describe the image.");
 });
 
-test("terminal tools expose structured request objects and preserve PTY input", () => {
+test("command session tools expose structured requests and preserve PTY input", () => {
   forget();
-  const start = parse("su name terminal start be terminal as wo start ob text input can");
-  const write = parse("su name terminal write be terminal as wo write ob text input can");
+  const start = parse("su name command session start be command session as wo start ob text input can");
+  const write = parse("su name command session write be command session as wo write ob text input can");
   doRemember({ mood: "ya", su: { name: "saddle tools" }, be: "map", ob: { map: { start, write } } });
 
   const schemas = buildToolSchemas("saddle tools");
-  const startSchema = schemas.tools.find((tool) => tool.function.name === "terminal_start");
+  const startSchema = schemas.tools.find((tool) => tool.function.name === "command_session_start");
   assert.equal(startSchema.function.parameters.properties.request.type, "object");
   const startSentence = buildToolSentence({
     capability: start,
@@ -361,9 +363,9 @@ test("terminal tools expose structured request objects and preserve PTY input", 
 
   const writeSentence = buildToolSentence({
     capability: write,
-    args: { request: { id: "terminal-one", input: "choice\t\r" } }
+    args: { request: { id: "session-one", input: "choice\t\r" } }
   });
-  assert.deepEqual(JSON.parse(writeSentence.ob.text), { id: "terminal-one", input: "choice\t\r" });
+  assert.deepEqual(JSON.parse(writeSentence.ob.text), { id: "session-one", input: "choice\t\r" });
 });
 
 test("tool sentence builder keeps explicit prompt for see tool", () => {

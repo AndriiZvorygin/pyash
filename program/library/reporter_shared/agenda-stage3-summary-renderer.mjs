@@ -214,7 +214,7 @@ const AMENDMENT_SEQUENCE_REPAIR_RULE = "When the source contains a proposed amen
 const ORDINAL_MOTION_SEQUENCE_RULE = "When a bounded source mentions first, second, third, next, or other ordinal motions, preserve each ordinal as a separate procedural reference. A listed or on-screen first option is not a moved first motion unless this bounded source explicitly says that first motion was moved or otherwise acted on. When the source explicitly identifies the first motion on screen and later records a matching 'I'll move' or equivalent motion for that subject, treat it as a moved first motion; a later explicit 'that motion is defeated' applies to that moved first motion. If literal motion evidence has no explicit first-motion record, never write that a first motion was moved, placed on the table, carried, defeated, or otherwise acted on. A question about one motion does not transfer its subject to another motion. Keep a motion's subject, geographic or policy scope, amendment, outcome, and vote count attached only when the same source wording pairs them; do not transfer a later motion's scope or roll-call count to an earlier motion, merge numbered motions, or infer an outcome for a motion that is only being clarified. Never turn an unnumbered or ambiguous 'on the table' phrase into a numbered first motion or attach it to a subject the source does not explicitly pair with it; omit that ambiguity, and omit the unnumbered motion from the generated prose entirely when naming it would invite an inferred first-motion label. When a roll call is explicitly on one motion, do not describe it as a vote split between alternative proposals merely because later alternatives are discussed; state the voted motion's own subject and describe later alternatives separately. If an earlier motion is carried without a spoken count, do not borrow a later count for it. When several motions occur in one bounded excerpt and the count-to-motion pairing is not unmistakable, omit vote counts entirely and report only the source-supported motion outcomes. If a source explicitly moves a second motion, later calls its question, and says that it is carried, attach that carried disposition to the second motion; keep a later third motion and its own amendment or vote separate. If the source says a separate motion to amend was carried and then says the amended motion was carried, write two distinct procedural clauses or sentences: first, the amendment motion was carried; second, after that amendment, the amended motion was carried. Never compress this into 'the third motion was amended and carried' without separately reporting the carried amendment motion. An explicit disposition such as 'that motion is defeated' controls the motion immediately under discussion even when a preceding vote count or conversational aside is noisy. A spoken roll-call sequence immediately before that disposition, such as counts of those in favour and opposed, is vote-count evidence and may be rendered numerically only when its target motion is unambiguous; preserve the count's order and labels, so 'three in favour' and 'two opposed' must not become 'three opposed to two'. Conversely, do not call a later motion pending, approved, carried, defeated, or under consideration merely because it is described as a next step, another motion, or a step two/three, or because the excerpt ends while participants ask whether another motion is needed; use neutral wording that later motions were described or omit them until their own disposition is explicitly recorded.";
 const ORDINAL_MOTION_AUDIT_PRIORITY_RULE = "For an ordinal-motion audit, align each disposition with the nearest explicitly moved motion in source order, scanning forward through intervening discussion until the next explicitly moved ordinal. A question call and carried result before the next ordinal belongs to the current motion even when the full motion wording is not repeated at the vote. When the source explicitly identifies the first motion on screen, later records a matching motion to move that subject, and then says that motion is defeated, accept concise wording that the first or initial moved motion was defeated; this is not an inference from a listed option. Do not infer a missing first motion merely because later motions are explicitly called second and third; an explicitly moved unnumbered motion remains unnumbered, and an unnumbered on-the-table status is grounded when the source states it. A current minutes receipt or approval motion followed by a carried vote is a supported action even if the same excerpt later narrates that an earlier committee item was postponed. Do not let that earlier carried minutes result overwrite a later separate motion. When the source uses a transition such as 'that is carried' for the current minutes and later says 'that motion is defeated' before introducing the next motions, these are separate dispositions: the later explicit phrase, especially after an unambiguous spoken in-favour/opposed count, is a supported defeat of the motion immediately under discussion; if the candidate reports that later motion as defeated, accept the literal phrase rather than reassigning the earlier carried result. If the source separately carries an amendment and then carries the amended motion, a grounded candidate must preserve both actions as separate procedural steps. When the source literally records a motion to amend by removing a scope, says that amendment is carried, then returns to the amended motion and says that motion is carried, wording such as 'the amendment was carried; subsequently, the amended motion was also carried' explicitly preserves those two distinct actions and must be accepted. If the source explicitly restates that the changes now relate only to the remaining scope, or says that the amendment leaves only that scope, accept that narrowed scope as grounded; do not demand that the final carried sentence repeat the entire amended subject. If an earlier 'on the table' or separate second/third motion is ambiguous, conservative omission of it is acceptable; do not demand that the summary invent an 'initial' sequence or conflate it with the later carried amendment steps. Do not substitute the earlier narrative postponement or carried result for that later defeat, and do not reject a concise summary that reports both separate actions.";
 const CURRENT_MEETING_MINUTES_ACTION_RULE = "When the current agenda item is minutes of another committee, board, or earlier meeting, treat that body as the subject of the minutes, not automatically as the body taking the current action. Narrative before the current meeting's minutes motion is content of the referenced minutes: describe it as what the minutes report, discuss, or recommend, and do not turn it into a current-meeting presentation, receipt, approval, or carried outcome. If the source explicitly records a motion to receive the current minutes, approve recommendations contained within them, and then says that motion carried, accept that exact current action; do not let a later narrative about a different earlier committee's postponed minutes negate it. A narrative statement such as 'Council postponed the earlier committee minutes in order to provide time for comment' is historical or referenced-minute content; do not apply that postponement to a later motion in the current bounded excerpt unless the same motion subject and chronology explicitly do so. When the same excerpt later says that the first motion was defeated, that explicit current motion disposition controls; do not replace it with the earlier narrative postponement. Conversely, do not treat an earlier carried receipt-and-approval motion for the current minutes as approval of a later unrelated motion. Match every disposition to the motion or item it directly follows. A handoff such as 'back to you for the minutes', 'pass it back to you', or an invitation to present them is only a transition, not a completed presentation, report-back, receipt, approval, or carried action. A qualified summary such as 'the excerpt records a handoff to the minutes without recording their presentation or approval' is grounded when no later minutes content, motion, or vote appears in the bounded span; do not reject that negative qualification merely because the handoff verb itself is explicit. Do not say the minutes were reported, reported back, presented, received, approved, or carried unless the bounded source explicitly records that action or content. For a handoff-only span with no minutes content, motion, or vote, use neutral transition wording such as 'the discussion returned to the minutes' and omit the recipient's name. Keep a carried vote attached only to the motion it directly follows. If the source says 'move the minutes', preserve that literal move action and do not upgrade it to 'approve' unless approval is explicitly stated. If the source records a current-meeting motion to move, adopt, receive, or approve those minutes followed by a carried vote, attribute that disposition to the authoritative current meeting body or use neutral wording that the minutes were moved. Do not transfer the current-meeting motion to the referenced committee unless the source explicitly places the motion in that earlier meeting.";
-const MINUTES_MOTION_SCOPE_REPAIR_RULE = "When a minutes item begins with a handoff to the current labeled committee's minutes, then uses a generic phrase such as 'I'll move the minutes' followed by a carried vote, preserve only that literal motion and disposition when the motion is explicitly paired with the current committee. If the same source later switches to another named committee's minutes and the generic motion never repeats the current committee, treat the generic motion as ambiguous rather than assigning it to the current item: use a handoff-only summary for the current label and omit the generic vote. Treat the later named committee as a boundary and omit its content and receipt motion from the current item. Do not infer that a generic 'move the minutes' refers to either committee, and do not claim that the current minutes were received or approved unless those words are explicitly paired with them.";
+const MINUTES_MOTION_SCOPE_REPAIR_RULE = "When a minutes item begins with a handoff to the current labeled committee's minutes, then uses a generic phrase such as 'I'll move the minutes' or 'I'm looking for someone to move those' followed by a carried vote, preserve only that literal motion and disposition when the motion is explicitly paired with the current committee. A procedural question about whether discussion would require a closed session is still discussion of the item's status; do not describe the minutes as approved without discussion merely because no substantive amendment to their contents was debated. If the same source later switches to another named committee's minutes and the generic motion never repeats the current committee, treat the generic motion as ambiguous rather than assigning it to the current item: use a handoff-only summary for the current label and omit the generic vote. Treat the later named committee as a boundary and omit its content and receipt motion from the current item. Do not infer that a generic 'move the minutes' refers to either committee, and do not claim that the current minutes were received or approved unless those words are explicitly paired with them.";
 const CONSENT_AGENDA_SCOPE_REPAIR_RULE = "When a consent-agenda motion explicitly lists a received range and a separate recommendations-approved range with exceptions, preserve both clauses and every exception exactly as source scope. Do not narrow the receive range to the approval range, expand the approval range to the receive range, replace 'save and accept' or 'save and except' with a generic approval, or attach a later pulled-item deferral or defeat to the composite consent motion. A carried composite motion may be summarized with the two explicit ranges and exceptions; later discussion of a pulled item is a separate action and may be omitted from the parent consent-agenda summary.";
 const CURRENT_MEETING_BODY_ATTRIBUTION_RULE = "When an authoritative current meeting body is supplied and the bounded source explicitly records a current-meeting motion and vote, a generic member of that body may be used for the motion even if the transcript exposes only an internal speaker label; this is contextual body identity, not an unsupported named office. When the authoritative body label identifies a Council meeting, including labels such as 'Council Meeting - Regular', accept wording such as 'a council member moved for approval' when the source records the motion and carried vote; do not demand the literal word council in the transcript and do not reject that generic attribution as unsupported. Do not use that generic role for an incomplete fragment, a call-to-order announcement, or a question-and-answer without an explicit motion and disposition.";
 const EXPLICIT_NAMED_MOTION_ATTRIBUTION_RULE = "EXPLICIT NAMED-MOTION ATTRIBUTION RULE: when the bounded source explicitly pairs a named mover or seconder with the motion, a candidate that repeats the same name and paired action is source-grounded. A candidate may also conservatively omit those names and use impersonal wording. Do not state that a candidate correctly attributes the named actions and then reject it merely because the candidate uses the explicitly sourced names or because a generic paraphrase would also be acceptable. Reject a named attribution only when the source does not pair that name with the claimed action, the spelling or role conflicts, or the candidate transfers the name to a different action.";
@@ -232,6 +232,8 @@ const FRAGMENTED_TRANSCRIPT_GROUNDING_RULE = "FRAGMENTED-TRANSCRIPT GROUNDING RU
 const LITERAL_SOURCE_CLAIM_CHECK_RULE = "Before marking a candidate claim absent, compare its concrete wording and ordinary paraphrases against the complete GROUNDED_SOURCE, including every line before a handoff. If the source explicitly states the claim, it is grounded even when it appears in a list or beside other actions; do not report it as absent. Generic presentation framing is a faithful paraphrase when the source speaker presents a report; do not reject it merely because the candidate says 'the presentation described' instead of repeating the speaker's wording. Generic actor compression such as 'one councillor' and 'another speaker' is acceptable when the source clearly supports two distinct participants performing the described actions; do not require names when the candidate does not assert unsupported roles. A wrong or noisy body label that appears only in GROUNDED_SOURCE is not a candidate defect; reject it only when the candidate itself asserts the wrong body. If your notes say that the source explicitly contains or supports the candidate claim, return grounded=true and leave unsupported claims empty. ${FRAGMENTED_TRANSCRIPT_GROUNDING_RULE}";
 const RECOMMENDATION_ACTOR_BINDING_RULE = "STAFF-RECOMMENDATION ACTOR RULE: Keep a report speaker's recommendation separate from the later body's disposition. When the source says staff recommended, proposed, or asked a body to direct staff to take an action, do not rewrite each recommendation clause as 'the committee/council directed staff' merely because the body later carried, received, or approved the report or recommendation. Use 'staff recommended/proposed' for the recommendation and 'the committee/council carried the report or recommendation' for the recorded disposition. Use a body-as-director only when the literal source explicitly says that body directed staff to that specific action.";
 const CONVERSATIONAL_RESTART_EVIDENCE_RULE = "CONVERSATIONAL-RESTART EVIDENCE RULE: Discourse markers such as 'sorry', 'correction', 'actually', or a self-repair do not erase the substantive clause that follows. If the source says 'sorry, applying to...' or otherwise repeats an action after a restart, that clause remains literal source evidence for a faithful summary; do not reject it solely because it follows an interruption or correction.";
+const AGENDA_LABEL_PROVENANCE_RULE = "AGENDA-LABEL PROVENANCE RULE: The authoritative agenda label may identify a report's named source, office, coordinator, organization, report code, or subject as item identity/provenance. A summary may say that the agenda-listed report was from that source, but must not turn the label into a transcript speaker, presenter, live statement, or institutional action unless the bounded source explicitly pairs that identity with the speech or action.";
+const NEGATION_FIDELITY_RULE = "NEGATION FIDELITY RULE: Preserve explicit negation and polarity exactly. A source answer containing no, not, never, without, neither, or cannot must not become an affirmative action, responsibility, approval, or outcome. Keep a question separate from its answer: if the source asks whether someone will do something and answers no, summarize the negative answer or omit the detail; never report that the subject will or did do it.";
 const GENERIC_SPEAKER_QUESTION_RULE = "GENERIC QUESTION ATTRIBUTION RULE: when the literal source contains a participant's direct question or question wording, accept a neutral paraphrase such as 'a speaker asked about ...' or 'the source records a question about ...' even when the exact speaker label is not explicitly paired with that question. This generic wording does not assert a named actor, formal inquiry, motion, vote, or institutional action. Do not reject it merely because the source does not identify the questioner by name; reject only a changed question subject, a completed answer or outcome, or a formal procedural claim not present in the source.";
 const EXPLICIT_PROPOSAL_PARAPHRASE_RULE = "EXPLICIT PROPOSAL PARAPHRASE RULE: when the literal source explicitly says a speaker or staff member is proposing, proposed, or recommends an action and pairs that speech act with its object or rationale, accept a neutral paraphrase such as 'the proposal involved ...' or 'a proposal was made to ...'. The singular word proposal does not by itself add a formal motion, completed outcome, or unsupported definitive scope. Reject only an object, rationale, actor, or outcome that changes or exceeds the source's explicit pairing.";
 const SOURCE_QUALIFIER_FIDELITY_RULE = "NON-NEGOTIABLE source-strength rule: preserve qualifiers, alternatives, singular/plural scope, and near-total wording that changes the claim's truth conditions. If the source gives alternatives such as 'acted upon or have been completed', retain the alternatives or omit that claim; do not choose the stronger branch 'completed'. If the source says one recommendation, do not pluralize it to recommendations unless the source supports a set. If the source says 'virtually' or 'almost', retain that qualification or omit the result; never strengthen it to 'all' or 'erased', and never drop a source-stated exception. Do not add descriptive qualifiers such as 'new', 'updated', 'current', 'redesigned', 'digital', 'expanded', or 'improved' unless the bounded source explicitly supports that qualifier for the retained subject; when the core subject or action is supported but a modifier is not, omit only the modifier and preserve the complete source-supported claim. If a speaker says they would or could support a proposal but immediately qualifies that support with a condition, contrast, or need for more information, preserve the qualification in the same claim; do not rewrite it as unconditional support plus a separate request. When the same source block contains qualified support followed by questions or requests for information, it is acceptable to report both facts, but use wording such as 'a speaker said they would support the proposal while requesting more information' or separate neutral clauses; never use unconditional past-tense 'supported' for that qualified statement. A concise summary may omit secondary detail, but it must not strengthen a qualified, approximate, disjunctive, or exception-bearing source statement.";
@@ -309,6 +311,27 @@ function staffRecommendationActorGroundingDefect({ sourceText = "", candidateTex
   return sourceHasStaffRecommendation && !sourceHasExplicitBodyDirection && candidateAssignsBodyDirection;
 }
 
+function unsupportedProceduralActorGroundingDefect({ sourceText = "", candidateText = "" } = {}) {
+  const source = String(sourceText || "");
+  const candidate = String(candidateText || "");
+  const candidateActorAction = /\b(?:the\s+)?(?:chair|committee|council|board|county)\b[\s\S]{0,100}\b(?:direct(?:ed|s|ing)?|call(?:ed|s|ing)?|order(?:ed|s|ing)?|open(?:ed|s|ing)?|close(?:d|s|ing)?|ask(?:ed|s|ing)?|tell(?:ing)?|announc(?:ed|es|ing)?|proceed(?:ed|s|ing)?)\b/iu.test(candidate);
+  if (!candidateActorAction) return false;
+  // The source may say “call the meeting of the Operations Committee ... to
+  // order”.  In that construction the committee is the object of “of”, not
+  // the actor.  Require a direct procedural verb after the body label and do
+  // not treat the standalone infinitive “to order” as an explicit body action.
+  const sourceExplicitActorAction = /\b(?:chair|committee|council|board|county)\b\s+(?:direct(?:ed|s|ing)?|call(?:ed|s|ing)?|open(?:ed|s|ing)?|close(?:d|s|ing)?|ask(?:ed|s|ing)?|tell(?:ing)?|announc(?:ed|es|ing)?|proceed(?:ed|s|ing)?)\b/iu.test(source);
+  return !sourceExplicitActorAction;
+}
+
+function negationPolarityGroundingDefect(text = "") {
+  const evidence = String(text || "");
+  const sourceNegates = /\b(?:source|transcript|excerpt)\b[\s\S]{0,220}\b(?:no|not|never|without|neither|cannot|can't|won['’]?t)\b[\s\S]{0,140}\b(?:responsib\w*|clean\w*|approv\w*|carri\w*|direct\w*|support\w*|recommend\w*|permit\w*|allow\w*|provide\w*|retain\w*|remove\w*|receiv\w*)\b/iu.test(evidence);
+  const candidateAffirms = /\b(?:candidate|summary|claim|output|prose)\b[\s\S]{0,180}\b(?:responsib\w*|clean\w*|approv\w*|carri\w*|direct\w*|support\w*|recommend\w*|permit\w*|allow\w*|provide\w*|retain\w*|remove\w*|receiv\w*)\b/iu.test(evidence);
+  const polarityConflict = /\b(?:contradict(?:s|ed|ing)?|invert(?:ed|s)?|opposite|affirmative|positive\s+claim|unsupported|wrong|incorrect)\b/iu.test(evidence);
+  return sourceNegates && candidateAffirms && polarityConflict;
+}
+
 function genericPluralActorGroundingDefect(text = "") {
   const evidence = String(text || "");
   return /\b(?:generic\s+plural|plural\s+(?:actor|subject|speaker)|generic\s+(?:actor|speaker)|plural\s+['”']?(?:speakers?|participants?|members?))\b/iu.test(evidence)
@@ -321,6 +344,32 @@ function unsupportedQualifierGroundingDefect(text = "") {
     && /\b(?:does\s+not\s+(?:explicitly\s+)?(?:state|record|say|label|call)|not\s+explicitly\s+(?:state|record|said|labelled|labeled)|unsupported|adds?\s+(?:the\s+)?(?:qualifier|descriptor|modifier|word)|changes?\s+the\s+(?:claim|truth)|not\s+present|absent)\b/iu.test(evidence);
 }
 
+function unsupportedEvidenceSpecificityGroundingDefect(text = "") {
+  const evidence = String(text || "");
+  const sourceGap = /\b(?:source|transcript|excerpt|provided\s+text|bounded\s+source)\b[\s\S]{0,420}\b(?:does\s+not|doesn't|never|not)\b[\s\S]{0,180}\b(?:mention|confirm|record|state|detail|specif|support|establish|list(?:s|ed)?\s+only|general(?:ly)?)\b/iu.test(evidence)
+    || /\blist(?:s|ed)?\b[\s\S]{0,180}\b(?:but|yet)\b[\s\S]{0,120}\b(?:does\s+not|doesn't|not)\b[\s\S]{0,120}\b(?:confirm|detail|establish|support)\b/iu.test(evidence);
+  const candidateSpecificClaim = /\b(?:candidate|summary|claim|output|prose|draft)\b[\s\S]{0,480}\b(?:specific|approved|adopted|withdraw(?:n|al)?|reserve|grant(?:s)?|fund(?:ed|ing)?|awarded|allocated|issued|project(?:s)?|action(?:s)?|amount|completed|confirmed|authorized|committed)\b/iu.test(evidence);
+  return sourceGap && candidateSpecificClaim;
+}
+
+function sourceExplicitlySupportsEvidenceSpecificity(source = "", candidate = "", audit = "") {
+  const sourceText = String(source || "");
+  const candidateText = String(candidate || "");
+  const auditText = String(audit || "");
+  const sourceLines = sourceText.split(/\n+/u).map((line) => line.trim()).filter(Boolean);
+  const hasReserveAction = sourceLines.some((line) =>
+    /\b(?:reserve|withdraw(?:n|al)?|draw(?:n)?\s+from)\b/iu.test(line) && /(?:\$|\b\d[\d,]*\b)/u.test(line));
+  const hasApprovedGrantAction = /\b(?:approved|awarded|funded|allocated|issued)\b[\s\S]{0,120}\bgrant(?:s)?\b/iu.test(sourceText)
+    || /\bgrant(?:s)?\b[\s\S]{0,120}\b(?:approved|awarded|funded|allocated|issued)\b/iu.test(sourceText);
+  const auditMentionsReserve = /\b(?:reserve|withdraw(?:n|al)?|draw(?:n)?\s+from)\b/iu.test(auditText);
+  const auditMentionsGrant = /\bgrant(?:s)?\b/iu.test(auditText);
+  const candidateClaimsCompletedAction = /\b(?:completed|constructed|built|finished|delivered)\b/iu.test(candidateText);
+  const sourceRecordsCompletedAction = /\b(?:completed|constructed|built|finished|delivered)\b/iu.test(sourceText);
+  if (candidateClaimsCompletedAction && !sourceRecordsCompletedAction) return false;
+  return (auditMentionsReserve && hasReserveAction)
+    || (auditMentionsGrant && hasApprovedGrantAction);
+}
+
 function fragmentedTranscriptGroundingDefect(text = "") {
   const evidence = String(text || "");
   return /\b(?:fragmented\s+(?:speech|source|transcript|lines?)|fragmentary\s+(?:speech|source|transcript|lines?)|transcript\s+fragments?|source\s+(?:fragment|ends?|is\s+truncated)|ASR\s+(?:fragment|line))\b/iu.test(evidence)
@@ -331,6 +380,15 @@ function mergedDiscussionScopeGroundingDefect(text = "") {
   const evidence = String(text || "");
   return /\b(?:combines?|merged|conflat(?:es?|ed)|single\s+(?:discussion|event|claim)|combined\s+(?:discussion|claim|scope)|unified\s+(?:discussion|event|claim)|distinct\s+(?:remarks?|topics?|speakers?)|separate(?:ly)?\s+(?:from|remarks?|topics?)|different\s+(?:speakers?|remarks?|topics?)|not\s+(?:a\s+)?(?:single|combined|unified)|specific\s+(?:causal\s+)?link(?:age)?|causal\s+link(?:age)?|comprehensive\s+scope)\b/iu.test(evidence)
     && /\b(?:source|transcript|candidate|summary|claim|remarks?|speakers?|topics?|discussion|relationship|scope)\b/iu.test(evidence);
+}
+
+function presentationDiscussionGroundingDefect(text = "") {
+  const evidence = String(text || "");
+  const hasPresentation = /\b(?:presentation|presented|briefing|report(?:ed|ing)?|describ(?:ed|es|ing))\b/iu.test(evidence);
+  const rejectsDiscussion = /\b(?:does\s+not\s+record|not\s+(?:a\s+)?(?:discussion|debate|conversation)|rather\s+than|instead\s+of|incorrect(?:ly)?\s+(?:frames?|describes?)|frames?\s+this\s+as)\b[\s\S]{0,260}\b(?:discussion|debate|conversation)\b/iu.test(evidence)
+    || /\b(?:discussion|debate|conversation)\b[\s\S]{0,260}\b(?:does\s+not\s+record|not\s+(?:a\s+)?(?:discussion|debate|conversation)|rather\s+than|instead\s+of|incorrect(?:ly)?|frames?)\b/iu.test(evidence);
+  const candidateDiscussion = /\b(?:candidate|summary|claim|output|prose|draft)\b[\s\S]{0,240}\b(?:discussion|discuss(?:ed|ing)?|conversation|debate)\b/iu.test(evidence);
+  return hasPresentation && rejectsDiscussion && candidateDiscussion;
 }
 
 function referredAgendaScopeGroundingDefect(text = "") {
@@ -504,13 +562,27 @@ function firstContainerHandoffSource(rawSource = "") {
   return null;
 }
 
-function firstNextAgendaHandoffSource(rawSource = "") {
+function firstNextAgendaHandoffSource(rawSource = "", { currentLabel = "" } = {}) {
   const lines = String(rawSource || "")
     .split(/\r?\n/u)
     .map((line) => normalizeText(line))
     .filter(Boolean);
+  const normalizedCurrentLabel = normalizeText(currentLabel);
+  const currentIsAdditionalBusiness = /\badditional\s+business\b/iu.test(normalizedCurrentLabel);
+  const currentIsMinutes = /\bminutes\b/iu.test(normalizedCurrentLabel);
+  const explicitSectionHandoffPatterns = [
+    {
+      pattern: /\b(?:i['’]?ll|we['’]?ll|let['’]?s)\s+call\s+for\s+additional\s+business\b/iu,
+      skip: currentIsAdditionalBusiness,
+    },
+    {
+      pattern: /\bnext\s+item\s+is\s+(?:the\s+)?confirmation\s+of\s+(?:the\s+)?(?:community\s+services\s+)?minutes\b/iu,
+      skip: currentIsMinutes,
+    },
+  ];
   for (let index = 0; index < lines.length; index += 1) {
-    const handoffPattern = NEXT_AGENDA_HANDOFF_PATTERNS.find((pattern) => pattern.test(lines[index]));
+    const handoffPattern = NEXT_AGENDA_HANDOFF_PATTERNS.find((pattern) => pattern.test(lines[index]))
+      || explicitSectionHandoffPatterns.find((entry) => !entry.skip && entry.pattern.test(lines[index]))?.pattern;
     if (handoffPattern) {
       const match = handoffPattern.exec(lines[index]);
       const matchIndex = match?.index || 0;
@@ -537,7 +609,9 @@ export function scopeSourceAtStructuredHandoff(unit = {}, nextUnit = {}) {
       return { ...containerHandoff, changed: true };
     }
   }
-  const nextAgendaHandoff = firstNextAgendaHandoffSource(rawSource);
+  const nextAgendaHandoff = firstNextAgendaHandoffSource(rawSource, {
+    currentLabel: unit?.label || "",
+  });
   if (nextAgendaHandoff && nextAgendaHandoff.source.length < source.length) {
     return { ...nextAgendaHandoff, changed: true };
   }
@@ -691,6 +765,7 @@ const SPELLED_STREET_ORDINAL = new RegExp(`\\b${ORDINAL_WORD}\\s+(?:Avenue|Stree
 const NUMERIC_WORD_TOKEN = "(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|sixteenth|seventeenth|eighteenth|nineteenth|twentieth|thirtieth)";
 const SPELLED_NUMBER_PHRASE = new RegExp(`\\b${NUMERIC_WORD_TOKEN}(?:[ -]+(?:and[ -]+)?${NUMERIC_WORD_TOKEN})*\\b`, "giu");
 const MIXED_MAGNITUDE_NUMBER = new RegExp(`\\b\\d+\\s+(?:hundred|thousand)(?:\\s+and\\s+(?:\\d+|${NUMERIC_WORD_TOKEN}))?\\b`, "giu");
+const NUMERIC_PLACEHOLDER_PATTERN = /\\b(?:a|an|the)\\s+(?:certain|particular|specific)\\s+(?:value|amount|number|figure|ratio|quantity|count)\\b|\\b(?:about|approximately|over|under)\\s+(?:a|an|the)\\s+(?:certain|particular|specific)\\b/iu;
 
 function numericFidelityDefects(text = "") {
   const value = String(text || "");
@@ -1556,6 +1631,8 @@ export async function auditGroundedSummaryLlm({
       LITERAL_SOURCE_CLAIM_CHECK_RULE,
       RECOMMENDATION_ACTOR_BINDING_RULE,
       CONVERSATIONAL_RESTART_EVIDENCE_RULE,
+      AGENDA_LABEL_PROVENANCE_RULE,
+      NEGATION_FIDELITY_RULE,
       parentAuditedChildEvidence ? PARENT_AUDITED_CHILD_EVIDENCE_RULE : "",
       GENERIC_SPEAKER_QUESTION_RULE,
       EXPLICIT_PROPOSAL_PARAPHRASE_RULE,
@@ -1759,6 +1836,8 @@ export async function adjudicateGroundedSummaryLlm({
       LITERAL_SOURCE_CLAIM_CHECK_RULE,
       RECOMMENDATION_ACTOR_BINDING_RULE,
       CONVERSATIONAL_RESTART_EVIDENCE_RULE,
+      AGENDA_LABEL_PROVENANCE_RULE,
+      NEGATION_FIDELITY_RULE,
       REFERRED_AGENDA_SCOPE_AUDIT_RULE,
       parentAuditedChildEvidence ? PARENT_AUDITED_CHILD_EVIDENCE_RULE : "",
       GENERIC_SPEAKER_QUESTION_RULE,
@@ -1883,6 +1962,8 @@ export async function confirmLiteralGroundingLlm({
       "Return grounded=false only for a claim that is absent, contradicted, or changes the source's actor, action, outcome, timing, amount, location, or relationship. Do not reject a claim for style, generic framing, conservative omission, or because the source uses a different but equivalent grammatical subject.",
       RECOMMENDATION_ACTOR_BINDING_RULE,
       CONVERSATIONAL_RESTART_EVIDENCE_RULE,
+      AGENDA_LABEL_PROVENANCE_RULE,
+      NEGATION_FIDELITY_RULE,
       LITERAL_SOURCE_PHASE_PRIORITY_RULE,
       REFERRED_AGENDA_SCOPE_AUDIT_RULE,
       parentAuditedChildEvidence ? PARENT_AUDITED_CHILD_EVIDENCE_RULE : "",
@@ -2208,6 +2289,16 @@ async function auditAndAdjudicateGroundedSummary({
   numericConflictRepairActive = false,
   deferralObjectRepairActive = false,
 }) {
+  if (unsupportedProceduralActorGroundingDefect({
+    sourceText: sourceExcerpt,
+    candidateText: summary,
+  })) {
+    return {
+      grounded: false,
+      unsupportedClaims: ["the candidate assigns a procedural announcement or transition to an unsupported chair or body actor"],
+      notes: "Use impersonal transition wording unless the source explicitly pairs the actor with that procedural action.",
+    };
+  }
   if (staffRecommendationActorGroundingDefect({
     sourceText: sourceExcerpt,
     candidateText: summary,
@@ -2295,6 +2386,20 @@ async function auditAndAdjudicateGroundedSummary({
       grounded: true,
       unsupportedClaims: [],
       notes: `minimal literal-source tie-breaker accepted the candidate${finalLiteralCheck.notes ? `: ${finalLiteralCheck.notes}` : ""}`,
+    };
+  }
+  const finalAuditEvidence = [
+    ...(Array.isArray(normalizedAudit.unsupportedClaims) ? normalizedAudit.unsupportedClaims : []),
+    ...(Array.isArray(normalizedAdjudication.unsupportedClaims) ? normalizedAdjudication.unsupportedClaims : []),
+    normalizedAudit.notes,
+    normalizedAdjudication.notes,
+  ].filter(Boolean).join(" | ");
+  if (unsupportedEvidenceSpecificityGroundingDefect(finalAuditEvidence)
+    && sourceExplicitlySupportsEvidenceSpecificity(sourceExcerpt, summary, finalAuditEvidence)) {
+    return {
+      grounded: true,
+      unsupportedClaims: [],
+      notes: "literal source contains the disputed amount/program action; specificity allegation was rejected by source evidence",
     };
   }
   if (ordinalMotionSequence) {
@@ -2444,10 +2549,17 @@ export async function summarizeGroundedUnit({
     && /\bminutes\b/iu.test(promptLabel)
     && /\b(?:pass|hand)\w*\s+(?:it\s+|them\s+)?back\s+to\b|\bback\s+to\s+you\b/iu.test(String(unit?.["source excerpt"] || ""))
     && !/\b(?:motion|moved|move|vote|carried|approved|adopt(?:ed)?|receiv(?:e|ed)|recommend(?:ed|s)?)\b/iu.test(String(unit?.["source excerpt"] || ""));
+  const minutesMotionSource = String(unit?.["source excerpt"] || "");
+  const closedMinutesProcedureOnly = /\bminutes\b/iu.test(promptLabel)
+    && /\bclosed\s+session\b[\s\S]{0,260}\bopen\s+agenda\b/iu.test(minutesMotionSource)
+    && /\b(?:seeing\s+none|looking\s+for\s+someone\s+to\s+move)\b/iu.test(minutesMotionSource);
   const minutesMotionScopeOnly = /\bminutes\b/iu.test(promptLabel)
-    && /\b(?:back|pass|hand)\w*\s+(?:it\s+|them\s+)?(?:back\s+)?to\b[^.\n]{0,160}\bminutes\b/iu.test(String(unit?.["source excerpt"] || ""))
-    && /\b(?:I['’]ll|I\s+will)\s+move\s+the\s+minutes\b/iu.test(String(unit?.["source excerpt"] || ""))
-    && /\b(?:all\s+in\s+favour|that['’]?s\s+carried|carried)\b/iu.test(String(unit?.["source excerpt"] || ""));
+    && (
+      ( /\b(?:back|pass|hand)\w*\s+(?:it\s+|them\s+)?(?:back\s+)?to\b[^.\n]{0,160}\bminutes\b/iu.test(minutesMotionSource)
+        && /\b(?:I['’]ll|I\s+will)\s+move\s+the\s+minutes\b/iu.test(minutesMotionSource) )
+      || /\b(?:looking\s+for|ask(?:ing)?\s+for)\s+(?:someone|a\s+member)\s+to\s+move\s+(?:those|the\s+minutes)\b/iu.test(minutesMotionSource)
+    )
+    && /\b(?:all\s+in\s+favour|that['’]?s\s+carried|carried)\b/iu.test(minutesMotionSource);
   const consentAgendaScopeOnly = /\bconsent\s+agenda\b/iu.test(`${promptLabel}\n${String(unit?.["source excerpt"] || "")}`)
     && /\b(?:receives?|approves?)\s+items?\s+[0-9]+[A-Z]?\s+to\s+[0-9]+[A-Z]?\b/iu.test(String(unit?.["source excerpt"] || ""))
     && /\bsave\s+and\s+(?:accept|except)\b/iu.test(String(unit?.["source excerpt"] || ""))
@@ -2525,6 +2637,10 @@ export async function summarizeGroundedUnit({
   const questionAnswerOnly = routineQuestionTransitionOnly
     || (/\?/u.test(sourceForSpeechActChecks)
       && /\b(?:is\s+this|did|does|would|could|why|how|what|where|when)\b/iu.test(sourceForSpeechActChecks));
+  const separateProceduralPhasesOnly = /\b(?:are\s+we\s+doing\s+separate\s+motions?|separate\s+motions?|one\s+motion\s+for\s+both)\b/iu.test(sourceForSpeechActChecks)
+    && /\b(?:receive|receiv(?:e|ed|ing)|correspondence|two\s+items|those\s+two\s+are\s+received)\b/iu.test(sourceForSpeechActChecks)
+    && /\b(?:carried|approved|adopted)\b/iu.test(sourceForSpeechActChecks)
+    && /\b(?:site\s+plan|next\s+item)\b/iu.test(sourceForSpeechActChecks);
   const shortAgendaTransitionOnly = !proceduralSelfReportOnly
     && String(unit?.["source excerpt"] || "").length <= 400
     && /\b(?:through|we['’]?re\s+at|moving\s+(?:through|to)|back\s+to)\b/iu.test(String(unit?.["source excerpt"] || ""));
@@ -2625,6 +2741,8 @@ export async function summarizeGroundedUnit({
     SOURCE_QUALIFIER_FIDELITY_RULE,
     RECOMMENDATION_ACTOR_BINDING_RULE,
     CONVERSATIONAL_RESTART_EVIDENCE_RULE,
+    AGENDA_LABEL_PROVENANCE_RULE,
+    NEGATION_FIDELITY_RULE,
     "The current agenda label is the binding scope. When trailing source lines announce or perform a different agenda item, keep that neighboring item out of the current summary even if the boundary context is inside the excerpt; never attach its motion, mover, seconder, question, answer, or outcome to the current label.",
     "The source excerpt may include trailing boundary context. Locate the first explicit sentence that announces a different report or agenda item and stop the current summary before that sentence; treat every later line as next-item boundary context, not evidence for this item.",
     COMPOSITE_MOTION_SCOPE_RULE,
@@ -2874,6 +2992,29 @@ export async function summarizeGroundedUnit({
     seed: seed + 16060 + attempt,
     format: STAGE3_SUMMARY_RESPONSE_FORMAT,
   });
+  const queryConservativeNegationRepair = async (attempt = 1, rejectedClaims = "", rejectedOutput = "") => callOllamaJson({
+    ollamaUrl,
+    llmModel,
+    appendUniversalContract: false,
+    system: "Write fresh source-grounded civic prose that preserves polarity and negation. Return strict JSON only.",
+    systemSuffix: "HARD NEGATION OVERRIDE: the prior candidate inverted or dropped an explicit source negation. Start over from the literal source. Preserve no, not, never, without, neither, cannot, and won't exactly; distinguish a question from its answer. Do not turn a negative answer into an affirmative responsibility, action, approval, recommendation, or outcome. Do not mention this repair contract.",
+    prompt: [
+      `Negation-preserving repair attempt ${attempt} of 3.`,
+      "The prior output and audit are untrusted diagnostics. Reconstruct both fields from the literal grounded source only.",
+      NEGATION_FIDELITY_RULE,
+      "Keep separate question and answer clauses separate. If the source answers a question with no or not, report the negative answer or omit the detail; never repeat the affirmative premise as if it were the answer.",
+      "Preserve all other source-supported topics and outcomes without adding an actor, title, or institutional action.",
+      `REJECTION_REASON: ${String(rejectedClaims || "the candidate reversed an explicit source negation")}`,
+      rejectedOutput ? `REJECTED_CANDIDATE (UNTRUSTED): ${String(rejectedOutput).slice(0, 3200)}` : "",
+      `AGENDA_LABEL: ${promptLabel}`,
+      `GROUNDED_SOURCE: ${String(semanticGroundingSourceExcerpt || unit?.["source excerpt"] || "").slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000))}`,
+      "Return one non-empty complete summary and chapter text as JSON. Do not copy the rejected affirmative wording or audit explanation.",
+    ].filter(Boolean).join("\n\n"),
+    maxOutputTokens: 720,
+    temperature: attempt >= 3 ? 0 : 0.1,
+    seed: seed + 17060 + attempt,
+    format: STAGE3_SUMMARY_RESPONSE_FORMAT,
+  });
   const queryConservativeGenericPluralActorRepair = async (attempt = 1, rejectedClaims = "", rejectedOutput = "") => {
     let repaired = null;
     for (let pass = 1; pass <= 3; pass += 1) {
@@ -2944,6 +3085,55 @@ export async function summarizeGroundedUnit({
       });
       const repairedText = `${String(repaired?.summary || "")} ${String(repaired?.["chapter text"] || "")}`;
       if (!unsupportedQualifierGroundingDefect(repairedText)) return repaired;
+    }
+    return repaired;
+  };
+  const queryConservativeUnsupportedEvidenceSpecificityRepair = async (attempt = 1, rejectedClaims = "", rejectedOutput = "") => {
+    let repaired = null;
+    const rejection = String(rejectedClaims || "");
+    const rejectedReserveAction = /\b(?:reserve|withdraw(?:n|al)?|draw(?:n)?\s+from)\b/iu.test(rejection)
+      && /\b(?:does\s+not|doesn't|not|absent|unsupported|lack(?:s|ing)?)\b[\s\S]{0,180}\b(?:reserve|withdraw(?:n|al)?|draw(?:n)?\s+from)\b/iu.test(rejection);
+    const rejectedGrantAction = /\bgrant(?:s)?\b/iu.test(rejection)
+      && /\b(?:approved|awarded|funded|withdrawn|allocated|issued|completed|authorized|specific\s+grant|grant\s+approval)\b/iu.test(rejection);
+    for (let pass = 1; pass <= 3; pass += 1) {
+      repaired = await callOllamaJson({
+        ollamaUrl,
+        llmModel,
+        appendUniversalContract: false,
+        system: "Write fresh source-grounded civic prose that does not turn a programme name into a completed financial or institutional action. Return strict JSON only.",
+        systemSuffix: [
+          "HARD UNSUPPORTED-EVIDENCE-SPECIFICITY OVERRIDE: the audit says the prior output asserted a specific amount, reserve withdrawal, grant, approval, allocation, award, project result, or other completed action that the bounded source does not explicitly state.",
+          "Start over from the literal bounded source. If the source only lists or names a programme, report, category, or grant title, say only that the source listed or described it; do not say that a grant was approved, awarded, funded, withdrawn, allocated, or completed. If an amount or reserve action is absent, omit it. Preserve a source-supported presentation, discussion, recommendation, or generic programme description without inventing its status.",
+          "Do not copy the rejected claim or audit wording. When a specific detail is unsupported, omit that detail rather than weakening it into a different specific claim. Keep separate listed programme names separate and do not infer that any one was acted on.",
+          pass > 1
+            ? "The preceding repair retained unsupported specificity. Discard it completely and regenerate from literal source nouns and actions only; a shorter neutral summary is preferred to an invented approval or financial action."
+            : "",
+        ].filter(Boolean).join(" "),
+        prompt: [
+          `Unsupported-evidence-specificity repair attempt ${attempt}.${pass} of 3.`,
+          "The rejected candidate and audit are diagnostic context, not source evidence.",
+          "Preserve only what the bounded source explicitly states. A programme title, grant name, budget heading, or general description is not proof that money was withdrawn, a grant was approved, a project was completed, or an action was authorized. Do not add a reserve draw, grant award, approval, allocation, completion, or amount unless the same source explicitly records it.",
+          "If the source names several programmes, use a neutral sentence such as 'The report described several programmes, including ...' only when those names are literally present. Do not turn names into specific approved grants or completed projects. Keep any source-supported recommendation or report framing separate from the listed names.",
+          "Return one non-empty complete summary and chapter text. Omit disputed specifics rather than guessing, and do not mention this repair or audit.",
+          `REJECTION_REASON: ${String(rejectedClaims || "").trim() || "the candidate contains a specific action or status absent from the bounded source"}`,
+          rejectedOutput ? `REJECTED_CANDIDATE (UNTRUSTED): ${String(rejectedOutput).slice(0, 3200)}` : "",
+          `AGENDA_LABEL: ${promptLabel}`,
+          `GROUNDED_SOURCE: ${String(semanticGroundingSourceExcerpt || unit?.["source excerpt"] || "").slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000))}`,
+          "FINAL OUTPUT CHECK: no unsupported reserve withdrawal, grant approval or award, allocation, completed project, authorized action, or amount; retain only literal source-supported description, discussion, recommendation, or status.",
+        ].filter(Boolean).join("\n\n"),
+        maxOutputTokens: 720,
+        temperature: pass >= 3 ? 0 : 0.1,
+        seed: seed + 18080 + attempt * 10 + pass,
+        format: STAGE3_SUMMARY_RESPONSE_FORMAT,
+      });
+      const repairedText = `${String(repaired?.summary || "")} ${String(repaired?.["chapter text"] || "")}`;
+      const retainedRejectedReserveAction = rejectedReserveAction
+        && /\b(?:reserve|withdraw(?:n|al)?|draw(?:n)?\s+from)\b/iu.test(repairedText);
+      const retainedRejectedGrantAction = rejectedGrantAction
+        && /\bgrant(?:s)?\b[^.?!]{0,120}\b(?:approved|awarded|funded|withdrawn|allocated|issued|completed|authorized)\b/iu.test(repairedText);
+      if (!retainedRejectedReserveAction
+        && !retainedRejectedGrantAction
+        && !unsupportedEvidenceSpecificityGroundingDefect(repairedText)) return repaired;
     }
     return repaired;
   };
@@ -3023,6 +3213,32 @@ export async function summarizeGroundedUnit({
     }
     return repaired;
   };
+  const queryConservativePresentationFramingRepair = async (attempt = 1, rejectedClaims = "", rejectedOutput = "") => callOllamaJson({
+    ollamaUrl,
+    llmModel,
+    appendUniversalContract: false,
+    system: "Write fresh source-grounded civic prose that preserves presentation framing. Return strict JSON only.",
+    systemSuffix: [
+      "HARD PRESENTATION-FRAMING OVERRIDE: the audit says the draft converted a presentation, briefing, or described report into a discussion, debate, or conversation. Rebuild from the literal bounded source only.",
+      "Use presentation, briefing, report, described, or other neutral wording supported by the source. Never call a presentation or an already-described profile, study, or report a discussion, debate, or conversation unless the literal source explicitly records that same material being discussed.",
+      "Keep the source's subject, collaboration, figures, names, and design details only when they are stated in the bounded source. Do not add an institutional actor, decision, recommendation, or outcome.",
+    ].join(" "),
+    prompt: [
+      `Presentation-framing grounding repair attempt ${attempt} of 3.`,
+      "Start over from GROUNDED_SOURCE only. The rejected candidate and audit are untrusted diagnostic context and must not be copied.",
+      "If the source records someone presenting or describing a profile, report, study, or briefing, say that it was presented or described. Do not replace that speech act with 'discussed', 'discussion regarding', 'debated', or 'conversation'. If the source explicitly records a separate discussion, keep that separate from the presentation rather than merging them.",
+      "Return one non-empty complete summary and chapter text as JSON. Omit any uncertain relationship or actor instead of guessing.",
+      `REJECTION_REASON: ${String(rejectedClaims || "").trim() || "the audit identified discussion wording that is not the source's presentation framing"}`,
+      rejectedOutput ? `REJECTED_CANDIDATE (UNTRUSTED): ${String(rejectedOutput).slice(0, 3200)}` : "",
+      `AGENDA_LABEL: ${promptLabel}`,
+      `GROUNDED_SOURCE: ${String(semanticGroundingSourceExcerpt || unit?.["source excerpt"] || "").slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000))}`,
+      "Do not copy audit wording or the rejected discussion-framed claim.",
+    ].filter(Boolean).join("\n\n"),
+    maxOutputTokens: 720,
+    temperature: attempt >= 3 ? 0 : 0.1,
+    seed: seed + 19160 + attempt,
+    format: STAGE3_SUMMARY_RESPONSE_FORMAT,
+  });
   const queryConservativeReferredAgendaScopeRepair = async (attempt = 1, rejectedClaims = "", rejectedOutput = "") => callOllamaJson({
     ollamaUrl,
     llmModel,
@@ -3280,6 +3496,44 @@ export async function summarizeGroundedUnit({
       if (!/\b(?:unspecified|unknown|unclear|not\s+(?:specified|given|provided))\b/iu.test(repairedText)) return repaired;
     }
     throw new Error(`stage3 retryable: numeric-specificity repair retained an unsupported unspecified claim for unit ${String(unit["unit id"] || unit["agenda item"] || "unknown")}`);
+  };
+  const queryConservativeNumericPlaceholderRepair = async (attempt = 1, rejectedClaims = "", rejectedOutput = "") => {
+    let repaired = null;
+    const sourceWithNumericDetail = String(semanticGroundingSourceExcerpt || unit?.["source excerpt"] || "")
+      .slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000));
+    for (let refreshAttempt = 1; refreshAttempt <= 4; refreshAttempt += 1) {
+      repaired = await callOllamaJson({
+        ollamaUrl,
+        llmModel,
+        appendUniversalContract: false,
+        system: "Write fresh source-grounded civic prose that preserves explicit numeric detail and never replaces it with a placeholder. Return strict JSON only.",
+        systemSuffix: "HARD NUMERIC-PLACEHOLDER OVERRIDE: never write a placeholder such as 'a certain value', 'a certain ratio', 'a specific amount', or 'an unspecified number'. When the bounded source explicitly pairs a number, amount, date, year, ratio, count, or range with a subject, copy that exact source-supported detail in Arabic digits. If a pairing is genuinely ambiguous, omit that numeric claim rather than inventing or generalizing it. Do not mention this repair contract or the rejected candidate.",
+        prompt: [
+          `Explicit-numeric-placeholder repair attempt ${refreshAttempt} after grounding attempt ${attempt}.`,
+          "Discard the rejected candidate and rebuild from GROUNDED_SOURCE only.",
+          "The rejected prose used a placeholder for a value or ratio, or generalized away an explicit source figure. Preserve every exact numeric detail that the bounded source clearly pairs with its subject, using Arabic digits and the source's own qualifiers (for example, 'approximately', 'more than', or a range). Keep separate figures attached to their original subjects; do not merge, calculate, reconcile, or transfer figures across projects or sentences.",
+          "Never use 'a certain value', 'a certain ratio', 'a specific amount', 'an unspecified number', or similar placeholder language. Do not call an explicit value unknown, unclear, or not given. If the source pairing is not clear, omit that one numeric claim while retaining other independently supported prose.",
+          SOURCE_QUALIFIER_FIDELITY_RULE,
+          UNIVERSAL_BOUNDED_SOURCE_PROSE_RULE,
+          refreshAttempt === 1
+            ? `REJECTION_REASON: ${String(rejectedClaims || "").trim() || "(none supplied; preserve explicit source figures)"}`
+            : "Fresh retry: discard every prior candidate and audit wording; regenerate from the literal source only.",
+          refreshAttempt === 1 && rejectedOutput ? `REJECTED_CANDIDATE: ${String(rejectedOutput).slice(0, 3200)}` : "",
+          "Return one non-empty complete source-grounded summary and chapter text. Do not copy the rejected candidate, audit prose, or placeholder wording.",
+          `AGENDA_LABEL: ${promptLabel}`,
+          `GROUNDED_SOURCE: ${sourceWithNumericDetail}`,
+          "FINAL OUTPUT CHECK: no numeric placeholder, unspecified/unknown/unclear wording for an explicit source figure, invented calculation, transferred amount, or audit fragment. Every retained number must be copied from its clear source pairing.",
+        ].filter(Boolean).join("\n\n"),
+        maxOutputTokens: 720,
+        temperature: refreshAttempt >= 3 ? 0 : 0.1,
+        seed: seed + 10075 + attempt + refreshAttempt,
+        format: STAGE3_SUMMARY_RESPONSE_FORMAT,
+      });
+      const repairedText = `${String(repaired?.summary || "")} ${String(repaired?.["chapter text"] || "")}`;
+      if (!NUMERIC_PLACEHOLDER_PATTERN.test(repairedText)
+        && !/\b(?:unspecified|unknown|unclear|not\s+(?:specified|given|provided))\b/iu.test(repairedText)) return repaired;
+    }
+    throw new Error(`stage3 retryable: numeric-placeholder repair retained placeholder wording for unit ${String(unit["unit id"] || unit["agenda item"] || "unknown")}`);
   };
   const queryUnsupportedSecondingRepair = async (attempt = 1) => {
     let repaired = null;
@@ -3731,27 +3985,80 @@ export async function summarizeGroundedUnit({
     seed: seed + 9000 + attempt,
     format: STAGE3_SUMMARY_RESPONSE_FORMAT,
   });
-  const queryConservativeMinutesMotionScopeRepair = async (attempt = 1, extraInstruction = "") => callOllamaJson({
-    ollamaUrl,
-    llmModel,
-    system: "Write one conservative source-grounded civic summary for a minutes item with a generic move-and-vote phrase. Return strict JSON only.",
-    prompt: [
-      `Conservative minutes-motion-scope repair attempt ${attempt} of 3.`,
-      "The prior output assigned a later minutes item or an unsupported receipt action to the current labeled minutes item. Start over from the literal source excerpt.",
-      MINUTES_MOTION_SCOPE_REPAIR_RULE,
-      "Use the authoritative agenda label only to identify the current minutes committee. If a later named committee appears after a generic move-and-vote phrase and the current committee is not repeated with that motion, use the handoff-only form: 'The excerpt records a handoff to the [current committee] minutes without explicitly recording their presentation or approval.' Otherwise, a safe form is: 'The discussion returned to the [current committee] minutes, and a motion to move the minutes was carried.' Do not use received, approved, adopted, presented, or reported back unless the source explicitly pairs that word with the current labeled minutes.",
-      "If the source includes a later named committee and a later motion to receive its minutes, stop before that later committee and omit its content, motion, and outcome.",
-      "Never copy transcript speaker labels or infer a named mover, seconder, recipient, or chair.",
-      extraInstruction,
-      "Return exactly one JSON object with summary, chapter text, confidence, and notes.",
-      `AGENDA_LABEL: ${promptLabel}`,
-      `GROUNDED_SOURCE: ${String(unit?.["source excerpt"] || "").slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000))}`,
-    ].filter(Boolean).join("\n\n"),
-    maxOutputTokens: 520,
-    temperature: 0.2,
-    seed: seed + 9500 + attempt,
-    format: STAGE3_SUMMARY_RESPONSE_FORMAT,
-  });
+  const queryConservativeMinutesMotionScopeRepair = async (attempt = 1, extraInstruction = "") => {
+    let repaired = null;
+    for (let pass = 1; pass <= 3; pass += 1) {
+      const retryInstruction = pass > 1
+        ? "HARD RETRY: the previous repair still changed the source's procedural contrast. Keep 'if there is any discussion of the minutes, the matter would need to go into a closed session' explicitly conditional; do not state that discussion requires closed as an absolute fact and do not invert the condition. Describe the open-agenda point as an understanding or statement, never as a determination, decision, confirmation, or established outcome. Use past or neutral impersonal wording, never 'a speaker asks', 'a speaker confirms', 'a councillor asks', or a named addressee. Do not say a speaker questioned whether the minutes would appear on the open agenda; do not say approval occurred 'if there is no discussion' or 'without discussion'; do not say a named addressee was asked for comments; do not call this a formal motion to move the minutes when the source only records a request for a mover and a carried vote. State the literal closed-session/open-agenda distinction impersonally and report the vote neutrally."
+        : "";
+      const minutesRepairRules = closedMinutesProcedureOnly
+        ? [
+          "CLOSED-MINUTES REPAIR ONLY: use the source lines below as the complete evidence and ignore any generic minutes template.",
+          "The question asks whether the minutes would be on a CLOSED meeting agenda. Preserve that exact subject; it is not a question about whether they would be on an open agenda.",
+          "The answer has three separate propositions: the minutes would be listed on the OPEN agenda; discussion of the minutes would require going into a CLOSED session; otherwise the minutes could be approved on the OPEN agenda.",
+          "The source then records that someone was sought to move the minutes and that the vote was carried. Keep that procedural vote separate from the three propositions; do not invent formal motion wording that the bounded source does not state.",
+          "Write one impersonal summary containing all four source-supported parts. Preserve the source's speech acts with wording such as 'the excerpt records an understanding that the minutes would be listed on the open agenda' and 'it says that if there is any discussion of the minutes, the matter would need to go into a closed session'. Do not say the minutes were determined, decided, confirmed, or established to be listed or approved. Do not use speaker/member/councillor questioned or asked wording, do not name an addressee, do not use present-tense verbs such as asks or confirms, do not invert the closed/open distinction, do not turn the condition into an absolute fact, and do not replace it with 'if there is no discussion' or 'without discussion'.",
+        ].join(" ")
+        : [
+          MINUTES_MOTION_SCOPE_REPAIR_RULE,
+          "Use the authoritative agenda label only to identify the current minutes committee. If a later named committee appears after a generic move-and-vote phrase and the current committee is not repeated with that motion, use the handoff-only form: 'The excerpt records a handoff to the [current committee] minutes without explicitly recording their presentation or approval.' Otherwise, a safe form is: 'The discussion returned to the [current committee] minutes, and a motion to move the minutes was carried.' Do not use received, approved, adopted, presented, or reported back unless the source explicitly pairs that word with the current labeled minutes.",
+          "If the source includes a later named committee and a later motion to receive its minutes, stop before that later committee and omit its content, motion, and outcome.",
+          "Never copy transcript speaker labels or infer a named mover, seconder, recipient, or chair.",
+        ].join(" ");
+      repaired = await callOllamaJson({
+        ollamaUrl,
+        llmModel,
+        appendUniversalContract: false,
+        system: "Write one conservative source-grounded civic summary for a minutes item with a generic move-and-vote phrase. Return strict JSON only.",
+        prompt: [
+          `Conservative minutes-motion-scope repair attempt ${attempt}.${pass} of 3.`,
+          "The prior output assigned a later minutes item or an unsupported receipt action to the current labeled minutes item. Start over from the literal source excerpt.",
+          minutesRepairRules,
+          retryInstruction,
+          extraInstruction,
+          "Return exactly one JSON object with summary, chapter text, confidence, and notes.",
+          `AGENDA_LABEL: ${promptLabel}`,
+          `GROUNDED_SOURCE: ${String(unit?.["source excerpt"] || "").slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000))}`,
+        ].filter(Boolean).join("\n\n"),
+        maxOutputTokens: 520,
+        temperature: pass >= 3 ? 0 : 0.2,
+        seed: seed + 9500 + attempt * 10 + pass,
+        format: STAGE3_SUMMARY_RESPONSE_FORMAT,
+      });
+      const repairedText = `${String(repaired?.summary || "")} ${String(repaired?.["chapter text"] || "")}`;
+      const closedMinutesContrastIncomplete = closedMinutesProcedureOnly && (
+        !/\b(?:listed|appear(?:ed)?|be)\b[\s\S]{0,40}\bopen\s+agenda\b/iu.test(repairedText)
+        || !/\bdiscussion\b[\s\S]{0,120}\bclosed\s+session\b/iu.test(repairedText)
+        || !/\b(?:otherwise|approv(?:e|ed|al))\b[\s\S]{0,120}\bopen\s+agenda\b/iu.test(repairedText)
+      );
+      const closedMinutesConditionalDefect = closedMinutesProcedureOnly && (
+        !/\bif\b[\s\S]{0,100}\bdiscussion\b[\s\S]{0,120}\b(?:would|need(?:s)?|go(?:ing)?\s+into)\b[\s\S]{0,80}\bclosed\s+session\b/iu.test(repairedText)
+        || /\bdiscussion\b[\s\S]{0,80}\bwould\s+require\s+going\s+into\s+(?:a\s+)?closed\b/iu.test(repairedText)
+      );
+      const closedMinutesFormalMotionDefect = closedMinutesProcedureOnly
+        && /\bmotion\s+to\s+move\s+(?:the\s+)?minutes\b[\s\S]{0,80}\b(?:carried|approved|adopted)\b/iu.test(repairedText);
+      const closedMinutesGenericActorDefect = closedMinutesProcedureOnly && (
+        /\b(?:a|another|the)\s+(?:speaker|councillor|councilor|member)\b/iu.test(repairedText)
+        || /\b(?:councillor|councilor)\s+[A-Z][A-Za-z'-]+\b/u.test(repairedText)
+        || /\b(?:asks?|confirms?|explains?|states?|says?)\b/iu.test(repairedText)
+      );
+      const closedMinutesDeterminationDefect = closedMinutesProcedureOnly
+        && /\b(?:determined|decided|confirmed|established|settled)\b[\s\S]{0,100}\b(?:listed|open\s+agenda|approv(?:e|ed|al))\b/iu.test(repairedText);
+      const closedMinutesRepairDefect = closedMinutesProcedureOnly && (
+        /\b(?:speaker|member|councillor|councilor)\b[\s\S]{0,90}\b(?:question(?:ed|s)?|asked)\b[\s\S]{0,180}\b(?:open\s+agenda|appear|listed)\b/iu.test(repairedText)
+        || /\bif\s+(?:there['’]?s|there\s+is)\s+(?:any\s+)?discussion\b/iu.test(repairedText) === false && /\bif\s+there\s+is\s+no\s+discussion\b/iu.test(repairedText)
+        || /\bwithout\s+discussion\b/iu.test(repairedText)
+        || /\b(?:councillor|councilor)\s+\w+\s+was\s+asked\s+for\s+(?:comments?|questions?)\b/iu.test(repairedText)
+        || closedMinutesContrastIncomplete
+        || closedMinutesConditionalDefect
+        || closedMinutesFormalMotionDefect
+        || closedMinutesGenericActorDefect
+        || closedMinutesDeterminationDefect
+      );
+      if (!closedMinutesRepairDefect) return repaired;
+    }
+    return repaired;
+  };
   const queryConservativeConsentAgendaScopeRepair = async (attempt = 1, extraInstruction = "") => callOllamaJson({
     ollamaUrl,
     llmModel,
@@ -4050,15 +4357,75 @@ export async function summarizeGroundedUnit({
     seed: seed + 9997 + attempt,
     format: STAGE3_SUMMARY_RESPONSE_FORMAT,
   });
+  const queryConservativeSeparateProceduralPhasesRepair = async (attempt = 1, extraInstruction = "") => {
+    let repaired = null;
+    for (let pass = 1; pass <= 3; pass += 1) {
+      repaired = await callOllamaJson({
+        ollamaUrl,
+        llmModel,
+        appendUniversalContract: false,
+        system: "Write one conservative source-grounded civic summary that keeps adjacent procedural phases separate. Return strict JSON only.",
+        prompt: [
+          `Conservative separate-procedural-phases repair attempt ${attempt}.${pass} of 3.`,
+          "The bounded source contains a generic question about whether motions should be separate, a separate agenda-item transition, and a later receipt vote. Do not attach the agenda-item label to the generic question unless the same source sentence explicitly does so.",
+          "Keep procedural phases separate: report the generic question as a question about whether separate motions were being used, without an inferred object or formal inquiry. Report the later source wording precisely: it records a request for a motion to receive two items of correspondence, followed by the statement that it was carried. Do not add mover or seconder details. Omit routine 'none/seeing none' transition wording unless needed for a complete fact.",
+          "Do not say a motion was moved or seconded when the source only requests a motion. Do not call the separate-motions question a formal inquiry, decision, or motion. Do not say the committee addressed or discussed the site plan when the source records only a procedural question about whether there were questions. Do not say a speaker called for a vote unless the source explicitly records that speech act. Do not infer who asked, answered, moved, or chaired the exchange. Do not import details from the agenda label into the question.",
+          pass > 1 ? "HARD RETRY: use only this conservative form: 'The source records a question about whether separate motions were being used. It then records a request for a motion to receive two items of correspondence, followed by the statement that it was carried.' You may omit the first sentence, but do not call the question a formal inquiry and do not say the motion was moved or seconded." : "",
+          extraInstruction,
+          "Return exactly one JSON object with summary, chapter text, confidence, and notes.",
+          `AGENDA_LABEL: ${promptLabel}`,
+          `GROUNDED_SOURCE: ${String(parentLiteralSourceExcerpt || parentRepairSourceExcerpt || semanticGroundingSourceExcerpt || unit?.["source excerpt"] || "").slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000))}`,
+        ].filter(Boolean).join("\n\n"),
+        maxOutputTokens: 520,
+        temperature: pass >= 3 ? 0 : 0.1,
+        seed: seed + 10080 + attempt * 10 + pass,
+        format: STAGE3_SUMMARY_RESPONSE_FORMAT,
+      });
+      const text = `${String(repaired?.summary || "")} ${String(repaired?.["chapter text"] || "")}`;
+      const unsupportedMotionClaim = /\b(?:carried|approved|adopted)\s+(?:a\s+)?motion\b|\b(?:motion|request)\b[^.?!]{0,100}\b(?:was|were)\s+(?:moved|seconded)\b|\b(?:address(?:ed|ing)?|discuss(?:ed|ing)?|consider(?:ed|ing)?|review(?:ed|ing)?|cover(?:ed|ing)?|went\s+over)\b[^.?!]{0,80}\bsite\s+plan\b|\bsite\s+plan\b[^.?!]{0,80}\b(?:addressed|discussed|considered|reviewed|covered)\b/iu.test(text);
+      if (!unsupportedMotionClaim && !/\b(?:moved|seconded|called\s+for\s+(?:a\s+)?vote)\b/iu.test(text)) return repaired;
+    }
+    return repaired;
+  };
+  const queryConservativeThroughChairRepair = async (attempt = 1, extraInstruction = "", rejectedClaims = "", rejectedOutput = "") => callOllamaJson({
+    ollamaUrl,
+    llmModel,
+    appendUniversalContract: false,
+    system: "Write one source-grounded civic summary that preserves routed responses without misattributing the chair. Return strict JSON only.",
+    prompt: [
+      `Conservative through-chair attribution repair attempt ${attempt} of 3.`,
+      "Start over from GROUNDED_SOURCE. A phrase such as 'Through Chair Kepki' or 'Through the chair' is a procedural channel or address, not evidence that Chair Kepki answered, explained, or made the response.",
+      "Keep the question and the response separate. Attribute the response to staff or another named person only when the same source block explicitly identifies that person as the respondent; otherwise use impersonal wording such as 'the response stated' or 'the discussion addressed'.",
+      "Preserve an explicitly recorded motion, vote, or carried outcome, but do not attach it to the chair or another unsupported actor.",
+      "Do not copy transcript speaker labels, unsupported names, or the rejected chair-as-respondent wording into either output field.",
+      extraInstruction,
+      rejectedClaims ? `INDEPENDENT_AUDIT_REJECTION: ${rejectedClaims}` : "",
+      rejectedOutput ? `REJECTED_CANDIDATE (UNTRUSTED): ${rejectedOutput}` : "",
+      "Return exactly one JSON object with summary, chapter text, confidence, and notes.",
+      `AGENDA_LABEL: ${promptLabel}`,
+      `GROUNDED_SOURCE: ${String(parentLiteralSourceExcerpt || parentRepairSourceExcerpt || semanticGroundingSourceExcerpt || unit?.["source excerpt"] || "").slice(0, Number(process.env.AGENDA_STAGE3_SOURCE_CHARS || 16000))}`,
+    ].filter(Boolean).join("\n\n"),
+    maxOutputTokens: 620,
+    temperature: attempt >= 3 ? 0 : 0.1,
+    seed: seed + 10050 + attempt,
+    format: STAGE3_SUMMARY_RESPONSE_FORMAT,
+  });
   const queryConservativeRoleAttributionRepair = async (attempt = 1, extraInstruction = "", rejectedClaims = "", rejectedOutput = "") => {
-    const repairEvidence = `${rejectedClaims} ${rejectedOutput}`;
+    const repairEvidence = `${extraInstruction} ${rejectedClaims} ${rejectedOutput}`;
     const handoffRoleDefect = /\b(?:incorrect(?:ly)?\s+attribut(?:e|es|ed)|attribut(?:e|es|ed)\s+the\s+presentation)\b/iu.test(repairEvidence)
       && /\b(?:handoff|over\s+to|delivered\s+by|presented\s+by|not\s+the\s+(?:manager|office|department|director)|agenda\s+(?:anchor|source))\b/iu.test(repairEvidence);
     const actingBodyAttributionDefect = /\b(?:acting\s+body|body\s+label|institutional\s+(?:actor|subject)|committee\s+itself|council\s+itself|rather\s+than\s+a\s+(?:generic\s+)?speaker|does\s+not\s+identify\s+the\s+speaker)\b/iu.test(repairEvidence)
       && /\b(?:call(?:ed)?|order|open(?:ed)?|announce(?:d)?|present(?:ed)?|ask(?:ed)?|said|speech)\b/iu.test(repairEvidence);
     const institutionalActorDefect = institutionalActorGroundingDefect(repairEvidence);
-    const collectiveAttributionDefect = collectiveActorGroundingDefect(repairEvidence);
+    // Only audit/rejection text establishes that a collective actor is
+    // disputed.  A rejected candidate can legitimately contain a supported
+    // staff or group reference that the role repair must retain.
+    const collectiveAttributionDefect = collectiveActorGroundingDefect(`${extraInstruction} ${rejectedClaims}`);
     const recommendationActorDefect = staffRecommendationActorGroundingDefect({
+      sourceText: semanticGroundingSourceExcerpt,
+      candidateText: rejectedOutput,
+    });
+    const proceduralActorDefect = unsupportedProceduralActorGroundingDefect({
       sourceText: semanticGroundingSourceExcerpt,
       candidateText: rejectedOutput,
     });
@@ -4079,6 +4446,9 @@ export async function summarizeGroundedUnit({
         : "",
       recommendationActorDefect
         ? "HARD STAFF-RECOMMENDATION OVERRIDE: the source records staff or a report recommending or proposing the action, while the rejected prose assigned that recommendation to the committee or council. Rewrite with 'staff recommended/proposed' and reserve the committee/council for the later recorded report or recommendation disposition. Never say the body directed staff to each recommendation clause unless the source explicitly does so."
+        : "",
+      proceduralActorDefect
+        ? "HARD PROCEDURAL-ACTOR OVERRIDE: the rejected prose assigned a chair, committee, council, board, or county actor to a procedural announcement or transition that the source does not explicitly pair with that actor. Use impersonal wording such as 'the meeting moved to the next item' or omit the transition; do not invent a chair or body speech act."
         : "",
       collectiveAttributionDefect
         ? "HARD COLLECTIVE-ATTRIBUTION OVERRIDE: the audit distinguishes individually attributed remarks from an unsupported collective or generic actor. Do not merge those remarks into Directors, staff, a team, a group, a committee, or another aggregate subject. Do not use generic staff or another aggregate actor when the source does not pair it with the retained claim. Use impersonal source wording or omit the disputed actor/action clause."
@@ -4745,16 +5115,21 @@ export async function summarizeGroundedUnit({
         ? groundingAudit.unsupportedClaims.join(" | ")
         : groundingAudit.notes || "the candidate contains a claim not supported by this source excerpt";
       const auditFeedback = [rejectedClaims, groundingAudit.notes].filter(Boolean).join(" | ");
+      const negationDefect = negationPolarityGroundingDefect(auditFeedback);
       const rejectedOutput = JSON.stringify({
         summary: normalizeText(summary),
         "chapter text": normalizeText(parsed?.["chapter text"] || ""),
       });
+      const generatedProse = `${summary} ${normalizeText(parsed?.["chapter text"] || "")}`;
       const actorAttributionConflict = /\b(?:candidate|summary|output)\b[\s\S]{0,220}\b(?:attribut(?:e|es|ed|ion)|assign(?:ed|s)?|named?)\b[\s\S]{0,400}\b(?:but|however|instead|unsupported|does\s+not|not\s+record|conflict|wrong|incorrect(?:ly)?|fails?\s+to\s+distinguish|delivered\s+by|presented\s+by|explicitly\s+identif(?:y|ies|ied))\b/iu.test(auditFeedback);
+      const throughChairAttributionDefect = /\b(?:through|via)\s+(?:the\s+)?(?:chair|mayor|warden)\b/iu.test(semanticGroundingSourceExcerpt)
+        && /\b(?:answered|responded|replied|explained|said|told)\s+by\s+(?:the\s+)?(?:chair|mayor|warden)\b/iu.test(generatedProse)
+        && (/(?:not|rather than|does not)\b[\s\S]{0,120}\b(?:answer|respond|reply|explain)/iu.test(auditFeedback)
+          || /\b(?:through|via)\s+(?:the\s+)?(?:chair|mayor|warden)\b[\s\S]{0,180}\b(?:not|rather than|does not)\b[\s\S]{0,100}\b(?:answer|respond|reply|explain)/iu.test(auditFeedback));
       const roleAttributionRepairOnly = !speakerHandoffCandidate
         && /\b(?:speaker|actor|role|attribution|addressee|council\s+member|councillor|mayor|staff)\b/iu.test(
         `${rejectedClaims} ${groundingAudit.notes || ""}`,
       ) && !proceduralFragmentOnly;
-    const generatedProse = `${summary} ${normalizeText(parsed?.["chapter text"] || "")}`;
       const sourceExplicitlyRecordsSeconding = /\b(?:seconded|seconder)\b/iu.test(semanticGroundingSourceExcerpt);
       const candidateClaimsSecondingWithoutSource = /\b(?:seconded|seconder)\b/iu.test(generatedProse)
         && !sourceExplicitlyRecordsSeconding;
@@ -4797,6 +5172,8 @@ export async function summarizeGroundedUnit({
           || /\b(?:explicit(?:ly)?\s+(?:stated|provided|identified)|source\s+(?:provides|contains|explicitly)|exact\s+(?:figures|amounts|values)|specific\s+amounts?)\b/iu.test(auditFeedback)
           || (auditNumericValues.length > 0 && /\b(?:source|candidate|amount|number|figure|value|numeric|budget|financial)\b/iu.test(auditFeedback))
         );
+      const numericPlaceholderDefect = NUMERIC_PLACEHOLDER_PATTERN.test(generatedProse)
+        || (NUMERIC_PLACEHOLDER_PATTERN.test(auditFeedback) && /\b(?:candidate|summary|prose|claim|placeholder|specific\s+figures?|exact\s+(?:figures?|amounts?|values?))\b/iu.test(auditFeedback));
       const parentScopeDefect = Boolean(parentOverviewGenerationContract)
         && /\b(?:not\s+supported|unsupported|no\s+(?:mention|record|statement)|does\s+not\s+(?:mention|record|state)|scope|broader|narrower)\b/iu.test(auditFeedback);
       const questionScopeDefect = Boolean(parentOverviewGenerationContract)
@@ -4851,8 +5228,12 @@ export async function summarizeGroundedUnit({
       const genericPluralActorDefect = genericPluralActorGroundingDefect(auditFeedback);
       const unsupportedQualifierDefect = unsupportedQualifierGroundingDefect(auditFeedback)
         && !institutionalActorDefect;
+      const unsupportedEvidenceSpecificityDefect = unsupportedEvidenceSpecificityGroundingDefect(auditFeedback)
+        && !sourceExplicitlySupportsEvidenceSpecificity(semanticGroundingSourceExcerpt, generatedProse, auditFeedback);
       const fragmentedTranscriptDefect = fragmentedTranscriptGroundingDefect(auditFeedback)
         && !institutionalActorDefect;
+      const presentationDiscussionDefect = presentationDiscussionGroundingDefect(auditFeedback)
+        && /\b(?:discussion|discussed|conversation|debate)\b/iu.test(generatedProse);
       const separateDiscussionDefect = mergedDiscussionScopeGroundingDefect(auditFeedback)
         && /\b(?:discussion|discussed|conversation|remarks?|topics?)\b/iu.test(generatedProse);
       const collectiveActorDefect = collectiveActorGroundingDefect(auditFeedback)
@@ -4872,10 +5253,24 @@ export async function summarizeGroundedUnit({
       if (numericConflictDefect) numericConflictRepairActive = true;
       if (numericSpecificityDefect) numericSpecificityRepairActive = true;
       if (deferralSubjectDefect) deferralObjectRepairActive = true;
-      parsed = incompleteDeferralDefect
+      parsed = closedMinutesProcedureOnly
+        ? await queryConservativeMinutesMotionScopeRepair(
+          groundingAttempt,
+          "Grounding repair: preserve the literal closed-meeting-agenda question, the open-agenda listing, the closed-session discussion condition, the open-agenda approval condition, and the separately carried minutes motion. Keep all procedural transitions impersonal and do not assign them to the chair or an addressee.",
+        )
+        : separateProceduralPhasesOnly
+        ? await queryConservativeSeparateProceduralPhasesRepair(
+          groundingAttempt,
+          "Grounding repair: keep the separate-motions question generic and separate from the later receipt result; do not attach the site-plan label to the question, call the result a carried motion, call the items correspondence unless the carried sentence does so, or say the site plan was addressed.",
+        )
+        : incompleteDeferralDefect
         ? await queryConservativeIncompleteDeferralRepair(groundingAttempt, auditFeedback, rejectedOutput)
+        : negationDefect
+        ? await queryConservativeNegationRepair(groundingAttempt, auditFeedback, rejectedOutput)
         : deferralSubjectDefect
         ? await queryUnsupportedDeferralSubjectRepair(groundingAttempt, auditFeedback, rejectedOutput)
+        : numericPlaceholderDefect
+        ? await queryConservativeNumericPlaceholderRepair(groundingAttempt, auditFeedback, rejectedOutput)
         : numericConflictDefect
         ? await queryConservativeNumericConflictRepair(groundingAttempt, auditFeedback, rejectedOutput)
         : conditionalRelationshipDefect
@@ -4890,6 +5285,10 @@ export async function summarizeGroundedUnit({
         ? await queryConservativeReferredAgendaScopeRepair(groundingAttempt, auditFeedback, rejectedOutput)
         : unsupportedSpeechActDefect
         ? await queryConservativeUnsupportedSpeechActRepair(groundingAttempt, auditFeedback, rejectedOutput)
+        : unsupportedEvidenceSpecificityDefect
+        ? await queryConservativeUnsupportedEvidenceSpecificityRepair(groundingAttempt, auditFeedback, rejectedOutput)
+        : presentationDiscussionDefect
+        ? await queryConservativePresentationFramingRepair(groundingAttempt, auditFeedback, rejectedOutput)
         : separateDiscussionDefect
         ? await queryConservativeSeparateDiscussionRepair(groundingAttempt, auditFeedback, rejectedOutput)
         : fragmentedTranscriptDefect
@@ -4910,6 +5309,13 @@ export async function summarizeGroundedUnit({
         ? await queryConservativeRoleAttributionRepair(
           groundingAttempt,
           "Grounding repair: the source explicitly separates the mover from the seconder, but the audit disputes a mover name, spelling, or joint-action attribution. Omit all personal mover and seconder names and do not say that the participants moved the motion together. Preserve only impersonal source-supported motion subject, action, and disposition; do not merge the mover and seconder roles.",
+          auditFeedback,
+          rejectedOutput,
+        )
+        : throughChairAttributionDefect
+        ? await queryConservativeThroughChairRepair(
+          groundingAttempt,
+          "Grounding repair: preserve the answer content but treat 'Through Chair' as routing/address language, never as evidence that the chair answered. Use impersonal response wording unless the source explicitly identifies the respondent.",
           auditFeedback,
           rejectedOutput,
         )
@@ -4938,6 +5344,28 @@ export async function summarizeGroundedUnit({
           groundingAttempt,
           "Grounding repair: the source names separate individual remarks, not a collective speaker. Do not merge them into 'Directors discussed', 'staff noted', or another group action. Preserve supported topics in impersonal wording and omit the unsupported collective actor/action clause.",
           auditFeedback,
+          rejectedOutput,
+        )
+        : unsupportedProceduralActorGroundingDefect({
+          sourceText: semanticGroundingSourceExcerpt,
+          candidateText: rejectedOutput,
+        }) && /\b(?:chair|committee|council|board|county)\b/iu.test(semanticGroundingSourceExcerpt)
+        ? await queryConservativeRoleAttributionRepair(
+          groundingAttempt,
+          "Grounding repair: remove the unsupported chair or institutional actor from this procedural transition. This is an acting-body attribution defect: use only impersonal wording supported by the literal source, such as the meeting moving to the next item; do not call a generic transition a chair announcement or body action.",
+          auditFeedback,
+          rejectedOutput,
+        )
+        : absenceListingOnly
+        ? await queryConservativeAbsenceListingRepair(
+          groundingAttempt,
+          "Grounding repair: keep only the first current-item absence listing and omit all trailing next-item context.",
+        )
+        : proceduralFragmentOnly
+        ? await queryConservativeProceduralFragmentRepair(
+          groundingAttempt,
+          "Grounding repair: start from the literal short procedural fragment and do not assign the call, transition, or terse response to a named or institutional actor unless the same source line explicitly does so.",
+          rejectedClaims,
           rejectedOutput,
         )
         : staffRecommendationActorGroundingDefect({
@@ -5010,11 +5438,6 @@ export async function summarizeGroundedUnit({
         )
         : minutesHandoffOnly
         ? await queryConservativeMinutesHandoffRepair(groundingAttempt)
-        : absenceListingOnly
-          ? await queryConservativeAbsenceListingRepair(
-            groundingAttempt,
-            "Grounding repair: keep only the first current-item absence listing and omit all trailing next-item context.",
-            )
         : decisionSequenceOnly
           ? await queryConservativeDecisionSequenceRepair(
             groundingAttempt,
@@ -5153,6 +5576,7 @@ export async function summarizeGroundedUnit({
         ? groundingAudit.unsupportedClaims.join(" | ")
         : groundingAudit.notes || "the candidate contains a claim not supported by this source excerpt";
       const finalAuditFeedback = [finalRejectedClaims, groundingAudit.notes].filter(Boolean).join(" | ");
+      const finalNegationDefect = negationPolarityGroundingDefect(finalAuditFeedback);
       const finalGeneratedProse = `${summary} ${normalizeText(parsed?.["chapter text"] || "")}`;
       const finalUnsupportedSpeechActDefect = /\b(?:does\s+not\s+explicitly\s+(?:record|state|contain)|not\s+explicitly\s+(?:recorded|stated)|not\s+in\s+the\s+(?:manner|form)|source\s+(?:does\s+not|never)\s+(?:record|state|contain)|not\s+(?:actually\s+)?present)\b/iu.test(finalAuditFeedback)
         && /\b(?:support(?:ed|s|ing)?|propos(?:e|ed|es|ing|al)|share(?:d|ing)?\s+(?:a\s+)?conversation)\b/iu.test(finalGeneratedProse);
@@ -5160,6 +5584,8 @@ export async function summarizeGroundedUnit({
         && /\b(?:speakers|participants|members|officials)\b/iu.test(finalGeneratedProse);
       const finalUnsupportedQualifierDefect = unsupportedQualifierGroundingDefect(finalAuditFeedback)
         && /\b(?:new|updated|current|redesigned|digital|expanded|improved)\b/iu.test(finalGeneratedProse);
+      const finalUnsupportedEvidenceSpecificityDefect = unsupportedEvidenceSpecificityGroundingDefect(finalAuditFeedback)
+        && !sourceExplicitlySupportsEvidenceSpecificity(semanticGroundingSourceExcerpt, finalGeneratedProse, finalAuditFeedback);
       const finalConditionalRecommendationDefect = (conditionalDeferralRecommendationSource(semanticGroundingSourceExcerpt)
         || (/\b(?:would|could)\s+recommend\b/iu.test(semanticGroundingSourceExcerpt)
           && /\b(?:deferr|postpon|refer|recommend|action|matter)\w*/iu.test(semanticGroundingSourceExcerpt)))
@@ -5172,11 +5598,15 @@ export async function summarizeGroundedUnit({
       const finalNumericConflictDefect = /\b(?:contradict(?:ed|s|ing|ory|ion)?|conflict(?:ed|s|ing)?|ambig(?:uous|uity)|uncertain|mismatch|discrepanc(?:y|ies)?|ASR)\b/iu.test(finalAuditFeedback)
         && /\b(?:numeric|number|date|year|amount|budget|expenditure|financial|ordinal|figure|value|requirement|cost)\b/iu.test(`${finalGeneratedProse} ${finalAuditFeedback}`)
         && /(?:\d[\d,]*(?:\.\d+)?|\b(?:19|20)\d{2}\b)/u.test(finalAuditFeedback);
+      const finalNumericPlaceholderDefect = NUMERIC_PLACEHOLDER_PATTERN.test(finalGeneratedProse)
+        || (NUMERIC_PLACEHOLDER_PATTERN.test(finalAuditFeedback) && /\b(?:candidate|summary|prose|claim|placeholder|specific\s+figures?|exact\s+(?:figures?|amounts?|values?))\b/iu.test(finalAuditFeedback));
       const finalNumericSpecificityDefect = /\b(?:unspecified|unknown|unclear|not\s+(?:specified|given|provided))\b/iu.test(finalGeneratedProse)
         && /\b(?:amount|budget|requirement|year|date|quantity|cost|figure|number|value|financial)\b/iu.test(finalGeneratedProse)
         && /\b(?:explicit(?:ly)?|exact|specific|source|provided|stated|figure|amount|number|value|numeric)\b/iu.test(finalAuditFeedback)
         && /(?:\d[\d,]*(?:\.\d+)?|\b(?:19|20)\d{2}\b)/u.test(finalAuditFeedback);
       const finalFragmentedTranscriptDefect = fragmentedTranscriptGroundingDefect(finalAuditFeedback);
+      const finalPresentationDiscussionDefect = presentationDiscussionGroundingDefect(finalAuditFeedback)
+        && /\b(?:discussion|discussed|conversation|debate)\b/iu.test(finalGeneratedProse);
       const finalSeparateDiscussionDefect = mergedDiscussionScopeGroundingDefect(finalAuditFeedback)
         && /\b(?:discussion|discussed|conversation|remarks?|topics?)\b/iu.test(finalGeneratedProse);
       if (finalReferredAgendaScopeDefect) {
@@ -5197,6 +5627,39 @@ export async function summarizeGroundedUnit({
         await repairSpeakerMetadata("final referred-agenda-scope");
         await repairDocumentSpeechAct("final referred-agenda-scope");
         await repairStructuredDateIdentity("final referred-agenda-scope");
+        groundingAudit = await auditAndAdjudicateGroundedSummary({
+          label: promptLabel,
+          summary,
+          sourceExcerpt: semanticGroundingSourceExcerpt,
+          llmModel,
+          ollamaUrl,
+          governingBody,
+          motionEvidence: ordinalMotionEvidence,
+          amendmentEvidence,
+          speakerHandoffEvidence,
+          documentSourceOnly,
+          numericConflictRepairActive,
+          deferralObjectRepairActive,
+        });
+      }
+      if (!groundingAudit.grounded && finalNegationDefect) {
+        parsed = await queryConservativeNegationRepair(
+          4,
+          finalAuditFeedback,
+          JSON.stringify({
+            summary: normalizeText(summary),
+            "chapter text": normalizeText(parsed?.["chapter text"] || ""),
+          }),
+        );
+        rawSummary = normalizeText(parsed?.summary || "");
+        assertCleanStage3Text(rawSummary, "stage3 final negation repair");
+        summary = enforceSummaryBudget(rawSummary, budget);
+        if (!summary) {
+          throw new Error(`stage3 retryable: final negation repair produced an empty summary for unit ${String(unit["unit id"] || unit["agenda item"] || "unknown")}`);
+        }
+        await repairSpeakerMetadata("final negation");
+        await repairDocumentSpeechAct("final negation");
+        await repairStructuredDateIdentity("final negation");
         groundingAudit = await auditAndAdjudicateGroundedSummary({
           label: promptLabel,
           summary,
@@ -5311,6 +5774,39 @@ export async function summarizeGroundedUnit({
           deferralObjectRepairActive,
         });
       }
+      if (!groundingAudit.grounded && finalUnsupportedEvidenceSpecificityDefect) {
+        parsed = await queryConservativeUnsupportedEvidenceSpecificityRepair(
+          4,
+          finalAuditFeedback,
+          JSON.stringify({
+            summary: normalizeText(summary),
+            "chapter text": normalizeText(parsed?.["chapter text"] || ""),
+          }),
+        );
+        rawSummary = normalizeText(parsed?.summary || "");
+        assertCleanStage3Text(rawSummary, "stage3 final unsupported-evidence-specificity repair");
+        summary = enforceSummaryBudget(rawSummary, budget);
+        if (!summary) {
+          throw new Error(`stage3 retryable: final unsupported-evidence-specificity repair produced an empty summary for unit ${String(unit["unit id"] || unit["agenda item"] || "unknown")}`);
+        }
+        await repairSpeakerMetadata("final unsupported-evidence-specificity");
+        await repairDocumentSpeechAct("final unsupported-evidence-specificity");
+        await repairStructuredDateIdentity("final unsupported-evidence-specificity");
+        groundingAudit = await auditAndAdjudicateGroundedSummary({
+          label: promptLabel,
+          summary,
+          sourceExcerpt: semanticGroundingSourceExcerpt,
+          llmModel,
+          ollamaUrl,
+          governingBody,
+          motionEvidence: ordinalMotionEvidence,
+          amendmentEvidence,
+          speakerHandoffEvidence,
+          documentSourceOnly,
+          numericConflictRepairActive,
+          deferralObjectRepairActive,
+        });
+      }
       if (!groundingAudit.grounded && finalFragmentedTranscriptDefect) {
         parsed = await queryConservativeFragmentedSourceRepair(
           4,
@@ -5329,6 +5825,39 @@ export async function summarizeGroundedUnit({
         await repairSpeakerMetadata("final fragmented-source");
         await repairDocumentSpeechAct("final fragmented-source");
         await repairStructuredDateIdentity("final fragmented-source");
+        groundingAudit = await auditAndAdjudicateGroundedSummary({
+          label: promptLabel,
+          summary,
+          sourceExcerpt: semanticGroundingSourceExcerpt,
+          llmModel,
+          ollamaUrl,
+          governingBody,
+          motionEvidence: ordinalMotionEvidence,
+          amendmentEvidence,
+          speakerHandoffEvidence,
+          documentSourceOnly,
+          numericConflictRepairActive,
+          deferralObjectRepairActive,
+        });
+      }
+      if (!groundingAudit.grounded && finalPresentationDiscussionDefect) {
+        parsed = await queryConservativePresentationFramingRepair(
+          4,
+          finalAuditFeedback,
+          JSON.stringify({
+            summary: normalizeText(summary),
+            "chapter text": normalizeText(parsed?.["chapter text"] || ""),
+          }),
+        );
+        rawSummary = normalizeText(parsed?.summary || "");
+        assertCleanStage3Text(rawSummary, "stage3 final presentation-framing repair");
+        summary = enforceSummaryBudget(rawSummary, budget);
+        if (!summary) {
+          throw new Error(`stage3 retryable: final presentation-framing repair produced an empty summary for unit ${String(unit["unit id"] || unit["agenda item"] || "unknown")}`);
+        }
+        await repairSpeakerMetadata("final presentation-framing");
+        await repairDocumentSpeechAct("final presentation-framing");
+        await repairStructuredDateIdentity("final presentation-framing");
         groundingAudit = await auditAndAdjudicateGroundedSummary({
           label: promptLabel,
           summary,
@@ -5428,6 +5957,39 @@ export async function summarizeGroundedUnit({
         await repairSpeakerMetadata("final causal-relationship");
         await repairDocumentSpeechAct("final causal-relationship");
         await repairStructuredDateIdentity("final causal-relationship");
+        groundingAudit = await auditAndAdjudicateGroundedSummary({
+          label: promptLabel,
+          summary,
+          sourceExcerpt: semanticGroundingSourceExcerpt,
+          llmModel,
+          ollamaUrl,
+          governingBody,
+          motionEvidence: ordinalMotionEvidence,
+          amendmentEvidence,
+          speakerHandoffEvidence,
+          documentSourceOnly,
+          numericConflictRepairActive,
+          deferralObjectRepairActive,
+        });
+      }
+      if (!groundingAudit.grounded && finalNumericPlaceholderDefect) {
+        parsed = await queryConservativeNumericPlaceholderRepair(
+          4,
+          finalAuditFeedback,
+          JSON.stringify({
+            summary: normalizeText(summary),
+            "chapter text": normalizeText(parsed?.["chapter text"] || ""),
+          }),
+        );
+        rawSummary = normalizeText(parsed?.summary || "");
+        assertCleanStage3Text(rawSummary, "stage3 final numeric-placeholder repair");
+        summary = enforceSummaryBudget(rawSummary, budget);
+        if (!summary) {
+          throw new Error(`stage3 retryable: final numeric-placeholder repair produced an empty summary for unit ${String(unit["unit id"] || unit["agenda item"] || "unknown")}`);
+        }
+        await repairSpeakerMetadata("final numeric-placeholder");
+        await repairDocumentSpeechAct("final numeric-placeholder");
+        await repairStructuredDateIdentity("final numeric-placeholder");
         groundingAudit = await auditAndAdjudicateGroundedSummary({
           label: promptLabel,
           summary,

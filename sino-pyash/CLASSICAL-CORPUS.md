@@ -23,6 +23,22 @@ Both text files were acquired as raw UTF-8 text on 2026-10-31. Their embedded he
 
 Project Gutenberg identifies these items as public domain in the United States, but its policy asks users outside the US to check their local copyright law. See the [eBook 4094 record](https://www.gutenberg.org/ebooks/4094), [eBook 23839 record](https://www.gutenberg.org/ebooks/23839), and [Project Gutenberg permissions guidance](https://www.gutenberg.org/policy/permission.html).
 
+## Acquired character dictionary data
+
+[`shuowen.json`](sources/classical-chinese/shuowen/shuowen.json) is the character-entry dataset
+published with the [Chinese Classical Corpus](https://github.com/gujilab/chinese-classical-corpus).
+The upstream project reports 9,831 entries, including 356 unresolved characters, and labels this
+dataset CC0 1.0. Retrieved 2026-11-17 from its
+[raw source file](https://raw.githubusercontent.com/gujilab/chinese-classical-corpus/main/output/shuowen.json).
+The local file is preserved unchanged; SHA-256:
+`dd162dc3c9f8251c873aa79c497e8e599bea539e1d992e7b2d4d7605ed5eb046`.
+
+The refinery uses a matching character's *Shuowen* definition as historically situated evidence
+alongside modern dictionary glosses and readings. The dataset publisher does not identify the
+historical source edition or provide entry-level transcription provenance, so those remain open
+source questions. A *Shuowen* definition is not treated as a complete modern meaning or as proof
+that a character maps to a particular Pyash atom.
+
 ## Acquired segmentation reference
 
 [`ke-2024-ccl-1.64.pdf`](sources/classical-chinese/references/ke-2024-ccl-1.64.pdf) is Yonghong Ke's 2024 paper, “Construction of Ancient Chinese Word Segmentation and Part-of-Speech Corpus,” *Proceedings of the 23rd Chinese National Conference on Computational Linguistics*, pp. 819–829. The ACL Anthology describes a corpus of 46 works, over 3.23 million characters and 2.17 million words, annotated with segmentation and POS, using manual and machine-assisted work. This is a method/reference paper: the Anthology record links the paper, not a downloadable annotated corpus. The article is included under the ACL Anthology's CC BY 4.0 license for 2016-and-later materials. SHA-256: `4a5bd60c0664c893ab15b22fe0eca98e4efaf0f20b66280ea69f42b86b9dc03c`.
