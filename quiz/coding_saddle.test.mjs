@@ -28,6 +28,7 @@ import {
   buildSaddleWorktreeReviewCommand,
   buildSaddleStrataContextOptions,
   buildSaddleOllamaContextOptions,
+  buildSaddleContinuationInput,
   buildSaddleSteeringInput,
   getSaddleOllamaModelContextLength,
   buildSaddleMindSentence,
@@ -45,6 +46,8 @@ import {
   resolveSaddleThinkSetting,
   isSaddleCodeChangeRequest,
   isSaddleAffirmativeReply,
+  isSaddleActionableContinuation,
+  isSaddleContinuationReply,
   SADDLE_OLLAMA_CONTEXT_PRESETS,
   parseSaddleMindCommand,
   resolveSaddleModelOption,
@@ -720,6 +723,62 @@ test("coding saddle continues an accepted action in an interrupted steering turn
 
   assert.equal(calls, 3);
   assert.match(continuation, /Original request: The previous response was interrupted/u);
+  assert.equal(turn.assessment.complete, true);
+  assert.equal(turn.assessment.kind, "code-change");
+});
+
+test("coding saddle continues the active task when the user says continue", async () => {
+  const originalInput = "so should we start with an agents.md perhaps?";
+  const assistantResponse = "A dedicated agents.md can guide the Robot Science Fiction magazine. I can create it for you. Want me to write it?";
+  const actionable = isSaddleActionableContinuation({ originalInput, assistantResponse });
+  const continuationInput = buildSaddleContinuationInput({
+    originalInput,
+    assistantResponse,
+    additions: "continue",
+    actionable
+  });
+  assert.equal(isSaddleAffirmativeReply("continue"), true);
+  assert.equal(isSaddleContinuationReply("continue"), true);
+  assert.match(continuationInput, /Previous assistant response:[\s\S]*I can create it for you/u);
+  assert.equal(actionable, true);
+  assert.equal(isSaddleCodeChangeRequest(continuationInput), true);
+  assert.equal(isSaddleToolActionRequest("continue"), false);
+  const conversationalContinuation = buildSaddleContinuationInput({
+    originalInput: "what is quantum computing?",
+    assistantResponse: "Quantum computing uses quantum states to represent and process information.",
+    additions: "continue",
+    actionable: false
+  });
+  assert.equal(isSaddleToolActionRequest(conversationalContinuation), false);
+
+  let calls = 0;
+  let followup = "";
+  const turn = await runSaddleTurnWithEvidence({
+    input: continuationInput,
+    runTurn: async ({ input, onToolCall }) => {
+      calls += 1;
+      if (calls === 1) return { ob: { text: "I'll create agents.md now." } };
+      followup = input;
+      const command = calls === 2
+        ? "cat > agents.md <<'EOF'\n# Robot Science Fiction Magazine\nEOF"
+        : "test -s agents.md";
+      await onToolCall({
+        stage: "call",
+        toolName: "bash",
+        toolSentence: { be: "command", ob: { text: command } }
+      });
+      await onToolCall({
+        stage: "result",
+        toolName: "bash",
+        toolText: "exit code: 0",
+        commandOutcome: { exitCode: 0, signal: null, timedOut: false }
+      });
+      return { ob: { text: calls === 2 ? "Created agents.md." : "Created and checked agents.md." } };
+    }
+  });
+
+  assert.equal(calls, 3);
+  assert.match(followup, /Harness completion check: the original code-change request/u);
   assert.equal(turn.assessment.complete, true);
   assert.equal(turn.assessment.kind, "code-change");
 });

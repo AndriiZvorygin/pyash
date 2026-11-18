@@ -62,6 +62,10 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
   const sessionName = `pty-model-switch-${process.pid}-${Date.now()}`;
   const bashMarker = "SADDLE_BASH_PTY_OK";
   const stderrMarker = "SADDLE_BASH_STDERR_PTY";
+  const continuationContext = "Should our Robot Science Fiction magazine repository start with a README?";
+  const continuationOffer = "A short README would help. I can create magazine/README.md with the magazine premise. Want me to write it?";
+  const continuationCreateCommand = "mkdir -p magazine && cat > magazine/README.md <<'EOF'\n# Robot Science Fiction Magazine\n\nA home for speculative stories about robots and the futures they shape.\nEOF";
+  const continuationVerifyCommand = "test -s magazine/README.md";
   const cleanupRequest = "please also remove any Python-style directories";
   const approvalRequest = "remove the scaffold directory";
   const proposalResponse = "Yes, I can create agents.md for the Robot Science Fiction magazine. Want me to create it?";
@@ -135,6 +139,38 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
       let message;
       if (payload.model === firstModel) {
         message = { role: "assistant", content: "Qwen first model turn passed." };
+      } else if (lastUserMessage === continuationContext) {
+        message = { role: "assistant", content: continuationOffer };
+      } else if (String(lastUserMessage ?? "").includes("Additional context:\ncontinue")
+        && !String(lastUserMessage ?? "").includes("Harness completion check")) {
+        message = { role: "assistant", content: "I'll create magazine/README.md now." };
+      } else if (String(lastUserMessage ?? "").includes("Harness completion check: the original code-change request")
+        && String(lastUserMessage ?? "").includes("magazine/README.md")) {
+        const fileCreated = currentTurnToolResults.some((tool) => String(tool.content ?? "").includes(continuationCreateCommand));
+        const fileVerified = currentTurnToolResults.some((tool) => String(tool.content ?? "").includes(continuationVerifyCommand));
+        if (!fileCreated) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-continue-create-magazine-readme",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: continuationCreateCommand }) }
+            }]
+          };
+        } else if (!fileVerified) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-continue-verify-magazine-readme",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: continuationVerifyCommand }) }
+            }]
+          };
+        } else {
+          message = { role: "assistant", content: "Created and verified magazine/README.md." };
+        }
       } else if (lastUserMessage === steeringInput) {
         message = { role: "assistant", content: "I'll create agents.md now." };
       } else if (String(lastUserMessage ?? "").includes("Harness completion check: the original code-change request")) {
@@ -313,6 +349,11 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
     await waitForOutputAfter(() => transcript, "Removed Python-style cache directories and verified none remain.", "pyash>");
     child.write(`${approvalRequest}\r`);
     await waitForOutputAfter(() => transcript, "Saddle command turn finished.", "pyash>");
+    child.write(`${continuationContext}\r`);
+    await waitForOutputAfter(() => transcript, continuationOffer, "pyash>");
+    child.write("continue\r");
+    await waitForOutputAfter(() => transcript, "Created and verified magazine/README.md.", "pyash>");
+    assert.equal(await fs.readFile(path.join(projectRoot, "magazine", "README.md"), "utf8"), "# Robot Science Fiction Magazine\n\nA home for speculative stories about robots and the futures they shape.\n");
     child.write(`\u001b[200~${steeringInput}\u001b[201~\r`);
     await waitForOutput(() => transcript, "[saddle evidence] changed: bash; validation: test -s agents.md; exit: 0");
     assert.equal(await fs.readFile(path.join(projectRoot, "agents.md"), "utf8"), "# Robot Science Fiction Magazine\n\nProject guidance.\n");
@@ -337,6 +378,19 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
     assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
       && String(message.content).includes(bashMarker))),
     "the real command runner output must be returned to the selected model");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(continuationCreateCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "a bare continue must carry the prior offer into Bash and create the magazine README");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(continuationVerifyCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "the continued code task must be verified after the file is created");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "user"
+      && String(message.content).includes("Harness completion check: the original code-change request")
+      && String(message.content).includes("Previous assistant response")
+      && String(message.content).includes("Original request: The user is continuing"))),
+    "the harness must retain the previous offer and require the actual resumed action");
     assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
       && String(message.content).includes(stderrMarker)
       && /status=7/u.test(String(message.content)))),

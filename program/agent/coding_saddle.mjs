@@ -139,6 +139,7 @@ export const DEFAULT_CODING_SADDLE_SYSTEM_PROMPT = [
 
 const SADDLE_CHANGE_ACTION = /\b(?:add|build|change|create|edit|fix|generate|implement|make|modify|patch|refactor|remove|rewrite|update|write)\b/iu;
 const SADDLE_CODE_TARGET = /\b(?:code|program|script|source|file|function|class|module|test|bug|tool|harness|command|repository|repo|pipeline|variable|package|configuration|config)\b|\.(?:mjs|js|cjs|ts|py|pya|json|sh|md)\b/iu;
+const SADDLE_CONTINUATION_REPLY = /^(?:(?:please\s+)?(?:continue|keep going|carry on|resume|finish(?: it)?)(?:\s+please)?)[.!]?$/iu;
 const SADDLE_TOOL_ACTION = /^(?:check|compare|confirm|create|delete|edit|execute|find|fix|generate|implement|inspect|install|list|look\s+up|make|modify|move|open|read|remove|rename|research|restart|run|search|start|stop|test|update|verify|write)\b/iu;
 const SADDLE_ALWAYS_TOOL_ACTION = /^(?:compare|execute|find|inspect|list|look\s+up|open|read|research|restart|run|search|start|stop|test|verify)\b/iu;
 const SADDLE_MUTATING_ACTION = /^(?:create|delete|edit|fix|generate|implement|install|make|modify|move|remove|rename|update|write)\b/iu;
@@ -146,9 +147,13 @@ const SADDLE_ACTION_TARGET = /\b(?:artifact|branch|cache|code|command|config|con
 
 export function isSaddleAffirmativeReply(input = "") {
   const text = String(input ?? "").trim().toLowerCase();
-  const match = text.match(/^(?:yes|yeah|yep|okay|ok|sure|go ahead|do it|please do|proceed|sounds good|that works)\b/u);
+  const match = text.match(/^(?:yes|yeah|yep|okay|ok|sure|go ahead|do it|please do|proceed|continue|keep going|carry on|resume|finish(?: it)?|sounds good|that works)\b/u);
   if (!match) return false;
   return !/^\s*(?:,?\s*but\s+)?(?:no|not|don't|do not|never|cancel|stop|instead)\b/u.test(text.slice(match[0].length));
+}
+
+export function isSaddleContinuationReply(input = "") {
+  return SADDLE_CONTINUATION_REPLY.test(String(input ?? "").trim());
 }
 
 export function buildSaddleSteeringInput({ originalInput = "", assistantResponse = "", additions = "" } = {}) {
@@ -161,6 +166,18 @@ export function buildSaddleSteeringInput({ originalInput = "", assistantResponse
     sections.push(`Interrupted assistant response:\n${response}`);
   }
   sections.push(`Additional context:\n${String(additions ?? "").trim()}`);
+  return sections.join("\n\n");
+}
+
+export function buildSaddleContinuationInput({ originalInput = "", assistantResponse = "", additions = "", actionable = false } = {}) {
+  const sections = [
+    "The user is continuing the previous exchange. Resume its active task or discussion using the context below; do not treat this as an unrelated request.",
+    `Previous user request:\n${String(originalInput ?? "").trim()}`,
+    `Previous assistant response:\n${String(assistantResponse ?? "").trim()}`
+  ];
+  sections.push(actionable
+    ? `Additional context:\n${String(additions ?? "").trim()}`
+    : `Current user message:\n${String(additions ?? "").trim()}`);
   return sections.join("\n\n");
 }
 
@@ -178,6 +195,26 @@ export function isSaddleCodeChangeRequest(input = "") {
   if (!SADDLE_CHANGE_ACTION.test(text)) return false;
   if (/\b(?:fix|implement|patch|refactor)\b/iu.test(text)) return true;
   return SADDLE_CODE_TARGET.test(text);
+}
+
+export function isSaddleActionOffer(input = "") {
+  const text = String(input ?? "");
+  const offers = text.matchAll(/\b(?:i can|i could|i will|i'll|shall i|want me to|would you like me to)\s+([^.!?\n]{1,160})/giu);
+  for (const offer of offers) {
+    const actionText = `${offer[1]}\n${text}`;
+    const action = resolveRequestedSaddleAction(offer[1]);
+    if (action && (SADDLE_ALWAYS_TOOL_ACTION.test(action) || SADDLE_ACTION_TARGET.test(actionText))) return true;
+    if (isSaddleCodeChangeRequest(actionText)) return true;
+  }
+  return false;
+}
+
+export function isSaddleActionableContinuation({ originalInput = "", assistantResponse = "", previousAssessment = null } = {}) {
+  const context = `${String(originalInput ?? "")}\n${String(assistantResponse ?? "")}`;
+  return previousAssessment?.required === true && previousAssessment.complete === false
+    || isSaddleCodeChangeRequest(context)
+    || isSaddleToolActionRequest(originalInput)
+    || isSaddleActionOffer(assistantResponse);
 }
 
 function resolveRequestedSaddleAction(input = "") {

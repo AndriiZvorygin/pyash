@@ -82,10 +82,13 @@ import {
 import { formatMindUsage, normalizeMindUsage, sumMindUsages } from "../program/verbs/mind/usage.mjs";
 import {
   buildSaddleMindSentence,
+  buildSaddleContinuationInput,
   buildSaddleOllamaContextOptions,
   buildSaddleStrataContextOptions,
   buildSaddleSteeringInput,
   buildSaddleWorktreeReviewCommand,
+  isSaddleActionableContinuation,
+  isSaddleContinuationReply,
   formatSaddleCompletionEvidence,
   runSaddleTurnWithEvidence,
   createSaddleInputDecoder,
@@ -970,6 +973,9 @@ async function main() {
   const pendingSteeringInputs = [];
   let activeTurnInput = "";
   let activeAssistantResponseText = "";
+  let previousTurnInput = "";
+  let previousAssistantResponseText = "";
+  let previousTurnAssessment = null;
   let activeInterruptController = null;
   let activeSteeringInterruptRequested = false;
   let steeringInterruptPromise = null;
@@ -1404,7 +1410,8 @@ async function main() {
     writeLine("saddle closed");
   };
   const submit = async (value, { alreadyDisplayed = false } = {}) => {
-    const input = String(value ?? "");
+    const submittedInput = String(value ?? "");
+    let input = submittedInput;
     if (!input.trim() || closing) {
       prompt({ clear: false });
       return;
@@ -1811,6 +1818,20 @@ async function main() {
       return;
     }
 
+    if (isSaddleContinuationReply(input) && previousTurnInput) {
+      const actionable = isSaddleActionableContinuation({
+        originalInput: previousTurnInput,
+        assistantResponse: previousAssistantResponseText,
+        previousAssessment: previousTurnAssessment
+      });
+      input = buildSaddleContinuationInput({
+        originalInput: previousTurnInput,
+        assistantResponse: previousAssistantResponseText,
+        additions: submittedInput,
+        actionable
+      });
+    }
+
     let settleActiveSubmit;
     const activeTurn = new Promise((resolve) => { settleActiveSubmit = resolve; });
     activeSubmitDone = activeTurn;
@@ -1823,7 +1844,7 @@ async function main() {
     busy = true;
     saddleUi.setBusy(true);
     saddleUi.setUsage("");
-    if (!alreadyDisplayed) writeLine(`you> ${input}`);
+    if (!alreadyDisplayed) writeLine(`you> ${submittedInput}`);
     saddleUi.setActivity(`working: ${model} via ${backend}${isLocalModelBackend(backend) ? " through GPU Housekeeper" : ""}`);
     prompt({ clear: false });
     const stopProgress = startSaddleProgress({
@@ -1840,6 +1861,8 @@ async function main() {
     let traceStatus = "failed";
     let traceError = "";
     let sessionTurnId = "";
+    let completedTurnAssessment = null;
+    let completedAssistantResponseText = "";
     try {
       finishActiveMindRun = await beginActiveMindRun({
         worldRoot: config.worldRoot,
@@ -1957,6 +1980,7 @@ async function main() {
           return String(output).trim() || "[worktree review returned no output]";
         }
       }));
+      completedTurnAssessment = turn.assessment;
       const result = turn.result;
       sessionTurnId = String(result?.accordingto?.text ?? "");
       const text = result?.ob?.text ?? result?.fromstate?.text ?? result?.value?.text ?? "";
@@ -1967,6 +1991,7 @@ async function main() {
         writeLine(`[worktree review unavailable] ${turn.worktreeReviewError || "the harness could not collect the Git review"}`);
       }
       const finalText = String(text).trim() || "(no response text)";
+      completedAssistantResponseText = finalText;
       if (lastTurnStreamed && responseStream) {
         if (responseSegmentText.trim() !== finalText) saddleUi.replaceMarkdownStream(responseStream, finalText);
       } else {
@@ -2023,6 +2048,11 @@ async function main() {
       await consumeMindInterrupt({ agentHouse: config.agentHouse, agentName: AGENT_NAME }).catch(() => {});
       await finishActiveMindRun().catch((error) => writeLine(`[interrupt cleanup failed] ${error.message}`));
       if (activeInterruptController === interruptController) activeInterruptController = null;
+      if (traceTurnId) {
+        previousTurnInput = input;
+        previousAssistantResponseText = completedAssistantResponseText || activeAssistantResponseText;
+        previousTurnAssessment = completedTurnAssessment;
+      }
       activeTurnInput = "";
       activeSteeringInterruptRequested = false;
       if (traceTurnId) {
