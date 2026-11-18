@@ -127,7 +127,7 @@ export const DEFAULT_CODING_SADDLE_SYSTEM_PROMPT = [
   "Do not pretend a change was made when a tool did not succeed.",
   "Keep work inside the configured coding directory and prefer small, verifiable steps.",
   "For code changes, name the target file before editing; use write for bounded file creation and repair for unified-diff edits.",
-  "For substantial multi-step coding work, maintain a concise session plan with the update session plan tool; update step states as work proceeds and mark a step done only after recording concrete verification evidence. Keep plans to the necessary steps and skip them for simple questions or one-step edits.",
+  "For substantial multi-step repository, research, or operational work, maintain a concise session plan with the update session plan tool; update step states as work proceeds and mark a step done only after recording concrete verification evidence. Keep plans to the necessary steps and skip them for simple questions or one-step edits.",
   "After the final edit, use command to run the narrowest relevant test, build, syntax check, or execution check. A check run before the final edit does not count.",
   "After a coding task passes its final verification, record only durable project decisions or constraints in the active agent house's absolute memory/MEMORY.md path shown in context (not a project-relative path), with the validation command and a session or artifact evidence reference. Do not store routine task logs, temporary findings, or unverified claims; if no durable decision was made, do not write a memory entry.",
   "Do not commit or push unless the user explicitly requests it. The harness will show the current worktree status and bounded diff for review before the completion evidence.",
@@ -137,6 +137,10 @@ export const DEFAULT_CODING_SADDLE_SYSTEM_PROMPT = [
 
 const SADDLE_CHANGE_ACTION = /\b(?:add|build|change|create|edit|fix|generate|implement|make|modify|patch|refactor|remove|rewrite|update|write)\b/iu;
 const SADDLE_CODE_TARGET = /\b(?:code|program|script|source|file|function|class|module|test|bug|tool|harness|command|repository|repo|pipeline|variable|package|configuration|config)\b|\.(?:mjs|js|cjs|ts|py|pya|json|sh|md)\b/iu;
+const SADDLE_TOOL_ACTION = /^(?:check|compare|confirm|create|delete|edit|execute|find|fix|generate|implement|inspect|install|list|look\s+up|make|modify|move|open|read|remove|rename|research|restart|run|search|start|stop|test|update|verify|write)\b/iu;
+const SADDLE_ALWAYS_TOOL_ACTION = /^(?:compare|execute|find|inspect|list|look\s+up|open|read|research|restart|run|search|start|stop|test|verify)\b/iu;
+const SADDLE_MUTATING_ACTION = /^(?:create|delete|edit|fix|generate|implement|install|make|modify|move|remove|rename|update|write)\b/iu;
+const SADDLE_ACTION_TARGET = /\b(?:artifact|branch|cache|code|command|config|configuration|directory|directories|file|files|folder|folders|module|package|path|paths|project|python|repo|repository|script|source|test|tests)\b|\.(?:mjs|js|cjs|ts|py|pya|json|sh|md)\b/iu;
 
 export function isSaddleCodeChangeRequest(input = "") {
   const text = String(input ?? "").replace(
@@ -152,6 +156,27 @@ export function isSaddleCodeChangeRequest(input = "") {
   if (!SADDLE_CHANGE_ACTION.test(text)) return false;
   if (/\b(?:fix|implement|patch|refactor)\b/iu.test(text)) return true;
   return SADDLE_CODE_TARGET.test(text);
+}
+
+function resolveRequestedSaddleAction(input = "") {
+  const original = String(input ?? "").trim();
+  if (/^(?:do it|go ahead|proceed)\s*[.!]?$/iu.test(original)) return "do it";
+  if (/^(?:how|why|what|when|where)\b/iu.test(original)) return "";
+  let actionText = original.toLowerCase();
+  actionText = actionText.replace(/^(?:(?:okay|ok|please|also|now|and|then)\s+)+/u, "");
+  actionText = actionText.replace(/^(?:(?:can|could|would)\s+you(?:\s+please)?|i\s+(?:need|want)\s+you\s+to|let'?s|go\s+ahead\s+and)\s+/u, "");
+  actionText = actionText.replace(/^(?:(?:okay|ok|please|also|now|and|then)\s+)+/u, "");
+  const match = actionText.match(SADDLE_TOOL_ACTION);
+  return match ? match[0].toLowerCase() : "";
+}
+
+export function isSaddleToolActionRequest(input = "") {
+  const action = resolveRequestedSaddleAction(input);
+  if (!action) return false;
+  const text = String(input ?? "");
+  return action === "do it"
+    || SADDLE_ALWAYS_TOOL_ACTION.test(action)
+    || SADDLE_ACTION_TARGET.test(text);
 }
 
 function eventToolName(event = {}) {
@@ -187,25 +212,48 @@ function commandText(event = {}) {
 
 function isMutatingCommand(text = "") {
   const command = String(text ?? "");
-  return /\b(?:apply_patch|install|mkdir|mv|rm|tee|touch)\b|\b(?:cp|git)\s+(?:-[^\s]+\s+)*(?:add|apply|checkout|clean|commit|merge|move|rebase|reset|restore|rm|switch)\b|\bsed\s+-i\b|\bperl\s+-pi\b/iu.test(command)
+  return /\b(?:apply_patch|install|mkdir|mv|rm|rmdir|tee|touch)\b|\b(?:cp|git)\s+(?:-[^\s]+\s+)*(?:add|apply|checkout|clean|commit|merge|move|rebase|reset|restore|rm|switch)\b|\bsed\s+-i\b|\bperl\s+-pi\b/iu.test(command)
+    || /\bfind\b[\s\S]*?(?:\s-delete\b|\s-exec(?:dir)?\s+rm\b)/iu.test(command)
     || /(?:^|[^<])>{1,2}\s*(?:["']?)(?:\/|\.\.?\/|~\/|[\w.-]+\/|[\w.-]+\.[a-z0-9_-]+)/iu.test(command);
 }
 
 function isValidationCommand(text = "") {
   const command = String(text ?? "").trim();
   if (!command) return false;
-  return /(?:^|[;&|]\s*)(?:git\s+diff\s+--check\b|(?:npm|pnpm|yarn)\s+(?:run\s+)?(?:test|lint|build|check|typecheck)\b|(?:node|npx)\s+(?:--test\b|--check\b|[\w./-]+\.(?:mjs|js|cjs|ts)\b)|(?:python|python3)\s+[\w./-]+\.py\b|(?:bash|sh)\s+[\w./-]+\.sh\b|pytest\b|vitest\b|jest\b|eslint\b|tsc\b|mypy\b|ruff\b|(?:cargo|go)\s+test\b|make\s+(?:test|check|build)\b|\.\/run\s+\S+)/iu.test(command);
+  return /(?:^|[;&|]\s*)(?:git\s+(?:diff\s+--check\b|status\b)|find\s+.+\s+-print0?\b|(?:ls|rg|grep|test|stat)\s+\S+|(?:npm|pnpm|yarn)\s+(?:run\s+)?(?:test|lint|build|check|typecheck)\b|(?:node|npx)\s+(?:--test\b|--check\b|[\w./-]+\.(?:mjs|js|cjs|ts)\b)|(?:python|python3)\s+[\w./-]+\.py\b|(?:bash|sh)\s+[\w./-]+\.sh\b|pytest\b|vitest\b|jest\b|eslint\b|tsc\b|mypy\b|ruff\b|(?:cargo|go)\s+test\b|make\s+(?:test|check|build)\b|\.\/run\s+\S+)/iu.test(command);
 }
 
 function isToolFailure(text = "") {
   const value = String(text ?? "");
-  return /\b(?:isError|is_error)\s*["']?\s*:\s*true\b|\b(?:command|write|repair) defective\b|\bexit=(?:[1-9]\d*|unknown)\b|"be"\s*:\s*"error"/iu.test(value);
+  return /\b(?:isError|is_error)\s*["']?\s*:\s*true\b|\b(?:command|write|repair) defective\b|\b(?:command approval|approve command|approval required|awaiting approval)\b|\bexit=(?:[1-9]\d*|unknown)\b|"be"\s*:\s*"(?:error|ratify)"/iu.test(value);
 }
 
 function eventCommandOutcome(event = {}) {
   if (event.commandOutcome && typeof event.commandOutcome === "object") return event.commandOutcome;
   const match = String(event.toolText ?? event.tool_text ?? "").match(/\bexit=(\d+)\b/u);
   return match ? { exitCode: Number(match[1]), signal: null, timedOut: false } : null;
+}
+
+function isShellTool(name = "") {
+  return ["bash", "command"].includes(toolKind(name));
+}
+
+function isPlanToolCall(call = {}) {
+  const sentence = eventSentence(call.event);
+  return call.name.includes("coding_saddle_plan")
+    || sentence?.fromstate?.text === "coding saddle plan";
+}
+
+function isSuccessfulToolCall(call = {}, events = []) {
+  if (call.resultIndex < 0 || isToolFailure(call.resultText)) return false;
+  const resultEvent = events[call.resultIndex];
+  const resultSentence = resultEvent?.resultSentence ?? resultEvent?.result_sentence;
+  if (resultSentence?.be === "ratify") return false;
+  const outcome = eventCommandOutcome(resultEvent);
+  if (isShellTool(call.name) && outcome) {
+    return outcome.exitCode === 0 && !outcome.signal && outcome.timedOut !== true;
+  }
+  return true;
 }
 
 function changedPathForEvent(event = {}) {
@@ -246,37 +294,64 @@ function pairToolEvents(events = []) {
 }
 
 export function assessSaddleCompletion(input = "", events = []) {
-  if (!isSaddleCodeChangeRequest(input)) {
+  const codeChange = isSaddleCodeChangeRequest(input);
+  const action = !codeChange && isSaddleToolActionRequest(input);
+  if (!codeChange && !action) {
     return { required: false, complete: true, missing: [], changedPaths: [], validation: null };
   }
 
   const calls = pairToolEvents(events);
+  const completedCalls = calls.filter((call) => isSuccessfulToolCall(call, events) && !isPlanToolCall(call));
+  const approvalRequired = calls.some((call) => {
+    if (call.resultIndex < 0) return false;
+    const resultEvent = events[call.resultIndex];
+    const resultSentence = resultEvent?.resultSentence ?? resultEvent?.result_sentence;
+    return resultSentence?.be === "ratify" || /\b(?:command approval|approve command|approval required)\b/iu.test(call.resultText);
+  });
   const mutations = calls.filter((call) => {
-    if (call.resultIndex < 0 || isToolFailure(call.resultText)) return false;
+    if (!isSuccessfulToolCall(call, events) || isPlanToolCall(call)) return false;
     const kind = toolKind(call.name);
     if (kind === "write") return true;
     if (kind === "repair") return !/\bcheck\b/iu.test(call.name);
-    return kind === "command" && isMutatingCommand(commandText(call.event));
+    return isShellTool(call.name) && isMutatingCommand(commandText(call.event));
   });
   const lastMutation = mutations.reduce((latest, call) => Math.max(latest, call.index), -1);
-  const validations = calls.filter((call) => toolKind(call.name) === "command"
+  const validations = calls.filter((call) => isShellTool(call.name)
     && !isMutatingCommand(commandText(call.event))
     && isValidationCommand(commandText(call.event))
     && call.resultIndex > lastMutation
-    && !isToolFailure(call.resultText)
-    && eventCommandOutcome(events[call.resultIndex])?.exitCode === 0
-    && !eventCommandOutcome(events[call.resultIndex])?.signal
-    && eventCommandOutcome(events[call.resultIndex])?.timedOut !== true);
+    && isSuccessfulToolCall(call, events)
+    && eventCommandOutcome(events[call.resultIndex])?.exitCode === 0);
   const validation = validations.at(-1) ?? null;
+  const lastActionShellCall = completedCalls.filter((call) => isShellTool(call.name)).at(-1);
   const missing = [];
-  if (mutations.length === 0) missing.push("a successful file-changing tool call");
-  if (!validation) missing.push("a successful relevant validation command after the final edit");
+  if (codeChange) {
+    if (mutations.length === 0) missing.push("a successful file-changing tool call");
+    if (!validation) missing.push("a successful relevant validation command after the final edit");
+  } else {
+    const requestedAction = resolveRequestedSaddleAction(input);
+    const mutationRequested = SADDLE_MUTATING_ACTION.test(requestedAction);
+    const successfulMutations = mutations.filter((call) => isShellTool(call.name) && isMutatingCommand(commandText(call.event)));
+    if (completedCalls.length === 0) {
+      missing.push("a successful tool call that performs or checks the requested action");
+    } else if (mutationRequested && successfulMutations.length === 0) {
+      missing.push("a successful command that performs the requested change");
+    }
+    if (mutationRequested && successfulMutations.length > 0 && !validation) {
+      missing.push("a successful verification command after the final change");
+    }
+  }
+  if (approvalRequired) missing.unshift("operator approval for the pending destructive command");
   return {
     required: true,
+    kind: codeChange ? "code-change" : "action",
+    approvalRequired,
     complete: missing.length === 0,
     missing,
-    changedPaths: [...new Set(mutations.map((call) => changedPathForEvent(call.event)).filter(Boolean))],
-    changeTools: [...new Set(mutations.map((call) => call.name))],
+    changedPaths: codeChange ? [...new Set(mutations.map((call) => changedPathForEvent(call.event)).filter(Boolean))] : [],
+    changeTools: codeChange ? [...new Set(mutations.map((call) => call.name))] : [],
+    actionTool: completedCalls.at(-1)?.name ?? "",
+    actionCommand: lastActionShellCall ? commandText(lastActionShellCall.event) : "",
     validation: validation ? {
       command: commandText(validation.event),
       exitCode: eventCommandOutcome(events[validation.resultIndex])?.exitCode,
@@ -287,6 +362,14 @@ export function assessSaddleCompletion(input = "", events = []) {
 
 export function buildSaddleCompletionFollowup(input = "", assessment = {}) {
   const missing = Array.isArray(assessment.missing) ? assessment.missing : [];
+  if (assessment.kind === "action") {
+    return [
+      "Harness completion check: the requested action still lacks completion evidence.",
+      `Original request: ${String(input ?? "").trim()}`,
+      `Missing evidence: ${missing.join("; ") || "use the available tool and report its result"}.`,
+      "Continue the original task with the available tools; do not restate a promise as completion. For a requested change, perform it and run a verification command afterward. For a multi-step task, update the session plan as you make evidence-backed progress. If blocked, report the exact tool error and leave the task explicitly incomplete."
+    ].join("\n");
+  }
   return [
     "Harness completion check: the original code-change request is not complete yet.",
     `Original request: ${String(input ?? "").trim()}`,
@@ -298,6 +381,13 @@ export function buildSaddleCompletionFollowup(input = "", assessment = {}) {
 export function formatSaddleCompletionEvidence(assessment = {}) {
   if (!assessment.required) return "";
   if (!assessment.complete) return `[saddle incomplete] ${assessment.missing.join("; ")}.`;
+  if (assessment.kind === "action") {
+    const command = assessment.actionCommand ? `; command: ${assessment.actionCommand}` : "";
+    const verification = assessment.validation
+      ? `; verification: ${assessment.validation.command}; exit: ${assessment.validation.exitCode}`
+      : "";
+    return `[saddle evidence] action complete${assessment.actionTool ? `; tool: ${assessment.actionTool}` : ""}${command}${verification}`;
+  }
   const changed = assessment.changedPaths.length ? assessment.changedPaths.join(", ") : assessment.changeTools.join(", ");
   const output = assessment.validation.output ? `; output: ${assessment.validation.output}` : "";
   return `[saddle evidence] changed: ${changed}; validation: ${assessment.validation.command}; exit: ${assessment.validation.exitCode}${output}`;
@@ -356,14 +446,17 @@ export async function runSaddleTurnWithEvidence({ input, runTurn, onToolCall, on
   let result = await invoke(input);
   let assessment = assessSaddleCompletion(input, events);
   let retried = false;
+  let completionPasses = 0;
   let retryError = "";
-  if (assessment.required && !assessment.complete) {
+  while (assessment.required && !assessment.complete && !assessment.approvalRequired && completionPasses < 3) {
     retried = true;
+    completionPasses += 1;
     await onFollowup?.(assessment);
     try {
       result = await invoke(buildSaddleCompletionFollowup(input, assessment));
     } catch (error) {
       retryError = String(error?.message ?? error);
+      break;
     }
     assessment = assessSaddleCompletion(input, events);
   }
@@ -376,7 +469,7 @@ export async function runSaddleTurnWithEvidence({ input, runTurn, onToolCall, on
       worktreeReviewError = String(error?.message ?? error);
     }
   }
-  return { result, assessment, retried, retryError, events, worktreeReview, worktreeReviewError };
+  return { result, assessment, retried, completionPasses, retryError, events, worktreeReview, worktreeReviewError };
 }
 
 function normalizeText(value) {

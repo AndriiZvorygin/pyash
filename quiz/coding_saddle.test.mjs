@@ -48,6 +48,7 @@ import {
   resolveSaddleModelOption,
   resolveSaddleModelSelection,
   resolveSaddleMindProfile,
+  isSaddleToolActionRequest,
   runSaddleTurnWithEvidence,
   saddleSlashCommandCompletions,
   saddleToolEventLabel,
@@ -428,6 +429,7 @@ test("coding saddle completion evidence requires a successful edit and a later c
     assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes(guidance), `missing retrieval guidance: ${guidance}`);
   }
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /name the target file before editing/u);
+  assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /multi-step repository, research, or operational work/u);
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /After the final edit/u);
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /active agent house's absolute memory\/MEMORY\.md path/u);
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /validation command and a session or artifact evidence reference/u);
@@ -440,6 +442,9 @@ test("coding saddle completion evidence requires a successful edit and a later c
   assert.equal(isSaddleCodeChangeRequest("see if the file update thing is fixed now"), false);
   assert.equal(isSaddleCodeChangeRequest("check if the file is changed, and update it if needed"), true);
   assert.equal(isSaddleCodeChangeRequest("update the coding saddle tools to show command output"), true);
+  assert.equal(isSaddleToolActionRequest("okay please also remove any python style directories"), true);
+  assert.equal(isSaddleToolActionRequest("how can I remove Python-style directories?"), false);
+  assert.equal(isSaddleToolActionRequest("Do you think the saddle is usable?"), false);
 
   const events = [
     {
@@ -610,6 +615,119 @@ test("coding saddle gives an incomplete code-change turn one evidence-driven con
   assert.equal(turn.result.ob.text, "Created hello.js and checked its syntax.");
 });
 
+test("coding saddle continues an explicit repository action after a promise without tool calls", async () => {
+  const input = "okay please also remove any python style directories";
+  let calls = 0;
+  let continuation = "";
+  const turn = await runSaddleTurnWithEvidence({
+    input,
+    runTurn: async ({ input: turnInput, onToolCall }) => {
+      calls += 1;
+      if (calls === 1) return { ob: { text: "I'll check and remove them if found." } };
+      continuation = turnInput;
+      const command = calls === 2
+        ? "find . -type d -name '__pycache__' -prune -exec rm -rf {} +"
+        : "find . -type d -name '*python*' -print";
+      await onToolCall({
+        stage: "call",
+        toolName: "bash",
+        toolSentence: { be: "command", ob: { text: command } }
+      });
+      await onToolCall({
+        stage: "result",
+        toolName: "bash",
+        toolText: `exit code: 0\ncommand: ${command}`,
+        commandOutcome: { exitCode: 0, signal: null, timedOut: false }
+      });
+      return { ob: { text: calls === 2 ? "Removed Python cache directories." : "Removed Python cache directories and verified none remain." } };
+    }
+  });
+
+  assert.equal(calls, 3);
+  assert.equal(turn.completionPasses, 2);
+  assert.equal(turn.retried, true);
+  assert.match(continuation, /Original request: okay please also remove any python style directories/u);
+  assert.equal(turn.assessment.complete, true);
+  assert.match(formatSaddleCompletionEvidence(turn.assessment), /action complete/u);
+});
+
+test("coding saddle leaves an explicit action incomplete when its continuation still has no tool evidence", async () => {
+  let calls = 0;
+  const turn = await runSaddleTurnWithEvidence({
+    input: "okay please also remove any python style directories",
+    runTurn: async () => {
+      calls += 1;
+      return { ob: { text: calls === 1 ? "I'll take care of that." : "Done." } };
+    }
+  });
+
+  assert.equal(calls, 4);
+  assert.equal(turn.completionPasses, 3);
+  assert.equal(turn.assessment.complete, false);
+  assert.match(formatSaddleCompletionEvidence(turn.assessment), /\[saddle incomplete\].*successful tool call/u);
+});
+
+test("coding saddle does not count command approval or a still-present target as completed removal", () => {
+  const removalCommand = "find ./magaiize -type d -name '__pycache__' -exec rm -rf {} +";
+  const verificationCommand = "find ./magaiize -type d -name '__pycache__' -print";
+  const assessment = assessSaddleCompletion("please remove Python-style directories", [
+    {
+      stage: "call",
+      toolName: "bash",
+      toolSentence: { be: "command", ob: { text: removalCommand } }
+    },
+    {
+      stage: "result",
+      toolName: "bash",
+      toolText: "approve command (destructive): find ./magaiize ...",
+      resultSentence: { be: "ratify", ob: { text: "approval required" } }
+    },
+    {
+      stage: "call",
+      toolName: "bash",
+      toolSentence: { be: "command", ob: { text: verificationCommand } }
+    },
+    {
+      stage: "result",
+      toolName: "bash",
+      toolText: "exit code: 0\nstdout: ./magaiize/src/__pycache__",
+      commandOutcome: { exitCode: 0, signal: null, timedOut: false }
+    }
+  ]);
+
+  assert.equal(assessment.complete, false);
+  assert.match(assessment.missing.join(" "), /successful command that performs the requested change/u);
+});
+
+test("coding saddle stops completion passes when a destructive command needs operator approval", async () => {
+  let calls = 0;
+  const removalCommand = "find ./magaiize -type d -name '__pycache__' -exec rm -rf {} +";
+  const turn = await runSaddleTurnWithEvidence({
+    input: "please remove Python-style directories",
+    runTurn: async ({ onToolCall }) => {
+      calls += 1;
+      if (calls === 1) return { ob: { text: "I'll remove them." } };
+      await onToolCall({
+        stage: "call",
+        toolName: "bash",
+        toolSentence: { be: "command", ob: { text: removalCommand } }
+      });
+      await onToolCall({
+        stage: "result",
+        toolName: "bash",
+        toolText: "approve command (destructive)",
+        resultSentence: { be: "ratify", ob: { text: "approval required" } }
+      });
+      return { ob: { text: "The destructive command is waiting for approval." } };
+    }
+  });
+
+  assert.equal(calls, 2);
+  assert.equal(turn.completionPasses, 1);
+  assert.equal(turn.assessment.approvalRequired, true);
+  assert.match(formatSaddleCompletionEvidence(turn.assessment), /operator approval for the pending destructive command/u);
+});
+
 test("coding saddle does not add a completion pass to general advice", async () => {
   let calls = 0;
   const turn = await runSaddleTurnWithEvidence({
@@ -642,7 +760,7 @@ test("coding saddle does not require code changes for a read-only command sessio
   assert.equal(turn.assessment.required, false);
 });
 
-test("coding saddle reports incomplete when the corrective pass still has no successful check", async () => {
+test("coding saddle reports incomplete after bounded completion passes still have no successful check", async () => {
   let calls = 0;
   const turn = await runSaddleTurnWithEvidence({
     input: "fix the code bug",
@@ -663,7 +781,8 @@ test("coding saddle reports incomplete when the corrective pass still has no suc
     }
   });
 
-  assert.equal(calls, 2);
+  assert.equal(calls, 4);
+  assert.equal(turn.completionPasses, 3);
   assert.equal(turn.assessment.complete, false);
   assert.match(formatSaddleCompletionEvidence(turn.assessment), /^\[saddle incomplete\]/u);
 });

@@ -1921,7 +1921,7 @@ async function main() {
           }
         },
         onFollowup: (assessment) => {
-          writeLine(`[saddle] completion check missing ${assessment.missing.join("; ")}; making one completion pass`);
+          writeLine(`[saddle] completion check missing ${assessment.missing.join("; ")}; continuing the task`);
         },
         onReview: async () => {
           const review = await interpret({

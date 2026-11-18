@@ -60,6 +60,10 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
   const sessionName = `pty-model-switch-${process.pid}-${Date.now()}`;
   const bashMarker = "SADDLE_BASH_PTY_OK";
   const stderrMarker = "SADDLE_BASH_STDERR_PTY";
+  const cleanupRequest = "please also remove any Python-style directories";
+  const cleanupDirectory = path.join(projectRoot, "magaiize", "src", "__pycache__");
+  const removePythonDirectoryCommand = "find ./magaiize -type d -name '__pycache__' -empty -prune -exec rmdir {} +";
+  const verifyPythonDirectoriesCommand = "find ./magaiize -type d \\( -name '__pycache__' -o -name '.pytest_cache' \\) -print";
   const failingCommand = `node -e "process.stdout.write('SADDLE_BASH_STDOUT_PTY\\n'); process.stderr.write('${stderrMarker}\\n'); process.exit(7)"`;
   const submissions = [];
   const jobs = new Map();
@@ -109,12 +113,44 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
       }
       const messages = Array.isArray(payload.messages) ? payload.messages : [];
       const hasToolResult = messages.some((message) => message?.role === "tool");
+      const latestUserIndex = messages.findLastIndex((message) => message?.role === "user");
+      const currentTurnMessages = latestUserIndex < 0 ? [] : messages.slice(latestUserIndex + 1);
+      const currentTurnToolResults = currentTurnMessages.filter((message) => message?.role === "tool");
       const hasStderrToolResult = messages.some((message) => message?.role === "tool"
         && String(message.content ?? "").includes(stderrMarker));
       const lastUserMessage = [...messages].reverse().find((message) => message?.role === "user")?.content;
       let message;
       if (payload.model === firstModel) {
         message = { role: "assistant", content: "Qwen first model turn passed." };
+      } else if (lastUserMessage === cleanupRequest && currentTurnToolResults.length === 0) {
+        message = { role: "assistant", content: "I'll inspect and remove Python-style directories if I find any." };
+      } else if (String(lastUserMessage ?? "").includes("Harness completion check: the requested action")) {
+        const verificationRequested = String(lastUserMessage).includes("successful verification command after the final change");
+        if (verificationRequested && currentTurnToolResults.length === 0) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-verify-python-directories",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: verifyPythonDirectoriesCommand }) }
+            }]
+          };
+        } else if (!verificationRequested && currentTurnToolResults.length === 0) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-remove-python-directory",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: removePythonDirectoryCommand }) }
+            }]
+          };
+        } else if (verificationRequested) {
+          message = { role: "assistant", content: "Removed Python-style cache directories and verified none remain." };
+        } else {
+          message = { role: "assistant", content: "Removed Python-style cache directories." };
+        }
       } else if (lastUserMessage === "stderr diagnostics" && !hasStderrToolResult) {
         message = {
           role: "assistant",
@@ -151,6 +187,7 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
   });
 
   await fs.mkdir(projectRoot, { recursive: true });
+  await fs.mkdir(cleanupDirectory, { recursive: true });
   await new Promise((resolve) => housekeeper.listen(0, "127.0.0.1", resolve));
   const address = housekeeper.address();
   const env = {
@@ -212,6 +249,10 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
     await waitForOutputAfter(() => transcript, "Spark first turn passed after the Bash command returned its output.", "pyash>");
     child.write("stderr diagnostics\r");
     await waitForOutputAfter(() => transcript, "exit code 7.", "pyash>");
+    child.write(`${cleanupRequest}\r`);
+    await waitForOutputAfter(() => transcript, "Removed Python-style cache directories and verified none remain.", "pyash>");
+    const cleanupTranscript = stripTerminalControlSequences(transcript);
+    await assert.rejects(fs.access(cleanupDirectory), cleanupTranscript.slice(-10000));
 
     const cleanTranscript = stripTerminalControlSequences(transcript);
     assert.match(cleanTranscript, new RegExp(`model: ${secondModel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
@@ -240,6 +281,15 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
       "PTY result preview must include the exit status and captured stderr");
     assert.ok(submissions.some((payload) => payload.model === secondModel && payload.options?.num_ctx === 131072),
       "the selected model must retry at the first supported context preset that fits the provider error");
+    assert.ok(submissions.some((payload) => payload.model === secondModel && payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(removePythonDirectoryCommand))),
+    "a promised repository action must continue into a real Bash deletion command");
+    assert.ok(submissions.some((payload) => payload.model === secondModel && payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(verifyPythonDirectoriesCommand))),
+    "the action continuation must run a verification command after deletion");
+    assert.match(cleanTranscript, /completion check missing a successful tool call that performs or checks the requested action/u);
+    assert.match(cleanTranscript, /completion check missing a successful verification command after the final change/u);
+    assert.match(cleanTranscript, /\[saddle evidence\] action complete/u);
     const commandDebugLines = cleanTranscript.match(/\[command debug\] \{[^\r\n]*\}/gu) ?? [];
     assert.ok(commandDebugLines.length >= 1, "PTY transcript should include a debug record for the Bash command");
     const commandDebug = commandDebugLines.map((line) => JSON.parse(line.slice("[command debug] ".length)));
