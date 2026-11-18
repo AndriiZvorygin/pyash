@@ -530,6 +530,10 @@ function historicalBackfillEligible(state, cfg = {}) {
   const payload = state?.row?.payload || {};
   if (String(payload.source || "") === "youtube-live") return true;
   if (String(payload.source || "") !== "youtube-video") return false;
+  const includeRegular = /^(1|true|yes|on)$/iu.test(String(
+    cfg.backfill_include_regular_videos || process.env.ANDRII_BACKFILL_INCLUDE_REGULAR_VIDEOS || "",
+  ));
+  if (!includeRegular) return false;
   const minimumSeconds = Math.max(0, Number(cfg.backfill_regular_min_duration_seconds || 600));
   return Number(payload.duration_seconds || 0) >= minimumSeconds;
 }
