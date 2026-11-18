@@ -2188,6 +2188,7 @@ test("channel runtime enforces ratify policy for propose tools (deny then allow)
     doRemember({ mood: "ya", su: { name: "world root" }, be: "root", ob: { filename: worldRoot } });
     await interpret(parse("exists su name helper be mind via state \"qwen3\" ya"));
     await interpret(parse("su name tools be map def"));
+    await interpret(parse("su name agent ob bool truth ya"));
     await interpret(parse("su name run shell be command ob text input propose"));
     await interpret(parse("prah"));
 
