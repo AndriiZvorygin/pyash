@@ -132,12 +132,13 @@ test("first-pass root candidate lists exclude grammar catalog targets and unders
     ]]),
     subtlex: new Map(),
     junda: new Map(),
-    cedict: new Map([["甲", [{ pinyin: "jia3", definitions: ["you"] }]]]),
+    cedict: new Map([["甲", [{ pinyin: "jia3", definitions: ["you", "ist"] }]]]),
     kwonRows: [],
     acceptedLinks: [],
     atomEntries: [
       { en: "you", pya: "hnan" },
-      { en: "you_", pya: "sa" }
+      { en: "you_", pya: "sa" },
+      { en: "_ist", pya: "dxi7s" }
     ],
     grammarTargets: [{ kind: "grammar", english: "you", pya: "wa" }],
     shuowenByCharacter: new Map(),
@@ -146,7 +147,7 @@ test("first-pass root candidate lists exclude grammar catalog targets and unders
 
   assert.deepEqual(buildChineseCharacterAtomWorklist(input, { includeMapped: false })[0]
     .existingAtomCandidates.map(({ kind, pya }) => [kind, pya]), [
-    ["atom", "hnan"], ["atom", "sa"], ["grammar", "wa"]
+    ["atom", "hnan"], ["atom", "sa"], ["atom", "dxi7s"], ["grammar", "wa"]
   ]);
   assert.deepEqual(buildChineseCharacterAtomWorklist(input, { includeMapped: false, rootAtomsOnly: true })[0]
     .existingAtomCandidates.map(({ kind, pya }) => [kind, pya]), [["atom", "hnan"]]);
@@ -398,6 +399,16 @@ test("automatic linking accepts ranked semantic fallbacks and deterministically 
         ]
       }
     },
+    {
+      ...you,
+      character: "者",
+      existingAtomCandidates: [{ kind: "atom", english: "_ist", pya: "dxi7s" }],
+      modelMatch: {
+        verdict: "match",
+        confidence: "high",
+        matches: [{ targetId: "atom:dxi7s", relation: "same-sense", rationale: "Derivational marker." }]
+      }
+    },
     { ...you, character: "熟", existingMappings: [{ pya: "other" }] },
     { ...you, character: "没", modelMatch: undefined }
   ], [
@@ -455,4 +466,18 @@ test("existing Chinese character conflicts keep root links and the higher-freque
   assert.deepEqual(result.acceptedLinks.map(({ character, status }) => [character, status]), [
     ["想", "accepted"], ["意", "withdrawn"], ["你", "accepted"]
   ]);
+});
+
+test("existing Chinese root links to underscore-marked morphology targets are withdrawn", () => {
+  const result = reconcileChineseCharacterAtomLinkConflicts({
+    acceptedLinks: [{ character: "者", pya: "dxi7s", english: "_ist", status: "accepted" }],
+    grammarCharacterLinks: [],
+    atomEntries: [{ en: "_ist", pya: "dxi7s" }],
+    subtlex: new Map(),
+    junda: new Map(),
+    unihan: new Map()
+  });
+
+  assert.deepEqual(result.withdrawn, [{ character: "者", pya: "dxi7s" }]);
+  assert.equal(result.acceptedLinks[0].status, "withdrawn");
 });

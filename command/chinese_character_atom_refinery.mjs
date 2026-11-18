@@ -639,7 +639,7 @@ export async function runChineseCharacterAtomRefinery() {
     ? await reconcileExistingLinks(initialInputs)
     : { grammarLinksRemoved: 0, rootLinksWithdrawn: 0 };
   if (linkRepairs.grammarLinksRemoved || linkRepairs.rootLinksWithdrawn) {
-    process.stdout.write(`reconciled existing links: removed ${linkRepairs.grammarLinksRemoved} grammar duplicates, withdrew ${linkRepairs.rootLinksWithdrawn} lower-frequency atom links\n`);
+    process.stdout.write(`reconciled existing links: removed ${linkRepairs.grammarLinksRemoved} grammar duplicates, withdrew ${linkRepairs.rootLinksWithdrawn} invalid or lower-frequency root links\n`);
   }
   const inputs = linkRepairs.grammarLinksRemoved || linkRepairs.rootLinksWithdrawn
     ? await loadChineseCharacterAtomRefineryInputs()

@@ -488,9 +488,14 @@ function oneCharacterMappings(rows = [], acceptedLinks = []) {
 
 function atomTargets(atomEntries, grammarTargets, { rootAtomsOnly = false } = {}) {
   const atoms = (atomEntries ?? []).filter((row) => text(row?.en) && text(row?.pya))
-    .filter((row) => !rootAtomsOnly || !text(row.en).endsWith("_"))
+    .filter((row) => !rootAtomsOnly || !isUnderscoreMarkedEnglish(row.en))
     .map((row) => ({ id: `atom:${text(row.pya)}`, kind: "atom", english: text(row.en), pya: text(row.pya) }));
   return [...atoms, ...(rootAtomsOnly ? [] : grammarTargets)];
+}
+
+function isUnderscoreMarkedEnglish(value) {
+  const english = text(value);
+  return english.startsWith("_") || english.endsWith("_");
 }
 
 function atomTargetIndex(targets) {
@@ -589,6 +594,17 @@ export function reconcileChineseCharacterAtomLinkConflicts(inputs) {
     throw invalid("Chinese character link reconciliation requires parsed accepted and grammar links");
   }
   const acceptedLinks = inputs.acceptedLinks.map((link) => ({ ...link }));
+  const atomEnglishByPya = new Map((inputs.atomEntries ?? [])
+    .filter((row) => text(row?.pya) && text(row?.en))
+    .map((row) => [text(row.pya), text(row.en)]));
+  const withdrawn = [];
+  for (const link of acceptedLinks) {
+    if (link.status !== "accepted") continue;
+    const english = atomEnglishByPya.get(text(link.pya)) ?? text(link.english);
+    if (!isUnderscoreMarkedEnglish(english)) continue;
+    link.status = "withdrawn";
+    withdrawn.push({ character: text(link.character), pya: text(link.pya) });
+  }
   const grammarCharacters = new Set(inputs.grammarCharacterLinks
     .filter((link) => link.source === "chinese-character-grammar-refinery")
     .map((link) => text(link.character)));
@@ -606,7 +622,6 @@ export function reconcileChineseCharacterAtomLinkConflicts(inputs) {
     rows.push(link);
     byPya.set(text(link.pya), rows);
   }
-  const withdrawn = [];
   for (const rows of byPya.values()) {
     if (rows.length < 2) continue;
     const ranked = rows.map((link) => ({
@@ -846,7 +861,7 @@ export function highConfidenceChineseCharacterAtomLinks(records = [], existingLi
       .filter((match) => match.relation !== "marked")
       .map((match) => candidateById.get(text(match.targetId)))
       .find((candidate) => candidate && candidate.kind === "atom"
-        && !text(candidate.english).endsWith("_")
+        && !isUnderscoreMarkedEnglish(candidate.english)
         && !linkedAtoms.has(text(candidate.pya)));
     if (!target) continue;
     result.push({
