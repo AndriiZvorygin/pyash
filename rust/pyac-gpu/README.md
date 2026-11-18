@@ -73,8 +73,10 @@ as programlet-local values. Text values and general effects are outside this
 programlet slice. Native Vulkan also dispatches independent named programlet
 sections concurrently; each result carries its source `sectionIndex` and HNUC
 name, while the response list and `completionOrder` follow GPU completion
-order. Source order is not imposed on independent results. The serial CPU
-reference naturally completes sections in source order.
+order. Source order is not imposed on independent results. The JavaScript
+reference interpreter is serial and naturally completes sections in source
+order; the Rust CPU executor schedules independent sections across available
+CPU threads and returns results as each finishes.
 
 The standalone smoke script verifies ordinary pack execution, one local-number
 programlet return, and rejection of a write to a constant quantity on the

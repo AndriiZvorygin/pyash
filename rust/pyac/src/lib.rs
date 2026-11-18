@@ -106,11 +106,51 @@ pub struct PackExecutionError {
     pub source: SemanticError,
 }
 
+/// A section result; `section_index` is its source ordinal, while vector order
+/// from `execute_pack_sections` records completion order.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PyacSectionResult {
     pub section_index: usize,
     pub name_words: Vec<u16>,
     pub value: PyacValue,
+}
+
+fn map_independent_sections<T, F>(section_count: usize, worker_count: usize, execute: F) -> Vec<T>
+where
+    T: Send,
+    F: Fn(usize) -> T + Sync,
+{
+    if section_count == 0 {
+        return Vec::new();
+    }
+    let worker_count = worker_count.max(1).min(section_count);
+    if worker_count == 1 {
+        return (0..section_count).map(execute).collect();
+    }
+
+    let next_section = std::sync::atomic::AtomicUsize::new(0);
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::scope(|scope| {
+        for _ in 0..worker_count {
+            let sender = sender.clone();
+            let execute = &execute;
+            let next_section = &next_section;
+            scope.spawn(move || {
+                loop {
+                    let section_index =
+                        next_section.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if section_index >= section_count {
+                        break;
+                    }
+                    if sender.send(execute(section_index)).is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+        drop(sender);
+        receiver.into_iter().collect()
+    })
 }
 
 impl PackExecutionError {
@@ -377,6 +417,8 @@ fn execute_shared_programlet(
     })
 }
 
+/// Executes independent named sections across available CPU threads.
+/// Results are returned in completion order and retain their source ordinals.
 pub fn execute_pack_sections(
     pack: &PyacPack,
 ) -> Result<Vec<PyacSectionResult>, PackExecutionError> {
@@ -403,21 +445,24 @@ pub fn execute_pack_sections(
         source: programlet_error(error),
     })?;
 
-    let mut results = Vec::with_capacity(section_count);
-    for (section_index, section) in sections[..section_count].iter().enumerate() {
+    let worker_count = std::thread::available_parallelism()
+        .map(|count| count.get())
+        .unwrap_or(1);
+    map_independent_sections(section_count, worker_count, |section_index| {
+        let section = sections[section_index];
         let start = section.codelet_start as usize;
-        let value =
-            execute_shared_programlet(&words, start, section.codelet_count as usize, start)?;
-        results.push(PyacSectionResult {
+        let value = execute_shared_programlet(&words, start, section.codelet_count as usize, start);
+        value.map(|value| PyacSectionResult {
             section_index,
             name_words: section.name_words[..section.name_length as usize]
                 .iter()
                 .map(|word| *word as u16)
                 .collect(),
             value,
-        });
-    }
-    Ok(results)
+        })
+    })
+    .into_iter()
+    .collect()
 }
 
 pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionError> {
@@ -431,8 +476,12 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
         .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
         .collect::<Vec<_>>();
     if pyac_vliw_core::has_programlet_section_header(&words, pack.codelets.len()) {
-        return execute_pack_sections(pack)
-            .map(|sections| sections.into_iter().map(|section| section.value).collect());
+        let mut sections = execute_pack_sections(pack)?;
+        // This compatibility API drops section identity, so retain its
+        // historical source-order result contract. Callers that need actual
+        // completion order should use execute_pack_sections instead.
+        sections.sort_by_key(|section| section.section_index);
+        return Ok(sections.into_iter().map(|section| section.value).collect());
     }
     if pyac_vliw_core::is_numeric_programlet(&words, pack.codelets.len()) {
         return execute_shared_programlet(&words, 0, pack.codelets.len(), 0)
@@ -538,10 +587,27 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Arc, Barrier};
+    use std::time::Duration;
 
     const ONE_PLUS: [u16; WORDS_PER_CODELET] = [
         0x0149, 0x881d, 0x0001, 0x245e, 0x881d, 0x0001, 0x243e, 0x8a64, 0x295e, 0, 0, 0, 0, 0, 0, 0,
     ];
+
+    #[test]
+    fn independent_cpu_sections_are_returned_in_completion_order() {
+        let start = Arc::new(Barrier::new(3));
+        let completed = map_independent_sections(3, 3, {
+            let start = Arc::clone(&start);
+            move |section_index| {
+                start.wait();
+                let delay_ms = [40, 1, 20][section_index];
+                std::thread::sleep(Duration::from_millis(delay_ms));
+                section_index
+            }
+        });
+        assert_eq!(completed, vec![1, 2, 0]);
+    }
 
     #[test]
     fn encodes_the_shared_one_plus_one_fixture() {

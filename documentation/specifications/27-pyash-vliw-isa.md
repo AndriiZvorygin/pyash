@@ -273,10 +273,11 @@ The source ordinal is retained as `sectionIndex` for identity, not as a result
 ordering constraint. Executors MAY schedule independent sections in any order
 and MUST return each result as its section completes. Thus result order is
 completion order, while the included source ordinal and Pyash name allow
-consumers to associate each value with its section. A serial reference
-executor naturally completes them in source order; parallel executors need
-not. Any dependency between sections disqualifies them from this independent
-section form and must be expressed within an ordered programlet instead.
+consumers to associate each value with its section. The JavaScript reference
+interpreter is serial and therefore completes sections in source order; Rust
+CPU and Vulkan executors may complete them in a different order. Any
+dependency between sections disqualifies them from this independent section
+form and must be expressed within an ordered programlet instead.
 
 ### Hosted PyashForth memory profile
 

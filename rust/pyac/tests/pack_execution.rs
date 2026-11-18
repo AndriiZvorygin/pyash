@@ -1470,10 +1470,16 @@ fn executes_independent_named_programlet_sections_and_preserves_hnuc_labels() {
         codelet
     }
 
+    let mut second_programlet = LOCAL_NUMBER_PROGRAMLET;
+    second_programlet[2][2] = 2;
+
     let mut codelets = Vec::new();
-    for name in [0xaa90, 0xa86a] {
+    for (name, programlet) in [
+        (0xaa90, &LOCAL_NUMBER_PROGRAMLET),
+        (0xa86a, &second_programlet),
+    ] {
         codelets.push(section_marker(name, 0x5217));
-        codelets.extend(LOCAL_NUMBER_PROGRAMLET);
+        codelets.extend(*programlet);
         codelets.push(section_marker(name, 0x4e27));
     }
     let bytes = encode_pack(&codelets).expect("sectioned pack encodes");
@@ -1481,14 +1487,26 @@ fn executes_independent_named_programlet_sections_and_preserves_hnuc_labels() {
 
     let sections = execute_pack_sections(&pack).expect("CPU shared runtime executes sections");
     assert_eq!(sections.len(), 2);
-    assert_eq!(sections[0].section_index, 0);
-    assert_eq!(sections[0].name_words, vec![0xaa90]);
-    assert_eq!(sections[0].value, PyacValue::Unsigned(1));
-    assert_eq!(sections[1].section_index, 1);
-    assert_eq!(sections[1].name_words, vec![0xa86a]);
-    assert_eq!(sections[1].value, PyacValue::Unsigned(1));
+    let sections_by_index = sections
+        .iter()
+        .map(|section| (section.section_index, section))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    assert_eq!(
+        sections_by_index.keys().copied().collect::<Vec<_>>(),
+        vec![0, 1]
+    );
+    assert_eq!(sections_by_index.get(&0).unwrap().name_words, vec![0xaa90]);
+    assert_eq!(sections_by_index.get(&1).unwrap().name_words, vec![0xa86a]);
+    assert_eq!(
+        sections_by_index.get(&0).unwrap().value,
+        PyacValue::Unsigned(1)
+    );
+    assert_eq!(
+        sections_by_index.get(&1).unwrap().value,
+        PyacValue::Unsigned(2)
+    );
     assert_eq!(
         execute_pack(&pack),
-        Ok(vec![PyacValue::Unsigned(1), PyacValue::Unsigned(1)])
+        Ok(vec![PyacValue::Unsigned(1), PyacValue::Unsigned(2)])
     );
 }
