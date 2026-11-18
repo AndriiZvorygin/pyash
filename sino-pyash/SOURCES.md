@@ -72,6 +72,15 @@ Retrieved 2026-10-31. Raw upstream files are tracked where redistribution terms 
 - Ke (2024), an ancient Chinese segmentation/POS methodology paper, is preserved under its post-2016 ACL CC BY 4.0 terms in [`sources/classical-chinese/references/`](sources/classical-chinese/references/). The paper describes an annotated corpus but does not provide a corpus download in its Anthology record; availability of the annotations remains unverified.
 - CText, PKU CCL, and Kroll are linked as lookup resources, not mirrored. See the access notes in [`CLASSICAL-CORPUS.md`](CLASSICAL-CORPUS.md).
 
+## UD Chinese-GSDSimp snapshot
+
+- Treebank: [UD Chinese-GSDSimp](https://universaldependencies.org/treebanks/zh_gsdsimp/), maintained in the [UniversalDependencies/UD_Chinese-GSDSimp repository](https://github.com/UniversalDependencies/UD_Chinese-GSDSimp).
+- Pinned upstream revision: [`b79a1c2f7ba7f9b264808d91c6886a67b7f847a3`](https://github.com/UniversalDependencies/UD_Chinese-GSDSimp/tree/b79a1c2f7ba7f9b264808d91c6886a67b7f847a3), retrieved 2026-11-17. The local snapshot includes `zh_gsdsimp-ud-train.conllu`, `zh_gsdsimp-ud-dev.conllu`, and `zh_gsdsimp-ud-test.conllu` under [`sources/ud-chinese-gsdsimp-b79a1c2/`](sources/ud-chinese-gsdsimp-b79a1c2/).
+- Contributors: Peng Qi and Koichi Yasuoka. License: [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/); preserve attribution and ShareAlike terms for adaptations.
+- The treebank describes itself as simplified Chinese converted from UD Chinese-GSD with manual corrections. Its overview reports 4,997 sentences and 123,289 tokens. UPOS tags are converted from manually annotated non-UD labels with some corrections, so POS is candidate evidence only; the grammar refinery also requires a direct dictionary-gloss match before model review.
+- SHA-256: train `afa9d230acde5173c779d9a1b270a1da0c2174df47fbc74151c4c9958d113d02`; dev `bd494a95dc3ba35005141daf44f35f51b5bc3497c6921fc2af419313e01857b1`; test `5af5c5b74afb334f2d4f6e95e32764a22569c809726edaa2be59761616452f0b`.
+- The 24-character Classical Chinese candidate set in [`sources/classical-chinese/function-characters-24.pya`](sources/classical-chinese/function-characters-24.pya) comes from section 4.3 of Yu Ningyi, Rao Gaoqi, and Xun Endong (2015), [“An Attempt to Ancient Chinese Extraction based on Statistical and Rule based Methods”](https://cips-cl.org/static/anthology/CCL-2015/CCL-15-112.pdf). The paper selected these characters as a text-classification heuristic and explicitly notes that their modern uses require disambiguation. Treat list membership as a search seed, not proof that a given occurrence is grammatical or that the list is exhaustive; details are in [`CLASSICAL-CORPUS.md`](CLASSICAL-CORPUS.md).
+
 ## Word-order references
 
 - Clause-level order observations for the acquired Ket, Tibetan, Caucasus, Basque, Sinitic, and Uralic comparison samples are recorded in [`WORD-ORDER.md`](WORD-ORDER.md). Profiles are tied to individual varieties and sources; they are not phonetic-proximity scores or compound-head rules.

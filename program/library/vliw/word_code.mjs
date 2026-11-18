@@ -43,6 +43,13 @@ function classifyWord(word) {
   throw invalid("Pyac words must contain two through five glyphs", { word });
 }
 
+export function classifyPyacWord(value) {
+  if (typeof value !== "string" || value.length === 0) {
+    throw invalid("Pyac word must be non-empty text", { value });
+  }
+  return classifyWord(value.normalize("NFC"));
+}
+
 function requireTable(table, glyph, role, word) {
   const value = table.get(glyph);
   if (value === undefined) throw invalid("Pyac word contains an unsupported glyph", { word, role, glyph });
