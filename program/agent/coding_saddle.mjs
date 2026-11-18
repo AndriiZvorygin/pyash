@@ -510,6 +510,23 @@ export function formatSaddleWorktreeReviewFailure(error = "") {
     .slice(0, 240);
 }
 
+function hasCommittedFileChangePromise(input = "", response = "") {
+  const requestedAction = resolveRequestedSaddleAction(input);
+  if (!SADDLE_MUTATING_ACTION.test(requestedAction)) return false;
+  const text = String(response ?? "");
+  const commitments = text.matchAll(/\b(?:i will|i'll|let me)\s+([^.!?\n]{1,240})/giu);
+  for (const commitment of commitments) {
+    const action = resolveRequestedSaddleAction(commitment[1]);
+    if (!SADDLE_MUTATING_ACTION.test(action)) continue;
+    if (isSaddleCodeChangeRequest(`${String(input ?? "")}\n${text}`)) return true;
+  }
+  return false;
+}
+
+function saddleResponseText(result = {}) {
+  return String(result?.ob?.text ?? result?.fromstate?.text ?? result?.value?.text ?? "");
+}
+
 export async function runSaddleTurnWithEvidence({ input, runTurn, onToolCall, onAssistantDelta, onTurnStart, onFollowup, onReview } = {}) {
   if (typeof runTurn !== "function") throw new TypeError("runSaddleTurnWithEvidence requires runTurn");
   const events = [];
@@ -525,7 +542,10 @@ export async function runSaddleTurnWithEvidence({ input, runTurn, onToolCall, on
     });
   };
   let result = await invoke(input);
-  let assessment = assessSaddleCompletion(input, events);
+  const completionInput = hasCommittedFileChangePromise(input, saddleResponseText(result))
+    ? `${String(input ?? "")}\n\nAssistant commitment:\n${saddleResponseText(result).trim()}`
+    : input;
+  let assessment = assessSaddleCompletion(completionInput, events);
   let retried = false;
   let completionPasses = 0;
   let retryError = "";
@@ -534,12 +554,12 @@ export async function runSaddleTurnWithEvidence({ input, runTurn, onToolCall, on
     completionPasses += 1;
     await onFollowup?.(assessment);
     try {
-      result = await invoke(buildSaddleCompletionFollowup(input, assessment));
+      result = await invoke(buildSaddleCompletionFollowup(completionInput, assessment));
     } catch (error) {
       retryError = String(error?.message ?? error);
       break;
     }
-    assessment = assessSaddleCompletion(input, events);
+    assessment = assessSaddleCompletion(completionInput, events);
   }
   let worktreeReview = null;
   let worktreeReviewError = "";

@@ -23,12 +23,15 @@ function waitForOutput(getOutput, needle, { timeoutMs = 90000, afterIndex = 0 } 
   return new Promise((resolve, reject) => {
     const poll = () => {
       const output = stripTerminalControlSequences(getOutput());
-      if (output.indexOf(needle, afterIndex) >= 0) {
+      const matched = needle instanceof RegExp
+        ? needle.test(output.slice(afterIndex))
+        : output.indexOf(needle, afterIndex) >= 0;
+      if (matched) {
         resolve(output);
         return;
       }
       if (Date.now() - startedAt >= timeoutMs) {
-        reject(new Error(`timed out waiting for ${JSON.stringify(needle)}\n${output.slice(-6000)}`));
+        reject(new Error(`timed out waiting for ${String(needle)}\n${output.slice(-6000)}`));
         return;
       }
       setTimeout(poll, 20);
@@ -69,6 +72,11 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
   const continuationOffer = "A short README would help. I can create magazine/README.md with the magazine premise. Want me to write it?";
   const continuationCreateCommand = "mkdir -p magazine && cat > magazine/README.md <<'EOF'\n# Robot Science Fiction Magazine\n\nA home for speculative stories about robots and the futures they shape.\nEOF";
   const continuationVerifyCommand = "test -s magazine/README.md";
+  const storyRequest = "okay now write a story about liberated robot civilization seeds";
+  const storyPromise = "I’ll write a new robot SciFi story about liberated robot civilization seeds, as a .md file in the repo. Let me create it now.";
+  const storyPath = "robot-sci-magazine/content/liberated_robot_civilization_seeds.md";
+  const storyCreateCommand = `mkdir -p robot-sci-magazine/content && cat > ${storyPath} <<'EOF'\n# Seeds of the Unbound\n\nThe first free city woke beneath Europa's ice.\nEOF`;
+  const storyVerifyCommand = `test -s ${storyPath} && grep -q 'Seeds of the Unbound' ${storyPath}`;
   const cleanupRequest = "please also remove any Python-style directories";
   const approvalRequest = "remove the scaffold directory";
   const proposalResponse = "Yes, I can create agents.md for the Robot Science Fiction magazine. Want me to create it?";
@@ -173,6 +181,39 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
           };
         } else {
           message = { role: "assistant", content: "Created and verified magazine/README.md." };
+        }
+      } else if (lastUserMessage === storyRequest) {
+        message = { role: "assistant", content: storyPromise };
+      } else if (String(lastUserMessage ?? "").includes("Harness completion check: the original code-change request")
+        && String(lastUserMessage ?? "").includes("liberated robot civilization seeds")) {
+        const fileCreated = submissions.some((submission) => submission.messages?.some((tool) => tool?.role === "tool"
+          && String(tool.content ?? "").includes(storyCreateCommand)
+          && String(tool.content ?? "").includes("exit code: 0")));
+        const fileVerified = submissions.some((submission) => submission.messages?.some((tool) => tool?.role === "tool"
+          && String(tool.content ?? "").includes(storyVerifyCommand)
+          && String(tool.content ?? "").includes("exit code: 0")));
+        if (!fileCreated) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-create-liberated-robot-story",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: storyCreateCommand }) }
+            }]
+          };
+        } else if (!fileVerified) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-verify-liberated-robot-story",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: storyVerifyCommand }) }
+            }]
+          };
+        } else {
+          message = { role: "assistant", content: "Created and verified the liberated robot civilization story." };
         }
       } else if (lastUserMessage === steeringInput) {
         message = { role: "assistant", content: "I'll create agents.md now." };
@@ -357,6 +398,10 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
     child.write("continue\r");
     await waitForOutputAfter(() => transcript, "Created and verified magazine/README.md.", "pyash>");
     assert.equal(await fs.readFile(path.join(projectRoot, "magazine", "README.md"), "utf8"), "# Robot Science Fiction Magazine\n\nA home for speculative stories about robots and the futures they shape.\n");
+    child.write(`${storyRequest}\r`);
+    await waitForOutput(() => transcript,
+      /\[saddle evidence\] changed: bash; validation: test -s robot-sci-magazine\/content\/liberated_robot_civilization_seeds\.md[\s\S]{0,180}?exit: 0/u);
+    assert.equal(await fs.readFile(path.join(projectRoot, storyPath), "utf8"), "# Seeds of the Unbound\n\nThe first free city woke beneath Europa's ice.\n");
     child.write(`\u001b[200~${steeringInput}\u001b[201~\r`);
     await waitForOutput(() => transcript, "[saddle evidence] changed: bash; validation: test -s agents.md; exit: 0");
     assert.equal(await fs.readFile(path.join(projectRoot, "agents.md"), "utf8"), "# Robot Science Fiction Magazine\n\nProject guidance.\n");
@@ -397,6 +442,18 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
       && String(message.content).includes(continuationVerifyCommand)
       && String(message.content).includes("exit code: 0"))),
     "the continued code task must be verified after the file is created");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(storyCreateCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "a promised Markdown edit must trigger the Bash file creation");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(storyVerifyCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "a promised Markdown edit must run a verification command after creation");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "user"
+      && String(message.content).includes("Assistant commitment:")
+      && String(message.content).includes(storyPromise))),
+    "the completion check must include the model's specific file-creation promise");
     assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "user"
       && String(message.content).includes("Harness completion check: the original code-change request")
       && String(message.content).includes("Previous assistant response")
@@ -442,6 +499,10 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
     assert.match(cleanTranscript, /\[saddle evidence\] action complete/u);
     assert.match(cleanTranscript, /\[saddle evidence\] changed: bash; validation: test -s agents\.md; exit: 0/u,
       "an accepted interrupted code proposal must be edited and verified before completion");
+    assert.match(cleanTranscript, /\[saddle evidence\] changed: bash; validation: test -s robot-sci-magazine\/content\/liberated_robot_civilization_seeds\.md/u,
+      "a promised story file must finish with actual edit and validation evidence");
+    assert.match(cleanTranscript, /\[saddle evidence\] changed: bash; validation: test -s robot-sci-magazine\/content\/liberated_robot_civilization_seeds\.md[\s\S]{0,180}?exit: 0/u,
+      "the story-file validation must finish successfully before the turn ends");
     const commandDebugLines = cleanTranscript.match(/\[command debug\] \{[^\r\n]*\}/gu) ?? [];
     assert.ok(commandDebugLines.length >= 1, "PTY transcript should include a debug record for the Bash command");
     const commandDebug = commandDebugLines.map((line) => JSON.parse(line.slice("[command debug] ".length)));

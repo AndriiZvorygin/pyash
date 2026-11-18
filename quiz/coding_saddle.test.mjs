@@ -676,6 +676,59 @@ test("coding saddle gives an incomplete code-change turn one evidence-driven con
   assert.equal(turn.result.ob.text, "Created hello.js and checked its syntax.");
 });
 
+test("coding saddle continues a promised Markdown file after announcing the edit", async () => {
+  const input = "okay now write a story about liberated robot civilization seeds";
+  const promisedResponse = "I’ll write a new robot SciFi story about liberated robot civilization seeds, as a .md file in the repo. Let me create it now.";
+  const filePath = "robot-sci-magazine/content/liberated_robot_civilization_seeds.md";
+  const createCommand = `mkdir -p robot-sci-magazine/content && cat > ${filePath} <<'EOF'\n# Seeds of the Unbound\n\nThe first free city woke beneath Europa's ice.\nEOF`;
+  const verifyCommand = `test -s ${filePath} && grep -q 'Seeds of the Unbound' ${filePath}`;
+  let calls = 0;
+  let followup = "";
+  const turn = await runSaddleTurnWithEvidence({
+    input,
+    runTurn: async ({ input: turnInput, onToolCall }) => {
+      calls += 1;
+      if (calls === 1) return { ob: { text: promisedResponse } };
+      followup = turnInput;
+      const command = calls === 2 ? createCommand : verifyCommand;
+      await onToolCall({
+        stage: "call",
+        toolName: "bash",
+        toolSentence: { be: "command", ob: { text: command } }
+      });
+      await onToolCall({
+        stage: "result",
+        toolName: "bash",
+        toolText: "exit code: 0",
+        commandOutcome: { exitCode: 0, signal: null, timedOut: false }
+      });
+      return { ob: { text: calls === 2 ? "Created the story file." : "Created and verified the story file." } };
+    }
+  });
+
+  assert.equal(calls, 3);
+  assert.match(followup, /Harness completion check: the original code-change request/u);
+  assert.match(followup, /I’ll write a new robot SciFi story/u);
+  assert.equal(turn.assessment.required, true);
+  assert.equal(turn.assessment.complete, true);
+  assert.deepEqual(turn.assessment.changeTools, ["bash"]);
+  assert.equal(turn.assessment.validation.command, verifyCommand);
+});
+
+test("coding saddle does not turn an optional file offer into a required file edit", async () => {
+  let calls = 0;
+  const turn = await runSaddleTurnWithEvidence({
+    input: "write a story about liberated robots",
+    runTurn: async () => {
+      calls += 1;
+      return { ob: { text: "I can put this in a Markdown file if you want." } };
+    }
+  });
+
+  assert.equal(calls, 1);
+  assert.equal(turn.assessment.required, false);
+});
+
 test("coding saddle continues an explicit repository action after a promise without tool calls", async () => {
   const input = "okay please also remove any python style directories";
   let calls = 0;
