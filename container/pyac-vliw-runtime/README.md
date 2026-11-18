@@ -11,10 +11,13 @@ The internal HTTP contract is protocol version 1:
 - `GET /health` returns `ready`, `protocolVersion`, and available worker slots.
 - `POST /v1/execute` accepts `{protocolVersion, jobId, jobSpec}` where
   `jobSpec.kind` is `pyac-pack-execute` and `jobSpec.payload.packBase64` is the
-  canonical PyAC pack.
-- The response is the existing Rust worker result (`ok`, `backend`, `device`,
-  and typed `values`). Raw shaders, arbitrary source code, and arbitrary
-  commands are not accepted.
+  canonical PyAC pack. Independent `myocpfun` sections are dispatched as
+  separate workgroups.
+- The response includes `ok`, `backend`, `device`, and typed `values`. For a
+  sectioned pack it also includes named `sections` and `completionOrder`; those
+  are in actual completion order, and each record retains its source
+  `sectionIndex` and HNUC name. Raw shaders, arbitrary source code, and
+  arbitrary commands are not accepted.
 
 The service binds inside Docker only. It publishes no host port and joins the
 Housekeeper's private Docker network. The Housekeeper's API remains the only

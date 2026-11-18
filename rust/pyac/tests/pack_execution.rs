@@ -1,6 +1,6 @@
 use pyac::{
     PyacValue, SemanticError, VectorElements, WORDS_PER_CODELET, decode_pack, encode_pack,
-    execute_pack, index_word,
+    execute_pack, execute_pack_sections, index_word,
 };
 
 const PLUS: [u16; WORDS_PER_CODELET] = [
@@ -1458,5 +1458,37 @@ fn combined_boolean_sentences_keep_codelet_boundaries() {
             PyacValue::Boolean(true),
             PyacValue::Boolean(true),
         ])
+    );
+}
+
+#[test]
+fn executes_independent_named_programlet_sections_and_preserves_hnuc_labels() {
+    fn section_marker(name: u16, mood: u16) -> [u16; WORDS_PER_CODELET] {
+        let mut codelet = [0; WORDS_PER_CODELET];
+        codelet[0] = 0x0049;
+        codelet[1..7].copy_from_slice(&[0x225e, name, 0x24de, 0xec01, 0x6a84, mood]);
+        codelet
+    }
+
+    let mut codelets = Vec::new();
+    for name in [0xaa90, 0xa86a] {
+        codelets.push(section_marker(name, 0x5217));
+        codelets.extend(LOCAL_NUMBER_PROGRAMLET);
+        codelets.push(section_marker(name, 0x4e27));
+    }
+    let bytes = encode_pack(&codelets).expect("sectioned pack encodes");
+    let pack = decode_pack(&bytes).expect("sectioned pack decodes");
+
+    let sections = execute_pack_sections(&pack).expect("CPU shared runtime executes sections");
+    assert_eq!(sections.len(), 2);
+    assert_eq!(sections[0].section_index, 0);
+    assert_eq!(sections[0].name_words, vec![0xaa90]);
+    assert_eq!(sections[0].value, PyacValue::Unsigned(1));
+    assert_eq!(sections[1].section_index, 1);
+    assert_eq!(sections[1].name_words, vec![0xa86a]);
+    assert_eq!(sections[1].value, PyacValue::Unsigned(1));
+    assert_eq!(
+        execute_pack(&pack),
+        Ok(vec![PyacValue::Unsigned(1), PyacValue::Unsigned(1)])
     );
 }

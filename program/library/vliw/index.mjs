@@ -424,6 +424,7 @@ export {
   MAX_PYASH_PROGRAMLET_STEP_BUDGET,
   compilePyashProgramSource,
   decodePyashProgramPack,
+  decodePyashProgramSections,
   executePyashProgramPack,
   evolvePyashProgramSource,
   mutatePyashProgramSource

@@ -83,6 +83,62 @@ test("PyAC programlet rejects writes to a declared constant quantity", () => {
   );
 });
 
+test("PyAC packet sections compile and execute as independent named sections", async () => {
+  const source = [
+    "su name one be myocpfun def",
+    "su name one to name num answer be ceremony def",
+    "ob num 2 to name num answer be plus do",
+    "su name answer ret",
+    "su name one be ceremony prah",
+    "to name num answer be one do",
+    "su name one be myocpfun prah",
+    "su name two be myocpfun def",
+    "su name two to name num answer be ceremony def",
+    "ob num 5 to name num answer be plus do",
+    "su name answer ret",
+    "su name two be ceremony prah",
+    "to name num answer be two do",
+    "su name two be myocpfun prah"
+  ].join("\n");
+  const compiled = compilePyashProgramSource(source);
+
+  assert.deepEqual(compiled.sections.map(({ name }) => name), ["one", "two"]);
+  assert.equal(compiled.sections.length, 2);
+  const result = await executePyashProgramPack(compiled.pack);
+  assert.deepEqual(result.sections.map(({ name, output }) => [name, output]), [
+    ["one", { num: 2 }],
+    ["two", { num: 5 }]
+  ]);
+  assert.deepEqual(result.completionOrder, result.sections.map(({ index }) => index));
+});
+
+test("PyAC packet sections reject duplicate names and unclosed boundaries", () => {
+  const section = [
+    "su name one be myocpfun def",
+    "su name one to name num answer be ceremony def",
+    "ob num 1 to name num answer be plus do",
+    "su name answer ret",
+    "su name one be ceremony prah",
+    "to name num answer be one do",
+    "su name one be myocpfun prah"
+  ];
+  assert.throws(
+    () => compilePyashProgramSource([...section, ...section].join("\n")),
+    /section names must be unique/u
+  );
+  assert.throws(
+    () => compilePyashProgramSource(section.slice(0, -1).join("\n")),
+    /missing its matching paragraph terminator/u
+  );
+  const longSectionName = section
+    .map((sentence) => sentence.replaceAll("name one", "name one two three four five six seven eight nine"))
+    .join("\n");
+  assert.throws(
+    () => compilePyashProgramSource(longSectionName),
+    /section name exceeds 8 HNUC words/u
+  );
+});
+
 test("PyAC programlet requires a typed destination when writing a numeric local", () => {
   const untypedDestination = localCounterSource.replace(
     "to name num count",

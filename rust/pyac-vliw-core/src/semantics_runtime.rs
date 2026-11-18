@@ -6,6 +6,8 @@ extern crate std;
 pub const CODELET_WORDS: usize = 16;
 pub const RESULT_WORDS: usize = 32;
 pub const MAX_PROGRAMLET_CODELETS: usize = 64;
+pub const MAX_PROGRAMLET_SECTIONS: usize = 64;
+pub const MAX_PROGRAMLET_SECTION_NAME_WORDS: usize = 8;
 pub const PROGRAMLET_SCRATCH_WORDS: usize = MAX_PROGRAMLET_CODELETS * (CODELET_WORDS - 1);
 pub const MAX_PROGRAMLET_LOCAL_SLOTS: usize = 64;
 pub const MAX_PROGRAMLET_CALL_DEPTH: usize = 8;
@@ -33,6 +35,24 @@ pub const ERROR_CONSTANT_WRITE: u32 = 7;
 pub const ERROR_STEP_BUDGET: u32 = 8;
 pub const ERROR_PROGRAM_CAPACITY: u32 = 9;
 pub const ERROR_CALL_DEPTH: u32 = 10;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ProgramletSection {
+    pub codelet_start: u32,
+    pub codelet_count: u32,
+    pub name_length: u32,
+    pub name_words: [u32; MAX_PROGRAMLET_SECTION_NAME_WORDS],
+}
+
+impl ProgramletSection {
+    pub const EMPTY: Self = Self {
+        codelet_start: 0,
+        codelet_count: 0,
+        name_length: 0,
+        name_words: [0; MAX_PROGRAMLET_SECTION_NAME_WORDS],
+    };
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CoreResult {
@@ -112,6 +132,8 @@ const BOOLEAN_TYPE: u32 = 0x538f;
 const VARIABLE: u32 = 0xc8c4;
 const PERMANENTLY: u32 = 0x0b50;
 const CEREMONY: u32 = 0xe8c9;
+const SECTION_MODULE: u32 = 0xec01;
+const SECTION_PART: u32 = 0x6a84;
 const MOOD_DEFINITION: u32 = 0x5217;
 const MOOD_PARAGRAPH: u32 = 0x4e27;
 const MOOD_RETURN: u32 = 0xa828;
@@ -858,16 +880,41 @@ fn collect_sentence(
     tokens: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
     boundaries: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
 ) -> Result<(usize, usize), u32> {
-    if start >= codelet_count || codelet_count > words.len() / CODELET_WORDS {
+    collect_sentence_at(
+        words,
+        codelet_count,
+        0,
+        codelet_count,
+        start,
+        tokens,
+        boundaries,
+    )
+}
+
+fn collect_sentence_at(
+    words: &[u32],
+    total_codelet_count: usize,
+    base_codelet: usize,
+    window_codelet_count: usize,
+    start: usize,
+    tokens: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+    boundaries: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+) -> Result<(usize, usize), u32> {
+    if start >= window_codelet_count
+        || base_codelet > total_codelet_count
+        || window_codelet_count > total_codelet_count - base_codelet
+        || total_codelet_count > words.len() / CODELET_WORDS
+    {
         return Err(ERROR_MALFORMED);
     }
     let mut token_count = 0;
     let mut codelet = start;
     loop {
-        if codelet >= codelet_count {
+        if codelet >= window_codelet_count {
             return Err(ERROR_MALFORMED);
         }
-        let header = word(words, codelet, 0);
+        let absolute_codelet = base_codelet + codelet;
+        let header = word(words, absolute_codelet, 0);
         let complete = header & 1 != 0;
         let mut last_boundary = 0;
         let mut slot = 1;
@@ -890,7 +937,7 @@ fn collect_sentence(
             if token_count >= tokens.len() || token_count >= boundaries.len() {
                 return Err(ERROR_FRAME_CAPACITY);
             }
-            let value = word(words, codelet, slot);
+            let value = word(words, absolute_codelet, slot);
             if value > MAX_U16 {
                 return Err(ERROR_MALFORMED);
             }
@@ -1336,6 +1383,7 @@ fn boolean_comparison(words: &[u32], start: usize, codelet_count: usize) -> Opti
 fn next_sentence_is_paragraph_end(
     words: &[u32],
     codelet_count: usize,
+    base_codelet: usize,
     start: usize,
     routine_end: usize,
     tokens: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
@@ -1344,7 +1392,15 @@ fn next_sentence_is_paragraph_end(
     if start >= routine_end {
         return Ok(false);
     }
-    let (length, _) = collect_sentence(words, codelet_count, start, tokens, boundaries)?;
+    let (length, _) = collect_sentence_at(
+        words,
+        base_codelet + codelet_count,
+        base_codelet,
+        codelet_count,
+        start,
+        tokens,
+        boundaries,
+    )?;
     let mut next = ParsedSentence::empty();
     let error = parse_sentence(tokens, boundaries, length, &mut next);
     if error != 0 {
@@ -1758,6 +1814,7 @@ fn capture_programlet_arguments(
 
 fn validate_programlet_arguments(
     words: &[u32],
+    base_codelet: usize,
     codelet_count: usize,
     routine_start: usize,
     tokens: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
@@ -1769,7 +1826,15 @@ fn validate_programlet_arguments(
         return Err(ERROR_FRAME_CAPACITY);
     }
     let definition_at = routine_start.checked_sub(1).ok_or(ERROR_MALFORMED)?;
-    let (length, _) = collect_sentence(words, codelet_count, definition_at, tokens, boundaries)?;
+    let (length, _) = collect_sentence_at(
+        words,
+        base_codelet + codelet_count,
+        base_codelet,
+        codelet_count,
+        definition_at,
+        tokens,
+        boundaries,
+    )?;
     let mut definition = ParsedSentence::empty();
     let parse_error = parse_sentence(tokens, boundaries, length, &mut definition);
     if parse_error != 0 {
@@ -2409,6 +2474,7 @@ fn is_ceremony_definition(
 
 fn find_programlet_routine(
     words: &[u32],
+    base_codelet: usize,
     codelet_count: usize,
     target: NameSpan,
     sentence_words: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
@@ -2423,8 +2489,10 @@ fn find_programlet_routine(
 ) -> u32 {
     let mut cursor = 0;
     while cursor < codelet_count {
-        let (length, next_codelet) = match collect_sentence(
+        let (length, next_codelet) = match collect_sentence_at(
             words,
+            base_codelet + codelet_count,
+            base_codelet,
             codelet_count,
             cursor,
             sentence_words,
@@ -2503,8 +2571,10 @@ fn find_programlet_routine(
             if cursor >= codelet_count {
                 return ERROR_MALFORMED;
             }
-            let (body_length, body_next) = match collect_sentence(
+            let (body_length, body_next) = match collect_sentence_at(
                 words,
+                base_codelet + codelet_count,
+                base_codelet,
                 codelet_count,
                 cursor,
                 sentence_words,
@@ -2569,7 +2639,14 @@ fn find_programlet_routine(
 /// definition. Recognition scans index-marked case and mood boundaries without
 /// imposing a separate function-name length limit.
 pub fn is_numeric_programlet(words: &[u32], codelet_count: usize) -> bool {
-    if codelet_count == 0 || codelet_count > words.len() / CODELET_WORDS {
+    is_numeric_programlet_at(words, 0, codelet_count)
+}
+
+pub fn is_numeric_programlet_at(words: &[u32], base_codelet: usize, codelet_count: usize) -> bool {
+    if codelet_count == 0
+        || base_codelet > words.len() / CODELET_WORDS
+        || codelet_count > words.len() / CODELET_WORDS - base_codelet
+    {
         return false;
     }
     let mut has_su = false;
@@ -2581,7 +2658,8 @@ pub fn is_numeric_programlet(words: &[u32], codelet_count: usize) -> bool {
         if codelet >= codelet_count {
             return false;
         }
-        let header = word(words, codelet, 0);
+        let absolute_codelet = base_codelet + codelet;
+        let header = word(words, absolute_codelet, 0);
         let complete = header & 1 != 0;
         let mut last_boundary = 0;
         let mut slot = 1;
@@ -2601,7 +2679,7 @@ pub fn is_numeric_programlet(words: &[u32], codelet_count: usize) -> bool {
         };
         slot = 1;
         while slot <= last_slot {
-            let value = word(words, codelet, slot);
+            let value = word(words, absolute_codelet, slot);
             let boundary = (header & (1 << slot) != 0) == complete;
             if boundary && value == NOMINATIVE {
                 has_su = true;
@@ -2626,6 +2704,194 @@ pub fn is_numeric_programlet(words: &[u32], codelet_count: usize) -> bool {
     }
 }
 
+fn is_programlet_section_verb(
+    sentence: &ParsedSentence,
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+) -> bool {
+    sentence.verb_length == 2
+        && tokens[sentence.verb_start] == SECTION_MODULE
+        && tokens[sentence.verb_start + 1] == SECTION_PART
+}
+
+fn section_names_equal(
+    left: &[u32; MAX_PROGRAMLET_SECTION_NAME_WORDS],
+    left_length: usize,
+    right: &[u32; MAX_PROGRAMLET_SECTION_NAME_WORDS],
+    right_length: usize,
+) -> bool {
+    left_length == right_length && left[..left_length] == right[..right_length]
+}
+
+pub fn has_programlet_section_header(words: &[u32], codelet_count: usize) -> bool {
+    if codelet_count == 0 || codelet_count > words.len() / CODELET_WORDS {
+        return false;
+    }
+    let mut sentence_words = [0u32; PROGRAMLET_SCRATCH_WORDS];
+    let mut sentence_boundaries = [0u32; PROGRAMLET_SCRATCH_WORDS];
+    let Ok((length, _)) = collect_sentence(
+        words,
+        codelet_count,
+        0,
+        &mut sentence_words,
+        &mut sentence_boundaries,
+    ) else {
+        return false;
+    };
+    let mut sentence = ParsedSentence::empty();
+    parse_sentence(&sentence_words, &sentence_boundaries, length, &mut sentence) == 0
+        && sentence.mood == MOOD_DEFINITION
+        && is_programlet_section_verb(&sentence, &sentence_words)
+}
+
+/// Scan a flat PyAC packet for independent, named `myoc pfun` programlet
+/// sections. Returned codelet ranges exclude both section boundary sentences.
+/// Each section name is its sequence of HNUC words, not display text.
+pub fn scan_numeric_programlet_sections(
+    words: &[u32],
+    codelet_count: usize,
+    sections: &mut [ProgramletSection],
+) -> Result<usize, u32> {
+    if codelet_count == 0 || codelet_count > words.len() / CODELET_WORDS {
+        return Err(ERROR_MALFORMED);
+    }
+    let mut sentence_words = [0u32; PROGRAMLET_SCRATCH_WORDS];
+    let mut sentence_boundaries = [0u32; PROGRAMLET_SCRATCH_WORDS];
+    let mut section_count = 0usize;
+    let mut cursor = 0usize;
+
+    while cursor < codelet_count {
+        if section_count >= sections.len() || section_count >= MAX_PROGRAMLET_SECTIONS {
+            return Err(ERROR_PROGRAM_CAPACITY);
+        }
+        let section_start = cursor;
+        let (header_length, body_start) = collect_sentence(
+            words,
+            codelet_count,
+            cursor,
+            &mut sentence_words,
+            &mut sentence_boundaries,
+        )?;
+        let mut header = ParsedSentence::empty();
+        let error = parse_sentence(
+            &sentence_words,
+            &sentence_boundaries,
+            header_length,
+            &mut header,
+        );
+        if error != 0 {
+            return Err(error);
+        }
+        if header.mood != MOOD_DEFINITION || !is_programlet_section_verb(&header, &sentence_words) {
+            return Err(ERROR_MALFORMED);
+        }
+        let Some(section_subject) = header.field(NOMINATIVE) else {
+            return Err(ERROR_MALFORMED);
+        };
+        let mut section_name = NameSpan::EMPTY;
+        let error = name_span(&sentence_words, section_subject, false, &mut section_name);
+        if error != 0 {
+            return Err(error);
+        }
+        if section_name.length > MAX_PROGRAMLET_SECTION_NAME_WORDS {
+            return Err(ERROR_FRAME_CAPACITY);
+        }
+        let mut name_words = [0u32; MAX_PROGRAMLET_SECTION_NAME_WORDS];
+        let mut name_index = 0usize;
+        while name_index < section_name.length {
+            let value = sentence_words[section_name.start + name_index];
+            if value == 0 || value > MAX_U16 {
+                return Err(ERROR_MALFORMED);
+            }
+            name_words[name_index] = value;
+            name_index += 1;
+        }
+        let mut prior_index = 0usize;
+        while prior_index < section_count {
+            let previous = sections[prior_index];
+            if section_names_equal(
+                &previous.name_words,
+                previous.name_length as usize,
+                &name_words,
+                section_name.length,
+            ) {
+                return Err(ERROR_MALFORMED);
+            }
+            prior_index += 1;
+        }
+
+        cursor = body_start;
+        let body_start_codelet = cursor;
+        loop {
+            if cursor >= codelet_count {
+                return Err(ERROR_MALFORMED);
+            }
+            let (sentence_length, next_codelet) = collect_sentence(
+                words,
+                codelet_count,
+                cursor,
+                &mut sentence_words,
+                &mut sentence_boundaries,
+            )?;
+            let mut sentence = ParsedSentence::empty();
+            let error = parse_sentence(
+                &sentence_words,
+                &sentence_boundaries,
+                sentence_length,
+                &mut sentence,
+            );
+            if error != 0 {
+                return Err(error);
+            }
+            if is_programlet_section_verb(&sentence, &sentence_words) {
+                if sentence.mood != MOOD_PARAGRAPH {
+                    return Err(ERROR_MALFORMED);
+                }
+                let Some(closing_subject) = sentence.field(NOMINATIVE) else {
+                    return Err(ERROR_MALFORMED);
+                };
+                let mut closing_name = NameSpan::EMPTY;
+                let error = name_span(&sentence_words, closing_subject, false, &mut closing_name);
+                if error != 0 {
+                    return Err(error);
+                }
+                let mut names_match = closing_name.length == section_name.length;
+                let mut closing_index = 0usize;
+                while names_match && closing_index < closing_name.length {
+                    names_match = name_words[closing_index]
+                        == sentence_words[closing_name.start + closing_index];
+                    closing_index += 1;
+                }
+                if !names_match {
+                    return Err(ERROR_MALFORMED);
+                }
+                let body_count = cursor.saturating_sub(body_start_codelet);
+                if body_count == 0 || body_count > MAX_PROGRAMLET_CODELETS {
+                    return Err(ERROR_PROGRAM_CAPACITY);
+                }
+                let body_word_start = body_start_codelet * CODELET_WORDS;
+                let body_word_end = cursor * CODELET_WORDS;
+                if !is_numeric_programlet(&words[body_word_start..body_word_end], body_count) {
+                    return Err(ERROR_UNSUPPORTED);
+                }
+                sections[section_count] = ProgramletSection {
+                    codelet_start: body_start_codelet as u32,
+                    codelet_count: body_count as u32,
+                    name_length: section_name.length as u32,
+                    name_words,
+                };
+                section_count += 1;
+                cursor = next_codelet;
+                break;
+            }
+            cursor = next_codelet;
+        }
+        if cursor <= section_start {
+            return Err(ERROR_MALFORMED);
+        }
+    }
+    Ok(section_count)
+}
+
 /// Execute a canonical Pyash numeric programlet using bounded local call frames.
 /// All memory is caller-owned so the same interpreter can run in Rust-GPU.
 pub fn execute_numeric_programlet(
@@ -2637,7 +2903,32 @@ pub fn execute_numeric_programlet(
     symbol_words: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
     frames: &mut [ProgramletFrame; MAX_PROGRAMLET_CALL_DEPTH],
 ) -> CoreResult {
-    if codelet_count == 0 || codelet_count > words.len() / CODELET_WORDS {
+    execute_numeric_programlet_at(
+        words,
+        0,
+        codelet_count,
+        step_budget,
+        sentence_words,
+        sentence_boundaries,
+        symbol_words,
+        frames,
+    )
+}
+
+pub fn execute_numeric_programlet_at(
+    words: &[u32],
+    base_codelet: usize,
+    codelet_count: usize,
+    step_budget: u32,
+    sentence_words: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+    sentence_boundaries: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+    symbol_words: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+    frames: &mut [ProgramletFrame; MAX_PROGRAMLET_CALL_DEPTH],
+) -> CoreResult {
+    if codelet_count == 0
+        || base_codelet > words.len() / CODELET_WORDS
+        || codelet_count > words.len() / CODELET_WORDS - base_codelet
+    {
         return CoreResult::failure(ERROR_MALFORMED, 0);
     }
     if codelet_count > MAX_PROGRAMLET_CODELETS {
@@ -2656,8 +2947,10 @@ pub fn execute_numeric_programlet(
     let mut invocation_start = 0;
     let mut codelet = 0usize;
     while codelet < codelet_count {
-        let (length, next_codelet) = match collect_sentence(
+        let (length, next_codelet) = match collect_sentence_at(
             words,
+            base_codelet + codelet_count,
+            base_codelet,
             codelet_count,
             codelet,
             sentence_words,
@@ -2678,8 +2971,10 @@ pub fn execute_numeric_programlet(
         codelet = next_codelet;
     }
 
-    let (invocation_length, _) = match collect_sentence(
+    let (invocation_length, _) = match collect_sentence_at(
         words,
+        base_codelet + codelet_count,
+        base_codelet,
         codelet_count,
         invocation_start,
         sentence_words,
@@ -2775,6 +3070,7 @@ pub fn execute_numeric_programlet(
     let mut routine_kind = 0;
     let routine_error = find_programlet_routine(
         words,
+        base_codelet,
         codelet_count,
         target,
         sentence_words,
@@ -2792,6 +3088,7 @@ pub fn execute_numeric_programlet(
     }
     if let Err(error) = validate_programlet_arguments(
         words,
+        base_codelet,
         codelet_count,
         routine_start,
         sentence_words,
@@ -2859,8 +3156,10 @@ pub fn execute_numeric_programlet(
         if pc >= frame.routine_end as usize {
             return CoreResult::failure(ERROR_MALFORMED, steps);
         }
-        let (length, next_codelet) = match collect_sentence(
+        let (length, next_codelet) = match collect_sentence_at(
             words,
+            base_codelet + codelet_count,
+            base_codelet,
             codelet_count,
             pc,
             sentence_words,
@@ -3130,6 +3429,7 @@ pub fn execute_numeric_programlet(
             let mut called_kind = 0;
             let routine_error = find_programlet_routine(
                 words,
+                base_codelet,
                 codelet_count,
                 call_name,
                 sentence_words,
@@ -3147,6 +3447,7 @@ pub fn execute_numeric_programlet(
             }
             if let Err(error) = validate_programlet_arguments(
                 words,
+                base_codelet,
                 codelet_count,
                 called_start,
                 sentence_words,
@@ -3312,6 +3613,7 @@ pub fn execute_numeric_programlet(
             let next_is_paragraph = match next_sentence_is_paragraph_end(
                 words,
                 codelet_count,
+                base_codelet,
                 next_codelet,
                 frame.routine_end as usize,
                 sentence_words,
@@ -3410,12 +3712,116 @@ pub fn execute_numeric_programlet(
 mod tests {
     use super::*;
 
+    fn append_sentence(words: &mut std::vec::Vec<u32>, tokens: &[u32], boundaries: &[usize]) {
+        assert!(tokens.len() < CODELET_WORDS);
+        let mut codelet = [0u32; CODELET_WORDS];
+        codelet[0] = 1;
+        for token_index in boundaries {
+            codelet[0] |= 1 << (token_index + 1);
+        }
+        codelet[1..=tokens.len()].copy_from_slice(tokens);
+        words.extend(codelet);
+    }
+
+    fn append_test_section(words: &mut std::vec::Vec<u32>, name: u32) {
+        append_sentence(
+            words,
+            &[
+                NAME_TYPE,
+                name,
+                NOMINATIVE,
+                SECTION_MODULE,
+                SECTION_PART,
+                MOOD_DEFINITION,
+            ],
+            &[2, 5],
+        );
+        append_sentence(
+            words,
+            &[
+                NAME_TYPE,
+                0x4321,
+                NOMINATIVE,
+                NAME_TYPE,
+                NUMBER_TYPE,
+                NAME_TYPE,
+                0x5678,
+                DESTINATION,
+                CEREMONY,
+                MOOD_DEFINITION,
+            ],
+            &[2, 7, 9],
+        );
+        append_sentence(
+            words,
+            &[
+                NAME_TYPE,
+                name,
+                NOMINATIVE,
+                SECTION_MODULE,
+                SECTION_PART,
+                MOOD_PARAGRAPH,
+            ],
+            &[2, 5],
+        );
+    }
+
     fn interpret(codelets: &[[u32; CODELET_WORDS]]) -> CoreResult {
         let words = codelets
             .iter()
             .flat_map(|codelet| codelet.iter().copied())
             .collect::<std::vec::Vec<_>>();
         interpret_group(&words, 0, codelets.len())
+    }
+
+    #[test]
+    fn scans_named_programlet_sections_as_independent_body_ranges() {
+        let mut words = std::vec::Vec::new();
+        append_test_section(&mut words, 0x1111);
+        append_test_section(&mut words, 0x2222);
+        let mut sections = [ProgramletSection::EMPTY; MAX_PROGRAMLET_SECTIONS];
+
+        let count =
+            scan_numeric_programlet_sections(&words, words.len() / CODELET_WORDS, &mut sections)
+                .unwrap();
+
+        assert_eq!(count, 2);
+        assert_eq!(sections[0].codelet_start, 1);
+        assert_eq!(sections[0].codelet_count, 1);
+        assert_eq!(sections[0].name_length, 1);
+        assert_eq!(sections[0].name_words[0], 0x1111);
+        assert_eq!(sections[1].codelet_start, 4);
+        assert_eq!(sections[1].codelet_count, 1);
+        assert_eq!(sections[1].name_words[0], 0x2222);
+    }
+
+    #[test]
+    fn rejects_duplicate_or_mismatched_programlet_section_names() {
+        let mut duplicate = std::vec::Vec::new();
+        append_test_section(&mut duplicate, 0x1111);
+        append_test_section(&mut duplicate, 0x1111);
+        let mut sections = [ProgramletSection::EMPTY; MAX_PROGRAMLET_SECTIONS];
+        assert_eq!(
+            scan_numeric_programlet_sections(
+                &duplicate,
+                duplicate.len() / CODELET_WORDS,
+                &mut sections,
+            ),
+            Err(ERROR_MALFORMED)
+        );
+
+        let mut mismatched = std::vec::Vec::new();
+        append_test_section(&mut mismatched, 0x1111);
+        let close = mismatched.len() - CODELET_WORDS;
+        mismatched[close + 2] = 0x2222;
+        assert_eq!(
+            scan_numeric_programlet_sections(
+                &mismatched,
+                mismatched.len() / CODELET_WORDS,
+                &mut sections,
+            ),
+            Err(ERROR_MALFORMED)
+        );
     }
 
     #[test]

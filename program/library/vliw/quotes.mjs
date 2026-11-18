@@ -100,6 +100,7 @@ const quoteDescriptorByWord = new Map(
 
 const legacyEntriesByHnuc = new Map();
 const legacyEntriesByEnglish = new Map();
+const legacyEntriesByPya = new Map();
 for (const entry of pyashWords) {
   if (typeof entry?.hnuc === "string" && !legacyEntriesByHnuc.has(entry.hnuc.toLowerCase())) {
     legacyEntriesByHnuc.set(entry.hnuc.toLowerCase(), entry);
@@ -107,7 +108,14 @@ for (const entry of pyashWords) {
   if (typeof entry?.en === "string" && !legacyEntriesByEnglish.has(entry.en)) {
     legacyEntriesByEnglish.set(entry.en, entry);
   }
+  if (typeof entry?.pya === "string" && !legacyEntriesByPya.has(entry.pya.toLowerCase())) {
+    legacyEntriesByPya.set(entry.pya.toLowerCase(), entry);
+  }
 }
+
+const legacyPyashCompoundParts = new Map([
+  ["myocpfun", ["myoc", "pfun"]]
+]);
 
 const legacyNumberNames = [
   "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
@@ -429,8 +437,20 @@ export function lookupLegacyWord(word) {
 
 export function lookupLegacyName(name) {
   if (typeof name !== "string" || !name.trim() || /\s/u.test(name.trim())) return null;
-  const entry = legacyEntriesByEnglish.get(name.trim().toLowerCase());
+  const normalized = name.trim().toLowerCase();
+  const entry = legacyEntriesByEnglish.get(normalized) ?? legacyEntriesByPya.get(normalized);
   return entry ? { en: entry.en, hnuc: entry.hnuc, pya: entry.pya } : null;
+}
+
+export function lookupLegacyWordSequence(name) {
+  if (typeof name !== "string" || !name.trim()) return null;
+  const normalized = name.trim().toLowerCase();
+  const direct = lookupLegacyName(normalized);
+  if (direct) return [direct];
+  const parts = legacyPyashCompoundParts.get(normalized);
+  if (!parts) return null;
+  const entries = parts.map((part) => lookupLegacyName(part));
+  return entries.every(Boolean) ? entries : null;
 }
 
 function legacyNumberWord(value) {

@@ -6,6 +6,17 @@ use serde_json::{Value, json};
 
 const RESULT_WORDS: usize = 32;
 const RESULT_STRIDE: usize = 4 + RESULT_WORDS;
+const MAX_SECTION_NAME_WORDS: usize = pyac_vliw_core::MAX_PROGRAMLET_SECTION_NAME_WORDS;
+const SECTION_DESCRIPTOR_STRIDE: usize = 3 + MAX_SECTION_NAME_WORDS;
+const SECTION_RESULT_STRIDE: usize = 4 + MAX_SECTION_NAME_WORDS + RESULT_STRIDE;
+
+#[derive(Debug)]
+struct DecodedSectionResult {
+    section_index: usize,
+    name_words: Vec<u32>,
+    completion_order: usize,
+    value: PyacValue,
+}
 
 pub(crate) struct GpuRuntime {
     device: wgpu::Device,
@@ -14,6 +25,7 @@ pub(crate) struct GpuRuntime {
     bind_group_layout: wgpu::BindGroupLayout,
     pack_pipeline: wgpu::ComputePipeline,
     programlet_pipeline: wgpu::ComputePipeline,
+    sections_pipeline: wgpu::ComputePipeline,
 }
 
 impl GpuRuntime {
@@ -71,6 +83,10 @@ impl GpuRuntime {
                         name: Cow::Borrowed("execute_pyac_programlet"),
                         workgroup_size: (64, 1, 1),
                     },
+                    wgpu::PassthroughShaderEntryPoint {
+                        name: Cow::Borrowed("execute_pyac_sections"),
+                        workgroup_size: (64, 1, 1),
+                    },
                 ]),
                 spirv: Some(Cow::Owned(shader_words.to_vec())),
                 ..Default::default()
@@ -111,6 +127,26 @@ impl GpuRuntime {
                     },
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
             ],
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -134,6 +170,14 @@ impl GpuRuntime {
             "Pyash VLIW programlet interpreter",
         )
         .await?;
+        let sections_pipeline = create_pipeline(
+            &device,
+            &pipeline_layout,
+            &shader,
+            "execute_pyac_sections",
+            "Pyash independent section interpreter",
+        )
+        .await?;
 
         Ok(Self {
             device,
@@ -142,6 +186,7 @@ impl GpuRuntime {
             bind_group_layout,
             pack_pipeline,
             programlet_pipeline,
+            sections_pipeline,
         })
     }
 
@@ -172,9 +217,31 @@ impl GpuRuntime {
             .iter()
             .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
             .collect::<Vec<_>>();
-        let programlet = pyac_vliw_core::is_numeric_programlet(&input_words, codelets.len());
-        let result_records = if programlet { 1 } else { codelets.len() };
-        let pipeline = if programlet {
+        let sectioned = pyac_vliw_core::has_programlet_section_header(&input_words, codelets.len());
+        let mut section_descriptors =
+            [pyac_vliw_core::ProgramletSection::EMPTY; pyac_vliw_core::MAX_PROGRAMLET_SECTIONS];
+        let section_count = if sectioned {
+            pyac_vliw_core::scan_numeric_programlet_sections(
+                &input_words,
+                codelets.len(),
+                &mut section_descriptors,
+            )
+            .map_err(|error| format!("malformed VLIW section packet (core error {error})"))?
+        } else {
+            0
+        };
+        let programlet =
+            !sectioned && pyac_vliw_core::is_numeric_programlet(&input_words, codelets.len());
+        let result_records = if sectioned {
+            section_count * SECTION_RESULT_STRIDE
+        } else if programlet {
+            RESULT_STRIDE
+        } else {
+            codelets.len() * RESULT_STRIDE
+        };
+        let pipeline = if sectioned {
+            &self.sections_pipeline
+        } else if programlet {
             &self.programlet_pipeline
         } else {
             &self.pack_pipeline
@@ -202,13 +269,48 @@ impl GpuRuntime {
         self.queue
             .write_buffer(&input_buffer, 0, bytemuck::cast_slice(&input_words));
 
-        let output_words = result_records * RESULT_STRIDE;
+        let mut section_words =
+            Vec::with_capacity(section_count.max(1) * SECTION_DESCRIPTOR_STRIDE);
+        for section in &section_descriptors[..section_count] {
+            section_words.push(section.codelet_start);
+            section_words.push(section.codelet_count);
+            section_words.push(section.name_length);
+            section_words.extend_from_slice(&section.name_words);
+        }
+        if section_words.is_empty() {
+            section_words.push(0);
+        }
+        let section_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Pyash VLIW section descriptors"),
+            size: std::mem::size_of_val(section_words.as_slice()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.queue
+            .write_buffer(&section_buffer, 0, bytemuck::cast_slice(&section_words));
+        let completion_counter = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Pyash VLIW section completion counter"),
+            size: 4,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.queue
+            .write_buffer(&completion_counter, 0, bytemuck::cast_slice(&[0u32]));
+
+        let output_words = result_records;
         let output_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Pyash VLIW results"),
             size: (output_words * 4) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_SRC
+                | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        self.queue.write_buffer(
+            &output_buffer,
+            0,
+            bytemuck::cast_slice(&vec![0u32; output_words]),
+        );
         let readback = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Pyash VLIW result readback"),
             size: (output_words * 4) as u64,
@@ -227,6 +329,14 @@ impl GpuRuntime {
                     binding: 1,
                     resource: output_buffer.as_entire_binding(),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: section_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: completion_counter.as_entire_binding(),
+                },
             ],
         });
         let mut encoder = self
@@ -241,7 +351,9 @@ impl GpuRuntime {
             });
             pass.set_pipeline(pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
-            let workgroups = if programlet {
+            let workgroups = if sectioned {
+                section_count as u32
+            } else if programlet {
                 1
             } else {
                 codelets.len().div_ceil(64) as u32
@@ -268,20 +380,52 @@ impl GpuRuntime {
             .map_err(|error| format!("Vulkan result map failed: {error}"))?;
         let output = bytemuck::try_cast_slice::<u8, u32>(&mapped)
             .map_err(|error| format!("GPU result buffer was not u32 aligned: {error}"))?;
-        let values = if programlet {
+        let section_records = if sectioned {
+            Some(decode_section_records(section_count, output)?)
+        } else {
+            None
+        };
+        let values = if let Some(records) = &section_records {
+            records.iter().map(|record| record.value.clone()).collect()
+        } else if programlet {
             decode_programlet_result(codelets.len(), output)?
         } else {
             decode_results(codelets, output)?
         };
+        let section_json = section_records.as_ref().map(|records| {
+            records
+                .iter()
+                .map(|record| {
+                    json!({
+                        "sectionIndex": record.section_index,
+                        "nameWords": record.name_words,
+                        "completionOrder": record.completion_order,
+                        "value": value_json(&record.value),
+                    })
+                })
+                .collect::<Vec<_>>()
+        });
         drop(mapped);
         readback.unmap();
 
-        Ok(json!({
+        let mut response = json!({
             "ok": true,
             "backend": "rust-gpu-vulkan",
             "device": self.adapter_name,
             "values": values.iter().map(value_json).collect::<Vec<_>>(),
-        }))
+        });
+        if let Some(section_json) = section_json {
+            response["sections"] = Value::Array(section_json);
+            response["completionOrder"] = Value::Array(
+                section_records
+                    .as_ref()
+                    .expect("section records exist for section packets")
+                    .iter()
+                    .map(|record| Value::from(record.section_index as u64))
+                    .collect(),
+            );
+        }
+        Ok(response)
     }
 }
 
@@ -337,6 +481,64 @@ fn decode_programlet_result(
         kind => return Err(format!("programlet: unsupported GPU result kind {kind}")),
     };
     Ok(vec![value])
+}
+
+fn decode_section_records(
+    section_count: usize,
+    output: &[u32],
+) -> Result<Vec<DecodedSectionResult>, String> {
+    if output.len() < section_count * SECTION_RESULT_STRIDE {
+        return Err("sectioned programlet: GPU result buffer is truncated".to_owned());
+    }
+
+    let mut records = Vec::with_capacity(section_count);
+    for completion_order in 0..section_count {
+        let record_start = completion_order * SECTION_RESULT_STRIDE;
+        let section_index = output[record_start] as usize;
+        let name_length = output[record_start + 1] as usize;
+        let codelet_count = output[record_start + 3] as usize;
+        if section_index >= section_count
+            || name_length == 0
+            || name_length > MAX_SECTION_NAME_WORDS
+            || codelet_count == 0
+        {
+            return Err(format!(
+                "sectioned programlet: invalid result metadata at completion slot {completion_order}"
+            ));
+        }
+        let name_words = output[record_start + 4..record_start + 4 + name_length].to_vec();
+        let result_start = record_start + 4 + MAX_SECTION_NAME_WORDS;
+        let result = &output[result_start..result_start + RESULT_STRIDE];
+        if result[1] != 0 {
+            return Err(format!(
+                "sectioned programlet {section_index} ({name_words:04x?}): shared VLIW runtime error {}",
+                result[1]
+            ));
+        }
+        if result[2] != 1 || result[3] as usize != codelet_count {
+            return Err(format!(
+                "sectioned programlet {section_index}: invalid result record (kind={}, length={}, consumed={}, expected={codelet_count})",
+                result[0], result[2], result[3]
+            ));
+        }
+        let value = match result[0] {
+            pyac_vliw_core::VALUE_UNSIGNED => PyacValue::Unsigned(u64::from(result[4])),
+            pyac_vliw_core::VALUE_SIGNED => PyacValue::Signed(i64::from(result[4] as i32)),
+            pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(result[4] != 0),
+            kind => {
+                return Err(format!(
+                    "sectioned programlet {section_index}: unsupported GPU result kind {kind}"
+                ));
+            }
+        };
+        records.push(DecodedSectionResult {
+            section_index,
+            name_words,
+            completion_order,
+            value,
+        });
+    }
+    Ok(records)
 }
 
 fn decode_results(
@@ -461,5 +663,33 @@ mod tests {
 
         let output = result_record(pyac_vliw_core::VALUE_DATE, 17);
         assert!(decode_programlet_result(6, &output).is_err());
+    }
+
+    #[test]
+    fn decodes_section_results_in_gpu_completion_order_with_hnuc_names() {
+        let mut output = vec![0; 2 * SECTION_RESULT_STRIDE];
+        for (ticket, section_index, name, value) in [(0, 1, 0x2222, 22), (1, 0, 0x1111, 11)] {
+            let start = ticket * SECTION_RESULT_STRIDE;
+            output[start] = section_index;
+            output[start + 1] = 1;
+            output[start + 2] = section_index * 2;
+            output[start + 3] = 3;
+            output[start + 4] = name;
+            let result = start + 4 + MAX_SECTION_NAME_WORDS;
+            output[result] = pyac_vliw_core::VALUE_UNSIGNED;
+            output[result + 2] = 1;
+            output[result + 3] = 3;
+            output[result + 4] = value;
+        }
+
+        let records = decode_section_records(2, &output).unwrap();
+        assert_eq!(records[0].completion_order, 0);
+        assert_eq!(records[0].section_index, 1);
+        assert_eq!(records[0].name_words, vec![0x2222]);
+        assert_eq!(records[0].value, PyacValue::Unsigned(22));
+        assert_eq!(records[1].completion_order, 1);
+        assert_eq!(records[1].section_index, 0);
+        assert_eq!(records[1].name_words, vec![0x1111]);
+        assert_eq!(records[1].value, PyacValue::Unsigned(11));
     }
 }

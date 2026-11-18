@@ -106,6 +106,13 @@ pub struct PackExecutionError {
     pub source: SemanticError,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PyacSectionResult {
+    pub section_index: usize,
+    pub name_words: Vec<u16>,
+    pub value: PyacValue,
+}
+
 impl PackExecutionError {
     pub fn code(&self) -> &'static str {
         self.source.code()
@@ -323,6 +330,96 @@ pub fn execute_numeric_arithmetic_pack(
         .collect()
 }
 
+fn programlet_error(error: u32) -> SemanticError {
+    match error {
+        pyac_vliw_core::ERROR_DIVISION_BY_ZERO => SemanticError::DivisionByZero,
+        pyac_vliw_core::ERROR_FRAME_CAPACITY => SemanticError::ProgramletFrameCapacity,
+        pyac_vliw_core::ERROR_CONSTANT_WRITE => SemanticError::ProgramletConstantWrite,
+        pyac_vliw_core::ERROR_STEP_BUDGET => SemanticError::ProgramletStepBudget,
+        pyac_vliw_core::ERROR_PROGRAM_CAPACITY => SemanticError::ProgramletProgramCapacity,
+        pyac_vliw_core::ERROR_CALL_DEPTH => SemanticError::ProgramletCallDepth,
+        pyac_vliw_core::ERROR_UNSUPPORTED => SemanticError::UnsupportedProgramlet,
+        _ => SemanticError::MalformedProgramlet,
+    }
+}
+
+fn execute_shared_programlet(
+    words: &[u32],
+    base_codelet: usize,
+    codelet_count: usize,
+    error_index: usize,
+) -> Result<PyacValue, PackExecutionError> {
+    let mut sentence_words = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
+    let mut sentence_boundaries = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
+    let mut symbol_words = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
+    let mut frames =
+        [pyac_vliw_core::ProgramletFrame::EMPTY; pyac_vliw_core::MAX_PROGRAMLET_CALL_DEPTH];
+    let result = pyac_vliw_core::execute_numeric_programlet_at(
+        words,
+        base_codelet,
+        codelet_count,
+        pyac_vliw_core::DEFAULT_PROGRAMLET_STEP_BUDGET,
+        &mut sentence_words,
+        &mut sentence_boundaries,
+        &mut symbol_words,
+        &mut frames,
+    );
+    if result.error != 0 {
+        return Err(PackExecutionError {
+            index: error_index,
+            source: programlet_error(result.error),
+        });
+    }
+    Ok(match result.value_kind {
+        pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(result.values[0] != 0),
+        pyac_vliw_core::VALUE_SIGNED => PyacValue::Signed(i64::from(result.values[0] as i32)),
+        _ => PyacValue::Unsigned(u64::from(result.values[0])),
+    })
+}
+
+pub fn execute_pack_sections(
+    pack: &PyacPack,
+) -> Result<Vec<PyacSectionResult>, PackExecutionError> {
+    let words = pack
+        .codelets
+        .iter()
+        .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
+        .collect::<Vec<_>>();
+    if !pyac_vliw_core::has_programlet_section_header(&words, pack.codelets.len()) {
+        return Err(PackExecutionError {
+            index: 0,
+            source: SemanticError::UnsupportedProgramlet,
+        });
+    }
+    let mut sections =
+        [pyac_vliw_core::ProgramletSection::EMPTY; pyac_vliw_core::MAX_PROGRAMLET_SECTIONS];
+    let section_count = pyac_vliw_core::scan_numeric_programlet_sections(
+        &words,
+        pack.codelets.len(),
+        &mut sections,
+    )
+    .map_err(|error| PackExecutionError {
+        index: 0,
+        source: programlet_error(error),
+    })?;
+
+    let mut results = Vec::with_capacity(section_count);
+    for (section_index, section) in sections[..section_count].iter().enumerate() {
+        let start = section.codelet_start as usize;
+        let value =
+            execute_shared_programlet(&words, start, section.codelet_count as usize, start)?;
+        results.push(PyacSectionResult {
+            section_index,
+            name_words: section.name_words[..section.name_length as usize]
+                .iter()
+                .map(|word| *word as u16)
+                .collect(),
+            value,
+        });
+    }
+    Ok(results)
+}
+
 pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionError> {
     use semantic::{
         NumericCodeletValue, execute_conditional_number_codelets, execute_numeric_codelet,
@@ -333,39 +430,13 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
         .iter()
         .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
         .collect::<Vec<_>>();
+    if pyac_vliw_core::has_programlet_section_header(&words, pack.codelets.len()) {
+        return execute_pack_sections(pack)
+            .map(|sections| sections.into_iter().map(|section| section.value).collect());
+    }
     if pyac_vliw_core::is_numeric_programlet(&words, pack.codelets.len()) {
-        let mut sentence_words = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
-        let mut sentence_boundaries = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
-        let mut symbol_words = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
-        let mut frames =
-            [pyac_vliw_core::ProgramletFrame::EMPTY; pyac_vliw_core::MAX_PROGRAMLET_CALL_DEPTH];
-        let result = pyac_vliw_core::execute_numeric_programlet(
-            &words,
-            pack.codelets.len(),
-            pyac_vliw_core::DEFAULT_PROGRAMLET_STEP_BUDGET,
-            &mut sentence_words,
-            &mut sentence_boundaries,
-            &mut symbol_words,
-            &mut frames,
-        );
-        if result.error != 0 {
-            let source = match result.error {
-                pyac_vliw_core::ERROR_DIVISION_BY_ZERO => SemanticError::DivisionByZero,
-                pyac_vliw_core::ERROR_FRAME_CAPACITY => SemanticError::ProgramletFrameCapacity,
-                pyac_vliw_core::ERROR_CONSTANT_WRITE => SemanticError::ProgramletConstantWrite,
-                pyac_vliw_core::ERROR_STEP_BUDGET => SemanticError::ProgramletStepBudget,
-                pyac_vliw_core::ERROR_PROGRAM_CAPACITY => SemanticError::ProgramletProgramCapacity,
-                pyac_vliw_core::ERROR_CALL_DEPTH => SemanticError::ProgramletCallDepth,
-                pyac_vliw_core::ERROR_UNSUPPORTED => SemanticError::UnsupportedProgramlet,
-                _ => SemanticError::MalformedProgramlet,
-            };
-            return Err(PackExecutionError { index: 0, source });
-        }
-        return Ok(vec![match result.value_kind {
-            pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(result.values[0] != 0),
-            pyac_vliw_core::VALUE_SIGNED => PyacValue::Signed(i64::from(result.values[0] as i32)),
-            _ => PyacValue::Unsigned(u64::from(result.values[0])),
-        }]);
+        return execute_shared_programlet(&words, 0, pack.codelets.len(), 0)
+            .map(|value| vec![value]);
     }
 
     let mut values = Vec::new();

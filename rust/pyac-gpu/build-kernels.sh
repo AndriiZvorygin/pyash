@@ -11,7 +11,8 @@ if ! cargo gpu --version >/dev/null 2>&1; then
 fi
 
 cargo gpu build --auto-install-rust-toolchain --shader-crate "$kernel" \
-  --target spirv-unknown-spv1.5 --output-dir "$out/vulkan"
+  --target spirv-unknown-spv1.5 --features vulkan-device-atomics \
+  --output-dir "$out/vulkan"
 cargo gpu build --auto-install-rust-toolchain --shader-crate "$kernel" \
   --target spirv-unknown-naga-wgsl --output-dir "$out/wgsl"
 

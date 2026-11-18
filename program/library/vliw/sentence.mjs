@@ -13,6 +13,7 @@ import {
   isUintVectorQuoteWord,
   lookupLegacyName,
   lookupLegacyWord,
+  lookupLegacyWordSequence,
   quoteWordFor,
   vectorThicknessFor
 } from "./quotes.mjs";
@@ -119,7 +120,12 @@ function nameWords(value, role) {
   if (typeof value !== "string" || !value.trim()) {
     throw invalid("invalid-name", `VLIW ${role} requires a non-empty name`);
   }
-  return value.trim().split(/\s+/u).map((token) => nameWord(token, role));
+  return value.trim().split(/\s+/u).flatMap((token) => {
+    const sequence = lookupLegacyWordSequence(token);
+    return sequence
+      ? sequence.map((entry) => Number.parseInt(entry.hnuc, 16))
+      : [nameWord(token, role)];
+  });
 }
 
 function typeWords(values, role) {
@@ -320,15 +326,15 @@ function encodeClause(sentence, { conditional = false } = {}) {
 
   if (!isReturn && !isParagraphEnd) {
     const verbTokens = String(sentence.be).trim().split(/\s+/u);
-    const verbs = verbTokens.map((token) => lookupLegacyName(OPERATOR_ENTRY_BY_SURFACE[token] ?? token));
-    const missingIndex = verbs.findIndex((verb) => !verb?.hnuc);
+    const verbs = verbTokens.map((token) => lookupLegacyWordSequence(OPERATOR_ENTRY_BY_SURFACE[token] ?? token));
+    const missingIndex = verbs.findIndex((sequence) => !sequence);
     if (missingIndex >= 0) {
       throw invalid("unrepresentable-verb", `VLIW verb has no vocabulary HNUC (${verbTokens[missingIndex]})`, {
         verb: sentence.be,
         token: verbTokens[missingIndex]
       });
     }
-    words.push(...verbs.map((verb) => Number.parseInt(verb.hnuc, 16)));
+    words.push(...verbs.flatMap((sequence) => sequence.map((verb) => Number.parseInt(verb.hnuc, 16))));
   }
   const mood = isReturn ? "ret" : conditional ? "then" : sentence.mood;
   const moodEntry = MOOD_ENTRIES[mood];

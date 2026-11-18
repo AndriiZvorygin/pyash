@@ -70,6 +70,13 @@ its narrow invocation-local numeric slots at execution time; that runtime
 behavior does not add a storage section to this container. Do not reinterpret
 its reserved header field or codelet words to add those features.
 
+Independent named program sections use `myocpfun` boundary sentences encoded
+as ordinary codelets in this stream; they do not alter the v1 container. Their
+source ordinal and HNUC name identify each result, while parallel executors
+return result records in completion order rather than sorting them back into
+source order. See the independent-section contract in the
+[`VLIW ISA specification`](../specifications/27-pyash-vliw-isa.md#independent-named-sections).
+
 ### Future indexed program image
 
 A later, explicitly versioned `.pyac` image may use a book-like contents

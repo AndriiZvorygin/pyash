@@ -3,9 +3,12 @@
 The VLIW GPU targets share the semantic implementation in
 `rust/pyac-vliw-core/src/semantics_runtime.rs`. Rust-GPU compiles it into one
 SPIR-V 1.5 module validated for Vulkan 1.2 for the native Housekeeper worker,
-and generated WGSL for the browser pack runtime. Keep behavior changes in the
-shared semantics runtime; do not add a parallel CUDA/PTX or hand-maintained
-WGSL implementation.
+and generated WGSL for the browser pack runtime. The independently scheduled
+`myocpfun` section entry point is Vulkan-only because it uses a device-scope
+atomic completion ticket. The browser WGSL target intentionally omits that
+entry point; it does not claim section execution or completion-order results.
+Keep behavior changes in the shared semantics runtime; do not add a parallel
+CUDA/PTX or hand-maintained WGSL implementation.
 
 The native shader intentionally uses SPIR-V's `Logical Simple` memory model.
 The Vulkan-specific Rust-GPU target emits `VulkanMemoryModel`, which requires a
@@ -67,7 +70,11 @@ arguments, nested calls, scalar operators, local comparisons/branches, bounded
 locals per frame, 8 arguments, call depth 8, and the 65,536-step default
 budget. Date/vector literals remain supported as ordinary codelet groups, not
 as programlet-local values. Text values and general effects are outside this
-programlet slice.
+programlet slice. Native Vulkan also dispatches independent named programlet
+sections concurrently; each result carries its source `sectionIndex` and HNUC
+name, while the response list and `completionOrder` follow GPU completion
+order. Source order is not imposed on independent results. The serial CPU
+reference naturally completes sections in source order.
 
 The standalone smoke script verifies ordinary pack execution, one local-number
 programlet return, and rejection of a write to a constant quantity on the
