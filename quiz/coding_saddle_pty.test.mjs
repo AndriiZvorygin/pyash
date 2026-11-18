@@ -61,8 +61,9 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
   const bashMarker = "SADDLE_BASH_PTY_OK";
   const stderrMarker = "SADDLE_BASH_STDERR_PTY";
   const cleanupRequest = "please also remove any Python-style directories";
-  const approvalRequest = "approval display check";
+  const approvalRequest = "remove the scaffold directory";
   const approvalCommand = "rm -rf ./magaiize";
+  const verifyLocalScaffoldCommand = "test ! -e ./magaiize";
   const cleanupDirectory = path.join(projectRoot, "magaiize", "src", "__pycache__");
   const removePythonDirectoryCommand = "find ./magaiize -type d -name '__pycache__' -empty -prune -exec rmdir {} +";
   const verifyPythonDirectoriesCommand = "find ./magaiize -type d \\( -name '__pycache__' -o -name '.pytest_cache' \\) -print";
@@ -129,13 +130,18 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
       } else if (String(lastUserMessage ?? "").includes("Harness completion check: the requested action")) {
         const verificationRequested = String(lastUserMessage).includes("successful verification command after the final change");
         if (verificationRequested && currentTurnToolResults.length === 0) {
+          const verificationCommand = String(lastUserMessage).includes("Python-style directories")
+            ? verifyPythonDirectoriesCommand
+            : verifyLocalScaffoldCommand;
           message = {
             role: "assistant",
             content: "",
             tool_calls: [{
-              id: "pty-verify-python-directories",
+              id: verificationCommand === verifyPythonDirectoriesCommand
+                ? "pty-verify-python-directories"
+                : "pty-verify-local-scaffold",
               type: "function",
-              function: { name: "bash", arguments: JSON.stringify({ command: verifyPythonDirectoriesCommand }) }
+              function: { name: "bash", arguments: JSON.stringify({ command: verificationCommand }) }
             }]
           };
         } else if (!verificationRequested && currentTurnToolResults.length === 0) {
@@ -175,8 +181,8 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
             function: { name: "bash", arguments: JSON.stringify({ command: approvalCommand }) }
           }]
         };
-      } else if (currentTurnToolResults.some((tool) => String(tool.content ?? "").includes('"status": "approval_required"'))) {
-        message = { role: "assistant", content: "Spark received a readable approval request and did not retry the command." };
+      } else if (lastUserMessage === approvalRequest && currentTurnToolResults.length > 0) {
+        message = { role: "assistant", content: "Saddle command turn finished." };
       } else if (hasToolResult) {
         message = { role: "assistant", content: "Spark first turn passed after the Bash command returned its output." };
       } else {
@@ -266,9 +272,10 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
     child.write(`${cleanupRequest}\r`);
     await waitForOutputAfter(() => transcript, "Removed Python-style cache directories and verified none remain.", "pyash>");
     child.write(`${approvalRequest}\r`);
-    await waitForOutputAfter(() => transcript, "Spark received a readable approval request and did not retry the command.", "pyash>");
+    await waitForOutputAfter(() => transcript, "Saddle command turn finished.", "pyash>");
     const cleanupTranscript = stripTerminalControlSequences(transcript);
     await assert.rejects(fs.access(cleanupDirectory), cleanupTranscript.slice(-10000));
+    await assert.rejects(fs.access(path.join(projectRoot, "magaiize")), cleanupTranscript.slice(-10000));
 
     const cleanTranscript = stripTerminalControlSequences(transcript);
     assert.match(cleanTranscript, new RegExp(`model: ${secondModel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
@@ -304,14 +311,16 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
       && String(message.content).includes(verifyPythonDirectoriesCommand))),
     "the action continuation must run a verification command after deletion");
     assert.ok(submissions.some((payload) => payload.model === secondModel && payload.messages?.some((message) => message?.role === "tool"
-      && String(message.content).includes('"status": "approval_required"')
-      && String(message.content).includes('"command": "rm -rf ./magaiize"')
-      && !String(message.content).includes("fromtext"))),
-    "the model must receive concise structured approval data without the opaque Pyash resume token");
-    assert.match(cleanTranscript, /\[tool result\] bash[\s\S]*"status": "approval_required"[\s\S]*"command": "rm -rf \.\/magaiize"/u,
-      "PTY output must pretty-print the approval state and command");
-    assert.doesNotMatch(cleanTranscript, /\\\\"kind\\\\":\\\\"command/u,
-      "PTY output must not show the resume token's escaped JSON");
+      && String(message.content).includes(approvalCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "the model must receive the successful destructive command result without an approval round trip");
+    assert.doesNotMatch(cleanTranscript, /approval_required|approve command \(destructive\): rm -rf \.\/magaiize/u,
+      "a project-local destructive command must not produce an approval request");
+    assert.match(cleanTranscript, /\[tool call\] bash: rm -rf \.\/magaiize[\s\S]*\[tool result\] bash[\s\S]*exit code: 0/u,
+      "PTY output must show the executed project-local command and its successful exit");
+    assert.ok(submissions.some((payload) => payload.model === secondModel && payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(verifyLocalScaffoldCommand))),
+    "the action continuation must verify the project-local directory was removed");
     assert.match(cleanTranscript, /completion check missing a successful tool call that performs or checks the requested action/u);
     assert.match(cleanTranscript, /completion check missing a successful verification command after the final change/u);
     assert.match(cleanTranscript, /\[saddle evidence\] action complete/u);

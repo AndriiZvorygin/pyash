@@ -345,6 +345,20 @@ function configureSaddle({ cwd, runtimeRoot, worldRoot, model, backend, host, sy
       at: { filename: cwd }
     });
   }
+  const agentCommandConfigure = remember("agent command configure");
+  doRemember({
+    ...(agentCommandConfigure?.be === "map" ? agentCommandConfigure : {}),
+    mood: "ya",
+    su: { name: "agent command configure" },
+    be: "map",
+    ob: {
+      ...(agentCommandConfigure?.ob ?? {}),
+      map: {
+        ...(agentCommandConfigure?.ob?.map ?? {}),
+        "policy mode": { ob: { wo: "allow" } }
+      }
+    }
+  });
   doRemember({
     mood: "ya",
     su: { name: "run root" },

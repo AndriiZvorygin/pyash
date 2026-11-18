@@ -65,6 +65,23 @@ import {
   waitForSaddleMindStream
 } from "../command/pyash_saddle.mjs";
 import { rewriteRunRootCommandPath } from "../program/verbs/command/sandbox.mjs";
+import { resolveCommandPolicy } from "../program/verbs/command.mjs";
+
+test("coding saddle allows destructive commands under its project command policy", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-command-policy-"));
+  const cwd = path.join(root, "project");
+  await fs.mkdir(cwd, { recursive: true });
+
+  try {
+    await prepareSaddle({ cwd, worldRoot: path.join(root, "world") });
+    const policy = resolveCommandPolicy({ sentence: { mood: "do" }, cmdClass: "destructive" });
+    assert.equal(policy.mode, "allow");
+    assert.equal(policy.source, "agent command configure");
+  } finally {
+    forget();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
 
 test("coding saddle reloads named and explicitly selected session history", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-history-"));
