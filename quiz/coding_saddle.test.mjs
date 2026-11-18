@@ -28,6 +28,7 @@ import {
   buildSaddleWorktreeReviewCommand,
   buildSaddleStrataContextOptions,
   buildSaddleOllamaContextOptions,
+  buildSaddleSteeringInput,
   getSaddleOllamaModelContextLength,
   buildSaddleMindSentence,
   createSaddleInputDecoder,
@@ -43,6 +44,7 @@ import {
   normalizeSaddleThinkSelection,
   resolveSaddleThinkSetting,
   isSaddleCodeChangeRequest,
+  isSaddleAffirmativeReply,
   SADDLE_OLLAMA_CONTEXT_PRESETS,
   parseSaddleMindCommand,
   resolveSaddleModelOption,
@@ -666,6 +668,60 @@ test("coding saddle continues an explicit repository action after a promise with
   assert.match(continuation, /Original request: okay please also remove any python style directories/u);
   assert.equal(turn.assessment.complete, true);
   assert.match(formatSaddleCompletionEvidence(turn.assessment), /action complete/u);
+});
+
+test("coding saddle continues an accepted action in an interrupted steering turn", async () => {
+  const assistantResponse = "Yes, I can create agents.md for the Robot Science Fiction magazine. Want me to create it?";
+  const input = buildSaddleSteeringInput({
+    originalInput: "so should we start with an agents.md perhaps?",
+    assistantResponse,
+    additions: "go ahead"
+  });
+  assert.equal(isSaddleAffirmativeReply("go ahead"), true);
+  assert.equal(isSaddleAffirmativeReply("go ahead, and include the project goal"), true);
+  assert.equal(isSaddleAffirmativeReply("no, don't create it"), false);
+  assert.equal(isSaddleAffirmativeReply("go ahead, but don't create it"), false);
+  assert.match(input, /Interrupted assistant response:[\s\S]*I can create agents\.md/u);
+  assert.equal(isSaddleCodeChangeRequest(input), true);
+  assert.equal(isSaddleToolActionRequest(input), true);
+  assert.equal(isSaddleToolActionRequest([
+    "The previous response was interrupted after the user added context.",
+    "Original user message:\nso should we start with an agents.md perhaps?",
+    "Additional context:\ngo ahead"
+  ].join("\n\n")), true);
+  assert.doesNotMatch(buildSaddleSteeringInput({
+    originalInput: "so should we start with an agents.md perhaps?",
+    assistantResponse,
+    additions: "no, don't create it"
+  }), /Interrupted assistant response:/u);
+  let calls = 0;
+  let continuation = "";
+  const turn = await runSaddleTurnWithEvidence({
+    input,
+    runTurn: async ({ input: turnInput, onToolCall }) => {
+      calls += 1;
+      if (calls === 1) return { ob: { text: "I'll create agents.md now." } };
+      continuation = turnInput;
+      const command = calls === 2 ? "cat > agents.md <<'EOF'\n# Robot Science Fiction Magazine\nEOF" : "test -s agents.md";
+      await onToolCall({
+        stage: "call",
+        toolName: "bash",
+        toolSentence: { be: "command", ob: { text: command } }
+      });
+      await onToolCall({
+        stage: "result",
+        toolName: "bash",
+        toolText: "exit code: 0",
+        commandOutcome: { exitCode: 0, signal: null, timedOut: false }
+      });
+      return { ob: { text: "Created agents.md and verified it is non-empty." } };
+    }
+  });
+
+  assert.equal(calls, 3);
+  assert.match(continuation, /Original request: The previous response was interrupted/u);
+  assert.equal(turn.assessment.complete, true);
+  assert.equal(turn.assessment.kind, "code-change");
 });
 
 test("coding saddle leaves an explicit action incomplete when its continuation still has no tool evidence", async () => {

@@ -144,6 +144,26 @@ const SADDLE_ALWAYS_TOOL_ACTION = /^(?:compare|execute|find|inspect|list|look\s+
 const SADDLE_MUTATING_ACTION = /^(?:create|delete|edit|fix|generate|implement|install|make|modify|move|remove|rename|update|write)\b/iu;
 const SADDLE_ACTION_TARGET = /\b(?:artifact|branch|cache|code|command|config|configuration|directory|directories|file|files|folder|folders|module|package|path|paths|project|python|repo|repository|script|source|test|tests)\b|\.(?:mjs|js|cjs|ts|py|pya|json|sh|md)\b/iu;
 
+export function isSaddleAffirmativeReply(input = "") {
+  const text = String(input ?? "").trim().toLowerCase();
+  const match = text.match(/^(?:yes|yeah|yep|okay|ok|sure|go ahead|do it|please do|proceed|sounds good|that works)\b/u);
+  if (!match) return false;
+  return !/^\s*(?:,?\s*but\s+)?(?:no|not|don't|do not|never|cancel|stop|instead)\b/u.test(text.slice(match[0].length));
+}
+
+export function buildSaddleSteeringInput({ originalInput = "", assistantResponse = "", additions = "" } = {}) {
+  const sections = [
+    "The previous response was interrupted after the user added context. Respond to the original request using that added context.",
+    `Original user message:\n${String(originalInput ?? "").trim()}`
+  ];
+  const response = String(assistantResponse ?? "").trim();
+  if (response && isSaddleAffirmativeReply(additions)) {
+    sections.push(`Interrupted assistant response:\n${response}`);
+  }
+  sections.push(`Additional context:\n${String(additions ?? "").trim()}`);
+  return sections.join("\n\n");
+}
+
 export function isSaddleCodeChangeRequest(input = "") {
   const text = String(input ?? "").replace(
     /\b(?:i|we)\s+(?:just\s+)?(?:did|made|completed|finished)\s+(?:an?\s+)?(?:add|build|change|create|edit|fix|generate|implement|make|modify|patch|refactor|remove|rewrite|update|write)\b/giu,
@@ -162,6 +182,8 @@ export function isSaddleCodeChangeRequest(input = "") {
 
 function resolveRequestedSaddleAction(input = "") {
   const original = String(input ?? "").trim();
+  const steeringContext = original.match(/\bAdditional context:\n([\s\S]*)$/iu)?.[1]?.trim();
+  if (steeringContext && isSaddleAffirmativeReply(steeringContext)) return "do it";
   if (/^(?:do it|go ahead|proceed)\s*[.!]?$/iu.test(original)) return "do it";
   if (/^(?:how|why|what|when|where)\b/iu.test(original)) return "";
   let actionText = original.toLowerCase();

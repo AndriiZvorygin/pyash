@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
@@ -7,13 +8,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as pty from "node-pty";
 import { stripTerminalControlSequences } from "../program/agent/coding_saddle_tui.mjs";
+import { buildSaddleSteeringInput } from "../program/agent/coding_saddle.mjs";
 import { resolveSaddleProjectWorldRoot } from "../command/pyash_saddle.mjs";
 
 const runtimeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const firstModel = "qwen3.5:9b";
 const secondModel = "SparkLLM/Spark-X2.6-4B:q4_k_m";
 
-function waitForOutput(getOutput, needle, { timeoutMs = 30000, afterIndex = 0 } = {}) {
+function waitForOutput(getOutput, needle, { timeoutMs = 90000, afterIndex = 0 } = {}) {
   const startedAt = Date.now();
   return new Promise((resolve, reject) => {
     const poll = () => {
@@ -32,7 +34,7 @@ function waitForOutput(getOutput, needle, { timeoutMs = 30000, afterIndex = 0 } 
   });
 }
 
-function waitForOutputAfter(getOutput, marker, needle, { timeoutMs = 30000 } = {}) {
+function waitForOutputAfter(getOutput, marker, needle, { timeoutMs = 90000 } = {}) {
   const startedAt = Date.now();
   return new Promise((resolve, reject) => {
     const poll = () => {
@@ -62,6 +64,14 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
   const stderrMarker = "SADDLE_BASH_STDERR_PTY";
   const cleanupRequest = "please also remove any Python-style directories";
   const approvalRequest = "remove the scaffold directory";
+  const proposalResponse = "Yes, I can create agents.md for the Robot Science Fiction magazine. Want me to create it?";
+  const steeringInput = buildSaddleSteeringInput({
+    originalInput: "so should we start with an agents.md perhaps?",
+    assistantResponse: proposalResponse,
+    additions: "go ahead"
+  });
+  const createAgentsCommand = "cat > agents.md <<'EOF'\n# Robot Science Fiction Magazine\n\nProject guidance.\nEOF";
+  const verifyAgentsCommand = "test -s agents.md";
   const approvalCommand = "rm -rf ./magaiize";
   const verifyLocalScaffoldCommand = "test ! -e ./magaiize";
   const cleanupDirectory = path.join(projectRoot, "magaiize", "src", "__pycache__");
@@ -125,6 +135,34 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
       let message;
       if (payload.model === firstModel) {
         message = { role: "assistant", content: "Qwen first model turn passed." };
+      } else if (lastUserMessage === steeringInput) {
+        message = { role: "assistant", content: "I'll create agents.md now." };
+      } else if (String(lastUserMessage ?? "").includes("Harness completion check: the original code-change request")) {
+        const editReturned = currentTurnToolResults.some((tool) => String(tool.content ?? "").includes(createAgentsCommand));
+        const verificationReturned = currentTurnToolResults.some((tool) => String(tool.content ?? "").includes(verifyAgentsCommand));
+        if (!editReturned) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-create-agents-guide",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: createAgentsCommand }) }
+            }]
+          };
+        } else if (!verificationReturned) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-verify-agents-guide",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: verifyAgentsCommand }) }
+            }]
+          };
+        } else {
+          message = { role: "assistant", content: "Created agents.md and verified it is non-empty." };
+        }
       } else if (lastUserMessage === cleanupRequest && currentTurnToolResults.length === 0) {
         message = { role: "assistant", content: "I'll inspect and remove Python-style directories if I find any." };
       } else if (String(lastUserMessage ?? "").includes("Harness completion check: the requested action")) {
@@ -207,6 +245,8 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
   });
 
   await fs.mkdir(projectRoot, { recursive: true });
+  execFileSync("git", ["init", "-q"], { cwd: projectRoot });
+  execFileSync("git", ["-c", "user.name=PTY Test", "-c", "user.email=pty@example.invalid", "commit", "--allow-empty", "-m", "initial"], { cwd: projectRoot });
   await fs.mkdir(cleanupDirectory, { recursive: true });
   await new Promise((resolve) => housekeeper.listen(0, "127.0.0.1", resolve));
   const address = housekeeper.address();
@@ -221,7 +261,7 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
     PYA_GPU_HOUSEKEEPER_URL: `http://127.0.0.1:${address.port}`,
     PYA_GPU_MANAGER_REQUIRED: "true",
     PYA_GPU_MANAGER_POLL_MS: "1",
-    PYA_GPU_MANAGER_TIMEOUT_MS: "30000",
+    PYA_GPU_MANAGER_TIMEOUT_MS: "90000",
     PYA_OLLAMA_USAGE_DIR: usageDir,
     PYA_WORLD_ROOT: path.join(tempRoot, "gpu-world"),
     PYA_COMMAND_DEBUG: "true",
@@ -273,6 +313,9 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
     await waitForOutputAfter(() => transcript, "Removed Python-style cache directories and verified none remain.", "pyash>");
     child.write(`${approvalRequest}\r`);
     await waitForOutputAfter(() => transcript, "Saddle command turn finished.", "pyash>");
+    child.write(`\u001b[200~${steeringInput}\u001b[201~\r`);
+    await waitForOutput(() => transcript, "[saddle evidence] changed: bash; validation: test -s agents.md; exit: 0");
+    assert.equal(await fs.readFile(path.join(projectRoot, "agents.md"), "utf8"), "# Robot Science Fiction Magazine\n\nProject guidance.\n");
     const cleanupTranscript = stripTerminalControlSequences(transcript);
     await assert.rejects(fs.access(cleanupDirectory), cleanupTranscript.slice(-10000));
     await assert.rejects(fs.access(path.join(projectRoot, "magaiize")), cleanupTranscript.slice(-10000));
@@ -321,9 +364,19 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
     assert.ok(submissions.some((payload) => payload.model === secondModel && payload.messages?.some((message) => message?.role === "tool"
       && String(message.content).includes(verifyLocalScaffoldCommand))),
     "the action continuation must verify the project-local directory was removed");
+    assert.ok(submissions.some((payload) => payload.model === secondModel && payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(createAgentsCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "the accepted interrupted proposal must reach Bash and create the requested guidance file");
+    assert.ok(submissions.some((payload) => payload.model === secondModel && payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(verifyAgentsCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "the PTY agent must verify the created guidance file before it reports completion");
     assert.match(cleanTranscript, /completion check missing a successful tool call that performs or checks the requested action/u);
     assert.match(cleanTranscript, /completion check missing a successful verification command after the final change/u);
     assert.match(cleanTranscript, /\[saddle evidence\] action complete/u);
+    assert.match(cleanTranscript, /\[saddle evidence\] changed: bash; validation: test -s agents\.md; exit: 0/u,
+      "an accepted interrupted code proposal must be edited and verified before completion");
     const commandDebugLines = cleanTranscript.match(/\[command debug\] \{[^\r\n]*\}/gu) ?? [];
     assert.ok(commandDebugLines.length >= 1, "PTY transcript should include a debug record for the Bash command");
     const commandDebug = commandDebugLines.map((line) => JSON.parse(line.slice("[command debug] ".length)));

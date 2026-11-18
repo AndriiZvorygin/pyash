@@ -84,6 +84,7 @@ import {
   buildSaddleMindSentence,
   buildSaddleOllamaContextOptions,
   buildSaddleStrataContextOptions,
+  buildSaddleSteeringInput,
   buildSaddleWorktreeReviewCommand,
   formatSaddleCompletionEvidence,
   runSaddleTurnWithEvidence,
@@ -968,6 +969,7 @@ async function main() {
   process.once("exit", restoreActiveSaddleUi);
   const pendingSteeringInputs = [];
   let activeTurnInput = "";
+  let activeAssistantResponseText = "";
   let activeInterruptController = null;
   let activeSteeringInterruptRequested = false;
   let steeringInterruptPromise = null;
@@ -1103,11 +1105,11 @@ async function main() {
       const steering = pendingSteeringInputs.splice(0).sort((left, right) => left.sequence - right.sequence);
       const original = steering[0].originalInput;
       const additions = steering.map(({ text }) => text).join("\n\n");
-      const combined = [
-        "The previous response was interrupted after the user added context. Respond to the original request using that added context.",
-        `Original user message:\n${original}`,
-        `Additional context:\n${additions}`
-      ].join("\n\n");
+      const combined = buildSaddleSteeringInput({
+        originalInput: original,
+        assistantResponse: activeAssistantResponseText,
+        additions
+      });
       void submit(combined, { alreadyDisplayed: true });
       return;
     }
@@ -1815,6 +1817,7 @@ async function main() {
     const interruptController = new AbortController();
     activeInterruptController = interruptController;
     activeTurnInput = input;
+    activeAssistantResponseText = "";
     activeSteeringInterruptRequested = false;
     let finishActiveMindRun = async () => {};
     busy = true;
@@ -1877,6 +1880,7 @@ async function main() {
         onAssistantDelta: (delta) => {
           const textDelta = String(delta ?? "");
           if (!textDelta) return;
+          activeAssistantResponseText += textDelta;
           if (!responseStream) {
             writeLine("saddle>");
             responseStream = saddleUi.beginMarkdownStream();
