@@ -158,11 +158,31 @@ export function parseEnglishGrammarCatalog(source, {
   const entries = [];
   const chineseCharacterLinks = [];
   const seen = new Set();
+  const linkedCharacters = new Map();
+  const linkedAtoms = new Map();
   for (const [index, sentence] of sentences.entries()) {
     if (sentence?.mood !== "ya" || typeof sentence.su?.text !== "string") continue;
     if (["format", "source", "source-hash"].includes(sentence.su.text)) continue;
     if (sentence.su.text.startsWith(ENGLISH_GRAMMAR_CHINESE_CHARACTER_LINK_PREFIX)) {
       const link = normalizeChineseCharacterLink(parsePayload(sentence, index), sentence.su.text, index);
+      if (linkedCharacters.has(link.character)) {
+        throw invalid("Chinese character-to-atom links must be one-to-one: character already linked", {
+          index,
+          character: link.character,
+          existingPya: linkedCharacters.get(link.character),
+          pya: link.pya
+        });
+      }
+      if (linkedAtoms.has(link.pya)) {
+        throw invalid("Chinese character-to-atom links must be one-to-one: atom already linked", {
+          index,
+          character: link.character,
+          pya: link.pya,
+          existingCharacter: linkedAtoms.get(link.pya)
+        });
+      }
+      linkedCharacters.set(link.character, link.pya);
+      linkedAtoms.set(link.pya, link.character);
       chineseCharacterLinks.push(link);
       continue;
     }
@@ -187,13 +207,31 @@ export function renderEnglishGrammarChineseCharacterLinks(source, links = []) {
   }
   const catalog = parseEnglishGrammarCatalog(source);
   const seen = new Set(catalog.chineseCharacterLinks.map((link) => `${link.character}\u0000${link.targetId}`));
+  const linkedCharacters = new Map(catalog.chineseCharacterLinks.map((link) => [link.character, link.pya]));
+  const linkedAtoms = new Map(catalog.chineseCharacterLinks.map((link) => [link.pya, link.character]));
   const rows = [];
   for (const [index, payload] of links.entries()) {
     const key = `${ENGLISH_GRAMMAR_CHINESE_CHARACTER_LINK_PREFIX}${payload?.character ?? ""}:${payload?.targetId ?? index}`;
     const link = normalizeChineseCharacterLink(payload, key, index);
     const identity = `${link.character}\u0000${link.targetId}`;
     if (seen.has(identity)) continue;
+    if (linkedCharacters.has(link.character)) {
+      throw invalid("Chinese character-to-atom links must be one-to-one: character already linked", {
+        character: link.character,
+        existingPya: linkedCharacters.get(link.character),
+        pya: link.pya
+      });
+    }
+    if (linkedAtoms.has(link.pya)) {
+      throw invalid("Chinese character-to-atom links must be one-to-one: atom already linked", {
+        character: link.character,
+        pya: link.pya,
+        existingCharacter: linkedAtoms.get(link.pya)
+      });
+    }
     seen.add(identity);
+    linkedCharacters.set(link.character, link.pya);
+    linkedAtoms.set(link.pya, link.character);
     const id = createHash("sha256").update(identity).digest("hex").slice(0, 12);
     rows.push(`su text ${JSON.stringify(`${ENGLISH_GRAMMAR_CHINESE_CHARACTER_LINK_PREFIX}${id}`)} ob text ${JSON.stringify(JSON.stringify(link))} ya`);
   }
@@ -209,6 +247,29 @@ export function renderEnglishGrammarChineseCharacterLinks(source, links = []) {
   if (terminator < 0) throw invalid("English grammar source has no closing prah");
   lines.splice(terminator, 0, ...rows);
   return lines.join("\n");
+}
+
+export function removeEnglishGrammarChineseCharacterLinks(source, {
+  sourceTag = ""
+} = {}) {
+  if (typeof source !== "string" || !sourceTag) {
+    throw invalid("English grammar link removal requires source text and a source tag");
+  }
+  const newline = source.includes("\r\n") ? "\r\n" : "\n";
+  const rows = source.split(newline);
+  const retained = rows.filter((row, index) => {
+    if (!row.trim() || /^\s*#/u.test(row)) return true;
+    const sentences = buildProgram(row).sentences;
+    if (sentences.length !== 1) {
+      throw invalid("English grammar link removal expects one parsed sentence per row", { index });
+    }
+    const sentence = sentences[0];
+    if (sentence?.mood !== "ya" || !String(sentence.su?.text ?? "").startsWith(ENGLISH_GRAMMAR_CHINESE_CHARACTER_LINK_PREFIX)) {
+      return true;
+    }
+    return parsePayload(sentence, index).source !== sourceTag;
+  });
+  return retained.join(newline);
 }
 
 export async function loadEnglishGrammarCatalog({

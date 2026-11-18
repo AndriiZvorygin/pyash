@@ -60,7 +60,7 @@ function readConfig(source) {
   return {
     model: String(values.get("model") ?? "").trim(),
     promptRevision: String(values.get("prompt-revision") ?? "").trim(),
-    generationLimit: Math.max(1, Math.min(64, Math.trunc(Number(values.get("generation-limit") ?? 64)))),
+    generationLimit: Math.max(1, Math.min(512, Math.trunc(Number(values.get("generation-limit") ?? 64)))),
     dutiesPerPass: Math.max(0, Math.min(64, Math.trunc(Number(values.get("housekeeper-duties-per-pass") ?? 64)))),
     parallelism: Math.max(1, Math.trunc(Number(values.get("housekeeper-parallelism") ?? 4))),
     maxOutputTokens: Math.max(256, Math.trunc(Number(values.get("max-output-tokens") ?? 2048)))
@@ -335,26 +335,55 @@ async function runStage(sentence, context) {
     result = { sourceHash: context.inputs.sourceHash, count: decisions.length, records: decisions };
   } else if (stage === "record grammar character links") {
     const decisions = mapValue("grammar match decisions").records ?? [];
-    const promotedLinks = highConfidenceChineseCharacterGrammarLinks(decisions, context.inputs.grammarCatalog.chineseCharacterLinks);
+    const expectedDecisionCount = (mapValue("character worklist").records ?? context.worklist)
+      .slice(0, context.config.generationLimit)
+      .filter((record) => record.grammarTargets.length > 0).length;
+    const completedDecisionCount = decisions.filter((record) => record.grammarMatch).length;
+    const assignmentComplete = completedDecisionCount === expectedDecisionCount;
+    const promotedLinks = assignmentComplete
+      ? highConfidenceChineseCharacterGrammarLinks(decisions, context.inputs.grammarCatalog.chineseCharacterLinks)
+      : [];
     if (promotedLinks.length > 0) {
       const source = await fs.readFile(ENGLISH_GRAMMAR_PATH, "utf8");
       const updated = createChineseCharacterGrammarLinkSource(source, promotedLinks);
       if (updated !== source) await atomicWrite(ENGLISH_GRAMMAR_PATH, updated);
       context.inputs.grammarCatalog = parseEnglishGrammarCatalog(updated);
     }
-    const promoted = new Set(promotedLinks.map((link) => `${link.character}\u0000${link.targetId}`));
-    const reviewed = decisions.map((record) => ({
-      ...record,
-      promotions: record.grammarMatch?.matches?.filter((match) => promoted.has(`${record.character}\u0000${match.targetId}`))
-        .map((match) => ({ targetId: match.targetId, status: "accepted", confidence: "high" })) ?? []
-    }));
+    const assignmentByCharacter = new Map(promotedLinks.map((link) => [link.character, link]));
+    const reviewed = decisions.map((record) => {
+      const assignment = assignmentByCharacter.get(record.character);
+      return {
+        ...record,
+        linkAssignment: assignment
+          ? {
+            status: "accepted",
+            targetId: assignment.targetId,
+            pya: assignment.pya,
+            candidateRank: assignment.candidateRank,
+            relevantUseFrequency: assignment.relevantUseFrequency
+          }
+          : {
+            status: assignmentComplete ? "unassigned" : "pending",
+            reason: assignmentComplete
+              ? record.grammarMatch?.verdict === "select" && record.grammarMatch?.confidence === "high"
+                ? "no-unique-atom-after-frequency-allocation"
+                : "no-high-confidence-unmarked-target"
+              : "waiting-for-all-character-reviews-before-global-allocation"
+          },
+        promotions: assignment
+          ? [{ targetId: assignment.targetId, status: "accepted", confidence: "high" }]
+          : []
+      };
+    });
     artifactPath = await writeStageArtifact(context, "review.pya", reviewed);
     const statusCounts = reviewed.reduce((counts, record) => {
-      const status = record.promotions.length > 0
+      const status = record.linkAssignment.status === "accepted"
         ? "accepted"
-        : record.grammarMatch?.verdict === "select"
-          ? `select/${record.grammarMatch.confidence}`
-          : record.grammarMatch?.verdict ?? "unreviewed";
+        : record.linkAssignment.status === "pending"
+          ? "pending"
+          : record.grammarMatch?.verdict === "select"
+            ? `select/${record.grammarMatch.confidence}/unassigned`
+            : record.grammarMatch?.verdict ?? "unreviewed";
       counts[status] = (counts[status] ?? 0) + 1;
       return counts;
     }, {});
@@ -363,7 +392,8 @@ async function runStage(sentence, context) {
       sourceHash: context.inputs.sourceHash,
       classicalSeedCount: context.inputs.classicalCandidates.characters.length,
       worklistCount: context.worklist.length,
-      processedCount: reviewed.length,
+      processedCount: completedDecisionCount,
+      assignmentComplete,
       rootTargetCount: 0,
       promotedLinkCount: promotedLinks.length,
       acceptedGrammarLinksPath: ENGLISH_GRAMMAR_PATH,
@@ -449,6 +479,7 @@ export async function runChineseCharacterGrammarRefinery() {
     `Classical candidate characters: ${inputs.classicalCandidates.characters.length}`,
     `grammar characters needing work: ${review.worklistCount}`,
     `processed this pass: ${review.processedCount}`,
+    `global one-to-one allocation complete: ${review.assignmentComplete ? "yes" : "no"}`,
     `root targets submitted: ${review.rootTargetCount}`,
     `Housekeeper duties this pass: ${context.dutiesThisPass}/${config.dutiesPerPass}`,
     `promoted grammar links: ${review.promotedLinkCount}`,

@@ -1,8 +1,8 @@
 su name translation_chinese_character_grammar_refinery_config be map def
 su text "format" ob text "chinese-character-grammar-refinery-v1" ya
 su text "model" ob text "qwen3.5:9b" ya
-su text "prompt-revision" ob text "classical-grammar-function-words-v1" ya
-su text "generation-limit" ob num 64 ya
+su text "prompt-revision" ob text "grammar-character-one-to-one-relevant-frequency-v2" ya
+su text "generation-limit" ob num 86 ya
 su text "housekeeper-duties-per-pass" ob num 64 ya
 su text "housekeeper-parallelism" ob num 4 ya
 su text "max-output-tokens" ob num 2048 ya

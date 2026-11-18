@@ -33,7 +33,7 @@ export const CHINESE_CHARACTER_GRAMMAR_SOURCE_PATHS = Object.freeze({
 const HAN = /\p{Script=Han}/u;
 const GRAMMAR_UPOS = new Set(["ADP", "AUX", "CCONJ", "DET", "PART", "PRON", "SCONJ"]);
 const ADV_GRAMMAR_TAG = "Polarity=Neg";
-const MAX_CONTEXTS_PER_SOURCE = 4;
+const MAX_CONTEXTS_PER_SOURCE = 6;
 const UPOS_GRAMMAR_KINDS = Object.freeze({
   ADP: new Set(["case-marker", "exemplifier"]),
   AUX: new Set(["aspect-marker", "existential-clause", "modal-mood"]),
@@ -185,6 +185,21 @@ function isGrammarAdverb(character, features, cedict, targets) {
   return features.split("|").includes(ADV_GRAMMAR_TAG) || englishGlossMatchesTarget(character, cedict, targets);
 }
 
+export function chineseGrammarRelevantUseFrequency(record, target) {
+  if (!record?.frequency || !target || !Array.isArray(target.kinds)) return 0;
+  const targetKinds = new Set(target.kinds);
+  const modernCount = Object.entries(record.frequency.gsdsimpUpostagCounts ?? {}).reduce((sum, [upos, count]) => {
+    const compatibleKinds = UPOS_GRAMMAR_KINDS[upos] ?? new Set();
+    return [...compatibleKinds].some((kind) => targetKinds.has(kind))
+      ? sum + (Number.isSafeInteger(count) && count > 0 ? count : 0)
+      : sum;
+  }, 0);
+  if (modernCount > 0) return modernCount;
+  return Math.max(0,
+    (Number(record.frequency.classicalLeggeOccurrences) || 0)
+      + (Number(record.frequency.classicalWenYenOccurrences) || 0));
+}
+
 export function parseUdChineseGrammarEvidence(sources, {
   cedict = new Map(),
   grammarTargets = []
@@ -300,11 +315,12 @@ export function buildChineseCharacterGrammarWorklist({
   const wenYenLines = classicalAnalectsLines(wenYenSource, { startAfter: "*** START OF THE PROJECT GUTENBERG EBOOK 論語 ***" });
   const modernEvidence = parseUdChineseGrammarEvidence(udSources, { cedict, grammarTargets });
   const classicalSet = new Set(candidateCharacters);
-  const linksByCharacter = new Map();
+  const linkedCharacters = new Set();
+  const linkedAtoms = new Set();
   for (const link of existingLinks) {
-    const rows = linksByCharacter.get(link.character) ?? new Set();
-    rows.add(link.targetId);
-    linksByCharacter.set(link.character, rows);
+    if (link?.status !== "accepted") continue;
+    if (link.character) linkedCharacters.add(link.character);
+    if (link.pya) linkedAtoms.add(link.pya);
   }
   const candidateCharacterSet = new Set([...candidateCharacters, ...modernEvidence.keys()]);
   const records = [];
@@ -313,9 +329,9 @@ export function buildChineseCharacterGrammarWorklist({
     if (!unihanRow) continue;
     const modern = modernEvidence.get(character) ?? { count: 0, uposCounts: {}, contexts: [] };
     const classicalSeed = classicalSet.has(character);
-    const existingTargetIds = linksByCharacter.get(character) ?? new Set();
+    if (linkedCharacters.has(character)) continue;
     const targets = grammarTargetsForCandidate(character, { modern, cedict, grammarTargets })
-      .filter((target) => !existingTargetIds.has(target.id));
+      .filter((target) => !linkedAtoms.has(target.pya));
     if (targets.length === 0) continue;
     const leggeCount = characterCount(leggeLines, character);
     const wenYenCount = characterCount(wenYenLines, character);
@@ -382,14 +398,16 @@ export function buildChineseCharacterGrammarReviewPrompt(record) {
     english: target.english,
     aliases: target.aliases,
     components: target.components,
-    pyash: target.pya
+    pyash: target.pya,
+    relevantUseFrequency: chineseGrammarRelevantUseFrequency(record, target)
   }));
   return [
     "Link the Chinese character only to the supplied existing Pyash grammar targets. No lexical root targets or new targets are available in this pass.",
     "A character in the candidate list can also have lexical meanings. Use only evidence for grammatical uses; do not treat candidate membership or character frequency as semantic proof.",
-    "Return no-fit or uncertain when the evidence does not support a supplied grammatical sense. A character may map to more than one target only when separate grammatical uses are directly supported by the supplied evidence.",
-    "Set confidence high only when every returned match is supported by an attested grammatical sense and the target meaning is specific. Marked/register-specific readings do not qualify for automatic linking.",
-    "Return JSON with verdict (select, no-fit, uncertain), confidence (high, medium, low), matches (targetId, relation, rationale), and rationale. relation is base, marked, or same-sense.",
+    "The final vocabulary is one-to-one: each Chinese character links to at most one atom, and each atom links to at most one character. Rank directly supported target uses from most frequent to least frequent. The matches array is an ordered fallback list for resolving collisions, never a request to create multiple links.",
+    "Use the supplied relevantUseFrequency counts to rank observed grammatical use; when counts tie, use the attested contexts and dictionary glosses to rank the senses. Do not rank by general character frequency alone. Return no-fit or uncertain when no target has a supported grammatical use.",
+    "Set confidence high only when every returned candidate is supported by an attested grammatical sense. Marked/register-specific readings do not qualify for automatic linking.",
+    "Return JSON with verdict (select, no-fit, uncertain), confidence (high, medium, low), matches (targetId, relation, rationale) ordered by relevant-use frequency, and rationale. relation is base, marked, or same-sense.",
     `Character: ${record.character}`,
     `Classical candidate: ${record.classicalSeed ? "yes" : "no"}`,
     `Independent source counts: ${JSON.stringify({
@@ -404,7 +422,7 @@ export function buildChineseCharacterGrammarReviewPrompt(record) {
     `Shuowen historical definition: ${record.evidence.shuowen.slice(0, 350)}`,
     `Analects / Legge contexts (attestation, not a standalone definition): ${JSON.stringify(record.evidence.classicalLegge)}`,
     `Analects / Wen Yen contexts (independent witness): ${JSON.stringify(record.evidence.classicalWenYen)}`,
-    `UD Chinese-GSDSimp contexts and POS tags: ${JSON.stringify(record.evidence.gsdsimp)}`,
+    `UD Chinese-GSDSimp contexts and POS tags: ${JSON.stringify(record.evidence.gsdsimp.slice(0, 6))}`,
     `Existing grammar links: ${JSON.stringify(record.existingGrammarLinks)}`,
     `Existing Pyash grammar targets: ${JSON.stringify(targets)}`
   ].join("\n");
@@ -427,12 +445,17 @@ export function parseChineseCharacterGrammarReviewResponse(value, record) {
     throw invalid("Grammar review response does not match the expected contract", { id: record.id });
   }
   const targets = new Set(record.grammarTargets.map((target) => target.id));
+  const targetById = new Map(record.grammarTargets.map((target) => [target.id, target]));
+  const seenAtoms = new Set();
   const matches = response.matches.map((match) => {
     const targetId = text(match?.targetId);
     const rationale = text(match?.rationale).slice(0, 300);
     if (!targets.has(targetId) || !["base", "marked", "same-sense"].includes(match?.relation) || !rationale) {
       throw invalid("Grammar review selected an unprovided target or invalid relation", { id: record.id, targetId });
     }
+    const atom = targetById.get(targetId)?.pya;
+    if (seenAtoms.has(atom)) throw invalid("Grammar fallback list repeats a Pyash atom", { id: record.id, targetId, atom });
+    seenAtoms.add(atom);
     return { targetId, relation: match.relation, rationale };
   });
   if (new Set(matches.map((match) => match.targetId)).size !== matches.length) {
@@ -449,21 +472,67 @@ export function highConfidenceChineseCharacterGrammarLinks(records = [], existin
   if (!Array.isArray(records) || !Array.isArray(existingLinks)) {
     throw invalid("Grammar linking requires record and link arrays");
   }
-  const existing = new Set(existingLinks.filter((link) => link.status === "accepted")
-    .map((link) => `${link.character}\u0000${link.targetId}`));
-  const links = [];
+  const existingCharacters = new Set(existingLinks.filter((link) => link.status === "accepted").map((link) => link.character));
+  const existingAtoms = new Set(existingLinks.filter((link) => link.status === "accepted").map((link) => link.pya));
+  const choices = [];
   for (const record of records) {
     const decision = record.grammarMatch;
-    if (decision?.verdict !== "select" || decision?.confidence !== "high") continue;
+    if (existingCharacters.has(record.character) || decision?.verdict !== "select" || decision?.confidence !== "high") continue;
     const targetById = new Map(record.grammarTargets.map((target) => [target.id, target]));
-    for (const match of decision.matches ?? []) {
+    const choicesForCharacter = [];
+    for (const [index, match] of (decision.matches ?? []).entries()) {
       if (match.relation === "marked") continue;
       const target = targetById.get(match.targetId);
-      if (!target) continue;
-      const identity = `${record.character}\u0000${target.id}`;
-      if (existing.has(identity)) continue;
-      existing.add(identity);
-      links.push({
+      if (!target || existingAtoms.has(target.pya) || choicesForCharacter.some((choice) => choice.target.pya === target.pya)) continue;
+      choicesForCharacter.push({
+        record,
+        target,
+        match,
+        candidateRank: index + 1,
+        relevantUseFrequency: chineseGrammarRelevantUseFrequency(record, target)
+      });
+    }
+    choicesForCharacter.sort((left, right) => (
+      right.relevantUseFrequency - left.relevantUseFrequency
+        || left.candidateRank - right.candidateRank
+        || left.target.pya.localeCompare(right.target.pya)
+    ));
+    if (choicesForCharacter.length > 0) {
+      const candidate = { record, choices: choicesForCharacter, next: 0 };
+      for (const choice of choicesForCharacter) choice.candidate = candidate;
+      choices.push(candidate);
+    }
+  }
+
+  const heldByAtom = new Map();
+  const queue = [...choices].sort((left, right) => left.record.character.localeCompare(right.record.character));
+  const compareAtomPreference = (left, right) => (
+    left.relevantUseFrequency - right.relevantUseFrequency
+      || (Number(left.record.frequency.subtlexCount) || 0) - (Number(right.record.frequency.subtlexCount) || 0)
+      || (Number(left.record.frequency.classicalLeggeOccurrences) || 0)
+        + (Number(left.record.frequency.classicalWenYenOccurrences) || 0)
+        - (Number(right.record.frequency.classicalLeggeOccurrences) || 0)
+        - (Number(right.record.frequency.classicalWenYenOccurrences) || 0)
+      || right.record.character.codePointAt(0) - left.record.character.codePointAt(0)
+  );
+  while (queue.length > 0) {
+    const candidate = queue.shift();
+    const choice = candidate.choices[candidate.next++];
+    if (!choice) continue;
+    const current = heldByAtom.get(choice.target.pya);
+    if (!current) {
+      heldByAtom.set(choice.target.pya, choice);
+      continue;
+    }
+    if (compareAtomPreference(choice, current) > 0) {
+      heldByAtom.set(choice.target.pya, choice);
+      queue.push(current.candidate);
+    } else {
+      queue.push(candidate);
+    }
+  }
+
+  return [...heldByAtom.values()].map(({ record, target, match, candidateRank, relevantUseFrequency }) => ({
         character: record.character,
         targetId: target.id,
         pya: target.pya,
@@ -475,6 +544,8 @@ export function highConfidenceChineseCharacterGrammarLinks(records = [], existin
         source: "chinese-character-grammar-refinery",
         sources: [...record.sources],
         rationale: match.rationale,
+        candidateRank,
+        relevantUseFrequency,
         sourceEvidence: {
           classicalSeed: record.classicalSeed,
           classicalLeggeOccurrences: record.frequency.classicalLeggeOccurrences,
@@ -482,10 +553,7 @@ export function highConfidenceChineseCharacterGrammarLinks(records = [], existin
           gsdsimpGrammarOccurrences: record.frequency.gsdsimpGrammarOccurrences,
           gsdsimpUpostagCounts: { ...record.frequency.gsdsimpUpostagCounts }
         }
-      });
-    }
-  }
-  return links;
+      }));
 }
 
 export function renderChineseCharacterGrammarReviewPya(records, {

@@ -11,6 +11,7 @@ import {
 } from "../program/library/translation/chinese_character_grammar_refinery.mjs";
 import {
   parseEnglishGrammarCatalog,
+  removeEnglishGrammarChineseCharacterLinks,
   renderEnglishGrammarChineseCharacterLinks
 } from "../program/library/translation/english_grammar.mjs";
 
@@ -139,6 +140,8 @@ test("grammar prompt and response contract restrict review to supplied targets",
   };
   const prompt = buildChineseCharacterGrammarReviewPrompt(record);
   assert.match(prompt, /No lexical root targets/u);
+  assert.match(prompt, /one-to-one/u);
+  assert.match(prompt, /ordered fallback list/u);
   assert.match(prompt, /Existing Pyash grammar targets/u);
   assert.doesNotMatch(prompt, /fyif/u);
   assert.deepEqual(parseChineseCharacterGrammarReviewResponse({
@@ -153,6 +156,15 @@ test("grammar prompt and response contract restrict review to supplied targets",
     matches: [{ targetId: "root:invented", relation: "base", rationale: "not supplied" }],
     rationale: "Invented target."
   }, record), /unprovided target/u);
+  assert.throws(() => parseChineseCharacterGrammarReviewResponse({
+    verdict: "select",
+    confidence: "high",
+    matches: [
+      { targetId: record.grammarTargets[0].id, relation: "base", rationale: "First candidate." },
+      { targetId: record.grammarTargets[0].id, relation: "same-sense", rationale: "Duplicate atom." }
+    ],
+    rationale: "Duplicate target candidate."
+  }, { ...record, grammarTargets: [record.grammarTargets[0], { ...record.grammarTargets[0], id: "alias-target" }] }), /repeats a Pyash atom/u);
 });
 
 test("high-confidence grammar linking withholds marked and lower-confidence decisions", () => {
@@ -185,6 +197,50 @@ test("high-confidence grammar linking withholds marked and lower-confidence deci
   }]).length, 0);
 });
 
+test("frequency allocation assigns one atom per character and falls back after an atom is claimed", () => {
+  const targets = parseEnglishGrammarCharacterTargets(grammarCatalogSource()).targets;
+  const and = targets.find((target) => target.english === "and");
+  const you = targets.find((target) => target.english === "you");
+  const records = [
+    {
+      character: "甲",
+      sources: ["UD test"],
+      classicalSeed: false,
+      frequency: { gsdsimpUpostagCounts: { CCONJ: 20, PRON: 10 }, subtlexCount: 100 },
+      grammarTargets: [and, you],
+      grammarMatch: {
+        verdict: "select",
+        confidence: "high",
+        matches: [
+          { targetId: and.id, relation: "base", rationale: "Most frequent candidate use." },
+          { targetId: you.id, relation: "same-sense", rationale: "Fallback use." }
+        ]
+      }
+    },
+    {
+      character: "乙",
+      sources: ["UD test"],
+      classicalSeed: false,
+      frequency: { gsdsimpUpostagCounts: { CCONJ: 30 }, subtlexCount: 50 },
+      grammarTargets: [and],
+      grammarMatch: {
+        verdict: "select",
+        confidence: "high",
+        matches: [{ targetId: and.id, relation: "base", rationale: "Higher-frequency conjunction use." }]
+      }
+    }
+  ];
+  const links = highConfidenceChineseCharacterGrammarLinks(records);
+  assert.equal(links.length, 2);
+  assert.deepEqual(new Set(links.map((link) => link.character)), new Set(["甲", "乙"]));
+  assert.deepEqual(new Set(links.map((link) => link.pya)), new Set([and.pya, you.pya]));
+  const assigned = new Map(links.map((link) => [link.character, link]));
+  assert.equal(assigned.get("甲").pya, you.pya);
+  assert.equal(assigned.get("甲").candidateRank, 2);
+  assert.equal(assigned.get("甲").relevantUseFrequency, 10);
+  assert.equal(assigned.get("乙").pya, and.pya);
+});
+
 test("accepted grammar links render into the English grammar catalog", () => {
   const source = grammarCatalogSource();
   const target = parseEnglishGrammarCharacterTargets(source).targets.find((entry) => entry.english === "also");
@@ -208,4 +264,43 @@ test("accepted grammar links render into the English grammar catalog", () => {
   assert.deepEqual(parsed.chineseCharacterLinks[0].components, ["also_"]);
   assert.equal(renderEnglishGrammarChineseCharacterLinks(updated, [link]), updated);
   assert.equal(catalog.chineseCharacterLinks.length, 0);
+});
+
+test("grammar link rendering enforces one-to-one assignments and can remove one run's links", () => {
+  const source = grammarCatalogSource();
+  const targets = parseEnglishGrammarCharacterTargets(source).targets;
+  const and = targets.find((target) => target.english === "and");
+  const you = targets.find((target) => target.english === "you");
+  const link = (character, target, sourceTag) => ({
+    character,
+    targetId: target.id,
+    pya: target.pya,
+    components: target.components,
+    english: target.english,
+    relation: "base",
+    confidence: "high",
+    status: "accepted",
+    source: sourceTag,
+    sources: ["test source"],
+    rationale: "Test evidence."
+  });
+
+  assert.throws(() => renderEnglishGrammarChineseCharacterLinks(source, [
+    link("甲", and, "test"),
+    link("乙", and, "test")
+  ]), /atom already linked/u);
+  assert.throws(() => renderEnglishGrammarChineseCharacterLinks(source, [
+    link("甲", and, "test"),
+    link("甲", you, "test")
+  ]), /character already linked/u);
+
+  const generatedSource = renderEnglishGrammarChineseCharacterLinks(source, [
+    link("甲", and, "chinese-character-grammar-refinery"),
+    link("乙", you, "human-curated")
+  ]);
+  const cleanedSource = removeEnglishGrammarChineseCharacterLinks(generatedSource, {
+    sourceTag: "chinese-character-grammar-refinery"
+  });
+  const remaining = parseEnglishGrammarCatalog(cleanedSource).chineseCharacterLinks;
+  assert.deepEqual(remaining.map((row) => [row.character, row.pya]), [["乙", you.pya]]);
 });
