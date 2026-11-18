@@ -188,6 +188,31 @@ test("coding saddle sends on Enter and keeps Shift+Enter as a newline", async ()
   assert.equal(decoder.getState().value, "");
 });
 
+
+test("coding saddle sends with Enter and queues to turn end with Tab while busy", () => {
+  let busy = true;
+  const submitted = [];
+  const queued = [];
+  const decoder = createSaddleInputDecoder({
+    onSubmit: (value) => submitted.push(value),
+    onQueue: (value) => { queued.push(value); return true; },
+    shouldQueue: () => busy,
+    onAutocomplete: saddleSlashCommandCompletions
+  });
+
+  decoder.feed("send after next tool\r");
+  decoder.feed("wait until turn end\t");
+
+  assert.deepEqual(submitted, ["send after next tool"]);
+  assert.deepEqual(queued, ["wait until turn end"]);
+  assert.equal(decoder.getState().value, "");
+
+  busy = false;
+  decoder.feed("/m\t");
+  assert.equal(decoder.getState().value, "/mind ");
+
+});
+
 test("coding saddle bracketed paste preserves multiline text without sending", async () => {
   const submitted = [];
   const decoder = createSaddleInputDecoder({ onSubmit: (value) => submitted.push(value) });

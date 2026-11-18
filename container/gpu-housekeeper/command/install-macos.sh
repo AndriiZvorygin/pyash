@@ -194,7 +194,8 @@ else
   echo "$!" > "$HOUSEKEEPER_PID_FILE"
 fi
 
-for _ in $(seq 1 60); do
+# First startup after the active-queue migration may scan a large legacy archive.
+for _ in $(seq 1 240); do
   if curl -fsS http://127.0.0.1:11434/api/version >/dev/null 2>&1 \
     && curl -fsS "http://127.0.0.1:$HOUSEKEEPER_PORT/health" >/dev/null 2>&1 \
     && lsof -nP -iTCP:"$HOUSEKEEPER_PORT" -sTCP:LISTEN 2>/dev/null | grep -F "$BIND_HOST" >/dev/null; then

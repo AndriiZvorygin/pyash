@@ -13,11 +13,12 @@ import {
 } from "../../../program/runtime/gpu/managed-ollama.mjs";
 import { resolveTextModel, resolveVisionModel } from "../../../program/runtime/gpu/text-model.mjs";
 
-function response(payload, status = 200) {
+function response(payload, status = 200, headers = {}) {
   return {
     ok: status >= 200 && status < 300,
     status,
     statusText: status === 200 ? "OK" : "error",
+    headers: { get(name) { return headers[String(name).toLowerCase()] || null; } },
     async json() { return payload; },
     async text() { return JSON.stringify(payload); },
   };
@@ -58,6 +59,51 @@ test("remote Ollama requests leave Qwen resource demand to the host housekeeper"
   assert.equal(calls[0].body.jobSpec.payload.model, DEFAULT_TEXT_MODEL);
 });
 
+test("aborting a managed Ollama turn cancels its Housekeeper job before returning", async () => {
+  const controller = new AbortController();
+  const calls = [];
+  let polling = false;
+  let jobPolls = 0;
+  const fetchImpl = async (url, options = {}) => {
+    calls.push({ url, body: options.body ? JSON.parse(options.body) : null });
+    if (url.endsWith("/submit")) return response({ accepted: true, remoteJobId: "job-to-cancel" });
+    if (url.endsWith("/job/job-to-cancel")) {
+      jobPolls += 1;
+      if (jobPolls > 1) return response({ status: "cancelled" });
+      polling = true;
+      return new Promise((_resolve, reject) => {
+        options.signal.addEventListener("abort", () => reject(options.signal.reason), { once: true });
+      });
+    }
+    if (url.endsWith("/cancel")) return response({ accepted: true, status: "cancelling", remoteJobId: "job-to-cancel" });
+    throw new Error(`unexpected URL ${url}`);
+  };
+
+  const pending = requestManagedOllamaChat({
+    ollamaUrl: "http://mriczo:11434/api/chat",
+    managerUrl: "http://test-housekeeper:8090",
+    messages: [{ role: "user", content: "original question" }],
+    fetchImpl,
+    signal: controller.signal,
+  });
+  for (let attempt = 0; !polling && attempt < 100; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  if (!polling) {
+    controller.abort(new Error("test timed out waiting for the Housekeeper job poll"));
+    await pending.catch(() => {});
+    assert.fail("managed Ollama request never began polling its submitted job");
+  }
+  controller.abort(new Error("user steered the active turn"));
+
+  await assert.rejects(pending, /user steered the active turn/u);
+  const cancellation = calls.find((call) => call.url.endsWith("/cancel"));
+  assert.deepEqual(cancellation.body, {
+    remoteJobId: "job-to-cancel",
+    handleId: calls[0].body.handleId,
+  });
+});
+
 test("manager-required Ollama requests fail closed before any direct provider call", async () => {
   let providerCalls = 0;
   await assert.rejects(
@@ -75,6 +121,38 @@ test("manager-required Ollama requests fail closed before any direct provider ca
     /requires PYA_GPU_HOUSEKEEPER_URL/u
   );
   assert.equal(providerCalls, 0);
+});
+
+test("aborting a managed Ollama chat cancels its Housekeeper job and waits for terminal status", async () => {
+  const controller = new AbortController();
+  const calls = [];
+  let statusReads = 0;
+  const fetchImpl = async (url, options = {}) => {
+    calls.push({ url, body: options.body ? JSON.parse(options.body) : null });
+    if (url.endsWith("/submit")) return response({ remoteJobId: "cancel-me" });
+    if (url.endsWith("/job/cancel-me")) {
+      statusReads += 1;
+      return response({ status: statusReads === 1 ? "running" : "cancelled" });
+    }
+    if (url.endsWith("/cancel")) return response({ accepted: true, status: "cancelling", remoteJobId: "cancel-me" });
+    throw new Error(`unexpected URL ${url}`);
+  };
+
+  const pending = requestManagedOllamaChat({
+    model: "qwen3.5:9b",
+    messages: [{ role: "user", content: "hold" }],
+    ollamaUrl: "http://ollama.invalid:11434",
+    managerUrl: "http://housekeeper.invalid:18886",
+    fetchImpl,
+    signal: controller.signal,
+    pollIntervalMs: 1000,
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  controller.abort(new Error("steering input"));
+
+  await assert.rejects(pending, /steering input/u);
+  assert.equal(calls.some((call) => call.url.endsWith("/cancel")), true);
+  assert.ok(statusReads >= 2, "the client must observe terminal cancellation before rejecting");
 });
 
 test("text and vision models are loaded from declarative pya configuration", async () => {
@@ -149,6 +227,37 @@ test("generic ComfyUI jobs use the same manager queue and return the remote resu
     processId: process.pid,
   });
   assert.equal(calls[0].body.jobSpec.resourceRequest.vramRequiredMb, 12000);
+});
+
+test("managed GPU submit retries transport failures and readiness responses with the same handle", async () => {
+  const calls = [];
+  const fetchImpl = async (url, options = {}) => {
+    const body = options.body ? JSON.parse(options.body) : null;
+    calls.push({ url, body });
+    if (url.endsWith("/submit")) {
+      const attempt = calls.filter((call) => call.url.endsWith("/submit")).length;
+      if (attempt === 1) throw new Error("connection refused");
+      if (attempt === 2) return response({ code: "housekeeper_starting" }, 503, { "retry-after": "0.05" });
+      return response({ accepted: true, remoteJobId: "job-retried" });
+    }
+    return response({ status: "success", result: { text: "done" } });
+  };
+
+  const result = await submitManagedGpuJob({
+    runtimeName: "comfyui",
+    profileName: "test-profile",
+    managerUrl: "http://test-housekeeper:8090",
+    handleId: "stable-retry-handle",
+    jobSpec: { kind: "test-job" },
+    fetchImpl,
+    pollIntervalMs: 1,
+  });
+
+  const submits = calls.filter((call) => call.url.endsWith("/submit"));
+  assert.equal(submits.length, 3);
+  assert.deepEqual(submits.map((call) => call.body), [submits[0].body, submits[0].body, submits[0].body]);
+  assert.equal(submits[0].body.handleId, "stable-retry-handle");
+  assert.equal(result.remoteJobId, "job-retried");
 });
 
 test("Ollama model provisioning uses one exact queued housekeeper job", async () => {

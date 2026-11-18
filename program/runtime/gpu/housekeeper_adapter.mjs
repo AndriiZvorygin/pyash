@@ -37,7 +37,14 @@ async function requestJson({ baseUrl = "", pathname = "", method = "GET", body, 
     options.body = JSON.stringify(body);
   }
 
-  const response = await fetch(url, options);
+  let response;
+  try {
+    response = await fetch(url, options);
+  } catch (cause) {
+    const error = new Error(`gpu housekeeper transport failed: ${normalizeText(cause?.message || cause)}`, { cause });
+    error.retryableTransport = true;
+    throw error;
+  }
   if (!response.ok) {
     let detail = "";
     try {
@@ -47,9 +54,28 @@ async function requestJson({ baseUrl = "", pathname = "", method = "GET", body, 
     }
     const error = new Error(`gpu housekeeper adapter defective (${response.status}): ${detail || response.statusText || "request failed"}`);
     error.statusCode = response.status;
+    const retryAfter = Number.parseFloat(String(response.headers?.get?.("retry-after") || ""));
+    if (Number.isFinite(retryAfter) && retryAfter > 0) error.retryAfterMs = Math.ceil(retryAfter * 1000);
     throw error;
   }
   return parseJsonOrThrow(response);
+}
+
+async function requestJsonWithRetry(options, retryWindowMs = 300000) {
+  const deadline = Date.now() + Math.max(1000, Number(retryWindowMs) || 300000);
+  let delayMs = 250;
+  while (true) {
+    const remainingMs = deadline - Date.now();
+    try {
+      return await requestJson({ ...options, timeoutMs: Math.min(30000, Math.max(1000, remainingMs)) });
+    } catch (error) {
+      const retryable = error?.retryableTransport === true || [502, 503, 504].includes(error?.statusCode);
+      if (!retryable || Date.now() >= deadline) throw error;
+      const waitMs = Math.min(deadline - Date.now(), error.retryAfterMs || delayMs);
+      await new Promise((resolve) => setTimeout(resolve, Math.max(50, waitMs)));
+      delayMs = Math.min(5000, delayMs * 2);
+    }
+  }
 }
 
 export function createGpuHousekeeperAdapter({ baseUrl = "", hostId = "", username = "" } = {}) {
@@ -143,7 +169,7 @@ export function createGpuHousekeeperAdapter({ baseUrl = "", hostId = "", usernam
       if (normalizeText(deviceId)) body.deviceId = normalizeText(deviceId);
       if (typeof dischargeAllowed === "boolean") body.dischargeAllowed = dischargeAllowed;
       if (routing && typeof routing === "object" && !Array.isArray(routing)) body.routing = { ...routing };
-      return requestJson({
+      return requestJsonWithRetry({
         baseUrl: rootUrl,
         pathname: "/submit",
         method: "POST",

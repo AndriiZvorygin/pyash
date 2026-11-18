@@ -133,7 +133,7 @@ function parseAbsolutePathTokens(commandText = "") {
 export function rewriteRunRootCommandPath(commandText, { cwd, rememberFn = remember } = {}) {
   const text = String(commandText ?? "").trim();
   if (!text) return text;
-  const match = text.match(/^((?:[A-Za-z_][A-Za-z0-9_]*=[^\s]+\s+)*)node\s+command\/([^\s]+)([\s\S]*)$/u);
+  const match = text.match(/^((?:[A-Za-z_][A-Za-z0-9_]*=[^\s]+\s+)*)node\s+(?:\.\/)?command\/([^\s]+)([\s\S]*)$/u);
   if (!match) return text;
   const prefix = match[1] ?? "";
   const commandFile = match[2] ?? "";

@@ -92,6 +92,7 @@ export async function runCommandText(cmd, { input, timeoutMs, cwd, env, maxOutpu
     }
     let stdout = "";
     let stderr = "";
+    let stdinError = null;
     let exceededOutputLimit = false;
     let timedOut = false;
     let timeoutHandle = null;
@@ -113,6 +114,9 @@ export async function runCommandText(cmd, { input, timeoutMs, cwd, env, maxOutpu
       if (typeof onStderr === "function" && text) onStderr(text);
       checkOutputLimit();
     });
+    proc.stdin.on("error", (error) => {
+      stdinError = error;
+    });
     proc.on("error", (err) => {
       if (timeoutHandle) clearTimeout(timeoutHandle);
       cleanupSignal();
@@ -124,7 +128,7 @@ export async function runCommandText(cmd, { input, timeoutMs, cwd, env, maxOutpu
       if (exceededOutputLimit) {
         stderr += `output exceeded ${maxOutputBytes} bytes`;
       }
-      resolve({ status, signal: proc.signalCode ?? null, stdout, stderr, timedOut, exceededOutputLimit, aborted });
+      resolve({ status, signal: proc.signalCode ?? null, stdout, stderr, stdinError, timedOut, exceededOutputLimit, aborted });
     });
     if (signal?.aborted) abortProcess();
     else signal?.addEventListener?.("abort", abortProcess, { once: true });

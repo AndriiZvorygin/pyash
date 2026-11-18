@@ -1,0 +1,13 @@
+su name truth to name bool answer be ceremony def
+ob bool truth ret
+prah
+
+su name lie to name bool answer be ceremony def
+ob bool lie ret
+prah
+
+su name equally number ob num 0 to name bool answer be ceremony def
+ob num of ob of this by num 2 to name num number be remains do
+ob name number be equally from num 0 then su name truth to name bool answer be truth else su name lie to name bool answer be lie do
+su name answer ret
+prah

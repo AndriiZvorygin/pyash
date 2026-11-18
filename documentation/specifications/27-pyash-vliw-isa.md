@@ -102,6 +102,48 @@ fields, with the quote sort describing interpretation. Type compatibility is
 checked by the decoder. A quote is therefore a typed value encoding, not a
 license to hide an unrepresentable sentence.
 
+The source form `quoted.<kind> ... .<kind>.quoted` is a block delimiter and
+payload annotation, distinct from the legacy quote sort. Parsing must retain
+the block kind as semantic metadata alongside the payload; it must not fold
+the delimiters into the payload or silently discard the kind. The kind is
+external to the payload, consistent with the legacy quote model's separation
+of value bytes and type information. In the VLIW sentence stream, a non-default
+kind uses the paired `zi` frame:
+
+```text
+zi 0 tag [length-quote] [hash-quote] 0 payload 0 tag 0 zi
+```
+
+`zi` is the existing `quoted_` HNUC (`0x229E`). The tag is a complete,
+self-delimiting typed quote value carrying the source quote kind (a text quote
+when the kind is textual); its full encoded words are repeated unchanged at
+close. It is framing metadata, not the legacy quote-sort field. Each optional
+field is a complete, properly typed quote value. No optional fields means
+neither length nor hash; one means the payload length in 16-bit words; two
+means payload length followed by hash. Thus a hash is never present without
+the length field. Each value's quote header and length determine its extent,
+so hashes need not have a fixed width. The length field is an unsigned 16-bit
+number quote (`0x881D` followed by the word count).
+The zero after `zi` distinguishes a frame from zero padding: a following zero
+means padding, while a nonzero tag begins the frame. The zero before `payload`
+ends the tag and optional-field prefix, and the payload uses its ordinary
+typed quote encoding. The closing zero and repeated tag must be followed by
+`zi`.
+
+Within this frame, the decoder interprets zero words as delimiters; outside
+the frame, zero words retain their existing padding meaning. It parses the
+tag and optional typed fields by their declared extents, then parses the
+payload by its quote header and length. It does not scan arbitrary payload
+words for a matching tag. If present, the payload length is checked against
+the decoded payload extent. Before producers emit a hash, a versioned profile
+MUST specify its algorithm and the canonical payload bytes it covers.
+Until such a profile is configured, the structural decoder can read a hash
+field but the sentence decoder rejects hash-bearing frames rather than
+silently treating an unverified digest as valid.
+Decoding restores the tag's quote kind to the sentence's `quoteKinds` map.
+This framing allocates no legacy quote-sort value or new HNUC; the flat v1
+`.pyac` container preserves the frame in its codelet words.
+
 ### 4.2 VLIW shape
 
 The legacy codelet is a vector of sixteen 16-bit words: 256 bits / 32 bytes.
@@ -110,6 +152,29 @@ whether a word is a phrase, case, verb, mood, or continuation according to
 the legacy index format. The remaining words hold quote denotations, content,
 case/phrase markers, the verb, mood, and zero/unassigned tail words where the
 codelet ends early.
+
+Long paragraph quotes follow the original Lwonprom blockquote framing. A
+paragraph-letter quote carries the legacy `L` vector-thickness flag and an
+explicit 16-bit payload-word count. For payloads larger than 28 bytes (more
+than fourteen 16-bit letter units), the indexed codelet stream ends that
+prefix immediately after the quote header and count. The quote data then
+occupies `ceil(payload_words / 16)` raw 16-word vectors: those vectors have no
+index word, so all sixteen words are available to the quote. Unused words in
+the final raw vector are zero. The next vector resumes the ordinary indexed
+stream, where the following grammatical case, verb, mood, or sentence begins.
+The count, not a scan for an index-like word or a terminator, determines the
+raw extent. A decoder MUST skip exactly that many vectors and MUST reject a
+missing block or nonzero final padding. Short paragraph quotes remain inline
+in the indexed stream.
+
+Ordinary vectors use indexed continuation, not raw blockquote vectors.
+Numeric and boolean vector quote headers identify their element type and
+fixed/explicit element count; their elements may cross any number of indexed
+codelets. Text vectors retain one typed letter quote per element and use the
+same indexed continuation for the vector as a whole. A text element that is
+itself a long paragraph quote uses the long-quote framing above. Decoding MUST
+preserve element order, zero-valued elements, and the distinction between a
+vector and a scalar.
 
 The index has two required properties from the legacy VM:
 
@@ -168,7 +233,7 @@ before values become visible to dependent codelets.
 The execution model has:
 
 - code in immutable/constant codelet storage;
-- globally addressable working/output storage for references;
+- working/output storage addressed by stable references;
 - a program queue for ready work rather than a mandatory program counter;
 - worker-local stacks for function-call frames; and
 - a completion/history record sufficient to diagnose or replay a codelet.
@@ -181,134 +246,64 @@ function call enqueues its body with a local frame and rejoins only after its
 declared outputs are fulfilled. Speculative or parallel execution is valid
 only for instructions proven independent by these rules.
 
+### Hosted PyashForth memory profile
+
+The hosted JavaScript programlet v1 now implements the first scalar-memory
+slice, following Lwonprom's recipe-local variable pile. This profile does not
+add program-wide mutable variables. A ceremony body may declare initialized
+unsigned 16-bit numeric locals before its actions:
+
+```text
+exists su name count ob num 0 as name variable be number ya
+exists su name limit ob num 5 as name permanently number be number ya
+ob num 1 to name num count be plus do
+su name count ret
+```
+
+`as name variable` marks a mutable local; `as name permanently number` marks
+a read-only constant quantity. The initializer is the declaration's `ob num`
+value, so no separate initialization opcode or vocabulary is introduced.
+Writes to a mutable slot must use a typed `to name num <slot>` destination.
+Declarations follow the containing `ceremony def` and precede its action
+sentences. Each invocation gets a fresh slot frame; writes replace the live
+slot value while diagnostic history retains the write, and the frame is
+discarded when the invocation returns. Constant writes and invalid slot types
+fail explicitly.
+
+This implemented slice is intentionally narrow: numeric values in the range
+0 through 65535, local to one ceremony invocation. It does not yet implement
+logical pages, quoted-payload initialization, other slot types, or an indexed
+program image. The v1 pack remains a flat codelet stream; runtime slots are
+created by the interpreter rather than stored in a new `.pyac` section.
+
+The broader intended memory profile remains:
+
+- Each ceremony invocation receives its own frame of named typed slots.
+  Declarations initialize slots; writes update the slot in place rather than
+  appending replacement declaration sentences. Constant quantities are
+  read-only. The implemented subset is limited to unsigned 16-bit numbers.
+- A frame may reserve zero-initialized logical data pages or initialize pages
+  from a quoted payload. A logical page is sixteen 32-byte VLIW codelets, or
+  512 bytes. This is a Pyash runtime unit, not a claim about the host or target
+  operating system's physical page size.
+- Frame slots and writable pages live only for that invocation and are
+  discarded on return. Any diagnostic history is separate from runtime state
+  and cannot become an unbounded variable store.
+- Long `quoted.<kind>` payloads preserve their kind separately from their
+  contents. A quote does not allocate writable memory by itself; a separate
+  allocation sentence supplies the named extent and initialization behavior.
+
+The page and quote requirements above remain future work. The current slot
+surface reuses existing vocabulary compounds and does not assign new HNUCs.
+The programlet compiler rejects unsupported declaration and allocation forms
+visibly.
+
 The executor MUST expose deterministic failure for malformed codelets,
 unfulfilled dependencies, duplicate writers, invalid types, and unsupported
 effects. It MUST NOT turn an execution failure into a different successful
 sentence.
 
-## 6. Target capabilities and lowering
+## Target companion
 
-The portable semantic core is a **minimum contract, not a performance ceiling**.
-Each target profile MUST declare its capabilities. An operation may be native,
-lowered to supported operations, or unavailable. A backend SHOULD select the
-fastest valid implementation and MAY emit variants for runtime target
-selection. Capability selection MUST be explicit and reproducible; similar
-instruction names do not establish equivalent semantics.
-
-A fallback MUST preserve specified results, effects, and ordering. Numerical
-approximation is valid only within a tolerance declared by the operation's
-contract. A backend MUST reject an operation when no implementation meets its
-contract.
-
-| Operation need | Possible native implementation | Possible fallback |
-| --- | --- | --- |
-| Integer multiply | Target multiply instruction | Shift/add sequence when the type and cost policy permit it |
-| Vector arithmetic | Vector or SIMD instruction | Scalar operations over the elements |
-| Matrix multiply | Target matrix/tensor unit | Vectorized or scalar multiply-accumulate |
-| Population count | Target bit-count instruction | Shift-and-count sequence or lookup implementation |
-
-These are implementation choices, not new Pyash syntax or performance
-guarantees. Targets such as x86-64, RISC-V, NVIDIA PTX, AMD GFX ISA, and future
-VLIW ASICs may provide their own implementations. Capabilities do not allocate
-identities or reuse reserved bits in the legacy 16-word codelet; an operation
-absent from its mapping requires an explicit, versioned encoding.
-
-## 7. Conceptual interfaces
-
-These signatures describe the semantic boundary. The JavaScript reference
-facade below implements the currently proven subset:
-
-```text
-lowerSentence(sentence) -> Codelet[] | EncodingError
-lowerParagraph(paragraph) -> Codelet[] | EncodingError
-decodeCodelet(words) -> SemanticInstruction[] | EncodingError
-executeCodelets(codelets, inputs) -> Paragraph | ExecutionError
-```
-
-`lowerSentence` and `lowerParagraph` MUST use the canonical sentence ABI and
-the compatibility table. `decodeCodelet` MUST validate all index, quote,
-continuation, HNUC, type, and dependency metadata. `executeCodelets` MUST
-return sentence/paragraph-shaped results and preserve the same semantic
-effects as interpreted execution. The current JavaScript reference facade
-implements these interfaces for the proven numeric-plus and typed-literal
-adapters and rejects other semantic codelets explicitly. The host language,
-OpenCL, or another
-backend is an implementation choice behind this boundary.
-
-A destination compiles a codelet into machine code that computes the result the
-interpreter produces. It MAY use native target capabilities or lower operations
-to simpler instructions, but the compiled program MUST preserve interpreted
-results, including the saturation the numeric semantics apply, and all
-observable effects. An explicitly approximate semantic operation is permitted
-only under its declared tolerance. If neither native nor fallback lowering
-satisfies the contract, the destination MUST reject the codelet.
-
-## 8. Compatibility examples
-
-The following are golden vectors, not new syntax:
-
-1. The numeric-plus sentence `ob num 1 to num 1 be plus do` MUST encode each
-   operand as quote type, value, then its grammatical-case HNUC, producing
-   `0149 881D 0001 245E 881D 0001 243E 8A64 295E` and result `2`.
-2. The legacy single-codelet form
-   `0051 291D E928 28BE 245E E948 295E 0000 0000 0000 0000 0000 0000 0000 0000`
-   MUST decode with its head, phrases, verb/mood, and unused tail intact.
-3. Typed literals that fit the legacy quote-sort contract MUST round-trip
-   byte-for-byte and preserve their semantic type.
-4. Two source languages that lower to the same canonical sentence MUST produce
-   the same codelet bytes. Different source spellings that carry different
-   cases or values MUST NOT be collapsed merely because their glosses look
-   alike.
-5. A sentence containing an unmapped current HNUC, unsupported nested value,
-   conflicting write, or unrepresentable effect MUST return an explicit
-   encoding error and no executable codelet.
-6. A date literal MUST travel in the uint sort with the 64-bit scalar
-   thickness, so `ob date 2025-05-01 be date ya` MUST encode with the
-   eight-word body `00C1 981D 9C00 8924 0196 0000 245E 217E`, where the four
-   payload words carry the milliseconds since the Unix epoch.
-7. A numeric vector literal MUST travel in the uint sort with the vector
-   thickness that states its element count, so `ob ve num 1 2 3 be vector
-   ya` MUST encode with the seven-word body `0061 8F1D 0001 0002 0003 245E
-   217E`, and a width without a fixed legacy thickness MUST use the explicit
-   length form.
-8. A boolean vector literal MUST travel in the signed integer sort with the
-   vector thickness that states its element count, so `ob ve bool truth lie
-   truth be vector ya` MUST encode with the seven-word body `0061 AF1D 0001
-   0000 0001 245E 217E`, where a truth is the non-zero element and a lie is
-   the zero element.
-9. A text vector literal MUST travel as one letter-sort region per element,
-   because the legacy quote sorts hold fixed-width elements and a text
-   element is a string, so `ob ve text Name Age be vector ya` MUST encode
-   with the fourteen-word body `3001 0E1D 0004 004E 0061 006D 0065 0E1D
-   0003 0041 0067 0065 245E 217E`. Every element MUST keep its exact
-   characters and its case.
-10. A destination MUST compile a codelet into machine code that computes the
-    interpreter's result. The golden codelet `0149 881D 0001 245E 881D 0001
-    243E 8A64 295E` MUST compile to a program that leaves the result `2` in
-    the first argument register, and an image that holds that program MUST be
-    an executable whose entry point runs the program and stops.
-
-Conformance tests should compare sentence round-trips, exact golden bytes,
-malformed continuation/quote rejection, compatibility-table coverage,
-dependency scheduling, single-writer enforcement, and interpreted versus
-decoded result paragraphs. Tests must include at least one source-language
-adapter and one unsupported-value rejection.
-
-## 9. Non-goals
-
-This specification does not add HNUCs, alter parser vocabulary, define the
-catalog/container database, require a GPU, introduce a model server or queue,
-or connect codelet execution to WorkTask/review/integration machinery. The
-database contract is defined in
-`documentation/reference/pyac-vliw-database.md`. This specification also does
-not replace the current sentence/paragraph interpreter. The only
-conforming future implementation is one that can prove the sentence result
-and the legacy encoding bytes agree.
-
-## 10. Implementation references
-
-The proven numeric-plus, quote, fixed-slot, typed-literal, named-fact, database,
-and facade slices are documented with their fixtures and implementation paths
-in `documentation/reference/pyac-vliw-semantic-slices.md`. The normative
-requirements above remain the authority; the reference notes identify the
-currently executable subset and its explicit unsupported cases.
+Target capability selection, backend lowering, and compatibility examples are
+normative in [Pyash VLIW targets and compatibility](28-pyash-vliw-targets.md).

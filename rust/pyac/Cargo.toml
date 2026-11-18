@@ -9,4 +9,5 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
+pyac-vliw-core = { path = "../pyac-vliw-core" }
 serde_json = "1"

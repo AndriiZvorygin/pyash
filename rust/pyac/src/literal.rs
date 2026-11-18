@@ -58,6 +58,8 @@ pub struct DateInstruction {
 pub enum VectorElements {
     /// The unsigned integer sort: each element is a 16-bit number.
     Numbers(Vec<u16>),
+    /// A numeric vector result promoted to 32 bits by multiplication.
+    Numbers32(Vec<u32>),
     /// The signed integer sort: each element is a truth or a lie.
     Booleans(Vec<bool>),
     /// The letter sort: one region per element, each holding a text.

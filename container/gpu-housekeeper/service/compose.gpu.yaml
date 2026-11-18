@@ -4,6 +4,7 @@ services:
     build:
       context: ../../..
       dockerfile: container/gpu-housekeeper/Dockerfile
+      network: host
     image: liberit/gpu-housekeeper:latest
     entrypoint: ["python3", "/service/server.py"]
     command: ["--host", "0.0.0.0", "--also-host", "::", "--port", "18886", "--host-id", "${GPU_HOUSEKEEPER_HOST_ID:-gpu-housekeeper}"]
@@ -12,6 +13,12 @@ services:
       - ollama
       - comfyui
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import json,urllib.request; response=urllib.request.urlopen('http://127.0.0.1:18886/health', timeout=4); assert json.load(response).get('ready') is True"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 180s
     ports:
       - "${GPU_HOUSEKEEPER_PUBLISH_PORT:-18886}:18886"
     runtime: nvidia
@@ -26,6 +33,7 @@ services:
       - GPU_HOUSEKEEPER_HOST_ID=${GPU_HOUSEKEEPER_HOST_ID:-gpu-housekeeper}
       - GPU_HOUSEKEEPER_PEERS=${GPU_HOUSEKEEPER_PEERS:-}
       - GPU_HOUSEKEEPER_PEER_TIMEOUT_MS=${GPU_HOUSEKEEPER_PEER_TIMEOUT_MS:-5000}
+      - GPU_HOUSEKEEPER_SUBMIT_RETRY_SECONDS=${GPU_HOUSEKEEPER_SUBMIT_RETRY_SECONDS:-300}
       - GPU_HOUSEKEEPER_PEER_FAILURE_LIMIT=${GPU_HOUSEKEEPER_PEER_FAILURE_LIMIT:-3}
       - GPU_HOUSEKEEPER_PEER_COOLDOWN_SEC=${GPU_HOUSEKEEPER_PEER_COOLDOWN_SEC:-60}
       - GPU_HOUSEKEEPER_PEER_HEALTH_INTERVAL_SEC=${GPU_HOUSEKEEPER_PEER_HEALTH_INTERVAL_SEC:-15}
@@ -46,6 +54,8 @@ services:
       - GPU_HOUSEKEEPER_ALLOW_MODEL_PULL=${GPU_HOUSEKEEPER_ALLOW_MODEL_PULL:-false}
       - GPU_HOUSEKEEPER_MODEL_ALLOWLIST=${GPU_HOUSEKEEPER_MODEL_ALLOWLIST:-}
       - GPU_HOUSEKEEPER_OLLAMA_MODEL_STORE_PATH=${GPU_HOUSEKEEPER_OLLAMA_MODEL_STORE_PATH:-/root/.ollama}
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
+      - VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
       - GPU_HOUSEKEEPER_OLLAMA_CATALOG_TTL_SEC=${GPU_HOUSEKEEPER_OLLAMA_CATALOG_TTL_SEC:-30}
       - GPU_HOUSEKEEPER_OLLAMA_GPU_STARTUP_GRACE_SEC=${GPU_HOUSEKEEPER_OLLAMA_GPU_STARTUP_GRACE_SEC:-60}
       - GPU_HOUSEKEEPER_OLLAMA_GPU_GUARD_POLL_SEC=${GPU_HOUSEKEEPER_OLLAMA_GPU_GUARD_POLL_SEC:-1}
@@ -55,6 +65,12 @@ services:
       - GPU_HOUSEKEEPER_PYA_DIR=/var/lib/pyash/gpu-housekeeper
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - type: bind
+        source: ${NVIDIA_VULKAN_ICD_PATH:-/usr/share/vulkan/icd.d/nvidia_icd.json}
+        target: /usr/share/vulkan/icd.d/nvidia_icd.json
+        read_only: true
+        bind:
+          create_host_path: false
       - ${GPU_HOUSEKEEPER_DATA_DIR:-./state}:/var/lib/pyash/gpu-housekeeper
       - ${GPU_HOUSEKEEPER_KUBERNETES_CREDENTIALS_DIR:-./state/kubernetes}:/run/kubernetes:ro
     extra_hosts:

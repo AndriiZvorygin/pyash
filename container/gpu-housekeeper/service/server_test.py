@@ -3,11 +3,13 @@ import base64
 import json
 import os
 import pathlib
+import struct
 import tempfile
 import threading
 import time
 import unittest
 from urllib.error import HTTPError
+from urllib.request import Request, urlopen
 from unittest.mock import patch
 
 # Keep service observations produced by tests out of the host's persistent state.
@@ -37,6 +39,21 @@ class HousekeeperServerConfigTests(unittest.TestCase):
     with patch.dict(os.environ, {"GPU_HOUSEKEEPER_PEER_HEALTH_INTERVAL_SEC": ""}, clear=False):
       self.assertEqual(server.peer_health_interval_seconds(), 15)
 
+  def test_peer_submit_retries_startup_with_the_original_idempotency_payload(self):
+    payload = {"handleId": "forwarded-stable-handle", "runtimeName": "ollama"}
+    with patch.object(server, "peer_submit_retry_seconds", return_value=1), \
+         patch.object(server.time, "sleep"), \
+         patch.object(server, "peer_request_json", side_effect=[
+           server.PeerRequestError("peer starting", status_code=503, retryable=True),
+           {"accepted": True, "remoteJobId": "job-peer"}
+         ]) as peer_request:
+      result = server.peer_submit_request_json("http://peer:18886", payload, timeout_ms=100)
+
+    self.assertEqual(result["remoteJobId"], "job-peer")
+    self.assertEqual(peer_request.call_count, 2)
+    self.assertIs(peer_request.call_args_list[0].args[2], payload)
+    self.assertIs(peer_request.call_args_list[1].args[2], payload)
+
   def test_ipv4_and_ipv6_housekeeper_listeners_bind_same_port(self):
     ipv4 = server.create_housekeeper_server("0.0.0.0", 0)
     ipv6 = None
@@ -54,6 +71,45 @@ class HousekeeperServerConfigTests(unittest.TestCase):
       ipv4.server_close()
       if ipv6 is not None:
         ipv6.server_close()
+
+  def test_listener_reports_retryable_startup_until_queue_restore_finishes(self):
+    previous = server.startup_status()
+    server.set_startup_status("restoring", restored_jobs=0)
+    listener = server.create_housekeeper_server("127.0.0.1", 0)
+    thread = threading.Thread(target=listener.serve_forever, daemon=True)
+    thread.start()
+    root = f"http://127.0.0.1:{listener.server_address[1]}"
+    try:
+      with self.assertRaises(HTTPError) as health_error:
+        urlopen(f"{root}/health", timeout=2)
+      self.assertEqual(health_error.exception.code, 503)
+      self.assertEqual(health_error.exception.headers.get("Retry-After"), "2")
+      self.assertFalse(json.loads(health_error.exception.read())[
+        "ready"
+      ])
+
+      request = Request(
+        f"{root}/submit",
+        data=b'{"handleId":"same-handle"}',
+        headers={"Content-Type": "application/json"},
+        method="POST"
+      )
+      with patch.object(server, "submit_job") as submit_job:
+        with self.assertRaises(HTTPError) as submit_error:
+          urlopen(request, timeout=2)
+      self.assertEqual(submit_error.exception.code, 503)
+      self.assertEqual(submit_error.exception.headers.get("Retry-After"), "2")
+      self.assertEqual(json.loads(submit_error.exception.read())["code"], "housekeeper_starting")
+      submit_job.assert_not_called()
+    finally:
+      listener.shutdown()
+      listener.server_close()
+      thread.join(timeout=2)
+      server.set_startup_status(
+        previous["state"],
+        restored_jobs=previous["restoredJobs"],
+        error=previous["error"]
+      )
 
   def test_model_size_estimate_rounds_up_to_a_whole_mib(self):
     request = server.job_resource_request({
@@ -86,14 +142,347 @@ class HousekeeperDurableQueueTests(unittest.TestCase):
     self.temp_dir = tempfile.TemporaryDirectory(prefix="gpu-housekeeper-durable-queue-")
     os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = self.temp_dir.name
     server._JOBS.clear()
+    server._JOB_CANCEL_EVENTS.clear()
+    server.set_dispatch_paused(False)
 
   def tearDown(self):
     server._JOBS.clear()
+    server._JOB_CANCEL_EVENTS.clear()
+    server.set_dispatch_paused(False)
     if self.original_pya_dir is None:
       os.environ.pop("GPU_HOUSEKEEPER_PYA_DIR", None)
     else:
       os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = self.original_pya_dir
     self.temp_dir.cleanup()
+
+  def test_soft_drain_accepts_and_persists_new_jobs_in_local_queue(self):
+    server.set_dispatch_paused(True)
+    payload = {
+      "handleId": "queued-during-soft-drain",
+      "runtimeName": "test-runtime",
+      "profileName": "test-profile",
+      "jobSpec": {"kind": "test-job"}
+    }
+    local = {
+      "hostId": "mriczo", "deviceId": "gpu0", "available": True,
+      "immediate": True, "score": 1, "reason": "local candidate"
+    }
+    with patch.object(server, "local_route_state", return_value=local), \
+         patch.object(server, "select_route") as select_route:
+      result = server.submit_job(payload, {"test-runtime": {}}, "mriczo")
+
+    self.assertTrue(result["accepted"])
+    self.assertFalse(result["forwarded"])
+    self.assertEqual(result["route"]["selectionPolicy"], "maintenance-queue")
+    select_route.assert_not_called()
+    self.assertEqual(server.queue_view()["localQueuedCount"], 1)
+    self.assertTrue(server.queue_view()["dispatchPaused"])
+    self.assertTrue(server.queue_view()["acceptingJobs"])
+    self.assertTrue(server.durable_job_path(result["remoteJobId"]).is_file())
+
+  def test_queued_job_waits_during_soft_drain_then_executes_after_resume(self):
+    remote_job_id = "job-paused-dispatch-test"
+    server._JOBS[remote_job_id] = {
+      "remoteJobId": remote_job_id,
+      "handleId": "paused-dispatch-handle",
+      "runtimeName": "test-runtime",
+      "profileName": "test-profile",
+      "jobSpec": {"kind": "test-job"},
+      "deviceId": "gpu-soft-drain-test",
+      "status": "queued",
+      "message": "queued",
+      "executionHostId": "mriczo",
+      "forwarded": False
+    }
+    server.set_dispatch_paused(True)
+    execution = threading.Thread(
+      target=server.execute_registered_job,
+      args=(remote_job_id, {"test-runtime": {}}),
+      daemon=True
+    )
+    with patch.object(server, "execute_job", return_value={"ok": True}) as execute_job, \
+         patch.object(server, "persist_durable_job"), \
+         patch.object(server, "record_queue_transition"):
+      execution.start()
+      time.sleep(0.15)
+      self.assertEqual(server._JOBS[remote_job_id]["status"], "queued")
+      execute_job.assert_not_called()
+
+      server.set_dispatch_paused(False)
+      execution.join(timeout=2)
+
+    self.assertFalse(execution.is_alive(), "queued job did not resume after dispatch reopened")
+    self.assertEqual(server._JOBS[remote_job_id]["status"], "success")
+    execute_job.assert_called_once()
+
+  def test_cancelled_queued_job_exits_while_dispatch_is_paused(self):
+    remote_job_id = "job-cancelled-during-soft-drain"
+    server._JOBS[remote_job_id] = {
+      "remoteJobId": remote_job_id,
+      "handleId": "cancel-during-drain-handle",
+      "runtimeName": "test-runtime",
+      "profileName": "test-profile",
+      "jobSpec": {"kind": "test-job"},
+      "deviceId": "gpu-soft-drain-cancel-test",
+      "status": "queued",
+      "message": "queued",
+      "executionHostId": "mriczo",
+      "forwarded": False
+    }
+    cancel_event = threading.Event()
+    server._JOB_CANCEL_EVENTS[remote_job_id] = cancel_event
+    server.set_dispatch_paused(True)
+    execution = threading.Thread(
+      target=server.execute_registered_job,
+      args=(remote_job_id, {"test-runtime": {}}),
+      daemon=True
+    )
+    with patch.object(server, "execute_job") as execute_job, \
+         patch.object(server, "persist_durable_job"), \
+         patch.object(server, "record_queue_transition"):
+      execution.start()
+      time.sleep(0.1)
+      cancel_event.set()
+      execution.join(timeout=2)
+
+    self.assertFalse(execution.is_alive(), "cancelled queue waiter did not exit")
+    self.assertEqual(server._JOBS[remote_job_id]["status"], "cancelled")
+    execute_job.assert_not_called()
+
+  def test_soft_drain_waits_for_active_job_without_starting_the_next_one(self):
+    first_id = "job-drain-active-first"
+    second_id = "job-drain-active-second"
+    for remote_job_id in (first_id, second_id):
+      server._JOBS[remote_job_id] = {
+        "remoteJobId": remote_job_id,
+        "handleId": remote_job_id,
+        "runtimeName": "test-runtime",
+        "profileName": "test-profile",
+        "jobSpec": {"kind": "test-job"},
+        "deviceId": "gpu-soft-drain-order-test",
+        "status": "queued",
+        "message": "queued",
+        "executionHostId": "mriczo",
+        "forwarded": False
+      }
+    first_started = threading.Event()
+    release_first = threading.Event()
+    second_started = threading.Event()
+
+    def execute(job, _runtime_registry, **_callbacks):
+      if job["remoteJobId"] == first_id:
+        first_started.set()
+        self.assertTrue(release_first.wait(2), "active test job did not get released")
+      else:
+        second_started.set()
+      return {"ok": True}
+
+    with patch.object(server, "execute_job", side_effect=execute), \
+         patch.object(server, "persist_durable_job"), \
+         patch.object(server, "record_queue_transition"):
+      first = threading.Thread(
+        target=server.execute_registered_job,
+        args=(first_id, {"test-runtime": {}}), daemon=True
+      )
+      second = threading.Thread(
+        target=server.execute_registered_job,
+        args=(second_id, {"test-runtime": {}}), daemon=True
+      )
+      first.start()
+      self.assertTrue(first_started.wait(2), "first job did not start")
+      second.start()
+      server.set_dispatch_paused(True)
+      release_first.set()
+      first.join(timeout=2)
+      second.join(timeout=0.2)
+
+      self.assertFalse(first.is_alive(), "already-running job did not finish")
+      self.assertFalse(second_started.is_set(), "queued job started during soft drain")
+      self.assertEqual(server.queue_view()["localRunningCount"], 0)
+      self.assertEqual(server.queue_view()["localQueuedCount"], 1)
+
+      server.set_dispatch_paused(False)
+      second.join(timeout=2)
+
+    self.assertFalse(second.is_alive(), "queued job did not resume")
+    self.assertTrue(second_started.is_set())
+    self.assertEqual(server._JOBS[first_id]["status"], "success")
+    self.assertEqual(server._JOBS[second_id]["status"], "success")
+
+  def test_soft_drain_finishes_active_job_and_holds_next_job_queued(self):
+    first_id = "job-active-before-soft-drain"
+    second_id = "job-next-after-soft-drain"
+    for remote_job_id in (first_id, second_id):
+      server._JOBS[remote_job_id] = {
+        "remoteJobId": remote_job_id,
+        "handleId": remote_job_id,
+        "runtimeName": "test-runtime",
+        "profileName": "test-profile",
+        "jobSpec": {"kind": "test-job"},
+        "deviceId": "gpu-soft-drain-shared-test",
+        "status": "queued",
+        "message": "queued",
+        "executionHostId": "mriczo",
+        "forwarded": False
+      }
+    first_started = threading.Event()
+    finish_first = threading.Event()
+    second_started = threading.Event()
+
+    def execute(job, _runtime_registry, **_callbacks):
+      if job["remoteJobId"] == first_id:
+        first_started.set()
+        self.assertTrue(finish_first.wait(2), "active test job was not released")
+      else:
+        second_started.set()
+      return {"ok": True}
+
+    with patch.object(server, "execute_job", side_effect=execute), \
+         patch.object(server, "persist_durable_job"), \
+         patch.object(server, "record_queue_transition"):
+      first = threading.Thread(
+        target=server.execute_registered_job,
+        args=(first_id, {"test-runtime": {}}), daemon=True
+      )
+      second = threading.Thread(
+        target=server.execute_registered_job,
+        args=(second_id, {"test-runtime": {}}), daemon=True
+      )
+      first.start()
+      self.assertTrue(first_started.wait(2), "first job did not start")
+      second.start()
+      server.set_dispatch_paused(True)
+      finish_first.set()
+      first.join(timeout=2)
+      second.join(timeout=0.2)
+
+      self.assertFalse(first.is_alive(), "active job did not finish during soft drain")
+      self.assertFalse(second_started.is_set(), "queued job started while dispatch was paused")
+      self.assertEqual(server.queue_view()["localRunningCount"], 0)
+      self.assertEqual(server.queue_view()["localQueuedCount"], 1)
+
+      server.set_dispatch_paused(False)
+      second.join(timeout=2)
+
+    self.assertFalse(second.is_alive(), "held job did not resume after dispatch reopened")
+    self.assertTrue(second_started.is_set())
+    self.assertEqual(server._JOBS[first_id]["status"], "success")
+    self.assertEqual(server._JOBS[second_id]["status"], "success")
+
+  def test_soft_drain_controls_are_loopback_only(self):
+    self.assertTrue(server.maintenance_request_is_local(("127.0.0.1", 1234)))
+    self.assertTrue(server.maintenance_request_is_local(("::1", 1234, 0, 0)))
+    self.assertFalse(server.maintenance_request_is_local(("192.0.2.20", 1234)))
+
+  def test_soft_drain_http_control_keeps_admission_open(self):
+    listener = server.create_housekeeper_server("127.0.0.1", 0)
+    listener_thread = threading.Thread(target=listener.serve_forever, daemon=True)
+    listener_thread.start()
+    root = f"http://127.0.0.1:{listener.server_address[1]}"
+    try:
+      with urlopen(Request(f"{root}/maintenance/drain", data=b"{}", method="POST"), timeout=2) as response:
+        drained = json.loads(response.read().decode("utf-8"))
+      health = json.loads(urlopen(f"{root}/health", timeout=2).read().decode("utf-8"))
+      self.assertTrue(drained["dispatchPaused"])
+      self.assertTrue(drained["acceptingJobs"])
+      self.assertTrue(health["ready"])
+      self.assertTrue(health["dispatchPaused"])
+      self.assertTrue(health["acceptingJobs"])
+
+      with urlopen(Request(f"{root}/maintenance/resume", data=b"{}", method="POST"), timeout=2) as response:
+        resumed = json.loads(response.read().decode("utf-8"))
+      self.assertFalse(resumed["dispatchPaused"])
+      self.assertTrue(resumed["acceptingJobs"])
+    finally:
+      server.set_dispatch_paused(False)
+      listener.shutdown()
+      listener.server_close()
+      listener_thread.join(timeout=2)
+
+  def test_cancel_job_by_handle_sets_the_running_job_cancellation_event(self):
+    remote_job_id = "running-cancel-target"
+    cancel_event = threading.Event()
+    with server._LOCK:
+      server._JOBS[remote_job_id] = {
+        "remoteJobId": remote_job_id,
+        "handleId": "stable-handle",
+        "status": "running",
+        "message": "running",
+        "runtimeName": "ollama",
+      }
+      server._JOB_CANCEL_EVENTS[remote_job_id] = cancel_event
+
+    with patch.object(server, "persist_durable_job"):
+      result = server.cancel_job({"handleId": "stable-handle"})
+
+    self.assertTrue(result["accepted"])
+    self.assertEqual(result["status"], "cancelling")
+    self.assertTrue(cancel_event.is_set())
+    self.assertEqual(server.job_status(remote_job_id)["status"], "running")
+
+  def test_cancel_http_endpoint_accepts_a_running_housekeeper_job(self):
+    remote_job_id = "http-running-cancel-target"
+    cancel_event = threading.Event()
+    with server._LOCK:
+      server._JOBS[remote_job_id] = {
+        "remoteJobId": remote_job_id,
+        "handleId": "http-stable-handle",
+        "status": "running",
+        "message": "running",
+        "runtimeName": "ollama",
+      }
+      server._JOB_CANCEL_EVENTS[remote_job_id] = cancel_event
+    listener = server.create_housekeeper_server("127.0.0.1", 0)
+    listener_thread = threading.Thread(target=listener.serve_forever, daemon=True)
+    listener_thread.start()
+    request = Request(
+      f"http://127.0.0.1:{listener.server_address[1]}/cancel",
+      data=json.dumps({"remoteJobId": remote_job_id}).encode("utf-8"),
+      headers={"Content-Type": "application/json"},
+      method="POST",
+    )
+    try:
+      with patch.object(server, "persist_durable_job"):
+        with urlopen(request, timeout=2) as response:
+          result = json.loads(response.read().decode("utf-8"))
+      self.assertTrue(result["accepted"])
+      self.assertEqual(result["status"], "cancelling")
+      self.assertTrue(cancel_event.is_set())
+    finally:
+      listener.shutdown()
+      listener.server_close()
+      listener_thread.join(timeout=2)
+
+  def test_cancel_requested_durable_job_is_not_resumed_after_restart(self):
+    remote_job_id = "job-cancelled-before-restart"
+    job = {
+      "remoteJobId": remote_job_id,
+      "handleId": "restart-cancel-handle",
+      "runtimeName": "test-runtime",
+      "profileName": "test-profile",
+      "jobSpec": {"kind": "test-job"},
+      "deviceId": "gpu0",
+      "status": "running",
+      "message": "cancellation requested",
+      "submittedAt": "now",
+      "startedAt": "before restart",
+      "finishedAt": "",
+      "source": {"hostId": "test-host"},
+      "forwarded": False,
+      "cancelRequested": True,
+    }
+    server.persist_durable_job(job)
+
+    resumed = server.restore_persisted_jobs()
+
+    self.assertEqual(resumed, [])
+    self.assertNotIn(remote_job_id, server._JOBS)
+    archive = server.durable_job_archive_path(remote_job_id)
+    self.assertTrue(archive.is_file(), f"cancelled archive missing: {archive}")
+    archived_job = server.read_durable_job(archive)
+    self.assertIsNotNone(archived_job)
+    self.assertEqual(archived_job["status"], "cancelled")
+    self.assertEqual(server.job_status(remote_job_id)["status"], "cancelled")
 
   def test_submit_persists_job_envelope_before_accepting(self):
     payload = {
@@ -153,7 +542,7 @@ class HousekeeperDurableQueueTests(unittest.TestCase):
     self.assertIn("different job content", mismatched["error"])
     self.assertEqual(len(server._JOBS), 1)
 
-  def test_restart_restores_queued_interrupted_terminal_and_forwarded_jobs(self):
+  def test_restart_restores_active_jobs_and_keeps_terminal_records_archived(self):
     base = {
       "runtimeName": "test-runtime", "profileName": "test-profile",
       "jobSpec": {"kind": "test-job", "payload": {"value": 7}},
@@ -177,9 +566,67 @@ class HousekeeperDurableQueueTests(unittest.TestCase):
     self.assertEqual(server._JOBS["job-interrupted"]["status"], "queued")
     self.assertEqual(server._JOBS["job-interrupted"]["startedAt"], "")
     self.assertIn("resuming interrupted job", server._JOBS["job-interrupted"]["message"])
+    self.assertNotIn("job-complete", server._JOBS)
     self.assertEqual(server.job_status("job-complete")["result"], {"text": "done"})
+    self.assertTrue(server.durable_job_archive_path("job-complete").is_file())
     self.assertTrue(server._JOBS["job-forwarded"]["forwarded"])
     self.assertEqual(server._JOBS["job-forwarded"]["peerJobId"], "job-peer-1")
+
+  def test_completed_archive_is_not_read_after_active_job_migration(self):
+    base = {
+      "runtimeName": "test-runtime", "profileName": "test-profile",
+      "jobSpec": {"kind": "test-job"}, "submittedAt": "now",
+      "startedAt": "", "finishedAt": "", "source": {"hostId": "test"},
+      "forwarded": False
+    }
+    server.persist_durable_job({**base, "remoteJobId": "job-active", "status": "queued"})
+    server.persist_durable_job({
+      **base, "remoteJobId": "job-terminal", "status": "success", "result": {"text": "kept"}
+    })
+    active_dir = pathlib.Path(self.temp_dir.name) / "jobs" / "active"
+    (active_dir / ".legacy-flat-jobs-migrated-v1").write_text("done\n", encoding="utf-8")
+    server._JOBS.clear()
+    original_reader = server.read_durable_job
+    inspected = []
+
+    def active_only_reader(path):
+      inspected.append(path)
+      self.assertEqual(path.parent, active_dir)
+      return original_reader(path)
+
+    with patch.object(server, "read_durable_job", side_effect=active_only_reader):
+      resumed = server.restore_persisted_jobs()
+
+    self.assertEqual(resumed, ["job-active"])
+    self.assertEqual(set(server._JOBS), {"job-active"})
+    self.assertTrue(server.durable_job_archive_path("job-terminal").is_file())
+    self.assertTrue(inspected)
+
+  def test_upgrade_migrates_legacy_active_records_and_leaves_history_in_place(self):
+    base = {
+      "runtimeName": "test-runtime", "profileName": "test-profile",
+      "jobSpec": {"kind": "test-job"}, "submittedAt": "now",
+      "startedAt": "", "finishedAt": "", "source": {"hostId": "test"},
+      "forwarded": False
+    }
+    server.persist_durable_job({
+      **base, "remoteJobId": "job-legacy-active", "status": "running", "message": "running",
+      "startedAt": "before restart"
+    })
+    legacy_active = server.active_durable_job_path("job-legacy-active")
+    legacy_active.replace(server.durable_job_archive_path("job-legacy-active"))
+    server.persist_durable_job({
+      **base, "remoteJobId": "job-legacy-terminal", "status": "fail", "message": "kept for debug"
+    })
+    server._JOBS.clear()
+
+    resumed = server.restore_persisted_jobs()
+
+    self.assertEqual(resumed, ["job-legacy-active"])
+    self.assertEqual(server._JOBS["job-legacy-active"]["status"], "queued")
+    self.assertTrue(server.active_durable_job_path("job-legacy-active").is_file())
+    self.assertTrue(server.durable_job_archive_path("job-legacy-terminal").is_file())
+    self.assertNotIn("job-legacy-terminal", server._JOBS)
 
   def test_terminal_execution_state_is_persisted_for_same_remote_id(self):
     job = {
@@ -395,6 +842,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
     self.original_watchdog_interval_env = os.environ.get("GPU_HOUSEKEEPER_OLLAMA_GPU_WATCHDOG_INTERVAL_SEC")
     server._PROFILES.clear()
     server._JOBS.clear()
+    server._JOB_CANCEL_EVENTS.clear()
     server.reset_ollama_model_catalog_cache()
     server.reset_strata_model_catalog_cache()
 
@@ -435,6 +883,60 @@ class HousekeeperOllamaTests(unittest.TestCase):
     server.reset_strata_model_catalog_cache()
     server._PROFILES.clear()
     server._JOBS.clear()
+    server._JOB_CANCEL_EVENTS.clear()
+
+  def test_cancelled_ollama_request_closes_the_active_provider_socket(self):
+    request_started = threading.Event()
+    release_provider = threading.Event()
+    errors = []
+
+    class SlowProvider(server.BaseHTTPRequestHandler):
+      def do_POST(self):
+        self.rfile.read(int(self.headers.get("Content-Length", "0")))
+        request_started.set()
+        release_provider.wait(5)
+        try:
+          self.send_response(200)
+          self.send_header("Content-Type", "application/json")
+          self.end_headers()
+          self.wfile.write(b'{"message":{"content":"late response"}}')
+        except OSError:
+          pass
+
+      def log_message(self, _format, *_args):
+        pass
+
+    provider = server.ThreadingHTTPServer(("127.0.0.1", 0), SlowProvider)
+    provider_thread = threading.Thread(target=provider.serve_forever, daemon=True)
+    provider_thread.start()
+    cancel_event = threading.Event()
+
+    def make_request():
+      try:
+        server.request_ollama_json(
+          "/api/chat",
+          {"model": "test-model", "messages": []},
+          timeout_sec=5,
+          cancel_event=cancel_event,
+        )
+      except Exception as err:
+        errors.append(err)
+
+    request_thread = threading.Thread(target=make_request, daemon=True)
+    try:
+      with patch.object(server, "ollama_runtime_url", return_value=f"http://127.0.0.1:{provider.server_address[1]}"):
+        request_thread.start()
+        self.assertTrue(request_started.wait(2), "mock provider never received the request")
+        cancel_event.set()
+        request_thread.join(1)
+      self.assertFalse(request_thread.is_alive(), "cancel did not interrupt the blocked Ollama request")
+      self.assertEqual(len(errors), 1)
+      self.assertIsInstance(errors[0], server.CancelledJobError)
+    finally:
+      release_provider.set()
+      provider.shutdown()
+      provider.server_close()
+      provider_thread.join(timeout=2)
 
   def test_strata_catalog_reports_only_models_returned_by_managed_runtime(self):
     calls = []
@@ -1242,7 +1744,7 @@ class HousekeeperOllamaTests(unittest.TestCase):
       "gpuObserved": True,
       "message": "running"
     }
-    server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600: (
+    server.request_ollama_json = lambda pathname, payload=None, timeout_sec=600, cancel_event=None: (
       {"models": [{"name": "qwen-test", "size": 1000, "size_vram": 1000}]} if pathname == "/api/ps" else {"response": "ok"}
     )
     server.ollama_model_catalog = lambda force=False: {
@@ -4393,25 +4895,16 @@ class HousekeeperIdleReaperTests(unittest.TestCase):
     discharge.assert_not_called()
 
 
-class HousekeeperVliwEvaluatorTests(unittest.TestCase):
+class HousekeeperVliwPackTests(unittest.TestCase):
   def valid_job_spec(self):
+    pack = b"PYACVLIW" + struct.pack("<HHHHIIII", 1, 16, 16, 32, 1, 32, 64, 0) + bytes(32)
     return {
-      "kind": "vliw-batch-evaluate",
+      "kind": "pyac-pack-execute",
       "resourceRequest": {"vramRequiredMb": 64},
-      "payload": {
-        "schemaVersion": 1,
-        "slots": ["left", "right", "sum"],
-        "inputSlots": ["left", "right"],
-        "outputSlot": "sum",
-        "cases": [{"values": {"left": 2, "right": 3}, "expected": 5}],
-        "candidates": [{
-          "id": "add",
-          "instructions": [{"op": "plus", "target": "sum", "left": "left", "right": "right"}]
-        }]
-      }
+      "payload": {"packBase64": base64.b64encode(pack).decode("ascii")}
     }
 
-  def test_submit_accepts_valid_vliw_batch_and_rejects_unbounded_or_invalid_jobs(self):
+  def test_submit_accepts_a_valid_pyac_pack_and_rejects_invalid_pack_bytes(self):
     temp_dir = tempfile.TemporaryDirectory(prefix="gpu-housekeeper-vliw-submit-")
     previous = os.environ.get("GPU_HOUSEKEEPER_PYA_DIR")
     os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = temp_dir.name
@@ -4422,22 +4915,33 @@ class HousekeeperVliwEvaluatorTests(unittest.TestCase):
         accepted = server.submit_job({
           "handleId": "vliw-valid",
           "runtimeName": "vliw",
-          "profileName": "vliw-batch-evaluator",
+          "profileName": "pyac-vliw-rust-gpu",
           "jobSpec": self.valid_job_spec()
         }, {"vliw": dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])}, "mriczo")
 
         invalid = self.valid_job_spec()
-        invalid["payload"]["candidates"][0]["instructions"][0]["op"] = "multiply"
+        invalid["payload"]["packBase64"] = "not valid base64"
         rejected = server.submit_job({
           "handleId": "vliw-invalid",
           "runtimeName": "vliw",
-          "profileName": "vliw-batch-evaluator",
+          "profileName": "pyac-vliw-rust-gpu",
           "jobSpec": invalid
+        }, {"vliw": dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])}, "mriczo")
+
+        removed_batch = self.valid_job_spec()
+        removed_batch["kind"] = "vliw-batch-evaluate"
+        rejected_batch = server.submit_job({
+          "handleId": "vliw-removed-batch",
+          "runtimeName": "vliw",
+          "profileName": "vliw-batch-evaluator",
+          "jobSpec": removed_batch
         }, {"vliw": dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])}, "mriczo")
 
       self.assertTrue(accepted["accepted"])
       self.assertFalse(rejected["accepted"])
-      self.assertIn("unsupported VLIW operation", rejected["error"])
+      self.assertIn("base64 is invalid", rejected["error"])
+      self.assertFalse(rejected_batch["accepted"])
+      self.assertIn("unsupported vliw jobSpec.kind", rejected_batch["error"])
     finally:
       server._JOBS.clear()
       if previous is None:
@@ -4460,22 +4964,21 @@ class HousekeeperVliwEvaluatorTests(unittest.TestCase):
     self.assertEqual(unavailable["status"], "stopped")
     self.assertFalse(unavailable["gpuObserved"])
 
-  def test_vliw_dispatch_calls_cuda_batch_evaluator_not_placeholder(self):
+  def test_vliw_dispatch_calls_the_rust_gpu_pack_worker(self):
     job = {
       "remoteJobId": "vliw-dispatch",
       "runtimeName": "vliw",
-      "profileName": "vliw-batch-evaluator",
+      "profileName": "pyac-vliw-rust-gpu",
       "deviceId": "gpu1",
       "jobSpec": self.valid_job_spec()
     }
-    result = {"candidateCount": 1, "scores": [{"id": "add", "incorrectCount": 0}]}
+    result = {"ok": True, "backend": "rust-gpu-vulkan", "values": []}
     with patch.object(server, "ensure_capacity_for_job", return_value={"decision": "fits"}), \
-         patch.object(server.vliw_evaluator, "score_vliw_batch", return_value=result) as evaluate:
+         patch.object(server, "execute_vliw_pack_gpu", return_value=result) as execute:
       actual = server.execute_job(job, {"vliw": dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])})
 
     self.assertEqual(actual, result)
-    evaluate.assert_called_once_with(job["jobSpec"]["payload"], "gpu1")
-
+    execute.assert_called_once_with(job)
 
 if __name__ == "__main__":
   unittest.main()

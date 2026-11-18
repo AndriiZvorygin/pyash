@@ -16,7 +16,7 @@ async function readSecretConfig() {
 }
 
 test("default config and system service connect the local GPU queue", async () => {
-  const [defaults, secret, service, compose, dockerfile, macInstaller, tunnel, webServer, strataHelper, worker, begin] = await Promise.all([
+  const [defaults, secret, service, compose, dockerfile, macInstaller, tunnel, webServer, strataHelper, worker, begin, softRestart] = await Promise.all([
     fs.readFile(new URL("../configure/default.pya", import.meta.url), "utf8"),
     readSecretConfig(),
     fs.readFile(new URL("../service/pyash-gpu-worker.service", import.meta.url), "utf8"),
@@ -28,6 +28,7 @@ test("default config and system service connect the local GPU queue", async () =
     fs.readFile(new URL("../command/strata_prepare_gpu.py", import.meta.url), "utf8"),
     fs.readFile(new URL("../command/gpu_worker.mjs", import.meta.url), "utf8"),
     fs.readFile(new URL("../container/gpu-housekeeper/command/begin.sh", import.meta.url), "utf8"),
+    fs.readFile(new URL("../container/gpu-housekeeper/command/soft-restart.sh", import.meta.url), "utf8"),
   ]);
 
   assert.match(defaults, /exists su name gpu housekeeper url ob text "http:\/\/localhost:18886" be default ya/u);
@@ -35,6 +36,7 @@ test("default config and system service connect the local GPU queue", async () =
   assert.match(service, /^WorkingDirectory=\/home\/htaf\/pyash$/mu);
   assert.match(service, /^Environment=PYA_GPU_HOUSEKEEPER_URL=http:\/\/localhost:18886$/mu);
   assert.match(compose, /"--port", "18886"/u);
+  assert.match(compose, /build:\s*\n\s+context: \.\.\/\.\.\/\.\.\s*\n\s+dockerfile: container\/gpu-housekeeper\/Dockerfile\s*\n\s+network: host/u);
   assert.match(compose, /GPU_HOUSEKEEPER_PUBLISH_PORT:-18886\}:18886/u);
   assert.match(compose, /enable_ipv6: true/u);
   assert.match(compose, /GPU_HOUSEKEEPER_IPV6_SUBNET/u);
@@ -43,6 +45,14 @@ test("default config and system service connect the local GPU queue", async () =
   assert.match(begin, /GPU_HOUSEKEEPER_ENV_FILE/u);
   assert.match(begin, /refusing IPv6 network migration/u);
   assert.match(begin, /\/queue/u);
+  assert.match(begin, /localRunningCount/u);
+  assert.match(begin, /queued jobs are durable and will resume/u);
+  assert.match(softRestart, /maintenance\/\{path\}/u);
+  assert.match(softRestart, /docker exec gpu-housekeeper/u);
+  assert.match(softRestart, /http:\/\/127\.0\.0\.1:18886\/maintenance/u);
+  assert.match(softRestart, /acceptingJobs/u);
+  assert.match(softRestart, /localRunningCount/u);
+  assert.doesNotMatch(softRestart, /localQueuedCount[^\n]*== 0/u);
   assert.match(begin, /network_migration_needed=true/u);
   assert.ok(
     begin.indexOf('docker compose "${COMPOSE_ENV_ARGS[@]}" -p gpu-housekeeper -f "$COMPOSE_FILE" down')

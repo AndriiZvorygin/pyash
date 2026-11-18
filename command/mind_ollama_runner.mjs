@@ -9,6 +9,7 @@ import { readGpuHandleStatus, writeGpuHandleStatus, isTerminalHandleStatus } fro
 import { resolveGpuQueueWaitTimeoutMs } from "../program/runtime/gpu/worker.mjs";
 import { buildOllamaUsageRecord, makeOllamaCallId, sha256Text, stableJson, writeOllamaUsageRecord } from "../program/library/ollama_usage.mjs";
 import { requestManagedOllamaChat, submitManagedGpuJob } from "../program/runtime/gpu/managed-ollama.mjs";
+import { nextOllamaContextWindow } from "../program/runtime/ollama_context.mjs";
 
 function requestTimeoutMs() {
   const raw = Number(process.env.PYA_OLLAMA_REQUEST_TIMEOUT_MS);
@@ -26,12 +27,12 @@ function parseArgs(argv) {
   return { stream, payload, payloadFile };
 }
 
-function readStdin() {
-  try {
-    return fs.readFileSync(0, "utf8");
-  } catch {
-    return "";
+async function readStdin() {
+  const chunks = [];
+  for await (const chunk of process.stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
+  return Buffer.concat(chunks).toString("utf8");
 }
 
 function resolveHost(payload) {
@@ -452,7 +453,30 @@ function ollamaOptions(payload) {
   return options;
 }
 
-async function runHousekeeperManagedMind(payload) {
+
+function resolveContextRetryWindow(error, payload, options) {
+  const message = String(error?.message ?? error);
+  const match = message.match(/request\s*\((\d+)\s*tokens?\).*?available context size\s*\((\d+)\s*tokens?\)/iu);
+  if (!match) return null;
+  const requestedTokens = Number(match[1]);
+  const availableContext = Number(match[2]);
+  const configuredContext = Number(options?.num_ctx ?? payload?.options?.num_ctx ?? 0);
+  const configuredOutput = Number(options?.num_predict ?? payload?.options?.num_predict ?? payload?.num_predict ?? 0);
+  const outputReserve = Number.isSafeInteger(configuredOutput) && configuredOutput > 0
+    ? configuredOutput
+    : 4096;
+  const currentContext = Math.max(
+    Number.isSafeInteger(availableContext) ? availableContext : 0,
+    Number.isSafeInteger(configuredContext) ? configuredContext : 0
+  );
+  return nextOllamaContextWindow({
+    minimumTokens: requestedTokens + outputReserve,
+    currentContextLength: currentContext
+  });
+}
+
+
+async function runHousekeeperManagedMind(payload, { signal } = {}) {
   if (payload?.stream) {
     throw new Error("mind_ollama_runner: streaming cannot bypass the required GPU Housekeeper queue");
   }
@@ -468,11 +492,11 @@ async function runHousekeeperManagedMind(payload) {
     const { messages, images } = await normalizeChatMessages(payload.messages);
     const extraImages = Array.isArray(payload.images) ? payload.images : [];
     const ollamaMessages = attachImagesToMessages(messages, [...images, ...extraImages]);
-    return requestManagedOllamaChat({
+    const requestChat = (requestOptions) => requestManagedOllamaChat({
       model,
       messages: ollamaMessages,
       tools: payload.tools,
-      options,
+      options: requestOptions,
       format: payload.format,
       think: payload.think,
       keepAlive: payload.keep_alive ?? 300,
@@ -480,8 +504,22 @@ async function runHousekeeperManagedMind(payload) {
       managerUrl,
       timeoutMs,
       pollIntervalMs,
+      signal,
       env: { ...process.env, PYA_GPU_MANAGER_REQUIRED: "true", PYA_GPU_MANAGER_ALLOW_DIRECT: "false" }
     });
+    try {
+      return await requestChat(options);
+    } catch (error) {
+      const retryContext = resolveContextRetryWindow(error, payload, options);
+      if (!retryContext) throw error;
+      const retryOptions = { ...options, num_ctx: retryContext };
+      payload.options = { ...(payload.options && typeof payload.options === "object" ? payload.options : {}), num_ctx: retryContext };
+      try {
+        return await requestChat(retryOptions);
+      } catch (retryError) {
+        throw new Error(`${retryError?.message ?? retryError} (automatic context retry with num_ctx=${retryContext} also failed)`, { cause: retryError });
+      }
+    }
   }
 
   const request = {
@@ -500,6 +538,7 @@ async function runHousekeeperManagedMind(payload) {
     providerUrl: resolveHost(payload),
     timeoutMs,
     pollIntervalMs,
+    signal,
     jobSpec: { kind: "ollama-generate", payload: request }
   });
 }
@@ -568,10 +607,10 @@ async function normalizeChatMessages(rawMessages) {
   return { messages: out, images };
 }
 
-async function main() {
+async function run(signal) {
   dns.setDefaultResultOrder("ipv4first");
   const args = parseArgs(process.argv);
-  let stdin = readStdin();
+  let stdin = await readStdin();
   if ((!stdin || !stdin.trim()) && args.payloadFile) {
     stdin = fs.readFileSync(args.payloadFile, "utf8");
   }
@@ -598,7 +637,7 @@ async function main() {
   let response;
   try {
     response = requireHousekeeper
-      ? await runHousekeeperManagedMind(payload)
+      ? await runHousekeeperManagedMind(payload, { signal })
       : useGpuQueue
         ? await runQueuedGpuMind(payload)
       : (mode === "chat" ? await runChat(payload) : await runGenerate(payload));
@@ -640,6 +679,19 @@ async function main() {
   }
   if (payload?.stream) return;
   process.stdout.write(`${JSON.stringify(response)}\n`);
+}
+
+async function main() {
+  const controller = new AbortController();
+  const interrupt = () => controller.abort(new Error("mind_ollama_runner interrupted"));
+  process.once("SIGINT", interrupt);
+  process.once("SIGTERM", interrupt);
+  try {
+    await run(controller.signal);
+  } finally {
+    process.removeListener("SIGINT", interrupt);
+    process.removeListener("SIGTERM", interrupt);
+  }
 }
 
 main().catch(err => {

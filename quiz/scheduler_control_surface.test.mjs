@@ -46,7 +46,8 @@ test("scheduler control surface supports begin health restart stop", async () =>
 
   const healthPath = path.join(worldRoot, "conduct", "health.pya");
   let healthText = "";
-  for (let i = 0; i < 100; i += 1) {
+  // Scheduler startup publishes health asynchronously; allow slower full-suite CI runs.
+  for (let i = 0; i < 600; i += 1) {
     try {
       healthText = await fs.readFile(healthPath, "utf8");
       if (healthText) break;

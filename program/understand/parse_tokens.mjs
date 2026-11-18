@@ -21,7 +21,7 @@ export class StrictParseError extends Error {
 
 export function parseTokens(
   tokens,
-  { allowMoodless = false, quotedText = null, strict = false, singletonCases = [] } = {}
+  { allowMoodless = false, quotedText = null, quotedKind = null, strict = false, singletonCases = [] } = {}
 ) {
   if (tokens.length === 0) return null;
   const consumed = strict ? new Set() : null;
@@ -81,11 +81,13 @@ export function parseTokens(
     const elseIndex = words.findIndex((token) => token === "else");
     if (elseIndex > 0) {
       const altStart = words[elseIndex + 1] === "if" ? elseIndex + 2 : elseIndex + 1;
-      const mainTokens = [...words.slice(0, elseIndex), mood];
-      const altTokens = [...words.slice(altStart), mood];
+      const mainTokens = words.slice(0, elseIndex);
+      const altTokens = words.slice(altStart);
+      if (!MOODS.includes(mainTokens.at(-1))) mainTokens.push(mood);
+      if (!MOODS.includes(altTokens.at(-1))) altTokens.push(mood);
       if (mainTokens.length > 1 && altTokens.length > 1) {
-        const primary = parseTokens(mainTokens, { allowMoodless: false, quotedText });
-        const alternative = parseTokens(altTokens, { allowMoodless: false, quotedText });
+        const primary = parseTokens(mainTokens, { allowMoodless: false, quotedText, quotedKind });
+        const alternative = parseTokens(altTokens, { allowMoodless: false, quotedText, quotedKind });
         if (primary && alternative) {
           primary.alternative = alternative;
           return primary;
@@ -326,6 +328,9 @@ export function parseTokens(
       } else {
         s.text = quotedText;
       }
+      if (quotedKind && quotedKind !== "text") {
+        s.quoteKinds = { ...(s.quoteKinds ?? {}), [current ?? "text"]: quotedKind };
+      }
       continue;
     }
 
@@ -563,6 +568,9 @@ export function parseTokens(
           const maybeNum = Number(value);
           if (t === "text") {
             target.text = value;
+            if (raw === QUOTED_PLACEHOLDER && quotedKind && quotedKind !== "text") {
+              s.quoteKinds = { ...(s.quoteKinds ?? {}), [current ?? "text"]: quotedKind };
+            }
           } else if (t === "filename") {
             target.filename = value;
           } else {
@@ -666,18 +674,21 @@ export function parseTokens(
 
 export function parse(line) {
   let quotedText = null;
+  let quotedKind = null;
   let working = line;
 
   const block = findQuotedTextBlock(working);
   if (block) {
     quotedText = working.slice(block.contentStart, block.contentEnd);
+    quotedKind = block.kind;
     working = `${working.slice(0, block.start)} ${QUOTED_PLACEHOLDER} ${working.slice(block.end)}`;
   }
 
   const tokens = tokenize(working.trim());
   if (tokens.length === 0) return null;
+
   try {
-    return parseTokens(tokens, { allowMoodless: false, quotedText });
+    return parseTokens(tokens, { allowMoodless: false, quotedText, quotedKind });
   } catch (error) {
     if (error && typeof error === "object") {
       error.parseDiagnostic = {
