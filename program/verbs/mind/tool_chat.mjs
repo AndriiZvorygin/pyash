@@ -35,6 +35,52 @@ function isZaiPromptLengthError(error) {
   return /(?:code\s*=\s*1261|prompt exceeds max length)/iu.test(String(error?.message ?? error));
 }
 
+function formatCommandToolErrorDetails({ toolName, toolSentence, surfacedTool, errorMessage } = {}) {
+  if (String(toolName ?? "").toLowerCase() !== "bash") return [];
+  const raw = surfacedTool?.ob?.raw && typeof surfacedTool.ob.raw === "object" ? surfacedTool.ob.raw : {};
+  const command = String(raw.command ?? toolSentence?.ob?.text ?? toolSentence?.ob?.wo ?? "").trim();
+  const message = String(errorMessage ?? "");
+  const details = [];
+  if (command && !message.includes(`command: ${command}`)) {
+    details.push(`command:\n\`\`\`sh\n${command.slice(0, 1600)}${command.length > 1600 ? "\n...[command truncated]" : ""}\n\`\`\``);
+  }
+  if (raw.cwd && !message.includes(`working directory: ${raw.cwd}`)) {
+    details.push(`working directory: ${raw.cwd}`);
+  }
+  if (raw.class) details.push(`command class: ${raw.class}`);
+  if (Array.isArray(raw.outsideRoots) && raw.outsideRoots.length) {
+    details.push(`blocked path: ${raw.outsideRoots.join(", ")}`);
+  }
+  if (Array.isArray(raw.commandRoots) && raw.commandRoots.length) {
+    details.push(`command roots: ${raw.commandRoots.join(", ")}`);
+  }
+  if (Array.isArray(raw.writableRoots) && raw.writableRoots.length) {
+    details.push(`writable roots: ${raw.writableRoots.join(", ")}`);
+  }
+  if (raw.processStarted === false) {
+    details.push(
+      "execution: blocked before process launch",
+      "stdout: <unavailable; the command did not run>",
+      "stderr: <unavailable; the command did not run>"
+    );
+  }
+  return details;
+}
+
+function formatCommandToolSuccess({ toolSentence, surfacedTool } = {}) {
+  const raw = surfacedTool?.ob?.raw && typeof surfacedTool.ob.raw === "object" ? surfacedTool.ob.raw : {};
+  const command = String(raw.command ?? toolSentence?.ob?.text ?? toolSentence?.ob?.wo ?? "").trim();
+  const stdout = String(raw.stdout ?? surfacedTool?.ob?.text ?? "");
+  const stderr = String(raw.stderr ?? "");
+  return [
+    command ? `command:\n\`\`\`sh\n${command.slice(0, 1600)}${command.length > 1600 ? "\n...[command truncated]" : ""}\n\`\`\`` : "",
+    raw.cwd ? `working directory: ${raw.cwd}` : "",
+    `exit code: ${Number.isInteger(raw.status) ? raw.status : 0}`,
+    `stdout:\n${stdout.trim() ? stdout : "<empty>"}`,
+    `stderr:\n${stderr.trim() ? stderr : "<empty>"}`
+  ].filter(Boolean).join("\n");
+}
+
 function trimOldestHistoryMessages(messages, start, end) {
   const count = Math.max(0, end - start);
   if (!count) return { removed: 0, end };
@@ -806,10 +852,30 @@ export async function runToolChat({
         if (surfacedTool.be === "error") {
           const errorName = String(surfacedTool.su?.name ?? "").trim();
           const errorMessage = String(surfacedTool.ob?.text ?? "tool failed").trim();
+          const commandRaw = surfacedTool.ob?.raw && typeof surfacedTool.ob.raw === "object"
+            ? surfacedTool.ob.raw
+            : {};
+          const commandDetails = formatCommandToolErrorDetails({
+            toolName,
+            toolSentence,
+            surfacedTool,
+            errorMessage
+          });
+          const formattedError = errorName && errorMessage.startsWith(`${errorName}:`)
+            ? errorMessage
+            : [errorName, errorMessage].filter(Boolean).join(": ");
+          const failureGuidance = String(toolName ?? "").toLowerCase() === "bash"
+            ? commandRaw.processStarted === false
+              ? "The command was blocked before execution. Adjust its paths to fit the listed writable roots before retrying. No stdout or stderr exists for a command that did not run."
+              : "The command ran and failed. Use its exit status and captured stdout/stderr to correct it before retrying."
+            : "This call failed. Do not claim it succeeded or repeat the same call unchanged; use another suitable tool if possible, otherwise state the blocker.";
           toolText = [
-            [errorName, errorMessage].filter(Boolean).join(": "),
-            "This call failed. Do not claim it succeeded or repeat the same call unchanged; use another suitable tool if possible, otherwise state the blocker."
+            formattedError,
+            ...commandDetails,
+            failureGuidance
           ].filter(Boolean).join("\n");
+        } else if (String(toolName ?? "").toLowerCase() === "bash" && surfacedTool.be === "command") {
+          toolText = formatCommandToolSuccess({ toolSentence, surfacedTool });
         }
         if (!toolText) toolText = formatCommandSessionResult(toolName, surfacedTool);
         if (!toolText && (toolName === "web_search" || toolName === "web_search_source")) {
@@ -836,7 +902,8 @@ export async function runToolChat({
       } else {
         toolText = String(surfacedTool ?? "");
       }
-      const commandOutcome = String(toolName).toLowerCase().startsWith("be_command")
+      const normalizedToolName = String(toolName).toLowerCase();
+      const commandOutcome = (normalizedToolName === "bash" || normalizedToolName.startsWith("be_command"))
         ? (surfacedTool?.be === "command"
           ? { exitCode: 0, signal: null, timedOut: false }
           : (() => {

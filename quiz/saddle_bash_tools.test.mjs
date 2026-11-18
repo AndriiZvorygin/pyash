@@ -7,7 +7,12 @@ import { fileURLToPath } from "node:url";
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget } from "../program/remember/index.mjs";
-import { buildSaddleMindSentence, DEFAULT_CODING_SADDLE_SYSTEM_PROMPT } from "../program/agent/coding_saddle.mjs";
+import {
+  buildSaddleMindSentence,
+  DEFAULT_CODING_SADDLE_SYSTEM_PROMPT,
+  saddleToolEventLabel,
+  saddleToolEventPreview
+} from "../program/agent/coding_saddle.mjs";
 import { buildToolSchemas, buildToolSentence } from "../program/verbs/mind/tooling.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -52,4 +57,73 @@ test("coding saddle defaults to Bash and its home guidance documents existing Py
   assert.match(toolGuide, /Bash-only Saddle/u);
   assert.match(toolGuide, /ob text "quantum computing decision making"[\s\S]*fromstate wo web[\s\S]*be search do/u);
   assert.match(toolGuide, /pyash run/u);
+});
+
+test("Bash tool-call labels show a bounded one-line command snippet", () => {
+  assert.equal(saddleToolEventLabel({
+    stage: "call",
+    toolName: "bash",
+    toolSentence: { ob: { text: "mkdir -p ./magazine\nprintf ready" } }
+  }), '[tool call] bash: "mkdir -p ./magazine printf ready"');
+
+  const longCommand = "x".repeat(500);
+  const label = saddleToolEventLabel({
+    stage: "call",
+    toolName: "bash",
+    toolSentence: { ob: { text: longCommand } }
+  });
+  assert.ok(label.length < 240);
+  assert.match(label, /characters omitted/u);
+});
+
+test("Bash result previews preserve exit status and stderr while keeping sandbox blocks distinct", () => {
+  const success = saddleToolEventPreview({
+    stage: "result",
+    toolName: "bash",
+    toolSentence: { ob: { text: "node success.mjs" } },
+    resultSentence: {
+      be: "command",
+      ob: { text: "stdout marker", raw: { status: 0, cwd: "/work/project", stdout: "stdout marker", stderr: "warning marker" } }
+    }
+  });
+  assert.match(success, /exit code: 0/u);
+  assert.match(success, /stdout: stdout marker/u);
+  assert.match(success, /stderr: warning marker/u);
+
+  const processFailure = saddleToolEventPreview({
+    stage: "result",
+    toolName: "bash",
+    toolSentence: { ob: { text: "node fail.mjs" } },
+    resultSentence: {
+      be: "error",
+      su: { name: "command defective" },
+      ob: {
+        text: "command defective: status=7 signal=none",
+        raw: {
+          status: 7,
+          cwd: "/work/project",
+          stdout: "stdout marker",
+          stderr: "stderr marker"
+        }
+      }
+    }
+  });
+  assert.match(processFailure, /exit code: 7/u);
+  assert.match(processFailure, /stderr: stderr marker/u);
+
+  const sandboxBlock = saddleToolEventPreview({
+    stage: "result",
+    toolName: "bash",
+    toolSentence: { ob: { text: "mkdir -p /outside" } },
+    resultSentence: {
+      be: "error",
+      su: { name: "command sandbox defective" },
+      ob: {
+        text: "command sandbox defective: command path outside writable roots",
+        raw: { processStarted: false, outsideRoots: ["/outside"], writableRoots: ["/work/project"] }
+      }
+    }
+  });
+  assert.match(sandboxBlock, /blocked before process launch/u);
+  assert.match(sandboxBlock, /stderr: unavailable because the command was blocked/u);
 });

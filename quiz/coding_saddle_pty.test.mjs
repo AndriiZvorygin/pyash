@@ -59,6 +59,8 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
   const usageDir = path.join(tempRoot, "usage");
   const sessionName = `pty-model-switch-${process.pid}-${Date.now()}`;
   const bashMarker = "SADDLE_BASH_PTY_OK";
+  const stderrMarker = "SADDLE_BASH_STDERR_PTY";
+  const failingCommand = `node -e "process.stdout.write('SADDLE_BASH_STDOUT_PTY\\n'); process.stderr.write('${stderrMarker}\\n'); process.exit(7)"`;
   const submissions = [];
   const jobs = new Map();
   let nextJobId = 0;
@@ -107,9 +109,24 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
       }
       const messages = Array.isArray(payload.messages) ? payload.messages : [];
       const hasToolResult = messages.some((message) => message?.role === "tool");
+      const hasStderrToolResult = messages.some((message) => message?.role === "tool"
+        && String(message.content ?? "").includes(stderrMarker));
+      const lastUserMessage = [...messages].reverse().find((message) => message?.role === "user")?.content;
       let message;
       if (payload.model === firstModel) {
         message = { role: "assistant", content: "Qwen first model turn passed." };
+      } else if (lastUserMessage === "stderr diagnostics" && !hasStderrToolResult) {
+        message = {
+          role: "assistant",
+          content: "",
+          tool_calls: [{
+            id: "pty-bash-stderr-command",
+            type: "function",
+            function: { name: "bash", arguments: JSON.stringify({ command: failingCommand }) }
+          }]
+        };
+      } else if (hasStderrToolResult) {
+        message = { role: "assistant", content: "Spark received the failing Bash command's stderr and exit code 7." };
       } else if (hasToolResult) {
         message = { role: "assistant", content: "Spark first turn passed after the Bash command returned its output." };
       } else {
@@ -192,7 +209,9 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
     const selectionMarker = `saved model selection for session: ${sessionName}`;
     await waitForOutputAfter(() => transcript, selectionMarker, "pyash>");
     child.write("hi\r");
-    await waitForOutput(() => transcript, "Spark first turn passed after the Bash command returned its output.");
+    await waitForOutputAfter(() => transcript, "Spark first turn passed after the Bash command returned its output.", "pyash>");
+    child.write("stderr diagnostics\r");
+    await waitForOutputAfter(() => transcript, "exit code 7.", "pyash>");
 
     const cleanTranscript = stripTerminalControlSequences(transcript);
     assert.match(cleanTranscript, new RegExp(`model: ${secondModel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
@@ -211,6 +230,14 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
     assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
       && String(message.content).includes(bashMarker))),
     "the real command runner output must be returned to the selected model");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(stderrMarker)
+      && /status=7/u.test(String(message.content)))),
+    "the failed command's exit status and stderr must reach the model after the real process exits");
+    assert.match(cleanTranscript, /\[tool call\] bash: "printf 'SADDLE_BASH_PTY_OK/u,
+      "PTY transcript must identify the command behind a Bash tool call");
+    assert.match(cleanTranscript, new RegExp(`\\[tool result\\] bash:[\\s\\S]*exit code: 7[\\s\\S]*stderr: ${stderrMarker}`),
+      "PTY result preview must include the exit status and captured stderr");
     assert.ok(submissions.some((payload) => payload.model === secondModel && payload.options?.num_ctx === 131072),
       "the selected model must retry at the first supported context preset that fits the provider error");
     const commandDebugLines = cleanTranscript.match(/\[command debug\] \{[^\r\n]*\}/gu) ?? [];
@@ -218,6 +245,8 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
     const commandDebug = commandDebugLines.map((line) => JSON.parse(line.slice("[command debug] ".length)));
     assert.ok(commandDebug.some((record) => record.cmd.includes(bashMarker) && record.status === 0
       && record.internalMindRunner === false), "Bash scenario must finish successfully through the command runner");
+    assert.ok(commandDebug.some((record) => record.cmd === failingCommand && record.status === 7
+      && record.stderr.includes(stderrMarker)), "failing Bash scenario must preserve stderr and the nonzero status");
     assert.equal(childExit, null, "the saddle should remain open after both model turns");
   } finally {
     if (child && !childExit) {

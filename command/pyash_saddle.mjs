@@ -104,7 +104,7 @@ import {
   resolveSaddleModelOption,
   resolveSaddleMindProfile,
   parseSaddleMindCommand,
-  saddleToolEventLabel,
+  saddleToolEventPreview,
   saddleSlashCommandCompletions,
   startSaddleProgress
 } from "../program/agent/coding_saddle.mjs";
@@ -1916,7 +1916,7 @@ async function main() {
             if (event?.stage === "context_compacted") {
               writeLine(`[prompt trimmed] ${String(event.toolText ?? "").slice(0, 400)}`);
             } else {
-              writeLine(`${saddleToolEventLabel(event)}${event.toolText ? `: ${String(event.toolText).slice(0, 400)}` : ""}`);
+              writeLine(saddleToolEventPreview(event));
             }
           }
         },

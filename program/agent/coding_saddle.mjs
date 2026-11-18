@@ -1105,7 +1105,64 @@ export function saddleToolEventLabel(event = {}) {
   const tool = normalizeText(event.toolName) || "tool";
   if (!stage) return `[tool] ${tool}`;
   const label = stage === "CALL" ? "tool call" : stage === "RESULT" ? "tool result" : stage === "RATIFY" ? "tool approval" : `tool ${stage.toLowerCase()}`;
-  return `[${label}] ${tool}`;
+  const command = String(event.toolSentence?.ob?.text ?? event.toolSentence?.ob?.wo ?? "").trim();
+  if (tool.toLowerCase() !== "bash" || !command) return `[${label}] ${tool}`;
+  const oneLine = command.replace(/\s+/gu, " ");
+  const snippet = oneLine.length > 110
+    ? `${oneLine.slice(0, 90)}…[${oneLine.length - 90} characters omitted]`
+    : oneLine;
+  return `[${label}] ${tool}: ${JSON.stringify(snippet)}`;
+}
+
+function previewDiagnosticValue(value, maximum = 180) {
+  const text = String(value ?? "").trim();
+  if (!text) return "<empty>";
+  const oneLine = text.replace(/\s+/gu, " ");
+  if (oneLine.length <= maximum) return oneLine;
+  return `${oneLine.slice(0, maximum)}…[${oneLine.length - maximum} characters omitted]`;
+}
+
+export function saddleToolEventPreview(event = {}) {
+  const label = saddleToolEventLabel(event);
+  const stage = normalizeText(event.stage).toUpperCase();
+  const tool = normalizeText(event.toolName).toLowerCase();
+  const toolText = String(event.toolText ?? "").trim();
+  if (tool !== "bash" || stage !== "RESULT") {
+    return `${label}${toolText ? `: ${toolText.slice(0, 400)}` : ""}`;
+  }
+
+  const result = event.resultSentence;
+  const raw = result?.ob?.raw && typeof result.ob.raw === "object" ? result.ob.raw : {};
+  if (result?.be === "command") {
+    return [
+      label,
+      `exit code: ${Number.isInteger(raw.status) ? raw.status : 0}`,
+      raw.cwd ? `working directory: ${raw.cwd}` : "",
+      `stdout: ${previewDiagnosticValue(raw.stdout ?? result.ob?.text)}`,
+      `stderr: ${previewDiagnosticValue(raw.stderr)}`
+    ].filter(Boolean).join("\n");
+  }
+  if (result?.be !== "error") return `${label}${toolText ? `: ${toolText.slice(0, 400)}` : ""}`;
+
+  const errorText = String(result.ob?.text ?? "command failed").trim();
+  const lines = [label, errorText.split("\n")[0] || "command failed"];
+  if (Number.isInteger(raw.status)) lines.push(`exit code: ${raw.status}`);
+  if (raw.signal) lines.push(`signal: ${raw.signal}`);
+  if (raw.cwd) lines.push(`working directory: ${raw.cwd}`);
+  if (raw.processStarted === false) lines.push("execution: blocked before process launch");
+  if (Array.isArray(raw.outsideRoots) && raw.outsideRoots.length) lines.push(`blocked path: ${raw.outsideRoots.join(", ")}`);
+  if (Array.isArray(raw.writableRoots) && raw.writableRoots.length) lines.push(`writable roots: ${raw.writableRoots.join(", ")}`);
+  if (raw.stdout !== undefined) lines.push(`stdout: ${previewDiagnosticValue(raw.stdout)}`);
+  if (raw.stderr !== undefined) lines.push(`stderr: ${previewDiagnosticValue(raw.stderr)}`);
+  if (raw.launchError) lines.push(`launch error: ${previewDiagnosticValue(raw.launchError)}`);
+  if (raw.stdinError) lines.push(`stdin error: ${previewDiagnosticValue(raw.stdinError)}`);
+  if (raw.processStarted === false) {
+    lines.push(
+      "stdout: unavailable because the command was blocked before execution",
+      "stderr: unavailable because the command was blocked before execution"
+    );
+  }
+  return lines.join("\n");
 }
 
 export function startSaddleProgress({
