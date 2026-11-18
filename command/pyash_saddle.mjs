@@ -87,6 +87,7 @@ import {
   buildSaddleStrataContextOptions,
   buildSaddleSteeringInput,
   buildSaddleWorktreeReviewCommand,
+  formatSaddleWorktreeReviewFailure,
   isSaddleActionableContinuation,
   isSaddleContinuationReply,
   formatSaddleCompletionEvidence,
@@ -1988,7 +1989,8 @@ async function main() {
         writeLine("worktree review · inspect this before accepting or committing");
         writeLine(turn.worktreeReview);
       } else if (turn.assessment.required && turn.assessment.changeTools?.length) {
-        writeLine(`[worktree review unavailable] ${turn.worktreeReviewError || "the harness could not collect the Git review"}`);
+        const detail = formatSaddleWorktreeReviewFailure(turn.worktreeReviewError);
+        writeLine(`[worktree review unavailable] ${detail}`);
       }
       const finalText = String(text).trim() || "(no response text)";
       completedAssistantResponseText = finalText;

@@ -464,6 +464,8 @@ export function buildSaddleWorktreeReviewCommand({
     return Number.isSafeInteger(number) ? Math.max(1000, Math.min(maximum, number)) : fallback;
   };
   const trackedLimit = bounded(trackedDiffLimit, 16000, 24000);
+  const stagedDiffLimit = Math.floor(trackedLimit / 2);
+  const unstagedDiffLimit = trackedLimit - stagedDiffLimit;
   const untrackedLimit = bounded(untrackedDiffLimit, 10000, 16000);
   const fileLimit = bounded(untrackedFileLimit, 2500, 5000);
   const excludedPathspecs = [
@@ -480,14 +482,32 @@ export function buildSaddleWorktreeReviewCommand({
     "set -e; printf '%s\\n' '[worktree root]'; git rev-parse --show-toplevel",
     "printf '%s\\n' '[worktree status]'",
     "git -c core.quotePath=true status --short --untracked-files=all",
-    "printf '%s\\n' '[tracked diff summary against HEAD]'",
-    `git diff --stat HEAD -- ${excludedPathspecs}`,
-    "printf '%s\\n' '[tracked diff excerpt; sensitive config paths omitted]'",
-    `git diff --no-ext-diff --unified=3 HEAD -- ${excludedPathspecs} | head -c ${trackedLimit} || true`,
+    "printf '%s\\n' '[staged diff summary]'",
+    `git diff --cached --stat -- ${excludedPathspecs}`,
+    "printf '%s\\n' '[unstaged diff summary]'",
+    `git diff --stat -- ${excludedPathspecs}`,
+    "printf '%s\\n' '[staged diff excerpt; sensitive config paths omitted]'",
+    `git diff --cached --no-ext-diff --unified=3 -- ${excludedPathspecs} | head -c ${stagedDiffLimit} || true`,
+    "printf '%s\\n' '[unstaged diff excerpt; sensitive config paths omitted]'",
+    `git diff --no-ext-diff --unified=3 -- ${excludedPathspecs} | head -c ${unstagedDiffLimit} || true`,
     "printf '%s\\n' '[untracked text diff excerpts; sensitive paths omitted]'",
     `git ls-files -z --others --exclude-standard | while IFS= read -r -d '' file; do case "$file" in .env|.env.*|*/.env|*/.env.*|secret.pya|*/secret.pya|*.pem|*.key|*credentials*|*token*) printf '[sensitive untracked path omitted]\\n' ;; *) printf '\\n--- untracked: %q ---\\n' "$file"; git diff --no-index --no-ext-diff --unified=3 /dev/null "$file" | head -c ${fileLimit} || true ;; esac; done | head -c ${untrackedLimit} || true`,
     "printf '%s\\n' '[diff excerpts are bounded; review includes any pre-existing worktree changes]'"
   ].join("; ");
+}
+
+export function formatSaddleWorktreeReviewFailure(error = "") {
+  const text = String(error?.message ?? error ?? "").trim();
+  const stderr = text.match(/(?:^|\n)stderr:\s*([\s\S]*)$/u)?.[1]
+    ?.split(/\r?\n/u)
+    .map((line) => line.trim())
+    .find((line) => line && line !== "<empty>");
+  const status = text.match(/command defective:\s*status=(\d+)/u)?.[1];
+  const detail = stderr || (status ? `review command exited ${status}` : "review command failed");
+  return detail.replace(/\x1b\[[0-?]*[ -/]*[@-~]/gu, "")
+    .replace(/\p{Cc}/gu, " ")
+    .replace(/\s+/gu, " ")
+    .slice(0, 240);
 }
 
 export async function runSaddleTurnWithEvidence({ input, runTurn, onToolCall, onAssistantDelta, onTurnStart, onFollowup, onReview } = {}) {

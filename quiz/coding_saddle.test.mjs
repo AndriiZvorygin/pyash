@@ -36,6 +36,7 @@ import {
   DEFAULT_CODING_SADDLE_SYSTEM_PROMPT,
   discoverSaddleModels,
   formatSaddleCompletionEvidence,
+  formatSaddleWorktreeReviewFailure,
   formatSaddleBackendPicker,
   formatSaddleModelPicker,
   formatSaddleStatus,
@@ -523,15 +524,33 @@ test("coding saddle completion evidence requires a successful edit and a later c
 test("coding saddle worktree review uses bounded read-only Git inspection and omits sensitive paths", () => {
   const command = buildSaddleWorktreeReviewCommand({ trackedDiffLimit: 999999, untrackedDiffLimit: 1200 });
   assert.match(command, /git -c core\.quotePath=true status --short --untracked-files=all/u);
-  assert.match(command, /git diff --stat HEAD/u);
-  assert.match(command, /git diff --no-ext-diff --unified=3 HEAD/u);
+  assert.match(command, /git diff --cached --stat/u);
+  assert.match(command, /git diff --cached --no-ext-diff --unified=3/u);
+  assert.match(command, /git diff --stat --/u);
+  assert.match(command, /git diff --no-ext-diff --unified=3 --/u);
   assert.match(command, /git ls-files -z --others --exclude-standard/u);
   assert.match(command, /\*credentials\*\|\*token\*/u);
-  assert.match(command, /head -c 24000/u);
+  assert.match(command, /head -c 12000/u);
   assert.match(command, /head -c 1200/u);
   assert.match(command, /pre-existing worktree changes/u);
   assert.equal(classifyCommandText(command), "read_only");
   assert.doesNotMatch(command, /git (?:add|commit|push|reset|clean)\b/u);
+});
+
+test("coding saddle summarizes worktree review errors without echoing command output", () => {
+  const error = [
+    "command defective: status=128 signal=none",
+    `command: ${"very long shell command ".repeat(30)}`,
+    "stdout:",
+    "a very long list of files",
+    "stderr:",
+    "fatal: bad revision 'HEAD'"
+  ].join("\n");
+
+  const summary = formatSaddleWorktreeReviewFailure(error);
+  assert.equal(summary, "fatal: bad revision 'HEAD'");
+  assert.doesNotMatch(summary, /command:|very long/u);
+  assert.ok(summary.length <= 240);
 });
 
 test("coding saddle worktree review shows real diffs while omitting sensitive untracked files", async () => {
@@ -561,6 +580,26 @@ test("coding saddle worktree review shows real diffs while omitting sensitive un
     assert.match(output, /new review content/u);
     assert.doesNotMatch(output, /tracked-secret-(?:before|after)|untracked-secret-do-not-print/u);
     assert.match(output, /pre-existing worktree changes/u);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("coding saddle worktree review handles a repository with no initial commit", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-review-unborn-"));
+  try {
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    await fs.writeFile(path.join(root, "story.md"), "A new story.\n", "utf8");
+
+    const output = execFileSync("bash", ["-lc", buildSaddleWorktreeReviewCommand()], {
+      cwd: root,
+      encoding: "utf8",
+      maxBuffer: 64 * 1024
+    });
+
+    assert.match(output, /\[worktree root\]/u);
+    assert.match(output, /story\.md/u);
+    assert.match(output, /A new story\./u);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
