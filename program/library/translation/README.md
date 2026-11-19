@@ -84,6 +84,11 @@ CC-CEDICT is licensed under CC BY-SA 4.0; its source and license are recorded in
 maintained here when regenerating the projection. Chinese entries absent from CC-CEDICT still
 show their linked form and English evidence, with Pinyin reported as unavailable.
 
+`pyash dict <chinese-form> from zh` performs the reverse lookup. It shows an exact Kwon or
+accepted character-to-atom link when present, plus matching COW WordNet senses ordered by the
+frequency evidence. It labels lower-frequency senses and COW spellings longer than the preferred
+form so callers can inspect ambiguity without treating those rows as preferred links.
+
 `kwon_chinese_single_atoms.csv` lists Kwon entries whose Chinese form is one Han
 character and whose Pyash form is one atom. It includes the English label, tone-marked
 Mandarin reading, and Cantonese Jyutping reading from the local Unicode Unihan 18.0.0

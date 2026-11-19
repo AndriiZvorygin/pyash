@@ -471,6 +471,35 @@ export function lookupCowChineseFormsByWordNetSenses(index, senseIds = []) {
     || codePointSort(left.chinese, right.chinese));
 }
 
+export function lookupCowWordNetSensesByChineseForms(index, chineseForms = []) {
+  if (!(index?.byChineseForm instanceof Map) || !Array.isArray(chineseForms)) {
+    throw invalid("COW WordNet reverse lookup requires a crosswalk index and Chinese forms");
+  }
+  const statusPriority = new Map([
+    ["frequency-top", 0],
+    ["unresolved-frequency-tie", 1],
+    ["no-english30k-frequency", 2],
+    ["lower-frequency", 3]
+  ]);
+  return chineseForms.map((value) => text(value).normalize("NFC")).filter(Boolean).map((chinese) => {
+    const matches = (index.byChineseForm.get(chinese) ?? []).map((record) => ({
+      wordNetSenseId: record.wordNetSenseId,
+      synset: record.synset,
+      partOfSpeech: record.partOfSpeech,
+      ili: record.ili,
+      frequencyRank: record.frequencyRank,
+      frequencyTagCount: record.frequencyTagCount,
+      matchedForm: record.matchedForm
+    })).sort((left, right) => (statusPriority.get(left.matchedForm.frequencyStatus) ?? 4)
+      - (statusPriority.get(right.matchedForm.frequencyStatus) ?? 4)
+      || (Number.isSafeInteger(left.frequencyRank) ? left.frequencyRank : Number.MAX_SAFE_INTEGER)
+        - (Number.isSafeInteger(right.frequencyRank) ? right.frequencyRank : Number.MAX_SAFE_INTEGER)
+      || Number(right.matchedForm.preferred) - Number(left.matchedForm.preferred)
+      || left.wordNetSenseId.localeCompare(right.wordNetSenseId));
+    return { chinese, matches };
+  });
+}
+
 export function renderCowWordNetCrosswalkPya(records = [], {
   source = "Chinese Open Wordnet 1.1 joined to Open English WordNet by ILI",
   sourceHash = "",

@@ -40,7 +40,9 @@ import {
   lookupChineseCharacterGlosses,
   lookupChinesePinyin,
   lookupChineseByPyash,
-  lookupChineseByWordNetSenses
+  lookupChineseByWordNetSenses,
+  lookupPyashByChinese,
+  lookupWordNetSensesByChinese
 } from "../program/library/translation/kwon_chinese_lookup.mjs";
 import {
   MOODS,
@@ -61,12 +63,20 @@ function parseArgs(args) {
   const sumoIds = [];
   let mapPath = null;
   let targetLanguage = "";
+  let sourceLanguage = "";
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
     if (arg === "to") {
       const language = String(args[i + 1] ?? "").trim().toLowerCase();
       if (language !== "zh") throw new Error(`unsupported dictionary output language: ${language || "(missing)"}; supported: zh`);
       targetLanguage = language;
+      i += 1;
+      continue;
+    }
+    if (arg === "from") {
+      const language = String(args[i + 1] ?? "").trim().toLowerCase();
+      if (language !== "zh") throw new Error(`unsupported dictionary input language: ${language || "(missing)"}; supported: zh`);
+      sourceLanguage = language;
       i += 1;
       continue;
     }
@@ -84,7 +94,16 @@ function parseArgs(args) {
     else if (/^sumo:[A-Za-z][A-Za-z0-9_]*$/u.test(arg)) sumoIds.push(arg);
     else inputs.push(arg);
   }
-  return { inputs, textInputs, senseIds: [...new Set(senseIds)], sumoIds: [...new Set(sumoIds)], mapPath, targetLanguage };
+  if (sourceLanguage && targetLanguage) throw new Error("dictionary input and output cannot both be zh");
+  return {
+    inputs,
+    textInputs,
+    senseIds: [...new Set(senseIds)],
+    sumoIds: [...new Set(sumoIds)],
+    mapPath,
+    sourceLanguage,
+    targetLanguage
+  };
 }
 
 const checked = new Map();
@@ -825,6 +844,118 @@ async function reportWordNetSenseLookups(senseIds, report) {
     }
   }
   return results;
+}
+
+async function runChineseSourceLookup(chineseInputs, { mapPath = null, report = console.log } = {}) {
+  const inputs = [...new Set(chineseInputs.map((value) => String(value ?? "").trim().normalize("NFC")).filter(Boolean))];
+  if (inputs.length === 0) {
+    report("from zh requires at least one Chinese form");
+    return { exitCode: 2, missing: 0, uncoveredNames: [], chineseLookups: [], wordNetSenseLookups: [] };
+  }
+
+  const cowLookups = await lookupWordNetSensesByChinese(inputs);
+  const senseIds = [...new Set(cowLookups.flatMap((row) => row.matches.map((match) => match.wordNetSenseId)))];
+  const wordNetSenseLookups = await reportWordNetSenseLookups(senseIds, () => {});
+  const sensesById = new Map(wordNetSenseLookups.map((row) => [row.senseId, row]));
+  const chineseLookups = [];
+  const uncoveredNames = [];
+
+  for (const input of inputs) {
+    const [pinyin, characterGlosses, pyashMatches] = await Promise.all([
+      lookupChinesePinyin(input),
+      lookupChineseCharacterGlosses(input),
+      lookupPyashByChinese(input)
+    ]);
+    const cowMatches = cowLookups.find((row) => row.chinese === input)?.matches ?? [];
+    const pinyinText = pinyin.length > 0 ? pinyin.join(" / ") : "unavailable in the local pinyin index";
+    report(`${input}: Pinyin ${pinyinText}`);
+    const characterBreakdown = characterGlosses
+      .filter((entry) => entry.glosses.length > 0)
+      .map((entry) => `${entry.character} (${entry.glosses.join("; ")})`);
+    if (characterBreakdown.length > 0) {
+      report(`${input}: English character glosses ${characterBreakdown.join(" + ")}`);
+    }
+
+    for (const match of pyashMatches) {
+      report(`${input}: Pyash ${match.english} -> ${match.pyash} (${match.source})`);
+      chineseLookups.push({
+        input,
+        source: match.source,
+        chinese: input,
+        pinyin,
+        characterGlosses,
+        english: match.english,
+        pyash: match.pyash
+      });
+    }
+
+    for (const match of cowMatches) {
+      const sense = sensesById.get(match.wordNetSenseId);
+      const frequencyLabel = match.matchedForm.frequencyStatus === "frequency-top"
+        ? "frequency-preferred"
+        : match.matchedForm.frequencyStatus === "unresolved-frequency-tie"
+          ? "unresolved frequency tie"
+          : match.matchedForm.frequencyStatus === "lower-frequency"
+            ? "lower-frequency sense"
+            : "no English30k rank";
+      const formLabel = match.matchedForm.preferred ? "shortest COW form" : "longer COW form";
+      if (sense) {
+        report(`${input}: WordNet ${sense.senseId} [${frequencyLabel}; ${formLabel}; ${sense.lemmas.join(", ")}]: ${sense.definition || "definition unavailable"}`);
+        if (sense.links.length === 0) {
+          report(`${input}: no Pyash sense link recorded for ${sense.senseId}`);
+        }
+        for (const link of sense.links) {
+          const sequence = link.pyashSequence.length > 0
+            ? ` -> ${renderPyacSurface(link.pyashSequence.join(" "))}`
+            : "";
+          report(`${input}: Pyash sense link ${link.target}${sequence} (${link.status})`);
+        }
+      } else {
+        report(`${input}: WordNet ${match.wordNetSenseId} [${frequencyLabel}; ${formLabel}]`);
+      }
+      chineseLookups.push({
+        input,
+        source: "cow-wordnet-crosswalk",
+        chinese: input,
+        pinyin,
+        characterGlosses,
+        wordNetSenseId: match.wordNetSenseId,
+        frequencyStatus: match.matchedForm.frequencyStatus,
+        preferredForm: match.matchedForm.preferred,
+        frequencyRank: match.frequencyRank,
+        frequencyTagCount: match.frequencyTagCount,
+        ...(sense ? {
+          lemmas: sense.lemmas,
+          definition: sense.definition,
+          status: sense.status,
+          links: sense.links
+        } : {})
+      });
+    }
+
+    if (pyashMatches.length === 0 && cowMatches.length === 0) {
+      uncoveredNames.push(input);
+      report(`${input}: no linked Chinese entry`);
+    }
+  }
+
+  if (mapPath) {
+    await fs.writeFile(mapPath, JSON.stringify({
+      format: "vocab-suggest-v3",
+      records: {},
+      chineseLookups,
+      wordNetSenseLookups,
+      sumoLookups: []
+    }, null, 2));
+  }
+
+  return {
+    exitCode: uncoveredNames.length > 0 ? 1 : 0,
+    missing: uncoveredNames.length,
+    uncoveredNames: uncoveredNames.sort((left, right) => left.localeCompare(right)),
+    chineseLookups,
+    wordNetSenseLookups
+  };
 }
 
 async function reportSumoLookups(keys, report) {
@@ -1716,7 +1847,13 @@ export async function runVocabSuggest(args = process.argv.slice(2), {
   report = console.log,
   includeStructured = null
 } = {}) {
-  const { inputs, textInputs, senseIds, sumoIds, mapPath, targetLanguage } = parseArgs(args);
+  const { inputs, textInputs, senseIds, sumoIds, mapPath, sourceLanguage, targetLanguage } = parseArgs(args);
+  if (sourceLanguage === "zh") {
+    if (senseIds.length > 0 || sumoIds.length > 0) {
+      throw new Error("WordNet and SUMO identifiers cannot be combined with from zh");
+    }
+    return runChineseSourceLookup([...inputs, ...textInputs], { mapPath, report });
+  }
   const resolved = await resolveRootsAndTokens(inputs, textInputs);
   const shouldBuildStructured = includeStructured ?? (mapPath !== null || !await isMainModule());
   const roots = (senseIds.length > 0 || sumoIds.length > 0) && inputs.length === 0 && textInputs.length === 0

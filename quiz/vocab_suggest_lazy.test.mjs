@@ -42,3 +42,31 @@ test("Chinese dictionary lookup can query COW forms by WordNet sense without an 
   assert.ok(englishLine > chineseLine, "COW Chinese output should precede the English sense detail");
   assert.ok(result.chineseLookups.some((row) => row.matchedWordNetSenseIds.includes("n:09869006-n")));
 });
+
+test("Chinese source lookup returns the WordNet sense and its Pyash link", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["宝贝", "from", "zh"], { report: (line) => lines.push(String(line)) });
+
+  assert.equal(result.exitCode, 0);
+  assert.ok(lines.some((line) => line.startsWith("宝贝: Pinyin ")));
+  assert.ok(lines.some((line) => line.startsWith("宝贝: WordNet n:09869006-n ")));
+  assert.ok(lines.some((line) => line === "宝贝: Pyash sense link dear -> syin (active)"));
+  assert.ok(result.chineseLookups.some((row) => row.source === "cow-wordnet-crosswalk"
+    && row.input === "宝贝" && row.wordNetSenseId === "n:09869006-n"));
+});
+
+test("Chinese source lookup returns direct accepted atom links", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["你", "from", "zh"], { report: (line) => lines.push(String(line)) });
+
+  assert.equal(result.exitCode, 0);
+  assert.ok(lines.some((line) => line === "你: Pyash you -> hnan (pyash-curated)"));
+});
+
+test("Chinese source lookup reports when no form was supplied", async () => {
+  const lines = [];
+  const result = await runVocabSuggest(["from", "zh"], { report: (line) => lines.push(String(line)) });
+
+  assert.equal(result.exitCode, 2);
+  assert.ok(lines.includes("from zh requires at least one Chinese form"));
+});
