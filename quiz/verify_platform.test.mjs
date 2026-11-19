@@ -355,7 +355,7 @@ alpha line four.text.quoted to name text draft out be text do`);
   await run("  su name inner ret");
   await run("prah");
 
-  await run("su name first from text \"x\" for name alpha accordingto name checks to name text output atleast num 0.8 atmost num 9 fromindex num 1 toindex num 1 be helper do");
+  await run("su name first from text \"x\" for name alpha accordingto name checks to name text output atleast num 0.8 atmost num 9 fromindex num 1 toindex num 2 be helper do");
   assert.match(String(remember("output")?.ob?.text ?? ""), /^alpha line one/mu);
 });
 

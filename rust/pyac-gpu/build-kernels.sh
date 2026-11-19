@@ -11,9 +11,36 @@ if ! cargo gpu --version >/dev/null 2>&1; then
 fi
 
 cargo gpu build --auto-install-rust-toolchain --shader-crate "$kernel" \
-  --target spirv-unknown-vulkan1.2 --output-dir "$out/vulkan"
+  --target spirv-unknown-spv1.5 --features vulkan-device-atomics \
+  --output-dir "$out/vulkan"
 cargo gpu build --auto-install-rust-toolchain --shader-crate "$kernel" \
   --target spirv-unknown-naga-wgsl --output-dir "$out/wgsl"
+
+spirv="$out/vulkan/pyac_vliw_gpu_kernel.spv"
+node --input-type=module - "$spirv" <<'NODE'
+import assert from "node:assert/strict";
+import fs from "node:fs";
+
+const bytes = fs.readFileSync(process.argv[2]);
+assert.equal(bytes.byteLength % 4, 0, "SPIR-V byte length must be word aligned");
+const words = new Uint32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
+assert.equal(words[0], 0x07230203, "shader output must be SPIR-V");
+const memoryModels = [];
+for (let cursor = 5; cursor < words.length;) {
+  const word = words[cursor];
+  const count = word >>> 16;
+  const opcode = word & 0xffff;
+  assert.ok(count > 0 && cursor + count <= words.length, "SPIR-V instruction is truncated");
+  if (opcode === 14) memoryModels.push([words[cursor + 1], words[cursor + 2]]);
+  cursor += count;
+}
+assert.deepEqual(memoryModels, [[0, 0]], "Vulkan worker shader must use Logical Simple memory model");
+console.log("SPIR-V memory model is Vulkan-compatible Logical Simple.");
+NODE
+
+if command -v spirv-val >/dev/null 2>&1; then
+  spirv-val --target-env vulkan1.2 "$spirv"
+fi
 
 browser_shader="$root/../pyac-browser/src/vliw_kernel.wgsl"
 {
@@ -21,6 +48,6 @@ browser_shader="$root/../pyac-browser/src/vliw_kernel.wgsl"
   sed 's/[[:blank:]]*$//' "$out/wgsl/pyac_vliw_gpu_kernel.wgsl"
 } > "$browser_shader"
 
-printf 'SPIR-V: %s\n' "$out/vulkan/pyac_vliw_gpu_kernel.spv"
+printf 'SPIR-V: %s\n' "$spirv"
 printf 'WGSL:   %s\n' "$out/wgsl/pyac_vliw_gpu_kernel.wgsl"
 printf 'Browser WGSL: %s\n' "$browser_shader"

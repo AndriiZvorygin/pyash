@@ -71,6 +71,7 @@ import {
   isUintVectorQuoteWord
 } from "./quotes.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
+import { lowerPyashSentence } from "./sentence.mjs";
 import { deriveSentenceEffects, scheduleCodeletDependencies } from "./effects.mjs";
 
 function semanticDecode(decoded, semantic, sentence) {
@@ -83,6 +84,25 @@ function semanticDecode(decoded, semantic, sentence) {
 }
 
 export function lowerSentence(sentence) {
+  if (["not", "and", "or"].includes(sentence?.be) && sentence?.mood === "do") {
+    return lowerPyashSentence(sentence).vectors.map((words) => ({
+      sentence,
+      words,
+      semantic: "boolean-composition"
+    }));
+  }
+  if (
+    ["equally", "tiny", "giant"].includes(sentence?.be)
+    && sentence?.mood === "do"
+    && !sentence.consequence
+    && !sentence.alternative
+  ) {
+    return lowerPyashSentence(sentence).vectors.map((words) => ({
+      sentence,
+      words,
+      semantic: "boolean-comparison"
+    }));
+  }
   if (isNamedQuerySentence(sentence)) {
     return [lowerNamedQuerySentence(sentence)];
   }
@@ -404,6 +424,7 @@ export {
   MAX_PYASH_PROGRAMLET_STEP_BUDGET,
   compilePyashProgramSource,
   decodePyashProgramPack,
+  decodePyashProgramSections,
   executePyashProgramPack,
   evolvePyashProgramSource,
   mutatePyashProgramSource

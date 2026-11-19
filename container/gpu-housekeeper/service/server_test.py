@@ -1827,6 +1827,13 @@ class HousekeeperOllamaTests(unittest.TestCase):
   def test_start_registered_job_returns_without_waiting_for_execution(self):
     started = []
     original = server.execute_registered_job
+    with server._LOCK:
+      server._JOBS["job-background"] = {
+        "remoteJobId": "job-background",
+        "runtimeName": "ollama",
+        "status": "queued",
+        "forwarded": False
+      }
     try:
       def fake_execute(remote_job_id, runtime_registry):
         started.append((remote_job_id, runtime_registry))
@@ -1840,6 +1847,8 @@ class HousekeeperOllamaTests(unittest.TestCase):
       self.assertEqual(started, [("job-background", {"ollama": {}})])
     finally:
       server.execute_registered_job = original
+      with server._LOCK:
+        server._JOBS.pop("job-background", None)
 
   def test_registered_jobs_on_different_devices_run_in_parallel(self):
     original_execute_job = server.execute_job
@@ -5006,19 +5015,79 @@ class HousekeeperVliwPackTests(unittest.TestCase):
         os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = previous
       temp_dir.cleanup()
 
-  def test_vliw_runtime_requires_a_visible_nvidia_device(self):
+  def test_vliw_runtime_health_requires_gpu_assignment_and_protocol_v1(self):
     runtime = dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])
-    with patch.object(server, "parse_nvidia_smi", return_value={
-      "available": True, "devices": [{"deviceId": "gpu0"}]
-    }):
+    running_inspect = json.dumps([{
+      "State": {"Running": True, "Status": "running"},
+      "HostConfig": {"DeviceRequests": [{"Driver": "nvidia", "Count": -1}]}
+    }])
+    no_gpu_inspect = json.dumps([{
+      "State": {"Running": True, "Status": "running"},
+      "HostConfig": {"DeviceRequests": []}
+    }])
+    with patch.object(server, "run_docker", return_value={"success": True, "stdout": running_inspect}), \
+         patch.object(server, "request_vliw_runtime_json", return_value={"ready": True, "protocolVersion": 1}):
       available = server.parse_runtime_status(runtime)
-    with patch.object(server, "parse_nvidia_smi", return_value={"available": False, "devices": []}):
+    with patch.object(server, "run_docker", return_value={"success": True, "stdout": no_gpu_inspect}), \
+         patch.object(server, "request_vliw_runtime_json") as health:
       unavailable = server.parse_runtime_status(runtime)
 
     self.assertEqual(available["status"], "running")
     self.assertTrue(available["gpuObserved"])
-    self.assertEqual(unavailable["status"], "stopped")
+    self.assertEqual(available["protocolVersion"], 1)
+    self.assertEqual(unavailable["status"], "unavailable")
     self.assertFalse(unavailable["gpuObserved"])
+    health.assert_not_called()
+
+  def test_vliw_runtime_registry_migrates_old_direct_worker_entry(self):
+    legacy = json.dumps([{
+      "runtimeName": "vliw",
+      "runtimeMode": "housekeeper-vliw",
+      "containerName": "",
+      "beginAction": [],
+      "stopAction": [],
+      "restartAction": [],
+      "concurrencySafe": True
+    }])
+    with patch.dict(os.environ, {
+      "GPU_HOUSEKEEPER_RUNTIME_REGISTRY": legacy,
+      "GPU_HOUSEKEEPER_VLIW_RUNTIME_URL": "http://vliw-runtime.test:18887"
+    }, clear=False):
+      runtime = server.load_runtime_registry()["vliw"]
+
+    self.assertEqual(runtime["runtimeMode"], "rust-vliw-http")
+    self.assertEqual(runtime["containerName"], "pyac-vliw-runtime")
+    self.assertEqual(runtime["runtimeUrl"], "http://vliw-runtime.test:18887")
+    self.assertEqual(runtime["beginAction"], ["start", "pyac-vliw-runtime"])
+    self.assertEqual(runtime["dischargeKind"], "vliw")
+    self.assertFalse(runtime["concurrencySafe"])
+
+  def test_vliw_dispatch_sends_the_canonical_pack_to_runtime_api(self):
+    job = {
+      "remoteJobId": "vliw-http-dispatch",
+      "runtimeName": "vliw",
+      "jobSpec": self.valid_job_spec()
+    }
+    result = {"ok": True, "backend": "rust-gpu-vulkan", "values": []}
+    with patch.object(server, "request_vliw_runtime_json", return_value=result) as request:
+      actual = server.execute_vliw_pack_gpu(job)
+
+    self.assertEqual(actual, result)
+    payload = request.call_args.args[1]
+    self.assertEqual(payload["protocolVersion"], 1)
+    self.assertEqual(payload["jobId"], "vliw-http-dispatch")
+    self.assertEqual(payload["jobSpec"], job["jobSpec"])
+
+  def test_vliw_readiness_waits_if_service_is_already_starting(self):
+    runtime = dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])
+    runtime["runtimeReadyTimeoutSec"] = 1
+    with patch.object(server, "parse_runtime_status", side_effect=[
+      {"status": "starting", "gpuObserved": True},
+      {"status": "running", "gpuObserved": True}
+    ]), patch.object(server, "runtime_action") as action, patch.object(server.time, "sleep"):
+      server.ensure_runtime_ready({"vliw": runtime}, "vliw")
+
+    action.assert_not_called()
 
   def test_vliw_dispatch_calls_the_rust_gpu_pack_worker(self):
     job = {
@@ -5030,11 +5099,173 @@ class HousekeeperVliwPackTests(unittest.TestCase):
     }
     result = {"ok": True, "backend": "rust-gpu-vulkan", "values": []}
     with patch.object(server, "ensure_capacity_for_job", return_value={"decision": "fits"}), \
+         patch.object(server, "ensure_runtime_ready"), \
          patch.object(server, "execute_vliw_pack_gpu", return_value=result) as execute:
       actual = server.execute_job(job, {"vliw": dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])})
 
     self.assertEqual(actual, result)
     execute.assert_called_once_with(job)
+
+
+class HousekeeperVliwRuntimeMaintenanceTests(unittest.TestCase):
+  def setUp(self):
+    with server._LOCK:
+      server._JOBS.clear()
+      server._JOB_CANCEL_EVENTS.clear()
+      server._STARTED_JOB_IDS.clear()
+      server._RUNNING_JOB_IDS.clear()
+      server._RUNTIME_PAUSED.discard("vliw")
+      event = server._RUNTIME_PAUSE_EVENTS.setdefault("vliw", threading.Event())
+      event.clear()
+
+  def job(self, remote_job_id, runtime_name="vliw", device_id="gpu0"):
+    return {
+      "remoteJobId": remote_job_id,
+      "handleId": remote_job_id,
+      "runtimeName": runtime_name,
+      "profileName": f"{runtime_name}-test",
+      "jobSpec": {"kind": "test-job", "sleepMs": 10, "capacityWaitSec": 3},
+      "deviceId": device_id,
+      "status": "queued",
+      "message": "queued",
+      "submittedAt": "2026-11-17T00:00:00Z",
+      "startedAt": "",
+      "finishedAt": "",
+      "forwarded": False
+    }
+
+  def test_pause_drains_started_work_and_holds_new_vliw_submissions(self):
+    active = self.job("vliw-active")
+    queued = self.job("vliw-queued")
+    server._JOBS[active["remoteJobId"]] = active
+    server._JOBS[queued["remoteJobId"]] = queued
+    server._STARTED_JOB_IDS.add(active["remoteJobId"])
+    event = server.runtime_pause_event("vliw")
+
+    def finish_active():
+      self.assertTrue(event.wait(1))
+      time.sleep(0.05)
+      with server._LOCK:
+        server._STARTED_JOB_IDS.discard(active["remoteJobId"])
+
+    finisher = threading.Thread(target=finish_active, daemon=True)
+    finisher.start()
+    drained = server.pause_runtime_dispatch("vliw", timeout_seconds=1)
+    finisher.join(timeout=1)
+
+    self.assertTrue(drained["success"])
+    self.assertFalse(server.start_registered_job(queued["remoteJobId"], {"vliw": {}}))
+    self.assertEqual(queued["status"], "queued")
+
+  def test_capacity_wait_is_returned_to_durable_queue_during_pause(self):
+    job = self.job("vliw-capacity-wait")
+    server._JOBS[job["remoteJobId"]] = job
+    gate = server.DeviceExecutionGate()
+    registry = {"vliw": {"runtimeName": "vliw", "concurrencySafe": True}}
+
+    def wait_for_capacity_message():
+      deadline = time.monotonic() + 2
+      while time.monotonic() < deadline:
+        if job.get("message") == "waiting for GPU capacity":
+          return True
+        time.sleep(0.01)
+      return False
+
+    with patch.object(server, "execution_gate_for", return_value=gate), \
+         patch.object(server, "ensure_capacity_for_job", side_effect=RuntimeError("GPU capacity temporarily unavailable")), \
+         patch.object(server, "capacity_poll_seconds", return_value=2), \
+         patch.object(server, "run_idle_runtime_reaper_once", return_value=[]):
+      self.assertTrue(server.start_registered_job(job["remoteJobId"], registry))
+      self.assertTrue(wait_for_capacity_message())
+      drained = server.pause_runtime_dispatch("vliw", timeout_seconds=2)
+
+    self.assertTrue(drained["success"])
+    self.assertEqual(job["status"], "queued")
+    self.assertEqual(job["message"], "held for VLIW runtime maintenance")
+    self.assertIsNone(job["error"])
+    self.assertFalse(gate.shared)
+
+  def test_resuming_vliw_does_not_resume_or_restart_other_runtime_jobs(self):
+    vliw = self.job("vliw-held")
+    other = self.job("ollama-ready", runtime_name="ollama", device_id="gpu1")
+    forwarded = self.job("vliw-forwarded")
+    forwarded["forwarded"] = True
+    server._JOBS.update({
+      vliw["remoteJobId"]: vliw,
+      other["remoteJobId"]: other,
+      forwarded["remoteJobId"]: forwarded
+    })
+    server._RUNTIME_PAUSED.add("vliw")
+    server.runtime_pause_event("vliw").set()
+
+    with patch.object(server, "start_registered_job", return_value=True) as start:
+      resumed = server.resume_runtime_dispatch("vliw", {"vliw": {}, "ollama": {}})
+
+    self.assertEqual(resumed, ["vliw-held"])
+    start.assert_called_once_with("vliw-held", {"vliw": {}, "ollama": {}})
+    self.assertFalse(server.runtime_pause_event("vliw").is_set())
+
+  def test_vliw_stop_and_begin_http_controls_hold_then_resume_queue(self):
+    registry = {"vliw": dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])}
+    listener = server.create_housekeeper_server("127.0.0.1", 0)
+    thread = threading.Thread(target=listener.serve_forever, daemon=True)
+    thread.start()
+    base_url = f"http://127.0.0.1:{listener.server_address[1]}"
+
+    def post(path):
+      request = Request(
+        f"{base_url}{path}",
+        data=b'{"runtimeName":"vliw"}',
+        headers={"Content-Type": "application/json"},
+        method="POST"
+      )
+      with urlopen(request, timeout=3) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+    try:
+      with patch.object(server.Handler, "runtime_registry", registry), \
+           patch.object(server, "runtime_action", return_value={"success": True, "status": "stopped"}) as action:
+        stopped = post("/runtime/stop")
+        self.assertTrue(server.runtime_pause_event("vliw").is_set())
+        self.assertIn("remains held", stopped["message"])
+        action.assert_called_once_with(registry, "vliw", "stopAction")
+
+      with patch.object(server.Handler, "runtime_registry", registry), \
+           patch.object(server, "ensure_runtime_ready"):
+        begun = post("/runtime/begin")
+        self.assertEqual(begun["status"], "running")
+        self.assertFalse(server.runtime_pause_event("vliw").is_set())
+    finally:
+      listener.shutdown()
+      listener.server_close()
+      thread.join(timeout=2)
+
+  def test_idle_vliw_discharge_stops_only_service_and_reopens_dispatch(self):
+    registry = {"vliw": dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])}
+    with patch.object(server.Handler, "runtime_registry", registry), \
+         patch.object(server, "observe_runtime_activity", return_value={"state": "idle"}), \
+         patch.object(server, "runtime_action", return_value={"success": True, "status": "stopped"}) as action:
+      result = server.discharge_runtime("vliw", registry["vliw"])
+
+    self.assertTrue(result["success"])
+    self.assertIn("without restarting Housekeeper", result["reason"])
+    action.assert_called_once_with(registry, "vliw", "stopAction")
+    self.assertFalse(server.runtime_pause_event("vliw").is_set())
+
+  def test_idle_reaper_manages_the_vliw_service_as_its_own_runtime(self):
+    registry = {"vliw": dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])}
+    gate = server.DeviceExecutionGate()
+    with patch.object(server.Handler, "runtime_registry", registry), \
+         patch.object(server, "observe_runtime_activity", return_value={"state": "idle"}), \
+         patch.object(server, "runtime_gpu_residency", return_value={"state": "resident"}), \
+         patch.object(server, "execution_gate_for", return_value=gate), \
+         patch.object(server, "runtime_action", return_value={"success": True, "status": "stopped"}) as action:
+      outcomes = server.run_idle_runtime_reaper_once(registry)
+
+    self.assertEqual(outcomes[0]["runtimeName"], "vliw")
+    self.assertEqual(outcomes[0]["state"], "discharged")
+    action.assert_called_once_with(registry, "vliw", "stopAction")
+    self.assertFalse(gate.exclusive)
 
 if __name__ == "__main__":
   unittest.main()

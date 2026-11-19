@@ -51,6 +51,10 @@ _RUNTIME_ACTIVITY: Dict[str, Dict[str, Any]] = {}
 _LAST_QUEUE_OVER_SOFT_CAP = False
 _NATIVE_RUNTIME_PROCESSES: Dict[str, subprocess.Popen] = {}
 _NATIVE_RUNTIME_LOCK = threading.Lock()
+_RUNTIME_PAUSED: set[str] = set()
+_RUNTIME_PAUSE_EVENTS: Dict[str, threading.Event] = {}
+_STARTED_JOB_IDS: set[str] = set()
+_RUNTIME_LIFECYCLE_LOCKS: Dict[str, threading.Lock] = {}
 _OLLAMA_MODEL_CATALOG_CACHE: Dict[str, Any] = {
   "observedAt": 0.0,
   "available": False,
@@ -79,6 +83,10 @@ class CancelledJobError(RuntimeError):
   pass
 
 
+class RuntimePausedError(RuntimeError):
+  pass
+
+
 class DeviceExecutionGate:
   """Shared/exclusive admission for one physical device."""
 
@@ -88,7 +96,14 @@ class DeviceExecutionGate:
     self.shared_vram_mb = 0
     self.exclusive = False
 
-  def acquire(self, shared: bool, vram_required_mb: int = 0, can_share=None, cancel_event=None) -> None:
+  def acquire(
+    self,
+    shared: bool,
+    vram_required_mb: int = 0,
+    can_share=None,
+    cancel_event=None,
+    pause_event=None
+  ) -> None:
     with self.condition:
       if shared:
         while self.exclusive or (
@@ -98,18 +113,26 @@ class DeviceExecutionGate:
         ):
           if cancel_event is not None and cancel_event.is_set():
             raise CancelledJobError("job cancelled while waiting for GPU capacity")
+          if pause_event is not None and pause_event.is_set():
+            raise RuntimePausedError("runtime dispatch paused for maintenance")
           self.condition.wait(timeout=0.1)
         if cancel_event is not None and cancel_event.is_set():
           raise CancelledJobError("job cancelled while waiting for GPU capacity")
+        if pause_event is not None and pause_event.is_set():
+          raise RuntimePausedError("runtime dispatch paused for maintenance")
         self.shared += 1
         self.shared_vram_mb += max(0, int(vram_required_mb or 0))
         return
       while self.exclusive or self.shared:
         if cancel_event is not None and cancel_event.is_set():
           raise CancelledJobError("job cancelled while waiting for GPU capacity")
+        if pause_event is not None and pause_event.is_set():
+          raise RuntimePausedError("runtime dispatch paused for maintenance")
         self.condition.wait(timeout=0.1)
       if cancel_event is not None and cancel_event.is_set():
         raise CancelledJobError("job cancelled while waiting for GPU capacity")
+      if pause_event is not None and pause_event.is_set():
+        raise RuntimePausedError("runtime dispatch paused for maintenance")
       self.exclusive = True
 
   def release(self, shared: bool, vram_required_mb: int = 0) -> None:
@@ -218,17 +241,20 @@ DEFAULT_RUNTIME_REGISTRY = {
   },
   "vliw": {
     "runtimeName": "vliw",
-    "containerName": "",
-    "runtimeMode": "housekeeper-vliw",
+    "containerName": "pyac-vliw-runtime",
+    "runtimeMode": "rust-vliw-http",
+    "runtimeUrl": "http://pyac-vliw-runtime:18887",
     "gpuExpected": True,
     "deviceId": "",
     "minimumVramRequiredMb": 64,
-    "beginAction": [],
-    "stopAction": [],
-    "restartAction": [],
+    "runtimeReadyTimeoutSec": 90,
+    "runtimeActionTimeoutSec": 1800,
+    "beginAction": ["start", "pyac-vliw-runtime"],
+    "stopAction": ["stop", "pyac-vliw-runtime"],
+    "restartAction": ["restart", "pyac-vliw-runtime"],
     "activityProbe": "housekeeper-vliw",
-    "dischargeKind": "",
-    "concurrencySafe": True
+    "dischargeKind": "vliw",
+    "concurrencySafe": False
   }
 }
 
@@ -1648,6 +1674,16 @@ def local_route_state(job: Dict[str, Any], runtime_registry: Dict[str, Dict[str,
       "reason": f"runtime not managed: {runtime_name}"
     }
   runtime_entry = runtime_registry[runtime_name]
+  if normalize_text(runtime_entry.get("runtimeMode")).lower() == "rust-vliw-http":
+    runtime_status = parse_runtime_status(runtime_entry)
+    if runtime_status.get("status") == "unknown" or runtime_status.get("gpuObserved") is not True:
+      return {
+        "hostId": host_id,
+        "available": False,
+        "immediate": False,
+        "deviceId": explicit_execution_device_id(job),
+        "reason": normalize_text(runtime_status.get("message")) or "Rust VLIW runtime has no verified GPU allocation"
+      }
   for reserved_name, reserved_entry in runtime_registry.items():
     if reserved_name == runtime_name or not reserved_entry.get("exclusiveHostGpu"):
       continue
@@ -1903,6 +1939,23 @@ def peer_route_candidate(
       "available": False,
       "reason": f"peer runtime is unavailable: {runtime_name}"
     }
+  vliw_runtime_mode = normalize_text(runtime.get("runtimeMode")).lower() == "rust-vliw-http"
+  if runtime_name == "vliw":
+    capabilities = snapshot.get("capabilities") if isinstance(snapshot.get("capabilities"), dict) else {}
+    if not vliw_runtime_mode or capabilities.get("pyacVliwRuntimeProtocol") != 1:
+      return {
+        "hostId": peer_host_id,
+        "url": peer_url,
+        "available": False,
+        "reason": "peer does not advertise the Rust VLIW runtime protocol v1"
+      }
+    if runtime.get("gpuObserved") is not True:
+      return {
+        "hostId": peer_host_id,
+        "url": peer_url,
+        "available": False,
+        "reason": normalize_text(runtime.get("message")) or "peer Rust VLIW runtime has no verified GPU allocation"
+      }
   if (
     runtime_name == "ollama"
     and normalize_text(runtime.get("runtimeMode")).lower() == "kubernetes-ollama"
@@ -1914,7 +1967,7 @@ def peer_route_candidate(
       "available": False,
       "reason": normalize_text(runtime.get("message")) or "peer Kubernetes Ollama pod has no verified GPU allocation"
     }
-  if runtime_is_stopped(runtime):
+  if runtime_is_stopped(runtime) and not (runtime_name == "vliw" and vliw_runtime_mode):
     return {
       "hostId": peer_host_id,
       "url": peer_url,
@@ -2272,6 +2325,11 @@ def make_snapshot(host_id: str) -> Dict[str, Any]:
     "capabilities": {
       "ollamaModelProvisioning": True,
       "ollamaGpuResidencyGuard": True,
+      "pyacVliwRuntimeProtocol": 1 if any(
+        normalize_text(item.get("runtimeName")).lower() == "vliw"
+        and normalize_text(item.get("runtimeMode")).lower() == "rust-vliw-http"
+        for item in (list(Handler.runtime_registry.values()) if "Handler" in globals() else [])
+      ) else None,
       "kubernetesRuntimeControl": any(
         normalize_text(item.get("actionDriver")).lower() == "kubernetes"
         for item in (list(Handler.runtime_registry.values()) if "Handler" in globals() else [])
@@ -2405,41 +2463,53 @@ def decode_vliw_pack_payload(job_spec: Dict[str, Any]) -> bytes:
   return pack
 
 
-def run_vliw_gpu_worker(worker_input: bytes) -> Dict[str, Any]:
-  worker_path = normalize_text(os.environ.get("GPU_HOUSEKEEPER_VLIW_WORKER")) or "/service/pyac-vliw-gpu-worker"
-  shader_path = normalize_text(os.environ.get("GPU_HOUSEKEEPER_VLIW_SPIRV_PATH")) or "/service/pyac_vliw_gpu_kernel.spv"
-  env = os.environ.copy()
-  env["PYAC_VLIW_SPIRV_PATH"] = shader_path
+def vliw_runtime_url(runtime_registry: Optional[Dict[str, Dict[str, Any]]] = None) -> str:
+  entry = (runtime_registry or Handler.runtime_registry).get("vliw") or {}
+  configured = normalize_text(os.environ.get("GPU_HOUSEKEEPER_VLIW_RUNTIME_URL"))
+  return (configured or normalize_text(entry.get("runtimeUrl")) or "http://pyac-vliw-runtime:18887").rstrip("/")
+
+
+def request_vliw_runtime_json(
+  pathname: str,
+  payload: Optional[Dict[str, Any]] = None,
+  timeout_sec: int = 1800,
+  runtime_registry: Optional[Dict[str, Dict[str, Any]]] = None
+) -> Dict[str, Any]:
+  url = f"{vliw_runtime_url(runtime_registry)}/{pathname.lstrip('/')}"
+  data = None if payload is None else json.dumps(payload).encode("utf-8")
+  request = Request(url, data=data, headers={"Content-Type": "application/json"})
+  if payload is None:
+    request.get_method = lambda: "GET"
   try:
-    completed = subprocess.run(
-      [worker_path],
-      input=worker_input,
-      stdout=subprocess.PIPE,
-      stderr=subprocess.PIPE,
-      timeout=max(1, int(os.environ.get("GPU_HOUSEKEEPER_VLIW_TIMEOUT_SEC", "1800"))),
-      env=env,
-      check=False
-    )
-  except (OSError, subprocess.TimeoutExpired) as err:
-    raise RuntimeError(f"Rust VLIW GPU worker could not execute: {normalize_text(err)}") from err
-  stdout = completed.stdout.decode("utf-8", errors="replace").strip()
-  stderr = completed.stderr.decode("utf-8", errors="replace").strip()
-  if completed.returncode != 0:
-    raise RuntimeError(stderr or f"Rust VLIW GPU worker exited {completed.returncode}")
+    with urlopen(request, timeout=max(1, timeout_sec)) as response:
+      raw = response.read().decode("utf-8")
+  except HTTPError as err:
+    try:
+      detail = err.read().decode("utf-8")
+    except Exception:
+      detail = str(err)
+    raise RuntimeError(f"Rust VLIW runtime request failed {err.code}: {detail}") from err
+  except (URLError, TimeoutError, socket.timeout, OSError) as err:
+    raise RuntimeError(f"Rust VLIW runtime request failed: {normalize_text(err)}") from err
   try:
-    result = json.loads(stdout)
+    result = json.loads(raw or "{}")
   except json.JSONDecodeError as err:
-    raise RuntimeError(f"Rust VLIW GPU worker returned invalid JSON: {normalize_text(err)}") from err
+    raise RuntimeError(f"Rust VLIW runtime returned invalid JSON: {normalize_text(err)}") from err
   if not isinstance(result, dict):
-    raise RuntimeError("Rust VLIW GPU worker returned a non-map result")
+    raise RuntimeError("Rust VLIW runtime returned a non-map result")
   return result
 
 
 def execute_vliw_pack_gpu(job: Dict[str, Any]) -> Dict[str, Any]:
   job_spec = job.get("jobSpec") if isinstance(job.get("jobSpec"), dict) else {}
-  result = run_vliw_gpu_worker(decode_vliw_pack_payload(job_spec))
+  decode_vliw_pack_payload(job_spec)
+  result = request_vliw_runtime_json("/v1/execute", {
+    "protocolVersion": 1,
+    "jobId": normalize_text(job.get("remoteJobId")) or normalize_text(job.get("handleId")),
+    "jobSpec": job_spec
+  })
   if result.get("ok") is not True or not isinstance(result.get("values"), list):
-    raise RuntimeError("Rust VLIW GPU worker returned an invalid pack result")
+    raise RuntimeError("Rust VLIW runtime returned an invalid pack result")
   return result
 
 
@@ -3229,13 +3299,62 @@ def parse_runtime_status(runtime_entry: Dict[str, Any]) -> Dict[str, Any]:
   running = bool(state.get("Running", False))
   state_status = normalize_text(state.get("Status")).lower()
   gpu_observed = resolve_gpu_observed(item)
+  if runtime_mode == "rust-vliw-http" and gpu_expected and gpu_observed is None:
+    gpu_observed = False
 
   status = state_status or ("running" if running else "stopped")
   message = "running" if running else (state_status or "not running")
+  if runtime_mode == "rust-vliw-http" and gpu_expected and gpu_observed is False:
+    return {
+      "runtimeName": runtime_name,
+      "status": "unavailable",
+      "containerName": container_name,
+      "runtimeMode": runtime_mode,
+      "gpuExpected": gpu_expected,
+      "gpuObserved": False,
+      "message": "Rust VLIW runtime container has no verified GPU allocation"
+    }
   if running and gpu_expected and gpu_observed is False:
     message = "running but gpu not observed"
   if running and gpu_observed is None:
     message = "running; gpu observation unavailable"
+
+  if runtime_mode == "rust-vliw-http" and running:
+    try:
+      health = request_vliw_runtime_json(
+        "/health", None, timeout_sec=3,
+        runtime_registry={"vliw": runtime_entry}
+      )
+      if health.get("ready") is not True or health.get("protocolVersion") != 1:
+        return {
+          "runtimeName": runtime_name,
+          "status": "starting",
+          "containerName": container_name,
+          "runtimeMode": runtime_mode,
+          "gpuExpected": gpu_expected,
+          "gpuObserved": gpu_observed,
+          "message": "Rust VLIW runtime has not reported protocol v1 readiness"
+        }
+    except Exception as err:
+      return {
+        "runtimeName": runtime_name,
+        "status": "starting",
+        "containerName": container_name,
+        "runtimeMode": runtime_mode,
+        "gpuExpected": gpu_expected,
+        "gpuObserved": gpu_observed,
+        "message": f"Rust VLIW runtime API is not ready: {normalize_text(err)}"
+      }
+    return {
+      "runtimeName": runtime_name,
+      "status": "running",
+      "containerName": container_name,
+      "runtimeMode": runtime_mode,
+      "gpuExpected": gpu_expected,
+      "gpuObserved": gpu_observed,
+      "message": "Rust VLIW runtime API is ready",
+      "protocolVersion": 1
+    }
 
   return {
     "runtimeName": runtime_name,
@@ -3379,6 +3498,47 @@ def observe_runtime_activity(runtime_name: str, runtime_entry: Dict[str, Any]) -
     return base
 
   probe = normalize_text(runtime_entry.get("activityProbe")).lower()
+  if probe == "housekeeper-vliw":
+    if status.get("status") != "running":
+      base["state"] = "unknown"
+      base["reason"] = status.get("message") or "Rust VLIW runtime is not healthy"
+      return base
+    with _LOCK:
+      if runtime_name in _RUNTIME_PAUSED:
+        base["state"] = "paused"
+        base["reason"] = "VLIW dispatch is paused for runtime maintenance"
+        return base
+      active_jobs = [
+        job for job in _JOBS.values()
+        if normalize_text(job.get("runtimeName")).lower() == runtime_name
+        and normalize_text(job.get("status")).lower() == "running"
+      ]
+      previous = _RUNTIME_ACTIVITY.get(runtime_name, {})
+      if active_jobs:
+        _RUNTIME_ACTIVITY[runtime_name] = {
+          "lastActivityAt": utc_now_iso(),
+          "idleSince": 0.0
+        }
+        base["state"] = "active"
+        base["reason"] = "GPU Housekeeper has an executing VLIW job"
+        return base
+      idle_since = float(previous.get("idleSince") or time.time())
+      last_activity = normalize_text(previous.get("lastActivityAt"))
+      _RUNTIME_ACTIVITY[runtime_name] = {
+        "lastActivityAt": last_activity,
+        "idleSince": idle_since
+      }
+    elapsed = max(0.0, time.time() - idle_since)
+    base["lastActivityAt"] = last_activity
+    base["idleSeconds"] = round(elapsed, 3)
+    if elapsed >= idle_grace_seconds():
+      base["state"] = "idle"
+      base["reason"] = "no executing VLIW job beyond the runtime idle grace"
+    else:
+      base["state"] = "cooldown"
+      base["reason"] = "VLIW runtime idle grace has not elapsed"
+    return base
+
   if probe == "ollama-access-log":
     with _LOCK:
       active_jobs = [
@@ -3540,6 +3700,13 @@ def observe_runtime_activity(runtime_name: str, runtime_entry: Dict[str, Any]) -
 def runtime_gpu_residency(runtime_name: str, runtime_entry: Dict[str, Any]) -> Dict[str, Any]:
   """Verify provider-owned residency before the idle reaper invokes a discharge hook."""
   kind = normalize_text(runtime_entry.get("dischargeKind")).lower()
+  if kind == "vliw":
+    status = parse_runtime_status(runtime_entry)
+    if status.get("status") == "running":
+      return {"state": "resident", "reason": "Rust VLIW runtime service is running"}
+    if runtime_is_stopped(status):
+      return {"state": "empty", "reason": "Rust VLIW runtime service is stopped"}
+    return {"state": "unknown", "reason": status.get("message") or "Rust VLIW runtime residency is unavailable"}
   if kind == "ollama":
     status = ollama_running_model_status()
     if not status.get("available"):
@@ -3586,7 +3753,7 @@ def runtime_gpu_residency(runtime_name: str, runtime_entry: Dict[str, Any]) -> D
 def run_idle_runtime_reaper_once(runtime_registry: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
   """Unload only registered, resident runtimes whose safe activity probe has elapsed."""
   outcomes: List[Dict[str, Any]] = []
-  supported = {"ollama", "comfyui", "strata"}
+  supported = {"ollama", "comfyui", "strata", "vliw"}
   for runtime_name in sorted(runtime_registry):
     entry = runtime_registry[runtime_name]
     kind = normalize_text(entry.get("dischargeKind")).lower()
@@ -3967,6 +4134,38 @@ def capacity_plan_for_job(job: Dict[str, Any], runtime_registry: Dict[str, Dict[
 
 def discharge_runtime(runtime_name: str, runtime_entry: Dict[str, Any]) -> Dict[str, Any]:
   kind = normalize_text(runtime_entry.get("dischargeKind")).lower()
+  if kind == "vliw":
+    if normalize_text(runtime_name).lower() in _RUNTIME_PAUSED:
+      return {
+        "success": False,
+        "runtimeName": runtime_name,
+        "reason": "VLIW dispatch is already paused by a runtime maintenance operation"
+      }
+    lifecycle_lock = runtime_lifecycle_lock(runtime_name)
+    with lifecycle_lock:
+      activity = observe_runtime_activity(runtime_name, runtime_entry)
+      if activity.get("state") != "idle":
+        return {
+          "success": False,
+          "runtimeName": runtime_name,
+          "reason": "VLIW runtime became active or its idle state could not be verified before stop"
+        }
+      paused = pause_runtime_dispatch(runtime_name, float(runtime_entry.get("runtimeActionTimeoutSec") or 1800))
+      if not paused.get("success"):
+        resume_runtime_dispatch(runtime_name, Handler.runtime_registry)
+        return {"success": False, "runtimeName": runtime_name, "reason": paused.get("message") or "VLIW jobs did not drain"}
+      stopped = runtime_action(Handler.runtime_registry, runtime_name, "stopAction")
+      if not stopped.get("success"):
+        resume_runtime_dispatch(runtime_name, Handler.runtime_registry)
+        return {"success": False, "runtimeName": runtime_name, "reason": stopped.get("message") or "VLIW runtime stop failed"}
+      resume_runtime_dispatch(runtime_name, Handler.runtime_registry)
+      with _LOCK:
+        _RUNTIME_ACTIVITY[runtime_name] = {"lastActivityAt": "", "idleSince": time.time()}
+      return {
+        "success": True,
+        "runtimeName": runtime_name,
+        "reason": "idle Rust VLIW runtime container stopped without restarting Housekeeper"
+      }
   if kind == "strata":
     activity = observe_runtime_activity(runtime_name, runtime_entry)
     if activity.get("state") != "idle":
@@ -5281,37 +5480,55 @@ def ensure_runtime_ready(runtime_registry: Dict[str, Dict[str, Any]], runtime_na
 
   status = parse_runtime_status(entry)
   strata_cli = normalize_text(entry.get("actionDriver")).lower() == "strata-cli"
-  if runtime_is_stopped(status) or (strata_cli and status.get("status") == "unknown"):
+  runtime_mode = normalize_text(entry.get("runtimeMode")).lower()
+  rust_vliw = runtime_mode == "rust-vliw-http"
+  if rust_vliw and status.get("gpuObserved") is False:
+    raise RuntimeError(status.get("message") or "Rust VLIW runtime has no verified GPU allocation")
+  needs_start = runtime_is_stopped(status) or (strata_cli and status.get("status") == "unknown")
+  if rust_vliw and status.get("status") not in {"running", "starting"}:
+    needs_start = True
+  if needs_start:
     result = runtime_action(runtime_registry, runtime_name, "beginAction")
     if not result.get("success"):
       raise RuntimeError(result.get("message") or f"runtime begin failed: {runtime_name}")
     status = parse_runtime_status(entry)
-    runtime_mode = normalize_text(entry.get("runtimeMode")).lower()
-    if runtime_mode in {"native-ollama", "kubernetes-ollama"} or strata_cli:
-      timeout_sec = 30
-      if strata_cli:
-        try:
-          timeout_sec = max(1, int(os.environ.get("GPU_HOUSEKEEPER_STRATA_READY_TIMEOUT_SEC", "120")))
-        except (TypeError, ValueError):
-          timeout_sec = 120
-      elif runtime_mode == "kubernetes-ollama":
-        try:
-          timeout_sec = max(1, int(entry.get("kubernetesReadyTimeoutSec") or 180))
-        except (TypeError, ValueError):
-          timeout_sec = 180
-      deadline = time.monotonic() + timeout_sec
-      while status.get("status") != "running" and time.monotonic() < deadline:
-        time.sleep(0.25)
-        status = parse_runtime_status(entry)
-      if status.get("status") != "running":
-        label = "Strata" if strata_cli else ("Kubernetes Ollama" if runtime_mode == "kubernetes-ollama" else "native Ollama")
-        raise RuntimeError(status.get("message") or f"{label} did not become available after start")
+  if rust_vliw:
+    timeout_sec = max(1, int(entry.get("runtimeReadyTimeoutSec") or 90))
+    deadline = time.monotonic() + timeout_sec
+    while status.get("status") != "running" and time.monotonic() < deadline:
+      time.sleep(0.25)
+      status = parse_runtime_status(entry)
+    if status.get("status") != "running":
+      raise RuntimeError(status.get("message") or "Rust VLIW runtime did not become ready")
+  elif needs_start and (runtime_mode in {"native-ollama", "kubernetes-ollama"} or strata_cli):
+    timeout_sec = 30
+    if strata_cli:
+      try:
+        timeout_sec = max(1, int(os.environ.get("GPU_HOUSEKEEPER_STRATA_READY_TIMEOUT_SEC", "120")))
+      except (TypeError, ValueError):
+        timeout_sec = 120
+    elif runtime_mode == "kubernetes-ollama":
+      try:
+        timeout_sec = max(1, int(entry.get("kubernetesReadyTimeoutSec") or 180))
+      except (TypeError, ValueError):
+        timeout_sec = 180
+    deadline = time.monotonic() + timeout_sec
+    while status.get("status") != "running" and time.monotonic() < deadline:
+      time.sleep(0.25)
+      status = parse_runtime_status(entry)
+    if status.get("status") != "running":
+      label = "Strata" if strata_cli else (
+        "Kubernetes Ollama" if runtime_mode == "kubernetes-ollama" else "native Ollama"
+      )
+      raise RuntimeError(status.get("message") or f"{label} did not become available after start")
 
   if (
     bool(entry.get("gpuExpected", False))
     and status.get("gpuObserved") is False
     and status.get("loaded") is not False
   ):
+    if rust_vliw:
+      raise RuntimeError("Rust VLIW runtime container has no verified GPU allocation")
     result = runtime_action(runtime_registry, runtime_name, "restartAction")
     if not result.get("success"):
       raise RuntimeError(result.get("message") or f"runtime restart failed: {runtime_name}")
@@ -6222,8 +6439,14 @@ def execute_job(
   runtime_registry: Dict[str, Dict[str, Any]],
   on_capacity_wait=None,
   on_capacity_ready=None,
-  cancel_event=None
+  cancel_event=None,
+  pause_event=None
 ) -> Dict[str, Any]:
+  def check_runtime_pause() -> None:
+    if pause_event is not None and pause_event.is_set():
+      raise RuntimePausedError("runtime dispatch paused for maintenance")
+
+  check_runtime_pause()
   if cancel_event is not None and cancel_event.is_set():
     raise CancelledJobError("job cancelled before execution")
   runtime_name = normalize_text(job.get("runtimeName")).lower()
@@ -6234,6 +6457,7 @@ def execute_job(
     return execute_ollama_ensure_model(job, runtime_registry)
   deadline = time.time() + capacity_wait_seconds(job)
   while True:
+    check_runtime_pause()
     if cancel_event is not None and cancel_event.is_set():
       raise CancelledJobError("job cancelled while waiting for GPU capacity")
     try:
@@ -6255,6 +6479,7 @@ def execute_job(
             raise CancelledJobError("job cancelled while waiting for GPU capacity")
         else:
           time.sleep(wait_seconds)
+  check_runtime_pause()
   if callable(on_capacity_ready):
     on_capacity_ready()
   if runtime_name == "ollama":
@@ -6270,6 +6495,7 @@ def execute_job(
   if runtime_name == "vliw":
     kind = normalize_text(job_spec.get("kind")).lower()
     if kind == "pyac-pack-execute":
+      ensure_runtime_ready(runtime_registry, "vliw")
       return execute_vliw_pack_gpu(job)
     raise RuntimeError("unsupported vliw job kind")
 
@@ -6305,6 +6531,7 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
       runtime_mode = normalize_text(item.get("runtimeMode")).lower()
       action_driver = normalize_text(item.get("actionDriver")).lower()
       housekeeper_vliw = runtime_name == "vliw" and runtime_mode == "housekeeper-vliw"
+      rust_vliw_http = runtime_name == "vliw" and runtime_mode == "rust-vliw-http"
       external_strata = runtime_name == "strata" and discharge_kind == "strata"
       native_ollama = runtime_name == "ollama" and runtime_mode == "native-ollama"
       kubernetes_ollama = (
@@ -6312,7 +6539,7 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
         and runtime_mode == "kubernetes-ollama"
         and action_driver == "kubernetes"
       )
-      if not runtime_name or (not container_name and not external_strata and not native_ollama and not kubernetes_ollama and not housekeeper_vliw):
+      if not runtime_name or (not container_name and not external_strata and not native_ollama and not kubernetes_ollama and not housekeeper_vliw and not rust_vliw_http):
         continue
       try:
         default_context_length = max(0, min(1_000_000, int(item.get("defaultContextLength") or 0)))
@@ -6330,6 +6557,10 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
         kubernetes_ready_timeout_sec = max(1, int(item.get("kubernetesReadyTimeoutSec") or 180))
       except (TypeError, ValueError):
         kubernetes_ready_timeout_sec = 180
+      try:
+        runtime_ready_timeout_sec = max(1, int(item.get("runtimeReadyTimeoutSec") or 90))
+      except (TypeError, ValueError):
+        runtime_ready_timeout_sec = 90
       registry[runtime_name] = {
         "runtimeName": runtime_name,
         "containerName": container_name,
@@ -6344,6 +6575,8 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
         "defaultContextLength": default_context_length,
         "minimumVramRequiredMb": minimum_vram_required_mb,
         "runtimeActionTimeoutSec": runtime_action_timeout_sec,
+        "runtimeReadyTimeoutSec": runtime_ready_timeout_sec,
+        "runtimeUrl": normalize_text(item.get("runtimeUrl")),
         "kubernetesApiUrl": normalize_text(item.get("kubernetesApiUrl")),
         "kubernetesTokenFile": normalize_text(item.get("kubernetesTokenFile")),
         "kubernetesCaFile": normalize_text(item.get("kubernetesCaFile")),
@@ -6368,7 +6601,21 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
 
   if not registry:
     registry = {key: dict(value) for key, value in DEFAULT_RUNTIME_REGISTRY.items()}
-  registry.setdefault("vliw", dict(DEFAULT_RUNTIME_REGISTRY["vliw"]))
+  vliw = {**DEFAULT_RUNTIME_REGISTRY["vliw"], **(registry.get("vliw") or {})}
+  vliw["runtimeMode"] = "rust-vliw-http"
+  vliw["containerName"] = normalize_text(vliw.get("containerName")) or DEFAULT_RUNTIME_REGISTRY["vliw"]["containerName"]
+  vliw["runtimeUrl"] = (
+    normalize_text(os.environ.get("GPU_HOUSEKEEPER_VLIW_RUNTIME_URL"))
+    or normalize_text(vliw.get("runtimeUrl"))
+    or DEFAULT_RUNTIME_REGISTRY["vliw"]["runtimeUrl"]
+  )
+  for action_key in ("beginAction", "stopAction", "restartAction"):
+    if not isinstance(vliw.get(action_key), list) or not vliw[action_key]:
+      vliw[action_key] = list(DEFAULT_RUNTIME_REGISTRY["vliw"][action_key])
+  vliw["activityProbe"] = "housekeeper-vliw"
+  vliw["dischargeKind"] = "vliw"
+  vliw["concurrencySafe"] = False
+  registry["vliw"] = vliw
   if normalize_text(os.environ.get("GPU_HOUSEKEEPER_STRATA_RUNTIME_URL")):
     registry.setdefault("strata", {
       "runtimeName": "strata",
@@ -6406,6 +6653,94 @@ def load_runtime_registry() -> Dict[str, Dict[str, Any]]:
   return registry
 
 
+def runtime_pause_event(runtime_name: str) -> threading.Event:
+  name = normalize_text(runtime_name).lower()
+  with _LOCK:
+    return _RUNTIME_PAUSE_EVENTS.setdefault(name, threading.Event())
+
+
+def runtime_lifecycle_lock(runtime_name: str) -> threading.Lock:
+  name = normalize_text(runtime_name).lower()
+  with _LOCK:
+    return _RUNTIME_LIFECYCLE_LOCKS.setdefault(name, threading.Lock())
+
+
+def hold_job_for_runtime_maintenance(remote_job_id: str) -> None:
+  global _RUNNING_JOB_ID
+  with _LOCK:
+    job = _JOBS.get(remote_job_id)
+    if not job or normalize_text(job.get("status")).lower() in {"success", "fail", "cancelled"}:
+      return
+    job.update({
+      "status": "queued",
+      "message": "held for VLIW runtime maintenance",
+      "startedAt": "",
+      "finishedAt": "",
+      "result": None,
+      "error": None
+    })
+    try:
+      persist_durable_job(job)
+    except Exception as err:
+      job["message"] = f"maintenance hold checkpoint failed; job will resume after restart: {normalize_text(err)}"
+      print(f"[gpu-housekeeper] could not checkpoint VLIW maintenance hold for {remote_job_id}: {normalize_text(err)}", flush=True)
+    device_id = execution_device_id(job)
+    running = _RUNNING_JOB_IDS.get(device_id, set())
+    running.discard(remote_job_id)
+    if not running:
+      _RUNNING_JOB_IDS.pop(device_id, None)
+    _RUNNING_JOB_ID = first_running_job_id()
+
+
+def pause_runtime_dispatch(runtime_name: str, timeout_seconds: float = 1800) -> Dict[str, Any]:
+  name = normalize_text(runtime_name).lower()
+  event = runtime_pause_event(name)
+  with _LOCK:
+    _RUNTIME_PAUSED.add(name)
+    event.set()
+  deadline = time.monotonic() + max(0.1, float(timeout_seconds))
+  while True:
+    with _LOCK:
+      active = sorted(
+        remote_job_id for remote_job_id in _STARTED_JOB_IDS
+        if normalize_text((_JOBS.get(remote_job_id) or {}).get("runtimeName")).lower() == name
+      )
+    if not active:
+      return {"success": True, "runtimeName": name, "drained": True, "activeJobs": []}
+    if time.monotonic() >= deadline:
+      return {
+        "success": False,
+        "runtimeName": name,
+        "drained": False,
+        "activeJobs": active,
+        "message": f"timed out draining {name} runtime jobs"
+      }
+    time.sleep(0.05)
+
+
+def resume_runtime_dispatch(runtime_name: str, runtime_registry: Dict[str, Dict[str, Any]]) -> List[str]:
+  name = normalize_text(runtime_name).lower()
+  event = runtime_pause_event(name)
+  with _LOCK:
+    _RUNTIME_PAUSED.discard(name)
+    event.clear()
+    queued = sorted(
+      [
+        (normalize_text(remote_job_id), normalize_text(job.get("submittedAt")))
+        for remote_job_id, job in _JOBS.items()
+        if normalize_text(job.get("runtimeName")).lower() == name
+        and normalize_text(job.get("status")).lower() == "queued"
+        and not bool(job.get("forwarded", False))
+      ],
+      key=lambda item: (item[1], item[0])
+    )
+  resumed = []
+  for remote_job_id, _submitted_at in queued:
+    if start_registered_job(remote_job_id, runtime_registry):
+      resumed.append(remote_job_id)
+  return resumed
+
+
 def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[str, Any]]) -> None:
   global _RUNNING_JOB_ID
   execution_host_id = ""
@@ -6422,6 +6757,7 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
     cancel_event = _JOB_CANCEL_EVENTS.setdefault(remote_job_id, threading.Event())
     device_id = execution_device_id(initial)
     runtime_name = normalize_text(initial.get("runtimeName")).lower()
+    pause_event = _RUNTIME_PAUSE_EVENTS.setdefault(runtime_name, threading.Event())
     vram_required_mb = declared_vram_mb(initial)
     shared = bool(
       (runtime_registry.get(runtime_name) or {}).get("concurrencySafe", False)
@@ -6435,9 +6771,13 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
       vram_required_mb,
       can_share=lambda reserved: shared_vram_can_admit(device_id, vram_required_mb, reserved)
       if shared else None,
-      cancel_event=cancel_event
+      cancel_event=cancel_event,
+      pause_event=pause_event
     )
     gate_held = True
+  except RuntimePausedError:
+    hold_job_for_runtime_maintenance(remote_job_id)
+    return
   except CancelledJobError:
     with _LOCK:
       current = _JOBS.get(remote_job_id)
@@ -6459,6 +6799,8 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
 
   try:
     while True:
+      if pause_event.is_set():
+        raise RuntimePausedError("runtime dispatch paused for maintenance")
       with _LOCK:
         job = _JOBS.get(remote_job_id)
         if not job:
@@ -6532,13 +6874,16 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
         vram_required_mb,
         can_share=lambda reserved: shared_vram_can_admit(device_id, vram_required_mb, reserved)
         if shared else None,
-        cancel_event=cancel_event
+        cancel_event=cancel_event,
+        pause_event=pause_event
       )
       gate_held = True
 
     def wait_for_capacity(_error: BaseException) -> None:
       nonlocal gate_held, last_capacity_reaper_check
       global _RUNNING_JOB_ID
+      if pause_event.is_set():
+        raise RuntimePausedError("runtime dispatch paused for maintenance")
       if cancel_event.is_set():
         raise CancelledJobError("job cancelled while waiting for GPU capacity")
       with _LOCK:
@@ -6571,6 +6916,7 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
         gate.release(shared, vram_required_mb)
         gate_held = False
 
+      should_reacquire_gate = True
       try:
         now = time.monotonic()
         if now - last_capacity_reaper_check >= idle_runtime_reaper_interval_seconds():
@@ -6583,49 +6929,60 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
               flush=True
             )
         wait_seconds = min(capacity_poll_seconds(), max(0.1, capacity_wait_seconds(job)))
-        if cancel_event.wait(wait_seconds):
-          raise CancelledJobError("job cancelled while waiting for GPU capacity")
+        wait_deadline = time.monotonic() + wait_seconds
+        while time.monotonic() < wait_deadline:
+          if pause_event.is_set():
+            should_reacquire_gate = False
+            raise RuntimePausedError("runtime dispatch paused for maintenance")
+          if cancel_event.is_set():
+            should_reacquire_gate = False
+            raise CancelledJobError("job cancelled while waiting for GPU capacity")
+          time.sleep(min(0.1, max(0.0, wait_deadline - time.monotonic())))
       finally:
-        while True:
-          wait_for_dispatch_resume(cancel_event)
-          gate.acquire(
-            shared,
-            vram_required_mb,
-            can_share=lambda reserved: shared_vram_can_admit(device_id, vram_required_mb, reserved)
-            if shared else None,
-            cancel_event=cancel_event
-          )
-          gate_held = True
-          with _LOCK:
-            current = _JOBS.get(remote_job_id)
-            if not current:
-              raise RuntimeError(f"job disappeared while resuming capacity check: {remote_job_id}")
-            if _DISPATCH_PAUSED:
-              pause_before_capacity_check = True
-            else:
-              pause_before_capacity_check = False
-              current["status"] = "running"
-              current["message"] = "checking GPU capacity"
-              current["startedAt"] = utc_now_iso()
-              try:
-                persist_durable_job(current)
-              except Exception as persist_error:
-                current["status"] = "queued"
-                current["message"] = f"durable queue checkpoint failed; job remains queued: {normalize_text(persist_error)}"
-                current["startedAt"] = ""
-                raise RuntimeError(
-                  f"could not checkpoint resumed capacity check for {remote_job_id}: {normalize_text(persist_error)}"
-                ) from persist_error
-              _RUNNING_JOB_IDS.setdefault(device_id, set()).add(remote_job_id)
-              _RUNNING_JOB_ID = remote_job_id
-          if not pause_before_capacity_check:
-            break
-          gate.release(shared, vram_required_mb)
-          gate_held = False
+        if should_reacquire_gate:
+          while True:
+            wait_for_dispatch_resume(cancel_event)
+            gate.acquire(
+              shared,
+              vram_required_mb,
+              can_share=lambda reserved: shared_vram_can_admit(device_id, vram_required_mb, reserved)
+              if shared else None,
+              cancel_event=cancel_event,
+              pause_event=pause_event
+            )
+            gate_held = True
+            with _LOCK:
+              current = _JOBS.get(remote_job_id)
+              if not current:
+                raise RuntimeError(f"job disappeared while resuming capacity check: {remote_job_id}")
+              if _DISPATCH_PAUSED:
+                pause_before_capacity_check = True
+              else:
+                pause_before_capacity_check = False
+                current["status"] = "running"
+                current["message"] = "checking GPU capacity"
+                current["startedAt"] = utc_now_iso()
+                try:
+                  persist_durable_job(current)
+                except Exception as persist_error:
+                  current["status"] = "queued"
+                  current["message"] = f"durable queue checkpoint failed; job remains queued: {normalize_text(persist_error)}"
+                  current["startedAt"] = ""
+                  raise RuntimeError(
+                    f"could not checkpoint resumed capacity check for {remote_job_id}: {normalize_text(persist_error)}"
+                  ) from persist_error
+                _RUNNING_JOB_IDS.setdefault(device_id, set()).add(remote_job_id)
+                _RUNNING_JOB_ID = remote_job_id
+            if not pause_before_capacity_check:
+              break
+            gate.release(shared, vram_required_mb)
+            gate_held = False
 
     def capacity_ready() -> None:
       nonlocal execution_started
       global _RUNNING_JOB_ID
+      if pause_event.is_set():
+        raise RuntimePausedError("runtime dispatch paused for maintenance")
       with _LOCK:
         current = _JOBS.get(remote_job_id)
         if not current:
@@ -6653,7 +7010,8 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
         runtime_registry,
         on_capacity_wait=wait_for_capacity,
         on_capacity_ready=capacity_ready,
-        cancel_event=cancel_event
+        cancel_event=cancel_event,
+        pause_event=pause_event
       )
       if cancel_event.is_set():
         raise CancelledJobError("job cancelled during execution")
@@ -6672,24 +7030,24 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
           except Exception as persist_error:
             print(f"[gpu-housekeeper] could not persist completed job {remote_job_id}: {normalize_text(persist_error)}", flush=True)
     except Exception as err:
-      with _LOCK:
-        current = _JOBS.get(remote_job_id)
-        if current:
-          cancelled = cancel_event.is_set() or isinstance(err, CancelledJobError)
-
-          outcome = "cancelled" if cancelled else "fail"
-
-          current["status"] = "cancelled" if cancelled else "fail"
-          current["message"] = "cancelled" if cancelled else (normalize_text(err) or "job failed")
-          current["result"] = None
-          current["error"] = None if cancelled else {"message": normalize_text(err) or "job failed"}
-          current["finishedAt"] = utc_now_iso()
-          if cancelled:
-            outcome = "cancelled"
-          try:
-            persist_durable_job(current)
-          except Exception as persist_error:
-            print(f"[gpu-housekeeper] could not persist failed job {remote_job_id}: {normalize_text(persist_error)}", flush=True)
+      if isinstance(err, RuntimePausedError):
+        outcome = "paused"
+        hold_job_for_runtime_maintenance(remote_job_id)
+      else:
+        with _LOCK:
+          current = _JOBS.get(remote_job_id)
+          if current:
+            cancelled = cancel_event.is_set() or isinstance(err, CancelledJobError)
+            outcome = "cancelled" if cancelled else "fail"
+            current["status"] = "cancelled" if cancelled else "fail"
+            current["message"] = "cancelled" if cancelled else (normalize_text(err) or "job failed")
+            current["result"] = None
+            current["error"] = None if cancelled else {"message": normalize_text(err) or "job failed"}
+            current["finishedAt"] = utc_now_iso()
+            try:
+              persist_durable_job(current)
+            except Exception as persist_error:
+              print(f"[gpu-housekeeper] could not persist failed job {remote_job_id}: {normalize_text(persist_error)}", flush=True)
     finally:
       if execution_started is not None and call_identity:
         try:
@@ -6717,6 +7075,11 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
             "lastActivityAt": utc_now_iso(),
             "idleSince": time.time()
           }
+        elif runtime_name.lower() == "vliw":
+          _RUNTIME_ACTIVITY[runtime_name.lower()] = {
+            "lastActivityAt": utc_now_iso(),
+            "idleSince": time.time()
+          }
         running_on_device = _RUNNING_JOB_IDS.get(device_id, set())
         running_on_device.discard(remote_job_id)
         if not running_on_device:
@@ -6731,13 +7094,36 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
       record_queue_transition(execution_host_id, "finished")
 
 
-def start_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[str, Any]]) -> None:
-  threading.Thread(
-    target=execute_registered_job,
-    args=(remote_job_id, runtime_registry),
-    name=f"gpu-job-{remote_job_id}",
-    daemon=True
-  ).start()
+def start_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[str, Any]]) -> bool:
+  with _LOCK:
+    job = _JOBS.get(remote_job_id)
+    if not job:
+      return False
+    runtime_name = normalize_text(job.get("runtimeName")).lower()
+    if runtime_name in _RUNTIME_PAUSED or remote_job_id in _STARTED_JOB_IDS:
+      return False
+    if normalize_text(job.get("status")).lower() != "queued":
+      return False
+    _STARTED_JOB_IDS.add(remote_job_id)
+
+  def run_registered() -> None:
+    try:
+      execute_registered_job(remote_job_id, runtime_registry)
+    finally:
+      with _LOCK:
+        _STARTED_JOB_IDS.discard(remote_job_id)
+
+  try:
+    threading.Thread(
+      target=run_registered,
+      name=f"gpu-job-{remote_job_id}",
+      daemon=True
+    ).start()
+    return True
+  except Exception:
+    with _LOCK:
+      _STARTED_JOB_IDS.discard(remote_job_id)
+    raise
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -6911,7 +7297,21 @@ class Handler(BaseHTTPRequestHandler):
       if not runtime_name:
         json_response(self, 400, {"success": False, "status": "invalid", "message": "runtimeName required"})
         return
-      result = runtime_action(self.runtime_registry, runtime_name, "beginAction")
+      if normalize_text((self.runtime_registry.get(runtime_name) or {}).get("runtimeMode")).lower() == "rust-vliw-http":
+        with runtime_lifecycle_lock(runtime_name):
+          try:
+            ensure_runtime_ready(self.runtime_registry, runtime_name)
+            resumed = resume_runtime_dispatch(runtime_name, self.runtime_registry)
+            result = {
+              "success": True,
+              "status": "running",
+              "message": "Rust VLIW runtime is ready",
+              "resumedJobs": resumed
+            }
+          except Exception as err:
+            result = {"success": False, "status": "defective", "message": normalize_text(err)}
+      else:
+        result = runtime_action(self.runtime_registry, runtime_name, "beginAction")
       json_response(self, 200 if result.get("success") else 400, result)
       return
 
@@ -6921,7 +7321,25 @@ class Handler(BaseHTTPRequestHandler):
       if not runtime_name:
         json_response(self, 400, {"success": False, "status": "invalid", "message": "runtimeName required"})
         return
-      result = runtime_action(self.runtime_registry, runtime_name, "stopAction")
+      if normalize_text((self.runtime_registry.get(runtime_name) or {}).get("runtimeMode")).lower() == "rust-vliw-http":
+        entry = self.runtime_registry[runtime_name]
+        with runtime_lifecycle_lock(runtime_name):
+          try:
+            timeout_sec = max(1, float(entry.get("runtimeActionTimeoutSec") or 1800))
+          except (TypeError, ValueError):
+            timeout_sec = 1800
+          paused = pause_runtime_dispatch(runtime_name, timeout_sec)
+          if not paused.get("success"):
+            resume_runtime_dispatch(runtime_name, self.runtime_registry)
+            result = {"success": False, "status": "timeout", "message": paused.get("message")}
+          else:
+            result = runtime_action(self.runtime_registry, runtime_name, "stopAction")
+            if not result.get("success"):
+              resume_runtime_dispatch(runtime_name, self.runtime_registry)
+            else:
+              result["message"] = "VLIW jobs drained; Rust runtime stopped and dispatch remains held until /runtime/begin"
+      else:
+        result = runtime_action(self.runtime_registry, runtime_name, "stopAction")
       json_response(self, 200 if result.get("success") else 400, result)
       return
 
@@ -6931,7 +7349,30 @@ class Handler(BaseHTTPRequestHandler):
       if not runtime_name:
         json_response(self, 400, {"success": False, "status": "invalid", "message": "runtimeName required"})
         return
-      result = runtime_action(self.runtime_registry, runtime_name, "restartAction")
+      if normalize_text((self.runtime_registry.get(runtime_name) or {}).get("runtimeMode")).lower() == "rust-vliw-http":
+        entry = self.runtime_registry[runtime_name]
+        with runtime_lifecycle_lock(runtime_name):
+          try:
+            timeout_sec = max(1, float(entry.get("runtimeActionTimeoutSec") or 1800))
+          except (TypeError, ValueError):
+            timeout_sec = 1800
+          paused = pause_runtime_dispatch(runtime_name, timeout_sec)
+          if not paused.get("success"):
+            resume_runtime_dispatch(runtime_name, self.runtime_registry)
+            result = {"success": False, "status": "timeout", "message": paused.get("message")}
+          else:
+            result = runtime_action(self.runtime_registry, runtime_name, "restartAction")
+            if result.get("success"):
+              try:
+                ensure_runtime_ready(self.runtime_registry, runtime_name)
+                resumed = resume_runtime_dispatch(runtime_name, self.runtime_registry)
+                result["status"] = "running"
+                result["message"] = "Rust VLIW runtime restarted and healthy; queued jobs resumed"
+                result["resumedJobs"] = resumed
+              except Exception as err:
+                result = {"success": False, "status": "unhealthy", "message": normalize_text(err)}
+            else:
+              resume_runtime_dispatch(runtime_name, self.runtime_registry)
       json_response(self, 200 if result.get("success") else 400, result)
       return
 

@@ -17,8 +17,14 @@ The housekeeper owns host-local GPU runtime control:
 - start/restart/discharge managed runtimes,
 - admit execution per physical device,
 - serialize default runtimes while allowing explicitly safe shared runtimes,
-- execute real Ollama, ComfyUI, and KataGo jobs,
+- execute real Ollama, ComfyUI, KataGo, and managed VLIW jobs,
 - expose job status and results over HTTP.
+
+The Rust VLIW interpreter is an independent GPU runtime service. Housekeeper
+continues to own GPU admission, queue durability, federation, and runtime
+lifecycle; it forwards only validated canonical PyAC packs to the service.
+Changing VLIW interpreter or shader code rebuilds/recreates that service, not
+the Housekeeper process or other GPU runtimes.
 
 It should not duplicate the durable queue. The Pyash holding spool is the
 system of record for queued duties and final handles; housekeeper job state is
@@ -218,6 +224,7 @@ The default managed runtimes are:
 - `katago`
 - `huggingface` (the Criterion sequence-to-sequence service)
 - `strata` when `GPU_HOUSEKEEPER_STRATA_RUNTIME_URL` is configured
+- `vliw` through the standalone Rust VLIW HTTP service
 
 Runtime configuration can be overridden with `GPU_HOUSEKEEPER_RUNTIME_REGISTRY`.
 
@@ -243,6 +250,27 @@ after its configured idle grace and with zero in-flight requests. Discharge
 uses Strata's `/v1/unload`, verifies `loaded:false`, and then rechecks actual
 free VRAM before the requesting runtime proceeds. Missing status, activity,
 authentication, or unload confirmation fails closed.
+
+### Rust VLIW runtime service
+
+The `vliw` Housekeeper runtime forwards only protocol-v1
+`pyac-pack-execute` requests to `pyac-vliw-runtime` over the private Docker
+network. The Rust HTTP service validates the envelope and PyAC pack, then
+invokes the existing Rust/WGPU worker and returns its typed result. Housekeeper
+performs GPU capacity admission before starting the service or sending a pack.
+The service is started on demand and stopped after the normal 300-second idle
+grace; an executing VLIW job prevents idle discharge.
+
+Runtime maintenance pauses only local VLIW dispatch. Active VLIW duties drain;
+new and capacity-waiting VLIW duties stay in the durable Housekeeper queue.
+Other runtimes continue to be admitted. `/runtime/begin` resumes the held VLIW
+queue after health is confirmed, while `/runtime/stop` leaves it held until a
+begin request. The standalone update helper uses this contract to rebuild and
+recreate only the VLIW container. The one-time Housekeeper deployment installs
+the route, but subsequent VLIW interpreter updates do not rebuild or restart
+Housekeeper. See
+[`container/pyac-vliw-runtime/README.md`](../../container/pyac-vliw-runtime/README.md)
+for the service API and rollout sequence.
 
 ## 3. Runtime Behavior
 

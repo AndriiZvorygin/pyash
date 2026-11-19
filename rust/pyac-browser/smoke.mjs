@@ -1,23 +1,21 @@
 import assert from "node:assert/strict";
-import { createReadStream, existsSync, readFileSync } from "node:fs";
+import { createReadStream, existsSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, resolve, sep } from "node:path";
 import { chromium } from "playwright";
 import { fileURLToPath } from "node:url";
-import { buildProgram } from "../../program/program.mjs";
-import { encodePyacPack, lowerPyashProgram } from "../../program/library/vliw/index.mjs";
+import { buildVliwGpuConformanceCases } from "../../command/vliw_gpu_conformance.mjs";
 
 const root = resolve(fileURLToPath(new URL("./web/", import.meta.url)));
-const repositoryRoot = resolve(fileURLToPath(new URL("../../", import.meta.url)));
 const generatedModule = resolve(root, "pkg/pyac_browser.js");
 assert.ok(existsSync(generatedModule), "run build.sh before the browser smoke");
-const programletSource = readFileSync(
-  resolve(repositoryRoot, "examples/pyash/vliw-programlet-gpu-smoke.pya"),
-  "utf8",
-);
-const programletPack = encodePyacPack(
-  lowerPyashProgram(buildProgram(programletSource).sentences).vectors,
-);
+const programletCases = buildVliwGpuConformanceCases()
+  .filter(({ kind }) => kind === "programlet")
+  .map(({ name, pack, expectedValues }) => ({
+    name,
+    pack: [...pack],
+    expectedValues,
+  }));
 
 const contentTypes = new Map([
   [".html", "text/html; charset=utf-8"],
@@ -173,23 +171,33 @@ try {
     `backend result: ${JSON.stringify(selectedBackendResult)}`,
   );
   assert.ok(["webgpu", "wasm-cpu"].includes(selectedBackendResult.backend));
-  assert.equal(selectedBackendResult.backend, rawGpuProbe.available ? "webgpu" : "wasm-cpu");
-  const programletParity = await page.evaluate(async ({ gpuAvailable, moduleUrl, pack }) => {
+  assert.equal(
+    selectedBackendResult.backend,
+    rawGpuProbe.available ? "webgpu" : "wasm-cpu",
+    `selected GPU action did not match the raw adapter probe: ${selectedBackendStatus}; result=${JSON.stringify(selectedBackendResult)}`,
+  );
+  const programletParity = await page.evaluate(async ({ gpuAvailable, moduleUrl, cases }) => {
     const { run_pack, run_pack_webgpu } = await import(moduleUrl);
-    const bytes = new Uint8Array(pack);
-    const cpu = JSON.parse(run_pack(bytes));
-    const gpu = gpuAvailable ? JSON.parse(await run_pack_webgpu(bytes)) : null;
-    return { cpu, gpu };
+    const results = [];
+    for (const testCase of cases) {
+      const bytes = new Uint8Array(testCase.pack);
+      const cpu = JSON.parse(run_pack(bytes));
+      const gpu = gpuAvailable ? JSON.parse(await run_pack_webgpu(bytes)) : null;
+      results.push({ name: testCase.name, expectedValues: testCase.expectedValues, cpu, gpu });
+    }
+    return results;
   }, {
     gpuAvailable: selectedBackendResult.backend === "webgpu",
     moduleUrl: generatedModuleUrl,
-    pack: [...programletPack],
+    cases: programletCases,
   });
-  assert.equal(programletParity.cpu.ok, true);
-  assert.deepEqual(programletParity.cpu.values, [{ type: "unsigned", value: 1 }]);
-  if (programletParity.gpu) {
-    assert.equal(programletParity.gpu.backend, "webgpu");
-    assert.deepEqual(programletParity.gpu.values, programletParity.cpu.values);
+  for (const result of programletParity) {
+    assert.equal(result.cpu.ok, true, `${result.name}: WASM CPU rejected the pack`);
+    assert.deepEqual(result.cpu.values, result.expectedValues, `${result.name}: WASM CPU differs from spec`);
+    if (result.gpu) {
+      assert.equal(result.gpu.backend, "webgpu", `${result.name}: WebGPU did not execute the pack`);
+      assert.deepEqual(result.gpu.values, result.expectedValues, `${result.name}: WebGPU differs from spec`);
+    }
   }
 
   let measurements = [];
@@ -287,7 +295,7 @@ try {
   assert.equal(invalidResult.error.code, "truncated-pack");
   assert.deepEqual(pageErrors, []);
 
-  process.stdout.write(`browser smoke passed: WASM demo -> unsigned 2; numeric batch parity -> ${selectedBackendResult.backend}${selectedBackendResult.device ? ` (${selectedBackendResult.device})` : ""}${selectedBackendResult.backend === "wasm-cpu" ? ` (${selectedBackendStatus})` : ""}; vector arithmetic CPU${vectorParity.gpu ? "/WebGPU parity" : " fixture"}; conditional equality true/false CPU${conditionalParity[0].gpu ? "/WebGPU parity" : " fixture"}; numeric programlet CPU${programletParity.gpu ? "/WebGPU parity" : " fixture"}; forced no-WebGPU -> WASM CPU fallback; malformed upload -> truncated-pack\n`);
+  process.stdout.write(`browser smoke passed: WASM demo -> unsigned 2; numeric batch parity -> ${selectedBackendResult.backend}${selectedBackendResult.device ? ` (${selectedBackendResult.device})` : ""}${selectedBackendResult.backend === "wasm-cpu" ? ` (${selectedBackendStatus})` : ""}; vector arithmetic CPU${vectorParity.gpu ? "/WebGPU parity" : " fixture"}; conditional equality true/false CPU${conditionalParity[0].gpu ? "/WebGPU parity" : " fixture"}; ${programletParity.length} scalar programlet cases CPU${programletParity[0]?.gpu ? "/WebGPU parity" : " fixture"}; forced no-WebGPU -> WASM CPU fallback; malformed upload -> truncated-pack\n`);
   if (measurements.length) process.stdout.write(`warm batch benchmark (ms, median of 7 alternating samples, includes JSON result encoding): ${JSON.stringify(measurements)}\n`);
 } finally {
   await browser.close();

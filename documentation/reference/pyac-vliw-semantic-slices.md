@@ -169,7 +169,7 @@ divisor is a `division-by-zero` execution error.
 
 ## Conditional numeric selection
 
-The Rust pack interpreter and browser WebGPU path execute the first
+The Rust pack interpreter and browser WebGPU path execute the scalar
 conditional slice emitted by the JavaScript sentence encoder:
 
 ```pyash
@@ -180,10 +180,14 @@ The condition and both numeric-literal arms form one completion-marked,
 two-codelet group. The CPU executor evaluates the inline equality; WebGPU
 validates the same group through the Rust semantic decoder, then compares the
 two operands and selects an arm in WGSL. Both return only the selected unsigned
-result. This remains one bounded branch shape: nested branches, named
-predicates, side-effecting arms, and conditional RISC-V code generation are
-not implemented. CPU true/false coverage is in
-`rust/pyac/tests/pack_execution.rs`; browser CPU/GPU parity coverage is in
+result. The bounded programlet evaluator also accepts `not`/`and`/`or`
+predicates whose comparison leaves resolve numeric or boolean arguments and
+local slots in the active frame. The expression stack is bounded to eight
+levels and preserves short-circuit evaluation. Nested conditional branches,
+side-effecting arms, and conditional RISC-V code generation remain
+unsupported. CPU true/false coverage is in
+`rust/pyac/tests/pack_execution.rs`; the Rust GPU conformance matrix includes
+true and false composed-local cases, and browser CPU/GPU parity coverage is in
 `rust/pyac-browser/smoke.mjs`.
 
 ## Numeric invert
@@ -319,38 +323,25 @@ change, slot opcode, or alternate candidate format is involved.
 
 The shared Rust runtime now executes nested ceremony calls, typed numeric and
 boolean arguments/locals/results, the pure scalar operator set, comparisons
-against literals/arguments/locals, one-level conditional actions with an
-optional alternative, and bounded `fromindex`/`toindex` traversal. Nested
-bounded loops compose through nested ceremony calls; each call frame owns its
-loop cursor and bound. A conditional has one action per arm; a multi-action arm
-can call a ceremony containing the sequence. Nested conditional branches and
-compound predicates are explicitly rejected by the programlet compiler rather
-than partially encoded. The compiler and Rust frame ABI admit U16 numeric and
-boolean scalar inputs; vector, date, text, and out-of-U16 input literals are
-rejected before lowering. Calls have a maximum depth of 8 and at most 8
-arguments in the frame ABI (the current sentence surface exposes five distinct
-argument cases); each frame has 64 slots including its return slot, leaving 63
-named locals, and each programlet pack is limited to 64 codelets. The default
-step budget is 65,536 executed sentences; root invocation and loop control are
-counted consistently, while `prah` delimiters do not consume steps. The same
-runtime source is compiled for the
-Rust CPU executor, Vulkan SPIR-V, and the WGSL target. Date and vector codelets
-remain supported by the ordinary shared codelet interpreter, but date/vector
-values are not programlet-local types; text-bearing programlet values and
-arbitrary effects remain unsupported.
+and composed boolean predicates over literals/arguments/locals, one-level
+conditional actions with an optional alternative, and bounded
+`fromindex`/`toindex` traversal. Calls have a
+maximum depth of 8 and at most 8 arguments; each invocation has at most 64
+local slots and 64 codelets, under the 65,536-step default budget. The same
+runtime source is compiled for the Rust CPU executor, Vulkan SPIR-V, and the
+WGSL target. Date and vector codelets remain supported by the ordinary shared
+codelet interpreter, but date/vector values are not programlet-local types;
+text-bearing programlet values and arbitrary effects remain unsupported.
 
-Every pure action must write to a typed `to name` destination. Source forms
-without that destination are rejected before packing, rather than accepted by
-the JavaScript interpreter as a discarded result while the Rust frame runtime
-rejects them. Error fixtures compare division-by-zero (shared runtime code 2)
-and constant-write (code 7) across the JavaScript reference, Rust CPU pack
-executor, and live Housekeeper Vulkan worker. Both GPU failures were verified
-on Mriczo's RTX 3090. The exact small step-budget boundary is pinned in
-JavaScript and Rust CPU tests; the GPU executes the same shared runtime with
-the fixed 65,536-step default.
+Each routine frame binds its return slot to the output name declared by that
+routine. A call's `to` name is a separate caller-side destination; the returned
+value is copied there when the callee closes. Nested-loop conformance exercises
+this distinction with three inner iterations inside each of three outer
+iterations, plus 299 outer iterations to verify repeated routine names reuse
+bounded symbol scratch.
 
 Conformance tests are in `rust/pyac/tests/pack_execution.rs`; GPU worker result
-decoding is covered in `rust/pyac-gpu/worker/src/main.rs` tests. The source-level
+decoding is covered in `rust/pyac-gpu/worker/src/gpu.rs` tests. The source-level
 reference fixture is `examples/pyash/vliw-programlet-local-slots.pya`.
 
 ## Pure-program semantics inventory
@@ -361,43 +352,57 @@ core and Rust pack executor.
 
 | Semantic family | Pyash reference behavior | Shared Rust CPU/GPU status | Remaining parity work |
 | --- | --- | --- | --- |
-| Scalar values | U16 numeric and boolean formal input literals; signed values can be produced by supported operators | codelet values plus typed numeric/boolean programlet arguments, locals, and returns on CPU and GPU | wider integer widths and additional local value families |
+| Scalar values | unsigned/signed `num` and `bool` literals/results | codelet values plus typed numeric/boolean programlet arguments, locals, and returns on CPU and GPU | wider integer widths and additional local value families |
 | Pure scalar verbs | `plus`, `subtract`, `multiply`, `divide`, `exponential`, `invert`, `xor`, `remains` | shared codelet semantics and bounded programlet writes; negative signed operands are rejected where the existing arithmetic contract is unsigned | additional verbs only where Pyash defines deterministic pure semantics |
-| Comparisons | `equally`, `tiny`, `giant` | shared codelet predicates and programlet comparisons against literals, arguments, and locals, including signed and boolean values; compound predicates are explicitly rejected | compound predicate representation and short-circuit logic |
-| Local quantities | initialized numeric/boolean variables and constant quantities; typed writes; constants reject writes; frame discarded at return | CPU and GPU execute typed declarations, operator writes, boolean writes, local `ret`, and frame isolation; 64 slots include the return slot | date/vector/text locals and shared mutable program state |
-| Ceremony calls | typed outputs and bounded calls; each call gets a fresh frame | nested calls execute with an 8-argument frame capacity and call depth 8; the current Pyash case surface provides five distinct input cases; depth overflow is an explicit error | broader signatures, general recursion semantics, and larger configurable limits |
-| Branches | conditional sentences with true and optional alternative action | one-level programlet predicates over literal/argument/local values select numeric or boolean actions; each arm is one action, with multi-action behavior composed through a call; nested branches are explicitly rejected | nested branch representation and multi-statement arm encoding |
-| Loops | bounded `fromindex`/`toindex` traversal under the programlet step budget | loop index is available as a typed argument; zero-width ranges skip execution; nested bounded loops compose through calls; JS and Rust agree on the exact 6-fail/7-pass step boundary for the loop fixture | wider iteration/index types |
+| Comparisons | `equally`, `tiny`, `giant` | shared codelet predicates and programlet comparisons against literals, arguments, and locals, including signed and boolean values; standalone numeric/boolean literal comparisons return typed booleans | additional comparison forms only where the Pyash execution contract defines them |
+| Boolean composition | `not`, `and`, `or` over boolean-producing sentences, as specified in `documentation/specifications/02-core-execution.md` | VLIW sentence lowering and shared Rust CPU/GPU runtime support nested boolean facts and literal/argument/local comparison leaves, bounded to depth 8; `and`/`or` short-circuit | additional pure boolean-producing leaf forms only where the contract defines them |
+| Local quantities | initialized numeric/boolean variables and constant quantities; typed writes; constants reject writes; frame discarded at return | CPU and GPU execute typed declarations, operator writes, boolean writes, local `ret`, and frame isolation | date/vector/text locals and shared mutable program state |
+| Ceremony calls | typed outputs and bounded calls; each call gets a fresh frame | nested calls execute with up to 8 arguments and call depth 8; depth overflow is an explicit error | broader signatures, general recursion semantics, and larger configurable limits |
+| Branches | conditional sentences with true and optional alternative action | one-level programlet predicates over literal/argument/local values select numeric or boolean actions | nested branches and multi-statement branch bodies |
+| Loops | bounded `fromindex`/`toindex` traversal under the programlet step budget; an explicit `ret` role updates the final evoker's loop register before progression | loop index and bound are available as typed arguments; explicit `fromindex` returns resolve literals or `this toindex` genitives and update the supervisor's remaining range; zero-width ranges skip execution; nested bounded loops preserve independent call-frame cursors | wider iteration/index types |
 | Effects | rejects effectful or unknown verbs | no general programlet effects; unsupported sentence forms fail | keep host effects outside pure core unless explicitly specified |
 
 The legacy named-slot candidate map format is not a Pyash sentence encoding and
 is not accepted by the Rust pack or Housekeeper runtime. The executable
 programlet contract above is the canonical sentence/codelet path.
 
-## Pure-function parity roadmap
+## Parity completion plan
 
-The parity target is the bounded, effect-free source accepted by
-`compilePyashProgramSource`, with `executePyashProgramPack` as the JavaScript
-Pyash semantic reference. It does not mean that the GPU implements every
-effectful Pyash verb. Recursion and effects remain explicit rejections unless
-the source contract is deliberately changed. Capacity limits are part of the
-contract and must be tested consistently, not hidden by backend fallbacks.
+The parity target is the pure-program subset defined by the Pyash execution
+specification and encoded by canonical `.pyac` input, with the same typed
+results on the JavaScript interpreter, Rust CPU executor, native Vulkan, and
+browser WebGPU. The JavaScript interpreter is an implementation under test,
+not the authority for expected behavior: known implementation defects must be
+fixed to match the spec rather than copied into the other backends. Host
+effects are outside this pure subset; valid pure semantics are not excluded
+merely because one backend is harder to implement. Every runtime rejection
+must also preserve the same documented error category and boundary.
 
-The slices proceed in this order:
+Work proceeds in these slices, with each completed slice backed by differential
+fixtures before the next one expands the surface:
 
-| Slice | Scope and exit condition | Status |
+| Slice | Scope and exit evidence | Status |
 | --- | --- | --- |
-| 0. Hardware baseline | Housekeeper executes representative nested-call, branch, loop, boolean-local, scalar, and vector-codelet packs on a real discrete GPU with exact typed results and no CPU fallback. | Complete: six cases passed on Mriczo RTX 3090 (`dev` commit `79d2012c9`). |
-| 1. Differential current domain | Compare the same canonical source/pack with the JavaScript reference, Rust CPU pack executor, and Housekeeper Vulkan worker. Cover successful scalar operators/comparisons, signed and unsigned result boundaries, boolean locals, calls, and bounded loops. Fix divergences before expanding the language. | Complete. Fixed the JavaScript boolean-local dispatch and sandpit-frame boundary. The same-pack JS→Rust CPU→Housekeeper Vulkan checks passed on Mriczo RTX 3090 for calls, numeric branches, loops, mutable boolean locals, all seven scalar operators, signed invert, vector arithmetic, and widened u32 vector products. |
-| 2. Control-flow boundary | Probe compound predicates, nested branches, multi-action branch bodies, and nested loops. Extend all backends only where the Pyash source contract admits the form; otherwise align and test explicit rejection. | Complete. Compound predicates and nested conditional branches now fail explicitly before lowering. Multi-action branch behavior is expressed through one ceremony call, and nested bounded loops match JS/Rust CPU/Vulkan results (9 on Mriczo RTX 3090). |
-| 3. Value-family boundary | Reconcile the reference and Rust accepted domains for vectors, dates, and text. Any new programlet value family starts in the Pyash reference and its ABI contract, then ports through Rust CPU and GPU with bounds and typed-result tests. | Complete. Source compilation and pack decoding reject vector/date/text programlet arguments and locals, plus numeric input literals outside U16, matching the Rust frame ABI. Ordinary date/vector codelet operations remain a separate supported path. |
-| 4. Limits and errors | Differentially verify argument/local/codelet/call-depth/step limits, constant writes, and malformed or unsupported input behavior. A limit may remain bounded, but acceptance and failure must be explicit and consistent across targets. | Complete for the admitted source domain. JS source validation and Rust frame limits agree on 64 codelets, 63 declared locals, 8 frame arguments, and call depth 8; unsupported value/control-flow forms and untyped/no-destination actions fail before packing. The 6-fail/7-pass step boundary is pinned in JS and Rust CPU tests. JS reference, Rust CPU, and live Vulkan returned matching defined errors for division-by-zero (2) and constant-write (7) on the RTX 3090. |
+| 0. Contract inventory | Record each spec-defined pure semantic, its encoding, and current JS/Rust CPU/Vulkan/WebGPU coverage; identify every remaining gap in the inventory above. | Initial inventory recorded. Boolean composition and named/local comparison leaves are covered; continue auditing remaining typed value families and error categories before claiming overall parity. |
+| 1. Hardware conformance harness | Submit canonical packs through Housekeeper, require Vulkan backend/device identity, and compare exact spec-derived typed outputs for nested calls, branches, loops, booleans, scalar arithmetic, vectors, and capacity cases. | The 27-case harness submits the complete supported matrix through Housekeeper and checks exact outputs/device identity. All 27 passed on the NVIDIA GeForce RTX 3090 using the resident Rust VLIW runtime. |
+| 2. Differential semantic fixes | For every mismatch against the spec, add a minimal Pyash fixture and make JS reference, Rust CPU, Vulkan, and WebGPU agree on value, frame/side-effect boundary, and error category. Include boundary capacities and forwarded typed cases. | Nested loops, boolean composition, literal/argument/local comparison leaves, forwarded typed arguments, and max codelet/call-depth cases pass the Rust CPU tests and the live RTX 3090 matrix. Browser parity and the remaining audited semantic families are still open; shader compilation alone is not runtime conformance. |
+| 3. Bounded GPU execution and shader structure | Preserve the shared 65,536-step contract while structuring execution into device-safe resumable work; prove successful completion below the limit and the same step-budget error at the limit without GPU hangs. Keep generated WGSL within browser parser limits. | Pending. Chromium/Naga rejects the current generated WGSL at its 127-level nesting/chaining limit during module creation, before either browser GPU pipeline can run. The checked-in pre-change WGSL fails the same way, so this is a pre-existing browser-target gap, not introduced by the genitive fix. |
+| 4. Remaining pure value/control-flow parity | Implement every spec-defined pure behavior still missing from shared Rust semantics, including boolean composition and any typed local/control forms confirmed by the contract audit, with minimized cross-backend fixtures. | Boolean composition and named/local comparison leaves are implemented and covered by JS reference and Rust CPU tests, and passed the full supported-slice GPU matrix. Date/vector/text locals, shared mutable program state, broader branch forms, and any remaining contract-audit gaps remain. |
+| 5. Completion audit | Run the full differential matrix against JS, Rust CPU, native Vulkan via Housekeeper, and browser WebGPU; verify effectful/unsupported forms reject consistently and confirm resource/error boundaries. | Not started. |
 
-Parity is complete only when every fixture in the documented bounded pure
-programlet domain has matching typed outputs and matching defined errors on
-the JavaScript reference, Rust CPU, and Vulkan GPU, and unsupported effects or
-out-of-contract inputs fail explicitly. A green representative GPU smoke is
-necessary hardware evidence, not the completion criterion.
+The generated WGSL currently lowers the whole programlet interpreter into one
+very large entrypoint (about 92,000 lines in the current generated file). Its
+state arrays and control-flow joins produce nesting beyond Chromium/Naga's
+limit. A viable Slice 3 design should reduce per-dispatch live state and
+separate bounded execution steps, rather than weakening the smoke assertion or
+reducing the semantic step budget.
+
+The earlier Vulkan timeout observation came from a worker image built from the
+separate `dev` checkout, not from `dev-vliw-backend`; it is a risk signal, not
+branch-valid evidence. Do not lower the shared step budget or silently fall
+back to CPU to make a GPU test pass. Browser tests must treat an available raw
+WebGPU adapter and a successfully created VLIW pipeline as separate facts; a
+CPU fallback does not count as GPU parity.
 
 ## The RISC-V destination
 

@@ -106,6 +106,53 @@ pub struct PackExecutionError {
     pub source: SemanticError,
 }
 
+/// A section result; `section_index` is its source ordinal, while vector order
+/// from `execute_pack_sections` records completion order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PyacSectionResult {
+    pub section_index: usize,
+    pub name_words: Vec<u16>,
+    pub value: PyacValue,
+}
+
+fn map_independent_sections<T, F>(section_count: usize, worker_count: usize, execute: F) -> Vec<T>
+where
+    T: Send,
+    F: Fn(usize) -> T + Sync,
+{
+    if section_count == 0 {
+        return Vec::new();
+    }
+    let worker_count = worker_count.max(1).min(section_count);
+    if worker_count == 1 {
+        return (0..section_count).map(execute).collect();
+    }
+
+    let next_section = std::sync::atomic::AtomicUsize::new(0);
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::scope(|scope| {
+        for _ in 0..worker_count {
+            let sender = sender.clone();
+            let execute = &execute;
+            let next_section = &next_section;
+            scope.spawn(move || {
+                loop {
+                    let section_index =
+                        next_section.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if section_index >= section_count {
+                        break;
+                    }
+                    if sender.send(execute(section_index)).is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+        drop(sender);
+        receiver.into_iter().collect()
+    })
+}
+
 impl PackExecutionError {
     pub fn code(&self) -> &'static str {
         self.source.code()
@@ -323,6 +370,101 @@ pub fn execute_numeric_arithmetic_pack(
         .collect()
 }
 
+fn programlet_error(error: u32) -> SemanticError {
+    match error {
+        pyac_vliw_core::ERROR_DIVISION_BY_ZERO => SemanticError::DivisionByZero,
+        pyac_vliw_core::ERROR_FRAME_CAPACITY => SemanticError::ProgramletFrameCapacity,
+        pyac_vliw_core::ERROR_CONSTANT_WRITE => SemanticError::ProgramletConstantWrite,
+        pyac_vliw_core::ERROR_STEP_BUDGET => SemanticError::ProgramletStepBudget,
+        pyac_vliw_core::ERROR_PROGRAM_CAPACITY => SemanticError::ProgramletProgramCapacity,
+        pyac_vliw_core::ERROR_CALL_DEPTH => SemanticError::ProgramletCallDepth,
+        pyac_vliw_core::ERROR_UNSUPPORTED => SemanticError::UnsupportedProgramlet,
+        _ => SemanticError::MalformedProgramlet,
+    }
+}
+
+fn execute_shared_programlet(
+    words: &[u32],
+    base_codelet: usize,
+    codelet_count: usize,
+    error_index: usize,
+) -> Result<PyacValue, PackExecutionError> {
+    let mut sentence_words = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
+    let mut sentence_boundaries = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
+    let mut symbol_words = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
+    let mut frames =
+        [pyac_vliw_core::ProgramletFrame::EMPTY; pyac_vliw_core::MAX_PROGRAMLET_CALL_DEPTH];
+    let result = pyac_vliw_core::execute_numeric_programlet_at(
+        words,
+        base_codelet,
+        codelet_count,
+        pyac_vliw_core::DEFAULT_PROGRAMLET_STEP_BUDGET,
+        &mut sentence_words,
+        &mut sentence_boundaries,
+        &mut symbol_words,
+        &mut frames,
+    );
+    if result.error != 0 {
+        return Err(PackExecutionError {
+            index: error_index,
+            source: programlet_error(result.error),
+        });
+    }
+    Ok(match result.value_kind {
+        pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(result.values[0] != 0),
+        pyac_vliw_core::VALUE_SIGNED => PyacValue::Signed(i64::from(result.values[0] as i32)),
+        _ => PyacValue::Unsigned(u64::from(result.values[0])),
+    })
+}
+
+/// Executes independent named sections across available CPU threads.
+/// Results are returned in completion order and retain their source ordinals.
+pub fn execute_pack_sections(
+    pack: &PyacPack,
+) -> Result<Vec<PyacSectionResult>, PackExecutionError> {
+    let words = pack
+        .codelets
+        .iter()
+        .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
+        .collect::<Vec<_>>();
+    if !pyac_vliw_core::has_programlet_section_header(&words, pack.codelets.len()) {
+        return Err(PackExecutionError {
+            index: 0,
+            source: SemanticError::UnsupportedProgramlet,
+        });
+    }
+    let mut sections =
+        [pyac_vliw_core::ProgramletSection::EMPTY; pyac_vliw_core::MAX_PROGRAMLET_SECTIONS];
+    let section_count = pyac_vliw_core::scan_numeric_programlet_sections(
+        &words,
+        pack.codelets.len(),
+        &mut sections,
+    )
+    .map_err(|error| PackExecutionError {
+        index: 0,
+        source: programlet_error(error),
+    })?;
+
+    let worker_count = std::thread::available_parallelism()
+        .map(|count| count.get())
+        .unwrap_or(1);
+    map_independent_sections(section_count, worker_count, |section_index| {
+        let section = sections[section_index];
+        let start = section.codelet_start as usize;
+        let value = execute_shared_programlet(&words, start, section.codelet_count as usize, start);
+        value.map(|value| PyacSectionResult {
+            section_index,
+            name_words: section.name_words[..section.name_length as usize]
+                .iter()
+                .map(|word| *word as u16)
+                .collect(),
+            value,
+        })
+    })
+    .into_iter()
+    .collect()
+}
+
 pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionError> {
     use semantic::{
         NumericCodeletValue, execute_conditional_number_codelets, execute_numeric_codelet,
@@ -333,39 +475,17 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
         .iter()
         .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
         .collect::<Vec<_>>();
+    if pyac_vliw_core::has_programlet_section_header(&words, pack.codelets.len()) {
+        let mut sections = execute_pack_sections(pack)?;
+        // This compatibility API drops section identity, so retain its
+        // historical source-order result contract. Callers that need actual
+        // completion order should use execute_pack_sections instead.
+        sections.sort_by_key(|section| section.section_index);
+        return Ok(sections.into_iter().map(|section| section.value).collect());
+    }
     if pyac_vliw_core::is_numeric_programlet(&words, pack.codelets.len()) {
-        let mut sentence_words = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
-        let mut sentence_boundaries = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
-        let mut symbol_words = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
-        let mut frames =
-            [pyac_vliw_core::ProgramletFrame::EMPTY; pyac_vliw_core::MAX_PROGRAMLET_CALL_DEPTH];
-        let result = pyac_vliw_core::execute_numeric_programlet(
-            &words,
-            pack.codelets.len(),
-            pyac_vliw_core::DEFAULT_PROGRAMLET_STEP_BUDGET,
-            &mut sentence_words,
-            &mut sentence_boundaries,
-            &mut symbol_words,
-            &mut frames,
-        );
-        if result.error != 0 {
-            let source = match result.error {
-                pyac_vliw_core::ERROR_DIVISION_BY_ZERO => SemanticError::DivisionByZero,
-                pyac_vliw_core::ERROR_FRAME_CAPACITY => SemanticError::ProgramletFrameCapacity,
-                pyac_vliw_core::ERROR_CONSTANT_WRITE => SemanticError::ProgramletConstantWrite,
-                pyac_vliw_core::ERROR_STEP_BUDGET => SemanticError::ProgramletStepBudget,
-                pyac_vliw_core::ERROR_PROGRAM_CAPACITY => SemanticError::ProgramletProgramCapacity,
-                pyac_vliw_core::ERROR_CALL_DEPTH => SemanticError::ProgramletCallDepth,
-                pyac_vliw_core::ERROR_UNSUPPORTED => SemanticError::UnsupportedProgramlet,
-                _ => SemanticError::MalformedProgramlet,
-            };
-            return Err(PackExecutionError { index: 0, source });
-        }
-        return Ok(vec![match result.value_kind {
-            pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(result.values[0] != 0),
-            pyac_vliw_core::VALUE_SIGNED => PyacValue::Signed(i64::from(result.values[0] as i32)),
-            _ => PyacValue::Unsigned(u64::from(result.values[0])),
-        }]);
+        return execute_shared_programlet(&words, 0, pack.codelets.len(), 0)
+            .map(|value| vec![value]);
     }
 
     let mut values = Vec::new();
@@ -467,10 +587,27 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::{Arc, Barrier};
+    use std::time::Duration;
 
     const ONE_PLUS: [u16; WORDS_PER_CODELET] = [
         0x0149, 0x881d, 0x0001, 0x245e, 0x881d, 0x0001, 0x243e, 0x8a64, 0x295e, 0, 0, 0, 0, 0, 0, 0,
     ];
+
+    #[test]
+    fn independent_cpu_sections_are_returned_in_completion_order() {
+        let start = Arc::new(Barrier::new(3));
+        let completed = map_independent_sections(3, 3, {
+            let start = Arc::clone(&start);
+            move |section_index| {
+                start.wait();
+                let delay_ms = [40, 1, 20][section_index];
+                std::thread::sleep(Duration::from_millis(delay_ms));
+                section_index
+            }
+        });
+        assert_eq!(completed, vec![1, 2, 0]);
+    }
 
     #[test]
     fn encodes_the_shared_one_plus_one_fixture() {

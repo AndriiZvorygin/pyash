@@ -130,7 +130,7 @@ export function resolveIoGenitives(sentence, { state, memory } = {}) {
   }
 }
 
-function resolveTypedGenitives(sentence, { state, memory } = {}) {
+export function resolveTypedGenitives(sentence, { state, memory } = {}) {
   if (!sentence || typeof sentence !== "object") return;
   const skipKeys = new Set(["mood", "be", "exists", "signatureWords", "signature", "ret", "this", "consequence", "alternative"]);
   const copyResolvedCaseObject = (target, resolved) => {
@@ -518,8 +518,11 @@ export async function handleImperative({
     fn = compileHandler;
   }
 
-  // Inline conditional with consequence (e.g., "be equally ... then ...")
-  if ((sentence.consequence || sentence.alternative) && (be === "equally" || be === "tiny" || be === "giant" || be === "resemble")) {
+  // Inline conditionals accept either a scalar predicate or a composed boolean expression.
+  if (
+    (sentence.consequence || sentence.alternative)
+    && ["equally", "tiny", "giant", "resemble", "not", "and", "or"].includes(be)
+  ) {
     if (!fn) {
       const pyash = sentenceToPyash(sentence);
       throwErrorSentence({
@@ -542,7 +545,28 @@ export async function handleImperative({
       sentence.from?.name && memory.remember(sentence.from.name)
         ? memory.remember(sentence.from.name).ob
         : sentence.from;
-    const truth = await fn({ su: lhs, from: rhs });
+    const result = await fn(
+      ["not", "and", "or"].includes(be) ? sentence : { su: lhs, from: rhs },
+      {
+        remember: memory.remember,
+        allRemember: memory.allRemember,
+        doRemember: memory.doRemember,
+        runtimeContext
+      }
+    );
+    const truth = typeof result === "boolean"
+      ? result
+      : typeof result?.ob?.boolean === "boolean"
+        ? result.ob.boolean
+        : null;
+    if (truth === null) {
+      throwErrorSentence({
+        name: "conditional predicate defective",
+        message: `conditional predicate did not return a boolean: ${be}`,
+        from: { name: "interpret" },
+        raw: { sentence, result }
+      });
+    }
     if (truth && sentence.consequence) {
       return interpret(sentence.consequence);
     }
@@ -676,6 +700,7 @@ export async function handleImperative({
     be === "mind" ||
     be === "say" ||
     be === "import" ||
+    be === "boolean" ||
     be === "text" ||
     be === "write" ||
     be === "evoke" ||
@@ -787,5 +812,8 @@ export async function handleImperative({
     });
   }
 
-  return { acted: to?.name, value: result?.ob };
+  return {
+    acted: to?.name,
+    value: result?.ob ?? (typeof result === "boolean" ? result : undefined)
+  };
 }
