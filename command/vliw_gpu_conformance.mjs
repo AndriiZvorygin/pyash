@@ -17,7 +17,54 @@ import { createHousekeeperVliwPackExecutor } from "../program/library/vliw/rust_
 
 function programlet(name, source, invocation, expectedValues) {
   const compiled = compilePyashProgramSource(source, { invocation });
-  return { name, kind: "programlet", pack: compiled.pack, expectedValues };
+  return { name, kind: "programlet", source, invocation, pack: compiled.pack, expectedValues };
+}
+
+const SECTION_NAMES = [
+  "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+  "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
+  "nineteen", "twenty"
+];
+
+export function buildVliwGpuConformanceBatches(cases) {
+  const codeletCases = cases.filter(({ kind }) => kind === "codelets");
+  const programletCases = cases.filter(({ kind }) => kind === "programlet");
+  if (!codeletCases.length || !programletCases.length) {
+    throw new Error("VLIW conformance batching requires codelet and programlet cases");
+  }
+  if (programletCases.length > SECTION_NAMES.length) {
+    throw new Error(`VLIW conformance batch exceeds ${SECTION_NAMES.length} named programlet sections`);
+  }
+
+  const codeletPack = encodePyacPack(codeletCases.flatMap(({ pack }) => decodePyacPack(pack).codelets));
+  const sectionSource = programletCases.map(({ source, invocation }, index) => {
+    const name = SECTION_NAMES[index];
+    return [
+      `su name ${name} be myocpfun def`,
+      source,
+      invocation,
+      `su name ${name} be myocpfun prah`
+    ].join("\n");
+  }).join("\n");
+  const sectioned = compilePyashProgramSource(sectionSource);
+
+  return [
+    {
+      kind: "codelets",
+      name: `codelet batch (${codeletCases.length} cases)`,
+      cases: codeletCases,
+      pack: codeletPack,
+      expectedValues: codeletCases.flatMap(({ referenceValues }) => referenceValues)
+    },
+    {
+      kind: "programlets",
+      name: `programlet sections (${programletCases.length} cases)`,
+      cases: programletCases,
+      pack: sectioned.pack,
+      sectionRanges: sectioned.sections,
+      expectedSections: programletCases.map(({ referenceValues }) => referenceValues[0])
+    }
+  ];
 }
 
 function codeletPack(name, sources, expectedValues) {
@@ -598,42 +645,74 @@ export async function runVliwGpuConformance({ executeCpuPacks, executePack, onPr
     throw new TypeError("VLIW GPU conformance requires a Housekeeper pack executor");
   }
   const cases = await buildVliwGpuConformanceCases();
-  const cpuResults = await executeCpuPacks(cases.map((testCase) => testCase.pack));
-  assert.equal(cpuResults?.length, cases.length, "Rust CPU returned a different number of conformance results");
-  for (const [index, testCase] of cases.entries()) {
+  const batches = buildVliwGpuConformanceBatches(cases);
+  const cpuBatchResults = await executeCpuPacks(batches.map((batch) => batch.pack));
+  assert.equal(cpuBatchResults?.length, batches.length, "Rust CPU returned a different number of conformance batches");
+  for (const [index, batch] of batches.entries()) {
+    const expectedValues = batch.kind === "codelets"
+      ? batch.expectedValues
+      : batch.expectedSections;
     assert.deepEqual(
-      cpuResults[index],
-      testCase.referenceValues,
-      `${testCase.name}: Rust CPU result differs from JavaScript reference`
+      cpuBatchResults[index],
+      expectedValues,
+      `${batch.name}: Rust CPU batch differs from JavaScript references`
     );
-    onProgress({ phase: "cpu-complete", name: testCase.name, values: cpuResults[index] });
+    if (batch.kind === "codelets") {
+      let valueIndex = 0;
+      for (const testCase of batch.cases) {
+        const values = cpuBatchResults[index].slice(valueIndex, valueIndex + testCase.referenceValues.length);
+        valueIndex += testCase.referenceValues.length;
+        onProgress({ phase: "cpu-complete", name: testCase.name, values });
+      }
+    } else {
+      batch.cases.forEach((testCase, sectionIndex) => {
+        onProgress({ phase: "cpu-complete", name: testCase.name, values: [cpuBatchResults[index][sectionIndex]] });
+      });
+    }
   }
 
-  const submissions = cases.map(async (testCase) => {
-    onProgress({ phase: "start", name: testCase.name });
+  const completedByName = new Map();
+  for (const batch of batches) {
+    onProgress({ phase: "start", name: batch.name, caseCount: batch.cases.length });
     try {
-      const result = await executePack(testCase.pack);
-      assert.equal(result?.ok, true, `${testCase.name}: Housekeeper worker did not report success`);
-      assert.equal(result.backend, "rust-gpu-vulkan", `${testCase.name}: unexpected GPU backend`);
-      assert.ok(String(result.device ?? "").trim(), `${testCase.name}: missing GPU device identity`);
-      assert.deepEqual(result.values, testCase.referenceValues, `${testCase.name}: typed result differs from JavaScript reference`);
-      const entry = { name: testCase.name, device: result.device, values: result.values };
-      onProgress({ phase: "complete", ...entry });
-      return entry;
+      const result = await executePack(batch.pack);
+      assert.equal(result?.ok, true, `${batch.name}: Housekeeper worker did not report success`);
+      assert.equal(result.backend, "rust-gpu-vulkan", `${batch.name}: unexpected GPU backend`);
+      assert.ok(String(result.device ?? "").trim(), `${batch.name}: missing GPU device identity`);
+      if (batch.kind === "codelets") {
+        assert.deepEqual(result.values, batch.expectedValues, `${batch.name}: typed results differ from JavaScript references`);
+        let valueIndex = 0;
+        for (const testCase of batch.cases) {
+          const values = result.values.slice(valueIndex, valueIndex + testCase.referenceValues.length);
+          valueIndex += testCase.referenceValues.length;
+          const entry = { name: testCase.name, device: result.device, values };
+          completedByName.set(testCase.name, entry);
+          onProgress({ phase: "complete", ...entry });
+        }
+      } else {
+        assert.equal(result.sections?.length, batch.cases.length, `${batch.name}: missing section results`);
+        const seen = new Set();
+        for (const section of result.sections) {
+          const index = Number(section.sectionIndex);
+          assert.ok(Number.isInteger(index) && index >= 0 && index < batch.cases.length, `${batch.name}: invalid section index`);
+          assert.ok(!seen.has(index), `${batch.name}: duplicate section result ${index}`);
+          seen.add(index);
+          const testCase = batch.cases[index];
+          const values = [section.value];
+          assert.deepEqual(values, testCase.referenceValues, `${testCase.name}: typed result differs from JavaScript reference`);
+          const entry = { name: testCase.name, device: result.device, values, completionOrder: section.completionOrder };
+          completedByName.set(testCase.name, entry);
+          onProgress({ phase: "complete", ...entry });
+        }
+        assert.equal(seen.size, batch.cases.length, `${batch.name}: one or more section results are missing`);
+      }
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      onProgress({ phase: "fail", name: testCase.name, error: detail });
-      throw new Error(`${testCase.name}: ${detail}`, { cause: error });
+      onProgress({ phase: "fail", name: batch.name, error: detail });
+      throw new Error(`${batch.name}: ${detail}`, { cause: error });
     }
-  });
-  const settled = await Promise.allSettled(submissions);
-  const failures = settled.flatMap((result) => result.status === "rejected" ? [result.reason] : []);
-  if (failures.length) {
-    throw new Error(
-      `Rust GPU conformance failed for ${failures.length}/${cases.length} cases:\n${failures.map((error) => `- ${error.message}`).join("\n")}`
-    );
   }
-  return settled.map((result) => result.value);
+  return cases.map(({ name }) => completedByName.get(name));
 }
 
 export async function runVliwGpuProgramletFailureConformance({
@@ -680,7 +759,7 @@ async function main() {
     executeCpuPacks: executeRustCpuReference,
     executePack,
     onProgress(event) {
-      if (event.phase === "start") console.log(`Queueing Rust GPU conformance case: ${event.name}`);
+      if (event.phase === "start") console.log(`Queueing Rust GPU conformance batch: ${event.name}`);
       if (event.phase === "cpu-complete") console.log(`PASS JavaScript/Rust CPU reference ${event.name}: ${JSON.stringify(event.values)}`);
       if (event.phase === "complete") {
         console.log(`PASS ${event.name} on ${event.device}: ${JSON.stringify(event.values)}`);

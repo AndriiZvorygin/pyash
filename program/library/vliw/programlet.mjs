@@ -545,16 +545,19 @@ export function compilePyashProgramSource(sourceText, { invocation = "" } = {}) 
 
 export function decodePyashProgramPack(pack) {
   const decodedPack = decodePyacPack(pack);
-  if (decodedPack.codelets.length > MAX_PYASH_PROGRAMLET_CODELETS) {
-    fail(`Pyash programlet exceeds ${MAX_PYASH_PROGRAMLET_CODELETS} codelets`, {
-      codelets: decodedPack.codelets.length
-    });
-  }
   const sentences = decodePyashProgram(decodedPack.codelets);
   const sections = splitProgramSections(sentences);
   if (!sections) {
+    if (decodedPack.codelets.length > MAX_PYASH_PROGRAMLET_CODELETS) {
+      fail(`Pyash programlet exceeds ${MAX_PYASH_PROGRAMLET_CODELETS} codelets`, {
+        codelets: decodedPack.codelets.length
+      });
+    }
     const invocationIndex = sentences.at(-1)?.mood === "do" ? sentences.length - 1 : -1;
     validatePureProgram(sentences, { invocationIndex });
+  } else {
+    const lowered = lowerPyashProgram(sentences);
+    sectionCodeletRanges(sections, lowered.sentences);
   }
   for (const sentence of sentences) {
     if (programletLocalDeclaration(sentence)) sentence.exists = true;
