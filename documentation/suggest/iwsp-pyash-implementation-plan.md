@@ -1023,7 +1023,101 @@ HNUCs or add entries to the accepted compound catalog.
 | Embedding as learned representation | **learned vector** (`learned` + `vector`; head: `vector`) | Learn/acquire knowledge `v:00599310-v`, `Learning` (`+`); vector quantity `n:05873161-n`, `FunctionQuantity` (`=`) | A vector-valued representation whose components are learned from data, such as a token embedding. |
 | Kernel launch | **parallel execution** (`parallel` + `execution`; head: `execution`) | Parallel processing `n:13539343-n`, `ContentDevelopment` (`+`); execute a computer program `v:02569242-v`, `PsychologicalProcess` (`+`) | Start a kernel program across a configured set of concurrent work items. |
 | GPU workgroup | **parallel group** (`parallel` + `group`; head: `group`) | Parallel processing `n:13539343-n`, `ContentDevelopment` (`+`); group `n:00031563-n`, `Group` (`=`) | A set of GPU work items scheduled as one cooperating unit. |
-| GPU barrier | **group synchronization** (`group` + `synchronization`; head: `synchronization`) | Group `n:00031563-n`, `Group` (`=`); synchronization `n:01003039-n`, `IntentionalProcess` (`+`) | A group-scoped rendezvous where participating work items wait until all have arrived before proceeding. |
+| GPU barrier | **group synchronization** (`group` + `synchronization`; head: `synchronization`) | Group `n:00031563-n`, `Group` (`=`); synchronization `n:01003039-n`, `IntentionalProcess` (`+`) | At a named point in the program, each computation instance in one assigned set pauses. None may proceed beyond that point until every instance in the set has reached it. |
 
 The compounds name the computation or execution concept; exact Pyash component
 words and HNUCs remain to be selected through the normal vocabulary workflow.
+
+### A.7 Refinements for broad anchors and GPU identity
+
+These refinements keep a broad WordNet/SUMO parent from being mistaken for an
+exact technical synonym. The compounds remain semantic proposals; their
+operation-level definitions belong in the VLIW specification.
+
+| Concept | Compound or identity proposal | Sense anchors | Qualification |
+|---|---|---|---|
+| Vector normalization | **vector normalization** (`vector` + `normalization`; head: `normalization`) | Vector `n:05873161-n`, `FunctionQuantity` (`=`); normalize `v:00469149-v`, `IntentionalProcess` (`+`) | `normalize` is a broad conform-to-standard sense, not an exact numerical-normalization sense. Specify the numerical operation in the ISA contract. |
+| Neural activation function | **activation function** (`activation` + `function`; head: `function`) | Activation `n:13447549-n`, `Process` (`+`); mathematical function `n:13806028-n`, `Function` (`+`) | The activation sense is biological/chemical stimulation, so this is a compositional label, not an exact neural-network synset. Define the supported activation operation separately. |
+| Workgroup barrier | **group synchronization** (`group` + `synchronization`; head: `synchronization`) | Group `n:00031563-n`, `Group` (`=`); synchronization `n:01003039-n`, `IntentionalProcess` (`+`), or coordination `n:00809161-n`, `Cooperation` (`+`) | Both synchronization senses are broader than a GPU barrier. The compound gloss must specify workgroup scope and the wait-until-all-participants-arrive behavior; memory visibility remains an ISA/runtime rule. |
+| Parallel kernel execution | **parallel execution** (`parallel` + `execution`; head: `execution`) | Parallel processing `n:13539343-n`, `ContentDevelopment` (`+`); computer instruction execution `n:13498665-n`, `ContentDevelopment` (`+`) | Prefer the computer-science execution sense over `v:02569242-v` (`PsychologicalProcess`) for this technical usage. “Launch” still describes starting this execution, not a separate exact synset found here. |
+| GPU hardware concept | Project-local concept proposal: **graphics processing unit (GPU)**, with a stable local concept ID and definition | SUMO `ComputerComponent` under `ComputerHardware`; align functionally to parallel processing `n:13539343-n` and computer instruction execution `n:13498665-n` without claiming either is equivalent to a GPU | The local lookup found no exact GPU/graphics-processing-unit synset or SUMO class. SUMO's `ComputerComponent` is a valid parent, not the GPU concept itself. |
+
+The accepted Pyash compound catalog currently resolves `GPU` to **video
+processor module** (`byot ples myoc`). Treat that as an existing lexical
+compound, not as evidence of a dedicated WordNet/SUMO GPU synset. The local
+lookup's `video` sense is about displayed text and graphics, while its
+available `processor` sense is not a graphics-processor definition. Keep the
+existing spelling usable, but ground the technical GPU identity in the
+project-local concept above rather than asserting a false exact crosswalk.
+
+The SUMO computer ontology defines `ComputerComponent` as computer hardware
+with measurable performance and includes processing and memory components; it
+does not provide a GPU-specific class in the checked source. This supports the
+parent choice while leaving the GPU as an explicit local specialization.
+
+### A.8 Non-circular glosses for group execution
+
+The synsets supply lexical anchors, but they do not fully specify GPU
+execution semantics. Use the plain-language gloss as the definition; do not
+define one technical term by repeating another unexplained technical term.
+
+| Term | Non-circular gloss | Lexical anchors |
+|---|---|---|
+| GPU workgroup | A set of copies of a program, each handling part of one calculation at the same time. The program treats those copies as one set for designated checkpoints and group-scoped resources. | Group `n:00031563-n`, `Group` (`=`); parallel processing `n:13539343-n`, `ContentDevelopment` (`+`). |
+| GPU group rendezvous (explanatory compound for a barrier) | A named point in the program where each copy pauses. No copy may execute instructions after that point until every copy in the same assigned set has reached it. | Group `n:00031563-n`, `Group` (`=`); rendezvous `n:01234113-n`, `Meeting` (`+`), a meeting planned for a time and place; wait `v:02644022-v`, `PsychologicalProcess` (`+`), stay in place while anticipating an event. These anchor the component ideas, not the GPU rule itself. |
+| Execution barrier / group synchronization | The same operation as the group rendezvous above. “Group synchronization” is the conventional operation label; the gloss explains its effect without using “synchronize” or “barrier” as its definition. | The coordination senses in A.7 provide broad lexical parents; the group-rendezvous composition gives a more concrete, non-circular explanation. |
+| Memory ordering | A separate rule stating which values one program copy stored before a point another copy is allowed to read afterward. Reaching the checkpoint alone does not define that rule; the opcode/API must say what becomes visible. | Computer memory `n:03749767-n`, `ComputerMemory` (`=`); computer instruction execution `n:13498665-n`, `ContentDevelopment` (`+`). |
+
+Thus, a GPU barrier is not a physical wall and does not itself carry data: it
+is a program point that holds the copies in one assigned set until every copy
+in that set has arrived. Some GPU APIs also define which earlier memory stores
+become visible at that point; that is a separate part of the operation's
+contract. The exact participant set and behavior when control flow skips the
+point must be stated in the VLIW/API operation contract. `Group rendezvous` is
+an explanatory lexical candidate; it does not replace the established
+technical name or allocate a Pyash form/HNUC.
+
+### A.9 Candidate Pyash sentence signatures
+
+These signatures connect the A.5-A.8 terms to the Pyash case grid. They are
+surface proposals, not registered signatures, vocabulary assignments, or a
+claim that the current VLIW runtime executes these operations. `from` names
+the primary input/source, `by` supplies a second operand or mapper, `via`
+selects an index, `with` supplies configuration, and `to` names the output.
+Where a term names a value or execution configuration rather than an action,
+the row gives its proposed map shape instead of inventing a verb.
+
+| Term | Candidate Pyash use/signature | Meaning and current status |
+|---|---|---|
+| Tensor | `su name weights be map def`<br>`  su name shape ob ve num 2 3 ya`<br>`  su name dtype ob text "float32" ya`<br>`  su name values ob ve num ... ya`<br>`prah` | Represent a tensor as a map with explicit shape, element type, and flattened values. This is a proposed authoring/data contract; the current `ve` literal is rank-1 and the tensor map is not yet a VLIW value type. Specify dimension order and bounds before implementation. Lowering should store values contiguously rather than dispatching one map operation per element. |
+| Matrix multiplication | `from name left by name right to name product be matrix multiplication do` | Multiply compatible matrices, with shape checks and a specified storage order. New operation; not the existing scalar/vector `produce` operation. |
+| Dot product / sum reduction | `from name weights by name inputs to name score be produce do` | Existing JS `produce` computes a same-length vector dot product. Its sentence shape is real, but the operation is not yet lowered to the shared VLIW CPU/GPU core. A general sum reduction still needs a distinct signature/contract. |
+| Exponential normalization (softmax) | `from name logits to name probabilities be exponential normalization do` | Produce normalized exponential weights from a numeric vector. Define stable max-subtraction, accumulation precision, and behavior for empty or non-finite inputs in the operation contract. New operation. |
+| Vector normalization | `from name values with name normalization options to name normalized be vector normalization do` | Normalize a vector under an explicitly selected norm (for example L1 or L2); options should include epsilon/zero-vector behavior. Distinct from exponential normalization. New operation. |
+| Maximum position (argmax) | `from name scores to name selected index be maximum position do` | Return the index of the greatest element. Define ties as the lowest index for deterministic results. New operation; output is an index, not the maximum value. |
+| Activation function | `from name preactivation by name relu to name activated be vector map do` | Reuse the existing vector-map sentence surface to apply a named scalar function elementwise. `vector map` currently runs through the JS interpreter; `relu` here is illustrative and needs a registered scalar mapper. A fused GPU activation is a later lowering/optimization, not a different meaning. |
+| Learned vector / embedding | `from name embedding table via name token id to name embedding be embedding lookup do` | Return the learned row for a token ID. “Learned vector” names the result; lookup is the action. New tensor-indexing operation. Existing vector `read` handles a flat element, not a row from a rank-2 table. |
+| Parallel execution / kernel launch | `from name kernel with name launch config to name results be parallel execution do` | Submit a kernel over the configured index space and return its result handle/data. This is a proposed compute operation, not `be gpu mind` or another Housekeeper inference request. |
+| Parallel group / GPU workgroup | `su name launch config be map def`<br>`  su name grid dimensions ob ve num 128 ya`<br>`  su name workgroup dimensions ob ve num 64 ya`<br>`prah` | The map configures the total work-item grid and the cooperating group shape. These example dimensions are illustrative 1-D values, not defaults or a finalized schema. Workgroup membership is execution topology, not an independent computation verb. |
+| Group synchronization / barrier | `from name workgroup be group synchronization do` | Every participant in the named group waits at this program point until all participants arrive. This is a proposed in-kernel control operation. Its scope, divergent-control behavior, and memory visibility rules must be explicit; memory ordering is not implied by the name alone. |
+| Group rendezvous (explanatory alias) | `from name workgroup be group synchronization do` | Same operation and signature as the barrier row; explanatory wording only, not a second opcode or dispatch signature. |
+| Memory ordering | `su name memory policy be map def`<br>`  su name scope ob text "workgroup" ya`<br>`  su name order ob text "acquire release" ya`<br>`prah` | A policy value to attach to future shared-memory access/synchronization operations. The field vocabulary and allowed orderings remain to be specified; this is not itself a barrier operation. |
+| GPU device concept | `su name device profile be map def`<br>`  su name kind ob text "graphics processing unit" ya`<br>`  su name backend ob text "wgpu" ya`<br>`prah` | A device/profile description anchored to the project-local GPU concept. It identifies a compute target; it does not invoke Housekeeper and does not add a `gpu` verb. Final device identity/capability fields belong in the target contract. |
+| Independent parallel sections | `su name first be myocpfun def`<br>`... section body ...`<br>`su name first be myocpfun prah` | This section form already exists in the VLIW pack surface for independent duties. It is the current Pyash-level way to mark section boundaries; runtime completion order may differ from source order. It does not yet express a GPU workgroup or a barrier inside a section. |
+
+The proposed action spellings in this table use the English compound labels
+from A.6-A.8 to make the case roles readable. They are placeholders until
+the normal Kwon/WordNet/SUMO and vocabulary workflow chooses the actual Pyash
+atoms or compounds and confirms their HNUCs. In particular, do not turn the
+examples into runnable `.pya` examples until those names have accepted
+vocabulary and registered dispatch signatures.
+
+Implementation boundary from the current source audit: numeric vector
+literals, JS `vector map`, JS `produce` (dot product), and the `neuron`
+operation exist; independent `myocpfun` sections exist in the VLIW pack
+format. Matrix/tensor values, matrix multiplication, softmax, argmax,
+GPU-resident kernel launch, workgroup topology, and group synchronization
+are not thereby implemented in the shared Rust VLIW CPU/GPU runtime. The
+signatures above define candidate Pyash surfaces for the IWSP/transformer
+work; each still needs spec, vocabulary, dispatch, CPU semantics, and GPU
+conformance coverage before it is considered supported.
