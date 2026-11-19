@@ -20,4 +20,8 @@ wgpu = { version = "30.0.2", default-features = false, features = ["std", "parki
 name = "pyac-vliw-runtime"
 path = "src/bin/vliw_runtime.rs"
 
+[[bin]]
+name = "pyac-vliw-pipeline-compiler"
+path = "src/bin/vliw_pipeline_compiler.rs"
+
 [workspace]

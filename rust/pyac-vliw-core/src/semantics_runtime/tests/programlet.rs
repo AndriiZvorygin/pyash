@@ -1,6 +1,51 @@
 use super::*;
 
 #[test]
+fn scans_sectioned_programlets_with_inline_conditional_bodies() {
+    let codelets = [
+        [
+            0x0049, 0x225e, 0x2818, 0x24de, 0xec01, 0x6a84, 0x5217, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ],
+        [
+            0x0a11, 0x225e, 0xaaa2, 0x8918, 0x24de, 0x225e, 0x327e, 0x225e, 0x4930, 0x243e, 0xe8c9,
+            0x5217, 0, 0, 0, 0,
+        ],
+        [
+            0xf6b6, 0x881d, 0x0003, 0x245e, 0x881d, 0x0005, 0x313e, 0x6c0d, 0x29be, 0x881d, 0x0002,
+            0x245e, 0x225e, 0x327e, 0x225e, 0x4930,
+        ],
+        [
+            0x000b, 0x243e, 0x8a64, 0x295e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ],
+        [
+            0x0019, 0x225e, 0x4930, 0x24de, 0xa828, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ],
+        [
+            0x0051, 0x225e, 0xaaa2, 0x8918, 0x24de, 0xe8c9, 0x4e27, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ],
+        [
+            0x0121, 0x225e, 0x327e, 0x225e, 0x4930, 0x243e, 0xaaa2, 0x8918, 0x295e, 0, 0, 0, 0, 0,
+            0, 0,
+        ],
+        [
+            0x0049, 0x225e, 0x2818, 0x24de, 0xec01, 0x6a84, 0x4e27, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ],
+    ];
+    let words = codelets
+        .iter()
+        .flat_map(|codelet| codelet.iter().copied())
+        .collect::<std::vec::Vec<_>>();
+    let mut sections = [ProgramletSection::EMPTY; MAX_PROGRAMLET_SECTIONS];
+
+    let count = scan_numeric_programlet_sections(&words, codelets.len(), &mut sections).unwrap();
+
+    assert_eq!(count, 1);
+    assert_eq!(sections[0].codelet_start, 1);
+    assert_eq!(sections[0].codelet_count, 6);
+    assert_eq!(sections[0].name_words[0], 0x2818);
+}
+
+#[test]
 fn composes_boolean_literals_in_nested_pyash_clauses() {
     let not_truth = [
         0x02a9,

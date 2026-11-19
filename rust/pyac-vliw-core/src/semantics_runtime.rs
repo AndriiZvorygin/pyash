@@ -99,6 +99,7 @@ macro_rules! array_put {
 }
 
 pub const CODELET_WORDS: usize = 16;
+pub const MAX_VECTOR_LANES: usize = 16;
 pub const RESULT_WORDS: usize = 32;
 pub const MAX_PROGRAMLET_CODELETS: usize = 64;
 pub const MAX_PROGRAMLET_SECTIONS: usize = 64;
@@ -120,6 +121,10 @@ pub const VALUE_VECTOR_U32: u32 = 5;
 pub const VALUE_VECTOR_BOOL: u32 = 6;
 pub const VALUE_BOOLEAN: u32 = 7;
 const VALUE_NUMBER: u32 = 8;
+pub const VALUE_FLOAT32: u32 = 9;
+pub const VALUE_FIXED16: u32 = 10;
+pub const VALUE_VECTOR_FLOAT32: u32 = 11;
+pub const VALUE_VECTOR_FLOAT64: u32 = 12;
 
 pub const ERROR_UNSUPPORTED: u32 = 1;
 pub const ERROR_DIVISION_BY_ZERO: u32 = 2;
@@ -131,6 +136,8 @@ pub const ERROR_CONSTANT_WRITE: u32 = 7;
 pub const ERROR_STEP_BUDGET: u32 = 8;
 pub const ERROR_PROGRAM_CAPACITY: u32 = 9;
 pub const ERROR_CALL_DEPTH: u32 = 10;
+pub const ERROR_FLOAT_DOMAIN: u32 = 11;
+pub const ERROR_FIXED16_DOMAIN: u32 = 12;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProgramletSection {
@@ -326,6 +333,33 @@ impl ProgramletFrame {
     };
 }
 
+pub(crate) fn clear_programlet_frame(frame: &mut ProgramletFrame) {
+    let mut slot_index = 0;
+    while slot_index < frame.slots.len() {
+        array_put!(&mut frame.slots, slot_index, NumericLocalSlot::EMPTY);
+        slot_index += 1;
+    }
+    frame.arguments = [ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS];
+    frame.argument_count = 0;
+    frame.routine_start = 0;
+    frame.routine_end = 0;
+    frame.program_counter = 0;
+    frame.routine_name_offset = 0;
+    frame.routine_name_length = 0;
+    frame.return_name_offset = 0;
+    frame.return_name_length = 0;
+    frame.result_value = 0;
+    frame.expected_kind = 0;
+    frame.result_kind = 0;
+    frame.state = 0;
+    frame.action_started = 0;
+    frame.has_returned = 0;
+    frame.loop_active = 0;
+    frame.loop_remaining = 0;
+    frame.loop_end = 0;
+    frame.loop_has_end = 0;
+}
+
 #[derive(Clone, Copy)]
 struct SentenceField {
     role: u32,
@@ -424,6 +458,12 @@ impl ProgramletNumber {
 mod boolean;
 #[path = "semantics_runtime/conditional.rs"]
 mod conditional;
+#[path = "semantics_runtime/dispatch.rs"]
+mod dispatch;
+#[path = "semantics_runtime/fixed16.rs"]
+mod fixed16;
+#[path = "semantics_runtime/float.rs"]
+mod float;
 #[path = "semantics_runtime/numeric.rs"]
 mod numeric;
 #[path = "semantics_runtime/programlet_actions.rs"]
@@ -450,12 +490,17 @@ mod programlet_symbols;
 mod programlet_values;
 #[path = "semantics_runtime/sentence.rs"]
 mod sentence;
+#[path = "semantics_runtime/vector_group.rs"]
+mod vector_group;
 
 use boolean::{
     boolean_comparison, boolean_composition, evaluate_boolean_expression,
     evaluate_boolean_expression_with_env, evaluate_boolean_leaf,
 };
 use conditional::conditional;
+pub use dispatch::interpret_group;
+use float::single_codelet;
+pub use numeric::apply_number_operator;
 use numeric::{
     arithmetic, boolean_literal, invert, literal, number_operator, vector_arithmetic, word,
     zero_tail,
@@ -465,11 +510,16 @@ use programlet_branch::{
     first_present_operand, programlet_branch, read_optional_programlet_number,
     unsigned_programlet_operand,
 };
+pub use programlet_execute::{execute_numeric_programlet, execute_numeric_programlet_at};
 use programlet_execute_call::execute_programlet_call;
 use programlet_execute_declare::declare_programlet_local;
 use programlet_execute_paragraph::close_programlet_paragraph;
 use programlet_execute_return::execute_programlet_return;
 use programlet_execute_setup::initialize_numeric_programlet;
+pub use programlet_sections::{
+    has_programlet_section_header, is_numeric_programlet, is_numeric_programlet_at,
+    scan_numeric_programlet_sections,
+};
 use programlet_symbols::{
     find_local_slot, find_programlet_routine, is_ceremony_definition, names_equal, store_name,
 };
@@ -483,52 +533,6 @@ use sentence::{
     collect_sentence, collect_sentence_at, contains_marked_token, embedded_clause_range, name_span,
     next_sentence_is_paragraph_end, parse_sentence, parse_sentence_range, typed_output_name,
 };
-
-pub use numeric::apply_number_operator;
-pub use programlet_execute::{execute_numeric_programlet, execute_numeric_programlet_at};
-pub use programlet_sections::{
-    has_programlet_section_header, is_numeric_programlet, is_numeric_programlet_at,
-    scan_numeric_programlet_sections,
-};
-pub fn interpret_group(words: &[u32], start: usize, codelet_count: usize) -> CoreResult {
-    if start >= codelet_count || words.len() < codelet_count * CODELET_WORDS {
-        return CoreResult::failure(ERROR_MALFORMED, 0);
-    }
-    let mut end = start;
-    while end < codelet_count && word(words, end, 0) & 1 == 0 {
-        end += 1;
-    }
-    if end == codelet_count {
-        return CoreResult::failure(ERROR_MALFORMED, (codelet_count - start) as u32);
-    }
-    let group_len = end - start + 1;
-    if let Some(result) = boolean_composition(words, start, codelet_count) {
-        return result;
-    }
-    if let Some(result) = boolean_comparison(words, start, codelet_count) {
-        return result;
-    }
-    if group_len > 1 {
-        return conditional(words, start, group_len);
-    }
-    if let Some(result) = invert(words, start) {
-        return result;
-    }
-    if let Some(result) = vector_arithmetic(words, start) {
-        return result;
-    }
-    if let Some(result) = arithmetic(words, start) {
-        return result;
-    }
-    if let Some(result) = boolean_literal(words, start) {
-        return result;
-    }
-    if let Some(result) = literal(words, start) {
-        return result;
-    }
-    CoreResult::failure(ERROR_UNSUPPORTED, 1)
-}
-
 #[cfg(test)]
 #[path = "semantics_runtime/tests.rs"]
 mod tests;

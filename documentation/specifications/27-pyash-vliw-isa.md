@@ -1,8 +1,9 @@
 # Pyash VLIW ISA and lowering contract
 
-Status: design specification. This document defines the encoding and execution
-boundary for a future Pyash VLIW backend. It does not change the current
-interpreter, parser, or sentence ABI.
+Status: normative encoding and semantic contract for the supported Pyash VLIW
+subset. Implemented behavior and remaining gaps are tracked in
+`documentation/reference/pyac-vliw-semantic-slices.md`. This specification
+does not change the Pyash parser or sentence ABI.
 
 ## 1. Scope and authority
 
@@ -11,6 +12,16 @@ language front end MUST lower to that IR before it is encoded. VLIW codelets
 are a compiled representation of the same sentences, not a second semantic
 language. The sentence's mood, verb, cases, values, and dependency effects
 remain authoritative after lowering.
+
+WordNet and SUMO links in the vocabulary catalog are lexical metadata: they
+identify or explain the meaning of canonical Pyash words and compounds. They
+are not tokens in executable sentences and are not serialized into codelets.
+Executable identity comes from the Pyash words and their HNUCs in the sentence.
+A lexical link helps establish the intended concept, but does not by itself
+specify operation details such as accepted value types, numeric precision, or
+failure behavior. For supported VLIW semantics, the shared Rust runtime is the
+reference implementation; its contract is recorded by this specification and
+the semantic-slice reference.
 
 This specification revives the encoding and execution model in the
 `lwonprom` repository at commit
@@ -46,6 +57,9 @@ Pyash command.
 - **HNUC** is a current Pyash semantic identity for a word/case. HNUCs are
   validated by the current compositional-case inventory. They are not silently
   interchangeable with the older `lwonprom` phonological word numbers.
+- **Lexical link** is vocabulary metadata associating a Pyash word or compound
+  with an external lexical sense or concept. It explains vocabulary identity;
+  it does not replace Pyash sentence words or define runtime behavior by itself.
 - **Canonical bytes** are the little-endian bytes of the exact encoded 16-bit
   words, in codelet order, with no timestamps, addresses, source paths, or
   runtime pointers.
@@ -105,6 +119,16 @@ fields, with the quote sort describing interpretation. Type compatibility is
 checked by the decoder. A quote is therefore a typed value encoding, not a
 license to hide an unrepresentable sentence.
 
+Legacy quote sort 6 with four-byte scalar width encodes one IEEE-754 binary32
+value. Its scalar quote header is `0xd01d`; the payload is two 16-bit words in
+little-endian order (low word first). The current scalar-float implementation
+accepts finite values only and rejects NaN and infinities. Arithmetic promotes
+both scalar operands to binary32 when either operand requires the float sort;
+`plus`, `subtract`, `multiply`, and `divide` execute with binary32 results.
+Unsigned-16-only arithmetic keeps its existing integer behavior. Typed vector
+quotes and their distinction from variable-length arrays are specified in
+`28-pyash-vliw-targets.md`.
+
 The source form `quoted.<kind> ... .<kind>.quoted` delimits a payload and
 annotates its kind. Preserve that kind as metadata outside the payload. A
 non-default kind uses this paired `zi` frame:
@@ -130,12 +154,9 @@ adds no quote sort or HNUC; flat v1 `.pyac` stores the frame in codelet words.
 
 ### 4.2 VLIW shape
 
-The legacy codelet is a vector of sixteen 16-bit words: 256 bits / 32 bytes.
-The first word is the head/index word. Its bits mark phrase boundaries and
-whether a word is a phrase, case, verb, mood, or continuation according to
-the legacy index format. The remaining words hold quote denotations, content,
-case/phrase markers, the verb, mood, and zero/unassigned tail words where the
-codelet ends early.
+The codelet is sixteen 16-bit words (256 bits / 32 bytes). Its first word is
+the head/index; bits mark phrase boundaries and completion. Remaining words
+encode quote data, cases, verb, mood, and zero tail padding.
 
 Long paragraph quotes use the original Lwonprom blockquote framing: the
 paragraph-letter quote has the legacy `L` flag and a 16-bit payload-word count.
@@ -145,10 +166,8 @@ padding is zero; the next vector resumes indexed encoding. The count defines
 the raw extent. A decoder MUST skip exactly that many vectors and reject a
 missing block or nonzero final padding. Short quotes stay inline.
 
-Ordinary vectors use indexed continuation. Numeric/boolean headers identify
-element type and count; text vectors use one typed letter quote per element. A
-long text element uses the framing above. Decoding MUST preserve order, zero
-values, and the vector/scalar distinction.
+Vector quote layout and continuation rules are defined in
+`28-pyash-vliw-targets.md`.
 
 The index has two required properties from the legacy VM:
 
@@ -163,8 +182,7 @@ continuation, impossible boundary, nonzero unassigned tail, or invalid quote
 length; it MUST NOT infer words from source text. Semantic adapters require a
 sentence-specific golden fixture before execution.
 
-One codelet is sixteen 16-bit words with a leading head and little-endian byte
-emission. A transport MAY batch codelets but MUST preserve their bytes and order.
+A transport MAY batch codelets but MUST preserve their bytes and order.
 
 ### 4.3 Compatibility table
 
@@ -239,9 +257,9 @@ The source ordinal is retained as `sectionIndex` for identity, not as a result
 ordering constraint. Executors MAY schedule independent sections in any order
 and MUST return each result as its section completes. Thus result order is
 completion order, while the included source ordinal and Pyash name allow
-consumers to associate each value with its section. The JavaScript reference
-interpreter is serial and therefore completes sections in source order; Rust
-CPU and Vulkan executors may complete them in a different order. Any
+consumers to associate each value with its section. The deprecated JavaScript
+interpreter is serial and completes sections in source order; Rust CPU and GPU
+executors may complete them in a different order. Any
 dependency between sections disqualifies them from this independent section
 form and must be expressed within an ordered programlet instead.
 

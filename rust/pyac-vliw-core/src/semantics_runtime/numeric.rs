@@ -132,12 +132,12 @@ pub(super) fn boolean_literal(words: &[u32], codelet: usize) -> Option<CoreResul
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct QuoteHeader {
-    valid: u32,
-    sort: u32,
-    scalar_bytes: u32,
-    fixed_length: u32,
-    explicit: u32,
+pub(super) struct QuoteHeader {
+    pub(super) valid: u32,
+    pub(super) sort: u32,
+    pub(super) scalar_bytes: u32,
+    pub(super) fixed_length: u32,
+    pub(super) explicit: u32,
 }
 
 impl QuoteHeader {
@@ -245,7 +245,7 @@ pub(super) fn literal(words: &[u32], codelet: usize) -> Option<CoreResult> {
     } else {
         _fixed_length
     };
-    if length == 0 || length > RESULT_WORDS || payload + length + 1 >= CODELET_WORDS {
+    if length == 0 || length > MAX_VECTOR_LANES || payload + length + 1 >= CODELET_WORDS {
         return Some(CoreResult::failure(ERROR_MALFORMED, 1));
     }
     let accusative = payload + length;

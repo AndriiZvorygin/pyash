@@ -2,9 +2,11 @@ import pyashWords from "../pyashWords.json" with { type: "json" };
 import { decodeLegacyCodeletGroups, VliwCodeletError } from "./codelets.mjs";
 import {
   INT_SORT_DENOTE,
+  LETTER_SORT_DENOTE,
   LETTER_QUOTE_WORD,
   NUMBER_QUOTE_WORD,
   PARAGRAPH_LETTER_QUOTE_WORD,
+  float32QuoteWords,
   QUOTED_GRAMMAR_WORD,
   UINT_SORT_DENOTE,
   VECTOR_THICK_LONG,
@@ -18,6 +20,8 @@ import {
   vectorThicknessFor
 } from "./quotes.mjs";
 import { encodePyacWord } from "./word_code.mjs";
+import { expandVectorInitializer, MAX_VLIW_ARRAY_ELEMENTS } from "./vector_shape.mjs";
+import { encodeTextArrayMembers } from "./text_array.mjs";
 
 const WORD_COUNT = 16;
 const PAYLOAD_WORDS = WORD_COUNT - 1;
@@ -176,52 +180,92 @@ function quoteKindFrame(value, payload, role) {
   return { words, rawQuotes };
 }
 
-function encodeVectorValue(vector, role) {
+function encodeVectorValue(vector, role, declaredLength = null) {
   if (!vector || typeof vector !== "object" || !Array.isArray(vector.values)) {
     throw invalid("unsupported-vector", `VLIW ${role} vector requires a typed values list`);
   }
   const type = vector.type ?? "num";
-  if (!["num", "bool", "text"].includes(type)) {
+  if (!["num", "bool", "float32", "float64", "text"].includes(type)) {
     throw invalid("unsupported-vector-type", `VLIW ${role} vector type is unsupported`, { type });
   }
-  if (vector.values.length < 2 || vector.values.length > 0xffff) {
-    throw invalid("unsupported-vector-width", `VLIW ${role} vector length must be between 2 and 65535`, {
-      count: vector.values.length
+  let initialValues;
+  try {
+    initialValues = expandVectorInitializer(
+      type,
+      vector.values,
+      declaredLength,
+      MAX_VLIW_ARRAY_ELEMENTS
+    );
+  } catch (error) {
+    throw invalid("unsupported-vector-width", error.message, {
+      count: vector.values.length,
+      declaredLength
     });
   }
 
   if (type === "text") {
-    const words = [];
-    const rawQuotes = [];
-    for (const value of vector.values) {
+    for (const value of initialValues) {
       if (typeof value !== "string" || value.length === 0) {
         throw invalid("unsupported-vector-value", "VLIW text vector elements must be non-empty strings", {
           value
         });
       }
-      const start = words.length;
-      if (value.length === 1) {
-        words.push(LETTER_QUOTE_WORD, value.charCodeAt(0));
-      } else {
-        const encoded = textWords(value, role);
-        words.push(...encoded.words);
-        rawQuotes.push(...encoded.rawQuotes.map((quote) => ({
-          ...quote,
-          payloadStart: start + quote.payloadStart
-        })));
-      }
     }
-    return { words, rawQuotes };
+    const words = encodeTextArrayMembers(initialValues, {
+      letterQuoteWord: LETTER_QUOTE_WORD,
+      paragraphQuoteWord: PARAGRAPH_LETTER_QUOTE_WORD
+    });
+    return {
+      words: [
+        quoteWordFor({
+          sort: LETTER_SORT_DENOTE,
+          vectorThick: VECTOR_THICK_LONG,
+          scalarBytes: 2,
+          sequence: true
+        }),
+        initialValues.length,
+        ...words
+      ],
+      rawQuotes: []
+    };
+  }
+
+  if (type === "float32" || type === "float64") {
+    const scalarBytes = type === "float32" ? 4 : 8;
+    const scalarWords = scalarBytes / 2;
+    const payload = initialValues.flatMap((value) => {
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        throw invalid("non-finite-float", `VLIW ${type} vector elements must be finite numbers`, { value });
+      }
+      const normalized = type === "float32" ? Math.fround(value) : value;
+      if (!Number.isFinite(normalized)) {
+        throw invalid("non-finite-float", `VLIW ${type} vector element is outside its finite range`, { value });
+      }
+      const view = new DataView(new ArrayBuffer(scalarBytes));
+      if (scalarBytes === 4) view.setFloat32(0, normalized, true);
+      else view.setFloat64(0, normalized, true);
+      return Array.from({ length: scalarWords }, (_, index) => view.getUint16(index * 2, true));
+    });
+    const thickness = initialValues.length === 1 ? VECTOR_THICK_LONG : vectorThicknessFor(initialValues.length);
+    const quote = quoteWordFor({
+      sort: 6,
+      vectorThick: thickness,
+      scalarBytes
+    });
+    return {
+      words: [quote, ...(thickness === VECTOR_THICK_LONG ? [initialValues.length] : []), ...payload],
+      rawQuotes: []
+    };
   }
 
   const sort = type === "num" ? UINT_SORT_DENOTE : INT_SORT_DENOTE;
-  const payload = vector.values.map((value) => {
+  const payload = initialValues.map((value) => {
     if (type === "num" && Number.isInteger(value) && value >= 0 && value <= 0xffff) return value;
     if (type === "bool" && (value === "truth" || value === true)) return 1;
     if (type === "bool" && (value === "lie" || value === false)) return 0;
     throw invalid("unsupported-vector-value", `VLIW ${type} vector element is invalid`, { value });
   });
-  const thickness = vectorThicknessFor(payload.length);
+  const thickness = payload.length === 1 ? VECTOR_THICK_LONG : vectorThicknessFor(payload.length);
   const quote = quoteWordFor({ sort, vectorThick: thickness, scalarBytes: 2 });
   return {
     words: [quote, ...(thickness === VECTOR_THICK_LONG ? [payload.length] : []), ...payload],
@@ -229,7 +273,7 @@ function encodeVectorValue(vector, role) {
   };
 }
 
-function encodeValue(value, role) {
+function encodeValue(value, role, declaredVectorLength = null) {
   if (value?.la && typeof value.la === "object") {
     const nested = encodeClause(value.la);
     return {
@@ -241,19 +285,17 @@ function encodeValue(value, role) {
       }))
     };
   }
-  if (Number.isInteger(value?.num)) {
-    if (value.num < 0 || value.num > 0xffff) {
-      throw invalid("unsupported-value", `VLIW ${role} number must be an unsigned 16-bit integer`, {
-        value: value.num
-      });
-    }
+  if (Number.isInteger(value?.num) && !Object.is(value.num, -0) && value.num >= 0 && value.num <= 0xffff) {
     return { words: [NUMBER_QUOTE_WORD, value.num], rawQuotes: [] };
+  }
+  if (typeof value?.num === "number") {
+    return { words: float32QuoteWords(value.num), rawQuotes: [] };
   }
   if (typeof value?.text === "string") {
     return textWords(value.text, role);
   }
   if (value?.ve !== undefined) {
-    return encodeVectorValue(value.ve, role);
+    return encodeVectorValue(value.ve, role, declaredVectorLength);
   }
   if (typeof value?.boolean === "boolean") {
     return { words: [wordForEntry(value.boolean ? "truth" : "lie")], rawQuotes: [] };
@@ -293,6 +335,7 @@ function encodeClause(sentence, { conditional = false } = {}) {
   const boundaries = [];
   const rawQuotes = [];
   for (const role of FIELD_ORDER) {
+    if (sentence.be === "vector" && role === "by") continue;
     const returnValue = isReturn && sentence.ret?.role === role
       ? sentence.ret.name
         ? { name: sentence.ret.name }
@@ -304,7 +347,10 @@ function encodeClause(sentence, { conditional = false } = {}) {
       : undefined;
     const fieldValue = sentence[role] ?? returnValue;
     if (fieldValue === undefined) continue;
-    let value = encodeValue(fieldValue, role);
+    const declaredVectorLength = sentence.be === "vector" && role === "ob"
+      ? sentence.by?.num ?? null
+      : null;
+    let value = encodeValue(fieldValue, role, declaredVectorLength);
     const quoteKind = sentence.quoteKinds?.[role];
     if (quoteKind !== undefined) {
       if (typeof sentence[role]?.text !== "string" || typeof quoteKind !== "string" || !quoteKind) {
@@ -397,9 +443,20 @@ function encodeSentenceWords(sentence) {
 }
 
 function vectorsFor(words, boundaryOffsets, rawQuotes = []) {
+  const rawRegions = [];
+  let rawWordTotal = 0;
+  for (const quote of rawQuotes.slice().sort((left, right) => left.payloadStart - right.payloadStart)) {
+    const indexedOffset = quote.payloadStart - rawWordTotal;
+    const usedInCodelet = indexedOffset % PAYLOAD_WORDS;
+    const available = PAYLOAD_WORDS - usedInCodelet;
+    if (quote.payloadWords > available) {
+      rawRegions.push(quote);
+      rawWordTotal += quote.payloadWords;
+    }
+  }
   const pieces = [];
   let cursor = 0;
-  for (const quote of rawQuotes.slice().sort((left, right) => left.payloadStart - right.payloadStart)) {
+  for (const quote of rawRegions) {
     const payloadStart = quote.payloadStart;
     const payloadEnd = payloadStart + quote.payloadWords;
     if (payloadStart < cursor || payloadEnd > words.length) {
@@ -518,6 +575,15 @@ function decodeValue(items, role, boundaryOffsets) {
     }
     if (isIntVectorQuoteWord(word) && Array.isArray(value)) {
       return { ve: { type: "bool", values: value.map((item) => item === 0 ? "lie" : "truth") } };
+    }
+    if ((items[0].quote.family === "float32-vector" || items[0].quote.family === "float64-vector") && Array.isArray(value)) {
+      return { ve: { type: items[0].quote.family === "float32-vector" ? "float32" : "float64", values: value } };
+    }
+    if (items[0].quote.family === "text-array" && Array.isArray(value)) {
+      return { ve: { type: "text", values: value } };
+    }
+    if (["float32", "float64", "fixed16"].includes(items[0].quote.family) && typeof value === "number") {
+      return { num: value };
     }
     if (word === NUMBER_QUOTE_WORD && Number.isInteger(value) && value >= 0 && value <= 0xffff) {
       return { num: value };

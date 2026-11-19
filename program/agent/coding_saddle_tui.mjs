@@ -1,5 +1,6 @@
 import MarkdownIt from "markdown-it";
 import { layoutSaddleInput } from "./coding_saddle.mjs";
+import { splitTerminalGraphemes, terminalCellWidth, terminalGraphemeWidth, truncateTerminalText } from "./terminal_width.mjs";
 
 const markdown = new MarkdownIt({
   html: false,
@@ -86,17 +87,30 @@ function wrapSegments(segments, width, {
   const limit = Math.max(8, Number(width) || 80);
   const chars = [];
   if (prefix) {
-    for (const character of prefix) chars.push({ character, styles: prefixStyle ? [prefixStyle] : [] });
+    for (const { segment } of splitTerminalGraphemes(prefix)) {
+      chars.push({ character: segment, width: terminalGraphemeWidth(segment), styles: prefixStyle ? [prefixStyle] : [] });
+    }
   }
   for (const segment of segments) {
-    for (const character of segment.text) {
-      chars.push({ character, styles: [...segment.styles, ...(baseStyle ? [baseStyle] : [])] });
+    for (const { segment: character } of splitTerminalGraphemes(segment.text)) {
+      chars.push({
+        character,
+        width: terminalGraphemeWidth(character),
+        styles: [...segment.styles, ...(baseStyle ? [baseStyle] : [])]
+      });
     }
   }
 
   const lines = [[]];
+  const lineWidth = (line) => line.reduce((width, item) => width + item.width, 0);
+  const firstPrefixWidth = terminalCellWidth(prefix);
+  const continuationPrefixWidth = terminalCellWidth(continuationPrefix);
   const addLine = () => lines.push(continuationPrefix
-    ? [...[...continuationPrefix].map((character) => ({ character, styles: continuationStyle ? [continuationStyle] : [] }))]
+    ? splitTerminalGraphemes(continuationPrefix).map(({ segment }) => ({
+      character: segment,
+      width: terminalGraphemeWidth(segment),
+      styles: continuationStyle ? [continuationStyle] : []
+    }))
     : []);
   let index = 0;
   while (index < chars.length) {
@@ -111,18 +125,22 @@ function wrapSegments(segments, width, {
     while (end < chars.length && chars[end].character !== "\n" && /\s/u.test(chars[end].character) === isWhitespace) end += 1;
     const word = chars.slice(index, end);
     const current = lines.at(-1);
-    if (isWhitespace && current.length + word.length > limit) {
+    const currentWidth = lineWidth(current);
+    const wordWidth = lineWidth(word);
+    const currentPrefixWidth = lines.length === 1 ? firstPrefixWidth : continuationPrefixWidth;
+    if (isWhitespace && currentWidth + wordWidth > limit) {
       index = end;
       continue;
     }
-    if (isWhitespace && current.length === (lines.length === 1 ? prefix.length : continuationPrefix.length)) {
+    if (isWhitespace && currentWidth === currentPrefixWidth) {
       index = end;
       continue;
     }
-    const currentPrefixLength = lines.length === 1 ? prefix.length : continuationPrefix.length;
-    if (!isWhitespace && current.length + word.length > limit && current.length > currentPrefixLength) addLine();
+    if (!isWhitespace && currentWidth + wordWidth > limit && currentWidth > currentPrefixWidth) addLine();
     for (const character of word) {
-      if (lines.at(-1).length >= limit && !isWhitespace) addLine();
+      const activeLine = lines.at(-1);
+      const activePrefixWidth = lines.length === 1 ? firstPrefixWidth : continuationPrefixWidth;
+      if (!isWhitespace && lineWidth(activeLine) + character.width > limit && lineWidth(activeLine) > activePrefixWidth) addLine();
       lines.at(-1).push(character);
     }
     index = end;
@@ -200,7 +218,7 @@ export function renderSaddleMarkdown(value = "", { width = 80, color = true } = 
       blank();
       const codeLines = stripTerminalControlSequences(token.content).replace(/\n$/u, "").split("\n");
       for (const line of codeLines) {
-        const safeLine = line.length > width - 2 ? `${line.slice(0, Math.max(1, width - 3))}…` : line;
+        const safeLine = truncateTerminalText(line, Math.max(1, width - 2));
         lines.push(styleText(`  ${safeLine}`, ["fence"], color));
       }
       blank();
@@ -215,7 +233,7 @@ export function renderSaddleMarkdown(value = "", { width = 80, color = true } = 
     else if (token.type === "tr_open") tableRow = [];
     else if (token.type === "tr_close" && tableRow) {
       const row = tableRow.join("  │  ");
-      lines.push(styleText(row.length > width ? `${row.slice(0, Math.max(1, width - 1))}…` : row, tableHeader ? ["bold"] : [], color));
+      lines.push(styleText(truncateTerminalText(row, width), tableHeader ? ["bold"] : [], color));
       tableRow = null;
     } else if (token.type === "th_open" || token.type === "td_open") tableCell = "";
     else if (token.type === "th_close" || token.type === "td_close") tableRow?.push(tableCell);
@@ -227,36 +245,17 @@ export function renderSaddleMarkdown(value = "", { width = 80, color = true } = 
 
 function wrapPlainLine(value, width) {
   const text = stripTerminalControlSequences(value);
-  const lines = [];
-  let line = "";
-  for (const word of text.split(/(\s+)/u)) {
-    if (!word) continue;
-    if (/^\s+$/u.test(word) && !line) continue;
-    if (line.length + word.length > width && line) {
-      lines.push(line);
-      line = "";
-      if (/^\s+$/u.test(word)) continue;
-    }
-    for (const character of word) {
-      if (line.length >= width) {
-        lines.push(line);
-        line = "";
-      }
-      line += character;
-    }
-  }
-  lines.push(line);
-  return lines;
+  return wrapSegments([{ text, styles: [] }], width);
 }
 
 function visibleLength(value) {
-  return stripTerminalControlSequences(value).length;
+  return terminalCellWidth(stripTerminalControlSequences(value));
 }
 
 function fitLine(value, width, color, style = null) {
   const plain = stripTerminalControlSequences(value);
-  const fitted = plain.length > width ? `${plain.slice(0, Math.max(0, width - 1))}…` : plain;
-  if (plain.length > width || style) return styleText(fitted, style ? [style] : [], color);
+  const fitted = truncateTerminalText(plain, width);
+  if (fitted !== plain || style) return styleText(fitted, style ? [style] : [], color);
   return value;
 }
 

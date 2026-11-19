@@ -199,6 +199,10 @@ export function buildGpuHandleStatus(input = {}) {
     queuedAt: normalizeText(input?.queuedAt),
     startedAt: normalizeText(input?.startedAt),
     finishedAt: normalizeText(input?.finishedAt),
+    remoteJobId: normalizeText(input?.remoteJobId),
+    remoteSubmittedAt: normalizeText(input?.remoteSubmittedAt),
+    remoteStartedAt: normalizeText(input?.remoteStartedAt),
+    remoteFinishedAt: normalizeText(input?.remoteFinishedAt),
     retryCount: normalizeCount(input?.retryCount, 0),
     outcome: normalizeText(input?.outcome).toLowerCase(),
     message: normalizeText(input?.message),
@@ -243,6 +247,16 @@ export function assertGpuHandleStatus(value = {}) {
   }
   if (finishedAt && !Number.isFinite(Date.parse(finishedAt))) {
     throw new Error("gpu handle status defective: invalid finished at");
+  }
+  for (const [field, label] of [
+    ["remoteSubmittedAt", "Housekeeper submitted at"],
+    ["remoteStartedAt", "Housekeeper started at"],
+    ["remoteFinishedAt", "Housekeeper finished at"]
+  ]) {
+    const timestamp = normalizeText(value[field]);
+    if (timestamp && !Number.isFinite(Date.parse(timestamp))) {
+      throw new Error(`gpu handle status defective: invalid ${label}`);
+    }
   }
   const retryCount = Number(value.retryCount);
   if (!Number.isFinite(retryCount) || retryCount < 0 || Math.trunc(retryCount) !== retryCount) {

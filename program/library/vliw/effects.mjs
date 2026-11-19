@@ -21,6 +21,7 @@ export function deriveSentenceEffects(sentence) {
   for (const field of CASE_FIELDS) {
     const value = sentence?.[field];
     if (!value || typeof value !== "object") continue;
+    if (field === "as" && value.name === "rational") continue;
     if (sentence?.mood === "que" && field === "ob" && value.name === "what") continue;
     if (field === "to" && sentence?.be !== "remains") {
       addName(writes, value);

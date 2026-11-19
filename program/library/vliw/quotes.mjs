@@ -1,5 +1,22 @@
 import pyashWords from "../pyashWords.json" with { type: "json" };
 import { decodePyacWord } from "./word_code.mjs";
+import {
+  FIXED16_SCALE,
+  fixed16ValueFromNumerator
+} from "./fixed16.mjs";
+import { decodeTextArrayMembers } from "./text_array.mjs";
+
+export {
+  FIXED16_MAX_NUMERATOR,
+  FIXED16_QUOTE_WORD,
+  FIXED16_SCALE,
+  fixed16NumeratorFromNumber,
+  fixed16NumeratorFromBase6,
+  fixed16NumeratorQuoteWords,
+  fixed16QuoteWords,
+  fixed16QuoteWordsFromBase6,
+  fixed16ValueFromNumerator
+} from "./fixed16.mjs";
 
 export const QUOTE_DENOTE = 0x001d;
 export const QUOTE_DENOTE_MASK = 0x001f;
@@ -14,6 +31,8 @@ export const LETTER_SORT_DENOTE = 0;
 export const WORD_SORT_DENOTE = 1;
 export const UINT_SORT_DENOTE = 4;
 export const INT_SORT_DENOTE = 5;
+export const FLOAT_SORT_DENOTE = 6;
+export const FLOAT32_QUOTE_WORD = 0xd01d;
 export const VECTOR_THICK_LONG = 6;
 
 const quotedGrammarEntry = pyashWords.find((entry) => entry.en === "quoted_");
@@ -172,7 +191,12 @@ export function decodeQuoteWord(word) {
   return { ...descriptor };
 }
 
-export function quoteWordFor({ sort = UINT_SORT_DENOTE, vectorThick = 0, scalarBytes = 2 } = {}) {
+export function quoteWordFor({
+  sort = UINT_SORT_DENOTE,
+  vectorThick = 0,
+  scalarBytes = 2,
+  sequence = false
+} = {}) {
   const scalarThick = scalarByteWidths.indexOf(scalarBytes);
   if (scalarThick < 0) {
     throw quoteError("unsupported-quote", "no legacy scalar width matches the requested bytes", {
@@ -184,15 +208,39 @@ export function quoteWordFor({ sort = UINT_SORT_DENOTE, vectorThick = 0, scalarB
       vectorThick
     });
   }
-  if (![LETTER_SORT_DENOTE, WORD_SORT_DENOTE, UINT_SORT_DENOTE, INT_SORT_DENOTE].includes(sort)) {
+  if (![LETTER_SORT_DENOTE, WORD_SORT_DENOTE, UINT_SORT_DENOTE, INT_SORT_DENOTE, FLOAT_SORT_DENOTE].includes(sort)) {
     throw quoteError("unsupported-quote", "no legacy quote sort matches the requested sort", { sort });
+  }
+  if (sort === FLOAT_SORT_DENOTE && (
+    scalarBytes === 1 || (scalarBytes === 2 && vectorThick !== 0)
+  )) {
+    throw quoteError("unsupported-quote", "legacy float quotes support fixed16 scalars and IEEE float vectors", {
+      scalarBytes,
+      vectorThick
+    });
   }
   return (
     (sort << 13) |
+    (sequence ? SEQUENCE_MASK : 0) |
     (vectorThick << 8) |
     (scalarThick << 11) |
     QUOTE_DENOTE
   );
+}
+
+export function float32QuoteWords(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw quoteError("non-finite-float", "VLIW f32 values must be finite numbers", { value });
+  }
+  const rounded = Math.fround(value);
+  if (!Number.isFinite(rounded)) {
+    throw quoteError("non-finite-float", "VLIW f32 value is outside the finite binary32 range", { value });
+  }
+  const buffer = new ArrayBuffer(4);
+  const view = new DataView(buffer);
+  view.setFloat32(0, rounded, true);
+  const bits = view.getUint32(0, true);
+  return [FLOAT32_QUOTE_WORD, bits & 0xffff, bits >>> 16];
 }
 
 export function uintQuoteWord({ vectorThick = 0, scalarBytes = 2 } = {}) {
@@ -215,6 +263,12 @@ export function isIntVectorQuoteWord(word) {
   const header = decodeQuoteHeader(word);
   if (header.sortName !== "int" || header.scalarBytes !== 2) return false;
   return header.vectorThick !== 0;
+}
+
+export function isFloatVectorQuoteWord(word) {
+  if ((word & QUOTE_DENOTE_MASK) !== QUOTE_DENOTE) return false;
+  const header = decodeQuoteHeader(word);
+  return header.sortName === "float" && [4, 8].includes(header.scalarBytes) && header.vectorThick !== 0;
 }
 
 export function isLetterQuoteWord(word) {
@@ -258,6 +312,41 @@ function dynamicQuoteDescriptor(word) {
       };
     }
     return null;
+  }
+  if (header.sequence) {
+    if (header.sortName === "letter" && header.scalarBytes === 2 && header.explicitVectorLength) {
+      return {
+        word,
+        family: "text-array",
+        payloadWords: null,
+        valueType: "text-array",
+        supported: true
+      };
+    }
+    return null;
+  }
+  if (header.sortName === "float") {
+    if (header.scalarBytes === 2 && header.vectorThick === 0 && header.vectorWords === 1) {
+      return {
+        word,
+        family: "fixed16",
+        payloadWords: 1,
+        valueType: "fixed16",
+        supported: true
+      };
+    }
+    if ([4, 8].includes(header.scalarBytes)) {
+      const bits = header.scalarBytes * 8;
+      const vector = header.vectorThick !== 0;
+      const fixedCount = vector && !header.explicitVectorLength ? header.vectorWords : null;
+      return {
+        word,
+        family: vector ? `float${bits}-vector` : `float${bits}`,
+        payloadWords: vector ? fixedCount : 1,
+        valueType: vector ? `float${bits}-vector` : `float${bits}`,
+        supported: fixedCount !== 0
+      };
+    }
   }
   if (header.vectorWords === null || header.scalarBytes !== 2) return null;
   if (header.sortName === "word") {
@@ -305,6 +394,7 @@ export function decodeQuoteHeader(word) {
     sortName: quoteSortNames.get(sort) ?? null,
     scalarBytes,
     vectorWords,
+    sequence: (word & SEQUENCE_MASK) !== 0,
     explicitVectorLength: vectorThick === 6
   };
 }
@@ -344,8 +434,7 @@ function textValue(payload) {
   return String.fromCharCode(...payload);
 }
 
-export function decodeQuote(words, offset = 0) {
-  const values = normalizeWords(words);
+function decodeQuoteNormalized(values, offset = 0) {
   if (!Number.isInteger(offset) || offset < 0 || offset >= values.length) {
     throw quoteError("invalid-offset", "quote offset is outside the word sequence", { offset });
   }
@@ -385,6 +474,25 @@ export function decodeQuote(words, offset = 0) {
       elementCount
     });
   }
+  if (header.sequence) {
+    const members = decodeTextArrayMembers(values, payloadOffset, elementCount, decodeQuoteNormalized);
+    if (members.invalidIndex !== undefined) {
+      throw quoteError("unsupported-quote", "text arrays may contain only typed text quotes", {
+        offset,
+        elementIndex: members.invalidIndex,
+        family: members.quote.family
+      });
+    }
+    const payloadWords = members.nextOffset - payloadOffset;
+    return {
+      ...descriptor,
+      payloadWords,
+      payload: values.slice(payloadOffset, members.nextOffset),
+      value: members.values,
+      lengthWord,
+      nextOffset: members.nextOffset
+    };
+  }
   const scalarWords = header.scalarBytes / 2;
   const payloadWords = elementCount * scalarWords;
   const end = payloadOffset + payloadWords;
@@ -418,15 +526,55 @@ export function decodeQuote(words, offset = 0) {
     } else if (header.scalarBytes > 2) {
       value = unsignedValue(payload, header.scalarBytes);
     }
+  } else if (descriptor.family === "float32" || descriptor.family === "float64") {
+    const view = new DataView(new ArrayBuffer(header.scalarBytes));
+    for (let index = 0; index < scalarWords; index += 1) {
+      view.setUint16(index * 2, payload[index], true);
+    }
+    value = header.scalarBytes === 4 ? view.getFloat32(0, true) : view.getFloat64(0, true);
+    if (!Number.isFinite(value)) {
+      throw quoteError("non-finite-float", `VLIW f${header.scalarBytes * 8} quote contains NaN or infinity`, {
+        offset,
+        payload
+      });
+    }
+  } else if (descriptor.family === "float32-vector" || descriptor.family === "float64-vector") {
+    const bytes = header.scalarBytes;
+    value = [];
+    for (let index = 0; index < elementCount; index += 1) {
+      const view = new DataView(new ArrayBuffer(bytes));
+      const start = index * scalarWords;
+      for (let wordIndex = 0; wordIndex < scalarWords; wordIndex += 1) {
+        view.setUint16(wordIndex * 2, payload[start + wordIndex], true);
+      }
+      const number = bytes === 4 ? view.getFloat32(0, true) : view.getFloat64(0, true);
+      if (!Number.isFinite(number)) {
+        throw quoteError("non-finite-float", `VLIW f${bytes * 8} vector contains NaN or infinity`, {
+          offset,
+          index,
+          payload: payload.slice(start, start + scalarWords)
+        });
+      }
+      value.push(number);
+    }
+  } else if (descriptor.family === "fixed16") {
+    value = fixed16ValueFromNumerator(payload[0]);
   }
   return {
     ...descriptor,
     payloadWords,
     payload,
     value,
+    ...(descriptor.family === "fixed16"
+      ? { numerator: payload[0], denominator: FIXED16_SCALE }
+      : {}),
     lengthWord,
     nextOffset: end
   };
+}
+
+export function decodeQuote(words, offset = 0) {
+  return decodeQuoteNormalized(normalizeWords(words), offset);
 }
 
 export function lookupLegacyWord(word) {

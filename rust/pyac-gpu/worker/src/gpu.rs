@@ -1,11 +1,18 @@
 use std::borrow::Cow;
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::time::Instant;
 
-use pyac::{PyacValue, VectorElements, decode_pack};
+use pyac::{PyacValue, decode_pack};
 use serde_json::{Value, json};
 
-const RESULT_WORDS: usize = 32;
-const RESULT_STRIDE: usize = 4 + RESULT_WORDS;
+#[path = "gpu/result.rs"]
+mod result;
+use result::{RESULT_STRIDE, decode_results, value_json};
+#[path = "gpu/timing.rs"]
+mod timing;
+pub(crate) use timing::GpuExecutionTiming;
+
 const MAX_SECTION_NAME_WORDS: usize = pyac_vliw_core::MAX_PROGRAMLET_SECTION_NAME_WORDS;
 const SECTION_DESCRIPTOR_STRIDE: usize = 3 + MAX_SECTION_NAME_WORDS;
 const SECTION_RESULT_STRIDE: usize = 4 + MAX_SECTION_NAME_WORDS + RESULT_STRIDE;
@@ -22,17 +29,47 @@ pub(crate) struct GpuRuntime {
     device: wgpu::Device,
     queue: wgpu::Queue,
     adapter_name: String,
+    timestamp_period_ns: Option<f32>,
     bind_group_layout: wgpu::BindGroupLayout,
+    pipeline_cache: wgpu::PipelineCache,
     pack_pipeline: wgpu::ComputePipeline,
     programlet_pipeline: wgpu::ComputePipeline,
     sections_pipeline: wgpu::ComputePipeline,
 }
 
 impl GpuRuntime {
-    pub(crate) async fn new(shader_path: &Path) -> Result<Self, String> {
+    pub(crate) async fn new(shader_path: &Path, cache_path: &Path) -> Result<Self, String> {
+        let cache_data = read_pipeline_cache(cache_path)?;
+        Self::initialize(shader_path, Some(&cache_data)).await
+    }
+
+    pub(crate) async fn compile_pipeline_cache(
+        shader_path: &Path,
+        cache_path: &Path,
+    ) -> Result<(), String> {
+        let runtime = Self::initialize(shader_path, None).await?;
+        let cache_data = runtime
+            .pipeline_cache
+            .get_data()
+            .ok_or_else(|| "Vulkan driver did not return pipeline executable data".to_owned())?;
+        if cache_data.is_empty() {
+            return Err("Vulkan driver returned an empty pipeline artifact".to_owned());
+        }
+        write_pipeline_cache(cache_path, &cache_data)?;
+        eprintln!(
+            "[pyac-vliw] wrote compiled GPU pipeline artifact: {} ({} bytes)",
+            cache_path.display(),
+            cache_data.len()
+        );
+        Ok(())
+    }
+
+    async fn initialize(shader_path: &Path, cache_data: Option<&[u8]>) -> Result<Self, String> {
+        let init_started = Instant::now();
         let mut instance_descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
         instance_descriptor.backends = wgpu::Backends::VULKAN;
         let instance = wgpu::Instance::new(instance_descriptor);
+        eprintln!("[pyac-vliw] requesting Vulkan adapter");
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -43,6 +80,12 @@ impl GpuRuntime {
             .await
             .map_err(|error| format!("Vulkan adapter unavailable: {error}"))?;
         let adapter_info = adapter.get_info();
+        eprintln!(
+            "[pyac-vliw] adapter ready in {:.2}s: {} ({:?})",
+            init_started.elapsed().as_secs_f64(),
+            adapter_info.name,
+            adapter_info.device_type
+        );
         if adapter_info.device_type != wgpu::DeviceType::DiscreteGpu {
             return Err(format!(
                 "refusing non-discrete adapter: {} ({:?})",
@@ -50,10 +93,21 @@ impl GpuRuntime {
             ));
         }
 
-        let required_features = wgpu::Features::PASSTHROUGH_SHADERS;
-        if !adapter.features().contains(required_features) {
-            return Err("Vulkan adapter lacks SPIR-V passthrough support".to_owned());
+        let timestamp_features =
+            wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES;
+        let timestamp_queries = adapter.features().contains(timestamp_features);
+        let mut required_features =
+            wgpu::Features::PASSTHROUGH_SHADERS | wgpu::Features::PIPELINE_CACHE;
+        if timestamp_queries {
+            required_features |= timestamp_features;
         }
+        if !adapter.features().contains(required_features) {
+            return Err(
+                "Vulkan adapter lacks SPIR-V passthrough or pipeline-cache support".to_owned(),
+            );
+        }
+        let device_started = Instant::now();
+        eprintln!("[pyac-vliw] requesting Vulkan device");
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 required_features,
@@ -61,6 +115,33 @@ impl GpuRuntime {
             })
             .await
             .map_err(|error| format!("Vulkan device unavailable: {error}"))?;
+        let timestamp_period_ns = timestamp_queries.then(|| queue.get_timestamp_period());
+        eprintln!(
+            "[pyac-vliw] device ready in {:.2}s",
+            device_started.elapsed().as_secs_f64()
+        );
+
+        let cache_internal_scope = device.push_error_scope(wgpu::ErrorFilter::Internal);
+        let cache_oom_scope = device.push_error_scope(wgpu::ErrorFilter::OutOfMemory);
+        let cache_validation_scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
+        // The compile command passes no data to create a new artifact. The service
+        // passes only bytes previously returned by PipelineCache::get_data.
+        let pipeline_cache = unsafe {
+            device.create_pipeline_cache(&wgpu::PipelineCacheDescriptor {
+                label: Some("Pyash VLIW compiled pipeline artifact"),
+                data: cache_data,
+                fallback: false,
+            })
+        };
+        let cache_validation_error = cache_validation_scope.pop().await;
+        let cache_oom_error = cache_oom_scope.pop().await;
+        let cache_internal_error = cache_internal_scope.pop().await;
+        if let Some(error) = cache_validation_error
+            .or(cache_oom_error)
+            .or(cache_internal_error)
+        {
+            return Err(format!("Vulkan VLIW pipeline artifact rejected: {error}"));
+        }
 
         let shader_bytes = std::fs::read(shader_path)
             .map_err(|error| format!("could not read {}: {error}", shader_path.display()))?;
@@ -69,6 +150,11 @@ impl GpuRuntime {
         let shader_internal_scope = device.push_error_scope(wgpu::ErrorFilter::Internal);
         let shader_oom_scope = device.push_error_scope(wgpu::ErrorFilter::OutOfMemory);
         let shader_validation_scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
+        let shader_started = Instant::now();
+        eprintln!(
+            "[pyac-vliw] creating SPIR-V module ({} bytes)",
+            shader_bytes.len()
+        );
         // SAFETY: the image build generates this module from our shader crate and validates it
         // for Vulkan 1.2; the entry points and workgroup sizes are fixed by that crate.
         let shader = unsafe {
@@ -103,6 +189,10 @@ impl GpuRuntime {
                 "Vulkan VLIW shader module creation failed: {error}"
             ));
         }
+        eprintln!(
+            "[pyac-vliw] SPIR-V module ready in {:.2}s",
+            shader_started.elapsed().as_secs_f64()
+        );
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Pyash VLIW storage bindings"),
@@ -154,36 +244,60 @@ impl GpuRuntime {
             bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
         });
+        let pipeline_started = Instant::now();
+        eprintln!("[pyac-vliw] creating pack pipeline");
         let pack_pipeline = create_pipeline(
             &device,
             &pipeline_layout,
             &shader,
+            &pipeline_cache,
             "execute_pyac_pack",
             "Pyash VLIW pack interpreter",
         )
         .await?;
+        eprintln!(
+            "[pyac-vliw] pack pipeline ready in {:.2}s",
+            pipeline_started.elapsed().as_secs_f64()
+        );
+        let pipeline_started = Instant::now();
+        eprintln!("[pyac-vliw] creating programlet pipeline");
         let programlet_pipeline = create_pipeline(
             &device,
             &pipeline_layout,
             &shader,
+            &pipeline_cache,
             "execute_pyac_programlet",
             "Pyash VLIW programlet interpreter",
         )
         .await?;
+        eprintln!(
+            "[pyac-vliw] programlet pipeline ready in {:.2}s",
+            pipeline_started.elapsed().as_secs_f64()
+        );
+        let pipeline_started = Instant::now();
+        eprintln!("[pyac-vliw] creating sections pipeline");
         let sections_pipeline = create_pipeline(
             &device,
             &pipeline_layout,
             &shader,
+            &pipeline_cache,
             "execute_pyac_sections",
             "Pyash independent section interpreter",
         )
         .await?;
+        eprintln!(
+            "[pyac-vliw] sections pipeline ready in {:.2}s; full initialization {:.2}s",
+            pipeline_started.elapsed().as_secs_f64(),
+            init_started.elapsed().as_secs_f64()
+        );
 
         Ok(Self {
             device,
             queue,
             adapter_name: adapter_info.name,
+            timestamp_period_ns,
             bind_group_layout,
+            pipeline_cache,
             pack_pipeline,
             programlet_pipeline,
             sections_pipeline,
@@ -196,13 +310,36 @@ impl GpuRuntime {
     }
 
     pub(crate) async fn execute_pack(&self, pack_bytes: &[u8]) -> Result<Value, String> {
-        let pack = decode_pack(pack_bytes).map_err(|error| error.to_string())?;
-        self.execute_codelets(&pack.codelets).await
+        let (result, timings) = self.execute_pack_with_timings(pack_bytes).await;
+        result.map(|mut response| {
+            response["runtimeTimingMs"] = timings.to_json();
+            response
+        })
+    }
+
+    pub(crate) async fn execute_pack_with_timings(
+        &self,
+        pack_bytes: &[u8],
+    ) -> (Result<Value, String>, GpuExecutionTiming) {
+        let total_started = Instant::now();
+        let decode_started = Instant::now();
+        let pack = decode_pack(pack_bytes);
+        let mut timings = GpuExecutionTiming {
+            pack_decode_ms: decode_started.elapsed().as_secs_f64() * 1000.0,
+            ..Default::default()
+        };
+        let result = match pack {
+            Ok(pack) => self.execute_codelets(&pack.codelets, &mut timings).await,
+            Err(error) => Err(error.to_string()),
+        };
+        timings.total_ms = total_started.elapsed().as_secs_f64() * 1000.0;
+        (result, timings)
     }
 
     async fn execute_codelets(
         &self,
         codelets: &[[u16; pyac::WORDS_PER_CODELET]],
+        timings: &mut GpuExecutionTiming,
     ) -> Result<Value, String> {
         if codelets.is_empty() {
             return Ok(json!({
@@ -213,6 +350,7 @@ impl GpuRuntime {
             }));
         }
 
+        let classify_started = Instant::now();
         let input_words = codelets
             .iter()
             .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
@@ -221,12 +359,19 @@ impl GpuRuntime {
         let mut section_descriptors =
             [pyac_vliw_core::ProgramletSection::EMPTY; pyac_vliw_core::MAX_PROGRAMLET_SECTIONS];
         let section_count = if sectioned {
-            pyac_vliw_core::scan_numeric_programlet_sections(
+            match pyac_vliw_core::scan_numeric_programlet_sections(
                 &input_words,
                 codelets.len(),
                 &mut section_descriptors,
-            )
-            .map_err(|error| format!("malformed VLIW section packet (core error {error})"))?
+            ) {
+                Ok(count) => count,
+                Err(error) => {
+                    timings.classify_ms = classify_started.elapsed().as_secs_f64() * 1000.0;
+                    return Err(format!(
+                        "malformed VLIW section packet (core error {error})"
+                    ));
+                }
+            }
         } else {
             0
         };
@@ -246,7 +391,9 @@ impl GpuRuntime {
         } else {
             &self.pack_pipeline
         };
+        timings.classify_ms = classify_started.elapsed().as_secs_f64() * 1000.0;
 
+        let buffer_setup_started = Instant::now();
         let input_buffer_internal_scope = self.device.push_error_scope(wgpu::ErrorFilter::Internal);
         let input_buffer_oom_scope = self.device.push_error_scope(wgpu::ErrorFilter::OutOfMemory);
         let input_buffer_validation_scope =
@@ -339,15 +486,49 @@ impl GpuRuntime {
                 },
             ],
         });
+        let timestamp_query_set = self.timestamp_period_ns.map(|_| {
+            self.device.create_query_set(&wgpu::QuerySetDescriptor {
+                label: Some("Pyash VLIW compute timestamp queries"),
+                count: 2,
+                ty: wgpu::QueryType::Timestamp,
+            })
+        });
+        let timestamp_resolve = timestamp_query_set.as_ref().map(|_| {
+            self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Pyash VLIW timestamp resolve"),
+                size: 256,
+                usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            })
+        });
+        let timestamp_readback = timestamp_query_set.as_ref().map(|_| {
+            self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Pyash VLIW timestamp readback"),
+                size: 16,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            })
+        });
+        timings.buffer_setup_ms = buffer_setup_started.elapsed().as_secs_f64() * 1000.0;
+
+        let command_encode_started = Instant::now();
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Pyash VLIW pack dispatch"),
             });
         {
+            let timestamp_writes =
+                timestamp_query_set
+                    .as_ref()
+                    .map(|query_set| wgpu::ComputePassTimestampWrites {
+                        query_set,
+                        beginning_of_pass_write_index: Some(0),
+                        end_of_pass_write_index: Some(1),
+                    });
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("Pyash shared interpreter"),
-                timestamp_writes: None,
+                timestamp_writes,
             });
             pass.set_pipeline(pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
@@ -361,37 +542,96 @@ impl GpuRuntime {
             pass.dispatch_workgroups(workgroups, 1, 1);
         }
         encoder.copy_buffer_to_buffer(&output_buffer, 0, &readback, 0, (output_words * 4) as u64);
-        self.queue.submit([encoder.finish()]);
+        if let (Some(query_set), Some(resolve), Some(timestamp_readback)) = (
+            timestamp_query_set.as_ref(),
+            timestamp_resolve.as_ref(),
+            timestamp_readback.as_ref(),
+        ) {
+            encoder.resolve_query_set(query_set, 0..2, resolve, 0);
+            encoder.copy_buffer_to_buffer(resolve, 0, timestamp_readback, 0, 16);
+        }
+        let command_buffer = encoder.finish();
+        timings.command_encode_ms = command_encode_started.elapsed().as_secs_f64() * 1000.0;
 
+        let submit_wait_started = Instant::now();
+        self.queue.submit([command_buffer]);
         let slice = readback.slice(..);
         let (sender, receiver) = std::sync::mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |result| {
             let _ = sender.send(result);
         });
-        self.device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .map_err(|error| format!("Vulkan device poll failed: {error}"))?;
-        receiver
+        let timestamp_slice = timestamp_readback.as_ref().map(|buffer| buffer.slice(..));
+        let (timestamp_sender, timestamp_receiver) = std::sync::mpsc::channel();
+        if let Some(timestamp_slice) = timestamp_slice.as_ref() {
+            timestamp_slice.map_async(wgpu::MapMode::Read, move |result| {
+                let _ = timestamp_sender.send(result);
+            });
+        }
+        let poll_result = self.device.poll(wgpu::PollType::wait_indefinitely());
+        let result_map_result = receiver
             .recv()
-            .map_err(|error| format!("Vulkan readback callback failed: {error}"))?
-            .map_err(|error| format!("Vulkan readback mapping failed: {error}"))?;
+            .map_err(|error| format!("Vulkan readback callback failed: {error}"))
+            .and_then(|result| {
+                result.map_err(|error| format!("Vulkan readback mapping failed: {error}"))
+            });
+        let timestamp_map_result = if timestamp_slice.is_some() {
+            timestamp_receiver
+                .recv()
+                .map_err(|error| format!("Vulkan timestamp callback failed: {error}"))
+                .and_then(|result| {
+                    result.map_err(|error| format!("Vulkan timestamp mapping failed: {error}"))
+                })
+        } else {
+            Ok(())
+        };
+        timings.submit_wait_readback_ms = submit_wait_started.elapsed().as_secs_f64() * 1000.0;
+        poll_result.map_err(|error| format!("Vulkan device poll failed: {error}"))?;
+        result_map_result?;
+        timestamp_map_result?;
+
+        if let (Some(timestamp_slice), Some(period_ns)) =
+            (timestamp_slice.as_ref(), self.timestamp_period_ns)
+        {
+            let timestamp_bytes = timestamp_slice
+                .get_mapped_range()
+                .map_err(|error| format!("Vulkan timestamp read failed: {error}"))?;
+            let timestamps = bytemuck::try_cast_slice::<u8, u64>(&timestamp_bytes)
+                .map_err(|error| format!("Vulkan timestamp data was not u64 aligned: {error}"))?;
+            if timestamps.len() >= 2 {
+                timings.kernel_gpu_ms = Some(
+                    timestamps[1].wrapping_sub(timestamps[0]) as f64 * f64::from(period_ns)
+                        / 1_000_000.0,
+                );
+            }
+            drop(timestamp_bytes);
+            if let Some(buffer) = timestamp_readback.as_ref() {
+                buffer.unmap();
+            }
+        }
+
         let mapped = slice
             .get_mapped_range()
             .map_err(|error| format!("Vulkan result map failed: {error}"))?;
         let output = bytemuck::try_cast_slice::<u8, u32>(&mapped)
             .map_err(|error| format!("GPU result buffer was not u32 aligned: {error}"))?;
-        let section_records = if sectioned {
-            Some(decode_section_records(section_count, output)?)
-        } else {
-            None
-        };
-        let values = if let Some(records) = &section_records {
-            records.iter().map(|record| record.value.clone()).collect()
-        } else if programlet {
-            decode_programlet_result(codelets.len(), output)?
-        } else {
-            decode_results(codelets, output)?
-        };
+        let result_decode_started = Instant::now();
+        let decode_result = (|| {
+            let section_records = if sectioned {
+                Some(decode_section_records(section_count, output)?)
+            } else {
+                None
+            };
+            let values = if let Some(records) = &section_records {
+                records.iter().map(|record| record.value.clone()).collect()
+            } else if programlet {
+                decode_programlet_result(codelets.len(), output)?
+            } else {
+                decode_results(codelets, output)?
+            };
+            Ok::<_, String>((section_records, values))
+        })();
+        timings.result_decode_ms = result_decode_started.elapsed().as_secs_f64() * 1000.0;
+        let (section_records, values) = decode_result?;
         let section_json = section_records.as_ref().map(|records| {
             records
                 .iter()
@@ -433,6 +673,7 @@ async fn create_pipeline(
     device: &wgpu::Device,
     layout: &wgpu::PipelineLayout,
     shader: &wgpu::ShaderModule,
+    cache: &wgpu::PipelineCache,
     entry_point: &str,
     label: &str,
 ) -> Result<wgpu::ComputePipeline, String> {
@@ -445,7 +686,7 @@ async fn create_pipeline(
         module: shader,
         entry_point: Some(entry_point),
         compilation_options: Default::default(),
-        cache: None,
+        cache: Some(cache),
     });
     let validation_error = validation_scope.pop().await;
     let oom_error = oom_scope.pop().await;
@@ -454,6 +695,56 @@ async fn create_pipeline(
         return Err(format!("Vulkan VLIW pipeline creation failed: {error}"));
     }
     Ok(pipeline)
+}
+
+fn read_pipeline_cache(path: &Path) -> Result<Vec<u8>, String> {
+    let bytes = fs::read(path).map_err(|error| {
+        format!(
+            "compiled GPU pipeline artifact is required at {}: {error}",
+            path.display()
+        )
+    })?;
+    if bytes.is_empty() {
+        return Err(format!(
+            "compiled GPU pipeline artifact is empty: {}",
+            path.display()
+        ));
+    }
+    Ok(bytes)
+}
+
+fn write_pipeline_cache(path: &Path, data: &[u8]) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty());
+    if let Some(parent) = parent {
+        fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "could not create pipeline artifact directory {}: {error}",
+                parent.display()
+            )
+        })?;
+    }
+    let mut temporary = PathBuf::from(path);
+    let extension = path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .unwrap_or("bin");
+    temporary.set_extension(format!("{extension}.{}.tmp", std::process::id()));
+    fs::write(&temporary, data).map_err(|error| {
+        format!(
+            "could not write compiled pipeline artifact {}: {error}",
+            temporary.display()
+        )
+    })?;
+    if let Err(error) = fs::rename(&temporary, path) {
+        let _ = fs::remove_file(&temporary);
+        return Err(format!(
+            "could not atomically install compiled pipeline artifact {}: {error}",
+            path.display()
+        ));
+    }
+    Ok(())
 }
 fn decode_programlet_result(
     codelet_count: usize,
@@ -477,6 +768,8 @@ fn decode_programlet_result(
     let value = match output[0] {
         pyac_vliw_core::VALUE_UNSIGNED => PyacValue::Unsigned(u64::from(output[4])),
         pyac_vliw_core::VALUE_SIGNED => PyacValue::Signed(i64::from(output[4] as i32)),
+        pyac_vliw_core::VALUE_FLOAT32 => PyacValue::Float32(output[4]),
+        pyac_vliw_core::VALUE_FIXED16 => PyacValue::Fixed16(output[4] as u16),
         pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(output[4] != 0),
         kind => return Err(format!("programlet: unsupported GPU result kind {kind}")),
     };
@@ -524,6 +817,8 @@ fn decode_section_records(
         let value = match result[0] {
             pyac_vliw_core::VALUE_UNSIGNED => PyacValue::Unsigned(u64::from(result[4])),
             pyac_vliw_core::VALUE_SIGNED => PyacValue::Signed(i64::from(result[4] as i32)),
+            pyac_vliw_core::VALUE_FLOAT32 => PyacValue::Float32(result[4]),
+            pyac_vliw_core::VALUE_FIXED16 => PyacValue::Fixed16(result[4] as u16),
             pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(result[4] != 0),
             kind => {
                 return Err(format!(
@@ -541,89 +836,35 @@ fn decode_section_records(
     Ok(records)
 }
 
-fn decode_results(
-    codelets: &[[u16; pyac::WORDS_PER_CODELET]],
-    output: &[u32],
-) -> Result<Vec<PyacValue>, String> {
-    let mut values = Vec::new();
-    let mut index = 0;
-    while index < codelets.len() {
-        if index > 0 && codelets[index - 1][0] & 1 == 0 {
-            index += 1;
-            continue;
-        }
-        let offset = index * RESULT_STRIDE;
-        let result = &output[offset..offset + RESULT_STRIDE];
-        if result[1] != 0 {
-            return Err(format!(
-                "codelet {index}: shared VLIW core error {}",
-                result[1]
-            ));
-        }
-        let length = result[2] as usize;
-        let data = &result[4..];
-        let value = match result[0] {
-            pyac_vliw_core::VALUE_UNSIGNED => {
-                PyacValue::Unsigned(u64::from(data[0]) | (u64::from(data[1]) << 32))
-            }
-            pyac_vliw_core::VALUE_SIGNED => {
-                PyacValue::Signed((u64::from(data[0]) | (u64::from(data[1]) << 32)) as i64)
-            }
-            pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(data[0] != 0),
-            pyac_vliw_core::VALUE_DATE => {
-                PyacValue::DateEpochMs(u64::from(data[0]) | (u64::from(data[1]) << 32))
-            }
-            pyac_vliw_core::VALUE_VECTOR_U16 => PyacValue::Vector(VectorElements::Numbers(
-                data[..length].iter().map(|value| *value as u16).collect(),
-            )),
-            pyac_vliw_core::VALUE_VECTOR_U32 => {
-                PyacValue::Vector(VectorElements::Numbers32(data[..length].to_vec()))
-            }
-            pyac_vliw_core::VALUE_VECTOR_BOOL => PyacValue::Vector(VectorElements::Booleans(
-                data[..length].iter().map(|value| *value != 0).collect(),
-            )),
-            kind => {
-                return Err(format!(
-                    "codelet {index}: unsupported GPU result kind {kind}"
-                ));
-            }
-        };
-        values.push(value);
-        let consumed = result[3] as usize;
-        if consumed == 0 {
-            return Err(format!(
-                "codelet {index}: shared VLIW core returned no group length"
-            ));
-        }
-        index += consumed;
-    }
-    Ok(values)
-}
-
-fn value_json(value: &PyacValue) -> Value {
-    match value {
-        PyacValue::Unsigned(value) => json!({"type": "unsigned", "value": value}),
-        PyacValue::Signed(value) => json!({"type": "signed", "value": value}),
-        PyacValue::Boolean(value) => json!({"type": "boolean", "value": value}),
-        PyacValue::DateEpochMs(value) => json!({"type": "date-epoch-ms", "value": value}),
-        PyacValue::Vector(VectorElements::Numbers(values)) => {
-            json!({"type": "vector", "elementType": "unsigned-16", "values": values})
-        }
-        PyacValue::Vector(VectorElements::Numbers32(values)) => {
-            json!({"type": "vector", "elementType": "unsigned-32", "values": values})
-        }
-        PyacValue::Vector(VectorElements::Booleans(values)) => {
-            json!({"type": "vector", "elementType": "boolean", "values": values})
-        }
-        PyacValue::Vector(VectorElements::Texts(values)) => {
-            json!({"type": "vector", "elementType": "text", "values": values})
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pipeline_artifact_is_written_atomically_and_required_when_loading() {
+        let path = std::env::temp_dir().join(format!(
+            "pyac-vliw-pipeline-cache-{}-{}.bin",
+            std::process::id(),
+            Instant::now().elapsed().as_nanos()
+        ));
+        let artifact = [0x50, 0x59, 0x41, 0x43, 1, 2, 3];
+
+        write_pipeline_cache(&path, &artifact).unwrap();
+        assert_eq!(read_pipeline_cache(&path).unwrap(), artifact);
+        fs::remove_file(&path).unwrap();
+        assert!(read_pipeline_cache(&path).unwrap_err().contains("required"));
+    }
+
+    #[test]
+    fn empty_pipeline_artifacts_are_rejected() {
+        let path = std::env::temp_dir().join(format!(
+            "pyac-vliw-empty-pipeline-cache-{}.bin",
+            std::process::id()
+        ));
+        fs::write(&path, []).unwrap();
+        assert!(read_pipeline_cache(&path).unwrap_err().contains("empty"));
+        fs::remove_file(path).unwrap();
+    }
 
     fn result_record(kind: u32, value: u32) -> [u32; RESULT_STRIDE] {
         let mut output = [0; RESULT_STRIDE];
@@ -652,6 +893,65 @@ mod tests {
         assert_eq!(
             decode_programlet_result(6, &result_record(pyac_vliw_core::VALUE_BOOLEAN, 1)).unwrap(),
             vec![PyacValue::Boolean(true)]
+        );
+        assert_eq!(
+            decode_programlet_result(
+                6,
+                &result_record(pyac_vliw_core::VALUE_FLOAT32, 1.25f32.to_bits())
+            )
+            .unwrap(),
+            vec![PyacValue::Float32(1.25f32.to_bits())]
+        );
+        assert_eq!(
+            decode_programlet_result(6, &result_record(pyac_vliw_core::VALUE_FIXED16, 23_328))
+                .unwrap(),
+            vec![PyacValue::Fixed16(23_328)]
+        );
+    }
+
+    #[test]
+    fn decodes_float32_codelet_results_and_json_values() {
+        let mut codelet = [0; pyac::WORDS_PER_CODELET];
+        codelet[0] = 1;
+        let bits = 0.3f32.to_bits();
+        let mut output = vec![0; RESULT_STRIDE];
+        output[0] = pyac_vliw_core::VALUE_FLOAT32;
+        output[2] = 1;
+        output[3] = 1;
+        output[4] = bits;
+
+        assert_eq!(
+            decode_results(&[codelet], &output).unwrap(),
+            vec![PyacValue::Float32(bits)]
+        );
+        assert_eq!(
+            value_json(&PyacValue::Float32(bits)),
+            json!({ "type": "float32", "value": f32::from_bits(bits) })
+        );
+    }
+
+    #[test]
+    fn decodes_fixed16_codelet_results_and_json_values() {
+        let mut codelet = [0; pyac::WORDS_PER_CODELET];
+        codelet[0] = 1;
+        let mut output = vec![0; RESULT_STRIDE];
+        output[0] = pyac_vliw_core::VALUE_FIXED16;
+        output[2] = 1;
+        output[3] = 1;
+        output[4] = 23_328;
+
+        assert_eq!(
+            decode_results(&[codelet], &output).unwrap(),
+            vec![PyacValue::Fixed16(23_328)]
+        );
+        assert_eq!(
+            value_json(&PyacValue::Fixed16(23_328)),
+            json!({
+                "type": "fixed16",
+                "value": 0.5,
+                "numerator": 23_328,
+                "denominator": 46_656
+            })
         );
     }
 

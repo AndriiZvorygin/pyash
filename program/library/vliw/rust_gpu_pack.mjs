@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import path from "node:path";
+import { performance } from "node:perf_hooks";
 
 import gpu from "../../verbs/gpu.mjs";
 import { readGpuHandleStatus } from "../../runtime/gpu/handle_status.mjs";
@@ -39,6 +40,84 @@ function estimateVramMb(codeletCount) {
   return Math.max(64, Math.ceil((bytes * 1.25) / MEBIBYTE));
 }
 
+function timestampDeltaMs(start, end) {
+  const startMs = Date.parse(String(start ?? ""));
+  const endMs = Date.parse(String(end ?? ""));
+  return Number.isFinite(startMs) && Number.isFinite(endMs) && endMs >= startMs
+    ? endMs - startMs
+    : null;
+}
+
+function timingRecord(status, handleId, requestStartedAt, requestStartedMs, runtimeTimingMs = null) {
+  return {
+    handleId,
+    remoteJobId: String(status?.remoteJobId ?? ""),
+    queuedAt: String(status?.queuedAt ?? ""),
+    workerStartedAt: String(status?.startedAt ?? ""),
+    workerFinishedAt: String(status?.finishedAt ?? ""),
+    remoteSubmittedAt: String(status?.remoteSubmittedAt ?? ""),
+    remoteStartedAt: String(status?.remoteStartedAt ?? ""),
+    remoteFinishedAt: String(status?.remoteFinishedAt ?? ""),
+    localQueueWaitMs: timestampDeltaMs(status?.queuedAt, status?.startedAt),
+    workerWallMs: timestampDeltaMs(status?.startedAt, status?.finishedAt),
+    housekeeperQueueWaitMs: timestampDeltaMs(status?.remoteSubmittedAt, status?.remoteStartedAt),
+    housekeeperActiveMs: timestampDeltaMs(status?.remoteStartedAt, status?.remoteFinishedAt),
+    clientRoundTripMs: Number((performance.now() - requestStartedMs).toFixed(3)),
+    requestStartedAt,
+    runtimeTimingMs
+  };
+}
+
+function runtimeTimingsFromError(message) {
+  function inspect(value, depth = 0) {
+    if (depth > 8) return null;
+    if (value && typeof value === "object") {
+      if (value.runtimeTimingMs && typeof value.runtimeTimingMs === "object") return value.runtimeTimingMs;
+      for (const key of ["message", "error", "detail", "response"]) {
+        const result = inspect(value[key], depth + 1);
+        if (result) return result;
+      }
+      return null;
+    }
+    if (typeof value !== "string") return null;
+    const source = value;
+    try {
+      const result = inspect(JSON.parse(source), depth + 1);
+      if (result) return result;
+    } catch {
+      // Housekeeper prefixes nested JSON error bodies with a human-readable message.
+    }
+    for (let start = source.indexOf("{"); start >= 0; start = source.indexOf("{", start + 1)) {
+      let nesting = 0;
+      let quoted = false;
+      let escaped = false;
+      for (let index = start; index < source.length; index += 1) {
+        const character = source[index];
+        if (quoted) {
+          if (escaped) escaped = false;
+          else if (character === "\\") escaped = true;
+          else if (character === '"') quoted = false;
+          continue;
+        }
+        if (character === '"') quoted = true;
+        else if (character === "{") nesting += 1;
+        else if (character === "}" && --nesting === 0) {
+          try {
+            const result = inspect(JSON.parse(source.slice(start, index + 1)), depth + 1);
+            if (result) return result;
+          } catch {
+            break;
+          }
+          break;
+        }
+      }
+    }
+    return null;
+  }
+
+  return inspect(String(message ?? ""));
+}
+
 export function createHousekeeperVliwPackExecutor({
   worldRoot = path.resolve(process.cwd(), "world"),
   agentName = "vliw-pack-executor",
@@ -64,6 +143,8 @@ export function createHousekeeperVliwPackExecutor({
     if (decoded.codelets.length === 0) throw new Error("VLIW Housekeeper executor requires a non-empty PyAC pack");
     const handleId = String(makeHandleId()).trim();
     if (!handleId) throw new Error("VLIW Housekeeper executor requires a non-empty handle id");
+    const requestStartedAt = new Date().toISOString();
+    const requestStartedMs = performance.now();
     const jobSpec = {
       kind: "pyac-pack-execute",
       profileName: "pyac-vliw-rust-gpu",
@@ -84,15 +165,38 @@ export function createHousekeeperVliwPackExecutor({
     while (Date.now() < deadline) {
       const status = await readStatus(resolvedWorldRoot, handleId);
       if (status?.status === "success") {
-        const result = readResult(status, handleId);
+        let result;
+        try {
+          result = readResult(status, handleId);
+        } catch (error) {
+          error.housekeeperTiming = timingRecord(status, handleId, requestStartedAt, requestStartedMs);
+          throw error;
+        }
         if (result?.ok !== true || !Array.isArray(result.values)) {
           throw new Error(`VLIW Housekeeper job ${handleId} returned an invalid pack result`);
         }
-        return result;
+        return {
+          ...result,
+          housekeeperTiming: timingRecord(
+            status,
+            handleId,
+            requestStartedAt,
+            requestStartedMs,
+            result.runtimeTimingMs ?? null
+          )
+        };
       }
       if (status?.status === "fail") {
         const detail = String(status.error || status.message || "unknown Housekeeper failure");
-        throw new Error(`VLIW Housekeeper job ${handleId} failed: ${detail}`);
+        const error = new Error(`VLIW Housekeeper job ${handleId} failed: ${detail}`);
+        error.housekeeperTiming = timingRecord(
+          status,
+          handleId,
+          requestStartedAt,
+          requestStartedMs,
+          runtimeTimingsFromError(detail)
+        );
+        throw error;
       }
       await sleep(Math.min(pollDelay, Math.max(1, deadline - Date.now())));
     }

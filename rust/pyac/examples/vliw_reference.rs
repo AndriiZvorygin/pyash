@@ -7,6 +7,13 @@ fn value_json(value: PyacValue) -> Value {
     match value {
         PyacValue::Unsigned(value) => json!({"type": "unsigned", "value": value}),
         PyacValue::Signed(value) => json!({"type": "signed", "value": value}),
+        PyacValue::Float32(bits) => json!({"type": "float32", "value": f32::from_bits(bits)}),
+        PyacValue::Fixed16(numerator) => json!({
+            "type": "fixed16",
+            "value": f64::from(numerator) / 46_656.0,
+            "numerator": numerator,
+            "denominator": 46_656
+        }),
         PyacValue::Boolean(value) => json!({"type": "boolean", "value": value}),
         PyacValue::DateEpochMs(value) => json!({"type": "date", "value": value}),
         PyacValue::Vector(VectorElements::Numbers(values)) => {
@@ -21,6 +28,16 @@ fn value_json(value: PyacValue) -> Value {
         PyacValue::Vector(VectorElements::Texts(values)) => {
             json!({"type": "vector", "elementType": "text", "values": values})
         }
+        PyacValue::Vector(VectorElements::Float32(values)) => json!({
+            "type": "vector",
+            "elementType": "float32",
+            "values": values.iter().map(|bits| f32::from_bits(*bits)).collect::<Vec<_>>()
+        }),
+        PyacValue::Vector(VectorElements::Float64(values)) => json!({
+            "type": "vector",
+            "elementType": "float64",
+            "values": values.iter().map(|bits| f64::from_bits(*bits)).collect::<Vec<_>>()
+        }),
     }
 }
 

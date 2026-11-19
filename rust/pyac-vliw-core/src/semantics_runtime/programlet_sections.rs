@@ -202,7 +202,10 @@ pub fn scan_numeric_programlet_sections(
                 &mut sentence,
             );
             if error != 0 {
-                return Err(error);
+                // Programlet-only body sentences can be valid without being
+                // standalone sentences understood by the section scanner.
+                cursor = next_codelet;
+                continue;
             }
             if is_programlet_section_verb(&sentence, &sentence_words) {
                 if sentence.mood != MOOD_PARAGRAPH {

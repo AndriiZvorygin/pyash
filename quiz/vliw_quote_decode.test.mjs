@@ -5,6 +5,12 @@ import {
   LETTER_QUOTE_WORD,
   NUMBER_QUOTE_WORD,
   PARAGRAPH_LETTER_QUOTE_WORD,
+  FIXED16_QUOTE_WORD,
+  fixed16NumeratorQuoteWords,
+  fixed16NumeratorFromBase6,
+  fixed16QuoteWords,
+  fixed16QuoteWordsFromBase6,
+  quoteWordFor,
   QuoteEncodingError,
   decodeQuoteHeader,
   decodeQuote,
@@ -88,6 +94,54 @@ test("numeric quote decodes its typed payload", () => {
     lengthWord: undefined,
     nextOffset: 2
   });
+});
+
+test("legacy float quote carries one finite f32 scalar", () => {
+  const header = quoteWordFor({ sort: 6, scalarBytes: 4 });
+  assert.equal(header, 0xd01d);
+  const bits = new DataView(new ArrayBuffer(4));
+  bits.setFloat32(0, 1.25, true);
+  const encoded = bits.getUint32(0, true);
+  const quote = decodeQuote([header, encoded & 0xffff, encoded >>> 16]);
+  assert.equal(quote.family, "float32");
+  assert.equal(quote.value, 1.25);
+  assert.deepEqual(quote.payload, [0, 0x3fa0]);
+  assert.throws(
+    () => decodeQuote([header, 0, 0x7f80]),
+    (error) => error.code === "non-finite-float"
+  );
+  assert.equal(quoteWordFor({ sort: 6, scalarBytes: 2 }), FIXED16_QUOTE_WORD);
+  assert.equal(quoteWordFor({ sort: 6, scalarBytes: 4, vectorThick: 1 }), 0xd11d);
+});
+
+test("fixed16 is a compact typed quote using the legacy float sort and u16 scalar", () => {
+  assert.equal(FIXED16_QUOTE_WORD, 0xc81d);
+  assert.deepEqual(fixed16QuoteWords(0.5), [FIXED16_QUOTE_WORD, 23_328]);
+  assert.deepEqual(fixed16NumeratorQuoteWords(65_535), [FIXED16_QUOTE_WORD, 65_535]);
+  assert.deepEqual(decodeQuote([FIXED16_QUOTE_WORD, 23_328]), {
+    word: FIXED16_QUOTE_WORD,
+    family: "fixed16",
+    payloadWords: 1,
+    valueType: "fixed16",
+    supported: true,
+    payload: [23_328],
+    value: 0.5,
+    numerator: 23_328,
+    denominator: 46_656,
+    lengthWord: undefined,
+    nextOffset: 2
+  });
+  assert.throws(() => fixed16QuoteWords(-1), (error) => error.code === "fixed16-range");
+  assert.throws(() => fixed16NumeratorQuoteWords(65_536), (error) => error.code === "fixed16-range");
+});
+
+test("fixed16 converts base-6 source numbers against its 1,000,000 base-6 scale", () => {
+  assert.equal(fixed16NumeratorFromBase6("0.1"), 7_776);
+  assert.equal(fixed16NumeratorFromBase6("0.3"), 23_328);
+  assert.equal(fixed16NumeratorFromBase6("1.000000"), 46_656);
+  assert.deepEqual(fixed16QuoteWordsFromBase6("0.3"), [FIXED16_QUOTE_WORD, 23_328]);
+  assert.throws(() => fixed16NumeratorFromBase6("0.6"), (error) => error.code === "fixed16-base6");
+  assert.throws(() => fixed16NumeratorFromBase6("1000000"), (error) => error.code === "fixed16-range");
 });
 
 test("quote headers expose legacy width, region, sequence, and sort fields", () => {
@@ -228,6 +282,8 @@ test("quote decoding rejects unsupported and malformed values", () => {
     errorCode(() => decodeQuote([PARAGRAPH_LETTER_QUOTE_WORD], 0)),
     "truncated-quote"
   );
+  assert.equal(errorCode(() => decodeQuote([0x0e9d, 1, NUMBER_QUOTE_WORD, 7], 0)), "unsupported-quote");
+  assert.equal(errorCode(() => decodeQuote([0x0e9d, 0], 0)), "unsupported-quote");
   assert.equal(errorCode(() => renderLegacyNumericPlusCodelet(onePlusOneWords.slice(0, -1))), "invalid-codelet");
 });
 

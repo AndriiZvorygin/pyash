@@ -170,6 +170,8 @@ pub enum SemanticError {
     },
     UnsupportedCodelet,
     DivisionByZero,
+    NonFiniteFloat,
+    Fixed16Domain,
     MalformedProgramlet,
     UnsupportedProgramlet,
     ProgramletFrameCapacity,
@@ -193,6 +195,8 @@ impl SemanticError {
             Self::VectorWidthMismatch { .. } => "vector-width-mismatch",
             Self::UnsupportedCodelet => "unsupported-codelet",
             Self::DivisionByZero => "division-by-zero",
+            Self::NonFiniteFloat => "non-finite-float",
+            Self::Fixed16Domain => "fixed16-domain",
             Self::MalformedProgramlet => "malformed-programlet",
             Self::UnsupportedProgramlet => "unsupported-programlet",
             Self::ProgramletFrameCapacity => "programlet-frame-capacity",
@@ -258,6 +262,12 @@ impl std::fmt::Display for SemanticError {
             ),
             Self::UnsupportedCodelet => formatter.write_str("the codelet family is unsupported"),
             Self::DivisionByZero => formatter.write_str("numeric division cannot divide by zero"),
+            Self::NonFiniteFloat => {
+                formatter.write_str("f32 values and results must remain finite")
+            }
+            Self::Fixed16Domain => {
+                formatter.write_str("fixed16 result is outside the supported u16 range")
+            }
             Self::MalformedProgramlet => {
                 formatter.write_str("the canonical Pyash programlet is malformed")
             }

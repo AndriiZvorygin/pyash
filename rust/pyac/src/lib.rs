@@ -95,6 +95,8 @@ impl std::error::Error for NumericPackExecutionError {}
 pub enum PyacValue {
     Unsigned(u64),
     Signed(i64),
+    Float32(u32),
+    Fixed16(u16),
     Boolean(bool),
     DateEpochMs(u64),
     Vector(VectorElements),
@@ -373,6 +375,8 @@ pub fn execute_numeric_arithmetic_pack(
 fn programlet_error(error: u32) -> SemanticError {
     match error {
         pyac_vliw_core::ERROR_DIVISION_BY_ZERO => SemanticError::DivisionByZero,
+        pyac_vliw_core::ERROR_FLOAT_DOMAIN => SemanticError::NonFiniteFloat,
+        pyac_vliw_core::ERROR_FIXED16_DOMAIN => SemanticError::Fixed16Domain,
         pyac_vliw_core::ERROR_FRAME_CAPACITY => SemanticError::ProgramletFrameCapacity,
         pyac_vliw_core::ERROR_CONSTANT_WRITE => SemanticError::ProgramletConstantWrite,
         pyac_vliw_core::ERROR_STEP_BUDGET => SemanticError::ProgramletStepBudget,
@@ -413,6 +417,8 @@ fn execute_shared_programlet(
     Ok(match result.value_kind {
         pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(result.values[0] != 0),
         pyac_vliw_core::VALUE_SIGNED => PyacValue::Signed(i64::from(result.values[0] as i32)),
+        pyac_vliw_core::VALUE_FLOAT32 => PyacValue::Float32(result.values[0]),
+        pyac_vliw_core::VALUE_FIXED16 => PyacValue::Fixed16(result.values[0] as u16),
         _ => PyacValue::Unsigned(u64::from(result.values[0])),
     })
 }
@@ -498,6 +504,18 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
                 source: SemanticError::DivisionByZero,
             });
         }
+        if shared.error == pyac_vliw_core::ERROR_FLOAT_DOMAIN {
+            return Err(PackExecutionError {
+                index,
+                source: SemanticError::NonFiniteFloat,
+            });
+        }
+        if shared.error == pyac_vliw_core::ERROR_FIXED16_DOMAIN {
+            return Err(PackExecutionError {
+                index,
+                source: SemanticError::Fixed16Domain,
+            });
+        }
         if shared.error == 0 && shared.value_kind != 0 {
             let value = match shared.value_kind {
                 pyac_vliw_core::VALUE_UNSIGNED => PyacValue::Unsigned(
@@ -506,6 +524,8 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
                 pyac_vliw_core::VALUE_SIGNED => {
                     PyacValue::Signed(i64::from(shared.values[0] as i32))
                 }
+                pyac_vliw_core::VALUE_FLOAT32 => PyacValue::Float32(shared.values[0]),
+                pyac_vliw_core::VALUE_FIXED16 => PyacValue::Fixed16(shared.values[0] as u16),
                 pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(shared.values[0] != 0),
                 pyac_vliw_core::VALUE_DATE => PyacValue::DateEpochMs(
                     u64::from(shared.values[0]) | (u64::from(shared.values[1]) << 32),
@@ -525,6 +545,18 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
                         .map(|value| *value != 0)
                         .collect(),
                 )),
+                pyac_vliw_core::VALUE_VECTOR_FLOAT32 => PyacValue::Vector(VectorElements::Float32(
+                    shared.values[..shared.length as usize].to_vec(),
+                )),
+                pyac_vliw_core::VALUE_VECTOR_FLOAT64 => {
+                    let words = &shared.values[..shared.length as usize * 2];
+                    PyacValue::Vector(VectorElements::Float64(
+                        words
+                            .chunks_exact(2)
+                            .map(|pair| u64::from(pair[0]) | (u64::from(pair[1]) << 32))
+                            .collect(),
+                    ))
+                }
                 _ => unreachable!("shared VLIW core returned an unknown value kind"),
             };
             values.push(value);

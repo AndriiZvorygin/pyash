@@ -178,8 +178,12 @@ fn decode_programlet_result(
             result[1]
         )));
     }
-    if result[0] != pyac_vliw_core::VALUE_UNSIGNED
-        || result[2] != 1
+    if !matches!(
+        result[0],
+        pyac_vliw_core::VALUE_UNSIGNED
+            | pyac_vliw_core::VALUE_FLOAT32
+            | pyac_vliw_core::VALUE_FIXED16
+    ) || result[2] != 1
         || result[3] as usize != codelet_count
     {
         return Err(js_error(format!(
@@ -187,7 +191,11 @@ fn decode_programlet_result(
             result[0], result[2], result[3]
         )));
     }
-    Ok(vec![PyacValue::Unsigned(u64::from(result[4]))])
+    Ok(vec![match result[0] {
+        pyac_vliw_core::VALUE_FLOAT32 => PyacValue::Float32(result[4]),
+        pyac_vliw_core::VALUE_FIXED16 => PyacValue::Fixed16(result[4] as u16),
+        _ => PyacValue::Unsigned(u64::from(result[4])),
+    }])
 }
 
 fn decode_results(
@@ -220,6 +228,8 @@ fn decode_results(
             pyac_vliw_core::VALUE_SIGNED => {
                 PyacValue::Signed((u64::from(data[0]) | (u64::from(data[1]) << 32)) as i64)
             }
+            pyac_vliw_core::VALUE_FLOAT32 => PyacValue::Float32(data[0]),
+            pyac_vliw_core::VALUE_FIXED16 => PyacValue::Fixed16(data[0] as u16),
             pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(data[0] != 0),
             pyac_vliw_core::VALUE_DATE => {
                 PyacValue::DateEpochMs(u64::from(data[0]) | (u64::from(data[1]) << 32))
@@ -233,6 +243,17 @@ fn decode_results(
             pyac_vliw_core::VALUE_VECTOR_BOOL if length <= RESULT_WORDS => PyacValue::Vector(
                 VectorElements::Booleans(data[..length].iter().map(|value| *value != 0).collect()),
             ),
+            pyac_vliw_core::VALUE_VECTOR_FLOAT32 if length <= RESULT_WORDS => {
+                PyacValue::Vector(VectorElements::Float32(data[..length].to_vec()))
+            }
+            pyac_vliw_core::VALUE_VECTOR_FLOAT64 if length <= RESULT_WORDS / 2 => {
+                PyacValue::Vector(VectorElements::Float64(
+                    data[..length * 2]
+                        .chunks_exact(2)
+                        .map(|pair| u64::from(pair[0]) | (u64::from(pair[1]) << 32))
+                        .collect(),
+                ))
+            }
             kind => {
                 return Err(js_error(format!(
                     "codelet {index}: invalid shared VLIW result kind/length ({kind}/{length})"

@@ -24,6 +24,7 @@ services:
       - PYAC_VLIW_RUNTIME_TIMEOUT_SEC=${PYAC_VLIW_RUNTIME_TIMEOUT_SEC:-1800}
       - PYAC_VLIW_WORKER_PATH=/service/pyac-vliw-gpu-worker
       - PYAC_VLIW_SPIRV_PATH=/service/pyac_vliw_gpu_kernel.spv
+      - PYAC_VLIW_PIPELINE_CACHE_PATH=/service/artifacts/pyac_vliw_pipeline_cache.bin
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
       - VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
     volumes:
@@ -31,6 +32,45 @@ services:
         source: ${NVIDIA_VULKAN_ICD_PATH:-/usr/share/vulkan/icd.d/nvidia_icd.json}
         target: /usr/share/vulkan/icd.d/nvidia_icd.json
         read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${PYAC_VLIW_ARTIFACT_DIR:?set PYAC_VLIW_ARTIFACT_DIR}
+        target: /service/artifacts
+        read_only: true
+        bind:
+          create_host_path: false
+
+  pyac-vliw-pipeline-compiler:
+    image: liberit/pyac-vliw-runtime:latest
+    entrypoint: ["/service/pyac-vliw-pipeline-compiler"]
+    command:
+      - /service/pyac_vliw_gpu_kernel.spv
+      - /service/artifacts/pyac_vliw_pipeline_cache.bin
+    profiles: ["build-artifact"]
+    networks:
+      - housekeeper
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
+      - VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json
+    volumes:
+      - type: bind
+        source: ${NVIDIA_VULKAN_ICD_PATH:-/usr/share/vulkan/icd.d/nvidia_icd.json}
+        target: /usr/share/vulkan/icd.d/nvidia_icd.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${PYAC_VLIW_ARTIFACT_DIR:?set PYAC_VLIW_ARTIFACT_DIR}
+        target: /service/artifacts
         bind:
           create_host_path: false
 

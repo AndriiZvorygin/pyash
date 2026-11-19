@@ -7,6 +7,24 @@ const PLUS: [u16; WORDS_PER_CODELET] = [
     0x0149, 0x881d, 1, 0x245e, 0x881d, 1, 0x243e, 0x8a64, 0x295e, 0, 0, 0, 0, 0, 0, 0,
 ];
 
+fn float_quote(value: f32) -> [u16; 3] {
+    let bits = value.to_bits();
+    [0xd01d, bits as u16, (bits >> 16) as u16]
+}
+
+fn float_arithmetic(left: f32, right: f32, operator: u16) -> [u16; WORDS_PER_CODELET] {
+    let left = float_quote(left);
+    let right = float_quote(right);
+    [
+        0x0511, left[0], left[1], left[2], 0x245e, right[0], right[1], right[2], 0x243e, operator,
+        0x295e, 0, 0, 0, 0, 0,
+    ]
+}
+
+const FLOAT_LITERAL: [u16; WORDS_PER_CODELET] = [
+    0x0031, 0xd01d, 0x0000, 0x3fa0, 0x245e, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+
 const INVERT: [u16; WORDS_PER_CODELET] = [
     0x0149, 0x881d, 5, 0x245e, 0x881d, 0, 0x207e, 0xaad2, 0x295e, 0, 0, 0, 0, 0, 0, 0,
 ];
@@ -779,6 +797,159 @@ fn executes_mixed_supported_codelet_families_in_pack_order() {
 }
 
 #[test]
+fn executes_f32_quotes_and_arithmetic_through_the_shared_pack_runtime() {
+    let cases = [
+        (0.1, 0.2, 0x8a64, 0.1f32 + 0.2f32),
+        (5.5, 2.0, 0xabd2, 5.5f32 - 2.0f32),
+        (1.5, 2.0, 0xec90, 1.5f32 * 2.0f32),
+        (1.5, 4.0, 0x8893, 1.5f32 / 4.0f32),
+    ];
+    let codelets = cases
+        .iter()
+        .map(|(left, right, operator, _)| float_arithmetic(*left, *right, *operator))
+        .collect::<Vec<_>>();
+    let pack =
+        decode_pack(&encode_pack(&codelets).expect("f32 pack fits")).expect("f32 pack decodes");
+
+    assert_eq!(
+        execute_pack(&pack),
+        Ok(cases
+            .iter()
+            .map(|(_, _, _, result)| PyacValue::Float32(result.to_bits()))
+            .collect())
+    );
+
+    let literal_pack = decode_pack(&encode_pack(&[FLOAT_LITERAL]).expect("literal pack fits"))
+        .expect("literal pack decodes");
+    assert_eq!(
+        execute_pack(&literal_pack),
+        Ok(vec![PyacValue::Float32(1.25f32.to_bits())])
+    );
+}
+
+#[test]
+fn executes_float32_and_float64_vectors_through_the_shared_pack_runtime() {
+    let f32_values = [1.25f32.to_bits(), (-0.5f32).to_bits()];
+    let f32_vector = [
+        0x00c1,
+        0xd11d,
+        f32_values[0] as u16,
+        (f32_values[0] >> 16) as u16,
+        f32_values[1] as u16,
+        (f32_values[1] >> 16) as u16,
+        0x245e,
+        0x217e,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    ];
+    let f64_values = [std::f64::consts::PI.to_bits(), (-0.0f64).to_bits()];
+    let f64_vector = [
+        0x0c01,
+        0xd91d,
+        f64_values[0] as u16,
+        (f64_values[0] >> 16) as u16,
+        (f64_values[0] >> 32) as u16,
+        (f64_values[0] >> 48) as u16,
+        f64_values[1] as u16,
+        (f64_values[1] >> 16) as u16,
+        (f64_values[1] >> 32) as u16,
+        (f64_values[1] >> 48) as u16,
+        0x245e,
+        0x217e,
+        0,
+        0,
+        0,
+        0,
+    ];
+    let pack =
+        decode_pack(&encode_pack(&[f32_vector, f64_vector]).expect("float vector pack fits"))
+            .expect("float vector pack decodes");
+
+    assert_eq!(
+        execute_pack(&pack),
+        Ok(vec![
+            PyacValue::Vector(VectorElements::Float32(f32_values.to_vec())),
+            PyacValue::Vector(VectorElements::Float64(f64_values.to_vec())),
+        ])
+    );
+}
+
+#[test]
+fn executes_fixed16_quotes_and_arithmetic_through_the_shared_pack_runtime() {
+    let fixed = |left, right, operator| {
+        [
+            0x0149, 0xc81d, left, 0x245e, 0xc81d, right, 0x243e, operator, 0x295e, 0, 0, 0, 0, 0,
+            0, 0,
+        ]
+    };
+    let codelets = [
+        fixed(23_328, 11_664, 0x8a64),
+        fixed(23_328, 11_664, 0xabd2),
+        fixed(23_328, 23_328, 0xec90),
+        fixed(11_664, 23_328, 0x8893),
+    ];
+    let pack = decode_pack(&encode_pack(&codelets).expect("fixed16 pack fits"))
+        .expect("fixed16 pack decodes");
+    assert_eq!(
+        execute_pack(&pack),
+        Ok(vec![
+            PyacValue::Fixed16(34_992),
+            PyacValue::Fixed16(11_664),
+            PyacValue::Fixed16(11_664),
+            PyacValue::Fixed16(23_328),
+        ])
+    );
+
+    let literal = [
+        0x0019, 0xc81d, 5_832, 0x245e, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ];
+    let pack = decode_pack(&encode_pack(&[literal]).expect("literal pack fits"))
+        .expect("literal pack decodes");
+    assert_eq!(execute_pack(&pack), Ok(vec![PyacValue::Fixed16(5_832)]));
+}
+
+#[test]
+fn shared_pack_runtime_reports_fixed16_range_errors() {
+    let arithmetic = |left, right, operator| {
+        [
+            0x0149, 0xc81d, left, 0x245e, 0xc81d, right, 0x243e, operator, 0x295e, 0, 0, 0, 0, 0,
+            0, 0,
+        ]
+    };
+    let overflow = decode_pack(&encode_pack(&[arithmetic(u16::MAX, 1, 0x8a64)]).unwrap()).unwrap();
+    assert_eq!(
+        execute_pack(&overflow).unwrap_err().code(),
+        "fixed16-domain"
+    );
+    let underflow = decode_pack(&encode_pack(&[arithmetic(0, 1, 0xabd2)]).unwrap()).unwrap();
+    assert_eq!(
+        execute_pack(&underflow).unwrap_err().code(),
+        "fixed16-domain"
+    );
+}
+
+#[test]
+fn shared_pack_runtime_rejects_non_finite_f32_values_and_results() {
+    let infinity = [
+        0x0031, 0xd01d, 0, 0x7f80, 0x245e, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ];
+    let pack = decode_pack(&encode_pack(&[infinity]).expect("pack fits")).expect("pack decodes");
+    let error = execute_pack(&pack).expect_err("infinity is rejected");
+    assert_eq!(error.code(), "non-finite-float");
+
+    let overflow = float_arithmetic(f32::MAX, 2.0, 0xec90);
+    let pack = decode_pack(&encode_pack(&[overflow]).expect("pack fits")).expect("pack decodes");
+    let error = execute_pack(&pack).expect_err("overflow is rejected");
+    assert_eq!(error.code(), "non-finite-float");
+}
+
+#[test]
 fn executes_canonical_numeric_local_declaration_write_and_return() {
     let bytes = encode_pack(&LOCAL_NUMBER_PROGRAMLET).expect("programlet pack fits");
     let pack = decode_pack(&bytes).expect("programlet pack decodes");
@@ -922,10 +1093,12 @@ fn executes_bounded_fromindex_toindex_programlet_loops() {
     let exhausted = run_numeric_programlet(&LOOPING_NUMERIC_PROGRAMLET, 5);
     assert_eq!(exhausted.error, pyac_vliw_core::ERROR_STEP_BUDGET);
 
-    let exhausted_at_six = run_numeric_programlet(&LOOPING_NUMERIC_PROGRAMLET, 6);
-    assert_eq!(exhausted_at_six.error, pyac_vliw_core::ERROR_STEP_BUDGET);
+    for budget in 6..=8 {
+        let exhausted = run_numeric_programlet(&LOOPING_NUMERIC_PROGRAMLET, budget);
+        assert_eq!(exhausted.error, pyac_vliw_core::ERROR_STEP_BUDGET);
+    }
 
-    let exact_budget = run_numeric_programlet(&LOOPING_NUMERIC_PROGRAMLET, 7);
+    let exact_budget = run_numeric_programlet(&LOOPING_NUMERIC_PROGRAMLET, 9);
     assert_eq!(exact_budget.error, 0, "{exact_budget:?}");
     assert_eq!(exact_budget.values[0], 3);
 }

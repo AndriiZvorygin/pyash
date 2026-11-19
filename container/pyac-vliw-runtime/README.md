@@ -42,13 +42,47 @@ container:
 On later code or shader updates, rerunning
 `container/pyac-vliw-runtime/command/deploy.sh` builds the
 runtime image first, asks Housekeeper to hold new VLIW duties and drain active
-VLIW jobs, recreates only `pyac-vliw-runtime`, waits for API readiness, and
-resumes queued VLIW work. Ollama, ComfyUI, Strata, and the Housekeeper process
-are not restarted. If the runtime update fails after the drain, the helper
-restores and health-checks the prior image when one exists, then resumes queued
-VLIW work. If no prior image exists or rollback cannot be verified, dispatch
-remains held for operator recovery instead of silently resuming against an
-unhealthy runtime.
+VLIW jobs, compiles all three Vulkan pipelines into a persistent, GPU-specific
+artifact file, and only then recreates `pyac-vliw-runtime`. The artifact is
+stored at `~/.local/share/pyash/pyac-vliw/pyac_vliw_pipeline_cache.bin` and
+mounted read-only by the service. This file is the GPU driver's compiled
+pipeline data; the `.spv` file in the image is an input to that compilation,
+not the final GPU artifact. The service requires the saved artifact and will
+fail startup if it is missing or rejected. It must not silently create an
+empty cache or fall back to compilation. The new service must become ready
+within 60 seconds. There is no longer a long startup wait or timeout override.
+
+The deploy helper retains the latest pipeline compiler output at
+`~/.local/share/pyash/pyac-vliw/pipeline-cache-build.log`. The conformance
+command extracts per-pipeline build times from that log when available;
+otherwise it records cached pipeline-load times from runtime logs. Each run
+also writes a dated `.pya` metrics record under
+`artifacts/YYYYMMDD-NNNN-rust-vliw-conformance/result.pya`, including separate
+CPU request wall times, local worker queue/wall and separately timestamped
+Housekeeper queue/active/round-trip GPU timings, remote job identity, service
+pack decode and slot/lock waits, GPU buffer/command setup, submit-to-
+readback wait, result decode, and Vulkan timestamp-query compute-pass duration
+when the adapter supports it. Runtime timings are preserved for expected-error
+responses too. It also records executable and shader sizes/hashes,
+pipeline-cache identity, device, and test outcomes. The report is written on
+both pass and failure. `kernelGpuMs` is the GPU timestamp interval around the
+compute pass; `submitWaitReadbackMs` is host-observed submit, synchronization,
+and map/readback time, not kernel execution time.
+`Housekeeper active` measures the remote job interval, while `worker wall`
+includes local dispatch and waiting for the remote terminal result. Neither is
+a substitute for the Vulkan kernel timestamp.
+
+After readiness, Housekeeper resumes queued VLIW work. Ollama, ComfyUI, Strata,
+and the Housekeeper process are not restarted. If artifact generation or the
+runtime update fails, the helper restores the prior runtime when available;
+dispatch remains held if rollback cannot be verified.
+
+This contract follows the November 18, 2026 startup incident: Rust-GPU had
+already emitted SPIR-V to disk, but runtime `create_compute_pipeline` calls
+still invoked the NVIDIA driver compiler before binding the HTTP listener. A
+30-minute readiness allowance hid that build/runtime boundary error. The
+required deliverable is now the persisted GPU pipeline artifact, generated
+before service replacement and loaded by the service.
 
 Useful checks:
 

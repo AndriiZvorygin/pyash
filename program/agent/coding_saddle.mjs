@@ -1,4 +1,6 @@
 import path from "node:path";
+import { StringDecoder } from "node:string_decoder";
+import { splitTerminalGraphemes, terminalGraphemeWidth } from "./terminal_width.mjs";
 import {
   DEFAULT_ZAI_CODING_REASONING_EFFORT,
   fetchZaiCodingPlanModels
@@ -590,24 +592,26 @@ export function layoutSaddleInput({ value = "", cursor, label = "pyash> ", colum
   const rendered = `${prefix}${text}`;
   const renderedCursor = prefix.length + cursorIndex;
 
-  for (let index = 0; index < rendered.length; index += 1) {
-    const character = rendered[index];
-    if (character === "\n") {
-      if (index === renderedCursor) cursorPosition = { row, column };
+  for (const { segment, index } of splitTerminalGraphemes(rendered)) {
+    const endIndex = index + segment.length;
+    if (renderedCursor >= index && renderedCursor < endIndex) cursorPosition = { row, column };
+    if (segment === "\n") {
       lines.push("");
       row += 1;
       column = 0;
-      if (index + 1 === renderedCursor) cursorPosition = { row, column };
+      if (endIndex === renderedCursor) cursorPosition = { row, column };
       continue;
     }
-    if (column >= maxColumn) {
+    const width = terminalGraphemeWidth(segment);
+    if (column + width > maxColumn && column > 0) {
       lines.push("");
       row += 1;
       column = 0;
     }
-    if (index === renderedCursor) cursorPosition = { row, column };
-    lines[row] += character;
-    column += 1;
+    if (renderedCursor === index) cursorPosition = { row, column };
+    lines[row] += segment;
+    column += width;
+    if (endIndex === renderedCursor) cursorPosition = { row, column };
   }
 
   if (renderedCursor === rendered.length) cursorPosition = { row, column };
@@ -1088,6 +1092,7 @@ export function createSaddleInputDecoder({
   let pasting = false;
   let pasteBuffer = "";
   let completion = null;
+  const utf8Decoder = new StringDecoder("utf8");
 
   const resetCompletion = () => { completion = null; };
 
@@ -1280,7 +1285,8 @@ export function createSaddleInputDecoder({
 
   return {
     feed(chunk) {
-      for (const char of String(chunk ?? "")) handleChar(char);
+      const text = Buffer.isBuffer(chunk) ? utf8Decoder.write(chunk) : String(chunk ?? "");
+      for (const char of text) handleChar(char);
     },
     getState() {
       return { ...state };

@@ -48,14 +48,16 @@ test("gpu mind status and await follow durable duty lifecycle through worker", a
     adapter: {
       async submitJob(job) {
         submitted.push(job);
-        return { remoteJobId: "remote-1" };
+        return { remoteJobId: "remote-1", submittedAt: "2026-11-19T18:00:00.000Z" };
       },
       async getJobStatus() {
         return {
           status: "success",
           message: "ollama ok",
           result: { response: "Fractions are equal parts." },
-          finishedAt: new Date().toISOString()
+          submittedAt: "2026-11-19T18:00:00.000Z",
+          startedAt: "2026-11-19T18:00:00.025Z",
+          finishedAt: "2026-11-19T18:00:00.075Z"
         };
       }
     },
@@ -73,6 +75,10 @@ test("gpu mind status and await follow durable duty lifecycle through worker", a
   assert.equal(state?.status, "success");
   assert.equal(state?.message, "ollama ok");
   assert.match(state?.result, /Fractions are equal parts\./);
+  assert.equal(state?.remoteJobId, "remote-1");
+  assert.equal(state?.remoteSubmittedAt, "2026-11-19T18:00:00.000Z");
+  assert.equal(state?.remoteStartedAt, "2026-11-19T18:00:00.025Z");
+  assert.equal(state?.remoteFinishedAt, "2026-11-19T18:00:00.075Z");
 
   const awaited = await run('accordingto text "gpu handle one" during num 2000 vyah await be gpu do');
   assert.deepEqual(awaited?.vyah?.ve?.values, ["await", "success"]);

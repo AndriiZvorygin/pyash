@@ -4,7 +4,7 @@ mod gpu_worker;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use axum::extract::{DefaultBodyLimit, State};
 use axum::http::StatusCode;
@@ -54,11 +54,16 @@ struct Payload {
 struct ApiError {
     status: StatusCode,
     message: String,
+    timings_ms: Option<Value>,
 }
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (self.status, Json(json!({ "error": self.message }))).into_response()
+        let mut body = json!({ "error": self.message });
+        if let Some(timings) = self.timings_ms {
+            body["runtimeTimingMs"] = timings;
+        }
+        (self.status, Json(body)).into_response()
     }
 }
 
@@ -67,18 +72,21 @@ fn decode_request(request: ExecuteRequest) -> Result<(String, Vec<u8>), ApiError
         return Err(ApiError {
             status: StatusCode::BAD_REQUEST,
             message: "protocolVersion must be 1".to_owned(),
+            timings_ms: None,
         });
     }
     if request.job_id.trim().is_empty() {
         return Err(ApiError {
             status: StatusCode::BAD_REQUEST,
             message: "jobId is required".to_owned(),
+            timings_ms: None,
         });
     }
     if request.job_spec.kind != "pyac-pack-execute" {
         return Err(ApiError {
             status: StatusCode::BAD_REQUEST,
             message: "jobSpec.kind must be pyac-pack-execute".to_owned(),
+            timings_ms: None,
         });
     }
     let pack = STANDARD
@@ -86,16 +94,19 @@ fn decode_request(request: ExecuteRequest) -> Result<(String, Vec<u8>), ApiError
         .map_err(|error| ApiError {
             status: StatusCode::BAD_REQUEST,
             message: format!("packBase64 is invalid: {error}"),
+            timings_ms: None,
         })?;
     if pack.len() > MAX_PACK_BYTES {
         return Err(ApiError {
             status: StatusCode::PAYLOAD_TOO_LARGE,
             message: "PyAC pack exceeds the 16 MiB runtime limit".to_owned(),
+            timings_ms: None,
         });
     }
     pyac::decode_pack(&pack).map_err(|error| ApiError {
         status: StatusCode::BAD_REQUEST,
         message: format!("PyAC pack is invalid: {error}"),
+        timings_ms: None,
     })?;
     Ok((request.job_id, pack))
 }
@@ -121,37 +132,69 @@ async fn execute(
     State(state): State<RuntimeState>,
     Json(request): Json<ExecuteRequest>,
 ) -> Result<Json<Value>, ApiError> {
+    let request_decode_started = Instant::now();
     let (job_id, pack) = decode_request(request)?;
+    let request_decode_ms = request_decode_started.elapsed().as_secs_f64() * 1000.0;
+    let worker_slot_started = Instant::now();
     let _permit = state.workers.acquire().await.map_err(|_| ApiError {
         status: StatusCode::SERVICE_UNAVAILABLE,
         message: "VLIW runtime is shutting down".to_owned(),
+        timings_ms: None,
     })?;
+    let worker_slot_wait_ms = worker_slot_started.elapsed().as_secs_f64() * 1000.0;
 
     // WGPU error-scope guards are not Send. Keep the GPU future on one blocking
     // thread, and serialize device-global error scopes while Housekeeper queues work.
     let gpu = Arc::clone(&state.gpu);
     let gpu_execution = Arc::clone(&state.gpu_execution);
     let execution = tokio::task::spawn_blocking(move || {
+        let lock_started = Instant::now();
         let _gpu_execution = gpu_execution
             .lock()
             .map_err(|_| "VLIW GPU execution lock was poisoned".to_owned())?;
-        pollster::block_on(gpu.execute_pack(&pack))
+        let gpu_lock_wait_ms = lock_started.elapsed().as_secs_f64() * 1000.0;
+        let (result, timings) = pollster::block_on(gpu.execute_pack_with_timings(&pack));
+        Ok::<_, String>((result, timings, gpu_lock_wait_ms))
     });
-    let result = timeout(state.worker_timeout, execution)
+    let execution_result = timeout(state.worker_timeout, execution)
         .await
         .map_err(|_| ApiError {
             status: StatusCode::GATEWAY_TIMEOUT,
             message: format!("VLIW GPU job {job_id} exceeded its runtime limit"),
+            timings_ms: None,
         })?
         .map_err(|error| ApiError {
             status: StatusCode::INTERNAL_SERVER_ERROR,
             message: format!("VLIW GPU execution task failed: {error}"),
+            timings_ms: None,
         })?
         .map_err(|error| ApiError {
-            status: StatusCode::UNPROCESSABLE_ENTITY,
+            status: StatusCode::INTERNAL_SERVER_ERROR,
             message: error,
+            timings_ms: None,
         })?;
-    Ok(Json(result))
+    let (result, timings, gpu_lock_wait_ms) = execution_result;
+    let mut timings_ms = timings.to_json();
+    if let Some(values) = timings_ms.as_object_mut() {
+        values.insert("requestDecodeMs".to_owned(), json!(request_decode_ms));
+        values.insert("workerSlotWaitMs".to_owned(), json!(worker_slot_wait_ms));
+        values.insert("gpuLockWaitMs".to_owned(), json!(gpu_lock_wait_ms));
+        values.insert(
+            "serviceTotalMs".to_owned(),
+            json!(request_decode_started.elapsed().as_secs_f64() * 1000.0),
+        );
+    }
+    match result {
+        Ok(mut response) => {
+            response["runtimeTimingMs"] = timings_ms;
+            Ok(Json(response))
+        }
+        Err(message) => Err(ApiError {
+            status: StatusCode::UNPROCESSABLE_ENTITY,
+            message,
+            timings_ms: Some(timings_ms),
+        }),
+    }
 }
 
 fn env_u16(name: &str, default: u16) -> u16 {
@@ -172,16 +215,30 @@ fn env_u64(name: &str, default: u64) -> u64 {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let runtime_started = Instant::now();
     let host = std::env::var("PYAC_VLIW_RUNTIME_HOST").unwrap_or_else(|_| "0.0.0.0".to_owned());
     let port = env_u16("PYAC_VLIW_RUNTIME_PORT", 18887);
     let workers = env_u16("PYAC_VLIW_RUNTIME_CONCURRENCY", 1) as usize;
     let shader_path = std::env::var_os("PYAC_VLIW_SPIRV_PATH")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/service/pyac_vliw_gpu_kernel.spv"));
+    let cache_path = std::env::var_os("PYAC_VLIW_PIPELINE_CACHE_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/service/pyac_vliw_pipeline_cache.bin"));
+    eprintln!(
+        "[pyac-vliw] loading shader {} and compiled GPU artifact {}",
+        shader_path.display(),
+        cache_path.display()
+    );
     let gpu = Arc::new(
-        gpu_worker::GpuRuntime::new(&shader_path)
+        gpu_worker::GpuRuntime::new(&shader_path, &cache_path)
             .await
             .map_err(std::io::Error::other)?,
+    );
+    eprintln!(
+        "[pyac-vliw] runtime initialized on {} in {:.2}s",
+        gpu.device_name(),
+        runtime_started.elapsed().as_secs_f64()
     );
     let state = RuntimeState {
         gpu,
@@ -199,6 +256,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_state(state);
     let address: SocketAddr = format!("{host}:{port}").parse()?;
     let listener = tokio::net::TcpListener::bind(address).await?;
+    eprintln!("[pyac-vliw] listening on {address}");
     axum::serve(listener, app)
         .with_graceful_shutdown(async {
             let _ = tokio::signal::ctrl_c().await;

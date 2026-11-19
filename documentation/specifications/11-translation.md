@@ -66,6 +66,13 @@ WordNet sense: `su` is the POS-prefixed sense key, `ob` is an existing English t
 `as` is the target part of speech, `with` is certainty, and `via` is provenance. The bridge
 provides a bounded candidate after the normal sentence sense selection; it does not add a
 second vocabulary or transcript format.
+WordNet sense IDs, English anchors and glosses, and SUMO links are explanatory
+lexical metadata; they MUST NOT be emitted as executable Pyash sentence tokens
+or VLIW words. Executable sentences use the selected canonical Pyash atoms or
+accepted compounds and their HNUCs. A lexical link can clarify the intended
+concept, but it does not define operation types, numeric precision, or runtime
+failure behavior; those are defined by the VLIW semantic contract and the shared
+Rust runtime.
 The bounded linker workflow is configured in
 `program/library/translation/english_wordnet_linker.pya`. Its JavaScript adapter emits
 one stable record per WordNet sense, builds a bounded inventory from existing Pyash coverage,

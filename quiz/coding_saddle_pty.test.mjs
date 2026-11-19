@@ -60,7 +60,38 @@ function waitForOutputAfter(getOutput, marker, needle, { timeoutMs = 90000 } = {
   });
 }
 
-test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool", async () => {
+function latestFrameRows(transcript) {
+  const start = transcript.lastIndexOf("\u001b[?25l\u001b[H");
+  if (start < 0) return [];
+  const frame = transcript.slice(start);
+  const end = frame.indexOf("\u001b[?25h");
+  if (end < 0) return [];
+  return frame.slice("\u001b[?25l\u001b[H".length, end)
+    .split("\u001b[1B\r")
+    .map((line) => stripTerminalControlSequences(line).replace(/\r/gu, ""));
+}
+
+function waitForVisibleFrame(getOutput, needle, { timeoutMs = 30000 } = {}) {
+  const startedAt = Date.now();
+  return new Promise((resolve, reject) => {
+    const poll = () => {
+      const rows = latestFrameRows(getOutput());
+      const screen = rows.join("\n");
+      if (screen.replace(/\s+/gu, " ").includes(needle.replace(/\s+/gu, " "))) {
+        resolve({ rows, screen });
+        return;
+      }
+      if (Date.now() - startedAt >= timeoutMs) {
+        reject(new Error(`timed out waiting for visible screen text ${JSON.stringify(needle)}\n${screen.slice(-6000)}`));
+        return;
+      }
+      setTimeout(poll, 20);
+    };
+    poll();
+  });
+}
+
+test("saddle CLI preserves a visible Unicode draft, switches Ollama models, and runs Bash tools in a PTY", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-pty-"));
   const projectRoot = path.join(tempRoot, "project");
   const projectWorldRoot = resolveSaddleProjectWorldRoot({ runtimeRoot, cwd: projectRoot });
@@ -153,7 +184,10 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
       const lastUserMessage = [...messages].reverse().find((message) => message?.role === "user")?.content;
       let message;
       if (payload.model === firstModel) {
-        message = { role: "assistant", content: "Qwen first model turn passed." };
+        message = {
+          role: "assistant",
+          content: `Qwen first model turn passed. ${"1".repeat(51)} 安德里 okay. The name and the practice are the same statement.`
+        };
       } else if (lastUserMessage === continuationContext) {
         message = { role: "assistant", content: continuationOffer };
       } else if (String(lastUserMessage ?? "").includes("Additional context:\ncontinue")
@@ -424,8 +458,23 @@ test("saddle CLI switches Ollama models in a PTY and runs the default Bash tool"
 
     const restoredMarker = `session: ${sessionName} | restored 0 saved messages`;
     await waitForOutputAfter(() => transcript, restoredMarker, "pyash>", { timeoutMs: 90000 });
-    child.write("first model check\r");
+    await waitForVisibleFrame(() => transcript, "pyash>", { timeoutMs: 90000 });
+    const draft = `typed ${"x".repeat(42)} 安德里`;
+    child.write(draft);
+    const draftScreen = await waitForVisibleFrame(() => transcript, `pyash> ${draft}`);
+    assert.equal(submissions.length, 0, "typing a draft must not send a model request before Enter");
+    assert.ok(draftScreen.rows.some((line) => line.includes("pyash> ")), "the unsent draft must be visible in the prompt row");
+    child.write("\r");
     await waitForOutputAfter(() => transcript, "Qwen first model turn passed.", "pyash>");
+    const responseScreen = await waitForVisibleFrame(() => transcript, "The name and the practice are the same statement.");
+    const normalizedResponse = responseScreen.screen.replace(/[ \t\n]+/gu, " ");
+    assert.ok(normalizedResponse.includes(draft), "the submitted prompt must remain visible in the transcript");
+    assert.match(normalizedResponse, /安德里 okay/u, "the response must preserve wide characters and neighboring words");
+    assert.equal((normalizedResponse.match(/same statement\./gu) ?? []).length, 1,
+      "the PTY screen must render the final response once, without duplicated chunks");
+    assert.ok(submissions.some((payload) => payload.model === firstModel
+      && payload.messages?.some((message) => message?.role === "user" && message.content === draft)),
+    "Enter must submit exactly the visible draft");
 
     child.write(`/model ${secondModel}\r`);
     const selectionMarker = `saved model selection for session: ${sessionName}`;

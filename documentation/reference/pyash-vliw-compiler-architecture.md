@@ -126,10 +126,10 @@ senses and the canonical Pyash vocabulary before assigning them VLIW meaning.
 
 | Surface | Role | Current status |
 | --- | --- | --- |
-| Pyash `.pya` source | Canonical sentence and paragraph semantics | Implemented language/interpreter surface |
+| Pyash `.pya` source | Canonical sentence and paragraph semantics | Canonical source language contract, independent of the VLIW execution backend |
 | Searchable `.pya` VLIW catalog | Semantic identity, provenance, and query/replay view | Separate from a program's source file and from its packed bytes |
 | `.pyac` pack | Header plus deterministic fixed-width codelet bytes | Version 1 is a flat codelet sequence; no embedded data/code sections or mutable variable store; the interpreter allocates implemented numeric locals per invocation |
-| JavaScript VLIW facade | Reference lowering, decoding, effects, and supported execution | Partial semantic coverage, including the canonical Pyash programlet v1 slice below |
+| JavaScript VLIW tools | Source lowering, codelet encoding/decoding, and compatibility helpers | Not the semantic authority; execution behavior is defined by the shared Rust runtime |
 | C output from `.pyac` | Compile supported codelets to C, then use the host C compiler | Verified arithmetic and invert subset; not a general Pyash-to-C replacement |
 | Shared VLIW semantics runtime | `rust/pyac-vliw-core/src/semantics_runtime.rs`, compiled as a `no_std` Rust library and called by the CPU pack interpreter and GPU kernels | Canonical codelet families plus bounded scalar programlets with nested calls, branches, loops, signed/unsigned numbers, and booleans; not full Pyash interpreter parity |
 | Rust-GPU native | Rust-GPU compiles that same semantics runtime to Vulkan SPIR-V for the native Housekeeper worker | Requires an NVIDIA discrete GPU and Vulkan; execution is explicitly bounded to the supported operations |
@@ -140,8 +140,9 @@ does not mean arbitrary Pyash programs already pass through VLIW. Likewise,
 the searchable `.pya` catalog is a semantic/provenance projection; `.pyac` is
 the executable byte projection.
 
-The JavaScript programlet is the semantic reference for pure functions. The
-Rust inventory and per-feature parity status are maintained in
+The JavaScript programlet interpreter is deprecated and is not the semantic
+reference for pure functions. The shared Rust runtime is authoritative for the
+supported VLIW semantics. Its inventory and per-feature status are maintained in
 [`pyac-vliw-semantic-slices.md`](pyac-vliw-semantic-slices.md). The shared Rust
 runtime now covers bounded nested calls, typed scalar locals and arguments,
 comparison branches, and indexed loops on the CPU, Vulkan, and generated WGSL
@@ -414,7 +415,7 @@ An accepted candidate has a closed, versioned function contract:
 | Effects | Deterministic and side-effect-free during evaluation. Random mutation is seeded and performed by the host evolution process, not by the candidate. No I/O, network, clock, model call, or undeclared memory access. |
 | State | Locals and writable state are declared with fixed extents. Invocation-local unsigned 16-bit numeric slots are implemented in the Pyash programlet; target evaluators must account for their per-work-item state and preserve frame isolation. Other types and bulk pages remain future work. |
 | Control flow | Finite branches, bounded `fromindex`/`toindex` loops, and acyclic ceremony calls. Recursion is rejected. Complexity at most 9 is a seed-quality target, not a language ceiling. |
-| Work bound | A per-invocation step budget, default 65,536 and configurable up to 10,000,000. The reference interpreter enforces it at runtime; straight-line candidates are also checked against the declared budget before dispatch. |
+| Work bound | A per-invocation step budget, default 65,536 and configurable up to 10,000,000. The shared Rust VLIW runtime enforces it; straight-line candidates are also checked against the declared budget before dispatch. |
 | VLIW representation | A function body may span multiple codelets. The 16-word codelet is an encoding unit, not a function-size limit or a register file. Grammatical cases describe operand roles; the target ABI maps values to virtual/physical registers or memory. |
 
 Define cyclomatic complexity from the candidate CFG itself as `M = E - N + 2P`

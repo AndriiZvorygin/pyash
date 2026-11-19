@@ -67,7 +67,7 @@ pub fn execute_numeric_programlet_at(
             return CoreResult::failure(ERROR_STEP_BUDGET, steps);
         }
         let frame_index = depth - 1;
-        let mut frame = array_at!(frames, frame_index);
+        let frame = &mut frames[frame_index];
         let pc = frame.program_counter as usize;
         if pc >= frame.routine_end as usize {
             return CoreResult::failure(ERROR_MALFORMED, steps);
@@ -108,7 +108,6 @@ pub fn execute_numeric_programlet_at(
                     return CoreResult::failure(branch_error, steps);
                 }
                 if !has_selected_action {
-                    array_put!(frames, frame_index, frame);
                     continue;
                 }
                 if steps >= step_budget {
@@ -140,11 +139,10 @@ pub fn execute_numeric_programlet_at(
                 sentence_words,
                 symbol_words,
                 &mut symbol_used,
-                &mut frame,
+                frame,
             ) {
                 return CoreResult::failure(error, steps);
             }
-            array_put!(frames, frame_index, frame);
         } else if frame.state == 1
             && sentence.mood == DEONTIC
             && sentence.verb_length == 1
@@ -163,7 +161,6 @@ pub fn execute_numeric_programlet_at(
             ) {
                 return CoreResult::failure(error, steps);
             }
-            array_put!(frames, frame_index, frame);
         } else if frame.state == 1
             && sentence.mood == DEONTIC
             && sentence.verb_length == 1
@@ -179,9 +176,7 @@ pub fn execute_numeric_programlet_at(
             ) {
                 return CoreResult::failure(error, steps);
             }
-            array_put!(frames, frame_index, frame);
         } else if frame.state == 1 && sentence.mood == DEONTIC {
-            array_put!(frames, frame_index, frame);
             if let Err(error) = execute_programlet_call(
                 &sentence,
                 words,
@@ -198,9 +193,7 @@ pub fn execute_numeric_programlet_at(
                 return CoreResult::failure(error, steps);
             }
         } else if frame.state == 1 && sentence.mood == MOOD_RETURN {
-            array_put!(frames, frame_index, frame);
             if let Err(error) = execute_programlet_return(
-                frame,
                 &sentence,
                 words,
                 base_codelet,
@@ -215,10 +208,8 @@ pub fn execute_numeric_programlet_at(
                 return CoreResult::failure(error, steps);
             }
         } else if frame.state == 2 && sentence.mood == MOOD_PARAGRAPH {
-            array_put!(frames, frame_index, frame);
             let mut result = CoreResult::empty();
             let close_status = close_programlet_paragraph(
-                frame,
                 &sentence,
                 sentence_words,
                 symbol_words,
