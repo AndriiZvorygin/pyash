@@ -654,6 +654,181 @@ function compareCharacterFrequency(left, right) {
     || codePointSort(left.character, right.character);
 }
 
+export function hasCowDirectAtomCandidate(record) {
+  return Number(record?.cowFrequencyCandidateCount) > 0 || (record?.existingAtomCandidates ?? []).some((candidate) => (
+    candidate?.kind === "atom" && (candidate.candidateSources ?? []).includes("cow-direct")
+  ));
+}
+
+function rankedCowCandidates(record) {
+  const candidates = (record?.existingAtomCandidates ?? []).filter((candidate) => (
+    candidate?.kind === "atom" && (candidate.candidateSources ?? []).includes("cow-direct")
+  )).map((candidate) => {
+    const senses = (candidate.wordnetSenses ?? []).filter((sense) => sense.cowLinked === true
+      && Number.isSafeInteger(sense.frequencyRank) && sense.frequencyRank > 0);
+    if (senses.length === 0) return null;
+    const frequencyRank = Math.min(...senses.map((sense) => sense.frequencyRank));
+    const bestSenses = senses.filter((sense) => sense.frequencyRank === frequencyRank);
+    const tagCounts = bestSenses.map((sense) => sense.frequencyTagCount)
+      .filter((count) => Number.isSafeInteger(count) && count >= 0);
+    const frequencyTagCount = tagCounts.length === bestSenses.length && tagCounts.length > 0
+      ? Math.max(...tagCounts)
+      : null;
+    const rankedSenses = [...bestSenses].sort((left, right) => (
+      (Number.isSafeInteger(right.frequencyTagCount) ? right.frequencyTagCount : -1)
+        - (Number.isSafeInteger(left.frequencyTagCount) ? left.frequencyTagCount : -1)
+      || text(left.senseId).localeCompare(text(right.senseId))
+    ));
+    return {
+      candidate,
+      frequencyRank,
+      frequencyTagCount,
+      frequencyLemma: rankedSenses.find((sense) => text(sense.frequencyLemma))?.frequencyLemma ?? "",
+      senseId: text(rankedSenses[0]?.senseId)
+    };
+  }).filter(Boolean);
+
+  const byRank = new Map();
+  for (const row of candidates) {
+    const group = byRank.get(row.frequencyRank) ?? [];
+    group.push(row);
+    byRank.set(row.frequencyRank, group);
+  }
+  const tiers = [];
+  for (const rank of [...byRank.keys()].sort((left, right) => left - right)) {
+    const rankGroup = byRank.get(rank);
+    // Princeton counts break English30k ties only when every tied target has a count.
+    if (rankGroup.length > 1 && rankGroup.every((row) => Number.isSafeInteger(row.frequencyTagCount))) {
+      const byTagCount = new Map();
+      for (const row of rankGroup) {
+        const group = byTagCount.get(row.frequencyTagCount) ?? [];
+        group.push(row);
+        byTagCount.set(row.frequencyTagCount, group);
+      }
+      for (const tagCount of [...byTagCount.keys()].sort((left, right) => right - left)) {
+        tiers.push(byTagCount.get(tagCount));
+      }
+    } else {
+      tiers.push(rankGroup);
+    }
+  }
+  return { candidates, tiers };
+}
+
+export function highFrequencyCowCharacterAtomLinks(records = [], existingLinks = []) {
+  if (!Array.isArray(records) || !Array.isArray(existingLinks)) {
+    throw invalid("COW frequency allocation requires record and link arrays");
+  }
+  const accepted = existingLinks.filter((link) => link.status === "accepted");
+  const ownersByPya = new Map();
+  const linkedCharacters = new Set();
+  for (const link of accepted) {
+    const character = text(link.character);
+    const pya = text(link.pya);
+    linkedCharacters.add(character);
+    const owners = ownersByPya.get(pya) ?? new Set();
+    owners.add(character);
+    ownersByPya.set(pya, owners);
+  }
+  const localAcceptedByCharacter = new Map(accepted
+    .filter((link) => ["chinese-character-atom-refinery", "cow-frequency-allocation"].includes(link.source))
+    .map((link) => [text(link.character), link]));
+  const changes = [];
+  const decisions = new Map();
+
+  for (const record of [...records].filter(hasCowDirectAtomCandidate).sort(compareCharacterFrequency)) {
+    const character = text(record.character);
+    const { candidates, tiers } = rankedCowCandidates(record);
+    const currentLink = localAcceptedByCharacter.get(character);
+    const canReplaceCurrent = currentLink && record.cowReviewRequired === true;
+    if (!canReplaceCurrent && (linkedCharacters.has(character) || (record.existingMappings ?? []).length > 0)) {
+      decisions.set(character, { status: "already-linked" });
+      continue;
+    }
+    if (candidates.length === 0) {
+      decisions.set(character, {
+        status: Number(record.cowFrequencyBlockedCandidateCount) > 0
+          ? "all-targets-already-linked"
+          : "no-english30k-frequency"
+      });
+      continue;
+    }
+
+    let selected;
+    let tied = false;
+    // Characters are processed by SUBTLEX/Jun Da order; an owned target allows the next tier.
+    for (const tier of tiers) {
+      const available = tier.filter(({ candidate }) => {
+        const owners = ownersByPya.get(text(candidate.pya));
+        return !owners || (owners.size === 1 && owners.has(character));
+      });
+      if (available.length === 0) continue;
+      if (available.length > 1) {
+        tied = true;
+        break;
+      }
+      selected = available[0];
+      break;
+    }
+    if (!selected) {
+      decisions.set(character, {
+        status: tied ? "unresolved-frequency-tie" : "all-targets-already-linked",
+        candidateCount: candidates.length
+      });
+      continue;
+    }
+
+    const link = {
+      character,
+      english: text(selected.candidate.english),
+      pya: text(selected.candidate.pya),
+      status: "accepted",
+      source: "cow-frequency-allocation",
+      confidence: "high",
+      wordNetSenseId: selected.senseId,
+      frequencyRank: selected.frequencyRank,
+      frequencyTagCount: selected.frequencyTagCount,
+      ...(selected.frequencyLemma ? { frequencyLemma: selected.frequencyLemma } : {})
+    };
+    if (currentLink && text(currentLink.pya) !== link.pya) {
+      const currentOwners = ownersByPya.get(text(currentLink.pya));
+      currentOwners?.delete(character);
+      if (currentOwners?.size === 0) ownersByPya.delete(text(currentLink.pya));
+      changes.push({
+        character,
+        english: text(currentLink.english),
+        pya: text(currentLink.pya),
+        status: "withdrawn",
+        source: currentLink.source
+      });
+    } else if (currentLink) {
+      decisions.set(character, {
+        status: "already-current-frequency-winner",
+        pya: link.pya,
+        frequencyRank: link.frequencyRank,
+        frequencyTagCount: link.frequencyTagCount,
+        wordNetSenseId: link.wordNetSenseId
+      });
+      continue;
+    }
+    changes.push(link);
+    const owners = ownersByPya.get(link.pya) ?? new Set();
+    owners.add(character);
+    ownersByPya.set(link.pya, owners);
+    linkedCharacters.add(character);
+    localAcceptedByCharacter.set(character, link);
+    decisions.set(character, {
+      status: currentLink ? "updated" : "promoted",
+      pya: link.pya,
+      english: link.english,
+      frequencyRank: link.frequencyRank,
+      frequencyTagCount: link.frequencyTagCount,
+      wordNetSenseId: link.wordNetSenseId
+    });
+  }
+  return { changes, decisions };
+}
+
 export function reconcileChineseCharacterAtomLinkConflicts(inputs) {
   if (!Array.isArray(inputs?.acceptedLinks) || !Array.isArray(inputs?.grammarCharacterLinks)) {
     throw invalid("Chinese character link reconciliation requires parsed accepted and grammar links");
@@ -747,6 +922,11 @@ export function buildChineseCharacterAtomWorklist(inputs, { includeMapped = true
       partOfSpeech: text(row.partOfSpeech ?? row.targetPartOfSpeech),
       gloss: text(row.gloss),
       lemmas: unique((row.lemmas ?? []).map(text).filter(Boolean)),
+      frequencyRank: Number.isSafeInteger(row.frequencyRank) && row.frequencyRank > 0 ? row.frequencyRank : null,
+      frequencyTagCount: Number.isSafeInteger(row.frequencyTagCount) && row.frequencyTagCount >= 0
+        ? row.frequencyTagCount
+        : null,
+      frequencyLemma: text(row.frequencyLemma),
       cowSynsets: []
     });
     sensesByPya.set(pya, senses);
@@ -809,10 +989,17 @@ export function buildChineseCharacterAtomWorklist(inputs, { includeMapped = true
     for (const row of cowRows) {
       for (const pya of pyasByIli.get(text(row.ili)) ?? []) cowPya.add(pya);
     }
+    let cowFrequencyCandidateCount = 0;
+    let cowFrequencyBlockedCandidateCount = 0;
     for (const pya of cowPya) {
-      if (!canUseTarget(character, pya)) continue;
       const target = atomByPya.get(pya);
-      if (target) cowTargetRows.push({ ...target, candidateSource: "cow-direct" });
+      if (!target) continue;
+      cowFrequencyCandidateCount += 1;
+      if (!canUseTarget(character, pya)) {
+        cowFrequencyBlockedCandidateCount += 1;
+        continue;
+      }
+      cowTargetRows.push({ ...target, candidateSource: "cow-direct" });
     }
     const currentTargetRows = existingMappings.flatMap((mapping) => {
       const target = atomByPya.get(mapping.pya);
@@ -894,6 +1081,8 @@ export function buildChineseCharacterAtomWorklist(inputs, { includeMapped = true
       englishCandidates: english,
       existingMappings,
       existingAtomCandidates: [...uniqueCandidates.values()],
+      cowFrequencyCandidateCount,
+      cowFrequencyBlockedCandidateCount,
       exactAtomCandidates: exactCandidates,
       relatedCharacters,
       specificityConflict: currentLinkIsGeneric,

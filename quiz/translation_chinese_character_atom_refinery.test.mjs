@@ -12,6 +12,8 @@ import {
   parseChineseCharacterAtomReviewResponse,
   parseChineseCharacterPhoneticResponse,
   parseChineseCharacterTranslationResponse,
+  hasCowDirectAtomCandidate,
+  highFrequencyCowCharacterAtomLinks,
   highConfidenceChineseCharacterAtomLinks,
   parseChineseCharacterAtomLinks,
   reconcileChineseCharacterAtomLinkConflicts,
@@ -23,6 +25,7 @@ import {
 import {
   buildChineseCharacterAtomMatchTasks,
   attachWordNetSenseTargets,
+  chineseCharacterRecordsForModelReview,
   applyChineseCharacterAtomLinkChanges,
   nextChineseCharacterDutyWave
 } from "../command/chinese_character_atom_refinery.mjs";
@@ -77,6 +80,143 @@ test("active atom bridges are joined to their WordNet ILI and sense definitions"
     lemmas: ["drive", "driving"]
   }]);
   assert.notEqual(attached.sourceHash, "input-source");
+});
+
+test("active atom bridge senses receive English30k rank and exact WordNet tag-count evidence", () => {
+  const attached = attachWordNetSenseTargets({
+    atomEntries: [{ en: "driving", pya: "hdok" }],
+    sourceHashes: { atoms: "atom-source" },
+    sourceHash: "input-source"
+  }, {
+    source: {
+      sourceHash: "english30k-source",
+      rows: [{ word: "drive", rank: 40 }, { word: "driving", rank: 10 }]
+    },
+    wordnet: {
+      sourceHash: "wordnet-source",
+      rows: [{ pos: "v", synset: "01934845-v", ili: "i-driving" }],
+      index: { bridgeIndex: new Map([
+        ["v:01934845-v", {
+          source: "v:01934845-v", targetKind: "atom", target: "driving", targetPartOfSpeech: "v",
+          pyashSequence: ["hdok"], gloss: "operate and control a vehicle", lemmas: ["drive", "driving"]
+        }]
+      ]) }
+    },
+    resourceHashes: { english30k: "english30k-source", englishWordNetBridges: "bridge-source" }
+  }, {
+    sourceHash: "princeton-frequency-source",
+    joined: { entries: [
+      { pos: "v", synset: "01934845-v", lemma: "drive", tagCount: 2 },
+      { pos: "v", synset: "01934845-v", lemma: "driving", tagCount: 12 }
+    ] }
+  });
+
+  assert.deepEqual(attached.wordnetSenseTargets.map(({ frequencyRank, frequencyTagCount, frequencyLemma }) => ({
+    frequencyRank, frequencyTagCount, frequencyLemma
+  })), [{ frequencyRank: 10, frequencyTagCount: 12, frequencyLemma: "driving" }]);
+  assert.equal(attached.sourceHashes.princetonWordNetFrequency, "princeton-frequency-source");
+});
+
+test("COW frequency allocation selects the most frequent linked atom sense without model review", () => {
+  const record = {
+    character: "驱",
+    frequency: { subtlexRank: 100 },
+    existingMappings: [],
+    existingAtomCandidates: [
+      {
+        kind: "atom", english: "drive", pya: "hgo", candidateSources: ["cow-direct"],
+        wordnetSenses: [{ senseId: "v:01934845-v", cowLinked: true, frequencyRank: 30, frequencyTagCount: 8 }]
+      },
+      {
+        kind: "atom", english: "driving", pya: "hdok", candidateSources: ["cow-direct"],
+        wordnetSenses: [{ senseId: "n:00299323-n", cowLinked: true, frequencyRank: 10, frequencyTagCount: 4 }]
+      }
+    ]
+  };
+  const { changes, decisions } = highFrequencyCowCharacterAtomLinks([record]);
+
+  assert.equal(hasCowDirectAtomCandidate(record), true);
+  assert.deepEqual(chineseCharacterRecordsForModelReview([record]).map((row) => row.character), []);
+  assert.deepEqual(changes.map(({ pya, status, frequencyRank }) => ({ pya, status, frequencyRank })), [
+    { pya: "hdok", status: "accepted", frequencyRank: 10 }
+  ]);
+  assert.equal(decisions.get("驱").status, "promoted");
+});
+
+test("COW frequency allocation uses WordNet tag count for rank ties and leaves unresolved ties pending", () => {
+  const record = {
+    character: "同",
+    frequency: { subtlexRank: 50 },
+    existingMappings: [],
+    existingAtomCandidates: [
+      {
+        kind: "atom", english: "equal-a", pya: "hpa", candidateSources: ["cow-direct"],
+        wordnetSenses: [{ senseId: "n:sense-a", cowLinked: true, frequencyRank: 12, frequencyTagCount: 3 }]
+      },
+      {
+        kind: "atom", english: "equal-b", pya: "hpb", candidateSources: ["cow-direct"],
+        wordnetSenses: [{ senseId: "n:sense-b", cowLinked: true, frequencyRank: 12, frequencyTagCount: 9 }]
+      }
+    ]
+  };
+  const selected = highFrequencyCowCharacterAtomLinks([record]);
+  assert.deepEqual(selected.changes.map(({ pya }) => pya), ["hpb"]);
+
+  record.existingAtomCandidates[0].wordnetSenses[0].frequencyTagCount = 9;
+  const tied = highFrequencyCowCharacterAtomLinks([record]);
+  assert.deepEqual(tied.changes, []);
+  assert.equal(tied.decisions.get("同").status, "unresolved-frequency-tie");
+
+  record.existingAtomCandidates.forEach((candidate) => {
+    candidate.wordnetSenses[0].frequencyTagCount = null;
+  });
+  const missingTagCounts = highFrequencyCowCharacterAtomLinks([record]);
+  assert.deepEqual(missingTagCounts.changes, []);
+  assert.equal(missingTagCounts.decisions.get("同").status, "unresolved-frequency-tie");
+});
+
+test("COW allocation gives a contested atom to the more frequent character and uses the next ranked target as fallback", () => {
+  const candidate = (pya, rank, senseId) => ({
+    kind: "atom", english: pya, pya, candidateSources: ["cow-direct"],
+    wordnetSenses: [{ senseId, cowLinked: true, frequencyRank: rank, frequencyTagCount: 2 }]
+  });
+  const records = [
+    {
+      character: "後", frequency: { subtlexRank: 20 }, existingMappings: [],
+      existingAtomCandidates: [candidate("hfirst", 1, "n:first"), candidate("hsecond", 4, "n:second")]
+    },
+    {
+      character: "后", frequency: { subtlexRank: 5 }, existingMappings: [],
+      existingAtomCandidates: [candidate("hfirst", 1, "n:first"), candidate("hthird", 7, "n:third")]
+    }
+  ];
+  const { changes } = highFrequencyCowCharacterAtomLinks(records);
+
+  assert.deepEqual(changes.map(({ character, pya }) => [character, pya]), [["后", "hfirst"], ["後", "hsecond"]]);
+});
+
+test("COW frequency allocation replaces a curated link and leaves unranked COW candidates as residuals", () => {
+  const current = { character: "驱", english: "drive", pya: "hgo", status: "accepted", source: "cow-frequency-allocation" };
+  const record = {
+    character: "驱",
+    frequency: { subtlexRank: 100 },
+    cowReviewRequired: true,
+    existingMappings: [{ ...current, kind: "pyash-curated" }],
+    existingAtomCandidates: [{
+      kind: "atom", english: "driving", pya: "hdok", candidateSources: ["cow-direct"],
+      wordnetSenses: [{ senseId: "v:01934845-v", cowLinked: true, frequencyRank: 10, frequencyTagCount: 8 }]
+    }]
+  };
+  const result = highFrequencyCowCharacterAtomLinks([record], [current]);
+
+  assert.deepEqual(result.changes.map(({ pya, status }) => [pya, status]), [["hgo", "withdrawn"], ["hdok", "accepted"]]);
+  assert.equal(result.decisions.get("驱").status, "updated");
+
+  record.existingAtomCandidates[0].wordnetSenses[0].frequencyRank = null;
+  const unranked = highFrequencyCowCharacterAtomLinks([record], [current]);
+  assert.deepEqual(unranked.changes, []);
+  assert.equal(unranked.decisions.get("驱").status, "no-english30k-frequency");
+  assert.deepEqual(chineseCharacterRecordsForModelReview([record]), []);
 });
 
 test("COW link replacement updates prior status without leaving a second accepted atom link", () => {
@@ -259,6 +399,9 @@ test("worklist ranks linked WordNet senses, uses COW ILI matches, and filters at
   }, { includeMapped: false, rootAtomsOnly: true });
 
   assert.deepEqual(record.existingAtomCandidates.map(({ pya }) => pya), ["hdrive"]);
+  assert.equal(record.cowFrequencyCandidateCount, 2);
+  assert.equal(record.cowFrequencyBlockedCandidateCount, 1);
+  assert.deepEqual(chineseCharacterRecordsForModelReview([record]), []);
   assert.deepEqual(record.existingAtomCandidates[0].wordnetSenses.map((sense) => ({
     senseId: sense.senseId,
     cowLinked: sense.cowLinked,
@@ -552,7 +695,7 @@ test("Chinese character proposals retain specificity review state after translat
   assert.equal(proposal.specificityReviewRequired, true);
 });
 
-test("first-pass Qwen review includes every candidate-bearing row, including a unique exact candidate", () => {
+test("first-pass Qwen review includes every supplied non-COW candidate row, including a unique exact candidate", () => {
   const uniqueExact = {
     id: "zh-char-you",
     character: "你",
