@@ -4,7 +4,7 @@ su text "frequency-source" ob text "SUBTLEX-CH primary; Jun Da separate suppleme
 su text "translation-sources" ob text "CC-CEDICT, Unicode Unihan, local Shuowen, Analects contexts as attestations" ya
 su text "model" ob text "qwen3.5:9b" ya
 su text "refinery-pass" ob text "first-pass" ya
-su text "prompt-revision" ob text "primary-reading-semantic-ranked-frequency-allocated-atom-link-v4" ya
+su text "prompt-revision" ob text "primary-reading-wordnet-sense-cow-frequency-allocated-atom-link-v5" ya
 su text "generation-limit" ob num 64 ya
 su text "housekeeper-duties-per-pass" ob num 64 ya
 su text "housekeeper-parallelism" ob num 4 ya

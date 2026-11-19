@@ -13,6 +13,7 @@ import { interpret } from "../program/bridge/index.mjs";
 import { resolveConfigText } from "../program/configure/env.mjs";
 import { createGpuHousekeeperAdapter } from "../program/runtime/gpu/housekeeper_adapter.mjs";
 import { buildProgram } from "../program/program.mjs";
+import { loadDefaultEnglishSentenceResources } from "../program/library/translation/english_sentence.mjs";
 import { loadDefaultConfig } from "./run_pya_helpers.mjs";
 import {
   buildChineseCharacterAtomProposals,
@@ -94,10 +95,22 @@ function taskKey(recordId, kind, concept = "") {
 
 function matchFingerprint(record) {
   return sha256(JSON.stringify({
-    candidates: (record.existingAtomCandidates ?? []).map((target) => `${target.kind}:${target.pya}`),
+    candidates: (record.existingAtomCandidates ?? []).map((target) => ({
+      targetId: target.kind + ":" + target.pya,
+      wordnetSenses: (target.wordnetSenses ?? []).map((sense) => ({
+        senseId: sense.senseId,
+        ili: sense.ili,
+        partOfSpeech: sense.partOfSpeech,
+        gloss: sense.gloss,
+        lemmas: sense.lemmas,
+        cowLinked: sense.cowLinked,
+        cowSynsets: sense.cowSynsets
+      }))
+    })),
     mappings: record.existingMappings ?? [],
     english: record.englishCandidates ?? [],
-    specificityConflict: Boolean(record.specificityConflict)
+    specificityConflict: Boolean(record.specificityConflict),
+    cowReview: record.cowReview ?? null
   })).slice(0, 12);
 }
 
@@ -248,7 +261,9 @@ function hydrateMatchCandidates(records, candidates) {
       exactAtomCandidates: candidate.exactAtomCandidates,
       existingAtomCandidates: candidate.rankedAtomCandidates,
       existingMappings: candidate.existingMappings,
-      specificityConflict: candidate.specificityConflict
+      specificityConflict: candidate.specificityConflict,
+      cowReviewRequired: candidate.cowReviewRequired,
+      cowReview: candidate.cowReview
     } : record;
   });
 }
@@ -307,6 +322,71 @@ async function reconcileExistingLinks(inputs) {
     grammarLinksRemoved: grammarLinksChanged ? reconciliation.grammarCharactersToRemove.length : 0,
     rootLinksWithdrawn: acceptedLinksChanged ? reconciliation.withdrawn.length : 0
   };
+}
+
+export function attachWordNetSenseTargets(inputs, resources) {
+  const englishByPya = new Map((inputs.atomEntries ?? []).map((entry) => [
+    String(entry?.pya ?? "").trim(),
+    String(entry?.en ?? "").trim()
+  ]));
+  const wordnetMetadataBySenseId = new Map();
+  for (const row of resources.wordnet.rows ?? []) {
+    const senseId = `${row.pos}:${row.synset}`;
+    if (!wordnetMetadataBySenseId.has(senseId)) {
+      wordnetMetadataBySenseId.set(senseId, { ili: row.ili ?? "", partOfSpeech: row.pos });
+    }
+  }
+  const wordnetSenseTargets = [...(resources.wordnet.index.bridgeIndex?.values() ?? [])]
+    .filter((entry) => typeof entry.source === "string"
+      && entry.targetKind === "atom"
+      && Array.isArray(entry.pyashSequence)
+      && entry.pyashSequence.length === 1
+      && englishByPya.has(entry.pyashSequence[0]))
+    .map((entry) => {
+      const wordnet = wordnetMetadataBySenseId.get(entry.source);
+      return {
+        senseId: entry.source,
+        ili: wordnet?.ili ?? "",
+        target: entry.target,
+        targetKind: entry.targetKind,
+        targetId: entry.targetId,
+        targetPartOfSpeech: entry.targetPartOfSpeech,
+        partOfSpeech: wordnet?.partOfSpeech ?? String(entry.source).slice(0, 1),
+        pyashSequence: [...entry.pyashSequence],
+        english: englishByPya.get(entry.pyashSequence[0]),
+        pya: entry.pyashSequence[0],
+        gloss: entry.gloss ?? "",
+        lemmas: [...(entry.lemmas ?? [])]
+      };
+    })
+    .filter((entry) => entry.ili && entry.gloss)
+    .sort((left, right) => left.senseId.localeCompare(right.senseId));
+  const sourceHashes = {
+    ...inputs.sourceHashes,
+    openEnglishWordNet: resources.wordnet.sourceHash,
+    englishWordNetBridges: resources.resourceHashes.englishWordNetBridges,
+    wordnetSenseTargets: sha256(JSON.stringify(wordnetSenseTargets))
+  };
+  return {
+    ...inputs,
+    wordnetSenseTargets,
+    sourceHashes,
+    sourceHash: sha256(JSON.stringify(sourceHashes))
+  };
+}
+
+export function applyChineseCharacterAtomLinkChanges(existingLinks, linkChanges) {
+  if (!Array.isArray(existingLinks) || !Array.isArray(linkChanges)) {
+    throw new TypeError("Chinese character link changes require link arrays");
+  }
+  const withdrawn = new Set(linkChanges.filter((link) => link.status === "withdrawn")
+    .map((link) => `${link.character}\u0000${link.pya}`));
+  return existingLinks
+    .map((link) => withdrawn.has(`${link.character}\u0000${link.pya}`) && link.status === "accepted"
+      ? { ...link, status: "withdrawn", key: `withdraw:${link.character}:${link.pya}` }
+      : link)
+    .concat(linkChanges.filter((link) => link.status === "accepted")
+      .map(({ wordNetSenseId, ...link }) => link));
 }
 
 async function initializePyashRuntime() {
@@ -504,6 +584,8 @@ async function runStage(sentence, context) {
       rankedAtomCandidates: record.existingAtomCandidates,
       existingMappings: record.existingMappings,
       specificityConflict: record.specificityConflict,
+      cowReviewRequired: record.cowReviewRequired,
+      cowReview: record.cowReview,
       frequency: record.frequency
     }));
     artifactPath = await writeStageArtifact(context, "atom-match-candidates.pya", "translation_chinese_character_atom_match_candidates", matches);
@@ -586,21 +668,31 @@ async function runStage(sentence, context) {
         ? { translationReview: translationById.get(record.id) }
         : {})
     }));
-    let promotedLinks = [];
+    let linkChanges = [];
     if (firstPass) {
-      promotedLinks = highConfidenceChineseCharacterAtomLinks(proposals, activeCharacterAtomLinks(context.inputs));
-      if (promotedLinks.length > 0) {
-        const acceptedLinks = [...context.inputs.acceptedLinks, ...promotedLinks];
+      linkChanges = highConfidenceChineseCharacterAtomLinks(proposals, activeCharacterAtomLinks(context.inputs));
+      if (linkChanges.length > 0) {
+        const acceptedLinks = applyChineseCharacterAtomLinkChanges(context.inputs.acceptedLinks, linkChanges);
         await atomicWrite(
           CHINESE_CHARACTER_ATOM_SOURCE_PATHS.acceptedLinks,
           renderChineseCharacterAtomLinksPya(acceptedLinks)
         );
         context.inputs.acceptedLinks = acceptedLinks;
       }
-      const promotedByCharacter = new Map(promotedLinks.map((link) => [link.character, link]));
+      const promotedByCharacter = new Map(linkChanges
+        .filter((link) => link.status === "accepted")
+        .map((link) => [link.character, link]));
       proposals = proposals.map((record) => {
         const link = promotedByCharacter.get(record.character);
-        return link ? { ...record, promotion: { status: "accepted", pya: link.pya, confidence: link.confidence } } : record;
+        return link ? {
+          ...record,
+          promotion: {
+            status: record.cowReviewRequired ? "updated" : "accepted",
+            pya: link.pya,
+            confidence: link.confidence,
+            wordNetSenseId: link.wordNetSenseId
+          }
+        } : record;
       });
     }
     artifactPath = path.join(context.artifactDirectory, "review.pya");
@@ -615,7 +707,13 @@ async function runStage(sentence, context) {
       standardCharacterCount: context.inputs.unihan.size,
       worklistCount: context.worklist.length,
       processedCount: proposals.length,
-      ...(firstPass ? { promotedLinkCount: promotedLinks.length, acceptedLinksPath: CHINESE_CHARACTER_ATOM_SOURCE_PATHS.acceptedLinks } : {}),
+      ...(firstPass ? {
+        promotedLinkCount: linkChanges.filter((link) => link.status === "accepted" && !proposals
+          .find((record) => record.character === link.character)?.cowReviewRequired).length,
+        updatedLinkCount: linkChanges.filter((link) => link.status === "accepted" && proposals
+          .find((record) => record.character === link.character)?.cowReviewRequired).length,
+        acceptedLinksPath: CHINESE_CHARACTER_ATOM_SOURCE_PATHS.acceptedLinks
+      } : {}),
       reviewPath: artifactPath,
       records: proposals
     };
@@ -634,7 +732,11 @@ export async function runChineseCharacterAtomRefinery() {
     throw new Error(`unsupported Chinese character atom refinery pass: ${config.refineryPass}`);
   }
   await initializePyashRuntime();
-  const initialInputs = await loadChineseCharacterAtomRefineryInputs();
+  const [rawInitialInputs, wordnetResources] = await Promise.all([
+    loadChineseCharacterAtomRefineryInputs(),
+    loadDefaultEnglishSentenceResources()
+  ]);
+  const initialInputs = attachWordNetSenseTargets(rawInitialInputs, wordnetResources);
   const linkRepairs = config.refineryPass === "first-pass"
     ? await reconcileExistingLinks(initialInputs)
     : { grammarLinksRemoved: 0, rootLinksWithdrawn: 0 };
@@ -642,7 +744,7 @@ export async function runChineseCharacterAtomRefinery() {
     process.stdout.write(`reconciled existing links: removed ${linkRepairs.grammarLinksRemoved} grammar duplicates, withdrew ${linkRepairs.rootLinksWithdrawn} invalid or lower-frequency root links\n`);
   }
   const inputs = linkRepairs.grammarLinksRemoved || linkRepairs.rootLinksWithdrawn
-    ? await loadChineseCharacterAtomRefineryInputs()
+    ? attachWordNetSenseTargets(await loadChineseCharacterAtomRefineryInputs(), wordnetResources)
     : initialInputs;
   const configHash = sha256(JSON.stringify({
     refineryPass: config.refineryPass,
@@ -701,12 +803,13 @@ export async function runChineseCharacterAtomRefinery() {
     `prepared this pass: ${proposals.length}`,
     `Housekeeper duties this pass: ${context.dutiesThisPass}/${config.dutiesPerPass}`,
     ...(review.promotedLinkCount !== undefined ? [`promoted links this pass: ${review.promotedLinkCount}`] : []),
+    ...(review.updatedLinkCount !== undefined ? [`COW-updated links this pass: ${review.updatedLinkCount}`] : []),
     ...(context.housekeeper ? [`Housekeeper: ${context.housekeeper.housekeeperHost}; queue before pass: ${context.housekeeper.queue.queued} queued, ${context.housekeeper.queue.running} running`] : []),
     `review artifact: ${review.reviewPath}`,
     `checkpoint: ${checkpointPath}`,
     ...Object.entries(proposals.reduce((counts, row) => {
-      const status = row.promotion?.status === "accepted"
-        ? "accepted"
+      const status = row.promotion?.status
+        ? row.promotion.status
         : row.modelMatch
           ? `${row.modelMatch.verdict}/${row.modelMatch.confidence}`
           : row.stageStatus ?? row.status ?? "unreviewed";

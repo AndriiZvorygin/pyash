@@ -6,6 +6,7 @@ import { buildProgram } from "../program/program.mjs";
 import { CHINESE_CHARACTER_ATOM_REFINERY_CONFIG_URL } from "../program/library/translation/chinese_character_atom_refinery.mjs";
 import {
   buildChineseCharacterAtomWorklist,
+  parseChineseOpenWordNetCharacterSenses,
   buildChineseCharacterAtomProposals,
   buildChineseCharacterAtomReviewPrompt,
   parseChineseCharacterAtomReviewResponse,
@@ -21,8 +22,78 @@ import {
 } from "../program/library/translation/chinese_character_atom_refinery.mjs";
 import {
   buildChineseCharacterAtomMatchTasks,
+  attachWordNetSenseTargets,
+  applyChineseCharacterAtomLinkChanges,
   nextChineseCharacterDutyWave
 } from "../command/chinese_character_atom_refinery.mjs";
+
+function wordnetSenseTarget(pya, english, senseId = `n:${pya}-sense`, ili = `i-${pya}`, gloss = english) {
+  return {
+    senseId, ili, targetKind: "atom", targetId: `atom:${pya}`, target: english,
+    targetPartOfSpeech: "n", pyashSequence: [pya], english, pya, gloss, lemmas: [english]
+  };
+}
+
+function candidateSense(pya, senseId = `n:${pya}-sense`, ili = `i-${pya}`, gloss = pya) {
+  return { senseId, ili, partOfSpeech: "n", gloss, lemmas: [pya], cowLinked: false };
+}
+
+test("active atom bridges are joined to their WordNet ILI and sense definitions", () => {
+  const attached = attachWordNetSenseTargets({
+    atomEntries: [{ en: "driving", pya: "hdok" }],
+    sourceHashes: { atoms: "atom-source" },
+    sourceHash: "input-source"
+  }, {
+    wordnet: {
+      sourceHash: "wordnet-source",
+      rows: [{ pos: "v", synset: "01934845-v", ili: "i-driving" }],
+      index: { bridgeIndex: new Map([
+        ["v:01934845-v", {
+          source: "v:01934845-v", targetKind: "atom", target: "drive", targetPartOfSpeech: "n",
+          pyashSequence: ["hdok"], gloss: "operate and control a vehicle", lemmas: ["drive", "driving"]
+        }],
+        ["n:00000001-n", {
+          source: "n:00000001-n", targetKind: "compound", target: "vehicle driver", targetPartOfSpeech: "n",
+          pyashSequence: ["hdok", "hfoo"], gloss: "a person who drives", lemmas: ["driver"]
+        }],
+        ["v:00000002-v", {
+          source: "v:00000002-v", targetKind: "atom", target: "missing", targetPartOfSpeech: "v",
+          pyashSequence: ["unknown"], gloss: "unavailable atom", lemmas: ["missing"]
+        }]
+      ]) }
+    },
+    resourceHashes: { englishWordNetBridges: "bridge-source" }
+  });
+
+  assert.deepEqual(attached.wordnetSenseTargets.map(({ senseId, ili, pya, partOfSpeech, targetPartOfSpeech, gloss, lemmas }) => ({
+    senseId, ili, pya, partOfSpeech, targetPartOfSpeech, gloss, lemmas
+  })), [{
+    senseId: "v:01934845-v",
+    ili: "i-driving",
+    pya: "hdok",
+    partOfSpeech: "v",
+    targetPartOfSpeech: "n",
+    gloss: "operate and control a vehicle",
+    lemmas: ["drive", "driving"]
+  }]);
+  assert.notEqual(attached.sourceHash, "input-source");
+});
+
+test("COW link replacement updates prior status without leaving a second accepted atom link", () => {
+  const links = applyChineseCharacterAtomLinkChanges([
+    { character: "驱", english: "drive", pya: "hgo", status: "accepted", source: "chinese-character-atom-refinery" },
+    { character: "你", english: "you", pya: "hnan", status: "accepted" }
+  ], [
+    { character: "驱", english: "drive", pya: "hgo", status: "withdrawn" },
+    { character: "驱", english: "driving", pya: "hdok", status: "accepted", wordNetSenseId: "v:01934845-v" }
+  ]);
+
+  assert.deepEqual(links, [
+    { character: "驱", english: "drive", pya: "hgo", status: "withdrawn", key: "withdraw:驱:hgo", source: "chinese-character-atom-refinery" },
+    { character: "你", english: "you", pya: "hnan", status: "accepted" },
+    { character: "驱", english: "driving", pya: "hdok", status: "accepted" }
+  ]);
+});
 
 test("Chinese character refinery keeps the complete graph and adds a separate existing-atom first pass", async () => {
   const source = await readFile(CHINESE_CHARACTER_ATOM_REFINERY_CONFIG_URL, "utf8");
@@ -77,6 +148,25 @@ test("Chinese character refinery reads single-atom grammar targets and skips cat
   }]);
 });
 
+test("COW character senses retain ILI crosswalks and omit multi-character and non-WordNet entries", () => {
+  const xml = `<?xml version="1.0"?>
+    <LexicalResource><Lexicon id="cow" language="cmn-Hans" version="1.1">
+      <LexicalEntry id="cow-w1"><Lemma writtenForm="驱" partOfSpeech="v"/><Sense synset="cow-00007012-v"/></LexicalEntry>
+      <LexicalEntry id="cow-w2"><Lemma writtenForm="你们" partOfSpeech="n"/><Sense synset="cow-00001740-n"/></LexicalEntry>
+      <LexicalEntry id="cow-w3"><Lemma writtenForm="之" partOfSpeech="n"/><Sense synset="cow-80000047-n"/></LexicalEntry>
+      <Synset id="cow-00007012-v" ili="i501" partOfSpeech="v"/>
+      <Synset id="cow-00001740-n" ili="i502" partOfSpeech="n"/>
+      <Synset id="cow-80000047-n" partOfSpeech="n"/>
+    </Lexicon></LexicalResource>`;
+
+  assert.deepEqual(parseChineseOpenWordNetCharacterSenses(xml), [{
+    character: "驱",
+    ili: "i501",
+    partOfSpeech: "v",
+    cowSynsets: ["cow-00007012-v"]
+  }]);
+});
+
 test("Chinese character refinery reads the TGH standard index from Unihan other mappings", () => {
   const characters = parseUnihanCharacterData(
     "U+4E00\tkMandarin\tyī\nU+4E00\tkDefinition\tone; 1",
@@ -108,6 +198,10 @@ test("Chinese character worklist preserves exact and prefix-ranked atom candidat
       { en: "affect", pya: "hfoo" },
       { en: "affectionate", pya: "hbar" }
     ],
+    wordnetSenseTargets: [
+      wordnetSenseTarget("hfoo", "affect"),
+      wordnetSenseTarget("hbar", "affectionate")
+    ],
     grammarTargets: [],
     shuowenByCharacter: new Map(),
     analectsSource: ""
@@ -122,6 +216,93 @@ test("Chinese character worklist preserves exact and prefix-ranked atom candidat
     { pya: "hfoo", candidateRank: 1, lexicalMatchScore: 2 },
     { pya: "hbar", candidateRank: 2, lexicalMatchScore: 2 }
   ]);
+});
+
+test("worklist ranks linked WordNet senses, uses COW ILI matches, and filters atoms already linked elsewhere", () => {
+  const [record] = buildChineseCharacterAtomWorklist({
+    unihan: new Map([[
+      "驱",
+      { character: "驱", standardIndex: 1, readings: { Mandarin: ["qū"], Cantonese: [] } }
+    ]]),
+    subtlex: new Map(),
+    junda: new Map(),
+    cedict: new Map([["驱", [{ pinyin: "qu1", definitions: ["to drive", "to expel"] }]]]),
+    kwonRows: [{ zh: "马", pya: "kyas", en: "horse" }],
+    acceptedLinks: [],
+    atomEntries: [
+      { en: "driving", pya: "hdrive" },
+      { en: "horse", pya: "kyas" },
+      { en: "expulsion", pya: "hexpel" }
+    ],
+    wordnetSenseTargets: [
+      {
+        senseId: "v:01934845-v", ili: "i-driving", targetKind: "atom", targetId: "atom:hdrive",
+        target: "driving", targetPartOfSpeech: "v", pyashSequence: ["hdrive"],
+        english: "driving", pya: "hdrive", gloss: "operate and control a vehicle's direction and speed",
+        lemmas: ["drive", "driving"]
+      },
+      {
+        senseId: "n:10123456-n", ili: "i-horse", targetKind: "atom", targetId: "atom:kyas",
+        target: "horse", targetPartOfSpeech: "n", pyashSequence: ["kyas"],
+        english: "horse", pya: "kyas", gloss: "a solid-hoofed herbivorous quadruped",
+        lemmas: ["horse"]
+      }
+    ],
+    cowCharacterSenses: [
+      { character: "驱", ili: "i-driving", partOfSpeech: "v", cowSynsets: ["cow-01934845-v"] },
+      { character: "驱", ili: "i-horse", partOfSpeech: "n", cowSynsets: ["cow-10123456-n"] }
+    ],
+    grammarCharacterLinks: [],
+    grammarTargets: [],
+    shuowenByCharacter: new Map(),
+    analectsSource: ""
+  }, { includeMapped: false, rootAtomsOnly: true });
+
+  assert.deepEqual(record.existingAtomCandidates.map(({ pya }) => pya), ["hdrive"]);
+  assert.deepEqual(record.existingAtomCandidates[0].wordnetSenses.map((sense) => ({
+    senseId: sense.senseId,
+    cowLinked: sense.cowLinked,
+    gloss: sense.gloss
+  })), [{
+    senseId: "v:01934845-v",
+    cowLinked: true,
+    gloss: "operate and control a vehicle's direction and speed"
+  }]);
+});
+
+test("COW adds a current Pyash link to the first-pass review when it has an alternate atom sense", () => {
+  const [record] = buildChineseCharacterAtomWorklist({
+    unihan: new Map([[
+      "驱",
+      { character: "驱", standardIndex: 1, readings: { Mandarin: ["qū"], Cantonese: [] } }
+    ]]),
+    subtlex: new Map([["驱", { rank: 100 }]]),
+    junda: new Map(),
+    cedict: new Map([["驱", [{ pinyin: "qu1", definitions: ["to drive"] }]]]),
+    kwonRows: [],
+    acceptedLinks: [{
+      character: "驱", english: "operate", pya: "hgo", status: "accepted",
+      source: "chinese-character-atom-refinery"
+    }],
+    atomEntries: [{ en: "operate", pya: "hgo" }, { en: "driving", pya: "hdrive" }],
+    wordnetSenseTargets: [
+      wordnetSenseTarget("hgo", "operate", "v:01934846-v", "i-operate", "cause a device to function"),
+      wordnetSenseTarget("hdrive", "driving", "v:01934845-v", "i-driving", "operate and control a vehicle")
+    ],
+    cowCharacterSenses: [{
+      character: "驱", ili: "i-driving", partOfSpeech: "v", cowSynsets: ["cow-01934845-v"]
+    }],
+    grammarCharacterLinks: [],
+    grammarTargets: [],
+    shuowenByCharacter: new Map(),
+    analectsSource: ""
+  }, { includeMapped: false, rootAtomsOnly: true });
+
+  assert.equal(record.status, "cow-link-review");
+  assert.equal(record.cowReviewRequired, true);
+  assert.deepEqual(record.existingAtomCandidates.map(({ pya }) => pya), ["hdrive", "hgo"]);
+  assert.deepEqual(record.cowReview.cowCandidates, ["hdrive"]);
+  assert.equal(record.reviewPriority, 0);
 });
 
 test("first-pass root candidate lists exclude grammar catalog targets and underscored atoms", () => {
@@ -140,6 +321,11 @@ test("first-pass root candidate lists exclude grammar catalog targets and unders
       { en: "you_", pya: "sa" },
       { en: "_ist", pya: "dxi7s" }
     ],
+    wordnetSenseTargets: [
+      wordnetSenseTarget("hnan", "you"),
+      wordnetSenseTarget("sa", "you_"),
+      wordnetSenseTarget("dxi7s", "_ist")
+    ],
     grammarTargets: [{ kind: "grammar", english: "you", pya: "wa" }],
     shuowenByCharacter: new Map(),
     analectsSource: ""
@@ -147,7 +333,7 @@ test("first-pass root candidate lists exclude grammar catalog targets and unders
 
   assert.deepEqual(buildChineseCharacterAtomWorklist(input, { includeMapped: false })[0]
     .existingAtomCandidates.map(({ kind, pya }) => [kind, pya]), [
-    ["atom", "hnan"], ["atom", "sa"], ["atom", "dxi7s"], ["grammar", "wa"]
+    ["atom", "hnan"], ["atom", "sa"], ["atom", "dxi7s"]
   ]);
   assert.deepEqual(buildChineseCharacterAtomWorklist(input, { includeMapped: false, rootAtomsOnly: true })[0]
     .existingAtomCandidates.map(({ kind, pya }) => [kind, pya]), [["atom", "hnan"]]);
@@ -224,8 +410,8 @@ test("Chinese character refinery parses Ollama envelopes for every Housekeeper s
   const record = {
     id: "fixture-character",
     existingAtomCandidates: [
-      { kind: "atom", pya: "hnan" },
-      { kind: "atom", pya: "hfoo" }
+      { kind: "atom", pya: "hnan", wordnetSenses: [candidateSense("hnan")] },
+      { kind: "atom", pya: "hfoo", wordnetSenses: [candidateSense("hfoo")] }
     ]
   };
   const envelope = (response) => JSON.stringify({
@@ -238,16 +424,16 @@ test("Chinese character refinery parses Ollama envelopes for every Housekeeper s
     verdict: "match",
     confidence: "high",
     matches: [
-      { targetId: "atom:hnan", relation: "base", rationale: "Best fit." },
-      { targetId: "atom:hfoo", relation: "same-sense", rationale: "Related fallback." }
+      { targetId: "atom:hnan", senseId: "n:hnan-sense", relation: "base", rationale: "Best fit." },
+      { targetId: "atom:hfoo", senseId: "n:hfoo-sense", relation: "same-sense", rationale: "Related fallback." }
     ],
     rationale: "The evidence ranks the base atom first."
   }), record), {
     verdict: "match",
     confidence: "high",
     matches: [
-      { targetId: "atom:hnan", relation: "base", rationale: "Best fit." },
-      { targetId: "atom:hfoo", relation: "same-sense", rationale: "Related fallback." }
+      { targetId: "atom:hnan", senseId: "n:hnan-sense", relation: "base", rationale: "Best fit." },
+      { targetId: "atom:hfoo", senseId: "n:hfoo-sense", relation: "same-sense", rationale: "Related fallback." }
     ],
     rationale: "The evidence ranks the base atom first."
   });
@@ -264,9 +450,45 @@ test("Chinese character refinery parses Ollama envelopes for every Housekeeper s
   }), record), /malformed JSON/u);
   assert.throws(() => parseChineseCharacterAtomReviewResponse(envelope({
     verdict: "match",
-    matches: [{ targetId: "atom:hnan", relation: "base", rationale: "Base meaning." }],
+    matches: [{ targetId: "atom:hnan", senseId: "n:hnan-sense", relation: "base", rationale: "Base meaning." }],
     rationale: "Missing confidence."
   }), record), /expected contract/u);
+});
+
+test("sense review requires the chosen WordNet synset and prompts against its linked definition", () => {
+  const sense = {
+    senseId: "n:00299323-n",
+    ili: "i321",
+    partOfSpeech: "n",
+    gloss: "the act of controlling and steering the movement of a vehicle or animal",
+    lemmas: ["driving"],
+    cowLinked: true
+  };
+  const record = {
+    id: "zh-char-qu",
+    character: "驱",
+    readings: { Mandarin: ["qū"] },
+    englishCandidates: ["to drive"],
+    evidence: { cedict: [{ pinyin: "qu1", definitions: ["to drive"] }] },
+    existingAtomCandidates: [{ kind: "atom", pya: "hdok", english: "driving", wordnetSenses: [sense] }]
+  };
+  const parsed = parseChineseCharacterAtomReviewResponse(JSON.stringify({
+    response: JSON.stringify({
+      verdict: "match",
+      confidence: "high",
+      matches: [{ targetId: "atom:hdok", senseId: "n:00299323-n", relation: "same-sense", rationale: "The linked synset definition matches the Chinese driving sense." }],
+      rationale: "The synset definition fits the standalone Chinese meaning."
+    }),
+    done: true
+  }), record);
+  const prompt = buildChineseCharacterAtomReviewPrompt(record);
+
+  assert.equal(parsed.matches[0].senseId, "n:00299323-n");
+  assert.match(prompt, /WordNet sense definition/u);
+  assert.match(prompt, /the act of controlling and steering/u);
+  assert.match(prompt, /COW direct character-to-synset evidence/u);
+  assert.match(prompt, /Character: 驱/u);
+  assert.doesNotMatch(prompt, /Rank only the supplied Pyash targets by semantic fit/u);
 });
 
 test("Chinese character match parsing accepts medium ranked alternatives and skips marked targets later", () => {
@@ -276,8 +498,8 @@ test("Chinese character match parsing accepts medium ranked alternatives and ski
     englishCandidates: ["you", "honorific for you"],
     existingMappings: [{ english: "you", pya: "hnan", kind: "kwon" }],
     existingAtomCandidates: [
-      { kind: "atom", pya: "hnan" },
-      { kind: "atom", pya: "hfoo" }
+      { kind: "atom", pya: "hnan", wordnetSenses: [candidateSense("hnan")] },
+      { kind: "atom", pya: "hfoo", wordnetSenses: [candidateSense("hfoo")] }
     ]
   };
   const response = JSON.stringify({
@@ -285,8 +507,8 @@ test("Chinese character match parsing accepts medium ranked alternatives and ski
       verdict: "match",
       confidence: "medium",
       matches: [
-        { targetId: "atom:hnan", relation: "marked", rationale: "Broad related sense." },
-        { targetId: "atom:hfoo", relation: "same-sense", rationale: "Closer semantic fallback." }
+        { targetId: "atom:hnan", senseId: "n:hnan-sense", relation: "marked", rationale: "Broad related sense." },
+        { targetId: "atom:hfoo", senseId: "n:hfoo-sense", relation: "same-sense", rationale: "Closer semantic fallback." }
       ],
       rationale: "Two candidates fit to different degrees."
     }),
@@ -300,7 +522,7 @@ test("Chinese character match parsing accepts medium ranked alternatives and ski
     existingMappings: [],
     evidence: { cedict: [] }
   });
-  assert.match(prompt, /Do not invent a target/u);
+  assert.match(prompt, /Do not invent targets/u);
   assert.match(prompt, /or decide which Chinese character is more frequent/iu);
   assert.match(prompt, /Use the supplied Unihan Mandarin reading/u);
   assert.doesNotMatch(prompt, /SUBTLEX-CH rank|Jun Da modern-text rank/u);
@@ -359,8 +581,8 @@ test("automatic linking accepts ranked semantic fallbacks and deterministically 
     verdict: "match",
     confidence: "high",
     matches: [
-      { targetId: "atom:hnan", relation: "base", rationale: "Direct unmarked pronoun." },
-      { targetId: "atom:hfoo", relation: "same-sense", rationale: "Related fallback." }
+      { targetId: "atom:hnan", senseId: "n:hnan-sense", relation: "base", rationale: "Direct unmarked pronoun." },
+      { targetId: "atom:hfoo", senseId: "n:hfoo-sense", relation: "same-sense", rationale: "Related fallback." }
     ],
     rationale: "The dictionary evidence supports the base atom."
   };
@@ -368,8 +590,8 @@ test("automatic linking accepts ranked semantic fallbacks and deterministically 
     character: "你",
     standardIndex: 1,
     existingAtomCandidates: [
-      { kind: "atom", english: "you", pya: "hnan" },
-      { kind: "atom", english: "fondness", pya: "hfoo" }
+      { kind: "atom", english: "you", pya: "hnan", wordnetSenses: [candidateSense("hnan")] },
+      { kind: "atom", english: "fondness", pya: "hfoo", wordnetSenses: [candidateSense("hfoo")] }
     ],
     exactAtomCandidates: [{ kind: "atom", english: "you", pya: "hnan" }],
     existingMappings: [],
@@ -394,7 +616,7 @@ test("automatic linking accepts ranked semantic fallbacks and deterministically 
         verdict: "match",
         confidence: "high",
         matches: [
-          { targetId: "atom:hyut", relation: "same-sense", rationale: "Grammar word." },
+          { targetId: "atom:hyut", senseId: "n:hyut-sense", relation: "same-sense", rationale: "Grammar word." },
           { targetId: "grammar:tseh", relation: "same-sense", rationale: "Grammar target." }
         ]
       }
@@ -406,7 +628,7 @@ test("automatic linking accepts ranked semantic fallbacks and deterministically 
       modelMatch: {
         verdict: "match",
         confidence: "high",
-        matches: [{ targetId: "atom:dxi7s", relation: "same-sense", rationale: "Derivational marker." }]
+        matches: [{ targetId: "atom:dxi7s", senseId: "n:dxi7s-sense", relation: "same-sense", rationale: "Derivational marker." }]
       }
     },
     { ...you, character: "熟", existingMappings: [{ pya: "other" }] },
@@ -422,18 +644,89 @@ test("automatic linking accepts ranked semantic fallbacks and deterministically 
   assert.deepEqual(highConfidenceChineseCharacterAtomLinks([{ ...you, modelMatch: undefined }]), []);
 });
 
+test("automatic character links keep the selected WordNet sense available for review provenance", () => {
+  const candidate = {
+    kind: "atom",
+    english: "driving",
+    pya: "hdok",
+    wordnetSenses: [{
+      senseId: "n:00299323-n",
+      ili: "i321",
+      partOfSpeech: "n",
+      gloss: "the act of controlling and steering a vehicle",
+      lemmas: ["driving"],
+      cowLinked: true
+    }]
+  };
+  const [link] = highConfidenceChineseCharacterAtomLinks([{
+    character: "驱",
+    existingAtomCandidates: [candidate],
+    existingMappings: [],
+    frequency: { subtlexRank: 100 },
+    modelMatch: {
+      verdict: "match",
+      confidence: "high",
+      matches: [{ targetId: "atom:hdok", senseId: "n:00299323-n", relation: "base", rationale: "The synset definition matches." }]
+    }
+  }]);
+
+  assert.equal(link.pya, "hdok");
+  assert.equal(link.wordNetSenseId, "n:00299323-n");
+});
+
+test("COW review can replace an existing refinery link with a better linked WordNet sense", () => {
+  const replacement = {
+    kind: "atom",
+    english: "driving",
+    pya: "hdok",
+    wordnetSenses: [candidateSense(
+      "hdok",
+      "v:01934845-v",
+      "i-driving",
+      "operate and control a vehicle's direction and speed"
+    )]
+  };
+  const [withdrawn, accepted] = highConfidenceChineseCharacterAtomLinks([{
+    character: "驱",
+    existingMappings: [{ character: "驱", english: "drive", pya: "hgo", kind: "pyash-curated" }],
+    cowReviewRequired: true,
+    specificityConflict: true,
+    existingAtomCandidates: [replacement],
+    frequency: { subtlexRank: 100 },
+    modelMatch: {
+      verdict: "match",
+      confidence: "high",
+      matches: [{ targetId: "atom:hdok", senseId: "v:01934845-v", relation: "base", rationale: "The COW-linked WordNet sense fits." }]
+    }
+  }], [{
+    character: "驱",
+    english: "drive",
+    pya: "hgo",
+    status: "accepted",
+    source: "chinese-character-atom-refinery"
+  }]);
+
+  assert.deepEqual({ character: withdrawn.character, pya: withdrawn.pya, status: withdrawn.status }, {
+    character: "驱", pya: "hgo", status: "withdrawn"
+  });
+  assert.deepEqual({ character: accepted.character, pya: accepted.pya, status: accepted.status }, {
+    character: "驱", pya: "hdok", status: "accepted"
+  });
+  assert.equal(accepted.wordNetSenseId, "v:01934845-v");
+});
+
 test("automatically linked characters appear in the accepted vocabulary projection", () => {
   const links = highConfidenceChineseCharacterAtomLinks([{
     character: "你",
-    existingAtomCandidates: [{ kind: "atom", english: "you", pya: "hnan" }],
-    exactAtomCandidates: [{ kind: "atom", english: "you", pya: "hnan" }],
+    existingAtomCandidates: [{ kind: "atom", english: "you", pya: "hnan", wordnetSenses: [candidateSense("hnan")] }],
+    exactAtomCandidates: [{ kind: "atom", english: "you", pya: "hnan", wordnetSenses: [candidateSense("hnan")] }],
     existingMappings: [],
     frequency: { subtlexRank: 3 },
     relatedCharacters: [],
     modelMatch: {
       verdict: "match",
       confidence: "high",
-      matches: [{ targetId: "atom:hnan", relation: "base", rationale: "Direct lexical fit." }],
+      matches: [{ targetId: "atom:hnan", senseId: "n:hnan-sense", relation: "base", rationale: "Direct lexical fit." }],
       rationale: "Direct dictionary match."
     }
   }]);
