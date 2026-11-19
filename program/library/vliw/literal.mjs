@@ -73,6 +73,10 @@ function numberQuoteWords(value, fixed16 = false) {
     : float32QuoteWords(value);
 }
 
+function typedLiteralHeadWord(accusativeOffset, realisOffset) {
+  return 1 + (2 ** accusativeOffset) + (2 ** realisOffset);
+}
+
 function normalizeTypedLiteralSentence(sentence) {
   if (!sentence || typeof sentence !== "object") {
     throw encodingError("unsupported-sentence", "typed literals require a sentence object");
@@ -161,40 +165,27 @@ export function isTypedLiteralSentence(sentence) {
 export function lowerTypedLiteralSentence(sentence) {
   const normalized = normalizeTypedLiteralSentence(sentence);
   const words = new Uint16Array(CODELET_WORD_COUNT);
+  let quoteWords;
   if (normalized.be === "number") {
-    words.set([
-      TYPED_LITERAL_HEAD_WORD,
-      ...numberQuoteWords(normalized.ob.num, normalized.as?.name === "rational"),
-      ACCUSATIVE_CASE_WORD,
-      REALIS_MOOD_WORD
-    ]);
+    quoteWords = numberQuoteWords(normalized.ob.num, normalized.as?.name === "rational");
   } else if (normalized.ob.text.length === 1) {
-    words.set([
-      TYPED_LITERAL_HEAD_WORD,
-      LETTER_QUOTE_WORD,
-      normalized.ob.text.charCodeAt(0),
-      ACCUSATIVE_CASE_WORD,
-      REALIS_MOOD_WORD
-    ]);
+    quoteWords = [LETTER_QUOTE_WORD, normalized.ob.text.charCodeAt(0)];
   } else {
     const chars = Array.from(
       { length: normalized.ob.text.length },
       (_, index) => normalized.ob.text.charCodeAt(index)
     );
-    words.set([
-      TYPED_LITERAL_HEAD_WORD,
-      PARAGRAPH_LETTER_QUOTE_WORD,
-      chars.length,
-      ...chars,
-      ACCUSATIVE_CASE_WORD,
-      REALIS_MOOD_WORD
-    ]);
+    quoteWords = [PARAGRAPH_LETTER_QUOTE_WORD, chars.length, ...chars];
   }
-  const usedWords = normalized.be === "number"
-    ? numberQuoteWords(normalized.ob.num, normalized.as?.name === "rational").length + 3
-    : normalized.ob.text.length === 1
-    ? TYPED_LITERAL_USED_WORD_COUNT
-    : normalized.ob.text.length + 5;
+  const accusativeOffset = quoteWords.length + 1;
+  const realisOffset = accusativeOffset + 1;
+  words.set([
+    typedLiteralHeadWord(accusativeOffset, realisOffset),
+    ...quoteWords,
+    ACCUSATIVE_CASE_WORD,
+    REALIS_MOOD_WORD
+  ]);
+  const usedWords = quoteWords.length + 3;
   return {
     sentence: normalized,
     words,
@@ -205,8 +196,6 @@ export function lowerTypedLiteralSentence(sentence) {
 
 export function decodeTypedLiteralCodelet(input) {
   const decoded = decodeLegacy(input);
-  markerAt(decoded, 0, TYPED_LITERAL_HEAD_WORD, "head");
-
   const quoteItem = decoded.items.find((candidate) => candidate.offset === 1);
   if (
     quoteItem?.kind !== "quote" ||
@@ -220,6 +209,12 @@ export function decodeTypedLiteralCodelet(input) {
   }
   const accusativeOffset = quoteItem.quote.nextOffset;
   const realisOffset = accusativeOffset + 1;
+  markerAt(
+    decoded,
+    0,
+    typedLiteralHeadWord(accusativeOffset, realisOffset),
+    "head"
+  );
   markerAt(decoded, accusativeOffset, ACCUSATIVE_CASE_WORD, "accusative case");
   markerAt(decoded, realisOffset, REALIS_MOOD_WORD, "realis mood");
   const expectedUsedWords = realisOffset + 1;
