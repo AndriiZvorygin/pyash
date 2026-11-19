@@ -1086,6 +1086,9 @@ the primary input/source, `by` supplies a second operand or mapper, `via`
 selects an index, `with` supplies configuration, and `to` names the output.
 Where a term names a value or execution configuration rather than an action,
 the row gives its proposed map shape instead of inventing a verb.
+The structured term/anchor/compound reference is
+[`iwsp-transformer-terms.pya`](iwsp-transformer-terms.pya); it also records
+partial mappings and the GPU compound review note from A.7.
 
 | Term | Candidate Pyash use/signature | Meaning and current status |
 |---|---|---|
