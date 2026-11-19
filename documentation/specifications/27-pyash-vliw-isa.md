@@ -13,25 +13,16 @@ are a compiled representation of the same sentences, not a second semantic
 language. The sentence's mood, verb, cases, values, and dependency effects
 remain authoritative after lowering.
 
-WordNet and SUMO links in the vocabulary catalog are lexical metadata: they
-identify or explain the meaning of canonical Pyash words and compounds. They
-are not tokens in executable sentences and are not serialized into codelets.
-Executable identity comes from the Pyash words and their HNUCs in the sentence.
-A lexical link helps establish the intended concept, but does not by itself
-specify operation details such as accepted value types, numeric precision, or
-failure behavior. For supported VLIW semantics, the shared Rust runtime is the
-reference implementation; its contract is recorded by this specification and
-the semantic-slice reference.
+WordNet and SUMO links are lexical metadata, not executable tokens or codelet
+data. Executable identity comes from Pyash words and HNUCs. Links may clarify a
+concept but do not define operation types, precision, or failure behavior. The
+shared Rust runtime is the reference for supported VLIW semantics.
 
-This specification revives the encoding and execution model in the
-`lwonprom` repository at commit
-`b6ef5eefcea4d10b5a0f09680976377ccfb28a35`. The reference material is
-`lwonprom/documentation/encoding.tex`,
-`lwonprom/documentation/vmOnOpenCL.tex`,
-`lwonprom/program/encoding.c`, and
-`lwonprom/program/translation.c`. No new word allocation, extension bit, or
-sidecar format is defined here. Any implementation that cannot prove
-compatibility with that encoding MUST reject the value.
+Encoding compatibility follows `lwonprom` commit
+`b6ef5eefcea4d10b5a0f09680976377ccfb28a35`, especially
+`documentation/encoding.tex`, `documentation/vmOnOpenCL.tex`,
+`program/encoding.c`, and `program/translation.c`. No word allocation,
+extension bit, or sidecar format is added; unprovable mappings MUST be rejected.
 
 This is an encoding and execution contract. The searchable catalog and
 compiled `.pyac` container built on this contract are defined in
@@ -57,9 +48,8 @@ Pyash command.
 - **HNUC** is a current Pyash semantic identity for a word/case. HNUCs are
   validated by the current compositional-case inventory. They are not silently
   interchangeable with the older `lwonprom` phonological word numbers.
-- **Lexical link** is vocabulary metadata associating a Pyash word or compound
-  with an external lexical sense or concept. It explains vocabulary identity;
-  it does not replace Pyash sentence words or define runtime behavior by itself.
+- **Lexical link** is external vocabulary metadata; it neither replaces Pyash
+  sentence words nor defines runtime behavior.
 - **Canonical bytes** are the little-endian bytes of the exact encoded 16-bit
   words, in codelet order, with no timestamps, addresses, source paths, or
   runtime pointers.
@@ -247,21 +237,16 @@ su name second be myocpfun def
 su name second be myocpfun prah
 ```
 
-Section names MUST be unique, HNUC-encodable, and at most eight HNUC words;
-the packet supports at most 64 sections, with at most 64 codelets in each
-section body. Each section MUST be a valid pure programlet and MUST not read
-or write another section's local state. The
-boundaries lower to ordinary codelets inside the existing flat v1 `.pyac`
-stream; this does not add a container section table or change codelet bytes.
-The source ordinal is retained as `sectionIndex` for identity, not as a result
-ordering constraint. Executors MAY schedule independent sections in any order
-and MUST return each result as its section completes. Thus result order is
-completion order, while the included source ordinal and Pyash name allow
-consumers to associate each value with its section. The deprecated JavaScript
-interpreter is serial and completes sections in source order; Rust CPU and GPU
-executors may complete them in a different order. Any
-dependency between sections disqualifies them from this independent section
-form and must be expressed within an ordered programlet instead.
+Section names MUST be unique, HNUC-encodable, and at most eight HNUC words.
+Packets allow at most 64 sections and 64 codelets per section. Each section
+MUST be a pure programlet that does not access another section's local state.
+Boundaries lower to ordinary codelets in the flat v1 `.pyac` stream; there is
+no section table or codelet-byte change. `sectionIndex` preserves source
+identity but not result order: executors MAY schedule sections independently
+and MUST return results as completed, with ordinal and Pyash name for
+association. The deprecated JavaScript interpreter is serial; Rust CPU/GPU
+executors may complete sections in another order. Cross-section dependencies
+must instead be expressed within one ordered programlet.
 
 ### Hosted PyashForth memory profile
 

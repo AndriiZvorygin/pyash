@@ -16,6 +16,8 @@ test("local maintainer tests configured development branches in an isolated work
   assert.match(runner, /PYA_MASTER_SAFETY_ADDITIONAL_SOURCE_BRANCHES:-dev-vocab dev-vliw-backend/u);
   assert.match(runner, /worktree add -b "\$BRANCH_NAME" "\$WORKTREE" "\$BASE_SHA"/u);
   assert.match(runner, /merge --no-edit "\$merge_sha"/u);
+  assert.match(runner, /resolve_generated_pinyin_conflict/u);
+  assert.match(runner, /node command\/generate_kwon_chinese_pinyin_index\.mjs/u);
   assert.match(runner, /for branch_name in "\$BRANCH" "\$\{source_branch_names\[@\]\}"/u);
   assert.match(runner, /remote branch tips selected for merge/u);
   assert.doesNotMatch(runner, /FINAL_STATUS=remote-divergence/u);
@@ -220,6 +222,95 @@ exit 2
     git(["merge-base", "--is-ancestor", vocabCommit, vliwCommit]);
     assert.equal(fs.existsSync(resultMap["worktree path"].text), false);
     assert.match(fs.readFileSync(path.join(artifactDir, "run.log"), "utf8"), /promoted tested commit/u);
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("runner regenerates the derived Pinyin index when merged vocabularies conflict", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pyash-master-safety-pinyin-conflict-"));
+  const repository = path.join(tempRoot, "repo");
+  const bare = path.join(tempRoot, "remote.git");
+  const fakeBin = path.join(tempRoot, "bin");
+  fs.mkdirSync(path.join(repository, "command"), { recursive: true });
+  fs.mkdirSync(path.join(repository, "program", "library", "translation"), { recursive: true });
+  fs.mkdirSync(fakeBin);
+
+  const git = (args, cwd = repository) =>
+    execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe" }).trim();
+  git(["init", "--quiet"]);
+  git(["config", "user.name", "Safety Fixture"]);
+  git(["config", "user.email", "safety-fixture@example.test"]);
+  fs.copyFileSync(path.join(repoRoot, "command", "run_local_master_safety.sh"), path.join(repository, "command", "run_local_master_safety.sh"));
+  fs.chmodSync(path.join(repository, "command", "run_local_master_safety.sh"), 0o755);
+  fs.writeFileSync(path.join(repository, ".gitignore"), "artifacts/\n");
+  fs.writeFileSync(path.join(repository, "program", "library", "translation", "kwon_chinese_pinyin.pya"), "base index\n");
+  fs.writeFileSync(path.join(repository, "command", "generate_kwon_chinese_pinyin_index.mjs"), `
+import fs from "node:fs";
+fs.writeFileSync("program/library/translation/kwon_chinese_pinyin.pya", "regenerated from merged sources\\n");
+`);
+  git(["add", "."]);
+  git(["commit", "--quiet", "-m", "fixture master"]);
+  git(["branch", "-M", "master"]);
+
+  git(["checkout", "-b", "dev"]);
+  fs.writeFileSync(path.join(repository, "program", "library", "translation", "kwon_chinese_pinyin.pya"), "dev index\n");
+  git(["add", "program/library/translation/kwon_chinese_pinyin.pya"]);
+  git(["commit", "--quiet", "-m", "fixture dev index"]);
+  const devCommit = git(["rev-parse", "HEAD"]);
+
+  git(["checkout", "-b", "dev-vocab", "master"]);
+  fs.writeFileSync(path.join(repository, "program", "library", "translation", "kwon_chinese_pinyin.pya"), "vocab index\n");
+  fs.writeFileSync(path.join(repository, "vocab-source.txt"), "vocab source\n");
+  git(["add", "."]);
+  git(["commit", "--quiet", "-m", "fixture vocab index"]);
+  const vocabCommit = git(["rev-parse", "HEAD"]);
+  git(["branch", "dev-vliw-backend", "master"]);
+  git(["checkout", "master"]);
+  execFileSync("git", ["clone", "--bare", "--quiet", repository, bare], { stdio: "pipe" });
+  git(["remote", "add", "github", bare]);
+  git(["remote", "add", "origin", bare]);
+
+  const fakeNpm = path.join(fakeBin, "npm");
+  fs.writeFileSync(fakeNpm, `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == ci ]]; then exit 0; fi
+if [[ "$1 $2" == "run test:ci" ]]; then
+  printf '  gating 10 files, reporting 2 without gating, excluding 1\\n'
+  printf '# tests 5\\n# pass 5\\n# fail 0\\n# skipped 0\\n# todo 0\\n# duration_ms 12.5\\n'
+  exit 0
+fi
+exit 2
+`);
+  fs.chmodSync(fakeNpm, 0o755);
+
+  try {
+    execFileSync("bash", [path.join(repository, "command", "run_local_master_safety.sh")], {
+      cwd: repository,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: `${fakeBin}:${process.env.PATH}`,
+        PYA_MASTER_SAFETY_REMOTE: "github",
+        PYA_MASTER_SAFETY_BRANCH: "master",
+        PYA_MASTER_SAFETY_REPOSITORY: repository,
+        PYA_MASTER_SAFETY_WORKTREE_PARENT: tempRoot,
+        PYA_MASTER_SAFETY_CODEX_BIN: "/bin/true",
+        PYA_MASTER_SAFETY_LOCK: path.join(tempRoot, "safety.lock")
+      },
+      stdio: "pipe"
+    });
+    const runRoot = path.join(repository, "artifacts", "local-master-safety");
+    const [runId] = fs.readdirSync(runRoot);
+    const result = await pyaFileToJson(path.join(runRoot, runId, "result.pya"));
+    const resultMap = result.memory[0]?.ob?.map;
+    const promoted = resultMap["promoted commit"].text;
+    assert.equal(resultMap.status.text, "promoted");
+    assert.equal(git(["--git-dir", bare, "show", `${promoted}:program/library/translation/kwon_chinese_pinyin.pya`]), "regenerated from merged sources");
+    assert.equal(git(["--git-dir", bare, "show", `${promoted}:vocab-source.txt`]), "vocab source");
+    git(["merge-base", "--is-ancestor", devCommit, promoted]);
+    git(["merge-base", "--is-ancestor", vocabCommit, promoted]);
+    assert.match(fs.readFileSync(path.join(runRoot, runId, "run.log"), "utf8"), /resolved generated Pinyin index/u);
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }

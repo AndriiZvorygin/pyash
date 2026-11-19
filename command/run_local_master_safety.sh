@@ -200,12 +200,38 @@ BRANCH_NAME="local-$BRANCH-safety/$SHORT_SHA-$RUN_ID"
 WORKTREE="$WORKTREE_PARENT/.pyash-$BRANCH-safety-$RUN_ID"
 printf 'testing proposed merge from branch inputs: %s\nworktree: %s\n' "$MERGE_INPUTS" "$WORKTREE"
 git -C "$REPOSITORY" worktree add -b "$BRANCH_NAME" "$WORKTREE" "$BASE_SHA"
+
+resolve_generated_pinyin_conflict() {
+  local conflicted_path
+  conflicted_path=$(git -C "$WORKTREE" diff --name-only --diff-filter=U)
+  if [[ "$conflicted_path" != 'program/library/translation/kwon_chinese_pinyin.pya' ]]; then
+    return 1
+  fi
+
+  printf 'regenerating the conflicted derived Pinyin index from merged source data\n'
+  if ! (cd "$WORKTREE" && npm ci && node command/generate_kwon_chinese_pinyin_index.mjs); then
+    printf 'generated Pinyin index could not be rebuilt; preserving conflict for review\n'
+    return 1
+  fi
+  git -C "$WORKTREE" add -- "$conflicted_path"
+  if [[ -n "$(git -C "$WORKTREE" diff --name-only --diff-filter=U)" ]]; then
+    printf 'additional merge conflicts remain; preserving candidate for review\n'
+    return 1
+  fi
+  git -C "$WORKTREE" -c user.name='Pyash Maintainer' -c user.email='pyash-maintainer@localhost' \
+    commit --no-edit --allow-empty
+  printf 'resolved generated Pinyin index and completed the merge commit\n'
+}
+
 for branch_name in "$BRANCH" "${source_branch_names[@]}"; do
   for remote_name in "${remote_names[@]}"; do
     merge_sha=$(git -C "$REPOSITORY" rev-parse "refs/remotes/$remote_name/$branch_name")
     printf 'merging %s/%s at %s into candidate\n' "$remote_name" "$branch_name" "$merge_sha"
     if ! git -C "$WORKTREE" -c user.name='Pyash Maintainer' -c user.email='pyash-maintainer@localhost' \
       merge --no-edit "$merge_sha"; then
+      if resolve_generated_pinyin_conflict; then
+        continue
+      fi
       printf 'branch tip merge conflict; preserving the candidate worktree for review\n'
       KEEP_WORKTREE=1
       FINAL_STATUS=merge-conflict
