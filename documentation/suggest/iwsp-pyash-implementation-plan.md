@@ -16,9 +16,9 @@ PDF and extracted text are kept outside the repository; see Appendix A.
 
 ### 1.1 What the paper does, in operational terms
 
-iWSP replaces training with authorship. Instead of fitting parameters by gradient
-descent, an LLM writes the parameters and the computation directly in code, in closed
-form, and is told not to train (paper §2, p. 3):
+iWSP as presented in the paper replaces training with authorship. Instead of fitting
+parameters by gradient descent, an LLM writes the parameters and computation directly
+in code, in closed form, and is told not to train (paper §2, p. 3):
 
 > "The model parameters must be set in closed form. [. . .] What you CANNOT do: Run any
 > kind of training, gradient descent, optimizer step, fitting loop, or backprop."
@@ -27,6 +27,11 @@ The loop is: the harness supplies a starting file and a **non-editable evaluatio
 script**; the agent writes a model, the harness evaluates it on a "visible set", and the
 agent revises, for a fixed number of iterations (30–50 for the algorithmic/NLP tasks,
 600 for the visual-cortex search) (paper §2, p. 3; §4.1, p. 6).
+
+That restriction describes the paper's experiment, not a blanket restriction on Pyash.
+Pyash should allow a task to select direct authorship, search, gradient-based updates
+including backpropagation, or a hybrid. The task contract declares which data and
+feedback each method may use; held-out evaluation remains protected and separate.
 
 Two things make this an interesting target for Pyash specifically:
 
@@ -49,12 +54,13 @@ candidate-evolution library. These are building blocks, not yet an integrated iW
 workflow: parameterized model facts, an isolated fixed evaluator, visible/hidden data
 ownership, and the revision/audit loop still need explicit contracts.
 
-The numeric substrate is no longer integer-only. The shared VLIW path now supports
-scalar IEEE float32 and scalar fixed16 in addition to its integer operations. Those
-formats have different range, sign, and resolution properties; neither is declared a
-universal requirement for every task. The paper's float64 examples are evidence about
-the authors' implementations, not a rule that Pyash must reproduce their leakage or
-numeric range before a lower-precision working candidate can count as useful.
+The numeric substrate is no longer integer-only. The shared VLIW path supports scalar
+IEEE float32, scalar fixed16, and typed float32/float64 vector literals in addition to
+integer operations. Those formats have different range, sign, and resolution
+properties; none is a universal requirement for every task. The paper's float64
+examples are evidence about the authors' implementations, not a rule that Pyash must
+reproduce their leakage or numeric range before a lower-precision working candidate can
+count as useful.
 
 ### 1.3 What this plan is and is not
 
@@ -75,10 +81,11 @@ numeric kernels:
 
 1. A task definition fixes the input/output contract, metric, limits, and visible and
    held-out data before candidate search starts.
-2. The agent writes a candidate as Pyash source and inspectable parameter facts. It
-   writes weights and computation in closed form; it does not train on task examples.
+2. The agent writes or updates a candidate as Pyash source and inspectable parameter
+   facts using the method declared by the task: direct authorship, search,
+   gradient-based updates, or a hybrid.
 3. A validator checks syntax, names, declared shapes, resource limits, and the
-   candidate's independence from evaluation data.
+   candidate's access against the task's declared data policy.
 4. A fixed evaluator executes the candidate on the visible split and returns bounded
    feedback. The agent cannot read or modify the evaluator or held-out split.
 5. Each revision records source, parameter facts, parent candidate, score, evaluator
@@ -128,9 +135,9 @@ Every model the paper describes is built from a small set of kernels. Reading Ta
 
 | # | Operation | Required semantics | Evidence | Domain | Status |
 |---|---|---|---|---|---|
-| B1 | Dot product / matrix-vector | Sum of elementwise products over a dimension. Present in every described model. | p. 20–21 | float64 | partial — `produce` in `program/verbs/mathematics/produce.mjs` does this at float64 in the JS verb layer; **does not lower to VLIW** (verified: `lowerSentence` rejects it) |
+| B1 | Dot product / matrix-vector | Sum of elementwise products over a dimension. Present in every described model. | p. 20–21 | float64 | partial — JS `produce` computes a float64 dot product; shared VLIW CPU/GPU supports typed float32/float64 vector literals, but has no dot-product/reduction operation yet |
 | B2 | Matrix-matrix product | Attention needs `QKᵀ` and `AV`. | p. 20–21 | float64 | absent |
-| B3 | Elementwise add / subtract / multiply / divide | Including subtract, which is where sign matters. | p. 20–21 | float64 | partial — integer, scalar float32, and scalar fixed16 arithmetic exist in VLIW; each has distinct range and error semantics, while model-sized tensor execution is absent |
+| B3 | Elementwise add / subtract / multiply / divide | Including subtract, which is where sign matters. | p. 20–21 | float64 | partial — integer, scalar float32, and scalar fixed16 arithmetic exist in VLIW; typed float32/float64 vector literals are supported, while model-sized tensor execution is absent |
 | B4 | ReLU | *"2-neuron ReLU MLP"*, *"residual ReLU MLPs"*, *"4 ReLU knots"*. | p. 21 | float64 | absent |
 | B5 | Softmax | Attention weighting; also *"softmax weights become 10^(4−i)/11111"*. | p. 21 | float64 | absent |
 | B6 | Numerically stable softmax | At the paper's sink scales (1e17, 1e22) a naive softmax overflows; the paper's own models rely on softmax degenerating to *"a plain exponential"*. A stable form (max-subtract) is required, not optional. | p. 21 | float64 | absent |
@@ -186,7 +193,7 @@ predicts recorded responses y"* (p. 4). The agent writes `f`; the harness owns t
 | D4 | Pearson correlation | The brain-path metric (p. 4). | absent |
 | D5 | Ridge regression (closed form) | Harness-side readout of agent-written features (p. 4). The paper is explicit the *agent* must not fit: *"the rules forbid a model from reading any of the brain responses"* (p. 4). | absent |
 | D6 | Feature-count and parameter-count limits | *"rejects a candidate with 10,000 or more features"* (p. 4); *"fewer than 100,000 explicit parameters"* (p. 6). | absent |
-| D7 | Weight-determinism check | *"rerunning each model's weight-writing code on altered task data leaves its weights unchanged"* (p. 3). A direct, checkable property: it is exactly A2/A3 plus a diff. | absent |
+| D7 | Weight-determinism / data-access check | The paper's protocol checks that closed-form weight writing is independent of task examples. Pyash makes this task-selected: direct-authorship tasks may require it; optimization tasks instead constrain visible-data access and protect held-out data. | absent |
 
 ### 2.5 Group E — Agent loop and provenance
 
@@ -199,17 +206,18 @@ predicts recorded responses y"* (p. 4). The agent writes `f`; the harness owns t
 
 ### 2.6 Summary of the gap
 
-The main gap is not one missing kernel: Pyash has useful arithmetic, vectors,
-programlets, independent sections, bounded function evolution, and durable artifact
-primitives, but they are not yet assembled into the task/evaluator/candidate lifecycle
-described above. Model-shaped parameter facts, an isolated immutable evaluator, a
-whole-run checkpoint identity, and an independent audit path remain to be designed.
+The main gap is not one missing kernel: Pyash has useful arithmetic, typed vector
+literals, programlets, independent sections, bounded function evolution, and durable
+artifact primitives, but they are not yet assembled into the task/evaluator/candidate
+lifecycle described above. Model-shaped parameter facts, an isolated immutable
+evaluator, a whole-run checkpoint identity, and an independent audit path remain to be
+designed.
 
-At the execution level, VLIW currently has scalar float32 and fixed16 alongside
-integer and boolean behavior, plus elementwise vector operations and programlet control
-flow. It does not yet provide reductions such as dot product, general matrix/tensor
-execution, or a weight data plane in `.pyac`. These are specific capability gaps, not
-evidence that every iWSP task requires float64 or GPU execution.
+At the execution level, VLIW has scalar float32 and fixed16 alongside integer and
+boolean behavior, plus typed float32/float64 vector literals and programlet control
+flow. It does not yet provide vector reductions such as dot product, general
+matrix/tensor execution, or a weight data plane in `.pyac`. These are specific
+capability gaps, not evidence that every iWSP task requires float64 or GPU execution.
 
 ---
 
@@ -225,9 +233,9 @@ correctness and interpretability criteria.
 
 The shared Rust semantics in `rust/pyac-vliw-core/src/semantics_runtime.rs` include
 integer and boolean behavior, scalar IEEE float32 (`VALUE_FLOAT32`), scalar fixed16
-(`VALUE_FIXED16`), and elementwise integer vectors. The legacy float quote sort also
-encodes finite IEEE float32 and float64 vector literals, with little-endian payloads;
-the shared CPU/GPU runtime returns both as typed vectors. A single 16-word codelet
+(`VALUE_FIXED16`), and integer vectors. The float quote sort also encodes finite IEEE
+float32 and float64 vector literals, with little-endian payloads; the shared CPU/GPU
+runtime returns both as typed vectors. A single 16-word codelet
 holds at most five unnamed float32 values or three unnamed float64 values (fewer when
 the name phrase consumes words). Longer indexed sentence serialization is not yet
 long-vector execution in the Rust runtime. Programlet slots remain scalar typed
@@ -267,7 +275,8 @@ Choose formats per task and operation based on measured behavior:
 
 Use the least costly representation that passes the task's declared criterion. Keep
 reference and evaluator arithmetic sufficiently independent to detect candidate
-errors. Float32 and fixed16 already provide two points for empirical comparison.
+errors. Scalar float32/fixed16 and float32/float64 vector values provide current
+representation points for comparison; vector reduction arithmetic remains future work.
 Float16, wider fixed numerators, signed fixed-point, and lower-bit parameter encodings
 should be added only when a task or benchmark demonstrates their value. No
 representation is rejected merely because it does not reproduce a paper's reported
@@ -298,7 +307,7 @@ following record types or `be` values already exist.
 | Concept | Information the candidate/evaluator must preserve |
 |---|---|
 | Feature/input | Name, value type, dimensions, and role in the task. |
-| Parameter | Stable name, values or reproducible closed-form initializer, numeric format, dimensions, and consumers. |
+| Parameter | Stable name, values or reproducible initializer/update history, numeric format, dimensions, and consumers. |
 | Computation | Pyash source describing operations and control/data dependencies. |
 | Connection | Which named result feeds which later computation. |
 | Candidate/model | Source revision, referenced facts, task contract, and enough structure to count parameters and summarize the candidate. |
@@ -312,15 +321,15 @@ the needed terms have been validated.
 ### 4.2 Operations to express
 
 The authoring operations (A1–A8) describe behaviors, not proposed verb names. An
-implementation must make it possible to identify parameters, initialize them without
-training, inspect values, express reuse/ties, describe computation and dependencies,
-and produce a structural summary. Each behavior needs a clear Pyash sentence/case
-signature and a testable contract before implementation.
+implementation must make it possible to identify parameters, initialize and update
+them using the task's declared method, inspect values, express reuse/ties, describe
+computation and dependencies, and produce a structural summary. Each behavior needs a
+clear Pyash sentence/case signature and a testable contract before implementation.
 
-These distinctions matter for auditability: element assignment, closed-form
-initialization, and parameter reuse are different behaviors even if they eventually
-share a storage representation. A single opaque "build model" operation would hide the
-authorship the method is intended to expose.
+These distinctions matter for auditability: element assignment, initialization,
+optimization updates, and parameter reuse are different behaviors even if they
+eventually share a storage representation. A single opaque "build model" operation
+would hide the candidate changes the method is intended to expose.
 
 ### 4.3 Why shape belongs to the candidate facts
 
@@ -331,7 +340,8 @@ inspectable so that:
 
 - A6 (parameter count) is a property of the fact set, computable without executing
   the model.
-- The weight-determinism check (D7) is a diff of two fact sets.
+- Candidate parameter changes can be inspected as fact-set diffs; D7 applies when the
+  selected task protocol requires data-independent, direct weight authorship.
 - The text-bottleneck test (A8) can be produced from the fact set plus the structure
   map.
 
@@ -509,7 +519,7 @@ does mean the split between "pack payload" and "host facts" must be explicit (§
 
 ### 6.1 Candidate generation and revision
 
-The paper's loop, restated operationally:
+The paper's loop, restated operationally for its direct-authorship protocol:
 
 | Paper step | Paper location | Pyash operation |
 |---|---|---|
@@ -520,7 +530,7 @@ The paper's loop, restated operationally:
 | Iterate 30–50 times (600 for visual cortex) | p. 3, p. 6 | loop control |
 | Compress after accuracy is reached | p. 4 | A6 + pruning |
 | Audit interpretability of the edits | p. 3 | E4 |
-| Check weights do not depend on task data | p. 3 | D7 |
+| Check weights do not depend on task data (when this protocol is selected) | p. 3 | D7 |
 | Re-evaluate on the hidden set | p. 3 | D2 + D3/D4 on the hidden split |
 
 The task contract must state exactly what the agent receives: its current Pyash source,
@@ -539,8 +549,9 @@ analogue of the paper's harness-side checks:
   width; every parameter's declared shape matches its consumers).
 - The model contains no unbound names.
 - Feature and parameter counts are within D6's limits.
-- If the candidate declares a training-like dependency on visible-set data, the
-  weight-determinism check (D7) catches it.
+- Enforce the task's data-use policy: direct-authorship protocols can require D7;
+  optimization protocols can use declared visible data while protecting held-out data
+  and recording the update method and inputs.
 
 ### 6.3 Feedback
 
@@ -677,39 +688,50 @@ Housekeeper contracts where they fit. New vocabulary, storage shapes, and APIs a
 selected only after checking the current Pyash cases, vocabulary inventory, and
 relevant specifications. Numeric formats are not a gate to the first framework slice.
 
+Current position: shared VLIW execution can carry typed float32/float64 vector
+literals, but the shared runtime does not yet reduce them. The next implementation
+sequence is the task/trust contract (Stage 0), followed by a CPU vector-scoring slice
+whose first kernel is dot product (Stage 1). This adds an operation only in service of
+that runnable slice.
+
 ### Stage 0 — Fix the task and trust contract
 
 Define one small deterministic task and write down, before implementation:
 
 - candidate inputs and outputs, allowed source/fact changes, and resource limits;
-- the visible feedback available during search and the exact metric;
-- which task examples/labels and evaluator internals are hidden from the agent;
+- the candidate update method or permitted method family, its allowed data, visible
+  feedback, and exact metric;
+- which examples and labels are visible to candidate updates, and which held-out data
+  and evaluator internals remain protected;
 - the sealed held-out evaluation step, iteration limit, and independent audit role;
 - what constitutes a reproducible run and which artifacts identify it.
 
-**Acceptance:** the roles and information boundaries are unambiguous; a reviewer can
-state what the candidate author may read or change and what the evaluator alone owns.
-No new Pyash surface is committed at this stage.
+**Acceptance:** the roles, method choices, and information boundaries are unambiguous;
+a reviewer can state what the candidate author may read or change and what the evaluator
+alone owns. No new Pyash surface is committed at this stage.
 
-### Stage 1 — Deliver one CPU vertical slice
+### Stage 1 — Deliver one CPU vertical slice with dot product
 
-Use a small algorithmic task with a deterministic reference and a compact candidate.
-The agent-authored artifact remains readable Pyash source plus any named facts needed
-for its parameters. Run it through the ordinary CPU execution path first. Reuse the
-existing refinery/run recording and criterion machinery where their contracts fit;
-confirm integration points in code rather than creating parallel abstractions.
+Use a small deterministic vector-scoring task with a known reference and compact
+candidate. Its first shared VLIW kernel is dot product over equal-length float vectors,
+which exercises the new float-vector values and gives the CPU slice a real numeric
+operation. Specify accumulation precision, length mismatch and empty-vector behavior,
+and CPU/GPU agreement before adding the operation. The candidate remains readable Pyash
+source plus named parameter facts. Run it through the ordinary CPU path first, reusing
+existing refinery/run recording and criterion machinery where their contracts fit.
 
 **Acceptance:** a valid candidate runs end-to-end; a deliberately wrong candidate
-scores worse; the task result names the source candidate and task version; a clean run
-can be reproduced without GPU availability.
+scores worse; dot-product edge cases are covered; the task result names the source
+candidate and task version; and a clean run is reproducible without GPU availability.
 
 ### Stage 2 — Isolate and verify the evaluator
 
 Implement the fixed evaluator as a trusted boundary separate from candidate-authored
 code. Validate candidate syntax, referenced names, permitted resources, and declared
-parameter limits before execution. Keep visible feedback bounded and defer held-out
-access until the search is sealed. Check that candidate parameter generation is
-independent of evaluation examples where the task requires closed-form authorship.
+parameter limits before execution. Enforce the task's declared data-access policy,
+keep visible feedback bounded, and defer held-out access until the search is sealed.
+Record the candidate update method and its permitted inputs so direct authorship,
+search, gradient-based updates, and hybrids can be audited under the same boundary.
 
 **Acceptance:** tests prove that candidate code cannot read or modify evaluator
 internals or held-out material; malformed/over-limit candidates fail before scoring;
@@ -719,27 +741,30 @@ is not returned into the search loop.
 ### Stage 3 — Make candidate history reproducible and auditable
 
 Connect each candidate revision to its source, parameter facts, parent revision, task
-and evaluator versions, visible score, and artifact hashes. Use Pyash's existing
-artifact/newspaper and checkpoint mechanisms where possible. Add a structural diff
-that lets an independent reviewer understand what changed between revisions.
+and evaluator versions, update method/configuration, visible score, and artifact hashes.
+For stochastic or gradient-based updates, record the relevant seed, optimizer settings,
+and permitted data identity. Use Pyash's existing artifact/newspaper and checkpoint
+mechanisms where possible. Add a structural diff that lets an independent reviewer
+understand what changed between revisions.
 
 **Acceptance:** a checkpoint can reconstruct and rerun its candidate; the recorded
 result matches; a two-revision fixture produces a useful source/fact diff and complete
 provenance; interrupted work can resume without changing the task or evaluator
 identity.
 
-### Stage 4 — Add bounded author/revise/evaluate search
+### Stage 4 — Add bounded candidate-update/evaluate search
 
 Only after the vertical slice and trust boundary work, add the bounded iteration loop.
-The agent writes parameters and computation in closed form; no gradient descent,
-optimizer, backpropagation, or candidate access to protected labels is introduced.
-Provide visible score feedback and a strict revision cap. Run the independent audit on
+Allow direct authorship, deterministic search, gradient-based optimization (including
+backpropagation), or hybrids according to the task and supported runtime. Record the
+chosen method, its data access, and compute budget. Keep protected held-out data outside
+the candidate loop; provide bounded visible feedback and a strict revision cap. Audit
 candidate changes, then seal and evaluate the selected candidate on held-out data.
 
 **Acceptance:** a small fixture shows improvement from a poor candidate to a correct
-one; a deliberately data-dependent weight writer is rejected; iteration limits,
-resume, audit, and held-out sequencing are covered by tests; each step is inspectable
-in recorded artifacts.
+one; attempts to access protected held-out data are rejected; iteration limits, resume,
+update-method provenance, audit, and held-out sequencing are covered by tests; each step
+is inspectable in recorded artifacts.
 
 ### Stage 5 — Expand candidate representation and operations from task evidence
 
@@ -814,12 +839,12 @@ rules. Do not add an undocumented sidecar merely to reach the GPU sooner.
 
 ### 9.4 Numeric format selection
 
-Float32 and fixed16 are implemented scalar formats; their task suitability remains an
-empirical question. For each pilot, record error/score, stability, sign/range needs,
-CPU/GPU agreement, memory, and throughput. Consider float16, wider fixed numerators,
-signed fixed-point, or lower-bit weights only when those measurements identify a
-benefit. Paper-reported float64 requirements are task-specific evidence, not a global
-format rule.
+Scalar float32 and fixed16, plus typed float32/float64 vector literals, are implemented;
+their task suitability remains an empirical question. For each pilot, record
+error/score, stability, sign/range needs, CPU/GPU agreement, memory, and throughput.
+Consider float16, wider fixed numerators, signed fixed-point, or lower-bit weights only
+when those measurements identify a benefit. Paper-reported float64 requirements are
+task-specific evidence, not a global format rule.
 
 ### 9.5 Evaluator independence and replay
 
