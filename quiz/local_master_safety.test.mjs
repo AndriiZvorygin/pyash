@@ -12,12 +12,16 @@ const read = (name) => fs.readFileSync(path.join(repoRoot, "command", name), "ut
 
 test("local maintainer tests configured development branches in an isolated worktree", () => {
   const runner = read("run_local_master_safety.sh");
+  const tierRunner = fs.readFileSync(path.join(repoRoot, "command", "run_test_tiers.mjs"), "utf8");
   assert.match(runner, /refs\/heads\/\$source_branch:refs\/remotes\/\$remote_name\/\$source_branch/u);
   assert.match(runner, /PYA_MASTER_SAFETY_ADDITIONAL_SOURCE_BRANCHES:-dev-vocab dev-vliw-backend/u);
   assert.match(runner, /worktree add -b "\$BRANCH_NAME" "\$WORKTREE" "\$BASE_SHA"/u);
   assert.match(runner, /merge --no-edit "\$merge_sha"/u);
   assert.match(runner, /resolve_generated_pinyin_conflict/u);
   assert.match(runner, /node command\/generate_kwon_chinese_pinyin_index\.mjs/u);
+  assert.match(runner, /remote input advanced during validation/u);
+  assert.match(runner, /MAX_INPUT_REFRESHES=2/u);
+  assert.match(tierRunner, /concurrency: CI_TEST_CONCURRENCY/u);
   assert.match(runner, /for branch_name in "\$BRANCH" "\$\{source_branch_names\[@\]\}"/u);
   assert.match(runner, /remote branch tips selected for merge/u);
   assert.doesNotMatch(runner, /FINAL_STATUS=remote-divergence/u);
@@ -311,6 +315,102 @@ exit 2
     git(["merge-base", "--is-ancestor", devCommit, promoted]);
     git(["merge-base", "--is-ancestor", vocabCommit, promoted]);
     assert.match(fs.readFileSync(path.join(runRoot, runId, "run.log"), "utf8"), /resolved generated Pinyin index/u);
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test("runner merges and retests a source branch that advances during CI", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pyash-master-safety-stale-input-"));
+  const repository = path.join(tempRoot, "repo");
+  const bare = path.join(tempRoot, "remote.git");
+  const fakeBin = path.join(tempRoot, "bin");
+  const testCount = path.join(tempRoot, "test-count");
+  fs.mkdirSync(path.join(repository, "command"), { recursive: true });
+  fs.mkdirSync(fakeBin);
+
+  const git = (args, cwd = repository) =>
+    execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe" }).trim();
+  git(["init", "--quiet"]);
+  git(["config", "user.name", "Safety Fixture"]);
+  git(["config", "user.email", "safety-fixture@example.test"]);
+  fs.copyFileSync(path.join(repoRoot, "command", "run_local_master_safety.sh"), path.join(repository, "command", "run_local_master_safety.sh"));
+  fs.chmodSync(path.join(repository, "command", "run_local_master_safety.sh"), 0o755);
+  fs.writeFileSync(path.join(repository, ".gitignore"), "artifacts/\n");
+  fs.writeFileSync(path.join(repository, "base.txt"), "base\n");
+  git(["add", "."]);
+  git(["commit", "--quiet", "-m", "fixture master"]);
+  git(["branch", "-M", "master"]);
+
+  git(["checkout", "-b", "dev"]);
+  fs.writeFileSync(path.join(repository, "dev-source.txt"), "dev\n");
+  git(["add", "dev-source.txt"]);
+  git(["commit", "--quiet", "-m", "fixture dev"]);
+
+  git(["checkout", "-b", "dev-vocab", "master"]);
+  fs.writeFileSync(path.join(repository, "vocab-initial.txt"), "initial vocab\n");
+  git(["add", "vocab-initial.txt"]);
+  git(["commit", "--quiet", "-m", "fixture initial vocab"]);
+  const initialVocabCommit = git(["rev-parse", "HEAD"]);
+  fs.writeFileSync(path.join(repository, "vocab-late.txt"), "late vocab update\n");
+  git(["add", "vocab-late.txt"]);
+  git(["commit", "--quiet", "-m", "fixture late vocab"]);
+  const lateVocabCommit = git(["rev-parse", "HEAD"]);
+  git(["branch", "late-vocab-holder", lateVocabCommit]);
+  git(["checkout", "master"]);
+  git(["branch", "-f", "dev-vocab", initialVocabCommit]);
+  git(["branch", "dev-vliw-backend", "master"]);
+  execFileSync("git", ["clone", "--bare", "--quiet", repository, bare], { stdio: "pipe" });
+  git(["remote", "add", "github", bare]);
+  git(["remote", "add", "origin", bare]);
+
+  const fakeNpm = path.join(fakeBin, "npm");
+  fs.writeFileSync(fakeNpm, `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == ci ]]; then exit 0; fi
+if [[ "$1 $2" == "run test:ci" ]]; then
+  count=0
+  if [[ -f "${testCount}" ]]; then read -r count < "${testCount}"; fi
+  count=$((count + 1))
+  printf '%s\\n' "$count" > "${testCount}"
+  if (( count == 1 )); then
+    git --git-dir "${bare}" update-ref refs/heads/dev-vocab "${lateVocabCommit}"
+  fi
+  printf '  gating 10 files, reporting 2 without gating, excluding 1\\n'
+  printf '# tests 5\\n# pass 5\\n# fail 0\\n# skipped 0\\n# todo 0\\n# duration_ms 12.5\\n'
+  exit 0
+fi
+exit 2
+`);
+  fs.chmodSync(fakeNpm, 0o755);
+
+  try {
+    execFileSync("bash", [path.join(repository, "command", "run_local_master_safety.sh")], {
+      cwd: repository,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: `${fakeBin}:${process.env.PATH}`,
+        PYA_MASTER_SAFETY_REMOTE: "github",
+        PYA_MASTER_SAFETY_BRANCH: "master",
+        PYA_MASTER_SAFETY_REPOSITORY: repository,
+        PYA_MASTER_SAFETY_WORKTREE_PARENT: tempRoot,
+        PYA_MASTER_SAFETY_CODEX_BIN: "/bin/true",
+        PYA_MASTER_SAFETY_LOCK: path.join(tempRoot, "safety.lock")
+      },
+      stdio: "pipe"
+    });
+    const runRoot = path.join(repository, "artifacts", "local-master-safety");
+    const [runId] = fs.readdirSync(runRoot);
+    const artifactDir = path.join(runRoot, runId);
+    const result = await pyaFileToJson(path.join(artifactDir, "result.pya"));
+    const resultMap = result.memory[0]?.ob?.map;
+    const promoted = resultMap["promoted commit"].text;
+    assert.equal(resultMap.status.text, "promoted");
+    assert.equal(fs.readFileSync(testCount, "utf8").trim(), "2");
+    assert.equal(git(["--git-dir", bare, "show", `${promoted}:vocab-late.txt`]), "late vocab update");
+    git(["merge-base", "--is-ancestor", lateVocabCommit, promoted]);
+    assert.match(fs.readFileSync(path.join(artifactDir, "run.log"), "utf8"), /merge remote updates and revalidate \(1\/2\)/u);
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }

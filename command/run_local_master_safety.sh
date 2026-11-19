@@ -186,9 +186,11 @@ done
 
 BASE_SHA=$(git -C "$REPOSITORY" rev-parse "refs/remotes/$REMOTE/$BRANCH")
 DEV_SHA=$(git -C "$REPOSITORY" rev-parse "refs/remotes/$REMOTE/$DEV_BRANCH")
+declare -A snapshot_shas=()
 for branch_name in "$BRANCH" "${source_branch_names[@]}"; do
   for remote_name in "${remote_names[@]}"; do
     branch_sha=$(git -C "$REPOSITORY" rev-parse "refs/remotes/$remote_name/$branch_name")
+    snapshot_shas["$remote_name/$branch_name"]=$branch_sha
     if [[ -n "$MERGE_INPUTS" ]]; then MERGE_INPUTS+=" "; fi
     MERGE_INPUTS+="$remote_name/$branch_name=$branch_sha"
   done
@@ -242,43 +244,49 @@ done
 CANDIDATE_COMMIT=$(git -C "$WORKTREE" rev-parse HEAD)
 printf 'proposed merge commit: %s\n' "$CANDIDATE_COMMIT"
 
-printf '\n== dependency install ==\n'
-(cd "$WORKTREE" && npm ci)
-
 suite_attempt=0
 repair_attempt=0
-while :; do
-  suite_attempt=$((suite_attempt + 1))
-  printf '\n== full test suite attempt %s ==\n' "$suite_attempt"
-  suite_log="$ARTIFACT_DIR/test-suite-attempt-$(printf '%02d' "$suite_attempt").log"
-  suite_status=0
-  if (cd "$WORKTREE" && npm run test:ci) 2>&1 | tee "$suite_log"; then
-    suite_status=0
-  else
-    suite_status=$?
-  fi
-  TEST_SUMMARY=$(sed -n -E 's/^.* (tests|pass|fail|skipped|todo) ([0-9]+)$/\1 \2/p; s/^.* duration_ms ([0-9.]+)$/duration_ms \1/p' "$suite_log" | awk 'NF { if (summary) summary = summary "; "; summary = summary $0 } END { print summary }')
-  TIER_SUMMARY=$(sed -n -E '/^  gating [0-9]+ files, reporting [0-9]+ without gating, excluding [0-9]+$/p' "$suite_log" | tail -1)
-  if (( suite_status == 0 )); then
-    FINAL_STATUS=passed
-    break
-  fi
-
-  if (( repair_attempt >= MAX_REPAIRS )); then
-    printf 'full suite failed after %s repair attempts; preserving candidate worktree for review\n' "$repair_attempt"
+run_candidate_suite() {
+  printf '\n== dependency install ==\n'
+  if ! (cd "$WORKTREE" && npm ci); then
+    printf 'dependency install failed; preserving candidate for review\n'
     KEEP_WORKTREE=1
-    FINAL_STATUS=failed-needs-review
-    break
+    FINAL_STATUS=dependency-install-failed
+    return 1
   fi
 
-  repair_attempt=$((repair_attempt + 1))
-  failure_log="$suite_log"
-  prompt="$ARTIFACT_DIR/codex-repair-prompt-$(printf '%02d' "$repair_attempt").md"
-  response="$ARTIFACT_DIR/codex-repair-result-$(printf '%02d' "$repair_attempt").md"
-  evidence_relative="artifacts/local-safety-evidence/test-suite-attempt-$(printf '%02d' "$suite_attempt").log"
-  mkdir -p "$WORKTREE/$(dirname -- "$evidence_relative")"
-  cp "$failure_log" "$WORKTREE/$evidence_relative"
-  cat > "$prompt" <<EOF
+  while :; do
+    suite_attempt=$((suite_attempt + 1))
+    printf '\n== full test suite attempt %s ==\n' "$suite_attempt"
+    suite_log="$ARTIFACT_DIR/test-suite-attempt-$(printf '%02d' "$suite_attempt").log"
+    suite_status=0
+    if (cd "$WORKTREE" && npm run test:ci) 2>&1 | tee "$suite_log"; then
+      suite_status=0
+    else
+      suite_status=$?
+    fi
+    TEST_SUMMARY=$(sed -n -E 's/^.* (tests|pass|fail|skipped|todo) ([0-9]+)$/\1 \2/p; s/^.* duration_ms ([0-9.]+)$/duration_ms \1/p' "$suite_log" | awk 'NF { if (summary) summary = summary "; "; summary = summary $0 } END { print summary }')
+    TIER_SUMMARY=$(sed -n -E '/^  gating [0-9]+ files, reporting [0-9]+ without gating, excluding [0-9]+$/p' "$suite_log" | tail -1)
+    if (( suite_status == 0 )); then
+      FINAL_STATUS=passed
+      break
+    fi
+
+    if (( repair_attempt >= MAX_REPAIRS )); then
+      printf 'full suite failed after %s repair attempts; preserving candidate worktree for review\n' "$repair_attempt"
+      KEEP_WORKTREE=1
+      FINAL_STATUS=failed-needs-review
+      return 1
+    fi
+
+    repair_attempt=$((repair_attempt + 1))
+    failure_log="$suite_log"
+    prompt="$ARTIFACT_DIR/codex-repair-prompt-$(printf '%02d' "$repair_attempt").md"
+    response="$ARTIFACT_DIR/codex-repair-result-$(printf '%02d' "$repair_attempt").md"
+    evidence_relative="artifacts/local-safety-evidence/test-suite-attempt-$(printf '%02d' "$suite_attempt").log"
+    mkdir -p "$WORKTREE/$(dirname -- "$evidence_relative")"
+    cp "$failure_log" "$WORKTREE/$evidence_relative"
+    cat > "$prompt" <<EOF
 # Local master maintainer full-suite repair
 
 This fresh local worktree contains the proposed promotion from these fetched branch inputs: $MERGE_INPUTS. Its full repository CI-tier suite failed; inspect this in-worktree test output:
@@ -289,28 +297,30 @@ Repair the actual underlying code or test defect with the smallest appropriate c
 
 If the failure is environmental, nondeterministic, or cannot be safely repaired from the evidence, leave the code unchanged and explain why rather than guessing.
 EOF
-  printf '\n== Luna repair attempt %s ==\n' "$repair_attempt"
-  if timeout --signal=TERM --kill-after=60s "${PYA_MASTER_SAFETY_CODEX_TIMEOUT:-90m}" \
-    "$CODEX" exec \
-      --model "$MODEL" \
-      --config "model_reasoning_effort=\"$REASONING\"" \
-      --sandbox danger-full-access \
-      --ignore-user-config \
-      --cd "$WORKTREE" \
-      --ephemeral \
-      --json \
-      --output-last-message "$response" \
-      - < "$prompt" \
-      > "$ARTIFACT_DIR/codex-repair-attempt-$(printf '%02d' "$repair_attempt").jsonl" \
-      2> "$ARTIFACT_DIR/codex-repair-attempt-$(printf '%02d' "$repair_attempt").stderr.log"; then
-    printf 'Codex repair attempt completed.\n'
-  else
-    codex_status=$?
-    printf 'Codex repair attempt exited with status %s; full suite will be rerun to verify current state.\n' "$codex_status"
-  fi
-done
+    printf '\n== Luna repair attempt %s ==\n' "$repair_attempt"
+    if timeout --signal=TERM --kill-after=60s "${PYA_MASTER_SAFETY_CODEX_TIMEOUT:-90m}" \
+      "$CODEX" exec \
+        --model "$MODEL" \
+        --config "model_reasoning_effort=\"$REASONING\"" \
+        --sandbox danger-full-access \
+        --ignore-user-config \
+        --cd "$WORKTREE" \
+        --ephemeral \
+        --json \
+        --output-last-message "$response" \
+        - < "$prompt" \
+        > "$ARTIFACT_DIR/codex-repair-attempt-$(printf '%02d' "$repair_attempt").jsonl" \
+        2> "$ARTIFACT_DIR/codex-repair-attempt-$(printf '%02d' "$repair_attempt").stderr.log"; then
+      printf 'Codex repair attempt completed.\n'
+    else
+      codex_status=$?
+      printf 'Codex repair attempt exited with status %s; full suite will be rerun to verify current state.\n' "$codex_status"
+    fi
+  done
 
-if [[ "$FINAL_STATUS" == passed ]]; then
+  if [[ "$FINAL_STATUS" != passed ]]; then
+    return 1
+  fi
   if [[ -n "$(git -C "$WORKTREE" status --porcelain --untracked-files=all)" ]]; then
     printf '\n== record verified repair on merge candidate ==\n'
     git -C "$WORKTREE" add -A
@@ -319,12 +329,13 @@ if [[ "$FINAL_STATUS" == passed ]]; then
       printf 'refusing to promote protected paths; candidate left in worktree:\n%s\n' "$forbidden"
       KEEP_WORKTREE=1
       FINAL_STATUS=passed-uncommitted-protected-paths
+      return 1
     elif ! git -C "$WORKTREE" -c user.name='Pyash Maintainer' -c user.email='pyash-maintainer@localhost' \
       commit -m "repair full-suite failures before promoting dev $SHORT_SHA"; then
       KEEP_WORKTREE=1
       KEEP_BRANCH=1
       FINAL_STATUS=repair-commit-failed
-      exit 1
+      return 1
     else
       git -C "$WORKTREE" diff --binary "$BASE_SHA" HEAD > "$ARTIFACT_DIR/verified-repair.patch"
       CANDIDATE_COMMIT=$(git -C "$WORKTREE" rev-parse HEAD)
@@ -332,8 +343,71 @@ if [[ "$FINAL_STATUS" == passed ]]; then
       printf 'verified repair is recorded on the tested merge candidate\n'
     fi
   fi
+  CANDIDATE_COMMIT=$(git -C "$WORKTREE" rev-parse HEAD)
   printf 'full CI-tier suite passed for all fetched branch tips\n'
-fi
+  return 0
+}
+
+if ! run_candidate_suite; then exit 1; fi
+
+MAX_INPUT_REFRESHES=2
+input_refreshes=0
+while :; do
+  changed_inputs=()
+  for remote_name in "${remote_names[@]}"; do
+    fetch_refspecs=("+refs/heads/$BRANCH:refs/remotes/$remote_name/$BRANCH")
+    for branch_name in "${source_branch_names[@]}"; do
+      fetch_refspecs+=("+refs/heads/$branch_name:refs/remotes/$remote_name/$branch_name")
+    done
+    git -C "$REPOSITORY" fetch --no-tags "$remote_name" "${fetch_refspecs[@]}"
+  done
+
+  latest_inputs=""
+  for branch_name in "$BRANCH" "${source_branch_names[@]}"; do
+    for remote_name in "${remote_names[@]}"; do
+      input_key="$remote_name/$branch_name"
+      latest_sha=$(git -C "$REPOSITORY" rev-parse "refs/remotes/$input_key")
+      if [[ -n "$latest_inputs" ]]; then latest_inputs+=" "; fi
+      latest_inputs+="$input_key=$latest_sha"
+      if [[ "$latest_sha" != "${snapshot_shas[$input_key]}" ]]; then
+        printf 'remote input advanced during validation: %s %s -> %s\n' \
+          "$input_key" "${snapshot_shas[$input_key]}" "$latest_sha"
+        snapshot_shas["$input_key"]=$latest_sha
+        if ! git -C "$WORKTREE" merge-base --is-ancestor "$latest_sha" HEAD; then
+          changed_inputs+=("$input_key=$latest_sha")
+        fi
+      fi
+    done
+  done
+  MERGE_INPUTS=$latest_inputs
+  if (( ${#changed_inputs[@]} == 0 )); then
+    break
+  fi
+  if (( input_refreshes >= MAX_INPUT_REFRESHES )); then
+    printf 'remote branches kept advancing during validation; preserving the tested candidate without promoting stale inputs\n'
+    KEEP_WORKTREE=1
+    KEEP_BRANCH=1
+    FINAL_STATUS=stale-inputs
+    exit 1
+  fi
+
+  input_refreshes=$((input_refreshes + 1))
+  printf '\n== merge remote updates and revalidate (%s/%s) ==\n' "$input_refreshes" "$MAX_INPUT_REFRESHES"
+  for changed_input in "${changed_inputs[@]}"; do
+    IFS='=' read -r input_key merge_sha <<< "$changed_input"
+    printf 'merging refreshed %s at %s into candidate\n' "$input_key" "$merge_sha"
+    if ! git -C "$WORKTREE" -c user.name='Pyash Maintainer' -c user.email='pyash-maintainer@localhost' \
+      merge --no-edit "$merge_sha"; then
+      if resolve_generated_pinyin_conflict; then continue; fi
+      printf 'refreshed branch tip conflict; preserving candidate for review\n'
+      KEEP_WORKTREE=1
+      FINAL_STATUS=merge-conflict
+      exit 1
+    fi
+  done
+  CANDIDATE_COMMIT=$(git -C "$WORKTREE" rev-parse HEAD)
+  if ! run_candidate_suite; then exit 1; fi
+done
 
 if [[ "$FINAL_STATUS" == passed ]]; then
   PROMOTED_COMMIT=$(git -C "$WORKTREE" rev-parse HEAD)
