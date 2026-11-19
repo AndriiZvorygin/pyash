@@ -15,12 +15,13 @@ The first executable slice uses:
 ob num 1 to num 1 be plus do
 ```
 
-The JavaScript reference backend accepts unsigned 16-bit `ob num A to num B`
-plus. Each typed operand phrase is encoded in `quoteType, value, case-HNUC`
-order. The `ob` phrase ends in its accusative HNUC; the second phrase ends in
-the HNUC for its actual case, such as destination (`to`) or source (`from`).
-Numeric plus saturates at `0xFFFF`, subtract floors at zero, divide returns the
-integer quotient, and divide by zero is an explicit execution error.
+The shared Rust VLIW runtime accepts unsigned 16-bit
+`ob num A to num B be plus do`. Each typed operand phrase is encoded in
+`quoteType, value, case-HNUC` order. The `ob` phrase ends in its accusative
+HNUC; the second phrase ends in the HNUC for its actual case, such as
+destination (`to`) or source (`from`). Numeric plus saturates at `0xFFFF`,
+subtract floors at zero, divide returns the integer quotient, and divide by
+zero is an explicit execution error.
 
 The fixed 16-word codelet has this nine-word prefix:
 
@@ -28,10 +29,11 @@ The fixed 16-word codelet has this nine-word prefix:
 0149 881D A 245E 881D B 243E 8A64 295E
 ```
 
-Seven zero words complete the vector. The decoder validates markers, numeric
-quote fields, and the zero tail before returning the canonical sentence. The
-reference implementation is `program/library/vliw/plus.mjs`; its fixture is
-`examples/pyash/vliw-numeric-plus.pya`, with conformance in
+Seven zero words complete the vector. The Rust runtime validates markers,
+numeric quote fields, and the zero tail before returning the canonical
+sentence. `program/library/vliw/plus.mjs` remains a JavaScript compatibility
+adapter; Rust semantics tests define execution behavior, with the source
+fixture `examples/pyash/vliw-numeric-plus.pya` and cross-path checks in
 `quiz/vliw_plus_semantics.test.mjs`.
 
 ## Quote descriptors and surface rendering
@@ -79,10 +81,11 @@ scalar-vector widths two through eight and vector-vector widths two through
 four, constrained by the existing quote layouts and 16-word slot. Vector
 operands must have equal widths. Multiplication returns unsigned-32 vector
 elements so the full product of two uint16 values is retained; other current
-operators return unsigned-16 elements. The JS reference path has matching
-lowering, decoding, and execution. Existing vector quote support described
-above is the data representation; this arithmetic sentence is the operation
-over that data.
+operators return unsigned-16 elements. CPU and GPU execution use the shared
+Rust runtime. JavaScript lowering and decoding remain compatibility tools and
+must produce codelets whose results conform to the Rust semantics. Existing
+vector quote support described above is the data representation; this
+arithmetic sentence is the operation over that data.
 
 ## Generic fixed-slot decoding
 
@@ -383,12 +386,12 @@ fixtures before the next one expands the surface:
 
 | Slice | Scope and exit evidence | Status |
 | --- | --- | --- |
-| 0. Contract inventory | Record each spec-defined pure semantic, its encoding, and current JS/Rust CPU/Vulkan/WebGPU coverage; identify every remaining gap in the inventory above. | Initial inventory recorded. Boolean composition and named/local comparison leaves are covered; continue auditing remaining typed value families and error categories before claiming overall parity. |
+| 0. Contract inventory | Record each spec-defined pure semantic, its encoding, and current Rust CPU/Vulkan/WebGPU coverage; identify every remaining gap in the inventory above. Retained JavaScript compatibility paths are checked against Rust. | Initial inventory recorded. Boolean composition and named/local comparison leaves are covered; continue auditing remaining typed value families and error categories before claiming overall parity. |
 | 1. Hardware conformance harness | Submit canonical packs through Housekeeper, require Vulkan backend/device identity, and compare exact spec-derived typed outputs for nested calls, branches, loops, booleans, scalar arithmetic, vectors, and capacity cases. | The 27-case harness submits the complete supported matrix through Housekeeper and checks exact outputs/device identity. All 27 passed on the NVIDIA GeForce RTX 3090 using the resident Rust VLIW runtime. |
-| 2. Differential semantic fixes | For every mismatch against the spec, add a minimal Pyash fixture and make JS reference, Rust CPU, Vulkan, and WebGPU agree on value, frame/side-effect boundary, and error category. Include boundary capacities and forwarded typed cases. | Nested loops, boolean composition, literal/argument/local comparison leaves, forwarded typed arguments, and max codelet/call-depth cases pass the Rust CPU tests and the live RTX 3090 matrix. Browser parity and the remaining audited semantic families are still open; shader compilation alone is not runtime conformance. |
+| 2. Differential semantic fixes | For every mismatch against the spec, add a minimal Pyash fixture and make Rust CPU, Vulkan, and WebGPU agree on value, frame/side-effect boundary, and error category. Check any retained JavaScript compatibility path against those Rust results. Include boundary capacities and forwarded typed cases. | Nested loops, boolean composition, literal/argument/local comparison leaves, forwarded typed arguments, and max codelet/call-depth cases pass the Rust CPU tests and the live RTX 3090 matrix. Browser parity and the remaining audited semantic families are still open; shader compilation alone is not runtime conformance. |
 | 3. Bounded GPU execution and shader structure | Preserve the shared 65,536-step contract while structuring execution into device-safe resumable work; prove successful completion below the limit and the same step-budget error at the limit without GPU hangs. Keep generated WGSL within browser parser limits. | Pending. Chromium/Naga rejects the current generated WGSL at its 127-level nesting/chaining limit during module creation, before either browser GPU pipeline can run. The checked-in pre-change WGSL fails the same way, so this is a pre-existing browser-target gap, not introduced by the genitive fix. |
-| 4. Remaining pure value/control-flow parity | Implement every spec-defined pure behavior still missing from shared Rust semantics, including boolean composition and any typed local/control forms confirmed by the contract audit, with minimized cross-backend fixtures. | Boolean composition and named/local comparison leaves are implemented and covered by JS reference and Rust CPU tests, and passed the full supported-slice GPU matrix. Date/vector/text locals, shared mutable program state, broader branch forms, and any remaining contract-audit gaps remain. |
-| 5. Completion audit | Run the full differential matrix against JS, Rust CPU, native Vulkan via Housekeeper, and browser WebGPU; verify effectful/unsupported forms reject consistently and confirm resource/error boundaries. | Not started. |
+| 4. Remaining pure value/control-flow parity | Implement every spec-defined pure behavior still missing from shared Rust semantics, including boolean composition and any typed local/control forms confirmed by the contract audit, with minimized cross-backend fixtures. | Boolean composition and named/local comparison leaves are implemented in the Rust reference runtime, covered by Rust CPU tests, and passed the full supported-slice GPU matrix. Date/vector/text locals, shared mutable program state, broader branch forms, and any remaining contract-audit gaps remain. |
+| 5. Completion audit | Run the full differential matrix against Rust CPU, native Vulkan via Housekeeper, and browser WebGPU; verify effectful/unsupported forms reject consistently and confirm resource/error boundaries. Check retained JavaScript compatibility paths against the same Rust-defined expectations where applicable. | Not started. |
 
 The generated WGSL currently lowers the whole programlet interpreter into one
 very large entrypoint (about 92,000 lines in the current generated file). Its
@@ -413,9 +416,9 @@ leaves in the first argument register. The compiler is in
 `rust/pyac/src/backend/riscv.rs` and the image it builds is
 `rust/pyac-riscv/`.
 
-The compiled program keeps the interpreter's numeric semantics, including the
-saturation to `0xffff` that the JavaScript reference backend applies to
-addition, subtraction, and exponentiation. The backend emits no branches: a
+The compiled program keeps the Rust VLIW runtime's numeric semantics, including
+the saturation to `0xffff` applied to addition, subtraction, and exponentiation.
+The backend emits no branches: a
 branchless program needs no label resolution, so the emitted words are the
 whole program.
 

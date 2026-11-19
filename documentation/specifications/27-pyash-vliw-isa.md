@@ -1,8 +1,9 @@
 # Pyash VLIW ISA and lowering contract
 
-Status: design specification. This document defines the encoding and execution
-boundary for a future Pyash VLIW backend. It does not change the current
-interpreter, parser, or sentence ABI.
+Status: normative encoding and semantic contract for the supported Pyash VLIW
+subset. Implemented behavior and remaining gaps are tracked in
+`documentation/reference/pyac-vliw-semantic-slices.md`. This specification
+does not change the Pyash parser or sentence ABI.
 
 ## 1. Scope and authority
 
@@ -11,6 +12,16 @@ language front end MUST lower to that IR before it is encoded. VLIW codelets
 are a compiled representation of the same sentences, not a second semantic
 language. The sentence's mood, verb, cases, values, and dependency effects
 remain authoritative after lowering.
+
+WordNet and SUMO links in the vocabulary catalog are lexical metadata: they
+identify or explain the meaning of canonical Pyash words and compounds. They
+are not tokens in executable sentences and are not serialized into codelets.
+Executable identity comes from the Pyash words and their HNUCs in the sentence.
+A lexical link helps establish the intended concept, but does not by itself
+specify operation details such as accepted value types, numeric precision, or
+failure behavior. For supported VLIW semantics, the shared Rust runtime is the
+reference implementation; its contract is recorded by this specification and
+the semantic-slice reference.
 
 This specification revives the encoding and execution model in the
 `lwonprom` repository at commit
@@ -46,6 +57,9 @@ Pyash command.
 - **HNUC** is a current Pyash semantic identity for a word/case. HNUCs are
   validated by the current compositional-case inventory. They are not silently
   interchangeable with the older `lwonprom` phonological word numbers.
+- **Lexical link** is vocabulary metadata associating a Pyash word or compound
+  with an external lexical sense or concept. It explains vocabulary identity;
+  it does not replace Pyash sentence words or define runtime behavior by itself.
 - **Canonical bytes** are the little-endian bytes of the exact encoded 16-bit
   words, in codelet order, with no timestamps, addresses, source paths, or
   runtime pointers.
@@ -243,9 +257,9 @@ The source ordinal is retained as `sectionIndex` for identity, not as a result
 ordering constraint. Executors MAY schedule independent sections in any order
 and MUST return each result as its section completes. Thus result order is
 completion order, while the included source ordinal and Pyash name allow
-consumers to associate each value with its section. The JavaScript reference
-interpreter is serial and therefore completes sections in source order; Rust
-CPU and Vulkan executors may complete them in a different order. Any
+consumers to associate each value with its section. The deprecated JavaScript
+interpreter is serial and completes sections in source order; Rust CPU and GPU
+executors may complete them in a different order. Any
 dependency between sections disqualifies them from this independent section
 form and must be expressed within an ordered programlet instead.
 

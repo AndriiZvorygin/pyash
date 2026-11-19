@@ -61,8 +61,9 @@ versioned encoding is specified.
 
 ## 7. Conceptual interfaces
 
-These signatures describe the semantic boundary. The JavaScript reference
-facade below implements the currently proven subset:
+These signatures describe the semantic boundary. JavaScript helpers still
+provide source lowering and codelet encoding/decoding, but the shared Rust VLIW
+runtime is authoritative for execution semantics:
 
 ```text
 lowerSentence(sentence) -> Codelet[] | EncodingError
@@ -74,11 +75,10 @@ executeCodelets(codelets, inputs) -> Paragraph | ExecutionError
 `lowerSentence` and `lowerParagraph` MUST use the canonical sentence ABI and
 the compatibility table. `decodeCodelet` MUST validate all index, quote,
 continuation, HNUC, type, and dependency metadata. `executeCodelets` MUST
-return sentence/paragraph-shaped results and preserve the same semantic
-effects as interpreted execution. The current JavaScript reference facade
-implements these interfaces for proven numeric-plus, typed-literal, and vector
-adapters and rejects other semantic codelets explicitly. The host language,
-OpenCL, or another backend is an implementation choice behind this boundary.
+return sentence/paragraph-shaped results and preserve the Rust runtime's
+semantics. Any retained JavaScript execution helper is a compatibility path,
+not an independent semantic authority. The host language, OpenCL, or another
+backend is an implementation choice behind this boundary.
 
 A destination compiles a codelet into machine code that computes the result the
 interpreter produces. It MAY use native target capabilities or lower operations
