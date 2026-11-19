@@ -36,8 +36,10 @@ su name iwsp transformer term 005 be map def
 su text "term" ob text "Dot or inner product" ya
 su text "wordnet sense" ob text "n:05873468-n" ya
 su text "sumo match" ob text "MultiplicationFn (+)" ya
-su text "pyash compound" ob text "" ya
-su text "status" ob text "good operation sense; Pyash mapping remains a gap" ya
+su text "pyash compound" ob text "scalar product" ya
+su text "pyash form" ob text "kl6m psas" ya
+su text "pyash gloss" ob text "kl6m psas na kl6m wa gyik psas ka dlut gyih" ya
+su text "status" ob text "user-approved curated compound; linked to the dot-product sense with an explicit vector-operation gloss" ya
 prah
 
 su name iwsp transformer term 006 be map def

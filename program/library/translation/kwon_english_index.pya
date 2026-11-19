@@ -1,9 +1,9 @@
 su name kwon english lookup index be map def
 su text "format" ob text "pyash-kwon-lookup-index-v4" ya
 su text "kind" ob text "english" ya
-su text "source hashes" ob text "{\"program/library/translation/english_grammar.pya\":\"5399ad4c8055017cac32e54b9c0d85e8094119a3bee7f7d1c91d70734e3657c5\",\"program/library/translation/english_lemmas.pya\":\"3038cc7527832cdcb84ee30c89ac46ce2e6cb6f95e2230935384e38fd9af2c69\",\"program/library/translation/english_wordnet_bridges.pya\":\"d4db5fa8ab288e3e2764593ae64545b625b28513cd2fa7bbe5cf89926aa4e9f5\",\"program/library/translation/english_wordnet.pya\":\"216ebb1d3098f28dec89dc2c157f7d3c9b60bf1abcbfa74ff06fb03d1c73d4bb\",\"program/library/translation/english_wordnet_compound_glosses.pya\":\"ceb15eabd44017a7f0816837d05613fd778412547330456740ba7931094d6eba\",\"program/library/translation/compound_coverage_wordnet_verified.pya\":\"69aba4ab5403ff59ce56b2016fa4b7c14f69c3536cf4143f0431e9324f7f16dc\",\"program/library/translation/compound_coverage_curated.pya\":\"6bf6452d01ad3b9ed9d42258d501d9c90844702a2d6f4a86c5d8761974c199df\",\"program/library/pyashWords.json\":\"090809b9d2cb0de1c0026da215474006c7f4034891abe380d423cd12e1ff51ab\",\"caterer/pyac/lyac/kwon_en.json\":\"9b81b9108a83006177dd8a6b382b03873340882e67de4da64ce51e06cae359e8\",\"caterer/pyac/lyac/pyashWords.json\":\"ca4b9c07ac92da6521daf98304bbe784f5b512bc75d05dafbd7a59039f01bc03\",\"caterer/pyac/lyac/pyackwon.json\":\"9c4a4b216387a0b505e0ed3a4a9647240e0d8ee39bf769bcce7a818d780be259\",\"caterer/pyac/lyac/dictionary_en.json\":\"8640f366dc69376b4b96a94133054daeda05665abf4267c18ab301af5ea2c93d\"}" ya
+su text "source hashes" ob text "{\"program/library/translation/english_grammar.pya\":\"5ed734716c529ec257482b11a46b05080e599a03439448ad296df2473ff047ea\",\"program/library/translation/english_lemmas.pya\":\"3038cc7527832cdcb84ee30c89ac46ce2e6cb6f95e2230935384e38fd9af2c69\",\"program/library/translation/english_wordnet_bridges.pya\":\"d4db5fa8ab288e3e2764593ae64545b625b28513cd2fa7bbe5cf89926aa4e9f5\",\"program/library/translation/english_wordnet.pya\":\"216ebb1d3098f28dec89dc2c157f7d3c9b60bf1abcbfa74ff06fb03d1c73d4bb\",\"program/library/translation/english_wordnet_compound_glosses.pya\":\"6564d298c941fb5003bdaddca0284b20f83b0545ed9b843e0f9bc12fc159dc9a\",\"program/library/translation/compound_coverage_wordnet_verified.pya\":\"69aba4ab5403ff59ce56b2016fa4b7c14f69c3536cf4143f0431e9324f7f16dc\",\"program/library/translation/compound_coverage_curated.pya\":\"015c59c233b0874220f2d89e6ab5660b3175882e9c3fa76e5157bf0af31afd17\",\"program/library/pyashWords.json\":\"090809b9d2cb0de1c0026da215474006c7f4034891abe380d423cd12e1ff51ab\",\"caterer/pyac/lyac/kwon_en.json\":\"9b81b9108a83006177dd8a6b382b03873340882e67de4da64ce51e06cae359e8\",\"caterer/pyac/lyac/pyashWords.json\":\"ca4b9c07ac92da6521daf98304bbe784f5b512bc75d05dafbd7a59039f01bc03\",\"caterer/pyac/lyac/pyackwon.json\":\"9c4a4b216387a0b505e0ed3a4a9647240e0d8ee39bf769bcce7a818d780be259\",\"caterer/pyac/lyac/dictionary_en.json\":\"8640f366dc69376b4b96a94133054daeda05665abf4267c18ab301af5ea2c93d\"}" ya
 su text "source ids" ob text "[\"caterer/pyac/lyac/dictionary_en.json\",\"caterer/pyac/lyac/kwon_en.json\",\"caterer/pyac/lyac/pyackwon.json\",\"caterer/pyac/lyac/pyashWords.json\",\"program/library/pyashWords.json\",\"program/library/translation/compound_coverage_curated.pya\",\"program/library/translation/compound_coverage_wordnet_verified.pya\",\"program/library/translation/english_grammar.pya\",\"program/library/translation/english_lemmas.pya\",\"program/library/translation/english_wordnet.pya\",\"program/library/translation/english_wordnet_bridges.pya\",\"program/library/translation/english_wordnet_compound_glosses.pya\"]" ya
-su text "entry count" ob num 79344 ya
+su text "entry count" ob num 79347 ya
 su text "index entries begin" ob text "begin" ya
 su text "kwon-entry:'cause" ob text "[[1,0,\"blacklist:X'cause\",\"account, because, causation\"]]" ya
 su text "kwon-entry:'cos" ob text "[[1,0,\"blacklist:X'cos\",\"because\"]]" ya
@@ -233,7 +233,7 @@ su text "kwon-entry:_ware" ob text "[[1,0,\"blacklist:X_ware\",\"shed, revenge\"
 su text "kwon-entry:_y" ob text "[[1,0,\"blacklist:X_y\",\"and\"]]" ya
 su text "kwon-entry:_z" ob text "[[2,4,6136,\"hze7c:_z\",\"hze7c\",\"_z\",\"0xF3A0\"],[2,3,6136,\"hze7c:_z\",\"hze7c\",\"_z\",\"0xF3A0\"]]" ya
 su text "kwon-entry:_z_" ob text "[[2,4,7824,\"ze:_z_\",\"ze\",\"_z_\",\"0x2E9E\"],[2,3,7824,\"ze:_z_\",\"ze\",\"_z_\",\"0x2E9E\"]]" ya
-su text "kwon-entry:a" ob text "[[0,7,12399,45,\"a\"],[0,10,3002591,22906,\"sense-lemma:n:13658855-n:1\"],[1,0,\"blacklist:Xa\",\"elective_quantifier_, one, behind\"]]" ya
+su text "kwon-entry:a" ob text "[[0,7,12399,45,\"a\"],[0,7,39103,111,\"chinese-character-link:990d40c3d628\"],[0,10,3002591,22906,\"sense-lemma:n:13658855-n:1\"],[1,0,\"blacklist:Xa\",\"elective_quantifier_, one, behind\"]]" ya
 su text "kwon-entry:a bit" ob text "[[0,11,11536536,32426,\"sense-compound-e99292378be8e2b17f8776ca\"],[0,6,39732378,32985,\"r:00034050-r\"]]" ya
 su text "kwon-entry:a bomb" ob text "[[0,11,3644856,10323,\"sense-compound-de33d9ee488dbd6165cd57d1\"],[0,6,12595876,10458,\"n:02756049-n\"]]" ya
 su text "kwon-entry:a couple of" ob text "[[0,11,12390716,35000,\"sense-compound-d0d763f6725c36b01175a7d7\"],[0,6,42848921,35609,\"s:01557697-s\"]]" ya
@@ -2963,7 +2963,7 @@ su text "kwon-entry:amoebic" ob text "[[0,6,3553843,2987,\"a:03052488-a\"]]" ya
 su text "kwon-entry:amoeboid" ob text "[[0,6,2179661,1841,\"a:02626897-a\"]]" ya
 su text "kwon-entry:amoebous" ob text "[[0,6,3553843,2987,\"a:03052488-a\"]]" ya
 su text "kwon-entry:amok" ob text "[[0,11,11681438,32874,\"sense-compound-f55df2c8ce990265bf31ebac\"],[0,11,11780033,33178,\"sense-compound-5dd057fbd387e93e1f2734f4\"],[0,6,40265667,33435,\"r:00274737-r\"],[0,6,40633122,33744,\"s:00086117-s\"],[1,0,\"blacklist:Xamok\",\"violently\"]]" ya
-su text "kwon-entry:among" ob text "[[0,7,20187,74,\"among\"],[1,0,\"blacklist:Xamong\",\"between\"]]" ya
+su text "kwon-entry:among" ob text "[[0,7,20187,74,\"among\"],[0,7,43100,116,\"chinese-character-link:cbe90832fa60\"],[1,0,\"blacklist:Xamong\",\"between\"]]" ya
 su text "kwon-entry:amongst" ob text "[[1,0,\"blacklist:Xamongst\",\"between\"]]" ya
 su text "kwon-entry:amoral" ob text "[[1,0,\"blacklist:Xamoral\",\"immoral, immorality, discipline\"]]" ya
 su text "kwon-entry:amorist" ob text "[[0,11,9417926,26544,\"sense-compound-f7d55ac50b92113217c427ff\"],[0,6,32428543,26955,\"n:09808745-n\"],[1,0,\"blacklist:Xamorist\",\"soulmate\"]]" ya
@@ -3187,7 +3187,7 @@ su text "kwon-entry:ancillary" ob text "[[0,6,44055954,36626,\"s:02363453-s\"],[
 su text "kwon-entry:ancona" ob text "[[1,0,\"blacklist:Xancona\",\"\"]]" ya
 su text "kwon-entry:anconeous muscle" ob text "[[0,11,6908216,19514,\"sense-compound-a9b3b9f648d14570f533a84f\"],[0,6,23774217,19762,\"n:05300355-n\"]]" ya
 su text "kwon-entry:ancylus fluviatilis" ob text "[[0,11,3058986,8724,\"sense-compound-e605c988948ddae7e6466595\"],[0,6,10628628,8844,\"n:01952614-n\"]]" ya
-su text "kwon-entry:and" ob text "[[0,7,3848,16,\"and\"],[2,4,14,\"hwan:and\",\"hwan\",\"and\",\"0x6928\"],[2,1,14,\"hwan:and\",\"hwan\",\"and\",\"0x6928\"],[2,1,7363,\"wa:and\",\"wa\",\"and\",\"0x24BE\"],[2,3,14,\"hwan:and\",\"hwan\",\"and\",\"0x6928\"]]" ya
+su text "kwon-entry:and" ob text "[[0,7,3848,16,\"and\"],[0,7,26635,95,\"chinese-character-link:efee0d0601a0\"],[2,4,14,\"hwan:and\",\"hwan\",\"and\",\"0x6928\"],[2,1,14,\"hwan:and\",\"hwan\",\"and\",\"0x6928\"],[2,1,7363,\"wa:and\",\"wa\",\"and\",\"0x24BE\"],[2,3,14,\"hwan:and\",\"hwan\",\"and\",\"0x6928\"]]" ya
 su text "kwon-entry:and circuit" ob text "[[0,11,3589135,10169,\"sense-compound-ad8ec6dec9d49378d170c8b3\"],[0,6,12407265,10303,\"n:02712767-n\"]]" ya
 su text "kwon-entry:and gate" ob text "[[0,6,12407265,10303,\"n:02712767-n\"]]" ya
 su text "kwon-entry:and so" ob text "[[0,11,11594400,32604,\"sense-compound-8f3093a3c106495c2c21dade\"],[0,6,39942442,33163,\"r:00118527-r\"]]" ya
@@ -3853,7 +3853,7 @@ su text "kwon-entry:anxiolytic drug" ob text "[[0,6,17270818,14352,\"n:03776976-
 su text "kwon-entry:anxious" ob text "[[0,10,3903163,29977,\"sense-lemma:s:00814817-s:1\"],[0,11,12763031,36105,\"sense-compound-57c9548a49a4c26c9a6bf1e4\"],[0,6,44191088,36740,\"s:02465209-s\"],[1,0,\"blacklist:Xanxious\",\"apprehensive, interest\"]]" ya
 su text "kwon-entry:anxiously" ob text "[[0,11,11632790,32722,\"sense-compound-337ae151dccbca19a93f75c8\"],[0,6,40084442,33282,\"r:00187482-r\"],[1,0,\"blacklist:Xanxiously\",\"mightily, apprehensive\"]]" ya
 su text "kwon-entry:anxiousness" ob text "[[0,6,37935651,31505,\"n:14397837-n\"]]" ya
-su text "kwon-entry:any" ob text "[[0,7,13983,50,\"any\"],[0,10,4387940,34019,\"sense-lemma:s:02275443-s:1\"],[1,0,\"blacklist:Xany\",\"elective_quantifier_, namely, all\"]]" ya
+su text "kwon-entry:any" ob text "[[0,7,13983,50,\"any\"],[0,7,40673,113,\"chinese-character-link:ddbbc6f9a29f\"],[0,10,4387940,34019,\"sense-lemma:s:02275443-s:1\"],[1,0,\"blacklist:Xany\",\"elective_quantifier_, namely, all\"]]" ya
 su text "kwon-entry:any and all bid" ob text "[[0,11,2030627,5902,\"sense-compound-7c70101e7cb68712f1e00374\"],[0,6,7162594,5993,\"n:00792338-n\"]]" ya
 su text "kwon-entry:any longer" ob text "[[0,11,11535264,32422,\"sense-compound-480b96a19768416b19af9cd0\"],[0,6,39727687,32981,\"r:00032002-r\"]]" ya
 su text "kwon-entry:anybody" ob text "[[0,7,22864,84,\"anybody\"],[1,0,\"blacklist:Xanybody\",\"anyone, elective_quantifier_, person_context_\"]]" ya
@@ -4762,7 +4762,7 @@ su text "kwon-entry:arugula" ob text "[[1,0,\"blacklist:Xarugula\",\"rocket\"]]"
 su text "kwon-entry:arum" ob text "[[1,0,\"blacklist:Xarum\",\"\"]]" ya
 su text "kwon-entry:aryan" ob text "[[0,10,523325,3704,\"a:03085993-a\"],[0,10,523780,3706,\"sense-lemma:a:03085993-a:1\"],[0,10,2478681,18775,\"n:09659011-n\"],[0,10,2479100,18777,\"sense-lemma:n:09659011-n:1\"],[0,11,9358997,26374,\"sense-compound-df8272392db7437c31e9059e\"],[0,6,32223864,26782,\"n:09659161-n\"],[2,4,4495,\"rya7n:aryan\",\"rya7n\",\"aryan\",\"0x710E\"],[2,1,4495,\"rya7n:aryan\",\"rya7n\",\"aryan\",\"0x710E\"],[2,3,4495,\"rya7n:aryan\",\"rya7n\",\"aryan\",\"0x710E\"]]" ya
 su text "kwon-entry:arytenoid" ob text "[[1,0,\"blacklist:Xarytenoid\",\"\"]]" ya
-su text "kwon-entry:as" ob text "[[0,7,19278,70,\"as\"],[0,10,3496071,26656,\"sense-lemma:r:00022585-r:1\"],[0,6,38437651,31925,\"n:14653327-n\"],[1,0,\"blacklist:Xas\",\"equally, because, how, who\"]]" ya
+su text "kwon-entry:as" ob text "[[0,7,19278,70,\"as\"],[0,7,35082,106,\"chinese-character-link:c48bdeeedeff\"],[0,10,3496071,26656,\"sense-lemma:r:00022585-r:1\"],[0,6,38437651,31925,\"n:14653327-n\"],[1,0,\"blacklist:Xas\",\"equally, because, how, who\"]]" ya
 su text "kwon-entry:as a group" ob text "[[0,11,11611957,32658,\"sense-compound-34d583b4d20123643ec332ad\"],[0,6,40008230,33218,\"r:00158427-r\"]]" ya
 su text "kwon-entry:as far as possible" ob text "[[0,11,11595115,32606,\"sense-compound-3857bd528a867f6fa89d7c7b\"],[0,6,39944848,33165,\"r:00120125-r\"]]" ya
 su text "kwon-entry:as if by magic" ob text "[[0,11,11598661,32617,\"sense-compound-64140223fdb9baa38acc1220\"],[0,6,39957969,33176,\"r:00130565-r\"]]" ya
@@ -5118,7 +5118,7 @@ su text "kwon-entry:asymptotic" ob text "[[0,10,428657,3025,\"a:02940384-a\"],[0
 su text "kwon-entry:asymptotically" ob text "[[0,11,11559565,32496,\"sense-compound-96e9b0730577baa575117760\"],[0,6,39815021,33055,\"r:00074057-r\"]]" ya
 su text "kwon-entry:asynchronous" ob text "[[0,11,530410,1594,\"sense-compound-328d33544fdc3409adb8d19e\"],[0,6,1913242,1616,\"a:02388163-a\"]]" ya
 su text "kwon-entry:asyndeton" ob text "[[1,0,\"blacklist:Xasyndeton\",\"\"]]" ya
-su text "kwon-entry:at" ob text "[[0,7,16034,57,\"at\"],[1,0,\"blacklist:Xat\",\"location_case_, locative_case_, horse, here\"]]" ya
+su text "kwon-entry:at" ob text "[[0,7,16034,57,\"at\"],[0,7,34266,105,\"chinese-character-link:1047294bb79d\"],[1,0,\"blacklist:Xat\",\"location_case_, locative_case_, horse, here\"]]" ya
 su text "kwon-entry:at a loss" ob text "[[0,10,4188087,32347,\"sense-lemma:s:01770438-s:1\"]]" ya
 su text "kwon-entry:at a lower place" ob text "[[0,11,11565048,32513,\"sense-compound-567e75d1fa33f349ec5a7bb0\"],[0,6,39835241,33072,\"r:00080389-r\"]]" ya
 su text "kwon-entry:at any rate" ob text "[[0,10,3500315,26690,\"sense-lemma:r:00026948-r:4\"]]" ya
@@ -10564,7 +10564,7 @@ su text "kwon-entry:busybodied" ob text "[[0,10,4071976,31385,\"sense-lemma:s:01
 su text "kwon-entry:busybodies" ob text "[[1,0,\"blacklist:Xbusybodies\",\"officious\"]]" ya
 su text "kwon-entry:busybody" ob text "[[0,10,2566696,19458,\"sense-lemma:n:09903259-n:1\"],[1,0,\"blacklist:Xbusybody\",\"officious, quickie\"]]" ya
 su text "kwon-entry:busywork" ob text "[[0,11,1744394,5113,\"sense-compound-e7d7a757a138438fab695fe6\"],[0,6,6194212,5195,\"n:00582658-n\"]]" ya
-su text "kwon-entry:but" ob text "[[0,7,8122,30,\"but\"],[0,10,3486353,26581,\"sense-lemma:r:00005103-r:1\"],[2,4,51,\"hlan:but\",\"hlan\",\"but\",\"0x6958\"],[2,1,51,\"hlan:but\",\"hlan\",\"but\",\"0x6958\"],[2,1,7400,\"pyuh:but\",\"pyuh\",\"but\",\"0x5027\"],[2,3,51,\"hlan:but\",\"hlan\",\"but\",\"0x6958\"]]" ya
+su text "kwon-entry:but" ob text "[[0,7,8122,30,\"but\"],[0,7,32705,103,\"chinese-character-link:84c76c2d213c\"],[0,10,3486353,26581,\"sense-lemma:r:00005103-r:1\"],[2,4,51,\"hlan:but\",\"hlan\",\"but\",\"0x6958\"],[2,1,51,\"hlan:but\",\"hlan\",\"but\",\"0x6958\"],[2,1,7400,\"pyuh:but\",\"pyuh\",\"but\",\"0x5027\"],[2,3,51,\"hlan:but\",\"hlan\",\"but\",\"0x6958\"]]" ya
 su text "kwon-entry:but_" ob text "[[2,4,7401,\"pyuh:but_\",\"pyuh\",\"but_\",\"0x5027\"],[2,3,7401,\"pyuh:but_\",\"pyuh\",\"but_\",\"0x5027\"]]" ya
 su text "kwon-entry:butacaine" ob text "[[0,11,3882730,11003,\"sense-compound-ecf9aa61c7ea6279acdad991\"],[0,6,13422873,11151,\"n:02930111-n\"]]" ya
 su text "kwon-entry:butacaine sulfate" ob text "[[0,6,13422873,11151,\"n:02930111-n\"]]" ya
@@ -10659,7 +10659,7 @@ su text "kwon-entry:bw defense" ob text "[[0,6,7949461,6639,\"n:00970097-n\"]]" 
 su text "kwon-entry:bwana" ob text "[[1,0,\"blacklist:Xbwana\",\"\"]]" ya
 su text "kwon-entry:bwr" ob text "[[0,6,13127421,10903,\"n:02867462-n\"]]" ya
 su text "kwon-entry:bx" ob text "[[1,0,\"blacklist:Xbx\",\"\"]]" ya
-su text "kwon-entry:by" ob text "[[0,7,19952,73,\"by\"],[0,6,40177963,33361,\"r:00235417-r\"],[1,0,\"blacklist:Xby\",\"way_case_, instrumental_case_, passing, and\"]]" ya
+su text "kwon-entry:by" ob text "[[0,7,19952,73,\"by\"],[0,7,44639,118,\"chinese-character-link:3010c15cfa66\"],[0,6,40177963,33361,\"r:00235417-r\"],[1,0,\"blacklist:Xby\",\"way_case_, instrumental_case_, passing, and\"]]" ya
 su text "kwon-entry:by all means" ob text "[[0,11,11550535,32468,\"sense-compound-1966c9fa1584c2cb429c83f4\"],[0,6,39782275,33027,\"r:00057454-r\"]]" ya
 su text "kwon-entry:by all odds" ob text "[[0,11,11539111,32434,\"sense-compound-9930dab2626d5bcc273c944b\"],[0,6,39741791,32993,\"r:00037329-r\"]]" ya
 su text "kwon-entry:by and large" ob text "[[0,11,11611263,32656,\"sense-compound-86a72d7f74e17037ad6835b1\"],[0,6,40005846,33216,\"r:00156754-r\"]]" ya
@@ -11132,7 +11132,7 @@ su text "kwon-entry:campsite" ob text "[[0,10,1246039,9257,\"n:03635148-n\"],[2,
 su text "kwon-entry:campus" ob text "[[1,0,\"blacklist:Xcampus\",\"college, school\"]]" ya
 su text "kwon-entry:campy" ob text "[[0,10,4425315,34346,\"sense-lemma:s:02403054-s:2\"]]" ya
 su text "kwon-entry:camshaft" ob text "[[0,11,3910389,11080,\"sense-compound-488afbe2b4bab6e49ccfe313\"],[0,6,13516628,11229,\"n:02950279-n\"]]" ya
-su text "kwon-entry:can" ob text "[[0,7,6696,25,\"can\"],[0,8,53057,171,\"canning\"],[0,10,1443274,10725,\"sense-lemma:n:04453410-n:2\"],[0,10,1444016,10733,\"sense-lemma:n:04453655-n:1\"],[0,10,1683258,12592,\"sense-lemma:n:05566889-n:10\"],[0,10,4564127,35539,\"sense-lemma:v:00214220-v:1\"],[1,0,\"blacklist:Xcan\",\"could, box, tin, know\"]]" ya
+su text "kwon-entry:can" ob text "[[0,7,6696,25,\"can\"],[0,7,31975,102,\"chinese-character-link:2655b3c0b4a4\"],[0,8,53057,171,\"canning\"],[0,10,1443274,10725,\"sense-lemma:n:04453410-n:2\"],[0,10,1444016,10733,\"sense-lemma:n:04453655-n:1\"],[0,10,1683258,12592,\"sense-lemma:n:05566889-n:10\"],[0,10,4564127,35539,\"sense-lemma:v:00214220-v:1\"],[1,0,\"blacklist:Xcan\",\"could, box, tin, know\"]]" ya
 su text "kwon-entry:can opener" ob text "[[0,10,1089563,8055,\"sense-lemma:n:02955021-n:1\"]]" ya
 su text "kwon-entry:can'st" ob text "[[1,0,\"blacklist:Xcan'st\",\"canst\"]]" ya
 su text "kwon-entry:can't" ob text "[[1,0,\"blacklist:Xcan't\",\"cannot\"]]" ya
@@ -21501,6 +21501,7 @@ su text "kwon-entry:dot com" ob text "[[0,11,834261,2498,\"sense-compound-7cc213
 su text "kwon-entry:dot matrix" ob text "[[0,10,2336129,17677,\"n:08284877-n\"],[0,10,2336554,17679,\"sense-lemma:n:08284877-n:1\"]]" ya
 su text "kwon-entry:dot matrix printer" ob text "[[0,11,4284179,12130,\"sense-compound-8e98c1da22faf85286da9ec9\"],[0,6,14804279,12301,\"n:03230480-n\"]]" ya
 su text "kwon-entry:dot printer" ob text "[[0,6,14804279,12301,\"n:03230480-n\"]]" ya
+su text "kwon-entry:dot product" ob text "[[0,5,16971,32,\"n:05873468-n\"]]" ya
 su text "kwon-entry:dot-matrix" ob text "[[2,1,2431,\"txis:dot-matrix\",\"txis\",\"dot-matrix\",\"0x88EA\"]]" ya
 su text "kwon-entry:dot_matrix" ob text "[[2,4,2431,\"txis:dot_matrix\",\"txis\",\"dot_matrix\",\"0x88EA\"],[2,3,2431,\"txis:dot_matrix\",\"txis\",\"dot_matrix\",\"0x88EA\"]]" ya
 su text "kwon-entry:dote" ob text "[[0,10,1951935,14613,\"n:06623345-n\"],[0,10,5097056,40214,\"v:01781380-v\"],[0,10,5097387,40216,\"sense-lemma:v:01781380-v:1\"],[0,11,14900656,42708,\"sense-compound-fa03c597d827bac11b86caf9\"],[0,6,52341589,43714,\"v:02703452-v\"],[2,4,4946,\"dro7t:dote\",\"dro7t\",\"dote\",\"0xB4D3\"],[2,1,4946,\"dro7t:dote\",\"dro7t\",\"dote\",\"0xB4D3\"],[2,3,4946,\"dro7t:dote\",\"dro7t\",\"dote\",\"0xB4D3\"]]" ya
@@ -22306,7 +22307,7 @@ su text "kwon-entry:durbar" ob text "[[0,11,4328276,12252,\"sense-compound-6a59d
 su text "kwon-entry:duress" ob text "[[0,11,6792632,19190,\"sense-compound-b87f7e8d641578dae9be252f\"],[0,6,23381673,19434,\"n:05202816-n\"],[1,0,\"blacklist:Xduress\",\"compulsion, threatening\"]]" ya
 su text "kwon-entry:durham" ob text "[[0,11,3387947,9621,\"sense-compound-397a152c80c21152a7c108a7\"],[0,6,11732758,9749,\"n:02409723-n\"],[1,0,\"blacklist:Xdurham\",\"\"]]" ya
 su text "kwon-entry:durian" ob text "[[1,0,\"blacklist:Xdurian\",\"\"]]" ya
-su text "kwon-entry:during" ob text "[[0,7,18816,68,\"during\"],[1,0,\"blacklist:Xduring\",\"medium, moment, between, meantime, season\"]]" ya
+su text "kwon-entry:during" ob text "[[0,7,18816,68,\"during\"],[0,7,27381,96,\"chinese-character-link:8cc679a57cf7\"],[1,0,\"blacklist:Xduring\",\"medium, moment, between, meantime, season\"]]" ya
 su text "kwon-entry:durn" ob text "[[1,0,\"blacklist:Xdurn\",\"\"]]" ya
 su text "kwon-entry:durst" ob text "[[1,0,\"blacklist:Xdurst\",\"brave\"]]" ya
 su text "kwon-entry:dusk" ob text "[[0,10,3421721,26088,\"sense-lemma:n:15194468-n:3\"],[0,11,13051600,36992,\"sense-compound-18a9bfea04d7588e8497bc19\"],[0,6,45248222,37643,\"v:00313357-v\"],[1,0,\"blacklist:Xdusk\",\"gloaming, dawn\"]]" ya
@@ -24943,7 +24944,7 @@ su text "kwon-entry:examined" ob text "[[1,0,\"blacklist:Xexamined\",\"probe, te
 su text "kwon-entry:examiner" ob text "[[0,11,9596485,27058,\"sense-compound-a3f733314b17ce2d6034f77a\"],[0,11,9596821,27059,\"sense-compound-ca313e1dddc58478a0f4cd99\"],[0,6,33067109,27484,\"n:10087775-n\"],[0,6,33068276,27485,\"n:10088041-n\"],[1,0,\"blacklist:Xexaminer\",\"examines\"]]" ya
 su text "kwon-entry:examines" ob text "[[0,8,141010,444,\"examine\"],[0,8,141300,445,\"examines\"],[0,10,4683597,36576,\"v:00646245-v\"],[2,4,4791,\"hzi7n:examines\",\"hzi7n\",\"examines\",\"0x70A0\"],[2,1,4791,\"hzi7n:examines\",\"hzi7n\",\"examines\",\"0x70A0\"],[2,3,4791,\"hzi7n:examines\",\"hzi7n\",\"examines\",\"0x70A0\"]]" ya
 su text "kwon-entry:examining" ob text "[[1,0,\"blacklist:Xexamining\",\"scouting, tested, verification, examines\"]]" ya
-su text "kwon-entry:example" ob text "[[0,7,10239,38,\"example\"],[0,6,27160407,22557,\"n:06685497-n\"],[2,4,422,\"tlam:example\",\"tlam\",\"example\",\"0x096A\"],[2,1,422,\"tlam:example\",\"tlam\",\"example\",\"0x096A\"],[2,3,422,\"tlam:example\",\"tlam\",\"example\",\"0x096A\"]]" ya
+su text "kwon-entry:example" ob text "[[0,7,10239,38,\"example\"],[0,7,47247,122,\"chinese-character-link:47a502dfc58c\"],[0,6,27160407,22557,\"n:06685497-n\"],[2,4,422,\"tlam:example\",\"tlam\",\"example\",\"0x096A\"],[2,1,422,\"tlam:example\",\"tlam\",\"example\",\"0x096A\"],[2,3,422,\"tlam:example\",\"tlam\",\"example\",\"0x096A\"]]" ya
 su text "kwon-entry:example_" ob text "[[2,4,7839,\"fluh:example_\",\"fluh\",\"example_\",\"0x5367\"]]" ya
 su text "kwon-entry:examples" ob text "[[1,0,\"blacklist:Xexamples\",\"example, translation, befit\"]]" ya
 su text "kwon-entry:exams" ob text "[[1,0,\"blacklist:Xexams\",\"temptation, examines\"]]" ya
@@ -27821,7 +27822,7 @@ su text "kwon-entry:footy" ob text "[[1,0,\"blacklist:Xfooty\",\"football, judge
 su text "kwon-entry:fop" ob text "[[0,6,32921113,27363,\"n:10010564-n\"],[1,0,\"blacklist:Xfop\",\"coxcomb\"]]" ya
 su text "kwon-entry:foppish" ob text "[[0,6,41755386,34686,\"s:00853318-s\"]]" ya
 su text "kwon-entry:foppishness" ob text "[[0,6,22226955,18471,\"n:04918025-n\"]]" ya
-su text "kwon-entry:for" ob text "[[0,7,19728,72,\"for\"],[1,0,\"blacklist:Xfor\",\"benefactive_case_, five, furrow, because, pro\"]]" ya
+su text "kwon-entry:for" ob text "[[0,7,19728,72,\"for\"],[0,7,28112,97,\"chinese-character-link:a56722710e0a\"],[1,0,\"blacklist:Xfor\",\"benefactive_case_, five, furrow, because, pro\"]]" ya
 su text "kwon-entry:for a while" ob text "[[0,6,39976073,33191,\"r:00145441-r\"]]" ya
 su text "kwon-entry:for certain" ob text "[[0,6,39977253,33192,\"r:00145758-r\"]]" ya
 su text "kwon-entry:for free" ob text "[[0,11,11675550,32856,\"sense-compound-3a98ef64ae52f04cb082aacf\"],[0,6,40243099,33416,\"r:00259685-r\"]]" ya
@@ -28630,7 +28631,7 @@ su text "kwon-entry:froghopper" ob text "[[0,11,3266454,9287,\"sense-compound-1d
 su text "kwon-entry:frogmarch" ob text "[[0,6,50527560,42164,\"v:02089014-v\"]]" ya
 su text "kwon-entry:frolic" ob text "[[0,10,693206,5027,\"sense-lemma:n:00512828-n:2\"],[0,10,5137484,40590,\"sense-lemma:v:01887709-v:4\"],[1,0,\"blacklist:Xfrolic\",\"jest, romp, bonhomie, lark\"]]" ya
 su text "kwon-entry:frolicsomeness" ob text "[[0,6,21252081,17660,\"n:04657192-n\"]]" ya
-su text "kwon-entry:from" ob text "[[0,7,15805,56,\"from\"],[1,0,\"blacklist:Xfrom\",\"source_case_, ablative_case_\"]]" ya
+su text "kwon-entry:from" ob text "[[0,7,15805,56,\"from\"],[0,7,30515,100,\"chinese-character-link:f6feb7c6e52a\"],[1,0,\"blacklist:Xfrom\",\"source_case_, ablative_case_\"]]" ya
 su text "kwon-entry:from head to toe" ob text "[[0,10,3605567,27538,\"sense-lemma:r:00253175-r:2\"]]" ya
 su text "kwon-entry:from nowhere" ob text "[[0,11,11619822,32682,\"sense-compound-eda60eeeb873d9c189ffbd05\"],[0,6,40036953,33242,\"r:00172975-r\"]]" ya
 su text "kwon-entry:from start to finish" ob text "[[0,11,11609977,32652,\"sense-compound-11f8be4e2a20d51a6ca17fdd\"],[0,6,40001192,33212,\"r:00153344-r\"]]" ya
@@ -29608,7 +29609,7 @@ su text "kwon-entry:genital wart" ob text "[[0,6,21447112,17822,\"n:04704145-n\"
 su text "kwon-entry:genitalia" ob text "[[0,10,1665306,12451,\"sense-lemma:n:05521732-n:3\"],[1,0,\"blacklist:Xgenitalia\",\"genitals\"]]" ya
 su text "kwon-entry:genitals" ob text "[[0,10,1664829,12447,\"n:05521732-n\"],[0,10,1665366,12452,\"sense-lemma:n:05521732-n:4\"],[0,10,3986835,30669,\"s:01085280-s\"],[2,4,3677,\"hsi2t:genitals\",\"hsi2t\",\"genitals\",\"0xB848\"],[2,1,3677,\"hsi2t:genitals\",\"hsi2t\",\"genitals\",\"0xB848\"],[2,3,3677,\"hsi2t:genitals\",\"hsi2t\",\"genitals\",\"0xB848\"]]" ya
 su text "kwon-entry:genitival" ob text "[[1,0,\"blacklist:Xgenitival\",\"\"]]" ya
-su text "kwon-entry:genitive" ob text "[[0,7,9466,35,\"genitive\"],[0,10,1871794,13998,\"sense-lemma:n:06322842-n:1\"],[1,0,\"blacklist:Xgenitive\",\"reflexive, genitive_case, genitals\"]]" ya
+su text "kwon-entry:genitive" ob text "[[0,7,9466,35,\"genitive\"],[0,7,46100,120,\"chinese-character-link:1290bcd203be\"],[0,10,1871794,13998,\"sense-lemma:n:06322842-n:1\"],[1,0,\"blacklist:Xgenitive\",\"reflexive, genitive_case, genitals\"]]" ya
 su text "kwon-entry:genitive case" ob text "[[0,10,1871437,13996,\"n:06322842-n\"],[0,10,1871853,13999,\"sense-lemma:n:06322842-n:2\"]]" ya
 su text "kwon-entry:genitive-case" ob text "[[2,1,12,\"hnik:genitive-case\",\"hnik\",\"genitive-case\",\"0x2830\"],[2,1,7361,\"ti:genitive-case\",\"ti\",\"genitive-case\",\"0x215E\"]]" ya
 su text "kwon-entry:genitive_case" ob text "[[2,4,12,\"hnik:genitive_case\",\"hnik\",\"genitive_case\",\"0x2830\"],[2,3,12,\"hnik:genitive_case\",\"hnik\",\"genitive_case\",\"0x2830\"]]" ya
@@ -34847,7 +34848,7 @@ su text "kwon-entry:hysterical neurosis" ob text "[[0,6,37962793,31526,\"n:14416
 su text "kwon-entry:hysterosalpingogram" ob text "[[0,11,4741583,13415,\"sense-compound-42957056363b5c62bd4a3051\"],[0,6,16365990,13600,\"n:03561176-n\"]]" ya
 su text "kwon-entry:hysteroscopy" ob text "[[0,11,1830012,5358,\"sense-compound-2a91a3fedf5de8e4e22671d5\"],[0,6,6495129,5444,\"n:00644153-n\"]]" ya
 su text "kwon-entry:hz" ob text "[[0,10,3464833,26431,\"sense-lemma:n:15304090-n:6\"]]" ya
-su text "kwon-entry:i" ob text "[[0,7,203,4,\"i\"],[0,10,3028239,23106,\"sense-lemma:n:13764713-n:3\"],[0,10,3242123,24790,\"sense-lemma:n:14665575-n:2\"],[0,10,4312823,33386,\"sense-lemma:s:02193977-s:3\"],[1,0,\"blacklist:Xi\",\"me, nominative_case\"]]" ya
+su text "kwon-entry:i" ob text "[[0,7,203,4,\"i\"],[0,7,36764,108,\"chinese-character-link:f568e913e188\"],[0,10,3028239,23106,\"sense-lemma:n:13764713-n:3\"],[0,10,3242123,24790,\"sense-lemma:n:14665575-n:2\"],[0,10,4312823,33386,\"sense-lemma:s:02193977-s:3\"],[1,0,\"blacklist:Xi\",\"me, nominative_case\"]]" ya
 su text "kwon-entry:i beam" ob text "[[0,11,4741929,13416,\"sense-compound-4554fb5ca0230ebde74a7da9\"],[0,6,16367264,13601,\"n:03561353-n\"]]" ya
 su text "kwon-entry:i'd" ob text "[[1,0,\"blacklist:Xi'd\",\"callsign, identity, _ide\"]]" ya
 su text "kwon-entry:i'll" ob text "[[1,0,\"blacklist:Xi'll\",\"sick, ills, misinform\"]]" ya
@@ -36529,6 +36530,7 @@ su text "kwon-entry:inner circle" ob text "[[0,10,2332930,17652,\"sense-lemma:n:
 su text "kwon-entry:inner city" ob text "[[0,11,9131765,25721,\"sense-compound-64c63232db247e982e07c9d4\"],[0,6,31437288,26118,\"n:08561188-n\"]]" ya
 su text "kwon-entry:inner ear" ob text "[[0,11,6941017,19603,\"sense-compound-f1a7f2626f4e63f1857910c4\"],[0,6,23880710,19851,\"n:05328855-n\"]]" ya
 su text "kwon-entry:inner light" ob text "[[0,11,9229833,26002,\"derived-compound-2e31e4860c184fecbc56b567\"],[0,6,31775880,26403,\"n:09207565-n\"]]" ya
+su text "kwon-entry:inner product" ob text "[[0,5,16971,32,\"n:05873468-n\"]]" ya
 su text "kwon-entry:inner resource" ob text "[[0,11,6744728,19059,\"sense-compound-b18f3070e6077807fadcfe05\"],[0,6,23222019,19302,\"n:05163033-n\"]]" ya
 su text "kwon-entry:inner tube" ob text "[[0,11,4762851,13474,\"sense-compound-b8351984e9f2b765e3a11cf2\"],[0,6,16437384,13659,\"n:03578156-n\"]]" ya
 su text "kwon-entry:innermost" ob text "[[0,6,41905856,34812,\"s:00954899-s\"],[1,0,\"blacklist:Xinnermost\",\"inner\"]]" ya
@@ -37160,7 +37162,7 @@ su text "kwon-entry:intimation" ob text "[[0,6,25783022,21423,\"n:05924900-n\"],
 su text "kwon-entry:intimidate" ob text "[[0,11,14214388,40590,\"sense-compound-57081493d62e2d165a84e689\"],[0,6,49594176,41363,\"v:01784999-v\"],[0,6,49718084,41468,\"v:01823521-v\"],[1,0,\"blacklist:Xintimidate\",\"threatening, daunt, pant\"]]" ya
 su text "kwon-entry:intimidating" ob text "[[1,0,\"blacklist:Xintimidating\",\"threatening, madam\"]]" ya
 su text "kwon-entry:intimidation" ob text "[[0,11,8542160,24053,\"sense-compound-ae2237387135ffa3dca35e4c\"],[0,11,8559033,24102,\"sense-compound-6f3951ea092cfb3242a19962\"],[0,6,9019439,7522,\"n:01224966-n\"],[0,6,28586395,23748,\"n:07268725-n\"],[0,6,29369597,24407,\"n:07538999-n\"],[0,6,29428927,24457,\"n:07558269-n\"],[1,0,\"blacklist:Xintimidation\",\"threatening, deterrence\"]]" ya
-su text "kwon-entry:into" ob text "[[0,7,17395,62,\"into\"],[1,0,\"blacklist:Xinto\",\"interior_context_, destination_case_, inessive_case_, between, one\"]]" ya
+su text "kwon-entry:into" ob text "[[0,7,17395,62,\"into\"],[0,7,47715,123,\"chinese-character-link:3320b923eb99\"],[1,0,\"blacklist:Xinto\",\"interior_context_, destination_case_, inessive_case_, between, one\"]]" ya
 su text "kwon-entry:intolerable" ob text "[[0,10,275232,1920,\"a:02444489-a\"],[0,10,275763,1922,\"sense-lemma:a:02444489-a:1\"],[2,4,3919,\"tra7n:intolerable\",\"tra7n\",\"intolerable\",\"0x71CA\"],[2,1,3919,\"tra7n:intolerable\",\"tra7n\",\"intolerable\",\"0x71CA\"],[2,3,3919,\"tra7n:intolerable\",\"tra7n\",\"intolerable\",\"0x71CA\"]]" ya
 su text "kwon-entry:intolerance" ob text "[[0,11,7622507,21465,\"sense-compound-973512c27adead5b2930c615\"],[0,6,26197399,21763,\"n:06214889-n\"]]" ya
 su text "kwon-entry:intolerant" ob text "[[0,10,276283,1927,\"sense-lemma:a:02445826-a:1\"],[0,10,3739699,28622,\"sense-lemma:s:00289103-s:2\"],[1,0,\"blacklist:Xintolerant\",\"zealot\"]]" ya
@@ -37642,7 +37644,7 @@ su text "kwon-entry:isthmus" ob text "[[0,6,23679078,19683,\"n:05274710-n\"],[1,
 su text "kwon-entry:isu" ob text "[[1,0,\"blacklist:Xisu\",\"\"]]" ya
 su text "kwon-entry:isurus oxyrhinchus" ob text "[[0,11,2745090,7880,\"sense-compound-a51d65a398a215933f2459ed\"],[0,6,9586569,7992,\"n:01486926-n\"]]" ya
 su text "kwon-entry:isurus oxyrhincus" ob text "[[0,6,9586569,7992,\"n:01486926-n\"]]" ya
-su text "kwon-entry:it" ob text "[[0,7,9989,37,\"it\"],[2,4,18,\"htit:it\",\"htit\",\"it\",\"0xA850\"],[2,1,18,\"htit:it\",\"htit\",\"it\",\"0xA850\"],[2,1,7367,\"ya:it\",\"ya\",\"it\",\"0x247E\"],[2,3,18,\"htit:it\",\"htit\",\"it\",\"0xA850\"]]" ya
+su text "kwon-entry:it" ob text "[[0,7,9989,37,\"it\"],[0,7,28930,98,\"chinese-character-link:d50339b018a7\"],[2,4,18,\"htit:it\",\"htit\",\"it\",\"0xA850\"],[2,1,18,\"htit:it\",\"htit\",\"it\",\"0xA850\"],[2,1,7367,\"ya:it\",\"ya\",\"it\",\"0x247E\"],[2,3,18,\"htit:it\",\"htit\",\"it\",\"0xA850\"]]" ya
 su text "kwon-entry:it'd" ob text "[[1,0,\"blacklist:Xit'd\",\"etc\"]]" ya
 su text "kwon-entry:it'll" ob text "[[1,0,\"blacklist:Xit'll\",\"\"]]" ya
 su text "kwon-entry:it_" ob text "[[2,4,7368,\"ya:it_\",\"ya\",\"it_\",\"0x247E\"],[2,3,7368,\"ya:it_\",\"ya\",\"it_\",\"0x247E\"]]" ya
@@ -42799,7 +42801,7 @@ su text "kwon-entry:manuscript" ob text "[[0,10,1906697,14260,\"n:06418622-n\"],
 su text "kwon-entry:manx" ob text "[[0,11,1012669,3023,\"sense-compound-372d8ce341aa3b067bf6ad51\"],[0,11,3183624,9061,\"sense-compound-2162197d3b7da1e531a322fb\"],[0,11,8104400,22801,\"sense-compound-e4ddfb3bda68de380a402bdd\"],[0,6,3646046,3064,\"a:03095976-a\"],[0,6,11045835,9186,\"n:02127136-n\"],[0,6,27841897,23127,\"n:06973961-n\"],[1,0,\"blacklist:Xmanx\",\"\"]]" ya
 su text "kwon-entry:manx cat" ob text "[[0,6,11045835,9186,\"n:02127136-n\"]]" ya
 su text "kwon-entry:manx language" ob text "[[0,6,27841897,23127,\"n:06973961-n\"]]" ya
-su text "kwon-entry:many" ob text "[[0,7,13368,48,\"many\"],[1,0,\"blacklist:Xmany\",\"multal_number, majority, several\"]]" ya
+su text "kwon-entry:many" ob text "[[0,7,13368,48,\"many\"],[0,7,31235,101,\"chinese-character-link:12758caeee70\"],[1,0,\"blacklist:Xmany\",\"multal_number, majority, several\"]]" ya
 su text "kwon-entry:many sided" ob text "[[0,11,12788729,36182,\"sense-compound-5d0008d6fd528b521b40ad32\"],[0,6,44282425,36817,\"s:02516967-s\"]]" ya
 su text "kwon-entry:manyfold" ob text "[[1,0,\"blacklist:Xmanyfold\",\"\"]]" ya
 su text "kwon-entry:mao jacket" ob text "[[0,11,4951087,14000,\"sense-compound-566fa45034c8b14e38415437\"],[0,6,17074484,14189,\"n:03725496-n\"]]" ya
@@ -43305,7 +43307,7 @@ su text "kwon-entry:maximum" ob text "[[0,10,173216,1216,\"sense-lemma:a:0149887
 su text "kwon-entry:maximum and minimum thermometer" ob text "[[0,11,4968624,14050,\"sense-compound-c64cb17c77acf9c7e45b15a5\"],[0,6,17135923,14241,\"n:03738149-n\"]]" ya
 su text "kwon-entry:maxwell" ob text "[[1,0,\"blacklist:Xmaxwell\",\"\"]]" ya
 su text "kwon-entry:maxzide" ob text "[[0,11,4969046,14051,\"sense-compound-0b107313761a6d39da274f06\"],[0,6,17137189,14242,\"n:03738319-n\"]]" ya
-su text "kwon-entry:may" ob text "[[0,7,7813,29,\"may\"],[1,0,\"blacklist:Xmay\",\"epistemtic_mood_, permissive_mood_, could\"]]" ya
+su text "kwon-entry:may" ob text "[[0,7,7813,29,\"may\"],[0,7,43810,117,\"chinese-character-link:b90003e4d785\"],[1,0,\"blacklist:Xmay\",\"epistemtic_mood_, permissive_mood_, could\"]]" ya
 su text "kwon-entry:may beetle" ob text "[[0,6,11153330,9275,\"n:02175522-n\"],[0,6,11155851,9277,\"n:02177311-n\"]]" ya
 su text "kwon-entry:may bug" ob text "[[0,6,11153330,9275,\"n:02175522-n\"],[0,6,11155851,9277,\"n:02177311-n\"]]" ya
 su text "kwon-entry:maya" ob text "[[0,10,2481906,18798,\"sense-lemma:n:09668014-n:1\"],[0,11,9107405,25653,\"sense-compound-7aaac5bbfcab3c51c6a541c4\"],[0,6,31354912,26049,\"n:08501397-n\"],[1,0,\"blacklist:Xmaya\",\"mayan, illusion, virtual, yeast\"]]" ya
@@ -47792,7 +47794,7 @@ su text "kwon-entry:nostril" ob text "[[0,6,24870972,20664,\"n:05607864-n\"],[1,
 su text "kwon-entry:nostrum" ob text "[[0,10,1294201,9607,\"n:03837845-n\"],[0,10,1294583,9609,\"sense-lemma:n:03837845-n:1\"],[0,10,1307391,9700,\"sense-lemma:n:03886467-n:3\"],[2,4,5206,\"nr6m:nostrum\",\"nr6m\",\"nostrum\",\"0x0DC6\"],[2,1,5206,\"nr6m:nostrum\",\"nr6m\",\"nostrum\",\"0x0DC6\"],[2,3,5206,\"nr6m:nostrum\",\"nr6m\",\"nostrum\",\"0x0DC6\"]]" ya
 su text "kwon-entry:nosy" ob text "[[1,0,\"blacklist:Xnosy\",\"fragrant, curious, officious\"]]" ya
 su text "kwon-entry:nosy parker" ob text "[[0,10,2566818,19460,\"sense-lemma:n:09903259-n:3\"]]" ya
-su text "kwon-entry:not" ob text "[[0,7,8392,31,\"not\"],[1,0,\"blacklist:Xnot\",\"negatory_quantifier_, never, pitch, cannot, gender\"]]" ya
+su text "kwon-entry:not" ob text "[[0,7,8392,31,\"not\"],[0,7,25798,94,\"chinese-character-link:bd1ef342ced5\"],[1,0,\"blacklist:Xnot\",\"negatory_quantifier_, never, pitch, cannot, gender\"]]" ya
 su text "kwon-entry:not bad" ob text "[[0,10,3997233,30759,\"sense-lemma:s:01127641-s:11\"]]" ya
 su text "kwon-entry:not for profit" ob text "[[0,10,827501,6094,\"sense-lemma:n:01139918-n:3\"]]" ya
 su text "kwon-entry:not guilty" ob text "[[0,10,4064292,31329,\"sense-lemma:s:01323426-s:2\"]]" ya
@@ -48526,7 +48528,7 @@ su text "kwon-entry:offspring" ob text "[[0,10,855865,6315,\"sense-lemma:n:01324
 su text "kwon-entry:offstage" ob text "[[0,10,1491147,11077,\"sense-lemma:n:04600289-n:2\"],[0,10,4211926,32554,\"sense-lemma:s:01866268-s:2\"],[0,11,388519,1166,\"sense-compound-2d263a86072b0521934a8d1a\"],[0,6,1398995,1182,\"a:01642046-a\"],[1,0,\"blacklist:Xoffstage\",\"secret, backstage\"]]" ya
 su text "kwon-entry:ofries" ob text "[[1,0,\"blacklist:Xofries\",\"\"]]" ya
 su text "kwon-entry:oft" ob text "[[1,0,\"blacklist:Xoft\",\"often, thick, bridge\"]]" ya
-su text "kwon-entry:often" ob text "[[0,7,7196,27,\"often\"],[0,6,39786994,33031,\"r:00059951-r\"],[2,4,159,\"tsac:often\",\"tsac\",\"often\",\"0xE94A\"],[2,1,159,\"tsac:often\",\"tsac\",\"often\",\"0xE94A\"],[2,3,159,\"tsac:often\",\"tsac\",\"often\",\"0xE94A\"]]" ya
+su text "kwon-entry:often" ob text "[[0,7,7196,27,\"often\"],[0,7,35922,107,\"chinese-character-link:06236267202c\"],[0,6,39786994,33031,\"r:00059951-r\"],[2,4,159,\"tsac:often\",\"tsac\",\"often\",\"0xE94A\"],[2,1,159,\"tsac:often\",\"tsac\",\"often\",\"0xE94A\"],[2,3,159,\"tsac:often\",\"tsac\",\"often\",\"0xE94A\"]]" ya
 su text "kwon-entry:oftenness" ob text "[[0,10,3464133,26423,\"sense-lemma:n:15303267-n:3\"]]" ya
 su text "kwon-entry:oftentimes" ob text "[[1,0,\"blacklist:Xoftentimes\",\"often, immeasurable\"]]" ya
 su text "kwon-entry:ofter" ob text "[[1,0,\"blacklist:Xofter\",\"\"]]" ya
@@ -48891,7 +48893,7 @@ su text "kwon-entry:onset" ob text "[[0,10,789218,5808,\"sense-lemma:n:00974725-
 su text "kwon-entry:onshore" ob text "[[0,11,11602533,32629,\"sense-compound-1ff479243a20a6b4f1b90b39\"],[0,6,39972589,33188,\"r:00141202-r\"]]" ya
 su text "kwon-entry:onslaught" ob text "[[0,10,789274,5809,\"sense-lemma:n:00974725-n:4\"],[0,11,8361520,23529,\"sense-compound-13c5e5b8d9e5345f7c51b2c3\"],[0,6,28123434,23360,\"n:07097633-n\"],[0,6,28735124,23872,\"n:07320778-n\"],[1,0,\"blacklist:Xonslaught\",\"attack, invading\"]]" ya
 su text "kwon-entry:ontario" ob text "[[1,0,\"blacklist:Xontario\",\"\"]]" ya
-su text "kwon-entry:onto" ob text "[[0,7,17863,64,\"onto\"],[1,0,\"blacklist:Xonto\",\"envelope, increasingly, against\"]]" ya
+su text "kwon-entry:onto" ob text "[[0,7,17863,64,\"onto\"],[0,7,48220,124,\"chinese-character-link:1ba36dacd92f\"],[1,0,\"blacklist:Xonto\",\"envelope, increasingly, against\"]]" ya
 su text "kwon-entry:ontogenesis" ob text "[[0,6,36469971,30285,\"n:13510240-n\"],[1,0,\"blacklist:Xontogenesis\",\"\"]]" ya
 su text "kwon-entry:ontogenetic" ob text "[[0,11,922181,2756,\"sense-compound-8995e739d1bbee89e540a4d2\"],[0,6,3321513,2793,\"a:02954106-a\"]]" ya
 su text "kwon-entry:ontogeny" ob text "[[0,6,36469971,30285,\"n:13510240-n\"],[1,0,\"blacklist:Xontogeny\",\"\"]]" ya
@@ -49123,7 +49125,7 @@ su text "kwon-entry:optometrist" ob text "[[0,6,33772068,28067,\"n:10400004-n\"]
 su text "kwon-entry:opulence" ob text "[[0,6,38223045,31746,\"n:14515957-n\"],[1,0,\"blacklist:Xopulence\",\"superfluity, lavishness, farthing\"]]" ya
 su text "kwon-entry:opulent" ob text "[[0,6,43558935,36207,\"s:02032205-s\"],[1,0,\"blacklist:Xopulent\",\"rich, deluxe\"]]" ya
 su text "kwon-entry:opus" ob text "[[0,10,2052386,15392,\"sense-lemma:n:07051211-n:3\"],[1,0,\"blacklist:Xopus\",\"workplace\"]]" ya
-su text "kwon-entry:or" ob text "[[0,7,15564,55,\"or\"],[0,6,17628768,14649,\"n:03855765-n\"],[1,0,\"blacklist:Xor\",\"and_or\"]]" ya
+su text "kwon-entry:or" ob text "[[0,7,15564,55,\"or\"],[0,7,37565,109,\"chinese-character-link:cf0ebe9c50f0\"],[0,6,17628768,14649,\"n:03855765-n\"],[1,0,\"blacklist:Xor\",\"and_or\"]]" ya
 su text "kwon-entry:or else" ob text "[[0,6,39791648,33035,\"r:00063710-r\"]]" ya
 su text "kwon-entry:or so" ob text "[[0,6,39676124,32937,\"r:00007414-r\"]]" ya
 su text "kwon-entry:oracle" ob text "[[0,10,2755022,20996,\"sense-lemma:n:10503115-n:1\"],[0,11,7971948,22432,\"sense-compound-b0a3a8d39e019ee0d65a42ba\"],[0,6,27390079,22749,\"n:06763053-n\"],[1,0,\"blacklist:Xoracle\",\"clairvoyant, priest\"]]" ya
@@ -53311,7 +53313,7 @@ su text "kwon-entry:plunker" ob text "[[0,6,4314519,3624,\"n:00133039-n\"]]" ya
 su text "kwon-entry:pluperfect" ob text "[[0,11,12477076,35255,\"sense-compound-9bc86307f5d7bf630d88d834\"],[0,6,37019967,30743,\"n:13828947-n\"],[0,6,43156102,35868,\"s:01756326-s\"],[1,0,\"blacklist:Xpluperfect\",\"old_time\"]]" ya
 su text "kwon-entry:pluperfect tense" ob text "[[0,6,37019967,30743,\"n:13828947-n\"]]" ya
 su text "kwon-entry:pluractional" ob text "[[1,0,\"blacklist:Xpluractional\",\"\"]]" ya
-su text "kwon-entry:plural" ob text "[[0,7,8933,33,\"plural\"],[0,10,255380,1780,\"sense-lemma:a:02190618-a:1\"],[1,0,\"blacklist:Xplural\",\"plural_number\"]]" ya
+su text "kwon-entry:plural" ob text "[[0,7,8933,33,\"plural\"],[0,7,45448,119,\"chinese-character-link:c9745df70af9\"],[0,10,255380,1780,\"sense-lemma:a:02190618-a:1\"],[1,0,\"blacklist:Xplural\",\"plural_number\"]]" ya
 su text "kwon-entry:plural-number" ob text "[[2,1,55,\"hpac:plural-number\",\"hpac\",\"plural-number\",\"0xE920\"],[2,1,7404,\"pu:plural-number\",\"pu\",\"plural-number\",\"0x289E\"]]" ya
 su text "kwon-entry:plural_number" ob text "[[0,10,255031,1778,\"a:02190618-a\"],[2,4,55,\"hpac:plural_number\",\"hpac\",\"plural_number\",\"0xE920\"],[2,3,55,\"hpac:plural_number\",\"hpac\",\"plural_number\",\"0xE920\"]]" ya
 su text "kwon-entry:plural_number_" ob text "[[2,4,7405,\"pu:plural_number_\",\"pu\",\"plural_number_\",\"0x289E\"],[2,3,7405,\"pu:plural_number_\",\"pu\",\"plural_number_\",\"0x289E\"]]" ya
@@ -60902,6 +60904,7 @@ su text "kwon-entry:scalability" ob text "[[0,11,6812025,19246,\"sense-compound-
 su text "kwon-entry:scalable" ob text "[[0,11,474640,1427,\"sense-compound-51fe83e4263b62da02984dbe\"],[0,6,1715027,1448,\"a:02090368-a\"]]" ya
 su text "kwon-entry:scalage" ob text "[[0,11,2313661,6675,\"sense-compound-d1fdfee35ee2ecd10d9b0ecc\"],[0,6,8109914,6770,\"n:01007899-n\"]]" ya
 su text "kwon-entry:scalar" ob text "[[0,10,561780,3977,\"a:03146439-a\"],[0,10,562233,3979,\"sense-lemma:a:03146439-a:1\"],[0,10,1761973,13227,\"n:05872935-n\"],[0,10,1762346,13229,\"sense-lemma:n:05872935-n:1\"],[0,11,1046139,3122,\"sense-compound-eac7e590bf7ed5223d0341d7\"],[0,6,3766939,3165,\"a:03146647-a\"],[2,4,3619,\"kl6m:scalar\",\"kl6m\",\"scalar\",\"0x0D62\"],[2,1,3619,\"kl6m:scalar\",\"kl6m\",\"scalar\",\"0x0D62\"],[2,3,3619,\"kl6m:scalar\",\"kl6m\",\"scalar\",\"0x0D62\"]]" ya
+su text "kwon-entry:scalar product" ob text "[[0,11,14969636,42926,\"curated-user-scalar-product-n05873468\"],[0,5,16971,32,\"n:05873468-n\"]]" ya
 su text "kwon-entry:scalawag" ob text "[[0,10,2766384,21090,\"sense-lemma:n:10556285-n:5\"],[0,6,33367431,27731,\"n:10219666-n\"]]" ya
 su text "kwon-entry:scald" ob text "[[0,6,5485666,4603,\"n:00404879-n\"],[0,6,37844971,31429,\"n:14313609-n\"],[0,6,44911867,37355,\"v:00197133-v\"],[0,6,45414808,37786,\"v:00372476-v\"],[0,6,46789597,38956,\"v:00865570-v\"],[1,0,\"blacklist:Xscald\",\"striped\"]]" ya
 su text "kwon-entry:scale" ob text "[[0,11,3032306,8650,\"sense-compound-6daeb7f2f302b80875ec63b8\"],[0,11,5504339,15550,\"sense-compound-793ec8b6877eb402e0a39eb3\"],[0,11,5504666,15551,\"sense-compound-e325adae50336bb0923b9aca\"],[0,11,10421356,29303,\"sense-compound-3e0a9baf39577a0edd1e6ad3\"],[0,11,10756678,30237,\"sense-compound-7b4d03b1974690537ac537ce\"],[0,11,10758116,30241,\"sense-compound-8af639dbb8b489e70062bf8f\"],[0,11,13059275,37016,\"sense-compound-484fb063667a21cf2266fd8c\"],[0,11,13196535,37436,\"sense-compound-603b97f588dac87eaaf3f128\"],[0,11,14319018,40914,\"sense-compound-ea7c0147e7bddec1277a12fb\"],[0,11,14372850,41083,\"sense-compound-f6e9b10bb53d0fbd1ed6d3b6\"],[0,6,10536622,8767,\"n:01905518-n\"],[0,6,18136640,15069,\"n:03965995-n\"],[0,6,18961920,15756,\"n:04148903-n\"],[0,6,18963099,15757,\"n:04149040-n\"],[0,6,27613072,22937,\"n:06869618-n\"],[0,6,32039445,26626,\"n:09448485-n\"],[0,6,35887315,29800,\"n:13176554-n\"],[0,6,37039210,30759,\"n:13837554-n\"],[0,6,37043880,30763,\"n:13839074-n\"],[0,6,37125572,30831,\"n:13872501-n\"],[0,6,45276268,37667,\"v:00320207-v\"],[0,6,45775334,38093,\"v:00491364-v\"],[0,6,48001564,39993,\"v:01266712-v\"],[0,6,50024515,41732,\"v:01926459-v\"],[0,6,50250729,41927,\"v:02003114-v\"],[1,0,\"blacklist:Xscale\",\"frame, proportional, stairs, magnitude\"]]" ya
@@ -62568,7 +62571,7 @@ su text "kwon-entry:seventy_three" ob text "[[2,4,5103,\"txi2s:seventy_three\",\
 su text "kwon-entry:seventy_two" ob text "[[2,4,4680,\"ht62t:seventy_two\",\"ht62t\",\"seventy_two\",\"0xBD50\"],[2,3,4680,\"ht62t:seventy_two\",\"ht62t\",\"seventy_two\",\"0xBD50\"]]" ya
 su text "kwon-entry:sever" ob text "[[1,0,\"blacklist:Xsever\",\"disconnect, abnegate, crop, lost, pluck\"]]" ya
 su text "kwon-entry:severable" ob text "[[0,10,3894897,29905,\"sense-lemma:s:00788558-s:3\"]]" ya
-su text "kwon-entry:several" ob text "[[0,7,13672,49,\"several\"],[0,6,41236510,34250,\"s:00496454-s\"],[2,4,196,\"kyak:several\",\"kyak\",\"several\",\"0x2902\"],[2,1,196,\"kyak:several\",\"kyak\",\"several\",\"0x2902\"],[2,3,196,\"kyak:several\",\"kyak\",\"several\",\"0x2902\"]]" ya
+su text "kwon-entry:several" ob text "[[0,7,13672,49,\"several\"],[0,7,38375,110,\"chinese-character-link:90300981ad47\"],[0,6,41236510,34250,\"s:00496454-s\"],[2,4,196,\"kyak:several\",\"kyak\",\"several\",\"0x2902\"],[2,1,196,\"kyak:several\",\"kyak\",\"several\",\"0x2902\"],[2,3,196,\"kyak:several\",\"kyak\",\"several\",\"0x2902\"]]" ya
 su text "kwon-entry:severalise" ob text "[[0,6,46194727,38449,\"v:00652006-v\"]]" ya
 su text "kwon-entry:severalize" ob text "[[0,6,46194727,38449,\"v:00652006-v\"]]" ya
 su text "kwon-entry:severally" ob text "[[0,10,3561277,27197,\"sense-lemma:r:00138725-r:2\"],[0,10,3587406,27399,\"sense-lemma:r:00208995-r:5\"],[0,6,40435211,33577,\"r:00452540-r\"]]" ya
@@ -63681,7 +63684,7 @@ su text "kwon-entry:simvastatin" ob text "[[0,11,5614344,15859,\"sense-compound-
 su text "kwon-entry:sin" ob text "[[0,10,1531464,11410,\"n:04835188-n\"],[0,10,1531760,11412,\"sense-lemma:n:04835188-n:1\"],[0,10,5360069,42535,\"v:02571602-v\"],[0,10,5360392,42537,\"sense-lemma:v:02571602-v:1\"],[0,11,1990285,5793,\"sense-compound-d3c55a31fc63089fc92f8bc2\"],[0,11,8029929,22594,\"sense-compound-45f4f5c736a8427c55d6d5d3\"],[0,11,10742315,30198,\"sense-compound-4471a369272f55b0084491af\"],[0,6,7029238,5883,\"n:00758433-n\"],[0,6,27590463,22918,\"n:06851918-n\"],[0,6,36992486,30720,\"n:13809591-n\"],[0,6,51967615,43395,\"v:02572142-v\"],[2,4,472,\"tsip:sin\",\"tsip\",\"sin\",\"0x484A\"],[2,1,472,\"tsip:sin\",\"tsip\",\"sin\",\"0x484A\"],[2,3,472,\"tsip:sin\",\"tsip\",\"sin\",\"0x484A\"]]" ya
 su text "kwon-entry:sinamay" ob text "[[1,0,\"blacklist:Xsinamay\",\"\"]]" ya
 su text "kwon-entry:sinapism" ob text "[[0,6,17416310,14473,\"n:03808340-n\"]]" ya
-su text "kwon-entry:since" ob text "[[0,7,18586,67,\"since\"],[1,0,\"blacklist:Xsince\",\"latter, first, after, because, sedan\"]]" ya
+su text "kwon-entry:since" ob text "[[0,7,18586,67,\"since\"],[0,7,41520,114,\"chinese-character-link:a2a16804a2e7\"],[1,0,\"blacklist:Xsince\",\"latter, first, after, because, sedan\"]]" ya
 su text "kwon-entry:sincere" ob text "[[0,11,491875,1480,\"sense-compound-5a3228725b95dcd61022d430\"],[0,6,1779083,1502,\"a:02186899-a\"],[0,6,43680255,36309,\"s:02126120-s\"],[1,0,\"blacklist:Xsincere\",\"honest, realistic, friendly, sincerely\"]]" ya
 su text "kwon-entry:sincerely" ob text "[[0,10,3641541,27813,\"r:00380195-r\"],[0,10,3641995,27815,\"sense-lemma:r:00380195-r:1\"],[0,11,11613265,32662,\"sense-compound-37ae5be9ca84876a72cbd6b2\"],[0,6,40013015,33222,\"r:00161285-r\"],[2,4,1149,\"sres:sincerely\",\"sres\",\"sincerely\",\"0x8BC9\"],[2,1,1149,\"sres:sincerely\",\"sres\",\"sincerely\",\"0x8BC9\"],[2,3,1149,\"sres:sincerely\",\"sres\",\"sincerely\",\"0x8BC9\"]]" ya
 su text "kwon-entry:sincerely yours" ob text "[[0,6,40013015,33222,\"r:00161285-r\"]]" ya
@@ -70405,7 +70408,7 @@ su text "kwon-entry:therapist" ob text "[[0,6,34466734,28642,\"n:10726882-n\"],[
 su text "kwon-entry:therapsid" ob text "[[0,6,10124871,8430,\"n:01722555-n\"]]" ya
 su text "kwon-entry:therapy" ob text "[[0,11,1852383,5419,\"sense-compound-d103231633a593d0478729f5\"],[0,6,6569664,5505,\"n:00662334-n\"],[1,0,\"blacklist:Xtherapy\",\"treatment\"]]" ya
 su text "kwon-entry:there" ob text "[[0,10,2368521,17925,\"n:08506637-n\"],[0,10,2369059,17927,\"sense-lemma:n:08506637-n:1\"],[0,10,3548892,27102,\"r:00109919-r\"],[0,10,3549268,27104,\"sense-lemma:r:00109919-r:1\"],[0,10,3791714,29079,\"s:00448792-s\"],[0,11,11587592,32583,\"sense-compound-396952347bf453a46016cfb0\"],[0,11,11587905,32584,\"sense-compound-1f0a50af78fb91b2ff25aee9\"],[0,6,39917580,33142,\"r:00110073-r\"],[0,6,39918760,33143,\"r:00110206-r\"],[2,4,63,\"klan:there\",\"klan\",\"there\",\"0x6962\"],[2,1,63,\"klan:there\",\"klan\",\"there\",\"0x6962\"],[2,1,7408,\"klah:there\",\"klah\",\"there\",\"0x4B17\"],[2,3,63,\"klan:there\",\"klan\",\"there\",\"0x6962\"]]" ya
-su text "kwon-entry:there are" ob text "[[0,7,4389,18,\"there are\"]]" ya
+su text "kwon-entry:there are" ob text "[[0,7,4389,18,\"there are\"],[0,7,46746,121,\"chinese-character-link:6b6d4b0af189\"]]" ya
 su text "kwon-entry:there can be" ob text "[[0,7,5286,21,\"there can be\"]]" ya
 su text "kwon-entry:there could be" ob text "[[0,7,5647,22,\"there could be\"]]" ya
 su text "kwon-entry:there exists" ob text "[[0,7,4980,20,\"there exists\"]]" ya
@@ -70631,7 +70634,7 @@ su text "kwon-entry:thirty_seven" ob text "[[2,4,4518,\"swi2t:thirty_seven\",\"s
 su text "kwon-entry:thirty_six" ob text "[[2,4,4150,\"sli7t:thirty_six\",\"sli7t\",\"thirty_six\",\"0xB069\"],[2,3,4150,\"sli7t:thirty_six\",\"sli7t\",\"thirty_six\",\"0xB069\"]]" ya
 su text "kwon-entry:thirty_three" ob text "[[2,4,4396,\"tfi2s:thirty_three\",\"tfi2s\",\"thirty_three\",\"0x988A\"],[2,3,4396,\"tfi2s:thirty_three\",\"tfi2s\",\"thirty_three\",\"0x988A\"]]" ya
 su text "kwon-entry:thirty_two" ob text "[[2,4,4183,\"hfi2t:thirty_two\",\"hfi2t\",\"thirty_two\",\"0xB860\"],[2,3,4183,\"hfi2t:thirty_two\",\"hfi2t\",\"thirty_two\",\"0xB860\"]]" ya
-su text "kwon-entry:this" ob text "[[0,7,11525,42,\"this\"],[1,0,\"blacklist:Xthis\",\"teeth, it\"]]" ya
+su text "kwon-entry:this" ob text "[[0,7,11525,42,\"this\"],[0,7,39944,112,\"chinese-character-link:d880e4da2cc0\"],[1,0,\"blacklist:Xthis\",\"teeth, it\"]]" ya
 su text "kwon-entry:this evening" ob text "[[0,10,3532300,26965,\"sense-lemma:r:00079765-r:1\"]]" ya
 su text "kwon-entry:this night" ob text "[[0,10,3532363,26966,\"sense-lemma:r:00079765-r:2\"]]" ya
 su text "kwon-entry:thistle" ob text "[[0,10,2891912,22075,\"sense-lemma:n:11964665-n:1\"],[1,0,\"blacklist:Xthistle\",\"safflower\"]]" ya
@@ -71319,7 +71322,7 @@ su text "kwon-entry:tmesis" ob text "[[1,0,\"blacklist:Xtmesis\",\"\"]]" ya
 su text "kwon-entry:tmv" ob text "[[0,11,2665132,7662,\"sense-compound-cab53ccec643da446159753f\"],[0,6,9316316,7769,\"n:01337159-n\"]]" ya
 su text "kwon-entry:tn" ob text "[[1,0,\"blacklist:Xtn\",\"\"]]" ya
 su text "kwon-entry:tnt" ob text "[[1,0,\"blacklist:Xtnt\",\"\"]]" ya
-su text "kwon-entry:to" ob text "[[0,7,16251,58,\"to\"],[1,0,\"blacklist:Xto\",\"come, until, direction\"]]" ya
+su text "kwon-entry:to" ob text "[[0,7,16251,58,\"to\"],[0,7,29792,99,\"chinese-character-link:8963715e9af9\"],[1,0,\"blacklist:Xto\",\"come, until, direction\"]]" ya
 su text "kwon-entry:to a fault" ob text "[[0,6,39763223,33011,\"r:00047930-r\"]]" ya
 su text "kwon-entry:to a higher place" ob text "[[0,6,39836455,33073,\"r:00080519-r\"]]" ya
 su text "kwon-entry:to a lower place" ob text "[[0,6,39835241,33072,\"r:00080389-r\"]]" ya
@@ -74699,7 +74702,7 @@ su text "kwon-entry:untidy" ob text "[[0,10,274757,1916,\"sense-lemma:a:02433027
 su text "kwon-entry:untie" ob text "[[0,6,48060588,40044,\"v:01287064-v\"],[1,0,\"blacklist:Xuntie\",\"unlock, expose, unbind, jowl, unroll, disconnect, clench\"]]" ya
 su text "kwon-entry:untied" ob text "[[0,6,247466,211,\"a:00255849-a\"],[0,6,40862076,33936,\"s:00255162-s\"]]" ya
 su text "kwon-entry:untier" ob text "[[0,6,34547900,28710,\"n:10757088-n\"]]" ya
-su text "kwon-entry:until" ob text "[[0,7,19043,69,\"until\"],[2,1,150,\"syat:until\",\"syat\",\"until\",\"0xA909\"],[2,1,7448,\"srah:until\",\"srah\",\"until\",\"0x4E4F\"],[2,3,150,\"syat:until\",\"syat\",\"until\",\"0xA909\"]]" ya
+su text "kwon-entry:until" ob text "[[0,7,19043,69,\"until\"],[0,7,33413,104,\"chinese-character-link:ecabf76bbbdd\"],[2,1,150,\"syat:until\",\"syat\",\"until\",\"0xA909\"],[2,1,7448,\"srah:until\",\"srah\",\"until\",\"0x4E4F\"],[2,3,150,\"syat:until\",\"syat\",\"until\",\"0xA909\"]]" ya
 su text "kwon-entry:until now" ob text "[[0,10,3502624,26714,\"sense-lemma:r:00028314-r:8\"]]" ya
 su text "kwon-entry:until_" ob text "[[2,3,7449,\"srah:until_\",\"srah\",\"until_\",\"0x4E4F\"]]" ya
 su text "kwon-entry:untimbered" ob text "[[0,11,539965,1623,\"sense-compound-279152f168310342ba37c767\"],[0,6,1947516,1645,\"a:02438814-a\"]]" ya
@@ -78186,7 +78189,7 @@ su text "kwon-entry:witch hunt" ob text "[[0,11,1566436,4610,\"sense-compound-65
 su text "kwon-entry:witchcraft" ob text "[[0,10,1782874,13380,\"n:05988217-n\"],[0,10,1783283,13382,\"sense-lemma:n:05988217-n:1\"],[2,4,4180,\"hwu2t:witchcraft\",\"hwu2t\",\"witchcraft\",\"0xBA28\"],[2,1,4180,\"hwu2t:witchcraft\",\"hwu2t\",\"witchcraft\",\"0xBA28\"],[2,3,4180,\"hwu2t:witchcraft\",\"hwu2t\",\"witchcraft\",\"0xBA28\"]]" ya
 su text "kwon-entry:witchery" ob text "[[0,10,1783344,13383,\"sense-lemma:n:05988217-n:2\"]]" ya
 su text "kwon-entry:witching" ob text "[[0,10,4129975,31866,\"sense-lemma:s:01580464-s:5\"]]" ya
-su text "kwon-entry:with" ob text "[[0,7,19492,71,\"with\"],[1,0,\"blacklist:Xwith\",\"comitative_case, and\"]]" ya
+su text "kwon-entry:with" ob text "[[0,7,19492,71,\"with\"],[0,7,42367,115,\"chinese-character-link:93a50cc2ba68\"],[1,0,\"blacklist:Xwith\",\"comitative_case, and\"]]" ya
 su text "kwon-entry:with child" ob text "[[0,6,40746436,33839,\"s:00174652-s\"]]" ya
 su text "kwon-entry:with kid gloves" ob text "[[0,6,40280845,33448,\"r:00283532-r\"]]" ya
 su text "kwon-entry:withal" ob text "[[0,10,3501660,26703,\"sense-lemma:r:00027761-r:9\"],[0,10,3511350,26789,\"r:00040906-r\"],[0,10,3511651,26791,\"sense-lemma:r:00040906-r:1\"],[2,4,3980,\"tci2t:withal\",\"tci2t\",\"withal\",\"0xB8AA\"],[2,1,3980,\"tci2t:withal\",\"tci2t\",\"withal\",\"0xB8AA\"],[2,3,3980,\"tci2t:withal\",\"tci2t\",\"withal\",\"0xB8AA\"]]" ya
