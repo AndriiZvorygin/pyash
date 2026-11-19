@@ -7,6 +7,7 @@ const CANDIDATES = [
   { file: "programlet_actions.rs", name: "apply_programlet_boolean_action", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
   { file: "programlet_execute_setup.rs", name: "initialize_numeric_programlet", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
   { file: "sentence.rs", name: "collect_sentence_at", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
+  { file: "numeric.rs", name: "word", expected: "u32", stub: "ERROR_UNSUPPORTED" },
   { file: "sentence.rs", name: "parse_sentence", expected: "u32", stub: "ERROR_UNSUPPORTED" },
   { file: "sentence.rs", name: "parse_sentence_range", expected: "u32", stub: "ERROR_UNSUPPORTED" },
   { file: "sentence.rs", name: "contains_marked_token", expected: "bool", stub: "false" },
