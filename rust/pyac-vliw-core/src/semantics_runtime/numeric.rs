@@ -132,12 +132,12 @@ pub(super) fn boolean_literal(words: &[u32], codelet: usize) -> Option<CoreResul
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct QuoteHeader {
-    valid: u32,
-    sort: u32,
-    scalar_bytes: u32,
-    fixed_length: u32,
-    explicit: u32,
+pub(super) struct QuoteHeader {
+    pub(super) valid: u32,
+    pub(super) sort: u32,
+    pub(super) scalar_bytes: u32,
+    pub(super) fixed_length: u32,
+    pub(super) explicit: u32,
 }
 
 impl QuoteHeader {

@@ -20,7 +20,12 @@ fn run() -> Result<(), String> {
         .unwrap_or_else(|| {
             PathBuf::from("rust/pyac-gpu/target/generated/vulkan/pyac_vliw_gpu_kernel.spv")
         });
-    let runtime = pollster::block_on(gpu::GpuRuntime::new(&shader_path))?;
+    let cache_path = std::env::var_os("PYAC_VLIW_PIPELINE_CACHE_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            PathBuf::from("rust/pyac-gpu/target/generated/vulkan/pyac_vliw_pipeline_cache.bin")
+        });
+    let runtime = pollster::block_on(gpu::GpuRuntime::new(&shader_path, &cache_path))?;
     let response = pollster::block_on(runtime.execute_pack(&input))?;
     std::io::stdout()
         .write_all(response.to_string().as_bytes())

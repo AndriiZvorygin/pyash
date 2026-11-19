@@ -105,6 +105,16 @@ fields, with the quote sort describing interpretation. Type compatibility is
 checked by the decoder. A quote is therefore a typed value encoding, not a
 license to hide an unrepresentable sentence.
 
+Legacy quote sort 6 with four-byte scalar width encodes one IEEE-754 binary32
+value. Its scalar quote header is `0xd01d`; the payload is two 16-bit words in
+little-endian order (low word first). The current scalar-float implementation
+accepts finite values only and rejects NaN and infinities. Arithmetic promotes
+both scalar operands to binary32 when either operand requires the float sort;
+`plus`, `subtract`, `multiply`, and `divide` execute with binary32 results.
+Unsigned-16-only arithmetic keeps its existing integer behavior. Float vectors,
+binary64 values, and float storage in mutable programlet slots are not part of
+this scalar-float slice.
+
 The source form `quoted.<kind> ... .<kind>.quoted` is a block delimiter and
 payload annotation, distinct from the legacy quote sort. Parsing must retain
 the block kind as semantic metadata alongside the payload; it must not fold

@@ -8,7 +8,8 @@ import {
   lookupLegacyWord,
   LETTER_QUOTE_WORD,
   NUMBER_QUOTE_WORD,
-  PARAGRAPH_LETTER_QUOTE_WORD
+  PARAGRAPH_LETTER_QUOTE_WORD,
+  float32QuoteWords
 } from "./quotes.mjs";
 import { VliwEncodingError } from "./plus.mjs";
 
@@ -55,14 +56,23 @@ function exactKeys(value, expected, role) {
 }
 
 function readNumber(value) {
-  if (!Number.isInteger(value) || value < 0 || value > 0xffff) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
     throw encodingError(
-      "literal-range",
-      "named numeric literals must be unsigned 16-bit integers",
+      "non-finite-float",
+      "named numeric literals must be finite numbers",
       { value }
     );
   }
+  if (!Number.isFinite(Math.fround(value))) {
+    throw encodingError("non-finite-float", "named numeric literal is outside the finite f32 range", { value });
+  }
   return value;
+}
+
+function numberQuoteWords(value) {
+  return Number.isInteger(value) && !Object.is(value, -0) && value >= 0 && value <= 0xffff
+    ? [NUMBER_QUOTE_WORD, value]
+    : float32QuoteWords(value);
 }
 
 function normalizeName(value) {
@@ -175,8 +185,7 @@ export function lowerNamedLiteralSentence(sentence) {
       NAMED_LITERAL_HEAD_WORD,
       ...normalized.nameWords,
       NOMINATIVE_CASE_WORD,
-      NUMBER_QUOTE_WORD,
-      normalized.ob.num,
+      ...numberQuoteWords(normalized.ob.num),
       ACCUSATIVE_CASE_WORD,
       REALIS_MOOD_WORD
     ]);
@@ -206,9 +215,17 @@ export function lowerNamedLiteralSentence(sentence) {
       REALIS_MOOD_WORD
     ]);
   }
-  const usedWords = normalized.be === "number" || normalized.ob.text.length === 1
+  const usedWords = normalized.be === "number"
+    ? normalized.nameWords.length + numberQuoteWords(normalized.ob.num).length + 4
+    : normalized.ob.text.length === 1
     ? normalized.nameWords.length + 6
     : normalized.ob.text.length + normalized.nameWords.length + 6;
+  if (usedWords > CODELET_WORD_COUNT) {
+    throw encodingError("codelet-overflow", "named numeric literal exceeds one VLIW codelet", {
+      usedWords,
+      maximum: CODELET_WORD_COUNT
+    });
+  }
   return {
     sentence: {
       mood: normalized.mood,
@@ -242,7 +259,7 @@ export function decodeNamedLiteralCodelet(input) {
   }
 
   const quoteItem = decoded.items.find((candidate) => candidate.offset === nominativeOffset + 1);
-  if (quoteItem?.kind !== "quote" || ![NUMBER_QUOTE_WORD, LETTER_QUOTE_WORD, PARAGRAPH_LETTER_QUOTE_WORD].includes(quoteItem.quote.word)) {
+  if (quoteItem?.kind !== "quote" || ![NUMBER_QUOTE_WORD, LETTER_QUOTE_WORD, PARAGRAPH_LETTER_QUOTE_WORD].includes(quoteItem.quote.word) && quoteItem.quote.family !== "float32") {
     throw encodingError("malformed-codelet", "named literal codelet has an unsupported quote", {
       actual: quoteItem?.quote?.word ?? quoteItem?.word
     });
@@ -260,11 +277,11 @@ export function decodeNamedLiteralCodelet(input) {
   }
 
   const name = nameItems.map((item) => lookupLegacyWord(item.word).en).join(" ");
-  if (quoteItem.quote.word === NUMBER_QUOTE_WORD) {
+  if (quoteItem.quote.word === NUMBER_QUOTE_WORD || quoteItem.quote.family === "float32") {
     return {
       mood: "ya",
       su: { name },
-      ob: { num: readNumber(quoteItem.quote.value) },
+      ob: { num: quoteItem.quote.family === "float32" ? quoteItem.quote.value : readNumber(quoteItem.quote.value) },
       be: "number"
     };
   }

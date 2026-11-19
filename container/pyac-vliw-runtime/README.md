@@ -42,13 +42,27 @@ container:
 On later code or shader updates, rerunning
 `container/pyac-vliw-runtime/command/deploy.sh` builds the
 runtime image first, asks Housekeeper to hold new VLIW duties and drain active
-VLIW jobs, recreates only `pyac-vliw-runtime`, waits for API readiness, and
-resumes queued VLIW work. Ollama, ComfyUI, Strata, and the Housekeeper process
-are not restarted. If the runtime update fails after the drain, the helper
-restores and health-checks the prior image when one exists, then resumes queued
-VLIW work. If no prior image exists or rollback cannot be verified, dispatch
-remains held for operator recovery instead of silently resuming against an
-unhealthy runtime.
+VLIW jobs, compiles all three Vulkan pipelines into a persistent, GPU-specific
+artifact file, and only then recreates `pyac-vliw-runtime`. The artifact is
+stored at `~/.local/share/pyash/pyac-vliw/pyac_vliw_pipeline_cache.bin` and
+mounted read-only by the service. This file is the GPU driver's compiled
+pipeline data; the `.spv` file in the image is an input to that compilation,
+not the final GPU artifact. The service requires the saved artifact and will
+fail startup if it is missing or rejected. It must not silently create an
+empty cache or fall back to compilation. The new service must become ready
+within 60 seconds. There is no longer a long startup wait or timeout override.
+
+After readiness, Housekeeper resumes queued VLIW work. Ollama, ComfyUI, Strata,
+and the Housekeeper process are not restarted. If artifact generation or the
+runtime update fails, the helper restores the prior runtime when available;
+dispatch remains held if rollback cannot be verified.
+
+This contract follows the November 18, 2026 startup incident: Rust-GPU had
+already emitted SPIR-V to disk, but runtime `create_compute_pipeline` calls
+still invoked the NVIDIA driver compiler before binding the HTTP listener. A
+30-minute readiness allowance hid that build/runtime boundary error. The
+required deliverable is now the persisted GPU pipeline artifact, generated
+before service replacement and loaded by the service.
 
 Useful checks:
 

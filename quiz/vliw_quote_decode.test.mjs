@@ -5,6 +5,7 @@ import {
   LETTER_QUOTE_WORD,
   NUMBER_QUOTE_WORD,
   PARAGRAPH_LETTER_QUOTE_WORD,
+  quoteWordFor,
   QuoteEncodingError,
   decodeQuoteHeader,
   decodeQuote,
@@ -88,6 +89,24 @@ test("numeric quote decodes its typed payload", () => {
     lengthWord: undefined,
     nextOffset: 2
   });
+});
+
+test("legacy float quote carries one finite f32 scalar", () => {
+  const header = quoteWordFor({ sort: 6, scalarBytes: 4 });
+  assert.equal(header, 0xd01d);
+  const bits = new DataView(new ArrayBuffer(4));
+  bits.setFloat32(0, 1.25, true);
+  const encoded = bits.getUint32(0, true);
+  const quote = decodeQuote([header, encoded & 0xffff, encoded >>> 16]);
+  assert.equal(quote.family, "float32");
+  assert.equal(quote.value, 1.25);
+  assert.deepEqual(quote.payload, [0, 0x3fa0]);
+  assert.throws(
+    () => decodeQuote([header, 0, 0x7f80]),
+    (error) => error.code === "non-finite-float"
+  );
+  assert.throws(() => quoteWordFor({ sort: 6, scalarBytes: 2 }), /only scalar f32 values/);
+  assert.throws(() => quoteWordFor({ sort: 6, scalarBytes: 4, vectorThick: 1 }), /only scalar f32 values/);
 });
 
 test("quote headers expose legacy width, region, sequence, and sort fields", () => {

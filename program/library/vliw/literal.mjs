@@ -6,7 +6,8 @@ import {
 import {
   LETTER_QUOTE_WORD,
   NUMBER_QUOTE_WORD,
-  PARAGRAPH_LETTER_QUOTE_WORD
+  PARAGRAPH_LETTER_QUOTE_WORD,
+  float32QuoteWords
 } from "./quotes.mjs";
 import { VliwEncodingError } from "./plus.mjs";
 
@@ -51,14 +52,23 @@ function exactKeys(value, expected, role) {
 }
 
 function readNumber(value) {
-  if (!Number.isInteger(value) || value < 0 || value > 0xffff) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
     throw encodingError(
-      "literal-range",
-      "typed numeric literals must be unsigned 16-bit integers",
+      "non-finite-float",
+      "typed numeric literals must be finite numbers",
       { value }
     );
   }
+  if (!Number.isFinite(Math.fround(value))) {
+    throw encodingError("non-finite-float", "typed numeric literal is outside the finite f32 range", { value });
+  }
   return value;
+}
+
+function numberQuoteWords(value) {
+  return Number.isInteger(value) && !Object.is(value, -0) && value >= 0 && value <= 0xffff
+    ? [NUMBER_QUOTE_WORD, value]
+    : float32QuoteWords(value);
 }
 
 function normalizeTypedLiteralSentence(sentence) {
@@ -142,13 +152,7 @@ export function lowerTypedLiteralSentence(sentence) {
   const normalized = normalizeTypedLiteralSentence(sentence);
   const words = new Uint16Array(CODELET_WORD_COUNT);
   if (normalized.be === "number") {
-    words.set([
-      TYPED_LITERAL_HEAD_WORD,
-      NUMBER_QUOTE_WORD,
-      normalized.ob.num,
-      ACCUSATIVE_CASE_WORD,
-      REALIS_MOOD_WORD
-    ]);
+    words.set([TYPED_LITERAL_HEAD_WORD, ...numberQuoteWords(normalized.ob.num), ACCUSATIVE_CASE_WORD, REALIS_MOOD_WORD]);
   } else if (normalized.ob.text.length === 1) {
     words.set([
       TYPED_LITERAL_HEAD_WORD,
@@ -171,7 +175,9 @@ export function lowerTypedLiteralSentence(sentence) {
       REALIS_MOOD_WORD
     ]);
   }
-  const usedWords = normalized.be === "number" || normalized.ob.text.length === 1
+  const usedWords = normalized.be === "number"
+    ? numberQuoteWords(normalized.ob.num).length + 3
+    : normalized.ob.text.length === 1
     ? TYPED_LITERAL_USED_WORD_COUNT
     : normalized.ob.text.length + 5;
   return {
@@ -187,7 +193,7 @@ export function decodeTypedLiteralCodelet(input) {
   markerAt(decoded, 0, TYPED_LITERAL_HEAD_WORD, "head");
 
   const quoteItem = decoded.items.find((candidate) => candidate.offset === 1);
-  if (quoteItem?.kind !== "quote" || ![NUMBER_QUOTE_WORD, LETTER_QUOTE_WORD, PARAGRAPH_LETTER_QUOTE_WORD].includes(quoteItem.quote.word)) {
+  if (quoteItem?.kind !== "quote" || ![NUMBER_QUOTE_WORD, LETTER_QUOTE_WORD, PARAGRAPH_LETTER_QUOTE_WORD].includes(quoteItem.quote.word) && quoteItem.quote.family !== "float32") {
     throw encodingError("malformed-codelet", "typed literal codelet has an unsupported quote", {
       actual: quoteItem?.quote?.word ?? quoteItem?.word
     });
@@ -204,10 +210,10 @@ export function decodeTypedLiteralCodelet(input) {
     });
   }
 
-  if (quoteItem.quote.word === NUMBER_QUOTE_WORD) {
+  if (quoteItem.quote.word === NUMBER_QUOTE_WORD || quoteItem.quote.family === "float32") {
     return {
       mood: "ya",
-      ob: { num: readNumber(quoteItem.quote.value) },
+      ob: { num: quoteItem.quote.family === "float32" ? quoteItem.quote.value : readNumber(quoteItem.quote.value) },
       be: "number"
     };
   }

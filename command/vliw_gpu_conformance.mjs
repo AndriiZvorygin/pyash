@@ -177,6 +177,31 @@ export function buildVliwGpuConformanceCases() {
       [{ type: "unsigned", value: 4_294_836_225 }]
     ),
     codeletPack(
+      "float32-literal",
+      "ob num 0.125 be number ya",
+      [{ type: "float32", value: 0.125 }]
+    ),
+    codeletPack(
+      "float32-plus",
+      "ob num 0.1 to num 0.2 be plus do",
+      [{ type: "float32", value: Math.fround(Math.fround(0.1) + Math.fround(0.2)) }]
+    ),
+    codeletPack(
+      "float32-subtract",
+      "ob num 5.5 from num 2 be subtract do",
+      [{ type: "float32", value: Math.fround(Math.fround(5.5) - Math.fround(2)) }]
+    ),
+    codeletPack(
+      "float32-multiply",
+      "ob num 1.5 with num 2 be multiply do",
+      [{ type: "float32", value: Math.fround(Math.fround(1.5) * Math.fround(2)) }]
+    ),
+    codeletPack(
+      "float32-divide",
+      "ob num 1.5 with num 4 be divide do",
+      [{ type: "float32", value: Math.fround(Math.fround(1.5) / Math.fround(4)) }]
+    ),
+    codeletPack(
       "vector-arithmetic",
       "ob ve num 1 2 3 4 to num 2 be plus do",
       [{ type: "vector", elementType: "unsigned-16", values: [3, 4, 5, 6] }]

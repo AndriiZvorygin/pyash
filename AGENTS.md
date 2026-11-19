@@ -100,3 +100,9 @@ This guide keeps contributions consistent for the Pyash codebase.
 - A non-empty Housekeeper queue is normal and is not a reason to stall, refuse, or wait before submitting independent work. Submit the bounded job and let Housekeeper perform admission, placement, concurrency control, and queueing across available hosts/devices.
 - Check active work when diagnosing a stalled job, when a task explicitly requires isolated performance measurements, or when no managed queue is available. Do not manually unload models or create competing unmanaged inference processes to make room.
 - Preserve declared dependencies between pipeline stages. Independent duties may run concurrently when Housekeeper admits them; same-device overlap remains governed by Housekeeper capacity/VRAM admission and the runtime's concurrency-safety declaration.
+
+## Production Service Artifact Rule
+- A production service must load compiled artifacts from disk; service startup must never compile source, shaders, or GPU pipelines, download model weights, or train models.
+- Build/deployment steps must produce and persist the exact target artifacts before service activation. Missing, stale, or incompatible artifacts fail clearly; startup must not JIT, silently fall back to another execution backend, or switch to CPU.
+- Production readiness has a hard 60-second ceiling. Do not add a longer startup wait or configurable override to conceal compilation during startup.
+- Add a regression test for artifact generation/loading and the startup ceiling whenever changing a production service's executable artifact path.

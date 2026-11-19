@@ -14,6 +14,8 @@ export const LETTER_SORT_DENOTE = 0;
 export const WORD_SORT_DENOTE = 1;
 export const UINT_SORT_DENOTE = 4;
 export const INT_SORT_DENOTE = 5;
+export const FLOAT_SORT_DENOTE = 6;
+export const FLOAT32_QUOTE_WORD = 0xd01d;
 export const VECTOR_THICK_LONG = 6;
 
 const quotedGrammarEntry = pyashWords.find((entry) => entry.en === "quoted_");
@@ -184,8 +186,14 @@ export function quoteWordFor({ sort = UINT_SORT_DENOTE, vectorThick = 0, scalarB
       vectorThick
     });
   }
-  if (![LETTER_SORT_DENOTE, WORD_SORT_DENOTE, UINT_SORT_DENOTE, INT_SORT_DENOTE].includes(sort)) {
+  if (![LETTER_SORT_DENOTE, WORD_SORT_DENOTE, UINT_SORT_DENOTE, INT_SORT_DENOTE, FLOAT_SORT_DENOTE].includes(sort)) {
     throw quoteError("unsupported-quote", "no legacy quote sort matches the requested sort", { sort });
+  }
+  if (sort === FLOAT_SORT_DENOTE && (scalarBytes !== 4 || vectorThick !== 0)) {
+    throw quoteError("unsupported-quote", "legacy float quotes currently support only scalar f32 values", {
+      scalarBytes,
+      vectorThick
+    });
   }
   return (
     (sort << 13) |
@@ -193,6 +201,21 @@ export function quoteWordFor({ sort = UINT_SORT_DENOTE, vectorThick = 0, scalarB
     (scalarThick << 11) |
     QUOTE_DENOTE
   );
+}
+
+export function float32QuoteWords(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    throw quoteError("non-finite-float", "VLIW f32 values must be finite numbers", { value });
+  }
+  const rounded = Math.fround(value);
+  if (!Number.isFinite(rounded)) {
+    throw quoteError("non-finite-float", "VLIW f32 value is outside the finite binary32 range", { value });
+  }
+  const buffer = new ArrayBuffer(4);
+  const view = new DataView(buffer);
+  view.setFloat32(0, rounded, true);
+  const bits = view.getUint32(0, true);
+  return [FLOAT32_QUOTE_WORD, bits & 0xffff, bits >>> 16];
 }
 
 export function uintQuoteWord({ vectorThick = 0, scalarBytes = 2 } = {}) {
@@ -258,6 +281,20 @@ function dynamicQuoteDescriptor(word) {
       };
     }
     return null;
+  }
+  if (
+    header.sortName === "float" &&
+    header.scalarBytes === 4 &&
+    header.vectorThick === 0 &&
+    header.vectorWords === 1
+  ) {
+    return {
+      word,
+      family: "float32",
+      payloadWords: 1,
+      valueType: "float32",
+      supported: true
+    };
   }
   if (header.vectorWords === null || header.scalarBytes !== 2) return null;
   if (header.sortName === "word") {
@@ -417,6 +454,17 @@ export function decodeQuote(words, offset = 0) {
       value = signedValue(payload, header.scalarBytes);
     } else if (header.scalarBytes > 2) {
       value = unsignedValue(payload, header.scalarBytes);
+    }
+  } else if (descriptor.family === "float32") {
+    const buffer = new ArrayBuffer(4);
+    const view = new DataView(buffer);
+    view.setUint32(0, payload[0] | (payload[1] << 16), true);
+    value = view.getFloat32(0, true);
+    if (!Number.isFinite(value)) {
+      throw quoteError("non-finite-float", "VLIW f32 quote contains NaN or infinity", {
+        offset,
+        payload
+      });
     }
   }
   return {

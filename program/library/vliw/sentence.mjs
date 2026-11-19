@@ -5,6 +5,7 @@ import {
   LETTER_QUOTE_WORD,
   NUMBER_QUOTE_WORD,
   PARAGRAPH_LETTER_QUOTE_WORD,
+  float32QuoteWords,
   QUOTED_GRAMMAR_WORD,
   UINT_SORT_DENOTE,
   VECTOR_THICK_LONG,
@@ -241,13 +242,11 @@ function encodeValue(value, role) {
       }))
     };
   }
-  if (Number.isInteger(value?.num)) {
-    if (value.num < 0 || value.num > 0xffff) {
-      throw invalid("unsupported-value", `VLIW ${role} number must be an unsigned 16-bit integer`, {
-        value: value.num
-      });
-    }
+  if (Number.isInteger(value?.num) && !Object.is(value.num, -0) && value.num >= 0 && value.num <= 0xffff) {
     return { words: [NUMBER_QUOTE_WORD, value.num], rawQuotes: [] };
+  }
+  if (typeof value?.num === "number") {
+    return { words: float32QuoteWords(value.num), rawQuotes: [] };
   }
   if (typeof value?.text === "string") {
     return textWords(value.text, role);

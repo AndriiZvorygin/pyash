@@ -4,7 +4,7 @@ mod gpu_worker;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use axum::extract::{DefaultBodyLimit, State};
 use axum::http::StatusCode;
@@ -172,16 +172,30 @@ fn env_u64(name: &str, default: u64) -> u64 {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let runtime_started = Instant::now();
     let host = std::env::var("PYAC_VLIW_RUNTIME_HOST").unwrap_or_else(|_| "0.0.0.0".to_owned());
     let port = env_u16("PYAC_VLIW_RUNTIME_PORT", 18887);
     let workers = env_u16("PYAC_VLIW_RUNTIME_CONCURRENCY", 1) as usize;
     let shader_path = std::env::var_os("PYAC_VLIW_SPIRV_PATH")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/service/pyac_vliw_gpu_kernel.spv"));
+    let cache_path = std::env::var_os("PYAC_VLIW_PIPELINE_CACHE_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("/service/pyac_vliw_pipeline_cache.bin"));
+    eprintln!(
+        "[pyac-vliw] loading shader {} and compiled GPU artifact {}",
+        shader_path.display(),
+        cache_path.display()
+    );
     let gpu = Arc::new(
-        gpu_worker::GpuRuntime::new(&shader_path)
+        gpu_worker::GpuRuntime::new(&shader_path, &cache_path)
             .await
             .map_err(std::io::Error::other)?,
+    );
+    eprintln!(
+        "[pyac-vliw] runtime initialized on {} in {:.2}s",
+        gpu.device_name(),
+        runtime_started.elapsed().as_secs_f64()
     );
     let state = RuntimeState {
         gpu,
@@ -199,6 +213,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_state(state);
     let address: SocketAddr = format!("{host}:{port}").parse()?;
     let listener = tokio::net::TcpListener::bind(address).await?;
+    eprintln!("[pyac-vliw] listening on {address}");
     axum::serve(listener, app)
         .with_graceful_shutdown(async {
             let _ = tokio::signal::ctrl_c().await;

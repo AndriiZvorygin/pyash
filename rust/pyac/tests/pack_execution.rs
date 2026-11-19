@@ -7,6 +7,24 @@ const PLUS: [u16; WORDS_PER_CODELET] = [
     0x0149, 0x881d, 1, 0x245e, 0x881d, 1, 0x243e, 0x8a64, 0x295e, 0, 0, 0, 0, 0, 0, 0,
 ];
 
+fn float_quote(value: f32) -> [u16; 3] {
+    let bits = value.to_bits();
+    [0xd01d, bits as u16, (bits >> 16) as u16]
+}
+
+fn float_arithmetic(left: f32, right: f32, operator: u16) -> [u16; WORDS_PER_CODELET] {
+    let left = float_quote(left);
+    let right = float_quote(right);
+    [
+        0x0511, left[0], left[1], left[2], 0x245e, right[0], right[1], right[2], 0x243e, operator,
+        0x295e, 0, 0, 0, 0, 0,
+    ]
+}
+
+const FLOAT_LITERAL: [u16; WORDS_PER_CODELET] = [
+    0x0031, 0xd01d, 0x0000, 0x3fa0, 0x245e, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+
 const INVERT: [u16; WORDS_PER_CODELET] = [
     0x0149, 0x881d, 5, 0x245e, 0x881d, 0, 0x207e, 0xaad2, 0x295e, 0, 0, 0, 0, 0, 0, 0,
 ];
@@ -776,6 +794,52 @@ fn executes_mixed_supported_codelet_families_in_pack_order() {
             PyacValue::Boolean(true),
         ])
     );
+}
+
+#[test]
+fn executes_f32_quotes_and_arithmetic_through_the_shared_pack_runtime() {
+    let cases = [
+        (0.1, 0.2, 0x8a64, 0.1f32 + 0.2f32),
+        (5.5, 2.0, 0xabd2, 5.5f32 - 2.0f32),
+        (1.5, 2.0, 0xec90, 1.5f32 * 2.0f32),
+        (1.5, 4.0, 0x8893, 1.5f32 / 4.0f32),
+    ];
+    let codelets = cases
+        .iter()
+        .map(|(left, right, operator, _)| float_arithmetic(*left, *right, *operator))
+        .collect::<Vec<_>>();
+    let pack =
+        decode_pack(&encode_pack(&codelets).expect("f32 pack fits")).expect("f32 pack decodes");
+
+    assert_eq!(
+        execute_pack(&pack),
+        Ok(cases
+            .iter()
+            .map(|(_, _, _, result)| PyacValue::Float32(result.to_bits()))
+            .collect())
+    );
+
+    let literal_pack = decode_pack(&encode_pack(&[FLOAT_LITERAL]).expect("literal pack fits"))
+        .expect("literal pack decodes");
+    assert_eq!(
+        execute_pack(&literal_pack),
+        Ok(vec![PyacValue::Float32(1.25f32.to_bits())])
+    );
+}
+
+#[test]
+fn shared_pack_runtime_rejects_non_finite_f32_values_and_results() {
+    let infinity = [
+        0x0031, 0xd01d, 0, 0x7f80, 0x245e, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ];
+    let pack = decode_pack(&encode_pack(&[infinity]).expect("pack fits")).expect("pack decodes");
+    let error = execute_pack(&pack).expect_err("infinity is rejected");
+    assert_eq!(error.code(), "non-finite-float");
+
+    let overflow = float_arithmetic(f32::MAX, 2.0, 0xec90);
+    let pack = decode_pack(&encode_pack(&[overflow]).expect("pack fits")).expect("pack decodes");
+    let error = execute_pack(&pack).expect_err("overflow is rejected");
+    assert_eq!(error.code(), "non-finite-float");
 }
 
 #[test]

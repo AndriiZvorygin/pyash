@@ -87,6 +87,97 @@ fn executes_numeric_operator_family_with_shared_saturating_semantics() {
 }
 
 #[test]
+fn executes_f32_literals_and_scalar_arithmetic() {
+    fn quote(value: f32) -> [u32; 3] {
+        let bits = value.to_bits();
+        [0xd01d, bits & 0xffff, bits >> 16]
+    }
+
+    let left = quote(0.1);
+    let right = quote(0.2);
+    let arithmetic = [
+        0x0511,
+        left[0],
+        left[1],
+        left[2],
+        ACCUSATIVE,
+        right[0],
+        right[1],
+        right[2],
+        DESTINATION,
+        PLUS,
+        DEONTIC,
+        0,
+        0,
+        0,
+        0,
+        0,
+    ];
+    let result = interpret(&[arithmetic]);
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.value_kind, VALUE_FLOAT32);
+    assert_eq!(result.values[0], (0.1f32 + 0.2f32).to_bits());
+
+    let bits = 1.25f32.to_bits();
+    let literal = [
+        0x0031,
+        0xd01d,
+        bits & 0xffff,
+        bits >> 16,
+        ACCUSATIVE,
+        REALIS,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    ];
+    let result = interpret(&[literal]);
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.value_kind, VALUE_FLOAT32);
+    assert_eq!(result.values[0], 1.25f32.to_bits());
+}
+
+#[test]
+fn rejects_non_finite_f32_literals_and_results() {
+    let infinity = [
+        0x0031, 0xd01d, 0, 0x7f80, ACCUSATIVE, REALIS, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ];
+    let result = interpret(&[infinity]);
+    assert_eq!(result.error, ERROR_FLOAT_DOMAIN, "{result:?}");
+
+    let max = f32::MAX.to_bits();
+    let max_quote = [0xd01d, max & 0xffff, max >> 16];
+    let two = 2.0f32.to_bits();
+    let two_quote = [0xd01d, two & 0xffff, two >> 16];
+    let overflow = [
+        0x0511,
+        max_quote[0],
+        max_quote[1],
+        max_quote[2],
+        ACCUSATIVE,
+        two_quote[0],
+        two_quote[1],
+        two_quote[2],
+        DESTINATION,
+        MULTIPLY,
+        DEONTIC,
+        0,
+        0,
+        0,
+        0,
+        0,
+    ];
+    let result = interpret(&[overflow]);
+    assert_eq!(result.error, ERROR_FLOAT_DOMAIN, "{result:?}");
+}
+
+#[test]
 fn executes_invert_date_and_numeric_vector_literals() {
     let invert = [
         0x0149,

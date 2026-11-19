@@ -120,6 +120,7 @@ pub const VALUE_VECTOR_U32: u32 = 5;
 pub const VALUE_VECTOR_BOOL: u32 = 6;
 pub const VALUE_BOOLEAN: u32 = 7;
 const VALUE_NUMBER: u32 = 8;
+pub const VALUE_FLOAT32: u32 = 9;
 
 pub const ERROR_UNSUPPORTED: u32 = 1;
 pub const ERROR_DIVISION_BY_ZERO: u32 = 2;
@@ -131,6 +132,7 @@ pub const ERROR_CONSTANT_WRITE: u32 = 7;
 pub const ERROR_STEP_BUDGET: u32 = 8;
 pub const ERROR_PROGRAM_CAPACITY: u32 = 9;
 pub const ERROR_CALL_DEPTH: u32 = 10;
+pub const ERROR_FLOAT_DOMAIN: u32 = 11;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProgramletSection {
@@ -451,6 +453,8 @@ impl ProgramletNumber {
 mod boolean;
 #[path = "semantics_runtime/conditional.rs"]
 mod conditional;
+#[path = "semantics_runtime/float.rs"]
+mod float;
 #[path = "semantics_runtime/numeric.rs"]
 mod numeric;
 #[path = "semantics_runtime/programlet_actions.rs"]
@@ -483,6 +487,7 @@ use boolean::{
     evaluate_boolean_expression_with_env, evaluate_boolean_leaf,
 };
 use conditional::conditional;
+use float::single_codelet;
 use numeric::{
     arithmetic, boolean_literal, invert, literal, number_operator, vector_arithmetic, word,
     zero_tail,
@@ -529,6 +534,11 @@ pub fn interpret_group(words: &[u32], start: usize, codelet_count: usize) -> Cor
         return CoreResult::failure(ERROR_MALFORMED, (codelet_count - start) as u32);
     }
     let group_len = end - start + 1;
+    if group_len == 1 {
+        if let Some(result) = single_codelet(words, start) {
+            return result;
+        }
+    }
     if let Some(result) = boolean_composition(words, start, codelet_count) {
         return result;
     }
