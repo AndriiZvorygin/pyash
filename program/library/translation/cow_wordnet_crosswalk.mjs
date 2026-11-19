@@ -7,6 +7,11 @@ export const COW_WORDNET_CROSSWALK_FORMAT = "cow-wordnet-sense-crosswalk-v1";
 export const COW_WORDNET_CROSSWALK_NAME = "translation_cow_wordnet_crosswalk";
 
 const HAN = /\p{Script=Han}/u;
+const FREQUENCY_STATUS_PRIORITY = Object.freeze({
+  "frequency-top": 0,
+  "unresolved-frequency-tie": 1,
+  "no-english30k-frequency": 2
+});
 
 function invalid(message, details = {}) {
   const error = new Error(message);
@@ -408,6 +413,62 @@ export function buildCowWordNetCrosswalkIndex(records = []) {
     preferredSenseByChineseForm,
     byIli
   };
+}
+
+export function lookupCowChineseFormsByWordNetSenses(index, senseIds = []) {
+  if (!(index?.byWordNetSense instanceof Map) || !(index?.byChineseForm instanceof Map)
+    || !Array.isArray(senseIds)) {
+    throw invalid("COW Chinese lookup requires a crosswalk index and WordNet sense ids");
+  }
+  const requestedSenseIds = new Set(senseIds.map((senseId) => text(senseId).toLowerCase()).filter(Boolean));
+  const results = new Map();
+  for (const senseId of requestedSenseIds) {
+    const record = index.byWordNetSense.get(senseId);
+    if (!record) continue;
+    for (const form of record.chineseForms ?? []) {
+      if (!form.preferred) continue;
+      const candidates = (index.byChineseForm.get(form.form) ?? [])
+        .filter((candidate) => candidate.matchedForm?.preferred);
+      const status = form.frequencyStatus;
+      let preferredCandidates = [];
+      if (status === "frequency-top") {
+        preferredCandidates = candidates.filter((candidate) => candidate.matchedForm.frequencyStatus === status);
+      } else if (status === "unresolved-frequency-tie") {
+        preferredCandidates = candidates.filter((candidate) => candidate.matchedForm.frequencyStatus === status);
+      } else if (status === "no-english30k-frequency"
+        && candidates.length > 0
+        && candidates.every((candidate) => candidate.matchedForm.frequencyStatus === status)) {
+        preferredCandidates = candidates;
+      }
+      const candidateSenseIds = [...new Set(preferredCandidates.map((candidate) => candidate.wordNetSenseId))]
+        .sort((left, right) => left.localeCompare(right));
+      if (!candidateSenseIds.includes(senseId)) continue;
+      const result = results.get(form.form) ?? {
+        chinese: form.form,
+        hanCharacterCount: form.hanCharacterCount,
+        frequencyStatus: status,
+        wordNetSenseIds: candidateSenseIds,
+        matchedWordNetSenseIds: [],
+        frequencyRank: record.frequencyRank,
+        frequencyTagCount: record.frequencyTagCount,
+        cowSynsetIds: [...new Set(preferredCandidates.flatMap((candidate) => candidate.matchedForm.cowSynsetIds ?? []))].sort(),
+        ...(form.subtlexRank !== undefined ? { subtlexRank: form.subtlexRank } : {}),
+        ...(form.jundaRank !== undefined ? { jundaRank: form.jundaRank } : {})
+      };
+      result.matchedWordNetSenseIds.push(senseId);
+      results.set(form.form, result);
+    }
+  }
+  return [...results.values()].map((row) => ({
+    ...row,
+    matchedWordNetSenseIds: [...new Set(row.matchedWordNetSenseIds)].sort((left, right) => left.localeCompare(right))
+  })).sort((left, right) => left.hanCharacterCount - right.hanCharacterCount
+    || (FREQUENCY_STATUS_PRIORITY[left.frequencyStatus] ?? 3)
+      - (FREQUENCY_STATUS_PRIORITY[right.frequencyStatus] ?? 3)
+    || (Number.isSafeInteger(left.frequencyRank) ? left.frequencyRank : Number.MAX_SAFE_INTEGER)
+      - (Number.isSafeInteger(right.frequencyRank) ? right.frequencyRank : Number.MAX_SAFE_INTEGER)
+    || compareChineseFormFrequency(left, right)
+    || codePointSort(left.chinese, right.chinese));
 }
 
 export function renderCowWordNetCrosswalkPya(records = [], {

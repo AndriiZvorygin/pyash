@@ -39,7 +39,8 @@ import { formatSumoEvidence, lookupSumoEvidence } from "../program/library/trans
 import {
   lookupChineseCharacterGlosses,
   lookupChinesePinyin,
-  lookupChineseByPyash
+  lookupChineseByPyash,
+  lookupChineseByWordNetSenses
 } from "../program/library/translation/kwon_chinese_lookup.mjs";
 import {
   MOODS,
@@ -503,10 +504,26 @@ function englishSenseDefinitions(token, english, linkedWordNetSenses) {
 
 async function reportPyashChineseLookups(tokens, {
   linkedWordNetSenses = [],
+  wordNetCompoundSenses = [],
   foundCompounds = new Map(),
   report = console.log
 } = {}) {
   const lookups = [];
+  const wordNetSenseEntries = [
+    ...linkedWordNetSenses,
+    ...wordNetCompoundSenses.map((entry) => ({
+      ...entry,
+      source: entry.senseId,
+      gloss: entry.definition,
+      active: true
+    }))
+  ];
+  const activeSenseIds = [...new Set(wordNetSenseEntries
+    .filter((entry) => entry.active === true)
+    .map((entry) => entry.source))];
+  const cowForms = activeSenseIds.length > 0
+    ? await lookupChineseByWordNetSenses(activeSenseIds)
+    : [];
   for (const token of tokens) {
     let matched = false;
     const linkedRows = await lookupChineseByPyash(token);
@@ -533,6 +550,52 @@ async function reportPyashChineseLookups(tokens, {
         pinyin,
         english: row.english,
         characterGlosses,
+        definitions
+      });
+      matched = true;
+    }
+
+    const tokenSenseIds = new Set(wordNetSenseEntries
+      .filter((entry) => entry.input === token && entry.active === true)
+      .map((entry) => entry.source));
+    const tokenCowForms = cowForms.filter((row) => row.matchedWordNetSenseIds
+      .some((senseId) => tokenSenseIds.has(senseId)));
+    for (const row of tokenCowForms) {
+      const pinyin = await lookupChinesePinyin(row.chinese);
+      const characterGlosses = await lookupChineseCharacterGlosses(row.chinese);
+      const pinyinText = pinyin.length > 0 ? pinyin.join(" / ") : "unavailable in the local pinyin index";
+      const frequencyLabel = row.frequencyStatus === "frequency-top"
+        ? "frequency-preferred"
+        : row.frequencyStatus === "unresolved-frequency-tie"
+          ? "unresolved frequency tie"
+          : "no English30k rank";
+      report(`${token}: COW WordNet Chinese ${row.chinese}; Pinyin ${pinyinText} (${frequencyLabel})`);
+      const characterBreakdown = characterGlosses
+        .filter((entry) => entry.glosses.length > 0)
+        .map((entry) => `${entry.character} (${entry.glosses.join("; ")})`);
+      if (characterBreakdown.length > 0) {
+        report(`${token}: English character glosses ${characterBreakdown.join(" + ")}`);
+      }
+      const definitions = wordNetSenseEntries
+        .filter((entry) => entry.input === token && entry.active === true
+          && row.wordNetSenseIds.includes(entry.source))
+        .map((entry) => ({ senseId: entry.source, target: entry.target, definition: entry.gloss }));
+      for (const definition of definitions) {
+        report(`${token}: English breakdown ${definition.target} — ${definition.definition} (${definition.senseId})`);
+      }
+      lookups.push({
+        input: token,
+        source: "cow-wordnet-crosswalk",
+        chinese: row.chinese,
+        hanCharacterCount: row.hanCharacterCount,
+        pinyin,
+        characterGlosses,
+        frequencyStatus: row.frequencyStatus,
+        frequencyRank: row.frequencyRank,
+        frequencyTagCount: row.frequencyTagCount,
+        wordNetSenseIds: row.wordNetSenseIds,
+        matchedWordNetSenseIds: row.matchedWordNetSenseIds,
+        cowSynsetIds: row.cowSynsetIds,
         definitions
       });
       matched = true;
@@ -572,6 +635,56 @@ async function reportPyashChineseLookups(tokens, {
       }
     }
     if (!matched) report(`${token}: no linked Chinese entry for this Pyash form`);
+  }
+  return lookups;
+}
+
+async function reportCowChineseSenseLookups(senseLookups, report) {
+  const senseRows = senseLookups.filter((row) => row.status !== "not-found");
+  if (senseRows.length === 0) return [];
+  const forms = await lookupChineseByWordNetSenses(senseRows.map((row) => row.senseId));
+  const lookups = [];
+  for (const row of forms) {
+    const senseEvidence = senseRows.filter((sense) => row.wordNetSenseIds.includes(sense.senseId));
+    const input = row.matchedWordNetSenseIds.join(", ");
+    const pinyin = await lookupChinesePinyin(row.chinese);
+    const characterGlosses = await lookupChineseCharacterGlosses(row.chinese);
+    const pinyinText = pinyin.length > 0 ? pinyin.join(" / ") : "unavailable in the local pinyin index";
+    const frequencyLabel = row.frequencyStatus === "frequency-top"
+      ? "frequency-preferred"
+      : row.frequencyStatus === "unresolved-frequency-tie"
+        ? "unresolved frequency tie"
+        : "no English30k rank";
+    report(`${input}: COW WordNet Chinese ${row.chinese}; Pinyin ${pinyinText} (${frequencyLabel})`);
+    const characterBreakdown = characterGlosses
+      .filter((entry) => entry.glosses.length > 0)
+      .map((entry) => `${entry.character} (${entry.glosses.join("; ")})`);
+    if (characterBreakdown.length > 0) {
+      report(`${input}: English character glosses ${characterBreakdown.join(" + ")}`);
+    }
+    const definitions = senseEvidence.map((sense) => ({
+      senseId: sense.senseId,
+      lemmas: sense.lemmas,
+      definition: sense.definition
+    }));
+    for (const sense of definitions) {
+      report(`${sense.senseId}: English breakdown ${sense.lemmas.join(", ")} — ${sense.definition}`);
+    }
+    lookups.push({
+      input,
+      source: "cow-wordnet-crosswalk",
+      chinese: row.chinese,
+      hanCharacterCount: row.hanCharacterCount,
+      pinyin,
+      characterGlosses,
+      frequencyStatus: row.frequencyStatus,
+      frequencyRank: row.frequencyRank,
+      frequencyTagCount: row.frequencyTagCount,
+      wordNetSenseIds: row.wordNetSenseIds,
+      matchedWordNetSenseIds: row.matchedWordNetSenseIds,
+      cowSynsetIds: row.cowSynsetIds,
+      definitions
+    });
   }
   return lookups;
 }
@@ -1878,8 +1991,23 @@ export async function runVocabSuggest(args = process.argv.slice(2), {
     if (!wordNetCompoundSenseLines.has(line)) lookupReport(line);
   }
 
+  const activeTextSenseIds = new Set([
+    ...linkedWordNetSenses.filter((entry) => entry.active === true).map((entry) => entry.source),
+    ...wordNetCompoundSenses
+      .filter((entry) => resolvedTextInputs.includes(entry.input))
+      .map((entry) => entry.senseId)
+  ]);
+  const directSenseChineseLookups = targetLanguage === "zh"
+    ? await reportCowChineseSenseLookups(wordNetSenseLookups
+      .filter((entry) => !activeTextSenseIds.has(entry.senseId)), report)
+    : [];
   const chineseLookups = targetLanguage === "zh"
-    ? await reportPyashChineseLookups(resolvedTextInputs, { linkedWordNetSenses, foundCompounds, report })
+    ? await reportPyashChineseLookups(resolvedTextInputs, {
+      linkedWordNetSenses,
+      wordNetCompoundSenses,
+      foundCompounds,
+      report
+    })
     : [];
   const sumoLookups = await reportSumoLookups([...resolvedTextInputs, ...sumoIds, ...senseIds], lookupReport);
 
@@ -2087,7 +2215,9 @@ export async function runVocabSuggest(args = process.argv.slice(2), {
       records,
       wordNetSenseLookups,
       sumoLookups,
-      ...(chineseLookups.length > 0 ? { chineseLookups } : {}),
+      ...([...directSenseChineseLookups, ...chineseLookups].length > 0
+        ? { chineseLookups: [...directSenseChineseLookups, ...chineseLookups] }
+        : {}),
       foundCompounds: [...foundCompounds.entries()].map(([target, found]) => ({
         target: found.pyacSequenceQuery ? found.row.target : target,
         ...(found.pyacSequenceQuery ? {
@@ -2152,7 +2282,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), {
     wordNetCompoundSenses,
     wordNetSenseLookups,
     sumoLookups,
-    chineseLookups,
+    chineseLookups: [...directSenseChineseLookups, ...chineseLookups],
     compoundAtomLinks: [...compoundAtomMatches.entries()].map(([token, links]) => ({
       token,
       compounds: links.map(({ compound, atom }) => ({
