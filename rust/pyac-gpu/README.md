@@ -26,6 +26,12 @@ Install the repository's pinned Rust toolchain, the official `cargo-gpu`
 rust/pyac-gpu/smoke.sh
 ```
 
+Before a GPU test, `./rust/pyac-gpu/probe-vulkan-device.sh` performs a
+low-memory inventory of the NVIDIA Vulkan adapter and compute queue. It has a
+10-second timeout and does not build shaders, create pipelines, or dispatch
+GPU work. Install `vulkan-tools` if `vulkaninfo` is not present. This check
+confirms driver/device visibility only; it is not a pipeline compilation test.
+
 The smoke command lowers a small Pyash programlet to a canonical `.pyac` pack,
 runs it on a discrete Vulkan GPU, and asserts the typed result plus rejection
 of a constant write. It also checks the ordinary codelet-pack path. It requires
