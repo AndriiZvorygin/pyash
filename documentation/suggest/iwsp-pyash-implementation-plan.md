@@ -333,9 +333,14 @@ inspectable so that:
 
 ### 4.4 Sense links
 
-**Sense links are not implemented and there is no runtime surface for them.** Verified:
-`rg "wordnet|synset|gloss" program/verbs/ program/bridge/ program/motor/` returns
-nothing. The lexical machinery exists but is build-time and translation-time only:
+**Sense links have no runtime lookup surface.** The lexical machinery exists but is
+build-time and translation-time only. Note that `rg "wordnet|synset|gloss"
+program/verbs/ program/bridge/ program/motor/` is *not* empty: it returns two hits in
+`program/verbs/exchange/translation.mjs:6,96`, which call `matchGlossToPyash`
+(`program/library/translation/reverse_pairs.mjs:205`). That helper matches a gloss
+*string* against a reverse word map; it does not resolve a model or feature name to a
+sense record (id, POS, synset, lemmas, gloss). The gap an implementation agent should
+plan against is therefore a name-to-sense lookup, not the absence of gloss handling.
 
 - `program/library/translation/english_wordnet_linker.mjs` produces sense records with
   a stable id (`english-wordnet-sense-<hash>`), `pos`, `synset`, `lemmas`, `gloss`,
@@ -960,3 +965,65 @@ the final driver-generated machine code:
 | `documentation/reference/pyac-vliw-database.md` | `.pyac` container and future indexed image |
 | `documentation/reference/gpu-housekeeper-architecture.md` | Housekeeper and runtime split |
 | `documentation/roadmap.md` | The parity-first invariant |
+
+### A.5 First-pass vocabulary anchors for the Transformer instruction set
+
+These matches were checked with the local Kwon/WordNet/SUMO lookup on 2026-11-19.
+IDs below are Open English WordNet 2025 senses. `=` marks an equivalent SUMO
+concept; `+` means the WordNet sense is subsumed by the broader SUMO concept.
+This is a sense-selection record, not a final Pyash compound or HNUC assignment.
+
+| Instruction concept | WordNet 2025 sense | SUMO link | Fit |
+|---|---|---|---|
+| Vector value | `n:05873161-n`, variable quantity resolved into components | `FunctionQuantity` (`=`) | Direct mathematical sense |
+| Tensor value | `n:05873065-n`, generalization of a vector | `Quantity` (`+`) | Useful parent concept |
+| Matrix value | `n:08284561-n`, rectangular array of quantities | `ContentBearingObject` (`+`) | Direct mathematical sense |
+| Matrix multiplication | `n:00874664-n`, multiplication of matrices | `Calculating` (`+`) | Direct operation sense |
+| Dot/inner product | `n:05873468-n`, scalar product of two vectors | `MultiplicationFn` (`+`) | Direct operation sense |
+| Sum reduction | `n:05869651-n`, sum of a group of numbers; action `v:00951320-v`, determine a sum | `AdditionFn` (`+`); action `Calculating` (`+`) | Direct operation/action senses |
+| Division | `v:00643760-v`, perform a division | `Calculating` (`+`) | Direct operation sense |
+| Exponentiation | `n:00874089-n`, raise a quantity to a power | `ExponentiationFn` (`=`) | Direct operation sense |
+| Exponential function | `n:13811674-n` | `ExponentiationFn` (`=`) | Direct function sense |
+| Square root | `n:13753980-n`, number whose square equals a given number | `SquareRootFn` (`=`) | Direct function sense |
+| Maximum result | `n:13798337-n`, largest possible quantity | `Quantity` (`+`) | Result sense; `argmax` has no direct match |
+| Normalize | `v:00469149-v`, make normal or conform to a standard; gloss includes temperature normalization | `IntentionalProcess` (`+`) | Broad parent for numeric normalization |
+| Activation function | `n:13806028-n`, mathematical function/relation | No specific SUMO mapping captured | Parent only; no direct ReLU/GELU sense found |
+| Softmax | No direct sense found | No direct SUMO concept found | Compose from maximum, subtraction, exponentiation, sum, and division |
+| Embedding lookup | `n:13574763-n`, table lookup operation | `ContentDevelopment` (`+`) | Lookup is direct; learned embedding has no direct sense |
+| Computer memory | `n:03749767-n`, electronic memory device | `ComputerMemory` (`=`) | Direct storage concept |
+| Computer address | `n:06367922-n`, code identifying where information is stored | `ContentBearingObject` (`+`) | Direct addressing concept |
+| Read computer data | `v:00629157-v`, obtain data from digital sources | No specific SUMO mapping captured | Direct read sense |
+| Write computer data | `v:01000931-v`, record data on a computer | `Encoding` (`+`) | Direct write sense |
+| Compare | `v:00654571-v`, examine similarities or differences | `Comparing` (`=`) | Direct comparison sense |
+| Select | `v:00676526-v`, choose from alternatives | `Selecting` (`=`) | Direct selection sense |
+| Parallel processing | `n:13539343-n`, simultaneous processing by multiple units | `ContentDevelopment` (`+`) | Direct execution-mode sense |
+| Execute program | `v:02569242-v`, run a process or program on a computer | `PsychologicalProcess` (`+`) | Direct computer-execution sense |
+| Synchronize | `v:00465909-v`, operate simultaneously | `Guiding` (`+`) | Broad concurrency parent; GPU barrier has no direct match |
+
+`kernel launch`, `workgroup`, positional encoding, and causal masking have no
+direct senses in these lookups. Kernel launch can use execution and parallel-
+processing parents; the other concepts can link to their mathematical, indexing,
+comparison, and selection parents. The Q/K/V “projection” in attention is a
+matrix multiplication, so the mathematical matrix-multiplication sense is the
+better anchor than the geometric projection sense.
+
+### A.6 Proposed head-final compounds for current lexical gaps
+
+Each proposal below is a two-part semantic composition. The component order is
+modifier then head, and the final component names the compound's core concept.
+The anchors are existing Open English WordNet 2025 senses and their verified
+SUMO crosswalks from A.5. These are plan candidates only; they do not allocate
+HNUCs or add entries to the accepted compound catalog.
+
+| Missing term | Proposed compound | Component synset anchors | Composed meaning |
+|---|---|---|---|
+| Softmax | **exponential normalization** (`exponential` + `normalization`; head: `normalization`) | Exponential function `n:13811674-n`, `ExponentiationFn` (`=`); normalize `v:00469149-v`, `IntentionalProcess` (`+`) | Normalize exponentials across a vector into relative weights; a stable implementation may subtract the maximum first. |
+| Argmax | **maximum position** (`maximum` + `position`; head: `position`) | Maximum quantity `n:13798337-n`, `Quantity` (`+`); list/sequence position `n:06495143-n` | Return the sequence position associated with the greatest value. |
+| Neural activation function | **activation function** (`activation` + `function`; head: `function`) | Activation process `n:13447549-n`, `Process` (`+`); mathematical function `n:13806028-n` | A neural input-to-output mapping that applies an activation operation; “neural” is the domain in the gloss, keeping the compound at two parts. |
+| Embedding as learned representation | **learned vector** (`learned` + `vector`; head: `vector`) | Learn/acquire knowledge `v:00599310-v`, `Learning` (`+`); vector quantity `n:05873161-n`, `FunctionQuantity` (`=`) | A vector-valued representation whose components are learned from data, such as a token embedding. |
+| Kernel launch | **parallel execution** (`parallel` + `execution`; head: `execution`) | Parallel processing `n:13539343-n`, `ContentDevelopment` (`+`); execute a computer program `v:02569242-v`, `PsychologicalProcess` (`+`) | Start a kernel program across a configured set of concurrent work items. |
+| GPU workgroup | **parallel group** (`parallel` + `group`; head: `group`) | Parallel processing `n:13539343-n`, `ContentDevelopment` (`+`); group `n:00031563-n`, `Group` (`=`) | A set of GPU work items scheduled as one cooperating unit. |
+| GPU barrier | **group synchronization** (`group` + `synchronization`; head: `synchronization`) | Group `n:00031563-n`, `Group` (`=`); synchronization `n:01003039-n`, `IntentionalProcess` (`+`) | A group-scoped rendezvous where participating work items wait until all have arrived before proceeding. |
+
+The compounds name the computation or execution concept; exact Pyash component
+words and HNUCs remain to be selected through the normal vocabulary workflow.
