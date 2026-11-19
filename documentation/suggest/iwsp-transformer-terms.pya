@@ -3,7 +3,8 @@ su text "term" ob text "Vector value" ya
 su text "wordnet sense" ob text "n:05873161-n" ya
 su text "sumo match" ob text "FunctionQuantity (=)" ya
 su text "pyash compound" ob text "vector" ya
-su text "status" ob text "good direct mathematical match; Pyash code mapping not recorded in this reference" ya
+su text "pyash form" ob text "dlek" ya
+su text "status" ob text "good direct mathematical match and linked Pyash atom" ya
 prah
 
 su name iwsp transformer term 002 be map def
@@ -18,8 +19,9 @@ su name iwsp transformer term 003 be map def
 su text "term" ob text "Matrix value" ya
 su text "wordnet sense" ob text "n:08284561-n" ya
 su text "sumo match" ob text "ContentBearingObject (+)" ya
-su text "pyash compound" ob text "" ya
-su text "status" ob text "partial; direct mathematical sense, no Pyash mapping recorded" ya
+su text "pyash compound" ob text "matrix" ya
+su text "compound components" ob text "align + stomach" ya
+su text "status" ob text "linked compound; serious semantic red flag for the mathematical matrix sense" ya
 prah
 
 su name iwsp transformer term 004 be map def
@@ -42,8 +44,10 @@ su name iwsp transformer term 006 be map def
 su text "term" ob text "Sum reduction" ya
 su text "wordnet senses" ob ve text "n:05869651-n" "v:00951320-v" ya
 su text "sumo match" ob text "AdditionFn (+); Calculating (+)" ya
-su text "pyash compound" ob text "sum of a group of numbers" ya
-su text "status" ob text "good noun and action senses; exact Pyash compound mapping not recorded" ya
+su text "pyash form" ob text "tfo2t (tot)" ya
+su text "linked compound target" ob text "amount" ya
+su text "compound components" ob text "number + gross" ya
+su text "status" ob text "sum action atom linked; noun compound is adjacent amount sense, not an exact reduction operation" ya
 prah
 
 su name iwsp transformer term 007 be map def
@@ -51,7 +55,8 @@ su text "term" ob text "Exponential function" ya
 su text "wordnet sense" ob text "n:13811674-n" ya
 su text "sumo match" ob text "ExponentiationFn (=)" ya
 su text "pyash compound" ob text "exponential" ya
-su text "status" ob text "good direct function sense; compound code not recorded here" ya
+su text "pyash form" ob text "swos" ya
+su text "status" ob text "good direct function sense and linked Pyash atom" ya
 prah
 
 su name iwsp transformer term 008 be map def
@@ -61,7 +66,8 @@ su text "sumo match" ob text "no direct concept found" ya
 su text "pyash compound" ob text "exponential normalization" ya
 su text "compound components" ob ve text "exponential" "normalization" ya
 su text "component anchors" ob ve text "n:13811674-n" "v:00469149-v" ya
-su text "status" ob text "compound recorded in plan; composed from existing concepts" ya
+su text "component Pyash links" ob text "exponential=swos; normalization=not listed in supplied mapping" ya
+su text "status" ob text "compound recorded in plan; Pyash component mapping is partial" ya
 su text "qualification" ob text "stable implementation may subtract the maximum first" ya
 prah
 
@@ -72,7 +78,8 @@ su text "sumo match" ob text "Quantity (+) for maximum result" ya
 su text "pyash compound" ob text "maximum position" ya
 su text "compound components" ob ve text "maximum" "position" ya
 su text "component anchors" ob ve text "n:13798337-n" "n:06495143-n" ya
-su text "status" ob text "compound recorded in plan; deterministic lower-index tie break is an operation rule" ya
+su text "component compound links" ob text "maximum=magnitude + boundary; position/place=sort + places" ya
+su text "status" ob text "compound recorded in plan; component mappings need semantic review; deterministic lower-index tie break is an operation rule" ya
 prah
 
 su name iwsp transformer term 010 be map def
@@ -81,7 +88,8 @@ su text "wordnet sense" ob ve text "n:13447549-n" "n:13806028-n" ya
 su text "sumo match" ob text "Process (+); Function (+)" ya
 su text "pyash compound" ob text "activation function" ya
 su text "compound components" ob ve text "activation" "function" ya
-su text "status" ob text "compound recorded in plan; anchors are broad, not an exact neural-network sense" ya
+su text "component compound link" ob text "function=box + number" ya
+su text "status" ob text "compound recorded in plan; broad anchors, and function components are a semantic red flag" ya
 prah
 
 su name iwsp transformer term 011 be map def
@@ -91,7 +99,8 @@ su text "sumo match" ob text "Learning (+); FunctionQuantity (=)" ya
 su text "pyash compound" ob text "learned vector" ya
 su text "compound components" ob ve text "learned" "vector" ya
 su text "lookup anchor" ob text "n:13574763-n; ContentDevelopment (+)" ya
-su text "status" ob text "compound recorded in plan; learned embedding has no direct sense" ya
+su text "component Pyash links" ob text "learn=lyac; vector=dlek; lookup=searching + see" ya
+su text "status" ob text "compound recorded in plan; learned embedding has no direct sense; lookup is an associated operation" ya
 prah
 
 su name iwsp transformer term 012 be map def
@@ -100,7 +109,8 @@ su text "wordnet senses" ob ve text "n:13539343-n" "n:13498665-n" ya
 su text "sumo match" ob text "ContentDevelopment (+)" ya
 su text "pyash compound" ob text "parallel execution" ya
 su text "compound components" ob ve text "parallel" "execution" ya
-su text "status" ob text "compound recorded in plan; prefer computer-science execution sense n:13498665-n" ya
+su text "supporting compound links" ob text "parallel processing=parallel + processing; instruction execution=command + executive; execute program=practical + verb" ya
+su text "status" ob text "compound recorded in plan; prefer computer-science execution sense n:13498665-n; execution links need semantic review" ya
 prah
 
 su name iwsp transformer term 013 be map def
@@ -109,7 +119,8 @@ su text "wordnet senses" ob ve text "n:13539343-n" "n:00031563-n" ya
 su text "sumo match" ob text "ContentDevelopment (+); Group (=)" ya
 su text "pyash compound" ob text "parallel group" ya
 su text "compound components" ob ve text "parallel" "group" ya
-su text "status" ob text "compound recorded in plan; workgroup meaning is specified by its gloss" ya
+su text "group compound link" ob text "together + company" ya
+su text "status" ob text "compound recorded in plan; workgroup meaning is specified by its gloss; company component needs review" ya
 prah
 
 su name iwsp transformer term 014 be map def
@@ -119,7 +130,8 @@ su text "sumo match" ob text "Group (=); IntentionalProcess (+)" ya
 su text "pyash compound" ob text "group synchronization" ya
 su text "compound components" ob ve text "group" "synchronization" ya
 su text "explanatory compound" ob text "group rendezvous" ya
-su text "status" ob text "compound recorded in plan; broad anchors, barrier scope and wait semantics are defined by gloss" ya
+su text "supporting Pyash links" ob text "synchronise=together + moment; wait=tyuc (waiting); rendezvous=hmi7n (milan alias; needs review)" ya
+su text "status" ob text "compound recorded in plan; broad anchors, barrier scope and wait semantics are defined by gloss; rendezvous alias needs review" ya
 su text "memory ordering" ob text "separate operation contract, not implied by barrier" ya
 prah
 
@@ -131,4 +143,157 @@ su text "pyash compound" ob text "video processor module" ya
 su text "pyash sequence" ob ve text "byot" "ples" "myoc" ya
 su text "status" ob text "existing accepted compound; project-local GPU concept remains proposed" ya
 su text "review note" ob text "three-part compound and available component senses are an acknowledged red flag for review" ya
+prah
+
+su name iwsp transformer term 016 be map def
+su text "term" ob text "Computer address" ya
+su text "wordnet sense" ob text "n:06367922-n" ya
+su text "pyash form" ob text "hdi7s (addresses)" ya
+su text "status" ob text "direct atom link supplied" ya
+prah
+
+su name iwsp transformer term 017 be map def
+su text "term" ob text "Compare" ya
+su text "wordnet sense" ob text "v:00654571-v" ya
+su text "sumo match" ob text "Comparing (=)" ya
+su text "pyash form" ob text "tras (comparison)" ya
+su text "status" ob text "direct atom link supplied" ya
+prah
+
+su name iwsp transformer term 018 be map def
+su text "term" ob text "Select" ya
+su text "wordnet sense" ob text "v:00676526-v" ya
+su text "sumo match" ob text "Selecting (=)" ya
+su text "pyash form" ob text "kcut (choose)" ya
+su text "status" ob text "direct atom link supplied" ya
+prah
+
+su name iwsp transformer term 019 be map def
+su text "term" ob text "Wait" ya
+su text "wordnet sense" ob text "v:02644022-v" ya
+su text "sumo match" ob text "PsychologicalProcess (+)" ya
+su text "pyash form" ob text "tyuc (waiting)" ya
+su text "status" ob text "direct atom link supplied" ya
+prah
+
+su name iwsp transformer term 020 be map def
+su text "term" ob text "Rendezvous" ya
+su text "wordnet sense" ob text "n:01234113-n" ya
+su text "sumo match" ob text "Meeting (+)" ya
+su text "pyash form" ob text "hmi7n (milan alias)" ya
+su text "status" ob text "direct atom alias supplied; needs review" ya
+prah
+
+su name iwsp transformer term 021 be map def
+su text "term" ob text "Computer memory" ya
+su text "wordnet sense" ob text "n:03749767-n" ya
+su text "sumo match" ob text "ComputerMemory (=)" ya
+su text "pyash compound" ob text "computer memory" ya
+su text "compound components" ob text "gather + computer" ya
+su text "status" ob text "linked compound; serious semantic red flag" ya
+prah
+
+su name iwsp transformer term 022 be map def
+su text "term" ob text "Position" ya
+su text "wordnet sense" ob text "n:06495143-n" ya
+su text "pyash compound" ob text "place" ya
+su text "compound components" ob text "sort + places" ya
+su text "status" ob text "linked position compound; used as an argmax component, not an exact index sense" ya
+prah
+
+su name iwsp transformer term 023 be map def
+su text "term" ob text "Maximum" ya
+su text "wordnet sense" ob text "n:13798337-n" ya
+su text "sumo match" ob text "Quantity (+)" ya
+su text "pyash compound" ob text "maximum" ya
+su text "compound components" ob text "magnitude + boundary" ya
+su text "status" ob text "linked result compound; review component fit for argmax" ya
+prah
+
+su name iwsp transformer term 024 be map def
+su text "term" ob text "Instruction execution" ya
+su text "wordnet sense" ob text "n:13498665-n" ya
+su text "sumo match" ob text "ContentDevelopment (+)" ya
+su text "pyash compound" ob text "execution" ya
+su text "compound components" ob text "command + executive" ya
+su text "status" ob text "linked compound; serious semantic red flag" ya
+prah
+
+su name iwsp transformer term 025 be map def
+su text "term" ob text "Parallel processing" ya
+su text "wordnet sense" ob text "n:13539343-n" ya
+su text "sumo match" ob text "ContentDevelopment (+)" ya
+su text "pyash compound" ob text "parallel processing" ya
+su text "compound components" ob text "parallel + processing" ya
+su text "status" ob text "good broad execution-mode match" ya
+prah
+
+su name iwsp transformer term 026 be map def
+su text "term" ob text "Lookup" ya
+su text "wordnet sense" ob text "n:13574763-n" ya
+su text "sumo match" ob text "ContentDevelopment (+)" ya
+su text "pyash compound" ob text "lookup" ya
+su text "compound components" ob text "searching + see" ya
+su text "status" ob text "linked compound; associated with embedding lookup" ya
+prah
+
+su name iwsp transformer term 027 be map def
+su text "term" ob text "Synchronization" ya
+su text "wordnet sense" ob text "v:00465909-v" ya
+su text "sumo match" ob text "Guiding (+)" ya
+su text "pyash compound" ob text "synchronise" ya
+su text "compound components" ob text "together + moment" ya
+su text "status" ob text "broad concurrency link; not an exact GPU barrier meaning" ya
+prah
+
+su name iwsp transformer term 028 be map def
+su text "term" ob text "Read computer data" ya
+su text "wordnet sense" ob text "v:00629157-v" ya
+su text "pyash compound" ob text "read" ya
+su text "compound components" ob text "derive + read" ya
+su text "status" ob text "linked compound" ya
+prah
+
+su name iwsp transformer term 029 be map def
+su text "term" ob text "Divide" ya
+su text "wordnet sense" ob text "v:00643760-v" ya
+su text "sumo match" ob text "Calculating (+)" ya
+su text "pyash compound" ob text "divide" ya
+su text "compound components" ob text "distribute + cutting" ya
+su text "status" ob text "linked compound" ya
+prah
+
+su name iwsp transformer term 030 be map def
+su text "term" ob text "Write computer data" ya
+su text "wordnet sense" ob text "v:01000931-v" ya
+su text "sumo match" ob text "Encoding (+)" ya
+su text "pyash compound" ob text "save" ya
+su text "compound components" ob text "holding + impose" ya
+su text "status" ob text "linked compound; serious semantic red flag" ya
+prah
+
+su name iwsp transformer term 031 be map def
+su text "term" ob text "Execute program" ya
+su text "wordnet sense" ob text "v:02569242-v" ya
+su text "sumo match" ob text "PsychologicalProcess (+)" ya
+su text "pyash compound" ob text "execute" ya
+su text "compound components" ob text "practical + verb" ya
+su text "status" ob text "linked compound; serious semantic red flag" ya
+prah
+
+su name iwsp transformer term 032 be map def
+su text "term" ob text "Learn" ya
+su text "wordnet sense" ob text "v:00599310-v" ya
+su text "sumo match" ob text "Learning (+)" ya
+su text "pyash form" ob text "lyac" ya
+su text "status" ob text "direct atom link supplied; used as a component of learned vector" ya
+prah
+
+su name iwsp transformer term 033 be map def
+su text "term" ob text "Mathematical function" ya
+su text "wordnet sense" ob text "n:13806028-n" ya
+su text "sumo match" ob text "Function (+)" ya
+su text "pyash compound" ob text "function" ya
+su text "compound components" ob text "box + number" ya
+su text "status" ob text "linked compound; serious semantic red flag" ya
 prah
