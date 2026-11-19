@@ -8,6 +8,7 @@ import {
   decodeCodelet,
   decodeVectorSequence,
   executeCodelets,
+  lowerVectorSequence,
   lowerSentence
 } from "../program/library/vliw/index.mjs";
 
@@ -37,6 +38,41 @@ test("vector widths use the legacy thickness and explicit length forms", () => {
     [0x0301, 0x8e1d, 0x0005, 0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x245e, 0x217e]
   );
   assert.deepEqual(decodeCodelet(five.words).sentence.ob.ve.values, [1, 2, 3, 4, 5]);
+});
+
+test("VLIW numeric arrays use the 16-bit thickness-6 count through 65,535 elements", async () => {
+  const values = Array.from({ length: 65_535 }, (_, index) => index & 0xffff);
+  const codelets = lowerSentence({
+    mood: "ya",
+    ob: { ve: { type: "num", values } },
+    be: "vector"
+  });
+
+  assert.equal(codelets[0].words[1], 0x8e1d);
+  assert.equal(codelets[0].words[2], 65_535);
+  const decoded = decodeVectorSequence(codelets.map(({ words }) => words));
+  assert.deepEqual(decoded.ob.ve.values, values);
+  const [executed] = await executeCodelets(codelets);
+  assert.deepEqual(executed.ob.ve.values, values);
+});
+
+test("VLIW text arrays count members and preserve each length-framed member", () => {
+  const sentence = parse('ob ve text "A" "long text" "tree" be vector ya');
+  const codelets = lowerSentence(sentence);
+  const decoded = decodeVectorSequence(codelets.map(({ words }) => words));
+
+  assert.equal(codelets[0].words[1], 0x0e9d);
+  assert.equal(codelets[0].words[2], 3);
+  assert.deepEqual(decoded.ob.ve, sentence.ob.ve);
+});
+
+test("the Pyash program packer round-trips counted numeric and text arrays", () => {
+  const sentences = [
+    parse(`ob ve num ${Array.from({ length: 17 }, (_, index) => index).join(" ")} be vector ya`),
+    parse('ob ve text "one" "two words" "three" be vector ya')
+  ];
+  const program = lowerPyashProgram(sentences);
+  assert.deepEqual(decodePyashProgram(program.vectors), sentences);
 });
 
 test("named vector literals carry the name phrase and its nominative case", async () => {
@@ -203,37 +239,37 @@ test("boolean vector literals lower to a signed integer quote", async () => {
 test("text vector literals keep every element and its case", async () => {
   const sentence = parse('ob ve text Name Age be vector ya');
   const [codelet] = lowerSentence(sentence);
-  assert.deepEqual(Array.from(codelet.words.slice(0, codelet.usedWords)), [
-    0x3001, 0x0e1d, 0x0004, 0x004e, 0x0061, 0x006d, 0x0065,
-    0x0e1d, 0x0003, 0x0041, 0x0067, 0x0065,
-    0x245e, 0x217e
-  ]);
+  assert.equal(codelet.words[1], 0x0e1d);
   assert.deepEqual(decodeCodelet(codelet.words).sentence, sentence);
   assert.deepEqual(await executeCodelets([codelet]), [sentence]);
 
   const longer = parse('ob ve text Ada Turing be vector ya');
-  const [longerCodelet] = lowerSentence(longer);
-  assert.deepEqual(decodeCodelet(longerCodelet.words).sentence.ob.ve.values, ["Ada", "Turing"]);
+  const longerCodelets = lowerSentence(longer);
+  assert.deepEqual(decodeCodelet(longerCodelets[0].words).sentence, longer);
 
   const longPayload = lowerSentence(parse("ob ve text hello world be vector ya"));
   assert.deepEqual(
-    decodePyashProgram(longPayload.map(({ words }) => words))[0].ob.ve.values,
+    decodeVectorSequence(longPayload.map(({ words }) => words)).ob.ve.values,
     ["hello", "world"]
   );
   assert.deepEqual((await executeCodelets(longPayload))[0].ob.ve.values, ["hello", "world"]);
 });
 
-test("vector literals accept one lane and reject widths above sixteen", () => {
+test("VLIW arrays accept one text element and reject lengths above the count field", () => {
   const [single] = lowerSentence(parse("ob ve num 7 be vector ya"));
   assert.deepEqual(decodeCodelet(single.words).sentence.ob.ve.values, [7]);
-  assert.throws(
-    () => lowerSentence(parse("ob ve num 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 be vector ya")),
-    (error) => error.code === "unsupported-vector-width"
-  );
-  assert.throws(
-    () => lowerSentence(parse("ob ve text one be vector ya")),
-    (error) => error.code === "unsupported-vector-width"
-  );
+  const [singleText] = lowerSentence(parse('ob ve text "one" be vector ya'));
+  assert.deepEqual(decodeCodelet(singleText.words).sentence.ob.ve.values, ["one"]);
+  assert.equal(decodeCodelet(singleText.words).items[1].quote.family, "text-array");
+  assert.equal(lowerVectorSequence(parse('ob ve text "one" be vector ya'))[0].words[1], 0x0e9d);
+  const seventeen = Array.from({ length: 17 }, (_, index) => index);
+  const codelets = lowerSentence({ mood: "ya", ob: { ve: { type: "num", values: seventeen } }, be: "vector" });
+  assert.deepEqual(decodeVectorSequence(codelets.map(({ words }) => words)).ob.ve.values, seventeen);
+  assert.throws(() => lowerSentence({
+    mood: "ya",
+    ob: { ve: { type: "num", values: Array(65_536).fill(0) } },
+    be: "vector"
+  }), (error) => error.code === "unsupported-vector-width");
 });
 
 test("vector literals reject element types and values without a proven encoding", () => {

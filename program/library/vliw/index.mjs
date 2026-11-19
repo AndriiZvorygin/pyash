@@ -64,10 +64,9 @@ import {
   executeVectorCodelet,
   isVectorSentence,
   lowerVectorSentence,
-  lowerVectorSequence,
-  decodeVectorSequence,
   normalizeVectorSentence
 } from "./vector.mjs";
+import { decodeVectorSequence, lowerVectorSequence } from "./vector_sequence.mjs";
 import {
   isIntVectorQuoteWord,
   isFloatVectorQuoteWord,
@@ -117,7 +116,10 @@ export function lowerSentence(sentence) {
     return [lowerDateSentence(sentence)];
   }
   if (isVectorSentence(sentence)) {
-    normalizeVectorSentence(sentence);
+    const { type, payload } = normalizeVectorSentence(sentence);
+    if (type === "text" && payload.length === 1) {
+      return lowerVectorSequence(sentence);
+    }
     try {
       return [lowerVectorSentence(sentence)];
     } catch (error) {
@@ -211,6 +213,7 @@ export function decodeCodelet(input) {
     (isUintVectorQuoteWord(quoteItem.quote.word) ||
       isIntVectorQuoteWord(quoteItem.quote.word) ||
       isFloatVectorQuoteWord(quoteItem.quote.word) ||
+      quoteItem.quote.family === "text-array" ||
       (quoteItems.length > 1 && isLetterQuoteWord(quoteItem.quote.word)))
   ) {
     try {
@@ -455,12 +458,11 @@ export {
 };
 export {
   decodeVectorCodelet,
-  decodeVectorSequence,
-  lowerVectorSequence,
   lowerVectorSentence,
   normalizeVectorSentence,
   vectorCompatibility
 } from "./vector.mjs";
+export { decodeVectorSequence, lowerVectorSequence } from "./vector_sequence.mjs";
 export {
   analyzeCodeletDependencies,
   deriveSentenceEffects,

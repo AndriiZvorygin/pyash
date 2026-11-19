@@ -2,6 +2,7 @@ import pyashWords from "../pyashWords.json" with { type: "json" };
 import { decodeLegacyCodeletGroups, VliwCodeletError } from "./codelets.mjs";
 import {
   INT_SORT_DENOTE,
+  LETTER_SORT_DENOTE,
   LETTER_QUOTE_WORD,
   NUMBER_QUOTE_WORD,
   PARAGRAPH_LETTER_QUOTE_WORD,
@@ -19,7 +20,8 @@ import {
   vectorThicknessFor
 } from "./quotes.mjs";
 import { encodePyacWord } from "./word_code.mjs";
-import { expandVectorInitializer } from "./vector_shape.mjs";
+import { expandVectorInitializer, MAX_VLIW_ARRAY_ELEMENTS } from "./vector_shape.mjs";
+import { encodeTextArrayMembers } from "./text_array.mjs";
 
 const WORD_COUNT = 16;
 const PAYLOAD_WORDS = WORD_COUNT - 1;
@@ -188,7 +190,12 @@ function encodeVectorValue(vector, role, declaredLength = null) {
   }
   let initialValues;
   try {
-    initialValues = expandVectorInitializer(type, vector.values, declaredLength);
+    initialValues = expandVectorInitializer(
+      type,
+      vector.values,
+      declaredLength,
+      MAX_VLIW_ARRAY_ELEMENTS
+    );
   } catch (error) {
     throw invalid("unsupported-vector-width", error.message, {
       count: vector.values.length,
@@ -197,30 +204,30 @@ function encodeVectorValue(vector, role, declaredLength = null) {
   }
 
   if (type === "text") {
-    if (initialValues.length < 2) {
-      throw invalid("unsupported-vector-width", "a one-element text vector is indistinguishable from scalar text");
-    }
-    const words = [];
-    const rawQuotes = [];
     for (const value of initialValues) {
       if (typeof value !== "string" || value.length === 0) {
         throw invalid("unsupported-vector-value", "VLIW text vector elements must be non-empty strings", {
           value
         });
       }
-      const start = words.length;
-      if (value.length === 1) {
-        words.push(LETTER_QUOTE_WORD, value.charCodeAt(0));
-      } else {
-        const encoded = textWords(value, role);
-        words.push(...encoded.words);
-        rawQuotes.push(...encoded.rawQuotes.map((quote) => ({
-          ...quote,
-          payloadStart: start + quote.payloadStart
-        })));
-      }
     }
-    return { words, rawQuotes };
+    const words = encodeTextArrayMembers(initialValues, {
+      letterQuoteWord: LETTER_QUOTE_WORD,
+      paragraphQuoteWord: PARAGRAPH_LETTER_QUOTE_WORD
+    });
+    return {
+      words: [
+        quoteWordFor({
+          sort: LETTER_SORT_DENOTE,
+          vectorThick: VECTOR_THICK_LONG,
+          scalarBytes: 2,
+          sequence: true
+        }),
+        initialValues.length,
+        ...words
+      ],
+      rawQuotes: []
+    };
   }
 
   if (type === "float32" || type === "float64") {
@@ -571,6 +578,9 @@ function decodeValue(items, role, boundaryOffsets) {
     }
     if ((items[0].quote.family === "float32-vector" || items[0].quote.family === "float64-vector") && Array.isArray(value)) {
       return { ve: { type: items[0].quote.family === "float32-vector" ? "float32" : "float64", values: value } };
+    }
+    if (items[0].quote.family === "text-array" && Array.isArray(value)) {
+      return { ve: { type: "text", values: value } };
     }
     if (["float32", "float64", "fixed16"].includes(items[0].quote.family) && typeof value === "number") {
       return { num: value };

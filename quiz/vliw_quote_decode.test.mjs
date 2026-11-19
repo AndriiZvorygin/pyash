@@ -282,6 +282,8 @@ test("quote decoding rejects unsupported and malformed values", () => {
     errorCode(() => decodeQuote([PARAGRAPH_LETTER_QUOTE_WORD], 0)),
     "truncated-quote"
   );
+  assert.equal(errorCode(() => decodeQuote([0x0e9d, 1, NUMBER_QUOTE_WORD, 7], 0)), "unsupported-quote");
+  assert.equal(errorCode(() => decodeQuote([0x0e9d, 0], 0)), "unsupported-quote");
   assert.equal(errorCode(() => renderLegacyNumericPlusCodelet(onePlusOneWords.slice(0, -1))), "invalid-codelet");
 });
 

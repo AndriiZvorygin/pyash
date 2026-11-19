@@ -234,13 +234,13 @@ correctness and interpretability criteria.
 The shared Rust semantics in `rust/pyac-vliw-core/src/semantics_runtime.rs` include
 integer and boolean behavior, scalar IEEE float32 (`VALUE_FLOAT32`), scalar fixed16
 (`VALUE_FIXED16`), and typed integer/boolean/float32/float64 vector literals. Fixed
-hardware vectors execute up to 16 lanes. Variable-length VLIW arrays use the existing
-quote thickness-6 form with a following 16-bit element count (up to 65,535) and indexed
-codelet continuation; text members keep their own length-delimited quotes. The shared
-runtime's current `CoreResult` path still supports only 16 returned lanes, so large-array
-execution/output transport is the next implementation gap, not a missing count encoding.
-Programlet slots remain scalar typed values, so this is not yet a general tensor or
-matrix data model.
+hardware vectors execute up to 16 lanes. The JavaScript VLIW codec now uses the
+thickness-6 16-bit element count (up to 65,535) for variable numeric arrays and
+sequence-framed text arrays, with indexed codelet continuation; its `executeCodelets`
+path round-trips those values. The shared Rust runtime's fixed `CoreResult` still
+supports only 16 returned lanes, so large-array execution/output transport through the
+Rust CPU/GPU ABI remains the next implementation gap. Programlet slots remain scalar
+typed values, so this is not yet a general tensor or matrix data model.
 
 The current fixed16 quote carries an unsigned 16-bit numerator `n`; its divisor is the
 implicit fixed constant 46,656 (`6^6`), not a per-value denominator field:

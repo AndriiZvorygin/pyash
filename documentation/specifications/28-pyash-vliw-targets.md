@@ -192,21 +192,27 @@ quote, and a long text lane uses the existing length-framed paragraph quote.
 Text lanes are not packed into the numeric vector sort.
 
 An array is the representation for a variable-length collection, including
-text elements. Encode its extent with the existing quote thickness 6 form: the
-quote header is followed by a 16-bit element count from 1 through 65,535, then
-the typed payload. This count is the number of logical elements, not payload
-words or codelets. Payload continuation uses indexed codelets, preserving word
-zero as each codelet's index. The existing quote sort and element width define
-the payload representation; text arrays retain a length-delimited text quote
-for each member.
+text elements. Fixed legacy vector widths remain available for numeric counts
+1, 2, 3, 4, 8, and 16. Other numeric extents use quote thickness 6: the quote
+header is followed by a 16-bit element count from 1 through 65,535, then the
+typed payload. This count is the number of logical elements, not payload words
+or codelets. Indexed continuation preserves word zero as each codelet's index.
 
-Array extent is distinct from SIMD lane width. The current Rust runtime still
-returns vectors through a fixed `CoreResult` buffer sized for 16 lanes, so its
-execution/result path does not yet accept or return 65,535-element arrays.
-That is a runtime transport/capacity gap, not an encoding gap. Numeric arrays
-may be processed in vector-width chunks, while text arrays retain their member
-boundaries. Array execution and mutable array operations remain future runtime
-work.
+A text array uses a letter-sort, thickness-6 quote with the sequence bit set.
+Its count is the number of strings; each member follows as an ordinary
+single-letter or length-framed paragraph-letter quote. This keeps member
+boundaries unambiguous even when text contains words that resemble quote
+headers. The sequence flag distinguishes this container from a flat text
+quote. For compatibility, a multi-member text vector that fits in one codelet
+may retain the legacy per-member quote layout; single-member and continued text
+arrays use the counted form.
+
+The JavaScript VLIW lowerer, decoder, and `executeCodelets` path now round-trip
+and execute numeric arrays through 65,535 elements and length-framed text
+arrays across indexed codelets. This does not change SIMD lane width. The shared
+Rust CPU/GPU interpreter still returns values through a fixed `CoreResult`
+buffer sized for 16 lanes; large-array execution through that ABI remains a
+runtime transport/capacity gap. Programlet slots remain scalar typed values.
 
 ## 10. Non-goals
 

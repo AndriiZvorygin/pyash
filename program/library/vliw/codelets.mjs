@@ -4,11 +4,11 @@ import {
   NUMBER_QUOTE_WORD,
   PARAGRAPH_LETTER_QUOTE_WORD,
   QUOTED_GRAMMAR_WORD,
-  decodeQuoteHeader,
   decodeQuote,
   lookupLegacyWord,
   QuoteEncodingError
 } from "./quotes.mjs";
+import { freshQuoteScan, scanQuoteWord } from "./quote_scan.mjs";
 
 export const CODELET_WORD_COUNT = 16;
 
@@ -239,44 +239,6 @@ function decodeWordSequence(words) {
   return { words, items, usedWords: words.length };
 }
 
-function freshQuoteScan() {
-  return { explicitLength: null, payloadWords: 0 };
-}
-
-function scanQuoteWord(word, state) {
-  if (state.payloadWords > 0) {
-    state.payloadWords -= 1;
-    return null;
-  }
-  if (state.explicitLength) {
-    const quote = state.explicitLength;
-    state.explicitLength = null;
-    if (quote.word === PARAGRAPH_LETTER_QUOTE_WORD && word > 14) {
-      return word;
-    }
-    const payloadWords = word * (quote.scalarBytes / 2);
-    state.payloadWords = payloadWords;
-    return null;
-  }
-  if ((word & QUOTE_DENOTE_MASK) !== QUOTE_DENOTE) return null;
-
-  let header;
-  try {
-    header = decodeQuoteHeader(word);
-  } catch {
-    return null;
-  }
-  if (header.explicitVectorLength) {
-    state.explicitLength = header;
-    return null;
-  }
-  if (header.vectorWords !== null && header.scalarBytes !== null) {
-    const payloadWords = header.vectorWords * (header.scalarBytes / 2);
-    state.payloadWords = payloadWords;
-  }
-  return null;
-}
-
 function appendIndexedVector(group, vector, effectiveSlots = CODELET_WORD_COUNT - 1) {
   const completion = Boolean(vector[0] & INDEX_COMPLETION_BIT);
   const logicalBase = group.words.length - 1;
@@ -328,7 +290,7 @@ export function decodeLegacyCodeletGroups(input) {
     let blockLength = null;
     let lengthSlot = CODELET_WORD_COUNT - 1;
     for (let slot = 1; slot < CODELET_WORD_COUNT; slot += 1) {
-      blockLength = scanQuoteWord(vector[slot], quoteScan);
+      blockLength = scanQuoteWord(vector[slot], quoteScan, codeletError);
       if (blockLength !== null) {
         lengthSlot = slot;
         for (let tail = slot + 1; tail < CODELET_WORD_COUNT; tail += 1) {

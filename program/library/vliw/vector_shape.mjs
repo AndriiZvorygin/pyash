@@ -1,4 +1,5 @@
 export const MAX_VECTOR_ELEMENTS = 16;
+export const MAX_VLIW_ARRAY_ELEMENTS = 0xffff;
 
 export function expandVectorInitializer(
   type,

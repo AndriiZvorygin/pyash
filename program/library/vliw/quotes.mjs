@@ -4,6 +4,7 @@ import {
   FIXED16_SCALE,
   fixed16ValueFromNumerator
 } from "./fixed16.mjs";
+import { decodeTextArrayMembers } from "./text_array.mjs";
 
 export {
   FIXED16_MAX_NUMERATOR,
@@ -190,7 +191,12 @@ export function decodeQuoteWord(word) {
   return { ...descriptor };
 }
 
-export function quoteWordFor({ sort = UINT_SORT_DENOTE, vectorThick = 0, scalarBytes = 2 } = {}) {
+export function quoteWordFor({
+  sort = UINT_SORT_DENOTE,
+  vectorThick = 0,
+  scalarBytes = 2,
+  sequence = false
+} = {}) {
   const scalarThick = scalarByteWidths.indexOf(scalarBytes);
   if (scalarThick < 0) {
     throw quoteError("unsupported-quote", "no legacy scalar width matches the requested bytes", {
@@ -215,6 +221,7 @@ export function quoteWordFor({ sort = UINT_SORT_DENOTE, vectorThick = 0, scalarB
   }
   return (
     (sort << 13) |
+    (sequence ? SEQUENCE_MASK : 0) |
     (vectorThick << 8) |
     (scalarThick << 11) |
     QUOTE_DENOTE
@@ -306,6 +313,18 @@ function dynamicQuoteDescriptor(word) {
     }
     return null;
   }
+  if (header.sequence) {
+    if (header.sortName === "letter" && header.scalarBytes === 2 && header.explicitVectorLength) {
+      return {
+        word,
+        family: "text-array",
+        payloadWords: null,
+        valueType: "text-array",
+        supported: true
+      };
+    }
+    return null;
+  }
   if (header.sortName === "float") {
     if (header.scalarBytes === 2 && header.vectorThick === 0 && header.vectorWords === 1) {
       return {
@@ -375,6 +394,7 @@ export function decodeQuoteHeader(word) {
     sortName: quoteSortNames.get(sort) ?? null,
     scalarBytes,
     vectorWords,
+    sequence: (word & SEQUENCE_MASK) !== 0,
     explicitVectorLength: vectorThick === 6
   };
 }
@@ -414,8 +434,7 @@ function textValue(payload) {
   return String.fromCharCode(...payload);
 }
 
-export function decodeQuote(words, offset = 0) {
-  const values = normalizeWords(words);
+function decodeQuoteNormalized(values, offset = 0) {
   if (!Number.isInteger(offset) || offset < 0 || offset >= values.length) {
     throw quoteError("invalid-offset", "quote offset is outside the word sequence", { offset });
   }
@@ -454,6 +473,25 @@ export function decodeQuote(words, offset = 0) {
       offset,
       elementCount
     });
+  }
+  if (header.sequence) {
+    const members = decodeTextArrayMembers(values, payloadOffset, elementCount, decodeQuoteNormalized);
+    if (members.invalidIndex !== undefined) {
+      throw quoteError("unsupported-quote", "text arrays may contain only typed text quotes", {
+        offset,
+        elementIndex: members.invalidIndex,
+        family: members.quote.family
+      });
+    }
+    const payloadWords = members.nextOffset - payloadOffset;
+    return {
+      ...descriptor,
+      payloadWords,
+      payload: values.slice(payloadOffset, members.nextOffset),
+      value: members.values,
+      lengthWord,
+      nextOffset: members.nextOffset
+    };
   }
   const scalarWords = header.scalarBytes / 2;
   const payloadWords = elementCount * scalarWords;
@@ -533,6 +571,10 @@ export function decodeQuote(words, offset = 0) {
     lengthWord,
     nextOffset: end
   };
+}
+
+export function decodeQuote(words, offset = 0) {
+  return decodeQuoteNormalized(normalizeWords(words), offset);
 }
 
 export function lookupLegacyWord(word) {
