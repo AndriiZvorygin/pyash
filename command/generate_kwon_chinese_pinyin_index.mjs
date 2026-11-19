@@ -8,6 +8,7 @@ import {
   acceptedChineseCharacterAtomRows,
   parseChineseCharacterAtomLinks
 } from "../program/library/translation/chinese_character_atom_refinery.mjs";
+import { loadEnglishGrammarCatalog } from "../program/library/translation/english_grammar.mjs";
 
 const COMMAND_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPOSITORY_ROOT = path.resolve(COMMAND_DIR, "..");
@@ -59,6 +60,8 @@ if (!Array.isArray(kwonRows)) throw new Error(`Kwon Chinese vocabulary must be a
 const wantedForms = new Set(kwonRows.map((row) => String(row?.zh ?? "").trim().normalize("NFC")).filter(Boolean));
 const acceptedLinks = parseChineseCharacterAtomLinks(await fs.readFile(ACCEPTED_LINKS_PATH, "utf8"));
 for (const row of acceptedChineseCharacterAtomRows(kwonRows, acceptedLinks)) wantedForms.add(row.character);
+const grammarCatalog = await loadEnglishGrammarCatalog();
+for (const link of grammarCatalog.chineseCharacterLinks) wantedForms.add(link.character);
 const chineseCompoundRows = await loadChineseCompoundLexicon();
 for (const row of chineseCompoundRows) {
   if (row.surface) wantedForms.add(String(row.surface).trim().normalize("NFC"));

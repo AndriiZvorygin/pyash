@@ -39,7 +39,7 @@ import { formatSumoEvidence, lookupSumoEvidence } from "../program/library/trans
 import {
   lookupChineseCharacterGlosses,
   lookupChinesePinyin,
-  lookupKwonChineseByPyash
+  lookupChineseByPyash
 } from "../program/library/translation/kwon_chinese_lookup.mjs";
 import {
   MOODS,
@@ -509,8 +509,8 @@ async function reportPyashChineseLookups(tokens, {
   const lookups = [];
   for (const token of tokens) {
     let matched = false;
-    const atomicRows = await lookupKwonChineseByPyash(token);
-    for (const row of atomicRows) {
+    const linkedRows = await lookupChineseByPyash(token);
+    for (const row of linkedRows) {
       const pinyin = await lookupChinesePinyin(row.chinese);
       const characterGlosses = await lookupChineseCharacterGlosses(row.chinese);
       const definitions = englishSenseDefinitions(token, row.english, linkedWordNetSenses);

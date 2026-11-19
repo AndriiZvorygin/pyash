@@ -4,27 +4,59 @@ import {
   acceptedChineseCharacterAtomRows,
   parseChineseCharacterAtomLinks
 } from "./chinese_character_atom_refinery.mjs";
+import { loadEnglishGrammarCatalog } from "./english_grammar.mjs";
 
 const KWON_CHINESE_URL = new URL("../../../caterer/pyac/lyac/kwon_zh.json", import.meta.url);
 const PINYIN_INDEX_URL = new URL("./kwon_chinese_pinyin.pya", import.meta.url);
 const ACCEPTED_LINKS_URL = new URL("./chinese_character_atom_links.pya", import.meta.url);
 
-let kwonChinesePromise = null;
+let chineseIndexPromise = null;
 let pinyinIndexPromise = null;
 
 function normalize(value) {
   return String(value ?? "").trim().normalize("NFC").toLowerCase();
 }
 
-async function loadKwonChineseIndex() {
-  if (!kwonChinesePromise) {
-    kwonChinesePromise = Promise.all([
+async function loadChineseIndex() {
+  if (!chineseIndexPromise) {
+    chineseIndexPromise = Promise.all([
       fs.readFile(KWON_CHINESE_URL, "utf8"),
-      fs.readFile(ACCEPTED_LINKS_URL, "utf8")
-    ]).then(([source, linksSource]) => {
+      fs.readFile(ACCEPTED_LINKS_URL, "utf8"),
+      loadEnglishGrammarCatalog()
+    ]).then(([source, linksSource, grammarCatalog]) => {
       const sourceRows = JSON.parse(source);
       if (!Array.isArray(sourceRows)) throw new Error("Kwon Chinese vocabulary must be an array");
-      const rows = acceptedChineseCharacterAtomRows(sourceRows, parseChineseCharacterAtomLinks(linksSource));
+      const rootRows = acceptedChineseCharacterAtomRows(sourceRows, parseChineseCharacterAtomLinks(linksSource));
+      const rootTargetsByCharacter = new Map();
+      const rootCharactersByPyash = new Map();
+      for (const row of rootRows) {
+        const characterTargets = rootTargetsByCharacter.get(row.character) ?? new Set();
+        characterTargets.add(normalize(row.pya));
+        rootTargetsByCharacter.set(row.character, characterTargets);
+        const pyashCharacters = rootCharactersByPyash.get(normalize(row.pya)) ?? new Set();
+        pyashCharacters.add(row.character);
+        rootCharactersByPyash.set(normalize(row.pya), pyashCharacters);
+      }
+      const grammarRows = grammarCatalog.chineseCharacterLinks
+        .filter((link) => {
+          const characterTargets = rootTargetsByCharacter.get(link.character);
+          if (characterTargets?.size > 0 && !characterTargets.has(normalize(link.pya))) return false;
+          const pyashCharacters = rootCharactersByPyash.get(normalize(link.pya));
+          return !pyashCharacters?.size || pyashCharacters.has(link.character);
+        })
+        .map((link) => ({
+          character: link.character,
+          english: link.english,
+          pya: link.pya,
+          source: "pyash-grammar"
+        }));
+      const seenMappings = new Set();
+      const rows = [...rootRows, ...grammarRows].filter((row) => {
+        const key = `${normalize(row.pya)}\u0000${row.character}`;
+        if (seenMappings.has(key)) return false;
+        seenMappings.add(key);
+        return true;
+      });
       const byPyash = new Map();
       for (const row of rows) {
         const pyash = normalize(row?.pya);
@@ -42,7 +74,7 @@ async function loadKwonChineseIndex() {
       return byPyash;
     });
   }
-  return kwonChinesePromise;
+  return chineseIndexPromise;
 }
 
 async function loadPinyinIndex() {
@@ -69,8 +101,8 @@ async function loadPinyinIndex() {
   return pinyinIndexPromise;
 }
 
-export async function lookupKwonChineseByPyash(pyash) {
-  const index = await loadKwonChineseIndex();
+export async function lookupChineseByPyash(pyash) {
+  const index = await loadChineseIndex();
   return [...(index.get(normalize(pyash)) ?? [])];
 }
 
