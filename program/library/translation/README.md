@@ -116,8 +116,9 @@ The runtime configuration is `chinese_character_atom_refinery.pya`. Each run use
 configured number of Housekeeper duties and stores the worklist, prompts, responses, and resumable
 queue checkpoint under the ignored `artifacts/chinese-character-atom-refinery/` directory.
 Those decision records stay local. Promote reviewed decisions through
-`chinese_character_atom_links.pya`; accepted links are then available to `pyash dict ... to zh`
-and the generated Chinese indexes. New root atoms belong in the canonical `pyashWords.json`
+`chinese_character_atom_links.pya`; accepted root links and accepted grammar-character links in
+`english_grammar.pya` are available to `pyash dict ... to zh` when they do not conflict with an
+existing root character mapping. New root atoms belong in the canonical `pyashWords.json`
 inventory. Commit these promoted vocabulary records and their source attribution, not run history.
 An accepted overlay row uses the map key `link:<character>:<atom>` and a JSON text value with
 `status`, `character`, `english`, `pya`, and source/evidence fields. To remove an inherited Kwon

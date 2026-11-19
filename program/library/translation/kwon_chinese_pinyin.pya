@@ -459,6 +459,7 @@ su text "久远" ob text "jiǔ yuǎn" ya
 su text "乇" ob text "tuō || zhé" ya
 su text "么" ob text "ma || me || má || yāo" ya
 su text "么么" ob text "me me" ya
+su text "之" ob text "zhī" ya
 su text "之间" ob text "zhī jiān" ya
 su text "乌" ob text "wū" ya
 su text "乌克兰" ob text "wū kè lán" ya
@@ -856,6 +857,7 @@ su text "仪" ob text "yí" ya
 su text "仪器" ob text "yí qì" ya
 su text "仪式" ob text "yí shì" ya
 su text "仪表" ob text "yí biǎo" ya
+su text "们" ob text "men" ya
 su text "仰" ob text "yǎng" ya
 su text "仰光" ob text "yǎng guāng" ya
 su text "仰泳" ob text "yǎng yǒng" ya
@@ -6697,6 +6699,7 @@ su text "戒" ob text "jiè" ya
 su text "戒备" ob text "jiè bèi" ya
 su text "戒酒" ob text "jiè jiǔ" ya
 su text "戒除" ob text "jiè chú" ya
+su text "或" ob text "huò" ya
 su text "戗" ob text "qiāng" ya
 su text "战" ob text "zhàn" ya
 su text "战争" ob text "zhàn zhēng" ya
@@ -8790,6 +8793,7 @@ su text "柄" ob text "bǐng" ya
 su text "柏拉图" ob text "bó lā tú" ya
 su text "柏林" ob text "bó lín" ya
 su text "柏柏尔" ob text "bò bò ěr" ya
+su text "某" ob text "mǒu" ya
 su text "某人" ob text "mǒu rén" ya
 su text "某处" ob text "mǒu chù" ya
 su text "染" ob text "rǎn" ya
@@ -11071,6 +11075,7 @@ su text "甘草" ob text "gān cǎo" ya
 su text "甘菊" ob text "gān jú" ya
 su text "甘薯" ob text "gān shǔ" ya
 su text "甘露醇" ob text "gān lù chún" ya
+su text "甚" ob text "shèn || shén" ya
 su text "甚高频" ob text "shèn gāo pín" ya
 su text "甜" ob text "tián" ya
 su text "甜点" ob text "tián diǎn" ya
@@ -11472,6 +11477,7 @@ su text "百眼巨人" ob text "bǎi yǎn jù rén" ya
 su text "百科全书" ob text "bǎi kē quán shū" ya
 su text "百货商店" ob text "bǎi huò shāng diàn" ya
 su text "皂" ob text "zào" ya
+su text "的" ob text "de || dì || dí || dī" ya
 su text "的确" ob text "dí què" ya
 su text "皇" ob text "huáng" ya
 su text "皇后" ob text "huáng hòu" ya
