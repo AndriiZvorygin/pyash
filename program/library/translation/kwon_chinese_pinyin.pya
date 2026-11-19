@@ -1419,6 +1419,7 @@ su text "健忘" ob text "jiàn wàng" ya
 su text "健谈" ob text "jiàn tán" ya
 su text "健身" ob text "jiàn shēn" ya
 su text "健身房" ob text "jiàn shēn fáng" ya
+su text "偭" ob text "miǎn" ya
 su text "偶" ob text "ǒu" ya
 su text "偶像" ob text "ǒu xiàng" ya
 su text "偶尔" ob text "ǒu ěr" ya
@@ -2509,6 +2510,7 @@ su text "勒马" ob text "lè mǎ" ya
 su text "勖" ob text "xù" ya
 su text "勘探" ob text "kān tàn" ya
 su text "勘误表" ob text "kān wù biǎo" ya
+su text "勚" ob text "yì" ya
 su text "募" ob text "mù" ya
 su text "募捐" ob text "mù juān" ya
 su text "勢" ob text "shì" ya
@@ -3692,6 +3694,7 @@ su text "哭丧" ob text "kū sāng" ya
 su text "哭喊" ob text "kū hǎn" ya
 su text "哭诉" ob text "kū sù" ya
 su text "哮喘" ob text "xiào chuǎn" ya
+su text "哱" ob text "bō" ya
 su text "哲" ob text "zhé" ya
 su text "哲学" ob text "zhé xué" ya
 su text "哲学家" ob text "zhé xué jiā" ya
@@ -3838,6 +3841,7 @@ su text "嗨" ob text "hāi" ya
 su text "嗯" ob text "en || èn || ēn" ya
 su text "嗳气" ob text "ài qì" ya
 su text "嗵" ob text "tōng" ya
+su text "𫫇" ob text "ě" ya
 su text "嗽" ob text "sòu" ya
 su text "嘌" ob text "piào || piāo" ya
 su text "嘌呤" ob text "piào lìng" ya
@@ -3885,6 +3889,7 @@ su text "嚎叫" ob text "háo jiào" ya
 su text "嚎啕大哭" ob text "háo táo dà kū" ya
 su text "嚏" ob text "tì" ya
 su text "嚓" ob text "chā || cā" ya
+su text "嚚" ob text "yín" ya
 su text "嚴肅" ob text "yán sù" ya
 su text "嚴苛" ob text "yán kē" ya
 su text "嚷" ob text "rǎng" ya
@@ -4873,6 +4878,7 @@ su text "媾" ob text "gòu" ya
 su text "嫁" ob text "jià" ya
 su text "嫁妆" ob text "jià zhuang" ya
 su text "嫁接" ob text "jià jiē" ya
+su text "嫄" ob text "yuán" ya
 su text "嫉" ob text "jí" ya
 su text "嫉妒" ob text "jí dù" ya
 su text "嫖客" ob text "piáo kè" ya
@@ -5185,6 +5191,7 @@ su text "宿命论" ob text "sù mìng lùn" ya
 su text "宿舍" ob text "sù shè" ya
 su text "宿营" ob text "sù yíng" ya
 su text "宿醉" ob text "sù zuì" ya
+su text "寁" ob text "zǎn" ya
 su text "寂" ob text "jì" ya
 su text "寂静" ob text "jì jìng" ya
 su text "寄" ob text "jì" ya
@@ -5549,6 +5556,7 @@ su text "崩溃" ob text "bēng kuì" ya
 su text "崽" ob text "zǎi" ya
 su text "嵌" ob text "kǎn || qiàn" ya
 su text "嵌入" ob text "qiàn rù" ya
+su text "嶲" ob text "xī" ya
 su text "州长" ob text "zhōu zhǎng" ya
 su text "巢" ob text "cháo" ya
 su text "巢穴" ob text "cháo xué" ya
@@ -5705,6 +5713,7 @@ su text "带菌者" ob text "dài jūn zhě" ya
 su text "带走" ob text "dài zǒu" ya
 su text "带鱼" ob text "dài yú" ya
 su text "帧" ob text "zhēn" ya
+su text "帨" ob text "shuì" ya
 su text "席" ob text "xí" ya
 su text "席位" ob text "xí wèi" ya
 su text "帮" ob text "bāng" ya
@@ -6005,6 +6014,7 @@ su text "弄明白" ob text "nòng míng bai" ya
 su text "弄直" ob text "nòng zhí" ya
 su text "弄碎" ob text "nòng suì" ya
 su text "弄脏" ob text "nòng zāng" ya
+su text "弇" ob text "yǎn" ya
 su text "弊" ob text "bì" ya
 su text "弊病" ob text "bì bìng" ya
 su text "式" ob text "shì" ya
@@ -6527,6 +6537,7 @@ su text "惊骇" ob text "jīng hài" ya
 su text "惋" ob text "wǎn" ya
 su text "惋惜" ob text "wǎn xī" ya
 su text "惑" ob text "huò" ya
+su text "惙" ob text "chuò" ya
 su text "惚" ob text "hū" ya
 su text "惠斯特" ob text "huì sī tè" ya
 su text "惨" ob text "cǎn" ya
@@ -6712,6 +6723,7 @@ su text "战车" ob text "zhàn chē" ya
 su text "战马" ob text "zhàn mǎ" ya
 su text "戚" ob text "qī" ya
 su text "戟" ob text "jǐ" ya
+su text "戤" ob text "gài" ya
 su text "截" ob text "jié" ya
 su text "截图" ob text "jié tú" ya
 su text "截断" ob text "jié duàn" ya
@@ -7577,6 +7589,7 @@ su text "插管" ob text "chā guǎn" ya
 su text "插话" ob text "chā huà" ya
 su text "插进" ob text "chā jìn" ya
 su text "插销" ob text "chā xiāo" ya
+su text "揕" ob text "zhèn" ya
 su text "握" ob text "wò" ya
 su text "握手" ob text "wò shǒu" ya
 su text "握拳" ob text "wò quán" ya
@@ -7600,6 +7613,7 @@ su text "搏" ob text "bó" ya
 su text "搏动" ob text "bó dòng" ya
 su text "搏斗" ob text "bó dòu" ya
 su text "搐" ob text "chù" ya
+su text "搒" ob text "bàng || pèng" ya
 su text "搓" ob text "cuō" ya
 su text "搓衣板" ob text "cuō yī bǎn" ya
 su text "搔痒" ob text "sāo yǎng" ya
@@ -8409,6 +8423,7 @@ su text "暗藏" ob text "àn cáng" ya
 su text "暗适应" ob text "àn shì yìng" ya
 su text "暗道" ob text "àn dào" ya
 su text "暧" ob text "ài" ya
+su text "㬎" ob text "xiǎn" ya
 su text "暮" ob text "mù" ya
 su text "暴" ob text "bào" ya
 su text "暴乱" ob text "bào luàn" ya
@@ -8998,6 +9013,7 @@ su text "棘手" ob text "jí shǒu" ya
 su text "棘皮动物" ob text "jí pí dòng wù" ya
 su text "棚" ob text "péng" ya
 su text "棚户区" ob text "péng hù qū" ya
+su text "棨" ob text "qǐ" ya
 su text "森" ob text "sēn" ya
 su text "森林" ob text "sēn lín" ya
 su text "棰" ob text "chuí" ya
@@ -9016,6 +9032,7 @@ su text "植物学家" ob text "zhí wù xué jiā" ya
 su text "植物群" ob text "zhí wù qún" ya
 su text "椎" ob text "chuí || zhuī" ya
 su text "椎间盘" ob text "zhuī jiān pán" ya
+su text "椑" ob text "bēi" ya
 su text "椒" ob text "jiāo" ya
 su text "椭" ob text "tuǒ" ya
 su text "椭圆" ob text "tuǒ yuán" ya
@@ -9113,6 +9130,7 @@ su text "橱" ob text "chú" ya
 su text "檀" ob text "tán" ya
 su text "檀香" ob text "tán xiāng" ya
 su text "檐" ob text "yán" ya
+su text "檑" ob text "léi" ya
 su text "檠" ob text "qíng" ya
 su text "權" ob text "quán" ya
 su text "權益" ob text "quán yì" ya
@@ -9917,6 +9935,7 @@ su text "浸" ob text "jìn" ya
 su text "浸染" ob text "jìn rǎn" ya
 su text "浸湿" ob text "jìn shī" ya
 su text "浸透" ob text "jìn tòu" ya
+su text "浼" ob text "měi" ya
 su text "涂" ob text "tú" ya
 su text "涂层" ob text "tú céng" ya
 su text "涂抹" ob text "tú mǒ" ya
@@ -10135,6 +10154,7 @@ su text "溃逃" ob text "kuì táo" ya
 su text "滋养层" ob text "zī yǎng céng" ya
 su text "滞期费" ob text "zhì qī fèi" ya
 su text "滞胀" ob text "zhì zhàng" ya
+su text "𣸣" ob text "fén" ya
 su text "源" ob text "yuán" ya
 su text "源头" ob text "yuán tóu" ya
 su text "源泉" ob text "yuán quán" ya
@@ -10536,6 +10556,7 @@ su text "焯" ob text "chāo" ya
 su text "焰火" ob text "yàn huǒ" ya
 su text "然" ob text "rán" ya
 su text "煮沸" ob text "zhǔ fèi" ya
+su text "煁" ob text "chén" ya
 su text "煌" ob text "huáng" ya
 su text "煎蛋" ob text "jiān dàn" ya
 su text "煎锅" ob text "jiān guō" ya
@@ -10748,6 +10769,7 @@ su text "特许状" ob text "tè xǔ zhuàng" ya
 su text "特质" ob text "tè zhì" ya
 su text "特长" ob text "tè cháng" ya
 su text "牺牲" ob text "xī shēng" ya
+su text "牻" ob text "máng" ya
 su text "犁地" ob text "lí dì" ya
 su text "犀" ob text "xī" ya
 su text "犀利" ob text "xī lì" ya
@@ -11024,6 +11046,7 @@ su text "瑞亚" ob text "ruì yà" ya
 su text "瑞典" ob text "ruì diǎn" ya
 su text "瑞士" ob text "ruì shì" ya
 su text "璁" ob text "cōng" ya
+su text "瓀" ob text "ruǎn" ya
 su text "瓜" ob text "guā" ya
 su text "瓠" ob text "hù" ya
 su text "瓠瓜" ob text "hù guā" ya
@@ -11318,6 +11341,7 @@ su text "疾" ob text "jí" ya
 su text "疾病" ob text "jí bìng" ya
 su text "疾风" ob text "jí fēng" ya
 su text "疾驰" ob text "jí chí" ya
+su text "痄" ob text "zhà" ya
 su text "病" ob text "bìng" ya
 su text "病人" ob text "bìng rén" ya
 su text "病况" ob text "bìng kuàng" ya
@@ -11363,6 +11387,7 @@ su text "痴情" ob text "chī qíng" ya
 su text "瘀伤" ob text "yū shāng" ya
 su text "瘁" ob text "cuì" ya
 su text "瘍" ob text "yáng" ya
+su text "瘕" ob text "jiǎ" ya
 su text "瘙痒" ob text "sào yǎng" ya
 su text "瘠" ob text "jí" ya
 su text "瘢" ob text "bān" ya
@@ -11702,6 +11727,7 @@ su text "矛" ob text "máo" ya
 su text "矛盾" ob text "máo dùn" ya
 su text "矜" ob text "jīn" ya
 su text "矜持" ob text "jīn chí" ya
+su text "矞" ob text "yù" ya
 su text "矢" ob text "shǐ" ya
 su text "矢量" ob text "shǐ liàng" ya
 su text "知" ob text "zhī" ya
@@ -11821,6 +11847,7 @@ su text "破裂" ob text "pò liè" ya
 su text "破译" ob text "pò yì" ya
 su text "破败" ob text "pò bài" ya
 su text "破除迷信" ob text "pò chú mí xìn" ya
+su text "砵" ob text "bō" ya
 su text "砷" ob text "shēn" ya
 su text "砸" ob text "zá" ya
 su text "砸烂" ob text "zá làn" ya
@@ -11929,7 +11956,9 @@ su text "磷" ob text "lín" ya
 su text "磷光" ob text "lín guāng" ya
 su text "磷火" ob text "lín huǒ" ya
 su text "磷酸盐" ob text "lín suān yán" ya
+su text "磻" ob text "pán" ya
 su text "礁" ob text "jiāo" ya
+su text "礞" ob text "méng" ya
 su text "示" ob text "shì" ya
 su text "示好" ob text "shì hǎo" ya
 su text "示威" ob text "shì wēi" ya
@@ -12742,6 +12771,7 @@ su text "经验" ob text "jīng yàn" ya
 su text "经验主义" ob text "jīng yàn zhǔ yì" ya
 su text "結核" ob text "jié hé" ya
 su text "結算" ob text "jié suàn" ya
+su text "絜" ob text "jié || xié" ya
 su text "絮" ob text "xù" ya
 su text "絮状物" ob text "xù zhuàng wù" ya
 su text "絮絮" ob text "xù xu" ya
@@ -12828,6 +12858,7 @@ su text "继承者" ob text "jì chéng zhě" ya
 su text "继母" ob text "jì mǔ" ya
 su text "继电器" ob text "jì diàn qì" ya
 su text "继续" ob text "jì xù" ya
+su text "𫄧" ob text "yán" ya
 su text "綦" ob text "qí" ya
 su text "緊缺" ob text "jǐn quē" ya
 su text "绫" ob text "líng" ya
@@ -13018,6 +13049,7 @@ su text "羑" ob text "yǒu" ya
 su text "羔" ob text "gāo" ya
 su text "羔羊" ob text "gāo yáng" ya
 su text "羚羊" ob text "líng yáng" ya
+su text "羝" ob text "dī" ya
 su text "羞" ob text "xiū" ya
 su text "羞怯" ob text "xiū qiè" ya
 su text "羞愧" ob text "xiū kuì" ya
@@ -13048,6 +13080,7 @@ su text "羿" ob text "yì" ya
 su text "翅" ob text "chì" ya
 su text "翔" ob text "xiáng" ya
 su text "翘起" ob text "qiào qǐ" ya
+su text "翛" ob text "shù" ya
 su text "翠" ob text "cuì" ya
 su text "翠鸟" ob text "cuì niǎo" ya
 su text "翡" ob text "fěi" ya
@@ -13521,6 +13554,7 @@ su text "臀部" ob text "tún bù" ya
 su text "臂" ob text "bì" ya
 su text "臆断" ob text "yì duàn" ya
 su text "臊" ob text "sào || sāo" ya
+su text "臑" ob text "nào" ya
 su text "臣" ob text "chén" ya
 su text "臣服" ob text "chén fú" ya
 su text "自" ob text "zì" ya
@@ -13652,6 +13686,7 @@ su text "般" ob text "bān || pán" ya
 su text "舰" ob text "jiàn" ya
 su text "舰载" ob text "jiàn zài" ya
 su text "舱" ob text "cāng" ya
+su text "舲" ob text "líng" ya
 su text "舵" ob text "duò" ya
 su text "舵手" ob text "duò shǒu" ya
 su text "舷" ob text "xián" ya
@@ -14032,6 +14067,7 @@ su text "蒺" ob text "jí" ya
 su text "蒼蒼" ob text "cāng cāng" ya
 su text "蓄" ob text "xù" ya
 su text "蓄電池" ob text "xù diàn chí" ya
+su text "蓇" ob text "gǔ" ya
 su text "蓑" ob text "suō" ya
 su text "蓝" ob text "lán" ya
 su text "蓝喉歌鸲" ob text "lán hóu gē qú" ya
@@ -14045,6 +14081,7 @@ su text "蓟" ob text "jì" ya
 su text "蓬" ob text "péng" ya
 su text "蓺" ob text "yì" ya
 su text "蓿" ob text "xù" ya
+su text "蔃" ob text "qiáng" ya
 su text "蔑" ob text "miè" ya
 su text "蔑视" ob text "miè shì" ya
 su text "蔓" ob text "màn || mán" ya
@@ -14071,6 +14108,7 @@ su text "薄荷" ob text "bò he" ya
 su text "薄荷糖" ob text "bò he táng" ya
 su text "薄雾" ob text "bó wù" ya
 su text "薄饼" ob text "báo bǐng" ya
+su text "薢" ob text "xiào" ya
 su text "薪" ob text "xīn" ya
 su text "薪水" ob text "xīn shuǐ" ya
 su text "薯" ob text "shǔ" ya
@@ -14138,6 +14176,7 @@ su text "蚕食" ob text "cán shí" ya
 su text "蚧" ob text "jiè" ya
 su text "蚪" ob text "dǒu" ya
 su text "蚱蜢" ob text "zhà měng" ya
+su text "蚺" ob text "rán" ya
 su text "蚺蛇" ob text "rán shé" ya
 su text "蛀" ob text "zhù" ya
 su text "蛀虫" ob text "zhù chóng" ya
@@ -14380,6 +14419,7 @@ su text "衰老" ob text "shuāi lǎo" ya
 su text "衰败" ob text "shuāi bài" ya
 su text "衰退" ob text "shuāi tuì" ya
 su text "衲" ob text "nà" ya
+su text "袆" ob text "huī" ya
 su text "袋" ob text "dài" ya
 su text "袋熊" ob text "dài xióng" ya
 su text "袋鼠" ob text "dài shǔ" ya
@@ -14391,6 +14431,7 @@ su text "袖手旁观" ob text "xiù shǒu páng guān" ya
 su text "袖扣" ob text "xiù kòu" ya
 su text "袜" ob text "wà" ya
 su text "袜子" ob text "wà zi" ya
+su text "袪" ob text "qū" ya
 su text "被" ob text "bèi" ya
 su text "被动" ob text "bèi dòng" ya
 su text "被子植物" ob text "bèi zǐ zhí wù" ya
@@ -14458,6 +14499,7 @@ su text "褐色" ob text "hè sè" ya
 su text "褒" ob text "bāo" ya
 su text "褪" ob text "tuì || tùn" ya
 su text "褪色" ob text "tuì sè" ya
+su text "褯" ob text "jiè" ya
 su text "褶" ob text "xí || zhě" ya
 su text "褶皱" ob text "zhě zhòu" ya
 su text "襁" ob text "qiǎng" ya
@@ -14868,6 +14910,7 @@ su text "谙" ob text "ān" ya
 su text "谚" ob text "yàn" ya
 su text "谚语" ob text "yàn yǔ" ya
 su text "谜" ob text "mèi || mí" ya
+su text "谞" ob text "xū" ya
 su text "謇" ob text "jiǎn" ya
 su text "谢" ob text "xiè" ya
 su text "谢幕" ob text "xiè mù" ya
@@ -14881,6 +14924,7 @@ su text "谨" ob text "jǐn" ya
 su text "谨严" ob text "jǐn yán" ya
 su text "谨慎" ob text "jǐn shèn" ya
 su text "谪" ob text "zhé" ya
+su text "谫" ob text "jiǎn" ya
 su text "谬误" ob text "miù wù" ya
 su text "谱" ob text "pǔ" ya
 su text "谱曲" ob text "pǔ qǔ" ya
@@ -15241,6 +15285,7 @@ su text "跗猴" ob text "fū hóu" ya
 su text "距离" ob text "jù lí" ya
 su text "距離" ob text "jù lí" ya
 su text "践踏" ob text "jiàn tà" ya
+su text "趼" ob text "jiǎn" ya
 su text "跟" ob text "gēn" ya
 su text "跟头" ob text "gēn tou" ya
 su text "跟屁虫" ob text "gēn pì chóng" ya
@@ -15453,6 +15498,7 @@ su text "輪胎" ob text "lún tāi" ya
 su text "辈" ob text "bèi" ya
 su text "辉煌" ob text "huī huáng" ya
 su text "辉石" ob text "huī shí" ya
+su text "辌" ob text "liáng" ya
 su text "辍学" ob text "chuò xué" ya
 su text "辏" ob text "còu" ya
 su text "辐" ob text "fú" ya
@@ -15808,6 +15854,7 @@ su text "造谣" ob text "zào yáo" ya
 su text "逢" ob text "féng" ya
 su text "逦" ob text "lǐ" ya
 su text "逮捕" ob text "dài bǔ" ya
+su text "逴" ob text "chuò" ya
 su text "逻" ob text "luó" ya
 su text "逻辑" ob text "luó ji" ya
 su text "逻辑学" ob text "luó ji xué" ya
@@ -15916,6 +15963,7 @@ su text "鄙" ob text "bǐ" ya
 su text "鄙夷" ob text "bǐ yí" ya
 su text "鄙弃" ob text "bǐ qì" ya
 su text "鄙视" ob text "bǐ shì" ya
+su text "酂" ob text "zàn" ya
 su text "酋长国" ob text "qiú zhǎng guó" ya
 su text "酌" ob text "zhuó" ya
 su text "配" ob text "pèi" ya
@@ -16080,6 +16128,7 @@ su text "量筒" ob text "liáng tǒng" ya
 su text "量角器" ob text "liáng jiǎo qì" ya
 su text "量词" ob text "liàng cí" ya
 su text "量身定做" ob text "liáng shēn dìng zuò" ya
+su text "釐" ob text "lí" ya
 su text "金" ob text "jīn" ya
 su text "金丝雀" ob text "jīn sī què" ya
 su text "金光闪烁" ob text "jīn guāng shǎn shuò" ya
@@ -16226,6 +16275,7 @@ su text "铜矿" ob text "tóng kuàng" ya
 su text "铜管乐器" ob text "tóng guǎn yuè qì" ya
 su text "铝" ob text "lǚ" ya
 su text "铝箔" ob text "lǚ bó" ya
+su text "铞" ob text "diào" ya
 su text "铠" ob text "kǎi" ya
 su text "铡" ob text "zhá" ya
 su text "铢" ob text "zhū" ya
@@ -16263,6 +16313,7 @@ su text "铺轨" ob text "pū guǐ" ya
 su text "铺面" ob text "pù miàn || pū miàn" ya
 su text "铻" ob text "wú" ya
 su text "铼" ob text "lái" ya
+su text "铽" ob text "tè" ya
 su text "链" ob text "liàn" ya
 su text "链球菌" ob text "liàn qiú jūn" ya
 su text "链路" ob text "liàn lù" ya
@@ -16329,6 +16380,7 @@ su text "锸" ob text "chā" ya
 su text "锻" ob text "duàn" ya
 su text "锻炼" ob text "duàn liàn" ya
 su text "锻造" ob text "duàn zào" ya
+su text "锽" ob text "huáng" ya
 su text "镀" ob text "dù" ya
 su text "镀层" ob text "dù céng" ya
 su text "镀金" ob text "dù jīn" ya
@@ -16359,9 +16411,11 @@ su text "镧" ob text "lán" ya
 su text "镧系元素" ob text "lán xì yuán sù" ya
 su text "镨" ob text "pǔ" ya
 su text "镫" ob text "dèng" ya
+su text "𫔍" ob text "fán" ya
 su text "镭" ob text "léi" ya
 su text "镯" ob text "zhuó" ya
 su text "镰" ob text "lián" ya
+su text "𬭼" ob text "suì" ya
 su text "镶" ob text "xiāng" ya
 su text "镶嵌" ob text "xiāng qiàn" ya
 su text "镶边" ob text "xiāng biān" ya
@@ -16890,6 +16944,7 @@ su text "革命" ob text "gé mìng" ya
 su text "革新" ob text "gé xīn" ya
 su text "靶" ob text "bǎ" ya
 su text "靶心" ob text "bǎ xīn" ya
+su text "鞁" ob text "bèi" ya
 su text "鞋" ob text "xié" ya
 su text "鞋垫" ob text "xié diàn" ya
 su text "鞋套" ob text "xié tào" ya
@@ -17047,6 +17102,7 @@ su text "颈圈" ob text "jǐng quān" ya
 su text "颈背" ob text "jǐng bèi" ya
 su text "颈部" ob text "jǐng bù" ya
 su text "颌" ob text "hé" ya
+su text "𫖯" ob text "fǔ" ya
 su text "颐" ob text "yí" ya
 su text "频" ob text "pín" ya
 su text "频数" ob text "pín shuò || pín shù" ya
@@ -17385,6 +17441,7 @@ su text "高速公路" ob text "gāo sù gōng lù" ya
 su text "高频" ob text "gāo pín" ya
 su text "高飞" ob text "gāo fēi" ya
 su text "高龄" ob text "gāo líng" ya
+su text "髢" ob text "dí" ya
 su text "髦" ob text "máo" ya
 su text "鬃毛" ob text "zōng máo" ya
 su text "鬆散" ob text "sōng san" ya
@@ -17429,12 +17486,14 @@ su text "鲈鱼" ob text "lú yú" ya
 su text "鲎" ob text "hòu" ya
 su text "鲑" ob text "guī" ya
 su text "鲔" ob text "wěi" ya
+su text "鲕" ob text "ér" ya
 su text "鲜" ob text "xiān || xiǎn" ya
 su text "鲜亮" ob text "xiān liang" ya
 su text "鲟" ob text "xún" ya
 su text "鲤" ob text "lǐ" ya
 su text "鲤鱼" ob text "lǐ yú" ya
 su text "鲥鱼" ob text "shí yú" ya
+su text "鲦" ob text "tiáo" ya
 su text "鲨" ob text "shā" ya
 su text "鲨鱼" ob text "shā yú" ya
 su text "鲫" ob text "jì" ya
@@ -17495,6 +17554,7 @@ su text "鸬鹚" ob text "lú cí" ya
 su text "鸭" ob text "yā" ya
 su text "鸭嘴兽" ob text "yā zuǐ shòu" ya
 su text "鸭嘴龙" ob text "yā zuǐ lóng" ya
+su text "鸰" ob text "líng" ya
 su text "鸵" ob text "tuó" ya
 su text "鸵鸟" ob text "tuó niǎo" ya
 su text "鸸鹋" ob text "ér miáo" ya
@@ -17503,6 +17563,7 @@ su text "鸽" ob text "gē" ya
 su text "鸽子" ob text "gē zi" ya
 su text "鸿" ob text "hóng" ya
 su text "鸿雁" ob text "hóng yàn" ya
+su text "䴕" ob text "liè" ya
 su text "鹀" ob text "wú" ya
 su text "鹂" ob text "lí" ya
 su text "鹃" ob text "juān" ya
@@ -17512,6 +17573,7 @@ su text "鹅掌楸" ob text "é zhǎng qiū" ya
 su text "鹊" ob text "què" ya
 su text "鹌" ob text "ān" ya
 su text "鹌鹑" ob text "ān chún" ya
+su text "鹖" ob text "hé" ya
 su text "鹤" ob text "hè" ya
 su text "鹤嘴锄" ob text "hè zuǐ chú" ya
 su text "鹦" ob text "yīng" ya
@@ -17528,6 +17590,7 @@ su text "鹳" ob text "guàn" ya
 su text "鹿" ob text "lù" ya
 su text "鹿肉" ob text "lù ròu" ya
 su text "鹿角" ob text "lù jiǎo" ya
+su text "麀" ob text "yōu" ya
 su text "麂" ob text "jǐ" ya
 su text "麂皮" ob text "jǐ pí" ya
 su text "麒" ob text "qí" ya
@@ -17678,6 +17741,7 @@ su text "鼻窦炎" ob text "bí dòu yán" ya
 su text "鼻骨" ob text "bí gǔ" ya
 su text "鼾" ob text "hān" ya
 su text "鼾声" ob text "hān shēng" ya
+su text "齇" ob text "zhā" ya
 su text "齐" ob text "qí" ya
 su text "齐射" ob text "qí shè" ya
 su text "齿" ob text "chǐ" ya
@@ -17928,6 +17992,7 @@ su text "character:偏" ob text "to lean || to slant || oblique || prejudiced ||
 su text "character:做" ob text "to do || to make || to produce || to write || to compose || to act as || to engage in || to hold (a party)" ya
 su text "character:停" ob text "to stop || to halt || to park (a car)" ya
 su text "character:健" ob text "healthy || to invigorate || to strengthen || to be good at || to be strong in" ya
+su text "character:偭" ob text "to transgress" ya
 su text "character:偶" ob text "accidental || image || pair || mate" ya
 su text "character:偷" ob text "to steal || to pilfer || to snatch || thief || stealthily" ya
 su text "character:偻" ob text "hunchback || crookbacked" ya
@@ -18111,6 +18176,7 @@ su text "character:勒" ob text "to rein in || to compel || to force || to carve
 su text "character:動" ob text "(of sth) to move || to set in movement || to displace || to touch || to make use of || to stir (emotions) || to alter || abbr. for 動詞|动词[dong4 ci2], verb" ya
 su text "character:勖" ob text "exhort || stimulate" ya
 su text "character:勘" ob text "to investigate || to survey || to collate" ya
+su text "character:勚" ob text "(literary) toilsome || laborious || (of an edge etc) worn out || blunt" ya
 su text "character:募" ob text "canvass for contributions || to recruit || to collect || to raise" ya
 su text "character:勢" ob text "power || influence || potential || momentum || tendency || trend || situation || conditions" ya
 su text "character:勤" ob text "diligent || industrious || hardworking || frequent || regular || constant || variant of 勤[qin2] || solicitous" ya
@@ -18332,6 +18398,7 @@ su text "character:哨" ob text "a whistle || sentry" ya
 su text "character:哩" ob text "mile (unit of length equal to 1,609.344 m) || old form of modern 英里[Ying1 li3] || (modal final particle similar to 呢[ne5] or 啦[la5])" ya
 su text "character:哭" ob text "to cry || to weep" ya
 su text "character:哮" ob text "pant || roar || bark (of animals) || Taiwan pr. [xiao1]" ya
+su text "character:哱" ob text "phonetic bo || used in onomatopoeia || see 呼呼哱[hu1 hu1 bo1], hoopoe bird" ya
 su text "character:哲" ob text "wise || a sage || (used in given names) || variant of 哲[zhe2]" ya
 su text "character:哺" ob text "to feed || to eat || evening meal || see 餔子|哺子[bu4 zi5]" ya
 su text "character:哼" ob text "to groan || to snort || to hum || to croon || humph!" ya
@@ -18403,6 +18470,7 @@ su text "character:嗪" ob text "used in phonetic transcription -xine, -zine or 
 su text "character:嗯" ob text "(a groaning sound) || (nonverbal grunt as interjection) || OK, yeah || what? || interjection indicating approval, appreciation or agreement" ya
 su text "character:嗳" ob text "(interj. of disapproval) || (interj. of regret)" ya
 su text "character:嗵" ob text "(onom.) thump || thud" ya
+su text "character:𫫇" ob text "variant of 惡|恶[e3], esp. used in names of chemical components" ya
 su text "character:嗽" ob text "cough" ya
 su text "character:嘉" ob text "surname Jia || excellent || auspicious || to praise || to commend" ya
 su text "character:嘌" ob text "fast || speedy || purine || see 嘌呤[piao4 ling4]" ya
@@ -18433,6 +18501,7 @@ su text "character:噼" ob text "child's buttocks (esp. Cantonese) || (onom.) cr
 su text "character:嚎" ob text "howl || bawl" ya
 su text "character:嚏" ob text "sneeze" ya
 su text "character:嚓" ob text "(onom.) scraping sound || ripping of fabric || screeching of tires || (onom.) snap || pop || see 喀嚓[ka1 cha1]" ya
+su text "character:嚚" ob text "insincere || stupid" ya
 su text "character:嚣" ob text "clamor" ya
 su text "character:嚴" ob text "surname Yan || tight (closely sealed) || stern || strict || rigorous || severe || father" ya
 su text "character:嚷" ob text "to shout || to bellow || to make a big deal of sth || to make a fuss about sth" ya
@@ -18648,6 +18717,7 @@ su text "character:媒" ob text "medium || intermediary || matchmaker || go-betw
 su text "character:媚" ob text "flatter || charm" ya
 su text "character:媾" ob text "to marry || to copulate" ya
 su text "character:嫁" ob text "(of a woman) to marry || to marry off a daughter || to shift (blame etc)" ya
+su text "character:嫄" ob text "name of an empress" ya
 su text "character:嫉" ob text "jealousy || to be jealous of" ya
 su text "character:嫌" ob text "to dislike || suspicion || resentment || enmity || abbr. for 嫌犯[xian2 fan4], criminal suspect" ya
 su text "character:嫖" ob text "to visit a prostitute" ya
@@ -18711,6 +18781,7 @@ su text "character:容" ob text "surname Rong || to hold || to contain || to all
 su text "character:宽" ob text "surname Kuan || wide || broad || loose || relaxed || lenient" ya
 su text "character:宾" ob text "visitor || guest || object (in grammar)" ya
 su text "character:宿" ob text "old variant of 宿[su4] || surname Su || lodge for the night || old || former || night || classifier for nights || constellation" ya
+su text "character:寁" ob text "swift" ya
 su text "character:寂" ob text "silent || solitary || Taiwan pr. [ji2]" ya
 su text "character:寄" ob text "to send || to mail || to entrust || to depend on || to attach oneself to || to live (in a house) || to lodge || foster (son etc)" ya
 su text "character:密" ob text "surname Mi || name of an ancient state || secret || confidential || close || thick || dense" ya
@@ -18797,6 +18868,7 @@ su text "character:崩" ob text "to collapse || to fall into ruins || death of k
 su text "character:崽" ob text "child || young animal" ya
 su text "character:嵌" ob text "see 赤嵌樓|赤嵌楼[Chi4 kan3 lou2] || to inlay || to embed || Taiwan pr. [qian1]" ya
 su text "character:嵴" ob text "ridge || crest || apex" ya
+su text "character:嶲" ob text "old variant of 巂[xi1]" ya
 su text "character:川" ob text "abbr. for Sichuan Province 四川[Si4 chuan1] in southwest China || (bound form) river || creek || plain || an area of level country" ya
 su text "character:州" ob text "prefecture || (old) province || (old) administrative division || state (e.g. of US) || oblast (Russia) || canton (Switzerland)" ya
 su text "character:巢" ob text "surname Chao || nest" ya
@@ -18830,6 +18902,7 @@ su text "character:帜" ob text "flag" ya
 su text "character:帝" ob text "emperor" ya
 su text "character:带" ob text "band || belt || girdle || ribbon || tire || area || zone || region" ya
 su text "character:帧" ob text "frame || classifier for paintings etc || Taiwan pr. [zheng4]" ya
+su text "character:帨" ob text "handkerchief" ya
 su text "character:師" ob text "surname Shi || teacher || master || expert || model || army division || (old) troops || to dispatch troops" ya
 su text "character:席" ob text "surname Xi || woven mat || seat || banquet || place in a democratic assembly || classifier for banquets, conversations etc || variant of 席[xi2]" ya
 su text "character:帮" ob text "old variant of 幫|帮[bang1] || to help || to assist || to support || for sb (i.e. as a help) || hired (as worker) || side (of pail, boat etc) || outer layer" ya
@@ -18889,6 +18962,7 @@ su text "character:开" ob text "to open || to start || to turn on || to boil ||
 su text "character:异" ob text "different || other || hetero- || unusual || strange || surprising || to distinguish || to separate" ya
 su text "character:弃" ob text "to abandon || to relinquish || to discard || to throw away" ya
 su text "character:弄" ob text "lane || alley || to do || to manage || to handle || to play with || to fool with || to mess with" ya
+su text "character:弇" ob text "to cover || trap" ya
 su text "character:弈" ob text "ancient name for go (Chinese board game)" ya
 su text "character:弊" ob text "detriment || fraud || harm || defeat" ya
 su text "character:弋" ob text "to shoot" ya
@@ -19023,6 +19097,7 @@ su text "character:惊" ob text "to startle || to be frightened || to be scared 
 su text "character:惋" ob text "to sigh in regret or pity || Taiwan pr. [wan4]" ya
 su text "character:惑" ob text "to confuse || to be puzzled" ya
 su text "character:惕" ob text "fearful || respectful" ya
+su text "character:惙" ob text "mournful || uncertain" ya
 su text "character:惚" ob text "indistinct" ya
 su text "character:惜" ob text "to cherish || to begrudge || to pity || Taiwan pr. [xi2]" ya
 su text "character:惠" ob text "surname Hui || favor || benefit || to bestow || (literary) benevolence || (honorific)" ya
@@ -19091,6 +19166,7 @@ su text "character:戗" ob text "contrary || pushing against || bump || knock ||
 su text "character:战" ob text "to fight || fight || war || battle" ya
 su text "character:戚" ob text "variant of 戚[qi1] || grief || sorrow || variant of 慼|戚[qi1] || surname Qi || relative || parent || battle-axe" ya
 su text "character:戟" ob text "halberd || long-handled weapon with pointed tip and crescent blade || combined spear and battle-ax" ya
+su text "character:戤" ob text "infringe upon a trade mark" ya
 su text "character:截" ob text "to cut off (a length) || to stop || to intercept || section || chunk || length" ya
 su text "character:戮" ob text "to peel with a knife || old variant of 戮[lu4] || to join (forces) || variant of 戮[lu4] || to kill" ya
 su text "character:戰" ob text "to fight || fight || war || battle" ya
@@ -19254,6 +19330,7 @@ su text "character:揍" ob text "to beat up || to break to pieces" ya
 su text "character:描" ob text "to depict || to trace (a drawing) || to copy || to touch up" ya
 su text "character:提" ob text "used in 提防[di1 fang5] and 提溜[di1 liu5] || to carry (hanging down from the hand) || to lift || to put forward || to mention || to raise (an issue) || upwards character stroke || lifting brush stroke (in painting)" ya
 su text "character:插" ob text "to insert || stick in || pierce || to take part in || to interfere || to interpose || old variant of 插[cha1]" ya
+su text "character:揕" ob text "to hit || to thrust" ya
 su text "character:換" ob text "to exchange || to change (clothes etc) || to substitute || to switch || to convert (currency)" ya
 su text "character:握" ob text "to hold || to grasp || to clench (one's fist) || to master || classifier: a handful" ya
 su text "character:揣" ob text "to put into (one's pockets, clothes) || Taiwan pr. [chuai3] || to estimate || to guess || to figure || to surmise" ya
@@ -19266,6 +19343,7 @@ su text "character:搜" ob text "to search" ya
 su text "character:搋" ob text "to knead || to rub || to clear a drain with a pump || to conceal sth in one's bosom || to carry sth under one's coat" ya
 su text "character:搏" ob text "to fight || to combat || to seize || (of heart) to beat" ya
 su text "character:搐" ob text "lead || pull" ya
+su text "character:搒" ob text "to row || oar || Taiwan pr. [beng4] || to whip" ya
 su text "character:搓" ob text "to rub or roll between the hands or fingers || to twist" ya
 su text "character:搔" ob text "to scratch || old variant of 騷|骚[sao1]" ya
 su text "character:搞" ob text "to do || to make || to go in for || to set up || to get hold of || to take care of" ya
@@ -19424,6 +19502,7 @@ su text "character:暇" ob text "leisure" ya
 su text "character:暖" ob text "old variant of 暖[nuan3] || warm || to warm || variant of 暖[nuan3] || variant of 暖[nuan3], warm" ya
 su text "character:暗" ob text "variant of 暗[an4] || dark || gloomy || hidden || secret || muddled || obscure || in the dark" ya
 su text "character:暧" ob text "(of daylight) dim || obscure || clandestine || dubious" ya
+su text "character:㬎" ob text "old variant of 顯|显[xian3] || visible || apparent" ya
 su text "character:暮" ob text "evening || sunset" ya
 su text "character:暴" ob text "surname Bao || sudden || violent || cruel || to show or expose || to injure" ya
 su text "character:曜" ob text "bright || glorious || one of the seven planets of premodern astronomy" ya
@@ -19578,6 +19657,7 @@ su text "character:棒" ob text "stick || club || cudgel || smart || capable || 
 su text "character:棕" ob text "palm || palm fiber || coir (coconut fiber) || brown || variant of 棕[zong1]" ya
 su text "character:棘" ob text "thorns" ya
 su text "character:棚" ob text "shed || canopy || shack" ya
+su text "character:棨" ob text "tally for going through a pass" ya
 su text "character:森" ob text "Mori (Japanese surname) || forest" ya
 su text "character:棰" ob text "to flog || whip || variant of 棰[chui2]" ya
 su text "character:棱" ob text "square beam || variant of 稜|棱[leng2] || corner || edge || arris (sharp ridge formed by two surfaces meeting at an edge) || protrusion" ya
@@ -19588,6 +19668,7 @@ su text "character:椅" ob text "chair" ya
 su text "character:椋" ob text "see 椋鳥|椋鸟[liang2 niao3]" ya
 su text "character:植" ob text "to plant" ya
 su text "character:椎" ob text "a hammer || spine" ya
+su text "character:椑" ob text "Fagus sylvatica" ya
 su text "character:椒" ob text "pepper" ya
 su text "character:椭" ob text "ellipse" ya
 su text "character:椰" ob text "coconut palm || Taiwan pr. [ye2]" ya
@@ -19641,6 +19722,7 @@ su text "character:橱" ob text "wardrobe || closet || cabinet" ya
 su text "character:橼" ob text "Citrus medica" ya
 su text "character:檀" ob text "surname Tan || sandalwood || hardwood || purple-red" ya
 su text "character:檐" ob text "eaves || ledge or brim || variant of 檐[yan2]" ya
+su text "character:檑" ob text "logs rolled down in defense of city" ya
 su text "character:檔" ob text "(Tw) variant of 擋|挡[dang3], gear || official records || grade (of goods) || file || records || shelves || slot || gap" ya
 su text "character:檠" ob text "instrument for straightening bows" ya
 su text "character:檬" ob text "lemon" ya
@@ -19809,6 +19891,7 @@ su text "character:浮" ob text "to float || superficial || floating || unstable
 su text "character:浴" ob text "bath || to bathe" ya
 su text "character:海" ob text "surname Hai || ocean || sea || great number of people or things || (dialect) numerous" ya
 su text "character:浸" ob text "to immerse || to soak || to steep || gradually" ya
+su text "character:浼" ob text "to ask a favor of" ya
 su text "character:涂" ob text "to apply (paint etc) || to smear || to daub || to blot out || to scribble || to scrawl || (literary) mud || street" ya
 su text "character:涅" ob text "to blacken || abbr. for 涅槃[nie4 pan2] || variant of 涅[nie4]" ya
 su text "character:消" ob text "to disappear || to vanish || to eliminate || to spend (time) || have to || need" ya
@@ -19865,6 +19948,7 @@ su text "character:溅" ob text "to splash" ya
 su text "character:溉" ob text "to irrigate" ya
 su text "character:滋" ob text "to grow || to nourish || to increase || to cause || juice || taste || (dialect) to spout || to spurt" ya
 su text "character:滞" ob text "sluggish" ya
+su text "character:𣸣" ob text "edge of water" ya
 su text "character:源" ob text "root || source || origin" ya
 su text "character:準" ob text "accurate || standard || definitely || certainly || about to become (bride, son-in-law etc) || quasi- || para-" ya
 su text "character:溜" ob text "to slip away || to escape in stealth || to skate" ya
@@ -19971,6 +20055,7 @@ su text "character:焯" ob text "to blanch (cooking) || to scald" ya
 su text "character:焰" ob text "flame || variant of 焰[yan4]" ya
 su text "character:然" ob text "correct || right || so || thus || like this || -ly" ya
 su text "character:煮" ob text "variant of 煮[zhu3] || to cook || to boil" ya
+su text "character:煁" ob text "brazier" ya
 su text "character:煌" ob text "brilliant" ya
 su text "character:煎" ob text "to pan fry || to sauté" ya
 su text "character:煞" ob text "to terminate || to cut short || to bring to a stop || to squeeze || to tighten || to damage || variant of 殺|杀[sha1] || fiend" ya
@@ -20029,6 +20114,7 @@ su text "character:牲" ob text "domestic animal || sacrificial animal" ya
 su text "character:牵" ob text "to lead along || to pull (an animal on a tether) || (bound form) to involve || to draw in" ya
 su text "character:特" ob text "special || unique || distinguished || especially || unusual || very || abbr. for 特克斯[te4 ke4 si1], tex" ya
 su text "character:牺" ob text "sacrifice" ya
+su text "character:牻" ob text "(literary) black and white cattle" ya
 su text "character:犁" ob text "plow" ya
 su text "character:犀" ob text "rhinoceros || sharp" ya
 su text "character:犊" ob text "calf || sacrificial victim" ya
@@ -20130,6 +20216,7 @@ su text "character:瑰" ob text "(semiprecious stone) || extraordinary || old va
 su text "character:璁" ob text "stone similar to jade" ya
 su text "character:璃" ob text "(phonetic character used in transliteration of foreign names) || Taiwan pr. [li4] || variant of 璃[li2] || colored glaze || glass" ya
 su text "character:環" ob text "surname Huan || ring || hoop || loop || (chain) link || classifier for scores in archery etc || to surround || to encircle" ya
+su text "character:瓀" ob text "opaque || white quartz" ya
 su text "character:瓜" ob text "melon || gourd || squash" ya
 su text "character:瓠" ob text "gourd" ya
 su text "character:瓢" ob text "dipper || ladle" ya
@@ -20202,6 +20289,7 @@ su text "character:疼" ob text "(it) hurts || sore || to love dearly" ya
 su text "character:疽" ob text "gangrene" ya
 su text "character:疾" ob text "sickness || disease || hate || envy || swift" ya
 su text "character:痂" ob text "scab" ya
+su text "character:痄" ob text "mumps" ya
 su text "character:病" ob text "illness || disease || to fall ill || defect" ya
 su text "character:症" ob text "disease || illness || abdominal tumor || bowel obstruction || (fig.) sticking point" ya
 su text "character:痉" ob text "spasm" ya
@@ -20227,6 +20315,7 @@ su text "character:痿" ob text "atrophy" ya
 su text "character:瘀" ob text "hematoma (internal blood clot) || extravasated blood (spilt into surrounding tissue) || contusion" ya
 su text "character:瘁" ob text "care-worn || distressed || tired || overworked || sick || weary" ya
 su text "character:瘍" ob text "ulcers || sores" ya
+su text "character:瘕" ob text "obstruction in the intestine" ya
 su text "character:瘟" ob text "epidemic || pestilence || plague || (fig.) stupid || dull || (of a performance) lackluster" ya
 su text "character:瘙" ob text "itch || old term for scabies || Taiwan pr. [sao1]" ya
 su text "character:瘠" ob text "barren || lean" ya
@@ -20318,6 +20407,7 @@ su text "character:瞰" ob text "to look down from a height || to spy on sth || 
 su text "character:瞳" ob text "pupil of the eye" ya
 su text "character:矛" ob text "spear || lance || pike" ya
 su text "character:矜" ob text "to boast || to esteem || to sympathize" ya
+su text "character:矞" ob text "grand || elegant || propitious" ya
 su text "character:矢" ob text "arrow || dart || straight || to vow || to swear || old variant of 屎[shi3]" ya
 su text "character:知" ob text "to know || to be aware" ya
 su text "character:矩" ob text "variant of 矩[ju3] || carpenter's square || rule || regulation || pattern || to carve" ya
@@ -20341,6 +20431,7 @@ su text "character:砧" ob text "anvil || variant of 砧[zhen1]" ya
 su text "character:砭" ob text "ancient stone acupuncture needle || to criticize || to pierce" ya
 su text "character:砰" ob text "(onom.) bang || thump" ya
 su text "character:破" ob text "broken || damaged || worn out || lousy || rotten || to break, split or cleave || to get rid of || to destroy" ya
+su text "character:砵" ob text "alms bowl" ya
 su text "character:砷" ob text "arsenic (chemistry)" ya
 su text "character:砸" ob text "to smash || to pound || to fail || to muck up || to bungle" ya
 su text "character:砺" ob text "grind || sandstone" ya
@@ -20378,8 +20469,10 @@ su text "character:磬" ob text "chime stones, ancient percussion instrument mad
 su text "character:磲" ob text "used in 硨磲|砗磲[che1 qu2]" ya
 su text "character:磷" ob text "variant of 磷[lin2] || phosphorus (chemistry)" ya
 su text "character:磺" ob text "sulfur" ya
+su text "character:磻" ob text "name of a river in Shaanxi" ya
 su text "character:礁" ob text "reef || shoal rock" ya
 su text "character:礙" ob text "to hinder || to obstruct || to block" ya
+su text "character:礞" ob text "(mineral)" ya
 su text "character:示" ob text "to show || to reveal" ya
 su text "character:礼" ob text "surname Li || abbr. for 禮記|礼记[Li3 ji4], Classic of Rites || gift || rite || ceremony || propriety || etiquette || courtesy" ya
 su text "character:社" ob text "society || group || club || agency || (old) god of the land" ya
@@ -20604,6 +20697,7 @@ su text "character:绍" ob text "surname Shao || to continue || to carry on" ya
 su text "character:绎" ob text "continuous || to interpret || to unravel || to draw silk (old)" ya
 su text "character:经" ob text "surname Jing || classics || sacred book || scripture || to pass through || to undergo || to bear || to endure" ya
 su text "character:結" ob text "(of a plant) to produce (fruit or seeds) || Taiwan pr. [jie2] || knot || sturdy || bond || to tie || to bind || to check out (of a hotel)" ya
+su text "character:絜" ob text "clean || marking line || pure || to regulate" ya
 su text "character:絮" ob text "cotton wadding || fig. padding || long-winded" ya
 su text "character:絲" ob text "silk || thread || trace || (cuisine) shreds or julienne strips || classifier: a thread (of cloud, smoke etc), a bit, an iota, a hint (of sth) etc" ya
 su text "character:绑" ob text "to tie || bind or fasten together || to kidnap" ya
@@ -20622,6 +20716,7 @@ su text "character:經" ob text "surname Jing || classics || sacred book || scri
 su text "character:绣" ob text "variant of 繡|绣[xiu4] || to embroider || embroidery" ya
 su text "character:绦" ob text "see 絛綸|绦纶[di2 lun2] || braid || cord || sash || variant of 絛|绦[tao1]" ya
 su text "character:继" ob text "to continue || to follow after || to go on with || to succeed || to inherit || then || afterwards" ya
+su text "character:𫄧" ob text "cap tassels" ya
 su text "character:綠" ob text "green || (slang) (derived from 綠帽子|绿帽子[lu:4 mao4 zi5]) to cheat on (one's spouse or boyfriend or girlfriend)" ya
 su text "character:綢" ob text "(light) silk" ya
 su text "character:綦" ob text "dark gray || superlative || variegated" ya
@@ -20703,6 +20798,7 @@ su text "character:美" ob text "the Americas || abbr. for 美洲[Mei3 zhou1] ||
 su text "character:羑" ob text "to lead" ya
 su text "character:羔" ob text "lamb" ya
 su text "character:羚" ob text "antelope" ya
+su text "character:羝" ob text "billy goat || ram" ya
 su text "character:羞" ob text "shy || ashamed || shame || bashful || variant of 饈|馐[xiu1] || delicacies" ya
 su text "character:羟" ob text "hydroxyl (radical)" ya
 su text "character:羡" ob text "to envy" ya
@@ -20718,6 +20814,7 @@ su text "character:翅" ob text "variant of 翅[chi4] || wing (of a bird or inse
 su text "character:習" ob text "surname Xi || (bound form) to practice || to study || habit || custom" ya
 su text "character:翔" ob text "to soar || to glide || variant of 詳|详[xiang2] || (slang) shit" ya
 su text "character:翘" ob text "outstanding || to raise || to stick up || to rise on one end || to tilt" ya
+su text "character:翛" ob text "hastiness" ya
 su text "character:翠" ob text "bluish-green || green jade" ya
 su text "character:翡" ob text "green jade || kingfisher" ya
 su text "character:翰" ob text "surname Han || writing brush || writing || pen" ya
@@ -20863,6 +20960,7 @@ su text "character:臀" ob text "butt || buttocks || old variant of 臀[tun2]" y
 su text "character:臂" ob text "arm" ya
 su text "character:臆" ob text "(bound form) chest || breast || inner feelings || subjective" ya
 su text "character:臊" ob text "smell of urine || shame || bashfulness || to shame || to humiliate" ya
+su text "character:臑" ob text "biceps (in Chinese medicine) || (arch.) forelimbs of livestock animal" ya
 su text "character:臣" ob text "surname Chen || state official or subject in dynastic China || I, your servant (used in addressing the sovereign) || Kangxi radical 131" ya
 su text "character:自" ob text "self || oneself || from || since || naturally || surely" ya
 su text "character:臭" ob text "stench || smelly || to smell (bad) || repulsive || loathsome || terrible || bad || severely" ya
@@ -20885,6 +20983,7 @@ su text "character:舫" ob text "2 boats lashed together || large boat" ya
 su text "character:般" ob text "sort || kind || class || way || manner || see 般樂|般乐[pan2 le4]" ya
 su text "character:舰" ob text "warship" ya
 su text "character:舱" ob text "cabin || the hold of a ship or airplane" ya
+su text "character:舲" ob text "small boat with windows" ya
 su text "character:舵" ob text "helm || rudder" ya
 su text "character:舷" ob text "side of a ship or an aircraft" ya
 su text "character:船" ob text "variant of 船[chuan2] || boat || vessel || ship" ya
@@ -21036,6 +21135,7 @@ su text "character:蒺" ob text "Tribulus terrestris" ya
 su text "character:蒼" ob text "surname Cang || dark blue || deep green || ash-gray" ya
 su text "character:蒿" ob text "celery wormwood (Artemisia carvifolia) || to give off || to weed" ya
 su text "character:蓄" ob text "to store up || to grow (e.g. a beard) || to entertain (ideas)" ya
+su text "character:蓇" ob text "follicle" ya
 su text "character:蓋" ob text "surname Ge || lid || top || cover || canopy || to cover || to conceal || to build" ya
 su text "character:蓍" ob text "yarrow (Achillea millefolium)" ya
 su text "character:蓑" ob text "variant of 蓑[suo1] || rain coat made of straw etc" ya
@@ -21045,6 +21145,7 @@ su text "character:蓬" ob text "surname Peng || fleabane (family Asteraceae) ||
 su text "character:蓺" ob text "skill || art" ya
 su text "character:蓼" ob text "polygonum || smartweed || luxuriant growth" ya
 su text "character:蓿" ob text "clover || lucerne || Taiwan pr. [su4]" ya
+su text "character:蔃" ob text "cigarette (slang) (Cantonese)" ya
 su text "character:蔑" ob text "to belittle || nothing || defiled with blood" ya
 su text "character:蔓" ob text "turnip || Brassica campestris || creeper || to spread" ya
 su text "character:蔚" ob text "surname Yu || place name || Artemisia japonica || luxuriant || resplendent || impressive" ya
@@ -21062,6 +21163,7 @@ su text "character:蕴" ob text "to accumulate || to hold in store || to contain
 su text "character:蕾" ob text "bud" ya
 su text "character:薄" ob text "surname Bo || thin || cold in manner || indifferent || weak || light || infertile || meager" ya
 su text "character:薇" ob text "Osmunda regalis, a species of fern || Taiwan pr. [wei2]" ya
+su text "character:薢" ob text "woody climbing plant" ya
 su text "character:薪" ob text "fuel || salary" ya
 su text "character:薯" ob text "potato || yam || variant of 薯[shu3]" ya
 su text "character:薰" ob text "fragrance || warm || to educate || variant of 熏[xun1] || to smoke || to fumigate || sweet-smelling grass || Coumarouna odorata" ya
@@ -21213,11 +21315,13 @@ su text "character:衬" ob text "(of garments) against the skin || to line || li
 su text "character:衰" ob text "mourning garments || to decline || to wane || to become weak or feeble" ya
 su text "character:衲" ob text "cassock || to line" ya
 su text "character:衷" ob text "inner feelings" ya
+su text "character:袆" ob text "a queen's ceremonial gowns" ya
 su text "character:袋" ob text "pouch || bag || sack || pocket" ya
 su text "character:袍" ob text "gown (lined)" ya
 su text "character:袒" ob text "to bare || old variant of 袒[tan3]" ya
 su text "character:袖" ob text "sleeve || to tuck inside one's sleeve" ya
 su text "character:袜" ob text "socks || stockings || variant of 韤|袜[wa4] || variant of 襪|袜[wa4]" ya
+su text "character:袪" ob text "sleeve opening" ya
 su text "character:被" ob text "quilt || by || (indicates passive-voice clauses) || (literary) to cover || to meet with || (coll.) (since c. 2009) used before a verb that does not accurately represent what actually happened, to describe with black humor how sb or sth was dealt with by the authorities (as in 被自殺|被自杀[bei4 zi4 sha1])" ya
 su text "character:袭" ob text "to attack || to inherit || classifier for suits (esp. of funeral robes)" ya
 su text "character:裁" ob text "to cut out (as a dress) || to cut || to trim || to reduce || to diminish || to cut back (e.g. on staff) || decision || judgment" ya
@@ -21242,6 +21346,7 @@ su text "character:褒" ob text "to praise || to commend || to honor || (of clot
 su text "character:褓" ob text "variant of 褓[bao3] || cloth for carrying baby on back" ya
 su text "character:褥" ob text "mattress" ya
 su text "character:褪" ob text "to take off (clothes) || to shed feathers || (of color) to fade || to discolor || to slip out of sth || to hide sth in one's sleeve" ya
+su text "character:褯" ob text "diaper" ya
 su text "character:褶" ob text "(arch.) court dress || pleat || crease || Taiwan pr. [zhe2]" ya
 su text "character:襁" ob text "string of copper coins || variant of 襁[qiang3] || cloth for carrying baby on back" ya
 su text "character:襟" ob text "lapel || overlap of Chinese gown || fig. bosom (the seat of emotions) || to cherish (ambition, desires, honorable intentions etc) in one's bosom" ya
@@ -21365,6 +21470,7 @@ su text "character:谕" ob text "order (from above)" ya
 su text "character:谙" ob text "to be versed in || to know well" ya
 su text "character:谚" ob text "proverb" ya
 su text "character:谜" ob text "see 謎兒|谜儿[mei4 r5], riddle || riddle" ya
+su text "character:谞" ob text "(literary) ability and wisdom || scheme || stratagem" ya
 su text "character:謇" ob text "to speak out boldly" ya
 su text "character:谢" ob text "surname Xie || to thank || to apologize || to wither (of flowers, leaves etc) || to decline" ya
 su text "character:谣" ob text "popular ballad || rumor" ya
@@ -21372,6 +21478,7 @@ su text "character:谤" ob text "to slander || to defame || to speak ill of" ya
 su text "character:谦" ob text "modest" ya
 su text "character:谨" ob text "cautious || careful || solemnly || sincerely (formal)" ya
 su text "character:谪" ob text "to relegate a high official to a minor post in an outlying region (punishment in imperial China) || to banish or exile || (of immortals) to banish from Heaven || to censure || to blame || variant of 謫|谪[zhe2]" ya
+su text "character:谫" ob text "shallow || superficial" ya
 su text "character:谬" ob text "to deceive || to confuse || to cheat || absurd || erroneous" ya
 su text "character:谱" ob text "chart || list || table || register || score (music) || spectrum (physics) || to set to music" ya
 su text "character:谲" ob text "deceitful" ya
@@ -21493,6 +21600,7 @@ su text "character:跚" ob text "limp" ya
 su text "character:跛" ob text "to limp || lame || crippled" ya
 su text "character:距" ob text "at a distance of || distance || to be apart" ya
 su text "character:践" ob text "to fulfill (a promise) || to tread || to walk" ya
+su text "character:趼" ob text "callus (patch or hardened skin) || corns (on the feet)" ya
 su text "character:跟" ob text "heel || to follow closely || to go with || (of a woman) to marry sb || with || compared with || to || towards" ya
 su text "character:跡" ob text "footprint || mark || trace || vestige || sign || indication || Taiwan pr. [ji1]" ya
 su text "character:跤" ob text "a tumble || a fall" ya
@@ -21559,6 +21667,7 @@ su text "character:輪" ob text "wheel || disk || ring || steamship || to take t
 su text "character:辈" ob text "lifetime || generation || group of people || class || classifier for generations || (literary) classifier for people" ya
 su text "character:辉" ob text "splendor || to shine upon" ya
 su text "character:辋" ob text "tire || wheel band" ya
+su text "character:辌" ob text "see 轀輬|辒辌[wen1 liang2]" ya
 su text "character:辍" ob text "to stop (before completion) || to cease || to suspend" ya
 su text "character:辏" ob text "to converge || hub of wheel" ya
 su text "character:辐" ob text "spoke of a wheel" ya
@@ -21632,6 +21741,7 @@ su text "character:逢" ob text "to meet by chance || to come across || (of a ca
 su text "character:逦" ob text "winding" ya
 su text "character:逮" ob text "(coll.) to catch || to seize || (literary) to arrest || to overtake || until" ya
 su text "character:進" ob text "to go forward || to advance || to go in || to enter || to put in || to submit || to take in || to admit" ya
+su text "character:逴" ob text "apparent || distant || highly" ya
 su text "character:逸" ob text "to escape || leisurely || outstanding" ya
 su text "character:逻" ob text "patrol" ya
 su text "character:逼" ob text "variant of 逼[bi1] || to compel || to pressure || to force (sb to do sth) || to press for || to extort || to press on towards || to press up to" ya
@@ -21674,6 +21784,7 @@ su text "character:郵" ob text "post (office) || mail" ya
 su text "character:都" ob text "surname Du || all || both || entirely || (used for emphasis) even || already || (not) at all || capital city" ya
 su text "character:鄙" ob text "rustic || low || base || mean || to despise || to scorn" ya
 su text "character:鄢" ob text "surname Yan || name of a district in Henan" ya
+su text "character:酂" ob text "group of 100 families || place name" ya
 su text "character:酊" ob text "tincture (loanword) || intoxicated" ya
 su text "character:酋" ob text "tribal chief" ya
 su text "character:酌" ob text "to pour wine || to drink wine || to deliberate || to consider" ya
@@ -21713,6 +21824,7 @@ su text "character:里" ob text "variant of 裡|里[li3] || lining || interior |
 su text "character:重" ob text "to repeat || repetition || again || re- || classifier: layer || heavy || serious || to attach importance to" ya
 su text "character:野" ob text "old variant of 野[ye3] || erroneous variant of 野[ye3] || field || plain || open space || limit || boundary || rude" ya
 su text "character:量" ob text "to measure || capacity || quantity || amount || to estimate || abbr. for 量詞|量词[liang4 ci2], classifier (in Chinese grammar) || measure word" ya
+su text "character:釐" ob text "Li (c. 2000 BC), sixth of the legendary Flame Emperors 炎帝[Yan2 di4] descended from Shennong 神農|神农[Shen2 nong2] Farmer God, also known as Ai 哀[Ai1] || one hundredth || centi-" ya
 su text "character:金" ob text "surname Jin || surname Kim (Korean) || Jurchen Jin dynasty (1115-1234) || gold || chemical element Au || generic term for lustrous and ductile metals || money || golden" ya
 su text "character:钇" ob text "yttrium (chemistry)" ya
 su text "character:针" ob text "needle || pin || injection || stitch || variant of 針|针[zhen1], needle" ya
@@ -21774,6 +21886,7 @@ su text "character:铗" ob text "pincers for use at a fire || sword" ya
 su text "character:铛" ob text "frying pan || griddle || clank || clang || sound of metal" ya
 su text "character:铜" ob text "copper (chemistry) || see also 紅銅|红铜[hong2 tong2]" ya
 su text "character:铝" ob text "aluminum (chemistry)" ya
+su text "character:铞" ob text "see 釕銱兒|钌铞儿[liao4 diao4 r5]" ya
 su text "character:铠" ob text "armor" ya
 su text "character:铡" ob text "lever-style guillotine || to chop using this type of guillotine" ya
 su text "character:铢" ob text "twenty-fourth part of a tael (2 or 3 grams)" ya
@@ -21825,6 +21938,7 @@ su text "character:锵" ob text "tinkling of small bells" ya
 su text "character:锶" ob text "strontium (chemistry)" ya
 su text "character:锸" ob text "spade || shovel" ya
 su text "character:锻" ob text "to forge || to discipline || wrought" ya
+su text "character:锽" ob text "sound of drums and bells || trident" ya
 su text "character:镀" ob text "-plated || to plate" ya
 su text "character:镁" ob text "magnesium (chemistry)" ya
 su text "character:镇" ob text "to press down || to calm || to subdue || to suppress || to guard || garrison || small town || to cool or chill (food or drinks)" ya
@@ -21841,9 +21955,11 @@ su text "character:镦" ob text "upsetting (forged pieces)" ya
 su text "character:镧" ob text "lanthanum (chemistry)" ya
 su text "character:镨" ob text "praseodymium (chemistry)" ya
 su text "character:镫" ob text "stirrup" ya
+su text "character:𫔍" ob text "vanadium" ya
 su text "character:镭" ob text "radium (chemistry)" ya
 su text "character:镯" ob text "bracelet" ya
 su text "character:镰" ob text "old variant of 鐮|镰[lian2] || variant of 鐮|镰[lian2] || scythe || sickle" ya
+su text "character:𬭼" ob text "speculum" ya
 su text "character:镶" ob text "to inlay || to embed || ridge || border" ya
 su text "character:長" ob text "length || long || forever || always || constantly || chief || head || elder" ya
 su text "character:长" ob text "length || long || forever || always || constantly || chief || head || elder" ya
@@ -21969,6 +22085,7 @@ su text "character:革" ob text "animal hide || leather || to reform || to remov
 su text "character:靴" ob text "boots || variant of 靴[xue1]" ya
 su text "character:靶" ob text "target || mark" ya
 su text "character:靼" ob text "(phonetic) || dressed leather" ya
+su text "character:鞁" ob text "horse tack (articles of harness such as saddle and bridle) || variant of 鞴[bei4]" ya
 su text "character:鞋" ob text "shoe || variant of 鞋[xie2]" ya
 su text "character:鞍" ob text "graphic variant of 鞍[an1] || saddle" ya
 su text "character:鞑" ob text "Tartar || a tribe in China" ya
@@ -22010,6 +22127,7 @@ su text "character:颈" ob text "neck" ya
 su text "character:颊" ob text "cheeks" ya
 su text "character:颌" ob text "maxilla and mandible" ya
 su text "character:颏" ob text "chin || (used in bird names) throat" ya
+su text "character:𫖯" ob text "variant of 俯[fu3]" ya
 su text "character:頭" ob text "head || hair style || the top || end || beginning or end || a stub || remnant || chief" ya
 su text "character:颐" ob text "cheek || lower cheek || chin || jaw || to nourish" ya
 su text "character:频" ob text "frequency || frequently || repetitious" ya
@@ -22116,6 +22234,7 @@ su text "character:髌" ob text "kneecapping || to cut or smash the kneecaps as 
 su text "character:髓" ob text "marrow || essence || quintessence || pith (soft interior of plant stem)" ya
 su text "character:體" ob text "body || form || style || system || substance || to experience || aspect (linguistics)" ya
 su text "character:高" ob text "surname Gao || high || tall || above average || loud || your (honorific)" ya
+su text "character:髢" ob text "old variant of 鬄[di2]" ya
 su text "character:髦" ob text "bang (hair) || fashionable || mane" ya
 su text "character:髮" ob text "hair || Taiwan pr. [fa3]" ya
 su text "character:髻" ob text "hair rolled up in a bun, topknot" ya
@@ -22147,12 +22266,14 @@ su text "character:鮨" ob text "sushi || grouper (Portuguese: garoupa) || Epine
 su text "character:鮮" ob text "fresh || bright (in color) || delicious || tasty || delicacy || aquatic foods || few || rare" ya
 su text "character:鲑" ob text "trout || salmon" ya
 su text "character:鲔" ob text "little tuna || Euthynnus alletteratus" ya
+su text "character:鲕" ob text "caviar || fish roe" ya
 su text "character:鲛" ob text "see 鮫魚|鲛鱼[jiao1 yu2]" ya
 su text "character:鲜" ob text "variant of 鮮|鲜[xian3] || variant of 尟|鲜[xian3] || fresh || bright (in color) || delicious || tasty || delicacy || aquatic foods" ya
 su text "character:鲟" ob text "sturgeon || Acipenser sturio" ya
 su text "character:鲡" ob text "eel" ya
 su text "character:鲤" ob text "carp" ya
 su text "character:鲥" ob text "shad || Ilisha elongata" ya
+su text "character:鲦" ob text "Korean sharpbelly (fish, Hemiculter leucisculus) || chub" ya
 su text "character:鲨" ob text "shark" ya
 su text "character:鲫" ob text "bastard carp || sand perch" ya
 su text "character:鯥" ob text "Pomatomus saltatrix || bluefish" ya
@@ -22199,6 +22320,7 @@ su text "character:鸫" ob text "thrush || Tardus fuscatus" ya
 su text "character:鸬" ob text "cormorant" ya
 su text "character:鸭" ob text "duck || (slang) male prostitute" ya
 su text "character:鸮" ob text "owl (order Strigiformes)" ya
+su text "character:鸰" ob text "wagtail || lark" ya
 su text "character:鸲" ob text "(bound form, used in the names of various kinds of bird, esp. robins and redstarts)" ya
 su text "character:鸵" ob text "ostrich" ya
 su text "character:鸶" ob text "heron" ya
@@ -22207,6 +22329,7 @@ su text "character:鸸" ob text "see 鴯鶓|鸸鹋[er2 miao2]" ya
 su text "character:鸻" ob text "plover" ya
 su text "character:鸽" ob text "pigeon || dove" ya
 su text "character:鸿" ob text "eastern bean goose || great || large" ya
+su text "character:䴕" ob text "woodpecker" ya
 su text "character:鵖" ob text "see 鵖鴔[bi1 fu2]" ya
 su text "character:鵙" ob text "a shrike" ya
 su text "character:鵟" ob text "buzzard (genus Buteo)" ya
@@ -22220,6 +22343,7 @@ su text "character:鹊" ob text "magpie" ya
 su text "character:鹋" ob text "see 鴯鶓|鸸鹋[er2 miao2]" ya
 su text "character:鹌" ob text "quail" ya
 su text "character:鹑" ob text "quail" ya
+su text "character:鹖" ob text "crossbill || long-tailed pheasant" ya
 su text "character:鹚" ob text "cormorant || variant of 鶿|鹚[ci2]" ya
 su text "character:鹛" ob text "babbler (bird)" ya
 su text "character:鹞" ob text "sparrow hawk || Accipiter nisus" ya
@@ -22238,6 +22362,7 @@ su text "character:鹰" ob text "eagle || falcon || hawk" ya
 su text "character:鹱" ob text "(bound form) bird of the Procellariidae family, which includes shearwaters, gadfly petrels etc" ya
 su text "character:鹳" ob text "crane || stork" ya
 su text "character:鹿" ob text "deer" ya
+su text "character:麀" ob text "female deer || doe || female animal" ya
 su text "character:麂" ob text "muntjac" ya
 su text "character:麋" ob text "surname Mi || moose || river bank" ya
 su text "character:麒" ob text "mythical male unicorn || see 麒麟" ya
@@ -22271,6 +22396,7 @@ su text "character:鼷" ob text "mouse" ya
 su text "character:鼹" ob text "mole" ya
 su text "character:鼻" ob text "nose" ya
 su text "character:鼾" ob text "snore || to snore" ya
+su text "character:齇" ob text "rosacea" ya
 su text "character:齐" ob text "(name of states and dynasties at several different periods) || surname Qi || neat || even || level with || identical || simultaneous || all together" ya
 su text "character:齿" ob text "tooth" ya
 su text "character:龄" ob text "age || length of experience, membership etc" ya
