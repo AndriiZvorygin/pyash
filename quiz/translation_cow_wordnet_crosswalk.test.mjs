@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   buildCowWordNetSenseCrosswalk,
   buildCowWordNetCrosswalkIndex,
+  lookupCowChineseFormsByWordNetSenses,
   parseCowChineseWordNet,
   parseCowWordNetCrosswalkPya,
   renderCowWordNetCrosswalkPya
@@ -202,4 +203,52 @@ test("crosswalk index and Pyash catalog round-trip preserve sense rows and form 
   assert.equal(index.preferredByChineseForm.get("乙")[0].matchedForm.preferred, true);
   assert.equal(index.preferredSenseByChineseForm.get("乙")[0].wordNetSenseId, "n:00000001-n");
   assert.equal(index.byChineseForm.has("甲乙"), true);
+});
+
+test("COW Chinese lookup keeps preferred short forms and reports sense ties without selecting a loser", () => {
+  const form = (value, hanCharacterCount, frequencyStatus, preferred = true) => ({
+    form: value,
+    hanCharacterCount,
+    preferred,
+    frequencyStatus,
+    cowSynsetIds: [`cow-${value}`]
+  });
+  const index = buildCowWordNetCrosswalkIndex([
+    {
+      wordNetSenseId: "n:00000001-n", synset: "00000001-n", partOfSpeech: "n", ili: "i1",
+      frequencyRank: 5, frequencyTagCount: 4,
+      chineseForms: [form("甲", 1, "frequency-top"), form("甲乙", 2, "frequency-top", false)]
+    },
+    {
+      wordNetSenseId: "n:00000002-n", synset: "00000002-n", partOfSpeech: "n", ili: "i2",
+      frequencyRank: 9, frequencyTagCount: 1,
+      chineseForms: [form("甲", 1, "lower-frequency")]
+    },
+    {
+      wordNetSenseId: "n:00000003-n", synset: "00000003-n", partOfSpeech: "n", ili: "i3",
+      frequencyRank: 12, frequencyTagCount: null,
+      chineseForms: [form("乙", 1, "unresolved-frequency-tie")]
+    },
+    {
+      wordNetSenseId: "n:00000004-n", synset: "00000004-n", partOfSpeech: "n", ili: "i4",
+      frequencyRank: 12, frequencyTagCount: null,
+      chineseForms: [form("乙", 1, "unresolved-frequency-tie")]
+    },
+    {
+      wordNetSenseId: "n:00000005-n", synset: "00000005-n", partOfSpeech: "n", ili: "i5",
+      frequencyRank: null, frequencyTagCount: null,
+      chineseForms: [form("丙", 1, "no-english30k-frequency")]
+    }
+  ]);
+
+  const results = lookupCowChineseFormsByWordNetSenses(index, [
+    "n:00000001-n", "n:00000002-n", "n:00000003-n", "n:00000005-n"
+  ]);
+  assert.deepEqual(results.map(({ chinese, frequencyStatus, wordNetSenseIds }) => ({
+    chinese, frequencyStatus, wordNetSenseIds
+  })), [
+    { chinese: "甲", frequencyStatus: "frequency-top", wordNetSenseIds: ["n:00000001-n"] },
+    { chinese: "乙", frequencyStatus: "unresolved-frequency-tie", wordNetSenseIds: ["n:00000003-n", "n:00000004-n"] },
+    { chinese: "丙", frequencyStatus: "no-english30k-frequency", wordNetSenseIds: ["n:00000005-n"] }
+  ]);
 });

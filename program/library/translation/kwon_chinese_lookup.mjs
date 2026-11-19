@@ -4,14 +4,20 @@ import {
   acceptedChineseCharacterAtomRows,
   parseChineseCharacterAtomLinks
 } from "./chinese_character_atom_refinery.mjs";
+import {
+  lookupCowChineseFormsByWordNetSenses,
+  parseCowWordNetCrosswalkPya
+} from "./cow_wordnet_crosswalk.mjs";
 import { loadEnglishGrammarCatalog } from "./english_grammar.mjs";
 
 const KWON_CHINESE_URL = new URL("../../../caterer/pyac/lyac/kwon_zh.json", import.meta.url);
 const PINYIN_INDEX_URL = new URL("./kwon_chinese_pinyin.pya", import.meta.url);
 const ACCEPTED_LINKS_URL = new URL("./chinese_character_atom_links.pya", import.meta.url);
+const COW_WORDNET_CROSSWALK_URL = new URL("./cow_wordnet_crosswalk.pya", import.meta.url);
 
 let chineseIndexPromise = null;
 let pinyinIndexPromise = null;
+let cowWordNetIndexPromise = null;
 
 function normalize(value) {
   return String(value ?? "").trim().normalize("NFC").toLowerCase();
@@ -101,9 +107,23 @@ async function loadPinyinIndex() {
   return pinyinIndexPromise;
 }
 
+async function loadCowWordNetIndex() {
+  if (!cowWordNetIndexPromise) {
+    cowWordNetIndexPromise = fs.readFile(COW_WORDNET_CROSSWALK_URL, "utf8")
+      .then(parseCowWordNetCrosswalkPya);
+  }
+  return cowWordNetIndexPromise;
+}
+
 export async function lookupChineseByPyash(pyash) {
   const index = await loadChineseIndex();
   return [...(index.get(normalize(pyash)) ?? [])];
+}
+
+export async function lookupChineseByWordNetSenses(senseIds) {
+  if (!Array.isArray(senseIds) || senseIds.length === 0) return [];
+  const crosswalk = await loadCowWordNetIndex();
+  return lookupCowChineseFormsByWordNetSenses(crosswalk, senseIds);
 }
 
 export async function lookupChinesePinyin(chinese) {

@@ -39,7 +39,8 @@ import { formatSumoEvidence, lookupSumoEvidence } from "../program/library/trans
 import {
   lookupChineseCharacterGlosses,
   lookupChinesePinyin,
-  lookupChineseByPyash
+  lookupChineseByPyash,
+  lookupChineseByWordNetSenses
 } from "../program/library/translation/kwon_chinese_lookup.mjs";
 import {
   MOODS,
@@ -503,10 +504,26 @@ function englishSenseDefinitions(token, english, linkedWordNetSenses) {
 
 async function reportPyashChineseLookups(tokens, {
   linkedWordNetSenses = [],
+  wordNetCompoundSenses = [],
   foundCompounds = new Map(),
   report = console.log
 } = {}) {
   const lookups = [];
+  const wordNetSenseEntries = [
+    ...linkedWordNetSenses,
+    ...wordNetCompoundSenses.map((entry) => ({
+      ...entry,
+      source: entry.senseId,
+      gloss: entry.definition,
+      active: true
+    }))
+  ];
+  const activeSenseIds = [...new Set(wordNetSenseEntries
+    .filter((entry) => entry.active === true)
+    .map((entry) => entry.source))];
+  const cowForms = activeSenseIds.length > 0
+    ? await lookupChineseByWordNetSenses(activeSenseIds)
+    : [];
   for (const token of tokens) {
     let matched = false;
     const linkedRows = await lookupChineseByPyash(token);
@@ -533,6 +550,52 @@ async function reportPyashChineseLookups(tokens, {
         pinyin,
         english: row.english,
         characterGlosses,
+        definitions
+      });
+      matched = true;
+    }
+
+    const tokenSenseIds = new Set(wordNetSenseEntries
+      .filter((entry) => entry.input === token && entry.active === true)
+      .map((entry) => entry.source));
+    const tokenCowForms = cowForms.filter((row) => row.matchedWordNetSenseIds
+      .some((senseId) => tokenSenseIds.has(senseId)));
+    for (const row of tokenCowForms) {
+      const pinyin = await lookupChinesePinyin(row.chinese);
+      const characterGlosses = await lookupChineseCharacterGlosses(row.chinese);
+      const pinyinText = pinyin.length > 0 ? pinyin.join(" / ") : "unavailable in the local pinyin index";
+      const frequencyLabel = row.frequencyStatus === "frequency-top"
+        ? "frequency-preferred"
+        : row.frequencyStatus === "unresolved-frequency-tie"
+          ? "unresolved frequency tie"
+          : "no English30k rank";
+      report(`${token}: COW WordNet Chinese ${row.chinese}; Pinyin ${pinyinText} (${frequencyLabel})`);
+      const characterBreakdown = characterGlosses
+        .filter((entry) => entry.glosses.length > 0)
+        .map((entry) => `${entry.character} (${entry.glosses.join("; ")})`);
+      if (characterBreakdown.length > 0) {
+        report(`${token}: English character glosses ${characterBreakdown.join(" + ")}`);
+      }
+      const definitions = wordNetSenseEntries
+        .filter((entry) => entry.input === token && entry.active === true
+          && row.wordNetSenseIds.includes(entry.source))
+        .map((entry) => ({ senseId: entry.source, target: entry.target, definition: entry.gloss }));
+      for (const definition of definitions) {
+        report(`${token}: English breakdown ${definition.target} — ${definition.definition} (${definition.senseId})`);
+      }
+      lookups.push({
+        input: token,
+        source: "cow-wordnet-crosswalk",
+        chinese: row.chinese,
+        hanCharacterCount: row.hanCharacterCount,
+        pinyin,
+        characterGlosses,
+        frequencyStatus: row.frequencyStatus,
+        frequencyRank: row.frequencyRank,
+        frequencyTagCount: row.frequencyTagCount,
+        wordNetSenseIds: row.wordNetSenseIds,
+        matchedWordNetSenseIds: row.matchedWordNetSenseIds,
+        cowSynsetIds: row.cowSynsetIds,
         definitions
       });
       matched = true;
@@ -1879,7 +1942,12 @@ export async function runVocabSuggest(args = process.argv.slice(2), {
   }
 
   const chineseLookups = targetLanguage === "zh"
-    ? await reportPyashChineseLookups(resolvedTextInputs, { linkedWordNetSenses, foundCompounds, report })
+    ? await reportPyashChineseLookups(resolvedTextInputs, {
+      linkedWordNetSenses,
+      wordNetCompoundSenses,
+      foundCompounds,
+      report
+    })
     : [];
   const sumoLookups = await reportSumoLookups([...resolvedTextInputs, ...sumoIds, ...senseIds], lookupReport);
 
