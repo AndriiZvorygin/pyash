@@ -8,6 +8,7 @@ HOUSEKEEPER_URL="${GPU_HOUSEKEEPER_URL:-http://127.0.0.1:18886}"
 IMAGE_NAME="liberit/pyac-vliw-runtime:latest"
 ARTIFACT_DIR="${HOME}/.local/share/pyash/pyac-vliw"
 PIPELINE_CACHE_FILE="$ARTIFACT_DIR/pyac_vliw_pipeline_cache.bin"
+PIPELINE_BUILD_LOG="$ARTIFACT_DIR/pipeline-cache-build.log"
 ROLLBACK_CACHE_FILE="$ARTIFACT_DIR/.rollback-pipeline-cache.bin"
 previous_image_id="$(docker inspect --format '{{.Image}}' pyac-vliw-runtime 2>/dev/null || true)"
 rollback_tag=""
@@ -136,7 +137,7 @@ curl -fsS --max-time 1900 -X POST \
   --data '{"runtimeName":"vliw"}' \
   "$HOUSEKEEPER_URL/runtime/stop" >/dev/null
 
-compose --profile build-artifact run --rm --no-deps pyac-vliw-pipeline-compiler
+compose --profile build-artifact run --rm --no-deps pyac-vliw-pipeline-compiler 2>&1 | tee "$PIPELINE_BUILD_LOG"
 if [[ ! -s "$ARTIFACT_DIR/pyac_vliw_pipeline_cache.bin" ]]; then
   echo "GPU pipeline compiler did not produce the required on-disk artifact." >&2
   exit 1

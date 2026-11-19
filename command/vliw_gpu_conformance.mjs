@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
+import { performance } from "node:perf_hooks";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { parse } from "../program/understand/index.mjs";
@@ -14,6 +15,10 @@ import {
   executePyashProgramPack
 } from "../program/library/vliw/programlet.mjs";
 import { createHousekeeperVliwPackExecutor } from "../program/library/vliw/rust_gpu_pack.mjs";
+import {
+  collectVliwConformanceEnvironment,
+  writeVliwConformancePya
+} from "./vliw_conformance_report.mjs";
 
 function programlet(name, source, invocation, expectedValues) {
   const compiled = compilePyashProgramSource(source, { invocation });
@@ -637,7 +642,12 @@ export function executeRustCpuProgramletFailureReference(pack) {
   return Number(match[1]);
 }
 
-export async function runVliwGpuConformance({ executeCpuPacks, executePack, onProgress = () => {} }) {
+export async function runVliwGpuConformance({
+  executeCpuPacks,
+  executePack,
+  onProgress = () => {},
+  onTiming = () => {}
+}) {
   if (typeof executeCpuPacks !== "function") {
     throw new TypeError("VLIW conformance requires a Rust CPU pack executor");
   }
@@ -646,8 +656,21 @@ export async function runVliwGpuConformance({ executeCpuPacks, executePack, onPr
   }
   const cases = await buildVliwGpuConformanceCases();
   const batches = buildVliwGpuConformanceBatches(cases);
-  const cpuBatchResults = await executeCpuPacks(batches.map((batch) => batch.pack));
-  assert.equal(cpuBatchResults?.length, batches.length, "Rust CPU returned a different number of conformance batches");
+  const cpuBatchResults = [];
+  for (const batch of batches) {
+    const startedMs = performance.now();
+    const results = await executeCpuPacks([batch.pack]);
+    const elapsedMs = Number((performance.now() - startedMs).toFixed(3));
+    assert.equal(results?.length, 1, `${batch.name}: Rust CPU returned a different number of results`);
+    cpuBatchResults.push(results[0]);
+    onTiming({
+      phase: "cpu-request",
+      name: batch.name,
+      elapsedMs,
+      packBytes: Buffer.byteLength(batch.pack),
+      caseCount: batch.cases.length
+    });
+  }
   for (const [index, batch] of batches.entries()) {
     const expectedValues = batch.kind === "codelets"
       ? batch.expectedValues
@@ -674,8 +697,19 @@ export async function runVliwGpuConformance({ executeCpuPacks, executePack, onPr
   const completedByName = new Map();
   for (const batch of batches) {
     onProgress({ phase: "start", name: batch.name, caseCount: batch.cases.length });
+    const startedMs = performance.now();
+    let housekeeperTiming = null;
     try {
       const result = await executePack(batch.pack);
+      housekeeperTiming = result?.housekeeperTiming ?? null;
+      onTiming({
+        phase: "gpu-request",
+        name: batch.name,
+        elapsedMs: Number((performance.now() - startedMs).toFixed(3)),
+        packBytes: Buffer.byteLength(batch.pack),
+        caseCount: batch.cases.length,
+        housekeeper: housekeeperTiming
+      });
       assert.equal(result?.ok, true, `${batch.name}: Housekeeper worker did not report success`);
       assert.equal(result.backend, "rust-gpu-vulkan", `${batch.name}: unexpected GPU backend`);
       assert.ok(String(result.device ?? "").trim(), `${batch.name}: missing GPU device identity`);
@@ -707,6 +741,15 @@ export async function runVliwGpuConformance({ executeCpuPacks, executePack, onPr
         assert.equal(seen.size, batch.cases.length, `${batch.name}: one or more section results are missing`);
       }
     } catch (error) {
+      housekeeperTiming ??= error?.housekeeperTiming ?? null;
+      onTiming({
+        phase: "gpu-request-failed",
+        name: batch.name,
+        elapsedMs: Number((performance.now() - startedMs).toFixed(3)),
+        packBytes: Buffer.byteLength(batch.pack),
+        caseCount: batch.cases.length,
+        housekeeper: housekeeperTiming
+      });
       const detail = error instanceof Error ? error.message : String(error);
       onProgress({ phase: "fail", name: batch.name, error: detail });
       throw new Error(`${batch.name}: ${detail}`, { cause: error });
@@ -718,7 +761,8 @@ export async function runVliwGpuConformance({ executeCpuPacks, executePack, onPr
 export async function runVliwGpuProgramletFailureConformance({
   executeCpuError,
   executePack,
-  onProgress = () => {}
+  onProgress = () => {},
+  onTiming = () => {}
 }) {
   if (typeof executeCpuError !== "function") {
     throw new TypeError("VLIW failure conformance requires a Rust CPU error-code executor");
@@ -729,18 +773,44 @@ export async function runVliwGpuProgramletFailureConformance({
   const cases = await buildVliwGpuProgramletFailureCases();
   const completed = [];
   for (const testCase of cases) {
+    const cpuStartedMs = performance.now();
     const cpuCode = await executeCpuError(testCase.pack);
+    onTiming({
+      phase: "cpu-error-request",
+      name: testCase.name,
+      elapsedMs: Number((performance.now() - cpuStartedMs).toFixed(3)),
+      packBytes: Buffer.byteLength(testCase.pack)
+    });
     assert.equal(
       cpuCode,
       testCase.expectedRuntimeCode,
       `${testCase.name}: Rust CPU returned a different shared runtime error`
     );
     onProgress({ phase: "cpu-error", name: testCase.name, errorCode: cpuCode });
-    await assert.rejects(
-      executePack(testCase.pack),
-      new RegExp(`shared VLIW runtime error ${testCase.expectedRuntimeCode}\\b`, "u"),
-      `${testCase.name}: Vulkan worker must return the same shared runtime error`
-    );
+    const gpuStartedMs = performance.now();
+    let housekeeperTiming = null;
+    try {
+      await assert.rejects(
+        async () => {
+          try {
+            await executePack(testCase.pack);
+          } catch (error) {
+            housekeeperTiming = error?.housekeeperTiming ?? null;
+            throw error;
+          }
+        },
+        new RegExp(`shared VLIW runtime error ${testCase.expectedRuntimeCode}\\b`, "u"),
+        `${testCase.name}: Vulkan worker must return the same shared runtime error`
+      );
+    } finally {
+      onTiming({
+        phase: "gpu-error-request",
+        name: testCase.name,
+        elapsedMs: Number((performance.now() - gpuStartedMs).toFixed(3)),
+        packBytes: Buffer.byteLength(testCase.pack),
+        housekeeper: housekeeperTiming
+      });
+    }
     const entry = { name: testCase.name, errorCode: testCase.expectedRuntimeCode };
     completed.push(entry);
     onProgress({ phase: "gpu-error", ...entry });
@@ -749,37 +819,86 @@ export async function runVliwGpuProgramletFailureConformance({
 }
 
 async function main() {
+  const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const startedAt = new Date().toISOString();
+  const startedMs = performance.now();
+  const report = {
+    startedAt,
+    status: "running",
+    cpuRequests: [],
+    gpuRequests: [],
+    passedCases: [],
+    expectedErrors: []
+  };
   const executePack = createHousekeeperVliwPackExecutor({
     worldRoot: path.resolve(process.env.PYA_WORLD_ROOT || "world"),
     agentName: "vliw-gpu-conformance",
     deviceId: process.env.PYA_VLIW_CONFORMANCE_DEVICE_ID || "gpu0",
     timeoutMs: Number(process.env.PYA_VLIW_CONFORMANCE_TIMEOUT_MS) || 5 * 60 * 1000
   });
-  const completed = await runVliwGpuConformance({
-    executeCpuPacks: executeRustCpuReference,
-    executePack,
-    onProgress(event) {
-      if (event.phase === "start") console.log(`Queueing Rust GPU conformance batch: ${event.name}`);
-      if (event.phase === "cpu-complete") console.log(`PASS JavaScript/Rust CPU reference ${event.name}: ${JSON.stringify(event.values)}`);
-      if (event.phase === "complete") {
-        console.log(`PASS ${event.name} on ${event.device}: ${JSON.stringify(event.values)}`);
+  let failure = null;
+  try {
+    const completed = await runVliwGpuConformance({
+      executeCpuPacks: executeRustCpuReference,
+      executePack,
+      onTiming(event) {
+        const target = event.phase.startsWith("cpu") ? report.cpuRequests : report.gpuRequests;
+        target.push(event);
+        const housekeeper = event.housekeeper;
+        const timing = housekeeper
+          ? `client ${housekeeper.clientRoundTripMs}ms; queue ${housekeeper.queueWaitMs ?? "n/a"}ms; active ${housekeeper.activeMs ?? "n/a"}ms`
+          : `wall ${event.elapsedMs}ms`;
+        console.log(`[timing] ${event.phase} ${event.name}: ${timing}`);
+      },
+      onProgress(event) {
+        if (event.phase === "start") console.log(`Queueing Rust GPU conformance batch: ${event.name}`);
+        if (event.phase === "cpu-complete") console.log(`PASS JavaScript/Rust CPU reference ${event.name}: ${JSON.stringify(event.values)}`);
+        if (event.phase === "complete") {
+          report.passedCases.push(event.name);
+          console.log(`PASS ${event.name} on ${event.device}: ${JSON.stringify(event.values)}`);
+        }
       }
-    }
-  });
-  console.log(`Rust GPU Housekeeper conformance passed: ${completed.length} cases.`);
-  const failures = await runVliwGpuProgramletFailureConformance({
-    executeCpuError: executeRustCpuProgramletFailureReference,
-    executePack,
-    onProgress(event) {
-      if (event.phase === "cpu-error") {
-        console.log(`PASS JavaScript/Rust CPU shared runtime error ${event.name}: ${event.errorCode}`);
+    });
+    console.log(`Rust GPU Housekeeper conformance passed: ${completed.length} cases.`);
+    const failures = await runVliwGpuProgramletFailureConformance({
+      executeCpuError: executeRustCpuProgramletFailureReference,
+      executePack,
+      onTiming(event) {
+        const target = event.phase.startsWith("cpu") ? report.cpuRequests : report.gpuRequests;
+        target.push(event);
+        const housekeeper = event.housekeeper;
+        const timing = housekeeper
+          ? `client ${housekeeper.clientRoundTripMs}ms; queue ${housekeeper.queueWaitMs ?? "n/a"}ms; active ${housekeeper.activeMs ?? "n/a"}ms`
+          : `wall ${event.elapsedMs}ms`;
+        console.log(`[timing] ${event.phase} ${event.name}: ${timing}`);
+      },
+      onProgress(event) {
+        if (event.phase === "cpu-error") {
+          console.log(`PASS JavaScript/Rust CPU shared runtime error ${event.name}: ${event.errorCode}`);
+        }
+        if (event.phase === "gpu-error") {
+          report.expectedErrors.push({ name: event.name, errorCode: event.errorCode });
+          console.log(`PASS ${event.name} on Vulkan worker: shared runtime error ${event.errorCode}`);
+        }
       }
-      if (event.phase === "gpu-error") {
-        console.log(`PASS ${event.name} on Vulkan worker: shared runtime error ${event.errorCode}`);
-      }
-    }
-  });
-  console.log(`Rust GPU Housekeeper error conformance passed: ${failures.length} cases.`);
+    });
+    console.log(`Rust GPU Housekeeper error conformance passed: ${failures.length} cases.`);
+    report.status = "passed";
+  } catch (error) {
+    failure = error;
+    report.status = "failed";
+    report.failure = error instanceof Error ? error.message : String(error);
+  }
+  report.finishedAt = new Date().toISOString();
+  report.totalWallMs = Number((performance.now() - startedMs).toFixed(3));
+  try {
+    report.environment = await collectVliwConformanceEnvironment(repositoryRoot);
+  } catch (error) {
+    report.environmentError = error instanceof Error ? error.message : String(error);
+  }
+  const reportPath = await writeVliwConformancePya(repositoryRoot, report);
+  console.log(`VLIW conformance metrics: ${path.relative(repositoryRoot, reportPath)}`);
+  if (failure) throw failure;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

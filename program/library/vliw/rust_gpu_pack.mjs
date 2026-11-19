@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import path from "node:path";
+import { performance } from "node:perf_hooks";
 
 import gpu from "../../verbs/gpu.mjs";
 import { readGpuHandleStatus } from "../../runtime/gpu/handle_status.mjs";
@@ -39,6 +40,27 @@ function estimateVramMb(codeletCount) {
   return Math.max(64, Math.ceil((bytes * 1.25) / MEBIBYTE));
 }
 
+function timestampDeltaMs(start, end) {
+  const startMs = Date.parse(String(start ?? ""));
+  const endMs = Date.parse(String(end ?? ""));
+  return Number.isFinite(startMs) && Number.isFinite(endMs) && endMs >= startMs
+    ? endMs - startMs
+    : null;
+}
+
+function timingRecord(status, handleId, requestStartedAt, requestStartedMs) {
+  return {
+    handleId,
+    queuedAt: String(status?.queuedAt ?? ""),
+    startedAt: String(status?.startedAt ?? ""),
+    finishedAt: String(status?.finishedAt ?? ""),
+    queueWaitMs: timestampDeltaMs(status?.queuedAt, status?.startedAt),
+    activeMs: timestampDeltaMs(status?.startedAt, status?.finishedAt),
+    clientRoundTripMs: Number((performance.now() - requestStartedMs).toFixed(3)),
+    requestStartedAt
+  };
+}
+
 export function createHousekeeperVliwPackExecutor({
   worldRoot = path.resolve(process.cwd(), "world"),
   agentName = "vliw-pack-executor",
@@ -64,6 +86,8 @@ export function createHousekeeperVliwPackExecutor({
     if (decoded.codelets.length === 0) throw new Error("VLIW Housekeeper executor requires a non-empty PyAC pack");
     const handleId = String(makeHandleId()).trim();
     if (!handleId) throw new Error("VLIW Housekeeper executor requires a non-empty handle id");
+    const requestStartedAt = new Date().toISOString();
+    const requestStartedMs = performance.now();
     const jobSpec = {
       kind: "pyac-pack-execute",
       profileName: "pyac-vliw-rust-gpu",
@@ -84,15 +108,26 @@ export function createHousekeeperVliwPackExecutor({
     while (Date.now() < deadline) {
       const status = await readStatus(resolvedWorldRoot, handleId);
       if (status?.status === "success") {
-        const result = readResult(status, handleId);
+        let result;
+        try {
+          result = readResult(status, handleId);
+        } catch (error) {
+          error.housekeeperTiming = timingRecord(status, handleId, requestStartedAt, requestStartedMs);
+          throw error;
+        }
         if (result?.ok !== true || !Array.isArray(result.values)) {
           throw new Error(`VLIW Housekeeper job ${handleId} returned an invalid pack result`);
         }
-        return result;
+        return {
+          ...result,
+          housekeeperTiming: timingRecord(status, handleId, requestStartedAt, requestStartedMs)
+        };
       }
       if (status?.status === "fail") {
         const detail = String(status.error || status.message || "unknown Housekeeper failure");
-        throw new Error(`VLIW Housekeeper job ${handleId} failed: ${detail}`);
+        const error = new Error(`VLIW Housekeeper job ${handleId} failed: ${detail}`);
+        error.housekeeperTiming = timingRecord(status, handleId, requestStartedAt, requestStartedMs);
+        throw error;
       }
       await sleep(Math.min(pollDelay, Math.max(1, deadline - Date.now())));
     }

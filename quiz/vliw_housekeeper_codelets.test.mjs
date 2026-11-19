@@ -38,11 +38,26 @@ test("Housekeeper Rust-GPU executor submits the original PyAC pack bytes", async
     async readStatus(worldRoot, handleId) {
       assert.equal(worldRoot, "/tmp/pyash-world");
       assert.equal(handleId, "pack-job-1");
-      return { status: "success", result: JSON.stringify(expected) };
+      return {
+        status: "success",
+        queuedAt: "2026-11-19T18:00:00.000Z",
+        startedAt: "2026-11-19T18:00:00.025Z",
+        finishedAt: "2026-11-19T18:00:00.075Z",
+        result: JSON.stringify(expected)
+      };
     }
   });
 
-  assert.deepEqual(await execute(pack), expected);
+  const result = await execute(pack);
+  const { housekeeperTiming, ...payload } = result;
+  assert.deepEqual(payload, expected);
+  assert.equal(housekeeperTiming.handleId, "pack-job-1");
+  assert.equal(housekeeperTiming.queuedAt, "2026-11-19T18:00:00.000Z");
+  assert.equal(housekeeperTiming.startedAt, "2026-11-19T18:00:00.025Z");
+  assert.equal(housekeeperTiming.finishedAt, "2026-11-19T18:00:00.075Z");
+  assert.equal(housekeeperTiming.queueWaitMs, 25);
+  assert.equal(housekeeperTiming.activeMs, 50);
+  assert.ok(housekeeperTiming.clientRoundTripMs >= 0);
   assert.equal(submitted.duty.be, "gpu vliw");
   const jobSpec = JSON.parse(submitted.duty.ob.text);
   assert.equal(jobSpec.kind, "pyac-pack-execute");

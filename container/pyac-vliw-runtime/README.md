@@ -52,6 +52,16 @@ fail startup if it is missing or rejected. It must not silently create an
 empty cache or fall back to compilation. The new service must become ready
 within 60 seconds. There is no longer a long startup wait or timeout override.
 
+The deploy helper retains the latest pipeline compiler output at
+`~/.local/share/pyash/pyac-vliw/pipeline-cache-build.log`. The conformance
+command extracts per-pipeline build times from that log when available;
+otherwise it records cached pipeline-load times from runtime logs. Each run
+also writes a dated `.pya` metrics record under
+`artifacts/YYYYMMDD-NNNN-rust-vliw-conformance/result.pya`, including separate
+CPU request wall times, Housekeeper queue/active/round-trip GPU timings,
+executable and shader sizes/hashes, pipeline-cache identity, device, and test
+outcomes. The report is written on both pass and failure.
+
 After readiness, Housekeeper resumes queued VLIW work. Ollama, ComfyUI, Strata,
 and the Housekeeper process are not restarted. If artifact generation or the
 runtime update fails, the helper restores the prior runtime when available;

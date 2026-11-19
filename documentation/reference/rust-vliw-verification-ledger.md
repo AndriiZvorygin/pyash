@@ -78,3 +78,49 @@ Run live GPU checks through Housekeeper. A non-empty queue is normal; preserve
 the queue and report queued work separately from terminal test results. The
 SWAC RTX 3060 was not used for this entry; no compilation or GPU test was run
 there.
+
+## 2026-11-19: Instrumented CPU/GPU Timing and Artifact Record
+
+This is the instrumented rerun of the live matrix above. It writes a complete,
+parser-valid Pyash record automatically, including per-request timings and
+artifact fingerprints, whether the test passes or fails.
+
+**Run record:** `artifacts/20261119-0002-rust-vliw-conformance/result.pya`
+
+| Measurement | CPU reference | GPU / Housekeeper |
+| --- | ---: | ---: |
+| Codelet batch, 26 cases | 68.258 ms | 30,057.372 ms client round trip; 102 ms queued; 28,875 ms active |
+| Sectioned programlet batch, 18 cases | 63.630 ms | 13,017.561 ms client round trip; 301 ms queued; 11,618 ms active |
+| Division-by-zero expected error | 64.089 ms | 10,017.997 ms client round trip; 24 ms queued; 8,800 ms active |
+| Constant-write expected error | 58.374 ms | 5,010.881 ms client round trip; 115 ms queued; 3,633 ms active |
+| Total conformance run | - | 58,796.957 ms wall time |
+
+CPU timings are the individual reference-process request durations. GPU client
+round trip includes submission and Housekeeper polling; queued time and active
+time come from the durable Housekeeper job record. Active time is not a
+kernel-only measurement, so these values should not be presented as raw GPU
+compute latency.
+
+### Executable and Pipeline Artifacts
+
+| Artifact | Size | SHA-256 / detail |
+| --- | ---: | --- |
+| CPU reference executable, `rust/pyac/target/debug/examples/vliw_reference` | 10,080,696 bytes (9.61 MiB) | `65aa18cee93137887139673c5bc96efa289fd32b596e2fd5f723153eab193896` |
+| Deployed GPU runtime executable | 9,028,048 bytes (8.61 MiB) | `56e6a7fc39d4ba27ad36c36d809e1e497ceedf60199135d4ae94330813fca4a1` |
+| Deployed GPU worker executable | 7,354,440 bytes (7.01 MiB) | `5f52d858890bd1687217b6ca39f4361a166fbe5994e70959a68e6e4a5ee47bb0` |
+| SPIR-V compute shader | 2,678,260 bytes (2.55 MiB) | `2de5a97441d3c938284b8afa3a9251465619467aa7446091a74dd2bc37475d61` |
+| Vulkan pipeline cache | 9,855,807 bytes (9.40 MiB) | `ca957cf6566ccf6e44590570597cc396d6bda1a53f27b9ca7d2f6b4a077f8aac` |
+
+The pipeline-cache build took 42.31 seconds (pack 5.82 s, programlet 18.69 s,
+sections 17.64 s) during deployment. The measured runtime pipeline-cache load
+and initialization for this run took 0.87 s total: pack 0.23 s, programlet
+0.25 s, sections 0.23 s. These are separate phases: cache generation is a
+deployment build step, while the 0.87-second measurement is cached runtime
+initialization.
+
+The report also records the source revision and dirty-tree patch hash, GPU and
+driver, runtime image/container identity, request timestamps and queue handles,
+case outcomes, and artifact sizes/hashes. Future invocations of
+`node command/vliw_gpu_conformance.mjs` write a new dated `.pya` record under
+`artifacts/`; see `container/pyac-vliw-runtime/README.md` for the record
+contract and deployment build log location.
