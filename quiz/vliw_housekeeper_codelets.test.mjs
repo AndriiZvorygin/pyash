@@ -26,7 +26,11 @@ test("Housekeeper Rust-GPU executor submits the original PyAC pack bytes", async
       { type: "unsigned", value: 4_294_836_225 },
       { type: "unsigned", value: 2 },
       { type: "unsigned", value: 4 }
-    ]
+    ],
+    runtimeTimingMs: {
+      kernelGpuMs: 0.004,
+      kernelTimingSource: "vulkan-timestamp-query"
+    }
   };
   const execute = createHousekeeperVliwPackExecutor({
     worldRoot: "/tmp/pyash-world",
@@ -43,6 +47,10 @@ test("Housekeeper Rust-GPU executor submits the original PyAC pack bytes", async
         queuedAt: "2026-11-19T18:00:00.000Z",
         startedAt: "2026-11-19T18:00:00.025Z",
         finishedAt: "2026-11-19T18:00:00.075Z",
+        remoteJobId: "remote-pack-1",
+        remoteSubmittedAt: "2026-11-19T18:00:00.100Z",
+        remoteStartedAt: "2026-11-19T18:00:00.125Z",
+        remoteFinishedAt: "2026-11-19T18:00:00.175Z",
         result: JSON.stringify(expected)
       };
     }
@@ -52,11 +60,15 @@ test("Housekeeper Rust-GPU executor submits the original PyAC pack bytes", async
   const { housekeeperTiming, ...payload } = result;
   assert.deepEqual(payload, expected);
   assert.equal(housekeeperTiming.handleId, "pack-job-1");
+  assert.equal(housekeeperTiming.remoteJobId, "remote-pack-1");
   assert.equal(housekeeperTiming.queuedAt, "2026-11-19T18:00:00.000Z");
-  assert.equal(housekeeperTiming.startedAt, "2026-11-19T18:00:00.025Z");
-  assert.equal(housekeeperTiming.finishedAt, "2026-11-19T18:00:00.075Z");
-  assert.equal(housekeeperTiming.queueWaitMs, 25);
-  assert.equal(housekeeperTiming.activeMs, 50);
+  assert.equal(housekeeperTiming.workerStartedAt, "2026-11-19T18:00:00.025Z");
+  assert.equal(housekeeperTiming.workerFinishedAt, "2026-11-19T18:00:00.075Z");
+  assert.equal(housekeeperTiming.localQueueWaitMs, 25);
+  assert.equal(housekeeperTiming.workerWallMs, 50);
+  assert.equal(housekeeperTiming.housekeeperQueueWaitMs, 25);
+  assert.equal(housekeeperTiming.housekeeperActiveMs, 50);
+  assert.deepEqual(housekeeperTiming.runtimeTimingMs, expected.runtimeTimingMs);
   assert.ok(housekeeperTiming.clientRoundTripMs >= 0);
   assert.equal(submitted.duty.be, "gpu vliw");
   const jobSpec = JSON.parse(submitted.duty.ob.text);
@@ -85,4 +97,27 @@ test("Housekeeper worker failures include the durable job identity", async () =>
     }
   });
   await assert.rejects(execute(numericPack()), /pack-job-failed failed: Vulkan adapter unavailable/u);
+});
+
+test("Housekeeper failures preserve GPU service timings returned with runtime errors", async () => {
+  const runtimeTimingMs = { kernelGpuMs: 0.006, kernelTimingSource: "vulkan-timestamp-query" };
+  const execute = createHousekeeperVliwPackExecutor({
+    makeHandleId: () => "pack-job-runtime-error",
+    async submitDuty() {},
+    async readStatus() {
+      return {
+        status: "fail",
+        error: JSON.stringify({
+          message: `Rust VLIW runtime request failed 422: ${JSON.stringify({
+            error: "programlet: shared VLIW runtime error 2",
+            runtimeTimingMs
+          })}`
+        })
+      };
+    }
+  });
+  await assert.rejects(execute(numericPack()), (error) => {
+    assert.deepEqual(error.housekeeperTiming.runtimeTimingMs, runtimeTimingMs);
+    return true;
+  });
 });

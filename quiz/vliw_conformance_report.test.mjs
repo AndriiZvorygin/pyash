@@ -26,9 +26,20 @@ test("VLIW conformance report records CPU/GPU timings and artifact identity as P
       caseCount: 18,
       housekeeper: {
         handleId: "job-1",
-        queueWaitMs: 100,
-        activeMs: 500,
-        clientRoundTripMs: 650
+        remoteJobId: "remote-job-1",
+        localQueueWaitMs: 100,
+        workerWallMs: 650,
+        housekeeperQueueWaitMs: 125,
+        housekeeperActiveMs: 500,
+        remoteSubmittedAt: "2026-11-19T17:00:00.025Z",
+        remoteStartedAt: "2026-11-19T17:00:00.150Z",
+        remoteFinishedAt: "2026-11-19T17:00:00.650Z",
+        clientRoundTripMs: 650,
+        runtimeTimingMs: {
+          kernelGpuMs: 0.02,
+          kernelTimingSource: "vulkan-timestamp-query",
+          submitWaitReadbackMs: 1.2
+        }
       }
     }],
     passedCases: ["scalar-arithmetic"],
@@ -47,7 +58,11 @@ test("VLIW conformance report records CPU/GPU timings and artifact identity as P
   const sentences = source.trim().split("\n").map((line) => parse(line));
   assert.equal(sentences.every(Boolean), true, "every report row is a valid Pyash sentence");
   assert.equal(sentences.some(({ su, ob }) => su?.name === "cpu request 01 wall ms" && ob?.num === 12.5), true);
-  assert.equal(sentences.some(({ su, ob }) => su?.name === "gpu request 01 active ms" && ob?.num === 500), true);
+  assert.equal(sentences.some(({ su, ob }) => su?.name === "gpu request 01 Housekeeper active ms" && ob?.num === 500), true);
+  assert.equal(sentences.some(({ su, ob }) => su?.name === "gpu request 01 local queue wait ms" && ob?.num === 100), true);
+  assert.equal(sentences.some(({ su, ob }) => su?.name === "gpu request 01 remote job id" && ob?.text === "remote-job-1"), true);
+  assert.equal(sentences.some(({ su, ob }) => su?.name === "gpu request 01 runtime kernel gpu ms" && ob?.num === 0.02), true);
+  assert.equal(sentences.some(({ su, ob }) => su?.name === "gpu request 01 runtime kernel timing source" && ob?.text === "vulkan-timestamp-query"), true);
   assert.equal(sentences.some(({ su, ob }) => su?.name === "spirv shader bytes" && ob?.num === 456), true);
   assert.equal(sentences.some(({ su, ob }) => su?.name === "expected error 01 code" && ob?.num === 2), true);
 });

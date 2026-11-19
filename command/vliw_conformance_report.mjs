@@ -145,8 +145,25 @@ function artifactFacts(name, artifact) {
 }
 
 function requestFacts(prefix, requests = []) {
+  const runtimeTimingNames = new Map([
+    ["requestDecodeMs", "service request decode ms"],
+    ["workerSlotWaitMs", "service worker slot wait ms"],
+    ["gpuLockWaitMs", "service gpu lock wait ms"],
+    ["packDecodeMs", "runtime pack decode ms"],
+    ["classifyMs", "runtime classify ms"],
+    ["bufferSetupMs", "runtime buffer setup ms"],
+    ["commandEncodeMs", "runtime command encode ms"],
+    ["submitWaitReadbackMs", "runtime submit wait readback ms"],
+    ["kernelGpuMs", "runtime kernel gpu ms"],
+    ["resultDecodeMs", "runtime result decode ms"],
+    ["totalMs", "runtime total ms"],
+    ["serviceTotalMs", "service total ms"]
+  ]);
   return requests.flatMap((request, index) => {
     const label = `${prefix} request ${String(index + 1).padStart(2, "0")}`;
+    const runtimeTimingFacts = [...runtimeTimingNames].map(([key, name]) =>
+      numberFact(`${label} ${name}`, request.housekeeper?.runtimeTimingMs?.[key])
+    );
     return [
       textFact(`${label} name`, request.name),
       textFact(`${label} phase`, request.phase),
@@ -155,12 +172,20 @@ function requestFacts(prefix, requests = []) {
       numberFact(`${label} case count`, request.caseCount),
       ...(request.housekeeper ? [
         textFact(`${label} queue handle`, request.housekeeper.handleId),
+        textFact(`${label} remote job id`, request.housekeeper.remoteJobId),
         textFact(`${label} queued at`, request.housekeeper.queuedAt),
-        textFact(`${label} started at`, request.housekeeper.startedAt),
-        textFact(`${label} finished at`, request.housekeeper.finishedAt),
-        numberFact(`${label} queue wait ms`, request.housekeeper.queueWaitMs),
-        numberFact(`${label} active ms`, request.housekeeper.activeMs),
-        numberFact(`${label} client round trip ms`, request.housekeeper.clientRoundTripMs)
+        textFact(`${label} worker started at`, request.housekeeper.workerStartedAt),
+        textFact(`${label} worker finished at`, request.housekeeper.workerFinishedAt),
+        textFact(`${label} Housekeeper submitted at`, request.housekeeper.remoteSubmittedAt),
+        textFact(`${label} Housekeeper started at`, request.housekeeper.remoteStartedAt),
+        textFact(`${label} Housekeeper finished at`, request.housekeeper.remoteFinishedAt),
+        numberFact(`${label} local queue wait ms`, request.housekeeper.localQueueWaitMs),
+        numberFact(`${label} worker wall ms`, request.housekeeper.workerWallMs),
+        numberFact(`${label} Housekeeper queue wait ms`, request.housekeeper.housekeeperQueueWaitMs),
+        numberFact(`${label} Housekeeper active ms`, request.housekeeper.housekeeperActiveMs),
+        numberFact(`${label} client round trip ms`, request.housekeeper.clientRoundTripMs),
+        textFact(`${label} runtime kernel timing source`, request.housekeeper.runtimeTimingMs?.kernelTimingSource),
+        ...runtimeTimingFacts
       ] : [])
     ].filter(Boolean);
   });

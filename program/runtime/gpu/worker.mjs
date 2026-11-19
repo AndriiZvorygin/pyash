@@ -406,6 +406,10 @@ export async function runGpuWorkerOnce({
     const submit = await housekeeper.submitJob(submitArgs);
     let remoteJobId = remoteJobIdFromSubmit(submit);
     if (!remoteJobId) throw new Error("gpu worker defective: housekeeper did not return remoteJobId");
+    await writeGpuHandleStatus(worldRoot, envelope.handleId, {
+      remoteJobId,
+      remoteSubmittedAt: normalizeText(submit.submittedAt)
+    });
 
     const effectiveMaxPolls = resolveGpuWorkerMaxPolls({
       pollIntervalMs,
@@ -437,16 +441,27 @@ export async function runGpuWorkerOnce({
         const recoveredSubmit = await housekeeper.submitJob(submitArgs);
         remoteJobId = remoteJobIdFromSubmit(recoveredSubmit);
         if (!remoteJobId) throw new Error("gpu worker defective: Housekeeper recovery did not return remoteJobId");
+        await writeGpuHandleStatus(worldRoot, envelope.handleId, {
+          remoteJobId,
+          remoteSubmittedAt: normalizeText(recoveredSubmit.submittedAt)
+        });
       }
     }
 
-    const finishedAt = normalizeText(remote.finishedAt) || new Date().toISOString();
+    const finishedAt = new Date().toISOString();
     const message = normalizeText(remote.message) || remote.status;
+    const remoteTiming = {
+      remoteJobId,
+      remoteSubmittedAt: normalizeText(remote.submittedAt) || normalizeText(submit.submittedAt),
+      remoteStartedAt: normalizeText(remote.startedAt),
+      remoteFinishedAt: normalizeText(remote.finishedAt)
+    };
     if (remote.status === "success") {
       success = true;
       await writeGpuHandleStatus(worldRoot, envelope.handleId, {
         status: "success",
         finishedAt,
+        ...remoteTiming,
         outcome: "success",
         message,
         result: jsonText(remote.result),
@@ -457,6 +472,7 @@ export async function runGpuWorkerOnce({
       await writeGpuHandleStatus(worldRoot, envelope.handleId, {
         status: "fail",
         finishedAt,
+        ...remoteTiming,
         retryCount: envelope.retryCount + 1,
         outcome: "fail",
         message,

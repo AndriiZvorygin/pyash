@@ -9,6 +9,9 @@ use serde_json::{Value, json};
 #[path = "gpu/result.rs"]
 mod result;
 use result::{RESULT_STRIDE, decode_results, value_json};
+#[path = "gpu/timing.rs"]
+mod timing;
+pub(crate) use timing::GpuExecutionTiming;
 
 const MAX_SECTION_NAME_WORDS: usize = pyac_vliw_core::MAX_PROGRAMLET_SECTION_NAME_WORDS;
 const SECTION_DESCRIPTOR_STRIDE: usize = 3 + MAX_SECTION_NAME_WORDS;
@@ -26,6 +29,7 @@ pub(crate) struct GpuRuntime {
     device: wgpu::Device,
     queue: wgpu::Queue,
     adapter_name: String,
+    timestamp_period_ns: Option<f32>,
     bind_group_layout: wgpu::BindGroupLayout,
     pipeline_cache: wgpu::PipelineCache,
     pack_pipeline: wgpu::ComputePipeline,
@@ -89,8 +93,14 @@ impl GpuRuntime {
             ));
         }
 
-        let required_features =
+        let timestamp_features =
+            wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES;
+        let timestamp_queries = adapter.features().contains(timestamp_features);
+        let mut required_features =
             wgpu::Features::PASSTHROUGH_SHADERS | wgpu::Features::PIPELINE_CACHE;
+        if timestamp_queries {
+            required_features |= timestamp_features;
+        }
         if !adapter.features().contains(required_features) {
             return Err(
                 "Vulkan adapter lacks SPIR-V passthrough or pipeline-cache support".to_owned(),
@@ -105,6 +115,7 @@ impl GpuRuntime {
             })
             .await
             .map_err(|error| format!("Vulkan device unavailable: {error}"))?;
+        let timestamp_period_ns = timestamp_queries.then(|| queue.get_timestamp_period());
         eprintln!(
             "[pyac-vliw] device ready in {:.2}s",
             device_started.elapsed().as_secs_f64()
@@ -284,6 +295,7 @@ impl GpuRuntime {
             device,
             queue,
             adapter_name: adapter_info.name,
+            timestamp_period_ns,
             bind_group_layout,
             pipeline_cache,
             pack_pipeline,
@@ -298,13 +310,36 @@ impl GpuRuntime {
     }
 
     pub(crate) async fn execute_pack(&self, pack_bytes: &[u8]) -> Result<Value, String> {
-        let pack = decode_pack(pack_bytes).map_err(|error| error.to_string())?;
-        self.execute_codelets(&pack.codelets).await
+        let (result, timings) = self.execute_pack_with_timings(pack_bytes).await;
+        result.map(|mut response| {
+            response["runtimeTimingMs"] = timings.to_json();
+            response
+        })
+    }
+
+    pub(crate) async fn execute_pack_with_timings(
+        &self,
+        pack_bytes: &[u8],
+    ) -> (Result<Value, String>, GpuExecutionTiming) {
+        let total_started = Instant::now();
+        let decode_started = Instant::now();
+        let pack = decode_pack(pack_bytes);
+        let mut timings = GpuExecutionTiming {
+            pack_decode_ms: decode_started.elapsed().as_secs_f64() * 1000.0,
+            ..Default::default()
+        };
+        let result = match pack {
+            Ok(pack) => self.execute_codelets(&pack.codelets, &mut timings).await,
+            Err(error) => Err(error.to_string()),
+        };
+        timings.total_ms = total_started.elapsed().as_secs_f64() * 1000.0;
+        (result, timings)
     }
 
     async fn execute_codelets(
         &self,
         codelets: &[[u16; pyac::WORDS_PER_CODELET]],
+        timings: &mut GpuExecutionTiming,
     ) -> Result<Value, String> {
         if codelets.is_empty() {
             return Ok(json!({
@@ -315,6 +350,7 @@ impl GpuRuntime {
             }));
         }
 
+        let classify_started = Instant::now();
         let input_words = codelets
             .iter()
             .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
@@ -323,12 +359,19 @@ impl GpuRuntime {
         let mut section_descriptors =
             [pyac_vliw_core::ProgramletSection::EMPTY; pyac_vliw_core::MAX_PROGRAMLET_SECTIONS];
         let section_count = if sectioned {
-            pyac_vliw_core::scan_numeric_programlet_sections(
+            match pyac_vliw_core::scan_numeric_programlet_sections(
                 &input_words,
                 codelets.len(),
                 &mut section_descriptors,
-            )
-            .map_err(|error| format!("malformed VLIW section packet (core error {error})"))?
+            ) {
+                Ok(count) => count,
+                Err(error) => {
+                    timings.classify_ms = classify_started.elapsed().as_secs_f64() * 1000.0;
+                    return Err(format!(
+                        "malformed VLIW section packet (core error {error})"
+                    ));
+                }
+            }
         } else {
             0
         };
@@ -348,7 +391,9 @@ impl GpuRuntime {
         } else {
             &self.pack_pipeline
         };
+        timings.classify_ms = classify_started.elapsed().as_secs_f64() * 1000.0;
 
+        let buffer_setup_started = Instant::now();
         let input_buffer_internal_scope = self.device.push_error_scope(wgpu::ErrorFilter::Internal);
         let input_buffer_oom_scope = self.device.push_error_scope(wgpu::ErrorFilter::OutOfMemory);
         let input_buffer_validation_scope =
@@ -441,15 +486,49 @@ impl GpuRuntime {
                 },
             ],
         });
+        let timestamp_query_set = self.timestamp_period_ns.map(|_| {
+            self.device.create_query_set(&wgpu::QuerySetDescriptor {
+                label: Some("Pyash VLIW compute timestamp queries"),
+                count: 2,
+                ty: wgpu::QueryType::Timestamp,
+            })
+        });
+        let timestamp_resolve = timestamp_query_set.as_ref().map(|_| {
+            self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Pyash VLIW timestamp resolve"),
+                size: 256,
+                usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            })
+        });
+        let timestamp_readback = timestamp_query_set.as_ref().map(|_| {
+            self.device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Pyash VLIW timestamp readback"),
+                size: 16,
+                usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+                mapped_at_creation: false,
+            })
+        });
+        timings.buffer_setup_ms = buffer_setup_started.elapsed().as_secs_f64() * 1000.0;
+
+        let command_encode_started = Instant::now();
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Pyash VLIW pack dispatch"),
             });
         {
+            let timestamp_writes =
+                timestamp_query_set
+                    .as_ref()
+                    .map(|query_set| wgpu::ComputePassTimestampWrites {
+                        query_set,
+                        beginning_of_pass_write_index: Some(0),
+                        end_of_pass_write_index: Some(1),
+                    });
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("Pyash shared interpreter"),
-                timestamp_writes: None,
+                timestamp_writes,
             });
             pass.set_pipeline(pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
@@ -463,37 +542,96 @@ impl GpuRuntime {
             pass.dispatch_workgroups(workgroups, 1, 1);
         }
         encoder.copy_buffer_to_buffer(&output_buffer, 0, &readback, 0, (output_words * 4) as u64);
-        self.queue.submit([encoder.finish()]);
+        if let (Some(query_set), Some(resolve), Some(timestamp_readback)) = (
+            timestamp_query_set.as_ref(),
+            timestamp_resolve.as_ref(),
+            timestamp_readback.as_ref(),
+        ) {
+            encoder.resolve_query_set(query_set, 0..2, resolve, 0);
+            encoder.copy_buffer_to_buffer(resolve, 0, timestamp_readback, 0, 16);
+        }
+        let command_buffer = encoder.finish();
+        timings.command_encode_ms = command_encode_started.elapsed().as_secs_f64() * 1000.0;
 
+        let submit_wait_started = Instant::now();
+        self.queue.submit([command_buffer]);
         let slice = readback.slice(..);
         let (sender, receiver) = std::sync::mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |result| {
             let _ = sender.send(result);
         });
-        self.device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .map_err(|error| format!("Vulkan device poll failed: {error}"))?;
-        receiver
+        let timestamp_slice = timestamp_readback.as_ref().map(|buffer| buffer.slice(..));
+        let (timestamp_sender, timestamp_receiver) = std::sync::mpsc::channel();
+        if let Some(timestamp_slice) = timestamp_slice.as_ref() {
+            timestamp_slice.map_async(wgpu::MapMode::Read, move |result| {
+                let _ = timestamp_sender.send(result);
+            });
+        }
+        let poll_result = self.device.poll(wgpu::PollType::wait_indefinitely());
+        let result_map_result = receiver
             .recv()
-            .map_err(|error| format!("Vulkan readback callback failed: {error}"))?
-            .map_err(|error| format!("Vulkan readback mapping failed: {error}"))?;
+            .map_err(|error| format!("Vulkan readback callback failed: {error}"))
+            .and_then(|result| {
+                result.map_err(|error| format!("Vulkan readback mapping failed: {error}"))
+            });
+        let timestamp_map_result = if timestamp_slice.is_some() {
+            timestamp_receiver
+                .recv()
+                .map_err(|error| format!("Vulkan timestamp callback failed: {error}"))
+                .and_then(|result| {
+                    result.map_err(|error| format!("Vulkan timestamp mapping failed: {error}"))
+                })
+        } else {
+            Ok(())
+        };
+        timings.submit_wait_readback_ms = submit_wait_started.elapsed().as_secs_f64() * 1000.0;
+        poll_result.map_err(|error| format!("Vulkan device poll failed: {error}"))?;
+        result_map_result?;
+        timestamp_map_result?;
+
+        if let (Some(timestamp_slice), Some(period_ns)) =
+            (timestamp_slice.as_ref(), self.timestamp_period_ns)
+        {
+            let timestamp_bytes = timestamp_slice
+                .get_mapped_range()
+                .map_err(|error| format!("Vulkan timestamp read failed: {error}"))?;
+            let timestamps = bytemuck::try_cast_slice::<u8, u64>(&timestamp_bytes)
+                .map_err(|error| format!("Vulkan timestamp data was not u64 aligned: {error}"))?;
+            if timestamps.len() >= 2 {
+                timings.kernel_gpu_ms = Some(
+                    timestamps[1].wrapping_sub(timestamps[0]) as f64 * f64::from(period_ns)
+                        / 1_000_000.0,
+                );
+            }
+            drop(timestamp_bytes);
+            if let Some(buffer) = timestamp_readback.as_ref() {
+                buffer.unmap();
+            }
+        }
+
         let mapped = slice
             .get_mapped_range()
             .map_err(|error| format!("Vulkan result map failed: {error}"))?;
         let output = bytemuck::try_cast_slice::<u8, u32>(&mapped)
             .map_err(|error| format!("GPU result buffer was not u32 aligned: {error}"))?;
-        let section_records = if sectioned {
-            Some(decode_section_records(section_count, output)?)
-        } else {
-            None
-        };
-        let values = if let Some(records) = &section_records {
-            records.iter().map(|record| record.value.clone()).collect()
-        } else if programlet {
-            decode_programlet_result(codelets.len(), output)?
-        } else {
-            decode_results(codelets, output)?
-        };
+        let result_decode_started = Instant::now();
+        let decode_result = (|| {
+            let section_records = if sectioned {
+                Some(decode_section_records(section_count, output)?)
+            } else {
+                None
+            };
+            let values = if let Some(records) = &section_records {
+                records.iter().map(|record| record.value.clone()).collect()
+            } else if programlet {
+                decode_programlet_result(codelets.len(), output)?
+            } else {
+                decode_results(codelets, output)?
+            };
+            Ok::<_, String>((section_records, values))
+        })();
+        timings.result_decode_ms = result_decode_started.elapsed().as_secs_f64() * 1000.0;
+        let (section_records, values) = decode_result?;
         let section_json = section_records.as_ref().map(|records| {
             records
                 .iter()

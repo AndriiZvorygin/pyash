@@ -58,9 +58,19 @@ command extracts per-pipeline build times from that log when available;
 otherwise it records cached pipeline-load times from runtime logs. Each run
 also writes a dated `.pya` metrics record under
 `artifacts/YYYYMMDD-NNNN-rust-vliw-conformance/result.pya`, including separate
-CPU request wall times, Housekeeper queue/active/round-trip GPU timings,
-executable and shader sizes/hashes, pipeline-cache identity, device, and test
-outcomes. The report is written on both pass and failure.
+CPU request wall times, local worker queue/wall and separately timestamped
+Housekeeper queue/active/round-trip GPU timings, remote job identity, service
+pack decode and slot/lock waits, GPU buffer/command setup, submit-to-
+readback wait, result decode, and Vulkan timestamp-query compute-pass duration
+when the adapter supports it. Runtime timings are preserved for expected-error
+responses too. It also records executable and shader sizes/hashes,
+pipeline-cache identity, device, and test outcomes. The report is written on
+both pass and failure. `kernelGpuMs` is the GPU timestamp interval around the
+compute pass; `submitWaitReadbackMs` is host-observed submit, synchronization,
+and map/readback time, not kernel execution time.
+`Housekeeper active` measures the remote job interval, while `worker wall`
+includes local dispatch and waiting for the remote terminal result. Neither is
+a substitute for the Vulkan kernel timestamp.
 
 After readiness, Housekeeper resumes queued VLIW work. Ollama, ComfyUI, Strata,
 and the Housekeeper process are not restarted. If artifact generation or the

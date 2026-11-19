@@ -124,3 +124,41 @@ case outcomes, and artifact sizes/hashes. Future invocations of
 `node command/vliw_gpu_conformance.mjs` write a new dated `.pya` record under
 `artifacts/`; see `container/pyac-vliw-runtime/README.md` for the record
 contract and deployment build log location.
+
+### Timing Interpretation: Run `20261119-0003`
+
+The GPU's apparent 67-second and 175-second request times are not GPU execution
+times. The instrumented Vulkan service reports:
+
+| Work | CPU reference wall | Vulkan compute pass | GPU service total | Housekeeper client round trip |
+| --- | ---: | ---: | ---: | ---: |
+| Codelet batch, 26 cases | 66.117 ms | 0.142 ms | 21.952 ms | 67,118.597 ms |
+| Sectioned programlet batch, 18 cases | 66.207 ms | 61.089 ms | 62.177 ms | 175,259.228 ms |
+| Division-by-zero error | 68.850 ms | 0.245 ms | 0.876 ms | 17,030.798 ms |
+| Constant-write error | 73.454 ms | 0.246 ms | 1.056 ms | 18,032.661 ms |
+
+The measurements show that the small codelet workload is inexpensive on GPU,
+while the sectioned programlet workload's GPU pass is roughly the same scale as
+the complete CPU reference request. These are not perfectly equivalent timing
+boundaries: CPU values include process/runtime overhead; Vulkan values separate
+GPU pass time from service setup/readback. This run does not establish a broad
+GPU speedup for small workloads.
+
+It does establish that the multi-second client latency is outside measured
+Vulkan service execution. The old report's `queue wait` was only the local Pyash
+worker's queue interval, and its `active` interval mixed local worker start with
+the remote Housekeeper completion timestamp. Those fields could not identify
+Housekeeper queue delay separately from its active interval. The GPU handle
+record now preserves the Housekeeper job ID and its own submitted/started/
+finished timestamps; future reports emit local queue, worker wall, remote queue,
+and remote active durations as distinct fields. Runtime timings nested inside
+Housekeeper error messages are also extracted, so subsequent expected-error
+records will include the kernel and service measurements already present in
+this run's raw handle records.
+
+The exact source of the long Housekeeper round trip remains unresolved by run
+`20261119-0003`: the Rust service took at most 62.177 ms, but this run did not
+retain the remote Housekeeper timestamps needed to attribute the remainder to
+remote queueing versus Housekeeper dispatch/HTTP handling. Use the newly split
+timestamps on the next conformance run before changing GPU execution or
+scheduler behavior.

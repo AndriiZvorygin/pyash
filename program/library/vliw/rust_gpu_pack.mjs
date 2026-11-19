@@ -48,17 +48,74 @@ function timestampDeltaMs(start, end) {
     : null;
 }
 
-function timingRecord(status, handleId, requestStartedAt, requestStartedMs) {
+function timingRecord(status, handleId, requestStartedAt, requestStartedMs, runtimeTimingMs = null) {
   return {
     handleId,
+    remoteJobId: String(status?.remoteJobId ?? ""),
     queuedAt: String(status?.queuedAt ?? ""),
-    startedAt: String(status?.startedAt ?? ""),
-    finishedAt: String(status?.finishedAt ?? ""),
-    queueWaitMs: timestampDeltaMs(status?.queuedAt, status?.startedAt),
-    activeMs: timestampDeltaMs(status?.startedAt, status?.finishedAt),
+    workerStartedAt: String(status?.startedAt ?? ""),
+    workerFinishedAt: String(status?.finishedAt ?? ""),
+    remoteSubmittedAt: String(status?.remoteSubmittedAt ?? ""),
+    remoteStartedAt: String(status?.remoteStartedAt ?? ""),
+    remoteFinishedAt: String(status?.remoteFinishedAt ?? ""),
+    localQueueWaitMs: timestampDeltaMs(status?.queuedAt, status?.startedAt),
+    workerWallMs: timestampDeltaMs(status?.startedAt, status?.finishedAt),
+    housekeeperQueueWaitMs: timestampDeltaMs(status?.remoteSubmittedAt, status?.remoteStartedAt),
+    housekeeperActiveMs: timestampDeltaMs(status?.remoteStartedAt, status?.remoteFinishedAt),
     clientRoundTripMs: Number((performance.now() - requestStartedMs).toFixed(3)),
-    requestStartedAt
+    requestStartedAt,
+    runtimeTimingMs
   };
+}
+
+function runtimeTimingsFromError(message) {
+  function inspect(value, depth = 0) {
+    if (depth > 8) return null;
+    if (value && typeof value === "object") {
+      if (value.runtimeTimingMs && typeof value.runtimeTimingMs === "object") return value.runtimeTimingMs;
+      for (const key of ["message", "error", "detail", "response"]) {
+        const result = inspect(value[key], depth + 1);
+        if (result) return result;
+      }
+      return null;
+    }
+    if (typeof value !== "string") return null;
+    const source = value;
+    try {
+      const result = inspect(JSON.parse(source), depth + 1);
+      if (result) return result;
+    } catch {
+      // Housekeeper prefixes nested JSON error bodies with a human-readable message.
+    }
+    for (let start = source.indexOf("{"); start >= 0; start = source.indexOf("{", start + 1)) {
+      let nesting = 0;
+      let quoted = false;
+      let escaped = false;
+      for (let index = start; index < source.length; index += 1) {
+        const character = source[index];
+        if (quoted) {
+          if (escaped) escaped = false;
+          else if (character === "\\") escaped = true;
+          else if (character === '"') quoted = false;
+          continue;
+        }
+        if (character === '"') quoted = true;
+        else if (character === "{") nesting += 1;
+        else if (character === "}" && --nesting === 0) {
+          try {
+            const result = inspect(JSON.parse(source.slice(start, index + 1)), depth + 1);
+            if (result) return result;
+          } catch {
+            break;
+          }
+          break;
+        }
+      }
+    }
+    return null;
+  }
+
+  return inspect(String(message ?? ""));
 }
 
 export function createHousekeeperVliwPackExecutor({
@@ -120,13 +177,25 @@ export function createHousekeeperVliwPackExecutor({
         }
         return {
           ...result,
-          housekeeperTiming: timingRecord(status, handleId, requestStartedAt, requestStartedMs)
+          housekeeperTiming: timingRecord(
+            status,
+            handleId,
+            requestStartedAt,
+            requestStartedMs,
+            result.runtimeTimingMs ?? null
+          )
         };
       }
       if (status?.status === "fail") {
         const detail = String(status.error || status.message || "unknown Housekeeper failure");
         const error = new Error(`VLIW Housekeeper job ${handleId} failed: ${detail}`);
-        error.housekeeperTiming = timingRecord(status, handleId, requestStartedAt, requestStartedMs);
+        error.housekeeperTiming = timingRecord(
+          status,
+          handleId,
+          requestStartedAt,
+          requestStartedMs,
+          runtimeTimingsFromError(detail)
+        );
         throw error;
       }
       await sleep(Math.min(pollDelay, Math.max(1, deadline - Date.now())));

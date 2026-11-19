@@ -845,8 +845,9 @@ async function main() {
         const target = event.phase.startsWith("cpu") ? report.cpuRequests : report.gpuRequests;
         target.push(event);
         const housekeeper = event.housekeeper;
+        const runtime = housekeeper?.runtimeTimingMs;
         const timing = housekeeper
-          ? `client ${housekeeper.clientRoundTripMs}ms; queue ${housekeeper.queueWaitMs ?? "n/a"}ms; active ${housekeeper.activeMs ?? "n/a"}ms`
+          ? `client ${housekeeper.clientRoundTripMs}ms; local queue ${housekeeper.localQueueWaitMs ?? "n/a"}ms; Housekeeper queue ${housekeeper.housekeeperQueueWaitMs ?? "n/a"}ms; Housekeeper active ${housekeeper.housekeeperActiveMs ?? "n/a"}ms; kernel ${runtime?.kernelGpuMs ?? "n/a"}ms; submit/wait ${runtime?.submitWaitReadbackMs ?? "n/a"}ms`
           : `wall ${event.elapsedMs}ms`;
         console.log(`[timing] ${event.phase} ${event.name}: ${timing}`);
       },
@@ -867,8 +868,9 @@ async function main() {
         const target = event.phase.startsWith("cpu") ? report.cpuRequests : report.gpuRequests;
         target.push(event);
         const housekeeper = event.housekeeper;
+        const runtime = housekeeper?.runtimeTimingMs;
         const timing = housekeeper
-          ? `client ${housekeeper.clientRoundTripMs}ms; queue ${housekeeper.queueWaitMs ?? "n/a"}ms; active ${housekeeper.activeMs ?? "n/a"}ms`
+          ? `client ${housekeeper.clientRoundTripMs}ms; local queue ${housekeeper.localQueueWaitMs ?? "n/a"}ms; Housekeeper queue ${housekeeper.housekeeperQueueWaitMs ?? "n/a"}ms; Housekeeper active ${housekeeper.housekeeperActiveMs ?? "n/a"}ms; kernel ${runtime?.kernelGpuMs ?? "n/a"}ms; submit/wait ${runtime?.submitWaitReadbackMs ?? "n/a"}ms`
           : `wall ${event.elapsedMs}ms`;
         console.log(`[timing] ${event.phase} ${event.name}: ${timing}`);
       },

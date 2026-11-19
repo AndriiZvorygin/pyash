@@ -79,6 +79,10 @@ function statusToText(status = {}) {
     { key: "queued at", type: "text", value: quoteText(status.queuedAt || "") },
     { key: "started at", type: "text", value: quoteText(status.startedAt || "") },
     { key: "finished at", type: "text", value: quoteText(status.finishedAt || "") },
+    { key: "remote job id", type: "text", value: quoteText(status.remoteJobId || "") },
+    { key: "housekeeper submitted at", type: "text", value: quoteText(status.remoteSubmittedAt || "") },
+    { key: "housekeeper started at", type: "text", value: quoteText(status.remoteStartedAt || "") },
+    { key: "housekeeper finished at", type: "text", value: quoteText(status.remoteFinishedAt || "") },
     { key: "retry count", type: "num", value: Math.max(0, Math.trunc(Number(status.retryCount) || 0)) },
     { key: "outcome", type: "text", value: quoteText(status.outcome || "") },
     { key: "message", type: "text", value: quoteText(status.message || "") },
@@ -101,6 +105,10 @@ function statusFromText(text) {
     queuedAt: "",
     startedAt: "",
     finishedAt: "",
+    remoteJobId: "",
+    remoteSubmittedAt: "",
+    remoteStartedAt: "",
+    remoteFinishedAt: "",
     retryCount: 0,
     outcome: "",
     message: "",
@@ -117,6 +125,10 @@ function statusFromText(text) {
     if (entry.key === "queued at") out.queuedAt = String(parseQuoted(entry.valueRaw) ?? "").trim();
     if (entry.key === "started at") out.startedAt = String(parseQuoted(entry.valueRaw) ?? "").trim();
     if (entry.key === "finished at") out.finishedAt = String(parseQuoted(entry.valueRaw) ?? "").trim();
+    if (entry.key === "remote job id") out.remoteJobId = String(parseQuoted(entry.valueRaw) ?? "").trim();
+    if (entry.key === "housekeeper submitted at") out.remoteSubmittedAt = String(parseQuoted(entry.valueRaw) ?? "").trim();
+    if (entry.key === "housekeeper started at") out.remoteStartedAt = String(parseQuoted(entry.valueRaw) ?? "").trim();
+    if (entry.key === "housekeeper finished at") out.remoteFinishedAt = String(parseQuoted(entry.valueRaw) ?? "").trim();
     if (entry.key === "retry count") out.retryCount = Math.max(0, Math.trunc(Number(entry.valueRaw) || 0));
     if (entry.key === "outcome") out.outcome = String(parseQuoted(entry.valueRaw) ?? "").trim();
     if (entry.key === "message") out.message = String(parseQuoted(entry.valueRaw) ?? "").trim();
@@ -157,6 +169,10 @@ export async function writeGpuHandleStatus(worldRoot, handleId, nextStatus = {})
     queuedAt: "",
     startedAt: "",
     finishedAt: "",
+    remoteJobId: "",
+    remoteSubmittedAt: "",
+    remoteStartedAt: "",
+    remoteFinishedAt: "",
     retryCount: 0,
     outcome: "",
     message: "",
