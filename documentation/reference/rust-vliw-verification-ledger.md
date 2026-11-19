@@ -22,6 +22,8 @@ and exact test outcome. A queued or timed-out job is not a passing test.
 | Pipeline cache generation | 42.31 seconds total on RTX 3090; pack 5.82 s, programlet 18.69 s, sections 17.64 s |
 | Runtime start | Container started at `2026-11-19T17:48:08.449961746Z`; deployed runtime reports ready with GPU observed |
 | Runtime memory observed | 89.65 MiB container memory |
+| Full conformance command wall time | 62.12 seconds, from log creation `2026-11-19 12:48:33.162 -0500` to final result `12:49:35.286 -0500`; includes CPU reference checks, both batched GPU requests, and both expected-error requests |
+| Per-request latency | Not recorded by this runner; the 62.12-second figure is end-to-end, not GPU execution time alone |
 
 The service update used `container/pyac-vliw-runtime/command/deploy.sh`. It held
 only VLIW dispatch, preserved queued jobs, generated the GPU-specific pipeline
@@ -40,6 +42,8 @@ step; it is not performed during service startup.
 - Expected-error conformance: **2/2 passed** through Housekeeper, as two
   separate requests. These remain separate because an error terminates a pack
   request, so combining them would prevent independently verifying both errors.
+- Run log: `/tmp/vliw-gpu-conformance-20261119-batched-final.log` (10,197
+  bytes; local ephemeral log, not committed).
 - This is not one physical dispatch for the entire matrix: codelet and
   sectioned-programlet packs follow distinct runtime paths. Current total is
   four Housekeeper submissions including the two isolated error checks.
