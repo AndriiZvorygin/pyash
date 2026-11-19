@@ -162,3 +162,33 @@ retain the remote Housekeeper timestamps needed to attribute the remainder to
 remote queueing versus Housekeeper dispatch/HTTP handling. Use the newly split
 timestamps on the next conformance run before changing GPU execution or
 scheduler behavior.
+
+## 2026-11-19: `kl6m psas` Dot Product
+
+**Run record:** `artifacts/20261119-0004-rust-vliw-conformance/result.pya`
+
+| Field | Evidence |
+| --- | --- |
+| Source revision at run | `00b4843f68ad8c6f58a0a2a5ac42954183bad8df`, dirty working tree |
+| Host and route | Mriczo, Pyash GPU Housekeeper -> `pyac-vliw-runtime` -> Rust-GPU Vulkan |
+| GPU | NVIDIA GeForce RTX 3090, driver `550.163.01`, 24,576 MiB |
+| Runtime image | `sha256:429523feea2bb62b2198ed7b05d808cdc2accfde61e5d6c08dba183e559a819f` |
+| Live conformance | 46/46 cases passed; both isolated expected-error cases passed |
+| Dot-product values | float32 `[1,2,3] · [4,5,6] = 32`; float64 `[0.1,2,-3] · [0.2,4,-5] = 23.02` |
+| CPU batch wall | 111.518 ms for 28 codelet cases; 107.989 ms for 18 programlet sections |
+| GPU compute pass | 0.144672 ms for the codelet batch; 60.949952 ms for programlet sections |
+| GPU client round trip | 7,050.046 ms for codelets; 17,030.845 ms for programlet sections |
+| Full run wall time | 54,372.145 ms, including two expected-error checks |
+| Pipeline-cache generation | 120.05 s for all three pipelines; generated before runtime replacement |
+| Runtime executable | 9,084,608 bytes; SHA-256 `ed69ba7d730001e88f79353d071a47eea775e3211ba25e53308b5419ba12ab42` |
+| GPU worker executable | 7,393,288 bytes; SHA-256 `8f56b3334d7ff8b4bdabed9e70e0566eae496417a62bb20f986925b6c320ebbd` |
+| SPIR-V shader | 2,732,480 bytes; SHA-256 `2e0a1a00a205e7272d6a9f2c88c852f2762f81e29686efc2bf20eb3472f8a3ca` |
+| Pipeline cache | 10,061,392 bytes; SHA-256 `6c5ee31112bc9715fa130982fb24a75a32829cbee17663014ac76dc5f647abb5` |
+
+The dot-product sentence was exercised through Pyash lowering, packed VLIW,
+Rust CPU reference, and the live Vulkan worker. After separating the
+`shader-f64` capability for native Vulkan from the WebGPU build, regenerating
+the Vulkan shader produced the same SPIR-V hash recorded by this live run. The
+WGSL build omits native 64-bit shader types and rejects float64 dot products;
+float32 dot products remain supported there. Housekeeper idled the VLIW
+container after the run; the next managed request starts it on demand.

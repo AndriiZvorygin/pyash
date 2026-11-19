@@ -13,14 +13,10 @@ are a compiled representation of the same sentences, not a second semantic
 language. The sentence's mood, verb, cases, values, and dependency effects
 remain authoritative after lowering.
 
-WordNet and SUMO links in the vocabulary catalog are lexical metadata: they
-identify or explain the meaning of canonical Pyash words and compounds. They
-are not tokens in executable sentences and are not serialized into codelets.
-Executable identity comes from the Pyash words and their HNUCs in the sentence.
-A lexical link helps establish the intended concept, but does not by itself
-specify operation details such as accepted value types, numeric precision, or
-failure behavior. For supported VLIW semantics, the shared Rust runtime is the
-reference implementation; its contract is recorded by this specification and
+WordNet and SUMO links are catalog metadata, not executable tokens. Sentences
+and codelets use Pyash words and HNUCs. Lexical links identify concepts but do
+not define runtime details such as types, precision, or errors. The shared Rust
+runtime is the VLIW semantic reference; its contract is recorded here and in
 the semantic-slice reference.
 
 This specification revives the encoding and execution model in the
@@ -54,12 +50,10 @@ Pyash command.
   may also contain a multi-clause codelet when the legacy layout permits it.
 - **Phrase** is a case/value region in a codelet. Its boundary is represented
   by the legacy index and phrase-marker bits/words, not by a separator string.
-- **HNUC** is a current Pyash semantic identity for a word/case. HNUCs are
-  validated by the current compositional-case inventory. They are not silently
-  interchangeable with the older `lwonprom` phonological word numbers.
-- **Lexical link** is vocabulary metadata associating a Pyash word or compound
-  with an external lexical sense or concept. It explains vocabulary identity;
-  it does not replace Pyash sentence words or define runtime behavior by itself.
+- **HNUC** is a current Pyash word/case identity validated by the compositional-
+  case inventory. It is not interchangeable with an old `lwonprom` word number.
+- **Lexical link** associates a Pyash word or compound with an external sense;
+  it explains vocabulary identity, not sentence or runtime behavior.
 - **Canonical bytes** are the little-endian bytes of the exact encoded 16-bit
   words, in codelet order, with no timestamps, addresses, source paths, or
   runtime pointers.
@@ -77,14 +71,12 @@ source language
   -> dependency-aware execution
 ```
 
-The source front end is responsible for preserving semantic distinctions while
-producing sentences. A human-language gloss, translation pair, or pretty
-printed sentence is not execution authority. Existing translation pairs may
-provide a presentation or fallback surface, but a backend MUST reject input
-whose semantic cases, types, mood, or values cannot be represented in the
-canonical sentence and legacy word tables. It MUST NOT drop fields, turn the
-whole sentence into an opaque quote, or attach an external executable
-sidecar.
+The source front end MUST preserve semantic distinctions. A gloss,
+translation pair, or pretty-printed sentence is not execution authority.
+Translation pairs may provide a presentation surface, but a backend MUST
+reject cases, types, mood, or values that the canonical sentence and legacy
+word tables cannot represent. It MUST NOT drop fields, quote the whole
+sentence opaquely, or attach an executable sidecar.
 
 Before encoding, normalization MUST:
 
@@ -200,7 +192,7 @@ The table is a compatibility artifact, not a place to allocate new IDs. Until
 the mapping is proven for an item, that item is unsupported by the VLIW
 backend even if it can be printed as readable Pyash.
 
-## 5. Execution contract
+## 5.2 General execution contract
 
 Decoding produces semantic instructions with explicit referential inputs and
 outputs. Each reference has a stable number, fulfillment state, and value
@@ -322,5 +314,6 @@ sentence.
 
 ## Target companion
 
-Target capability selection, backend lowering, and compatibility examples are
-normative in [Pyash VLIW targets and compatibility](28-pyash-vliw-targets.md).
+Target capability selection, dot product (`kl6m psas`), backend lowering, and
+compatibility examples are normative in
+[Pyash VLIW targets and compatibility](28-pyash-vliw-targets.md).

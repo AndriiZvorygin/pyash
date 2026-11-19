@@ -96,6 +96,7 @@ pub enum PyacValue {
     Unsigned(u64),
     Signed(i64),
     Float32(u32),
+    Float64(u64),
     Fixed16(u16),
     Boolean(bool),
     DateEpochMs(u64),
@@ -418,6 +419,9 @@ fn execute_shared_programlet(
         pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(result.values[0] != 0),
         pyac_vliw_core::VALUE_SIGNED => PyacValue::Signed(i64::from(result.values[0] as i32)),
         pyac_vliw_core::VALUE_FLOAT32 => PyacValue::Float32(result.values[0]),
+        pyac_vliw_core::VALUE_FLOAT64 => {
+            PyacValue::Float64(u64::from(result.values[0]) | (u64::from(result.values[1]) << 32))
+        }
         pyac_vliw_core::VALUE_FIXED16 => PyacValue::Fixed16(result.values[0] as u16),
         _ => PyacValue::Unsigned(u64::from(result.values[0])),
     })
@@ -525,6 +529,9 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
                     PyacValue::Signed(i64::from(shared.values[0] as i32))
                 }
                 pyac_vliw_core::VALUE_FLOAT32 => PyacValue::Float32(shared.values[0]),
+                pyac_vliw_core::VALUE_FLOAT64 => PyacValue::Float64(
+                    u64::from(shared.values[0]) | (u64::from(shared.values[1]) << 32),
+                ),
                 pyac_vliw_core::VALUE_FIXED16 => PyacValue::Fixed16(shared.values[0] as u16),
                 pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(shared.values[0] != 0),
                 pyac_vliw_core::VALUE_DATE => PyacValue::DateEpochMs(

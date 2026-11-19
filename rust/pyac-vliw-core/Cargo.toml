@@ -6,6 +6,10 @@ rust-version = "1.85"
 publish = false
 build = "build.rs"
 
+[features]
+default = ["shader-f64"]
+shader-f64 = []
+
 [lib]
 path = "src/semantics_runtime.rs"
 

@@ -214,7 +214,31 @@ Rust CPU/GPU interpreter still returns values through a fixed `CoreResult`
 buffer sized for 16 lanes; large-array execution through that ABI remains a
 runtime transport/capacity gap. Programlet slots remain scalar typed values.
 
-## 10. Non-goals
+## 10. Scalar product (dot product)
+
+The Pyash compound `kl6m psas` has English gloss **dot product**. Its canonical
+sentence is:
+
+```pyash
+ob ve float32 1 2 3 by ve float32 4 5 6 be kl6m psas do
+```
+
+`ob` and `by` are the left and right vectors; `do` requests the operation.
+There is no `to` result-name case: execution returns one typed scalar. The
+executable verb is HNUCs `0x0D62 0x8944`; WordNet/SUMO links remain catalog
+metadata.
+
+Operands MUST be finite, non-empty float32 or float64 vectors of matching type
+and equal length, from one to `MAX_VECTOR_LANES` (currently 16). Multiply
+matching lanes, then add products to a zero accumulator in ascending lane order
+at the operand precision. Return a scalar of that precision. Reject malformed
+phrases and type/length mismatches; non-finite inputs/results produce the
+float-domain error. Without `shader-f64`, reject float64 with the unsupported-
+operation error. Rust CPU and native Vulkan enable `shader-f64`; WGSL/WebGPU
+omits it, so there float32 is supported and float64 is not. Implementations
+MUST preserve the specified operation order and precision.
+
+## 11. Non-goals
 
 This specification does not add HNUCs, alter parser vocabulary, define the
 catalog/container database, require a GPU, introduce a model server or queue,
@@ -225,7 +249,7 @@ not replace the current sentence/paragraph interpreter. The only
 conforming future implementation is one that can prove the sentence result
 and the legacy encoding bytes agree.
 
-## 11. Implementation references
+## 12. Implementation references
 
 The proven numeric-plus, quote, fixed-slot, typed-literal, named-fact, database,
 and facade slices are documented with their fixtures and implementation paths

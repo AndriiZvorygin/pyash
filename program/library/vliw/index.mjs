@@ -67,6 +67,7 @@ import {
   normalizeVectorSentence
 } from "./vector.mjs";
 import { decodeVectorSequence, lowerVectorSequence } from "./vector_sequence.mjs";
+import { normalizeScalarProductSentence, isScalarProductSentence } from "./scalar_product.mjs";
 import {
   isIntVectorQuoteWord,
   isFloatVectorQuoteWord,
@@ -90,6 +91,14 @@ function semanticDecode(decoded, semantic, sentence) {
 }
 
 export function lowerSentence(sentence) {
+  if (isScalarProductSentence(sentence)) {
+    const normalized = normalizeScalarProductSentence(sentence);
+    return lowerPyashSentence(normalized).vectors.map((words) => ({
+      sentence: normalized,
+      words,
+      semantic: "scalar-product"
+    }));
+  }
   if (["not", "and", "or"].includes(sentence?.be) && sentence?.mood === "do") {
     return lowerPyashSentence(sentence).vectors.map((words) => ({
       sentence,

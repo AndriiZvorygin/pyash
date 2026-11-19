@@ -125,6 +125,7 @@ pub const VALUE_FLOAT32: u32 = 9;
 pub const VALUE_FIXED16: u32 = 10;
 pub const VALUE_VECTOR_FLOAT32: u32 = 11;
 pub const VALUE_VECTOR_FLOAT64: u32 = 12;
+pub const VALUE_FLOAT64: u32 = 13;
 
 pub const ERROR_UNSUPPORTED: u32 = 1;
 pub const ERROR_DIVISION_BY_ZERO: u32 = 2;
@@ -488,6 +489,8 @@ mod programlet_sections;
 mod programlet_symbols;
 #[path = "semantics_runtime/programlet_values.rs"]
 mod programlet_values;
+#[path = "semantics_runtime/scalar_product.rs"]
+mod scalar_product;
 #[path = "semantics_runtime/sentence.rs"]
 mod sentence;
 #[path = "semantics_runtime/vector_group.rs"]

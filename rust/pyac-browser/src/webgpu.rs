@@ -193,6 +193,9 @@ fn decode_programlet_result(
     }
     Ok(vec![match result[0] {
         pyac_vliw_core::VALUE_FLOAT32 => PyacValue::Float32(result[4]),
+        pyac_vliw_core::VALUE_FLOAT64 => {
+            PyacValue::Float64(u64::from(result[4]) | (u64::from(result[5]) << 32))
+        }
         pyac_vliw_core::VALUE_FIXED16 => PyacValue::Fixed16(result[4] as u16),
         _ => PyacValue::Unsigned(u64::from(result[4])),
     }])
@@ -229,6 +232,9 @@ fn decode_results(
                 PyacValue::Signed((u64::from(data[0]) | (u64::from(data[1]) << 32)) as i64)
             }
             pyac_vliw_core::VALUE_FLOAT32 => PyacValue::Float32(data[0]),
+            pyac_vliw_core::VALUE_FLOAT64 => {
+                PyacValue::Float64(u64::from(data[0]) | (u64::from(data[1]) << 32))
+            }
             pyac_vliw_core::VALUE_FIXED16 => PyacValue::Fixed16(data[0] as u16),
             pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(data[0] != 0),
             pyac_vliw_core::VALUE_DATE => {

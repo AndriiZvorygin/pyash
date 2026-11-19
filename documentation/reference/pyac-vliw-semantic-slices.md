@@ -87,6 +87,25 @@ must produce codelets whose results conform to the Rust semantics. Existing
 vector quote support described above is the data representation; this
 arithmetic sentence is the operation over that data.
 
+## Float-vector scalar product
+
+The shared Rust runtime executes the `kl6m psas` sentence shape:
+
+```pyash
+ob ve float32 1 2 3 by ve float32 4 5 6 be kl6m psas do
+```
+
+The Rust implementation returns one binary32 scalar (`32` for this example).
+The same sentence accepts equal-width float64 vectors and returns a binary64
+scalar. Inputs are finite, widths match, and accumulation follows lane order in
+the input precision. The typed vectors may span multiple indexed codelets; the
+sentence's case and mood boundary bits remain validated. The Rust core tests
+cover float32/float64, sixteen lanes, continuation, shape errors, and non-finite
+results. Native Vulkan and CPU builds enable `shader-f64`; the WGSL/WebGPU shader
+build intentionally omits it and rejects float64 dot products while retaining
+float32 support. The JavaScript adapter only lowers the typed sentence; it is
+not the semantic oracle.
+
 ## Generic fixed-slot decoding
 
 `program/library/vliw/codelets.mjs` losslessly decodes the existing 16-word slot,

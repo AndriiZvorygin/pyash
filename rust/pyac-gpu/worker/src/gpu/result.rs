@@ -33,6 +33,9 @@ pub(super) fn decode_results(
                 PyacValue::Signed((u64::from(data[0]) | (u64::from(data[1]) << 32)) as i64)
             }
             pyac_vliw_core::VALUE_FLOAT32 => PyacValue::Float32(data[0]),
+            pyac_vliw_core::VALUE_FLOAT64 => {
+                PyacValue::Float64(u64::from(data[0]) | (u64::from(data[1]) << 32))
+            }
             pyac_vliw_core::VALUE_FIXED16 => PyacValue::Fixed16(data[0] as u16),
             pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(data[0] != 0),
             pyac_vliw_core::VALUE_DATE => {
@@ -82,6 +85,7 @@ pub(super) fn value_json(value: &PyacValue) -> Value {
         PyacValue::Unsigned(value) => json!({"type": "unsigned", "value": value}),
         PyacValue::Signed(value) => json!({"type": "signed", "value": value}),
         PyacValue::Float32(bits) => json!({"type": "float32", "value": f32::from_bits(*bits)}),
+        PyacValue::Float64(bits) => json!({"type": "float64", "value": f64::from_bits(*bits)}),
         PyacValue::Fixed16(numerator) => json!({
             "type": "fixed16",
             "value": f64::from(*numerator) / 46_656.0,

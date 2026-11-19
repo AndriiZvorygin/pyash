@@ -15,7 +15,8 @@ COPY rust/pyac-gpu/shader /src/rust/pyac-gpu/shader
 RUN cargo gpu build --auto-install-rust-toolchain \
     --shader-crate /src/rust/pyac-gpu/shader \
     --target spirv-unknown-spv1.5 \
-    --features vulkan-device-atomics \
+    --features vulkan-device-atomics,shader-f64 \
+    --capabilities Float64 --capabilities Int64 \
     --output-dir /src/rust/pyac-gpu/target/generated/vulkan
 RUN spirv-val --target-env vulkan1.2 /src/rust/pyac-gpu/target/generated/vulkan/pyac_vliw_gpu_kernel.spv
 

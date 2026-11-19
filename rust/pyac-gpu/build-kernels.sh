@@ -11,10 +11,22 @@ if ! cargo gpu --version >/dev/null 2>&1; then
 fi
 
 cargo gpu build --auto-install-rust-toolchain --shader-crate "$kernel" \
-  --target spirv-unknown-spv1.5 --features vulkan-device-atomics \
+  --target spirv-unknown-spv1.5 --features vulkan-device-atomics,shader-f64 \
+  --capabilities Float64 --capabilities Int64 \
   --output-dir "$out/vulkan"
 cargo gpu build --auto-install-rust-toolchain --shader-crate "$kernel" \
-  --target spirv-unknown-naga-wgsl --output-dir "$out/wgsl"
+  --target spirv-unknown-naga-wgsl \
+  --output-dir "$out/wgsl"
+
+wgsl="$out/wgsl/pyac_vliw_gpu_kernel.wgsl"
+node --input-type=module - "$wgsl" <<'NODE'
+import assert from "node:assert/strict";
+import fs from "node:fs";
+
+const source = fs.readFileSync(process.argv[2], "utf8");
+assert.doesNotMatch(source, /\b(?:f64|u64)\b/, "WebGPU WGSL must not require native shader-f64");
+console.log("WGSL contains no native f64/u64 shader types.");
+NODE
 
 spirv="$out/vulkan/pyac_vliw_gpu_kernel.spv"
 node --input-type=module - "$spirv" <<'NODE'
@@ -45,7 +57,7 @@ fi
 browser_shader="$root/../pyac-browser/src/vliw_kernel.wgsl"
 {
   printf '// Generated from pyac-vliw-core via the Rust-GPU WGSL target. Do not edit.\n'
-  sed 's/[[:blank:]]*$//' "$out/wgsl/pyac_vliw_gpu_kernel.wgsl"
+  sed 's/[[:blank:]]*$//' "$wgsl"
 } > "$browser_shader"
 
 printf 'SPIR-V: %s\n' "$spirv"
