@@ -32,6 +32,32 @@ low-memory inventory of the NVIDIA Vulkan adapter and compute queue. It has a
 GPU work. Install `vulkan-tools` if `vulkaninfo` is not present. This check
 confirms driver/device visibility only; it is not a pipeline compilation test.
 
+To profile the final Vulkan driver pipeline-build stage using existing binaries,
+run `node rust/pyac-gpu/profile-pipeline-build.mjs --run`. It does not run
+Cargo or rebuild SPIR-V. It requires 20 GiB host RAM and 8 GiB free VRAM, then
+caps the process at 16 GiB RSS and five minutes; logs and the report go under
+the ignored `rust/pyac-gpu/target/diagnostics/` directory. This is an explicit
+diagnostic, not part of service startup. `PYAC_VLIW_PROFILE_TIMEOUT_SEC` can
+shorten the wall limit (never raise it above five minutes), and
+`PYAC_VLIW_PIPELINE_COMPILER` selects an alternate prebuilt compiler for A/B
+experiments such as a temporary Vulkan-HAL optimization-flag patch.
+
+To isolate source-level pipeline cost, list candidates with
+`node rust/pyac-gpu/profile-function-reduction.mjs --list`, then run exactly
+one diagnostic variant, for example:
+`node rust/pyac-gpu/profile-function-reduction.mjs --run --function execute_numeric_programlet_at`.
+The tool copies the shader and VLIW core under ignored `target/diagnostics/`,
+replaces only that candidate's body with an error stub, builds SPIR-V with
+Rust-GPU (120-second and 10-GiB limits by default), then probes Vulkan pipeline
+creation (60-second limit). Each run records source hashes, build logs, SPIR-V,
+and resource/timing reports. The stub intentionally changes behavior; these
+variants are for compiler attribution only and must never be deployed. Set
+`PYAC_VLIW_REDUCE_BUILD_TIMEOUT_SEC` (up to 300) or
+`PYAC_VLIW_REDUCE_PIPELINE_TIMEOUT_SEC` (up to 120) to adjust the diagnostic
+caps. Each run updates `target/diagnostics/function-reduction/index.md`.
+NVIDIA's persistent shader cache is not cleared by the tool, so repeated runs
+of the same variant may be warm; compare and label first-run stage timings.
+
 The smoke command lowers a small Pyash programlet to a canonical `.pyac` pack,
 runs it on a discrete Vulkan GPU, and asserts the typed result plus rejection
 of a constant write. It also checks the ordinary codelet-pack path. It requires
