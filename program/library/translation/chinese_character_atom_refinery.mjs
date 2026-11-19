@@ -4,11 +4,11 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { JSDOM } from "jsdom";
 
 import pyashWords from "../pyashWords.json" with { type: "json" };
 import { buildProgram } from "../../program.mjs";
 import { buildAtomWordProposal, loadAtomWordGenerationInputs } from "./atom_word_generation.mjs";
+import { parseCowChineseWordNet } from "./cow_wordnet_crosswalk.mjs";
 import { parseEnglishGrammarCatalog } from "./english_grammar.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -332,48 +332,22 @@ export function parseEnglishGrammarTargets(source) {
 }
 
 export function parseChineseOpenWordNetCharacterSenses(source) {
-  if (typeof source !== "string" || !source.trim()) {
-    throw invalid("Chinese Open Wordnet source must be XML text");
-  }
-  let document;
-  try {
-    document = new JSDOM(source, { contentType: "text/xml" }).window.document;
-  } catch (error) {
-    throw invalid("Chinese Open Wordnet XML is malformed", { cause: error.message });
-  }
-  if (document.querySelector("parsererror")) throw invalid("Chinese Open Wordnet XML is malformed");
-  const lexicon = [...document.querySelectorAll("Lexicon")]
-    .find((entry) => entry.getAttribute("id") === "cow");
-  if (!lexicon || lexicon.getAttribute("version") !== "1.1") {
-    throw invalid("Chinese Open Wordnet source must be COW 1.1");
-  }
-  const synsets = new Map([...lexicon.querySelectorAll("Synset")].map((synset) => [
-    synset.getAttribute("id"),
-    {
-      ili: text(synset.getAttribute("ili")),
-      partOfSpeech: text(synset.getAttribute("partOfSpeech"))
-    }
-  ]).filter(([id]) => id));
+  const parsed = typeof source === "string" ? parseCowChineseWordNet(source) : source;
+  if (!Array.isArray(parsed?.senses)) throw invalid("Chinese Open Wordnet source must be COW 1.1 XML or parsed COW senses");
   const rows = new Map();
-  for (const entry of lexicon.querySelectorAll("LexicalEntry")) {
-    const lemma = entry.querySelector("Lemma");
-    const character = text(lemma?.getAttribute("writtenForm"));
-    if ([...character].length !== 1 || !HAN.test(character)) continue;
-    for (const sense of entry.querySelectorAll("Sense")) {
-      const cowSynset = text(sense.getAttribute("synset"));
-      const synset = synsets.get(cowSynset);
-      if (!synset?.ili || !/^i[0-9]+$/u.test(synset.ili)) continue;
-      if (!WORDNET_PARTS_OF_SPEECH.has(synset.partOfSpeech)) continue;
-      const key = `${character}\u0000${synset.ili}\u0000${synset.partOfSpeech}`;
-      const row = rows.get(key) ?? {
-        character,
-        ili: synset.ili,
-        partOfSpeech: synset.partOfSpeech,
-        cowSynsets: []
-      };
-      if (!row.cowSynsets.includes(cowSynset)) row.cowSynsets.push(cowSynset);
-      rows.set(key, row);
-    }
+  for (const sense of parsed.senses) {
+    const character = text(sense.form);
+    if ([...character].length !== 1 || !HAN.test(character) || !sense.ili) continue;
+    if (!WORDNET_PARTS_OF_SPEECH.has(sense.partOfSpeech)) continue;
+    const key = `${character}\u0000${sense.ili}\u0000${sense.partOfSpeech}`;
+    const row = rows.get(key) ?? {
+      character,
+      ili: sense.ili,
+      partOfSpeech: sense.partOfSpeech,
+      cowSynsets: []
+    };
+    if (!row.cowSynsets.includes(sense.cowSynsetId)) row.cowSynsets.push(sense.cowSynsetId);
+    rows.set(key, row);
   }
   return [...rows.values()].map((row) => ({
     ...row,
@@ -468,7 +442,8 @@ export async function loadChineseCharacterAtomRefineryInputs({
     encoding: "utf8",
     maxBuffer: 128 * 1024 * 1024
   });
-  const cowCharacterSenses = parseChineseOpenWordNetCharacterSenses(cowXml.stdout);
+  const cowWordNet = parseCowChineseWordNet(cowXml.stdout);
+  const cowCharacterSenses = parseChineseOpenWordNetCharacterSenses(cowWordNet);
   const kwonRows = JSON.parse(kwonSource);
   if (!Array.isArray(kwonRows)) throw invalid("Kwon Chinese vocabulary must be an array");
   const shuowenRows = JSON.parse(shuowenSource);
@@ -518,6 +493,7 @@ export async function loadChineseCharacterAtomRefineryInputs({
     analectsSource,
     kwonRows,
     acceptedLinks,
+    cowWordNet,
     cowCharacterSenses,
     grammarTargets,
     grammarCharacterLinks: grammarCatalog.chineseCharacterLinks,
@@ -640,15 +616,19 @@ function lexicalCandidateTargets(terms, targetIndex, exactTargets, isEligible = 
 function compareCharacterFrequency(left, right) {
   const leftHasSubtlex = Number.isSafeInteger(left.frequency?.subtlexRank);
   const rightHasSubtlex = Number.isSafeInteger(right.frequency?.subtlexRank);
-  if (leftHasSubtlex !== rightHasSubtlex) return leftHasSubtlex ? -1 : 1;
-  if (leftHasSubtlex && left.frequency.subtlexRank !== right.frequency.subtlexRank) {
-    return left.frequency.subtlexRank - right.frequency.subtlexRank;
-  }
-  const leftHasJunda = Number.isSafeInteger(left.frequency?.jundaRank);
-  const rightHasJunda = Number.isSafeInteger(right.frequency?.jundaRank);
-  if (leftHasJunda !== rightHasJunda) return leftHasJunda ? -1 : 1;
-  if (leftHasJunda && left.frequency.jundaRank !== right.frequency.jundaRank) {
-    return left.frequency.jundaRank - right.frequency.jundaRank;
+  if (leftHasSubtlex && rightHasSubtlex) {
+    const difference = left.frequency.subtlexRank - right.frequency.subtlexRank;
+    if (difference) return difference;
+  } else if (leftHasSubtlex !== rightHasSubtlex) {
+    return leftHasSubtlex ? -1 : 1;
+  } else {
+    const leftHasJunda = Number.isSafeInteger(left.frequency?.jundaRank);
+    const rightHasJunda = Number.isSafeInteger(right.frequency?.jundaRank);
+    if (leftHasJunda !== rightHasJunda) return leftHasJunda ? -1 : 1;
+    if (leftHasJunda) {
+      const difference = left.frequency.jundaRank - right.frequency.jundaRank;
+      if (difference) return difference;
+    }
   }
   return (left.standardIndex ?? Number.MAX_SAFE_INTEGER) - (right.standardIndex ?? Number.MAX_SAFE_INTEGER)
     || codePointSort(left.character, right.character);

@@ -195,6 +195,25 @@ test("COW allocation gives a contested atom to the more frequent character and u
   assert.deepEqual(changes.map(({ character, pya }) => [character, pya]), [["后", "hfirst"], ["後", "hsecond"]]);
 });
 
+test("Jun Da does not break equal SUBTLEX ranks when characters compete for one atom", () => {
+  const candidate = {
+    kind: "atom", english: "shared", pya: "hshared", candidateSources: ["cow-direct"],
+    wordnetSenses: [{ senseId: "n:shared", cowLinked: true, frequencyRank: 1, frequencyTagCount: 1 }]
+  };
+  const { changes } = highFrequencyCowCharacterAtomLinks([
+    {
+      character: "乙", standardIndex: 2, frequency: { subtlexRank: 10, jundaRank: 1 },
+      existingMappings: [], existingAtomCandidates: [{ ...candidate }]
+    },
+    {
+      character: "甲", standardIndex: 1, frequency: { subtlexRank: 10, jundaRank: 100 },
+      existingMappings: [], existingAtomCandidates: [{ ...candidate }]
+    }
+  ]);
+
+  assert.deepEqual(changes.map(({ character }) => character), ["甲"]);
+});
+
 test("COW frequency allocation replaces a curated link and leaves unranked COW candidates as residuals", () => {
   const current = { character: "驱", english: "drive", pya: "hgo", status: "accepted", source: "cow-frequency-allocation" };
   const record = {
