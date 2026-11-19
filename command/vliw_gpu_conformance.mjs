@@ -202,6 +202,31 @@ export function buildVliwGpuConformanceCases() {
       [{ type: "float32", value: Math.fround(Math.fround(1.5) / Math.fround(4)) }]
     ),
     codeletPack(
+      "fixed16-literal",
+      "ob num 0.125 as name rational be number ya",
+      [{ type: "fixed16", value: 0.125, numerator: 5_832, denominator: 46_656 }]
+    ),
+    codeletPack(
+      "fixed16-plus",
+      "ob num 0.5 as name rational to num 0.25 be plus do",
+      [{ type: "fixed16", value: 0.75, numerator: 34_992, denominator: 46_656 }]
+    ),
+    codeletPack(
+      "fixed16-subtract",
+      "ob num 0.5 as name rational from num 0.25 be subtract do",
+      [{ type: "fixed16", value: 0.25, numerator: 11_664, denominator: 46_656 }]
+    ),
+    codeletPack(
+      "fixed16-multiply-rounds-even",
+      `ob num ${3 / 46_656} as name rational with num 0.5 be multiply do`,
+      [{ type: "fixed16", value: 2 / 46_656, numerator: 2, denominator: 46_656 }]
+    ),
+    codeletPack(
+      "fixed16-divide",
+      "ob num 0.25 as name rational with num 0.5 be divide do",
+      [{ type: "fixed16", value: 0.5, numerator: 23_328, denominator: 46_656 }]
+    ),
+    codeletPack(
       "vector-arithmetic",
       "ob ve num 1 2 3 4 to num 2 be plus do",
       [{ type: "vector", elementType: "unsigned-16", values: [3, 4, 5, 6] }]

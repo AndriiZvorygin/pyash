@@ -16,6 +16,11 @@ import {
   VECTOR_THICK_LONG
 } from "./quotes.mjs";
 import { VliwEncodingError } from "./plus.mjs";
+import {
+  calculateFixed16Numerator,
+  fixed16QuoteWords,
+  fixed16ValueFromNumerator
+} from "./fixed16.mjs";
 
 const LEGACY_HEAD_WORD = 0x0149;
 const INSTRUMENTAL_CASE_WORD = 0x287e;
@@ -105,7 +110,8 @@ function isUnsigned16(value) {
   return Number.isInteger(value) && !Object.is(value, -0) && value >= 0 && value <= 0xffff;
 }
 
-function scalarQuoteWords(value, forceFloat) {
+function scalarQuoteWords(value, forceFloat, fixed16 = false) {
+  if (fixed16) return fixed16QuoteWords(value);
   return !forceFloat && isUnsigned16(value)
     ? [NUMBER_QUOTE_WORD, value]
     : float32QuoteWords(value);
@@ -199,7 +205,11 @@ export function normalizeNumericArithmeticSentence(sentence) {
     throw encodingError("unsupported-sentence", "numeric arithmetic requires an ob operand");
   }
   const role = operandRole(sentence);
-  exactKeys(sentence, ["be", "mood", "ob", role].sort(), "numeric arithmetic sentence");
+  const fixed16 = sentence.as !== undefined;
+  if (fixed16 && (sentence.as?.name !== "rational" || Object.keys(sentence.as).length !== 1)) {
+    throw encodingError("unsupported-type", "fixed16 arithmetic requires as name rational");
+  }
+  exactKeys(sentence, ["be", "mood", "ob", role, ...(fixed16 ? ["as"] : [])].sort(), "numeric arithmetic sentence");
   const obKeys = Object.keys(sentence.ob).sort();
   let ob;
   if (obKeys.length === 1 && obKeys[0] === "num") {
@@ -229,6 +239,9 @@ export function normalizeNumericArithmeticSentence(sentence) {
     });
   }
   const right = normalizeOperand(sentence[role], role, sentence.be);
+  if (fixed16 && (ob.ve || right.ve || typeof right.name === "string")) {
+    throw encodingError("unsupported-type", "fixed16 arithmetic supports scalar numeric operands only");
+  }
   if (right.ve && !ob.ve) {
     throw encodingError("unsupported-sentence", "numeric vector arithmetic requires a vector ob operand");
   }
@@ -245,6 +258,7 @@ export function normalizeNumericArithmeticSentence(sentence) {
     mood: "do",
     be: sentence.be,
     ob,
+    ...(fixed16 ? { as: { name: "rational" } } : {}),
     [role]: right
   };
 }
@@ -259,7 +273,7 @@ export function isNumericArithmeticCodelet(words, usedWords) {
     const firstQuote = decodeQuote(words, 1);
     const header = decodeQuoteHeader(words[1]);
     const isVector = header.sortName === "uint" && header.scalarBytes === 2 && header.vectorThick !== 0;
-    const isFloat = header.sortName === "float" && header.scalarBytes === 4 && header.vectorThick === 0;
+    const isFloat = header.sortName === "float" && [2, 4].includes(header.scalarBytes) && header.vectorThick === 0;
     if (isVector || isFloat) {
       const caseOffset = usedWords - 3;
       return words[firstQuote.nextOffset] === ACCUSATIVE_CASE_WORD &&
@@ -304,7 +318,12 @@ function markerAt(decoded, offset, expected, role) {
 
 function decodeNumberQuote(decoded, offset, role) {
   const item = decoded.items.find((candidate) => candidate.offset === offset);
-  if (item?.kind !== "quote" || item.quote.word !== NUMBER_QUOTE_WORD && item.quote.family !== "float32") {
+  if (
+    item?.kind !== "quote" ||
+    item.quote.word !== NUMBER_QUOTE_WORD &&
+    item.quote.family !== "float32" &&
+    item.quote.family !== "fixed16"
+  ) {
     throw encodingError("malformed-codelet", `numeric arithmetic codelet has an invalid ${role} quote`, {
       offset,
       actual: item?.quote?.word ?? item?.word
@@ -321,7 +340,8 @@ export function lowerNumericArithmeticSentence(sentence) {
   const role = operandRole(normalized);
   const words = new Uint16Array(CODELET_WORD_COUNT);
   const roleValue = normalized[role];
-  const useFloat = !normalized.ob.ve && typeof roleValue.name !== "string" &&
+  const useFixed16 = normalized.as?.name === "rational";
+  const useFloat = !useFixed16 && !normalized.ob.ve && typeof roleValue.name !== "string" &&
     (!isUnsigned16(normalized.ob.num) || !isUnsigned16(roleValue.num));
   const obWords = normalized.ob.ve
     ? [
@@ -334,7 +354,7 @@ export function lowerNumericArithmeticSentence(sentence) {
         : []),
       ...normalized.ob.ve.values
     ]
-    : scalarQuoteWords(normalized.ob.num, useFloat);
+    : scalarQuoteWords(normalized.ob.num, useFloat, useFixed16);
   const roleWords = roleValue.ve
     ? [
       uintQuoteWord({ vectorThick: vectorThicknessFor(roleValue.ve.values.length), scalarBytes: 2 }),
@@ -345,7 +365,7 @@ export function lowerNumericArithmeticSentence(sentence) {
     ]
     : typeof roleValue.name === "string"
     ? [NAME_TYPE_WORD, ...legacyNameWords(roleValue.name)]
-    : scalarQuoteWords(roleValue.num, useFloat);
+    : scalarQuoteWords(roleValue.num, useFloat, useFixed16);
   const accusativeOffset = 1 + obWords.length;
   const roleCaseOffset = accusativeOffset + 1 + roleWords.length;
   const operatorOffset = roleCaseOffset + 1;
@@ -397,6 +417,7 @@ export function decodeNumericArithmeticCodelet(input) {
     });
   }
   const leftValue = obQuote.quote.value;
+  const fixed16 = obQuote.quote.family === "fixed16";
   if (vectorOb && (!Array.isArray(leftValue) || leftValue.length < 2)) {
     throw encodingError("malformed-codelet", "numeric arithmetic ob vector has an invalid width");
   }
@@ -428,9 +449,15 @@ export function decodeNumericArithmeticCodelet(input) {
   const rightOffset = accusativeOffset + 1;
   const rightQuote = decoded.items.find((candidate) => candidate.offset === rightOffset);
   let right;
-  if (rightQuote?.kind === "quote" && (rightQuote.quote.word === NUMBER_QUOTE_WORD || rightQuote.quote.family === "float32")) {
+  if (
+    rightQuote?.kind === "quote" &&
+    (rightQuote.quote.word === NUMBER_QUOTE_WORD || rightQuote.quote.family === "float32" || rightQuote.quote.family === "fixed16")
+  ) {
     if (rightQuote.quote.nextOffset !== roleCaseOffset) {
       throw encodingError("malformed-codelet", "numeric arithmetic right quote has an invalid boundary");
+    }
+    if ((rightQuote.quote.family === "fixed16") !== fixed16) {
+      throw encodingError("malformed-codelet", "fixed16 arithmetic operands must use matching fixed16 quote types");
     }
     right = { num: rightQuote.quote.value };
   } else if (rightQuote?.kind === "quote") {
@@ -481,6 +508,7 @@ export function decodeNumericArithmeticCodelet(input) {
     ob: vectorOb
       ? { ve: { type: "num", values: leftValue } }
       : { num: decodeNumberQuote(decoded, 1, "ob operand") },
+    ...(fixed16 ? { as: { name: "rational" } } : {}),
     [role]: right
   };
 }
@@ -569,6 +597,20 @@ export async function executeNumericArithmeticCodelet(input, { state } = {}) {
   const leftQuote = decodeQuote(input, 1);
   const rightOffset = leftQuote.nextOffset + 1;
   const rightQuote = decodeQuote(input, rightOffset);
+  if (leftQuote.family === "fixed16" && rightQuote.family === "fixed16") {
+    const numerator = calculateFixed16Numerator(
+      sentence.be,
+      leftQuote.numerator,
+      rightQuote.numerator
+    );
+    return {
+      su: { name: "result" },
+      ob: { num: fixed16ValueFromNumerator(numerator) },
+      as: { name: "rational" },
+      be: "number",
+      mood: "ya"
+    };
+  }
   if (leftQuote.family === "float32" || rightQuote.family === "float32") {
     return {
       su: { name: "result" },

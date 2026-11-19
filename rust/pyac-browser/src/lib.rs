@@ -216,6 +216,12 @@ pub(crate) fn value_to_json(value: &PyacValue) -> Value {
         PyacValue::Unsigned(value) => json!({ "type": "unsigned", "value": value }),
         PyacValue::Signed(value) => json!({ "type": "signed", "value": value }),
         PyacValue::Float32(bits) => json!({ "type": "float32", "value": f32::from_bits(*bits) }),
+        PyacValue::Fixed16(numerator) => json!({
+            "type": "fixed16",
+            "value": f64::from(*numerator) / 46_656.0,
+            "numerator": numerator,
+            "denominator": 46_656
+        }),
         PyacValue::Boolean(value) => json!({ "type": "boolean", "value": value }),
         PyacValue::DateEpochMs(value) => json!({ "type": "date-epoch-ms", "value": value }),
         PyacValue::Vector(values) => vector_to_json(values),
@@ -299,6 +305,23 @@ mod tests {
         assert_eq!(response["ok"], true);
         assert_eq!(response["values"][0]["type"], "float32");
         assert_eq!(response["values"][0]["value"], f64::from(0.1f32 + 0.2f32));
+    }
+
+    #[test]
+    fn wasm_cpu_api_returns_fixed16_results_without_losing_the_numerator() {
+        let codelet = [
+            0x0149, 0xc81d, 23_328, 0x245e, 0xc81d, 11_664, 0x243e, 0x8a64, 0x295e, 0, 0, 0, 0, 0,
+            0, 0,
+        ];
+        let pack = encode_pack(&[codelet]).expect("fixed16 pack encodes");
+        let response: Value =
+            serde_json::from_str(&run_pack(&pack)).expect("response is valid JSON");
+
+        assert_eq!(response["ok"], true);
+        assert_eq!(response["values"][0]["type"], "fixed16");
+        assert_eq!(response["values"][0]["value"], 0.75);
+        assert_eq!(response["values"][0]["numerator"], 34_992);
+        assert_eq!(response["values"][0]["denominator"], 46_656);
     }
 
     #[test]

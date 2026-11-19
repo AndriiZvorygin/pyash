@@ -828,6 +828,60 @@ fn executes_f32_quotes_and_arithmetic_through_the_shared_pack_runtime() {
 }
 
 #[test]
+fn executes_fixed16_quotes_and_arithmetic_through_the_shared_pack_runtime() {
+    let fixed = |left, right, operator| {
+        [
+            0x0149, 0xc81d, left, 0x245e, 0xc81d, right, 0x243e, operator, 0x295e, 0, 0, 0, 0, 0,
+            0, 0,
+        ]
+    };
+    let codelets = [
+        fixed(23_328, 11_664, 0x8a64),
+        fixed(23_328, 11_664, 0xabd2),
+        fixed(23_328, 23_328, 0xec90),
+        fixed(11_664, 23_328, 0x8893),
+    ];
+    let pack = decode_pack(&encode_pack(&codelets).expect("fixed16 pack fits"))
+        .expect("fixed16 pack decodes");
+    assert_eq!(
+        execute_pack(&pack),
+        Ok(vec![
+            PyacValue::Fixed16(34_992),
+            PyacValue::Fixed16(11_664),
+            PyacValue::Fixed16(11_664),
+            PyacValue::Fixed16(23_328),
+        ])
+    );
+
+    let literal = [
+        0x0019, 0xc81d, 5_832, 0x245e, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    ];
+    let pack = decode_pack(&encode_pack(&[literal]).expect("literal pack fits"))
+        .expect("literal pack decodes");
+    assert_eq!(execute_pack(&pack), Ok(vec![PyacValue::Fixed16(5_832)]));
+}
+
+#[test]
+fn shared_pack_runtime_reports_fixed16_range_errors() {
+    let arithmetic = |left, right, operator| {
+        [
+            0x0149, 0xc81d, left, 0x245e, 0xc81d, right, 0x243e, operator, 0x295e, 0, 0, 0, 0, 0,
+            0, 0,
+        ]
+    };
+    let overflow = decode_pack(&encode_pack(&[arithmetic(u16::MAX, 1, 0x8a64)]).unwrap()).unwrap();
+    assert_eq!(
+        execute_pack(&overflow).unwrap_err().code(),
+        "fixed16-domain"
+    );
+    let underflow = decode_pack(&encode_pack(&[arithmetic(0, 1, 0xabd2)]).unwrap()).unwrap();
+    assert_eq!(
+        execute_pack(&underflow).unwrap_err().code(),
+        "fixed16-domain"
+    );
+}
+
+#[test]
 fn shared_pack_runtime_rejects_non_finite_f32_values_and_results() {
     let infinity = [
         0x0031, 0xd01d, 0, 0x7f80, 0x245e, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,

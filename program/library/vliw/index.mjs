@@ -126,7 +126,10 @@ export function lowerSentence(sentence) {
   }
   const hasNonU16Number = [sentence?.ob, sentence?.to, sentence?.from, sentence?.with, sentence?.by]
     .some((value) => typeof value?.num === "number" && (!Number.isInteger(value.num) || value.num < 0 || value.num > 0xffff));
-  if (isNumericArithmeticSentence(sentence) && (sentence.be !== "plus" || sentence.ob?.ve !== undefined || hasNonU16Number)) {
+  if (isNumericArithmeticSentence(sentence) && (
+    sentence.as?.name === "rational" ||
+    sentence.be !== "plus" || sentence.ob?.ve !== undefined || hasNonU16Number
+  )) {
     return [lowerNumericArithmeticSentence(sentence)];
   }
   return [lowerNumericPlusSentence(sentence)];

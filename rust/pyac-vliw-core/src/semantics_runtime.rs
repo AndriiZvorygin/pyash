@@ -121,6 +121,7 @@ pub const VALUE_VECTOR_BOOL: u32 = 6;
 pub const VALUE_BOOLEAN: u32 = 7;
 const VALUE_NUMBER: u32 = 8;
 pub const VALUE_FLOAT32: u32 = 9;
+pub const VALUE_FIXED16: u32 = 10;
 
 pub const ERROR_UNSUPPORTED: u32 = 1;
 pub const ERROR_DIVISION_BY_ZERO: u32 = 2;
@@ -133,6 +134,7 @@ pub const ERROR_STEP_BUDGET: u32 = 8;
 pub const ERROR_PROGRAM_CAPACITY: u32 = 9;
 pub const ERROR_CALL_DEPTH: u32 = 10;
 pub const ERROR_FLOAT_DOMAIN: u32 = 11;
+pub const ERROR_FIXED16_DOMAIN: u32 = 12;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProgramletSection {
@@ -453,6 +455,8 @@ impl ProgramletNumber {
 mod boolean;
 #[path = "semantics_runtime/conditional.rs"]
 mod conditional;
+#[path = "semantics_runtime/fixed16.rs"]
+mod fixed16;
 #[path = "semantics_runtime/float.rs"]
 mod float;
 #[path = "semantics_runtime/numeric.rs"]
@@ -535,6 +539,9 @@ pub fn interpret_group(words: &[u32], start: usize, codelet_count: usize) -> Cor
     }
     let group_len = end - start + 1;
     if group_len == 1 {
+        if let Some(result) = fixed16::single_codelet(words, start) {
+            return result;
+        }
         if let Some(result) = single_codelet(words, start) {
             return result;
         }

@@ -7,7 +7,8 @@ import {
   LETTER_QUOTE_WORD,
   NUMBER_QUOTE_WORD,
   PARAGRAPH_LETTER_QUOTE_WORD,
-  float32QuoteWords
+  float32QuoteWords,
+  fixed16QuoteWords
 } from "./quotes.mjs";
 import { VliwEncodingError } from "./plus.mjs";
 
@@ -65,7 +66,8 @@ function readNumber(value) {
   return value;
 }
 
-function numberQuoteWords(value) {
+function numberQuoteWords(value, fixed16 = false) {
+  if (fixed16) return fixed16QuoteWords(value);
   return Number.isInteger(value) && !Object.is(value, -0) && value >= 0 && value <= 0xffff
     ? [NUMBER_QUOTE_WORD, value]
     : float32QuoteWords(value);
@@ -83,7 +85,14 @@ function normalizeTypedLiteralSentence(sentence) {
     );
   }
 
-  exactKeys(sentence, ["be", "mood", "ob"], "typed literal sentence");
+  const fixed16 = sentence.as !== undefined;
+  if (fixed16 && (sentence.as?.name !== "rational" || Object.keys(sentence.as).length !== 1)) {
+    throw encodingError("unsupported-type", "fixed16 literals require as name rational");
+  }
+  if (fixed16 && sentence.be !== "number") {
+    throw encodingError("unsupported-type", "fixed16 annotation applies only to numeric literals");
+  }
+  exactKeys(sentence, ["be", "mood", "ob", ...(fixed16 ? ["as"] : [])].sort(), "typed literal sentence");
   if (sentence.mood !== "ya" || !["number", "text"].includes(sentence.be)) {
     throw encodingError("unsupported-sentence", "typed literals require mood ya and type number or text", {
       mood: sentence.mood,
@@ -100,6 +109,7 @@ function normalizeTypedLiteralSentence(sentence) {
     return {
       mood: "ya",
       ob: { num: readNumber(sentence.ob.num) },
+      ...(fixed16 ? { as: { name: "rational" } } : {}),
       be: "number"
     };
   }
@@ -152,7 +162,12 @@ export function lowerTypedLiteralSentence(sentence) {
   const normalized = normalizeTypedLiteralSentence(sentence);
   const words = new Uint16Array(CODELET_WORD_COUNT);
   if (normalized.be === "number") {
-    words.set([TYPED_LITERAL_HEAD_WORD, ...numberQuoteWords(normalized.ob.num), ACCUSATIVE_CASE_WORD, REALIS_MOOD_WORD]);
+    words.set([
+      TYPED_LITERAL_HEAD_WORD,
+      ...numberQuoteWords(normalized.ob.num, normalized.as?.name === "rational"),
+      ACCUSATIVE_CASE_WORD,
+      REALIS_MOOD_WORD
+    ]);
   } else if (normalized.ob.text.length === 1) {
     words.set([
       TYPED_LITERAL_HEAD_WORD,
@@ -176,7 +191,7 @@ export function lowerTypedLiteralSentence(sentence) {
     ]);
   }
   const usedWords = normalized.be === "number"
-    ? numberQuoteWords(normalized.ob.num).length + 3
+    ? numberQuoteWords(normalized.ob.num, normalized.as?.name === "rational").length + 3
     : normalized.ob.text.length === 1
     ? TYPED_LITERAL_USED_WORD_COUNT
     : normalized.ob.text.length + 5;
@@ -193,7 +208,12 @@ export function decodeTypedLiteralCodelet(input) {
   markerAt(decoded, 0, TYPED_LITERAL_HEAD_WORD, "head");
 
   const quoteItem = decoded.items.find((candidate) => candidate.offset === 1);
-  if (quoteItem?.kind !== "quote" || ![NUMBER_QUOTE_WORD, LETTER_QUOTE_WORD, PARAGRAPH_LETTER_QUOTE_WORD].includes(quoteItem.quote.word) && quoteItem.quote.family !== "float32") {
+  if (
+    quoteItem?.kind !== "quote" ||
+    ![NUMBER_QUOTE_WORD, LETTER_QUOTE_WORD, PARAGRAPH_LETTER_QUOTE_WORD].includes(quoteItem.quote.word) &&
+    quoteItem.quote.family !== "float32" &&
+    quoteItem.quote.family !== "fixed16"
+  ) {
     throw encodingError("malformed-codelet", "typed literal codelet has an unsupported quote", {
       actual: quoteItem?.quote?.word ?? quoteItem?.word
     });
@@ -210,10 +230,17 @@ export function decodeTypedLiteralCodelet(input) {
     });
   }
 
-  if (quoteItem.quote.word === NUMBER_QUOTE_WORD || quoteItem.quote.family === "float32") {
+  if (
+    quoteItem.quote.word === NUMBER_QUOTE_WORD ||
+    quoteItem.quote.family === "float32" ||
+    quoteItem.quote.family === "fixed16"
+  ) {
     return {
       mood: "ya",
-      ob: { num: quoteItem.quote.family === "float32" ? quoteItem.quote.value : readNumber(quoteItem.quote.value) },
+      ob: { num: quoteItem.quote.family === "float32" || quoteItem.quote.family === "fixed16"
+        ? quoteItem.quote.value
+        : readNumber(quoteItem.quote.value) },
+      ...(quoteItem.quote.family === "fixed16" ? { as: { name: "rational" } } : {}),
       be: "number"
     };
   }

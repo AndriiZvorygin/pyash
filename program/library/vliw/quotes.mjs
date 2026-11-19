@@ -1,5 +1,21 @@
 import pyashWords from "../pyashWords.json" with { type: "json" };
 import { decodePyacWord } from "./word_code.mjs";
+import {
+  FIXED16_SCALE,
+  fixed16ValueFromNumerator
+} from "./fixed16.mjs";
+
+export {
+  FIXED16_MAX_NUMERATOR,
+  FIXED16_QUOTE_WORD,
+  FIXED16_SCALE,
+  fixed16NumeratorFromNumber,
+  fixed16NumeratorFromBase6,
+  fixed16NumeratorQuoteWords,
+  fixed16QuoteWords,
+  fixed16QuoteWordsFromBase6,
+  fixed16ValueFromNumerator
+} from "./fixed16.mjs";
 
 export const QUOTE_DENOTE = 0x001d;
 export const QUOTE_DENOTE_MASK = 0x001f;
@@ -189,8 +205,8 @@ export function quoteWordFor({ sort = UINT_SORT_DENOTE, vectorThick = 0, scalarB
   if (![LETTER_SORT_DENOTE, WORD_SORT_DENOTE, UINT_SORT_DENOTE, INT_SORT_DENOTE, FLOAT_SORT_DENOTE].includes(sort)) {
     throw quoteError("unsupported-quote", "no legacy quote sort matches the requested sort", { sort });
   }
-  if (sort === FLOAT_SORT_DENOTE && (scalarBytes !== 4 || vectorThick !== 0)) {
-    throw quoteError("unsupported-quote", "legacy float quotes currently support only scalar f32 values", {
+  if (sort === FLOAT_SORT_DENOTE && (![2, 4].includes(scalarBytes) || vectorThick !== 0)) {
+    throw quoteError("unsupported-quote", "legacy float quotes support scalar fixed16 and f32 values", {
       scalarBytes,
       vectorThick
     });
@@ -281,6 +297,20 @@ function dynamicQuoteDescriptor(word) {
       };
     }
     return null;
+  }
+  if (
+    header.sortName === "float" &&
+    header.scalarBytes === 2 &&
+    header.vectorThick === 0 &&
+    header.vectorWords === 1
+  ) {
+    return {
+      word,
+      family: "fixed16",
+      payloadWords: 1,
+      valueType: "fixed16",
+      supported: true
+    };
   }
   if (
     header.sortName === "float" &&
@@ -466,12 +496,17 @@ export function decodeQuote(words, offset = 0) {
         payload
       });
     }
+  } else if (descriptor.family === "fixed16") {
+    value = fixed16ValueFromNumerator(payload[0]);
   }
   return {
     ...descriptor,
     payloadWords,
     payload,
     value,
+    ...(descriptor.family === "fixed16"
+      ? { numerator: payload[0], denominator: FIXED16_SCALE }
+      : {}),
     lengthWord,
     nextOffset: end
   };

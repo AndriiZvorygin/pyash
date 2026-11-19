@@ -629,6 +629,7 @@ fn decode_programlet_result(
         pyac_vliw_core::VALUE_UNSIGNED => PyacValue::Unsigned(u64::from(output[4])),
         pyac_vliw_core::VALUE_SIGNED => PyacValue::Signed(i64::from(output[4] as i32)),
         pyac_vliw_core::VALUE_FLOAT32 => PyacValue::Float32(output[4]),
+        pyac_vliw_core::VALUE_FIXED16 => PyacValue::Fixed16(output[4] as u16),
         pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(output[4] != 0),
         kind => return Err(format!("programlet: unsupported GPU result kind {kind}")),
     };
@@ -677,6 +678,7 @@ fn decode_section_records(
             pyac_vliw_core::VALUE_UNSIGNED => PyacValue::Unsigned(u64::from(result[4])),
             pyac_vliw_core::VALUE_SIGNED => PyacValue::Signed(i64::from(result[4] as i32)),
             pyac_vliw_core::VALUE_FLOAT32 => PyacValue::Float32(result[4]),
+            pyac_vliw_core::VALUE_FIXED16 => PyacValue::Fixed16(result[4] as u16),
             pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(result[4] != 0),
             kind => {
                 return Err(format!(
@@ -723,6 +725,7 @@ fn decode_results(
                 PyacValue::Signed((u64::from(data[0]) | (u64::from(data[1]) << 32)) as i64)
             }
             pyac_vliw_core::VALUE_FLOAT32 => PyacValue::Float32(data[0]),
+            pyac_vliw_core::VALUE_FIXED16 => PyacValue::Fixed16(data[0] as u16),
             pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(data[0] != 0),
             pyac_vliw_core::VALUE_DATE => {
                 PyacValue::DateEpochMs(u64::from(data[0]) | (u64::from(data[1]) << 32))
@@ -759,6 +762,12 @@ fn value_json(value: &PyacValue) -> Value {
         PyacValue::Unsigned(value) => json!({"type": "unsigned", "value": value}),
         PyacValue::Signed(value) => json!({"type": "signed", "value": value}),
         PyacValue::Float32(bits) => json!({"type": "float32", "value": f32::from_bits(*bits)}),
+        PyacValue::Fixed16(numerator) => json!({
+            "type": "fixed16",
+            "value": f64::from(*numerator) / 46_656.0,
+            "numerator": numerator,
+            "denominator": 46_656
+        }),
         PyacValue::Boolean(value) => json!({"type": "boolean", "value": value}),
         PyacValue::DateEpochMs(value) => json!({"type": "date-epoch-ms", "value": value}),
         PyacValue::Vector(VectorElements::Numbers(values)) => {
@@ -842,6 +851,11 @@ mod tests {
             .unwrap(),
             vec![PyacValue::Float32(1.25f32.to_bits())]
         );
+        assert_eq!(
+            decode_programlet_result(6, &result_record(pyac_vliw_core::VALUE_FIXED16, 23_328))
+                .unwrap(),
+            vec![PyacValue::Fixed16(23_328)]
+        );
     }
 
     #[test]
@@ -862,6 +876,31 @@ mod tests {
         assert_eq!(
             value_json(&PyacValue::Float32(bits)),
             json!({ "type": "float32", "value": f32::from_bits(bits) })
+        );
+    }
+
+    #[test]
+    fn decodes_fixed16_codelet_results_and_json_values() {
+        let mut codelet = [0; pyac::WORDS_PER_CODELET];
+        codelet[0] = 1;
+        let mut output = vec![0; RESULT_STRIDE];
+        output[0] = pyac_vliw_core::VALUE_FIXED16;
+        output[2] = 1;
+        output[3] = 1;
+        output[4] = 23_328;
+
+        assert_eq!(
+            decode_results(&[codelet], &output).unwrap(),
+            vec![PyacValue::Fixed16(23_328)]
+        );
+        assert_eq!(
+            value_json(&PyacValue::Fixed16(23_328)),
+            json!({
+                "type": "fixed16",
+                "value": 0.5,
+                "numerator": 23_328,
+                "denominator": 46_656
+            })
         );
     }
 
