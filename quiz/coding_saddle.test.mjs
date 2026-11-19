@@ -16,6 +16,7 @@ import {
   buildSessionNameForDate,
   buildSessionNamePrefix
 } from "../program/agent/session.mjs";
+import { renderSaddleMarkdown } from "../program/agent/coding_saddle_tui.mjs";
 import {
   getCodingSaddleProfile,
   readCodingSaddleState,
@@ -321,6 +322,40 @@ test("coding saddle redraw layout wraps long lines once and preserves the cursor
   assert.deepEqual(multiline.lines, ["pyash> first", "second"]);
   assert.equal(multiline.cursorRow, 1);
   assert.equal(multiline.cursorColumn, 6);
+});
+
+test("coding saddle measures wide characters in terminal columns for wrapping and cursor placement", () => {
+  const input = layoutSaddleInput({ value: "安a", cursor: 1, label: "pyash> ", columns: 10 });
+  assert.deepEqual(input.lines, ["pyash> 安", "a"]);
+  assert.equal(input.cursorRow, 1);
+  assert.equal(input.cursorColumn, 0);
+
+  const markdown = renderSaddleMarkdown(`${"1".repeat(51)} 安德里 okay`, { width: 57, color: false });
+  const terminalWidth = (line) => [...line].reduce((width, character) => {
+    const codePoint = character.codePointAt(0);
+    const wide = codePoint >= 0x1100 && (
+      codePoint <= 0x115f
+      || codePoint === 0x2329
+      || codePoint === 0x232a
+      || (codePoint >= 0x2e80 && codePoint <= 0xa4cf)
+      || (codePoint >= 0xac00 && codePoint <= 0xd7a3)
+      || (codePoint >= 0xf900 && codePoint <= 0xfaff)
+      || (codePoint >= 0xfe10 && codePoint <= 0xfe6f)
+      || (codePoint >= 0xff00 && codePoint <= 0xff60)
+      || (codePoint >= 0xffe0 && codePoint <= 0xffe6)
+      || (codePoint >= 0x1f300 && codePoint <= 0x1faff)
+      || (codePoint >= 0x20000 && codePoint <= 0x3fffd)
+    );
+    return width + (wide ? 2 : 1);
+  }, 0);
+  assert.ok(markdown.every((line) => terminalWidth(line) <= 57), markdown.join("\\n"));
+});
+
+test("coding saddle keeps UTF-8 characters intact across input chunks", () => {
+  const decoder = createSaddleInputDecoder();
+  const bytes = Buffer.from("安德里", "utf8");
+  for (const byte of bytes) decoder.feed(Buffer.from([byte]));
+  assert.equal(decoder.getState().value, "安德里");
 });
 
 test("coding saddle supports cursor editing and control actions", () => {

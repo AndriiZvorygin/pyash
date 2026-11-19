@@ -61,12 +61,14 @@ test("coding saddle streams one accumulated Markdown response without duplicatin
   ui.enter();
   ui.writeLine("saddle>");
   const stream = ui.beginMarkdownStream();
-  ui.appendMarkdownStream(stream, "**A streamed ");
-  ui.appendMarkdownStream(stream, "answer**\n\n- item");
-  ui.replaceMarkdownStream(stream, "**A streamed answer**\n\n- item");
-  const output = writes.join("");
-  assert.match(output, /A streamed answer/u);
-  assert.match(output, /• item/u);
+  ui.appendMarkdownStream(stream, "**An de li — 安");
+  ui.appendMarkdownStream(stream, "德里 — peace virtue inside.**\n\n- item");
+  ui.replaceMarkdownStream(stream, "**An de li — 安德里 — peace virtue inside.**\n\n- item");
+  const lastFrame = stripTerminalControlSequences(writes.at(-1));
+  assert.match(lastFrame, /An de li — 安德里 — peace virtue inside\./u);
+  assert.match(lastFrame, /• item/u);
+  assert.equal((lastFrame.match(/peace virtue inside\./gu) ?? []).length, 1,
+    "the final screen frame must contain streamed text exactly once");
   assert.equal(ui.getState().itemCount, 2);
   ui.exit();
 });

@@ -17,7 +17,7 @@ function waitForOutput(getOutput, needle, { timeoutMs = 30000, afterIndex = 0 } 
   const startedAt = Date.now();
   return new Promise((resolve, reject) => {
     const poll = () => {
-      const output = stripTerminalControlSequences(getOutput());
+      const output = stripTerminalControlSequences(getOutput()).replace(/\s+/gu, " ");
       if (output.indexOf(needle, afterIndex) >= 0) {
         resolve(output);
         return;
@@ -36,7 +36,7 @@ function waitForOutputAfter(getOutput, marker, needle, { timeoutMs = 30000 } = {
   const startedAt = Date.now();
   return new Promise((resolve, reject) => {
     const poll = () => {
-      const output = stripTerminalControlSequences(getOutput());
+      const output = stripTerminalControlSequences(getOutput()).replace(/\s+/gu, " ");
       const markerIndex = output.indexOf(marker);
       if (markerIndex >= 0 && output.indexOf(needle, markerIndex + marker.length) >= 0) {
         resolve(output);
@@ -52,7 +52,38 @@ function waitForOutputAfter(getOutput, marker, needle, { timeoutMs = 30000 } = {
   });
 }
 
-test("saddle CLI switches Ollama models in a PTY and completes the first turn", async () => {
+function latestFrameRows(transcript) {
+  const start = transcript.lastIndexOf("\u001b[?25l\u001b[H");
+  if (start < 0) return [];
+  const frame = transcript.slice(start);
+  const end = frame.indexOf("\u001b[?25h");
+  if (end < 0) return [];
+  return frame.slice("\u001b[?25l\u001b[H".length, end)
+    .split("\u001b[1B\r")
+    .map((line) => stripTerminalControlSequences(line).replace(/\r/gu, ""));
+}
+
+function waitForVisibleFrame(getOutput, needle, { timeoutMs = 30000 } = {}) {
+  const startedAt = Date.now();
+  return new Promise((resolve, reject) => {
+    const poll = () => {
+      const rows = latestFrameRows(getOutput());
+      const screen = rows.join("\n");
+      if (screen.replace(/\s+/gu, " ").includes(needle.replace(/\s+/gu, " "))) {
+        resolve({ rows, screen });
+        return;
+      }
+      if (Date.now() - startedAt >= timeoutMs) {
+        reject(new Error(`timed out waiting for visible screen text ${JSON.stringify(needle)}\n${screen.slice(-6000)}`));
+        return;
+      }
+      setTimeout(poll, 20);
+    };
+    poll();
+  });
+}
+
+test("saddle CLI shows an unsent Unicode draft, renders a wide-character response, and switches models in a PTY", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-pty-"));
   const projectRoot = path.join(tempRoot, "project");
   const projectWorldRoot = resolveSaddleProjectWorldRoot({ runtimeRoot, cwd: projectRoot });
@@ -110,7 +141,10 @@ test("saddle CLI switches Ollama models in a PTY and completes the first turn", 
       const hasToolResult = messages.some((message) => message?.role === "tool");
       let message;
       if (payload.model === firstModel) {
-        message = { role: "assistant", content: "Qwen first model turn passed." };
+        message = {
+          role: "assistant",
+          content: `Qwen first model turn passed. ${"1".repeat(51)} 安德里 okay. The name and the practice are the same statement.`
+        };
       } else if (hasToolResult) {
         message = { role: "assistant", content: "Spark first turn passed after the internal runner call was blocked." };
       } else {
@@ -167,7 +201,7 @@ test("saddle CLI switches Ollama models in a PTY and completes the first turn", 
   try {
     child = pty.spawn(process.execPath, [path.join(runtimeRoot, "command", "pyash.mjs"), "saddle"], {
       name: "xterm-256color",
-      cols: 120,
+      cols: 58,
       rows: 40,
       cwd: projectRoot,
       env
@@ -178,14 +212,28 @@ test("saddle CLI switches Ollama models in a PTY and completes the first turn", 
       resolveChildExit(event);
     });
 
-    const restoredMarker = `session: ${sessionName} | restored 0 saved messages`;
-    await waitForOutputAfter(() => transcript, restoredMarker, "pyash>", { timeoutMs: 90000 });
-    child.write("first model check\r");
+    await waitForOutput(() => transcript, "restored 0 saved messages", { timeoutMs: 90000 });
+    await waitForVisibleFrame(() => transcript, "pyash>", { timeoutMs: 90000 });
+    const draft = `typed ${"x".repeat(42)} 安德里`;
+    child.write(draft);
+    const draftScreen = await waitForVisibleFrame(() => transcript, `pyash> ${draft}`);
+    assert.equal(submissions.length, 0, "typing a draft must not send a model request before Enter");
+    assert.ok(draftScreen.rows.some((line) => line.includes("pyash> ")), "the unsent draft must be visible in the prompt row");
+    child.write("\r");
     await waitForOutputAfter(() => transcript, "Qwen first model turn passed.", "pyash>");
+    const responseScreen = await waitForVisibleFrame(() => transcript, "The name and the practice are the same statement.");
+    const normalizedResponse = responseScreen.screen.replace(/[ \t\n]+/gu, " ");
+    assert.ok(normalizedResponse.includes(draft), "the submitted prompt must remain visible in the transcript");
+    assert.match(normalizedResponse, /安德里 okay/u, "the response must preserve wide characters and neighboring words");
+    assert.equal((normalizedResponse.match(/same statement\./gu) ?? []).length, 1,
+      "the PTY screen must render the final response once, without duplicated chunks");
+    assert.ok(submissions.some((payload) => payload.model === firstModel
+      && payload.messages?.some((message) => message?.role === "user" && message.content === draft)),
+    "Enter must submit exactly the visible draft");
 
     child.write(`/model ${secondModel}\r`);
-    const selectionMarker = `saved model selection for session: ${sessionName}`;
-    await waitForOutputAfter(() => transcript, selectionMarker, "pyash>");
+    await waitForOutput(() => transcript, "saved model selection for session");
+    await waitForVisibleFrame(() => transcript, "pyash>");
     child.write("hi\r");
     await waitForOutput(() => transcript, "Spark first turn passed after the internal runner call was blocked.");
 
