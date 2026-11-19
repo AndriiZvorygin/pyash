@@ -233,13 +233,13 @@ correctness and interpretability criteria.
 
 The shared Rust semantics in `rust/pyac-vliw-core/src/semantics_runtime.rs` include
 integer and boolean behavior, scalar IEEE float32 (`VALUE_FLOAT32`), scalar fixed16
-(`VALUE_FIXED16`), and integer vectors. The float quote sort also encodes finite IEEE
-float32 and float64 vector literals, with little-endian payloads; the shared CPU/GPU
-runtime returns both as typed vectors. A single 16-word codelet
-holds at most five unnamed float32 values or three unnamed float64 values (fewer when
-the name phrase consumes words). Longer indexed sentence serialization is not yet
-long-vector execution in the Rust runtime. Programlet slots remain scalar typed
-values; this is not yet a general tensor or matrix data model.
+(`VALUE_FIXED16`), and typed integer/boolean/float32/float64 vector literals. Vector
+quotes use the legacy width field or its following 16-bit explicit count and continue
+through indexed codelets. Execution is bounded to 16 lanes; this is a hardware vector
+width, not an arbitrary array length. Variable-length arrays, including text arrays,
+need a separate storage extent and indexed-access model; numeric arrays can be processed
+in vector-width chunks. Programlet slots remain scalar typed values, so this is not yet
+a general tensor or matrix data model.
 
 The current fixed16 quote carries an unsigned 16-bit numerator `n`; its divisor is the
 implicit fixed constant 46,656 (`6^6`), not a per-value denominator field:

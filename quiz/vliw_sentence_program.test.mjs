@@ -194,17 +194,19 @@ test("long quote length may cross an indexed codelet boundary", () => {
   assert.deepEqual(decodePyashProgram(lowered.vectors), [sentence]);
 });
 
-test("ordinary numeric vectors use indexed continuations and preserve following sentences", () => {
-  const values = Array.from({ length: 40 }, (_, index) => index === 15 ? 0 : index + 1);
+test("sixteen-lane numeric vectors use indexed continuation and preserve following sentences", () => {
+  const values = Array.from({ length: 16 }, (_, index) => index === 15 ? 0 : index + 1);
   const sentences = [
     parse(`ob ve num ${values.join(" ")} be vector ya`),
     parse("ob num 9 be number ya")
   ];
   const lowered = lowerPyashProgram(sentences);
 
-  assert.ok(lowered.vectors.length > 3);
+  assert.equal(lowered.vectors.length, 3);
   assert.ok(lowered.vectors.every((vector) => vector.length === 16));
-  assert.ok(lowered.vectors.slice(0, -1).some((vector) => (vector[0] & 1) === 0));
+  assert.equal(lowered.vectors[0][1], 0x8c1d);
+  assert.equal(lowered.vectors[0][0] & 1, 0);
+  assert.notEqual(lowered.vectors[1][0], values[0], "continuation codelets keep an index word");
   assert.deepEqual(decodePyashProgram(lowered.vectors), sentences);
 });
 

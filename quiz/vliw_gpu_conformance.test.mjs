@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { decodePyacPack } from "../program/library/vliw/database.mjs";
+import { decodePyacPack, encodePyacPack } from "../program/library/vliw/database.mjs";
+import { parse } from "../program/understand/index.mjs";
+import { lowerSentence } from "../program/library/vliw/index.mjs";
 import { executePyashProgramPack } from "../program/library/vliw/programlet.mjs";
 import {
   buildVliwGpuConformanceCases,
@@ -55,6 +57,11 @@ test("VLIW GPU conformance matrix covers the merged typed and control-flow contr
     "vector-arithmetic",
     "float32-vector-literal",
     "float64-vector-literal",
+    "uint16-vector-sixteen-lanes",
+    "boolean-vector-sixteen-lanes",
+    "float32-vector-sixteen-lanes",
+    "float64-vector-sixteen-lanes",
+    "float32-vector-explicit-six-count",
     "boolean-not-literal",
     "boolean-and-literals",
     "boolean-or-literals",
@@ -102,6 +109,36 @@ test("Rust CPU reference matches nested bounded-loop and boolean-composition pac
   const rustValues = executeRustCpuReference(selected.map(({ pack }) => pack));
 
   assert.deepEqual(rustValues, selected.map(({ referenceValues }) => referenceValues));
+});
+
+test("Rust CPU executes indexed typed vectors through the sixteen-lane boundary", () => {
+  const cases = [
+    {
+      source: `ob ve num ${Array.from({ length: 16 }, (_, index) => index).join(" ")} be vector ya`,
+      expected: { type: "vector", elementType: "unsigned-16", values: Array.from({ length: 16 }, (_, index) => index) }
+    },
+    {
+      source: `ob ve bool ${Array.from({ length: 16 }, (_, index) => index % 2 ? "lie" : "truth").join(" ")} be vector ya`,
+      expected: { type: "vector", elementType: "boolean", values: Array.from({ length: 16 }, (_, index) => index % 2 === 0) }
+    },
+    {
+      source: `ob ve float32 ${Array.from({ length: 16 }, (_, index) => index + 0.25).join(" ")} be vector ya`,
+      expected: { type: "vector", elementType: "float32", values: Array.from({ length: 16 }, (_, index) => index + 0.25) }
+    },
+    {
+      source: `ob ve float64 ${Array.from({ length: 16 }, (_, index) => index + 0.125).join(" ")} be vector ya`,
+      expected: { type: "vector", elementType: "float64", values: Array.from({ length: 16 }, (_, index) => index + 0.125) }
+    },
+    {
+      source: "ob ve float32 1 2 3 4 5 6 be vector ya",
+      expected: { type: "vector", elementType: "float32", values: [1, 2, 3, 4, 5, 6] }
+    }
+  ];
+  const packs = cases.map(({ source }) => encodePyacPack(
+    lowerSentence(parse(source)).map(({ words }) => words)
+  ));
+  const results = executeRustCpuReference(packs).map(([value]) => value);
+  assert.deepEqual(results, cases.map(({ expected }) => expected));
 });
 
 test("Rust GPU conformance queues all cases and checks exact typed results", async () => {

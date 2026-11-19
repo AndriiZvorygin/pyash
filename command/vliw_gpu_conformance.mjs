@@ -26,6 +26,11 @@ function codeletPack(name, sources, expectedValues) {
   return { name, kind: "codelets", pack: encodePyacPack(codelets), expectedValues };
 }
 
+function vectorPack(name, source, expectedValues) {
+  const vectors = lowerPyashProgram([parse(source)]).vectors;
+  return { name, kind: "codelets", pack: encodePyacPack(vectors), expectedValues };
+}
+
 function normalizeReferenceValue(value, numericType = null) {
   const result = value?.ob ?? value;
   if (typeof result?.boolean === "boolean") return { type: "boolean", value: result.boolean };
@@ -52,10 +57,13 @@ function normalizeReferenceValue(value, numericType = null) {
           : vector.values.some((entry) => entry < 0)
             ? "signed-16"
             : vector.values.some((entry) => entry > 0xffff) ? "unsigned-32" : "unsigned-16";
+    const values = vector.type === "bool"
+      ? vector.values.map((entry) => entry === "truth" || entry === true)
+      : vector.values;
     return {
       type: "vector",
       elementType,
-      values: vector.values
+      values
     };
   }
   throw new TypeError(`VLIW conformance reference returned an unsupported value: ${JSON.stringify(value)}`);
@@ -79,7 +87,7 @@ async function evaluateReference(testCase) {
       return normalizeReferenceValue(fact, numericType);
     });
   } catch (error) {
-    if (error?.code !== "unsupported-codelet") throw error;
+    if (!new Set(["unsupported-codelet", "malformed-quote"]).has(error?.code)) throw error;
   }
 
   const sentences = decodePyashProgram(decoded.codelets);
@@ -87,6 +95,10 @@ async function evaluateReference(testCase) {
   try {
     const values = [];
     for (const sentence of sentences) {
+        if (sentence.be === "vector") {
+          values.push(normalizeReferenceValue(sentence.ob));
+          continue;
+        }
       const outcome = await interpret(sentence);
       const result = remember("result");
       if (result?.ob !== undefined) {
@@ -325,6 +337,31 @@ export async function buildVliwGpuConformanceCases() {
       "float64-vector-literal",
       "ob ve float64 3.141592653589793 -0.5 -0 be vector ya",
       [{ type: "vector", elementType: "float64", values: [Math.PI, -0.5, -0] }]
+    ),
+    vectorPack(
+      "uint16-vector-sixteen-lanes",
+      `ob ve num ${Array.from({ length: 16 }, (_, index) => index).join(" ")} be vector ya`,
+      [{ type: "vector", elementType: "unsigned-16", values: Array.from({ length: 16 }, (_, index) => index) }]
+    ),
+    vectorPack(
+      "boolean-vector-sixteen-lanes",
+      `ob ve bool ${Array.from({ length: 16 }, (_, index) => index % 2 ? "lie" : "truth").join(" ")} be vector ya`,
+      [{ type: "vector", elementType: "boolean", values: Array.from({ length: 16 }, (_, index) => index % 2 === 0) }]
+    ),
+    vectorPack(
+      "float32-vector-sixteen-lanes",
+      `ob ve float32 ${Array.from({ length: 16 }, (_, index) => index + 0.25).join(" ")} be vector ya`,
+      [{ type: "vector", elementType: "float32", values: Array.from({ length: 16 }, (_, index) => index + 0.25) }]
+    ),
+    vectorPack(
+      "float64-vector-sixteen-lanes",
+      `ob ve float64 ${Array.from({ length: 16 }, (_, index) => index + 0.125).join(" ")} be vector ya`,
+      [{ type: "vector", elementType: "float64", values: Array.from({ length: 16 }, (_, index) => index + 0.125) }]
+    ),
+    vectorPack(
+      "float32-vector-explicit-six-count",
+      "ob ve float32 1 2 3 4 5 6 be vector ya",
+      [{ type: "vector", elementType: "float32", values: [1, 2, 3, 4, 5, 6] }]
     ),
     codeletPack(
       "boolean-not-literal",

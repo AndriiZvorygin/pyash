@@ -76,10 +76,9 @@ the compatibility table. `decodeCodelet` MUST validate all index, quote,
 continuation, HNUC, type, and dependency metadata. `executeCodelets` MUST
 return sentence/paragraph-shaped results and preserve the same semantic
 effects as interpreted execution. The current JavaScript reference facade
-implements these interfaces for the proven numeric-plus and typed-literal
+implements these interfaces for proven numeric-plus, typed-literal, and vector
 adapters and rejects other semantic codelets explicitly. The host language,
-OpenCL, or another
-backend is an implementation choice behind this boundary.
+OpenCL, or another backend is an implementation choice behind this boundary.
 
 A destination compiles a codelet into machine code that computes the result the
 interpreter produces. It MAY use native target capabilities or lower operations
@@ -166,7 +165,40 @@ write rejection, zero initialization, page-bound checks, and frame cleanup on
 return. These cases are acceptance requirements for the future runtime; they
 do not imply current implementation coverage.
 
-## 9. Non-goals
+## 9. Vector values and arrays
+
+A vector quote is one typed hardware value with at most 16 lanes in the current
+shared Rust CPU/GPU runtime. It is not an arbitrary-length collection. Finite
+binary32 and binary64 lanes use legacy float sort 6, preserve their IEEE bit
+patterns, and serialize their 16-bit payload words in little-endian order.
+Unsigned integer and boolean vectors retain their existing legacy sorts.
+
+For binary32, `0xd41d` denotes the fixed 16-lane form followed by 32 payload
+words (two words per lane). `0xd61d 0x0006` denotes an explicit six-lane form:
+the count word is the number of lanes, followed by 12 payload words. It is not
+a codelet count or payload-word count. Binary64 payloads use four words per
+lane. A decoder MUST reject unsupported types, malformed counts, non-finite
+float values, and widths above 16.
+
+Word zero of every codelet remains its index. Vector payloads that continue
+across codelets use indexed continuation, not raw quote blocks. The decoder
+collects the indexed words through the completion marker, then validates the
+typed quote and sentence cases. Continuation MUST preserve lane order and
+cannot consume the next sentence. Fixed-width vectors are results and inputs;
+mutable programlet slots remain scalar in this runtime.
+
+Text vectors also have at most 16 lanes. Each lane is an ordinary typed text
+quote, and a long text lane uses the existing length-framed paragraph quote.
+Text lanes are not packed into the numeric vector sort.
+
+An array is the representation for a variable-length collection, including
+text elements. It has a storage extent and indexed access; it is distinct from
+a vector quote and is not constrained to 16 elements. Numeric arrays may be
+processed in vector-width chunks, while text arrays retain their element
+boundaries. This section establishes that type distinction; it does not define
+an array storage ABI or mutable array operations.
+
+## 10. Non-goals
 
 This specification does not add HNUCs, alter parser vocabulary, define the
 catalog/container database, require a GPU, introduce a model server or queue,
@@ -177,7 +209,7 @@ not replace the current sentence/paragraph interpreter. The only
 conforming future implementation is one that can prove the sentence result
 and the legacy encoding bytes agree.
 
-## 10. Implementation references
+## 11. Implementation references
 
 The proven numeric-plus, quote, fixed-slot, typed-literal, named-fact, database,
 and facade slices are documented with their fixtures and implementation paths

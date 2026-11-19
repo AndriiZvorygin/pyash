@@ -254,7 +254,8 @@ function scanQuoteWord(word, state) {
     if (quote.word === PARAGRAPH_LETTER_QUOTE_WORD && word > 14) {
       return word;
     }
-    state.payloadWords = word * (quote.scalarBytes / 2);
+    const payloadWords = word * (quote.scalarBytes / 2);
+    state.payloadWords = payloadWords;
     return null;
   }
   if ((word & QUOTE_DENOTE_MASK) !== QUOTE_DENOTE) return null;
@@ -270,7 +271,8 @@ function scanQuoteWord(word, state) {
     return null;
   }
   if (header.vectorWords !== null && header.scalarBytes !== null) {
-    state.payloadWords = header.vectorWords * (header.scalarBytes / 2);
+    const payloadWords = header.vectorWords * (header.scalarBytes / 2);
+    state.payloadWords = payloadWords;
   }
   return null;
 }

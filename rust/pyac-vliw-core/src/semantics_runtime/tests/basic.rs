@@ -1,5 +1,20 @@
 use super::*;
 
+fn indexed_codelets(words: &[u32]) -> std::vec::Vec<[u32; CODELET_WORDS]> {
+    let chunks = words.chunks(CODELET_WORDS - 1);
+    let chunk_count = chunks.len();
+    words
+        .chunks(CODELET_WORDS - 1)
+        .enumerate()
+        .map(|(index, chunk)| {
+            let mut codelet = [0u32; CODELET_WORDS];
+            codelet[0] = u32::from(index + 1 == chunk_count);
+            codelet[1..chunk.len() + 1].copy_from_slice(chunk);
+            codelet
+        })
+        .collect()
+}
+
 #[test]
 fn scans_named_programlet_sections_as_independent_body_ranges() {
     let mut words = std::vec::Vec::new();
@@ -202,6 +217,69 @@ fn executes_f32_and_f64_vector_literals_in_the_shared_core() {
             (f64_values[1] >> 32) as u32,
         ]
     );
+}
+
+#[test]
+fn executes_max_width_float_vectors_across_indexed_codelets() {
+    let f32_bits = (1..=16)
+        .map(|value| (value as f32 + 0.25).to_bits())
+        .collect::<std::vec::Vec<_>>();
+    let mut f32_words = std::vec![0xd41d];
+    f32_words.extend(f32_bits.iter().flat_map(|bits| [bits & 0xffff, bits >> 16]));
+    f32_words.extend([ACCUSATIVE, REALIS]);
+    let f32_codelets = indexed_codelets(&f32_words);
+    let result = interpret(&f32_codelets);
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.value_kind, VALUE_VECTOR_FLOAT32);
+    assert_eq!(result.length, 16);
+    assert_eq!(&result.values[..16], f32_bits.as_slice());
+
+    let f64_bits = (1..=16)
+        .map(|value| (value as f64 + 0.125).to_bits())
+        .collect::<std::vec::Vec<_>>();
+    let mut f64_words = std::vec![0xdc1d];
+    f64_words.extend(f64_bits.iter().flat_map(|bits| {
+        [
+            *bits as u16 as u32,
+            (*bits >> 16) as u16 as u32,
+            (*bits >> 32) as u16 as u32,
+            (*bits >> 48) as u16 as u32,
+        ]
+    }));
+    f64_words.extend([ACCUSATIVE, REALIS]);
+    let f64_codelets = indexed_codelets(&f64_words);
+    let result = interpret(&f64_codelets);
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.value_kind, VALUE_VECTOR_FLOAT64);
+    assert_eq!(result.length, 16);
+    for (index, bits) in f64_bits.iter().enumerate() {
+        assert_eq!(result.values[index * 2], *bits as u32);
+        assert_eq!(result.values[index * 2 + 1], (*bits >> 32) as u32);
+    }
+}
+
+#[test]
+fn executes_explicit_six_lane_float_vector_from_its_length_word() {
+    let mut words = std::vec![0xd61d, 6];
+    let values = [1.0f32, 2.0, 3.0, 4.0, 5.0, 6.0].map(f32::to_bits);
+    words.extend(values.iter().flat_map(|bits| [bits & 0xffff, bits >> 16]));
+    words.extend([ACCUSATIVE, REALIS]);
+    let codelets = indexed_codelets(&words);
+    let result = interpret(&codelets);
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.value_kind, VALUE_VECTOR_FLOAT32);
+    assert_eq!(result.length, 6);
+    assert_eq!(&result.values[..6], &values);
+    assert_eq!(result.consumed_codelets, codelets.len() as u32);
+}
+
+#[test]
+fn rejects_explicit_vector_width_above_the_execution_limit() {
+    let mut words = std::vec![0xd61d, 17];
+    words.extend(std::iter::repeat_n(0, 17 * 2));
+    words.extend([ACCUSATIVE, REALIS]);
+    let result = interpret(&indexed_codelets(&words));
+    assert_eq!(result.error, ERROR_VECTOR_WIDTH);
 }
 
 #[test]

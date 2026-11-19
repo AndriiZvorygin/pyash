@@ -6,6 +6,7 @@ import {
   decodePyashProgram,
   lowerPyashProgram,
   decodeCodelet,
+  decodeVectorSequence,
   executeCodelets,
   lowerSentence
 } from "../program/library/vliw/index.mjs";
@@ -76,6 +77,87 @@ test("long float32 vectors use indexed continuation without changing the quote k
   assert.deepEqual(decoded.ob.ve.values, values.map(Math.fround));
 });
 
+test("sixteen float32 lanes use the bounded quote width and indexed continuation", () => {
+  const values = Array.from({ length: 16 }, (_, index) => index + 1);
+  const sentence = parse(`ob ve float32 ${values.join(" ")} be vector ya`);
+  const program = lowerPyashProgram([sentence]);
+  assert.equal(program.vectors.length, 3);
+  assert.equal(program.vectors[0][1], 0xd41d);
+  assert.notEqual(program.vectors[1][0], 0, "the continuation remains indexed");
+  assert.deepEqual(decodePyashProgram(program.vectors)[0].ob.ve.values, values);
+});
+
+test("declared float32 vector width zero-fills trailing lanes before lowering", () => {
+  const sentence = parse("su name collector ob ve float32 1.0 1.2 1.3 by num 16 be vector ya");
+  const codelets = lowerSentence(sentence);
+  const decoded = decodeVectorSequence(codelets.map(({ words }) => words));
+
+  assert.ok(codelets[0].words.includes(0xd41d));
+  assert.equal(decoded.su.name, "collector");
+  assert.deepEqual(decoded.ob.ve.values, [1, Math.fround(1.2), Math.fround(1.3), ...Array(13).fill(0)]);
+});
+
+test("literal lowering carries sixteen lanes for every fixed-width quote family", async () => {
+  const cases = [
+    { type: "num", values: Array.from({ length: 16 }, (_, index) => index + 1) },
+    { type: "bool", values: Array.from({ length: 16 }, (_, index) => index % 2 ? "lie" : "truth") },
+    { type: "float32", values: Array.from({ length: 16 }, (_, index) => index + 0.25) },
+    { type: "float64", values: Array.from({ length: 16 }, (_, index) => index + 0.125) }
+  ];
+  for (const { type, values } of cases) {
+    const sourceValues = values.map((value) => type === "bool" ? value : String(value)).join(" ");
+    const codelets = lowerSentence(parse(`ob ve ${type} ${sourceValues} be vector ya`));
+    const expected = type === "float32" ? values.map(Math.fround) : values;
+    assert.deepEqual(decodeVectorSequence(codelets.map(({ words }) => words)).ob.ve.values, expected, type);
+    assert.deepEqual((await executeCodelets(codelets))[0].ob.ve.values, expected, type);
+  }
+});
+
+test("one-element float vectors remain distinct from scalar quotes", () => {
+  const sentence = parse("ob ve float32 1.25 be vector ya");
+  const program = lowerPyashProgram([sentence]);
+  assert.equal(program.vectors[0][1], 0xd61d);
+  assert.equal(program.vectors[0][2], 1);
+  assert.deepEqual(decodePyashProgram(program.vectors)[0].ob.ve.values, [1.25]);
+});
+
+test("an indexed vector continuation is followed by a separately indexed next sentence", () => {
+  const sentences = [
+    parse(`ob ve float32 ${Array.from({ length: 16 }, (_, index) => index).join(" ")} be vector ya`),
+    parse("ob num 7 be number ya")
+  ];
+  const program = lowerPyashProgram(sentences);
+  assert.equal(decodePyashProgram(program.vectors).length, 2);
+  assert.deepEqual(decodePyashProgram(program.vectors)[1], sentences[1]);
+});
+
+test("continued vectors execute alongside following codelet sentences", async () => {
+  const vectorSource = `ob ve float32 ${Array.from({ length: 16 }, (_, index) => index + 0.5).join(" ")} be vector ya`;
+  const codelets = [
+    ...lowerSentence(parse(vectorSource)),
+    ...lowerSentence(parse("ob num 7 be number ya"))
+  ];
+  const results = await executeCodelets(codelets);
+
+  assert.equal(results.length, 2);
+  assert.equal(results[0].be, "vector");
+  assert.deepEqual(results[0].ob.ve.values, Array.from({ length: 16 }, (_, index) => index + 0.5));
+  assert.equal(results[1].ob.num, 7);
+});
+
+test("continued vector execution preserves named state across its boundary", async () => {
+  const vectorSource = `ob ve num ${Array.from({ length: 16 }, (_, index) => index).join(" ")} be vector ya`;
+  const codelets = [
+    ...lowerSentence(parse("exists su name count ob num 7 be number ya")),
+    ...lowerSentence(parse(vectorSource)),
+    ...lowerSentence(parse("su name count ob what que"))
+  ];
+  const results = await executeCodelets(codelets);
+
+  assert.equal(results[1].be, "vector");
+  assert.equal(results[2].ob.num, 7);
+});
+
 test("float64 vectors use the legacy eight-byte scalar width", () => {
   const values = [Math.PI, -0, 1e200, -1e-200];
   const program = lowerPyashProgram([
@@ -87,28 +169,25 @@ test("float64 vectors use the legacy eight-byte scalar width", () => {
   assert.deepEqual(decoded.ob.ve.values, values);
 });
 
-test("float vector codelets enforce their scalar-width capacity", async () => {
+test("float vectors continue across codelets up to the sixteen-lane quote limit", async () => {
   const f32Values = [1, 2, 3, 4, 5];
   const [f32] = lowerSentence(parse(`ob ve float32 ${f32Values.join(" ")} be vector ya`));
   assert.deepEqual(decodeCodelet(f32.words).sentence.ob.ve.values, f32Values);
   assert.deepEqual((await executeCodelets([f32]))[0].ob.ve.values, f32Values);
-  assert.throws(
-    () => lowerSentence(parse("ob ve float32 1 2 3 4 5 6 be vector ya")),
-    (error) => error.code === "unsupported-vector-width" && error.details.maximum === 5
-  );
+  const f32Long = lowerSentence(parse("ob ve float32 1 2 3 4 5 6 be vector ya"));
+  assert.deepEqual(decodeVectorSequence(f32Long.map(({ words }) => words)).ob.ve.values, [1, 2, 3, 4, 5, 6]);
+  assert.deepEqual((await executeCodelets(f32Long))[0].ob.ve.values, [1, 2, 3, 4, 5, 6]);
 
   const f64Values = [Math.PI, -0, 1e100];
   const [f64] = lowerSentence(parse("ob ve float64 3.141592653589793 -0 1e100 be vector ya"));
   assert.deepEqual(decodeCodelet(f64.words).sentence.ob.ve.values, f64Values);
   assert.deepEqual((await executeCodelets([f64]))[0].ob.ve.values, f64Values);
-  assert.throws(
-    () => lowerSentence(parse("ob ve float64 1 2 3 4 be vector ya")),
-    (error) => error.code === "unsupported-vector-width" && error.details.maximum === 3
-  );
-  assert.throws(
-    () => lowerSentence(parse("su name collector ob ve float64 1 2 3 be vector ya")),
-    (error) => error.code === "unsupported-vector-width" && error.details.maximum === 2
-  );
+  const f64Long = lowerSentence(parse("ob ve float64 1 2 3 4 be vector ya"));
+  assert.deepEqual(decodeVectorSequence(f64Long.map(({ words }) => words)).ob.ve.values, [1, 2, 3, 4]);
+  assert.deepEqual((await executeCodelets(f64Long))[0].ob.ve.values, [1, 2, 3, 4]);
+
+  const named = lowerSentence(parse("su name collector ob ve float64 1 2 3 be vector ya"));
+  assert.deepEqual(decodeVectorSequence(named.map(({ words }) => words)).ob.ve.values, [1, 2, 3]);
 });
 
 test("boolean vector literals lower to a signed integer quote", async () => {
@@ -135,20 +214,25 @@ test("text vector literals keep every element and its case", async () => {
   const longer = parse('ob ve text Ada Turing be vector ya');
   const [longerCodelet] = lowerSentence(longer);
   assert.deepEqual(decodeCodelet(longerCodelet.words).sentence.ob.ve.values, ["Ada", "Turing"]);
+
+  const longPayload = lowerSentence(parse("ob ve text hello world be vector ya"));
+  assert.deepEqual(
+    decodePyashProgram(longPayload.map(({ words }) => words))[0].ob.ve.values,
+    ["hello", "world"]
+  );
+  assert.deepEqual((await executeCodelets(longPayload))[0].ob.ve.values, ["hello", "world"]);
 });
 
-test("vector literals reject widths the format cannot state", () => {
+test("vector literals accept one lane and reject widths above sixteen", () => {
+  const [single] = lowerSentence(parse("ob ve num 7 be vector ya"));
+  assert.deepEqual(decodeCodelet(single.words).sentence.ob.ve.values, [7]);
   assert.throws(
-    () => lowerSentence(parse("ob ve num 7 be vector ya")),
+    () => lowerSentence(parse("ob ve num 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 be vector ya")),
     (error) => error.code === "unsupported-vector-width"
   );
   assert.throws(
-    () => lowerSentence(parse("ob ve num 1 2 3 4 5 6 7 8 9 10 11 12 be vector ya")),
+    () => lowerSentence(parse("ob ve text one be vector ya")),
     (error) => error.code === "unsupported-vector-width"
-  );
-  assert.throws(
-    () => lowerSentence(parse("ob ve text hello world be vector ya")),
-    (error) => error.code === "literal-width"
   );
 });
 

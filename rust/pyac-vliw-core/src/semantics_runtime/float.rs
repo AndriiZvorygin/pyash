@@ -168,7 +168,12 @@ fn vector_literal(
         fixed_words / words_per_value
     };
     let payload_words = length * words_per_value;
-    if length == 0 || payload_words > RESULT_WORDS || (!explicit && payload_words != fixed_words) {
+    let result_words = length * scalar_bytes as usize / 4;
+    if length == 0
+        || length > MAX_VECTOR_LANES
+        || result_words > RESULT_WORDS
+        || (!explicit && payload_words != fixed_words)
+    {
         return CoreResult::failure(ERROR_MALFORMED, 1);
     }
     let payload = offset + if explicit { 2 } else { 1 };

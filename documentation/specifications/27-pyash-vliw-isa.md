@@ -111,14 +111,9 @@ little-endian order (low word first). The current scalar-float implementation
 accepts finite values only and rejects NaN and infinities. Arithmetic promotes
 both scalar operands to binary32 when either operand requires the float sort;
 `plus`, `subtract`, `multiply`, and `divide` execute with binary32 results.
-Unsigned-16-only arithmetic keeps its existing integer behavior. The same
-legacy float sort encodes finite IEEE binary32 and binary64 vector literals;
-their payload words are little-endian and retain the exact IEEE bit patterns.
-The shared Rust CPU and GPU pack runtimes return these as typed vectors, with
-one-codelet limits of five unnamed binary32 elements or three unnamed binary64
-elements (fewer when name words consume capacity). Long-vector sentence
-serialization does not imply multi-codelet vector execution. Mutable
-programlet slots remain scalar and do not yet store float vectors.
+Unsigned-16-only arithmetic keeps its existing integer behavior. Typed vector
+quotes and their distinction from variable-length arrays are specified in
+`28-pyash-vliw-targets.md`.
 
 The source form `quoted.<kind> ... .<kind>.quoted` delimits a payload and
 annotates its kind. Preserve that kind as metadata outside the payload. A
@@ -157,10 +152,8 @@ padding is zero; the next vector resumes indexed encoding. The count defines
 the raw extent. A decoder MUST skip exactly that many vectors and reject a
 missing block or nonzero final padding. Short quotes stay inline.
 
-Ordinary vectors use indexed continuation. Numeric/boolean headers identify
-element type and count; text vectors use one typed letter quote per element. A
-long text element uses the framing above. Decoding MUST preserve order, zero
-values, and the vector/scalar distinction.
+Vector quote layout and continuation rules are defined in
+`28-pyash-vliw-targets.md`.
 
 The index has two required properties from the legacy VM:
 
