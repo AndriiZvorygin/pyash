@@ -1623,6 +1623,11 @@ class HousekeeperOllamaTests(unittest.TestCase):
         "name": model, "size": 6000, "sizeVram": 0,
         "loaded": True, "gpuResident": False,
         "reason": "Ollama loaded the model without GPU VRAM"
+      }]},
+      {"available": True, "models": [{
+        "name": model, "size": 6000, "sizeVram": 0,
+        "loaded": True, "gpuResident": False,
+        "reason": "Ollama loaded the model without GPU VRAM"
       }]}
     ])
     server.parse_runtime_status = lambda _entry: {"status": "running", "gpuExpected": True, "gpuObserved": True}
@@ -1662,6 +1667,57 @@ class HousekeeperOllamaTests(unittest.TestCase):
 
     self.assertTrue(request_started.is_set())
     self.assertEqual(actions, [("ollama", "restartAction")])
+
+  def test_mid_inference_transient_zero_vram_report_does_not_restart_ollama(self):
+    actions = []
+    request_started = threading.Event()
+    release_request = threading.Event()
+    model = "qwen3.5:9b"
+    gpu_model = {
+      "name": model, "size": 6000, "sizeVram": 6000,
+      "loaded": True, "gpuResident": True,
+      "reason": "model weights are resident on GPU"
+    }
+    cpu_model = {
+      "name": model, "size": 6000, "sizeVram": 0,
+      "loaded": True, "gpuResident": False,
+      "reason": "Ollama loaded the model without GPU VRAM"
+    }
+    reports = iter([
+      {"available": True, "models": [gpu_model]},
+      {"available": True, "models": [cpu_model]},
+      {"available": True, "models": [gpu_model]}
+    ])
+    status_calls = {"count": 0}
+    server.parse_runtime_status = lambda _entry: {"status": "running", "gpuExpected": True, "gpuObserved": True}
+
+    def model_status():
+      status_calls["count"] += 1
+      report = next(reports, {"available": True, "models": [gpu_model]})
+      if status_calls["count"] >= 3:
+        release_request.set()
+      return report
+
+    def fake_request(pathname, _payload=None, timeout_sec=600):
+      self.assertEqual(pathname, "/api/generate")
+      request_started.set()
+      self.assertTrue(release_request.wait(2))
+      return {"response": "GPU recovered"}
+
+    server.ollama_running_model_status = model_status
+    server.runtime_action = lambda _registry, runtime_name, action: actions.append((runtime_name, action)) or {"success": True}
+    server.request_ollama_json = fake_request
+    os.environ["GPU_HOUSEKEEPER_OLLAMA_GPU_GUARD_POLL_SEC"] = "0.05"
+
+    result = server.execute_ollama_job({
+      "runtimeName": "ollama",
+      "profileName": model,
+      "jobSpec": {"kind": "ollama-generate", "payload": {"model": model, "prompt": "hello"}}
+    }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+
+    self.assertTrue(request_started.is_set())
+    self.assertEqual(result["response"], "GPU recovered")
+    self.assertEqual(actions, [])
 
   def test_stopped_runtime_triggers_begin_before_ollama_job(self):
     actions = []
