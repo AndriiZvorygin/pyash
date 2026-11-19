@@ -125,7 +125,7 @@ test("coding saddle seeds and injects its house guide without replacing user ide
     const guide = await fs.readFile(houseGuide, "utf8");
     assert.match(guide, /relative paths from that directory/u);
     assert.match(guide, /memory\/MEMORY\.md/u);
-    assert.match(guide, /Shell commands continue to run from the project directory/u);
+    assert.match(guide, /coding saddle can run commands, including destructive changes, in the project directory without a per-command approval prompt/u);
     const prompt = await buildAgentSystemPrompt({ agentHouse, mindName: "coding saddle" });
     assert.match(prompt, /Coding Saddle House/u);
     assert.match(prompt, /Project-specific identity/u);

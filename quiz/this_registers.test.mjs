@@ -19,7 +19,7 @@ test("this fromindex/this toindex bindings inside sandpit preserve registers on 
     "exists su name seen-toindex ob this toindex be number ya",
     "this ret",
     "su name inspector be ceremony prah",
-    "to name sink fromindex num 2 toindex num 2 be inspector do",
+    "to name sink fromindex num 2 toindex num 3 be inspector do",
   ];
 
   for (const line of lines) {
@@ -33,11 +33,11 @@ test("this fromindex/this toindex bindings inside sandpit preserve registers on 
   const seenTo = sandpit ? [...sandpit].reverse().find(s => s.su?.name === "seen-toindex") : null;
 
   assert.ok(evoker, "evoker should be recorded first in sandpit");
-  assert.equal(evoker.fromindex?.num ?? evoker.fromindex, 2, "evoker fromindex should remain at initial value when toindex matches");
-  assert.equal(evoker.toindex?.num ?? evoker.toindex, 2);
+  assert.equal(evoker.fromindex?.num ?? evoker.fromindex, 3, "the final evoker should reach the exclusive bound");
+  assert.equal(evoker.toindex?.num ?? evoker.toindex, 3);
 
   assert.equal(seenFrom?.ob?.num ?? seenFrom?.ob, 2, "this fromindex should bind into seen fact");
-  assert.equal(seenTo?.ob?.num ?? seenTo?.ob, 2, "this toindex should bind into seen fact");
+  assert.equal(seenTo?.ob?.num ?? seenTo?.ob, 3, "this toindex should bind into seen fact");
 
   assert.ok(result, "result fact should be present");
 

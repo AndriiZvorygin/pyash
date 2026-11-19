@@ -111,83 +111,56 @@ little-endian order (low word first). The current scalar-float implementation
 accepts finite values only and rejects NaN and infinities. Arithmetic promotes
 both scalar operands to binary32 when either operand requires the float sort;
 `plus`, `subtract`, `multiply`, and `divide` execute with binary32 results.
-Unsigned-16-only arithmetic keeps its existing integer behavior. Float vectors,
-binary64 values, and float storage in mutable programlet slots are not part of
-this scalar-float slice.
+Unsigned-16-only arithmetic keeps its existing integer behavior. The same
+legacy float sort encodes finite IEEE binary32 and binary64 vector literals;
+their payload words are little-endian and retain the exact IEEE bit patterns.
+The shared Rust CPU and GPU pack runtimes return these as typed vectors, with
+one-codelet limits of five unnamed binary32 elements or three unnamed binary64
+elements (fewer when name words consume capacity). Long-vector sentence
+serialization does not imply multi-codelet vector execution. Mutable
+programlet slots remain scalar and do not yet store float vectors.
 
-The source form `quoted.<kind> ... .<kind>.quoted` is a block delimiter and
-payload annotation, distinct from the legacy quote sort. Parsing must retain
-the block kind as semantic metadata alongside the payload; it must not fold
-the delimiters into the payload or silently discard the kind. The kind is
-external to the payload, consistent with the legacy quote model's separation
-of value bytes and type information. In the VLIW sentence stream, a non-default
-kind uses the paired `zi` frame:
+The source form `quoted.<kind> ... .<kind>.quoted` delimits a payload and
+annotates its kind. Preserve that kind as metadata outside the payload. A
+non-default kind uses this paired `zi` frame:
 
 ```text
 zi 0 tag [length-quote] [hash-quote] 0 payload 0 tag 0 zi
 ```
 
-`zi` is the existing `quoted_` HNUC (`0x229E`). The tag is a complete,
-self-delimiting typed quote value carrying the source quote kind (a text quote
-when the kind is textual); its full encoded words are repeated unchanged at
-close. It is framing metadata, not the legacy quote-sort field. Each optional
-field is a complete, properly typed quote value. No optional fields means
-neither length nor hash; one means the payload length in 16-bit words; two
-means payload length followed by hash. Thus a hash is never present without
-the length field. Each value's quote header and length determine its extent,
-so hashes need not have a fixed width. The length field is an unsigned 16-bit
-number quote (`0x881D` followed by the word count).
-The zero after `zi` distinguishes a frame from zero padding: a following zero
-means padding, while a nonzero tag begins the frame. The zero before `payload`
-ends the tag and optional-field prefix, and the payload uses its ordinary
-typed quote encoding. The closing zero and repeated tag must be followed by
-`zi`.
+`zi` is the existing `quoted_` HNUC (`0x229E`). The complete typed tag is
+framing metadata (not a quote sort) and is repeated unchanged at close. Optional
+fields are typed quotes: none, payload length, or length then hash. Length is
+an unsigned 16-bit number quote (`0x881D` plus word count); hash requires length.
+Each quote header defines its extent.
 
-Within this frame, the decoder interprets zero words as delimiters; outside
-the frame, zero words retain their existing padding meaning. It parses the
-tag and optional typed fields by their declared extents, then parses the
-payload by its quote header and length. It does not scan arbitrary payload
-words for a matching tag. If present, the payload length is checked against
-the decoded payload extent. Before producers emit a hash, a versioned profile
-MUST specify its algorithm and the canonical payload bytes it covers.
-Until such a profile is configured, the structural decoder can read a hash
-field but the sentence decoder rejects hash-bearing frames rather than
-silently treating an unverified digest as valid.
-Decoding restores the tag's quote kind to the sentence's `quoteKinds` map.
-This framing allocates no legacy quote-sort value or new HNUC; the flat v1
-`.pyac` container preserves the frame in its codelet words.
+Within the frame, zero words delimit the prefix, payload, and close; outside it,
+zero retains its padding meaning. After `zi`, zero means padding and a nonzero
+tag begins the frame. The payload uses its ordinary typed quote encoding; the
+decoder follows declared extents, never scans payload for a tag, and validates
+the optional length. A versioned profile MUST define the hash algorithm and
+canonical bytes before producers emit hashes; until then, sentence decoding
+rejects hash-bearing frames. Decoding restores the tag in `quoteKinds`. This
+adds no quote sort or HNUC; flat v1 `.pyac` stores the frame in codelet words.
 
 ### 4.2 VLIW shape
 
-The legacy codelet is a vector of sixteen 16-bit words: 256 bits / 32 bytes.
-The first word is the head/index word. Its bits mark phrase boundaries and
-whether a word is a phrase, case, verb, mood, or continuation according to
-the legacy index format. The remaining words hold quote denotations, content,
-case/phrase markers, the verb, mood, and zero/unassigned tail words where the
-codelet ends early.
+The codelet is sixteen 16-bit words (256 bits / 32 bytes). Its first word is
+the head/index; bits mark phrase boundaries and completion. Remaining words
+encode quote data, cases, verb, mood, and zero tail padding.
 
-Long paragraph quotes follow the original Lwonprom blockquote framing. A
-paragraph-letter quote carries the legacy `L` vector-thickness flag and an
-explicit 16-bit payload-word count. For payloads larger than 28 bytes (more
-than fourteen 16-bit letter units), the indexed codelet stream ends that
-prefix immediately after the quote header and count. The quote data then
-occupies `ceil(payload_words / 16)` raw 16-word vectors: those vectors have no
-index word, so all sixteen words are available to the quote. Unused words in
-the final raw vector are zero. The next vector resumes the ordinary indexed
-stream, where the following grammatical case, verb, mood, or sentence begins.
-The count, not a scan for an index-like word or a terminator, determines the
-raw extent. A decoder MUST skip exactly that many vectors and MUST reject a
-missing block or nonzero final padding. Short paragraph quotes remain inline
-in the indexed stream.
+Long paragraph quotes use the original Lwonprom blockquote framing: the
+paragraph-letter quote has the legacy `L` flag and a 16-bit payload-word count.
+Above 28 bytes, the indexed stream ends after its header/count and payload
+occupies `ceil(payload_words / 16)` raw vectors (all 16 words are data). Final
+padding is zero; the next vector resumes indexed encoding. The count defines
+the raw extent. A decoder MUST skip exactly that many vectors and reject a
+missing block or nonzero final padding. Short quotes stay inline.
 
-Ordinary vectors use indexed continuation, not raw blockquote vectors.
-Numeric and boolean vector quote headers identify their element type and
-fixed/explicit element count; their elements may cross any number of indexed
-codelets. Text vectors retain one typed letter quote per element and use the
-same indexed continuation for the vector as a whole. A text element that is
-itself a long paragraph quote uses the long-quote framing above. Decoding MUST
-preserve element order, zero-valued elements, and the distinction between a
-vector and a scalar.
+Ordinary vectors use indexed continuation. Numeric/boolean headers identify
+element type and count; text vectors use one typed letter quote per element. A
+long text element uses the framing above. Decoding MUST preserve order, zero
+values, and the vector/scalar distinction.
 
 The index has two required properties from the legacy VM:
 
@@ -196,19 +169,13 @@ The index has two required properties from the legacy VM:
 - phrase/mood marker bits identify phrase or mood words relative to that
   completion state.
 
-When a value or clause exceeds one vector, the index marks a partial codelet.
-The structural decoder collects the preceding/following vectors in codelet order
-until a final index is reached, preserves the vector and index-word evidence,
-and validates the flattened word sequence. It MUST reject a missing
-continuation, an impossible boundary, a non-zero unassigned tail, or an invalid
-quote length. Semantic adapters still require a sentence-specific golden
-fixture before execution. The decoder MUST NOT infer missing words from source
-text.
+For multi-vector values or clauses, the decoder collects vectors in order to
+the final index and validates the flattened words. It MUST reject a missing
+continuation, impossible boundary, nonzero unassigned tail, or invalid quote
+length; it MUST NOT infer words from source text. Semantic adapters require a
+sentence-specific golden fixture before execution.
 
-The legacy layout is intentionally fixed: one codelet vector is sixteen words, each
-word is 16 bits, the head comes first, and byte emission is little-endian per
-word. A future physical transport MAY batch codelets, but batching MUST NOT
-change codelet bytes or their sentence order.
+A transport MAY batch codelets but MUST preserve their bytes and order.
 
 ### 4.3 Compatibility table
 

@@ -8,5 +8,5 @@ exists su name author be mind as name "qwen3.5:9b" fromtext name author prompter
 exists su name verifier be mind as name "qwen3.5:9b" fromtext name verifier prompter ya
 from filename "../../module/re_entry_cycle.pya" ob name re-entry cycle to name re-entry cycle be import do
 exists su name input ob text "Write a short greeting." be text ya
-fromindex num 0 toindex num 0 to name text result be re-entry cycle do
+fromindex num 0 toindex num 1 to name text result be re-entry cycle do
 ob name result be write do

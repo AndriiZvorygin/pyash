@@ -4,6 +4,7 @@ services:
     build:
       context: ../../..
       dockerfile: container/gpu-housekeeper/Dockerfile
+      network: host
     image: liberit/gpu-housekeeper:latest
     entrypoint: ["python3", "/service/server.py"]
     command: ["--host", "0.0.0.0", "--also-host", "::", "--port", "18886", "--host-id", "${GPU_HOUSEKEEPER_HOST_ID:-gpu-housekeeper}"]

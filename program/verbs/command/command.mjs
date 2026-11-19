@@ -548,7 +548,21 @@ export async function command(sentence, { remember: rememberFn = remember, runti
     await fs.mkdir(path.dirname(sentence.to.filename), { recursive: true });
     await fs.writeFile(sentence.to.filename, output, "utf8");
   }
-  const resultSentence = commandResultSentence({ requestIdentity, output });
+  const resultSentence = commandResultSentence({
+    requestIdentity,
+    output,
+    raw: {
+      command: cmd,
+      cwd: sandbox.cwd,
+      status: res.status ?? 0,
+      signal: res.signal ?? "",
+      stdout: res.stdout ?? "",
+      stderr: res.stderr ?? "",
+      timedOut: res.timedOut === true,
+      exceededOutputLimit: res.exceededOutputLimit === true,
+      aborted: res.aborted === true
+    }
+  });
   await recordCommandOutput({ filename: sentence?.to?.filename, output, requestIdentity });
   rememberCommandResult({ sentence, resultSentence });
   emitCommandAudit({

@@ -1,11 +1,18 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { parse } from "../program/understand/index.mjs";
-import { lowerSentence } from "../program/library/vliw/index.mjs";
+import { decodeCodelet, decodePyashProgram, executeCodelets, lowerPyashProgram, lowerSentence } from "../program/library/vliw/index.mjs";
 import { decodePyacPack, encodePyacPack } from "../program/library/vliw/database.mjs";
-import { compilePyashProgramSource } from "../program/library/vliw/programlet.mjs";
+import { interpret } from "../program/bridge/index.mjs";
+import { forget, remember } from "../program/remember/index.mjs";
+import {
+  compilePyashProgramSource,
+  decodePyashProgramPack,
+  executePyashProgramPack
+} from "../program/library/vliw/programlet.mjs";
 import { createHousekeeperVliwPackExecutor } from "../program/library/vliw/rust_gpu_pack.mjs";
 
 function programlet(name, source, invocation, expectedValues) {
@@ -13,12 +20,90 @@ function programlet(name, source, invocation, expectedValues) {
   return { name, kind: "programlet", pack: compiled.pack, expectedValues };
 }
 
-function codeletPack(name, sentence, expectedValues) {
-  const codelets = lowerSentence(parse(sentence)).map((codelet) => codelet.words);
-  return { name, kind: "codelet-pack", pack: encodePyacPack(codelets), expectedValues };
+function codeletPack(name, sources, expectedValues) {
+  const sentences = Array.isArray(sources) ? sources : [sources];
+  const codelets = sentences.flatMap((source) => lowerSentence(parse(source))).map((codelet) => codelet.words);
+  return { name, kind: "codelets", pack: encodePyacPack(codelets), expectedValues };
 }
 
-export function buildVliwGpuConformanceCases() {
+function normalizeReferenceValue(value, numericType = null) {
+  const result = value?.ob ?? value;
+  if (typeof result?.boolean === "boolean") return { type: "boolean", value: result.boolean };
+  if (typeof result?.num === "number" && Number.isFinite(result.num)) {
+    if (numericType === "float32") return { type: "float32", value: Math.fround(result.num) };
+    if (numericType === "float64") return { type: "float64", value: result.num };
+    if (value?.as?.name === "rational" || numericType === "fixed16") {
+      const numerator = Math.round(result.num * 46_656);
+      return { type: "fixed16", value: numerator / 46_656, numerator, denominator: 46_656 };
+    }
+  }
+  if (Number.isInteger(result?.num)) {
+    return { type: result.num < 0 ? "signed" : "unsigned", value: result.num };
+  }
+  if (typeof result?.num === "number" && Number.isFinite(result.num)) {
+    return { type: "float32", value: Math.fround(result.num) };
+  }
+  const vector = result?.ve;
+  if (Array.isArray(vector?.values)) {
+    const elementType = vector.type === "float32" || vector.type === "float64"
+      ? vector.type
+      : vector.type === "text" ? "text"
+        : vector.type === "bool" ? "boolean"
+          : vector.values.some((entry) => entry < 0)
+            ? "signed-16"
+            : vector.values.some((entry) => entry > 0xffff) ? "unsigned-32" : "unsigned-16";
+    return {
+      type: "vector",
+      elementType,
+      values: vector.values
+    };
+  }
+  throw new TypeError(`VLIW conformance reference returned an unsupported value: ${JSON.stringify(value)}`);
+}
+
+async function evaluateReference(testCase) {
+  if (testCase.kind === "programlet") {
+    const { output } = await executePyashProgramPack(testCase.pack);
+    return [normalizeReferenceValue(output)];
+  }
+  const decoded = decodePyacPack(testCase.pack);
+  try {
+    const facts = await executeCodelets(decoded.codelets);
+    return facts.map((fact, index) => {
+      const instruction = decodeCodelet(decoded.codelets[index]);
+      const quoteFamily = instruction.items.find((item) => item.kind === "quote")?.quote.family;
+      const numericType = instruction.sentence?.as?.name === "rational"
+        ? "fixed16"
+        : quoteFamily === "float32" ? "float32"
+          : quoteFamily === "float64" ? "float64" : null;
+      return normalizeReferenceValue(fact, numericType);
+    });
+  } catch (error) {
+    if (error?.code !== "unsupported-codelet") throw error;
+  }
+
+  const sentences = decodePyashProgram(decoded.codelets);
+  forget();
+  try {
+    const values = [];
+    for (const sentence of sentences) {
+      const outcome = await interpret(sentence);
+      const result = remember("result");
+      if (result?.ob !== undefined) {
+        values.push(normalizeReferenceValue(result));
+      } else if (typeof outcome?.value === "boolean") {
+        values.push(normalizeReferenceValue({ boolean: outcome.value }));
+      } else {
+        throw new Error(`VLIW conformance sentence produced no result: ${JSON.stringify(sentence)}`);
+      }
+    }
+    return values;
+  } finally {
+    forget();
+  }
+}
+
+export async function buildVliwGpuConformanceCases() {
   const nestedCalls = [
     "su name count once to name num answer be ceremony def",
     "exists su name count ob num 0 as name variable be number ya",
@@ -351,14 +436,142 @@ export function buildVliwGpuConformanceCases() {
   ];
   const maximumPack = cases.find(({ name }) => name === "maximum-codelet-count").pack;
   assert.equal(decodePyacPack(maximumPack).codelets.length, 64);
+  for (const testCase of cases) {
+    try {
+      testCase.referenceValues = await evaluateReference(testCase);
+    } catch (error) {
+      error.message = `${testCase.name}: ${error.message}`;
+      throw error;
+    }
+    assert.deepEqual(testCase.referenceValues, testCase.expectedValues, testCase.name + ': JavaScript reference differs from the declared conformance result');
+  }
   return cases;
 }
 
-export async function runVliwGpuConformance({ executePack, onProgress = () => {} }) {
+
+export async function buildVliwGpuProgramletFailureCases() {
+  const divideByZeroSource = [
+    "su name count once to name num answer be ceremony def",
+    "exists su name count ob num 1 as name variable be number ya",
+    "from name count by num 0 to name num count be divide do",
+    "su name count ret",
+    "su name count once be ceremony prah"
+  ].join("\n");
+  const divideByZero = compilePyashProgramSource(divideByZeroSource, {
+    invocation: "to name num answer be count once do"
+  });
+  const mutableConstantSource = [
+    "su name count once to name num answer be ceremony def",
+    "exists su name count ob num 5 as name variable be number ya",
+    "ob num 1 to name num count be plus do",
+    "su name count ret",
+    "su name count once be ceremony prah"
+  ].join("\n");
+  const mutable = compilePyashProgramSource(mutableConstantSource, {
+    invocation: "to name num answer be count once do"
+  });
+  const constantSentences = decodePyashProgramPack(mutable.pack);
+  const declaration = constantSentences.find((sentence) => sentence.be === "number" && sentence.as);
+  assert.ok(declaration, "constant-write fixture has a typed local declaration");
+  declaration.as = { name: "permanently number" };
+  const constantWritePack = encodePyacPack(lowerPyashProgram(constantSentences).vectors);
+
+  const cases = [
+    {
+      name: "programlet-division-by-zero",
+      pack: divideByZero.pack,
+      expectedRuntimeCode: 2,
+      referenceError: /divide: by cannot be zero/u
+    },
+    {
+      name: "programlet-constant-write",
+      pack: constantWritePack,
+      expectedRuntimeCode: 7,
+      referenceError: /constant quantity is read-only: count/u
+    }
+  ];
+  for (const testCase of cases) {
+    await assert.rejects(
+      executePyashProgramPack(testCase.pack),
+      testCase.referenceError,
+      `${testCase.name}: JavaScript reference must reject the same runtime condition`
+    );
+  }
+  return cases;
+}
+
+export function executeRustCpuReference(packs) {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const framed = [];
+  for (const pack of packs) {
+    const bytes = Buffer.from(pack);
+    const length = Buffer.alloc(4);
+    length.writeUInt32LE(bytes.length);
+    framed.push(length, bytes);
+  }
+  const result = spawnSync("cargo", [
+    "run",
+    "--quiet",
+    "--manifest-path",
+    "rust/pyac/Cargo.toml",
+    "--example",
+    "vliw_reference"
+  ], {
+    cwd: root,
+    input: Buffer.concat(framed),
+    encoding: "utf8",
+    maxBuffer: 16 * 1024 * 1024
+  });
+  if (result.error || result.status !== 0) {
+    throw new Error(`Rust CPU VLIW reference failed: ${result.error?.message ?? result.stderr ?? result.status}`);
+  }
+  return String(result.stdout).trim().split(/\r?\n/u).filter(Boolean).map((line) => JSON.parse(line).values);
+}
+
+export function executeRustCpuProgramletFailureReference(pack) {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const bytes = Buffer.from(pack);
+  const length = Buffer.alloc(4);
+  length.writeUInt32LE(bytes.length);
+  const result = spawnSync("cargo", [
+    "run",
+    "--quiet",
+    "--manifest-path",
+    "rust/pyac/Cargo.toml",
+    "--example",
+    "vliw_reference"
+  ], {
+    cwd: root,
+    input: Buffer.concat([length, bytes]),
+    encoding: "utf8",
+    maxBuffer: 16 * 1024 * 1024
+  });
+  if (result.error) throw result.error;
+  assert.notEqual(result.status, 0, "Rust CPU unexpectedly accepted a runtime-error fixture");
+  const match = String(result.stderr).match(/\[programlet error=(\d+),/u);
+  assert.ok(match, `Rust CPU failure lacks a shared runtime error code: ${result.stderr}`);
+  return Number(match[1]);
+}
+
+export async function runVliwGpuConformance({ executeCpuPacks, executePack, onProgress = () => {} }) {
+  if (typeof executeCpuPacks !== "function") {
+    throw new TypeError("VLIW conformance requires a Rust CPU pack executor");
+  }
   if (typeof executePack !== "function") {
     throw new TypeError("VLIW GPU conformance requires a Housekeeper pack executor");
   }
-  const cases = buildVliwGpuConformanceCases();
+  const cases = await buildVliwGpuConformanceCases();
+  const cpuResults = await executeCpuPacks(cases.map((testCase) => testCase.pack));
+  assert.equal(cpuResults?.length, cases.length, "Rust CPU returned a different number of conformance results");
+  for (const [index, testCase] of cases.entries()) {
+    assert.deepEqual(
+      cpuResults[index],
+      testCase.referenceValues,
+      `${testCase.name}: Rust CPU result differs from JavaScript reference`
+    );
+    onProgress({ phase: "cpu-complete", name: testCase.name, values: cpuResults[index] });
+  }
+
   const submissions = cases.map(async (testCase) => {
     onProgress({ phase: "start", name: testCase.name });
     try {
@@ -366,7 +579,7 @@ export async function runVliwGpuConformance({ executePack, onProgress = () => {}
       assert.equal(result?.ok, true, `${testCase.name}: Housekeeper worker did not report success`);
       assert.equal(result.backend, "rust-gpu-vulkan", `${testCase.name}: unexpected GPU backend`);
       assert.ok(String(result.device ?? "").trim(), `${testCase.name}: missing GPU device identity`);
-      assert.deepEqual(result.values, testCase.expectedValues, `${testCase.name}: typed result mismatch`);
+      assert.deepEqual(result.values, testCase.referenceValues, `${testCase.name}: typed result differs from JavaScript reference`);
       const entry = { name: testCase.name, device: result.device, values: result.values };
       onProgress({ phase: "complete", ...entry });
       return entry;
@@ -386,6 +599,39 @@ export async function runVliwGpuConformance({ executePack, onProgress = () => {}
   return settled.map((result) => result.value);
 }
 
+export async function runVliwGpuProgramletFailureConformance({
+  executeCpuError,
+  executePack,
+  onProgress = () => {}
+}) {
+  if (typeof executeCpuError !== "function") {
+    throw new TypeError("VLIW failure conformance requires a Rust CPU error-code executor");
+  }
+  if (typeof executePack !== "function") {
+    throw new TypeError("VLIW GPU failure conformance requires a Housekeeper pack executor");
+  }
+  const cases = await buildVliwGpuProgramletFailureCases();
+  const completed = [];
+  for (const testCase of cases) {
+    const cpuCode = await executeCpuError(testCase.pack);
+    assert.equal(
+      cpuCode,
+      testCase.expectedRuntimeCode,
+      `${testCase.name}: Rust CPU returned a different shared runtime error`
+    );
+    onProgress({ phase: "cpu-error", name: testCase.name, errorCode: cpuCode });
+    await assert.rejects(
+      executePack(testCase.pack),
+      new RegExp(`shared VLIW runtime error ${testCase.expectedRuntimeCode}\\b`, "u"),
+      `${testCase.name}: Vulkan worker must return the same shared runtime error`
+    );
+    const entry = { name: testCase.name, errorCode: testCase.expectedRuntimeCode };
+    completed.push(entry);
+    onProgress({ phase: "gpu-error", ...entry });
+  }
+  return completed;
+}
+
 async function main() {
   const executePack = createHousekeeperVliwPackExecutor({
     worldRoot: path.resolve(process.env.PYA_WORLD_ROOT || "world"),
@@ -394,16 +640,30 @@ async function main() {
     timeoutMs: Number(process.env.PYA_VLIW_CONFORMANCE_TIMEOUT_MS) || 5 * 60 * 1000
   });
   const completed = await runVliwGpuConformance({
+    executeCpuPacks: executeRustCpuReference,
     executePack,
     onProgress(event) {
-      if (event.phase === "start") console.log(`Submitting Rust GPU conformance case: ${event.name}`);
+      if (event.phase === "start") console.log(`Queueing Rust GPU conformance case: ${event.name}`);
+      if (event.phase === "cpu-complete") console.log(`PASS JavaScript/Rust CPU reference ${event.name}: ${JSON.stringify(event.values)}`);
       if (event.phase === "complete") {
         console.log(`PASS ${event.name} on ${event.device}: ${JSON.stringify(event.values)}`);
       }
-      if (event.phase === "fail") console.error(`FAIL ${event.name}: ${event.error}`);
     }
   });
   console.log(`Rust GPU Housekeeper conformance passed: ${completed.length} cases.`);
+  const failures = await runVliwGpuProgramletFailureConformance({
+    executeCpuError: executeRustCpuProgramletFailureReference,
+    executePack,
+    onProgress(event) {
+      if (event.phase === "cpu-error") {
+        console.log(`PASS JavaScript/Rust CPU shared runtime error ${event.name}: ${event.errorCode}`);
+      }
+      if (event.phase === "gpu-error") {
+        console.log(`PASS ${event.name} on Vulkan worker: shared runtime error ${event.errorCode}`);
+      }
+    }
+  });
+  console.log(`Rust GPU Housekeeper error conformance passed: ${failures.length} cases.`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

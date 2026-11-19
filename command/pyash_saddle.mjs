@@ -82,9 +82,14 @@ import {
 import { formatMindUsage, normalizeMindUsage, sumMindUsages } from "../program/verbs/mind/usage.mjs";
 import {
   buildSaddleMindSentence,
+  buildSaddleContinuationInput,
   buildSaddleOllamaContextOptions,
   buildSaddleStrataContextOptions,
+  buildSaddleSteeringInput,
   buildSaddleWorktreeReviewCommand,
+  formatSaddleWorktreeReviewFailure,
+  isSaddleActionableContinuation,
+  isSaddleContinuationReply,
   formatSaddleCompletionEvidence,
   runSaddleTurnWithEvidence,
   createSaddleInputDecoder,
@@ -104,14 +109,14 @@ import {
   resolveSaddleModelOption,
   resolveSaddleMindProfile,
   parseSaddleMindCommand,
-  saddleToolEventLabel,
+  saddleToolEventPreview,
   saddleSlashCommandCompletions,
   startSaddleProgress
 } from "../program/agent/coding_saddle.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const AGENT_NAME = "coding saddle";
-const TOOL_MAP_NAME = "saddle tools";
+const TOOL_MAP_NAME = "saddle command tools";
 const SESSION_NAME = "coding";
 const RECENT_MODEL_SESSION = "__recent_model__";
 
@@ -328,9 +333,9 @@ function resolveConfiguredSaddleMind(mindName) {
   });
 }
 
-async function importSaddleTools() {
-  const modulePath = path.join(root, "module", "saddle_tools.pya");
-  const sentence = parse(`from filename ${JSON.stringify(modulePath)} ob name saddle tools to name saddle tools be import do`);
+async function importSaddleBashTools() {
+  const modulePath = path.join(root, "module", "saddle_bash_tools.pya");
+  const sentence = parse(`from filename ${JSON.stringify(modulePath)} ob name saddle command tools to name saddle command tools be import do`);
   await interpret(sentence);
 }
 
@@ -345,6 +350,20 @@ function configureSaddle({ cwd, runtimeRoot, worldRoot, model, backend, host, sy
       at: { filename: cwd }
     });
   }
+  const agentCommandConfigure = remember("agent command configure");
+  doRemember({
+    ...(agentCommandConfigure?.be === "map" ? agentCommandConfigure : {}),
+    mood: "ya",
+    su: { name: "agent command configure" },
+    be: "map",
+    ob: {
+      ...(agentCommandConfigure?.ob ?? {}),
+      map: {
+        ...(agentCommandConfigure?.ob?.map ?? {}),
+        "policy mode": { ob: { wo: "allow" } }
+      }
+    }
+  });
   doRemember({
     mood: "ya",
     su: { name: "run root" },
@@ -425,7 +444,7 @@ export async function prepareSaddle({
   setEntryModulePath(resolvedCwd);
   forget();
   await loadDefaultConfig({ cwd: resolvedRuntimeRoot, interpretFn: interpret, entryPath: path.join(resolvedRuntimeRoot, "saddle.pya") });
-  await importSaddleTools();
+  await importSaddleBashTools();
   const newspaperMaximumBytes = Number(configValue("newspaper maximum bytes", 524288000));
   const newspaperSegmentMaximumBytes = Number(configValue("newspaper segment maximum bytes", 4194304));
   const housekeeperUrl = resolveSaddleHousekeeperUrl(resolvedRuntimeRoot);
@@ -954,6 +973,10 @@ async function main() {
   process.once("exit", restoreActiveSaddleUi);
   const pendingSteeringInputs = [];
   let activeTurnInput = "";
+  let activeAssistantResponseText = "";
+  let previousTurnInput = "";
+  let previousAssistantResponseText = "";
+  let previousTurnAssessment = null;
   let activeInterruptController = null;
   let activeSteeringInterruptRequested = false;
   let steeringInterruptPromise = null;
@@ -1089,11 +1112,11 @@ async function main() {
       const steering = pendingSteeringInputs.splice(0).sort((left, right) => left.sequence - right.sequence);
       const original = steering[0].originalInput;
       const additions = steering.map(({ text }) => text).join("\n\n");
-      const combined = [
-        "The previous response was interrupted after the user added context. Respond to the original request using that added context.",
-        `Original user message:\n${original}`,
-        `Additional context:\n${additions}`
-      ].join("\n\n");
+      const combined = buildSaddleSteeringInput({
+        originalInput: original,
+        assistantResponse: activeAssistantResponseText,
+        additions
+      });
       void submit(combined, { alreadyDisplayed: true });
       return;
     }
@@ -1388,7 +1411,8 @@ async function main() {
     writeLine("saddle closed");
   };
   const submit = async (value, { alreadyDisplayed = false } = {}) => {
-    const input = String(value ?? "");
+    const submittedInput = String(value ?? "");
+    let input = submittedInput;
     if (!input.trim() || closing) {
       prompt({ clear: false });
       return;
@@ -1795,18 +1819,33 @@ async function main() {
       return;
     }
 
+    if (isSaddleContinuationReply(input) && previousTurnInput) {
+      const actionable = isSaddleActionableContinuation({
+        originalInput: previousTurnInput,
+        assistantResponse: previousAssistantResponseText,
+        previousAssessment: previousTurnAssessment
+      });
+      input = buildSaddleContinuationInput({
+        originalInput: previousTurnInput,
+        assistantResponse: previousAssistantResponseText,
+        additions: submittedInput,
+        actionable
+      });
+    }
+
     let settleActiveSubmit;
     const activeTurn = new Promise((resolve) => { settleActiveSubmit = resolve; });
     activeSubmitDone = activeTurn;
     const interruptController = new AbortController();
     activeInterruptController = interruptController;
     activeTurnInput = input;
+    activeAssistantResponseText = "";
     activeSteeringInterruptRequested = false;
     let finishActiveMindRun = async () => {};
     busy = true;
     saddleUi.setBusy(true);
     saddleUi.setUsage("");
-    if (!alreadyDisplayed) writeLine(`you> ${input}`);
+    if (!alreadyDisplayed) writeLine(`you> ${submittedInput}`);
     saddleUi.setActivity(`working: ${model} via ${backend}${isLocalModelBackend(backend) ? " through GPU Housekeeper" : ""}`);
     prompt({ clear: false });
     const stopProgress = startSaddleProgress({
@@ -1823,6 +1862,8 @@ async function main() {
     let traceStatus = "failed";
     let traceError = "";
     let sessionTurnId = "";
+    let completedTurnAssessment = null;
+    let completedAssistantResponseText = "";
     try {
       finishActiveMindRun = await beginActiveMindRun({
         worldRoot: config.worldRoot,
@@ -1863,6 +1904,7 @@ async function main() {
         onAssistantDelta: (delta) => {
           const textDelta = String(delta ?? "");
           if (!textDelta) return;
+          activeAssistantResponseText += textDelta;
           if (!responseStream) {
             writeLine("saddle>");
             responseStream = saddleUi.beginMarkdownStream();
@@ -1916,12 +1958,12 @@ async function main() {
             if (event?.stage === "context_compacted") {
               writeLine(`[prompt trimmed] ${String(event.toolText ?? "").slice(0, 400)}`);
             } else {
-              writeLine(`${saddleToolEventLabel(event)}${event.toolText ? `: ${String(event.toolText).slice(0, 400)}` : ""}`);
+              writeLine(saddleToolEventPreview(event));
             }
           }
         },
         onFollowup: (assessment) => {
-          writeLine(`[saddle] completion check missing ${assessment.missing.join("; ")}; making one completion pass`);
+          writeLine(`[saddle] completion check missing ${assessment.missing.join("; ")}; continuing the task`);
         },
         onReview: async () => {
           const review = await interpret({
@@ -1939,6 +1981,7 @@ async function main() {
           return String(output).trim() || "[worktree review returned no output]";
         }
       }));
+      completedTurnAssessment = turn.assessment;
       const result = turn.result;
       sessionTurnId = String(result?.accordingto?.text ?? "");
       const text = result?.ob?.text ?? result?.fromstate?.text ?? result?.value?.text ?? "";
@@ -1946,9 +1989,11 @@ async function main() {
         writeLine("worktree review · inspect this before accepting or committing");
         writeLine(turn.worktreeReview);
       } else if (turn.assessment.required && turn.assessment.changeTools?.length) {
-        writeLine(`[worktree review unavailable] ${turn.worktreeReviewError || "the harness could not collect the Git review"}`);
+        const detail = formatSaddleWorktreeReviewFailure(turn.worktreeReviewError);
+        writeLine(`[worktree review unavailable] ${detail}`);
       }
       const finalText = String(text).trim() || "(no response text)";
+      completedAssistantResponseText = finalText;
       if (lastTurnStreamed && responseStream) {
         if (responseSegmentText.trim() !== finalText) saddleUi.replaceMarkdownStream(responseStream, finalText);
       } else {
@@ -2005,6 +2050,11 @@ async function main() {
       await consumeMindInterrupt({ agentHouse: config.agentHouse, agentName: AGENT_NAME }).catch(() => {});
       await finishActiveMindRun().catch((error) => writeLine(`[interrupt cleanup failed] ${error.message}`));
       if (activeInterruptController === interruptController) activeInterruptController = null;
+      if (traceTurnId) {
+        previousTurnInput = input;
+        previousAssistantResponseText = completedAssistantResponseText || activeAssistantResponseText;
+        previousTurnAssessment = completedTurnAssessment;
+      }
       activeTurnInput = "";
       activeSteeringInterruptRequested = false;
       if (traceTurnId) {

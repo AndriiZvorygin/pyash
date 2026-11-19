@@ -4,6 +4,7 @@ import base64
 import binascii
 import copy
 import http.client
+import ipaddress
 import json
 import math
 import os
@@ -43,6 +44,7 @@ _JOB_CONTEXT = threading.local()
 # execution boundary used by the current housekeeper.
 _EXECUTION_LOCK = threading.Lock()
 _SUBMISSION_LOCK = threading.Lock()
+_DISPATCH_PAUSED = False
 _RUNNING_JOB_ID: Optional[str] = None
 _RUNNING_JOB_IDS: Dict[str, set] = {}
 _RUNTIME_ACTIVITY: Dict[str, Dict[str, Any]] = {}
@@ -1343,17 +1345,49 @@ def queue_view() -> Dict[str, Any]:
   local_counts = local_queue_counts()
   cap = soft_queue_cap()
   local_queued = local_counts["queuedCount"]
+  with _LOCK:
+    dispatch_paused = _DISPATCH_PAUSED
   return {
     "queueDepth": queue_depth(),
     "queuedCount": sum(1 for job in jobs if job.get("status") == "queued"),
     "runningCount": sum(1 for job in jobs if job.get("status") == "running"),
     "localQueuedCount": local_queued,
     "localRunningCount": local_counts["runningCount"],
+    "dispatchPaused": dispatch_paused,
+    "acceptingJobs": True,
     "softQueueCap": cap,
     "queueOverSoftCap": local_queued > cap,
     "queueMetrics": queue_metrics(),
     "jobs": jobs
   }
+
+
+def set_dispatch_paused(paused: bool) -> Dict[str, Any]:
+  global _DISPATCH_PAUSED
+  with _LOCK:
+    _DISPATCH_PAUSED = bool(paused)
+  return queue_view()
+
+
+def dispatch_paused() -> bool:
+  with _LOCK:
+    return _DISPATCH_PAUSED
+
+
+def wait_for_dispatch_resume(cancel_event: threading.Event) -> None:
+  while dispatch_paused():
+    if cancel_event.wait(0.1):
+      raise CancelledJobError("job cancelled while waiting for Housekeeper dispatch resume")
+
+
+def maintenance_request_is_local(client_address: Any) -> bool:
+  try:
+    address = ipaddress.ip_address(str(client_address[0]).split("%", 1)[0])
+  except (IndexError, TypeError, ValueError):
+    return False
+  if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
+    address = address.ipv4_mapped
+  return address.is_loopback
 
 
 def normalize_job_source(payload: Dict[str, Any], peer_address: str = "") -> Dict[str, Any]:
@@ -2703,7 +2737,19 @@ def submit_job(
           "source": existing.get("source") or {"hostId": "unknown"},
           "replayed": True
         }
-    route = select_route(payload, job, runtime_registry, selected_host)
+    if dispatch_paused() and target_host_id in {"", selected_host}:
+      local = local_route_state(job, runtime_registry, selected_host)
+      route = {
+        "selected": local if local.get("available") else None,
+        "candidates": [local],
+        "forwarded": False,
+        "reason": "Housekeeper is paused for a soft restart; accepted work stays queued locally",
+        "selectionPolicy": "maintenance-queue"
+      }
+      if not local.get("available"):
+        route = select_route(payload, job, runtime_registry, selected_host)
+    else:
+      route = select_route(payload, job, runtime_registry, selected_host)
     selected = route.get("selected") or {}
     if route.get("forwarded"):
       try:
@@ -5616,9 +5662,17 @@ def guarded_ollama_request(
   threading.Thread(target=request, name="ollama-gpu-guard-request", daemon=True).start()
   started = time.monotonic()
   observed_gpu = already_gpu_resident
+  nonresident_observations = 0
+  last_nonresident_reason = ""
   grace = ollama_gpu_startup_grace_seconds()
   poll_interval = ollama_gpu_guard_poll_seconds()
   next_guard_check = started + poll_interval
+
+  def reject_nonresident_model(reason: str) -> None:
+    restarted = restart_ollama_after_gpu_guard_failure(runtime_registry, target_model, reason)
+    restart_state = "Ollama restarted" if restarted.get("success") else f"Ollama restart failed: {normalize_text(restarted.get('message'))}"
+    raise RuntimeError(f"Ollama GPU guard rejected CPU/partial-offload inference ({restart_state}): {reason}")
+
   while not done.is_set():
     if cancel_event is not None and cancel_event.is_set():
 
@@ -5635,10 +5689,14 @@ def guarded_ollama_request(
     if residency:
       if not residency.get("gpuResident"):
         reason = residency.get("reason") or "Ollama model is not sufficiently resident on GPU"
-        restarted = restart_ollama_after_gpu_guard_failure(runtime_registry, target_model, reason)
-        restart_state = "Ollama restarted" if restarted.get("success") else f"Ollama restart failed: {normalize_text(restarted.get('message'))}"
-        raise RuntimeError(f"Ollama GPU guard rejected CPU/partial-offload inference ({restart_state}): {reason}")
-      observed_gpu = True
+        nonresident_observations += 1
+        last_nonresident_reason = reason
+        if nonresident_observations >= 2:
+          reject_nonresident_model(reason)
+      else:
+        observed_gpu = True
+        nonresident_observations = 0
+        last_nonresident_reason = ""
     if not observed_gpu and time.monotonic() - started >= grace:
       reason = "Ollama did not report the target model resident on GPU before the startup deadline"
       restarted = restart_ollama_after_gpu_guard_failure(runtime_registry, target_model, reason)
@@ -5649,6 +5707,21 @@ def guarded_ollama_request(
     if isinstance(result["error"], CancelledJobError) or (cancel_event is not None and cancel_event.is_set()):
       raise CancelledJobError("Ollama inference cancelled")
     raise RuntimeError(f"Ollama inference request failed: {normalize_text(result['error'])}")
+  if nonresident_observations:
+    report = ollama_running_model_status()
+    residency = ollama_model_residency(target_model, report.get("models", []))
+    if residency and residency.get("gpuResident"):
+      observed_gpu = True
+      nonresident_observations = 0
+      last_nonresident_reason = ""
+    elif residency:
+      nonresident_observations += 1
+      last_nonresident_reason = residency.get("reason") or last_nonresident_reason
+      if nonresident_observations >= 2:
+        reject_nonresident_model(last_nonresident_reason or "Ollama model is not sufficiently resident on GPU")
+    elif report.get("available"):
+      nonresident_observations = 0
+      last_nonresident_reason = ""
   if not observed_gpu:
     report = ollama_running_model_status()
     residency = ollama_model_residency(target_model, report.get("models", []))
@@ -5656,9 +5729,7 @@ def guarded_ollama_request(
       observed_gpu = True
     elif residency:
       reason = residency.get("reason") or "Ollama model is not sufficiently resident on GPU"
-      restarted = restart_ollama_after_gpu_guard_failure(runtime_registry, target_model, reason)
-      restart_state = "Ollama restarted" if restarted.get("success") else f"Ollama restart failed: {normalize_text(restarted.get('message'))}"
-      raise RuntimeError(f"Ollama GPU guard rejected CPU/partial-offload inference ({restart_state}): {reason}")
+      reject_nonresident_model(reason)
   if not observed_gpu:
     reason = "Ollama completed inference without observable GPU model residency"
     restarted = restart_ollama_after_gpu_guard_failure(runtime_registry, target_model, reason)
@@ -6694,6 +6765,7 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
     )
   gate = execution_gate_for(device_id)
   try:
+    wait_for_dispatch_resume(cancel_event)
     gate.acquire(
       shared,
       vram_required_mb,
@@ -6726,52 +6798,86 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
   _JOB_CONTEXT.cancel_event = cancel_event
 
   try:
-    if pause_event.is_set():
-      hold_job_for_runtime_maintenance(remote_job_id)
-      return
-    with _LOCK:
-      job = _JOBS.get(remote_job_id)
-      if not job:
-        return
-      if cancel_event.is_set() or normalize_text(job.get("status")).lower() not in {"queued", "running"}:
-        job["status"] = "cancelled"
-        job["message"] = "cancelled before execution"
-        job["finishedAt"] = utc_now_iso()
-        job["result"] = None
-        job["error"] = None
-        try:
-          persist_durable_job(job)
-        except Exception as persist_error:
-          print(f"[gpu-housekeeper] could not persist cancelled job {remote_job_id}: {normalize_text(persist_error)}", flush=True)
-        return
-      job["status"] = "running"
-      job["message"] = "running"
-      job["startedAt"] = utc_now_iso()
+    while True:
+      if pause_event.is_set():
+        raise RuntimePausedError("runtime dispatch paused for maintenance")
+      with _LOCK:
+        job = _JOBS.get(remote_job_id)
+        if not job:
+          return
+        if _DISPATCH_PAUSED:
+          pause_before_start = True
+        else:
+          pause_before_start = False
+          if cancel_event.is_set() or normalize_text(job.get("status")).lower() not in {"queued", "running"}:
+            job["status"] = "cancelled"
+            job["message"] = "cancelled before execution"
+            job["finishedAt"] = utc_now_iso()
+            job["result"] = None
+            job["error"] = None
+            try:
+              persist_durable_job(job)
+            except Exception as persist_error:
+              print(f"[gpu-housekeeper] could not persist cancelled job {remote_job_id}: {normalize_text(persist_error)}", flush=True)
+            return
+          job["status"] = "running"
+          job["message"] = "running"
+          job["startedAt"] = utc_now_iso()
+          try:
+            persist_durable_job(job)
+          except Exception as err:
+            job["status"] = "queued"
+            job["message"] = f"durable queue checkpoint failed; job remains queued: {normalize_text(err)}"
+            job["startedAt"] = ""
+            print(f"[gpu-housekeeper] refusing to run uncheckpointed job {remote_job_id}: {normalize_text(err)}", flush=True)
+            return
+          _RUNNING_JOB_IDS.setdefault(device_id, set()).add(remote_job_id)
+          _RUNNING_JOB_ID = remote_job_id
+          profile_name = normalize_text(job.get("profileName"))
+          runtime_name = normalize_text(job.get("runtimeName"))
+          job_spec = job.get("jobSpec") if isinstance(job.get("jobSpec"), dict) else {}
+          call_identity = job_call_identity(job)
+          execution_host_id = normalize_text(job.get("executionHostId"))
+          is_model_ensure = (
+            runtime_name.lower() == "ollama"
+            and normalize_text(job_spec.get("kind")).lower() == "ollama-ensure-model"
+          )
+          if profile_name and not is_model_ensure and runtime_name.lower() != "ollama":
+            _PROFILES[profile_name] = {
+              "profileName": profile_name,
+              "runtimeName": runtime_name,
+              "loaded": True
+            }
+      if not pause_before_start:
+        break
+      if gate_held:
+        gate.release(shared, vram_required_mb)
+        gate_held = False
       try:
-        persist_durable_job(job)
-      except Exception as err:
-        job["status"] = "queued"
-        job["message"] = f"durable queue checkpoint failed; job remains queued: {normalize_text(err)}"
-        job["startedAt"] = ""
-        print(f"[gpu-housekeeper] refusing to run uncheckpointed job {remote_job_id}: {normalize_text(err)}", flush=True)
+        wait_for_dispatch_resume(cancel_event)
+      except CancelledJobError:
+        with _LOCK:
+          current = _JOBS.get(remote_job_id)
+          if current and normalize_text(current.get("status")).lower() not in {"success", "fail", "cancelled"}:
+            current["status"] = "cancelled"
+            current["message"] = "cancelled before execution"
+            current["finishedAt"] = utc_now_iso()
+            current["result"] = None
+            current["error"] = None
+            try:
+              persist_durable_job(current)
+            except Exception as persist_error:
+              print(f"[gpu-housekeeper] could not persist cancelled job {remote_job_id}: {normalize_text(persist_error)}", flush=True)
         return
-      _RUNNING_JOB_IDS.setdefault(device_id, set()).add(remote_job_id)
-      _RUNNING_JOB_ID = remote_job_id
-      profile_name = normalize_text(job.get("profileName"))
-      runtime_name = normalize_text(job.get("runtimeName"))
-      job_spec = job.get("jobSpec") if isinstance(job.get("jobSpec"), dict) else {}
-      call_identity = job_call_identity(job)
-      execution_host_id = normalize_text(job.get("executionHostId"))
-      is_model_ensure = (
-        runtime_name.lower() == "ollama"
-        and normalize_text(job_spec.get("kind")).lower() == "ollama-ensure-model"
+      gate.acquire(
+        shared,
+        vram_required_mb,
+        can_share=lambda reserved: shared_vram_can_admit(device_id, vram_required_mb, reserved)
+        if shared else None,
+        cancel_event=cancel_event,
+        pause_event=pause_event
       )
-      if profile_name and not is_model_ensure and runtime_name.lower() != "ollama":
-        _PROFILES[profile_name] = {
-          "profileName": profile_name,
-          "runtimeName": runtime_name,
-          "loaded": True
-        }
+      gate_held = True
 
     def wait_for_capacity(_error: BaseException) -> None:
       nonlocal gate_held, last_capacity_reaper_check
@@ -6834,15 +6940,43 @@ def execute_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[
           time.sleep(min(0.1, max(0.0, wait_deadline - time.monotonic())))
       finally:
         if should_reacquire_gate:
-          gate.acquire(
-            shared,
-            vram_required_mb,
-            can_share=lambda reserved: shared_vram_can_admit(device_id, vram_required_mb, reserved)
-            if shared else None,
-            cancel_event=cancel_event,
-            pause_event=pause_event
-          )
-          gate_held = True
+          while True:
+            wait_for_dispatch_resume(cancel_event)
+            gate.acquire(
+              shared,
+              vram_required_mb,
+              can_share=lambda reserved: shared_vram_can_admit(device_id, vram_required_mb, reserved)
+              if shared else None,
+              cancel_event=cancel_event,
+              pause_event=pause_event
+            )
+            gate_held = True
+            with _LOCK:
+              current = _JOBS.get(remote_job_id)
+              if not current:
+                raise RuntimeError(f"job disappeared while resuming capacity check: {remote_job_id}")
+              if _DISPATCH_PAUSED:
+                pause_before_capacity_check = True
+              else:
+                pause_before_capacity_check = False
+                current["status"] = "running"
+                current["message"] = "checking GPU capacity"
+                current["startedAt"] = utc_now_iso()
+                try:
+                  persist_durable_job(current)
+                except Exception as persist_error:
+                  current["status"] = "queued"
+                  current["message"] = f"durable queue checkpoint failed; job remains queued: {normalize_text(persist_error)}"
+                  current["startedAt"] = ""
+                  raise RuntimeError(
+                    f"could not checkpoint resumed capacity check for {remote_job_id}: {normalize_text(persist_error)}"
+                  ) from persist_error
+                _RUNNING_JOB_IDS.setdefault(device_id, set()).add(remote_job_id)
+                _RUNNING_JOB_ID = remote_job_id
+            if not pause_before_capacity_check:
+              break
+            gate.release(shared, vram_required_mb)
+            gate_held = False
 
     def capacity_ready() -> None:
       nonlocal execution_started
@@ -7013,6 +7147,8 @@ class Handler(BaseHTTPRequestHandler):
       json_response(self, 200, {
         "status": status,
         "ready": True,
+        "dispatchPaused": dispatch_paused(),
+        "acceptingJobs": True,
         "startup": startup,
         "timestamp": utc_now_iso()
       })
@@ -7074,6 +7210,19 @@ class Handler(BaseHTTPRequestHandler):
     json_response(self, 404, {"error": "not found"})
 
   def do_POST(self) -> None:
+    if self.path in {"/maintenance/drain", "/maintenance/resume"}:
+      if not maintenance_request_is_local(self.client_address):
+        json_response(self, 403, {"error": "maintenance controls are available from loopback only"})
+        return
+      paused = self.path == "/maintenance/drain"
+      status = set_dispatch_paused(paused)
+      status["message"] = (
+        "dispatch paused; accepted jobs remain queued until Housekeeper resumes"
+        if paused else "dispatch resumed"
+      )
+      json_response(self, 200, status)
+      return
+
     if self.path == "/cancel":
       payload = read_json_body(self)
       result = cancel_job(payload)

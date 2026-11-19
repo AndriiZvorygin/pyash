@@ -549,6 +549,9 @@ function decodeValue(items, role, boundaryOffsets) {
     if ((items[0].quote.family === "float32-vector" || items[0].quote.family === "float64-vector") && Array.isArray(value)) {
       return { ve: { type: items[0].quote.family === "float32-vector" ? "float32" : "float64", values: value } };
     }
+    if (["float32", "float64", "fixed16"].includes(items[0].quote.family) && typeof value === "number") {
+      return { num: value };
+    }
     if (word === NUMBER_QUOTE_WORD && Number.isInteger(value) && value >= 0 && value <= 0xffff) {
       return { num: value };
     }

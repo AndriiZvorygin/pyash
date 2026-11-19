@@ -51,6 +51,11 @@ const TOOL_NON_CASE_FIELDS = new Set([
 ]);
 
 const TOOL_ARGUMENT_SCHEMA_ADAPTERS = {
+  "bash": {
+    toolName: "bash",
+    description: "Run one shell command in the active project directory through Pyash's command runner. Return its output and exit status. Follow the existing command policy. This tool supports one-shot commands, not interactive processes that require later input.",
+    fields: { ob: { name: "command", type: "string", description: "One shell command to run." } }
+  },
   "command session start": {
     toolName: "command_session_start",
     description: "Start a long-running interactive command session only when the user needs to keep a process open and interact with it. This is not for web search, API calls, URL retrieval, or ordinary one-shot commands; use web_search, web_search_source, download, or command for those. The working directory defaults to the agent's active project root. Pass request with command, args (array), and optional cwd, columns, rows.",
@@ -157,8 +162,10 @@ function toolCapabilityName(capability) {
     : subjectName;
 }
 
-function toolArgumentSchemaAdapter(capability) {
-  return TOOL_ARGUMENT_SCHEMA_ADAPTERS[toolCapabilityName(capability)] ?? null;
+function toolArgumentSchemaAdapter(capability, toolName = "") {
+  return TOOL_ARGUMENT_SCHEMA_ADAPTERS[toolName]
+    ?? TOOL_ARGUMENT_SCHEMA_ADAPTERS[toolCapabilityName(capability)]
+    ?? null;
 }
 
 function isInputMarker(value) {
@@ -278,6 +285,7 @@ export function buildToolSchemas(toolMapName) {
   if (!toolMapName) return { tools: [], toolMap: new Map(), toolBlock: "" };
   const fact = remember(toolMapName);
   if (!fact || fact.be !== "map") return { tools: [], toolMap: new Map(), toolBlock: "" };
+  const toolNameAlias = toolMapName === "saddle command tools" ? "bash" : "";
   const entries = fact.ob?.map ?? {};
   const caps = [];
   for (const entry of Object.values(entries)) {
@@ -291,7 +299,7 @@ export function buildToolSchemas(toolMapName) {
   const toolMap = new Map();
   const tools = [];
   for (const cap of caps) {
-    const argumentSchemaAdapter = toolArgumentSchemaAdapter(cap.sentence);
+    const argumentSchemaAdapter = toolArgumentSchemaAdapter(cap.sentence, toolNameAlias);
     const signatureWords = deriveSignatureFromCall(cap.sentence, { remember });
     const signatureName = joinSignatureWords(signatureWords);
     const toolName = toolFunctionNameFromSignature(signatureWords);
@@ -349,7 +357,7 @@ export function buildToolSchemas(toolMapName) {
     toolMap.set(signatureName, cap.sentence);
   }
   const toolBlock = `TOOLS:\n${caps.map((cap) => {
-    const argumentSchemaAdapter = toolArgumentSchemaAdapter(cap.sentence);
+    const argumentSchemaAdapter = toolArgumentSchemaAdapter(cap.sentence, toolNameAlias);
     if (!argumentSchemaAdapter) return cap.canonical;
     const argumentNames = Object.values(argumentSchemaAdapter.fields)
       .map((field) => field.name)
@@ -359,7 +367,7 @@ export function buildToolSchemas(toolMapName) {
   return { tools, toolMap, toolBlock };
 }
 
-export function buildToolSentence({ capability, args }) {
+export function buildToolSentence({ capability, args, toolName = "" }) {
   const call = cloneSentence(capability);
   delete call.su;
   delete call.subj;
@@ -391,7 +399,7 @@ export function buildToolSentence({ capability, args }) {
   const capabilityCaseKeys = new Set(
     Object.keys(capability ?? {}).filter((key) => !TOOL_NON_CASE_FIELDS.has(key))
   );
-  const argumentSchemaAdapter = toolArgumentSchemaAdapter(capability);
+  const argumentSchemaAdapter = toolArgumentSchemaAdapter(capability, toolName);
   const aliasedCaseKeys = new Map(
     Object.entries(argumentSchemaAdapter?.fields ?? {}).map(([caseKey, field]) => [field.name, caseKey])
   );

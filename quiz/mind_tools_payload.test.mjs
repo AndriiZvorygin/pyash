@@ -317,6 +317,9 @@ test("mind tool adapter executes propose tools when ratify policy allows", async
 
   try {
     await interpret(parse("su name tools be map def"));
+    await interpret(parse("su name sandbox configure be map def"));
+    await interpret(parse(`su name writable roots ob ve filename ${JSON.stringify(process.cwd())} ${JSON.stringify(tmp)} ya`));
+    await interpret(parse("prah"));
     await interpret(parse("su name run shell be command ob text input propose"));
     await interpret(parse("prah"));
     await interpret(parse("exists su name helper be mind via state \"qwen3\" ya"));

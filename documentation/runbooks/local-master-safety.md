@@ -23,9 +23,9 @@ crontab calls the runner directly so it does not contend with itself.
 
 ## Promotion gate
 
-Each run fetches `master`, `dev`, and `dev-vliw-backend` from the source remote
-and every configured push remote (by default, `origin` and `github`). The two
-development source branches are configurable with
+Each run fetches `master`, `dev`, `dev-vocab`, and `dev-vliw-backend` from the
+source remote and every configured push remote (by default, `origin` and
+`github`). The development source branches are configurable with
 `PYA_MASTER_SAFETY_DEV_BRANCH` and `PYA_MASTER_SAFETY_ADDITIONAL_SOURCE_BRANCHES`.
 It records every branch tip, then merges all fetched `master` tips followed by
 all fetched development branch tips into a disposable candidate worktree. This

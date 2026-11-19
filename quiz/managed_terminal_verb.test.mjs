@@ -119,6 +119,56 @@ test("command session starts a real PTY in the project when the Pyash runtime is
   });
 });
 
+test("command session start includes output when the process exits before the start result", async () => {
+  await withProject(async ({ project, world }) => {
+    const remember = rememberFor({ project, world, commandMode: "allow" });
+    const calls = [];
+    const requestTerminal = async (_world, _project, request) => {
+      calls.push(request);
+      if (request.action === "start") {
+        return {
+          id: "quick-exit",
+          command: process.execPath,
+          args: ["-e", "process.exitCode = 7"],
+          cwd: project,
+          status: "exited",
+          exitCode: 7,
+          signal: "0",
+          cursor: 2,
+          outputBytes: 30
+        };
+      }
+      if (request.action === "read") {
+        return {
+          id: request.id,
+          status: "exited",
+          exitCode: 7,
+          output: "stdout marker\nstderr marker\n",
+          chunks: [],
+          cursor: 2,
+          truncated: false
+        };
+      }
+      throw new Error(`unexpected terminal action: ${request.action}`);
+    };
+
+    const result = await commandSession(commandSessionSentence("start", {
+      command: process.execPath,
+      args: ["-e", "process.exitCode = 7"]
+    }), {
+      remember,
+      requestTerminal,
+      runtimeContext: { agentName: "mind", backend: "ollama" }
+    });
+    const started = JSON.parse(result.ob.text);
+
+    assert.equal(started.status, "exited");
+    assert.equal(started.exitCode, 7);
+    assert.equal(started.output, "stdout marker\nstderr marker\n");
+    assert.deepEqual(calls.map((call) => call.action), ["start", "read"]);
+  });
+});
+
 test("Pyash size and finish actions route to the existing PTY operations", async () => {
   await withProject(async ({ project, world }) => {
     const remember = rememberFor({ project, world });

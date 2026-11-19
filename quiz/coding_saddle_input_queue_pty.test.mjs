@@ -14,7 +14,7 @@ const model = "qwen3.5:9b";
 
 const alternateModel = "llama3.2:3b";
 
-const planToolName = "be_write_fromstate_text_ob_text";
+const bashMarker = "INPUT_QUEUE_BASH_OK";
 
 function deferred() {
   let resolve;
@@ -91,7 +91,7 @@ function getUserTexts(payload) {
     .map((message) => String(message.content ?? ""));
 }
 
-function makePlanToolResponse(id) {
+function makeBashToolResponse(id) {
   return {
     status: "success",
     result: {
@@ -102,14 +102,8 @@ function makePlanToolResponse(id) {
           id,
           type: "function",
           function: {
-            name: planToolName,
-            arguments: JSON.stringify({
-              ob: JSON.stringify({
-                action: "create",
-                objective: "Exercise saddle input timing",
-                steps: [{ title: "Complete the queued input scenario" }]
-              })
-            })
+            name: "bash",
+            arguments: JSON.stringify({ command: `sleep 1; printf '${bashMarker}'` })
           }
         }]
       }
@@ -301,18 +295,23 @@ test("saddle PTY steers on Enter, queues on Tab, and continues after switching O
 
     child.write("start tab scenario\r");
     await waitFor(() => submissions.some((payload) => getUserTexts(payload).includes("start tab scenario")), "second held provider request");
-    child.write("deliver after turn end\t");
-    await waitForOutput(() => transcript, "queued until the current turn finishes");
     const secondHeldJob = [...jobs.values()].find((job) => job.heldMarker === "start tab scenario");
     assert.ok(secondHeldJob?.response,
-      `second model response must be held while Tab is pressed; held=${JSON.stringify([...heldMarkers])}; users=${JSON.stringify(submissions.map(getUserTexts))}`);
-    secondHeldJob.response.resolve(makePlanToolResponse("tab-plan-call"));
+      `second model response must be held before it requests Bash; held=${JSON.stringify([...heldMarkers])}; users=${JSON.stringify(submissions.map(getUserTexts))}`);
+    assert.deepEqual(secondHeldJob.payload.tools.map((tool) => tool.function?.name), ["bash"],
+      "the active turn must use the single default Bash tool");
+    secondHeldJob.response.resolve(makeBashToolResponse("tab-bash-call"));
+    await waitForOutput(() => transcript, "[tool call] bash");
+    child.write("deliver after turn end\t");
+    await waitForOutput(() => transcript, "queued until the current turn finishes");
     await waitForSaddleTurn(() => transcript, "Tab message stayed queued until this turn completed.");
     await waitFor(() => submissions.some((payload) => getUserTexts(payload).includes("deliver after turn end")), "queued Tab message to start after the turn");
 
     const tabContinuation = submissions.find((payload) => getUserTexts(payload).includes("start tab scenario")
       && payload.messages?.some((message) => message?.role === "tool"));
     assert.ok(tabContinuation, "Tab test turn must continue after its tool result");
+    assert.ok(tabContinuation.messages.some((message) => message?.role === "tool"
+      && String(message.content).includes(bashMarker)), "the model must receive the completed Bash output");
     assert.equal(getUserTexts(tabContinuation).includes("deliver after turn end"), false,
       "Tab input must not be added to the model continuation before the turn ends");
     const queuedTurn = submissions.find((payload) => getUserTexts(payload).includes("deliver after turn end"));

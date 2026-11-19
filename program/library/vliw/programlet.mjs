@@ -12,10 +12,22 @@ import {
 
 export const DEFAULT_PYASH_PROGRAMLET_STEP_BUDGET = 65_536;
 export const MAX_PYASH_PROGRAMLET_STEP_BUDGET = 10_000_000;
-const MAX_PYASH_PROGRAMLET_CODELETS = 64;
+export const MAX_PYASH_PROGRAMLET_CODELETS = 64;
+export const MAX_PYASH_PROGRAMLET_LOCAL_SLOTS = 64;
+export const MAX_PYASH_PROGRAMLET_ARGUMENTS = 8;
+export const MAX_PYASH_PROGRAMLET_CALL_DEPTH = 8;
 const MAX_PYASH_PROGRAM_SECTIONS = 64;
 const MAX_PYASH_SECTION_NAME_WORDS = 8;
 const SECTION_VERBS = new Set(["myocpfun", "myoc pfun", "module partially"]);
+
+const PROGRAMLET_ARGUMENT_EXCLUDED_FIELDS = new Set([
+  "mood",
+  "su",
+  "to",
+  "be",
+  "fromindex",
+  "toindex"
+]);
 
 const PURE_BUILTIN_VERBS = new Set([
   "remains",
@@ -85,12 +97,48 @@ function programComplexity(sentences) {
   return decisions + 1;
 }
 
+function branchDepth(sentence) {
+  if (!sentence || (!sentence.consequence && !sentence.alternative)) return 0;
+  return 1 + Math.max(branchDepth(sentence.consequence), branchDepth(sentence.alternative));
+}
+
 function outputType(sentence) {
   const types = sentence?.to?.nameTypeWords ?? [];
   if (!sentence?.to?.name || types.length !== 1) return null;
   if (["bool", "boolean"].includes(types[0])) return "bool";
   if (["num", "number"].includes(types[0])) return "num";
   return null;
+}
+
+function scalarInputType(value) {
+  if (Number.isInteger(value?.num) && value.num >= 0 && value.num <= 0xffff) return "num";
+  if (typeof value?.boolean === "boolean") return "bool";
+  return null;
+}
+
+function programletInputFields(sentence) {
+  return Object.entries(sentence).filter(([role]) => !PROGRAMLET_ARGUMENT_EXCLUDED_FIELDS.has(role));
+}
+
+function validateProgramletInputs(sentence) {
+  const fields = programletInputFields(sentence);
+  if (fields.length > MAX_PYASH_PROGRAMLET_ARGUMENTS) {
+    fail(`Pyash programlet ceremony ${sentence.su.name} exceeds ${MAX_PYASH_PROGRAMLET_ARGUMENTS} scalar input fields`);
+  }
+  for (const [role, value] of fields) {
+    if (!scalarInputType(value)) {
+      fail(`Pyash programlet ceremony ${sentence.su.name} only admits U16 numeric or boolean scalar input fields`, {
+        role
+      });
+    }
+  }
+}
+
+function validateProgramletInputCount(sentence, ceremonyName) {
+  const count = programletInputFields(sentence).length;
+  if (count > MAX_PYASH_PROGRAMLET_ARGUMENTS) {
+    fail(`Pyash programlet call to ${ceremonyName} exceeds ${MAX_PYASH_PROGRAMLET_ARGUMENTS} input fields`);
+  }
 }
 
 function programletLocalDeclaration(sentence) {
@@ -123,6 +171,11 @@ function programletLocalDeclaration(sentence) {
 }
 
 function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
+  for (const [index, sentence] of sentences.entries()) {
+    if (branchDepth(sentence) > 1) {
+      fail("Pyash programlet nested conditional branches are not admitted", { sentence: index + 1 });
+    }
+  }
   const definitionNames = sentences
     .filter((sentence) => sentence?.mood === "def" && sentence.be === "ceremony")
     .map((sentence) => sentence.su?.name)
@@ -137,6 +190,7 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
     if (!type) {
       fail(`Pyash programlet ceremony ${sentence.su.name} must declare one bool or num output name`);
     }
+    validateProgramletInputs(sentence);
     signatures.set(sentence.su.name, type);
   }
 
@@ -189,6 +243,9 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
         if (activeSlots.has(slotName)) {
           fail(`Pyash programlet redeclares local slot: ${slotName}`, { sentence: index + 1 });
         }
+        if (activeSlots.size >= MAX_PYASH_PROGRAMLET_LOCAL_SLOTS - 1) {
+          fail(`Pyash programlet ceremony ${activeDefinition} exceeds ${MAX_PYASH_PROGRAMLET_LOCAL_SLOTS - 1} declared locals`);
+        }
         activeSlots.set(slotName, localDeclaration);
       } else if (sentence.mood === "do") {
         activeDefinitionHasAction = true;
@@ -218,6 +275,12 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
           if (!PURE_BUILTIN_VERBS.has(action.be) && !isCall && !isBooleanPredicate) {
             fail(`Pyash programlet rejects effectful or unknown verb: ${action.be}`, { sentence: index + 1 });
           }
+          const isBranchPredicate = Boolean(action.consequence || action.alternative);
+          if (!isCall && !isBranchPredicate && !action.to?.name) {
+            fail(`Pyash programlet ${action.be} action requires a typed to name destination`, {
+              sentence: index + 1
+            });
+          }
           const targetSlot = action.to?.name ? activeSlots.get(action.to.name) : null;
           if (targetSlot?.kind === "constant") {
             fail(`constant quantity is read-only: ${action.to.name}`, { sentence: index + 1 });
@@ -230,7 +293,13 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
               sentence: index + 1
             });
           }
+          if (!isCall && !isBranchPredicate && !outputType(action) && !targetSlot) {
+            fail(`Pyash programlet ${action.be} action requires a typed to name destination`, {
+              sentence: index + 1
+            });
+          }
           if (isCall) {
+            validateProgramletInputCount(action, action.be);
             if (!action.to?.name || outputType(action) !== signatures.get(action.be)
               || (targetSlot?.type && targetSlot.type !== outputType(action))) {
               fail(`Pyash programlet call to ${action.be} has an incompatible output signature`, {
@@ -275,21 +344,27 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
     if (!definitions.has(invocation.be)) {
       fail("Pyash programlet final invocation must call a defined ceremony", { be: invocation.be });
     }
+    validateProgramletInputCount(invocation, invocation.be);
     if (!outputType(invocation) || outputType(invocation) !== signatures.get(invocation.be)) {
       fail("Pyash programlet invocation requires one typed bool or num output name");
     }
   }
   const visiting = new Set();
-  const visited = new Set();
+  const depths = new Map();
   const visitCall = (name) => {
     if (visiting.has(name)) {
       fail("Pyash programlet does not admit recursive ceremony calls", { ceremony: name });
     }
-    if (visited.has(name)) return;
+    if (depths.has(name)) return depths.get(name);
     visiting.add(name);
-    for (const called of calls.get(name) ?? []) visitCall(called);
+    let depth = 1;
+    for (const called of calls.get(name) ?? []) depth = Math.max(depth, 1 + visitCall(called));
     visiting.delete(name);
-    visited.add(name);
+    if (depth > MAX_PYASH_PROGRAMLET_CALL_DEPTH) {
+      fail(`Pyash programlet call depth exceeds ${MAX_PYASH_PROGRAMLET_CALL_DEPTH}`, { ceremony: name });
+    }
+    depths.set(name, depth);
+    return depth;
   };
   for (const name of definitions) visitCall(name);
 
@@ -452,6 +527,11 @@ export function compilePyashProgramSource(sourceText, { invocation = "" } = {}) 
   const invocationIndex = call ? program.length - 1 : -1;
   const validation = validatePureProgram(program, { invocationIndex });
   const lowered = lowerPyashProgram(program);
+  if (lowered.vectors.length > MAX_PYASH_PROGRAMLET_CODELETS) {
+    fail(`Pyash programlet exceeds ${MAX_PYASH_PROGRAMLET_CODELETS} codelets`, {
+      codelets: lowered.vectors.length
+    });
+  }
   const pack = encodePyacPack(lowered.vectors);
   return {
     pack,
@@ -465,6 +545,11 @@ export function compilePyashProgramSource(sourceText, { invocation = "" } = {}) 
 
 export function decodePyashProgramPack(pack) {
   const decodedPack = decodePyacPack(pack);
+  if (decodedPack.codelets.length > MAX_PYASH_PROGRAMLET_CODELETS) {
+    fail(`Pyash programlet exceeds ${MAX_PYASH_PROGRAMLET_CODELETS} codelets`, {
+      codelets: decodedPack.codelets.length
+    });
+  }
   const sentences = decodePyashProgram(decodedPack.codelets);
   const sections = splitProgramSections(sentences);
   if (!sections) {
@@ -502,12 +587,13 @@ function defaultOutputFact(invocation) {
 }
 
 async function executeProgramletSentences(sentences, { outputName = "", stepBudget } = {}) {
+  const limit = normalizeStepBudget(stepBudget);
   if (allRemember().length > 0) {
     fail("Pyash programlet reference execution requires an empty interpreter memory");
   }
   forget();
   const previousBudget = bridgeState.programStepBudget;
-  bridgeState.programStepBudget = { limit: stepBudget, remaining: stepBudget };
+  bridgeState.programStepBudget = { limit, remaining: limit };
   try {
     const invocation = sentences.at(-1);
     if (invocation?.mood !== "do") fail("Pyash programlet pack must end with an invocation");
@@ -519,7 +605,9 @@ async function executeProgramletSentences(sentences, { outputName = "", stepBudg
     // Compile loads VLIW while the bridge is registering built-in signatures.
     // Load the bridge only when reference execution begins to avoid that cycle.
     const { interpret } = await import("../../bridge/index.mjs");
+    bridgeState.programStepBudget = null;
     for (const sentence of sentences.slice(0, -1)) await interpret(clone(sentence));
+    bridgeState.programStepBudget = { limit, remaining: limit };
     const initial = defaultOutputFact(invocation);
     doRemember({ mood: "ya", su: { name: destination }, ...initial });
     const execution = await interpret(clone(invocation));

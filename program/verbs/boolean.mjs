@@ -1,26 +1,36 @@
-import { namedNumericSlotKind } from "../library/named_numeric_slot.mjs";
+import { remember } from "../remember/index.mjs";
+import { throwErrorSentence } from "../error.mjs";
 
-export function boolean_obj_boolean_to_name_bool(sentence, { remember } = {}) {
-  const targetName = sentence.to?.name;
-  const target = targetName && typeof remember === "function" ? remember(targetName) : null;
-  const targetTypes = sentence.to?.nameTypeWords ?? [];
-  if (typeof sentence.ob?.boolean !== "boolean") {
-    throw new Error("boolean assignment requires a boolean object");
+function resolveBoolean(ob, { rememberFn = remember } = {}) {
+  if (typeof ob?.boolean === "boolean") return ob.boolean;
+  if (typeof ob?.bool === "boolean") return ob.bool;
+  if (typeof ob?.name === "string") {
+    const fact = rememberFn(ob.name);
+    if (typeof fact?.ob?.boolean === "boolean") return fact.ob.boolean;
+    if (typeof fact?.ob?.bool === "boolean") return fact.ob.bool;
   }
-  if (!targetName || targetTypes.length !== 1 || !["bool", "boolean"].includes(targetTypes[0])) {
-    throw new Error("boolean assignment requires a typed boolean destination");
-  }
-  if (!target || !["bool", "boolean"].includes(target.be) || namedNumericSlotKind(target) !== "variable") {
-    throw new Error(`boolean assignment requires a mutable boolean local: ${targetName}`);
-  }
-  return { ob: { boolean: sentence.ob.boolean }, be: target.be };
+  throwErrorSentence({
+    name: "boolean defective",
+    message: "boolean requires a boolean value",
+    from: { name: "boolean" },
+    raw: { ob }
+  });
 }
 
-export default boolean_obj_boolean_to_name_bool;
+export function boolean(sentence, { remember: rememberFn = remember } = {}) {
+  return {
+    ob: { boolean: resolveBoolean(sentence?.ob, { rememberFn }) },
+    be: "boolean"
+  };
+}
 
 export const signatures = [
-  { signatureWords: ["be", "boolean", "ob", "bool", "to", "name", "bool"], handler: boolean_obj_boolean_to_name_bool },
-  { signatureWords: ["be", "boolean", "ob", "bool", "to", "name", "boolean"], handler: boolean_obj_boolean_to_name_bool },
-  { signatureWords: ["be", "boolean", "ob", "boolean", "to", "name", "bool"], handler: boolean_obj_boolean_to_name_bool },
-  { signatureWords: ["be", "boolean", "ob", "boolean", "to", "name", "boolean"], handler: boolean_obj_boolean_to_name_bool }
+  { signatureWords: ["be", "boolean", "ob", "bool"], handler: boolean },
+  { signatureWords: ["be", "boolean", "ob", "bool", "to", "name", "bool"], handler: boolean },
+  { signatureWords: ["be", "boolean", "ob", "bool", "to", "name", "boolean"], handler: boolean },
+  { signatureWords: ["be", "boolean", "ob", "name", "bool"], handler: boolean },
+  { signatureWords: ["be", "boolean", "ob", "name", "bool", "to", "name", "bool"], handler: boolean },
+  { signatureWords: ["be", "boolean", "ob", "name", "bool", "to", "name", "boolean"], handler: boolean }
 ];
+
+export default boolean;

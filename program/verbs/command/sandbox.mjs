@@ -119,15 +119,241 @@ function isPathWithinRoots(targetPath, roots = []) {
   return false;
 }
 
-function parseAbsolutePathTokens(commandText = "") {
-  const text = String(commandText ?? "");
-  const tokens = [];
-  for (const token of text.split(/\s+/)) {
-    const cleaned = token.replace(/[;,]+$/g, "").trim();
-    if (!cleaned.startsWith("/")) continue;
-    tokens.push(cleaned);
+function findShellSubstitutionEnd(text, start) {
+  let depth = 1;
+  let quote = "";
+  for (let index = start; index < text.length; index += 1) {
+    const character = text[index];
+    if (quote === "'") {
+      if (character === "'") quote = "";
+      continue;
+    }
+    if (quote === '"') {
+      if (character === "\\") index += 1;
+      else if (character === '"') quote = "";
+      else if (character === "$" && text[index + 1] === "(") {
+        depth += 1;
+        index += 1;
+      }
+      continue;
+    }
+    if (character === "\\") index += 1;
+    else if (character === "'") quote = "'";
+    else if (character === '"') quote = '"';
+    else if (character === "$" && text[index + 1] === "(") {
+      depth += 1;
+      index += 1;
+    } else if (character === "(") depth += 1;
+    else if (character === ")") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
   }
+  return text.length;
+}
+
+function findBacktickSubstitutionEnd(text, start) {
+  for (let index = start; index < text.length; index += 1) {
+    if (text[index] === "\\") index += 1;
+    else if (text[index] === "`") return index;
+  }
+  return text.length;
+}
+
+function parseShellTokens(commandText = "", nestedCommands = []) {
+  const text = String(commandText ?? "");
+  const operators = [
+    "&>>", "<<<", "<<-", "<<", ">>", "&&", "||", "&>", "<>", ">|", "<", ">", ";", "|", "&", "(", ")"
+  ];
+  const tokens = [];
+  const hereDocs = [];
+  let word = "";
+  let wordStarted = false;
+  let quote = "";
+  let hereDocExpectation = null;
+
+  const flushWord = () => {
+    if (!wordStarted) return;
+    if (hereDocExpectation) {
+      hereDocs.push({ delimiter: word, stripTabs: hereDocExpectation.stripTabs });
+      hereDocExpectation = null;
+    } else {
+      tokens.push({ kind: "word", value: word });
+    }
+    word = "";
+    wordStarted = false;
+  };
+
+  const skipHereDocBodies = (start) => {
+    let cursor = start;
+    for (const hereDoc of hereDocs) {
+      let foundDelimiter = false;
+      while (cursor < text.length) {
+        const newline = text.indexOf("\n", cursor);
+        const end = newline === -1 ? text.length : newline;
+        const line = text.slice(cursor, end);
+        const candidate = hereDoc.stripTabs ? line.replace(/^\t+/u, "") : line;
+        cursor = newline === -1 ? text.length : newline + 1;
+        if (candidate === hereDoc.delimiter) {
+          foundDelimiter = true;
+          break;
+        }
+      }
+      if (!foundDelimiter) return text.length;
+    }
+    hereDocs.length = 0;
+    return cursor;
+  };
+
+  // Keep quoted shell words intact so prose slashes are not mistaken for path arguments.
+  for (let index = 0; index < text.length;) {
+    const character = text[index];
+    if (quote === "'") {
+      if (character === "'") quote = "";
+      else word += character;
+      index += 1;
+      continue;
+    }
+    if (quote === '"') {
+      if (character === "$" && text[index + 1] === "(") {
+        const end = findShellSubstitutionEnd(text, index + 2);
+        nestedCommands.push(text.slice(index + 2, end));
+        const afterEnd = end < text.length ? end + 1 : end;
+        word += text.slice(index, afterEnd);
+        index = afterEnd;
+      } else if (character === "`") {
+        const end = findBacktickSubstitutionEnd(text, index + 1);
+        if (end < text.length) nestedCommands.push(text.slice(index + 1, end));
+        const afterEnd = end < text.length ? end + 1 : end;
+        word += text.slice(index, afterEnd);
+        index = afterEnd;
+      } else if (character === "\\" && index + 1 < text.length) {
+        const next = text[index + 1];
+        if (next === "\n") index += 2;
+        else if ("$`\"\\".includes(next)) {
+          word += next;
+          index += 2;
+        } else {
+          word += `\\${next}`;
+          index += 2;
+        }
+      } else if (character === '"') {
+        quote = "";
+        index += 1;
+      } else {
+        word += character;
+        index += 1;
+      }
+      continue;
+    }
+
+    if (character === "\\" && index + 1 < text.length) {
+      const next = text[index + 1];
+      wordStarted = true;
+      if (next !== "\n") word += next;
+      index += 2;
+      continue;
+    }
+    if (character === "'" || character === '"') {
+      quote = character;
+      wordStarted = true;
+      index += 1;
+      continue;
+    }
+    if (character === "#" && !wordStarted) {
+      const newline = text.indexOf("\n", index);
+      index = newline === -1 ? text.length : newline;
+      continue;
+    }
+    if (character === "\n") {
+      flushWord();
+      tokens.push({ kind: "operator", value: "\n" });
+      index = hereDocs.length ? skipHereDocBodies(index + 1) : index + 1;
+      continue;
+    }
+    if (/\s/u.test(character)) {
+      flushWord();
+      index += 1;
+      continue;
+    }
+
+    const operator = operators.find((candidate) => text.startsWith(candidate, index));
+    if (operator) {
+      flushWord();
+      tokens.push({ kind: "operator", value: operator });
+      if (operator === "<<" || operator === "<<-") {
+        hereDocExpectation = { stripTabs: operator === "<<-" };
+      }
+      index += operator.length;
+      continue;
+    }
+
+    word += character;
+    wordStarted = true;
+    index += 1;
+  }
+  flushWord();
   return tokens;
+}
+
+const SHELL_WRITE_COMMANDS = new Set([
+  "chmod", "chown", "cp", "install", "mkdir", "mv", "rm", "rmdir", "tee", "touch", "truncate", "warc2zim", "zimwriterfs"
+]);
+const SHELL_WRAPPERS = new Set(["builtin", "command", "env", "exec", "nice", "nohup", "sudo", "time"]);
+const SHELL_SEPARATORS = new Set(["\n", "&&", "||", ";", "|", "&", "(", ")"]);
+const SHELL_OUTPUT_REDIRECTIONS = new Set([">", ">>", ">|", "&>", "&>>"]);
+
+function collectShellWritePaths(tokens = [], paths = [], nestedCommands = []) {
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    const next = tokens[index + 1];
+    if (token.kind === "operator" && SHELL_OUTPUT_REDIRECTIONS.has(token.value)
+      && next?.kind === "word" && next.value.startsWith("/")) {
+      paths.push(next.value);
+    }
+  }
+
+  const words = tokens.filter((token) => token.kind === "word").map((token) => token.value);
+  let commandIndex = 0;
+  while (commandIndex < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/u.test(words[commandIndex])) commandIndex += 1;
+  while (commandIndex < words.length && SHELL_WRAPPERS.has(path.basename(words[commandIndex]).toLowerCase())) {
+    commandIndex += 1;
+    while (commandIndex < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/u.test(words[commandIndex])) commandIndex += 1;
+  }
+  if (commandIndex >= words.length) return;
+
+  const commandName = path.basename(words[commandIndex]).toLowerCase();
+  if (["sh", "bash", "dash", "zsh"].includes(commandName)) {
+    const codeFlag = words.indexOf("-c", commandIndex + 1);
+    if (codeFlag >= 0 && words[codeFlag + 1]) nestedCommands.push(words[codeFlag + 1]);
+  } else if (commandName === "eval") {
+    const evaluatedText = words.slice(commandIndex + 1).join(" ");
+    if (evaluatedText) nestedCommands.push(evaluatedText);
+  } else if (SHELL_WRITE_COMMANDS.has(commandName)) {
+    for (const argument of words.slice(commandIndex + 1)) {
+      if (argument.startsWith("/")) paths.push(argument);
+    }
+  }
+}
+
+function parseAbsolutePathTokens(commandText = "") {
+  const nestedCommands = [];
+  const tokens = parseShellTokens(commandText, nestedCommands);
+  const paths = [];
+  let commandTokens = [];
+  const flushCommand = () => {
+    if (commandTokens.length) collectShellWritePaths(commandTokens, paths, nestedCommands);
+    commandTokens = [];
+  };
+  for (const token of tokens) {
+    if (token.kind === "operator" && SHELL_SEPARATORS.has(token.value)) flushCommand();
+    else commandTokens.push(token);
+  }
+  flushCommand();
+  for (const nestedCommand of nestedCommands) {
+    paths.push(...parseAbsolutePathTokens(nestedCommand));
+  }
+  return paths;
 }
 
 export function rewriteRunRootCommandPath(commandText, { cwd, rememberFn = remember } = {}) {
@@ -252,12 +478,20 @@ export function buildAllowedEnv({ allowlist = [], cwd, runRoot } = {}) {
 }
 
 export function validateSandboxWritePolicy({ sentence, commandText, commandClass, sandbox } = {}) {
+  const rejectionContext = (details = {}) => ({
+    ...details,
+    command: String(commandText ?? ""),
+    cwd: String(sandbox?.cwd ?? ""),
+    commandRoots: Array.isArray(sandbox?.commandRoots) ? [...sandbox.commandRoots] : [],
+    writableRoots: Array.isArray(sandbox?.writableRoots) ? [...sandbox.writableRoots] : [],
+    processStarted: false
+  });
   if (!Array.isArray(sandbox?.writableRoots) || sandbox.writableRoots.length === 0) {
     throwErrorSentence({
       name: "command sandbox defective",
       message: "command sandbox defective: writable roots missing",
       from: { la: sentence },
-      raw: { sandbox }
+      raw: rejectionContext({ sandbox })
     });
   }
   if (!Array.isArray(sandbox?.commandRoots) || sandbox.commandRoots.length === 0) {
@@ -265,7 +499,7 @@ export function validateSandboxWritePolicy({ sentence, commandText, commandClass
       name: "command permission defective",
       message: "command permission defective: command license missing",
       from: { la: sentence },
-      raw: { commandRoots: sandbox?.commandRoots }
+      raw: rejectionContext()
     });
   }
   if (!isPathWithinRoots(sandbox.cwd, sandbox.commandRoots)) {
@@ -273,7 +507,7 @@ export function validateSandboxWritePolicy({ sentence, commandText, commandClass
       name: "command sandbox defective",
       message: `command sandbox defective: cwd outside command roots (${sandbox.cwd})`,
       from: { la: sentence },
-      raw: { cwd: sandbox.cwd, commandRoots: sandbox.commandRoots }
+      raw: rejectionContext()
     });
   }
   if (sentence?.to?.filename) {
@@ -284,7 +518,7 @@ export function validateSandboxWritePolicy({ sentence, commandText, commandClass
         name: "command sandbox defective",
         message: `command sandbox defective: write target outside writable roots (${sentence.to.filename})`,
         from: { la: sentence },
-        raw: { target: sentence.to.filename, resolvedTarget, writableRoots: sandbox.writableRoots }
+        raw: rejectionContext({ target: sentence.to.filename, resolvedTarget })
       });
     }
   }
@@ -295,7 +529,7 @@ export function validateSandboxWritePolicy({ sentence, commandText, commandClass
     name: "command sandbox defective",
     message: `command sandbox defective: command path outside writable roots (${outsideRoots[0]})`,
     from: { la: sentence },
-    raw: { class: commandClass, outsideRoots, writableRoots: sandbox.writableRoots }
+    raw: rejectionContext({ class: commandClass, outsideRoots })
   });
 }
 

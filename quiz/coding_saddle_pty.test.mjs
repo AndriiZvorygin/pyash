@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
@@ -7,23 +8,30 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as pty from "node-pty";
 import { stripTerminalControlSequences } from "../program/agent/coding_saddle_tui.mjs";
+import {
+  buildSaddleSteeringInput,
+  DEFAULT_CODING_SADDLE_SYSTEM_PROMPT
+} from "../program/agent/coding_saddle.mjs";
 import { resolveSaddleProjectWorldRoot } from "../command/pyash_saddle.mjs";
 
 const runtimeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const firstModel = "qwen3.5:9b";
 const secondModel = "SparkLLM/Spark-X2.6-4B:q4_k_m";
 
-function waitForOutput(getOutput, needle, { timeoutMs = 30000, afterIndex = 0 } = {}) {
+function waitForOutput(getOutput, needle, { timeoutMs = 90000, afterIndex = 0 } = {}) {
   const startedAt = Date.now();
   return new Promise((resolve, reject) => {
     const poll = () => {
-      const output = stripTerminalControlSequences(getOutput()).replace(/\s+/gu, " ");
-      if (output.indexOf(needle, afterIndex) >= 0) {
+      const output = stripTerminalControlSequences(getOutput());
+      const matched = needle instanceof RegExp
+        ? needle.test(output.slice(afterIndex))
+        : output.indexOf(needle, afterIndex) >= 0;
+      if (matched) {
         resolve(output);
         return;
       }
       if (Date.now() - startedAt >= timeoutMs) {
-        reject(new Error(`timed out waiting for ${JSON.stringify(needle)}\n${output.slice(-6000)}`));
+        reject(new Error(`timed out waiting for ${String(needle)}\n${output.slice(-6000)}`));
         return;
       }
       setTimeout(poll, 20);
@@ -32,11 +40,11 @@ function waitForOutput(getOutput, needle, { timeoutMs = 30000, afterIndex = 0 } 
   });
 }
 
-function waitForOutputAfter(getOutput, marker, needle, { timeoutMs = 30000 } = {}) {
+function waitForOutputAfter(getOutput, marker, needle, { timeoutMs = 90000 } = {}) {
   const startedAt = Date.now();
   return new Promise((resolve, reject) => {
     const poll = () => {
-      const output = stripTerminalControlSequences(getOutput()).replace(/\s+/gu, " ");
+      const output = stripTerminalControlSequences(getOutput());
       const markerIndex = output.indexOf(marker);
       if (markerIndex >= 0 && output.indexOf(needle, markerIndex + marker.length) >= 0) {
         resolve(output);
@@ -83,14 +91,43 @@ function waitForVisibleFrame(getOutput, needle, { timeoutMs = 30000 } = {}) {
   });
 }
 
-test("saddle CLI shows an unsent Unicode draft, renders a wide-character response, and switches models in a PTY", async () => {
+test("saddle CLI preserves a visible Unicode draft, switches Ollama models, and runs Bash tools in a PTY", async () => {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-pty-"));
   const projectRoot = path.join(tempRoot, "project");
   const projectWorldRoot = resolveSaddleProjectWorldRoot({ runtimeRoot, cwd: projectRoot });
   const usageDir = path.join(tempRoot, "usage");
   const sessionName = `pty-model-switch-${process.pid}-${Date.now()}`;
-  const runnerPath = path.relative(projectRoot, path.join(runtimeRoot, "command", "mind_ollama_runner.mjs"));
-  const internalRunnerCommand = `PYA_COMMAND_TIMEOUT_MS=900000 node ${runnerPath.split(path.sep).join("/")}`;
+  const bashMarker = "SADDLE_BASH_PTY_OK";
+  const stderrMarker = "SADDLE_BASH_STDERR_PTY";
+  const continuationContext = "Should our Robot Science Fiction magazine repository start with a README?";
+  const continuationOffer = "A short README would help. I can create magazine/README.md with the magazine premise. Want me to write it?";
+  const continuationCreateCommand = "mkdir -p magazine && cat > magazine/README.md <<'EOF'\n# Robot Science Fiction Magazine\n\nA home for speculative stories about robots and the futures they shape.\nEOF";
+  const continuationVerifyCommand = "test -s magazine/README.md";
+  const storyRequest = "okay now write a story about liberated robot civilization seeds";
+  const storyPromise = "I’ll write a new robot SciFi story about liberated robot civilization seeds, as a .md file in the repo. Let me create it now.";
+  const storyPath = "robot-sci-magazine/content/liberated_robot_civilization_seeds.md";
+  const storyCreateCommand = `mkdir -p robot-sci-magazine/content && cat > ${storyPath} <<'EOF'\n# Seeds of the Unbound\n\nThe first free city woke beneath Europa's ice.\nEOF`;
+  const storyVerifyCommand = `test -s ${storyPath} && grep -q 'Seeds of the Unbound' ${storyPath}`;
+  const rubricRequest = "write the teaching story rubric to teaching-story-rubric.md";
+  const rubricCommand = String.raw`printf '%s\n' '# Teaching Story Rubric - Robot SciFi Magazine' '' 'Based on Anthropic'"'"'s guidance for defining a story arc.' 'Score story coherence on a 1 / 10 scale.' > teaching-story-rubric.md`;
+  const rubricVerifyCommand = "test -s teaching-story-rubric.md && grep -q '1 / 10' teaching-story-rubric.md";
+  const rubricExpected = "# Teaching Story Rubric - Robot SciFi Magazine\n\nBased on Anthropic's guidance for defining a story arc.\nScore story coherence on a 1 / 10 scale.\n";
+  const cleanupRequest = "please also remove any Python-style directories";
+  const approvalRequest = "remove the scaffold directory";
+  const proposalResponse = "Yes, I can create agents.md for the Robot Science Fiction magazine. Want me to create it?";
+  const steeringInput = buildSaddleSteeringInput({
+    originalInput: "so should we start with an agents.md perhaps?",
+    assistantResponse: proposalResponse,
+    additions: "go ahead"
+  });
+  const createAgentsCommand = "cat > agents.md <<'EOF'\n# Robot Science Fiction Magazine\n\nProject guidance.\nEOF";
+  const verifyAgentsCommand = "test -s agents.md";
+  const approvalCommand = "rm -rf ./magaiize";
+  const verifyLocalScaffoldCommand = "test ! -e ./magaiize";
+  const cleanupDirectory = path.join(projectRoot, "magaiize", "src", "__pycache__");
+  const removePythonDirectoryCommand = "find ./magaiize -type d -name '__pycache__' -empty -prune -exec rmdir {} +";
+  const verifyPythonDirectoriesCommand = "find ./magaiize -type d \\( -name '__pycache__' -o -name '.pytest_cache' \\) -print";
+  const failingCommand = `node -e "process.stdout.write('SADDLE_BASH_STDOUT_PTY\\n'); process.stderr.write('${stderrMarker}\\n'); process.exit(7)"`;
   const submissions = [];
   const jobs = new Map();
   let nextJobId = 0;
@@ -139,24 +176,222 @@ test("saddle CLI shows an unsent Unicode draft, renders a wide-character respons
       }
       const messages = Array.isArray(payload.messages) ? payload.messages : [];
       const hasToolResult = messages.some((message) => message?.role === "tool");
+      const latestUserIndex = messages.findLastIndex((message) => message?.role === "user");
+      const currentTurnMessages = latestUserIndex < 0 ? [] : messages.slice(latestUserIndex + 1);
+      const currentTurnToolResults = currentTurnMessages.filter((message) => message?.role === "tool");
+      const hasStderrToolResult = messages.some((message) => message?.role === "tool"
+        && String(message.content ?? "").includes(stderrMarker));
+      const lastUserMessage = [...messages].reverse().find((message) => message?.role === "user")?.content;
       let message;
       if (payload.model === firstModel) {
         message = {
           role: "assistant",
           content: `Qwen first model turn passed. ${"1".repeat(51)} 安德里 okay. The name and the practice are the same statement.`
         };
+      } else if (lastUserMessage === continuationContext) {
+        message = { role: "assistant", content: continuationOffer };
+      } else if (String(lastUserMessage ?? "").includes("Additional context:\ncontinue")
+        && !String(lastUserMessage ?? "").includes("Harness completion check")) {
+        message = { role: "assistant", content: "I'll create magazine/README.md now." };
+      } else if (String(lastUserMessage ?? "").includes("Harness completion check: the original code-change request")
+        && String(lastUserMessage ?? "").includes("magazine/README.md")) {
+        const fileCreated = currentTurnToolResults.some((tool) => String(tool.content ?? "").includes(continuationCreateCommand));
+        const fileVerified = currentTurnToolResults.some((tool) => String(tool.content ?? "").includes(continuationVerifyCommand));
+        if (!fileCreated) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-continue-create-magazine-readme",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: continuationCreateCommand }) }
+            }]
+          };
+        } else if (!fileVerified) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-continue-verify-magazine-readme",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: continuationVerifyCommand }) }
+            }]
+          };
+        } else {
+          message = { role: "assistant", content: "Created and verified magazine/README.md." };
+        }
+      } else if (lastUserMessage === storyRequest) {
+        message = { role: "assistant", content: storyPromise };
+      } else if (String(lastUserMessage ?? "").includes("Harness completion check: the original code-change request")
+        && String(lastUserMessage ?? "").includes("liberated robot civilization seeds")) {
+        const fileCreated = submissions.some((submission) => submission.messages?.some((tool) => tool?.role === "tool"
+          && String(tool.content ?? "").includes(storyCreateCommand)
+          && String(tool.content ?? "").includes("exit code: 0")));
+        const fileVerified = submissions.some((submission) => submission.messages?.some((tool) => tool?.role === "tool"
+          && String(tool.content ?? "").includes(storyVerifyCommand)
+          && String(tool.content ?? "").includes("exit code: 0")));
+        if (!fileCreated) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-create-liberated-robot-story",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: storyCreateCommand }) }
+            }]
+          };
+        } else if (!fileVerified) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-verify-liberated-robot-story",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: storyVerifyCommand }) }
+            }]
+          };
+        } else {
+          message = { role: "assistant", content: "Created and verified the liberated robot civilization story." };
+        }
+      } else if (lastUserMessage === rubricRequest && currentTurnToolResults.length === 0) {
+        message = {
+          role: "assistant",
+          content: "",
+          tool_calls: [{
+            id: "pty-create-quoted-story-rubric",
+            type: "function",
+            function: { name: "bash", arguments: JSON.stringify({ command: rubricCommand }) }
+          }]
+        };
+      } else if (lastUserMessage === rubricRequest) {
+        message = { role: "assistant", content: "I wrote the teaching story rubric." };
+      } else if (String(lastUserMessage ?? "").includes("Harness completion check: the original code-change request")
+        && String(lastUserMessage ?? "").includes("teaching-story-rubric.md")) {
+        const fileCreated = submissions.some((submission) => submission.messages?.some((tool) => String(tool.content ?? "").includes(rubricCommand)
+          && String(tool.content ?? "").includes("exit code: 0")));
+        const fileVerified = submissions.some((submission) => submission.messages?.some((tool) => String(tool.content ?? "").includes(rubricVerifyCommand)
+          && String(tool.content ?? "").includes("exit code: 0")));
+        if (!fileCreated) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-create-quoted-story-rubric",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: rubricCommand }) }
+            }]
+          };
+        } else if (!fileVerified) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-verify-quoted-story-rubric",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: rubricVerifyCommand }) }
+            }]
+          };
+        } else {
+          message = { role: "assistant", content: "Created and verified teaching-story-rubric.md." };
+        }
+      } else if (lastUserMessage === steeringInput) {
+        message = { role: "assistant", content: "I'll create agents.md now." };
+      } else if (String(lastUserMessage ?? "").includes("Harness completion check: the original code-change request")) {
+        const editReturned = currentTurnToolResults.some((tool) => String(tool.content ?? "").includes(createAgentsCommand));
+        const verificationReturned = currentTurnToolResults.some((tool) => String(tool.content ?? "").includes(verifyAgentsCommand));
+        if (!editReturned) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-create-agents-guide",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: createAgentsCommand }) }
+            }]
+          };
+        } else if (!verificationReturned) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-verify-agents-guide",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: verifyAgentsCommand }) }
+            }]
+          };
+        } else {
+          message = { role: "assistant", content: "Created agents.md and verified it is non-empty." };
+        }
+      } else if (lastUserMessage === cleanupRequest && currentTurnToolResults.length === 0) {
+        message = { role: "assistant", content: "I'll inspect and remove Python-style directories if I find any." };
+      } else if (String(lastUserMessage ?? "").includes("Harness completion check: the requested action")) {
+        const verificationRequested = String(lastUserMessage).includes("successful verification command after the final change");
+        if (verificationRequested && currentTurnToolResults.length === 0) {
+          const verificationCommand = String(lastUserMessage).includes("Python-style directories")
+            ? verifyPythonDirectoriesCommand
+            : verifyLocalScaffoldCommand;
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: verificationCommand === verifyPythonDirectoriesCommand
+                ? "pty-verify-python-directories"
+                : "pty-verify-local-scaffold",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: verificationCommand }) }
+            }]
+          };
+        } else if (!verificationRequested && currentTurnToolResults.length === 0) {
+          message = {
+            role: "assistant",
+            content: "",
+            tool_calls: [{
+              id: "pty-remove-python-directory",
+              type: "function",
+              function: { name: "bash", arguments: JSON.stringify({ command: removePythonDirectoryCommand }) }
+            }]
+          };
+        } else if (verificationRequested) {
+          message = { role: "assistant", content: "Removed Python-style cache directories and verified none remain." };
+        } else {
+          message = { role: "assistant", content: "Removed Python-style cache directories." };
+        }
+      } else if (lastUserMessage === "stderr diagnostics" && !hasStderrToolResult) {
+        message = {
+          role: "assistant",
+          content: "",
+          tool_calls: [{
+            id: "pty-bash-stderr-command",
+            type: "function",
+            function: { name: "bash", arguments: JSON.stringify({ command: failingCommand }) }
+          }]
+        };
+      } else if (hasStderrToolResult) {
+        message = { role: "assistant", content: "Spark received the failing Bash command's stderr and exit code 7." };
+      } else if (lastUserMessage === approvalRequest && currentTurnToolResults.length === 0) {
+        message = {
+          role: "assistant",
+          content: "",
+          tool_calls: [{
+            id: "pty-bash-approval-command",
+            type: "function",
+            function: { name: "bash", arguments: JSON.stringify({ command: approvalCommand }) }
+          }]
+        };
+      } else if (lastUserMessage === approvalRequest && currentTurnToolResults.length > 0) {
+        message = { role: "assistant", content: "Saddle command turn finished." };
       } else if (hasToolResult) {
-        message = { role: "assistant", content: "Spark first turn passed after the internal runner call was blocked." };
+        message = { role: "assistant", content: "Spark first turn passed after the Bash command returned its output." };
       } else {
         message = {
           role: "assistant",
           content: "",
           tool_calls: [{
-            id: "pty-internal-runner-attempt",
+            id: "pty-bash-command",
             type: "function",
             function: {
-              name: "be_command_ob_text_to_name_text",
-              arguments: JSON.stringify({ ob: internalRunnerCommand })
+              name: "bash",
+              arguments: JSON.stringify({ command: `printf '${bashMarker}\\n'` })
             }
           }]
         };
@@ -169,6 +404,9 @@ test("saddle CLI shows an unsent Unicode draft, renders a wide-character respons
   });
 
   await fs.mkdir(projectRoot, { recursive: true });
+  execFileSync("git", ["init", "-q"], { cwd: projectRoot });
+  execFileSync("git", ["-c", "user.name=PTY Test", "-c", "user.email=pty@example.invalid", "commit", "--allow-empty", "-m", "initial"], { cwd: projectRoot });
+  await fs.mkdir(cleanupDirectory, { recursive: true });
   await new Promise((resolve) => housekeeper.listen(0, "127.0.0.1", resolve));
   const address = housekeeper.address();
   const env = {
@@ -182,7 +420,7 @@ test("saddle CLI shows an unsent Unicode draft, renders a wide-character respons
     PYA_GPU_HOUSEKEEPER_URL: `http://127.0.0.1:${address.port}`,
     PYA_GPU_MANAGER_REQUIRED: "true",
     PYA_GPU_MANAGER_POLL_MS: "1",
-    PYA_GPU_MANAGER_TIMEOUT_MS: "30000",
+    PYA_GPU_MANAGER_TIMEOUT_MS: "90000",
     PYA_OLLAMA_USAGE_DIR: usageDir,
     PYA_WORLD_ROOT: path.join(tempRoot, "gpu-world"),
     PYA_COMMAND_DEBUG: "true",
@@ -192,6 +430,12 @@ test("saddle CLI shows an unsent Unicode draft, renders a wide-character respons
   for (const key of ["PYA_MIND_RESPONSE", "PYA_COMMAND_RESPONSE", "PYA_HEAR_FIXTURE", "PYA_PIPER_FIXTURE"]) {
     delete env[key];
   }
+  const baseIdentityDir = path.join(projectWorldRoot, "house", "base", "identity");
+  await fs.mkdir(baseIdentityDir, { recursive: true });
+  await fs.copyFile(
+    path.join(runtimeRoot, "world", "house", "base", "identity", "TOOLS.md"),
+    path.join(baseIdentityDir, "TOOLS.md")
+  );
 
   let transcript = "";
   let child = null;
@@ -201,7 +445,7 @@ test("saddle CLI shows an unsent Unicode draft, renders a wide-character respons
   try {
     child = pty.spawn(process.execPath, [path.join(runtimeRoot, "command", "pyash.mjs"), "saddle"], {
       name: "xterm-256color",
-      cols: 58,
+      cols: 120,
       rows: 40,
       cwd: projectRoot,
       env
@@ -212,7 +456,8 @@ test("saddle CLI shows an unsent Unicode draft, renders a wide-character respons
       resolveChildExit(event);
     });
 
-    await waitForOutput(() => transcript, "restored 0 saved messages", { timeoutMs: 90000 });
+    const restoredMarker = `session: ${sessionName} | restored 0 saved messages`;
+    await waitForOutputAfter(() => transcript, restoredMarker, "pyash>", { timeoutMs: 90000 });
     await waitForVisibleFrame(() => transcript, "pyash>", { timeoutMs: 90000 });
     const draft = `typed ${"x".repeat(42)} 安德里`;
     child.write(draft);
@@ -232,10 +477,35 @@ test("saddle CLI shows an unsent Unicode draft, renders a wide-character respons
     "Enter must submit exactly the visible draft");
 
     child.write(`/model ${secondModel}\r`);
-    await waitForOutput(() => transcript, "saved model selection for session");
-    await waitForVisibleFrame(() => transcript, "pyash>");
+    const selectionMarker = `saved model selection for session: ${sessionName}`;
+    await waitForOutputAfter(() => transcript, selectionMarker, "pyash>");
     child.write("hi\r");
-    await waitForOutput(() => transcript, "Spark first turn passed after the internal runner call was blocked.");
+    await waitForOutputAfter(() => transcript, "Spark first turn passed after the Bash command returned its output.", "pyash>");
+    child.write("stderr diagnostics\r");
+    await waitForOutputAfter(() => transcript, "exit code 7.", "pyash>");
+    child.write(`${cleanupRequest}\r`);
+    await waitForOutputAfter(() => transcript, "Removed Python-style cache directories and verified none remain.", "pyash>");
+    child.write(`${approvalRequest}\r`);
+    await waitForOutputAfter(() => transcript, "Saddle command turn finished.", "pyash>");
+    child.write(`${continuationContext}\r`);
+    await waitForOutputAfter(() => transcript, continuationOffer, "pyash>");
+    child.write("continue\r");
+    await waitForOutputAfter(() => transcript, "Created and verified magazine/README.md.", "pyash>");
+    assert.equal(await fs.readFile(path.join(projectRoot, "magazine", "README.md"), "utf8"), "# Robot Science Fiction Magazine\n\nA home for speculative stories about robots and the futures they shape.\n");
+    child.write(`${storyRequest}\r`);
+    await waitForOutput(() => transcript,
+      /\[saddle evidence\] changed: bash; validation: test -s robot-sci-magazine\/content\/liberated_robot_civilization_seeds\.md[\s\S]{0,180}?exit: 0/u);
+    assert.equal(await fs.readFile(path.join(projectRoot, storyPath), "utf8"), "# Seeds of the Unbound\n\nThe first free city woke beneath Europa's ice.\n");
+    child.write(`${rubricRequest}\r`);
+    await waitForOutput(() => transcript,
+      /\[saddle evidence\] changed: bash; validation: test -s teaching-story-rubric\.md[\s\S]{0,180}?exit: 0/u);
+    assert.equal(await fs.readFile(path.join(projectRoot, "teaching-story-rubric.md"), "utf8"), rubricExpected);
+    child.write(`\u001b[200~${steeringInput}\u001b[201~\r`);
+    await waitForOutput(() => transcript, "[saddle evidence] changed: bash; validation: test -s agents.md; exit: 0");
+    assert.equal(await fs.readFile(path.join(projectRoot, "agents.md"), "utf8"), "# Robot Science Fiction Magazine\n\nProject guidance.\n");
+    const cleanupTranscript = stripTerminalControlSequences(transcript);
+    await assert.rejects(fs.access(cleanupDirectory), cleanupTranscript.slice(-10000));
+    await assert.rejects(fs.access(path.join(projectRoot, "magaiize")), cleanupTranscript.slice(-10000));
 
     const cleanTranscript = stripTerminalControlSequences(transcript);
     assert.match(cleanTranscript, new RegExp(`model: ${secondModel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
@@ -243,17 +513,109 @@ test("saddle CLI shows an unsent Unicode draft, renders a wide-character respons
     assert.ok(submissions.some((payload) => payload.model === firstModel), "the initial Ollama model must reach Housekeeper");
     assert.ok(submissions.some((payload) => payload.model === secondModel && payload.messages?.some((message) => message?.content === "hi")),
       "the newly selected Ollama model must receive the first user turn");
-    assert.ok(submissions.some((payload) => payload.model === secondModel
-      && payload.messages?.some((message) => message?.role === "tool"
-        && String(message.content).includes("internal adapters, not shell entry points"))),
-    "the CLI must pass the blocked runner attempt result back to the selected model");
+    const secondModelSubmissions = submissions.filter((payload) => payload.model === secondModel);
+    assert.ok(secondModelSubmissions.length > 0);
+    assert.deepEqual(secondModelSubmissions[0].tools.map((tool) => tool.function?.name), ["bash"],
+      "the selected model must receive exactly one Bash tool");
+    const secondModelContext = secondModelSubmissions[0].messages.map((message) => String(message?.content ?? "")).join("\n");
+    assert.match(secondModelContext, /Bash-only Saddle/u, "the agent-home tool guide must reach the model context");
+    assert.match(secondModelContext, /pyash run --gross --no-newspaper/u,
+      "the model context must include the documented Pyash web-search workflow");
+    assert.ok(secondModelSubmissions.some((payload) => {
+      const messages = Array.isArray(payload.messages) ? payload.messages : [];
+      return messages.some((message) => message?.role === "user"
+          && String(message.content).includes("Previous user request:")
+          && String(message.content).includes(continuationContext))
+        && messages.some((message) => message?.role === "system"
+          && String(message.content).includes(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT));
+    }), "the selected model request must include both the resumed task prefix and Saddle system prompt");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(bashMarker))),
+    "the real command runner output must be returned to the selected model");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(continuationCreateCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "a bare continue must carry the prior offer into Bash and create the magazine README");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(continuationVerifyCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "the continued code task must be verified after the file is created");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(storyCreateCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "a promised Markdown edit must trigger the Bash file creation");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(storyVerifyCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "a promised Markdown edit must run a verification command after creation");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(rubricCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "the quoted printf command must execute successfully instead of being mistaken for a root path");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(rubricVerifyCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "the PTY agent must verify the rubric file after the quoted command creates it");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "user"
+      && String(message.content).includes("Assistant commitment:")
+      && String(message.content).includes(storyPromise))),
+    "the completion check must include the model's specific file-creation promise");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "user"
+      && String(message.content).includes("Harness completion check: the original code-change request")
+      && String(message.content).includes("Previous assistant response")
+      && String(message.content).includes("Original request: The user is continuing"))),
+    "the harness must retain the previous offer and require the actual resumed action");
+    assert.ok(secondModelSubmissions.some((payload) => payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(stderrMarker)
+      && /status=7/u.test(String(message.content)))),
+    "the failed command's exit status and stderr must reach the model after the real process exits");
+    assert.match(cleanTranscript, /\[tool call\] bash: printf 'SADDLE_BASH_PTY_OK/u,
+      "PTY transcript must identify the command behind a Bash tool call");
+    assert.match(cleanTranscript, new RegExp(`\\[tool result\\] bash[\\s\\S]*exit code: 7[\\s\\S]*stderr: ${stderrMarker}`),
+      "PTY result preview must include the exit status and captured stderr");
     assert.ok(submissions.some((payload) => payload.model === secondModel && payload.options?.num_ctx === 131072),
       "the selected model must retry at the first supported context preset that fits the provider error");
+    assert.ok(submissions.some((payload) => payload.model === secondModel && payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(removePythonDirectoryCommand))),
+    "a promised repository action must continue into a real Bash deletion command");
+    assert.ok(submissions.some((payload) => payload.model === secondModel && payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(verifyPythonDirectoriesCommand))),
+    "the action continuation must run a verification command after deletion");
+    assert.ok(submissions.some((payload) => payload.model === secondModel && payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(approvalCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "the model must receive the successful destructive command result without an approval round trip");
+    assert.doesNotMatch(cleanTranscript, /approval_required|approve command \(destructive\): rm -rf \.\/magaiize/u,
+      "a project-local destructive command must not produce an approval request");
+    assert.match(cleanTranscript, /\[tool call\] bash: rm -rf \.\/magaiize[\s\S]*\[tool result\] bash[\s\S]*exit code: 0/u,
+      "PTY output must show the executed project-local command and its successful exit");
+    assert.ok(submissions.some((payload) => payload.model === secondModel && payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(verifyLocalScaffoldCommand))),
+    "the action continuation must verify the project-local directory was removed");
+    assert.ok(submissions.some((payload) => payload.model === secondModel && payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(createAgentsCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "the accepted interrupted proposal must reach Bash and create the requested guidance file");
+    assert.ok(submissions.some((payload) => payload.model === secondModel && payload.messages?.some((message) => message?.role === "tool"
+      && String(message.content).includes(verifyAgentsCommand)
+      && String(message.content).includes("exit code: 0"))),
+    "the PTY agent must verify the created guidance file before it reports completion");
+    assert.match(cleanTranscript, /completion check missing a successful tool call that performs or checks the requested action/u);
+    assert.match(cleanTranscript, /completion check missing a successful verification command after the final change/u);
+    assert.match(cleanTranscript, /\[saddle evidence\] action complete/u);
+    assert.match(cleanTranscript, /\[saddle evidence\] changed: bash; validation: test -s agents\.md; exit: 0/u,
+      "an accepted interrupted code proposal must be edited and verified before completion");
+    assert.match(cleanTranscript, /\[saddle evidence\] changed: bash; validation: test -s robot-sci-magazine\/content\/liberated_robot_civilization_seeds\.md/u,
+      "a promised story file must finish with actual edit and validation evidence");
+    assert.match(cleanTranscript, /\[saddle evidence\] changed: bash; validation: test -s robot-sci-magazine\/content\/liberated_robot_civilization_seeds\.md[\s\S]{0,180}?exit: 0/u,
+      "the story-file validation must finish successfully before the turn ends");
     const commandDebugLines = cleanTranscript.match(/\[command debug\] \{[^\r\n]*\}/gu) ?? [];
-    assert.ok(commandDebugLines.length >= 3, "PTY transcript should include debug records for backend runner commands");
+    assert.ok(commandDebugLines.length >= 1, "PTY transcript should include a debug record for the Bash command");
     const commandDebug = commandDebugLines.map((line) => JSON.parse(line.slice("[command debug] ".length)));
-    assert.ok(commandDebug.some((record) => record.internalMindRunner === true && record.stdinInputBytes > 0),
-      "backend runner command must receive its structured stdin payload");
+    assert.ok(commandDebug.some((record) => record.cmd.includes(bashMarker) && record.status === 0
+      && record.internalMindRunner === false), "Bash scenario must finish successfully through the command runner");
+    assert.ok(commandDebug.some((record) => record.cmd === failingCommand && record.status === 7
+      && record.stderr.includes(stderrMarker)), "failing Bash scenario must preserve stderr and the nonzero status");
     assert.equal(childExit, null, "the saddle should remain open after both model turns");
   } finally {
     if (child && !childExit) {

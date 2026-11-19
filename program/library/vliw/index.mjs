@@ -75,6 +75,8 @@ import { sentenceToPyash } from "../../beautiful.mjs";
 import { lowerPyashSentence } from "./sentence.mjs";
 import { deriveSentenceEffects, scheduleCodeletDependencies } from "./effects.mjs";
 
+const TYPED_LITERAL_QUOTE_FAMILIES = new Set(["number", "letter", "paragraph-letter", "float32", "fixed16"]);
+
 function semanticDecode(decoded, semantic, sentence) {
   return {
     ...decoded,
@@ -286,7 +288,22 @@ export function decodeCodelet(input) {
       throw error;
     }
   }
-  if (decoded.words[0] === typedLiteralCompatibility.head) {
+  const literalQuote = decoded.items.find((candidate) => candidate.offset === 1);
+  const typedLiteralCaseOffset = literalQuote?.quote?.nextOffset;
+  const hasTypedLiteralBoundaries = decoded.items.some((item) => (
+    item.offset === typedLiteralCaseOffset
+    && item.kind === "word"
+    && item.word === typedLiteralCompatibility.accusativeCase
+  )) && decoded.items.some((item) => (
+    item.offset === typedLiteralCaseOffset + 1
+    && item.kind === "word"
+    && item.word === typedLiteralCompatibility.realisMood
+  ));
+  if (
+    literalQuote?.kind === "quote"
+    && TYPED_LITERAL_QUOTE_FAMILIES.has(literalQuote.quote.family)
+    && hasTypedLiteralBoundaries
+  ) {
     try {
       return semanticDecode(
         decoded,

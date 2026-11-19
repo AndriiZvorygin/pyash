@@ -143,15 +143,261 @@ class HousekeeperDurableQueueTests(unittest.TestCase):
     os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = self.temp_dir.name
     server._JOBS.clear()
     server._JOB_CANCEL_EVENTS.clear()
+    server.set_dispatch_paused(False)
 
   def tearDown(self):
     server._JOBS.clear()
     server._JOB_CANCEL_EVENTS.clear()
+    server.set_dispatch_paused(False)
     if self.original_pya_dir is None:
       os.environ.pop("GPU_HOUSEKEEPER_PYA_DIR", None)
     else:
       os.environ["GPU_HOUSEKEEPER_PYA_DIR"] = self.original_pya_dir
     self.temp_dir.cleanup()
+
+  def test_soft_drain_accepts_and_persists_new_jobs_in_local_queue(self):
+    server.set_dispatch_paused(True)
+    payload = {
+      "handleId": "queued-during-soft-drain",
+      "runtimeName": "test-runtime",
+      "profileName": "test-profile",
+      "jobSpec": {"kind": "test-job"}
+    }
+    local = {
+      "hostId": "mriczo", "deviceId": "gpu0", "available": True,
+      "immediate": True, "score": 1, "reason": "local candidate"
+    }
+    with patch.object(server, "local_route_state", return_value=local), \
+         patch.object(server, "select_route") as select_route:
+      result = server.submit_job(payload, {"test-runtime": {}}, "mriczo")
+
+    self.assertTrue(result["accepted"])
+    self.assertFalse(result["forwarded"])
+    self.assertEqual(result["route"]["selectionPolicy"], "maintenance-queue")
+    select_route.assert_not_called()
+    self.assertEqual(server.queue_view()["localQueuedCount"], 1)
+    self.assertTrue(server.queue_view()["dispatchPaused"])
+    self.assertTrue(server.queue_view()["acceptingJobs"])
+    self.assertTrue(server.durable_job_path(result["remoteJobId"]).is_file())
+
+  def test_queued_job_waits_during_soft_drain_then_executes_after_resume(self):
+    remote_job_id = "job-paused-dispatch-test"
+    server._JOBS[remote_job_id] = {
+      "remoteJobId": remote_job_id,
+      "handleId": "paused-dispatch-handle",
+      "runtimeName": "test-runtime",
+      "profileName": "test-profile",
+      "jobSpec": {"kind": "test-job"},
+      "deviceId": "gpu-soft-drain-test",
+      "status": "queued",
+      "message": "queued",
+      "executionHostId": "mriczo",
+      "forwarded": False
+    }
+    server.set_dispatch_paused(True)
+    execution = threading.Thread(
+      target=server.execute_registered_job,
+      args=(remote_job_id, {"test-runtime": {}}),
+      daemon=True
+    )
+    with patch.object(server, "execute_job", return_value={"ok": True}) as execute_job, \
+         patch.object(server, "persist_durable_job"), \
+         patch.object(server, "record_queue_transition"):
+      execution.start()
+      time.sleep(0.15)
+      self.assertEqual(server._JOBS[remote_job_id]["status"], "queued")
+      execute_job.assert_not_called()
+
+      server.set_dispatch_paused(False)
+      execution.join(timeout=2)
+
+    self.assertFalse(execution.is_alive(), "queued job did not resume after dispatch reopened")
+    self.assertEqual(server._JOBS[remote_job_id]["status"], "success")
+    execute_job.assert_called_once()
+
+  def test_cancelled_queued_job_exits_while_dispatch_is_paused(self):
+    remote_job_id = "job-cancelled-during-soft-drain"
+    server._JOBS[remote_job_id] = {
+      "remoteJobId": remote_job_id,
+      "handleId": "cancel-during-drain-handle",
+      "runtimeName": "test-runtime",
+      "profileName": "test-profile",
+      "jobSpec": {"kind": "test-job"},
+      "deviceId": "gpu-soft-drain-cancel-test",
+      "status": "queued",
+      "message": "queued",
+      "executionHostId": "mriczo",
+      "forwarded": False
+    }
+    cancel_event = threading.Event()
+    server._JOB_CANCEL_EVENTS[remote_job_id] = cancel_event
+    server.set_dispatch_paused(True)
+    execution = threading.Thread(
+      target=server.execute_registered_job,
+      args=(remote_job_id, {"test-runtime": {}}),
+      daemon=True
+    )
+    with patch.object(server, "execute_job") as execute_job, \
+         patch.object(server, "persist_durable_job"), \
+         patch.object(server, "record_queue_transition"):
+      execution.start()
+      time.sleep(0.1)
+      cancel_event.set()
+      execution.join(timeout=2)
+
+    self.assertFalse(execution.is_alive(), "cancelled queue waiter did not exit")
+    self.assertEqual(server._JOBS[remote_job_id]["status"], "cancelled")
+    execute_job.assert_not_called()
+
+  def test_soft_drain_waits_for_active_job_without_starting_the_next_one(self):
+    first_id = "job-drain-active-first"
+    second_id = "job-drain-active-second"
+    for remote_job_id in (first_id, second_id):
+      server._JOBS[remote_job_id] = {
+        "remoteJobId": remote_job_id,
+        "handleId": remote_job_id,
+        "runtimeName": "test-runtime",
+        "profileName": "test-profile",
+        "jobSpec": {"kind": "test-job"},
+        "deviceId": "gpu-soft-drain-order-test",
+        "status": "queued",
+        "message": "queued",
+        "executionHostId": "mriczo",
+        "forwarded": False
+      }
+    first_started = threading.Event()
+    release_first = threading.Event()
+    second_started = threading.Event()
+
+    def execute(job, _runtime_registry, **_callbacks):
+      if job["remoteJobId"] == first_id:
+        first_started.set()
+        self.assertTrue(release_first.wait(2), "active test job did not get released")
+      else:
+        second_started.set()
+      return {"ok": True}
+
+    with patch.object(server, "execute_job", side_effect=execute), \
+         patch.object(server, "persist_durable_job"), \
+         patch.object(server, "record_queue_transition"):
+      first = threading.Thread(
+        target=server.execute_registered_job,
+        args=(first_id, {"test-runtime": {}}), daemon=True
+      )
+      second = threading.Thread(
+        target=server.execute_registered_job,
+        args=(second_id, {"test-runtime": {}}), daemon=True
+      )
+      first.start()
+      self.assertTrue(first_started.wait(2), "first job did not start")
+      second.start()
+      server.set_dispatch_paused(True)
+      release_first.set()
+      first.join(timeout=2)
+      second.join(timeout=0.2)
+
+      self.assertFalse(first.is_alive(), "already-running job did not finish")
+      self.assertFalse(second_started.is_set(), "queued job started during soft drain")
+      self.assertEqual(server.queue_view()["localRunningCount"], 0)
+      self.assertEqual(server.queue_view()["localQueuedCount"], 1)
+
+      server.set_dispatch_paused(False)
+      second.join(timeout=2)
+
+    self.assertFalse(second.is_alive(), "queued job did not resume")
+    self.assertTrue(second_started.is_set())
+    self.assertEqual(server._JOBS[first_id]["status"], "success")
+    self.assertEqual(server._JOBS[second_id]["status"], "success")
+
+  def test_soft_drain_finishes_active_job_and_holds_next_job_queued(self):
+    first_id = "job-active-before-soft-drain"
+    second_id = "job-next-after-soft-drain"
+    for remote_job_id in (first_id, second_id):
+      server._JOBS[remote_job_id] = {
+        "remoteJobId": remote_job_id,
+        "handleId": remote_job_id,
+        "runtimeName": "test-runtime",
+        "profileName": "test-profile",
+        "jobSpec": {"kind": "test-job"},
+        "deviceId": "gpu-soft-drain-shared-test",
+        "status": "queued",
+        "message": "queued",
+        "executionHostId": "mriczo",
+        "forwarded": False
+      }
+    first_started = threading.Event()
+    finish_first = threading.Event()
+    second_started = threading.Event()
+
+    def execute(job, _runtime_registry, **_callbacks):
+      if job["remoteJobId"] == first_id:
+        first_started.set()
+        self.assertTrue(finish_first.wait(2), "active test job was not released")
+      else:
+        second_started.set()
+      return {"ok": True}
+
+    with patch.object(server, "execute_job", side_effect=execute), \
+         patch.object(server, "persist_durable_job"), \
+         patch.object(server, "record_queue_transition"):
+      first = threading.Thread(
+        target=server.execute_registered_job,
+        args=(first_id, {"test-runtime": {}}), daemon=True
+      )
+      second = threading.Thread(
+        target=server.execute_registered_job,
+        args=(second_id, {"test-runtime": {}}), daemon=True
+      )
+      first.start()
+      self.assertTrue(first_started.wait(2), "first job did not start")
+      second.start()
+      server.set_dispatch_paused(True)
+      finish_first.set()
+      first.join(timeout=2)
+      second.join(timeout=0.2)
+
+      self.assertFalse(first.is_alive(), "active job did not finish during soft drain")
+      self.assertFalse(second_started.is_set(), "queued job started while dispatch was paused")
+      self.assertEqual(server.queue_view()["localRunningCount"], 0)
+      self.assertEqual(server.queue_view()["localQueuedCount"], 1)
+
+      server.set_dispatch_paused(False)
+      second.join(timeout=2)
+
+    self.assertFalse(second.is_alive(), "held job did not resume after dispatch reopened")
+    self.assertTrue(second_started.is_set())
+    self.assertEqual(server._JOBS[first_id]["status"], "success")
+    self.assertEqual(server._JOBS[second_id]["status"], "success")
+
+  def test_soft_drain_controls_are_loopback_only(self):
+    self.assertTrue(server.maintenance_request_is_local(("127.0.0.1", 1234)))
+    self.assertTrue(server.maintenance_request_is_local(("::1", 1234, 0, 0)))
+    self.assertFalse(server.maintenance_request_is_local(("192.0.2.20", 1234)))
+
+  def test_soft_drain_http_control_keeps_admission_open(self):
+    listener = server.create_housekeeper_server("127.0.0.1", 0)
+    listener_thread = threading.Thread(target=listener.serve_forever, daemon=True)
+    listener_thread.start()
+    root = f"http://127.0.0.1:{listener.server_address[1]}"
+    try:
+      with urlopen(Request(f"{root}/maintenance/drain", data=b"{}", method="POST"), timeout=2) as response:
+        drained = json.loads(response.read().decode("utf-8"))
+      health = json.loads(urlopen(f"{root}/health", timeout=2).read().decode("utf-8"))
+      self.assertTrue(drained["dispatchPaused"])
+      self.assertTrue(drained["acceptingJobs"])
+      self.assertTrue(health["ready"])
+      self.assertTrue(health["dispatchPaused"])
+      self.assertTrue(health["acceptingJobs"])
+
+      with urlopen(Request(f"{root}/maintenance/resume", data=b"{}", method="POST"), timeout=2) as response:
+        resumed = json.loads(response.read().decode("utf-8"))
+      self.assertFalse(resumed["dispatchPaused"])
+      self.assertTrue(resumed["acceptingJobs"])
+    finally:
+      server.set_dispatch_paused(False)
+      listener.shutdown()
+      listener.server_close()
+      listener_thread.join(timeout=2)
 
   def test_cancel_job_by_handle_sets_the_running_job_cancellation_event(self):
     remote_job_id = "running-cancel-target"
@@ -1377,6 +1623,11 @@ class HousekeeperOllamaTests(unittest.TestCase):
         "name": model, "size": 6000, "sizeVram": 0,
         "loaded": True, "gpuResident": False,
         "reason": "Ollama loaded the model without GPU VRAM"
+      }]},
+      {"available": True, "models": [{
+        "name": model, "size": 6000, "sizeVram": 0,
+        "loaded": True, "gpuResident": False,
+        "reason": "Ollama loaded the model without GPU VRAM"
       }]}
     ])
     server.parse_runtime_status = lambda _entry: {"status": "running", "gpuExpected": True, "gpuObserved": True}
@@ -1416,6 +1667,57 @@ class HousekeeperOllamaTests(unittest.TestCase):
 
     self.assertTrue(request_started.is_set())
     self.assertEqual(actions, [("ollama", "restartAction")])
+
+  def test_mid_inference_transient_zero_vram_report_does_not_restart_ollama(self):
+    actions = []
+    request_started = threading.Event()
+    release_request = threading.Event()
+    model = "qwen3.5:9b"
+    gpu_model = {
+      "name": model, "size": 6000, "sizeVram": 6000,
+      "loaded": True, "gpuResident": True,
+      "reason": "model weights are resident on GPU"
+    }
+    cpu_model = {
+      "name": model, "size": 6000, "sizeVram": 0,
+      "loaded": True, "gpuResident": False,
+      "reason": "Ollama loaded the model without GPU VRAM"
+    }
+    reports = iter([
+      {"available": True, "models": [gpu_model]},
+      {"available": True, "models": [cpu_model]},
+      {"available": True, "models": [gpu_model]}
+    ])
+    status_calls = {"count": 0}
+    server.parse_runtime_status = lambda _entry: {"status": "running", "gpuExpected": True, "gpuObserved": True}
+
+    def model_status():
+      status_calls["count"] += 1
+      report = next(reports, {"available": True, "models": [gpu_model]})
+      if status_calls["count"] >= 3:
+        release_request.set()
+      return report
+
+    def fake_request(pathname, _payload=None, timeout_sec=600):
+      self.assertEqual(pathname, "/api/generate")
+      request_started.set()
+      self.assertTrue(release_request.wait(2))
+      return {"response": "GPU recovered"}
+
+    server.ollama_running_model_status = model_status
+    server.runtime_action = lambda _registry, runtime_name, action: actions.append((runtime_name, action)) or {"success": True}
+    server.request_ollama_json = fake_request
+    os.environ["GPU_HOUSEKEEPER_OLLAMA_GPU_GUARD_POLL_SEC"] = "0.05"
+
+    result = server.execute_ollama_job({
+      "runtimeName": "ollama",
+      "profileName": model,
+      "jobSpec": {"kind": "ollama-generate", "payload": {"model": model, "prompt": "hello"}}
+    }, {"ollama": {"runtimeName": "ollama", "gpuExpected": True}})
+
+    self.assertTrue(request_started.is_set())
+    self.assertEqual(result["response"], "GPU recovered")
+    self.assertEqual(actions, [])
 
   def test_stopped_runtime_triggers_begin_before_ollama_job(self):
     actions = []

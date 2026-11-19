@@ -29,12 +29,15 @@ import {
   buildSaddleWorktreeReviewCommand,
   buildSaddleStrataContextOptions,
   buildSaddleOllamaContextOptions,
+  buildSaddleContinuationInput,
+  buildSaddleSteeringInput,
   getSaddleOllamaModelContextLength,
   buildSaddleMindSentence,
   createSaddleInputDecoder,
   DEFAULT_CODING_SADDLE_SYSTEM_PROMPT,
   discoverSaddleModels,
   formatSaddleCompletionEvidence,
+  formatSaddleWorktreeReviewFailure,
   formatSaddleBackendPicker,
   formatSaddleModelPicker,
   formatSaddleStatus,
@@ -44,11 +47,15 @@ import {
   normalizeSaddleThinkSelection,
   resolveSaddleThinkSetting,
   isSaddleCodeChangeRequest,
+  isSaddleAffirmativeReply,
+  isSaddleActionableContinuation,
+  isSaddleContinuationReply,
   SADDLE_OLLAMA_CONTEXT_PRESETS,
   parseSaddleMindCommand,
   resolveSaddleModelOption,
   resolveSaddleModelSelection,
   resolveSaddleMindProfile,
+  isSaddleToolActionRequest,
   runSaddleTurnWithEvidence,
   saddleSlashCommandCompletions,
   saddleToolEventLabel,
@@ -65,6 +72,23 @@ import {
   waitForSaddleMindStream
 } from "../command/pyash_saddle.mjs";
 import { rewriteRunRootCommandPath } from "../program/verbs/command/sandbox.mjs";
+import { resolveCommandPolicy } from "../program/verbs/command.mjs";
+
+test("coding saddle allows destructive commands under its project command policy", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-command-policy-"));
+  const cwd = path.join(root, "project");
+  await fs.mkdir(cwd, { recursive: true });
+
+  try {
+    await prepareSaddle({ cwd, worldRoot: path.join(root, "world") });
+    const policy = resolveCommandPolicy({ sentence: { mood: "do" }, cmdClass: "destructive" });
+    assert.equal(policy.mode, "allow");
+    assert.equal(policy.source, "agent command configure");
+  } finally {
+    forget();
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
 
 test("coding saddle reloads named and explicitly selected session history", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-history-"));
@@ -438,17 +462,12 @@ test("coding saddle shows elapsed progress and explicit tool event labels", () =
   assert.equal(saddleToolEventLabel({ stage: "result", toolName: "repair" }), "[tool result] repair");
 });
 
-test("coding saddle routes live search, archives, project commands, and interactive processes separately", () => {
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`read_archive_focus(archive_path, entry_path, focus)`"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`search_zim_library(query)`"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`web_search(query)`"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`web_search_source(query, search_url)`"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("technology RSS-feed discovery"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`command_session_start`"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("Search, URL retrieval, API requests, and ordinary commands do not need a command session"));
+test("coding saddle routes work through its Bash tool and agent-home workflows", () => {
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("use `bash(command)`"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("active agent house's `identity/TOOLS.md`"));
   assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("A tool error is a result for the active task"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("Do not claim titles or URLs absent from tool results"));
-  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("`search_archive(archive_path, query)`"));
+  assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes("do not invent titles or URLs"));
+  assert.doesNotMatch(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /search_zim_library|web_search|command_session_start|read_archive_focus/u);
 });
 
 test("coding saddle handles greetings directly without exposing runtime script names", () => {
@@ -459,24 +478,16 @@ test("coding saddle handles greetings directly without exposing runtime script n
 
 test("coding saddle completion evidence requires a successful edit and a later command check", () => {
   for (const guidance of [
-    "documentation and reference research",
-    "configured Kiwix service, which may be remote",
-    "Pass returned URLs unchanged",
-    "`web_search(query)`",
-    "`web_search_source(query, search_url)`",
-    "For a named search service",
-    "`command_session_start` only when the user needs a long-running interactive process",
-    "Search, URL retrieval, API requests, and ordinary commands do not need a command session",
+    "use `bash(command)`",
+    "active agent house's `identity/TOOLS.md`",
     "A tool error is a result for the active task",
     "do not repeat an unchanged failing call",
-    "Do not claim titles or URLs absent from tool results",
-    "`search_archive(archive_path, query)`",
-    "`read_archive_focus(archive_path, entry_path, focus)`",
-    "ground claims in retrieved page text"
+    "Ground claims in command output and retrieved page text"
   ]) {
     assert.ok(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT.includes(guidance), `missing retrieval guidance: ${guidance}`);
   }
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /name the target file before editing/u);
+  assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /multi-step repository, research, or operational work/u);
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /After the final edit/u);
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /active agent house's absolute memory\/MEMORY\.md path/u);
   assert.match(DEFAULT_CODING_SADDLE_SYSTEM_PROMPT, /validation command and a session or artifact evidence reference/u);
@@ -489,6 +500,9 @@ test("coding saddle completion evidence requires a successful edit and a later c
   assert.equal(isSaddleCodeChangeRequest("see if the file update thing is fixed now"), false);
   assert.equal(isSaddleCodeChangeRequest("check if the file is changed, and update it if needed"), true);
   assert.equal(isSaddleCodeChangeRequest("update the coding saddle tools to show command output"), true);
+  assert.equal(isSaddleToolActionRequest("okay please also remove any python style directories"), true);
+  assert.equal(isSaddleToolActionRequest("how can I remove Python-style directories?"), false);
+  assert.equal(isSaddleToolActionRequest("Do you think the saddle is usable?"), false);
 
   const events = [
     {
@@ -545,15 +559,33 @@ test("coding saddle completion evidence requires a successful edit and a later c
 test("coding saddle worktree review uses bounded read-only Git inspection and omits sensitive paths", () => {
   const command = buildSaddleWorktreeReviewCommand({ trackedDiffLimit: 999999, untrackedDiffLimit: 1200 });
   assert.match(command, /git -c core\.quotePath=true status --short --untracked-files=all/u);
-  assert.match(command, /git diff --stat HEAD/u);
-  assert.match(command, /git diff --no-ext-diff --unified=3 HEAD/u);
+  assert.match(command, /git diff --cached --stat/u);
+  assert.match(command, /git diff --cached --no-ext-diff --unified=3/u);
+  assert.match(command, /git diff --stat --/u);
+  assert.match(command, /git diff --no-ext-diff --unified=3 --/u);
   assert.match(command, /git ls-files -z --others --exclude-standard/u);
   assert.match(command, /\*credentials\*\|\*token\*/u);
-  assert.match(command, /head -c 24000/u);
+  assert.match(command, /head -c 12000/u);
   assert.match(command, /head -c 1200/u);
   assert.match(command, /pre-existing worktree changes/u);
   assert.equal(classifyCommandText(command), "read_only");
   assert.doesNotMatch(command, /git (?:add|commit|push|reset|clean)\b/u);
+});
+
+test("coding saddle summarizes worktree review errors without echoing command output", () => {
+  const error = [
+    "command defective: status=128 signal=none",
+    `command: ${"very long shell command ".repeat(30)}`,
+    "stdout:",
+    "a very long list of files",
+    "stderr:",
+    "fatal: bad revision 'HEAD'"
+  ].join("\n");
+
+  const summary = formatSaddleWorktreeReviewFailure(error);
+  assert.equal(summary, "fatal: bad revision 'HEAD'");
+  assert.doesNotMatch(summary, /command:|very long/u);
+  assert.ok(summary.length <= 240);
 });
 
 test("coding saddle worktree review shows real diffs while omitting sensitive untracked files", async () => {
@@ -583,6 +615,26 @@ test("coding saddle worktree review shows real diffs while omitting sensitive un
     assert.match(output, /new review content/u);
     assert.doesNotMatch(output, /tracked-secret-(?:before|after)|untracked-secret-do-not-print/u);
     assert.match(output, /pre-existing worktree changes/u);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("coding saddle worktree review handles a repository with no initial commit", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-review-unborn-"));
+  try {
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    await fs.writeFile(path.join(root, "story.md"), "A new story.\n", "utf8");
+
+    const output = execFileSync("bash", ["-lc", buildSaddleWorktreeReviewCommand()], {
+      cwd: root,
+      encoding: "utf8",
+      maxBuffer: 64 * 1024
+    });
+
+    assert.match(output, /\[worktree root\]/u);
+    assert.match(output, /story\.md/u);
+    assert.match(output, /A new story\./u);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -659,6 +711,282 @@ test("coding saddle gives an incomplete code-change turn one evidence-driven con
   assert.equal(turn.result.ob.text, "Created hello.js and checked its syntax.");
 });
 
+test("coding saddle continues a promised Markdown file after announcing the edit", async () => {
+  const input = "okay now write a story about liberated robot civilization seeds";
+  const promisedResponse = "I’ll write a new robot SciFi story about liberated robot civilization seeds, as a .md file in the repo. Let me create it now.";
+  const filePath = "robot-sci-magazine/content/liberated_robot_civilization_seeds.md";
+  const createCommand = `mkdir -p robot-sci-magazine/content && cat > ${filePath} <<'EOF'\n# Seeds of the Unbound\n\nThe first free city woke beneath Europa's ice.\nEOF`;
+  const verifyCommand = `test -s ${filePath} && grep -q 'Seeds of the Unbound' ${filePath}`;
+  let calls = 0;
+  let followup = "";
+  const turn = await runSaddleTurnWithEvidence({
+    input,
+    runTurn: async ({ input: turnInput, onToolCall }) => {
+      calls += 1;
+      if (calls === 1) return { ob: { text: promisedResponse } };
+      followup = turnInput;
+      const command = calls === 2 ? createCommand : verifyCommand;
+      await onToolCall({
+        stage: "call",
+        toolName: "bash",
+        toolSentence: { be: "command", ob: { text: command } }
+      });
+      await onToolCall({
+        stage: "result",
+        toolName: "bash",
+        toolText: "exit code: 0",
+        commandOutcome: { exitCode: 0, signal: null, timedOut: false }
+      });
+      return { ob: { text: calls === 2 ? "Created the story file." : "Created and verified the story file." } };
+    }
+  });
+
+  assert.equal(calls, 3);
+  assert.match(followup, /Harness completion check: the original code-change request/u);
+  assert.match(followup, /I’ll write a new robot SciFi story/u);
+  assert.equal(turn.assessment.required, true);
+  assert.equal(turn.assessment.complete, true);
+  assert.deepEqual(turn.assessment.changeTools, ["bash"]);
+  assert.equal(turn.assessment.validation.command, verifyCommand);
+});
+
+test("coding saddle does not turn an optional file offer into a required file edit", async () => {
+  let calls = 0;
+  const turn = await runSaddleTurnWithEvidence({
+    input: "write a story about liberated robots",
+    runTurn: async () => {
+      calls += 1;
+      return { ob: { text: "I can put this in a Markdown file if you want." } };
+    }
+  });
+
+  assert.equal(calls, 1);
+  assert.equal(turn.assessment.required, false);
+});
+
+test("coding saddle continues an explicit repository action after a promise without tool calls", async () => {
+  const input = "okay please also remove any python style directories";
+  let calls = 0;
+  let continuation = "";
+  const turn = await runSaddleTurnWithEvidence({
+    input,
+    runTurn: async ({ input: turnInput, onToolCall }) => {
+      calls += 1;
+      if (calls === 1) return { ob: { text: "I'll check and remove them if found." } };
+      continuation = turnInput;
+      const command = calls === 2
+        ? "find . -type d -name '__pycache__' -prune -exec rm -rf {} +"
+        : "find . -type d -name '*python*' -print";
+      await onToolCall({
+        stage: "call",
+        toolName: "bash",
+        toolSentence: { be: "command", ob: { text: command } }
+      });
+      await onToolCall({
+        stage: "result",
+        toolName: "bash",
+        toolText: `exit code: 0\ncommand: ${command}`,
+        commandOutcome: { exitCode: 0, signal: null, timedOut: false }
+      });
+      return { ob: { text: calls === 2 ? "Removed Python cache directories." : "Removed Python cache directories and verified none remain." } };
+    }
+  });
+
+  assert.equal(calls, 3);
+  assert.equal(turn.completionPasses, 2);
+  assert.equal(turn.retried, true);
+  assert.match(continuation, /Original request: okay please also remove any python style directories/u);
+  assert.equal(turn.assessment.complete, true);
+  assert.match(formatSaddleCompletionEvidence(turn.assessment), /action complete/u);
+});
+
+test("coding saddle continues an accepted action in an interrupted steering turn", async () => {
+  const assistantResponse = "Yes, I can create agents.md for the Robot Science Fiction magazine. Want me to create it?";
+  const input = buildSaddleSteeringInput({
+    originalInput: "so should we start with an agents.md perhaps?",
+    assistantResponse,
+    additions: "go ahead"
+  });
+  assert.equal(isSaddleAffirmativeReply("go ahead"), true);
+  assert.equal(isSaddleAffirmativeReply("go ahead, and include the project goal"), true);
+  assert.equal(isSaddleAffirmativeReply("no, don't create it"), false);
+  assert.equal(isSaddleAffirmativeReply("go ahead, but don't create it"), false);
+  assert.match(input, /Interrupted assistant response:[\s\S]*I can create agents\.md/u);
+  assert.equal(isSaddleCodeChangeRequest(input), true);
+  assert.equal(isSaddleToolActionRequest(input), true);
+  assert.equal(isSaddleToolActionRequest([
+    "The previous response was interrupted after the user added context.",
+    "Original user message:\nso should we start with an agents.md perhaps?",
+    "Additional context:\ngo ahead"
+  ].join("\n\n")), true);
+  assert.doesNotMatch(buildSaddleSteeringInput({
+    originalInput: "so should we start with an agents.md perhaps?",
+    assistantResponse,
+    additions: "no, don't create it"
+  }), /Interrupted assistant response:/u);
+  let calls = 0;
+  let continuation = "";
+  const turn = await runSaddleTurnWithEvidence({
+    input,
+    runTurn: async ({ input: turnInput, onToolCall }) => {
+      calls += 1;
+      if (calls === 1) return { ob: { text: "I'll create agents.md now." } };
+      continuation = turnInput;
+      const command = calls === 2 ? "cat > agents.md <<'EOF'\n# Robot Science Fiction Magazine\nEOF" : "test -s agents.md";
+      await onToolCall({
+        stage: "call",
+        toolName: "bash",
+        toolSentence: { be: "command", ob: { text: command } }
+      });
+      await onToolCall({
+        stage: "result",
+        toolName: "bash",
+        toolText: "exit code: 0",
+        commandOutcome: { exitCode: 0, signal: null, timedOut: false }
+      });
+      return { ob: { text: "Created agents.md and verified it is non-empty." } };
+    }
+  });
+
+  assert.equal(calls, 3);
+  assert.match(continuation, /Original request: The previous response was interrupted/u);
+  assert.equal(turn.assessment.complete, true);
+  assert.equal(turn.assessment.kind, "code-change");
+});
+
+test("coding saddle continues the active task when the user says continue", async () => {
+  const originalInput = "so should we start with an agents.md perhaps?";
+  const assistantResponse = "A dedicated agents.md can guide the Robot Science Fiction magazine. I can create it for you. Want me to write it?";
+  const actionable = isSaddleActionableContinuation({ originalInput, assistantResponse });
+  const continuationInput = buildSaddleContinuationInput({
+    originalInput,
+    assistantResponse,
+    additions: "continue",
+    actionable
+  });
+  assert.equal(isSaddleAffirmativeReply("continue"), true);
+  assert.equal(isSaddleContinuationReply("continue"), true);
+  assert.match(continuationInput, /Previous assistant response:[\s\S]*I can create it for you/u);
+  assert.equal(actionable, true);
+  assert.equal(isSaddleCodeChangeRequest(continuationInput), true);
+  assert.equal(isSaddleToolActionRequest("continue"), false);
+  const conversationalContinuation = buildSaddleContinuationInput({
+    originalInput: "what is quantum computing?",
+    assistantResponse: "Quantum computing uses quantum states to represent and process information.",
+    additions: "continue",
+    actionable: false
+  });
+  assert.equal(isSaddleToolActionRequest(conversationalContinuation), false);
+
+  let calls = 0;
+  let followup = "";
+  const turn = await runSaddleTurnWithEvidence({
+    input: continuationInput,
+    runTurn: async ({ input, onToolCall }) => {
+      calls += 1;
+      if (calls === 1) return { ob: { text: "I'll create agents.md now." } };
+      followup = input;
+      const command = calls === 2
+        ? "cat > agents.md <<'EOF'\n# Robot Science Fiction Magazine\nEOF"
+        : "test -s agents.md";
+      await onToolCall({
+        stage: "call",
+        toolName: "bash",
+        toolSentence: { be: "command", ob: { text: command } }
+      });
+      await onToolCall({
+        stage: "result",
+        toolName: "bash",
+        toolText: "exit code: 0",
+        commandOutcome: { exitCode: 0, signal: null, timedOut: false }
+      });
+      return { ob: { text: calls === 2 ? "Created agents.md." : "Created and checked agents.md." } };
+    }
+  });
+
+  assert.equal(calls, 3);
+  assert.match(followup, /Harness completion check: the original code-change request/u);
+  assert.equal(turn.assessment.complete, true);
+  assert.equal(turn.assessment.kind, "code-change");
+});
+
+test("coding saddle leaves an explicit action incomplete when its continuation still has no tool evidence", async () => {
+  let calls = 0;
+  const turn = await runSaddleTurnWithEvidence({
+    input: "okay please also remove any python style directories",
+    runTurn: async () => {
+      calls += 1;
+      return { ob: { text: calls === 1 ? "I'll take care of that." : "Done." } };
+    }
+  });
+
+  assert.equal(calls, 4);
+  assert.equal(turn.completionPasses, 3);
+  assert.equal(turn.assessment.complete, false);
+  assert.match(formatSaddleCompletionEvidence(turn.assessment), /\[saddle incomplete\].*successful tool call/u);
+});
+
+test("coding saddle does not count command approval or a still-present target as completed removal", () => {
+  const removalCommand = "find ./magaiize -type d -name '__pycache__' -exec rm -rf {} +";
+  const verificationCommand = "find ./magaiize -type d -name '__pycache__' -print";
+  const assessment = assessSaddleCompletion("please remove Python-style directories", [
+    {
+      stage: "call",
+      toolName: "bash",
+      toolSentence: { be: "command", ob: { text: removalCommand } }
+    },
+    {
+      stage: "result",
+      toolName: "bash",
+      toolText: "approve command (destructive): find ./magaiize ...",
+      resultSentence: { be: "ratify", ob: { text: "approval required" } }
+    },
+    {
+      stage: "call",
+      toolName: "bash",
+      toolSentence: { be: "command", ob: { text: verificationCommand } }
+    },
+    {
+      stage: "result",
+      toolName: "bash",
+      toolText: "exit code: 0\nstdout: ./magaiize/src/__pycache__",
+      commandOutcome: { exitCode: 0, signal: null, timedOut: false }
+    }
+  ]);
+
+  assert.equal(assessment.complete, false);
+  assert.match(assessment.missing.join(" "), /successful command that performs the requested change/u);
+});
+
+test("coding saddle stops completion passes when a destructive command needs operator approval", async () => {
+  let calls = 0;
+  const removalCommand = "find ./magaiize -type d -name '__pycache__' -exec rm -rf {} +";
+  const turn = await runSaddleTurnWithEvidence({
+    input: "please remove Python-style directories",
+    runTurn: async ({ onToolCall }) => {
+      calls += 1;
+      if (calls === 1) return { ob: { text: "I'll remove them." } };
+      await onToolCall({
+        stage: "call",
+        toolName: "bash",
+        toolSentence: { be: "command", ob: { text: removalCommand } }
+      });
+      await onToolCall({
+        stage: "result",
+        toolName: "bash",
+        toolText: "approve command (destructive)",
+        resultSentence: { be: "ratify", ob: { text: "approval required" } }
+      });
+      return { ob: { text: "The destructive command is waiting for approval." } };
+    }
+  });
+
+  assert.equal(calls, 2);
+  assert.equal(turn.completionPasses, 1);
+  assert.equal(turn.assessment.approvalRequired, true);
+  assert.match(formatSaddleCompletionEvidence(turn.assessment), /operator approval for the pending destructive command/u);
+});
+
 test("coding saddle does not add a completion pass to general advice", async () => {
   let calls = 0;
   const turn = await runSaddleTurnWithEvidence({
@@ -691,7 +1019,7 @@ test("coding saddle does not require code changes for a read-only command sessio
   assert.equal(turn.assessment.required, false);
 });
 
-test("coding saddle reports incomplete when the corrective pass still has no successful check", async () => {
+test("coding saddle reports incomplete after bounded completion passes still have no successful check", async () => {
   let calls = 0;
   const turn = await runSaddleTurnWithEvidence({
     input: "fix the code bug",
@@ -712,7 +1040,8 @@ test("coding saddle reports incomplete when the corrective pass still has no suc
     }
   });
 
-  assert.equal(calls, 2);
+  assert.equal(calls, 4);
+  assert.equal(turn.completionPasses, 3);
   assert.equal(turn.assessment.complete, false);
   assert.match(formatSaddleCompletionEvidence(turn.assessment), /^\[saddle incomplete\]/u);
 });
@@ -769,7 +1098,7 @@ test("coding saddle builds a Pyash mind call with backend and session context", 
 
   assert.equal(sentence.be, "write");
   assert.equal(sentence.for.name, "coding saddle");
-  assert.equal(sentence.with.name, "saddle tools");
+  assert.equal(sentence.with.name, "saddle command tools");
   assert.equal(sentence.fromstate.text, "ollama");
   assert.equal(sentence.from.text, "http://mriczo:11434");
   assert.equal(sentence.contextWindow, 131072);

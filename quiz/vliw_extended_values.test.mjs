@@ -12,7 +12,7 @@ test("anonymous paragraph text literals lower and replay", async () => {
   const sentence = parse('ob text "Pyash" be text ya');
   const [codelet] = lowerSentence(sentence);
   assert.deepEqual(Array.from(codelet.words.slice(0, 9)), [
-    0x0019, 0x0e1d, 5, 0x0050, 0x0079, 0x0061, 0x0073, 0x0068, 0x245e
+    0x0301, 0x0e1d, 5, 0x0050, 0x0079, 0x0061, 0x0073, 0x0068, 0x245e
   ]);
   assert.equal(decodeCodelet(codelet.words).sentence.ob.text, "Pyash");
   assert.deepEqual(await executeCodelets([codelet]), [sentence]);
@@ -29,7 +29,7 @@ test("text lowering preserves UTF-16 code-unit offsets", async () => {
   const sentence = parse('ob text "😀" be text ya');
   const [codelet] = lowerSentence(sentence);
   assert.deepEqual(Array.from(codelet.words.slice(0, 6)), [
-    0x0019, 0x0e1d, 2, 0xd83d, 0xde00, 0x245e
+    0x0061, 0x0e1d, 2, 0xd83d, 0xde00, 0x245e
   ]);
   assert.deepEqual(await executeCodelets([codelet]), [sentence]);
 });
