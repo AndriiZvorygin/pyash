@@ -46,12 +46,22 @@ To isolate source-level pipeline cost, list candidates with
 `node rust/pyac-gpu/profile-function-reduction.mjs --list`, then run exactly
 one diagnostic variant, for example:
 `node rust/pyac-gpu/profile-function-reduction.mjs --run --function execute_numeric_programlet_at`.
-The tool copies the shader and VLIW core under ignored `target/diagnostics/`,
-replaces only that candidate's body with an error stub, builds SPIR-V with
-Rust-GPU (120-second and 10-GiB limits by default), then probes Vulkan pipeline
-creation (60-second limit). Each run records source hashes, build logs, SPIR-V,
-and resource/timing reports. The stub intentionally changes behavior; these
-variants are for compiler attribution only and must never be deployed. Set
+For `collect_sentence_at`, compare its loop-eliding, input-dependent variant with
+`--run --function collect_sentence_at --variant minimal`; unlike the default
+error stub, this retains a successful downstream path for attribution.
+`--variant baseline` builds the unmodified source and is useful for profiling a
+code-generation change without pruning any interpreter path. Add
+`--repo-source` to reuse the shader crate's existing Cargo target cache; this
+reads the working source directly, puts the SPIR-V and reports under ignored
+`target/diagnostics/`, and reuses Cargo intermediates under `shader/target/`.
+The tool copies the shader and VLIW core under ignored `target/diagnostics/`
+unless `--repo-source` is selected. It supports an unchanged `baseline`, an
+early-error `error` stub, and the collector-specific success-shaped `minimal`
+variant. It builds SPIR-V with Rust-GPU (120-second and 10-GiB limits by
+default), then probes Vulkan pipeline creation (60-second limit). Each run
+records source hashes, build logs, SPIR-V, and resource/timing reports. Stub
+variants intentionally change behavior; they are for compiler attribution only
+and must never be deployed. Set
 `PYAC_VLIW_REDUCE_BUILD_TIMEOUT_SEC` (up to 300) or
 `PYAC_VLIW_REDUCE_PIPELINE_TIMEOUT_SEC` (up to 120) to adjust the diagnostic
 caps. Each run updates `target/diagnostics/function-reduction/index.md`.

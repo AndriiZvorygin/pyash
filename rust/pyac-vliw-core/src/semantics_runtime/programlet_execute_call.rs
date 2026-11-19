@@ -13,8 +13,7 @@ pub(super) fn execute_programlet_call(
     frame_index: usize,
     depth: &mut usize,
 ) -> Result<(), u32> {
-    let mut caller = array_at!(frames, frame_index);
-    caller.action_started = 1;
+    frames[frame_index].action_started = 1;
     if sentence.field_count == 0 {
         return Err(ERROR_UNSUPPORTED);
     }
@@ -63,8 +62,8 @@ pub(super) fn execute_programlet_call(
         sentence,
         sentence_words,
         symbol_words,
-        &caller.arguments,
-        &caller.slots,
+        &frames[frame_index].arguments,
+        &frames[frame_index].slots,
         &mut call_arguments,
         &mut call_argument_count,
     ) {
@@ -148,47 +147,48 @@ pub(super) fn execute_programlet_call(
             stored_return_name,
             called_kind,
             result,
-            &mut caller.slots,
+            &mut frames[frame_index].slots,
         ) {
             return Err(error);
         }
     } else {
-        if *depth == MAX_PROGRAMLET_CALL_DEPTH {
+        if *depth >= MAX_PROGRAMLET_CALL_DEPTH {
             return Err(ERROR_CALL_DEPTH);
         }
-        let mut child = ProgramletFrame {
-            routine_start: called_start as u32,
-            routine_end: called_end as u32,
-            program_counter: called_start as u32,
-            routine_name_offset: called_name.start as u32,
-            routine_name_length: called_name.length as u32,
-            arguments: call_arguments,
-            argument_count: call_argument_count,
-            return_name_offset: stored_return_name.start as u32,
-            return_name_length: stored_return_name.length as u32,
-            state: 1,
-            expected_kind: called_kind,
-            loop_active: u32::from(sentence.field(FROM_INDEX).is_some()),
-            loop_remaining: call_loop_remaining,
-            loop_end: call_loop_end.unwrap_or(0),
-            loop_has_end: u32::from(call_loop_end.is_some()),
-            ..ProgramletFrame::EMPTY
-        };
-        child.slots[0] = NumericLocalSlot {
-            name_offset: called_output_name.start as u32,
-            name_length: called_output_name.length as u32,
-            value: 0,
-            kind: if return_kind == VALUE_BOOLEAN { 3 } else { 1 },
-            value_kind: if return_kind == VALUE_BOOLEAN {
-                VALUE_BOOLEAN
-            } else {
-                VALUE_UNSIGNED
-            },
-        };
-        array_put!(frames, *depth, child);
+        let child = &mut frames[*depth];
+        clear_programlet_frame(child);
+        child.arguments = call_arguments;
+        child.argument_count = call_argument_count;
+        child.routine_start = called_start as u32;
+        child.routine_end = called_end as u32;
+        child.program_counter = called_start as u32;
+        child.routine_name_offset = called_name.start as u32;
+        child.routine_name_length = called_name.length as u32;
+        child.return_name_offset = stored_return_name.start as u32;
+        child.return_name_length = stored_return_name.length as u32;
+        child.state = 1;
+        child.expected_kind = called_kind;
+        child.loop_active = u32::from(sentence.field(FROM_INDEX).is_some());
+        child.loop_remaining = call_loop_remaining;
+        child.loop_end = call_loop_end.unwrap_or(0);
+        child.loop_has_end = u32::from(call_loop_end.is_some());
+        array_put!(
+            &mut child.slots,
+            0,
+            NumericLocalSlot {
+                name_offset: called_output_name.start as u32,
+                name_length: called_output_name.length as u32,
+                value: 0,
+                kind: if return_kind == VALUE_BOOLEAN { 3 } else { 1 },
+                value_kind: if return_kind == VALUE_BOOLEAN {
+                    VALUE_BOOLEAN
+                } else {
+                    VALUE_UNSIGNED
+                },
+            }
+        );
         *depth += 1;
     }
 
-    array_put!(frames, frame_index, caller);
     Ok(())
 }

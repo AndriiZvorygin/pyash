@@ -1,7 +1,6 @@
 use super::*;
 
 pub(super) fn execute_programlet_return(
-    frame: ProgramletFrame,
     sentence: &ParsedSentence,
     words: &[u32],
     base_codelet: usize,
@@ -13,7 +12,7 @@ pub(super) fn execute_programlet_return(
     frames: &mut [ProgramletFrame; MAX_PROGRAMLET_CALL_DEPTH],
     frame_index: usize,
 ) -> Result<(), u32> {
-    let mut active = array_at!(frames, frame_index);
+    let active = &mut frames[frame_index];
     let from_index_return = sentence.field(FROM_INDEX);
     if sentence.field_count != 1 || sentence.verb_length != 0 {
         return Err(ERROR_MALFORMED);
@@ -61,7 +60,7 @@ pub(super) fn execute_programlet_return(
         }
     } else if from_index_return.is_some() {
         let output = array_at!(active.slots, 0);
-        if !number_kind_matches(frame.expected_kind, output.value_kind) {
+        if !number_kind_matches(active.expected_kind, output.value_kind) {
             return Err(ERROR_UNSUPPORTED);
         }
         active.result_value = output.value;
@@ -96,7 +95,7 @@ pub(super) fn execute_programlet_return(
             };
         }
     }
-    if !number_kind_matches(frame.expected_kind, active.result_kind) {
+    if !number_kind_matches(active.expected_kind, active.result_kind) {
         return Err(ERROR_UNSUPPORTED);
     }
     let next_is_paragraph = match next_sentence_is_paragraph_end(
@@ -104,7 +103,7 @@ pub(super) fn execute_programlet_return(
         codelet_count,
         base_codelet,
         next_codelet,
-        frame.routine_end as usize,
+        active.routine_end as usize,
         sentence_words,
         sentence_boundaries,
     ) {
@@ -114,6 +113,5 @@ pub(super) fn execute_programlet_return(
     active.has_returned = 1;
     active.state = if next_is_paragraph { 2 } else { 1 };
 
-    array_put!(frames, frame_index, active);
     Ok(())
 }

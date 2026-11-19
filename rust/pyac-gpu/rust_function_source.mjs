@@ -6,7 +6,29 @@ const CANDIDATES = [
   { file: "programlet_actions.rs", name: "apply_programlet_number_action", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
   { file: "programlet_actions.rs", name: "apply_programlet_boolean_action", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
   { file: "programlet_execute_setup.rs", name: "initialize_numeric_programlet", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-  { file: "sentence.rs", name: "collect_sentence_at", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
+  {
+    file: "sentence.rs",
+    name: "collect_sentence_at",
+    expected: "Result",
+    stub: "Err(ERROR_UNSUPPORTED)",
+    minimalStub: `if start >= window_codelet_count
+        || base_codelet > total_codelet_count
+        || window_codelet_count > total_codelet_count - base_codelet
+        || total_codelet_count > words.len() / CODELET_WORDS
+    {
+        return Err(ERROR_MALFORMED);
+    }
+    let absolute_codelet = base_codelet + start;
+    let header = word(words, absolute_codelet, 0);
+    let complete = header & 1 != 0;
+    let token = word(words, absolute_codelet, 1);
+    if token > MAX_U16 {
+        return Err(ERROR_MALFORMED);
+    }
+    array_put!(tokens, 0, token);
+    array_put!(boundaries, 0, u32::from((header & 2 != 0) == complete));
+    Ok((1, start + 1))`,
+  },
   { file: "numeric.rs", name: "word", expected: "u32", stub: "ERROR_UNSUPPORTED" },
   { file: "sentence.rs", name: "parse_sentence", expected: "u32", stub: "ERROR_UNSUPPORTED" },
   { file: "sentence.rs", name: "parse_sentence_range", expected: "u32", stub: "ERROR_UNSUPPORTED" },
@@ -108,9 +130,12 @@ function findBodyEnd(source, bodyStart) {
   throw new Error("function body has unmatched braces");
 }
 
-export function replaceCandidateBody(source, functionName) {
+export function replaceCandidateBody(source, functionName, variant = "error") {
   const candidate = CANDIDATES.find(({ name }) => name === functionName);
   if (!candidate) throw new Error(`unknown reduction function: ${functionName}`);
+  if (!new Set(["baseline", "error", "minimal"]).has(variant)) throw new Error(`variant ${variant} is not supported`);
+  const stub = variant === "error" ? candidate.stub : candidate.minimalStub;
+  if (variant === "minimal" && !stub) throw new Error(`variant ${variant} is not supported for ${functionName}`);
   const declaration = new RegExp(`\\bfn\\s+${functionName}\\s*\\(`, "gu");
   const matches = [...source.matchAll(declaration)];
   if (matches.length !== 1) throw new Error(`expected one declaration for ${functionName}; found ${matches.length}`);
@@ -123,9 +148,10 @@ export function replaceCandidateBody(source, functionName) {
   }
   const bodyEnd = findBodyEnd(source, bodyStart);
   return {
-    source: `${source.slice(0, bodyStart)}{ ${candidate.stub} }${source.slice(bodyEnd)}`,
+    source: variant === "baseline" ? source : `${source.slice(0, bodyStart)}{ ${stub} }${source.slice(bodyEnd)}`,
     candidate,
+    variant,
     originalBody: source.slice(bodyStart, bodyEnd),
-    replacementBody: `{ ${candidate.stub} }`,
+    replacementBody: variant === "baseline" ? source.slice(bodyStart, bodyEnd) : `{ ${stub} }`,
   };
 }

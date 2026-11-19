@@ -24,7 +24,7 @@ pub(super) fn initialize_numeric_programlet(
     }
     let mut frame_index = 0;
     while frame_index < frames.len() {
-        array_put!(frames, frame_index, ProgramletFrame::EMPTY);
+        clear_programlet_frame(&mut frames[frame_index]);
         frame_index += 1;
     }
     let mut symbol_used = 0usize;
@@ -186,33 +186,34 @@ pub(super) fn initialize_numeric_programlet(
     if !number_kind_matches(output_kind, routine_kind) {
         return Err(ERROR_UNSUPPORTED);
     }
-    let mut initial_frame = ProgramletFrame {
-        routine_start: routine_start as u32,
-        routine_end: routine_end as u32,
-        program_counter: routine_start as u32,
-        routine_name_offset: routine_name.start as u32,
-        routine_name_length: routine_name.length as u32,
-        arguments: invocation_arguments,
-        argument_count: invocation_argument_count,
-        state: 1,
-        expected_kind: routine_kind,
-        loop_active: u32::from(invocation.field(FROM_INDEX).is_some()),
-        loop_remaining,
-        loop_end: loop_end.unwrap_or(0),
-        loop_has_end: u32::from(loop_end.is_some()),
-        ..ProgramletFrame::EMPTY
-    };
-    initial_frame.slots[0] = NumericLocalSlot {
-        name_offset: routine_output_name.start as u32,
-        name_length: routine_output_name.length as u32,
-        value: 0,
-        kind: if output_kind == VALUE_BOOLEAN { 3 } else { 1 },
-        value_kind: if output_kind == VALUE_BOOLEAN {
-            VALUE_BOOLEAN
-        } else {
-            VALUE_UNSIGNED
-        },
-    };
-    array_put!(frames, 0, initial_frame);
+    let initial_frame = &mut frames[0];
+    initial_frame.routine_start = routine_start as u32;
+    initial_frame.routine_end = routine_end as u32;
+    initial_frame.program_counter = routine_start as u32;
+    initial_frame.routine_name_offset = routine_name.start as u32;
+    initial_frame.routine_name_length = routine_name.length as u32;
+    initial_frame.arguments = invocation_arguments;
+    initial_frame.argument_count = invocation_argument_count;
+    initial_frame.state = 1;
+    initial_frame.expected_kind = routine_kind;
+    initial_frame.loop_active = u32::from(invocation.field(FROM_INDEX).is_some());
+    initial_frame.loop_remaining = loop_remaining;
+    initial_frame.loop_end = loop_end.unwrap_or(0);
+    initial_frame.loop_has_end = u32::from(loop_end.is_some());
+    array_put!(
+        &mut initial_frame.slots,
+        0,
+        NumericLocalSlot {
+            name_offset: routine_output_name.start as u32,
+            name_length: routine_output_name.length as u32,
+            value: 0,
+            kind: if output_kind == VALUE_BOOLEAN { 3 } else { 1 },
+            value_kind: if output_kind == VALUE_BOOLEAN {
+                VALUE_BOOLEAN
+            } else {
+                VALUE_UNSIGNED
+            },
+        }
+    );
     Ok(symbol_used)
 }

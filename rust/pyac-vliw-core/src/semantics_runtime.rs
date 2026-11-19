@@ -326,6 +326,33 @@ impl ProgramletFrame {
     };
 }
 
+pub(crate) fn clear_programlet_frame(frame: &mut ProgramletFrame) {
+    let mut slot_index = 0;
+    while slot_index < frame.slots.len() {
+        array_put!(&mut frame.slots, slot_index, NumericLocalSlot::EMPTY);
+        slot_index += 1;
+    }
+    frame.arguments = [ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS];
+    frame.argument_count = 0;
+    frame.routine_start = 0;
+    frame.routine_end = 0;
+    frame.program_counter = 0;
+    frame.routine_name_offset = 0;
+    frame.routine_name_length = 0;
+    frame.return_name_offset = 0;
+    frame.return_name_length = 0;
+    frame.result_value = 0;
+    frame.expected_kind = 0;
+    frame.result_kind = 0;
+    frame.state = 0;
+    frame.action_started = 0;
+    frame.has_returned = 0;
+    frame.loop_active = 0;
+    frame.loop_remaining = 0;
+    frame.loop_end = 0;
+    frame.loop_has_end = 0;
+}
+
 #[derive(Clone, Copy)]
 struct SentenceField {
     role: u32,
