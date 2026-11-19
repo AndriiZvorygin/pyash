@@ -111,7 +111,7 @@ test("legacy float quote carries one finite f32 scalar", () => {
     (error) => error.code === "non-finite-float"
   );
   assert.equal(quoteWordFor({ sort: 6, scalarBytes: 2 }), FIXED16_QUOTE_WORD);
-  assert.throws(() => quoteWordFor({ sort: 6, scalarBytes: 4, vectorThick: 1 }), /scalar fixed16 and f32 values/);
+  assert.equal(quoteWordFor({ sort: 6, scalarBytes: 4, vectorThick: 1 }), 0xd11d);
 });
 
 test("fixed16 is a compact typed quote using the legacy float sort and u16 scalar", () => {

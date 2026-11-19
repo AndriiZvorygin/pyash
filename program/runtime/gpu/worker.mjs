@@ -40,7 +40,12 @@ function parseSpecMap(value) {
 function jsonText(value) {
   if (value === undefined) return "";
   try {
-    return JSON.stringify(value);
+    const initial = JSON.stringify(value);
+    if (typeof initial !== "string") return initial;
+    let marker = "__PYASH_GPU_NEGATIVE_ZERO__";
+    while (initial.includes(marker)) marker += "_";
+    const serialized = JSON.stringify(value, (_key, item) => Object.is(item, -0) ? marker : item);
+    return serialized.replaceAll(JSON.stringify(marker), "-0");
   } catch {
     return JSON.stringify(String(value));
   }

@@ -3,11 +3,13 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use pyac::{PyacValue, VectorElements, decode_pack};
+use pyac::{PyacValue, decode_pack};
 use serde_json::{Value, json};
 
-const RESULT_WORDS: usize = 32;
-const RESULT_STRIDE: usize = 4 + RESULT_WORDS;
+#[path = "gpu/result.rs"]
+mod result;
+use result::{RESULT_STRIDE, decode_results, value_json};
+
 const MAX_SECTION_NAME_WORDS: usize = pyac_vliw_core::MAX_PROGRAMLET_SECTION_NAME_WORDS;
 const SECTION_DESCRIPTOR_STRIDE: usize = 3 + MAX_SECTION_NAME_WORDS;
 const SECTION_RESULT_STRIDE: usize = 4 + MAX_SECTION_NAME_WORDS + RESULT_STRIDE;
@@ -694,95 +696,6 @@ fn decode_section_records(
         });
     }
     Ok(records)
-}
-
-fn decode_results(
-    codelets: &[[u16; pyac::WORDS_PER_CODELET]],
-    output: &[u32],
-) -> Result<Vec<PyacValue>, String> {
-    let mut values = Vec::new();
-    let mut index = 0;
-    while index < codelets.len() {
-        if index > 0 && codelets[index - 1][0] & 1 == 0 {
-            index += 1;
-            continue;
-        }
-        let offset = index * RESULT_STRIDE;
-        let result = &output[offset..offset + RESULT_STRIDE];
-        if result[1] != 0 {
-            return Err(format!(
-                "codelet {index}: shared VLIW core error {}",
-                result[1]
-            ));
-        }
-        let length = result[2] as usize;
-        let data = &result[4..];
-        let value = match result[0] {
-            pyac_vliw_core::VALUE_UNSIGNED => {
-                PyacValue::Unsigned(u64::from(data[0]) | (u64::from(data[1]) << 32))
-            }
-            pyac_vliw_core::VALUE_SIGNED => {
-                PyacValue::Signed((u64::from(data[0]) | (u64::from(data[1]) << 32)) as i64)
-            }
-            pyac_vliw_core::VALUE_FLOAT32 => PyacValue::Float32(data[0]),
-            pyac_vliw_core::VALUE_FIXED16 => PyacValue::Fixed16(data[0] as u16),
-            pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(data[0] != 0),
-            pyac_vliw_core::VALUE_DATE => {
-                PyacValue::DateEpochMs(u64::from(data[0]) | (u64::from(data[1]) << 32))
-            }
-            pyac_vliw_core::VALUE_VECTOR_U16 => PyacValue::Vector(VectorElements::Numbers(
-                data[..length].iter().map(|value| *value as u16).collect(),
-            )),
-            pyac_vliw_core::VALUE_VECTOR_U32 => {
-                PyacValue::Vector(VectorElements::Numbers32(data[..length].to_vec()))
-            }
-            pyac_vliw_core::VALUE_VECTOR_BOOL => PyacValue::Vector(VectorElements::Booleans(
-                data[..length].iter().map(|value| *value != 0).collect(),
-            )),
-            kind => {
-                return Err(format!(
-                    "codelet {index}: unsupported GPU result kind {kind}"
-                ));
-            }
-        };
-        values.push(value);
-        let consumed = result[3] as usize;
-        if consumed == 0 {
-            return Err(format!(
-                "codelet {index}: shared VLIW core returned no group length"
-            ));
-        }
-        index += consumed;
-    }
-    Ok(values)
-}
-
-fn value_json(value: &PyacValue) -> Value {
-    match value {
-        PyacValue::Unsigned(value) => json!({"type": "unsigned", "value": value}),
-        PyacValue::Signed(value) => json!({"type": "signed", "value": value}),
-        PyacValue::Float32(bits) => json!({"type": "float32", "value": f32::from_bits(*bits)}),
-        PyacValue::Fixed16(numerator) => json!({
-            "type": "fixed16",
-            "value": f64::from(*numerator) / 46_656.0,
-            "numerator": numerator,
-            "denominator": 46_656
-        }),
-        PyacValue::Boolean(value) => json!({"type": "boolean", "value": value}),
-        PyacValue::DateEpochMs(value) => json!({"type": "date-epoch-ms", "value": value}),
-        PyacValue::Vector(VectorElements::Numbers(values)) => {
-            json!({"type": "vector", "elementType": "unsigned-16", "values": values})
-        }
-        PyacValue::Vector(VectorElements::Numbers32(values)) => {
-            json!({"type": "vector", "elementType": "unsigned-32", "values": values})
-        }
-        PyacValue::Vector(VectorElements::Booleans(values)) => {
-            json!({"type": "vector", "elementType": "boolean", "values": values})
-        }
-        PyacValue::Vector(VectorElements::Texts(values)) => {
-            json!({"type": "vector", "elementType": "text", "values": values})
-        }
-    }
 }
 
 #[cfg(test)]

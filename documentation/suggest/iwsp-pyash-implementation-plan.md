@@ -225,9 +225,13 @@ correctness and interpretability criteria.
 
 The shared Rust semantics in `rust/pyac-vliw-core/src/semantics_runtime.rs` include
 integer and boolean behavior, scalar IEEE float32 (`VALUE_FLOAT32`), scalar fixed16
-(`VALUE_FIXED16`), and elementwise vectors. The quote encoders and runtime implement
-both numeric forms. Programlet slots remain scalar typed values; this is not yet a
-general tensor or matrix data model.
+(`VALUE_FIXED16`), and elementwise integer vectors. The legacy float quote sort also
+encodes finite IEEE float32 and float64 vector literals, with little-endian payloads;
+the shared CPU/GPU runtime returns both as typed vectors. A single 16-word codelet
+holds at most five unnamed float32 values or three unnamed float64 values (fewer when
+the name phrase consumes words). Longer indexed sentence serialization is not yet
+long-vector execution in the Rust runtime. Programlet slots remain scalar typed
+values; this is not yet a general tensor or matrix data model.
 
 The current fixed16 quote carries an unsigned 16-bit numerator `n`; its divisor is the
 implicit fixed constant 46,656 (`6^6`), not a per-value denominator field:
@@ -436,11 +440,12 @@ evaluation batch, subject to the current 64-section pack capacity and measured p
 overhead.
 
 That is distinct from parallelizing a single example's tensor operations. Float32 and
-fixed16 scalar semantics now exist, but VLIW vector reductions (dot product, sum,
-argmax), model-scale matrix/tensor operations, and a parameter payload/data layout are
-still gaps. The plan must measure whether within-example parallelism is worthwhile
-after a minimal end-to-end CPU candidate exists; do not treat "GPU" as synonymous with
-"matrix support" or assume current section dispatch already accelerates a layer.
+fixed16 scalar semantics and float32/float64 vector literals now exist, but VLIW vector
+reductions (dot product, sum, argmax), model-scale matrix/tensor operations, and a
+parameter payload/data layout are still gaps. The plan must measure whether
+within-example parallelism is worthwhile after a minimal end-to-end CPU candidate
+exists; do not treat "GPU" as synonymous with "matrix support" or assume current
+section dispatch already accelerates a layer.
 
 The `.pyac` pack currently carries codelets rather than a general weight-data plane.
 Any weight transport must follow the indexed program-image/container design and its
@@ -1115,10 +1120,11 @@ atoms or compounds and confirms their HNUCs. In particular, do not turn the
 examples into runnable `.pya` examples until those names have accepted
 vocabulary and registered dispatch signatures.
 
-Implementation boundary from the current source audit: numeric vector
-literals, JS `vector map`, JS `produce` (dot product), and the `neuron`
-operation exist; independent `myocpfun` sections exist in the VLIW pack
-format. Matrix/tensor values, matrix multiplication, softmax, argmax,
+Implementation boundary from the current source audit: integer, float32, and
+float64 vector literals run through the shared Rust CPU/GPU interpreter; JS
+`vector map`, JS `produce` (dot product), and the `neuron` operation also exist;
+independent `myocpfun` sections exist in the VLIW pack format. Matrix/tensor values,
+matrix multiplication, softmax, argmax,
 GPU-resident kernel launch, workgroup topology, and group synchronization
 are not thereby implemented in the shared Rust VLIW CPU/GPU runtime. The
 signatures above define candidate Pyash surfaces for the IWSP/transformer

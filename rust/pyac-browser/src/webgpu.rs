@@ -243,6 +243,17 @@ fn decode_results(
             pyac_vliw_core::VALUE_VECTOR_BOOL if length <= RESULT_WORDS => PyacValue::Vector(
                 VectorElements::Booleans(data[..length].iter().map(|value| *value != 0).collect()),
             ),
+            pyac_vliw_core::VALUE_VECTOR_FLOAT32 if length <= RESULT_WORDS => {
+                PyacValue::Vector(VectorElements::Float32(data[..length].to_vec()))
+            }
+            pyac_vliw_core::VALUE_VECTOR_FLOAT64 if length <= RESULT_WORDS / 2 => {
+                PyacValue::Vector(VectorElements::Float64(
+                    data[..length * 2]
+                        .chunks_exact(2)
+                        .map(|pair| u64::from(pair[0]) | (u64::from(pair[1]) << 32))
+                        .collect(),
+                ))
+            }
             kind => {
                 return Err(js_error(format!(
                     "codelet {index}: invalid shared VLIW result kind/length ({kind}/{length})"

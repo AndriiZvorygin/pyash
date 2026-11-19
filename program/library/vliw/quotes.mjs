@@ -205,8 +205,10 @@ export function quoteWordFor({ sort = UINT_SORT_DENOTE, vectorThick = 0, scalarB
   if (![LETTER_SORT_DENOTE, WORD_SORT_DENOTE, UINT_SORT_DENOTE, INT_SORT_DENOTE, FLOAT_SORT_DENOTE].includes(sort)) {
     throw quoteError("unsupported-quote", "no legacy quote sort matches the requested sort", { sort });
   }
-  if (sort === FLOAT_SORT_DENOTE && (![2, 4].includes(scalarBytes) || vectorThick !== 0)) {
-    throw quoteError("unsupported-quote", "legacy float quotes support scalar fixed16 and f32 values", {
+  if (sort === FLOAT_SORT_DENOTE && (
+    scalarBytes === 1 || (scalarBytes === 2 && vectorThick !== 0)
+  )) {
+    throw quoteError("unsupported-quote", "legacy float quotes support fixed16 scalars and IEEE float vectors", {
       scalarBytes,
       vectorThick
     });
@@ -256,6 +258,12 @@ export function isIntVectorQuoteWord(word) {
   return header.vectorThick !== 0;
 }
 
+export function isFloatVectorQuoteWord(word) {
+  if ((word & QUOTE_DENOTE_MASK) !== QUOTE_DENOTE) return false;
+  const header = decodeQuoteHeader(word);
+  return header.sortName === "float" && [4, 8].includes(header.scalarBytes) && header.vectorThick !== 0;
+}
+
 export function isLetterQuoteWord(word) {
   if ((word & QUOTE_DENOTE_MASK) !== QUOTE_DENOTE) return false;
   return decodeQuoteHeader(word).sortName === "letter";
@@ -298,33 +306,28 @@ function dynamicQuoteDescriptor(word) {
     }
     return null;
   }
-  if (
-    header.sortName === "float" &&
-    header.scalarBytes === 2 &&
-    header.vectorThick === 0 &&
-    header.vectorWords === 1
-  ) {
-    return {
-      word,
-      family: "fixed16",
-      payloadWords: 1,
-      valueType: "fixed16",
-      supported: true
-    };
-  }
-  if (
-    header.sortName === "float" &&
-    header.scalarBytes === 4 &&
-    header.vectorThick === 0 &&
-    header.vectorWords === 1
-  ) {
-    return {
-      word,
-      family: "float32",
-      payloadWords: 1,
-      valueType: "float32",
-      supported: true
-    };
+  if (header.sortName === "float") {
+    if (header.scalarBytes === 2 && header.vectorThick === 0 && header.vectorWords === 1) {
+      return {
+        word,
+        family: "fixed16",
+        payloadWords: 1,
+        valueType: "fixed16",
+        supported: true
+      };
+    }
+    if ([4, 8].includes(header.scalarBytes)) {
+      const bits = header.scalarBytes * 8;
+      const vector = header.vectorThick !== 0;
+      const fixedCount = vector && !header.explicitVectorLength ? header.vectorWords : null;
+      return {
+        word,
+        family: vector ? `float${bits}-vector` : `float${bits}`,
+        payloadWords: vector ? fixedCount : 1,
+        valueType: vector ? `float${bits}-vector` : `float${bits}`,
+        supported: fixedCount !== 0
+      };
+    }
   }
   if (header.vectorWords === null || header.scalarBytes !== 2) return null;
   if (header.sortName === "word") {
@@ -485,16 +488,36 @@ export function decodeQuote(words, offset = 0) {
     } else if (header.scalarBytes > 2) {
       value = unsignedValue(payload, header.scalarBytes);
     }
-  } else if (descriptor.family === "float32") {
-    const buffer = new ArrayBuffer(4);
-    const view = new DataView(buffer);
-    view.setUint32(0, payload[0] | (payload[1] << 16), true);
-    value = view.getFloat32(0, true);
+  } else if (descriptor.family === "float32" || descriptor.family === "float64") {
+    const view = new DataView(new ArrayBuffer(header.scalarBytes));
+    for (let index = 0; index < scalarWords; index += 1) {
+      view.setUint16(index * 2, payload[index], true);
+    }
+    value = header.scalarBytes === 4 ? view.getFloat32(0, true) : view.getFloat64(0, true);
     if (!Number.isFinite(value)) {
-      throw quoteError("non-finite-float", "VLIW f32 quote contains NaN or infinity", {
+      throw quoteError("non-finite-float", `VLIW f${header.scalarBytes * 8} quote contains NaN or infinity`, {
         offset,
         payload
       });
+    }
+  } else if (descriptor.family === "float32-vector" || descriptor.family === "float64-vector") {
+    const bytes = header.scalarBytes;
+    value = [];
+    for (let index = 0; index < elementCount; index += 1) {
+      const view = new DataView(new ArrayBuffer(bytes));
+      const start = index * scalarWords;
+      for (let wordIndex = 0; wordIndex < scalarWords; wordIndex += 1) {
+        view.setUint16(wordIndex * 2, payload[start + wordIndex], true);
+      }
+      const number = bytes === 4 ? view.getFloat32(0, true) : view.getFloat64(0, true);
+      if (!Number.isFinite(number)) {
+        throw quoteError("non-finite-float", `VLIW f${bytes * 8} vector contains NaN or infinity`, {
+          offset,
+          index,
+          payload: payload.slice(start, start + scalarWords)
+        });
+      }
+      value.push(number);
     }
   } else if (descriptor.family === "fixed16") {
     value = fixed16ValueFromNumerator(payload[0]);

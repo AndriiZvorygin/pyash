@@ -182,7 +182,7 @@ function encodeVectorValue(vector, role) {
     throw invalid("unsupported-vector", `VLIW ${role} vector requires a typed values list`);
   }
   const type = vector.type ?? "num";
-  if (!["num", "bool", "text"].includes(type)) {
+  if (!["num", "bool", "float32", "float64", "text"].includes(type)) {
     throw invalid("unsupported-vector-type", `VLIW ${role} vector type is unsupported`, { type });
   }
   if (vector.values.length < 2 || vector.values.length > 0xffff) {
@@ -213,6 +213,34 @@ function encodeVectorValue(vector, role) {
       }
     }
     return { words, rawQuotes };
+  }
+
+  if (type === "float32" || type === "float64") {
+    const scalarBytes = type === "float32" ? 4 : 8;
+    const scalarWords = scalarBytes / 2;
+    const payload = vector.values.flatMap((value) => {
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        throw invalid("non-finite-float", `VLIW ${type} vector elements must be finite numbers`, { value });
+      }
+      const normalized = type === "float32" ? Math.fround(value) : value;
+      if (!Number.isFinite(normalized)) {
+        throw invalid("non-finite-float", `VLIW ${type} vector element is outside its finite range`, { value });
+      }
+      const view = new DataView(new ArrayBuffer(scalarBytes));
+      if (scalarBytes === 4) view.setFloat32(0, normalized, true);
+      else view.setFloat64(0, normalized, true);
+      return Array.from({ length: scalarWords }, (_, index) => view.getUint16(index * 2, true));
+    });
+    const thickness = vectorThicknessFor(vector.values.length);
+    const quote = quoteWordFor({
+      sort: 6,
+      vectorThick: thickness,
+      scalarBytes
+    });
+    return {
+      words: [quote, ...(thickness === VECTOR_THICK_LONG ? [vector.values.length] : []), ...payload],
+      rawQuotes: []
+    };
   }
 
   const sort = type === "num" ? UINT_SORT_DENOTE : INT_SORT_DENOTE;
@@ -517,6 +545,9 @@ function decodeValue(items, role, boundaryOffsets) {
     }
     if (isIntVectorQuoteWord(word) && Array.isArray(value)) {
       return { ve: { type: "bool", values: value.map((item) => item === 0 ? "lie" : "truth") } };
+    }
+    if ((items[0].quote.family === "float32-vector" || items[0].quote.family === "float64-vector") && Array.isArray(value)) {
+      return { ve: { type: items[0].quote.family === "float32-vector" ? "float32" : "float64", values: value } };
     }
     if (word === NUMBER_QUOTE_WORD && Number.isInteger(value) && value >= 0 && value <= 0xffff) {
       return { num: value };

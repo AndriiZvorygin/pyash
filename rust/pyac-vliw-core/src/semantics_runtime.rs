@@ -122,6 +122,8 @@ pub const VALUE_BOOLEAN: u32 = 7;
 const VALUE_NUMBER: u32 = 8;
 pub const VALUE_FLOAT32: u32 = 9;
 pub const VALUE_FIXED16: u32 = 10;
+pub const VALUE_VECTOR_FLOAT32: u32 = 11;
+pub const VALUE_VECTOR_FLOAT64: u32 = 12;
 
 pub const ERROR_UNSUPPORTED: u32 = 1;
 pub const ERROR_DIVISION_BY_ZERO: u32 = 2;

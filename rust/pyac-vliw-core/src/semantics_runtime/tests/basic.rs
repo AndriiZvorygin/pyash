@@ -144,6 +144,80 @@ fn executes_f32_literals_and_scalar_arithmetic() {
 }
 
 #[test]
+fn executes_f32_and_f64_vector_literals_in_the_shared_core() {
+    let f32_values = [1.25f32.to_bits(), (-0.5f32).to_bits()];
+    let f32_vector = [
+        0x00c1,
+        0xd11d,
+        f32_values[0] & 0xffff,
+        f32_values[0] >> 16,
+        f32_values[1] & 0xffff,
+        f32_values[1] >> 16,
+        ACCUSATIVE,
+        REALIS,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    ];
+    let result = interpret(&[f32_vector]);
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.value_kind, VALUE_VECTOR_FLOAT32);
+    assert_eq!(result.length, 2);
+    assert_eq!(&result.values[..2], &f32_values);
+
+    let f64_values = [std::f64::consts::PI.to_bits(), (-0.0f64).to_bits()];
+    let f64_vector = [
+        0x0c01,
+        0xd91d,
+        f64_values[0] as u32 & 0xffff,
+        f64_values[0] as u32 >> 16,
+        (f64_values[0] >> 32) as u32 & 0xffff,
+        (f64_values[0] >> 48) as u32,
+        f64_values[1] as u32 & 0xffff,
+        f64_values[1] as u32 >> 16,
+        (f64_values[1] >> 32) as u32 & 0xffff,
+        (f64_values[1] >> 48) as u32,
+        ACCUSATIVE,
+        REALIS,
+        0,
+        0,
+        0,
+        0,
+    ];
+    let result = interpret(&[f64_vector]);
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.value_kind, VALUE_VECTOR_FLOAT64);
+    assert_eq!(result.length, 2);
+    assert_eq!(
+        &result.values[..4],
+        &[
+            f64_values[0] as u32,
+            (f64_values[0] >> 32) as u32,
+            f64_values[1] as u32,
+            (f64_values[1] >> 32) as u32,
+        ]
+    );
+}
+
+#[test]
+fn rejects_non_finite_values_in_float_vectors() {
+    let f32_nan = [
+        0x00c1, 0xd11d, 0, 0x7f80, 0, 0, ACCUSATIVE, REALIS, 0, 0, 0, 0, 0, 0, 0, 0,
+    ];
+    assert_eq!(interpret(&[f32_nan]).error, ERROR_FLOAT_DOMAIN);
+
+    let f64_infinity = [
+        0x0c01, 0xd91d, 0, 0, 0, 0x7ff0, 0, 0, 0, 0, ACCUSATIVE, REALIS, 0, 0, 0, 0,
+    ];
+    assert_eq!(interpret(&[f64_infinity]).error, ERROR_FLOAT_DOMAIN);
+}
+
+#[test]
 fn executes_fixed16_literals_and_scalar_arithmetic() {
     fn arithmetic(left: u32, right: u32, operator: u32) -> [u32; CODELET_WORDS] {
         [

@@ -242,6 +242,16 @@ fn vector_to_json(values: &VectorElements) -> Value {
         VectorElements::Texts(values) => {
             json!({ "type": "vector", "elementType": "text", "values": values })
         }
+        VectorElements::Float32(values) => json!({
+            "type": "vector",
+            "elementType": "float32",
+            "values": values.iter().map(|bits| f32::from_bits(*bits)).collect::<Vec<_>>()
+        }),
+        VectorElements::Float64(values) => json!({
+            "type": "vector",
+            "elementType": "float64",
+            "values": values.iter().map(|bits| f64::from_bits(*bits)).collect::<Vec<_>>()
+        }),
     }
 }
 
@@ -305,6 +315,35 @@ mod tests {
         assert_eq!(response["ok"], true);
         assert_eq!(response["values"][0]["type"], "float32");
         assert_eq!(response["values"][0]["value"], f64::from(0.1f32 + 0.2f32));
+    }
+
+    #[test]
+    fn wasm_api_serializes_typed_float_vectors() {
+        let float32 = PyacValue::Vector(VectorElements::Float32(vec![
+            1.25f32.to_bits(),
+            (-0.5f32).to_bits(),
+        ]));
+        assert_eq!(
+            value_to_json(&float32),
+            json!({
+                "type": "vector",
+                "elementType": "float32",
+                "values": [1.25, -0.5]
+            })
+        );
+
+        let float64 = PyacValue::Vector(VectorElements::Float64(vec![
+            std::f64::consts::PI.to_bits(),
+            (-0.5f64).to_bits(),
+        ]));
+        assert_eq!(
+            value_to_json(&float64),
+            json!({
+                "type": "vector",
+                "elementType": "float64",
+                "values": [std::f64::consts::PI, -0.5]
+            })
+        );
     }
 
     #[test]

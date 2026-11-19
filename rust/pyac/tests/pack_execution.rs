@@ -828,6 +828,59 @@ fn executes_f32_quotes_and_arithmetic_through_the_shared_pack_runtime() {
 }
 
 #[test]
+fn executes_float32_and_float64_vectors_through_the_shared_pack_runtime() {
+    let f32_values = [1.25f32.to_bits(), (-0.5f32).to_bits()];
+    let f32_vector = [
+        0x00c1,
+        0xd11d,
+        f32_values[0] as u16,
+        (f32_values[0] >> 16) as u16,
+        f32_values[1] as u16,
+        (f32_values[1] >> 16) as u16,
+        0x245e,
+        0x217e,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    ];
+    let f64_values = [std::f64::consts::PI.to_bits(), (-0.0f64).to_bits()];
+    let f64_vector = [
+        0x0c01,
+        0xd91d,
+        f64_values[0] as u16,
+        (f64_values[0] >> 16) as u16,
+        (f64_values[0] >> 32) as u16,
+        (f64_values[0] >> 48) as u16,
+        f64_values[1] as u16,
+        (f64_values[1] >> 16) as u16,
+        (f64_values[1] >> 32) as u16,
+        (f64_values[1] >> 48) as u16,
+        0x245e,
+        0x217e,
+        0,
+        0,
+        0,
+        0,
+    ];
+    let pack =
+        decode_pack(&encode_pack(&[f32_vector, f64_vector]).expect("float vector pack fits"))
+            .expect("float vector pack decodes");
+
+    assert_eq!(
+        execute_pack(&pack),
+        Ok(vec![
+            PyacValue::Vector(VectorElements::Float32(f32_values.to_vec())),
+            PyacValue::Vector(VectorElements::Float64(f64_values.to_vec())),
+        ])
+    );
+}
+
+#[test]
 fn executes_fixed16_quotes_and_arithmetic_through_the_shared_pack_runtime() {
     let fixed = |left, right, operator| {
         [

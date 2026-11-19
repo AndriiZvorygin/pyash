@@ -41,6 +41,8 @@ test("Rust GPU conformance matrix compiles the supported typed and control-flow 
     "fixed16-multiply-rounds-even",
     "fixed16-divide",
     "vector-arithmetic",
+    "float32-vector-literal",
+    "float64-vector-literal",
     "boolean-not-literal",
     "boolean-and-literals",
     "boolean-or-literals",

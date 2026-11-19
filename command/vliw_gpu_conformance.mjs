@@ -232,6 +232,16 @@ export function buildVliwGpuConformanceCases() {
       [{ type: "vector", elementType: "unsigned-16", values: [3, 4, 5, 6] }]
     ),
     codeletPack(
+      "float32-vector-literal",
+      "ob ve float32 1.25 -0.5 be vector ya",
+      [{ type: "vector", elementType: "float32", values: [1.25, -0.5] }]
+    ),
+    codeletPack(
+      "float64-vector-literal",
+      "ob ve float64 3.141592653589793 -0.5 -0 be vector ya",
+      [{ type: "vector", elementType: "float64", values: [Math.PI, -0.5, -0] }]
+    ),
+    codeletPack(
       "boolean-not-literal",
       "be not ob la ob bool truth be boolean ya ko do",
       [{ type: "boolean", value: false }]

@@ -395,7 +395,7 @@ export function parseTokens(
         !["be", "then", "else", "ta", "ret"].includes(words[j])
       ) {
         const token = tokenValue(words[j]);
-        if (elemType === "num" || elemType === "number") {
+        if (elemType === "num" || elemType === "number" || elemType === "float" || elemType === "float32" || elemType === "float64") {
           const num = Number(token);
           vector.values.push(Number.isNaN(num) ? token : num);
         } else if (elemType === "bool" || elemType === "boolean") {
@@ -410,7 +410,10 @@ export function parseTokens(
 
       const target = slot || (current ? s[current] : null);
       if (target) {
-        target.ve = vector;
+        target.ve = {
+          ...vector,
+          type: elemType === "float" ? "float32" : elemType
+        };
       }
 
       i = j - 1;

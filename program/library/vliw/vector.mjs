@@ -4,8 +4,11 @@ import {
   encodingError,
   normalizeLiteralName
 } from "./literal_layout.mjs";
+import { CODELET_WORD_COUNT } from "./codelets.mjs";
 import {
   INT_SORT_DENOTE,
+  FLOAT_SORT_DENOTE,
+  isFloatVectorQuoteWord,
   isIntVectorQuoteWord,
   isLetterQuoteWord,
   isUintVectorQuoteWord,
@@ -31,7 +34,9 @@ export const TEXT_VECTOR_MAX_ELEMENTS = 6;
 
 export const VECTOR_SORTS = Object.freeze({
   num: UINT_SORT_DENOTE,
-  bool: INT_SORT_DENOTE
+  bool: INT_SORT_DENOTE,
+  float32: FLOAT_SORT_DENOTE,
+  float64: FLOAT_SORT_DENOTE
 });
 
 export const vectorCompatibility = Object.freeze({
@@ -42,11 +47,25 @@ export const vectorCompatibility = Object.freeze({
   sorts: VECTOR_SORTS
 });
 
+function maximumFloatVectorElements(type, nameWordCount) {
+  const scalarWords = type === "float32" ? 2 : 4;
+  let maximum = 0;
+  for (let count = VECTOR_MIN_ELEMENTS; count <= 0xffff; count += 1) {
+    const explicitLength = vectorThicknessFor(count) === VECTOR_THICK_LONG ? 1 : 0;
+    const usedWords = 1 + nameWordCount + (nameWordCount > 0 ? 1 : 0) + 1
+      + explicitLength + count * scalarWords + 2;
+    if (usedWords > CODELET_WORD_COUNT) break;
+    maximum = count;
+  }
+  return maximum;
+}
+
 export function vectorQuoteWord(type, count) {
+  const scalarBytes = type === "float32" ? 4 : type === "float64" ? 8 : 2;
   return quoteWordFor({
     sort: VECTOR_SORTS[type],
     vectorThick: vectorThicknessFor(count),
-    scalarBytes: 2
+    scalarBytes
   });
 }
 
@@ -140,10 +159,11 @@ export function normalizeVectorSentence(sentence) {
     });
   }
   const type = vector.type === undefined ? "num" : vector.type;
-  if (type !== "num" && type !== "bool" && type !== "text") {
+  const name = sentence.su === undefined ? null : normalizeLiteralName(sentence.su);
+  if (!Object.hasOwn(VECTOR_SORTS, type) && type !== "text") {
     throw encodingError(
       "unsupported-vector-type",
-      "only numeric, boolean, and text vectors have a proven legacy quote encoding",
+      "only integer, boolean, float32, float64, and text vectors have a legacy quote encoding",
       { type: vector.type }
     );
   }
@@ -154,7 +174,9 @@ export function normalizeVectorSentence(sentence) {
       { count: vector.values.length, minimum: VECTOR_MIN_ELEMENTS }
     );
   }
-  const maximum = type === "text" ? TEXT_VECTOR_MAX_ELEMENTS : VECTOR_MAX_ELEMENTS;
+  const maximum = type === "text" ? TEXT_VECTOR_MAX_ELEMENTS
+    : type === "num" || type === "bool" ? VECTOR_MAX_ELEMENTS
+      : maximumFloatVectorElements(type, name?.words.length ?? 0);
   if (vector.values.length > maximum) {
     throw encodingError(
       "unsupported-vector-width",
@@ -167,7 +189,18 @@ export function normalizeVectorSentence(sentence) {
     ? readNumbers(vector.values)
     : type === "bool"
       ? readBooleans(vector.values)
-      : vector.values.map((value) => {
+      : type === "float32" || type === "float64"
+        ? vector.values.map((value) => {
+          if (typeof value !== "number" || !Number.isFinite(value)) {
+            throw encodingError("non-finite-float", `${type} vector values must be finite numbers`, { value });
+          }
+          const normalized = type === "float32" ? Math.fround(value) : value;
+          if (!Number.isFinite(normalized)) {
+            throw encodingError("non-finite-float", `value is outside the finite ${type} range`, { value });
+          }
+          return normalized;
+        })
+        : vector.values.map((value) => {
         textRegion(value);
         return value;
       });
@@ -178,7 +211,6 @@ export function normalizeVectorSentence(sentence) {
     be: "vector"
   };
   if (sentence.su !== undefined) {
-    const name = normalizeLiteralName(sentence.su);
     normalized.su = { name: name.name };
   }
   return { normalized, type, payload: values };
@@ -192,9 +224,20 @@ export function lowerVectorSentence(sentence) {
   if (type === "text") {
     regions = payload.map((value) => textRegion(value));
   } else {
-    const words = vectorUsesExplicitLength(payload.length)
-      ? [payload.length, ...payload]
+    const scalarBytes = type === "float32" ? 4 : type === "float64" ? 8 : 2;
+    const scalarWords = scalarBytes / 2;
+    const encodedPayload = type === "float32" || type === "float64"
+      ? payload.flatMap((value) => {
+        const view = new DataView(new ArrayBuffer(scalarBytes));
+        if (scalarBytes === 4) view.setFloat32(0, value, true);
+        else view.setFloat64(0, value, true);
+        return Array.from({ length: scalarWords }, (_, index) => view.getUint16(index * 2, true));
+      })
       : payload;
+    const explicitLength = vectorThicknessFor(payload.length) === VECTOR_THICK_LONG;
+    const words = explicitLength
+      ? [payload.length, ...encodedPayload]
+      : encodedPayload;
     regions = [{ quoteWord: vectorQuoteWord(type, payload.length), payloadWords: words }];
   }
 
@@ -216,6 +259,7 @@ export function decodeVectorCodelet(input) {
     acceptsQuote: (quote) => (
       isUintVectorQuoteWord(quote.word) ||
       isIntVectorQuoteWord(quote.word) ||
+      isFloatVectorQuoteWord(quote.word) ||
       isLetterQuoteWord(quote.word)
     ),
     payloadWordCount: (quote) => quote.payloadWords
@@ -230,6 +274,9 @@ export function decodeVectorCodelet(input) {
   } else if (isIntVectorQuoteWord(first.word)) {
     type = "bool";
     values = literal.regions[0].payloadWords.map((code) => (code === 0 ? "lie" : "truth"));
+  } else if (isFloatVectorQuoteWord(first.word)) {
+    type = first.family === "float32-vector" ? "float32" : "float64";
+    values = literal.regions[0].quote.value;
   } else {
     type = "text";
     if (!literal.regions.every((region) => isLetterQuoteWord(region.quote.word))) {

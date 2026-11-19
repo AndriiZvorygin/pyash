@@ -28,6 +28,7 @@ pub(super) fn single_codelet(words: &[u32], codelet: usize) -> Option<CoreResult
         header.scalar_bytes,
         header.fixed_length as usize,
         header.explicit != 0,
+        ((header_word & 0x0700) >> 8) != 0,
     ))
 }
 
@@ -110,7 +111,19 @@ pub(super) fn literal(
     scalar_bytes: u32,
     fixed_length: usize,
     explicit: bool,
+    vector: bool,
 ) -> CoreResult {
+    if vector {
+        return vector_literal(
+            words,
+            codelet,
+            offset,
+            nominative,
+            scalar_bytes,
+            fixed_length,
+            explicit,
+        );
+    }
     if scalar_bytes != 4 || fixed_length != 2 || explicit || offset + 4 >= CODELET_WORDS {
         return CoreResult::failure(ERROR_MALFORMED, 1);
     }
@@ -131,4 +144,77 @@ pub(super) fn literal(
         return CoreResult::failure(ERROR_FLOAT_DOMAIN, 1);
     }
     CoreResult::scalar(VALUE_FLOAT32, bits, 0, 1)
+}
+
+fn vector_literal(
+    words: &[u32],
+    codelet: usize,
+    offset: usize,
+    nominative: bool,
+    scalar_bytes: u32,
+    fixed_words: usize,
+    explicit: bool,
+) -> CoreResult {
+    if !matches!(scalar_bytes, 4 | 8) {
+        return CoreResult::failure(ERROR_MALFORMED, 1);
+    }
+    let words_per_value = (scalar_bytes / 2) as usize;
+    if explicit && offset + 1 >= CODELET_WORDS {
+        return CoreResult::failure(ERROR_MALFORMED, 1);
+    }
+    let length = if explicit {
+        word(words, codelet, offset + 1) as usize
+    } else {
+        fixed_words / words_per_value
+    };
+    let payload_words = length * words_per_value;
+    if length == 0 || payload_words > RESULT_WORDS || (!explicit && payload_words != fixed_words) {
+        return CoreResult::failure(ERROR_MALFORMED, 1);
+    }
+    let payload = offset + if explicit { 2 } else { 1 };
+    let accusative = payload + payload_words;
+    let realis = accusative + 1;
+    if realis >= CODELET_WORDS
+        || word(words, codelet, accusative) != ACCUSATIVE
+        || word(words, codelet, realis) != REALIS
+        || word(words, codelet, 0)
+            != expected_index(nominative.then_some(offset - 1), accusative, realis)
+        || !zero_tail(words, codelet, realis + 1)
+    {
+        return CoreResult::failure(ERROR_MALFORMED, 1);
+    }
+
+    let mut result = CoreResult::empty();
+    result.value_kind = if scalar_bytes == 4 {
+        VALUE_VECTOR_FLOAT32
+    } else {
+        VALUE_VECTOR_FLOAT64
+    };
+    result.length = length as u32;
+    result.consumed_codelets = 1;
+    let mut index = 0;
+    while index < length {
+        if scalar_bytes == 4 {
+            let low = word(words, codelet, payload + index * 2) & 0xffff;
+            let high = word(words, codelet, payload + index * 2 + 1) & 0xffff;
+            let bits = low | (high << 16);
+            if bits & 0x7f80_0000 == 0x7f80_0000 {
+                return CoreResult::failure(ERROR_FLOAT_DOMAIN, 1);
+            }
+            array_put!(&mut result.values, index, bits);
+        } else {
+            let start = payload + index * 4;
+            let low = (word(words, codelet, start) & 0xffff)
+                | ((word(words, codelet, start + 1) & 0xffff) << 16);
+            let high = (word(words, codelet, start + 2) & 0xffff)
+                | ((word(words, codelet, start + 3) & 0xffff) << 16);
+            if high & 0x7ff0_0000 == 0x7ff0_0000 {
+                return CoreResult::failure(ERROR_FLOAT_DOMAIN, 1);
+            }
+            array_put!(&mut result.values, index * 2, low);
+            array_put!(&mut result.values, index * 2 + 1, high);
+        }
+        index += 1;
+    }
+    result
 }

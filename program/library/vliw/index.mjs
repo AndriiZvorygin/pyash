@@ -67,6 +67,7 @@ import {
 } from "./vector.mjs";
 import {
   isIntVectorQuoteWord,
+  isFloatVectorQuoteWord,
   isLetterQuoteWord,
   isUintVectorQuoteWord
 } from "./quotes.mjs";
@@ -164,7 +165,7 @@ export function decodeCodelet(input) {
       throw error;
     }
   }
-  if (quoteItem && isUintVectorQuoteWord(quoteItem.quote.word) &&
+  if (quoteItem && (isUintVectorQuoteWord(quoteItem.quote.word) || isFloatVectorQuoteWord(quoteItem.quote.word)) &&
       isNumericArithmeticCodelet(decoded.words, decoded.usedWords)) {
     try {
       return semanticDecode(
@@ -187,6 +188,7 @@ export function decodeCodelet(input) {
     quoteItem &&
     (isUintVectorQuoteWord(quoteItem.quote.word) ||
       isIntVectorQuoteWord(quoteItem.quote.word) ||
+      isFloatVectorQuoteWord(quoteItem.quote.word) ||
       (quoteItems.length > 1 && isLetterQuoteWord(quoteItem.quote.word)))
   ) {
     try {

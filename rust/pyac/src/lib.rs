@@ -545,6 +545,18 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
                         .map(|value| *value != 0)
                         .collect(),
                 )),
+                pyac_vliw_core::VALUE_VECTOR_FLOAT32 => PyacValue::Vector(VectorElements::Float32(
+                    shared.values[..shared.length as usize].to_vec(),
+                )),
+                pyac_vliw_core::VALUE_VECTOR_FLOAT64 => {
+                    let words = &shared.values[..shared.length as usize * 2];
+                    PyacValue::Vector(VectorElements::Float64(
+                        words
+                            .chunks_exact(2)
+                            .map(|pair| u64::from(pair[0]) | (u64::from(pair[1]) << 32))
+                            .collect(),
+                    ))
+                }
                 _ => unreachable!("shared VLIW core returned an unknown value kind"),
             };
             values.push(value);
