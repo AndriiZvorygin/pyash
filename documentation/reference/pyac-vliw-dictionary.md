@@ -276,3 +276,37 @@ It builds 100,000 entries, measures each in-memory indexed lookup over
 queries. This is a repeatable algorithmic baseline, not a substitute for
 measuring file-backed open and range reads on target storage. The volume is
 the persisted source of truth; all lookup arrays are reconstructed from it.
+
+## 9. Vocabulary-agent workflow
+
+Use the [dictionary vocabulary workbook](../suggest/pyac-vliw-dictionary-workbook.md)
+as a curation handoff. It records candidates and evidence; it is not the
+canonical vocabulary catalog or a compiled dictionary volume.
+
+For each proposed dictionary entry, agents should:
+
+1. Select the exact active Pyac atom or compound and copy its HNUC sequence
+   from the vocabulary catalog. Do not create a second key for an existing
+   meaning.
+2. Resolve the intended WordNet/SUMO/etc. concept by exact versioned source ID
+   and gloss. Record the mapping relation; use a distinct Pyac key for a
+   distinct sense. Keep the machine-readable profile key `lyin kwon` separate
+   from the general dictionary atom `kwon` and from the entry-structure key
+   `tlat kwon`.
+3. Record each language form with its exact surface and NFC lookup form.
+   Preserve case; add case or spelling variants as separate forms instead of
+   silently folding them together.
+4. Draft the meaning as ordinary Pyash definition sentences using existing
+   canonical keys. Record referenced keys and ensure each is present in the
+   volume or an explicitly linked volume.
+5. Describe operation signatures by verb, mood, grammatical case, and value
+   type. Keep argument names and explanations as documentation, not dispatch
+   constraints.
+6. Update the workbook with evidence and review state. Only copy an
+   `accepted-llm` or `accepted-curated` state when the vocabulary catalog
+   itself records that state.
+
+The Rust writer currently consumes `DictionaryVolume` values with already-
+lowered definition codelets; there is not yet an importer from this workbook
+or from vocabulary catalogs. The permanent compiled-volume location is also
+undecided. See `documentation/guideline/hierarchy.md` before proposing one.
