@@ -156,12 +156,13 @@ These local Kwon results are useful candidates for the eventual sentence
 signatures. `accepted-llm` is a candidate status, not semantic approval or a
 curated dictionary entry.
 
-| Dictionary role | WordNet sense | Current Pyash candidate/status |
+| Dictionary role | WordNet / crosswalk sense | Current Pyash candidate/status |
 | --- | --- | --- |
 | Book/compilation | `n:06649049-n`, compilation of known facts | `lwat hpuk`, accepted-LLM candidate. |
 | Contents / table of contents | `n:06501650-n`, list of divisions and their locations | `dvis hnok`, accepted-LLM candidate. |
 | Alphabetical index | `n:06503777-n`, alphabetical listing of names and topics | `lwat txik`, accepted-LLM candidate. |
-| Written entry | `n:06515715-n`, item inserted in a written record | `nyit lwat`, accepted-LLM candidate. |
+| Dictionary entry | WordNet 3.0 `n:06300823` -> Open English WordNet 2025 `n:06311813-n`; the entry in a dictionary of information about a word. | `tlat kwon` (word + dictionary), accepted-LLM candidate; not curated. |
+| General written-record entry | `n:06515715-n`, an item inserted in a written record | `nyit lwat`, accepted-LLM candidate. |
 | Word definition | `n:06757091-n`, concise explanation of a word's meaning | `pcat nyif`, accepted-LLM candidate. |
 | Dictionary | Current atom `kwon` | Existing lexical atom. |
 | Chapter | No suitable dictionary-book sense selected | Use TOC ranges and ordinary paragraph boundaries; do not force a nearby sense or allocate a special chapter HNUC for this profile. |
