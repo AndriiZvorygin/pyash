@@ -5,6 +5,8 @@ the searchable catalog and compiled VLIW container built on the sentence-first
 lowering contract in `documentation/specifications/27-pyash-vliw-isa.md`.
 For the wider compiler flow and backend status, see
 [`pyash-vliw-compiler-architecture.md`](pyash-vliw-compiler-architecture.md).
+The proposed in-band dictionary profile is specified in
+[`pyac-vliw-dictionary.md`](pyac-vliw-dictionary.md).
 
 ## 1. Purpose and boundary
 
@@ -26,6 +28,12 @@ The catalog carries semantic identity, provenance, compatibility status,
 source text references, codelet hashes, and replay expectations. The `.pyac`
 pack carries exact legacy VLIW words. The catalog is the searchable semantic
 index; the pack is the executable byte projection.
+
+That builder remains an executable-codelet corpus with a searchable `.pya`
+catalog. A dictionary volume is a distinct in-band content profile: its own
+TOC, lookup indexes, lexical records, and semantic definitions are all VLIW
+sentences. It does not change this builder or the frozen v1 pack layout; see
+[`pyac-vliw-dictionary.md`](pyac-vliw-dictionary.md).
 
 Human-language input enters this boundary through an existing or future
 translation adapter. It becomes executable after the adapter produces a

@@ -1690,3 +1690,36 @@ fn executes_independent_named_programlet_sections_and_preserves_hnuc_labels() {
         Ok(vec![PyacValue::Unsigned(1), PyacValue::Unsigned(2)])
     );
 }
+
+#[test]
+fn pluk_tlas_counts_exact_matches_from_named_float32_vectors_in_a_pack() {
+    let prediction = [
+        0x0c05, 0x68b1, 0x24de, 0xd71d, 0, 0x3f80, 0, 0x4000, 0, 0x4040, 0x245e, 0x217e, 0, 0, 0, 0,
+    ];
+    let answer = [
+        0x0c05, 0x4930, 0x24de, 0xd71d, 0, 0x3f80, 0, 0x4000, 0, 0x4080, 0x245e, 0x217e, 0, 0, 0, 0,
+    ];
+    let score = [
+        0x4909, 0x225e, 0x68b1, 0x245e, 0x225e, 0x327e, 0x225e, 0xaa90, 0x243e, 0x225e, 0x4930,
+        0x287e, 0x2a64, 0x896a, 0x295e, 0,
+    ];
+    let bytes = encode_pack(&[prediction, answer, score]).expect("evaluator pack encodes");
+    let pack = decode_pack(&bytes).expect("evaluator pack decodes");
+
+    assert_eq!(
+        execute_pack(&pack),
+        Ok(vec![
+            PyacValue::Vector(VectorElements::Float32(vec![
+                1.0f32.to_bits(),
+                2.0f32.to_bits(),
+                3.0f32.to_bits(),
+            ])),
+            PyacValue::Vector(VectorElements::Float32(vec![
+                1.0f32.to_bits(),
+                2.0f32.to_bits(),
+                4.0f32.to_bits(),
+            ])),
+            PyacValue::Unsigned(2),
+        ])
+    );
+}

@@ -123,10 +123,11 @@ CPU threads and returns results as each finishes.
 The standalone smoke script verifies ordinary pack execution, one local-number
 programlet return, and rejection of a write to a constant quantity on the
 discrete GPU. The earlier 39-case Housekeeper matrix passed on the NVIDIA
-GeForce RTX 3090 with the resident runtime. Five additional cases now exercise
+GeForce RTX 3090 with the resident runtime. Six additional cases now exercise
 16-lane numeric, boolean, float32, and float64 vectors plus an explicit
-six-lane count. Those additions require a matching rebuilt runtime and a fresh
-Housekeeper run before they can be claimed as GPU-verified.
+six-lane count and dot-product collection into a mutable prediction vector.
+Those additions require a matching rebuilt runtime and a fresh Housekeeper run
+before they can be claimed as GPU-verified.
 This establishes conformance for those cases only; it does not claim parity for
 the currently unsupported programlet value families or control-flow forms.
 

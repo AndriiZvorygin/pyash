@@ -8,6 +8,7 @@ fn value_json(value: PyacValue) -> Value {
         PyacValue::Unsigned(value) => json!({"type": "unsigned", "value": value}),
         PyacValue::Signed(value) => json!({"type": "signed", "value": value}),
         PyacValue::Float32(bits) => json!({"type": "float32", "value": f32::from_bits(bits)}),
+        PyacValue::Float64(bits) => json!({"type": "float64", "value": f64::from_bits(bits)}),
         PyacValue::Fixed16(numerator) => json!({
             "type": "fixed16",
             "value": f64::from(numerator) / 46_656.0,

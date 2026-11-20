@@ -96,14 +96,15 @@ impl GpuRuntime {
         let timestamp_features =
             wgpu::Features::TIMESTAMP_QUERY | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES;
         let timestamp_queries = adapter.features().contains(timestamp_features);
-        let mut required_features =
-            wgpu::Features::PASSTHROUGH_SHADERS | wgpu::Features::PIPELINE_CACHE;
+        let mut required_features = wgpu::Features::PASSTHROUGH_SHADERS
+            | wgpu::Features::PIPELINE_CACHE
+            | wgpu::Features::SHADER_F64;
         if timestamp_queries {
             required_features |= timestamp_features;
         }
         if !adapter.features().contains(required_features) {
             return Err(
-                "Vulkan adapter lacks SPIR-V passthrough or pipeline-cache support".to_owned(),
+                "Vulkan adapter lacks a required VLIW feature (SPIR-V passthrough, pipeline cache, or shader-f64)".to_owned(),
             );
         }
         let device_started = Instant::now();
@@ -769,6 +770,9 @@ fn decode_programlet_result(
         pyac_vliw_core::VALUE_UNSIGNED => PyacValue::Unsigned(u64::from(output[4])),
         pyac_vliw_core::VALUE_SIGNED => PyacValue::Signed(i64::from(output[4] as i32)),
         pyac_vliw_core::VALUE_FLOAT32 => PyacValue::Float32(output[4]),
+        pyac_vliw_core::VALUE_FLOAT64 => {
+            PyacValue::Float64(u64::from(output[4]) | (u64::from(output[5]) << 32))
+        }
         pyac_vliw_core::VALUE_FIXED16 => PyacValue::Fixed16(output[4] as u16),
         pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(output[4] != 0),
         kind => return Err(format!("programlet: unsupported GPU result kind {kind}")),
@@ -818,6 +822,9 @@ fn decode_section_records(
             pyac_vliw_core::VALUE_UNSIGNED => PyacValue::Unsigned(u64::from(result[4])),
             pyac_vliw_core::VALUE_SIGNED => PyacValue::Signed(i64::from(result[4] as i32)),
             pyac_vliw_core::VALUE_FLOAT32 => PyacValue::Float32(result[4]),
+            pyac_vliw_core::VALUE_FLOAT64 => {
+                PyacValue::Float64(u64::from(result[4]) | (u64::from(result[5]) << 32))
+            }
             pyac_vliw_core::VALUE_FIXED16 => PyacValue::Fixed16(result[4] as u16),
             pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(result[4] != 0),
             kind => {

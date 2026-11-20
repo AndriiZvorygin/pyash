@@ -125,6 +125,7 @@ pub const VALUE_FLOAT32: u32 = 9;
 pub const VALUE_FIXED16: u32 = 10;
 pub const VALUE_VECTOR_FLOAT32: u32 = 11;
 pub const VALUE_VECTOR_FLOAT64: u32 = 12;
+pub const VALUE_FLOAT64: u32 = 13;
 
 pub const ERROR_UNSUPPORTED: u32 = 1;
 pub const ERROR_DIVISION_BY_ZERO: u32 = 2;
@@ -198,10 +199,12 @@ impl CoreResult {
 
 const NUMBER_QUOTE: u32 = 0x881d;
 const DATE_QUOTE: u32 = 0x981d;
+const QUOTED_GRAMMAR: u32 = 0x229e;
 const ACCUSATIVE: u32 = 0x245e;
 const NOMINATIVE: u32 = 0x24de;
 const SOURCE: u32 = 0x313e;
 const DESTINATION: u32 = 0x243e;
+const LOCATIVE: u32 = 0x615f;
 const COMITATIVE: u32 = 0x490f;
 const INSTRUMENTAL: u32 = 0x287e;
 const DATIVE: u32 = 0x207e;
@@ -432,9 +435,9 @@ impl BooleanEvalFrame {
 }
 
 #[derive(Clone, Copy)]
-struct NameSpan {
-    start: usize,
-    length: usize,
+pub(crate) struct NameSpan {
+    pub(crate) start: usize,
+    pub(crate) length: usize,
 }
 
 impl NameSpan {
@@ -464,8 +467,14 @@ mod dispatch;
 mod fixed16;
 #[path = "semantics_runtime/float.rs"]
 mod float;
+#[path = "semantics_runtime/mutable_vector.rs"]
+mod mutable_vector;
+#[path = "semantics_runtime/named_vector.rs"]
+mod named_vector;
 #[path = "semantics_runtime/numeric.rs"]
 mod numeric;
+#[path = "semantics_runtime/pluk_tlas.rs"]
+mod pluk_tlas;
 #[path = "semantics_runtime/programlet_actions.rs"]
 mod programlet_actions;
 #[path = "semantics_runtime/programlet_branch.rs"]
@@ -488,6 +497,8 @@ mod programlet_sections;
 mod programlet_symbols;
 #[path = "semantics_runtime/programlet_values.rs"]
 mod programlet_values;
+#[path = "semantics_runtime/scalar_product.rs"]
+mod scalar_product;
 #[path = "semantics_runtime/sentence.rs"]
 mod sentence;
 #[path = "semantics_runtime/vector_group.rs"]

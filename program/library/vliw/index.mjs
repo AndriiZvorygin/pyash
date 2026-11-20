@@ -6,67 +6,49 @@ import {
 import {
   decodeNumericPlusCodelet,
   executeNumericPlusCodelet,
-  lowerNumericPlusSentence,
   VliwEncodingError
 } from "./plus.mjs";
 import {
   decodeTypedLiteralCodelet,
   executeTypedLiteralCodelet,
-  isTypedLiteralSentence,
-  lowerTypedLiteralSentence,
   typedLiteralCompatibility
 } from "./literal.mjs";
 import {
   decodeNamedLiteralCodelet,
   executeNamedLiteralCodelet,
-  isNamedLiteralSentence,
-  lowerNamedLiteralSentence,
   namedLiteralCompatibility
 } from "./named_literal.mjs";
 import {
   booleanLiteralCompatibility,
   decodeBooleanLiteralCodelet,
-  executeBooleanLiteralCodelet,
-  isBooleanLiteralSentence,
-  lowerBooleanLiteralSentence
+  executeBooleanLiteralCodelet
 } from "./boolean_literal.mjs";
 import {
   decodeNumericArithmeticCodelet,
   executeNumericArithmeticCodelet,
   isNumericArithmeticCodelet,
-  isNumericArithmeticSentence,
-  lowerNumericArithmeticSentence,
   numericArithmeticCompatibility
 } from "./arithmetic.mjs";
 import {
   decodeNamedQueryCodelet,
   executeNamedQueryCodelet,
-  isNamedQuerySentence,
-  lowerNamedQuerySentence,
   namedQueryCompatibility
 } from "./named_query.mjs";
 import {
   decodeNumericInvertCodelet,
   executeNumericInvertCodelet,
-  isNumericInvertSentence,
-  lowerNumericInvertSentence,
   numericInvertCompatibility
 } from "./invert.mjs";
 import {
   dateCompatibility,
   decodeDateCodelet,
-  executeDateCodelet,
-  isDateSentence,
-  lowerDateSentence
+  executeDateCodelet
 } from "./date.mjs";
 import {
   decodeVectorCodelet,
-  executeVectorCodelet,
-  isVectorSentence,
-  lowerVectorSentence,
-  normalizeVectorSentence
+  executeVectorCodelet
 } from "./vector.mjs";
-import { decodeVectorSequence, lowerVectorSequence } from "./vector_sequence.mjs";
+import { decodeVectorSequence } from "./vector_sequence.mjs";
 import {
   isIntVectorQuoteWord,
   isFloatVectorQuoteWord,
@@ -74,7 +56,7 @@ import {
   isUintVectorQuoteWord
 } from "./quotes.mjs";
 import { sentenceToPyash } from "../../beautiful.mjs";
-import { decodePyashProgram, lowerPyashSentence } from "./sentence.mjs";
+import { decodePyashProgram } from "./sentence.mjs";
 import { deriveSentenceEffects, scheduleCodeletDependencies } from "./effects.mjs";
 import { executeVectorProgram, hasVectorCodelets } from "./vector_program.mjs";
 
@@ -89,83 +71,7 @@ function semanticDecode(decoded, semantic, sentence) {
   };
 }
 
-export function lowerSentence(sentence) {
-  if (["not", "and", "or"].includes(sentence?.be) && sentence?.mood === "do") {
-    return lowerPyashSentence(sentence).vectors.map((words) => ({
-      sentence,
-      words,
-      semantic: "boolean-composition"
-    }));
-  }
-  if (
-    ["equally", "tiny", "giant"].includes(sentence?.be)
-    && sentence?.mood === "do"
-    && !sentence.consequence
-    && !sentence.alternative
-  ) {
-    return lowerPyashSentence(sentence).vectors.map((words) => ({
-      sentence,
-      words,
-      semantic: "boolean-comparison"
-    }));
-  }
-  if (isNamedQuerySentence(sentence)) {
-    return [lowerNamedQuerySentence(sentence)];
-  }
-  if (isDateSentence(sentence)) {
-    return [lowerDateSentence(sentence)];
-  }
-  if (isVectorSentence(sentence)) {
-    const { type, payload } = normalizeVectorSentence(sentence);
-    if (type === "text" && payload.length === 1) {
-      return lowerVectorSequence(sentence);
-    }
-    try {
-      return [lowerVectorSentence(sentence)];
-    } catch (error) {
-      if (error.code !== "literal-width") throw error;
-    }
-    try {
-      return lowerVectorSequence(sentence);
-    } catch (error) {
-      if (error.code !== "literal-width") throw error;
-    }
-    const lowered = lowerPyashSentence(sentence);
-    return lowered.vectors.map((words) => ({
-      sentence,
-      words,
-      semantic: "vector"
-    }));
-  }
-  if (isBooleanLiteralSentence(sentence)) {
-    return [lowerBooleanLiteralSentence(sentence)];
-  }
-  if (isNamedLiteralSentence(sentence)) {
-    return [lowerNamedLiteralSentence(sentence)];
-  }
-  if (isTypedLiteralSentence(sentence)) {
-    return [lowerTypedLiteralSentence(sentence)];
-  }
-  if (isNumericInvertSentence(sentence)) {
-    return [lowerNumericInvertSentence(sentence)];
-  }
-  const hasNonU16Number = [sentence?.ob, sentence?.to, sentence?.from, sentence?.with, sentence?.by]
-    .some((value) => typeof value?.num === "number" && (!Number.isInteger(value.num) || value.num < 0 || value.num > 0xffff));
-  if (isNumericArithmeticSentence(sentence) && (
-    sentence.as?.name === "rational" ||
-    sentence.be !== "plus" || sentence.ob?.ve !== undefined || hasNonU16Number
-  )) {
-    return [lowerNumericArithmeticSentence(sentence)];
-  }
-  return [lowerNumericPlusSentence(sentence)];
-}
-
-export function lowerParagraph(paragraph) {
-  if (!Array.isArray(paragraph)) {
-    throw new VliwEncodingError("invalid-paragraph", "VLIW paragraph must be an array of sentences");
-  }
-  return paragraph.flatMap((sentence) => lowerSentence(sentence));
-}
+export { lowerSentence, lowerParagraph } from "./lower_sentence.mjs";
 
 export function decodeCodelet(input) {
   const decoded = decodeLegacyCodelet(input);

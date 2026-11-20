@@ -214,7 +214,66 @@ Rust CPU/GPU interpreter still returns values through a fixed `CoreResult`
 buffer sized for 16 lanes; large-array execution through that ABI remains a
 runtime transport/capacity gap. Programlet slots remain scalar typed values.
 
-## 10. Non-goals
+## 10. Scalar product (dot product)
+
+The Pyash compound `kl6m psas` means **dot product**. Inline form:
+
+```pyash
+ob ve float32 1 2 3 by ve float32 4 5 6 be kl6m psas do
+```
+
+`ob` and `by` are the left and right operands: an inline typed vector or one
+preceding named float32/float64 vector literal in the pack. For example:
+
+```pyash
+su name features ob ve float32 1 2 be vector ya
+su name weight ob ve float32 4 5 be vector ya
+ob name features by name weight be kl6m psas do
+```
+
+Named operands are read-only; missing or duplicate names are errors. Mutable
+float32 vectors may be destinations only. Optional `to name <vector> at num
+<lane>` stores the scalar in a preceding zeroed vector (1-16 lanes, zero-based
+index, writes in source order); omitting it returns only the scalar. Verb HNUCs:
+`0x0D62 0x8944`.
+
+Operands MUST be finite, non-empty float32 or float64 vectors of matching type
+and equal length, from one to `MAX_VECTOR_LANES` (currently 16). Multiply
+matching lanes, then add products to a zero accumulator in ascending lane order
+at the operand precision. Return a scalar of that precision. Reject malformed
+phrases and type/length mismatches; non-finite inputs/results produce the
+float-domain error. Without `shader-f64`, reject float64 with the unsupported-
+operation error. Rust CPU and native Vulkan enable `shader-f64`; WGSL/WebGPU
+omits it, so there float32 is supported and float64 is not. Implementations
+MUST preserve the specified operation order and precision.
+
+## 11. Exact-match count (`pluk tlas`)
+
+This evaluator compares two named float32 vectors in one PyAC pack. Its typed
+Pyash signature is:
+
+```pyash
+ob name prediction value
+by name reference point value
+to name num correct count
+be pluk tlas do
+```
+
+The `ob` and `by` fields are references, not inline vector literals. Each MUST
+resolve to exactly one preceding named float32 vector declaration in the same
+pack. A mutable prediction vector may be populated by earlier indexed dot
+products; unwritten lanes stay zero. Both vectors MUST have equal nonzero width
+(at most 16) and finite lanes. The result counts corresponding lanes equal under exact
+IEEE-754 binary32 numeric comparison; there is no tolerance, and positive and
+negative zero compare equal. Return one unsigned scalar in the range 0 to 16.
+
+The verb uses the existing two-word `pluk tlas` HNUC sequence and deontic mood;
+no quote type or vocabulary allocation is added. Unbound or duplicate names,
+non-float32 inputs, malformed declarations, and unequal widths are errors. The
+shared Rust VLIW runtime owns CPU and GPU execution semantics; JavaScript only
+lowers the sentence and does not calculate the count.
+
+## 12. Non-goals
 
 This specification does not add HNUCs, alter parser vocabulary, define the
 catalog/container database, require a GPU, introduce a model server or queue,
@@ -225,7 +284,7 @@ not replace the current sentence/paragraph interpreter. The only
 conforming future implementation is one that can prove the sentence result
 and the legacy encoding bytes agree.
 
-## 11. Implementation references
+## 13. Implementation references
 
 The proven numeric-plus, quote, fixed-slot, typed-literal, named-fact, database,
 and facade slices are documented with their fixtures and implementation paths

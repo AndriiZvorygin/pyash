@@ -162,3 +162,93 @@ retain the remote Housekeeper timestamps needed to attribute the remainder to
 remote queueing versus Housekeeper dispatch/HTTP handling. Use the newly split
 timestamps on the next conformance run before changing GPU execution or
 scheduler behavior.
+
+## 2026-11-19: `kl6m psas` Dot Product
+
+**Run record:** `artifacts/20261119-0004-rust-vliw-conformance/result.pya`
+
+| Field | Evidence |
+| --- | --- |
+| Source revision at run | `00b4843f68ad8c6f58a0a2a5ac42954183bad8df`, dirty working tree |
+| Host and route | Mriczo, Pyash GPU Housekeeper -> `pyac-vliw-runtime` -> Rust-GPU Vulkan |
+| GPU | NVIDIA GeForce RTX 3090, driver `550.163.01`, 24,576 MiB |
+| Runtime image | `sha256:429523feea2bb62b2198ed7b05d808cdc2accfde61e5d6c08dba183e559a819f` |
+| Live conformance | 46/46 cases passed; both isolated expected-error cases passed |
+| Dot-product values | float32 `[1,2,3] · [4,5,6] = 32`; float64 `[0.1,2,-3] · [0.2,4,-5] = 23.02` |
+| CPU batch wall | 111.518 ms for 28 codelet cases; 107.989 ms for 18 programlet sections |
+| GPU compute pass | 0.144672 ms for the codelet batch; 60.949952 ms for programlet sections |
+| GPU client round trip | 7,050.046 ms for codelets; 17,030.845 ms for programlet sections |
+| Full run wall time | 54,372.145 ms, including two expected-error checks |
+| Pipeline-cache generation | 120.05 s for all three pipelines; generated before runtime replacement |
+| Runtime executable | 9,084,608 bytes; SHA-256 `ed69ba7d730001e88f79353d071a47eea775e3211ba25e53308b5419ba12ab42` |
+| GPU worker executable | 7,393,288 bytes; SHA-256 `8f56b3334d7ff8b4bdabed9e70e0566eae496417a62bb20f986925b6c320ebbd` |
+| SPIR-V shader | 2,732,480 bytes; SHA-256 `2e0a1a00a205e7272d6a9f2c88c852f2762f81e29686efc2bf20eb3472f8a3ca` |
+| Pipeline cache | 10,061,392 bytes; SHA-256 `6c5ee31112bc9715fa130982fb24a75a32829cbee17663014ac76dc5f647abb5` |
+
+The dot-product sentence was exercised through Pyash lowering, packed VLIW,
+Rust CPU reference, and the live Vulkan worker. After separating the
+`shader-f64` capability for native Vulkan from the WebGPU build, regenerating
+the Vulkan shader produced the same SPIR-V hash recorded by this live run. The
+WGSL build omits native 64-bit shader types and rejects float64 dot products;
+float32 dot products remain supported there. Housekeeper idled the VLIW
+container after the run; the next managed request starts it on demand.
+
+## 2026-11-20: Mutable Prediction Vector
+
+**Run record:** `artifacts/20261120-0002-rust-vliw-conformance/result.pya`
+
+| Field | Evidence |
+| --- | --- |
+| Source revision | `616b6313a4ee03dc2926fed38da08bd8593c67d7`, dirty tree; run patch SHA-256 `c409c7fb7adba4d19ab544033b892d1d911fd17dcd3bbc1164aa0207ed226e9e` |
+| Host and GPU | Mriczo; RTX 3090, driver `550.163.01`, 24,576 MiB |
+| Runtime image | `sha256:47f1c4f9be0abc1c8020bd03efdfe0aec5830c1c534fad70a7a6d496b2a1d18a` |
+| Live GPU results | 47/47 cases passed, including mutable-vector dot-product collection; 2/2 expected errors passed |
+| Run wall time | 6,604.662 ms |
+| CPU batches | 29 codelet cases: 60.532 ms; 18 sections: 55.366 ms |
+| GPU kernel | Codelet batch: 0.609 ms; section batch: 67.285 ms |
+| GPU client round trip | Codelet batch: 3,011.818 ms; section batch: 1,004.206 ms |
+| Pipeline-cache generation | 74.05 s total: pack 37.22 s, programlet 18.85 s, sections 17.65 s |
+| Executables | CPU reference 10,168,568 bytes; GPU runtime 9,086,432 bytes; GPU worker 7,394,016 bytes |
+| GPU artifacts | SPIR-V 3,440,244 bytes; persisted pipeline cache 12,609,996 bytes |
+
+The new case declares `prediction` as zero-initialized mutable float32 state,
+writes three dot-product results to indexed lanes, then passes that vector to
+`pluk tlas`. CPU and GPU both produce `[5,4,3]` and an exact-match count of 3.
+The result vector is `[5,4,3]`, with exact-match count `3`. Complete hashes,
+per-request queue/service/kernel timings, and the case list are in the `.pya`
+run record.
+
+## 2026-11-20: IWSP Linear Scorer CPU/GPU Slice
+
+**Run record:** `artifacts/20261120-0005-rust-vliw-conformance/result.pya`
+
+| Field | Evidence |
+| --- | --- |
+| Source revision | `c7a42a2f61d64474422274c2a34320b0bbae1090` plus dirty patch SHA-256 `2ec097e85060739d732d2e044a149d072f9ac5c4dc6b4db6d39c3614b69de61e` |
+| Host and route | Mriczo, Pyash GPU Housekeeper -> `pyac-vliw-runtime` -> Rust-GPU Vulkan |
+| GPU | NVIDIA GeForce RTX 3090, driver `550.163.01`, 24,576 MiB |
+| Live conformance | 49/49 valid cases passed; 2/2 expected runtime errors passed |
+| IWSP baseline | Prediction `[5,4,3]`; exact-match score `3/3` on Rust CPU and RTX 3090 |
+| IWSP mutation | Changed third weight `[3,0]` to `[2,0]`; prediction `[5,4,2]`; score `2/3` on Rust CPU and RTX 3090 |
+| Full conformance wall | 32,684.886 ms |
+| CPU batch wall | 31 codelet cases: 57.891 ms; 18 programlet sections: 57.246 ms |
+| Vulkan kernel time | Codelet batch: 2.398976 ms; section batch: 60.768576 ms |
+| Client round trip | Codelet batch: 4,014.266 ms; section batch: 24,036.924 ms |
+| Runtime startup | 1.27 s with the persisted cache loaded; below the 60-second ceiling |
+| Pipeline-cache generation | 120.45 s total: pack 83.28 s, programlet 19.60 s, sections 17.27 s; deployment/build step only |
+| Executables | CPU reference 10,181,624 bytes; GPU runtime 9,086,096 bytes; GPU worker 7,393,808 bytes |
+| GPU artifacts | SPIR-V 4,015,496 bytes; pipeline cache 14,598,161 bytes |
+| Runtime image | `sha256:8c165192ef7f0b951cd7bfb204fe2c03cd399d9818b96df8e43cbb9aa4936462` |
+
+The scorer and deliberately degraded candidate were included in one GPU
+codelet batch using distinct named bindings. The separate reference-answer
+vector stayed `[5,4,3]`, so the `2/3` result demonstrates that the judge
+distinguishes the changed candidate rather than changing its target along with
+the candidate.
+
+GPU compute is not a speed claim for this tiny scorer: the codelet batch took
+2.399 ms in the Vulkan timestamp interval, while the CPU reference batch took
+57.891 ms including process/runtime overhead. The section batch's 24.037-second
+client round trip is also much larger than its 61 ms service/kernel interval;
+this run records that latency but does not explain it. Evaluator isolation,
+held-out data, and protected task scoring remain Stage 2 work.

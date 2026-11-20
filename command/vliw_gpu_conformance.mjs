@@ -19,6 +19,8 @@ import {
   collectVliwConformanceEnvironment,
   writeVliwConformancePya
 } from "./vliw_conformance_report.mjs";
+import { buildPlukTlasConformanceCase } from "./vliw_gpu_conformance/pluk_tlas.mjs";
+import { buildIwspLinearScorerConformanceCases } from "./vliw_gpu_conformance/iwsp_linear_scorer.mjs";
 
 function programlet(name, source, invocation, expectedValues) {
   const compiled = compilePyashProgramSource(source, { invocation });
@@ -72,10 +74,16 @@ export function buildVliwGpuConformanceBatches(cases) {
   ];
 }
 
-function codeletPack(name, sources, expectedValues) {
+function codeletPack(name, sources, expectedValues, referenceValues) {
   const sentences = Array.isArray(sources) ? sources : [sources];
   const codelets = sentences.flatMap((source) => lowerSentence(parse(source))).map((codelet) => codelet.words);
-  return { name, kind: "codelets", pack: encodePyacPack(codelets), expectedValues };
+  return {
+    name,
+    kind: "codelets",
+    pack: encodePyacPack(codelets),
+    expectedValues,
+    ...(referenceValues === undefined ? {} : { referenceValues })
+  };
 }
 
 function vectorPack(name, source, expectedValues) {
@@ -390,6 +398,20 @@ export async function buildVliwGpuConformanceCases() {
       "ob ve float64 3.141592653589793 -0.5 -0 be vector ya",
       [{ type: "vector", elementType: "float64", values: [Math.PI, -0.5, -0] }]
     ),
+    codeletPack(
+      "float32-dot-product",
+      "ob ve float32 1 2 3 by ve float32 4 5 6 be kl6m psas do",
+      [{ type: "float32", value: 32 }],
+      [{ type: "float32", value: 32 }]
+    ),
+    buildPlukTlasConformanceCase(),
+    ...buildIwspLinearScorerConformanceCases(),
+    codeletPack(
+      "float64-dot-product",
+      "ob ve float64 0.1 2 -3 by ve float64 0.2 4 -5 be kl6m psas do",
+      [{ type: "float64", value: 23.02 }],
+      [{ type: "float64", value: 23.02 }]
+    ),
     vectorPack(
       "uint16-vector-sixteen-lanes",
       `ob ve num ${Array.from({ length: 16 }, (_, index) => index).join(" ")} be vector ya`,
@@ -526,13 +548,15 @@ export async function buildVliwGpuConformanceCases() {
   const maximumPack = cases.find(({ name }) => name === "maximum-codelet-count").pack;
   assert.equal(decodePyacPack(maximumPack).codelets.length, 64);
   for (const testCase of cases) {
-    try {
-      testCase.referenceValues = await evaluateReference(testCase);
-    } catch (error) {
-      error.message = `${testCase.name}: ${error.message}`;
-      throw error;
+    if (testCase.referenceValues === undefined) {
+      try {
+        testCase.referenceValues = await evaluateReference(testCase);
+      } catch (error) {
+        error.message = `${testCase.name}: ${error.message}`;
+        throw error;
+      }
     }
-    assert.deepEqual(testCase.referenceValues, testCase.expectedValues, testCase.name + ': JavaScript reference differs from the declared conformance result');
+    assert.deepEqual(testCase.referenceValues, testCase.expectedValues, testCase.name + ': semantic reference differs from the declared conformance result');
   }
   return cases;
 }

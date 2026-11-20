@@ -58,6 +58,11 @@ test("VLIW GPU conformance matrix covers the merged typed and control-flow contr
     "vector-arithmetic",
     "float32-vector-literal",
     "float64-vector-literal",
+    "float32-dot-product",
+    "pluk-tlas-collects-dot-products-into-prediction-vector",
+    "iwsp-linear-scorer-named-vectors",
+    "iwsp-linear-scorer-perturbed-candidate",
+    "float64-dot-product",
     "uint16-vector-sixteen-lanes",
     "boolean-vector-sixteen-lanes",
     "float32-vector-sixteen-lanes",
@@ -112,9 +117,12 @@ test("JavaScript programlet reference matches spec-derived GPU expectations", as
   }
 });
 
-test("Rust CPU reference matches nested bounded-loop and boolean-composition packs", async () => {
+test("Rust CPU reference matches dot-product collection, exact evaluation, and nested control-flow packs", async () => {
   const cases = await buildVliwGpuConformanceCases();
   const selected = cases.filter(({ name }) => [
+    "pluk-tlas-collects-dot-products-into-prediction-vector",
+    "iwsp-linear-scorer-named-vectors",
+    "iwsp-linear-scorer-perturbed-candidate",
     "nested-bounded-loops-keep-independent-cursors",
     "nested-bounded-loops-reuse-symbols",
     "boolean-argument-true-branch",
@@ -155,6 +163,23 @@ test("Rust CPU executes indexed typed vectors through the sixteen-lane boundary"
   ));
   const results = executeRustCpuReference(packs).map(([value]) => value);
   assert.deepEqual(results, cases.map(({ expected }) => expected));
+});
+
+test("Rust CPU executes the Pyash kl6m psas dot-product sentence for both float widths", () => {
+  const cases = [
+    {
+      source: "ob ve float32 1 2 3 by ve float32 4 5 6 be kl6m psas do",
+      expected: [{ type: "float32", value: 32 }]
+    },
+    {
+      source: "ob ve float64 0.1 2 -3 by ve float64 0.2 4 -5 be kl6m psas do",
+      expected: [{ type: "float64", value: 23.02 }]
+    }
+  ];
+  const packs = cases.map(({ source }) => encodePyacPack(
+    lowerSentence(parse(source)).map(({ words }) => words)
+  ));
+  assert.deepEqual(executeRustCpuReference(packs), cases.map(({ expected }) => expected));
 });
 
 test("Rust GPU conformance submits two batches and maps parallel section results by index", async () => {

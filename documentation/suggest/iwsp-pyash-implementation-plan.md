@@ -135,7 +135,7 @@ Every model the paper describes is built from a small set of kernels. Reading Ta
 
 | # | Operation | Required semantics | Evidence | Domain | Status |
 |---|---|---|---|---|---|
-| B1 | Dot product / matrix-vector | Sum of elementwise products over a dimension. Present in every described model. | p. 20–21 | float64 | partial — JS `produce` computes a float64 dot product; shared VLIW CPU/GPU supports typed float32/float64 vector literals, but has no dot-product/reduction operation yet |
+| B1 | Dot product / matrix-vector | Sum of elementwise products over a dimension. Present in every described model. | p. 20–21 | float64 | implemented as the shared Rust VLIW scalar product for equal-width float32/float64 vectors; matrix-vector remains unimplemented |
 | B2 | Matrix-matrix product | Attention needs `QKᵀ` and `AV`. | p. 20–21 | float64 | absent |
 | B3 | Elementwise add / subtract / multiply / divide | Including subtract, which is where sign matters. | p. 20–21 | float64 | partial — integer, scalar float32, and scalar fixed16 arithmetic exist in VLIW; typed float32/float64 vector literals are supported, while model-sized tensor execution is absent |
 | B4 | ReLU | *"2-neuron ReLU MLP"*, *"residual ReLU MLPs"*, *"4 ReLU knots"*. | p. 21 | float64 | absent |
@@ -214,10 +214,11 @@ evaluator, a whole-run checkpoint identity, and an independent audit path remain
 designed.
 
 At the execution level, VLIW has scalar float32 and fixed16 alongside integer and
-boolean behavior, plus typed float32/float64 vector literals and programlet control
-flow. It does not yet provide vector reductions such as dot product, general
-matrix/tensor execution, or a weight data plane in `.pyac`. These are specific
-capability gaps, not evidence that every iWSP task requires float64 or GPU execution.
+boolean behavior, typed float32/float64 vector literals, programlet control flow,
+16-lane dot products, and exact-match vector evaluation. General sum/argmax
+reductions, matrix/tensor execution, and a scalable model-weight data plane in
+`.pyac` remain gaps. These are specific capability gaps, not evidence that every
+iWSP task requires float64 or GPU execution.
 
 ---
 
@@ -259,10 +260,13 @@ runtime types. Increasing the divisor improves resolution while lowering the max
 signed encodings must also spend range on negative values. Binary/low-bit weights are
 another possible representation, not a claim that an IEEE float is one bit wide.
 
-The shared core currently has no vector reductions such as dot product or sum and no
-general matrix/tensor execution. The `.pyac` pack also has no weight-data section.
-These are separate execution/data-layout gaps; they should not be conflated with scalar
-numeric-format support.
+The shared core currently supports dot product for inline or preceding named
+float32/float64 vectors, up to 16 lanes. General sum/argmax reductions and
+matrix/tensor execution are still absent. The `.pyac` pack has no scalable
+weight-data section: small named vectors fit in ordinary vector declarations,
+but larger model weights need the versioned program-image/container design.
+These are separate execution/data-layout gaps; they should not be conflated with
+scalar numeric-format support.
 
 ### 3.2 How to choose a representation
 
@@ -451,9 +455,9 @@ evaluation batch, subject to the current 64-section pack capacity and measured p
 overhead.
 
 That is distinct from parallelizing a single example's tensor operations. Float32 and
-fixed16 scalar semantics and float32/float64 vector literals now exist, but VLIW vector
-reductions (dot product, sum, argmax), model-scale matrix/tensor operations, and a
-parameter payload/data layout are still gaps. The plan must measure whether
+fixed16 scalar semantics, float32/float64 vector literals, and a 16-lane dot product
+now exist. General sum/argmax reductions, model-scale matrix/tensor operations, and a
+scalable parameter payload/data layout are still gaps. The plan must measure whether
 within-example parallelism is worthwhile after a minimal end-to-end CPU candidate
 exists; do not treat "GPU" as synonymous with "matrix support" or assume current
 section dispatch already accelerates a layer.
@@ -689,11 +693,17 @@ Housekeeper contracts where they fit. New vocabulary, storage shapes, and APIs a
 selected only after checking the current Pyash cases, vocabulary inventory, and
 relevant specifications. Numeric formats are not a gate to the first framework slice.
 
-Current position: shared VLIW execution can carry typed float32/float64 vector
-literals, but the shared runtime does not yet reduce them. The next implementation
-sequence is the task/trust contract (Stage 0), followed by a CPU vector-scoring slice
-whose first kernel is dot product (Stage 1). This adds an operation only in service of
-that runnable slice.
+Current position: typed float32/float64 vectors, inline and named-vector dot
+products, mutable float32 result collection, and the `pluk tlas` exact-match count
+are implemented in the shared VLIW runtime. The CPU pilot
+`iwsp-linear-score-v1` uses one two-feature input, three named weight vectors,
+three collected scores, and a fixed expected vector: the reference candidate
+scores 3/3 and a one-weight mutation scores 2/3. It is a reproducible visible
+scoring example, not an isolated evaluator or held-out benchmark. The same
+reference and mutated candidates now pass on live Vulkan through Housekeeper;
+see the verification ledger for the exact run and artifacts. The immediate
+next stage is to build and test the separate trusted evaluator boundary before
+adding candidate search.
 
 ### Stage 0 — Fix the task and trust contract
 
@@ -711,19 +721,65 @@ Define one small deterministic task and write down, before implementation:
 a reviewer can state what the candidate author may read or change and what the evaluator
 alone owns. No new Pyash surface is committed at this stage.
 
-### Stage 1 — Deliver one CPU vertical slice with dot product
+**Pilot contract (`iwsp-linear-score-v1`):** the feature vector, expected score
+vector, and candidate weights are all visible and fixed in one small Pyash fixture.
+For this smoke task, the permitted candidate edit is the three named weight-vector
+declarations; the update method is a direct source edit, with no search loop or
+gradient update. Feedback is the exact-match count from 0 to 3. There is no held-out
+data and no evaluator confidentiality claim at this stage. Stage 2 adds an actual
+trusted boundary; it must not be inferred from this transparent conformance pack.
 
-Use a small deterministic vector-scoring task with a known reference and compact
-candidate. Its first shared VLIW kernel is dot product over equal-length float vectors,
-which exercises the new float-vector values and gives the CPU slice a real numeric
-operation. Specify accumulation precision, length mismatch and empty-vector behavior,
-and CPU/GPU agreement before adding the operation. The candidate remains readable Pyash
-source plus named parameter facts. Run it through the ordinary CPU path first, reusing
-existing refinery/run recording and criterion machinery where their contracts fit.
+### Stage 0.1 — Add an exact-match judge primitive (implemented)
 
-**Acceptance:** a valid candidate runs end-to-end; a deliberately wrong candidate
-scores worse; dot-product edge cases are covered; the task result names the source
-candidate and task version; and a clean run is reproducible without GPU availability.
+The shared Rust VLIW runtime accepts a mutable float32 prediction vector, indexed
+dot-product writes, a named answer vector, and:
+
+```pyash
+ob name prediction value
+by name reference point value
+to name num correct count
+be pluk tlas do
+```
+
+Each dot product returns its scalar and may store it with `to name prediction at num 0`.
+The mutable-vector declaration's `state` quote and count choose a zero-initialized
+float32 vector; stores apply in source order. The evaluator resolves each reference
+to one preceding named vector in the same pack, requires equal nonzero widths and
+finite float32 values, and returns the exact-equality count as an unsigned numeric
+scalar. JavaScript only lowers the sentences; CPU and GPU use the shared Rust
+semantics. The runnable source fixture is
+`examples/pyash/vliw-pluk-tlas.pya`.
+
+**Acceptance evidence:** Rust core tests cover exact equality, one-ULP differences,
+signed zero, maximum vector width across indexed codelets, missing/duplicate names,
+type errors, and width mismatch. The public Rust pack executor returns `Unsigned(3)`
+for the fixture. This establishes the operation, not evaluator isolation, held-out data
+protection, or a complete iWSP search loop.
+
+### Stage 1 — Deliver one CPU/GPU vertical slice with named-vector dot product (verified)
+
+Task version `iwsp-linear-score-v1` uses the visible feature vector `[1, 2]`;
+candidate weight vectors `[1, 2]`, `[2, 1]`, and `[3, 0]`; and reference scores
+`[5, 4, 3]`. The candidate may edit the named weight-vector declarations for this
+smoke task. Dot products read the named feature/weight vectors and store each
+scalar in a lane of the mutable prediction vector. `pluk tlas` supplies the exact
+float32 score out of three. A deliberate third-weight change to `[2, 0]` yields
+`[5, 4, 2]` and score `2/3`.
+
+All data and the evaluator are visible in the same PyAC pack. This is a small
+scoring/conformance fixture, not a security boundary, training loop, classifier
+argmax, or held-out evaluation. Dot products require finite, nonempty, equal-width
+vectors of matching type and accumulate in lane order at the input precision;
+the pilot uses two-lane float32 vectors. The CPU fixture and tests use the shared
+Rust semantics; JavaScript lowers but does not calculate the score.
+
+**Acceptance evidence:** the runnable fixture is
+`examples/pyash/iwsp-linear-scorer-v1.pya`; CPU tests prove reference score `3`
+and mutated score `2`; Rust tests cover named lookup, missing/duplicate names,
+width mismatch, inline compatibility, and numeric edge cases. The live RTX 3090
+Housekeeper run passed both candidates plus the full matrix (49/49 valid cases
+and 2/2 expected errors); its metrics and artifact hashes are recorded in the
+VLIW verification ledger. Stage 1 is cross-target verified.
 
 ### Stage 2 — Isolate and verify the evaluator
 
@@ -1124,8 +1180,8 @@ partial mappings and the GPU compound review note from A.7.
 | Term | Candidate Pyash use/signature | Meaning and current status |
 |---|---|---|
 | Tensor | `su name weights be map def`<br>`  su name shape ob ve num 2 3 ya`<br>`  su name dtype ob text "float32" ya`<br>`  su name values ob ve num ... ya`<br>`prah` | Represent a tensor as a map with explicit shape, element type, and flattened values. This is a proposed authoring/data contract; the current `ve` literal is rank-1 and the tensor map is not yet a VLIW value type. Specify dimension order and bounds before implementation. Lowering should store values contiguously rather than dispatching one map operation per element. |
-| Matrix multiplication | `from name left by name right to name product be matrix multiplication do` | Multiply compatible matrices, with shape checks and a specified storage order. New operation; not the existing scalar/vector `produce` operation. |
-| Dot product / sum reduction | `from name weights by name inputs to name score be produce do` | Existing JS `produce` computes a same-length vector dot product. Its sentence shape is real, but the operation is not yet lowered to the shared VLIW CPU/GPU core. A general sum reduction still needs a distinct signature/contract. |
+| Matrix multiplication | `from name left by name right to name product be matrix multiplication do` | Multiply compatible matrices, with shape checks and a specified storage order. New operation; distinct from `kl6m psas` (dot product). |
+| Dot product / sum reduction | `ob ve float32 ... by ve float32 ... be kl6m psas do` | `kl6m psas` is the catalog-linked Pyash compound glossed “dot product.” The shared Rust VLIW operation accepts equal-width float32/float64 vectors and returns one scalar; general sum reduction remains a separate operation. |
 | Exponential normalization (softmax) | `from name logits to name probabilities be exponential normalization do` | Produce normalized exponential weights from a numeric vector. Define stable max-subtraction, accumulation precision, and behavior for empty or non-finite inputs in the operation contract. New operation. |
 | Vector normalization | `from name values with name normalization options to name normalized be vector normalization do` | Normalize a vector under an explicitly selected norm (for example L1 or L2); options should include epsilon/zero-vector behavior. Distinct from exponential normalization. New operation. |
 | Maximum position (argmax) | `from name scores to name selected index be maximum position do` | Return the index of the greatest element. Define ties as the lowest index for deterministic results. New operation; output is an index, not the maximum value. |

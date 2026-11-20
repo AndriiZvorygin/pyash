@@ -25,7 +25,7 @@ export function deriveSentenceEffects(sentence) {
     if (sentence?.mood === "que" && field === "ob" && value.name === "what") continue;
     if (field === "to" && sentence?.be !== "remains") {
       addName(writes, value);
-      if (["plus", "subtract", "multiply", "divide", "invert"].includes(sentence?.be)) {
+      if (["plus", "subtract", "multiply", "divide", "invert", "kl6m psas"].includes(sentence?.be)) {
         addName(reads, value);
         addName(orderedWrites, value);
       }

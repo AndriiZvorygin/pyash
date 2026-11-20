@@ -87,6 +87,77 @@ must produce codelets whose results conform to the Rust semantics. Existing
 vector quote support described above is the data representation; this
 arithmetic sentence is the operation over that data.
 
+## Float-vector scalar product
+
+The shared Rust runtime executes the `kl6m psas` sentence shape:
+
+```pyash
+ob ve float32 1 2 3 by ve float32 4 5 6 be kl6m psas do
+```
+
+The Rust implementation returns one binary32 scalar (`32` for this example).
+The same sentence accepts equal-width float64 vectors and returns a binary64
+scalar. Inputs are finite, widths match, and accumulation follows lane order in
+the input precision. The typed vectors may span multiple indexed codelets; the
+sentence's case and mood boundary bits remain validated. The Rust core tests
+cover float32/float64, sixteen lanes, continuation, shape errors, and non-finite
+results. Either operand can also name a preceding immutable vector declaration;
+name references are resolved by HNUC sequence, with exactly one preceding match
+required:
+
+```pyash
+su name features ob ve float32 1 2 be vector ya
+su name weight ob ve float32 4 5 be vector ya
+ob name features by name weight be kl6m psas do
+```
+
+Named inputs can be combined with the existing optional indexed destination.
+Mutable-vector source reads are not part of this slice. Native Vulkan and CPU builds enable `shader-f64`; the WGSL/WebGPU shader
+build intentionally omits it and rejects float64 dot products while retaining
+float32 support. The JavaScript adapter only lowers the typed sentence; it is
+not the semantic oracle.
+
+## IWSP linear scoring pilot
+
+`examples/pyash/iwsp-linear-scorer-v1.pya` is a deterministic CPU scoring task
+that exercises named feature/weight vectors, dot-product collection, and the
+exact-match judge. With input `[1, 2]` and weights `[1, 2]`, `[2, 1]`, and
+`[3, 0]`, the prediction scores are `[5, 4, 3]` and the judge returns `3`.
+Changing the third weight to `[2, 0]` produces `[5, 4, 2]` and score `2`.
+This visible synthetic fixture validates scoring behavior only; its candidate,
+labels, and evaluator are all in the same pack, so it makes no evaluator
+isolation or held-out-data claim.
+
+## Exact-match evaluation (`pluk tlas`)
+
+The Rust reference runtime also supports an exact-match judge over named
+float32 vectors. A prediction vector can be initialized as mutable state and
+filled by indexed dot-product results. The source fixture is
+`examples/pyash/vliw-pluk-tlas.pya`:
+
+```pyash
+exists su name prediction via state "vector float32" by num 3 be variable ya
+ob ve float32 1 2 by ve float32 1 2 to name prediction at num 0 be kl6m psas do
+ob ve float32 2 1 by ve float32 1 2 to name prediction at num 1 be kl6m psas do
+ob ve float32 3 0 by ve float32 1 2 to name prediction at num 2 be kl6m psas do
+su name answer ob ve float32 5 4 3 be vector ya
+ob name prediction by name answer to name num count be pluk tlas do
+```
+
+The declaration creates three zeroed float32 lanes. Each optional dot-product
+destination writes its computed scalar into the named lane; `at` is zero-based,
+and repeated writes resolve in source order. The `ob` and `by` evaluator fields
+resolve the preceding vector declarations; `to name num count` declares the
+numeric result. The shared Rust implementation returns unsigned `2`, counting
+lanes that compare equal under exact binary32 equality. Signed zeros compare
+equal; no epsilon is used. Inputs must be finite, float32, non-empty, and
+equal-width. Missing or duplicate bindings, invalid destinations, out-of-range
+lanes, other vector types, malformed declarations, and width mismatches fail
+explicitly. Rust core tests cover zero initialization, collected writes,
+source-order replacement, bounds, shape and equality edges. The JavaScript quiz
+drives the full pack through the Rust CPU reference and contains no scoring
+implementation.
+
 ## Generic fixed-slot decoding
 
 `program/library/vliw/codelets.mjs` losslessly decodes the existing 16-word slot,
