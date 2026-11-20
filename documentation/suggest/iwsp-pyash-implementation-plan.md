@@ -699,11 +699,10 @@ are implemented in the shared VLIW runtime. The CPU pilot
 `iwsp-linear-score-v1` uses one two-feature input, three named weight vectors,
 three collected scores, and a fixed expected vector: the reference candidate
 scores 3/3 and a one-weight mutation scores 2/3. It is a reproducible visible
-scoring example, not an isolated evaluator or held-out benchmark. The same
-reference and mutated candidates now pass on live Vulkan through Housekeeper;
-see the verification ledger for the exact run and artifacts. The immediate
-next stage is to build and test the separate trusted evaluator boundary before
-adding candidate search.
+scoring example, not a complete candidate-search loop. The same reference and mutated
+candidates now pass on live Vulkan through Housekeeper; see the verification ledger for
+the exact run and artifacts. The first Rust PyAC evaluator boundary is now implemented;
+Stage 2 remains open for the orchestration and parameter-policy work listed below.
 
 ### Stage 0 — Fix the task and trust contract
 
@@ -794,6 +793,29 @@ search, gradient-based updates, and hybrids can be audited under the same bounda
 internals or held-out material; malformed/over-limit candidates fail before scoring;
 reference and evaluator checks detect a known wrong output; the sealed held-out result
 is not returned into the search loop.
+
+**Implemented first slice (2026-11-20):** `rust/pyac/src/iwsp.rs` owns visible and
+held-out reference vectors outside the candidate `PyacPack`. Candidate execution is
+limited to 64 codelets and its final 1, 2, 3, 4, 8, or 16 scalar float32 results are
+treated as predictions. `score_visible` returns only the bounded exact-match count;
+`seal` consumes the visible evaluator and creates a one-use held-out evaluator whose
+`evaluate` consumes itself. The trusted evaluator builds a separate PyAC pack containing
+the existing Pyash `pluk tlas` signature and invokes the shared Rust runtime. Candidate
+code is not combined with the evaluator pack: only its final scalar outputs are copied
+into the trusted judge pack alongside its private reference values. The candidate test
+uses named float vectors and `kl6m psas`, and proves reference score 3/3 and a
+changed-weight score 2/3. A separate test confirms that changing held-out references
+does not change visible feedback.
+
+This is an in-process boundary for bounded, data-only PyAC execution, not an operating
+system sandbox against arbitrary native code. The scorer also exposes a prediction-slice
+entry point for outputs produced by another conforming target. GPU execution is not yet
+wired into this evaluator API. Remaining Stage 2 work: connect the one-use seal to the
+actual candidate-search controller
+so held-out scores cannot flow back into revisions; define and enforce task-specific
+parameter counts and allowed candidate edits; and add tests for referenced-name/resource
+policy at the task boundary. No candidate optimizer or held-out data loader is introduced
+by this slice.
 
 ### Stage 3 — Make candidate history reproducible and auditable
 
