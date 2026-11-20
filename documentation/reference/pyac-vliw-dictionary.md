@@ -99,6 +99,13 @@ chromosome-mapping sense. These are different Pyac keys because they identify
 different meanings; a surface lookup returns both, while a WordNet lookup by
 exact version and synset selects the corresponding one.
 
+For programming-oriented English display, the bare term `map` denotes the
+mathematical function sense (`pwak hnuc`, `n:13806028-n`). Other meanings use
+an explicit English compound when needed to disambiguate. For example,
+`chromosome mapping` (`tcas hjom`, `n:01026585-n`). This display convention
+does not collapse senses: if a lexical surface is shared, exact surface lookup
+still returns every linked Pyac key.
+
 Each volume declares its language identifiers and normalization policy in
 ordinary VLIW sentences. The source surface is retained exactly. A normalized
 surface is an explicit lookup value; case folding, transliteration, or other
