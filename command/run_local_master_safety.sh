@@ -94,6 +94,7 @@ DEV_SHA=''
 TEST_SUMMARY=''
 TIER_SUMMARY=''
 MERGE_INPUTS=''
+CONFLICT_RESOLUTION_ATTEMPT=0
 finish() {
   local exit_code=$?
   trap - EXIT
@@ -225,16 +226,122 @@ resolve_generated_pinyin_conflict() {
   printf 'resolved generated Pinyin index and completed the merge commit\n'
 }
 
+resolve_remaining_merge_conflicts() {
+  local -a conflicted_paths=()
+  mapfile -t conflicted_paths < <(git -C "$WORKTREE" diff --name-only --diff-filter=U)
+  if (( ${#conflicted_paths[@]} == 0 )); then
+    return 1
+  fi
+
+  CONFLICT_RESOLUTION_ATTEMPT=$((CONFLICT_RESOLUTION_ATTEMPT + 1))
+  local attempt prompt response codex_log codex_stderr before_head
+  local before_index after_index before_worktree after_worktree before_untracked after_untracked
+  attempt=$(printf '%02d' "$CONFLICT_RESOLUTION_ATTEMPT")
+  prompt="$ARTIFACT_DIR/codex-merge-conflict-prompt-$attempt.md"
+  response="$ARTIFACT_DIR/codex-merge-conflict-result-$attempt.md"
+  codex_log="$ARTIFACT_DIR/codex-merge-conflict-$attempt.jsonl"
+  codex_stderr="$ARTIFACT_DIR/codex-merge-conflict-$attempt.stderr.log"
+  before_index="$ARTIFACT_DIR/merge-conflict-$attempt-index-before.patch"
+  after_index="$ARTIFACT_DIR/merge-conflict-$attempt-index-after.patch"
+  before_worktree="$ARTIFACT_DIR/merge-conflict-$attempt-worktree-before.patch"
+  after_worktree="$ARTIFACT_DIR/merge-conflict-$attempt-worktree-after.patch"
+  before_untracked="$ARTIFACT_DIR/merge-conflict-$attempt-untracked-before.txt"
+  after_untracked="$ARTIFACT_DIR/merge-conflict-$attempt-untracked-after.txt"
+  local -a exclude_conflicts=()
+  local conflicted_path
+  for conflicted_path in "${conflicted_paths[@]}"; do
+    exclude_conflicts+=(":(exclude)$conflicted_path")
+  done
+
+  before_head=$(git -C "$WORKTREE" rev-parse HEAD)
+  git -C "$WORKTREE" diff --binary --cached HEAD -- . "${exclude_conflicts[@]}" > "$before_index"
+  git -C "$WORKTREE" diff --binary -- . "${exclude_conflicts[@]}" > "$before_worktree"
+  git -C "$WORKTREE" ls-files --others --exclude-standard > "$before_untracked"
+  {
+    cat <<EOF
+# Local master maintainer merge conflict resolution
+
+The isolated candidate worktree is stopped during a merge of $merge_sha from $remote_name/$branch_name. Resolve this Git merge carefully so both branch histories and their valid independent changes are preserved.
+
+Only edit the conflicted paths listed below. Inspect each side with Git's stage entries and relevant source, tests, or documentation. When an output file is generated from source data, use the repository's authoritative generator after resolving its source inputs. Do not guess generated data or discard valid additions from either side.
+
+Do not stage files, commit, amend, merge, push, change remotes, or edit anything outside the listed conflicted paths. Do not inspect credentials or secret files. Do not invoke GPU, media, or long-running external-model pipelines. The outer runner will verify your changes, stage the resolved files, complete the merge commit, and run the full CI-tier suite before any promotion.
+
+Conflicted paths:
+EOF
+    printf -- '- `%s`\n' "${conflicted_paths[@]}"
+  } > "$prompt"
+
+  printf 'asking Codex to resolve %s merge conflict(s) in the isolated candidate\n' "${#conflicted_paths[@]}"
+  if timeout --signal=TERM --kill-after=60s "${PYA_MASTER_SAFETY_CONFLICT_TIMEOUT:-30m}" \
+    "$CODEX" exec \
+      --model "$MODEL" \
+      --config "model_reasoning_effort=\"$REASONING\"" \
+      --sandbox danger-full-access \
+      --ignore-user-config \
+      --cd "$WORKTREE" \
+      --ephemeral \
+      --json \
+      --output-last-message "$response" \
+      - < "$prompt" \
+      > "$codex_log" \
+      2> "$codex_stderr"; then
+    :
+  else
+    local codex_status=$?
+    printf 'Codex conflict resolver exited with status %s; preserving candidate for review\n' "$codex_status"
+    return 1
+  fi
+
+  if [[ "$(git -C "$WORKTREE" rev-parse HEAD)" != "$before_head" ]]; then
+    printf 'Codex changed candidate history; preserving candidate without promotion\n' >&2
+    return 1
+  fi
+  git -C "$WORKTREE" diff --binary --cached HEAD -- . "${exclude_conflicts[@]}" > "$after_index"
+  git -C "$WORKTREE" diff --binary -- . "${exclude_conflicts[@]}" > "$after_worktree"
+  git -C "$WORKTREE" ls-files --others --exclude-standard > "$after_untracked"
+  if ! cmp -s "$before_index" "$after_index" || ! cmp -s "$before_worktree" "$after_worktree" || ! cmp -s "$before_untracked" "$after_untracked"; then
+    printf 'Codex changed paths outside the conflict set; preserving candidate without promotion\n' >&2
+    return 1
+  fi
+
+  git -C "$WORKTREE" add -- "${conflicted_paths[@]}"
+  local remaining_conflicts
+  remaining_conflicts=$(git -C "$WORKTREE" diff --name-only --diff-filter=U)
+  if [[ -n "$remaining_conflicts" ]]; then
+    printf 'Codex left unresolved merge paths; preserving candidate for review:\n%s\n' "$remaining_conflicts"
+    return 1
+  fi
+  if git -C "$WORKTREE" grep -n -e '^<<<<<<< ' -e '^=======$' -e '^>>>>>>> ' -e '^||||||| ' -- "${conflicted_paths[@]}"; then
+    printf 'resolved paths still contain merge markers; preserving candidate\n'
+    return 1
+  fi
+  if ! git -C "$WORKTREE" diff --cached --check -- "${conflicted_paths[@]}"; then
+    printf 'resolved paths still contain merge markers or whitespace errors; preserving candidate\n'
+    return 1
+  fi
+  if [[ -n "$(git -C "$WORKTREE" diff --name-only --diff-filter=U)" ]]; then
+    printf 'merge paths remain unmerged after staging; preserving candidate for review\n'
+    return 1
+  fi
+  if ! git -C "$WORKTREE" -c user.name='Pyash Maintainer' -c user.email='pyash-maintainer@localhost' \
+    commit --no-edit --allow-empty; then
+    printf 'could not complete the resolved merge commit; preserving candidate for review\n'
+    return 1
+  fi
+  printf 'Codex-resolved conflicts passed scope checks and the merge commit completed\n'
+}
+
 for branch_name in "$BRANCH" "${source_branch_names[@]}"; do
   for remote_name in "${remote_names[@]}"; do
     merge_sha=$(git -C "$REPOSITORY" rev-parse "refs/remotes/$remote_name/$branch_name")
     printf 'merging %s/%s at %s into candidate\n' "$remote_name" "$branch_name" "$merge_sha"
     if ! git -C "$WORKTREE" -c user.name='Pyash Maintainer' -c user.email='pyash-maintainer@localhost' \
       merge --no-edit "$merge_sha"; then
-      if resolve_generated_pinyin_conflict; then
+      if resolve_generated_pinyin_conflict || resolve_remaining_merge_conflicts; then
         continue
       fi
-      printf 'branch tip merge conflict; preserving the candidate worktree for review\n'
+      printf 'branch tip merge conflict could not be resolved safely; preserving the candidate worktree for review\n'
       KEEP_WORKTREE=1
       FINAL_STATUS=merge-conflict
       exit 1
@@ -398,8 +505,8 @@ while :; do
     printf 'merging refreshed %s at %s into candidate\n' "$input_key" "$merge_sha"
     if ! git -C "$WORKTREE" -c user.name='Pyash Maintainer' -c user.email='pyash-maintainer@localhost' \
       merge --no-edit "$merge_sha"; then
-      if resolve_generated_pinyin_conflict; then continue; fi
-      printf 'refreshed branch tip conflict; preserving candidate for review\n'
+      if resolve_generated_pinyin_conflict || resolve_remaining_merge_conflicts; then continue; fi
+      printf 'refreshed branch tip conflict could not be resolved safely; preserving candidate for review\n'
       KEEP_WORKTREE=1
       FINAL_STATUS=merge-conflict
       exit 1

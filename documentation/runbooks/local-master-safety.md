@@ -33,8 +33,12 @@ joins commits that arrived on different remotes and promotes one tested
 history to `master` and `dev` on every configured remote; it leaves the source
 feature branch unchanged. If the only merge conflict is the generated Kwon
 Chinese Pinyin index, the runner rebuilds that projection from the merged
-vocabulary and grammar inputs, then completes the merge. Other conflicts leave
-the candidate for review. The runner installs dependencies and runs
+vocabulary and grammar inputs, then completes the merge. For other conflicts,
+Codex is asked to resolve only the conflicted paths in the isolated candidate.
+The runner checks that no unrelated paths or candidate history changed, stages
+the resolved paths, rejects remaining conflict markers, and completes the merge
+before testing. An unsafe or incomplete resolution leaves the candidate for
+review. The runner installs dependencies and runs
 `npm run test:ci` against that exact candidate. Existing checkouts, including
 a dirty local `master` worktree, are not checked out or modified.
 The CI-tier runner uses at most four concurrent test workers to reduce host

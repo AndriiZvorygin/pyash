@@ -320,6 +320,119 @@ exit 2
   }
 });
 
+test("runner asks Codex to resolve other merge conflicts and verifies the clean merge before promotion", async () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pyash-master-safety-codex-conflict-"));
+  const repository = path.join(tempRoot, "repo");
+  const bare = path.join(tempRoot, "remote.git");
+  const fakeBin = path.join(tempRoot, "bin");
+  const promptCapture = path.join(tempRoot, "conflict-prompt.md");
+  fs.mkdirSync(path.join(repository, "command"), { recursive: true });
+  fs.mkdirSync(fakeBin);
+
+  const git = (args, cwd = repository) =>
+    execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe" }).trim();
+  git(["init", "--quiet"]);
+  git(["config", "user.name", "Safety Fixture"]);
+  git(["config", "user.email", "safety-fixture@example.test"]);
+  fs.copyFileSync(path.join(repoRoot, "command", "run_local_master_safety.sh"), path.join(repository, "command", "run_local_master_safety.sh"));
+  fs.chmodSync(path.join(repository, "command", "run_local_master_safety.sh"), 0o755);
+  fs.writeFileSync(path.join(repository, ".gitignore"), "artifacts/\n");
+  fs.writeFileSync(path.join(repository, "curated.txt"), "shared base\n");
+  git(["add", "."]);
+  git(["commit", "--quiet", "-m", "fixture master"]);
+  git(["branch", "-M", "master"]);
+  const masterCommit = git(["rev-parse", "HEAD"]);
+
+  git(["checkout", "--quiet", "-b", "dev"]);
+  fs.writeFileSync(path.join(repository, "curated.txt"), "development entry\n");
+  fs.writeFileSync(path.join(repository, "dev-only.txt"), "keep development entry\n");
+  git(["add", "."]);
+  git(["commit", "--quiet", "-m", "fixture dev changes"]);
+  const devCommit = git(["rev-parse", "HEAD"]);
+
+  git(["checkout", "--quiet", "-b", "dev-vocab", masterCommit]);
+  fs.writeFileSync(path.join(repository, "curated.txt"), "vocabulary entry\n");
+  fs.writeFileSync(path.join(repository, "vocab-only.txt"), "keep vocabulary entry\n");
+  git(["add", "."]);
+  git(["commit", "--quiet", "-m", "fixture vocab changes"]);
+  const vocabCommit = git(["rev-parse", "HEAD"]);
+  git(["branch", "dev-vliw-backend", masterCommit]);
+  git(["checkout", "--quiet", "master"]);
+  execFileSync("git", ["clone", "--bare", "--quiet", repository, bare], { stdio: "pipe" });
+  git(["remote", "add", "github", bare]);
+  git(["remote", "add", "origin", bare]);
+
+  const fakeNpm = path.join(fakeBin, "npm");
+  fs.writeFileSync(fakeNpm, `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == ci ]]; then exit 0; fi
+if [[ "$1 $2" == "run test:ci" ]]; then
+  printf '  gating 10 files, reporting 2 without gating, excluding 1\\n'
+  printf '# tests 5\\n# pass 5\\n# fail 0\\n# skipped 0\\n# todo 0\\n# duration_ms 12.5\\n'
+  exit 0
+fi
+exit 2
+`);
+  fs.chmodSync(fakeNpm, 0o755);
+
+  const fakeCodex = path.join(fakeBin, "codex");
+  fs.writeFileSync(fakeCodex, `#!/usr/bin/env bash
+set -euo pipefail
+worktree=''
+last_message=''
+while (($#)); do
+  case "$1" in
+    --cd) worktree="$2"; shift 2 ;;
+    --output-last-message) last_message="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+prompt=$(cat)
+printf '%s\\n' "$prompt" > "${promptCapture}"
+[[ "$prompt" == *'curated.txt'* ]]
+printf 'combined entry from both branches\\n' > "$worktree/curated.txt"
+printf 'fixture conflict resolution\\n' > "$last_message"
+printf '{"type":"turn.completed"}\\n'
+`);
+  fs.chmodSync(fakeCodex, 0o755);
+
+  try {
+    execFileSync("bash", [path.join(repository, "command", "run_local_master_safety.sh")], {
+      cwd: repository,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: `${fakeBin}:${process.env.PATH}`,
+        PYA_MASTER_SAFETY_REMOTE: "github",
+        PYA_MASTER_SAFETY_BRANCH: "master",
+        PYA_MASTER_SAFETY_REPOSITORY: repository,
+        PYA_MASTER_SAFETY_WORKTREE_PARENT: tempRoot,
+        PYA_MASTER_SAFETY_CODEX_BIN: fakeCodex,
+        PYA_MASTER_SAFETY_LOCK: path.join(tempRoot, "conflict.lock")
+      },
+      stdio: "pipe"
+    });
+    const runRoot = path.join(repository, "artifacts", "local-master-safety");
+    const [runId] = fs.readdirSync(runRoot);
+    const artifactDir = path.join(runRoot, runId);
+    const result = await pyaFileToJson(path.join(artifactDir, "result.pya"));
+    const resultMap = result.memory[0]?.ob?.map;
+    const promoted = resultMap["promoted commit"].text;
+    assert.equal(resultMap.status.text, "promoted");
+    assert.equal(git(["--git-dir", bare, "show", `${promoted}:curated.txt`]), "combined entry from both branches");
+    assert.equal(git(["--git-dir", bare, "show", `${promoted}:dev-only.txt`]), "keep development entry");
+    assert.equal(git(["--git-dir", bare, "show", `${promoted}:vocab-only.txt`]), "keep vocabulary entry");
+    git(["merge-base", "--is-ancestor", devCommit, promoted]);
+    git(["merge-base", "--is-ancestor", vocabCommit, promoted]);
+    assert.match(fs.readFileSync(promptCapture, "utf8"), /Only edit the conflicted paths/u);
+    assert.match(fs.readFileSync(path.join(artifactDir, "codex-merge-conflict-result-01.md"), "utf8"), /fixture conflict resolution/u);
+    assert.match(fs.readFileSync(path.join(artifactDir, "run.log"), "utf8"), /Codex-resolved conflicts passed scope checks/u);
+    assert.equal(fs.existsSync(resultMap["worktree path"].text), false);
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test("runner merges and retests a source branch that advances during CI", async () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pyash-master-safety-stale-input-"));
   const repository = path.join(tempRoot, "repo");
