@@ -44,7 +44,8 @@ export function buildCuratedCompoundEntry({
   components,
   atomicEntries,
   layerIndex,
-  evidence
+  evidence,
+  provenance = "user-curated compound catalog"
 } = {}) {
   const target = normalized(surface);
   const definition = typeof gloss === "string" ? gloss.normalize("NFC").trim() : "";
@@ -87,7 +88,7 @@ export function buildCuratedCompoundEntry({
     maxLayer: Math.max(...componentLayers),
     head: componentGlosses.at(-1),
     evidence: rowEvidence,
-    provenance: "user-curated compound catalog",
+    provenance,
     confidence: "curated",
     status: "accepted-curated"
   };
@@ -95,6 +96,25 @@ export function buildCuratedCompoundEntry({
 
 function renderRow(entry) {
   return `su text ${JSON.stringify(entry.surface)} ob text ${JSON.stringify(JSON.stringify(entry))} ya`;
+}
+
+function catalogRowAtSurface(lines, surface) {
+  for (const [index, line] of lines.entries()) {
+    let sentence;
+    try {
+      sentence = buildProgram(line).sentences[0];
+    } catch {
+      continue;
+    }
+    if (sentence?.mood !== "ya" || sentence?.su?.text !== surface || typeof sentence?.ob?.text !== "string") continue;
+    try {
+      const payload = JSON.parse(sentence.ob.text);
+      if (normalized(payload?.surface) === surface) return { index, payload };
+    } catch {
+      continue;
+    }
+  }
+  return null;
 }
 
 function validateCatalogSource(source, atomicEntries) {
@@ -123,26 +143,57 @@ async function atomicWrite(path, contents) {
   }
 }
 
-export async function addCuratedCompoundCatalogEntry({
-  catalogUrl = CURATED_COMPOUND_CATALOG_URL,
+export function prepareCuratedCompoundCatalogUpdate({
+  source,
   atomicEntries,
   layerIndex,
+  allowUpdate = true,
   ...definition
 } = {}) {
+  if (typeof source !== "string") throw invalid("curated compound catalog source must be text");
   const entry = buildCuratedCompoundEntry({ ...definition, atomicEntries, layerIndex });
-  const sourcePath = catalogUrl instanceof URL ? fileURLToPath(catalogUrl) : String(catalogUrl);
-  const source = await fs.readFile(sourcePath, "utf8");
   const currentEntries = validateCatalogSource(source, atomicEntries);
   const existingSurface = currentEntries.find((candidate) => normalized(candidate.surface) === entry.surface);
   if (existingSurface) {
-    const matches = existingSurface.gloss === entry.gloss &&
-      JSON.stringify(existingSurface.pyashSequence) === JSON.stringify(entry.pyashSequence);
-    if (matches) return { status: "already-present", entry: existingSurface };
-    throw invalid(`compound name already exists with a different gloss or atom sequence: ${entry.surface}`, {
-      surface: entry.surface,
-      existingGloss: existingSurface.gloss,
-      existingPyashSequence: existingSurface.pyashSequence
-    });
+    if (JSON.stringify(existingSurface.pyashSequence) !== JSON.stringify(entry.pyashSequence)) {
+      throw invalid(`compound name already exists with a different atom sequence: ${entry.surface}`, {
+        surface: entry.surface,
+        existingPyashSequence: existingSurface.pyashSequence,
+        pyashSequence: entry.pyashSequence
+      });
+    }
+    if (existingSurface.gloss === entry.gloss
+      && existingSurface.status === "accepted-curated"
+      && existingSurface.evidence === entry.evidence
+      && existingSurface.provenance === entry.provenance) {
+      return { status: "already-present", entry: existingSurface, source };
+    }
+    if (!allowUpdate && existingSurface.gloss === entry.gloss) {
+      return { status: "already-present", entry: existingSurface, source };
+    }
+    if (!allowUpdate) {
+      throw invalid(`compound name already exists with a different gloss or atom sequence: ${entry.surface}`, {
+        surface: entry.surface,
+        existingGloss: existingSurface.gloss,
+        existingPyashSequence: existingSurface.pyashSequence
+      });
+    }
+
+    const lines = source.split(/\r?\n/u);
+    const row = catalogRowAtSurface(lines, entry.surface);
+    if (!row) throw invalid("curated compound row could not be located for update", { surface: entry.surface });
+    const updatedPayload = {
+      ...row.payload,
+      gloss: entry.gloss,
+      evidence: entry.evidence,
+      provenance: entry.provenance,
+      confidence: "curated",
+      status: "accepted-curated"
+    };
+    lines[row.index] = renderRow(updatedPayload);
+    const updatedSource = `${lines.join("\n").replace(/\n*$/u, "\n")}`;
+    validateCatalogSource(updatedSource, atomicEntries);
+    return { status: "updated", entry: { ...existingSurface, ...updatedPayload }, source: updatedSource };
   }
 
   const conflictingSequence = currentEntries.find((candidate) => (
@@ -162,6 +213,26 @@ export async function addCuratedCompoundCatalogEntry({
     .find(([line]) => line.trim() === "prah")?.[1];
   if (prahIndex === undefined) throw invalid("curated compound catalog has no trailing prah");
   lines.splice(prahIndex, 0, renderRow(entry));
-  await atomicWrite(sourcePath, `${lines.join("\n").replace(/\n*$/u, "\n")}`);
-  return { status: "added", entry };
+  const updatedSource = `${lines.join("\n").replace(/\n*$/u, "\n")}`;
+  validateCatalogSource(updatedSource, atomicEntries);
+  return { status: "added", entry, source: updatedSource };
+}
+
+export async function addCuratedCompoundCatalogEntry({
+  catalogUrl = CURATED_COMPOUND_CATALOG_URL,
+  atomicEntries,
+  layerIndex,
+  ...definition
+} = {}) {
+  const sourcePath = catalogUrl instanceof URL ? fileURLToPath(catalogUrl) : String(catalogUrl);
+  const source = await fs.readFile(sourcePath, "utf8");
+  const prepared = prepareCuratedCompoundCatalogUpdate({
+    source,
+    atomicEntries,
+    layerIndex,
+    ...definition,
+    allowUpdate: false
+  });
+  if (prepared.source !== source) await atomicWrite(sourcePath, prepared.source);
+  return { status: prepared.status, entry: prepared.entry };
 }

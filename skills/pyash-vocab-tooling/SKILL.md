@@ -25,6 +25,8 @@ Use this skill when adding or updating Pyash atoms, compounds, English forms, or
   `node command/vocab_atom_suggest.mjs "new concept"`
 - Add a compound from existing atoms (replace the placeholders):
   `node command/compound_catalog_add.mjs "<target>" "<English gloss>" <modifier> <head>`
+- Record or update one vocabulary entry's WordNet review:
+  `node command/vocabulary_entry_review.mjs <one-entry.pya>`
 
 Synset IDs are POS-qualified (`a`, `n`, `r`, `v`, or `s`) and use the matching POS suffix,
 such as `n:07558676-n`. The lookup reports the source lemmas and gloss, linked Pyash anchor,
@@ -83,18 +85,43 @@ when it already expresses the intended meaning.
   not create an atom. English lemma mappings live in
   `program/library/translation/english_lemmas.pya`. Do not create a duplicate
   atom just to cover an English inflection or alternate spelling.
-- **Chinese or WordNet link:** update the canonical link/bridge catalog through
-  its vocabulary workflow. For Chinese character links, follow
-  `pyash-chinese-character-atom-refinery`; for English WordNet sense links,
-  keep the POS-qualified synset and evidence in the bridge workflow. Do not
-  edit acquired source dictionaries or generated lookup indexes to change a
-  link.
+- **Chinese link:** for Chinese character links, follow
+  `pyash-chinese-character-atom-refinery`. Do not edit acquired source
+  dictionaries or generated lookup indexes to change a link.
+- **English WordNet review/link:** create a one-entry `.pya` map and run
+  `node command/vocabulary_entry_review.mjs <one-entry.pya>`. The entry must
+  include `target`, `gloss`, `pyash`, `sense-id`, `review-status`, and
+  `evidence`; `model-status` is optional and records the model decision
+  separately from human review. Use a POS-qualified synset ID such as
+  `n:01025762-n`.
+
+  ```pya
+  su name vocabulary entry review be map def
+  su text "target" ob text "procedure" ya
+  su text "gloss" ob text "course of action intended to achieve a result" ya
+  su text "pyash" ob text "rwoc hrom" ya
+  su text "sense-id" ob text "n:01025762-n" ya
+  su text "model-status" ob text "accepted-llm" ya
+  su text "review-status" ob text "review-needed" ya
+  su text "evidence" ob text "The ordered Pyash atoms express a procedure." ya
+  prah
+  ```
+
+  `review-needed`, `rejected-curated`, and `deferred-curated` update the
+  per-entry review ledger without creating an active WordNet link.
+  `accepted-curated` links the exact sense to the existing atom or compound;
+  for compounds it also adds or updates the curated compound gloss and ordered
+  atom sequence. A later non-accepted status removes only the bridge row that
+  this review entry created. Existing bridge conflicts fail for review rather
+  than silently replacing another mapping. The model status remains intact as
+  a separate field.
 
 ### Update existing entries
 
-`compound_catalog_add.mjs` is an add operation, not an update command. If the
-same target is already present with a different gloss or atom sequence, it
-intentionally fails. Do not add a second row for that target or sequence.
+`compound_catalog_add.mjs` is an add operation, not a review/status command. If
+the same target is already present with a different gloss or atom sequence, it
+intentionally fails. For a sense-linked compound whose gloss or review state
+needs updating, use the one-entry `vocabulary_entry_review.mjs` flow above.
 Inspect the matching canonical row with the parser-backed reader:
 
 ```
@@ -128,6 +155,10 @@ not edit the acquired Kwon data.
   only when the updated catalogs need to be visible to Kwon immediately. The
   canonical catalogs remain the source of truth; never edit the sidecar index
   directly.
+
+The entry review command updates the canonical catalogs, but Kwon's generated
+sidecar indexes can lag. Run `node command/vocab_lookup_index.mjs` when the new
+accepted link must be available to lookup immediately.
 
 ## Canonical words over legacy aliases
 
