@@ -205,11 +205,16 @@ acceptance is not the same provenance as curated acceptance.
 | Mathematical map / function | WordNet 3.0 `n:13783816` -> Open English WordNet 2025 `n:13806028-n`; a single-valued mathematical relation from domain elements to range elements. | `pwak hnuc`, linked compound, accepted-LLM. |
 | Chromosome mapping | WordNet 3.0 `n:01024643` -> Open English WordNet 2025 `n:01026585-n`; the process of locating genes on a chromosome. | `tcas hjom`, linked compound, accepted-LLM. |
 | Dictionary | Current atom `kwon` | Existing lexical atom. |
+| Normalization policy | Open English WordNet 2025 `n:05910115-n`; a plan of action adopted by an individual or group. | `trec kfan`, accepted-LLM. The selected normalization algorithm is stored as exact quoted policy data; it is not inferred from this concept. |
+| Data | WordNet 3.0 `n:08462320` -> Open English WordNet 2025 `n:08479331-n`; a collection of facts from which conclusions may be drawn. | `drut hnuc`, accepted-LLM. Dataset names and release labels remain exact quoted source data; no dataset compound is required. |
+| Identifier | WordNet 3.0 `n:07270601` -> Open English WordNet 2025 `n:07285306-n`; a symbol that establishes the identity of what bears it. | `hdiftyec`, confirmed for this schema by the user; external identifier values remain exact quoted source data. |
+| Mathematical interval | WordNet 3.0 `n:06016276` -> Open English WordNet 2025 `n:06025625-n`; the set of points between two endpoints. | `hkic tri2k`, accepted-LLM. TOC ranges are encoded as start ordinal plus count. |
 
-These compounds and links are recorded as supplied by the vocabulary catalog.
-The dictionary preserves their exact sense links and provenance; it does not
-re-rank or reinterpret the vocabulary decisions. This reference adds no
-vocabulary entries.
+Existing catalog compounds and links are recorded as supplied by the
+vocabulary catalog. The `hdiftyec` identifier mapping is the user-confirmed
+schema choice being linked by vocabulary work. The dictionary preserves exact
+sense links and provenance; it does not re-rank or reinterpret vocabulary
+decisions. This reference adds no vocabulary entries.
 
 ## 7. Conformance and validation
 
@@ -256,7 +261,8 @@ file-backed dictionary image on target storage.
 
 The Rust crate does not yet parse dictionary records from `.pyac`, emit a
 dictionary image, or perform lazy file-backed range reads. The next
-implementation slice is to settle the remaining vocabulary-backed relation
-signatures and sentence framing, then add a reader/writer that validates the
-in-band TOC/index records against the existing pack decoder. A `.pya` sidecar
-is not a substitute for the eventual in-band dictionary truth.
+implementation slice is to specify the exact ordinary Pyash sentence
+signatures and profile framing using the vocabulary recorded above, then add
+a Rust reader/writer that validates the in-band TOC/index records against the
+existing pack decoder. A `.pya` sidecar is not a substitute for the eventual
+in-band dictionary truth.
