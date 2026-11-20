@@ -1,9 +1,10 @@
 # Pyac VLIW Multilingual Dictionary
 
-Status: proposed design contract; no dictionary reader or image builder is
-implemented by this document. This profile organizes a searchable,
-multilingual dictionary as a printable sequence of ordinary Pyash sentences
-encoded in the existing `.pyac` VLIW format.
+Status: design contract with a Rust in-memory index prototype. The prototype
+indexes parsed entry metadata; it does not yet read or write a serialized
+dictionary volume. The target profile organizes a searchable, multilingual
+dictionary as ordinary Pyash sentences encoded in the existing `.pyac` VLIW
+format.
 
 ## 1. Design boundary
 
@@ -26,9 +27,8 @@ sentences. An optional program link is a separate record and is never followed
 by a dictionary lookup as an invocation.
 
 The profile uses existing sentence, typed-value, quote, and codelet rules from
-the [VLIW ISA](../specifications/27-pyash-vliw-isa.md). It does not use
-`myocpfun` as a chapter marker: that compound delimits independent executable
-programlets, not dictionary sections.
+the [VLIW ISA](../specifications/27-pyash-vliw-isa.md). Its TOC groups are
+logical ranges, not executable programlets.
 
 ## 2. In-band book layout
 
@@ -42,9 +42,9 @@ After the profile sentence, codelets appear in this order:
 All constituent records are ordinary Pyash sentences. A dictionary entry is
 one complete Pyash paragraph or map, using the existing grammar to keep its
 sentences together; it is not a new opcode or a new word allocation. Its
-definition is one or more canonical Pyash sentences. A section is a named
-logical range in the TOC. A printable reader presents these ranges as
-book-like sections and preserves the source codelet order.
+definition is one or more canonical Pyash sentences. A TOC item is a named
+logical range. A printable reader presents these ranges as navigable groups
+and preserves the source codelet order.
 
 Entries are sorted by the unsigned numeric HNUC sequence of the exact
 canonical Pyac key in `su`, lexicographically, with a shorter prefix first.
@@ -108,6 +108,16 @@ same keyed meaning. SUMO and other ontology links may have distinct explicit
 mapping relations. Conflicting WordNet senses under one key are a curation
 error, not a reason to give that key multiple meanings.
 
+### Derived dictionary views
+
+The multilingual reference volume is the canonical source. A language- or
+task-specific dictionary is a deterministic projection of that volume, not a
+separately authored truth. A projection retains canonical Pyac keys,
+definitions, source links, and provenance for selected entries; it includes
+the transitive closure of definition references, then rebuilds its TOC and
+lookup indexes. A translated definition is included only when separately
+authored and linked as a language-specific definition record.
+
 ## 4. Lookup indexes
 
 The volume contains in-band sentence sections for these lookup directions:
@@ -118,6 +128,7 @@ The volume contains in-band sentence sections for these lookup directions:
 | Canonical Pyac | Exact HNUC atom or compound sequence | The corresponding dictionary-entry range. |
 | External source | Dataset, release, and exact external identifier | The matching Pyac key and explicit mapping relation. |
 | Entry location | Canonical Pyac key | The codelet range containing that entry. |
+| Operation signature | Verb, mood, and unordered grammatical-case/value-type pairs | The operation entry and its descriptive argument/result metadata. |
 
 Each index section is itself a deterministically ordered sequence of VLIW
 sentences. Its TOC range lets a reader find the appropriate index without
@@ -133,7 +144,19 @@ canonical Pyac HNUC sequence. Language-surface keys use the declared
 normalized UTF-8 form; external-source keys include the dataset and release.
 A language-specific normalization policy is part of the volume metadata, so
 readers do not depend on host locale collation. A lookup that encounters a
-duplicate surface key returns the complete ordered set of Pyac keys.
+duplicate surface key returns the complete ordered set of Pyac keys. An
+operation signature is a structural dispatch description: argument names and
+descriptions explain the contract to readers, but do not constrain which
+lexical forms may fill the grammatical cases.
+
+The Rust prototype uses sorted posting arrays and binary-search range starts;
+postings refer to entry/form/link records rather than copying indexed strings.
+Lookup is `O(log n + matches)` after index construction, rather than scanning
+every definition. The eventual on-disk reader should use the TOC to locate an
+index range and may load only the relevant index pages and entry ranges. The
+exact in-band sentence signatures and page-directory representation remain
+pending vocabulary-backed decisions; the runtime posting arrays are
+disposable indexes, not a persisted sidecar.
 
 ## 5. Definition paragraphs and program links
 
@@ -152,24 +175,26 @@ invoked only through an explicit program-execution request.
 
 ## 6. Vocabulary evidence and curation status
 
-These local Kwon results are useful candidates for the eventual sentence
-signatures. `accepted-llm` is a candidate status, not semantic approval or a
-curated dictionary entry.
+These local Kwon results are evidence for the eventual sentence signatures.
+In the vocabulary workflow, `accepted-llm` means the compound passed the
+LLM-review acceptance step; it is distinct from `accepted-curated`, and is
+not merely an unreviewed suggestion. The status preserves provenance: model
+acceptance is not the same provenance as curated acceptance.
 
 | Dictionary role | WordNet / crosswalk sense | Current Pyash candidate/status |
 | --- | --- | --- |
-| Book/compilation | `n:06649049-n`, compilation of known facts | `lwat hpuk`, accepted-LLM candidate. |
-| Contents / table of contents | `n:06501650-n`, list of divisions and their locations | `dvis hnok`, accepted-LLM candidate. |
-| Alphabetical index | `n:06503777-n`, alphabetical listing of names and topics | `lwat txik`, accepted-LLM candidate. |
-| Dictionary entry | WordNet 3.0 `n:06300823` -> Open English WordNet 2025 `n:06311813-n`; the entry in a dictionary of information about a word. | `tlat kwon` (word + dictionary), accepted-LLM candidate; not curated. |
-| General written-record entry | `n:06515715-n`, an item inserted in a written record | `nyit lwat`, accepted-LLM candidate. |
-| Word definition | `n:06757091-n`, concise explanation of a word's meaning | `pcat nyif`, accepted-LLM candidate. |
+| Book/compilation | `n:06649049-n`, compilation of known facts | `lwat hpuk`, accepted-LLM. |
+| Contents / table of contents | `n:06501650-n`, list of divisions and their locations | `dvis hnok`, accepted-LLM. |
+| Alphabetical index | `n:06503777-n`, alphabetical listing of names and topics | `lwat txik`, accepted-LLM. |
+| Dictionary entry | WordNet 3.0 `n:06300823` -> Open English WordNet 2025 `n:06311813-n`; the entry in a dictionary of information about a word. | `tlat kwon` (word + dictionary), accepted-LLM; its final component is “dictionary,” so the head-final fit for “entry/article” remains questionable. |
+| General written-record entry | `n:06515715-n`, an item inserted in a written record | `nyit lwat`, accepted-LLM. |
+| Word definition | `n:06757091-n`, concise explanation of a word's meaning | `pcat nyif`, accepted-LLM. |
 | Dictionary | Current atom `kwon` | Existing lexical atom. |
-| Chapter | No suitable dictionary-book sense selected | Use TOC ranges and ordinary paragraph boundaries; do not force a nearby sense or allocate a special chapter HNUC for this profile. |
 
-The candidates document search evidence only. Before a later implementation
-uses them as Pyash names, vocabulary review must confirm their exact senses,
-component order, and active HNUCs. This reference adds no vocabulary entries.
+These compounds are current vocabulary records. This reference does not change
+them or assert that each is the best semantic fit; notably, `tlat kwon` still
+merits head-final review before it is chosen as the canonical term for a
+dictionary article. This reference adds no vocabulary entries.
 
 ## 7. Conformance and validation
 
@@ -183,12 +208,38 @@ A conforming volume and reader MUST:
   to fall between complete sentences, reject overlapping/out-of-range ranges,
   and reject missing references;
 - resolve every index posting to an existing Pyac key and entry range;
+- match operation signatures by verb, mood, grammatical cases, and value
+  types, while keeping human-readable parameter labels outside the dispatch
+  key;
 - preserve all distinct Pyac keys for a shared surface form and return them
   in deterministic order;
+- generate language/task projections deterministically and include referenced
+  definition entries transitively;
 - round-trip the volume to printable Pyash without changing sentences,
   paragraph boundaries, language forms, or index order; and
 - keep lookup declarative, with programlet execution available only by
   explicit request.
 
-This is a design specification, not a claim that a multilingual dictionary
-builder, reader, or search service already exists.
+## 8. Implementation status
+
+`rust/pyac/src/dictionary.rs` provides an in-memory index over validated
+parsed entry descriptors. It supports exact Pyac-key lookup,
+language-plus-normalized-surface lookup, version-qualified external-source
+lookup, structural operation-signature lookup, and deterministic
+language/task projections with reference closure. These are sorted postings
+and binary searches; posting records refer to entry/form/link descriptors
+rather than duplicating indexed text.
+
+Run the synthetic scaling comparison with
+`cargo bench --manifest-path rust/pyac/Cargo.toml --bench dictionary_index`.
+It builds 100,000 entries, measures each indexed lookup over 100,000 queries,
+and compares against bounded linear scans over the first 100 queries. This is
+a repeatable algorithmic baseline, not a substitute for benchmarking a
+file-backed dictionary image on target storage.
+
+The Rust crate does not yet parse dictionary records from `.pyac`, emit a
+dictionary image, or perform lazy file-backed range reads. The next
+implementation slice is to settle the remaining vocabulary-backed relation
+signatures and sentence framing, then add a reader/writer that validates the
+in-band TOC/index records against the existing pack decoder. A `.pya` sidecar
+is not a substitute for the eventual in-band dictionary truth.

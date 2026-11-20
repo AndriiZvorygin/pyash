@@ -2,6 +2,7 @@
 
 pub mod backend;
 pub mod catalog;
+pub mod dictionary;
 pub mod literal;
 pub mod semantic;
 
