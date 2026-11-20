@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { createHash } from "node:crypto";
 
-import { fetchChecksumed } from "../command/bootstrap_caterer.mjs";
+import { fetchChecksumed, fetchChecksumedFromSources } from "../command/bootstrap_caterer.mjs";
 
 // A local server so the test needs nothing from the network.
 async function serve(handler) {
@@ -55,6 +55,33 @@ test("a bootstrap download gives up when the failure is permanent", async () => 
     assert.equal(calls, 2);
   } finally {
     server.close();
+  }
+});
+
+test("a bootstrap download falls back to another source after the primary is unavailable", async () => {
+  let primaryCalls = 0;
+  let fallbackCalls = 0;
+  const primary = await serve((req, res) => {
+    primaryCalls += 1;
+    res.statusCode = 503;
+    res.end("temporarily unavailable");
+  });
+  const fallback = await serve((req, res) => {
+    fallbackCalls += 1;
+    res.end("verified payload");
+  });
+  try {
+    const bytes = await fetchChecksumedFromSources(
+      [primary.url, fallback.url],
+      sha256("verified payload"),
+      { attempts: 2, backoffMs: 1 }
+    );
+    assert.equal(bytes.toString(), "verified payload");
+    assert.equal(primaryCalls, 2);
+    assert.equal(fallbackCalls, 1);
+  } finally {
+    primary.server.close();
+    fallback.server.close();
   }
 });
 
