@@ -1,10 +1,10 @@
 # Pyac VLIW Multilingual Dictionary
 
-Status: design contract with a Rust in-memory index prototype. The prototype
-indexes parsed entry metadata; it does not yet read or write a serialized
-dictionary volume. The target profile organizes a searchable, multilingual
-dictionary as ordinary Pyash sentences encoded in the existing `.pyac` VLIW
-format.
+Status: implemented Rust writer and seek-based reader for the v1 dictionary
+volume, with in-memory binary-search indexes rebuilt from its VLIW sentences.
+The writer accepts already-lowered definition codelets; it does not translate
+Pyash source text. The profile organizes a searchable, multilingual dictionary
+as ordinary Pyash sentences encoded in the existing `.pyac` VLIW format.
 
 ## 1. Design boundary
 
@@ -16,15 +16,21 @@ definitions are all ordinary VLIW sentences. There is no binary directory,
 opaque JSON record payload, or persisted sidecar index that contains
 dictionary truth.
 
-The first data sentence identifies the profile using an ordinary Pyash
-relation and typed value. Its relation and profile value must have active,
-curated Pyac/HNUC representations before a volume can be encoded. This
-reference does not invent that vocabulary: the tempting literal `format`
-marker is not currently lowerable through the VLIW named-literal path. The
-profile marker does not reserve an HNUC or alter the `.pyac` header. The volume
-is read as dictionary data; lookup does not execute its declarative definition
-sentences. An optional program link is a separate record and is never followed
-by a dictionary lookup as an invocation.
+The first sentence identifies the profile with the Pyac key `lyin kwon`
+(`n:06639023` in WordNet 3.0, crosswalked to `n:06651548-n` in Open English
+WordNet 2025): a machine-readable version of a standard dictionary. Its `ob`
+text labels the concrete volume kind, such as `English Pyash dictionary` or
+`Chinese Pyash dictionary`:
+
+```text
+su name lyin kwon ob text "English Pyash dictionary" be text ya
+```
+
+The profile marker uses ordinary dictionary vocabulary and does not reserve
+an HNUC or alter the `.pyac` header. The volume is read as dictionary data;
+lookup does not execute its declarative definition sentences. An optional
+program link is a separate record and is never followed by a dictionary lookup
+as an invocation.
 
 The profile uses existing sentence, typed-value, quote, and codelet rules from
 the [VLIW ISA](../specifications/27-pyash-vliw-isa.md). Its TOC groups are
@@ -162,14 +168,12 @@ operation signature is a structural dispatch description: argument names and
 descriptions explain the contract to readers, but do not constrain which
 lexical forms may fill the grammatical cases.
 
-The Rust prototype uses sorted posting arrays and binary-search range starts;
-postings refer to entry/form/link records rather than copying indexed strings.
-Lookup is `O(log n + matches)` after index construction, rather than scanning
-every definition. The eventual on-disk reader should use the TOC to locate an
-index range and may load only the relevant index pages and entry ranges. The
-exact in-band sentence signatures and page-directory representation remain
-pending vocabulary-backed decisions; the runtime posting arrays are
-disposable indexes, not a persisted sidecar.
+The Rust reader validates the in-band index sentence shapes and targets, then
+builds sorted posting arrays with binary-search range starts. These arrays are
+disposable runtime indexes, not persisted sidecars. Lookup is
+`O(log n + matches)` after opening, rather than scanning definitions. Opening
+loads the indexes into memory; definitions remain on disk and are fetched by
+their validated codelet ranges only when requested.
 
 ## 5. Definition paragraphs and program links
 
@@ -188,11 +192,12 @@ invoked only through an explicit program-execution request.
 
 ## 6. Vocabulary evidence and curation status
 
-These local Kwon results are evidence for the eventual sentence signatures.
-In the vocabulary workflow, `accepted-llm` means the compound passed the
-LLM-review acceptance step; it is distinct from `accepted-curated`, and is
-not merely an unreviewed suggestion. The status preserves provenance: model
-acceptance is not the same provenance as curated acceptance.
+These local Kwon results establish the Pyac concepts used by the profile and
+record signatures. In the vocabulary workflow, `accepted-llm` means the
+compound passed the LLM-review acceptance step; it is distinct from
+`accepted-curated`, and is not merely an unreviewed suggestion. The status
+preserves provenance: model acceptance is not the same provenance as curated
+acceptance.
 
 | Dictionary role | WordNet / crosswalk sense | Current Pyash candidate/status |
 | --- | --- | --- |
@@ -204,7 +209,8 @@ acceptance is not the same provenance as curated acceptance.
 | Word definition | `n:06757091-n`, concise explanation of a word's meaning | `pcat nyif`, accepted-LLM. |
 | Mathematical map / function | WordNet 3.0 `n:13783816` -> Open English WordNet 2025 `n:13806028-n`; a single-valued mathematical relation from domain elements to range elements. | `pwak hnuc`, linked compound, accepted-LLM. |
 | Chromosome mapping | WordNet 3.0 `n:01024643` -> Open English WordNet 2025 `n:01026585-n`; the process of locating genes on a chromosome. | `tcas hjom`, linked compound, accepted-LLM. |
-| Dictionary | Current atom `kwon` | Existing lexical atom. |
+| General dictionary | Open English WordNet 2025 `n:06430544-n`, a reference book containing an alphabetical list of words and information about them. | `kwon`, existing lexical atom. |
+| Machine-readable dictionary profile | WordNet 3.0 `n:06639023` -> Open English WordNet 2025 `n:06651548-n`, a machine-readable version of a standard dictionary. | `lyin kwon`, the profile marker subject. Its `ob` text gives the concrete kind, such as `English Pyash dictionary`. |
 | Normalization policy | Open English WordNet 2025 `n:05910115-n`; a plan of action adopted by an individual or group. | `trec kfan`, accepted-LLM. The selected normalization algorithm is stored as exact quoted policy data; it is not inferred from this concept. |
 | Data | WordNet 3.0 `n:08462320` -> Open English WordNet 2025 `n:08479331-n`; a collection of facts from which conclusions may be drawn. | `drut hnuc`, accepted-LLM. Dataset names and release labels remain exact quoted source data; no dataset compound is required. |
 | Identifier | WordNet 3.0 `n:07270601` -> Open English WordNet 2025 `n:07285306-n`; a symbol that establishes the identity of what bears it. | `hdiftyec`, confirmed for this schema by the user; external identifier values remain exact quoted source data. |
@@ -244,25 +250,29 @@ A conforming volume and reader MUST:
 
 ## 8. Implementation status
 
-`rust/pyac/src/dictionary.rs` provides an in-memory index over validated
-parsed entry descriptors. It supports exact Pyac-key lookup,
-language-plus-normalized-surface lookup, version-qualified external-source
-lookup, structural operation-signature lookup, and deterministic
-language/task projections with reference closure. These are sorted postings
-and binary searches; posting records refer to entry/form/link descriptors
-rather than duplicating indexed text.
+`rust/pyac/src/dictionary.rs` exposes a deterministic volume writer and a
+seek-based file reader. The writer emits the profile marker, metadata, TOC,
+canonical/surface/source/location/operation indexes, entry descriptors, and
+already-lowered definition sentences as ordinary VLIW codelets. The reader
+validates those records, rebuilds searchable postings, and supports exact
+Pyac-key location/read, NFC-normalized language-surface lookup, versioned
+external-source lookup (returning its relation), and structural operation-
+signature lookup. It reads an entry's codelet range on demand rather than
+loading all definitions. The separate in-memory `DictionaryIndex` retains its
+language/task projection API.
+
+`rust/pyac/examples/dictionary_fixture.rs` is the runnable minimal authoring
+example. It creates a typed Pyash definition sentence, adds lexical and
+WordNet records, and writes the resulting `.pyac` bytes to stdout:
+
+```sh
+cargo run --manifest-path rust/pyac/Cargo.toml --example dictionary_fixture > dictionary.pyac
+```
 
 Run the synthetic scaling comparison with
 `cargo bench --manifest-path rust/pyac/Cargo.toml --bench dictionary_index`.
-It builds 100,000 entries, measures each indexed lookup over 100,000 queries,
-and compares against bounded linear scans over the first 100 queries. This is
-a repeatable algorithmic baseline, not a substitute for benchmarking a
-file-backed dictionary image on target storage.
-
-The Rust crate does not yet parse dictionary records from `.pyac`, emit a
-dictionary image, or perform lazy file-backed range reads. The next
-implementation slice is to specify the exact ordinary Pyash sentence
-signatures and profile framing using the vocabulary recorded above, then add
-a Rust reader/writer that validates the in-band TOC/index records against the
-existing pack decoder. A `.pya` sidecar is not a substitute for the eventual
-in-band dictionary truth.
+It builds 100,000 entries, measures each in-memory indexed lookup over
+100,000 queries, and compares against bounded linear scans over the first 100
+queries. This is a repeatable algorithmic baseline, not a substitute for
+measuring file-backed open and range reads on target storage. The volume is
+the persisted source of truth; all lookup arrays are reconstructed from it.

@@ -21,6 +21,11 @@ pub enum DictionaryIndexError {
         key: Vec<u16>,
         field: &'static str,
     },
+    InvalidNormalization {
+        key: Vec<u16>,
+        surface: String,
+        normalized: String,
+    },
     EmptySourceField {
         key: Vec<u16>,
         field: &'static str,
@@ -59,6 +64,10 @@ impl Display for DictionaryIndexError {
             Self::EmptyLexicalField { key, field } => {
                 write!(formatter, "entry {key:?} has an empty lexical {field}")
             }
+            Self::InvalidNormalization { key, .. } => write!(
+                formatter,
+                "entry {key:?} normalized form must be the NFC form of its exact surface"
+            ),
             Self::EmptySourceField { key, field } => {
                 write!(formatter, "entry {key:?} has an empty source-link {field}")
             }
