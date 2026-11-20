@@ -6,6 +6,7 @@ import {
 } from "./chinese_character_atom_refinery.mjs";
 import {
   lookupCowChineseFormsByWordNetSenses,
+  lookupCowWordNetSensesByChineseForms,
   parseCowWordNetCrosswalkPya
 } from "./cow_wordnet_crosswalk.mjs";
 import { loadEnglishGrammarCatalog } from "./english_grammar.mjs";
@@ -64,20 +65,25 @@ async function loadChineseIndex() {
         return true;
       });
       const byPyash = new Map();
+      const byChinese = new Map();
       for (const row of rows) {
         const pyash = normalize(row?.pya);
         const chinese = String(row?.character ?? "").trim().normalize("NFC");
         const english = String(row?.english ?? "").trim();
         if (!pyash || !chinese || !english) continue;
-        const matches = byPyash.get(pyash) ?? [];
-        matches.push({ pyash, chinese, english });
-        byPyash.set(pyash, matches);
+        const entry = { pyash, chinese, english, source: row.source ?? "kwon-chinese" };
+        const pyashMatches = byPyash.get(pyash) ?? [];
+        pyashMatches.push(entry);
+        byPyash.set(pyash, pyashMatches);
+        const chineseMatches = byChinese.get(normalize(chinese)) ?? [];
+        chineseMatches.push(entry);
+        byChinese.set(normalize(chinese), chineseMatches);
       }
-      for (const matches of byPyash.values()) {
+      for (const matches of [...byPyash.values(), ...byChinese.values()]) {
         matches.sort((left, right) => left.english.localeCompare(right.english)
           || left.chinese.localeCompare(right.chinese));
       }
-      return byPyash;
+      return { byPyash, byChinese };
     });
   }
   return chineseIndexPromise;
@@ -117,13 +123,24 @@ async function loadCowWordNetIndex() {
 
 export async function lookupChineseByPyash(pyash) {
   const index = await loadChineseIndex();
-  return [...(index.get(normalize(pyash)) ?? [])];
+  return [...(index.byPyash.get(normalize(pyash)) ?? [])];
+}
+
+export async function lookupPyashByChinese(chinese) {
+  const index = await loadChineseIndex();
+  return [...(index.byChinese.get(normalize(chinese)) ?? [])];
 }
 
 export async function lookupChineseByWordNetSenses(senseIds) {
   if (!Array.isArray(senseIds) || senseIds.length === 0) return [];
   const crosswalk = await loadCowWordNetIndex();
   return lookupCowChineseFormsByWordNetSenses(crosswalk, senseIds);
+}
+
+export async function lookupWordNetSensesByChinese(chineseForms) {
+  if (!Array.isArray(chineseForms) || chineseForms.length === 0) return [];
+  const crosswalk = await loadCowWordNetIndex();
+  return lookupCowWordNetSensesByChineseForms(crosswalk, chineseForms);
 }
 
 export async function lookupChinesePinyin(chinese) {

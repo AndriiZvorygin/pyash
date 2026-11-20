@@ -26,6 +26,7 @@ Utility scripts for working with Pyash from the shell:
 - `list_pyash_words.mjs` — print a comma-separated list of English entries from `pyashWords.json`.
 - `anchor_words_add.mjs --anchor <name> --form <text> --role <role>` — append a new anchor word mapping to `anchor_words.pya`.
 - `vocab_suggest.mjs "word"` — check a proposed token/phrase; pass a file/dir to scan `.pya` files.
+- `compound_catalog_add.mjs <name> <gloss> <atom> <atom> [atom ...]` — add a head-final compound built from existing atoms to `compound_coverage_curated.pya`; the gloss is used by dictionary and VLIW lookups. The last atom is the head, and the command checks atom membership, layer data, duplicate names, and sequence collisions.
 - `pyash dict <pyash-word> to zh` — show the linked Chinese form, Hanyu Pinyin, and its English gloss or compound breakdown.
 - `generate_kwon_chinese_pinyin_index.mjs` — refresh the compact Chinese Pinyin projection from the adjacent CC-CEDICT source, Kwon vocabulary, and accepted compounds.
 - `generate_kwon_chinese_single_atom_csv.mjs` — export Kwon one-character, one-atom mappings with Mandarin Pinyin and Cantonese Jyutping from the local Unihan archive.
