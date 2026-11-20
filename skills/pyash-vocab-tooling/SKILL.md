@@ -110,11 +110,12 @@ when it already expresses the intended meaning.
   `review-needed`, `rejected-curated`, and `deferred-curated` update the
   per-entry review ledger without creating an active WordNet link.
   `accepted-curated` links the exact sense to the existing atom or compound;
-  for compounds it also adds or updates the curated compound gloss and ordered
-  atom sequence. A later non-accepted status removes only the bridge row that
-  this review entry created. Existing bridge conflicts fail for review rather
-  than silently replacing another mapping. The model status remains intact as
-  a separate field.
+  for compounds it adds the curated gloss and ordered atom sequence, or updates
+  the gloss and evidence when the target already has that same sequence. A
+  sequence conflict fails for review. A later non-accepted status removes only
+  the bridge row that this review entry created. Existing bridge conflicts
+  fail for review rather than silently replacing another mapping. The model
+  status remains intact as a separate field.
 
 ### Update existing entries
 
