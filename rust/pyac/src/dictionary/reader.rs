@@ -157,6 +157,10 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
         self.codelet_count
     }
 
+    pub fn entry_count(&self) -> usize {
+        self.locations.len()
+    }
+
     pub fn read_section(
         &mut self,
         role: &str,

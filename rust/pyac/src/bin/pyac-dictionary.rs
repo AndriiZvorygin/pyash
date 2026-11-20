@@ -240,7 +240,7 @@ fn execute(args: &[String]) -> Result<Value, Box<dyn std::error::Error>> {
             let metadata = reader.metadata();
             json!({
                 "command": "inspect", "path": path, "volumeBytes": size,
-                "codeletCount": reader.codelet_count(),
+                "codeletCount": reader.codelet_count(), "entryCount": reader.entry_count(),
                 "metadata": {
                     "kind": metadata.kind, "title": metadata.title,
                     "revision": metadata.revision, "languages": metadata.languages,
@@ -331,6 +331,7 @@ fn execute(args: &[String]) -> Result<Value, Box<dyn std::error::Error>> {
                 "iterations": iterations, "warmupIterations": 5,
                 "matchesPerIteration": match_count / iterations as usize,
                 "volumeBytes": size, "codeletCount": reader.codelet_count(),
+                "entryCount": reader.entry_count(),
                 "openMs": open_ms, "lookupTotalNs": lookup_ns,
                 "lookupMeanNs": lookup_ns / u128::from(iterations),
                 "lookupsPerSecond": (iterations as f64 * 1_000_000_000.0)

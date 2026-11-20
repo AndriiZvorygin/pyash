@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
+import { dictionaryKeyName, renderDefinitionSentence } from "../command/pyac_dictionary.mjs";
 import { buildDictionarySource } from "../program/library/dictionary/source.mjs";
 import { lookupLegacyName } from "../program/library/vliw/quotes.mjs";
 
@@ -72,4 +75,39 @@ test("dictionary source accepts structural operation signature and argument meta
     name: "result",
     description: "computed value"
   }]);
+});
+
+test("dictionary CLI renders canonical Pyash compound keys on decoded definitions", () => {
+  const key = ["drut", "hnuc"].map((word) => Number.parseInt(lookupLegacyName(word).hnuc, 16));
+  assert.equal(dictionaryKeyName(key), "drut hnuc");
+  assert.equal(
+    renderDefinitionSentence({
+      su: { name: "descriptive number" },
+      ob: { text: "A collection of facts." },
+      be: "text",
+      mood: "ya"
+    }, "drut hnuc"),
+    'su name drut hnuc ob text "A collection of facts." be text ya'
+  );
+});
+
+test("published English core source imports six real WordNet-linked entries", async () => {
+  const sourcePath = fileURLToPath(new URL(
+    "../program/library/dictionary/english-core.pya",
+    import.meta.url
+  ));
+  const built = buildDictionarySource(await fs.readFile(sourcePath, "utf8"));
+  assert.equal(built.entries.length, 6);
+  assert.deepEqual(
+    built.entries.map((entry) => entry.source_links[0].identifier).sort(),
+    [
+      "n:05873161-n",
+      "n:08479331-n",
+      "n:13574763-n",
+      "v:00654571-v",
+      "v:00676526-v",
+      "v:00951320-v"
+    ]
+  );
+  assert.ok(built.entries.every((entry) => entry.definition.length > 0));
 });

@@ -1,9 +1,10 @@
 # Pyac VLIW Dictionary Workbook
 
 Status: temporary vocabulary-agent worksheet. Update this file while curating
-the first dictionary content; do not treat it as the dictionary database or
-as a substitute for the canonical vocabulary catalogs. Published compiled
-volumes are planned for `program/library/dictionary/`.
+dictionary content; do not treat it as the dictionary database or as a
+substitute for the canonical vocabulary catalogs. The initial six-entry
+English core volume is published in `program/library/dictionary/`; broader
+English and multilingual coverage remains future curation work.
 
 See the [dictionary format and workflow reference](../reference/pyac-vliw-dictionary.md)
 for the profile marker, serialized record contract, and Rust reader/writer.
@@ -51,6 +52,6 @@ allowed when they resolve to different keys/senses.
   volume.
 - A review state is copied from the vocabulary catalog, never inferred from
   the presence of a row in this workbook.
-- Workbook changes remain curation notes until an explicit importer/build
-  workflow converts accepted entries to `DictionaryVolume` input and a
+- Workbook changes remain curation notes until an agent curates the matching
+  `.pya` source using the documented authoring workflow and publishes a
   validated `.pyac` volume.

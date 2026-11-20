@@ -13,8 +13,10 @@ workflow, then publish a validated `.pyac` volume here.
 
 ## Current State
 
-No production dictionary volume has been published here yet. The vocabulary
-workbook is at
+`english-core.pya` is the editable source for the first published volume,
+`english-core.pyac`. It contains six source-linked entries for vector, data,
+compare, select, sum, and lookup. This is a usable core slice, not the full
+English or multilingual reference dictionary. The vocabulary workbook is at
 `documentation/workbook/pyac-vliw-dictionary.md`; it is a curation
 worksheet, not runtime data.
 

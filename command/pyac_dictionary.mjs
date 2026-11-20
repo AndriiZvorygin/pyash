@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { sentenceToPyash } from "../program/beautiful.mjs";
 import { buildDictionarySource } from "../program/library/dictionary/source.mjs";
 import { decodePyashProgram } from "../program/library/vliw/index.mjs";
-import { lookupLegacyName } from "../program/library/vliw/quotes.mjs";
+import { lookupLegacyName, lookupLegacyWord } from "../program/library/vliw/quotes.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const binaryCandidates = [
@@ -57,6 +57,22 @@ function binaryKey(name) {
   }).join(",");
 }
 
+export function dictionaryKeyName(words) {
+  return words.map((word) => {
+    const entry = lookupLegacyWord(Number(word));
+    if (!entry?.pya) throw new Error(`HNUC has no Pyash spelling: ${word}`);
+    return entry.pya;
+  }).join(" ");
+}
+
+export function renderDefinitionSentence(sentence, canonicalKey) {
+  const rendered = sentenceToPyash(sentence);
+  const decodedKey = sentence?.su?.name;
+  const decodedSubject = `su name ${decodedKey}`;
+  if (!decodedKey || !rendered.startsWith(decodedSubject)) return rendered;
+  return `su name ${canonicalKey}${rendered.slice(decodedSubject.length)}`;
+}
+
 function metricRecord(result) {
   const lines = [
     "su name criterion be series def",
@@ -68,6 +84,7 @@ function metricRecord(result) {
     `su name criterion ob text ${JSON.stringify(`executableBytes=${result.executableBytes}`)} be text ya`,
     `su name criterion ob text ${JSON.stringify(`volumeBytes=${result.volumeBytes}`)} be text ya`,
     `su name criterion ob text ${JSON.stringify(`codeletCount=${result.codeletCount ?? 0}`)} be text ya`,
+    `su name criterion ob text ${JSON.stringify(`entryCount=${result.entryCount ?? 0}`)} be text ya`,
     `su name criterion ob text ${JSON.stringify(`language=${result.language}`)} be text ya`,
     `su name criterion ob text ${JSON.stringify(`surface=${result.surface}`)} be text ya`,
     `su name criterion ob text ${JSON.stringify(`iterations=${result.iterations}`)} be text ya`,
@@ -104,12 +121,20 @@ export async function runPyacDictionary(args = process.argv.slice(2), { stdout =
     result = runBinary(binary, ["inspect", path.resolve(args[1])]);
   } else if (args[0] === "lookup" && args[2] === "surface" && args.length === 5) {
     result = runBinary(binary, ["surface", path.resolve(args[1]), args[3], args[4]]);
+    result.pyashKeys = result.matches.map(dictionaryKeyName);
   } else if (args[0] === "lookup" && args[2] === "source" && args.length === 6) {
     result = runBinary(binary, ["source", path.resolve(args[1]), args[3], args[4], args[5]]);
+    result.matches = result.matches.map((match) => ({
+      ...match,
+      pyashKey: dictionaryKeyName(match.key)
+    }));
   } else if (args[0] === "read" && args[2] === "key" && args.length === 4) {
     result = runBinary(binary, ["key", path.resolve(args[1]), binaryKey(args[3])]);
     result.sentences = decodePyashProgram(result.codelets.map((codelet) => Uint16Array.from(codelet)));
-    result.pyash = result.sentences.map(sentenceToPyash).join("\n");
+    const canonicalKey = args[3].trim().split(/\s+/u).join(" ");
+    result.pyash = result.sentences.map((sentence) => (
+      renderDefinitionSentence(sentence, canonicalKey)
+    )).join("\n");
     delete result.codelets;
   } else if (args[0] === "benchmark" && args[1] && args[2] === "surface" && args[6] === "to" && args.length === 8) {
     const volumePath = path.resolve(args[1]);

@@ -95,6 +95,7 @@ fn compiled_cli_builds_inspects_looks_up_and_benchmarks_a_volume() {
     let inspected = run(&["inspect", volume_arg], None);
     assert_eq!(inspected["metadata"]["title"], "CLI test volume");
     assert_eq!(inspected["codeletCount"], built["codeletCount"]);
+    assert_eq!(inspected["entryCount"], 1);
     assert!(inspected["openMs"].as_f64().is_some());
 
     let surface = run(&["surface", volume_arg, "en", "dictionary"], None);
@@ -124,6 +125,7 @@ fn compiled_cli_builds_inspects_looks_up_and_benchmarks_a_volume() {
     );
     assert_eq!(benchmark["iterations"], 1000);
     assert_eq!(benchmark["warmupIterations"], 5);
+    assert_eq!(benchmark["entryCount"], 1);
     assert_eq!(benchmark["matchesPerIteration"], 1);
     assert!(benchmark["lookupMeanNs"].as_u64().is_some());
     assert!(benchmark["lookupsPerSecond"].as_f64().unwrap() > 0.0);

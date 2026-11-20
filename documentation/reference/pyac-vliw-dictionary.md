@@ -2,8 +2,9 @@
 
 Status: implemented Rust writer and seek-based reader for dictionary profile
 v2, with in-memory binary-search indexes rebuilt from its VLIW sentences.
-The selected permanent location for published volumes is
-`program/library/dictionary/`. No production volume is stored there yet. The
+The initial six-entry English core volume is published in
+`program/library/dictionary/`; complete English and multilingual coverage
+remain to be curated. The
 Rust library writer accepts already-lowered definition codelets. The
 `pyash dictionary volume` authoring command parses Pyash source and lowers its
 definition sentences before calling that writer. The profile organizes a
@@ -269,13 +270,21 @@ Pyash-source file, builds/replaces a compiled volume, and uses the Rust binary
 for inspection, lookup, definition reads, and throughput measurement:
 
 ```sh
-pyash dictionary volume build from program/library/dictionary/english.pya to program/library/dictionary/english.pyac
-pyash dictionary volume inspect program/library/dictionary/english.pyac
-pyash dictionary volume lookup program/library/dictionary/english.pyac surface en vector
-pyash dictionary volume lookup program/library/dictionary/english.pyac source wordnet 3.0 n:05873161-n
-pyash dictionary volume read program/library/dictionary/english.pyac key vector
-pyash dictionary volume benchmark program/library/dictionary/english.pyac surface en vector 10000 to criterion/results/dictionary-vector.pya
+pyash dictionary volume build from program/library/dictionary/english-core.pya to program/library/dictionary/english-core.pyac
+pyash dictionary volume inspect program/library/dictionary/english-core.pyac
+pyash dictionary volume lookup program/library/dictionary/english-core.pyac surface en vector
+pyash dictionary volume lookup program/library/dictionary/english-core.pyac source wordnet "Open English WordNet 2025" n:05873161-n
+pyash dictionary volume read program/library/dictionary/english-core.pyac key vector
+pyash dictionary volume benchmark program/library/dictionary/english-core.pyac surface en vector 100000 to artifacts/dictionary-benchmarks/english-core.pya
 ```
+
+The published starter volume currently contains six exact-sense links:
+`vector` (`n:05873161-n`), `data` (`n:08479331-n`), `compare`
+(`v:00654571-v`), `select` (`v:00676526-v`), `sum` (`v:00951320-v`), and
+`lookup` (`n:13574763-n`). English lookup forms come from those linked senses.
+The entries currently store concise English source glosses as ordinary Pyash
+text-definition sentences; compositional Pyash definitions can be added as
+the necessary relations are curated.
 
 The `.pya` source starts with a profile sentence and metadata sentence:
 
