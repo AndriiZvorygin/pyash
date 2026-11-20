@@ -250,6 +250,12 @@ function acceptedCompoundRow(payload) {
     pyash,
     status,
     aliases,
+    ...(payload.sourceSurfaces && typeof payload.sourceSurfaces === "object" && !Array.isArray(payload.sourceSurfaces)
+      ? { sourceSurfaces: { ...payload.sourceSurfaces } }
+      : {}),
+    ...(payload.sourceMorphemesByLanguage && typeof payload.sourceMorphemesByLanguage === "object" && !Array.isArray(payload.sourceMorphemesByLanguage)
+      ? { sourceMorphemesByLanguage: { ...payload.sourceMorphemesByLanguage } }
+      : {}),
     ...(specificAtom ? { specificAtom } : {}),
     senseLinks,
     identity: `${components.join("\u0001")}\u0000${pyash.join("\u0001")}\u0000${specificAtom ?? ""}\u0000${senseLinks.map((link) => link.senseId).join("\u0001")}`
@@ -622,21 +628,24 @@ async function reportPyashChineseLookups(tokens, {
     }
 
     const found = foundCompounds.get(token);
-    if (found?.pyacSequenceQuery) {
+    if (found?.pyacSequenceQuery || found?.compoundCatalogLookup) {
       for (const row of found.rows ?? [found.row]) {
         const chinese = chineseCompoundSurface(row);
-        if (!chinese) continue;
-        const pinyin = await lookupChinesePinyin(chinese);
+        const pinyin = chinese ? await lookupChinesePinyin(chinese) : [];
         const componentGlosses = row.componentGlosses
           ?? row.sourceComponentGlossesByLanguage?.chinese
           ?? row.components
           ?? row.morphemes
           ?? [];
         const breakdown = Array.isArray(componentGlosses) ? componentGlosses.filter(Boolean) : [];
-        const pinyinText = pinyin.length > 0 ? pinyin.join(" / ") : "unavailable in the local pinyin index";
-        report(`${token}: Chinese ${chinese}; Pinyin ${pinyinText}`);
+        if (chinese) {
+          const pinyinText = pinyin.length > 0 ? pinyin.join(" / ") : "unavailable in the local pinyin index";
+          report(`${token}: Chinese ${chinese}; Pinyin ${pinyinText}`);
+        } else {
+          report(`${token}: no linked Chinese entry for this compound`);
+        }
         report(`${token}: English breakdown ${breakdown.length > 0 ? breakdown.join(" + ") : row.target}`);
-        if (row.gloss && normalizeCompoundTarget(row.gloss) !== normalizeCompoundTarget(row.target)) {
+        if (row.gloss) {
           report(`${token}: English compound gloss ${row.gloss}`);
         }
         const definitions = (found.senseGlosses ?? [])
@@ -647,8 +656,11 @@ async function reportPyashChineseLookups(tokens, {
         }
         lookups.push({
           input: token,
+          source: "pyash-compound",
+          target: row.target,
+          gloss: row.gloss ?? row.target,
           pyashSequence: [...row.pyash],
-          chinese,
+          ...(chinese ? { chinese } : {}),
           pinyin,
           english: row.target,
           englishBreakdown: breakdown,
@@ -1389,6 +1401,123 @@ function buildPackedPyacCompoundIndex(compounds) {
   ]));
 }
 
+function buildCompoundSequenceIndex(compounds) {
+  const bySequence = new Map();
+  for (const rows of compounds.values()) {
+    for (const row of rows) {
+      if (!Array.isArray(row.pyash) || row.pyash.length < 2) continue;
+      const key = row.pyash.join(" ").toLowerCase();
+      const matches = bySequence.get(key) ?? new Map();
+      matches.set(row.identity, row);
+      bySequence.set(key, matches);
+    }
+  }
+  return new Map([...bySequence].map(([key, rows]) => [
+    key,
+    [...rows.values()].sort((left, right) => left.target.localeCompare(right.target)
+      || left.pyash.join("+").localeCompare(right.pyash.join("+")))
+  ]));
+}
+
+function buildCompoundTargetIndex(compounds) {
+  const byTarget = new Map();
+  for (const [target, rows] of compounds) {
+    if (target.trim().split(/\s+/u).length < 2) continue;
+    const matches = byTarget.get(target) ?? new Map();
+    for (const row of rows) matches.set(row.identity, row);
+    byTarget.set(target, matches);
+  }
+  return new Map([...byTarget].map(([target, rows]) => [target, [...rows.values()]]));
+}
+
+function resolveCuratedPyashCompoundInputs(inputs, curatedCompounds) {
+  const bySequence = buildCompoundSequenceIndex(curatedCompounds);
+  const byTarget = buildCompoundTargetIndex(curatedCompounds);
+  const maximumLength = Math.max(0,
+    ...[...bySequence.keys(), ...byTarget.keys()].map((value) => value.split(" ").length));
+  const items = [];
+  const originalInputs = [];
+
+  for (const [inputIndex, input] of inputs.entries()) {
+    const words = String(input ?? "").trim().split(/\s+/u).filter(Boolean);
+    const isPyashSequence = words.length > 0 && words.every((word) => PACKED_PYAC_ATOMS.has(word.toLowerCase()));
+    originalInputs.push({ input, words, isPyashSequence });
+    for (const [wordIndex, word] of words.entries()) {
+      items.push({ inputIndex, wordIndex, word: word.toLowerCase(), isPyashSequence });
+    }
+  }
+
+  const queries = [];
+  const consumed = new Set();
+  for (let start = 0; start < items.length; start += 1) {
+    if (consumed.has(start)) continue;
+    let match = null;
+    const maximum = Math.min(maximumLength, items.length - start);
+    for (let length = maximum; length >= 2; length -= 1) {
+      const candidateItems = items.slice(start, start + length);
+      if (candidateItems.some((_, offset) => consumed.has(start + offset))) continue;
+      const words = candidateItems.map((item) => item.word);
+      const kind = candidateItems.every((item) => item.isPyashSequence) ? "pyac" : "target";
+      const rows = kind === "pyac"
+        ? bySequence.get(words.join(" "))
+        : byTarget.get(words.join(" "));
+      if (rows?.length) {
+        match = {
+          start,
+          length,
+          sequence: words,
+          rows,
+          kind,
+          words: candidateItems.map((item) => item.word)
+        };
+        break;
+      }
+    }
+    if (!match) continue;
+    for (let offset = 0; offset < match.length; offset += 1) consumed.add(start + offset);
+    queries.push({
+      ...match,
+      input: match.words.join(" ")
+    });
+    start += match.length - 1;
+  }
+
+  const remainingInputs = originalInputs.flatMap(({ input, words }, inputIndex) => {
+    const remaining = words.filter((_, wordIndex) => {
+      const itemIndex = items.findIndex((item) => item.inputIndex === inputIndex && item.wordIndex === wordIndex);
+      return !consumed.has(itemIndex);
+    });
+    if (remaining.length === words.length) return [input];
+    return remaining.length > 0 ? [remaining.join(" ")] : [];
+  });
+
+  const dictionaryInputs = [];
+  const queriesByStart = new Map(queries.map((query) => [query.start, query]));
+  for (let index = 0; index < items.length;) {
+    const query = queriesByStart.get(index);
+    if (query) {
+      dictionaryInputs.push(query.input);
+      index += query.length - 1;
+    } else if (!items[index].isPyashSequence) {
+      const inputIndex = items[index].inputIndex;
+      const sameInputHasQuery = queries.some((candidate) => (
+        items[candidate.start]?.inputIndex === inputIndex
+      ));
+      if (!sameInputHasQuery) {
+        dictionaryInputs.push(originalInputs[inputIndex].input);
+        while (index < items.length && items[index].inputIndex === inputIndex) index += 1;
+        continue;
+      }
+      if (!consumed.has(index)) dictionaryInputs.push(items[index].word);
+    } else if (!consumed.has(index)) {
+      dictionaryInputs.push(items[index].word);
+    }
+    index += 1;
+  }
+
+  return { queries, remainingInputs, dictionaryInputs };
+}
+
 function registerFoundPackedCompound(foundCompounds, rows, token) {
   registerFoundCompound(foundCompounds, rows, "input", token);
   const found = foundCompounds.get(token);
@@ -1892,6 +2021,25 @@ export async function runVocabSuggest(args = process.argv.slice(2), {
     mergeCompoundRows(acceptedCompounds, await loadDefaultCuratedAcceptedCompounds());
     defaultAcceptedCompoundsLoaded = true;
   };
+  let compoundSequencePlan = {
+    queries: [],
+    remainingInputs: resolvedTextInputs,
+    dictionaryInputs: resolvedTextInputs
+  };
+  if (targetLanguage === "zh") {
+    const curatedCompounds = await loadDefaultCuratedAcceptedCompounds();
+    mergeCompoundRows(acceptedCompounds, curatedCompounds);
+    curatedAcceptedCompoundsLoaded = true;
+    compoundSequencePlan = resolveCuratedPyashCompoundInputs(resolvedTextInputs, curatedCompounds);
+    for (const query of compoundSequencePlan.queries) {
+      registerFoundCompound(foundCompounds, query.rows, "input", query.input);
+      const found = foundCompounds.get(query.input);
+      if (found && query.kind === "pyac") found.pyacSequenceQuery = query.input;
+      else if (found) found.compoundCatalogLookup = true;
+    }
+  }
+  const tokenLookupInputs = compoundSequencePlan.remainingInputs;
+  const dictionaryLookupInputs = compoundSequencePlan.dictionaryInputs;
   const registerCompoundAtomMatches = async (token, english) => {
     const links = await loadDefaultCompoundAtomLinksSafe();
     const matches = links.atomToCompounds.get(normalizeCompoundTarget(english)) ?? [];
@@ -1933,7 +2081,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), {
   let missing = 0;
   const uncoveredNames = new Set();
   const textTokens = new Set();
-  for (const input of resolvedTextInputs) {
+  for (const input of tokenLookupInputs) {
     for (const token of tokenizeName(input)) textTokens.add(token);
   }
   for (const { file, text, program } of parsedFiles) {
@@ -2122,7 +2270,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), {
   const wordNetSenseLookups = await reportWordNetSenseLookups(senseIds, lookupReport);
 
   const linkedWordNetLines = [];
-  const linkedWordNetSenses = await reportLinkedWordNetSenses(resolvedTextInputs, (line) => linkedWordNetLines.push(line));
+  const linkedWordNetSenses = await reportLinkedWordNetSenses(tokenLookupInputs, (line) => linkedWordNetLines.push(line));
   const wordNetCompoundLines = [];
   const wordNetCompoundSenses = await addWordNetCompoundSenseGlosses(foundCompounds, (line) => wordNetCompoundLines.push(line));
   const wordNetCompoundSenseLines = new Set(wordNetCompoundSenses.map((entry) => (
@@ -2135,7 +2283,7 @@ export async function runVocabSuggest(args = process.argv.slice(2), {
   const activeTextSenseIds = new Set([
     ...linkedWordNetSenses.filter((entry) => entry.active === true).map((entry) => entry.source),
     ...wordNetCompoundSenses
-      .filter((entry) => resolvedTextInputs.includes(entry.input))
+      .filter((entry) => dictionaryLookupInputs.includes(entry.input))
       .map((entry) => entry.senseId)
   ]);
   const directSenseChineseLookups = targetLanguage === "zh"
@@ -2143,14 +2291,14 @@ export async function runVocabSuggest(args = process.argv.slice(2), {
       .filter((entry) => !activeTextSenseIds.has(entry.senseId)), report)
     : [];
   const chineseLookups = targetLanguage === "zh"
-    ? await reportPyashChineseLookups(resolvedTextInputs, {
+    ? await reportPyashChineseLookups(dictionaryLookupInputs, {
       linkedWordNetSenses,
       wordNetCompoundSenses,
       foundCompounds,
       report
     })
     : [];
-  const sumoLookups = await reportSumoLookups([...resolvedTextInputs, ...sumoIds, ...senseIds], lookupReport);
+  const sumoLookups = await reportSumoLookups([...dictionaryLookupInputs, ...sumoIds, ...senseIds], lookupReport);
 
 
   const foundCompoundLines = [];

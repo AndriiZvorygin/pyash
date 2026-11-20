@@ -297,3 +297,53 @@ test("vocab_suggest reports the accepted cluster-compress compound", async () =>
   }]);
   assert.match(lines.join("\n"), /cluster-compress: found compound cluster \+ compress -> ksus hzip \(accepted-curated\)/u);
 });
+
+test("Chinese dictionary lookup prefers curated multi-atom compounds over component rows", async () => {
+  const cases = [
+    {
+      args: ["bjin hnuc gjat", "to", "zh"],
+      target: "prediction value",
+      gloss: "the numerical quantity produced as a prediction for one item",
+      components: ["bjin", "hnuc", "gjat"],
+      sequence: ["bjin", "hnuc", "gjat"]
+    },
+    {
+      args: ["hrec", "nyac", "hnuc", "gjat", "to", "zh"],
+      target: "reference point value",
+      gloss: "the numerical value assigned to a reference point for comparison with a prediction",
+      components: ["hrec", "nyac", "hnuc", "gjat"],
+      sequence: ["hrec", "nyac", "hnuc", "gjat"]
+    },
+    {
+      args: ["prediction", "value", "to", "zh"],
+      target: "prediction value",
+      gloss: "the numerical quantity produced as a prediction for one item",
+      components: ["prediction", "value"],
+      sequence: ["bjin", "hnuc", "gjat"]
+    },
+    {
+      args: ["prediction value", "to", "zh"],
+      target: "prediction value",
+      gloss: "the numerical quantity produced as a prediction for one item",
+      components: ["prediction", "value"],
+      sequence: ["bjin", "hnuc", "gjat"]
+    }
+  ];
+
+  for (const { args, target, gloss, components, sequence } of cases) {
+    const lines = [];
+    const result = await runVocabSuggest(args, { report: (line) => lines.push(String(line)) });
+    assert.equal(result.exitCode, 0);
+    assert.ok(lines.some((line) => line.includes(`English compound gloss ${gloss}`)));
+    for (const component of components) {
+      assert.equal(lines.some((line) => line.startsWith(`${component}: `)), false, `${component} should be resolved as part of ${target}`);
+    }
+    assert.ok(result.foundCompounds.some((compound) => (
+      compound.target === target && compound.gloss === gloss && compound.pyash.join(" ") === sequence.join(" ")
+    )));
+  }
+
+  const atomLines = [];
+  await runVocabSuggest(["bjin", "to", "zh"], { report: (line) => atomLines.push(String(line)) });
+  assert.ok(atomLines.some((line) => line.startsWith("bjin: ")));
+});
