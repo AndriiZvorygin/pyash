@@ -31,6 +31,11 @@ Optional names
 - `configure/`       Project-local configuration
 - `world/`           Runtime state for agents, scheduler, channels, and newspaper
 
+Shared installed library data
+- `program/library/dictionary/` Published, versioned Pyac VLIW dictionary
+  volumes. Trusted vocabulary agents maintain repository changes through
+  version control; runtime consumers read published volumes read-only.
+
 
 ### Mapping from common shorthand
 

@@ -2,13 +2,13 @@
 
 Status: temporary vocabulary-agent worksheet. Update this file while curating
 the first dictionary content; do not treat it as the dictionary database or
-as a substitute for the canonical vocabulary catalogs. The permanent location
-for compiled dictionary volumes has not been selected.
+as a substitute for the canonical vocabulary catalogs. Published compiled
+volumes are planned for `program/library/dictionary/`.
 
 See the [dictionary format and workflow reference](../reference/pyac-vliw-dictionary.md)
 for the profile marker, serialized record contract, and Rust reader/writer.
-Use the [repository hierarchy](../guideline/hierarchy.md) when proposing the
-eventual storage location.
+Use the [repository hierarchy](../guideline/hierarchy.md) for the
+library/runtime boundary.
 
 ## Decisions already recorded
 

@@ -2,7 +2,9 @@
 
 Status: implemented Rust writer and seek-based reader for the v1 dictionary
 volume, with in-memory binary-search indexes rebuilt from its VLIW sentences.
-The writer accepts already-lowered definition codelets; it does not translate
+The selected permanent location for published volumes is
+`program/library/dictionary/`. No production volume is stored there yet. The
+writer accepts already-lowered definition codelets; it does not translate
 Pyash source text. The profile organizes a searchable, multilingual dictionary
 as ordinary Pyash sentences encoded in the existing `.pyac` VLIW format.
 
@@ -308,5 +310,7 @@ For each proposed dictionary entry, agents should:
 
 The Rust writer currently consumes `DictionaryVolume` values with already-
 lowered definition codelets; there is not yet an importer from this workbook
-or from vocabulary catalogs. The permanent compiled-volume location is also
-undecided. See `documentation/guideline/hierarchy.md` before proposing one.
+or from vocabulary catalogs. Vocabulary agents may maintain the tracked
+library volume through trusted, version-controlled updates; runtime/model
+workers consume the published file read-only. The authoring importer and
+release step remain to be automated.
