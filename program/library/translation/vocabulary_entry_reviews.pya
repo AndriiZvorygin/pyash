@@ -1,0 +1,4 @@
+su name translation_vocabulary_entry_reviews be map def
+su text "format" ob text "vocabulary-entry-review-v1" ya
+su text "vocabulary-review-a688ce01c93a2d7d9d5e3e94" ob text "{\"reviewId\":\"vocabulary-review-a688ce01c93a2d7d9d5e3e94\",\"target\":\"identifier\",\"gloss\":\"a symbol that establishes the identity of the one bearing it\",\"pyashSequence\":[\"hdif\",\"tyec\"],\"senseId\":\"n:07285306-n\",\"targetPartOfSpeech\":\"n\",\"reviewStatus\":\"accepted-curated\",\"modelStatus\":\"accepted-llm\",\"evidence\":\"The identifier is an identity tag: the symbol establishes the identity of the person or thing bearing it. The compound is head-final, identity + tag.\",\"coverageTarget\":\"identifier\",\"bridgeManaged\":true}" ya
+prah

@@ -43156,4 +43156,7 @@ su text "sense-lemma:v:90009391-v:1" ob text "screenshot" ya
 su text "v:90011761-v" ob name "bricks" as text "v" with text "deterministic" via text "frequency-first anchor allocation: exact lemma brick at English30k rank 4875; no exact-key Princeton tag count (sense key unmatched exact lexical key)" ya
 su text "sense-gloss:v:90011761-v" ob text "To stop working (of an electronic device)" ya
 su text "sense-lemma:v:90011761-v:1" ob text "brick" ya
+su text "n:07285306-n" ob name "identifier" as text "n" with text "contextual" via text "vocabulary-entry-review:vocabulary-review-a688ce01c93a2d7d9d5e3e94; The identifier is an identity tag: the symbol establishes the identity of the person or thing bearing it. The compound is head-final, identity + tag." ya
+su text "sense-gloss:n:07285306-n" ob text "a symbol that establishes the identity of the one bearing it" ya
+su text "sense-lemma:n:07285306-n:1" ob text "identifier" ya
 prah
