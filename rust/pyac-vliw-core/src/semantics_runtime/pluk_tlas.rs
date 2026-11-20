@@ -1,3 +1,5 @@
+use super::mutable_vector::mutable_vector_declaration;
+use super::scalar_product::{scalar_product_destination, scalar_product_group};
 use super::vector_group::{interpret_vector_group, vector_name_span};
 use super::*;
 
@@ -35,6 +37,23 @@ struct ParsedOperation {
     fields: [SentenceField; 9],
     field_count: usize,
     verb: TokenSpan,
+}
+
+#[derive(Clone, Copy)]
+struct VectorResolution {
+    present: u32,
+    vector: CoreResult,
+    mutable: u32,
+    declaration_start: usize,
+}
+
+impl VectorResolution {
+    const EMPTY: Self = Self {
+        present: 0,
+        vector: CoreResult::empty(),
+        mutable: 0,
+        declaration_start: 0,
+    };
 }
 
 fn is_boundary(words: &[u32], codelet: usize, slot: usize) -> bool {
@@ -91,6 +110,7 @@ fn is_case(role: u32) -> bool {
             | ACCUSATIVE
             | ESSIVE
             | DESTINATION
+            | LOCATIVE
             | SOURCE
             | COMITATIVE
             | INSTRUMENTAL
@@ -261,7 +281,7 @@ fn resolve_vector(
     reference: TokenSpan,
 ) -> Result<CoreResult, u32> {
     let mut cursor = 0usize;
-    let mut found = None;
+    let mut found = VectorResolution::EMPTY;
     while cursor < before {
         let length = group_length(words, cursor, codelet_count).ok_or(ERROR_MALFORMED)?;
         if cursor + length > before {
@@ -277,7 +297,7 @@ fn resolve_vector(
                 length,
                 name,
             ) {
-                if found.is_some() {
+                if found.present != 0 {
                     return Err(ERROR_MALFORMED);
                 }
                 let decoded = if length == 1 {
@@ -292,12 +312,86 @@ fn resolve_vector(
                 if decoded.value_kind != VALUE_VECTOR_FLOAT32 {
                     return Err(ERROR_UNSUPPORTED);
                 }
-                found = Some(decoded);
+                found = VectorResolution {
+                    present: 1,
+                    vector: decoded,
+                    mutable: 0,
+                    declaration_start: cursor,
+                };
+            }
+        }
+        if let Ok((name, vector_length)) = mutable_vector_declaration(words, cursor, length) {
+            if names_equal(
+                words,
+                reference_start,
+                reference_group_len,
+                reference,
+                cursor,
+                length,
+                name,
+            ) {
+                if found.present != 0 {
+                    return Err(ERROR_MALFORMED);
+                }
+                let mut vector = CoreResult::empty();
+                vector.value_kind = VALUE_VECTOR_FLOAT32;
+                vector.length = vector_length as u32;
+                vector.consumed_codelets = length as u32;
+                found = VectorResolution {
+                    present: 1,
+                    vector,
+                    mutable: 1,
+                    declaration_start: cursor,
+                };
+            }
+        }
+        if let Ok(destination) = scalar_product_destination(words, cursor, length) {
+            if destination.present != 0
+                && names_equal(
+                    words,
+                    reference_start,
+                    reference_group_len,
+                    reference,
+                    cursor,
+                    length,
+                    destination.name,
+                )
+            {
+                if found.present == 0 {
+                    return Err(ERROR_UNSUPPORTED);
+                }
+                if found.mutable == 0 {
+                    return Err(ERROR_CONSTANT_WRITE);
+                }
+                if cursor < found.declaration_start
+                    || destination.index >= found.vector.length as usize
+                {
+                    return Err(ERROR_VECTOR_WIDTH);
+                }
+                let result =
+                    scalar_product_group(words, cursor, length).ok_or(ERROR_UNSUPPORTED)?;
+                if result.error != 0 {
+                    return Err(result.error);
+                }
+                if result.value_kind != VALUE_FLOAT32 {
+                    return Err(ERROR_UNSUPPORTED);
+                }
+                let mut vector = found.vector;
+                array_put!(
+                    &mut vector.values,
+                    destination.index,
+                    array_at!(result.values, 0)
+                );
+                found.vector = vector;
             }
         }
         cursor += length;
     }
-    found.ok_or(ERROR_UNSUPPORTED)
+    if found.present == 0 {
+        Err(ERROR_UNSUPPORTED)
+    } else {
+        Ok(found.vector)
+    }
 }
 
 pub(super) fn pluk_tlas_group(

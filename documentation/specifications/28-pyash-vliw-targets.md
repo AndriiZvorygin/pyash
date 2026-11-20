@@ -224,9 +224,14 @@ ob ve float32 1 2 3 by ve float32 4 5 6 be kl6m psas do
 ```
 
 `ob` and `by` are the left and right vectors; `do` requests the operation.
-There is no `to` result-name case: execution returns one typed scalar. The
-executable verb is HNUCs `0x0D62 0x8944`; WordNet/SUMO links remain catalog
-metadata.
+The sentence returns a typed scalar and may also store it in a preceding
+mutable float32 vector using `to name <vector> at num <lane>`.
+
+The declaration creates a zeroed vector with one to 16 lanes. `to` names it;
+`at` is the zero-based lane. The destination MUST be declared earlier and the
+lane MUST be in range. Writes apply in source order; omitted `to`/`at` keeps the
+operation scalar-only. The executable verb is HNUCs `0x0D62 0x8944`;
+WordNet/SUMO links remain catalog metadata.
 
 Operands MUST be finite, non-empty float32 or float64 vectors of matching type
 and equal length, from one to `MAX_VECTOR_LANES` (currently 16). Multiply
@@ -240,8 +245,8 @@ MUST preserve the specified operation order and precision.
 
 ## 11. Exact-match count (`pluk tlas`)
 
-This evaluator compares two previously declared, named float32 vectors in one
-PyAC pack. Its typed Pyash signature is:
+This evaluator compares two named float32 vectors in one PyAC pack. Its typed
+Pyash signature is:
 
 ```pyash
 ob name prediction value
@@ -252,8 +257,9 @@ be pluk tlas do
 
 The `ob` and `by` fields are references, not inline vector literals. Each MUST
 resolve to exactly one preceding named float32 vector declaration in the same
-pack. Both vectors MUST have the same nonzero width (at most 16) and finite
-lanes. The result is the number of corresponding lanes equal under exact
+pack. A mutable prediction vector may be populated by earlier indexed dot
+products; unwritten lanes stay zero. Both vectors MUST have equal nonzero width
+(at most 16) and finite lanes. The result counts corresponding lanes equal under exact
 IEEE-754 binary32 numeric comparison; there is no tolerance, and positive and
 negative zero compare equal. Return one unsigned scalar in the range 0 to 16.
 

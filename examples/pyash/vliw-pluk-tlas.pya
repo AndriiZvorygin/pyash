@@ -1,3 +1,6 @@
-su name prediction ob ve float32 1 2 3 be vector ya
-su name answer ob ve float32 1 2 4 be vector ya
+exists su name prediction via state "vector float32" by num 3 be variable ya
+ob ve float32 1 2 by ve float32 1 2 to name prediction at num 0 be kl6m psas do
+ob ve float32 2 1 by ve float32 1 2 to name prediction at num 1 be kl6m psas do
+ob ve float32 3 0 by ve float32 1 2 to name prediction at num 2 be kl6m psas do
+su name answer ob ve float32 5 4 3 be vector ya
 ob name prediction by name answer to name num count be pluk tlas do

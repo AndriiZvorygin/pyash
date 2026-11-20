@@ -104,6 +104,57 @@ fn append_evaluation(words: &mut std::vec::Vec<u32>, prediction: u32, answer: u3
     append_group(words, &tokens, &[2, 7, 10, 13])
 }
 
+fn append_mutable_vector(words: &mut std::vec::Vec<u32>, name: u32, length: u32) {
+    let mut tokens = std::vec![NAME_TYPE, name, NOMINATIVE, QUOTED_GRAMMAR, 0];
+    for text in [
+        b"state".as_slice(),
+        b"vector float32".as_slice(),
+        b"state".as_slice(),
+    ] {
+        tokens.extend([0x0e1d, text.len() as u32]);
+        tokens.extend(text.iter().map(|byte| u32::from(*byte)));
+        tokens.push(0);
+    }
+    tokens.push(QUOTED_GRAMMAR);
+    tokens.extend([ESSIVE, NUMBER_QUOTE, length, INSTRUMENTAL, VARIABLE, REALIS]);
+    append_group(
+        words,
+        &tokens,
+        &[2, tokens.len() - 6, tokens.len() - 3, tokens.len() - 1],
+    );
+}
+
+fn append_f32_pair(tokens: &mut std::vec::Vec<u32>, values: [f32; 2]) {
+    tokens.push(0xd11d);
+    for value in values {
+        let bits = value.to_bits();
+        tokens.extend([bits & 0xffff, bits >> 16]);
+    }
+}
+
+fn append_dot_store(
+    words: &mut std::vec::Vec<u32>,
+    name: u32,
+    index: u32,
+    left: [f32; 2],
+    right: [f32; 2],
+) {
+    let mut tokens = std::vec::Vec::new();
+    append_f32_pair(&mut tokens, left);
+    tokens.extend([
+        ACCUSATIVE,
+        NAME_TYPE,
+        name,
+        DESTINATION,
+        NUMBER_QUOTE,
+        index,
+        LOCATIVE,
+    ]);
+    append_f32_pair(&mut tokens, right);
+    tokens.extend([INSTRUMENTAL, 0x0d62, 0x8944, DEONTIC]);
+    append_group(words, &tokens, &[5, 8, 11, 17, 20]);
+}
+
 fn evaluate(predicted: &[f32], expected: &[f32]) -> CoreResult {
     let mut words = std::vec::Vec::new();
     append_f32_vector(&mut words, PREDICTION, predicted);
@@ -125,6 +176,65 @@ fn counts_exact_float32_matches_between_named_vectors() {
     assert_eq!(result.length, 1);
     assert_eq!(result.values[0], 2);
     assert_eq!(result.consumed_codelets, 1);
+}
+
+#[test]
+fn declares_a_zero_initialized_float32_vector_from_tagged_state_and_length() {
+    let mut words = std::vec::Vec::new();
+    append_mutable_vector(&mut words, PREDICTION, 3);
+    let decoded = super::super::mutable_vector::mutable_vector_declaration(
+        &words,
+        0,
+        words.len() / CODELET_WORDS,
+    );
+    assert_eq!(decoded.map(|(_, length)| length), Ok(3));
+    let result = interpret_group(&words, 0, words.len() / CODELET_WORDS);
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.value_kind, VALUE_VECTOR_FLOAT32);
+    assert_eq!(result.length, 3);
+    assert_eq!(&result.values[..3], &[0, 0, 0]);
+}
+
+#[test]
+fn pluk_tlas_collects_indexed_dot_products_and_leaves_unwritten_lanes_zero() {
+    let mut words = std::vec::Vec::new();
+    append_mutable_vector(&mut words, PREDICTION, 3);
+    append_dot_store(&mut words, PREDICTION, 1, [2.0, 1.0], [1.0, 2.0]);
+    append_f32_vector(&mut words, ANSWER, &[0.0, 4.0, 0.0]);
+    let start = append_evaluation(&mut words, PREDICTION, ANSWER);
+    let result = interpret_group(&words, start, words.len() / CODELET_WORDS);
+
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.value_kind, VALUE_UNSIGNED);
+    assert_eq!(result.values[0], 3);
+}
+
+#[test]
+fn pluk_tlas_uses_source_order_for_repeated_indexed_writes() {
+    let mut words = std::vec::Vec::new();
+    append_mutable_vector(&mut words, PREDICTION, 2);
+    append_dot_store(&mut words, PREDICTION, 0, [1.0, 1.0], [1.0, 1.0]);
+    append_dot_store(&mut words, PREDICTION, 0, [2.0, 1.0], [1.0, 2.0]);
+    append_f32_vector(&mut words, ANSWER, &[4.0, 0.0]);
+    let start = append_evaluation(&mut words, PREDICTION, ANSWER);
+    let result = interpret_group(&words, start, words.len() / CODELET_WORDS);
+
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.values[0], 2);
+}
+
+#[test]
+fn rejects_a_dot_product_store_outside_the_declared_vector() {
+    let mut words = std::vec::Vec::new();
+    append_mutable_vector(&mut words, PREDICTION, 2);
+    append_dot_store(&mut words, PREDICTION, 2, [1.0, 1.0], [1.0, 1.0]);
+    append_f32_vector(&mut words, ANSWER, &[1.0, 1.0]);
+    let start = append_evaluation(&mut words, PREDICTION, ANSWER);
+
+    assert_eq!(
+        interpret_group(&words, start, words.len() / CODELET_WORDS).error,
+        ERROR_VECTOR_WIDTH
+    );
 }
 
 #[test]

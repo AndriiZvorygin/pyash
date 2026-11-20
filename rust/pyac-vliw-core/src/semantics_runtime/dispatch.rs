@@ -1,3 +1,4 @@
+use super::mutable_vector::mutable_vector_group;
 use super::pluk_tlas::pluk_tlas_group;
 use super::scalar_product::scalar_product_group;
 use super::vector_group::interpret_vector_group;
@@ -19,6 +20,9 @@ pub fn interpret_group(words: &[u32], start: usize, codelet_count: usize) -> Cor
         return result;
     }
     if let Some(result) = scalar_product_group(words, start, group_len) {
+        return result;
+    }
+    if let Some(result) = mutable_vector_group(words, start, group_len) {
         return result;
     }
     if group_len == 1 {

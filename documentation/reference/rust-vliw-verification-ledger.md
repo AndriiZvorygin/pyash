@@ -192,3 +192,28 @@ the Vulkan shader produced the same SPIR-V hash recorded by this live run. The
 WGSL build omits native 64-bit shader types and rejects float64 dot products;
 float32 dot products remain supported there. Housekeeper idled the VLIW
 container after the run; the next managed request starts it on demand.
+
+## 2026-11-20: Mutable Prediction Vector
+
+**Run record:** `artifacts/20261120-0002-rust-vliw-conformance/result.pya`
+
+| Field | Evidence |
+| --- | --- |
+| Source revision | `616b6313a4ee03dc2926fed38da08bd8593c67d7`, dirty tree; run patch SHA-256 `c409c7fb7adba4d19ab544033b892d1d911fd17dcd3bbc1164aa0207ed226e9e` |
+| Host and GPU | Mriczo; RTX 3090, driver `550.163.01`, 24,576 MiB |
+| Runtime image | `sha256:47f1c4f9be0abc1c8020bd03efdfe0aec5830c1c534fad70a7a6d496b2a1d18a` |
+| Live GPU results | 47/47 cases passed, including mutable-vector dot-product collection; 2/2 expected errors passed |
+| Run wall time | 6,604.662 ms |
+| CPU batches | 29 codelet cases: 60.532 ms; 18 sections: 55.366 ms |
+| GPU kernel | Codelet batch: 0.609 ms; section batch: 67.285 ms |
+| GPU client round trip | Codelet batch: 3,011.818 ms; section batch: 1,004.206 ms |
+| Pipeline-cache generation | 74.05 s total: pack 37.22 s, programlet 18.85 s, sections 17.65 s |
+| Executables | CPU reference 10,168,568 bytes; GPU runtime 9,086,432 bytes; GPU worker 7,394,016 bytes |
+| GPU artifacts | SPIR-V 3,440,244 bytes; persisted pipeline cache 12,609,996 bytes |
+
+The new case declares `prediction` as zero-initialized mutable float32 state,
+writes three dot-product results to indexed lanes, then passes that vector to
+`pluk tlas`. CPU and GPU both produce `[5,4,3]` and an exact-match count of 3.
+The result vector is `[5,4,3]`, with exact-match count `3`. Complete hashes,
+per-request queue/service/kernel timings, and the case list are in the `.pya`
+run record.

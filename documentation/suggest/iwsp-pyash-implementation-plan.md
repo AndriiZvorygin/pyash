@@ -690,12 +690,13 @@ selected only after checking the current Pyash cases, vocabulary inventory, and
 relevant specifications. Numeric formats are not a gate to the first framework slice.
 
 Current position: typed float32/float64 vectors and float-vector dot product are
-implemented in the shared VLIW runtime. The `pluk tlas` exact-match count is now a
-second shared evaluation primitive, using named float32 vector inputs and returning
-an unsigned count. This is a judge primitive, not a complete isolated evaluator or
-candidate-scoring pipeline. The next work is to connect trusted evaluation and its
-task/data contract, then exercise useful scoring workflows without duplicating
-semantic implementations in JavaScript.
+implemented in the shared VLIW runtime. The `pluk tlas` exact-match count is a
+second shared evaluation primitive, using named float32 vectors and returning an
+unsigned count. Indexed dot-product results can populate a zero-initialized named
+float32 prediction vector. This is a judge primitive, not a complete isolated
+evaluator or candidate-scoring pipeline. The next work is to connect trusted
+evaluation and its task/data contract, then exercise useful scoring workflows
+without duplicating semantic implementations in JavaScript.
 
 ### Stage 0 — Fix the task and trust contract
 
@@ -715,7 +716,8 @@ alone owns. No new Pyash surface is committed at this stage.
 
 ### Stage 0.1 — Add an exact-match judge primitive (implemented)
 
-The shared Rust VLIW runtime accepts named float32 vector declarations followed by:
+The shared Rust VLIW runtime accepts a mutable float32 prediction vector, indexed
+dot-product writes, a named answer vector, and:
 
 ```pyash
 ob name prediction value
@@ -724,10 +726,13 @@ to name num correct count
 be pluk tlas do
 ```
 
-The operation resolves each reference to one preceding named vector in the same pack,
-requires equal nonzero widths and finite float32 values, and returns the exact-equality
-count as an unsigned numeric scalar. JavaScript only lowers the sentence; CPU and GPU
-use the shared Rust semantics. The runnable source fixture is
+Each dot product returns its scalar and may store it with `to name prediction at num 0`.
+The mutable-vector declaration's `state` quote and count choose a zero-initialized
+float32 vector; stores apply in source order. The evaluator resolves each reference
+to one preceding named vector in the same pack, requires equal nonzero widths and
+finite float32 values, and returns the exact-equality count as an unsigned numeric
+scalar. JavaScript only lowers the sentences; CPU and GPU use the shared Rust
+semantics. The runnable source fixture is
 `examples/pyash/vliw-pluk-tlas.pya`.
 
 **Acceptance evidence:** Rust core tests cover exact equality, one-ULP differences,

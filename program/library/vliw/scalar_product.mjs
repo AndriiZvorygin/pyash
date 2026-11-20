@@ -16,9 +16,22 @@ export function normalizeScalarProductSentence(sentence) {
     throw invalid("unsupported-sentence", "scalar product requires mood do and verb kl6m psas");
   }
   const keys = Object.keys(sentence).sort();
-  if (keys.join(",") !== "be,by,mood,ob") {
-    throw invalid("unsupported-sentence", "scalar product requires exactly mood, ob, by, and be", {
+  const storesLane = sentence.to !== undefined || sentence.at !== undefined;
+  const expected = storesLane ? "at,be,by,mood,ob,to" : "be,by,mood,ob";
+  if (keys.join(",") !== expected) {
+    throw invalid("unsupported-sentence", "scalar product requires ob and by, with an optional indexed vector destination", {
       keys
+    });
+  }
+  if (storesLane && (
+    !sentence.to || Object.keys(sentence.to).join(",") !== "name"
+    || typeof sentence.to.name !== "string" || !sentence.to.name.trim()
+    || !sentence.at || Object.keys(sentence.at).join(",") !== "num"
+    || !Number.isInteger(sentence.at.num) || sentence.at.num < 0 || sentence.at.num > 0xffff
+  )) {
+    throw invalid("unsupported-sentence", "scalar product destination requires to name <vector> at num <index>", {
+      to: sentence.to,
+      at: sentence.at
     });
   }
   const left = normalizeOperand(sentence.ob, "ob");
@@ -35,7 +48,13 @@ export function normalizeScalarProductSentence(sentence) {
       right: right.values.length
     });
   }
-  return { mood: "do", ob: { ve: left }, by: { ve: right }, be: OPERATION };
+  return {
+    mood: "do",
+    ob: { ve: left },
+    ...(storesLane ? { to: sentence.to, at: sentence.at } : {}),
+    by: { ve: right },
+    be: OPERATION
+  };
 }
 
 function normalizeOperand(value, role) {

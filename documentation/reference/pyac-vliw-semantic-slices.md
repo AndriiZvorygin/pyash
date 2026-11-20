@@ -109,24 +109,32 @@ not the semantic oracle.
 ## Exact-match evaluation (`pluk tlas`)
 
 The Rust reference runtime also supports an exact-match judge over named
-float32 vectors. The source fixture is
+float32 vectors. A prediction vector can be initialized as mutable state and
+filled by indexed dot-product results. The source fixture is
 `examples/pyash/vliw-pluk-tlas.pya`:
 
 ```pyash
-su name prediction ob ve float32 1 2 3 be vector ya
-su name answer ob ve float32 1 2 4 be vector ya
+exists su name prediction via state "vector float32" by num 3 be variable ya
+ob ve float32 1 2 by ve float32 1 2 to name prediction at num 0 be kl6m psas do
+ob ve float32 2 1 by ve float32 1 2 to name prediction at num 1 be kl6m psas do
+ob ve float32 3 0 by ve float32 1 2 to name prediction at num 2 be kl6m psas do
+su name answer ob ve float32 5 4 3 be vector ya
 ob name prediction by name answer to name num count be pluk tlas do
 ```
 
-The `ob` and `by` fields resolve the preceding named vector declarations;
-`to name num count` declares the numeric result. The shared Rust implementation
-returns unsigned `2`, counting lanes that compare equal under exact binary32
-equality. Signed zeros compare equal; no epsilon is used. Inputs must be finite,
-float32, non-empty, and equal-width. Missing or duplicate bindings, other vector
-types, malformed declarations, and width mismatches fail explicitly. Rust core
-tests cover shape and equality edges; the public Rust pack executor test confirms
-the complete pack result. The JavaScript quiz verifies source lowering and the
-legacy HNUC/case codelet, but intentionally contains no scoring implementation.
+The declaration creates three zeroed float32 lanes. Each optional dot-product
+destination writes its computed scalar into the named lane; `at` is zero-based,
+and repeated writes resolve in source order. The `ob` and `by` evaluator fields
+resolve the preceding vector declarations; `to name num count` declares the
+numeric result. The shared Rust implementation returns unsigned `2`, counting
+lanes that compare equal under exact binary32 equality. Signed zeros compare
+equal; no epsilon is used. Inputs must be finite, float32, non-empty, and
+equal-width. Missing or duplicate bindings, invalid destinations, out-of-range
+lanes, other vector types, malformed declarations, and width mismatches fail
+explicitly. Rust core tests cover zero initialization, collected writes,
+source-order replacement, bounds, shape and equality edges. The JavaScript quiz
+drives the full pack through the Rust CPU reference and contains no scoring
+implementation.
 
 ## Generic fixed-slot decoding
 

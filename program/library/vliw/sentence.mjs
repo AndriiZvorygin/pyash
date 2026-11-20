@@ -38,6 +38,7 @@ const ROLE_ENTRIES = Object.freeze({
   as: "essive_case_",
   from: "source_case_",
   to: "destination_case_",
+  at: "locative_case_",
   by: "instrumental_case_",
   with: "comitative_case_",
   fromindex: "multiplicative_case_",

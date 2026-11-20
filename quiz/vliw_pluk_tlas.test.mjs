@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 
 import { parse } from "../program/understand/index.mjs";
 import { lowerSentence } from "../program/library/vliw/index.mjs";
+import { encodePyacPack } from "../program/library/vliw/database.mjs";
+import { executeRustCpuReference } from "../command/vliw_gpu_conformance.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const source = fs.readFileSync(path.join(root, "examples/pyash/vliw-pluk-tlas.pya"), "utf8");
@@ -15,7 +17,7 @@ const loweredProgram = source
   .flatMap((line) => lowerSentence(parse(line)));
 
 test("pluk tlas lowers its typed named-vector evaluation signature without JS scoring", () => {
-  const lowered = loweredProgram[2];
+  const lowered = loweredProgram.find((item) => item.semantic === "pluk-tlas");
 
   assert.equal(lowered.semantic, "pluk-tlas");
   assert.deepEqual(Array.from(lowered.words.slice(0, 15)), [
@@ -46,4 +48,32 @@ test("pluk tlas requires named vector references and a num output", () => {
     () => lowerSentence(parse("ob name prediction by name answer to name text count be pluk tlas do")),
     (error) => error.code === "unsupported-sentence"
   );
+});
+
+test("mutable prediction vectors require a supported float32 lane count", () => {
+  assert.throws(
+    () => lowerSentence(parse('exists su name prediction via state "vector float32" by num 17 be variable ya')),
+    (error) => error.code === "unsupported-vector-width"
+  );
+  assert.throws(
+    () => lowerSentence(parse("ob ve float32 1 by ve float32 1 to name prediction be kl6m psas do")),
+    (error) => error.code === "unsupported-sentence"
+  );
+});
+
+test("dot products write indexed lanes of a zero-initialized vector consumed by pluk tlas", async () => {
+  const codelets = source
+    .split(/\n/u)
+    .filter((line) => line.trim())
+    .flatMap((line) => lowerSentence(parse(line)).map(({ words }) => words));
+  const [results] = executeRustCpuReference([encodePyacPack(codelets)]);
+
+  assert.deepEqual(results, [
+    { type: "vector", elementType: "float32", values: [0, 0, 0] },
+    { type: "float32", value: 5 },
+    { type: "float32", value: 4 },
+    { type: "float32", value: 3 },
+    { type: "vector", elementType: "float32", values: [5, 4, 3] },
+    { type: "unsigned", value: 3 }
+  ]);
 });

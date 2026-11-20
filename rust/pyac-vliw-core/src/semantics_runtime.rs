@@ -199,10 +199,12 @@ impl CoreResult {
 
 const NUMBER_QUOTE: u32 = 0x881d;
 const DATE_QUOTE: u32 = 0x981d;
+const QUOTED_GRAMMAR: u32 = 0x229e;
 const ACCUSATIVE: u32 = 0x245e;
 const NOMINATIVE: u32 = 0x24de;
 const SOURCE: u32 = 0x313e;
 const DESTINATION: u32 = 0x243e;
+const LOCATIVE: u32 = 0x615f;
 const COMITATIVE: u32 = 0x490f;
 const INSTRUMENTAL: u32 = 0x287e;
 const DATIVE: u32 = 0x207e;
@@ -433,9 +435,9 @@ impl BooleanEvalFrame {
 }
 
 #[derive(Clone, Copy)]
-struct NameSpan {
-    start: usize,
-    length: usize,
+pub(crate) struct NameSpan {
+    pub(crate) start: usize,
+    pub(crate) length: usize,
 }
 
 impl NameSpan {
@@ -465,6 +467,8 @@ mod dispatch;
 mod fixed16;
 #[path = "semantics_runtime/float.rs"]
 mod float;
+#[path = "semantics_runtime/mutable_vector.rs"]
+mod mutable_vector;
 #[path = "semantics_runtime/numeric.rs"]
 mod numeric;
 #[path = "semantics_runtime/pluk_tlas.rs"]

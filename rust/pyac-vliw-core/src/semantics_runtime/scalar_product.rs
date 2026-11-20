@@ -1,10 +1,11 @@
-use super::numeric::{QuoteHeader, quote_header, word};
+use super::numeric::{quote_header, word, QuoteHeader};
 use super::*;
 
 const SCALAR_WORD: u32 = 0x0d62;
 const PRODUCE_WORD: u32 = 0x8944;
 
 struct Cursor {
+    start: usize,
     codelet: usize,
     slot: usize,
     end: usize,
@@ -22,6 +23,20 @@ fn boundary_at(words: &[u32], codelet: usize, slot: usize) -> bool {
 }
 
 impl Cursor {
+    fn peek(&self, words: &[u32], boundary: bool) -> Option<u32> {
+        if self.codelet >= self.end
+            || self.slot >= CODELET_WORDS
+            || boundary_at(words, self.codelet, self.slot) != boundary
+        {
+            return None;
+        }
+        Some(word(words, self.codelet, self.slot))
+    }
+
+    fn offset(&self) -> usize {
+        (self.codelet - self.start) * (CODELET_WORDS - 1) + self.slot - 1
+    }
+
     fn read(&mut self, words: &[u32], boundary: bool) -> Option<u32> {
         if self.codelet >= self.end || self.slot >= CODELET_WORDS {
             return None;
@@ -53,6 +68,74 @@ impl Cursor {
         }
         true
     }
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct ScalarProductDestination {
+    pub(super) present: u32,
+    pub(super) name: NameSpan,
+    pub(super) index: usize,
+}
+
+impl ScalarProductDestination {
+    const NONE: Self = Self {
+        present: 0,
+        name: NameSpan::EMPTY,
+        index: 0,
+    };
+}
+
+fn read_destination(words: &[u32], cursor: &mut Cursor) -> Result<ScalarProductDestination, u32> {
+    if cursor.peek(words, false) != Some(NAME_TYPE) {
+        return Ok(ScalarProductDestination::NONE);
+    }
+    cursor.read(words, false).ok_or(ERROR_MALFORMED)?;
+    let name_start = cursor.offset();
+    let mut name_length = 0;
+    while cursor.peek(words, false).is_some() {
+        cursor.read(words, false).ok_or(ERROR_MALFORMED)?;
+        name_length += 1;
+    }
+    if name_length == 0 || cursor.read(words, true) != Some(DESTINATION) {
+        return Err(ERROR_MALFORMED);
+    }
+    if cursor.read(words, false) != Some(NUMBER_QUOTE) {
+        return Err(ERROR_MALFORMED);
+    }
+    let index = cursor.read(words, false).ok_or(ERROR_MALFORMED)? as usize;
+    if index > MAX_U16 as usize || cursor.read(words, true) != Some(LOCATIVE) {
+        return Err(ERROR_MALFORMED);
+    }
+    Ok(ScalarProductDestination {
+        present: 1,
+        name: NameSpan {
+            start: name_start,
+            length: name_length,
+        },
+        index,
+    })
+}
+
+pub(super) fn scalar_product_destination(
+    words: &[u32],
+    start: usize,
+    group_len: usize,
+) -> Result<ScalarProductDestination, u32> {
+    let end = start + group_len;
+    if group_len == 0 || !operation_suffix(words, start, end) {
+        return Ok(ScalarProductDestination::NONE);
+    }
+    let mut cursor = Cursor {
+        start,
+        codelet: start,
+        slot: 1,
+        end,
+    };
+    read_vector(&mut cursor, words)?;
+    if cursor.read(words, true) != Some(ACCUSATIVE) {
+        return Err(ERROR_MALFORMED);
+    }
+    read_destination(words, &mut cursor)
 }
 
 fn vector_length(header: QuoteHeader, cursor: &mut Cursor, words: &[u32]) -> Result<usize, u32> {
@@ -156,6 +239,7 @@ pub(super) fn scalar_product_group(
         return None;
     }
     let mut cursor = Cursor {
+        start,
         codelet: start,
         slot: 1,
         end,
@@ -166,6 +250,10 @@ pub(super) fn scalar_product_group(
     };
     if cursor.read(words, true) != Some(ACCUSATIVE) {
         return Some(CoreResult::failure(ERROR_MALFORMED, group_len as u32));
+    }
+    match read_destination(words, &mut cursor) {
+        Ok(_) => {}
+        Err(error) => return Some(CoreResult::failure(error, group_len as u32)),
     }
     let right = match read_vector(&mut cursor, words) {
         Ok(value) => value,
