@@ -25,6 +25,8 @@ Use this skill when adding or updating Pyash atoms, compounds, English forms, or
   `node command/vocab_atom_suggest.mjs "new concept"`
 - Add a compound from existing atoms (replace the placeholders):
   `node command/compound_catalog_add.mjs "<target>" "<English gloss>" <modifier> <head>`
+- Build the disambiguated VLIW compound projection:
+  `node command/vliw_dictionary_compounds.mjs`
 - Record or update one vocabulary entry's WordNet review:
   `node command/vocabulary_entry_review.mjs <one-entry.pya>`
 
@@ -160,6 +162,23 @@ not edit the acquired Kwon data.
 The entry review command updates the canonical catalogs, but Kwon's generated
 sidecar indexes can lag. Run `node command/vocab_lookup_index.mjs` when the new
 accepted link must be available to lookup immediately.
+
+### VLIW compound dictionary projection
+
+`node command/vliw_dictionary_compounds.mjs` builds the ignored
+`examples/out/vliw_dictionary_compounds.pya` projection from the canonical
+curated and WordNet verified compound catalogs. It selects one English target
+for each exact Pyash sequence so the dictionary index receives one meaning per
+key. Accepted-LLM and repaired-LLM rows are eligible accepted vocabulary; they
+do not require a separate manual-promotion step. Curated rows compete under the
+same frequency rule.
+
+Selection uses English30k rank ascending, then exact WordNet sense tag count
+descending when both candidates have counts, then fewer Unicode letters after
+ignoring spaces and dashes, normalized target, part of speech, and sense ID.
+The output keeps the selected WordNet source link and candidate identifiers;
+the canonical catalogs remain the source of all accepted alternatives. Rebuild
+the projection after changing either catalog or the frequency data.
 
 ## Canonical words over legacy aliases
 
