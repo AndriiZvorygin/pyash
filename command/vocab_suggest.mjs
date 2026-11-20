@@ -245,6 +245,7 @@ function acceptedCompoundRow(payload) {
     : [];
   return {
     target,
+    gloss: typeof payload?.gloss === "string" && payload.gloss.trim() ? payload.gloss.trim() : target,
     components,
     pyash,
     status,
@@ -635,6 +636,9 @@ async function reportPyashChineseLookups(tokens, {
         const pinyinText = pinyin.length > 0 ? pinyin.join(" / ") : "unavailable in the local pinyin index";
         report(`${token}: Chinese ${chinese}; Pinyin ${pinyinText}`);
         report(`${token}: English breakdown ${breakdown.length > 0 ? breakdown.join(" + ") : row.target}`);
+        if (row.gloss && normalizeCompoundTarget(row.gloss) !== normalizeCompoundTarget(row.target)) {
+          report(`${token}: English compound gloss ${row.gloss}`);
+        }
         const definitions = (found.senseGlosses ?? [])
           .filter((entry) => normalizeCompoundTarget(entry.target) === normalizeCompoundTarget(row.target))
           .map((entry) => ({ senseId: entry.senseId, definition: entry.definition }));
@@ -2161,10 +2165,13 @@ export async function runVocabSuggest(args = process.argv.slice(2), {
         ? `; specific atom ${specificAtom.english} -> ${specificAtom.pyash}`
         : "";
       const englishTargetSuffix = found.pyacSequenceQuery ? `; English target ${row.target}` : "";
+      const glossSuffix = row.gloss && normalizeCompoundTarget(row.gloss) !== normalizeCompoundTarget(row.target)
+        ? `; gloss ${row.gloss}`
+        : "";
       foundCompoundLines.push({
         token: target,
         sequence: row.pyash.join(" "),
-        line: `${target}: found compound ${row.components.join(" + ")} -> ${row.pyash.join(" ")} (${row.status})${specificSuffix}${englishTargetSuffix}${locationSuffix ? ` (${locationSuffix})` : ""}`
+        line: `${target}: found compound ${row.components.join(" + ")} -> ${row.pyash.join(" ")} (${row.status})${glossSuffix}${specificSuffix}${englishTargetSuffix}${locationSuffix ? ` (${locationSuffix})` : ""}`
       });
     }
   }
