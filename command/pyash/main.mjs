@@ -76,7 +76,7 @@ import { createConfigureMindCommand } from "./configure_mind_command.mjs";
 import { createVerifyCommand } from "./verify_command.mjs";
 import { createAgentCommand } from "./agent_command.mjs";
 import { resolvePyashCommand } from "./command_names.mjs";
-import { compileInvocation, translatePyacToPyash } from "./file_commands.mjs";
+import { compileInvocation, translatePyac } from "./file_commands.mjs";
 import { projectCodexRunToPyash } from "./agent_codex_projection.mjs";
 import {
   MIND_BACKEND_CHOICES,
@@ -519,8 +519,9 @@ export async function main() {
   }
   if (command === "translate") {
     try {
-      const result = await translatePyacToPyash("translate", args.slice(1));
-      textOut(`translated ${result.codeletCount} PyAC codelets: ${result.source} -> ${result.destination}`);
+      const result = await translatePyac("translate", args.slice(1));
+      const description = result.format === "pyac" ? "Pyac VLIW codelets" : "PyAC codelets to Pyash";
+      textOut(`translated ${result.codeletCount} ${description}: ${result.source} -> ${result.destination}`);
     } catch (error) {
       console.error(error.message);
       process.exitCode = 1;

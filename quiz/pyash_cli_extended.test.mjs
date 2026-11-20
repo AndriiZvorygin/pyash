@@ -62,6 +62,41 @@ test("pyash translate decodes a PyAC pack to readable Pyash using from/to paths"
   });
 });
 
+test("pyash translate as pyac preserves Pyac word order and round-trips every codelet word", async () => {
+  await withTempDirectory(async (directory) => {
+    const sourcePath = path.join(directory, "source.pyac");
+    const textPath = path.join(directory, "source.pya");
+    const roundTripPath = path.join(directory, "round-trip.pyac");
+    const sourcePack = encodePyacPack([
+      Uint16Array.from([0x245e, 0x245e, 0x803e, 0x881d, 42, ...new Array(11).fill(0)]),
+      Uint16Array.from([0, 0x229e, 0x0e1d, 0x0004, 0xffff, ...new Array(11).fill(0)])
+    ]);
+    await fs.writeFile(sourcePath, sourcePack);
+
+    const decode = runCli(["translate", "from", sourcePath, "to", textPath, "as", "pyac"]);
+    assert.equal(decode.status, 0, decode.stderr);
+    const text = await fs.readFile(textPath, "utf8");
+    assert.match(text, /0x245e ka 0x803e Qyis 0x002a/);
+
+    const encode = runCli(["translate", "from", textPath, "to", roundTripPath, "as", "pyac"]);
+    assert.equal(encode.status, 0, encode.stderr);
+    assert.deepEqual(Buffer.from(await fs.readFile(roundTripPath)), Buffer.from(sourcePack));
+  });
+});
+
+test("pyash translate as pyac rejects malformed word-dump rows without writing output", async () => {
+  await withTempDirectory(async (directory) => {
+    const sourcePath = path.join(directory, "malformed.pya");
+    const outputPath = path.join(directory, "malformed.pyac");
+    await fs.writeFile(sourcePath, "# Pyac VLIW word dump v1; each row is one 16-word codelet in slot order.\nka ob\n");
+
+    const result = runCli(["translate", "from", sourcePath, "to", outputPath, "as", "pyac"]);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /has 2 words; expected 16/);
+    assert.equal(await fs.stat(outputPath).then(() => true, () => false), false);
+  });
+});
+
 test("pyash translate accepts its unique prefix and does not leave partial output on unsupported input", async () => {
   await withTempDirectory(async (directory) => {
     const sourcePath = path.join(directory, "invalid.pyac");
@@ -136,7 +171,7 @@ test("pyash help lists the new commands and shortest unique forms", () => {
   const result = runCli(["--help"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /pyash compile from <source> to <destination>/);
-  assert.match(result.stdout, /pyash translate from <source\.pyac> to <destination\.pya>/);
+  assert.match(result.stdout, /pyash translate from <source> to <destination> \[as pyac\]/);
   assert.match(result.stdout, /pyash dictionary/);
   assert.match(result.stdout, /PyAC to \.c\/\.asm/);
   assert.match(result.stdout, /com=compile/);
