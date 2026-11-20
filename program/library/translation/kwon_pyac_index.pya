@@ -1,9 +1,9 @@
 su name kwon pyac lookup index be map def
 su text "format" ob text "pyash-kwon-lookup-index-v4" ya
 su text "kind" ob text "pyac" ya
-su text "source hashes" ob text "{\"program/library/translation/english_grammar.pya\":\"5399ad4c8055017cac32e54b9c0d85e8094119a3bee7f7d1c91d70734e3657c5\",\"program/library/translation/english_lemmas.pya\":\"3038cc7527832cdcb84ee30c89ac46ce2e6cb6f95e2230935384e38fd9af2c69\",\"program/library/translation/english_wordnet_bridges.pya\":\"d4db5fa8ab288e3e2764593ae64545b625b28513cd2fa7bbe5cf89926aa4e9f5\",\"program/library/translation/english_wordnet.pya\":\"216ebb1d3098f28dec89dc2c157f7d3c9b60bf1abcbfa74ff06fb03d1c73d4bb\",\"program/library/translation/english_wordnet_compound_glosses.pya\":\"ceb15eabd44017a7f0816837d05613fd778412547330456740ba7931094d6eba\",\"program/library/translation/compound_coverage_wordnet_verified.pya\":\"69aba4ab5403ff59ce56b2016fa4b7c14f69c3536cf4143f0431e9324f7f16dc\",\"program/library/translation/compound_coverage_curated.pya\":\"6bf6452d01ad3b9ed9d42258d501d9c90844702a2d6f4a86c5d8761974c199df\",\"program/library/pyashWords.json\":\"090809b9d2cb0de1c0026da215474006c7f4034891abe380d423cd12e1ff51ab\",\"caterer/pyac/lyac/kwon_en.json\":\"9b81b9108a83006177dd8a6b382b03873340882e67de4da64ce51e06cae359e8\",\"caterer/pyac/lyac/pyashWords.json\":\"ca4b9c07ac92da6521daf98304bbe784f5b512bc75d05dafbd7a59039f01bc03\",\"caterer/pyac/lyac/pyackwon.json\":\"9c4a4b216387a0b505e0ed3a4a9647240e0d8ee39bf769bcce7a818d780be259\",\"caterer/pyac/lyac/dictionary_en.json\":\"8640f366dc69376b4b96a94133054daeda05665abf4267c18ab301af5ea2c93d\"}" ya
+su text "source hashes" ob text "{\"program/library/translation/english_grammar.pya\":\"fea14b41569bc1436c255a7b2105e78062f83ca377c0ad59a4f6209405663945\",\"program/library/translation/english_lemmas.pya\":\"3038cc7527832cdcb84ee30c89ac46ce2e6cb6f95e2230935384e38fd9af2c69\",\"program/library/translation/english_wordnet_bridges.pya\":\"d4db5fa8ab288e3e2764593ae64545b625b28513cd2fa7bbe5cf89926aa4e9f5\",\"program/library/translation/english_wordnet.pya\":\"216ebb1d3098f28dec89dc2c157f7d3c9b60bf1abcbfa74ff06fb03d1c73d4bb\",\"program/library/translation/english_wordnet_compound_glosses.pya\":\"ceb15eabd44017a7f0816837d05613fd778412547330456740ba7931094d6eba\",\"program/library/translation/compound_coverage_wordnet_verified.pya\":\"69aba4ab5403ff59ce56b2016fa4b7c14f69c3536cf4143f0431e9324f7f16dc\",\"program/library/translation/compound_coverage_curated.pya\":\"db02b9491f25f5c48f68c3ef8e7984434d9aad5f918cab475ca846a0ba3a6b2a\",\"program/library/pyashWords.json\":\"090809b9d2cb0de1c0026da215474006c7f4034891abe380d423cd12e1ff51ab\",\"caterer/pyac/lyac/kwon_en.json\":\"9b81b9108a83006177dd8a6b382b03873340882e67de4da64ce51e06cae359e8\",\"caterer/pyac/lyac/pyashWords.json\":\"ca4b9c07ac92da6521daf98304bbe784f5b512bc75d05dafbd7a59039f01bc03\",\"caterer/pyac/lyac/pyackwon.json\":\"9c4a4b216387a0b505e0ed3a4a9647240e0d8ee39bf769bcce7a818d780be259\",\"caterer/pyac/lyac/dictionary_en.json\":\"8640f366dc69376b4b96a94133054daeda05665abf4267c18ab301af5ea2c93d\"}" ya
 su text "source ids" ob text "[\"caterer/pyac/lyac/dictionary_en.json\",\"caterer/pyac/lyac/kwon_en.json\",\"caterer/pyac/lyac/pyackwon.json\",\"caterer/pyac/lyac/pyashWords.json\",\"program/library/pyashWords.json\",\"program/library/translation/compound_coverage_curated.pya\",\"program/library/translation/compound_coverage_wordnet_verified.pya\",\"program/library/translation/english_grammar.pya\",\"program/library/translation/english_lemmas.pya\",\"program/library/translation/english_wordnet.pya\",\"program/library/translation/english_wordnet_bridges.pya\",\"program/library/translation/english_wordnet_compound_glosses.pya\"]" ya
-su text "entry count" ob num 89272 ya
+su text "entry count" ob num 89278 ya
 su text "index entries begin" ob text "begin" ya
 su text "kwon-entry:b6" ob text "[[2,4,7834,\"b6:_ible_\",\"b6\",\"_ible_\",\"0x363E\"],[2,1,7833,\"b6:-ible\",\"b6\",\"-ible\",\"0x363E\"],[2,3,7834,\"b6:_ible_\",\"b6\",\"_ible_\",\"0x363E\"]]" ya
 su text "kwon-entry:ba" ob text "[[0,7,15564,55,\"or\"],[2,4,7394,\"ba:and_or_\",\"ba\",\"and_or_\",\"0x263E\"],[2,1,7393,\"ba:and-or\",\"ba\",\"and-or\",\"0x263E\"],[2,3,7394,\"ba:and_or_\",\"ba\",\"and_or_\",\"0x263E\"]]" ya
@@ -127,6 +127,7 @@ su text "kwon-entry:bjin" ob text "[[2,4,1612,\"bjin:prediction\",\"bjin\",\"pre
 su text "kwon-entry:bjin cwat" ob text "[[0,11,7970893,22429,\"sense-compound-0a3efc447a05c5435d38776b\"],[0,6,27386577,22746,\"n:06762443-n\"]]" ya
 su text "kwon-entry:bjin hcik" ob text "[[0,11,7397772,20845,\"sense-compound-a5df743d4872452b08c0c57c\"],[0,6,25434181,21132,\"n:05783078-n\"]]" ya
 su text "kwon-entry:bjin hlic" ob text "[[0,11,2402540,6927,\"sense-compound-0df9e9b3884fc0612e721fd1\"],[0,6,8414600,7023,\"n:01080966-n\"]]" ya
+su text "kwon-entry:bjin hnuc gjat" ob text "[[0,5,16971,32,\"prediction value\"]]" ya
 su text "kwon-entry:bjin hpat" ob text "[[0,11,9616591,27115,\"sense-compound-85d1c6b8d800e1183b070e17\"],[0,6,33138408,27542,\"n:10122275-n\"]]" ya
 su text "kwon-entry:bjin htis" ob text "[[0,11,13517289,38418,\"sense-compound-291d53bad42f94f91efab518\"],[0,6,46948690,39091,\"v:00919743-v\"]]" ya
 su text "kwon-entry:bjin hyif" ob text "[[0,11,7970519,22428,\"sense-compound-0624186cf44edec54adf9385\"],[0,6,27385350,22745,\"n:06761683-n\"]]" ya
@@ -137,6 +138,7 @@ su text "kwon-entry:bjin psun" ob text "[[0,11,8540430,24048,\"sense-compound-d6
 su text "kwon-entry:bjincwat" ob text "[[0,11,7970893,22429,\"sense-compound-0a3efc447a05c5435d38776b\"],[0,6,27386577,22746,\"n:06762443-n\"]]" ya
 su text "kwon-entry:bjinhcik" ob text "[[0,11,7397772,20845,\"sense-compound-a5df743d4872452b08c0c57c\"],[0,6,25434181,21132,\"n:05783078-n\"]]" ya
 su text "kwon-entry:bjinhlic" ob text "[[0,11,2402540,6927,\"sense-compound-0df9e9b3884fc0612e721fd1\"],[0,6,8414600,7023,\"n:01080966-n\"]]" ya
+su text "kwon-entry:bjinhnucgjat" ob text "[[0,5,16971,32,\"prediction value\"]]" ya
 su text "kwon-entry:bjinhpat" ob text "[[0,11,9616591,27115,\"sense-compound-85d1c6b8d800e1183b070e17\"],[0,6,33138408,27542,\"n:10122275-n\"]]" ya
 su text "kwon-entry:bjinhtis" ob text "[[0,11,13517289,38418,\"sense-compound-291d53bad42f94f91efab518\"],[0,6,46948690,39091,\"v:00919743-v\"]]" ya
 su text "kwon-entry:bjinhyif" ob text "[[0,11,7970519,22428,\"sense-compound-0624186cf44edec54adf9385\"],[0,6,27385350,22745,\"n:06761683-n\"]]" ya
@@ -33752,10 +33754,12 @@ su text "kwon-entry:hrec" ob text "[[2,4,714,\"hrec:referential\",\"hrec\",\"ref
 su text "kwon-entry:hrec dlut" ob text "[[0,11,7507967,21154,\"sense-compound-c91b113cfca60c1476041350\"],[0,6,25809270,21445,\"n:05931946-n\"]]" ya
 su text "kwon-entry:hrec hwus" ob text "[[0,11,8322358,23416,\"sense-compound-68d28487a0b4043a8fcdd5c8\"],[0,6,28598727,23758,\"n:07273332-n\"]]" ya
 su text "kwon-entry:hrec nyac" ob text "[[0,11,8321981,23415,\"sense-compound-86bd7b6eeb151642d2e9e8ef\"],[0,6,28597415,23757,\"n:07273000-n\"]]" ya
+su text "kwon-entry:hrec nyac hnuc gjat" ob text "[[0,5,17726,33,\"reference point value\"]]" ya
 su text "kwon-entry:hrec tlat" ob text "[[0,11,7855179,22104,\"sense-compound-a769e00d4329e95d2ace572d\"],[0,6,26988156,22416,\"n:06616004-n\"]]" ya
 su text "kwon-entry:hrecdlut" ob text "[[0,11,7507967,21154,\"sense-compound-c91b113cfca60c1476041350\"],[0,6,25809270,21445,\"n:05931946-n\"]]" ya
 su text "kwon-entry:hrechwus" ob text "[[0,11,8322358,23416,\"sense-compound-68d28487a0b4043a8fcdd5c8\"],[0,6,28598727,23758,\"n:07273332-n\"]]" ya
 su text "kwon-entry:hrecnyac" ob text "[[0,11,8321981,23415,\"sense-compound-86bd7b6eeb151642d2e9e8ef\"],[0,6,28597415,23757,\"n:07273000-n\"]]" ya
+su text "kwon-entry:hrecnyachnucgjat" ob text "[[0,5,17726,33,\"reference point value\"]]" ya
 su text "kwon-entry:hrectlat" ob text "[[0,11,7855179,22104,\"sense-compound-a769e00d4329e95d2ace572d\"],[0,6,26988156,22416,\"n:06616004-n\"]]" ya
 su text "kwon-entry:href" ob text "[[2,4,1946,\"href:rarefied\",\"href\",\"rarefied\",\"0xCB70\"],[2,1,1946,\"href:rarefied\",\"href\",\"rarefied\",\"0xCB70\"],[2,3,1946,\"href:rarefied\",\"href\",\"rarefied\",\"0xCB70\"]]" ya
 su text "kwon-entry:href dxuk" ob text "[[0,11,12750097,36066,\"sense-compound-a7145920e8e3689a43cc60b7\"],[0,6,44143730,36700,\"s:02426407-s\"]]" ya
@@ -77402,10 +77406,12 @@ su text "kwon-entry:tcof" ob text "[[2,4,2929,\"tcof:archery\",\"tcof\",\"archer
 su text "kwon-entry:tcoh" ob text "[[2,4,7504,\"tcoh:pain_\",\"tcoh\",\"pain_\",\"0x6557\"],[2,1,7503,\"tcoh:pain\",\"tcoh\",\"pain\",\"0x6557\"],[2,3,7504,\"tcoh:pain_\",\"tcoh\",\"pain_\",\"0x6557\"]]" ya
 su text "kwon-entry:tcok" ob text "[[2,4,1210,\"tcok:accuracy\",\"tcok\",\"accuracy\",\"0x2CAA\"],[2,1,1210,\"tcok:accuracy\",\"tcok\",\"accuracy\",\"0x2CAA\"],[2,3,1210,\"tcok:accuracy\",\"tcok\",\"accuracy\",\"0x2CAA\"]]" ya
 su text "kwon-entry:tcok dyim" ob text "[[0,11,4689739,13270,\"sense-compound-494f5ffc17dad8b5c84d256c\"],[0,6,16190271,13454,\"n:03522923-n\"]]" ya
+su text "kwon-entry:tcok hgut" ob text "[[0,5,18599,34,\"correct count\"]]" ya
 su text "kwon-entry:tcok hron" ob text "[[0,11,6534839,18462,\"sense-compound-09c9db14e3245e5ae54500f3\"],[0,6,22504627,18702,\"n:04982607-n\"]]" ya
 su text "kwon-entry:tcok pric" ob text "[[0,11,6550442,18507,\"sense-compound-95e7aeb438046a4a72a5dd3c\"],[0,6,22558157,18747,\"n:04994418-n\"]]" ya
 su text "kwon-entry:tcok tfic" ob text "[[0,11,5658703,15984,\"sense-compound-1217759201d5d477aef97d04\"],[0,6,19486188,16193,\"n:04257334-n\"]]" ya
 su text "kwon-entry:tcokdyim" ob text "[[0,11,4689739,13270,\"sense-compound-494f5ffc17dad8b5c84d256c\"],[0,6,16190271,13454,\"n:03522923-n\"]]" ya
+su text "kwon-entry:tcokhgut" ob text "[[0,5,18599,34,\"correct count\"]]" ya
 su text "kwon-entry:tcokhron" ob text "[[0,11,6534839,18462,\"sense-compound-09c9db14e3245e5ae54500f3\"],[0,6,22504627,18702,\"n:04982607-n\"]]" ya
 su text "kwon-entry:tcokpric" ob text "[[0,11,6550442,18507,\"sense-compound-95e7aeb438046a4a72a5dd3c\"],[0,6,22558157,18747,\"n:04994418-n\"]]" ya
 su text "kwon-entry:tcoktfic" ob text "[[0,11,5658703,15984,\"sense-compound-1217759201d5d477aef97d04\"],[0,6,19486188,16193,\"n:04257334-n\"]]" ya
