@@ -281,7 +281,7 @@ the persisted source of truth; all lookup arrays are reconstructed from it.
 
 ## 9. Vocabulary-agent workflow
 
-Use the [dictionary vocabulary workbook](../suggest/pyac-vliw-dictionary-workbook.md)
+Use the [dictionary vocabulary workbook](../workbook/pyac-vliw-dictionary.md)
 as a curation handoff. It records candidates and evidence; it is not the
 canonical vocabulary catalog or a compiled dictionary volume.
 

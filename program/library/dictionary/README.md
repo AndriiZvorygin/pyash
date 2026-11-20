@@ -15,7 +15,7 @@ workflow, then publish a validated `.pyac` volume here.
 
 No production dictionary volume has been published here yet. The vocabulary
 workbook is at
-`documentation/suggest/pyac-vliw-dictionary-workbook.md`; it is a curation
+`documentation/workbook/pyac-vliw-dictionary.md`; it is a curation
 worksheet, not runtime data.
 
 The Rust writer currently accepts `DictionaryVolume` values with already-

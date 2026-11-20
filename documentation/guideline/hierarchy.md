@@ -36,6 +36,12 @@ Shared installed library data
   volumes. Trusted vocabulary agents maintain repository changes through
   version control; runtime consumers read published volumes read-only.
 
+Documentation work areas
+- `documentation/workbook/` Active structured workbooks used to curate and
+  review content.
+- `documentation/suggest/` Proposals awaiting review; it is not an active
+  workbook or implementation workspace.
+
 
 ### Mapping from common shorthand
 
