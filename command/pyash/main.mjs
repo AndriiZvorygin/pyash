@@ -147,6 +147,7 @@ const runProgramPath = path.join(installRoot, "command", "run_pya_program.mjs");
 const saddlePath = path.join(installRoot, "command", "pyash_saddle.mjs");
 const compileLanguagePath = path.join(installRoot, "command", "cli_language.mjs");
 const vocabSuggestPath = path.join(installRoot, "command", "vocab_suggest.mjs");
+const pyacDictionaryPath = path.join(installRoot, "command", "pyac_dictionary.mjs");
 const replPath = path.join(installRoot, "program", "main.mjs");
 const codexAccountPath = path.join(installRoot, "command", "codex_account.mjs");
 
@@ -525,6 +526,9 @@ export async function main() {
       process.exitCode = 1;
     }
     return;
+  }
+  if (command === "dictionary" && args[1] === "volume") {
+    return void process.exit(await runNodeScript(pyacDictionaryPath, args.slice(2)));
   }
   if (command === "dictionary") return void process.exit(await runNodeScript(vocabSuggestPath, args.slice(1)));
   const code=await runNodeScript(runProgramPath,args);

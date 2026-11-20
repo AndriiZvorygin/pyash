@@ -1,12 +1,14 @@
 # Pyac VLIW Multilingual Dictionary
 
-Status: implemented Rust writer and seek-based reader for the v1 dictionary
-volume, with in-memory binary-search indexes rebuilt from its VLIW sentences.
+Status: implemented Rust writer and seek-based reader for dictionary profile
+v2, with in-memory binary-search indexes rebuilt from its VLIW sentences.
 The selected permanent location for published volumes is
 `program/library/dictionary/`. No production volume is stored there yet. The
-writer accepts already-lowered definition codelets; it does not translate
-Pyash source text. The profile organizes a searchable, multilingual dictionary
-as ordinary Pyash sentences encoded in the existing `.pyac` VLIW format.
+Rust library writer accepts already-lowered definition codelets. The
+`pyash dictionary volume` authoring command parses Pyash source and lowers its
+definition sentences before calling that writer. The profile organizes a
+searchable, multilingual dictionary as ordinary Pyash sentences encoded in
+the existing `.pyac` VLIW format.
 
 ## 1. Design boundary
 
@@ -170,6 +172,9 @@ operation signature is a structural dispatch description: argument names and
 descriptions explain the contract to readers, but do not constrain which
 lexical forms may fill the grammatical cases.
 
+The entry-location index records both the full entry range and the definition
+paragraph range. A reader can return human-readable definitions without
+mistaking typed lexical/provenance index records for definition sentences.
 The Rust reader validates the in-band index sentence shapes and targets, then
 builds sorted posting arrays with binary-search range starts. These arrays are
 disposable runtime indexes, not persisted sidecars. Lookup is
@@ -250,34 +255,63 @@ A conforming volume and reader MUST:
 - keep lookup declarative, with programlet execution available only by
   explicit request.
 
-## 8. Implementation status
+## 8. Build, read, and measure
 
-`rust/pyac/src/dictionary.rs` exposes a deterministic volume writer and a
-seek-based file reader. The writer emits the profile marker, metadata, TOC,
-canonical/surface/source/location/operation indexes, entry descriptors, and
-already-lowered definition sentences as ordinary VLIW codelets. The reader
-validates those records, rebuilds searchable postings, and supports exact
-Pyac-key location/read, NFC-normalized language-surface lookup, versioned
-external-source lookup (returning its relation), and structural operation-
-signature lookup. It reads an entry's codelet range on demand rather than
-loading all definitions. The separate in-memory `DictionaryIndex` retains its
-language/task projection API.
-
-`rust/pyac/examples/dictionary_fixture.rs` is the runnable minimal authoring
-example. It creates a typed Pyash definition sentence, adds lexical and
-WordNet records, and writes the resulting `.pyac` bytes to stdout:
+Build the Rust command once during setup. Normal dictionary commands use this
+compiled executable and never invoke Cargo or compile source:
 
 ```sh
-cargo run --manifest-path rust/pyac/Cargo.toml --example dictionary_fixture > dictionary.pyac
+cargo build --release --manifest-path rust/pyac/Cargo.toml --bin pyac-dictionary
 ```
 
-Run the synthetic scaling comparison with
-`cargo bench --manifest-path rust/pyac/Cargo.toml --bench dictionary_index`.
-It builds 100,000 entries, measures each in-memory indexed lookup over
-100,000 queries, and compares against bounded linear scans over the first 100
-queries. This is a repeatable algorithmic baseline, not a substitute for
-measuring file-backed open and range reads on target storage. The volume is
-the persisted source of truth; all lookup arrays are reconstructed from it.
+The author-facing interface is `pyash dictionary volume`. It imports a
+Pyash-source file, builds/replaces a compiled volume, and uses the Rust binary
+for inspection, lookup, definition reads, and throughput measurement:
+
+```sh
+pyash dictionary volume build from program/library/dictionary/english.pya to program/library/dictionary/english.pyac
+pyash dictionary volume inspect program/library/dictionary/english.pyac
+pyash dictionary volume lookup program/library/dictionary/english.pyac surface en vector
+pyash dictionary volume lookup program/library/dictionary/english.pyac source wordnet 3.0 n:05873161-n
+pyash dictionary volume read program/library/dictionary/english.pyac key vector
+pyash dictionary volume benchmark program/library/dictionary/english.pyac surface en vector 10000 to criterion/results/dictionary-vector.pya
+```
+
+The `.pya` source starts with a profile sentence and metadata sentence:
+
+```pyash
+su name lyin kwon ob text "English Pyash dictionary" be text ya
+su name lyin kwon ob text "English reference" as num 1 from text "en" to text "NFC" with text "pyac-vliw-dictionary/2" be text ya
+```
+
+Each entry starts with `su name tlat kwon ob name <canonical Pyash key> at
+text "entry" be text ya`. Add following `lexical-form`, `source-link`,
+`task`, `reference`, and operation-signature records with the same `tlat kwon`
+subject and the entry key in `ob`. Then add the definition as one or more
+ordinary Pyash sentences whose `su` is that exact canonical key. The importer
+resolves every key through the checkout's Pyash HNUC vocabulary and lowers
+definition sentences through the existing VLIW compiler; unknown key atoms
+and unsupported record tags fail instead of being guessed or dropped. Editing
+the `.pya` source and rebuilding the `.pyac` volume is the supported add/update
+workflow. It does not recompile the Rust executable.
+
+Each executable response reports executable bytes, volume bytes, and relevant
+open/read/lookup/build durations. The `benchmark` command performs five warmup
+lookups, then measures the requested iteration count and writes a Pyash `.pya`
+measurement record to the specified destination. The record includes the
+timestamp, host/platform/architecture, executable and volume sizes, codelet
+count, warmup and measured iteration counts, index-open time, total and mean
+lookup time, lookup rate, and result count. It is persistent comparison
+evidence; printed JSON is only the immediate CLI response.
+
+`rust/pyac/src/dictionary.rs` exposes the deterministic writer and seek-based
+reader APIs. Lookup indexes are rebuilt in memory from the volume; entry
+definitions are fetched on demand using their explicit codelet ranges. The
+separate in-memory `DictionaryIndex` retains its language/task projection API.
+The synthetic scaling comparison remains available with
+`cargo bench --manifest-path rust/pyac/Cargo.toml --bench dictionary_index`;
+it is an algorithmic baseline, not a substitute for the file-backed CLI
+measurement above.
 
 ## 9. Vocabulary-agent workflow
 
@@ -308,9 +342,12 @@ For each proposed dictionary entry, agents should:
    `accepted-llm` or `accepted-curated` state when the vocabulary catalog
    itself records that state.
 
-The Rust writer currently consumes `DictionaryVolume` values with already-
-lowered definition codelets; there is not yet an importer from this workbook
-or from vocabulary catalogs. Vocabulary agents may maintain the tracked
-library volume through trusted, version-controlled updates; runtime/model
-workers consume the published file read-only. The authoring importer and
-release step remain to be automated.
+The source importer resolves entry names against this checkout's active Pyash
+HNUC vocabulary and lowers definition sentences with the existing VLIW
+compiler. It validates the documented record kinds and sends the resulting
+structured build request to the Rust writer over stdin; that request is
+transient and is not saved as a JSON state file. The workbook and vocabulary
+catalog are curation inputs, not runtime dictionary data. Vocabulary agents
+can update the tracked `.pya` source, after which a maintainer rebuilds and
+validates the published `.pyac` volume. Runtime readers consume the compiled
+volume directly.

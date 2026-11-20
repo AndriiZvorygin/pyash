@@ -8,7 +8,7 @@ pub(super) const PROFILE_SUBJECT: [u16; 2] = [0x680b, 0x6c22]; // lyin kwon: mac
 pub(super) const CONTENTS_SUBJECT: [u16; 2] = [0x8893, 0x2c30]; // dvis hnok.
 pub(super) const INDEX_SUBJECT: [u16; 2] = [0xa92b, 0x28ea]; // lwat txik.
 pub(super) const ENTRY_SUBJECT: [u16; 2] = [0xa96a, 0x6c22]; // tlat kwon.
-pub(super) const PROFILE_VERSION: &str = "pyac-vliw-dictionary/1";
+pub(super) const PROFILE_VERSION: &str = "pyac-vliw-dictionary/2";
 pub(super) const TOC_ROLES: [&str; 7] = [
     "metadata",
     "canonical-index",
@@ -274,12 +274,19 @@ pub(super) fn index_records(
                 vector_field(TO, &entry.key),
             ],
         )?);
+        let entry_start = location[0] as usize | ((location[1] as usize) << 16);
+        let entry_count = location[2] as usize | ((location[3] as usize) << 16);
+        let definition_start = entry_start
+            .checked_add(entry_count.saturating_sub(entry.definition.len()))
+            .ok_or(DictionaryVolumeError::TooManyCodelets)?;
+        let definition_range = range_pair(definition_start, entry.definition.len())?;
         locations.extend(sentence(
             INDEX_SUBJECT.as_slice(),
             &[
                 text_field(OB, "entry-location"),
                 vector_field(FROM, &entry.key),
                 vector_field(TO, location),
+                vector_field(WITH, &definition_range),
             ],
         )?);
         for form in &entry.lexical_forms {

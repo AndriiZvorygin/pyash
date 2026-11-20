@@ -92,6 +92,15 @@ fn writer_emits_reproducible_pack_and_seek_reader_reads_entry_on_demand() {
         .read_entry(&ENTRY_KEY)
         .expect("read only matching range");
     assert_eq!(entry.len(), (range.end - range.start) as usize);
+    let definition_range = reader
+        .definition_location(&ENTRY_KEY)
+        .expect("definition range");
+    assert!(definition_range.start >= range.start);
+    assert!(definition_range.end <= range.end);
+    assert_eq!(
+        reader.read_definition(&ENTRY_KEY).expect("read definition"),
+        volume.entries[0].definition
+    );
     assert_eq!(reader.read_section("entries").unwrap().len(), entry.len());
     assert_eq!(reader.location(&[0xffff]), None);
     assert_eq!(

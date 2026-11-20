@@ -18,10 +18,14 @@ workbook is at
 `documentation/workbook/pyac-vliw-dictionary.md`; it is a curation
 worksheet, not runtime data.
 
-The Rust writer currently accepts `DictionaryVolume` values with already-
-lowered definition codelets. It does not import the workbook or vocabulary
-catalogs, so producing a volume still requires a Rust-side authoring step. Do
-not copy the test fixture into this directory as if it were production data.
+Author and update a version-controlled `.pya` source volume, then build it
+with the prebuilt Rust executable through `pyash dictionary volume build from
+<source.pya> to <volume.pyac>`. Definitions remain ordinary Pyash sentences
+and are lowered through the existing VLIW compiler. Build the executable once
+using the command in the dictionary reference; normal dictionary commands
+never compile it. The CLI also provides `inspect`, indexed `lookup`, definition
+`read`, and a benchmark command that records binary/volume sizes and timings
+to a requested `.pya` result file.
 
 ## Publication Checks
 

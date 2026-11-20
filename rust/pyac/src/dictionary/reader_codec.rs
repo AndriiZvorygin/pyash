@@ -359,7 +359,9 @@ pub(super) fn parse_toc(words: &[u16]) -> Result<DictionarySection, DictionaryRe
     })
 }
 
-pub(super) fn parse_location(words: &[u16]) -> Result<(Vec<u16>, Range<u32>), DictionaryReadError> {
+pub(super) fn parse_location(
+    words: &[u16],
+) -> Result<(Vec<u16>, Range<u32>, Range<u32>), DictionaryReadError> {
     let mut cursor = subject_end(words, &INDEX_SUBJECT)?;
     if take_text(words, &mut cursor)? != "entry-location" {
         return Err(DictionaryReadError::InvalidRecord(
@@ -371,21 +373,34 @@ pub(super) fn parse_location(words: &[u16]) -> Result<(Vec<u16>, Range<u32>), Di
     expect_word(words, &mut cursor, FROM)?;
     let range = take_vector(words, &mut cursor)?;
     expect_word(words, &mut cursor, TO)?;
+    let definition_words = take_vector(words, &mut cursor)?;
+    expect_word(words, &mut cursor, WITH)?;
     expect_end(words, &mut cursor)?;
-    if key.is_empty() || range.len() != 4 {
+    if key.is_empty() || range.len() != 4 || definition_words.len() != 4 {
         return Err(DictionaryReadError::InvalidRecord(
-            "invalid entry-location key or range",
+            "invalid entry-location key or ranges",
         ));
     }
-    let start = range[0] as u32 | ((range[1] as u32) << 16);
-    let count = range[2] as u32 | ((range[3] as u32) << 16);
-    Ok((
-        key,
-        start
+    let decode_range = |range: &[u16]| -> Result<Range<u32>, DictionaryReadError> {
+        let start = range[0] as u32 | ((range[1] as u32) << 16);
+        let count = range[2] as u32 | ((range[3] as u32) << 16);
+        Ok(start
             ..start
                 .checked_add(count)
-                .ok_or(DictionaryReadError::InvalidRecord("entry range overflow"))?,
-    ))
+                .ok_or(DictionaryReadError::InvalidRecord("entry range overflow"))?)
+    };
+    let entry_range = decode_range(&range)?;
+    let definition_range = decode_range(&definition_words)?;
+    if entry_range.is_empty()
+        || definition_range.is_empty()
+        || definition_range.start < entry_range.start
+        || definition_range.end > entry_range.end
+    {
+        return Err(DictionaryReadError::InvalidRecord(
+            "definition range is outside its dictionary entry",
+        ));
+    }
+    Ok((key, entry_range, definition_range))
 }
 
 pub(super) fn validate_sections(

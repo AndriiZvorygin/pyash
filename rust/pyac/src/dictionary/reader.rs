@@ -75,6 +75,7 @@ pub struct DictionaryFileReader<R> {
     metadata: DictionaryMetadata,
     sections: Vec<DictionarySection>,
     locations: Vec<(Vec<u16>, Range<u32>)>,
+    definitions: Vec<(Vec<u16>, Range<u32>)>,
     postings: IndexPostings,
 }
 
@@ -134,6 +135,7 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
             metadata,
             sections,
             locations: Vec::new(),
+            definitions: Vec::new(),
             postings: IndexPostings::default(),
         };
         reader.load_locations()?;
@@ -174,6 +176,13 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
             .map(|index| self.locations[index].1.clone())
     }
 
+    pub fn definition_location(&self, key: &[u16]) -> Option<Range<u32>> {
+        self.definitions
+            .binary_search_by(|(candidate, _)| candidate.as_slice().cmp(key))
+            .ok()
+            .map(|index| self.definitions[index].1.clone())
+    }
+
     pub fn lookup_surface(&self, language: &str, surface: &str) -> Vec<Vec<u16>> {
         self.postings.lookup_surface(language, surface)
     }
@@ -197,6 +206,16 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
     ) -> Result<Vec<[u16; WORDS_PER_CODELET]>, DictionaryReadError> {
         let range = self
             .location(key)
+            .ok_or_else(|| DictionaryReadError::MissingEntry(key.to_vec()))?;
+        self.read_range(range)
+    }
+
+    pub fn read_definition(
+        &mut self,
+        key: &[u16],
+    ) -> Result<Vec<[u16; WORDS_PER_CODELET]>, DictionaryReadError> {
+        let range = self
+            .definition_location(key)
             .ok_or_else(|| DictionaryReadError::MissingEntry(key.to_vec()))?;
         self.read_range(range)
     }
@@ -226,9 +245,10 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
         let end = section.codelet_start + section.codelet_count;
         let mut ordinal = section.codelet_start;
         let mut locations = Vec::new();
+        let mut definitions = Vec::new();
         while ordinal < end {
             let (words, consumed) = read_sentence(&mut self.source, ordinal, self.codelet_count)?;
-            let (key, range) = parse_location(&words)?;
+            let (key, range, definition_range) = parse_location(&words)?;
             if locations
                 .last()
                 .is_some_and(|(previous, _): &(Vec<u16>, Range<u32>)| previous >= &key)
@@ -237,6 +257,7 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
                     "entry-location index is not strictly sorted",
                 ));
             }
+            definitions.push((key.clone(), definition_range));
             locations.push((key, range));
             ordinal += consumed;
         }
@@ -256,6 +277,20 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
         }) {
             return Err(DictionaryReadError::InvalidRecord(
                 "entry-location posting points outside the entries section",
+            ));
+        }
+        if definitions.len() != locations.len()
+            || definitions.iter().zip(&locations).any(
+                |((definition_key, definition), (entry_key, entry))| {
+                    definition_key != entry_key
+                        || definition.start < entry.start
+                        || definition.end > entry.end
+                        || definition.is_empty()
+                },
+            )
+        {
+            return Err(DictionaryReadError::InvalidRecord(
+                "definition ranges do not match their entry locations",
             ));
         }
         let mut by_range = locations
@@ -278,6 +313,7 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
             ));
         }
         self.locations = locations;
+        self.definitions = definitions;
         Ok(())
     }
 }
