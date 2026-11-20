@@ -59,6 +59,7 @@ test("VLIW GPU conformance matrix covers the merged typed and control-flow contr
     "float32-vector-literal",
     "float64-vector-literal",
     "float32-dot-product",
+    "pluk-tlas-exact-match-count",
     "float64-dot-product",
     "uint16-vector-sixteen-lanes",
     "boolean-vector-sixteen-lanes",
@@ -114,9 +115,10 @@ test("JavaScript programlet reference matches spec-derived GPU expectations", as
   }
 });
 
-test("Rust CPU reference matches nested bounded-loop and boolean-composition packs", async () => {
+test("Rust CPU reference matches exact-match evaluation and nested control-flow packs", async () => {
   const cases = await buildVliwGpuConformanceCases();
   const selected = cases.filter(({ name }) => [
+    "pluk-tlas-exact-match-count",
     "nested-bounded-loops-keep-independent-cursors",
     "nested-bounded-loops-reuse-symbols",
     "boolean-argument-true-branch",

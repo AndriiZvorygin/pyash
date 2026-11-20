@@ -689,11 +689,13 @@ Housekeeper contracts where they fit. New vocabulary, storage shapes, and APIs a
 selected only after checking the current Pyash cases, vocabulary inventory, and
 relevant specifications. Numeric formats are not a gate to the first framework slice.
 
-Current position: shared VLIW execution can carry typed float32/float64 vector
-literals, but the shared runtime does not yet reduce them. The next implementation
-sequence is the task/trust contract (Stage 0), followed by a CPU vector-scoring slice
-whose first kernel is dot product (Stage 1). This adds an operation only in service of
-that runnable slice.
+Current position: typed float32/float64 vectors and float-vector dot product are
+implemented in the shared VLIW runtime. The `pluk tlas` exact-match count is now a
+second shared evaluation primitive, using named float32 vector inputs and returning
+an unsigned count. This is a judge primitive, not a complete isolated evaluator or
+candidate-scoring pipeline. The next work is to connect trusted evaluation and its
+task/data contract, then exercise useful scoring workflows without duplicating
+semantic implementations in JavaScript.
 
 ### Stage 0 — Fix the task and trust contract
 
@@ -711,15 +713,38 @@ Define one small deterministic task and write down, before implementation:
 a reviewer can state what the candidate author may read or change and what the evaluator
 alone owns. No new Pyash surface is committed at this stage.
 
+### Stage 0.1 — Add an exact-match judge primitive (implemented)
+
+The shared Rust VLIW runtime accepts named float32 vector declarations followed by:
+
+```pyash
+ob name prediction value
+by name reference point value
+to name num correct count
+be pluk tlas do
+```
+
+The operation resolves each reference to one preceding named vector in the same pack,
+requires equal nonzero widths and finite float32 values, and returns the exact-equality
+count as an unsigned numeric scalar. JavaScript only lowers the sentence; CPU and GPU
+use the shared Rust semantics. The runnable source fixture is
+`examples/pyash/vliw-pluk-tlas.pya`.
+
+**Acceptance evidence:** Rust core tests cover exact equality, one-ULP differences,
+signed zero, maximum vector width across indexed codelets, missing/duplicate names,
+type errors, and width mismatch. The public Rust pack executor returns `Unsigned(2)`
+for the fixture. This establishes the operation, not evaluator isolation, held-out data
+protection, or a complete iWSP search loop.
+
 ### Stage 1 — Deliver one CPU vertical slice with dot product
 
 Use a small deterministic vector-scoring task with a known reference and compact
-candidate. Its first shared VLIW kernel is dot product over equal-length float vectors,
-which exercises the new float-vector values and gives the CPU slice a real numeric
-operation. Specify accumulation precision, length mismatch and empty-vector behavior,
-and CPU/GPU agreement before adding the operation. The candidate remains readable Pyash
-source plus named parameter facts. Run it through the ordinary CPU path first, reusing
-existing refinery/run recording and criterion machinery where their contracts fit.
+candidate. Reuse the existing shared dot product and the new exact-match judge where
+their contracts fit; do not add a duplicate JS metric implementation. Specify
+accumulation precision, length mismatch and empty-vector behavior, and CPU/GPU agreement
+for each selected operation. The candidate remains readable Pyash source plus named
+parameter facts. Run it through the ordinary CPU path first, reusing existing
+refinery/run recording and criterion machinery where their contracts fit.
 
 **Acceptance:** a valid candidate runs end-to-end; a deliberately wrong candidate
 scores worse; dot-product edge cases are covered; the task result names the source

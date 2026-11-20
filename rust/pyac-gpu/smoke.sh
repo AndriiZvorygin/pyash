@@ -53,7 +53,10 @@ assert.deepEqual(pack.values, [
   { type: "unsigned", value: 7 },
   { type: "unsigned", value: 7 },
   { type: "unsigned", value: 9 },
-  { type: "boolean", value: true }
+  { type: "boolean", value: true },
+  { type: "vector", elementType: "float32", values: [1, 2, 3] },
+  { type: "vector", elementType: "float32", values: [1, 2, 4] },
+  { type: "unsigned", value: 2 }
 ]);
 
 console.log(`Rust-GPU smoke passed on ${pack.device}: canonical PyAC pack execution.`);

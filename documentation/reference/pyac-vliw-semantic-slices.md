@@ -106,6 +106,28 @@ build intentionally omits it and rejects float64 dot products while retaining
 float32 support. The JavaScript adapter only lowers the typed sentence; it is
 not the semantic oracle.
 
+## Exact-match evaluation (`pluk tlas`)
+
+The Rust reference runtime also supports an exact-match judge over named
+float32 vectors. The source fixture is
+`examples/pyash/vliw-pluk-tlas.pya`:
+
+```pyash
+su name prediction ob ve float32 1 2 3 be vector ya
+su name answer ob ve float32 1 2 4 be vector ya
+ob name prediction by name answer to name num count be pluk tlas do
+```
+
+The `ob` and `by` fields resolve the preceding named vector declarations;
+`to name num count` declares the numeric result. The shared Rust implementation
+returns unsigned `2`, counting lanes that compare equal under exact binary32
+equality. Signed zeros compare equal; no epsilon is used. Inputs must be finite,
+float32, non-empty, and equal-width. Missing or duplicate bindings, other vector
+types, malformed declarations, and width mismatches fail explicitly. Rust core
+tests cover shape and equality edges; the public Rust pack executor test confirms
+the complete pack result. The JavaScript quiz verifies source lowering and the
+legacy HNUC/case codelet, but intentionally contains no scoring implementation.
+
 ## Generic fixed-slot decoding
 
 `program/library/vliw/codelets.mjs` losslessly decodes the existing 16-word slot,

@@ -68,6 +68,7 @@ import {
 } from "./vector.mjs";
 import { decodeVectorSequence, lowerVectorSequence } from "./vector_sequence.mjs";
 import { normalizeScalarProductSentence, isScalarProductSentence } from "./scalar_product.mjs";
+import { isPlukTlasSentence, lowerPlukTlasSentence } from "./pluk_tlas.mjs";
 import {
   isIntVectorQuoteWord,
   isFloatVectorQuoteWord,
@@ -91,6 +92,9 @@ function semanticDecode(decoded, semantic, sentence) {
 }
 
 export function lowerSentence(sentence) {
+  if (isPlukTlasSentence(sentence)) {
+    return lowerPlukTlasSentence(sentence);
+  }
   if (isScalarProductSentence(sentence)) {
     const normalized = normalizeScalarProductSentence(sentence);
     return lowerPyashSentence(normalized).vectors.map((words) => ({

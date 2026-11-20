@@ -1,0 +1,3 @@
+su name prediction ob ve float32 1 2 3 be vector ya
+su name answer ob ve float32 1 2 4 be vector ya
+ob name prediction by name answer to name num count be pluk tlas do

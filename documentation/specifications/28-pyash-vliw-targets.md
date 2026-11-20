@@ -238,7 +238,33 @@ operation error. Rust CPU and native Vulkan enable `shader-f64`; WGSL/WebGPU
 omits it, so there float32 is supported and float64 is not. Implementations
 MUST preserve the specified operation order and precision.
 
-## 11. Non-goals
+## 11. Exact-match count (`pluk tlas`)
+
+This evaluator compares two previously declared, named float32 vectors in one
+PyAC pack. Its typed Pyash signature is:
+
+```pyash
+ob name prediction value
+by name reference point value
+to name num correct count
+be pluk tlas do
+```
+
+The `ob` and `by` fields are references, not inline vector literals. Each MUST
+resolve to exactly one preceding named float32 vector declaration in the same
+pack. Both vectors MUST have the same nonzero width (at most 16) and finite
+lanes. The result is the number of corresponding lanes equal under exact
+IEEE-754 binary32 numeric comparison; there is no tolerance, and positive and
+negative zero compare equal. Return one unsigned scalar in the range 0 to 16.
+
+The cases use their ordinary accusative, instrumental, and destination HNUCs.
+The verb uses the existing two-word `pluk tlas` HNUC sequence and deontic mood;
+this adds no quote type or vocabulary allocation. Unbound or duplicate names,
+non-float32 inputs, malformed declarations, and unequal widths are errors. The
+shared Rust VLIW runtime owns CPU and GPU execution semantics; JavaScript only
+lowers the sentence and does not calculate the count.
+
+## 12. Non-goals
 
 This specification does not add HNUCs, alter parser vocabulary, define the
 catalog/container database, require a GPU, introduce a model server or queue,
@@ -249,7 +275,7 @@ not replace the current sentence/paragraph interpreter. The only
 conforming future implementation is one that can prove the sentence result
 and the legacy encoding bytes agree.
 
-## 12. Implementation references
+## 13. Implementation references
 
 The proven numeric-plus, quote, fixed-slot, typed-literal, named-fact, database,
 and facade slices are documented with their fixtures and implementation paths

@@ -19,6 +19,7 @@ import {
   collectVliwConformanceEnvironment,
   writeVliwConformancePya
 } from "./vliw_conformance_report.mjs";
+import { buildPlukTlasConformanceCase } from "./vliw_gpu_conformance/pluk_tlas.mjs";
 
 function programlet(name, source, invocation, expectedValues) {
   const compiled = compilePyashProgramSource(source, { invocation });
@@ -402,6 +403,7 @@ export async function buildVliwGpuConformanceCases() {
       [{ type: "float32", value: 32 }],
       [{ type: "float32", value: 32 }]
     ),
+    buildPlukTlasConformanceCase(),
     codeletPack(
       "float64-dot-product",
       "ob ve float64 0.1 2 -3 by ve float64 0.2 4 -5 be kl6m psas do",

@@ -467,6 +467,8 @@ mod fixed16;
 mod float;
 #[path = "semantics_runtime/numeric.rs"]
 mod numeric;
+#[path = "semantics_runtime/pluk_tlas.rs"]
+mod pluk_tlas;
 #[path = "semantics_runtime/programlet_actions.rs"]
 mod programlet_actions;
 #[path = "semantics_runtime/programlet_branch.rs"]

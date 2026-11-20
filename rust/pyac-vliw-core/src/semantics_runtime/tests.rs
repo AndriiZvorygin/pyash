@@ -93,6 +93,8 @@ fn interpret(codelets: &[[u32; CODELET_WORDS]]) -> CoreResult {
 
 #[path = "tests/basic.rs"]
 mod basic;
+#[path = "tests/pluk_tlas.rs"]
+mod pluk_tlas;
 #[path = "tests/programlet.rs"]
 mod programlet;
 #[path = "tests/scalar_product.rs"]

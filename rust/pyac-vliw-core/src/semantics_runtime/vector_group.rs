@@ -16,6 +16,39 @@ fn vector_header(words: &[u32], codelet: usize) -> Option<(usize, QuoteHeader)> 
     None
 }
 
+pub(super) fn vector_name_span(words: &[u32], start: usize, group_len: usize) -> Option<NameSpan> {
+    let token_capacity = group_len * (CODELET_WORDS - 1);
+    let mut token_offset = 0usize;
+    while token_offset < token_capacity {
+        let codelet = start + token_offset / (CODELET_WORDS - 1);
+        let slot = token_offset % (CODELET_WORDS - 1) + 1;
+        let raw = word(words, codelet, slot);
+        let header = quote_header(raw);
+        let thickness = (raw & 0x0700) >> 8;
+        if header.valid != 0 && matches!(header.sort, 4 | 5 | 6) && thickness != 0 {
+            if token_offset >= 2
+                && token_at(words, start, token_offset - 1, group_len) == Some(NOMINATIVE)
+            {
+                return Some(NameSpan {
+                    start: 0,
+                    length: token_offset - 1,
+                });
+            }
+        }
+        token_offset += 1;
+    }
+    None
+}
+
+fn token_at(words: &[u32], start: usize, offset: usize, group_len: usize) -> Option<u32> {
+    if offset >= group_len * (CODELET_WORDS - 1) {
+        return None;
+    }
+    let codelet = start + offset / (CODELET_WORDS - 1);
+    let slot = offset % (CODELET_WORDS - 1) + 1;
+    (codelet * CODELET_WORDS + slot < words.len()).then(|| word(words, codelet, slot))
+}
+
 fn vector_length(
     words: &[u32],
     codelet: usize,

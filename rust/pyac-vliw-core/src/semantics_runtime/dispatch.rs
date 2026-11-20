@@ -1,3 +1,4 @@
+use super::pluk_tlas::pluk_tlas_group;
 use super::scalar_product::scalar_product_group;
 use super::vector_group::interpret_vector_group;
 use super::*;
@@ -14,6 +15,9 @@ pub fn interpret_group(words: &[u32], start: usize, codelet_count: usize) -> Cor
         return CoreResult::failure(ERROR_MALFORMED, (codelet_count - start) as u32);
     }
     let group_len = end - start + 1;
+    if let Some(result) = pluk_tlas_group(words, start, group_len, codelet_count) {
+        return result;
+    }
     if let Some(result) = scalar_product_group(words, start, group_len) {
         return result;
     }

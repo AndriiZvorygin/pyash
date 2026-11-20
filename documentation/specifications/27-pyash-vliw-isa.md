@@ -314,6 +314,6 @@ sentence.
 
 ## Target companion
 
-Target capability selection, dot product (`kl6m psas`), backend lowering, and
-compatibility examples are normative in
+Target capability selection, dot product (`kl6m psas`), exact-match count
+(`pluk tlas`), backend lowering, and compatibility examples are normative in
 [Pyash VLIW targets and compatibility](28-pyash-vliw-targets.md).
