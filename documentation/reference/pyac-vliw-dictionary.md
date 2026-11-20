@@ -93,6 +93,12 @@ return all matching keys rather than silently selecting one. One key may have
 lexical forms in many languages, all resolving to that entry's single
 definition.
 
+For example, the English surface `mapping` can index both `pwak hnuc`, linked
+to the mathematical function/map sense, and `tcas hjom`, linked to the
+chromosome-mapping sense. These are different Pyac keys because they identify
+different meanings; a surface lookup returns both, while a WordNet lookup by
+exact version and synset selects the corresponding one.
+
 Each volume declares its language identifiers and normalization policy in
 ordinary VLIW sentences. The source surface is retained exactly. A normalized
 surface is an explicit lookup value; case folding, transliteration, or other
@@ -186,15 +192,17 @@ acceptance is not the same provenance as curated acceptance.
 | Book/compilation | `n:06649049-n`, compilation of known facts | `lwat hpuk`, accepted-LLM. |
 | Contents / table of contents | `n:06501650-n`, list of divisions and their locations | `dvis hnok`, accepted-LLM. |
 | Alphabetical index | `n:06503777-n`, alphabetical listing of names and topics | `lwat txik`, accepted-LLM. |
-| Dictionary entry | WordNet 3.0 `n:06300823` -> Open English WordNet 2025 `n:06311813-n`; the entry in a dictionary of information about a word. | `tlat kwon` (word + dictionary), accepted-LLM; its final component is “dictionary,” so the head-final fit for “entry/article” remains questionable. |
+| Dictionary entry | WordNet 3.0 `n:06300823` -> Open English WordNet 2025 `n:06311813-n`; the entry in a dictionary of information about a word. | `tlat kwon`, accepted-LLM. |
 | General written-record entry | `n:06515715-n`, an item inserted in a written record | `nyit lwat`, accepted-LLM. |
 | Word definition | `n:06757091-n`, concise explanation of a word's meaning | `pcat nyif`, accepted-LLM. |
+| Mathematical map / function | WordNet 3.0 `n:13783816` -> Open English WordNet 2025 `n:13806028-n`; a single-valued mathematical relation from domain elements to range elements. | `pwak hnuc`, linked compound, accepted-LLM. |
+| Chromosome mapping | WordNet 3.0 `n:01024643` -> Open English WordNet 2025 `n:01026585-n`; the process of locating genes on a chromosome. | `tcas hjom`, linked compound, accepted-LLM. |
 | Dictionary | Current atom `kwon` | Existing lexical atom. |
 
-These compounds are current vocabulary records. This reference does not change
-them or assert that each is the best semantic fit; notably, `tlat kwon` still
-merits head-final review before it is chosen as the canonical term for a
-dictionary article. This reference adds no vocabulary entries.
+These compounds and links are recorded as supplied by the vocabulary catalog.
+The dictionary preserves their exact sense links and provenance; it does not
+re-rank or reinterpret the vocabulary decisions. This reference adds no
+vocabulary entries.
 
 ## 7. Conformance and validation
 
@@ -208,6 +216,8 @@ A conforming volume and reader MUST:
   to fall between complete sentences, reject overlapping/out-of-range ranges,
   and reject missing references;
 - resolve every index posting to an existing Pyac key and entry range;
+- preserve each external sense identifier and its linked Pyac key exactly;
+  equal English surfaces do not merge distinct senses or compounds;
 - match operation signatures by verb, mood, grammatical cases, and value
   types, while keeping human-readable parameter labels outside the dispatch
   key;
