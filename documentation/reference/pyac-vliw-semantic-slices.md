@@ -101,10 +101,32 @@ scalar. Inputs are finite, widths match, and accumulation follows lane order in
 the input precision. The typed vectors may span multiple indexed codelets; the
 sentence's case and mood boundary bits remain validated. The Rust core tests
 cover float32/float64, sixteen lanes, continuation, shape errors, and non-finite
-results. Native Vulkan and CPU builds enable `shader-f64`; the WGSL/WebGPU shader
+results. Either operand can also name a preceding immutable vector declaration;
+name references are resolved by HNUC sequence, with exactly one preceding match
+required:
+
+```pyash
+su name features ob ve float32 1 2 be vector ya
+su name weight ob ve float32 4 5 be vector ya
+ob name features by name weight be kl6m psas do
+```
+
+Named inputs can be combined with the existing optional indexed destination.
+Mutable-vector source reads are not part of this slice. Native Vulkan and CPU builds enable `shader-f64`; the WGSL/WebGPU shader
 build intentionally omits it and rejects float64 dot products while retaining
 float32 support. The JavaScript adapter only lowers the typed sentence; it is
 not the semantic oracle.
+
+## IWSP linear scoring pilot
+
+`examples/pyash/iwsp-linear-scorer-v1.pya` is a deterministic CPU scoring task
+that exercises named feature/weight vectors, dot-product collection, and the
+exact-match judge. With input `[1, 2]` and weights `[1, 2]`, `[2, 1]`, and
+`[3, 0]`, the prediction scores are `[5, 4, 3]` and the judge returns `3`.
+Changing the third weight to `[2, 0]` produces `[5, 4, 2]` and score `2`.
+This visible synthetic fixture validates scoring behavior only; its candidate,
+labels, and evaluator are all in the same pack, so it makes no evaluator
+isolation or held-out-data claim.
 
 ## Exact-match evaluation (`pluk tlas`)
 

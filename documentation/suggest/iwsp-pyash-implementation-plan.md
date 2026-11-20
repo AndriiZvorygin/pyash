@@ -214,10 +214,11 @@ evaluator, a whole-run checkpoint identity, and an independent audit path remain
 designed.
 
 At the execution level, VLIW has scalar float32 and fixed16 alongside integer and
-boolean behavior, plus typed float32/float64 vector literals and programlet control
-flow. It does not yet provide vector reductions such as dot product, general
-matrix/tensor execution, or a weight data plane in `.pyac`. These are specific
-capability gaps, not evidence that every iWSP task requires float64 or GPU execution.
+boolean behavior, typed float32/float64 vector literals, programlet control flow,
+16-lane dot products, and exact-match vector evaluation. General sum/argmax
+reductions, matrix/tensor execution, and a scalable model-weight data plane in
+`.pyac` remain gaps. These are specific capability gaps, not evidence that every
+iWSP task requires float64 or GPU execution.
 
 ---
 
@@ -259,10 +260,13 @@ runtime types. Increasing the divisor improves resolution while lowering the max
 signed encodings must also spend range on negative values. Binary/low-bit weights are
 another possible representation, not a claim that an IEEE float is one bit wide.
 
-The shared core currently has no vector reductions such as dot product or sum and no
-general matrix/tensor execution. The `.pyac` pack also has no weight-data section.
-These are separate execution/data-layout gaps; they should not be conflated with scalar
-numeric-format support.
+The shared core currently supports dot product for inline or preceding named
+float32/float64 vectors, up to 16 lanes. General sum/argmax reductions and
+matrix/tensor execution are still absent. The `.pyac` pack has no scalable
+weight-data section: small named vectors fit in ordinary vector declarations,
+but larger model weights need the versioned program-image/container design.
+These are separate execution/data-layout gaps; they should not be conflated with
+scalar numeric-format support.
 
 ### 3.2 How to choose a representation
 
@@ -451,9 +455,9 @@ evaluation batch, subject to the current 64-section pack capacity and measured p
 overhead.
 
 That is distinct from parallelizing a single example's tensor operations. Float32 and
-fixed16 scalar semantics and float32/float64 vector literals now exist, but VLIW vector
-reductions (dot product, sum, argmax), model-scale matrix/tensor operations, and a
-parameter payload/data layout are still gaps. The plan must measure whether
+fixed16 scalar semantics, float32/float64 vector literals, and a 16-lane dot product
+now exist. General sum/argmax reductions, model-scale matrix/tensor operations, and a
+scalable parameter payload/data layout are still gaps. The plan must measure whether
 within-example parallelism is worthwhile after a minimal end-to-end CPU candidate
 exists; do not treat "GPU" as synonymous with "matrix support" or assume current
 section dispatch already accelerates a layer.
@@ -689,14 +693,17 @@ Housekeeper contracts where they fit. New vocabulary, storage shapes, and APIs a
 selected only after checking the current Pyash cases, vocabulary inventory, and
 relevant specifications. Numeric formats are not a gate to the first framework slice.
 
-Current position: typed float32/float64 vectors and float-vector dot product are
-implemented in the shared VLIW runtime. The `pluk tlas` exact-match count is a
-second shared evaluation primitive, using named float32 vectors and returning an
-unsigned count. Indexed dot-product results can populate a zero-initialized named
-float32 prediction vector. This is a judge primitive, not a complete isolated
-evaluator or candidate-scoring pipeline. The next work is to connect trusted
-evaluation and its task/data contract, then exercise useful scoring workflows
-without duplicating semantic implementations in JavaScript.
+Current position: typed float32/float64 vectors, inline and named-vector dot
+products, mutable float32 result collection, and the `pluk tlas` exact-match count
+are implemented in the shared VLIW runtime. The CPU pilot
+`iwsp-linear-score-v1` uses one two-feature input, three named weight vectors,
+three collected scores, and a fixed expected vector: the reference candidate
+scores 3/3 and a one-weight mutation scores 2/3. It is a reproducible visible
+scoring example, not an isolated evaluator or held-out benchmark. The same
+reference and mutated candidates now pass on live Vulkan through Housekeeper;
+see the verification ledger for the exact run and artifacts. The immediate
+next stage is to build and test the separate trusted evaluator boundary before
+adding candidate search.
 
 ### Stage 0 — Fix the task and trust contract
 
@@ -713,6 +720,14 @@ Define one small deterministic task and write down, before implementation:
 **Acceptance:** the roles, method choices, and information boundaries are unambiguous;
 a reviewer can state what the candidate author may read or change and what the evaluator
 alone owns. No new Pyash surface is committed at this stage.
+
+**Pilot contract (`iwsp-linear-score-v1`):** the feature vector, expected score
+vector, and candidate weights are all visible and fixed in one small Pyash fixture.
+For this smoke task, the permitted candidate edit is the three named weight-vector
+declarations; the update method is a direct source edit, with no search loop or
+gradient update. Feedback is the exact-match count from 0 to 3. There is no held-out
+data and no evaluator confidentiality claim at this stage. Stage 2 adds an actual
+trusted boundary; it must not be inferred from this transparent conformance pack.
 
 ### Stage 0.1 — Add an exact-match judge primitive (implemented)
 
@@ -737,23 +752,34 @@ semantics. The runnable source fixture is
 
 **Acceptance evidence:** Rust core tests cover exact equality, one-ULP differences,
 signed zero, maximum vector width across indexed codelets, missing/duplicate names,
-type errors, and width mismatch. The public Rust pack executor returns `Unsigned(2)`
+type errors, and width mismatch. The public Rust pack executor returns `Unsigned(3)`
 for the fixture. This establishes the operation, not evaluator isolation, held-out data
 protection, or a complete iWSP search loop.
 
-### Stage 1 — Deliver one CPU vertical slice with dot product
+### Stage 1 — Deliver one CPU/GPU vertical slice with named-vector dot product (verified)
 
-Use a small deterministic vector-scoring task with a known reference and compact
-candidate. Reuse the existing shared dot product and the new exact-match judge where
-their contracts fit; do not add a duplicate JS metric implementation. Specify
-accumulation precision, length mismatch and empty-vector behavior, and CPU/GPU agreement
-for each selected operation. The candidate remains readable Pyash source plus named
-parameter facts. Run it through the ordinary CPU path first, reusing existing
-refinery/run recording and criterion machinery where their contracts fit.
+Task version `iwsp-linear-score-v1` uses the visible feature vector `[1, 2]`;
+candidate weight vectors `[1, 2]`, `[2, 1]`, and `[3, 0]`; and reference scores
+`[5, 4, 3]`. The candidate may edit the named weight-vector declarations for this
+smoke task. Dot products read the named feature/weight vectors and store each
+scalar in a lane of the mutable prediction vector. `pluk tlas` supplies the exact
+float32 score out of three. A deliberate third-weight change to `[2, 0]` yields
+`[5, 4, 2]` and score `2/3`.
 
-**Acceptance:** a valid candidate runs end-to-end; a deliberately wrong candidate
-scores worse; dot-product edge cases are covered; the task result names the source
-candidate and task version; and a clean run is reproducible without GPU availability.
+All data and the evaluator are visible in the same PyAC pack. This is a small
+scoring/conformance fixture, not a security boundary, training loop, classifier
+argmax, or held-out evaluation. Dot products require finite, nonempty, equal-width
+vectors of matching type and accumulate in lane order at the input precision;
+the pilot uses two-lane float32 vectors. The CPU fixture and tests use the shared
+Rust semantics; JavaScript lowers but does not calculate the score.
+
+**Acceptance evidence:** the runnable fixture is
+`examples/pyash/iwsp-linear-scorer-v1.pya`; CPU tests prove reference score `3`
+and mutated score `2`; Rust tests cover named lookup, missing/duplicate names,
+width mismatch, inline compatibility, and numeric edge cases. The live RTX 3090
+Housekeeper run passed both candidates plus the full matrix (49/49 valid cases
+and 2/2 expected errors); its metrics and artifact hashes are recorded in the
+VLIW verification ledger. Stage 1 is cross-target verified.
 
 ### Stage 2 — Isolate and verify the evaluator
 

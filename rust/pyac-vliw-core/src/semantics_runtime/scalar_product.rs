@@ -1,9 +1,11 @@
-use super::numeric::{quote_header, word, QuoteHeader};
+use super::named_vector::resolve_prior_vector;
+use super::numeric::{QuoteHeader, quote_header, word};
 use super::*;
 
 const SCALAR_WORD: u32 = 0x0d62;
 const PRODUCE_WORD: u32 = 0x8944;
 
+#[derive(Clone, Copy)]
 struct Cursor {
     start: usize,
     codelet: usize,
@@ -11,6 +13,7 @@ struct Cursor {
     end: usize,
 }
 
+#[derive(Clone, Copy)]
 struct VectorOperand {
     kind: u32,
     length: usize,
@@ -89,6 +92,7 @@ fn read_destination(words: &[u32], cursor: &mut Cursor) -> Result<ScalarProductD
     if cursor.peek(words, false) != Some(NAME_TYPE) {
         return Ok(ScalarProductDestination::NONE);
     }
+    let saved = *cursor;
     cursor.read(words, false).ok_or(ERROR_MALFORMED)?;
     let name_start = cursor.offset();
     let mut name_length = 0;
@@ -96,9 +100,14 @@ fn read_destination(words: &[u32], cursor: &mut Cursor) -> Result<ScalarProductD
         cursor.read(words, false).ok_or(ERROR_MALFORMED)?;
         name_length += 1;
     }
-    if name_length == 0 || cursor.read(words, true) != Some(DESTINATION) {
+    if name_length == 0 {
         return Err(ERROR_MALFORMED);
     }
+    if cursor.peek(words, true) != Some(DESTINATION) {
+        *cursor = saved;
+        return Ok(ScalarProductDestination::NONE);
+    }
+    cursor.read(words, true).ok_or(ERROR_MALFORMED)?;
     if cursor.read(words, false) != Some(NUMBER_QUOTE) {
         return Err(ERROR_MALFORMED);
     }
@@ -131,7 +140,7 @@ pub(super) fn scalar_product_destination(
         slot: 1,
         end,
     };
-    read_vector(&mut cursor, words)?;
+    skip_operand(&mut cursor, words)?;
     if cursor.read(words, true) != Some(ACCUSATIVE) {
         return Err(ERROR_MALFORMED);
     }
@@ -201,6 +210,51 @@ fn read_vector(cursor: &mut Cursor, words: &[u32]) -> Result<VectorOperand, u32>
     })
 }
 
+fn read_name_span(cursor: &mut Cursor, words: &[u32]) -> Result<NameSpan, u32> {
+    cursor.read(words, false).ok_or(ERROR_MALFORMED)?;
+    let start = cursor.offset();
+    let mut length = 0;
+    while cursor.peek(words, false).is_some() {
+        cursor.read(words, false).ok_or(ERROR_MALFORMED)?;
+        length += 1;
+    }
+    if length == 0 {
+        return Err(ERROR_MALFORMED);
+    }
+    Ok(NameSpan { start, length })
+}
+
+fn read_operand(
+    cursor: &mut Cursor,
+    words: &[u32],
+    start: usize,
+    group_len: usize,
+    codelet_count: usize,
+) -> Result<VectorOperand, u32> {
+    if cursor.peek(words, false) != Some(NAME_TYPE) {
+        return read_vector(cursor, words);
+    }
+    let name = read_name_span(cursor, words)?;
+    let result = resolve_prior_vector(words, codelet_count, start, start, group_len, name)?;
+    Ok(VectorOperand {
+        kind: result.value_kind,
+        length: result.length as usize,
+        values: result.values,
+    })
+}
+
+fn skip_operand(cursor: &mut Cursor, words: &[u32]) -> Result<(), u32> {
+    if cursor.peek(words, false) == Some(NAME_TYPE) {
+        read_name_span(cursor, words)?;
+    } else {
+        match read_vector(cursor, words) {
+            Ok(_) => {}
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(())
+}
+
 fn operation_suffix(words: &[u32], start: usize, end: usize) -> bool {
     let mut found = [0u32; 3];
     let mut count = 0;
@@ -233,6 +287,7 @@ pub(super) fn scalar_product_group(
     words: &[u32],
     start: usize,
     group_len: usize,
+    codelet_count: usize,
 ) -> Option<CoreResult> {
     let end = start + group_len;
     if group_len == 0 || !operation_suffix(words, start, end) {
@@ -244,7 +299,7 @@ pub(super) fn scalar_product_group(
         slot: 1,
         end,
     };
-    let left = match read_vector(&mut cursor, words) {
+    let left = match read_operand(&mut cursor, words, start, group_len, codelet_count) {
         Ok(value) => value,
         Err(error) => return Some(CoreResult::failure(error, group_len as u32)),
     };
@@ -255,7 +310,7 @@ pub(super) fn scalar_product_group(
         Ok(_) => {}
         Err(error) => return Some(CoreResult::failure(error, group_len as u32)),
     }
-    let right = match read_vector(&mut cursor, words) {
+    let right = match read_operand(&mut cursor, words, start, group_len, codelet_count) {
         Ok(value) => value,
         Err(error) => return Some(CoreResult::failure(error, group_len as u32)),
     };

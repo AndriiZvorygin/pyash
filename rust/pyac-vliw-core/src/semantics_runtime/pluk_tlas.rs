@@ -369,7 +369,8 @@ fn resolve_vector(
                     return Err(ERROR_VECTOR_WIDTH);
                 }
                 let result =
-                    scalar_product_group(words, cursor, length).ok_or(ERROR_UNSUPPORTED)?;
+                    scalar_product_group(words, cursor, length, codelet_count)
+                        .ok_or(ERROR_UNSUPPORTED)?;
                 if result.error != 0 {
                     return Err(result.error);
                 }

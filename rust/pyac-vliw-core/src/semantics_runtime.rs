@@ -469,6 +469,8 @@ mod fixed16;
 mod float;
 #[path = "semantics_runtime/mutable_vector.rs"]
 mod mutable_vector;
+#[path = "semantics_runtime/named_vector.rs"]
+mod named_vector;
 #[path = "semantics_runtime/numeric.rs"]
 mod numeric;
 #[path = "semantics_runtime/pluk_tlas.rs"]

@@ -36,13 +36,13 @@ export function normalizeScalarProductSentence(sentence) {
   }
   const left = normalizeOperand(sentence.ob, "ob");
   const right = normalizeOperand(sentence.by, "by");
-  if (left.type !== right.type) {
+  if (left.type && right.type && left.type !== right.type) {
     throw invalid("unsupported-vector-type", "scalar product operands must use the same float type", {
       left: left.type,
       right: right.type
     });
   }
-  if (left.values.length !== right.values.length) {
+  if (left.values && right.values && left.values.length !== right.values.length) {
     throw invalid("unsupported-vector-width", "scalar product operands must have equal lengths", {
       left: left.values.length,
       right: right.values.length
@@ -50,14 +50,18 @@ export function normalizeScalarProductSentence(sentence) {
   }
   return {
     mood: "do",
-    ob: { ve: left },
+    ob: left.name ? { name: left.name } : { ve: left },
     ...(storesLane ? { to: sentence.to, at: sentence.at } : {}),
-    by: { ve: right },
+    by: right.name ? { name: right.name } : { ve: right },
     be: OPERATION
   };
 }
 
 function normalizeOperand(value, role) {
+  if (value?.name !== undefined && Object.keys(value).join(",") === "name"
+    && typeof value.name === "string" && value.name.trim()) {
+    return { name: value.name.trim() };
+  }
   const vector = value?.ve;
   if (!vector || !["float32", "float64"].includes(vector.type) || !Array.isArray(vector.values)) {
     throw invalid("unsupported-vector-type", `scalar product ${role} requires a float32 or float64 vector`);

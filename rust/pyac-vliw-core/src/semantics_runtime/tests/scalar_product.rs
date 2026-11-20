@@ -84,6 +84,69 @@ fn execute(left: &[f64], right: &[f64], width: usize) -> CoreResult {
     interpret(&codelets)
 }
 
+fn append_group(
+    words: &mut std::vec::Vec<u32>,
+    tokens: &[u32],
+    boundary_offsets: &[usize],
+) -> usize {
+    let start = words.len() / CODELET_WORDS;
+    let chunk_count = tokens.chunks(CODELET_WORDS - 1).len();
+    for (chunk_index, chunk) in tokens.chunks(CODELET_WORDS - 1).enumerate() {
+        let complete = chunk_index + 1 == chunk_count;
+        let token_start = chunk_index * (CODELET_WORDS - 1);
+        let mut codelet = [0u32; CODELET_WORDS];
+        codelet[0] = u32::from(complete);
+        codelet[1..chunk.len() + 1].copy_from_slice(chunk);
+        for (offset, _) in chunk.iter().enumerate() {
+            if boundary_offsets.contains(&(token_start + offset)) == complete {
+                codelet[0] |= 1 << (offset + 1);
+            }
+        }
+        words.extend(codelet);
+    }
+    start
+}
+
+fn append_named_f32(words: &mut std::vec::Vec<u32>, name: u32, values: [f32; 2]) {
+    let mut tokens = std::vec![name, NOMINATIVE, 0xd11d];
+    for value in values {
+        let bits = value.to_bits();
+        tokens.extend([bits & 0xffff, bits >> 16]);
+    }
+    let accusative = tokens.len();
+    tokens.extend([ACCUSATIVE, REALIS]);
+    append_group(words, &tokens, &[1, accusative, accusative + 1]);
+}
+
+fn append_named_f32_three(words: &mut std::vec::Vec<u32>, name: u32, values: [f32; 3]) {
+    let mut tokens = std::vec![name, NOMINATIVE, 0xd71d];
+    for value in values {
+        let bits = value.to_bits();
+        tokens.extend([bits & 0xffff, bits >> 16]);
+    }
+    let accusative = tokens.len();
+    tokens.extend([ACCUSATIVE, REALIS]);
+    append_group(words, &tokens, &[1, accusative, accusative + 1]);
+}
+
+fn append_named_dot(words: &mut std::vec::Vec<u32>, left: u32, right: u32) -> usize {
+    append_group(
+        words,
+        &[
+            NAME_TYPE,
+            left,
+            ACCUSATIVE,
+            NAME_TYPE,
+            right,
+            INSTRUMENTAL,
+            SCALAR_WORD,
+            PRODUCE_WORD,
+            DEONTIC,
+        ],
+        &[2, 5, 8],
+    )
+}
+
 #[test]
 fn computes_float32_dot_product_from_pyash_compound_signature() {
     let result = execute(&[1.0, 2.0, 3.0], &[4.0, 5.0, 6.0], 4);
@@ -91,6 +154,51 @@ fn computes_float32_dot_product_from_pyash_compound_signature() {
     assert_eq!(result.value_kind, VALUE_FLOAT32);
     assert_eq!(f32::from_bits(result.values[0]), 32.0);
     assert_eq!(result.consumed_codelets, 2);
+}
+
+#[test]
+fn computes_a_dot_product_from_preceding_named_vectors() {
+    let mut words = std::vec::Vec::new();
+    append_named_f32(&mut words, 0x4123, [1.0, 2.0]);
+    append_named_f32(&mut words, 0x4567, [4.0, 5.0]);
+    assert_eq!(interpret_group(&words, 0, 1).error, 0);
+    assert_eq!(interpret_group(&words, 1, 2).error, 0);
+    let start = append_named_dot(&mut words, 0x4123, 0x4567);
+    let result = interpret_group(&words, start, words.len() / CODELET_WORDS);
+
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.value_kind, VALUE_FLOAT32);
+    assert_eq!(f32::from_bits(result.values[0]), 14.0);
+}
+
+#[test]
+fn rejects_unbound_duplicate_and_width_mismatched_named_dot_operands() {
+    let mut unbound = std::vec::Vec::new();
+    append_named_f32(&mut unbound, 0x4123, [1.0, 2.0]);
+    let start = append_named_dot(&mut unbound, 0x4123, 0x4567);
+    assert_eq!(
+        interpret_group(&unbound, start, unbound.len() / CODELET_WORDS).error,
+        ERROR_UNSUPPORTED
+    );
+
+    let mut duplicate = std::vec::Vec::new();
+    append_named_f32(&mut duplicate, 0x4123, [1.0, 2.0]);
+    append_named_f32(&mut duplicate, 0x4123, [3.0, 4.0]);
+    append_named_f32(&mut duplicate, 0x4567, [4.0, 5.0]);
+    let start = append_named_dot(&mut duplicate, 0x4123, 0x4567);
+    assert_eq!(
+        interpret_group(&duplicate, start, duplicate.len() / CODELET_WORDS).error,
+        ERROR_MALFORMED
+    );
+
+    let mut mismatched = std::vec::Vec::new();
+    append_named_f32(&mut mismatched, 0x4123, [1.0, 2.0]);
+    append_named_f32_three(&mut mismatched, 0x4567, [4.0, 5.0, 6.0]);
+    let start = append_named_dot(&mut mismatched, 0x4123, 0x4567);
+    assert_eq!(
+        interpret_group(&mismatched, start, mismatched.len() / CODELET_WORDS).error,
+        ERROR_VECTOR_WIDTH
+    );
 }
 
 #[test]

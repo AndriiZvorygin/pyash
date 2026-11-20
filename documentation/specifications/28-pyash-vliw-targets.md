@@ -216,22 +216,26 @@ runtime transport/capacity gap. Programlet slots remain scalar typed values.
 
 ## 10. Scalar product (dot product)
 
-The Pyash compound `kl6m psas` has English gloss **dot product**. Its canonical
-sentence is:
+The Pyash compound `kl6m psas` means **dot product**. Inline form:
 
 ```pyash
 ob ve float32 1 2 3 by ve float32 4 5 6 be kl6m psas do
 ```
 
-`ob` and `by` are the left and right vectors; `do` requests the operation.
-The sentence returns a typed scalar and may also store it in a preceding
-mutable float32 vector using `to name <vector> at num <lane>`.
+`ob` and `by` are the left and right operands: an inline typed vector or one
+preceding named float32/float64 vector literal in the pack. For example:
 
-The declaration creates a zeroed vector with one to 16 lanes. `to` names it;
-`at` is the zero-based lane. The destination MUST be declared earlier and the
-lane MUST be in range. Writes apply in source order; omitted `to`/`at` keeps the
-operation scalar-only. The executable verb is HNUCs `0x0D62 0x8944`;
-WordNet/SUMO links remain catalog metadata.
+```pyash
+su name features ob ve float32 1 2 be vector ya
+su name weight ob ve float32 4 5 be vector ya
+ob name features by name weight be kl6m psas do
+```
+
+Named operands are read-only; missing or duplicate names are errors. Mutable
+float32 vectors may be destinations only. Optional `to name <vector> at num
+<lane>` stores the scalar in a preceding zeroed vector (1-16 lanes, zero-based
+index, writes in source order); omitting it returns only the scalar. Verb HNUCs:
+`0x0D62 0x8944`.
 
 Operands MUST be finite, non-empty float32 or float64 vectors of matching type
 and equal length, from one to `MAX_VECTOR_LANES` (currently 16). Multiply
@@ -263,9 +267,8 @@ products; unwritten lanes stay zero. Both vectors MUST have equal nonzero width
 IEEE-754 binary32 numeric comparison; there is no tolerance, and positive and
 negative zero compare equal. Return one unsigned scalar in the range 0 to 16.
 
-The cases use their ordinary accusative, instrumental, and destination HNUCs.
 The verb uses the existing two-word `pluk tlas` HNUC sequence and deontic mood;
-this adds no quote type or vocabulary allocation. Unbound or duplicate names,
+no quote type or vocabulary allocation is added. Unbound or duplicate names,
 non-float32 inputs, malformed declarations, and unequal widths are errors. The
 shared Rust VLIW runtime owns CPU and GPU execution semantics; JavaScript only
 lowers the sentence and does not calculate the count.

@@ -217,3 +217,38 @@ writes three dot-product results to indexed lanes, then passes that vector to
 The result vector is `[5,4,3]`, with exact-match count `3`. Complete hashes,
 per-request queue/service/kernel timings, and the case list are in the `.pya`
 run record.
+
+## 2026-11-20: IWSP Linear Scorer CPU/GPU Slice
+
+**Run record:** `artifacts/20261120-0005-rust-vliw-conformance/result.pya`
+
+| Field | Evidence |
+| --- | --- |
+| Source revision | `c7a42a2f61d64474422274c2a34320b0bbae1090` plus dirty patch SHA-256 `2ec097e85060739d732d2e044a149d072f9ac5c4dc6b4db6d39c3614b69de61e` |
+| Host and route | Mriczo, Pyash GPU Housekeeper -> `pyac-vliw-runtime` -> Rust-GPU Vulkan |
+| GPU | NVIDIA GeForce RTX 3090, driver `550.163.01`, 24,576 MiB |
+| Live conformance | 49/49 valid cases passed; 2/2 expected runtime errors passed |
+| IWSP baseline | Prediction `[5,4,3]`; exact-match score `3/3` on Rust CPU and RTX 3090 |
+| IWSP mutation | Changed third weight `[3,0]` to `[2,0]`; prediction `[5,4,2]`; score `2/3` on Rust CPU and RTX 3090 |
+| Full conformance wall | 32,684.886 ms |
+| CPU batch wall | 31 codelet cases: 57.891 ms; 18 programlet sections: 57.246 ms |
+| Vulkan kernel time | Codelet batch: 2.398976 ms; section batch: 60.768576 ms |
+| Client round trip | Codelet batch: 4,014.266 ms; section batch: 24,036.924 ms |
+| Runtime startup | 1.27 s with the persisted cache loaded; below the 60-second ceiling |
+| Pipeline-cache generation | 120.45 s total: pack 83.28 s, programlet 19.60 s, sections 17.27 s; deployment/build step only |
+| Executables | CPU reference 10,181,624 bytes; GPU runtime 9,086,096 bytes; GPU worker 7,393,808 bytes |
+| GPU artifacts | SPIR-V 4,015,496 bytes; pipeline cache 14,598,161 bytes |
+| Runtime image | `sha256:8c165192ef7f0b951cd7bfb204fe2c03cd399d9818b96df8e43cbb9aa4936462` |
+
+The scorer and deliberately degraded candidate were included in one GPU
+codelet batch using distinct named bindings. The separate reference-answer
+vector stayed `[5,4,3]`, so the `2/3` result demonstrates that the judge
+distinguishes the changed candidate rather than changing its target along with
+the candidate.
+
+GPU compute is not a speed claim for this tiny scorer: the codelet batch took
+2.399 ms in the Vulkan timestamp interval, while the CPU reference batch took
+57.891 ms including process/runtime overhead. The section batch's 24.037-second
+client round trip is also much larger than its 61 ms service/kernel interval;
+this run records that latency but does not explain it. Evaluator isolation,
+held-out data, and protected task scoring remain Stage 2 work.

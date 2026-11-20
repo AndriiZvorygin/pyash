@@ -19,7 +19,7 @@ pub fn interpret_group(words: &[u32], start: usize, codelet_count: usize) -> Cor
     if let Some(result) = pluk_tlas_group(words, start, group_len, codelet_count) {
         return result;
     }
-    if let Some(result) = scalar_product_group(words, start, group_len) {
+    if let Some(result) = scalar_product_group(words, start, group_len, codelet_count) {
         return result;
     }
     if let Some(result) = mutable_vector_group(words, start, group_len) {

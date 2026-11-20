@@ -77,3 +77,26 @@ test("dot products write indexed lanes of a zero-initialized vector consumed by 
     { type: "unsigned", value: 3 }
   ]);
 });
+
+test("named input and weight vectors score the deterministic IWSP linear task", () => {
+  const source = fs.readFileSync(path.join(root, "examples/pyash/iwsp-linear-scorer-v1.pya"), "utf8");
+  const run = (candidate) => {
+    const codelets = candidate
+      .split(/\n/u)
+      .filter((line) => line.trim())
+      .flatMap((line) => lowerSentence(parse(line)).map(({ words }) => words));
+    const [results] = executeRustCpuReference([encodePyacPack(codelets)]);
+    return results;
+  };
+
+  const correct = run(source);
+  const deliberatelyWrong = run(source.replace(
+    "su name weight three ob ve float32 3 0 be vector ya",
+    "su name weight three ob ve float32 2 0 be vector ya"
+  ));
+
+  assert.deepEqual(correct.at(-3), { type: "float32", value: 3 });
+  assert.deepEqual(correct.at(-1), { type: "unsigned", value: 3 });
+  assert.deepEqual(deliberatelyWrong.at(-3), { type: "float32", value: 2 });
+  assert.deepEqual(deliberatelyWrong.at(-1), { type: "unsigned", value: 2 });
+});
