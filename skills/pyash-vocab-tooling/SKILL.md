@@ -1,11 +1,11 @@
 ---
 name: pyash-vocab-tooling
-description: "Work with Pyash vocabulary tooling (vocab_suggest, vocab_check, anchor helpers); use when adding new words or checking tokens."
+description: "Safely add or update Pyash atoms, compounds, English forms, and vocabulary links using their canonical catalogs and validation tools."
 ---
 
 # Pyash Vocab Tooling
 
-Use this skill when adding new verbs/names or checking token validity.
+Use this skill when adding or updating Pyash atoms, compounds, English forms, or vocabulary links, and when checking token validity.
 
 ## Common commands
 
@@ -21,6 +21,10 @@ Use this skill when adding new verbs/names or checking token validity.
   `kwon n:07558676-n`
 - Write machine-readable lookup output:
   `node command/vocab_suggest.mjs n:07558676-n --map /tmp/love-synset.json`
+- Propose a new lexical atom (read-only):
+  `node command/vocab_atom_suggest.mjs "new concept"`
+- Add a compound from existing atoms (replace the placeholders):
+  `node command/compound_catalog_add.mjs "<target>" "<English gloss>" <modifier> <head>`
 
 Synset IDs are POS-qualified (`a`, `n`, `r`, `v`, or `s`) and use the matching POS suffix,
 such as `n:07558676-n`. The lookup reports the source lemmas and gloss, linked Pyash anchor,
@@ -42,6 +46,88 @@ Indexes refresh hourly from the schedule in
 (default: `minute 17 every hour`). Set that value to `disabled` to remove the refresh, then apply
 the calendar with `node world/house/refinery-watchdog/program/install-cron.mjs`. To refresh
 immediately, run `node command/vocab_lookup_index.mjs`. The source catalogs remain canonical.
+
+## Safely add or update vocabulary
+
+### Inspect before adding
+
+Check the current dictionary and canonical catalogs before creating a word. Use
+`node command/vocab_suggest.mjs "<English term>"` for single-term token, alias,
+and WordNet coverage. For compound targets, inspect the curated compound
+catalog with the parser-backed reader; a multiword target may be split into
+individual English lookups. For a specific WordNet meaning, query its
+POS-qualified synset (for example, `kwon n:07558676-n`) instead of relying on
+the English lemma alone. Prefer an existing atom or a compositional compound
+when it already expresses the intended meaning.
+
+### Choose the canonical record
+
+- **New lexical atom:** run `node command/vocab_atom_suggest.mjs "<concept>"`.
+  This is a read-only proposal based on the configured translation and
+  phonetic evidence; it does not add vocabulary. Review the proposed form,
+  English meaning, layer, and HNUC against current usage before accepting it in
+  `program/library/pyashWords.json`. Keep each Pyac form and HNUC unique, and
+  do not reuse an existing atom for a different meaning. See
+  `program/library/translation/README.md` under “Atom word proposals” for the
+  generator inputs and acceptance boundary.
+- **Compound from existing atoms:** run
+  `node command/compound_catalog_add.mjs "<target>" "<English gloss>" <modifier> <head>`.
+  Quote multiword targets and glosses. Give atoms in head-final order, with the
+  final atom as the head. This command writes the curated compound catalog and
+  checks that components are existing atoms with layer data, the target is not
+  already an atom, and neither the target nor the sequence conflicts with an
+  existing compound. Repeating an identical addition is safe and reports
+  `already-present`.
+- **Additional English spelling or alias:** use the appropriate anchor or
+  English lemma catalog. `anchor_words_add.mjs` adds an anchor form; it does
+  not create an atom. English lemma mappings live in
+  `program/library/translation/english_lemmas.pya`. Do not create a duplicate
+  atom just to cover an English inflection or alternate spelling.
+- **Chinese or WordNet link:** update the canonical link/bridge catalog through
+  its vocabulary workflow. For Chinese character links, follow
+  `pyash-chinese-character-atom-refinery`; for English WordNet sense links,
+  keep the POS-qualified synset and evidence in the bridge workflow. Do not
+  edit acquired source dictionaries or generated lookup indexes to change a
+  link.
+
+### Update existing entries
+
+`compound_catalog_add.mjs` is an add operation, not an update command. If the
+same target is already present with a different gloss or atom sequence, it
+intentionally fails. Do not add a second row for that target or sequence.
+Inspect the matching canonical row with the parser-backed reader:
+
+```
+node command/pya_to_json.mjs <catalog.pya> --pretty
+```
+
+Then make a focused change to that row in its source catalog. Preserve its
+evidence, provenance, aliases, source-language fields, and any WordNet sense
+links unless the update explicitly changes them. Re-run the compound catalog,
+lexicon, coverage, and lookup checks below.
+
+Treat an atom's Pyac form and HNUC as stable identity. To correct an English
+form, add or update the appropriate anchor/lemma mapping. If the underlying
+meaning changes, add a distinct atom or compound and migrate its links rather
+than silently repurposing the existing atom. For Chinese mappings, record a
+withdrawal in the canonical overlay when an inherited Kwon link is wrong; do
+not edit the acquired Kwon data.
+
+### Verify the change
+
+- For a new atom or English form, check the token with
+  `node command/vocab_suggest.mjs "<term>"`. For a new compound, confirm the
+  add command reports the intended atom sequence and gloss; the focused tests
+  below exercise catalog parsing, coverage, and VLIW compound resolution.
+- For compound catalog changes, run:
+  `node --test quiz/translation_compound_catalog.test.mjs quiz/translation_compound_lexicon.test.mjs quiz/translation_compound_coverage.test.mjs quiz/vocab_suggest_compounds.test.mjs`
+- For new atom proposals or Pyac encoding changes, run:
+  `node --test quiz/translation_atom_word_generation.test.mjs quiz/vliw_word_code.test.mjs`
+- For English anchor changes, run `node --test quiz/translation_anchor_words.test.mjs`.
+- Rebuild the Kwon sidecar indexes with `node command/vocab_lookup_index.mjs`
+  only when the updated catalogs need to be visible to Kwon immediately. The
+  canonical catalogs remain the source of truth; never edit the sidecar index
+  directly.
 
 ## Canonical words over legacy aliases
 
