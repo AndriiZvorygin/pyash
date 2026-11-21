@@ -159,6 +159,36 @@ dependency scheduling, single-writer enforcement, and interpreted versus
 decoded result paragraphs. Tests must include at least one source-language
 adapter and one unsupported-value rejection.
 
+### Rust programlet routine dispatch
+
+Pyac-defined ceremony routines use a flat canonical signature, distinct from
+the built-in sentence-handler key in section 5.1 of the VLIW ISA specification:
+
+```text
+type HNUC(s), case HNUC, type HNUC(s), case HNUC, ..., routine-name HNUC(s)
+```
+
+The Rust runtime derives each type from the declared argument or destination
+type and each case from its grammatical role. It sorts complete type/case
+groups by ascending numeric case HNUC, preserving the type with its case, then
+appends the routine name's HNUC sequence. Thus changing source case order does
+not change the key. `number`, `bool`, `float`, and `vec float` are represented
+by their Pyac type HNUC sequence; generic float types bind to the concrete
+float32 or float64 precision carried by the invocation.
+
+The destination type participates under `to`; destination variable names,
+argument names, and values do not. `fromindex` and `toindex` are loop controls,
+not callable arguments, and do not enter the key. The runtime builds a bounded
+directory once per program packet, sorts the complete flat keys, and resolves
+calls by binary search. Nested calls use the same directory. A duplicate full
+signature is an error; an absent exact key is unsupported. Dispatch does not
+fall back to name-only matching or probe another routine after a mismatch.
+
+This is the Rust VLIW execution contract; the JavaScript implementation is not
+the semantic authority. Implementation and packet tests are in
+`rust/pyac-vliw-core/src/semantics_runtime/programlet_dispatch_index.rs` and
+`rust/pyac-vliw-core/src/semantics_runtime/tests/programlet_signature_dispatch.rs`.
+
 The hosted PyashForth memory profile additionally requires conformance cases
 for quote-kind and payload round-trips, per-invocation slot isolation, constant
 write rejection, zero initialization, page-bound checks, and frame cleanup on

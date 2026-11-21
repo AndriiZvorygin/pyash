@@ -49,5 +49,8 @@ pub fn interpret_group(words: &[u32], start: usize, codelet_count: usize) -> Cor
         ROUTE_LITERAL if group_len == 1 => literal(words, start),
         _ => None,
     };
-    result.unwrap_or_else(|| CoreResult::failure(ERROR_MALFORMED, group_len as u32))
+    match result {
+        Some(result) => result,
+        None => CoreResult::failure(ERROR_MALFORMED, group_len as u32),
+    }
 }

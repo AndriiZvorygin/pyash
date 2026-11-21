@@ -1,3 +1,6 @@
+use super::float::is_finite_f32;
+#[cfg(feature = "shader-f64")]
+use super::float::is_finite_f64;
 use super::numeric::quote_header;
 use super::scalar_product::{Cursor, VectorOperand, read_operand};
 use super::*;
@@ -42,7 +45,7 @@ fn read_scalar(cursor: &mut Cursor, words: &[u32], vector_kind: u32) -> Result<V
             (6, 4) => f32::from_bits(payload[0] | (payload[1] << 16)),
             _ => return Err(ERROR_UNSUPPORTED),
         };
-        if !value.is_finite() {
+        if !is_finite_f32(value) {
             return Err(ERROR_FLOAT_DOMAIN);
         }
         result.values[0] = value.to_bits();
@@ -61,7 +64,7 @@ fn read_scalar(cursor: &mut Cursor, words: &[u32], vector_kind: u32) -> Result<V
                 }
                 _ => return Err(ERROR_UNSUPPORTED),
             };
-            if !value.is_finite() {
+            if !is_finite_f64(value) {
                 return Err(ERROR_FLOAT_DOMAIN);
             }
             let bits = value.to_bits();

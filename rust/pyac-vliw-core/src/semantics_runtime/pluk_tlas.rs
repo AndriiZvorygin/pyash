@@ -94,7 +94,11 @@ fn token_at(words: &[u32], start: usize, group_len: usize, offset: usize) -> Opt
     }
     let codelet = start + offset / (CODELET_WORDS - 1);
     let slot = offset % (CODELET_WORDS - 1) + 1;
-    (codelet * CODELET_WORDS + slot < words.len()).then(|| word(words, codelet, slot))
+    if codelet * CODELET_WORDS + slot < words.len() {
+        Some(word(words, codelet, slot))
+    } else {
+        None
+    }
 }
 
 fn boundary_at_token(words: &[u32], start: usize, offset: usize) -> bool {
@@ -368,9 +372,8 @@ fn resolve_vector(
                 {
                     return Err(ERROR_VECTOR_WIDTH);
                 }
-                let result =
-                    scalar_product_group(words, cursor, length, codelet_count)
-                        .ok_or(ERROR_UNSUPPORTED)?;
+                let result = scalar_product_group(words, cursor, length, codelet_count)
+                    .ok_or(ERROR_UNSUPPORTED)?;
                 if result.error != 0 {
                     return Err(result.error);
                 }

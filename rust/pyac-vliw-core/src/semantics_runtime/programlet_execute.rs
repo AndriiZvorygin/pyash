@@ -31,6 +31,7 @@ pub fn execute_numeric_programlet_at(
     symbol_words: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
     frames: &mut [ProgramletFrame; MAX_PROGRAMLET_CALL_DEPTH],
 ) -> CoreResult {
+    let mut routine_directory = ProgramletRoutineDirectory::EMPTY;
     let mut symbol_used = match initialize_numeric_programlet(
         words,
         base_codelet,
@@ -40,6 +41,7 @@ pub fn execute_numeric_programlet_at(
         sentence_boundaries,
         symbol_words,
         frames,
+        &mut routine_directory,
     ) {
         Ok(used) => used,
         Err(error) => return CoreResult::failure(error, 0),
@@ -199,6 +201,7 @@ pub fn execute_numeric_programlet_at(
                 sentence_words,
                 sentence_boundaries,
                 symbol_words,
+                &routine_directory,
                 &mut symbol_used,
                 frames,
                 frame_index,

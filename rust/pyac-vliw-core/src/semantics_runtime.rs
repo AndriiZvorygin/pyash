@@ -142,6 +142,7 @@ pub const ERROR_PROGRAM_CAPACITY: u32 = 9;
 pub const ERROR_CALL_DEPTH: u32 = 10;
 pub const ERROR_FLOAT_DOMAIN: u32 = 11;
 pub const ERROR_FIXED16_DOMAIN: u32 = 12;
+pub const ERROR_DUPLICATE_SIGNATURE: u32 = 13;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProgramletSection {
@@ -402,6 +403,10 @@ mod pluk_tlas;
 mod programlet_actions;
 #[path = "semantics_runtime/programlet_branch.rs"]
 mod programlet_branch;
+#[path = "semantics_runtime/programlet_dispatch_index.rs"]
+mod programlet_dispatch_index;
+#[path = "semantics_runtime/programlet_dispatch_signature.rs"]
+mod programlet_dispatch_signature;
 #[path = "semantics_runtime/programlet_execute.rs"]
 mod programlet_execute;
 #[path = "semantics_runtime/programlet_execute_call.rs"]
@@ -454,6 +459,9 @@ use programlet_branch::{
     first_present_operand, programlet_branch, read_optional_programlet_number,
     unsigned_programlet_operand,
 };
+use programlet_dispatch_index::{
+    ProgramletRoutineDirectory, build_programlet_routine_directory, resolve_programlet_routine,
+};
 pub use programlet_execute::{execute_numeric_programlet, execute_numeric_programlet_at};
 use programlet_execute_call::execute_programlet_call;
 use programlet_execute_declare::declare_programlet_local;
@@ -469,12 +477,11 @@ pub use programlet_sections::{
     has_programlet_section_header, is_numeric_programlet, is_numeric_programlet_at,
     scan_numeric_programlet_sections,
 };
-use programlet_symbols::{
-    find_local_slot, find_programlet_routine, is_ceremony_definition, names_equal, store_name,
-};
+use programlet_symbols::{find_local_slot, is_ceremony_definition, names_equal, store_name};
 use programlet_values::{
     argument_value, capture_programlet_arguments, comparison_operand, loop_iterations,
-    number_value, resolve_programlet_value, set_loop_index_argument, set_loop_register_argument,
+    optional_number_field,
+    resolve_programlet_value, set_loop_index_argument, set_loop_register_argument,
     validate_programlet_arguments, write_programlet_call_result,
 };
 use programlet_vector_actions::{apply_programlet_vector_action, is_programlet_vector_action};

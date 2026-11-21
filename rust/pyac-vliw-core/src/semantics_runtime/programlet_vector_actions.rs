@@ -1,3 +1,6 @@
+use super::float::is_finite_f32;
+#[cfg(feature = "shader-f64")]
+use super::float::is_finite_f64;
 use super::*;
 
 const SUBTRACT_VERB: u32 = 0xabd2;
@@ -8,10 +11,10 @@ const MAXIMUM_FIRST: u32 = 0xa9b2;
 const MAXIMUM_SECOND: u32 = 0xa831;
 
 fn exp_f32(value: f32) -> Result<f32, u32> {
-    if value == f32::NEG_INFINITY || value < -104.0 {
+    if value.to_bits() == 0xff80_0000 || value < -104.0 {
         return Ok(0.0);
     }
-    if !value.is_finite() || value > 88.0 {
+    if !is_finite_f32(value) || value > 88.0 {
         return Err(ERROR_FLOAT_DOMAIN);
     }
     let scaled = value * 1.442_695_1_f32;
@@ -46,7 +49,7 @@ fn exp_f32(value: f32) -> Result<f32, u32> {
         0.0
     };
     let output = polynomial * scale;
-    if !output.is_finite() {
+    if !is_finite_f32(output) {
         return Err(ERROR_FLOAT_DOMAIN);
     }
     Ok(output)
@@ -54,10 +57,10 @@ fn exp_f32(value: f32) -> Result<f32, u32> {
 
 #[cfg(feature = "shader-f64")]
 fn exp_f64(value: f64) -> Result<f64, u32> {
-    if value == f64::NEG_INFINITY || value < -746.0 {
+    if value.to_bits() == 0xfff0_0000_0000_0000 || value < -746.0 {
         return Ok(0.0);
     }
-    if !value.is_finite() || value > 709.0 {
+    if !is_finite_f64(value) || value > 709.0 {
         return Err(ERROR_FLOAT_DOMAIN);
     }
     let scaled = value * 1.442_695_040_888_963_4_f64;
@@ -94,17 +97,15 @@ fn exp_f64(value: f64) -> Result<f64, u32> {
         0.0
     };
     let output = polynomial * scale;
-    if !output.is_finite() {
+    if !is_finite_f64(output) {
         return Err(ERROR_FLOAT_DOMAIN);
     }
     Ok(output)
 }
 
 fn vector_precision_matches(vector_kind: u32, scalar_kind: u32) -> bool {
-    matches!(
-        (vector_kind, scalar_kind),
-        (VALUE_VECTOR_FLOAT32, VALUE_FLOAT32) | (VALUE_VECTOR_FLOAT64, VALUE_FLOAT64)
-    )
+    (vector_kind == VALUE_VECTOR_FLOAT32 && scalar_kind == VALUE_FLOAT32)
+        || (vector_kind == VALUE_VECTOR_FLOAT64 && scalar_kind == VALUE_FLOAT64)
 }
 
 fn apply_f32(
@@ -113,7 +114,10 @@ fn apply_f32(
     verb: u32,
 ) -> Result<ProgramletVectorValue, u32> {
     let mut result = *vector;
-    let scalar_value = scalar.map(|value| f32::from_bits(value.bits));
+    let scalar_value = match scalar {
+        Some(value) => Some(f32::from_bits(value.bits)),
+        None => None,
+    };
     let mut lane = 0;
     while lane < vector.length {
         let input = f32::from_bits(array_at!(vector.values, lane));
@@ -129,7 +133,7 @@ fn apply_f32(
             EXPONENTIAL_VERB => exp_f32(input)?,
             _ => return Err(ERROR_UNSUPPORTED),
         };
-        if !output.is_finite() && !(verb == SUBTRACT_VERB && output == f32::NEG_INFINITY) {
+        if !is_finite_f32(output) && !(verb == SUBTRACT_VERB && output.to_bits() == 0xff80_0000) {
             return Err(ERROR_FLOAT_DOMAIN);
         }
         array_put!(&mut result.values, lane, output.to_bits());
@@ -145,8 +149,12 @@ fn apply_f64(
     verb: u32,
 ) -> Result<ProgramletVectorValue, u32> {
     let mut result = *vector;
-    let scalar_value =
-        scalar.map(|value| f64::from_bits(u64::from(value.bits) | (u64::from(value.high) << 32)));
+    let scalar_value = match scalar {
+        Some(value) => Some(f64::from_bits(
+            u64::from(value.bits) | (u64::from(value.high) << 32),
+        )),
+        None => None,
+    };
     let mut lane = 0;
     while lane < vector.length {
         let offset = lane * 2;
@@ -166,7 +174,9 @@ fn apply_f64(
             EXPONENTIAL_VERB => exp_f64(input)?,
             _ => return Err(ERROR_UNSUPPORTED),
         };
-        if !output.is_finite() && !(verb == SUBTRACT_VERB && output == f64::NEG_INFINITY) {
+        if !is_finite_f64(output)
+            && !(verb == SUBTRACT_VERB && output.to_bits() == 0xfff0_0000_0000_0000)
+        {
             return Err(ERROR_FLOAT_DOMAIN);
         }
         let bits = output.to_bits();
@@ -195,7 +205,7 @@ fn reduce_vector(vector: &ProgramletVectorValue, verb: u32) -> Result<Programlet
             };
             lane += 1;
         }
-        if !value.is_finite() {
+        if !is_finite_f32(value) {
             return Err(ERROR_FLOAT_DOMAIN);
         }
         return Ok(ProgramletNumber {
@@ -225,7 +235,7 @@ fn reduce_vector(vector: &ProgramletVectorValue, verb: u32) -> Result<Programlet
             };
             lane += 1;
         }
-        if !value.is_finite() {
+        if !is_finite_f64(value) {
             return Err(ERROR_FLOAT_DOMAIN);
         }
         let bits = value.to_bits();
@@ -254,16 +264,19 @@ pub(super) fn is_programlet_vector_action(
     symbols: &[u32; PROGRAMLET_SCRATCH_WORDS],
     frame: &ProgramletFrame,
 ) -> bool {
-    is_programlet_vector_verb(sentence, tokens)
-        && sentence.field(SOURCE).is_some_and(|source| {
-            programlet_field_is_vector(
-                tokens,
-                source,
-                symbols,
-                &frame.arguments,
-                &frame.vector_slots,
-            )
-        })
+    if !is_programlet_vector_verb(sentence, tokens) {
+        return false;
+    }
+    match sentence.field(SOURCE) {
+        Some(source) => programlet_field_is_vector(
+            tokens,
+            source,
+            symbols,
+            &frame.arguments,
+            &frame.vector_slots,
+        ),
+        None => false,
+    }
 }
 
 pub(super) fn apply_programlet_vector_action(
@@ -304,7 +317,7 @@ pub(super) fn apply_programlet_vector_action(
     } else {
         array_at!(tokens, sentence.verb_start)
     };
-    if matches!(verb, SUM_VERB | MAXIMUM_FIRST) {
+    if verb == SUM_VERB || verb == MAXIMUM_FIRST {
         if sentence.field(COMITATIVE).is_some() {
             return Err(ERROR_MALFORMED);
         }
@@ -319,10 +332,16 @@ pub(super) fn apply_programlet_vector_action(
             &mut frame.slots,
         );
     }
-    let scalar = sentence
-        .field(COMITATIVE)
-        .map(|field| read_programlet_float(tokens, field, symbols, &frame.arguments, &frame.slots))
-        .transpose()?;
+    let scalar = match sentence.field(COMITATIVE) {
+        Some(field) => Some(read_programlet_float(
+            tokens,
+            field,
+            symbols,
+            &frame.arguments,
+            &frame.slots,
+        )?),
+        None => None,
+    };
     if verb != EXPONENTIAL_VERB && scalar.is_none() {
         return Err(ERROR_MALFORMED);
     }

@@ -39,3 +39,24 @@ fn other_small_arrays_keep_their_indexed_accessor() {
     assert!(array_seven.contains("match index"));
     assert!(!array_seven.contains("self[index]"));
 }
+
+#[test]
+fn signature_dispatch_arrays_have_bounded_indexed_accessors() {
+    let generated = build_support::generate_fixed_array_accessors();
+    for length in [2, 9, 10, 12] {
+        let marker = format!("impl<T: Copy> FixedArrayAccess for [T; {length}] {{");
+        let array = generated
+            .split(&marker)
+            .nth(1)
+            .unwrap()
+            .split("\nimpl<T: Copy>")
+            .next()
+            .unwrap();
+        assert!(array.contains("match index"));
+        assert!(array.contains(&format!(
+            "{length_minus_one} =>",
+            length_minus_one = length - 1
+        )));
+        assert!(!array.contains("self[index]"));
+    }
+}

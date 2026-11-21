@@ -308,6 +308,7 @@ pub(super) fn validate_programlet_arguments(
     words: &[u32],
     base_codelet: usize,
     codelet_count: usize,
+    definition_start: usize,
     routine_start: usize,
     tokens: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
     boundaries: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
@@ -319,34 +320,18 @@ pub(super) fn validate_programlet_arguments(
     if argument_count as usize > arguments.len() {
         return Err(ERROR_FRAME_CAPACITY);
     }
-    let mut definition_at = None;
-    let mut cursor = 0;
-    while cursor < routine_start {
-        let (_, next) = collect_sentence_at(
-            words,
-            base_codelet + codelet_count,
-            base_codelet,
-            codelet_count,
-            cursor,
-            tokens,
-            boundaries,
-        )?;
-        if next == routine_start {
-            definition_at = Some(cursor);
-            break;
-        }
-        cursor = next;
-    }
-    let definition_at = definition_at.ok_or(ERROR_MALFORMED)?;
-    let (length, _) = collect_sentence_at(
+    let (length, next) = collect_sentence_at(
         words,
         base_codelet + codelet_count,
         base_codelet,
         codelet_count,
-        definition_at,
+        definition_start,
         tokens,
         boundaries,
     )?;
+    if next != routine_start {
+        return Err(ERROR_MALFORMED);
+    }
     let mut definition = ParsedSentence::empty();
     let parse_error = parse_sentence(tokens, boundaries, length, &mut definition);
     if parse_error != 0 {
@@ -420,14 +405,8 @@ pub(super) fn loop_iterations(
     sentence: &ParsedSentence,
     tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
 ) -> Result<u32, u32> {
-    let start = sentence
-        .field(FROM_INDEX)
-        .map(|field| number_value(tokens, field))
-        .transpose()?;
-    let end = sentence
-        .field(TO_INDEX)
-        .map(|field| number_value(tokens, field))
-        .transpose()?;
+    let start = optional_number_field(sentence, FROM_INDEX, tokens)?;
+    let end = optional_number_field(sentence, TO_INDEX, tokens)?;
     if end.is_some() && start.is_none() {
         return Err(ERROR_MALFORMED);
     }
@@ -436,6 +415,20 @@ pub(super) fn loop_iterations(
         (Some(start), None) => start,
         _ => 0,
     })
+}
+
+pub(super) fn optional_number_field(
+    sentence: &ParsedSentence,
+    role: u32,
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+) -> Result<Option<u32>, u32> {
+    match sentence.field(role) {
+        Some(field) => match number_value(tokens, field) {
+            Ok(value) => Ok(Some(value)),
+            Err(error) => Err(error),
+        },
+        None => Ok(None),
+    }
 }
 
 pub(super) fn comparison_operand(

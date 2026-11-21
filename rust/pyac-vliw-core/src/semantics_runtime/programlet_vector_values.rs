@@ -73,12 +73,15 @@ pub(super) fn programlet_field_is_vector(
     let Ok(name) = name_from_field(tokens, field) else {
         return false;
     };
-    find_argument(tokens, name, symbols, arguments).is_some_and(|index| {
-        matches!(
+    if let Some(index) = find_argument(tokens, name, symbols, arguments) {
+        if matches!(
             array_at!(arguments, index).value_kind,
             VALUE_VECTOR_FLOAT32 | VALUE_VECTOR_FLOAT64
-        )
-    }) || find_programlet_vector_slot(tokens, name, symbols, slots).is_some()
+        ) {
+            return true;
+        }
+    }
+    find_programlet_vector_slot(tokens, name, symbols, slots).is_some()
 }
 
 fn vector_from_quote(

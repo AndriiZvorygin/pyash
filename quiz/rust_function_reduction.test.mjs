@@ -12,6 +12,9 @@ test("function reducer has one explicit diagnostic replacement per candidate", (
   const candidates = listReductionCandidates();
   assert.ok(candidates.length >= 8);
   assert.equal(new Set(candidates.map(({ name }) => name)).size, candidates.length);
+  assert.ok(candidates.some(({ name }) => name === "build_programlet_routine_directory"));
+  assert.ok(candidates.some(({ name }) => name === "resolve_programlet_routine"));
+  assert.ok(!candidates.some(({ name }) => name === "find_programlet_routine"));
   for (const candidate of candidates) {
     const source = fs.readFileSync(path.join(CORE, candidate.file), "utf8");
     const result = replaceCandidateBody(source, candidate.name);
