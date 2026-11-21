@@ -30,7 +30,7 @@ Purpose: normative spec set for Pyash. This folder is intentionally compact: <=2
 21. `26-criterion.md` — benchmark, stress, simulation, and replayable result contracts.
 22. `26-headquarters-fixture-mail.md` — Headquarters fixture-mail vertical slice.
 23. `27-pyash-vliw-isa.md` — sentence-first lowering, legacy word encoding, and codelet execution contract.
-24. `28-pyash-vliw-targets.md` — target capabilities, dot product, typed vector/array values, lowering choices, and compatibility examples.
+24. `28-pyash-vliw-targets.md` — target capabilities, typed vector/array values, dot product, IWSP float-vector scale/add/sum, lowering choices, and compatibility examples.
 
 ## Reference docs (non-normative)
 

@@ -117,6 +117,17 @@ build intentionally omits it and rejects float64 dot products while retaining
 float32 support. The JavaScript adapter only lowers the typed sentence; it is
 not the semantic oracle.
 
+## IWSP float-vector primitives
+
+`lowerSentence` encodes float32/float64 vector scale and addition using the
+existing `multiply`/`plus` words, and sum reduction using `tfo2t` (`0xBC8A`).
+The shared Rust runtime supports inline and uniquely resolved preceding named
+vectors, indexed continuation, 1-16 lanes, finite-value checks, same-width
+addition, scalar scaling, and ascending-lane sum. Pyash-built conformance cases
+in `command/vliw_gpu_conformance/iwsp_vector_ops.mjs` cover float32/float64 and
+named-vector scale. Focused CPU regression coverage is in
+`rust/pyac-vliw-core/src/semantics_runtime/tests/iwsp_vector_ops.rs`.
+
 ## IWSP linear scoring pilot
 
 `examples/pyash/iwsp-linear-scorer-v1.pya` is a deterministic CPU scoring task

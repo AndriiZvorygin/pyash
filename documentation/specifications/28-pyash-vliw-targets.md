@@ -167,52 +167,27 @@ do not imply current implementation coverage.
 
 ## 9. Vector values and arrays
 
-A vector quote is one typed hardware value with at most 16 lanes in the current
-shared Rust CPU/GPU runtime. It is not an arbitrary-length collection. Finite
-binary32 and binary64 lanes use legacy float sort 6, preserve their IEEE bit
-patterns, and serialize their 16-bit payload words in little-endian order.
-Unsigned integer and boolean vectors retain their existing legacy sorts.
+Vectors are typed hardware values with 1-16 lanes, not arbitrary-length
+collections. Unsigned and boolean lanes retain their legacy sorts; finite
+binary32/binary64 lanes use float sort 6 and little-endian IEEE payload words.
+For example, `0xd41d` is 16 float32 lanes (32 payload words), while
+`0xd61d 0x0006` is six lanes (the count is logical elements, followed by 12
+payload words). Float64 uses four words per lane. Decoders MUST reject invalid
+types/counts, non-finite values, and widths above 16.
 
-For binary32, `0xd41d` denotes the fixed 16-lane form followed by 32 payload
-words (two words per lane). `0xd61d 0x0006` denotes an explicit six-lane form:
-the count word is the number of lanes, followed by 12 payload words. It is not
-a codelet count or payload-word count. Binary64 payloads use four words per
-lane. A decoder MUST reject unsupported types, malformed counts, non-finite
-float values, and widths above 16.
+Long vectors use indexed continuation, preserving word zero as each codelet's
+index and lane order across the completion marker. Continuation cannot consume
+the next sentence. Text vectors have at most 16 members; each member is a
+normal text or length-framed paragraph quote, not a numeric-sort payload.
+Programlet slots remain scalar.
 
-Word zero of every codelet remains its index. Vector payloads that continue
-across codelets use indexed continuation, not raw quote blocks. The decoder
-collects the indexed words through the completion marker, then validates the
-typed quote and sentence cases. Continuation MUST preserve lane order and
-cannot consume the next sentence. Fixed-width vectors are results and inputs;
-mutable programlet slots remain scalar in this runtime.
-
-Text vectors also have at most 16 lanes. Each lane is an ordinary typed text
-quote, and a long text lane uses the existing length-framed paragraph quote.
-Text lanes are not packed into the numeric vector sort.
-
-An array is the representation for a variable-length collection, including
-text elements. Fixed legacy vector widths remain available for numeric counts
-1, 2, 3, 4, 8, and 16. Other numeric extents use quote thickness 6: the quote
-header is followed by a 16-bit element count from 1 through 65,535, then the
-typed payload. This count is the number of logical elements, not payload words
-or codelets. Indexed continuation preserves word zero as each codelet's index.
-
-A text array uses a letter-sort, thickness-6 quote with the sequence bit set.
-Its count is the number of strings; each member follows as an ordinary
-single-letter or length-framed paragraph-letter quote. This keeps member
-boundaries unambiguous even when text contains words that resemble quote
-headers. The sequence flag distinguishes this container from a flat text
-quote. For compatibility, a multi-member text vector that fits in one codelet
-may retain the legacy per-member quote layout; single-member and continued text
-arrays use the counted form.
-
-The JavaScript VLIW lowerer, decoder, and `executeCodelets` path now round-trip
-and execute numeric arrays through 65,535 elements and length-framed text
-arrays across indexed codelets. This does not change SIMD lane width. The shared
-Rust CPU/GPU interpreter still returns values through a fixed `CoreResult`
-buffer sized for 16 lanes; large-array execution through that ABI remains a
-runtime transport/capacity gap. Programlet slots remain scalar typed values.
+Variable-length collections use arrays. Numeric arrays of unsupported fixed
+vector widths use quote thickness 6 and a 16-bit logical element count
+(1-65,535), followed by typed payload. Text arrays use letter sort, thickness
+6, the sequence bit, a string count, then individually framed members. Indexed
+continuation applies to both. The JavaScript lowerer/decoder executes arrays
+through 65,535 elements; the shared Rust `CoreResult` ABI currently returns at
+most 16 lanes, so large-array execution remains a transport-capacity gap.
 
 ## 10. Scalar product (dot product)
 
@@ -247,7 +222,28 @@ operation error. Rust CPU and native Vulkan enable `shader-f64`; WGSL/WebGPU
 omits it, so there float32 is supported and float64 is not. Implementations
 MUST preserve the specified operation order and precision.
 
-## 11. Exact-match count (`pluk tlas`)
+## 11. Float-vector scale, addition, and sum
+
+The shared Rust runtime accepts these Pyash forms (including preceding named
+float vectors):
+
+```pyash
+ob ve float32 1 2 3 to num 0.5 be multiply do
+ob ve float32 1 2 3 to ve float32 4 5 6 be plus do
+ob ve float32 1 2 3 be tfo2t do
+```
+
+`multiply` scales each lane; its `to` operand is a finite numeric scalar,
+converted to the vector precision. `plus` adds equal-width, same-precision
+vectors lane-wise; it does not broadcast. `tfo2t` (`0xBC8A`) sums a non-empty
+vector in ascending lane order at its precision and returns a scalar of that
+type. Results preserve vector precision; non-finite inputs/results, empty
+sums, incompatible types, and unequal widths are errors. Vectors may span
+indexed codelets and have 1-16 lanes. Preceding named vectors must resolve
+uniquely. Rust CPU/native Vulkan support float32 and float64; WGSL/WebGPU
+supports float32 only.
+
+## 12. Exact-match count (`pluk tlas`)
 
 This evaluator compares two named float32 vectors in one PyAC pack. Its typed
 Pyash signature is:
@@ -273,7 +269,7 @@ non-float32 inputs, malformed declarations, and unequal widths are errors. The
 shared Rust VLIW runtime owns CPU and GPU execution semantics; JavaScript only
 lowers the sentence and does not calculate the count.
 
-## 12. Non-goals
+## 13. Non-goals
 
 This specification does not add HNUCs, alter parser vocabulary, define the
 catalog/container database, require a GPU, introduce a model server or queue,
@@ -284,7 +280,7 @@ not replace the current sentence/paragraph interpreter. The only
 conforming future implementation is one that can prove the sentence result
 and the legacy encoding bytes agree.
 
-## 13. Implementation references
+## 14. Implementation references
 
 The proven numeric-plus, quote, fixed-slot, typed-literal, named-fact, database,
 and facade slices are documented with their fixtures and implementation paths

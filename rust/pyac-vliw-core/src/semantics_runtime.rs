@@ -459,6 +459,8 @@ impl ProgramletNumber {
 
 #[path = "semantics_runtime/boolean.rs"]
 mod boolean;
+#[path = "semantics_runtime/canonical_signature.rs"]
+mod canonical_signature;
 #[path = "semantics_runtime/conditional.rs"]
 mod conditional;
 #[path = "semantics_runtime/dispatch.rs"]
@@ -467,6 +469,8 @@ mod dispatch;
 mod fixed16;
 #[path = "semantics_runtime/float.rs"]
 mod float;
+#[path = "semantics_runtime/iwsp_vector_ops.rs"]
+mod iwsp_vector_ops;
 #[path = "semantics_runtime/mutable_vector.rs"]
 mod mutable_vector;
 #[path = "semantics_runtime/named_vector.rs"]
@@ -499,12 +503,10 @@ mod programlet_symbols;
 mod programlet_values;
 #[path = "semantics_runtime/scalar_product.rs"]
 mod scalar_product;
-#[path = "semantics_runtime/canonical_signature.rs"]
-mod canonical_signature;
-#[path = "semantics_runtime/signature_dispatch.rs"]
-mod signature_dispatch;
 #[path = "semantics_runtime/sentence.rs"]
 mod sentence;
+#[path = "semantics_runtime/signature_dispatch.rs"]
+mod signature_dispatch;
 #[path = "semantics_runtime/vector_group.rs"]
 mod vector_group;
 

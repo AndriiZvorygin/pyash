@@ -95,6 +95,29 @@ fn case_source_order_does_not_change_the_selected_route() {
 }
 
 #[test]
+fn routes_subtraction_from_its_source_case_instead_of_assuming_destination() {
+    let left = 5.5f32.to_bits();
+    let right = 2.0f32.to_bits();
+    let subtract = codelet(
+        &[
+            0xd01d,
+            left & 0xffff,
+            left >> 16,
+            ACCUSATIVE,
+            0xd01d,
+            right & 0xffff,
+            right >> 16,
+            SOURCE,
+            SUBTRACT,
+            DEONTIC,
+        ],
+        &[3, 7, 9],
+    );
+
+    assert_eq!(select_signature_route(&subtract, 0, 1), Ok(ROUTE_FLOAT));
+}
+
+#[test]
 fn rejects_unknown_and_malformed_signatures_without_handler_fallthrough() {
     let unknown = codelet(
         &[

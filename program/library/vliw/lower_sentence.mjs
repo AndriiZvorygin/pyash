@@ -25,6 +25,19 @@ import { isMutableVectorSentence, lowerMutableVectorSentence } from "./mutable_v
 import { isPlukTlasSentence, lowerPlukTlasSentence } from "./pluk_tlas.mjs";
 import { lowerPyashSentence } from "./sentence.mjs";
 
+function isIwspFloatVectorOperation(sentence) {
+  if (sentence?.mood !== "do") return false;
+  const left = sentence.ob;
+  const isFloatVector = (value) => ["float32", "float64"].includes(value?.ve?.type);
+  const isNamedVector = (value) => typeof value?.name === "string";
+  if (sentence.be === "tfo2t") {
+    return isFloatVector(left) || isNamedVector(left);
+  }
+  if (!["plus", "multiply"].includes(sentence.be)) return false;
+  if (!isFloatVector(left) && !isNamedVector(left)) return false;
+  return sentence.to !== undefined && sentence.from === undefined && sentence.with === undefined;
+}
+
 export function lowerSentence(sentence) {
   if (isMutableVectorSentence(sentence)) {
     return lowerMutableVectorSentence(sentence);
@@ -98,6 +111,13 @@ export function lowerSentence(sentence) {
   }
   if (isNumericInvertSentence(sentence)) {
     return [lowerNumericInvertSentence(sentence)];
+  }
+  if (isIwspFloatVectorOperation(sentence)) {
+    return lowerPyashSentence(sentence).vectors.map((words) => ({
+      sentence,
+      words,
+      semantic: "iwsp-float-vector-operation"
+    }));
   }
   const hasNonU16Number = [sentence?.ob, sentence?.to, sentence?.from, sentence?.with, sentence?.by]
     .some((value) => typeof value?.num === "number" && (!Number.isInteger(value.num) || value.num < 0 || value.num > 0xffff));

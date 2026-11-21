@@ -1,7 +1,8 @@
 use super::canonical_signature::{
-    case_type, has_cases, signature, token_at, token_boundary, verb_is, SignatureView,
-    TYPE_BOOLEAN, TYPE_CLAUSE, TYPE_NAME, TYPE_NAME_NUMBER, TYPE_QUOTE_TAG,
+    SignatureView, TYPE_BOOLEAN, TYPE_CLAUSE, TYPE_NAME, TYPE_NAME_NUMBER, TYPE_QUOTE_TAG,
+    case_type, has_cases, signature, token_at, token_boundary, verb_is,
 };
+use super::iwsp_vector_ops::SUM_VERB;
 use super::numeric::quote_header;
 use super::pluk_tlas::{PLUK, TLAS};
 use super::scalar_product::{PRODUCE_WORD, SCALAR_WORD};
@@ -13,6 +14,8 @@ const TYPE_FLOAT32: u32 = TYPE_QUOTE_TAG | (6 << 12) | (4 << 4);
 const TYPE_FLOAT64: u32 = TYPE_QUOTE_TAG | (6 << 12) | (8 << 4);
 const TYPE_UINT16: u32 = TYPE_QUOTE_TAG | (4 << 12) | (2 << 4);
 const TYPE_VECTOR_UINT16: u32 = TYPE_UINT16 | 1;
+const TYPE_VECTOR_FLOAT32: u32 = TYPE_FLOAT32 | 1;
+const TYPE_VECTOR_FLOAT64: u32 = TYPE_FLOAT64 | 1;
 
 pub(super) const ROUTE_PLUK_TLAS: u32 = 0x100;
 pub(super) const ROUTE_SCALAR_PRODUCT: u32 = 0x101;
@@ -28,6 +31,8 @@ pub(super) const ROUTE_VECTOR_ARITHMETIC: u32 = 0x10a;
 pub(super) const ROUTE_ARITHMETIC: u32 = 0x10b;
 pub(super) const ROUTE_BOOLEAN_LITERAL: u32 = 0x10c;
 pub(super) const ROUTE_LITERAL: u32 = 0x10d;
+pub(super) const ROUTE_VECTOR_FLOAT_ARITHMETIC: u32 = 0x10e;
+pub(super) const ROUTE_VECTOR_SUM: u32 = 0x10f;
 
 const VERB_PLUK_TLAS: u32 = 1;
 const VERB_SCALAR_PRODUCT: u32 = 2;
@@ -38,6 +43,7 @@ const VERB_BOOLEAN_COMPARISON: u32 = 6;
 const VERB_BOOLEAN_COMPOSITION: u32 = 7;
 const VERB_BOOLEAN_LITERAL: u32 = 8;
 const VERB_LITERAL: u32 = 9;
+const VERB_VECTOR_SUM: u32 = 10;
 const VERB_UNSUPPORTED: u32 = 0;
 
 fn classify_verb(signature: &SignatureView, words: &[u32], start: usize, group_len: usize) -> u32 {
@@ -70,6 +76,7 @@ fn classify_verb(signature: &SignatureView, words: &[u32], start: usize, group_l
         EQUALLY | TINY | GIANT => VERB_BOOLEAN_COMPARISON,
         NEGATORY_QUANTIFIER | AND_GRAMMAR | OR_GRAMMAR => VERB_BOOLEAN_COMPOSITION,
         NUMBER_VERB | BOOLEAN_VERB => VERB_BOOLEAN_LITERAL,
+        SUM_VERB => VERB_VECTOR_SUM,
         VECTOR_VERB => VERB_LITERAL,
         _ => VERB_UNSUPPORTED,
     }
@@ -124,11 +131,27 @@ fn is_multicodelet_vector_literal(words: &[u32], start: usize, group_len: usize)
                 && token_at(words, start, group_len, case_offset + 2) == Some(REALIS)))
 }
 
+fn other_operand_type(signature: &SignatureView, primary_case: u32) -> Option<u32> {
+    if signature.case_count != 2 {
+        return None;
+    }
+    let mut index = 0;
+    while index < signature.case_count {
+        if signature.cases[index].case == primary_case {
+            let other = 1 - index;
+            return Some(signature.cases[other].value_type);
+        }
+        index += 1;
+    }
+    None
+}
+
 fn arithmetic_route(signature: &SignatureView) -> Result<u32, u32> {
     if signature.case_count != 2 {
         return Err(ERROR_UNSUPPORTED);
     }
-    let [left, right] = [signature.cases[0].value_type, signature.cases[1].value_type];
+    let left = case_type(signature, ACCUSATIVE).ok_or(ERROR_UNSUPPORTED)?;
+    let right = other_operand_type(signature, ACCUSATIVE).ok_or(ERROR_UNSUPPORTED)?;
     if left == right {
         match left {
             TYPE_FIXED16 => return Ok(ROUTE_FIXED16),
@@ -136,6 +159,24 @@ fn arithmetic_route(signature: &SignatureView) -> Result<u32, u32> {
             TYPE_UINT16 => return Ok(ROUTE_ARITHMETIC),
             _ => {}
         }
+    }
+    if (left == TYPE_NAME
+        && matches!(
+            right,
+            TYPE_NAME | TYPE_FLOAT32 | TYPE_FLOAT64 | TYPE_VECTOR_FLOAT32 | TYPE_VECTOR_FLOAT64
+        ))
+        || (matches!(left, TYPE_VECTOR_FLOAT32 | TYPE_VECTOR_FLOAT64)
+            && matches!(
+                right,
+                TYPE_NAME
+                    | TYPE_FLOAT32
+                    | TYPE_FLOAT64
+                    | TYPE_UINT16
+                    | TYPE_VECTOR_FLOAT32
+                    | TYPE_VECTOR_FLOAT64
+            ))
+    {
+        return Ok(ROUTE_VECTOR_FLOAT_ARITHMETIC);
     }
     let mut index = 0;
     while index < signature.case_count {
@@ -233,6 +274,15 @@ pub(super) fn select_signature_route(
         }
         VERB_BOOLEAN_LITERAL if has_cases(&signature, &[(ACCUSATIVE, TYPE_BOOLEAN)]) => {
             Ok(ROUTE_BOOLEAN_LITERAL)
+        }
+        VERB_VECTOR_SUM
+            if signature.case_count == 1
+                && matches!(
+                    case_type(&signature, ACCUSATIVE),
+                    Some(TYPE_VECTOR_FLOAT32) | Some(TYPE_VECTOR_FLOAT64) | Some(TYPE_NAME)
+                ) =>
+        {
+            Ok(ROUTE_VECTOR_SUM)
         }
         VERB_LITERAL => literal_route(&signature, group_len),
         _ => Err(ERROR_UNSUPPORTED),

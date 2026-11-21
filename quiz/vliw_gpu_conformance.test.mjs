@@ -62,6 +62,11 @@ test("VLIW GPU conformance matrix covers the merged typed and control-flow contr
     "pluk-tlas-collects-dot-products-into-prediction-vector",
     "iwsp-linear-scorer-named-vectors",
     "iwsp-linear-scorer-perturbed-candidate",
+    "iwsp-float32-vector-scale",
+    "iwsp-float32-vector-add",
+    "iwsp-float32-vector-sum",
+    "iwsp-named-float32-vector-scale",
+    "iwsp-float64-vector-scale-add-sum",
     "float64-dot-product",
     "uint16-vector-sixteen-lanes",
     "boolean-vector-sixteen-lanes",
@@ -133,6 +138,22 @@ test("Rust CPU reference matches dot-product collection, exact evaluation, and n
   const rustValues = executeRustCpuReference(selected.map(({ pack }) => pack));
 
   assert.deepEqual(rustValues, selected.map(({ referenceValues }) => referenceValues));
+});
+
+test("Rust CPU executes IWSP float-vector Pyash operations after VLIW lowering", async () => {
+  const names = new Set([
+    "iwsp-float32-vector-scale",
+    "iwsp-float32-vector-add",
+    "iwsp-float32-vector-sum",
+    "iwsp-named-float32-vector-scale",
+    "iwsp-float64-vector-scale-add-sum"
+  ]);
+  const selected = (await buildVliwGpuConformanceCases()).filter(({ name }) => names.has(name));
+  assert.equal(selected.length, names.size);
+  assert.deepEqual(
+    executeRustCpuReference(selected.map(({ pack }) => pack)),
+    selected.map(({ referenceValues }) => referenceValues)
+  );
 });
 
 test("Rust CPU executes indexed typed vectors through the sixteen-lane boundary", () => {
