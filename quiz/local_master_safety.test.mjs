@@ -57,6 +57,11 @@ test("runner adds the latest NVM toolchain even when cron already has system Nod
   assert.doesNotMatch(runner, /if ! command -v node[\s\S]*?NVM_ROOT/u);
 });
 
+test("runner adds an installed Cargo toolchain to cron PATH", () => {
+  const runner = read("run_local_master_safety.sh");
+  assert.match(runner, /CARGO_BIN="\$HOME\/\.cargo\/bin"[\s\S]*?\*":\$CARGO_BIN:"\*\)[\s\S]*?export PATH="\$CARGO_BIN:\$PATH"/u);
+});
+
 test("runner finds NVM Codex in a cron-like PATH that already contains system Node and npm", () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pyash-master-safety-cron-path-"));
   const nvmBin = path.join(tempRoot, ".nvm", "versions", "node", "v99.0.0", "bin");

@@ -17,6 +17,13 @@ LOCK=${PYA_MASTER_SAFETY_LOCK:-/tmp/pyash-${BRANCH}-safety.lock}
 WORKTREE_PARENT=${PYA_MASTER_SAFETY_WORKTREE_PARENT:-$(dirname -- "$REPOSITORY")}
 
 export HOME=${HOME:-/home/htaf}
+CARGO_BIN="$HOME/.cargo/bin"
+if [[ -d "$CARGO_BIN" ]]; then
+  case ":$PATH:" in
+    *":$CARGO_BIN:"*) ;;
+    *) export PATH="$CARGO_BIN:$PATH" ;;
+  esac
+fi
 NVM_ROOT="$HOME/.nvm/versions/node"
 if [[ -d "$NVM_ROOT" ]]; then
   while IFS= read -r node_version; do

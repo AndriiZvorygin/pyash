@@ -43,6 +43,8 @@ review. The runner installs dependencies and runs
 a dirty local `master` worktree, are not checked out or modified.
 The CI-tier runner uses at most four concurrent test workers to reduce host
 contention; it uses fewer when the resource-based limit is lower.
+The runner adds `$HOME/.cargo/bin` to `PATH` when present so cron can build
+Rust-backed test prerequisites with the installed toolchain.
 After a green suite, it fetches the branch inputs again. If a source advances
 during testing, the runner merges the new tip and reruns the suite, up to two
 refreshes; continued movement preserves the candidate without promotion.
