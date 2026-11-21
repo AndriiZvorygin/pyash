@@ -33,26 +33,42 @@ impl IndexPostings {
         codelet_count: u32,
     ) -> Result<Self, DictionaryReadError> {
         let mut postings = Self::default();
-        postings.load_canonical(
-            source,
-            find_section(sections, "canonical-index")?,
-            codelet_count,
-        )?;
-        postings.load_surfaces(
-            source,
-            find_section(sections, "surface-index")?,
-            codelet_count,
-        )?;
-        postings.load_sources(
-            source,
-            find_section(sections, "source-index")?,
-            codelet_count,
-        )?;
-        postings.load_operations(
-            source,
-            find_section(sections, "operation-signature-index")?,
-            codelet_count,
-        )?;
+        postings
+            .load_canonical(
+                source,
+                find_section(sections, "canonical-index")?,
+                codelet_count,
+            )
+            .map_err(|error| {
+                DictionaryReadError::Context("canonical index".into(), Box::new(error))
+            })?;
+        postings
+            .load_surfaces(
+                source,
+                find_section(sections, "surface-index")?,
+                codelet_count,
+            )
+            .map_err(|error| {
+                DictionaryReadError::Context("surface index".into(), Box::new(error))
+            })?;
+        postings
+            .load_sources(
+                source,
+                find_section(sections, "source-index")?,
+                codelet_count,
+            )
+            .map_err(|error| {
+                DictionaryReadError::Context("source index".into(), Box::new(error))
+            })?;
+        postings
+            .load_operations(
+                source,
+                find_section(sections, "operation-signature-index")?,
+                codelet_count,
+            )
+            .map_err(|error| {
+                DictionaryReadError::Context("operation index".into(), Box::new(error))
+            })?;
         Ok(postings)
     }
 
@@ -151,7 +167,7 @@ impl IndexPostings {
         section: &DictionarySection,
         limit: u32,
     ) -> Result<(), DictionaryReadError> {
-        for_each_sentence(source, section, limit, |words| {
+        for_each_sentence(source, section, limit, |_, words| {
             let mut cursor = index_subject(words)?;
             expect_text(words, &mut cursor, OB, "canonical")?;
             let key = take_vector(words, &mut cursor)?;
@@ -177,13 +193,18 @@ impl IndexPostings {
         section: &DictionarySection,
         limit: u32,
     ) -> Result<(), DictionaryReadError> {
-        for_each_sentence(source, section, limit, |words| {
+        for_each_sentence(source, section, limit, |ordinal, words| {
             let mut cursor = index_subject(words)?;
             expect_text(words, &mut cursor, OB, "language-surface")?;
             let language = take_text(words, &mut cursor)?;
             expect_word(words, &mut cursor, AS)?;
             let surface = take_text(words, &mut cursor)?;
-            expect_word(words, &mut cursor, FROM)?;
+            expect_word(words, &mut cursor, FROM).map_err(|error| {
+                DictionaryReadError::Context(
+                    format!("surface posting at codelet {ordinal}: {language:?} {surface:?}"),
+                    Box::new(error),
+                )
+            })?;
             let key = take_vector(words, &mut cursor)?;
             expect_word(words, &mut cursor, TO)?;
             expect_end(words, &mut cursor)?;
@@ -209,7 +230,7 @@ impl IndexPostings {
         section: &DictionarySection,
         limit: u32,
     ) -> Result<(), DictionaryReadError> {
-        for_each_sentence(source, section, limit, |words| {
+        for_each_sentence(source, section, limit, |_, words| {
             let mut cursor = index_subject(words)?;
             expect_text(words, &mut cursor, OB, "external-source")?;
             let dataset = take_text(words, &mut cursor)?;
@@ -247,7 +268,7 @@ impl IndexPostings {
         section: &DictionarySection,
         limit: u32,
     ) -> Result<(), DictionaryReadError> {
-        for_each_sentence(source, section, limit, |words| {
+        for_each_sentence(source, section, limit, |_, words| {
             let mut cursor = index_subject(words)?;
             expect_text(words, &mut cursor, OB, "operation-signature")?;
             let dispatch = take_vector(words, &mut cursor)?;
@@ -282,13 +303,13 @@ fn for_each_sentence<R: Read + Seek>(
     source: &mut R,
     section: &DictionarySection,
     limit: u32,
-    mut visit: impl FnMut(&[u16]) -> Result<(), DictionaryReadError>,
+    mut visit: impl FnMut(u32, &[u16]) -> Result<(), DictionaryReadError>,
 ) -> Result<(), DictionaryReadError> {
     let range = section.range();
     let mut ordinal = range.start;
     while ordinal < range.end {
         let (words, consumed) = read_sentence(source, ordinal, limit)?;
-        visit(&words)?;
+        visit(ordinal, &words)?;
         ordinal = ordinal
             .checked_add(consumed)
             .ok_or_else(|| invalid("index sentence ordinal overflow"))?;

@@ -164,14 +164,11 @@ fn pack_words(
         return Err(DictionaryWireError::TooManyCases);
     }
     let mut raw_regions = Vec::new();
-    let mut raw_word_total = 0usize;
     for quote in raw_text {
-        let indexed_offset = quote.start.saturating_sub(raw_word_total);
-        let used = indexed_offset % CODELET_DATA_WORDS;
-        let available = CODELET_DATA_WORDS - used;
-        if quote.length > available {
+        // The reader reserves every text quote longer than 14 UTF-16 words
+        // for raw continuation codelets, even when 15 words would fit inline.
+        if quote.length > 14 {
             raw_regions.push(quote.clone());
-            raw_word_total += quote.length;
         }
     }
     let mut pieces = Vec::new();

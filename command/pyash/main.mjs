@@ -531,7 +531,12 @@ export async function main() {
   if (command === "dictionary" && args[1] === "volume") {
     return void process.exit(await runNodeScript(pyacDictionaryPath, args.slice(2)));
   }
-  if (command === "dictionary") return void process.exit(await runNodeScript(vocabSuggestPath, args.slice(1)));
+  if (command === "dictionary" && args[1] === "suggest") {
+    return void process.exit(await runNodeScript(vocabSuggestPath, args.slice(2)));
+  }
+  if (command === "dictionary") {
+    return void process.exit(await runNodeScript(pyacDictionaryPath, ["reference", ...args.slice(1)]));
+  }
   const code=await runNodeScript(runProgramPath,args);
   process.exit(code);
 }

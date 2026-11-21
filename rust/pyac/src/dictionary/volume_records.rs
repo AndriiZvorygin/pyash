@@ -8,7 +8,8 @@ pub(super) const PROFILE_SUBJECT: [u16; 2] = [0x680b, 0x6c22]; // lyin kwon: mac
 pub(super) const CONTENTS_SUBJECT: [u16; 2] = [0x8893, 0x2c30]; // dvis hnok.
 pub(super) const INDEX_SUBJECT: [u16; 2] = [0xa92b, 0x28ea]; // lwat txik.
 pub(super) const ENTRY_SUBJECT: [u16; 2] = [0xa96a, 0x6c22]; // tlat kwon.
-pub(super) const PROFILE_VERSION: &str = "pyac-vliw-dictionary/2";
+pub(super) const PROFILE_VERSION_V2: &str = "pyac-vliw-dictionary/2";
+pub(super) const PROFILE_VERSION: &str = "pyac-vliw-dictionary/3";
 pub(super) const TOC_ROLES: [&str; 7] = [
     "metadata",
     "canonical-index",
@@ -133,19 +134,20 @@ pub(super) fn encode_entry(
     entry: &DictionaryVolumeEntry,
     range: [u16; 4],
 ) -> Result<EncodedEntry, DictionaryVolumeError> {
-    if entry.key.is_empty() || entry.definition.is_empty() {
-        return Err(DictionaryVolumeError::InvalidEntry(
-            "key and definition must be non-empty",
-        ));
+    if entry.key.is_empty() {
+        return Err(DictionaryVolumeError::InvalidEntry("key must be non-empty"));
     }
-    if entry
-        .definition
-        .last()
-        .is_none_or(|codelet| codelet[0] & 1 == 0)
-    {
-        return Err(DictionaryVolumeError::InvalidEntry(
-            "definition ends in an incomplete codelet group",
-        ));
+    if let Some(definition) = &entry.definition {
+        if definition.is_empty() {
+            return Err(DictionaryVolumeError::InvalidEntry(
+                "an authored definition cannot be empty; omit it instead",
+            ));
+        }
+        if definition.last().is_none_or(|codelet| codelet[0] & 1 == 0) {
+            return Err(DictionaryVolumeError::InvalidEntry(
+                "definition ends in an incomplete codelet group",
+            ));
+        }
     }
     let key = &entry.key;
     let mut output = sentence(
@@ -174,6 +176,30 @@ pub(super) fn encode_entry(
                 text_field(TO, &link.identifier),
                 text_field(BY, &link.relation),
                 text_field(AT, "source-link"),
+            ],
+        )?);
+    }
+    for gloss in &entry.source_glosses {
+        output.extend(sentence(
+            ENTRY_SUBJECT.as_slice(),
+            &[
+                vector_field(OB, key),
+                text_field(AS, &gloss.language),
+                text_field(FROM, &gloss.dataset),
+                text_field(TO, &gloss.release),
+                text_field(BY, &gloss.identifier),
+                text_field(WITH, &gloss.text),
+                text_field(AT, "source-gloss"),
+            ],
+        )?);
+    }
+    for component in &entry.component_keys {
+        output.extend(sentence(
+            ENTRY_SUBJECT.as_slice(),
+            &[
+                vector_field(OB, key),
+                vector_field(FROM, component),
+                text_field(AT, "component"),
             ],
         )?);
     }
@@ -234,7 +260,9 @@ pub(super) fn encode_entry(
             )?);
         }
     }
-    output.extend(entry.definition.iter().copied());
+    if let Some(definition) = &entry.definition {
+        output.extend(definition.iter().copied());
+    }
     let mut descriptor = DictionaryEntry {
         key: key.clone(),
         codelet_start: 0,
@@ -276,10 +304,11 @@ pub(super) fn index_records(
         )?);
         let entry_start = location[0] as usize | ((location[1] as usize) << 16);
         let entry_count = location[2] as usize | ((location[3] as usize) << 16);
+        let definition_len = entry.definition.as_ref().map_or(0, Vec::len);
         let definition_start = entry_start
-            .checked_add(entry_count.saturating_sub(entry.definition.len()))
+            .checked_add(entry_count.saturating_sub(definition_len))
             .ok_or(DictionaryVolumeError::TooManyCodelets)?;
-        let definition_range = range_pair(definition_start, entry.definition.len())?;
+        let definition_range = range_pair(definition_start, definition_len)?;
         locations.extend(sentence(
             INDEX_SUBJECT.as_slice(),
             &[

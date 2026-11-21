@@ -2,9 +2,10 @@
 
 Status: temporary vocabulary-agent worksheet. Update this file while curating
 dictionary content; do not treat it as the dictionary database or as a
-substitute for the canonical vocabulary catalogs. The initial six-entry
-English core volume is published in `program/library/dictionary/`; broader
-English and multilingual coverage remains future curation work.
+substitute for the canonical vocabulary catalogs. The accepted-vocabulary
+reference volume is generated in `program/library/dictionary/`; this workbook
+records schema decisions and curation handoffs, not the full vocabulary
+database. `english-core.pya` remains a six-entry example volume.
 
 See the [dictionary format and workflow reference](../reference/pyac-vliw-dictionary.md)
 for the profile marker, serialized record contract, and Rust reader/writer.
@@ -29,12 +30,12 @@ allowed when they resolve to different keys/senses.
 | Field | Record |
 | --- | --- |
 | Pyac key and exact HNUC sequence |  |
-| Intended meaning / concise gloss |  |
+| Intended meaning / exact WordNet interim gloss |  |
 | Versioned source IDs and mapping relations |  |
 | Vocabulary-catalog status and evidence |  |
 | Language-tagged exact surface forms |  |
 | NFC lookup forms (preserve case) |  |
-| Canonical Pyash definition sentences |  |
+| Optional native Pyash definition sentences |  |
 | Referenced Pyac keys and their meanings |  |
 | Optional operation signature: verb, mood, case/type pairs |  |
 | Review notes / unresolved choices |  |
@@ -47,8 +48,10 @@ allowed when they resolve to different keys/senses.
   relation; a broad or related sense is not presented as an exact match.
 - Lexical surfaces are preserved exactly; normalized lookup strings use NFC
   and are not silently case-folded.
-- Definitions are Pyash sentences, not English-only glosses or JSON payloads.
-- Every definition reference resolves to the same volume or a declared linked
+- The exact gloss is attached to its linked WordNet sense and serves as an
+  interim definition until a native Pyash definition is available.
+- Native definitions are Pyash sentences, not JSON payloads. Every reference
+  in a native definition resolves to the same volume or a declared linked
   volume.
 - A review state is copied from the vocabulary catalog, never inferred from
   the presence of a row in this workbook.

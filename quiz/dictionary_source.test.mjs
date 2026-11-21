@@ -3,16 +3,21 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-import { dictionaryKeyName, renderDefinitionSentence } from "../command/pyac_dictionary.mjs";
+import {
+  dictionaryKeyName,
+  renderDefinitionSentence,
+  summarizeDictionaryEntry
+} from "../command/pyac_dictionary.mjs";
 import { buildDictionarySource } from "../program/library/dictionary/source.mjs";
 import { lookupLegacyName } from "../program/library/vliw/quotes.mjs";
 
 function sourceWithEntry(definition = "A quantity with direction and magnitude.") {
   return `su name lyin kwon ob text "English Pyash dictionary" be text ya
-su name lyin kwon ob text "Pyash reference" as num 3 from text "en" to text "NFC" with text "pyac-vliw-dictionary/2" be text ya
+su name lyin kwon ob text "Pyash reference" as num 3 from text "en" to text "NFC" with text "pyac-vliw-dictionary/3" be text ya
 su name tlat kwon ob name vector at text "entry" be text ya
 su name tlat kwon ob name vector as text "en" from text "vector" to text "vector" at text "lexical-form" be text ya
 su name tlat kwon ob name vector as text "wordnet" from text "3.0" to text "n:05873161-n" by text "exact-sense" at text "source-link" be text ya
+su name tlat kwon ob name vector as text "en" from text "wordnet" to text "3.0" by text "n:05873161-n" with text "A sense-specific interim gloss." at text "source-gloss" be text ya
 su name vector ob text "${definition}" be text ya`;
 }
 
@@ -30,6 +35,13 @@ test("dictionary source lowers keyed Pyash definition sentences and metadata", (
     { language: "en", surface: "vector", normalized: "vector" }
   ]);
   assert.equal(built.entries[0].source_links[0].identifier, "n:05873161-n");
+  assert.deepEqual(built.entries[0].source_glosses, [{
+    language: "en",
+    dataset: "wordnet",
+    release: "3.0",
+    identifier: "n:05873161-n",
+    text: "A sense-specific interim gloss."
+  }]);
   assert.ok(built.entries[0].definition.length > 1);
   assert.ok(built.entries[0].definition.every((codelet) => codelet.length === 16));
 });
@@ -37,6 +49,16 @@ test("dictionary source lowers keyed Pyash definition sentences and metadata", (
 test("dictionary source rejects definitions without a declared entry", () => {
   const source = sourceWithEntry().replace('su name tlat kwon ob name vector at text "entry" be text ya\n', "");
   assert.throws(() => buildDictionarySource(source), /precedes entry block/u);
+});
+
+test("dictionary source accepts a WordNet interim gloss without a Pyash definition", () => {
+  const source = sourceWithEntry().replace(
+    'su name vector ob text "A quantity with direction and magnitude." be text ya',
+    ""
+  );
+  const entry = buildDictionarySource(source).entries[0];
+  assert.equal(entry.definition, null);
+  assert.equal(entry.source_glosses[0].text, "A sense-specific interim gloss.");
 });
 
 test("dictionary source rejects unresolved Pyash key atoms rather than inventing HNUCs", () => {
@@ -91,6 +113,33 @@ test("dictionary CLI renders canonical Pyash compound keys on decoded definition
   );
 });
 
+test("dictionary entry read labels the linked WordNet gloss as the interim definition", () => {
+  const key = ["drut", "hnuc"].map((word) => Number.parseInt(lookupLegacyName(word).hnuc, 16));
+  const summary = summarizeDictionaryEntry([
+    {
+      su: { name: "word dictionary" },
+      ob: { ve: { values: key } },
+      at: { ve: { values: [274, 0, 30, 0] } }
+    },
+    {
+      su: { name: "word dictionary" },
+      ob: { ve: { values: key } },
+      as: { text: "en" },
+      from: { text: "wordnet" },
+      to: { text: "Open English WordNet 2025" },
+      by: { text: "n:08479331-n" },
+      with: { text: "A collection of facts." },
+      at: { text: "source-gloss" }
+    }
+  ], "drut hnuc");
+
+  assert.equal(summary.definitionType, "wordnet-interim");
+  assert.equal(summary.interimDefinitions.length, 1);
+  assert.equal(summary.interimDefinitions[0].identifier, "n:08479331-n");
+  assert.equal(summary.interimDefinitions[0].text, "A collection of facts.");
+  assert.equal(summary.pyash, "");
+});
+
 test("published English core source imports six real WordNet-linked entries", async () => {
   const sourcePath = fileURLToPath(new URL(
     "../program/library/dictionary/english-core.pya",
@@ -109,5 +158,6 @@ test("published English core source imports six real WordNet-linked entries", as
       "v:00951320-v"
     ]
   );
-  assert.ok(built.entries.every((entry) => entry.definition.length > 0));
+  assert.ok(built.entries.every((entry) => entry.definition === null));
+  assert.ok(built.entries.every((entry) => entry.source_glosses.length === 1));
 });

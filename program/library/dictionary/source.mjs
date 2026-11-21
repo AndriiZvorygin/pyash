@@ -1,10 +1,10 @@
 import { buildProgram } from "../../program.mjs";
 import { lowerPyashProgram, lowerSentence } from "../vliw/index.mjs";
-import { lookupLegacyName } from "../vliw/quotes.mjs";
+import { lookupLegacyPyaName } from "../vliw/quotes.mjs";
 
 const PROFILE_KEY = "lyin kwon";
 const ENTRY_RECORD_KEY = "tlat kwon";
-const PROFILE_VERSION = "pyac-vliw-dictionary/2";
+const PROFILE_VERSION = "pyac-vliw-dictionary/3";
 
 function requireText(value, label) {
   if (typeof value !== "string" || !value.trim()) {
@@ -17,7 +17,7 @@ function keyForName(name) {
   const words = String(name ?? "").trim().split(/\s+/u).filter(Boolean);
   if (!words.length) throw new Error("dictionary entry requires a Pyash key");
   return words.map((word) => {
-    const entry = lookupLegacyName(word);
+    const entry = lookupLegacyPyaName(word);
     if (!entry?.hnuc) throw new Error(`dictionary key word has no HNUC mapping: ${word}`);
     return Number.parseInt(entry.hnuc, 16);
   });
@@ -74,7 +74,7 @@ function text(value, label) {
 
 function buildEntryRecord(sentence, entries, entryByName) {
   const kind = sentence.at?.text;
-  const target = requireText(sentence.ob?.name, "entry record ob key");
+  const target = requireText(sentence.ob?.text ?? sentence.ob?.name, "entry record ob key");
   const key = keyForName(target);
   let entry = entryByName.get(target);
   if (kind === "entry") {
@@ -83,6 +83,8 @@ function buildEntryRecord(sentence, entries, entryByName) {
       key,
       lexical_forms: [],
       source_links: [],
+      source_glosses: [],
+      component_keys: [],
       task_keys: [],
       references: [],
       operation_signatures: [],
@@ -107,6 +109,16 @@ function buildEntryRecord(sentence, entries, entryByName) {
       identifier: text(sentence.to, "source identifier"),
       relation: text(sentence.by, "source relation")
     });
+  } else if (kind === "source-gloss") {
+    entry.source_glosses.push({
+      language: text(sentence.as, "source gloss language"),
+      dataset: text(sentence.from, "source gloss dataset"),
+      release: text(sentence.to, "source gloss release"),
+      identifier: text(sentence.by, "source gloss identifier"),
+      text: text(sentence.with, "source gloss text")
+    });
+  } else if (kind === "component") {
+    entry.component_keys.push(keyForName(sentence.from?.text ?? sentence.from?.name));
   } else if (kind === "task") {
     entry.task_keys.push(keyForName(sentence.with?.name));
   } else if (kind === "reference") {
@@ -156,6 +168,7 @@ export function buildDictionarySource(source) {
   const entries = [];
   const entryByName = new Map();
   for (const sentence of sentences) {
+    if (sentence?.mood === "prah") continue;
     if (sentence.su?.name === PROFILE_KEY) continue;
     if (sentence.su?.name === ENTRY_RECORD_KEY) {
       buildEntryRecord(sentence, entries, entryByName);
@@ -174,8 +187,8 @@ export function buildDictionarySource(source) {
     entry.definition.push(...lowered.map(({ words }) => Array.from(words)));
   }
   if (!entries.length) throw new Error("dictionary source contains no entry blocks");
-  for (const [name, entry] of entryByName) {
-    if (!entry.definition.length) throw new Error(`dictionary entry has no definition sentences: ${name}`);
+  for (const entry of entries) {
+    if (!entry.definition.length) entry.definition = null;
   }
   return {
     metadata: {

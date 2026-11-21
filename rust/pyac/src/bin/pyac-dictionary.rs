@@ -6,8 +6,8 @@ use std::time::Instant;
 
 use pyac::dictionary::{
     DictionaryFileReader, DictionaryMetadata, DictionaryVolume, DictionaryVolumeEntry, LexicalForm,
-    OperationArgument, OperationArgumentType, OperationResult, OperationSignature, SourceLink,
-    encode_dictionary,
+    OperationArgument, OperationArgumentType, OperationResult, OperationSignature, SourceGloss,
+    SourceLink, encode_dictionary,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -33,12 +33,17 @@ struct DictionaryEntryInput {
     lexical_forms: Vec<LexicalFormInput>,
     source_links: Vec<SourceLinkInput>,
     #[serde(default)]
+    source_glosses: Vec<SourceGlossInput>,
+    #[serde(default)]
+    component_keys: Vec<Vec<u16>>,
+    #[serde(default)]
     task_keys: Vec<Vec<u16>>,
     #[serde(default)]
     references: Vec<Vec<u16>>,
     #[serde(default)]
     operation_signatures: Vec<OperationSignatureInput>,
-    definition: Vec<Vec<u16>>,
+    #[serde(default)]
+    definition: Option<Vec<Vec<u16>>>,
 }
 
 #[derive(Deserialize)]
@@ -54,6 +59,15 @@ struct SourceLinkInput {
     release: String,
     identifier: String,
     relation: String,
+}
+
+#[derive(Deserialize)]
+struct SourceGlossInput {
+    language: String,
+    text: String,
+    dataset: String,
+    release: String,
+    identifier: String,
 }
 
 #[derive(Deserialize)]
@@ -80,7 +94,7 @@ struct OperationResultInput {
 }
 
 fn usage() -> &'static str {
-    "usage:\n  pyac-dictionary build <volume.pyac>  # Build JSON request is read from stdin.\n  pyac-dictionary inspect <volume.pyac>\n  pyac-dictionary surface <volume.pyac> <language> <surface>\n  pyac-dictionary source <volume.pyac> <dataset> <release> <identifier>\n  pyac-dictionary key <volume.pyac> <hnuc[,hnuc...]>\n  pyac-dictionary benchmark <volume.pyac> <iterations> surface <language> <surface>"
+    "usage:\n  pyac-dictionary build <volume.pyac>  # Build JSON request is read from stdin.\n  pyac-dictionary inspect <volume.pyac>\n  pyac-dictionary surface <volume.pyac> <language> <surface>\n  pyac-dictionary surface-entries <volume.pyac> <language> <surface>\n  pyac-dictionary source <volume.pyac> <dataset> <release> <identifier>\n  pyac-dictionary source-entries <volume.pyac> <dataset> <release> <identifier>\n  pyac-dictionary key <volume.pyac> <hnuc[,hnuc...]>\n  pyac-dictionary entry <volume.pyac> <hnuc[,hnuc...]>\n  pyac-dictionary benchmark <volume.pyac> <iterations> surface <language> <surface>"
 }
 
 fn binary_bytes() -> io::Result<u64> {
@@ -108,13 +122,17 @@ fn convert_input(input: BuildInput) -> Result<DictionaryVolume, String> {
         .map(|entry| {
             let definition = entry
                 .definition
-                .into_iter()
-                .map(|codelet| {
-                    codelet
-                        .try_into()
-                        .map_err(|_| "definition codelet must contain exactly 16 uint16 words")
+                .map(|codelets| {
+                    codelets
+                        .into_iter()
+                        .map(|codelet| {
+                            codelet.try_into().map_err(
+                                |_| "definition codelet must contain exactly 16 uint16 words",
+                            )
+                        })
+                        .collect::<Result<Vec<[u16; 16]>, _>>()
                 })
-                .collect::<Result<Vec<[u16; 16]>, _>>()?;
+                .transpose()?;
             Ok(DictionaryVolumeEntry {
                 key: entry.key,
                 lexical_forms: entry
@@ -136,6 +154,18 @@ fn convert_input(input: BuildInput) -> Result<DictionaryVolume, String> {
                         relation: link.relation,
                     })
                     .collect(),
+                source_glosses: entry
+                    .source_glosses
+                    .into_iter()
+                    .map(|gloss| SourceGloss {
+                        language: gloss.language,
+                        text: gloss.text,
+                        dataset: gloss.dataset,
+                        release: gloss.release,
+                        identifier: gloss.identifier,
+                    })
+                    .collect(),
+                component_keys: entry.component_keys,
                 task_keys: entry.task_keys,
                 references: entry.references,
                 operation_signatures: entry
@@ -268,6 +298,30 @@ fn execute(args: &[String]) -> Result<Value, Box<dyn std::error::Error>> {
                 "lookupNs": lookup_ns
             })
         }
+        "surface-entries" if args.len() == 4 => {
+            let path = Path::new(&args[1]);
+            let size = fs::metadata(path)?.len();
+            let open_start = Instant::now();
+            let mut reader = open_reader(path)?;
+            let open_ms = open_start.elapsed().as_secs_f64() * 1000.0;
+            let lookup_start = Instant::now();
+            let keys = reader.lookup_surface(&args[2], &args[3]);
+            let matches = keys
+                .iter()
+                .map(|key| {
+                    Ok(json!({
+                        "key": key,
+                        "codelets": reader.read_entry(key)?.iter().map(|codelet| codelet.to_vec()).collect::<Vec<_>>()
+                    }))
+                })
+                .collect::<Result<Vec<_>, pyac::dictionary::DictionaryReadError>>()?;
+            let lookup_ns = lookup_start.elapsed().as_nanos();
+            json!({
+                "command": "surface-entries", "path": path, "language": args[2], "surface": args[3],
+                "matches": matches, "volumeBytes": size, "openMs": open_ms,
+                "lookupNs": lookup_ns
+            })
+        }
         "source" if args.len() == 5 => {
             let path = Path::new(&args[1]);
             let size = fs::metadata(path)?.len();
@@ -291,7 +345,32 @@ fn execute(args: &[String]) -> Result<Value, Box<dyn std::error::Error>> {
                 "openMs": open_ms, "lookupNs": lookup_ns
             })
         }
-        "key" if args.len() == 3 => {
+        "source-entries" if args.len() == 5 => {
+            let path = Path::new(&args[1]);
+            let size = fs::metadata(path)?.len();
+            let open_start = Instant::now();
+            let mut reader = open_reader(path)?;
+            let open_ms = open_start.elapsed().as_secs_f64() * 1000.0;
+            let lookup_start = Instant::now();
+            let source_matches = reader.lookup_source(&args[2], &args[3], &args[4]);
+            let matches = source_matches
+                .iter()
+                .map(|source_match| {
+                    Ok(json!({
+                        "key": source_match.key,
+                        "relation": source_match.relation,
+                        "codelets": reader.read_entry(&source_match.key)?.iter().map(|codelet| codelet.to_vec()).collect::<Vec<_>>()
+                    }))
+                })
+                .collect::<Result<Vec<_>, pyac::dictionary::DictionaryReadError>>()?;
+            let lookup_ns = lookup_start.elapsed().as_nanos();
+            json!({
+                "command": "source-entries", "path": path, "dataset": args[2], "release": args[3],
+                "identifier": args[4], "matches": matches, "volumeBytes": size,
+                "openMs": open_ms, "lookupNs": lookup_ns
+            })
+        }
+        "key" | "entry" if args.len() == 3 => {
             let path = Path::new(&args[1]);
             let key = parse_key(&args[2]).map_err(io::Error::other)?;
             let size = fs::metadata(path)?.len();
@@ -299,10 +378,15 @@ fn execute(args: &[String]) -> Result<Value, Box<dyn std::error::Error>> {
             let mut reader = open_reader(path)?;
             let open_ms = open_start.elapsed().as_secs_f64() * 1000.0;
             let read_start = Instant::now();
-            let codelets = reader.read_definition(&key)?;
+            let codelets = if command == "entry" {
+                reader.read_entry(&key)?
+            } else {
+                reader.read_definition(&key)?
+            };
             let read_ns = read_start.elapsed().as_nanos();
             json!({
-                "command": "key", "path": path, "key": key, "codelets": codelets,
+                "command": command, "path": path, "key": key, "codelets": codelets,
+                "hasDefinition": reader.has_definition(&key),
                 "volumeBytes": size, "openMs": open_ms, "readNs": read_ns
             })
         }

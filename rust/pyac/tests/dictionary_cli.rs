@@ -45,6 +45,10 @@ fn request() -> Value {
                 "dataset": "wordnet", "release": "OEWN 2025",
                 "identifier": "n:06311813-n", "relation": "exact-sense"
             }],
+            "source_glosses": [{
+                "language": "en", "dataset": "wordnet", "release": "OEWN 2025",
+                "identifier": "n:06311813-n", "text": "A dictionary entry used by the CLI test."
+            }],
             "definition": codelets
         }]
     })
@@ -111,6 +115,13 @@ fn compiled_cli_builds_inspects_looks_up_and_benchmarks_a_volume() {
     let entry = run(&["key", volume_arg, "a96a,6c22"], None);
     assert_eq!(entry["key"], serde_json::json!([0xa96a, 0x6c22]));
     assert!(!entry["codelets"].as_array().unwrap().is_empty());
+
+    let full_entry = run(&["entry", volume_arg, "a96a,6c22"], None);
+    assert_eq!(full_entry["hasDefinition"], true);
+    assert!(
+        full_entry["codelets"].as_array().unwrap().len()
+            > entry["codelets"].as_array().unwrap().len()
+    );
 
     let benchmark = run(
         &[

@@ -6,13 +6,20 @@ format and record grammar are specified in
 
 ## Current Volume
 
-`english-core.pya` is the editable source for `english-core.pyac`. The volume
-has six exact-sense-linked entries: vector (`dlek`), data (`drut hnuc`),
-compare (`tras`), select (`kcut`), sum (`tfo2t`), and lookup (`tsoc hsat`).
-It is a real, usable core slice, not complete English or multilingual
-coverage. Current entries include concise English WordNet glosses in Pyash
-text-definition sentences; richer compositional definitions can be added as
-their vocabulary relations are curated.
+`reference.pya` is the generated snapshot of accepted Pyash vocabulary;
+`reference.pyac` is its compiled runtime volume. The current snapshot contains
+58,630 entries, including 57,283 selected exact WordNet senses, SUMO links,
+Chinese forms, and unique legacy translations. It includes 2,885 single
+Chinese-character-to-atom links. A key may retain separate sense glosses for
+different parts of speech. Each exact linked WordNet gloss is an interim
+definition; a native compositional Pyash definition is optional. For Chinese
+multi-character forms, Pinyin or Jyutping is composed only when every Han
+character has one local reading and the surface resolves to one Pyash key.
+
+`english-core.pya` and `.pyac` remain a small six-entry example volume for
+vector, data, compare, select, sum, and lookup. The accepted vocabulary source
+snapshot is generated on the `dev-vocab` branch from the canonical vocabulary
+catalogs; do not hand-edit `reference.pya`.
 
 ## Setup Once
 
@@ -30,46 +37,55 @@ instruction rather than compiling during use.
 
 ## Add Or Update Entries
 
-1. Edit `english-core.pya` (or a separate volume source). Use the exact
-   canonical Pyash key in `su`; for a compound, write its Pyash atoms in order
-   (for example, `drut hnuc`), not an English alias such as `data`.
-2. Start each entry with `su name tlat kwon ob name <key> at text "entry" be
-   text ya`. Add its `lexical-form` and exact versioned `source-link` records,
-   then one or more definition sentences whose `su` is that same key.
-3. Preserve each written form and its NFC lookup form. Use a distinct Pyash
-   key for a distinct WordNet sense; shared English surfaces are allowed.
-4. Increment the source volume revision when publishing the update.
-5. Build the compiled volume from the source:
+Promote new atoms, compounds, English forms, and exact WordNet links through
+their canonical vocabulary workflows on `dev-vocab`. For a compound from
+existing atoms, use `compound_catalog_add.mjs`; record the exact sense and its
+review state with `vocabulary_entry_review.mjs` or the catalog's accepted-LLM
+flow. An exact linked WordNet gloss becomes the interim definition. Then
+regenerate the accepted snapshot on `dev-vocab`:
 
 ```sh
-pyash dictionary volume build from program/library/dictionary/english-core.pya to program/library/dictionary/english-core.pyac
+node program/library/dictionary/build_reference_source.mjs
+```
+
+Bring the generated `reference.pya` into this runtime worktree and build the
+compiled volume:
+
+```sh
+pyash dictionary volume build from program/library/dictionary/reference.pya to program/library/dictionary/reference.pyac
 ```
 
 The build validates and lowers the source, then atomically replaces the
-`.pyac` volume. It does not rebuild the Rust executable. Keep the `.pya` and
-`.pyac` together in version control.
+`.pyac` volume. It does not rebuild the Rust executable. Keep the generated
+snapshot and compiled volume together when publishing runtime data.
 
 ## Verify And Use
 
 ```sh
-pyash dictionary volume inspect program/library/dictionary/english-core.pyac
-pyash dictionary volume lookup program/library/dictionary/english-core.pyac surface en data
-pyash dictionary volume lookup program/library/dictionary/english-core.pyac source wordnet "Open English WordNet 2025" n:08479331-n
-pyash dictionary volume read program/library/dictionary/english-core.pyac key "drut hnuc"
+pyash dictionary forecast
+pyash dictionary n:07285306-n
+pyash dictionary sumo:Identifier
+pyash dictionary hnan to zh
+pyash dictionary volume inspect program/library/dictionary/reference.pyac
+pyash dictionary volume lookup program/library/dictionary/reference.pyac surface zh 你
+pyash dictionary volume lookup program/library/dictionary/reference.pyac source wordnet "Open English WordNet 2025" n:07285306-n
+pyash dictionary volume read program/library/dictionary/reference.pyac key hdiftyec
 ```
 
-Inspect reports entry/codelet counts, volume and executable bytes, metadata,
-and open time. Surface lookup returns all matching senses and their Pyash
-keys. Source lookup selects an exact dataset/release/identifier. Read returns
-only the definition paragraph for the requested key, not the lexical or index
-records.
+`pyash dictionary` (also `pyash dict`) queries the reference volume by English
+or Chinese surface, exact WordNet sense, `sumo:<concept>`, or Pyash key. The
+`to zh` form prints Chinese first, followed by available Pinyin/Jyutping,
+English forms, component breakdown, and WordNet interim glosses. Low-level
+volume lookup returns all matching Pyash keys for homographs. `inspect` reports
+counts, bytes, metadata, and open time; `read` returns lexical forms, source
+links, exact glosses, component keys, and an optional native definition.
 
 ## Measure
 
 Run a warmed file-backed surface lookup benchmark and save its Pyash record:
 
 ```sh
-pyash dictionary volume benchmark program/library/dictionary/english-core.pyac surface en vector 100000 to artifacts/dictionary-benchmarks/english-core-$(hostname)-$(date +%Y%m%d).pya
+pyash dictionary volume benchmark program/library/dictionary/reference.pyac surface en forecast 100000 to artifacts/dictionary-benchmarks/reference-$(hostname)-$(date +%Y%m%d).pya
 ```
 
 The command performs five warmups and records the timestamp, host/platform,
@@ -78,11 +94,19 @@ latency, lookup rate, iteration count, and result count. `artifacts/` is
 git-ignored; use a unique filename for each run and retain/copy the record
 where local benchmark history is maintained.
 
-Baseline on `mriczo`, 2026-11-20: six entries, 353 codelets, 11,328-byte
-volume, 1,396,632-byte release executable; 100,000 vector surface lookups
-averaged 163 ns (about 6.13 million lookups/second). The run record was
-`artifacts/dictionary-benchmarks/english-core-mriczo-20261120.pya`. This is a
-small-volume CPU lookup baseline, not a large-corpus benchmark.
+The six-entry example volume's earlier benchmark is not representative of this
+full snapshot. Benchmark `reference.pyac` when the volume, index reader, or
+runtime command changes; its file-backed open cost and in-memory lookup rate
+are separate measurements.
+
+Full-volume baseline on this host, 2026-11-20: 58,630 entries, 6,261,431
+codelets, 200,365,824-byte volume, 1,504,464-byte release executable. Opening
+and validating the in-band indexes took 3.63 seconds. After opening, 100,000
+English `forecast` lookups averaged 338 ns (about 2.96 million lookups/second);
+each lookup returned three matching keys. The measurement record is
+`artifacts/dictionary-benchmarks/reference-current.pya`. One-shot CLI calls
+pay the index-open cost; repeated lookups within one Rust process use the
+already loaded in-memory indexes.
 
 Before publishing, check the keys and source IDs against the active catalogs,
 build the volume, inspect it, run representative surface/source/read

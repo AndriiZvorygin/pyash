@@ -5,7 +5,7 @@ use super::reader_codec::{
 };
 use super::reader_index::IndexPostings;
 use super::volume::{DictionaryMetadata, DictionaryVolumeError};
-use super::volume_records::TOC_ROLES;
+use super::volume_records::{PROFILE_VERSION, PROFILE_VERSION_V2, TOC_ROLES};
 use crate::{HEADER_BYTES, PyacError, WORDS_PER_CODELET};
 use std::io::{Read, Seek, SeekFrom};
 use std::ops::Range;
@@ -35,6 +35,12 @@ pub enum DictionaryReadError {
     Pack(PyacError),
     Volume(DictionaryVolumeError),
     InvalidRecord(&'static str),
+    UnexpectedWord {
+        expected: u16,
+        actual: Option<u16>,
+        offset: usize,
+    },
+    Context(String, Box<DictionaryReadError>),
     MissingSection(String),
     MissingEntry(Vec<u16>),
 }
@@ -46,6 +52,16 @@ impl std::fmt::Display for DictionaryReadError {
             Self::Pack(error) => write!(f, "invalid PyAC dictionary pack: {error}"),
             Self::Volume(error) => write!(f, "invalid PyAC dictionary volume: {error}"),
             Self::InvalidRecord(reason) => write!(f, "invalid dictionary record: {reason}"),
+            Self::UnexpectedWord {
+                expected,
+                actual,
+                offset,
+            } => write!(
+                f,
+                "invalid dictionary record: expected case/verb 0x{expected:04x} at word {offset}, found {}",
+                actual.map_or_else(|| "end of sentence".into(), |word| format!("0x{word:04x}"))
+            ),
+            Self::Context(context, error) => write!(f, "{context}: {error}"),
             Self::MissingSection(role) => write!(f, "dictionary has no {role} section"),
             Self::MissingEntry(key) => write!(f, "dictionary has no entry for Pyac key {key:?}"),
         }
@@ -72,6 +88,7 @@ impl From<DictionaryVolumeError> for DictionaryReadError {
 pub struct DictionaryFileReader<R> {
     source: R,
     codelet_count: u32,
+    profile_version: String,
     metadata: DictionaryMetadata,
     sections: Vec<DictionarySection>,
     locations: Vec<(Vec<u16>, Range<u32>)>,
@@ -96,9 +113,14 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
             .into());
         }
         let (marker, marker_count) = read_sentence(&mut source, 0, count)?;
-        let kind = parse_marker(&marker)?;
+        let kind = parse_marker(&marker).map_err(|error| {
+            DictionaryReadError::Context("profile marker".into(), Box::new(error))
+        })?;
         let (metadata_words, metadata_count) = read_sentence(&mut source, marker_count, count)?;
-        let (mut metadata, toc_count) = parse_metadata(&metadata_words)?;
+        let (mut metadata, toc_count, profile_version) =
+            parse_metadata(&metadata_words).map_err(|error| {
+                DictionaryReadError::Context("profile metadata".into(), Box::new(error))
+            })?;
         if kind.trim().is_empty()
             || metadata.title.trim().is_empty()
             || metadata.normalization_policy != "NFC"
@@ -117,7 +139,9 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
         let mut sections = Vec::with_capacity(toc_count);
         for role in TOC_ROLES {
             let (words, consumed) = read_sentence(&mut source, ordinal, count)?;
-            let section = parse_toc(&words)?;
+            let section = parse_toc(&words).map_err(|error| {
+                DictionaryReadError::Context(format!("TOC record for {role}"), Box::new(error))
+            })?;
             if section.role != role {
                 return Err(DictionaryReadError::InvalidRecord(
                     "TOC records are not in canonical role order",
@@ -132,15 +156,21 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
         let mut reader = Self {
             source,
             codelet_count: count,
+            profile_version,
             metadata,
             sections,
             locations: Vec::new(),
             definitions: Vec::new(),
             postings: IndexPostings::default(),
         };
-        reader.load_locations()?;
+        reader.load_locations().map_err(|error| {
+            DictionaryReadError::Context("entry-location index".into(), Box::new(error))
+        })?;
         reader.postings =
-            IndexPostings::load(&mut reader.source, &reader.sections, reader.codelet_count)?;
+            IndexPostings::load(&mut reader.source, &reader.sections, reader.codelet_count)
+                .map_err(|error| {
+                    DictionaryReadError::Context("lookup indexes".into(), Box::new(error))
+                })?;
         reader
             .postings
             .validate_targets(&reader.locations, &reader.metadata.languages)?;
@@ -149,6 +179,9 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
 
     pub fn metadata(&self) -> &DictionaryMetadata {
         &self.metadata
+    }
+    pub fn profile_version(&self) -> &str {
+        &self.profile_version
     }
     pub fn sections(&self) -> &[DictionarySection] {
         &self.sections
@@ -185,6 +218,11 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
             .binary_search_by(|(candidate, _)| candidate.as_slice().cmp(key))
             .ok()
             .map(|index| self.definitions[index].1.clone())
+    }
+
+    pub fn has_definition(&self, key: &[u16]) -> bool {
+        self.definition_location(key)
+            .is_some_and(|range| !range.is_empty())
     }
 
     pub fn lookup_surface(&self, language: &str, surface: &str) -> Vec<Vec<u16>> {
@@ -289,7 +327,12 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
                     definition_key != entry_key
                         || definition.start < entry.start
                         || definition.end > entry.end
-                        || definition.is_empty()
+                        || (definition.is_empty()
+                            && (self.profile_version != PROFILE_VERSION
+                                || definition.start != entry.end))
+                        || (!definition.is_empty()
+                            && self.profile_version == PROFILE_VERSION_V2
+                            && definition.end != entry.end)
                 },
             )
         {

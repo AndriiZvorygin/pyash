@@ -3,7 +3,8 @@ use std::io::Cursor;
 use pyac::dictionary::{
     DictionaryField, DictionaryFileReader, DictionaryMetadata, DictionaryValue, DictionaryVolume,
     DictionaryVolumeEntry, LexicalForm, OperationArgument, OperationArgumentType,
-    OperationSignature, OperationSignatureKey, SourceLink, encode_dictionary, encode_text_sentence,
+    OperationSignature, OperationSignatureKey, SourceGloss, SourceLink, encode_dictionary,
+    encode_text_sentence,
 };
 
 const ENTRY_KEY: [u16; 2] = [0xa96a, 0x6c22]; // tlat kwon
@@ -52,6 +53,14 @@ fn sample_volume() -> DictionaryVolume {
                 identifier: "n:06311813-n".into(),
                 relation: "exact-sense".into(),
             }],
+            source_glosses: vec![SourceGloss {
+                language: "en".into(),
+                text: "A sense-specific interim gloss.".into(),
+                dataset: "wordnet".into(),
+                release: "OEWN 2025".into(),
+                identifier: "n:06311813-n".into(),
+            }],
+            component_keys: vec![],
             task_keys: vec![],
             references: vec![],
             operation_signatures: vec![OperationSignature {
@@ -67,7 +76,7 @@ fn sample_volume() -> DictionaryVolume {
                 }],
                 results: vec![],
             }],
-            definition,
+            definition: Some(definition),
         }],
     }
 }
@@ -99,7 +108,7 @@ fn writer_emits_reproducible_pack_and_seek_reader_reads_entry_on_demand() {
     assert!(definition_range.end <= range.end);
     assert_eq!(
         reader.read_definition(&ENTRY_KEY).expect("read definition"),
-        volume.entries[0].definition
+        volume.entries[0].definition.clone().unwrap()
     );
     assert_eq!(reader.read_section("entries").unwrap().len(), entry.len());
     assert_eq!(reader.location(&[0xffff]), None);
@@ -144,4 +153,49 @@ fn volume_rejects_unresolved_definition_references_before_writing() {
     let mut volume = sample_volume();
     volume.entries[0].references.push(vec![0x7777]);
     assert!(encode_dictionary(&volume).is_err());
+}
+
+#[test]
+fn source_gloss_only_entry_is_searchable_without_an_authored_definition() {
+    let mut volume = sample_volume();
+    volume.entries[0].definition = None;
+    let bytes = encode_dictionary(&volume).expect("encode gloss-only dictionary");
+    let mut reader = DictionaryFileReader::open(Cursor::new(bytes)).expect("open v3 volume");
+
+    assert_eq!(reader.profile_version(), "pyac-vliw-dictionary/3");
+    assert_eq!(
+        reader.lookup_surface("en", "Dictionary"),
+        [ENTRY_KEY.to_vec()]
+    );
+    assert!(!reader.has_definition(&ENTRY_KEY));
+    assert!(reader.read_definition(&ENTRY_KEY).unwrap().is_empty());
+    assert!(!reader.read_entry(&ENTRY_KEY).unwrap().is_empty());
+}
+
+#[test]
+fn source_gloss_must_match_an_exact_source_link() {
+    let mut volume = sample_volume();
+    volume.entries[0].source_glosses[0].identifier = "n:99999999-n".into();
+    assert!(encode_dictionary(&volume).is_err());
+}
+
+#[test]
+fn reader_keeps_v2_definition_volumes_compatible() {
+    let mut volume = sample_volume();
+    volume.entries[0].source_glosses.clear();
+    let mut bytes = encode_dictionary(&volume).expect("encode profile volume");
+    let profile = b"pyac-vliw-dictionary/3"
+        .iter()
+        .flat_map(|byte| [*byte, 0])
+        .collect::<Vec<_>>();
+    let start = bytes
+        .windows(profile.len())
+        .position(|window| window == profile)
+        .expect("profile version text");
+    bytes[start + profile.len() - 2] = b'2';
+
+    let mut reader = DictionaryFileReader::open(Cursor::new(bytes)).expect("open v2 volume");
+    assert_eq!(reader.profile_version(), "pyac-vliw-dictionary/2");
+    assert!(reader.has_definition(&ENTRY_KEY));
+    assert!(!reader.read_definition(&ENTRY_KEY).unwrap().is_empty());
 }

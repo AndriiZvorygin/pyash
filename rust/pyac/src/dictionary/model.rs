@@ -105,6 +105,15 @@ pub struct SourceLink {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceGloss {
+    pub language: String,
+    pub text: String,
+    pub dataset: String,
+    pub release: String,
+    pub identifier: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DictionaryEntry {
     pub key: Vec<u16>,
     pub codelet_start: u32,

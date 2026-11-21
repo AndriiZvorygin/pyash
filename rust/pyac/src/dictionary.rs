@@ -9,7 +9,7 @@ mod volume_records;
 mod wire;
 
 pub use index::DictionaryIndex;
-pub use model::{DictionaryEntry, DictionaryIndexError, LexicalForm, SourceLink};
+pub use model::{DictionaryEntry, DictionaryIndexError, LexicalForm, SourceGloss, SourceLink};
 pub use operation::{
     OperationArgument, OperationArgumentType, OperationResult, OperationSignature,
     OperationSignatureKey,

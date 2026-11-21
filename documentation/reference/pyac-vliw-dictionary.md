@@ -1,11 +1,15 @@
 # Pyac VLIW Multilingual Dictionary
 
 Status: implemented Rust writer and seek-based reader for dictionary profile
-v2, with in-memory binary-search indexes rebuilt from its VLIW sentences.
-The initial six-entry English core volume is published in
-`program/library/dictionary/`; complete English and multilingual coverage
-remain to be curated. The
-Rust library writer accepts already-lowered definition codelets. The
+v3, with v2 read compatibility and in-memory binary-search indexes rebuilt
+from its VLIW sentences.
+The accepted-vocabulary reference volume is published in
+`program/library/dictionary/` and currently contains 58,630 entries. It is
+generated from promoted vocabulary catalogs and includes English and selected
+multilingual forms, 57,283 selected WordNet links, and SUMO mappings. The
+separate six-entry `english-core` volume remains a small example fixture. The
+Rust library writer accepts optional already-lowered native definition
+codelets and exact source glosses. The
 `pyash dictionary volume` authoring command parses Pyash source and lowers its
 definition sentences before calling that writer. The profile organizes a
 searchable, multilingual dictionary as ordinary Pyash sentences encoded in
@@ -53,7 +57,11 @@ After the profile sentence, codelets appear in this order:
 All constituent records are ordinary Pyash sentences. A dictionary entry is
 one complete Pyash paragraph or map, using the existing grammar to keep its
 sentences together; it is not a new opcode or a new word allocation. Its
-definition is one or more canonical Pyash sentences. A TOC item is a named
+each linked WordNet sense and exact gloss provide an interim definition when
+no native Pyash definition has been authored. An entry may carry multiple
+sense-specific interim glosses, such as a noun and an adjective under one
+Pyash key. A native definition is one or more
+canonical Pyash sentences and may be added later. A TOC item is a named
 logical range. A printable reader presents these ranges as navigable groups
 and preserves the source codelet order.
 
@@ -93,16 +101,17 @@ identity.
 | Term | Meaning |
 | --- | --- |
 | Pyac key | The canonical atom or compound in `su`; the unique identity of one meaning. |
-| Dictionary entry | The paragraph or map keyed by that Pyac key. It contains the canonical definition plus any lexical-form, source-link, provenance, and optional program-link sentences. |
+| Dictionary entry | The paragraph or map keyed by that Pyac key. It contains lexical forms, exact source links and glosses, optional native Pyash definition sentences, component references, and optional program links. |
 | Lexical form | A language-tagged written or spoken form, including its exact surface, normalized lookup form, variants, and morphology. It is lookup data inside an entry, not the entry's identity. |
 | Source link | A versioned external identifier and explicit mapping relation, such as a WordNet synset, COW record, or SUMO concept. Links document correspondence; they do not add another meaning to the key. |
-| Definition | The canonical Pyash sentence paragraph in the entry. Localized glosses are supplementary lexical data, not replacements for the definition. |
+| Interim definition | The exact gloss from the linked WordNet sense. It is displayed as a source-derived definition until a native Pyash definition is available. |
+| Native definition | The canonical Pyash sentence paragraph in the entry. It is the compositional Pyash definition when present; its absence does not make the entry unavailable. |
 
 A language-plus-surface lookup may return multiple Pyac keys. This represents
 homographs or polysemy as separate sense-specific entries; the reader MUST
 return all matching keys rather than silently selecting one. One key may have
-lexical forms in many languages, all resolving to that entry's single
-definition.
+lexical forms in many languages, all resolving to that entry's exact linked
+sense and its interim or native definition.
 
 For example, the English surface `mapping` can index both `pwak hnuc`, linked
 to the mathematical function/map sense, and `tcas hjom`, linked to the
@@ -173,9 +182,13 @@ operation signature is a structural dispatch description: argument names and
 descriptions explain the contract to readers, but do not constrain which
 lexical forms may fill the grammatical cases.
 
-The entry-location index records both the full entry range and the definition
-paragraph range. A reader can return human-readable definitions without
-mistaking typed lexical/provenance index records for definition sentences.
+The entry-location index records both the full entry range and the optional
+native-definition paragraph range. A zero-length definition range is valid in
+v3 and points to the end of its entry. Readers then use the entry's exact
+source glosses, each tied to a linked WordNet sense, as its interim definitions.
+A reader can return human-readable
+definitions without mistaking typed lexical/provenance records for definition
+sentences.
 The Rust reader validates the in-band index sentence shapes and targets, then
 builds sorted posting arrays with binary-search range starts. These arrays are
 disposable runtime indexes, not persisted sidecars. Lookup is
@@ -185,12 +198,16 @@ their validated codelet ranges only when requested.
 
 ## 5. Definition paragraphs and program links
 
-Definitions are semantic Pyash sentences, not English gloss blobs, JSON
-descriptions, or executable code hidden in a quote. They are lowered through
-the ordinary sentence-to-VLIW path and remain printable as Pyash. An entry's
-definition paragraph may express its meaning through other defined meanings;
-references use their canonical Pyac keys and must resolve within the volume
-or an explicitly declared linked dictionary volume.
+An interim definition is the exact gloss attached to one of the entry's linked
+WordNet synsets, stored as quoted source data together with its language,
+dataset, release, and identifier. The source link and gloss must agree exactly.
+This gives every linked sense a readable definition while the vocabulary is
+still being built. A native Pyash definition is semantic Pyash sentences, not
+an English gloss blob, JSON description, or executable code hidden in a
+quote. It is lowered through the ordinary sentence-to-VLIW path and remains
+printable as Pyash. A native definition may express its meaning through other
+defined meanings; references use their canonical Pyac keys and must resolve
+within the volume or an explicitly declared linked dictionary volume.
 
 An entry may separately link to a pure VLIW programlet that demonstrates or
 computes an operational interpretation. This link does not replace the
@@ -228,7 +245,8 @@ Existing catalog compounds and links are recorded as supplied by the
 vocabulary catalog. The `hdiftyec` identifier mapping is the user-confirmed
 schema choice being linked by vocabulary work. The dictionary preserves exact
 sense links and provenance; it does not re-rank or reinterpret vocabulary
-decisions. This reference adds no vocabulary entries.
+decisions. The writer allocates no Pyash words; new entries must use keys from
+the canonical atom and compound catalogs.
 
 ## 7. Conformance and validation
 
@@ -267,42 +285,72 @@ cargo build --release --manifest-path rust/pyac/Cargo.toml --bin pyac-dictionary
 
 The author-facing interface is `pyash dictionary volume`. It imports a
 Pyash-source file, builds/replaces a compiled volume, and uses the Rust binary
-for inspection, lookup, definition reads, and throughput measurement:
+for inspection, lookup, definition reads, and throughput measurement. The
+full reference is generated from canonical vocabulary catalogs on `dev-vocab`;
+after a vocabulary update, regenerate `reference.pya` there, sync that source
+to the runtime worktree, and rebuild the compiled volume:
 
 ```sh
-pyash dictionary volume build from program/library/dictionary/english-core.pya to program/library/dictionary/english-core.pyac
-pyash dictionary volume inspect program/library/dictionary/english-core.pyac
-pyash dictionary volume lookup program/library/dictionary/english-core.pyac surface en vector
-pyash dictionary volume lookup program/library/dictionary/english-core.pyac source wordnet "Open English WordNet 2025" n:05873161-n
-pyash dictionary volume read program/library/dictionary/english-core.pyac key vector
-pyash dictionary volume benchmark program/library/dictionary/english-core.pyac surface en vector 100000 to artifacts/dictionary-benchmarks/english-core.pya
+pyash dictionary volume build from program/library/dictionary/reference.pya to program/library/dictionary/reference.pyac
+pyash dictionary volume inspect program/library/dictionary/reference.pyac
+pyash dictionary forecast
+pyash dictionary n:07285306-n
+pyash dictionary sumo:Identifier
+pyash dictionary hnan to zh
+pyash dictionary volume lookup program/library/dictionary/reference.pyac surface zh 你
+pyash dictionary volume lookup program/library/dictionary/reference.pyac source wordnet "Open English WordNet 2025" n:07285306-n
+pyash dictionary volume read program/library/dictionary/reference.pyac key hdiftyec
+pyash dictionary volume benchmark program/library/dictionary/reference.pyac surface en forecast 100000 to artifacts/dictionary-benchmarks/reference.pya
 ```
 
-The published starter volume currently contains six exact-sense links:
-`vector` (`n:05873161-n`), `data` (`n:08479331-n`), `compare`
-(`v:00654571-v`), `select` (`v:00676526-v`), `sum` (`v:00951320-v`), and
-`lookup` (`n:13574763-n`). English lookup forms come from those linked senses.
-The entries currently store concise English source glosses as ordinary Pyash
-text-definition sentences; compositional Pyash definitions can be added as
-the necessary relations are curated.
+`pyash dictionary` is also available as `pyash dict`. It searches the compiled
+reference volume by English form, Chinese form, exact WordNet sense ID, SUMO
+concept ID, or canonical Pyash key. A SUMO lookup uses `sumo:<concept>`.
+`pyash dictionary <key> to zh` prints the Chinese form first, then available
+Pinyin/Jyutping and the English component breakdown.
+Multi-character readings are included only when every Han character has one
+local reading and the surface maps to one Pyash key. Surface lookups return
+all matching sense keys for homographs.
 
 The `.pya` source starts with a profile sentence and metadata sentence:
 
 ```pyash
 su name lyin kwon ob text "English Pyash dictionary" be text ya
-su name lyin kwon ob text "English reference" as num 1 from text "en" to text "NFC" with text "pyac-vliw-dictionary/2" be text ya
+su name lyin kwon ob text "English reference" as num 2 from text "en" to text "NFC" with text "pyac-vliw-dictionary/3" be text ya
 ```
 
-Each entry starts with `su name tlat kwon ob name <canonical Pyash key> at
-text "entry" be text ya`. Add following `lexical-form`, `source-link`,
-`task`, `reference`, and operation-signature records with the same `tlat kwon`
-subject and the entry key in `ob`. Then add the definition as one or more
-ordinary Pyash sentences whose `su` is that exact canonical key. The importer
-resolves every key through the checkout's Pyash HNUC vocabulary and lowers
-definition sentences through the existing VLIW compiler; unknown key atoms
-and unsupported record tags fail instead of being guessed or dropped. Editing
-the `.pya` source and rebuilding the `.pyac` volume is the supported add/update
-workflow. It does not recompile the Rust executable.
+Each entry starts with `su name tlat kwon ob text "<canonical Pyash key>" at
+text "entry" be text ya`. The key is quoted text because an atom spelling can
+also be a grammatical role word. Add following `lexical-form`, `source-link`,
+`source-gloss`, `component`, `task`, `reference`, and operation-signature
+records with the same `tlat kwon` subject and the key in `ob text`. A
+`source-gloss` must match an exact source link. Its WordNet gloss supplies the
+interim definition. A native definition may be added as one or more ordinary
+Pyash sentences whose `su` is that exact canonical key; it is optional. The
+importer resolves every key through the checkout's Pyash HNUC vocabulary and
+lowers native definition sentences through the existing VLIW compiler;
+unknown key atoms and unsupported record tags fail instead of being guessed
+or dropped. For standalone volumes, editing the `.pya` source and rebuilding
+the `.pyac` volume is the supported add/update workflow. For the accepted
+reference volume, update the canonical vocabulary catalog, regenerate its
+snapshot, then rebuild the volume. Neither workflow recompiles the Rust
+executable.
+
+For example, this adds an English form and an exact WordNet interim gloss to
+the existing compound `rwoc hrom`:
+
+```pyash
+su name tlat kwon ob text "rwoc hrom" at text "entry" be text ya
+su name tlat kwon ob text "rwoc hrom" as text "en" from text "procedure" to text "procedure" at text "lexical-form" be text ya
+su name tlat kwon ob text "rwoc hrom" as text "wordnet" from text "Open English WordNet 2025" to text "n:01025762-n" by text "exact-sense" at text "source-link" be text ya
+su name tlat kwon ob text "rwoc hrom" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:01025762-n" with text "course of action intended to achieve a result" at text "source-gloss" be text ya
+```
+
+After adding the block and profile metadata to a standalone source, build the
+volume, then retrieve the entry by `procedure`, `n:01025762-n`, or `rwoc hrom`.
+For the full accepted reference, create or update the corresponding canonical
+compound and sense-link catalog records instead; the snapshot generator
+projects those records into the same entry shape.
 
 Each executable response reports executable bytes, volume bytes, and relevant
 open/read/lookup/build durations. The `benchmark` command performs five warmup
@@ -315,7 +363,8 @@ evidence; printed JSON is only the immediate CLI response.
 
 `rust/pyac/src/dictionary.rs` exposes the deterministic writer and seek-based
 reader APIs. Lookup indexes are rebuilt in memory from the volume; entry
-definitions are fetched on demand using their explicit codelet ranges. The
+records and optional native definitions are fetched on demand using their
+explicit codelet ranges. Gloss-only entries remain searchable. The
 separate in-memory `DictionaryIndex` retains its language/task projection API.
 The synthetic scaling comparison remains available with
 `cargo bench --manifest-path rust/pyac/Cargo.toml --bench dictionary_index`;
@@ -341,9 +390,10 @@ For each proposed dictionary entry, agents should:
 3. Record each language form with its exact surface and NFC lookup form.
    Preserve case; add case or spelling variants as separate forms instead of
    silently folding them together.
-4. Draft the meaning as ordinary Pyash definition sentences using existing
-   canonical keys. Record referenced keys and ensure each is present in the
-   volume or an explicitly linked volume.
+4. Store the exact WordNet gloss as an interim definition linked to its source
+   sense. Add a native Pyash definition when its compositional meaning is
+   ready, using existing canonical keys. Record referenced keys and ensure
+   each is present in the volume or an explicitly linked volume.
 5. Describe operation signatures by verb, mood, grammatical case, and value
    type. Keep argument names and explanations as documentation, not dispatch
    constraints.
@@ -357,6 +407,7 @@ compiler. It validates the documented record kinds and sends the resulting
 structured build request to the Rust writer over stdin; that request is
 transient and is not saved as a JSON state file. The workbook and vocabulary
 catalog are curation inputs, not runtime dictionary data. Vocabulary agents
-can update the tracked `.pya` source, after which a maintainer rebuilds and
-validates the published `.pyac` volume. Runtime readers consume the compiled
-volume directly.
+update the canonical atom/compound and source-link catalogs, then the
+`build_reference_source.mjs` generator creates the accepted snapshot. A
+maintainer rebuilds and validates the published `.pyac` volume. Runtime readers
+consume the compiled volume directly.

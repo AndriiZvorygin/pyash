@@ -35,10 +35,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 identifier: "n:06311813-n".into(),
                 relation: "exact-sense".into(),
             }],
+            source_glosses: vec![],
+            component_keys: vec![],
             task_keys: vec![],
             references: vec![],
             operation_signatures: vec![],
-            definition,
+            definition: Some(definition),
         }],
     };
     io::stdout()

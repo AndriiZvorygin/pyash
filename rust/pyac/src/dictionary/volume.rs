@@ -4,7 +4,7 @@ use super::operation::OperationSignature;
 use super::volume_records::{
     TOC_ROLES, encode_entry, index_records, profile_records, range_pair, toc_records,
 };
-use super::{DictionaryIndex, DictionaryIndexError, LexicalForm, SourceLink};
+use super::{DictionaryIndex, DictionaryIndexError, LexicalForm, SourceGloss, SourceLink};
 use crate::{PyacError, WORDS_PER_CODELET, encode_pack};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,11 +22,13 @@ pub struct DictionaryVolumeEntry {
     pub key: Vec<u16>,
     pub lexical_forms: Vec<LexicalForm>,
     pub source_links: Vec<SourceLink>,
+    pub source_glosses: Vec<SourceGloss>,
+    pub component_keys: Vec<Vec<u16>>,
     pub task_keys: Vec<Vec<u16>>,
     pub references: Vec<Vec<u16>>,
     pub operation_signatures: Vec<OperationSignature>,
     /// Already-lowered ordinary Pyash sentence codelets; copied without reinterpretation.
-    pub definition: Vec<[u16; WORDS_PER_CODELET]>,
+    pub definition: Option<Vec<[u16; WORDS_PER_CODELET]>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -141,6 +143,23 @@ fn canonicalize_entry(entry: &mut DictionaryVolumeEntry) {
             ))
     });
     entry.source_links.dedup();
+    entry.source_glosses.sort_by(|left, right| {
+        (
+            &left.language,
+            &left.dataset,
+            &left.release,
+            &left.identifier,
+            &left.text,
+        )
+            .cmp(&(
+                &right.language,
+                &right.dataset,
+                &right.release,
+                &right.identifier,
+                &right.text,
+            ))
+    });
+    entry.source_glosses.dedup();
     entry.task_keys.sort();
     entry.task_keys.dedup();
     entry.references.sort();
@@ -193,6 +212,42 @@ pub fn encode_dictionary(volume: &DictionaryVolume) -> Result<Vec<u8>, Dictionar
     let mut input_entries = volume.entries.clone();
     input_entries.iter_mut().for_each(canonicalize_entry);
     input_entries.sort_unstable_by(|left, right| left.key.cmp(&right.key));
+    let keys = input_entries
+        .iter()
+        .map(|entry| entry.key.as_slice())
+        .collect::<std::collections::BTreeSet<_>>();
+    for entry in &input_entries {
+        if entry
+            .component_keys
+            .iter()
+            .any(|key| !keys.contains(key.as_slice()))
+        {
+            return Err(DictionaryVolumeError::InvalidEntry(
+                "component key does not resolve to a dictionary entry",
+            ));
+        }
+        for gloss in &entry.source_glosses {
+            if gloss.language.trim().is_empty()
+                || gloss.text.trim().is_empty()
+                || gloss.dataset.trim().is_empty()
+                || gloss.release.trim().is_empty()
+                || gloss.identifier.trim().is_empty()
+            {
+                return Err(DictionaryVolumeError::InvalidEntry(
+                    "source gloss language, text, and source identity are required",
+                ));
+            }
+            if !entry.source_links.iter().any(|link| {
+                link.dataset == gloss.dataset
+                    && link.release == gloss.release
+                    && link.identifier == gloss.identifier
+            }) {
+                return Err(DictionaryVolumeError::InvalidEntry(
+                    "source gloss must identify a source linked to the entry",
+                ));
+            }
+        }
+    }
     if input_entries
         .iter()
         .flat_map(|entry| &entry.lexical_forms)
@@ -205,6 +260,20 @@ pub fn encode_dictionary(volume: &DictionaryVolume) -> Result<Vec<u8>, Dictionar
     {
         return Err(DictionaryVolumeError::InvalidMetadata(
             "every lexical form language must be declared by the volume",
+        ));
+    }
+    if input_entries
+        .iter()
+        .flat_map(|entry| &entry.source_glosses)
+        .any(|gloss| {
+            metadata_copy
+                .languages
+                .binary_search(&gloss.language)
+                .is_err()
+        })
+    {
+        return Err(DictionaryVolumeError::InvalidMetadata(
+            "every source gloss language must be declared by the volume",
         ));
     }
     let (marker, metadata) = profile_records(&metadata_copy)?;

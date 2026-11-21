@@ -8,16 +8,19 @@ import { fileURLToPath } from "node:url";
 import { sentenceToPyash } from "../program/beautiful.mjs";
 import { buildDictionarySource } from "../program/library/dictionary/source.mjs";
 import { decodePyashProgram } from "../program/library/vliw/index.mjs";
-import { lookupLegacyName, lookupLegacyWord } from "../program/library/vliw/quotes.mjs";
+import { lookupLegacyName, lookupLegacyPyaName, lookupLegacyWord } from "../program/library/vliw/quotes.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const referenceVolumePath = path.join(root, "program/library/dictionary/reference.pyac");
+const WORDNET_RELEASE = "Open English WordNet 2025";
+const SUMO_RELEASE = "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed";
 const binaryCandidates = [
   path.join(root, "rust/pyac/target/release/pyac-dictionary"),
   path.join(root, "rust/pyac/target/debug/pyac-dictionary")
 ];
 
 function usageError(message) {
-  return new Error(`${message}\nusage:\n  pyash dictionary volume build from <source.pya> to <volume.pyac>\n  pyash dictionary volume inspect <volume.pyac>\n  pyash dictionary volume lookup <volume.pyac> surface <language> <surface>\n  pyash dictionary volume lookup <volume.pyac> source <dataset> <release> <identifier>\n  pyash dictionary volume read <volume.pyac> key <pyash-name>\n  pyash dictionary volume benchmark <volume.pyac> surface <language> <surface> <iterations> to <record.pya>`);
+  return new Error(`${message}\nusage:\n  pyash dict <English word|Chinese form|WordNet sense|sumo:<concept>|Pyash key>\n  pyash dict <Pyash key> to zh\n  pyash dictionary volume build from <source.pya> to <volume.pyac>\n  pyash dictionary volume inspect <volume.pyac>\n  pyash dictionary volume lookup <volume.pyac> surface <language> <surface>\n  pyash dictionary volume lookup <volume.pyac> source <dataset> <release> <identifier>\n  pyash dictionary volume read <volume.pyac> key <pyash-name>\n  pyash dictionary volume benchmark <volume.pyac> surface <language> <surface> <iterations> to <record.pya>`);
 }
 
 async function executablePath() {
@@ -51,7 +54,7 @@ function binaryKey(name) {
   const words = String(name).trim().split(/\s+/u).filter(Boolean);
   if (!words.length) throw usageError("read requires a Pyash key");
   return words.map((word) => {
-    const entry = lookupLegacyName(word);
+    const entry = lookupLegacyPyaName(word);
     if (!entry?.hnuc) throw new Error(`Pyash dictionary key has no HNUC mapping: ${word}`);
     return Number.parseInt(entry.hnuc, 16).toString(16);
   }).join(",");
@@ -100,7 +103,158 @@ function metricRecord(result) {
   return `${lines.join("\n")}\n`;
 }
 
+export function summarizeDictionaryEntry(sentences, canonicalKey) {
+  const entryRecordTypes = new Set([
+    "entry", "lexical-form", "source-link", "source-gloss", "component", "task",
+    "reference", "operation-signature", "operation-argument", "operation-result"
+  ]);
+  const requestedKey = canonicalKey.split(/\s+/u).map((word) => (
+    Number.parseInt(lookupLegacyName(word).hnuc, 16)
+  ));
+  const structureKey = ["tlat", "kwon"].map((word) => (
+    Number.parseInt(lookupLegacyName(word).hnuc, 16)
+  ));
+  const structureSubject = structureKey.map((word) => lookupLegacyWord(word)?.en).join(" ");
+  const isEntryRangeMarker = (sentence) => (
+    sentence.su?.name === structureSubject
+    && JSON.stringify(sentence.ob?.ve?.values) === JSON.stringify(requestedKey)
+    && sentence.at?.ve?.values?.length === 4
+  );
+  const isEntryRecord = (sentence) => entryRecordTypes.has(sentence.at?.text) || isEntryRangeMarker(sentence);
+  const entrySentences = sentences.filter(isEntryRecord);
+  const definitionSentences = sentences.filter((sentence) => !isEntryRecord(sentence));
+  const entry = {
+    lexicalForms: entrySentences.filter((sentence) => sentence.at?.text === "lexical-form").map((sentence) => ({
+      language: sentence.as?.text,
+      surface: sentence.from?.text,
+      normalized: sentence.to?.text
+    })),
+    sourceLinks: entrySentences.filter((sentence) => sentence.at?.text === "source-link").map((sentence) => ({
+      dataset: sentence.as?.text,
+      release: sentence.from?.text,
+      identifier: sentence.to?.text,
+      relation: sentence.by?.text
+    })),
+    sourceGlosses: entrySentences.filter((sentence) => sentence.at?.text === "source-gloss").map((sentence) => ({
+      language: sentence.as?.text,
+      dataset: sentence.from?.text,
+      release: sentence.to?.text,
+      identifier: sentence.by?.text,
+      text: sentence.with?.text
+    })),
+    components: entrySentences.filter((sentence) => sentence.at?.text === "component").map((sentence) => {
+      const key = sentence.from?.ve?.values;
+      if (Array.isArray(key)) return dictionaryKeyName(key);
+      return sentence.from?.text ?? sentence.from?.name;
+    })
+  };
+  const interimDefinitions = entry.sourceGlosses.filter((gloss) => gloss.dataset === "wordnet");
+  return {
+    entry,
+    interimDefinitions,
+    definitionType: definitionSentences.length ? "pyash" : interimDefinitions.length ? "wordnet-interim" : "none",
+    sentences: definitionSentences,
+    pyash: definitionSentences.map((sentence) => renderDefinitionSentence(sentence, canonicalKey)).join("\n")
+  };
+}
+
+function summarizeEntryCodelets(match) {
+  const key = dictionaryKeyName(match.key);
+  const sentences = decodePyashProgram(match.codelets.map((codelet) => Uint16Array.from(codelet)));
+  return { key, ...summarizeDictionaryEntry(sentences, key) };
+}
+
+function renderReferenceEntry(match, query) {
+  const english = match.entry.lexicalForms
+    .filter((form) => form.language === "en")
+    .map((form) => form.surface);
+  const lines = [`${query}: ${match.key}${english.length ? ` [${[...new Set(english)].join(", ")}]` : ""}`];
+  for (const gloss of match.interimDefinitions) {
+    lines.push(`  WordNet ${gloss.identifier}: ${gloss.text}`);
+  }
+  for (const link of match.entry.sourceLinks.filter((source) => source.dataset === "sumo")) {
+    lines.push(`  SUMO ${link.identifier} (${link.relation})`);
+  }
+  for (const component of match.entry.components) {
+    const known = lookupLegacyPyaName(component) ?? lookupLegacyName(component);
+    if (known) lines.push(`  component: ${known.en} (${known.pya})`);
+    else lines.push(`  component: ${component}`);
+  }
+  return lines.join("\n");
+}
+
+function renderChineseEntry(match) {
+  const forms = match.entry.lexicalForms;
+  const chinese = [...new Set(forms.filter((form) => form.language === "zh").map((form) => form.surface))];
+  const mandarin = [...new Set(forms.filter((form) => form.language === "zh-Latn-pinyin").map((form) => form.surface))];
+  const cantonese = [...new Set(forms.filter((form) => form.language === "yue-Latn-jyutping").map((form) => form.surface))];
+  const english = [...new Set(forms.filter((form) => form.language === "en").map((form) => form.surface))];
+  const components = match.entry.components.map((component) => {
+    const known = lookupLegacyPyaName(component) ?? lookupLegacyName(component);
+    return known ? `${known.en} (${known.pya})` : component;
+  });
+  return [
+    chinese.length ? chinese.join("、") : "(no Chinese form linked)",
+    `Pinyin: ${mandarin.length ? mandarin.join("; ") : "(unavailable)"}`,
+    ...(cantonese.length ? [`Jyutping: ${cantonese.join("; ")}`] : []),
+    `English: ${english.join(", ") || "(unavailable)"}`,
+    ...(components.length ? [`English breakdown: ${components.join(" + ")}`] : []),
+    `Pyash: ${match.key}`,
+    ...match.interimDefinitions.map((gloss) => `WordNet ${gloss.identifier}: ${gloss.text}`)
+  ].join("\n");
+}
+
+function sourceMatchEntries(result) {
+  return result.matches.map(summarizeEntryCodelets);
+}
+
+async function runReferenceDictionary(args, { stdout = process.stdout } = {}) {
+  if (!args.length || (args.at(-2) === "to" && args.at(-1) === "zh" && args.length <= 2)) {
+    throw usageError("dictionary lookup requires an English word, Chinese form, WordNet sense id, or Pyash key");
+  }
+  const binary = await executablePath();
+  try {
+    await fs.access(referenceVolumePath);
+  } catch {
+    throw new Error(`reference dictionary volume is missing: ${referenceVolumePath}\nbuild it from program/library/dictionary/reference.pya with pyash dictionary volume build`);
+  }
+
+  if (args.at(-2) === "to" && args.at(-1) === "zh") {
+    const key = args.slice(0, -2).join(" ").trim();
+    const result = runBinary(binary, ["entry", referenceVolumePath, binaryKey(key)]);
+    const entry = summarizeEntryCodelets(result);
+    stdout.write(`${renderChineseEntry(entry)}\n`);
+    return entry;
+  }
+
+  const query = args.join(" ").trim();
+  if (!query) throw usageError("dictionary lookup requires a query");
+  let result;
+  if (/^[anrvs]:\d{8}-[anrvs]$/iu.test(query)) {
+    result = runBinary(binary, ["source-entries", referenceVolumePath, "wordnet", WORDNET_RELEASE, query]);
+  } else if (/^sumo:/iu.test(query)) {
+    result = runBinary(binary, ["source-entries", referenceVolumePath, "sumo", SUMO_RELEASE, query.slice(5)]);
+  } else if (args.every((word) => lookupLegacyPyaName(word))) {
+    result = runBinary(binary, ["entry", referenceVolumePath, binaryKey(query)]);
+    const entry = summarizeEntryCodelets(result);
+    stdout.write(`${renderReferenceEntry(entry, query)}\n`);
+    return entry;
+  } else {
+    const language = [...query].some((character) => /\p{Script=Han}/u.test(character)) ? "zh" : "en";
+    result = runBinary(binary, ["surface-entries", referenceVolumePath, language, query]);
+  }
+
+  const entries = sourceMatchEntries(result);
+  if (!entries.length) {
+    stdout.write(`${query}: no dictionary entry found\n`);
+    return { query, matches: [] };
+  }
+  stdout.write(`${entries.map((entry) => renderReferenceEntry(entry, query)).join("\n")}\n`);
+  return { query, matches: entries };
+}
+
 export async function runPyacDictionary(args = process.argv.slice(2), { stdout = process.stdout } = {}) {
+  if (args[0] === "reference") return runReferenceDictionary(args.slice(1), { stdout });
   const binary = await executablePath();
   let result;
   let benchmarkPath = null;
@@ -129,12 +283,10 @@ export async function runPyacDictionary(args = process.argv.slice(2), { stdout =
       pyashKey: dictionaryKeyName(match.key)
     }));
   } else if (args[0] === "read" && args[2] === "key" && args.length === 4) {
-    result = runBinary(binary, ["key", path.resolve(args[1]), binaryKey(args[3])]);
+    result = runBinary(binary, ["entry", path.resolve(args[1]), binaryKey(args[3])]);
     result.sentences = decodePyashProgram(result.codelets.map((codelet) => Uint16Array.from(codelet)));
     const canonicalKey = args[3].trim().split(/\s+/u).join(" ");
-    result.pyash = result.sentences.map((sentence) => (
-      renderDefinitionSentence(sentence, canonicalKey)
-    )).join("\n");
+    Object.assign(result, summarizeDictionaryEntry(result.sentences, canonicalKey));
     delete result.codelets;
   } else if (args[0] === "benchmark" && args[1] && args[2] === "surface" && args[6] === "to" && args.length === 8) {
     const volumePath = path.resolve(args[1]);

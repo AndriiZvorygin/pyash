@@ -1,7 +1,8 @@
 use super::reader::{DictionaryReadError, DictionarySection};
 use super::volume::DictionaryMetadata;
 use super::volume_records::{
-    CONTENTS_SUBJECT, INDEX_SUBJECT, PROFILE_SUBJECT, PROFILE_VERSION, TOC_ROLES,
+    CONTENTS_SUBJECT, INDEX_SUBJECT, PROFILE_SUBJECT, PROFILE_VERSION, PROFILE_VERSION_V2,
+    TOC_ROLES,
 };
 use crate::literal::decode_quote_header;
 use crate::{CODELET_BYTES, FORMAT_VERSION, HEADER_BYTES, MAGIC, PyacError, WORDS_PER_CODELET};
@@ -261,9 +262,11 @@ pub(super) fn expect_word(
     expected: u16,
 ) -> Result<(), DictionaryReadError> {
     if words.get(*cursor) != Some(&expected) {
-        return Err(DictionaryReadError::InvalidRecord(
-            "sentence case or verb is out of order",
-        ));
+        return Err(DictionaryReadError::UnexpectedWord {
+            expected,
+            actual: words.get(*cursor).copied(),
+            offset: *cursor,
+        });
     }
     *cursor += 1;
     Ok(())
@@ -299,7 +302,7 @@ fn take_number(words: &[u16], cursor: &mut usize) -> Result<u16, DictionaryReadE
 
 pub(super) fn parse_metadata(
     words: &[u16],
-) -> Result<(DictionaryMetadata, usize), DictionaryReadError> {
+) -> Result<(DictionaryMetadata, usize, String), DictionaryReadError> {
     let mut cursor = subject_end(words, &PROFILE_SUBJECT)?;
     let title = take_text(words, &mut cursor)?;
     expect_word(words, &mut cursor, OB)?;
@@ -323,7 +326,9 @@ pub(super) fn parse_metadata(
     let profile_version = take_text(words, &mut cursor)?;
     expect_word(words, &mut cursor, WITH)?;
     expect_end(words, &mut cursor)?;
-    if profile_version != PROFILE_VERSION || languages.iter().any(String::is_empty) {
+    if ![PROFILE_VERSION, PROFILE_VERSION_V2].contains(&profile_version.as_str())
+        || languages.iter().any(String::is_empty)
+    {
         return Err(DictionaryReadError::InvalidRecord(
             "unsupported profile revision or invalid language list",
         ));
@@ -337,6 +342,7 @@ pub(super) fn parse_metadata(
             normalization_policy,
         },
         toc_count,
+        profile_version,
     ))
 }
 
@@ -392,7 +398,6 @@ pub(super) fn parse_location(
     let entry_range = decode_range(&range)?;
     let definition_range = decode_range(&definition_words)?;
     if entry_range.is_empty()
-        || definition_range.is_empty()
         || definition_range.start < entry_range.start
         || definition_range.end > entry_range.end
     {
