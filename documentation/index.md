@@ -26,6 +26,7 @@
 - `documentation/reference/atlaskv-pyash-style-analysis.md` — relationship between the AtlasKV paper (KG-to-attention injection, hierarchical key pruning) and Pyash knowledge, sense, and evidence surfaces.
 - `documentation/release-preview-0.1.md` — initial release gate, smoke route, and known limits.
 - `documentation/pyash.md` — high-level design goals and interlanguage intent.
+- `documentation/workbook/` — active structured workbooks for vocabulary curation and similar agent work; separate from proposals.
 - `documentation/pyac.txt` — broader 2019 language/spec background.
 - `documentation/compositional-cases.md` — axis/context grid and keyword mapping.
 - `documentation/suggest/` — proposals awaiting review, kept apart from accepted documentation; see `documentation/suggest/README.md` for what belongs there and how a proposal graduates.

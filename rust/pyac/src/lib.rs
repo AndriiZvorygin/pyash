@@ -3,6 +3,7 @@
 pub mod backend;
 pub mod catalog;
 pub mod dictionary;
+pub mod iwsp;
 pub mod literal;
 pub mod semantic;
 
@@ -11,6 +12,10 @@ pub use backend::riscv::{
     compile_numeric_invert, execute,
 };
 pub use catalog::{CatalogError, PyacCatalog, parse_catalog_pya};
+pub use iwsp::{
+    IwspError, IwspEvaluator, IwspScore, MAX_IWSP_CANDIDATE_CODELETS, MAX_IWSP_WIDTH,
+    SealedIwspEvaluator,
+};
 pub use literal::{
     DateInstruction, VectorElements, VectorInstruction, decode_date, decode_quote_header,
     decode_vector, execute_date, execute_date_codelet, execute_vector, execute_vector_codelet,

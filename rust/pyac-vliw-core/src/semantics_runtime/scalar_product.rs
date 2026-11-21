@@ -2,8 +2,8 @@ use super::named_vector::resolve_prior_vector;
 use super::numeric::{QuoteHeader, quote_header, word};
 use super::*;
 
-const SCALAR_WORD: u32 = 0x0d62;
-const PRODUCE_WORD: u32 = 0x8944;
+pub(super) const SCALAR_WORD: u32 = 0x0d62;
+pub(super) const PRODUCE_WORD: u32 = 0x8944;
 
 #[derive(Clone, Copy)]
 struct Cursor {

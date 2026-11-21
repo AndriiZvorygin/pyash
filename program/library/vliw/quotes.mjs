@@ -510,10 +510,10 @@ function decodeQuoteNormalized(values, offset = 0) {
     value = textValue(payload);
   } else if (descriptor.family === "word") {
     const words = payload.map((code) => decodeVectorWord(code));
-    value = elementCount > 1 ? words : words[0];
+    value = header.vectorThick !== 0 ? words : words[0];
   } else if (descriptor.family === "number") {
     const signed = header.sortName === "int";
-    if (elementCount > 1) {
+    if (header.vectorThick !== 0) {
       value = [];
       for (let index = 0; index < elementCount; index += 1) {
         const element = payload.slice(index * scalarWords, (index + 1) * scalarWords);
@@ -587,6 +587,12 @@ export function lookupLegacyName(name) {
   if (typeof name !== "string" || !name.trim() || /\s/u.test(name.trim())) return null;
   const normalized = name.trim().toLowerCase();
   const entry = legacyEntriesByEnglish.get(normalized) ?? legacyEntriesByPya.get(normalized);
+  return entry ? { en: entry.en, hnuc: entry.hnuc, pya: entry.pya } : null;
+}
+
+export function lookupLegacyPyaName(name) {
+  if (typeof name !== "string" || !name.trim() || /\s/u.test(name.trim())) return null;
+  const entry = legacyEntriesByPya.get(name.trim().toLowerCase());
   return entry ? { en: entry.en, hnuc: entry.hnuc, pya: entry.pya } : null;
 }
 

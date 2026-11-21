@@ -2,6 +2,7 @@ use super::operation::{self, OperationPosting};
 use super::{
     DictionaryEntry, DictionaryIndexError, OperationSignature, OperationSignatureKey, SourceLink,
 };
+use unicode_normalization::UnicodeNormalization;
 
 #[derive(Debug, Clone)]
 struct SurfacePosting {
@@ -346,6 +347,14 @@ fn validate_entry(
                     field,
                 });
             }
+        }
+        let expected: String = form.surface.nfc().collect();
+        if form.normalized != expected {
+            return Err(DictionaryIndexError::InvalidNormalization {
+                key: entry.key.clone(),
+                surface: form.surface.clone(),
+                normalized: form.normalized.clone(),
+            });
         }
     }
     for link in &entry.source_links {

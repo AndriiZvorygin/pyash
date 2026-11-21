@@ -1,6 +1,7 @@
 use super::mutable_vector::mutable_vector_group;
 use super::pluk_tlas::pluk_tlas_group;
 use super::scalar_product::scalar_product_group;
+use super::signature_dispatch::*;
 use super::vector_group::interpret_vector_group;
 use super::*;
 
@@ -16,49 +17,26 @@ pub fn interpret_group(words: &[u32], start: usize, codelet_count: usize) -> Cor
         return CoreResult::failure(ERROR_MALFORMED, (codelet_count - start) as u32);
     }
     let group_len = end - start + 1;
-    if let Some(result) = pluk_tlas_group(words, start, group_len, codelet_count) {
-        return result;
-    }
-    if let Some(result) = scalar_product_group(words, start, group_len, codelet_count) {
-        return result;
-    }
-    if let Some(result) = mutable_vector_group(words, start, group_len) {
-        return result;
-    }
-    if group_len == 1 {
-        if let Some(result) = fixed16::single_codelet(words, start) {
-            return result;
-        }
-        if let Some(result) = single_codelet(words, start) {
-            return result;
-        }
-    }
-    if let Some(result) = interpret_vector_group(words, start, group_len) {
-        return result;
-    }
-    if let Some(result) = boolean_composition(words, start, codelet_count) {
-        return result;
-    }
-    if let Some(result) = boolean_comparison(words, start, codelet_count) {
-        return result;
-    }
-    if group_len > 1 {
-        return conditional(words, start, group_len);
-    }
-    if let Some(result) = invert(words, start) {
-        return result;
-    }
-    if let Some(result) = vector_arithmetic(words, start) {
-        return result;
-    }
-    if let Some(result) = arithmetic(words, start) {
-        return result;
-    }
-    if let Some(result) = boolean_literal(words, start) {
-        return result;
-    }
-    if let Some(result) = literal(words, start) {
-        return result;
-    }
-    CoreResult::failure(ERROR_UNSUPPORTED, 1)
+    let route = match select_signature_route(words, start, group_len) {
+        Ok(route) => route,
+        Err(error) => return CoreResult::failure(error, group_len as u32),
+    };
+    let result = match route {
+        ROUTE_PLUK_TLAS => pluk_tlas_group(words, start, group_len, codelet_count),
+        ROUTE_SCALAR_PRODUCT => scalar_product_group(words, start, group_len, codelet_count),
+        ROUTE_MUTABLE_VECTOR => mutable_vector_group(words, start, group_len),
+        ROUTE_FIXED16 if group_len == 1 => fixed16::single_codelet(words, start),
+        ROUTE_FLOAT if group_len == 1 => single_codelet(words, start),
+        ROUTE_VECTOR_LITERAL => interpret_vector_group(words, start, group_len),
+        ROUTE_BOOLEAN_COMPOSITION => boolean_composition(words, start, codelet_count),
+        ROUTE_BOOLEAN_COMPARISON => boolean_comparison(words, start, codelet_count),
+        ROUTE_CONDITIONAL => return conditional(words, start, group_len),
+        ROUTE_INVERT if group_len == 1 => invert(words, start),
+        ROUTE_VECTOR_ARITHMETIC if group_len == 1 => vector_arithmetic(words, start),
+        ROUTE_ARITHMETIC if group_len == 1 => arithmetic(words, start),
+        ROUTE_BOOLEAN_LITERAL if group_len == 1 => boolean_literal(words, start),
+        ROUTE_LITERAL if group_len == 1 => literal(words, start),
+        _ => None,
+    };
+    result.unwrap_or_else(|| CoreResult::failure(ERROR_MALFORMED, group_len as u32))
 }

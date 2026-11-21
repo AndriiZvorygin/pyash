@@ -31,7 +31,7 @@ pub struct OperationSignature {
     pub results: Vec<OperationResult>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct OperationSignatureKey {
     verb: Vec<u16>,
     mood: Vec<u16>,

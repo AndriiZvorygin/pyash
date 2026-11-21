@@ -46,7 +46,7 @@ fn normalized_surface_lookup_returns_every_sense_without_duplicate_entries() {
         LexicalForm {
             language: "en".into(),
             surface: "LEAD".into(),
-            normalized: "lead".into(),
+            normalized: "LEAD".into(),
         },
     ];
     let mut second = entry(&[12], 1);
@@ -64,6 +64,30 @@ fn normalized_surface_lookup_returns_every_sense_without_duplicate_entries() {
     assert_eq!(keys, [&[11][..], &[12][..],]);
     assert_eq!(index.by_surface("EN", "lead").count(), 0);
     assert_eq!(index.by_surface("en", "Lead").count(), 0);
+}
+
+#[test]
+fn lexical_normalization_is_nfc_without_case_folding() {
+    let mut composed = entry(&[13], 0);
+    composed.lexical_forms.push(LexicalForm {
+        language: "en".into(),
+        surface: "Cafe\u{301}".into(),
+        normalized: "Caf\u{e9}".into(),
+    });
+    let index = DictionaryIndex::new(1, vec![composed]).expect("NFC surface");
+    assert_eq!(index.by_surface("en", "Caf\u{e9}").count(), 1);
+    assert_eq!(index.by_surface("en", "café").count(), 0);
+
+    let mut invalid = entry(&[14], 0);
+    invalid.lexical_forms.push(LexicalForm {
+        language: "en".into(),
+        surface: "Cafe\u{301}".into(),
+        normalized: "café".into(),
+    });
+    assert!(matches!(
+        DictionaryIndex::new(1, vec![invalid]),
+        Err(DictionaryIndexError::InvalidNormalization { .. })
+    ));
 }
 
 #[test]

@@ -1,0 +1,156 @@
+su name iwsp task contract term 001 be map def
+su text "term" ob text "IWSP task" ya
+su text "wordnet sense" ob text "n:00797381-n" ya
+su text "sumo match" ob text "IntentionalProcess (+)" ya
+su text "pyash compound" ob text "task" ya
+su text "pyash form" ob text "cwas twot" ya
+su text "status" ob text "task map is declarative data, not a bundle of operations" ya
+prah
+
+su name iwsp task contract term 002 be map def
+su text "term" ob text "Computational input slot" ya
+su text "wordnet sense" ob text "n:06367706-n" ya
+su text "sumo match" ob text "Quantity (+)" ya
+su text "pyash compound" ob text "argument" ya
+su text "pyash form" ob text "tlas hrut" ya
+su text "status" ob text "computer-science argument passed to a program; slots still declare types and shapes" ya
+prah
+
+su name iwsp task contract term 003 be map def
+su text "term" ob text "Electronic output" ya
+su text "wordnet sense" ob text "n:07279593-n" ya
+su text "sumo match" ob text "Icon (+)" ya
+su text "pyash compound" ob text "output signal" ya
+su text "pyash form" ob text "hqut tyan" ya
+su text "status" ob text "interface-output anchor; not every result is a physical signal" ya
+prah
+
+su name iwsp task contract term 004 be map def
+su text "term" ob text "Candidate model" ya
+su text "wordnet sense" ob text "n:03782816-n" ya
+su text "sumo match" ob text "Icon (+)" ya
+su text "pyash compound" ob text "model" ya
+su text "pyash form" ob text "hfam tlep" ya
+su text "status" ob text "representation/simulation sense, not the person sense of candidate" ya
+prah
+
+su name iwsp task contract term 005 be map def
+su text "term" ob text "Tunable model parameter" ya
+su text "wordnet sense" ob text "n:05867655-n" ya
+su text "sumo match" ob text "Quantity (+)" ya
+su text "pyash compound" ob text "parameter" ya
+su text "pyash form" ob text "prif nrup" ya
+su text "status" ob text "variable quantity in a parameterized equation; distinguish statistical parameter n:05867861-n" ya
+prah
+
+su name iwsp task contract term 006 be map def
+su text "term" ob text "Task data" ya
+su text "wordnet sense" ob text "n:08479331-n" ya
+su text "sumo match" ob text "FactualText (=)" ya
+su text "pyash compound" ob text "data" ya
+su text "pyash form" ob text "drut hnuc" ya
+su text "status" ob text "collection of facts used by the task" ya
+prah
+
+su name iwsp task contract term 007 be map def
+su text "term" ob text "Task example" ya
+su text "wordnet sense" ob text "n:05830135-n" ya
+su text "sumo match" ob text "Entity (+)" ya
+su text "pyash compound" ob text "sample" ya
+su text "pyash form" ob text "nyit hkup" ya
+su text "status" ob text "one representative case map in a named series" ya
+prah
+
+su name iwsp task contract term 008 be map def
+su text "term" ob text "Evaluation" ya
+su text "wordnet sense" ob text "n:00876484-n" ya
+su text "sumo match" ob text "Comparing (+)" ya
+su text "pyash compound" ob text "evaluation" ya
+su text "pyash form" ob text "pluk tlas" ya
+su text "status" ob text "existing exact-match evaluator operation" ya
+prah
+
+su name iwsp task contract term 009 be map def
+su text "term" ob text "Evaluation criterion" ya
+su text "wordnet sense" ob text "n:05933552-n" ya
+su text "sumo match" ob text "SubjectiveAssessmentAttribute (+)" ya
+su text "pyash compound" ob text "criterion" ya
+su text "pyash form" ob text "hwaf rwun" ya
+su text "status" ob text "ideal or standard in terms of which an evaluation is judged" ya
+prah
+
+su name iwsp task contract term 010 be map def
+su text "term" ob text "Accuracy" ya
+su text "wordnet sense" ob text "n:04810156-n" ya
+su text "sumo match" ob text "True (+)" ya
+su text "pyash compound" ob text "accuracy" ya
+su text "pyash form" ob text "klaf tcok" ya
+su text "status" ob text "nearness to the true value; not identical to exact-match count" ya
+prah
+
+su name iwsp task contract term 011 be map def
+su text "term" ob text "Iteration" ya
+su text "wordnet sense" ob text "n:01021071-n" ya
+su text "sumo match" ob text "IntentionalProcess (+)" ya
+su text "pyash atom" ob text "dret" ya
+su text "status" ob text "repeated doing; used as a numeric task bound, not an operation declaration" ya
+prah
+
+su name iwsp task contract term 012 be map def
+su text "term" ob text "Allowed amount limit" ya
+su text "wordnet sense" ob text "n:13780436-n" ya
+su text "sumo match" ob text "ConstantQuantity (+)" ya
+su text "pyash compound" ob text "limit" ya
+su text "pyash form" ob text "bwit hkuc" ya
+su text "status" ob text "greatest amount possible or allowed" ya
+prah
+
+su name iwsp task contract term 013 be map def
+su text "term" ob text "Data-use policy" ya
+su text "wordnet sense" ob text "n:05910115-n" ya
+su text "sumo match" ob text "Plan (+)" ya
+su text "pyash atom" ob text "trec kfan" ya
+su text "status" ob text "adopted plan governing data and feedback access" ya
+prah
+
+su name iwsp task contract term 014 be map def
+su text "term" ob text "Numeric value" ya
+su text "wordnet sense" ob text "n:05864972-n" ya
+su text "sumo match" ob text "Quantity (+)" ya
+su text "pyash compound" ob text "value" ya
+su text "pyash form" ob text "hnuc gjat" ya
+su text "status" ob text "numeric payload anchor for computed predictions and reference values" ya
+prah
+
+su name iwsp task contract term 015 be map def
+su text "term" ob text "Expected or reference value role" ya
+su text "wordnet sense" ob text "n:05864972-n" ya
+su text "pyash form" ob text "hnuc gjat" ya
+su text "status" ob text "numeric payload is linked; no direct sense for the expected/reference relation is claimed" ya
+prah
+
+su name iwsp task contract term 016 be map def
+su text "term" ob text "Correct-count evaluator result" ya
+su text "type" ob text "unsigned num" ya
+su text "pyash operation" ob text "pluk tlas" ya
+su text "status" ob text "no exact linked correct-count sense recorded; defined by evaluator contract" ya
+prah
+
+su name iwsp task contract term 017 be map def
+su text "term" ob text "Visible and held-out data roles" ya
+su text "wordnet senses" ob ve text "n:08479331-n" "n:05830135-n" ya
+su text "pyash forms" ob ve text "drut hnuc" "nyit hkup" ya
+su text "status" ob text "data-access roles, not lexical synonyms or a new split operation" ya
+prah
+
+su name iwsp task contract term 018 be map def
+su text "term" ob text "Update method field" ya
+su text "wordnet sense" ob text "n:05668113-n" ya
+su text "status" ob text "generic method sense exists; current Pyash association is ambiguous, so keep this field a text enum" ya
+prah
+
+su name iwsp task contract term 019 be map def
+su text "term" ob text "Model-scoring metric label" ya
+su text "wordnet sense" ob text "n:13807118-n" ya
+su text "status" ob text "available sense is topological, not model-scoring; use criterion and accuracy anchors" ya
+prah
