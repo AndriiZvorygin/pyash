@@ -369,6 +369,16 @@ run_candidate_suite() {
     return 1
   fi
 
+  if [[ -f "$WORKTREE/rust/pyac/Cargo.toml" ]]; then
+    printf '\n== Rust dictionary executable build ==\n'
+    if ! (cd "$WORKTREE" && cargo build --release --manifest-path rust/pyac/Cargo.toml --bin pyac-dictionary); then
+      printf 'Rust dictionary executable build failed; preserving candidate for review\n'
+      KEEP_WORKTREE=1
+      FINAL_STATUS=rust-build-failed
+      return 1
+    fi
+  fi
+
   while :; do
     suite_attempt=$((suite_attempt + 1))
     printf '\n== full test suite attempt %s ==\n' "$suite_attempt"

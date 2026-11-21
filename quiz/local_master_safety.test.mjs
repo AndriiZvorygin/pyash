@@ -62,6 +62,16 @@ test("runner adds an installed Cargo toolchain to cron PATH", () => {
   assert.match(runner, /CARGO_BIN="\$HOME\/\.cargo\/bin"[\s\S]*?\*":\$CARGO_BIN:"\*\)[\s\S]*?export PATH="\$CARGO_BIN:\$PATH"/u);
 });
 
+test("runner builds the Rust dictionary executable before the gated quiz suite", () => {
+  const runner = read("run_local_master_safety.sh");
+  const build = runner.indexOf("cargo build --release --manifest-path rust/pyac/Cargo.toml --bin pyac-dictionary");
+  const suite = runner.indexOf("npm run test:ci");
+  assert.notEqual(build, -1);
+  assert.ok(build < suite, "build the on-disk dictionary executable before its CLI quiz runs");
+  assert.match(runner, /if \[\[ -f "\$WORKTREE\/rust\/pyac\/Cargo\.toml" \]\]; then[\s\S]*?cargo build/u);
+  assert.match(runner, /FINAL_STATUS=rust-build-failed/u);
+});
+
 test("runner finds NVM Codex in a cron-like PATH that already contains system Node and npm", () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pyash-master-safety-cron-path-"));
   const nvmBin = path.join(tempRoot, ".nvm", "versions", "node", "v99.0.0", "bin");
