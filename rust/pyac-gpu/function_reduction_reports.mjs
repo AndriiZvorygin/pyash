@@ -18,6 +18,13 @@ export function replacementDescription(variant) {
   return "early-error diagnostic replacement (not behaviorally equivalent)";
 }
 
+export function profileExitCode(build, pipeline, artifactAvailable = true) {
+  const buildFailed = Boolean(build.stopReason) || build.code !== 0 || !artifactAvailable;
+  const pipelineFailed = pipeline !== null
+    && (Boolean(pipeline.stopReason) || pipeline.code !== 0);
+  return buildFailed || pipelineFailed ? 1 : 0;
+}
+
 export function sourceFingerprint(roots, repoRoot) {
   const hash = createHash("sha256");
   for (const root of roots) {

@@ -60,6 +60,21 @@ test("runtime uses the Vulkan loader version verified on Mriczo", () => {
   assert.match(dockerfile, /libvulkan1/u);
 });
 
+test("function-reduction profiling allows a full bounded pipeline build", () => {
+  const reducer = read("rust/pyac-gpu/profile-function-reduction.mjs");
+  const runtimeGuide = read("rust/pyac-gpu/README.md");
+
+  assert.match(reducer, /BUILD_TIMEOUT_SEC = Number\(process\.env\.PYAC_VLIW_REDUCE_BUILD_TIMEOUT_SEC \|\| 300\)/u);
+  assert.match(reducer, /args\.includes\("--build-only"\)/u);
+  assert.match(reducer, /PIPELINE_TIMEOUT_SEC = Number\(process\.env\.PYAC_VLIW_REDUCE_PIPELINE_TIMEOUT_SEC \|\| 600\)/u);
+  assert.match(reducer, /PIPELINE_TIMEOUT_SEC > 600/u);
+  assert.match(read("rust/pyac-gpu/profile-pipeline-build.mjs"), /const MAX_TIMEOUT_SEC = 600/u);
+  assert.match(runtimeGuide, /ten-minute default and maximum/u);
+  assert.match(runtimeGuide, /`--build-only` stops after SPIR-V generation/u);
+  assert.match(runtimeGuide, /current full shader pipeline build/u);
+  assert.match(runtimeGuide, /60-second readiness ceiling/u);
+});
+
 test("repository rules forbid production startup compilation and CPU fallback", () => {
   const agents = read("AGENTS.md");
   const runtimeGuide = read("container/pyac-vliw-runtime/README.md");

@@ -35,10 +35,10 @@ confirms driver/device visibility only; it is not a pipeline compilation test.
 To profile the final Vulkan driver pipeline-build stage using existing binaries,
 run `node rust/pyac-gpu/profile-pipeline-build.mjs --run`. It does not run
 Cargo or rebuild SPIR-V. It requires 20 GiB host RAM and 8 GiB free VRAM, then
-caps the process at 16 GiB RSS and five minutes; logs and the report go under
+caps the process at 16 GiB RSS and ten minutes; logs and the report go under
 the ignored `rust/pyac-gpu/target/diagnostics/` directory. This is an explicit
 diagnostic, not part of service startup. `PYAC_VLIW_PROFILE_TIMEOUT_SEC` can
-shorten the wall limit (never raise it above five minutes), and
+shorten the wall limit (never raise it above ten minutes), and
 `PYAC_VLIW_PIPELINE_COMPILER` selects an alternate prebuilt compiler for A/B
 experiments such as a temporary Vulkan-HAL optimization-flag patch.
 
@@ -57,14 +57,19 @@ reads the working source directly, puts the SPIR-V and reports under ignored
 The tool copies the shader and VLIW core under ignored `target/diagnostics/`
 unless `--repo-source` is selected. It supports an unchanged `baseline`, an
 early-error `error` stub, and the collector-specific success-shaped `minimal`
-variant. It builds SPIR-V with Rust-GPU (120-second and 10-GiB limits by
-default), then probes Vulkan pipeline creation (60-second limit). Each run
-records source hashes, build logs, SPIR-V, and resource/timing reports. Stub
-variants intentionally change behavior; they are for compiler attribution only
-and must never be deployed. Set
-`PYAC_VLIW_REDUCE_BUILD_TIMEOUT_SEC` (up to 300) or
-`PYAC_VLIW_REDUCE_PIPELINE_TIMEOUT_SEC` (up to 120) to adjust the diagnostic
-caps. Each run updates `target/diagnostics/function-reduction/index.md`.
+variant. `--build-only` stops after SPIR-V generation, which is useful when the
+GPU is occupied; otherwise the tool also probes Vulkan pipeline creation. The
+Rust-GPU build has a five-minute default and maximum with a 10-GiB RSS cap; the
+Vulkan diagnostic has a ten-minute default and maximum with a 16-GiB RSS cap.
+Each run records source hashes, build logs, SPIR-V, and resource/timing
+reports, and exits nonzero if either stage fails. Stub variants intentionally
+change behavior; they are for compiler attribution only and must never be
+deployed. Set `PYAC_VLIW_REDUCE_BUILD_TIMEOUT_SEC` (up to 300) or
+`PYAC_VLIW_REDUCE_PIPELINE_TIMEOUT_SEC` (up to 600; ten minutes) to adjust the
+diagnostic caps. The pipeline probe defaults to ten minutes so it can finish
+the current full shader pipeline build; this does not change the production
+service's 60-second readiness ceiling. Each run updates
+`target/diagnostics/function-reduction/index.md`.
 NVIDIA's persistent shader cache is not cleared by the tool, so repeated runs
 of the same variant may be warm; compare and label first-run stage timings.
 

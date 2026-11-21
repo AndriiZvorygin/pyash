@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { listReductionCandidates, replaceCandidateBody } from "../rust/pyac-gpu/rust_function_source.mjs";
-import { interpretationForVariant, replacementDescription } from "../rust/pyac-gpu/function_reduction_reports.mjs";
+import { interpretationForVariant, profileExitCode, replacementDescription } from "../rust/pyac-gpu/function_reduction_reports.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const CORE = path.join(ROOT, "rust/pyac-vliw-core/src/semantics_runtime");
@@ -14,9 +14,21 @@ test("function reducer has one explicit diagnostic replacement per candidate", (
   assert.equal(new Set(candidates.map(({ name }) => name)).size, candidates.length);
   assert.ok(candidates.some(({ name }) => name === "build_programlet_routine_directory"));
   assert.ok(candidates.some(({ name }) => name === "resolve_programlet_routine"));
+  for (const name of [
+    "exp_f32",
+    "apply_programlet_vector_action",
+    "reduce_vector",
+    "vector_float_arithmetic_group",
+    "vector_sum_group",
+    "vector_maximum_group",
+  ]) {
+    assert.ok(candidates.some((candidate) => candidate.name === name), `missing candidate ${name}`);
+  }
   assert.ok(!candidates.some(({ name }) => name === "find_programlet_routine"));
   for (const candidate of candidates) {
-    const source = fs.readFileSync(path.join(CORE, candidate.file), "utf8");
+    const sourcePath = path.join(CORE, candidate.file);
+    assert.ok(fs.existsSync(sourcePath), `missing candidate source ${candidate.file}`);
+    const source = fs.readFileSync(sourcePath, "utf8");
     const result = replaceCandidateBody(source, candidate.name);
     assert.equal(result.source.slice(0, result.source.indexOf(result.replacementBody)), source.slice(0, source.indexOf(result.originalBody)));
     assert.equal((result.source.match(new RegExp(`\\bfn\\s+${candidate.name}\\s*\\(`, "gu")) || []).length, 1);
@@ -69,4 +81,12 @@ test("reduction reports distinguish baseline controls from early-error stubs", (
   assert.match(replacementDescription("baseline"), /none/u);
   assert.match(replacementDescription("error"), /early-error/u);
   assert.match(replacementDescription("minimal"), /success-shaped/u);
+});
+
+test("function reducer returns failure when Vulkan pipeline profiling fails", () => {
+  assert.equal(profileExitCode({ code: 0, stopReason: null }, null), 0);
+  assert.equal(profileExitCode({ code: 0, stopReason: null }, null, false), 1);
+  assert.equal(profileExitCode({ code: 0, stopReason: null }, { code: 1, stopReason: null }), 1);
+  assert.equal(profileExitCode({ code: 0, stopReason: null }, { code: 0, stopReason: "300s time cap" }), 1);
+  assert.equal(profileExitCode({ code: 1, stopReason: null }, null), 1);
 });

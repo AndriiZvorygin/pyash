@@ -6,15 +6,15 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import readline from "node:readline";
 import { listReductionCandidates, replaceCandidateBody } from "./rust_function_source.mjs";
-import { digest, replacementDescription, sourceFingerprint, writeIndex, writeReport } from "./function_reduction_reports.mjs";
+import { digest, profileExitCode, replacementDescription, sourceFingerprint, writeIndex, writeReport } from "./function_reduction_reports.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const CORE = path.join(ROOT, "rust/pyac-vliw-core");
 const SHADER = path.join(ROOT, "rust/pyac-gpu/shader");
 const PIPELINE_COMPILER = process.env.PYAC_VLIW_PIPELINE_COMPILER || path.join(ROOT, "rust/pyac-gpu/worker/target/release/pyac-vliw-pipeline-compiler");
 const DIAGNOSTICS = path.join(ROOT, "rust/pyac-gpu/target/diagnostics/function-reduction");
-const BUILD_TIMEOUT_SEC = Number(process.env.PYAC_VLIW_REDUCE_BUILD_TIMEOUT_SEC || 120);
-const PIPELINE_TIMEOUT_SEC = Number(process.env.PYAC_VLIW_REDUCE_PIPELINE_TIMEOUT_SEC || 60);
+const BUILD_TIMEOUT_SEC = Number(process.env.PYAC_VLIW_REDUCE_BUILD_TIMEOUT_SEC || 300);
+const PIPELINE_TIMEOUT_SEC = Number(process.env.PYAC_VLIW_REDUCE_PIPELINE_TIMEOUT_SEC || 600);
 const BUILD_RSS_LIMIT = 10 * 1024 ** 3;
 const MIN_BUILD_RAM = 16 * 1024 ** 3;
 const SAMPLE_MS = 2000;
@@ -151,7 +151,7 @@ async function main(args) {
     for (const candidate of listReductionCandidates()) process.stdout.write(`${candidate.name}\t${candidate.file}\n`);
     return;
   }
-  if (!args.includes("--run")) throw new Error("pass --run to create a diagnostic SPIR-V variant and probe Vulkan pipeline creation");
+  if (!args.includes("--run")) throw new Error("pass --run to create a diagnostic SPIR-V variant");
   const functionArg = args.indexOf("--function");
   const functionName = functionArg >= 0 ? args[functionArg + 1] : null;
   const variantArg = args.indexOf("--variant");
@@ -161,9 +161,10 @@ async function main(args) {
   if (!["baseline", "error", "minimal"].includes(variant)) throw new Error("--variant must be baseline, error, or minimal");
   if (variant === "minimal" && !candidate.minimalStub) throw new Error(`no success-preserving minimal variant exists for ${functionName}`);
   const repoSource = args.includes("--repo-source");
+  const buildOnly = args.includes("--build-only");
   if (repoSource && variant !== "baseline") throw new Error("--repo-source is only valid for the unmodified baseline variant");
   if (!Number.isInteger(BUILD_TIMEOUT_SEC) || BUILD_TIMEOUT_SEC < 1 || BUILD_TIMEOUT_SEC > 300) throw new Error("build timeout must be 1..300 seconds");
-  if (!Number.isInteger(PIPELINE_TIMEOUT_SEC) || PIPELINE_TIMEOUT_SEC < 1 || PIPELINE_TIMEOUT_SEC > 120) throw new Error("pipeline timeout must be 1..120 seconds");
+  if (!Number.isInteger(PIPELINE_TIMEOUT_SEC) || PIPELINE_TIMEOUT_SEC < 1 || PIPELINE_TIMEOUT_SEC > 600) throw new Error("pipeline timeout must be 1..600 seconds");
   if (!fs.existsSync(PIPELINE_COMPILER)) throw new Error(`prebuilt Vulkan pipeline compiler missing: ${PIPELINE_COMPILER}`);
   const available = readAvailableRam();
   if (available < 20 * 1024 ** 3) throw new Error(`refusing shader build with only ${(available / 1024 ** 3).toFixed(1)} GiB available RAM`);
@@ -206,8 +207,9 @@ async function main(args) {
       phase: "shader build",
     });
     const spirvPath = path.join(buildOutput, "vulkan/pyac_vliw_gpu_kernel.spv");
+    const spirvAvailable = fs.existsSync(spirvPath) && fs.statSync(spirvPath).size > 0;
     let pipeline = null;
-    if (!build.stopReason && build.code === 0 && fs.existsSync(spirvPath)) {
+    if (!buildOnly && !build.stopReason && build.code === 0 && spirvAvailable) {
       pipeline = await runBounded("node", [path.join(ROOT, "rust/pyac-gpu/profile-pipeline-build.mjs"), "--run"], {
         cwd: ROOT,
         env: {
@@ -225,7 +227,7 @@ async function main(args) {
     writeReport(runDir, candidate, variant, build, pipeline, spirvPath);
     writeIndex(DIAGNOSTICS);
     process.stdout.write(`[reduction] report: ${path.join(runDir, "report.md")}\n`);
-    if (build.stopReason || build.code !== 0) process.exitCode = 1;
+    process.exitCode = profileExitCode(build, pipeline, spirvAvailable);
   } finally {
     fs.closeSync(lockFd);
     fs.rmSync(lockPath, { force: true });
