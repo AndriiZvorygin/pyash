@@ -448,6 +448,7 @@ export function parseTokens(
           "num",
           "number",
           "text",
+          "float",
           "filename",
           "vec",
           "ve",
@@ -480,7 +481,7 @@ export function parseTokens(
             temp.push("vec");
             k += 1;
             const elem = words[k];
-            if (elem && (elem === "num" || elem === "number" || elem === "text" || elem === "bool" || elem === "boolean")) {
+            if (elem && (elem === "num" || elem === "number" || elem === "text" || elem === "bool" || elem === "boolean" || elem === "float")) {
               temp.push(elem === "number" ? "num" : (elem === "boolean" ? "bool" : elem));
               k += 1;
             }

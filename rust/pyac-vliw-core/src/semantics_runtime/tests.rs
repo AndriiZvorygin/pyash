@@ -99,5 +99,7 @@ mod iwsp_vector_ops;
 mod pluk_tlas;
 #[path = "tests/programlet.rs"]
 mod programlet;
+#[path = "tests/programlet_vectors.rs"]
+mod programlet_vectors;
 #[path = "tests/scalar_product.rs"]
 mod scalar_product;

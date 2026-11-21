@@ -315,27 +315,60 @@ pub(super) fn name_span(
     0
 }
 
+pub(super) fn typed_name_span(
+    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    field: SentenceField,
+    name: &mut NameSpan,
+    kind: &mut u32,
+) -> u32 {
+    if field.length < 2 || array_at!(tokens, field.start) != NAME_TYPE {
+        return ERROR_MALFORMED;
+    }
+    let mut marker = field.start + 1;
+    while marker < field.start + field.length && array_at!(tokens, marker) != NAME_TYPE {
+        marker += 1;
+    }
+    if marker == field.start + field.length {
+        *kind = 0;
+        return name_span(tokens, field, false, name);
+    }
+    let type_count = marker - field.start - 1;
+    *kind = match type_count {
+        1 => match array_at!(tokens, field.start + 1) {
+            NUMBER_TYPE => VALUE_NUMBER,
+            BOOLEAN_TYPE => VALUE_BOOLEAN,
+            FLOAT_TYPE => VALUE_FLOAT,
+            _ => return ERROR_UNSUPPORTED,
+        },
+        2 if array_at!(tokens, field.start + 1) == VECTOR_TYPE
+            && array_at!(tokens, field.start + 2) == FLOAT_TYPE =>
+        {
+            VALUE_VECTOR_FLOAT
+        }
+        _ => return ERROR_UNSUPPORTED,
+    };
+    if marker + 1 >= field.start + field.length {
+        return ERROR_MALFORMED;
+    }
+    *name = NameSpan {
+        start: marker + 1,
+        length: field.start + field.length - marker - 1,
+    };
+    0
+}
+
 pub(super) fn typed_output_name(
     tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
     field: SentenceField,
     name: &mut NameSpan,
     kind: &mut u32,
 ) -> u32 {
-    if field.length < 4
-        || array_at!(tokens, field.start) != NAME_TYPE
-        || array_at!(tokens, field.start + 2) != NAME_TYPE
-    {
+    let error = typed_name_span(tokens, field, name, kind);
+    if error != 0 {
+        return error;
+    }
+    if *kind == 0 {
         return ERROR_MALFORMED;
     }
-    let output_kind = match array_at!(tokens, field.start + 1) {
-        NUMBER_TYPE => VALUE_NUMBER,
-        BOOLEAN_TYPE => VALUE_BOOLEAN,
-        _ => return ERROR_UNSUPPORTED,
-    };
-    *name = NameSpan {
-        start: field.start + 3,
-        length: field.length - 3,
-    };
-    *kind = output_kind;
     0
 }

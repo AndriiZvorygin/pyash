@@ -179,7 +179,10 @@ Long vectors use indexed continuation, preserving word zero as each codelet's
 index and lane order across the completion marker. Continuation cannot consume
 the next sentence. Text vectors have at most 16 members; each member is a
 normal text or length-framed paragraph quote, not a numeric-sort payload.
-Programlet slots remain scalar.
+Programlet frames support up to 64 scalar locals and 8 named floating-vector
+locals, each bounded by the 16-lane vector limit. Generic `float` and
+`vec float` ceremony types bind to the concrete float32 or float64 precision
+carried by the invocation; the called routine preserves that precision.
 
 Variable-length collections use arrays. Numeric arrays of unsupported fixed
 vector widths use quote thickness 6 and a 16-bit logical element count
@@ -253,6 +256,35 @@ It returns the greatest finite lane as a scalar of the input precision. It
 requires 1-16 lanes; ties retain the first lane. This returns a value, not an
 index (`argmax`). Rust CPU/native Vulkan support float32/float64; WGSL supports
 float32.
+
+### 11.1 Pyash-composed stable exponential normalization
+
+Stable softmax is currently a Pyash ceremony composed from the primitives
+above, not a separate `softmax` opcode. The source fixture
+[`vliw-programlet-vector-weight.pya`](../../quiz/fixtures/vliw-programlet-vector-weight.pya)
+compiles this routine and invokes it with a float32 vector:
+
+```pyash
+su name vector weight from name vec float features to name vec float answer be ceremony def
+from name features to name float count be gjat bwit do
+from name features with name count to name vec float weight be subtract do
+from name weight to name vec float vector be exponential do
+from name vector to name float count be tfo2t do
+from name vector with name count to name vec float answer be dvis do
+su name answer ret
+su name vector weight be ceremony prah
+```
+
+The generic formal/output types accept either float32 or float64 vectors, with
+the invocation's precision preserved through the max reduction, vector-minus-
+scalar, elementwise exponential, ordered sum, and vector/scalar division (`dvis`). The
+`subtract` route is selected from its vector source signature, so scalar
+subtraction retains its existing route. Inputs must be finite and non-empty;
+non-finite positive results and zero denominators fail. A negative overflow in
+the max-subtraction intermediate is treated as negative infinity, whose
+exponential is zero. CPU Rust tests cover float32/float64, equal logits,
+extreme finite logits, and empty input. GPU/WGSL execution of this newly added
+programlet path still requires separate conformance verification.
 
 ## 12. Exact-match count (`pluk tlas`)
 

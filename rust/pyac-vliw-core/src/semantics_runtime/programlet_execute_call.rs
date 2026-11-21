@@ -64,6 +64,7 @@ pub(super) fn execute_programlet_call(
         symbol_words,
         &frames[frame_index].arguments,
         &frames[frame_index].slots,
+        &frames[frame_index].vector_slots,
         &mut call_arguments,
         &mut call_argument_count,
     ) {
@@ -125,12 +126,14 @@ pub(super) fn execute_programlet_call(
         called_start,
         sentence_words,
         sentence_boundaries,
-        &call_arguments,
+        symbol_words,
+        symbol_used,
+        &mut call_arguments,
         call_argument_count,
     ) {
         return Err(error);
     }
-    if !number_kind_matches(return_kind, called_kind) {
+    if !programlet_type_matches(return_kind, called_kind) {
         return Err(ERROR_UNSUPPORTED);
     }
     if sentence.field(FROM_INDEX).is_some() && call_loop_remaining == 0 {
@@ -172,21 +175,24 @@ pub(super) fn execute_programlet_call(
         child.loop_remaining = call_loop_remaining;
         child.loop_end = call_loop_end.unwrap_or(0);
         child.loop_has_end = u32::from(call_loop_end.is_some());
-        array_put!(
-            &mut child.slots,
-            0,
-            NumericLocalSlot {
-                name_offset: called_output_name.start as u32,
-                name_length: called_output_name.length as u32,
-                value: 0,
-                kind: if return_kind == VALUE_BOOLEAN { 3 } else { 1 },
-                value_kind: if return_kind == VALUE_BOOLEAN {
-                    VALUE_BOOLEAN
-                } else {
-                    VALUE_UNSIGNED
-                },
-            }
-        );
+        if return_kind != VALUE_VECTOR_FLOAT {
+            array_put!(
+                &mut child.slots,
+                0,
+                NumericLocalSlot {
+                    name_offset: called_output_name.start as u32,
+                    name_length: called_output_name.length as u32,
+                    value: 0,
+                    value_high: 0,
+                    kind: if return_kind == VALUE_BOOLEAN { 3 } else { 1 },
+                    value_kind: if return_kind == VALUE_BOOLEAN {
+                        VALUE_BOOLEAN
+                    } else {
+                        VALUE_UNSIGNED
+                    },
+                }
+            );
+        }
         *depth += 1;
     }
 

@@ -145,6 +145,20 @@ pub fn execute_numeric_programlet_at(
             }
         } else if frame.state == 1
             && sentence.mood == DEONTIC
+            && is_programlet_vector_action(&sentence, sentence_words, symbol_words, frame)
+        {
+            frame.action_started = 1;
+            if let Err(error) = apply_programlet_vector_action(
+                &sentence,
+                sentence_words,
+                symbol_words,
+                &mut symbol_used,
+                frame,
+            ) {
+                return CoreResult::failure(error, steps);
+            }
+        } else if frame.state == 1
+            && sentence.mood == DEONTIC
             && sentence.verb_length == 1
             && matches!(
                 array_at!(sentence_words, sentence.verb_start),

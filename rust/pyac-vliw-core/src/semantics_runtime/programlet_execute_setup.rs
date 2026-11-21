@@ -103,6 +103,7 @@ pub(super) fn initialize_numeric_programlet(
         symbol_words,
         &[ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS],
         &[NumericLocalSlot::EMPTY; MAX_PROGRAMLET_LOCAL_SLOTS],
+        &[ProgramletVectorSlot::EMPTY; MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
         &mut invocation_arguments,
         &mut invocation_argument_count,
     ) {
@@ -178,12 +179,14 @@ pub(super) fn initialize_numeric_programlet(
         routine_start,
         sentence_words,
         sentence_boundaries,
-        &invocation_arguments,
+        symbol_words,
+        &mut symbol_used,
+        &mut invocation_arguments,
         invocation_argument_count,
     ) {
         return Err(error);
     }
-    if !number_kind_matches(output_kind, routine_kind) {
+    if !programlet_type_matches(output_kind, routine_kind) {
         return Err(ERROR_UNSUPPORTED);
     }
     let initial_frame = &mut frames[0];
@@ -200,20 +203,23 @@ pub(super) fn initialize_numeric_programlet(
     initial_frame.loop_remaining = loop_remaining;
     initial_frame.loop_end = loop_end.unwrap_or(0);
     initial_frame.loop_has_end = u32::from(loop_end.is_some());
-    array_put!(
-        &mut initial_frame.slots,
-        0,
-        NumericLocalSlot {
-            name_offset: routine_output_name.start as u32,
-            name_length: routine_output_name.length as u32,
-            value: 0,
-            kind: if output_kind == VALUE_BOOLEAN { 3 } else { 1 },
-            value_kind: if output_kind == VALUE_BOOLEAN {
-                VALUE_BOOLEAN
-            } else {
-                VALUE_UNSIGNED
-            },
-        }
-    );
+    if output_kind != VALUE_VECTOR_FLOAT {
+        array_put!(
+            &mut initial_frame.slots,
+            0,
+            NumericLocalSlot {
+                name_offset: routine_output_name.start as u32,
+                name_length: routine_output_name.length as u32,
+                value: 0,
+                value_high: 0,
+                kind: if output_kind == VALUE_BOOLEAN { 3 } else { 1 },
+                value_kind: if output_kind == VALUE_BOOLEAN {
+                    VALUE_BOOLEAN
+                } else {
+                    VALUE_UNSIGNED
+                },
+            }
+        );
+    }
     Ok(symbol_used)
 }
