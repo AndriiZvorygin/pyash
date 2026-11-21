@@ -7,6 +7,13 @@ description: "Maintain translation pairs, templates, and anchor words for Pyash;
 
 Use this skill when editing translation pairs/templates, adapters, or anchor word normalization.
 
+For routine vocabulary operations, WordNet sweep status/recovery, decision
+interpretation, or vocabulary promotion, use the
+[dev-vocab operations guide](../../documentation/runbooks/dev-vocab-operations.md)
+first. This skill remains the deeper reference for translation implementation
+and WordNet linker behavior; it does not replace the branch and sweep safety
+checks in that guide.
+
 ## Pair files
 
 - Exact pairs: `program/library/translation/pairs_<lang>.pya`
