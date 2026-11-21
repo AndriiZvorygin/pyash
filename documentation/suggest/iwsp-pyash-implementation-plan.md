@@ -69,12 +69,14 @@ source, evaluator and data-split responsibilities, candidate iteration and audit
 staged deliverables with acceptance criteria, and the operations that may be needed.
 
 It does not: write runtime code, change the compiler, add tests, or modify any existing
-file. It does not assume that every candidate must run on a GPU. The first complete
-system should establish correct authoring, evaluation, isolation, and replay on CPU;
-shared VLIW CPU/GPU execution is introduced where measured workload size benefits from
-it. Existing Pyash sentence and fact conventions remain the authoring surface.
+file. It does not assume that every candidate must run on a GPU. The first useful model
+milestone is a small, correct transformer forward computation on CPU, expressed in
+Pyash/VLIW. Candidate search, evaluator isolation, and replay are later workflow
+capabilities; shared VLIW GPU/browser execution follows the same operation contracts
+where supported. Existing Pyash sentence and fact conventions remain the authoring
+surface.
 
-## Framework at a glance
+## Eventual framework at a glance
 
 An iWSP run is a controlled search over readable candidate programs, not just a set of
 numeric kernels:
@@ -93,10 +95,10 @@ numeric kernels:
 6. After the bounded search ends, the sealed candidate is evaluated on held-out data;
    interpretability and reproducibility are reviewed independently of its score.
 
-The host owns orchestration, validation, data access, scoring, and provenance. Candidate
-execution can use Pyash's existing interpreter or lower to the shared VLIW runtime
-where the candidate's operations fit. The Housekeeper is for admitted GPU execution of
-sufficiently parallel work, not for authoring or every small candidate edit.
+This is the eventual end-to-end workflow, not the order in which Pyash needs to build
+it. The immediate roadmap starts with useful model operations and a forward pass;
+candidate-search controls and any protected evaluation boundary come later, if and when
+a concrete task needs them.
 
 The success criterion is a useful, reproducible candidate for a defined task. Matching
 the paper's numerical precision or reported score is a separate comparison, not a
@@ -396,29 +398,27 @@ evaluation loop would report a mediocre correlation without saying why.
 ### 5.1 Separate responsibilities; shared candidate semantics
 
 ```
-Task contract + protected evaluator/data (host-owned)
-                  │ visible feedback during bounded search
+Pyash sentences + named model/data facts
+                  │ lower without changing sentence meaning
                   ▼
-Agent-authored Pyash source + named parameter facts
-                  │ validate, record, execute
-                  ▼
-Candidate runtime: Pyash interpreter or shared VLIW semantics
-                  │ same candidate contract; execution target selected by workload
+             PyAC / VLIW
+                  │ interpreted by the generic runtime
           ┌───────┴────────┐
           ▼                ▼
-       CPU runtime     GPU / browser runtime
-       reference       admitted GPU work via Housekeeper
-                  │
+       Rust CPU       Rust GPU / browser
+       reference      same VLIW semantics
+          └───────┬────────┘
                   ▼
-       sealed held-out evaluation + independent audit
+       named outputs and visible score
 ```
 
-The evaluator and orchestration own task data, scoring, limits, and provenance. The
-candidate remains readable Pyash source and named facts. Execution is not divided by
-numeric type: use the interpreter or shared VLIW implementation according to supported
-semantics and measured workload. CPU is the reference and first integration target;
-GPU/WebGPU are execution targets for suitable workloads, not separate candidate
-languages or a reason to weaken the evaluator boundary.
+The intended computation, declarations, and scoring remain visible in Pyash/PyAC VLIW;
+Rust supplies the generic execution machinery rather than a hidden iWSP model layer.
+Execution is not divided by numeric type: CPU is the behavioral reference, with GPU
+and browser targets implementing the same VLIW semantics when supported. Housekeeper
+is used when GPU work needs managed admission, not for every small development test.
+An isolated evaluator and held-out data path are later workflow choices, not
+prerequisites for implementing attention.
 
 ### 5.2 Interpreter semantics today
 
@@ -655,13 +655,15 @@ well-defined boundary, rather than serve as documentation alone:
 
 Each catches a class of bug that can otherwise appear as a plausible-but-wrong number.
 
-### 7.3 The independent evaluator
+### 7.3 The independent evaluator (later, when a task needs it)
 
-The target correctness boundary follows the paper: the agent writes the candidate; a
-fixed trusted harness owns scoring and protected data. For the algorithmic path, the
-candidate returns predictions and the harness computes the metric. For the brain path,
-the harness also owns the ridge readout (p. 4). It enforces feature/parameter limits
-and runs held-out examples only after search ends.
+For tasks that need protected evaluation, the target correctness boundary follows the
+paper: the agent writes the candidate; a fixed evaluator owns scoring and protected
+data. For the algorithmic path, the candidate returns predictions and the evaluator
+computes the metric. For the brain path, the evaluator also owns the ridge readout
+(p. 4). It enforces feature/parameter limits and runs held-out examples only after
+search ends. This is a later workflow capability, not a prerequisite for the first
+transformer operations or forward pass.
 
 The evaluator should not call candidate-authored scoring code. Independent reference
 checks for metrics and representative outputs help prevent candidate and evaluator
@@ -670,7 +672,8 @@ for this boundary; Pyash must establish it through implementation and tests.
 
 ### 7.4 Proof obligations for the implementation
 
-These are target invariants, not claims about the current runtime:
+These are later-stage target invariants for tasks that require a protected evaluator,
+not claims about the current runtime or gates for the operation ladder:
 
 1. Candidate edits are limited to the declared source and parameter surface.
 2. Every executable operation has a pinned semantic contract and a reference test.
@@ -685,53 +688,22 @@ evidence across the targets that claim to support it (§5.4).
 
 ---
 
-## 8. Implementation roadmap
+## 8. Implementation roadmap: a useful-capability ladder
 
-The order is architecture-first and vertical-slice driven. Each step should reuse
-existing Pyash facts, sentences, interpreter, artifact, refinery, criterion, and
-Housekeeper contracts where they fit. New vocabulary, storage shapes, and APIs are
-selected only after checking the current Pyash cases, vocabulary inventory, and
-relevant specifications. Numeric formats are not a gate to the first framework slice.
+The next step is the smallest new operation that is useful on its own and unlocks the
+next computation. The existing scorer is a baseline, not a reason to build evaluator
+governance before there is a model to evaluate. Keep each rung visible as Pyash/PyAC
+sentences and VLIW operations; Rust implements generic execution semantics, not hidden
+IWSP policy. Choose exact sentence signatures when each rung is ready, after checking
+the existing cases, vocabulary, and VLIW specification.
 
-Current position: typed float32/float64 vectors, inline and named-vector dot
-products, mutable float32 result collection, and the `pluk tlas` exact-match count
-are implemented in the shared VLIW runtime. The CPU pilot
-`iwsp-linear-score-v1` uses one two-feature input, three named weight vectors,
-three collected scores, and a fixed expected vector: the reference candidate
-scores 3/3 and a one-weight mutation scores 2/3. It is a reproducible visible
-scoring example, not a complete candidate-search loop. The same reference and mutated
-candidates now pass on live Vulkan through Housekeeper; see the verification ledger for
-the exact run and artifacts. The first Rust PyAC evaluator boundary is now implemented;
-Stage 2 remains open for the orchestration and parameter-policy work listed below.
+### Current floor — Dot product and exact-match scoring (implemented)
 
-### Stage 0 — Fix the task and trust contract
-
-Define one small deterministic task and write down, before implementation:
-
-- candidate inputs and outputs, allowed source/fact changes, and resource limits;
-- the candidate update method or permitted method family, its allowed data, visible
-  feedback, and exact metric;
-- which examples and labels are visible to candidate updates, and which held-out data
-  and evaluator internals remain protected;
-- the sealed held-out evaluation step, iteration limit, and independent audit role;
-- what constitutes a reproducible run and which artifacts identify it.
-
-**Acceptance:** the roles, method choices, and information boundaries are unambiguous;
-a reviewer can state what the candidate author may read or change and what the evaluator
-alone owns. No new Pyash surface is committed at this stage.
-
-**Pilot contract (`iwsp-linear-score-v1`):** the feature vector, expected score
-vector, and candidate weights are all visible and fixed in one small Pyash fixture.
-For this smoke task, the permitted candidate edit is the three named weight-vector
-declarations; the update method is a direct source edit, with no search loop or
-gradient update. Feedback is the exact-match count from 0 to 3. There is no held-out
-data and no evaluator confidentiality claim at this stage. Stage 2 adds an actual
-trusted boundary; it must not be inferred from this transparent conformance pack.
-
-### Stage 0.1 — Add an exact-match judge primitive (implemented)
-
-The shared Rust VLIW runtime accepts a mutable float32 prediction vector, indexed
-dot-product writes, a named answer vector, and:
+The shared VLIW runtime has typed float32/float64 vectors, named-vector dot products,
+mutable float32 result collection, and `pluk tlas`. The
+`iwsp-linear-scorer-v1` fixture uses feature `[1, 2]`, three weight vectors, and
+reference scores `[5, 4, 3]`; it scores 3/3, while a one-weight mutation scores 2/3.
+The judge sentence is:
 
 ```pyash
 ob name prediction value
@@ -740,151 +712,97 @@ to name num correct count
 be pluk tlas do
 ```
 
-Each dot product returns its scalar and may store it with `to name prediction at num 0`.
-The mutable-vector declaration's `state` quote and count choose a zero-initialized
-float32 vector; stores apply in source order. The evaluator resolves each reference
-to one preceding named vector in the same pack, requires equal nonzero widths and
-finite float32 values, and returns the exact-equality count as an unsigned numeric
-scalar. JavaScript only lowers the sentences; CPU and GPU use the shared Rust
-semantics. The runnable source fixture is
-`examples/pyash/vliw-pluk-tlas.pya`.
+Runnable fixtures are `examples/pyash/iwsp-linear-scorer-v1.pya` and
+`examples/pyash/vliw-pluk-tlas.pya`; CPU and live Vulkan verification are recorded in
+the VLIW verification ledger. This is the working floor; it is not a transformer or
+an integrated candidate-search system.
 
-**Acceptance evidence:** Rust core tests cover exact equality, one-ULP differences,
-signed zero, maximum vector width across indexed codelets, missing/duplicate names,
-type errors, and width mismatch. The public Rust pack executor returns `Unsigned(3)`
-for the fixture. This establishes the operation, not evaluator isolation, held-out data
-protection, or a complete iWSP search loop.
+### Stage 1 — Vector scale
 
-### Stage 1 — Deliver one CPU/GPU vertical slice with named-vector dot product (verified)
+Multiply a vector by a scalar and return a vector of the same width and element type.
+This is independently useful for weights, residual scaling, and the first step in
+forming a weighted value sum. Specify finite-value and overflow behavior; test empty,
+normal, and boundary inputs on CPU.
 
-Task version `iwsp-linear-score-v1` uses the visible feature vector `[1, 2]`;
-candidate weight vectors `[1, 2]`, `[2, 1]`, and `[3, 0]`; and reference scores
-`[5, 4, 3]`. The candidate may edit the named weight-vector declarations for this
-smoke task. Dot products read the named feature/weight vectors and store each
-scalar in a lane of the mutable prediction vector. `pluk tlas` supplies the exact
-float32 score out of three. A deliberate third-weight change to `[2, 0]` yields
-`[5, 4, 2]` and score `2/3`.
+### Stage 2 — Vector addition
 
-All data and the evaluator are visible in the same PyAC pack. This is a small
-scoring/conformance fixture, not a security boundary, training loop, classifier
-argmax, or held-out evaluation. Dot products require finite, nonempty, equal-width
-vectors of matching type and accumulate in lane order at the input precision;
-the pilot uses two-lane float32 vectors. The CPU fixture and tests use the shared
-Rust semantics; JavaScript lowers but does not calculate the score.
+Add equal-width, same-type vectors element by element. This is useful for accumulating
+weighted values and later for transformer residual connections. Reject incompatible
+shapes/types rather than silently broadcasting. Together, Stages 1 and 2 make weighted
+vector accumulation expressible without a hidden attention helper.
 
-**Acceptance evidence:** the runnable fixture is
-`examples/pyash/iwsp-linear-scorer-v1.pya`; CPU tests prove reference score `3`
-and mutated score `2`; Rust tests cover named lookup, missing/duplicate names,
-width mismatch, inline compatibility, and numeric edge cases. The live RTX 3090
-Housekeeper run passed both candidates plus the full matrix (49/49 valid cases
-and 2/2 expected errors); its metrics and artifact hashes are recorded in the
-VLIW verification ledger. Stage 1 is cross-target verified.
+### Stage 3 — Vector sum reduction
 
-### Stage 2 — Isolate and verify the evaluator
+Reduce a non-empty vector to one scalar with a documented accumulation order and
+precision. This is useful for pooling and means, and provides the normalization
+denominator needed by softmax. Add a small runnable example and numeric edge tests.
 
-Implement the fixed evaluator as a trusted boundary separate from candidate-authored
-code. Validate candidate syntax, referenced names, permitted resources, and declared
-parameter limits before execution. Enforce the task's declared data-access policy,
-keep visible feedback bounded, and defer held-out access until the search is sealed.
-Record the candidate update method and its permitted inputs so direct authorship,
-search, gradient-based updates, and hybrids can be audited under the same boundary.
+### Stage 4 — Vector maximum reduction
 
-**Acceptance:** tests prove that candidate code cannot read or modify evaluator
-internals or held-out material; malformed/over-limit candidates fail before scoring;
-reference and evaluator checks detect a known wrong output; the sealed held-out result
-is not returned into the search loop.
+Return the greatest value in a non-empty vector. This is useful by itself and supplies
+the stable offset for softmax. Keep `argmax` (returning an index) as a separate follow-up
+unless the first attention example demonstrates that it is needed.
 
-**Implemented first slice (2026-11-20):** `rust/pyac/src/iwsp.rs` owns visible and
-held-out reference vectors outside the candidate `PyacPack`. Candidate execution is
-limited to 64 codelets and its final 1, 2, 3, 4, 8, or 16 scalar float32 results are
-treated as predictions. `score_visible` returns only the bounded exact-match count;
-`seal` consumes the visible evaluator and creates a one-use held-out evaluator whose
-`evaluate` consumes itself. The trusted evaluator builds a separate PyAC pack containing
-the existing Pyash `pluk tlas` signature and invokes the shared Rust runtime. Candidate
-code is not combined with the evaluator pack: only its final scalar outputs are copied
-into the trusted judge pack alongside its private reference values. The candidate test
-uses named float vectors and `kl6m psas`, and proves reference score 3/3 and a
-changed-weight score 2/3. A separate test confirms that changing held-out references
-does not change visible feedback.
+### Stage 5 — Stable softmax
 
-This is an in-process boundary for bounded, data-only PyAC execution, not an operating
-system sandbox against arbitrary native code. The scorer also exposes a prediction-slice
-entry point for outputs produced by another conforming target. GPU execution is not yet
-wired into this evaluator API. Remaining Stage 2 work: connect the one-use seal to the
-actual candidate-search controller
-so held-out scores cannot flow back into revisions; define and enforce task-specific
-parameter counts and allowed candidate edits; and add tests for referenced-name/resource
-policy at the task boundary. No candidate optimizer or held-out data loader is introduced
-by this slice.
+Map a logits vector to normalized weights using max-subtraction, exponentiation, and a
+sum. Define output type, accumulation precision, and behavior for empty or non-finite
+input. This is the first standard attention-specific operation and can also be used as
+a general probability normalization. Verify that outputs are finite and sum to one
+within the specified tolerance.
 
-### Stage 3 — Make candidate history reproducible and auditable
+### Stage 6 — Two-key, one-query attention
 
-Connect each candidate revision to its source, parameter facts, parent revision, task
-and evaluator versions, update method/configuration, visible score, and artifact hashes.
-For stochastic or gradient-based updates, record the relevant seed, optimizer settings,
-and permitted data identity. Use Pyash's existing artifact/newspaper and checkpoint
-mechanisms where possible. Add a structural diff that lets an independent reviewer
-understand what changed between revisions.
+Use the existing dot product to produce two query/key scores, apply Stage 5 to obtain
+two weights, scale each of two named value vectors using Stage 1, and add them using
+Stage 2. Keep this first fixture deliberately small and explicit: it demonstrates an
+actual attention result without first requiring general matrix/tensor storage, a
+multi-head abstraction, or candidate-search machinery. Check the output against a
+small independently calculated reference on the Rust CPU runtime.
 
-**Acceptance:** a checkpoint can reconstruct and rerun its candidate; the recorded
-result matches; a two-revision fixture produces a useful source/fact diff and complete
-provenance; interrupted work can resume without changing the task or evaluator
-identity.
+### Stage 7 — Query/key/value projections
 
-### Stage 4 — Add bounded candidate-update/evaluate search
+Once the explicit attention composition works, add the smallest matrix-vector or
+equivalent projection operation needed to derive Q, K, and V from token vectors and
+named weights. Fix storage layout and shape rules using a tiny sequence fixture. This
+makes the attention inputs part of a model computation rather than hand-supplied test
+vectors.
 
-Only after the vertical slice and trust boundary work, add the bounded iteration loop.
-Allow direct authorship, deterministic search, gradient-based optimization (including
-backpropagation), or hybrids according to the task and supported runtime. Record the
-chosen method, its data access, and compute budget. Keep protected held-out data outside
-the candidate loop; provide bounded visible feedback and a strict revision cap. Audit
-candidate changes, then seal and evaluate the selected candidate on held-out data.
+### Stage 8 — Minimal transformer block
 
-**Acceptance:** a small fixture shows improvement from a poor candidate to a correct
-one; attempts to access protected held-out data are rejected; iteration limits, resume,
-update-method provenance, audit, and held-out sequencing are covered by tests; each step
-is inspectable in recorded artifacts.
+Compose the verified attention path with the next necessary pieces: residual addition,
+normalization, an elementwise activation, and a small feed-forward projection. Add each
+missing primitive only when the block's runnable example reaches it. The acceptance
+target is one tiny CPU-executable block with inspectable Pyash/VLIW inputs, parameters,
+intermediates, and output, not paper-scale performance.
 
-### Stage 5 — Expand candidate representation and operations from task evidence
+### Stage 9 — Sequence task and cross-target conformance
 
-Use the capability inventory in §2 to select the next operation needed by the chosen
-task, rather than implementing every paper operation up front. Keep source expressed
-as Pyash sentences/cases and retain named, inspectable parameter facts. Define type,
-shape, range, rounding, overflow, and determinism contracts for the operations actually
-used. Check that any proposed vocabulary and compound meanings are inventory-backed
-and reviewed before fixing signatures.
+Run the minimal block on a small deterministic sequence task, record its VLIW input and
+outputs, and compare against an independent reference. Then run the same conformance
+cases on GPU/browser targets for the operations they support. Measure end-to-end time
+and dispatch overhead; do not optimize or scale until correctness is established.
 
-**Acceptance:** each added operation has a Pyash-level contract, reference semantics,
-edge-case tests, and a candidate task that demonstrates its need. Existing encodings
-and programs remain compatible. Numeric representation is chosen by task measurements
-as described in §3, not by paper precision alone.
+### Stage 10 — Visible candidate iteration
 
-### Stage 6 — Scale suitable execution across CPU and GPU
+Only after a useful forward computation exists, add a visible candidate-revision loop
+that edits named Pyash parameters/source and records each score and diff. The current
+`rust/pyac/src/iwsp.rs` evaluator wrapper is a prototype/conformance aid, not the target
+semantic layer. Start with simple inspectable revisions; search strategies and
+optimization can be added as separate capabilities when a task calls for them.
 
-Profile the completed CPU vertical slice first. Batch independent examples/sections
-where the existing section and pack limits make that effective. Use the shared VLIW
-runtime when the candidate's operations fit; route GPU work through the GPU Housekeeper.
-Only add within-example reductions, matrix/tensor execution, or a weight-data transport
-contract when the measured workload requires them. Follow the indexed program-image
-and `.pyac` versioning design rather than an ad hoc side channel.
+### Stage 11 — Optional protected evaluation
 
-**Acceptance:** CPU remains the behavioral reference; GPU/browser paths pass the same
-conformance cases for supported semantics; results are keyed by section identity and
-remain correct when sections complete out of source order; workload measurements show
-that dispatch overhead is justified.
+Only if a chosen task uses hidden/held-out examples, add the corresponding evaluator
+separation and data-access boundary. The existing Rust wrapper is not a reason to make
+this a prerequisite or to put IWSP-specific policy in the interpreter. Represent task,
+candidate, and evaluation behavior in Pyash/VLIW; keep Rust responsible for generic
+interpretation and execution.
 
-### Stage 7 — Broaden the task and audit suite
-
-Add representative algorithmic tasks incrementally, then consider the brain-encoding
-path as a separate expansion. That path needs feature extraction, protected response
-data, a trusted ridge readout, and its own correctness and privacy review. Use the paper's
-operation inventory as coverage guidance, not a mandatory all-at-once implementation
-list.
-
-**Acceptance:** each task has a fixed reference, explicit metric and resource limits,
-visible/held-out separation, replayable candidates, and independent review. Report
-score, parameter count, numeric behavior, runtime cost, and interpretability evidence
-separately so one measure cannot conceal failure in another.
+**Rung completion rule:** each stage needs one Pyash-level sentence contract, one small
+runnable example, CPU reference tests including an edge case, and a recorded result.
+GPU verification follows for shared-runtime changes before claiming CPU/GPU parity.
+Do not begin a later rung just because its operation appears in the paper's inventory.
 
 ---
 
