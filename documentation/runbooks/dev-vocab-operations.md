@@ -228,6 +228,68 @@ Before committing:
    <code>bash command/push_all.sh</code>; never force-push or publish these
    changes to dev or dev-vliw-backend.
 
+### Committing promoted output while a sweep is running
+
+A healthy sweep keeps writing. Commit the vocabulary it has already produced
+without disturbing it, and expect the working tree to stay dirty afterwards.
+
+The decision ledger is intentionally larger on the host than in the commit. The
+host keeps the full campaign history; the commit carries only the accepted
+promotion records. Never rewrite, reset, restore, or clean the ledger to make
+the tree tidy, and never commit the whole file. Do not restart a healthy sweep
+and do not stage anything the sweep is writing at that moment.
+
+Derive the required ledger rows instead of guessing them:
+
+1. Take the rows of <code>compound_coverage_wordnet_verified.pya</code> whose
+   sense id is absent from the committed version. These are the newly promoted
+   senses.
+2. Read their <code>verificationDecisionId</code> and
+   <code>verificationDecisionIds</code> values.
+3. Resolve every referenced id in the ledger and confirm each one is
+   <code>accepted-llm</code>, <code>accepted-deterministic</code>, or
+   <code>repaired-llm</code>. If a referenced row is rejected, uncertain, or
+   missing, stop and report it instead of staging it.
+4. Stage only those accepted rows. Do not rewrite the live ledger file: the
+   sweep holds an in-memory offset index over it, so a rewrite would point that
+   index at the wrong lines. Build the isolated file from the committed ledger
+   plus the accepted rows above, confirm it still parses with
+   <code>parseEnglishWordNetCompoundDecisions</code>, and stage it as a blob
+   while leaving the working file as the sweep wrote it:
+
+   ~~~sh
+   git hash-object -w /tmp/filtered_ledger.pya
+   git update-index --cacheinfo <mode>,<blob>,program/library/translation/english_wordnet_compound_decisions.pya
+   ~~~
+
+Record the count checks in the commit body: promoted catalog rows added, gloss
+rows added, isolated ledger rows added, and the number of referenced decisions
+verified accepted. Keep the subject short and lower case.
+
+Refresh the lookup indexes from the catalogs that are about to be committed:
+
+~~~sh
+node command/vocab_lookup_index.mjs
+~~~
+
+The hourly refresh in <code>conduct/calendar.pya</code> can run before the
+newest catalog writes, so its output can be one batch stale. Run the rebuild
+after a stable batch, confirm the index files are newer than the catalogs they
+were built from, and confirm the newly promoted sense ids appear in the rebuilt
+wordnet index.
+
+The generated dictionary snapshot is a separate blocked task.
+<code>program/library/dictionary/reference.pya</code> is built from the promoted
+catalogs plus the SUMO mapping source
+<code>know/sumo/pyash_wordnet_mappings.pya</code>. A host without that source
+cannot rebuild it. Do not fabricate the input and do not hand-edit the
+generated snapshot. Rebuild it in an environment that has the source, then
+verify that it matches the promoted catalogs before publishing it.
+
+The generated catalogs exceed GitHub's 50 MB recommendation. Treat any move to
+Git LFS as its own decision, taken separately from a sweep and never while one
+is running.
+
 ## References
 
 - [Translation and WordNet pipeline](../../program/library/translation/README.md)
