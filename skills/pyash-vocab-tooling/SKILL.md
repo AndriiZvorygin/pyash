@@ -163,6 +163,26 @@ The entry review command updates the canonical catalogs, but Kwon's generated
 sidecar indexes can lag. Run `node command/vocab_lookup_index.mjs` when the new
 accepted link must be available to lookup immediately.
 
+### Publish accepted vocabulary to the VLIW reference dictionary
+
+The reference dictionary is generated from the canonical promoted atom,
+compound, WordNet, SUMO, Chinese, and translation catalogs. Do not edit its
+generated `reference.pya` directly and do not copy decision-history records
+into it. After adding or updating an accepted vocabulary link, regenerate the
+snapshot:
+
+```sh
+node program/library/dictionary/build_reference_source.mjs
+```
+
+The exact linked WordNet gloss is the entry's interim definition. A native
+Pyash definition is optional and may be added when its component vocabulary is
+ready. For Chinese forms, the snapshot keeps one target atom per single Han
+character; it adds a multi-character pinyin or Jyutping form only when every
+character has one unambiguous local reading and the complete Chinese surface
+resolves to one Pyash entry. The generated snapshot is consumed by the VLIW
+runtime worktree, where it is compiled into the `.pyac` reference volume.
+
 ### VLIW compound dictionary projection
 
 `node command/vliw_dictionary_compounds.mjs` builds the ignored
