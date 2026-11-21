@@ -7,6 +7,25 @@ For the full source-to-pack-to-backend picture and the distinction between
 current support and target architecture, see
 [`pyash-vliw-compiler-architecture.md`](pyash-vliw-compiler-architecture.md).
 
+## Runtime signature dispatch
+
+The Rust VLIW runtime selects one semantic handler from the encoded sentence
+signature before execution. The key is ordered be-verb HNUCs plus
+`[(case HNUC, value-type descriptor)]`, sorted by ascending unsigned HNUC for
+comparison. Type descriptors preserve quote sort, scalar width, and scalar or
+vector form. Compound-verb HNUCs retain their encoded order. Sorting changes
+only the temporary key; codelet bytes, payloads, and phrase boundaries stay
+unchanged. Mood remains part of validation and handler semantics, but not key
+identity. Identifiers and literal values remain values.
+
+Dispatch is independent of surface spelling, English glosses, WordNet/SUMO
+links, and dictionary lookup. The Rust core reads numeric HNUCs and quote
+headers, uses bounded fixed-capacity storage without allocation or text
+conversion, and selects at most one handler. Unknown verbs and unsupported
+case/type shapes fail without fallback. Continuation-framed values and
+programlet branches use structural routes that validate framing before calling
+shared semantic operations.
+
 ## Numeric plus
 
 The first executable slice uses:

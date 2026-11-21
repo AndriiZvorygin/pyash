@@ -272,6 +272,8 @@ The isolated candidate worktree is stopped during a merge of $merge_sha from $re
 
 Only edit the conflicted paths listed below. Inspect each side with Git's stage entries and relevant source, tests, or documentation. When an output file is generated from source data, use the repository's authoritative generator after resolving its source inputs. Do not guess generated data or discard valid additions from either side.
 
+When a conflicted path is under documentation/specifications/, run `node command/spec_audit.mjs` after resolving it and keep every specification within the audit's 16 KiB file limit. Preserve the normative behavior while meeting that limit.
+
 Do not stage files, commit, amend, merge, push, change remotes, or edit anything outside the listed conflicted paths. Do not inspect credentials or secret files. Do not invoke GPU, media, or long-running external-model pipelines. The outer runner will verify your changes, stage the resolved files, complete the merge commit, and run the full CI-tier suite before any promotion.
 
 Conflicted paths:

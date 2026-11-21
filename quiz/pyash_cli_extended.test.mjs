@@ -141,13 +141,13 @@ test("pyash compile infers JavaScript output for Pyash source", async () => {
   });
 });
 
-test("pyash dictionary forwards existing Kwon arguments", () => {
+test("pyash dictionary suggest forwards existing Kwon arguments", () => {
   const direct = spawnSync(process.execPath, [path.join(repoRoot, "command/vocab_suggest.mjs"), "love"], {
     cwd: repoRoot,
     encoding: "utf8",
     timeout: 30000
   });
-  const routed = runCli(["d", "love"]);
+  const routed = runCli(["dictionary", "suggest", "love"]);
   assert.equal(routed.status, direct.status, routed.stderr);
   assert.equal(routed.stdout, direct.stdout);
   assert.equal(routed.stderr, direct.stderr);

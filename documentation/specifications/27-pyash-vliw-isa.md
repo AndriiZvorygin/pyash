@@ -195,67 +195,39 @@ backend even if it can be printed as readable Pyash.
 
 ## 5.1 Runtime signature dispatch
 
-The Rust VLIW runtime selects one semantic handler from the encoded sentence
-signature before executing it. The matching key is:
-
-```text
-ordered be-verb HNUCs
-+ sorted [(case HNUC, value-type descriptor)]
-```
-
-Case pairs are sorted by ascending unsigned numeric HNUC for dispatch-key
-comparison. Each type descriptor preserves the encoded semantic type, including
-quote sort, scalar width, and scalar-versus-vector form where applicable. A
-compound verb retains its encoded HNUC sequence and order. The source codelet,
-payloads, and phrase boundaries are not reordered; sorting applies only to the
-temporary dispatch key. Mood remains part of sentence validation and handler
-semantics, but is not part of this key. Identifier payloads and literal values
-likewise remain values, not signature identity.
-
-This runtime ordering is independent of source-language spelling, English
-glosses, WordNet/SUMO links, and dictionary lookup. The Rust core reads numeric
-HNUCs and quote headers already present in the codelet. It uses bounded
-fixed-capacity storage, performs no allocation or text conversion, and
-dispatches to at most one handler. An unknown verb or unsupported case/type
-shape returns an error instead of probing other handlers as fallbacks.
-
-Continuation-framed values and programlet branch encodings have dedicated
-structural routes because their payload words are not ordinary phrase tokens;
-those routes validate their framing before selecting the corresponding shared
-semantic operation.
+The dispatch key is ordered be-verb HNUCs plus grammatical-case/value-type
+pairs sorted by unsigned HNUC. Preserve types, verb order, and payloads;
+validate mood but exclude mood and literals from key identity. Dispatch MUST
+use numeric data, select at most one handler, and reject unsupported signatures
+without fallback. Structural values MUST validate framing first. See
+[implementation details](../reference/pyac-vliw-semantic-slices.md#runtime-signature-dispatch).
 
 ## 5.2 General execution contract
 
-Decoding produces semantic instructions with explicit referential inputs and
-outputs. Each reference has a stable number, fulfillment state, and value
-location in the backend's working memory. Each instruction identifies whether
-it reads or writes each reference. There MUST be at most one writer for a
-reference in a dependency region; additional uses are readers. A decoder MUST
-reject conflicting writers unless the semantic sentence explicitly lowers to
-an ordered effect.
+Decoding produces instructions with numbered input/output references,
+fulfillment state, and working-memory locations. Instructions identify reads
+and writes. Each dependency region MUST have at most one writer per reference;
+decoders reject conflicts unless the sentence defines an ordered effect.
 
-An instruction is ready only when all of its required inputs and control
-conditions are fulfilled. The executor may place ready independent
-instructions in a program queue and execute them out of source order. It MUST
-preserve dependency edges, single-writer rules, observable side-effect order,
-and paragraph/codelet boundaries. Workers synchronize at evaluation boundaries
-before values become visible to dependent codelets.
+Instructions are ready when inputs and control conditions are fulfilled.
+Executors MAY schedule independent ready work out of source order, but MUST
+preserve dependencies, single-writer rules, observable side-effect order, and
+paragraph/codelet boundaries. Workers synchronize at evaluation boundaries
+before exposing values to dependent codelets.
 
 The execution model has:
 
-- code in immutable/constant codelet storage;
+- immutable codelet storage;
 - working/output storage addressed by stable references;
-- a program queue for ready work rather than a mandatory program counter;
-- worker-local stacks for function-call frames; and
-- a completion/history record sufficient to diagnose or replay a codelet.
+- a ready-work queue rather than a mandatory program counter;
+- worker-local call-frame stacks; and
+- completion history sufficient to diagnose or replay codelets.
 
-Branches write a condition/reference and dependent clauses wait on it. A
-branch that rejoins MUST use an explicit dependency or function-call boundary.
-Static loops are lowered as repeated codelets; dynamic loops require an
-explicit continuation/jump reference and a bounded termination rule. A
-function call enqueues its body with a local frame and rejoins only after its
-declared outputs are fulfilled. Speculative or parallel execution is valid
-only for instructions proven independent by these rules.
+Branches write conditions/references that dependent clauses await; rejoins MUST
+use explicit dependencies or call boundaries. Static loops repeat codelets;
+dynamic loops require an explicit continuation/jump reference and bounded
+termination. Calls enqueue a local frame and rejoin after declared outputs are
+fulfilled. Parallel execution requires proven independence.
 
 ### Independent named sections
 

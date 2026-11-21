@@ -1,10 +1,10 @@
 su name lyin kwon ob text "English Pyash core dictionary" be text ya
 su name lyin kwon ob text "English core vocabulary" as num 2 from text "en" to text "NFC" with text "pyac-vliw-dictionary/3" be text ya
 
-su name tlat kwon ob name vector at text "entry" be text ya
-su name tlat kwon ob name vector as text "en" from text "vector" to text "vector" at text "lexical-form" be text ya
-su name tlat kwon ob name vector as text "wordnet" from text "Open English WordNet 2025" to text "n:05873161-n" by text "exact-sense" at text "source-link" be text ya
-su name tlat kwon ob name vector as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:05873161-n" with text "A variable quantity that can be resolved into components." at text "source-gloss" be text ya
+su name tlat kwon ob name dlek at text "entry" be text ya
+su name tlat kwon ob name dlek as text "en" from text "vector" to text "vector" at text "lexical-form" be text ya
+su name tlat kwon ob name dlek as text "wordnet" from text "Open English WordNet 2025" to text "n:05873161-n" by text "exact-sense" at text "source-link" be text ya
+su name tlat kwon ob name dlek as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:05873161-n" with text "A variable quantity that can be resolved into components." at text "source-gloss" be text ya
 
 su name tlat kwon ob name drut hnuc at text "entry" be text ya
 su name tlat kwon ob name drut hnuc as text "en" from text "data" to text "data" at text "lexical-form" be text ya

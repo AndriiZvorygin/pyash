@@ -9,16 +9,16 @@ import {
   summarizeDictionaryEntry
 } from "../command/pyac_dictionary.mjs";
 import { buildDictionarySource } from "../program/library/dictionary/source.mjs";
-import { lookupLegacyName } from "../program/library/vliw/quotes.mjs";
+import { lookupLegacyName, lookupLegacyPyaName } from "../program/library/vliw/quotes.mjs";
 
 function sourceWithEntry(definition = "A quantity with direction and magnitude.") {
   return `su name lyin kwon ob text "English Pyash dictionary" be text ya
 su name lyin kwon ob text "Pyash reference" as num 3 from text "en" to text "NFC" with text "pyac-vliw-dictionary/3" be text ya
-su name tlat kwon ob name vector at text "entry" be text ya
-su name tlat kwon ob name vector as text "en" from text "vector" to text "vector" at text "lexical-form" be text ya
-su name tlat kwon ob name vector as text "wordnet" from text "3.0" to text "n:05873161-n" by text "exact-sense" at text "source-link" be text ya
-su name tlat kwon ob name vector as text "en" from text "wordnet" to text "3.0" by text "n:05873161-n" with text "A sense-specific interim gloss." at text "source-gloss" be text ya
-su name vector ob text "${definition}" be text ya`;
+su name tlat kwon ob name dlek at text "entry" be text ya
+su name tlat kwon ob name dlek as text "en" from text "vector" to text "vector" at text "lexical-form" be text ya
+su name tlat kwon ob name dlek as text "wordnet" from text "3.0" to text "n:05873161-n" by text "exact-sense" at text "source-link" be text ya
+su name tlat kwon ob name dlek as text "en" from text "wordnet" to text "3.0" by text "n:05873161-n" with text "A sense-specific interim gloss." at text "source-gloss" be text ya
+su name dlek ob text "${definition}" be text ya`;
 }
 
 test("dictionary source lowers keyed Pyash definition sentences and metadata", () => {
@@ -30,7 +30,7 @@ test("dictionary source lowers keyed Pyash definition sentences and metadata", (
     languages: ["en"],
     normalization_policy: "NFC"
   });
-  assert.deepEqual(built.entries[0].key, [Number.parseInt(lookupLegacyName("vector").hnuc, 16)]);
+  assert.deepEqual(built.entries[0].key, [Number.parseInt(lookupLegacyPyaName("dlek").hnuc, 16)]);
   assert.deepEqual(built.entries[0].lexical_forms, [
     { language: "en", surface: "vector", normalized: "vector" }
   ]);
@@ -47,13 +47,13 @@ test("dictionary source lowers keyed Pyash definition sentences and metadata", (
 });
 
 test("dictionary source rejects definitions without a declared entry", () => {
-  const source = sourceWithEntry().replace('su name tlat kwon ob name vector at text "entry" be text ya\n', "");
+  const source = sourceWithEntry().replace('su name tlat kwon ob name dlek at text "entry" be text ya\n', "");
   assert.throws(() => buildDictionarySource(source), /precedes entry block/u);
 });
 
 test("dictionary source accepts a WordNet interim gloss without a Pyash definition", () => {
   const source = sourceWithEntry().replace(
-    'su name vector ob text "A quantity with direction and magnitude." be text ya',
+    'su name dlek ob text "A quantity with direction and magnitude." be text ya',
     ""
   );
   const entry = buildDictionarySource(source).entries[0];
@@ -61,8 +61,9 @@ test("dictionary source accepts a WordNet interim gloss without a Pyash definiti
   assert.equal(entry.source_glosses[0].text, "A sense-specific interim gloss.");
 });
 
-test("dictionary source rejects unresolved Pyash key atoms rather than inventing HNUCs", () => {
-  assert.throws(() => buildDictionarySource(sourceWithEntry().replaceAll("vector", "unmappedword")), /no HNUC mapping/u);
+test("dictionary source rejects English aliases and unresolved Pyash key atoms", () => {
+  assert.throws(() => buildDictionarySource(sourceWithEntry().replaceAll("dlek", "vector")), /no HNUC mapping: vector/u);
+  assert.throws(() => buildDictionarySource(sourceWithEntry().replaceAll("dlek", "unmappedword")), /no HNUC mapping/u);
 });
 
 test("dictionary source refuses an unimplemented entry record instead of dropping it", () => {
@@ -75,12 +76,12 @@ test("dictionary source refuses an unimplemented entry record instead of droppin
 
 test("dictionary source accepts structural operation signature and argument metadata", () => {
   const source = sourceWithEntry().replace(
-    'su name vector ob text "A quantity with direction and magnitude." be text ya',
+    'su name dlek ob text "A quantity with direction and magnitude." be text ya',
     [
-      'su name tlat kwon ob name vector from ve 0 1 4369 1 8574 1 1 9310 1 3613 at text "operation-signature" be text ya',
-      'su name tlat kwon ob name vector as ve 0 1 9310 1 3613 from text "input" to text "value consumed" at text "operation-argument" be text ya',
-      'su name tlat kwon ob name vector as ve 0 3613 from text "result" to text "computed value" at text "operation-result" be text ya',
-      'su name vector ob text "A quantity with direction and magnitude." be text ya'
+      'su name tlat kwon ob name dlek from ve 0 1 4369 1 8574 1 1 9310 1 3613 at text "operation-signature" be text ya',
+      'su name tlat kwon ob name dlek as ve 0 1 9310 1 3613 from text "input" to text "value consumed" at text "operation-argument" be text ya',
+      'su name tlat kwon ob name dlek as ve 0 3613 from text "result" to text "computed value" at text "operation-result" be text ya',
+      'su name dlek ob text "A quantity with direction and magnitude." be text ya'
     ].join("\n")
   );
   const signature = buildDictionarySource(source).entries[0].operation_signatures[0];

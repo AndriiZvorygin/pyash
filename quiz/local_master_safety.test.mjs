@@ -45,6 +45,7 @@ test("Codex repair uses the requested Luna xhigh full-access profile and verific
   assert.match(runner, /printf 'prah\\n'/u);
   assert.match(runner, /su name test summary/u);
   assert.match(runner, /su name tier summary/u);
+  assert.match(runner, /documentation\/specifications\/[\s\S]*?node command\/spec_audit\.mjs[\s\S]*?16 KiB/u);
   assert.match(runner, /Do not weaken, delete, skip, or broaden tests/u);
   assert.match(runner, /git -C "\$WORKTREE" diff --binary "\$BASE_SHA" HEAD/u);
   assert.match(runner, /Do not change Git remotes, push, merge, or commit/u);
