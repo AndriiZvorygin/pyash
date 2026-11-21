@@ -499,6 +499,10 @@ mod programlet_symbols;
 mod programlet_values;
 #[path = "semantics_runtime/scalar_product.rs"]
 mod scalar_product;
+#[path = "semantics_runtime/canonical_signature.rs"]
+mod canonical_signature;
+#[path = "semantics_runtime/signature_dispatch.rs"]
+mod signature_dispatch;
 #[path = "semantics_runtime/sentence.rs"]
 mod sentence;
 #[path = "semantics_runtime/vector_group.rs"]

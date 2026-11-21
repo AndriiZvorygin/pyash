@@ -192,6 +192,37 @@ The table is a compatibility artifact, not a place to allocate new IDs. Until
 the mapping is proven for an item, that item is unsupported by the VLIW
 backend even if it can be printed as readable Pyash.
 
+## 5.1 Runtime signature dispatch
+
+The Rust VLIW runtime selects one semantic handler from the encoded sentence
+signature before executing it. The matching key is:
+
+```text
+ordered be-verb HNUCs
++ sorted [(case HNUC, value-type descriptor)]
+```
+
+Case pairs are sorted by ascending unsigned numeric HNUC for dispatch-key
+comparison. Each type descriptor preserves the encoded semantic type, including
+quote sort, scalar width, and scalar-versus-vector form where applicable. A
+compound verb retains its encoded HNUC sequence and order. The source codelet,
+payloads, and phrase boundaries are not reordered; sorting applies only to the
+temporary dispatch key. Mood remains part of sentence validation and handler
+semantics, but is not part of this key. Identifier payloads and literal values
+likewise remain values, not signature identity.
+
+This runtime ordering is independent of source-language spelling, English
+glosses, WordNet/SUMO links, and dictionary lookup. The Rust core reads numeric
+HNUCs and quote headers already present in the codelet. It uses bounded
+fixed-capacity storage, performs no allocation or text conversion, and
+dispatches to at most one handler. An unknown verb or unsupported case/type
+shape returns an error instead of probing other handlers as fallbacks.
+
+Continuation-framed values and programlet branch encodings have dedicated
+structural routes because their payload words are not ordinary phrase tokens;
+those routes validate their framing before selecting the corresponding shared
+semantic operation.
+
 ## 5.2 General execution contract
 
 Decoding produces semantic instructions with explicit referential inputs and

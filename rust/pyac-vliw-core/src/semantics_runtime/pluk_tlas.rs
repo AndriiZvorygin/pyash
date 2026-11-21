@@ -3,8 +3,8 @@ use super::scalar_product::{scalar_product_destination, scalar_product_group};
 use super::vector_group::{interpret_vector_group, vector_name_span};
 use super::*;
 
-const PLUK: u32 = 0x2a64;
-const TLAS: u32 = 0x896a;
+pub(super) const PLUK: u32 = 0x2a64;
+pub(super) const TLAS: u32 = 0x896a;
 
 #[derive(Clone, Copy)]
 struct TokenSpan {

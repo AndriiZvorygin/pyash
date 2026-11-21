@@ -1,7 +1,7 @@
 use super::numeric::{QuoteHeader, quote_header};
 use super::*;
 
-const VECTOR_VERB: u32 = 0x2b73;
+pub(super) const VECTOR_VERB: u32 = 0x2b73;
 
 fn vector_header(words: &[u32], codelet: usize) -> Option<(usize, QuoteHeader)> {
     let mut slot = 1;

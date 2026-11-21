@@ -161,9 +161,21 @@ fn computes_a_dot_product_from_preceding_named_vectors() {
     let mut words = std::vec::Vec::new();
     append_named_f32(&mut words, 0x4123, [1.0, 2.0]);
     append_named_f32(&mut words, 0x4567, [4.0, 5.0]);
+    assert_eq!(
+        super::super::signature_dispatch::select_signature_route(&words, 0, 1),
+        Ok(super::super::signature_dispatch::ROUTE_FLOAT)
+    );
     assert_eq!(interpret_group(&words, 0, 1).error, 0);
     assert_eq!(interpret_group(&words, 1, 2).error, 0);
     let start = append_named_dot(&mut words, 0x4123, 0x4567);
+    assert_eq!(
+        super::super::signature_dispatch::select_signature_route(
+            &words,
+            start,
+            words.len() / CODELET_WORDS - start,
+        ),
+        Ok(super::super::signature_dispatch::ROUTE_SCALAR_PRODUCT)
+    );
     let result = interpret_group(&words, start, words.len() / CODELET_WORDS);
 
     assert_eq!(result.error, 0, "{result:?}");
