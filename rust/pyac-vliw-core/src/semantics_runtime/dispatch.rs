@@ -1,3 +1,4 @@
+use super::iwsp_vector_ops::{vector_float_arithmetic_group, vector_sum_group};
 use super::mutable_vector::mutable_vector_group;
 use super::pluk_tlas::pluk_tlas_group;
 use super::scalar_product::scalar_product_group;
@@ -24,6 +25,13 @@ pub fn interpret_group(words: &[u32], start: usize, codelet_count: usize) -> Cor
     let result = match route {
         ROUTE_PLUK_TLAS => pluk_tlas_group(words, start, group_len, codelet_count),
         ROUTE_SCALAR_PRODUCT => scalar_product_group(words, start, group_len, codelet_count),
+        ROUTE_VECTOR_FLOAT_ARITHMETIC => Some(vector_float_arithmetic_group(
+            words,
+            start,
+            group_len,
+            codelet_count,
+        )),
+        ROUTE_VECTOR_SUM => Some(vector_sum_group(words, start, group_len, codelet_count)),
         ROUTE_MUTABLE_VECTOR => mutable_vector_group(words, start, group_len),
         ROUTE_FIXED16 if group_len == 1 => fixed16::single_codelet(words, start),
         ROUTE_FLOAT if group_len == 1 => single_codelet(words, start),

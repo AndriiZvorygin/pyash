@@ -6,18 +6,18 @@ pub(super) const SCALAR_WORD: u32 = 0x0d62;
 pub(super) const PRODUCE_WORD: u32 = 0x8944;
 
 #[derive(Clone, Copy)]
-struct Cursor {
-    start: usize,
-    codelet: usize,
-    slot: usize,
-    end: usize,
+pub(super) struct Cursor {
+    pub(super) start: usize,
+    pub(super) codelet: usize,
+    pub(super) slot: usize,
+    pub(super) end: usize,
 }
 
 #[derive(Clone, Copy)]
-struct VectorOperand {
-    kind: u32,
-    length: usize,
-    values: [u32; RESULT_WORDS],
+pub(super) struct VectorOperand {
+    pub(super) kind: u32,
+    pub(super) length: usize,
+    pub(super) values: [u32; RESULT_WORDS],
 }
 
 fn boundary_at(words: &[u32], codelet: usize, slot: usize) -> bool {
@@ -26,7 +26,7 @@ fn boundary_at(words: &[u32], codelet: usize, slot: usize) -> bool {
 }
 
 impl Cursor {
-    fn peek(&self, words: &[u32], boundary: bool) -> Option<u32> {
+    pub(super) fn peek(&self, words: &[u32], boundary: bool) -> Option<u32> {
         if self.codelet >= self.end
             || self.slot >= CODELET_WORDS
             || boundary_at(words, self.codelet, self.slot) != boundary
@@ -36,11 +36,11 @@ impl Cursor {
         Some(word(words, self.codelet, self.slot))
     }
 
-    fn offset(&self) -> usize {
+    pub(super) fn offset(&self) -> usize {
         (self.codelet - self.start) * (CODELET_WORDS - 1) + self.slot - 1
     }
 
-    fn read(&mut self, words: &[u32], boundary: bool) -> Option<u32> {
+    pub(super) fn read(&mut self, words: &[u32], boundary: bool) -> Option<u32> {
         if self.codelet >= self.end || self.slot >= CODELET_WORDS {
             return None;
         }
@@ -56,7 +56,7 @@ impl Cursor {
         Some(value)
     }
 
-    fn zero_tail(&self, words: &[u32]) -> bool {
+    pub(super) fn zero_tail(&self, words: &[u32]) -> bool {
         let mut codelet = self.codelet;
         let mut slot = self.slot;
         while codelet < self.end {
@@ -224,7 +224,7 @@ fn read_name_span(cursor: &mut Cursor, words: &[u32]) -> Result<NameSpan, u32> {
     Ok(NameSpan { start, length })
 }
 
-fn read_operand(
+pub(super) fn read_operand(
     cursor: &mut Cursor,
     words: &[u32],
     start: usize,

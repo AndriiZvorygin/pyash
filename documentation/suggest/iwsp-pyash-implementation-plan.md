@@ -717,18 +717,16 @@ Runnable fixtures are `examples/pyash/iwsp-linear-scorer-v1.pya` and
 the VLIW verification ledger. This is the working floor; it is not a transformer or
 an integrated candidate-search system.
 
-Typed float32 and float64 vector quotes and dot products already work. The gap below
-is support for these types in additional operations: current elementwise VLIW vector
-arithmetic accepts unsigned `ve num` vectors only. The following table records the
-candidate sentence forms for the next four primitives; it does not claim they already
-lower or execute:
+Typed float32 and float64 vector quotes and dot products already work. The next
+primitive slice now adds float-vector scale, addition, and sum reduction to the same
+Pyash-to-VLIW-to-Rust path. The following table tracks the first four operations:
 
-| Primitive | Candidate Pyash sentence | Result and status |
+| Primitive | Pyash sentence | Result and status |
 |---|---|---|
-| Vector scale | `ob ve float32 1 2 3 to num 0.5 be multiply do` | Elementwise scalar multiplication; returns a float32 vector. Existing `multiply` surface, extended to typed float vectors. |
-| Vector addition | `ob ve float32 1 2 3 to ve float32 4 5 6 be plus do` | Equal-width elementwise addition; returns a float32 vector. Existing `plus` surface, extended to typed float vectors. |
-| Sum reduction | `ob ve float32 1 2 3 be tfo2t do` | Reduces to a scalar of the input type. `tfo2t` is the recorded Pyash link for the sum action; VLIW reduction is new. |
-| Maximum reduction | `ob ve float32 1 2 3 be maximum do` | Reduces to the greatest scalar value. Candidate operation wording only: the current `maximum` link names the result, so confirm its verb use with the vocabulary workflow. |
+| Vector scale | `ob ve float32 1 2 3 to num 0.5 be multiply do` | Implemented: elementwise scalar multiplication; returns the input precision and width. |
+| Vector addition | `ob ve float32 1 2 3 to ve float32 4 5 6 be plus do` | Implemented: equal-width, same-precision addition; no broadcasting. |
+| Sum reduction | `ob ve float32 1 2 3 be tfo2t do` | Implemented: non-empty lane-ordered sum returning a scalar of the input precision; `tfo2t` HNUC `0xBC8A`. |
+| Maximum reduction | `ob ve float32 1 2 3 be maximum do` | Pending: maximum currently links to a result noun/compound, not an approved action verb signature. |
 
 Use `float64` in place of `float32` for the corresponding typed form where the target
 supports it; the existing WGSL/WebGPU target supports float32 but not float64. In the
@@ -737,25 +735,23 @@ arithmetic grammar. Each operation returns its result record (`su name result`);
 vector-output binding is not part of these candidate forms. The existing dot product
 has its separate optional indexed `to name <vector> at num <lane>` destination.
 
-### Stage 1 — Vector scale
+### Stage 1 — Vector scale (implemented)
 
-Multiply a vector by a scalar and return a vector of the same width and element type.
-This is independently useful for weights, residual scaling, and the first step in
-forming a weighted value sum. Specify finite-value and overflow behavior; test empty,
-normal, and boundary inputs on CPU.
+Multiply a vector by a finite scalar, converted to the vector precision, and return
+the same width/type. Rust tests cover float32 scaling and overflow; the surfaced
+conformance cases cover float32/float64 lowering and execution.
 
-### Stage 2 — Vector addition
+### Stage 2 — Vector addition (implemented)
 
-Add equal-width, same-type vectors element by element. This is useful for accumulating
-weighted values and later for transformer residual connections. Reject incompatible
-shapes/types rather than silently broadcasting. Together, Stages 1 and 2 make weighted
-vector accumulation expressible without a hidden attention helper.
+Add equal-width, same-precision vectors elementwise; incompatible widths/types fail
+rather than broadcasting. Rust tests cover continued eight-lane float32 addition,
+width rejection, named vectors, and sixteen-lane float64 addition.
 
-### Stage 3 — Vector sum reduction
+### Stage 3 — Vector sum reduction (implemented)
 
-Reduce a non-empty vector to one scalar with a documented accumulation order and
-precision. This is useful for pooling and means, and provides the normalization
-denominator needed by softmax. Add a small runnable example and numeric edge tests.
+Reduce non-empty vectors in ascending lane order at input precision. Tests cover
+float32/float64 results, named vectors, empty input, and non-finite overflow. The
+Pyash lowerer and Rust CPU conformance cases exercise the published signature.
 
 ### Stage 4 — Vector maximum reduction
 
