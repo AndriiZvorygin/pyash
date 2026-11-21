@@ -1234,3 +1234,39 @@ are not thereby implemented in the shared Rust VLIW CPU/GPU runtime. The
 signatures above define candidate Pyash surfaces for the IWSP/transformer
 work; each still needs spec, vocabulary, dispatch, CPU semantics, and GPU
 conformance coverage before it is considered supported.
+
+### A.10 IWSP task declaration fields and vocabulary links
+
+An IWSP task is declarative data, not a bundle of evolutionary operations. Use one
+task `map` for the contract and named `series` of case maps for visible and held-out
+examples, following the existing task shape in
+`examples/pyash/vliw-u16-addition.pya`. The field names describe the contract; their
+English spelling does not itself claim a Pyash lexical mapping. WordNet links below
+were checked against the local Rust reference dictionary (Open English WordNet 2025).
+The structured records are in
+[`iwsp-task-contract-terms.pya`](iwsp-task-contract-terms.pya), separate from the
+transformer-operation term ledger to keep each Pyash source file within the repository
+size limit.
+
+| Contract field/concept | Pyash data shape | WordNet 2025 sense and linked Pyash form | Qualification |
+|---|---|---|---|
+| Task | Top-level `map` | `n:00797381-n`, work undertaken or attempted; `cwas twot` | The task is the work being specified. |
+| Input slots | Named slot references/list in the task map | `n:06367706-n`, a value passed to a program; `tlas hrut` | Computational-argument sense; slot declarations separately state type and shape. |
+| Output slots | Named output slot reference/list | `n:07279593-n`, signal coming out of an electronic system; `hqut tyan` | Interface-output anchor, not a claim that every result is a physical signal. |
+| Candidate model | Candidate source plus named facts | `n:03782816-n`, representation or simulation; `hfam tlep` | Use the model sense, not the person sense of “candidate.” |
+| Tunable parameter | Named typed value/fact | `n:05867655-n`, variable quantity in a parameterized equation; `prif nrup` | Fits adjustable model weights; distinguish the separate statistical-parameter sense `n:05867861-n`. |
+| Task data and cases | Data references; each case is a `map` in a `series` | `n:08479331-n`, collection of facts; `drut hnuc`. Sample: `n:05830135-n`; `nyit hkup` | `visible` and `heldout` are data-access roles, not claimed WordNet synonyms. |
+| Evaluator | Existing `pluk tlas` sentence | `n:00876484-n`, act of determining value or worth; `pluk tlas` | This is the existing evaluator operation. |
+| Evaluation criterion | Named criterion/configuration value | `n:05933552-n`, ideal used for judgment; `hwaf rwun` | The task declares which criterion the evaluator applies. |
+| Accuracy | Numeric evaluation measure when applicable | `n:04810156-n`, nearness to the true value; `klaf tcok` | Do not equate accuracy with the exact-match count returned by `pluk tlas`. |
+| Update iteration and limit | Numeric iteration/resource-limit fields | Iteration `n:01021071-n`; `dret`. Limit `n:13780436-n`; `bwit hkuc` | These bound the declared process; they do not add loop operations to the task map. |
+| Data-use policy | Named policy value | `n:05910115-n`, adopted plan of action; `trec kfan` | Records which data and feedback an update method may use. |
+| Numeric prediction/reference payload | Existing numeric/vector values | `n:05864972-n`, numerical quantity; `hnuc gjat` | `expected` and `reference` remain schema labels; no exact direct WordNet link for their relation is claimed. |
+| Correct-count result | Unsigned `num` returned by `pluk tlas` | No exact linked “correct count” sense recorded | Keep the result typed and defined by the evaluator contract; do not invent a compound. |
+| Update method | Text value in the task map | Generic method sense `n:05668113-n` | The current Pyash association `mwun kyan` also carries unrelated senses, so the contract uses a text enum and does not depend on that lexical form. |
+| Metric label | Criterion/measure selected by the task | No general model-scoring metric link recorded | The available topological metric sense `n:13807118-n` is not the intended ML scoring concept; use the criterion and measure rows above. |
+
+This table describes declarations only. The pilot task can still expose its feature
+vector, reference vector, editable weight facts, and exact-match feedback directly;
+later task contracts can add protected splits and bounded update methods without
+changing the evaluator signature or turning those declarations into operations.
