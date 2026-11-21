@@ -118,7 +118,18 @@ export async function createEnglishWordNetCompoundDecisionOffsetIndex({ url = EN
         continue;
       }
       if (sentence?.mood !== "ya" || typeof sentence.su?.text !== "string") continue;
-      offsetsById.set(sentence.su.text, { offset, length: lineBytes.length });
+      const id = sentence.su.text;
+      if (typeof sentence.ob?.text !== "string") {
+        throw invalid("WordNet compound decision row requires JSON text", { id });
+      }
+      let record;
+      try {
+        record = JSON.parse(sentence.ob.text);
+      } catch (error) {
+        throw invalid("WordNet compound decision row contains malformed JSON", { id, cause: error.message });
+      }
+      const normalized = normalizeDecisionRecord(record, id);
+      offsetsById.set(id, { offset, length: lineBytes.length, status: normalized.status });
     }
   };
   for await (const chunk of input) {
@@ -138,6 +149,11 @@ export async function createEnglishWordNetCompoundDecisionOffsetIndex({ url = EN
 
   return {
     size: metadata.size,
+    entries() {
+      return [...offsetsById.entries()]
+        .map(([candidateId, location]) => [candidateId, location.status])
+        .sort(([left], [right]) => left.localeCompare(right));
+    },
     async load(candidateIds = []) {
       const rowsById = new Map();
       const handle = await open(url, "r");

@@ -1387,7 +1387,8 @@ async function recordAndPromoteChoices({ context, candidates }) {
       .map((record) => [record.candidateId, record]));
   } else {
     if (!sweepState.decisionOffsetIndex) {
-      sweepState.decisionOffsetIndex = await createEnglishWordNetCompoundDecisionOffsetIndex({ url: decisionsPath });
+      sweepState.decisionOffsetIndex = context.allocation?.compoundDecisionIndex
+        ?? await createEnglishWordNetCompoundDecisionOffsetIndex({ url: decisionsPath });
     }
     decisionById = (await sweepState.decisionOffsetIndex.load(candidateIds)).byId;
   }

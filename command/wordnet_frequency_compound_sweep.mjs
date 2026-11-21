@@ -25,6 +25,7 @@ import {
 } from "../program/library/translation/english_wordnet_bridges.mjs";
 import {
   ENGLISH_WORDNET_COMPOUND_DECISIONS_URL,
+  createEnglishWordNetCompoundDecisionOffsetIndex,
   loadEnglishWordNetCompoundDecisions,
   renderEnglishWordNetCompoundDecisionAppend,
   renderEnglishWordNetCompoundDecisions
@@ -543,9 +544,11 @@ export async function runWordNetFrequencyCompoundSweep({ artifactRoot = ARTIFACT
   ));
   const readyCandidates = currentCandidates.filter((record) => record.disposition === "ready-for-housekeeper-verification");
   const decisionsPath = fileURLToPath(ENGLISH_WORDNET_COMPOUND_DECISIONS_URL);
-  let decisionsState = await loadEnglishWordNetCompoundDecisions();
-  const decisionsById = new Map(decisionsState.rows.map((row) => [row.candidateId, row]));
   const currentCandidateIds = new Set(currentCandidates.map((row) => candidateId(row.verificationRecord ?? row)));
+  const decisionIndex = allocation.compoundDecisionIndex
+    ?? await createEnglishWordNetCompoundDecisionOffsetIndex({ url: decisionsPath });
+  const decisionsState = await decisionIndex.load([...currentCandidateIds]);
+  const decisionsById = new Map(decisionsState.rows.map((row) => [row.candidateId, row]));
   const completedIds = new Set([...currentCandidateIds].filter((id) => (
     decisionsById.get(id)?.decisionRevision === decisionRevision
   )));

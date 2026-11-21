@@ -20,7 +20,7 @@ import {
   reconcileEnglishWordNetFrequencyBridgeRows
 } from "../program/library/translation/english_wordnet_frequency.mjs";
 import { isCircularEnglishWordNetGloss } from "../program/library/translation/english_wordnet_glosses.mjs";
-import { loadEnglishWordNetCompoundDecisions } from "../program/library/translation/english_wordnet_compound_decisions.mjs";
+import { createEnglishWordNetCompoundDecisionOffsetIndex } from "../program/library/translation/english_wordnet_compound_decisions.mjs";
 import { renderEnglishWordNetSenseLinksPya } from "../program/library/translation/english_wordnet_linker.mjs";
 import {
   english30kLookupVariants,
@@ -600,16 +600,19 @@ async function writeBatches(directory, { kind, name, format, runId, records, bat
 export async function prepareWordNetFrequencyAllocation({ reselectAtomTargetIds = [] } = {}) {
   const allocationConfigSource = await readFile(ENGLISH_WORDNET_FREQUENCY_ALLOCATION_CONFIG_URL, "utf8");
   const allocationConfig = parseEnglishWordNetFrequencyAllocationConfig(allocationConfigSource);
-  const [resources, frequency, linkerSource, compoundDecisions] = await Promise.all([
+  const [resources, frequency, linkerSource] = await Promise.all([
     loadDefaultEnglishSentenceResources(),
     loadEnglishWordNetFrequencyResources(),
-    readFile(new URL("../program/library/translation/english_wordnet_bridges.pya", import.meta.url), "utf8"),
-    loadEnglishWordNetCompoundDecisions()
+    readFile(new URL("../program/library/translation/english_wordnet_bridges.pya", import.meta.url), "utf8")
   ]);
   const compoundCoverage = await loadCoverage({
     maximumCompoundComponents: allocationConfig["maximum-compound-components"],
     wordnetIndex: resources.wordnet.index
   });
+  const compoundDecisionIndex = await createEnglishWordNetCompoundDecisionOffsetIndex();
+  const compoundDecisions = await compoundDecisionIndex.load(
+    compoundCoverage.candidates.map((record) => record.id)
+  );
   const catalog = parseEnglishWordNetBridgeCatalog(linkerSource);
   const resolveWord = buildWordResolver(resources, compoundCoverage);
   const rankForEnglish = rankLookup(resources);
@@ -728,7 +731,7 @@ export async function prepareWordNetFrequencyAllocation({ reselectAtomTargetIds 
       (record.componentGlosses ?? []).map(normalized),
       sequence(record.pyashSequence)
     ]).sort((a, b) => a[0].localeCompare(b[0])),
-    compoundDecisions: compoundDecisions.rows.map((record) => [record.candidateId, record.status]).sort((a, b) => a[0].localeCompare(b[0])),
+    compoundDecisions: compoundDecisionIndex.entries(),
     allocationConfig,
     tagMatches: frequency.joined.matchedCount
   };
@@ -740,6 +743,7 @@ export async function prepareWordNetFrequencyAllocation({ reselectAtomTargetIds 
     coverageHash,
     allocationConfig,
     allocation,
+    compoundDecisionIndex,
     reconciliation,
     residualCompounds,
     atomCoverage,

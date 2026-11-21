@@ -236,6 +236,27 @@ function prepareBridgeUpdate(source, review, previousReview) {
           requestedTarget: review.coverageTarget
         });
       }
+      if (!existing.gloss || !Array.isArray(existing.lemmas) || existing.lemmas.length === 0) {
+        const metadataLines = [
+          ...(!existing.gloss ? [`su text ${JSON.stringify(`sense-gloss:${review.senseId}`)} ob text ${JSON.stringify(review.gloss)} ya`] : []),
+          ...(!Array.isArray(existing.lemmas) || existing.lemmas.length === 0
+            ? [`su text ${JSON.stringify(`sense-lemma:${review.senseId}:1`)} ob text ${JSON.stringify(review.target)} ya`]
+            : [])
+        ];
+        const lines = source.split(/\r?\n/u);
+        const prahIndex = [...lines].map((line, index) => [line, index])
+          .reverse()
+          .find(([line]) => line.trim() === "prah")?.[1];
+        if (prahIndex === undefined) throw invalid("WordNet bridge catalog has no trailing prah");
+        lines.splice(prahIndex, 0, ...metadataLines);
+        const updatedSource = lines.join("\n").replace(/\n*$/u, "\n");
+        parseEnglishWordNetBridgeCatalog(updatedSource);
+        return {
+          source: updatedSource,
+          bridgeManaged: existing.evidence.startsWith(`${marker};`),
+          status: "metadata-completed"
+        };
+      }
       return {
         source,
         bridgeManaged: existing.evidence.startsWith(`${marker};`),
@@ -248,7 +269,9 @@ function prepareBridgeUpdate(source, review, previousReview) {
       target: review.coverageTarget,
       targetPartOfSpeech: review.targetPartOfSpeech,
       certainty: "contextual",
-      evidence: `${marker}; ${review.evidence}`
+      evidence: `${marker}; ${review.evidence}`,
+      gloss: review.gloss,
+      lemmas: [review.target]
     };
     const rendered = renderEnglishWordNetBridgeCatalog({
       source: catalog.source,
@@ -257,8 +280,13 @@ function prepareBridgeUpdate(source, review, previousReview) {
       entries: [entry]
     });
     const snippetLines = rendered.split(/\r?\n/u)
-      .filter((line) => parsedLineKey(line) === review.senseId);
-    if (snippetLines.length !== 1) throw invalid("could not render exactly one WordNet bridge row", { senseId: review.senseId });
+      .filter((line) => {
+        const key = parsedLineKey(line);
+        return key === review.senseId
+          || key === `sense-gloss:${review.senseId}`
+          || key.startsWith(`sense-lemma:${review.senseId}:`);
+      });
+    if (snippetLines.length !== 3) throw invalid("could not render the WordNet bridge row and its sense metadata", { senseId: review.senseId });
     const lines = source.split(/\r?\n/u);
     const prahIndex = [...lines].map((line, index) => [line, index])
       .reverse()
