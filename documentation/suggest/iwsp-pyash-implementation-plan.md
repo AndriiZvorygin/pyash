@@ -726,7 +726,7 @@ Pyash-to-VLIW-to-Rust path. The following table tracks the first four operations
 | Vector scale | `ob ve float32 1 2 3 to num 0.5 be multiply do` | Implemented: elementwise scalar multiplication; returns the input precision and width. |
 | Vector addition | `ob ve float32 1 2 3 to ve float32 4 5 6 be plus do` | Implemented: equal-width, same-precision addition; no broadcasting. |
 | Sum reduction | `ob ve float32 1 2 3 be tfo2t do` | Implemented: non-empty lane-ordered sum returning a scalar of the input precision; `tfo2t` HNUC `0xBC8A`. |
-| Maximum reduction | `ob ve float32 1 2 3 be maximum do` | Pending: maximum currently links to a result noun/compound, not an approved action verb signature. |
+| Maximum reduction | `ob ve float32 1 2 3 be gjat bwit do` | Implemented: existing maximum compound used as an operation verb; no conflicting verb sense. Returns the greatest scalar, keeping the first lane on ties. |
 
 Use `float64` in place of `float32` for the corresponding typed form where the target
 supports it; the existing WGSL/WebGPU target supports float32 but not float64. In the
@@ -753,11 +753,13 @@ Reduce non-empty vectors in ascending lane order at input precision. Tests cover
 float32/float64 results, named vectors, empty input, and non-finite overflow. The
 Pyash lowerer and Rust CPU conformance cases exercise the published signature.
 
-### Stage 4 — Vector maximum reduction
+### Stage 4 — Vector maximum reduction (implemented)
 
-Return the greatest value in a non-empty vector. This is useful by itself and supplies
-the stable offset for softmax. Keep `argmax` (returning an index) as a separate follow-up
-unless the first attention example demonstrates that it is needed.
+The `gjat bwit` compound is the operation verb because the reference dictionary has no
+conflicting verb sense for maximum. Return the greatest finite value of a non-empty
+float32/float64 vector; retain the first lane on ties. This is a value reduction, not
+`argmax`, and supplies the stable offset for softmax. CPU and live GPU conformance cover
+inline and named vectors.
 
 ### Stage 5 — Stable softmax
 

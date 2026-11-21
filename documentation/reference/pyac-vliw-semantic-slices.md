@@ -121,6 +121,9 @@ not the semantic oracle.
 
 `lowerSentence` encodes float32/float64 vector scale and addition using the
 existing `multiply`/`plus` words, and sum reduction using `tfo2t` (`0xBC8A`).
+Maximum reduction uses the existing two-word compound `gjat bwit`
+(`0xA9B2 0xA831`) as an operation verb; its result is the greatest scalar value,
+not an index.
 The shared Rust runtime supports inline and uniquely resolved preceding named
 vectors, indexed continuation, 1-16 lanes, finite-value checks, same-width
 addition, scalar scaling, and ascending-lane sum. Pyash-built conformance cases

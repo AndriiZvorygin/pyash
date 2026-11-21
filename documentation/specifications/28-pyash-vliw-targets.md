@@ -222,7 +222,7 @@ operation error. Rust CPU and native Vulkan enable `shader-f64`; WGSL/WebGPU
 omits it, so there float32 is supported and float64 is not. Implementations
 MUST preserve the specified operation order and precision.
 
-## 11. Float-vector scale, addition, and sum
+## 11. Float-vector operations
 
 The shared Rust runtime accepts these Pyash forms (including preceding named
 float vectors):
@@ -240,8 +240,19 @@ vector in ascending lane order at its precision and returns a scalar of that
 type. Results preserve vector precision; non-finite inputs/results, empty
 sums, incompatible types, and unequal widths are errors. Vectors may span
 indexed codelets and have 1-16 lanes. Preceding named vectors must resolve
-uniquely. Rust CPU/native Vulkan support float32 and float64; WGSL/WebGPU
-supports float32 only.
+uniquely. CPU/native Vulkan support float32/float64; WGSL supports float32.
+
+The existing compound `gjat bwit` (`0xA9B2 0xA831`, magnitude + boundary) is
+also an operation verb for maximum reduction:
+
+```pyash
+ob ve float32 1 2 3 be gjat bwit do
+```
+
+It returns the greatest finite lane as a scalar of the input precision. It
+requires 1-16 lanes; ties retain the first lane. This returns a value, not an
+index (`argmax`). Rust CPU/native Vulkan support float32/float64; WGSL supports
+float32.
 
 ## 12. Exact-match count (`pluk tlas`)
 

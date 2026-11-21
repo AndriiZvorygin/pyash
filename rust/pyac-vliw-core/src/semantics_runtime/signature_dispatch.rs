@@ -2,7 +2,7 @@ use super::canonical_signature::{
     SignatureView, TYPE_BOOLEAN, TYPE_CLAUSE, TYPE_NAME, TYPE_NAME_NUMBER, TYPE_QUOTE_TAG,
     case_type, has_cases, signature, token_at, token_boundary, verb_is,
 };
-use super::iwsp_vector_ops::SUM_VERB;
+use super::iwsp_vector_ops::{MAXIMUM_VERB_FIRST, MAXIMUM_VERB_SECOND, SUM_VERB};
 use super::numeric::quote_header;
 use super::pluk_tlas::{PLUK, TLAS};
 use super::scalar_product::{PRODUCE_WORD, SCALAR_WORD};
@@ -33,6 +33,7 @@ pub(super) const ROUTE_BOOLEAN_LITERAL: u32 = 0x10c;
 pub(super) const ROUTE_LITERAL: u32 = 0x10d;
 pub(super) const ROUTE_VECTOR_FLOAT_ARITHMETIC: u32 = 0x10e;
 pub(super) const ROUTE_VECTOR_SUM: u32 = 0x10f;
+pub(super) const ROUTE_VECTOR_MAXIMUM: u32 = 0x110;
 
 const VERB_PLUK_TLAS: u32 = 1;
 const VERB_SCALAR_PRODUCT: u32 = 2;
@@ -44,11 +45,22 @@ const VERB_BOOLEAN_COMPOSITION: u32 = 7;
 const VERB_BOOLEAN_LITERAL: u32 = 8;
 const VERB_LITERAL: u32 = 9;
 const VERB_VECTOR_SUM: u32 = 10;
+const VERB_VECTOR_MAXIMUM: u32 = 11;
 const VERB_UNSUPPORTED: u32 = 0;
 
 fn classify_verb(signature: &SignatureView, words: &[u32], start: usize, group_len: usize) -> u32 {
     if verb_is(signature, words, start, group_len, PLUK, Some(TLAS)) {
         return VERB_PLUK_TLAS;
+    }
+    if verb_is(
+        signature,
+        words,
+        start,
+        group_len,
+        MAXIMUM_VERB_FIRST,
+        Some(MAXIMUM_VERB_SECOND),
+    ) {
+        return VERB_VECTOR_MAXIMUM;
     }
     if verb_is(
         signature,
@@ -283,6 +295,15 @@ pub(super) fn select_signature_route(
                 ) =>
         {
             Ok(ROUTE_VECTOR_SUM)
+        }
+        VERB_VECTOR_MAXIMUM
+            if signature.case_count == 1
+                && matches!(
+                    case_type(&signature, ACCUSATIVE),
+                    Some(TYPE_VECTOR_FLOAT32) | Some(TYPE_VECTOR_FLOAT64) | Some(TYPE_NAME)
+                ) =>
+        {
+            Ok(ROUTE_VECTOR_MAXIMUM)
         }
         VERB_LITERAL => literal_route(&signature, group_len),
         _ => Err(ERROR_UNSUPPORTED),
