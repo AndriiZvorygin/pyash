@@ -47,7 +47,7 @@ import {
   syncZaiCodexModelCatalog
 } from "../program/runtime/zai_coding_plan.mjs";
 import { requestCodingDutyHub, resolveCodingDutyHub } from "../program/agent/coding_duty_client.mjs";
-import { createSaddleTerminalUi } from "../program/agent/coding_saddle_tui.mjs";
+import { createSaddleResizeRedrawHandler, createSaddleTerminalUi } from "../program/agent/coding_saddle_tui.mjs";
 import { createCodingSaddleTrace } from "../program/agent/coding_saddle_trace.mjs";
 import { registerArtifactRun } from "../program/library/artifact_store_lock.mjs";
 import { rotateWorldNewspapers } from "../program/agent/newspaper_retention.mjs";
@@ -814,7 +814,10 @@ function formatSaddleContextPressure(pressure = {}) {
 function restoreActiveSaddleUi() {
   if (process.stdin.isTTY && process.stdin.isRaw) process.stdin.setRawMode(false);
   if (process.stdin.isTTY) process.stdin.pause();
-  if (activeSaddleResizeHandler) process.stdout.off("resize", activeSaddleResizeHandler);
+  if (activeSaddleResizeHandler) {
+    process.stdout.off("resize", activeSaddleResizeHandler);
+    activeSaddleResizeHandler.cancel();
+  }
   activeSaddleResizeHandler = null;
   if (!activeSaddleOutputFailed) activeSaddleUi?.exit();
   activeSaddleUi = null;
@@ -2094,7 +2097,7 @@ async function main() {
   process.stdin.resume();
   process.on("SIGINT", () => { shutdown().catch(() => {}); });
   process.on("SIGTERM", () => { shutdown().catch(() => {}); });
-  activeSaddleResizeHandler = () => saddleUi.draw();
+  activeSaddleResizeHandler = createSaddleResizeRedrawHandler(() => saddleUi.draw());
   process.stdout.on("resize", activeSaddleResizeHandler);
 
   await showStatus();

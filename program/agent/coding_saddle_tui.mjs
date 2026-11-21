@@ -30,6 +30,24 @@ const ANSI = {
   toolOther: "\u001b[35m"
 };
 
+export function createSaddleResizeRedrawHandler(draw, { delayMs = 40 } = {}) {
+  if (typeof draw !== "function") throw new TypeError("resize redraw requires a draw function");
+  const delay = Math.max(0, Number(delayMs) || 0);
+  let timer = null;
+  const handler = () => {
+    if (timer !== null) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null;
+      draw();
+    }, delay);
+  };
+  handler.cancel = () => {
+    if (timer !== null) clearTimeout(timer);
+    timer = null;
+  };
+  return handler;
+}
+
 export function stripTerminalControlSequences(value = "") {
   return String(value ?? "")
     .replace(/\u001b(?:\[[0-?]*[ -/]*[@-~]|\][^\u0007]*(?:\u0007|\u001b\\)|[@-_])/gu, "")

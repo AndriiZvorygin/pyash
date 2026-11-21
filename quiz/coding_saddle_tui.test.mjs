@@ -5,6 +5,7 @@ import { EventEmitter } from "node:events";
 import { renderSaddleSessionHistory } from "../command/pyash_saddle.mjs";
 import {
   createSaddleTerminalUi,
+  createSaddleResizeRedrawHandler,
   renderSaddleMarkdown,
   stripTerminalControlSequences
 } from "../program/agent/coding_saddle_tui.mjs";
@@ -158,6 +159,35 @@ test("coding saddle wraps at an exact-width word boundary without clipping its l
   const lines = renderSaddleMarkdown(`${fullWidthWord} next`, { width: 20, color: false });
   assert.deepEqual(lines, [fullWidthWord, "next"]);
   assert.ok(lines.every((line) => line.length <= 20));
+});
+
+test("coding saddle coalesces tmux resize bursts and redraws at the settled width", async () => {
+  const output = new EventEmitter();
+  output.columns = 80;
+  const redraws = [];
+  const onResize = createSaddleResizeRedrawHandler(() => redraws.push(output.columns), { delayMs: 10 });
+  output.on("resize", onResize);
+
+  output.columns = 44;
+  output.emit("resize");
+  output.columns = 37;
+  output.emit("resize");
+  output.columns = 52;
+  output.emit("resize");
+  await new Promise((resolve) => setTimeout(resolve, 25));
+
+  assert.deepEqual(redraws, [52]);
+  output.off("resize", onResize);
+  onResize.cancel();
+});
+
+test("coding saddle cancels a pending resize redraw during shutdown", async () => {
+  const redraws = [];
+  const onResize = createSaddleResizeRedrawHandler(() => redraws.push("draw"), { delayMs: 10 });
+  onResize();
+  onResize.cancel();
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  assert.deepEqual(redraws, []);
 });
 
 test("coding saddle screen keeps progress fixed, scrolls conversation, resizes, and restores terminal", () => {
