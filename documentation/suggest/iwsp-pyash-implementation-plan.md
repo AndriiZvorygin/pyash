@@ -717,6 +717,26 @@ Runnable fixtures are `examples/pyash/iwsp-linear-scorer-v1.pya` and
 the VLIW verification ledger. This is the working floor; it is not a transformer or
 an integrated candidate-search system.
 
+Typed float32 and float64 vector quotes and dot products already work. The gap below
+is support for these types in additional operations: current elementwise VLIW vector
+arithmetic accepts unsigned `ve num` vectors only. The following table records the
+candidate sentence forms for the next four primitives; it does not claim they already
+lower or execute:
+
+| Primitive | Candidate Pyash sentence | Result and status |
+|---|---|---|
+| Vector scale | `ob ve float32 1 2 3 to num 0.5 be multiply do` | Elementwise scalar multiplication; returns a float32 vector. Existing `multiply` surface, extended to typed float vectors. |
+| Vector addition | `ob ve float32 1 2 3 to ve float32 4 5 6 be plus do` | Equal-width elementwise addition; returns a float32 vector. Existing `plus` surface, extended to typed float vectors. |
+| Sum reduction | `ob ve float32 1 2 3 be tfo2t do` | Reduces to a scalar of the input type. `tfo2t` is the recorded Pyash link for the sum action; VLIW reduction is new. |
+| Maximum reduction | `ob ve float32 1 2 3 be maximum do` | Reduces to the greatest scalar value. Candidate operation wording only: the current `maximum` link names the result, so confirm its verb use with the vocabulary workflow. |
+
+Use `float64` in place of `float32` for the corresponding typed form where the target
+supports it; the existing WGSL/WebGPU target supports float32 but not float64. In the
+arithmetic rows, `to` carries the right operand, following the existing vector
+arithmetic grammar. Each operation returns its result record (`su name result`); named
+vector-output binding is not part of these candidate forms. The existing dot product
+has its separate optional indexed `to name <vector> at num <lane>` destination.
+
 ### Stage 1 — Vector scale
 
 Multiply a vector by a scalar and return a vector of the same width and element type.
