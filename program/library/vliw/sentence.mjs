@@ -531,7 +531,8 @@ function wordName(word, role) {
   if (word === wordForEntry("multiplicative_case_")) return "fromindex";
   if (word === wordForEntry("toindex_")) return "toindex";
   if (ROLE_BY_WORD.has(word)) return ROLE_BY_WORD.get(word);
-  if (TYPE_SURFACE_BY_WORD.has(word)) return TYPE_SURFACE_BY_WORD.get(word);
+  // The vector HNUC is both a type marker and a verb; verbs keep their lexical spelling.
+  if (role !== "verb" && TYPE_SURFACE_BY_WORD.has(word)) return TYPE_SURFACE_BY_WORD.get(word);
   if (role === "verb" && OPERATOR_SURFACE_BY_WORD.has(word)) return OPERATOR_SURFACE_BY_WORD.get(word);
   const entry = ENTRIES_BY_HNUC.get(word);
   if (entry?.en && !entry.en.endsWith("_")) return entry.en;

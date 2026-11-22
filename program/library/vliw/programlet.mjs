@@ -363,7 +363,11 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
       fail("Pyash programlet final invocation must call a defined ceremony", { be: invocation.be });
     }
     validateProgramletInputCount(invocation, invocation.be);
-    if (!outputType(invocation) || outputType(invocation) !== signatures.get(invocation.be)) {
+    const invocationOutputType = outputType(invocation);
+    if (!invocationOutputType) {
+      fail("Pyash programlet invocation requires one typed bool or num output name, or another supported float output type");
+    }
+    if (invocationOutputType !== signatures.get(invocation.be)) {
       fail("Pyash programlet invocation output type must match its ceremony");
     }
   }
