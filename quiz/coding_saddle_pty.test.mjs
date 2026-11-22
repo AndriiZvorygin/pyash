@@ -518,6 +518,11 @@ test("saddle CLI preserves a visible Unicode draft, switches Ollama models, and 
     await assert.rejects(fs.access(path.join(projectRoot, "magaiize")), cleanupTranscript.slice(-10000));
 
     const cleanTranscript = stripTerminalControlSequences(transcript);
+    assert.ok(cleanTranscript.includes(projectRoot), "the active project directory must be visible in the terminal status");
+    assert.doesNotMatch(cleanTranscript, /--- untracked:|^diff --git|^@@ /mu,
+      "automatic worktree review must not print diff contents at the end of a turn");
+    assert.doesNotMatch(cleanTranscript, /artifacts\/session\/turn-000077-pty-test\.pya|SADDLE_SESSION_TRACE_MUST_NOT_BE_DUMPED/u,
+      "automatic worktree review must omit the generated session trace path and contents");
     assert.match(cleanTranscript, new RegExp(`model: ${secondModel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
     assert.doesNotMatch(cleanTranscript, /command defective: status=1|mind_ollama_runner: missing request payload|EPIPE/u);
     assert.ok(submissions.some((payload) => payload.model === firstModel), "the initial Ollama model must reach Housekeeper");

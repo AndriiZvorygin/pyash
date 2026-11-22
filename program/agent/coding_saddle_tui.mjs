@@ -316,12 +316,16 @@ function footerHelpLines(width) {
 }
 
 function statusDisplayLines(value, width, height, usage = "") {
-  const compact = String(value || "starting...")
-    .split(" | ")
-    .filter((part) => !part.startsWith("cwd: "))
-    .join("  ·  ");
+  const parts = String(value || "starting...").split(" | ");
+  const project = parts.find((part) => part.startsWith("cwd: "));
+  const compact = parts.filter((part) => !part.startsWith("cwd: ")).join("  ·  ");
   const maxRows = Math.max(1, Math.min(5, height - 6));
-  const lines = wrapPlainLine(compact, width).slice(0, Math.min(3, maxRows));
+  const lines = project
+    ? wrapPlainLine(`project: ${project.slice("cwd: ".length)}`, width).slice(0, maxRows)
+    : [];
+  if (lines.length < maxRows) {
+    lines.push(...wrapPlainLine(compact, width).slice(0, Math.min(3, maxRows - lines.length)));
+  }
   if (usage && lines.length < maxRows) {
     lines.push(...wrapPlainLine(usage, width).slice(0, maxRows - lines.length));
   }

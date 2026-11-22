@@ -1989,11 +1989,11 @@ async function main() {
       sessionTurnId = String(result?.accordingto?.text ?? "");
       const text = result?.ob?.text ?? result?.fromstate?.text ?? result?.value?.text ?? "";
       if (turn.worktreeReview) {
-        writeLine("worktree review · inspect this before accepting or committing");
+        writeLine("worktree summary · changed paths only; inspect details with /status or Bash when needed");
         writeLine(turn.worktreeReview);
       } else if (turn.assessment.required && turn.assessment.changeTools?.length) {
         const detail = formatSaddleWorktreeReviewFailure(turn.worktreeReviewError);
-        writeLine(`[worktree review unavailable] ${detail}`);
+        writeLine(`[worktree summary unavailable] ${detail}`);
       }
       const finalText = String(text).trim() || "(no response text)";
       completedAssistantResponseText = finalText;

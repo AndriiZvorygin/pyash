@@ -5,6 +5,8 @@
   routing, and operations.
 - `documentation/design.md` — architecture overview and module layout.
 - `documentation/reference.md` — how to run the REPL, traces, and helper scripts.
+- `documentation/reference/pyash-coding-saddle.md` — terminal and web coding saddle controls, state, and operation.
+- `documentation/runbooks/maintaining-coding-saddle.md` — source ownership, scenario tests, and change workflow for Saddle agents.
 - `documentation/state.md` — current scope, goals, and known edges.
 - `documentation/decisions.md` — recorded choices and trade-offs.
 - `documentation/quiz-plan.md` — quiz coverage, gaps, and how to run quizzes.

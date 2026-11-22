@@ -161,6 +161,20 @@ test("coding saddle wraps at an exact-width word boundary without clipping its l
   assert.ok(lines.every((line) => line.length <= 20));
 });
 
+test("coding saddle keeps the active project directory prominent in its status header", () => {
+  const writes = [];
+  const ui = createSaddleTerminalUi({
+    output: { columns: 80, rows: 16, isTTY: true, write(value) { writes.push(String(value)); } },
+    color: false
+  });
+  ui.enter();
+  ui.setStatus("mind: mind | model: qwen3.5:9b | session: coding | cwd: /home/htaf/hpuk/biography | gpu queue: 0 | state: ready");
+
+  const screen = stripTerminalControlSequences(writes.at(-1));
+  assert.ok(screen.includes("project: /home/htaf/hpuk/biography"));
+  ui.exit();
+});
+
 test("coding saddle coalesces tmux resize bursts and redraws at the settled width", async () => {
   const output = new EventEmitter();
   output.columns = 80;
