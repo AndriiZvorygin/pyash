@@ -2,6 +2,12 @@
 
 This folder keeps per-language adapters separate so contributors can work in parallel.
 
+For vocabulary operations on the `dev-vocab` branch—including coverage counts,
+WordNet sweep status and recovery, decision review, new atoms/compounds, and
+publication—start with the [dev-vocab operations guide](../../../documentation/runbooks/dev-vocab-operations.md).
+This README is the technical reference for translation adapters, lexical data,
+and the implementation contracts those operations use.
+
 Pattern:
 - `<language>.mjs` exports a line-to-sentence mapper (e.g., `englishLineToSentence`), used as `toPyash`.
 - Add Pyash → target language logic by exporting a sentence formatter (e.g., `sentenceToEnglish`), used as `fromPyash`.

@@ -9,6 +9,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 - Output formatting sits in `program/beautiful.mjs`; Ollama network I/O is in `program/motor/ollama.mjs`.
 - Quizzes are under `quiz/*.test.mjs`; keep helpers near the code they cover.
 - Docs: `documentation/specifications/00-index.md` is the normative spec index (start there); `documentation/specifications/01-sentence-and-grammar.md` and `02-core-execution.md` define the sentence model and dispatch contract. `documentation/pyac.txt` is the broader spec, `documentation/pyash.md` the design goals, `documentation/compositional-cases.md` the case grid. `program/configure/workplace.json` is example data/config; keep secrets out of the repo.
+- Vocabulary work (atoms, compounds, WordNet links, Chinese links, and their sweeps) belongs on the `dev-vocab` branch. Verify the worktree and branch before local or SSH work; do not make vocabulary changes on `dev` or `dev-vliw-backend`. Start with [the dev-vocab operations guide](documentation/runbooks/dev-vocab-operations.md), which is written as the end-to-end agent procedure.
 - Ceremonies (`def...prah`) have speakable, multi-word names; bodies run in sandpits during invocation, and `this`/`ret` flow updates the caller’s evoke/targets and records sandpit traces.
 
 ## Build, Quiz, and Development Commands
