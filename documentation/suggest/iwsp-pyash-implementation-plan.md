@@ -726,7 +726,7 @@ Pyash-to-VLIW-to-Rust path. The following table tracks the first four operations
 | Vector scale | `ob ve float32 1 2 3 to num 0.5 be multiply do` | Implemented: elementwise scalar multiplication; returns the input precision and width. |
 | Vector addition | `ob ve float32 1 2 3 to ve float32 4 5 6 be plus do` | Implemented: equal-width, same-precision addition; no broadcasting. |
 | Sum reduction | `ob ve float32 1 2 3 be tfo2t do` | Implemented: non-empty lane-ordered sum returning a scalar of the input precision; `tfo2t` HNUC `0xBC8A`. |
-| Maximum reduction | `ob ve float32 1 2 3 be maximum do` | Pending: maximum currently links to a result noun/compound, not an approved action verb signature. |
+| Maximum reduction | `ob ve float32 1 2 3 be gjat bwit do` | Implemented: existing maximum compound used as an operation verb; no conflicting verb sense. Returns the greatest scalar, keeping the first lane on ties. |
 
 Use `float64` in place of `float32` for the corresponding typed form where the target
 supports it; the existing WGSL/WebGPU target supports float32 but not float64. In the
@@ -753,11 +753,13 @@ Reduce non-empty vectors in ascending lane order at input precision. Tests cover
 float32/float64 results, named vectors, empty input, and non-finite overflow. The
 Pyash lowerer and Rust CPU conformance cases exercise the published signature.
 
-### Stage 4 — Vector maximum reduction
+### Stage 4 — Vector maximum reduction (implemented)
 
-Return the greatest value in a non-empty vector. This is useful by itself and supplies
-the stable offset for softmax. Keep `argmax` (returning an index) as a separate follow-up
-unless the first attention example demonstrates that it is needed.
+The `gjat bwit` compound is the operation verb because the reference dictionary has no
+conflicting verb sense for maximum. Return the greatest finite value of a non-empty
+float32/float64 vector; retain the first lane on ties. This is a value reduction, not
+`argmax`, and supplies the stable offset for softmax. CPU and live GPU conformance cover
+inline and named vectors.
 
 ### Stage 5 — Stable softmax
 
@@ -1138,7 +1140,7 @@ partial mappings and the GPU compound review note from A.7.
 | Tensor | `su name weights be map def`<br>`  su name shape ob ve num 2 3 ya`<br>`  su name dtype ob text "float32" ya`<br>`  su name values ob ve num ... ya`<br>`prah` | Represent a tensor as a map with explicit shape, element type, and flattened values. This is a proposed authoring/data contract; the current `ve` literal is rank-1 and the tensor map is not yet a VLIW value type. Specify dimension order and bounds before implementation. Lowering should store values contiguously rather than dispatching one map operation per element. |
 | Matrix multiplication | `from name left by name right to name product be matrix multiplication do` | Multiply compatible matrices, with shape checks and a specified storage order. New operation; distinct from `kl6m psas` (dot product). |
 | Dot product / sum reduction | `ob ve float32 ... by ve float32 ... be kl6m psas do` | `kl6m psas` is the catalog-linked Pyash compound glossed “dot product.” The shared Rust VLIW operation accepts equal-width float32/float64 vectors and returns one scalar; general sum reduction remains a separate operation. |
-| Exponential normalization (softmax) | `from name logits to name probabilities be exponential normalization do` | Produce normalized exponential weights from a numeric vector. Define stable max-subtraction, accumulation precision, and behavior for empty or non-finite inputs in the operation contract. New operation. |
+| Exponential normalization (softmax) | Pyash ceremony: maximum → vector subtract → exponential → sum → `dvis` | Implemented as a composition in the Rust CPU programlet runtime, not a separate softmax opcode. Generic `float`/`vec float` formals preserve float32 or float64. See the executable-source fixture and the normative contract in specification 28; GPU/WGSL conformance remains open. |
 | Vector normalization | `from name values with name normalization options to name normalized be vector normalization do` | Normalize a vector under an explicitly selected norm (for example L1 or L2); options should include epsilon/zero-vector behavior. Distinct from exponential normalization. New operation. |
 | Maximum position (argmax) | `from name scores to name selected index be maximum position do` | Return the index of the greatest element. Define ties as the lowest index for deterministic results. New operation; output is an index, not the maximum value. |
 | Activation function | `from name preactivation by name relu to name activated be vector map do` | Reuse the existing vector-map sentence surface to apply a named scalar function elementwise. `vector map` currently runs through the JS interpreter; `relu` here is illustrative and needs a registered scalar mapper. A fused GPU activation is a later lowering/optimization, not a different meaning. |
@@ -1151,23 +1153,22 @@ partial mappings and the GPU compound review note from A.7.
 | GPU device concept | `su name device profile be map def`<br>`  su name kind ob text "graphics processing unit" ya`<br>`  su name backend ob text "wgpu" ya`<br>`prah` | A device/profile description anchored to the project-local GPU concept. It identifies a compute target; it does not invoke Housekeeper and does not add a `gpu` verb. Final device identity/capability fields belong in the target contract. |
 | Independent parallel sections | `su name first be myocpfun def`<br>`... section body ...`<br>`su name first be myocpfun prah` | This section form already exists in the VLIW pack surface for independent duties. It is the current Pyash-level way to mark section boundaries; runtime completion order may differ from source order. It does not yet express a GPU workgroup or a barrier inside a section. |
 
-The proposed action spellings in this table use the English compound labels
-from A.6-A.8 to make the case roles readable. They are placeholders until
-the normal Kwon/WordNet/SUMO and vocabulary workflow chooses the actual Pyash
-atoms or compounds and confirms their HNUCs. In particular, do not turn the
-examples into runnable `.pya` examples until those names have accepted
-vocabulary and registered dispatch signatures.
+For unimplemented rows, the action spellings are placeholders until the normal
+Kwon/WordNet/SUMO and vocabulary workflow chooses Pyash atoms or compounds and
+confirms their HNUCs. Stable softmax is the exception: its composition uses
+existing vocabulary and is source-compiled in
+[`quiz/fixtures/vliw-programlet-vector-weight.pya`](../../quiz/fixtures/vliw-programlet-vector-weight.pya).
 
 Implementation boundary from the current source audit: integer, float32, and
 float64 vector literals run through the shared Rust CPU/GPU interpreter; JS
 `vector map`, JS `produce` (dot product), and the `neuron` operation also exist;
 independent `myocpfun` sections exist in the VLIW pack format. Matrix/tensor values,
-matrix multiplication, softmax, argmax,
-GPU-resident kernel launch, workgroup topology, and group synchronization
-are not thereby implemented in the shared Rust VLIW CPU/GPU runtime. The
-signatures above define candidate Pyash surfaces for the IWSP/transformer
-work; each still needs spec, vocabulary, dispatch, CPU semantics, and GPU
-conformance coverage before it is considered supported.
+matrix multiplication, standalone argmax, GPU-resident kernel launch, workgroup
+topology, and group synchronization are not thereby implemented in the shared
+Rust VLIW CPU/GPU runtime. Stable softmax is CPU-tested as a Pyash composition;
+its newly added vector-valued programlet path still needs GPU/WGSL conformance.
+Other candidate signatures still need vocabulary, dispatch, CPU semantics, and
+GPU coverage before they are considered supported.
 
 ### A.10 IWSP task declaration fields and vocabulary links
 

@@ -40,6 +40,9 @@ const PURE_BUILTIN_VERBS = new Set([
   "multiply",
   "divide",
   "exponential",
+  "tfo2t",
+  "gjat bwit",
+  "dvis",
   "invert",
   "xor"
 ]);
@@ -104,16 +107,31 @@ function branchDepth(sentence) {
 
 function outputType(sentence) {
   const types = sentence?.to?.nameTypeWords ?? [];
-  if (!sentence?.to?.name || types.length !== 1) return null;
+  if (!sentence?.to?.name) return null;
+  if (types.length === 2 && types[0] === "vec" && types[1] === "float") return "vec-float";
+  if (types.length === 1 && types[0] === "float") return "float";
+  if (types.length !== 1) return null;
   if (["bool", "boolean"].includes(types[0])) return "bool";
   if (["num", "number"].includes(types[0])) return "num";
   return null;
 }
 
 function scalarInputType(value) {
+  if (value?.ve && ["float32", "float64"].includes(value.ve.type)
+    && Array.isArray(value.ve.values) && value.ve.values.length > 0
+    && value.ve.values.every((item) => Number.isFinite(item))) return "vec-float";
   if (Number.isInteger(value?.num) && value.num >= 0 && value.num <= 0xffff) return "num";
   if (typeof value?.boolean === "boolean") return "bool";
   return null;
+}
+
+function programletInputType(value) {
+  const nameTypes = value?.nameTypeWords ?? [];
+  if (nameTypes.length === 2 && nameTypes[0] === "vec" && nameTypes[1] === "float") return "vec-float";
+  if (nameTypes.length === 1 && nameTypes[0] === "float") return "float";
+  if (nameTypes.length === 1 && ["num", "number"].includes(nameTypes[0])) return "num";
+  if (nameTypes.length === 1 && ["bool", "boolean"].includes(nameTypes[0])) return "bool";
+  return scalarInputType(value);
 }
 
 function programletInputFields(sentence) {
@@ -126,8 +144,8 @@ function validateProgramletInputs(sentence) {
     fail(`Pyash programlet ceremony ${sentence.su.name} exceeds ${MAX_PYASH_PROGRAMLET_ARGUMENTS} scalar input fields`);
   }
   for (const [role, value] of fields) {
-    if (!scalarInputType(value)) {
-      fail(`Pyash programlet ceremony ${sentence.su.name} only admits U16 numeric or boolean scalar input fields`, {
+    if (!programletInputType(value)) {
+      fail(`Pyash programlet ceremony ${sentence.su.name} only admits U16 numeric or boolean scalar input fields and typed float vectors`, {
         role
       });
     }
@@ -188,7 +206,7 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
     if (sentence?.mood !== "def" || sentence.be !== "ceremony") continue;
     const type = outputType(sentence);
     if (!type) {
-      fail(`Pyash programlet ceremony ${sentence.su.name} must declare one bool or num output name`);
+      fail(`Pyash programlet ceremony ${sentence.su.name} must declare one supported typed output name`);
     }
     validateProgramletInputs(sentence);
     signatures.set(sentence.su.name, type);
@@ -346,7 +364,7 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
     }
     validateProgramletInputCount(invocation, invocation.be);
     if (!outputType(invocation) || outputType(invocation) !== signatures.get(invocation.be)) {
-      fail("Pyash programlet invocation requires one typed bool or num output name");
+      fail("Pyash programlet invocation output type must match its ceremony");
     }
   }
   const visiting = new Set();
@@ -580,6 +598,10 @@ export function decodePyashProgramSections(pack) {
 
 function defaultOutputFact(invocation) {
   const typeNames = invocation.to?.nameTypeWords ?? [];
+  if (typeNames.length === 2 && typeNames[0] === "vec" && typeNames[1] === "float") {
+    return { be: "vector", ob: { ve: { type: "float32", values: [] } } };
+  }
+  if (typeNames.includes("float")) return { be: "number", ob: { num: 0 } };
   if (typeNames.includes("bool") || typeNames.includes("boolean")) {
     return { be: "bool", ob: { boolean: false } };
   }

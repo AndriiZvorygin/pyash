@@ -1,6 +1,8 @@
 use super::*;
 
 const SUM_VERB: u32 = 0xbc8a;
+const MAXIMUM_VERB_FIRST: u32 = 0xa9b2;
+const MAXIMUM_VERB_SECOND: u32 = 0xa831;
 
 fn append_sentence(tokens: &[u32], boundaries: &[usize]) -> std::vec::Vec<u32> {
     let chunks = tokens.chunks(CODELET_WORDS - 1);
@@ -127,6 +129,23 @@ fn sum_f32(values: &[f32]) -> std::vec::Vec<u32> {
     append_sentence(&tokens, &[accusative, accusative + 2])
 }
 
+fn maximum_f32(values: &[f32]) -> std::vec::Vec<u32> {
+    let mut tokens = f32_vector(values);
+    let accusative = tokens.len();
+    tokens.push(ACCUSATIVE);
+    tokens.extend([MAXIMUM_VERB_FIRST, MAXIMUM_VERB_SECOND, DEONTIC]);
+    append_sentence(&tokens, &[accusative, accusative + 3])
+}
+
+#[cfg(feature = "shader-f64")]
+fn maximum_f64(values: &[f64]) -> std::vec::Vec<u32> {
+    let mut tokens = f64_vector(values);
+    let accusative = tokens.len();
+    tokens.push(ACCUSATIVE);
+    tokens.extend([MAXIMUM_VERB_FIRST, MAXIMUM_VERB_SECOND, DEONTIC]);
+    append_sentence(&tokens, &[accusative, accusative + 3])
+}
+
 fn named_f32(name: u32, values: &[f32]) -> std::vec::Vec<u32> {
     let mut tokens = std::vec![name, NOMINATIVE];
     tokens.extend(f32_vector(values));
@@ -185,6 +204,7 @@ fn sums_float32_lanes_in_order_and_rejects_empty_vectors() {
     assert_eq!(result.error, 0, "{result:?}");
     assert_eq!(result.value_kind, VALUE_FLOAT32);
     assert_eq!(result.values[0], 6.0f32.to_bits());
+
     assert_eq!(
         result.consumed_codelets as usize,
         words.len() / CODELET_WORDS
@@ -200,6 +220,26 @@ fn sums_float32_lanes_in_order_and_rejects_empty_vectors() {
     assert_eq!(
         interpret_group(&overflow, 0, overflow.len() / CODELET_WORDS).error,
         ERROR_FLOAT_DOMAIN
+    );
+}
+
+#[test]
+fn maximum_reduces_float32_and_rejects_empty_vectors() {
+    let words = maximum_f32(&[-4.0, 2.5, 2.5, -1.0]);
+    let result = interpret_group(&words, 0, words.len() / CODELET_WORDS);
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.value_kind, VALUE_FLOAT32);
+    assert_eq!(result.values[0], 2.5f32.to_bits());
+
+    let signed_zero = maximum_f32(&[-0.0, 0.0]);
+    let result = interpret_group(&signed_zero, 0, signed_zero.len() / CODELET_WORDS);
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.values[0], (-0.0f32).to_bits());
+
+    let empty = maximum_f32(&[]);
+    assert_eq!(
+        interpret_group(&empty, 0, empty.len() / CODELET_WORDS).error,
+        ERROR_VECTOR_WIDTH
     );
 }
 
@@ -244,6 +284,22 @@ fn adds_and_sums_preceding_named_vectors_and_scales_a_named_vector() {
     assert_eq!(result.error, 0, "{result:?}");
     assert_eq!(result.value_kind, VALUE_FLOAT32);
     assert_eq!(result.values[0], 6.0f32.to_bits());
+
+    let tokens = std::vec![
+        NAME_TYPE,
+        left_name,
+        ACCUSATIVE,
+        MAXIMUM_VERB_FIRST,
+        MAXIMUM_VERB_SECOND,
+        DEONTIC,
+    ];
+    let operation = append_sentence(&tokens, &[2, 5]);
+    let start = words.len() / CODELET_WORDS;
+    words.extend(operation);
+    let result = interpret_group(&words, start, words.len() / CODELET_WORDS);
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.value_kind, VALUE_FLOAT32);
+    assert_eq!(result.values[0], 3.0f32.to_bits());
 }
 
 #[cfg(feature = "shader-f64")]
@@ -294,4 +350,12 @@ fn adds_and_sums_float64_vectors() {
         assert_eq!(result.values[lane * 2], bits as u32);
         assert_eq!(result.values[lane * 2 + 1], (bits >> 32) as u32);
     }
+
+    let words = maximum_f64(&[-3.0, 1.25, 0.75]);
+    let result = interpret_group(&words, 0, words.len() / CODELET_WORDS);
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.value_kind, VALUE_FLOAT64);
+    let bits = 1.25f64.to_bits();
+    assert_eq!(result.values[0], bits as u32);
+    assert_eq!(result.values[1], (bits >> 32) as u32);
 }

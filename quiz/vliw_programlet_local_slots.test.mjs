@@ -68,6 +68,47 @@ test("PyAC programlet keeps numeric variable markers and initializes each call f
   }
 });
 
+test("PyAC programlet signatures preserve floating-vector argument and return types", () => {
+  const source = [
+    "su name vector echo from name vec float input to name vec float answer be ceremony def",
+    "su name input ret",
+    "su name vector echo be ceremony prah"
+  ].join("\n");
+  const compiled = compilePyashProgramSource(source, {
+    invocation: "from ve float32 1 2 to name vec float answer be vector echo do"
+  });
+
+  assert.ok(compiled.byteLength > 0);
+  assert.deepEqual(compiled.sentences[0].from, {
+    name: "input",
+    nameTypeWords: ["vec", "float"]
+  });
+  assert.deepEqual(compiled.sentences[0].to, {
+    name: "answer",
+    nameTypeWords: ["vec", "float"]
+  });
+});
+
+test("PyAC source compiles a vector-weight ceremony from existing vector primitives", async () => {
+  const source = await fs.readFile(
+    path.resolve("quiz/fixtures/vliw-programlet-vector-weight.pya"),
+    "utf8"
+  );
+  const compiled = compilePyashProgramSource(source, {
+    invocation: "from ve float32 1 2 3 to name vec float answer be vector weight do"
+  });
+
+  assert.equal(compiled.sentences.length, 9);
+  assert.deepEqual(compiled.sentences[0].from.nameTypeWords, ["vec", "float"]);
+  assert.deepEqual(compiled.sentences[0].to.nameTypeWords, ["vec", "float"]);
+  assert.deepEqual(
+    compiled.sentences.slice(1, 6).map(({ be }) => be),
+    ["gjat bwit", "subtract", "exponential", "tfo2t", "dvis"]
+  );
+  assert.equal(compiled.sentences.at(-1).mood, "do");
+  assert.ok(compiled.byteLength > 0);
+});
+
 const constantSource = [
   "su name count once to name num answer be ceremony def",
   "exists su name limit ob num 5 as name permanently number be number ya",

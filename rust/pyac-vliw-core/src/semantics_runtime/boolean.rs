@@ -39,10 +39,10 @@ pub(super) fn evaluate_boolean_leaf_with_env(
     if matches!(sentence.mood, DEONTIC | CONDITIONAL) && sentence.verb_length == 1 {
         let comparator = array_at!(tokens, sentence.verb_start);
         if matches!(comparator, EQUALLY | TINY | GIANT) {
-            let left_field = sentence
-                .field(NOMINATIVE)
-                .or_else(|| sentence.field(ACCUSATIVE))
-                .ok_or(ERROR_MALFORMED)?;
+            let left_field = match sentence.field(NOMINATIVE) {
+                Some(field) => field,
+                None => sentence.field(ACCUSATIVE).ok_or(ERROR_MALFORMED)?,
+            };
             let right_field = sentence.field(SOURCE).ok_or(ERROR_MALFORMED)?;
             let mut left = ProgramletNumber::EMPTY;
             let left_end = left_field

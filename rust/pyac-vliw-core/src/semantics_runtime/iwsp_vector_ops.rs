@@ -1,8 +1,13 @@
+use super::float::is_finite_f32;
+#[cfg(feature = "shader-f64")]
+use super::float::is_finite_f64;
 use super::numeric::quote_header;
 use super::scalar_product::{Cursor, VectorOperand, read_operand};
 use super::*;
 
 pub(super) const SUM_VERB: u32 = 0xbc8a;
+pub(super) const MAXIMUM_VERB_FIRST: u32 = 0xa9b2;
+pub(super) const MAXIMUM_VERB_SECOND: u32 = 0xa831;
 
 fn read_scalar(cursor: &mut Cursor, words: &[u32], vector_kind: u32) -> Result<VectorOperand, u32> {
     let header_word = cursor.read(words, false).ok_or(ERROR_MALFORMED)?;
@@ -40,7 +45,7 @@ fn read_scalar(cursor: &mut Cursor, words: &[u32], vector_kind: u32) -> Result<V
             (6, 4) => f32::from_bits(payload[0] | (payload[1] << 16)),
             _ => return Err(ERROR_UNSUPPORTED),
         };
-        if !value.is_finite() {
+        if !is_finite_f32(value) {
             return Err(ERROR_FLOAT_DOMAIN);
         }
         result.values[0] = value.to_bits();
@@ -59,7 +64,7 @@ fn read_scalar(cursor: &mut Cursor, words: &[u32], vector_kind: u32) -> Result<V
                 }
                 _ => return Err(ERROR_UNSUPPORTED),
             };
-            if !value.is_finite() {
+            if !is_finite_f64(value) {
                 return Err(ERROR_FLOAT_DOMAIN);
             }
             let bits = value.to_bits();
@@ -298,6 +303,71 @@ pub(super) fn vector_sum_group(
         if bits & 0x7ff0_0000_0000_0000 == 0x7ff0_0000_0000_0000 {
             return CoreResult::failure(ERROR_FLOAT_DOMAIN, group_len as u32);
         }
+        CoreResult::scalar(
+            VALUE_FLOAT64,
+            bits as u32,
+            (bits >> 32) as u32,
+            group_len as u32,
+        )
+    }
+}
+
+pub(super) fn vector_maximum_group(
+    words: &[u32],
+    start: usize,
+    group_len: usize,
+    codelet_count: usize,
+) -> CoreResult {
+    let mut cursor = Cursor {
+        start,
+        codelet: start,
+        slot: 1,
+        end: start + group_len,
+    };
+    let vector = match read_operand(&mut cursor, words, start, group_len, codelet_count) {
+        Ok(value) => value,
+        Err(error) => return CoreResult::failure(error, group_len as u32),
+    };
+    if !matches!(vector.kind, VALUE_VECTOR_FLOAT32 | VALUE_VECTOR_FLOAT64)
+        || cursor.read(words, true) != Some(ACCUSATIVE)
+        || cursor.read(words, false) != Some(MAXIMUM_VERB_FIRST)
+        || cursor.read(words, false) != Some(MAXIMUM_VERB_SECOND)
+        || cursor.read(words, true) != Some(DEONTIC)
+        || !cursor.zero_tail(words)
+    {
+        return CoreResult::failure(ERROR_MALFORMED, group_len as u32);
+    }
+    if vector.length == 0 {
+        return CoreResult::failure(ERROR_VECTOR_WIDTH, group_len as u32);
+    }
+    if vector.kind == VALUE_VECTOR_FLOAT32 {
+        let mut maximum = f32::from_bits(vector.values[0]);
+        let mut lane = 1;
+        while lane < vector.length {
+            let value = f32::from_bits(vector.values[lane]);
+            if value > maximum {
+                maximum = value;
+            }
+            lane += 1;
+        }
+        return CoreResult::scalar(VALUE_FLOAT32, maximum.to_bits(), 0, group_len as u32);
+    }
+    #[cfg(not(feature = "shader-f64"))]
+    {
+        CoreResult::failure(ERROR_UNSUPPORTED, group_len as u32)
+    }
+    #[cfg(feature = "shader-f64")]
+    {
+        let mut maximum = f64::from_bits(vector_bits(&vector, 0));
+        let mut lane = 1;
+        while lane < vector.length {
+            let value = f64::from_bits(vector_bits(&vector, lane));
+            if value > maximum {
+                maximum = value;
+            }
+            lane += 1;
+        }
+        let bits = maximum.to_bits();
         CoreResult::scalar(
             VALUE_FLOAT64,
             bits as u32,

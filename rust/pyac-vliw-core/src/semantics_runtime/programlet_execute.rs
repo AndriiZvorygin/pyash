@@ -31,6 +31,7 @@ pub fn execute_numeric_programlet_at(
     symbol_words: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
     frames: &mut [ProgramletFrame; MAX_PROGRAMLET_CALL_DEPTH],
 ) -> CoreResult {
+    let mut routine_directory = ProgramletRoutineDirectory::EMPTY;
     let mut symbol_used = match initialize_numeric_programlet(
         words,
         base_codelet,
@@ -40,6 +41,7 @@ pub fn execute_numeric_programlet_at(
         sentence_boundaries,
         symbol_words,
         frames,
+        &mut routine_directory,
     ) {
         Ok(used) => used,
         Err(error) => return CoreResult::failure(error, 0),
@@ -145,6 +147,20 @@ pub fn execute_numeric_programlet_at(
             }
         } else if frame.state == 1
             && sentence.mood == DEONTIC
+            && is_programlet_vector_action(&sentence, sentence_words, symbol_words, frame)
+        {
+            frame.action_started = 1;
+            if let Err(error) = apply_programlet_vector_action(
+                &sentence,
+                sentence_words,
+                symbol_words,
+                &mut symbol_used,
+                frame,
+            ) {
+                return CoreResult::failure(error, steps);
+            }
+        } else if frame.state == 1
+            && sentence.mood == DEONTIC
             && sentence.verb_length == 1
             && matches!(
                 array_at!(sentence_words, sentence.verb_start),
@@ -185,6 +201,7 @@ pub fn execute_numeric_programlet_at(
                 sentence_words,
                 sentence_boundaries,
                 symbol_words,
+                &routine_directory,
                 &mut symbol_used,
                 frames,
                 frame_index,

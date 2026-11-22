@@ -1,6 +1,15 @@
 use super::numeric::{expected_index, find_quote, quote_header, word, zero_tail};
 use super::*;
 
+pub(super) fn is_finite_f32(value: f32) -> bool {
+    value.to_bits() & 0x7f80_0000 != 0x7f80_0000
+}
+
+#[cfg(feature = "shader-f64")]
+pub(super) fn is_finite_f64(value: f64) -> bool {
+    value.to_bits() & 0x7ff0_0000_0000_0000 != 0x7ff0_0000_0000_0000
+}
+
 pub(super) fn single_codelet(words: &[u32], codelet: usize) -> Option<CoreResult> {
     let offset = find_quote(words, codelet)?;
     let header_word = word(words, codelet, offset);

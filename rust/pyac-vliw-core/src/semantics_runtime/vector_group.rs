@@ -46,7 +46,11 @@ fn token_at(words: &[u32], start: usize, offset: usize, group_len: usize) -> Opt
     }
     let codelet = start + offset / (CODELET_WORDS - 1);
     let slot = offset % (CODELET_WORDS - 1) + 1;
-    (codelet * CODELET_WORDS + slot < words.len()).then(|| word(words, codelet, slot))
+    if codelet * CODELET_WORDS + slot < words.len() {
+        Some(word(words, codelet, slot))
+    } else {
+        None
+    }
 }
 
 fn vector_length(

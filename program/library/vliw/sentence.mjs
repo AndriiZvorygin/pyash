@@ -74,7 +74,9 @@ const TYPE_ENTRY_BY_SURFACE = Object.freeze({
   number: "number_",
   bool: "boolean_",
   boolean: "boolean_",
-  text: "text_"
+  text: "text_",
+  vec: "vector",
+  float: "float"
 });
 const OPERATOR_ENTRY_BY_SURFACE = Object.freeze({
   divide: "divisions",
@@ -89,7 +91,9 @@ const OPERATOR_SURFACE_BY_WORD = new Map(
 const TYPE_SURFACE_BY_WORD = new Map([
   [wordForEntry("number_"), "num"],
   [wordForEntry("boolean_"), "bool"],
-  [wordForEntry("text_"), "text"]
+  [wordForEntry("text_"), "text"],
+  [wordForEntry("vector"), "vec"],
+  [wordForEntry("float"), "float"]
 ]);
 
 function wordForEntry(english) {

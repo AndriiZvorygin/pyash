@@ -30,6 +30,9 @@ function isIwspFloatVectorOperation(sentence) {
   const left = sentence.ob;
   const isFloatVector = (value) => ["float32", "float64"].includes(value?.ve?.type);
   const isNamedVector = (value) => typeof value?.name === "string";
+  if (sentence.be === "gjat bwit") {
+    return isFloatVector(left) || isNamedVector(left);
+  }
   if (sentence.be === "tfo2t") {
     return isFloatVector(left) || isNamedVector(left);
   }

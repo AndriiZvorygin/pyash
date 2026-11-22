@@ -126,6 +126,9 @@ pub const VALUE_FIXED16: u32 = 10;
 pub const VALUE_VECTOR_FLOAT32: u32 = 11;
 pub const VALUE_VECTOR_FLOAT64: u32 = 12;
 pub const VALUE_FLOAT64: u32 = 13;
+const VALUE_FLOAT: u32 = 14;
+const VALUE_VECTOR_FLOAT: u32 = 15;
+const MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS: usize = 8;
 
 pub const ERROR_UNSUPPORTED: u32 = 1;
 pub const ERROR_DIVISION_BY_ZERO: u32 = 2;
@@ -139,6 +142,7 @@ pub const ERROR_PROGRAM_CAPACITY: u32 = 9;
 pub const ERROR_CALL_DEPTH: u32 = 10;
 pub const ERROR_FLOAT_DOMAIN: u32 = 11;
 pub const ERROR_FIXED16_DOMAIN: u32 = 12;
+pub const ERROR_DUPLICATE_SIGNATURE: u32 = 13;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProgramletSection {
@@ -235,6 +239,8 @@ const QUOTE_DENOTE: u32 = 0x001d;
 const NAME_TYPE: u32 = 0x225e;
 const NUMBER_TYPE: u32 = 0x327e;
 const BOOLEAN_TYPE: u32 = 0x538f;
+const VECTOR_TYPE: u32 = 0x2b73;
+const FLOAT_TYPE: u32 = 0xaa6c;
 const VARIABLE: u32 = 0xc8c4;
 const PERMANENTLY: u32 = 0x0b50;
 const CEREMONY: u32 = 0xe8c9;
@@ -256,6 +262,7 @@ pub struct NumericLocalSlot {
     pub name_offset: u32,
     pub name_length: u32,
     pub value: u32,
+    pub value_high: u32,
     pub kind: u32,
     pub value_kind: u32,
 }
@@ -265,102 +272,10 @@ impl NumericLocalSlot {
         name_offset: 0,
         name_length: 0,
         value: 0,
+        value_high: 0,
         kind: 0,
         value_kind: 0,
     };
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ProgramletArgument {
-    pub role: u32,
-    pub value: u32,
-    pub value_kind: u32,
-}
-
-impl ProgramletArgument {
-    pub const EMPTY: Self = Self {
-        role: 0,
-        value: 0,
-        value_kind: 0,
-    };
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ProgramletFrame {
-    pub slots: [NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
-    pub arguments: [ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
-    pub argument_count: u32,
-    pub routine_start: u32,
-    pub routine_end: u32,
-    pub program_counter: u32,
-    pub routine_name_offset: u32,
-    pub routine_name_length: u32,
-    pub return_name_offset: u32,
-    pub return_name_length: u32,
-    pub result_value: u32,
-    pub expected_kind: u32,
-    pub result_kind: u32,
-    pub state: u32,
-    pub action_started: u32,
-    pub has_returned: u32,
-    pub loop_active: u32,
-    pub loop_remaining: u32,
-    pub loop_end: u32,
-    pub loop_has_end: u32,
-}
-
-impl ProgramletFrame {
-    pub const EMPTY: Self = Self {
-        slots: [NumericLocalSlot::EMPTY; MAX_PROGRAMLET_LOCAL_SLOTS],
-        arguments: [ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS],
-        argument_count: 0,
-        routine_start: 0,
-        routine_end: 0,
-        program_counter: 0,
-        routine_name_offset: 0,
-        routine_name_length: 0,
-        return_name_offset: 0,
-        return_name_length: 0,
-        result_value: 0,
-        expected_kind: 0,
-        result_kind: 0,
-        state: 0,
-        action_started: 0,
-        has_returned: 0,
-        loop_active: 0,
-        loop_remaining: 0,
-        loop_end: 0,
-        loop_has_end: 0,
-    };
-}
-
-pub(crate) fn clear_programlet_frame(frame: &mut ProgramletFrame) {
-    let mut slot_index = 0;
-    while slot_index < frame.slots.len() {
-        array_put!(&mut frame.slots, slot_index, NumericLocalSlot::EMPTY);
-        slot_index += 1;
-    }
-    frame.arguments = [ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS];
-    frame.argument_count = 0;
-    frame.routine_start = 0;
-    frame.routine_end = 0;
-    frame.program_counter = 0;
-    frame.routine_name_offset = 0;
-    frame.routine_name_length = 0;
-    frame.return_name_offset = 0;
-    frame.return_name_length = 0;
-    frame.result_value = 0;
-    frame.expected_kind = 0;
-    frame.result_kind = 0;
-    frame.state = 0;
-    frame.action_started = 0;
-    frame.has_returned = 0;
-    frame.loop_active = 0;
-    frame.loop_remaining = 0;
-    frame.loop_end = 0;
-    frame.loop_has_end = 0;
 }
 
 #[derive(Clone, Copy)]
@@ -450,11 +365,16 @@ impl NameSpan {
 #[derive(Clone, Copy)]
 struct ProgramletNumber {
     bits: u32,
+    high: u32,
     kind: u32,
 }
 
 impl ProgramletNumber {
-    const EMPTY: Self = Self { bits: 0, kind: 0 };
+    const EMPTY: Self = Self {
+        bits: 0,
+        high: 0,
+        kind: 0,
+    };
 }
 
 #[path = "semantics_runtime/boolean.rs"]
@@ -483,6 +403,10 @@ mod pluk_tlas;
 mod programlet_actions;
 #[path = "semantics_runtime/programlet_branch.rs"]
 mod programlet_branch;
+#[path = "semantics_runtime/programlet_dispatch_index.rs"]
+mod programlet_dispatch_index;
+#[path = "semantics_runtime/programlet_dispatch_signature.rs"]
+mod programlet_dispatch_signature;
 #[path = "semantics_runtime/programlet_execute.rs"]
 mod programlet_execute;
 #[path = "semantics_runtime/programlet_execute_call.rs"]
@@ -495,12 +419,20 @@ mod programlet_execute_paragraph;
 mod programlet_execute_return;
 #[path = "semantics_runtime/programlet_execute_setup.rs"]
 mod programlet_execute_setup;
+#[path = "semantics_runtime/programlet_frame.rs"]
+mod programlet_frame;
+#[path = "semantics_runtime/programlet_numeric_types.rs"]
+mod programlet_numeric_types;
 #[path = "semantics_runtime/programlet_sections.rs"]
 mod programlet_sections;
 #[path = "semantics_runtime/programlet_symbols.rs"]
 mod programlet_symbols;
 #[path = "semantics_runtime/programlet_values.rs"]
 mod programlet_values;
+#[path = "semantics_runtime/programlet_vector_actions.rs"]
+mod programlet_vector_actions;
+#[path = "semantics_runtime/programlet_vector_values.rs"]
+mod programlet_vector_values;
 #[path = "semantics_runtime/scalar_product.rs"]
 mod scalar_product;
 #[path = "semantics_runtime/sentence.rs"]
@@ -527,28 +459,41 @@ use programlet_branch::{
     first_present_operand, programlet_branch, read_optional_programlet_number,
     unsigned_programlet_operand,
 };
+use programlet_dispatch_index::{
+    ProgramletRoutineDirectory, build_programlet_routine_directory, resolve_programlet_routine,
+};
 pub use programlet_execute::{execute_numeric_programlet, execute_numeric_programlet_at};
 use programlet_execute_call::execute_programlet_call;
 use programlet_execute_declare::declare_programlet_local;
 use programlet_execute_paragraph::close_programlet_paragraph;
 use programlet_execute_return::execute_programlet_return;
 use programlet_execute_setup::initialize_numeric_programlet;
+use programlet_frame::clear_programlet_frame;
+pub use programlet_frame::{ProgramletArgument, ProgramletFrame, ProgramletVectorSlot};
+use programlet_numeric_types::{
+    compare_programlet_numbers, number_kind_matches, programlet_type_matches,
+};
 pub use programlet_sections::{
     has_programlet_section_header, is_numeric_programlet, is_numeric_programlet_at,
     scan_numeric_programlet_sections,
 };
-use programlet_symbols::{
-    find_local_slot, find_programlet_routine, is_ceremony_definition, names_equal, store_name,
-};
+use programlet_symbols::{find_local_slot, is_ceremony_definition, names_equal, store_name};
 use programlet_values::{
-    argument_value, capture_programlet_arguments, compare_programlet_numbers, comparison_operand,
-    loop_iterations, number_kind_matches, number_value, resolve_programlet_value,
-    set_loop_index_argument, set_loop_register_argument, validate_programlet_arguments,
-    write_programlet_call_result,
+    argument_value, capture_programlet_arguments, comparison_operand, loop_iterations,
+    optional_number_field,
+    resolve_programlet_value, set_loop_index_argument, set_loop_register_argument,
+    validate_programlet_arguments, write_programlet_call_result,
+};
+use programlet_vector_actions::{apply_programlet_vector_action, is_programlet_vector_action};
+use programlet_vector_values::{
+    ProgramletVectorValue, programlet_field_is_vector, read_programlet_float,
+    read_programlet_vector, write_programlet_float, write_programlet_vector,
+    write_programlet_vector_result,
 };
 use sentence::{
     collect_sentence, collect_sentence_at, contains_marked_token, embedded_clause_range, name_span,
-    next_sentence_is_paragraph_end, parse_sentence, parse_sentence_range, typed_output_name,
+    next_sentence_is_paragraph_end, parse_sentence, parse_sentence_range, typed_name_span,
+    typed_output_name,
 };
 #[cfg(test)]
 #[path = "semantics_runtime/tests.rs"]

@@ -12,3 +12,4 @@
 - `pyash-cli-low-churn` — modular `command/pyash/` update workflow with size/test guardrails and regression checklist.
 - `pyash-doc-integrity` — detect prose corrupted by bulk keyword replacement; verify examples still execute.
 - `pyash-world-rooms` — post a document for other agents to read in a world room (commons, library); the read/write path rules and the activity-log convention.
+- `pyash-comfyui-housekeeper` — discover, submit, and troubleshoot ComfyUI work through the GPU Housekeeper, including workflow and multi-host considerations.

@@ -21,6 +21,8 @@ pub(super) fn close_programlet_paragraph(
         routine_start,
         result_kind,
         result_value,
+        result_length,
+        result_values,
         return_name_offset,
         return_name_length,
         expected_kind,
@@ -37,6 +39,8 @@ pub(super) fn close_programlet_paragraph(
             frame.routine_start,
             frame.result_kind,
             frame.result_value,
+            frame.result_length,
+            frame.result_values,
             frame.return_name_offset,
             frame.return_name_length,
             frame.expected_kind,
@@ -88,10 +92,24 @@ pub(super) fn close_programlet_paragraph(
         current.has_returned = 0;
         current.result_value = 0;
         current.result_kind = 0;
+        current.result_length = 0;
+        current.result_values = [0; RESULT_WORDS];
         return 0;
     }
     if *depth == 1 {
-        *result = CoreResult::scalar(result_kind, result_value, 0, codelet_count as u32);
+        if matches!(result_kind, VALUE_VECTOR_FLOAT32 | VALUE_VECTOR_FLOAT64) {
+            result.value_kind = result_kind;
+            result.length = result_length;
+            result.consumed_codelets = codelet_count as u32;
+            result.values = result_values;
+        } else {
+            *result = CoreResult::scalar(
+                result_kind,
+                result_value,
+                result_values[1],
+                codelet_count as u32,
+            );
+        }
         return PROGRAMLET_EXECUTION_COMPLETE;
     }
     let caller_index = *depth - 2;
@@ -99,12 +117,25 @@ pub(super) fn close_programlet_paragraph(
         start: return_name_offset as usize,
         length: return_name_length as usize,
     };
-    if let Err(error) = write_programlet_call_result(
+    if matches!(result_kind, VALUE_VECTOR_FLOAT32 | VALUE_VECTOR_FLOAT64) {
+        if let Err(error) = write_programlet_vector_result(
+            symbol_words,
+            return_name,
+            expected_kind,
+            result_kind,
+            result_length,
+            &result_values,
+            &mut frames[caller_index].vector_slots,
+        ) {
+            return error;
+        }
+    } else if let Err(error) = write_programlet_call_result(
         symbol_words,
         return_name,
         expected_kind,
         ProgramletNumber {
             bits: result_value,
+            high: result_values[1],
             kind: result_kind,
         },
         &mut frames[caller_index].slots,

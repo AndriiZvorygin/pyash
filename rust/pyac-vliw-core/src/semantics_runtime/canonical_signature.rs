@@ -244,12 +244,15 @@ pub(super) fn verb_is(
     first: u32,
     second: Option<u32>,
 ) -> bool {
-    let expected_length = if second.is_some() { 2 } else { 1 };
-    signature.verb_length == expected_length
-        && token_at(words, start, group_len, signature.verb_start) == Some(first)
-        && second.is_none_or(|word| {
-            token_at(words, start, group_len, signature.verb_start + 1) == Some(word)
-        })
+    if signature.verb_length != if second.is_some() { 2 } else { 1 }
+        || token_at(words, start, group_len, signature.verb_start) != Some(first)
+    {
+        return false;
+    }
+    match second {
+        Some(word) => token_at(words, start, group_len, signature.verb_start + 1) == Some(word),
+        None => true,
+    }
 }
 
 pub(super) fn case_type(signature: &SignatureView, case: u32) -> Option<u32> {

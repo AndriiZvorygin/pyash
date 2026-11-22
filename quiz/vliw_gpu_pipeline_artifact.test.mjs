@@ -21,6 +21,10 @@ test("VLIW deploy compiles and persists the GPU artifact before replacement", ()
   assert.ok(compileIndex >= 0 && compileIndex < replaceIndex);
   assert.match(deploy, /if \[\[ ! -s "\$ARTIFACT_DIR\/pyac_vliw_pipeline_cache\.bin" \]\]/u);
   assert.match(deploy, /rollback-pipeline-cache\.bin/u);
+  assert.match(deploy, /if \(\( exit_code != 0 \)\); then/u);
+  assert.match(deploy, /if \[\[ -n "\$rollback_tag" \]\] && \(\( cache_backup == 1 \)\); then/u);
+  assert.match(deploy, /No verified prior runtime image and pipeline artifact are available/u);
+  assert.equal(deploy.includes("deployment_started"), false);
 });
 
 test("runtime consumes a required saved pipeline artifact through WGPU", () => {
@@ -40,9 +44,35 @@ test("compose mounts the artifact read-only in service and writable for its comp
   const runtime = compose.services["pyac-vliw-runtime"];
   const compiler = compose.services["pyac-vliw-pipeline-compiler"];
 
+  for (const service of [runtime, compiler]) {
+    assert.equal(service.runtime, "nvidia");
+    assert.deepEqual(service.deploy.resources.reservations.devices[0].capabilities, ["gpu"]);
+  }
   assert.equal(runtime.volumes.some((volume) => volume.target === "/service/artifacts" && volume.read_only), true);
   assert.equal(compiler.entrypoint[0], "/service/pyac-vliw-pipeline-compiler");
   assert.equal(compiler.volumes.some((volume) => volume.target === "/service/artifacts" && !volume.read_only), true);
+});
+
+test("runtime uses the Vulkan loader version verified on Mriczo", () => {
+  const dockerfile = read("container/pyac-vliw-runtime/Dockerfile");
+
+  assert.match(dockerfile, /FROM ubuntu:24\.04/u);
+  assert.match(dockerfile, /libvulkan1/u);
+});
+
+test("function-reduction profiling allows a full bounded pipeline build", () => {
+  const reducer = read("rust/pyac-gpu/profile-function-reduction.mjs");
+  const runtimeGuide = read("rust/pyac-gpu/README.md");
+
+  assert.match(reducer, /BUILD_TIMEOUT_SEC = Number\(process\.env\.PYAC_VLIW_REDUCE_BUILD_TIMEOUT_SEC \|\| 300\)/u);
+  assert.match(reducer, /args\.includes\("--build-only"\)/u);
+  assert.match(reducer, /PIPELINE_TIMEOUT_SEC = Number\(process\.env\.PYAC_VLIW_REDUCE_PIPELINE_TIMEOUT_SEC \|\| 600\)/u);
+  assert.match(reducer, /PIPELINE_TIMEOUT_SEC > 600/u);
+  assert.match(read("rust/pyac-gpu/profile-pipeline-build.mjs"), /const MAX_TIMEOUT_SEC = 600/u);
+  assert.match(runtimeGuide, /ten-minute default and maximum/u);
+  assert.match(runtimeGuide, /`--build-only` stops after SPIR-V generation/u);
+  assert.match(runtimeGuide, /current full shader pipeline build/u);
+  assert.match(runtimeGuide, /60-second readiness ceiling/u);
 });
 
 test("repository rules forbid production startup compilation and CPU fallback", () => {

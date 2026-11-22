@@ -18,27 +18,61 @@ pub(super) fn execute_programlet_return(
         return Err(ERROR_MALFORMED);
     }
     if let Some(return_field) = sentence.field(NOMINATIVE) {
-        let mut return_name = NameSpan::EMPTY;
-        let name_error = name_span(sentence_words, return_field, false, &mut return_name);
-        if name_error != 0 {
-            return Err(name_error);
+        if let Ok(vector) = read_programlet_vector(
+            sentence_words,
+            return_field,
+            symbol_words,
+            &active.arguments,
+            &active.vector_slots,
+        ) {
+            active.result_kind = vector.kind;
+            active.result_length = vector.length as u32;
+            active.result_values = vector.values;
+        } else if let Ok(value) = read_programlet_float(
+            sentence_words,
+            return_field,
+            symbol_words,
+            &active.arguments,
+            &active.slots,
+        ) {
+            active.result_value = value.bits;
+            active.result_values[0] = value.bits;
+            active.result_values[1] = value.high;
+            active.result_length = 1;
+            active.result_kind = value.kind;
+        } else {
+            let mut return_name = NameSpan::EMPTY;
+            let name_error = name_span(sentence_words, return_field, false, &mut return_name);
+            if name_error != 0 {
+                return Err(name_error);
+            }
+            let Some(index) =
+                find_local_slot(sentence_words, return_name, symbol_words, &active.slots)
+            else {
+                return Err(ERROR_MALFORMED);
+            };
+            active.result_value = array_at!(active.slots, index).value;
+            active.result_values[0] = active.result_value;
+            active.result_values[1] = array_at!(active.slots, index).value_high;
+            active.result_length = 1;
+            active.result_kind = array_at!(active.slots, index).value_kind;
         }
-        let Some(index) = find_local_slot(sentence_words, return_name, symbol_words, &active.slots)
-        else {
-            return Err(ERROR_MALFORMED);
-        };
-        active.result_value = array_at!(active.slots, index).value;
-        active.result_kind = array_at!(active.slots, index).value_kind;
     } else if let Some(return_field) = sentence.field(ACCUSATIVE) {
         if return_field.length == 1
             && matches!(array_at!(sentence_words, return_field.start), TRUTH | LIE)
         {
             active.result_value = u32::from(array_at!(sentence_words, return_field.start) == TRUTH);
+            active.result_values[0] = active.result_value;
+            active.result_values[1] = 0;
+            active.result_length = 1;
             active.result_kind = VALUE_BOOLEAN;
         } else if return_field.length == 2
             && array_at!(sentence_words, return_field.start) == NUMBER_QUOTE
         {
             active.result_value = array_at!(sentence_words, return_field.start + 1);
+            active.result_values[0] = active.result_value;
+            active.result_values[1] = 0;
+            active.result_length = 1;
             active.result_kind = VALUE_UNSIGNED;
         } else if return_field.length >= 2
             && array_at!(sentence_words, return_field.start) == NAME_TYPE
@@ -54,16 +88,22 @@ pub(super) fn execute_programlet_return(
                 return Err(ERROR_MALFORMED);
             };
             active.result_value = array_at!(active.slots, index).value;
+            active.result_values[0] = active.result_value;
+            active.result_values[1] = array_at!(active.slots, index).value_high;
+            active.result_length = 1;
             active.result_kind = array_at!(active.slots, index).value_kind;
         } else {
             return Err(ERROR_UNSUPPORTED);
         }
     } else if from_index_return.is_some() {
         let output = array_at!(active.slots, 0);
-        if !number_kind_matches(active.expected_kind, output.value_kind) {
+        if !programlet_type_matches(active.expected_kind, output.value_kind) {
             return Err(ERROR_UNSUPPORTED);
         }
         active.result_value = output.value;
+        active.result_values[0] = output.value;
+        active.result_values[1] = output.value_high;
+        active.result_length = 1;
         active.result_kind = output.value_kind;
     } else {
         return Err(ERROR_MALFORMED);
@@ -95,7 +135,7 @@ pub(super) fn execute_programlet_return(
             };
         }
     }
-    if !number_kind_matches(active.expected_kind, active.result_kind) {
+    if !programlet_type_matches(active.expected_kind, active.result_kind) {
         return Err(ERROR_UNSUPPORTED);
     }
     let next_is_paragraph = match next_sentence_is_paragraph_end(

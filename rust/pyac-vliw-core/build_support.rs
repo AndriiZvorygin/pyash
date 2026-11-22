@@ -2,7 +2,7 @@ const CHUNKED_LENGTH: usize = 960;
 
 pub fn generate_fixed_array_accessors() -> String {
     let mut generated = String::from("// Generated bounded array accessors for Rust-GPU/WGSL.\n");
-    for length in [7usize, 8, 13, 18, 32, 64, CHUNKED_LENGTH] {
+    for length in [2usize, 7, 8, 9, 10, 12, 13, 18, 32, 64, CHUNKED_LENGTH] {
         push_array_impl(&mut generated, length);
     }
     generated

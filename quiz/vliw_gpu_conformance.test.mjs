@@ -65,6 +65,7 @@ test("VLIW GPU conformance matrix covers the merged typed and control-flow contr
     "iwsp-float32-vector-scale",
     "iwsp-float32-vector-add",
     "iwsp-float32-vector-sum",
+    "iwsp-float32-vector-maximum",
     "iwsp-named-float32-vector-scale",
     "iwsp-float64-vector-scale-add-sum",
     "float64-dot-product",
@@ -145,6 +146,7 @@ test("Rust CPU executes IWSP float-vector Pyash operations after VLIW lowering",
     "iwsp-float32-vector-scale",
     "iwsp-float32-vector-add",
     "iwsp-float32-vector-sum",
+    "iwsp-float32-vector-maximum",
     "iwsp-named-float32-vector-scale",
     "iwsp-float64-vector-scale-add-sum"
   ]);

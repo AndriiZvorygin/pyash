@@ -13,7 +13,6 @@ ROLLBACK_CACHE_FILE="$ARTIFACT_DIR/.rollback-pipeline-cache.bin"
 previous_image_id="$(docker inspect --format '{{.Image}}' pyac-vliw-runtime 2>/dev/null || true)"
 rollback_tag=""
 dispatch_held=0
-deployment_started=0
 cache_backup=0
 READY_TIMEOUT_SEC=60
 export PYAC_VLIW_ARTIFACT_DIR="$ARTIFACT_DIR"
@@ -57,12 +56,10 @@ recover_runtime() {
   local exit_code=$?
   trap - EXIT
   if (( dispatch_held == 1 )); then
-    if (( exit_code != 0 && deployment_started == 1 )); then
-      if [[ -n "$rollback_tag" ]]; then
+    if (( exit_code != 0 )); then
+      if [[ -n "$rollback_tag" ]] && (( cache_backup == 1 )); then
         echo "VLIW runtime update failed; restoring the previous image." >&2
-        if (( cache_backup == 1 )); then
-          cp "$ROLLBACK_CACHE_FILE" "$PIPELINE_CACHE_FILE"
-        fi
+        mv -f "$ROLLBACK_CACHE_FILE" "$PIPELINE_CACHE_FILE"
         if docker tag "$rollback_tag" "$IMAGE_NAME" \
           && compose up -d --no-deps --force-recreate --no-build pyac-vliw-runtime \
           && wait_runtime_ready \
@@ -80,7 +77,7 @@ recover_runtime() {
           echo "Rollback could not be verified; VLIW dispatch remains held for recovery." >&2
         fi
       else
-        echo "No prior runtime image is available to roll back; VLIW dispatch remains held for recovery." >&2
+        echo "No verified prior runtime image and pipeline artifact are available; VLIW dispatch remains held for recovery." >&2
       fi
     else
       curl -fsS --max-time 120 -X POST \
@@ -143,7 +140,6 @@ if [[ ! -s "$ARTIFACT_DIR/pyac_vliw_pipeline_cache.bin" ]]; then
   exit 1
 fi
 
-deployment_started=1
 compose up -d --no-deps --force-recreate --no-build pyac-vliw-runtime
 wait_runtime_ready
 
