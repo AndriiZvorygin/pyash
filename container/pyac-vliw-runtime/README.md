@@ -6,7 +6,7 @@ starts this container on demand, submits canonical `pyac-pack-execute` packs,
 and stops the service after its idle grace. VLIW runtime updates do not rebuild
 or restart Housekeeper.
 
-## CUDA canary
+## CUDA validation and deployment
 
 The optional CUDA image runs the same Rust semantics core, including typed
 dispatch, from an offline-assembled `sm_86` cubin. The standard image still
@@ -25,13 +25,25 @@ bash container/pyac-vliw-runtime/command/cuda-canary.sh swac <CUDA_IMAGE>
 bash container/pyac-vliw-runtime/command/cuda-canary.sh mriczo <CUDA_IMAGE>
 ```
 
-The build prints the image tag and evidence directory. The canary requires a
-prior Vulkan container and saved cache on the destination. It changes only
-the VLIW route, caps the canary container at 1 GiB of host memory, validates
-readiness within 60 seconds, and submits host-pinned jobs with discharge
-disabled. It restores the prior container afterward. If that container
-cannot regain readiness, only VLIW remains held for recovery. Do not compile
-a cache during startup or reuse a cache from a different GPU/driver.
+The build prints the image tag and evidence directory. This controlled
+deployment test requires a prior Vulkan container and saved cache on the
+destination. It changes only the VLIW route, caps the temporary CUDA container
+at 1 GiB of host memory, validates readiness within 60 seconds, and submits
+host-pinned jobs with discharge disabled. It runs the **full configured VLIW
+conformance matrix**, including typed dispatch and expected errors; “canary”
+describes the temporary deployment/rollback, not a reduced test subset. It
+then restores the prior container and verifies readiness. If rollback cannot
+be verified, only VLIW remains held for recovery. Do not compile a cache during
+startup or reuse an artifact from a different GPU architecture.
+
+CUDA cubin is the validated route for current full-signature dispatcher work.
+The prior Vulkan source/cache checkpoint is `fc77719f6`; canonical typed
+signature dispatch was added in `a72c6bcf2`. Vulkan remains a legacy route for
+already-built artifacts until a post-dispatch Vulkan artifact passes the same
+conformance matrix. The latest RTX 3090 CUDA result and exact artifact hashes
+are in `documentation/reference/rust-vliw-verification-ledger.md`. The
+validation script restores Vulkan afterward; it does not permanently change a
+host's selected runtime.
 
 The internal HTTP contract is protocol version 1:
 

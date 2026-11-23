@@ -4,13 +4,14 @@ Use this file as the lookup record for Rust VLIW CPU/GPU conformance runs. Each
 entry records the repository revision, deployed artifact, host/device, route,
 and exact test outcome. A queued or timed-out job is not a passing test.
 
-## 2026-11-23: CUDA Cubin Canary on SWAC
+## 2026-11-23: Full CUDA Cubin Conformance on SWAC
 
-The prebuilt Rust NVPTX worker executed the same typed VLIW core through SWAC
-Housekeeper. Three standalone typed-dispatch results passed: numeric overload
-`41`, reversed-case boolean overload `true`, and nested overloaded call
-`41`. The missing overload returned shared error `1`. All **55** batched
-matrix cases and both other expected errors passed.
+The temporary deployment canary ran the full configured conformance suite, not
+a reduced smoke test. The prebuilt Rust NVPTX worker executed the same typed
+VLIW core through SWAC Housekeeper. Three standalone typed-dispatch results
+passed: numeric overload `41`, reversed-case boolean overload `true`, and
+nested overloaded call `41`. The missing overload returned shared error `1`.
+All **55** batched matrix cases and both other expected errors passed.
 
 | Field | Evidence |
 | --- | --- |
@@ -40,9 +41,58 @@ host. Build logs are under `rust/pyac-gpu/cuda-kernel/target/cuda-build-yXfwwfUm
 Rollback restored SWAC's prior Vulkan container, but that container was
 already exited and its required pipeline cache was absent. Its historical
 build log shows a Vulkan adapter initialization failure. The VLIW route
-remains held; other runtimes and Housekeeper were not restarted. Mriczo's
-CUDA canary was not run because the SWAC rollback could not be verified.
-The canary now checks for the saved rollback cache before changing a route.
+remained held; other runtimes and Housekeeper were not restarted. Mriczo was
+not attempted during that first SWAC recovery because rollback could not be
+verified. The canary now checks for the saved rollback cache before changing
+a route; the later Mriczo result is recorded below.
+
+## 2026-11-23: Full CUDA Dispatcher Verification on Mriczo
+
+This was the **full configured conformance run**, not a reduced smoke test. The
+temporary CUDA deployment used the Mriczo Housekeeper and RTX 3090, then
+restored the original Vulkan container and verified that it was ready again.
+
+| Field | Evidence |
+| --- | --- |
+| Source revision | `91af375eb6a4ff06c752919dd8f17f1ba436390f`; no tracked working-tree patch |
+| Host and route | Mriczo, Pyash GPU Housekeeper -> `pyac-vliw-runtime` -> Rust NVPTX cubin |
+| GPU and driver | NVIDIA GeForce RTX 3090, `sm_86`, driver `550.163.01`, 24,576 MiB VRAM |
+| CUDA image | `sha256:d81383ed7b9998c8231c0e8e0b9f849708f380305a611ef9b95f0518513088cb` |
+| CUDA runtime executable | 9,248,560 bytes; SHA-256 `2cfdebfef9bb488a0c5f6493eec1aa18da27c553064cb2ee415017dc78a6f7a1` |
+| Cubin | 2,741,208 bytes; SHA-256 `21651098503d4cf7cf9ae7e984078cde9cfbff0b2056a8af3b7e77f509ad86d3` |
+| Runtime initialization | Cubin load and GPU initialization: 0.09 seconds; ready in 722 ms from container start |
+| Full run | 6,421.989 ms; **58 value cases passed and 3 expected-error cases matched** |
+| Typed dispatcher checks | Numeric overload `41`; reversed-case boolean overload `true`; nested overloaded call `41`; missing overload returned shared error `1` |
+| Batched GPU work | 37 codelet cases in 4.147 ms GPU time; 18 independent programlet sections in 111.077 ms GPU time |
+| CPU reference batches | 37 cases in 81.653 ms; 18 sections in 83.541 ms |
+| Housekeeper round trips | Codelet pack 659 ms; section pack 719 ms; these include client/queue overhead, not GPU time |
+| Restored runtime | Original Vulkan image `sha256:8b0f3303b03d726ba3969d408dd25c2ccbdc250da3d201d93feb1c4c08432ecd`; Housekeeper reported it ready after restoration |
+| Run record | `artifacts/20261123-0003-rust-vliw-conformance/result.pya` |
+
+This verifies the same shared Rust semantics and full-signature dispatcher on
+CUDA, including typed overload selection, case-order canonicalization, nested
+calls, and dispatcher errors. It is a full semantic conformance result, not a
+claim that these small workloads are faster on GPU than CPU.
+
+### Vulkan Compatibility Boundary
+
+The latest recorded source checkpoint with successful Vulkan pipeline-cache
+generation is **`fc77719f6157d7068044d56beff94ab95487bfc1`** (`add vector
+maximum reduction`). The following commit, **`a72c6bcf225df639e511c63b37e240e143d8972a`**,
+introduced canonical Rust programlet signature dispatch. The current full
+signature-dispatch matrix is verified on the prebuilt CUDA cubin; this ledger
+has no equivalent current-source Vulkan cache-generation/conformance record.
+Treat `fc77719f6` as the last known Vulkan cache checkpoint, not proof that
+Vulkan hardware cannot implement dispatch.
+
+The pre-existing Mriczo Vulkan container did restart successfully from its
+saved artifacts after this CUDA test, but that only verifies the older
+deployed Vulkan artifact and its startup. It does not establish that artifact
+has the newer full-signature dispatch behavior. Keep Vulkan as a legacy
+compatibility path for its already-built artifacts; use the validated CUDA
+cubin path for current dispatcher work until Vulkan is rebuilt and passes the
+same matrix. The test procedure restored Vulkan, so this entry does not claim
+that Mriczo was left persistently switched to CUDA.
 
 ## 2026-11-19: Live GPU Refresh
 
