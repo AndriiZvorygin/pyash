@@ -8,11 +8,13 @@ or restart Housekeeper.
 
 ## CUDA validation and deployment
 
-The optional CUDA image runs the same Rust semantics core, including typed
-dispatch, from an offline-assembled `sm_86` cubin. The standard image still
-defaults to Vulkan. Housekeeper uses the same `pyac-pack-execute` protocol for
-both. The CUDA image includes only the runtime, cubin, and build metadata:
-there is no PTX, compiler, or fallback to Vulkan or CPU.
+The CUDA image runs the same Rust semantics core, including typed dispatch,
+from an offline-assembled `sm_86` cubin. The standard image still defaults to
+Vulkan; Mriczo's Housekeeper-managed VLIW runtime is now persistently using the
+validated CUDA image. SWAC's VLIW route remains held pending a verified
+rollback target there. Housekeeper uses the same `pyac-pack-execute` protocol
+for both backends. The CUDA image includes only the runtime, cubin, and build
+metadata: there is no PTX, compiler, or fallback to Vulkan or CPU.
 
 Build on Mriczo, not SWAC. The pinned nightly must have `rust-src`,
 `llvm-tools`, and `llvm-bitcode-linker`; `ptxas` 12.8 and Docker are used on
@@ -21,8 +23,12 @@ the build host. Then run:
 ```sh
 bash rust/pyac-gpu/build-cuda-image.sh
 bash container/pyac-vliw-runtime/command/cuda-canary.sh swac <CUDA_IMAGE>
-# Only after SWAC conformance and rollback are verified:
+# RTX 3090 full-suite verification; restores the original runtime afterward:
 bash container/pyac-vliw-runtime/command/cuda-canary.sh mriczo <CUDA_IMAGE>
+# After verification, persist CUDA on Mriczo and retain Vulkan for rollback:
+bash container/pyac-vliw-runtime/command/cuda-canary.sh mriczo <CUDA_IMAGE> deploy
+# Restore the retained Vulkan container if needed:
+bash container/pyac-vliw-runtime/command/cuda-canary.sh mriczo <CUDA_IMAGE> rollback
 ```
 
 The build prints the image tag and evidence directory. This controlled
@@ -31,9 +37,12 @@ destination. It changes only the VLIW route, caps the temporary CUDA container
 at 1 GiB of host memory, validates readiness within 60 seconds, and submits
 host-pinned jobs with discharge disabled. It runs the **full configured VLIW
 conformance matrix**, including typed dispatch and expected errors; “canary”
-describes the temporary deployment/rollback, not a reduced test subset. It
-then restores the prior container and verifies readiness. If rollback cannot
-be verified, only VLIW remains held for recovery. Do not compile a cache during
+describes the temporary deployment/rollback, not a reduced test subset. The
+default `verify` mode restores the prior container and verifies readiness. The
+`deploy` mode keeps CUDA selected only after the full suite passes and retains
+the previous Vulkan container as a stopped rollback target. `rollback` restores
+that retained container and verifies readiness. If a transition fails,
+Housekeeper keeps only VLIW held for recovery. Do not compile a cache during
 startup or reuse an artifact from a different GPU architecture.
 
 CUDA cubin is the validated route for current full-signature dispatcher work.
@@ -41,9 +50,9 @@ The prior Vulkan source/cache checkpoint is `fc77719f6`; canonical typed
 signature dispatch was added in `a72c6bcf2`. Vulkan remains a legacy route for
 already-built artifacts until a post-dispatch Vulkan artifact passes the same
 conformance matrix. The latest RTX 3090 CUDA result and exact artifact hashes
-are in `documentation/reference/rust-vliw-verification-ledger.md`. The
-validation script restores Vulkan afterward; it does not permanently change a
-host's selected runtime.
+are in `documentation/reference/rust-vliw-verification-ledger.md`. Use `deploy`
+to persist the verified backend; the default verification mode restores the
+previous runtime.
 
 The internal HTTP contract is protocol version 1:
 

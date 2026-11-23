@@ -3,7 +3,9 @@ set -euo pipefail
 cd "$(dirname "$0")/../../.."
 host="${1:?expected swac or mriczo}"
 image="${2:?expected a locally built CUDA image}"
+mode="${3:-verify}"
 [[ "$host" == swac || "$host" == mriczo ]] || exit 2
+[[ "$mode" == verify || "$mode" == deploy || "$mode" == rollback ]] || exit 2
 image_id="$(docker image inspect --format '{{.Id}}' "$image")"
 [[ "$image_id" == sha256:* ]] || exit 2
 
@@ -72,7 +74,7 @@ case "$action" in
     control stop 1900
     docker rename "$name" "$backup"
     docker create --name "$name" --network gpu-housekeeper_default \
-      --label org.pyash.vliw.cuda-canary="$image" --runtime nvidia --gpus device=0 \
+      --label org.pyash.vliw.cuda-image="$image" --runtime nvidia --gpus device=0 \
       --memory=1g --restart=no "$image"
     started="$(date +%s%3N)"
     docker start "$name"
@@ -83,7 +85,7 @@ case "$action" in
   restore)
     if docker inspect "$backup" >/dev/null 2>&1; then
       if docker inspect "$name" >/dev/null 2>&1; then
-        [[ "$(docker inspect --format '{{index .Config.Labels "org.pyash.vliw.cuda-canary"}}' "$name")" == "$image" ]]
+        [[ "$(docker inspect --format '{{index .Config.Labels "org.pyash.vliw.cuda-image"}}' "$name")" == "$image" ]]
         docker stats --no-stream --format 'canary memory={{.MemUsage}}' "$name" || true
         control stop 1900
         docker logs --tail 20 "$name"
@@ -97,10 +99,27 @@ case "$action" in
     control begin 30
     docker inspect --format 'restored image={{.Image}}' "$name"
     ;;
+  rollback)
+    docker inspect "$backup" >/dev/null
+    [[ "$(docker inspect --format '{{index .Config.Labels "org.pyash.vliw.cuda-image"}}' "$name")" == "$image" ]]
+    control stop 1900
+    docker rm "$name"
+    docker rename "$backup" "$name"
+    started="$(date +%s%3N)"
+    docker start "$name"
+    wait_ready rust-gpu-vulkan "$started"
+    control begin 30
+    docker inspect --format 'rolled back image={{.Image}}' "$name"
+    ;;
   *) exit 2 ;;
 esac
 REMOTE
 }
+
+if [[ "$mode" == rollback ]]; then
+  switch_runtime rollback
+  exit 0
+fi
 
 switch_runtime check
 if [[ "$host" == swac ]]; then
@@ -122,3 +141,11 @@ PYA_GPU_HOUSEKEEPER_URL="http://$host:18886" \
 PYA_VLIW_CONFORMANCE_HOST="$host" \
 PYA_VLIW_CONFORMANCE_BACKEND=rust-cuda-cubin \
   node command/vliw_gpu_conformance.mjs
+
+if [[ "$mode" == deploy ]]; then
+  trap - EXIT
+  echo "CUDA VLIW deployment retained on $host; rollback with: $0 $host $image rollback"
+else
+  switch_runtime restore
+  trap - EXIT
+fi

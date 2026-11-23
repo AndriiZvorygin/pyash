@@ -91,8 +91,30 @@ deployed Vulkan artifact and its startup. It does not establish that artifact
 has the newer full-signature dispatch behavior. Keep Vulkan as a legacy
 compatibility path for its already-built artifacts; use the validated CUDA
 cubin path for current dispatcher work until Vulkan is rebuilt and passes the
-same matrix. The test procedure restored Vulkan, so this entry does not claim
-that Mriczo was left persistently switched to CUDA.
+same matrix. Run `20261123-0003` was verification-only and restored Vulkan.
+
+### Persistent Mriczo Deployment
+
+After that full pass, `deploy` mode ran the same matrix again and retained the
+prebuilt CUDA runtime on Mriczo. The previous Vulkan container remains stopped
+as the rollback target.
+
+| Field | Evidence |
+| --- | --- |
+| Deployment verification | `artifacts/20261123-0004-rust-vliw-conformance/result.pya`; 58 value cases passed, 3 expected errors matched |
+| Runtime artifact | Same tested CUDA image and cubin hashes above; cubin initialization 0.10 seconds |
+| Run duration | 14,569.242 ms, including CPU checks, Housekeeper requests, and recording |
+| Active image | `sha256:d81383ed7b9998c8231c0e8e0b9f849708f380305a611ef9b95f0518513088cb` |
+| Retained rollback container | `pyac-vliw-runtime-cuda-canary-previous`, prior image `sha256:8b0f3303b03d726ba3969d408dd25c2ccbdc250da3d201d93feb1c4c08432ecd` |
+| Post-deploy state | Housekeeper reported VLIW ready on Mriczo; queue depth 0 |
+| Rollback command | `bash container/pyac-vliw-runtime/command/cuda-canary.sh mriczo liberit/pyac-vliw-runtime:cuda-sm86-21651098503d4cf7 rollback` |
+
+The conformance harness checkout was `d5ac63d159140e490c65e2a4b43ef596853d63e4`
+with a tracked patch limited to the deployment script and documentation; the
+prebuilt runtime image remains the exact, hashed artifact identified above.
+Housekeeper may stop the idle container, but it retains this CUDA image and
+will restart it on demand. SWAC's VLIW route remains held pending a verified
+rollback target there; other runtime routes were not changed.
 
 ## 2026-11-19: Live GPU Refresh
 
