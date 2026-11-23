@@ -387,6 +387,20 @@ The service writes the promoted catalog into the working tree on every batch.
 Commit that catalog separately, and never stage the run artifacts, the
 newspaper, or the WordNet decision ledger with it.
 
+### Repair a promoted relation
+
+The relation of a promoted link is derived from the evidence, never from the
+model. A catalog row whose relation does not follow from its evidence is
+rewritten by one command:
+
+~~~sh
+node command/sumo_concept_link_relations.mjs
+~~~
+
+The command reports every transition it made and rewrites the catalog in
+place. It changes the relation only; the identifiers, the target, and the
+recorded evidence stay as they are.
+
 ### Promote and publish
 
 Accepted links are written to

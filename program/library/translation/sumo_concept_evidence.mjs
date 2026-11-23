@@ -32,6 +32,16 @@ export const SUMO_CROSSWALK_RELATIONS = Object.freeze([
 
 export const SUMO_CONCEPT_PATHS = Object.freeze(["surface", "hierarchy", "adjudication"]);
 
+// The relation each evidence path supports. The path names the kind of claim
+// the evidence makes, so the relation follows from the evidence and never from
+// the model. An own surface match names the concept itself, while an ancestor
+// or a head-word class names something broader than the concept.
+export const SUMO_PATH_RELATIONS = Object.freeze({
+  surface: "equivalent-to",
+  hierarchy: "superclass-of",
+  adjudication: "superclass-of"
+});
+
 function invalid(message, details = {}) {
   const error = new Error(message);
   error.code = "invalid-sumo-concept-evidence";
@@ -323,15 +333,68 @@ export function resolveSumoConceptEvidence(evidence) {
 
 /**
  * The relation a chosen target carries. A target that holds the concept's
- * unique crosswalk sense keeps that crosswalk's relation; any other target
- * keeps the surface or subsumption claim the evidence supports.
+ * unique crosswalk sense keeps that crosswalk's relation. Any other target
+ * takes the relation its evidence path supports: `equivalent-to` when the
+ * entry carries the concept's own surface, `superclass-of` when the entry is
+ * an ancestor or the concept's head-word class.
  */
-export function relationForTarget(evidence, target, proposed = "") {
-  const crosswalk = evidence?.crosswalk;
-  const senses = target?.senses ?? [];
-  if (crosswalk && senses.includes(crosswalk.senseId)) return crosswalk.relation;
-  if (SUMO_LINK_RELATIONS.includes(proposed)) return proposed;
-  return "equivalent-to";
+export function deriveSumoConceptRelation({ path, crosswalk, targetSenses = [] } = {}) {
+  if (crosswalk && targetSenses.includes(crosswalk.senseId)) return crosswalk.relation;
+  const relation = SUMO_PATH_RELATIONS[path];
+  if (!relation) {
+    throw invalid("SUMO concept evidence path has no relation", { path: path ?? "" });
+  }
+  return relation;
+}
+
+/**
+ * The relation a chosen target carries, read from the concept's evidence. The
+ * model proposes a target; the evidence decides the relation.
+ */
+export function relationForTarget(evidence, target) {
+  return deriveSumoConceptRelation({
+    path: evidence?.path,
+    crosswalk: evidence?.crosswalk,
+    targetSenses: target?.senses ?? []
+  });
+}
+
+/**
+ * Rewrites the relation of promoted records from their evidence. A record
+ * whose relation came from the model is corrected in place; the identifiers,
+ * the target, and the recorded evidence stay untouched.
+ */
+export function reconcileSumoConceptLinkRelations(records = [], { linkIndex } = {}) {
+  const changes = [];
+  const reconciled = [];
+  for (const record of records) {
+    const crosswalk = record?.evidence?.crosswalkSenseId
+      ? { senseId: record.evidence.crosswalkSenseId, relation: record.evidence.crosswalkRelation }
+      : null;
+    const target = linkIndex?.entriesBySequence?.get((record?.pyashSequence ?? []).join(" "));
+    let relation = record?.relation ?? "";
+    try {
+      relation = deriveSumoConceptRelation({
+        path: record?.evidence?.path,
+        crosswalk,
+        targetSenses: target?.senses ?? []
+      });
+    } catch {
+      // A record without a usable path keeps the relation it was promoted with.
+    }
+    if (relation === record?.relation) {
+      reconciled.push(record);
+      continue;
+    }
+    changes.push({
+      sumoId: record.sumoId,
+      from: record.relation,
+      to: relation,
+      path: record.evidence?.path ?? ""
+    });
+    reconciled.push({ ...record, relation });
+  }
+  return { records: reconciled, changes };
 }
 
 /**

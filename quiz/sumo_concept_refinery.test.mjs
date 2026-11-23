@@ -14,6 +14,7 @@ import {
   parseSumoConceptConfig,
   parseSumoConceptRowsPya,
   promoteSumoConceptLinks,
+  sumoConceptRelationForCandidate,
   sumoConceptRunId
 } from "../program/library/translation/sumo_concept_refinery.mjs";
 
@@ -103,7 +104,7 @@ test("the adjudication response format asks for one choice", () => {
 });
 
 test("a model answer that names a supplied candidate is accepted", () => {
-  const evidence = { crosswalk: null };
+  const evidence = { path: "surface", crosswalk: null };
   const candidates = [{ sequence: "pyan hbin", senses: [], glosses: [] }];
   const parsed = parseSumoConceptChoiceResponse(
     JSON.stringify({ choice: "pyan hbin", relation: "equivalent-to", reason: "same word" }),
@@ -130,7 +131,7 @@ test("a model answer that names a candidate number is read as that candidate", (
   ];
   const parsed = parseSumoConceptChoiceResponse(
     JSON.stringify({ choice: "2", relation: "equivalent-to", reason: "second candidate" }),
-    { evidence: {}, candidates }
+    { evidence: { path: "surface", crosswalk: null }, candidates }
   );
   assert.equal(parsed.status, "accepted");
   assert.equal(parsed.choice, "cyit tfen");
@@ -139,30 +140,59 @@ test("a model answer that names a candidate number is read as that candidate", (
 test("a model answer naming an unsupplied candidate stays uncertain", () => {
   const parsed = parseSumoConceptChoiceResponse(
     JSON.stringify({ choice: "not offered", relation: "equivalent-to", reason: "guess" }),
-    { evidence: {}, candidates: [{ sequence: "pyan hbin", senses: [] }] }
+    { evidence: { path: "surface", crosswalk: null }, candidates: [{ sequence: "pyan hbin", senses: [] }] }
   );
   assert.equal(parsed.status, "uncertain");
   assert.match(parsed.reason, /unsupplied candidate/u);
 });
 
-test("a model relation that contradicts the crosswalk stays uncertain", () => {
-  const evidence = { crosswalk: { senseId: "n:07511157-n", relation: "equivalent-to" } };
+test("the model relation never decides the relation", () => {
+  const evidence = { path: "surface", crosswalk: null };
+  const candidates = [{ sequence: "pyan hbin", senses: [] }];
+  const parsed = parseSumoConceptChoiceResponse(
+    JSON.stringify({ choice: "pyan hbin", relation: "subsumed-by", reason: "narrower" }),
+    { evidence, candidates }
+  );
+  assert.equal(parsed.status, "accepted");
+  assert.equal(parsed.relation, "equivalent-to");
+  assert.equal(parsed.proposed, "subsumed-by");
+});
+
+test("a model relation the sweep does not support is advisory too", () => {
+  const evidence = { path: "adjudication", crosswalk: null };
+  const candidates = [{ sequence: "pyan hbin", senses: [] }];
+  const parsed = parseSumoConceptChoiceResponse(
+    JSON.stringify({ choice: "pyan hbin", relation: "invented", reason: "guess" }),
+    { evidence, candidates }
+  );
+  assert.equal(parsed.status, "accepted");
+  assert.equal(parsed.relation, "superclass-of");
+  assert.equal(parsed.proposed, "");
+});
+
+test("a model relation that contradicts the crosswalk does not decide the relation", () => {
+  const evidence = { path: "surface", crosswalk: { senseId: "n:07511157-n", relation: "equivalent-to" } };
   const candidates = [{ sequence: "pyan hbin", senses: ["n:07511157-n"] }];
   const parsed = parseSumoConceptChoiceResponse(
     JSON.stringify({ choice: "pyan hbin", relation: "superclass-of", reason: "wider" }),
     { evidence, candidates }
   );
-  assert.equal(parsed.status, "uncertain");
-  assert.match(parsed.reason, /contradicts the crosswalk/u);
+  assert.equal(parsed.status, "accepted");
+  assert.equal(parsed.relation, "equivalent-to");
+  assert.equal(parsed.proposed, "superclass-of");
 });
 
-test("a model relation that is not supported stays uncertain", () => {
-  const parsed = parseSumoConceptChoiceResponse(
-    JSON.stringify({ choice: "pyan hbin", relation: "invented", reason: "guess" }),
-    { evidence: {}, candidates: [{ sequence: "pyan hbin", senses: [] }] }
-  );
-  assert.equal(parsed.status, "uncertain");
-  assert.match(parsed.reason, /unsupported relation/u);
+test("a candidate row cannot promote the relation it recorded", () => {
+  const linkIndex = {
+    entriesBySequence: new Map([
+      ["pyan hbin", { sequence: "pyan hbin", surfaces: ["love"], senses: ["n:07511157-n"], glosses: [] }]
+    ])
+  };
+  const evidence = { crosswalk: { senseId: "n:07511157-n", relation: "equivalent-to" } };
+  const stale = { sumoId: "Love", status: "resolved", path: "surface", sequence: "pyan hbin", relation: "subsumed-by" };
+  assert.equal(sumoConceptRelationForCandidate(stale, evidence, linkIndex), "equivalent-to");
+  const other = { sumoId: "CompanionateLove", status: "resolved", path: "adjudication", sequence: "pyan hbin", relation: "subsumed-by" };
+  assert.equal(sumoConceptRelationForCandidate(other, { crosswalk: null }, linkIndex), "superclass-of");
 });
 
 test("adjudication candidates come from the head word", () => {
@@ -189,7 +219,7 @@ test("the provider envelope is unwrapped before the answer is read", () => {
     done: true
   });
   const parsed = parseSumoConceptChoiceResponse(answer, {
-    evidence: {},
+    evidence: { path: "surface", crosswalk: null },
     candidates: [{ sequence: "pyan hbin", senses: [] }]
   });
   assert.equal(parsed.status, "accepted");
@@ -202,12 +232,13 @@ test("a truncated answer still reads its choice and relation", () => {
     done_reason: "length"
   });
   const parsed = parseSumoConceptChoiceResponse(answer, {
-    evidence: {},
+    evidence: { path: "surface", crosswalk: null },
     candidates: [{ sequence: "pyac", senses: [] }]
   });
   assert.equal(parsed.status, "accepted");
   assert.equal(parsed.choice, "pyac");
-  assert.equal(parsed.relation, "subsumed-by");
+  assert.equal(parsed.proposed, "subsumed-by");
+  assert.equal(parsed.relation, "equivalent-to");
 });
 
 test("an answer that is not JSON stays uncertain", () => {

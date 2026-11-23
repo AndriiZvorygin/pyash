@@ -118,7 +118,9 @@ A concept is resolved by the first path that yields a sound answer.
    whether the match is a head-word match or a class-only match.
 3. **Adjudication.** Neither path resolves the concept. The model receives the
    concept's definition and a bounded candidate set, and picks one supplied
-   candidate or none.
+   candidate or none. The candidates are the concept's head word and its linked
+   ancestor, so the target is broader than the concept and the relation is
+   `superclass-of`.
 
 Path 1 is preferred over path 2, because a surface match names the concept's
 own meaning while the hierarchy only names a supertype. Path 2 is preferred
@@ -126,9 +128,18 @@ over path 3, because the hierarchy claim needs no model judgment at all.
 
 The model never writes a relation. It chooses the target, and the relation
 follows from the evidence: a target carrying the concept's unique crosswalk
-sense takes that crosswalk's relation, and any other target takes
-`equivalent-to` or `superclass-of`. SUMO definitions reach the model as
-evidence and are never written into a Pyash record.
+sense takes that crosswalk's relation, and any other target takes the relation
+its path supports, `equivalent-to` for an own-surface target and
+`superclass-of` for an ancestor or head-word target. The answer still names a
+relation, and the sweep records it as a proposal, but the evidence decides.
+SUMO definitions reach the model as evidence and are never written into a
+Pyash record.
+
+The relation is derived again when the decision is recorded, so a candidate row
+written by an earlier build cannot promote a relation the evidence does not
+support. `node command/sumo_concept_link_relations.mjs` applies the same
+derivation to the promoted catalog and rewrites the rows whose relation the
+evidence does not support.
 
 
 ## Worklist

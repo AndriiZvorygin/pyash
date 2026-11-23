@@ -30,6 +30,7 @@ import {
   buildSumoConceptEvidence,
   buildSumoConceptLinkRecord,
   buildSumoLinkIndex,
+  deriveSumoConceptRelation,
   normalizeSumoSurface,
   parseSumoConceptCatalog,
   parseSumoConceptLinkRows,
@@ -228,8 +229,8 @@ export function buildSumoConceptResponseFormat() {
 
 /**
  * Validates a model answer against the candidates it was given. An answer
- * that names an unknown candidate, an unsupported relation, or a relation the
- * crosswalk contradicts stays uncertain rather than being repaired.
+ * that names an unknown candidate stays uncertain rather than being repaired.
+ * The relation the model writes is advisory: the evidence decides it.
  */
 /**
  * The Housekeeper returns the provider envelope, so the answer can sit inside
@@ -286,7 +287,7 @@ export function parseSumoConceptChoiceResponse(value, { evidence, candidates = [
     return { status: "uncertain", reason: "model answer is not JSON", choice: "", relation: "" };
   }
   const choice = text(answer?.choice).trim();
-  const relation = text(answer?.relation).trim();
+  let relation = text(answer?.relation).trim();
   const reason = text(answer?.reason).trim();
   if (!choice) return { status: "uncertain", reason: "model answer has no choice", choice: "", relation };
   if (choice.toLowerCase() === "none") {
@@ -302,23 +303,27 @@ export function parseSumoConceptChoiceResponse(value, { evidence, candidates = [
     return { status: "uncertain", reason: `model named an unsupplied candidate ${choice}`, choice, relation: "" };
   }
   if (!SUMO_LINK_RELATIONS.includes(relation)) {
-    return { status: "uncertain", reason: `model named an unsupported relation ${relation}`, choice, relation: "" };
+    // The model names a relation the sweep does not support. The relation is
+    // advisory, so the answer still stands as a choice.
+    relation = "";
   }
-  const crosswalk = evidence?.crosswalk;
-  if (crosswalk && candidate.senses.includes(crosswalk.senseId) && relation !== crosswalk.relation) {
+  let settled;
+  try {
+    settled = relationForTarget(evidence, candidate);
+  } catch (error) {
     return {
       status: "uncertain",
-      reason: `model relation ${relation} contradicts the crosswalk relation ${crosswalk.relation}`,
+      reason: text(error?.message) || "the evidence path supports no relation",
       choice,
       relation: ""
     };
   }
-  const settled = relationForTarget(evidence, candidate, relation);
   return {
     status: "accepted",
     reason: reason || "model chose one candidate",
     choice: candidate.sequence,
-    relation: settled
+    relation: settled,
+    proposed: relation
   };
 }
 
@@ -772,6 +777,7 @@ async function resolveCandidates({ context, dependencies }) {
           path: resolution.path,
           sequence: parsed.choice || "",
           relation: parsed.relation || "",
+          proposedRelation: parsed.proposed || "",
           reason: parsed.reason,
           candidates: candidates.map((candidate) => candidate.sequence),
           promptRevision: context.config.promptRevision
@@ -809,6 +815,7 @@ async function resolveCandidates({ context, dependencies }) {
           path: resolution.path,
           sequence: retried.choice || "",
           relation: retried.relation || "",
+          proposedRelation: retried.proposed || "",
           reason: retried.reason,
           candidates: candidates.map((candidate) => candidate.sequence),
           promptRevision: context.config.promptRevision
@@ -836,6 +843,20 @@ async function resolveCandidates({ context, dependencies }) {
     "candidate-count": resolved.length,
     "failure-count": failures.length
   };
+}
+
+/**
+ * The relation a candidate row earns. The relation is derived again from the
+ * evidence, so a candidate row recorded before the derivation was fixed cannot
+ * promote a relation the evidence does not support.
+ */
+export function sumoConceptRelationForCandidate(candidate, evidence, linkIndex) {
+  const target = linkIndex?.entriesBySequence?.get(candidate?.sequence);
+  return deriveSumoConceptRelation({
+    path: candidate?.path,
+    crosswalk: evidence?.crosswalk,
+    targetSenses: target?.senses ?? []
+  });
 }
 
 async function verifyLinks({ context, dependencies }) {
@@ -872,10 +893,27 @@ async function verifyLinks({ context, dependencies }) {
       continue;
     }
     const concept = state.concepts.get(candidate.sumoId);
+    // The relation is derived again from the evidence, so a candidate row
+    // recorded before the derivation was fixed cannot promote a wrong relation.
+    let relation;
+    try {
+      relation = sumoConceptRelationForCandidate(candidate, evidence, state.linkIndex);
+    } catch (error) {
+      decisions.push({
+        id: `decision:${candidate.sumoId}`,
+        sumoId: candidate.sumoId,
+        status: "uncertain",
+        relation: "",
+        sequence: "",
+        path: candidate.path,
+        reason: text(error?.message)
+      });
+      continue;
+    }
     const resolution = {
       status: "resolved",
       path: candidate.path,
-      relation: candidate.relation,
+      relation,
       sequence: candidate.sequence,
       reason: candidate.reason
     };

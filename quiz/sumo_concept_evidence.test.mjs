@@ -6,9 +6,11 @@ import {
   buildSumoConceptEvidence,
   buildSumoConceptLinkRecord,
   buildSumoLinkIndex,
+  deriveSumoConceptRelation,
   normalizeSumoSurface,
   parseSumoConceptCatalog,
   parseSumoConceptLinkRows,
+  reconcileSumoConceptLinkRelations,
   relationForTarget,
   renderSumoConceptLinkRows,
   resolveSumoConceptEvidence,
@@ -152,11 +154,87 @@ test("several surface candidates need adjudication", () => {
   assert.equal(resolution.path, "surface");
 });
 
-test("a chosen target keeps the crosswalk relation only when it holds the sense", () => {
-  const evidence = { crosswalk: { senseId: "n:07511157-n", relation: "equivalent-to" } };
-  assert.equal(relationForTarget(evidence, { senses: ["n:07511157-n"] }), "equivalent-to");
-  assert.equal(relationForTarget(evidence, { senses: ["n:00000000-n"] }, "superclass-of"), "superclass-of");
-  assert.equal(relationForTarget(evidence, { senses: [] }), "equivalent-to");
+test("a chosen target takes the relation its evidence path supports", () => {
+  const surface = { path: "surface", crosswalk: { senseId: "n:07511157-n", relation: "equivalent-to" } };
+  assert.equal(relationForTarget(surface, { senses: ["n:07511157-n"] }), "equivalent-to");
+  assert.equal(relationForTarget(surface, { senses: ["n:00000000-n"] }), "equivalent-to");
+  const hierarchy = { path: "hierarchy", crosswalk: null };
+  assert.equal(relationForTarget(hierarchy, { senses: [] }), "superclass-of");
+  const adjudication = { path: "adjudication", crosswalk: { senseId: "n:07511157-n", relation: "equivalent-to" } };
+  assert.equal(relationForTarget(adjudication, { senses: [] }), "superclass-of");
+});
+
+test("a target that holds the crosswalk sense keeps the crosswalk relation", () => {
+  const evidence = { path: "surface", crosswalk: { senseId: "n:07511157-n", relation: "subsumed-by" } };
+  assert.equal(relationForTarget(evidence, { senses: ["n:07511157-n"] }), "subsumed-by");
+});
+
+test("an evidence path that supports no relation is refused", () => {
+  assert.throws(
+    () => deriveSumoConceptRelation({ path: "covered", crosswalk: null, targetSenses: [] }),
+    (error) => error.code === "invalid-sumo-concept-evidence"
+  );
+});
+
+test("promoted links keep their identifiers when the relation is repaired", () => {
+  const index = buildSumoLinkIndex(ENTRIES);
+  const records = [
+    {
+      recordId: "sumo-link:CompanionateLove",
+      kind: "sumo-concept-link",
+      sumoId: "CompanionateLove",
+      label: "companionate love",
+      surface: "companionate love",
+      pyashSequence: ["pyan", "hbin"],
+      relation: "subsumed-by",
+      evidence: {
+        path: "adjudication",
+        reason: "the head word entry is broader",
+        crosswalkSenseId: "",
+        crosswalkRelation: "",
+        ancestorSumoId: "Love",
+        ancestorSurface: "love",
+        hierarchyDepth: 1,
+        affinity: "head-word"
+      },
+      provenance: "WordNet 3.0 mapping snapshot"
+    }
+  ];
+  const { records: reconciled, changes } = reconcileSumoConceptLinkRelations(records, { linkIndex: index });
+  assert.equal(reconciled[0].relation, "superclass-of");
+  assert.deepEqual(reconciled[0].pyashSequence, ["pyan", "hbin"]);
+  assert.deepEqual(changes, [
+    { sumoId: "CompanionateLove", from: "subsumed-by", to: "superclass-of", path: "adjudication" }
+  ]);
+});
+
+test("a promoted link whose relation the evidence supports is left alone", () => {
+  const index = buildSumoLinkIndex(ENTRIES);
+  const records = [
+    {
+      recordId: "sumo-link:Love",
+      kind: "sumo-concept-link",
+      sumoId: "Love",
+      label: "love",
+      surface: "love",
+      pyashSequence: ["pyan", "hbin"],
+      relation: "equivalent-to",
+      evidence: {
+        path: "surface",
+        reason: "own surface matches one entry",
+        crosswalkSenseId: "n:07511157-n",
+        crosswalkRelation: "equivalent-to",
+        ancestorSumoId: "",
+        ancestorSurface: "",
+        hierarchyDepth: null,
+        affinity: ""
+      },
+      provenance: "WordNet 3.0 mapping snapshot"
+    }
+  ];
+  const { records: reconciled, changes } = reconcileSumoConceptLinkRelations(records, { linkIndex: index });
+  assert.equal(reconciled[0], records[0]);
+  assert.deepEqual(changes, []);
 });
 
 test("a link record keeps identifiers and never copies the SUMO definition", () => {
