@@ -350,6 +350,43 @@ Read <code>concept-worklist.pya</code> first, then
 An uncertain or rejected decision is not a transient failure. Do not rerun it
 without reading its evidence.
 
+### Run the backlog under a supervisor
+
+The backlog runs for hours, so it needs a supervisor that outlives the agent
+that starts it. A user service with lingering enabled keeps it running across
+sessions:
+
+~~~ini
+# ~/.config/systemd/user/pyash-sumo-concept-sweep.service
+[Unit]
+Description=Pyash SUMO concept sweep
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/htaf/pyash-vocab-sweep
+Environment=PYA_GPU_HOUSEKEEPER_URL=http://mriczo:18886
+ExecStart=/usr/bin/env -u PYA_MIND_RESPONSE node --max-old-space-size=8192 command/sumo_concept_refinery.mjs
+Restart=on-failure
+RestartSec=90
+StandardOutput=append:/home/htaf/pyash-vocab-sweep/artifacts/logs/sumo-sweep.log
+StandardError=append:/home/htaf/pyash-vocab-sweep/artifacts/logs/sumo-sweep.log
+
+[Install]
+WantedBy=default.target
+~~~
+
+Start it with <code>systemctl --user start pyash-sumo-concept-sweep.service</code>
+and read progress from <code>artifacts/logs/sumo-sweep.log</code>. The
+remaining count in each batch line falls as concepts leave the queue. Stop it
+with <code>systemctl --user stop pyash-sumo-concept-sweep.service</code>; the
+run lock is released when the process exits, and a stale lock is reclaimed on
+the next start.
+
+The service writes the promoted catalog into the working tree on every batch.
+Commit that catalog separately, and never stage the run artifacts, the
+newspaper, or the WordNet decision ledger with it.
+
 ### Promote and publish
 
 Accepted links are written to
