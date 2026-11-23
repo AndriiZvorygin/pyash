@@ -108,6 +108,19 @@ test("a model answer of none is a rejection", () => {
   assert.equal(parsed.choice, "");
 });
 
+test("a model answer that names a candidate number is read as that candidate", () => {
+  const candidates = [
+    { sequence: "pyan hbin", senses: [] },
+    { sequence: "cyit tfen", senses: [] }
+  ];
+  const parsed = parseSumoConceptChoiceResponse(
+    JSON.stringify({ choice: "2", relation: "equivalent-to", reason: "second candidate" }),
+    { evidence: {}, candidates }
+  );
+  assert.equal(parsed.status, "accepted");
+  assert.equal(parsed.choice, "cyit tfen");
+});
+
 test("a model answer naming an unsupplied candidate stays uncertain", () => {
   const parsed = parseSumoConceptChoiceResponse(
     JSON.stringify({ choice: "not offered", relation: "equivalent-to", reason: "guess" }),

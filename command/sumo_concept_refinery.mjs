@@ -14,7 +14,11 @@ import {
   setExchangeSentenceId,
   setExchangeStrict
 } from "../program/bridge/exchange.mjs";
-import { readSumoConceptPilotIds, runSumoConceptRefinery } from "../program/library/translation/sumo_concept_refinery.mjs";
+import {
+  readSumoConceptPilotIds,
+  runSumoConceptRefinery,
+  sumoConceptRunIdForState
+} from "../program/library/translation/sumo_concept_refinery.mjs";
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ARTIFACT_ROOT = path.join(REPOSITORY_ROOT, "artifacts");
@@ -125,6 +129,28 @@ async function progressArtifactSignature(artifactDirectory) {
   return signatures.join("\n");
 }
 
+async function attachExchangeRecorder({ runId, repositoryRoot }) {
+  const newspaperPath = path.join(repositoryRoot, "newspaper", `${sanitizeRunId(runId)}.pya`);
+  let write = Promise.resolve();
+  setExchangeRecorder({
+    runRoot: repositoryRoot,
+    record: (sentence) => {
+      write = write.then(async () => {
+        await fs.mkdir(path.dirname(newspaperPath), { recursive: true });
+        await fs.appendFile(newspaperPath, `${sentenceToPyash(sentence)}\n`, "utf8");
+      });
+      return write;
+    }
+  });
+  setExchangeRunId(runId);
+  setExchangeStrict(true);
+  return {
+    async flush() {
+      await write;
+    }
+  };
+}
+
 export async function runSumoConceptRefinerySweepCommand({
   dependencies = {},
   configuration = {},
@@ -152,7 +178,10 @@ export async function runSumoConceptRefinerySweepCommand({
     let requestedOffset = 0;
     let batchCount = 0;
     let lastResult = null;
-    const sweepState = {};
+    const prepared = await sumoConceptRunIdForState({ dependencies, repositoryRoot });
+    const sweepState = prepared.sweepState;
+    const runId = requestedRunId || prepared.runId;
+    const recorder = await attachExchangeRecorder({ runId, repositoryRoot });
 
     while (batchCount < maximumBatches) {
       const before = await (dependencies.progressSignature ?? progressArtifactSignature)(
@@ -167,15 +196,17 @@ export async function runSumoConceptRefinerySweepCommand({
       lastResult = await runSumoConceptRefinery({
         dependencies,
         configuration: chunkConceptIds ? { ...configuration, conceptIds: chunkConceptIds } : configuration,
-        runId: requestedRunId,
+        runId,
         repositoryRoot,
         artifactRoot,
         report: () => {},
         onCheckpoint: () => {},
         onStage: () => {},
+        sweepState,
         initialize: dependencies.initialize ?? true
       });
       batchCount += 1;
+      await recorder.flush();
       report(JSON.stringify({
         event: "sumo-concept-batch-complete",
         batchCount,

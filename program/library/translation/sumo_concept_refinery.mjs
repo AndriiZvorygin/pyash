@@ -123,6 +123,21 @@ export async function readSumoConceptPilotIds({ configUrl = SUMO_CONCEPT_CONFIG_
 }
 
 /**
+ * The run id is derived from the source identities and the prompt revision, so
+ * the caller can attach its exchange recorder before the first batch.
+ */
+export async function sumoConceptRunIdForState({
+  dependencies = {},
+  repositoryRoot = REPOSITORY_ROOT,
+  configUrl = SUMO_CONCEPT_CONFIG_URL,
+  sweepState = {}
+} = {}) {
+  const config = parseSumoConceptConfig(await readFile(configUrl, "utf8"));
+  const state = sweepState.sumoState ?? (sweepState.sumoState = await loadSumoConceptState({ dependencies, repositoryRoot }));
+  return { runId: sumoConceptRunId({ sourceHash: state.sourceHash, promptRevision: config.promptRevision }), sweepState, config };
+}
+
+/**
  * The concept's own words, used to find entries that share its head word.
  */
 function headWord(surface) {
@@ -255,7 +270,12 @@ export function parseSumoConceptChoiceResponse(value, { evidence, candidates = [
   if (choice.toLowerCase() === "none") {
     return { status: "rejected", reason: reason || "no candidate denotes the concept", choice: "", relation: "" };
   }
-  const candidate = candidates.find((entry) => entry.sequence === choice);
+  let candidate = candidates.find((entry) => entry.sequence === choice);
+  if (!candidate && /^[0-9]+$/u.test(choice)) {
+    // The prompt numbers the candidates, so a model may answer with a number.
+    const index = Number(choice) - 1;
+    if (index >= 0 && index < candidates.length) candidate = candidates[index];
+  }
   if (!candidate) {
     return { status: "uncertain", reason: `model named an unsupplied candidate ${choice}`, choice, relation: "" };
   }
@@ -902,6 +922,7 @@ export async function runSumoConceptRefinery({
   artifactRoot = join(REPOSITORY_ROOT, "artifacts"),
   dependencies = {},
   configuration = {},
+  sweepState = {},
   checkpointEnabled = true,
   runId = "",
   interpretFn = interpret,
@@ -929,7 +950,7 @@ export async function runSumoConceptRefinery({
       else await (await import("../../../command/run_pya_helpers.mjs")).loadDefaultConfig({ cwd: repositoryRoot, interpretFn, entryPath: repositoryRoot });
       configureMind(config.model);
     }
-    const state = await loadSumoConceptState({ dependencies, repositoryRoot });
+    const state = sweepState.sumoState ?? (sweepState.sumoState = await loadSumoConceptState({ dependencies, repositoryRoot }));
     const stableRunId = runId || sumoConceptRunId({ sourceHash: state.sourceHash, promptRevision: config.promptRevision });
     const artifactDirectory = join(resolve(artifactRoot), stableRunId);
     await mkdir(artifactDirectory, { recursive: true });
