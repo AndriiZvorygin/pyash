@@ -41,6 +41,12 @@ test("coding saddle renders common Markdown as structured terminal text", () => 
   assert.match(rendered, /one\s+│\s+two/u);
 });
 
+test("coding saddle keeps Markdown filenames from becoming HTTP links", () => {
+  const rendered = renderSaddleMarkdown("Append the house MEMORY.md, then update documentation/pyash.md.", { color: false }).join("\n");
+
+  assert.equal(rendered, "Append the house MEMORY.md, then update documentation/pyash.md.");
+});
+
 test("coding saddle Markdown styling is terminal-native and strips model control codes", () => {
   const malicious = "\u001b[2J# Safe\n\n**Bold** and `code`.";
   const lines = renderSaddleMarkdown(malicious, { width: 40, color: true });

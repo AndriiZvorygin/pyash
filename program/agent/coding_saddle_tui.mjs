@@ -5,7 +5,7 @@ import { splitTerminalGraphemes, terminalCellWidth, terminalGraphemeWidth, trunc
 const markdown = new MarkdownIt({
   html: false,
   breaks: true,
-  linkify: true,
+  linkify: false,
   typographer: true
 });
 
