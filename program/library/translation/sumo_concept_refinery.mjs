@@ -104,8 +104,21 @@ export function parseSumoConceptConfig(source) {
     maximumConcepts: Number(metadata["max-concepts-per-launch"]) || 64,
     candidateLimit: Number(metadata["candidate-limit"]) || 8,
     hierarchyDepthLimit: Number(metadata["hierarchy-depth-limit"]) || 6,
-    worklistOrder: text(metadata["worklist-order"]) || "english30k-rank"
+    worklistOrder: text(metadata["worklist-order"]) || "english30k-rank",
+    pilotConceptIds: text(metadata["pilot-concept-ids"])
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
   };
+}
+
+/**
+ * The pilot selection lives in the refinery config so a pilot runs without a
+ * command line switch and stays reviewable.
+ */
+export async function readSumoConceptPilotIds({ configUrl = SUMO_CONCEPT_CONFIG_URL } = {}) {
+  const config = parseSumoConceptConfig(await readFile(configUrl, "utf8"));
+  return config.pilotConceptIds;
 }
 
 /**

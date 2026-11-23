@@ -14,7 +14,7 @@ import {
   setExchangeSentenceId,
   setExchangeStrict
 } from "../program/bridge/exchange.mjs";
-import { runSumoConceptRefinery } from "../program/library/translation/sumo_concept_refinery.mjs";
+import { readSumoConceptPilotIds, runSumoConceptRefinery } from "../program/library/translation/sumo_concept_refinery.mjs";
 
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ARTIFACT_ROOT = path.join(REPOSITORY_ROOT, "artifacts");
@@ -142,8 +142,11 @@ export async function runSumoConceptRefinerySweepCommand({
   }
   const releaseLock = await acquireRunLock(artifactRoot);
   try {
-    const requestedConceptIds = Array.isArray(configuration.conceptIds)
-      ? [...new Set(configuration.conceptIds.map((value) => String(value ?? "").trim()).filter(Boolean))]
+    const configuredIds = Array.isArray(configuration.conceptIds)
+      ? configuration.conceptIds
+      : await readSumoConceptPilotIds();
+    const requestedConceptIds = configuredIds.length
+      ? [...new Set(configuredIds.map((value) => String(value ?? "").trim()).filter(Boolean))]
       : null;
     const requestedBatchSize = Math.min(64, Math.max(1, Math.trunc(Number(configuration.maximumConcepts) || 64)));
     let requestedOffset = 0;
