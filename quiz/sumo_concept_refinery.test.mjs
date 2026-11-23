@@ -28,6 +28,7 @@ const CONFIG = [
   'su text "candidate-limit" ob num 8 ya',
   'su text "hierarchy-depth-limit" ob num 6 ya',
   'su text "worklist-order" ob text "english30k-rank" ya',
+  'su text "pilot-concept-ids" ob text "Love,CompanionateLove" ya',
   "prah"
 ].join("\n");
 
@@ -38,6 +39,9 @@ test("the SUMO concept config reads its sweep settings", () => {
   assert.equal(config.maximumConcepts, 64);
   assert.equal(config.candidateLimit, 8);
   assert.equal(config.worklistOrder, "english30k-rank");
+  assert.deepEqual(config.pilotConceptIds, ["Love", "CompanionateLove"]);
+  assert.equal(config.maxOutputTokens, 512);
+  assert.equal(config.hierarchyDepthLimit, 6);
 });
 
 test("the SUMO concept run id follows its sources and prompt revision", () => {

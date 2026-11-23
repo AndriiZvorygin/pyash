@@ -86,14 +86,14 @@ export function parseSumoConceptConfig(source) {
   const metadata = {};
   for (const sentence of sentences) {
     if (sentence?.mood !== "ya" || typeof sentence.su?.text !== "string") continue;
-    if (sentence.su.text === "format") {
+    const key = sentence.su.text.startsWith("meta:") ? sentence.su.text.slice(5) : sentence.su.text;
+    if (key === "format") {
       metadata.format = text(sentence.ob?.text);
       continue;
     }
-    if (!sentence.su.text.startsWith("meta:")) continue;
-    const key = sentence.su.text.slice(5);
     const value = sentence.ob?.text;
-    metadata[key] = typeof value === "number" ? value : text(value);
+    const count = sentence.ob?.num;
+    metadata[key] = typeof value === "string" ? value : typeof count === "number" ? count : "";
   }
   if (!metadata.format) throw invalid("SUMO concept refinery config has no format");
   return {
@@ -511,11 +511,12 @@ export async function loadSumoConceptState({ dependencies = {}, repositoryRoot =
     ? await dependencies.loadEnglish30k()
     : await loadEnglish30k();
   const rankForEnglish = buildEnglishRankIndex(english30k.rows ?? []);
+  // The promoted catalog grows while a sweep runs, so it stays out of the
+  // source hash: the run id has to survive a promotion.
   return { ontology, concepts, linkIndex, evidence, promotedRecords, rankForEnglish, sourceHash: hash(stableJson({
     ontology: SUMO_ONTOLOGY_COMMIT,
     concepts: concepts.size,
-    entries: entries.length,
-    promoted: promotedRecords.length
+    entries: entries.length
   })) };
 }
 
@@ -957,7 +958,7 @@ export async function runSumoConceptRefinery({
     return {
       runId: stableRunId,
       artifactDirectory,
-      selectedConceptCount: Number(result["accepted-count"] ?? 0),
+      selectedConceptCount: Number(mapValue("concept mapping")["selected-concept-count"] ?? 0),
       remainingConceptCount: mapValue("concept mapping")["remaining-concept-count"] ?? 0,
       result
     };
