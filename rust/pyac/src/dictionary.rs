@@ -14,9 +14,7 @@ pub use operation::{
     OperationArgument, OperationArgumentType, OperationResult, OperationSignature,
     OperationSignatureKey,
 };
-pub use reader::{
-    DictionaryFileReader, DictionaryReadError, DictionarySection, DictionarySourceMatch,
-};
+pub use reader::{DictionaryFileReader, DictionaryReadError, DictionarySection};
 pub use volume::{
     DictionaryMetadata, DictionaryVolume, DictionaryVolumeEntry, DictionaryVolumeError,
     encode_dictionary,

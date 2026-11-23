@@ -1,21 +1,31 @@
-use super::operation::{OperationArgumentType, OperationSignature, OperationSignatureKey};
+use super::operation::{OperationArgumentType, OperationSignature};
 use super::volume::{DictionaryMetadata, DictionaryVolumeError};
-use super::wire::{AS, AT, BY, FROM, Field, OB, TO, Value, WITH, encode_text_sentence};
+use super::wire::{
+    AS, AT, BY, FROM, Field, OB, Subject, TO, Value, WITH, encode_index_sentence_v4,
+    encode_sentence, encode_text_sentence,
+};
 use super::{DictionaryEntry, DictionaryVolumeEntry};
 use crate::WORDS_PER_CODELET;
 
 pub(super) const PROFILE_SUBJECT: [u16; 2] = [0x680b, 0x6c22]; // lyin kwon: machine-readable dictionary.
 pub(super) const CONTENTS_SUBJECT: [u16; 2] = [0x8893, 0x2c30]; // dvis hnok.
 pub(super) const INDEX_SUBJECT: [u16; 2] = [0xa92b, 0x28ea]; // lwat txik.
-pub(super) const ENTRY_SUBJECT: [u16; 2] = [0xa96a, 0x6c22]; // tlat kwon.
 pub(super) const PROFILE_VERSION_V2: &str = "pyac-vliw-dictionary/2";
-pub(super) const PROFILE_VERSION: &str = "pyac-vliw-dictionary/3";
+pub(super) const PROFILE_VERSION_V3: &str = "pyac-vliw-dictionary/3";
+pub(super) const PROFILE_VERSION: &str = "pyac-vliw-dictionary/4";
 pub(super) const TOC_ROLES: [&str; 7] = [
     "metadata",
     "canonical-index",
     "surface-index",
     "source-index",
     "entry-location-index",
+    "operation-signature-index",
+    "entries",
+];
+pub(super) const TOC_ROLES_V4: [&str; 5] = [
+    "canonical-index",
+    "surface-index",
+    "source-index",
     "operation-signature-index",
     "entries",
 ];
@@ -90,8 +100,9 @@ fn append_argument_type(
     append_sequence(output, &key.value_type)
 }
 
-pub(super) fn profile_records(
+pub(super) fn profile_records_v4(
     metadata: &DictionaryMetadata,
+    entry_count: usize,
 ) -> Result<(Vec<[u16; WORDS_PER_CODELET]>, Vec<[u16; WORDS_PER_CODELET]>), DictionaryVolumeError> {
     let marker = sentence(
         PROFILE_SUBJECT.as_slice(),
@@ -108,31 +119,48 @@ pub(super) fn profile_records(
             text_field(TO, &metadata.normalization_policy),
             Field {
                 grammatical_case: BY,
-                value: Value::Uint16(TOC_ROLES.len() as u16),
+                value: Value::Uint16(TOC_ROLES_V4.len() as u16),
             },
             text_field(WITH, PROFILE_VERSION),
+            Field {
+                grammatical_case: AT,
+                value: Value::Uint32(
+                    u32::try_from(entry_count)
+                        .map_err(|_| DictionaryVolumeError::TooManyCodelets)?,
+                ),
+            },
         ],
     )?;
     Ok((marker, metadata_record))
 }
 
-pub(super) fn toc_records(
+pub(super) fn toc_records_v4(
     ranges: &[(usize, usize)],
 ) -> Result<Vec<[u16; WORDS_PER_CODELET]>, DictionaryVolumeError> {
+    if ranges.len() != TOC_ROLES_V4.len() {
+        return Err(DictionaryVolumeError::InvalidMetadata(
+            "v4 TOC must declare all five fixed sections",
+        ));
+    }
     let mut output = Vec::new();
-    for (role, (start, count)) in TOC_ROLES.iter().zip(ranges) {
+    for (ordinal, (start, count)) in ranges.iter().enumerate() {
         let words = range_pair(*start, *count)?;
         output.extend(sentence(
             CONTENTS_SUBJECT.as_slice(),
-            &[text_field(OB, role), vector_field(FROM, &words)],
+            &[
+                Field {
+                    grammatical_case: OB,
+                    value: Value::Uint16(ordinal as u16),
+                },
+                vector_field(FROM, &words),
+            ],
         )?);
     }
     Ok(output)
 }
 
-pub(super) fn encode_entry(
+pub(super) fn encode_entry_v4(
     entry: &DictionaryVolumeEntry,
-    range: [u16; 4],
 ) -> Result<EncodedEntry, DictionaryVolumeError> {
     if entry.key.is_empty() {
         return Err(DictionaryVolumeError::InvalidEntry("key must be non-empty"));
@@ -150,112 +178,83 @@ pub(super) fn encode_entry(
         }
     }
     let key = &entry.key;
-    let mut output = sentence(
-        ENTRY_SUBJECT.as_slice(),
-        &[vector_field(OB, key), vector_field(AT, &range)],
-    )?;
+    let mut output = Vec::new();
     for form in &entry.lexical_forms {
-        output.extend(sentence(
-            ENTRY_SUBJECT.as_slice(),
+        output.extend(encode_sentence(
+            Subject::Name(key),
             &[
-                vector_field(OB, key),
                 text_field(AS, &form.language),
                 text_field(FROM, &form.surface),
                 text_field(TO, &form.normalized),
-                text_field(AT, "lexical-form"),
             ],
         )?);
     }
     for link in &entry.source_links {
-        output.extend(sentence(
-            ENTRY_SUBJECT.as_slice(),
+        output.extend(encode_sentence(
+            Subject::Name(key),
             &[
-                vector_field(OB, key),
                 text_field(AS, &link.dataset),
                 text_field(FROM, &link.release),
                 text_field(TO, &link.identifier),
                 text_field(BY, &link.relation),
-                text_field(AT, "source-link"),
             ],
         )?);
     }
     for gloss in &entry.source_glosses {
-        output.extend(sentence(
-            ENTRY_SUBJECT.as_slice(),
+        output.extend(encode_sentence(
+            Subject::Name(key),
             &[
-                vector_field(OB, key),
                 text_field(AS, &gloss.language),
                 text_field(FROM, &gloss.dataset),
                 text_field(TO, &gloss.release),
                 text_field(BY, &gloss.identifier),
                 text_field(WITH, &gloss.text),
-                text_field(AT, "source-gloss"),
             ],
         )?);
     }
     for component in &entry.component_keys {
-        output.extend(sentence(
-            ENTRY_SUBJECT.as_slice(),
-            &[
-                vector_field(OB, key),
-                vector_field(FROM, component),
-                text_field(AT, "component"),
-            ],
+        output.extend(encode_sentence(
+            Subject::Name(key),
+            &[vector_field(FROM, component)],
         )?);
     }
     for task in &entry.task_keys {
-        output.extend(sentence(
-            ENTRY_SUBJECT.as_slice(),
-            &[
-                vector_field(OB, key),
-                vector_field(WITH, task),
-                text_field(AT, "task"),
-            ],
+        output.extend(encode_sentence(
+            Subject::Name(key),
+            &[vector_field(WITH, task)],
         )?);
     }
     for reference in &entry.references {
-        output.extend(sentence(
-            ENTRY_SUBJECT.as_slice(),
-            &[
-                vector_field(OB, key),
-                vector_field(TO, reference),
-                text_field(AT, "reference"),
-            ],
+        output.extend(encode_sentence(
+            Subject::Name(key),
+            &[vector_field(TO, reference)],
         )?);
     }
     for signature in &entry.operation_signatures {
         let dispatch = signature_words(signature)?;
-        output.extend(sentence(
-            ENTRY_SUBJECT.as_slice(),
-            &[
-                vector_field(OB, key),
-                vector_field(FROM, &dispatch),
-                text_field(AT, "operation-signature"),
-            ],
+        output.extend(encode_sentence(
+            Subject::Name(key),
+            &[vector_field(BY, &dispatch)],
         )?);
         for argument in &signature.arguments {
             let mut key_words = Vec::new();
             append_argument_type(&mut key_words, &argument.key)?;
-            output.extend(sentence(
-                ENTRY_SUBJECT.as_slice(),
+            output.extend(encode_sentence(
+                Subject::Name(key),
                 &[
-                    vector_field(OB, key),
                     vector_field(AS, &key_words),
                     text_field(FROM, &argument.name),
                     text_field(TO, &argument.description),
-                    text_field(AT, "operation-argument"),
                 ],
             )?);
         }
         for result in &signature.results {
-            output.extend(sentence(
-                ENTRY_SUBJECT.as_slice(),
+            output.extend(encode_sentence(
+                Subject::Name(key),
                 &[
-                    vector_field(OB, key),
                     vector_field(AS, &result.value_type),
-                    text_field(FROM, &result.name),
-                    text_field(TO, &result.description),
-                    text_field(AT, "operation-result"),
+                    text_field(BY, &result.name),
+                    text_field(WITH, &result.description),
                 ],
             )?);
         }
@@ -263,128 +262,158 @@ pub(super) fn encode_entry(
     if let Some(definition) = &entry.definition {
         output.extend(definition.iter().copied());
     }
-    let mut descriptor = DictionaryEntry {
+    if output.is_empty() {
+        return Err(DictionaryVolumeError::InvalidEntry(
+            "entry must contain at least one sentence",
+        ));
+    }
+    let descriptor = DictionaryEntry {
         key: key.clone(),
         codelet_start: 0,
-        codelet_count: 0,
+        codelet_count: u32::try_from(output.len())
+            .map_err(|_| DictionaryVolumeError::TooManyCodelets)?,
         lexical_forms: entry.lexical_forms.clone(),
         source_links: entry.source_links.clone(),
         task_keys: entry.task_keys.clone(),
         references: entry.references.clone(),
         operation_signatures: entry.operation_signatures.clone(),
     };
-    descriptor.codelet_count =
-        u32::try_from(output.len()).map_err(|_| DictionaryVolumeError::TooManyCodelets)?;
     Ok(EncodedEntry {
         entry: descriptor,
         codelets: output,
     })
 }
 
-pub(super) fn index_records(
+pub(super) fn index_records_v4(
     entries: &[DictionaryVolumeEntry],
-    entry_ranges: &[[u16; 4]],
+    entry_offsets: &[u32],
 ) -> Result<Vec<Vec<[u16; WORDS_PER_CODELET]>>, DictionaryVolumeError> {
+    if entries.len() != entry_offsets.len() {
+        return Err(DictionaryVolumeError::InvalidMetadata(
+            "entry offset count does not match entries",
+        ));
+    }
     let mut canonical = Vec::new();
-    let mut surfaces = Vec::new();
-    let mut sources = Vec::new();
-    let mut locations = Vec::new();
-    let mut operations = Vec::new();
     let mut surface_rows = Vec::new();
     let mut source_rows = Vec::new();
-    let mut operation_rows: Vec<(OperationSignatureKey, Vec<u16>, &[u16])> = Vec::new();
-    for (entry, location) in entries.iter().zip(entry_ranges) {
-        canonical.extend(sentence(
-            INDEX_SUBJECT.as_slice(),
-            &[
-                text_field(OB, "canonical"),
-                vector_field(FROM, &entry.key),
-                vector_field(TO, &entry.key),
-            ],
-        )?);
-        let entry_start = location[0] as usize | ((location[1] as usize) << 16);
-        let entry_count = location[2] as usize | ((location[3] as usize) << 16);
-        let definition_len = entry.definition.as_ref().map_or(0, Vec::len);
-        let definition_start = entry_start
-            .checked_add(entry_count.saturating_sub(definition_len))
-            .ok_or(DictionaryVolumeError::TooManyCodelets)?;
-        let definition_range = range_pair(definition_start, definition_len)?;
-        locations.extend(sentence(
-            INDEX_SUBJECT.as_slice(),
-            &[
-                text_field(OB, "entry-location"),
-                vector_field(FROM, &entry.key),
-                vector_field(TO, location),
-                vector_field(WITH, &definition_range),
-            ],
+    let mut operation_rows = Vec::new();
+    for (entry, offset) in entries.iter().zip(entry_offsets.iter().copied()) {
+        canonical.extend(encode_index_sentence_v4(
+            Subject::Name(&entry.key),
+            &[Field {
+                grammatical_case: AT,
+                value: Value::Uint32(offset),
+            }],
         )?);
         for form in &entry.lexical_forms {
             surface_rows.push((
+                form.normalized.encode_utf16().collect::<Vec<_>>(),
                 form.language.as_str(),
-                form.normalized.as_str(),
-                entry.key.as_slice(),
+                offset,
             ));
         }
         for link in &entry.source_links {
             source_rows.push((
+                link.identifier.as_str(),
                 link.dataset.as_str(),
                 link.release.as_str(),
-                link.identifier.as_str(),
-                entry.key.as_slice(),
-                link.relation.as_str(),
+                offset,
             ));
         }
         for signature in &entry.operation_signatures {
-            let key = OperationSignatureKey::new(
-                signature.verb.clone(),
-                signature.mood.clone(),
-                signature
-                    .arguments
-                    .iter()
-                    .map(|argument| argument.key.clone())
-                    .collect(),
-            );
-            operation_rows.push((key, signature_words(signature)?, entry.key.as_slice()));
+            operation_rows.push((signature_words(signature)?, offset));
         }
     }
-    surface_rows.sort_unstable();
+    surface_rows.sort_unstable_by(|left, right| {
+        (&left.0, left.1, left.2).cmp(&(&right.0, right.1, right.2))
+    });
     surface_rows.dedup();
     source_rows.sort_unstable();
-    operation_rows.sort_unstable_by(|left, right| (&left.0, left.2).cmp(&(&right.0, right.2)));
-    operation_rows.dedup_by(|left, right| left.0 == right.0 && left.2 == right.2);
-    for (language, normalized, key) in surface_rows {
-        surfaces.extend(sentence(
-            INDEX_SUBJECT.as_slice(),
-            &[
-                text_field(OB, "language-surface"),
-                text_field(AS, language),
-                text_field(FROM, normalized),
-                vector_field(TO, key),
-            ],
+    source_rows.dedup();
+    operation_rows.sort_unstable();
+    operation_rows.dedup();
+
+    let mut surfaces = Vec::new();
+    let mut cursor = 0;
+    while cursor < surface_rows.len() {
+        let end = surface_rows[cursor..]
+            .iter()
+            .position(|row| row.0 != surface_rows[cursor].0 || row.1 != surface_rows[cursor].1)
+            .map_or(surface_rows.len(), |delta| cursor + delta);
+        let surface = String::from_utf16(&surface_rows[cursor].0)
+            .map_err(|_| DictionaryVolumeError::InvalidEntry("surface is invalid UTF-16"))?;
+        let language = surface_rows[cursor].1;
+        let offsets = surface_rows[cursor..end]
+            .iter()
+            .map(|row| row.2)
+            .collect::<Vec<_>>();
+        surfaces.extend(encode_index_sentence_v4(
+            Subject::Text(&surface),
+            &[text_field(AS, language), offsets_field(&offsets)],
         )?);
+        cursor = end;
     }
-    for (dataset, release, identifier, key, relation) in source_rows {
-        sources.extend(sentence(
-            INDEX_SUBJECT.as_slice(),
+
+    let mut sources = Vec::new();
+    cursor = 0;
+    while cursor < source_rows.len() {
+        let end = source_rows[cursor..]
+            .iter()
+            .position(|row| {
+                row.0 != source_rows[cursor].0
+                    || row.1 != source_rows[cursor].1
+                    || row.2 != source_rows[cursor].2
+            })
+            .map_or(source_rows.len(), |delta| cursor + delta);
+        let identifier = source_rows[cursor].0;
+        let dataset = source_rows[cursor].1;
+        let release = source_rows[cursor].2;
+        let offsets = source_rows[cursor..end]
+            .iter()
+            .map(|row| row.3)
+            .collect::<Vec<_>>();
+        sources.extend(encode_index_sentence_v4(
+            Subject::Text(identifier),
             &[
-                text_field(OB, "external-source"),
                 text_field(AS, dataset),
                 text_field(FROM, release),
-                text_field(TO, identifier),
-                vector_field(BY, key),
-                text_field(WITH, relation),
+                offsets_field(&offsets),
             ],
         )?);
+        cursor = end;
     }
-    for (_, dispatch, key) in operation_rows {
-        operations.extend(sentence(
-            INDEX_SUBJECT.as_slice(),
-            &[
-                text_field(OB, "operation-signature"),
-                vector_field(FROM, &dispatch),
-                vector_field(TO, key),
-            ],
+
+    let mut operations = Vec::new();
+    cursor = 0;
+    while cursor < operation_rows.len() {
+        let end = operation_rows[cursor..]
+            .iter()
+            .position(|row| row.0 != operation_rows[cursor].0)
+            .map_or(operation_rows.len(), |delta| cursor + delta);
+        let signature = &operation_rows[cursor].0;
+        let offsets = operation_rows[cursor..end]
+            .iter()
+            .map(|row| row.1)
+            .collect::<Vec<_>>();
+        operations.extend(encode_index_sentence_v4(
+            Subject::Uint16Vector(signature),
+            &[offsets_field(&offsets)],
         )?);
+        cursor = end;
     }
-    Ok(vec![canonical, surfaces, sources, locations, operations])
+    Ok(vec![canonical, surfaces, sources, operations])
+}
+
+fn offsets_field(offsets: &[u32]) -> Field<'_> {
+    if offsets.len() == 1 {
+        Field {
+            grammatical_case: AT,
+            value: Value::Uint32(offsets[0]),
+        }
+    } else {
+        Field {
+            grammatical_case: AT,
+            value: Value::Uint32Vector(offsets),
+        }
+    }
 }

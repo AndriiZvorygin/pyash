@@ -1,10 +1,11 @@
 import { buildProgram } from "../../program.mjs";
 import { lowerPyashProgram, lowerSentence } from "../vliw/index.mjs";
-import { lookupLegacyPyaName } from "../vliw/quotes.mjs";
+import { lookupLegacyName, lookupLegacyPyaName } from "../vliw/quotes.mjs";
 
 const PROFILE_KEY = "lyin kwon";
 const ENTRY_RECORD_KEY = "tlat kwon";
-const PROFILE_VERSION = "pyac-vliw-dictionary/3";
+const LEGACY_PROFILE_VERSION = "pyac-vliw-dictionary/3";
+const PROFILE_VERSION = "pyac-vliw-dictionary/4";
 
 function requireText(value, label) {
   if (typeof value !== "string" || !value.trim()) {
@@ -17,7 +18,7 @@ function keyForName(name) {
   const words = String(name ?? "").trim().split(/\s+/u).filter(Boolean);
   if (!words.length) throw new Error("dictionary entry requires a Pyash key");
   return words.map((word) => {
-    const entry = lookupLegacyPyaName(word);
+    const entry = lookupLegacyPyaName(word) ?? lookupLegacyName(word);
     if (!entry?.hnuc) throw new Error(`dictionary key word has no HNUC mapping: ${word}`);
     return Number.parseInt(entry.hnuc, 16);
   });
@@ -70,6 +71,92 @@ function parseOperationSignature(dispatch) {
 
 function text(value, label) {
   return requireText(value?.text, label);
+}
+
+function hasCaseShape(sentence, cases, types) {
+  const present = ["ob", "as", "from", "to", "by", "with"]
+    .filter((caseName) => sentence[caseName] !== undefined)
+    .sort();
+  if (present.join(" ") !== [...cases].sort().join(" ")) return false;
+  return cases.every((caseName, index) => {
+    const value = sentence[caseName];
+    return types[index] === "text"
+      ? typeof value?.text === "string"
+      : Array.isArray(value?.ve?.values);
+  });
+}
+
+function addV4EntryMetadata(sentence, entry) {
+  if (hasCaseShape(sentence, ["as", "from", "to"], ["text", "text", "text"])) {
+    entry.lexical_forms.push({
+      language: text(sentence.as, "lexical language"),
+      surface: text(sentence.from, "lexical surface"),
+      normalized: text(sentence.to, "normalized lexical surface")
+    });
+  } else if (hasCaseShape(sentence, ["as", "from", "to", "by"], ["text", "text", "text", "text"])) {
+    entry.source_links.push({
+      dataset: text(sentence.as, "source dataset"),
+      release: text(sentence.from, "source release"),
+      identifier: text(sentence.to, "source identifier"),
+      relation: text(sentence.by, "source relation")
+    });
+  } else if (hasCaseShape(sentence, ["as", "from", "to", "by", "with"], ["text", "text", "text", "text", "text"])) {
+    entry.source_glosses.push({
+      language: text(sentence.as, "source gloss language"),
+      dataset: text(sentence.from, "source gloss dataset"),
+      release: text(sentence.to, "source gloss release"),
+      identifier: text(sentence.by, "source gloss identifier"),
+      text: text(sentence.with, "source gloss text")
+    });
+  } else if (hasCaseShape(sentence, ["from"], ["vector"])) {
+    entry.component_keys.push(parseVector(sentence.from.ve.values, "component key"));
+  } else if (hasCaseShape(sentence, ["with"], ["vector"])) {
+    entry.task_keys.push(parseVector(sentence.with.ve.values, "task key"));
+  } else if (hasCaseShape(sentence, ["to"], ["vector"])) {
+    entry.references.push(parseVector(sentence.to.ve.values, "reference key"));
+  } else if (hasCaseShape(sentence, ["by"], ["vector"])) {
+    entry.operation_signatures.push(parseOperationSignature(sentence.by.ve.values));
+  } else if (hasCaseShape(sentence, ["as", "from", "to"], ["vector", "text", "text"])) {
+    const signature = entry.operation_signatures.at(-1);
+    if (!signature) throw new Error("operation argument must follow its operation signature");
+    const words = parseVector(sentence.as.ve.values, "operation argument descriptor");
+    const cursor = { index: 0 };
+    const grammaticalCase = parseSequence(words, cursor, "argument case");
+    const valueType = parseSequence(words, cursor, "argument type");
+    if (cursor.index !== words.length) throw new Error("operation argument descriptor has trailing words");
+    const argument = signature.arguments.find((item) => (
+      JSON.stringify(item.grammatical_case) === JSON.stringify(grammaticalCase)
+      && JSON.stringify(item.value_type) === JSON.stringify(valueType)
+    ));
+    if (!argument) throw new Error("operation argument metadata does not match its signature");
+    argument.name = text(sentence.from, "operation argument name");
+    argument.description = text(sentence.to, "operation argument description");
+  } else if (hasCaseShape(sentence, ["as", "by", "with"], ["vector", "text", "text"])) {
+    const signature = entry.operation_signatures.at(-1);
+    if (!signature) throw new Error("operation result must follow its operation signature");
+    signature.results.push({
+      value_type: parseVector(sentence.as.ve.values, "operation result type"),
+      name: text(sentence.by, "operation result name"),
+      description: text(sentence.with, "operation result description")
+    });
+  } else {
+    return false;
+  }
+  return true;
+}
+
+function newEntry(keyName) {
+  return {
+    key: keyForName(keyName),
+    lexical_forms: [],
+    source_links: [],
+    source_glosses: [],
+    component_keys: [],
+    task_keys: [],
+    references: [],
+    operation_signatures: [],
+    definition: []
+  };
 }
 
 function buildEntryRecord(sentence, entries, entryByName) {
@@ -161,22 +248,44 @@ export function buildDictionarySource(source) {
   if (!marker || !metadata) {
     throw new Error("dictionary source requires profile and metadata sentences for lyin kwon");
   }
-  if (metadata.to?.text !== "NFC" || metadata.with?.text !== PROFILE_VERSION) {
+  const sourceVersion = metadata.with?.text;
+  if (metadata.to?.text !== "NFC" || ![PROFILE_VERSION, LEGACY_PROFILE_VERSION].includes(sourceVersion)) {
     throw new Error(`dictionary metadata must declare NFC and ${PROFILE_VERSION}`);
   }
   const languages = text(metadata.from, "volume languages").split(",").map((item) => item.trim());
   const entries = [];
   const entryByName = new Map();
+  const definitionStarted = new Set();
   for (const sentence of sentences) {
-    if (sentence?.mood === "prah") continue;
-    if (sentence.su?.name === PROFILE_KEY) continue;
-    if (sentence.su?.name === ENTRY_RECORD_KEY) {
-      buildEntryRecord(sentence, entries, entryByName);
+    if (sentence?.mood === "prah" || sentence.su?.name === PROFILE_KEY) continue;
+    const name = sentence.su?.name;
+    if (!name) throw new Error("dictionary entry sentence requires its canonical Pyac key in su");
+    if (sourceVersion === LEGACY_PROFILE_VERSION) {
+      if (name === ENTRY_RECORD_KEY) {
+        buildEntryRecord(sentence, entries, entryByName);
+        continue;
+      }
+      const entry = entryByName.get(name);
+      if (!entry) throw new Error(`definition sentence is not inside a declared entry: ${name}`);
+      let lowered;
+      try {
+        lowered = lowerSentence(sentence);
+      } catch (error) {
+        if (!["unsupported-sentence", "literal-width"].includes(error?.code)) throw error;
+        lowered = lowerPyashProgram([sentence]).vectors.map((words) => ({ words }));
+      }
+      entry.definition.push(...lowered.map(({ words }) => Array.from(words)));
       continue;
     }
-    const name = sentence.su?.name;
-    const entry = entryByName.get(name);
-    if (!entry) throw new Error(`definition sentence is not inside a declared entry: ${name ?? "(no su)"}`);
+
+    let entry = entryByName.get(name);
+    if (!entry) {
+      entry = newEntry(name);
+      entries.push(entry);
+      entryByName.set(name, entry);
+    }
+    if (!definitionStarted.has(name) && addV4EntryMetadata(sentence, entry)) continue;
+    definitionStarted.add(name);
     let lowered;
     try {
       lowered = lowerSentence(sentence);

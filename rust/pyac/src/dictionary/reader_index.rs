@@ -1,6 +1,7 @@
-use super::reader::{DictionaryReadError, DictionarySection, DictionarySourceMatch};
+use super::reader::{DictionaryReadError, DictionarySection};
 use super::reader_codec::{
-    expect_end, expect_word, read_sentence, subject_end, take_text, take_vector,
+    RecordSubject, expect_end, expect_word, read_codelet, read_sentence, read_sentence_v4,
+    subject_end, take_record_subject, take_text, take_uint32, take_uint32_vector, take_vector,
 };
 use super::volume_records::INDEX_SUBJECT;
 use super::{OperationArgumentType, OperationSignatureKey};
@@ -13,290 +14,349 @@ const FROM: u16 = 0x313e;
 const TO: u16 = 0x243e;
 const BY: u16 = 0x287e;
 const WITH: u16 = 0x490f;
+const AT: u16 = 0x615f;
 
-type SurfacePosting = (String, String, Vec<u16>);
-type SourcePosting = (String, String, String, Vec<u16>, String);
-type OperationPosting = (OperationSignatureKey, Vec<u16>);
-
-#[derive(Debug, Default)]
-pub(super) struct IndexPostings {
-    canonical: Vec<Vec<u16>>,
-    surfaces: Vec<SurfacePosting>,
-    sources: Vec<SourcePosting>,
-    operations: Vec<OperationPosting>,
+#[derive(Debug, Clone, Copy)]
+pub(super) enum DirectIndexLookup<'a> {
+    Canonical(&'a [u16]),
+    Surface(&'a str, &'a str),
+    Source(&'a str, &'a str, &'a str),
+    Operation(&'a OperationSignatureKey),
 }
 
-impl IndexPostings {
-    pub(super) fn load<R: Read + Seek>(
-        source: &mut R,
-        sections: &[DictionarySection],
-        codelet_count: u32,
-    ) -> Result<Self, DictionaryReadError> {
-        let mut postings = Self::default();
-        postings
-            .load_canonical(
-                source,
-                find_section(sections, "canonical-index")?,
-                codelet_count,
-            )
-            .map_err(|error| {
-                DictionaryReadError::Context("canonical index".into(), Box::new(error))
-            })?;
-        postings
-            .load_surfaces(
-                source,
-                find_section(sections, "surface-index")?,
-                codelet_count,
-            )
-            .map_err(|error| {
-                DictionaryReadError::Context("surface index".into(), Box::new(error))
-            })?;
-        postings
-            .load_sources(
-                source,
-                find_section(sections, "source-index")?,
-                codelet_count,
-            )
-            .map_err(|error| {
-                DictionaryReadError::Context("source index".into(), Box::new(error))
-            })?;
-        postings
-            .load_operations(
-                source,
-                find_section(sections, "operation-signature-index")?,
-                codelet_count,
-            )
-            .map_err(|error| {
-                DictionaryReadError::Context("operation index".into(), Box::new(error))
-            })?;
-        Ok(postings)
-    }
+#[derive(Debug)]
+struct DirectIndexRecord {
+    key: DirectIndexKey,
+    offsets: Vec<u32>,
+    next: u32,
+}
 
-    pub(super) fn validate_targets(
-        &self,
-        locations: &[(Vec<u16>, std::ops::Range<u32>)],
-        languages: &[String],
-    ) -> Result<(), DictionaryReadError> {
-        if self.canonical.len() != locations.len()
-            || self
-                .canonical
-                .iter()
-                .zip(locations)
-                .any(|(key, (location_key, _))| key != location_key)
-        {
-            return Err(invalid("canonical index does not match entry locations"));
-        }
-        let exists = |key: &[u16]| {
-            locations
-                .binary_search_by(|item| item.0.as_slice().cmp(key))
-                .is_ok()
+#[derive(Debug, PartialEq, Eq)]
+enum DirectIndexKey {
+    Canonical(Vec<u16>),
+    Surface(Vec<u16>, String),
+    Source(String, String, String),
+    Operation(Vec<u16>),
+}
+
+pub(super) fn lookup_v4<R: Read + Seek>(
+    source: &mut R,
+    section: &DictionarySection,
+    lookup: DirectIndexLookup<'_>,
+) -> Result<Vec<u32>, DictionaryReadError> {
+    let mut low = section.codelet_start;
+    let mut high = section.codelet_start + section.codelet_count;
+    while low < high {
+        let probe = low + (high - low) / 2;
+        let Some(record) = find_next_record(source, section, probe, high)? else {
+            high = probe;
+            continue;
         };
-        if self.surfaces.iter().any(|(_, _, key)| !exists(key))
-            || self.sources.iter().any(|(_, _, _, key, _)| !exists(key))
-            || self.operations.iter().any(|(_, key)| !exists(key))
-        {
-            return Err(invalid("lookup index posting has no entry-location record"));
+        match compare_lookup(&record.key, lookup) {
+            std::cmp::Ordering::Less => low = record.next,
+            std::cmp::Ordering::Equal => return Ok(record.offsets),
+            std::cmp::Ordering::Greater => high = probe,
         }
-        if self
-            .surfaces
-            .iter()
-            .any(|(language, _, _)| languages.binary_search(language).is_err())
-        {
-            return Err(invalid(
-                "surface index uses a language absent from volume metadata",
-            ));
+    }
+
+    let section_end = section.codelet_start + section.codelet_count;
+    let mut ordinal = low;
+    while ordinal < high && ordinal < section_end {
+        let (words, consumed) = read_sentence_v4(source, ordinal, section_end)?;
+        let record = parse_v4_record(&words, ordinal + consumed)?;
+        match compare_lookup(&record.key, lookup) {
+            std::cmp::Ordering::Less => ordinal = record.next,
+            std::cmp::Ordering::Equal => return Ok(record.offsets),
+            std::cmp::Ordering::Greater => break,
         }
-        Ok(())
     }
+    Ok(Vec::new())
+}
 
-    pub(super) fn lookup_surface(&self, language: &str, surface: &str) -> Vec<Vec<u16>> {
-        let normalized: String = surface.nfc().collect();
-        let needle = (language, normalized.as_str());
-        let start = self
-            .surfaces
-            .partition_point(|(lang, form, _)| (lang.as_str(), form.as_str()) < needle);
-        let mut matches = self.surfaces[start..]
-            .iter()
-            .take_while(|(lang, form, _)| (lang.as_str(), form.as_str()) == needle)
-            .map(|(_, _, key)| key.clone())
-            .collect::<Vec<_>>();
-        matches.dedup();
-        matches
+pub(super) fn next_canonical_offset_after<R: Read + Seek>(
+    source: &mut R,
+    section: &DictionarySection,
+    wanted: u32,
+) -> Result<Option<u32>, DictionaryReadError> {
+    let mut low = section.codelet_start;
+    let mut high = section.codelet_start + section.codelet_count;
+    while low < high {
+        let probe = low + (high - low) / 2;
+        let Some((record_start, record)) =
+            find_canonical_record_at_or_before(source, section, probe)?
+        else {
+            high = probe;
+            continue;
+        };
+        let offset = match record.key {
+            DirectIndexKey::Canonical(_) => record.offsets[0],
+            _ => return Err(invalid("canonical index contains a noncanonical row")),
+        };
+        if offset <= wanted {
+            low = record.next;
+        } else {
+            high = record_start;
+        }
     }
-
-    pub(super) fn lookup_source(
-        &self,
-        dataset: &str,
-        release: &str,
-        identifier: &str,
-    ) -> Vec<DictionarySourceMatch> {
-        let needle = (dataset, release, identifier);
-        let start = self.sources.partition_point(|(data, version, id, _, _)| {
-            (data.as_str(), version.as_str(), id.as_str()) < needle
-        });
-        let mut matches = self.sources[start..]
-            .iter()
-            .take_while(|(data, version, id, _, _)| {
-                (data.as_str(), version.as_str(), id.as_str()) == needle
-            })
-            .map(|(_, _, _, key, relation)| DictionarySourceMatch {
-                key: key.clone(),
-                relation: relation.clone(),
-            })
-            .collect::<Vec<_>>();
-        matches.dedup();
-        matches
+    let section_end = section.codelet_start + section.codelet_count;
+    if low < section_end {
+        let (words, consumed) = read_sentence_v4(source, low, section_end)?;
+        let record = parse_v4_record(&words, low + consumed)?;
+        let offset = match record.key {
+            DirectIndexKey::Canonical(_) => record.offsets[0],
+            _ => return Err(invalid("canonical index contains a noncanonical row")),
+        };
+        if offset > wanted {
+            return Ok(Some(offset));
+        }
     }
+    Ok(None)
+}
 
-    pub(super) fn lookup_operation(&self, key: &OperationSignatureKey) -> Vec<Vec<u16>> {
-        let start = self
-            .operations
-            .partition_point(|(candidate, _)| candidate < key);
-        let mut matches = self.operations[start..]
-            .iter()
-            .take_while(|(candidate, _)| candidate == key)
-            .map(|(_, entry_key)| entry_key.clone())
-            .collect::<Vec<_>>();
-        matches.dedup();
-        matches
+fn find_canonical_record_at_or_before<R: Read + Seek>(
+    source: &mut R,
+    section: &DictionarySection,
+    probe: u32,
+) -> Result<Option<(u32, DirectIndexRecord)>, DictionaryReadError> {
+    let mut start = probe;
+    while start > section.codelet_start {
+        if read_codelet(source, start - 1)?[0] & 1 != 0 {
+            break;
+        }
+        start -= 1;
     }
+    let section_end = section.codelet_start + section.codelet_count;
+    let (words, consumed) = read_sentence_v4(source, start, section_end)?;
+    let record = parse_v4_record(&words, start + consumed)?;
+    if !matches!(record.key, DirectIndexKey::Canonical(_)) {
+        return Err(invalid("canonical index contains a noncanonical row"));
+    }
+    Ok(Some((start, record)))
+}
 
-    fn load_canonical<R: Read + Seek>(
-        &mut self,
-        source: &mut R,
-        section: &DictionarySection,
-        limit: u32,
-    ) -> Result<(), DictionaryReadError> {
-        for_each_sentence(source, section, limit, |_, words| {
-            let mut cursor = index_subject(words)?;
-            expect_text(words, &mut cursor, OB, "canonical")?;
-            let key = take_vector(words, &mut cursor)?;
-            expect_word(words, &mut cursor, FROM)?;
-            let target = take_vector(words, &mut cursor)?;
-            expect_word(words, &mut cursor, TO)?;
-            expect_end(words, &mut cursor)?;
-            if key.is_empty() || key != target {
-                return Err(invalid("canonical index key and target differ"));
+fn find_next_record<R: Read + Seek>(
+    source: &mut R,
+    section: &DictionarySection,
+    probe: u32,
+    search_end: u32,
+) -> Result<Option<DirectIndexRecord>, DictionaryReadError> {
+    let section_end = section.codelet_start + section.codelet_count;
+    let mut ordinal = probe;
+    while ordinal < search_end {
+        let starts_here = ordinal == section.codelet_start
+            || (ordinal > section.codelet_start && read_codelet(source, ordinal - 1)?[0] & 1 != 0);
+        if starts_here {
+            match read_sentence_v4(source, ordinal, section_end) {
+                Ok((words, consumed)) => {
+                    if let Ok(record) = parse_v4_record(&words, ordinal + consumed) {
+                        return Ok(Some(record));
+                    }
+                }
+                Err(DictionaryReadError::Io(error)) => {
+                    return Err(DictionaryReadError::Io(error));
+                }
+                Err(_) => {}
             }
-            self.canonical.push(key);
-            Ok(())
-        })?;
-        if self.canonical.windows(2).any(|pair| pair[0] >= pair[1]) {
-            return Err(invalid("canonical index is not strictly sorted"));
         }
-        Ok(())
+        ordinal += 1;
     }
+    Ok(None)
+}
 
-    fn load_surfaces<R: Read + Seek>(
-        &mut self,
-        source: &mut R,
-        section: &DictionarySection,
-        limit: u32,
-    ) -> Result<(), DictionaryReadError> {
-        for_each_sentence(source, section, limit, |ordinal, words| {
-            let mut cursor = index_subject(words)?;
-            expect_text(words, &mut cursor, OB, "language-surface")?;
-            let language = take_text(words, &mut cursor)?;
+fn parse_v4_record(words: &[u16], next: u32) -> Result<DirectIndexRecord, DictionaryReadError> {
+    let mut cursor = 0;
+    let subject = take_record_subject(words, &mut cursor)?;
+    let key = match subject {
+        RecordSubject::Name(name) => {
+            let offset = take_uint32(words, &mut cursor)?;
+            expect_word(words, &mut cursor, AT)?;
+            DirectIndexKey::Canonical(name).with_offsets(vec![offset], next)
+        }
+        RecordSubject::Text(surface) => {
+            let first = take_text(words, &mut cursor)?;
             expect_word(words, &mut cursor, AS)?;
-            let surface = take_text(words, &mut cursor)?;
-            expect_word(words, &mut cursor, FROM).map_err(|error| {
-                DictionaryReadError::Context(
-                    format!("surface posting at codelet {ordinal}: {language:?} {surface:?}"),
-                    Box::new(error),
+            let (key, offsets) = if words.get(cursor).copied() == Some(0x0e1d) {
+                let release = take_text(words, &mut cursor)?;
+                expect_word(words, &mut cursor, FROM)?;
+                let dataset = first;
+                let offsets = take_offsets(words, &mut cursor)?;
+                expect_word(words, &mut cursor, AT)?;
+                (DirectIndexKey::Source(surface, dataset, release), offsets)
+            } else {
+                let offsets = take_offsets(words, &mut cursor)?;
+                expect_word(words, &mut cursor, AT)?;
+                (
+                    DirectIndexKey::Surface(surface.encode_utf16().collect(), first),
+                    offsets,
                 )
-            })?;
-            let key = take_vector(words, &mut cursor)?;
-            expect_word(words, &mut cursor, TO)?;
-            expect_end(words, &mut cursor)?;
-            if language.is_empty() || surface.is_empty() || key.is_empty() {
-                return Err(invalid("empty language-surface posting field"));
-            }
-            let normalized: String = surface.nfc().collect();
-            if normalized != surface {
-                return Err(invalid("surface index is not stored in NFC"));
-            }
-            self.surfaces.push((language, surface, key));
-            Ok(())
-        })?;
-        if self.surfaces.windows(2).any(|pair| pair[0] > pair[1]) {
-            return Err(invalid("surface index is not in canonical order"));
+            };
+            key.with_offsets(offsets, next)
         }
-        Ok(())
-    }
+        RecordSubject::Uint16Vector(signature) => {
+            let offsets = take_offsets(words, &mut cursor)?;
+            expect_word(words, &mut cursor, AT)?;
+            DirectIndexKey::Operation(signature).with_offsets(offsets, next)
+        }
+    };
+    expect_end(words, &mut cursor)?;
+    Ok(key)
+}
 
-    fn load_sources<R: Read + Seek>(
-        &mut self,
-        source: &mut R,
-        section: &DictionarySection,
-        limit: u32,
-    ) -> Result<(), DictionaryReadError> {
-        for_each_sentence(source, section, limit, |_, words| {
-            let mut cursor = index_subject(words)?;
-            expect_text(words, &mut cursor, OB, "external-source")?;
-            let dataset = take_text(words, &mut cursor)?;
-            expect_word(words, &mut cursor, AS)?;
-            let release = take_text(words, &mut cursor)?;
-            expect_word(words, &mut cursor, FROM)?;
-            let identifier = take_text(words, &mut cursor)?;
-            expect_word(words, &mut cursor, TO)?;
-            let key = take_vector(words, &mut cursor)?;
-            expect_word(words, &mut cursor, BY)?;
-            let relation = take_text(words, &mut cursor)?;
-            expect_word(words, &mut cursor, WITH)?;
-            expect_end(words, &mut cursor)?;
-            if dataset.is_empty()
-                || release.is_empty()
-                || identifier.is_empty()
-                || key.is_empty()
-                || relation.is_empty()
-            {
-                return Err(invalid("empty external-source posting field"));
-            }
-            self.sources
-                .push((dataset, release, identifier, key, relation));
-            Ok(())
-        })?;
-        if self.sources.windows(2).any(|pair| pair[0] > pair[1]) {
-            return Err(invalid("source index is not in canonical order"));
+impl DirectIndexKey {
+    fn with_offsets(self, offsets: Vec<u32>, next: u32) -> DirectIndexRecord {
+        DirectIndexRecord {
+            key: self,
+            offsets,
+            next,
         }
-        Ok(())
-    }
-
-    fn load_operations<R: Read + Seek>(
-        &mut self,
-        source: &mut R,
-        section: &DictionarySection,
-        limit: u32,
-    ) -> Result<(), DictionaryReadError> {
-        for_each_sentence(source, section, limit, |_, words| {
-            let mut cursor = index_subject(words)?;
-            expect_text(words, &mut cursor, OB, "operation-signature")?;
-            let dispatch = take_vector(words, &mut cursor)?;
-            expect_word(words, &mut cursor, FROM)?;
-            let key = take_vector(words, &mut cursor)?;
-            expect_word(words, &mut cursor, TO)?;
-            expect_end(words, &mut cursor)?;
-            if key.is_empty() {
-                return Err(invalid("operation posting has an empty entry key"));
-            }
-            self.operations.push((decode_signature(&dispatch)?, key));
-            Ok(())
-        })?;
-        if self.operations.windows(2).any(|pair| pair[0] > pair[1]) {
-            return Err(invalid("operation index is not in canonical order"));
-        }
-        Ok(())
     }
 }
 
-fn find_section<'a>(
-    sections: &'a [DictionarySection],
-    role: &str,
-) -> Result<&'a DictionarySection, DictionaryReadError> {
-    sections
-        .iter()
-        .find(|section| section.role == role)
-        .ok_or_else(|| DictionaryReadError::MissingSection(role.into()))
+fn take_offsets(words: &[u16], cursor: &mut usize) -> Result<Vec<u32>, DictionaryReadError> {
+    let offsets = if words.get(*cursor).copied() == Some(0x901d) {
+        vec![take_uint32(words, cursor)?]
+    } else {
+        take_uint32_vector(words, cursor)?
+    };
+    if offsets.is_empty() || offsets.windows(2).any(|pair| pair[0] >= pair[1]) {
+        return Err(invalid(
+            "index offsets must be non-empty and strictly increasing",
+        ));
+    }
+    Ok(offsets)
+}
+
+fn compare_lookup(key: &DirectIndexKey, lookup: DirectIndexLookup<'_>) -> std::cmp::Ordering {
+    match (key, lookup) {
+        (DirectIndexKey::Canonical(key), DirectIndexLookup::Canonical(needle)) => {
+            key.as_slice().cmp(needle)
+        }
+        (DirectIndexKey::Surface(surface, language), DirectIndexLookup::Surface(lang, form)) => {
+            surface
+                .as_slice()
+                .cmp(form.encode_utf16().collect::<Vec<_>>().as_slice())
+                .then_with(|| language.as_str().cmp(lang))
+        }
+        (
+            DirectIndexKey::Source(identifier, dataset, release),
+            DirectIndexLookup::Source(needle_dataset, needle_release, needle_identifier),
+        ) => (identifier.as_str(), dataset.as_str(), release.as_str()).cmp(&(
+            needle_identifier,
+            needle_dataset,
+            needle_release,
+        )),
+        (DirectIndexKey::Operation(signature), DirectIndexLookup::Operation(needle)) => signature
+            .as_slice()
+            .cmp(operation_key_words(needle).as_slice()),
+        _ => std::cmp::Ordering::Greater,
+    }
+}
+
+fn operation_key_words(key: &OperationSignatureKey) -> Vec<u16> {
+    let mut words = Vec::new();
+    append_sequence(&mut words, key.verb());
+    append_sequence(&mut words, key.mood());
+    words.push(key.arguments().len() as u16);
+    for argument in key.arguments() {
+        append_sequence(&mut words, &argument.grammatical_case);
+        append_sequence(&mut words, &argument.value_type);
+    }
+    words
+}
+
+fn append_sequence(output: &mut Vec<u16>, sequence: &[u16]) {
+    output.push(sequence.len() as u16);
+    output.extend(sequence);
+}
+
+pub(super) fn lookup_legacy_surface<R: Read + Seek>(
+    source: &mut R,
+    section: &DictionarySection,
+    limit: u32,
+    language: &str,
+    surface: &str,
+) -> Result<Vec<Vec<u16>>, DictionaryReadError> {
+    let normalized: String = surface.nfc().collect();
+    let mut matches = Vec::new();
+    for_each_sentence(source, section, limit, |_, words| {
+        let mut cursor = index_subject(words)?;
+        expect_text(words, &mut cursor, OB, "language-surface")?;
+        let candidate_language = take_text(words, &mut cursor)?;
+        expect_word(words, &mut cursor, AS)?;
+        let candidate_surface = take_text(words, &mut cursor)?;
+        expect_word(words, &mut cursor, FROM)?;
+        let key = take_vector(words, &mut cursor)?;
+        expect_word(words, &mut cursor, TO)?;
+        expect_end(words, &mut cursor)?;
+        if candidate_language == language && candidate_surface == normalized {
+            matches.push(key);
+        }
+        Ok(())
+    })?;
+    matches.sort_unstable();
+    matches.dedup();
+    Ok(matches)
+}
+
+pub(super) fn lookup_legacy_source<R: Read + Seek>(
+    source: &mut R,
+    section: &DictionarySection,
+    limit: u32,
+    dataset: &str,
+    release: &str,
+    identifier: &str,
+) -> Result<Vec<Vec<u16>>, DictionaryReadError> {
+    let mut matches = Vec::new();
+    for_each_sentence(source, section, limit, |_, words| {
+        let mut cursor = index_subject(words)?;
+        expect_text(words, &mut cursor, OB, "external-source")?;
+        let candidate_dataset = take_text(words, &mut cursor)?;
+        expect_word(words, &mut cursor, AS)?;
+        let candidate_release = take_text(words, &mut cursor)?;
+        expect_word(words, &mut cursor, FROM)?;
+        let candidate_identifier = take_text(words, &mut cursor)?;
+        expect_word(words, &mut cursor, TO)?;
+        let key = take_vector(words, &mut cursor)?;
+        expect_word(words, &mut cursor, BY)?;
+        let _relation = take_text(words, &mut cursor)?;
+        expect_word(words, &mut cursor, WITH)?;
+        expect_end(words, &mut cursor)?;
+        if candidate_dataset == dataset
+            && candidate_release == release
+            && candidate_identifier == identifier
+        {
+            matches.push(key);
+        }
+        Ok(())
+    })?;
+    matches.sort_unstable();
+    matches.dedup();
+    Ok(matches)
+}
+
+pub(super) fn lookup_legacy_operation<R: Read + Seek>(
+    source: &mut R,
+    section: &DictionarySection,
+    limit: u32,
+    lookup: &OperationSignatureKey,
+) -> Result<Vec<Vec<u16>>, DictionaryReadError> {
+    let mut matches = Vec::new();
+    for_each_sentence(source, section, limit, |_, words| {
+        let mut cursor = index_subject(words)?;
+        expect_text(words, &mut cursor, OB, "operation-signature")?;
+        let dispatch = take_vector(words, &mut cursor)?;
+        expect_word(words, &mut cursor, FROM)?;
+        let key = take_vector(words, &mut cursor)?;
+        expect_word(words, &mut cursor, TO)?;
+        expect_end(words, &mut cursor)?;
+        if &decode_signature(&dispatch)? == lookup {
+            matches.push(key);
+        }
+        Ok(())
+    })?;
+    matches.sort_unstable();
+    matches.dedup();
+    Ok(matches)
 }
 
 fn for_each_sentence<R: Read + Seek>(

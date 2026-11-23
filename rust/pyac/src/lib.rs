@@ -427,7 +427,9 @@ fn execute_shared_programlet(
         pyac_vliw_core::VALUE_VECTOR_FLOAT32
             if result_length > 0 && result_length <= pyac_vliw_core::MAX_VECTOR_LANES =>
         {
-            PyacValue::Vector(VectorElements::Float32(result.values[..result_length].to_vec()))
+            PyacValue::Vector(VectorElements::Float32(
+                result.values[..result_length].to_vec(),
+            ))
         }
         pyac_vliw_core::VALUE_VECTOR_FLOAT64
             if result_length > 0 && result_length * 2 <= pyac_vliw_core::RESULT_WORDS =>

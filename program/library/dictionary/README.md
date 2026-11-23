@@ -7,19 +7,21 @@ format and record grammar are specified in
 ## Current Volume
 
 `reference.pya` is the generated snapshot of accepted Pyash vocabulary;
-`reference.pyac` is its compiled runtime volume. The current snapshot contains
-58,630 entries, including 57,283 selected exact WordNet senses, SUMO links,
-Chinese forms, and unique legacy translations. It includes 2,885 single
-Chinese-character-to-atom links. A key may retain separate sense glosses for
-different parts of speech. Each exact linked WordNet gloss is an interim
-definition; a native compositional Pyash definition is optional. For Chinese
-multi-character forms, Pinyin or Jyutping is composed only when every Han
-character has one local reading and the surface resolves to one Pyash key.
+`reference.pyac` is its compiled runtime volume. The checked-in snapshot has
+58,630 entries and remains profile v3 pending curation of 3,363 keys with
+multiple exact Open English WordNet 2025 senses. Do not rebuild that snapshot
+as v4 until those conflicts are reviewed. V4 permits one exact WordNet sense
+per dataset release for each Pyac key; cross-release links to the same sense
+remain valid. Each exact linked gloss is an interim definition; a native
+compositional Pyash definition is optional. Chinese multi-character Pinyin or
+Jyutping is composed only when each Han character has one local reading and
+the surface resolves to one Pyac key.
 
-`english-core.pya` and `.pyac` remain a small six-entry example volume for
-vector, data, compare, select, sum, and lookup. The accepted vocabulary source
-snapshot is generated on the `dev-vocab` branch from the canonical vocabulary
-catalogs; do not hand-edit `reference.pya`.
+`english-core.pya` and `.pyac` are a six-entry v4 example volume for vector,
+data, compare, select, sum, and lookup. Its source demonstrates direct Pyac
+keys in `su` and case/type metadata without quoted schema labels. The accepted
+vocabulary source snapshot is generated on the `dev-vocab` branch from the
+canonical vocabulary catalogs; do not hand-edit `reference.pya`.
 
 ## Setup Once
 
@@ -85,30 +87,30 @@ links, exact glosses, component keys, and an optional native definition.
 Run a warmed file-backed surface lookup benchmark and save its Pyash record:
 
 ```sh
-pyash dictionary volume benchmark program/library/dictionary/reference.pyac surface en forecast 100000 to artifacts/dictionary-benchmarks/reference-$(hostname)-$(date +%Y%m%d).pya
+pyash dictionary volume benchmark <v4-volume.pyac> surface en forecast 100000 to artifacts/dictionary-benchmarks/reference-$(hostname)-$(date +%Y%m%d).pya
 ```
 
-The command performs five warmups and records the timestamp, host/platform,
+The command requires profile v4, performs five warmups, and records the timestamp, host/platform,
 executable and volume sizes, entry/codelet counts, open time, total/mean lookup
 latency, lookup rate, iteration count, and result count. `artifacts/` is
 git-ignored; use a unique filename for each run and retain/copy the record
 where local benchmark history is maintained.
 
 The six-entry example volume's earlier benchmark is not representative of this
-full snapshot. Benchmark `reference.pyac` when the volume, index reader, or
-runtime command changes; its file-backed open cost and in-memory lookup rate
-are separate measurements.
+full snapshot. The previous 2026-11-20 338 ns figure measured v3 after loading
+runtime indexes; it is not a v4 raw-file lookup result. Legacy v2/v3 lookups
+use seek-and-scan and are intentionally slower. Do not run a large iteration
+benchmark against a legacy volume; first migrate it to v4 after the curation
+gate is clear.
 
-Full-volume baseline on this host, 2026-11-20: 58,630 entries, 6,261,431
-codelets, 200,365,824-byte volume, 1,504,464-byte release executable. Opening
-and validating the in-band indexes took 3.63 seconds. After opening, 100,000
-English `forecast` lookups averaged 338 ns (about 2.96 million lookups/second);
-each lookup returned three matching keys. The measurement record is
-`artifacts/dictionary-benchmarks/reference-current.pya`. One-shot CLI calls
-pay the index-open cost; repeated lookups within one Rust process use the
-already loaded in-memory indexes.
+Legacy-reader smoke check on this host, 2026-11-23: opening the checked-in v3
+volume (58,630 entries, 6,261,431 codelets, 200,365,824 bytes) took about
+0.37 seconds. A single `en`/`map` lookup returned six offsets in about
+3.90 seconds through the legacy scan path. This is a compatibility check, not
+a v4 performance baseline. Record the v4 full-volume benchmark after the
+reference data passes its exact-sense curation gate.
 
 Before publishing, check the keys and source IDs against the active catalogs,
-build the volume, inspect it, run representative surface/source/read
+build the v4 volume, inspect it, run representative surface/source/read
 lookups, run the dictionary Rust and source-import tests, and commit the source
 and compiled volume together.

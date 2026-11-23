@@ -103,14 +103,34 @@ fn compiled_cli_builds_inspects_looks_up_and_benchmarks_a_volume() {
     assert!(inspected["openMs"].as_f64().is_some());
 
     let surface = run(&["surface", volume_arg, "en", "dictionary"], None);
-    assert_eq!(surface["matches"], serde_json::json!([[0xa96a, 0x6c22]]));
+    let surface_entries = run(&["surface-entries", volume_arg, "en", "dictionary"], None);
+    let offset = surface_entries["matches"][0]["offset"].clone();
+    assert_eq!(surface["matches"], serde_json::json!([offset]));
+    assert!(
+        !surface_entries["matches"][0]["codelets"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
     assert!(surface["lookupNs"].as_u64().is_some());
 
     let source = run(
-        &["source", volume_arg, "wordnet", "OEWN 2025", "n:06311813-n"],
+        &[
+            "source-entries",
+            volume_arg,
+            "wordnet",
+            "OEWN 2025",
+            "n:06311813-n",
+        ],
         None,
     );
-    assert_eq!(source["matches"][0]["relation"], "exact-sense");
+    assert_eq!(source["matches"].as_array().unwrap().len(), 1);
+    assert!(
+        !source["matches"][0]["codelets"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
 
     let entry = run(&["key", volume_arg, "a96a,6c22"], None);
     assert_eq!(entry["key"], serde_json::json!([0xa96a, 0x6c22]));
