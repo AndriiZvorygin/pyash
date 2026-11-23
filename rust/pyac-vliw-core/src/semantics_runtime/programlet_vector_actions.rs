@@ -111,6 +111,7 @@ fn vector_precision_matches(vector_kind: u32, scalar_kind: u32) -> bool {
 fn apply_f32(
     vector: &ProgramletVectorValue,
     scalar: Option<ProgramletNumber>,
+    other: Option<&ProgramletVectorValue>,
     verb: u32,
 ) -> Result<ProgramletVectorValue, u32> {
     let mut result = *vector;
@@ -123,7 +124,10 @@ fn apply_f32(
     let mut lane = 0;
     while lane < vector.length {
         let input = f32::from_bits(array_at!(values, lane));
+        let other_value = other.map(|value| f32::from_bits(array_at!(value.values, lane)));
         let output = match verb {
+            PLUS => input + other_value.ok_or(ERROR_MALFORMED)?,
+            MULTIPLY => input * scalar_value.ok_or(ERROR_MALFORMED)?,
             SUBTRACT_VERB => input - scalar_value.ok_or(ERROR_MALFORMED)?,
             DIVIDE_VERB => {
                 let divisor = scalar_value.ok_or(ERROR_MALFORMED)?;
@@ -149,6 +153,7 @@ fn apply_f32(
 fn apply_f64(
     vector: &ProgramletVectorValue,
     scalar: Option<ProgramletNumber>,
+    other: Option<&ProgramletVectorValue>,
     verb: u32,
 ) -> Result<ProgramletVectorValue, u32> {
     let mut result = *vector;
@@ -166,7 +171,15 @@ fn apply_f64(
         let input = f64::from_bits(
             u64::from(array_at!(values, offset)) | (u64::from(array_at!(values, offset + 1)) << 32),
         );
+        let other_value = other.map(|value| {
+            f64::from_bits(
+                u64::from(array_at!(value.values, offset))
+                    | (u64::from(array_at!(value.values, offset + 1)) << 32),
+            )
+        });
         let output = match verb {
+            PLUS => input + other_value.ok_or(ERROR_MALFORMED)?,
+            MULTIPLY => input * scalar_value.ok_or(ERROR_MALFORMED)?,
             SUBTRACT_VERB => input - scalar_value.ok_or(ERROR_MALFORMED)?,
             DIVIDE_VERB => {
                 let divisor = scalar_value.ok_or(ERROR_MALFORMED)?;
@@ -262,7 +275,10 @@ pub(super) fn is_programlet_vector_verb(
             sentence.verb_length,
             sentence_at!(*tokens, sentence.verb_start)
         ),
-        (1, SUBTRACT_VERB | EXPONENTIAL_VERB | DIVIDE_VERB | SUM_VERB) | (2, MAXIMUM_FIRST)
+        (
+            1,
+            PLUS | MULTIPLY | SUBTRACT_VERB | EXPONENTIAL_VERB | DIVIDE_VERB | SUM_VERB
+        ) | (2, MAXIMUM_FIRST)
     )
 }
 
@@ -345,13 +361,40 @@ pub(super) fn apply_programlet_vector_action(
         )?;
         return Ok(());
     }
-    let scalar = match sentence.field(COMITATIVE) {
-        Some(field) => Some(read_programlet_float(
-            tokens, field, symbols, arguments, slots,
-        )?),
-        None => None,
+    let other = if verb == PLUS {
+        let field = sentence.field(COMITATIVE).ok_or(ERROR_MALFORMED)?;
+        Some(read_programlet_vector(
+            tokens,
+            field,
+            symbols,
+            arguments,
+            frame_index,
+            vector_slots,
+            vector_values,
+        )?)
+    } else {
+        None
     };
-    if verb != EXPONENTIAL_VERB && scalar.is_none() {
+    if let Some(other) = other
+        && (other.kind != vector.kind || other.length != vector.length)
+    {
+        return Err(if other.kind != vector.kind {
+            ERROR_UNSUPPORTED
+        } else {
+            ERROR_VECTOR_WIDTH
+        });
+    }
+    let scalar = if verb == PLUS {
+        None
+    } else {
+        match sentence.field(COMITATIVE) {
+            Some(field) => Some(read_programlet_float(
+                tokens, field, symbols, arguments, slots,
+            )?),
+            None => None,
+        }
+    };
+    if !matches!(verb, EXPONENTIAL_VERB | PLUS) && scalar.is_none() {
         return Err(ERROR_MALFORMED);
     }
     if let Some(value) = scalar
@@ -360,12 +403,12 @@ pub(super) fn apply_programlet_vector_action(
         return Err(ERROR_UNSUPPORTED);
     }
     let result = if vector.kind == VALUE_VECTOR_FLOAT32 {
-        apply_f32(&vector, scalar, verb)?
+        apply_f32(&vector, scalar, other.as_ref(), verb)?
     } else {
         #[cfg(not(feature = "shader-f64"))]
         return Err(ERROR_UNSUPPORTED);
         #[cfg(feature = "shader-f64")]
-        apply_f64(&vector, scalar, verb)?
+        apply_f64(&vector, scalar, other.as_ref(), verb)?
     };
     write_programlet_vector(
         tokens,

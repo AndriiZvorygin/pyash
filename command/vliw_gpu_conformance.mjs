@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
@@ -26,10 +27,18 @@ function programlet(name, source, invocation, expectedValues) {
   return { name, kind: "programlet", source, invocation, pack: compiled.pack, expectedValues };
 }
 
+async function programletExample(filename, name, expectedValues) {
+  const sourceText = await readFile(new URL(`../examples/pyash/${filename}`, import.meta.url), "utf8");
+  const lines = sourceText.trim().split(/\r?\n/u);
+  const invocation = lines.pop();
+  if (!invocation || !lines.length) throw new Error(`${filename} must contain definitions followed by one invocation`);
+  return programlet(name, lines.join("\n"), invocation, expectedValues);
+}
+
 const SECTION_NAMES = [
   "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
   "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
-  "nineteen", "twenty"
+  "nineteen", "twenty", "twenty one"
 ];
 
 export function buildVliwGpuConformanceBatches(cases) {
@@ -204,6 +213,15 @@ export async function buildVliwGpuConformanceCases() {
     "su name answer ret",
     "su name choose once be ceremony prah"
   ].join("\n");
+  const softmax = await programletExample("iwsp-stable-softmax.pya", "iwsp-stable-softmax-float32", [
+    { type: "vector", elementType: "float32", values: [0.5, 0.5] }
+  ]);
+  const softmaxF64 = await programletExample("iwsp-stable-softmax-float64.pya", "iwsp-stable-softmax-float64", [
+    { type: "vector", elementType: "float64", values: [0.5, 0.5] }
+  ]);
+  const attention = await programletExample("iwsp-two-key-one-query-attention.pya", "iwsp-two-key-one-query-attention", [
+    { type: "vector", elementType: "float32", values: [3, 5] }
+  ]);
 
   const cases = [
     programlet(
@@ -320,6 +338,9 @@ export async function buildVliwGpuConformanceCases() {
     buildPlukTlasConformanceCase(),
     ...buildIwspLinearScorerConformanceCases(),
     ...buildIwspVectorOpsConformanceCases(),
+    softmax,
+    softmaxF64,
+    attention,
     codeletPack(
       "float64-dot-product",
       "ob ve float64 0.1 2 -3 by ve float64 0.2 4 -5 be kl6m psas do",

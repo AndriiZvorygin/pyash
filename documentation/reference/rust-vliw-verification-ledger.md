@@ -4,6 +4,38 @@ Use this file as the lookup record for Rust VLIW CPU/GPU conformance runs. Each
 entry records the repository revision, deployed artifact, host/device, route,
 and exact test outcome. A queued or timed-out job is not a passing test.
 
+## 2026-11-23: Softmax and Two-Key Attention on Mriczo CUDA
+
+The full Housekeeper-routed CUDA conformance matrix passed on Mriczo's RTX 3090.
+It included **58 value cases and 3 expected-error cases**, with the 21 independent
+programlet sections executed as one GPU batch. New examples verify stable softmax
+in float32 and float64 and a smallest attention composition: two query/key dot
+products, softmax weights, scaling two value vectors, and adding them. The
+attention fixture returns `[3, 5]`; the equal logits produce weights `[0.5, 0.5]`.
+
+| Field | Evidence |
+| --- | --- |
+| Source revision | `7ada05f988e74de156a7fedadbbf3d2cbec6b968` plus tracked patch SHA-256 `3c01b68ae502e4747c1765a42f16e191c757c75ea2e2621710241e2cd8b6301f` at test time |
+| Host and route | Mriczo, Pyash GPU Housekeeper -> Rust NVPTX CUDA runtime |
+| GPU and driver | NVIDIA GeForce RTX 3090, `sm_86`, driver `550.163.01`, 24,576 MiB VRAM |
+| CUDA image | `sha256:9a3631ec3b885c1b89f4cff218848d228a3bb2894b1b127abd2ddce95144de59` |
+| Runtime executable | 9,247,536 bytes; SHA-256 `fca78f5f840e0a2c278d197c8891b037bf568eae86272246a938bf8eb9f5df67` |
+| Cubin | 3,015,896 bytes; SHA-256 `ea534211ca141421a90beee3cbf0bfe8b17547e809b2c47cf1e85969291f505b` |
+| CPU reference executable | 15,281,000 bytes; SHA-256 `82e2a8a7e2dbaa699aff19113fe75abfd7e9424906a48b6160bab732a87d960a` |
+| Runtime initialization | Compiled cubin load and GPU initialization: 0.09 s; worker ready in 585 ms |
+| Full run | 6,446.583 ms; 58 value cases passed and all 3 expected errors matched |
+| CPU request batches | 37 codelet cases: 59.901 ms; 21 programlet sections: 66.676 ms |
+| GPU execution batches | 37 codelet cases: 4.013 ms CUDA event time; 21 programlet sections: 120.582 ms CUDA event time |
+| Housekeeper client round trip | Codelet batch: 1,089.965 ms; section batch: 659.905 ms |
+| Run record | `artifacts/20261123-0006-rust-vliw-conformance/result.pya` |
+
+The client round trips include transport and Housekeeper overhead and should not
+be compared directly with the CUDA-event timings. The sectioned batch includes
+all 21 sections, not just the new attention cases. A first attempt exposed a
+scalar-only worker result decoder for vector-valued programlets; the decoder was
+fixed, unit-tested, rebuilt, and the complete matrix then passed. The canary
+restored the previous Mriczo CUDA container and resumed the VLIW route.
+
 ## 2026-11-23: Full CUDA Cubin Conformance on SWAC
 
 The temporary deployment canary ran the full configured conformance suite, not

@@ -141,8 +141,8 @@ Every model the paper describes is built from a small set of kernels. Reading Ta
 | B2 | Matrix-matrix product | Attention needs `QKᵀ` and `AV`. | p. 20–21 | float64 | absent |
 | B3 | Elementwise add / subtract / multiply / divide | Including subtract, which is where sign matters. | p. 20–21 | float64 | partial — integer, scalar float32, and scalar fixed16 arithmetic exist in VLIW; typed float32/float64 vector literals are supported, while model-sized tensor execution is absent |
 | B4 | ReLU | *"2-neuron ReLU MLP"*, *"residual ReLU MLPs"*, *"4 ReLU knots"*. | p. 21 | float64 | absent |
-| B5 | Softmax | Attention weighting; also *"softmax weights become 10^(4−i)/11111"*. | p. 21 | float64 | absent |
-| B6 | Numerically stable softmax | At the paper's sink scales (1e17, 1e22) a naive softmax overflows; the paper's own models rely on softmax degenerating to *"a plain exponential"*. A stable form (max-subtract) is required, not optional. | p. 21 | float64 | absent |
+| B5 | Softmax | Attention weighting; also *"softmax weights become 10^(4−i)/11111"*. | p. 21 | float32/float64 | implemented as a Pyash programlet composition; CPU and live CUDA conformance pass |
+| B6 | Numerically stable softmax | At the paper's sink scales (1e17, 1e22) a naive softmax overflows; the paper's own models rely on softmax degenerating to *"a plain exponential"*. A stable form (max-subtract) is required, not optional. | p. 21 | float32/float64 | implemented with max-subtraction; CPU and live CUDA conformance pass |
 | B7 | Hard argmax over a row | *"using hard argmax instead of softmax"* (p. 21); attention that reads *"the single best earlier position"*. | p. 21 | float64 | absent |
 | B8 | Argmax readout with deterministic tie-break | Paper: *"An exact match scores 0; ties go to the lower id"* (p. 21). | p. 21 | integer | absent |
 | B9 | Squared distance | *"negative squared distance between query and key"* (p. 21); *"-40(i−(s−5))²"* (p. 22). | p. 21–22 | float64 | absent |
@@ -761,22 +761,25 @@ float32/float64 vector; retain the first lane on ties. This is a value reduction
 `argmax`, and supplies the stable offset for softmax. CPU and live GPU conformance cover
 inline and named vectors.
 
-### Stage 5 — Stable softmax
+### Stage 5 — Stable softmax (implemented)
 
 Map a logits vector to normalized weights using max-subtraction, exponentiation, and a
-sum. Define output type, accumulation precision, and behavior for empty or non-finite
-input. This is the first standard attention-specific operation and can also be used as
-a general probability normalization. Verify that outputs are finite and sum to one
-within the specified tolerance.
+sum followed by vector/scalar division. It is a composition of existing Pyash
+operations, not a new opcode. Float32 and float64 examples and CPU/GPU conformance
+verify equal logits `[1, 1]` produce `[0.5, 0.5]`; CPU tests also cover extreme finite
+logits and invalid empty/non-finite inputs. See `examples/pyash/iwsp-stable-softmax.pya`,
+`examples/pyash/iwsp-stable-softmax-float64.pya`, and the verification ledger.
 
-### Stage 6 — Two-key, one-query attention
+### Stage 6 — Two-key, one-query attention (implemented)
 
 Use the existing dot product to produce two query/key scores, apply Stage 5 to obtain
 two weights, scale each of two named value vectors using Stage 1, and add them using
-Stage 2. Keep this first fixture deliberately small and explicit: it demonstrates an
-actual attention result without first requiring general matrix/tensor storage, a
-multi-head abstraction, or candidate-search machinery. Check the output against a
-small independently calculated reference on the Rust CPU runtime.
+Stage 2. The example uses query `[1, 1]`, keys `[1, 0]` and `[0, 1]`, and values `[1, 3]`
+and `[5, 7]`; it returns `[3, 5]`. This deliberately small composition demonstrates
+attention without general matrix/tensor storage, a multi-head abstraction, or
+candidate-search machinery. CPU and live CUDA results are checked against the same
+independent expected value. See `examples/pyash/iwsp-two-key-one-query-attention.pya`
+and the verification ledger.
 
 ### Stage 7 — Query/key/value projections
 
@@ -1140,7 +1143,7 @@ partial mappings and the GPU compound review note from A.7.
 | Tensor | `su name weights be map def`<br>`  su name shape ob ve num 2 3 ya`<br>`  su name dtype ob text "float32" ya`<br>`  su name values ob ve num ... ya`<br>`prah` | Represent a tensor as a map with explicit shape, element type, and flattened values. This is a proposed authoring/data contract; the current `ve` literal is rank-1 and the tensor map is not yet a VLIW value type. Specify dimension order and bounds before implementation. Lowering should store values contiguously rather than dispatching one map operation per element. |
 | Matrix multiplication | `from name left by name right to name product be matrix multiplication do` | Multiply compatible matrices, with shape checks and a specified storage order. New operation; distinct from `kl6m psas` (dot product). |
 | Dot product / sum reduction | `ob ve float32 ... by ve float32 ... be kl6m psas do` | `kl6m psas` is the catalog-linked Pyash compound glossed “dot product.” The shared Rust VLIW operation accepts equal-width float32/float64 vectors and returns one scalar; general sum reduction remains a separate operation. |
-| Exponential normalization (softmax) | Pyash ceremony: maximum → vector subtract → exponential → sum → `dvis` | Implemented as a composition in the Rust CPU programlet runtime, not a separate softmax opcode. Generic `float`/`vec float` formals preserve float32 or float64. See the executable-source fixture and the normative contract in specification 28; GPU/WGSL conformance remains open. |
+| Exponential normalization (softmax) | Pyash ceremony: maximum → vector subtract → exponential → sum → `dvis` | Implemented as a composition in the Rust CPU/GPU programlet runtime, not a separate softmax opcode. Generic `float`/`vec float` formals preserve float32 or float64. CPU and live CUDA conformance pass; WGSL has not been verified. See the executable examples and specification 28. |
 | Vector normalization | `from name values with name normalization options to name normalized be vector normalization do` | Normalize a vector under an explicitly selected norm (for example L1 or L2); options should include epsilon/zero-vector behavior. Distinct from exponential normalization. New operation. |
 | Maximum position (argmax) | `from name scores to name selected index be maximum position do` | Return the index of the greatest element. Define ties as the lowest index for deterministic results. New operation; output is an index, not the maximum value. |
 | Activation function | `from name preactivation by name relu to name activated be vector map do` | Reuse the existing vector-map sentence surface to apply a named scalar function elementwise. `vector map` currently runs through the JS interpreter; `relu` here is illustrative and needs a registered scalar mapper. A fused GPU activation is a later lowering/optimization, not a different meaning. |
@@ -1155,9 +1158,11 @@ partial mappings and the GPU compound review note from A.7.
 
 For unimplemented rows, the action spellings are placeholders until the normal
 Kwon/WordNet/SUMO and vocabulary workflow chooses Pyash atoms or compounds and
-confirms their HNUCs. Stable softmax is the exception: its composition uses
-existing vocabulary and is source-compiled in
-[`quiz/fixtures/vliw-programlet-vector-weight.pya`](../../quiz/fixtures/vliw-programlet-vector-weight.pya).
+confirms their HNUCs. Stable softmax and the minimal attention composition use
+existing vocabulary and are source-compiled in
+[`examples/pyash/iwsp-stable-softmax.pya`](../../examples/pyash/iwsp-stable-softmax.pya),
+[`examples/pyash/iwsp-stable-softmax-float64.pya`](../../examples/pyash/iwsp-stable-softmax-float64.pya),
+and [`examples/pyash/iwsp-two-key-one-query-attention.pya`](../../examples/pyash/iwsp-two-key-one-query-attention.pya).
 
 Implementation boundary from the current source audit: integer, float32, and
 float64 vector literals run through the shared Rust CPU/GPU interpreter; JS
@@ -1165,8 +1170,8 @@ float64 vector literals run through the shared Rust CPU/GPU interpreter; JS
 independent `myocpfun` sections exist in the VLIW pack format. Matrix/tensor values,
 matrix multiplication, standalone argmax, GPU-resident kernel launch, workgroup
 topology, and group synchronization are not thereby implemented in the shared
-Rust VLIW CPU/GPU runtime. Stable softmax is CPU-tested as a Pyash composition;
-its newly added vector-valued programlet path still needs GPU/WGSL conformance.
+Rust VLIW CPU/GPU runtime. Stable softmax and the two-key attention example now pass
+CPU and live CUDA conformance; WGSL remains unverified.
 Other candidate signatures still need vocabulary, dispatch, CPU semantics, and
 GPU coverage before they are considered supported.
 

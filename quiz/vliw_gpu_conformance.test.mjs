@@ -57,6 +57,9 @@ test("VLIW GPU conformance matrix covers the merged typed and control-flow contr
     "iwsp-float32-vector-maximum",
     "iwsp-named-float32-vector-scale",
     "iwsp-float64-vector-scale-add-sum",
+    "iwsp-stable-softmax-float32",
+    "iwsp-stable-softmax-float64",
+    "iwsp-two-key-one-query-attention",
     "float64-dot-product",
     "uint16-vector-sixteen-lanes",
     "boolean-vector-sixteen-lanes",
@@ -114,14 +117,17 @@ test("Rust CPU reference matches every declared conformance expectation", async 
   ));
 });
 
-test("Rust CPU executes IWSP float-vector Pyash operations after VLIW lowering", async () => {
+test("Rust CPU executes IWSP vector operations, softmax, and attention after VLIW lowering", async () => {
   const names = new Set([
     "iwsp-float32-vector-scale",
     "iwsp-float32-vector-add",
     "iwsp-float32-vector-sum",
     "iwsp-float32-vector-maximum",
     "iwsp-named-float32-vector-scale",
-    "iwsp-float64-vector-scale-add-sum"
+    "iwsp-float64-vector-scale-add-sum",
+    "iwsp-stable-softmax-float32",
+    "iwsp-stable-softmax-float64",
+    "iwsp-two-key-one-query-attention"
   ]);
   const selected = (await buildVliwGpuConformanceCases()).filter(({ name }) => names.has(name));
   assert.equal(selected.length, names.size);
@@ -184,8 +190,20 @@ test("Rust GPU conformance submits two batches and maps parallel section results
   const submissions = [];
   const progress = [];
   const releases = new Map();
+  let startedCount = 0;
+  let resolveFirstStart;
+  let resolveSecondStart;
+  const firstStart = new Promise((resolve) => { resolveFirstStart = resolve; });
+  const secondStart = new Promise((resolve) => { resolveSecondStart = resolve; });
   const run = runVliwGpuConformance({
-    onProgress(event) { progress.push(event.phase); },
+    onProgress(event) {
+      progress.push(event.phase);
+      if (event.phase === "start") {
+        startedCount += 1;
+        if (startedCount === 1) resolveFirstStart();
+        if (startedCount === 2) resolveSecondStart();
+      }
+    },
     executeCpuPacks(packs) {
       return valuesForPacks(batches, packs);
     },
@@ -210,12 +228,12 @@ test("Rust GPU conformance submits two batches and maps parallel section results
     }
   });
 
-  await new Promise((resolve) => setImmediate(resolve));
+  await firstStart;
   assert.deepEqual(submissions, [batches[0].name], "the codelet batch is submitted once");
   assert.deepEqual(progress.slice(0, cases.length), cases.map(() => "cpu-complete"));
   assert.equal(progress[cases.length], "start");
   releases.get(batches[0].name)();
-  await new Promise((resolve) => setImmediate(resolve));
+  await secondStart;
   assert.deepEqual(submissions, batches.map(({ name }) => name));
   releases.get(batches[1].name)();
   const completed = await run;

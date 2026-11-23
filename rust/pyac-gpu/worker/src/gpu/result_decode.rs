@@ -1,4 +1,5 @@
 use super::*;
+use pyac::{PyacValue, VectorElements};
 
 #[derive(Debug)]
 pub(super) struct DecodedSectionResult {
@@ -6,6 +7,49 @@ pub(super) struct DecodedSectionResult {
     pub(super) name_words: Vec<u32>,
     pub(super) completion_order: usize,
     pub(super) value: PyacValue,
+}
+
+fn decode_value(kind: u32, length: usize, data: &[u32]) -> Result<PyacValue, String> {
+    let scalar = |value| {
+        if length != 1 {
+            Err(format!("scalar result has invalid length {length}"))
+        } else {
+            Ok(value)
+        }
+    };
+    match kind {
+        pyac_vliw_core::VALUE_UNSIGNED => scalar(PyacValue::Unsigned(u64::from(data[0]))),
+        pyac_vliw_core::VALUE_SIGNED => scalar(PyacValue::Signed(i64::from(data[0] as i32))),
+        pyac_vliw_core::VALUE_FLOAT32 => scalar(PyacValue::Float32(data[0])),
+        pyac_vliw_core::VALUE_FLOAT64 => scalar(PyacValue::Float64(
+            u64::from(data[0]) | (u64::from(data[1]) << 32),
+        )),
+        pyac_vliw_core::VALUE_FIXED16 => scalar(PyacValue::Fixed16(data[0] as u16)),
+        pyac_vliw_core::VALUE_BOOLEAN => scalar(PyacValue::Boolean(data[0] != 0)),
+        pyac_vliw_core::VALUE_VECTOR_U16 if length <= data.len() => Ok(PyacValue::Vector(
+            VectorElements::Numbers(data[..length].iter().map(|value| *value as u16).collect()),
+        )),
+        pyac_vliw_core::VALUE_VECTOR_U32 if length <= data.len() => Ok(PyacValue::Vector(
+            VectorElements::Numbers32(data[..length].to_vec()),
+        )),
+        pyac_vliw_core::VALUE_VECTOR_BOOL if length <= data.len() => Ok(PyacValue::Vector(
+            VectorElements::Booleans(data[..length].iter().map(|value| *value != 0).collect()),
+        )),
+        pyac_vliw_core::VALUE_VECTOR_FLOAT32 if length <= data.len() => Ok(PyacValue::Vector(
+            VectorElements::Float32(data[..length].to_vec()),
+        )),
+        pyac_vliw_core::VALUE_VECTOR_FLOAT64 if length <= data.len() / 2 => {
+            Ok(PyacValue::Vector(VectorElements::Float64(
+                data[..length * 2]
+                    .chunks_exact(2)
+                    .map(|pair| u64::from(pair[0]) | (u64::from(pair[1]) << 32))
+                    .collect(),
+            )))
+        }
+        _ => Err(format!(
+            "unsupported or malformed GPU result kind {kind} length {length}"
+        )),
+    }
 }
 
 pub(super) fn decode_programlet_result(
@@ -21,23 +65,13 @@ pub(super) fn decode_programlet_result(
             output[1]
         ));
     }
-    if output[2] != 1 || output[3] as usize != codelet_count {
+    if output[3] as usize != codelet_count {
         return Err(format!(
             "programlet: invalid GPU result record (kind={}, length={}, consumed={}, expected={codelet_count})",
             output[0], output[2], output[3]
         ));
     }
-    let value = match output[0] {
-        pyac_vliw_core::VALUE_UNSIGNED => PyacValue::Unsigned(u64::from(output[4])),
-        pyac_vliw_core::VALUE_SIGNED => PyacValue::Signed(i64::from(output[4] as i32)),
-        pyac_vliw_core::VALUE_FLOAT32 => PyacValue::Float32(output[4]),
-        pyac_vliw_core::VALUE_FLOAT64 => {
-            PyacValue::Float64(u64::from(output[4]) | (u64::from(output[5]) << 32))
-        }
-        pyac_vliw_core::VALUE_FIXED16 => PyacValue::Fixed16(output[4] as u16),
-        pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(output[4] != 0),
-        kind => return Err(format!("programlet: unsupported GPU result kind {kind}")),
-    };
+    let value = decode_value(output[0], output[2] as usize, &output[4..])?;
     Ok(vec![value])
 }
 
@@ -73,27 +107,14 @@ pub(super) fn decode_section_records(
                 result[1]
             ));
         }
-        if result[2] != 1 || result[3] as usize != codelet_count {
+        if result[3] as usize != codelet_count {
             return Err(format!(
                 "sectioned programlet {section_index}: invalid result record (kind={}, length={}, consumed={}, expected={codelet_count})",
                 result[0], result[2], result[3]
             ));
         }
-        let value = match result[0] {
-            pyac_vliw_core::VALUE_UNSIGNED => PyacValue::Unsigned(u64::from(result[4])),
-            pyac_vliw_core::VALUE_SIGNED => PyacValue::Signed(i64::from(result[4] as i32)),
-            pyac_vliw_core::VALUE_FLOAT32 => PyacValue::Float32(result[4]),
-            pyac_vliw_core::VALUE_FLOAT64 => {
-                PyacValue::Float64(u64::from(result[4]) | (u64::from(result[5]) << 32))
-            }
-            pyac_vliw_core::VALUE_FIXED16 => PyacValue::Fixed16(result[4] as u16),
-            pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(result[4] != 0),
-            kind => {
-                return Err(format!(
-                    "sectioned programlet {section_index}: unsupported GPU result kind {kind}"
-                ));
-            }
-        };
+        let value = decode_value(result[0], result[2] as usize, &result[4..])
+            .map_err(|error| format!("sectioned programlet {section_index}: {error}"))?;
         records.push(DecodedSectionResult {
             section_index,
             name_words,

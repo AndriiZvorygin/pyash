@@ -8,6 +8,7 @@ mode="${3:-verify}"
 [[ "$mode" == verify || "$mode" == deploy || "$mode" == rollback ]] || exit 2
 image_id="$(docker image inspect --format '{{.Id}}' "$image")"
 [[ "$image_id" == sha256:* ]] || exit 2
+backup="pyac-vliw-runtime-cuda-canary-${image_id#sha256:}"
 
 on_host() {
   if [[ "$host" == swac ]]; then
@@ -18,12 +19,12 @@ on_host() {
 }
 
 switch_runtime() {
-  on_host "$1" "$image_id" <<'REMOTE'
+  on_host "$1" "$image_id" "$backup" <<'REMOTE'
 set -euo pipefail
 action="$1"
 image="$2"
+backup="$3"
 name=pyac-vliw-runtime
-backup=pyac-vliw-runtime-cuda-canary-previous
 url=http://127.0.0.1:18886
 control() {
   curl --fail-with-body -sS --max-time "$2" -H 'Content-Type: application/json' \
@@ -58,15 +59,22 @@ case "$action" in
   check)
     docker inspect --format 'prior image={{.Image}} state={{.State.Status}}' "$name"
     if docker inspect "$backup" >/dev/null 2>&1; then
-      echo "Existing VLIW rollback container found; not changing the route" >&2
+      echo "Candidate-specific VLIW rollback container already exists; not changing the route" >&2
       exit 1
     fi
     curl -fsS --max-time 4 "$url/snapshot" | python3 -c \
       'import json, sys; assert json.load(sys.stdin)["capabilities"]["pyacVliwRuntimeProtocol"] == 1'
-    cache_dir="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/service/artifacts"}}{{.Source}}{{end}}{{end}}' "$name")"
-    if [[ -z "$cache_dir" || ! -s "$cache_dir/pyac_vliw_pipeline_cache.bin" ]]; then
-      echo "Prior Vulkan cache missing; refusing to swap an unverified rollback target" >&2
-      exit 1
+    prior_cuda_image="$(docker inspect --format '{{index .Config.Labels "org.pyash.vliw.cuda-image"}}' "$name")"
+    if [[ -n "$prior_cuda_image" && "$prior_cuda_image" != '<no value>' ]]; then
+      docker image inspect "$prior_cuda_image" >/dev/null
+      echo "Prior runtime is CUDA; rollback target image=$prior_cuda_image"
+    else
+      cache_dir="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/service/artifacts"}}{{.Source}}{{end}}{{end}}' "$name")"
+      if [[ -z "$cache_dir" || ! -s "$cache_dir/pyac_vliw_pipeline_cache.bin" ]]; then
+        echo "Prior Vulkan cache missing; refusing to swap an unverified rollback target" >&2
+        exit 1
+      fi
+      echo "Prior runtime is Vulkan; persistent pipeline cache verified"
     fi
     ;;
   switch)
@@ -83,19 +91,24 @@ case "$action" in
     control begin 30
     ;;
   restore)
-    if docker inspect "$backup" >/dev/null 2>&1; then
-      if docker inspect "$name" >/dev/null 2>&1; then
-        [[ "$(docker inspect --format '{{index .Config.Labels "org.pyash.vliw.cuda-image"}}' "$name")" == "$image" ]]
-        docker stats --no-stream --format 'canary memory={{.MemUsage}}' "$name" || true
-        control stop 1900
-        docker logs --tail 20 "$name"
-        docker rm "$name"
-      fi
-      docker rename "$backup" "$name"
+    docker inspect "$backup" >/dev/null
+    if docker inspect "$name" >/dev/null 2>&1; then
+      [[ "$(docker inspect --format '{{index .Config.Labels "org.pyash.vliw.cuda-image"}}' "$name")" == "$image" ]]
+      docker stats --no-stream --format 'canary memory={{.MemUsage}}' "$name" || true
+      control stop 1900
+      docker logs --tail 20 "$name"
+      docker rm "$name"
     fi
+    prior_cuda_image="$(docker inspect --format '{{index .Config.Labels "org.pyash.vliw.cuda-image"}}' "$backup")"
+    if [[ -n "$prior_cuda_image" && "$prior_cuda_image" != '<no value>' ]]; then
+      expected_backend=rust-cuda-cubin
+    else
+      expected_backend=rust-gpu-vulkan
+    fi
+    docker rename "$backup" "$name"
     started="$(date +%s%3N)"
     docker start "$name"
-    wait_ready rust-gpu-vulkan "$started"
+    wait_ready "$expected_backend" "$started"
     control begin 30
     docker inspect --format 'restored image={{.Image}}' "$name"
     ;;
@@ -107,7 +120,12 @@ case "$action" in
     docker rename "$backup" "$name"
     started="$(date +%s%3N)"
     docker start "$name"
-    wait_ready rust-gpu-vulkan "$started"
+    prior_cuda_image="$(docker inspect --format '{{index .Config.Labels "org.pyash.vliw.cuda-image"}}' "$name")"
+    if [[ -n "$prior_cuda_image" && "$prior_cuda_image" != '<no value>' ]]; then
+      wait_ready rust-cuda-cubin "$started"
+    else
+      wait_ready rust-gpu-vulkan "$started"
+    fi
     control begin 30
     docker inspect --format 'rolled back image={{.Image}}' "$name"
     ;;

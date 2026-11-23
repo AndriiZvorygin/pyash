@@ -4,6 +4,7 @@ import { allRemember, doRemember, forget, remember } from "../../remember/index.
 import { decodePyashProgram, lowerPyashProgram } from "./sentence.mjs";
 import { decodePyacPack, encodePyacPack } from "./database.mjs";
 import { lookupLegacyWordSequence } from "./quotes.mjs";
+import { isMutableVectorSentence, normalizeMutableVectorSentence } from "./mutable_vector.mjs";
 import { state as bridgeState } from "../../bridge/state.mjs";
 import {
   isNamedNumericSlotDeclaration,
@@ -41,8 +42,13 @@ const PURE_BUILTIN_VERBS = new Set([
   "divide",
   "exponential",
   "tfo2t",
+  "tot",
   "gjat bwit",
+  "magnitude boundary",
   "dvis",
+  "kl6m psas",
+  "scalar produce",
+  "choose",
   "invert",
   "xor"
 ]);
@@ -162,6 +168,16 @@ function validateProgramletInputCount(sentence, ceremonyName) {
 function programletLocalDeclaration(sentence) {
   if (isNamedNumericSlotDeclaration(sentence)) {
     return { type: "num", kind: namedNumericSlotKind(sentence) };
+  }
+  if (
+    sentence?.mood === "ya"
+    && sentence?.be === "variable"
+    && (sentence?.as?.name === "vector float32" || sentence?.as?.text === "vector float32")
+    && Number.isInteger(sentence?.by?.num)
+    && sentence.by.num >= 1
+    && sentence.by.num <= 16
+  ) {
+    return { type: "vec-float", kind: "variable", length: sentence.by.num };
   }
   const chain = sentence?.ob?.genitive?.chain;
   const inherited = Array.isArray(chain)
@@ -300,10 +316,19 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
             });
           }
           const targetSlot = action.to?.name ? activeSlots.get(action.to.name) : null;
+          const indexedVectorStore = ["kl6m psas", "scalar produce"].includes(action.be)
+            && targetSlot?.type === "vec-float"
+            && Number.isInteger(action.at?.num)
+            && action.at.num >= 0
+            && action.at.num < targetSlot.length;
           if (targetSlot?.kind === "constant") {
             fail(`constant quantity is read-only: ${action.to.name}`, { sentence: index + 1 });
           }
-          if (targetSlot?.kind === "variable" && outputType(action) !== targetSlot.type) {
+          if (
+            targetSlot?.kind === "variable"
+            && outputType(action) !== targetSlot.type
+            && !indexedVectorStore
+          ) {
             const message = targetSlot.type === "num"
               ? `numeric variable slot requires a typed num destination: ${action.to.name}`
               : `boolean variable slot requires a typed bool destination: ${action.to.name}`;
@@ -472,12 +497,12 @@ function splitProgramSections(sentences) {
   return sections;
 }
 
-function sectionCodeletRanges(sections, loweredSentences) {
+function sectionCodeletRanges(sections, sentenceCodeletCounts) {
   const starts = [];
   let cursor = 0;
-  for (const sentence of loweredSentences) {
+  for (const count of sentenceCodeletCounts) {
     starts.push(cursor);
-    cursor += sentence.vectors.length;
+    cursor += count;
   }
   return sections.map((section) => {
     const bodyStart = section.startSentence + 1;
@@ -498,6 +523,20 @@ function sectionCodeletRanges(sections, loweredSentences) {
       codeletCount
     };
   });
+}
+
+function decodedSentenceCodeletCounts(codelets) {
+  const counts = [];
+  let current = 0;
+  for (const codelet of codelets) {
+    current += 1;
+    if (codelet[0] & 1) {
+      counts.push(current);
+      current = 0;
+    }
+  }
+  if (current !== 0) fail("PyAC packet ends with an incomplete sentence codelet");
+  return counts;
 }
 
 function normalizeStepBudget(value = DEFAULT_PYASH_PROGRAMLET_STEP_BUDGET) {
@@ -528,12 +567,15 @@ export function compilePyashProgramSource(sourceText, { invocation = "" } = {}) 
     if (String(invocation ?? "").trim()) {
       fail("sectioned PyAC packets carry one invocation inside each section; do not append an invocation");
     }
-    const lowered = lowerPyashProgram(sentences);
+  const lowerableSentences = sentences.map((sentence) =>
+    isMutableVectorSentence(sentence) ? normalizeMutableVectorSentence(sentence) : sentence
+  );
+  const lowered = lowerPyashProgram(lowerableSentences);
     const pack = encodePyacPack(lowered.vectors);
     return {
       pack,
       sentences,
-      sections: sectionCodeletRanges(sections, lowered.sentences),
+      sections: sectionCodeletRanges(sections, lowered.sentences.map(({ vectors }) => vectors.length)),
       vectorCount: lowered.vectors.length,
       byteLength: pack.byteLength,
       complexity: sections.reduce((total, section) => total + section.complexity, 0),
@@ -544,7 +586,10 @@ export function compilePyashProgramSource(sourceText, { invocation = "" } = {}) 
   const program = call ? [...sentences, call] : sentences;
   const invocationIndex = call ? program.length - 1 : -1;
   const validation = validatePureProgram(program, { invocationIndex });
-  const lowered = lowerPyashProgram(program);
+  const lowerableProgram = program.map((sentence) =>
+    isMutableVectorSentence(sentence) ? normalizeMutableVectorSentence(sentence) : sentence
+  );
+  const lowered = lowerPyashProgram(lowerableProgram);
   if (lowered.vectors.length > MAX_PYASH_PROGRAMLET_CODELETS) {
     fail(`Pyash programlet exceeds ${MAX_PYASH_PROGRAMLET_CODELETS} codelets`, {
       codelets: lowered.vectors.length
@@ -574,8 +619,7 @@ export function decodePyashProgramPack(pack) {
     const invocationIndex = sentences.at(-1)?.mood === "do" ? sentences.length - 1 : -1;
     validatePureProgram(sentences, { invocationIndex });
   } else {
-    const lowered = lowerPyashProgram(sentences);
-    sectionCodeletRanges(sections, lowered.sentences);
+    sectionCodeletRanges(sections, decodedSentenceCodeletCounts(decodedPack.codelets));
   }
   for (const sentence of sentences) {
     if (programletLocalDeclaration(sentence)) sentence.exists = true;
