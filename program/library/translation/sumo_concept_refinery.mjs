@@ -14,6 +14,7 @@ import { resolveConfigText } from "../../configure/env.mjs";
 import { builtInSignatures } from "../../verbs/index.mjs";
 import { clearSignatureHandlers, registerSignatureHandler } from "../../bridge/signature.mjs";
 import { createGpuHousekeeperAdapter } from "../../runtime/gpu/housekeeper_adapter.mjs";
+import { recordExchangeJsonArtifact } from "../../bridge/exchange.mjs";
 import { loadEnglish30k, english30kLookupVariants } from "./english30k_coverage.mjs";
 import { loadSumoOntology, SUMO_ONTOLOGY_COMMIT } from "./sumo_ontology.mjs";
 import {
@@ -215,14 +216,37 @@ export function buildSumoConceptResponseFormat() {
  * that names an unknown candidate, an unsupported relation, or a relation the
  * crosswalk contradicts stays uncertain rather than being repaired.
  */
-export function parseSumoConceptChoiceResponse(value, { evidence, candidates = [] } = {}) {
+/**
+ * The Housekeeper returns the provider envelope, so the answer can sit inside
+ * `response` or `message.content` rather than at the top level.
+ */
+export function unwrapSumoConceptAnswer(value) {
   let payload = value;
   if (typeof value === "string") {
     try {
       payload = JSON.parse(value);
     } catch {
-      return { status: "uncertain", reason: "model answer is not JSON", choice: "", relation: "" };
+      return null;
     }
+  }
+  if (!payload || typeof payload !== "object") return null;
+  if (payload.choice !== undefined) return payload;
+  const wrapped = typeof payload.response === "string"
+    ? payload.response
+    : typeof payload.message?.content === "string" ? payload.message.content : "";
+  if (!wrapped) return payload;
+  try {
+    const inner = JSON.parse(wrapped);
+    return inner && typeof inner === "object" ? inner : payload;
+  } catch {
+    return payload;
+  }
+}
+
+export function parseSumoConceptChoiceResponse(value, { evidence, candidates = [] } = {}) {
+  const payload = unwrapSumoConceptAnswer(value);
+  if (!payload) {
+    return { status: "uncertain", reason: "model answer is not JSON", choice: "", relation: "" };
   }
   const choice = text(payload?.choice).trim();
   const relation = text(payload?.relation).trim();
@@ -287,6 +311,12 @@ export function createQueuedMindSumoConceptChoiceTransport({
       }
     };
     const queuedHandle = `${id}-${Math.max(1, Math.trunc(Number(attempt) || 1))}`;
+    recordExchangeJsonArtifact({
+      identity: queuedHandle,
+      label: "request",
+      producer: "gpu mind request",
+      payload: { handleId: queuedHandle, job: jobSpec }
+    });
     const started = await runInterpret(parse(
       `su name ${JSON.stringify(queuedHandle)} ob text ${JSON.stringify(JSON.stringify(jobSpec))} vyah start future be gpu mind do`
     ));
@@ -296,6 +326,16 @@ export function createQueuedMindSumoConceptChoiceTransport({
     const completed = await runInterpret(parse(
       `accordingto text ${JSON.stringify(queuedHandle)} during num ${waitMs} vyah await be gpu do`
     ));
+    recordExchangeJsonArtifact({
+      identity: queuedHandle,
+      label: "response",
+      producer: "gpu mind response",
+      payload: {
+        handleId: text(queuedHandle),
+        status: text(completed?.ob?.text),
+        result: completed?.result ?? null
+      }
+    });
     if (text(completed?.ob?.text) !== "success") {
       throw invalid("Housekeeper SUMO concept duty did not complete successfully", { handleId: queuedHandle, response: completed });
     }
@@ -650,14 +690,39 @@ async function resolveCandidates({ context, dependencies }) {
           promptRevision: context.config.promptRevision
         };
       } catch (error) {
+        let answer = "";
+        let lastError = error;
+        for (let attempt = 2; attempt <= 3; attempt += 1) {
+          try {
+            answer = await transport({ input, handleId: `sumo-concept-${row.sumoId}`, attempt });
+            lastError = null;
+            break;
+          } catch (retryError) {
+            lastError = retryError;
+          }
+        }
+        if (lastError) {
+          return {
+            id: `candidate:${row.sumoId}`,
+            sumoId: row.sumoId,
+            status: "failed",
+            path: resolution.path,
+            sequence: "",
+            relation: "",
+            reason: text(lastError?.message) || "model call failed",
+            candidates: candidates.map((candidate) => candidate.sequence),
+            promptRevision: context.config.promptRevision
+          };
+        }
+        const retried = parseSumoConceptChoiceResponse(answer, { evidence, candidates });
         return {
           id: `candidate:${row.sumoId}`,
           sumoId: row.sumoId,
-          status: "failed",
+          status: retried.status === "accepted" ? "resolved" : retried.status,
           path: resolution.path,
-          sequence: "",
-          relation: "",
-          reason: text(error?.message) || "model call failed",
+          sequence: retried.choice || "",
+          relation: retried.relation || "",
+          reason: retried.reason,
           candidates: candidates.map((candidate) => candidate.sequence),
           promptRevision: context.config.promptRevision
         };

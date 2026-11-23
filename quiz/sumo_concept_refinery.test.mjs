@@ -148,6 +148,26 @@ test("adjudication candidates come from the head word", () => {
   assert.equal(candidates[0].reason, "head word");
 });
 
+test("the provider envelope is unwrapped before the answer is read", () => {
+  const answer = JSON.stringify({
+    model: "qwen3.5:9b",
+    response: "{\"choice\": \"pyan hbin\", \"relation\": \"equivalent-to\", \"reason\": \"same word\"}",
+    done: true
+  });
+  const parsed = parseSumoConceptChoiceResponse(answer, {
+    evidence: {},
+    candidates: [{ sequence: "pyan hbin", senses: [] }]
+  });
+  assert.equal(parsed.status, "accepted");
+  assert.equal(parsed.choice, "pyan hbin");
+});
+
+test("an answer that is not JSON stays uncertain", () => {
+  const parsed = parseSumoConceptChoiceResponse("not json at all", { evidence: {}, candidates: [] });
+  assert.equal(parsed.status, "uncertain");
+  assert.match(parsed.reason, /not JSON/u);
+});
+
 test("promoted links replace an earlier decision for the same concept", async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "sumo-links-"));
   const catalogUrl = path.join(directory, "sumo_concept_links.pya");
