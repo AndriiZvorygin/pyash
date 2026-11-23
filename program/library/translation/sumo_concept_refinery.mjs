@@ -292,7 +292,12 @@ export function parseSumoConceptChoiceResponse(value, { evidence, candidates = [
     };
   }
   const settled = relationForTarget(evidence, candidate, relation);
-  return { status: "accepted", reason: reason || "model chose one candidate", choice, relation: settled };
+  return {
+    status: "accepted",
+    reason: reason || "model chose one candidate",
+    choice: candidate.sequence,
+    relation: settled
+  };
 }
 
 function serializedInterpreter(interpret) {
