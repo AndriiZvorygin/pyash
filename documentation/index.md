@@ -11,6 +11,7 @@
 - `documentation/examples.md` — notes about the curated `examples/` transcripts.
 - `documentation/recipes/agent-operations.md` — scheduler, channel, and runtime operations runbook.
 - `documentation/runbooks/dev-vocab-operations.md` — end-to-end vocabulary, WordNet sweep, decision review, index, and publishing workflow for the `dev-vocab` branch.
+- `documentation/reference/sumo-concept-sweep.md` — SUMO concept sweep design: evidence sources, link shape and relation semantics, worklist sizing, and the stage graph.
 - `documentation/recipes/pyash-agent-admin.md` — configure/reconcile/debug recipe for Pyash agent administration.
 - `documentation/recipes/channel-stop-control.md` — channel interrupt control (`stop`, `@agent stop`) and verification runbook.
 - `documentation/agent-memory.md` — current agent memory model (session files, summary, and runtime memory).

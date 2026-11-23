@@ -461,7 +461,9 @@ export function buildAcceptedReferenceSource({
   pinyinRows = [],
   jyutpingRows = [],
   legacyDictionaries = [],
-  sumoRows = []
+  sumoRows = [],
+  sumoConceptLinkRows = [],
+  render = true
 } = {}) {
   const entriesByKey = new Map();
   const getEntry = (sequence) => {
@@ -606,16 +608,17 @@ export function buildAcceptedReferenceSource({
       addSourceLink(getEntry(sequence), "sumo", SUMO_RELEASE, row.sumoId, row.mappingRelation ?? "mapped-to");
     }
   }
+  for (const record of sumoConceptLinkRows) {
+    if (!Array.isArray(record?.pyashSequence) || record.pyashSequence.length === 0) continue;
+    addSourceLink(getEntry(record.pyashSequence), "sumo", SUMO_RELEASE, record.sumoId, record.relation ?? "equivalent-to");
+  }
 
   const languages = [...new Set([
     "en", ...Object.keys(LANGUAGE_FILES), "zh-Latn-pinyin", "yue-Latn-jyutping"
   ])].sort();
   const chineseSingleCharacterForms = singleChineseOwners(entriesByKey).size;
-  const lines = [
-    'su name lyin kwon ob text "Pyash accepted vocabulary reference dictionary" be text ya',
-    `su name lyin kwon ob text "Pyash accepted vocabulary reference" as num 1 from text ${JSON.stringify(languages.join(","))} to text "NFC" with text "pyac-vliw-dictionary/3" be text ya`
-  ];
-  for (const entry of [...entriesByKey.values()].sort((left, right) => left.sequence.localeCompare(right.sequence))) {
+  const entries = [...entriesByKey.values()].sort((left, right) => left.sequence.localeCompare(right.sequence));
+  for (const entry of entries) {
     entry.forms.sort((left, right) => left.language.localeCompare(right.language)
       || left.normalized.localeCompare(right.normalized)
       || left.surface.localeCompare(right.surface));
@@ -625,21 +628,28 @@ export function buildAcceptedReferenceSource({
       || left.relation.localeCompare(right.relation));
     entry.sourceGlosses.sort((left, right) => left.identifier.localeCompare(right.identifier)
       || left.text.localeCompare(right.text));
-    lines.push(...pyaEntryLines(entry));
   }
+  const summary = {
+    entries: entriesByKey.size,
+    atoms: atoms.length,
+    compoundEntries: compoundEntries.length,
+    acceptedWordNetSenseCandidates: selectedSenses.candidateCount,
+    selectedWordNetSenses: selectedSenses.winners.length,
+    resolvedSenseCollisionGroups: selectedSenses.collisionGroups,
+    chineseSingleCharacterForms,
+    languages
+  };
+  if (!render) return { entries, summary };
+  const lines = [
+    'su name lyin kwon ob text "Pyash accepted vocabulary reference dictionary" be text ya',
+    `su name lyin kwon ob text "Pyash accepted vocabulary reference" as num 1 from text ${JSON.stringify(languages.join(","))} to text "NFC" with text "pyac-vliw-dictionary/3" be text ya`
+  ];
+  for (const entry of entries) lines.push(...pyaEntryLines(entry));
   lines.push("prah", "");
   return {
     source: lines.join("\n"),
-    summary: {
-      entries: entriesByKey.size,
-      atoms: atoms.length,
-      compoundEntries: compoundEntries.length,
-      acceptedWordNetSenseCandidates: selectedSenses.candidateCount,
-      selectedWordNetSenses: selectedSenses.winners.length,
-      resolvedSenseCollisionGroups: selectedSenses.collisionGroups,
-      chineseSingleCharacterForms,
-      languages
-    }
+    entries,
+    summary
   };
 }
 
@@ -647,7 +657,7 @@ async function readJson(path) {
   return JSON.parse(await readFile(path, "utf8"));
 }
 
-export async function generateAcceptedReferenceSource({ output = OUTPUT } = {}) {
+export async function loadReferenceSourceInputs() {
   const translation = (name) => new URL(`../translation/${name}`, import.meta.url);
   const sumoCatalog = new URL("../../../know/sumo/pyash_wordnet_mappings.pya", import.meta.url);
   const legacy = (name) => new URL(`../../../caterer/pyac/lyac/${name}`, import.meta.url);
@@ -663,6 +673,7 @@ export async function generateAcceptedReferenceSource({ output = OUTPUT } = {}) 
     pinyinSource,
     jyutpingSource,
     sumoSource,
+    sumoConceptLinkSource,
     englishSource,
     frequencyResources,
     legacyDictionaries
@@ -678,6 +689,10 @@ export async function generateAcceptedReferenceSource({ output = OUTPUT } = {}) 
     readFile(translation("kwon_chinese_pinyin.pya"), "utf8"),
     readFile(translation("kwon_chinese_single_atoms.csv"), "utf8"),
     readFile(sumoCatalog, "utf8"),
+    readFile(translation("sumo_concept_links.pya"), "utf8").catch((error) => {
+      if (error?.code === "ENOENT") return "";
+      throw error;
+    }),
     loadEnglish30k(),
     loadEnglishWordNetFrequencyResources(),
     Promise.all(Object.entries(LANGUAGE_FILES).map(async ([language, filename]) => ({
@@ -722,7 +737,11 @@ export async function generateAcceptedReferenceSource({ output = OUTPUT } = {}) 
   }));
   const sumoRows = decodeJsonRows(parseMapRows(sumoSource, "sumo_wordnet_evidence")
     .filter((sentence) => sentence.su.text !== "format" && sentence.su.text !== "metadata"), "SUMO crosswalk");
-  const built = buildAcceptedReferenceSource({
+  const sumoConceptLinkRows = sumoConceptLinkSource.trim()
+    ? decodeJsonRows(parseMapRows(sumoConceptLinkSource, "sumo_concept_links")
+      .filter((sentence) => sentence.su.text !== "format"), "SUMO concept links")
+    : [];
+  return {
     bridgeCatalog,
     compoundEntries: compounds.all,
     compoundGlosses: compoundGlossRows,
@@ -734,8 +753,13 @@ export async function generateAcceptedReferenceSource({ output = OUTPUT } = {}) 
     pinyinRows,
     jyutpingRows,
     legacyDictionaries,
-    sumoRows
-  });
+    sumoRows,
+    sumoConceptLinkRows
+  };
+}
+
+export async function generateAcceptedReferenceSource({ output = OUTPUT } = {}) {
+  const built = buildAcceptedReferenceSource({ ...(await loadReferenceSourceInputs()), render: true });
   const outputPath = output instanceof URL ? fileURLToPath(output) : String(output);
   await mkdir(dirname(outputPath), { recursive: true });
   await writeFile(outputPath, built.source, "utf8");

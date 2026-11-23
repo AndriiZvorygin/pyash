@@ -1,0 +1,16 @@
+su name translation be map def
+su text "format" ob text "translation-sumo-concept-refinery-v1" ya
+su text "model" ob text "qwen3.5:9b" ya
+su text "prompt-revision" ob text "sumo-concept-link-v1" ya
+su text "max-output-tokens" ob num 512 ya
+su text "parallelism" ob num 8 ya
+su text "max-concepts-per-launch" ob num 64 ya
+su text "candidate-limit" ob num 8 ya
+su text "hierarchy-depth-limit" ob num 6 ya
+su text "worklist-order" ob text "english30k-rank" ya
+prah
+su name translation concept mapping be refinery def
+su name select concepts to name map concept mapping be translation stage do
+su name resolve concept mapping from name map concept mapping to name map concept mapping rows be translation stage do
+su name verify concept mapping from name map concept mapping rows to name map concept mapping results be translation stage do
+prah
