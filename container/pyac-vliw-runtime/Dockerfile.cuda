@@ -1,0 +1,9 @@
+FROM ubuntu:24.04
+WORKDIR /service
+ENV PYAC_VLIW_BACKEND=cuda \
+    CUDA_DISABLE_PTX_JIT=1 \
+    CUDA_MODULE_LOADING=EAGER \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility
+COPY pyac-vliw-runtime pyac_vliw_gpu_kernel.cubin cubin.metadata.pya /service/
+EXPOSE 18887
+ENTRYPOINT ["/service/pyac-vliw-runtime"]

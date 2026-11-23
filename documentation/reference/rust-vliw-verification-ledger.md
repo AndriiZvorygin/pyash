@@ -4,6 +4,46 @@ Use this file as the lookup record for Rust VLIW CPU/GPU conformance runs. Each
 entry records the repository revision, deployed artifact, host/device, route,
 and exact test outcome. A queued or timed-out job is not a passing test.
 
+## 2026-11-23: CUDA Cubin Canary on SWAC
+
+The prebuilt Rust NVPTX worker executed the same typed VLIW core through SWAC
+Housekeeper. Three standalone typed-dispatch results passed: numeric overload
+`41`, reversed-case boolean overload `true`, and nested overloaded call
+`41`. The missing overload returned shared error `1`. All **55** batched
+matrix cases and both other expected errors passed.
+
+| Field | Evidence |
+| --- | --- |
+| Build source | CUDA implementation on top of `54c274e34`; build metadata records the dirty checkout at canary build time |
+| Build host and tools | Mriczo; Rust nightly `2026-08-15`; NVIDIA `ptxas 12.8.93` |
+| Device and driver | SWAC, NVIDIA GeForce RTX 3060, `sm_86`, driver `535.247.01` |
+| Rust-to-PTX / offline assembly | 5.81 s with cached dependencies / 33.36 s |
+| Cubin | 2,741,208 bytes; SHA-256 `21651098503d4cf7cf9ae7e984078cde9cfbff0b2056a8af3b7e77f509ad86d3` |
+| Runtime executable | 9,247,912 bytes; SHA-256 `01b77418be221a6d84580e86ed7a3867b36d311e6702d7908b42085a3c6783b2` |
+| Image | `sha256:c2db10e15c334cc0e8fc2d9221d1914aa6909b6366eb5ee4d0078635208b0298` |
+| Cold readiness | 1.092 s measured from before container start; runtime initialization 0.11 s |
+| GPU kernel events | Codelet pack 3.758 ms; section batch 101.297 ms; nested overload 0.413 ms |
+| Client round trips | Codelet pack 678.516 ms; section batch 672.471 ms |
+| Container host memory | 39.93 MiB sampled; 1 GiB enforced limit |
+
+`ptxas` reported 255 registers per entry point. Pack, standalone programlet,
+and section stack frames were 7,072, 3,856, and 3,816 bytes, respectively.
+Their entry-point spill stores/loads were 4/4, 16/0, and 12/8 bytes. Terminal
+Housekeeper timestamps had one-second resolution, so their queue and active
+deltas should not be interpreted as subsecond measurements.
+
+The conformance result is `artifacts/20261123-0002-rust-vliw-conformance/result.pya`.
+Its case and request timings are valid; its environment sweep sampled the
+client host, not SWAC. The CUDA report collector now queries the pinned GPU
+host. Build logs are under `rust/pyac-gpu/cuda-kernel/target/cuda-build-yXfwwfUm/`.
+
+Rollback restored SWAC's prior Vulkan container, but that container was
+already exited and its required pipeline cache was absent. Its historical
+build log shows a Vulkan adapter initialization failure. The VLIW route
+remains held; other runtimes and Housekeeper were not restarted. Mriczo's
+CUDA canary was not run because the SWAC rollback could not be verified.
+The canary now checks for the saved rollback cache before changing a route.
+
 ## 2026-11-19: Live GPU Refresh
 
 **Test target:** Rust VLIW shared core and Rust-GPU Vulkan pack runtime, including batched codelets and sectioned programlets.

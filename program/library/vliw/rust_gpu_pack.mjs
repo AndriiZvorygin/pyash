@@ -4,6 +4,7 @@ import { performance } from "node:perf_hooks";
 
 import gpu from "../../verbs/gpu.mjs";
 import { readGpuHandleStatus } from "../../runtime/gpu/handle_status.mjs";
+import { submitManagedGpuJob } from "../../runtime/gpu/managed-ollama.mjs";
 import { decodePyacPack } from "./database.mjs";
 
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
@@ -201,5 +202,53 @@ export function createHousekeeperVliwPackExecutor({
       await sleep(Math.min(pollDelay, Math.max(1, deadline - Date.now())));
     }
     throw new Error(`VLIW Housekeeper job ${handleId} is still queued or running after ${waitLimit}ms`);
+  };
+}
+
+export function createPinnedVliwPackExecutor({ targetHostId, timeoutMs, managerUrl, submit = submitManagedGpuJob }) {
+  const host = String(targetHostId ?? "").trim().toLowerCase();
+  if (!host) throw new Error("pinned VLIW execution requires a host");
+  return async (packBytes) => {
+    const decoded = decodePyacPack(packBytes);
+    const startedMs = performance.now();
+    const startedAt = new Date().toISOString();
+    const handleId = `pyac-pack-${crypto.randomUUID()}`;
+    let terminal;
+    const timing = (runtime) => timingRecord({
+      remoteJobId: terminal?.remoteJobId,
+      remoteSubmittedAt: terminal?.submittedAt,
+      remoteStartedAt: terminal?.startedAt,
+      remoteFinishedAt: terminal?.finishedAt
+    }, handleId, startedAt, startedMs, runtime);
+    const verifyHost = () => {
+      if (terminal?.executionHostId !== host) {
+        throw new Error(`VLIW expected host ${host}, got ${terminal?.executionHostId ?? "unknown"}`);
+      }
+    };
+    try {
+      const result = await submit({
+        runtimeName: "vliw",
+        profileName: "pyac-vliw-rust-gpu",
+        workerId: "vliw-gpu-conformance",
+        targetHostId: host,
+        deviceId: "gpu0",
+        managerUrl,
+        timeoutMs,
+        handleId,
+        dischargeAllowed: false,
+        vramRequiredMb: Math.max(512, estimateVramMb(decoded.codelets.length)),
+        jobSpec: {
+          kind: "pyac-pack-execute",
+          payload: { packBase64: Buffer.from(packBytes).toString("base64") }
+        },
+        onStatus(status) { terminal = status; }
+      });
+      verifyHost();
+      return { ...result, housekeeperTiming: timing(result.runtimeTimingMs ?? null) };
+    } catch (error) {
+      if (terminal) verifyHost();
+      error.housekeeperTiming = timing(runtimeTimingsFromError(error.message));
+      throw error;
+    }
   };
 }

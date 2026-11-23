@@ -1,0 +1,17 @@
+[package]
+name = "pyac-vliw-cuda-kernel"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+pyac-vliw-core = { path = "../../pyac-vliw-core" }
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+
+[workspace]

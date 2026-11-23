@@ -6,6 +6,33 @@ starts this container on demand, submits canonical `pyac-pack-execute` packs,
 and stops the service after its idle grace. VLIW runtime updates do not rebuild
 or restart Housekeeper.
 
+## CUDA canary
+
+The optional CUDA image runs the same Rust semantics core, including typed
+dispatch, from an offline-assembled `sm_86` cubin. The standard image still
+defaults to Vulkan. Housekeeper uses the same `pyac-pack-execute` protocol for
+both. The CUDA image includes only the runtime, cubin, and build metadata:
+there is no PTX, compiler, or fallback to Vulkan or CPU.
+
+Build on Mriczo, not SWAC. The pinned nightly must have `rust-src`,
+`llvm-tools`, and `llvm-bitcode-linker`; `ptxas` 12.8 and Docker are used on
+the build host. Then run:
+
+```sh
+bash rust/pyac-gpu/build-cuda-image.sh
+bash container/pyac-vliw-runtime/command/cuda-canary.sh swac <CUDA_IMAGE>
+# Only after SWAC conformance and rollback are verified:
+bash container/pyac-vliw-runtime/command/cuda-canary.sh mriczo <CUDA_IMAGE>
+```
+
+The build prints the image tag and evidence directory. The canary requires a
+prior Vulkan container and saved cache on the destination. It changes only
+the VLIW route, caps the canary container at 1 GiB of host memory, validates
+readiness within 60 seconds, and submits host-pinned jobs with discharge
+disabled. It restores the prior container afterward. If that container
+cannot regain readiness, only VLIW remains held for recovery. Do not compile
+a cache during startup or reuse a cache from a different GPU/driver.
+
 The internal HTTP contract is protocol version 1:
 
 - `GET /health` returns `ready`, `protocolVersion`, and available worker slots.

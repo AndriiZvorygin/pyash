@@ -11,7 +11,8 @@ import {
   compilePyashProgramSource,
   decodePyashProgramPack
 } from "../program/library/vliw/programlet.mjs";
-import { createHousekeeperVliwPackExecutor } from "../program/library/vliw/rust_gpu_pack.mjs";
+import { createHousekeeperVliwPackExecutor, createPinnedVliwPackExecutor } from "../program/library/vliw/rust_gpu_pack.mjs";
+import { verifyTypedDispatch } from "./vliw_gpu_conformance/typed_dispatch.mjs";
 import {
   collectVliwConformanceEnvironment,
   writeVliwConformancePya
@@ -562,6 +563,7 @@ export function executeRustCpuProgramletFailureReference(pack) {
 export async function runVliwGpuConformance({
   executeCpuPacks,
   executePack,
+  backend = "rust-gpu-vulkan",
   onProgress = () => {},
   onTiming = () => {}
 }) {
@@ -628,7 +630,7 @@ export async function runVliwGpuConformance({
         housekeeper: housekeeperTiming
       });
       assert.equal(result?.ok, true, `${batch.name}: Housekeeper worker did not report success`);
-      assert.equal(result.backend, "rust-gpu-vulkan", `${batch.name}: unexpected GPU backend`);
+      assert.equal(result.backend, backend, `${batch.name}: unexpected GPU backend`);
       assert.ok(String(result.device ?? "").trim(), `${batch.name}: missing GPU device identity`);
       if (batch.kind === "codelets") {
         assert.deepEqual(result.values, batch.expectedValues, `${batch.name}: typed results differ from declared expected values`);
@@ -747,17 +749,40 @@ async function main() {
     passedCases: [],
     expectedErrors: []
   };
-  const executePack = createHousekeeperVliwPackExecutor({
+  const backend = process.env.PYA_VLIW_CONFORMANCE_BACKEND || "rust-gpu-vulkan";
+  const targetHostId = process.env.PYA_VLIW_CONFORMANCE_HOST;
+  if (backend === "rust-cuda-cubin" && !targetHostId) {
+    throw new Error("CUDA conformance requires PYA_VLIW_CONFORMANCE_HOST");
+  }
+  const timeoutMs = Number(process.env.PYA_VLIW_CONFORMANCE_TIMEOUT_MS) || 5 * 60 * 1000;
+  const executePack = targetHostId
+    ? createPinnedVliwPackExecutor({ targetHostId, timeoutMs })
+    : createHousekeeperVliwPackExecutor({
     worldRoot: path.resolve(process.env.PYA_WORLD_ROOT || "world"),
     agentName: "vliw-gpu-conformance",
     deviceId: process.env.PYA_VLIW_CONFORMANCE_DEVICE_ID || "gpu0",
-    timeoutMs: Number(process.env.PYA_VLIW_CONFORMANCE_TIMEOUT_MS) || 5 * 60 * 1000
+    timeoutMs
   });
   let failure = null;
   try {
+    if (backend === "rust-cuda-cubin") {
+      await verifyTypedDispatch({
+        executePack,
+        executeCpuPacks: executeRustCpuReference,
+        executeCpuError: executeRustCpuProgramletFailureReference,
+        backend,
+        report(name, housekeeper, device, expected) {
+          report.gpuRequests.push({ name, housekeeper });
+          if (device) report.passedCases.push(name);
+          else report.expectedErrors.push({ name, errorCode: expected });
+          console.log(`PASS CUDA ${name}: ${JSON.stringify(expected)}; ${JSON.stringify(housekeeper)}`);
+        }
+      });
+    }
     const completed = await runVliwGpuConformance({
       executeCpuPacks: executeRustCpuReference,
       executePack,
+      backend,
       onTiming(event) {
         const target = event.phase.startsWith("cpu") ? report.cpuRequests : report.gpuRequests;
         target.push(event);
@@ -797,7 +822,7 @@ async function main() {
         }
         if (event.phase === "gpu-error") {
           report.expectedErrors.push({ name: event.name, errorCode: event.errorCode });
-          console.log(`PASS ${event.name} on Vulkan worker: shared runtime error ${event.errorCode}`);
+          console.log(`PASS ${event.name} on ${backend}: shared runtime error ${event.errorCode}`);
         }
       }
     });
@@ -811,7 +836,9 @@ async function main() {
   report.finishedAt = new Date().toISOString();
   report.totalWallMs = Number((performance.now() - startedMs).toFixed(3));
   try {
-    report.environment = await collectVliwConformanceEnvironment(repositoryRoot);
+    report.environment = await collectVliwConformanceEnvironment(repositoryRoot, {
+      cudaHost: backend === "rust-cuda-cubin" ? targetHostId : undefined
+    });
   } catch (error) {
     report.environmentError = error instanceof Error ? error.message : String(error);
   }

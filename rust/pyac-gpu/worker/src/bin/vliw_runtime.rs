@@ -22,9 +22,41 @@ const MAX_PACK_BYTES: usize = 16 * 1024 * 1024;
 const MAX_REQUEST_BYTES: usize = 23 * 1024 * 1024;
 const DEFAULT_TIMEOUT_SECONDS: u64 = 1800;
 
+enum RuntimeBackend {
+    Vulkan(gpu_worker::GpuRuntime),
+    #[cfg(feature = "cuda")]
+    Cuda(gpu_worker::cuda::CudaRuntime),
+}
+
+impl RuntimeBackend {
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Vulkan(_) => "rust-gpu-vulkan",
+            #[cfg(feature = "cuda")]
+            Self::Cuda(_) => gpu_worker::cuda::BACKEND,
+        }
+    }
+
+    fn device_name(&self) -> &str {
+        match self {
+            Self::Vulkan(gpu) => gpu.device_name(),
+            #[cfg(feature = "cuda")]
+            Self::Cuda(gpu) => gpu.device_name(),
+        }
+    }
+
+    fn execute(&self, pack: Vec<u8>) -> (Result<Value, String>, gpu_worker::GpuExecutionTiming) {
+        match self {
+            Self::Vulkan(gpu) => pollster::block_on(gpu.execute_pack_with_timings(&pack)),
+            #[cfg(feature = "cuda")]
+            Self::Cuda(gpu) => gpu.execute(pack),
+        }
+    }
+}
+
 #[derive(Clone)]
 struct RuntimeState {
-    gpu: Arc<gpu_worker::GpuRuntime>,
+    gpu: Arc<RuntimeBackend>,
     worker_timeout: Duration,
     workers: Arc<Semaphore>,
     gpu_execution: Arc<std::sync::Mutex<()>>,
@@ -121,6 +153,7 @@ async fn health(State(state): State<RuntimeState>) -> impl IntoResponse {
             "workerReady": true,
             "shaderReady": true,
             "gpuReady": true,
+            "backend": state.gpu.name(),
             "device": state.gpu.device_name(),
             "availableWorkers": state.workers.available_permits(),
             "executionMode": "resident"
@@ -153,7 +186,7 @@ async fn execute(
             .lock()
             .map_err(|_| "VLIW GPU execution lock was poisoned".to_owned())?;
         let gpu_lock_wait_ms = lock_started.elapsed().as_secs_f64() * 1000.0;
-        let (result, timings) = pollster::block_on(gpu.execute_pack_with_timings(&pack));
+        let (result, timings) = gpu.execute(pack);
         Ok::<_, String>((result, timings, gpu_lock_wait_ms))
     });
     let execution_result = timeout(state.worker_timeout, execution)
@@ -225,16 +258,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cache_path = std::env::var_os("PYAC_VLIW_PIPELINE_CACHE_PATH")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("/service/pyac_vliw_pipeline_cache.bin"));
-    eprintln!(
-        "[pyac-vliw] loading shader {} and compiled GPU artifact {}",
-        shader_path.display(),
-        cache_path.display()
-    );
-    let gpu = Arc::new(
-        gpu_worker::GpuRuntime::new(&shader_path, &cache_path)
-            .await
-            .map_err(std::io::Error::other)?,
-    );
+    let backend = std::env::var("PYAC_VLIW_BACKEND").unwrap_or_else(|_| "vulkan".to_owned());
+    let gpu = Arc::new(match backend.as_str() {
+        "vulkan" => {
+            eprintln!(
+                "[pyac-vliw] loading shader {} and compiled GPU artifact {}",
+                shader_path.display(),
+                cache_path.display()
+            );
+            RuntimeBackend::Vulkan(
+                gpu_worker::GpuRuntime::new(&shader_path, &cache_path)
+                    .await
+                    .map_err(std::io::Error::other)?,
+            )
+        }
+        #[cfg(feature = "cuda")]
+        "cuda" => {
+            let cubin = std::env::var_os("PYAC_VLIW_CUBIN_PATH")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from("/service/pyac_vliw_gpu_kernel.cubin"));
+            eprintln!(
+                "[pyac-vliw] loading compiled CUDA artifact {}",
+                cubin.display()
+            );
+            RuntimeBackend::Cuda(
+                gpu_worker::cuda::CudaRuntime::new(cubin).map_err(std::io::Error::other)?,
+            )
+        }
+        #[cfg(not(feature = "cuda"))]
+        "cuda" => return Err("this VLIW runtime was built without CUDA support".into()),
+        _ => return Err(format!("unsupported VLIW backend: {backend}").into()),
+    });
     eprintln!(
         "[pyac-vliw] runtime initialized on {} in {:.2}s",
         gpu.device_name(),

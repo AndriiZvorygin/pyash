@@ -7,8 +7,9 @@ and generated WGSL for the browser pack runtime. The independently scheduled
 `myocpfun` section entry point is Vulkan-only because it uses a device-scope
 atomic completion ticket. The browser WGSL target intentionally omits that
 entry point; it does not claim section execution or completion-order results.
-Keep behavior changes in the shared semantics runtime; do not add a parallel
-CUDA/PTX or hand-maintained WGSL implementation.
+Keep behavior changes in the shared semantics runtime. The optional Rust
+CUDA target also builds this core; its adapter only loads a prebuilt cubin
+and launches kernels. See the [CUDA canary runbook](../../container/pyac-vliw-runtime/README.md#cuda-canary).
 
 The native shader intentionally uses SPIR-V's `Logical Simple` memory model.
 The Vulkan-specific Rust-GPU target emits `VulkanMemoryModel`, which requires a
