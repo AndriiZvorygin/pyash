@@ -47,6 +47,41 @@ conformance run or runtime replacement was claimed on SWAC. Resolve its
 Housekeeper lifecycle-control issue or establish a verified rollback target
 before retrying there.
 
+### Clean committed-source verification on SWAC
+
+After restarting SWAC Housekeeper to clear the stale runtime pause, the clean
+committed CUDA candidate was installed behind a verified CUDA rollback
+container and tested through the SWAC Housekeeper queue. The full configured
+matrix passed: **61 batched semantic cases**, three typed-dispatch probes, and
+all **3 expected errors**. This includes the Q/K/V row projections and both
+float32/float64 maximum-index cases. The Housekeeper queue drained to zero,
+dispatch resumed, and the candidate remained selected. The earlier failed
+handoff above is retained as historical evidence; this later run is the
+successful SWAC deployment and conformance result.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261123-0012-rust-vliw-conformance/result.pya` |
+| Source revision | `30db7a20246a9998db42f610d05f2729fc6c873e`; no tracked source patch |
+| Client and GPU host | Mriczo client -> SWAC Housekeeper -> SWAC RTX 3060 |
+| GPU and driver | NVIDIA GeForce RTX 3060, driver `535.247.01`, 12,288 MiB |
+| CUDA image | `sha256:2d3c8b52363ab8dac197015e468fabd32a6b3392495347771b685621304c9326` |
+| Runtime executable | 9,248,544 bytes; SHA-256 `47eddabc3a5a999df168c0efeb97dd58d06e79808a03005825b6081d6bfea0e6` |
+| Cubin | 3,046,232 bytes; SHA-256 `e969de24a9d55527e4036eae2f9a5b1e07c7e3901e04370abbda52e298d57aa4` |
+| CPU reference executable | 15,729,000 bytes; SHA-256 `020b269522e7ef16664746147393450d0b85c13767fd99cd658275bf10b1124a` |
+| Runtime initialization | Cubin load and GPU initialization: 0.11 s |
+| Full run | 6,199.526 ms; 61 matrix cases passed; 3 typed-dispatch probes passed; all 3 expected errors matched |
+| CPU batches | 38 codelet cases: 59.440 ms; 23 programlet sections: 64.974 ms |
+| CUDA event batches | 38 codelet cases: 3.806 ms; 23 programlet sections: 110.098 ms |
+| Housekeeper client round trips | Codelet batch: 667.413 ms; section batch: 680.248 ms |
+| Container memory limit / post-run GPU | 1 GiB limit; RTX 3060 returned to 466 MiB used and 0% utilization |
+
+The CUDA-event values are GPU kernel intervals; the larger client round trips
+include Housekeeper and transport overhead. This verifies the clean committed
+artifact on SWAC hardware, not a general GPU speedup claim. SWAC's Housekeeper
+was healthy and accepting work after the run, with an empty queue and dispatch
+resumed.
+
 ## 2026-11-23: Softmax and Two-Key Attention on Mriczo CUDA
 
 The full Housekeeper-routed CUDA conformance matrix passed on Mriczo's RTX 3090.
