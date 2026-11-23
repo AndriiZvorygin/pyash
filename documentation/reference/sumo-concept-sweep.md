@@ -201,6 +201,32 @@ one "love"; the links now keep all three SUMO kinds of love.
 No promoted record carries a SUMO definition. The definition is model input
 only.
 
+## Backlog result
+
+The backlog ran on `zvorygin` as the same run
+`sumo-concept-sweep-d4544c7a891aff61b320a319`, 88 batches of 64 concepts. It
+decided every concept the worklist offered.
+
+| Outcome | Concepts |
+| --- | --- |
+| Promoted links | 7,084 |
+| — `superclass-of` | 5,658 |
+| — `equivalent-to` | 1,426 |
+| Rejected by the model | 1,373 |
+| No candidate | 2,109 |
+| Uncertain | 120 |
+
+The evidence paths were 3,617 hierarchy, 1,409 surface, and 2,058 adjudicated.
+The promoted catalog holds one row per concept, every row agrees with the
+derivation, every target is an existing entry, and no row carries a SUMO
+definition.
+
+The first part of the run promoted links whose relation the model had written
+rather than the one the evidence supports. The relation is now derived from the
+evidence path, and `node command/sumo_concept_link_relations.mjs` rewrote the
+747 affected rows of the 4,007 rows promoted at that point. The identifiers,
+the targets, and the recorded evidence of those rows were left untouched.
+
 ## Operations
 
 The sweep runs on `zvorygin`, which needs two local-only inputs that are not in
