@@ -156,6 +156,35 @@ following the same shape as the WordNet sense compound refinery.
 Durable state is `.pya` under `artifacts/<run-id>/`. The decision ledger is
 append-only under stable row identities.
 
+## Pilot result
+
+The first pilot ran on `zvorygin` as run
+`sumo-concept-sweep-d4544c7a891aff61b320a319`, 64 concepts selected and
+processed.
+
+| Outcome | Concepts |
+| --- | --- |
+| Promoted links | 47 |
+| — `superclass-of` | 21 |
+| — `equivalent-to` | 17 |
+| — `subsumed-by` | 9 |
+| Rejected by the model | 5 |
+| No candidate | 11 |
+| Uncertain | 1 |
+
+The evidence paths were exercised in proportion: 21 hierarchy, 20 surface, 6
+adjudicated. The model's rejections were sound — it refused the playing-card
+"king" for SUMO `King`, the Brazilian currency for `BrazilianReal`, and the
+monotheistic deity candidates for `God`.
+
+The love family is the case the sweep exists for. `CompanionateLove` and
+`PassionateLove` both link to the Pyash love entry as `superclass-of`, through
+their ancestor `Love`, with a head-word affinity. WordNet gives the language
+one "love"; the links now keep all three SUMO kinds of love.
+
+No promoted record carries a SUMO definition. The definition is model input
+only.
+
 ## Operations
 
 The sweep runs on `zvorygin`, which needs two local-only inputs that are not in
