@@ -290,6 +290,20 @@ The generated catalogs exceed GitHub's 50 MB recommendation. Treat any move to
 Git LFS as its own decision, taken separately from a sweep and never while one
 is running.
 
+The GitLab remote enforces a 100 MiB limit per blob, and a pre-receive hook
+rejects the entire push when one file crosses it. The committed ledger
+therefore stores one row per decision id: keep the last row for each id, drop
+the superseded ones, and confirm that the parsed state is identical before
+staging. A compacted ledger parses to exactly the same rows and the same id
+set as the file it replaces, because the loader keeps the last row for an id.
+
+Each committed row costs about 9 KB, so roughly 10,500 rows fit under the
+limit. When the remaining sense count would push the committed ledger past
+that, stop and report it instead of pushing. The remedy is a storage decision
+- Git LFS for that one file, or a shorter retention window for committed
+decisions - and it must be taken separately from a sweep, never while one is
+running.
+
 ## References
 
 - [Translation and WordNet pipeline](../../program/library/translation/README.md)
