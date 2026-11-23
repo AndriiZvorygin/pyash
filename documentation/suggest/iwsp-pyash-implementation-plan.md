@@ -790,28 +790,31 @@ and the verification ledger.
 Q, K, and V mean query, key, and value. For input representation `X`, a transformer
 forms them with learned linear projections, conventionally written `Q = XW_Q`,
 `K = XW_K`, and `V = XW_V`. Attention compares Q with K (here by dot product),
-normalizes the scores, then uses those weights to combine V. These are distinct
-mathematical roles, not ordinary questions, physical keys, or scalar values.
+normalizes the scores, then uses those weights to combine V. In this project, use
+`hwas`, `htis hsek`, and `hnuc gjat` as the Pyash labels for those respective roles;
+their broader source dictionary senses remain unchanged.
 
 [`examples/pyash/iwsp-qkv-projection.pya`](../../examples/pyash/iwsp-qkv-projection.pya)
 is the first executable projection slice. With input `[1, 2]`, it computes one row
-for each projection: `[1, 0]` gives Q=`1`, `[1, 2]` gives K=`5`, and `[2, 1]` gives
-V=`4`. The resulting `[1, 5, 4]` is checked by `pluk tlas`. This is deliberately a
+for each projection: `[1, 0]` gives Q=`1` (`hwas`), `[1, 2]` gives K=`5`
+(`htis hsek`), and `[2, 1]` gives V=`4` (`hnuc gjat`). The resulting
+`[1, 5, 4]`, ordered Q/K/V, is checked by `pluk tlas`. This is deliberately a
 one-output-lane-per-role fixture; it proves Pyash composition of three dot products,
 not general matrix multiplication or a complete transformer attention path. Rust CPU
-tests and live CUDA conformance on the Mriczo RTX 3090 now pass for this fixture,
-along with float32 and float64 first-maximum-index selection. The complete 61-value
-case matrix and two expected-error cases passed; see the run record in the VLIW
-verification ledger.
+tests and live CUDA conformance on both Mriczo's RTX 3090 and SWAC's RTX 3060 pass for
+this fixture, along with float32 and float64 first-maximum-index selection. The
+complete 61-case matrix and expected-error cases passed; see the run records in the
+VLIW verification ledger.
 
-The next increment is to produce at least two lanes per Q/K/V projection and feed
-those outputs into the already-working attention composition. Keep the matrix shape,
-row order, and output layout visible in the Pyash example. Only add a general
+The adopted Pyash role labels are Q=`hwas`, K=`htis hsek`, and V=`hnuc gjat`; their
+source senses are broader analogues, not redefined dictionary entries. The next
+increment is to produce at least two lanes per Q/K/V projection and feed those
+outputs into the already-working attention composition. Keep the matrix shape, row
+order, and output layout visible in the Pyash example. Only add a general
 matrix-vector primitive if the explicit dot-product composition becomes unwieldy or
 fails the required scale; the current scalar proof does not justify a new opcode by
-itself. The exact transformer-role vocabulary is still pending curation; current
-examples intentionally retain Q/K/V as technical labels rather than misusing the
-nearest ordinary-language words.
+itself. Keep Q/K/V as technical notation and pair it with the adopted Pyash labels
+where the role names are useful to readers.
 
 ### Stage 8 — Minimal Q/K/V-fed transformer block
 
@@ -1080,15 +1083,16 @@ comparison, and selection parents. The Q/K/V “projection” in attention is a
 matrix multiplication, so the mathematical matrix-multiplication sense is the
 better anchor than the geometric projection sense.
 
-The transformer-specific roles query, key, and value do not yet have exact linked
-Pyash terms. The nearest current entries are only analogies: `hwas` is “question”
-(WordNet `n:07208256-n`), `htis hsek` is a key/clue sense (WordNet `n:05802065-n`),
-`hnuc gjat` is numerical value (WordNet `n:05864972-n`), and `dlek` is vector
-(WordNet `n:05873161-n`). None names the corresponding Q/K/V role, and `hcuk hnop`
-for ordinary cognitive attention is not a transformer-attention term. Keep Q/K/V as
-standard technical notation in this implementation record until the vocabulary work
-assigns exact senses and forms; do not use these nearest entries as if they were
-validated transformer compounds.
+The project adopts `hwas` for the transformer query representation Q,
+`htis hsek` for key representation K, and `hnuc gjat` for value representation V.
+Their existing linked senses are respectively question (WordNet `n:07208256-n`),
+key/clue (WordNet `n:05802065-n`), and numerical value (WordNet `n:05864972-n`).
+These are practical project mappings: the attention roles are narrower than the
+source senses, which remain unchanged in the dictionary. Record them in
+[`iwsp-transformer-terms.pya`](iwsp-transformer-terms.pya) and use these Pyash forms
+alongside Q/K/V in IWSP examples and implementation notes. `dlek` remains the vector
+term (WordNet `n:05873161-n`); `hcuk hnop` for ordinary cognitive attention is not
+being assigned the transformer-attention meaning.
 
 ### A.6 Proposed head-final compounds for current lexical gaps
 
@@ -1181,7 +1185,7 @@ partial mappings and the GPU compound review note from A.7.
 | Exponential normalization (softmax) | Pyash ceremony: maximum → vector subtract → exponential → sum → `dvis` | Implemented as a composition in the Rust CPU/GPU programlet runtime, not a separate softmax opcode. Generic `float`/`vec float` formals preserve float32 or float64. CPU and live CUDA conformance pass; WGSL has not been verified. See the executable examples and specification 28. |
 | Vector normalization | `from name values with name normalization options to name normalized be vector normalization do` | Normalize a vector under an explicitly selected norm (for example L1 or L2); options should include epsilon/zero-vector behavior. Distinct from exponential normalization. New operation. |
 | Maximum position (argmax) | `from name scores to name num answer be gjat bwit do` | Implemented as the typed `gjat bwit` form: float output returns the maximum value; a numeric destination returns the zero-based index of the first maximum. Non-empty finite float32/float64 vectors only; ties select the lower lane. This is lane-index selection, not arbitrary ID lookup. |
-| Q/K/V row projection | `ob name input by ve float32 ... to name candidate at num ... be kl6m psas do` | Implemented as three visible dot-product rows in `examples/pyash/iwsp-qkv-projection.pya`; the example checks `[Q,K,V] = [1,5,4]`. It is a minimal scalar-per-role proof, not a general matrix-vector operation. Transformer role names remain standard technical notation pending exact vocabulary links. |
+| Q/K/V row projection | `ob name input by ve float32 ... to name candidate at num ... be kl6m psas do` | Implemented as three visible dot-product rows in `examples/pyash/iwsp-qkv-projection.pya`; the example checks `[Q,K,V] = [1,5,4]`. It is a minimal scalar-per-role proof, not a general matrix-vector operation. Adopted Pyash labels are Q=`hwas`, K=`htis hsek`, and V=`hnuc gjat`; their original dictionary senses remain broader. |
 | Activation function | `from name preactivation by name relu to name activated be vector map do` | Reuse the existing vector-map sentence surface to apply a named scalar function elementwise. `vector map` currently runs through the JS interpreter; `relu` here is illustrative and needs a registered scalar mapper. A fused GPU activation is a later lowering/optimization, not a different meaning. |
 | Learned vector / embedding | `from name embedding table via name token id to name embedding be embedding lookup do` | Return the learned row for a token ID. “Learned vector” names the result; lookup is the action. New tensor-indexing operation. Existing vector `read` handles a flat element, not a row from a rank-2 table. |
 | Parallel execution / kernel launch | `from name kernel with name launch config to name results be parallel execution do` | Submit a kernel over the configured index space and return its result handle/data. This is a proposed compute operation, not `be gpu mind` or another Housekeeper inference request. |
