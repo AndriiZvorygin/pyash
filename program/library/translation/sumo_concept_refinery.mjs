@@ -1,8 +1,6 @@
 import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
 import { appendFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
 import { buildProgram } from "../../program.mjs";
@@ -455,19 +453,15 @@ export function parseSumoConceptRowsPya(source, expectedName) {
 }
 
 async function readRowsPyaFile(artifactPath, expectedName) {
+  let source;
   try {
-    if ((await stat(artifactPath)).size === 0) return [];
+    source = await readFile(artifactPath, "utf8");
   } catch (error) {
     if (error?.code === "ENOENT") return [];
     throw error;
   }
-  const records = [];
-  const input = createReadStream(artifactPath, { encoding: "utf8" });
-  const lines = createInterface({ input, crlfDelay: Infinity });
-  for await (const line of lines) {
-    for (const record of parseSumoConceptRowsPya(line, expectedName)) records.push(record);
-  }
-  return records;
+  if (!source.trim()) return [];
+  return parseSumoConceptRowsPya(source, expectedName);
 }
 
 async function writeRowsPyaFile(artifactPath, name, format, records, metadata = {}) {
@@ -901,14 +895,21 @@ async function runStage(sentence, context) {
   const stage = text(sentence?.su?.name);
   const output = outputHandle(sentence);
   let result;
-  if (stage === "select concepts") {
-    result = await selectConcepts({ context, dependencies: context.dependencies });
-  } else if (stage === "resolve concept mapping") {
-    result = await resolveCandidates({ context, dependencies: context.dependencies });
-  } else if (stage === "verify concept mapping") {
-    result = await verifyLinks({ context, dependencies: context.dependencies });
-  } else {
-    throw invalid("unknown SUMO concept refinery stage", { stage });
+  try {
+    if (stage === "select concepts") {
+      result = await selectConcepts({ context, dependencies: context.dependencies });
+    } else if (stage === "resolve concept mapping") {
+      result = await resolveCandidates({ context, dependencies: context.dependencies });
+    } else if (stage === "verify concept mapping") {
+      result = await verifyLinks({ context, dependencies: context.dependencies });
+    } else {
+      throw invalid("unknown SUMO concept refinery stage", { stage });
+    }
+  } catch (error) {
+    // The stage name tells the operator which stage produced the failure.
+    error.stage = stage;
+    error.message = `${error.message} [stage: ${stage}]`;
+    throw error;
   }
   const fact = mapFact(output, result);
   doRemember(fact);
