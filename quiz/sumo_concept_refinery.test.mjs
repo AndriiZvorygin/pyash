@@ -181,6 +181,20 @@ test("the provider envelope is unwrapped before the answer is read", () => {
   assert.equal(parsed.choice, "pyan hbin");
 });
 
+test("a truncated answer still reads its choice and relation", () => {
+  const answer = JSON.stringify({
+    response: "{\"choice\": \"pyac\", \"relation\": \"subsumed-by\", \"reason\": \"a specific instance of the general concept 'language'.}**/n**/n**",
+    done_reason: "length"
+  });
+  const parsed = parseSumoConceptChoiceResponse(answer, {
+    evidence: {},
+    candidates: [{ sequence: "pyac", senses: [] }]
+  });
+  assert.equal(parsed.status, "accepted");
+  assert.equal(parsed.choice, "pyac");
+  assert.equal(parsed.relation, "subsumed-by");
+});
+
 test("an answer that is not JSON stays uncertain", () => {
   const parsed = parseSumoConceptChoiceResponse("not json at all", { evidence: {}, candidates: [] });
   assert.equal(parsed.status, "uncertain");

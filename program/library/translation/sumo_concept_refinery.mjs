@@ -16,6 +16,7 @@ import { clearSignatureHandlers, registerSignatureHandler } from "../../bridge/s
 import { createGpuHousekeeperAdapter } from "../../runtime/gpu/housekeeper_adapter.mjs";
 import { recordExchangeJsonArtifact } from "../../bridge/exchange.mjs";
 import { loadEnglish30k, english30kLookupVariants } from "./english30k_coverage.mjs";
+import { extractBoundedJsonObject } from "./english_verification.mjs";
 import { loadSumoOntology, SUMO_ONTOLOGY_COMMIT } from "./sumo_ontology.mjs";
 import {
   SUMO_CONCEPT_CANDIDATE_FORMAT,
@@ -209,7 +210,8 @@ export function buildSumoConceptPrompt({ concept, evidence, candidates = [] }) {
     "- instance-of: the entry is an instance of the concept",
     "- superclass-of: the entry is a broader class than the concept",
     "",
-    'Reply with JSON: {"choice": "<candidate sequence or none>", "relation": "<relation>", "reason": "<one short sentence>"}'
+    "Reply with JSON: {\"choice\": \"<candidate sequence or none>\", \"relation\": \"<relation>\", \"reason\": \"<one short sentence>\"}",
+    "Keep the reason under fifteen words and stop there."
   );
   return lines.join("\n");
 }
@@ -233,39 +235,61 @@ export function buildSumoConceptResponseFormat() {
  */
 /**
  * The Housekeeper returns the provider envelope, so the answer can sit inside
- * `response` or `message.content` rather than at the top level.
+ * `response` or `message.content` rather than at the top level. This returns
+ * the most specific text that can hold the answer.
  */
-export function unwrapSumoConceptAnswer(value) {
+export function sumoConceptAnswerText(value) {
   let payload = value;
   if (typeof value === "string") {
     try {
       payload = JSON.parse(value);
     } catch {
-      return null;
+      return value;
     }
   }
-  if (!payload || typeof payload !== "object") return null;
-  if (payload.choice !== undefined) return payload;
-  const wrapped = typeof payload.response === "string"
-    ? payload.response
-    : typeof payload.message?.content === "string" ? payload.message.content : "";
-  if (!wrapped) return payload;
-  try {
-    const inner = JSON.parse(wrapped);
-    return inner && typeof inner === "object" ? inner : payload;
-  } catch {
-    return payload;
-  }
+  if (!payload || typeof payload !== "object") return typeof value === "string" ? value : "";
+  if (typeof payload.response === "string") return payload.response;
+  if (typeof payload.message?.content === "string") return payload.message.content;
+  return typeof value === "string" ? value : JSON.stringify(payload);
+}
+
+/**
+ * A model that runs past its token limit can leave the answer truncated, so
+ * the short fields are read directly when the whole object will not parse.
+ */
+export function extractSumoConceptFields(value) {
+  const source = typeof value === "string" ? value : "";
+  const choice = source.match(/"choice"\s*:\s*"([^"]*)"/u);
+  const relation = source.match(/"relation"\s*:\s*"([^"]*)"/u);
+  if (!choice && !relation) return null;
+  const reason = source.match(/"reason"\s*:\s*"([^"]{0,400})/u);
+  return {
+    choice: choice ? choice[1] : "",
+    relation: relation ? relation[1] : "",
+    reason: reason ? reason[1] : ""
+  };
 }
 
 export function parseSumoConceptChoiceResponse(value, { evidence, candidates = [] } = {}) {
-  const payload = unwrapSumoConceptAnswer(value);
-  if (!payload) {
+  const raw = sumoConceptAnswerText(value);
+  let answer = null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && parsed.choice !== undefined) answer = parsed;
+  } catch {
+    answer = null;
+  }
+  if (!answer) {
+    const bounded = extractBoundedJsonObject(raw);
+    if (bounded && typeof bounded === "object" && bounded.choice !== undefined) answer = bounded;
+  }
+  if (!answer) answer = extractSumoConceptFields(raw);
+  if (!answer) {
     return { status: "uncertain", reason: "model answer is not JSON", choice: "", relation: "" };
   }
-  const choice = text(payload?.choice).trim();
-  const relation = text(payload?.relation).trim();
-  const reason = text(payload?.reason).trim();
+  const choice = text(answer?.choice).trim();
+  const relation = text(answer?.relation).trim();
+  const reason = text(answer?.reason).trim();
   if (!choice) return { status: "uncertain", reason: "model answer has no choice", choice: "", relation };
   if (choice.toLowerCase() === "none") {
     return { status: "rejected", reason: reason || "no candidate denotes the concept", choice: "", relation: "" };
