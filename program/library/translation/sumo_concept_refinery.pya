@@ -8,7 +8,7 @@ su text "max-concepts-per-launch" ob num 64 ya
 su text "candidate-limit" ob num 8 ya
 su text "hierarchy-depth-limit" ob num 6 ya
 su text "worklist-order" ob text "english30k-rank" ya
-su text "pilot-concept-ids" ob text "Beryllium,WhenFn,time,May,Can,before,FirstFn,most,DayFn,Urination,LastFn,Hand,God,House,Head,King,between,Set,Celebrity,Name,Phosphorus,Astatine,Nobelium,BloodTypeA,DayTime,GoGame,Americium,EvenInteger,FacialExpression,CompanionateLove,PassionateLove,NonNullSet,SetOfEquations,CareOrganization,PermanentResidence,CourtRoom,DiningRoom,HotelRoom,SelfServiceLaundry,Irrigating,Dismounting,Noun,On,Angstrom,WhereFn,NorthernSamiLanguage,ContainerFull,WhiteEthnicity,USStateDepartment,WarState,during,manner,England,PastFn,BrazilianReal,France,PeaceState,Downstairs,FootLength,knows,DeviceDamaged,states,home,Home" ya
+su text "pilot-concept-ids" ob text "" ya
 prah
 su name translation concept mapping be refinery def
 su name select concepts to name map concept mapping be translation stage do
