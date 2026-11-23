@@ -1210,3 +1210,22 @@ This table describes declarations only. The pilot task can still expose its feat
 vector, reference vector, editable weight facts, and exact-match feedback directly;
 later task contracts can add protected splits and bounded update methods without
 changing the evaluator signature or turning those declarations into operations.
+
+### A.11 GLM-5.4 loop-transformer reference
+
+Z.ai's 23 Nov 2026 post, [GLM-5.4: Toward Generalized Coding with Our First Loop
+Transformer](https://z.ai/blog/glm-5.4), describes GLM-5.4 as reusing a shared
+28-layer block for two passes. Per-token gates control how each pass writes its
+candidate update into the residual stream: the first pass builds context
+conservatively, while the second refines the result. The second pass reuses sparse
+key/value state selected by the first, adds a local sliding-window key/value stream,
+and reuses the first pass's sparse-attention indices. Z.ai reports that an additional
+loop therefore adds a sliding-window cache rather than a second full-context cache.
+
+These are useful later design references for Pyash: shared-block iteration over
+retained state, gated vector updates, and explicit cache/index reuse. They do not
+change the current implementation ladder or establish Pyash tensor shapes, cache
+layouts, or operation signatures. The post reports a controlled 30B comparison and
+serving claims, but does not provide enough implementation detail to port its full
+architecture directly; treat its reported results as vendor evidence, not independent
+Pyash measurements.
