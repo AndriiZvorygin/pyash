@@ -168,13 +168,19 @@ fn vector_literal(
         return CoreResult::failure(ERROR_MALFORMED, 1);
     }
     let words_per_value = (scalar_bytes / 2) as usize;
+    if words_per_value == 0 {
+        return CoreResult::failure(ERROR_MALFORMED, 1);
+    }
     if explicit && offset + 1 >= CODELET_WORDS {
         return CoreResult::failure(ERROR_MALFORMED, 1);
     }
     let length = if explicit {
         word(words, codelet, offset + 1) as usize
     } else {
-        fixed_words / words_per_value
+        match fixed_words.checked_div(words_per_value) {
+            Some(length) => length,
+            None => return CoreResult::failure(ERROR_MALFORMED, 1),
+        }
     };
     let payload_words = length * words_per_value;
     let result_words = length * scalar_bytes as usize / 4;

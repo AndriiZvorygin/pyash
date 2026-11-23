@@ -2,9 +2,9 @@ use super::*;
 
 pub(super) fn evaluate_boolean_leaf(
     sentence: &ParsedSentence,
-    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    tokens: &SentenceView<'_>,
 ) -> Result<bool, u32> {
-    let symbols = [0; PROGRAMLET_SCRATCH_WORDS];
+    let symbols = [0; MAX_PROGRAMLET_PAYLOAD_WORDS];
     let arguments = [ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS];
     let slots = [NumericLocalSlot::EMPTY; MAX_PROGRAMLET_LOCAL_SLOTS];
     evaluate_boolean_leaf_with_env(sentence, tokens, &symbols, &arguments, &slots)
@@ -12,14 +12,14 @@ pub(super) fn evaluate_boolean_leaf(
 
 pub(super) fn evaluate_boolean_leaf_with_env(
     sentence: &ParsedSentence,
-    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
-    symbols: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    tokens: &SentenceView<'_>,
+    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
 ) -> Result<bool, u32> {
     if sentence.mood == REALIS
         && sentence.verb_length == 1
-        && array_at!(tokens, sentence.verb_start) == BOOLEAN_VERB
+        && sentence_at!(*tokens, sentence.verb_start) == BOOLEAN_VERB
     {
         if sentence.field_count != 1 {
             return Err(ERROR_UNSUPPORTED);
@@ -30,14 +30,14 @@ pub(super) fn evaluate_boolean_leaf_with_env(
         if value.length != 1 {
             return Err(ERROR_UNSUPPORTED);
         }
-        return match array_at!(tokens, value.start) {
+        return match sentence_at!(*tokens, value.start) {
             TRUTH => Ok(true),
             LIE => Ok(false),
             _ => Err(ERROR_UNSUPPORTED),
         };
     }
     if matches!(sentence.mood, DEONTIC | CONDITIONAL) && sentence.verb_length == 1 {
-        let comparator = array_at!(tokens, sentence.verb_start);
+        let comparator = sentence_at!(*tokens, sentence.verb_start);
         if matches!(comparator, EQUALLY | TINY | GIANT) {
             let left_field = match sentence.field(NOMINATIVE) {
                 Some(field) => field,
@@ -97,25 +97,21 @@ pub(super) fn evaluate_boolean_leaf_with_env(
 }
 
 pub(super) fn evaluate_boolean_expression(
-    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
-    boundaries: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    tokens: &SentenceView<'_>,
     start: usize,
     end: usize,
 ) -> Result<bool, u32> {
-    let symbols = [0; PROGRAMLET_SCRATCH_WORDS];
+    let symbols = [0; MAX_PROGRAMLET_PAYLOAD_WORDS];
     let arguments = [ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS];
     let slots = [NumericLocalSlot::EMPTY; MAX_PROGRAMLET_LOCAL_SLOTS];
-    evaluate_boolean_expression_with_env(
-        tokens, boundaries, start, end, &symbols, &arguments, &slots,
-    )
+    evaluate_boolean_expression_with_env(tokens, start, end, &symbols, &arguments, &slots)
 }
 
 pub(super) fn evaluate_boolean_expression_with_env(
-    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
-    boundaries: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    tokens: &SentenceView<'_>,
     start: usize,
     end: usize,
-    symbols: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
 ) -> Result<bool, u32> {
@@ -173,15 +169,14 @@ pub(super) fn evaluate_boolean_expression_with_env(
         let frame_index = depth - 1;
         let mut frame = array_at!(stack, frame_index);
         let mut sentence = ParsedSentence::empty();
-        let parse_error =
-            parse_sentence_range(tokens, boundaries, frame.start, frame.end, &mut sentence);
+        let parse_error = parse_sentence_range(tokens, frame.start, frame.end, &mut sentence);
         if parse_error != 0 {
             return Err(parse_error);
         }
 
         let operator =
             if matches!(sentence.mood, DEONTIC | CONDITIONAL) && sentence.verb_length == 1 {
-                array_at!(tokens, sentence.verb_start)
+                sentence_at!(*tokens, sentence.verb_start)
             } else {
                 0
             };
@@ -246,25 +241,22 @@ pub(super) fn boolean_composition(
     start: usize,
     codelet_count: usize,
 ) -> Option<CoreResult> {
-    let mut tokens = [0; PROGRAMLET_SCRATCH_WORDS];
-    let mut boundaries = [0; PROGRAMLET_SCRATCH_WORDS];
-    let Ok((length, next_codelet)) =
-        collect_sentence(words, codelet_count, start, &mut tokens, &mut boundaries)
-    else {
+    let Ok((token_count, next_codelet)) = collect_sentence(words, codelet_count, start) else {
         return None;
     };
+    let tokens = SentenceView::new(words, start, token_count);
     let mut sentence = ParsedSentence::empty();
-    if parse_sentence(&tokens, &boundaries, length, &mut sentence) != 0
+    if parse_sentence(&tokens, &mut sentence) != 0
         || sentence.mood != DEONTIC
         || sentence.verb_length != 1
         || !matches!(
-            array_at!(tokens, sentence.verb_start),
+            sentence_at!(tokens, sentence.verb_start),
             NEGATORY_QUANTIFIER | AND_GRAMMAR | OR_GRAMMAR
         )
     {
         return None;
     }
-    match evaluate_boolean_expression(&tokens, &boundaries, 0, length) {
+    match evaluate_boolean_expression(&tokens, 0, tokens.len()) {
         Ok(value) => Some(CoreResult::scalar(
             VALUE_BOOLEAN,
             u32::from(value),
@@ -280,19 +272,16 @@ pub(super) fn boolean_comparison(
     start: usize,
     codelet_count: usize,
 ) -> Option<CoreResult> {
-    let mut tokens = [0; PROGRAMLET_SCRATCH_WORDS];
-    let mut boundaries = [0; PROGRAMLET_SCRATCH_WORDS];
-    let Ok((length, next_codelet)) =
-        collect_sentence(words, codelet_count, start, &mut tokens, &mut boundaries)
-    else {
+    let Ok((token_count, next_codelet)) = collect_sentence(words, codelet_count, start) else {
         return None;
     };
+    let tokens = SentenceView::new(words, start, token_count);
     let mut sentence = ParsedSentence::empty();
-    if parse_sentence(&tokens, &boundaries, length, &mut sentence) != 0
+    if parse_sentence(&tokens, &mut sentence) != 0
         || sentence.mood != DEONTIC
         || sentence.verb_length != 1
         || !matches!(
-            array_at!(tokens, sentence.verb_start),
+            sentence_at!(tokens, sentence.verb_start),
             EQUALLY | TINY | GIANT
         )
     {

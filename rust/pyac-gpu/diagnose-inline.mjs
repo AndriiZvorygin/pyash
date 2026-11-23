@@ -6,13 +6,13 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import readline from "node:readline";
-import { instrumentInlineSource } from "./inline_diagnostics.mjs";
-import { createInlineMetricCollector, parseSpirtLocations, renderInlineReport } from "./inline_diagnostics_report.mjs";
+import { instrumentInlineSource, rewriteCargoPathDependency } from "./inline_diagnostics.mjs";
+import { createInlineMetricCollector, parseSpirtLocations, renderInlineReport, resolveInlineTimeoutSeconds } from "./inline_diagnostics_report.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SHADER = path.join(ROOT, "rust/pyac-gpu/shader");
-const INSTRUMENTATION_VERSION = "2";
-const RUST_GPU_LIMIT_MS = 15 * 60 * 1000;
+const INSTRUMENTATION_VERSION = "3";
+const RUST_GPU_LIMIT_SEC = resolveInlineTimeoutSeconds(process.env.PYAC_RUSTGPU_INLINE_TIMEOUT_SEC);
 const RSS_LIMIT_BYTES = 8 * 1024 ** 3;
 const BUILD_LOG_LIMIT_BYTES = 4 * 1024 ** 2;
 const SAMPLE_MS = 2000;
@@ -71,11 +71,10 @@ function copyShaderToTemp(tempRoot) {
   });
   const manifest = path.join(tempShader, "Cargo.toml");
   const oldManifest = fs.readFileSync(manifest, "utf8");
-  const pathDependency = /pyac-vliw-core\s*=\s*\{\s*path\s*=\s*"([^"]+)"\s*\}/g;
-  const matches = [...oldManifest.matchAll(pathDependency)];
-  if (matches.length !== 1) throw new Error("expected one pyac-vliw-core path dependency in shader Cargo.toml");
-  const corePath = path.resolve(SHADER, matches[0][1]);
-  const newManifest = oldManifest.replace(pathDependency, `pyac-vliw-core = { path = ${JSON.stringify(corePath)} }`);
+  const dependency = oldManifest.match(/^pyac-vliw-core\s*=\s*\{\s*path\s*=\s*"([^"]+)"/mu);
+  if (!dependency) throw new Error("pyac-vliw-core path is missing from shader Cargo.toml");
+  const corePath = path.resolve(SHADER, dependency[1]);
+  const newManifest = rewriteCargoPathDependency(oldManifest, "pyac-vliw-core", corePath);
   fs.writeFileSync(manifest, newManifest);
   return tempShader;
 }
@@ -149,7 +148,7 @@ function sendSignal(child, signal) {
   }
 }
 
-async function runProfileBuild({ cargoGpu, args, env, logPath, collector }) {
+async function runProfileBuild({ cargoGpu, args, env, logPath, collector, timeoutMs }) {
   const child = spawn(cargoGpu, args, { cwd: ROOT, env, detached: true, stdio: ["ignore", "pipe", "pipe"] });
   const log = fs.createWriteStream(logPath, { flags: "wx" });
   let logBytes = 0;
@@ -191,7 +190,7 @@ async function runProfileBuild({ cargoGpu, args, env, logPath, collector }) {
     exit = await Promise.race([childExit, new Promise((resolve) => setTimeout(() => resolve(null), SAMPLE_MS))]);
     if (exit) break;
     peakRssBytes = Math.max(peakRssBytes, processTreeRss(child.pid));
-    if (Date.now() - started >= RUST_GPU_LIMIT_MS) stopReason = "15-minute wall-time limit";
+    if (Date.now() - started >= timeoutMs) stopReason = `${Math.floor(timeoutMs / 1000)}-second wall-time limit`;
     else if (peakRssBytes >= RSS_LIMIT_BYTES) stopReason = "8-GiB process-tree RSS limit";
     if (stopReason) {
       sendSignal(child, "SIGINT");
@@ -248,7 +247,6 @@ async function main() {
       "--auto-install-rust-toolchain",
       "--shader-crate", tempShader,
       "--target", "spirv-unknown-naga-wgsl",
-      "--debug",
       "--output-dir", outputDir,
       "--spirv-builder-source", pathToFileURL(instrumented.source).href,
       "--spirv-builder-version", instrumented.revision,
@@ -258,12 +256,19 @@ async function main() {
       CARGO_HOME: tempCargoHome,
       RUSTUP_HOME: process.env.RUSTUP_HOME || path.join(os.homedir(), ".rustup"),
       XDG_CACHE_HOME: tempCache,
-      RUSTGPU_RUSTFLAGS: "-Ztime-passes",
+      RUSTGPU_RUSTFLAGS: "-Ztime-passes -Zub-checks=no",
       RUSTGPU_CODEGEN_ARGS: `--no-spirv-opt --dump-pre-inline=${preInline}`,
     };
     console.log(`[inline profiler] Rust-GPU ${revisionPrefix}; shader dependency ${shaderSource}; compiler cache ${instrumented.reused ? "reused" : "built"}`);
     console.log(`[inline profiler] report directory: ${reportDir}`);
-    const result = await runProfileBuild({ cargoGpu, args, env, logPath, collector });
+    const result = await runProfileBuild({
+      cargoGpu,
+      args,
+      env,
+      logPath,
+      collector,
+      timeoutMs: RUST_GPU_LIMIT_SEC * 1000,
+    });
     const metrics = collector.snapshot();
     const spirtFile = fs.readdirSync(preInline).find((name) => name.endsWith(".spirt"));
     const sourceLocations = spirtFile
@@ -285,6 +290,7 @@ async function main() {
       instrumentedCompilerReused: instrumented.reused,
       shaderRustGpuSource: shaderSource,
       target: "spirv-unknown-naga-wgsl",
+      shaderProfile: "release-default",
       elapsedMs: result.elapsedMs,
       phaseAtStop: result.phase,
       exitCode: result.code,

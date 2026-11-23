@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { decodePyacPack, encodePyacPack } from "../program/library/vliw/database.mjs";
 import { parse } from "../program/understand/index.mjs";
 import { lowerSentence } from "../program/library/vliw/index.mjs";
-import { decodePyashProgramSections, executePyashProgramPack } from "../program/library/vliw/programlet.mjs";
+import { decodePyashProgramSections } from "../program/library/vliw/programlet.mjs";
 import {
   buildVliwGpuConformanceCases,
   buildVliwGpuConformanceBatches,
@@ -14,17 +14,6 @@ import {
   runVliwGpuConformance,
   runVliwGpuProgramletFailureConformance
 } from "../command/vliw_gpu_conformance.mjs";
-
-function referenceValue(output) {
-  if (typeof output?.boolean === "boolean") return { type: "boolean", value: output.boolean };
-  if (typeof output?.num === "number") {
-    return {
-      type: output.num < 0 ? "signed" : "unsigned",
-      value: output.num
-    };
-  }
-  assert.fail("unsupported programlet reference result: " + JSON.stringify(output));
-}
 
 function valuesForPacks(batches, packs) {
   return packs.map((pack) => {
@@ -96,7 +85,7 @@ test("VLIW GPU conformance matrix covers the merged typed and control-flow contr
   ]);
   for (const testCase of cases) {
     assert.ok(decodePyacPack(testCase.pack).codelets.length > 0, testCase.name + " lowers to PyAC");
-    assert.deepEqual(testCase.referenceValues, testCase.expectedValues, testCase.name + " JavaScript oracle");
+    assert.ok(Array.isArray(testCase.expectedValues), testCase.name + " has declared expected values");
   }
 });
 
@@ -109,36 +98,20 @@ test("VLIW conformance packs independent codelets together and programlets as na
   assert.equal(batches.length, 2);
   assert.equal(batches[0].kind, "codelets");
   assert.equal(batches[0].cases.length, codeletCases.length);
-  assert.deepEqual(batches[0].expectedValues, codeletCases.flatMap(({ referenceValues }) => referenceValues));
+  assert.deepEqual(batches[0].expectedValues, codeletCases.flatMap(({ expectedValues }) => expectedValues));
   assert.equal(batches[1].kind, "programlets");
   assert.equal(batches[1].cases.length, programletCases.length);
   assert.equal(decodePyashProgramSections(batches[1].pack).length, programletCases.length);
 });
 
-test("JavaScript programlet reference matches spec-derived GPU expectations", async () => {
-  const cases = (await buildVliwGpuConformanceCases()).filter(({ kind }) => kind === "programlet");
-  for (const testCase of cases) {
-    const { output } = await executePyashProgramPack(testCase.pack);
-    assert.deepEqual([referenceValue(output)], testCase.expectedValues, testCase.name);
-  }
-});
-
-test("Rust CPU reference matches dot-product collection, exact evaluation, and nested control-flow packs", async () => {
+test("Rust CPU reference matches every declared conformance expectation", async () => {
   const cases = await buildVliwGpuConformanceCases();
-  const selected = cases.filter(({ name }) => [
-    "pluk-tlas-collects-dot-products-into-prediction-vector",
-    "iwsp-linear-scorer-named-vectors",
-    "iwsp-linear-scorer-perturbed-candidate",
-    "nested-bounded-loops-keep-independent-cursors",
-    "nested-bounded-loops-reuse-symbols",
-    "boolean-argument-true-branch",
-    "boolean-argument-false-branch",
-    "boolean-and-local-comparison-leaves-true-branch",
-    "boolean-and-local-comparison-leaves-false-branch"
-  ].includes(name));
-  const rustValues = executeRustCpuReference(selected.map(({ pack }) => pack));
+  const batches = buildVliwGpuConformanceBatches(cases);
+  const rustValues = executeRustCpuReference(batches.map(({ pack }) => pack));
 
-  assert.deepEqual(rustValues, selected.map(({ referenceValues }) => referenceValues));
+  assert.deepEqual(rustValues, batches.map(({ expectedValues, expectedSections }) =>
+    expectedValues ?? expectedSections
+  ));
 });
 
 test("Rust CPU executes IWSP float-vector Pyash operations after VLIW lowering", async () => {
@@ -154,7 +127,7 @@ test("Rust CPU executes IWSP float-vector Pyash operations after VLIW lowering",
   assert.equal(selected.length, names.size);
   assert.deepEqual(
     executeRustCpuReference(selected.map(({ pack }) => pack)),
-    selected.map(({ referenceValues }) => referenceValues)
+    selected.map(({ expectedValues }) => expectedValues)
   );
 });
 
@@ -268,7 +241,7 @@ test("Rust GPU conformance rejects CPU mismatches, non-GPU workers, and wrong va
         assert.fail("GPU submission must not follow a failed CPU comparison");
       }
     }),
-    /Rust CPU batch differs from JavaScript references/u
+    /Rust CPU batch differs from declared expected values/u
   );
 
   await assert.rejects(
@@ -288,11 +261,11 @@ test("Rust GPU conformance rejects CPU mismatches, non-GPU workers, and wrong va
         return { ok: true, backend: "rust-gpu-vulkan", device: "GPU", values: [{ type: "unsigned", value: 99 }] };
       }
     }),
-    /typed results differ from JavaScript references/u
+    /typed results differ from declared expected values/u
   );
 });
 
-test("programlet runtime failures keep shared error codes across JS, Rust CPU, and Vulkan", async () => {
+test("programlet runtime failures keep shared error codes across Rust CPU and Vulkan", async () => {
   const cases = await buildVliwGpuProgramletFailureCases();
   assert.deepEqual(cases.map(({ name, expectedRuntimeCode }) => [name, expectedRuntimeCode]), [
     ["programlet-division-by-zero", 2],

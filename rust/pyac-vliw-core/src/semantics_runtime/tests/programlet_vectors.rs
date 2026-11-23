@@ -187,20 +187,10 @@ fn append_softmax_f64(words: &mut std::vec::Vec<u32>, logits: &[f64]) {
 }
 
 fn run(words: &[u32]) -> CoreResult {
-    let mut sentence_words = [0; PROGRAMLET_SCRATCH_WORDS];
-    let mut boundaries = [0; PROGRAMLET_SCRATCH_WORDS];
     let codelet_count = words.len() / CODELET_WORDS;
-    let mut symbols = [0; PROGRAMLET_SCRATCH_WORDS];
-    let mut frames = [ProgramletFrame::EMPTY; MAX_PROGRAMLET_CALL_DEPTH];
-    execute_numeric_programlet(
-        words,
-        codelet_count,
-        256,
-        &mut sentence_words,
-        &mut boundaries,
-        &mut symbols,
-        &mut frames,
-    )
+    let mut symbols = [0; MAX_PROGRAMLET_PAYLOAD_WORDS];
+    let mut frames = ProgramletStack::EMPTY;
+    execute_numeric_programlet(words, codelet_count, 256, &mut symbols, &mut frames)
 }
 
 #[test]
@@ -224,19 +214,16 @@ fn scalar_subtraction_signature_does_not_enter_vector_dispatch() {
     ];
     let mut words = std::vec::Vec::new();
     append_sentence(&mut words, &tokens, &[3, 7, 12, 14]);
-    let mut sentence_words = [0; PROGRAMLET_SCRATCH_WORDS];
-    let mut boundaries = [0; PROGRAMLET_SCRATCH_WORDS];
-    let (length, _) = collect_sentence(&words, 1, 0, &mut sentence_words, &mut boundaries).unwrap();
+    let (token_count, _) = collect_sentence(&words, 1, 0).unwrap();
+    let sentence_view = SentenceView::new(&words, 0, token_count);
     let mut sentence = ParsedSentence::empty();
-    assert_eq!(
-        parse_sentence(&sentence_words, &boundaries, length, &mut sentence),
-        0
-    );
+    assert_eq!(parse_sentence(&sentence_view, &mut sentence), 0);
     assert!(!is_programlet_vector_action(
         &sentence,
-        &sentence_words,
-        &[0; PROGRAMLET_SCRATCH_WORDS],
-        &ProgramletFrame::EMPTY,
+        &sentence_view,
+        &[0; MAX_PROGRAMLET_PAYLOAD_WORDS],
+        &[ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS],
+        &[ProgramletVectorSlot::EMPTY; 8],
     ));
 }
 
@@ -259,6 +246,31 @@ fn composes_stable_softmax_from_vector_programlet_primitives() {
         .map(|index| f32::from_bits(result.values[index]))
         .sum::<f32>();
     assert!((sum - 1.0).abs() < 1e-6);
+}
+
+#[test]
+fn vector_call_argument_keeps_a_pointer_into_the_original_packet() {
+    let mut words = std::vec::Vec::new();
+    append_softmax(&mut words, &[1.0, 2.0, 3.0]);
+    let codelet_count = words.len() / CODELET_WORDS;
+    let invocation_start = last_programlet_sentence_start(&words, 0, codelet_count).unwrap();
+    let (invocation_length, _) = collect_sentence(&words, codelet_count, invocation_start).unwrap();
+    let invocation_view = SentenceView::new(&words, invocation_start, invocation_length);
+    let mut invocation = ParsedSentence::empty();
+    assert_eq!(parse_sentence(&invocation_view, &mut invocation), 0);
+    let source = invocation.field(SOURCE).unwrap();
+    let expected_word_index = invocation_view.word_index(source.start);
+
+    let mut symbols = [0; MAX_PROGRAMLET_PAYLOAD_WORDS];
+    let mut frames = ProgramletStack::EMPTY;
+    let result = execute_numeric_programlet(&words, codelet_count, 256, &mut symbols, &mut frames);
+
+    assert_eq!(result.error, 0, "{result:?}");
+    let argument = frames.arguments[0];
+    assert_eq!(argument.vector_source_kind, VECTOR_SOURCE_QUOTE);
+    assert_eq!(argument.vector_source_index as usize, expected_word_index);
+    assert_eq!(argument.vector_source_length as usize, source.length);
+    assert_eq!(argument.vector_length, 3);
 }
 
 #[test]

@@ -2,7 +2,25 @@ const CHUNKED_LENGTH: usize = 960;
 
 pub fn generate_fixed_array_accessors() -> String {
     let mut generated = String::from("// Generated bounded array accessors for Rust-GPU/WGSL.\n");
-    for length in [2usize, 7, 8, 9, 10, 12, 13, 18, 32, 64, CHUNKED_LENGTH] {
+    for length in [
+        1usize,
+        2,
+        3,
+        4,
+        7,
+        8,
+        9,
+        10,
+        12,
+        13,
+        16,
+        18,
+        32,
+        64,
+        256,
+        512,
+        CHUNKED_LENGTH,
+    ] {
         push_array_impl(&mut generated, length);
     }
     generated
@@ -16,7 +34,7 @@ fn push_array_impl(generated: &mut String, length: usize) {
     generated.push_str("    #[inline(never)]\n    fn first(&self) -> T { self[0] }\n");
     // Rust-GPU forcibly inlines pointer-argument methods; expanding 64 struct arms multiplies
     // every local-slot read and write into large entry-point control flow.
-    if matches!(length, 8 | 64 | CHUNKED_LENGTH) {
+    if matches!(length, 8 | 64 | 256 | 512 | CHUNKED_LENGTH) {
         push_bounded_dynamic_method(generated, length, false);
         push_bounded_dynamic_method(generated, length, true);
     } else {
@@ -27,17 +45,49 @@ fn push_array_impl(generated: &mut String, length: usize) {
 }
 
 fn push_bounded_dynamic_method(generated: &mut String, length: usize, write: bool) {
+    let method = if write { "write_at" } else { "read_at" };
+    generated.push_str("    #[cfg(target_arch = \"spirv\")]\n");
     if write {
-        generated.push_str("    fn write_at(&mut self, index: usize, value: T) -> bool {\n");
+        generated.push_str(&format!(
+            "    fn {method}(&mut self, index: usize, value: T) -> bool {{\n"
+        ));
     } else {
-        generated.push_str("    fn read_at(&self, index: usize, output: &mut T) -> bool {\n");
+        generated.push_str(&format!(
+            "    fn {method}(&self, index: usize, output: &mut T) -> bool {{\n"
+        ));
     }
     generated.push_str(&format!(
         "        if index >= {length} {{ return false; }}\n"
     ));
+    generated
+        .push_str("        // SAFETY: the explicit guard above proves the index is in bounds.\n");
     if write {
+        generated.push_str(&format!(
+            "        unsafe {{ *<[T; {length}] as spirv_std::arch::IndexUnchecked<T>>::index_unchecked_mut(self, index) = value; }}\n"
+        ));
+    } else {
+        generated.push_str(&format!(
+            "        *output = unsafe {{ *<[T; {length}] as spirv_std::arch::IndexUnchecked<T>>::index_unchecked(self, index) }};\n"
+        ));
+    }
+    generated.push_str("        true\n    }\n");
+
+    generated.push_str("    #[cfg(not(target_arch = \"spirv\"))]\n");
+    if write {
+        generated.push_str(&format!(
+            "    fn {method}(&mut self, index: usize, value: T) -> bool {{\n"
+        ));
+        generated.push_str(&format!(
+            "        if index >= {length} {{ return false; }}\n"
+        ));
         generated.push_str("        self[index] = value;\n");
     } else {
+        generated.push_str(&format!(
+            "    fn {method}(&self, index: usize, output: &mut T) -> bool {{\n"
+        ));
+        generated.push_str(&format!(
+            "        if index >= {length} {{ return false; }}\n"
+        ));
         generated.push_str("        *output = self[index];\n");
     }
     generated.push_str("        true\n    }\n");

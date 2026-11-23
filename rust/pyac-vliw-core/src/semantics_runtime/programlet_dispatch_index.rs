@@ -1,8 +1,26 @@
+#[cfg(not(target_arch = "spirv"))]
+use super::programlet_dispatch_signature::compare_keys;
 use super::programlet_dispatch_signature::{
-    MAX_ROUTINE_SIGNATURE_CASES, SignatureCase, append_case, canonical_type, compare_keys,
-    compare_query, formal_type, insert_case,
+    MAX_ROUTINE_SIGNATURE_CASES, SignatureCase, append_case, canonical_type, formal_type,
+    insert_case, sort_cases,
 };
+use super::programlet_symbols::ProgramletWordSource;
 use super::*;
+
+#[cfg(not(target_arch = "spirv"))]
+#[path = "programlet_dispatch_index/body_scan.rs"]
+mod body_scan;
+#[path = "programlet_dispatch_index/wire.rs"]
+mod wire;
+
+pub use wire::PROGRAMLET_ROUTINE_DIRECTORY_WORDS;
+#[cfg(not(target_arch = "spirv"))]
+pub use wire::build_programlet_routine_directory_words;
+#[cfg(target_arch = "spirv")]
+pub(super) use wire::read_programlet_routine_directory_header;
+#[cfg(not(target_arch = "spirv"))]
+pub(super) use wire::validate_programlet_routine_directory_words;
+use wire::{read_programlet_routine_entry, read_programlet_routine_signature_word};
 
 #[derive(Clone, Copy)]
 struct RoutineEntry {
@@ -33,17 +51,19 @@ impl RoutineEntry {
     };
 }
 
+#[cfg(not(target_arch = "spirv"))]
 pub(super) struct ProgramletRoutineDirectory {
     entries: [RoutineEntry; MAX_PROGRAMLET_CODELETS],
-    signatures: [u32; PROGRAMLET_SCRATCH_WORDS],
+    signatures: [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
     entry_count: usize,
     signature_used: usize,
 }
 
+#[cfg(not(target_arch = "spirv"))]
 impl ProgramletRoutineDirectory {
     pub(super) const EMPTY: Self = Self {
         entries: [RoutineEntry::EMPTY; MAX_PROGRAMLET_CODELETS],
-        signatures: [0; PROGRAMLET_SCRATCH_WORDS],
+        signatures: [0; MAX_PROGRAMLET_PAYLOAD_WORDS],
         entry_count: 0,
         signature_used: 0,
     };
@@ -59,14 +79,16 @@ pub(super) struct SelectedProgramletRoutine {
     pub(super) routine_end: usize,
 }
 
+#[cfg(not(target_arch = "spirv"))]
 fn check_status(status: u32) -> Result<(), u32> {
     if status == 0 { Ok(()) } else { Err(status) }
 }
 
+#[cfg(not(target_arch = "spirv"))]
 fn append_name(
-    source: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    source: &impl ProgramletWordSource,
     name: NameSpan,
-    destination: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+    destination: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
     used: &mut usize,
 ) -> Result<usize, u32> {
     let end = used.checked_add(name.length).ok_or(ERROR_FRAME_CAPACITY)?;
@@ -74,7 +96,7 @@ fn append_name(
         .start
         .checked_add(name.length)
         .ok_or(ERROR_FRAME_CAPACITY)?;
-    if end > destination.len() || source_end > source.len() {
+    if end > destination.len() || source_end > source.word_count() {
         return Err(ERROR_FRAME_CAPACITY);
     }
     let start = *used;
@@ -83,7 +105,7 @@ fn append_name(
         array_put!(
             destination,
             start + index,
-            array_at!(source, name.start + index)
+            source.word_at(name.start + index).ok_or(ERROR_MALFORMED)?
         );
         index += 1;
     }
@@ -91,9 +113,10 @@ fn append_name(
     Ok(start)
 }
 
+#[cfg(not(target_arch = "spirv"))]
 fn definition_signature(
     sentence: &ParsedSentence,
-    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    tokens: &SentenceView<'_>,
     directory: &mut ProgramletRoutineDirectory,
 ) -> Result<(usize, usize, NameSpan, usize, usize, usize, u32), u32> {
     let name_field = sentence.field(NOMINATIVE).ok_or(ERROR_MALFORMED)?;
@@ -112,9 +135,10 @@ fn definition_signature(
     let signature_start = directory.signature_used;
     let mut cases = [SignatureCase::EMPTY; MAX_ROUTINE_SIGNATURE_CASES];
     let mut case_count = 0;
+    let fields = sentence.fields;
     let mut field_index = 0;
     while field_index < sentence.field_count {
-        let field = array_at!(sentence.fields, field_index);
+        let field = array_at!(fields, field_index);
         if field.role != NOMINATIVE
             && field.role != DESTINATION
             && field.role != FROM_INDEX
@@ -135,12 +159,13 @@ fn definition_signature(
         DESTINATION,
         canonical_type(output_kind)?,
     )?;
+    sort_cases(&mut cases);
     let mut index = 0;
     while index < case_count {
         append_case(
             &mut directory.signatures,
             &mut directory.signature_used,
-            array_at!(&cases, index),
+            array_at!(cases, index),
         )?;
         index += 1;
     }
@@ -168,41 +193,15 @@ fn definition_signature(
     ))
 }
 
-fn close_matches_verb(
-    sentence: &ParsedSentence,
-    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
-    signatures: &[u32; PROGRAMLET_SCRATCH_WORDS],
-    verb_start: usize,
-    verb_length: usize,
-) -> Result<bool, u32> {
-    let field = sentence.field(NOMINATIVE).ok_or(ERROR_MALFORMED)?;
-    let mut closing_verb = NameSpan::EMPTY;
-    check_status(name_span(tokens, field, false, &mut closing_verb))?;
-    if closing_verb.length != verb_length {
-        return Ok(false);
-    }
-    let mut index = 0;
-    while index < verb_length {
-        if array_at!(tokens, closing_verb.start + index)
-            != array_at!(signatures, verb_start + index)
-        {
-            return Ok(false);
-        }
-        index += 1;
-    }
-    Ok(true)
-}
-
+#[cfg(not(target_arch = "spirv"))]
 pub(super) fn build_programlet_routine_directory(
     words: &[u32],
     base_codelet: usize,
     codelet_count: usize,
-    tokens: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
-    boundaries: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
     directory: &mut ProgramletRoutineDirectory,
 ) -> Result<(), u32> {
     directory.entries = [RoutineEntry::EMPTY; MAX_PROGRAMLET_CODELETS];
-    directory.signatures = [0; PROGRAMLET_SCRATCH_WORDS];
+    directory.signatures = [0; MAX_PROGRAMLET_PAYLOAD_WORDS];
     directory.entry_count = 0;
     directory.signature_used = 0;
     let mut cursor = 0;
@@ -213,15 +212,18 @@ pub(super) fn build_programlet_routine_directory(
             base_codelet,
             codelet_count,
             cursor,
-            tokens,
-            boundaries,
         )?;
+        let definition_view = SentenceView::new(words, base_codelet + cursor, definition_length);
+        if sentence_at!(definition_view, definition_view.len() - 1) != MOOD_DEFINITION {
+            cursor = definition_end;
+            continue;
+        }
         let mut definition = ParsedSentence::empty();
-        let parse_error = parse_sentence(tokens, boundaries, definition_length, &mut definition);
+        let parse_error = parse_sentence(&definition_view, &mut definition);
         if parse_error != 0 {
             return Err(parse_error);
         }
-        if !is_ceremony_definition(&definition, tokens) {
+        if !is_ceremony_definition(&definition, &definition_view) {
             cursor = definition_end;
             continue;
         }
@@ -233,47 +235,17 @@ pub(super) fn build_programlet_routine_directory(
             output_name_start,
             output_name_length,
             output_kind,
-        ) = definition_signature(&definition, tokens, directory)?;
+        ) = definition_signature(&definition, &definition_view, directory)?;
         let body_start = definition_end;
-        let mut body_cursor = body_start;
-        let body_end = loop {
-            if body_cursor >= codelet_count {
-                return Err(ERROR_MALFORMED);
-            }
-            let (body_length, body_next) = collect_sentence_at(
-                words,
-                base_codelet + codelet_count,
-                base_codelet,
-                codelet_count,
-                body_cursor,
-                tokens,
-                boundaries,
-            )?;
-            let is_branch = contains_marked_token(tokens, boundaries, body_length, CONDITIONAL);
-            let mut body_sentence = ParsedSentence::empty();
-            if !is_branch {
-                let error = parse_sentence(tokens, boundaries, body_length, &mut body_sentence);
-                if error != 0 {
-                    return Err(error);
-                }
-            }
-            if !is_branch && is_ceremony_definition(&body_sentence, tokens) {
-                return Err(ERROR_MALFORMED);
-            }
-            if !is_branch && body_sentence.mood == MOOD_PARAGRAPH {
-                if !close_matches_verb(
-                    &body_sentence,
-                    tokens,
-                    &directory.signatures,
-                    verb_start,
-                    verb.length,
-                )? {
-                    return Err(ERROR_MALFORMED);
-                }
-                break body_next;
-            }
-            body_cursor = body_next;
-        };
+        let body_end = body_scan::find_routine_body_end(
+            words,
+            base_codelet,
+            codelet_count,
+            body_start,
+            &directory.signatures,
+            verb_start,
+            verb.length,
+        )?;
         if directory.entry_count == directory.entries.len() {
             return Err(ERROR_PROGRAM_CAPACITY);
         }
@@ -299,6 +271,7 @@ pub(super) fn build_programlet_routine_directory(
     sort_directory(directory)
 }
 
+#[cfg(not(target_arch = "spirv"))]
 fn sort_directory(directory: &mut ProgramletRoutineDirectory) -> Result<(), u32> {
     let mut index = 1;
     while index < directory.entry_count {
@@ -341,14 +314,61 @@ fn sort_directory(directory: &mut ProgramletRoutineDirectory) -> Result<(), u32>
     Ok(())
 }
 
+#[derive(Clone, Copy)]
+struct CallSignature {
+    cases: [SignatureCase; MAX_ROUTINE_SIGNATURE_CASES],
+    case_count: usize,
+    verb_start: usize,
+    length: usize,
+}
+
+impl CallSignature {
+    fn word_at(&self, index: usize, tokens: &SentenceView<'_>) -> Option<u32> {
+        if index >= self.length {
+            return None;
+        }
+        let mut offset = 0;
+        macro_rules! case_word {
+            ($case_index:literal) => {{
+                if self.case_count > $case_index {
+                    let case = self.cases[$case_index];
+                    if index == offset {
+                        return Some(case.value_type.words[0]);
+                    }
+                    offset += 1;
+                    if case.value_type.length > 1 {
+                        if index == offset {
+                            return Some(case.value_type.words[1]);
+                        }
+                        offset += 1;
+                    }
+                    if index == offset {
+                        return Some(case.role);
+                    }
+                    offset += 1;
+                }
+            }};
+        }
+        case_word!(0);
+        case_word!(1);
+        case_word!(2);
+        case_word!(3);
+        case_word!(4);
+        case_word!(5);
+        case_word!(6);
+        case_word!(7);
+        case_word!(8);
+        tokens.token(self.verb_start + index - offset)
+    }
+}
+
 fn make_call_signature(
     sentence: &ParsedSentence,
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     argument_count: u32,
     output_kind: u32,
-    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
-    key: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
-) -> Result<usize, u32> {
+    tokens: &SentenceView<'_>,
+) -> Result<CallSignature, u32> {
     if argument_count as usize > arguments.len() {
         return Err(ERROR_FRAME_CAPACITY);
     }
@@ -356,7 +376,7 @@ fn make_call_signature(
     let mut case_count = 0;
     let mut index = 0;
     while index < argument_count as usize {
-        let argument = array_at!(arguments, index);
+        let argument = array_at!(*arguments, index);
         if argument.role != FROM_INDEX && argument.role != TO_INDEX {
             insert_case(
                 &mut cases,
@@ -373,59 +393,83 @@ fn make_call_signature(
         DESTINATION,
         canonical_type(output_kind)?,
     )?;
-    let mut used = 0;
+    sort_cases(&mut cases);
+    let mut case_words = 0;
     index = 0;
     while index < case_count {
-        append_case(key, &mut used, array_at!(&cases, index))?;
+        case_words += array_at!(cases, index).value_type.length + 1;
         index += 1;
     }
-    if sentence.verb_length == 0 || used + sentence.verb_length > key.len() {
+    if sentence.verb_length == 0 || case_words + sentence.verb_length > MAX_PROGRAMLET_PAYLOAD_WORDS
+    {
         return Err(ERROR_MALFORMED);
     }
     index = 0;
     while index < sentence.verb_length {
-        let token = array_at!(tokens, sentence.verb_start + index);
+        let Some(token) = tokens.token(sentence.verb_start + index) else {
+            return Err(ERROR_MALFORMED);
+        };
         if token > MAX_U16 {
             return Err(ERROR_MALFORMED);
         }
-        array_put!(key, used, token);
-        used += 1;
         index += 1;
     }
-    Ok(used)
+    Ok(CallSignature {
+        cases,
+        case_count,
+        verb_start: sentence.verb_start,
+        length: case_words + sentence.verb_length,
+    })
 }
 
 pub(super) fn resolve_programlet_routine(
-    directory: &ProgramletRoutineDirectory,
+    directory_words: &[u32],
+    directory_offset: usize,
+    entry_count: usize,
+    signature_used: usize,
     sentence: &ParsedSentence,
-    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
-    scratch: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
-    symbol_words: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+    tokens: &SentenceView<'_>,
+    symbol_words: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
     symbol_used: &mut usize,
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     argument_count: u32,
     output_kind: u32,
 ) -> Result<SelectedProgramletRoutine, u32> {
-    let key_length = make_call_signature(
-        sentence,
-        arguments,
-        argument_count,
-        output_kind,
-        tokens,
-        scratch,
-    )?;
+    let key = make_call_signature(sentence, arguments, argument_count, output_kind, tokens)?;
+    let signature_base = directory_offset + wire::SIGNATURE_BASE;
     let mut low = 0;
-    let mut high = directory.entry_count;
+    let mut high = entry_count;
     while low < high {
         let middle = low + (high - low) / 2;
-        let entry = array_at!(&directory.entries, middle);
-        let ordering = compare_query(
-            &directory.signatures,
-            entry.signature_start as usize,
-            entry.signature_length as usize,
-            scratch,
-            key_length,
-        );
+        let entry =
+            read_programlet_routine_entry(directory_words, directory_offset, middle, entry_count);
+        let signature_length = entry.signature_length as usize;
+        let common = signature_length.min(key.length);
+        let mut index = 0;
+        let mut ordering = 0;
+        while index < common {
+            let left = read_programlet_routine_signature_word(
+                directory_words,
+                directory_offset,
+                entry.signature_start as usize + index,
+                signature_used,
+            );
+            let right = key.word_at(index, tokens).ok_or(ERROR_MALFORMED)?;
+            if left != right {
+                ordering = if left < right { -1 } else { 1 };
+                break;
+            }
+            index += 1;
+        }
+        if ordering == 0 {
+            ordering = if signature_length < key.length {
+                -1
+            } else if signature_length > key.length {
+                1
+            } else {
+                0
+            };
+        }
         if ordering < 0 {
             low = middle + 1;
             continue;
@@ -435,8 +479,9 @@ pub(super) fn resolve_programlet_routine(
             continue;
         }
         let mut name = NameSpan::EMPTY;
-        let name_error = store_name(
-            &directory.signatures,
+        let name_error = store_name_from_slice(
+            directory_words,
+            signature_base,
             NameSpan {
                 start: entry.verb_start as usize,
                 length: entry.verb_length as usize,
@@ -449,8 +494,9 @@ pub(super) fn resolve_programlet_routine(
             return Err(name_error);
         }
         let mut output_name = NameSpan::EMPTY;
-        let output_name_error = store_name(
-            &directory.signatures,
+        let output_name_error = store_name_from_slice(
+            directory_words,
+            signature_base,
             NameSpan {
                 start: entry.output_name_start as usize,
                 length: entry.output_name_length as usize,

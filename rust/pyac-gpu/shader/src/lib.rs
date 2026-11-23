@@ -3,9 +3,10 @@
 use glam::UVec3;
 use pyac_vliw_core::{
     CODELET_WORDS, CoreResult, DEFAULT_PROGRAMLET_STEP_BUDGET, ERROR_MALFORMED,
-    ERROR_PROGRAM_CAPACITY, ERROR_UNSUPPORTED, MAX_PROGRAMLET_CALL_DEPTH, MAX_PROGRAMLET_CODELETS,
-    PROGRAMLET_SCRATCH_WORDS, ProgramletFrame, RESULT_WORDS, execute_numeric_programlet,
-    interpret_group, is_numeric_programlet,
+    ERROR_PROGRAM_CAPACITY, ERROR_UNSUPPORTED, MAX_PROGRAMLET_CODELETS,
+    MAX_PROGRAMLET_PAYLOAD_WORDS, PROGRAMLET_ROUTINE_DIRECTORY_WORDS, ProgramletStack,
+    RESULT_WORDS, execute_numeric_programlet_at_with_directory_words, interpret_group,
+    is_numeric_programlet,
 };
 use spirv_std::spirv;
 
@@ -54,11 +55,12 @@ pub fn execute_pyac_pack(
     }
 }
 
-#[spirv(compute(threads(64)))]
+#[spirv(compute(threads(1)))]
 pub fn execute_pyac_programlet(
     #[spirv(global_invocation_id)] invocation: UVec3,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] input: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] output: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] routine_directory: &[u32],
 ) {
     if invocation.x != 0 || output.len() < RESULT_STRIDE {
         return;
@@ -77,17 +79,18 @@ pub fn execute_pyac_programlet(
             CoreResult::failure(ERROR_PROGRAM_CAPACITY, 0)
         } else if !is_numeric_programlet(input, codelet_count) {
             CoreResult::failure(ERROR_UNSUPPORTED, 0)
+        } else if routine_directory.len() < PROGRAMLET_ROUTINE_DIRECTORY_WORDS {
+            CoreResult::failure(ERROR_MALFORMED, 0)
         } else {
-            let mut sentence_words = [0u32; PROGRAMLET_SCRATCH_WORDS];
-            let mut sentence_boundaries = [0u32; PROGRAMLET_SCRATCH_WORDS];
-            let mut symbol_words = [0u32; PROGRAMLET_SCRATCH_WORDS];
-            let mut frames = [ProgramletFrame::EMPTY; MAX_PROGRAMLET_CALL_DEPTH];
-            execute_numeric_programlet(
+            let mut symbol_words = [0u32; MAX_PROGRAMLET_PAYLOAD_WORDS];
+            let mut frames = ProgramletStack::EMPTY;
+            execute_numeric_programlet_at_with_directory_words(
                 input,
+                0,
                 codelet_count,
                 DEFAULT_PROGRAMLET_STEP_BUDGET,
-                &mut sentence_words,
-                &mut sentence_boundaries,
+                routine_directory,
+                0,
                 &mut symbol_words,
                 &mut frames,
             )
@@ -113,13 +116,15 @@ pub fn execute_pyac_sections(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] output: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] sections: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] completion_counter: &mut u32,
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] routine_directories: &[u32],
 ) {
     if invocation.x % 64 != 0 || sections.len() % SECTION_DESCRIPTOR_STRIDE != 0 {
         return;
     }
     let section_index = invocation.x as usize / 64;
     let section_count = sections.len() / SECTION_DESCRIPTOR_STRIDE;
-    if section_index >= section_count || output.len() < section_count * SECTION_RESULT_STRIDE {
+    let result_words = section_count * SECTION_RESULT_STRIDE;
+    if section_index >= section_count || output.len() < result_words {
         return;
     }
 
@@ -135,17 +140,15 @@ pub fn execute_pyac_sections(
     } else if !pyac_vliw_core::is_numeric_programlet_at(input, codelet_start, codelet_count) {
         CoreResult::failure(ERROR_UNSUPPORTED, 0)
     } else {
-        let mut sentence_words = [0u32; PROGRAMLET_SCRATCH_WORDS];
-        let mut sentence_boundaries = [0u32; PROGRAMLET_SCRATCH_WORDS];
-        let mut symbol_words = [0u32; PROGRAMLET_SCRATCH_WORDS];
-        let mut frames = [ProgramletFrame::EMPTY; MAX_PROGRAMLET_CALL_DEPTH];
-        pyac_vliw_core::execute_numeric_programlet_at(
+        let mut symbol_words = [0u32; MAX_PROGRAMLET_PAYLOAD_WORDS];
+        let mut frames = ProgramletStack::EMPTY;
+        pyac_vliw_core::execute_numeric_programlet_at_with_directory_words(
             input,
             codelet_start,
             codelet_count,
             DEFAULT_PROGRAMLET_STEP_BUDGET,
-            &mut sentence_words,
-            &mut sentence_boundaries,
+            routine_directories,
+            section_index * PROGRAMLET_ROUTINE_DIRECTORY_WORDS,
             &mut symbol_words,
             &mut frames,
         )

@@ -5,6 +5,7 @@ function decodeHex(hex) {
 export function createInlineMetricCollector() {
   const functions = [];
   const edges = new Map();
+  const abortOrigins = new Set();
   let activeFunction = null;
   let activeEdge = null;
   let edgeEvents = 0;
@@ -12,7 +13,9 @@ export function createInlineMetricCollector() {
     ingest(line) {
       if (!line.startsWith("PYASH_INLINE_")) return;
       const fields = line.split("\t");
-      if (fields[0] === "PYASH_INLINE_START") {
+      if (fields[0] === "PYASH_INLINE_ABORT" && fields.length === 2) {
+        abortOrigins.add(decodeHex(fields[1]));
+      } else if (fields[0] === "PYASH_INLINE_START") {
         activeFunction = decodeHex(fields[1] || "");
         activeEdge = null;
       } else if (fields[0] === "PYASH_INLINE_EDGE_START" && fields.length === 4) {
@@ -55,6 +58,7 @@ export function createInlineMetricCollector() {
       return {
         functions: [...functions],
         edges: [...edges.values()].sort((a, b) => b.durationMs - a.durationMs),
+        abortOrigins: [...abortOrigins].sort(),
         activeFunction,
         activeEdge,
         edgeEvents,
@@ -67,6 +71,14 @@ export function parseInlineMetrics(log) {
   const collector = createInlineMetricCollector();
   for (const line of log.split(/\r?\n/)) collector.ingest(line);
   return collector.snapshot();
+}
+
+export function resolveInlineTimeoutSeconds(value) {
+  const seconds = value === undefined ? 120 : Number(value);
+  if (!Number.isInteger(seconds) || seconds < 1 || seconds > 900) {
+    throw new Error("PYAC_RUSTGPU_INLINE_TIMEOUT_SEC must be an integer from 1 to 900");
+  }
+  return seconds;
 }
 
 export function parseSpirtLocations(spirt) {
@@ -99,6 +111,12 @@ export function renderInlineReport({ metrics, sourceLocations, build, peakRssByt
     `- Peak compiler process-tree RSS: ${(peakRssBytes / 1024 ** 3).toFixed(2)} GiB`,
     `- Function active at stop: ${metrics.activeFunction || "none"}`,
     `- Inline edge active at stop: ${metrics.activeEdge ? `${metrics.activeEdge.caller} -> ${metrics.activeEdge.callee} (${metrics.activeEdge.reason})` : "none"}`,
+    "",
+    "## Functions Containing Rust-GPU Abort Markers",
+    "",
+    ...(metrics.abortOrigins?.length
+      ? metrics.abortOrigins.map((name) => `- \`${name}\` — ${sourceLocations.get(name) || "source location unavailable"}`)
+      : ["- None reported"]),
     "",
     "## Slowest Functions",
     "",

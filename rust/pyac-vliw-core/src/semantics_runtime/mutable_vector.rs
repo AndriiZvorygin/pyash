@@ -109,6 +109,13 @@ pub(super) fn mutable_vector_declaration(
     group_len: usize,
 ) -> Result<(NameSpan, usize), u32> {
     let length = token_count(words, start, group_len).ok_or(ERROR_MALFORMED)?;
+    if length < 2
+        || token(words, start, group_len, 0) != Some(NAME_TYPE)
+        || token(words, start, group_len, length - 2) != Some(VARIABLE)
+        || token(words, start, group_len, length - 1) != Some(REALIS)
+    {
+        return Err(ERROR_UNSUPPORTED);
+    }
     let mut offset = 0;
     if !expect(words, start, group_len, &mut offset, NAME_TYPE, false) {
         return Err(ERROR_UNSUPPORTED);

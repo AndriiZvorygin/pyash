@@ -1,5 +1,8 @@
 use super::*;
 
+pub(super) const VECTOR_SOURCE_QUOTE: u32 = 1;
+pub(super) const VECTOR_SOURCE_LOCAL: u32 = 2;
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProgramletArgument {
@@ -10,7 +13,10 @@ pub struct ProgramletArgument {
     pub name_offset: u32,
     pub name_length: u32,
     pub vector_length: u32,
-    pub vector_values: [u32; RESULT_WORDS],
+    pub vector_source_kind: u32,
+    pub vector_source_index: u32,
+    pub vector_source_frame: u32,
+    pub vector_source_length: u32,
 }
 
 impl ProgramletArgument {
@@ -22,7 +28,10 @@ impl ProgramletArgument {
         name_offset: 0,
         name_length: 0,
         vector_length: 0,
-        vector_values: [0; RESULT_WORDS],
+        vector_source_kind: 0,
+        vector_source_index: 0,
+        vector_source_frame: 0,
+        vector_source_length: 0,
     };
 }
 
@@ -33,7 +42,6 @@ pub struct ProgramletVectorSlot {
     pub name_length: u32,
     pub value_kind: u32,
     pub length: u32,
-    pub values: [u32; RESULT_WORDS],
 }
 
 impl ProgramletVectorSlot {
@@ -42,16 +50,12 @@ impl ProgramletVectorSlot {
         name_length: 0,
         value_kind: 0,
         length: 0,
-        values: [0; RESULT_WORDS],
     };
 }
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProgramletFrame {
-    pub slots: [NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
-    pub vector_slots: [ProgramletVectorSlot; MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
-    pub arguments: [ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     pub argument_count: u32,
     pub routine_start: u32,
     pub routine_end: u32,
@@ -64,7 +68,6 @@ pub struct ProgramletFrame {
     pub expected_kind: u32,
     pub result_kind: u32,
     pub result_length: u32,
-    pub result_values: [u32; RESULT_WORDS],
     pub state: u32,
     pub action_started: u32,
     pub has_returned: u32,
@@ -76,9 +79,6 @@ pub struct ProgramletFrame {
 
 impl ProgramletFrame {
     pub const EMPTY: Self = Self {
-        slots: [NumericLocalSlot::EMPTY; MAX_PROGRAMLET_LOCAL_SLOTS],
-        vector_slots: [ProgramletVectorSlot::EMPTY; MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
-        arguments: [ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS],
         argument_count: 0,
         routine_start: 0,
         routine_end: 0,
@@ -91,7 +91,6 @@ impl ProgramletFrame {
         expected_kind: 0,
         result_kind: 0,
         result_length: 0,
-        result_values: [0; RESULT_WORDS],
         state: 0,
         action_started: 0,
         has_returned: 0,
@@ -102,40 +101,183 @@ impl ProgramletFrame {
     };
 }
 
-pub(crate) fn clear_programlet_frame(frame: &mut ProgramletFrame) {
-    let mut slot_index = 0;
-    while slot_index < frame.slots.len() {
-        array_put!(&mut frame.slots, slot_index, NumericLocalSlot::EMPTY);
-        slot_index += 1;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ProgramletStack {
+    pub controls: [ProgramletFrame; MAX_PROGRAMLET_CALL_DEPTH],
+    pub slots: [[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS]; MAX_PROGRAMLET_CALL_DEPTH],
+    pub vector_slots:
+        [ProgramletVectorSlot; MAX_PROGRAMLET_CALL_DEPTH * MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
+    pub arguments: [ProgramletArgument; MAX_PROGRAMLET_CALL_DEPTH * MAX_PROGRAMLET_ARGUMENTS],
+    pub vector_values: [u32; MAX_PROGRAMLET_VECTOR_VALUE_WORDS],
+    pub result_values: [u32; MAX_PROGRAMLET_CALL_DEPTH * RESULT_WORDS],
+}
+
+impl ProgramletStack {
+    pub const EMPTY: Self = Self {
+        controls: [ProgramletFrame::EMPTY; MAX_PROGRAMLET_CALL_DEPTH],
+        slots: [[NumericLocalSlot::EMPTY; MAX_PROGRAMLET_LOCAL_SLOTS]; MAX_PROGRAMLET_CALL_DEPTH],
+        vector_slots: [ProgramletVectorSlot::EMPTY;
+            MAX_PROGRAMLET_CALL_DEPTH * MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
+        arguments: [ProgramletArgument::EMPTY;
+            MAX_PROGRAMLET_CALL_DEPTH * MAX_PROGRAMLET_ARGUMENTS],
+        vector_values: [0; MAX_PROGRAMLET_VECTOR_VALUE_WORDS],
+        result_values: [0; MAX_PROGRAMLET_CALL_DEPTH * RESULT_WORDS],
+    };
+}
+
+#[inline(always)]
+pub(super) fn frame_row_is_valid<T, const DEPTH: usize, const WIDTH: usize>(
+    backing: &[[T; WIDTH]; DEPTH],
+    frame: usize,
+) -> bool {
+    let _ = backing;
+    WIDTH != 0 && frame < DEPTH && frame < MAX_PROGRAMLET_CALL_DEPTH
+}
+
+#[inline(always)]
+pub(super) fn frame_row<T: Copy, const DEPTH: usize, const WIDTH: usize>(
+    backing: &[[T; WIDTH]; DEPTH],
+    frame: usize,
+) -> &[T; WIDTH] {
+    #[cfg(target_arch = "spirv")]
+    {
+        unsafe {
+            <[[T; WIDTH]; DEPTH] as spirv_std::arch::IndexUnchecked<[T; WIDTH]>>::index_unchecked(
+                backing, frame,
+            )
+        }
     }
-    let mut vector_index = 0;
-    while vector_index < frame.vector_slots.len() {
-        array_put!(
-            &mut frame.vector_slots,
-            vector_index,
-            ProgramletVectorSlot::EMPTY
-        );
-        vector_index += 1;
+    #[cfg(not(target_arch = "spirv"))]
+    {
+        &backing[frame]
     }
-    frame.arguments = [ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS];
-    frame.argument_count = 0;
-    frame.routine_start = 0;
-    frame.routine_end = 0;
-    frame.program_counter = 0;
-    frame.routine_name_offset = 0;
-    frame.routine_name_length = 0;
-    frame.return_name_offset = 0;
-    frame.return_name_length = 0;
-    frame.result_value = 0;
-    frame.expected_kind = 0;
-    frame.result_kind = 0;
-    frame.result_length = 0;
-    frame.result_values = [0; RESULT_WORDS];
-    frame.state = 0;
-    frame.action_started = 0;
-    frame.has_returned = 0;
-    frame.loop_active = 0;
-    frame.loop_remaining = 0;
-    frame.loop_end = 0;
-    frame.loop_has_end = 0;
+}
+
+#[inline(always)]
+pub(super) fn frame_row_mut<T: Copy, const DEPTH: usize, const WIDTH: usize>(
+    backing: &mut [[T; WIDTH]; DEPTH],
+    frame: usize,
+) -> &mut [T; WIDTH] {
+    #[cfg(target_arch = "spirv")]
+    {
+        unsafe {
+            <[[T; WIDTH]; DEPTH] as spirv_std::arch::IndexUnchecked<[T; WIDTH]>>::index_unchecked_mut(
+                backing, frame,
+            )
+        }
+    }
+    #[cfg(not(target_arch = "spirv"))]
+    {
+        &mut backing[frame]
+    }
+}
+
+#[cfg(target_arch = "spirv")]
+pub(super) fn load_frame_row<T: Copy, const BACKING: usize, const WIDTH: usize>(
+    backing: &[T; BACKING],
+    frame: usize,
+    empty: T,
+) -> [T; WIDTH]
+where
+    [T; BACKING]: FixedArrayAccess<Item = T>,
+    [T; WIDTH]: FixedArrayAccess<Item = T>,
+{
+    let mut row = [empty; WIDTH];
+    if frame >= MAX_PROGRAMLET_CALL_DEPTH {
+        return row;
+    }
+    let base = frame * WIDTH;
+    let mut index = 0;
+    while index < WIDTH {
+        let value = array_at!(*backing, base + index);
+        // The loop bound proves this local row index is valid without a panic branch.
+        unsafe {
+            *<[T; WIDTH] as spirv_std::arch::IndexUnchecked<T>>::index_unchecked_mut(
+                &mut row, index,
+            ) = value;
+        }
+        index += 1;
+    }
+    row
+}
+
+#[cfg(not(target_arch = "spirv"))]
+pub(super) fn load_frame_row<T: Copy, const BACKING: usize, const WIDTH: usize>(
+    backing: &[T; BACKING],
+    frame: usize,
+    empty: T,
+) -> [T; WIDTH] {
+    let mut row = [empty; WIDTH];
+    if frame >= MAX_PROGRAMLET_CALL_DEPTH {
+        return row;
+    }
+    let base = frame * WIDTH;
+    let mut index = 0;
+    while index < WIDTH {
+        row[index] = backing[base + index];
+        index += 1;
+    }
+    row
+}
+
+#[cfg(target_arch = "spirv")]
+pub(super) fn store_frame_row<T: Copy, const BACKING: usize, const WIDTH: usize>(
+    backing: &mut [T; BACKING],
+    frame: usize,
+    row: [T; WIDTH],
+) where
+    [T; BACKING]: FixedArrayAccess<Item = T>,
+    [T; WIDTH]: FixedArrayAccess<Item = T>,
+{
+    if frame >= MAX_PROGRAMLET_CALL_DEPTH {
+        return;
+    }
+    let base = frame * WIDTH;
+    let mut index = 0;
+    while index < WIDTH {
+        let value = unsafe {
+            *<[T; WIDTH] as spirv_std::arch::IndexUnchecked<T>>::index_unchecked(&row, index)
+        };
+        array_put!(backing, base + index, value);
+        index += 1;
+    }
+}
+
+#[cfg(not(target_arch = "spirv"))]
+pub(super) fn store_frame_row<T: Copy, const BACKING: usize, const WIDTH: usize>(
+    backing: &mut [T; BACKING],
+    frame: usize,
+    row: [T; WIDTH],
+) {
+    if frame >= MAX_PROGRAMLET_CALL_DEPTH {
+        return;
+    }
+    let base = frame * WIDTH;
+    let mut index = 0;
+    while index < WIDTH {
+        backing[base + index] = row[index];
+        index += 1;
+    }
+}
+
+pub(crate) fn clear_programlet_frame(stack: &mut ProgramletStack, index: usize) {
+    array_put!(&mut stack.controls, index, ProgramletFrame::EMPTY);
+    array_put!(
+        &mut stack.slots,
+        index,
+        [NumericLocalSlot::EMPTY; MAX_PROGRAMLET_LOCAL_SLOTS]
+    );
+    store_frame_row(
+        &mut stack.vector_slots,
+        index,
+        [ProgramletVectorSlot::EMPTY; MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
+    );
+    store_frame_row(
+        &mut stack.arguments,
+        index,
+        [ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS],
+    );
+    // Vector payload is intentionally left in place; empty argument/slot descriptors make it unreachable.
+    store_frame_row(&mut stack.result_values, index, [0; RESULT_WORDS]);
 }

@@ -114,13 +114,15 @@ fn apply_f32(
     verb: u32,
 ) -> Result<ProgramletVectorValue, u32> {
     let mut result = *vector;
+    let mut result_values = result.values;
+    let values = vector.values;
     let scalar_value = match scalar {
         Some(value) => Some(f32::from_bits(value.bits)),
         None => None,
     };
     let mut lane = 0;
     while lane < vector.length {
-        let input = f32::from_bits(array_at!(vector.values, lane));
+        let input = f32::from_bits(array_at!(values, lane));
         let output = match verb {
             SUBTRACT_VERB => input - scalar_value.ok_or(ERROR_MALFORMED)?,
             DIVIDE_VERB => {
@@ -136,9 +138,10 @@ fn apply_f32(
         if !is_finite_f32(output) && !(verb == SUBTRACT_VERB && output.to_bits() == 0xff80_0000) {
             return Err(ERROR_FLOAT_DOMAIN);
         }
-        array_put!(&mut result.values, lane, output.to_bits());
+        array_put!(&mut result_values, lane, output.to_bits());
         lane += 1;
     }
+    result.values = result_values;
     Ok(result)
 }
 
@@ -149,6 +152,8 @@ fn apply_f64(
     verb: u32,
 ) -> Result<ProgramletVectorValue, u32> {
     let mut result = *vector;
+    let mut result_values = result.values;
+    let values = vector.values;
     let scalar_value = match scalar {
         Some(value) => Some(f64::from_bits(
             u64::from(value.bits) | (u64::from(value.high) << 32),
@@ -159,8 +164,7 @@ fn apply_f64(
     while lane < vector.length {
         let offset = lane * 2;
         let input = f64::from_bits(
-            u64::from(array_at!(vector.values, offset))
-                | (u64::from(array_at!(vector.values, offset + 1)) << 32),
+            u64::from(array_at!(values, offset)) | (u64::from(array_at!(values, offset + 1)) << 32),
         );
         let output = match verb {
             SUBTRACT_VERB => input - scalar_value.ok_or(ERROR_MALFORMED)?,
@@ -180,10 +184,11 @@ fn apply_f64(
             return Err(ERROR_FLOAT_DOMAIN);
         }
         let bits = output.to_bits();
-        array_put!(&mut result.values, offset, bits as u32);
-        array_put!(&mut result.values, offset + 1, (bits >> 32) as u32);
+        array_put!(&mut result_values, offset, bits as u32);
+        array_put!(&mut result_values, offset + 1, (bits >> 32) as u32);
         lane += 1;
     }
+    result.values = result_values;
     Ok(result)
 }
 
@@ -191,11 +196,12 @@ fn reduce_vector(vector: &ProgramletVectorValue, verb: u32) -> Result<Programlet
     if vector.length == 0 {
         return Err(ERROR_VECTOR_WIDTH);
     }
+    let values = vector.values;
     if vector.kind == VALUE_VECTOR_FLOAT32 {
-        let mut value = f32::from_bits(array_at!(vector.values, 0));
+        let mut value = f32::from_bits(array_at!(values, 0));
         let mut lane = 1;
         while lane < vector.length {
-            let next = f32::from_bits(array_at!(vector.values, lane));
+            let next = f32::from_bits(array_at!(values, lane));
             value = if verb == SUM_VERB {
                 value + next
             } else if next > value {
@@ -216,15 +222,14 @@ fn reduce_vector(vector: &ProgramletVectorValue, verb: u32) -> Result<Programlet
     }
     #[cfg(feature = "shader-f64")]
     if vector.kind == VALUE_VECTOR_FLOAT64 {
-        let bits =
-            u64::from(array_at!(vector.values, 0)) | (u64::from(array_at!(vector.values, 1)) << 32);
+        let bits = u64::from(array_at!(values, 0)) | (u64::from(array_at!(values, 1)) << 32);
         let mut value = f64::from_bits(bits);
         let mut lane = 1;
         while lane < vector.length {
             let offset = lane * 2;
             let next = f64::from_bits(
-                u64::from(array_at!(vector.values, offset))
-                    | (u64::from(array_at!(vector.values, offset + 1)) << 32),
+                u64::from(array_at!(values, offset))
+                    | (u64::from(array_at!(values, offset + 1)) << 32),
             );
             value = if verb == SUM_VERB {
                 value + next
@@ -250,41 +255,46 @@ fn reduce_vector(vector: &ProgramletVectorValue, verb: u32) -> Result<Programlet
 
 pub(super) fn is_programlet_vector_verb(
     sentence: &ParsedSentence,
-    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    tokens: &SentenceView<'_>,
 ) -> bool {
     matches!(
-        (sentence.verb_length, array_at!(tokens, sentence.verb_start)),
+        (
+            sentence.verb_length,
+            sentence_at!(*tokens, sentence.verb_start)
+        ),
         (1, SUBTRACT_VERB | EXPONENTIAL_VERB | DIVIDE_VERB | SUM_VERB) | (2, MAXIMUM_FIRST)
     )
 }
 
 pub(super) fn is_programlet_vector_action(
     sentence: &ParsedSentence,
-    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
-    symbols: &[u32; PROGRAMLET_SCRATCH_WORDS],
-    frame: &ProgramletFrame,
+    tokens: &SentenceView<'_>,
+    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
+    vector_slots: &[ProgramletVectorSlot; MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
 ) -> bool {
     if !is_programlet_vector_verb(sentence, tokens) {
         return false;
     }
     match sentence.field(SOURCE) {
-        Some(source) => programlet_field_is_vector(
-            tokens,
-            source,
-            symbols,
-            &frame.arguments,
-            &frame.vector_slots,
-        ),
+        Some(source) => {
+            programlet_field_is_vector(tokens, source, symbols, arguments, vector_slots)
+        }
         None => false,
     }
 }
 
+#[inline(never)]
 pub(super) fn apply_programlet_vector_action(
     sentence: &ParsedSentence,
-    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
-    symbols: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+    tokens: &SentenceView<'_>,
+    symbols: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
     symbol_used: &mut usize,
-    frame: &mut ProgramletFrame,
+    arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
+    frame_index: usize,
+    slots: &mut [NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
+    vector_slots: &mut [ProgramletVectorSlot; MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
+    vector_values: &mut [u32; MAX_PROGRAMLET_VECTOR_VALUE_WORDS],
 ) -> Result<(), u32> {
     if sentence.mood != DEONTIC || !is_programlet_vector_verb(sentence, tokens) {
         return Err(ERROR_UNSUPPORTED);
@@ -304,41 +314,40 @@ pub(super) fn apply_programlet_vector_action(
         tokens,
         source,
         symbols,
-        &frame.arguments,
-        &frame.vector_slots,
+        arguments,
+        frame_index,
+        vector_slots,
+        vector_values,
     )?;
     let verb = if sentence.verb_length == 2 {
-        if array_at!(tokens, sentence.verb_start + 1) != MAXIMUM_SECOND
+        if sentence_at!(*tokens, sentence.verb_start + 1) != MAXIMUM_SECOND
             || sentence.field(COMITATIVE).is_some()
         {
             return Err(ERROR_MALFORMED);
         }
         MAXIMUM_FIRST
     } else {
-        array_at!(tokens, sentence.verb_start)
+        sentence_at!(*tokens, sentence.verb_start)
     };
     if verb == SUM_VERB || verb == MAXIMUM_FIRST {
         if sentence.field(COMITATIVE).is_some() {
             return Err(ERROR_MALFORMED);
         }
         let result = reduce_vector(&vector, verb)?;
-        return write_programlet_float(
+        write_programlet_float(
             tokens,
             output,
             symbols,
             symbol_used,
             VALUE_FLOAT,
             result,
-            &mut frame.slots,
-        );
+            slots,
+        )?;
+        return Ok(());
     }
     let scalar = match sentence.field(COMITATIVE) {
         Some(field) => Some(read_programlet_float(
-            tokens,
-            field,
-            symbols,
-            &frame.arguments,
-            &frame.slots,
+            tokens, field, symbols, arguments, slots,
         )?),
         None => None,
     };
@@ -364,6 +373,9 @@ pub(super) fn apply_programlet_vector_action(
         symbols,
         symbol_used,
         result,
-        &mut frame.vector_slots,
-    )
+        vector_slots,
+        vector_values,
+        frame_index,
+    )?;
+    Ok(())
 }

@@ -1,10 +1,8 @@
 use super::*;
 
 pub(super) fn programlet_branch(
-    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
-    boundaries: &[u32; PROGRAMLET_SCRATCH_WORDS],
-    length: usize,
-    symbols: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    tokens: &SentenceView<'_>,
+    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
     selected_action: &mut ParsedSentence,
@@ -12,8 +10,8 @@ pub(super) fn programlet_branch(
 ) -> u32 {
     let mut conditional_at = None;
     let mut index = 0;
-    while index < length {
-        if array_at!(boundaries, index) != 0 && array_at!(tokens, index) == CONDITIONAL {
+    while index < tokens.len() {
+        if tokens.boundary(index) && sentence_at!(*tokens, index) == CONDITIONAL {
             conditional_at = Some(index);
             break;
         }
@@ -26,12 +24,11 @@ pub(super) fn programlet_branch(
         return ERROR_MALFORMED;
     }
     let predicate = if matches!(
-        array_at!(tokens, conditional_at - 1),
+        sentence_at!(*tokens, conditional_at - 1),
         NEGATORY_QUANTIFIER | AND_GRAMMAR | OR_GRAMMAR
     ) {
         match evaluate_boolean_expression_with_env(
             tokens,
-            boundaries,
             0,
             conditional_at + 1,
             symbols,
@@ -46,10 +43,10 @@ pub(super) fn programlet_branch(
         let mut source_at = None;
         index = 0;
         while index < conditional_at {
-            if array_at!(boundaries, index) != 0 {
-                if array_at!(tokens, index) == ACCUSATIVE {
+            if tokens.boundary(index) {
+                if sentence_at!(*tokens, index) == ACCUSATIVE {
                     accusative_at = Some(index);
-                } else if array_at!(tokens, index) == SOURCE {
+                } else if sentence_at!(*tokens, index) == SOURCE {
                     source_at = Some(index);
                 }
             }
@@ -94,7 +91,7 @@ pub(super) fn programlet_branch(
             return ERROR_UNSUPPORTED;
         }
         let ordering = compare_programlet_numbers(left, right);
-        match array_at!(tokens, source_at + 1) {
+        match sentence_at!(*tokens, source_at + 1) {
             EQUALLY => ordering == 1,
             TINY => ordering == 0,
             GIANT => ordering == 2,
@@ -103,22 +100,23 @@ pub(super) fn programlet_branch(
     };
 
     let mut first_mood = conditional_at + 1;
-    while first_mood < length
-        && (array_at!(boundaries, first_mood) == 0
+    while first_mood < tokens.len()
+        && (!tokens.boundary(first_mood)
             || !matches!(
-                array_at!(tokens, first_mood),
+                sentence_at!(*tokens, first_mood),
                 REALIS | DEONTIC | MOOD_RETURN | MOOD_PARAGRAPH
             ))
     {
         first_mood += 1;
     }
-    if first_mood == length || !matches!(array_at!(tokens, first_mood), DEONTIC | MOOD_RETURN) {
+    if first_mood == tokens.len()
+        || !matches!(sentence_at!(*tokens, first_mood), DEONTIC | MOOD_RETURN)
+    {
         return ERROR_UNSUPPORTED;
     }
     let mut first_action = ParsedSentence::empty();
     let first_action_error = parse_sentence_range(
         tokens,
-        boundaries,
         conditional_at + 1,
         first_mood + 1,
         &mut first_action,
@@ -126,11 +124,10 @@ pub(super) fn programlet_branch(
     if first_action_error != 0 {
         return first_action_error;
     }
-    let has_alternative = first_mood + 1 < length;
+    let has_alternative = first_mood + 1 < tokens.len();
     let alternative = if has_alternative {
         let mut alternative = ParsedSentence::empty();
-        let error =
-            parse_sentence_range(tokens, boundaries, first_mood + 1, length, &mut alternative);
+        let error = parse_sentence_range(tokens, first_mood + 1, tokens.len(), &mut alternative);
         if error != 0 {
             return error;
         }
@@ -151,8 +148,8 @@ pub(super) fn programlet_branch(
 pub(super) fn read_optional_programlet_number(
     present: bool,
     field: SentenceField,
-    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
-    symbols: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    tokens: &SentenceView<'_>,
+    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
     value: &mut ProgramletNumber,

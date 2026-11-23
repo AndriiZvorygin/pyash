@@ -18,6 +18,10 @@ the Vulkan 1.2 target environment before packaging the shader.
 
 ## Build and smoke-test
 
+See [`vliw-gpu-pipeline-cache.md`](../../documentation/reference/vliw-gpu-pipeline-cache.md)
+for the production cache destination, low-scratch diagnostic workflow, and
+the current cache-generation failure evidence.
+
 Install the repository's pinned Rust toolchain, the official `cargo-gpu`
 0.11.0 release, and its matching nightly/Rust source component. Then run:
 
@@ -34,9 +38,15 @@ confirms driver/device visibility only; it is not a pipeline compilation test.
 
 To profile the final Vulkan driver pipeline-build stage using existing binaries,
 run `node rust/pyac-gpu/profile-pipeline-build.mjs --run`. It does not run
-Cargo or rebuild SPIR-V. It requires 20 GiB host RAM and 8 GiB free VRAM, then
-caps the process at 16 GiB RSS and ten minutes; logs and the report go under
-the ignored `rust/pyac-gpu/target/diagnostics/` directory. This is an explicit
+Cargo or rebuild SPIR-V. Preflight requires 16 GiB available RAM for the full
+shader, or 8 GiB for diagnostic SPIR-V up to 1 MiB; live available RAM must
+remain above 8 GiB. The process is capped at 16 GiB RSS and ten minutes.
+Pipeline creation is host-side driver compilation and dispatches no shader
+work, so GPU compute utilization is not a success signal; free VRAM is recorded
+as device context but is not an idle-device gate. Set
+`PYAC_VLIW_PROFILE_DIR` to colocate its cache, log, and report beside an
+existing SPIR-V under ignored `target/diagnostics/`; outputs are never
+overwritten. This is an explicit
 diagnostic, not part of service startup. `PYAC_VLIW_PROFILE_TIMEOUT_SEC` can
 shorten the wall limit (never raise it above ten minutes), and
 `PYAC_VLIW_PIPELINE_COMPILER` selects an alternate prebuilt compiler for A/B
@@ -59,8 +69,12 @@ unless `--repo-source` is selected. It supports an unchanged `baseline`, an
 early-error `error` stub, and the collector-specific success-shaped `minimal`
 variant. `--build-only` stops after SPIR-V generation, which is useful when the
 GPU is occupied; otherwise the tool also probes Vulkan pipeline creation. The
-Rust-GPU build has a five-minute default and maximum with a 10-GiB RSS cap; the
-Vulkan diagnostic has a ten-minute default and maximum with a 16-GiB RSS cap.
+Rust-GPU build has a five-minute default and maximum with a 10-GiB RSS cap.
+Build-only profiling requires 15 GiB available RAM at launch and stops if it
+falls below 8 GiB, preserving headroom while tolerating normal host-memory
+fluctuations during the measured Rust-GPU build. Runs that also probe Vulkan
+retain a 20-GiB launch requirement; the Vulkan diagnostic has a ten-minute
+default and maximum with a 16-GiB RSS cap and 12-GiB available-RAM floor.
 Each run records source hashes, build logs, SPIR-V, and resource/timing
 reports, and exits nonzero if either stage fails. Stub variants intentionally
 change behavior; they are for compiler attribution only and must never be
@@ -72,6 +86,10 @@ service's 60-second readiness ceiling. Each run updates
 `target/diagnostics/function-reduction/index.md`.
 NVIDIA's persistent shader cache is not cleared by the tool, so repeated runs
 of the same variant may be warm; compare and label first-run stage timings.
+The source-level inliner profiler defaults to a 120-second bounded sample;
+set `PYAC_RUSTGPU_INLINE_TIMEOUT_SEC` from 1 to 900 when a longer attribution
+window is justified. Its partial report includes the active function and edge
+at stop, so a full 15-minute compiler run is not required for a useful sample.
 
 The smoke command lowers a small Pyash programlet to a canonical `.pyac` pack,
 runs it on a discrete Vulkan GPU, and asserts the typed result plus rejection

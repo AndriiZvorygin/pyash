@@ -1,11 +1,14 @@
 use super::*;
 
+#[inline(never)]
 pub(super) fn declare_programlet_local(
     sentence: &ParsedSentence,
-    sentence_words: &[u32; PROGRAMLET_SCRATCH_WORDS],
-    symbol_words: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
+    sentence_view: &SentenceView<'_>,
+    symbol_words: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
     symbol_used: &mut usize,
     frame: &mut ProgramletFrame,
+    arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
+    slots: &mut [NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
 ) -> Result<(), u32> {
     if frame.action_started != 0 || sentence.field_count != 3 {
         return Err(ERROR_MALFORMED);
@@ -18,11 +21,11 @@ pub(super) fn declare_programlet_local(
         return Err(ERROR_MALFORMED);
     };
     let mut name = NameSpan::EMPTY;
-    let name_error = name_span(sentence_words, su, false, &mut name);
+    let name_error = name_span(sentence_view, su, false, &mut name);
     if name_error != 0 {
         return Err(name_error);
     }
-    let value_kind = if array_at!(sentence_words, sentence.verb_start) == BOOLEAN_VERB {
+    let value_kind = if sentence_at!(*sentence_view, sentence.verb_start) == BOOLEAN_VERB {
         VALUE_BOOLEAN
     } else {
         VALUE_NUMBER
@@ -34,11 +37,11 @@ pub(super) fn declare_programlet_local(
     };
     let mut value = ProgramletNumber::EMPTY;
     let value_error = resolve_programlet_value(
-        sentence_words,
+        sentence_view,
         ob,
         symbol_words,
-        &frame.arguments,
-        &frame.slots,
+        arguments,
+        slots,
         &mut value,
     );
     if value_error != 0 {
@@ -48,47 +51,47 @@ pub(super) fn declare_programlet_local(
         return Err(ERROR_UNSUPPORTED);
     }
     let kind = if as_field.length == 2
-        && array_at!(sentence_words, as_field.start) == NAME_TYPE
-        && array_at!(sentence_words, as_field.start + 1) == VARIABLE
+        && sentence_at!(*sentence_view, as_field.start) == NAME_TYPE
+        && sentence_at!(*sentence_view, as_field.start + 1) == VARIABLE
     {
         if value_kind == VALUE_BOOLEAN { 3 } else { 1 }
     } else if as_field.length == 3
-        && array_at!(sentence_words, as_field.start) == NAME_TYPE
-        && array_at!(sentence_words, as_field.start + 1) == PERMANENTLY
-        && array_at!(sentence_words, as_field.start + 2) == expected_verb
+        && sentence_at!(*sentence_view, as_field.start) == NAME_TYPE
+        && sentence_at!(*sentence_view, as_field.start + 1) == PERMANENTLY
+        && sentence_at!(*sentence_view, as_field.start + 2) == expected_verb
     {
         if value_kind == VALUE_BOOLEAN { 4 } else { 2 }
     } else {
         return Err(ERROR_UNSUPPORTED);
     };
     let slot_index = if let Some(existing) =
-        find_local_slot(sentence_words, name, symbol_words, &frame.slots)
+        find_local_slot(sentence_view, name, symbol_words, slots)
     {
         existing
     } else {
         let mut free = 0;
-        while free < MAX_PROGRAMLET_LOCAL_SLOTS && array_at!(frame.slots, free).kind != 0 {
+        while free < MAX_PROGRAMLET_LOCAL_SLOTS && array_at!(*slots, free).kind != 0 {
             free += 1;
         }
         if free == MAX_PROGRAMLET_LOCAL_SLOTS {
             return Err(ERROR_FRAME_CAPACITY);
         }
         let mut stored = NameSpan::EMPTY;
-        let name_error = store_name(sentence_words, name, symbol_words, symbol_used, &mut stored);
+        let name_error = store_name(sentence_view, name, symbol_words, symbol_used, &mut stored);
         if name_error != 0 {
             return Err(name_error);
         }
-        let mut slot = array_at!(frame.slots, free);
+        let mut slot = array_at!(*slots, free);
         slot.name_offset = stored.start as u32;
         slot.name_length = stored.length as u32;
-        array_put!(&mut frame.slots, free, slot);
+        array_put!(slots, free, slot);
         free
     };
-    let mut slot = array_at!(frame.slots, slot_index);
+    let mut slot = array_at!(*slots, slot_index);
     slot.value = value.bits;
     slot.kind = kind;
     slot.value_kind = value.kind;
-    array_put!(&mut frame.slots, slot_index, slot);
+    array_put!(slots, slot_index, slot);
 
     Ok(())
 }

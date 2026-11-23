@@ -400,18 +400,13 @@ fn execute_shared_programlet(
     codelet_count: usize,
     error_index: usize,
 ) -> Result<PyacValue, PackExecutionError> {
-    let mut sentence_words = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
-    let mut sentence_boundaries = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
-    let mut symbol_words = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
-    let mut frames =
-        [pyac_vliw_core::ProgramletFrame::EMPTY; pyac_vliw_core::MAX_PROGRAMLET_CALL_DEPTH];
+    let mut symbol_words = [0; pyac_vliw_core::MAX_PROGRAMLET_PAYLOAD_WORDS];
+    let mut frames = pyac_vliw_core::ProgramletStack::EMPTY;
     let result = pyac_vliw_core::execute_numeric_programlet_at(
         words,
         base_codelet,
         codelet_count,
         pyac_vliw_core::DEFAULT_PROGRAMLET_STEP_BUDGET,
-        &mut sentence_words,
-        &mut sentence_boundaries,
         &mut symbol_words,
         &mut frames,
     );

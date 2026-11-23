@@ -72,8 +72,12 @@ fn arithmetic(words: &[u32], codelet: usize) -> CoreResult {
 }
 
 fn rounded_fixed16(numerator: u32, denominator: u32) -> Result<u32, u32> {
-    let quotient = numerator / denominator;
-    let remainder = numerator % denominator;
+    let quotient = numerator
+        .checked_div(denominator)
+        .ok_or(ERROR_DIVISION_BY_ZERO)?;
+    let remainder = numerator
+        .checked_rem(denominator)
+        .ok_or(ERROR_DIVISION_BY_ZERO)?;
     let doubled_remainder = remainder * 2;
     let rounded = if doubled_remainder > denominator
         || (doubled_remainder == denominator && quotient & 1 != 0)
