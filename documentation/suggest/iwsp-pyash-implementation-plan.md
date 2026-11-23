@@ -143,8 +143,8 @@ Every model the paper describes is built from a small set of kernels. Reading Ta
 | B4 | ReLU | *"2-neuron ReLU MLP"*, *"residual ReLU MLPs"*, *"4 ReLU knots"*. | p. 21 | float64 | absent |
 | B5 | Softmax | Attention weighting; also *"softmax weights become 10^(4−i)/11111"*. | p. 21 | float32/float64 | implemented as a Pyash programlet composition; CPU and live CUDA conformance pass |
 | B6 | Numerically stable softmax | At the paper's sink scales (1e17, 1e22) a naive softmax overflows; the paper's own models rely on softmax degenerating to *"a plain exponential"*. A stable form (max-subtract) is required, not optional. | p. 21 | float32/float64 | implemented with max-subtraction; CPU and live CUDA conformance pass |
-| B7 | Hard argmax over a row | *"using hard argmax instead of softmax"* (p. 21); attention that reads *"the single best earlier position"*. | p. 21 | float64 | absent |
-| B8 | Argmax readout with deterministic tie-break | Paper: *"An exact match scores 0; ties go to the lower id"* (p. 21). | p. 21 | integer | absent |
+| B7 | Hard argmax over a row | *"using hard argmax instead of softmax"* (p. 21); attention that reads *"the single best earlier position"*. | p. 21 | float32/float64 | implemented for finite non-empty vectors: a numeric destination returns the first maximum's zero-based index; ties therefore select the lower lane. CPU tests and the GPU conformance matrix cover both widths |
+| B8 | Argmax readout with deterministic tie-break | Paper: *"An exact match scores 0; ties go to the lower id"* (p. 21). | p. 21 | integer | partial — first-max lane tie-breaking is implemented; mapping lane positions to an arbitrary candidate-ID table is not |
 | B9 | Squared distance | *"negative squared distance between query and key"* (p. 21); *"-40(i−(s−5))²"* (p. 22). | p. 21–22 | float64 | absent |
 | B10 | Layer normalisation | Present in some described models and deliberately absent in others (p. 21). | p. 21 | float64 | absent |
 | B11 | Residual add | *"7-channel float64 residual stream"* (p. 21); *"the residual state has channels VAL, A, B, X"* (p. 21). | p. 21 | float64 | absent |
@@ -217,10 +217,12 @@ designed.
 
 At the execution level, VLIW has scalar float32 and fixed16 alongside integer and
 boolean behavior, typed float32/float64 vector literals, programlet control flow,
-16-lane dot products, and exact-match vector evaluation. General sum/argmax
-reductions, matrix/tensor execution, and a scalable model-weight data plane in
-`.pyac` remain gaps. These are specific capability gaps, not evidence that every
-iWSP task requires float64 or GPU execution.
+16-lane dot products, vector sum/maximum/first-maximum-index reductions, and
+exact-match vector evaluation. A small Q/K/V row-projection example now composes
+dot products in Pyash. General matrix/tensor execution, vector-valued Q/K/V
+projections, and a scalable model-weight data plane in `.pyac` remain gaps. These
+are specific capability gaps, not evidence that every iWSP task requires float64
+or GPU execution.
 
 ---
 
@@ -262,13 +264,15 @@ runtime types. Increasing the divisor improves resolution while lowering the max
 signed encodings must also spend range on negative values. Binary/low-bit weights are
 another possible representation, not a claim that an IEEE float is one bit wide.
 
-The shared core currently supports dot product for inline or preceding named
-float32/float64 vectors, up to 16 lanes. General sum/argmax reductions and
-matrix/tensor execution are still absent. The `.pyac` pack has no scalable
-weight-data section: small named vectors fit in ordinary vector declarations,
-but larger model weights need the versioned program-image/container design.
-These are separate execution/data-layout gaps; they should not be conflated with
-scalar numeric-format support.
+The shared core supports dot product for inline or preceding named float32/float64
+vectors, up to 16 lanes; non-empty float-vector sum and maximum reductions; and a
+first-maximum-index result selected by a numeric destination. A minimal Q/K/V row
+projection is composed from those dot products, not from a new matrix opcode.
+General matrix/tensor execution and vector-valued Q/K/V projections remain absent.
+The `.pyac` pack has no scalable weight-data section: small named vectors fit in
+ordinary vector declarations, but larger model weights need the versioned
+program-image/container design. These are separate execution/data-layout gaps;
+they should not be conflated with scalar numeric-format support.
 
 ### 3.2 How to choose a representation
 
@@ -456,11 +460,11 @@ overhead.
 
 That is distinct from parallelizing a single example's tensor operations. Float32 and
 fixed16 scalar semantics, float32/float64 vector literals, and a 16-lane dot product
-now exist. General sum/argmax reductions, model-scale matrix/tensor operations, and a
-scalable parameter payload/data layout are still gaps. The plan must measure whether
-within-example parallelism is worthwhile after a minimal end-to-end CPU candidate
-exists; do not treat "GPU" as synonymous with "matrix support" or assume current
-section dispatch already accelerates a layer.
+now exist. Model-scale matrix/tensor operations and a scalable parameter payload/data
+layout are still gaps. The plan must measure whether within-example parallelism is
+worthwhile after a minimal end-to-end CPU candidate exists; do not treat "GPU" as
+synonymous with "matrix support" or assume current section dispatch already
+accelerates a layer.
 
 The `.pyac` pack currently carries codelets rather than a general weight-data plane.
 Any weight transport must follow the indexed program-image/container design and its
@@ -781,20 +785,41 @@ candidate-search machinery. CPU and live CUDA results are checked against the sa
 independent expected value. See `examples/pyash/iwsp-two-key-one-query-attention.pya`
 and the verification ledger.
 
-### Stage 7 — Query/key/value projections
+### Stage 7 — Query/key/value projections (minimal row proof implemented)
 
-Once the explicit attention composition works, add the smallest matrix-vector or
-equivalent projection operation needed to derive Q, K, and V from token vectors and
-named weights. Fix storage layout and shape rules using a tiny sequence fixture. This
-makes the attention inputs part of a model computation rather than hand-supplied test
-vectors.
+Q, K, and V mean query, key, and value. For input representation `X`, a transformer
+forms them with learned linear projections, conventionally written `Q = XW_Q`,
+`K = XW_K`, and `V = XW_V`. Attention compares Q with K (here by dot product),
+normalizes the scores, then uses those weights to combine V. These are distinct
+mathematical roles, not ordinary questions, physical keys, or scalar values.
 
-### Stage 8 — Minimal transformer block
+[`examples/pyash/iwsp-qkv-projection.pya`](../../examples/pyash/iwsp-qkv-projection.pya)
+is the first executable projection slice. With input `[1, 2]`, it computes one row
+for each projection: `[1, 0]` gives Q=`1`, `[1, 2]` gives K=`5`, and `[2, 1]` gives
+V=`4`. The resulting `[1, 5, 4]` is checked by `pluk tlas`. This is deliberately a
+one-output-lane-per-role fixture; it proves Pyash composition of three dot products,
+not general matrix multiplication or a complete transformer attention path. Rust CPU
+tests and live CUDA conformance on the Mriczo RTX 3090 now pass for this fixture,
+along with float32 and float64 first-maximum-index selection. The complete 61-value
+case matrix and two expected-error cases passed; see the run record in the VLIW
+verification ledger.
 
-Compose the verified attention path with the next necessary pieces: residual addition,
-normalization, an elementwise activation, and a small feed-forward projection. Add each
-missing primitive only when the block's runnable example reaches it. The acceptance
-target is one tiny CPU-executable block with inspectable Pyash/VLIW inputs, parameters,
+The next increment is to produce at least two lanes per Q/K/V projection and feed
+those outputs into the already-working attention composition. Keep the matrix shape,
+row order, and output layout visible in the Pyash example. Only add a general
+matrix-vector primitive if the explicit dot-product composition becomes unwieldy or
+fails the required scale; the current scalar proof does not justify a new opcode by
+itself. The exact transformer-role vocabulary is still pending curation; current
+examples intentionally retain Q/K/V as technical labels rather than misusing the
+nearest ordinary-language words.
+
+### Stage 8 — Minimal Q/K/V-fed transformer block
+
+Connect vector-valued Q/K/V projections to the existing attention calculation, then
+add only the pieces needed to make one tiny block executable: residual addition,
+normalization, an elementwise activation, and a small feed-forward projection. Add
+each missing primitive when the runnable example reaches it. The acceptance target is
+one tiny CPU-executable block with inspectable Pyash/VLIW inputs, parameters,
 intermediates, and output, not paper-scale performance.
 
 ### Stage 9 — Sequence task and cross-target conformance
@@ -1055,6 +1080,16 @@ comparison, and selection parents. The Q/K/V “projection” in attention is a
 matrix multiplication, so the mathematical matrix-multiplication sense is the
 better anchor than the geometric projection sense.
 
+The transformer-specific roles query, key, and value do not yet have exact linked
+Pyash terms. The nearest current entries are only analogies: `hwas` is “question”
+(WordNet `n:07208256-n`), `htis hsek` is a key/clue sense (WordNet `n:05802065-n`),
+`hnuc gjat` is numerical value (WordNet `n:05864972-n`), and `dlek` is vector
+(WordNet `n:05873161-n`). None names the corresponding Q/K/V role, and `hcuk hnop`
+for ordinary cognitive attention is not a transformer-attention term. Keep Q/K/V as
+standard technical notation in this implementation record until the vocabulary work
+assigns exact senses and forms; do not use these nearest entries as if they were
+validated transformer compounds.
+
 ### A.6 Proposed head-final compounds for current lexical gaps
 
 Each proposal below is a two-part semantic composition. The component order is
@@ -1145,7 +1180,8 @@ partial mappings and the GPU compound review note from A.7.
 | Dot product / sum reduction | `ob ve float32 ... by ve float32 ... be kl6m psas do` | `kl6m psas` is the catalog-linked Pyash compound glossed “dot product.” The shared Rust VLIW operation accepts equal-width float32/float64 vectors and returns one scalar; general sum reduction remains a separate operation. |
 | Exponential normalization (softmax) | Pyash ceremony: maximum → vector subtract → exponential → sum → `dvis` | Implemented as a composition in the Rust CPU/GPU programlet runtime, not a separate softmax opcode. Generic `float`/`vec float` formals preserve float32 or float64. CPU and live CUDA conformance pass; WGSL has not been verified. See the executable examples and specification 28. |
 | Vector normalization | `from name values with name normalization options to name normalized be vector normalization do` | Normalize a vector under an explicitly selected norm (for example L1 or L2); options should include epsilon/zero-vector behavior. Distinct from exponential normalization. New operation. |
-| Maximum position (argmax) | `from name scores to name selected index be maximum position do` | Return the index of the greatest element. Define ties as the lowest index for deterministic results. New operation; output is an index, not the maximum value. |
+| Maximum position (argmax) | `from name scores to name num answer be gjat bwit do` | Implemented as the typed `gjat bwit` form: float output returns the maximum value; a numeric destination returns the zero-based index of the first maximum. Non-empty finite float32/float64 vectors only; ties select the lower lane. This is lane-index selection, not arbitrary ID lookup. |
+| Q/K/V row projection | `ob name input by ve float32 ... to name candidate at num ... be kl6m psas do` | Implemented as three visible dot-product rows in `examples/pyash/iwsp-qkv-projection.pya`; the example checks `[Q,K,V] = [1,5,4]`. It is a minimal scalar-per-role proof, not a general matrix-vector operation. Transformer role names remain standard technical notation pending exact vocabulary links. |
 | Activation function | `from name preactivation by name relu to name activated be vector map do` | Reuse the existing vector-map sentence surface to apply a named scalar function elementwise. `vector map` currently runs through the JS interpreter; `relu` here is illustrative and needs a registered scalar mapper. A fused GPU activation is a later lowering/optimization, not a different meaning. |
 | Learned vector / embedding | `from name embedding table via name token id to name embedding be embedding lookup do` | Return the learned row for a token ID. “Learned vector” names the result; lookup is the action. New tensor-indexing operation. Existing vector `read` handles a flat element, not a row from a rank-2 table. |
 | Parallel execution / kernel launch | `from name kernel with name launch config to name results be parallel execution do` | Submit a kernel over the configured index space and return its result handle/data. This is a proposed compute operation, not `be gpu mind` or another Housekeeper inference request. |
@@ -1167,11 +1203,13 @@ and [`examples/pyash/iwsp-two-key-one-query-attention.pya`](../../examples/pyash
 Implementation boundary from the current source audit: integer, float32, and
 float64 vector literals run through the shared Rust CPU/GPU interpreter; JS
 `vector map`, JS `produce` (dot product), and the `neuron` operation also exist;
-independent `myocpfun` sections exist in the VLIW pack format. Matrix/tensor values,
-matrix multiplication, standalone argmax, GPU-resident kernel launch, workgroup
-topology, and group synchronization are not thereby implemented in the shared
-Rust VLIW CPU/GPU runtime. Stable softmax and the two-key attention example now pass
-CPU and live CUDA conformance; WGSL remains unverified.
+independent `myocpfun` sections exist in the VLIW pack format. Vector-valued Q/K/V,
+general matrix/tensor values and multiplication, arbitrary candidate-ID lookup,
+GPU-resident kernel launch, workgroup topology, and group synchronization are not
+thereby implemented in the shared Rust VLIW CPU/GPU runtime. Stable softmax, the
+two-key attention example, the scalar Q/K/V projection fixture, and typed
+first-maximum-index behavior are tracked separately in the verification ledger;
+WGSL remains unverified.
 Other candidate signatures still need vocabulary, dispatch, CPU semantics, and
 GPU coverage before they are considered supported.
 

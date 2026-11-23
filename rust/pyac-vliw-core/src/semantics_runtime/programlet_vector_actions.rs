@@ -266,6 +266,60 @@ fn reduce_vector(vector: &ProgramletVectorValue, verb: u32) -> Result<Programlet
     Err(ERROR_UNSUPPORTED)
 }
 
+fn maximum_index(vector: &ProgramletVectorValue) -> Result<u32, u32> {
+    if vector.length == 0 {
+        return Err(ERROR_VECTOR_WIDTH);
+    }
+    if vector.kind == VALUE_VECTOR_FLOAT32 {
+        let mut maximum = f32::from_bits(array_at!(vector.values, 0));
+        if !is_finite_f32(maximum) {
+            return Err(ERROR_FLOAT_DOMAIN);
+        }
+        let mut maximum_index = 0;
+        let mut lane = 1;
+        while lane < vector.length {
+            let value = f32::from_bits(array_at!(vector.values, lane));
+            if !is_finite_f32(value) {
+                return Err(ERROR_FLOAT_DOMAIN);
+            }
+            if value > maximum {
+                maximum = value;
+                maximum_index = lane;
+            }
+            lane += 1;
+        }
+        return Ok(maximum_index as u32);
+    }
+    #[cfg(feature = "shader-f64")]
+    if vector.kind == VALUE_VECTOR_FLOAT64 {
+        let mut maximum = f64::from_bits(
+            u64::from(array_at!(vector.values, 0)) | (u64::from(array_at!(vector.values, 1)) << 32),
+        );
+        if !is_finite_f64(maximum) {
+            return Err(ERROR_FLOAT_DOMAIN);
+        }
+        let mut maximum_index = 0;
+        let mut lane = 1;
+        while lane < vector.length {
+            let offset = lane * 2;
+            let value = f64::from_bits(
+                u64::from(array_at!(vector.values, offset))
+                    | (u64::from(array_at!(vector.values, offset + 1)) << 32),
+            );
+            if !is_finite_f64(value) {
+                return Err(ERROR_FLOAT_DOMAIN);
+            }
+            if value > maximum {
+                maximum = value;
+                maximum_index = lane;
+            }
+            lane += 1;
+        }
+        return Ok(maximum_index as u32);
+    }
+    Err(ERROR_UNSUPPORTED)
+}
+
 pub(super) fn is_programlet_vector_verb(
     sentence: &ParsedSentence,
     tokens: &SentenceView<'_>,
@@ -349,13 +403,36 @@ pub(super) fn apply_programlet_vector_action(
         if sentence.field(COMITATIVE).is_some() {
             return Err(ERROR_MALFORMED);
         }
+        let mut output_name = NameSpan::EMPTY;
+        let mut output_kind = 0;
+        let output_error = typed_output_name(tokens, output, &mut output_name, &mut output_kind);
+        if output_error != 0 {
+            return Err(output_error);
+        }
+        if verb == MAXIMUM_FIRST && output_kind == VALUE_NUMBER {
+            let index = maximum_index(&vector)?;
+            write_programlet_float(
+                tokens,
+                output,
+                symbols,
+                symbol_used,
+                VALUE_NUMBER,
+                ProgramletNumber {
+                    bits: index,
+                    high: 0,
+                    kind: VALUE_UNSIGNED,
+                },
+                slots,
+            )?;
+            return Ok(());
+        }
         let result = reduce_vector(&vector, verb)?;
         write_programlet_float(
             tokens,
             output,
             symbols,
             symbol_used,
-            VALUE_FLOAT,
+            output_kind,
             result,
             slots,
         )?;

@@ -38,7 +38,7 @@ async function programletExample(filename, name, expectedValues) {
 const SECTION_NAMES = [
   "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
   "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
-  "nineteen", "twenty", "twenty one"
+  "nineteen", "twenty", "twenty one", "twenty two", "twenty three"
 ];
 
 export function buildVliwGpuConformanceBatches(cases) {
@@ -222,6 +222,42 @@ export async function buildVliwGpuConformanceCases() {
   const attention = await programletExample("iwsp-two-key-one-query-attention.pya", "iwsp-two-key-one-query-attention", [
     { type: "vector", elementType: "float32", values: [3, 5] }
   ]);
+  const qkvProjectionText = await readFile(
+    new URL("../examples/pyash/iwsp-qkv-projection.pya", import.meta.url),
+    "utf8"
+  );
+  const qkvProjection = codeletPack(
+    "iwsp-qkv-row-projections",
+    qkvProjectionText.trim().split(/\r?\n/u),
+    [
+      { type: "vector", elementType: "float32", values: [1, 2] },
+      { type: "vector", elementType: "float32", values: [0, 0, 0] },
+      { type: "float32", value: 1 },
+      { type: "float32", value: 5 },
+      { type: "float32", value: 4 },
+      { type: "vector", elementType: "float32", values: [1, 5, 4] },
+      { type: "unsigned", value: 3 }
+    ]
+  );
+  const maximumIndexText = await readFile(
+    new URL("../examples/pyash/iwsp-maximum-index.pya", import.meta.url),
+    "utf8"
+  );
+  const maximumIndexLines = maximumIndexText.trim().split(/\r?\n/u);
+  const maximumIndexInvocation = maximumIndexLines.pop();
+  const maximumIndexSource = maximumIndexLines.join("\n");
+  const maximumIndex = programlet(
+    "iwsp-maximum-index-float32",
+    maximumIndexSource,
+    maximumIndexInvocation,
+    [{ type: "unsigned", value: 1 }]
+  );
+  const maximumIndexF64 = programlet(
+    "iwsp-maximum-index-float64",
+    maximumIndexSource,
+    "from ve float64 4 9 9 -2 to name num answer be answer do",
+    [{ type: "unsigned", value: 1 }]
+  );
 
   const cases = [
     programlet(
@@ -341,6 +377,9 @@ export async function buildVliwGpuConformanceCases() {
     softmax,
     softmaxF64,
     attention,
+    qkvProjection,
+    maximumIndex,
+    maximumIndexF64,
     codeletPack(
       "float64-dot-product",
       "ob ve float64 0.1 2 -3 by ve float64 0.2 4 -5 be kl6m psas do",

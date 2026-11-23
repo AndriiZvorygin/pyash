@@ -7,6 +7,7 @@ const MAXIMUM_NAME: u32 = 0xaa90;
 const SHIFTED_NAME: u32 = 0x6844;
 const EXPONENTIALS_NAME: u32 = 0x2b73;
 const DENOMINATOR_NAME: u32 = 0xaa90;
+const ANSWER_ROUTINE: u32 = 0x4930;
 
 fn append_sentence(words: &mut std::vec::Vec<u32>, tokens: &[u32], boundaries: &[usize]) {
     for (index, chunk) in tokens.chunks(CODELET_WORDS - 1).enumerate() {
@@ -186,6 +187,93 @@ fn append_softmax_f64(words: &mut std::vec::Vec<u32>, logits: &[f64]) {
     append_softmax_program(words, quote);
 }
 
+fn append_argmax_program(words: &mut std::vec::Vec<u32>, quote: std::vec::Vec<u32>) {
+    let mut definition = std::vec![NAME_TYPE, ANSWER_ROUTINE, NOMINATIVE];
+    definition.extend(typed_name(&[VECTOR_TYPE, FLOAT_TYPE], &[LOGITS_NAME]));
+    definition.push(SOURCE);
+    definition.extend(typed_name(&[NUMBER_TYPE], &[ANSWER_NAME]));
+    definition.extend([DESTINATION, CEREMONY, MOOD_DEFINITION]);
+    append_sentence(words, &definition, &[2, 8, 13, 15]);
+
+    let mut maximum_index = std::vec![NAME_TYPE, LOGITS_NAME, SOURCE];
+    maximum_index.extend(typed_name(&[NUMBER_TYPE], &[ANSWER_NAME]));
+    maximum_index.extend([DESTINATION, 0xa9b2, 0xa831, DEONTIC]);
+    append_sentence(words, &maximum_index, &[2, 7, 10]);
+
+    append_sentence(
+        words,
+        &[NAME_TYPE, ANSWER_NAME, NOMINATIVE, MOOD_RETURN],
+        &[2, 3],
+    );
+    append_sentence(
+        words,
+        &[
+            NAME_TYPE,
+            ANSWER_ROUTINE,
+            NOMINATIVE,
+            CEREMONY,
+            MOOD_PARAGRAPH,
+        ],
+        &[2, 4],
+    );
+
+    let source_index = quote.len();
+    let mut invocation = quote;
+    invocation.push(SOURCE);
+    invocation.extend(typed_name(&[NUMBER_TYPE], &[ANSWER_NAME]));
+    let destination_index = source_index + 1 + 4;
+    invocation.extend([DESTINATION, ANSWER_ROUTINE, DEONTIC]);
+    append_sentence(
+        words,
+        &invocation,
+        &[source_index, destination_index, destination_index + 2],
+    );
+}
+
+fn f32_quote(values: &[f32]) -> std::vec::Vec<u32> {
+    let mut quote = std::vec![match values.len() {
+        2 => 0xd11d,
+        3 => 0xd71d,
+        4 => 0xd21d,
+        8 => 0xd31d,
+        16 => 0xd41d,
+        _ => 0xd61d,
+    }];
+    if !matches!(values.len(), 2 | 3 | 4 | 8 | 16) {
+        quote.push(values.len() as u32);
+    }
+    for value in values {
+        let bits = value.to_bits();
+        quote.extend([bits & 0xffff, bits >> 16]);
+    }
+    quote
+}
+
+#[cfg(feature = "shader-f64")]
+fn f64_quote(values: &[f64]) -> std::vec::Vec<u32> {
+    let mut quote = std::vec![match values.len() {
+        2 => 0xd91d,
+        3 => 0xdf1d,
+        4 => 0xda1d,
+        8 => 0xdb1d,
+        16 => 0xdc1d,
+        _ => 0xde1d,
+    }];
+    if !matches!(values.len(), 2 | 3 | 4 | 8 | 16) {
+        quote.push(values.len() as u32);
+    }
+    for value in values {
+        let bits = value.to_bits();
+        quote.extend([
+            bits as u32 & 0xffff,
+            (bits >> 16) as u32 & 0xffff,
+            (bits >> 32) as u32 & 0xffff,
+            (bits >> 48) as u32,
+        ]);
+    }
+    quote
+}
+
 fn run(words: &[u32]) -> CoreResult {
     let codelet_count = words.len() / CODELET_WORDS;
     let mut symbols = [0; MAX_PROGRAMLET_PAYLOAD_WORDS];
@@ -297,6 +385,32 @@ fn stable_softmax_handles_equal_logits_and_rejects_empty_vectors() {
 }
 
 #[test]
+fn maximum_with_unsigned_output_returns_the_first_maximum_index() {
+    let mut words = std::vec::Vec::new();
+    append_argmax_program(&mut words, f32_quote(&[1.0, 2.0, 2.0, 0.0]));
+    let result = run(&words);
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.value_kind, VALUE_UNSIGNED);
+    assert_eq!(result.values[0], 1);
+
+    let mut last_lane_words = std::vec::Vec::new();
+    append_argmax_program(
+        &mut last_lane_words,
+        f32_quote(&[
+            0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0,
+        ]),
+    );
+    let last_lane = run(&last_lane_words);
+    assert_eq!(last_lane.error, 0, "{last_lane:?}");
+    assert_eq!(last_lane.value_kind, VALUE_UNSIGNED);
+    assert_eq!(last_lane.values[0], 15);
+
+    let mut empty_words = std::vec::Vec::new();
+    append_argmax_program(&mut empty_words, f32_quote(&[]));
+    assert_eq!(run(&empty_words).error, ERROR_VECTOR_WIDTH);
+}
+
+#[test]
 #[cfg(feature = "shader-f64")]
 fn composes_stable_softmax_for_float64_vectors() {
     let mut words = std::vec::Vec::new();
@@ -328,4 +442,15 @@ fn composes_stable_softmax_for_float64_vectors() {
             u64::from(extreme.values[index * 2]) | (u64::from(extreme.values[index * 2 + 1]) << 32);
         assert_eq!(f64::from_bits(bits), expected);
     }
+}
+
+#[test]
+#[cfg(feature = "shader-f64")]
+fn maximum_with_unsigned_output_supports_float64_and_first_tie() {
+    let mut words = std::vec::Vec::new();
+    append_argmax_program(&mut words, f64_quote(&[4.0, 9.0, 9.0, -2.0]));
+    let result = run(&words);
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.value_kind, VALUE_UNSIGNED);
+    assert_eq!(result.values[0], 1);
 }

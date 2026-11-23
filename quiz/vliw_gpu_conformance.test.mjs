@@ -60,6 +60,9 @@ test("VLIW GPU conformance matrix covers the merged typed and control-flow contr
     "iwsp-stable-softmax-float32",
     "iwsp-stable-softmax-float64",
     "iwsp-two-key-one-query-attention",
+    "iwsp-qkv-row-projections",
+    "iwsp-maximum-index-float32",
+    "iwsp-maximum-index-float64",
     "float64-dot-product",
     "uint16-vector-sixteen-lanes",
     "boolean-vector-sixteen-lanes",
@@ -127,7 +130,10 @@ test("Rust CPU executes IWSP vector operations, softmax, and attention after VLI
     "iwsp-float64-vector-scale-add-sum",
     "iwsp-stable-softmax-float32",
     "iwsp-stable-softmax-float64",
-    "iwsp-two-key-one-query-attention"
+    "iwsp-two-key-one-query-attention",
+    "iwsp-qkv-row-projections",
+    "iwsp-maximum-index-float32",
+    "iwsp-maximum-index-float64"
   ]);
   const selected = (await buildVliwGpuConformanceCases()).filter(({ name }) => names.has(name));
   assert.equal(selected.length, names.size);
