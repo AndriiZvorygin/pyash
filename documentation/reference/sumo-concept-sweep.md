@@ -138,20 +138,25 @@ id. The rank is taken from the concept's own surface, then from its crosswalk
 lemmas, then from the surface of the entry its hierarchy path reaches.
 Concepts with no rank keep a stable position at the end of the order.
 
-The pilot takes 64 concepts and is stratified so every evidence path and both
-adjudication outcomes are exercised before the full backlog runs.
+A focused run is a list of concept ids in the refinery config, in the
+`pilot-concept-ids` sentence. The pilot of 64 was stratified so every evidence
+path and both adjudication outcomes were exercised before the backlog ran. An
+empty list runs the whole backlog.
 
 ## Stages
 
 The workflow graph lives in `program/library/translation/sumo_concept_refinery.pya`,
 following the same shape as the WordNet sense compound refinery.
 
-1. `select unresolved SUMO concepts` — build the worklist and the candidate
-   evidence for each concept.
-2. `resolve SUMO link candidates` — deterministic resolution, plus one bounded
+1. `select concepts` — build the worklist and the candidate evidence for each
+   concept.
+2. `resolve concept mapping` — deterministic resolution, plus one bounded
    Housekeeper mind call per ambiguous concept.
-3. `verify SUMO concept links` — record decisions, promote accepted links, and
+3. `verify concept mapping` — record decisions, promote accepted links, and
    refresh the mutable link coverage so accepted concepts leave later queues.
+
+The stage names use vocabulary the repository already covers. The domain words
+live in the file name, the config `format` value, and the record identifiers.
 
 Durable state is `.pya` under `artifacts/<run-id>/`. The decision ledger is
 append-only under stable row identities.
