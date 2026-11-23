@@ -850,7 +850,13 @@ async function verifyLinks({ context, dependencies }) {
   const decisionPath = join(context.artifactDirectory, "concept-decisions.pya");
   const decisions = [];
   const accepted = [];
+  // A concept is decided once. Re-verifying it would grow the ledger with a
+  // second copy of the same decision on every batch.
+  const decided = new Set((await readRowsPyaFile(decisionPath, SUMO_CONCEPT_DECISION_NAME))
+    .map((row) => row?.sumoId)
+    .filter(Boolean));
   for (const candidate of candidates) {
+    if (decided.has(candidate.sumoId)) continue;
     const evidence = state.evidence.get(candidate.sumoId);
     if (!evidence) continue;
     if (candidate.status !== "resolved" || !candidate.sequence) {
