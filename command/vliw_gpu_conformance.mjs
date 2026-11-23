@@ -38,7 +38,7 @@ async function programletExample(filename, name, expectedValues) {
 const SECTION_NAMES = [
   "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
   "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
-  "nineteen", "twenty", "twenty one", "twenty two", "twenty three"
+  "nineteen", "twenty", "twenty one", "twenty two", "twenty three", "twenty four"
 ];
 
 export function buildVliwGpuConformanceBatches(cases) {
@@ -222,6 +222,11 @@ export async function buildVliwGpuConformanceCases() {
   const attention = await programletExample("iwsp-two-key-one-query-attention.pya", "iwsp-two-key-one-query-attention", [
     { type: "vector", elementType: "float32", values: [3, 5] }
   ]);
+  const projectedAttention = await programletExample(
+    "iwsp-pyash-projected-attention.pya",
+    "iwsp-pyash-projected-attention",
+    [{ type: "vector", elementType: "float32", values: [3, 5] }]
+  );
   const qkvProjectionText = await readFile(
     new URL("../examples/pyash/iwsp-qkv-projection.pya", import.meta.url),
     "utf8"
@@ -377,6 +382,7 @@ export async function buildVliwGpuConformanceCases() {
     softmax,
     softmaxF64,
     attention,
+    projectedAttention,
     qkvProjection,
     maximumIndex,
     maximumIndexF64,

@@ -4,6 +4,36 @@ Use this file as the lookup record for Rust VLIW CPU/GPU conformance runs. Each
 entry records the repository revision, deployed artifact, host/device, route,
 and exact test outcome. A queued or timed-out job is not a passing test.
 
+## 2026-11-23: Pyash Role-Projected Attention
+
+**Run record:** `artifacts/20261123-0013-rust-vliw-conformance/result.pya`
+
+| Field | Evidence |
+| --- | --- |
+| Source revision | `1353c70559fdef4005e53727d3ad182bc8c1e2a2` plus tracked working patch SHA-256 `8f53a6639c7e0eb383114fa657b2d689fcf2a4ef4aee5457835d2cc48484189e` |
+| New example source | SHA-256 `d0b72be5467595bc874b4d68c58b68a787e544b2ae070b2518ade8f46fffde73` |
+| Host and route | Mriczo client -> SWAC Housekeeper -> Rust CUDA VLIW runtime |
+| GPU | NVIDIA GeForce RTX 3060, driver `535.247.01`, 12,288 MiB |
+| Runtime image | `sha256:2d3c8b52363ab8dac197015e468fabd32a6b3392495347771b685621304c9326` |
+| Live conformance | 65 passing records (62 semantic cases and 3 typed-dispatch probes); 3 expected errors passed |
+| New role-attention case | `iwsp-pyash-projected-attention`: Rust CPU and RTX 3060 both returned float32 vector `[3,5]` |
+| Full run wall | 7,118.452 ms |
+| CPU batches | 38 codelet cases: 56.418 ms; 24 programlet sections: 63.565 ms |
+| CUDA event batches | Codelet batch: 3.784704 ms; programlet sections: 109.886467 ms |
+| CUDA client round trips | Codelet batch: 667.877 ms; programlet sections: 682.051 ms |
+| Runtime initialization | 0.11 s; persisted cubin was loaded (no compilation during service startup) |
+| Executables | CPU reference 15,729,000 bytes; GPU runtime 9,248,544 bytes |
+| GPU artifact | Cubin 3,046,232 bytes; SHA-256 `e969de24a9d55527e4036eae2f9a5b1e07c7e3901e04370abbda52e298d57aa4` |
+| Queue after run | SWAC Housekeeper: zero queued/running jobs; dispatch active |
+
+The new programlet uses the Pyash role names `hwas`, `htis hsek`, and `hnuc gjat`.
+It forms two-lane role vectors from explicit `kl6m psas` sentences, computes the
+two attention scores and stable-softmax weights, scales the named value vectors
+in place, and adds them. The in-place writes keep the sample within the runtime's
+eight-vector local-frame capacity; this is an example-level storage choice, not a
+runtime-capacity change. The full run and per-request records are preserved in the
+`.pya` run artifact above.
+
 ## 2026-11-23: Q/K/V Row Projection and Maximum Index
 
 Commit `c73ee1628` adds the minimal Pyash Q/K/V projection composition and
