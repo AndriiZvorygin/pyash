@@ -5,12 +5,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  appendSumoConceptRowsPyaFile,
   buildAdjudicationCandidates,
   buildSumoConceptPrompt,
   buildSumoConceptResponseFormat,
   orderSumoConceptWorklist,
   parseSumoConceptChoiceResponse,
   parseSumoConceptConfig,
+  parseSumoConceptRowsPya,
   promoteSumoConceptLinks,
   sumoConceptRunId
 } from "../program/library/translation/sumo_concept_refinery.mjs";
@@ -189,5 +191,22 @@ test("promoted links replace an earlier decision for the same concept", async ()
   const source = await fs.readFile(catalogUrl, "utf8");
   assert.ok(source.includes("superclass-of"));
   assert.equal(source.split('su text "sumo-link:Love" ob text').length - 1, 1);
+  await fs.rm(directory, { recursive: true, force: true });
+});
+
+test("artifact rows keep their map header and read back", async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "sumo-artifact-"));
+  const artifactPath = path.join(directory, "concept-candidates.pya");
+  await appendSumoConceptRowsPyaFile(artifactPath, "sumo_concept_candidates", "sumo-concept-candidate-v1", [
+    { id: "candidate:Love", sumoId: "Love", status: "resolved", sequence: "pyan hbin" }
+  ], { "model": "qwen3.5:9b" });
+  await appendSumoConceptRowsPyaFile(artifactPath, "sumo_concept_candidates", "sumo-concept-candidate-v1", [
+    { id: "candidate:CompanionateLove", sumoId: "CompanionateLove", status: "resolved", sequence: "pyan hbin" }
+  ]);
+  const source = await fs.readFile(artifactPath, "utf8");
+  assert.ok(source.includes("su name sumo_concept_candidates be map def"));
+  const rows = parseSumoConceptRowsPya(source, "sumo_concept_candidates");
+  assert.equal(rows.length, 2);
+  assert.deepEqual(rows.map((row) => row.sumoId), ["Love", "CompanionateLove"]);
   await fs.rm(directory, { recursive: true, force: true });
 });

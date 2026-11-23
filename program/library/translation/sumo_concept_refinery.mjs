@@ -381,7 +381,7 @@ function renderRowsPya(name, format, records = [], metadata = {}) {
 
 const METADATA_KEYS = new Set(["format"]);
 
-function parseRowsPya(source, expectedName) {
+export function parseSumoConceptRowsPya(source, expectedName) {
   const sentences = buildProgram(text(source)).sentences;
   const records = [];
   let hasHeader = false;
@@ -416,7 +416,7 @@ async function readRowsPyaFile(artifactPath, expectedName) {
   const input = createReadStream(artifactPath, { encoding: "utf8" });
   const lines = createInterface({ input, crlfDelay: Infinity });
   for await (const line of lines) {
-    for (const record of parseRowsPya(line, expectedName)) records.push(record);
+    for (const record of parseSumoConceptRowsPya(line, expectedName)) records.push(record);
   }
   return records;
 }
@@ -426,7 +426,7 @@ async function writeRowsPyaFile(artifactPath, name, format, records, metadata = 
   await writeFile(artifactPath, renderRowsPya(name, format, records, metadata), "utf8");
 }
 
-async function appendRowsPyaFile(artifactPath, name, format, records, metadata = {}) {
+export async function appendSumoConceptRowsPyaFile(artifactPath, name, format, records, metadata = {}) {
   if (!records.length) return;
   await mkdir(resolve(artifactPath, ".."), { recursive: true });
   const lines = [];
@@ -434,6 +434,20 @@ async function appendRowsPyaFile(artifactPath, name, format, records, metadata =
     const id = text(record?.id);
     if (!id) throw invalid("SUMO concept artifact row has no stable identity", { name });
     lines.push(`su text ${JSON.stringify(id)} ob text ${JSON.stringify(JSON.stringify(record))} ya`);
+  }
+  let existing = "";
+  try {
+    existing = await readFile(artifactPath, "utf8");
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+  }
+  if (!existing.trim()) {
+    const header = [`su name ${name} be map def`, `su text "format" ob text ${JSON.stringify(format)} ya`];
+    for (const [key, value] of Object.entries(metadata).sort(([left], [right]) => left.localeCompare(right))) {
+      header.push(`su text ${JSON.stringify(`meta:${key}`)} ob text ${JSON.stringify(String(value))} ya`);
+    }
+    await writeFile(artifactPath, `${header.join("\n")}\n${lines.join("\n")}\n`, "utf8");
+    return;
   }
   await appendFile(artifactPath, `${lines.join("\n")}\n`, "utf8");
 }
@@ -612,7 +626,7 @@ async function resolveCandidates({ context, dependencies }) {
     dependencies,
     repositoryRoot: context.repositoryRoot
   }));
-  const worklist = context.worklist ?? parseRowsPya(
+  const worklist = context.worklist ?? parseSumoConceptRowsPya(
     await readFile(mapValue("concept mapping")["worklist-path"], "utf8"),
     SUMO_CONCEPT_EVIDENCE_NAME
   );
@@ -732,13 +746,13 @@ async function resolveCandidates({ context, dependencies }) {
       resolved.push(outcome);
       if (outcome.status === "failed") failures.push(outcome);
     }
-    await appendRowsPyaFile(candidatePath, SUMO_CONCEPT_CANDIDATE_NAME, SUMO_CONCEPT_CANDIDATE_FORMAT, resolved.slice(-wave.length), {
+    await appendSumoConceptRowsPyaFile(candidatePath, SUMO_CONCEPT_CANDIDATE_NAME, SUMO_CONCEPT_CANDIDATE_FORMAT, resolved.slice(-wave.length), {
       "prompt-revision": context.config.promptRevision,
       "model": context.config.model
     });
   }
   if (failures.length) {
-    await appendRowsPyaFile(failurePath, "sumo_concept_adjudication_failures", "sumo-concept-adjudication-failure-v1", failures, {
+    await appendSumoConceptRowsPyaFile(failurePath, "sumo_concept_adjudication_failures", "sumo-concept-adjudication-failure-v1", failures, {
       "prompt-revision": context.config.promptRevision,
       "model": context.config.model
     });
@@ -756,7 +770,7 @@ async function verifyLinks({ context, dependencies }) {
     dependencies,
     repositoryRoot: context.repositoryRoot
   }));
-  const candidates = context.candidates ?? parseRowsPya(
+  const candidates = context.candidates ?? parseSumoConceptRowsPya(
     await readFile(mapValue("concept mapping rows")["candidate-path"], "utf8"),
     SUMO_CONCEPT_CANDIDATE_NAME
   );
@@ -812,7 +826,7 @@ async function verifyLinks({ context, dependencies }) {
       reason: record.evidence.reason
     });
   }
-  await appendRowsPyaFile(decisionPath, SUMO_CONCEPT_DECISION_NAME, SUMO_CONCEPT_DECISION_FORMAT, decisions, {
+  await appendSumoConceptRowsPyaFile(decisionPath, SUMO_CONCEPT_DECISION_NAME, SUMO_CONCEPT_DECISION_FORMAT, decisions, {
     "prompt-revision": context.config.promptRevision,
     "model": context.config.model
   });
