@@ -4,6 +4,49 @@ Use this file as the lookup record for Rust VLIW CPU/GPU conformance runs. Each
 entry records the repository revision, deployed artifact, host/device, route,
 and exact test outcome. A queued or timed-out job is not a passing test.
 
+## 2026-11-23: Q/K/V Row Projection and Maximum Index
+
+Commit `c73ee1628` adds the minimal Pyash Q/K/V projection composition and
+typed maximum-index behavior. The committed cubin is byte-identical to the
+cubin used in the earlier passing full CUDA run below: **64 passing records**
+(3 standalone dispatch probes plus 61 batched semantic cases) and **3 expected
+errors**. The new cases `iwsp-qkv-row-projections`,
+`iwsp-maximum-index-float32`, and `iwsp-maximum-index-float64` all passed on the
+RTX 3090. The Q/K/V example returns `[1, 5, 4]`; both argmax widths return the
+first maximum index `1`.
+
+| Field | Evidence |
+| --- | --- |
+| Source revision | `c73ee1628e8f9268b0cc9de9a4b40192edae23b2` |
+| Successful live GPU run | `artifacts/20261123-0009-rust-vliw-conformance/result.pya`; source tree was dirty, but the cubin hash matches the clean committed build below |
+| Successful conformance | 64 passing records; 3 expected errors; total run 6,451.196 ms |
+| GPU and route | Mriczo, Housekeeper -> CUDA runtime; NVIDIA RTX 3090, driver `550.163.01`, 24,576 MiB |
+| Build initialization | Cubin/runtime initialization 0.14 s; service ready within the canary startup bound |
+| CPU batches | 38 codelet cases: 93.294 ms; 23 programlet sections: 77.064 ms |
+| CUDA event batches | Codelet batch: 3.744 ms; programlet sections: 120.560 ms |
+| Clean committed runtime | 9,248,544 bytes; SHA-256 `47eddabc3a5a999df168c0efeb97dd58d06e79808a03005825b6081d6bfea0e6` |
+| Clean committed cubin | 3,046,232 bytes; SHA-256 `e969de24a9d55527e4036eae2f9a5b1e07c7e3901e04370abbda52e298d57aa4` |
+| Clean image | `sha256:2d3c8b52363ab8dac197015e468fabd32a6b3392495347771b685621304c9326`; metadata says clean source revision `c73ee1628` |
+
+The clean-image deploy attempt is separately recorded at
+`artifacts/20261123-0010-rust-vliw-conformance/result.pya`. Runtime startup
+passed in 0.974 s, but the first CUDA batch failed with `CUresult 2`. At that
+time the Mriczo GPU was at 23,954/24,576 MiB, with a Python process using
+23,616 MiB; the Housekeeper queue was empty. The canary automatically restored
+the previous Mriczo image and confirmed it healthy. Therefore the clean image
+is built and its cubin has full live-GPU conformance evidence, but it was not
+retained on Mriczo because available VRAM could not support the batch.
+
+An attempted SWAC canary did not alter that host: the safe canary guard found
+its existing named runtime was an exited Vulkan image with no persisted
+pipeline cache, so it could not serve as a verified rollback target. The
+previously verified SWAC CUDA image is cached locally, but Housekeeper's
+`/runtime/stop` request did not return despite an empty queue; that request was
+cancelled and the Housekeeper remained healthy and accepting work. No GPU
+conformance run or runtime replacement was claimed on SWAC. Resolve its
+Housekeeper lifecycle-control issue or establish a verified rollback target
+before retrying there.
+
 ## 2026-11-23: Softmax and Two-Key Attention on Mriczo CUDA
 
 The full Housekeeper-routed CUDA conformance matrix passed on Mriczo's RTX 3090.
