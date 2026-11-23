@@ -569,10 +569,11 @@ export async function loadSumoConceptState({ dependencies = {}, repositoryRoot =
  * its hierarchy path reaches. Concepts without a rank keep a stable place at
  * the end of the order.
  */
-export function orderSumoConceptWorklist(evidenceById, rankForEnglish, { limit = 64, conceptIds = null } = {}) {
+export function orderSumoConceptWorklist(evidenceById, rankForEnglish, { limit = 64, conceptIds = null, exclude = null } = {}) {
   const rows = [];
   for (const evidence of evidenceById.values()) {
     if (evidence.covered) continue;
+    if (exclude?.has(evidence.sumoId)) continue;
     const resolution = resolveSumoConceptEvidence(evidence);
     if (resolution.status === "covered") continue;
     const surfaces = [evidence.surface, ...(evidence.crosswalk?.lemmas ?? [])];
@@ -619,15 +620,43 @@ export async function promoteSumoConceptLinks(records = [], { catalogUrl = SUMO_
   return { path, count: ordered.length, added: ordered.length - existing.length };
 }
 
+/**
+ * Concepts leave the queue once the sweep has promoted a link for them or
+ * already recorded a decision for them. Without this the worklist keeps
+ * offering the same concepts and the sweep never advances.
+ */
+export async function refreshSumoConceptCoverage(state, { artifactDirectory, repositoryRoot = REPOSITORY_ROOT } = {}) {
+  const promoted = await readFile(SUMO_CONCEPT_LINKS_URL, "utf8").catch(() => "");
+  const promotedRecords = promoted ? parseSumoConceptLinkRows(promoted) : [];
+  const decided = new Set();
+  if (artifactDirectory) {
+    const rows = await readRowsPyaFile(join(artifactDirectory, "concept-candidates.pya"), SUMO_CONCEPT_CANDIDATE_NAME);
+    for (const row of rows) if (row?.sumoId) decided.add(row.sumoId);
+  }
+  for (const record of promotedRecords) {
+    const entry = state.evidence.get(record.sumoId);
+    if (!entry) continue;
+    entry.promotedLink = record;
+    entry.covered = true;
+    entry.path = "covered";
+  }
+  return { promotedCount: promotedRecords.length, decidedCount: decided.size, decided };
+}
+
 async function selectConcepts({ context, dependencies }) {
   const state = context.sumoState ?? (context.sumoState = await loadSumoConceptState({
     dependencies,
     repositoryRoot: context.repositoryRoot
   }));
+  const coverage = await refreshSumoConceptCoverage(state, {
+    artifactDirectory: context.artifactDirectory,
+    repositoryRoot: context.repositoryRoot
+  });
   const requested = context.config.conceptIds;
   const selection = orderSumoConceptWorklist(state.evidence, state.rankForEnglish, {
     limit: context.config.maximumConcepts,
-    conceptIds: requested ? new Set(requested) : null
+    conceptIds: requested ? new Set(requested) : null,
+    exclude: coverage.decided
   });
   const worklistPath = join(context.artifactDirectory, "concept-worklist.pya");
   const records = selection.rows.map((row) => {

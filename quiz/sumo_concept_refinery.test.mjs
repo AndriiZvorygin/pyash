@@ -64,6 +64,21 @@ test("the worklist keeps the frequency order and skips covered concepts", () => 
   assert.deepEqual(selection.rows.map((row) => row.sumoId), ["Beta", "Alpha"]);
 });
 
+test("the worklist leaves out concepts that already have a decision", () => {
+  const evidence = new Map([
+    ["Alpha", { sumoId: "Alpha", surface: "alpha", covered: false, candidates: [], hierarchy: null, crosswalk: null, path: "surface" }],
+    ["Beta", { sumoId: "Beta", surface: "beta", covered: false, candidates: [], hierarchy: null, crosswalk: null, path: "surface" }],
+    ["Gamma", { sumoId: "Gamma", surface: "gamma", covered: false, candidates: [], hierarchy: null, crosswalk: null, path: "surface" }]
+  ]);
+  const rankForEnglish = (value) => ({ alpha: 10, beta: 5, gamma: 1 })[String(value ?? "").toLowerCase()] ?? Number.POSITIVE_INFINITY;
+  const selection = orderSumoConceptWorklist(evidence, rankForEnglish, {
+    limit: 64,
+    exclude: new Set(["Gamma"])
+  });
+  assert.deepEqual(selection.rows.map((row) => row.sumoId), ["Beta", "Alpha"]);
+  assert.equal(selection.total, 2);
+});
+
 test("the adjudication prompt states the relation direction", () => {
   const prompt = buildSumoConceptPrompt({
     concept: { sumoId: "CompanionateLove" },
