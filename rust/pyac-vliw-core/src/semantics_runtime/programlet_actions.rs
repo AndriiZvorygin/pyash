@@ -1,12 +1,18 @@
 use super::*;
 
+#[inline(never)]
 pub(super) fn apply_programlet_number_action(
     sentence: &ParsedSentence,
-    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
-    symbols: &[u32; PROGRAMLET_SCRATCH_WORDS],
-    arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
-    slots: &mut [NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
+    tokens: &SentenceView<'_>,
+    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    frames: &mut ProgramletStack,
+    frame_index: usize,
 ) -> Result<(), u32> {
+    let arguments = array_at!(frames.arguments, frame_index);
+    if !frame_row_is_valid::<_, _, MAX_PROGRAMLET_LOCAL_SLOTS>(&frames.slots, frame_index) {
+        return Err(ERROR_MALFORMED);
+    }
+    let slots = frame_row_mut::<_, _, MAX_PROGRAMLET_LOCAL_SLOTS>(&mut frames.slots, frame_index);
     if sentence.verb_length != 1 {
         return Err(ERROR_UNSUPPORTED);
     }
@@ -21,7 +27,7 @@ pub(super) fn apply_programlet_number_action(
     let Some(target_index) = find_local_slot(tokens, target_name, symbols, slots) else {
         return Err(ERROR_MALFORMED);
     };
-    let mut target = array_at!(slots, target_index);
+    let mut target = array_at!(*slots, target_index);
     match target.kind {
         1 => {}
         2 | 4 => return Err(ERROR_CONSTANT_WRITE),
@@ -40,55 +46,32 @@ pub(super) fn apply_programlet_number_action(
     let from_present = from.is_some();
     let by_present = by.is_some();
     let with_present = with.is_some();
-    let ob_error = read_optional_programlet_number(
-        ob_present,
-        ob.unwrap_or(SentenceField::EMPTY),
-        tokens,
-        symbols,
-        arguments,
-        slots,
-        &mut ob_value,
-    );
-    let from_error = read_optional_programlet_number(
-        from_present,
-        from.unwrap_or(SentenceField::EMPTY),
-        tokens,
-        symbols,
-        arguments,
-        slots,
-        &mut from_value,
-    );
-    let by_error = read_optional_programlet_number(
-        by_present,
-        by.unwrap_or(SentenceField::EMPTY),
-        tokens,
-        symbols,
-        arguments,
-        slots,
-        &mut by_value,
-    );
-    let with_error = read_optional_programlet_number(
-        with_present,
-        with.unwrap_or(SentenceField::EMPTY),
-        tokens,
-        symbols,
-        arguments,
-        slots,
-        &mut with_value,
-    );
-    if ob_error != 0 {
-        return Err(ob_error);
+    let mut operand_index = 0;
+    while operand_index < 4 {
+        let field = match operand_index {
+            0 => ob,
+            1 => from,
+            2 => by,
+            _ => with,
+        };
+        if let Some(field) = field {
+            let mut value = ProgramletNumber::EMPTY;
+            let error = read_optional_programlet_number(
+                true, field, tokens, symbols, &arguments, slots, &mut value,
+            );
+            if error != 0 {
+                return Err(error);
+            }
+            match operand_index {
+                0 => ob_value = value,
+                1 => from_value = value,
+                2 => by_value = value,
+                _ => with_value = value,
+            }
+        }
+        operand_index += 1;
     }
-    if from_error != 0 {
-        return Err(from_error);
-    }
-    if by_error != 0 {
-        return Err(by_error);
-    }
-    if with_error != 0 {
-        return Err(with_error);
-    }
-    let operator = array_at!(tokens, sentence.verb_start);
+    let operator = sentence_at!(*tokens, sentence.verb_start);
 
     if operator == INVERT {
         if from_present || by_present || with_present {
@@ -173,10 +156,11 @@ pub(super) fn apply_programlet_number_action(
     Ok(())
 }
 
+#[inline(never)]
 pub(super) fn apply_programlet_boolean_action(
     sentence: &ParsedSentence,
-    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
-    symbols: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    tokens: &SentenceView<'_>,
+    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     slots: &mut [NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
 ) -> Result<(), u32> {
@@ -195,7 +179,7 @@ pub(super) fn apply_programlet_boolean_action(
     let Some(target_index) = find_local_slot(tokens, target_name, symbols, slots) else {
         return Err(ERROR_MALFORMED);
     };
-    let mut target = array_at!(slots, target_index);
+    let mut target = array_at!(*slots, target_index);
     match target.kind {
         3 => {}
         4 => return Err(ERROR_CONSTANT_WRITE),

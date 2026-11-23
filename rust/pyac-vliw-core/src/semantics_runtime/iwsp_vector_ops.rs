@@ -36,7 +36,11 @@ fn read_scalar(cursor: &mut Cursor, words: &[u32], vector_kind: u32) -> Result<V
     let mut payload = [0u32; 4];
     let mut index = 0;
     while index < words_per_value {
-        payload[index] = cursor.read(words, false).ok_or(ERROR_MALFORMED)? & 0xffff;
+        array_put!(
+            &mut payload,
+            index,
+            cursor.read(words, false).ok_or(ERROR_MALFORMED)? & 0xffff
+        );
         index += 1;
     }
     if result.kind == VALUE_FLOAT32 {
@@ -106,18 +110,19 @@ fn read_numeric_operand(
 #[cfg(feature = "shader-f64")]
 fn vector_bits(operand: &VectorOperand, lane: usize) -> u64 {
     if operand.kind == VALUE_VECTOR_FLOAT32 {
-        u64::from(operand.values[lane])
+        u64::from(array_at!(operand.values, lane))
     } else {
-        u64::from(operand.values[lane * 2]) | (u64::from(operand.values[lane * 2 + 1]) << 32)
+        u64::from(array_at!(operand.values, lane * 2))
+            | (u64::from(array_at!(operand.values, lane * 2 + 1)) << 32)
     }
 }
 
 #[cfg(feature = "shader-f64")]
 fn scalar_bits(operand: &VectorOperand) -> u64 {
     if operand.kind == VALUE_FLOAT32 {
-        u64::from(operand.values[0])
+        u64::from(array_at!(operand.values, 0))
     } else {
-        u64::from(operand.values[0]) | (u64::from(operand.values[1]) << 32)
+        u64::from(array_at!(operand.values, 0)) | (u64::from(array_at!(operand.values, 1)) << 32)
     }
 }
 
@@ -205,11 +210,11 @@ pub(super) fn vector_float_arithmetic_group(
     let mut lane = 0;
     while lane < left.length {
         if left.kind == VALUE_VECTOR_FLOAT32 {
-            let left_value = f32::from_bits(left.values[lane]);
+            let left_value = f32::from_bits(array_at!(left.values, lane));
             let right_value = f32::from_bits(if right_is_vector {
-                right.values[lane]
+                array_at!(right.values, lane)
             } else {
-                right.values[0]
+                array_at!(right.values, 0)
             });
             let value = if operator == PLUS {
                 left_value + right_value
@@ -278,7 +283,7 @@ pub(super) fn vector_sum_group(
         let mut sum = 0.0f32;
         let mut lane = 0;
         while lane < vector.length {
-            sum += f32::from_bits(vector.values[lane]);
+            sum += f32::from_bits(array_at!(vector.values, lane));
             lane += 1;
         }
         let bits = sum.to_bits();
@@ -344,7 +349,7 @@ pub(super) fn vector_maximum_group(
         let mut maximum = f32::from_bits(vector.values[0]);
         let mut lane = 1;
         while lane < vector.length {
-            let value = f32::from_bits(vector.values[lane]);
+            let value = f32::from_bits(array_at!(vector.values, lane));
             if value > maximum {
                 maximum = value;
             }

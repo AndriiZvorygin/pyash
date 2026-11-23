@@ -1,62 +1,4 @@
-const CANDIDATES = [
-  { file: "programlet_execute.rs", name: "execute_numeric_programlet_at", expected: "CoreResult", stub: "CoreResult::failure(ERROR_UNSUPPORTED, 0)" },
-  { file: "programlet_execute.rs", name: "execute_numeric_programlet", expected: "CoreResult", stub: "CoreResult::failure(ERROR_UNSUPPORTED, 0)" },
-  { file: "programlet_branch.rs", name: "programlet_branch", expected: "u32", stub: "ERROR_UNSUPPORTED" },
-  { file: "boolean.rs", name: "evaluate_boolean_expression_with_env", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-  { file: "programlet_actions.rs", name: "apply_programlet_number_action", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-  { file: "programlet_actions.rs", name: "apply_programlet_boolean_action", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-  { file: "programlet_execute_setup.rs", name: "initialize_numeric_programlet", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-  {
-    file: "sentence.rs",
-    name: "collect_sentence_at",
-    expected: "Result",
-    stub: "Err(ERROR_UNSUPPORTED)",
-    minimalStub: `if start >= window_codelet_count
-        || base_codelet > total_codelet_count
-        || window_codelet_count > total_codelet_count - base_codelet
-        || total_codelet_count > words.len() / CODELET_WORDS
-    {
-        return Err(ERROR_MALFORMED);
-    }
-    let absolute_codelet = base_codelet + start;
-    let header = word(words, absolute_codelet, 0);
-    let complete = header & 1 != 0;
-    let token = word(words, absolute_codelet, 1);
-    if token > MAX_U16 {
-        return Err(ERROR_MALFORMED);
-    }
-    array_put!(tokens, 0, token);
-    array_put!(boundaries, 0, u32::from((header & 2 != 0) == complete));
-    Ok((1, start + 1))`,
-  },
-  { file: "numeric.rs", name: "word", expected: "u32", stub: "ERROR_UNSUPPORTED" },
-  { file: "sentence.rs", name: "parse_sentence", expected: "u32", stub: "ERROR_UNSUPPORTED" },
-  { file: "sentence.rs", name: "parse_sentence_range", expected: "u32", stub: "ERROR_UNSUPPORTED" },
-  { file: "sentence.rs", name: "contains_marked_token", expected: "bool", stub: "false" },
-  { file: "sentence.rs", name: "typed_output_name", expected: "u32", stub: "ERROR_UNSUPPORTED" },
-  { file: "programlet_values.rs", name: "capture_programlet_arguments", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-  { file: "programlet_values.rs", name: "validate_programlet_arguments", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-  { file: "programlet_values.rs", name: "loop_iterations", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-  { file: "programlet_symbols.rs", name: "store_name", expected: "u32", stub: "ERROR_UNSUPPORTED" },
-  { file: "programlet_vector_actions.rs", name: "exp_f32", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-  { file: "programlet_vector_actions.rs", name: "exp_f64", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-  { file: "programlet_vector_actions.rs", name: "apply_f32", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-  { file: "programlet_vector_actions.rs", name: "apply_f64", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-  { file: "programlet_vector_actions.rs", name: "reduce_vector", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-  { file: "programlet_vector_actions.rs", name: "apply_programlet_vector_action", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-  { file: "programlet_vector_values.rs", name: "read_programlet_vector", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-  { file: "programlet_vector_values.rs", name: "write_programlet_vector", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-  { file: "programlet_vector_values.rs", name: "read_programlet_float", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-  { file: "programlet_vector_values.rs", name: "write_programlet_float", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-  { file: "iwsp_vector_ops.rs", name: "vector_float_arithmetic_group", expected: "CoreResult", stub: "CoreResult::failure(ERROR_UNSUPPORTED, 0)" },
-  { file: "iwsp_vector_ops.rs", name: "vector_sum_group", expected: "CoreResult", stub: "CoreResult::failure(ERROR_UNSUPPORTED, 0)" },
-  { file: "iwsp_vector_ops.rs", name: "vector_maximum_group", expected: "CoreResult", stub: "CoreResult::failure(ERROR_UNSUPPORTED, 0)" },
-  { file: "programlet_dispatch_index.rs", name: "build_programlet_routine_directory", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-  { file: "programlet_dispatch_index.rs", name: "resolve_programlet_routine", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-  { file: "programlet_execute_call.rs", name: "execute_programlet_call", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-  { file: "programlet_execute_declare.rs", name: "declare_programlet_local", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-  { file: "programlet_execute_return.rs", name: "execute_programlet_return", expected: "Result", stub: "Err(ERROR_UNSUPPORTED)" },
-];
+import { CANDIDATES } from "./rust_function_reduction_candidates.mjs";
 
 export function listReductionCandidates() {
   return CANDIDATES.map((candidate) => ({ ...candidate }));
@@ -144,28 +86,45 @@ function findBodyEnd(source, bodyStart) {
   throw new Error("function body has unmatched braces");
 }
 
-export function replaceCandidateBody(source, functionName, variant = "error") {
-  const candidate = CANDIDATES.find(({ name }) => name === functionName);
-  if (!candidate) throw new Error(`unknown reduction function: ${functionName}`);
-  if (!new Set(["baseline", "error", "minimal"]).has(variant)) throw new Error(`variant ${variant} is not supported`);
-  const stub = variant === "error" ? candidate.stub : candidate.minimalStub;
-  if (variant === "minimal" && !stub) throw new Error(`variant ${variant} is not supported for ${functionName}`);
-  const declaration = new RegExp(`\\bfn\\s+${functionName}\\s*\\(`, "gu");
+export function rustBlockBoundsFrom(source, start) {
+  const bodyStart = findBodyStart(source, start);
+  return { bodyStart, bodyEnd: findBodyEnd(source, bodyStart) };
+}
+
+export function replaceRustFunctionBody(source, functionName, replacement) {
+  const declaration = new RegExp(`\\bfn\\s+${functionName}\\s*(?:<[^\\n>]*>)?\\s*\\(`, "gu");
   const matches = [...source.matchAll(declaration)];
   if (matches.length !== 1) throw new Error(`expected one declaration for ${functionName}; found ${matches.length}`);
   const signatureStart = matches[0].index + matches[0][0].length - 1;
   const bodyStart = findBodyStart(source, signatureStart);
   const signature = source.slice(signatureStart, bodyStart);
   const returnType = signature.match(/\)\s*->\s*([^\{]+)$/su)?.[1]?.trim() || "()";
-  if (!returnType.startsWith(candidate.expected)) {
-    throw new Error(`${functionName} return type changed: expected ${candidate.expected}, got ${returnType}`);
-  }
   const bodyEnd = findBodyEnd(source, bodyStart);
+  const originalBody = source.slice(bodyStart, bodyEnd);
+  const replacementBody = `{ ${replacement} }`;
   return {
-    source: variant === "baseline" ? source : `${source.slice(0, bodyStart)}{ ${stub} }${source.slice(bodyEnd)}`,
+    source: `${source.slice(0, bodyStart)}${replacementBody}${source.slice(bodyEnd)}`,
+    originalBody,
+    replacementBody,
+    returnType,
+  };
+}
+
+export function replaceCandidateBody(source, functionName, variant = "error") {
+  const candidate = CANDIDATES.find(({ name }) => name === functionName);
+  if (!candidate) throw new Error(`unknown reduction function: ${functionName}`);
+  if (!new Set(["baseline", "error", "minimal"]).has(variant)) throw new Error(`variant ${variant} is not supported`);
+  const stub = variant === "error" ? candidate.stub : candidate.minimalStub;
+  if (variant === "minimal" && !stub) throw new Error(`variant ${variant} is not supported for ${functionName}`);
+  const replaced = replaceRustFunctionBody(source, candidate.functionName ?? functionName, stub);
+  if (!replaced.returnType.startsWith(candidate.expected)) {
+    throw new Error(`${functionName} return type changed: expected ${candidate.expected}, got ${replaced.returnType}`);
+  }
+  return {
+    source: variant === "baseline" ? source : replaced.source,
     candidate,
     variant,
-    originalBody: source.slice(bodyStart, bodyEnd),
-    replacementBody: variant === "baseline" ? source.slice(bodyStart, bodyEnd) : `{ ${stub} }`,
+    originalBody: replaced.originalBody,
+    replacementBody: variant === "baseline" ? replaced.originalBody : replaced.replacementBody,
   };
 }

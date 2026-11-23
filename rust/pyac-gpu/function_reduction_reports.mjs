@@ -9,12 +9,14 @@ export function digest(content) {
 export function interpretationForVariant(variant) {
   if (variant === "baseline") return "Control run: the selected function body is unchanged; compare this artifact with diagnostic variants built from the same source snapshot.";
   if (variant === "minimal") return "Diagnostic-only success-shaped replacement; it preserves a successful return but may remove other reachable behavior, so it is not a behavior test.";
+  if (variant === "noop") return "Diagnostic-only no-op branch replacement; it preserves branch predicates and loop fallthrough, but omits action behavior and is not a behavior test.";
   return "Diagnostic-only early-error replacement; downstream code may become unreachable and be removed, so a fast result only implicates this function's reachable path.";
 }
 
 export function replacementDescription(variant) {
   if (variant === "baseline") return "none; source body unchanged";
   if (variant === "minimal") return "success-shaped diagnostic replacement (not behaviorally equivalent)";
+  if (variant === "noop") return "no-op branch replacement (not behaviorally equivalent)";
   return "early-error diagnostic replacement (not behaviorally equivalent)";
 }
 
@@ -23,6 +25,14 @@ export function profileExitCode(build, pipeline, artifactAvailable = true) {
   const pipelineFailed = pipeline !== null
     && (Boolean(pipeline.stopReason) || pipeline.code !== 0);
   return buildFailed || pipelineFailed ? 1 : 0;
+}
+
+export function reductionStartupRamFloor(buildOnly) {
+  return (buildOnly ? 15 : 20) * 1024 ** 3;
+}
+
+export function reductionLiveRamFloor(buildOnly) {
+  return (buildOnly ? 8 : 12) * 1024 ** 3;
 }
 
 export function sourceFingerprint(roots, repoRoot) {
@@ -65,7 +75,7 @@ export function writeReport(runDir, candidate, variant, build, pipeline, spirvPa
     "",
     `- Candidate: \`${candidate.name}\``,
     `- Source: \`rust/pyac-vliw-core/src/semantics_runtime/${candidate.file}\``,
-    `- Variant: \`${variant}\`; ${variant === "baseline" ? "function body unchanged" : "diagnostic-only body replacement, not a behavior test"}.`,
+    `- Variant: \`${variant}\`; ${variant === "baseline" ? "function body unchanged" : interpretationForVariant(variant)}.`,
     `- Rust-GPU/SPIR-V build: ${build.stopReason ? `stopped (${build.stopReason})` : build.code === 0 ? "complete" : `failed (exit ${build.code ?? "unknown"})`}`,
     `- Build time: ${(build.elapsedMs / 1000).toFixed(1)} s; peak process-tree RSS: ${(build.peakRss / 1024 ** 3).toFixed(2)} GiB`,
     `- SPIR-V artifact: ${size ? `${spirvPath} (${size} bytes)` : "not produced"}`,

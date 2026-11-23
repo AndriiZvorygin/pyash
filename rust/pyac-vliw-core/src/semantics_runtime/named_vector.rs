@@ -32,9 +32,17 @@ fn names_equal(
     }
     let mut index = 0;
     while index < reference.length {
-        if token_at(words, reference_start, reference_group_len, reference.start + index)
-            != token_at(words, binding_start, binding_group_len, binding.start + index)
-        {
+        if token_at(
+            words,
+            reference_start,
+            reference_group_len,
+            reference.start + index,
+        ) != token_at(
+            words,
+            binding_start,
+            binding_group_len,
+            binding.start + index,
+        ) {
             return false;
         }
         index += 1;
@@ -80,7 +88,10 @@ pub(super) fn resolve_prior_vector(
                 if resolved.error != 0 {
                     return Err(resolved.error);
                 }
-                if !matches!(resolved.value_kind, VALUE_VECTOR_FLOAT32 | VALUE_VECTOR_FLOAT64) {
+                if !matches!(
+                    resolved.value_kind,
+                    VALUE_VECTOR_FLOAT32 | VALUE_VECTOR_FLOAT64
+                ) {
                     return Err(ERROR_UNSUPPORTED);
                 }
                 found = true;

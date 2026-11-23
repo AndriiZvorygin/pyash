@@ -216,16 +216,17 @@ pub(super) fn signature(words: &[u32], start: usize, group_len: usize) -> Signat
             value_type,
         };
         let mut insert = view.case_count;
-        while insert > 0 && view.cases[insert - 1].case > entry.case {
-            view.cases[insert] = view.cases[insert - 1];
+        while insert > 0 && array_at!(view.cases, insert - 1).case > entry.case {
+            let previous = array_at!(view.cases, insert - 1);
+            array_put!(&mut view.cases, insert, previous);
             insert -= 1;
         }
-        if (insert > 0 && view.cases[insert - 1].case == entry.case)
-            || (insert < view.case_count && view.cases[insert].case == entry.case)
+        if (insert > 0 && array_at!(view.cases, insert - 1).case == entry.case)
+            || (insert < view.case_count && array_at!(view.cases, insert).case == entry.case)
         {
             return SignatureView::failure(ERROR_MALFORMED);
         }
-        view.cases[insert] = entry;
+        array_put!(&mut view.cases, insert, entry);
         view.case_count += 1;
         field_start = index + 1;
         index += 1;
@@ -258,8 +259,9 @@ pub(super) fn verb_is(
 pub(super) fn case_type(signature: &SignatureView, case: u32) -> Option<u32> {
     let mut index = 0;
     while index < signature.case_count {
-        if signature.cases[index].case == case {
-            return Some(signature.cases[index].value_type);
+        let entry = array_at!(signature.cases, index);
+        if entry.case == case {
+            return Some(entry.value_type);
         }
         index += 1;
     }
@@ -275,12 +277,34 @@ pub(super) fn has_cases<const N: usize>(
     }
     let mut index = 0;
     while index < N {
-        if case_type(signature, expected[index].0) != Some(expected[index].1) {
+        let Some((case, value_type)) = expected_pair(expected, index) else {
+            return false;
+        };
+        if case_type(signature, case) != Some(value_type) {
             return false;
         }
         index += 1;
     }
     true
+}
+
+fn expected_pair<const N: usize>(expected: &[(u32, u32); N], index: usize) -> Option<(u32, u32)> {
+    if index >= N {
+        return None;
+    }
+    #[cfg(target_arch = "spirv")]
+    {
+        // SAFETY: the length guard above proves the const-sized array index is valid.
+        Some(unsafe {
+            *<[(u32, u32); N] as spirv_std::arch::IndexUnchecked<(u32, u32)>>::index_unchecked(
+                expected, index,
+            )
+        })
+    }
+    #[cfg(not(target_arch = "spirv"))]
+    {
+        Some(expected[index])
+    }
 }
 
 #[cfg(test)]

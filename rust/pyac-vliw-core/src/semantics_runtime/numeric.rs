@@ -1,7 +1,21 @@
 use super::*;
 
+const INVALID_CODELET_WORD: u32 = u32::MAX;
+
 pub(super) fn word(words: &[u32], codelet: usize, slot: usize) -> u32 {
-    words[codelet * CODELET_WORDS + slot]
+    if slot >= CODELET_WORDS || codelet >= words.len() / CODELET_WORDS {
+        return INVALID_CODELET_WORD;
+    }
+    let index = codelet * CODELET_WORDS + slot;
+    // SAFETY: the guards prove this index is within a complete codelet in `words`.
+    #[cfg(target_arch = "spirv")]
+    unsafe {
+        *<[u32] as spirv_std::arch::IndexUnchecked<u32>>::index_unchecked(words, index)
+    }
+    #[cfg(not(target_arch = "spirv"))]
+    {
+        words[index]
+    }
 }
 
 pub(super) fn zero_tail(words: &[u32], codelet: usize, from: usize) -> bool {
@@ -24,7 +38,7 @@ pub(super) fn number_operator(operator: u32, left: u32, right: u32) -> Result<u3
         SUBTRACT => Ok(if left >= right { left - right } else { 0 }),
         MULTIPLY => Ok(left * right),
         DIVIDE if right == 0 => Err(ERROR_DIVISION_BY_ZERO),
-        DIVIDE => Ok(left / right),
+        DIVIDE => left.checked_div(right).ok_or(ERROR_DIVISION_BY_ZERO),
         XOR => Ok(left ^ right),
         EXPONENTIAL => {
             let mut result = 1u32;
@@ -42,7 +56,7 @@ pub(super) fn number_operator(operator: u32, left: u32, right: u32) -> Result<u3
             Ok(result)
         }
         REMAINS if right == 0 => Err(ERROR_DIVISION_BY_ZERO),
-        REMAINS => Ok(left % right),
+        REMAINS => left.checked_rem(right).ok_or(ERROR_DIVISION_BY_ZERO),
         _ => Err(ERROR_UNSUPPORTED),
     }
 }

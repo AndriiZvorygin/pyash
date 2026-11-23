@@ -149,10 +149,15 @@ pub(super) fn scalar_product_destination(
 
 fn vector_length(header: QuoteHeader, cursor: &mut Cursor, words: &[u32]) -> Result<usize, u32> {
     let scalar_words = header.scalar_bytes as usize / 2;
+    if scalar_words == 0 {
+        return Err(ERROR_MALFORMED);
+    }
     let length = if header.explicit != 0 {
         cursor.read(words, false).ok_or(ERROR_MALFORMED)? as usize
     } else {
-        header.fixed_length as usize / scalar_words
+        (header.fixed_length as usize)
+            .checked_div(scalar_words)
+            .ok_or(ERROR_MALFORMED)?
     };
     if length == 0 || length > MAX_VECTOR_LANES {
         return Err(ERROR_VECTOR_WIDTH);
@@ -183,7 +188,11 @@ fn read_vector(cursor: &mut Cursor, words: &[u32]) -> Result<VectorOperand, u32>
         let mut lane_words = [0u32; 4];
         let mut index = 0;
         while index < words_per_lane {
-            lane_words[index] = cursor.read(words, false).ok_or(ERROR_MALFORMED)? & 0xffff;
+            array_put!(
+                &mut lane_words,
+                index,
+                cursor.read(words, false).ok_or(ERROR_MALFORMED)? & 0xffff
+            );
             index += 1;
         }
         if kind == VALUE_VECTOR_FLOAT32 {
@@ -256,31 +265,33 @@ fn skip_operand(cursor: &mut Cursor, words: &[u32]) -> Result<(), u32> {
 }
 
 fn operation_suffix(words: &[u32], start: usize, end: usize) -> bool {
-    let mut found = [0u32; 3];
-    let mut count = 0;
+    if start >= end || end > words.len() / CODELET_WORDS {
+        return false;
+    }
+    let mut matched = 0;
+    let earliest = if end - start > 3 { end - 3 } else { start };
     let mut codelet = end;
-    while codelet > start {
+    while codelet > earliest && matched < 3 {
         codelet -= 1;
         let mut slot = CODELET_WORDS;
-        while slot > 1 {
+        while slot > 1 && matched < 3 {
             slot -= 1;
             let value = word(words, codelet, slot);
             if value != 0 {
-                if count < found.len() {
-                    found[2 - count] = value;
-                    count += 1;
-                } else {
-                    return found[0] == SCALAR_WORD
-                        && found[1] == PRODUCE_WORD
-                        && found[2] == DEONTIC;
+                let expected = match matched {
+                    0 => DEONTIC,
+                    1 => PRODUCE_WORD,
+                    2 => SCALAR_WORD,
+                    _ => return false,
+                };
+                if value != expected {
+                    return false;
                 }
+                matched += 1;
             }
         }
     }
-    count == found.len()
-        && found[0] == SCALAR_WORD
-        && found[1] == PRODUCE_WORD
-        && found[2] == DEONTIC
+    matched == 3
 }
 
 pub(super) fn scalar_product_group(
@@ -333,7 +344,8 @@ pub(super) fn scalar_product_group(
         let mut sum = 0.0f32;
         let mut lane = 0;
         while lane < left.length {
-            sum += f32::from_bits(left.values[lane]) * f32::from_bits(right.values[lane]);
+            sum += f32::from_bits(array_at!(left.values, lane))
+                * f32::from_bits(array_at!(right.values, lane));
             lane += 1;
         }
         let bits = sum.to_bits();
@@ -348,10 +360,10 @@ pub(super) fn scalar_product_group(
         let mut sum = 0.0f64;
         let mut lane = 0;
         while lane < left.length {
-            let left_bits =
-                u64::from(left.values[lane * 2]) | (u64::from(left.values[lane * 2 + 1]) << 32);
-            let right_bits =
-                u64::from(right.values[lane * 2]) | (u64::from(right.values[lane * 2 + 1]) << 32);
+            let left_bits = u64::from(array_at!(left.values, lane * 2))
+                | (u64::from(array_at!(left.values, lane * 2 + 1)) << 32);
+            let right_bits = u64::from(array_at!(right.values, lane * 2))
+                | (u64::from(array_at!(right.values, lane * 2 + 1)) << 32);
             sum += f64::from_bits(left_bits) * f64::from_bits(right_bits);
             lane += 1;
         }

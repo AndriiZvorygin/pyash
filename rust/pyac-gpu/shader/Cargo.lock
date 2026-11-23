@@ -51,6 +51,9 @@ dependencies = [
 [[package]]
 name = "pyac-vliw-core"
 version = "0.1.0"
+dependencies = [
+ "spirv-std",
+]
 
 [[package]]
 name = "pyac-vliw-gpu-kernel"

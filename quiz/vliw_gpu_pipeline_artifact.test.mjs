@@ -29,14 +29,26 @@ test("VLIW deploy compiles and persists the GPU artifact before replacement", ()
 
 test("runtime consumes a required saved pipeline artifact through WGPU", () => {
   const gpu = read("rust/pyac-gpu/worker/src/gpu.rs");
-  const runtime = read("rust/pyac-gpu/worker/src/bin/vliw_runtime.rs");
+  const pipeline = read("rust/pyac-gpu/worker/src/gpu/pipeline.rs");
+  const runtime = read("rust/pyac-gpu/worker/src/gpu/runtime.rs");
+  const runtimeBin = read("rust/pyac-gpu/worker/src/bin/vliw_runtime.rs");
 
-  assert.match(runtime, /PYAC_VLIW_PIPELINE_CACHE_PATH/u);
-  assert.match(gpu, /read_pipeline_cache\(cache_path\)/u);
-  assert.match(gpu, /fallback: false/u);
-  assert.match(gpu, /cache: Some\(cache\)/u);
-  assert.match(gpu, /pipeline_cache\s*\.get_data\(\)/u);
-  assert.doesNotMatch(gpu, /cache: None/u);
+  assert.match(runtimeBin, /PYAC_VLIW_PIPELINE_CACHE_PATH/u);
+  assert.match(gpu, /mod runtime;/u);
+  assert.match(pipeline, /read_pipeline_cache\(path: &Path\)/u);
+  assert.match(pipeline, /cache: Some\(cache\)/u);
+  assert.match(runtime, /read_pipeline_cache\(cache_path\)/u);
+  assert.match(runtime, /fallback: false/u);
+  assert.match(runtime, /pipeline_cache\s*\.get_data\(\)/u);
+  assert.doesNotMatch(runtime, /cache: None/u);
+});
+
+test("serial programlet interpreter declares and binds a single-lane workgroup", () => {
+  const shader = read("rust/pyac-gpu/shader/src/lib.rs");
+  const runtime = read("rust/pyac-gpu/worker/src/gpu/runtime.rs");
+
+  assert.match(shader, /#\[spirv\(compute\(threads\(1\)\)\)\]\s+pub fn execute_pyac_programlet/u);
+  assert.match(runtime, /name: Cow::Borrowed\("execute_pyac_programlet"\),\s+workgroup_size: \(1, 1, 1\)/u);
 });
 
 test("compose mounts the artifact read-only in service and writable for its compiler", () => {
@@ -69,10 +81,22 @@ test("function-reduction profiling allows a full bounded pipeline build", () => 
   assert.match(reducer, /PIPELINE_TIMEOUT_SEC = Number\(process\.env\.PYAC_VLIW_REDUCE_PIPELINE_TIMEOUT_SEC \|\| 600\)/u);
   assert.match(reducer, /PIPELINE_TIMEOUT_SEC > 600/u);
   assert.match(read("rust/pyac-gpu/profile-pipeline-build.mjs"), /const MAX_TIMEOUT_SEC = 600/u);
-  assert.match(runtimeGuide, /ten-minute default and maximum/u);
+  assert.match(runtimeGuide, /capped at 16 GiB RSS and ten minutes/u);
   assert.match(runtimeGuide, /`--build-only` stops after SPIR-V generation/u);
   assert.match(runtimeGuide, /current full shader pipeline build/u);
   assert.match(runtimeGuide, /60-second readiness ceiling/u);
+});
+
+test("function-reduction can isolate shader entrypoints and stub multiple core candidates", () => {
+  const reducer = read("rust/pyac-gpu/profile-function-reduction.mjs");
+  const workspace = read("rust/pyac-gpu/function_reduction_workspace.mjs");
+
+  assert.match(reducer, /\["pack", "programlet", "sections"\]/u);
+  assert.match(reducer, /args\.includes\(`--\$\{name\}-only`\)/u);
+  assert.match(reducer, /args\.indexOf\("--functions"\)/u);
+  assert.match(workspace, /\["pack", "programlet", "sections"\]\.map\(\(part\) => `execute_pyac_\$\{part\}`\)/u);
+  assert.match(workspace, /name !== `execute_pyac_\$\{entrypointMode\}`/u);
+  assert.match(workspace, /replaceRustFunctionBody\(source, name, "return;"\)/u);
 });
 
 test("repository rules forbid production startup compilation and CPU fallback", () => {

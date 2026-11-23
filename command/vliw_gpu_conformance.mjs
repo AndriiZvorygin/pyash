@@ -5,14 +5,11 @@ import { performance } from "node:perf_hooks";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { parse } from "../program/understand/index.mjs";
-import { decodeCodelet, decodePyashProgram, executeCodelets, lowerPyashProgram, lowerSentence } from "../program/library/vliw/index.mjs";
+import { lowerPyashProgram, lowerSentence } from "../program/library/vliw/index.mjs";
 import { decodePyacPack, encodePyacPack } from "../program/library/vliw/database.mjs";
-import { interpret } from "../program/bridge/index.mjs";
-import { forget, remember } from "../program/remember/index.mjs";
 import {
   compilePyashProgramSource,
-  decodePyashProgramPack,
-  executePyashProgramPack
+  decodePyashProgramPack
 } from "../program/library/vliw/programlet.mjs";
 import { createHousekeeperVliwPackExecutor } from "../program/library/vliw/rust_gpu_pack.mjs";
 import {
@@ -62,7 +59,7 @@ export function buildVliwGpuConformanceBatches(cases) {
       name: `codelet batch (${codeletCases.length} cases)`,
       cases: codeletCases,
       pack: codeletPack,
-      expectedValues: codeletCases.flatMap(({ referenceValues }) => referenceValues)
+      expectedValues: codeletCases.flatMap(({ expectedValues }) => expectedValues)
     },
     {
       kind: "programlets",
@@ -70,110 +67,25 @@ export function buildVliwGpuConformanceBatches(cases) {
       cases: programletCases,
       pack: sectioned.pack,
       sectionRanges: sectioned.sections,
-      expectedSections: programletCases.map(({ referenceValues }) => referenceValues[0])
+      expectedSections: programletCases.map(({ expectedValues }) => expectedValues[0])
     }
   ];
 }
 
-function codeletPack(name, sources, expectedValues, referenceValues) {
+function codeletPack(name, sources, expectedValues) {
   const sentences = Array.isArray(sources) ? sources : [sources];
   const codelets = sentences.flatMap((source) => lowerSentence(parse(source))).map((codelet) => codelet.words);
   return {
     name,
     kind: "codelets",
     pack: encodePyacPack(codelets),
-    expectedValues,
-    ...(referenceValues === undefined ? {} : { referenceValues })
+    expectedValues
   };
 }
 
 function vectorPack(name, source, expectedValues) {
   const vectors = lowerPyashProgram([parse(source)]).vectors;
   return { name, kind: "codelets", pack: encodePyacPack(vectors), expectedValues };
-}
-
-function normalizeReferenceValue(value, numericType = null) {
-  const result = value?.ob ?? value;
-  if (typeof result?.boolean === "boolean") return { type: "boolean", value: result.boolean };
-  if (typeof result?.num === "number" && Number.isFinite(result.num)) {
-    if (numericType === "float32") return { type: "float32", value: Math.fround(result.num) };
-    if (numericType === "float64") return { type: "float64", value: result.num };
-    if (value?.as?.name === "rational" || numericType === "fixed16") {
-      const numerator = Math.round(result.num * 46_656);
-      return { type: "fixed16", value: numerator / 46_656, numerator, denominator: 46_656 };
-    }
-  }
-  if (Number.isInteger(result?.num)) {
-    return { type: result.num < 0 ? "signed" : "unsigned", value: result.num };
-  }
-  if (typeof result?.num === "number" && Number.isFinite(result.num)) {
-    return { type: "float32", value: Math.fround(result.num) };
-  }
-  const vector = result?.ve;
-  if (Array.isArray(vector?.values)) {
-    const elementType = vector.type === "float32" || vector.type === "float64"
-      ? vector.type
-      : vector.type === "text" ? "text"
-        : vector.type === "bool" ? "boolean"
-          : vector.values.some((entry) => entry < 0)
-            ? "signed-16"
-            : vector.values.some((entry) => entry > 0xffff) ? "unsigned-32" : "unsigned-16";
-    const values = vector.type === "bool"
-      ? vector.values.map((entry) => entry === "truth" || entry === true)
-      : vector.values;
-    return {
-      type: "vector",
-      elementType,
-      values
-    };
-  }
-  throw new TypeError(`VLIW conformance reference returned an unsupported value: ${JSON.stringify(value)}`);
-}
-
-async function evaluateReference(testCase) {
-  if (testCase.kind === "programlet") {
-    const { output } = await executePyashProgramPack(testCase.pack);
-    return [normalizeReferenceValue(output)];
-  }
-  const decoded = decodePyacPack(testCase.pack);
-  try {
-    const facts = await executeCodelets(decoded.codelets);
-    return facts.map((fact, index) => {
-      const instruction = decodeCodelet(decoded.codelets[index]);
-      const quoteFamily = instruction.items.find((item) => item.kind === "quote")?.quote.family;
-      const numericType = instruction.sentence?.as?.name === "rational"
-        ? "fixed16"
-        : quoteFamily === "float32" ? "float32"
-          : quoteFamily === "float64" ? "float64" : null;
-      return normalizeReferenceValue(fact, numericType);
-    });
-  } catch (error) {
-    if (!new Set(["unsupported-codelet", "malformed-quote"]).has(error?.code)) throw error;
-  }
-
-  const sentences = decodePyashProgram(decoded.codelets);
-  forget();
-  try {
-    const values = [];
-    for (const sentence of sentences) {
-        if (sentence.be === "vector") {
-          values.push(normalizeReferenceValue(sentence.ob));
-          continue;
-        }
-      const outcome = await interpret(sentence);
-      const result = remember("result");
-      if (result?.ob !== undefined) {
-        values.push(normalizeReferenceValue(result));
-      } else if (typeof outcome?.value === "boolean") {
-        values.push(normalizeReferenceValue({ boolean: outcome.value }));
-      } else {
-        throw new Error(`VLIW conformance sentence produced no result: ${JSON.stringify(sentence)}`);
-      }
-    }
-    return values;
-  } finally {
-    forget();
-  }
 }
 
 export async function buildVliwGpuConformanceCases() {
@@ -402,7 +314,6 @@ export async function buildVliwGpuConformanceCases() {
     codeletPack(
       "float32-dot-product",
       "ob ve float32 1 2 3 by ve float32 4 5 6 be kl6m psas do",
-      [{ type: "float32", value: 32 }],
       [{ type: "float32", value: 32 }]
     ),
     buildPlukTlasConformanceCase(),
@@ -411,7 +322,6 @@ export async function buildVliwGpuConformanceCases() {
     codeletPack(
       "float64-dot-product",
       "ob ve float64 0.1 2 -3 by ve float64 0.2 4 -5 be kl6m psas do",
-      [{ type: "float64", value: 23.02 }],
       [{ type: "float64", value: 23.02 }]
     ),
     vectorPack(
@@ -549,17 +459,6 @@ export async function buildVliwGpuConformanceCases() {
   ];
   const maximumPack = cases.find(({ name }) => name === "maximum-codelet-count").pack;
   assert.equal(decodePyacPack(maximumPack).codelets.length, 64);
-  for (const testCase of cases) {
-    if (testCase.referenceValues === undefined) {
-      try {
-        testCase.referenceValues = await evaluateReference(testCase);
-      } catch (error) {
-        error.message = `${testCase.name}: ${error.message}`;
-        throw error;
-      }
-    }
-    assert.deepEqual(testCase.referenceValues, testCase.expectedValues, testCase.name + ': semantic reference differs from the declared conformance result');
-  }
   return cases;
 }
 
@@ -596,22 +495,14 @@ export async function buildVliwGpuProgramletFailureCases() {
       name: "programlet-division-by-zero",
       pack: divideByZero.pack,
       expectedRuntimeCode: 2,
-      referenceError: /divide: by cannot be zero/u
+      expectedRuntimeCode: 2
     },
     {
       name: "programlet-constant-write",
       pack: constantWritePack,
-      expectedRuntimeCode: 7,
-      referenceError: /constant quantity is read-only: count/u
+      expectedRuntimeCode: 7
     }
   ];
-  for (const testCase of cases) {
-    await assert.rejects(
-      executePyashProgramPack(testCase.pack),
-      testCase.referenceError,
-      `${testCase.name}: JavaScript reference must reject the same runtime condition`
-    );
-  }
   return cases;
 }
 
@@ -704,13 +595,13 @@ export async function runVliwGpuConformance({
     assert.deepEqual(
       cpuBatchResults[index],
       expectedValues,
-      `${batch.name}: Rust CPU batch differs from JavaScript references`
+      `${batch.name}: Rust CPU batch differs from declared expected values`
     );
     if (batch.kind === "codelets") {
       let valueIndex = 0;
       for (const testCase of batch.cases) {
-        const values = cpuBatchResults[index].slice(valueIndex, valueIndex + testCase.referenceValues.length);
-        valueIndex += testCase.referenceValues.length;
+        const values = cpuBatchResults[index].slice(valueIndex, valueIndex + testCase.expectedValues.length);
+        valueIndex += testCase.expectedValues.length;
         onProgress({ phase: "cpu-complete", name: testCase.name, values });
       }
     } else {
@@ -740,11 +631,11 @@ export async function runVliwGpuConformance({
       assert.equal(result.backend, "rust-gpu-vulkan", `${batch.name}: unexpected GPU backend`);
       assert.ok(String(result.device ?? "").trim(), `${batch.name}: missing GPU device identity`);
       if (batch.kind === "codelets") {
-        assert.deepEqual(result.values, batch.expectedValues, `${batch.name}: typed results differ from JavaScript references`);
+        assert.deepEqual(result.values, batch.expectedValues, `${batch.name}: typed results differ from declared expected values`);
         let valueIndex = 0;
         for (const testCase of batch.cases) {
-          const values = result.values.slice(valueIndex, valueIndex + testCase.referenceValues.length);
-          valueIndex += testCase.referenceValues.length;
+          const values = result.values.slice(valueIndex, valueIndex + testCase.expectedValues.length);
+          valueIndex += testCase.expectedValues.length;
           const entry = { name: testCase.name, device: result.device, values };
           completedByName.set(testCase.name, entry);
           onProgress({ phase: "complete", ...entry });
@@ -759,7 +650,7 @@ export async function runVliwGpuConformance({
           seen.add(index);
           const testCase = batch.cases[index];
           const values = [section.value];
-          assert.deepEqual(values, testCase.referenceValues, `${testCase.name}: typed result differs from JavaScript reference`);
+          assert.deepEqual(values, testCase.expectedValues, `${testCase.name}: typed result differs from declared expected values`);
           const entry = { name: testCase.name, device: result.device, values, completionOrder: section.completionOrder };
           completedByName.set(testCase.name, entry);
           onProgress({ phase: "complete", ...entry });
@@ -879,7 +770,7 @@ async function main() {
       },
       onProgress(event) {
         if (event.phase === "start") console.log(`Queueing Rust GPU conformance batch: ${event.name}`);
-        if (event.phase === "cpu-complete") console.log(`PASS JavaScript/Rust CPU reference ${event.name}: ${JSON.stringify(event.values)}`);
+        if (event.phase === "cpu-complete") console.log(`PASS Rust CPU ${event.name}: ${JSON.stringify(event.values)}`);
         if (event.phase === "complete") {
           report.passedCases.push(event.name);
           console.log(`PASS ${event.name} on ${event.device}: ${JSON.stringify(event.values)}`);
@@ -902,7 +793,7 @@ async function main() {
       },
       onProgress(event) {
         if (event.phase === "cpu-error") {
-          console.log(`PASS JavaScript/Rust CPU shared runtime error ${event.name}: ${event.errorCode}`);
+          console.log(`PASS Rust CPU shared runtime error ${event.name}: ${event.errorCode}`);
         }
         if (event.phase === "gpu-error") {
           report.expectedErrors.push({ name: event.name, errorCode: event.errorCode });

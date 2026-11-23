@@ -1,42 +1,90 @@
 use super::*;
 
-pub(super) fn number_value(
-    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
-    field: SentenceField,
-) -> Result<u32, u32> {
-    if field.length != 2 || array_at!(tokens, field.start) != NUMBER_QUOTE {
+pub(super) fn number_value(tokens: &SentenceView<'_>, field: SentenceField) -> Result<u32, u32> {
+    if field.length != 2 || sentence_at!(*tokens, field.start) != NUMBER_QUOTE {
         return Err(ERROR_MALFORMED);
     }
-    let value = array_at!(tokens, field.start + 1);
+    let value = sentence_at!(*tokens, field.start + 1);
     if value > MAX_U16 {
         return Err(ERROR_MALFORMED);
     }
     Ok(value)
 }
 
+#[inline(never)]
 pub(super) fn argument_value(
-    arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
+    arguments: [ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     role: u32,
-    value: &mut ProgramletNumber,
-) -> bool {
-    let mut index = 0;
-    while index < arguments.len() {
-        let argument = array_at!(arguments, index);
-        if argument.role == role {
-            *value = ProgramletNumber {
-                bits: argument.value,
-                high: argument.value_high,
-                kind: argument.value_kind,
-            };
-            return true;
-        }
-        index += 1;
+) -> ProgramletNumber {
+    let argument = array_at!(arguments, 0);
+    if argument.role == role {
+        return ProgramletNumber {
+            bits: argument.value,
+            high: argument.value_high,
+            kind: argument.value_kind,
+        };
     }
-    false
+    let argument = array_at!(arguments, 1);
+    if argument.role == role {
+        return ProgramletNumber {
+            bits: argument.value,
+            high: argument.value_high,
+            kind: argument.value_kind,
+        };
+    }
+    let argument = array_at!(arguments, 2);
+    if argument.role == role {
+        return ProgramletNumber {
+            bits: argument.value,
+            high: argument.value_high,
+            kind: argument.value_kind,
+        };
+    }
+    let argument = array_at!(arguments, 3);
+    if argument.role == role {
+        return ProgramletNumber {
+            bits: argument.value,
+            high: argument.value_high,
+            kind: argument.value_kind,
+        };
+    }
+    let argument = array_at!(arguments, 4);
+    if argument.role == role {
+        return ProgramletNumber {
+            bits: argument.value,
+            high: argument.value_high,
+            kind: argument.value_kind,
+        };
+    }
+    let argument = array_at!(arguments, 5);
+    if argument.role == role {
+        return ProgramletNumber {
+            bits: argument.value,
+            high: argument.value_high,
+            kind: argument.value_kind,
+        };
+    }
+    let argument = array_at!(arguments, 6);
+    if argument.role == role {
+        return ProgramletNumber {
+            bits: argument.value,
+            high: argument.value_high,
+            kind: argument.value_kind,
+        };
+    }
+    let argument = array_at!(arguments, 7);
+    if argument.role == role {
+        return ProgramletNumber {
+            bits: argument.value,
+            high: argument.value_high,
+            kind: argument.value_kind,
+        };
+    }
+    ProgramletNumber::EMPTY
 }
 
 pub(super) fn write_programlet_call_result(
-    symbols: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
     return_name: NameSpan,
     expected_kind: u32,
     result: ProgramletNumber,
@@ -45,16 +93,16 @@ pub(super) fn write_programlet_call_result(
     if !programlet_type_matches(expected_kind, result.kind) {
         return Err(ERROR_UNSUPPORTED);
     }
-    let mut target_slot = find_local_slot(symbols, return_name, symbols, slots);
+    let mut target_slot = find_local_slot_in_storage(symbols, return_name, slots);
     if target_slot.is_none() {
         let mut slot_index = 0;
-        while slot_index < MAX_PROGRAMLET_LOCAL_SLOTS && array_at!(slots, slot_index).kind != 0 {
+        while slot_index < MAX_PROGRAMLET_LOCAL_SLOTS && array_at!(*slots, slot_index).kind != 0 {
             slot_index += 1;
         }
         if slot_index == MAX_PROGRAMLET_LOCAL_SLOTS {
             return Err(ERROR_FRAME_CAPACITY);
         }
-        let mut slot = array_at!(slots, slot_index);
+        let mut slot = array_at!(*slots, slot_index);
         slot.name_offset = return_name.start as u32;
         slot.name_length = return_name.length as u32;
         slot.kind = if expected_kind == VALUE_BOOLEAN { 3 } else { 1 };
@@ -62,7 +110,7 @@ pub(super) fn write_programlet_call_result(
         target_slot = Some(slot_index);
     }
     let target_slot = target_slot.unwrap_or(0);
-    let mut slot = array_at!(slots, target_slot);
+    let mut slot = array_at!(*slots, target_slot);
     if slot.kind == 2 || slot.kind == 4 {
         return Err(ERROR_CONSTANT_WRITE);
     }
@@ -78,56 +126,38 @@ pub(super) fn write_programlet_call_result(
 
 pub(super) fn set_loop_index_argument(
     arguments: &mut [ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
+    index: usize,
     value: u32,
 ) -> Result<(), u32> {
-    set_loop_register_argument(arguments, FROM_INDEX, value)
+    set_loop_register_argument(arguments, index, FROM_INDEX, value)
 }
 
 pub(super) fn set_loop_register_argument(
     arguments: &mut [ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
+    index: usize,
     role: u32,
     value: u32,
 ) -> Result<(), u32> {
-    let mut empty_index = arguments.len();
-    let mut index = 0;
-    while index < arguments.len() {
-        let mut argument = array_at!(arguments, index);
-        if argument.role == role {
-            argument.value = value;
-            argument.value_kind = VALUE_UNSIGNED;
-            array_put!(arguments, index, argument);
-            return Ok(());
-        }
-        if argument.role == 0 && empty_index == arguments.len() {
-            empty_index = index;
-        }
-        index += 1;
-    }
-    if empty_index == arguments.len() {
+    if index >= MAX_PROGRAMLET_ARGUMENTS {
         return Err(ERROR_FRAME_CAPACITY);
     }
-    array_put!(
-        arguments,
-        empty_index,
-        ProgramletArgument {
-            role,
-            value,
-            value_kind: VALUE_UNSIGNED,
-            ..ProgramletArgument::EMPTY
-        }
-    );
+    let mut argument = arguments[index];
+    argument.role = role;
+    argument.value = value;
+    argument.value_kind = VALUE_UNSIGNED;
+    arguments[index] = argument;
     Ok(())
 }
 
 pub(super) fn resolve_programlet_value(
-    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    tokens: &SentenceView<'_>,
     field: SentenceField,
-    symbols: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
     value: &mut ProgramletNumber,
 ) -> u32 {
-    if field.length == 2 && array_at!(tokens, field.start) == NUMBER_QUOTE {
+    if field.length == 2 && sentence_at!(*tokens, field.start) == NUMBER_QUOTE {
         let bits = match number_value(tokens, field) {
             Ok(bits) => bits,
             Err(error) => return error,
@@ -139,24 +169,24 @@ pub(super) fn resolve_programlet_value(
         };
         return 0;
     }
-    if field.length == 1 && matches!(array_at!(tokens, field.start), TRUTH | LIE) {
+    if field.length == 1 && matches!(sentence_at!(*tokens, field.start), TRUTH | LIE) {
         *value = ProgramletNumber {
-            bits: u32::from(array_at!(tokens, field.start) == TRUTH),
+            bits: u32::from(sentence_at!(*tokens, field.start) == TRUTH),
             high: 0,
             kind: VALUE_BOOLEAN,
         };
         return 0;
     }
     if field.length == 5
-        && array_at!(tokens, field.start) == THIS_WORD
-        && array_at!(tokens, field.start + 1) == GENITIVE_CASE
-        && array_at!(tokens, field.start + 3) == GENITIVE_CASE
+        && sentence_at!(*tokens, field.start) == THIS_WORD
+        && sentence_at!(*tokens, field.start + 1) == GENITIVE_CASE
+        && sentence_at!(*tokens, field.start + 3) == GENITIVE_CASE
     {
-        let mut argument = ProgramletNumber::EMPTY;
-        if !argument_value(arguments, array_at!(tokens, field.start + 2), &mut argument) {
+        let argument = argument_value(*arguments, sentence_at!(*tokens, field.start + 2));
+        if argument.kind == 0 {
             return ERROR_MALFORMED;
         }
-        let expected_kind = match array_at!(tokens, field.start + 4) {
+        let expected_kind = match sentence_at!(*tokens, field.start + 4) {
             NUMBER_TYPE => VALUE_NUMBER,
             BOOLEAN_TYPE => VALUE_BOOLEAN,
             _ => return ERROR_UNSUPPORTED,
@@ -168,14 +198,14 @@ pub(super) fn resolve_programlet_value(
         return 0;
     }
     let typed_name_genitive = field.length == 4
-        && array_at!(tokens, field.start) == NAME_TYPE
-        && array_at!(tokens, field.start + 2) == GENITIVE_CASE;
+        && sentence_at!(*tokens, field.start) == NAME_TYPE
+        && sentence_at!(*tokens, field.start + 2) == GENITIVE_CASE;
     let bare_name_genitive =
-        field.length == 3 && array_at!(tokens, field.start + 1) == GENITIVE_CASE;
+        field.length == 3 && sentence_at!(*tokens, field.start + 1) == GENITIVE_CASE;
     let genitive_type = if typed_name_genitive {
-        array_at!(tokens, field.start + 3)
+        sentence_at!(*tokens, field.start + 3)
     } else if bare_name_genitive {
-        array_at!(tokens, field.start + 2)
+        sentence_at!(*tokens, field.start + 2)
     } else {
         0
     };
@@ -192,7 +222,7 @@ pub(super) fn resolve_programlet_value(
         let Some(index) = find_local_slot(tokens, name, symbols, slots) else {
             return ERROR_UNSUPPORTED;
         };
-        let slot = array_at!(slots, index);
+        let slot = array_at!(*slots, index);
         if !number_kind_matches(expected_kind, slot.value_kind) {
             return ERROR_UNSUPPORTED;
         }
@@ -203,27 +233,34 @@ pub(super) fn resolve_programlet_value(
         };
         return 0;
     }
-    if array_at!(tokens, field.start) != NAME_TYPE {
+    if sentence_at!(*tokens, field.start) != NAME_TYPE {
         return ERROR_UNSUPPORTED;
     }
     let typed_number = field.length >= 4
-        && array_at!(tokens, field.start + 1) == NUMBER_TYPE
-        && array_at!(tokens, field.start + 2) == NAME_TYPE;
+        && sentence_at!(*tokens, field.start + 1) == NUMBER_TYPE
+        && sentence_at!(*tokens, field.start + 2) == NAME_TYPE;
     let typed_boolean = field.length >= 4
-        && array_at!(tokens, field.start + 1) == BOOLEAN_TYPE
-        && array_at!(tokens, field.start + 2) == NAME_TYPE;
+        && sentence_at!(*tokens, field.start + 1) == BOOLEAN_TYPE
+        && sentence_at!(*tokens, field.start + 2) == NAME_TYPE;
     if field.length > 2 && !typed_number && !typed_boolean {
         return ERROR_UNSUPPORTED;
     }
-    let mut name = NameSpan::EMPTY;
-    let name_error = name_span(tokens, field, typed_number || typed_boolean, &mut name);
-    if name_error != 0 {
-        return name_error;
-    }
+    let name_start = if typed_number || typed_boolean {
+        field.start + 3
+    } else {
+        if sentence_at!(*tokens, field.start + 1) == NAME_TYPE {
+            return ERROR_MALFORMED;
+        }
+        field.start + 1
+    };
+    let name = NameSpan {
+        start: name_start,
+        length: field.start + field.length - name_start,
+    };
     let Some(index) = find_local_slot(tokens, name, symbols, slots) else {
         return ERROR_MALFORMED;
     };
-    let slot = array_at!(slots, index);
+    let slot = array_at!(*slots, index);
     if typed_number && !number_kind_matches(VALUE_NUMBER, slot.value_kind) {
         return ERROR_UNSUPPORTED;
     }
@@ -244,166 +281,9 @@ pub(super) fn resolve_programlet_value(
     0
 }
 
-pub(super) fn capture_programlet_arguments(
-    sentence: &ParsedSentence,
-    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
-    symbols: &[u32; PROGRAMLET_SCRATCH_WORDS],
-    arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
-    slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
-    vector_slots: &[ProgramletVectorSlot; MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
-    captured: &mut [ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
-    captured_count: &mut u32,
-) -> Result<(), u32> {
-    *captured = [ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS];
-    let mut count = 0usize;
-    let mut index = 0;
-    while index < sentence.field_count {
-        let field = array_at!(sentence.fields, index);
-        if !matches!(field.role, NOMINATIVE | DESTINATION | FROM_INDEX | TO_INDEX) {
-            if count == MAX_PROGRAMLET_ARGUMENTS {
-                return Err(ERROR_FRAME_CAPACITY);
-            }
-            let mut value = ProgramletNumber::EMPTY;
-            let scalar_error =
-                resolve_programlet_value(tokens, field, symbols, arguments, slots, &mut value);
-            let captured_value = if scalar_error == 0 {
-                ProgramletArgument {
-                    role: field.role,
-                    value: value.bits,
-                    value_high: value.high,
-                    value_kind: value.kind,
-                    ..ProgramletArgument::EMPTY
-                }
-            } else if let Ok(value) =
-                read_programlet_float(tokens, field, symbols, arguments, slots)
-            {
-                ProgramletArgument {
-                    role: field.role,
-                    value: value.bits,
-                    value_high: value.high,
-                    value_kind: value.kind,
-                    ..ProgramletArgument::EMPTY
-                }
-            } else {
-                let vector =
-                    read_programlet_vector(tokens, field, symbols, arguments, vector_slots)?;
-                ProgramletArgument {
-                    role: field.role,
-                    value_kind: vector.kind,
-                    vector_length: vector.length as u32,
-                    vector_values: vector.values,
-                    ..ProgramletArgument::EMPTY
-                }
-            };
-            array_put!(captured, count, captured_value);
-            count += 1;
-        }
-        index += 1;
-    }
-    *captured_count = count as u32;
-    Ok(())
-}
-
-pub(super) fn validate_programlet_arguments(
-    words: &[u32],
-    base_codelet: usize,
-    codelet_count: usize,
-    definition_start: usize,
-    routine_start: usize,
-    tokens: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
-    boundaries: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
-    symbols: &mut [u32; PROGRAMLET_SCRATCH_WORDS],
-    symbol_used: &mut usize,
-    arguments: &mut [ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
-    argument_count: u32,
-) -> Result<(), u32> {
-    if argument_count as usize > arguments.len() {
-        return Err(ERROR_FRAME_CAPACITY);
-    }
-    let (length, next) = collect_sentence_at(
-        words,
-        base_codelet + codelet_count,
-        base_codelet,
-        codelet_count,
-        definition_start,
-        tokens,
-        boundaries,
-    )?;
-    if next != routine_start {
-        return Err(ERROR_MALFORMED);
-    }
-    let mut definition = ParsedSentence::empty();
-    let parse_error = parse_sentence(tokens, boundaries, length, &mut definition);
-    if parse_error != 0 {
-        return Err(parse_error);
-    }
-    if !is_ceremony_definition(&definition, tokens) {
-        return Err(ERROR_MALFORMED);
-    }
-
-    let mut formal_count = 0usize;
-    let mut field_index = 0;
-    while field_index < definition.field_count {
-        let formal = array_at!(definition.fields, field_index);
-        if !matches!(
-            formal.role,
-            NOMINATIVE | DESTINATION | FROM_INDEX | TO_INDEX
-        ) {
-            if formal_count >= MAX_PROGRAMLET_ARGUMENTS {
-                return Err(ERROR_FRAME_CAPACITY);
-            }
-            let mut formal_name = NameSpan::EMPTY;
-            let mut expected_kind = 0;
-            let typed_error = typed_name_span(tokens, formal, &mut formal_name, &mut expected_kind);
-            let named_formal = typed_error == 0 && expected_kind != 0;
-            if !named_formal {
-                expected_kind =
-                    if formal.length == 2 && array_at!(tokens, formal.start) == NUMBER_QUOTE {
-                        VALUE_NUMBER
-                    } else if formal.length == 1
-                        && matches!(array_at!(tokens, formal.start), TRUTH | LIE)
-                    {
-                        VALUE_BOOLEAN
-                    } else {
-                        return Err(ERROR_UNSUPPORTED);
-                    };
-            }
-            let mut argument_index = 0;
-            while argument_index < argument_count as usize
-                && array_at!(arguments, argument_index).role != formal.role
-            {
-                argument_index += 1;
-            }
-            if argument_index == argument_count as usize {
-                return Err(ERROR_MALFORMED);
-            }
-            let mut argument = array_at!(arguments, argument_index);
-            if !programlet_type_matches(expected_kind, argument.value_kind) {
-                return Err(ERROR_UNSUPPORTED);
-            }
-            if named_formal {
-                let mut stored_name = NameSpan::EMPTY;
-                let error = store_name(tokens, formal_name, symbols, symbol_used, &mut stored_name);
-                if error != 0 {
-                    return Err(error);
-                }
-                argument.name_offset = stored_name.start as u32;
-                argument.name_length = stored_name.length as u32;
-                array_put!(arguments, argument_index, argument);
-            }
-            formal_count += 1;
-        }
-        field_index += 1;
-    }
-    if formal_count != argument_count as usize {
-        return Err(ERROR_MALFORMED);
-    }
-    Ok(())
-}
-
 pub(super) fn loop_iterations(
     sentence: &ParsedSentence,
-    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    tokens: &SentenceView<'_>,
 ) -> Result<u32, u32> {
     let start = optional_number_field(sentence, FROM_INDEX, tokens)?;
     let end = optional_number_field(sentence, TO_INDEX, tokens)?;
@@ -420,7 +300,7 @@ pub(super) fn loop_iterations(
 pub(super) fn optional_number_field(
     sentence: &ParsedSentence,
     role: u32,
-    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    tokens: &SentenceView<'_>,
 ) -> Result<Option<u32>, u32> {
     match sentence.field(role) {
         Some(field) => match number_value(tokens, field) {
@@ -432,10 +312,10 @@ pub(super) fn optional_number_field(
 }
 
 pub(super) fn comparison_operand(
-    tokens: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    tokens: &SentenceView<'_>,
     start: usize,
     end: usize,
-    symbols: &[u32; PROGRAMLET_SCRATCH_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
     value: &mut ProgramletNumber,

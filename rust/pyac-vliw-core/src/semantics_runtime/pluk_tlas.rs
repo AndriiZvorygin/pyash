@@ -169,18 +169,22 @@ fn parse_operation(
                 }
                 let mut prior = 0;
                 while prior < parsed.field_count {
-                    if parsed.fields[prior].role == token {
+                    if array_at!(parsed.fields, prior).role == token {
                         return Err(ERROR_MALFORMED);
                     }
                     prior += 1;
                 }
-                parsed.fields[parsed.field_count] = SentenceField {
-                    role: token,
-                    value: TokenSpan {
-                        start: field_start,
-                        length: index - field_start,
-                    },
-                };
+                array_put!(
+                    &mut parsed.fields,
+                    parsed.field_count,
+                    SentenceField {
+                        role: token,
+                        value: TokenSpan {
+                            start: field_start,
+                            length: index - field_start,
+                        },
+                    }
+                );
                 parsed.field_count += 1;
                 field_start = index + 1;
             } else if is_mood(token) {
@@ -207,8 +211,9 @@ fn parse_operation(
 fn field(parsed: &ParsedOperation, role: u32) -> Option<TokenSpan> {
     let mut index = 0;
     while index < parsed.field_count {
-        if parsed.fields[index].role == role {
-            return Some(parsed.fields[index].value);
+        let field = array_at!(parsed.fields, index);
+        if field.role == role {
+            return Some(field.value);
         }
         index += 1;
     }
@@ -381,11 +386,14 @@ fn resolve_vector(
                     return Err(ERROR_UNSUPPORTED);
                 }
                 let mut vector = found.vector;
+                let mut vector_values = vector.values;
+                let result_values = result.values;
                 array_put!(
-                    &mut vector.values,
+                    &mut vector_values,
                     destination.index,
-                    array_at!(result.values, 0)
+                    array_at!(result_values, 0)
                 );
+                vector.values = vector_values;
                 found.vector = vector;
             }
         }
@@ -459,7 +467,9 @@ pub(super) fn pluk_tlas_group(
     let mut correct = 0u32;
     let mut lane = 0;
     while lane < prediction.length as usize {
-        if f32::from_bits(prediction.values[lane]) == f32::from_bits(answer.values[lane]) {
+        if f32::from_bits(array_at!(prediction.values, lane))
+            == f32::from_bits(array_at!(answer.values, lane))
+        {
             correct += 1;
         }
         lane += 1;

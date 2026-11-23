@@ -15,17 +15,27 @@ fn fixed_array_accessors_reject_out_of_bounds_indices() {
 }
 
 #[test]
+fn codelet_word_reads_reject_out_of_bounds_without_panicking() {
+    let mut words = [0u32; CODELET_WORDS];
+    words[1] = 0x5678;
+
+    assert_eq!(word(&words, 0, 1), 0x5678);
+    assert_eq!(word(&words, 1, 0), u32::MAX);
+    assert_eq!(word(&words, usize::MAX, usize::MAX), u32::MAX);
+}
+
+#[test]
 fn scratch_array_accessors_use_bounded_dynamic_indices() {
-    let mut values = [0u32; PROGRAMLET_SCRATCH_WORDS];
-    let last = PROGRAMLET_SCRATCH_WORDS - 1;
+    let mut values = [0u32; MAX_PROGRAMLET_PAYLOAD_WORDS];
+    let last = MAX_PROGRAMLET_PAYLOAD_WORDS - 1;
     let mut read = 17;
 
     assert!(values.write_at(last, 99));
     assert!(values.read_at(last, &mut read));
     assert_eq!(read, 99);
-    assert!(!values.read_at(PROGRAMLET_SCRATCH_WORDS, &mut read));
+    assert!(!values.read_at(MAX_PROGRAMLET_PAYLOAD_WORDS, &mut read));
     assert_eq!(read, 99);
-    assert!(!values.write_at(PROGRAMLET_SCRATCH_WORDS, 101));
+    assert!(!values.write_at(MAX_PROGRAMLET_PAYLOAD_WORDS, 101));
     assert_eq!(values[last], 99);
 }
 

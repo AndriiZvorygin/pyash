@@ -17,6 +17,23 @@ fn pyash_inline_shape(function: &Function) -> (usize, usize, usize, usize) {
 }
 `;
 
+export function rewriteCargoPathDependency(manifest, dependency, replacementPath) {
+  const escapedName = dependency.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const declaration = new RegExp(`(^|\\n)([\\t ]*${escapedName}[\\t ]*=[\\t ]*\\{)([^}]*)(\\})`, "gu");
+  const matches = [...manifest.matchAll(declaration)];
+  if (matches.length !== 1) {
+    throw new Error(`expected one ${dependency} path dependency, found ${matches.length}`);
+  }
+  const match = matches[0];
+  const fields = match[3];
+  const pathField = /(^|,)[\t ]*path[\t ]*=[\t ]*("[^"]+")/u.exec(fields);
+  if (!pathField) throw new Error(`${dependency} dependency has no string path`);
+  const fieldsStart = match.index + match[1].length + match[2].length;
+  const valueStart = fieldsStart + pathField.index + pathField[0].lastIndexOf(pathField[2]);
+  const valueEnd = valueStart + pathField[2].length;
+  return `${manifest.slice(0, valueStart)}${JSON.stringify(replacementPath)}${manifest.slice(valueEnd)}`;
+}
+
 function replaceExactly(source, before, after, label) {
   const count = source.split(before).length - 1;
   if (count !== 1) throw new Error(`Rust-GPU instrumentation anchor ${label}: expected once, found ${count}`);
@@ -27,6 +44,68 @@ export function instrumentInlineSource(source) {
   let patched = source;
   patched = replaceExactly(patched, "use std::mem;", "use std::mem;\nuse std::time::Instant;", "time import");
   patched = replaceExactly(patched, "pub fn inline(sess: &Session, module: &mut Module) -> super::Result<()> {", `${METRIC_HELPERS}\npub fn inline(sess: &Session, module: &mut Module) -> super::Result<()> {`, "metric helpers");
+  patched = replaceExactly(
+    patched,
+    `        functions_that_may_abort: module
+            .functions
+            .iter()
+            .filter_map(|func| {
+                let custom_ext_inst_set_import = custom_ext_inst_set_import?;
+                func.blocks
+                    .iter()
+                    .any(|block| match &block.instructions[..] {
+                        [.., last_normal_inst, terminator_inst]
+                            if last_normal_inst.class.opcode == Op::ExtInst
+                                && last_normal_inst.operands[0].unwrap_id_ref()
+                                    == custom_ext_inst_set_import
+                                && CustomOp::decode_from_ext_inst(last_normal_inst)
+                                    == CustomOp::Abort =>
+                        {
+                            assert_eq!(terminator_inst.class.opcode, Op::Unreachable);
+                            true
+                        }
+
+                        _ => false,
+                    })
+                    .then_some(func.def_id().unwrap())
+            })
+            .collect(),`,
+    `        functions_that_may_abort: module
+            .functions
+            .iter()
+            .filter_map(|func| {
+                let custom_ext_inst_set_import = custom_ext_inst_set_import?;
+                let may_abort = func.blocks
+                    .iter()
+                    .any(|block| match &block.instructions[..] {
+                        [.., last_normal_inst, terminator_inst]
+                            if last_normal_inst.class.opcode == Op::ExtInst
+                                && last_normal_inst.operands[0].unwrap_id_ref()
+                                    == custom_ext_inst_set_import
+                                && CustomOp::decode_from_ext_inst(last_normal_inst)
+                                    == CustomOp::Abort =>
+                        {
+                            assert_eq!(terminator_inst.class.opcode, Op::Unreachable);
+                            true
+                        }
+
+                        _ => false,
+                    });
+                if !may_abort {
+                    return None;
+                }
+                let function_id = func.def_id().unwrap();
+                let function_name = module.debug_names
+                    .iter()
+                    .find(|inst| inst.operands.first().is_some_and(|id| id.unwrap_id_ref() == function_id))
+                    .map(|inst| inst.operands[1].unwrap_literal_string())
+                    .unwrap_or("<unnamed>");
+                eprintln!("PYASH_INLINE_ABORT\\t{}", pyash_inline_hex(function_name));
+                Some(function_id)
+            })
+            .collect(),`,
+    "abort-origin collection",
+  );
 
   const inlineFnBefore = `    fn inline_fn(
         &mut self,

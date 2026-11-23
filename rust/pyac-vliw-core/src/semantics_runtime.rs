@@ -67,36 +67,7 @@ fn fixed_array_write<A: FixedArrayAccess>(array: &mut A, index: usize, value: A:
     array.write_at(index, value)
 }
 
-#[cfg(target_arch = "spirv")]
-macro_rules! array_at {
-    ($array:expr, $index:expr) => {{
-        let access = fixed_array_read(&$array, $index);
-        debug_assert!(access.valid, "validated VLIW array index became invalid");
-        access.value
-    }};
-}
-
-#[cfg(not(target_arch = "spirv"))]
-macro_rules! array_at {
-    ($array:expr, $index:expr) => {
-        $array[$index]
-    };
-}
-
-#[cfg(target_arch = "spirv")]
-macro_rules! array_put {
-    ($array:expr, $index:expr, $value:expr) => {{
-        let valid = fixed_array_write($array, $index, $value);
-        debug_assert!(valid, "validated VLIW array index became invalid");
-    }};
-}
-
-#[cfg(not(target_arch = "spirv"))]
-macro_rules! array_put {
-    ($array:expr, $index:expr, $value:expr) => {
-        $array[$index] = $value
-    };
-}
+include!("semantics_runtime/array_access.rs");
 
 pub const CODELET_WORDS: usize = 16;
 pub const MAX_VECTOR_LANES: usize = 16;
@@ -104,9 +75,11 @@ pub const RESULT_WORDS: usize = 32;
 pub const MAX_PROGRAMLET_CODELETS: usize = 64;
 pub const MAX_PROGRAMLET_SECTIONS: usize = 64;
 pub const MAX_PROGRAMLET_SECTION_NAME_WORDS: usize = 8;
-pub const PROGRAMLET_SCRATCH_WORDS: usize = MAX_PROGRAMLET_CODELETS * (CODELET_WORDS - 1);
+pub const MAX_PROGRAMLET_PAYLOAD_WORDS: usize = MAX_PROGRAMLET_CODELETS * (CODELET_WORDS - 1);
 pub const MAX_PROGRAMLET_LOCAL_SLOTS: usize = 64;
 pub const MAX_PROGRAMLET_CALL_DEPTH: usize = 8;
+pub const MAX_PROGRAMLET_VECTOR_VALUE_WORDS: usize =
+    MAX_PROGRAMLET_CALL_DEPTH * MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS * RESULT_WORDS;
 const MAX_BOOLEAN_EXPRESSION_DEPTH: usize = 8;
 const PROGRAMLET_EXECUTION_COMPLETE: u32 = u32::MAX;
 const MAX_U16: u32 = 65_535;
@@ -316,7 +289,8 @@ impl ParsedSentence {
     fn field(&self, role: u32) -> Option<SentenceField> {
         let mut index = 0;
         while index < self.field_count {
-            let field = array_at!(self.fields, index);
+            let fields = self.fields;
+            let field = array_at!(fields, index);
             if field.role == role {
                 return Some(field);
             }
@@ -401,6 +375,8 @@ mod numeric;
 mod pluk_tlas;
 #[path = "semantics_runtime/programlet_actions.rs"]
 mod programlet_actions;
+#[path = "semantics_runtime/programlet_arguments.rs"]
+mod programlet_arguments;
 #[path = "semantics_runtime/programlet_branch.rs"]
 mod programlet_branch;
 #[path = "semantics_runtime/programlet_dispatch_index.rs"]
@@ -431,21 +407,22 @@ mod programlet_symbols;
 mod programlet_values;
 #[path = "semantics_runtime/programlet_vector_actions.rs"]
 mod programlet_vector_actions;
+#[path = "semantics_runtime/programlet_vector_storage.rs"]
+mod programlet_vector_storage;
 #[path = "semantics_runtime/programlet_vector_values.rs"]
 mod programlet_vector_values;
 #[path = "semantics_runtime/scalar_product.rs"]
 mod scalar_product;
 #[path = "semantics_runtime/sentence.rs"]
 mod sentence;
+#[path = "semantics_runtime/sentence_parse_state.rs"]
+mod sentence_parse_state;
 #[path = "semantics_runtime/signature_dispatch.rs"]
 mod signature_dispatch;
 #[path = "semantics_runtime/vector_group.rs"]
 mod vector_group;
 
-use boolean::{
-    boolean_comparison, boolean_composition, evaluate_boolean_expression,
-    evaluate_boolean_expression_with_env, evaluate_boolean_leaf,
-};
+use boolean::{boolean_comparison, boolean_composition, evaluate_boolean_expression_with_env};
 use conditional::conditional;
 pub use dispatch::interpret_group;
 use float::single_codelet;
@@ -455,21 +432,36 @@ use numeric::{
     zero_tail,
 };
 use programlet_actions::{apply_programlet_boolean_action, apply_programlet_number_action};
+use programlet_arguments::{capture_programlet_arguments, validate_programlet_arguments};
 use programlet_branch::{
     first_present_operand, programlet_branch, read_optional_programlet_number,
     unsigned_programlet_operand,
 };
-use programlet_dispatch_index::{
-    ProgramletRoutineDirectory, build_programlet_routine_directory, resolve_programlet_routine,
-};
+pub use programlet_dispatch_index::PROGRAMLET_ROUTINE_DIRECTORY_WORDS;
+#[cfg(not(target_arch = "spirv"))]
+pub use programlet_dispatch_index::build_programlet_routine_directory_words;
+#[cfg(target_arch = "spirv")]
+use programlet_dispatch_index::read_programlet_routine_directory_header;
+use programlet_dispatch_index::resolve_programlet_routine;
+#[cfg(not(target_arch = "spirv"))]
+use programlet_dispatch_index::validate_programlet_routine_directory_words;
+pub use programlet_execute::execute_numeric_programlet_at_with_directory_words;
+#[cfg(not(target_arch = "spirv"))]
 pub use programlet_execute::{execute_numeric_programlet, execute_numeric_programlet_at};
 use programlet_execute_call::execute_programlet_call;
 use programlet_execute_declare::declare_programlet_local;
 use programlet_execute_paragraph::close_programlet_paragraph;
 use programlet_execute_return::execute_programlet_return;
 use programlet_execute_setup::initialize_numeric_programlet;
-use programlet_frame::clear_programlet_frame;
-pub use programlet_frame::{ProgramletArgument, ProgramletFrame, ProgramletVectorSlot};
+#[cfg(test)]
+use programlet_execute_setup::last_programlet_sentence_start;
+pub use programlet_frame::{
+    ProgramletArgument, ProgramletFrame, ProgramletStack, ProgramletVectorSlot,
+};
+use programlet_frame::{
+    VECTOR_SOURCE_LOCAL, VECTOR_SOURCE_QUOTE, clear_programlet_frame, frame_row,
+    frame_row_is_valid, frame_row_mut, load_frame_row, store_frame_row,
+};
 use programlet_numeric_types::{
     compare_programlet_numbers, number_kind_matches, programlet_type_matches,
 };
@@ -477,23 +469,25 @@ pub use programlet_sections::{
     has_programlet_section_header, is_numeric_programlet, is_numeric_programlet_at,
     scan_numeric_programlet_sections,
 };
-use programlet_symbols::{find_local_slot, is_ceremony_definition, names_equal, store_name};
+use programlet_symbols::{
+    find_local_slot, find_local_slot_in_storage, is_ceremony_definition, names_equal, store_name,
+    store_name_from_slice,
+};
 use programlet_values::{
-    argument_value, capture_programlet_arguments, comparison_operand, loop_iterations,
-    optional_number_field,
+    argument_value, comparison_operand, loop_iterations, optional_number_field,
     resolve_programlet_value, set_loop_index_argument, set_loop_register_argument,
-    validate_programlet_arguments, write_programlet_call_result,
+    write_programlet_call_result,
 };
 use programlet_vector_actions::{apply_programlet_vector_action, is_programlet_vector_action};
 use programlet_vector_values::{
-    ProgramletVectorValue, programlet_field_is_vector, read_programlet_float,
-    read_programlet_vector, write_programlet_float, write_programlet_vector,
+    ProgramletVectorValue, programlet_field_is_vector, programlet_vector_argument_reference,
+    read_programlet_float, read_programlet_vector, write_programlet_float, write_programlet_vector,
     write_programlet_vector_result,
 };
 use sentence::{
-    collect_sentence, collect_sentence_at, contains_marked_token, embedded_clause_range, name_span,
-    next_sentence_is_paragraph_end, parse_sentence, parse_sentence_range, typed_name_span,
-    typed_output_name,
+    SentenceView, collect_sentence, collect_sentence_at, contains_marked_token,
+    embedded_clause_range, name_span, next_sentence_is_paragraph_end, parse_sentence,
+    parse_sentence_range, typed_name_span, typed_output_name,
 };
 #[cfg(test)]
 #[path = "semantics_runtime/tests.rs"]

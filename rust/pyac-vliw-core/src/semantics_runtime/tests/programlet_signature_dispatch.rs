@@ -88,19 +88,60 @@ fn append_boolean_call(words: &mut std::vec::Vec<u32>, value: u32) {
 }
 
 fn run(words: &[u32]) -> CoreResult {
-    let mut sentence_words = [0; PROGRAMLET_SCRATCH_WORDS];
-    let mut boundaries = [0; PROGRAMLET_SCRATCH_WORDS];
-    let mut symbols = [0; PROGRAMLET_SCRATCH_WORDS];
-    let mut frames = [ProgramletFrame::EMPTY; MAX_PROGRAMLET_CALL_DEPTH];
+    let mut symbols = [0; MAX_PROGRAMLET_PAYLOAD_WORDS];
+    let mut frames = ProgramletStack::EMPTY;
     execute_numeric_programlet(
         words,
         words.len() / CODELET_WORDS,
         64,
-        &mut sentence_words,
-        &mut boundaries,
         &mut symbols,
         &mut frames,
     )
+}
+
+#[test]
+fn prepared_signature_directory_matches_in_interpreter_directory_build() {
+    let mut words = std::vec::Vec::new();
+    append_overload(&mut words, NUMBER_TYPE, NUMBER_TYPE, &[NUMBER_QUOTE, 41]);
+    append_number_call(&mut words, 7, NUMBER_TYPE);
+    let expected = run(&words);
+
+    let mut directory = [0; PROGRAMLET_ROUTINE_DIRECTORY_WORDS];
+    build_programlet_routine_directory_words(
+        &words,
+        0,
+        words.len() / CODELET_WORDS,
+        &mut directory,
+    )
+    .unwrap();
+    let mut symbols = [0; MAX_PROGRAMLET_PAYLOAD_WORDS];
+    let mut frames = ProgramletStack::EMPTY;
+    let prepared = execute_numeric_programlet_at_with_directory_words(
+        &words,
+        0,
+        words.len() / CODELET_WORDS,
+        64,
+        &directory,
+        0,
+        &mut symbols,
+        &mut frames,
+    );
+    assert_eq!(prepared.error, expected.error);
+    assert_eq!(prepared.value_kind, expected.value_kind);
+    assert_eq!(prepared.values, expected.values);
+
+    directory[0] = 0;
+    let malformed = execute_numeric_programlet_at_with_directory_words(
+        &words,
+        0,
+        words.len() / CODELET_WORDS,
+        64,
+        &directory,
+        0,
+        &mut symbols,
+        &mut frames,
+    );
+    assert_eq!(malformed.error, ERROR_MALFORMED);
 }
 
 #[test]

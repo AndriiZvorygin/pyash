@@ -1,10 +1,11 @@
 use super::*;
 
+#[inline(never)]
 pub(super) fn close_programlet_paragraph(
     sentence: &ParsedSentence,
-    sentence_words: &[u32; PROGRAMLET_SCRATCH_WORDS],
-    symbol_words: &[u32; PROGRAMLET_SCRATCH_WORDS],
-    frames: &mut [ProgramletFrame; MAX_PROGRAMLET_CALL_DEPTH],
+    sentence_view: &SentenceView<'_>,
+    symbol_words: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    frames: &mut ProgramletStack,
     frame_index: usize,
     depth: &mut usize,
     codelet_count: usize,
@@ -22,12 +23,11 @@ pub(super) fn close_programlet_paragraph(
         result_kind,
         result_value,
         result_length,
-        result_values,
         return_name_offset,
         return_name_length,
         expected_kind,
     ) = {
-        let frame = &frames[frame_index];
+        let frame = array_at!(frames.controls, frame_index);
         (
             frame.has_returned,
             frame.routine_name_offset,
@@ -40,16 +40,16 @@ pub(super) fn close_programlet_paragraph(
             frame.result_kind,
             frame.result_value,
             frame.result_length,
-            frame.result_values,
             frame.return_name_offset,
             frame.return_name_length,
             frame.expected_kind,
         )
     };
+    let result_values = array_at!(frames.result_values, frame_index);
     if has_returned == 0
         || sentence.field_count != 1
         || sentence.verb_length != 1
-        || array_at!(sentence_words, sentence.verb_start) != CEREMONY
+        || sentence_at!(*sentence_view, sentence.verb_start) != CEREMONY
     {
         return ERROR_MALFORMED;
     }
@@ -57,7 +57,7 @@ pub(super) fn close_programlet_paragraph(
         return ERROR_MALFORMED;
     };
     let mut closing_name = NameSpan::EMPTY;
-    let name_error = name_span(sentence_words, su, false, &mut closing_name);
+    let name_error = name_span(sentence_view, su, false, &mut closing_name);
     if name_error != 0 {
         return name_error;
     }
@@ -65,14 +65,15 @@ pub(super) fn close_programlet_paragraph(
         start: routine_name_offset as usize,
         length: routine_name_length as usize,
     };
-    if !names_equal(sentence_words, closing_name, symbol_words, routine_name) {
+    if !names_equal(sentence_view, closing_name, symbol_words, routine_name) {
         return ERROR_MALFORMED;
     }
     if loop_active != 0 && loop_remaining > 1 {
-        let current = &mut frames[frame_index];
+        let mut current = array_at!(frames.controls, frame_index);
         current.loop_remaining -= 1;
-        let mut current_index = ProgramletNumber::EMPTY;
-        if argument_value(&current.arguments, FROM_INDEX, &mut current_index) {
+        let mut arguments = array_at!(frames.arguments, frame_index);
+        let current_index = argument_value(arguments, FROM_INDEX);
+        if current_index.kind != 0 {
             let next = if loop_has_end != 0 {
                 if current_index.bits < loop_end {
                     current_index.bits + 1
@@ -82,7 +83,9 @@ pub(super) fn close_programlet_paragraph(
             } else {
                 current_index.bits - 1
             };
-            if let Err(error) = set_loop_index_argument(&mut current.arguments, next) {
+            if let Err(error) =
+                set_loop_index_argument(&mut arguments, current.argument_count as usize, next)
+            {
                 return error;
             }
         }
@@ -93,7 +96,9 @@ pub(super) fn close_programlet_paragraph(
         current.result_value = 0;
         current.result_kind = 0;
         current.result_length = 0;
-        current.result_values = [0; RESULT_WORDS];
+        array_put!(&mut frames.arguments, frame_index, arguments);
+        array_put!(&mut frames.result_values, frame_index, [0; RESULT_WORDS]);
+        array_put!(&mut frames.controls, frame_index, current);
         return 0;
     }
     if *depth == 1 {
@@ -117,7 +122,9 @@ pub(super) fn close_programlet_paragraph(
         start: return_name_offset as usize,
         length: return_name_length as usize,
     };
+    let caller = array_at!(frames.controls, caller_index);
     if matches!(result_kind, VALUE_VECTOR_FLOAT32 | VALUE_VECTOR_FLOAT64) {
+        let mut vector_slots = array_at!(frames.vector_slots, caller_index);
         if let Err(error) = write_programlet_vector_result(
             symbol_words,
             return_name,
@@ -125,23 +132,34 @@ pub(super) fn close_programlet_paragraph(
             result_kind,
             result_length,
             &result_values,
-            &mut frames[caller_index].vector_slots,
+            &mut vector_slots,
+            &mut frames.vector_values,
+            caller_index,
         ) {
             return error;
         }
-    } else if let Err(error) = write_programlet_call_result(
-        symbol_words,
-        return_name,
-        expected_kind,
-        ProgramletNumber {
-            bits: result_value,
-            high: result_values[1],
-            kind: result_kind,
-        },
-        &mut frames[caller_index].slots,
-    ) {
-        return error;
+        array_put!(&mut frames.vector_slots, caller_index, vector_slots);
+    } else {
+        if !frame_row_is_valid::<_, _, MAX_PROGRAMLET_LOCAL_SLOTS>(&frames.slots, caller_index) {
+            return ERROR_MALFORMED;
+        }
+        let slots =
+            frame_row_mut::<_, _, MAX_PROGRAMLET_LOCAL_SLOTS>(&mut frames.slots, caller_index);
+        if let Err(error) = write_programlet_call_result(
+            symbol_words,
+            return_name,
+            expected_kind,
+            ProgramletNumber {
+                bits: result_value,
+                high: result_values[1],
+                kind: result_kind,
+            },
+            slots,
+        ) {
+            return error;
+        }
     }
+    array_put!(&mut frames.controls, caller_index, caller);
     *depth -= 1;
 
     0

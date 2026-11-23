@@ -763,17 +763,12 @@ fn run_numeric_programlet(
         .iter()
         .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
         .collect::<Vec<_>>();
-    let mut sentence_words = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
-    let mut sentence_boundaries = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
-    let mut symbols = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
-    let mut frames =
-        [pyac_vliw_core::ProgramletFrame::EMPTY; pyac_vliw_core::MAX_PROGRAMLET_CALL_DEPTH];
+    let mut symbols = [0; pyac_vliw_core::MAX_PROGRAMLET_PAYLOAD_WORDS];
+    let mut frames = pyac_vliw_core::ProgramletStack::EMPTY;
     pyac_vliw_core::execute_numeric_programlet(
         &words,
         codelets.len(),
         step_budget,
-        &mut sentence_words,
-        &mut sentence_boundaries,
         &mut symbols,
         &mut frames,
     )
@@ -1193,17 +1188,12 @@ fn composes_local_comparison_leaves_in_programlet_branches() {
             .iter()
             .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
             .collect::<Vec<_>>();
-        let mut sentence_words = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
-        let mut sentence_boundaries = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
-        let mut symbols = [0; pyac_vliw_core::PROGRAMLET_SCRATCH_WORDS];
-        let mut frames =
-            [pyac_vliw_core::ProgramletFrame::EMPTY; pyac_vliw_core::MAX_PROGRAMLET_CALL_DEPTH];
+        let mut symbols = [0; pyac_vliw_core::MAX_PROGRAMLET_PAYLOAD_WORDS];
+        let mut frames = pyac_vliw_core::ProgramletStack::EMPTY;
         pyac_vliw_core::execute_numeric_programlet(
             &words,
             programlet.len(),
             pyac_vliw_core::DEFAULT_PROGRAMLET_STEP_BUDGET,
-            &mut sentence_words,
-            &mut sentence_boundaries,
             &mut symbols,
             &mut frames,
         )

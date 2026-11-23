@@ -126,10 +126,18 @@ fn is_multicodelet_vector_literal(words: &[u32], start: usize, group_len: usize)
         }
     } else {
         let scalar_words = header.scalar_bytes as usize / 2;
-        if scalar_words == 0 || header.fixed_length as usize % scalar_words != 0 {
+        if scalar_words == 0
+            || (header.fixed_length as usize)
+                .checked_rem(scalar_words)
+                .unwrap_or(1)
+                != 0
+        {
             return false;
         }
-        header.fixed_length as usize / scalar_words
+        match (header.fixed_length as usize).checked_div(scalar_words) {
+            Some(length) => length,
+            None => return false,
+        }
     };
     if length == 0 || length > MAX_VECTOR_LANES {
         return true;
@@ -149,9 +157,9 @@ fn other_operand_type(signature: &SignatureView, primary_case: u32) -> Option<u3
     }
     let mut index = 0;
     while index < signature.case_count {
-        if signature.cases[index].case == primary_case {
+        if array_at!(signature.cases, index).case == primary_case {
             let other = 1 - index;
-            return Some(signature.cases[other].value_type);
+            return Some(array_at!(signature.cases, other).value_type);
         }
         index += 1;
     }
@@ -192,7 +200,7 @@ fn arithmetic_route(signature: &SignatureView) -> Result<u32, u32> {
     }
     let mut index = 0;
     while index < signature.case_count {
-        if signature.cases[index].value_type == TYPE_VECTOR_UINT16 {
+        if array_at!(signature.cases, index).value_type == TYPE_VECTOR_UINT16 {
             return Ok(ROUTE_VECTOR_ARITHMETIC);
         }
         index += 1;
@@ -313,7 +321,7 @@ pub(super) fn select_signature_route(
 fn all_case_types(signature: &SignatureView, expected: u32) -> bool {
     let mut index = 0;
     while index < signature.case_count {
-        if signature.cases[index].value_type != expected {
+        if array_at!(signature.cases, index).value_type != expected {
             return false;
         }
         index += 1;

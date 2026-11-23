@@ -17,7 +17,12 @@ fn vector_header(words: &[u32], codelet: usize) -> Option<(usize, QuoteHeader)> 
 }
 
 pub(super) fn vector_name_span(words: &[u32], start: usize, group_len: usize) -> Option<NameSpan> {
-    let token_capacity = group_len * (CODELET_WORDS - 1);
+    if group_len == 0 {
+        return None;
+    }
+    // The vector decoder reads the quote header from the first codelet, so a
+    // later header cannot be a decodable named vector binding.
+    let token_capacity = CODELET_WORDS - 1;
     let mut token_offset = 0usize;
     while token_offset < token_capacity {
         let codelet = start + token_offset / (CODELET_WORDS - 1);
@@ -60,6 +65,9 @@ fn vector_length(
     header: QuoteHeader,
 ) -> Option<(usize, usize)> {
     let scalar_words = header.scalar_bytes as usize / 2;
+    if scalar_words == 0 {
+        return None;
+    }
     let (length, payload_offset) = if header.explicit != 0 {
         if offset + 1 >= CODELET_WORDS {
             return None;
@@ -67,7 +75,10 @@ fn vector_length(
         let length = word(words, codelet, offset + 1) as usize;
         (length, offset + 2)
     } else {
-        (header.fixed_length as usize / scalar_words, offset + 1)
+        (
+            (header.fixed_length as usize).checked_div(scalar_words)?,
+            offset + 1,
+        )
     };
     if length == 0 || length > MAX_VECTOR_LANES {
         return None;
@@ -116,7 +127,7 @@ fn vector_literal(words: &[u32], start: usize, group_len: usize) -> Option<CoreR
                 Some(value) => value & 0xffff,
                 None => return Some(CoreResult::failure(ERROR_MALFORMED, group_len as u32)),
             };
-            value_words[word_index] = value;
+            array_put!(&mut value_words, word_index, value);
             word_index += 1;
         }
 
