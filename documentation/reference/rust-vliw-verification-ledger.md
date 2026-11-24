@@ -214,6 +214,44 @@ CUDA, including typed overload selection, case-order canonicalization, nested
 calls, and dispatcher errors. It is a full semantic conformance result, not a
 claim that these small workloads are faster on GPU than CPU.
 
+## 2026-11-24: Parameterized Attention and Long Programlet Bodies on SWAC
+
+This full configured CUDA run exercised the parameter-backed attention
+composition and the removed fixed codelet-body ceiling through SWAC Housekeeper.
+The 27-section batch included the baseline attention output `[3,5]`, changed
+input output `[8.5,13.5]`, changed value-weight output `[4,6]`, and an 84-codelet
+programlet returning `80`. All 65 batched matrix cases passed. Three additional
+typed-dispatch successes and all three expected-error probes also matched. The
+canary restored SWAC's prior CUDA runtime and resumed dispatch.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261124-0001-rust-vliw-conformance/result.pya` |
+| Source revision | `bab793fafd9d7d6a810e90e2dc0f2174ee4382a5`; no tracked patch |
+| Build host and tools | Mriczo; Rust nightly `2026-08-15`; NVIDIA `ptxas 12.8.93` |
+| Client and GPU host | Mriczo client -> SWAC Housekeeper -> Rust CUDA cubin runtime |
+| GPU and driver | NVIDIA GeForce RTX 3060, `sm_86`, driver `535.247.01`, 12,288 MiB |
+| CUDA image | `sha256:0484aaf0575183169036a1cfd3ffd0d151f28e1811f4fa1675f0a53df79666de` |
+| Cubin | 3,198,808 bytes; SHA-256 `1e8a65cc4c276c4fca76471d4645b01680f4227107d3c3557d7a72dad9fbd8cb` |
+| CUDA runtime executable | 9,248,944 bytes; SHA-256 `dc3214dd11c4221963b96c260477c97e5b29175723966c0860303a83871363e4` |
+| CPU reference executable | 15,728,032 bytes; SHA-256 `8a03501d243341afaae39355bbeec1f36eadfd326cf471eea06c9cd162ec2fc3` |
+| Batched work | 38 codelet cases; 27 independent programlet sections; 65/65 matrix cases passed |
+| CPU reference batch | 38 codelet cases: 54.594 ms; 27 sections: 61.427 ms |
+| GPU kernel event | 38 codelet cases: 3.798 ms; 27 sections: 118.734 ms |
+| GPU client round trip | 38 codelet cases: 666.628 ms; 27 sections: 683.082 ms |
+| Runtime startup | CUDA artifact initialization 0.11 s; ready in 1.027 s |
+| Full conformance wall | 6,091.769 ms |
+| Runtime memory | 28.75 MiB sampled under the canary's 1 GiB host-memory limit |
+| Rollback result | Prior SWAC CUDA image restored; Housekeeper ready, dispatch active, queue empty |
+
+This demonstrates correctness for these small programlets, not a GPU speedup:
+the entire 27-section attention/control-flow batch took 118.734 ms of CUDA-event
+time versus 61.427 ms for the Rust CPU reference batch. The long-body case
+specifically confirms that 84 codelets execute; the remaining 64-sized limits
+are separate routine/section/local resources, not codelet-count ceilings. Build
+logs and generated artifacts are under
+`rust/pyac-gpu/cuda-kernel/target/cuda-build-8hIvwpwZ/`.
+
 ### Vulkan Compatibility Boundary
 
 The latest recorded source checkpoint with successful Vulkan pipeline-cache
