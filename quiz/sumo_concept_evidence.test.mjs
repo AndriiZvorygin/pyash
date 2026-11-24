@@ -1,8 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
 
 import {
   SUMO_CONCEPT_LINK_FORMAT,
+  SUMO_PATH_RELATIONS,
   buildSumoConceptEvidence,
   buildSumoConceptLinkRecord,
   buildSumoLinkIndex,
@@ -288,4 +290,27 @@ test("link rows round trip through the catalog", () => {
   assert.equal(parsed.length, 1);
   assert.equal(parsed[0].relation, "superclass-of");
   assert.deepEqual(parsed[0].pyashSequence, ["pyan", "hbin"]);
+});
+
+test("every promoted SUMO link carries a relation its evidence path supports", async () => {
+  const source = await fs.readFile(
+    new URL("../program/library/translation/sumo_concept_links.pya", import.meta.url),
+    "utf8"
+  );
+  const records = parseSumoConceptLinkRows(source);
+  assert.ok(records.length > 1000, "the promoted catalog holds the sweep links");
+  const unsupported = [];
+  for (const record of records) {
+    const path = record.evidence?.path ?? "";
+    const allowed = new Set([SUMO_PATH_RELATIONS[path], record.evidence?.crosswalkRelation ?? ""].filter(Boolean));
+    if (!allowed.has(record.relation)) {
+      unsupported.push({
+        sumoId: record.sumoId,
+        path,
+        relation: record.relation,
+        allowed: [...allowed]
+      });
+    }
+  }
+  assert.deepEqual(unsupported, []);
 });
