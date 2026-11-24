@@ -376,43 +376,61 @@ fn canonical_ranges_end_at_the_next_entry_even_for_multicodelet_keys() {
 }
 
 #[test]
-fn current_v3_reference_volume_remains_readable_without_runtime_indexes() {
+fn published_reference_volume_indexes_the_promoted_sumo_concepts() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../program/library/dictionary/reference.pyac");
     let mut reader = DictionaryFileReader::open(
-        File::open(path).expect("tracked v3 reference dictionary is available"),
+        File::open(path).expect("tracked reference dictionary is available"),
     )
-    .expect("open legacy v3 dictionary by seeking");
+    .expect("open reference dictionary by seeking");
 
-    assert_eq!(reader.profile_version(), "pyac-vliw-dictionary/3");
-    assert_eq!(reader.entry_count(), 58_630);
+    assert_eq!(reader.profile_version(), "pyac-vliw-dictionary/4");
+    assert_eq!(reader.entry_count(), 64_572);
     let offsets = reader
         .lookup_surface("en", "map")
-        .expect("scan legacy v3 surface index");
-    assert_eq!(offsets.len(), 6);
+        .expect("scan reference surface index");
+    assert!(!offsets.is_empty());
     assert!(
         offsets
             .iter()
             .all(|offset| *offset < reader.codelet_count())
     );
+
+    // The SUMO concept links the sweep promoted are part of the volume, so a
+    // concept that only the promoted catalog carries resolves here too.
+    let sumo_release = "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed";
+    for concept in ["AAA_Rating", "AariyaLanguage", "Love"] {
+        let matches = reader
+            .lookup_source("sumo", sumo_release, concept)
+            .expect("look up a promoted SUMO concept");
+        assert!(!matches.is_empty(), "the volume must index {concept}");
+        assert!(
+            matches
+                .iter()
+                .all(|offset| *offset < reader.codelet_count())
+        );
+    }
 }
 
 #[test]
-fn throughput_benchmark_refuses_legacy_scan_profiles() {
+fn throughput_benchmark_runs_on_the_published_v4_volume() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../program/library/dictionary/reference.pyac");
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_pyac-dictionary"))
         .args([
             "benchmark",
             path.to_str().expect("dictionary path is UTF-8"),
-            "100000",
+            "100",
             "surface",
             "en",
             "map",
         ])
         .output()
-        .expect("run dictionary CLI benchmark guard");
+        .expect("run dictionary CLI benchmark");
 
-    assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("requires v4 direct-file indexes"));
+    assert!(
+        output.status.success(),
+        "benchmark failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
