@@ -542,3 +542,40 @@ GPU compute is not a speed claim for this tiny scorer: the codelet batch took
 client round trip is also much larger than its 61 ms service/kernel interval;
 this run records that latency but does not explain it. Evaluator isolation,
 held-out data, and protected task scoring remain Stage 2 work.
+
+## 2026-11-24: Parameterized Non-Uniform Attention on SWAC CUDA
+
+**Run record:** `artifacts/20261124-0002-rust-vliw-conformance/result.pya`
+
+| Field | Evidence |
+| --- | --- |
+| Source revision | `bc90245687c63d77d5d3b07b075f8f6b0ca7b602`; no tracked source patch (untracked unrelated files remained in the worktree) |
+| Example source | `examples/vliw/iwsp-parameterized-two-token-attention.pya`; SHA-256 `b5c5b584716c87b54bccbde8ca6a610d3672a98cf884ca152145c26246f7df87` |
+| Client and GPU route | Mriczo -> SWAC Housekeeper -> SWAC RTX 3060 CUDA VLIW runtime |
+| GPU | NVIDIA GeForce RTX 3060, driver `535.247.01`, 12,288 MiB |
+| Candidate image | `sha256:b739397e8f13c4944c8910d9e97c0b52999126f340d3e323be0c674b7a21ae01`; source metadata records the clean revision above |
+| Final SWAC runtime | Prior verified CUDA image restored: `sha256:2d3c8b52363ab8dac197015e468fabd32a6b3392495347771b685621304c9326`; Housekeeper healthy, queue empty, dispatch active |
+| Live conformance | 67/67 batched cases passed (38 codelet cases and 29 programlet sections); 3 typed-dispatch probes passed; 2/2 expected runtime errors passed |
+| Attention outputs | Baseline `[10,20]`; changed input `[12,24]`; changed query weights `[12,24]`; changed key weights `[12,24]`; changed value weights `[20,30]` |
+| Full run wall | 6,353.149 ms |
+| CPU reference batches | Codelets: 67.450 ms; sections: 72.646 ms |
+| CUDA event batches | Codelets: 3.793 ms; sections: 118.560 ms |
+| Housekeeper client round trip | Codelets: 676.596 ms; sections: 684.508 ms |
+| Runtime initialization | 0.11 s, loading the precompiled cubin; no service-start compilation |
+| CPU reference executable | 15,728,032 bytes; SHA-256 `8a03501d243341afaae39355bbeec1f36eadfd326cf471eea06c9cd162ec2fc3` |
+| GPU runtime executable | 9,248,944 bytes; SHA-256 `dc3214dd11c4221963b96c260477c97e5b29175723966c0860303a83871363e4` |
+| CUDA cubin | 3,198,808 bytes; SHA-256 `1e8a65cc4c276c4fca76471d4645b01680f4227107d3c3557d7a72dad9fbd8cb` |
+
+The parameterized example uses query `[1,0]`, keys `[0,0]` and `[ln(2),0]`,
+and values `[0,0]` and `[15,30]`. The unequal logits `[0,ln(2)]` produce
+weights `[1/3,2/3]`, so the baseline is not the uninformative equal-weight
+case. Independently perturbing the input, query projection, or key projection
+changes the output to `[12,24]`; perturbing the value projection changes it
+to `[20,30]`. CPU and live CUDA agree on all five outputs. The executable Pyash
+role names remain `hwas`, `htis hsek`, and `hnuc gjat`; their readable
+Pyash-English glosses are `attention-query`, `attention-key`, and
+`attention-value`.
+
+The candidate was built on Mriczo, transferred to SWAC, and tested entirely
+through its Housekeeper queue. The canary then restored the original verified
+CUDA image; the candidate was not retained as SWAC's active runtime.
