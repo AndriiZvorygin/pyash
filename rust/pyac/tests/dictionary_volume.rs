@@ -209,7 +209,7 @@ fn reader_rejects_a_v4_pack_misdeclared_as_v3() {
 }
 
 #[test]
-fn writer_rejects_two_exact_wordnet_senses_for_one_pyac_key() {
+fn writer_rejects_two_exact_wordnet_senses_of_one_part_of_speech_for_one_pyac_key() {
     let mut volume = sample_volume();
     volume.entries[0].source_links.push(SourceLink {
         dataset: "wordnet".into(),
@@ -219,6 +219,25 @@ fn writer_rejects_two_exact_wordnet_senses_for_one_pyac_key() {
     });
     let error = encode_dictionary(&volume).expect_err("conflicting senses must be rejected");
     assert!(error.to_string().contains("multiple exact WordNet senses"));
+}
+
+#[test]
+fn writer_accepts_exact_wordnet_senses_of_different_parts_of_speech_for_one_pyac_key() {
+    let mut volume = sample_volume();
+    volume.entries[0].source_links.push(SourceLink {
+        dataset: "wordnet".into(),
+        release: "OEWN 2025".into(),
+        identifier: "v:06311813-v".into(),
+        relation: "exact-sense".into(),
+    });
+    volume.entries[0].source_glosses.push(SourceGloss {
+        language: "en".into(),
+        text: "A verb sense for the same key.".into(),
+        dataset: "wordnet".into(),
+        release: "OEWN 2025".into(),
+        identifier: "v:06311813-v".into(),
+    });
+    encode_dictionary(&volume).expect("senses of different parts of speech must be accepted");
 }
 
 #[test]
