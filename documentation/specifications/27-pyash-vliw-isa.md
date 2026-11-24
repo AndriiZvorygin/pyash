@@ -256,6 +256,62 @@ function call enqueues its body with a local frame and rejoins only after its
 declared outputs are fulfilled. Speculative or parallel execution is valid
 only for instructions proven independent by these rules.
 
+### IWSP float-vector compositions
+
+These operation forms are part of the shared Rust programlet runtime. They are
+ordinary typed Pyash sentences; they do not introduce transformer-specific
+opcodes.
+
+`kl6m psas` (dot product) has two programlet output forms:
+
+```text
+ob name float vector-left by name float vector-right
+  to name float dot-result be kl6m psas do
+ob name float vector-left by name float vector-right
+  to name dot-lanes at num lane be kl6m psas do
+```
+
+The first writes a float local with the operands' precision. The second writes
+the scalar result into the indicated lane of a declared float vector. Both
+require equal, non-empty, finite float32 or float64 operands of the same
+precision. The generic `float` type preserves the actual float width. An
+unindexed typed scalar destination and an indexed vector-lane destination are
+distinct signatures of the same dot-product operation.
+
+`gjat bwit` (maximum) is a reduction when no comitative vector is present. With
+an equal-width, same-precision comitative vector it is elementwise maximum:
+
+```text
+from name preactivation with name zero-vector
+  to name activated be gjat bwit do
+```
+
+The output is a float vector; ties retain the source lane. A zero vector thus
+expresses ReLU directly as `max(preactivation, zero-vector)`, with no hidden
+activation or host-side callback.
+
+`dwic kwap` is the standard-deviation operation over a scalar variance:
+
+```text
+from name float variance with num epsilon
+  to name float deviation be dwic kwap do
+```
+
+The optional epsilon defaults to zero. Variance and epsilon must be finite,
+non-negative, and the same float width; the result is `sqrt(variance +
+epsilon)` at that width. A negative input or epsilon returns the shared
+float-domain error. The shared no-std implementation uses a bounded Newton
+iteration; it is tested on normal and subnormal values on CPU, and the CUDA
+conformance case exercises it in the full block.
+
+The Stage 8 LayerNorm composition computes mean as a dot product with a uniform
+`1/N` vector, subtracts that scalar from the input, computes population
+variance as a dot product of centered values and values scaled by `1/N`, then
+divides by `dwic kwap` with a small positive epsilon. Residual connections use
+the existing equal-width vector `plus` operation. The runnable Stage 8 example
+is a two-feature proof: it does not add a fused LayerNorm, matrix-multiplication
+opcode, or arbitrary-shape tensor execution.
+
 ### Independent named sections
 
 A sectioned source packet uses matching `myocpfun` paragraph boundaries around

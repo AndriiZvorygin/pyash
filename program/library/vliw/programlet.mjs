@@ -47,6 +47,8 @@ const PURE_BUILTIN_VERBS = new Set([
   "tfo2t",
   "tot",
   "gjat bwit",
+  "dwic kwap",
+  "deviation square",
   "magnitude boundary",
   "dvis",
   "kl6m psas",

@@ -385,6 +385,8 @@ mod programlet_actions;
 mod programlet_arguments;
 #[path = "semantics_runtime/programlet_branch.rs"]
 mod programlet_branch;
+#[path = "semantics_runtime/programlet_composition_actions.rs"]
+mod programlet_composition_actions;
 #[path = "semantics_runtime/programlet_dispatch_index.rs"]
 mod programlet_dispatch_index;
 #[path = "semantics_runtime/programlet_dispatch_signature.rs"]
@@ -407,6 +409,8 @@ mod programlet_frame;
 mod programlet_numeric_types;
 #[path = "semantics_runtime/programlet_sections.rs"]
 mod programlet_sections;
+#[path = "semantics_runtime/programlet_standard_deviation.rs"]
+mod programlet_standard_deviation;
 #[path = "semantics_runtime/programlet_symbols.rs"]
 mod programlet_symbols;
 #[path = "semantics_runtime/programlet_values.rs"]
@@ -452,6 +456,9 @@ use programlet_branch::{
     first_present_operand, programlet_branch, read_optional_programlet_number,
     unsigned_programlet_operand,
 };
+use programlet_composition_actions::{
+    apply_programlet_composition_action, is_programlet_composition_action,
+};
 pub use programlet_dispatch_index::PROGRAMLET_ROUTINE_DIRECTORY_WORDS;
 #[cfg(not(target_arch = "spirv"))]
 pub use programlet_dispatch_index::build_programlet_routine_directory_words;
@@ -495,8 +502,7 @@ use programlet_values::{
 };
 use programlet_vector_actions::{apply_programlet_vector_action, is_programlet_vector_action};
 use programlet_vector_composition::{
-    apply_programlet_dot_product_store, apply_programlet_vector_select,
-    declare_programlet_vector_local, is_programlet_dot_product_store,
+    apply_programlet_vector_select, declare_programlet_vector_local,
     is_programlet_vector_declaration, is_programlet_vector_select,
 };
 use programlet_vector_values::{

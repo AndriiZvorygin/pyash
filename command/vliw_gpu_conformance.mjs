@@ -41,7 +41,8 @@ const SECTION_NAMES = [
   "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
   "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
   "nineteen", "twenty", "twenty one", "twenty two", "twenty three", "twenty four",
-  "twenty five", "twenty six", "twenty seven", "twenty eight", "twenty nine"
+  "twenty five", "twenty six", "twenty seven", "twenty eight", "twenty nine", "zero", "first",
+  "second"
 ];
 
 export function buildVliwGpuConformanceBatches(cases) {
@@ -280,6 +281,41 @@ export async function buildVliwGpuConformanceCases() {
     "iwsp-pyash-projected-attention",
     [{ type: "vector", elementType: "float32", values: [3, 5] }]
   );
+  const minimalTransformerBlock = await programletExample(
+    "iwsp-minimal-role-projected-block.pya",
+    "iwsp-minimal-role-projected-block",
+    [{ type: "vector", elementType: "float32", values: [-1, 1] }]
+  );
+  const minimalBlockLines = (await readFile(
+    new URL("../examples/pyash/iwsp-minimal-role-projected-block.pya", import.meta.url),
+    "utf8"
+  )).trim().split(/\r?\n/u);
+  const minimalBlockInvocation = minimalBlockLines.pop();
+  const zeroVarianceInvocation = minimalBlockInvocation.replace(
+    "ob ve float32 1 0 from ve float32 1 0 by ve float32 0 1",
+    "ob ve float32 0 0 from ve float32 0 0 by ve float32 0 0"
+  );
+  if (zeroVarianceInvocation === minimalBlockInvocation) {
+    throw new Error("minimal transformer block invocation changed unexpectedly");
+  }
+  const minimalTransformerBlockZeroVariance = programlet(
+    "iwsp-minimal-role-projected-block-zero-variance",
+    minimalBlockLines.join("\n"),
+    zeroVarianceInvocation,
+    [{ type: "vector", elementType: "float32", values: [0, 0] }]
+  );
+  const float64StandardDeviation = programlet(
+    "iwsp-float64-standard-deviation",
+    [
+      "su name candidate prediction to name float answer be ceremony def",
+      "ob ve float64 3 4 by ve float64 3 4 to name float count be kl6m psas do",
+      "from name float count to name float answer be dwic kwap do",
+      "su name answer ret",
+      "su name candidate prediction be ceremony prah"
+    ].join("\n"),
+    "to name float answer be candidate prediction do",
+    [{ type: "float64", value: 5 }]
+  );
   const qkvProjectionText = await readFile(
     new URL("../examples/pyash/iwsp-qkv-projection.pya", import.meta.url),
     "utf8"
@@ -437,6 +473,9 @@ export async function buildVliwGpuConformanceCases() {
     attention,
     ...await buildIwspParameterizedAttentionCases(),
     projectedAttention,
+    minimalTransformerBlock,
+    minimalTransformerBlockZeroVariance,
+    float64StandardDeviation,
     qkvProjection,
     maximumIndex,
     maximumIndexF64,
@@ -619,6 +658,39 @@ export async function buildVliwGpuProgramletFailureCases() {
   const mutable = compilePyashProgramSource(mutableConstantSource, {
     invocation: "to name num answer be count once do"
   });
+  const negativeStandardDeviationSource = [
+    "su name candidate prediction to name float answer be ceremony def",
+    "ob ve float32 -1 0 by ve float32 1 0 to name float count be kl6m psas do",
+    "from name float count to name float answer be dwic kwap do",
+    "su name answer ret",
+    "su name candidate prediction be ceremony prah"
+  ].join("\n");
+  const negativeStandardDeviation = compilePyashProgramSource(
+    negativeStandardDeviationSource,
+    { invocation: "to name float answer be candidate prediction do" }
+  );
+  const negativeVarianceWithEpsilonSource = [
+    "su name candidate prediction to name float answer be ceremony def",
+    "ob ve float32 -1 0 by ve float32 1 0 to name float count be kl6m psas do",
+    "from name float count with num 1.5 to name float answer be dwic kwap do",
+    "su name answer ret",
+    "su name candidate prediction be ceremony prah"
+  ].join("\n");
+  const negativeVarianceWithEpsilon = compilePyashProgramSource(
+    negativeVarianceWithEpsilonSource,
+    { invocation: "to name float answer be candidate prediction do" }
+  );
+  const negativeEpsilonSource = [
+    "su name candidate prediction to name float answer be ceremony def",
+    "ob ve float32 1 0 by ve float32 1 0 to name float count be kl6m psas do",
+    "from name float count with num -0.1 to name float answer be dwic kwap do",
+    "su name answer ret",
+    "su name candidate prediction be ceremony prah"
+  ].join("\n");
+  const negativeEpsilon = compilePyashProgramSource(
+    negativeEpsilonSource,
+    { invocation: "to name float answer be candidate prediction do" }
+  );
   const constantSentences = decodePyashProgramPack(mutable.pack);
   const declaration = constantSentences.find((sentence) => sentence.be === "number" && sentence.as);
   assert.ok(declaration, "constant-write fixture has a typed local declaration");
@@ -636,6 +708,21 @@ export async function buildVliwGpuProgramletFailureCases() {
       name: "programlet-constant-write",
       pack: constantWritePack,
       expectedRuntimeCode: 7
+    },
+    {
+      name: "programlet-negative-standard-deviation",
+      pack: negativeStandardDeviation.pack,
+      expectedRuntimeCode: 11
+    },
+    {
+      name: "programlet-negative-variance-with-positive-epsilon",
+      pack: negativeVarianceWithEpsilon.pack,
+      expectedRuntimeCode: 11
+    },
+    {
+      name: "programlet-negative-normalization-epsilon",
+      pack: negativeEpsilon.pack,
+      expectedRuntimeCode: 11
     }
   ];
   return cases;

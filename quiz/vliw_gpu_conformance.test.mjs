@@ -4,7 +4,10 @@ import assert from "node:assert/strict";
 import { decodePyacPack, encodePyacPack } from "../program/library/vliw/database.mjs";
 import { parse } from "../program/understand/index.mjs";
 import { lowerSentence } from "../program/library/vliw/index.mjs";
-import { decodePyashProgramSections } from "../program/library/vliw/programlet.mjs";
+import {
+  decodePyashProgramPack,
+  decodePyashProgramSections
+} from "../program/library/vliw/programlet.mjs";
 import {
   buildVliwGpuConformanceCases,
   buildVliwGpuConformanceBatches,
@@ -25,6 +28,9 @@ function valuesForPacks(batches, packs) {
 
 test("VLIW GPU conformance matrix covers the merged typed and control-flow contract", async () => {
   const cases = await buildVliwGpuConformanceCases();
+  const transformerBlock = cases.find(({ name }) => name === "iwsp-minimal-role-projected-block");
+  assert.ok(transformerBlock);
+  assert.ok(decodePyashProgramPack(transformerBlock.pack).some(({ be }) => be === "deviation square"));
 
   assert.deepEqual(cases.map(({ name }) => name), [
     "nested-calls-and-isolated-locals",
@@ -66,6 +72,9 @@ test("VLIW GPU conformance matrix covers the merged typed and control-flow contr
     "iwsp-parameterized-attention-changed-key-weights",
     "iwsp-parameterized-attention-changed-value-weights",
     "iwsp-pyash-projected-attention",
+    "iwsp-minimal-role-projected-block",
+    "iwsp-minimal-role-projected-block-zero-variance",
+    "iwsp-float64-standard-deviation",
     "iwsp-qkv-row-projections",
     "iwsp-maximum-index-float32",
     "iwsp-maximum-index-float64",
@@ -314,7 +323,10 @@ test("programlet runtime failures keep shared error codes across Rust CPU and Vu
   const cases = await buildVliwGpuProgramletFailureCases();
   assert.deepEqual(cases.map(({ name, expectedRuntimeCode }) => [name, expectedRuntimeCode]), [
     ["programlet-division-by-zero", 2],
-    ["programlet-constant-write", 7]
+    ["programlet-constant-write", 7],
+    ["programlet-negative-standard-deviation", 11],
+    ["programlet-negative-variance-with-positive-epsilon", 11],
+    ["programlet-negative-normalization-epsilon", 11]
   ]);
 
   for (const testCase of cases) {

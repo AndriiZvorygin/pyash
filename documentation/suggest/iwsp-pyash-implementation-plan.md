@@ -824,19 +824,25 @@ composition becomes unwieldy or fails the required scale.
 
 ### Stage 8 — Minimal role-projected transformer block
 
-Extend the working role-projection attention calculation with only the pieces
-needed to make one tiny block executable: residual addition, normalization, an
-elementwise activation, and a small feed-forward projection. Add each missing
-primitive when the runnable example reaches it. The acceptance target is one tiny
-CPU-executable block with inspectable Pyash/VLIW inputs, parameters, intermediates,
-and output, not paper-scale performance.
+**Status: complete (2026-11-24).** The runnable two-feature Pyash block composes
+role-projected attention, residual addition, population LayerNorm with explicit
+epsilon, ReLU as elementwise maximum with zero, a two-neuron feed-forward
+projection, a second residual, and a second LayerNorm. It uses existing vector
+and dot-product sentences plus the standard-deviation primitive; no fused
+transformer operation or hidden Rust-side model logic was introduced. The
+Rust CPU reference and the Housekeeper-routed Mriczo RTX 3090 CUDA worker both
+pass the ordinary and zero-variance outputs (`[-1, 1]` and `[0, 0]`). Negative
+variance and negative epsilon are also checked as domain errors. Full run,
+artifact sizes, and timings are in the
+[Rust VLIW verification ledger](../reference/rust-vliw-verification-ledger.md).
 
 ### Stage 9 — Sequence task and cross-target conformance
 
-Run the minimal block on a small deterministic sequence task, record its VLIW input and
-outputs, and compare against an independent reference. Then run the same conformance
-cases on GPU/browser targets for the operations they support. Measure end-to-end time
-and dispatch overhead; do not optimize or scale until correctness is established.
+**Next rung.** Run the minimal block on a small deterministic sequence task,
+record its VLIW input and outputs, and compare against an independent reference.
+Then run the same conformance cases on other supported targets. Measure
+end-to-end time and dispatch overhead; do not optimize or scale until correctness
+is established.
 
 ### Stage 10 — Visible candidate iteration
 

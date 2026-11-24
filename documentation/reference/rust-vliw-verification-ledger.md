@@ -4,6 +4,39 @@ Use this file as the lookup record for Rust VLIW CPU/GPU conformance runs. Each
 entry records the repository revision, deployed artifact, host/device, route,
 and exact test outcome. A queued or timed-out job is not a passing test.
 
+## 2026-11-24: Minimal Role-Projected Transformer Block
+
+Stage 8 of the IWSP roadmap now has an executable Pyash-level block. It composes
+the existing role-projected attention with residual addition, population
+LayerNorm, ReLU, a two-neuron feed-forward projection, a second residual, and a
+second LayerNorm. The block is intentionally only two features wide; this is a
+correctness/conformance milestone, not a performance claim.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261124-0011-rust-vliw-conformance/result.pya` |
+| Source revision / checkout | `18bd03d6a7c5ca2a740c5f5ce8058243bdc8819c`; working tree was dirty during build |
+| Build-time patch SHA-256 | `1d75b5e76844ac63ba25542f0ab2e279cb851f85e54dccae0a204d344866c9a5` |
+| Conformance-time patch SHA-256 | `31d38dfdcb661f2a85c512b3c262bc979a38a8af758912972bf78cd2b9fa2b58` |
+| Host and route | Mriczo client -> Mriczo Housekeeper -> Rust CUDA VLIW runtime |
+| GPU / driver | NVIDIA GeForce RTX 3090, driver `550.163.01`, 24,576 MiB |
+| CUDA image | `sha256:a73bae1de284227dc32813edbb808f4c52836786a1934bce40c404cc0202f31a` |
+| Runtime executable | 9,318,864 bytes; SHA-256 `fa8db546ec349de0a2d5ae0616d56ec552a815273bb04db20e4a97ec99a05fce` |
+| Cubin | 3,283,400 bytes; SHA-256 `c478d27bd9478c6a1c67de96b0a21f2faf440cad578b7f0c79cbb07cc2b35acb` |
+| CPU reference executable | 16,515,512 bytes; SHA-256 `44f7403eec0a1355fedf14979510e5ffa1704a49979bf5d1f5d80fce71ea3e04` |
+| Build time | Rust-to-PTX succeeded; `ptxas` took 77.37 s wall and peaked at 503,424 KiB RSS |
+| Runtime readiness | Cubin/GPU initialization 0.11 s; worker ready in 771 ms |
+| Full verification | 72 value cases, 3 typed-dispatch successes, 1 missing-overload error, and 5 expected programlet errors passed; 13,443.653 ms total |
+| CPU request batches | 40 codelet cases: 55.915 ms; 32 programlet sections: 64.684 ms |
+| CUDA event batches | 40 codelet cases: 1.322 ms; 32 programlet sections: 121.603 ms |
+| New block outputs | Ordinary input `[-1, 1]`; zero-variance input `[0, 0]`; CPU and RTX 3090 agreed |
+| Float64 primitive | Dot product of `[3,4]` with `[3,4]`, then `dwic kwap`, returned `5` on CPU and RTX 3090 |
+| Route after run | Updated CUDA worker retained on Mriczo; Housekeeper queue empty and VLIW route ready |
+
+The block's small workload runs slower as one GPU programlet batch than on the
+CPU reference (121.603 ms versus 64.684 ms). The result validates semantics and
+hardware parity only; it does not establish a GPU speedup for tiny workloads.
+
 ## 2026-11-24: Borrowed `u16` Input and CUDA Pack Upload
 
 The PyAC pack format remains v1: codelet payloads are sixteen `u16` words.
