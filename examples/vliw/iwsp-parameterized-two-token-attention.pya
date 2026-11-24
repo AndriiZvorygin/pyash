@@ -8,15 +8,15 @@ exists su name prediction via state "vector float32" by num 2 be variable ya
 ob name first by ve float32 1 0 to name hwas at num 0 be kl6m psas do
 ob name first by ve float32 0 1 to name hwas at num 1 be kl6m psas do
 ob name first by ve float32 0 0 to name htis hsek at num 0 be kl6m psas do
-ob name first by ve float32 1 1 to name htis hsek at num 1 be kl6m psas do
+ob name first by ve float32 0 0 to name htis hsek at num 1 be kl6m psas do
 ob name hwas by name htis hsek to name prediction at num 0 be kl6m psas do
-ob name second by ve float32 0 0 to name htis hsek at num 0 be kl6m psas do
-ob name second by ve float32 1 1 to name htis hsek at num 1 be kl6m psas do
+ob name second by ve float32 0 0.6931472 to name htis hsek at num 0 be kl6m psas do
+ob name second by ve float32 0 0 to name htis hsek at num 1 be kl6m psas do
 ob name hwas by name htis hsek to name prediction at num 1 be kl6m psas do
-ob name first by ve float32 1 5 to name hnuc gjat at num 0 be kl6m psas do
-ob name first by ve float32 3 7 to name hnuc gjat at num 1 be kl6m psas do
-ob name second by ve float32 1 5 to name hnuc gjat second at num 0 be kl6m psas do
-ob name second by ve float32 3 7 to name hnuc gjat second at num 1 be kl6m psas do
+ob name first by ve float32 0 0 to name hnuc gjat at num 0 be kl6m psas do
+ob name first by ve float32 0 0 to name hnuc gjat at num 1 be kl6m psas do
+ob name second by ve float32 0 15 to name hnuc gjat second at num 0 be kl6m psas do
+ob name second by ve float32 0 30 to name hnuc gjat second at num 1 be kl6m psas do
 
 from name prediction to name float count be gjat bwit do
 from name prediction with name count to name vec float htis hsek be subtract do

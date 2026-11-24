@@ -803,12 +803,14 @@ live SWAC CUDA conformance pass. Exact hardware, artifact, and timing evidence i
 in the VLIW verification ledger. The parameter-backed follow-up,
 [`examples/vliw/iwsp-parameterized-two-token-attention.pya`](../../examples/vliw/iwsp-parameterized-two-token-attention.pya),
 keeps query/key/value projection weights as explicit Pyash vector literals and
-accepts input vectors as typed ceremony arguments. Its conformance variants
-change the input vectors and value weights independently; CPU reference results
-are `[3, 5]`, `[8.5, 13.5]`, and `[4, 6]`. Each attention pack is 61 codelets;
-a separate 84-codelet programlet conformance case guards the removed body-size ceiling.
-All three new cases passed the live SWAC RTX 3060 CUDA matrix; the exact build,
-run, and artifact evidence is in the verification ledger.
+accepts input vectors as typed ceremony arguments. It uses query `[1,0]`, keys
+`[0,0]` and `[ln(2),0]`, and value vectors `[0,0]` and `[15,30]`. The unequal
+logits `[0,ln(2)]` produce weights `[1/3,2/3]` and output `[10,20]`. Input,
+query-weight, or key-weight variants change the logits to `[0,ln(4)]` and output
+to `[12,24]`; changing value weights produces `[20,30]`. Each attention pack is
+61 codelets; a separate 84-codelet programlet conformance case guards the
+removed body-size ceiling. CPU tests pass; live CUDA verification of these
+revised, non-uniform cases is pending.
 
 [`examples/pyash/iwsp-qkv-projection.pya`](../../examples/pyash/iwsp-qkv-projection.pya)
 remains a compatibility fixture for the earlier scalar-per-role test. New examples
@@ -1088,7 +1090,8 @@ The project adopts `hwas` for the transformer query representation,
 `htis hsek` for key representation, and `hnuc gjat` for value representation.
 Their existing linked senses are respectively question (WordNet `n:07208256-n`),
 key/clue (WordNet `n:05802065-n`), and numerical value (WordNet `n:05864972-n`).
-These are practical project mappings: the attention roles are narrower than the
+For unambiguous Pyash-English rendering, use attention-query, attention-key,
+and attention-value. These practical project mappings are narrower than the
 source senses, which remain unchanged in the dictionary. Record them in
 [`iwsp-transformer-terms.pya`](iwsp-transformer-terms.pya) and use these Pyash forms
 in IWSP examples and implementation notes. `dlek` remains the vector term (WordNet
@@ -1186,7 +1189,7 @@ partial mappings and the GPU compound review note from A.7.
 | Exponential normalization (softmax) | Pyash ceremony: maximum → vector subtract → exponential → sum → `dvis` | Implemented as a composition in the Rust CPU/GPU programlet runtime, not a separate softmax opcode. Generic `float`/`vec float` formals preserve float32 or float64. CPU and live CUDA conformance pass; WGSL has not been verified. See the executable examples and specification 28. |
 | Vector normalization | `from name values with name normalization options to name normalized be vector normalization do` | Normalize a vector under an explicitly selected norm (for example L1 or L2); options should include epsilon/zero-vector behavior. Distinct from exponential normalization. New operation. |
 | Maximum position (argmax) | `from name scores to name num answer be gjat bwit do` | Implemented as the typed `gjat bwit` form: float output returns the maximum value; a numeric destination returns the zero-based index of the first maximum. Non-empty finite float32/float64 vectors only; ties select the lower lane. This is lane-index selection, not arbitrary ID lookup. |
-| Pyash attention-role projection | `ob ve float32 ... by ve float32 ... to name hwas at num ... be kl6m psas do`<br>`ob ve float32 ... by ve float32 ... to name htis hsek at num ... be kl6m psas do`<br>`ob ve float32 ... by ve float32 ... to name hnuc gjat at num ... be kl6m psas do` | The fixed `iwsp-pyash-projected-attention.pya` and parameter-backed `examples/vliw/iwsp-parameterized-two-token-attention.pya` use explicit projection dot products, stable softmax, and value mixing. CPU and live SWAC CUDA conformance cover baseline and changed inputs/weights. The older scalar fixture remains separately named `iwsp-qkv-projection.pya`; new program surfaces use the Pyash role names. |
+| Pyash attention-role projection | `ob ve float32 ... by ve float32 ... to name hwas at num ... be kl6m psas do`<br>`ob ve float32 ... by ve float32 ... to name htis hsek at num ... be kl6m psas do`<br>`ob ve float32 ... by ve float32 ... to name hnuc gjat at num ... be kl6m psas do` | Use Pyash-English renderings attention-query, attention-key, and attention-value. The fixed and parameter-backed examples use explicit projection dot products, non-uniform stable softmax, and value mixing. CPU tests cover independent input, query-weight, key-weight, and value-weight changes; live CUDA verification remains pending. The older scalar fixture remains separately named `iwsp-qkv-projection.pya`. |
 | Activation function | `from name preactivation by name relu to name activated be vector map do` | Reuse the existing vector-map sentence surface to apply a named scalar function elementwise. `vector map` currently runs through the JS interpreter; `relu` here is illustrative and needs a registered scalar mapper. A fused GPU activation is a later lowering/optimization, not a different meaning. |
 | Learned vector / embedding | `from name embedding table via name token id to name embedding be embedding lookup do` | Return the learned row for a token ID. “Learned vector” names the result; lookup is the action. New tensor-indexing operation. Existing vector `read` handles a flat element, not a row from a rank-2 table. |
 | Parallel execution / kernel launch | `from name kernel with name launch config to name results be parallel execution do` | Submit a kernel over the configured index space and return its result handle/data. This is a proposed compute operation, not `be gpu mind` or another Housekeeper inference request. |
