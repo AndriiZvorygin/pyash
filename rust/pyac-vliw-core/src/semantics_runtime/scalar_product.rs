@@ -1,5 +1,6 @@
 use super::named_vector::resolve_prior_vector;
 use super::numeric::{QuoteHeader, quote_header, word};
+use super::storage_vector::resolve_storage_vector;
 use super::*;
 
 pub(super) const SCALAR_WORD: u32 = 0x0d62;
@@ -18,6 +19,8 @@ pub(super) struct VectorOperand {
     pub(super) kind: u32,
     pub(super) length: usize,
     pub(super) values: [u32; RESULT_WORDS],
+    pub(super) storage_backed: bool,
+    pub(super) storage_byte_offset: usize,
 }
 
 fn boundary_at(words: &[impl VliwWord], codelet: usize, slot: usize) -> bool {
@@ -223,6 +226,8 @@ fn read_vector(cursor: &mut Cursor, words: &[impl VliwWord]) -> Result<VectorOpe
         kind,
         length,
         values,
+        storage_backed: false,
+        storage_byte_offset: 0,
     })
 }
 
@@ -246,17 +251,30 @@ pub(super) fn read_operand(
     start: usize,
     group_len: usize,
     codelet_count: usize,
+    storage: &StorageView<'_>,
 ) -> Result<VectorOperand, u32> {
     if cursor.peek(words, false) != Some(NAME_TYPE) {
-        return read_vector(cursor, words);
+        let mut vector = read_vector(cursor, words)?;
+        vector.storage_backed = false;
+        vector.storage_byte_offset = 0;
+        return Ok(vector);
     }
     let name = read_name_span(cursor, words)?;
-    let result = resolve_prior_vector(words, codelet_count, start, start, group_len, name)?;
-    Ok(VectorOperand {
-        kind: result.value_kind,
-        length: result.length as usize,
-        values: result.values,
-    })
+    let prior = resolve_prior_vector(words, codelet_count, start, start, group_len, name);
+    let backed = resolve_storage_vector(words, start, group_len, name, storage)?;
+    match (prior, backed) {
+        (Ok(_), Some(_)) => Err(ERROR_DUPLICATE_SIGNATURE),
+        (Ok(result), None) => Ok(VectorOperand {
+            kind: result.value_kind,
+            length: result.length as usize,
+            values: result.values,
+            storage_backed: false,
+            storage_byte_offset: 0,
+        }),
+        (Err(error), Some(value)) if error == ERROR_UNSUPPORTED => Ok(value),
+        (Err(error), Some(_)) => Err(error),
+        (Err(error), None) => Err(error),
+    }
 }
 
 fn skip_operand(cursor: &mut Cursor, words: &[impl VliwWord]) -> Result<(), u32> {
@@ -307,6 +325,16 @@ pub(super) fn scalar_product_group(
     group_len: usize,
     codelet_count: usize,
 ) -> Option<CoreResult> {
+    scalar_product_group_with_storage(words, start, group_len, codelet_count, &StorageView::EMPTY)
+}
+
+pub(super) fn scalar_product_group_with_storage(
+    words: &[impl VliwWord],
+    start: usize,
+    group_len: usize,
+    codelet_count: usize,
+    storage: &StorageView<'_>,
+) -> Option<CoreResult> {
     let end = start + group_len;
     if group_len == 0 || !operation_suffix(words, start, end) {
         return None;
@@ -317,7 +345,7 @@ pub(super) fn scalar_product_group(
         slot: 1,
         end,
     };
-    let left = match read_operand(&mut cursor, words, start, group_len, codelet_count) {
+    let left = match read_operand(&mut cursor, words, start, group_len, codelet_count, storage) {
         Ok(value) => value,
         Err(error) => return Some(CoreResult::failure(error, group_len as u32)),
     };
@@ -328,7 +356,7 @@ pub(super) fn scalar_product_group(
         Ok(_) => {}
         Err(error) => return Some(CoreResult::failure(error, group_len as u32)),
     }
-    let right = match read_operand(&mut cursor, words, start, group_len, codelet_count) {
+    let right = match read_operand(&mut cursor, words, start, group_len, codelet_count, storage) {
         Ok(value) => value,
         Err(error) => return Some(CoreResult::failure(error, group_len as u32)),
     };
@@ -351,8 +379,12 @@ pub(super) fn scalar_product_group(
         let mut sum = 0.0f32;
         let mut lane = 0;
         while lane < left.length {
-            sum += f32::from_bits(array_at!(left.values, lane))
-                * f32::from_bits(array_at!(right.values, lane));
+            let left_bits = operand_f32_bits(&left, lane, storage)?;
+            let right_bits = operand_f32_bits(&right, lane, storage)?;
+            if left_bits & 0x7f80_0000 == 0x7f80_0000 || right_bits & 0x7f80_0000 == 0x7f80_0000 {
+                return Some(CoreResult::failure(ERROR_FLOAT_DOMAIN, group_len as u32));
+            }
+            sum += f32::from_bits(left_bits) * f32::from_bits(right_bits);
             lane += 1;
         }
         let bits = sum.to_bits();
@@ -367,10 +399,13 @@ pub(super) fn scalar_product_group(
         let mut sum = 0.0f64;
         let mut lane = 0;
         while lane < left.length {
-            let left_bits = u64::from(array_at!(left.values, lane * 2))
-                | (u64::from(array_at!(left.values, lane * 2 + 1)) << 32);
-            let right_bits = u64::from(array_at!(right.values, lane * 2))
-                | (u64::from(array_at!(right.values, lane * 2 + 1)) << 32);
+            let left_bits = operand_f64_bits(&left, lane, storage)?;
+            let right_bits = operand_f64_bits(&right, lane, storage)?;
+            if left_bits & 0x7ff0_0000_0000_0000 == 0x7ff0_0000_0000_0000
+                || right_bits & 0x7ff0_0000_0000_0000 == 0x7ff0_0000_0000_0000
+            {
+                return Some(CoreResult::failure(ERROR_FLOAT_DOMAIN, group_len as u32));
+            }
             sum += f64::from_bits(left_bits) * f64::from_bits(right_bits);
             lane += 1;
         }
@@ -388,5 +423,41 @@ pub(super) fn scalar_product_group(
     #[cfg(not(feature = "shader-f64"))]
     {
         Some(CoreResult::failure(ERROR_UNSUPPORTED, group_len as u32))
+    }
+}
+
+fn operand_f32_bits(
+    operand: &VectorOperand,
+    lane: usize,
+    storage: &StorageView<'_>,
+) -> Option<u32> {
+    if operand.storage_backed {
+        storage.read_payload_u32(
+            operand
+                .storage_byte_offset
+                .checked_add(lane.checked_mul(4)?)?,
+        )
+    } else {
+        Some(array_at!(operand.values, lane))
+    }
+}
+
+#[cfg(feature = "shader-f64")]
+fn operand_f64_bits(
+    operand: &VectorOperand,
+    lane: usize,
+    storage: &StorageView<'_>,
+) -> Option<u64> {
+    if operand.storage_backed {
+        storage.read_payload_u64(
+            operand
+                .storage_byte_offset
+                .checked_add(lane.checked_mul(8)?)?,
+        )
+    } else {
+        Some(
+            u64::from(array_at!(operand.values, lane * 2))
+                | (u64::from(array_at!(operand.values, lane * 2 + 1)) << 32),
+        )
     }
 }

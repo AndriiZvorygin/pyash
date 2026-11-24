@@ -169,7 +169,7 @@ DEFAULT_OLLAMA_MODEL_STORE_PATH = "/root/.ollama"
 DEFAULT_OLLAMA_GPU_STARTUP_GRACE_SECONDS = 60
 DEFAULT_OLLAMA_MIN_GPU_MODEL_FRACTION = 0.99
 DEFAULT_OLLAMA_GPU_WATCHDOG_INTERVAL_SECONDS = 300
-MAX_VLIW_PACK_BYTES = 16 * 1024 * 1024
+MAX_VLIW_PACK_BYTES = 0xFFFF_FFFF
 MAX_PYAC_UPLOAD_BYTES = MAX_VLIW_PACK_BYTES + 64 * 1024 + 64
 VLIW_PACK_HEADER_BYTES = 32
 VLIW_PACK_CODELET_BYTES = 32
@@ -2509,13 +2509,13 @@ def decode_vliw_pack_payload(job_spec: Dict[str, Any]) -> bytes:
   if not encoded:
     raise ValueError("pyac-pack-execute payload.packBase64 is required")
   if len(encoded) > ((MAX_VLIW_PACK_BYTES + 2) // 3) * 4:
-    raise ValueError("PyAC pack exceeds the 16 MiB Housekeeper limit")
+    raise ValueError("PyAC pack exceeds the VLIW protocol byte-length limit")
   try:
     pack = base64.b64decode(encoded, validate=True)
   except (binascii.Error, ValueError) as err:
     raise ValueError(f"PyAC pack base64 is invalid: {normalize_text(err)}") from err
   if len(pack) > MAX_VLIW_PACK_BYTES:
-    raise ValueError("PyAC pack exceeds the 16 MiB Housekeeper limit")
+    raise ValueError("PyAC pack exceeds the VLIW protocol byte-length limit")
   return validate_vliw_pack_bytes(pack)
 
 

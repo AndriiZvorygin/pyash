@@ -99,6 +99,25 @@ class PyacWireTests(unittest.TestCase):
     self.assertEqual(identity["handleId"], "0123456789ab")
     self.assertEqual(job, upload[-64:])
 
+  def test_unpack_frame_accepts_packs_above_the_old_16_mib_limit(self):
+    codelet_count = (16 * 1024 * 1024) // pyac_wire.CODELET_BYTES + 1
+    total_bytes = pyac_wire.PACK_HEADER_BYTES + codelet_count * pyac_wire.CODELET_BYTES
+    header = struct.pack(
+      "<8sHHHHIIII",
+      pyac_wire.PACK_MAGIC,
+      1,
+      16,
+      16,
+      pyac_wire.PACK_HEADER_BYTES,
+      codelet_count,
+      pyac_wire.CODELET_BYTES,
+      total_bytes,
+      0,
+    )
+    frame = header + bytes(total_bytes - len(header))
+    self.assertGreater(len(frame), 16 * 1024 * 1024)
+    self.assertEqual(pyac_wire.unpack_frame(frame)[1], len(frame))
+
   def test_rejects_wrong_key_tampered_job_and_trailing_bytes(self):
     upload = upload_fixture()
     with self.assertRaisesRegex(pyac_wire.PyacWireError, "authentication failed"):

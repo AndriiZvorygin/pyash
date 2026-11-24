@@ -12,11 +12,27 @@ const QUOTE_DENOTE: u32 = 0x001d;
 pub struct StorageSectionRange {
     pub metadata_start: usize,
     pub metadata_codelets: usize,
+    pub name_word_index: usize,
+    pub name_length: usize,
     pub payload_start: usize,
     pub payload_codelets: usize,
     pub byte_length: u32,
     pub element_width: u32,
     pub element_count: u32,
+    pub element_type: u32,
+    pub rank: u32,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct StorageMetadata {
+    next_codelet: usize,
+    name_word_index: usize,
+    name_length: usize,
+    byte_length: u32,
+    element_width: u32,
+    element_count: u32,
+    element_type: u32,
+    rank: u32,
 }
 
 fn vector_span(
@@ -51,7 +67,10 @@ fn vector_span(
     }
 }
 
-fn field_byte_length(tokens: &SentenceView<'_, impl VliwWord>, field: SentenceField) -> Option<u32> {
+fn field_byte_length(
+    tokens: &SentenceView<'_, impl VliwWord>,
+    field: SentenceField,
+) -> Option<u32> {
     let (start, count) = vector_span(tokens, field)?;
     if count != 2 {
         return None;
@@ -63,7 +82,7 @@ fn storage_metadata(
     words: &[u16],
     codelet_count: usize,
     start: usize,
-) -> Result<Option<(usize, u32, u32, u32)>, u32> {
+) -> Result<Option<StorageMetadata>, u32> {
     let Ok((token_count, next)) = collect_sentence(words, codelet_count, start) else {
         return Ok(None);
     };
@@ -102,11 +121,15 @@ fn storage_metadata(
     }
     let mut element_count = 1u32;
     for index in 0..dimension_count {
-        let dimension = tokens.token(dimension_start + index).ok_or(ERROR_MALFORMED)?;
+        let dimension = tokens
+            .token(dimension_start + index)
+            .ok_or(ERROR_MALFORMED)?;
         if dimension == 0 {
             return Err(ERROR_MALFORMED);
         }
-        element_count = element_count.checked_mul(dimension).ok_or(ERROR_MALFORMED)?;
+        element_count = element_count
+            .checked_mul(dimension)
+            .ok_or(ERROR_MALFORMED)?;
     }
     let dtype_word = tokens.token(dtype.start + 1).ok_or(ERROR_MALFORMED)? as u32;
     let element_width = match dtype_word {
@@ -122,7 +145,16 @@ fn storage_metadata(
     {
         return Err(ERROR_MALFORMED);
     }
-    Ok(Some((next, byte_length, element_width, element_count)))
+    Ok(Some(StorageMetadata {
+        next_codelet: next,
+        name_word_index: tokens.word_index(subject.start + 1),
+        name_length: subject.length - 1,
+        byte_length,
+        element_width,
+        element_count,
+        element_type: dtype_word,
+        rank: dimension_count as u32,
+    }))
 }
 
 fn has_nearby_storage_verb(words: &[u16], codelet_count: usize, start: usize) -> bool {
@@ -157,21 +189,27 @@ pub fn scan_storage_sections(
             cursor += 1;
             continue;
         }
-        let Some((payload_start, byte_length, element_width, element_count)) =
-            storage_metadata(words, codelet_count, cursor)?
-        else {
+        let Some(metadata) = storage_metadata(words, codelet_count, cursor)? else {
             cursor += 1;
             continue;
         };
+        let payload_start = metadata.next_codelet;
+        let byte_length = metadata.byte_length;
         let payload_codelets = (byte_length as usize).div_ceil(CODELET_WORDS * 2);
-        let payload_end = payload_start.checked_add(payload_codelets).ok_or(ERROR_MALFORMED)?;
+        let payload_end = payload_start
+            .checked_add(payload_codelets)
+            .ok_or(ERROR_MALFORMED)?;
         if payload_end > codelet_count || found >= output.len() || found >= STORAGE_MAX_SECTIONS {
             return Err(ERROR_FRAME_CAPACITY);
         }
         for byte_index in byte_length as usize..payload_codelets * CODELET_WORDS * 2 {
             let codelet = payload_start + byte_index / (CODELET_WORDS * 2);
             let word = words[codelet * CODELET_WORDS + (byte_index % (CODELET_WORDS * 2)) / 2];
-            let padding_byte = if byte_index % 2 == 0 { word & 0xff } else { word >> 8 };
+            let padding_byte = if byte_index % 2 == 0 {
+                word & 0xff
+            } else {
+                word >> 8
+            };
             if padding_byte != 0 {
                 return Err(ERROR_MALFORMED);
             }
@@ -179,11 +217,15 @@ pub fn scan_storage_sections(
         output[found] = StorageSectionRange {
             metadata_start: cursor,
             metadata_codelets: payload_start - cursor,
+            name_word_index: metadata.name_word_index,
+            name_length: metadata.name_length,
             payload_start,
             payload_codelets,
-            byte_length,
-            element_width,
-            element_count,
+            byte_length: metadata.byte_length,
+            element_width: metadata.element_width,
+            element_count: metadata.element_count,
+            element_type: metadata.element_type,
+            rank: metadata.rank,
         };
         found += 1;
         cursor = payload_end;
@@ -197,9 +239,9 @@ mod tests {
 
     fn storage_pack() -> [u16; 48] {
         [
-            0xbbb6, 0x225e, 0x6844, 0x24de, 0x225e, 0x309e, 0x414f, 0x891d, 4, 0, 0x287e,
-            0x8e1d, 1, 4, 0x490f, 0x6a84, 5, 0xec01, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0x0201, 0x0403, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0xbbb6, 0x225e, 0x6844, 0x24de, 0x225e, 0x309e, 0x414f, 0x891d, 4, 0, 0x287e, 0x8e1d,
+            1, 4, 0x490f, 0x6a84, 5, 0xec01, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x0201,
+            0x0403, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ]
     }
 
@@ -214,12 +256,15 @@ mod tests {
             byte_length: 0,
             element_width: 0,
             element_count: 0,
+            ..StorageSectionRange::default()
         }; 4];
         assert_eq!(scan_storage_sections(&words, 3, &mut sections), Ok(1));
         assert_eq!(sections[0].metadata_codelets, 2);
         assert_eq!(sections[0].payload_start, 2);
         assert_eq!(sections[0].byte_length, 4);
         assert_eq!(sections[0].element_count, 4);
+        assert_eq!(sections[0].name_length, 1);
+        assert_eq!(words[sections[0].name_word_index], 0x6844);
     }
 
     #[test]
@@ -255,28 +300,37 @@ mod tests {
             byte_length: 0,
             element_width: 0,
             element_count: 0,
+            ..StorageSectionRange::default()
         }; 4];
-        assert_eq!(scan_storage_sections(&words, 3, &mut sections), Err(ERROR_MALFORMED));
+        assert_eq!(
+            scan_storage_sections(&words, 3, &mut sections),
+            Err(ERROR_MALFORMED)
+        );
         words = storage_pack();
         words[12] = 3;
-        assert_eq!(scan_storage_sections(&words, 3, &mut sections), Err(ERROR_MALFORMED));
+        assert_eq!(
+            scan_storage_sections(&words, 3, &mut sections),
+            Err(ERROR_MALFORMED)
+        );
     }
 
     #[test]
     fn storage_descriptor_reads_exact_large_lengths_and_fixed_vector_shapes() {
         let mut words = std::vec![0u16; 2 * CODELET_WORDS + 2_188 * CODELET_WORDS];
         words[..16].copy_from_slice(&[
-            0xbbb6, 0x225e, 0x6844, 0x24de, 0x225e, 0x309e, 0x414f, 0x891d, 0x1170, 1,
-            0x287e, 0x891d, 0x88b8, 2, 0x490f, 0x6a84,
+            0xbbb6, 0x225e, 0x6844, 0x24de, 0x225e, 0x309e, 0x414f, 0x891d, 0x1170, 1, 0x287e,
+            0x891d, 0x88b8, 2, 0x490f, 0x6a84,
         ]);
         words[16] = 5;
         words[17] = 0xec01;
         words[18] = 0x217e;
         let mut sections = [StorageSectionRange::default(); STORAGE_MAX_SECTIONS];
-        assert_eq!(scan_storage_sections(&words, 2 + 2_188, &mut sections), Ok(1));
+        let count = scan_storage_sections(&words, 2 + 2_188, &mut sections);
+        assert_eq!(count, Ok(1), "sections: {:?}", &sections[..2]);
         assert_eq!(sections[0].byte_length, 70_000);
         assert_eq!(sections[0].element_count, 70_000);
         assert_eq!(sections[0].element_width, 1);
+        assert_eq!(sections[0].rank, 2);
         assert_eq!(sections[0].payload_codelets, 2_188);
     }
 }

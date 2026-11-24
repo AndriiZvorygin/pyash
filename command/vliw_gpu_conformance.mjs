@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
@@ -53,7 +54,11 @@ export function buildVliwGpuConformanceBatches(cases) {
     throw new Error(`VLIW conformance batch exceeds ${SECTION_NAMES.length} named programlet sections`);
   }
 
-  const codeletPack = encodePyacPack(codeletCases.flatMap(({ pack }) => decodePyacPack(pack).codelets));
+  const executableCodelets = codeletCases.flatMap(({ pack, executableCodelets: explicit }) =>
+    explicit ?? decodePyacPack(pack).codelets
+  );
+  const storageCodelets = codeletCases.flatMap(({ storageCodelets: sections = [] }) => sections);
+  const codeletPack = encodePyacPack([...executableCodelets, ...storageCodelets]);
   const sectionSource = programletCases.map(({ source, invocation }, index) => {
     const name = SECTION_NAMES[index];
     return [
@@ -98,6 +103,52 @@ function codeletPack(name, sources, expectedValues) {
 function vectorPack(name, source, expectedValues) {
   const vectors = lowerPyashProgram([parse(source)]).vectors;
   return { name, kind: "codelets", pack: encodePyacPack(vectors), expectedValues };
+}
+
+async function storageBackedDotProductCase({
+  name,
+  lanes,
+  width,
+  rightValue,
+  leftName = "dlek",
+  rightName = "pset"
+}) {
+  const assetRoot = await mkdtemp(path.join(os.tmpdir(), "pyac-vliw-storage-"));
+  try {
+    const byteLength = lanes * width;
+    const left = Buffer.alloc(byteLength);
+    const right = Buffer.alloc(byteLength);
+    let expected = 0;
+    for (let lane = 0; lane < lanes; lane += 1) {
+      const leftValue = lane + 1;
+      const offset = lane * width;
+      const write = width === 4 ? Buffer.prototype.writeFloatLE : Buffer.prototype.writeDoubleLE;
+      write.call(left, leftValue, offset);
+      write.call(right, rightValue, offset);
+      expected += leftValue * rightValue;
+    }
+    await writeFile(path.join(assetRoot, "left.bin"), left);
+    await writeFile(path.join(assetRoot, "right.bin"), right);
+    const byteLengthWords = [byteLength % 0x1_0000, Math.floor(byteLength / 0x1_0000)];
+    const storageSource = [
+      `exists su name ${leftName} from filename "left.bin" by ve num ${byteLengthWords.join(" ")} as name float with ve num ${lanes} be pfun myoc ya`,
+      `exists su name ${rightName} from filename "right.bin" by ve num ${byteLengthWords.join(" ")} as name float with ve num ${lanes} be pfun myoc ya`
+    ].join("\n");
+    const storagePack = compilePyashProgramSource(storageSource, { assetRoot }).pack;
+    const storageCodelets = decodePyacPack(storagePack).codelets;
+    const dotCodelets = lowerSentence(parse(`ob ${leftName} by ${rightName} be kl6m psas do`))
+      .map(({ words }) => words);
+    return {
+      name,
+      kind: "codelets",
+      executableCodelets: dotCodelets,
+      storageCodelets,
+      pack: encodePyacPack([...dotCodelets, ...storageCodelets]),
+      expectedValues: [{ type: width === 4 ? "float32" : "float64", value: expected }]
+    };
+  } finally {
+    await rm(assetRoot, { recursive: true, force: true });
+  }
 }
 
 export async function buildVliwGpuConformanceCases() {
@@ -394,6 +445,20 @@ export async function buildVliwGpuConformanceCases() {
       "ob ve float64 0.1 2 -3 by ve float64 0.2 4 -5 be kl6m psas do",
       [{ type: "float64", value: 23.02 }]
     ),
+    await storageBackedDotProductCase({
+      name: "float32-storage-backed-dot-product-32-lanes",
+      lanes: 32,
+      width: 4,
+      rightValue: 2
+    }),
+    await storageBackedDotProductCase({
+      name: "float64-storage-backed-dot-product-17-lanes",
+      lanes: 17,
+      width: 8,
+      rightValue: 0.25,
+      leftName: "gjat",
+      rightName: "hdi7s"
+    }),
     vectorPack(
       "uint16-vector-sixteen-lanes",
       `ob ve num ${Array.from({ length: 16 }, (_, index) => index).join(" ")} be vector ya`,

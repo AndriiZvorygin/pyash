@@ -70,6 +70,8 @@ test("VLIW GPU conformance matrix covers the merged typed and control-flow contr
     "iwsp-maximum-index-float32",
     "iwsp-maximum-index-float64",
     "float64-dot-product",
+    "float32-storage-backed-dot-product-32-lanes",
+    "float64-storage-backed-dot-product-17-lanes",
     "uint16-vector-sixteen-lanes",
     "boolean-vector-sixteen-lanes",
     "float32-vector-sixteen-lanes",
@@ -111,6 +113,13 @@ test("VLIW conformance packs independent codelets together and programlets as na
   assert.equal(batches[0].kind, "codelets");
   assert.equal(batches[0].cases.length, codeletCases.length);
   assert.deepEqual(batches[0].expectedValues, codeletCases.flatMap(({ expectedValues }) => expectedValues));
+  const executableCodelets = codeletCases.flatMap(({ pack, executableCodelets: explicit }) =>
+    explicit ?? decodePyacPack(pack).codelets
+  );
+  const storageCodelets = codeletCases.flatMap(({ storageCodelets: sections = [] }) => sections);
+  const combinedCodelets = decodePyacPack(batches[0].pack).codelets;
+  assert.deepEqual(combinedCodelets.slice(0, executableCodelets.length), executableCodelets);
+  assert.deepEqual(combinedCodelets.slice(executableCodelets.length), storageCodelets);
   assert.equal(batches[1].kind, "programlets");
   assert.equal(batches[1].cases.length, programletCases.length);
   assert.equal(decodePyashProgramSections(batches[1].pack).length, programletCases.length);

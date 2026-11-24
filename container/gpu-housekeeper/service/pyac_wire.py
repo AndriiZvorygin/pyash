@@ -12,7 +12,9 @@ from typing import Any, Dict, List, Tuple
 PACK_MAGIC = b"PYACVLIW"
 PACK_HEADER_BYTES = 32
 CODELET_BYTES = 32
-MAX_PACK_BYTES = 16 * 1024 * 1024
+# The framed pack's total_bytes field is uint32; the protocol, not an
+# arbitrary service tuning value, is the size ceiling.
+MAX_PACK_BYTES = 0xFFFF_FFFF
 TEXT_QUOTE = 0x0e1d
 UINT_VECTOR_QUOTE_MASK = 0x001f
 IDENTITY_WORD = 0xc898
@@ -248,5 +250,5 @@ def read_persisted_pack(root: Path, reference: str) -> bytes:
     raise PyacWireError("durable PyAC pack file is unavailable") from error
   unpack_frame(pack)
   if len(pack) > MAX_PACK_BYTES:
-    raise PyacWireError("durable PyAC pack exceeds the Housekeeper limit")
+    raise PyacWireError("durable PyAC pack exceeds the VLIW protocol byte-length limit")
   return pack

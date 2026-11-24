@@ -29,6 +29,22 @@ function readResult(status, handleId) {
   }
 }
 
+function errorText(value) {
+  if (typeof value === "string") return value;
+  if (value instanceof Error) return value.message;
+  if (value && typeof value === "object") {
+    for (const key of ["message", "error", "detail"]) {
+      if (typeof value[key] === "string" && value[key]) return value[key];
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "unserializable Housekeeper error";
+    }
+  }
+  return String(value ?? "unknown Housekeeper failure");
+}
+
 function estimateVramMb(codeletCount) {
   const bytes = WORKER_RESERVE_BYTES + codeletCount * GPU_BUFFER_BYTES_PER_CODELET;
   return Math.max(64, Math.ceil((bytes * 1.25) / MEBIBYTE));
@@ -205,7 +221,7 @@ export function createHousekeeperVliwPackExecutor({
         };
       }
       if (status?.status === "fail") {
-        const detail = String(status.error || status.message || "unknown Housekeeper failure");
+        const detail = errorText(status.error || status.message || "unknown Housekeeper failure");
         const error = new Error(`VLIW Housekeeper job ${handleId} failed: ${detail}`);
         error.housekeeperTiming = timingRecord(
           status,

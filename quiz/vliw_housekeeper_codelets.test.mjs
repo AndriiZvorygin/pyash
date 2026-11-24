@@ -109,6 +109,28 @@ test("Housekeeper worker failures include the durable job identity", async () =>
   await assert.rejects(execute(numericPack()), /failed-pack-1 failed: Vulkan adapter unavailable/u);
 });
 
+test("Housekeeper worker failures retain structured error messages", async () => {
+  const execute = createHousekeeperVliwPackExecutor({
+    managerUrl: "http://housekeeper.test",
+    secret: "test-secret",
+    hostId: "mriczo",
+    username: "htaf",
+    makeHandleId: () => "struct-fail",
+    async fetchImpl(url) {
+      return url.endsWith("/submit-pyac")
+        ? { ok: true, status: 200, json: async () => ({ accepted: true, remoteJobId: "remote-structured-failure" }) }
+        : { ok: true, status: 200, json: async () => ({
+          status: "fail",
+          error: { message: "shared VLIW runtime error 1: no matching overload" }
+        }) };
+    }
+  });
+  await assert.rejects(
+    execute(numericPack()),
+    /struct-fail failed: shared VLIW runtime error 1: no matching overload/u
+  );
+});
+
 test("Housekeeper failures preserve GPU service timings returned with runtime errors", async () => {
   const runtimeTimingMs = { kernelGpuMs: 0.006, kernelTimingSource: "vulkan-timestamp-query" };
   const execute = createHousekeeperVliwPackExecutor({

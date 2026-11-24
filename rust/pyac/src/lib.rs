@@ -7,6 +7,9 @@ pub mod iwsp;
 pub mod literal;
 mod pack_view;
 pub mod semantic;
+mod storage;
+
+pub use storage::{PyacStorageSections, StorageSectionError, prepare_storage_sections};
 
 pub use backend::riscv::{
     BackendError, RiscvProgram, compile_and_execute_numeric_arithmetic, compile_numeric_arithmetic,
@@ -437,8 +440,20 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
         NumericCodeletValue, execute_conditional_number_codelets, execute_numeric_codelet,
     };
 
-    let words = pack.codelets.as_flattened();
-    if pyac_vliw_core::has_programlet_section_header(&words, pack.codelets.len()) {
+    let prepared_storage =
+        prepare_storage_sections(&pack.codelets).map_err(|_| PackExecutionError {
+            index: 0,
+            source: SemanticError::MalformedStorageSection,
+        })?;
+    let codelet_count = prepared_storage.executable_codelet_count;
+    let executable_codelets = &pack.codelets[..codelet_count];
+    let words = executable_codelets.as_flattened();
+    let storage = pyac_vliw_core::StorageView::new(
+        &prepared_storage.descriptors,
+        &prepared_storage.names,
+        &prepared_storage.payload,
+    );
+    if pyac_vliw_core::has_programlet_section_header(&words, codelet_count) {
         let mut sections = execute_pack_sections(pack)?;
         // This compatibility API drops section identity, so retain its
         // historical source-order result contract. Callers that need actual
@@ -446,15 +461,15 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
         sections.sort_by_key(|section| section.section_index);
         return Ok(sections.into_iter().map(|section| section.value).collect());
     }
-    if pyac_vliw_core::is_numeric_programlet(&words, pack.codelets.len()) {
-        return execute_shared_programlet(&words, 0, pack.codelets.len(), 0)
-            .map(|value| vec![value]);
+    if pyac_vliw_core::is_numeric_programlet(&words, codelet_count) {
+        return execute_shared_programlet(&words, 0, codelet_count, 0).map(|value| vec![value]);
     }
 
     let mut values = Vec::new();
     let mut index = 0;
-    while index < pack.codelets.len() {
-        let shared = pyac_vliw_core::interpret_group(&words, index, pack.codelets.len());
+    while index < codelet_count {
+        let shared =
+            pyac_vliw_core::interpret_group_with_storage(&words, index, codelet_count, &storage);
         if shared.error == pyac_vliw_core::ERROR_DIVISION_BY_ZERO {
             return Err(PackExecutionError {
                 index,
@@ -525,17 +540,17 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
         }
 
         let start = index;
-        while index < pack.codelets.len() && pack.codelets[index][0] & 1 == 0 {
+        while index < codelet_count && executable_codelets[index][0] & 1 == 0 {
             index += 1;
         }
-        if index == pack.codelets.len() {
+        if index == codelet_count {
             return Err(PackExecutionError {
                 index: start,
                 source: SemanticError::UnsupportedCodelet,
             });
         }
 
-        let group = &pack.codelets[start..=index];
+        let group = &executable_codelets[start..=index];
         if group.len() > 1 {
             values.push(
                 execute_conditional_number_codelets(group)

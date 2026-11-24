@@ -5,8 +5,8 @@ use pyac_vliw_core::{
     CODELET_WORDS, CoreResult, DEFAULT_PROGRAMLET_STEP_BUDGET, ERROR_MALFORMED,
     ERROR_PROGRAM_CAPACITY, ERROR_UNSUPPORTED, MAX_PROGRAMLET_SYMBOL_WORDS,
     PROGRAMLET_ROUTINE_DIRECTORY_WORDS, ProgramletStack,
-    RESULT_WORDS, execute_numeric_programlet_at_with_directory_words, interpret_group,
-    is_numeric_programlet,
+    RESULT_WORDS, StorageView, execute_numeric_programlet_at_with_directory_words,
+    interpret_group, interpret_group_with_storage, is_numeric_programlet,
 };
 use spirv_std::spirv;
 
@@ -22,6 +22,9 @@ pub fn execute_pyac_pack(
     #[spirv(global_invocation_id)] invocation: UVec3,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] input: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] output: &mut [u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] storage_descriptors: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] storage_names: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] storage_payload: &[u32],
 ) {
     let codelet_count = input.len() / CODELET_WORDS;
     let codelet_index = invocation.x as usize;
@@ -43,7 +46,9 @@ pub fn execute_pyac_pack(
         }
     }
 
-    let result: CoreResult = interpret_group(input, codelet_index, codelet_count);
+    let storage = StorageView::new(storage_descriptors, storage_names, storage_payload);
+    let result: CoreResult =
+        interpret_group_with_storage(input, codelet_index, codelet_count, &storage);
     output[output_start] = result.value_kind;
     output[output_start + 1] = result.error;
     output[output_start + 2] = result.length;

@@ -1,5 +1,7 @@
 #[path = "../gpu.rs"]
 mod gpu_worker;
+#[path = "pack_validation.rs"]
+mod pack_validation;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -19,9 +21,10 @@ use serde_json::{Value, json};
 use tokio::sync::Semaphore;
 use tokio::time::timeout;
 
-const MAX_PACK_BYTES: usize = 16 * 1024 * 1024;
-const MAX_REQUEST_BYTES: usize = 23 * 1024 * 1024;
+const MAX_REQUEST_BYTES: usize = ((u32::MAX as u64 * 4).div_ceil(3) + 64 * 1024) as usize;
 const DEFAULT_TIMEOUT_SECONDS: u64 = 1800;
+
+use pack_validation::{MAX_PACK_BYTES, validate_pack};
 
 enum RuntimeBackend {
     Vulkan(gpu_worker::GpuRuntime),
@@ -132,47 +135,6 @@ fn decode_request(request: ExecuteRequest) -> Result<(String, Vec<u8>), ApiError
     validate_pack(request.job_id, pack)
 }
 
-fn validate_pack(job_id: String, pack: Vec<u8>) -> Result<(String, Vec<u8>), ApiError> {
-    if job_id.trim().is_empty() {
-        return Err(ApiError {
-            status: StatusCode::BAD_REQUEST,
-            message: "jobId is required".to_owned(),
-            timings_ms: None,
-        });
-    }
-    if pack.len() > MAX_PACK_BYTES {
-        return Err(ApiError {
-            status: StatusCode::PAYLOAD_TOO_LARGE,
-            message: "PyAC pack exceeds the 16 MiB runtime limit".to_owned(),
-            timings_ms: None,
-        });
-    }
-    let decoded = pyac::decode_pack(&pack).map_err(|error| ApiError {
-        status: StatusCode::BAD_REQUEST,
-        message: format!("PyAC pack is invalid: {error}"),
-        timings_ms: None,
-    })?;
-    let mut storage_sections = [pyac_vliw_core::StorageSectionRange::default(); 64];
-    let storage_count = pyac_vliw_core::scan_storage_sections(
-        decoded.codelets.as_flattened(),
-        decoded.codelets.len(),
-        &mut storage_sections,
-    )
-    .map_err(|error| ApiError {
-        status: StatusCode::BAD_REQUEST,
-        message: format!("PyAC storage section is malformed (core error {error})"),
-        timings_ms: None,
-    })?;
-    if storage_count > 0 {
-        return Err(ApiError {
-            status: StatusCode::UNPROCESSABLE_ENTITY,
-            message: "PyAC storage sections are valid, but this runtime does not yet bind their payloads as GPU inputs; refusing to execute them as codelets".to_owned(),
-            timings_ms: None,
-        });
-    }
-    Ok((job_id, pack))
-}
-
 async fn health(State(state): State<RuntimeState>) -> impl IntoResponse {
     (
         StatusCode::OK,
@@ -209,7 +171,7 @@ async fn execute_raw_pack(
     if body.len() > MAX_PACK_BYTES {
         return Err(ApiError {
             status: StatusCode::PAYLOAD_TOO_LARGE,
-            message: "PyAC pack exceeds the 16 MiB runtime limit".to_owned(),
+            message: "PyAC pack exceeds the VLIW protocol's 32-bit byte-length limit".to_owned(),
             timings_ms: None,
         });
     }
@@ -403,8 +365,8 @@ mod tests {
     fn valid_storage_pack() -> Vec<u8> {
         let codelets: [[u16; pyac::WORDS_PER_CODELET]; 3] = [
             [
-                0xbbb6, 0x225e, 0x6844, 0x24de, 0x225e, 0x309e, 0x414f, 0x891d, 4, 0,
-                0x287e, 0x8e1d, 1, 4, 0x490f, 0x6a84,
+                0xbbb6, 0x225e, 0x6844, 0x24de, 0x225e, 0x309e, 0x414f, 0x891d, 4, 0, 0x287e,
+                0x8e1d, 1, 4, 0x490f, 0x6a84,
             ],
             [5, 0xec01, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
             [0x0201, 0x0403, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
@@ -454,10 +416,10 @@ mod tests {
     }
 
     #[test]
-    fn runtime_refuses_to_execute_embedded_payload_codelets_as_instructions() {
-        let error = decode_request(request(&valid_storage_pack())).unwrap_err();
-        assert_eq!(error.status, StatusCode::UNPROCESSABLE_ENTITY);
-        assert!(error.message.contains("does not yet bind their payloads"));
+    fn runtime_accepts_storage_sections_for_gpu_input_binding() {
+        let (job_id, decoded) = decode_request(request(&valid_storage_pack())).unwrap();
+        assert_eq!(job_id, "test-job");
+        assert_eq!(decoded, valid_storage_pack());
     }
 
     #[test]

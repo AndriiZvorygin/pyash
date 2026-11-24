@@ -184,6 +184,113 @@ fn computes_a_dot_product_from_preceding_named_vectors() {
 }
 
 #[test]
+fn computes_a_dot_product_from_payload_backed_vectors_beyond_inline_lane_limit() {
+    const LANES: usize = 32;
+    let mut words = std::vec::Vec::new();
+    let start = append_named_dot(&mut words, 0x4123, 0x4567);
+    let mut payload = std::vec::Vec::with_capacity(LANES * 2);
+    let mut expected = 0.0f32;
+    for lane in 0..LANES {
+        let left = lane as f32 + 1.0;
+        payload.push(left.to_bits());
+        expected += left * 2.0;
+    }
+    for _ in 0..LANES {
+        payload.push(2.0f32.to_bits());
+    }
+    let byte_length = (LANES * std::mem::size_of::<f32>()) as u32;
+    let descriptors = [
+        2,
+        0,
+        1,
+        0,
+        byte_length,
+        4,
+        LANES as u32,
+        0xaa6c,
+        1,
+        1,
+        1,
+        byte_length,
+        byte_length,
+        4,
+        LANES as u32,
+        0xaa6c,
+        1,
+    ];
+    let names = [0x4123, 0x4567];
+    let storage = StorageView::new(&descriptors, &names, &payload);
+    assert_eq!(storage.section_count(), 2);
+    let mut cursor = super::super::scalar_product::Cursor {
+        start,
+        codelet: start,
+        slot: 1,
+        end: start + words.len() / CODELET_WORDS,
+    };
+    let operand = super::super::scalar_product::read_operand(
+        &mut cursor,
+        &words,
+        start,
+        words.len() / CODELET_WORDS,
+        words.len() / CODELET_WORDS,
+        &storage,
+    );
+    assert_eq!(operand.err(), None);
+
+    let result = interpret_group_with_storage(&words, start, words.len() / CODELET_WORDS, &storage);
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.value_kind, VALUE_FLOAT32);
+    assert_eq!(f32::from_bits(result.values[0]), expected);
+}
+
+#[test]
+fn computes_a_float64_dot_product_from_payload_backed_vectors_beyond_inline_lane_limit() {
+    const LANES: usize = 17;
+    let mut words = std::vec::Vec::new();
+    let start = append_named_dot(&mut words, 0x4123, 0x4567);
+    let mut payload = std::vec::Vec::with_capacity(LANES * 4);
+    let mut expected = 0.0f64;
+    for lane in 0..LANES {
+        let value = lane as f64 + 1.0;
+        let bits = value.to_bits();
+        payload.extend([bits as u32, (bits >> 32) as u32]);
+        expected += value * 0.25;
+    }
+    for _ in 0..LANES {
+        let bits = 0.25f64.to_bits();
+        payload.extend([bits as u32, (bits >> 32) as u32]);
+    }
+    let byte_length = (LANES * std::mem::size_of::<f64>()) as u32;
+    let descriptors = [
+        2,
+        0,
+        1,
+        0,
+        byte_length,
+        8,
+        LANES as u32,
+        0xaa6c,
+        1,
+        1,
+        1,
+        byte_length,
+        byte_length,
+        8,
+        LANES as u32,
+        0xaa6c,
+        1,
+    ];
+    let names = [0x4123, 0x4567];
+    let storage = StorageView::new(&descriptors, &names, &payload);
+
+    let result = interpret_group_with_storage(&words, start, words.len() / CODELET_WORDS, &storage);
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.value_kind, VALUE_FLOAT64);
+    let actual = f64::from_bits(u64::from(result.values[0]) | (u64::from(result.values[1]) << 32));
+    assert_eq!(actual, expected);
+}
+
+#[test]
 fn rejects_unbound_duplicate_and_width_mismatched_named_dot_operands() {
     let mut unbound = std::vec::Vec::new();
     append_named_f32(&mut unbound, 0x4123, [1.0, 2.0]);

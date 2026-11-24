@@ -172,6 +172,7 @@ pub enum SemanticError {
     DivisionByZero,
     NonFiniteFloat,
     Fixed16Domain,
+    MalformedStorageSection,
     MalformedProgramlet,
     UnsupportedProgramlet,
     ProgramletFrameCapacity,
@@ -197,6 +198,7 @@ impl SemanticError {
             Self::DivisionByZero => "division-by-zero",
             Self::NonFiniteFloat => "non-finite-float",
             Self::Fixed16Domain => "fixed16-domain",
+            Self::MalformedStorageSection => "malformed-storage-section",
             Self::MalformedProgramlet => "malformed-programlet",
             Self::UnsupportedProgramlet => "unsupported-programlet",
             Self::ProgramletFrameCapacity => "programlet-frame-capacity",
@@ -267,6 +269,9 @@ impl std::fmt::Display for SemanticError {
             }
             Self::Fixed16Domain => {
                 formatter.write_str("fixed16 result is outside the supported u16 range")
+            }
+            Self::MalformedStorageSection => {
+                formatter.write_str("the PyAC storage section packet is malformed")
             }
             Self::MalformedProgramlet => {
                 formatter.write_str("the canonical Pyash programlet is malformed")

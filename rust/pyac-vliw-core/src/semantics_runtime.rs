@@ -423,18 +423,22 @@ mod programlet_vector_values;
 mod scalar_product;
 #[path = "semantics_runtime/sentence.rs"]
 mod sentence;
-#[path = "semantics_runtime/storage_sections.rs"]
-mod storage_sections;
 #[path = "semantics_runtime/sentence_parse_state.rs"]
 mod sentence_parse_state;
 #[path = "semantics_runtime/signature_dispatch.rs"]
 mod signature_dispatch;
+#[path = "semantics_runtime/storage_sections.rs"]
+mod storage_sections;
+#[path = "semantics_runtime/storage_vector.rs"]
+mod storage_vector;
+#[path = "semantics_runtime/storage_view.rs"]
+mod storage_view;
 #[path = "semantics_runtime/vector_group.rs"]
 mod vector_group;
 
 use boolean::{boolean_comparison, boolean_composition, evaluate_boolean_expression_with_env};
 use conditional::conditional;
-pub use dispatch::interpret_group;
+pub use dispatch::{interpret_group, interpret_group_with_storage};
 use float::single_codelet;
 use mutable_vector::mutable_vector_declaration;
 pub use numeric::apply_number_operator;
@@ -506,6 +510,7 @@ use sentence::{
     parse_sentence_range, typed_name_span, typed_output_name,
 };
 pub use storage_sections::{StorageSectionRange, scan_storage_sections};
+pub use storage_view::{STORAGE_BINDING_WORDS, StorageView};
 #[cfg(test)]
 #[path = "semantics_runtime/tests.rs"]
 mod tests;

@@ -331,14 +331,23 @@ Pyash signature, reads its exact extent, and skips the payload without scanning
 it for sentence boundaries. Payload codelets are data, never executable
 instructions.
 
+The resident Rust GPU worker binds the descriptors, Pyac names, and exact
+payload bytes as separate read-only GPU inputs. Its shared Rust semantics
+runtime resolves named rank-one float32/float64 storage vectors for `kl6m psas`
+(dot product); the storage length is not restricted by the inline vector lane
+limit. Inline vector literals retain their independent hardware-oriented lane
+limit. Descriptor dimensions, element widths, exact byte lengths, unique names,
+and final-codelet padding are validated before GPU dispatch. The v1 pack's
+uint32 total-byte field is the protocol ceiling; hosts and devices may impose
+lower practical memory limits during allocation, and those failures are
+reported rather than silently falling back to another execution path.
+
 This profile adds no header field, second pack format, sidecar, pointer, or
 runtime-generated index. A reader that does not recognize the storage
 signature MUST reject the pack rather than dispatching opaque payload words as
-instructions. The current compiler embeds and validates file-backed sections;
-the Rust GPU runtime currently validates and locates them, then rejects
-execution until its GPU binding ABI can expose the payload as read-only input
-memory. That refusal is deliberate and prevents weights from being interpreted
-as code.
+instructions. The compiler embeds and validates file-backed sections; the
+runtime extracts their storage bindings while retaining executable codelets as
+the original uint16 input stream.
 
 ### Pyash VLIW authentication sentence
 

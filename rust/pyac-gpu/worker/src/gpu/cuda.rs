@@ -192,8 +192,7 @@ impl CudaDevice {
                 );
                 #[cfg(target_endian = "little")]
                 {
-                    let payload = view.payload_bytes();
-                    self.execute_codelets(&codelets_from_view(&view), payload, &mut timing)
+                    self.execute_codelets(&codelets_from_view(&view), &mut timing)
                 }
             }
             Err(error) => Err(error.to_string()),
@@ -205,7 +204,6 @@ impl CudaDevice {
     fn execute_codelets(
         &self,
         codelets: &[[u16; pyac::WORDS_PER_CODELET]],
-        payload: &[u8],
         timing: &mut GpuExecutionTiming,
     ) -> Result<Value, String> {
         if codelets.is_empty() {
@@ -215,9 +213,13 @@ impl CudaDevice {
         let prepared = prepare_pack(codelets);
         timing.classify_ms = elapsed(start);
         let PreparedPack {
-            input_words: _,
+            executable_codelets,
+            input_words,
             section_words,
             dispatch_words,
+            storage_descriptors,
+            storage_names,
+            storage_payload,
             section_count,
             programlet,
             result_records,
@@ -225,7 +227,7 @@ impl CudaDevice {
 
         let start = Instant::now();
         let driver = &self.driver;
-        let input = Buffer::upload_bytes(driver, payload)?;
+        let input = Buffer::upload(driver, input_words)?;
         let result = Buffer::new(driver, result_records)?;
         check(
             unsafe { (driver.clear)(result.address, 0, result_records) },
@@ -233,6 +235,9 @@ impl CudaDevice {
         )?;
         let directory = Buffer::upload(driver, &dispatch_words)?;
         let sections = Buffer::upload(driver, &section_words)?;
+        let storage_descriptor_buffer = Buffer::upload(driver, &storage_descriptors)?;
+        let storage_name_buffer = Buffer::upload(driver, &storage_names)?;
+        let storage_payload_buffer = Buffer::upload(driver, &storage_payload)?;
         let completion = Buffer::upload(driver, &[0])?;
         let before = Event::new(driver)?;
         let after = Event::new(driver)?;
@@ -242,16 +247,32 @@ impl CudaDevice {
         let (mut src, mut dst) = (input.address, result.address);
         let (mut directory, mut descriptors, mut ticket) =
             (directory.address, sections.address, completion.address);
-        let (mut count, mut section_total) = (codelets.len() as u32, section_count as u32);
-        let mut args: [*mut c_void; 7] = [
+        let (mut count, mut section_total) =
+            (executable_codelets.len() as u32, section_count as u32);
+        let (mut storage_descriptor_words, mut storage_name_count, mut storage_payload_words) = (
+            storage_descriptors.len() as u32,
+            storage_names.len() as u32,
+            storage_payload.len() as u32,
+        );
+        let mut args: [*mut c_void; 9] = [
             from_mut(&mut src).cast(),
             from_mut(&mut count).cast(),
             from_mut(&mut dst).cast(),
             null_mut(),
+            from_mut(&mut storage_descriptor_words).cast(),
             null_mut(),
+            from_mut(&mut storage_name_count).cast(),
             null_mut(),
-            null_mut(),
+            from_mut(&mut storage_payload_words).cast(),
         ];
+        let (mut storage_descriptor_address, mut storage_name_address, mut storage_payload_address) = (
+            storage_descriptor_buffer.address,
+            storage_name_buffer.address,
+            storage_payload_buffer.address,
+        );
+        args[3] = from_mut(&mut storage_descriptor_address).cast();
+        args[5] = from_mut(&mut storage_name_address).cast();
+        args[7] = from_mut(&mut storage_payload_address).cast();
         let (entry, blocks, block_size) = if section_count > 0 {
             args[3] = from_mut(&mut descriptors).cast();
             args[4] = from_mut(&mut section_total).cast();
@@ -312,7 +333,7 @@ impl CudaDevice {
         timing.kernel_timing_source = Some("cuda-event");
         timing.submit_wait_readback_ms = elapsed(start);
         decode_pack_result(
-            codelets,
+            executable_codelets,
             &output,
             section_count,
             programlet,

@@ -32,6 +32,8 @@ fn read_scalar(
         kind: result_kind,
         length: 1,
         values: [0; RESULT_WORDS],
+        storage_backed: false,
+        storage_byte_offset: 0,
     };
     let words_per_value = header.scalar_bytes as usize / 2;
     if !matches!(words_per_value, 1 | 2 | 4) {
@@ -104,7 +106,14 @@ fn read_numeric_operand(
             }
         }
     }
-    *result = match read_operand(cursor, words, start, group_len, codelet_count) {
+    *result = match read_operand(
+        cursor,
+        words,
+        start,
+        group_len,
+        codelet_count,
+        &StorageView::EMPTY,
+    ) {
         Ok(value) => value,
         Err(error) => return Err(error),
     };
@@ -142,7 +151,14 @@ pub(super) fn vector_float_arithmetic_group(
         slot: 1,
         end: start + group_len,
     };
-    let left = match read_operand(&mut cursor, words, start, group_len, codelet_count) {
+    let left = match read_operand(
+        &mut cursor,
+        words,
+        start,
+        group_len,
+        codelet_count,
+        &StorageView::EMPTY,
+    ) {
         Ok(value) => value,
         Err(error) => return CoreResult::failure(error, group_len as u32),
     };
@@ -155,6 +171,8 @@ pub(super) fn vector_float_arithmetic_group(
         kind: 0,
         length: 0,
         values: [0; RESULT_WORDS],
+        storage_backed: false,
+        storage_byte_offset: 0,
     };
     let right_is_vector = match read_numeric_operand(
         &mut cursor,
@@ -271,7 +289,14 @@ pub(super) fn vector_sum_group(
         slot: 1,
         end: start + group_len,
     };
-    let vector = match read_operand(&mut cursor, words, start, group_len, codelet_count) {
+    let vector = match read_operand(
+        &mut cursor,
+        words,
+        start,
+        group_len,
+        codelet_count,
+        &StorageView::EMPTY,
+    ) {
         Ok(value) => value,
         Err(error) => return CoreResult::failure(error, group_len as u32),
     };
@@ -333,7 +358,14 @@ pub(super) fn vector_maximum_group(
         slot: 1,
         end: start + group_len,
     };
-    let vector = match read_operand(&mut cursor, words, start, group_len, codelet_count) {
+    let vector = match read_operand(
+        &mut cursor,
+        words,
+        start,
+        group_len,
+        codelet_count,
+        &StorageView::EMPTY,
+    ) {
         Ok(value) => value,
         Err(error) => return CoreResult::failure(error, group_len as u32),
     };

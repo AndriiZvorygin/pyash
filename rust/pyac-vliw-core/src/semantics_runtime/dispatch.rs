@@ -3,12 +3,21 @@ use super::iwsp_vector_ops::{
 };
 use super::mutable_vector::mutable_vector_group;
 use super::pluk_tlas::pluk_tlas_group;
-use super::scalar_product::scalar_product_group;
+use super::scalar_product::scalar_product_group_with_storage;
 use super::signature_dispatch::*;
 use super::vector_group::interpret_vector_group;
 use super::*;
 
 pub fn interpret_group(words: &[impl VliwWord], start: usize, codelet_count: usize) -> CoreResult {
+    interpret_group_with_storage(words, start, codelet_count, &StorageView::EMPTY)
+}
+
+pub fn interpret_group_with_storage(
+    words: &[impl VliwWord],
+    start: usize,
+    codelet_count: usize,
+    storage: &StorageView<'_>,
+) -> CoreResult {
     if start >= codelet_count || words.len() < codelet_count * CODELET_WORDS {
         return CoreResult::failure(ERROR_MALFORMED, 0);
     }
@@ -26,7 +35,9 @@ pub fn interpret_group(words: &[impl VliwWord], start: usize, codelet_count: usi
     };
     let result = match route {
         ROUTE_PLUK_TLAS => pluk_tlas_group(words, start, group_len, codelet_count),
-        ROUTE_SCALAR_PRODUCT => scalar_product_group(words, start, group_len, codelet_count),
+        ROUTE_SCALAR_PRODUCT => {
+            scalar_product_group_with_storage(words, start, group_len, codelet_count, storage)
+        }
         ROUTE_VECTOR_FLOAT_ARITHMETIC => Some(vector_float_arithmetic_group(
             words,
             start,
