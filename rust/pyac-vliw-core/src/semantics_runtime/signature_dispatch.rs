@@ -48,7 +48,12 @@ const VERB_VECTOR_SUM: u32 = 10;
 const VERB_VECTOR_MAXIMUM: u32 = 11;
 const VERB_UNSUPPORTED: u32 = 0;
 
-fn classify_verb(signature: &SignatureView, words: &[u32], start: usize, group_len: usize) -> u32 {
+fn classify_verb(
+    signature: &SignatureView,
+    words: &[impl VliwWord],
+    start: usize,
+    group_len: usize,
+) -> u32 {
     if verb_is(signature, words, start, group_len, PLUK, Some(TLAS)) {
         return VERB_PLUK_TLAS;
     }
@@ -94,7 +99,7 @@ fn classify_verb(signature: &SignatureView, words: &[u32], start: usize, group_l
     }
 }
 
-fn has_boundary_word(words: &[u32], start: usize, group_len: usize, target: u32) -> bool {
+fn has_boundary_word(words: &[impl VliwWord], start: usize, group_len: usize, target: u32) -> bool {
     let capacity = group_len * (CODELET_WORDS - 1);
     let mut index = 0;
     while index < capacity {
@@ -108,7 +113,7 @@ fn has_boundary_word(words: &[u32], start: usize, group_len: usize, target: u32)
     false
 }
 
-fn is_multicodelet_vector_literal(words: &[u32], start: usize, group_len: usize) -> bool {
+fn is_multicodelet_vector_literal(words: &[impl VliwWord], start: usize, group_len: usize) -> bool {
     if group_len < 2 {
         return false;
     }
@@ -228,7 +233,7 @@ fn literal_route(signature: &SignatureView, group_len: usize) -> Result<u32, u32
 }
 
 pub(super) fn select_signature_route(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
 ) -> Result<u32, u32> {

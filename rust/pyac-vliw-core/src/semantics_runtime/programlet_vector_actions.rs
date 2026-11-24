@@ -322,7 +322,7 @@ fn maximum_index(vector: &ProgramletVectorValue) -> Result<u32, u32> {
 
 pub(super) fn is_programlet_vector_verb(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
 ) -> bool {
     matches!(
         (
@@ -338,7 +338,7 @@ pub(super) fn is_programlet_vector_verb(
 
 pub(super) fn is_programlet_vector_action(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     vector_slots: &[ProgramletVectorSlot; MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
@@ -357,7 +357,7 @@ pub(super) fn is_programlet_vector_action(
 #[inline(never)]
 pub(super) fn apply_programlet_vector_action(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     symbols: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     symbol_used: &mut usize,
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],

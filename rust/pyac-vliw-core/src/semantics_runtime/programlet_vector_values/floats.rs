@@ -1,7 +1,7 @@
 use super::*;
 
 pub(crate) fn read_programlet_float(
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     field: SentenceField,
     symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
@@ -61,7 +61,7 @@ pub(crate) fn read_programlet_float(
 }
 
 pub(crate) fn write_programlet_float(
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     output: SentenceField,
     symbols: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     symbol_used: &mut usize,

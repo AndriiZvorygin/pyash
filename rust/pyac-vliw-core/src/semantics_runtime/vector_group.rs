@@ -3,7 +3,7 @@ use super::*;
 
 pub(super) const VECTOR_VERB: u32 = 0x2b73;
 
-fn vector_header(words: &[u32], codelet: usize) -> Option<(usize, QuoteHeader)> {
+fn vector_header(words: &[impl VliwWord], codelet: usize) -> Option<(usize, QuoteHeader)> {
     let mut slot = 1;
     while slot < CODELET_WORDS {
         let raw = word(words, codelet, slot);
@@ -16,7 +16,11 @@ fn vector_header(words: &[u32], codelet: usize) -> Option<(usize, QuoteHeader)> 
     None
 }
 
-pub(super) fn vector_name_span(words: &[u32], start: usize, group_len: usize) -> Option<NameSpan> {
+pub(super) fn vector_name_span(
+    words: &[impl VliwWord],
+    start: usize,
+    group_len: usize,
+) -> Option<NameSpan> {
     if group_len == 0 {
         return None;
     }
@@ -45,7 +49,7 @@ pub(super) fn vector_name_span(words: &[u32], start: usize, group_len: usize) ->
     None
 }
 
-fn token_at(words: &[u32], start: usize, offset: usize, group_len: usize) -> Option<u32> {
+fn token_at(words: &[impl VliwWord], start: usize, offset: usize, group_len: usize) -> Option<u32> {
     if offset >= group_len * (CODELET_WORDS - 1) {
         return None;
     }
@@ -59,7 +63,7 @@ fn token_at(words: &[u32], start: usize, offset: usize, group_len: usize) -> Opt
 }
 
 fn vector_length(
-    words: &[u32],
+    words: &[impl VliwWord],
     codelet: usize,
     offset: usize,
     header: QuoteHeader,
@@ -86,7 +90,11 @@ fn vector_length(
     Some((length, payload_offset))
 }
 
-fn next_indexed_word(words: &[u32], codelet: &mut usize, slot: &mut usize) -> Option<u32> {
+fn next_indexed_word(
+    words: &[impl VliwWord],
+    codelet: &mut usize,
+    slot: &mut usize,
+) -> Option<u32> {
     if *codelet * CODELET_WORDS + *slot >= words.len() {
         return None;
     }
@@ -99,7 +107,7 @@ fn next_indexed_word(words: &[u32], codelet: &mut usize, slot: &mut usize) -> Op
     Some(value)
 }
 
-fn vector_literal(words: &[u32], start: usize, group_len: usize) -> Option<CoreResult> {
+fn vector_literal(words: &[impl VliwWord], start: usize, group_len: usize) -> Option<CoreResult> {
     let (offset, header) = vector_header(words, start)?;
     let (length, payload_offset) = match vector_length(words, start, offset, header) {
         Some(layout) => layout,
@@ -189,7 +197,7 @@ fn vector_literal(words: &[u32], start: usize, group_len: usize) -> Option<CoreR
 }
 
 pub(super) fn interpret_vector_group(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
 ) -> Option<CoreResult> {

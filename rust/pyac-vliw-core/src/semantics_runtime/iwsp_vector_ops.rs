@@ -9,7 +9,11 @@ pub(super) const SUM_VERB: u32 = 0xbc8a;
 pub(super) const MAXIMUM_VERB_FIRST: u32 = 0xa9b2;
 pub(super) const MAXIMUM_VERB_SECOND: u32 = 0xa831;
 
-fn read_scalar(cursor: &mut Cursor, words: &[u32], vector_kind: u32) -> Result<VectorOperand, u32> {
+fn read_scalar(
+    cursor: &mut Cursor,
+    words: &[impl VliwWord],
+    vector_kind: u32,
+) -> Result<VectorOperand, u32> {
     let header_word = cursor.read(words, false).ok_or(ERROR_MALFORMED)?;
     let header = quote_header(header_word);
     if header.valid == 0
@@ -81,7 +85,7 @@ fn read_scalar(cursor: &mut Cursor, words: &[u32], vector_kind: u32) -> Result<V
 
 fn read_numeric_operand(
     cursor: &mut Cursor,
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
     codelet_count: usize,
@@ -127,7 +131,7 @@ fn scalar_bits(operand: &VectorOperand) -> u64 {
 }
 
 pub(super) fn vector_float_arithmetic_group(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
     codelet_count: usize,
@@ -256,7 +260,7 @@ pub(super) fn vector_float_arithmetic_group(
 }
 
 pub(super) fn vector_sum_group(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
     codelet_count: usize,
@@ -318,7 +322,7 @@ pub(super) fn vector_sum_group(
 }
 
 pub(super) fn vector_maximum_group(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
     codelet_count: usize,

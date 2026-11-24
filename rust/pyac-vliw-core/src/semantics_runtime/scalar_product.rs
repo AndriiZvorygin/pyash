@@ -20,13 +20,13 @@ pub(super) struct VectorOperand {
     pub(super) values: [u32; RESULT_WORDS],
 }
 
-fn boundary_at(words: &[u32], codelet: usize, slot: usize) -> bool {
+fn boundary_at(words: &[impl VliwWord], codelet: usize, slot: usize) -> bool {
     let head = word(words, codelet, 0);
     (head & (1 << slot) != 0) == (head & 1 != 0)
 }
 
 impl Cursor {
-    pub(super) fn peek(&self, words: &[u32], boundary: bool) -> Option<u32> {
+    pub(super) fn peek(&self, words: &[impl VliwWord], boundary: bool) -> Option<u32> {
         if self.codelet >= self.end
             || self.slot >= CODELET_WORDS
             || boundary_at(words, self.codelet, self.slot) != boundary
@@ -40,7 +40,7 @@ impl Cursor {
         (self.codelet - self.start) * (CODELET_WORDS - 1) + self.slot - 1
     }
 
-    pub(super) fn read(&mut self, words: &[u32], boundary: bool) -> Option<u32> {
+    pub(super) fn read(&mut self, words: &[impl VliwWord], boundary: bool) -> Option<u32> {
         if self.codelet >= self.end || self.slot >= CODELET_WORDS {
             return None;
         }
@@ -56,7 +56,7 @@ impl Cursor {
         Some(value)
     }
 
-    pub(super) fn zero_tail(&self, words: &[u32]) -> bool {
+    pub(super) fn zero_tail(&self, words: &[impl VliwWord]) -> bool {
         let mut codelet = self.codelet;
         let mut slot = self.slot;
         while codelet < self.end {
@@ -88,7 +88,10 @@ impl ScalarProductDestination {
     };
 }
 
-fn read_destination(words: &[u32], cursor: &mut Cursor) -> Result<ScalarProductDestination, u32> {
+fn read_destination(
+    words: &[impl VliwWord],
+    cursor: &mut Cursor,
+) -> Result<ScalarProductDestination, u32> {
     if cursor.peek(words, false) != Some(NAME_TYPE) {
         return Ok(ScalarProductDestination::NONE);
     }
@@ -126,7 +129,7 @@ fn read_destination(words: &[u32], cursor: &mut Cursor) -> Result<ScalarProductD
 }
 
 pub(super) fn scalar_product_destination(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
 ) -> Result<ScalarProductDestination, u32> {
@@ -147,7 +150,11 @@ pub(super) fn scalar_product_destination(
     read_destination(words, &mut cursor)
 }
 
-fn vector_length(header: QuoteHeader, cursor: &mut Cursor, words: &[u32]) -> Result<usize, u32> {
+fn vector_length(
+    header: QuoteHeader,
+    cursor: &mut Cursor,
+    words: &[impl VliwWord],
+) -> Result<usize, u32> {
     let scalar_words = header.scalar_bytes as usize / 2;
     if scalar_words == 0 {
         return Err(ERROR_MALFORMED);
@@ -165,7 +172,7 @@ fn vector_length(header: QuoteHeader, cursor: &mut Cursor, words: &[u32]) -> Res
     Ok(length)
 }
 
-fn read_vector(cursor: &mut Cursor, words: &[u32]) -> Result<VectorOperand, u32> {
+fn read_vector(cursor: &mut Cursor, words: &[impl VliwWord]) -> Result<VectorOperand, u32> {
     let header_word = cursor.read(words, false).ok_or(ERROR_MALFORMED)?;
     let header = quote_header(header_word);
     if header.valid == 0 || header.sort != 6 || !matches!(header.scalar_bytes, 4 | 8) {
@@ -219,7 +226,7 @@ fn read_vector(cursor: &mut Cursor, words: &[u32]) -> Result<VectorOperand, u32>
     })
 }
 
-fn read_name_span(cursor: &mut Cursor, words: &[u32]) -> Result<NameSpan, u32> {
+fn read_name_span(cursor: &mut Cursor, words: &[impl VliwWord]) -> Result<NameSpan, u32> {
     cursor.read(words, false).ok_or(ERROR_MALFORMED)?;
     let start = cursor.offset();
     let mut length = 0;
@@ -235,7 +242,7 @@ fn read_name_span(cursor: &mut Cursor, words: &[u32]) -> Result<NameSpan, u32> {
 
 pub(super) fn read_operand(
     cursor: &mut Cursor,
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
     codelet_count: usize,
@@ -252,7 +259,7 @@ pub(super) fn read_operand(
     })
 }
 
-fn skip_operand(cursor: &mut Cursor, words: &[u32]) -> Result<(), u32> {
+fn skip_operand(cursor: &mut Cursor, words: &[impl VliwWord]) -> Result<(), u32> {
     if cursor.peek(words, false) == Some(NAME_TYPE) {
         read_name_span(cursor, words)?;
     } else {
@@ -264,7 +271,7 @@ fn skip_operand(cursor: &mut Cursor, words: &[u32]) -> Result<(), u32> {
     Ok(())
 }
 
-fn operation_suffix(words: &[u32], start: usize, end: usize) -> bool {
+fn operation_suffix(words: &[impl VliwWord], start: usize, end: usize) -> bool {
     if start >= end || end > words.len() / CODELET_WORDS {
         return false;
     }
@@ -295,7 +302,7 @@ fn operation_suffix(words: &[u32], start: usize, end: usize) -> bool {
 }
 
 pub(super) fn scalar_product_group(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
     codelet_count: usize,

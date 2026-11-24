@@ -1,7 +1,7 @@
 use super::*;
 
-pub(super) struct PreparedPack {
-    pub(super) input_words: Vec<u32>,
+pub(super) struct PreparedPack<'a> {
+    pub(super) input_words: &'a [u16],
     pub(super) section_words: Vec<u32>,
     pub(super) dispatch_words: Vec<u32>,
     pub(super) section_count: usize,
@@ -11,11 +11,8 @@ pub(super) struct PreparedPack {
 
 pub(super) fn prepare_pack(
     codelets: &[[u16; pyac::WORDS_PER_CODELET]],
-) -> Result<PreparedPack, String> {
-    let input_words = codelets
-        .iter()
-        .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
-        .collect::<Vec<_>>();
+) -> Result<PreparedPack<'_>, String> {
+    let input_words = codelets.as_flattened();
     let sectioned = pyac_vliw_core::has_programlet_section_header(&input_words, codelets.len());
     let mut section_descriptors =
         [pyac_vliw_core::ProgramletSection::EMPTY; pyac_vliw_core::MAX_PROGRAMLET_SECTIONS];
@@ -129,4 +126,24 @@ pub(super) fn decode_pack_result(
         );
     }
     Ok(response)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prepared_cuda_input_borrows_packed_words_without_widening() {
+        let codelets = [[0x1234u16; pyac::WORDS_PER_CODELET]; 2];
+        let prepared = prepare_pack(&codelets).expect("valid packet shape");
+        let source = codelets.as_flattened();
+
+        assert_eq!(prepared.input_words.len(), source.len());
+        assert_eq!(
+            std::mem::size_of_val(prepared.input_words),
+            source.len() * 2
+        );
+        assert_eq!(prepared.input_words.as_ptr(), source.as_ptr());
+        assert_eq!(prepared.input_words, source);
+    }
 }

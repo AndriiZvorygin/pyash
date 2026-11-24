@@ -4,7 +4,7 @@ use super::*;
 const FIXED16_QUOTE: u32 = 0xc81d;
 const FIXED16_SCALE: u32 = 46_656;
 
-pub(super) fn single_codelet(words: &[u32], codelet: usize) -> Option<CoreResult> {
+pub(super) fn single_codelet(words: &[impl VliwWord], codelet: usize) -> Option<CoreResult> {
     let offset = find_quote(words, codelet)?;
     let header = quote_header(word(words, codelet, offset));
     if header.valid == 0
@@ -36,7 +36,7 @@ pub(super) fn single_codelet(words: &[u32], codelet: usize) -> Option<CoreResult
     Some(CoreResult::failure(ERROR_UNSUPPORTED, 1))
 }
 
-fn arithmetic(words: &[u32], codelet: usize) -> CoreResult {
+fn arithmetic(words: &[impl VliwWord], codelet: usize) -> CoreResult {
     let operator = word(words, codelet, 7);
     if !matches!(operator, PLUS | SUBTRACT | MULTIPLY | DIVIDE) {
         return CoreResult::failure(ERROR_UNSUPPORTED, 1);

@@ -8,7 +8,7 @@ use super::signature_dispatch::*;
 use super::vector_group::interpret_vector_group;
 use super::*;
 
-pub fn interpret_group(words: &[u32], start: usize, codelet_count: usize) -> CoreResult {
+pub fn interpret_group(words: &[impl VliwWord], start: usize, codelet_count: usize) -> CoreResult {
     if start >= codelet_count || words.len() < codelet_count * CODELET_WORDS {
         return CoreResult::failure(ERROR_MALFORMED, 0);
     }

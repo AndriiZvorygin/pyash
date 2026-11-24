@@ -4,6 +4,39 @@ Use this file as the lookup record for Rust VLIW CPU/GPU conformance runs. Each
 entry records the repository revision, deployed artifact, host/device, route,
 and exact test outcome. A queued or timed-out job is not a passing test.
 
+## 2026-11-24: Borrowed `u16` Input and CUDA Pack Upload
+
+The PyAC pack format remains v1: codelet payloads are sixteen `u16` words.
+The CPU interpreter now reads those words directly, the shared core accepts
+both `u16` and `u32` sources while widening only an individual word at
+semantic access, and CUDA uploads the original pack payload bytes without a
+pack-sized `u32` expansion. Dispatch metadata and result buffers remain
+`u32`; WebGPU converts at its existing `u32` storage-buffer boundary.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261124-0003-rust-vliw-conformance/result.pya` |
+| Source revision | `e63ad0f1a052fa9bf61abba60dbb8c67850a9388` plus tracked patch SHA-256 `75f310856e1917b544a49bd1bee83d1ab5e20e37231f6c9f0d1330048e0965fd` at canary build time |
+| Build host / GPU host | Mriczo build and client -> SWAC Housekeeper -> Rust CUDA runtime |
+| GPU | NVIDIA GeForce RTX 3060, driver `535.247.01`, 12,288 MiB |
+| Runtime image | `sha256:28aaaf032af869b410ecca82a1e213b6c72bb2a413fcd67f48ad6468714da79b` |
+| Cubin | 3,201,880 bytes; SHA-256 `e37447150fb9140a5c417baf13b4a7349925d9a9b36b0a94e8a8dcca4ba44938` |
+| Runtime executable | 9,277,288 bytes; SHA-256 `317e898f34defb7044396520e0aca3f281350a2e92f812df88440100553cc674` |
+| CPU reference executable | 16,019,616 bytes; SHA-256 `9495d84c78bd7a77dd2398439eb279bac30d651916f2053c55efec0f081cbad7` |
+| Full run | 7,525.010 ms; 67 matrix cases and 3 standalone dispatch probes passed; both expected errors matched |
+| CPU batches | 38 codelet cases: 58.217 ms; 29 sections: 65.578 ms |
+| CUDA event batches | 38 codelet cases: 3.549 ms; 29 sections: 108.637 ms |
+| CUDA client round trips | Codelet batch: 659.086 ms; section batch: 669.290 ms |
+| Cold runtime | CUDA artifact loaded; runtime initialization 0.11 s; ready in 1.044 s |
+| Container memory | 1 GiB limit; post-run sample 28.77 MiB |
+| Route after verification | Prior CUDA runtime restored and ready; Housekeeper resumed dispatch |
+
+This run covers the configured VLIW matrix, including float vectors, nested
+dispatch, and attention. Targeted tests verify the borrowed pack view and exact
+CUDA payload bytes; unaligned host packets use a host-side decoding copy only,
+while the GPU still receives the original bytes. The `.pya` run record holds
+per-request timings and Housekeeper job IDs.
+
 ## 2026-11-23: Pyash Role-Projected Attention
 
 **Run record:** `artifacts/20261123-0013-rust-vliw-conformance/result.pya`

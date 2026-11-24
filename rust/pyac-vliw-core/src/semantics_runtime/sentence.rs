@@ -1,33 +1,21 @@
 use super::sentence_parse_state::{SentenceParseState, advance_sentence_parse};
 use super::*;
 
-#[cfg(target_arch = "spirv")]
-macro_rules! sentence_word_unchecked {
-    ($words:expr, $index:expr) => {{
-        // SAFETY: SentenceView construction and parser range checks prove the
-        // absolute index belongs to its validated codelet span.
-        unsafe { *<[u32] as spirv_std::arch::IndexUnchecked<u32>>::index_unchecked($words, $index) }
-    }};
-}
-
-#[cfg(not(target_arch = "spirv"))]
-macro_rules! sentence_word_unchecked {
-    ($words:expr, $index:expr) => {
-        $words[$index]
-    };
-}
-
 #[derive(Clone, Copy)]
-pub(super) struct SentenceView<'a> {
-    words: &'a [u32],
+pub(super) struct SentenceView<'a, W: VliwWord> {
+    words: &'a [W],
     start_word_index: usize,
     token_count: usize,
 }
 
 /// A borrowed Phrase-like span over codelet payloads and their header marks.
 /// Reads stay on the source page; parsing does not flatten sentences into scratch arrays.
-impl SentenceView<'_> {
-    pub(super) fn new(words: &[u32], start_codelet: usize, token_count: usize) -> SentenceView<'_> {
+impl<'a, W: VliwWord> SentenceView<'a, W> {
+    pub(super) fn new(
+        words: &'a [W],
+        start_codelet: usize,
+        token_count: usize,
+    ) -> SentenceView<'a, W> {
         SentenceView {
             words,
             start_word_index: start_codelet * CODELET_WORDS + 1,
@@ -55,17 +43,8 @@ impl SentenceView<'_> {
 
     pub(super) fn word_at_word_index(&self, start_word_index: usize, index: usize) -> u32 {
         let source_index = Self::word_index_from(start_word_index, index);
-        #[cfg(target_arch = "spirv")]
-        unsafe {
-            *<[u32] as spirv_std::arch::IndexUnchecked<u32>>::index_unchecked(
-                self.words,
-                source_index,
-            )
-        }
-        #[cfg(not(target_arch = "spirv"))]
-        {
-            self.words[source_index]
-        }
+        // SAFETY: callers validate this index against the collected span.
+        unsafe { input_word_unchecked(self.words, source_index) }
     }
 
     pub(super) fn word_span_is_valid(&self, start_word_index: usize, token_count: usize) -> bool {
@@ -84,7 +63,7 @@ impl SentenceView<'_> {
         if index >= self.token_count {
             return None;
         }
-        let value = self.words[self.word_index(index)];
+        let value = self.word_at_word_index(self.start_word_index, index);
         (value <= MAX_U16).then_some(value)
     }
 
@@ -92,17 +71,7 @@ impl SentenceView<'_> {
         let source_index = self.word_index(index);
         // SAFETY: callers validate the logical index against the collected
         // span, whose codelets and payload words were validated on collection.
-        #[cfg(target_arch = "spirv")]
-        unsafe {
-            *<[u32] as spirv_std::arch::IndexUnchecked<u32>>::index_unchecked(
-                self.words,
-                source_index,
-            )
-        }
-        #[cfg(not(target_arch = "spirv"))]
-        {
-            self.words[source_index]
-        }
+        unsafe { input_word_unchecked(self.words, source_index) }
     }
 
     pub(super) fn token_or_first(&self, index: usize) -> u32 {
@@ -134,33 +103,16 @@ impl SentenceView<'_> {
         let slot = source_index % CODELET_WORDS;
         let source_index = codelet * CODELET_WORDS;
         // SAFETY: callers validate the logical index against the collected span.
-        #[cfg(target_arch = "spirv")]
-        let header = unsafe {
-            *<[u32] as spirv_std::arch::IndexUnchecked<u32>>::index_unchecked(
-                self.words,
-                source_index,
-            )
-        };
-        #[cfg(not(target_arch = "spirv"))]
-        let header = self.words[source_index];
+        let header = unsafe { input_word_unchecked(self.words, source_index) };
         let complete = header & 1 != 0;
         (header & (1 << slot) != 0) == complete
-    }
-}
-
-#[cfg(not(target_arch = "spirv"))]
-impl core::ops::Index<usize> for SentenceView<'_> {
-    type Output = u32;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.words[self.word_index(index)]
     }
 }
 
 /// Validate one sentence and return its payload length and next codelet offset.
 /// Scalar span metadata avoids materializing a token buffer on the GPU path.
 pub(super) fn collect_sentence(
-    words: &[u32],
+    words: &[impl VliwWord],
     codelet_count: usize,
     start: usize,
 ) -> Result<(usize, usize), u32> {
@@ -168,7 +120,7 @@ pub(super) fn collect_sentence(
 }
 
 pub(super) fn collect_sentence_at(
-    words: &[u32],
+    words: &[impl VliwWord],
     total_codelet_count: usize,
     base_codelet: usize,
     window_codelet_count: usize,
@@ -222,12 +174,15 @@ pub(super) fn collect_sentence_at(
     }
 }
 
-pub(super) fn parse_sentence(tokens: &SentenceView<'_>, parsed: &mut ParsedSentence) -> u32 {
+pub(super) fn parse_sentence(
+    tokens: &SentenceView<'_, impl VliwWord>,
+    parsed: &mut ParsedSentence,
+) -> u32 {
     parse_sentence_range(tokens, 0, tokens.len(), parsed)
 }
 
 pub(super) fn parse_sentence_range(
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     start: usize,
     end: usize,
     parsed: &mut ParsedSentence,
@@ -241,9 +196,9 @@ pub(super) fn parse_sentence_range(
     let mut source_index = tokens.word_index(start);
     let mut codelet = source_index / CODELET_WORDS;
     let mut slot = source_index % CODELET_WORDS;
-    let mut header = sentence_word_unchecked!(tokens.words, codelet * CODELET_WORDS);
+    let mut header = unsafe { input_word_unchecked(tokens.words, codelet * CODELET_WORDS) };
     while index < end {
-        let token = sentence_word_unchecked!(tokens.words, source_index);
+        let token = unsafe { input_word_unchecked(tokens.words, source_index) };
         let complete = header & 1 != 0;
         let boundary = state.clause_depth == 0
             && token != DEPENDENT_CLAUSE
@@ -271,7 +226,7 @@ pub(super) fn parse_sentence_range(
                 codelet += 1;
                 slot = 1;
                 source_index = codelet * CODELET_WORDS + slot;
-                header = sentence_word_unchecked!(tokens.words, codelet * CODELET_WORDS);
+                header = unsafe { input_word_unchecked(tokens.words, codelet * CODELET_WORDS) };
             } else {
                 slot += 1;
                 source_index += 1;
@@ -281,7 +236,11 @@ pub(super) fn parse_sentence_range(
     ERROR_MALFORMED
 }
 
-pub(super) fn clause_tail(tokens: &SentenceView<'_>, start: usize, end: usize) -> Option<usize> {
+pub(super) fn clause_tail(
+    tokens: &SentenceView<'_, impl VliwWord>,
+    start: usize,
+    end: usize,
+) -> Option<usize> {
     if start >= end || end > tokens.len() {
         return None;
     }
@@ -306,7 +265,7 @@ pub(super) fn clause_tail(tokens: &SentenceView<'_>, start: usize, end: usize) -
 }
 
 pub(super) fn embedded_clause_range(
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     field: SentenceField,
 ) -> Result<(usize, usize), u32> {
     let Some(end) = field.start.checked_add(field.length) else {
@@ -328,7 +287,7 @@ pub(super) fn embedded_clause_range(
 }
 
 pub(super) fn next_sentence_is_paragraph_end(
-    words: &[u32],
+    words: &[impl VliwWord],
     codelet_count: usize,
     base_codelet: usize,
     start: usize,
@@ -353,7 +312,7 @@ pub(super) fn next_sentence_is_paragraph_end(
     Ok(next.mood == MOOD_PARAGRAPH)
 }
 
-pub(super) fn contains_marked_token(tokens: &SentenceView<'_>, target: u32) -> bool {
+pub(super) fn contains_marked_token(tokens: &SentenceView<'_, impl VliwWord>, target: u32) -> bool {
     let mut index = 0;
     while index < tokens.len() {
         if tokens.boundary(index) && sentence_at!(*tokens, index) == target {
@@ -365,7 +324,7 @@ pub(super) fn contains_marked_token(tokens: &SentenceView<'_>, target: u32) -> b
 }
 
 pub(super) fn name_span(
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     field: SentenceField,
     typed_number: bool,
     name: &mut NameSpan,
@@ -415,7 +374,7 @@ pub(super) fn name_span(
 }
 
 pub(super) fn typed_name_span(
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     field: SentenceField,
     name: &mut NameSpan,
     kind: &mut u32,
@@ -466,7 +425,7 @@ pub(super) fn typed_name_span(
 }
 
 pub(super) fn typed_output_name(
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     field: SentenceField,
     name: &mut NameSpan,
     kind: &mut u32,

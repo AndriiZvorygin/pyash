@@ -13,7 +13,7 @@ const SELECT_VERB: u32 = 0xaaa2;
 
 pub(super) fn is_programlet_vector_declaration(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
 ) -> bool {
     sentence.mood == REALIS
         && sentence.verb_length == 1
@@ -22,7 +22,7 @@ pub(super) fn is_programlet_vector_declaration(
 
 pub(super) fn declare_programlet_vector_local(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     symbols: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     symbol_used: &mut usize,
     vector_slots: &mut [ProgramletVectorSlot; MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
@@ -70,7 +70,7 @@ pub(super) fn declare_programlet_vector_local(
 
 pub(super) fn is_programlet_dot_product_store(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
 ) -> bool {
     sentence.mood == DEONTIC
         && sentence.verb_length == 2
@@ -80,7 +80,7 @@ pub(super) fn is_programlet_dot_product_store(
 
 pub(super) fn apply_programlet_dot_product_store(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     frame_index: usize,
@@ -172,7 +172,7 @@ pub(super) fn apply_programlet_dot_product_store(
 
 pub(super) fn is_programlet_vector_select(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     vector_slots: &[ProgramletVectorSlot; MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
@@ -191,7 +191,7 @@ pub(super) fn is_programlet_vector_select(
 
 pub(super) fn apply_programlet_vector_select(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     symbols: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     symbol_used: &mut usize,
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],

@@ -6,7 +6,7 @@ use core::slice::{from_raw_parts, from_raw_parts_mut};
 use core::sync::atomic::{AtomicU32, Ordering};
 use pyac_vliw_core::{
     CODELET_WORDS, CoreResult, DEFAULT_PROGRAMLET_STEP_BUDGET, ERROR_MALFORMED,
-    MAX_PROGRAMLET_SYMBOL_WORDS, MAX_PROGRAMLET_SECTION_NAME_WORDS, MAX_PROGRAMLET_SECTIONS,
+    MAX_PROGRAMLET_SECTION_NAME_WORDS, MAX_PROGRAMLET_SECTIONS, MAX_PROGRAMLET_SYMBOL_WORDS,
     PROGRAMLET_ROUTINE_DIRECTORY_WORDS, ProgramletStack, RESULT_WORDS,
     execute_numeric_programlet_at_with_directory_words, interpret_group,
 };
@@ -46,7 +46,7 @@ fn write_result(result: CoreResult, words: &mut [u32]) {
 }
 
 unsafe fn run_programlet(
-    input: &[u32],
+    input: &[u16],
     start: usize,
     count: usize,
     directory: &[u32],
@@ -68,7 +68,7 @@ unsafe fn run_programlet(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "ptx-kernel" fn execute_pyac_pack(
-    input: *const u32,
+    input: *const u16,
     codelet_count: u32,
     output: *mut u32,
 ) {
@@ -88,7 +88,7 @@ pub unsafe extern "ptx-kernel" fn execute_pyac_pack(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "ptx-kernel" fn execute_pyac_programlet(
-    input: *const u32,
+    input: *const u16,
     codelet_count: u32,
     output: *mut u32,
     directory: *const u32,
@@ -105,7 +105,7 @@ pub unsafe extern "ptx-kernel" fn execute_pyac_programlet(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "ptx-kernel" fn execute_pyac_sections(
-    input: *const u32,
+    input: *const u16,
     codelet_count: u32,
     output: *mut u32,
     descriptors: *const u32,

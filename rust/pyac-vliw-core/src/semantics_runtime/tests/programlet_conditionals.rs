@@ -3,7 +3,7 @@ use crate::boolean::{evaluate_boolean_expression, evaluate_boolean_leaf};
 
 #[test]
 fn scans_sectioned_programlets_with_inline_conditional_bodies() {
-    let codelets = [
+    let codelets: [[u32; CODELET_WORDS]; 8] = [
         [
             0x0049, 0x225e, 0x2818, 0x24de, 0xec01, 0x6a84, 0x5217, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ],

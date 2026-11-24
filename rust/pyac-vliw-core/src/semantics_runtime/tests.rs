@@ -115,3 +115,5 @@ mod programlet_signature_dispatch;
 mod programlet_vectors;
 #[path = "tests/scalar_product.rs"]
 mod scalar_product;
+#[path = "tests/u16_input.rs"]
+mod u16_input;

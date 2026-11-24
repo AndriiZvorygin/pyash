@@ -2,23 +2,16 @@ use super::*;
 
 const INVALID_CODELET_WORD: u32 = u32::MAX;
 
-pub(super) fn word(words: &[u32], codelet: usize, slot: usize) -> u32 {
+pub(super) fn word(words: &[impl VliwWord], codelet: usize, slot: usize) -> u32 {
     if slot >= CODELET_WORDS || codelet >= words.len() / CODELET_WORDS {
         return INVALID_CODELET_WORD;
     }
     let index = codelet * CODELET_WORDS + slot;
     // SAFETY: the guards prove this index is within a complete codelet in `words`.
-    #[cfg(target_arch = "spirv")]
-    unsafe {
-        *<[u32] as spirv_std::arch::IndexUnchecked<u32>>::index_unchecked(words, index)
-    }
-    #[cfg(not(target_arch = "spirv"))]
-    {
-        words[index]
-    }
+    unsafe { input_word_unchecked(words, index) }
 }
 
-pub(super) fn zero_tail(words: &[u32], codelet: usize, from: usize) -> bool {
+pub(super) fn zero_tail(words: &[impl VliwWord], codelet: usize, from: usize) -> bool {
     let mut slot = from;
     while slot < CODELET_WORDS {
         if word(words, codelet, slot) != 0 {
@@ -65,7 +58,7 @@ pub fn apply_number_operator(operator: u32, left: u32, right: u32) -> Result<u32
     number_operator(operator, left, right)
 }
 
-pub(super) fn arithmetic(words: &[u32], codelet: usize) -> Option<CoreResult> {
+pub(super) fn arithmetic(words: &[impl VliwWord], codelet: usize) -> Option<CoreResult> {
     if word(words, codelet, 1) != NUMBER_QUOTE
         || word(words, codelet, 3) != ACCUSATIVE
         || word(words, codelet, 4) != NUMBER_QUOTE
@@ -94,7 +87,7 @@ pub(super) fn arithmetic(words: &[u32], codelet: usize) -> Option<CoreResult> {
     }
 }
 
-pub(super) fn invert(words: &[u32], codelet: usize) -> Option<CoreResult> {
+pub(super) fn invert(words: &[impl VliwWord], codelet: usize) -> Option<CoreResult> {
     if word(words, codelet, 7) != INVERT && word(words, codelet, 6) != DATIVE {
         return None;
     }
@@ -124,7 +117,7 @@ pub(super) fn invert(words: &[u32], codelet: usize) -> Option<CoreResult> {
     ))
 }
 
-pub(super) fn boolean_literal(words: &[u32], codelet: usize) -> Option<CoreResult> {
+pub(super) fn boolean_literal(words: &[impl VliwWord], codelet: usize) -> Option<CoreResult> {
     let value = word(words, codelet, 1);
     if !matches!(value, TRUTH | LIE)
         || word(words, codelet, 2) != ACCUSATIVE
@@ -198,7 +191,7 @@ pub(super) fn quote_header(header: u32) -> QuoteHeader {
     }
 }
 
-pub(super) fn find_quote(words: &[u32], codelet: usize) -> Option<usize> {
+pub(super) fn find_quote(words: &[impl VliwWord], codelet: usize) -> Option<usize> {
     let mut slot = 1;
     while slot < CODELET_WORDS {
         if word(words, codelet, slot) & 0x1f == QUOTE_DENOTE {
@@ -209,7 +202,7 @@ pub(super) fn find_quote(words: &[u32], codelet: usize) -> Option<usize> {
     None
 }
 
-pub(super) fn literal(words: &[u32], codelet: usize) -> Option<CoreResult> {
+pub(super) fn literal(words: &[impl VliwWord], codelet: usize) -> Option<CoreResult> {
     let offset = find_quote(words, codelet)?;
     let header = word(words, codelet, offset);
     let header_info = quote_header(header);
@@ -305,7 +298,7 @@ pub(super) fn expected_index(nominative: Option<usize>, accusative: usize, mood:
     result | (1 << accusative) | (1 << mood)
 }
 
-pub(super) fn vector_arithmetic(words: &[u32], codelet: usize) -> Option<CoreResult> {
+pub(super) fn vector_arithmetic(words: &[impl VliwWord], codelet: usize) -> Option<CoreResult> {
     let left_header = word(words, codelet, 1);
     let left_info = quote_header(left_header);
     if left_info.valid == 0 {

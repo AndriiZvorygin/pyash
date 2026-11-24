@@ -5,6 +5,7 @@ pub mod catalog;
 pub mod dictionary;
 pub mod iwsp;
 pub mod literal;
+mod pack_view;
 pub mod semantic;
 
 pub use backend::riscv::{
@@ -18,6 +19,7 @@ pub use literal::{
     decode_vector, execute_date, execute_date_codelet, execute_vector, execute_vector_codelet,
     format_date, index_word,
 };
+pub use pack_view::{PyacPackView, decode_pack_view};
 pub use semantic::{
     ConditionalNumberInstruction, GOLDEN_NUMERIC_PLUS_CODELET, NumericArithmeticInstruction,
     NumericInvertInstruction, NumericOperandCase, NumericOperator, NumericPlusInstruction,
@@ -286,78 +288,16 @@ pub fn encode_pack(codelets: &[[u16; WORDS_PER_CODELET]]) -> Result<Vec<u8>, Pya
 }
 
 pub fn decode_pack(bytes: &[u8]) -> Result<PyacPack, PyacError> {
-    if bytes.len() < HEADER_BYTES {
-        return Err(PyacError::TruncatedPack);
-    }
-    if &bytes[..MAGIC.len()] != MAGIC {
-        return Err(PyacError::InvalidMagic);
-    }
-
-    let version = read_u16(bytes, 8);
-    let word_bits = read_u16(bytes, 10);
-    let words_per_codelet = read_u16(bytes, 12);
-    let header_bytes = read_u16(bytes, 14);
-    let record_count = read_u32(bytes, 16) as usize;
-    let codelet_bytes = read_u32(bytes, 20);
-    let declared_bytes = read_u32(bytes, 24);
-    let reserved = read_u32(bytes, 28);
-
-    if version != FORMAT_VERSION {
-        return Err(PyacError::UnsupportedVersion(version));
-    }
-    if word_bits != WORD_BITS || words_per_codelet != WORDS_PER_CODELET as u16 {
-        return Err(PyacError::UnsupportedWordLayout {
-            word_bits,
-            words_per_codelet,
-        });
-    }
-    if header_bytes as usize != HEADER_BYTES
-        || codelet_bytes as usize != CODELET_BYTES
-        || reserved != 0
-    {
-        return Err(PyacError::InvalidHeader {
-            header_bytes,
-            codelet_bytes,
-            reserved,
-        });
-    }
-
-    let expected_bytes =
-        HEADER_BYTES
-            .checked_add(record_count.checked_mul(CODELET_BYTES).ok_or(
-                PyacError::LengthMismatch {
-                    expected: usize::MAX,
-                    declared: declared_bytes,
-                    actual: bytes.len(),
-                },
-            )?)
-            .ok_or(PyacError::LengthMismatch {
-                expected: usize::MAX,
-                declared: declared_bytes,
-                actual: bytes.len(),
-            })?;
-    if declared_bytes as usize != expected_bytes || bytes.len() != expected_bytes {
-        return Err(PyacError::LengthMismatch {
-            expected: expected_bytes,
-            declared: declared_bytes,
-            actual: bytes.len(),
-        });
-    }
-
-    let mut codelets = Vec::with_capacity(record_count);
-    for codelet_index in 0..record_count {
-        let start = HEADER_BYTES + codelet_index * CODELET_BYTES;
-        let mut codelet = [0u16; WORDS_PER_CODELET];
-        for (word_index, word) in codelet.iter_mut().enumerate() {
-            *word = read_u16(bytes, start + word_index * 2);
-        }
-        codelets.push(codelet);
+    let view = decode_pack_view(bytes)?;
+    let mut codelets = Vec::with_capacity(view.codelet_count());
+    for index in 0..view.codelet_count() {
+        codelets.push(view.codelet(index).expect("validated codelet range"));
     }
     Ok(PyacPack {
-        version,
-        word_bits,
-        words_per_codelet,
-        codelet_bytes,
+        version: view.version(),
+        word_bits: view.word_bits(),
+        words_per_codelet: view.words_per_codelet(),
+        codelet_bytes: view.codelet_bytes(),
         codelets,
         bytes: bytes.to_vec(),
     })
@@ -392,7 +332,7 @@ fn programlet_error(error: u32) -> SemanticError {
 }
 
 fn execute_shared_programlet(
-    words: &[u32],
+    words: &[impl pyac_vliw_core::VliwWord],
     base_codelet: usize,
     codelet_count: usize,
     error_index: usize,
@@ -453,11 +393,7 @@ fn execute_shared_programlet(
 pub fn execute_pack_sections(
     pack: &PyacPack,
 ) -> Result<Vec<PyacSectionResult>, PackExecutionError> {
-    let words = pack
-        .codelets
-        .iter()
-        .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
-        .collect::<Vec<_>>();
+    let words = pack.codelets.as_flattened();
     if !pyac_vliw_core::has_programlet_section_header(&words, pack.codelets.len()) {
         return Err(PackExecutionError {
             index: 0,
@@ -501,11 +437,7 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
         NumericCodeletValue, execute_conditional_number_codelets, execute_numeric_codelet,
     };
 
-    let words = pack
-        .codelets
-        .iter()
-        .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
-        .collect::<Vec<_>>();
+    let words = pack.codelets.as_flattened();
     if pyac_vliw_core::has_programlet_section_header(&words, pack.codelets.len()) {
         let mut sections = execute_pack_sections(pack)?;
         // This compatibility API drops section identity, so retain its

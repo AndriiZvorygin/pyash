@@ -4,7 +4,7 @@ use pyac_vliw_core::{
 };
 
 pub(crate) fn prepare_dispatch_words(
-    input_words: &[u32],
+    input_words: &[impl pyac_vliw_core::VliwWord],
     programlet: bool,
     sections: &[ProgramletSection],
 ) -> Result<Vec<u32>, String> {

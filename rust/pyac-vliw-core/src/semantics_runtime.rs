@@ -1,4 +1,8 @@
 #![no_std]
+#[path = "semantics_runtime/word_input.rs"]
+mod word_input;
+pub use word_input::VliwWord;
+use word_input::input_word_unchecked;
 
 #[cfg(test)]
 extern crate std;

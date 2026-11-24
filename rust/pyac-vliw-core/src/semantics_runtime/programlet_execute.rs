@@ -2,7 +2,7 @@ use super::*;
 
 #[cfg(not(target_arch = "spirv"))]
 pub fn execute_numeric_programlet(
-    words: &[u32],
+    words: &[impl VliwWord],
     codelet_count: usize,
     step_budget: u32,
     symbol_words: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
@@ -13,7 +13,7 @@ pub fn execute_numeric_programlet(
 
 #[cfg(not(target_arch = "spirv"))]
 pub fn execute_numeric_programlet_at(
-    words: &[u32],
+    words: &[impl VliwWord],
     base_codelet: usize,
     codelet_count: usize,
     step_budget: u32,
@@ -42,7 +42,7 @@ pub fn execute_numeric_programlet_at(
 }
 
 pub fn execute_numeric_programlet_at_with_directory_words(
-    words: &[u32],
+    words: &[impl VliwWord],
     base_codelet: usize,
     codelet_count: usize,
     step_budget: u32,
@@ -76,7 +76,7 @@ pub fn execute_numeric_programlet_at_with_directory_words(
 }
 
 fn execute_numeric_programlet_at_with_directory_view(
-    words: &[u32],
+    words: &[impl VliwWord],
     base_codelet: usize,
     codelet_count: usize,
     step_budget: u32,

@@ -56,12 +56,12 @@ impl VectorResolution {
     };
 }
 
-fn is_boundary(words: &[u32], codelet: usize, slot: usize) -> bool {
+fn is_boundary(words: &[impl VliwWord], codelet: usize, slot: usize) -> bool {
     let head = word(words, codelet, 0);
     (head & (1 << slot) != 0) == (head & 1 != 0)
 }
 
-fn group_length(words: &[u32], start: usize, codelet_count: usize) -> Option<usize> {
+fn group_length(words: &[impl VliwWord], start: usize, codelet_count: usize) -> Option<usize> {
     let mut end = start;
     while end < codelet_count && word(words, end, 0) & 1 == 0 {
         end += 1;
@@ -69,7 +69,7 @@ fn group_length(words: &[u32], start: usize, codelet_count: usize) -> Option<usi
     (end < codelet_count).then_some(end - start + 1)
 }
 
-fn group_token_count(words: &[u32], start: usize, group_len: usize) -> Option<usize> {
+fn group_token_count(words: &[impl VliwWord], start: usize, group_len: usize) -> Option<usize> {
     if group_len == 0 || word(words, start + group_len - 1, 0) & 1 == 0 {
         return None;
     }
@@ -88,7 +88,7 @@ fn group_token_count(words: &[u32], start: usize, group_len: usize) -> Option<us
     Some((group_len - 1) * (CODELET_WORDS - 1) + last_boundary)
 }
 
-fn token_at(words: &[u32], start: usize, group_len: usize, offset: usize) -> Option<u32> {
+fn token_at(words: &[impl VliwWord], start: usize, group_len: usize, offset: usize) -> Option<u32> {
     if offset >= group_len * (CODELET_WORDS - 1) {
         return None;
     }
@@ -101,7 +101,7 @@ fn token_at(words: &[u32], start: usize, group_len: usize, offset: usize) -> Opt
     }
 }
 
-fn boundary_at_token(words: &[u32], start: usize, offset: usize) -> bool {
+fn boundary_at_token(words: &[impl VliwWord], start: usize, offset: usize) -> bool {
     let codelet = start + offset / (CODELET_WORDS - 1);
     let slot = offset % (CODELET_WORDS - 1) + 1;
     is_boundary(words, codelet, slot)
@@ -130,7 +130,7 @@ fn is_mood(mood: u32) -> bool {
     )
 }
 
-fn operation_suffix(words: &[u32], start: usize, group_len: usize) -> bool {
+fn operation_suffix(words: &[impl VliwWord], start: usize, group_len: usize) -> bool {
     let Some(token_count) = group_token_count(words, start, group_len) else {
         return false;
     };
@@ -147,7 +147,7 @@ fn operation_suffix(words: &[u32], start: usize, group_len: usize) -> bool {
 }
 
 fn parse_operation(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
 ) -> Result<(ParsedOperation, u32), u32> {
@@ -221,7 +221,7 @@ fn field(parsed: &ParsedOperation, role: u32) -> Option<TokenSpan> {
 }
 
 fn field_name(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
     field: TokenSpan,
@@ -236,7 +236,7 @@ fn field_name(
 }
 
 fn output_name(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
     field: TokenSpan,
@@ -258,7 +258,7 @@ fn output_name(
 }
 
 fn names_equal(
-    words: &[u32],
+    words: &[impl VliwWord],
     left_start: usize,
     left_group_len: usize,
     left: TokenSpan,
@@ -282,7 +282,7 @@ fn names_equal(
 }
 
 fn resolve_vector(
-    words: &[u32],
+    words: &[impl VliwWord],
     codelet_count: usize,
     before: usize,
     reference_start: usize,
@@ -407,7 +407,7 @@ fn resolve_vector(
 }
 
 pub(super) fn pluk_tlas_group(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
     codelet_count: usize,

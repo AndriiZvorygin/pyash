@@ -224,7 +224,7 @@ fn frame_rows_borrow_nested_backing_with_checked_frame_bounds() {
 
 #[test]
 fn finds_the_final_programlet_sentence_from_codelet_headers() {
-    let words = [
+    let words: [u32; 32] = [
         1 | (1 << 2),
         0x1234,
         0x5678,
@@ -325,20 +325,20 @@ fn sentence_parser_rejects_duplicate_top_level_case_roles() {
 
 #[test]
 fn rejects_incomplete_or_malformed_programlet_sentence_headers() {
-    let incomplete = [0; CODELET_WORDS];
+    let incomplete = [0u32; CODELET_WORDS];
     assert_eq!(
         last_programlet_sentence_start(&incomplete, 0, 1),
         Err(ERROR_MALFORMED)
     );
 
-    let malformed = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    let malformed = [1u32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
     assert_eq!(
         last_programlet_sentence_start(&malformed, 0, 1),
         Err(ERROR_MALFORMED)
     );
 
     let out_of_range = [
-        1 | (1 << 1),
+        1u32 | (1 << 1),
         65_536,
         0,
         0,

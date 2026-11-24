@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) fn last_programlet_sentence_start(
-    words: &[u32],
+    words: &[impl VliwWord],
     base_codelet: usize,
     codelet_count: usize,
 ) -> Result<usize, u32> {
@@ -48,7 +48,7 @@ pub(super) fn last_programlet_sentence_start(
 }
 
 pub(super) fn initialize_numeric_programlet(
-    words: &[u32],
+    words: &[impl VliwWord],
     base_codelet: usize,
     codelet_count: usize,
     step_budget: u32,

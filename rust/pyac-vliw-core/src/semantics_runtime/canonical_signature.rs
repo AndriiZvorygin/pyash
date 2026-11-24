@@ -53,7 +53,7 @@ impl SignatureView {
 }
 
 pub(super) fn token_at(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
     offset: usize,
@@ -67,14 +67,14 @@ pub(super) fn token_at(
     (value <= MAX_U16).then_some(value)
 }
 
-pub(super) fn token_boundary(words: &[u32], start: usize, offset: usize) -> bool {
+pub(super) fn token_boundary(words: &[impl VliwWord], start: usize, offset: usize) -> bool {
     let codelet = start + offset / (CODELET_WORDS - 1);
     let slot = offset % (CODELET_WORDS - 1) + 1;
     let header = word(words, codelet, 0);
     (header & (1 << slot) != 0) == (header & 1 != 0)
 }
 
-fn token_count(words: &[u32], start: usize, group_len: usize) -> Result<usize, u32> {
+fn token_count(words: &[impl VliwWord], start: usize, group_len: usize) -> Result<usize, u32> {
     if group_len == 0
         || start > words.len() / CODELET_WORDS
         || group_len > words.len() / CODELET_WORDS - start
@@ -108,7 +108,7 @@ fn is_mood(word: u32) -> bool {
 }
 
 fn value_type(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
     case: u32,
@@ -157,7 +157,7 @@ fn value_type(
     Ok(TYPE_WORD_TAG)
 }
 
-pub(super) fn signature(words: &[u32], start: usize, group_len: usize) -> SignatureView {
+pub(super) fn signature(words: &[impl VliwWord], start: usize, group_len: usize) -> SignatureView {
     let length = match token_count(words, start, group_len) {
         Ok(length) => length,
         Err(error) => return SignatureView::failure(error),
@@ -239,7 +239,7 @@ pub(super) fn signature(words: &[u32], start: usize, group_len: usize) -> Signat
 
 pub(super) fn verb_is(
     signature: &SignatureView,
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
     first: u32,

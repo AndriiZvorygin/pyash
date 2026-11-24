@@ -4,7 +4,7 @@ const LETTER_VECTOR_QUOTE: u32 = 0x0e1d;
 const VARIABLE: u32 = 0xc8c4;
 const ESSIVE: u32 = 0x414f;
 
-fn token_count(words: &[u32], start: usize, group_len: usize) -> Option<usize> {
+fn token_count(words: &[impl VliwWord], start: usize, group_len: usize) -> Option<usize> {
     if group_len == 0 || word(words, start + group_len - 1, 0) & 1 == 0 {
         return None;
     }
@@ -20,7 +20,7 @@ fn token_count(words: &[u32], start: usize, group_len: usize) -> Option<usize> {
     (final_boundary != 0).then_some((group_len - 1) * (CODELET_WORDS - 1) + final_boundary)
 }
 
-fn token(words: &[u32], start: usize, group_len: usize, offset: usize) -> Option<u32> {
+fn token(words: &[impl VliwWord], start: usize, group_len: usize, offset: usize) -> Option<u32> {
     if offset >= group_len * (CODELET_WORDS - 1) {
         return None;
     }
@@ -29,7 +29,7 @@ fn token(words: &[u32], start: usize, group_len: usize, offset: usize) -> Option
     Some(word(words, codelet, slot))
 }
 
-fn boundary(words: &[u32], start: usize, offset: usize) -> bool {
+fn boundary(words: &[impl VliwWord], start: usize, offset: usize) -> bool {
     let codelet = start + offset / (CODELET_WORDS - 1);
     let slot = offset % (CODELET_WORDS - 1) + 1;
     let header = word(words, codelet, 0);
@@ -37,7 +37,7 @@ fn boundary(words: &[u32], start: usize, offset: usize) -> bool {
 }
 
 fn expect(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
     offset: &mut usize,
@@ -51,7 +51,7 @@ fn expect(
 }
 
 fn expect_text_start(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
     offset: &mut usize,
@@ -65,11 +65,21 @@ fn expect_text_start(
     true
 }
 
-fn expect_text_end(words: &[u32], start: usize, group_len: usize, offset: &mut usize) -> bool {
+fn expect_text_end(
+    words: &[impl VliwWord],
+    start: usize,
+    group_len: usize,
+    offset: &mut usize,
+) -> bool {
     expect(words, start, group_len, offset, 0, false)
 }
 
-fn expect_state_text(words: &[u32], start: usize, group_len: usize, offset: &mut usize) -> bool {
+fn expect_state_text(
+    words: &[impl VliwWord],
+    start: usize,
+    group_len: usize,
+    offset: &mut usize,
+) -> bool {
     expect_text_start(words, start, group_len, offset, 5)
         && expect(words, start, group_len, offset, b's' as u32, false)
         && expect(words, start, group_len, offset, b't' as u32, false)
@@ -80,7 +90,7 @@ fn expect_state_text(words: &[u32], start: usize, group_len: usize, offset: &mut
 }
 
 fn expect_vector_float32_text(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
     offset: &mut usize,
@@ -104,7 +114,7 @@ fn expect_vector_float32_text(
 }
 
 pub(super) fn mutable_vector_declaration(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
 ) -> Result<(NameSpan, usize), u32> {
@@ -163,7 +173,7 @@ pub(super) fn mutable_vector_declaration(
 }
 
 pub(super) fn mutable_vector_group(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
 ) -> Option<CoreResult> {

@@ -16,6 +16,14 @@ rollback target there. Housekeeper uses the same `pyac-pack-execute` protocol
 for both backends. The CUDA image includes only the runtime, cubin, and build
 metadata: there is no PTX, compiler, or fallback to Vulkan or CPU.
 
+PyAC v1 codelet inputs stay 16-bit through CPU and CUDA execution. The shared
+semantics core reads either `u16` or `u32` sources and widens one word only when
+accessing its semantic value; dispatch directories and result records remain
+`u32`. CUDA validates a borrowed pack view and uploads the original codelet
+payload bytes directly, without a pack-sized `u32` expansion. The WebGPU/WGSL
+path converts at its own `u32` storage-buffer boundary and keeps the same pack
+format and runtime behavior.
+
 Build on Mriczo, not SWAC. The pinned nightly must have `rust-src`,
 `llvm-tools`, and `llvm-bitcode-linker`; `ptxas` 12.8 and Docker are used on
 the build host. Then run:

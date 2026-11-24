@@ -25,6 +25,11 @@ impl GpuRuntime {
             programlet,
             result_records,
         } = prepared?;
+        // WGSL storage buffers use u32 words; CUDA uploads the same source as u16.
+        let input_words = input_words
+            .iter()
+            .map(|word| u32::from(*word))
+            .collect::<Vec<_>>();
         let sectioned = section_count > 0;
         let pipeline = if sectioned {
             &self.sections_pipeline

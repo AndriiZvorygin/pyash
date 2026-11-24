@@ -1,10 +1,14 @@
 use super::*;
 
-pub fn is_numeric_programlet(words: &[u32], codelet_count: usize) -> bool {
+pub fn is_numeric_programlet(words: &[impl VliwWord], codelet_count: usize) -> bool {
     is_numeric_programlet_at(words, 0, codelet_count)
 }
 
-pub fn is_numeric_programlet_at(words: &[u32], base_codelet: usize, codelet_count: usize) -> bool {
+pub fn is_numeric_programlet_at(
+    words: &[impl VliwWord],
+    base_codelet: usize,
+    codelet_count: usize,
+) -> bool {
     if codelet_count == 0
         || base_codelet > words.len() / CODELET_WORDS
         || codelet_count > words.len() / CODELET_WORDS - base_codelet
@@ -68,7 +72,7 @@ pub fn is_numeric_programlet_at(words: &[u32], base_codelet: usize, codelet_coun
 
 pub(super) fn is_programlet_section_verb(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
 ) -> bool {
     sentence.verb_length == 2
         && sentence_at!(*tokens, sentence.verb_start) == SECTION_MODULE
@@ -94,7 +98,7 @@ pub(super) fn section_names_equal(
     true
 }
 
-pub fn has_programlet_section_header(words: &[u32], codelet_count: usize) -> bool {
+pub fn has_programlet_section_header(words: &[impl VliwWord], codelet_count: usize) -> bool {
     if codelet_count == 0 || codelet_count > words.len() / CODELET_WORDS {
         return false;
     }
@@ -112,7 +116,7 @@ pub fn has_programlet_section_header(words: &[u32], codelet_count: usize) -> boo
 /// sections. Returned codelet ranges exclude both section boundary sentences.
 /// Each section name is its sequence of HNUC words, not display text.
 pub fn scan_numeric_programlet_sections(
-    words: &[u32],
+    words: &[impl VliwWord],
     codelet_count: usize,
     sections: &mut [ProgramletSection],
 ) -> Result<usize, u32> {
