@@ -4,7 +4,7 @@ use super::*;
 pub(super) fn close_programlet_paragraph(
     sentence: &ParsedSentence,
     sentence_view: &SentenceView<'_>,
-    symbol_words: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbol_words: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     frames: &mut ProgramletStack,
     frame_index: usize,
     depth: &mut usize,

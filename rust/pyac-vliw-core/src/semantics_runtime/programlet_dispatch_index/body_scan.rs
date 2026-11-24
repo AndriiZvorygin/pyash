@@ -5,7 +5,7 @@ pub(super) fn find_routine_body_end(
     base_codelet: usize,
     codelet_count: usize,
     body_start: usize,
-    signatures: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    signatures: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     verb_start: usize,
     verb_length: usize,
 ) -> Result<usize, u32> {
@@ -56,7 +56,7 @@ pub(super) fn find_routine_body_end(
 fn close_matches_verb(
     sentence: &ParsedSentence,
     tokens: &SentenceView<'_>,
-    signatures: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    signatures: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     verb_start: usize,
     verb_length: usize,
 ) -> Result<bool, u32> {

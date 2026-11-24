@@ -1,6 +1,6 @@
 use pyac::{
-    IwspError, IwspEvaluator, IwspScore, MAX_IWSP_CANDIDATE_CODELETS, PyacPack, SemanticError,
-    WORDS_PER_CODELET, decode_pack, encode_pack,
+    IwspError, IwspEvaluator, IwspScore, PyacPack, SemanticError, WORDS_PER_CODELET, decode_pack,
+    encode_pack,
 };
 
 fn float_literal(value: f32) -> [u16; WORDS_PER_CODELET] {
@@ -181,13 +181,17 @@ fn rejects_invalid_candidate_outputs_and_task_references_before_scoring() {
 }
 
 #[test]
-fn rejects_candidate_packs_over_the_task_resource_limit_before_execution() {
-    let evaluator = IwspEvaluator::new(&[1.0], &[1.0]).expect("task references are valid");
-    let too_large = vec![[0; WORDS_PER_CODELET]; MAX_IWSP_CANDIDATE_CODELETS + 1];
-    let pack = decode_pack(&encode_pack(&too_large).expect("pack encodes")).expect("pack decodes");
+fn scores_candidate_packs_longer_than_sixty_four_codelets() {
+    let evaluator =
+        IwspEvaluator::new(&[1.0, 1.0], &[1.0, 1.0]).expect("task references are valid");
+    let pack = candidate(&vec![1.0; 80]);
 
-    assert!(matches!(
+    assert_eq!(pack.codelets.len(), 80);
+    assert_eq!(
         evaluator.score_visible(&pack),
-        Err(IwspError::CandidateCodeletLimit { .. })
-    ));
+        Ok(IwspScore {
+            correct: 2,
+            total: 2
+        })
+    );
 }

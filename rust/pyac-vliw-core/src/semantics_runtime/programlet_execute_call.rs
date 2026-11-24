@@ -7,7 +7,7 @@ pub(super) fn execute_programlet_call(
     base_codelet: usize,
     codelet_count: usize,
     sentence_view: &SentenceView<'_>,
-    symbol_words: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbol_words: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     routine_directory_words: &[u32],
     directory_offset: usize,
     directory_entry_count: usize,

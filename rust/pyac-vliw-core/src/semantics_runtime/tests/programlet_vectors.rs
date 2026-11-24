@@ -276,7 +276,7 @@ fn f64_quote(values: &[f64]) -> std::vec::Vec<u32> {
 
 fn run(words: &[u32]) -> CoreResult {
     let codelet_count = words.len() / CODELET_WORDS;
-    let mut symbols = [0; MAX_PROGRAMLET_PAYLOAD_WORDS];
+    let mut symbols = [0; MAX_PROGRAMLET_SYMBOL_WORDS];
     let mut frames = ProgramletStack::EMPTY;
     execute_numeric_programlet(words, codelet_count, 256, &mut symbols, &mut frames)
 }
@@ -309,7 +309,7 @@ fn scalar_subtraction_signature_does_not_enter_vector_dispatch() {
     assert!(!is_programlet_vector_action(
         &sentence,
         &sentence_view,
-        &[0; MAX_PROGRAMLET_PAYLOAD_WORDS],
+        &[0; MAX_PROGRAMLET_SYMBOL_WORDS],
         &[ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS],
         &[ProgramletVectorSlot::EMPTY; 8],
     ));
@@ -349,7 +349,7 @@ fn vector_call_argument_keeps_a_pointer_into_the_original_packet() {
     let source = invocation.field(SOURCE).unwrap();
     let expected_word_index = invocation_view.word_index(source.start);
 
-    let mut symbols = [0; MAX_PROGRAMLET_PAYLOAD_WORDS];
+    let mut symbols = [0; MAX_PROGRAMLET_SYMBOL_WORDS];
     let mut frames = ProgramletStack::EMPTY;
     let result = execute_numeric_programlet(&words, codelet_count, 256, &mut symbols, &mut frames);
 

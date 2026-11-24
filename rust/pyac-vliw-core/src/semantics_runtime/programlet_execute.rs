@@ -5,7 +5,7 @@ pub fn execute_numeric_programlet(
     words: &[u32],
     codelet_count: usize,
     step_budget: u32,
-    symbol_words: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbol_words: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     frames: &mut ProgramletStack,
 ) -> CoreResult {
     execute_numeric_programlet_at(words, 0, codelet_count, step_budget, symbol_words, frames)
@@ -17,7 +17,7 @@ pub fn execute_numeric_programlet_at(
     base_codelet: usize,
     codelet_count: usize,
     step_budget: u32,
-    symbol_words: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbol_words: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     frames: &mut ProgramletStack,
 ) -> CoreResult {
     let mut routine_directory_words = [0; PROGRAMLET_ROUTINE_DIRECTORY_WORDS];
@@ -48,7 +48,7 @@ pub fn execute_numeric_programlet_at_with_directory_words(
     step_budget: u32,
     routine_directory_words: &[u32],
     directory_offset: usize,
-    symbol_words: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbol_words: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     frames: &mut ProgramletStack,
 ) -> CoreResult {
     #[cfg(not(target_arch = "spirv"))]
@@ -84,7 +84,7 @@ fn execute_numeric_programlet_at_with_directory_view(
     directory_offset: usize,
     directory_entry_count: usize,
     directory_signature_used: usize,
-    symbol_words: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbol_words: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     frames: &mut ProgramletStack,
 ) -> CoreResult {
     let mut symbol_used = match initialize_numeric_programlet(

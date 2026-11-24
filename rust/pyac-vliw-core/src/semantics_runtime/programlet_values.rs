@@ -84,7 +84,7 @@ pub(super) fn argument_value(
 }
 
 pub(super) fn write_programlet_call_result(
-    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     return_name: NameSpan,
     expected_kind: u32,
     result: ProgramletNumber,
@@ -152,7 +152,7 @@ pub(super) fn set_loop_register_argument(
 pub(super) fn resolve_programlet_value(
     tokens: &SentenceView<'_>,
     field: SentenceField,
-    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
     value: &mut ProgramletNumber,
@@ -315,7 +315,7 @@ pub(super) fn comparison_operand(
     tokens: &SentenceView<'_>,
     start: usize,
     end: usize,
-    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
     value: &mut ProgramletNumber,

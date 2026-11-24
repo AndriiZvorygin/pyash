@@ -51,7 +51,7 @@ fn programlet_diagnostic(pack: &PyacPack) -> Option<String> {
     if !pyac_vliw_core::is_numeric_programlet(&words, pack.codelets.len()) {
         return None;
     }
-    let mut symbol_words = [0; pyac_vliw_core::MAX_PROGRAMLET_PAYLOAD_WORDS];
+    let mut symbol_words = [0; pyac_vliw_core::MAX_PROGRAMLET_SYMBOL_WORDS];
     let mut frames = pyac_vliw_core::ProgramletStack::EMPTY;
     let result = pyac_vliw_core::execute_numeric_programlet(
         &words,

@@ -88,7 +88,7 @@ fn append_boolean_call(words: &mut std::vec::Vec<u32>, value: u32) {
 }
 
 fn run(words: &[u32]) -> CoreResult {
-    let mut symbols = [0; MAX_PROGRAMLET_PAYLOAD_WORDS];
+    let mut symbols = [0; MAX_PROGRAMLET_SYMBOL_WORDS];
     let mut frames = ProgramletStack::EMPTY;
     execute_numeric_programlet(
         words,
@@ -114,7 +114,7 @@ fn prepared_signature_directory_matches_in_interpreter_directory_build() {
         &mut directory,
     )
     .unwrap();
-    let mut symbols = [0; MAX_PROGRAMLET_PAYLOAD_WORDS];
+    let mut symbols = [0; MAX_PROGRAMLET_SYMBOL_WORDS];
     let mut frames = ProgramletStack::EMPTY;
     let prepared = execute_numeric_programlet_at_with_directory_words(
         &words,

@@ -7,7 +7,6 @@ pub(super) fn last_programlet_sentence_start(
 ) -> Result<usize, u32> {
     let mut current_sentence_start = 0;
     let mut last_sentence_start = 0;
-    let mut sentence_token_count = 0usize;
     let mut codelet = 0;
     while codelet < codelet_count {
         let absolute_codelet = base_codelet + codelet;
@@ -29,10 +28,6 @@ pub(super) fn last_programlet_sentence_start(
         } else {
             CODELET_WORDS - 1
         };
-        sentence_token_count += last_slot;
-        if sentence_token_count > MAX_PROGRAMLET_PAYLOAD_WORDS {
-            return Err(ERROR_FRAME_CAPACITY);
-        }
         slot = 1;
         while slot <= last_slot {
             if word(words, absolute_codelet, slot) > MAX_U16 {
@@ -44,7 +39,6 @@ pub(super) fn last_programlet_sentence_start(
         if complete {
             last_sentence_start = current_sentence_start;
             current_sentence_start = codelet;
-            sentence_token_count = 0;
         }
     }
     if current_sentence_start != codelet_count {
@@ -58,7 +52,7 @@ pub(super) fn initialize_numeric_programlet(
     base_codelet: usize,
     codelet_count: usize,
     step_budget: u32,
-    symbol_words: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbol_words: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     frames: &mut ProgramletStack,
     routine_directory_words: &[u32],
     directory_offset: usize,
@@ -70,9 +64,6 @@ pub(super) fn initialize_numeric_programlet(
         || codelet_count > words.len() / CODELET_WORDS - base_codelet
     {
         return Err(ERROR_MALFORMED);
-    }
-    if codelet_count > MAX_PROGRAMLET_CODELETS {
-        return Err(ERROR_PROGRAM_CAPACITY);
     }
     if step_budget == 0 {
         return Err(ERROR_STEP_BUDGET);

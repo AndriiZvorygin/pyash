@@ -208,9 +208,6 @@ pub(super) fn collect_sentence_at(
         };
         slot = 1;
         while slot <= last_slot {
-            if token_count >= MAX_PROGRAMLET_PAYLOAD_WORDS {
-                return Err(ERROR_FRAME_CAPACITY);
-            }
             let value = word(words, absolute_codelet, slot);
             if value > MAX_U16 {
                 return Err(ERROR_MALFORMED);

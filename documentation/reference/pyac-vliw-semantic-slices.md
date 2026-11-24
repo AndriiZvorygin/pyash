@@ -415,7 +415,8 @@ and composed boolean predicates over literals/arguments/locals, one-level
 conditional actions with an optional alternative, and bounded
 `fromindex`/`toindex` traversal. Calls have a
 maximum depth of 8 and at most 8 arguments; each invocation has at most 64
-local slots and 64 codelets, under the 65,536-step default budget. The same
+local slots, with no fixed codelet-count ceiling and a 65,536-step default
+execution budget. The same
 runtime source is compiled for the Rust CPU executor, Vulkan SPIR-V, and the
 WGSL target. Date and vector codelets remain supported by the ordinary shared
 codelet interpreter, but date/vector values are not programlet-local types;

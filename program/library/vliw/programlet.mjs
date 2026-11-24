@@ -13,7 +13,6 @@ import {
 
 export const DEFAULT_PYASH_PROGRAMLET_STEP_BUDGET = 65_536;
 export const MAX_PYASH_PROGRAMLET_STEP_BUDGET = 10_000_000;
-export const MAX_PYASH_PROGRAMLET_CODELETS = 64;
 export const MAX_PYASH_PROGRAMLET_LOCAL_SLOTS = 64;
 export const MAX_PYASH_PROGRAMLET_ARGUMENTS = 8;
 export const MAX_PYASH_PROGRAMLET_CALL_DEPTH = 8;
@@ -510,11 +509,6 @@ function sectionCodeletRanges(sections, sentenceCodeletCounts) {
     const startCodelet = starts[bodyStart];
     const endCodelet = starts[bodyEnd];
     const codeletCount = endCodelet - startCodelet;
-    if (codeletCount > MAX_PYASH_PROGRAMLET_CODELETS) {
-      fail(`PyAC packet section ${section.name} exceeds ${MAX_PYASH_PROGRAMLET_CODELETS} codelets`, {
-        codeletCount
-      });
-    }
     return {
       index: section.index,
       name: section.name,
@@ -590,11 +584,6 @@ export function compilePyashProgramSource(sourceText, { invocation = "" } = {}) 
     isMutableVectorSentence(sentence) ? normalizeMutableVectorSentence(sentence) : sentence
   );
   const lowered = lowerPyashProgram(lowerableProgram);
-  if (lowered.vectors.length > MAX_PYASH_PROGRAMLET_CODELETS) {
-    fail(`Pyash programlet exceeds ${MAX_PYASH_PROGRAMLET_CODELETS} codelets`, {
-      codelets: lowered.vectors.length
-    });
-  }
   const pack = encodePyacPack(lowered.vectors);
   return {
     pack,
@@ -611,11 +600,6 @@ export function decodePyashProgramPack(pack) {
   const sentences = decodePyashProgram(decodedPack.codelets);
   const sections = splitProgramSections(sentences);
   if (!sections) {
-    if (decodedPack.codelets.length > MAX_PYASH_PROGRAMLET_CODELETS) {
-      fail(`Pyash programlet exceeds ${MAX_PYASH_PROGRAMLET_CODELETS} codelets`, {
-        codelets: decodedPack.codelets.length
-      });
-    }
     const invocationIndex = sentences.at(-1)?.mood === "do" ? sentences.length - 1 : -1;
     validatePureProgram(sentences, { invocationIndex });
   } else {

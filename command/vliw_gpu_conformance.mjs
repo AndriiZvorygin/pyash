@@ -21,6 +21,7 @@ import {
 import { buildPlukTlasConformanceCase } from "./vliw_gpu_conformance/pluk_tlas.mjs";
 import { buildIwspLinearScorerConformanceCases } from "./vliw_gpu_conformance/iwsp_linear_scorer.mjs";
 import { buildIwspVectorOpsConformanceCases } from "./vliw_gpu_conformance/iwsp_vector_ops.mjs";
+import { buildIwspParameterizedAttentionCases } from "./vliw_gpu_conformance/iwsp_parameterized_attention.mjs";
 
 function programlet(name, source, invocation, expectedValues) {
   const compiled = compilePyashProgramSource(source, { invocation });
@@ -38,7 +39,8 @@ async function programletExample(filename, name, expectedValues) {
 const SECTION_NAMES = [
   "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
   "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
-  "nineteen", "twenty", "twenty one", "twenty two", "twenty three", "twenty four"
+  "nineteen", "twenty", "twenty one", "twenty two", "twenty three", "twenty four",
+  "twenty five", "twenty six", "twenty seven"
 ];
 
 export function buildVliwGpuConformanceBatches(cases) {
@@ -186,9 +188,9 @@ export async function buildVliwGpuConformanceCases() {
       `su name count ${word} be ceremony prah`
     ];
   }).join("\n");
-  const maximumCodeletCount = [
+  const programletOver64Codelets = [
     "su name count once to name num answer be ceremony def",
-    ...Array.from({ length: 60 }, () => "ob num 1 to name num answer be plus do"),
+    ...Array.from({ length: 80 }, () => "ob num 1 to name num answer be plus do"),
     "su name answer ret",
     "su name count once be ceremony prah"
   ].join("\n");
@@ -382,6 +384,7 @@ export async function buildVliwGpuConformanceCases() {
     softmax,
     softmaxF64,
     attention,
+    ...await buildIwspParameterizedAttentionCases(),
     projectedAttention,
     qkvProjection,
     maximumIndex,
@@ -494,10 +497,10 @@ export async function buildVliwGpuConformanceCases() {
       [{ type: "unsigned", value: 1 }]
     ),
     programlet(
-      "maximum-codelet-count",
-      maximumCodeletCount,
+      "programlet-over-64-codelets",
+      programletOver64Codelets,
       "to name num answer be count once do",
-      [{ type: "unsigned", value: 60 }]
+      [{ type: "unsigned", value: 80 }]
     ),
     programlet(
       "giant-branch",
@@ -524,8 +527,8 @@ export async function buildVliwGpuConformanceCases() {
       [{ type: "unsigned", value: 2 }]
     )
   ];
-  const maximumPack = cases.find(({ name }) => name === "maximum-codelet-count").pack;
-  assert.equal(decodePyacPack(maximumPack).codelets.length, 64);
+  const longPack = cases.find(({ name }) => name === "programlet-over-64-codelets").pack;
+  assert.ok(decodePyacPack(longPack).codelets.length > 64);
   return cases;
 }
 

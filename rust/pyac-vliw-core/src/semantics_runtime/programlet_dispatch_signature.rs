@@ -131,7 +131,7 @@ pub(super) fn formal_type(
 }
 
 pub(super) fn append_case(
-    signature: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    signature: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     used: &mut usize,
     case: SignatureCase,
 ) -> Result<(), u32> {
@@ -153,7 +153,7 @@ pub(super) fn append_case(
 }
 
 pub(super) fn compare_keys(
-    signatures: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    signatures: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     left_start: usize,
     left_length: usize,
     right_start: usize,

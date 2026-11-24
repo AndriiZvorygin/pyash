@@ -53,7 +53,7 @@ impl ProgramletVectorValue {
 pub(super) fn find_programlet_vector_slot(
     source: &impl ProgramletWordSource,
     name: NameSpan,
-    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     slots: &[ProgramletVectorSlot; MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
 ) -> Option<usize> {
     let mut index = 0;
@@ -138,7 +138,7 @@ fn vector_quote_shape(
 pub(super) fn programlet_vector_argument_reference(
     tokens: &SentenceView<'_>,
     field: SentenceField,
-    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     frame_index: usize,
     slots: &[ProgramletVectorSlot; MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
@@ -190,7 +190,7 @@ pub(super) fn programlet_vector_argument_reference(
 pub(super) fn programlet_field_is_vector(
     tokens: &SentenceView<'_>,
     field: SentenceField,
-    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     slots: &[ProgramletVectorSlot; MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
 ) -> bool {
@@ -218,7 +218,7 @@ pub(super) fn programlet_field_is_vector(
 fn find_argument(
     source: &impl ProgramletWordSource,
     name: NameSpan,
-    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
 ) -> Option<usize> {
     let mut index = 0;
@@ -245,7 +245,7 @@ fn find_argument(
 pub(super) fn read_programlet_vector(
     tokens: &SentenceView<'_>,
     field: SentenceField,
-    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     frame_index: usize,
     slots: &[ProgramletVectorSlot; MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
@@ -303,7 +303,7 @@ pub(super) fn read_programlet_vector(
 pub(super) fn write_programlet_vector(
     tokens: &SentenceView<'_>,
     output: SentenceField,
-    symbols: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     symbol_used: &mut usize,
     result: ProgramletVectorValue,
     slots: &mut [ProgramletVectorSlot; MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
@@ -358,7 +358,7 @@ pub(super) fn write_programlet_vector_lane(
     output: SentenceField,
     lane: usize,
     value: ProgramletNumber,
-    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     slots: &[ProgramletVectorSlot; MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
     vector_values: &mut [u32; MAX_PROGRAMLET_VECTOR_VALUE_WORDS],
     frame_index: usize,
@@ -390,7 +390,7 @@ pub(super) fn write_programlet_vector_lane(
 }
 
 pub(super) fn write_programlet_vector_result(
-    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     return_name: NameSpan,
     expected_kind: u32,
     result_kind: u32,

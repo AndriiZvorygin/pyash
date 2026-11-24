@@ -800,7 +800,14 @@ the named value vectors in place, and adds them. The example returns `[3, 5]`.
 This is a runnable one-query/two-key proof built from existing Pyash sentences;
 it is not general matrix multiplication or a general tensor data model. CPU and
 live SWAC CUDA conformance pass. Exact hardware, artifact, and timing evidence is
-in the VLIW verification ledger.
+in the VLIW verification ledger. The parameter-backed follow-up,
+[`examples/vliw/iwsp-parameterized-two-token-attention.pya`](../../examples/vliw/iwsp-parameterized-two-token-attention.pya),
+keeps query/key/value projection weights as explicit Pyash vector literals and
+accepts input vectors as typed ceremony arguments. Its conformance variants
+change the input vectors and value weights independently; CPU reference results
+are `[3, 5]`, `[8.5, 13.5]`, and `[4, 6]`. This pack is 62 codelets; a separate
+84-codelet programlet conformance case guards the removed body-size ceiling.
+The new cases are in the live CUDA matrix, but have not yet been run on the GPU.
 
 [`examples/pyash/iwsp-qkv-projection.pya`](../../examples/pyash/iwsp-qkv-projection.pya)
 remains a compatibility fixture for the earlier scalar-per-role test. New examples
@@ -1178,7 +1185,7 @@ partial mappings and the GPU compound review note from A.7.
 | Exponential normalization (softmax) | Pyash ceremony: maximum → vector subtract → exponential → sum → `dvis` | Implemented as a composition in the Rust CPU/GPU programlet runtime, not a separate softmax opcode. Generic `float`/`vec float` formals preserve float32 or float64. CPU and live CUDA conformance pass; WGSL has not been verified. See the executable examples and specification 28. |
 | Vector normalization | `from name values with name normalization options to name normalized be vector normalization do` | Normalize a vector under an explicitly selected norm (for example L1 or L2); options should include epsilon/zero-vector behavior. Distinct from exponential normalization. New operation. |
 | Maximum position (argmax) | `from name scores to name num answer be gjat bwit do` | Implemented as the typed `gjat bwit` form: float output returns the maximum value; a numeric destination returns the zero-based index of the first maximum. Non-empty finite float32/float64 vectors only; ties select the lower lane. This is lane-index selection, not arbitrary ID lookup. |
-| Pyash attention-role projection | `ob ve float32 ... by ve float32 ... to name hwas at num ... be kl6m psas do`<br>`ob ve float32 ... by ve float32 ... to name htis hsek at num ... be kl6m psas do`<br>`ob ve float32 ... by ve float32 ... to name hnuc gjat at num ... be kl6m psas do` | The executable `iwsp-pyash-projected-attention.pya` builds two-lane role vectors with explicit dot products, computes attention weights, and returns `[3,5]`. The older scalar fixture remains separately named `iwsp-qkv-projection.pya`; new program surfaces use the Pyash role names. |
+| Pyash attention-role projection | `ob ve float32 ... by ve float32 ... to name hwas at num ... be kl6m psas do`<br>`ob ve float32 ... by ve float32 ... to name htis hsek at num ... be kl6m psas do`<br>`ob ve float32 ... by ve float32 ... to name hnuc gjat at num ... be kl6m psas do` | The fixed `iwsp-pyash-projected-attention.pya` and parameter-backed `examples/vliw/iwsp-parameterized-two-token-attention.pya` use explicit projection dot products, stable softmax, and value mixing. CPU conformance covers baseline and changed inputs/weights; live GPU verification of the new variants remains pending. The older scalar fixture remains separately named `iwsp-qkv-projection.pya`; new program surfaces use the Pyash role names. |
 | Activation function | `from name preactivation by name relu to name activated be vector map do` | Reuse the existing vector-map sentence surface to apply a named scalar function elementwise. `vector map` currently runs through the JS interpreter; `relu` here is illustrative and needs a registered scalar mapper. A fused GPU activation is a later lowering/optimization, not a different meaning. |
 | Learned vector / embedding | `from name embedding table via name token id to name embedding be embedding lookup do` | Return the learned row for a token ID. “Learned vector” names the result; lookup is the action. New tensor-indexing operation. Existing vector `read` handles a flat element, not a row from a rank-2 table. |
 | Parallel execution / kernel launch | `from name kernel with name launch config to name results be parallel execution do` | Submit a kernel over the configured index space and return its result handle/data. This is a proposed compute operation, not `be gpu mind` or another Housekeeper inference request. |

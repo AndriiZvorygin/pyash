@@ -132,9 +132,10 @@ of the Rust VLIW interpreter or its Housekeeper runtime.
 The CPU pack executor and native Vulkan shader use the same bounded scalar
 programlet runtime: typed numeric/boolean locals and
 arguments, nested calls, scalar operators, local comparisons/branches, bounded
-`fromindex`/`toindex` loops, and typed returns. Limits are 64 codelets, 64
-locals per frame, 8 arguments, call depth 8, and the 65,536-step default
-budget. Date/vector literals remain supported as ordinary codelet groups, not
+`fromindex`/`toindex` loops, and typed returns. Programlet bodies have no fixed
+codelet-count ceiling; packet size and the 65,536-step default execution budget
+bound input and work. Other limits are 64 locals per frame, 8 arguments, and
+call depth 8. Date/vector literals remain supported as ordinary codelet groups, not
 as programlet-local values. Text values and general effects are outside this
 programlet slice. Native Vulkan also dispatches independent named programlet
 sections concurrently; each result carries its source `sectionIndex` and HNUC

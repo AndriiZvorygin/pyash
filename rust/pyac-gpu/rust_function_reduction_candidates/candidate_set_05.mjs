@@ -47,8 +47,8 @@ export const CANDIDATES = [
     name: "build_programlet_routine_directory",
     expected: "Result",
     stub: "Err(ERROR_UNSUPPORTED)",
-    minimalStub: `directory.entries = [RoutineEntry::EMPTY; MAX_PROGRAMLET_CODELETS];
-    directory.signatures = [0; MAX_PROGRAMLET_PAYLOAD_WORDS];
+    minimalStub: `directory.entries = [RoutineEntry::EMPTY; MAX_PROGRAMLET_ROUTINES];
+    directory.signatures = [0; MAX_PROGRAMLET_SYMBOL_WORDS];
     let signature_length = codelet_count * (CODELET_WORDS - 1);
     directory.entry_count = usize::from(codelet_count > 0);
     directory.signature_used = signature_length;

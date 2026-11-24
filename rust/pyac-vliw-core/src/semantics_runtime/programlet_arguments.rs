@@ -3,7 +3,7 @@ use super::*;
 pub(super) fn capture_programlet_arguments(
     sentence: &ParsedSentence,
     tokens: &SentenceView<'_>,
-    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
     vector_slots: &[ProgramletVectorSlot; MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
@@ -67,7 +67,7 @@ pub(super) fn validate_programlet_arguments(
     codelet_count: usize,
     definition_start: usize,
     routine_start: usize,
-    symbols: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     symbol_used: &mut usize,
     arguments: &mut [ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     argument_count: u32,

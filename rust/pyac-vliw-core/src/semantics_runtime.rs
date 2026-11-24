@@ -72,10 +72,11 @@ include!("semantics_runtime/array_access.rs");
 pub const CODELET_WORDS: usize = 16;
 pub const MAX_VECTOR_LANES: usize = 16;
 pub const RESULT_WORDS: usize = 32;
-pub const MAX_PROGRAMLET_CODELETS: usize = 64;
 pub const MAX_PROGRAMLET_SECTIONS: usize = 64;
 pub const MAX_PROGRAMLET_SECTION_NAME_WORDS: usize = 8;
-pub const MAX_PROGRAMLET_PAYLOAD_WORDS: usize = MAX_PROGRAMLET_CODELETS * (CODELET_WORDS - 1);
+pub const MAX_PROGRAMLET_ROUTINES: usize = 64;
+/// Scratch capacity for interned identifiers and dispatch signature words.
+pub const MAX_PROGRAMLET_SYMBOL_WORDS: usize = 960;
 pub const MAX_PROGRAMLET_LOCAL_SLOTS: usize = 64;
 pub const MAX_PROGRAMLET_CALL_DEPTH: usize = 8;
 pub const MAX_PROGRAMLET_VECTOR_VALUE_WORDS: usize =
@@ -85,6 +86,7 @@ const PROGRAMLET_EXECUTION_COMPLETE: u32 = u32::MAX;
 const MAX_U16: u32 = 65_535;
 const SYMBOL_NAME_SEPARATOR: u32 = MAX_U16 + 1;
 pub const MAX_PROGRAMLET_ARGUMENTS: usize = 8;
+const MAX_SENTENCE_FIELDS: usize = MAX_PROGRAMLET_ARGUMENTS + 2;
 
 pub const VALUE_UNSIGNED: u32 = 1;
 pub const VALUE_SIGNED: u32 = 2;
@@ -268,7 +270,7 @@ impl SentenceField {
 
 #[derive(Clone, Copy)]
 struct ParsedSentence {
-    fields: [SentenceField; 8],
+    fields: [SentenceField; MAX_SENTENCE_FIELDS],
     field_count: usize,
     verb_start: usize,
     verb_length: usize,
@@ -278,7 +280,7 @@ struct ParsedSentence {
 impl ParsedSentence {
     const fn empty() -> Self {
         Self {
-            fields: [SentenceField::EMPTY; 8],
+            fields: [SentenceField::EMPTY; MAX_SENTENCE_FIELDS],
             field_count: 0,
             verb_start: 0,
             verb_length: 0,

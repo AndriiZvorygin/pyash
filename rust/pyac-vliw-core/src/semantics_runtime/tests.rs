@@ -26,16 +26,16 @@ fn codelet_word_reads_reject_out_of_bounds_without_panicking() {
 
 #[test]
 fn scratch_array_accessors_use_bounded_dynamic_indices() {
-    let mut values = [0u32; MAX_PROGRAMLET_PAYLOAD_WORDS];
-    let last = MAX_PROGRAMLET_PAYLOAD_WORDS - 1;
+    let mut values = [0u32; MAX_PROGRAMLET_SYMBOL_WORDS];
+    let last = MAX_PROGRAMLET_SYMBOL_WORDS - 1;
     let mut read = 17;
 
     assert!(values.write_at(last, 99));
     assert!(values.read_at(last, &mut read));
     assert_eq!(read, 99);
-    assert!(!values.read_at(MAX_PROGRAMLET_PAYLOAD_WORDS, &mut read));
+    assert!(!values.read_at(MAX_PROGRAMLET_SYMBOL_WORDS, &mut read));
     assert_eq!(read, 99);
-    assert!(!values.write_at(MAX_PROGRAMLET_PAYLOAD_WORDS, 101));
+    assert!(!values.write_at(MAX_PROGRAMLET_SYMBOL_WORDS, 101));
     assert_eq!(values[last], 99);
 }
 

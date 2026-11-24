@@ -12,10 +12,7 @@ pub use backend::riscv::{
     compile_numeric_invert, execute,
 };
 pub use catalog::{CatalogError, PyacCatalog, parse_catalog_pya};
-pub use iwsp::{
-    IwspError, IwspEvaluator, IwspScore, MAX_IWSP_CANDIDATE_CODELETS, MAX_IWSP_WIDTH,
-    SealedIwspEvaluator,
-};
+pub use iwsp::{IwspError, IwspEvaluator, IwspScore, MAX_IWSP_WIDTH, SealedIwspEvaluator};
 pub use literal::{
     DateInstruction, VectorElements, VectorInstruction, decode_date, decode_quote_header,
     decode_vector, execute_date, execute_date_codelet, execute_vector, execute_vector_codelet,
@@ -400,7 +397,7 @@ fn execute_shared_programlet(
     codelet_count: usize,
     error_index: usize,
 ) -> Result<PyacValue, PackExecutionError> {
-    let mut symbol_words = [0; pyac_vliw_core::MAX_PROGRAMLET_PAYLOAD_WORDS];
+    let mut symbol_words = [0; pyac_vliw_core::MAX_PROGRAMLET_SYMBOL_WORDS];
     let mut frames = pyac_vliw_core::ProgramletStack::EMPTY;
     let result = pyac_vliw_core::execute_numeric_programlet_at(
         words,

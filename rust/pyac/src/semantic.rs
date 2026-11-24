@@ -284,7 +284,7 @@ impl std::fmt::Display for SemanticError {
                 formatter.write_str("the programlet execution step budget was exhausted")
             }
             Self::ProgramletProgramCapacity => {
-                formatter.write_str("the programlet exceeds the supported codelet capacity")
+                formatter.write_str("the programlet exceeded a routine or section resource limit")
             }
             Self::ProgramletCallDepth => {
                 formatter.write_str("the programlet call depth exceeded the supported limit")

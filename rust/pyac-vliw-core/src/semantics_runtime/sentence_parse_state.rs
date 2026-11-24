@@ -82,7 +82,9 @@ pub(super) fn advance_sentence_parse(
         _ => 0,
     };
     if role_bit != 0 {
-        if state.value_start >= index || state.field_count >= 8 || state.seen_roles & role_bit != 0
+        if state.value_start >= index
+            || state.field_count >= MAX_SENTENCE_FIELDS
+            || state.seen_roles & role_bit != 0
         {
             transition.error = ERROR_MALFORMED;
             return transition;

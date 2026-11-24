@@ -38,8 +38,10 @@ numeric/boolean programlets through the shared semantic runtime and
 whole-program WGSL entry point used by native Vulkan. That admitted subset
 includes typed arguments and local values, typed genitive resolution, nested
 calls, scalar arithmetic, local comparisons, single-level branch selection,
-and bounded `fromindex`/`toindex` loops. Limits are 64 codelets, 64 locals per
-frame, 8 arguments, call depth 8, and 65,536 steps. The browser smoke uses the
+and bounded `fromindex`/`toindex` loops. Programlet bodies have no fixed
+codelet-count ceiling; packet size and the 65,536-step default execution budget
+bound input and work. Other limits are 64 locals per frame, 8 arguments, and
+call depth 8. The browser smoke uses the
 same spec-derived 15-case matrix against WASM CPU and WebGPU and asserts both
 against fixed expected values, not the JavaScript interpreter.
 

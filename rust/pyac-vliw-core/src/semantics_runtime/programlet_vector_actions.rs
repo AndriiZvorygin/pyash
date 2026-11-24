@@ -339,7 +339,7 @@ pub(super) fn is_programlet_vector_verb(
 pub(super) fn is_programlet_vector_action(
     sentence: &ParsedSentence,
     tokens: &SentenceView<'_>,
-    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     vector_slots: &[ProgramletVectorSlot; MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
 ) -> bool {
@@ -358,7 +358,7 @@ pub(super) fn is_programlet_vector_action(
 pub(super) fn apply_programlet_vector_action(
     sentence: &ParsedSentence,
     tokens: &SentenceView<'_>,
-    symbols: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     symbol_used: &mut usize,
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     frame_index: usize,

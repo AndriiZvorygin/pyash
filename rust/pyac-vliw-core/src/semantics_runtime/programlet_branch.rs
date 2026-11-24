@@ -2,7 +2,7 @@ use super::*;
 
 pub(super) fn programlet_branch(
     tokens: &SentenceView<'_>,
-    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
     selected_action: &mut ParsedSentence,
@@ -149,7 +149,7 @@ pub(super) fn read_optional_programlet_number(
     present: bool,
     field: SentenceField,
     tokens: &SentenceView<'_>,
-    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
     value: &mut ProgramletNumber,

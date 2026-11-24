@@ -271,8 +271,9 @@ su name second be myocpfun prah
 ```
 
 Section names MUST be unique, HNUC-encodable, and at most eight HNUC words;
-the packet supports at most 64 sections, with at most 64 codelets in each
-section body. Each section MUST be a valid pure programlet and MUST not read
+the packet supports at most 64 sections. A section body has no fixed
+codelet-count ceiling: its length is bounded by the enclosing packet and the
+executor's step budget. Each section MUST be a valid pure programlet and MUST not read
 or write another section's local state. The
 boundaries lower to ordinary codelets inside the existing flat v1 `.pyac`
 stream; this does not add a container section table or change codelet bytes.

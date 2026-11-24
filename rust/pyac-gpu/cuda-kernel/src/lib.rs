@@ -6,7 +6,7 @@ use core::slice::{from_raw_parts, from_raw_parts_mut};
 use core::sync::atomic::{AtomicU32, Ordering};
 use pyac_vliw_core::{
     CODELET_WORDS, CoreResult, DEFAULT_PROGRAMLET_STEP_BUDGET, ERROR_MALFORMED,
-    MAX_PROGRAMLET_PAYLOAD_WORDS, MAX_PROGRAMLET_SECTION_NAME_WORDS, MAX_PROGRAMLET_SECTIONS,
+    MAX_PROGRAMLET_SYMBOL_WORDS, MAX_PROGRAMLET_SECTION_NAME_WORDS, MAX_PROGRAMLET_SECTIONS,
     PROGRAMLET_ROUTINE_DIRECTORY_WORDS, ProgramletStack, RESULT_WORDS,
     execute_numeric_programlet_at_with_directory_words, interpret_group,
 };
@@ -17,13 +17,13 @@ const SECTION_RESULT_STRIDE: usize = SECTION_HEADER + RESULT_STRIDE;
 const SECTION_DESCRIPTOR_STRIDE: usize = 3 + MAX_PROGRAMLET_SECTION_NAME_WORDS;
 
 struct FrameStorage {
-    symbols: [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     stack: ProgramletStack,
 }
 
 impl FrameStorage {
     const EMPTY: Self = Self {
-        symbols: [0; MAX_PROGRAMLET_PAYLOAD_WORDS],
+        symbols: [0; MAX_PROGRAMLET_SYMBOL_WORDS],
         stack: ProgramletStack::EMPTY,
     };
 }
