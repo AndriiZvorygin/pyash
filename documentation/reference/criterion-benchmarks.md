@@ -1,5 +1,60 @@
 # Criterion Benchmark Reference
 
+## English All-Words Word-Sense Disambiguation
+
+Criterion can score prediction key files for the five Raganato English
+all-words test sets: `semeval2007`, `senseval2`, `senseval3`, `semeval2013`,
+and `semeval2015`. Gold labels use WordNet 3.0 sense keys. Keep downloaded data
+and system outputs in a local cache; do not commit them.
+
+Arrange source and prediction files like this:
+
+```text
+<gold-dir>/
+  semeval2007/semeval2007.gold.key.txt
+  senseval2/senseval2.gold.key.txt
+  senseval3/senseval3.gold.key.txt
+  semeval2013/semeval2013.gold.key.txt
+  semeval2015/semeval2015.gold.key.txt
+<predictions-dir>/
+  semeval2007.key.txt
+  senseval2.key.txt
+  senseval3.key.txt
+  semeval2013.key.txt
+  semeval2015.key.txt
+```
+
+Each non-comment line is `instance-id sense-key`; gold lines may list multiple
+accepted keys, while each prediction line must contain exactly one key. Missing
+predictions reduce coverage and recall; duplicate IDs and predictions for IDs
+outside the gold set fail the run. `ALL` is pooled micro precision/recall/F1,
+not the arithmetic mean of the five dataset scores.
+
+```sh
+node command/criterion.mjs wsd-score \
+  --gold-dir "$PYA_WSD_CACHE/Evaluation_Datasets" \
+  --predictions-dir "$PYA_WSD_CACHE/predictions/bert-base-augmented" \
+  --model "BPYap/BERT-WSD BERT-base-augmented" \
+  --model-artifact "$PYA_WSD_CACHE/checkpoint/pytorch_model.bin" \
+  --run-id wsd-bert-base-augmented
+```
+
+The command writes `criterion/results/<run-id>.pya`, `.md`, and `.json`. These
+record per-dataset and ALL metrics, missing-output coverage, SHA-256 hashes of
+every gold and prediction key file, and the optional checkpoint-file hash.
+`--model-artifact` is streamed when hashing, so checkpoint size does not imply a
+matching in-memory copy. Add `--strict` to return failure when ALL F1 is below
+the plan's 77.7% acceptance threshold.
+
+The published comparison target is BPYap/BERT-WSD `BERT-base-augmented` (110M
+parameters, reported ALL F1 78.7%). The scorer does not perform model inference:
+it is the reproducible evaluation gate for predictions produced by the planned
+Pyash/VLIW inference path. Cross-check the first full local result with the
+framework's Java scorer before treating it as a reproduced benchmark.
+
+Sources: [Raganato et al. unified WSD evaluation framework](https://lcl.uniroma1.it/wsdeval/),
+[BPYap/BERT-WSD results and model](https://github.com/BPYap/BERT-WSD).
+
 The criterion lane compares the local HelpOS-facing Qwen profiles with the same sampling settings:
 
 ```text
