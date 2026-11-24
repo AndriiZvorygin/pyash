@@ -204,16 +204,16 @@ without fallback. Structural values MUST validate framing first. See
 
 ## 5.2 General execution contract
 
-Decoding produces instructions with numbered input/output references,
-fulfillment state, and working-memory locations. Instructions identify reads
-and writes. Each dependency region MUST have at most one writer per reference;
-decoders reject conflicts unless the sentence defines an ordered effect.
+Instructions carry numbered input/output references, fulfillment state, and
+working-memory locations, and identify reads and writes. Each dependency region
+MUST have at most one writer per reference; decoders MUST reject conflicts
+unless the sentence defines an ordered effect.
 
-Instructions are ready when inputs and control conditions are fulfilled.
-Executors MAY schedule independent ready work out of source order, but MUST
-preserve dependencies, single-writer rules, observable side-effect order, and
-paragraph/codelet boundaries. Workers synchronize at evaluation boundaries
-before exposing values to dependent codelets.
+Inputs and control conditions MUST be fulfilled before execution. Executors
+MAY reorder independent work but MUST preserve dependencies, single-writer
+rules, observable side-effect order, and paragraph/codelet boundaries. Workers
+synchronize at evaluation boundaries before exposing values to dependent
+codelets.
 
 The execution model has:
 
@@ -227,7 +227,7 @@ Branches write conditions/references that dependent clauses await; rejoins MUST
 use explicit dependencies or call boundaries. Static loops repeat codelets;
 dynamic loops require an explicit continuation/jump reference and bounded
 termination. Calls enqueue a local frame and rejoin after declared outputs are
-fulfilled. Parallel execution requires proven independence.
+fulfilled; parallel execution requires proven independence.
 
 ### Independent named sections
 
@@ -244,19 +244,18 @@ su name second be myocpfun prah
 ```
 
 Section names MUST be unique, HNUC-encodable, and at most eight HNUC words;
-the packet supports at most 64 sections, with at most 64 codelets in each
-section body. Each section MUST be a valid pure programlet and MUST not read or
-write another section's local state. Boundaries lower to ordinary codelets
-inside the existing flat v1 `.pyac` stream; this adds no container section
-table and changes no codelet bytes. The source ordinal is retained as
-`sectionIndex` for identity, not as a result-ordering constraint. Executors MAY
-schedule independent sections in any order and MUST return each result as its
-section completes. Result order is completion order; the included source
-ordinal and Pyash name let consumers associate each value with its section. The
-deprecated JavaScript interpreter is serial and completes sections in source
-order; Rust CPU and GPU executors may complete them in a different order. Any
-dependency between sections disqualifies them from this independent section
-form and must be expressed within an ordered programlet instead.
+the packet supports at most 64 sections. Section bodies have no fixed codelet
+limit; their length is bounded by the packet and executor step budget. Each
+section MUST be a valid pure programlet and MUST not read or write another
+section's local state. Boundaries lower to ordinary codelets inside the
+existing flat v1 `.pyac` stream; this adds no container section table and
+changes no codelet bytes. `sectionIndex` retains
+source identity, not result order. Executors MAY schedule independent sections
+in any order and MUST return results on completion. Result order follows
+completion; consumers associate values by source ordinal and Pyash name. The
+deprecated JavaScript interpreter completes in source order; Rust CPU/GPU may
+differ. Dependencies disqualify this form and MUST be expressed in an ordered
+programlet.
 
 ### Hosted PyashForth memory profile
 

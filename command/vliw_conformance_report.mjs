@@ -98,13 +98,43 @@ async function collectGpuArtifacts(root) {
   };
 }
 
-export async function collectVliwConformanceEnvironment(root) {
+function collectCudaArtifacts(root, host) {
+  if (!/^[a-z0-9][a-z0-9.-]*$/u.test(host)) throw new Error("invalid CUDA metrics host");
+  const onHost = (command, args) => {
+    if (host === os.hostname().toLowerCase()) return run(command, args, { cwd: root, includeStderr: true });
+    const remote = [command, ...args].map((arg) => "'" + arg.replaceAll("'", "'\"'\"'") + "'").join(" ");
+    return run("ssh", ["-x", "-o", "BatchMode=yes", host, remote], { cwd: root, includeStderr: true });
+  };
+  const artifacts = {};
+  for (const [name, file] of [
+    ["gpu runtime executable", "/service/pyac-vliw-runtime"],
+    ["cubin", "/service/pyac_vliw_gpu_kernel.cubin"]
+  ]) {
+    const size = onHost("docker", ["exec", GPU_CONTAINER, "stat", "-c", "%s", file]);
+    const hash = onHost("docker", ["exec", GPU_CONTAINER, "sha256sum", file]).split(/\s+/u)[0];
+    artifacts[name] = /^\d+$/u.test(size) && /^[0-9a-f]{64}$/u.test(hash)
+      ? { path: file, sizeBytes: Number(size), sha256: hash }
+      : { path: file, unavailable: true };
+  }
+  const log = onHost("docker", ["logs", "--tail", "30", GPU_CONTAINER]);
+  return {
+    artifacts,
+    pipeline: { ...pipelineTimings(log), scope: "cubin-load" },
+    imageId: onHost("docker", ["inspect", "--format", "{{.Image}}", GPU_CONTAINER]),
+    containerStartedAt: onHost("docker", ["inspect", "--format", "{{.State.StartedAt}}", GPU_CONTAINER]),
+    gpuInfo: onHost("nvidia-smi", ["--query-gpu=name,driver_version,memory.total", "--format=csv,noheader"])
+  };
+}
+
+export async function collectVliwConformanceEnvironment(root, { cudaHost } = {}) {
   const targetDirectory = process.env.CARGO_TARGET_DIR
     ? path.resolve(root, process.env.CARGO_TARGET_DIR)
     : path.join(root, "rust/pyac/target");
   const cpuExecutable = await fileMetrics(path.join(targetDirectory, "debug/examples/vliw_reference"));
-  const gpu = await collectGpuArtifacts(root);
-  const gpuInfo = run("nvidia-smi", ["--query-gpu=name,driver_version,memory.total", "--format=csv,noheader"], { cwd: root });
+  const gpu = cudaHost ? collectCudaArtifacts(root, cudaHost) : await collectGpuArtifacts(root);
+  const gpuInfo = cudaHost
+    ? gpu.gpuInfo
+    : run("nvidia-smi", ["--query-gpu=name,driver_version,memory.total", "--format=csv,noheader"], { cwd: root });
   const patch = spawnSync("git", ["diff", "--binary", "HEAD"], {
     cwd: root,
     timeout: 5000,
@@ -113,6 +143,7 @@ export async function collectVliwConformanceEnvironment(root) {
   const workingTree = run("git", ["status", "--porcelain"], { cwd: root });
   return {
     hostname: os.hostname(),
+    gpuHost: cudaHost,
     sourceRevision: run("git", ["rev-parse", "HEAD"], { cwd: root }),
     workingTreeState: workingTree ? "dirty" : "clean",
     trackedPatchSha256: !patch.error && patch.status === 0
@@ -201,6 +232,7 @@ export function renderVliwConformancePya(report) {
     textFact("finished at", report.finishedAt),
     numberFact("total wall ms", report.totalWallMs),
     textFact("hostname", environment.hostname),
+    textFact("gpu hostname", environment.gpuHost),
     textFact("source revision", environment.sourceRevision),
     textFact("working tree state", environment.workingTreeState),
     textFact("tracked patch sha256", environment.trackedPatchSha256),

@@ -1,0 +1,21 @@
+su name vector weight from name vec float features to name vec float answer be ceremony def
+from name features to name float count be gjat bwit do
+from name features with name count to name vec float weight be subtract do
+from name weight to name vec float vector be exponential do
+from name vector to name float count be tfo2t do
+from name vector with name count to name vec float answer be dvis do
+su name answer ret
+su name vector weight be ceremony prah
+su name candidate prediction ob name vec float features from name vec float features first by name vec float features second with name vec float candidate first as name vec float candidate second to name vec float answer be ceremony def
+exists su name prediction via state "vector float32" by num 2 be variable ya
+ob name features by name features first to name prediction at num 0 be kl6m psas do
+ob name features by name features second to name prediction at num 1 be kl6m psas do
+from name prediction to name vec float answer be vector weight do
+from name answer at num 0 to name float weight first be choose do
+from name answer at num 1 to name float weight second be choose do
+from name candidate first with name weight first to name vec float answer first be multiply do
+from name candidate second with name weight second to name vec float answer second be multiply do
+from name answer first with name answer second to name vec float answer be plus do
+su name answer ret
+su name candidate prediction be ceremony prah
+ob ve float32 1 1 from ve float32 1 0 by ve float32 0 1 with ve float32 1 3 as ve float32 5 7 to name vec float answer be candidate prediction do

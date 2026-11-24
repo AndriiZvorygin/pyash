@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter};
 
 use super::operation::OperationSignature;
 use super::volume_records::{
-    TOC_ROLES, encode_entry, index_records, profile_records, range_pair, toc_records,
+    TOC_ROLES_V4, encode_entry_v4, index_records_v4, profile_records_v4, toc_records_v4,
 };
 use super::{DictionaryIndex, DictionaryIndexError, LexicalForm, SourceGloss, SourceLink};
 use crate::{PyacError, WORDS_PER_CODELET, encode_pack};
@@ -42,6 +42,11 @@ pub enum DictionaryVolumeError {
     InvalidMetadata(&'static str),
     InvalidEntry(&'static str),
     TooManyCodelets,
+    ConflictingExactWordNetSenses {
+        key: Vec<u16>,
+        release: String,
+        identifiers: Vec<String>,
+    },
     Wire(super::wire::DictionaryWireError),
     Pack(PyacError),
     Index(DictionaryIndexError),
@@ -57,6 +62,14 @@ impl Display for DictionaryVolumeError {
             Self::TooManyCodelets => {
                 formatter.write_str("dictionary volume exceeds 32-bit codelet ranges")
             }
+            Self::ConflictingExactWordNetSenses {
+                key,
+                release,
+                identifiers,
+            } => write!(
+                formatter,
+                "dictionary key {key:?} links to multiple exact WordNet senses in {release}: {identifiers:?}"
+            ),
             Self::Wire(error) => {
                 write!(formatter, "dictionary sentence encoding failed: {error:?}")
             }
@@ -217,6 +230,26 @@ pub fn encode_dictionary(volume: &DictionaryVolume) -> Result<Vec<u8>, Dictionar
         .map(|entry| entry.key.as_slice())
         .collect::<std::collections::BTreeSet<_>>();
     for entry in &input_entries {
+        let mut exact_wordnet_senses =
+            std::collections::BTreeMap::<&str, std::collections::BTreeSet<&str>>::new();
+        for link in &entry.source_links {
+            if link.dataset == "wordnet" && link.relation == "exact-sense" {
+                exact_wordnet_senses
+                    .entry(&link.release)
+                    .or_default()
+                    .insert(&link.identifier);
+            }
+        }
+        if let Some((release, identifiers)) = exact_wordnet_senses
+            .into_iter()
+            .find(|(_, identifiers)| identifiers.len() > 1)
+        {
+            return Err(DictionaryVolumeError::ConflictingExactWordNetSenses {
+                key: entry.key.clone(),
+                release: release.to_owned(),
+                identifiers: identifiers.into_iter().map(str::to_owned).collect(),
+            });
+        }
         if entry
             .component_keys
             .iter()
@@ -276,18 +309,16 @@ pub fn encode_dictionary(volume: &DictionaryVolume) -> Result<Vec<u8>, Dictionar
             "every source gloss language must be declared by the volume",
         ));
     }
-    let (marker, metadata) = profile_records(&metadata_copy)?;
-    let zero_range = [0; 4];
+    let (marker, metadata) = profile_records_v4(&metadata_copy, input_entries.len())?;
     let entry_group_sizes = input_entries
         .iter()
-        .map(|entry| encode_entry(entry, zero_range).map(|group| group.codelets.len()))
+        .map(|entry| encode_entry_v4(entry).map(|group| group.codelets.len()))
         .collect::<Result<Vec<_>, _>>()?;
-    let placeholder_locations = vec![zero_range; input_entries.len()];
-    let placeholder_index_groups = index_records(&input_entries, &placeholder_locations)?;
-    let mut toc_ranges = vec![(0usize, 0usize); TOC_ROLES.len()];
-    let toc_placeholder = toc_records(&toc_ranges)?;
+    let placeholder_offsets = vec![0; input_entries.len()];
+    let placeholder_index_groups = index_records_v4(&input_entries, &placeholder_offsets)?;
+    let mut toc_ranges = vec![(0usize, 0usize); TOC_ROLES_V4.len()];
+    let toc_placeholder = toc_records_v4(&toc_ranges)?;
     let marker_count = marker.len();
-    let metadata_range = (marker_count, metadata.len());
     let toc_start = marker_count + metadata.len();
     let indexes_start = toc_start + toc_placeholder.len();
     let mut index_ranges = Vec::new();
@@ -298,18 +329,21 @@ pub fn encode_dictionary(volume: &DictionaryVolume) -> Result<Vec<u8>, Dictionar
     }
     let entries_start = next;
     let mut actual_entries = Vec::new();
-    let mut locations = Vec::new();
+    let mut entry_offsets = Vec::new();
+    let mut descriptors = Vec::new();
     let mut entry_start = entries_start;
     for (entry, count) in input_entries.iter().zip(entry_group_sizes) {
-        let range = range_pair(entry_start, count)?;
-        let mut actual = encode_entry(entry, range)?;
+        let mut actual = encode_entry_v4(entry)?;
         actual.entry.codelet_start =
             u32::try_from(entry_start).map_err(|_| DictionaryVolumeError::TooManyCodelets)?;
+        actual.entry.codelet_count =
+            u32::try_from(count).map_err(|_| DictionaryVolumeError::TooManyCodelets)?;
+        entry_offsets.push(actual.entry.codelet_start);
+        descriptors.push(actual.entry.clone());
         actual_entries.push(actual);
-        locations.push(range);
         entry_start += count;
     }
-    let index_groups = index_records(&input_entries, &locations)?;
+    let index_groups = index_records_v4(&input_entries, &entry_offsets)?;
     if index_groups
         .iter()
         .zip(&placeholder_index_groups)
@@ -327,18 +361,11 @@ pub fn encode_dictionary(volume: &DictionaryVolume) -> Result<Vec<u8>, Dictionar
     if total_count > u32::MAX as usize {
         return Err(DictionaryVolumeError::TooManyCodelets);
     }
-    let index = DictionaryIndex::new(
-        total_count,
-        actual_entries
-            .iter()
-            .map(|item| item.entry.clone())
-            .collect(),
-    )?;
+    let index = DictionaryIndex::new(total_count, descriptors)?;
 
-    toc_ranges[0] = metadata_range;
-    toc_ranges[1..6].copy_from_slice(&index_ranges);
-    toc_ranges[6] = (entries_start, entries_count);
-    let toc = toc_records(&toc_ranges)?;
+    toc_ranges[..4].copy_from_slice(&index_ranges);
+    toc_ranges[4] = (entries_start, entries_count);
+    let toc = toc_records_v4(&toc_ranges)?;
     if toc.len() != toc_placeholder.len() {
         return Err(DictionaryVolumeError::InvalidMetadata(
             "TOC encoding size changed while resolving ranges",

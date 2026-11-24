@@ -3,7 +3,7 @@ use super::*;
 pub(crate) fn read_programlet_float(
     tokens: &SentenceView<'_>,
     field: SentenceField,
-    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
 ) -> Result<ProgramletNumber, u32> {
@@ -63,7 +63,7 @@ pub(crate) fn read_programlet_float(
 pub(crate) fn write_programlet_float(
     tokens: &SentenceView<'_>,
     output: SentenceField,
-    symbols: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     symbol_used: &mut usize,
     expected_kind: u32,
     result: ProgramletNumber,

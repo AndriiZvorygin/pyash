@@ -287,14 +287,14 @@ fn execute(args: &[String]) -> Result<Value, Box<dyn std::error::Error>> {
             let path = Path::new(&args[1]);
             let size = fs::metadata(path)?.len();
             let open_start = Instant::now();
-            let reader = open_reader(path)?;
+            let mut reader = open_reader(path)?;
             let open_ms = open_start.elapsed().as_secs_f64() * 1000.0;
             let lookup_start = Instant::now();
-            let keys = reader.lookup_surface(&args[2], &args[3]);
+            let offsets = reader.lookup_surface(&args[2], &args[3])?;
             let lookup_ns = lookup_start.elapsed().as_nanos();
             json!({
                 "command": "surface", "path": path, "language": args[2], "surface": args[3],
-                "matches": keys, "volumeBytes": size, "openMs": open_ms,
+                "matches": offsets, "volumeBytes": size, "openMs": open_ms,
                 "lookupNs": lookup_ns
             })
         }
@@ -305,13 +305,13 @@ fn execute(args: &[String]) -> Result<Value, Box<dyn std::error::Error>> {
             let mut reader = open_reader(path)?;
             let open_ms = open_start.elapsed().as_secs_f64() * 1000.0;
             let lookup_start = Instant::now();
-            let keys = reader.lookup_surface(&args[2], &args[3]);
-            let matches = keys
+            let offsets = reader.lookup_surface(&args[2], &args[3])?;
+            let matches = offsets
                 .iter()
-                .map(|key| {
+                .map(|offset| {
                     Ok(json!({
-                        "key": key,
-                        "codelets": reader.read_entry(key)?.iter().map(|codelet| codelet.to_vec()).collect::<Vec<_>>()
+                        "offset": offset,
+                        "codelets": reader.read_entry_at(*offset)?.iter().map(|codelet| codelet.to_vec()).collect::<Vec<_>>()
                     }))
                 })
                 .collect::<Result<Vec<_>, pyac::dictionary::DictionaryReadError>>()?;
@@ -326,18 +326,14 @@ fn execute(args: &[String]) -> Result<Value, Box<dyn std::error::Error>> {
             let path = Path::new(&args[1]);
             let size = fs::metadata(path)?.len();
             let open_start = Instant::now();
-            let reader = open_reader(path)?;
+            let mut reader = open_reader(path)?;
             let open_ms = open_start.elapsed().as_secs_f64() * 1000.0;
             let lookup_start = Instant::now();
-            let matches = reader.lookup_source(&args[2], &args[3], &args[4]);
+            let matches = reader.lookup_source(&args[2], &args[3], &args[4])?;
             let lookup_ns = lookup_start.elapsed().as_nanos();
             let matches = matches
                 .iter()
-                .map(|item| {
-                    json!({
-                        "key": item.key, "relation": item.relation
-                    })
-                })
+                .map(|offset| json!({"offset": offset}))
                 .collect::<Vec<_>>();
             json!({
                 "command": "source", "path": path, "dataset": args[2], "release": args[3],
@@ -352,14 +348,13 @@ fn execute(args: &[String]) -> Result<Value, Box<dyn std::error::Error>> {
             let mut reader = open_reader(path)?;
             let open_ms = open_start.elapsed().as_secs_f64() * 1000.0;
             let lookup_start = Instant::now();
-            let source_matches = reader.lookup_source(&args[2], &args[3], &args[4]);
+            let source_matches = reader.lookup_source(&args[2], &args[3], &args[4])?;
             let matches = source_matches
                 .iter()
-                .map(|source_match| {
+                .map(|offset| {
                     Ok(json!({
-                        "key": source_match.key,
-                        "relation": source_match.relation,
-                        "codelets": reader.read_entry(&source_match.key)?.iter().map(|codelet| codelet.to_vec()).collect::<Vec<_>>()
+                        "offset": offset,
+                        "codelets": reader.read_entry_at(*offset)?.iter().map(|codelet| codelet.to_vec()).collect::<Vec<_>>()
                     }))
                 })
                 .collect::<Result<Vec<_>, pyac::dictionary::DictionaryReadError>>()?;
@@ -386,7 +381,7 @@ fn execute(args: &[String]) -> Result<Value, Box<dyn std::error::Error>> {
             let read_ns = read_start.elapsed().as_nanos();
             json!({
                 "command": command, "path": path, "key": key, "codelets": codelets,
-                "hasDefinition": reader.has_definition(&key),
+                "hasDefinition": reader.has_definition(&key)?,
                 "volumeBytes": size, "openMs": open_ms, "readNs": read_ns
             })
         }
@@ -398,16 +393,22 @@ fn execute(args: &[String]) -> Result<Value, Box<dyn std::error::Error>> {
             let path = Path::new(&args[1]);
             let size = fs::metadata(path)?.len();
             let open_start = Instant::now();
-            let reader = open_reader(path)?;
+            let mut reader = open_reader(path)?;
             let open_ms = open_start.elapsed().as_secs_f64() * 1000.0;
+            if reader.profile_version() != "pyac-vliw-dictionary/4" {
+                return Err(io::Error::other(
+                    "dictionary throughput benchmark requires v4 direct-file indexes; v2/v3 use compatibility scans",
+                )
+                .into());
+            }
             for _ in 0..5 {
-                std::hint::black_box(reader.lookup_surface(&args[4], &args[5]));
+                std::hint::black_box(reader.lookup_surface(&args[4], &args[5])?);
             }
             let lookup_start = Instant::now();
             let mut match_count = 0usize;
             for _ in 0..iterations {
                 match_count +=
-                    std::hint::black_box(reader.lookup_surface(&args[4], &args[5])).len();
+                    std::hint::black_box(reader.lookup_surface(&args[4], &args[5])?).len();
             }
             let lookup_ns = lookup_start.elapsed().as_nanos();
             json!({

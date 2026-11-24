@@ -4,7 +4,7 @@ pub(super) fn evaluate_boolean_leaf(
     sentence: &ParsedSentence,
     tokens: &SentenceView<'_>,
 ) -> Result<bool, u32> {
-    let symbols = [0; MAX_PROGRAMLET_PAYLOAD_WORDS];
+    let symbols = [0; MAX_PROGRAMLET_SYMBOL_WORDS];
     let arguments = [ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS];
     let slots = [NumericLocalSlot::EMPTY; MAX_PROGRAMLET_LOCAL_SLOTS];
     evaluate_boolean_leaf_with_env(sentence, tokens, &symbols, &arguments, &slots)
@@ -13,7 +13,7 @@ pub(super) fn evaluate_boolean_leaf(
 pub(super) fn evaluate_boolean_leaf_with_env(
     sentence: &ParsedSentence,
     tokens: &SentenceView<'_>,
-    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
 ) -> Result<bool, u32> {
@@ -101,7 +101,7 @@ pub(super) fn evaluate_boolean_expression(
     start: usize,
     end: usize,
 ) -> Result<bool, u32> {
-    let symbols = [0; MAX_PROGRAMLET_PAYLOAD_WORDS];
+    let symbols = [0; MAX_PROGRAMLET_SYMBOL_WORDS];
     let arguments = [ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS];
     let slots = [NumericLocalSlot::EMPTY; MAX_PROGRAMLET_LOCAL_SLOTS];
     evaluate_boolean_expression_with_env(tokens, start, end, &symbols, &arguments, &slots)
@@ -111,7 +111,7 @@ pub(super) fn evaluate_boolean_expression_with_env(
     tokens: &SentenceView<'_>,
     start: usize,
     end: usize,
-    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
 ) -> Result<bool, u32> {

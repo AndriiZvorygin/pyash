@@ -264,8 +264,17 @@ subtraction retains its existing route. Inputs must be finite and non-empty;
 non-finite positive results and zero denominators fail. A negative overflow in
 the max-subtraction intermediate is treated as negative infinity, whose
 exponential is zero. CPU Rust tests cover float32/float64, equal logits,
-extreme finite logits, and empty input. GPU/WGSL execution of this newly added
-programlet path still requires separate conformance verification.
+extreme finite logits, and empty input. Both precisions now also pass the live
+CUDA conformance matrix on Mriczo's RTX 3090. This verifies the CUDA programlet
+path; it does not establish WGSL/WebGPU conformance.
+
+The executable attention example
+[`iwsp-two-key-one-query-attention.pya`](../../examples/pyash/iwsp-two-key-one-query-attention.pya)
+composes two `kl6m psas` dot products into a logits vector, applies this
+softmax ceremony, scales two value vectors by the resulting weights, and adds
+them. Its test inputs produce weights `[0.5, 0.5]` and output `[3, 5]`. The
+example is included in the one-batch programlet-section CPU/CUDA conformance
+matrix; the run record is in the [Rust VLIW verification ledger](../reference/rust-vliw-verification-ledger.md).
 
 ## 12. Exact-match count (`pluk tlas`)
 

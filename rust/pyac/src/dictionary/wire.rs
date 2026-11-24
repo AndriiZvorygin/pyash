@@ -10,6 +10,7 @@ pub(super) const BY: u16 = 0x287e;
 pub(super) const WITH: u16 = 0x490f;
 pub(super) const AT: u16 = 0x615f;
 const NUMBER_QUOTE: u16 = 0x881d;
+const UINT32_QUOTE: u16 = 0x901d;
 const TEXT_QUOTE: u16 = 0x0e1d;
 const TEXT_VERB: u16 = 0x8a28;
 const REALIS: u16 = 0x217e;
@@ -37,8 +38,17 @@ impl std::error::Error for DictionaryWireError {}
 pub enum Value<'a> {
     Text(&'a str),
     Uint16(u16),
+    Uint32(u32),
     Uint16Vector(&'a [u16]),
+    Uint32Vector(&'a [u32]),
     Name(&'a [u16]),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Subject<'a> {
+    Name(&'a [u16]),
+    Text(&'a str),
+    Uint16Vector(&'a [u16]),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -53,7 +63,10 @@ struct RawText {
     length: usize,
 }
 
-fn vector_quote_word(count: usize) -> Result<(u16, bool), DictionaryWireError> {
+fn vector_quote_word(
+    count: usize,
+    scalar_bytes: usize,
+) -> Result<(u16, bool), DictionaryWireError> {
     let (thickness, explicit) = match count {
         2 => (1u16, false),
         4 => (2, false),
@@ -63,7 +76,15 @@ fn vector_quote_word(count: usize) -> Result<(u16, bool), DictionaryWireError> {
         1..=65_535 => (6, true),
         _ => return Err(DictionaryWireError::VectorTooLong),
     };
-    Ok((0x8000 | (thickness << 8) | 0x0800 | 0x001d, explicit))
+    let scalar_thickness = match scalar_bytes {
+        2 => 1u16,
+        4 => 2u16,
+        _ => return Err(DictionaryWireError::VectorTooLong),
+    };
+    Ok((
+        0x8000 | (scalar_thickness << 11) | (thickness << 8) | 0x001d,
+        explicit,
+    ))
 }
 
 fn encode_value(
@@ -73,32 +94,27 @@ fn encode_value(
 ) -> Result<(), DictionaryWireError> {
     match value {
         Value::Text(text) => {
-            let encoded: Vec<u16> = text.encode_utf16().collect();
-            if encoded.is_empty() {
-                return Err(DictionaryWireError::EmptyText);
-            }
-            if encoded.len() > u16::MAX as usize {
-                return Err(DictionaryWireError::TextTooLong);
-            }
-            words.push(TEXT_QUOTE);
-            words.push(encoded.len() as u16);
-            let start = words.len();
-            words.extend(encoded.iter().copied());
-            if encoded.len() >= 15 {
-                raw.push(RawText {
-                    start,
-                    length: encoded.len(),
-                });
-            }
+            append_text(text, words, raw)?;
         }
         Value::Uint16(value) => words.extend([NUMBER_QUOTE, *value]),
+        Value::Uint32(value) => words.extend([UINT32_QUOTE, *value as u16, (*value >> 16) as u16]),
         Value::Uint16Vector(values) => {
-            let (header, explicit) = vector_quote_word(values.len())?;
+            let (header, explicit) = vector_quote_word(values.len(), 2)?;
             words.push(header);
             if explicit {
                 words.push(values.len() as u16);
             }
             words.extend(values.iter().copied());
+        }
+        Value::Uint32Vector(values) => {
+            let (header, explicit) = vector_quote_word(values.len(), 4)?;
+            words.push(header);
+            if explicit {
+                words.push(values.len() as u16);
+            }
+            for value in *values {
+                words.extend([*value as u16, (*value >> 16) as u16]);
+            }
         }
         Value::Name(name) => {
             if name.is_empty() {
@@ -115,14 +131,54 @@ pub fn encode_text_sentence(
     subject: &[u16],
     fields: &[Field<'_>],
 ) -> Result<Vec<[u16; WORDS_PER_CODELET]>, DictionaryWireError> {
-    if subject.is_empty() {
-        return Err(DictionaryWireError::EmptySubject);
-    }
+    encode_sentence(Subject::Name(subject), fields)
+}
+
+pub fn encode_sentence(
+    subject: Subject<'_>,
+    fields: &[Field<'_>],
+) -> Result<Vec<[u16; WORDS_PER_CODELET]>, DictionaryWireError> {
+    encode_sentence_with_quote_layout(subject, fields, false)
+}
+
+pub(super) fn encode_index_sentence_v4(
+    subject: Subject<'_>,
+    fields: &[Field<'_>],
+) -> Result<Vec<[u16; WORDS_PER_CODELET]>, DictionaryWireError> {
+    encode_sentence_with_quote_layout(subject, fields, true)
+}
+
+fn encode_sentence_with_quote_layout(
+    subject: Subject<'_>,
+    fields: &[Field<'_>],
+    indexed_raw_quotes: bool,
+) -> Result<Vec<[u16; WORDS_PER_CODELET]>, DictionaryWireError> {
     let mut words = Vec::new();
     let mut boundaries = Vec::new();
     let mut raw = Vec::new();
-    words.push(NAME_TYPE);
-    words.extend(subject.iter().copied());
+    match subject {
+        Subject::Name(name) => {
+            if name.is_empty() {
+                return Err(DictionaryWireError::EmptySubject);
+            }
+            words.push(NAME_TYPE);
+            words.extend(name.iter().copied());
+        }
+        Subject::Text(text) => {
+            append_text(text, &mut words, &mut raw)?;
+        }
+        Subject::Uint16Vector(values) => {
+            if values.is_empty() {
+                return Err(DictionaryWireError::EmptySubject);
+            }
+            let (header, explicit) = vector_quote_word(values.len(), 2)?;
+            words.push(header);
+            if explicit {
+                words.push(values.len() as u16);
+            }
+            words.extend(values.iter().copied());
+        }
+    }
     words.push(SU);
     boundaries.push(words.len());
     let mut previous_case = 0;
@@ -139,7 +195,32 @@ pub fn encode_text_sentence(
     }
     words.extend([TEXT_VERB, REALIS]);
     boundaries.push(words.len());
-    pack_words(&words, &boundaries, &raw)
+    pack_words(&words, &boundaries, &raw, indexed_raw_quotes)
+}
+
+fn append_text(
+    text: &str,
+    words: &mut Vec<u16>,
+    raw: &mut Vec<RawText>,
+) -> Result<(), DictionaryWireError> {
+    let encoded: Vec<u16> = text.encode_utf16().collect();
+    if encoded.is_empty() {
+        return Err(DictionaryWireError::EmptyText);
+    }
+    if encoded.len() > u16::MAX as usize {
+        return Err(DictionaryWireError::TextTooLong);
+    }
+    words.push(TEXT_QUOTE);
+    words.push(encoded.len() as u16);
+    let start = words.len();
+    words.extend(encoded.iter().copied());
+    if encoded.len() >= 15 {
+        raw.push(RawText {
+            start,
+            length: encoded.len(),
+        });
+    }
+    Ok(())
 }
 
 fn case_order(case: u16) -> Option<u8> {
@@ -159,6 +240,7 @@ fn pack_words(
     words: &[u16],
     boundaries: &[usize],
     raw_text: &[RawText],
+    indexed_raw_quotes: bool,
 ) -> Result<Vec<[u16; WORDS_PER_CODELET]>, DictionaryWireError> {
     if boundaries.len() > 16 {
         return Err(DictionaryWireError::TooManyCases);
@@ -193,9 +275,15 @@ fn pack_words(
     let mut output = Vec::new();
     for (is_raw, start, piece) in pieces {
         if is_raw {
-            for chunk in piece.chunks(WORDS_PER_CODELET) {
+            let payload_width = if indexed_raw_quotes {
+                CODELET_DATA_WORDS
+            } else {
+                WORDS_PER_CODELET
+            };
+            for chunk in piece.chunks(payload_width) {
                 let mut codelet = [0; WORDS_PER_CODELET];
-                codelet[..chunk.len()].copy_from_slice(chunk);
+                let payload_start = usize::from(indexed_raw_quotes);
+                codelet[payload_start..payload_start + chunk.len()].copy_from_slice(chunk);
                 output.push(codelet);
             }
             continue;
@@ -263,5 +351,75 @@ mod tests {
         assert!(sentence.len() > 1);
         assert_eq!(sentence[0][0] & 1, 0);
         assert_eq!(sentence[1][0], b'P' as u16);
+    }
+
+    #[test]
+    fn v4_index_quote_continuation_preserves_the_codelet_index_word() {
+        let text = "Long dictionary index key with enough characters for continuation.";
+        let sentence = encode_index_sentence_v4(
+            Subject::Text(text),
+            &[Field {
+                grammatical_case: AT,
+                value: Value::Uint32(123),
+            }],
+        )
+        .expect("encode indexed quote");
+        assert!(sentence.len() > 2);
+        assert_eq!(sentence[1][0], 0);
+        assert_eq!(sentence[1][1], b'L' as u16);
+    }
+
+    #[test]
+    fn uint32_vector_uses_four_byte_elements_and_explicit_count() {
+        let values = [0x1234_5678, 0x9abc_def0];
+        let sentence = encode_text_sentence(
+            &DICTIONARY,
+            &[Field {
+                grammatical_case: OB,
+                value: Value::Uint32Vector(&values),
+            }],
+        )
+        .expect("encode uint32 vector");
+        let words = sentence
+            .iter()
+            .flat_map(|codelet| codelet[1..].iter().copied())
+            .collect::<Vec<_>>();
+        let quote = words
+            .iter()
+            .position(|word| *word == 0x911d)
+            .expect("u32 vector quote");
+        assert_eq!(
+            &words[quote..quote + 5],
+            &[0x911d, 0x5678, 0x1234, 0xdef0, 0x9abc]
+        );
+    }
+
+    #[test]
+    fn text_and_vector_subjects_are_encoded_without_a_name_wrapper() {
+        let text = encode_sentence(
+            Subject::Text("surface"),
+            &[Field {
+                grammatical_case: AT,
+                value: Value::Uint32(123),
+            }],
+        )
+        .expect("encode text subject");
+        let words = text
+            .iter()
+            .flat_map(|codelet| codelet[1..].iter().copied())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            &words[..10],
+            &[TEXT_QUOTE, 7, 115, 117, 114, 102, 97, 99, 101, SU]
+        );
+
+        let key = [0x1111, 0x2222];
+        let vector =
+            encode_sentence(Subject::Uint16Vector(&key), &[]).expect("encode vector subject");
+        let words = vector
+            .iter()
+            .flat_map(|codelet| codelet[1..].iter().copied())
+            .collect::<Vec<_>>();
+        assert!(words.starts_with(&[0x891d, 0x1111, 0x2222, SU]));
     }
 }

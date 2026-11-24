@@ -13,11 +13,18 @@ import { lookupLegacyName, lookupLegacyPyaName } from "../program/library/vliw/q
 
 function sourceWithEntry(definition = "A quantity with direction and magnitude.") {
   return `su name lyin kwon ob text "English Pyash dictionary" be text ya
-su name lyin kwon ob text "Pyash reference" as num 3 from text "en" to text "NFC" with text "pyac-vliw-dictionary/3" be text ya
+su name lyin kwon ob text "Pyash reference" as num 3 from text "en" to text "NFC" with text "pyac-vliw-dictionary/4" be text ya
+su name dlek as text "en" from text "vector" to text "vector" be text ya
+su name dlek as text "wordnet" from text "3.0" to text "n:05873161-n" by text "exact-sense" be text ya
+su name dlek as text "en" from text "wordnet" to text "3.0" by text "n:05873161-n" with text "A sense-specific interim gloss." be text ya
+su name dlek ob text "${definition}" be text ya`;
+}
+
+function legacyV3SourceWithEntry(definition = "A variable quantity.") {
+  return `su name lyin kwon ob text "English Pyash dictionary" be text ya
+su name lyin kwon ob text "Legacy import" as num 3 from text "en" to text "NFC" with text "pyac-vliw-dictionary/3" be text ya
 su name tlat kwon ob name dlek at text "entry" be text ya
 su name tlat kwon ob name dlek as text "en" from text "vector" to text "vector" at text "lexical-form" be text ya
-su name tlat kwon ob name dlek as text "wordnet" from text "3.0" to text "n:05873161-n" by text "exact-sense" at text "source-link" be text ya
-su name tlat kwon ob name dlek as text "en" from text "wordnet" to text "3.0" by text "n:05873161-n" with text "A sense-specific interim gloss." at text "source-gloss" be text ya
 su name dlek ob text "${definition}" be text ya`;
 }
 
@@ -46,9 +53,34 @@ test("dictionary source lowers keyed Pyash definition sentences and metadata", (
   assert.ok(built.entries[0].definition.every((codelet) => codelet.length === 16));
 });
 
-test("dictionary source rejects definitions without a declared entry", () => {
-  const source = sourceWithEntry().replace('su name tlat kwon ob name dlek at text "entry" be text ya\n', "");
+test("dictionary source still imports the current generated v3 source grammar", () => {
+  const built = buildDictionarySource(legacyV3SourceWithEntry());
+  assert.equal(built.entries.length, 1);
+  assert.deepEqual(built.entries[0].lexical_forms, [
+    { language: "en", surface: "vector", normalized: "vector" }
+  ]);
+  assert.ok(built.entries[0].definition.length > 0);
+});
+
+test("v3 dictionary source rejects definitions without a declared entry", () => {
+  const source = legacyV3SourceWithEntry().replace(
+    'su name tlat kwon ob name dlek at text "entry" be text ya\n',
+    ""
+  );
   assert.throws(() => buildDictionarySource(source), /precedes entry block/u);
+});
+
+test("v3 dictionary source rejects unimplemented entry records", () => {
+  const source = legacyV3SourceWithEntry().replace(
+    'at text "lexical-form"',
+    'at text "unknown-record"'
+  );
+  assert.throws(() => buildDictionarySource(source), /unsupported dictionary entry record/u);
+});
+
+test("v4 dictionary source requires a canonical Pyac key in su", () => {
+  const source = sourceWithEntry().replaceAll("su name dlek", "ob name dlek");
+  assert.throws(() => buildDictionarySource(source), /requires its canonical Pyac key in su/u);
 });
 
 test("dictionary source accepts a WordNet interim gloss without a Pyash definition", () => {
@@ -61,27 +93,50 @@ test("dictionary source accepts a WordNet interim gloss without a Pyash definiti
   assert.equal(entry.source_glosses[0].text, "A sense-specific interim gloss.");
 });
 
-test("dictionary source rejects English aliases and unresolved Pyash key atoms", () => {
-  assert.throws(() => buildDictionarySource(sourceWithEntry().replaceAll("dlek", "vector")), /no HNUC mapping: vector/u);
+test("dictionary source rejects unresolved Pyash key atoms rather than inventing HNUCs", () => {
   assert.throws(() => buildDictionarySource(sourceWithEntry().replaceAll("dlek", "unmappedword")), /no HNUC mapping/u);
 });
 
-test("dictionary source refuses an unimplemented entry record instead of dropping it", () => {
-  const source = sourceWithEntry().replace(
-    'at text "lexical-form" be text ya',
-    'at text "unknown-record" be text ya'
-  );
-  assert.throws(() => buildDictionarySource(source), /unsupported dictionary entry record/u);
+test("v4 dictionary source stores no quoted schema labels", () => {
+  const source = sourceWithEntry();
+  assert.doesNotMatch(source, /at text|lexical-form|source-link|source-gloss/u);
+  assert.equal(buildDictionarySource(source).entries.length, 1);
 });
 
 test("dictionary source accepts structural operation signature and argument metadata", () => {
   const source = sourceWithEntry().replace(
     'su name dlek ob text "A quantity with direction and magnitude." be text ya',
     [
+      'su name dlek by ve 0 1 4369 1 8574 1 1 9310 1 3613 be text ya',
+      'su name dlek as ve 0 1 9310 1 3613 from text "input" to text "value consumed" be text ya',
+      'su name dlek as ve 0 3613 by text "result" with text "computed value" be text ya',
+      'su name dlek ob text "A quantity with direction and magnitude." be text ya'
+    ].join("\n")
+  );
+  const signature = buildDictionarySource(source).entries[0].operation_signatures[0];
+  assert.deepEqual(signature.verb, [4369]);
+  assert.deepEqual(signature.mood, [8574]);
+  assert.deepEqual(signature.arguments, [{
+    grammatical_case: [9310],
+    value_type: [3613],
+    name: "input",
+    description: "value consumed"
+  }]);
+  assert.deepEqual(signature.results, [{
+    value_type: [3613],
+    name: "result",
+    description: "computed value"
+  }]);
+});
+
+test("v3 dictionary source imports structural operation metadata", () => {
+  const source = legacyV3SourceWithEntry().replace(
+    'su name dlek ob text "A variable quantity." be text ya',
+    [
       'su name tlat kwon ob name dlek from ve 0 1 4369 1 8574 1 1 9310 1 3613 at text "operation-signature" be text ya',
       'su name tlat kwon ob name dlek as ve 0 1 9310 1 3613 from text "input" to text "value consumed" at text "operation-argument" be text ya',
       'su name tlat kwon ob name dlek as ve 0 3613 from text "result" to text "computed value" at text "operation-result" be text ya',
-      'su name dlek ob text "A quantity with direction and magnitude." be text ya'
+      'su name dlek ob text "A variable quantity." be text ya'
     ].join("\n")
   );
   const signature = buildDictionarySource(source).entries[0].operation_signatures[0];
@@ -141,6 +196,52 @@ test("dictionary entry read labels the linked WordNet gloss as the interim defin
   assert.equal(summary.pyash, "");
 });
 
+test("dictionary entry read decodes v4 case-type metadata without labels", () => {
+  const summary = summarizeDictionaryEntry([
+    {
+      su: { name: "descriptive number" },
+      as: { text: "en" },
+      from: { text: "data" },
+      to: { text: "data" },
+      be: "text",
+      mood: "ya"
+    },
+    {
+      su: { name: "descriptive number" },
+      as: { text: "wordnet" },
+      from: { text: "Open English WordNet 2025" },
+      to: { text: "n:08479331-n" },
+      by: { text: "exact-sense" },
+      be: "text",
+      mood: "ya"
+    },
+    {
+      su: { name: "descriptive number" },
+      as: { text: "en" },
+      from: { text: "wordnet" },
+      to: { text: "Open English WordNet 2025" },
+      by: { text: "n:08479331-n" },
+      with: { text: "A collection of facts." },
+      be: "text",
+      mood: "ya"
+    },
+    {
+      su: { name: "descriptive number" },
+      ob: { text: "A collection of facts." },
+      be: "text",
+      mood: "ya"
+    }
+  ], "drut hnuc");
+
+  assert.deepEqual(summary.entry.lexicalForms, [
+    { language: "en", surface: "data", normalized: "data" }
+  ]);
+  assert.equal(summary.entry.sourceLinks[0].identifier, "n:08479331-n");
+  assert.equal(summary.interimDefinitions[0].text, "A collection of facts.");
+  assert.equal(summary.sentences.length, 1);
+  assert.match(summary.pyash, /^su name drut hnuc/u);
+});
+
 test("published English core source imports six real WordNet-linked entries", async () => {
   const sourcePath = fileURLToPath(new URL(
     "../program/library/dictionary/english-core.pya",
@@ -161,4 +262,9 @@ test("published English core source imports six real WordNet-linked entries", as
   );
   assert.ok(built.entries.every((entry) => entry.definition === null));
   assert.ok(built.entries.every((entry) => entry.source_glosses.length === 1));
+  const dataKey = ["drut", "hnuc"].map((word) => Number.parseInt(lookupLegacyPyaName(word).hnuc, 16));
+  assert.deepEqual(
+    built.entries.find((entry) => entry.lexical_forms.some((form) => form.surface === "data")).key,
+    dataKey
+  );
 });

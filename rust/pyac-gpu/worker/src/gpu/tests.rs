@@ -68,6 +68,46 @@ fn decodes_supported_typed_programlet_results() {
 }
 
 #[test]
+fn decodes_float_vectors_from_programlet_and_section_results() {
+    let mut programlet = [0; RESULT_STRIDE];
+    programlet[0] = pyac_vliw_core::VALUE_VECTOR_FLOAT32;
+    programlet[2] = 2;
+    programlet[3] = 6;
+    programlet[4] = 0.5f32.to_bits();
+    programlet[5] = 0.5f32.to_bits();
+    assert_eq!(
+        decode_programlet_result(6, &programlet).unwrap(),
+        vec![PyacValue::Vector(pyac::VectorElements::Float32(vec![
+            0.5f32.to_bits(),
+            0.5f32.to_bits(),
+        ]))]
+    );
+
+    let mut sections = vec![0; SECTION_RESULT_STRIDE];
+    sections[0] = 0;
+    sections[1] = 1;
+    sections[2] = 0;
+    sections[3] = 6;
+    sections[4] = 0x1234;
+    let result = 4 + MAX_SECTION_NAME_WORDS;
+    sections[result] = pyac_vliw_core::VALUE_VECTOR_FLOAT64;
+    sections[result + 2] = 2;
+    sections[result + 3] = 6;
+    sections[result + 4] = 1.25f64.to_bits() as u32;
+    sections[result + 5] = (1.25f64.to_bits() >> 32) as u32;
+    sections[result + 6] = (-0.5f64).to_bits() as u32;
+    sections[result + 7] = ((-0.5f64).to_bits() >> 32) as u32;
+    let records = decode_section_records(1, &sections).unwrap();
+    assert_eq!(
+        records[0].value,
+        PyacValue::Vector(pyac::VectorElements::Float64(vec![
+            1.25f64.to_bits(),
+            (-0.5f64).to_bits(),
+        ]))
+    );
+}
+
+#[test]
 fn decodes_float32_codelet_results_and_json_values() {
     let mut codelet = [0; pyac::WORDS_PER_CODELET];
     codelet[0] = 1;

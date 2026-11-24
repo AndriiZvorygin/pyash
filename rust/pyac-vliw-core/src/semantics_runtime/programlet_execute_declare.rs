@@ -4,7 +4,7 @@ use super::*;
 pub(super) fn declare_programlet_local(
     sentence: &ParsedSentence,
     sentence_view: &SentenceView<'_>,
-    symbol_words: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbol_words: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     symbol_used: &mut usize,
     frame: &mut ProgramletFrame,
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],

@@ -72,10 +72,11 @@ include!("semantics_runtime/array_access.rs");
 pub const CODELET_WORDS: usize = 16;
 pub const MAX_VECTOR_LANES: usize = 16;
 pub const RESULT_WORDS: usize = 32;
-pub const MAX_PROGRAMLET_CODELETS: usize = 64;
 pub const MAX_PROGRAMLET_SECTIONS: usize = 64;
 pub const MAX_PROGRAMLET_SECTION_NAME_WORDS: usize = 8;
-pub const MAX_PROGRAMLET_PAYLOAD_WORDS: usize = MAX_PROGRAMLET_CODELETS * (CODELET_WORDS - 1);
+pub const MAX_PROGRAMLET_ROUTINES: usize = 64;
+/// Scratch capacity for interned identifiers and dispatch signature words.
+pub const MAX_PROGRAMLET_SYMBOL_WORDS: usize = 960;
 pub const MAX_PROGRAMLET_LOCAL_SLOTS: usize = 64;
 pub const MAX_PROGRAMLET_CALL_DEPTH: usize = 8;
 pub const MAX_PROGRAMLET_VECTOR_VALUE_WORDS: usize =
@@ -85,6 +86,7 @@ const PROGRAMLET_EXECUTION_COMPLETE: u32 = u32::MAX;
 const MAX_U16: u32 = 65_535;
 const SYMBOL_NAME_SEPARATOR: u32 = MAX_U16 + 1;
 pub const MAX_PROGRAMLET_ARGUMENTS: usize = 8;
+const MAX_SENTENCE_FIELDS: usize = MAX_PROGRAMLET_ARGUMENTS + 2;
 
 pub const VALUE_UNSIGNED: u32 = 1;
 pub const VALUE_SIGNED: u32 = 2;
@@ -268,7 +270,7 @@ impl SentenceField {
 
 #[derive(Clone, Copy)]
 struct ParsedSentence {
-    fields: [SentenceField; 8],
+    fields: [SentenceField; MAX_SENTENCE_FIELDS],
     field_count: usize,
     verb_start: usize,
     verb_length: usize,
@@ -278,7 +280,7 @@ struct ParsedSentence {
 impl ParsedSentence {
     const fn empty() -> Self {
         Self {
-            fields: [SentenceField::EMPTY; 8],
+            fields: [SentenceField::EMPTY; MAX_SENTENCE_FIELDS],
             field_count: 0,
             verb_start: 0,
             verb_length: 0,
@@ -407,6 +409,8 @@ mod programlet_symbols;
 mod programlet_values;
 #[path = "semantics_runtime/programlet_vector_actions.rs"]
 mod programlet_vector_actions;
+#[path = "semantics_runtime/programlet_vector_composition.rs"]
+mod programlet_vector_composition;
 #[path = "semantics_runtime/programlet_vector_storage.rs"]
 mod programlet_vector_storage;
 #[path = "semantics_runtime/programlet_vector_values.rs"]
@@ -426,6 +430,7 @@ use boolean::{boolean_comparison, boolean_composition, evaluate_boolean_expressi
 use conditional::conditional;
 pub use dispatch::interpret_group;
 use float::single_codelet;
+use mutable_vector::mutable_vector_declaration;
 pub use numeric::apply_number_operator;
 use numeric::{
     arithmetic, boolean_literal, invert, literal, number_operator, vector_arithmetic, word,
@@ -479,6 +484,11 @@ use programlet_values::{
     write_programlet_call_result,
 };
 use programlet_vector_actions::{apply_programlet_vector_action, is_programlet_vector_action};
+use programlet_vector_composition::{
+    apply_programlet_dot_product_store, apply_programlet_vector_select,
+    declare_programlet_vector_local, is_programlet_dot_product_store,
+    is_programlet_vector_declaration, is_programlet_vector_select,
+};
 use programlet_vector_values::{
     ProgramletVectorValue, programlet_field_is_vector, programlet_vector_argument_reference,
     read_programlet_float, read_programlet_vector, write_programlet_float, write_programlet_vector,

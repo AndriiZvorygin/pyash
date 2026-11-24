@@ -1,14 +1,15 @@
 # Pyac VLIW Multilingual Dictionary
 
-Status: implemented Rust writer and seek-based reader for dictionary profile
-v3, with v2 read compatibility and in-memory binary-search indexes rebuilt
-from its VLIW sentences.
+Status: Rust writes dictionary profile v4 and searches its sorted in-band
+indexes directly in the raw `.pyac` file. Profile v2 and v3 remain readable
+through a seek-and-scan compatibility path; those legacy profiles do not get
+runtime-built indexes.
 The accepted-vocabulary reference volume is published in
-`program/library/dictionary/` and currently contains 58,630 entries. It is
-generated from promoted vocabulary catalogs and includes English and selected
-multilingual forms, 57,283 selected WordNet links, and SUMO mappings. The
-separate six-entry `english-core` volume remains a small example fixture. The
-Rust library writer accepts optional already-lowered native definition
+`program/library/dictionary/` and currently contains 58,630 entries in its
+existing v3 snapshot. Its regeneration is gated on resolving 3,363 keys with
+multiple exact Open English WordNet 2025 senses; v4 rejects those conflicts.
+The separate six-entry `english-core` volume remains a small example fixture.
+The Rust library writer accepts optional already-lowered native definition
 codelets and exact source glosses. The
 `pyash dictionary volume` authoring command parses Pyash source and lowers its
 definition sentences before calling that writer. The profile organizes a
@@ -51,41 +52,43 @@ After the profile sentence, codelets appear in this order:
 
 1. volume metadata, including title, revision, and supported language tags;
 2. table-of-contents records;
-3. lookup-index sections;
+3. four lookup-index sections;
 4. dictionary entries, ordered by their canonical Pyac key.
 
 All constituent records are ordinary Pyash sentences. A dictionary entry is
 one complete Pyash paragraph or map, using the existing grammar to keep its
-sentences together; it is not a new opcode or a new word allocation. Its
-each linked WordNet sense and exact gloss provide an interim definition when
-no native Pyash definition has been authored. An entry may carry multiple
-sense-specific interim glosses, such as a noun and an adjective under one
-Pyash key. A native definition is one or more
-canonical Pyash sentences and may be added later. A TOC item is a named
-logical range. A printable reader presents these ranges as navigable groups
-and preserves the source codelet order.
+sentences together; it is not a new opcode or a new word allocation. Each
+entry's exact linked WordNet sense and gloss provide an interim definition
+when no native Pyash definition has been authored. V4 permits one distinct
+exact WordNet sense per dataset release for each Pyac key; cross-release links
+to the same sense are allowed. A native definition is one or more canonical
+Pyash sentences and may be added later. V4 TOC sections use fixed ordinal
+roles; a printable reader presents them as navigable groups while preserving
+the source codelet order.
 
 Entries are sorted by the unsigned numeric HNUC sequence of the exact
 canonical Pyac key in `su`, lexicographically, with a shorter prefix first.
 The sequence itself is the identity; no separate entry ID participates in
 sorting or lookup.
 
-A volume-level record gives the number of TOC records, so a reader can find
-the end of the TOC without scanning definitions or relying on a sidecar. A TOC
-record identifies a stable section ID, its role, and its codelet range.
-Ranges use zero-based codelet ordinals and codelet counts, never byte offsets.
-Each ordinal/count is an unsigned 32-bit value represented in ordinary VLIW
-typed data as two unsigned 16-bit words, low word first. The range payload is
-`[start-low, start-high, count-low, count-high]`. The profile marker, count,
-and TOC records are all ordinary VLIW sentences; their relation signatures
-must be vocabulary-backed and use typed quote values. Readers derive byte
-positions from the existing fixed-width codelet layout.
+A volume-level record gives the number of TOC records and the entry count.
+V4 TOC records use fixed numeric ordinals, not quoted role names. Their
+zero-based codelet ranges use `[start-low, start-high, count-low,
+count-high]`; offsets in index rows are unsigned 32-bit codelet ordinals.
+Readers derive byte positions from the existing fixed-width codelet layout.
 
 The TOC and indexes are first-class dictionary contents and can be printed,
 decoded, copied, and validated with the same sentence tools as definitions.
-A reader may build disposable in-memory maps from these sentences for fast
-lookup. Such maps are caches only: they are rebuilt from the `.pyac` volume
-and are never an alternate persisted encoding.
+V4 lookup binary-searches the sorted index sentences in place in the raw
+file. It creates no runtime maps, scratch copy, or sidecar and uses no fence
+records. A probe that lands in a multi-codelet sentence advances to a
+complete-codelet boundary and validates the candidate sentence shape before
+comparing its key. To make that seek reliable when an indexed text key uses
+raw quote continuation, those continuation codelets reserve the first uint16
+for the codelet index (zero for continuation) and carry up to fifteen payload
+words. The rest of the v4 volume, including profile, entry, and definition
+sentences, keeps the ordinary text-quote encoding. V2/v3 compatibility uses
+the legacy sixteen-word raw quote payload and query-time seek-and-scan.
 
 ## 3. Entry identity and terminology
 
@@ -155,46 +158,53 @@ authored and linked as a language-specific definition record.
 
 The volume contains in-band sentence sections for these lookup directions:
 
-| Index | Key | Result |
+| V4 index section | Sort key | Result |
 | --- | --- | --- |
-| Language surface | Language ID plus normalized surface form | One or more canonical Pyac keys. |
-| Canonical Pyac | Exact HNUC atom or compound sequence | The corresponding dictionary-entry range. |
-| External source | Dataset, release, and exact external identifier | The matching Pyac key and explicit mapping relation. |
-| Entry location | Canonical Pyac key | The codelet range containing that entry. |
-| Operation signature | Verb, mood, and unordered grammatical-case/value-type pairs | The operation entry and its descriptive argument/result metadata. |
+| Canonical Pyac | Exact HNUC atom or compound sequence in the subject | Entry start offset (`at` uint32). |
+| Language surface | Normalized surface in the subject, then language | Sorted entry offsets (`at` uint32 or uint32 vector). |
+| External source | Identifier in the subject, then dataset and release | Sorted entry offsets (`at` uint32 or uint32 vector). |
+| Operation signature | Canonical signature words in the subject | Sorted entry offsets (`at` uint32 or uint32 vector). |
 
-Each index section is itself a deterministically ordered sequence of VLIW
-sentences. Its TOC range lets a reader find the appropriate index without
-scanning definition sections. Index records point to canonical Pyac keys and
-entry codelet ranges; they do not contain a second copy of the definition.
-The field meanings and relation signatures MUST use Pyash cases
-and typed quote values. If a needed relation lacks a suitable canonical
-vocabulary entry, record that as a vocabulary dependency instead of assigning
-an unreviewed HNUC or substituting an unrelated word.
+The corresponding decoded sentence shapes are compact. The subject is the
+lookup key; `at` contains only the result offset(s):
 
-Index order is deterministic by the index's complete key and then by the
-canonical Pyac HNUC sequence. Language-surface keys use the declared
-normalized UTF-8 form; external-source keys include the dataset and release.
-A language-specific normalization policy is part of the volume metadata, so
-readers do not depend on host locale collation. A lookup that encounters a
-duplicate surface key returns the complete ordered set of Pyac keys. An
-operation signature is a structural dispatch description: argument names and
-descriptions explain the contract to readers, but do not constrain which
-lexical forms may fill the grammatical cases.
+```text
+su name drut hnuc at num 12312 be text ya
+su text "vector" as text "en" at num 12312 be text ya
+su text "n:05873161-n" as text "wordnet" from text "OEWN 2025" at ve num 12312 16384 be text ya
+su ve num <canonical-signature-words> at num 12312 be text ya
+```
 
-The entry-location index records both the full entry range and the optional
-native-definition paragraph range. A zero-length definition range is valid in
-v3 and points to the end of its entry. Readers then use the entry's exact
-source glosses, each tied to a linked WordNet sense, as its interim definitions.
-A reader can return human-readable
-definitions without mistaking typed lexical/provenance records for definition
-sentences.
-The Rust reader validates the in-band index sentence shapes and targets, then
-builds sorted posting arrays with binary-search range starts. These arrays are
-disposable runtime indexes, not persisted sidecars. Lookup is
-`O(log n + matches)` after opening, rather than scanning definitions. Opening
-loads the indexes into memory; definitions remain on disk and are fetched by
-their validated codelet ranges only when requested.
+These are sentence-level renderings of the index rows; the serialized file
+uses the corresponding typed VLIW quote widths and fixed ordinal TOC sections.
+
+Each index section is a deterministically ordered sequence of VLIW sentences.
+V4 row schemas are distinguished by section ordinal, subject type, and
+case/type sequence; English schema labels are not stored as quoted text. Rows
+point directly to entry offsets and do not copy definitions.
+
+Their ordering uses the complete index key and then entry offset. Surface keys
+use UTF-16 code-unit order to match the VLIW text payload. Source keys order by
+identifier, dataset, and release. A language-specific normalization policy
+is part of volume metadata, so readers do not depend on host locale
+collation. Duplicate surface and source keys return every matching offset.
+Operation argument names and explanations describe a signature for readers,
+but do not constrain lexical forms.
+
+The canonical index replaces the separate entry-location index. An entry
+starts at its indexed offset and ends at the next canonical offset; the last
+entry ends at the entries-section boundary. V4 profile metadata includes the
+entry count. Entry metadata records precede native definition sentences and
+are recognized by their case/type patterns rather than text labels. A
+zero-length definition is the entry's end offset. V2/v3 volumes retain their
+entry-location index and are scanned on demand without constructing posting
+arrays or maps.
+
+For v4, binary search reads candidate sentences from the index section using
+codelet offsets and the existing continuation/completion bit. It parses and
+validates each candidate row before comparing keys. Lookup is
+`O(log n + row width + matches)` reads and does not scan the definitions area.
+No index is loaded or materialized at open time.
 
 ## 5. Definition paragraphs and program links
 
@@ -300,7 +310,7 @@ pyash dictionary hnan to zh
 pyash dictionary volume lookup program/library/dictionary/reference.pyac surface zh 你
 pyash dictionary volume lookup program/library/dictionary/reference.pyac source wordnet "Open English WordNet 2025" n:07285306-n
 pyash dictionary volume read program/library/dictionary/reference.pyac key hdiftyec
-pyash dictionary volume benchmark program/library/dictionary/reference.pyac surface en forecast 100000 to artifacts/dictionary-benchmarks/reference.pya
+pyash dictionary volume benchmark <v4-volume.pyac> surface en forecast 100000 to artifacts/dictionary-benchmarks/reference.pya
 ```
 
 `pyash dictionary` is also available as `pyash dict`. It searches the compiled
@@ -312,38 +322,34 @@ Multi-character readings are included only when every Han character has one
 local reading and the surface maps to one Pyash key. Surface lookups return
 all matching sense keys for homographs.
 
-The `.pya` source starts with a profile sentence and metadata sentence:
+New `.pya` sources start with the profile and v4 metadata sentences:
 
 ```pyash
 su name lyin kwon ob text "English Pyash dictionary" be text ya
-su name lyin kwon ob text "English reference" as num 2 from text "en" to text "NFC" with text "pyac-vliw-dictionary/3" be text ya
+su name lyin kwon ob text "English reference" as num 2 from text "en" to text "NFC" with text "pyac-vliw-dictionary/4" be text ya
 ```
 
-Each entry starts with `su name tlat kwon ob text "<canonical Pyash key>" at
-text "entry" be text ya`. The key is quoted text because an atom spelling can
-also be a grammatical role word. Add following `lexical-form`, `source-link`,
-`source-gloss`, `component`, `task`, `reference`, and operation-signature
-records with the same `tlat kwon` subject and the key in `ob text`. A
-`source-gloss` must match an exact source link. Its WordNet gloss supplies the
-interim definition. A native definition may be added as one or more ordinary
-Pyash sentences whose `su` is that exact canonical key; it is optional. The
-importer resolves every key through the checkout's Pyash HNUC vocabulary and
-lowers native definition sentences through the existing VLIW compiler;
-unknown key atoms and unsupported record tags fail instead of being guessed
-or dropped. For standalone volumes, editing the `.pya` source and rebuilding
-the `.pyac` volume is the supported add/update workflow. For the accepted
-reference volume, update the canonical vocabulary catalog, regenerate its
-snapshot, then rebuild the volume. Neither workflow recompiles the Rust
-executable.
+V4 entries use the canonical Pyac key directly as their `su` name. Metadata
+sentences are identified by their case/type signatures, not quoted labels;
+native definition sentences follow the metadata for that key. Key words are
+resolved through the active Pyash HNUC vocabulary. A source gloss must match
+an exact source link and supplies the interim definition. Unknown key atoms
+fail, and native definitions are lowered through the existing VLIW compiler.
+The importer still accepts v3 authored source for the checked-in generated
+snapshot; it serializes accepted entries with the v4 Rust writer. For
+standalone volumes, editing the `.pya` source and rebuilding the `.pyac`
+volume is the supported add/update workflow. For the accepted reference
+volume, update canonical vocabulary catalogs, resolve the exact-sense curation
+gate, regenerate the snapshot, then rebuild the volume. Neither workflow
+recompiles the Rust executable.
 
 For example, this adds an English form and an exact WordNet interim gloss to
 the existing compound `rwoc hrom`:
 
 ```pyash
-su name tlat kwon ob text "rwoc hrom" at text "entry" be text ya
-su name tlat kwon ob text "rwoc hrom" as text "en" from text "procedure" to text "procedure" at text "lexical-form" be text ya
-su name tlat kwon ob text "rwoc hrom" as text "wordnet" from text "Open English WordNet 2025" to text "n:01025762-n" by text "exact-sense" at text "source-link" be text ya
-su name tlat kwon ob text "rwoc hrom" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:01025762-n" with text "course of action intended to achieve a result" at text "source-gloss" be text ya
+su name rwoc hrom as text "en" from text "procedure" to text "procedure" be text ya
+su name rwoc hrom as text "wordnet" from text "Open English WordNet 2025" to text "n:01025762-n" by text "exact-sense" be text ya
+su name rwoc hrom as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:01025762-n" with text "course of action intended to achieve a result" be text ya
 ```
 
 After adding the block and profile metadata to a standalone source, build the
@@ -362,10 +368,12 @@ lookup time, lookup rate, and result count. It is persistent comparison
 evidence; printed JSON is only the immediate CLI response.
 
 `rust/pyac/src/dictionary.rs` exposes the deterministic writer and seek-based
-reader APIs. Lookup indexes are rebuilt in memory from the volume; entry
-records and optional native definitions are fetched on demand using their
-explicit codelet ranges. Gloss-only entries remain searchable. The
-separate in-memory `DictionaryIndex` retains its language/task projection API.
+reader APIs. V4 lookup searches raw index codelets directly; v2/v3 lookup uses
+query-time scanning without runtime indexes. Throughput benchmarks require
+v4 so a high iteration count cannot accidentally scan a legacy volume for
+hours. Entry records and optional native definitions are fetched on demand
+using codelet offsets. Gloss-only entries remain searchable. The separate
+in-memory `DictionaryIndex` retains its language/task projection API.
 The synthetic scaling comparison remains available with
 `cargo bench --manifest-path rust/pyac/Cargo.toml --bench dictionary_index`;
 it is an algorithmic baseline, not a substitute for the file-backed CLI

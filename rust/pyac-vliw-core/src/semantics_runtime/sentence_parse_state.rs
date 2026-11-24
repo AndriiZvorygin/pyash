@@ -78,10 +78,13 @@ pub(super) fn advance_sentence_parse(
         INSTRUMENTAL => 1 << 6,
         FROM_INDEX => 1 << 7,
         TO_INDEX => 1 << 8,
+        LOCATIVE => 1 << 9,
         _ => 0,
     };
     if role_bit != 0 {
-        if state.value_start >= index || state.field_count >= 8 || state.seen_roles & role_bit != 0
+        if state.value_start >= index
+            || state.field_count >= MAX_SENTENCE_FIELDS
+            || state.seen_roles & role_bit != 0
         {
             transition.error = ERROR_MALFORMED;
             return transition;

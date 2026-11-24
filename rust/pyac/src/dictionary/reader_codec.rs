@@ -2,7 +2,7 @@ use super::reader::{DictionaryReadError, DictionarySection};
 use super::volume::DictionaryMetadata;
 use super::volume_records::{
     CONTENTS_SUBJECT, INDEX_SUBJECT, PROFILE_SUBJECT, PROFILE_VERSION, PROFILE_VERSION_V2,
-    TOC_ROLES,
+    PROFILE_VERSION_V3, TOC_ROLES, TOC_ROLES_V4,
 };
 use crate::literal::decode_quote_header;
 use crate::{CODELET_BYTES, FORMAT_VERSION, HEADER_BYTES, MAGIC, PyacError, WORDS_PER_CODELET};
@@ -17,7 +17,9 @@ const FROM: u16 = 0x313e;
 const TO: u16 = 0x243e;
 const BY: u16 = 0x287e;
 const WITH: u16 = 0x490f;
+const AT: u16 = 0x615f;
 const UINT16: u16 = 0x881d;
+const UINT32: u16 = 0x901d;
 const TEXT: u16 = 0x0e1d;
 const TEXT_VERB: u16 = 0x8a28;
 const REALIS: u16 = 0x217e;
@@ -109,6 +111,24 @@ pub(super) fn read_sentence<R: Read + Seek>(
     start: u32,
     limit: u32,
 ) -> Result<(Vec<u16>, u32), DictionaryReadError> {
+    read_sentence_with_raw_width(source, start, limit, WORDS_PER_CODELET, false)
+}
+
+pub(super) fn read_sentence_v4<R: Read + Seek>(
+    source: &mut R,
+    start: u32,
+    limit: u32,
+) -> Result<(Vec<u16>, u32), DictionaryReadError> {
+    read_sentence_with_raw_width(source, start, limit, WORDS_PER_CODELET - 1, true)
+}
+
+fn read_sentence_with_raw_width<R: Read + Seek>(
+    source: &mut R,
+    start: u32,
+    limit: u32,
+    raw_width: usize,
+    indexed_raw: bool,
+) -> Result<(Vec<u16>, u32), DictionaryReadError> {
     let mut words = Vec::new();
     let mut scan = QuoteScan::default();
     let mut ordinal = start;
@@ -123,7 +143,7 @@ pub(super) fn read_sentence<R: Read + Seek>(
         words.extend_from_slice(&codelet[1..=used_slots]);
         if let Some((length, _)) = raw {
             let mut remaining = length;
-            for _ in 0..length.div_ceil(WORDS_PER_CODELET) {
+            for _ in 0..length.div_ceil(raw_width) {
                 if ordinal >= limit {
                     return Err(DictionaryReadError::InvalidRecord(
                         "raw text quote is truncated",
@@ -131,8 +151,14 @@ pub(super) fn read_sentence<R: Read + Seek>(
                 }
                 let raw_codelet = read_codelet(source, ordinal)?;
                 ordinal += 1;
-                let used = remaining.min(WORDS_PER_CODELET);
-                words.extend_from_slice(&raw_codelet[..used]);
+                if indexed_raw && raw_codelet[0] != 0 {
+                    return Err(DictionaryReadError::InvalidRecord(
+                        "raw text continuation has a nonzero codelet index",
+                    ));
+                }
+                let payload_start = usize::from(indexed_raw);
+                let used = remaining.min(raw_width);
+                words.extend_from_slice(&raw_codelet[payload_start..payload_start + used]);
                 remaining -= used;
             }
         } else if codelet[0] & 1 != 0 {
@@ -256,6 +282,121 @@ pub(super) fn take_vector(
     Ok(values)
 }
 
+pub(super) fn take_uint32(words: &[u16], cursor: &mut usize) -> Result<u32, DictionaryReadError> {
+    expect_word(words, cursor, UINT32)?;
+    let low = *words
+        .get(*cursor)
+        .ok_or(DictionaryReadError::InvalidRecord("truncated uint32 quote"))?;
+    let high = *words
+        .get(*cursor + 1)
+        .ok_or(DictionaryReadError::InvalidRecord("truncated uint32 quote"))?;
+    *cursor += 2;
+    Ok(low as u32 | ((high as u32) << 16))
+}
+
+pub(super) fn take_uint32_vector(
+    words: &[u16],
+    cursor: &mut usize,
+) -> Result<Vec<u32>, DictionaryReadError> {
+    let header_word = *words
+        .get(*cursor)
+        .ok_or(DictionaryReadError::InvalidRecord(
+            "missing uint32 vector quote",
+        ))?;
+    let header = decode_quote_header(header_word).ok_or(DictionaryReadError::InvalidRecord(
+        "invalid uint32 vector quote header",
+    ))?;
+    if header.sort != 4 || header.scalar_bytes != 4 {
+        return Err(DictionaryReadError::InvalidRecord(
+            "expected a uint32 vector quote",
+        ));
+    }
+    *cursor += 1;
+    let count = if header.explicit_vector_length {
+        let count = *words
+            .get(*cursor)
+            .ok_or(DictionaryReadError::InvalidRecord(
+                "missing uint32 vector length",
+            ))? as usize;
+        *cursor += 1;
+        count
+    } else {
+        header
+            .vector_words
+            .ok_or(DictionaryReadError::InvalidRecord(
+                "unsupported uint32 vector thickness",
+            ))?
+    };
+    let word_count = count
+        .checked_mul(2)
+        .ok_or(DictionaryReadError::InvalidRecord(
+            "uint32 vector length overflow",
+        ))?;
+    let end = cursor
+        .checked_add(word_count)
+        .ok_or(DictionaryReadError::InvalidRecord(
+            "uint32 vector length overflow",
+        ))?;
+    let payload = words
+        .get(*cursor..end)
+        .ok_or(DictionaryReadError::InvalidRecord(
+            "truncated uint32 vector payload",
+        ))?;
+    let values = payload
+        .chunks_exact(2)
+        .map(|pair| pair[0] as u32 | ((pair[1] as u32) << 16))
+        .collect();
+    *cursor = end;
+    Ok(values)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum RecordSubject {
+    Name(Vec<u16>),
+    Text(String),
+    Uint16Vector(Vec<u16>),
+}
+
+pub(super) fn take_record_subject(
+    words: &[u16],
+    cursor: &mut usize,
+) -> Result<RecordSubject, DictionaryReadError> {
+    match words.get(*cursor).copied() {
+        Some(NAME_TYPE) => {
+            *cursor += 1;
+            let start = *cursor;
+            let end = words
+                .get(start..)
+                .and_then(|tail| tail.iter().position(|word| *word == SU))
+                .map(|index| start + index)
+                .ok_or(DictionaryReadError::InvalidRecord(
+                    "name subject has no nominative boundary",
+                ))?;
+            if end == start {
+                return Err(DictionaryReadError::InvalidRecord("empty name subject"));
+            }
+            *cursor = end + 1;
+            Ok(RecordSubject::Name(words[start..end].to_vec()))
+        }
+        Some(TEXT) => {
+            let value = take_text(words, cursor)?;
+            expect_word(words, cursor, SU)?;
+            Ok(RecordSubject::Text(value))
+        }
+        Some(header)
+            if decode_quote_header(header)
+                .is_some_and(|item| item.sort == 4 && item.scalar_bytes == 2) =>
+        {
+            let value = take_vector(words, cursor)?;
+            expect_word(words, cursor, SU)?;
+            Ok(RecordSubject::Uint16Vector(value))
+        }
+        _ => Err(DictionaryReadError::InvalidRecord(
+            "unsupported dictionary index subject type",
+        )),
+    }
+}
+
 pub(super) fn expect_word(
     words: &[u16],
     cursor: &mut usize,
@@ -302,7 +443,7 @@ fn take_number(words: &[u16], cursor: &mut usize) -> Result<u16, DictionaryReadE
 
 pub(super) fn parse_metadata(
     words: &[u16],
-) -> Result<(DictionaryMetadata, usize, String), DictionaryReadError> {
+) -> Result<(DictionaryMetadata, usize, String, Option<u32>), DictionaryReadError> {
     let mut cursor = subject_end(words, &PROFILE_SUBJECT)?;
     let title = take_text(words, &mut cursor)?;
     expect_word(words, &mut cursor, OB)?;
@@ -325,8 +466,16 @@ pub(super) fn parse_metadata(
     expect_word(words, &mut cursor, BY)?;
     let profile_version = take_text(words, &mut cursor)?;
     expect_word(words, &mut cursor, WITH)?;
+    let entry_count = if profile_version == PROFILE_VERSION {
+        let value = take_uint32(words, &mut cursor)?;
+        expect_word(words, &mut cursor, AT)?;
+        Some(value)
+    } else {
+        None
+    };
     expect_end(words, &mut cursor)?;
-    if ![PROFILE_VERSION, PROFILE_VERSION_V2].contains(&profile_version.as_str())
+    if ![PROFILE_VERSION, PROFILE_VERSION_V3, PROFILE_VERSION_V2]
+        .contains(&profile_version.as_str())
         || languages.iter().any(String::is_empty)
     {
         return Err(DictionaryReadError::InvalidRecord(
@@ -343,7 +492,31 @@ pub(super) fn parse_metadata(
         },
         toc_count,
         profile_version,
+        entry_count,
     ))
+}
+
+pub(super) fn parse_toc_v4(
+    words: &[u16],
+    expected_ordinal: u16,
+    role: &str,
+) -> Result<DictionarySection, DictionaryReadError> {
+    let mut cursor = subject_end(words, &CONTENTS_SUBJECT)?;
+    let ordinal = take_number(words, &mut cursor)?;
+    expect_word(words, &mut cursor, OB)?;
+    let range = take_vector(words, &mut cursor)?;
+    expect_word(words, &mut cursor, FROM)?;
+    expect_end(words, &mut cursor)?;
+    if ordinal != expected_ordinal || range.len() != 4 {
+        return Err(DictionaryReadError::InvalidRecord(
+            "v4 TOC ordinal or range shape is invalid",
+        ));
+    }
+    Ok(DictionarySection {
+        role: role.to_owned(),
+        codelet_start: range[0] as u32 | ((range[1] as u32) << 16),
+        codelet_count: range[2] as u32 | ((range[3] as u32) << 16),
+    })
 }
 
 pub(super) fn parse_toc(words: &[u16]) -> Result<DictionarySection, DictionaryReadError> {
@@ -437,6 +610,36 @@ pub(super) fn validate_sections(
     if expected != pack_count {
         return Err(DictionaryReadError::InvalidRecord(
             "TOC does not cover the complete pack",
+        ));
+    }
+    Ok(())
+}
+
+pub(super) fn validate_sections_v4(
+    sections: &[DictionarySection],
+    toc_end: u32,
+    pack_count: u32,
+    entry_count: u32,
+) -> Result<(), DictionaryReadError> {
+    if sections.len() != TOC_ROLES_V4.len() || entry_count == 0 {
+        return Err(DictionaryReadError::InvalidRecord(
+            "v4 section count or dictionary entry count is invalid",
+        ));
+    }
+    let mut expected = toc_end;
+    for (section, role) in sections.iter().zip(TOC_ROLES_V4) {
+        if section.role != role || section.codelet_start != expected {
+            return Err(DictionaryReadError::InvalidRecord(
+                "v4 TOC section order or range is noncanonical",
+            ));
+        }
+        expected = expected
+            .checked_add(section.codelet_count)
+            .ok_or(DictionaryReadError::InvalidRecord("v4 TOC range overflow"))?;
+    }
+    if expected != pack_count || sections[0].codelet_count == 0 || sections[4].codelet_count == 0 {
+        return Err(DictionaryReadError::InvalidRecord(
+            "v4 TOC does not cover the pack or required sections are empty",
         ));
     }
     Ok(())

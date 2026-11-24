@@ -61,7 +61,7 @@ pub(super) fn names_equal<L: ProgramletWordSource + ?Sized, R: ProgramletWordSou
 pub(super) fn store_name(
     source: &SentenceView<'_>,
     span: NameSpan,
-    storage: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    storage: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     used: &mut usize,
     stored: &mut NameSpan,
 ) -> u32 {
@@ -135,7 +135,7 @@ pub(super) fn store_name_from_slice(
     source: &[u32],
     source_base: usize,
     span: NameSpan,
-    storage: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    storage: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     used: &mut usize,
     stored: &mut NameSpan,
 ) -> u32 {
@@ -225,7 +225,7 @@ fn source_word(source: &[u32], index: usize) -> Option<u32> {
 pub(super) fn find_local_slot<const SLOTS: usize>(
     source: &SentenceView<'_>,
     span: NameSpan,
-    storage: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    storage: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     slots: &[NumericLocalSlot; SLOTS],
 ) -> Option<usize>
 where
@@ -265,7 +265,7 @@ where
 }
 
 pub(super) fn find_local_slot_in_storage<const SLOTS: usize>(
-    storage: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    storage: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     span: NameSpan,
     slots: &[NumericLocalSlot; SLOTS],
 ) -> Option<usize>

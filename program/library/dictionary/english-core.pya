@@ -1,45 +1,39 @@
 su name lyin kwon ob text "English Pyash core dictionary" be text ya
-su name lyin kwon ob text "English core vocabulary" as num 2 from text "en" to text "NFC" with text "pyac-vliw-dictionary/3" be text ya
+su name lyin kwon ob text "English core vocabulary" as num 2 from text "en" to text "NFC" with text "pyac-vliw-dictionary/4" be text ya
 
-su name tlat kwon ob name dlek at text "entry" be text ya
-su name tlat kwon ob name dlek as text "en" from text "vector" to text "vector" at text "lexical-form" be text ya
-su name tlat kwon ob name dlek as text "wordnet" from text "Open English WordNet 2025" to text "n:05873161-n" by text "exact-sense" at text "source-link" be text ya
-su name tlat kwon ob name dlek as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:05873161-n" with text "A variable quantity that can be resolved into components." at text "source-gloss" be text ya
+su name dlek as text "en" from text "vector" to text "vector" be text ya
+su name dlek as text "wordnet" from text "Open English WordNet 2025" to text "n:05873161-n" by text "exact-sense" be text ya
+su name dlek as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:05873161-n" with text "A variable quantity that can be resolved into components." be text ya
 
-su name tlat kwon ob name drut hnuc at text "entry" be text ya
-su name tlat kwon ob name drut hnuc as text "en" from text "data" to text "data" at text "lexical-form" be text ya
-su name tlat kwon ob name drut hnuc as text "en" from text "information" to text "information" at text "lexical-form" be text ya
-su name tlat kwon ob name drut hnuc as text "wordnet" from text "Open English WordNet 2025" to text "n:08479331-n" by text "exact-sense" at text "source-link" be text ya
-su name tlat kwon ob name drut hnuc as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:08479331-n" with text "A collection of facts from which conclusions may be drawn; statistical data." at text "source-gloss" be text ya
+su name drut hnuc as text "en" from text "data" to text "data" be text ya
+su name drut hnuc as text "en" from text "information" to text "information" be text ya
+su name drut hnuc as text "wordnet" from text "Open English WordNet 2025" to text "n:08479331-n" by text "exact-sense" be text ya
+su name drut hnuc as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:08479331-n" with text "A collection of facts from which conclusions may be drawn; statistical data." be text ya
 
-su name tlat kwon ob name tras at text "entry" be text ya
-su name tlat kwon ob name tras as text "en" from text "compare" to text "compare" at text "lexical-form" be text ya
-su name tlat kwon ob name tras as text "wordnet" from text "Open English WordNet 2025" to text "v:00654571-v" by text "exact-sense" at text "source-link" be text ya
-su name tlat kwon ob name tras as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "v:00654571-v" with text "Examine and note the similarities or differences of." at text "source-gloss" be text ya
+su name tras as text "en" from text "compare" to text "compare" be text ya
+su name tras as text "wordnet" from text "Open English WordNet 2025" to text "v:00654571-v" by text "exact-sense" be text ya
+su name tras as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "v:00654571-v" with text "Examine and note the similarities or differences of." be text ya
 
-su name tlat kwon ob name kcut at text "entry" be text ya
-su name tlat kwon ob name kcut as text "en" from text "select" to text "select" at text "lexical-form" be text ya
-su name tlat kwon ob name kcut as text "en" from text "choose" to text "choose" at text "lexical-form" be text ya
-su name tlat kwon ob name kcut as text "en" from text "pick out" to text "pick out" at text "lexical-form" be text ya
-su name tlat kwon ob name kcut as text "en" from text "take" to text "take" at text "lexical-form" be text ya
-su name tlat kwon ob name kcut as text "wordnet" from text "Open English WordNet 2025" to text "v:00676526-v" by text "exact-sense" at text "source-link" be text ya
-su name tlat kwon ob name kcut as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "v:00676526-v" with text "Pick out, select, or choose from a number of alternatives." at text "source-gloss" be text ya
+su name kcut as text "en" from text "select" to text "select" be text ya
+su name kcut as text "en" from text "choose" to text "choose" be text ya
+su name kcut as text "en" from text "pick out" to text "pick out" be text ya
+su name kcut as text "en" from text "take" to text "take" be text ya
+su name kcut as text "wordnet" from text "Open English WordNet 2025" to text "v:00676526-v" by text "exact-sense" be text ya
+su name kcut as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "v:00676526-v" with text "Pick out, select, or choose from a number of alternatives." be text ya
 
-su name tlat kwon ob name tfo2t at text "entry" be text ya
-su name tlat kwon ob name tfo2t as text "en" from text "sum" to text "sum" at text "lexical-form" be text ya
-su name tlat kwon ob name tfo2t as text "en" from text "add" to text "add" at text "lexical-form" be text ya
-su name tlat kwon ob name tfo2t as text "en" from text "add together" to text "add together" at text "lexical-form" be text ya
-su name tlat kwon ob name tfo2t as text "en" from text "add up" to text "add up" at text "lexical-form" be text ya
-su name tlat kwon ob name tfo2t as text "en" from text "summate" to text "summate" at text "lexical-form" be text ya
-su name tlat kwon ob name tfo2t as text "en" from text "tally" to text "tally" at text "lexical-form" be text ya
-su name tlat kwon ob name tfo2t as text "en" from text "tot" to text "tot" at text "lexical-form" be text ya
-su name tlat kwon ob name tfo2t as text "en" from text "total" to text "total" at text "lexical-form" be text ya
-su name tlat kwon ob name tfo2t as text "en" from text "tote up" to text "tote up" at text "lexical-form" be text ya
-su name tlat kwon ob name tfo2t as text "wordnet" from text "Open English WordNet 2025" to text "v:00951320-v" by text "exact-sense" at text "source-link" be text ya
-su name tlat kwon ob name tfo2t as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "v:00951320-v" with text "Determine the sum of." at text "source-gloss" be text ya
+su name tfo2t as text "en" from text "sum" to text "sum" be text ya
+su name tfo2t as text "en" from text "add" to text "add" be text ya
+su name tfo2t as text "en" from text "add together" to text "add together" be text ya
+su name tfo2t as text "en" from text "add up" to text "add up" be text ya
+su name tfo2t as text "en" from text "summate" to text "summate" be text ya
+su name tfo2t as text "en" from text "tally" to text "tally" be text ya
+su name tfo2t as text "en" from text "tot" to text "tot" be text ya
+su name tfo2t as text "en" from text "total" to text "total" be text ya
+su name tfo2t as text "en" from text "tote up" to text "tote up" be text ya
+su name tfo2t as text "wordnet" from text "Open English WordNet 2025" to text "v:00951320-v" by text "exact-sense" be text ya
+su name tfo2t as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "v:00951320-v" with text "Determine the sum of." be text ya
 
-su name tlat kwon ob name tsoc hsat at text "entry" be text ya
-su name tlat kwon ob name tsoc hsat as text "en" from text "lookup" to text "lookup" at text "lexical-form" be text ya
-su name tlat kwon ob name tsoc hsat as text "en" from text "search" to text "search" at text "lexical-form" be text ya
-su name tlat kwon ob name tsoc hsat as text "wordnet" from text "Open English WordNet 2025" to text "n:13574763-n" by text "exact-sense" at text "source-link" be text ya
-su name tlat kwon ob name tsoc hsat as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:13574763-n" with text "An operation that determines whether one or more of a set of items has a specified property." at text "source-gloss" be text ya
+su name tsoc hsat as text "en" from text "lookup" to text "lookup" be text ya
+su name tsoc hsat as text "en" from text "search" to text "search" be text ya
+su name tsoc hsat as text "wordnet" from text "Open English WordNet 2025" to text "n:13574763-n" by text "exact-sense" be text ya
+su name tsoc hsat as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:13574763-n" with text "An operation that determines whether one or more of a set of items has a specified property." be text ya

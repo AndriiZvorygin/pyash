@@ -4,6 +4,296 @@ Use this file as the lookup record for Rust VLIW CPU/GPU conformance runs. Each
 entry records the repository revision, deployed artifact, host/device, route,
 and exact test outcome. A queued or timed-out job is not a passing test.
 
+## 2026-11-23: Pyash Role-Projected Attention
+
+**Run record:** `artifacts/20261123-0013-rust-vliw-conformance/result.pya`
+
+| Field | Evidence |
+| --- | --- |
+| Source revision | `1353c70559fdef4005e53727d3ad182bc8c1e2a2` plus tracked working patch SHA-256 `8f53a6639c7e0eb383114fa657b2d689fcf2a4ef4aee5457835d2cc48484189e` |
+| New example source | SHA-256 `d0b72be5467595bc874b4d68c58b68a787e544b2ae070b2518ade8f46fffde73` |
+| Host and route | Mriczo client -> SWAC Housekeeper -> Rust CUDA VLIW runtime |
+| GPU | NVIDIA GeForce RTX 3060, driver `535.247.01`, 12,288 MiB |
+| Runtime image | `sha256:2d3c8b52363ab8dac197015e468fabd32a6b3392495347771b685621304c9326` |
+| Live conformance | 65 passing records (62 semantic cases and 3 typed-dispatch probes); 3 expected errors passed |
+| New role-attention case | `iwsp-pyash-projected-attention`: Rust CPU and RTX 3060 both returned float32 vector `[3,5]` |
+| Full run wall | 7,118.452 ms |
+| CPU batches | 38 codelet cases: 56.418 ms; 24 programlet sections: 63.565 ms |
+| CUDA event batches | Codelet batch: 3.784704 ms; programlet sections: 109.886467 ms |
+| CUDA client round trips | Codelet batch: 667.877 ms; programlet sections: 682.051 ms |
+| Runtime initialization | 0.11 s; persisted cubin was loaded (no compilation during service startup) |
+| Executables | CPU reference 15,729,000 bytes; GPU runtime 9,248,544 bytes |
+| GPU artifact | Cubin 3,046,232 bytes; SHA-256 `e969de24a9d55527e4036eae2f9a5b1e07c7e3901e04370abbda52e298d57aa4` |
+| Queue after run | SWAC Housekeeper: zero queued/running jobs; dispatch active |
+
+The new programlet uses the Pyash role names `hwas`, `htis hsek`, and `hnuc gjat`.
+It forms two-lane role vectors from explicit `kl6m psas` sentences, computes the
+two attention scores and stable-softmax weights, scales the named value vectors
+in place, and adds them. The in-place writes keep the sample within the runtime's
+eight-vector local-frame capacity; this is an example-level storage choice, not a
+runtime-capacity change. The full run and per-request records are preserved in the
+`.pya` run artifact above.
+
+## 2026-11-23: Q/K/V Row Projection and Maximum Index
+
+Commit `c73ee1628` adds the minimal Pyash Q/K/V projection composition and
+typed maximum-index behavior. The committed cubin is byte-identical to the
+cubin used in the earlier passing full CUDA run below: **64 passing records**
+(3 standalone dispatch probes plus 61 batched semantic cases) and **3 expected
+errors**. The new cases `iwsp-qkv-row-projections`,
+`iwsp-maximum-index-float32`, and `iwsp-maximum-index-float64` all passed on the
+RTX 3090. The Q/K/V example returns `[1, 5, 4]`; both argmax widths return the
+first maximum index `1`.
+
+| Field | Evidence |
+| --- | --- |
+| Source revision | `c73ee1628e8f9268b0cc9de9a4b40192edae23b2` |
+| Successful live GPU run | `artifacts/20261123-0009-rust-vliw-conformance/result.pya`; source tree was dirty, but the cubin hash matches the clean committed build below |
+| Successful conformance | 64 passing records; 3 expected errors; total run 6,451.196 ms |
+| GPU and route | Mriczo, Housekeeper -> CUDA runtime; NVIDIA RTX 3090, driver `550.163.01`, 24,576 MiB |
+| Build initialization | Cubin/runtime initialization 0.14 s; service ready within the canary startup bound |
+| CPU batches | 38 codelet cases: 93.294 ms; 23 programlet sections: 77.064 ms |
+| CUDA event batches | Codelet batch: 3.744 ms; programlet sections: 120.560 ms |
+| Clean committed runtime | 9,248,544 bytes; SHA-256 `47eddabc3a5a999df168c0efeb97dd58d06e79808a03005825b6081d6bfea0e6` |
+| Clean committed cubin | 3,046,232 bytes; SHA-256 `e969de24a9d55527e4036eae2f9a5b1e07c7e3901e04370abbda52e298d57aa4` |
+| Clean image | `sha256:2d3c8b52363ab8dac197015e468fabd32a6b3392495347771b685621304c9326`; metadata says clean source revision `c73ee1628` |
+
+The clean-image deploy attempt is separately recorded at
+`artifacts/20261123-0010-rust-vliw-conformance/result.pya`. Runtime startup
+passed in 0.974 s, but the first CUDA batch failed with `CUresult 2`. At that
+time the Mriczo GPU was at 23,954/24,576 MiB, with a Python process using
+23,616 MiB; the Housekeeper queue was empty. The canary automatically restored
+the previous Mriczo image and confirmed it healthy. Therefore the clean image
+is built and its cubin has full live-GPU conformance evidence, but it was not
+retained on Mriczo because available VRAM could not support the batch.
+
+An attempted SWAC canary did not alter that host: the safe canary guard found
+its existing named runtime was an exited Vulkan image with no persisted
+pipeline cache, so it could not serve as a verified rollback target. The
+previously verified SWAC CUDA image is cached locally, but Housekeeper's
+`/runtime/stop` request did not return despite an empty queue; that request was
+cancelled and the Housekeeper remained healthy and accepting work. No GPU
+conformance run or runtime replacement was claimed on SWAC. Resolve its
+Housekeeper lifecycle-control issue or establish a verified rollback target
+before retrying there.
+
+### Clean committed-source verification on SWAC
+
+After restarting SWAC Housekeeper to clear the stale runtime pause, the clean
+committed CUDA candidate was installed behind a verified CUDA rollback
+container and tested through the SWAC Housekeeper queue. The full configured
+matrix passed: **61 batched semantic cases**, three typed-dispatch probes, and
+all **3 expected errors**. This includes the Q/K/V row projections and both
+float32/float64 maximum-index cases. The Housekeeper queue drained to zero,
+dispatch resumed, and the candidate remained selected. The earlier failed
+handoff above is retained as historical evidence; this later run is the
+successful SWAC deployment and conformance result.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261123-0012-rust-vliw-conformance/result.pya` |
+| Source revision | `30db7a20246a9998db42f610d05f2729fc6c873e`; no tracked source patch |
+| Client and GPU host | Mriczo client -> SWAC Housekeeper -> SWAC RTX 3060 |
+| GPU and driver | NVIDIA GeForce RTX 3060, driver `535.247.01`, 12,288 MiB |
+| CUDA image | `sha256:2d3c8b52363ab8dac197015e468fabd32a6b3392495347771b685621304c9326` |
+| Runtime executable | 9,248,544 bytes; SHA-256 `47eddabc3a5a999df168c0efeb97dd58d06e79808a03005825b6081d6bfea0e6` |
+| Cubin | 3,046,232 bytes; SHA-256 `e969de24a9d55527e4036eae2f9a5b1e07c7e3901e04370abbda52e298d57aa4` |
+| CPU reference executable | 15,729,000 bytes; SHA-256 `020b269522e7ef16664746147393450d0b85c13767fd99cd658275bf10b1124a` |
+| Runtime initialization | Cubin load and GPU initialization: 0.11 s |
+| Full run | 6,199.526 ms; 61 matrix cases passed; 3 typed-dispatch probes passed; all 3 expected errors matched |
+| CPU batches | 38 codelet cases: 59.440 ms; 23 programlet sections: 64.974 ms |
+| CUDA event batches | 38 codelet cases: 3.806 ms; 23 programlet sections: 110.098 ms |
+| Housekeeper client round trips | Codelet batch: 667.413 ms; section batch: 680.248 ms |
+| Container memory limit / post-run GPU | 1 GiB limit; RTX 3060 returned to 466 MiB used and 0% utilization |
+
+The CUDA-event values are GPU kernel intervals; the larger client round trips
+include Housekeeper and transport overhead. This verifies the clean committed
+artifact on SWAC hardware, not a general GPU speedup claim. SWAC's Housekeeper
+was healthy and accepting work after the run, with an empty queue and dispatch
+resumed.
+
+## 2026-11-23: Softmax and Two-Key Attention on Mriczo CUDA
+
+The full Housekeeper-routed CUDA conformance matrix passed on Mriczo's RTX 3090.
+It included **58 value cases and 3 expected-error cases**, with the 21 independent
+programlet sections executed as one GPU batch. New examples verify stable softmax
+in float32 and float64 and a smallest attention composition: two query/key dot
+products, softmax weights, scaling two value vectors, and adding them. The
+attention fixture returns `[3, 5]`; the equal logits produce weights `[0.5, 0.5]`.
+
+| Field | Evidence |
+| --- | --- |
+| Source revision | `7ada05f988e74de156a7fedadbbf3d2cbec6b968` plus tracked patch SHA-256 `3c01b68ae502e4747c1765a42f16e191c757c75ea2e2621710241e2cd8b6301f` at test time |
+| Host and route | Mriczo, Pyash GPU Housekeeper -> Rust NVPTX CUDA runtime |
+| GPU and driver | NVIDIA GeForce RTX 3090, `sm_86`, driver `550.163.01`, 24,576 MiB VRAM |
+| CUDA image | `sha256:9a3631ec3b885c1b89f4cff218848d228a3bb2894b1b127abd2ddce95144de59` |
+| Runtime executable | 9,247,536 bytes; SHA-256 `fca78f5f840e0a2c278d197c8891b037bf568eae86272246a938bf8eb9f5df67` |
+| Cubin | 3,015,896 bytes; SHA-256 `ea534211ca141421a90beee3cbf0bfe8b17547e809b2c47cf1e85969291f505b` |
+| CPU reference executable | 15,281,000 bytes; SHA-256 `82e2a8a7e2dbaa699aff19113fe75abfd7e9424906a48b6160bab732a87d960a` |
+| Runtime initialization | Compiled cubin load and GPU initialization: 0.09 s; worker ready in 585 ms |
+| Full run | 6,446.583 ms; 58 value cases passed and all 3 expected errors matched |
+| CPU request batches | 37 codelet cases: 59.901 ms; 21 programlet sections: 66.676 ms |
+| GPU execution batches | 37 codelet cases: 4.013 ms CUDA event time; 21 programlet sections: 120.582 ms CUDA event time |
+| Housekeeper client round trip | Codelet batch: 1,089.965 ms; section batch: 659.905 ms |
+| Run record | `artifacts/20261123-0006-rust-vliw-conformance/result.pya` |
+
+The client round trips include transport and Housekeeper overhead and should not
+be compared directly with the CUDA-event timings. The sectioned batch includes
+all 21 sections, not just the new attention cases. A first attempt exposed a
+scalar-only worker result decoder for vector-valued programlets; the decoder was
+fixed, unit-tested, rebuilt, and the complete matrix then passed. The canary
+restored the previous Mriczo CUDA container and resumed the VLIW route.
+
+## 2026-11-23: Full CUDA Cubin Conformance on SWAC
+
+The temporary deployment canary ran the full configured conformance suite, not
+a reduced smoke test. The prebuilt Rust NVPTX worker executed the same typed
+VLIW core through SWAC Housekeeper. Three standalone typed-dispatch results
+passed: numeric overload `41`, reversed-case boolean overload `true`, and
+nested overloaded call `41`. The missing overload returned shared error `1`.
+All **55** batched matrix cases and both other expected errors passed.
+
+| Field | Evidence |
+| --- | --- |
+| Build source | CUDA implementation on top of `54c274e34`; build metadata records the dirty checkout at canary build time |
+| Build host and tools | Mriczo; Rust nightly `2026-08-15`; NVIDIA `ptxas 12.8.93` |
+| Device and driver | SWAC, NVIDIA GeForce RTX 3060, `sm_86`, driver `535.247.01` |
+| Rust-to-PTX / offline assembly | 5.81 s with cached dependencies / 33.36 s |
+| Cubin | 2,741,208 bytes; SHA-256 `21651098503d4cf7cf9ae7e984078cde9cfbff0b2056a8af3b7e77f509ad86d3` |
+| Runtime executable | 9,247,912 bytes; SHA-256 `01b77418be221a6d84580e86ed7a3867b36d311e6702d7908b42085a3c6783b2` |
+| Image | `sha256:c2db10e15c334cc0e8fc2d9221d1914aa6909b6366eb5ee4d0078635208b0298` |
+| Cold readiness | 1.092 s measured from before container start; runtime initialization 0.11 s |
+| GPU kernel events | Codelet pack 3.758 ms; section batch 101.297 ms; nested overload 0.413 ms |
+| Client round trips | Codelet pack 678.516 ms; section batch 672.471 ms |
+| Container host memory | 39.93 MiB sampled; 1 GiB enforced limit |
+
+`ptxas` reported 255 registers per entry point. Pack, standalone programlet,
+and section stack frames were 7,072, 3,856, and 3,816 bytes, respectively.
+Their entry-point spill stores/loads were 4/4, 16/0, and 12/8 bytes. Terminal
+Housekeeper timestamps had one-second resolution, so their queue and active
+deltas should not be interpreted as subsecond measurements.
+
+The conformance result is `artifacts/20261123-0002-rust-vliw-conformance/result.pya`.
+Its case and request timings are valid; its environment sweep sampled the
+client host, not SWAC. The CUDA report collector now queries the pinned GPU
+host. Build logs are under `rust/pyac-gpu/cuda-kernel/target/cuda-build-yXfwwfUm/`.
+
+Rollback restored SWAC's prior Vulkan container, but that container was
+already exited and its required pipeline cache was absent. Its historical
+build log shows a Vulkan adapter initialization failure. The VLIW route
+remained held; other runtimes and Housekeeper were not restarted. Mriczo was
+not attempted during that first SWAC recovery because rollback could not be
+verified. The canary now checks for the saved rollback cache before changing
+a route; the later Mriczo result is recorded below.
+
+## 2026-11-23: Full CUDA Dispatcher Verification on Mriczo
+
+This was the **full configured conformance run**, not a reduced smoke test. The
+temporary CUDA deployment used the Mriczo Housekeeper and RTX 3090, then
+restored the original Vulkan container and verified that it was ready again.
+
+| Field | Evidence |
+| --- | --- |
+| Source revision | `91af375eb6a4ff06c752919dd8f17f1ba436390f`; no tracked working-tree patch |
+| Host and route | Mriczo, Pyash GPU Housekeeper -> `pyac-vliw-runtime` -> Rust NVPTX cubin |
+| GPU and driver | NVIDIA GeForce RTX 3090, `sm_86`, driver `550.163.01`, 24,576 MiB VRAM |
+| CUDA image | `sha256:d81383ed7b9998c8231c0e8e0b9f849708f380305a611ef9b95f0518513088cb` |
+| CUDA runtime executable | 9,248,560 bytes; SHA-256 `2cfdebfef9bb488a0c5f6493eec1aa18da27c553064cb2ee415017dc78a6f7a1` |
+| Cubin | 2,741,208 bytes; SHA-256 `21651098503d4cf7cf9ae7e984078cde9cfbff0b2056a8af3b7e77f509ad86d3` |
+| Runtime initialization | Cubin load and GPU initialization: 0.09 seconds; ready in 722 ms from container start |
+| Full run | 6,421.989 ms; **58 value cases passed and 3 expected-error cases matched** |
+| Typed dispatcher checks | Numeric overload `41`; reversed-case boolean overload `true`; nested overloaded call `41`; missing overload returned shared error `1` |
+| Batched GPU work | 37 codelet cases in 4.147 ms GPU time; 18 independent programlet sections in 111.077 ms GPU time |
+| CPU reference batches | 37 cases in 81.653 ms; 18 sections in 83.541 ms |
+| Housekeeper round trips | Codelet pack 659 ms; section pack 719 ms; these include client/queue overhead, not GPU time |
+| Restored runtime | Original Vulkan image `sha256:8b0f3303b03d726ba3969d408dd25c2ccbdc250da3d201d93feb1c4c08432ecd`; Housekeeper reported it ready after restoration |
+| Run record | `artifacts/20261123-0003-rust-vliw-conformance/result.pya` |
+
+This verifies the same shared Rust semantics and full-signature dispatcher on
+CUDA, including typed overload selection, case-order canonicalization, nested
+calls, and dispatcher errors. It is a full semantic conformance result, not a
+claim that these small workloads are faster on GPU than CPU.
+
+## 2026-11-24: Parameterized Attention and Long Programlet Bodies on SWAC
+
+This full configured CUDA run exercised the parameter-backed attention
+composition and the removed fixed codelet-body ceiling through SWAC Housekeeper.
+The 27-section batch included the baseline attention output `[3,5]`, changed
+input output `[8.5,13.5]`, changed value-weight output `[4,6]`, and an 84-codelet
+programlet returning `80`. All 65 batched matrix cases passed. Three additional
+typed-dispatch successes and all three expected-error probes also matched. The
+canary restored SWAC's prior CUDA runtime and resumed dispatch.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261124-0001-rust-vliw-conformance/result.pya` |
+| Source revision | `bab793fafd9d7d6a810e90e2dc0f2174ee4382a5`; no tracked patch |
+| Build host and tools | Mriczo; Rust nightly `2026-08-15`; NVIDIA `ptxas 12.8.93` |
+| Client and GPU host | Mriczo client -> SWAC Housekeeper -> Rust CUDA cubin runtime |
+| GPU and driver | NVIDIA GeForce RTX 3060, `sm_86`, driver `535.247.01`, 12,288 MiB |
+| CUDA image | `sha256:0484aaf0575183169036a1cfd3ffd0d151f28e1811f4fa1675f0a53df79666de` |
+| Cubin | 3,198,808 bytes; SHA-256 `1e8a65cc4c276c4fca76471d4645b01680f4227107d3c3557d7a72dad9fbd8cb` |
+| CUDA runtime executable | 9,248,944 bytes; SHA-256 `dc3214dd11c4221963b96c260477c97e5b29175723966c0860303a83871363e4` |
+| CPU reference executable | 15,728,032 bytes; SHA-256 `8a03501d243341afaae39355bbeec1f36eadfd326cf471eea06c9cd162ec2fc3` |
+| Batched work | 38 codelet cases; 27 independent programlet sections; 65/65 matrix cases passed |
+| CPU reference batch | 38 codelet cases: 54.594 ms; 27 sections: 61.427 ms |
+| GPU kernel event | 38 codelet cases: 3.798 ms; 27 sections: 118.734 ms |
+| GPU client round trip | 38 codelet cases: 666.628 ms; 27 sections: 683.082 ms |
+| Runtime startup | CUDA artifact initialization 0.11 s; ready in 1.027 s |
+| Full conformance wall | 6,091.769 ms |
+| Runtime memory | 28.75 MiB sampled under the canary's 1 GiB host-memory limit |
+| Rollback result | Prior SWAC CUDA image restored; Housekeeper ready, dispatch active, queue empty |
+
+This demonstrates correctness for these small programlets, not a GPU speedup:
+the entire 27-section attention/control-flow batch took 118.734 ms of CUDA-event
+time versus 61.427 ms for the Rust CPU reference batch. The long-body case
+specifically confirms that 84 codelets execute; the remaining 64-sized limits
+are separate routine/section/local resources, not codelet-count ceilings. Build
+logs and generated artifacts are under
+`rust/pyac-gpu/cuda-kernel/target/cuda-build-8hIvwpwZ/`.
+
+### Vulkan Compatibility Boundary
+
+The latest recorded source checkpoint with successful Vulkan pipeline-cache
+generation is **`fc77719f6157d7068044d56beff94ab95487bfc1`** (`add vector
+maximum reduction`). The following commit, **`a72c6bcf225df639e511c63b37e240e143d8972a`**,
+introduced canonical Rust programlet signature dispatch. The current full
+signature-dispatch matrix is verified on the prebuilt CUDA cubin; this ledger
+has no equivalent current-source Vulkan cache-generation/conformance record.
+Treat `fc77719f6` as the last known Vulkan cache checkpoint, not proof that
+Vulkan hardware cannot implement dispatch.
+
+The pre-existing Mriczo Vulkan container did restart successfully from its
+saved artifacts after this CUDA test, but that only verifies the older
+deployed Vulkan artifact and its startup. It does not establish that artifact
+has the newer full-signature dispatch behavior. Keep Vulkan as a legacy
+compatibility path for its already-built artifacts; use the validated CUDA
+cubin path for current dispatcher work until Vulkan is rebuilt and passes the
+same matrix. Run `20261123-0003` was verification-only and restored Vulkan.
+
+### Persistent Mriczo Deployment
+
+After that full pass, `deploy` mode ran the same matrix again and retained the
+prebuilt CUDA runtime on Mriczo. The previous Vulkan container remains stopped
+as the rollback target.
+
+| Field | Evidence |
+| --- | --- |
+| Deployment verification | `artifacts/20261123-0004-rust-vliw-conformance/result.pya`; 58 value cases passed, 3 expected errors matched |
+| Runtime artifact | Same tested CUDA image and cubin hashes above; cubin initialization 0.10 seconds |
+| Run duration | 14,569.242 ms, including CPU checks, Housekeeper requests, and recording |
+| Active image | `sha256:d81383ed7b9998c8231c0e8e0b9f849708f380305a611ef9b95f0518513088cb` |
+| Retained rollback container | `pyac-vliw-runtime-cuda-canary-previous`, prior image `sha256:8b0f3303b03d726ba3969d408dd25c2ccbdc250da3d201d93feb1c4c08432ecd` |
+| Post-deploy state | Housekeeper reported VLIW ready on Mriczo; queue depth 0 |
+| Rollback command | `bash container/pyac-vliw-runtime/command/cuda-canary.sh mriczo liberit/pyac-vliw-runtime:cuda-sm86-21651098503d4cf7 rollback` |
+
+The conformance harness checkout was `d5ac63d159140e490c65e2a4b43ef596853d63e4`
+with a tracked patch limited to the deployment script and documentation; the
+prebuilt runtime image remains the exact, hashed artifact identified above.
+Housekeeper may stop the idle container, but it retains this CUDA image and
+will restart it on demand. SWAC's VLIW route remains held pending a verified
+rollback target there; other runtime routes were not changed.
+
 ## 2026-11-19: Live GPU Refresh
 
 **Test target:** Rust VLIW shared core and Rust-GPU Vulkan pack runtime, including batched codelets and sectioned programlets.
@@ -252,3 +542,40 @@ GPU compute is not a speed claim for this tiny scorer: the codelet batch took
 client round trip is also much larger than its 61 ms service/kernel interval;
 this run records that latency but does not explain it. Evaluator isolation,
 held-out data, and protected task scoring remain Stage 2 work.
+
+## 2026-11-24: Parameterized Non-Uniform Attention on SWAC CUDA
+
+**Run record:** `artifacts/20261124-0002-rust-vliw-conformance/result.pya`
+
+| Field | Evidence |
+| --- | --- |
+| Source revision | `bc90245687c63d77d5d3b07b075f8f6b0ca7b602`; no tracked source patch (untracked unrelated files remained in the worktree) |
+| Example source | `examples/vliw/iwsp-parameterized-two-token-attention.pya`; SHA-256 `b5c5b584716c87b54bccbde8ca6a610d3672a98cf884ca152145c26246f7df87` |
+| Client and GPU route | Mriczo -> SWAC Housekeeper -> SWAC RTX 3060 CUDA VLIW runtime |
+| GPU | NVIDIA GeForce RTX 3060, driver `535.247.01`, 12,288 MiB |
+| Candidate image | `sha256:b739397e8f13c4944c8910d9e97c0b52999126f340d3e323be0c674b7a21ae01`; source metadata records the clean revision above |
+| Final SWAC runtime | Prior verified CUDA image restored: `sha256:2d3c8b52363ab8dac197015e468fabd32a6b3392495347771b685621304c9326`; Housekeeper healthy, queue empty, dispatch active |
+| Live conformance | 67/67 batched cases passed (38 codelet cases and 29 programlet sections); 3 typed-dispatch probes passed; 2/2 expected runtime errors passed |
+| Attention outputs | Baseline `[10,20]`; changed input `[12,24]`; changed query weights `[12,24]`; changed key weights `[12,24]`; changed value weights `[20,30]` |
+| Full run wall | 6,353.149 ms |
+| CPU reference batches | Codelets: 67.450 ms; sections: 72.646 ms |
+| CUDA event batches | Codelets: 3.793 ms; sections: 118.560 ms |
+| Housekeeper client round trip | Codelets: 676.596 ms; sections: 684.508 ms |
+| Runtime initialization | 0.11 s, loading the precompiled cubin; no service-start compilation |
+| CPU reference executable | 15,728,032 bytes; SHA-256 `8a03501d243341afaae39355bbeec1f36eadfd326cf471eea06c9cd162ec2fc3` |
+| GPU runtime executable | 9,248,944 bytes; SHA-256 `dc3214dd11c4221963b96c260477c97e5b29175723966c0860303a83871363e4` |
+| CUDA cubin | 3,198,808 bytes; SHA-256 `1e8a65cc4c276c4fca76471d4645b01680f4227107d3c3557d7a72dad9fbd8cb` |
+
+The parameterized example uses query `[1,0]`, keys `[0,0]` and `[ln(2),0]`,
+and values `[0,0]` and `[15,30]`. The unequal logits `[0,ln(2)]` produce
+weights `[1/3,2/3]`, so the baseline is not the uninformative equal-weight
+case. Independently perturbing the input, query projection, or key projection
+changes the output to `[12,24]`; perturbing the value projection changes it
+to `[20,30]`. CPU and live CUDA agree on all five outputs. The executable Pyash
+role names remain `hwas`, `htis hsek`, and `hnuc gjat`; their readable
+Pyash-English glosses are `attention-query`, `attention-key`, and
+`attention-value`.
+
+The candidate was built on Mriczo, transferred to SWAC, and tested entirely
+through its Housekeeper queue. The canary then restored the original verified
+CUDA image; the candidate was not retained as SWAC's active runtime.

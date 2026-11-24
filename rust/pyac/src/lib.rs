@@ -12,10 +12,7 @@ pub use backend::riscv::{
     compile_numeric_invert, execute,
 };
 pub use catalog::{CatalogError, PyacCatalog, parse_catalog_pya};
-pub use iwsp::{
-    IwspError, IwspEvaluator, IwspScore, MAX_IWSP_CANDIDATE_CODELETS, MAX_IWSP_WIDTH,
-    SealedIwspEvaluator,
-};
+pub use iwsp::{IwspError, IwspEvaluator, IwspScore, MAX_IWSP_WIDTH, SealedIwspEvaluator};
 pub use literal::{
     DateInstruction, VectorElements, VectorInstruction, decode_date, decode_quote_header,
     decode_vector, execute_date, execute_date_codelet, execute_vector, execute_vector_codelet,
@@ -400,7 +397,7 @@ fn execute_shared_programlet(
     codelet_count: usize,
     error_index: usize,
 ) -> Result<PyacValue, PackExecutionError> {
-    let mut symbol_words = [0; pyac_vliw_core::MAX_PROGRAMLET_PAYLOAD_WORDS];
+    let mut symbol_words = [0; pyac_vliw_core::MAX_PROGRAMLET_SYMBOL_WORDS];
     let mut frames = pyac_vliw_core::ProgramletStack::EMPTY;
     let result = pyac_vliw_core::execute_numeric_programlet_at(
         words,
@@ -416,12 +413,35 @@ fn execute_shared_programlet(
             source: programlet_error(result.error),
         });
     }
+    let result_length = result.length as usize;
     Ok(match result.value_kind {
         pyac_vliw_core::VALUE_BOOLEAN => PyacValue::Boolean(result.values[0] != 0),
         pyac_vliw_core::VALUE_SIGNED => PyacValue::Signed(i64::from(result.values[0] as i32)),
         pyac_vliw_core::VALUE_FLOAT32 => PyacValue::Float32(result.values[0]),
         pyac_vliw_core::VALUE_FLOAT64 => {
             PyacValue::Float64(u64::from(result.values[0]) | (u64::from(result.values[1]) << 32))
+        }
+        pyac_vliw_core::VALUE_VECTOR_FLOAT32
+            if result_length > 0 && result_length <= pyac_vliw_core::MAX_VECTOR_LANES =>
+        {
+            PyacValue::Vector(VectorElements::Float32(
+                result.values[..result_length].to_vec(),
+            ))
+        }
+        pyac_vliw_core::VALUE_VECTOR_FLOAT64
+            if result_length > 0 && result_length * 2 <= pyac_vliw_core::RESULT_WORDS =>
+        {
+            let values = result.values[..result_length * 2]
+                .chunks_exact(2)
+                .map(|words| u64::from(words[0]) | (u64::from(words[1]) << 32))
+                .collect();
+            PyacValue::Vector(VectorElements::Float64(values))
+        }
+        pyac_vliw_core::VALUE_VECTOR_FLOAT32 | pyac_vliw_core::VALUE_VECTOR_FLOAT64 => {
+            return Err(PackExecutionError {
+                index: error_index,
+                source: SemanticError::MalformedProgramlet,
+            });
         }
         pyac_vliw_core::VALUE_FIXED16 => PyacValue::Fixed16(result.values[0] as u16),
         _ => PyacValue::Unsigned(u64::from(result.values[0])),

@@ -353,7 +353,7 @@ test("PyAC programlet locals explicitly reject vector, date, and text values", (
   }
 });
 
-test("PyAC programlet enforces the shared codelet capacity at the source boundary", () => {
+test("PyAC programlet accepts source bodies longer than 64 codelets", () => {
   const sourceWithActions = (actionCount) => [
     "su name count once to name num answer be ceremony def",
     ...Array.from({ length: actionCount }, () => "ob num 1 to name num answer be plus do"),
@@ -361,16 +361,10 @@ test("PyAC programlet enforces the shared codelet capacity at the source boundar
     "su name count once be ceremony prah"
   ].join("\n");
 
-  const maximum = compilePyashProgramSource(sourceWithActions(60), {
+  const compiled = compilePyashProgramSource(sourceWithActions(80), {
     invocation: "to name num answer be count once do"
   });
-  assert.equal(maximum.vectorCount, 64);
-  assert.throws(
-    () => compilePyashProgramSource(sourceWithActions(61), {
-      invocation: "to name num answer be count once do"
-    }),
-    /exceeds 64 codelets/u
-  );
+  assert.equal(compiled.vectorCount, 84);
 });
 
 test("PyAC programlet enforces frame-local and call-depth limits", async () => {

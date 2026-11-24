@@ -213,7 +213,7 @@ pub fn scan_numeric_programlet_sections(
                     return Err(ERROR_MALFORMED);
                 }
                 let body_count = cursor.saturating_sub(body_start_codelet);
-                if body_count == 0 || body_count > MAX_PROGRAMLET_CODELETS {
+                if body_count == 0 {
                     return Err(ERROR_PROGRAM_CAPACITY);
                 }
                 if !is_numeric_programlet_at(words, body_start_codelet, body_count) {

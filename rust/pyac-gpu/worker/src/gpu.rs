@@ -22,6 +22,12 @@ pub(crate) use timing::GpuExecutionTiming;
 #[path = "gpu/programlet_dispatch.rs"]
 mod programlet_dispatch;
 use programlet_dispatch::prepare_dispatch_words;
+#[path = "gpu/pack_io.rs"]
+mod pack_io;
+use pack_io::{PreparedPack, decode_pack_result, prepare_pack};
+#[cfg(feature = "cuda")]
+#[path = "gpu/cuda.rs"]
+pub(crate) mod cuda;
 #[path = "gpu/execution.rs"]
 mod execution;
 #[path = "gpu/runtime.rs"]

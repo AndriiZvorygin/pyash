@@ -4,9 +4,9 @@ pub(super) const DIRECTORY_MAGIC: u32 = 0x5059_0001;
 pub(super) const HEADER_WORDS: usize = 3;
 pub(super) const ENTRY_WORDS: usize = 10;
 pub(super) const ENTRY_BASE: usize = HEADER_WORDS;
-pub(super) const SIGNATURE_BASE: usize = ENTRY_BASE + MAX_PROGRAMLET_CODELETS * ENTRY_WORDS;
+pub(super) const SIGNATURE_BASE: usize = ENTRY_BASE + MAX_PROGRAMLET_ROUTINES * ENTRY_WORDS;
 
-pub const PROGRAMLET_ROUTINE_DIRECTORY_WORDS: usize = SIGNATURE_BASE + MAX_PROGRAMLET_PAYLOAD_WORDS;
+pub const PROGRAMLET_ROUTINE_DIRECTORY_WORDS: usize = SIGNATURE_BASE + MAX_PROGRAMLET_SYMBOL_WORDS;
 
 pub fn read_programlet_routine_directory_header(
     words: &[u32],
@@ -20,7 +20,7 @@ pub fn read_programlet_routine_directory_header(
     }
     let entry_count = read_word(words, offset + 1).ok_or(ERROR_MALFORMED)? as usize;
     let signature_used = read_word(words, offset + 2).ok_or(ERROR_MALFORMED)? as usize;
-    if entry_count > MAX_PROGRAMLET_CODELETS || signature_used > MAX_PROGRAMLET_PAYLOAD_WORDS {
+    if entry_count > MAX_PROGRAMLET_ROUTINES || signature_used > MAX_PROGRAMLET_SYMBOL_WORDS {
         return Err(ERROR_MALFORMED);
     }
     Ok((entry_count, signature_used))
@@ -58,7 +58,7 @@ pub(super) fn read_programlet_routine_entry(
     index: usize,
     entry_count: usize,
 ) -> RoutineEntry {
-    if index >= entry_count || entry_count > MAX_PROGRAMLET_CODELETS {
+    if index >= entry_count || entry_count > MAX_PROGRAMLET_ROUTINES {
         return RoutineEntry::EMPTY;
     }
     let start = offset + ENTRY_BASE + index * ENTRY_WORDS;
@@ -82,7 +82,7 @@ pub(super) fn read_programlet_routine_signature_word(
     index: usize,
     signature_used: usize,
 ) -> u32 {
-    if index >= signature_used || signature_used > MAX_PROGRAMLET_PAYLOAD_WORDS {
+    if index >= signature_used || signature_used > MAX_PROGRAMLET_SYMBOL_WORDS {
         return 0;
     }
     read_word_unchecked(words, offset + SIGNATURE_BASE + index)
@@ -137,7 +137,7 @@ fn encode_directory(
     output[1] = directory.entry_count as u32;
     output[2] = directory.signature_used as u32;
     let mut index = 0;
-    while index < MAX_PROGRAMLET_CODELETS {
+    while index < MAX_PROGRAMLET_ROUTINES {
         let entry = array_at!(&directory.entries, index);
         let start = ENTRY_BASE + index * ENTRY_WORDS;
         output[start] = entry.signature_start;
@@ -153,7 +153,7 @@ fn encode_directory(
         index += 1;
     }
     index = 0;
-    while index < MAX_PROGRAMLET_PAYLOAD_WORDS {
+    while index < MAX_PROGRAMLET_SYMBOL_WORDS {
         output[SIGNATURE_BASE + index] = array_at!(&directory.signatures, index);
         index += 1;
     }
@@ -173,12 +173,12 @@ mod tests {
     fn directory_header_accepts_bounded_counts_without_scanning_entries() {
         let mut words = std::vec![0; PROGRAMLET_ROUTINE_DIRECTORY_WORDS];
         words[0] = DIRECTORY_MAGIC;
-        words[1] = MAX_PROGRAMLET_CODELETS as u32;
-        words[2] = MAX_PROGRAMLET_PAYLOAD_WORDS as u32;
+        words[1] = MAX_PROGRAMLET_ROUTINES as u32;
+        words[2] = MAX_PROGRAMLET_SYMBOL_WORDS as u32;
 
         assert_eq!(
             read_programlet_routine_directory_header(&words, 0),
-            Ok((MAX_PROGRAMLET_CODELETS, MAX_PROGRAMLET_PAYLOAD_WORDS))
+            Ok((MAX_PROGRAMLET_ROUTINES, MAX_PROGRAMLET_SYMBOL_WORDS))
         );
     }
 
@@ -186,14 +186,14 @@ mod tests {
     fn directory_header_rejects_truncated_or_unbounded_headers() {
         let mut words = std::vec![0; PROGRAMLET_ROUTINE_DIRECTORY_WORDS];
         words[0] = DIRECTORY_MAGIC;
-        words[1] = MAX_PROGRAMLET_CODELETS as u32 + 1;
+        words[1] = MAX_PROGRAMLET_ROUTINES as u32 + 1;
         assert_eq!(
             read_programlet_routine_directory_header(&words, 0),
             Err(ERROR_MALFORMED)
         );
 
         words[1] = 0;
-        words[2] = MAX_PROGRAMLET_PAYLOAD_WORDS as u32 + 1;
+        words[2] = MAX_PROGRAMLET_SYMBOL_WORDS as u32 + 1;
         assert_eq!(
             read_programlet_routine_directory_header(&words, 0),
             Err(ERROR_MALFORMED)

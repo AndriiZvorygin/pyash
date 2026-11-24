@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
@@ -11,7 +12,8 @@ import {
   compilePyashProgramSource,
   decodePyashProgramPack
 } from "../program/library/vliw/programlet.mjs";
-import { createHousekeeperVliwPackExecutor } from "../program/library/vliw/rust_gpu_pack.mjs";
+import { createHousekeeperVliwPackExecutor, createPinnedVliwPackExecutor } from "../program/library/vliw/rust_gpu_pack.mjs";
+import { verifyTypedDispatch } from "./vliw_gpu_conformance/typed_dispatch.mjs";
 import {
   collectVliwConformanceEnvironment,
   writeVliwConformancePya
@@ -19,16 +21,26 @@ import {
 import { buildPlukTlasConformanceCase } from "./vliw_gpu_conformance/pluk_tlas.mjs";
 import { buildIwspLinearScorerConformanceCases } from "./vliw_gpu_conformance/iwsp_linear_scorer.mjs";
 import { buildIwspVectorOpsConformanceCases } from "./vliw_gpu_conformance/iwsp_vector_ops.mjs";
+import { buildIwspParameterizedAttentionCases } from "./vliw_gpu_conformance/iwsp_parameterized_attention.mjs";
 
 function programlet(name, source, invocation, expectedValues) {
   const compiled = compilePyashProgramSource(source, { invocation });
   return { name, kind: "programlet", source, invocation, pack: compiled.pack, expectedValues };
 }
 
+async function programletExample(filename, name, expectedValues) {
+  const sourceText = await readFile(new URL(`../examples/pyash/${filename}`, import.meta.url), "utf8");
+  const lines = sourceText.trim().split(/\r?\n/u);
+  const invocation = lines.pop();
+  if (!invocation || !lines.length) throw new Error(`${filename} must contain definitions followed by one invocation`);
+  return programlet(name, lines.join("\n"), invocation, expectedValues);
+}
+
 const SECTION_NAMES = [
   "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
   "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
-  "nineteen", "twenty"
+  "nineteen", "twenty", "twenty one", "twenty two", "twenty three", "twenty four",
+  "twenty five", "twenty six", "twenty seven", "twenty eight", "twenty nine"
 ];
 
 export function buildVliwGpuConformanceBatches(cases) {
@@ -176,9 +188,9 @@ export async function buildVliwGpuConformanceCases() {
       `su name count ${word} be ceremony prah`
     ];
   }).join("\n");
-  const maximumCodeletCount = [
+  const programletOver64Codelets = [
     "su name count once to name num answer be ceremony def",
-    ...Array.from({ length: 60 }, () => "ob num 1 to name num answer be plus do"),
+    ...Array.from({ length: 80 }, () => "ob num 1 to name num answer be plus do"),
     "su name answer ret",
     "su name count once be ceremony prah"
   ].join("\n");
@@ -203,6 +215,56 @@ export async function buildVliwGpuConformanceCases() {
     "su name answer ret",
     "su name choose once be ceremony prah"
   ].join("\n");
+  const softmax = await programletExample("iwsp-stable-softmax.pya", "iwsp-stable-softmax-float32", [
+    { type: "vector", elementType: "float32", values: [0.5, 0.5] }
+  ]);
+  const softmaxF64 = await programletExample("iwsp-stable-softmax-float64.pya", "iwsp-stable-softmax-float64", [
+    { type: "vector", elementType: "float64", values: [0.5, 0.5] }
+  ]);
+  const attention = await programletExample("iwsp-two-key-one-query-attention.pya", "iwsp-two-key-one-query-attention", [
+    { type: "vector", elementType: "float32", values: [3, 5] }
+  ]);
+  const projectedAttention = await programletExample(
+    "iwsp-pyash-projected-attention.pya",
+    "iwsp-pyash-projected-attention",
+    [{ type: "vector", elementType: "float32", values: [3, 5] }]
+  );
+  const qkvProjectionText = await readFile(
+    new URL("../examples/pyash/iwsp-qkv-projection.pya", import.meta.url),
+    "utf8"
+  );
+  const qkvProjection = codeletPack(
+    "iwsp-qkv-row-projections",
+    qkvProjectionText.trim().split(/\r?\n/u),
+    [
+      { type: "vector", elementType: "float32", values: [1, 2] },
+      { type: "vector", elementType: "float32", values: [0, 0, 0] },
+      { type: "float32", value: 1 },
+      { type: "float32", value: 5 },
+      { type: "float32", value: 4 },
+      { type: "vector", elementType: "float32", values: [1, 5, 4] },
+      { type: "unsigned", value: 3 }
+    ]
+  );
+  const maximumIndexText = await readFile(
+    new URL("../examples/pyash/iwsp-maximum-index.pya", import.meta.url),
+    "utf8"
+  );
+  const maximumIndexLines = maximumIndexText.trim().split(/\r?\n/u);
+  const maximumIndexInvocation = maximumIndexLines.pop();
+  const maximumIndexSource = maximumIndexLines.join("\n");
+  const maximumIndex = programlet(
+    "iwsp-maximum-index-float32",
+    maximumIndexSource,
+    maximumIndexInvocation,
+    [{ type: "unsigned", value: 1 }]
+  );
+  const maximumIndexF64 = programlet(
+    "iwsp-maximum-index-float64",
+    maximumIndexSource,
+    "from ve float64 4 9 9 -2 to name num answer be answer do",
+    [{ type: "unsigned", value: 1 }]
+  );
 
   const cases = [
     programlet(
@@ -319,6 +381,14 @@ export async function buildVliwGpuConformanceCases() {
     buildPlukTlasConformanceCase(),
     ...buildIwspLinearScorerConformanceCases(),
     ...buildIwspVectorOpsConformanceCases(),
+    softmax,
+    softmaxF64,
+    attention,
+    ...await buildIwspParameterizedAttentionCases(),
+    projectedAttention,
+    qkvProjection,
+    maximumIndex,
+    maximumIndexF64,
     codeletPack(
       "float64-dot-product",
       "ob ve float64 0.1 2 -3 by ve float64 0.2 4 -5 be kl6m psas do",
@@ -427,10 +497,10 @@ export async function buildVliwGpuConformanceCases() {
       [{ type: "unsigned", value: 1 }]
     ),
     programlet(
-      "maximum-codelet-count",
-      maximumCodeletCount,
+      "programlet-over-64-codelets",
+      programletOver64Codelets,
       "to name num answer be count once do",
-      [{ type: "unsigned", value: 60 }]
+      [{ type: "unsigned", value: 80 }]
     ),
     programlet(
       "giant-branch",
@@ -457,8 +527,8 @@ export async function buildVliwGpuConformanceCases() {
       [{ type: "unsigned", value: 2 }]
     )
   ];
-  const maximumPack = cases.find(({ name }) => name === "maximum-codelet-count").pack;
-  assert.equal(decodePyacPack(maximumPack).codelets.length, 64);
+  const longPack = cases.find(({ name }) => name === "programlet-over-64-codelets").pack;
+  assert.ok(decodePyacPack(longPack).codelets.length > 64);
   return cases;
 }
 
@@ -562,6 +632,7 @@ export function executeRustCpuProgramletFailureReference(pack) {
 export async function runVliwGpuConformance({
   executeCpuPacks,
   executePack,
+  backend = "rust-gpu-vulkan",
   onProgress = () => {},
   onTiming = () => {}
 }) {
@@ -628,7 +699,7 @@ export async function runVliwGpuConformance({
         housekeeper: housekeeperTiming
       });
       assert.equal(result?.ok, true, `${batch.name}: Housekeeper worker did not report success`);
-      assert.equal(result.backend, "rust-gpu-vulkan", `${batch.name}: unexpected GPU backend`);
+      assert.equal(result.backend, backend, `${batch.name}: unexpected GPU backend`);
       assert.ok(String(result.device ?? "").trim(), `${batch.name}: missing GPU device identity`);
       if (batch.kind === "codelets") {
         assert.deepEqual(result.values, batch.expectedValues, `${batch.name}: typed results differ from declared expected values`);
@@ -747,17 +818,40 @@ async function main() {
     passedCases: [],
     expectedErrors: []
   };
-  const executePack = createHousekeeperVliwPackExecutor({
+  const backend = process.env.PYA_VLIW_CONFORMANCE_BACKEND || "rust-gpu-vulkan";
+  const targetHostId = process.env.PYA_VLIW_CONFORMANCE_HOST;
+  if (backend === "rust-cuda-cubin" && !targetHostId) {
+    throw new Error("CUDA conformance requires PYA_VLIW_CONFORMANCE_HOST");
+  }
+  const timeoutMs = Number(process.env.PYA_VLIW_CONFORMANCE_TIMEOUT_MS) || 5 * 60 * 1000;
+  const executePack = targetHostId
+    ? createPinnedVliwPackExecutor({ targetHostId, timeoutMs })
+    : createHousekeeperVliwPackExecutor({
     worldRoot: path.resolve(process.env.PYA_WORLD_ROOT || "world"),
     agentName: "vliw-gpu-conformance",
     deviceId: process.env.PYA_VLIW_CONFORMANCE_DEVICE_ID || "gpu0",
-    timeoutMs: Number(process.env.PYA_VLIW_CONFORMANCE_TIMEOUT_MS) || 5 * 60 * 1000
+    timeoutMs
   });
   let failure = null;
   try {
+    if (backend === "rust-cuda-cubin") {
+      await verifyTypedDispatch({
+        executePack,
+        executeCpuPacks: executeRustCpuReference,
+        executeCpuError: executeRustCpuProgramletFailureReference,
+        backend,
+        report(name, housekeeper, device, expected) {
+          report.gpuRequests.push({ name, housekeeper });
+          if (device) report.passedCases.push(name);
+          else report.expectedErrors.push({ name, errorCode: expected });
+          console.log(`PASS CUDA ${name}: ${JSON.stringify(expected)}; ${JSON.stringify(housekeeper)}`);
+        }
+      });
+    }
     const completed = await runVliwGpuConformance({
       executeCpuPacks: executeRustCpuReference,
       executePack,
+      backend,
       onTiming(event) {
         const target = event.phase.startsWith("cpu") ? report.cpuRequests : report.gpuRequests;
         target.push(event);
@@ -797,7 +891,7 @@ async function main() {
         }
         if (event.phase === "gpu-error") {
           report.expectedErrors.push({ name: event.name, errorCode: event.errorCode });
-          console.log(`PASS ${event.name} on Vulkan worker: shared runtime error ${event.errorCode}`);
+          console.log(`PASS ${event.name} on ${backend}: shared runtime error ${event.errorCode}`);
         }
       }
     });
@@ -811,7 +905,9 @@ async function main() {
   report.finishedAt = new Date().toISOString();
   report.totalWallMs = Number((performance.now() - startedMs).toFixed(3));
   try {
-    report.environment = await collectVliwConformanceEnvironment(repositoryRoot);
+    report.environment = await collectVliwConformanceEnvironment(repositoryRoot, {
+      cudaHost: backend === "rust-cuda-cubin" ? targetHostId : undefined
+    });
   } catch (error) {
     report.environmentError = error instanceof Error ? error.message : String(error);
   }

@@ -53,8 +53,8 @@ impl RoutineEntry {
 
 #[cfg(not(target_arch = "spirv"))]
 pub(super) struct ProgramletRoutineDirectory {
-    entries: [RoutineEntry; MAX_PROGRAMLET_CODELETS],
-    signatures: [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    entries: [RoutineEntry; MAX_PROGRAMLET_ROUTINES],
+    signatures: [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     entry_count: usize,
     signature_used: usize,
 }
@@ -62,8 +62,8 @@ pub(super) struct ProgramletRoutineDirectory {
 #[cfg(not(target_arch = "spirv"))]
 impl ProgramletRoutineDirectory {
     pub(super) const EMPTY: Self = Self {
-        entries: [RoutineEntry::EMPTY; MAX_PROGRAMLET_CODELETS],
-        signatures: [0; MAX_PROGRAMLET_PAYLOAD_WORDS],
+        entries: [RoutineEntry::EMPTY; MAX_PROGRAMLET_ROUTINES],
+        signatures: [0; MAX_PROGRAMLET_SYMBOL_WORDS],
         entry_count: 0,
         signature_used: 0,
     };
@@ -88,7 +88,7 @@ fn check_status(status: u32) -> Result<(), u32> {
 fn append_name(
     source: &impl ProgramletWordSource,
     name: NameSpan,
-    destination: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    destination: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     used: &mut usize,
 ) -> Result<usize, u32> {
     let end = used.checked_add(name.length).ok_or(ERROR_FRAME_CAPACITY)?;
@@ -200,8 +200,8 @@ pub(super) fn build_programlet_routine_directory(
     codelet_count: usize,
     directory: &mut ProgramletRoutineDirectory,
 ) -> Result<(), u32> {
-    directory.entries = [RoutineEntry::EMPTY; MAX_PROGRAMLET_CODELETS];
-    directory.signatures = [0; MAX_PROGRAMLET_PAYLOAD_WORDS];
+    directory.entries = [RoutineEntry::EMPTY; MAX_PROGRAMLET_ROUTINES];
+    directory.signatures = [0; MAX_PROGRAMLET_SYMBOL_WORDS];
     directory.entry_count = 0;
     directory.signature_used = 0;
     let mut cursor = 0;
@@ -400,7 +400,7 @@ fn make_call_signature(
         case_words += array_at!(cases, index).value_type.length + 1;
         index += 1;
     }
-    if sentence.verb_length == 0 || case_words + sentence.verb_length > MAX_PROGRAMLET_PAYLOAD_WORDS
+    if sentence.verb_length == 0 || case_words + sentence.verb_length > MAX_PROGRAMLET_SYMBOL_WORDS
     {
         return Err(ERROR_MALFORMED);
     }
@@ -429,7 +429,7 @@ pub(super) fn resolve_programlet_routine(
     signature_used: usize,
     sentence: &ParsedSentence,
     tokens: &SentenceView<'_>,
-    symbol_words: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbol_words: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     symbol_used: &mut usize,
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     argument_count: u32,

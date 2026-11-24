@@ -11,7 +11,6 @@ use crate::{
 };
 
 pub const MAX_IWSP_WIDTH: usize = pyac_vliw_core::MAX_VECTOR_LANES;
-pub const MAX_IWSP_CANDIDATE_CODELETS: usize = pyac_vliw_core::MAX_PROGRAMLET_CODELETS;
 
 const NOMINATIVE: u32 = 0x24de;
 const ACCUSATIVE: u32 = 0x245e;
@@ -37,7 +36,6 @@ pub struct IwspScore {
 pub enum IwspError {
     InvalidReferenceWidth,
     ReferenceNonFinite { index: usize },
-    CandidateCodeletLimit { actual: usize, maximum: usize },
     CandidateExecution(PackExecutionError),
     CandidateOutputCount { expected: usize, available: usize },
     CandidateOutputType { index: usize },
@@ -57,10 +55,6 @@ impl std::fmt::Display for IwspError {
             Self::ReferenceNonFinite { index } => {
                 write!(formatter, "IWSP reference value {index} is not finite")
             }
-            Self::CandidateCodeletLimit { actual, maximum } => write!(
-                formatter,
-                "candidate has {actual} codelets; task limit is {maximum}"
-            ),
             Self::CandidateExecution(error) => write!(formatter, "candidate failed: {error}"),
             Self::CandidateOutputCount {
                 expected,
@@ -163,12 +157,6 @@ fn reference_bits(values: &[f32]) -> Result<Vec<u32>, IwspError> {
 }
 
 fn score_pack(candidate: &PyacPack, reference: &[u32]) -> Result<IwspScore, IwspError> {
-    if candidate.codelets.len() > MAX_IWSP_CANDIDATE_CODELETS {
-        return Err(IwspError::CandidateCodeletLimit {
-            actual: candidate.codelets.len(),
-            maximum: MAX_IWSP_CANDIDATE_CODELETS,
-        });
-    }
     let outputs = execute_pack(candidate).map_err(IwspError::CandidateExecution)?;
     let start =
         outputs

@@ -8,7 +8,7 @@ pub(super) fn execute_programlet_return(
     codelet_count: usize,
     next_codelet: usize,
     sentence_view: &SentenceView<'_>,
-    symbol_words: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbol_words: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     frames: &mut ProgramletStack,
     frame_index: usize,
 ) -> Result<(), u32> {

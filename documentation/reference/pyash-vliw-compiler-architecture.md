@@ -240,8 +240,9 @@ The current implementation is one shared VLIW semantics runtime with CPU,
 native Vulkan, and browser WGSL targets. Ordinary codelet packs still execute
 as sentence groups. A recognized programlet selects a separate whole-program
 entrypoint with bounded caller-owned frames and one typed result. Programlets
-are bounded to 64 codelets, 64 local slots per frame, 8 arguments, call depth
-8, and the 65,536-step default budget. This is a correctness slice, not yet a
+have no fixed codelet-count ceiling; packet size and the 65,536-step default
+budget bound their input and execution. Other limits remain 64 local slots per
+frame, 8 arguments, and call depth 8. This is a correctness slice, not yet a
 batched evolutionary-candidate kernel.
 
 | Capability | Current WebGPU support | Remaining work for broader VLIW coverage |

@@ -3,8 +3,8 @@
 use glam::UVec3;
 use pyac_vliw_core::{
     CODELET_WORDS, CoreResult, DEFAULT_PROGRAMLET_STEP_BUDGET, ERROR_MALFORMED,
-    ERROR_PROGRAM_CAPACITY, ERROR_UNSUPPORTED, MAX_PROGRAMLET_CODELETS,
-    MAX_PROGRAMLET_PAYLOAD_WORDS, PROGRAMLET_ROUTINE_DIRECTORY_WORDS, ProgramletStack,
+    ERROR_PROGRAM_CAPACITY, ERROR_UNSUPPORTED, MAX_PROGRAMLET_SYMBOL_WORDS,
+    PROGRAMLET_ROUTINE_DIRECTORY_WORDS, ProgramletStack,
     RESULT_WORDS, execute_numeric_programlet_at_with_directory_words, interpret_group,
     is_numeric_programlet,
 };
@@ -75,14 +75,12 @@ pub fn execute_pyac_programlet(
         CoreResult::failure(ERROR_MALFORMED, 0)
     } else {
         let codelet_count = input.len() / CODELET_WORDS;
-        if codelet_count > MAX_PROGRAMLET_CODELETS {
-            CoreResult::failure(ERROR_PROGRAM_CAPACITY, 0)
-        } else if !is_numeric_programlet(input, codelet_count) {
+        if !is_numeric_programlet(input, codelet_count) {
             CoreResult::failure(ERROR_UNSUPPORTED, 0)
         } else if routine_directory.len() < PROGRAMLET_ROUTINE_DIRECTORY_WORDS {
             CoreResult::failure(ERROR_MALFORMED, 0)
         } else {
-            let mut symbol_words = [0u32; MAX_PROGRAMLET_PAYLOAD_WORDS];
+            let mut symbol_words = [0u32; MAX_PROGRAMLET_SYMBOL_WORDS];
             let mut frames = ProgramletStack::EMPTY;
             execute_numeric_programlet_at_with_directory_words(
                 input,
@@ -132,7 +130,6 @@ pub fn execute_pyac_sections(
     let codelet_start = sections[descriptor_start] as usize;
     let codelet_count = sections[descriptor_start + 1] as usize;
     let mut result = if codelet_count == 0
-        || codelet_count > MAX_PROGRAMLET_CODELETS
         || codelet_start > input.len() / CODELET_WORDS
         || codelet_count > input.len() / CODELET_WORDS - codelet_start
     {
@@ -140,7 +137,7 @@ pub fn execute_pyac_sections(
     } else if !pyac_vliw_core::is_numeric_programlet_at(input, codelet_start, codelet_count) {
         CoreResult::failure(ERROR_UNSUPPORTED, 0)
     } else {
-        let mut symbol_words = [0u32; MAX_PROGRAMLET_PAYLOAD_WORDS];
+        let mut symbol_words = [0u32; MAX_PROGRAMLET_SYMBOL_WORDS];
         let mut frames = ProgramletStack::EMPTY;
         pyac_vliw_core::execute_numeric_programlet_at_with_directory_words(
             input,

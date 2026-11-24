@@ -153,6 +153,15 @@ test("pyash dictionary suggest forwards existing Kwon arguments", () => {
   assert.equal(routed.stderr, direct.stderr);
 });
 
+test("pyash dictionary short prefix selects the Pyac reference lookup", () => {
+  const full = runCli(["dictionary", "love"]);
+  const routed = runCli(["d", "love"]);
+  assert.equal(routed.status, full.status, routed.stderr);
+  assert.equal(routed.stdout, full.stdout);
+  assert.equal(routed.stderr, full.stderr);
+  assert.match(routed.stdout, /love:/u);
+});
+
 test("ambiguous prefixes report choices and direct Pyash file execution remains available", async () => {
   const ambiguous = runCli(["co"]);
   assert.equal(ambiguous.status, 2);

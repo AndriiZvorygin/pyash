@@ -5,7 +5,7 @@ pub fn execute_numeric_programlet(
     words: &[u32],
     codelet_count: usize,
     step_budget: u32,
-    symbol_words: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbol_words: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     frames: &mut ProgramletStack,
 ) -> CoreResult {
     execute_numeric_programlet_at(words, 0, codelet_count, step_budget, symbol_words, frames)
@@ -17,7 +17,7 @@ pub fn execute_numeric_programlet_at(
     base_codelet: usize,
     codelet_count: usize,
     step_budget: u32,
-    symbol_words: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbol_words: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     frames: &mut ProgramletStack,
 ) -> CoreResult {
     let mut routine_directory_words = [0; PROGRAMLET_ROUTINE_DIRECTORY_WORDS];
@@ -48,7 +48,7 @@ pub fn execute_numeric_programlet_at_with_directory_words(
     step_budget: u32,
     routine_directory_words: &[u32],
     directory_offset: usize,
-    symbol_words: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbol_words: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     frames: &mut ProgramletStack,
 ) -> CoreResult {
     #[cfg(not(target_arch = "spirv"))]
@@ -84,7 +84,7 @@ fn execute_numeric_programlet_at_with_directory_view(
     directory_offset: usize,
     directory_entry_count: usize,
     directory_signature_used: usize,
-    symbol_words: &mut [u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbol_words: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     frames: &mut ProgramletStack,
 ) -> CoreResult {
     let mut symbol_used = match initialize_numeric_programlet(
@@ -186,7 +186,27 @@ fn execute_numeric_programlet_at_with_directory_view(
             sentence
         };
 
-        if frame.state == 1
+        if frame.state == 1 && is_programlet_vector_declaration(&sentence, &sentence_view) {
+            let (_, length) =
+                match mutable_vector_declaration(words, base_codelet + pc, next_codelet - pc) {
+                    Ok(declaration) => declaration,
+                    Err(error) => return CoreResult::failure(error, steps),
+                };
+            let mut vector_slots = array_at!(frames.vector_slots, frame_index);
+            if let Err(error) = declare_programlet_vector_local(
+                &sentence,
+                &sentence_view,
+                symbol_words,
+                &mut symbol_used,
+                &mut vector_slots,
+                &mut frames.vector_values,
+                frame_index,
+                length,
+            ) {
+                return CoreResult::failure(error, steps);
+            }
+            array_put!(&mut frames.vector_slots, frame_index, vector_slots);
+        } else if frame.state == 1
             && sentence.mood == REALIS
             && sentence.verb_length == 1
             && matches!(
@@ -208,6 +228,51 @@ fn execute_numeric_programlet_at_with_directory_view(
                 &mut frame,
                 &arguments,
                 slots,
+            ) {
+                return CoreResult::failure(error, steps);
+            }
+        } else if frame.state == 1 && is_programlet_dot_product_store(&sentence, &sentence_view) {
+            frame.action_started = 1;
+            let arguments = array_at!(frames.arguments, frame_index);
+            let vector_slots = array_at!(frames.vector_slots, frame_index);
+            if let Err(error) = apply_programlet_dot_product_store(
+                &sentence,
+                &sentence_view,
+                symbol_words,
+                &arguments,
+                frame_index,
+                &vector_slots,
+                &mut frames.vector_values,
+            ) {
+                return CoreResult::failure(error, steps);
+            }
+        } else if frame.state == 1
+            && is_programlet_vector_select(
+                &sentence,
+                &sentence_view,
+                symbol_words,
+                &array_at!(frames.arguments, frame_index),
+                &array_at!(frames.vector_slots, frame_index),
+            )
+        {
+            frame.action_started = 1;
+            if !frame_row_is_valid::<_, _, MAX_PROGRAMLET_LOCAL_SLOTS>(&frames.slots, frame_index) {
+                return CoreResult::failure(ERROR_MALFORMED, steps);
+            }
+            let arguments = array_at!(frames.arguments, frame_index);
+            let vector_slots = array_at!(frames.vector_slots, frame_index);
+            let slots =
+                frame_row_mut::<_, _, MAX_PROGRAMLET_LOCAL_SLOTS>(&mut frames.slots, frame_index);
+            if let Err(error) = apply_programlet_vector_select(
+                &sentence,
+                &sentence_view,
+                symbol_words,
+                &mut symbol_used,
+                &arguments,
+                frame_index,
+                slots,
+                &vector_slots,
+                &frames.vector_values,
             ) {
                 return CoreResult::failure(error, steps);
             }

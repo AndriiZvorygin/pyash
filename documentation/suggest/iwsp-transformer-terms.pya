@@ -299,3 +299,27 @@ su text "pyash compound" ob text "function" ya
 su text "compound components" ob text "box + number" ya
 su text "status" ob text "linked compound; serious semantic red flag" ya
 prah
+
+su name iwsp transformer term 034 be map def
+su text "term" ob text "Transformer query representation (Q)" ya
+su text "wordnet sense" ob text "n:07208256-n" ya
+su text "pyash form" ob text "hwas" ya
+su text "pyash english" ob text "attention-query" ya
+su text "status" ob text "adopted project mapping; query-vector role is narrower than the source question sense" ya
+prah
+
+su name iwsp transformer term 035 be map def
+su text "term" ob text "Transformer key representation (K)" ya
+su text "wordnet sense" ob text "n:05802065-n" ya
+su text "pyash form" ob text "htis hsek" ya
+su text "pyash english" ob text "attention-key" ya
+su text "status" ob text "adopted project mapping; attention-key role is narrower than the source key-or-clue sense" ya
+prah
+
+su name iwsp transformer term 036 be map def
+su text "term" ob text "Transformer value representation (V)" ya
+su text "wordnet sense" ob text "n:05864972-n" ya
+su text "pyash form" ob text "hnuc gjat" ya
+su text "pyash english" ob text "attention-value" ya
+su text "status" ob text "adopted project mapping; attention-value role is narrower than the source numerical-value sense" ya
+prah

@@ -4,7 +4,7 @@ use super::*;
 pub(super) fn apply_programlet_number_action(
     sentence: &ParsedSentence,
     tokens: &SentenceView<'_>,
-    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     frames: &mut ProgramletStack,
     frame_index: usize,
 ) -> Result<(), u32> {
@@ -160,7 +160,7 @@ pub(super) fn apply_programlet_number_action(
 pub(super) fn apply_programlet_boolean_action(
     sentence: &ParsedSentence,
     tokens: &SentenceView<'_>,
-    symbols: &[u32; MAX_PROGRAMLET_PAYLOAD_WORDS],
+    symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     slots: &mut [NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
 ) -> Result<(), u32> {

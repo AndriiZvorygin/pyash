@@ -104,15 +104,11 @@ function metricRecord(result) {
 }
 
 export function summarizeDictionaryEntry(sentences, canonicalKey) {
-  const entryRecordTypes = new Set([
-    "entry", "lexical-form", "source-link", "source-gloss", "component", "task",
-    "reference", "operation-signature", "operation-argument", "operation-result"
-  ]);
   const requestedKey = canonicalKey.split(/\s+/u).map((word) => (
-    Number.parseInt(lookupLegacyName(word).hnuc, 16)
+    Number.parseInt((lookupLegacyPyaName(word) ?? lookupLegacyName(word)).hnuc, 16)
   ));
   const structureKey = ["tlat", "kwon"].map((word) => (
-    Number.parseInt(lookupLegacyName(word).hnuc, 16)
+    Number.parseInt((lookupLegacyPyaName(word) ?? lookupLegacyName(word)).hnuc, 16)
   ));
   const structureSubject = structureKey.map((word) => lookupLegacyWord(word)?.en).join(" ");
   const isEntryRangeMarker = (sentence) => (
@@ -120,29 +116,67 @@ export function summarizeDictionaryEntry(sentences, canonicalKey) {
     && JSON.stringify(sentence.ob?.ve?.values) === JSON.stringify(requestedKey)
     && sentence.at?.ve?.values?.length === 4
   );
-  const isEntryRecord = (sentence) => entryRecordTypes.has(sentence.at?.text) || isEntryRangeMarker(sentence);
-  const entrySentences = sentences.filter(isEntryRecord);
-  const definitionSentences = sentences.filter((sentence) => !isEntryRecord(sentence));
+  const legacy = sentences.some(isEntryRangeMarker);
+  const legacyRecordTypes = new Set([
+    "entry", "lexical-form", "source-link", "source-gloss", "component", "task",
+    "reference", "operation-signature", "operation-argument", "operation-result"
+  ]);
+  const entrySentences = [];
+  const definitionSentences = [];
+  let definitionsStarted = false;
+  const caseShape = (sentence, cases, kinds) => {
+    const present = ["ob", "as", "from", "to", "by", "with"]
+      .filter((caseName) => sentence[caseName] !== undefined)
+      .sort();
+    return present.join(" ") === [...cases].sort().join(" ")
+      && cases.every((caseName, index) => kinds[index] === "text"
+        ? typeof sentence[caseName]?.text === "string"
+        : Array.isArray(sentence[caseName]?.ve?.values));
+  };
+  const v4MetadataKind = (sentence) => {
+    if (caseShape(sentence, ["as", "from", "to"], ["text", "text", "text"])) return "lexical-form";
+    if (caseShape(sentence, ["as", "from", "to", "by"], ["text", "text", "text", "text"])) return "source-link";
+    if (caseShape(sentence, ["as", "from", "to", "by", "with"], ["text", "text", "text", "text", "text"])) return "source-gloss";
+    if (caseShape(sentence, ["from"], ["vector"])) return "component";
+    if (caseShape(sentence, ["with"], ["vector"])) return "task";
+    if (caseShape(sentence, ["to"], ["vector"])) return "reference";
+    if (caseShape(sentence, ["by"], ["vector"])) return "operation-signature";
+    if (caseShape(sentence, ["as", "from", "to"], ["vector", "text", "text"])) return "operation-argument";
+    if (caseShape(sentence, ["as", "by", "with"], ["vector", "text", "text"])) return "operation-result";
+    return null;
+  };
+  for (const sentence of sentences) {
+    const kind = legacy
+      ? (legacyRecordTypes.has(sentence.at?.text)
+        ? sentence.at.text
+        : isEntryRangeMarker(sentence) ? "entry" : null)
+      : (definitionsStarted ? null : v4MetadataKind(sentence));
+    if (kind) entrySentences.push({ ...sentence, dictionaryRecordKind: kind });
+    else {
+      definitionsStarted = true;
+      definitionSentences.push(sentence);
+    }
+  }
   const entry = {
-    lexicalForms: entrySentences.filter((sentence) => sentence.at?.text === "lexical-form").map((sentence) => ({
+    lexicalForms: entrySentences.filter((sentence) => (sentence.dictionaryRecordKind ?? sentence.at?.text) === "lexical-form").map((sentence) => ({
       language: sentence.as?.text,
       surface: sentence.from?.text,
       normalized: sentence.to?.text
     })),
-    sourceLinks: entrySentences.filter((sentence) => sentence.at?.text === "source-link").map((sentence) => ({
+    sourceLinks: entrySentences.filter((sentence) => (sentence.dictionaryRecordKind ?? sentence.at?.text) === "source-link").map((sentence) => ({
       dataset: sentence.as?.text,
       release: sentence.from?.text,
       identifier: sentence.to?.text,
       relation: sentence.by?.text
     })),
-    sourceGlosses: entrySentences.filter((sentence) => sentence.at?.text === "source-gloss").map((sentence) => ({
+    sourceGlosses: entrySentences.filter((sentence) => (sentence.dictionaryRecordKind ?? sentence.at?.text) === "source-gloss").map((sentence) => ({
       language: sentence.as?.text,
       dataset: sentence.from?.text,
       release: sentence.to?.text,
       identifier: sentence.by?.text,
       text: sentence.with?.text
     })),
-    components: entrySentences.filter((sentence) => sentence.at?.text === "component").map((sentence) => {
+    components: entrySentences.filter((sentence) => (sentence.dictionaryRecordKind ?? sentence.at?.text) === "component").map((sentence) => {
       const key = sentence.from?.ve?.values;
       if (Array.isArray(key)) return dictionaryKeyName(key);
       return sentence.from?.text ?? sentence.from?.name;
@@ -159,8 +193,16 @@ export function summarizeDictionaryEntry(sentences, canonicalKey) {
 }
 
 function summarizeEntryCodelets(match) {
-  const key = dictionaryKeyName(match.key);
   const sentences = decodePyashProgram(match.codelets.map((codelet) => Uint16Array.from(codelet)));
+  const legacyMarker = sentences.find((sentence) => (
+    sentence.su?.name === "word dictionary"
+    && Array.isArray(sentence.ob?.ve?.values)
+    && sentence.at?.ve?.values?.length === 4
+  ));
+  const key = legacyMarker
+    ? dictionaryKeyName(legacyMarker.ob.ve.values)
+    : sentences.find((sentence) => sentence.su?.name)?.su.name;
+  if (!key) throw new Error("dictionary entry has no canonical Pyac key in its sentence stream");
   return { key, ...summarizeDictionaryEntry(sentences, key) };
 }
 
