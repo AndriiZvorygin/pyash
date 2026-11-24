@@ -6,26 +6,25 @@ compatibility examples, and implementation boundaries.
 
 ## 6. Target capabilities and lowering
 
-The portable semantic core is a **minimum target contract, not a performance
-ceiling**. A backend MAY use any target instruction, execution model, memory
-facility, or accelerator, but the compiler MUST preserve canonical Pyash
-semantics. Each target profile MUST mark each capability native, lowered from
-supported operations, or unavailable. Selection MUST be explicit and
-reproducible; when several valid implementations exist, a backend SHOULD prefer
-the native or fastest one. Runtime selection and multiple variants are allowed.
+The portable core sets a minimum target contract, not a performance
+ceiling. A backend MAY use any target instruction, execution model, memory
+facility, or accelerator if the compiler preserves canonical Pyash semantics.
+Each target profile MUST mark capabilities native, lowered from supported
+operations, or unavailable. Selection MUST be explicit and reproducible; among
+valid implementations, a backend SHOULD prefer the native or fastest one.
+Runtime selection and multiple variants are allowed.
 
-A native or lowered implementation MUST preserve specified results, effects,
-and ordering, including any declared approximation tolerance. Reject an
-operation when no implementation meets its contract; never substitute one
-merely because its name is similar. Capabilities do not allocate legacy
-16-word codelet fields or reuse reserved bits. Operations not represented by
-the legacy mapping remain unsupported until a versioned encoding is specified.
+Native and lowered implementations MUST preserve specified results, effects,
+ordering, and declared approximation tolerances. Reject operations without a
+conforming implementation; never substitute a similarly named operation.
+Capabilities do not allocate legacy 16-word codelet fields or reuse reserved
+bits. Unmapped operations remain unsupported until a versioned encoding is
+specified.
 
 ## 7. Conceptual interfaces
 
-These signatures define the boundary; the shared Rust VLIW runtime is
-authoritative for execution semantics. JavaScript helpers provide lowering,
-encoding, and decoding:
+These signatures define the boundary. The shared Rust VLIW runtime is
+authoritative for execution; JavaScript helpers lower, encode, and decode:
 
 ```text
 lowerSentence(sentence) -> Codelet[] | EncodingError
@@ -34,14 +33,13 @@ decodeCodelet(words) -> SemanticInstruction[] | EncodingError
 executeCodelets(codelets, inputs) -> Paragraph | ExecutionError
 ```
 
-Lowerers MUST use the canonical sentence ABI and compatibility table. The
-decoder MUST validate indexes, quotes, continuations, HNUCs, types, and
-dependencies. Execution MUST return sentence/paragraph-shaped results under
-Rust semantics; retained JavaScript execution is compatibility-only. A target
-MAY compile codelets using native or lowered operations, but MUST preserve
-interpreter results (including numeric saturation) and observable effects.
-Approximation is allowed only within a declared tolerance. Reject codelets
-that cannot meet the contract.
+Lowerers MUST use the canonical sentence ABI and compatibility table. Decoders
+MUST validate indexes, quotes, continuations, HNUCs, types, and dependencies.
+Execution MUST return sentence/paragraph-shaped results under Rust semantics;
+retained JavaScript execution is compatibility-only. Targets MAY use native or
+lowered operations but MUST preserve interpreter results (including numeric
+saturation) and observable effects. Approximation is allowed only within a
+declared tolerance. Reject codelets that cannot meet the contract.
 
 ## 8. Compatibility examples
 
@@ -256,25 +254,22 @@ su name answer ret
 su name vector weight be ceremony prah
 ```
 
-The generic formal/output types accept either float32 or float64 vectors, with
-the invocation's precision preserved through the max reduction, vector-minus-
-scalar, elementwise exponential, ordered sum, and vector/scalar division (`dvis`). The
-`subtract` route is selected from its vector source signature, so scalar
-subtraction retains its existing route. Inputs must be finite and non-empty;
-non-finite positive results and zero denominators fail. A negative overflow in
-the max-subtraction intermediate is treated as negative infinity, whose
-exponential is zero. CPU Rust tests cover float32/float64, equal logits,
-extreme finite logits, and empty input. Both precisions now also pass the live
-CUDA conformance matrix on Mriczo's RTX 3090. This verifies the CUDA programlet
-path; it does not establish WGSL/WebGPU conformance.
+Generic formal and output types accept float32 or float64 vectors and preserve
+the invocation's precision through max reduction, vector-minus-scalar,
+exponential, ordered sum, and vector/scalar division (`dvis`). Vector-source
+dispatch selects this `subtract` route; scalar subtraction keeps its existing
+route. Inputs must be finite and non-empty; non-finite positive results and
+zero denominators fail. Negative overflow in the max-subtraction intermediate
+is treated as negative infinity, whose exponential is zero. CPU Rust tests
+cover both precisions, equal/extreme logits, and empty input. CUDA results are
+in the [Rust VLIW verification ledger](../reference/rust-vliw-verification-ledger.md);
+they do not establish WGSL/WebGPU conformance.
 
-The executable attention example
+The executable
 [`iwsp-two-key-one-query-attention.pya`](../../examples/pyash/iwsp-two-key-one-query-attention.pya)
-composes two `kl6m psas` dot products into a logits vector, applies this
-softmax ceremony, scales two value vectors by the resulting weights, and adds
-them. Its test inputs produce weights `[0.5, 0.5]` and output `[3, 5]`. The
-example is included in the one-batch programlet-section CPU/CUDA conformance
-matrix; the run record is in the [Rust VLIW verification ledger](../reference/rust-vliw-verification-ledger.md).
+composes two `kl6m psas` dot products, this softmax, and weighted vector
+addition. Equal weights produce `[3, 5]`; the CPU/CUDA run is in the [Rust
+VLIW verification ledger](../reference/rust-vliw-verification-ledger.md).
 
 ## 12. Exact-match count (`pluk tlas`)
 

@@ -19,6 +19,12 @@ export const MAX_PYASH_PROGRAMLET_CALL_DEPTH = 8;
 const MAX_PYASH_PROGRAM_SECTIONS = 64;
 const MAX_PYASH_SECTION_NAME_WORDS = 8;
 const SECTION_VERBS = new Set(["myocpfun", "myoc pfun", "module partially"]);
+const PROGRAMLET_NAME_ALIASES = new Map([
+  ["ve", "vector"],
+  ["vec", "vector"],
+  ["num", "number"],
+  ["bool", "boolean"]
+]);
 
 const PROGRAMLET_ARGUMENT_EXCLUDED_FIELDS = new Set([
   "mood",
@@ -103,6 +109,18 @@ function programComplexity(sentences) {
     });
   }
   return decisions + 1;
+}
+
+function programletNameKey(name) {
+  return String(name ?? "").trim().split(/\s+/u).filter(Boolean).flatMap((token) => {
+    const normalizedToken = token.toLowerCase();
+    const sequence = lookupLegacyWordSequence(
+      PROGRAMLET_NAME_ALIASES.get(normalizedToken) ?? normalizedToken
+    );
+    return sequence
+      ? sequence.map(({ hnuc }) => `h:${hnuc}`)
+      : [`t:${normalizedToken}`];
+  }).join("|");
 }
 
 function branchDepth(sentence) {
@@ -213,7 +231,8 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
     .filter((sentence) => sentence?.mood === "def" && sentence.be === "ceremony")
     .map((sentence) => sentence.su?.name)
     .filter(Boolean);
-  const definitions = new Set(definitionNames);
+  const definitions = new Set(definitionNames.map(programletNameKey));
+  const definitionNamesByKey = new Map(definitionNames.map((name) => [programletNameKey(name), name]));
   if (definitions.size === 0) fail("Pyash programlet must define at least one ceremony");
   if (definitions.size !== definitionNames.length) fail("Pyash programlet ceremony names must be unique");
   const signatures = new Map();
@@ -224,7 +243,7 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
       fail(`Pyash programlet ceremony ${sentence.su.name} must declare one supported typed output name`);
     }
     validateProgramletInputs(sentence);
-    signatures.set(sentence.su.name, type);
+    signatures.set(programletNameKey(sentence.su.name), type);
   }
 
   const calls = new Map([...definitions].map((name) => [name, new Set()]));
@@ -247,7 +266,7 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
     if (sentence.mood === "prah") {
       if (
         !activeDefinition
-        || (sentence.su?.name && sentence.su.name !== activeDefinition)
+        || (sentence.su?.name && programletNameKey(sentence.su.name) !== programletNameKey(activeDefinition))
         || (sentence.be && sentence.be !== "ceremony")
       ) {
         fail("Pyash programlet paragraph must close the active ceremony definition", { sentence: index + 1 });
@@ -302,7 +321,8 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
           if (action.mood !== "do") {
             fail("Pyash programlet conditional branches must be do sentences", { sentence: index + 1 });
           }
-          const isCall = definitions.has(action.be);
+          const actionNameKey = programletNameKey(action.be);
+          const isCall = definitions.has(actionNameKey);
           const isBooleanPredicate = (action.consequence || action.alternative)
             && ["not", "and", "or"].includes(action.be);
           if (!PURE_BUILTIN_VERBS.has(action.be) && !isCall && !isBooleanPredicate) {
@@ -342,13 +362,13 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
           }
           if (isCall) {
             validateProgramletInputCount(action, action.be);
-            if (!action.to?.name || outputType(action) !== signatures.get(action.be)
+            if (!action.to?.name || outputType(action) !== signatures.get(actionNameKey)
               || (targetSlot?.type && targetSlot.type !== outputType(action))) {
               fail(`Pyash programlet call to ${action.be} has an incompatible output signature`, {
                 sentence: index + 1
               });
             }
-            calls.get(activeDefinition).add(action.be);
+            calls.get(programletNameKey(activeDefinition)).add(actionNameKey);
           }
         });
         if (sentence.consequence?.mood === "ret" && sentence.alternative?.mood === "ret") {
@@ -363,7 +383,11 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
       }
       continue;
     }
-    if (index === invocationIndex && sentence.mood === "do" && definitions.has(sentence.be)) continue;
+    if (
+      index === invocationIndex
+      && sentence.mood === "do"
+      && definitions.has(programletNameKey(sentence.be))
+    ) continue;
     fail("top-level programlet content must be a ceremony or one final invocation", {
       sentence: index + 1,
       mood: sentence.mood
@@ -383,7 +407,8 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
   }
   if (invocationIndex >= 0) {
     const invocation = sentences[invocationIndex];
-    if (!definitions.has(invocation.be)) {
+    const invocationNameKey = programletNameKey(invocation.be);
+    if (!definitions.has(invocationNameKey)) {
       fail("Pyash programlet final invocation must call a defined ceremony", { be: invocation.be });
     }
     validateProgramletInputCount(invocation, invocation.be);
@@ -391,28 +416,29 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
     if (!invocationOutputType) {
       fail("Pyash programlet invocation requires one typed bool or num output name, or another supported float output type");
     }
-    if (invocationOutputType !== signatures.get(invocation.be)) {
+    if (invocationOutputType !== signatures.get(invocationNameKey)) {
       fail("Pyash programlet invocation output type must match its ceremony");
     }
   }
   const visiting = new Set();
   const depths = new Map();
-  const visitCall = (name) => {
-    if (visiting.has(name)) {
+  const visitCall = (nameKey) => {
+    const name = definitionNamesByKey.get(nameKey) ?? nameKey;
+    if (visiting.has(nameKey)) {
       fail("Pyash programlet does not admit recursive ceremony calls", { ceremony: name });
     }
-    if (depths.has(name)) return depths.get(name);
-    visiting.add(name);
+    if (depths.has(nameKey)) return depths.get(nameKey);
+    visiting.add(nameKey);
     let depth = 1;
-    for (const called of calls.get(name) ?? []) depth = Math.max(depth, 1 + visitCall(called));
-    visiting.delete(name);
+    for (const called of calls.get(nameKey) ?? []) depth = Math.max(depth, 1 + visitCall(called));
+    visiting.delete(nameKey);
     if (depth > MAX_PYASH_PROGRAMLET_CALL_DEPTH) {
       fail(`Pyash programlet call depth exceeds ${MAX_PYASH_PROGRAMLET_CALL_DEPTH}`, { ceremony: name });
     }
-    depths.set(name, depth);
+    depths.set(nameKey, depth);
     return depth;
   };
-  for (const name of definitions) visitCall(name);
+  for (const nameKey of definitions) visitCall(nameKey);
 
   const complexity = programComplexity(sentences);
   return { definitions, complexity };
