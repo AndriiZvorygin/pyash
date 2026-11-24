@@ -304,6 +304,121 @@ that, stop and report it instead of pushing. The remedy is a storage decision
 decisions - and it must be taken separately from a sweep, never while one is
 running.
 
+## 7. Run the SUMO concept sweep
+
+The SUMO concept sweep links SUMO concepts that have no link to the Pyash
+entry carrying their own meaning. It is a separate sweep from the WordNet
+compound sweep: it never writes compounds, and it never restarts the WordNet
+sweep. The design, the measured universe, and the relation semantics are in
+[the SUMO concept sweep reference](../reference/sumo-concept-sweep.md).
+
+The refinery configuration is in
+<code>program/library/translation/sumo_concept_refinery.pya</code> and the
+promoted catalog is
+<code>program/library/translation/sumo_concept_links.pya</code>.
+
+### Host inputs
+
+The sweep needs two local-only inputs that are not in the repository:
+
+- <code>know/sumo/pyash_wordnet_mappings.pya</code>, the SUMO crosswalk
+  catalog. It is git-ignored, so copy it to the sweep host and verify its
+  checksum against the source.
+- <code>know/sumo/ontology</code>, a checkout of
+  <code>github.com/ontologyportal/sumo</code> at the pinned revision
+  <code>f0c126842d098a312e390479b38ecfbac018f8ed</code>. The loader refuses any
+  other revision, so a checkout that drifts is a hard failure rather than a
+  silent catalog change.
+
+### Run a pilot first
+
+The batch limit is 64 concepts, the same bound the WordNet sweep uses. Start
+with a pilot that mixes the evidence paths, then read the artifacts before
+running the backlog:
+
+~~~sh
+ssh zvorygin 'cd /home/htaf/pyash-vocab-sweep && node command/sumo_concept_refinery.mjs'
+~~~
+
+A pilot over a named set of concepts uses the same command; pass the concept
+ids through the command's configuration rather than editing the config file.
+The run writes its worklist, candidate rows, and decisions under
+<code>artifacts/&lt;run-id&gt;/</code>.
+
+Read <code>concept-worklist.pya</code> first, then
+<code>concept-candidates.pya</code>, then <code>concept-decisions.pya</code>.
+An uncertain or rejected decision is not a transient failure. Do not rerun it
+without reading its evidence.
+
+### Run the backlog under a supervisor
+
+The backlog runs for hours, so it needs a supervisor that outlives the agent
+that starts it. A user service with lingering enabled keeps it running across
+sessions:
+
+~~~ini
+# ~/.config/systemd/user/pyash-sumo-concept-sweep.service
+[Unit]
+Description=Pyash SUMO concept sweep
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/htaf/pyash-vocab-sweep
+Environment=PYA_GPU_HOUSEKEEPER_URL=http://mriczo:18886
+ExecStart=/usr/bin/env -u PYA_MIND_RESPONSE node --max-old-space-size=8192 command/sumo_concept_refinery.mjs
+Restart=on-failure
+RestartSec=90
+StandardOutput=append:/home/htaf/pyash-vocab-sweep/artifacts/logs/sumo-sweep.log
+StandardError=append:/home/htaf/pyash-vocab-sweep/artifacts/logs/sumo-sweep.log
+
+[Install]
+WantedBy=default.target
+~~~
+
+Start it with <code>systemctl --user start pyash-sumo-concept-sweep.service</code>
+and read progress from <code>artifacts/logs/sumo-sweep.log</code>. The
+remaining count in each batch line falls as concepts leave the queue. Stop it
+with <code>systemctl --user stop pyash-sumo-concept-sweep.service</code>; the
+run lock is released when the process exits, and a stale lock is reclaimed on
+the next start.
+
+The service writes the promoted catalog into the working tree on every batch.
+Commit that catalog separately, and never stage the run artifacts, the
+newspaper, or the WordNet decision ledger with it.
+
+### Repair a promoted relation
+
+The relation of a promoted link is derived from the evidence, never from the
+model. A catalog row whose relation does not follow from its evidence is
+rewritten by one command:
+
+~~~sh
+node command/sumo_concept_link_relations.mjs
+~~~
+
+The command reports every transition it made and rewrites the catalog in
+place. It changes the relation only; the identifiers, the target, and the
+recorded evidence stay as they are.
+
+### Promote and publish
+
+Accepted links are written to
+<code>program/library/translation/sumo_concept_links.pya</code>, one row per
+SUMO concept, keyed by concept id so a later run replaces an earlier decision
+instead of appending a duplicate. The record keeps the SUMO identifier, the
+Pyash sequence, the relation, the evidence that produced it, and the
+provenance. It never carries the SUMO definition: the ontology is read-only
+evidence, and its definitions are model input only.
+
+After promotion, rebuild the reference snapshot so the new source links reach
+the dictionary, then rebuild the lookup sidecars:
+
+~~~sh
+node program/library/dictionary/build_reference_source.mjs
+node command/vocab_lookup_index.mjs
+~~~
+
 ## References
 
 - [Translation and WordNet pipeline](../../program/library/translation/README.md)
