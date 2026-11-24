@@ -71,12 +71,20 @@ the header in source order. The file width equals the header width plus
 `count * 32`; trailing bytes are invalid. A reader rejects an unknown magic,
 version, word layout, reserved field, truncation, or extra data.
 
-This v1 layout remains frozen as a flat codelet stream. It has no contents
-directory, symbol table, data section, quote-kind descriptor, or embedded
-mutable variable store. The hosted programlet interpreter currently allocates
-its narrow invocation-local numeric slots at execution time; that runtime
-behavior does not add a storage section to this container. Do not reinterpret
-its reserved header field or codelet words to add those features.
+This v1 layout remains a flat codelet stream with no contents directory or
+symbol table. Its reserved header field remains zero. The inline immutable
+storage profile uses ordinary Pyash descriptor sentences followed immediately
+by opaque payload codelets in the same stream; it does not introduce a second
+header or sidecar. The header codelet count includes those payload codelets.
+Executable sentences precede storage descriptors, and consumers must recognize
+the full section signature and skip the declared payload extent rather than
+interpreting payload words as instructions. The current syntax, exact length
+encoding, validation, and runtime support boundary are normative in
+[`the VLIW ISA specification`](../specifications/27-pyash-vliw-isa.md#inline-immutable-storage-sections).
+
+The hosted programlet interpreter also allocates narrow invocation-local
+numeric slots at execution time; that separate runtime behavior does not alter
+the v1 header. Do not reinterpret its reserved field.
 
 Independent named program sections use `myocpfun` boundary sentences encoded
 as ordinary codelets in this stream; they do not alter the v1 container. Their
@@ -87,7 +95,7 @@ source order. See the independent-section contract in the
 
 ### Future indexed program image
 
-A later, explicitly versioned `.pyac` image may use a book-like contents
+A later, explicitly versioned `.pyac` image may add a book-like contents
 directory and symbol index to locate code, immutable constants, quote payloads,
 and initialization records for invocation-local writable pages. The directory
 may include quote-kind metadata external to each payload, preserving

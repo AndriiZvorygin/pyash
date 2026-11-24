@@ -17,6 +17,7 @@ RUN apt-get update \
 WORKDIR /service
 
 COPY container/gpu-housekeeper/service/server.py /service/server.py
+COPY container/gpu-housekeeper/service/pyac_wire.py /service/pyac_wire.py
 COPY container/gpu-housekeeper/service/kubernetes_runtime.py /service/kubernetes_runtime.py
 COPY container/gpu-housekeeper/service/strata_context_helper.py /service/strata_context_helper.py
 COPY container/gpu-housekeeper/service/strata_context_client.py /service/strata_context_client.py

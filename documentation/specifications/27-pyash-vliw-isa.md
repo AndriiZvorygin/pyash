@@ -287,6 +287,93 @@ executors may complete them in a different order. Any
 dependency between sections disqualifies them from this independent section
 form and must be expressed within an ordered programlet instead.
 
+### Inline immutable storage sections
+
+An executable pack may end with one or more immutable storage sections. Each
+section is declared by an ordinary Pyash sentence using the existing `pfun
+myoc` section verb:
+
+```text
+exists su name weights from filename "weights.bin"
+  by ve num <length-low-u16> <length-high-u16>
+  as name float with ve num <rows> <columns>
+  be pfun myoc ya
+```
+
+`from filename` is a compile-time asset locator and is omitted from the
+compiled descriptor. `by ve num` contains exactly two unsigned 16-bit words;
+the low word precedes the high word and together they give the exact uint32
+byte length. `as name` selects the element representation. The Pyash numeric
+family's storage widths are fixed:
+
+| Pyash numeric type | storage width |
+| --- | ---: |
+| `paucal_number_` | 8 bits |
+| `number_` | 16 bits |
+| `plural_number_` | 32 bits |
+| `multal_number_` | 64 bits |
+
+These widths describe storage representation, not the arithmetic semantics of
+an operation. `float` selects IEEE floating-point storage and must resolve to
+32- or 64-bit elements from the declared shape and exact payload length.
+`with ve num` contains one through eight positive uint16 dimensions. The
+dimension product times the element width MUST equal the declared byte
+length. The total pack still obeys the v1 uint32 byte-length field.
+
+The compiler emits the descriptor as ordinary sentence codelets, immediately
+followed by `ceil(byteLength / 32)` opaque payload codelets. Bytes occupy the
+little-endian byte order of the 16 uint16 words; only the final codelet may be
+padded, and all padding bytes MUST be zero. The header remains the existing
+32-byte v1 header, its reserved field remains zero, and its codelet count
+includes both descriptor and payload codelets. Executable sentences MUST
+precede storage sections. A reader identifies a section from its complete
+Pyash signature, reads its exact extent, and skips the payload without scanning
+it for sentence boundaries. Payload codelets are data, never executable
+instructions.
+
+This profile adds no header field, second pack format, sidecar, pointer, or
+runtime-generated index. A reader that does not recognize the storage
+signature MUST reject the pack rather than dispatching opaque payload words as
+instructions. The current compiler embeds and validates file-backed sections;
+the Rust GPU runtime currently validates and locates them, then rejects
+execution until its GPU binding ABI can expose the payload as read-only input
+memory. That refusal is deliberate and prevents weights from being interpreted
+as code.
+
+### Pyash VLIW authentication sentence
+
+The binary Housekeeper upload is two consecutive, independently framed `.pyac`
+packs: an authentication sentence, then the exact job pack. Its Pyash source
+form is:
+
+```text
+su name identity ob text "<username>"
+  from text "<host-id>" to text "<handle-id>"
+  at ve num <8 uint16 nonce words>
+  with ve num <16 uint16 SHA-256 words>
+  by ve num <16 uint16 HMAC-SHA-256 words>
+  be handshake do
+```
+
+The vectors carry fixed-size binary values as little-endian uint16 words: an
+8-word (128-bit) nonce and 16-word digests. The caller signs the UTF-8 bytes of
+`pyac-vliw-upload-v1\0<username>\0<host-id>\0<nonce-hex>\0<handle-id>\0<job-sha256-hex>`
+with HMAC-SHA-256 and the key declared by
+`exists su name gpu authentication key ob text "<secret>" be text ya`
+in machine-local `configure/secret.pya`. The job digest covers every byte of
+the complete following pack, including its existing header and embedded
+storage. The receiver validates both frame boundaries, the Pyash identity
+sentence, the digest, and the HMAC before durable queue admission.
+
+The client posts this raw concatenation to Housekeeper `/submit-pyac` using
+`application/vnd.pyac-vliw-upload`; it does not Base64-encode the program or
+place the pack in JSON. Housekeeper persists the verified job pack by content
+hash, then sends the raw pack to the resident Rust VLIW runtime's
+`/v1/execute-pack` endpoint. If Housekeeper routes the job to a peer, it
+forwards the same signed byte stream and the peer independently authenticates
+it with the shared secret. Queue admission and status remain available through
+the ordinary JSON Housekeeper control API.
+
 ### Hosted PyashForth memory profile
 
 The hosted JavaScript programlet v1 now implements the first scalar-memory

@@ -25,6 +25,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import unquote, urlsplit
 from urllib.request import Request, urlopen
 import kubernetes_runtime
+import pyac_wire
 
 _JOBS: Dict[str, Dict[str, Any]] = {}
 _JOB_CANCEL_EVENTS: Dict[str, threading.Event] = {}
@@ -169,6 +170,7 @@ DEFAULT_OLLAMA_GPU_STARTUP_GRACE_SECONDS = 60
 DEFAULT_OLLAMA_MIN_GPU_MODEL_FRACTION = 0.99
 DEFAULT_OLLAMA_GPU_WATCHDOG_INTERVAL_SECONDS = 300
 MAX_VLIW_PACK_BYTES = 16 * 1024 * 1024
+MAX_PYAC_UPLOAD_BYTES = MAX_VLIW_PACK_BYTES + 64 * 1024 + 64
 VLIW_PACK_HEADER_BYTES = 32
 VLIW_PACK_CODELET_BYTES = 32
 OLLAMA_VRAM_DEFAULT_WEIGHT_HEADROOM = 1.20
@@ -1899,6 +1901,55 @@ def peer_submit_request_json(base_url: str, payload: Dict[str, Any], timeout_ms:
       delay_seconds = min(5.0, delay_seconds * 2)
 
 
+def peer_submit_pyac_request(
+  base_url: str,
+  upload_stream: bytes,
+  options: Dict[str, Any],
+  timeout_ms: int
+) -> Dict[str, Any]:
+  """Forward the authenticated binary envelope unchanged to another Housekeeper."""
+  url = f"{normalize_text(base_url).rstrip('/')}/submit-pyac"
+  headers = {"Content-Type": "application/vnd.pyac-vliw-upload"}
+  for key, header in (
+    ("deviceId", "X-Pyash-Device-Id"),
+    ("targetHostId", "X-Pyash-Target-Host-Id"),
+    ("workerId", "X-Pyash-Worker-Id"),
+  ):
+    value = normalize_text(options.get(key))
+    if value:
+      headers[header] = value
+  headers["X-Pyash-Discharge-Allowed"] = "false" if options.get("dischargeAllowed") is False else "true"
+  routing = options.get("routing")
+  if isinstance(routing, dict):
+    headers["X-Pyash-Routing"] = json.dumps(routing, separators=(",", ":"))
+  deadline = time.monotonic() + peer_submit_retry_seconds()
+  delay_seconds = 0.5
+  while True:
+    request = Request(url, data=upload_stream, headers=headers, method="POST")
+    try:
+      with urlopen(request, timeout=max(0.1, timeout_ms / 1000.0)) as response:
+        result = json.loads(response.read().decode("utf-8") or "{}")
+      if not isinstance(result, dict):
+        raise RuntimeError("peer returned a non-map PyAC submission response")
+      return result
+    except HTTPError as err:
+      detail = normalize_text(err.read().decode("utf-8", errors="replace"))
+      retryable = err.code in {502, 503, 504}
+      remaining = deadline - time.monotonic()
+      if not retryable or remaining <= 0:
+        raise PeerRequestError(
+          f"peer PyAC submission failed {err.code}: {detail}",
+          status_code=err.code,
+          retryable=retryable
+        ) from err
+    except (URLError, TimeoutError, socket.timeout, OSError) as err:
+      remaining = deadline - time.monotonic()
+      if remaining <= 0:
+        raise PeerRequestError(f"peer PyAC submission failed: {normalize_text(err)}", retryable=True) from err
+    time.sleep(min(delay_seconds, max(0, remaining)))
+    delay_seconds = min(5.0, delay_seconds * 2)
+
+
 def peer_route_candidate(
   peer_host_id: str,
   peer_url: str,
@@ -2393,7 +2444,23 @@ def forward_job_to_peer(payload: Dict[str, Any], job: Dict[str, Any], route: Dic
       "visitedHosts": list(dict.fromkeys([*visited, normalize_text(Handler.host_id)]))
     }
   }
-  peer_result = peer_submit_request_json(peer_url, forwarded_payload, timeout_ms=peer_timeout_ms())
+  upload_stream = payload.get("_pyac_upload_stream")
+  job_source = job.get("source") if isinstance(job.get("source"), dict) else {}
+  if isinstance(upload_stream, bytes):
+    peer_result = peer_submit_pyac_request(
+      peer_url,
+      upload_stream,
+      {
+        "deviceId": selected_device,
+        "targetHostId": normalize_text(payload.get("targetHostId")),
+        "workerId": normalize_text(job_source.get("workerId")),
+        "dischargeAllowed": job.get("dischargeAllowed", True),
+        "routing": forwarded_payload["routing"]
+      },
+      timeout_ms=peer_timeout_ms()
+    )
+  else:
+    peer_result = peer_submit_request_json(peer_url, forwarded_payload, timeout_ms=peer_timeout_ms())
   peer_job_id = normalize_text(peer_result.get("remoteJobId"))
   if not peer_result.get("accepted") or not peer_job_id:
     return {
@@ -2434,6 +2501,10 @@ def decode_vliw_pack_payload(job_spec: Dict[str, Any]) -> bytes:
   payload = job_spec.get("payload") if isinstance(job_spec, dict) else None
   if not isinstance(payload, dict):
     raise ValueError("pyac-pack-execute jobSpec.payload must be map")
+  reference = normalize_text(payload.get("packFile"))
+  if reference:
+    pack = pyac_wire.read_persisted_pack(pya_loading_dir(), reference)
+    return validate_vliw_pack_bytes(pack)
   encoded = normalize_text(payload.get("packBase64"))
   if not encoded:
     raise ValueError("pyac-pack-execute payload.packBase64 is required")
@@ -2445,6 +2516,10 @@ def decode_vliw_pack_payload(job_spec: Dict[str, Any]) -> bytes:
     raise ValueError(f"PyAC pack base64 is invalid: {normalize_text(err)}") from err
   if len(pack) > MAX_VLIW_PACK_BYTES:
     raise ValueError("PyAC pack exceeds the 16 MiB Housekeeper limit")
+  return validate_vliw_pack_bytes(pack)
+
+
+def validate_vliw_pack_bytes(pack: bytes) -> bytes:
   if len(pack) < VLIW_PACK_HEADER_BYTES or pack[:8] != b"PYACVLIW":
     raise ValueError("PyAC pack has an invalid or truncated header")
   version = int.from_bytes(pack[8:10], "little")
@@ -2500,14 +2575,46 @@ def request_vliw_runtime_json(
   return result
 
 
+def request_vliw_runtime_pack(
+  pathname: str,
+  pack: bytes,
+  job_id: str,
+  timeout_sec: int = 1800,
+  runtime_registry: Optional[Dict[str, Dict[str, Any]]] = None
+) -> Dict[str, Any]:
+  url = f"{vliw_runtime_url(runtime_registry)}/{pathname.lstrip('/')}"
+  request = Request(url, data=pack, headers={
+    "Content-Type": "application/vnd.pyac-vliw",
+    "X-PyAC-Job-Id": normalize_text(job_id)
+  })
+  try:
+    with urlopen(request, timeout=max(1, timeout_sec)) as response:
+      raw = response.read().decode("utf-8")
+  except HTTPError as err:
+    try:
+      detail = err.read().decode("utf-8")
+    except Exception:
+      detail = str(err)
+    raise RuntimeError(f"Rust VLIW runtime request failed {err.code}: {detail}") from err
+  except (URLError, TimeoutError, socket.timeout, OSError) as err:
+    raise RuntimeError(f"Rust VLIW runtime request failed: {normalize_text(err)}") from err
+  try:
+    result = json.loads(raw or "{}")
+  except json.JSONDecodeError as err:
+    raise RuntimeError(f"Rust VLIW runtime returned invalid JSON: {normalize_text(err)}") from err
+  if not isinstance(result, dict):
+    raise RuntimeError("Rust VLIW runtime returned a non-map result")
+  return result
+
+
 def execute_vliw_pack_gpu(job: Dict[str, Any]) -> Dict[str, Any]:
   job_spec = job.get("jobSpec") if isinstance(job.get("jobSpec"), dict) else {}
-  decode_vliw_pack_payload(job_spec)
-  result = request_vliw_runtime_json("/v1/execute", {
-    "protocolVersion": 1,
-    "jobId": normalize_text(job.get("remoteJobId")) or normalize_text(job.get("handleId")),
-    "jobSpec": job_spec
-  })
+  pack = decode_vliw_pack_payload(job_spec)
+  result = request_vliw_runtime_pack(
+    "/v1/execute-pack",
+    pack,
+    normalize_text(job.get("remoteJobId")) or normalize_text(job.get("handleId"))
+  )
   if result.get("ok") is not True or not isinstance(result.get("values"), list):
     raise RuntimeError("Rust VLIW runtime returned an invalid pack result")
   return result
@@ -7126,6 +7233,55 @@ def start_registered_job(remote_job_id: str, runtime_registry: Dict[str, Dict[st
     raise
 
 
+def prepare_pyac_upload_job(
+  upload_stream: bytes,
+  *,
+  options: Dict[str, Any],
+  runtime_registry: Optional[Dict[str, Dict[str, Any]]] = None,
+  host_id: str = "",
+  source_address: str = ""
+) -> Dict[str, Any]:
+  secret = pyac_wire.load_shared_secret()
+  identity, pack = pyac_wire.verify_upload_stream(upload_stream, secret)
+  validate_vliw_pack_bytes(pack)
+  pack_reference = pyac_wire.persist_pack(pya_loading_dir(), pack)
+  codelet_count = int.from_bytes(pack[16:20], "little")
+  reserve_bytes = 64 * 1024 * 1024
+  gpu_buffer_bytes = codelet_count * (16 * 4 + 36 * 4)
+  vram_required_mb = max(64, math.ceil(((reserve_bytes + gpu_buffer_bytes) * 1.25) / (1024 * 1024)))
+  handle_id = identity["handleId"]
+  device_id = normalize_text(options.get("deviceId"))
+  target_host_id = normalize_text(options.get("targetHostId")).lower()
+  worker_id = normalize_text(options.get("workerId")) or "pyash-vliw-client"
+  routing = options.get("routing") if isinstance(options.get("routing"), dict) else {}
+  payload = {
+    "handleId": handle_id,
+    "runtimeName": "vliw",
+    "profileName": "pyac-vliw-rust-gpu",
+    "workerId": worker_id,
+    "deviceId": device_id,
+    "targetHostId": target_host_id,
+    "dischargeAllowed": options.get("dischargeAllowed") is not False,
+    "source": {
+      "username": identity["username"],
+      "hostId": identity["hostId"],
+      "workerId": worker_id
+    },
+    "routing": routing,
+    "_pyac_upload_stream": upload_stream,
+    "jobSpec": {
+      "kind": "pyac-pack-execute",
+      "resourceRequest": {
+        "vramRequiredMb": vram_required_mb,
+        **({"deviceId": device_id} if device_id else {})
+      },
+      "uploadDigest": identity["digest"].hex(),
+      "payload": {"packFile": pack_reference}
+    }
+  }
+  return submit_job(payload, runtime_registry, host_id, source_address)
+
+
 class Handler(BaseHTTPRequestHandler):
   host_id = "gpu-housekeeper"
   runtime_registry = DEFAULT_RUNTIME_REGISTRY
@@ -7256,6 +7412,66 @@ class Handler(BaseHTTPRequestHandler):
       payload = read_json_body(self)
       result = prepare_capacity(payload, self.runtime_registry)
       json_response(self, 200 if result.get("prepared") else (409 if result.get("busy") else 503), result)
+      return
+
+    if self.path == "/submit-pyac":
+      startup = startup_status()
+      if not startup["ready"]:
+        json_response(self, 503, {
+          "accepted": False,
+          "code": "housekeeper_starting",
+          "error": "Housekeeper is restoring its durable queue",
+          "retryAfterSeconds": 2,
+          "startup": startup
+        }, headers={"Retry-After": "2"})
+        return
+      if normalize_text(self.headers.get("Content-Type")).split(";", 1)[0].lower() != "application/vnd.pyac-vliw-upload":
+        json_response(self, 415, {"accepted": False, "error": "Content-Type must be application/vnd.pyac-vliw-upload"})
+        return
+      try:
+        length = int(self.headers.get("Content-Length", "0"))
+      except ValueError:
+        json_response(self, 400, {"accepted": False, "error": "Content-Length must be an integer"})
+        return
+      if length < VLIW_PACK_HEADER_BYTES * 2 or length > MAX_PYAC_UPLOAD_BYTES:
+        json_response(self, 413, {"accepted": False, "error": "authenticated PyAC upload length is outside its limit"})
+        return
+      upload_stream = self.rfile.read(length)
+      if len(upload_stream) != length:
+        json_response(self, 400, {"accepted": False, "error": "authenticated PyAC upload body is truncated"})
+        return
+      try:
+        routing_header = self.headers.get("X-Pyash-Routing", "")
+        routing = json.loads(routing_header) if routing_header else {}
+        if not isinstance(routing, dict):
+          raise ValueError("routing metadata must be a map")
+        result = prepare_pyac_upload_job(
+          upload_stream,
+          options={
+            "deviceId": self.headers.get("X-Pyash-Device-Id", ""),
+            "targetHostId": self.headers.get("X-Pyash-Target-Host-Id", ""),
+            "dischargeAllowed": self.headers.get("X-Pyash-Discharge-Allowed", "true").lower() != "false",
+            "workerId": self.headers.get("X-Pyash-Worker-Id", ""),
+            "routing": routing
+          },
+          runtime_registry=self.runtime_registry,
+          host_id=self.host_id,
+          source_address=self.client_address[0]
+        )
+      except pyac_wire.PyacWireError as err:
+        message = normalize_text(err)
+        status = 503 if "shared secret" in message else (401 if "authentication failed" in message else 400)
+        json_response(self, status, {"accepted": False, "error": message})
+        return
+      except (ValueError, RuntimeError) as err:
+        json_response(self, 400, {"accepted": False, "error": normalize_text(err)})
+        return
+      if result.get("accepted"):
+        if not result.get("forwarded"):
+          start_registered_job(normalize_text(result.get("remoteJobId")), self.runtime_registry)
+        json_response(self, 200, result)
+      else:
+        json_response(self, 400, result)
       return
 
     if self.path == "/submit":

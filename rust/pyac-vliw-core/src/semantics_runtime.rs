@@ -423,6 +423,8 @@ mod programlet_vector_values;
 mod scalar_product;
 #[path = "semantics_runtime/sentence.rs"]
 mod sentence;
+#[path = "semantics_runtime/storage_sections.rs"]
+mod storage_sections;
 #[path = "semantics_runtime/sentence_parse_state.rs"]
 mod sentence_parse_state;
 #[path = "semantics_runtime/signature_dispatch.rs"]
@@ -503,6 +505,7 @@ use sentence::{
     embedded_clause_range, name_span, next_sentence_is_paragraph_end, parse_sentence,
     parse_sentence_range, typed_name_span, typed_output_name,
 };
+pub use storage_sections::{StorageSectionRange, scan_storage_sections};
 #[cfg(test)]
 #[path = "semantics_runtime/tests.rs"]
 mod tests;
