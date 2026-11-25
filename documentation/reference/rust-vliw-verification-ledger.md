@@ -34,6 +34,7 @@ encoder or a trained WSD network.
 | Housekeeper client round trips | Codelet batch: 1,132.205 ms; section batch: 1,129.534 ms |
 | WSD case outputs | Financial `[1, 0.25]` -> scores `[1, 0.25]` -> index `0`; river `[0.25, 1]` -> `[0.25, 1]` -> index `1`; tie `[1, 1]` -> `[1, 1]` -> index `0` |
 | Route after run | New CUDA worker retained on Mriczo; Housekeeper queue drained to zero and dispatch resumed |
+| Idle restart check | After idle shutdown (container exit `137`, `OOMKilled=false`), Housekeeper restarted the worker for river-context job `job-6a0e0e58b76a`; it returned index `1` on the RTX 3090 (CUDA event 2.735 ms, client round trip 1,184.338 ms) |
 
 The CPU/GPU event batches cover the full conformance workloads, not isolated
 WSD latency. Client round trips include Housekeeper and transport overhead;
