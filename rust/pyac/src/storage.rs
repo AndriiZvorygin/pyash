@@ -1,4 +1,4 @@
-use pyac_vliw_core::{scan_storage_sections, StorageSectionRange, MAX_PROGRAMLET_SECTIONS};
+use pyac_vliw_core::{MAX_PROGRAMLET_SECTIONS, StorageSectionRange, scan_storage_sections};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StorageSectionError {

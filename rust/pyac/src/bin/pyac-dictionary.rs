@@ -239,7 +239,9 @@ fn benchmark_guard_reason(profile_version: &str) -> Option<&'static str> {
     if profile_version == "pyac-vliw-dictionary/4" {
         return None;
     }
-    Some("dictionary throughput benchmark requires v4 direct-file indexes; v2/v3 use compatibility scans")
+    Some(
+        "dictionary throughput benchmark requires v4 direct-file indexes; v2/v3 use compatibility scans",
+    )
 }
 
 fn open_reader(path: &Path) -> Result<DictionaryFileReader<File>, Box<dyn std::error::Error>> {
