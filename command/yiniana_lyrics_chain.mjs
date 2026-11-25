@@ -210,11 +210,23 @@ export function readCardFromResult(stdout) {
 
 // ---------------------------------------------------------------- song check
 
-// The hymn manuscript writes bracketed section tags, as ACE-Step expects:
-// [verse 1], [verse 2], [verse 3], [chorus], [bridge], [chorus], [outro]. A tag
-// opens its line and the first lyric line follows it on the same line. The
-// numbering is dropped when the tag is read, exactly as ACE-Step drops it. The
-// song has no intro: the sheet opens on the first verse.
+// The hymn manuscript writes the yiniana reference arrangement: three verses,
+// three choruses, a bridge and a closing outro, in this fixed order. The
+// second chorus repeats the first verbatim and the third chorus keeps the
+// first three lines and turns only the last one, so the sheet must carry
+// exactly eight sections. Section tags use the reference vocabulary
+// ([Verse], [Chorus], [Bridge], [Outro]) and each tag opens its own line.
+export const SONG_SECTION_ORDER = [
+  "verse",
+  "verse",
+  "chorus",
+  "verse",
+  "chorus",
+  "bridge",
+  "chorus",
+  "outro"
+];
+
 export function parseSongSections(text) {
   const tags = [];
   for (const match of String(text ?? "").matchAll(/^\s*\[([^\]]+)\]/gmu)) {
@@ -230,10 +242,13 @@ export function verifySongStructure(text) {
   const count = (name) => tags.filter((tag) => tag === name).length;
   const missing = [];
   if (count("verse") < 3) missing.push("verse");
-  if (count("chorus") < 2) missing.push("chorus");
+  if (count("chorus") < 3) missing.push("chorus");
   if (!count("bridge")) missing.push("bridge");
   if (!count("outro")) missing.push("outro");
-  return { ok: missing.length === 0, missing, tags };
+  const ordered =
+    tags.length === SONG_SECTION_ORDER.length &&
+    SONG_SECTION_ORDER.every((tag, index) => tags[index] === tag);
+  return { ok: missing.length === 0 && ordered, missing, ordered, tags };
 }
 
 // -------------------------------------------------------------------- driver
@@ -286,7 +301,11 @@ async function main() {
     const text = await fsp.readFile(args.songPath, "utf8");
     const verdict = verifySongStructure(text);
     if (!verdict.ok) {
-      throw new Error(`yiniana lyrics chain: song missing sections ${verdict.missing.join(", ")}`);
+      const missing = verdict.missing.length ? `missing sections ${verdict.missing.join(", ")}` : "";
+      const order = verdict.ordered
+        ? ""
+        : `section order is ${verdict.tags.join(", ")} but the yiniana reference needs ${SONG_SECTION_ORDER.join(", ")}`;
+      throw new Error(`yiniana lyrics chain: song ${[missing, order].filter(Boolean).join("; ")}`);
     }
     process.stdout.write(`${args.songPath}\n`);
     return;

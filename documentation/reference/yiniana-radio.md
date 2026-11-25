@@ -60,33 +60,64 @@ its ten contract headings before the step is allowed to succeed.
 ### Step 3 — sing
 
 `module/hymn_manuscript.pya` turns the card into a hymn manuscript with the
-shape of the Yiniana song:
+shape of the Yiniana reference song:
 
 ```
-[verse 1] [verse 2] [verse 3] [chorus] [bridge] [chorus] [outro]
+[Verse] [Verse] [Chorus] [Verse] [Chorus] [Bridge] [Chorus] [Outro]
 ```
 
-There is no intro. The sheet is plain bracketed-tag text.
+There is no intro. The sheet is plain bracketed-tag text, and each tag opens
+its own line.
 
-The chorus is three lines — hook, echo, hook — and the second chorus is written,
-not copied. Its echo line is a new line that escalates the first chorus's echo
-while keeping the refrain identity. The outro carries the crux rather than a
-farewell: its first line is meant to be the hook with one word changed and its
-second line reframes the song. A mechanical phrase-count check holds the total
-hook repetitions between 3 and 6, so a regression toward the old shape fails the
-manuscript rather than shipping.
+**The model writes each distinct piece once; the code assembles the song.**
+Seven sections are generated — three verses, one chorus, a bridge, an outro and
+one closing line — and the arrangement, the repeats and the tag vocabulary are
+the code's job:
 
-Measured on the dignity card, old shape against new:
+- the chorus is one four-line stanza whose first line is the hook,
+- the second chorus is the first chorus verbatim,
+- the third chorus is the first chorus's first three lines plus one rewritten
+  closing line,
+- the outro is three short lines.
 
-| | old sheet | new sheet |
-|---|---|---|
-| sections | intro, verse, chorus, verse, chorus, bridge, chorus, outro | verse, verse, verse, chorus, bridge, chorus, outro |
-| exact hook occurrences | 8 | 5 |
-| chorus lines repeated verbatim | hook and echo, 3 times each | hook only, once per chorus |
-| chorus echo lines | 1 (the same line 3 times) | 2 (a new, escalated line in the second chorus) |
+`hymn sheet assemble` is that assembly, and it is exported, so the sheet format
+is testable without a model in the loop.
 
-ACE-Step parses `[verse 1]` as the section "verse" with the numbering stripped,
-so the manuscript is fed to the engine as it is. No tag adapter is needed.
+The tag vocabulary is the reference's, because it is measurable: the same words
+and the same seed, with `[Verse]/[Chorus]/[Bridge]/[Outro]` spelled that way,
+give a 13.8 s lead-in and a 7.0 s worst stall, while `[verse 1]/[chorus]`
+gives a 6.3 s lead-in and a 14.5 s worst stall. Lower-case, numbered tags are
+not a cosmetic choice.
+
+**Density is the dominant cause of a bad render.** The reference song carries
+353 words over 175 s, which is 2.0 words per second. The sheet this module used
+to write carried about 110 words, and at that sparsity the model drags the
+verses to 0.6 words per second and slams the chorus to 3, which is the
+"drawn out, then rushed out of sync" symptom. The section prompts ask for
+44–56 words per verse and 42–52 for the chorus, and the deterministic checks
+hold the sections inside a wide band around those targets.
+
+**The gates rate, they do not fail.** Every verifier — imagery, communal voice,
+source thrust — returns HIGH, MID or LOW, and HIGH or MID passes. A LOW is
+recorded as a note and the pipeline keeps the best value it has. There is no
+fatal guarantee left in the module: a song that is not quite right still gets
+written, because the radio station needs songs more than it needs perfect ones.
+The one gate that stays hard is structural: the sheet's section order and the
+chorus's four lines, because the assembly reads them.
+
+Measured on the dignity card:
+
+| | old sheet | reference sheet | sheet today |
+|---|---|---|---|
+| sections | intro, verse, chorus, verse, chorus, bridge, chorus, outro | verse, verse, chorus, verse, chorus, bridge, chorus, outro | verse, verse, chorus, verse, chorus, bridge, chorus, outro |
+| words | about 110 | 353 | about 320 |
+| words per second over 175 s | 0.6 | 2.0 | about 1.8 |
+| hook occurrences | 8 | 3 | 3 |
+| chorus lines repeated verbatim | hook and echo, 3 times each | none | none |
+
+The old `ACE-Step parses [verse 1] as the section "verse" with the numbering
+stripped` claim was wrong: the tag is what the model reads, and how it is
+spelled changes the render.
 
 ### Running it
 

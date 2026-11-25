@@ -208,23 +208,68 @@ test("runLyricsChain fails loudly when the corpus has nothing on the topic", asy
 
 test("verifySongStructure reads the bracketed section tags", () => {
   const full = [
-    "[verse 1]Walking in our sovereign light,",
-    "[verse 2]We sew honor where broken fabric meets,",
-    "[verse 3]The loom runs steady as the morning rises,",
-    "[chorus]We recognise stately dignity",
-    "[bridge]Accept sorrow, watch the dark weave gold,",
-    "[chorus]We recognise stately dignity",
-    "[outro]Bright beauty lives inside us always."
+    "[Verse]",
+    "Walking in our sovereign light,",
+    "[Verse]",
+    "We sew honor where broken fabric meets,",
+    "[Chorus]",
+    "We recognise stately dignity",
+    "[Verse]",
+    "The loom runs steady as the morning rises,",
+    "[Chorus]",
+    "We recognise stately dignity",
+    "[Bridge]",
+    "Accept sorrow, watch the dark weave gold,",
+    "[Chorus]",
+    "We recognise stately dignity",
+    "[Outro]",
+    "Bright beauty lives inside us always."
   ].join("\n");
 
   const verdict = verifySongStructure(full);
   assert.equal(verdict.ok, true);
-  assert.deepEqual(verdict.tags, ["verse", "verse", "verse", "chorus", "bridge", "chorus", "outro"]);
+  assert.equal(verdict.ordered, true);
+  assert.deepEqual(verdict.tags, [
+    "verse",
+    "verse",
+    "chorus",
+    "verse",
+    "chorus",
+    "bridge",
+    "chorus",
+    "outro"
+  ]);
 
-  const partial = verifySongStructure("[verse 1]One\n[chorus]Two\n");
+  const partial = verifySongStructure("[Verse]One\n[Chorus]Two\n");
   assert.equal(partial.ok, false);
   assert.ok(partial.missing.includes("verse"));
   assert.ok(partial.missing.includes("chorus"));
   assert.ok(partial.missing.includes("bridge"));
   assert.ok(partial.missing.includes("outro"));
+});
+
+test("verifySongStructure rejects a sheet whose sections are out of the reference order", () => {
+  const shuffled = [
+    "[Verse]",
+    "One",
+    "[Verse]",
+    "Two",
+    "[Verse]",
+    "Three",
+    "[Chorus]",
+    "Four",
+    "[Bridge]",
+    "Five",
+    "[Chorus]",
+    "Six",
+    "[Chorus]",
+    "Seven",
+    "[Outro]",
+    "Eight"
+  ].join("\n");
+
+  const verdict = verifySongStructure(shuffled);
+  assert.equal(verdict.ok, false);
+  assert.equal(verdict.ordered, false);
+  assert.deepEqual(verdict.missing, []);
 });
