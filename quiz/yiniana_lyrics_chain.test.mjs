@@ -75,6 +75,15 @@ async function makeCorpus(root) {
   );
 }
 
+
+// The artifacts folder is gitignored, so a fresh checkout does not have it.
+// The tests create their own scratch space; they should not depend on it.
+async function makeTempDir(prefix) {
+  const parent = path.join(process.cwd(), "artifacts");
+  await fs.mkdir(parent, { recursive: true });
+  return fs.mkdtemp(path.join(parent, prefix));
+}
+
 test("slugifyTopic keeps single words and refuses multi-word topics", () => {
   assert.equal(slugifyTopic("dignity"), "dignity");
   assert.throws(() => slugifyTopic("two words"), /single word/u);
@@ -95,7 +104,7 @@ test("buildTopicPattern matches the word and not its neighbours", () => {
 });
 
 test("collectTopicExcerpts finds the lines and their context", async () => {
-  const root = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "lyrics-chain-"));
+  const root = await makeTempDir("lyrics-chain-");
   await makeCorpus(root);
 
   const result = await collectTopicExcerpts({ corpusDir: root, topic: "peace" });
@@ -109,7 +118,7 @@ test("collectTopicExcerpts finds the lines and their context", async () => {
 });
 
 test("collectTopicExcerpts follows linked corpus directories", async () => {
-  const root = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "lyrics-chain-"));
+  const root = await makeTempDir("lyrics-chain-");
   const real = path.join(root, "real");
   await fs.mkdir(real, { recursive: true });
   await fs.writeFile(path.join(real, "0303.txt"), "Healing arrives quietly.\n", "utf8");
@@ -124,7 +133,7 @@ test("collectTopicExcerpts follows linked corpus directories", async () => {
 });
 
 test("collectTopicExcerpts stays inside its bounds", async () => {
-  const root = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "lyrics-chain-"));
+  const root = await makeTempDir("lyrics-chain-");
   await makeCorpus(root);
 
   const result = await collectTopicExcerpts({ corpusDir: root, topic: "peace", maxFiles: 1 });
@@ -135,7 +144,7 @@ test("collectTopicExcerpts stays inside its bounds", async () => {
 });
 
 test("writeFileAtomic leaves the target in place and no temp file behind", async () => {
-  const root = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "lyrics-chain-"));
+  const root = await makeTempDir("lyrics-chain-");
   const target = path.join(root, "nested", "song.txt");
 
   await writeFileAtomic(target, "the song\n");
@@ -149,7 +158,7 @@ test("writeFileAtomic leaves the target in place and no temp file behind", async
 
 test("readCardFromResult follows the verbose result file", async () => {
   assert.equal(readCardFromResult("SEED CONCEPT\nsomething\n"), "SEED CONCEPT\nsomething");
-  const root = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "lyrics-chain-"));
+  const root = await makeTempDir("lyrics-chain-");
   const cardPath = path.join(root, "card.txt");
   await fs.writeFile(cardPath, "SEED CONCEPT\nfrom the file\n", "utf8");
   assert.equal(readCardFromResult(`FINAL_RESULT_FILE: ${cardPath}\n`), "SEED CONCEPT\nfrom the file");
@@ -157,7 +166,7 @@ test("readCardFromResult follows the verbose result file", async () => {
 });
 
 test("runLyricsChain writes the source and the teaching, and refuses a broken card", async () => {
-  const root = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "lyrics-chain-"));
+  const root = await makeTempDir("lyrics-chain-");
   const corpus = path.join(root, "corpus");
   const radio = path.join(root, "radio");
   await makeCorpus(corpus);
@@ -184,7 +193,7 @@ test("runLyricsChain writes the source and the teaching, and refuses a broken ca
 });
 
 test("runLyricsChain fails loudly when the corpus has nothing on the topic", async () => {
-  const root = await fs.mkdtemp(path.join(process.cwd(), "artifacts", "lyrics-chain-"));
+  const root = await makeTempDir("lyrics-chain-");
   const corpus = path.join(root, "corpus");
   await makeCorpus(corpus);
 
