@@ -287,14 +287,13 @@ pub(super) fn select_signature_route(
         }
         VERB_EMBEDDING_LOOKUP
             if signature.mood == DEONTIC
-                && has_cases(
-                    &signature,
-                    &[
-                        (SOURCE, TYPE_NAME),
-                        (DESTINATION, TYPE_NAME),
-                        (LOCATIVE, TYPE_UINT16),
-                    ],
-                ) =>
+                && signature.case_count == 3
+                && matches!(
+                    case_type(&signature, LOCATIVE),
+                    Some(TYPE_UINT16) | Some(TYPE_NAME)
+                )
+                && case_type(&signature, SOURCE) == Some(TYPE_NAME)
+                && case_type(&signature, DESTINATION) == Some(TYPE_NAME) =>
         {
             Ok(ROUTE_EMBEDDING_LOOKUP)
         }

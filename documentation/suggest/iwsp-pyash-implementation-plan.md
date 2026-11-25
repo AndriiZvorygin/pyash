@@ -871,15 +871,18 @@ This is the first dense, file-backed projection needed by a benchmark-sized
 network, not a benchmark result. The Criterion WSD target remains the published
 BPYap/BERT-WSD `BERT-base-augmented` result (78.7% pooled F1 on the five
 Raganato test sets). No Pyash model prediction has been evaluated on those sets.
-The file-backed embedding-row lookup is now implemented as the next small
-slice: `from name pset gjat at num <row> to name lyac dlek be tsoc hsat do`
-binds one row as a zero-copy named vector view that feeds the existing
-`kl6m psas` operation. It supports widths above 16 inline lanes. Its current
-row selector is a literal uint16; dynamic token-ID values, tokenization,
-complete float projections, BERT encoder operations, and prediction-key
-emission remain before evaluating the published WSD benchmark. This
-conformance slice is not itself a WSD score. The exact surface and lexical
-meanings are in the [VLIW ISA specification](../specifications/27-pyash-vliw-isa.md#payload-backed-embedding-row-view).
+The file-backed embedding-row lookup supports both
+`from name pset gjat at num <row> to name lyac dlek be tsoc hsat do` and a
+data-driven `at name lwat txik` selector. The latter reads one uint16 token ID
+from a named one-element `number_` storage section and binds that matrix row as
+a zero-copy named vector view for `kl6m psas`. It is CPU-tested for rows 0–2,
+out-of-range values, and type rejection; the Pyash-built case is in the live
+CUDA conformance matrix. This remains one token ID per pack: text tokenization,
+sequence gathering, complete float projections, BERT encoder operations, and
+prediction-key emission remain before evaluating the published WSD benchmark.
+This conformance slice is not itself a WSD score. The exact surface and
+lexical meanings are in the
+[VLIW ISA specification](../specifications/27-pyash-vliw-isa.md#payload-backed-embedding-row-view).
 
 ### Stage 10 — Visible candidate iteration
 

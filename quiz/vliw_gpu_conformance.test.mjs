@@ -85,7 +85,7 @@ test("VLIW GPU conformance matrix covers the merged typed and control-flow contr
     "float32-storage-backed-dot-product-32-lanes",
     "float64-storage-backed-dot-product-17-lanes",
     "iwsp-float32-storage-backed-matrix-vector-3x4",
-    "iwsp-float32-embedding-row-lookup-3x20",
+    "iwsp-float32-dynamic-embedding-row-lookup-3x20",
     "uint16-vector-sixteen-lanes",
     "boolean-vector-sixteen-lanes",
     "float32-vector-sixteen-lanes",

@@ -22,8 +22,8 @@ export async function buildIwspEmbeddingLookupCase() {
     if (sentence?.from?.filename !== undefined) declarations.push(line);
     else operations.push(line);
   }
-  if (declarations.length !== 2 || operations.length !== 6) {
-    throw new Error("embedding lookup example requires two payload sections and three lookup/dot pairs");
+  if (declarations.length !== 3 || operations.length !== 2) {
+    throw new Error("embedding lookup example requires query, table, index sections, and one lookup/dot pair");
   }
 
   const storagePack = compilePyashProgramSource(declarations.join("\n"), {
@@ -33,9 +33,9 @@ export async function buildIwspEmbeddingLookupCase() {
   const executableCodelets = operations.flatMap((line) =>
     lowerSentence(parse(line)).map(({ words }) => words)
   );
-  const expectedValues = [20, 40, 60].map((value) => ({ type: "float32", value }));
+  const expectedValues = [{ type: "float32", value: 40 }];
   return {
-    name: "iwsp-float32-embedding-row-lookup-3x20",
+    name: "iwsp-float32-dynamic-embedding-row-lookup-3x20",
     kind: "codelets",
     executableCodelets,
     storageCodelets,

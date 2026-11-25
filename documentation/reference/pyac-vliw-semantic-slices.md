@@ -132,10 +132,13 @@ arbitrary tensor indexing, or a complete transformer forward pass.
 The `tsoc hsat` lookup form binds a payload-backed row as a named view, for
 example `from name pset gjat at num 1 to name lyac dlek be tsoc hsat do`. The
 view is zero-copy and feeds later `kl6m psas` operations at widths above 16
-lanes. The current row selector is a literal uint16, and alias resolution scans
-preceding sentences in the pack; dynamic token IDs and tokenization remain
-future work. Exact WordNet/SUMO anchors, component meanings, and the fact that
-`lyac dlek` is descriptive rather than a curated compound are in the
+lanes. Its selector may instead be `at name lwat txik`; `lwat txik` links to
+Open English WordNet 2025 `n:06652323-n` (an index number/indicator) and names
+an immutable, one-element rank-one `number_` section holding the row as uint16.
+This accepts one supplied token ID per pack, without tokenization or sequence
+gathering. Alias resolution scans preceding sentences in the pack.
+Exact WordNet/SUMO anchors, component meanings, and the fact that `lyac dlek`
+is descriptive rather than a curated compound are in the
 [VLIW ISA specification](../specifications/27-pyash-vliw-isa.md#payload-backed-embedding-row-view).
 
 ## IWSP float-vector primitives

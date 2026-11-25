@@ -417,21 +417,15 @@ ob name hwas by name lyac dlek be kl6m psas do
 ```
 
 The lookup signature is exactly `SOURCE name`, `DESTINATION name`, and
-`LOCATIVE uint16`, with deontic mood. The source names an immutable,
-file-backed rank-two float32/float64 section; `at num` is a zero-based uint16
-row number; the destination names a row view. The row-major payload remains in
-its original storage section. A later named-vector operation in the same pack
-resolves the most recent preceding lookup that assigned that name, then reads
-the selected row directly from the payload. This supports widths above the
-16-lane inline literal limit. An alias colliding with a storage-section name
-is rejected. Missing sections, malformed shapes, unsupported element types,
-and out-of-range rows produce errors; the lookup itself returns no vector
-value.
-
-This first slice uses a literal `at num` row. It does not yet read a dynamic
-token ID from a named runtime value, tokenize text, or choose a WordNet sense.
-Those remain later IWSP stages. Named-view resolution scans preceding sentence
-groups in the submitted pack; it creates no runtime index or copied tensor.
+`LOCATIVE uint16` or `LOCATIVE name`, with deontic mood. The source names an
+immutable file-backed rank-two float32/float64 section. A literal selector is
+a zero-based row number; a named selector resolves an immutable rank-one
+`number_` section containing one uint16 row number. The destination names a
+zero-copy row view, which later named-vector operations read from the original
+payload. Shape/type errors and out-of-range rows are rejected. The dynamic
+form consumes one supplied token ID per pack; it does not tokenize text,
+gather a sequence, or perform word-sense disambiguation. See the semantic-slice
+reference for the full storage and resolution contract.
 
 The surface words have these documented lexical meanings:
 

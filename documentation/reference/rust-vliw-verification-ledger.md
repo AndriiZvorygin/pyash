@@ -4,6 +4,39 @@ Use this file as the lookup record for Rust VLIW CPU/GPU conformance runs. Each
 entry records the repository revision, deployed artifact, host/device, route,
 and exact test outcome. A queued or timed-out job is not a passing test.
 
+## 2026-11-25: Payload-Selected Embedding Row
+
+The embedding-row operation now accepts either its existing literal uint16
+row or `at name lwat txik`, which reads one token ID from an immutable,
+one-element rank-one `number_` storage section. The conformance fixture supplies
+index `1`, selects row 1 of a 3x20 float32 table, and the existing dot-product
+sentence returns `40` on both the Rust CPU reference and the live CUDA worker.
+The selector is payload data; no runtime index map or tensor copy is built.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261125-0004-rust-vliw-conformance/result.pya` |
+| Source revision / checkout | `4f2ed0eaf15ec9aca3c9f71ea37f26cc05edd481`; tracked tree was dirty during build |
+| Tracked patch SHA-256 | `b8a1c4d7764e9a104bf65392e771ea324c82e93980d74f21b8f3a26250630a96` |
+| Host and route | Mriczo client -> Mriczo Housekeeper -> temporary Rust CUDA VLIW canary |
+| GPU / driver | NVIDIA GeForce RTX 3090, driver `550.163.01`, 24,576 MiB |
+| Runtime image | `sha256:e9d22dc233e795b35a3606d1cd7f09e78d89e2c071738ba5b7fe2a4b0c331653` |
+| Runtime executable | 9,315,920 bytes; SHA-256 `2f5a4daadc640d897b9513bf19a33bb24c0d175768d420fad540fab99037148f` |
+| Cubin | 3,448,520 bytes; SHA-256 `1fc07d52d141910c736e9c2ba38084a0598f8f30506edd70afd9caac3f00e66a` |
+| CPU reference executable | 16,580,848 bytes; SHA-256 `f5dc1f4f7b4ca2887dd0539dab2907afeca9111aa4edd1f8c92f8abb5375da3d` |
+| Runtime initialization / readiness | Cubin load 0.09 s; worker ready in 615 ms |
+| Full verification | 77/77 ordinary cases passed (45 codelet, 32 programlet), 3 typed-dispatch positive probes passed, and 6/6 expected errors matched; 13,442.304 ms total |
+| CPU request batches | Codelet batch: 62.032 ms; programlet batch: 63.535 ms |
+| CUDA event batches | Codelet batch: 12.344 ms; programlet batch: 121.301 ms |
+| Housekeeper client round trips | Codelet batch: 1,129.052 ms; programlet batch: 1,126.719 ms |
+| New dynamic result | `number_` payload index `1` -> embedding row `1` -> dot product `40` on CPU and RTX 3090 |
+| Deployment state | Canary passed; prior persistent runtime was restored afterward. The tested image was not left deployed by this verification run. |
+
+Batch timings include the complete listed case sets; they are not per-operation
+latencies. The six expected errors comprise one absent overload and five
+programlet/runtime guard cases. The final image and evidence are kept in the
+ignored CUDA build target and local `artifacts/` directory respectively.
+
 ## 2026-11-25: Payload-backed Matrix-Vector Dot Product
 
 Rank-two immutable float storage now feeds the existing Pyash `kl6m psas`

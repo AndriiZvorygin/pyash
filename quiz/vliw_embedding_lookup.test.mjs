@@ -23,3 +23,23 @@ test("rejects lookup sentences without the exact table, row, alias, and verb fie
     /exactly from, at, to, be, and mood/u
   );
 });
+
+test("lowers a payload-backed named index for dynamic embedding-row selection", () => {
+  const lowered = lowerSentence(parse(
+    "from name pset gjat at name lwat txik to name lyac dlek be tsoc hsat do"
+  ));
+  assert.equal(lowered.length, 1);
+  assert.equal(lowered[0].semantic, "embedding-row-lookup");
+  assert.deepEqual(Array.from(lowered[0].words), [
+    0x9111, 0x225e, 0xab44, 0xa9b2, 0x313e,
+    0x225e, 0xe90b, 0x2b73, 0x243e, 0x225e,
+    0xa92b, 0x28ea, 0x615f, 0xec4a, 0xa948, 0x295e
+  ]);
+});
+
+test("rejects embedding selectors that are not a uint16 literal or named index", () => {
+  assert.throws(
+    () => lowerSentence(parse("from name pset gjat at text row to name lyac dlek be tsoc hsat do")),
+    /named scalar index section/u
+  );
+});

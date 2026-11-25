@@ -69,6 +69,59 @@ pub(super) fn storage_has_name(
     Ok(false)
 }
 
+pub(super) fn resolve_storage_u16_scalar(
+    words: &[impl VliwWord],
+    start: usize,
+    group_len: usize,
+    reference: NameSpan,
+    storage: &StorageView<'_>,
+) -> Result<Option<u16>, u32> {
+    let mut found = None;
+    let mut section = 0;
+    while section < storage.section_count() {
+        let name_offset = storage.descriptor(section, 0).ok_or(ERROR_MALFORMED)? as usize;
+        let name_length = storage.descriptor(section, 1).ok_or(ERROR_MALFORMED)? as usize;
+        if name_matches(
+            words,
+            start,
+            group_len,
+            reference,
+            name_offset,
+            name_length,
+            storage,
+        ) {
+            if found.is_some() {
+                return Err(ERROR_DUPLICATE_SIGNATURE);
+            }
+            let payload_offset = storage.descriptor(section, 2).ok_or(ERROR_MALFORMED)? as usize;
+            let byte_length = storage.descriptor(section, 3).ok_or(ERROR_MALFORMED)? as usize;
+            let element_width = storage.descriptor(section, 4).ok_or(ERROR_MALFORMED)? as usize;
+            let element_count = storage.descriptor(section, 5).ok_or(ERROR_MALFORMED)? as usize;
+            let element_type = storage.descriptor(section, 6).ok_or(ERROR_MALFORMED)?;
+            let rank = storage.descriptor(section, 7).ok_or(ERROR_MALFORMED)?;
+            if element_count.checked_mul(element_width) != Some(byte_length) {
+                return Err(ERROR_MALFORMED);
+            }
+            if element_type != NUMBER_TYPE || element_width != 2 {
+                return Err(ERROR_UNSUPPORTED);
+            }
+            if rank != 1 || element_count != 1 || storage.shape(section, 0) != Some(1) {
+                return Err(ERROR_UNSUPPORTED);
+            }
+            if payload_offset.checked_add(byte_length).is_none() {
+                return Err(ERROR_MALFORMED);
+            }
+            found = Some(
+                storage
+                    .read_payload_u16(payload_offset)
+                    .ok_or(ERROR_MALFORMED)?,
+            );
+        }
+        section += 1;
+    }
+    Ok(found)
+}
+
 pub(super) fn resolve_storage_section_vector(
     words: &[impl VliwWord],
     reference_start: usize,
