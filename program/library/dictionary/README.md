@@ -23,12 +23,13 @@ resolves to one Pyac key.
 
 The IWSP Q/K/V forms are present as Pyac dictionary keys: `hwas` resolves to
 the English form `question`, `htis hsek` to `key`, and `hnuc gjat` to `value`.
-The latter two carry exact Open English WordNet 2025 links
-`n:05802065-n` and `n:05864972-n`. The `hwas` entry does not currently carry
-the proposed `n:07208256-n` query link, and project labels `attention-query`,
-`attention-key`, and `attention-value` are not English surface aliases in the
-reference volume. Those are vocabulary curation gaps; Rust key, surface, and
-source indexes are tested against the entries and links that are published.
+All three carry exact Open English WordNet 2025 links: `hwas` to
+`n:07208256-n` (question/query), `htis hsek` to `n:05802065-n` (key), and
+`hnuc gjat` to `n:05864972-n` (value). The `attention-query`, `attention-key`,
+and `attention-value` labels are IWSP role names, not English lexical forms;
+the reference volume therefore exposes the canonical English surfaces rather
+than treating those role labels as dictionary aliases. Rust key, surface, and
+source indexes are tested against these entries and exact links.
 
 `english-core.pya` and `.pyac` are a six-entry v4 example volume for vector,
 data, compare, select, sum, and lookup. Its source demonstrates direct Pyac
@@ -110,14 +111,14 @@ git-ignored; use a unique filename for each run and retain/copy the record
 where local benchmark history is maintained.
 
 Current reference-volume verification on Mriczo, 2026-11-25: rebuilding
-`reference.pyac` from the checked-in `reference.pya` parsed 100,269,187 source
-bytes in 12.249 s and completed in 17.063 s. The rebuilt artifact was
-byte-identical to the published file (SHA-256
-`32a4d5dc45ea86d90a24d3087714585349fc4aedec60eca40972b4346f6d1868`). A
-10,000-iteration warmed `en`/`tensor` lookup measured 113,408 ns mean
-(8,817.7 lookups/s), one result per lookup; the release CLI was 1,527,152
+`reference.pyac` from the checked-in `reference.pya` parsed 100,269,153 source
+bytes in 12.552 s and completed in 17.506 s. The result contains 64,572 entries
+and 4,065,444 codelets, occupies 130,094,240 bytes, and has SHA-256
+`cfd71496549c629263c74316adc3e5fe510746aea1b86b79bdb24bbfa9424c62`. A
+10,000-iteration warmed `en`/`tensor` lookup measured 106,218 ns mean
+(9,414.5 lookups/s), one result per lookup; the release CLI was 1,527,152
 bytes. The local Pyash run record is
-`artifacts/dictionary-benchmarks/reference-mriczo-20261125.pya`.
+`artifacts/dictionary-benchmarks/reference-mriczo-20261125-iwsp-query-link.pya`.
 
 The six-entry example volume's earlier benchmark is not representative of this
 full snapshot. The previous 2026-11-20 338 ns figure measured v3 after loading

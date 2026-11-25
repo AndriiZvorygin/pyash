@@ -429,7 +429,7 @@ fn published_reference_volume_indexes_current_iwsp_vocabulary() {
         (&[0xaad3, 0xea30], "data"),   // drut hnuc
         (&[0xaaa2], "choose"),         // kcut
         (&[0xbc8a], "tot"),            // tfo2t
-        (&[0x8928], "question"),       // hwas; proposed attention-query label
+        (&[0x8928], "question"),       // hwas; reviewed IWSP query representation
         (&[0x8850, 0x2b48], "key"),    // htis hsek; attention-key label
         (&[0xea30, 0xa9b2], "value"),  // hnuc gjat; attention-value label
     ];
@@ -455,11 +455,24 @@ fn published_reference_volume_indexes_current_iwsp_vocabulary() {
         );
     }
 
+    let query_range = reader
+        .location(&[0x8928])
+        .expect("search reviewed query atom")
+        .expect("hwas entry exists");
+    assert!(
+        reader
+            .lookup_surface("en", "query")
+            .expect("search query lemma")
+            .contains(&query_range.start),
+        "WordNet lemma query must resolve to the reviewed hwas entry"
+    );
+
     let wordnet_release = "Open English WordNet 2025";
     for (key, sense) in [
         (&[0xab44, 0xa9b2][..], "n:05873065-n"),
         (&[0xec4a, 0xa948][..], "n:13574763-n"),
         (&[0xaad3, 0xea30][..], "n:08479331-n"),
+        (&[0x8928][..], "n:07208256-n"),
         (&[0x8850, 0x2b48][..], "n:05802065-n"),
         (&[0xea30, 0xa9b2][..], "n:05864972-n"),
     ] {

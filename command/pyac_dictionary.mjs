@@ -316,14 +316,11 @@ export async function runPyacDictionary(args = process.argv.slice(2), { stdout =
   } else if (args[0] === "inspect" && args.length === 2) {
     result = runBinary(binary, ["inspect", path.resolve(args[1])]);
   } else if (args[0] === "lookup" && args[2] === "surface" && args.length === 5) {
-    result = runBinary(binary, ["surface", path.resolve(args[1]), args[3], args[4]]);
-    result.pyashKeys = result.matches.map(dictionaryKeyName);
+    result = runBinary(binary, ["surface-entries", path.resolve(args[1]), args[3], args[4]]);
+    result.matches = result.matches.map(summarizeEntryCodelets);
   } else if (args[0] === "lookup" && args[2] === "source" && args.length === 6) {
-    result = runBinary(binary, ["source", path.resolve(args[1]), args[3], args[4], args[5]]);
-    result.matches = result.matches.map((match) => ({
-      ...match,
-      pyashKey: dictionaryKeyName(match.key)
-    }));
+    result = runBinary(binary, ["source-entries", path.resolve(args[1]), args[3], args[4], args[5]]);
+    result.matches = result.matches.map(summarizeEntryCodelets);
   } else if (args[0] === "read" && args[2] === "key" && args.length === 4) {
     result = runBinary(binary, ["entry", path.resolve(args[1]), binaryKey(args[3])]);
     result.sentences = decodePyashProgram(result.codelets.map((codelet) => Uint16Array.from(codelet)));

@@ -267669,45 +267669,30 @@ su name tlat kwon ob text "hpun hsok" as text "en" from text "wordnet" to text "
 su name tlat kwon ob text "hpun hsok" from text "hpun" at text "component" be text ya
 su name tlat kwon ob text "hpun hsok" from text "hsok" at text "component" be text ya
 su name tlat kwon ob text "hpun hwas" at text "entry" be text ya
-su name tlat kwon ob text "hpun hwas" as text "ar" from text "سؤال" to text "سؤال" at text "lexical-form" be text ya
-su name tlat kwon ob text "hpun hwas" as text "ar" from text "ﻝﺍﺆﺳ" to text "ﻝﺍﺆﺳ" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "ar" from text "يسأل" to text "يسأل" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "en" from text "asking" to text "asking" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "en" from text "query" to text "query" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "en" from text "question" to text "question" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "en" from text "request" to text "request" at text "lexical-form" be text ya
-su name tlat kwon ob text "hpun hwas" as text "es" from text "consulta" to text "consulta" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "es" from text "preguntando" to text "preguntando" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "fi" from text "pyytäminen" to text "pyytäminen" at text "lexical-form" be text ya
-su name tlat kwon ob text "hpun hwas" as text "fi" from text "tiedustelu" to text "tiedustelu" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "fr" from text "demandant" to text "demandant" at text "lexical-form" be text ya
-su name tlat kwon ob text "hpun hwas" as text "fr" from text "question" to text "question" at text "lexical-form" be text ya
-su name tlat kwon ob text "hpun hwas" as text "he" from text "אתליאש" to text "אתליאש" at text "lexical-form" be text ya
-su name tlat kwon ob text "hpun hwas" as text "he" from text "שאילתא" to text "שאילתא" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "he" from text "שואל" to text "שואל" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "hi" from text "पूछ" to text "पूछ" at text "lexical-form" be text ya
-su name tlat kwon ob text "hpun hwas" as text "hi" from text "सवाल" to text "सवाल" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "id" from text "meminta" to text "meminta" at text "lexical-form" be text ya
-su name tlat kwon ob text "hpun hwas" as text "id" from text "pertanyaan" to text "pertanyaan" at text "lexical-form" be text ya
-su name tlat kwon ob text "hpun hwas" as text "nl" from text "vraag" to text "vraag" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "nl" from text "vragen" to text "vragen" at text "lexical-form" be text ya
-su name tlat kwon ob text "hpun hwas" as text "ru" from text "запрос" to text "запрос" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "ru" from text "просить" to text "просить" at text "lexical-form" be text ya
-su name tlat kwon ob text "hpun hwas" as text "tr" from text "sorgu" to text "sorgu" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "tr" from text "sormak" to text "sormak" at text "lexical-form" be text ya
-su name tlat kwon ob text "hpun hwas" as text "uk" from text "запит" to text "запит" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "uk" from text "просити" to text "просити" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "zh" from text "发问" to text "发问" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "zh" from text "提问" to text "提问" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "zh" from text "盘问" to text "盘问" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "zh" from text "索取" to text "索取" at text "lexical-form" be text ya
-su name tlat kwon ob text "hpun hwas" as text "zh" from text "询问" to text "询问" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "zh" from text "问道" to text "问道" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "zh-Latn-pinyin" from text "pán wèn" to text "pán wèn" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "zh-Latn-pinyin" from text "suǒ qǔ" to text "suǒ qǔ" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "zh-Latn-pinyin" from text "tí wèn" to text "tí wèn" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "zh-Latn-pinyin" from text "wèn dào" to text "wèn dào" at text "lexical-form" be text ya
-su name tlat kwon ob text "hpun hwas" as text "zh-Latn-pinyin" from text "xún wèn" to text "xún wèn" at text "lexical-form" be text ya
 su name tlat kwon ob text "hpun hwas" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "Questioning" by text "equivalent-to" at text "source-link" be text ya
 su name tlat kwon ob text "hpun hwas" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "Requesting" by text "equivalent-to" at text "source-link" be text ya
 su name tlat kwon ob text "hpun hwas" as text "wordnet" from text "Open English WordNet 2025" to text "n:07199985-n" by text "exact-sense" at text "source-link" be text ya
@@ -320955,10 +320940,23 @@ su name tlat kwon ob text "hwap xyas" as text "en" from text "wordnet" to text "
 su name tlat kwon ob text "hwap xyas" from text "hwap" at text "component" be text ya
 su name tlat kwon ob text "hwap xyas" from text "xyas" at text "component" be text ya
 su name tlat kwon ob text "hwas" at text "entry" be text ya
+su name tlat kwon ob text "hwas" as text "en" from text "enquiry" to text "enquiry" at text "lexical-form" be text ya
+su name tlat kwon ob text "hwas" as text "en" from text "inquiry" to text "inquiry" at text "lexical-form" be text ya
+su name tlat kwon ob text "hwas" as text "en" from text "interrogation" to text "interrogation" at text "lexical-form" be text ya
+su name tlat kwon ob text "hwas" as text "en" from text "query" to text "query" at text "lexical-form" be text ya
 su name tlat kwon ob text "hwas" as text "en" from text "question" to text "question" at text "lexical-form" be text ya
 su name tlat kwon ob text "hwas" as text "yue-Latn-jyutping" from text "tai4" to text "tai4" at text "lexical-form" be text ya
+su name tlat kwon ob text "hwas" as text "zh" from text "探问" to text "探问" at text "lexical-form" be text ya
+su name tlat kwon ob text "hwas" as text "zh" from text "询问" to text "询问" at text "lexical-form" be text ya
+su name tlat kwon ob text "hwas" as text "zh" from text "质问" to text "质问" at text "lexical-form" be text ya
 su name tlat kwon ob text "hwas" as text "zh" from text "题" to text "题" at text "lexical-form" be text ya
+su name tlat kwon ob text "hwas" as text "zh-Latn-pinyin" from text "tàn wèn" to text "tàn wèn" at text "lexical-form" be text ya
 su name tlat kwon ob text "hwas" as text "zh-Latn-pinyin" from text "tí" to text "tí" at text "lexical-form" be text ya
+su name tlat kwon ob text "hwas" as text "zh-Latn-pinyin" from text "xún wèn" to text "xún wèn" at text "lexical-form" be text ya
+su name tlat kwon ob text "hwas" as text "zh-Latn-pinyin" from text "zhì wèn" to text "zhì wèn" at text "lexical-form" be text ya
+su name tlat kwon ob text "hwas" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "Questioning" by text "subsumed-by" at text "source-link" be text ya
+su name tlat kwon ob text "hwas" as text "wordnet" from text "Open English WordNet 2025" to text "n:07208256-n" by text "exact-sense" at text "source-link" be text ya
+su name tlat kwon ob text "hwas" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:07208256-n" with text "an instance of questioning; there was a question about my training; we made inquiries of all those who were present" at text "source-gloss" be text ya
 su name tlat kwon ob text "hwas bran" at text "entry" be text ya
 su name tlat kwon ob text "hwas bran" as text "en" from text "takeout" to text "takeout" at text "lexical-form" be text ya
 su name tlat kwon ob text "hwas bran" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "Committing" by text "subsumed-by" at text "source-link" be text ya
