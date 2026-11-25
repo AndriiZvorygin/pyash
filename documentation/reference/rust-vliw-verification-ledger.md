@@ -6,6 +6,43 @@ and exact test outcome. A queued or timed-out job is not a passing test. Entries
 are historical: compare the recorded source revision with `git rev-parse HEAD`
 before assuming the deployed artifact matches the checkout.
 
+## 2026-11-25: Dockerized cubin build and redeploy
+
+The CUDA cubin and worker binary are now built inside the image build rather
+than by a host pre-step. `container/pyac-vliw-runtime/Dockerfile.cuda` has a
+`kernel-builder` stage (pinned nightly, `rust-src`, `llvm-tools`,
+`llvm-bitcode-linker`, host `ptxas` through a named build context) and a minimal
+runtime stage that copies only the artifacts. The build script
+`container/pyac-vliw-runtime/command/build.sh` builds, tags by cubin hash, and
+optionally runs the canary. The worker build receives
+`PYAC_VLIW_BUILD_CUBIN_SHA256`, which it requires at startup.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261125-0011-rust-vliw-conformance/result.pya` |
+| Source revision / checkout | `8f2df2afb788dbff991e321feb923a31c575dd6a`; tracked tree dirty during build |
+| Tracked patch SHA-256 | `59e0cb3e2bf53370d9faae0e41e75fe34feb777851404a1174cd0a4891291981` |
+| Host and route | Mriczo client -> Mriczo Housekeeper -> `rust-cuda-cubin` |
+| GPU | NVIDIA GeForce RTX 3090 |
+| Runtime image | `sha256:4cda8d9404573b5705e9e9d203de25a5c410dae4e054ad0b954f206a6034e0e2` (`liberit/pyac-vliw-runtime:cuda-sm86-a99e5a3a2bcaf400`) |
+| Cubin | 3,866,952 bytes; SHA-256 `a99e5a3a2bcaf40011409ad217df2c54919e466000eff8b0051c3263f329b820` |
+| Runtime executable | 9,312,752 bytes; SHA-256 `f3b06fbd5db36ee4d152c672c8b772786245f2e2594316e2ce179ae983ba3966` |
+| CPU reference executable | 16,700,120 bytes; SHA-256 `006a9b0f25559460ef6293ed088464cc0b9fe8a86193d9654cb93672cdb5f443` |
+| Runtime initialization | Cubin load and GPU initialization 0.09 s; ready in 529 ms |
+| Full verification | 79/79 value cases passed (45 codelet, 34 programlet); 3 typed-dispatch probes; 5/5 expected errors matched |
+| CPU batches | Codelet batch: 64.144 ms; programlet sections: 68.905 ms |
+| CUDA event batches | Codelet batch: 12.327 ms; programlet sections: 88.038 ms |
+| Housekeeper client round trips | Codelet batch: 1,139.148 ms; section batch: 1,140.302 ms |
+| Total run wall | 13,713.187 ms |
+| Deployment | Retained on Mriczo; prior image `sha256:fcf8808f70e71cb8d8678c1c6a60743ed7f4bd3f9476c8eaf55e9b20d50b68bf` is the rollback target |
+| Rollback | `bash container/pyac-vliw-runtime/command/cuda-canary.sh mriczo liberit/pyac-vliw-runtime:cuda-sm86-a99e5a3a2bcaf400 rollback` |
+
+Build note: the first image from this Dockerfile started but exited with "CUDA
+worker was not built with a packaged cubin hash"; the canary restored the prior
+runtime, and the worker step now exports the cubin digest from the builder
+stage. The build also requires `--network=host` on Mriczo because the builder's
+embedded DNS cannot resolve the package archive.
+
 ## 2026-11-25: Programlet-Local Embedding Attention
 
 The programlet `tsoc hsat` action now selects a row from the file-backed
@@ -602,6 +639,8 @@ shader, the eight live vector cases above passed exactly.
 
 ## Repeatable Checks
 
+- Build and deploy the CUDA runtime:
+  `bash container/pyac-vliw-runtime/command/build.sh mriczo deploy`
 - Full CPU + live Housekeeper GPU matrix:
   `PYA_VLIW_CONFORMANCE_TIMEOUT_MS=1800000 node command/vliw_gpu_conformance.mjs`
 - Targeted batching and programlet regression tests:

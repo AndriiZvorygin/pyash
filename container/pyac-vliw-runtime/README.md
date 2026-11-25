@@ -24,22 +24,39 @@ payload bytes directly, without a pack-sized `u32` expansion. The WebGPU/WGSL
 path converts at its own `u32` storage-buffer boundary and keeps the same pack
 format and runtime behavior.
 
-Build on Mriczo, not SWAC. The pinned nightly must have `rust-src`,
-`llvm-tools`, and `llvm-bitcode-linker`; `ptxas` 12.8 and Docker are used on
-the build host. Then run:
+Build on Mriczo, not SWAC. The build needs Docker, the host CUDA 12.8
+`ptxas` at `/usr/local/cuda/bin/ptxas`, and network access for the pinned Rust
+toolchain and crates. The cubin and runtime binary are built in a multi-stage
+Docker build; the runtime image contains only compiled artifacts, never a
+compiler or toolchain.
+
+Build and deploy in one step:
 
 ```sh
-bash rust/pyac-gpu/build-cuda-image.sh
+bash container/pyac-vliw-runtime/command/build.sh mriczo deploy
+```
+
+Build only; the script prints `CUDA_IMAGE` and the cubin hash:
+
+```sh
+bash container/pyac-vliw-runtime/command/build.sh
+```
+
+The script tags the image `cuda-sm86-<cubin-sha>`, passes the source revision
+and clean/dirty state into `cubin.metadata.pya`, and then runs the canary. The
+canary remains available for verify and rollback:
+
+```sh
 bash container/pyac-vliw-runtime/command/cuda-canary.sh swac <CUDA_IMAGE>
-# RTX 3090 full-suite verification; restores the original runtime afterward:
-bash container/pyac-vliw-runtime/command/cuda-canary.sh mriczo <CUDA_IMAGE>
-# After verification, persist CUDA on Mriczo and retain Vulkan for rollback:
 bash container/pyac-vliw-runtime/command/cuda-canary.sh mriczo <CUDA_IMAGE> deploy
-# Restore the retained Vulkan container if needed:
 bash container/pyac-vliw-runtime/command/cuda-canary.sh mriczo <CUDA_IMAGE> rollback
 ```
 
-The build prints the image tag and evidence directory. This controlled
+Manual `docker build` must pass the tool context:
+`--build-context cuda-tools=/usr/local/cuda/bin` and `--network=host`; the
+builder's embedded DNS does not resolve the package archive on Mriczo.
+
+The build prints the image tag and cubin hash. This controlled
 deployment test requires a prior Vulkan container and saved cache on the
 destination. It changes only the VLIW route, caps the temporary CUDA container
 at 1 GiB of host memory, validates readiness within 60 seconds, and submits
