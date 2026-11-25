@@ -209,7 +209,7 @@ test("sixteen-lane numeric vectors use indexed continuation and preserve followi
   assert.notEqual(lowered.vectors[1][0], values[0], "continuation codelets keep an index word");
   assert.deepEqual(
     decodePyashProgram(lowered.vectors),
-    sentences.map((sentence) => sentence.be === "vector" ? { ...sentence, be: "vec" } : sentence)
+    sentences
   );
 });
 
@@ -219,7 +219,7 @@ test("ordinary text vectors use indexed continuation rather than raw vector bloc
   const lowered = lowerPyashProgram([sentence]);
 
   assert.equal(lowered.vectors.length, 4);
-  assert.deepEqual(decodePyashProgram(lowered.vectors), [{ ...sentence, be: "vec" }]);
+  assert.deepEqual(decodePyashProgram(lowered.vectors), [sentence]);
 });
 
 test("ordinary Pyash is-even program executes from its compiled PyAC pack", async () => {
@@ -279,7 +279,7 @@ test("programlet admission rejects effectful and recursive bodies", () => {
     /rejects effectful or unknown verb/u
   );
   assert.throws(
-    () => compilePyashProgramSource(source, { invocation: "be equally number do" }),
+    () => compilePyashProgramSource(source, { invocation: "to name num answer be equally number do" }),
     /invocation output type must match its ceremony/u
   );
   const incompatibleCall = source.replace(
