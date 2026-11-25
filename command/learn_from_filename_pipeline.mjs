@@ -569,7 +569,13 @@ async function runPyashExample(examplePath, args, envOverrides = {}, { traceDir 
         resolve({ stdoutText: stdout, stderrText: stderr });
         return;
       }
-      const err = new Error(`child run defective: status=${code ?? 0} signal=${signal ?? ""}`);
+      // A child that fails says nothing on the surface on its own, so its
+      // own words are carried in the message: without them the failure reads
+      // as a bare status and tells nobody anything.
+      const childWords = stderr.trim() || stdout.trim();
+      const err = new Error(
+        `child run defective: status=${code ?? 0} signal=${signal ?? ""}${childWords ? `: ${childWords.slice(-600)}` : ""}`
+      );
       err.stdout = stdout;
       err.stderr = stderr;
       err.resultText = extractFinalResult([stdout, stderr].filter(Boolean).join("\n"));

@@ -619,6 +619,21 @@ The producer needs two things from its environment, and the unit sets both:
 - `PYA_RADIO_CATALOGUE` — the folder the songs are published into. The
   default is `radio/audio` beside the run.
 
+It needs a third thing, and it is the one that breaks silently: **the PATH**.
+The pyash run script is a bash script that calls `node` from the PATH, and
+the system node is older than the house's code — `import ... with { type:
+"json" }` is a syntax error to it. A unit that starts the producer without a
+PATH gets a chain whose every child dies on the first import, five seconds
+into the run, with a bare "child run defective" and nothing else. The unit
+therefore names the same node as its `ExecStart`:
+
+```
+Environment=PATH=/home/htaf/.nvm/versions/node/v24.22.1/bin:/usr/local/bin:/usr/bin:/bin
+```
+
+A chain that fails in five seconds is almost always this, and not a topic
+the corpus cannot carry.
+
 ```ini
 [Service]
 Type=simple
