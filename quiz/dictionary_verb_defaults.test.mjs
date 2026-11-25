@@ -46,10 +46,34 @@ test("a mapped verb encodes through lowering as its chosen spelling", () => {
   );
 });
 
-test("a verb without a defensible sense stays unresolved", () => {
-  assert.equal(defaultVerbSpelling("xor"), null);
+test("a primitive operator resolves to a single atom", () => {
+  // A primitive must be one atom: the compiled runtime dispatches on the atom's
+  // identity, so a compound would not reach the arithmetic handler.
+  const primitives = {
+    divide: ["dvis", "0x8893"],
+    xor: ["hkit", "0xA810"],
+    not: ["no", "0x30DE"],
+    or: ["ba", "0x263E"]
+  };
+  for (const [surface, [atom, hnuc]] of Object.entries(primitives)) {
+    const spelling = defaultVerbSpelling(surface);
+    assert.deepEqual(spelling, [atom], `${surface} must resolve to the single atom ${atom}`);
+    const sequence = lookupLegacyWordSequence(surface);
+    assert.ok(sequence, `${surface} must lower`);
+    assert.equal(sequence.length, 1, `${surface} must not be a compound`);
+    assert.equal(sequence[0].pya, atom);
+    assert.equal(
+      Number.parseInt(sequence[0].hnuc, 16),
+      Number.parseInt(hnuc, 16),
+      `${surface} must lower to the runtime's dispatch word`
+    );
+  }
+});
+
+test("a verb with no existing sense stays unresolved rather than guessed", () => {
   assert.equal(defaultVerbSpelling("promptify"), null);
-  assert.equal(lookupLegacyWordSequence("xor"), null);
+  assert.equal(defaultVerbSpelling("espeak"), null);
+  assert.equal(lookupLegacyWordSequence("promptify"), null);
 });
 
 test("mapping verbs collects their declared signatures", () => {

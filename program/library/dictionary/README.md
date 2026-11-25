@@ -9,7 +9,7 @@ The volume format and record grammar are specified in
 `reference.pya` is the generated source snapshot of accepted Pyash vocabulary.
 Its profile-v3 marker describes the source entry grammar; the Rust build
 converts it to the current profile-v4 runtime volume in `reference.pyac`. Both
-contain 64,593 entries. The current v4 volume is 131,214,912 bytes. The snapshot includes
+contain 64,593 entries. The current v4 volume is 131,219,680 bytes. The snapshot includes
 7,084 promoted SUMO links: 5,658 `superclass-of` and 1,426 `equivalent-to`.
 
 ## Operation signatures
@@ -21,8 +21,8 @@ code-resident tables in `program/verbs/*/**.mjs` by
 
 Atomic verbs spell their English surface and resolve to their pya atom
 (`multiply` -> `hgoc`); compound verbs are already pya sequences
-(`kl6m psas`). Both work, and the current snapshot carries 1,821 signatures
-across 93 verbs.
+(`kl6m psas`). Both work, and the current snapshot carries 1,832 signatures
+across 96 verbs.
 
 A surface the older encoding table does not carry resolves through
 `program/library/dictionary/verb_defaults.mjs`, which records one chosen sense
@@ -30,10 +30,16 @@ per surface. This is a deterministic default, not word-sense disambiguation: a
 `.pya` sentence must round-trip to `.pyac` the same way every time, so each
 surface has exactly one spelling and other senses are written as explicit
 compounds at the call site later. `verify` is `tras drot`, `divide` is
-`syap krot` (SUMO Calculating, the arithmetic division), and `verify platform`
-composes both surfaces. A surface with no defensible implementation sense is
-absent on purpose — `xor`, `not`, `or`, and `promptify` still skip rather than
-take an arbitrary spelling.
+`dvis` (the runtime's DIVIDE word), and `verify platform` composes both
+surfaces.
+
+A primitive is always **one atom**, because the compiled runtime dispatches on
+that atom's identity: `divide`/`dvis` `0x8893`, `xor`/`hkit` `0xA810`,
+`not`/`no` `0x30DE`, `or`/`ba` `0x263E`. `pyashWords.h` carries the grammar
+forms (`exclusive_or_`, `and_or_`, `negatory_quantifier_`), so these are
+existing words rather than new ones. A surface with no existing word is absent
+on purpose — `promptify` and the engine-named TTS verbs (`piper say`,
+`qwen say`) skip rather than take an arbitrary spelling.
 
 Type words follow the encoder's own rule: `num`, `bool`, `vec`, and `float`
 resolve to their grammar form (`number_`, `boolean_`, `vector`, `float`); any
@@ -181,10 +187,10 @@ count. `artifacts/` is git-ignored; use a unique filename for each run and
 retain or copy the record where local benchmark history is maintained.
 
 Current reference-volume verification on Mriczo, 2026-11-25: rebuilding
-`reference.pyac` from the checked-in `reference.pya` parsed 101,436,268 source
+`reference.pyac` from the checked-in `reference.pya` parsed 101,440,675 source
 bytes and wrote the volume in about 15 s. The result contains 64,593 entries
-and 4,100,465 codelets, occupies 131,214,912 bytes, and has SHA-256
-`27cd0871bf108f89491fcd0d82ff215c3535820293bb5f85cadfdc98dfccc7f7`. A
+and 4,100,614 codelets, occupies 131,219,680 bytes, and has SHA-256
+`988945f1a3a695bb407013fbf2963154b39334531e64b3dc08ea49180c670a2e`. A
 10,000-iteration warmed `en`/`tensor` lookup measured 106,218 ns mean
 (9,414.5 lookups/s) on the previous volume, one result per lookup; re-measure
 against this one before quoting a rate. The local Pyash run record for that

@@ -10,6 +10,18 @@
 // with no defensible implementation sense is absent on purpose: it needs a new
 // word (WordNet sense selection and generation), not a preference here.
 export const DEFAULT_VERB_SPELLING = new Map([
+  // Primitives. Each is a single atom, and that atom's identity is what the
+  // compiled runtime and the arithmetic quizzes already dispatch on. `divide`
+  // is `dvis` (0x8893) rather than a compound: a primitive must not depend on
+  // which sense the catalog happened to gloss.
+  //
+  // `and` and `invert` are absent on purpose. The encoder already carries them
+  // (`hwan`, `grut`), but lowering sends `and` through AND_GRAMMAR (0x24BE),
+  // the grammar particle the runtime compares against, not the lexical verb.
+  ["divide", ["dvis"]], // DIVIDE 0x8893
+  ["xor", ["hkit"]], // XOR 0xA810, exclusive_or
+  ["not", ["no"]], // NEGATORY_QUANTIFIER 0x30DE
+  ["or", ["ba"]], // OR_GRAMMAR 0x263E
   ["verify", ["tras", "drot"]], // SUMO Investigating; control/verify
   ["loop", ["dret", "fwin"]], // SUMO ComputerProgram; repeated iterations
   ["concatenate", ["hl6n", "jren"]], // SUMO Attaching; join in sequence
@@ -18,7 +30,6 @@ export const DEFAULT_VERB_SPELLING = new Map([
   ["evoke", ["hvik"]], // Process; evoke or provoke to appear
   ["search", ["tsoc"]], // Investigating; searching (atom)
   ["stop", ["hzot", "tsit"]], // Keeping; cause to end
-  ["divide", ["syap", "krot"]], // Calculating; perform a division
   ["export", ["hfat", "sroc"]], // Exporting; transfer data out of a document
   ["exists", ["psit", "hlaf"]], // cooccur; state or fact of existing
   ["status", ["hmac", "ksac"]], // Attribute; state at a particular time
