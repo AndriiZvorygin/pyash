@@ -1,7 +1,11 @@
-// Declared parity corpus. A case with `expected: "same"` must produce identical
-// normalized stdout on every declared backend and exit zero. A case with a
-// per-backend `expected` map pins a known divergence: the gate fails if any
-// backend changes, in either direction.
+// Declared parity corpus. The authority is spec 27 and the declared signature
+// tables, not the historical JavaScript interpreter. A case with
+// `expected: "same"` must produce identical normalized stdout on every declared
+// backend and exit zero. A per-backend `expected` map pins a known divergence.
+//
+// `authority` records which backends are expected to be correct when the legacy
+// interpreter is the outlier; the interpreter may then be pinned as `legacy:`
+// behavior rather than treated as an expectation.
 export const CASES = [
   {
     family: "text-facts",
@@ -46,6 +50,21 @@ export const CASES = [
     expected: "same",
     lines: [
       "ob num 3 to num 4 be plus do",
+      "ob name result be write do"
+    ]
+  },
+  {
+    family: "numeric-facts",
+    name: "literal-operand-roles",
+    backends: ["javascript", "c"],
+    expected: "same",
+    authority: "spec 27: the second operand phrase carries its actual case",
+    lines: [
+      "ob num 9 to num 4 be subtract do",
+      "ob name result be write do",
+      "ob num 6 to num 7 be multiply do",
+      "ob name result be write do",
+      "ob num 6 from num 3 be xor do",
       "ob name result be write do"
     ]
   },

@@ -41,7 +41,7 @@ This guide keeps contributions consistent for the Pyash codebase.
 
 ## Quiz Guidelines
 - Add quizzes for every new code path; mirror real REPL usage strings where possible.
-- A new verb or signature declares a parity class (`core`, `pure`, `host`, or `experimental`) in `documentation/reference/parity-gate.md`; `core` changes must pass `npm run parity:gate`.
+- A new verb or signature declares a parity class (`core`, `pure`, `host`, or `legacy`) in `documentation/reference/parity-gate.md`; `core` changes must pass `npm run parity:gate`.
 - Follow `node:test` with `assert/strict` (see `quiz/core.test.mjs`).
 - Name quizzes with readable sentences; reset memory between cases to avoid coupling.
 - Cover at least one happy path and one edge/guard path for each new verb or interpreter change.

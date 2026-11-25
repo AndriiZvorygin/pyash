@@ -8,22 +8,30 @@ which implementation is authoritative for each surface and how drift is caught.
 
 | Surface | Normative implementation | Conformance targets |
 | --- | --- | --- |
-| Pure codelets and programlets | Rust CPU (`rust/pyac`) | CUDA, WebGPU, RISC-V; JavaScript lowering is a producer, not an authority |
-| Full Pyash with host effects | JavaScript interpreter (`program/`) | compiled JavaScript and compiled C |
-| Run recording, newspaper, artifacts | JavaScript interpreter | compiled backends must match the declared record shape |
+| Pure codelets and programlets | Rust CPU (`rust/pyac`) and spec 27 | CUDA, WebGPU, RISC-V; JavaScript lowering is a producer, not an authority |
+| Legacy Pyash interpreter | none — historical, flawed, out of scope on the VLIW branch | not a conformance target |
+| Compiled JavaScript and C | must match the declared spec semantics | compared against the spec, not against the legacy interpreter |
 | VLIW catalogue and packs | spec 27 and the shared Rust runtime | `command/vliw_gpu_conformance.mjs` |
 
 When two implementations disagree, the normative column wins. A target that
 disagrees is a defect, not a second definition.
 
+The JavaScript interpreter (`program/`) is a **historical implementation**. It is
+not the authority for anything, and its behavior is not a target. On this
+branch it is out of scope except where a spec sentence has no Rust
+implementation yet. Where the legacy interpreter diverges from spec 27 or the
+declared signature tables, the legacy behavior is the defect. Do not encode
+interpreter quirks into compiled backends to make them "match".
+
 ## Parity classes
 
 Every verb family and signature declares one class:
 
-- `core` — interpreter, compiled JavaScript, and compiled C must agree.
+- `core` — compiled JavaScript and compiled C agree with the declared spec semantics.
 - `pure` — Rust CPU and the GPU targets, gated by the VLIW conformance matrix.
-- `host` — interpreter only, behind a named gate and a stated reason.
-- `experimental` — no parity obligation yet, stated explicitly.
+- `host` — explicitly out of parity scope, with a stated reason.
+- `legacy` — behavior only the historical JavaScript interpreter implements;
+  recorded, never used as an expectation.
 
 A new verb or a changed signature declares its class in the review that adds it.
 `core` changes must pass the gate.
@@ -58,18 +66,21 @@ now writes the `result` fact, `read` exposes the contents as `result`, a
 ceremony's default return propagates its mutated destination, and
 `boolExprForClause` handles `equally`/`tiny`/`giant` leaves.
 
-Literal arithmetic accepts only the operand roles the interpreter accepts, so a
-compiled backend never invents a value the interpreter leaves unset:
+Literal arithmetic accepts the second operand in any operand case (`to`,
+`from`, `with`, `by`). Per the VLIW ISA the phrase's case is just its actual
+case, so one role is not privileged over another. An earlier revision of this
+file restricted the roles per verb because the historical interpreter did; that
+encoded interpreter quirks into the compiler and was wrong.
 
-| Verb | Right-hand role |
-| --- | --- |
-| `plus` | `to`, `with`, `from`, `by` |
-| `subtract` | `from` |
-| `multiply` | `by`, `with` |
-| `divide` | `by`, `with` |
-| `remains` | `from`, `by` |
-| `exponential` | `from`, `by` |
-| `xor` | `to`, `with` |
+Recorded legacy-only behavior, not a target:
+
+- the historical interpreter returns nothing for `ob … to … be subtract`,
+  `ob … to … be multiply`, and `ob … from … be xor`, although the declared
+  signature tables accept those shapes.
+
+When the gate runs a case where the legacy interpreter disagrees with the spec,
+mark the case `legacy` and pin only the compiled backends; do not pin the
+interpreter as an expectation.
 
 The pinned-case mechanism remains available for future disagreements. A pin may
 also declare `stderrMatch`, so an error case is proven equivalent rather than

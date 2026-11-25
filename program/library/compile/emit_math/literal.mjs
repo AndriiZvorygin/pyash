@@ -1,39 +1,34 @@
-// Literal-operand arithmetic with no named destination writes the same `result`
-// fact the interpreter produces. Each verb accepts only the operand roles the
-// interpreter accepts, so compiled backends do not invent a value the
-// interpreter would leave unset. Semantics and guards follow
+// Literal-operand arithmetic with no named destination writes the `result`
+// fact. The second operand may arrive in any operand case; per the VLIW ISA the
+// phrase's case is just its actual case, and the decoder reads the HNUC without
+// privileging one role. Operator semantics and zero guards follow
 // program/verbs/mathematics.
+const RIGHT_OPERAND_ROLES = ["to", "from", "with", "by"];
+
 const OPERATORS = {
   plus: {
-    roles: ["to", "with", "from", "by"],
     expr: (left, right) => `(${left} + ${right})`
   },
   subtract: {
-    roles: ["from"],
     expr: (left, right) => `(${left} - ${right})`
   },
   multiply: {
-    roles: ["by", "with"],
     expr: (left, right) => `(${left} * ${right})`
   },
   divide: {
-    roles: ["by", "with"],
     expr: (left, right) => `(${left} / ${right})`,
     guard: (right) => ({ zero: right, message: "divide: by cannot be zero" })
   },
   remains: {
-    roles: ["from", "by"],
     expr: (left, right) => `(${left} % ${right})`,
     cExpr: (left, right) => `fmod(${left}, ${right})`,
     guard: (right) => ({ zero: right, message: "remains: from cannot be zero" })
   },
   exponential: {
-    roles: ["from", "by"],
     expr: (left, right) => `(${left} ** ${right})`,
     cExpr: (left, right) => `pow(${left}, ${right})`
   },
   xor: {
-    roles: ["to", "with"],
     expr: (left, right) => `(${left} ^ ${right})`,
     cExpr: (left, right) => `((long)(${left}) ^ (long)(${right}))`
   }
@@ -65,7 +60,7 @@ export function handleLiteralMath(context, helpers) {
   const operator = OPERATORS[baseBe];
   if (!operator) return null;
   if (sentence.to?.name || sentence.to?.genitive) return null;
-  const role = operator.roles.find((name) => sentence[name] !== undefined);
+  const role = RIGHT_OPERAND_ROLES.find((name) => sentence[name] !== undefined);
   if (!role) return null;
   const left = numericOperand(sentence.ob, { lang, locals, declared, sanitizeName });
   const right = numericOperand(sentence[role], { lang, locals, declared, sanitizeName });

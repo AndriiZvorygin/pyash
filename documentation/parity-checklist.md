@@ -5,8 +5,12 @@ This checklist tracks parity work with explicit gates.
 ## Authority and parity classes
 
 See `reference/parity-gate.md`. A new verb or signature declares one class:
-`core`, `pure`, `host`, or `experimental`. A `core` change must pass
+`core`, `pure`, `host`, or `legacy`. A `core` change must pass
 `npm run parity:gate`. The VLIW conformance matrix remains the `pure` gate.
+
+The legacy JavaScript interpreter is a historical implementation, not an
+authority. Its behavior is never a conformance target; where it diverges from
+spec 27 or the declared signature tables, the interpreter is the defect.
 
 ## 1) Recurrence Grammar Lock
 

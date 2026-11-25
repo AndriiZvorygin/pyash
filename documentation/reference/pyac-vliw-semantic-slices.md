@@ -9,12 +9,10 @@ current support and target architecture, see
 
 ## Known divergences from lwonprom
 
-- **Revision.** lwonprom lets a later definition replace an earlier one. The
-  Rust routine directory currently returns `ERROR_DUPLICATE_SIGNATURE` when two
-  routines share a signature key. The target is latest-wins by definition
-  order, specified in
+- None for revision. lwonprom lets a later definition replace an earlier one,
+  and the Rust routine directory now does the same: equal signature keys are
+  compacted to the latest definition instead of rejected. See
   [`27-pyash-vliw-isa.md` §5.1.1](../specifications/27-pyash-vliw-isa.md#511-revision).
-  This divergence is not yet fixed.
 
 ## Runtime signature dispatch
 

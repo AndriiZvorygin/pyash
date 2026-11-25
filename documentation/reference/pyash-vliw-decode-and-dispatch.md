@@ -125,15 +125,15 @@ part that should eventually adopt the dictionary's shape, not the reverse.
 ## 6. Revision semantics
 
 lwonprom permits revision: the most recent definition takes precedence. The
-current Rust routine directory instead rejects an equal signature key with
-`ERROR_DUPLICATE_SIGNATURE`.
+Rust routine directory now does the same.
 
-Within one programlet, latest-wins is well defined by definition order: keep the
-directory sorted for binary search, but resolve a collision by the latest
-definition offset instead of failing. This is recorded as a divergence in
-[`pyac-vliw-semantic-slices.md`](pyac-vliw-semantic-slices.md) until it is
-implemented. Cross-pack revision needs a version or sequence field and is a
-later question.
+Within one programlet, latest-wins is well defined by definition order: the
+directory stays sorted for binary search, and equal signature keys are
+compacted to the entry with the highest definition offset rather than rejected.
+`ERROR_DUPLICATE_SIGNATURE` remains for duplicate *bindings inside one
+sentence* (two storage or named-vector bindings of the same name), which is a
+different condition. Cross-pack revision needs a version or sequence field and
+is a later question.
 
 ## 7. Self-extension requirements
 
@@ -146,7 +146,7 @@ exists for the first; the loop does not yet exist for the rest.
 | Define a new signature shape | Yes: any set of cases and types, within the executable value families. |
 | Persist a definition | No: the registry is rebuilt per pack. Durable vocabulary is a catalog workflow, not yet a runtime act. |
 | Introspect the vocabulary | No in-language reflection; host commands (`vocab_suggest`, `kwon`) only. The reference dictionary already carries operation signatures with argument names and descriptions; the runtime does not consume them yet. |
-| Revise a definition | No: duplicate signatures are fatal today; latest-wins is the target. |
+| Revise a definition | Yes: equal signature keys resolve to the latest definition. |
 
 Two scales that are easy to confuse:
 
