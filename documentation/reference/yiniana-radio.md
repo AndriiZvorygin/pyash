@@ -91,7 +91,37 @@ For "dignity" that is 29 files, 33 matches and 88 KB.
 
 `runLearnPipeline` spawns `command/learn_from_filename_pipeline.mjs` and reads
 the card back out of its stdout. `validateLearnCard` checks the card carries
-its ten contract headings before the step is allowed to succeed.
+its contract headings before the step is allowed to succeed.
+
+The card has a **depth**, and the radio asks for the lean one:
+
+| Depth | Headings | Who wants it |
+| --- | --- | --- |
+| `full` | ten | the house's teaching workflows |
+| `radio` | six | the songs |
+
+The radio card keeps SEED CONCEPT, CARDINAL TRAINING SENTENCE, TEACHING
+PROGRESSION, CAUSATIVE AND CONSEQUENCE, CARDINAL SCENES AND IDIOMS and BRIEF
+MEMORY PHRASES — what the teaching is, the line that can be sung back, how it
+unfolds, what follows from what, the pictures it draws and the short phrases
+that become a refrain. It leaves out ORTHOGONAL FEATURES, SURPRISES AND
+MISUNDERSTANDINGS, AFFAIRS OR ACTIVITIES and CONCEPT RELATIONS, because a song
+never reads them.
+
+`radio card depth` says which card the radio writes; it is `radio` at the
+moment. The depth reaches the pipeline as `PYA_RADIO_CARD_DEPTH`, and each
+depth has its own examples:
+
+| Depth | Direct | Chunk card | Merge and refine |
+| --- | --- | --- | --- |
+| `full` | `learn-direct-from-filename.pya` | `learn-extract-card-from-filename.pya` | `learn-merge-refine-cards-from-filename.pya` |
+| `radio` | `learn-radio-direct-from-filename.pya` | `learn-radio-extract-card-from-filename.pya` | `learn-radio-merge-refine-cards-from-filename.pya` |
+
+The card a topic already has is kept when it is the card the radio wants: a
+card that carries another depth's headings is written again, and a card of the
+right depth is never written twice. The card is the slow part of the chain, so
+this is the difference between a retry that costs a minute and a retry that
+costs seven.
 
 ### Step 3 — sing
 
@@ -511,14 +541,16 @@ The station plays what has been rendered. The producer is what makes more.
    rotation fills lane by lane and the second engine of a lane reuses the
    sheet the first one wrote.
 2. **Write.** The sheet for the topic, when the station does not have one yet:
-   the corpus excerpts, the learnteaching card, the hymn manuscript.
+   the corpus excerpts, the learnteaching card, the hymn manuscript. When the
+   radio already holds the card the topic wants, only the hymn is written from
+   it — the card is the slow part of the chain, so a retry that only lost the
+   hymn costs a minute and not seven.
 3. **Audition.** The seed is a lottery — the same sheet and graph came back
    instrumental for one seed and sung for two others. So the producer renders
    `radio producer seeds` seeds and keeps the one that carries the most of the
-   words. The measurement is the opening of the render: the first
-   `radio producer window seconds` are cut, the hear lane says what it hears,
-   and the lyric recovery says how much of the sheet came back. An
-   instrumental render answers "(upbeat music)" and recovers nothing.
+   words. The whole render is heard: the hear lane says what it hears, and the
+   lyric recovery says how much of the sheet came back. An instrumental render
+   answers "(upbeat music)" and recovers nothing.
 4. **Publish.** The winner is copied into the catalogue and renamed into
    place, so a half written song is never on the air. The station's own
    catalogue scan takes it from there, within the quarter of a minute.
@@ -586,8 +618,9 @@ prah
 | `radio producer durations` | map | the engine and the length of its song |
 | `radio producer seeds` | `2` | seeds rendered per song |
 | `radio producer song count` | `1` | songs made per run |
-| `radio producer window seconds` | `60` | the opening that decides a song |
+| `radio producer audition seconds` | `0` | the window that decides a song; `0` hears the whole render |
 | `radio producer min recovery` | `10` | the percent of the words a song must carry |
+| `radio card depth` | `radio` | the card the radio writes: `radio` or `full` |
 | `radio producer loop` | `lie` | keep going until the rotation is full |
 | `radio producer pause seconds` | `0` | the pause between songs |
 | `radio producer command` | `node command/yiniana_producer.mjs` | the command the ceremony runs |
@@ -718,7 +751,7 @@ segment list.
 
 ### What a song costs
 
-Measured on the humility lane, on this machine:
+Measured on the humility lane, on this machine, with the full teaching card:
 
 | Step | Cost | How it was measured |
 | --- | --- | --- |
@@ -735,6 +768,11 @@ SENTENCE, TEACHING PROGRESSION, ORTHOGONAL FEATURES, SURPRISES AND
 MISUNDERSTANDINGS, AFFAIRS OR ACTIVITIES, CAUSATIVE AND CONSEQUENCE, CARDINAL
 SCENES AND IDIOMS, BRIEF MEMORY PHRASES, CONCEPT RELATIONS — written by the
 mind over the corpus excerpts, and the hymn is written from the card.
+
+The radio card is the lean one: six headings, the ones a song reads. It is
+also cheaper, because the mind is asked for less. One radio card over a 100 KB
+source took 3 min 50 s through the whole pipeline — fifteen chunks, two merge
+layers — against the full card's 6.6 min. One chunk on its own takes 25 s.
 
 The mind and the music engines share one GPU: qwen3.5:9b is resident on the
 card at 6.6 GB, 100 % GPU, and the renders want the same device. So the
@@ -774,6 +812,44 @@ A caution on the transcriber: Qwen3-ASR heard 63 % of the ACE-Step song's
 the same audio. Measure recovery with a transcriber that can sing, and treat a
 low number as a question about the transcriber first.
 
+### The audition window
+
+The audition used to hear only the first sixty seconds of a render. A
+175-second song carries its words through the whole of itself, so a window of
+sixty seconds hears about a third of the sheet — and a song whose words arrive
+late is judged on an instrumental runway and thrown away.
+
+Measured over the published songs, the share of the sheet's 4-grams the hear
+lane carried back:
+
+| Song | first 60 s | first 90 s | the whole render |
+| --- | --- | --- | --- |
+| ace-step-compassion | 22.6 % | 31.3 % | 46.1 % |
+| ace-step-dignity | 0 % | 0 % | 0 % |
+| ace-step-forgiveness | 26.5 % | 42.2 % | 56.6 % |
+| ace-step-humility | 21.1 % | 34.0 % | 36.7 % |
+| ace-step-love | 24.9 % | 27.3 % | 28.7 % |
+| az-armour-of-light | 45.5 % | 58.0 % | 55.7 % |
+| az-compassion | 33.5 % | 45.1 % | 57.2 % |
+| az-every-walk | 22.8 % | 30.4 % | 62.0 % |
+| az-fresh-light | 23.6 % | 40.0 % | 66.2 % |
+| az-go-forth | 0 % | 0 % | 0 % |
+| az-god-remembers | 28.0 % | 47.0 % | 68.0 % |
+
+The two wordless renders answer nothing in every window; the sung ones answer
+21 % to 45 % of the sheet in the first minute. The whole render separates the
+same two groups — nothing against 28 % to 68 % — without judging a song by
+its intro, so the audition now hears the whole render
+(`radio producer audition seconds` is `0`, which means the whole render, and a
+number asks for a window instead).
+
+The floor stays where it was: a song must carry at least
+`radio producer min recovery` percent of the words. The floor was measured on
+the sixty-second scale, where a good render reached 21 % to 45 % and a
+wordless one 0 %. On the whole-render scale the same renders reach 28 % to
+68 %, so the floor still means the same thing — a song that carries some of
+its words — and it no longer rejects a good seed for arriving late.
+
 ### The style prompt
 
 The style prompt is the station's voice. The two workflow files carry it as
@@ -808,5 +884,11 @@ the station and the cause is usually the prompt that was passed.
 - `quiz/music_comfyui_runner.test.mjs` — the workflow and mapping pairs, node detection, the mapping spellings, the save format, and the byte sniffing.
 - `quiz/music_say.test.mjs` — the verb side of the music surface.
 - `quiz/yiniana_radio.test.mjs` — the frame reader, the catalogue scan, the programme loop, the slow listener, the http surface, the rotation contract, the order of the programme and the pyash ceremony.
-- `quiz/yiniana_producer.test.mjs` — the lanes, the work list, the seed choice, the publishing, the song that is rejected, and the pyash ceremony.
+- `quiz/yiniana_producer.test.mjs` — the lanes, the work list, the seed choice, the publishing, the song that is rejected, the audition window, the sheet that reuses its card, and the pyash ceremony.
 - `quiz/yiniana_song_import.test.mjs` — the manifest, the song that is already there, the sheet naming, the mp3 the station cannot play, the part file that never lands, and the pyash ceremony.
+- `quiz/learn_card_headings.test.mjs` — the two card depths, the headings an argument may name, the headings a card carries, and the card that matches a depth.
+- `quiz/learn_module.test.mjs` — the learn ceremonies, and the radio card's own ceremonies and prompts.
+- `quiz/learn_internal_examples.test.mjs` — the learn examples, and the radio examples that call the radio stages.
+- `quiz/learn_filename_pipeline.test.mjs` — the card depth and the examples it runs.
+- `quiz/normalize_learn_card.test.mjs` — the heading spellings, the phrase repair, and the radio hook that is kept whole.
+- `quiz/validate_learn_card.test.mjs` — the full card, the radio card, and the phrase limits of each.

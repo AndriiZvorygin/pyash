@@ -11,6 +11,8 @@ export const DEFAULT_CHUNK_OVERLAP = 1800;
 export const DEFAULT_MERGE_GROUP_SIZE = 4;
 export const DEFAULT_STAGE_RETRIES = 3;
 export const DEFAULT_LEARN_PARALLELISM = 4;
+export const RADIO_CARD_DEPTH = "radio";
+export const FULL_CARD_DEPTH = "full";
 const MAX_LEARN_PARALLELISM = 8;
 const PARAGRAPH_BOUNDARY = /\n\s*\n/gmu;
 const CHILD_OLLAMA_TIMEOUT_MS = "600000";
@@ -104,6 +106,35 @@ export function resolveLearnParallelism(value) {
   const numeric = Number(configured);
   if (!Number.isFinite(numeric) || numeric < 1) return DEFAULT_LEARN_PARALLELISM;
   return Math.max(1, Math.min(MAX_LEARN_PARALLELISM, Math.floor(numeric)));
+}
+
+/**
+ * The depth of the card the pipeline writes. The full card is the house's
+ * teaching artifact; the radio card carries only the headings a song uses.
+ * An unknown depth is the full card: the teaching card is always safe.
+ */
+export function resolveCardDepth(value) {
+  const raw = String(value ?? process.env.PYA_RADIO_CARD_DEPTH ?? "").trim().toLowerCase();
+  return raw === RADIO_CARD_DEPTH ? RADIO_CARD_DEPTH : FULL_CARD_DEPTH;
+}
+
+/**
+ * The examples a depth runs. Each depth has its own examples because the
+ * card they write has its own headings.
+ */
+export function cardExamplesForDepth(cardDepth) {
+  const radio = resolveCardDepth(cardDepth) === RADIO_CARD_DEPTH;
+  return {
+    direct: radio
+      ? "examples/pyash/learn-radio-direct-from-filename.pya"
+      : "examples/pyash/learn-direct-from-filename.pya",
+    extract: radio
+      ? "examples/pyash/learn-radio-extract-card-from-filename.pya"
+      : "examples/pyash/learn-extract-card-from-filename.pya",
+    mergeRefine: radio
+      ? "examples/pyash/learn-radio-merge-refine-cards-from-filename.pya"
+      : "examples/pyash/learn-merge-refine-cards-from-filename.pya"
+  };
 }
 
 export async function mapWithConcurrency(items, worker, { concurrency = resolveLearnParallelism() } = {}) {
@@ -613,12 +644,13 @@ async function runPyashExample(examplePath, args, envOverrides = {}, { traceDir 
 export async function runLearnFilenamePipeline({
   sourceFilename,
   learningFocus,
+  cardDepth = resolveCardDepth(),
   readFileFn = (file) => fsp.readFile(file, "utf8"),
   mkdtempFn = (prefix) => fsp.mkdtemp(prefix),
   writeFileFn = (file, text) => fsp.writeFile(file, text),
-  runDirectFn = ({ sourceFilename: file, learningFocus: focus, envOverrides, traceDir, traceLabel, childRunId }) => runPyashExample("examples/pyash/learn-direct-from-filename.pya", [file, focus], envOverrides, { traceDir, traceLabel, childRunId }),
-  runExtractFn = ({ sourceFilename: file, learningFocus: focus, envOverrides, traceDir, traceLabel, childRunId }) => runPyashExample("examples/pyash/learn-extract-card-from-filename.pya", [file, focus], envOverrides, { traceDir, traceLabel, childRunId }),
-  runMergeRefineFn = ({ sourceFilename: source, cardsFilename: cards, learningFocus: focus, envOverrides, traceDir, traceLabel, childRunId }) => runPyashExample("examples/pyash/learn-merge-refine-cards-from-filename.pya", [source, cards, focus], envOverrides, { traceDir, traceLabel, childRunId }),
+  runDirectFn = null,
+  runExtractFn = null,
+  runMergeRefineFn = null,
   parallelism
 }) {
   if (!String(sourceFilename ?? "").trim()) {
@@ -627,6 +659,11 @@ export async function runLearnFilenamePipeline({
   if (!String(learningFocus ?? "").trim()) {
     throw new Error("learn filename pipeline defective: missing learning focus");
   }
+  const depth = resolveCardDepth(cardDepth);
+  const examples = cardExamplesForDepth(depth);
+  const directRunner = runDirectFn ?? (({ sourceFilename: file, learningFocus: focus, envOverrides, traceDir, traceLabel, childRunId }) => runPyashExample(examples.direct, [file, focus], envOverrides, { traceDir, traceLabel, childRunId }));
+  const extractRunner = runExtractFn ?? (({ sourceFilename: file, learningFocus: focus, envOverrides, traceDir, traceLabel, childRunId }) => runPyashExample(examples.extract, [file, focus], envOverrides, { traceDir, traceLabel, childRunId }));
+  const mergeRefineRunner = runMergeRefineFn ?? (({ sourceFilename: source, cardsFilename: cards, learningFocus: focus, envOverrides, traceDir, traceLabel, childRunId }) => runPyashExample(examples.mergeRefine, [source, cards, focus], envOverrides, { traceDir, traceLabel, childRunId }));
   const takeFixtureResponses = createMindFixtureAllocator(process.env.PYA_MIND_RESPONSE);
   const stageParallelism = resolveLearnParallelism(parallelism);
   const sourceText = String(await readFileFn(sourceFilename));
@@ -636,13 +673,14 @@ export async function runLearnFilenamePipeline({
   const artifactRoot = resolvePipelineArtifactRoot();
   logVerbose(`[learn pipeline] source filename: ${sourceFilename}`);
   logVerbose(`[learn pipeline] learning focus: ${learningFocus || "(empty)"}`);
+  logVerbose(`[learn pipeline] card depth: ${depth}`);
   logVerbose(`[learn pipeline] source chars: ${sourceText.length}`);
   const tempRoot = artifactRoot || await mkdtempFn(path.join(os.tmpdir(), "pyash-learn-chunks-"));
   await fsp.mkdir(tempRoot, { recursive: true });
   logVerbose(`[learn pipeline] trace root: ${tempRoot}`);
   if (sourceText.length <= DEFAULT_CHUNK_SIZE) {
     logVerbose("[learn pipeline] mode: single-pass");
-    const direct = normalizeStageResult(await runStageWithRetries("direct", async () => runDirectFn({
+    const direct = normalizeStageResult(await runStageWithRetries("direct", async () => directRunner({
       sourceFilename,
       learningFocus,
       envOverrides: { PYA_MIND_RESPONSE: takeFixtureResponses(4) ?? process.env.PYA_MIND_RESPONSE },
@@ -677,7 +715,7 @@ export async function runLearnFilenamePipeline({
   const chunkCards = await mapWithConcurrency(chunkJobs, async (job) => {
     const idx = job.index;
     logVerbose(`[learn pipeline] extracting chunk ${idx + 1}/${chunks.length} (${job.chunk.length} chars)`);
-    const card = normalizeStageResult(await runStageWithRetries(`chunk ${idx + 1}/${chunks.length}`, async () => runExtractFn({
+    const card = normalizeStageResult(await runStageWithRetries(`chunk ${idx + 1}/${chunks.length}`, async () => extractRunner({
       sourceFilename: job.chunkFilename,
       learningFocus,
       envOverrides: job.envOverrides,
@@ -727,7 +765,7 @@ export async function runLearnFilenamePipeline({
     const mergedCards = await mapWithConcurrency(mergeJobs, async (job) => {
       const { groupLabel, groupDir, cardsFilename, cardCount } = job;
       logVerbose(`[learn pipeline] ${layerLabel} ${groupLabel} starting (${cardCount} cards)`);
-      const merged = normalizeStageResult(await runStageWithRetries(`${layerLabel} ${groupLabel}`, async () => runMergeRefineFn({
+      const merged = normalizeStageResult(await runStageWithRetries(`${layerLabel} ${groupLabel}`, async () => mergeRefineRunner({
         sourceFilename,
         cardsFilename,
         learningFocus,

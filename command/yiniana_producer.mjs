@@ -16,6 +16,7 @@ import { interpret } from "../program/bridge/index.mjs";
 import { resolveConfigBool, resolveConfigMap, resolveConfigMapNum, resolveConfigMapText, resolveConfigNum, resolveConfigText } from "../program/configure/env.mjs";
 import { parseLanes } from "../program/library/radio/rotation.mjs";
 import { recoverRate, transcriptText } from "./yiniana_lyric_recovery.mjs";
+import { readCardIfItMatches } from "./yiniana_lyrics_chain.mjs";
 import { loadDefaultConfig } from "./run_pya_helpers.mjs";
 
 // The lane parser lives with the rotation now. The producer keeps exporting
@@ -25,8 +26,9 @@ export { parseLanes };
 const DEFAULT_LANES = "radio/topics.txt";
 const DEFAULT_SEEDS = 2;
 const DEFAULT_SONGS_PER_RUN = 1;
-const DEFAULT_WINDOW_SECONDS = 60;
-const DEFAULT_MIN_RECOVERY = 10;
+export const DEFAULT_AUDITION_SECONDS = 0;
+export const DEFAULT_CARD_DEPTH = "radio";
+export const DEFAULT_MIN_RECOVERY = 10;
 const DEFAULT_DURATION_SECONDS = 175;
 const DEFAULT_COMFYUI_HOST = "http://localhost:8188";
 const DEFAULT_HOUSEKEEPER_URL = "http://localhost:18886";
@@ -95,14 +97,29 @@ function run(command, args, { cwd = process.cwd(), env = process.env, label = ""
 }
 
 /**
- * Cut the opening of a render into the shape the hear lane takes, and let the
- * hear lane say what it hears. The opening is what decides a song: a render
- * that carries the words from the first minute carries them.
+ * The ffmpeg arguments that cut the render into the shape the hear lane
+ * takes. The whole render is heard by default; a positive number of seconds
+ * hears only the opening.
+ */
+export function buildAuditionArgs({ audioPath, windowPath, auditionSeconds = DEFAULT_AUDITION_SECONDS }) {
+  const args = ["-v", "error", "-y", "-i", audioPath];
+  if (Number(auditionSeconds) > 0) {
+    args.push("-ss", "0", "-to", String(auditionSeconds));
+  }
+  args.push("-ar", "16000", "-ac", "1", windowPath);
+  return args;
+}
+
+/**
+ * Cut the render into the shape the hear lane takes, and let the hear lane
+ * say what it hears. The whole render is heard by default: a window that
+ * covers only the opening judges a song by its intro, and a song whose
+ * words arrive late is thrown away for it.
  */
 export async function scoreRender({
   audioPath,
   sheetPath,
-  windowSeconds = DEFAULT_WINDOW_SECONDS,
+  auditionSeconds = DEFAULT_AUDITION_SECONDS,
   hearBin = "",
   hearModel = "",
   repoRoot = process.cwd(),
@@ -112,13 +129,7 @@ export async function scoreRender({
   await fs.mkdir(dir, { recursive: true });
   const windowPath = path.join(dir, "opening.wav");
   const transcriptPath = path.join(dir, "opening.txt");
-  await run("ffmpeg", [
-    "-v", "error", "-y",
-    "-i", audioPath,
-    "-ss", "0", "-to", String(windowSeconds),
-    "-ar", "16000", "-ac", "1",
-    windowPath
-  ], { label: "ffmpeg window" });
+  await run("ffmpeg", buildAuditionArgs({ audioPath, windowPath, auditionSeconds }), { label: "ffmpeg window" });
   await run(process.execPath, [
     path.join(repoRoot, "command", "whisper_main.mjs"),
     "--input", windowPath,
@@ -182,9 +193,24 @@ async function renderSeed({
 }
 
 /**
+ * The examples that write a sheet. A card the radio already has is never
+ * written twice: when the card is there and it is the card the radio wants,
+ * only the hymn is written from it.
+ */
+export const SHEET_EXAMPLES = {
+  hymn: "examples/pyash/yiniana-radio-hymn.pya",
+  chain: "examples/pyash/yiniana-radio-lyrics.pya"
+};
+
+export async function chooseSheetExample({ teachingPath, cardDepth = DEFAULT_CARD_DEPTH }) {
+  const card = await readCardIfItMatches(teachingPath, cardDepth);
+  return card ? SHEET_EXAMPLES.hymn : SHEET_EXAMPLES.chain;
+}
+
+/**
  * Write the sheet for a topic when the station does not have one yet.
  */
-async function ensureSheet({ repoRoot, topic, radioDirectory, log }) {
+async function ensureSheet({ repoRoot, topic, radioDirectory, cardDepth = DEFAULT_CARD_DEPTH, log }) {
   const sheetPath = path.join(radioDirectory, "lyrics", `song-${topic}.txt`);
   try {
     await fs.access(sheetPath);
@@ -192,10 +218,15 @@ async function ensureSheet({ repoRoot, topic, radioDirectory, log }) {
   } catch {
     // no sheet yet
   }
-  log(`writing the lyrics for ${topic}`);
+  const teachingPath = path.join(radioDirectory, "lyrics", `teaching-${topic}.txt`);
+  const example = await chooseSheetExample({ teachingPath, cardDepth });
+  const card = example === SHEET_EXAMPLES.hymn;
+  log(card
+    ? `writing the lyrics for ${topic} from the card it already has`
+    : `writing the lyrics for ${topic}`);
   await run(process.execPath, [
     path.join(repoRoot, "command", "run_pya_program.mjs"),
-    "examples/pyash/yiniana-radio-lyrics.pya",
+    example,
     "ob", "text", topic, "to", "name", "topic", "ya",
     "ob", "text", radioDirectory, "to", "name", "radio_dir"
   ], { cwd: repoRoot, label: "lyrics chain" });
@@ -217,8 +248,9 @@ export async function produce({
   radioDirectory = "",
   seeds = DEFAULT_SEEDS,
   songsPerRun = DEFAULT_SONGS_PER_RUN,
-  windowSeconds = DEFAULT_WINDOW_SECONDS,
+  auditionSeconds = DEFAULT_AUDITION_SECONDS,
   minRecovery = DEFAULT_MIN_RECOVERY,
+  cardDepth = DEFAULT_CARD_DEPTH,
   hearBin = "",
   hearModel = "",
   comfyHost = DEFAULT_COMFYUI_HOST,
@@ -257,7 +289,7 @@ export async function produce({
       const record = { topic: item.topic, engine: item.engine, status: "skipped", seeds: [], published: "" };
       const workflow = workflows[item.engine];
       const duration = Number(durations[item.engine] ?? DEFAULT_DURATION_SECONDS);
-      const sheetPath = await ensureSheet({ repoRoot, topic: item.topic, radioDirectory: radio, log });
+      const sheetPath = await ensureSheet({ repoRoot, topic: item.topic, radioDirectory: radio, cardDepth, log });
       const lyrics = await fs.readFile(sheetPath, "utf8");
       for (let attempt = 0; attempt < Math.max(1, seeds); attempt += 1) {
         const seed = pickSeed();
@@ -277,7 +309,7 @@ export async function produce({
         const measured = await score({
           audioPath: renderPath,
           sheetPath,
-          windowSeconds,
+          auditionSeconds,
           hearBin,
           hearModel,
           repoRoot
@@ -344,8 +376,9 @@ export async function startProducer({ cwd = process.cwd() } = {}) {
     radioDirectory,
     seeds: resolveConfigNum("radio producer seeds") ?? DEFAULT_SEEDS,
     songsPerRun: resolveConfigNum("radio producer song count") ?? DEFAULT_SONGS_PER_RUN,
-    windowSeconds: resolveConfigNum("radio producer window seconds") ?? DEFAULT_WINDOW_SECONDS,
+    auditionSeconds: resolveConfigNum("radio producer audition seconds") ?? DEFAULT_AUDITION_SECONDS,
     minRecovery: resolveConfigNum("radio producer min recovery") ?? DEFAULT_MIN_RECOVERY,
+    cardDepth: resolveConfigText("radio card depth") ?? DEFAULT_CARD_DEPTH,
     loop: resolveConfigBool("radio producer loop") ?? false,
     pauseSeconds: resolveConfigNum("radio producer pause seconds") ?? 0,
     hearBin: resolveConfigText("hear bin") ?? "",

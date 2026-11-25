@@ -273,3 +273,82 @@ test("verifySongStructure rejects a sheet whose sections are out of the referenc
   assert.equal(verdict.ordered, false);
   assert.deepEqual(verdict.missing, []);
 });
+
+const RADIO_CARD = [
+  "SEED CONCEPT",
+  "The light we carry is the light we give.",
+  "",
+  "CARDINAL TRAINING SENTENCE",
+  "We carry the light we give.",
+  "",
+  "TEACHING PROGRESSION",
+  "- We notice the light",
+  "- We share the light",
+  "- We become the light",
+  "",
+  "CAUSATIVE AND CONSEQUENCE",
+  "- We give, and we receive",
+  "",
+  "CARDINAL SCENES AND IDIOMS",
+  "- A lamp carried through the dark",
+  "",
+  "BRIEF MEMORY PHRASES",
+  "- We carry the light",
+  "- The light we give",
+  "- A lamp in the dark",
+  "- We share what we are"
+].join("\n");
+
+test("the chain keeps a card the radio already wants and never writes it twice", async () => {
+  const root = await makeTempDir("lyrics-chain-");
+  const corpus = path.join(root, "corpus");
+  const radio = path.join(root, "radio");
+  await makeCorpus(corpus);
+  await fs.mkdir(path.join(radio, "lyrics"), { recursive: true });
+  await fs.writeFile(buildTeachingPath(radio, "peace"), RADIO_CARD, "utf8");
+
+  let learned = 0;
+  const result = await runLyricsChain({
+    topic: "peace",
+    radioDir: radio,
+    corpusDir: corpus,
+    cardDepth: "radio",
+    runLearn: async () => {
+      learned += 1;
+      return { card: RADIO_CARD, stderr: "" };
+    }
+  });
+
+  assert.equal(learned, 0, "the card was written again although the radio already had it");
+  assert.equal(result.reused, true);
+  assert.equal(await fs.readFile(result.teachingPath, "utf8"), RADIO_CARD);
+
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test("the chain writes a card of another depth again", async () => {
+  const root = await makeTempDir("lyrics-chain-");
+  const corpus = path.join(root, "corpus");
+  const radio = path.join(root, "radio");
+  await makeCorpus(corpus);
+  await fs.mkdir(path.join(radio, "lyrics"), { recursive: true });
+  await fs.writeFile(buildTeachingPath(radio, "peace"), VALID_CARD, "utf8");
+
+  let learned = 0;
+  const result = await runLyricsChain({
+    topic: "peace",
+    radioDir: radio,
+    corpusDir: corpus,
+    cardDepth: "radio",
+    runLearn: async () => {
+      learned += 1;
+      return { card: RADIO_CARD, stderr: "" };
+    }
+  });
+
+  assert.equal(learned, 1, "the full card is not the card the radio wants");
+  assert.equal(result.reused, false);
+  assert.equal(await fs.readFile(result.teachingPath, "utf8"), RADIO_CARD);
+
+  await fs.rm(root, { recursive: true, force: true });
+});

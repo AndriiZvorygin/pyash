@@ -190,11 +190,12 @@ exists su name radio station name ob text "Yiniana Radio" be default ya
 exists su name radio station command ob text "node command/yiniana_radio.mjs" be default ya
 exists su name radio rotation ob text "radio/rotation.txt" be default ya
 exists su name radio song imports ob text "radio/imports.txt" be default ya
+exists su name radio card depth ob text "radio" be default ya
 exists su name radio producer lanes ob text "radio/topics.txt" be default ya
 exists su name radio producer command ob text "node command/yiniana_producer.mjs" be default ya
 exists su name radio producer seeds ob num 2 be default ya
 exists su name radio producer song count ob num 1 be default ya
-exists su name radio producer window seconds ob num 60 be default ya
+exists su name radio producer audition seconds ob num 0 be default ya
 exists su name radio producer min recovery ob num 10 be default ya
 exists su name radio producer loop ob bool lie be default ya
 exists su name radio producer pause seconds ob num 0 be default ya

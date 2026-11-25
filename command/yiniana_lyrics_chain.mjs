@@ -22,6 +22,10 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 
 import { validateLearnCard } from "./validate_learn_card.mjs";
+import { cardMatchesDepth, headingsForDepth } from "../program/library/learn_card_headings.mjs";
+import { interpret } from "../program/bridge/index.mjs";
+import { resolveConfigText } from "../program/configure/env.mjs";
+import { loadDefaultConfig } from "./run_pya_helpers.mjs";
 
 export const DEFAULT_CORPUS_DIR = "/home/htaf/channelingtxt";
 export const DEFAULT_MAX_FILES = 40;
@@ -29,6 +33,7 @@ export const DEFAULT_CONTEXT_LINES = 2;
 export const DEFAULT_MAX_SOURCE_BYTES = 96 * 1024;
 export const DEFAULT_MAX_FILE_BYTES = 256 * 1024;
 export const LEARN_PIPELINE_TIMEOUT_MS = 45 * 60 * 1000;
+export const DEFAULT_CARD_DEPTH = "radio";
 
 // --------------------------------------------------------------------- paths
 
@@ -171,11 +176,12 @@ export async function writeFileAtomic(target, text) {
 
 // ------------------------------------------------------------- learnteaching
 
-export function runLearnPipeline({ sourcePath, topic, cwd = process.cwd(), timeoutMs = LEARN_PIPELINE_TIMEOUT_MS }) {
+export function runLearnPipeline({ sourcePath, topic, cwd = process.cwd(), cardDepth = DEFAULT_CARD_DEPTH, timeoutMs = LEARN_PIPELINE_TIMEOUT_MS }) {
   const runner = path.join(cwd, "command", "learn_from_filename_pipeline.mjs");
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [runner, sourcePath, topic], {
       cwd,
+      env: { ...process.env, PYA_RADIO_CARD_DEPTH: cardDepth },
       stdio: ["ignore", "pipe", "pipe"]
     });
     let stdout = "";
@@ -258,6 +264,7 @@ export async function runLyricsChain({
   radioDir,
   corpusDir = DEFAULT_CORPUS_DIR,
   runLearn = runLearnPipeline,
+  cardDepth = DEFAULT_CARD_DEPTH,
   cwd = process.cwd()
 } = {}) {
   const sourcePath = buildSourcePath(radioDir, topic);
@@ -269,9 +276,27 @@ export async function runLyricsChain({
   }
   await writeFileAtomic(sourcePath, excerpts.text);
 
-  const learned = await runLearn({ sourcePath, topic, cwd });
+  // A card the radio already has is kept when it is the card the radio wants.
+  // The card is the slow part of the chain, so a card that already fits is
+  // never written twice.
+  const kept = await readCardIfItMatches(teachingPath, cardDepth);
+  if (kept) {
+    return {
+      topic,
+      sourcePath,
+      teachingPath,
+      files: excerpts.files,
+      matches: excerpts.matches,
+      bytes: excerpts.bytes,
+      cardDepth,
+      card: kept,
+      reused: true
+    };
+  }
+
+  const learned = await runLearn({ sourcePath, topic, cwd, cardDepth });
   const card = readCardFromResult(learned.card);
-  const defect = validateLearnCard(card);
+  const defect = validateLearnCard(card, headingsForDepth(cardDepth));
   if (defect) throw new Error(`yiniana lyrics chain: ${defect}`);
   await writeFileAtomic(teachingPath, card);
 
@@ -281,8 +306,27 @@ export async function runLyricsChain({
     teachingPath,
     files: excerpts.files,
     matches: excerpts.matches,
-    bytes: excerpts.bytes
+    bytes: excerpts.bytes,
+    cardDepth,
+    card,
+    reused: false
   };
+}
+
+/**
+ * The card the radio already has for a topic, when it is the card the radio
+ * wants. A card of another depth is not kept: the radio wants its own shape.
+ */
+export async function readCardIfItMatches(teachingPath, cardDepth = DEFAULT_CARD_DEPTH) {
+  let text = "";
+  try {
+    text = await fsp.readFile(teachingPath, "utf8");
+  } catch {
+    return "";
+  }
+  if (!cardMatchesDepth(text, cardDepth)) return "";
+  if (validateLearnCard(text, headingsForDepth(cardDepth))) return "";
+  return text.trim();
 }
 
 function parseArgs(argv) {
@@ -316,7 +360,9 @@ async function main() {
   }
   const radioDir = path.resolve(args.radioDir || path.join(process.cwd(), "radio"));
   const corpusDir = process.env.RADIO_CORPUS_DIR || DEFAULT_CORPUS_DIR;
-  const result = await runLyricsChain({ topic: args.topic, radioDir, corpusDir });
+  await loadDefaultConfig({ cwd: process.cwd(), interpretFn: interpret });
+  const cardDepth = resolveConfigText("radio card depth") || DEFAULT_CARD_DEPTH;
+  const result = await runLyricsChain({ topic: args.topic, radioDir, corpusDir, cardDepth });
   process.stdout.write(`${result.teachingPath}\n`);
 }
 

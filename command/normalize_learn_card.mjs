@@ -1,22 +1,14 @@
 import fs from "node:fs";
 
-const SCHEMA_HEADINGS = [
-  "SEED CONCEPT",
-  "CARDINAL TRAINING SENTENCE",
-  "TEACHING PROGRESSION",
-  "ORTHOGONAL FEATURES",
-  "SURPRISES AND MISUNDERSTANDINGS",
-  "AFFAIRS OR ACTIVITIES",
-  "CAUSATIVE AND CONSEQUENCE",
-  "CARDINAL SCENES AND IDIOMS",
-  "BRIEF MEMORY PHRASES",
-  "CONCEPT RELATIONS"
-];
+import { SCHEMA_HEADINGS, depthFromHeadings, headingsFromArgument } from "../program/library/learn_card_headings.mjs";
 
 const HEADING_ALIASES = new Map([
   ["ORTHOGENAL FEATURES", "ORTHOGONAL FEATURES"],
   ["ORTHOGRANAL FEATURES", "ORTHOGONAL FEATURES"]
 ]);
+
+const FULL_PHRASE_WORD_LIMIT = 6;
+const RADIO_PHRASE_WORD_LIMIT = 8;
 
 function readInput() {
   return fs.readFileSync(0, "utf8");
@@ -46,7 +38,7 @@ function trimDanglingPhrase(text) {
   return phrase;
 }
 
-function toMemoryPhrase(text) {
+function toMemoryPhrase(text, wordLimit = FULL_PHRASE_WORD_LIMIT) {
   const words = String(text ?? "")
     .replace(/^[-*]+\s*/u, "")
     .replace(/[“”"()]/gu, "")
@@ -56,27 +48,29 @@ function toMemoryPhrase(text) {
     .split(" ")
     .filter(Boolean);
   if (words.length < 2) return "";
-  return trimDanglingPhrase(words.slice(0, 6).join(" ").replace(/[.!?]+$/u, ""));
+  return trimDanglingPhrase(words.slice(0, wordLimit).join(" ").replace(/[.!?]+$/u, ""));
 }
 
-function normalizeBriefMemoryPhraseBlock(lines) {
+function normalizeBriefMemoryPhraseBlock(lines, wordLimit = FULL_PHRASE_WORD_LIMIT) {
   const nonEmpty = lines.map(line => String(line ?? "").trim()).filter(Boolean);
   if (nonEmpty.length >= 4 && nonEmpty.length <= 8 && nonEmpty.every(line => line.startsWith("- "))) {
     return nonEmpty.map((line) => {
-      const phrase = toMemoryPhrase(line.slice(2));
+      const phrase = toMemoryPhrase(line.slice(2), wordLimit);
       return phrase ? `- ${phrase}` : line;
     });
   }
+  // A sentence that holds two clauses is two phrases, not one long one: the
+  // clause is kept whole so the phrase still reads like a line of a song.
   const segments = nonEmpty
     .join("\n")
-    .split(/(?:\n+|(?<=[.!?])\s+)/u)
-    .map(toMemoryPhrase)
+    .split(/(?:\n+|(?<=[.!?])\s+|[,;]\s+)/u)
+    .map((segment) => toMemoryPhrase(segment, wordLimit))
     .filter(Boolean);
   const phrases = [];
   const seen = new Set();
   for (const segment of segments) {
     const words = phraseWordCount(segment);
-    if (words < 2 || words > 6) continue;
+    if (words < 2 || words > wordLimit) continue;
     const key = segment.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
@@ -87,12 +81,13 @@ function normalizeBriefMemoryPhraseBlock(lines) {
   return phrases.map(phrase => `- ${phrase}`);
 }
 
-export function normalizeLearnCard(text) {
+export function normalizeLearnCard(text, headings = SCHEMA_HEADINGS) {
   const source = String(text ?? "").replace(/\r\n?/gu, "\n");
   const lines = source.split("\n");
+  const wordLimit = depthFromHeadings(headings) === "radio" ? RADIO_PHRASE_WORD_LIMIT : FULL_PHRASE_WORD_LIMIT;
   const normalized = lines.map((line) => {
     const heading = canonicalHeading(line);
-    const replacement = SCHEMA_HEADINGS.includes(heading) ? heading : "";
+    const replacement = headings.includes(heading) ? heading : "";
     if (!replacement) return line;
     const leading = String(line ?? "").match(/^\s*/u)?.[0] ?? "";
     const trailing = String(line ?? "").match(/\s*$/u)?.[0] ?? "";
@@ -110,12 +105,12 @@ export function normalizeLearnCard(text) {
       body.push(normalized[index]);
       index += 1;
     }
-    repaired.push(...normalizeBriefMemoryPhraseBlock(body));
+    repaired.push(...normalizeBriefMemoryPhraseBlock(body, wordLimit));
     index -= 1;
   }
   return repaired.join("\n");
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  process.stdout.write(normalizeLearnCard(readInput()));
+  process.stdout.write(normalizeLearnCard(readInput(), headingsFromArgument(process.argv.slice(2))));
 }

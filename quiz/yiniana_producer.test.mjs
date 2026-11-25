@@ -10,11 +10,14 @@ import { forget } from "../program/remember/index.mjs";
 
 import {
   buildWorkList,
+  buildAuditionArgs,
+  chooseSheetExample,
   chooseWinner,
   parseLanes,
   pickSeed,
   produce,
-  publishSong
+  publishSong,
+  SHEET_EXAMPLES
 } from "../command/yiniana_producer.mjs";
 
 async function makeStation(root, { lanes = ["dignity", "peace"], published = [] } = {}) {
@@ -196,4 +199,54 @@ test("the pyash ceremony runs the producer command", async () => {
   const output = String(result?.result?.text ?? result?.ob?.text ?? "");
   assert.match(output, /producer-up/u);
   forget();
+});
+
+test("the audition hears the whole render unless a window is asked for", () => {
+  const whole = buildAuditionArgs({ audioPath: "song.mp3", windowPath: "opening.wav" });
+  assert.ok(!whole.includes("-to"), "the whole render is heard, not only its opening");
+  assert.deepEqual(whole, ["-v", "error", "-y", "-i", "song.mp3", "-ar", "16000", "-ac", "1", "opening.wav"]);
+
+  const window = buildAuditionArgs({ audioPath: "song.mp3", windowPath: "opening.wav", auditionSeconds: 60 });
+  assert.deepEqual(window, [
+    "-v", "error", "-y", "-i", "song.mp3", "-ss", "0", "-to", "60", "-ar", "16000", "-ac", "1", "opening.wav"
+  ]);
+});
+
+test("the producer writes only the hymn when the radio already has the card", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "yiniana-producer-"));
+  const radio = await makeStation(root, { lanes: ["dignity"] });
+  const teachingPath = path.join(radio, "lyrics", "teaching-dignity.txt");
+  await fs.writeFile(teachingPath, [
+    "SEED CONCEPT",
+    "The light we carry is the light we give.",
+    "",
+    "CARDINAL TRAINING SENTENCE",
+    "We carry the light we give.",
+    "",
+    "TEACHING PROGRESSION",
+    "- We notice the light",
+    "- We share the light",
+    "- We become the light",
+    "",
+    "CAUSATIVE AND CONSEQUENCE",
+    "- We give, and we receive",
+    "",
+    "CARDINAL SCENES AND IDIOMS",
+    "- A lamp carried through the dark",
+    "",
+    "BRIEF MEMORY PHRASES",
+    "- We carry the light",
+    "- The light we give",
+    "- A lamp in the dark",
+    "- We share what we are"
+  ].join("\n"), "utf8");
+
+  assert.equal(await chooseSheetExample({ teachingPath, cardDepth: "radio" }), SHEET_EXAMPLES.hymn);
+  assert.equal(await chooseSheetExample({ teachingPath, cardDepth: "full" }), SHEET_EXAMPLES.chain,
+    "a card of another depth is written again");
+
+  const missingPath = path.join(radio, "lyrics", "teaching-peace.txt");
+  assert.equal(await chooseSheetExample({ teachingPath: missingPath, cardDepth: "radio" }), SHEET_EXAMPLES.chain);
+
+  await fs.rm(root, { recursive: true, force: true });
 });
