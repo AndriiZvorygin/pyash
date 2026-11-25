@@ -1,4 +1,5 @@
 import { resolveConfigText } from "../configure/env.mjs";
+import { comfyuiRuntimeIsBusy } from "./comfyui_admin_guard.mjs";
 
 function resolveSayHost({ rememberFn } = {}) {
   return (
@@ -68,12 +69,20 @@ export async function dischargeSayBackend({ rememberFn } = {}) {
     return { backend, discharged: false };
   }
   const host = resolveSayHost({ rememberFn }).replace(/\/$/, "");
+  if (await comfyuiRuntimeIsBusy({ providerUrl: host })) {
+    return { backend, discharged: false, reason: "a managed ComfyUI job is running on this runtime" };
+  }
   await postJson(`${host}/free`, { unload_models: true, free_memory: true });
   return { backend, discharged: true };
 }
 
 export async function dischargeQwenSayBackend({ rememberFn } = {}) {
   const host = resolveQwenSayHost({ rememberFn }).replace(/\/$/, "");
+  // The qwen say host and the music host are the same ComfyUI. A render that
+  // is already running must not be cancelled by another surface's discharge.
+  if (await comfyuiRuntimeIsBusy({ providerUrl: host })) {
+    return { host, discharged: false, reason: "a managed ComfyUI job is running on this runtime" };
+  }
   try {
     await postEmpty(`${host}/interrupt`);
   } catch {
