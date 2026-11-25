@@ -120,24 +120,24 @@ test("a player reads the tags of a song from the tag of the file", () => {
   const tagged = writeId3Tags(syntheticMp3(), {
     title: "Lover Is Closer",
     artist: "Andrii Zvorygin",
-    album: "Yiniana Radio",
+    album: "Zvorygin Radio",
     date: "2026-11-22",
     year: "2026",
-    comment: "Yiniana Radio · Andrii Zvorygin · mirror-stranger"
+    comment: "Zvorygin Radio · Andrii Zvorygin · mirror-stranger"
   });
 
   const tags = readId3Tags(tagged);
   assert.equal(tags.title, "Lover Is Closer");
   assert.equal(tags.artist, "Andrii Zvorygin");
-  assert.equal(tags.album, "Yiniana Radio");
+  assert.equal(tags.album, "Zvorygin Radio");
   assert.equal(tags.date, "2026-11-22");
   assert.equal(tags.year, "2026");
-  assert.equal(tags.comment, "Yiniana Radio · Andrii Zvorygin · mirror-stranger");
+  assert.equal(tags.comment, "Zvorygin Radio · Andrii Zvorygin · mirror-stranger");
   assert.deepEqual(id3Frames(tagged).map((frame) => frame.id), ["TIT2", "TPE1", "TALB", "TDRC", "TYER", "COMM"]);
 });
 
 test("the tags of a song are written over the tags the file carried", () => {
-  const once = writeId3Tags(syntheticMp3(), { title: "A Seed Planted", artist: "Yiniana Radio" });
+  const once = writeId3Tags(syntheticMp3(), { title: "A Seed Planted", artist: "Zvorygin Radio" });
   const twice = writeId3Tags(once, { title: "A Seed Was Planted", artist: "Andrii Zvorygin" });
 
   const tags = readId3Tags(twice);

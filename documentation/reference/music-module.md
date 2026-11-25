@@ -113,7 +113,7 @@ Option names are accepted in camel case, snake case and spaced form, so
 `voiceBoost`, `voice_boost` and `voice boost` are the same option.
 
 The radio chain and the two engines it drives are described in
-`documentation/reference/yiniana-radio.md`.
+`documentation/reference/zvorygin-radio.md`.
 
 ## 9. Existing Quiz Coverage
 

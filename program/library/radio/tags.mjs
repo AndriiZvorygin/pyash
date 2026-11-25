@@ -20,15 +20,15 @@ import { parseTrackName } from "./catalogue.mjs";
 /**
  * The album every song of the house belongs to.
  */
-export const ALBUM = "Yiniana Radio";
+export const ALBUM = "Zvorygin Radio";
 
 // The voice behind each engine: who the listener hears, and what made the
 // song. The songs of the house are Andrii Zvorygin's own; the rest the
 // station made for itself.
 const VOICES = {
-  "ace-step": { artist: "Yiniana Radio", label: "ACE-Step 1.5 XL turbo" },
+  "ace-step": { artist: "Zvorygin Radio", label: "ACE-Step 1.5 XL turbo" },
   "az": { artist: "Andrii Zvorygin", label: "Andrii Zvorygin" },
-  "yue2": { artist: "Yiniana Radio", label: "YuE2" }
+  "yue2": { artist: "Zvorygin Radio", label: "YuE2" }
 };
 
 /**

@@ -135,8 +135,8 @@ test("the producer makes the song the catalogue is missing and publishes it", as
   assert.ok(written.includes(syntheticMp3()), "the audio that was rendered is what plays");
   const tags = readId3Tags(written);
   assert.equal(tags.title, "Dignity", "the song is named by the lane it was made for");
-  assert.equal(tags.artist, "Yiniana Radio", "the song is by the house");
-  assert.equal(tags.album, "Yiniana Radio");
+  assert.equal(tags.artist, "Zvorygin Radio", "the song is by the house");
+  assert.equal(tags.album, "Zvorygin Radio");
   assert.match(tags.date, /^\d{4}-\d{2}-\d{2}$/u, "the song carries the day it was made");
   const leftovers = (await fs.readdir(path.join(radio, "audio"))).filter((name) => name.endsWith(".part"));
   assert.deepEqual(leftovers, [], "a half written song was left behind");

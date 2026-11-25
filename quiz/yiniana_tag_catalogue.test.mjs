@@ -57,11 +57,11 @@ test("the tags of every song of the catalogue are written into the songs", async
   const house = readId3Tags(await fs.readFile(path.join(audio, "az-mirror-stranger.mp3")));
   assert.equal(house.title, "Lover Is Closer");
   assert.equal(house.artist, "Andrii Zvorygin");
-  assert.equal(house.album, "Yiniana Radio");
+  assert.equal(house.album, "Zvorygin Radio");
   assert.equal(house.date, "2026-11-22", "the song of the house carries the day it was made");
   const rendered = readId3Tags(await fs.readFile(path.join(audio, "ace-step-grace.mp3")));
   assert.equal(rendered.title, "Grace");
-  assert.equal(rendered.artist, "Yiniana Radio");
+  assert.equal(rendered.artist, "Zvorygin Radio");
   assert.match(rendered.comment, /ACE-Step 1\.5 XL turbo/u, "the song says what made it");
   assert.match(rendered.date, /^\d{4}-\d{2}-\d{2}$/u);
 

@@ -22,7 +22,7 @@ import { loadDefaultConfig } from "./run_pya_helpers.mjs";
 const DEFAULT_HOST = "0.0.0.0";
 const DEFAULT_PORT = 8090;
 const DEFAULT_CATALOGUE = "radio/audio";
-const DEFAULT_STATION_NAME = "Yiniana Radio";
+const DEFAULT_STATION_NAME = "Zvorygin Radio";
 const DEFAULT_LANES = "radio/topics.txt";
 const DEFAULT_ROTATION = "radio/rotation.txt";
 const RESCAN_MS = 15 * 1000;

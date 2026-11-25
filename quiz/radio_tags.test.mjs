@@ -47,17 +47,17 @@ test("the tags of a song carry its name, its author, its album and its day", () 
 
   assert.equal(tags.title, "Lover Is Closer");
   assert.equal(tags.artist, "Andrii Zvorygin");
-  assert.equal(tags.album, "Yiniana Radio");
+  assert.equal(tags.album, "Zvorygin Radio");
   assert.equal(tags.date, "2026-11-22");
-  assert.equal(tags.comment, "Yiniana Radio · Andrii Zvorygin · mirror-stranger");
+  assert.equal(tags.comment, "Zvorygin Radio · Andrii Zvorygin · mirror-stranger");
 });
 
 test("a song without a name of its own is named by the lane it was made for", () => {
   const tags = songTags({ filename: "ace-step-grace.mp3", date: "2026-11-25" });
 
   assert.equal(tags.title, "Grace");
-  assert.equal(tags.artist, "Yiniana Radio");
-  assert.equal(tags.comment, "Yiniana Radio · ACE-Step 1.5 XL turbo · grace");
+  assert.equal(tags.artist, "Zvorygin Radio");
+  assert.equal(tags.comment, "Zvorygin Radio · ACE-Step 1.5 XL turbo · grace");
 });
 
 test("the day of a date is the day the house wrote down", () => {
@@ -152,7 +152,7 @@ test("the catalogue is stamped song by song, and the day of an imported song is 
   assert.equal(imported.date, sourceDay, "the imported song is dated by its source");
   const rendered = readId3Tags(await fs.readFile(path.join(audio, "ace-step-grace.mp3")));
   assert.equal(rendered.title, "Grace");
-  assert.equal(rendered.artist, "Yiniana Radio");
+  assert.equal(rendered.artist, "Zvorygin Radio");
   assert.match(rendered.date, /^\d{4}-\d{2}-\d{2}$/u, "the rendered song is dated by the day it was published");
   await fs.rm(root, { recursive: true, force: true });
 });

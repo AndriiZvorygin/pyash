@@ -1,4 +1,4 @@
-# The Yiniana radio topic rotation.
+# The Zvorygin radio topic rotation.
 #
 # One teaching lane per line, single words: the lyrics chain turns each topic
 # into a source file, a learnteaching and a song. The lanes match the topics

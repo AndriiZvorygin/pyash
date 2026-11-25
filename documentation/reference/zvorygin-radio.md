@@ -1,4 +1,4 @@
-# Yiniana Radio Chain
+# Zvorygin Radio Chain
 
 Status: reference for the local radio station that turns channeling notes into songs.
 Covers the lyrics chain (phase 1), the music engines (phase 2) and the radio
@@ -128,7 +128,7 @@ costs seven.
 ### Step 3 — sing
 
 `module/hymn_manuscript.pya` turns the card into a hymn manuscript with the
-shape of the Yiniana reference song:
+shape of the house reference song:
 
 ```
 [Verse] [Verse] [Chorus] [Verse] [Chorus] [Bridge] [Chorus] [Outro]
@@ -218,7 +218,7 @@ spellings meet.
 
 | Engine | Checkpoint | Length | Notes |
 |---|---|---|---|
-| ACE-Step 1.5 XL turbo | `acestep_v1.5_xl_turbo_bf16.safetensors` | 175 s | The station engine. Its graph is the Yiniana reference's own graph |
+| ACE-Step 1.5 XL turbo | `acestep_v1.5_xl_turbo_bf16.safetensors` | 175 s | The station engine. Its graph is the house reference's own graph |
 | YuE2 | `yue2_3b_int8_convrot.safetensors` | 175 s | A comparison engine: off mode, empty abc, `full` melody and chords |
 
 **ACE-Step turbo is the station's text-to-music flow.** `music workflow default`
@@ -229,7 +229,7 @@ reachable by naming its workflow, but it is not part of the flow.
 ### The reference graph
 
 `music/comfyui/audio_ace_step_1_5_xl_turbo.json` is the ComfyUI prompt graph
-that produced the Yiniana reference song, taken from that song's own ID3 tags.
+that produced the house reference song, taken from that song's own ID3 tags.
 The reference's mp3 carries the full API prompt it was rendered with, so the
 station renders on the same graph rather than on a lookalike:
 
@@ -419,10 +419,10 @@ song in the tag of the file:
 | Tag | Frame | What it says |
 | --- | --- | --- |
 | title | `TIT2` | the name of the song |
-| artist | `TPE1` | who made it: *Andrii Zvorygin* for the songs of the house, *Yiniana Radio* for the songs the station made for itself |
-| album | `TALB` | *Yiniana Radio*, the album every song belongs to |
+| artist | `TPE1` | who made it: *Andrii Zvorygin* for the songs of the house, *Zvorygin Radio* for the songs the station made for itself |
+| album | `TALB` | *Zvorygin Radio*, the album every song belongs to |
 | date | `TDRC` | the day the audio was made |
-| comment | `COMM` | the station, the voice and the lane: *Yiniana Radio · ACE-Step 1.5 XL turbo · grace* |
+| comment | `COMM` | the station, the voice and the lane: *Zvorygin Radio · ACE-Step 1.5 XL turbo · grace* |
 
 The day of a song is written once, when the song enters the catalogue: the
 day of the source of an imported song, and the day the render finished for a
@@ -472,7 +472,7 @@ The settings live in the pyash configuration surface, in `configure/default.pya`
 | `radio host` | `::` | the address the station binds |
 | `radio port` | `8090` | the port the station listens on |
 | `radio catalogue` | `radio/audio` | the folder of rendered songs |
-| `radio station name` | `Yiniana Radio` | the name on the page and in the status |
+| `radio station name` | `Zvorygin Radio` | the name on the page and in the status |
 | `radio station command` | `node command/yiniana_radio.mjs` | the command the pyash ceremony runs |
 | `radio song imports` | `radio/imports.txt` | the manifest of the songs the house made before the radio |
 | `radio tags command` | `node command/yiniana_tag_catalogue.mjs` | the command the pyash ceremony runs to write the tags of the songs |
@@ -974,7 +974,7 @@ double-kick pulse, deep sub kick, acid bassline, supersaw stabs, instant opening
 chorus, key change into final chorus
 ```
 
-`instant opening chorus` is the one tag the Yiniana reference carries that the
+`instant opening chorus` is the one tag the house reference carries that the
 station style did not. It asks the model to open on the chorus instead of
 building towards it, which is what a rendered "cinematic builds" intro sounds
 like: a long instrumental runway before the first word.

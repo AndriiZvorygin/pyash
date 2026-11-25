@@ -416,8 +416,8 @@ test("an ipv6 address in a url is written in brackets", () => {
   assert.equal(formatHost(""), "");
 });
 
-test("the station page carries the station name and the stream", () => {  const page = renderStationPage({ stationName: "Yiniana Radio", streamUrl: "/stream.mp3" });
-  assert.match(page, /Yiniana Radio/u);
+test("the station page carries the station name and the stream", () => {  const page = renderStationPage({ stationName: "Zvorygin Radio", streamUrl: "/stream.mp3" });
+  assert.match(page, /Zvorygin Radio/u);
   assert.match(page, /\/stream\.mp3/u);
   assert.match(page, /<audio/u);
 });
@@ -427,7 +427,7 @@ test("the station answers over http", async () => {
   const track = await writeTrack(root, "ace-step-dignity.mp3", { frames: 40 });
   const station = createRadioStation({ tracks: [track], gapMs: 0 });
   station.start();
-  const { server } = createRadioServer({ station, stationName: "Yiniana Radio" });
+  const { server } = createRadioServer({ station, stationName: "Zvorygin Radio" });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address();
   const base = `http://127.0.0.1:${port}`;
@@ -442,11 +442,11 @@ test("the station answers over http", async () => {
 
   const status = await fetch(`${base}/status.json`);
   const state = await status.json();
-  assert.equal(state.station, "Yiniana Radio");
+  assert.equal(state.station, "Zvorygin Radio");
   assert.equal(state.track.filename, "ace-step-dignity.mp3");
 
   const page = await fetch(`${base}/`);
-  assert.match(await page.text(), /Yiniana Radio/u);
+  assert.match(await page.text(), /Zvorygin Radio/u);
 
   const missing = await fetch(`${base}/nowhere`);
   assert.equal(missing.status, 404);
@@ -467,7 +467,7 @@ test("a malformed request does not take the station down", async () => {
   const track = await writeTrack(root, "ace-step-dignity.mp3", { frames: 40 });
   const station = createRadioStation({ tracks: [track], gapMs: 0 });
   station.start();
-  const { server } = createRadioServer({ station, stationName: "Yiniana Radio" });
+  const { server } = createRadioServer({ station, stationName: "Zvorygin Radio" });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address();
 
@@ -511,7 +511,7 @@ test("a listener can download the song that is playing", async () => {
   const track = await writeTrack(root, "ace-step-dignity.mp3", { frames: 40 });
   const station = createRadioStation({ tracks: [track], gapMs: 0 });
   station.start();
-  const { server } = createRadioServer({ station, stationName: "Yiniana Radio", catalogueDirectory: root });
+  const { server } = createRadioServer({ station, stationName: "Zvorygin Radio", catalogueDirectory: root });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address();
   const base = `http://127.0.0.1:${port}`;
@@ -541,7 +541,7 @@ test("a song that carries its own name is taken home under that name", async () 
   track.title = "Lover Is Closer";
   const station = createRadioStation({ tracks: [track], gapMs: 0 });
   station.start();
-  const { server } = createRadioServer({ station, stationName: "Yiniana Radio", catalogueDirectory: root });
+  const { server } = createRadioServer({ station, stationName: "Zvorygin Radio", catalogueDirectory: root });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address();
   const base = `http://127.0.0.1:${port}`;
@@ -561,7 +561,7 @@ test("a download serves nothing that is not a song of the programme", async () =
   await fs.writeFile(path.join(root, "secret.txt"), "not a song");
   const station = createRadioStation({ tracks: [track], gapMs: 0 });
   station.start();
-  const { server } = createRadioServer({ station, stationName: "Yiniana Radio", catalogueDirectory: root });
+  const { server } = createRadioServer({ station, stationName: "Zvorygin Radio", catalogueDirectory: root });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address();
   const base = `http://127.0.0.1:${port}`;
@@ -583,7 +583,7 @@ test("a download serves nothing that is not a song of the programme", async () =
 });
 
 test("the station page offers the download of the song and of the catalogue", () => {
-  const page = renderStationPage({ stationName: "Yiniana Radio", streamUrl: "/stream.mp3" });
+  const page = renderStationPage({ stationName: "Zvorygin Radio", streamUrl: "/stream.mp3" });
   assert.match(page, /id="now-download"/u);
   assert.match(page, /downloadLink\(status\.track\.downloadUrl/u);
   assert.match(page, /downloadLink\(track\.downloadUrl/u);
@@ -591,7 +591,7 @@ test("the station page offers the download of the song and of the catalogue", ()
 });
 
 test("the station page lists the catalogue in alphabetical order", () => {
-  const page = renderStationPage({ stationName: "Yiniana Radio", streamUrl: "/stream.mp3" });
+  const page = renderStationPage({ stationName: "Zvorygin Radio", streamUrl: "/stream.mp3" });
   assert.match(page, /sort\(\(a, b\) =>/u);
   assert.match(page, /String\(a\.title \?\? ""\)\.localeCompare\(String\(b\.title \?\? ""\)\)/u);
 });

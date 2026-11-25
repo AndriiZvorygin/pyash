@@ -150,7 +150,7 @@ test("a song that is already there is given the name the house gave it", async (
   const tags = readId3Tags(await fs.readFile(published));
   assert.equal(tags.title, "Lover Is Closer");
   assert.equal(tags.artist, "Andrii Zvorygin", "the song says who made it");
-  assert.equal(tags.album, "Yiniana Radio");
+  assert.equal(tags.album, "Zvorygin Radio");
   assert.equal(tags.date, "2026-11-22", "the song carries the day the house made it");
   const tracks = await scanCatalogue({ directory: catalogue });
   assert.equal(tracks[0].title, "Lover Is Closer", "the station shows the name of the song");
