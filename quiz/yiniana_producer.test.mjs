@@ -12,6 +12,7 @@ import {
   buildWorkList,
   chooseWinner,
   parseLanes,
+  pickSeed,
   produce,
   publishSong
 } from "../command/yiniana_producer.mjs";
@@ -73,6 +74,17 @@ test("the producer keeps the seed that carries the most of the words", () => {
   assert.equal(tie.seed, 7);
 });
 
+test("the producer draws a seed the workflow will take", () => {
+  for (let draw = 0; draw < 200; draw += 1) {
+    const seed = pickSeed();
+    assert.ok(Number.isInteger(seed), "the seed is a whole number");
+    assert.ok(seed >= 0, "the seed is never negative");
+    assert.ok(seed < 2 ** 32, "the seed fits the range the workflow takes");
+  }
+  assert.equal(pickSeed(() => 0), 0, "the lowest draw is zero");
+  assert.equal(pickSeed(() => 0.9999999999), 4294967295, "the highest draw is the top of the range");
+});
+
 test("the producer makes the song the catalogue is missing and publishes it", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "yiniana-producer-"));
   const radio = await makeStation(root, { lanes: ["dignity"], published: ["ace-step-dignity.mp3"] });
@@ -103,6 +115,9 @@ test("the producer makes the song the catalogue is missing and publishes it", as
   });
 
   assert.equal(rendered.length, 2, "two seeds were rendered");
+  for (const { seed } of rendered) {
+    assert.ok(seed >= 0, "the seed a render is given is never negative");
+  }
   assert.equal(published.length, 1, "one song was published");
   assert.deepEqual(published, ["yue2-dignity.mp3"], "the lane is filled before the next one starts");
   assert.equal(summary.songs[0].status, "published");

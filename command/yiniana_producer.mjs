@@ -32,6 +32,15 @@ const DEFAULT_COMFYUI_HOST = "http://localhost:8188";
 const DEFAULT_HOUSEKEEPER_URL = "http://localhost:18886";
 
 /**
+ * A seed for a render. The seed is a whole number the workflow takes as it
+ * is, and it is never negative: a node that refuses a negative seed fails
+ * the whole render, so the lottery draws from the non-negative range only.
+ */
+export function pickSeed(random = Math.random) {
+  return Math.floor(random() * 2 ** 32);
+}
+
+/**
  * The songs the catalogue is still missing: every lane, every engine, in the
  * order the rotation should hear them. A song that is already in the
  * catalogue is never made again.
@@ -245,7 +254,7 @@ export async function produce({
     const sheetPath = await ensureSheet({ repoRoot, topic: item.topic, radioDirectory: radio, log });
     const lyrics = await fs.readFile(sheetPath, "utf8");
     for (let attempt = 0; attempt < Math.max(1, seeds); attempt += 1) {
-      const seed = Math.floor((Math.random() * 2 ** 31) - 2 ** 31);
+      const seed = pickSeed();
       const renderPath = path.join(repoRoot, "artifacts", "radio-producer", `${item.engine}-${item.topic}-${seed}.mp3`);
       await fs.mkdir(path.dirname(renderPath), { recursive: true });
       log(`rendering ${item.engine} ${item.topic} with seed ${seed}`);

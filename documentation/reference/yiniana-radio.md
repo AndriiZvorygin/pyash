@@ -483,6 +483,12 @@ A song whose best seed carries less than `radio producer min recovery` percent
 of the words is not published. The lane stays open, and the next run tries
 fresh seeds.
 
+The seed is a whole number and never negative. The lottery draws from 0 to
+2³²−1, because the YuE2 node takes its seed with a minimum of zero and
+refuses a negative one: a negative seed fails the render instead of drawing a
+different song. ACE-Step takes a negative seed, so the failure only showed up
+when the producer reached the second engine of a lane.
+
 ### The settings
 
 | Fact | Default | Meaning |
