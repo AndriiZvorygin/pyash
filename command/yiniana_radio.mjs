@@ -32,13 +32,32 @@ function jsonResponse(res, status, value) {
   res.end(body);
 }
 
+/**
+ * An IPv6 address in a url goes inside brackets, otherwise the port is read
+ * as part of the address.
+ */
+export function formatHost(host) {
+  const value = String(host ?? "").trim();
+  if (!value) return "";
+  if (!value.includes(":")) return value;
+  if (value.includes("]")) return value;
+  return `[${value}]`;
+}
+
 function localAddresses() {
   const out = [];
   for (const entries of Object.values(os.networkInterfaces())) {
     for (const entry of entries ?? []) {
       if (!entry || entry.internal) continue;
-      if (entry.family !== "IPv4" && entry.family !== 4) continue;
-      out.push(entry.address);
+      if (entry.family === "IPv4" || entry.family === 4) {
+        out.push({ address: entry.address, ipv6: false });
+        continue;
+      }
+      if (entry.family === "IPv6" || entry.family === 6) {
+        const address = String(entry.address ?? "");
+        if (!address || address.startsWith("fe80")) continue;
+        out.push({ address, ipv6: true });
+      }
     }
   }
   return out;
@@ -47,11 +66,19 @@ function localAddresses() {
 /**
  * Build the station server. The station object owns the programme; the server
  * only hands it out over HTTP.
+ *
+ * The station listens to the open internet, so nothing a stranger sends may
+ * take it down: a malformed request is answered and the house keeps playing.
  */
 export function createRadioServer({ station, stationName = DEFAULT_STATION_NAME } = {}) {
-  const server = http.createServer((req, res) => {
-    const url = new URL(req.url ?? "/", "http://localhost");
-    const pathname = url.pathname;
+  const handle = (req, res) => {
+    let pathname = "/";
+    try {
+      pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+    } catch {
+      jsonResponse(res, 400, { ok: false, error: "bad request" });
+      return;
+    }
     if (req.method !== "GET" && req.method !== "HEAD") {
       jsonResponse(res, 405, { ok: false, error: "method not allowed" });
       return;
@@ -94,6 +121,23 @@ export function createRadioServer({ station, stationName = DEFAULT_STATION_NAME 
       return;
     }
     jsonResponse(res, 404, { ok: false, error: "not found" });
+  };
+
+  const server = http.createServer((req, res) => {
+    try {
+      handle(req, res);
+    } catch {
+      // A request must never take the station down.
+      if (res.headersSent) {
+        res.destroy();
+        return;
+      }
+      jsonResponse(res, 500, { ok: false, error: "station fault" });
+    }
+  });
+  server.on("clientError", (error, socket) => {
+    if (socket.writable) socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
+    socket.destroy();
   });
   return { server };
 }
@@ -130,9 +174,10 @@ export async function startRadioStation({ cwd = process.cwd(), listen = true } =
     server.once("error", reject);
     server.listen(port, host, resolve);
   });
-  process.stdout.write(`yiniana radio listening on http://${host}:${port}\n`);
-  process.stdout.write(`yiniana radio stream at http://${host}:${port}/stream.mp3\n`);
-  for (const address of localAddresses()) {
+  process.stdout.write(`yiniana radio listening on http://${formatHost(host)}:${port}\n`);
+  process.stdout.write(`yiniana radio stream at http://${formatHost(host)}:${port}/stream.mp3\n`);
+  for (const entry of localAddresses()) {
+    const address = entry.ipv6 ? formatHost(entry.address) : entry.address;
     process.stdout.write(`yiniana radio reachable at http://${address}:${port}\n`);
   }
   if (!tracks.length) {

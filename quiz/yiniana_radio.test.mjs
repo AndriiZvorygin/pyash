@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 
@@ -12,7 +13,7 @@ import { id3v2Size, measureMp3Buffer, parseFrameHeader } from "../program/librar
 import { parseTrackName, publicCatalogue, scanCatalogue } from "../program/library/radio/catalogue.mjs";
 import { renderStationPage } from "../program/library/radio/page.mjs";
 import { createRadioStation } from "../program/library/radio/station.mjs";
-import { createRadioServer } from "../command/yiniana_radio.mjs";
+import { createRadioServer, formatHost } from "../command/yiniana_radio.mjs";
 
 const FRAME_BYTES = Math.floor((144 * 128000) / 44100);
 const FRAME_SECONDS = 1152 / 44100;
@@ -239,8 +240,14 @@ test("a fresh catalogue keeps the song that is playing", async () => {
   station.stop();
 });
 
-test("the station page carries the station name and the stream", () => {
-  const page = renderStationPage({ stationName: "Yiniana Radio", streamUrl: "/stream.mp3" });
+test("an ipv6 address in a url is written in brackets", () => {
+  assert.equal(formatHost("::"), "[::]");
+  assert.equal(formatHost("eb22:3b21:2100:e8c1::"), "[eb22:3b21:2100:e8c1::]");
+  assert.equal(formatHost("0.0.0.0"), "0.0.0.0");
+  assert.equal(formatHost(""), "");
+});
+
+test("the station page carries the station name and the stream", () => {  const page = renderStationPage({ stationName: "Yiniana Radio", streamUrl: "/stream.mp3" });
   assert.match(page, /Yiniana Radio/u);
   assert.match(page, /\/stream\.mp3/u);
   assert.match(page, /<audio/u);
@@ -281,6 +288,38 @@ test("the station answers over http", async () => {
   const first = await reader.read();
   assert.ok(first.value.length > 0, "the stream carried no audio");
   await reader.cancel();
+
+  await new Promise((resolve) => server.close(resolve));
+  station.stop();
+});
+
+test("a malformed request does not take the station down", async () => {
+  const root = await makeTempDir();
+  const track = await writeTrack(root, "ace-step-dignity.mp3", { frames: 40 });
+  const station = createRadioStation({ tracks: [track], gapMs: 0 });
+  station.start();
+  const { server } = createRadioServer({ station, stationName: "Yiniana Radio" });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+
+  // A request target that is not a url at all: the station must answer it
+  // and keep playing.
+  const raw = await new Promise((resolve) => {
+    const socket = net.connect(port, "127.0.0.1", () => {
+      socket.write("GET //%2e%2e%2f%2eenv HTTP/1.1\r\nHost: localhost\r\n\r\n");
+    });
+    let text = "";
+    socket.on("data", (chunk) => {
+      text += chunk.toString("utf8");
+    });
+    socket.on("close", () => resolve(text));
+    socket.on("error", () => resolve(text));
+    setTimeout(() => socket.destroy(), 2000);
+  });
+  assert.match(raw, /^HTTP\/1\.1 400/u);
+
+  const health = await fetch(`http://127.0.0.1:${port}/health`);
+  assert.equal(health.status, 200);
 
   await new Promise((resolve) => server.close(resolve));
   station.stop();

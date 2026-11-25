@@ -320,9 +320,48 @@ The settings live in the pyash configuration surface, in `configure/default.pya`
 The environment overrides the same names: `PYA_RADIO_HOST`, `PYA_RADIO_PORT`,
 `PYA_RADIO_CATALOGUE`, `PYA_RADIO_STATION_NAME`.
 
-The default bind is every interface, so the station can be tuned in from
-another machine on the house network. Set `radio host` to `127.0.0.1` when it
-should only answer on this machine.
+The default bind is every interface over both families — the station answers
+on IPv4 and on IPv6 — so it can be tuned in from another machine on the house
+network and from the tunnel. Set `radio host` to `127.0.0.1` when it should
+only answer on this machine.
+
+### The public address
+
+The station is published at `https://radio.zvorygin.ca/stream.mp3`. The edge
+is Caddy in Docker on the zvorygin host, and it reaches the station over the
+house IPv6 tunnel:
+
+```
+radio.zvorygin.ca  ->  caddy (zvorygin)  ->  [eb22:3b21:2100:e8c1::]:8090  ->  the station (mriczo)
+```
+
+The DNS record is kept by the zvorygin DNS script, `~/byin/dns.zvorygin.ca.sh`
+on the edge host, which publishes the A and AAAA records of every public site
+in the `WEB_FQDNS` list. Caddy takes the certificate for the name through
+ACME.
+
+The Caddy block is in `~/hven/caddy/Caddyfile` on the edge host:
+
+```
+radio.zvorygin.ca {
+	reverse_proxy [eb22:3b21:2100:e8c1::]:8090 {
+		flush_interval -1
+	}
+}
+```
+
+`flush_interval -1` keeps the proxy from holding the programme back: the
+stream is one long lived response.
+
+### Keeping it playing
+
+The station runs as a systemd user unit, `yiniana-radio.service`, so it
+survives a logout and comes back after a crash:
+
+```sh
+systemctl --user status yiniana-radio
+journalctl --user -u yiniana-radio -f
+```
 
 ### Running it
 

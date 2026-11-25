@@ -183,7 +183,7 @@ exists su name zim archive default language ob text "eng" be default ya
 exists su name zim archive default creator ob text "Pyash" be default ya
 exists su name zim archive default publisher ob text "Pyash" be default ya
 exists su name web archive network ob bool truth be default ya
-exists su name radio host ob text "0.0.0.0" be default ya
+exists su name radio host ob text "::" be default ya
 exists su name radio port ob num 8090 be default ya
 exists su name radio catalogue ob text "radio/audio" be default ya
 exists su name radio station name ob text "Yiniana Radio" be default ya
