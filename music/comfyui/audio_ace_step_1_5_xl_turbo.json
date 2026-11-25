@@ -1,97 +1,171 @@
 {
   "prompt": {
     "3": {
-      "class_type": "AceStepSFTModelLoader",
       "inputs": {
-        "diffusion_model": "acestep_v1.5_xl_turbo_bf16.safetensors",
-        "text_encoder_1": "qwen_0.6b_ace15.safetensors",
-        "text_encoder_2": "qwen_1.7b_ace15.safetensors",
-        "vae_name": "ace_1.5_vae.safetensors"
+        "seed": [
+          "109",
+          0
+        ],
+        "steps": 8,
+        "cfg": 1.0,
+        "sampler_name": "euler",
+        "scheduler": "simple",
+        "denoise": 1.0,
+        "model": [
+          "78",
+          0
+        ],
+        "positive": [
+          "94",
+          0
+        ],
+        "negative": [
+          "47",
+          0
+        ],
+        "latent_image": [
+          "98",
+          0
+        ]
+      },
+      "class_type": "KSampler",
+      "_meta": {
+        "title": "KSampler"
       }
     },
-    "4": {
-      "class_type": "AceStepSFTTextEncode",
+    "18": {
       "inputs": {
-        "clip": ["3", 1],
-        "caption": "electronic symphony, electroclash techno, 128 bpm, D minor, mature adult European female vocals, mid-30s voice, low monotone speech-singing verses, warm low-mid timbre, indie pop attitude, crisp mid-range sung chorus, orchestral strings, epic brass stabs, cinematic builds, choir pads, heartbeat rhythm, lub-dub double-kick pulse, deep sub kick, acid bassline, supersaw stabs, key change into final chorus",
+        "samples": [
+          "3",
+          0
+        ],
+        "vae": [
+          "106",
+          0
+        ]
+      },
+      "class_type": "VAEDecodeAudio",
+      "_meta": {
+        "title": "VAE Decode Audio"
+      }
+    },
+    "47": {
+      "inputs": {
+        "conditioning": [
+          "94",
+          0
+        ]
+      },
+      "class_type": "ConditioningZeroOut",
+      "_meta": {
+        "title": "Conditioning Zero Out"
+      }
+    },
+    "78": {
+      "inputs": {
+        "shift": 3.0,
+        "sampling": "flow",
+        "model": [
+          "104",
+          0
+        ]
+      },
+      "class_type": "ModelSamplingAuraFlow",
+      "_meta": {
+        "title": "ModelSamplingAuraFlow"
+      }
+    },
+    "94": {
+      "inputs": {
+        "tags": "electronic symphony, electroclash techno, 128 bpm, D minor, mature adult European female vocals, mid-30s voice, low monotone speech-singing verses, warm low-mid timbre, indie pop attitude, crisp mid-range sung chorus, orchestral strings, epic brass stabs, cinematic builds, choir pads, heartbeat rhythm, lub-dub double-kick pulse, deep sub kick, acid bassline, supersaw stabs, instant opening chorus, key change into final chorus",
         "lyrics": "[Verse]\nYou see a stranger in the mirror and a stranger in the street,\nbut every face is love in costume, and the costume is complete.",
-        "instrumental": false,
-        "seed": 0,
-        "duration": 180.0,
+        "seed": [
+          "109",
+          0
+        ],
         "bpm": 128,
+        "duration": 175.0,
         "timesignature": "4",
         "language": "en",
         "keyscale": "D minor",
         "generate_audio_codes": true,
-        "lm_cfg_scale": 3.0,
-        "lm_temperature": 0.7,
-        "lm_top_p": 0.9,
-        "lm_top_k": 0,
-        "lm_min_p": 0,
-        "lm_negative_prompt": "",
-        "style_bpm": ["21", 0]
+        "cfg_scale": 2.0,
+        "temperature": 0.85,
+        "top_p": 0.9,
+        "top_k": 0,
+        "min_p": 0.0,
+        "clip": [
+          "105",
+          0
+        ]
+      },
+      "class_type": "TextEncodeAceStepAudio1.5",
+      "_meta": {
+        "title": "TextEncodeAceStepAudio1.5"
       }
     },
-    "6": {
-      "class_type": "AceStepSFTGenerate",
+    "98": {
       "inputs": {
-        "model": ["3", 0],
-        "positive": ["4", 0],
-        "negative": ["4", 1],
-        "vae": ["3", 2],
-        "reference_audio": ["11", 0],
-        "seed": 0,
-        "steps": 8,
-        "cfg": 1.0,
-        "sampler_name": "jkass_quality",
-        "scheduler": "ace_step",
-        "denoise": 1.0,
-        "duration": 180.0,
-        "infer_method": "ode",
-        "guidance_mode": "apg",
-        "batch_size": 1,
-        "latent_shift": 0.0,
-        "latent_rescale": 1.0,
-        "fade_in_duration": 0.0,
-        "fade_out_duration": 0.0,
-        "use_tiled_vae": true,
-        "unload_models_after_generate": false,
-        "voice_boost": 3.5,
-        "apg_eta": 0.0,
-        "apg_momentum": -0.75,
-        "apg_norm_threshold": 2.5,
-        "guidance_interval": 0.5,
-        "guidance_schedule": "normal",
-        "min_guidance_scale": 3,
-        "guidance_scale_text": -1.0,
-        "guidance_scale_lyric": -1.0,
-        "omega_scale": 0.0,
-        "erg_scale": 0.0,
-        "cfg_interval_start": 0.0,
-        "cfg_interval_end": 1.0,
-        "shift": 3.0
+        "seconds": 175.0,
+        "batch_size": 1
+      },
+      "class_type": "EmptyAceStep1.5LatentAudio",
+      "_meta": {
+        "title": "Empty Ace Step 1.5 Latent Audio"
       }
     },
-    "11": {
-      "class_type": "AceStepSFTLoadReferenceAudio",
+    "104": {
       "inputs": {
-        "enabled": false,
-        "audio": ""
+        "unet_name": "acestep_v1.5_xl_turbo_bf16.safetensors",
+        "weight_dtype": "default"
+      },
+      "class_type": "UNETLoader",
+      "_meta": {
+        "title": "Load Diffusion Model"
       }
     },
-    "13": {
-      "class_type": "AceStepSFTSaveAudio",
+    "105": {
       "inputs": {
-        "audio": ["6", 5],
+        "clip_name1": "qwen_0.6b_ace15.safetensors",
+        "clip_name2": "qwen_4b_ace15.safetensors",
+        "type": "ace",
+        "device": "default"
+      },
+      "class_type": "DualCLIPLoader",
+      "_meta": {
+        "title": "Load CLIP (Dual)"
+      }
+    },
+    "106": {
+      "inputs": {
+        "vae_name": "ace_1.5_vae.safetensors"
+      },
+      "class_type": "VAELoader",
+      "_meta": {
+        "title": "Load VAE"
+      }
+    },
+    "107": {
+      "inputs": {
         "filename_prefix": "music/ace-step-1-5-xl-turbo",
-        "format": "mp3",
-        "quality": "192k"
+        "quality": "V0",
+        "audio": [
+          "18",
+          0
+        ]
+      },
+      "class_type": "SaveAudioMP3",
+      "_meta": {
+        "title": "Save Audio (MP3) (DEPRECATED)"
       }
     },
-    "21": {
-      "class_type": "PrimitiveInt",
+    "109": {
       "inputs": {
-        "value": 128
+        "value": 20261125
+      },
+      "class_type": "PrimitiveInt",
+      "_meta": {
+        "title": "Int (Seed)"
       }
     }
   }

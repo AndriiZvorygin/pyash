@@ -113,13 +113,36 @@ spellings meet.
 
 | Engine | Checkpoint | Length | Notes |
 |---|---|---|---|
-| ACE-Step 1.5 XL turbo | `acestep_v1.5_xl_turbo_bf16.safetensors` | 180 s | Turbo preset: steps 8, cfg 1.0, ode, shift 3 |
-| YuE2 | `yue2_3b_int8_convrot.safetensors` | 175 s | off mode: empty abc, `full` melody and chords |
+| ACE-Step 1.5 XL turbo | `acestep_v1.5_xl_turbo_bf16.safetensors` | 175 s | The station engine. Its graph is the Yiniana reference's own graph |
+| YuE2 | `yue2_3b_int8_convrot.safetensors` | 175 s | A comparison engine: off mode, empty abc, `full` melody and chords |
 
-Both write mp3 at 192 k through `AceStepSFTSaveAudio`.
+**ACE-Step turbo is the station's text-to-music flow.** `music workflow default`
+in `configure/default.pya` names it, so `be music say do` renders with it and
+nothing else has to be chosen. YuE2 is kept as a comparison engine — it is
+reachable by naming its workflow, but it is not part of the flow.
 
-The ACE-Step workflow is self-contained: the style BPM comes from a
-`PrimitiveInt` node, not from a reference track in the ComfyUI input folder.
+### The reference graph
+
+`music/comfyui/audio_ace_step_1_5_xl_turbo.json` is the ComfyUI prompt graph
+that produced the Yiniana reference song, taken from that song's own ID3 tags.
+The reference's mp3 carries the full API prompt it was rendered with, so the
+station renders on the same graph rather than on a lookalike:
+
+- `UNETLoader` + `DualCLIPLoader` (`qwen_0.6b_ace15` + `qwen_4b_ace15`) +
+  `VAELoader` for the models,
+- `TextEncodeAceStepAudio1.5` for the style caption and the lyrics,
+- `EmptyAceStep1.5LatentAudio` for the length,
+- `ModelSamplingAuraFlow` at shift 3 and `KSampler` at 8 steps, cfg 1.0,
+  euler/simple,
+- `SaveAudioMP3` at V0.
+
+One seed feeds both halves of the render. The sampler seed and the text
+encoder's seed are the same `PrimitiveInt` node, so the audio codes the
+language model writes and the noise the sampler consumes come from one seed.
+The old workflow gave the two halves different seeds.
+
+The length lives in two places — the text encoder's `duration` and the
+latent's `seconds` — and the runner writes the same number to both.
 
 ### Running an engine
 
@@ -127,11 +150,11 @@ The ACE-Step workflow is self-contained: the style BPM comes from a
 PYA_GPU_HOUSEKEEPER_URL=http://localhost:18886 \
   node command/music_comfyui_runner.mjs \
   --lyrics "$(cat radio/lyrics/song-dignity.txt)" \
-  --workflow-name audio_yue2_own_melody \
+  --workflow-name audio_ace_step_1_5_xl_turbo \
   --workflow-root ./music/ \
   --host http://localhost:8188 \
   --options-json '{"seed":20261125,"maxDuration":175}' \
-  --output radio/audio/yue2-dignity.mp3
+  --output radio/audio/ace-step-dignity.mp3
 ```
 
 No `--style` is passed, so the workflow's own caption — the station style — is
@@ -226,9 +249,14 @@ electronic symphony, electroclash techno, 128 bpm, D minor, mature adult Europea
 female vocals, mid-30s voice, low monotone speech-singing verses, warm low-mid
 timbre, indie pop attitude, crisp mid-range sung chorus, orchestral strings,
 epic brass stabs, cinematic builds, choir pads, heartbeat rhythm, lub-dub
-double-kick pulse, deep sub kick, acid bassline, supersaw stabs, key change
-into final chorus
+double-kick pulse, deep sub kick, acid bassline, supersaw stabs, instant opening
+chorus, key change into final chorus
 ```
+
+`instant opening chorus` is the one tag the Yiniana reference carries that the
+station style did not. It asks the model to open on the chorus instead of
+building towards it, which is what a rendered "cinematic builds" intro sounds
+like: a long instrumental runway before the first word.
 
 The runner's `--style` overrides that default. A render that is meant to
 represent the station should not pass `--style` at all, so the shipped default

@@ -181,6 +181,18 @@ function setAtPath(obj, dottedPath, value) {
   cur[parts[parts.length - 1]] = value;
 }
 
+// Reads a dotted path back out, so a caller can tell a plain value from a
+// link to another node.
+function readAtPath(obj, dottedPath) {
+  const parts = String(dottedPath ?? "").split(".");
+  let cur = obj;
+  for (const key of parts) {
+    if (cur === undefined || cur === null || typeof cur !== "object") return undefined;
+    cur = cur[key];
+  }
+  return cur;
+}
+
 function detectInputPath(workflow, promptObject, inputName, preferredNodeType = "") {
   const wanted = String(inputName ?? "").trim().toLowerCase();
   const preferred = (Array.isArray(preferredNodeType) ? preferredNodeType : [preferredNodeType])
@@ -211,15 +223,21 @@ const LYRICS_NODE_TYPES = ["AceStepSFTTextEncode", "YuE2GenerateMusic", "TextEnc
 const STYLE_NODE_TYPES = ["AceStepSFTTextEncode", "YuE2GenerateMusic", "TextEncodeAceStepAudio1.5"];
 const SAMPLER_NODE_TYPES = ["AceStepSFTGenerate", "KSampler"];
 const LATENT_NODE_TYPES = ["EmptyYuE2LatentAudio", "EmptyAceStep1.5LatentAudio"];
-const SAVE_NODE_TYPES = ["AceStepSFTSaveAudio", "SaveAudioOpus", "SaveAudio"];
+const SAVE_NODE_TYPES = ["AceStepSFTSaveAudio", "SaveAudioMP3", "SaveAudioOpus", "SaveAudio"];
+
+// A save node may name its format outright or fix it in the node type.
+const SAVE_NODE_FORMATS = { SaveAudioMP3: "mp3", SaveAudioOpus: "opus" };
 
 // The save node knows which container it will write. The output file must
 // carry that extension, because Icecast is handed the bytes as they are.
 function detectSaveFormat(workflow, promptObject) {
   for (const entry of Object.values(promptObject ?? {})) {
-    if (!SAVE_NODE_TYPES.includes(String(entry?.class_type ?? ""))) continue;
+    const classType = String(entry?.class_type ?? "");
+    if (!SAVE_NODE_TYPES.includes(classType)) continue;
     const format = String(entry?.inputs?.format ?? "").trim().toLowerCase();
     if (format) return format;
+    const fixed = SAVE_NODE_FORMATS[classType];
+    if (fixed) return fixed;
   }
   return "";
 }
@@ -429,9 +447,9 @@ async function main() {
     ["seed", ["seed"]],
     ["steps", ["steps"]],
     ["cfg", ["cfg"]],
-    ["cfgScale", ["cfgScale", "cfg_scale", "cfg scale"]],
+    ["cfgScale", ["cfgScale", "cfg_scale", "cfg scale", "lmCfgScale", "lm_cfg_scale", "lm cfg scale"]],
     ["cfgscale", ["cfgscale", "cfg_scale", "cfg scale"]],
-    ["temperature", ["temperature"]],
+    ["temperature", ["temperature", "lmTemperature", "lm_temperature", "lm temperature"]],
     ["topP", ["topP", "top_p", "top p"]],
     ["topp", ["topp", "top_p", "top p"]],
     ["topK", ["topK", "top_k", "top k"]],
@@ -445,8 +463,6 @@ async function main() {
     ["quality", ["quality"]],
     ["maxDuration", ["maxDuration", "max_duration", "max duration"]],
     ["voiceBoost", ["voiceBoost", "voice_boost", "voice boost"]],
-    ["lmCfgScale", ["lmCfgScale", "lm_cfg_scale", "lm cfg scale"]],
-    ["lmTemperature", ["lmTemperature", "lm_temperature", "lm temperature"]],
     ["repetitionPenalty", ["repetitionPenalty", "repetition_penalty", "repetition penalty"]]
   ]);
 
@@ -477,12 +493,22 @@ async function main() {
     if (resolvedPath) setAtPath(promptObject, resolvedPath, value);
   }
 
-  // The sampler carries a duration of its own; it must agree with the one the
-  // text encoder was given, or the two halves of the song disagree in length.
-  const durationValue = optionsByCanonical.duration ?? optionsByCanonical.Duration;
+  // The text encoder, the latent and the sampler each carry a length of their
+  // own; they must agree, or the two halves of the song disagree in length.
+  const durationValue = optionsByCanonical.duration
+    ?? optionsByCanonical.Duration
+    ?? optionsByCanonical.maxDuration
+    ?? optionsByCanonical.maxduration;
   if (durationValue !== undefined) {
-    const samplerDurationPath = detectInputPath(workflow, promptObject, "duration", SAMPLER_NODE_TYPES);
-    if (samplerDurationPath) setAtPath(promptObject, samplerDurationPath, durationValue);
+    for (const [wanted, types] of [["duration", STYLE_NODE_TYPES], ["duration", SAMPLER_NODE_TYPES], ["seconds", LATENT_NODE_TYPES]]) {
+      const durationPath = detectInputPath(workflow, promptObject, wanted, types);
+      if (!durationPath) continue;
+      // A linked length is driven by the node it points at; overwriting it
+      // would cut the link and let the two halves drift apart.
+      const current = readAtPath(promptObject, durationPath);
+      if (Array.isArray(current)) continue;
+      setAtPath(promptObject, durationPath, durationValue);
+    }
   }
 
   const savePrefixPath = mappingLookup(mapping, "saveAudioPrefixPath");
@@ -593,6 +619,7 @@ export {
   isInterruptedExecution,
   mappingLookup,
   parseOptions,
+  readAtPath,
   readMappingPya,
   setAtPath,
   sniffAudioFormat,

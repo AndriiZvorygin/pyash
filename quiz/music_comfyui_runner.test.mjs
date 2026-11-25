@@ -14,6 +14,7 @@ import {
   isInterruptedExecution,
   formatMatchesExtension,
   mappingLookup,
+  readAtPath,
   readMappingPya,
   setAtPath,
   sniffAudioFormat
@@ -38,17 +39,88 @@ test("the new music workflows ship with their mappings", async () => {
   }
 });
 
-test("the ACE-Step mapping points at the SFT nodes", async () => {
+test("the ACE-Step mapping points at the reference graph nodes", async () => {
   const mapping = await readMappingPya(path.join(MUSIC_ROOT, "audio_ace_step_1_5_xl_turbo.json"));
-  assert.equal(mapping.lyricsPath, "4.inputs.lyrics");
-  assert.equal(mapping.stylePath, "4.inputs.caption");
-  assert.equal(mapping.durationPath, "4.inputs.duration");
-  assert.equal(mapping.seedPath, "6.inputs.seed");
-  assert.equal(mapping.stepsPath, "6.inputs.steps");
-  assert.equal(mapping.cfgPath, "6.inputs.cfg");
-  assert.equal(mapping.samplerNamePath, "6.inputs.sampler_name");
-  assert.equal(mapping.qualityPath, "13.inputs.quality");
-  assert.equal(mapping.saveAudioPrefixPath, "13.inputs.filename_prefix");
+  assert.equal(mapping.lyricsPath, "94.inputs.lyrics");
+  assert.equal(mapping.stylePath, "94.inputs.tags");
+  assert.equal(mapping.durationPath, "94.inputs.duration");
+  assert.equal(mapping.secondsPath, "98.inputs.seconds");
+  assert.equal(mapping.seedPath, "109.inputs.value");
+  assert.equal(mapping.stepsPath, "3.inputs.steps");
+  assert.equal(mapping.cfgPath, "3.inputs.cfg");
+  assert.equal(mapping.samplerNamePath, "3.inputs.sampler_name");
+  assert.equal(mapping.cfgScalePath, "94.inputs.cfg_scale");
+  assert.equal(mapping.temperaturePath, "94.inputs.temperature");
+  assert.equal(mapping.qualityPath, "107.inputs.quality");
+  assert.equal(mapping.saveAudioPrefixPath, "107.inputs.filename_prefix");
+});
+
+test("the ACE-Step workflow is the reference graph, node for node", async () => {
+  const workflow = await readWorkflow("audio_ace_step_1_5_xl_turbo");
+  const prompt = workflow.prompt;
+  const byType = (type) => Object.entries(prompt).find(([, entry]) => entry.class_type === type);
+
+  const sampler = byType("KSampler");
+  assert.ok(sampler, "the reference graph samples with a KSampler");
+  assert.equal(sampler[1].inputs.steps, 8);
+  assert.equal(sampler[1].inputs.cfg, 1.0);
+  assert.equal(sampler[1].inputs.sampler_name, "euler");
+  assert.equal(sampler[1].inputs.scheduler, "simple");
+
+  const flow = byType("ModelSamplingAuraFlow");
+  assert.ok(flow, "the reference graph shifts the model with ModelSamplingAuraFlow");
+  assert.equal(flow[1].inputs.shift, 3.0);
+  assert.equal(flow[1].inputs.sampling, "flow");
+
+  const encode = byType("TextEncodeAceStepAudio1.5");
+  assert.ok(encode, "the reference graph encodes with TextEncodeAceStepAudio1.5");
+  assert.equal(encode[1].inputs.cfg_scale, 2.0);
+  assert.equal(encode[1].inputs.temperature, 0.85);
+  assert.equal(encode[1].inputs.top_p, 0.9);
+  assert.equal(encode[1].inputs.top_k, 0);
+
+  const clip = byType("DualCLIPLoader");
+  assert.ok(clip, "the reference graph loads both ACE text encoders");
+  assert.equal(clip[1].inputs.clip_name2, "qwen_4b_ace15.safetensors");
+
+  const save = byType("SaveAudioMP3");
+  assert.ok(save, "the reference graph saves an mp3");
+  assert.equal(save[1].inputs.quality, "V0");
+  assert.ok(!byType("SaveAudioOpus"), "the station saves one file, not two");
+});
+
+test("one seed feeds both halves of the ACE-Step render", async () => {
+  const workflow = await readWorkflow("audio_ace_step_1_5_xl_turbo");
+  const prompt = workflow.prompt;
+  const seedNode = Object.entries(prompt).find(([, entry]) => entry.class_type === "PrimitiveInt");
+  assert.ok(seedNode, "the reference graph keeps the seed in one node");
+  const [seedId] = seedNode;
+  const sampler = Object.entries(prompt).find(([, entry]) => entry.class_type === "KSampler");
+  const encode = Object.entries(prompt).find(([, entry]) => entry.class_type === "TextEncodeAceStepAudio1.5");
+  assert.deepEqual(sampler[1].inputs.seed, [seedId, 0]);
+  assert.deepEqual(encode[1].inputs.seed, [seedId, 0]);
+});
+
+test("the ACE-Step length is written to the encoder and the latent alike", async () => {
+  const workflow = await readWorkflow("audio_ace_step_1_5_xl_turbo");
+  const prompt = workflow.prompt;
+  const encode = Object.entries(prompt).find(([, e]) => e.class_type === "TextEncodeAceStepAudio1.5");
+  const latent = Object.entries(prompt).find(([, e]) => e.class_type === "EmptyAceStep1.5LatentAudio");
+  assert.equal(encode[1].inputs.duration, 175.0);
+  assert.equal(latent[1].inputs.seconds, 175.0);
+});
+
+test("the station style asks for an instant opening chorus", async () => {
+  const workflow = await readWorkflow("audio_ace_step_1_5_xl_turbo");
+  const prompt = workflow.prompt;
+  const encode = Object.entries(prompt).find(([, e]) => e.class_type === "TextEncodeAceStepAudio1.5");
+  const caption = encode[1].inputs.tags;
+  assert.match(caption, /instant opening chorus/);
+  assert.match(caption, /key change into final chorus/);
+
+  const yue2 = await readWorkflow("audio_yue2_own_melody");
+  const yue2Style = yue2.prompt["5"].inputs.style;
+  assert.match(yue2Style, /instant opening chorus/);
 });
 
 test("the YuE2 mapping points at the YuE2 nodes", async () => {
@@ -61,13 +133,13 @@ test("the YuE2 mapping points at the YuE2 nodes", async () => {
   assert.equal(mapping.saveAudioPrefixPath, "11.inputs.filename_prefix");
 });
 
-test("detectInputPath finds the SFT and YuE2 nodes", async () => {
+test("detectInputPath finds the reference and YuE2 nodes", async () => {
   const aceStep = await readWorkflow("audio_ace_step_1_5_xl_turbo");
   const prompt = aceStep.prompt;
-  assert.equal(detectInputPath(aceStep, prompt, "lyrics", LYRICS_NODE_TYPES), "4.inputs.lyrics");
-  assert.equal(detectInputPath(aceStep, prompt, "caption", STYLE_NODE_TYPES), "4.inputs.caption");
-  assert.equal(detectInputPath(aceStep, prompt, "steps", SAMPLER_NODE_TYPES), "6.inputs.steps");
-  assert.equal(detectInputPath(aceStep, prompt, "filename_prefix", SAVE_NODE_TYPES), "13.inputs.filename_prefix");
+  assert.equal(detectInputPath(aceStep, prompt, "lyrics", LYRICS_NODE_TYPES), "94.inputs.lyrics");
+  assert.equal(detectInputPath(aceStep, prompt, "tags", STYLE_NODE_TYPES), "94.inputs.tags");
+  assert.equal(detectInputPath(aceStep, prompt, "steps", SAMPLER_NODE_TYPES), "3.inputs.steps");
+  assert.equal(detectInputPath(aceStep, prompt, "filename_prefix", SAVE_NODE_TYPES), "107.inputs.filename_prefix");
 
   const yue2 = await readWorkflow("audio_yue2_own_melody");
   assert.equal(detectInputPath(yue2, yue2.prompt, "lyrics", LYRICS_NODE_TYPES), "5.inputs.lyrics");
@@ -106,15 +178,30 @@ test("mappingLookup meets the word spelling with the camel spelling", () => {
 
 test("the mapping files answer to the runner's canonical option names", async () => {
   const aceStep = await readMappingPya(path.join(MUSIC_ROOT, "audio_ace_step_1_5_xl_turbo.json"));
-  assert.equal(mappingLookup(aceStep, "voiceBoostPath"), "6.inputs.voice_boost");
-  assert.equal(mappingLookup(aceStep, "lmCfgScalePath"), "4.inputs.lm_cfg_scale");
-  assert.equal(mappingLookup(aceStep, "samplerNamePath"), "6.inputs.sampler_name");
+  assert.equal(mappingLookup(aceStep, "cfgScalePath"), "94.inputs.cfg_scale");
+  assert.equal(mappingLookup(aceStep, "temperaturePath"), "94.inputs.temperature");
+  assert.equal(mappingLookup(aceStep, "samplerNamePath"), "3.inputs.sampler_name");
+  assert.equal(mappingLookup(aceStep, "maxDurationPath"), "94.inputs.duration");
+  assert.equal(mappingLookup(aceStep, "seedPath"), "109.inputs.value");
 
   const yue2 = await readMappingPya(path.join(MUSIC_ROOT, "audio_yue2_own_melody.json"));
   assert.equal(mappingLookup(yue2, "maxDurationPath"), "5.inputs.max_duration");
   assert.equal(mappingLookup(yue2, "repetitionPenaltyPath"), "5.inputs.repetition_penalty");
   assert.equal(mappingLookup(yue2, "topPPath"), "5.inputs.top_p");
   assert.equal(mappingLookup(yue2, "cfgScalePath"), "5.inputs.cfg_scale");
+});
+
+test("readAtPath reads a value back out of the prompt graph", () => {
+  const prompt = { "3": { inputs: { seed: ["109", 0] } } };
+  assert.deepEqual(readAtPath(prompt, "3.inputs.seed"), ["109", 0]);
+  assert.equal(readAtPath(prompt, "3.inputs.missing"), undefined);
+  assert.equal(readAtPath(prompt, "9.inputs.seed"), undefined);
+});
+
+test("the save node list knows the mp3 node the reference graph uses", () => {
+  assert.ok(SAVE_NODE_TYPES.includes("SaveAudioMP3"));
+  const prompt = { "107": { class_type: "SaveAudioMP3", inputs: { quality: "V0" } } };
+  assert.equal(detectSaveFormat({}, prompt), "mp3");
 });
 
 test("detectSaveFormat reads the container the save node will write", async () => {
