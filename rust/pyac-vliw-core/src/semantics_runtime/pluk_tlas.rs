@@ -406,6 +406,27 @@ fn resolve_vector(
     }
 }
 
+pub(super) fn resolve_named_vector_for_read(
+    words: &[impl VliwWord],
+    codelet_count: usize,
+    before: usize,
+    reference_start: usize,
+    reference_group_len: usize,
+    name: NameSpan,
+) -> Result<CoreResult, u32> {
+    resolve_vector(
+        words,
+        codelet_count,
+        before,
+        reference_start,
+        reference_group_len,
+        TokenSpan {
+            start: name.start,
+            length: name.length,
+        },
+    )
+}
+
 pub(super) fn pluk_tlas_group(
     words: &[impl VliwWord],
     start: usize,

@@ -78,6 +78,9 @@ test("VLIW GPU conformance matrix covers the merged typed and control-flow contr
     "iwsp-qkv-row-projections",
     "iwsp-maximum-index-float32",
     "iwsp-maximum-index-float64",
+    "iwsp-wsd-bank-financial-context",
+    "iwsp-wsd-bank-river-context",
+    "iwsp-wsd-bank-tied-context",
     "float64-dot-product",
     "float32-storage-backed-dot-product-32-lanes",
     "float64-storage-backed-dot-product-17-lanes",
@@ -109,6 +112,30 @@ test("VLIW GPU conformance matrix covers the merged typed and control-flow contr
   for (const testCase of cases) {
     assert.ok(decodePyacPack(testCase.pack).codelets.length > 0, testCase.name + " lowers to PyAC");
     assert.ok(Array.isArray(testCase.expectedValues), testCase.name + " has declared expected values");
+  }
+});
+
+test("IWSP bank sense selection matches an independent prototype-score reference", async () => {
+  const cases = await buildVliwGpuConformanceCases();
+  const prototypes = [[1, 0], [0, 1]];
+  const contexts = [
+    { name: "iwsp-wsd-bank-financial-context", values: [1, 0.25], expectedSense: "n:08437235-n" },
+    { name: "iwsp-wsd-bank-river-context", values: [0.25, 1], expectedSense: "n:09438462-n" },
+    { name: "iwsp-wsd-bank-tied-context", values: [1, 1], expectedSense: "n:08437235-n" }
+  ];
+
+  for (const context of contexts) {
+    const scores = prototypes.map((prototype) =>
+      context.values.reduce((sum, feature, index) => sum + feature * prototype[index], 0)
+    );
+    const expectedIndex = scores.reduce(
+      (best, score, index) => score > scores[best] ? index : best,
+      0
+    );
+    const testCase = cases.find(({ name }) => name === context.name);
+    assert.ok(testCase, `${context.name} is in the conformance matrix`);
+    assert.equal(testCase.expectedValues.at(-1).value, expectedIndex, context.expectedSense);
+    assert.deepEqual(testCase.expectedValues.at(-1), { type: "unsigned", value: expectedIndex });
   }
 });
 

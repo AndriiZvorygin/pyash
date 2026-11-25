@@ -836,13 +836,23 @@ variance and negative epsilon are also checked as domain errors. Full run,
 artifact sizes, and timings are in the
 [Rust VLIW verification ledger](../reference/rust-vliw-verification-ledger.md).
 
-### Stage 9 — Sequence task and cross-target conformance
+### Stage 9 — Minimal feature-based sense selection
 
-**Next rung.** Run the minimal block on a small deterministic sequence task,
-record its VLIW input and outputs, and compare against an independent reference.
-Then run the same conformance cases on other supported targets. Measure
-end-to-end time and dispatch overhead; do not optimize or scale until correctness
-is established.
+**Status: complete (2026-11-25).** The runnable
+`examples/pyash/iwsp-wsd-bank-sense-selection.pya` example uses two explicit
+float32 context features and two hand-authored sense prototypes. Pyash dot
+products (`kl6m psas`) collect the candidate scores in a named vector, and
+maximum-index (`gjat bwit`) selects the sense. The financial-context case
+selects WordNet 2025 `n:08437235-n`; the river-context case selects
+`n:09438462-n`; an exact tie selects the first prototype. A Rust CPU oracle
+and the Housekeeper-routed Mriczo RTX 3090 both verified the same VLIW cases,
+and an independent score calculation checks the expected selections.
+
+This is a transparent feature-to-prototype classifier that validates the
+operation ladder for a tiny WSD task. The context features and prototypes are
+provided directly; this milestone does not encode raw text or implement a
+trained language/WSD network. The complete GPU run, artifact identities, and
+timings are in the [Rust VLIW verification ledger](../reference/rust-vliw-verification-ledger.md).
 
 ### Stage 10 — Visible candidate iteration
 

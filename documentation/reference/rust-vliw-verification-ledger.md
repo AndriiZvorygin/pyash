@@ -4,6 +4,41 @@ Use this file as the lookup record for Rust VLIW CPU/GPU conformance runs. Each
 entry records the repository revision, deployed artifact, host/device, route,
 and exact test outcome. A queued or timed-out job is not a passing test.
 
+## 2026-11-25: Minimal Feature-Based Bank-Sense Selection
+
+The Stage 9 example performs prototype-based selection from explicit
+float32 context features. It scores two named prototypes with the Pyash dot
+product, stores those scores in a prediction vector, and selects the maximum
+index. Financial context selects WordNet 2025 `n:08437235-n`; river context
+selects `n:09438462-n`; the tie case selects the first prototype. The exact
+example was lowered and run through the Rust CPU reference, and the corresponding
+three cases were included in the complete CUDA matrix. This demonstrates the
+VLIW operations needed for a tiny WSD-style classifier; it is not a raw-text
+encoder or a trained WSD network.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261125-0001-rust-vliw-conformance/result.pya` |
+| Source revision / checkout | `0ef2c26a979f0c56a40abe0fd02d4dfc7ccd46ab`; working tree was dirty during run |
+| Tracked patch SHA-256 | `7ae3ebc33796b10e2bc66fc8f04f33296b5267a65988816ec52e4662cd3b73d8` |
+| Host and route | Mriczo client -> Mriczo Housekeeper -> Rust CUDA VLIW runtime |
+| GPU / driver | NVIDIA GeForce RTX 3090, driver `550.163.01`, 24,576 MiB |
+| CUDA image | `sha256:178b01c665acda2ccc0a1b98451a88590862e1ccbef1d541ee3a22a01bf9d776` |
+| Runtime executable | 9,318,808 bytes; SHA-256 `842161492eaf571b4a48a06343cdf57ad4dd72e61f4163da7a34800df7925c0f` |
+| Cubin | 3,341,128 bytes; SHA-256 `671d89f3e45fede729d064cd5f56960ec407ea86da7e59dfeb6dfb631e8eb167` |
+| CPU reference executable | 16,528,720 bytes; SHA-256 `28b62c2aba3a535318d855215f19e2b05d43262fd37f060ca196210f690032a8` |
+| Runtime readiness | CUDA cubin load and GPU initialization: 0.09 s; worker ready in 603 ms |
+| Full verification | 78 successful value/dispatch results and 6 expected errors; 13,442.122 ms total |
+| CPU request batches | 43 codelet cases: 58.339 ms; 32 programlet sections: 65.659 ms |
+| CUDA event batches | 43 codelet cases: 4.302 ms; 32 programlet sections: 121.096 ms |
+| Housekeeper client round trips | Codelet batch: 1,132.205 ms; section batch: 1,129.534 ms |
+| WSD case outputs | Financial `[1, 0.25]` -> scores `[1, 0.25]` -> index `0`; river `[0.25, 1]` -> `[0.25, 1]` -> index `1`; tie `[1, 1]` -> `[1, 1]` -> index `0` |
+| Route after run | New CUDA worker retained on Mriczo; Housekeeper queue drained to zero and dispatch resumed |
+
+The CPU/GPU event batches cover the full conformance workloads, not isolated
+WSD latency. Client round trips include Housekeeper and transport overhead;
+these numbers establish correctness and artifact provenance, not a speedup claim.
+
 ## 2026-11-24: Minimal Role-Projected Transformer Block
 
 Stage 8 of the IWSP roadmap now has an executable Pyash-level block. It composes

@@ -42,7 +42,7 @@ const SECTION_NAMES = [
   "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
   "nineteen", "twenty", "twenty one", "twenty two", "twenty three", "twenty four",
   "twenty five", "twenty six", "twenty seven", "twenty eight", "twenty nine", "zero", "first",
-  "second"
+  "second", "third", "fourth", "fifth"
 ];
 
 export function buildVliwGpuConformanceBatches(cases) {
@@ -352,6 +352,35 @@ export async function buildVliwGpuConformanceCases() {
     "from ve float64 4 9 9 -2 to name num answer be answer do",
     [{ type: "unsigned", value: 1 }]
   );
+  const bankSenseSource = await readFile(
+    new URL("../examples/pyash/iwsp-wsd-bank-sense-selection.pya", import.meta.url),
+    "utf8"
+  );
+  const bankSenseCases = [
+    ["iwsp-wsd-bank-financial-context", [1, 0.25], 0, ["pcan psas", "hwas tlat", "tlat psas", "hwas psas"]],
+    ["iwsp-wsd-bank-river-context", [0.25, 1], 1, ["hyun kl6m", "htis pcun", "hwas hyun", "kl6m hmi7n"]],
+    ["iwsp-wsd-bank-tied-context", [1, 1], 0, ["dlek tfo2t", "hdi7s hmi7n", "tfo2t pcan", "hmi7n hyun"]]
+  ].map(([name, context, expectedIndex, names]) => {
+    const [featureName, predictionName, firstWeightName, secondWeightName] = names;
+    const source = bankSenseSource
+      .replaceAll("candidate prediction", predictionName)
+      .replaceAll("weight money", firstWeightName)
+      .replaceAll("weight river", secondWeightName)
+      .replaceAll("features", featureName)
+      .replace(
+        `su name ${featureName} ob ve float32 1 0.25`,
+        `su name ${featureName} ob ve float32 ${context.join(" ")}`
+      );
+    return codeletPack(name, source.trim().split(/\r?\n/u), [
+      { type: "vector", elementType: "float32", values: context },
+      { type: "vector", elementType: "float32", values: [1, 0] },
+      { type: "vector", elementType: "float32", values: [0, 1] },
+      { type: "vector", elementType: "float32", values: [0, 0] },
+      { type: "float32", value: context[0] },
+      { type: "float32", value: context[1] },
+      { type: "unsigned", value: expectedIndex }
+    ]);
+  });
 
   const cases = [
     programlet(
@@ -479,6 +508,7 @@ export async function buildVliwGpuConformanceCases() {
     qkvProjection,
     maximumIndex,
     maximumIndexF64,
+    ...bankSenseCases,
     codeletPack(
       "float64-dot-product",
       "ob ve float64 0.1 2 -3 by ve float64 0.2 4 -5 be kl6m psas do",

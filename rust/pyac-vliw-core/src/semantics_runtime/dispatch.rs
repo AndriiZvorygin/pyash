@@ -5,6 +5,7 @@ use super::mutable_vector::mutable_vector_group;
 use super::pluk_tlas::pluk_tlas_group;
 use super::scalar_product::scalar_product_group_with_storage;
 use super::signature_dispatch::*;
+use super::vector_argmax::vector_argmax_group;
 use super::vector_group::interpret_vector_group;
 use super::*;
 
@@ -46,6 +47,7 @@ pub fn interpret_group_with_storage(
         )),
         ROUTE_VECTOR_SUM => Some(vector_sum_group(words, start, group_len, codelet_count)),
         ROUTE_VECTOR_MAXIMUM => Some(vector_maximum_group(words, start, group_len, codelet_count)),
+        ROUTE_VECTOR_ARGMAX => Some(vector_argmax_group(words, start, group_len, codelet_count)),
         ROUTE_MUTABLE_VECTOR => mutable_vector_group(words, start, group_len),
         ROUTE_FIXED16 if group_len == 1 => fixed16::single_codelet(words, start),
         ROUTE_FLOAT if group_len == 1 => single_codelet(words, start),

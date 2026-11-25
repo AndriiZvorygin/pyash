@@ -437,6 +437,8 @@ mod storage_sections;
 mod storage_vector;
 #[path = "semantics_runtime/storage_view.rs"]
 mod storage_view;
+#[path = "semantics_runtime/vector_argmax.rs"]
+mod vector_argmax;
 #[path = "semantics_runtime/vector_group.rs"]
 mod vector_group;
 

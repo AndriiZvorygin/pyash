@@ -117,3 +117,5 @@ mod programlet_vectors;
 mod scalar_product;
 #[path = "tests/u16_input.rs"]
 mod u16_input;
+#[path = "tests/vector_argmax.rs"]
+mod vector_argmax;

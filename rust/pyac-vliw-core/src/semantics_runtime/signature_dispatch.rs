@@ -34,6 +34,7 @@ pub(super) const ROUTE_LITERAL: u32 = 0x10d;
 pub(super) const ROUTE_VECTOR_FLOAT_ARITHMETIC: u32 = 0x10e;
 pub(super) const ROUTE_VECTOR_SUM: u32 = 0x10f;
 pub(super) const ROUTE_VECTOR_MAXIMUM: u32 = 0x110;
+pub(super) const ROUTE_VECTOR_ARGMAX: u32 = 0x111;
 
 const VERB_PLUK_TLAS: u32 = 1;
 const VERB_SCALAR_PRODUCT: u32 = 2;
@@ -308,6 +309,16 @@ pub(super) fn select_signature_route(
                 ) =>
         {
             Ok(ROUTE_VECTOR_SUM)
+        }
+        VERB_VECTOR_MAXIMUM
+            if signature.case_count == 2
+                && matches!(
+                    case_type(&signature, ACCUSATIVE),
+                    Some(TYPE_VECTOR_FLOAT32) | Some(TYPE_VECTOR_FLOAT64) | Some(TYPE_NAME)
+                )
+                && case_type(&signature, DESTINATION) == Some(TYPE_NAME_NUMBER) =>
+        {
+            Ok(ROUTE_VECTOR_ARGMAX)
         }
         VERB_VECTOR_MAXIMUM
             if signature.case_count == 1
