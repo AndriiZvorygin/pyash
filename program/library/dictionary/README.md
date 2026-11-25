@@ -9,7 +9,7 @@ The volume format and record grammar are specified in
 `reference.pya` is the generated source snapshot of accepted Pyash vocabulary.
 Its profile-v3 marker describes the source entry grammar; the Rust build
 converts it to the current profile-v4 runtime volume in `reference.pyac`. Both
-contain 64,573 entries. The current v4 volume is 130 MB. The snapshot includes
+contain 64,585 entries. The current v4 volume is 130,632,544 bytes. The snapshot includes
 7,084 promoted SUMO links: 5,658 `superclass-of` and 1,426 `equivalent-to`.
 
 ## Operation signatures
@@ -172,13 +172,14 @@ count. `artifacts/` is git-ignored; use a unique filename for each run and
 retain or copy the record where local benchmark history is maintained.
 
 Current reference-volume verification on Mriczo, 2026-11-25: rebuilding
-`reference.pyac` from the checked-in `reference.pya` parsed 100,269,153 source
-bytes in 12.552 s and completed in 17.506 s. The result contains 64,572 entries
-and 4,065,444 codelets, occupies 130,094,240 bytes, and has SHA-256
-`cfd71496549c629263c74316adc3e5fe510746aea1b86b79bdb24bbfa9424c62`. A
+`reference.pyac` from the checked-in `reference.pya` parsed 100,825,433 source
+bytes and wrote the volume in about 15 s. The result contains 64,585 entries
+and 4,082,266 codelets, occupies 130,632,544 bytes, and has SHA-256
+`a4d7e496908429176a942a972dc8aad6ecea7c4b80fe0bc0e90731ff4fa1f655`. A
 10,000-iteration warmed `en`/`tensor` lookup measured 106,218 ns mean
-(9,414.5 lookups/s), one result per lookup; the release CLI was 1,527,152
-bytes. The local Pyash run record is
+(9,414.5 lookups/s) on the previous volume, one result per lookup; re-measure
+against this one before quoting a rate. The local Pyash run record for that
+earlier measurement is
 `artifacts/dictionary-benchmarks/reference-mriczo-20261125-iwsp-query-link.pya`.
 
 The six-entry example volume's earlier benchmark is not representative of this

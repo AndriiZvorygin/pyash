@@ -377525,9 +377525,7 @@ su name tlat kwon ob text "kcu2n sra7n" as text "en" from text "wordnet" to text
 su name tlat kwon ob text "kcu2n sra7n" from text "kcu2n" at text "component" be text ya
 su name tlat kwon ob text "kcu2n sra7n" from text "sra7n" at text "component" be text ya
 su name tlat kwon ob text "kcu7h" at text "entry" be text ya
-su name tlat kwon ob text "kcu7h" as text "en" from text "choice_gender_" to text "choice_gender_" at text "lexical-form" be text ya
 su name tlat kwon ob text "kcu7h" as text "en" from text "inductive_mood_" to text "inductive_mood_" at text "lexical-form" be text ya
-su name tlat kwon ob text "kcu7h" as text "isv" from text "избрапол" to text "избрапол" at text "lexical-form" be text ya
 su name tlat kwon ob text "kcu7t" at text "entry" be text ya
 su name tlat kwon ob text "kcu7t" as text "en" from text "open_ended" to text "open_ended" at text "lexical-form" be text ya
 su name tlat kwon ob text "kcuc" at text "entry" be text ya
@@ -378151,6 +378149,9 @@ su name tlat kwon ob text "kcuc xwas" as text "wordnet" from text "Open English 
 su name tlat kwon ob text "kcuc xwas" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:02014114-n" with text "relatively small compact tawny-brown heron with nocturnal habits and a booming cry" at text "source-gloss" be text ya
 su name tlat kwon ob text "kcuc xwas" from text "kcuc" at text "component" be text ya
 su name tlat kwon ob text "kcuc xwas" from text "xwas" at text "component" be text ya
+su name tlat kwon ob text "kcuh" at text "entry" be text ya
+su name tlat kwon ob text "kcuh" as text "en" from text "choice_gender_" to text "choice_gender_" at text "lexical-form" be text ya
+su name tlat kwon ob text "kcuh" as text "isv" from text "избрапол" to text "избрапол" at text "lexical-form" be text ya
 su name tlat kwon ob text "kcuk" at text "entry" be text ya
 su name tlat kwon ob text "kcuk" as text "en" from text "school" to text "school" at text "lexical-form" be text ya
 su name tlat kwon ob text "kcuk" as text "zh" from text "学" to text "学" at text "lexical-form" be text ya
@@ -436842,6 +436843,8 @@ su name tlat kwon ob text "kyuc tsim" as text "wordnet" from text "Open English 
 su name tlat kwon ob text "kyuc tsim" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:15263971-n" with text "one of the two seasons in tropical climates, a yearly period of dryness in the tropics" at text "source-gloss" be text ya
 su name tlat kwon ob text "kyuc tsim" from text "kyuc" at text "component" be text ya
 su name tlat kwon ob text "kyuc tsim" from text "tsim" at text "component" be text ya
+su name tlat kwon ob text "kyuh" at text "entry" be text ya
+su name tlat kwon ob text "kyuh" as text "en" from text "social_" to text "social_" at text "lexical-form" be text ya
 su name tlat kwon ob text "kyuk" at text "entry" be text ya
 su name tlat kwon ob text "kyuk" as text "en" from text "neck" to text "neck" at text "lexical-form" be text ya
 su name tlat kwon ob text "kyuk" as text "zh" from text "项" to text "项" at text "lexical-form" be text ya
@@ -611700,7 +611703,6 @@ su name tlat kwon ob text "syi7f" as text "uk" from text "Софія" to text "�
 su name tlat kwon ob text "syi7f" as text "zh" from text "苏菲亚" to text "苏菲亚" at text "lexical-form" be text ya
 su name tlat kwon ob text "syi7h" at text "entry" be text ya
 su name tlat kwon ob text "syi7h" as text "en" from text "existential_clause_" to text "existential_clause_" at text "lexical-form" be text ya
-su name tlat kwon ob text "syi7h" as text "en" from text "social_" to text "social_" at text "lexical-form" be text ya
 su name tlat kwon ob text "syi7h" as text "zh" from text "有" to text "有" at text "lexical-form" be text ya
 su name tlat kwon ob text "syi7h" as text "zh-Latn-pinyin" from text "yǒu" to text "yǒu" at text "lexical-form" be text ya
 su name tlat kwon ob text "syi7k" at text "entry" be text ya

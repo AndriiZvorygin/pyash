@@ -17,7 +17,7 @@ file as authoritative.
 
 The Rust reader (`rust/pyac/src/dictionary/`) searches the volume directly and
 owns the canonical key, surface, source, and operation-signature indexes. It
-currently carries 64,582 keys and 85,553 distinct English surfaces.
+currently carries 64,585 keys and 85,553 distinct English surfaces.
 
 `pyashWords.json` carries 7,841 rows, roughly an eighth of the catalog.
 
