@@ -11,7 +11,7 @@ import { interpret } from "../program/bridge/index.mjs";
 import { forget, remember } from "../program/remember/index.mjs";
 
 import { measureMp3Buffer, parseFrameHeader } from "../program/library/radio/mp3.mjs";
-import { id3v2Size, writeId3Title } from "../program/library/radio/id3.mjs";
+import { id3v2Size, writeId3Tags } from "../program/library/radio/id3.mjs";
 import { parseTrackName, publicCatalogue, scanCatalogue } from "../program/library/radio/catalogue.mjs";
 import { renderStationPage } from "../program/library/radio/page.mjs";
 import { contractNames, contractWithOrder, inContract, orderTracks, parseLanes, parseRotation, readLanes, readRotation } from "../program/library/radio/rotation.mjs";
@@ -168,7 +168,7 @@ test("a song is named by the title it carries, and by its lane when it carries n
   await fs.mkdir(audio, { recursive: true });
   await fs.writeFile(
     path.join(audio, "az-mirror-stranger.mp3"),
-    writeId3Title(syntheticMp3({ frames: 8 }), "Lover Is Closer")
+    writeId3Tags(syntheticMp3({ frames: 8 }), { title: "Lover Is Closer" })
   );
   await fs.writeFile(path.join(audio, "ace-step-dignity.mp3"), syntheticMp3({ frames: 8 }));
 

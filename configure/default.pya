@@ -190,6 +190,7 @@ exists su name radio station name ob text "Yiniana Radio" be default ya
 exists su name radio station command ob text "node command/yiniana_radio.mjs" be default ya
 exists su name radio rotation ob text "radio/rotation.txt" be default ya
 exists su name radio song imports ob text "radio/imports.txt" be default ya
+exists su name radio tags command ob text "node command/yiniana_tag_catalogue.mjs" be default ya
 exists su name radio card depth ob text "radio" be default ya
 exists su name radio producer lanes ob text "radio/topics.txt" be default ya
 exists su name radio producer command ob text "node command/yiniana_producer.mjs" be default ya

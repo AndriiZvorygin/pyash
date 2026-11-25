@@ -18,8 +18,9 @@ import { interpret } from "../program/bridge/index.mjs";
 import { resolveConfigText } from "../program/configure/env.mjs";
 import { parseTrackName } from "../program/library/radio/catalogue.mjs";
 import { parseImports, pendingImports } from "../program/library/radio/imports.mjs";
-import { readId3Title, writeId3Title } from "../program/library/radio/id3.mjs";
+import { writeId3Tags } from "../program/library/radio/id3.mjs";
 import { measureMp3Buffer } from "../program/library/radio/mp3.mjs";
+import { fileDay, readSongTags, songTags, stampSong } from "../program/library/radio/tags.mjs";
 import { loadDefaultConfig } from "./run_pya_helpers.mjs";
 
 const DEFAULT_MANIFEST = "radio/imports.txt";
@@ -107,29 +108,23 @@ export async function publishFile(sourcePath, targetPath) {
 }
 
 /**
- * Give a file in the catalogue its own title. The title is written into the
- * tag of the file, so the station reads it there and the file carries its name
- * with it wherever it goes.
+ * Give a file in the catalogue the tags of a song: the name the house gave
+ * it, who made it, the album it belongs to, and the day the audio was made.
  *
- * A file that already carries the title is left untouched, so the import can
+ * The tags are written into the tag of the file, so the station reads them
+ * there and the file carries them with it wherever it goes.
+ *
+ * A file that already carries the tags is left untouched, so the import can
  * be run again without touching a single byte.
  */
-export async function applyTitle(targetPath, title) {
-  const name = String(title ?? "").trim();
-  if (!name) return false;
-  let buffer = null;
-  try {
-    buffer = await fs.readFile(targetPath);
-  } catch {
-    return false;
-  }
-  if (readId3Title(buffer) === name) return false;
-  const tagged = writeId3Title(buffer, name);
-  if (tagged === buffer) return false;
-  const staging = `${targetPath}.part`;
-  await fs.writeFile(staging, tagged);
-  await fs.rename(staging, targetPath);
-  return true;
+export async function applyTags(targetPath, { title = "", date = "" } = {}) {
+  const current = await readSongTags({ filePath: targetPath });
+  const tags = songTags({
+    filename: path.basename(targetPath),
+    title: current.title || title,
+    date
+  });
+  return stampSong({ targetPath, tags });
 }
 
 /**
@@ -148,10 +143,11 @@ export async function importSong({
   try {
     await fs.access(target);
     // The song is already in the catalogue. The only thing left to do is to
-    // give it the name the house gave it, if the manifest carries one.
-    const titled = await applyTitle(target, entry.title);
-    if (titled) {
-      log(`titled ${entry.name} as ${entry.title}`);
+    // give it the name and the tags the house gave it.
+    const day = entry.source ? await fileDay(entry.source) : "";
+    const tagged = await applyTags(target, { title: entry.title, date: day });
+    if (tagged) {
+      log(`titled ${entry.name} as ${entry.title || path.basename(entry.name, ".mp3")}`);
       return { name: entry.name, status: "titled", title: entry.title, sheet: "" };
     }
     return { name: entry.name, status: "present", sheet: "" };
@@ -169,12 +165,11 @@ export async function importSong({
     await fs.rm(scratch, { force: true });
     throw new Error(`the import of ${entry.name} produced an mp3 the station cannot play`);
   }
-  if (entry.title) {
-    // The song is named before it is published, so the file that lands in the
-    // catalogue already carries its own title.
-    buffer = writeId3Title(buffer, entry.title);
-    await fs.writeFile(scratch, buffer);
-  }
+  // The song is named and dated before it is published, so the file that
+  // lands in the catalogue already carries its own tags.
+  const day = await fileDay(entry.source);
+  buffer = writeId3Tags(buffer, songTags({ filename: entry.name, title: entry.title, date: day }));
+  await fs.writeFile(scratch, buffer);
   await publishFile(scratch, target);
   await fs.rm(scratch, { force: true });
   let sheet = "";

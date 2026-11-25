@@ -19,6 +19,13 @@ import {
   publishSong,
   SHEET_EXAMPLES
 } from "../command/yiniana_producer.mjs";
+import { readId3Tags } from "../program/library/radio/id3.mjs";
+
+function syntheticMp3({ frames = 6 } = {}) {
+  const frame = Buffer.alloc(Math.floor((144 * 128000) / 44100));
+  Buffer.from([0xff, 0xfb, 0x90, 0x00]).copy(frame, 0);
+  return Buffer.concat(Array.from({ length: frames }, () => frame));
+}
 
 async function makeStation(root, { lanes = ["dignity", "peace"], published = [] } = {}) {
   const radio = path.join(root, "radio");
@@ -107,7 +114,7 @@ test("the producer makes the song the catalogue is missing and publishes it", as
     minRecovery: 10,
     render: async ({ outputPath, seed }) => {
       rendered.push({ seed });
-      await fs.writeFile(outputPath, `render ${seed}`);
+      await fs.writeFile(outputPath, syntheticMp3());
       return outputPath;
     },
     score: async () => ({ percent: 40, hits: 40, total: 100, transcript: "words" }),
@@ -124,8 +131,13 @@ test("the producer makes the song the catalogue is missing and publishes it", as
   assert.equal(published.length, 1, "one song was published");
   assert.deepEqual(published, ["yue2-dignity.mp3"], "the lane is filled before the next one starts");
   assert.equal(summary.songs[0].status, "published");
-  const written = await fs.readFile(path.join(radio, "audio", "yue2-dignity.mp3"), "utf8");
-  assert.match(written, /^render /u);
+  const written = await fs.readFile(path.join(radio, "audio", "yue2-dignity.mp3"));
+  assert.ok(written.includes(syntheticMp3()), "the audio that was rendered is what plays");
+  const tags = readId3Tags(written);
+  assert.equal(tags.title, "Dignity", "the song is named by the lane it was made for");
+  assert.equal(tags.artist, "Yiniana Radio", "the song is by the house");
+  assert.equal(tags.album, "Yiniana Radio");
+  assert.match(tags.date, /^\d{4}-\d{2}-\d{2}$/u, "the song carries the day it was made");
   const leftovers = (await fs.readdir(path.join(radio, "audio"))).filter((name) => name.endsWith(".part"));
   assert.deepEqual(leftovers, [], "a half written song was left behind");
 });

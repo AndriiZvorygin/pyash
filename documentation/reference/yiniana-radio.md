@@ -24,6 +24,8 @@ folded back into pyash, because pyash already owns every step of it.
 - Station program: `examples/pyash/yiniana-radio.pya` — the station, wired as pyash sentences.
 - Producer command: `command/yiniana_producer.mjs` — the songs the station is missing.
 - Producer program: `examples/pyash/yiniana-radio-producer.pya` — the producer, wired as pyash sentences.
+- Tag command: `command/yiniana_tag_catalogue.mjs` — the tags a player reads on every song of the catalogue.
+- Tag program: `examples/pyash/yiniana-radio-tags.pya` — the tags, wired as pyash sentences.
 - Lanes: `radio/topics.txt` — the curated topic rotation.
 - Music engines: `music/comfyui/audio_ace_step_1_5_xl_turbo.*`, `music/comfyui/audio_yue2_own_melody.*`.
 - Recovery check: `command/yiniana_lyric_recovery.mjs`.
@@ -339,7 +341,8 @@ station is a few hundred lines of Node and a small frame reader.
 ### The pieces
 
 - `program/library/radio/mp3.mjs` — the frame reader: frame headers, duration, frame clock.
-- `program/library/radio/id3.mjs` — the tag at the head of a file: the title a song carries, written and read.
+- `program/library/radio/id3.mjs` — the tag at the head of a file: the title a song carries, the tags a player reads, written and read.
+- `program/library/radio/tags.mjs` — the tags of a song: who made it, what it belongs to, the day the audio was made, and the stamping of the songs of the catalogue.
 - `program/library/radio/catalogue.mjs` — the catalogue scan: which files are playable, which engine and topic each one carries, which lyric sheet belongs to it.
 - `program/library/radio/rotation.mjs` — the rotation: the lanes, the engines, the names the station is contracted to play.
 - `program/library/radio/station.mjs` — the programme: the loop, the fan-out to listeners, the now playing state.
@@ -407,6 +410,47 @@ playlist and in the now-playing state, so a listener always knows what they are
 hearing. The lane stays the topic either way, so the programme still plays
 the song it contracted to play.
 
+### The tags of a song
+
+A listener plays a song in a player, and a player shows what the file says
+about itself. Every song of the catalogue therefore carries the tags of a
+song in the tag of the file:
+
+| Tag | Frame | What it says |
+| --- | --- | --- |
+| title | `TIT2` | the name of the song |
+| artist | `TPE1` | who made it: *Andrii Zvorygin* for the songs of the house, *Yiniana Radio* for the songs the station made for itself |
+| album | `TALB` | *Yiniana Radio*, the album every song belongs to |
+| date | `TDRC` | the day the audio was made |
+| comment | `COMM` | the station, the voice and the lane: *Yiniana Radio · ACE-Step 1.5 XL turbo · grace* |
+
+The day of a song is written once, when the song enters the catalogue: the
+day of the source of an imported song, and the day the render finished for a
+song the producer made. A later pass fills in what is missing and leaves the
+day alone, because the file's own timestamp moves whenever the file is
+touched.
+
+The three places that put a song on the air write the tags: the import, when
+it brings a song in; the producer, when it publishes a render; and the tag
+command, which walks the catalogue and writes the tags of every song that
+does not carry them yet.
+
+```sh
+cd /home/htaf/pyac/pyash-dev
+PYA_RADIO_CATALOGUE=/home/htaf/pyac/pyash/radio/audio \
+  node command/yiniana_tag_catalogue.mjs
+```
+
+or, as pyash sentences:
+
+```sh
+node command/run_pya_program.mjs examples/pyash/yiniana-radio-tags.pya
+```
+
+The tag is written in front of the same audio the station plays, and the
+song is written beside the catalogue and renamed onto it, so a half written
+song is never on the air.
+
 ### Real time, not file speed
 
 The station reads the frames itself and paces them. Every MPEG layer three
@@ -430,6 +474,8 @@ The settings live in the pyash configuration surface, in `configure/default.pya`
 | `radio catalogue` | `radio/audio` | the folder of rendered songs |
 | `radio station name` | `Yiniana Radio` | the name on the page and in the status |
 | `radio station command` | `node command/yiniana_radio.mjs` | the command the pyash ceremony runs |
+| `radio song imports` | `radio/imports.txt` | the manifest of the songs the house made before the radio |
+| `radio tags command` | `node command/yiniana_tag_catalogue.mjs` | the command the pyash ceremony runs to write the tags of the songs |
 
 The environment overrides the same names: `PYA_RADIO_HOST`, `PYA_RADIO_PORT`,
 `PYA_RADIO_CATALOGUE`, `PYA_RADIO_STATION_NAME`.
@@ -602,8 +648,10 @@ The station plays what has been rendered. The producer is what makes more.
    lyric recovery says how much of the sheet came back. An instrumental render
    answers "(upbeat music)" and recovers nothing.
 4. **Publish.** The winner is copied into the catalogue and renamed into
-   place, so a half written song is never on the air. The station's own
-   catalogue scan takes it from there, within the quarter of a minute.
+   place, so a half written song is never on the air. The song is stamped
+   with the tags of a song — its name, the house that made it, and the day
+   the render finished — before it is heard. The station's own catalogue scan
+   takes it from there, within the quarter of a minute.
 
 A song whose best seed carries less than `radio producer min recovery` percent
 of the words is not published. The lane stays open, and the next run tries
@@ -748,16 +796,17 @@ gave the song, and it is optional too: a song without one is named by its
 lane.
 
 The import turns each song into an mp3 the station can stream, puts it in the
-catalogue, writes the title into the tag of the file, and copies the sheet
-into `radio/lyrics/` under the song's own name. It reads the mp3 back before
-it publishes it, so a file that came out wrong never reaches the air, and it
-renames the finished file into place, so a half written song is never on the
-air either.
+catalogue, writes the tags of the song into the tag of the file, and copies
+the sheet into `radio/lyrics/` under the song's own name. It reads the mp3
+back before it publishes it, so a file that came out wrong never reaches the
+air, and it renames the finished file into place, so a half written song is
+never on the air either.
 
-A song that is already in the catalogue is left alone, apart from its title:
-the import writes the title into a song that does not carry it yet, and
+A song that is already in the catalogue is left alone, apart from its tags:
+the import writes the tags into a song that does not carry them yet, and
 touches nothing else. So the import can be run again whenever the house makes
-more songs, and it is how a song gets the name it had before the radio.
+more songs, and it is how a song gets the name and the day it had before the
+radio.
 
 ```sh
 cd /home/htaf/pyac/pyash-dev
@@ -938,8 +987,9 @@ Every rendered mp3 carries its own ComfyUI prompt in the ID3 `TXXX` tag, so
 the file says what produced it. Read the tag when a render does not sound like
 the station and the cause is usually the prompt that was passed.
 
-The name of a song lives in the same tag, in the `TIT2` frame. The import
-writes it there, so a file carries its own name with it.
+The name of a song lives in the same tag, in the `TIT2` frame, next to the
+artist, the album, the day and the comment. The import and the producer write
+them there, so a file carries its own name with it.
 
 ## 10. Existing Quiz Coverage
 
@@ -950,7 +1000,9 @@ writes it there, so a file carries its own name with it.
 - `quiz/yiniana_radio.test.mjs` — the frame reader, the catalogue scan, the programme loop, the slow listener, the http surface, the download of a song and what a download refuses, the rotation contract, the order of the programme and the pyash ceremony.
 - `quiz/yiniana_producer.test.mjs` — the lanes, the work list, the seed choice, the publishing, the song that is rejected, the audition window, the sheet that reuses its card, and the pyash ceremony.
 - `quiz/yiniana_song_import.test.mjs` — the manifest, the song that is already there, the song that is named, the sheet naming, the mp3 the station cannot play, the part file that never lands, and the pyash ceremony.
-- `quiz/radio_id3.test.mjs` — the title a file carries, the title written onto a file, the frames that are kept, and the tag the writer leaves alone.
+- `quiz/radio_id3.test.mjs` — the title a file carries, the title written onto a file, the frames that are kept, the tag the writer leaves alone, and the tags a player reads.
+- `quiz/radio_tags.test.mjs` — the tags of a song, the voice of an engine, the day a song carries, the day written once, and the catalogue stamped song by song.
+- `quiz/yiniana_tag_catalogue.test.mjs` — the tags of every song of the catalogue, the day of an imported song, and the pyash ceremony.
 - `quiz/learn_card_headings.test.mjs` — the two card depths, the headings an argument may name, the headings a card carries, and the card that matches a depth.
 - `quiz/learn_module.test.mjs` — the learn ceremonies, and the radio card's own ceremonies and prompts.
 - `quiz/learn_internal_examples.test.mjs` — the learn examples, and the radio examples that call the radio stages.

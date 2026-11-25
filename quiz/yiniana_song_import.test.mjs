@@ -27,7 +27,7 @@ import { forget } from "../program/remember/index.mjs";
 
 import { parseTrackName, scanCatalogue } from "../program/library/radio/catalogue.mjs";
 import { parseImports, pendingImports } from "../program/library/radio/imports.mjs";
-import { readId3Title } from "../program/library/radio/id3.mjs";
+import { readId3Tags } from "../program/library/radio/id3.mjs";
 import {
   importSong,
   importSongs,
@@ -137,14 +137,21 @@ test("a song that is already there is given the name the house gave it", async (
   await fs.mkdir(catalogue, { recursive: true });
   const published = path.join(catalogue, "az-mirror-stranger.mp3");
   await fs.writeFile(published, syntheticMp3({ frames: 6 }));
+  const source = path.join(root, "house-song.opus");
+  await fs.writeFile(source, "the song the house made");
+  await fs.utimes(source, new Date(2026, 10, 22), new Date(2026, 10, 22));
 
   const song = await importSong({
-    entry: { name: "az-mirror-stranger.mp3", source: "/nowhere/song.opus", sheet: "", title: "Lover Is Closer" },
+    entry: { name: "az-mirror-stranger.mp3", source, sheet: "", title: "Lover Is Closer" },
     catalogueDirectory: catalogue
   });
 
   assert.equal(song.status, "titled");
-  assert.equal(readId3Title(await fs.readFile(published)), "Lover Is Closer");
+  const tags = readId3Tags(await fs.readFile(published));
+  assert.equal(tags.title, "Lover Is Closer");
+  assert.equal(tags.artist, "Andrii Zvorygin", "the song says who made it");
+  assert.equal(tags.album, "Yiniana Radio");
+  assert.equal(tags.date, "2026-11-22", "the song carries the day the house made it");
   const tracks = await scanCatalogue({ directory: catalogue });
   assert.equal(tracks[0].title, "Lover Is Closer", "the station shows the name of the song");
 });
@@ -155,6 +162,7 @@ test("a song that is brought in is named before it is published", async () => {
   await fs.mkdir(catalogue, { recursive: true });
   const source = path.join(root, "song.opus");
   await fs.writeFile(source, "the song we have");
+  await fs.utimes(source, new Date(2026, 2, 21), new Date(2026, 2, 21));
 
   await importSong({
     entry: { name: "az-open-the-weights.mp3", source, sheet: "", title: "Open the Weights" },
@@ -166,7 +174,10 @@ test("a song that is brought in is named before it is published", async () => {
   });
 
   const published = path.join(catalogue, "az-open-the-weights.mp3");
-  assert.equal(readId3Title(await fs.readFile(published)), "Open the Weights");
+  const tags = readId3Tags(await fs.readFile(published));
+  assert.equal(tags.title, "Open the Weights");
+  assert.equal(tags.artist, "Andrii Zvorygin");
+  assert.equal(tags.date, "2026-03-21", "the song carries the day the house made it");
   const leftovers = (await fs.readdir(catalogue)).filter((name) => name.endsWith(".part"));
   assert.deepEqual(leftovers, [], "no part file was left behind");
 });

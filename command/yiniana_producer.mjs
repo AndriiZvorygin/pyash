@@ -15,6 +15,7 @@ import { fileURLToPath } from "node:url";
 import { interpret } from "../program/bridge/index.mjs";
 import { resolveConfigBool, resolveConfigMap, resolveConfigMapNum, resolveConfigMapText, resolveConfigNum, resolveConfigText } from "../program/configure/env.mjs";
 import { parseLanes } from "../program/library/radio/rotation.mjs";
+import { fileDay, songTags, stampSong } from "../program/library/radio/tags.mjs";
 import { recoverRate, transcriptText } from "./yiniana_lyric_recovery.mjs";
 import { readCardIfItMatches } from "./yiniana_lyrics_chain.mjs";
 import { loadDefaultConfig } from "./run_pya_helpers.mjs";
@@ -331,6 +332,10 @@ export async function produce({
         catalogueDirectory: catalogue,
         filename: item.filename
       });
+      // The song is stamped before it is heard: a player shows who made it,
+      // what it is called, and the day the render finished.
+      const tags = songTags({ filename: item.filename, date: await fileDay(sourcePath) });
+      await stampSong({ targetPath: target, tags });
       record.status = "published";
       record.seed = winner.seed;
       record.percent = winner.percent;

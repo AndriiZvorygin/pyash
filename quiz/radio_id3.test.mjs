@@ -8,7 +8,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { id3Frames, id3v2Size, readId3Title, writeId3Title } from "../program/library/radio/id3.mjs";
+import { id3Frames, id3v2Size, readId3Tags, readId3Title, writeId3Tags } from "../program/library/radio/id3.mjs";
 import { measureMp3Buffer } from "../program/library/radio/mp3.mjs";
 
 const FRAME_BYTES = Math.floor((144 * 128000) / 44100);
@@ -66,7 +66,7 @@ test("the title of a file is the title its tag carries", () => {
 
 test("a title written onto a file can be read back, and the audio is untouched", () => {
   const audio = syntheticMp3({ frames: 8 });
-  const tagged = writeId3Title(audio, "Polish the Armour of Light");
+  const tagged = writeId3Tags(audio, { title: "Polish the Armour of Light" });
 
   assert.equal(readId3Title(tagged), "Polish the Armour of Light");
   assert.ok(tagged.includes(audio), "the audio the station plays is still there");
@@ -76,8 +76,8 @@ test("a title written onto a file can be read back, and the audio is untouched",
 });
 
 test("a title written twice is the title that was written last", () => {
-  const once = writeId3Title(syntheticMp3(), "A Seed Planted");
-  const twice = writeId3Title(once, "A Seed Was Planted");
+  const once = writeId3Tags(syntheticMp3(), { title: "A Seed Planted" });
+  const twice = writeId3Tags(once, { title: "A Seed Was Planted" });
 
   assert.equal(readId3Title(twice), "A Seed Was Planted");
   assert.equal(id3Frames(twice).filter((frame) => frame.id === "TIT2").length, 1, "there is one title, not two");
@@ -89,7 +89,7 @@ test("a title written onto a file keeps the frames the file already carried", ()
     Buffer.from("prompt\0", "utf8"),
     Buffer.from("{\"3\": \"inputs\"}", "utf8")
   ]));
-  const tagged = writeId3Title(taggedMp3([prompt]), "God Remembers All");
+  const tagged = writeId3Tags(taggedMp3([prompt]), { title: "God Remembers All" });
 
   const frames = id3Frames(tagged);
   assert.deepEqual(frames.map((frame) => frame.id), ["TXXX", "TIT2"], "the prompt is still in the tag");
@@ -106,12 +106,51 @@ test("a tag the writer does not know is left alone rather than rewritten from a 
   const tagged = Buffer.concat([header, Buffer.alloc(4), audio]);
 
   assert.equal(readId3Title(tagged), "");
-  assert.equal(writeId3Title(tagged, "True Power"), tagged, "the file is left as it was");
+  assert.equal(writeId3Tags(tagged, { title: "True Power" }), tagged, "the file is left as it was");
 });
 
 test("an empty title is not a title, and a file that is not audio is not touched", () => {
   const audio = syntheticMp3();
 
-  assert.equal(writeId3Title(audio, "   "), audio, "an empty title changes nothing");
-  assert.equal(writeId3Title("not audio", "Lover Is Closer"), "not audio");
+  assert.equal(writeId3Tags(audio, { title: "   " }), audio, "an empty title changes nothing");
+  assert.equal(writeId3Tags("not audio", { title: "Lover Is Closer" }), "not audio");
+});
+
+test("a player reads the tags of a song from the tag of the file", () => {
+  const tagged = writeId3Tags(syntheticMp3(), {
+    title: "Lover Is Closer",
+    artist: "Andrii Zvorygin",
+    album: "Yiniana Radio",
+    date: "2026-11-22",
+    year: "2026",
+    comment: "Yiniana Radio · Andrii Zvorygin · mirror-stranger"
+  });
+
+  const tags = readId3Tags(tagged);
+  assert.equal(tags.title, "Lover Is Closer");
+  assert.equal(tags.artist, "Andrii Zvorygin");
+  assert.equal(tags.album, "Yiniana Radio");
+  assert.equal(tags.date, "2026-11-22");
+  assert.equal(tags.year, "2026");
+  assert.equal(tags.comment, "Yiniana Radio · Andrii Zvorygin · mirror-stranger");
+  assert.deepEqual(id3Frames(tagged).map((frame) => frame.id), ["TIT2", "TPE1", "TALB", "TDRC", "TYER", "COMM"]);
+});
+
+test("the tags of a song are written over the tags the file carried", () => {
+  const once = writeId3Tags(syntheticMp3(), { title: "A Seed Planted", artist: "Yiniana Radio" });
+  const twice = writeId3Tags(once, { title: "A Seed Was Planted", artist: "Andrii Zvorygin" });
+
+  const tags = readId3Tags(twice);
+  assert.equal(tags.title, "A Seed Was Planted");
+  assert.equal(tags.artist, "Andrii Zvorygin");
+  assert.deepEqual(id3Frames(twice).map((frame) => frame.id), ["TIT2", "TPE1"]);
+});
+
+test("a tag the house has decided against does not linger", () => {
+  const tagged = writeId3Tags(syntheticMp3(), { title: "Grace", date: "2026-11-22", year: "2026" });
+  assert.deepEqual(id3Frames(tagged).map((frame) => frame.id), ["TIT2", "TDRC", "TYER"]);
+
+  const cleaned = writeId3Tags(tagged, { year: null });
+  assert.deepEqual(id3Frames(cleaned).map((frame) => frame.id), ["TIT2", "TDRC"]);
+  assert.equal(readId3Tags(cleaned).date, "2026-11-22", "the day of the song is still there");
 });

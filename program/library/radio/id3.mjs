@@ -6,10 +6,22 @@
 //
 // The tag is read and written here, and nowhere else: one place owns the
 // bytes of the tag, so a title written once is a title every reader sees.
+// The frames the house writes are the ones a player shows: who made the song,
+// what it is called, the album it belongs to, when the audio was made, and
+// a word about the song itself.
 
 const HEADER_BYTES = 10;
-const TITLE_FRAME = "TIT2";
 const UTF8_ENCODING = 3;
+const LANGUAGE = "eng";
+
+const FRAME_FIELDS = [
+  { key: "title", id: "TIT2" },
+  { key: "artist", id: "TPE1" },
+  { key: "album", id: "TALB" },
+  { key: "date", id: "TDRC" },
+  { key: "year", id: "TYER" },
+  { key: "comment", id: "COMM" }
+];
 
 /**
  * Read a four byte size that is stored as seven bits per byte.
@@ -64,7 +76,7 @@ export function id3v2Size(buffer) {
  */
 function swap16(buffer) {
   const out = Buffer.from(buffer);
-  for (let index = 0; index + 1 < out.length; index += 2) {
+  for (let index = 0; index + 1 < out.length; index += 1) {
     const first = out[index];
     out[index] = out[index + 1];
     out[index + 1] = first;
@@ -100,6 +112,19 @@ function decodeText(data) {
 }
 
 /**
+ * Read a comment: the way it is written, the language it is in, the name of
+ * the comment, and the comment itself.
+ */
+function decodeComment(data) {
+  if (!Buffer.isBuffer(data) || data.length < 5) return "";
+  const encoding = data[0];
+  const body = data.subarray(4);
+  const cut = body.indexOf(0);
+  const text = cut >= 0 ? body.subarray(cut + 1) : body;
+  return decodeText(Buffer.concat([Buffer.from([encoding]), text]));
+}
+
+/**
  * The frames of the tag at the head of the buffer. A frame is an id, a size
  * and the bytes of the frame; the walk stops at the first thing that is not a
  * frame, which is where the padding begins.
@@ -132,12 +157,32 @@ export function id3Frames(buffer) {
 }
 
 /**
+ * The text of one frame of the tag, empty when the tag does not carry it.
+ */
+export function readId3Frame(buffer, id) {
+  const frame = id3Frames(buffer).find((entry) => entry.id === id);
+  if (!frame) return "";
+  return id === "COMM" ? decodeComment(frame.data) : decodeText(frame.data);
+}
+
+/**
+ * The tags of the file, as a player reads them: the name of the song, who
+ * made it, the album it belongs to, when the audio was made, and the word
+ * about the song.
+ */
+export function readId3Tags(buffer) {
+  const tags = {};
+  for (const field of FRAME_FIELDS) {
+    tags[field.key] = readId3Frame(buffer, field.id);
+  }
+  return tags;
+}
+
+/**
  * The title a file carries, empty when it carries none.
  */
 export function readId3Title(buffer) {
-  const frame = id3Frames(buffer).find((entry) => entry.id === TITLE_FRAME);
-  if (!frame) return "";
-  return decodeText(frame.data);
+  return readId3Frame(buffer, "TIT2");
 }
 
 /**
@@ -151,28 +196,77 @@ function buildFrame(id, data) {
 }
 
 /**
- * Give a file its own title. The frames the file already carries are kept,
- * the title is replaced or added, and the audio is untouched: the tag is
- * written in front of the same bytes the station already plays.
+ * The bytes of a text frame: how it is written, the text, and the end of it.
+ */
+function textFrameData(text) {
+  return Buffer.concat([
+    Buffer.from([UTF8_ENCODING]),
+    Buffer.from(String(text ?? ""), "utf8"),
+    Buffer.from([0])
+  ]);
+}
+
+/**
+ * The bytes of a comment frame: how it is written, the language it is in, the
+ * empty name of the comment, the comment, and the end of it.
+ */
+function commentFrameData(text) {
+  return Buffer.concat([
+    Buffer.from([UTF8_ENCODING]),
+    Buffer.from(LANGUAGE, "latin1"),
+    Buffer.from([0]),
+    Buffer.from(String(text ?? ""), "utf8"),
+    Buffer.from([0])
+  ]);
+}
+
+/**
+ * The frames the given tags ask for, in the order a player reads them.
+ *
+ * A field that is null is removed from the file: a tag the house has decided
+ * against does not linger.
+ */
+function tagFrames(tags = {}) {
+  const frames = [];
+  const removed = [];
+  for (const field of FRAME_FIELDS) {
+    const value = tags[field.key];
+    if (value === null) {
+      removed.push(field.id);
+      continue;
+    }
+    const text = String(value ?? "").trim();
+    if (!text) continue;
+    const data = field.id === "COMM" ? commentFrameData(text) : textFrameData(text);
+    frames.push({ id: field.id, data });
+  }
+  return { frames, removed };
+}
+
+/**
+ * Give a file the tags of a song. The frames the file already carries are
+ * kept, the frames of the given tags are replaced or added, and the audio is
+ * untouched: the tag is written in front of the same bytes the station
+ * already plays.
  *
  * A file whose tag carries flags the writer does not know is left alone
  * rather than rewritten from a guess.
  */
-export function writeId3Title(buffer, title) {
-  const name = String(title ?? "").trim();
-  if (!Buffer.isBuffer(buffer) || !name) return buffer;
+export function writeId3Tags(buffer, tags = {}) {
+  const { frames: wanted, removed } = tagFrames(tags);
+  if (!Buffer.isBuffer(buffer)) return buffer;
+  if (!wanted.length && !removed.length) return buffer;
   const flags = id3v2Flags(buffer);
   if (flags > 0) return buffer;
   const present = flags === 0;
   const frames = present ? id3Frames(buffer) : [];
   const audio = present ? buffer.subarray(id3v2Size(buffer)) : buffer;
-  const kept = frames.filter((frame) => frame.id !== TITLE_FRAME);
-  const titleFrame = buildFrame(TITLE_FRAME, Buffer.concat([
-    Buffer.from([UTF8_ENCODING]),
-    Buffer.from(name, "utf8"),
-    Buffer.from([0])
-  ]));
-  const body = Buffer.concat([...kept.map((frame) => buildFrame(frame.id, frame.data)), titleFrame]);
+  const managed = new Set([...wanted.map((frame) => frame.id), ...removed]);
+  const kept = frames.filter((frame) => !managed.has(frame.id));
+  const body = Buffer.concat([
+    ...kept.map((frame) => buildFrame(frame.id, frame.data)),
+    ...wanted.map((frame) => buildFrame(frame.id, frame.data))
+  ]);
   const header = Buffer.alloc(HEADER_BYTES);
   header[0] = 0x49;
   header[1] = 0x44;
