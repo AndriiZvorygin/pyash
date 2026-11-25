@@ -9,7 +9,7 @@ The volume format and record grammar are specified in
 `reference.pya` is the generated source snapshot of accepted Pyash vocabulary.
 Its profile-v3 marker describes the source entry grammar; the Rust build
 converts it to the current profile-v4 runtime volume in `reference.pyac`. Both
-contain 64,585 entries. The current v4 volume is 130,632,544 bytes. The snapshot includes
+contain 64,593 entries. The current v4 volume is 131,214,912 bytes. The snapshot includes
 7,084 promoted SUMO links: 5,658 `superclass-of` and 1,426 `equivalent-to`.
 
 ## Operation signatures
@@ -21,22 +21,31 @@ code-resident tables in `program/verbs/*/**.mjs` by
 
 Atomic verbs spell their English surface and resolve to their pya atom
 (`multiply` -> `hgoc`); compound verbs are already pya sequences
-(`kl6m psas`). Both work, and the current snapshot carries 1,080 signatures
-across 71 verbs.
+(`kl6m psas`). Both work, and the current snapshot carries 1,821 signatures
+across 93 verbs.
+
+A surface the older encoding table does not carry resolves through
+`program/library/dictionary/verb_defaults.mjs`, which records one chosen sense
+per surface. This is a deterministic default, not word-sense disambiguation: a
+`.pya` sentence must round-trip to `.pyac` the same way every time, so each
+surface has exactly one spelling and other senses are written as explicit
+compounds at the call site later. `verify` is `tras drot`, `divide` is
+`syap krot` (SUMO Calculating, the arithmetic division), and `verify platform`
+composes both surfaces. A surface with no defensible implementation sense is
+absent on purpose — `xor`, `not`, `or`, and `promptify` still skip rather than
+take an arbitrary spelling.
 
 Type words follow the encoder's own rule: `num`, `bool`, `vec`, and `float`
 resolve to their grammar form (`number_`, `boolean_`, `vector`, `float`); any
 other type word resolves by its own surface. `name <X>` is a named type, so
 `X` is an arbitrary identifier and is not resolved against the vocabulary.
 
-A skipped row means the **encoder** cannot resolve the verb or its types, not
-that the catalog lacks a linkage. Many skipped verbs do have real dictionary
-entries — `cut` has 47, `evoke` 3, `verify` 2 — but verb resolution still reads
-the deprecated `program/library/pyashWords.json` through
-`lookupLegacyWordSequence` instead of the volume, so coverage is bounded by that
-older table. A concrete example is `ob date`: the catalog has `date`
-(`hta2c`), but the encoder has no `date` type word, so those signatures are
-correctly skipped. See
+The remaining skips are now dominated by cases and types, not verbs.
+`fromindex` and `toindex` are marked unassigned in the compositional grid, so
+signatures using them stay skipped until those cases are decided — inventing a
+mapping would put two arguments in one case and the volume writer rejects that.
+`ob date` still skips: the catalog has `date` (`hta2c`), but the encoder has no
+`date` type word. See
 [`pyashwords-deprecated.md`](../../../documentation/reference/pyashwords-deprecated.md).
 `collectOperationSignatures` reports every skipped row with a reason rather than
 inventing a key.
@@ -172,10 +181,10 @@ count. `artifacts/` is git-ignored; use a unique filename for each run and
 retain or copy the record where local benchmark history is maintained.
 
 Current reference-volume verification on Mriczo, 2026-11-25: rebuilding
-`reference.pyac` from the checked-in `reference.pya` parsed 100,825,433 source
-bytes and wrote the volume in about 15 s. The result contains 64,585 entries
-and 4,082,266 codelets, occupies 130,632,544 bytes, and has SHA-256
-`a4d7e496908429176a942a972dc8aad6ecea7c4b80fe0bc0e90731ff4fa1f655`. A
+`reference.pyac` from the checked-in `reference.pya` parsed 101,436,268 source
+bytes and wrote the volume in about 15 s. The result contains 64,593 entries
+and 4,100,465 codelets, occupies 131,214,912 bytes, and has SHA-256
+`27cd0871bf108f89491fcd0d82ff215c3535820293bb5f85cadfdc98dfccc7f7`. A
 10,000-iteration warmed `en`/`tensor` lookup measured 106,218 ns mean
 (9,414.5 lookups/s) on the previous volume, one result per lookup; re-measure
 against this one before quoting a rate. The local Pyash run record for that

@@ -1,5 +1,6 @@
 import { builtInSignatures } from "../../verbs/index.mjs";
 import { ROLE_KEYS, COMPOSITIONAL_KEYWORDS } from "../grammar/keywords.mjs";
+import { defaultVerbSpelling } from "./verb_defaults.mjs";
 import pyashWords from "../pyashWords.json" with { type: "json" };
 
 // The declared signature tables are the code-resident dispatch surface. This
@@ -36,7 +37,12 @@ const CASE_ENTRY_BY_ROLE = new Map([
   ["at", "location_case_"],
   ["vyah", "way_case_"],
   ["via", "vialis_case_"],
-  ["atindex", "location_case_"]
+  ["atindex", "location_case_"],
+  // `among` is the WAY + social keyword and the compositional grid assigns it
+  // associative_case_ outright, so it is a case rather than a riding modifier.
+  ["among", "associative_case_"],
+  // `accordingto` is WAY + discourse, likewise a case in the grid.
+  ["accordingto", "evidential_case_"]
 ]);
 
 // Grammar type words. `num`, `bool`, `vec`, and `date` are sentence type tokens
@@ -70,6 +76,25 @@ function entryForName(name) {
   return WORD_BY_PYA.get(text.toLowerCase())
     ?? WORD_BY_EN.get(text.toLowerCase())
     ?? null;
+}
+
+// A verb surface resolves to one or more HNUCs. Multi-word verbs such as
+// `verify platform` contribute every token, and a default spelling may itself be
+// a two-atom compound.
+function verbHnucs(token) {
+  const key = String(token ?? "").trim().toLowerCase();
+  const entry = entryForName(key);
+  if (entry) {
+    const word = hnucOf(entry);
+    return word === null ? null : [word];
+  }
+  const spelling = defaultVerbSpelling(key);
+  if (!spelling) return null;
+  const words = spelling.map((pya) => {
+    const part = WORD_BY_PYA.get(pya.toLowerCase());
+    return part ? hnucOf(part) : null;
+  });
+  return words.some((word) => word === null) ? null : words;
 }
 
 function hnucOf(entry) {
@@ -158,10 +183,7 @@ export function collectOperationSignatures(rows = builtInSignatures) {
       continue;
     }
     const verbKey = verb.join(" ");
-    const verbHnuc = verb.map((token) => {
-      const entry = entryForName(token);
-      return entry ? hnucOf(entry) : null;
-    });
+    const verbHnuc = verb.flatMap((token) => verbHnucs(token) ?? [null]);
     if (verbHnuc.some((word) => word === null)) {
       skipped.push({ reason: "unmapped-verb", signatureWords: row.signatureWords });
       continue;

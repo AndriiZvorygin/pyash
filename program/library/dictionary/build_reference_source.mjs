@@ -19,6 +19,7 @@ import {
 } from "../translation/chinese_character_atom_refinery.mjs";
 import { loadEnglishGrammarCatalog } from "../translation/english_grammar.mjs";
 import { collectOperationSignatures } from "./operation_signatures.mjs";
+import { defaultVerbSpelling } from "./verb_defaults.mjs";
 
 const OUTPUT = new URL("./reference.pya", import.meta.url);
 const RELEASE = "Open English WordNet 2025";
@@ -559,13 +560,24 @@ export function buildAcceptedReferenceSource({
   // English surface to its canonical pya key before building the entry.
   const { byVerb: signaturesByVerb } = collectOperationSignatures();
   let attachedSignatures = 0;
+  const canonicalAtom = (token) => {
+    if (ATOM_BY_PYA.has(token)) {
+      return CANONICAL_PYA_BY_HNUC.get(String(ATOM_BY_PYA.get(token).hnuc).toLowerCase());
+    }
+    const englishAtom = atoms.find((row) => String(row.en).toLowerCase() === token);
+    if (!englishAtom) return null;
+    return CANONICAL_PYA_BY_HNUC.get(String(englishAtom.hnuc).toLowerCase());
+  };
   for (const [verbKey, signatures] of signaturesByVerb) {
     const words = verbKey.split(" ").map((word) => word.trim().toLowerCase());
-    const canonical = words.map((word) => {
-      if (ATOM_BY_PYA.has(word)) return CANONICAL_PYA_BY_HNUC.get(String(ATOM_BY_PYA.get(word).hnuc).toLowerCase());
-      const englishAtom = atoms.find((row) => String(row.en).toLowerCase() === word);
-      if (!englishAtom) return null;
-      return CANONICAL_PYA_BY_HNUC.get(String(englishAtom.hnuc).toLowerCase());
+    // A surface with no atom may still carry a chosen default spelling, which is
+    // itself a compound. Resolve through the same table the signature collector
+    // uses so the entry key and the signature's verb words agree.
+    const canonical = words.flatMap((word) => {
+      const direct = canonicalAtom(word);
+      if (direct) return [direct];
+      const spelling = defaultVerbSpelling(word);
+      return spelling ? spelling.map(canonicalAtom) : [null];
     });
     if (canonical.some((word) => !word)) continue;
     const entry = getEntry(canonical);

@@ -152,7 +152,7 @@ Two scales that are easy to confuse:
 
 - the **lexical catalog** is `program/library/dictionary/reference.pya` and its
   compiled `reference.pyac`: the vocabulary reference, generated on `dev-vocab`,
-  never hand-edited. It carries 64,585 keys and 85,553 English surfaces;
+  never hand-edited. It carries 64,593 keys and 85,553 English surfaces;
 - the **executable namespace** per programlet is bounded (64 routines, 8
   arguments, 8 signature cases, 10 sentence fields, call depth 8).
 

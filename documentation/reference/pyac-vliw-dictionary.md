@@ -8,7 +8,7 @@ The accepted-vocabulary source is published in
 `program/library/dictionary/reference.pya`; its source marker remains profile
 v3 for the established entry-record grammar. Rust compiles it into the current
 v4 runtime volume, `program/library/dictionary/reference.pyac`. Both contain
-64,585 entries. The v4 volume contains 4,082,266 codelets and is 130,632,544
+64,593 entries. The v4 volume contains 4,100,465 codelets and is 131,214,912
 bytes. This snapshot includes 7,084 promoted SUMO source links (5,658
 `superclass-of` and 1,426 `equivalent-to`). The previously documented
 3,363-key regeneration gate described an older snapshot; the accepted source

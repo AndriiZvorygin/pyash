@@ -385,7 +385,7 @@ fn published_reference_volume_indexes_the_promoted_sumo_concepts() {
     .expect("open reference dictionary by seeking");
 
     assert_eq!(reader.profile_version(), "pyac-vliw-dictionary/4");
-    assert_eq!(reader.entry_count(), 64_585);
+    assert_eq!(reader.entry_count(), 64_593);
     let offsets = reader
         .lookup_surface("en", "map")
         .expect("scan reference surface index");
