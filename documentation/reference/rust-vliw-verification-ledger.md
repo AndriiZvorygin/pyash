@@ -750,3 +750,30 @@ Pyash-English glosses are `attention-query`, `attention-key`, and
 The candidate was built on Mriczo, transferred to SWAC, and tested entirely
 through its Housekeeper queue. The canary then restored the original verified
 CUDA image; the candidate was not retained as SWAC's active runtime.
+
+## 2026-11-25: Sequence-Level Embedding Lookup on Mriczo CUDA
+
+**Run record:** `artifacts/20261125-0006-rust-vliw-conformance/result.pya`
+
+| Field | Evidence |
+| --- | --- |
+| Source revision | `856747bf5420cb0c2ca7cc0dff34eff6976fed44`; unrelated pre-existing `.gitignore` change left uncommitted |
+| Client and GPU route | Mriczo -> Mriczo Housekeeper -> Mriczo RTX 3090 CUDA VLIW runtime |
+| GPU | NVIDIA GeForce RTX 3090, driver `550.163.01`, 24,576 MiB |
+| Runtime image | `sha256:9889f729ae7906a324915dac8b25c0c5c78b2f6db708f5b6d675866381dbb940` (90,990,604 bytes) |
+| Final runtime | CUDA image retained on Mriczo; prior image `sha256:e9d22dc233e795b35a3606d1cd7f09e78d89e2c071738ba5b7fe2a4b0c331653` retained for rollback |
+| Live conformance | 80 functional passes (77 matrix cases + 3 typed-dispatch probes); 6 expected errors passed |
+| Sequence lookup output | IDs `[2,0]` selected rows 2 and 0; dot outputs `[60,20]` on CPU and CUDA |
+| Full run wall | 62,086.375 ms |
+| CPU request batches | 45 codelet cases: 67.610 ms; 32 programlet cases: 71.073 ms |
+| Housekeeper GPU client round trip | 45 codelet cases: 4,556.087 ms; 32 programlet cases: 5,176.405 ms (each queued 4 s behind another admitted job) |
+| CUDA event time | Codelet batch: 11.624 ms; programlet sections: 109.763 ms |
+| Runtime initialization | 0.09 s loading the prebuilt cubin; no startup compilation |
+| CPU reference executable | 16,586,464 bytes; SHA-256 `6297fd87fb5370f21c13f112f804bdd5e09052353a57f3f05785c2cadea0f813` |
+| GPU runtime executable | 9,316,056 bytes; SHA-256 `f4b353f37e42324a8a625f55f455e803ed7dc708042d41de14de4de8e4078de5` |
+| CUDA cubin | 3,469,384 bytes; SHA-256 `d980f25532a8305fe5367d141ba9c48e9185b7144b86d514d536aacf27cd1dd5` |
+
+The example uses a rank-one uint16 token-ID sequence and `fromindex num
+<position>` to select each ID. Each selected embedding row remains a zero-copy
+view into the file-backed rank-two float table. Text tokenization and a WSD
+benchmark are not part of this conformance result.
