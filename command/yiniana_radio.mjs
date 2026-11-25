@@ -111,10 +111,10 @@ export async function startRadioStation({ cwd = process.cwd(), listen = true } =
   const stationName = resolveConfigText("radio station name") || DEFAULT_STATION_NAME;
   const tracks = await scanCatalogue({ directory: catalogueDirectory, lyricsDirectory });
   const station = createRadioStation({ tracks });
-  station.start();
   station.on("track", ({ track }) => {
     process.stdout.write(`yiniana radio: now playing ${track.title}\n`);
   });
+  station.start();
   const { server } = createRadioServer({ station, stationName });
   const rescan = setInterval(async () => {
     const next = await scanCatalogue({ directory: catalogueDirectory, lyricsDirectory });
