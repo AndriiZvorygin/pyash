@@ -208,10 +208,10 @@ test("runLyricsChain fails loudly when the corpus has nothing on the topic", asy
 
 test("verifySongStructure reads the bracketed section tags", () => {
   const full = [
-    "[intro]We recognise the dignity before we begin",
     "[verse 1]Walking in our sovereign light,",
-    "[chorus]We recognise stately dignity",
     "[verse 2]We sew honor where broken fabric meets,",
+    "[verse 3]The loom runs steady as the morning rises,",
+    "[chorus]We recognise stately dignity",
     "[bridge]Accept sorrow, watch the dark weave gold,",
     "[chorus]We recognise stately dignity",
     "[outro]Bright beauty lives inside us always."
@@ -219,11 +219,12 @@ test("verifySongStructure reads the bracketed section tags", () => {
 
   const verdict = verifySongStructure(full);
   assert.equal(verdict.ok, true);
-  assert.deepEqual(verdict.tags, ["intro", "verse", "chorus", "verse", "bridge", "chorus", "outro"]);
+  assert.deepEqual(verdict.tags, ["verse", "verse", "verse", "chorus", "bridge", "chorus", "outro"]);
 
-  const partial = verifySongStructure("[intro]\n[verse 1]One\n[chorus]Two\n");
+  const partial = verifySongStructure("[verse 1]One\n[chorus]Two\n");
   assert.equal(partial.ok, false);
   assert.ok(partial.missing.includes("verse"));
+  assert.ok(partial.missing.includes("chorus"));
   assert.ok(partial.missing.includes("bridge"));
   assert.ok(partial.missing.includes("outro"));
 });

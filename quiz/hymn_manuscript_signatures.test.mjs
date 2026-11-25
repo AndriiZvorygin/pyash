@@ -37,10 +37,9 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /exists su name hymn source analysis prompt ob text quoted\.text\.Extract a compact writing brief/);
   assert.match(text, /exists su name hymn hook sieve prompt ob text quoted\.text\.Filter the hook candidates down to only valid refrain lines/);
   assert.match(text, /exists su name hymn hook choose prompt ob text quoted\.text\.Select the single best usable hook candidate/);
-  assert.match(text, /exists su name hymn intro prompt ob text quoted\.text\.You are writing the Intro/);
   assert.match(text, /exists su name hymn verse one prompt ob text quoted\.text\.You are writing Verse 1/);
   assert.match(text, /exists su name hymn chorus prompt ob text quoted\.text\.You are writing the echo line of a chorus\./);
-  assert.match(text, /exists su name hymn final chorus prompt ob text quoted\.text\.You are writing the Final Chorus/);
+  assert.match(text, /exists su name hymn final chorus prompt ob text quoted\.text\.You are writing the echo line of the final chorus/);
   assert.match(text, /exists su name hymn verse two prompt ob text quoted\.text\.You are writing Verse 2/);
   assert.match(text, /exists su name hymn bridge prompt ob text quoted\.text\.You are writing the Bridge/);
   assert.match(text, /exists su name hymn outro prompt ob text quoted\.text\.You are writing the Outro/);
@@ -50,7 +49,6 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /exists su name hymn source analysis mind be mind fromtext name hymn source analysis prompt ya/);
   assert.match(text, /exists su name hymn hook sieve mind be mind fromtext name hymn hook sieve prompt ya/);
   assert.match(text, /exists su name hymn hook choose mind be mind fromtext name hymn hook choose prompt ya/);
-  assert.match(text, /exists su name hymn intro mind be mind fromtext name hymn intro prompt ya/);
   assert.match(text, /exists su name hymn outro mind be mind fromtext name hymn outro prompt ya/);
   assert.match(text, /exists su name hymn imagery verify mind be mind fromtext name hymn imagery verify prompt ya/);
   assert.match(text, /exists su name hymn imagery verdict mind be mind fromtext name hymn imagery verdict prompt ya/);
@@ -70,7 +68,7 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /Prefer lived witness over direct commands\./);
   assert.match(text, /Avoid direct second-person instruction and bare imperative openings\./);
   assert.match(text, /Repeat the hook as a statement of what is true now, not as an instruction\./);
-  assert.match(text, /Use the exact HOOK_PHRASE as its own full line if it fits\./);
+  assert.match(text, /It must deepen the FIRST CHORUS's echo rather than paraphrase it\./);
   assert.match(text, /The chorus structure is:/);
   assert.match(text, /Your job is to write the ECHO line\./);
   assert.match(text, /Write exactly one short lyrical line\./);
@@ -99,7 +97,6 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /Do not reuse the exact HOOK_PHRASE in this verse\./);
   assert.match(text, /Verse 1 does not need the hook and should develop the song without repeating it\./);
   assert.match(text, /Verse 2 does not need the hook and should develop the song without repeating it\./);
-  assert.match(text, /Do not restate the intro line\./);
   assert.match(text, /Verse 2 must introduce at least two new nouns or images not used in Verse 1\./);
   assert.match(text, /Each line should express only one image or one action\./);
   assert.match(text, /At least one line must clearly express the spiritual teaching or practice of the song\./);
@@ -113,8 +110,8 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /avoid wording such as nothing, no, not, never, or without when an affirmative source-faithful phrasing can carry the teaching instead/);
   assert.match(text, /generic spiritual filler/);
   assert.match(text, /Allow imperative phrasing sparingly only if it adds movement or emphasis\./);
-  assert.match(text, /Keep wording close to the prior chorus rather than rewriting it from scratch\./);
-  assert.match(text, /Use the exact HOOK_PHRASE as its own full line if it fits\./);
+  assert.match(text, /It must not reuse the first chorus's echo line or its wording\./);
+  assert.match(text, /It must escalate: the same claim, seen from further along or at greater depth\./);
   assert.match(text, /Prefer source-derived wording over generic uplift language\./);
   assert.match(text, /Avoid negations and fear framing such as not, never, no, no more, without, cannot, won't, don't/);
   assert.match(text, /Reveal the transformation that happens when the teaching is lived\./);
@@ -124,8 +121,8 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /At least one line must clearly express the spiritual teaching or practice of the song\./);
   assert.match(text, /Draw its turn or resolution from the source text rather than generic uplift phrasing\./);
   assert.match(text, /Draw its closing language from the source text where possible\./);
-  assert.match(text, /Prefer line 1 to be exactly the HOOK_PHRASE\./);
-  assert.match(text, /Keep line 2 to a very short closing image or truth\./);
+  assert.match(text, /Line 2 is the crux: the one thing the listener carries away\./);
+  assert.match(text, /Do not write a farewell, a goodbye, a blessing to send someone off, or a closing pleasantry\./);
   assert.match(text, /8 to 16 words total\./);
   assert.match(text, /The echo line must explain the effect or purpose of the hook practice\./);
   assert.match(text, /be declarative rather than directive unless no source-grounded declarative option works/);
@@ -153,11 +150,22 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /4 to 8 words only\./);
   assert.match(text, /Avoid second-person wording such as you or your\./);
   assert.match(text, /Avoid source-prose fragments, speaker labels, query wording, and quoted report language\./);
-  assert.match(text, /su name hymn intro checks be series def/);
-  assert.match(text, /su name hymn intro checks be series def[\s\S]*?su name word_min ob num 4 ya/);
   assert.match(text, /su name hymn verse one checks be series def/);
   assert.match(text, /su name hymn chorus checks be series def/);
-  assert.match(text, /su name hymn final chorus checks be series def/);
+  assert.doesNotMatch(text, /su name hymn final chorus checks be series def/);
+  assert.match(text, /exists su name hymn verse three prompt ob text quoted\.text\.You are writing Verse 3/);
+  assert.match(text, /exists su name hymn verse three mind be mind fromtext name hymn verse three prompt ya/);
+  assert.match(text, /su name hymn verse three checks be series def/);
+  assert.match(text, /su name verse three stage from text of ob of verse three request for name hymn verse three mind accordingto name hymn verse three checks to name text verse three out be hymn section verify do/);
+  assert.match(text, /su name verse three imagery verify stage from text of ob of verse three out to name text verse three imagery pass be hymn imagery do/);
+  assert.match(text, /fromindex num 1 toindex num 3 to name text verse three imagery pass be hymn verse three imagery retry do/);
+  assert.match(text, /su name hymn final chorus build from text request to name text final chorus out be ceremony def/);
+  assert.match(text, /su name final chorus echo stage from text of from of this for name hymn final chorus mind accordingto name hymn chorus checks to name text final chorus echo out be hymn section verify do/);
+  assert.match(text, /su name final chorus request chorus stage ob name text chorus out to name final chorus request be plus do/);
+  assert.match(text, /su name final chorus request bridge stage ob name text bridge out to name final chorus request be plus do/);
+  assert.match(text, /su name hymn out verse three stage ob name text verse three out to name hymn out be plus do/);
+  assert.match(text, /su name hymn out verse two stage ob name text verse two out to name hymn out be plus do/);
+  assert.match(text, /Line 1 is the HOOK_PHRASE with exactly one word changed/);
   assert.match(text, /su name hymn verse two checks be series def/);
   assert.match(text, /su name hymn bridge checks be series def/);
   assert.match(text, /su name hymn outro checks be series def/);
@@ -170,7 +178,11 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /su name line_count_min ob num 2 ya/);
   assert.match(text, /su name line_count_max ob num 2 ya/);
   assert.match(text, /su name hymn chorus checks be series def[\s\S]*?su name word_min ob num 4 ya[\s\S]*?su name word_max ob num 8 ya[\s\S]*?su name line_count_min ob num 1 ya[\s\S]*?su name line_count_max ob num 1 ya/);
-  assert.match(text, /su name hymn final chorus checks be series def[\s\S]*?su name word_min ob num 6 ya[\s\S]*?su name word_max ob num 16 ya[\s\S]*?su name line_count_min ob num 3 ya[\s\S]*?su name line_count_max ob num 3 ya/);
+  assert.match(text, /The final chorus structure is:/);
+  assert.match(text, /Your job is to write the ECHO line of the FINAL chorus\./);
+  assert.match(text, /Verify whether FINAL_CHORUS keeps the same refrain identity as CHORUS while deepening its echo\./);
+  assert.doesNotMatch(text, /wording changes are limited and do not rewrite the chorus from scratch/);
+  assert.doesNotMatch(text, /the refrain feels rewritten instead of repeated/);
   assert.match(text, /su name hymn bridge checks be series def[\s\S]*?su name word_min ob num 8 ya[\s\S]*?su name word_max ob num 16 ya[\s\S]*?su name line_count_min ob num 2 ya[\s\S]*?su name line_count_max ob num 2 ya/);
   assert.match(text, /su name hymn outro checks be series def[\s\S]*?su name word_min ob num 6 ya[\s\S]*?su name word_max ob num 16 ya[\s\S]*?su name line_count_min ob num 2 ya[\s\S]*?su name line_count_max ob num 2 ya/);
   assert.match(text, /su name hymn stage pass ob text packet to name text verdict be ceremony def/);
@@ -195,9 +207,6 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /SOURCE BRIEF:\\n/);
   assert.match(text, /su name hymn hook pool stage from text of ob of hymn hook source to name text hymn hook candidates raw out be hymn hook pool fill do/);
   assert.match(text, /su name hymn hook sieve stage from text of ob of hymn hook source with text of ob of hymn hook candidates raw out to name text hymn hook candidates out be hymn hook sieve do/);
-  assert.match(text, /ob name text hook out to name text intro out be text do/);
-  assert.match(text, /su name hymn intro hook verify stage be verify as wo phrase count atleast num 1 atmost num 2 from name text intro out with name text hook out to name map hymn intro hook verify do/);
-  assert.match(text, /su name hymn intro hook guarantee stage ob bool lie fromtext text "hymn intro hook defective" be guarantee do/);
   assert.match(text, /su name verse one stage from text of ob of verse one request for name hymn verse one mind accordingto name hymn verse one checks to name text verse one out be hymn section verify do/);
   assert.match(text, /su name verse one imagery verify stage from text of ob of verse one out to name text verse one imagery pass be hymn imagery do/);
   assert.match(text, /fromindex num 1 toindex num 3 to name text verse one imagery pass be hymn verse one imagery retry do/);
@@ -212,12 +221,12 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /su name verse two imagery verify stage from text of ob of verse two out to name text verse two imagery pass be hymn imagery do/);
   assert.match(text, /fromindex num 1 toindex num 3 to name text verse two imagery pass be hymn verse two imagery retry do/);
   assert.match(text, /su name bridge stage from text of ob of bridge request for name hymn bridge mind accordingto name hymn bridge checks to name text bridge out be hymn section verify do/);
-  assert.match(text, /su name final chorus stage ob name text chorus out to name text final chorus out be text do/);
+  assert.match(text, /su name final chorus stage from text of ob of final chorus request to name text final chorus out be hymn final chorus build do/);
   assert.match(text, /su name hymn chorus stability verify stage from text of ob of chorus out with text of ob of final chorus out to name text hymn chorus stability pass be hymn chorus stability do/);
   assert.match(text, /fromindex num 1 toindex num 3 to name text hymn chorus stability pass be hymn chorus stability retry do/);
   assert.match(text, /be verify as wo phrase count atleast num 1 atmost num 2 from name text chorus out with name text hook out to name map hymn chorus hook verify do/);
   assert.match(text, /be verify as wo phrase count atleast num 1 atmost num 4 from name text final chorus out with name text hook out to name map hymn final chorus hook verify do/);
-  assert.match(text, /be verify as wo phrase count atleast num 3 atmost num 12 from name text hymn out with name text hook out to name map hymn total hook verify do/);
+  assert.match(text, /be verify as wo phrase count atleast num 3 atmost num 6 from name text hymn out with name text hook out to name map hymn total hook verify do/);
   assert.match(text, /fromindex num 1 toindex num 5 to name text hymn chorus hook pass be hymn chorus hook retry do/);
   assert.match(text, /su name outro stage from text of ob of outro request for name hymn outro mind accordingto name hymn outro checks to name text outro out be hymn section verify do/);
   assert.doesNotMatch(text, /be verify loop do/);
@@ -271,12 +280,43 @@ test("hymn manuscript module keeps educational staged flow with verify platform"
   assert.match(text, /su name chorus request begin stage ob text "TARGET_WORDS: 14-24\\nSECTION_ROLE: MEMORY_ANCHOR\\nFORMAT: RHYMING_COUPLETS\\nRHYME_SCHEME: AAAA_OR_AABB\\nHOOK_PHRASE:\\n"/);
   assert.match(text, /su name outro request begin stage ob text "TARGET_WORDS: 8-16\\nSECTION_ROLE: OUTRO_CLOSURE\\nFORMAT: RHYMING_COUPLETS\\nRHYME_SCHEME: AA\\nHOOK_PHRASE:\\n"/);
   assert.match(text, /HOOK_PHRASE:\\n/);
-  assert.match(text, /hymn out begin stage ob text quoted\.text\.\[intro\]/);
+  assert.match(text, /hymn out begin stage ob text quoted\.text\.\[verse 1\]/);
   assert.match(text, /hymn out chorus one header stage ob text quoted\.text\./);
   assert.match(text, /\[chorus\]/);
   assert.match(text, /hymn out bridge header stage ob text quoted\.text\./);
   assert.match(text, /\[bridge\]/);
   assert.match(text, /\[outro\]/);
-  assert.match(text, /hymn out chorus three stage ob name text final chorus out to name hymn out be plus do/);
+  assert.match(text, /hymn out chorus two stage ob name text final chorus out to name hymn out be plus do/);
   assert.match(text, /ob text "node command\/normalize_escaped_newlines\.mjs" fromtext name hymn out to name text hymn out be command do/);
+});
+
+test("hymn manuscript assembles the yiniana song shape with a written final chorus", async () => {
+  const text = await fs.readFile("module/hymn_manuscript.pya", "utf8");
+
+  const order = [
+    "hymn out verse one stage",
+    "hymn out verse two stage",
+    "hymn out verse three stage",
+    "hymn out chorus one stage",
+    "hymn out bridge stage",
+    "hymn out chorus two stage",
+    "hymn out outro stage"
+  ];
+
+  let cursor = 0;
+  for (const step of order) {
+    const at = text.indexOf(`su name ${step}`);
+    assert.ok(at > cursor, `section is out of order: ${step}`);
+    cursor = at;
+  }
+
+  assert.match(text, /hymn out begin stage ob text quoted\.text\.\[verse 1\]/);
+  assert.match(text, /\[verse 3\]/);
+  assert.match(text, /hymn out chorus two stage ob name text final chorus out to name hymn out be plus do/);
+  assert.match(text, /su name final chorus stage from text of ob of final chorus request to name text final chorus out be hymn final chorus build do/);
+
+  assert.doesNotMatch(text, /hymn intro/);
+  assert.doesNotMatch(text, /\[intro\]/);
+  assert.doesNotMatch(text, /su name final chorus stage ob name text chorus out to name text final chorus out be text do/);
+  assert.doesNotMatch(text, /ob of request/);
 });

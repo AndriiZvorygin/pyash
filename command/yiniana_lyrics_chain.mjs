@@ -211,9 +211,10 @@ export function readCardFromResult(stdout) {
 // ---------------------------------------------------------------- song check
 
 // The hymn manuscript writes bracketed section tags, as ACE-Step expects:
-// [intro], [verse 1], [chorus], [bridge], [outro]. A tag opens its line and the
-// first lyric line follows it on the same line. The numbering is dropped when
-// the tag is read, exactly as ACE-Step drops it.
+// [verse 1], [verse 2], [verse 3], [chorus], [bridge], [chorus], [outro]. A tag
+// opens its line and the first lyric line follows it on the same line. The
+// numbering is dropped when the tag is read, exactly as ACE-Step drops it. The
+// song has no intro: the sheet opens on the first verse.
 export function parseSongSections(text) {
   const tags = [];
   for (const match of String(text ?? "").matchAll(/^\s*\[([^\]]+)\]/gmu)) {
@@ -228,8 +229,7 @@ export function verifySongStructure(text) {
   const tags = parseSongSections(text);
   const count = (name) => tags.filter((tag) => tag === name).length;
   const missing = [];
-  if (!count("intro")) missing.push("intro");
-  if (count("verse") < 2) missing.push("verse");
+  if (count("verse") < 3) missing.push("verse");
   if (count("chorus") < 2) missing.push("chorus");
   if (!count("bridge")) missing.push("bridge");
   if (!count("outro")) missing.push("outro");

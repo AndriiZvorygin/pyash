@@ -59,10 +59,31 @@ its ten contract headings before the step is allowed to succeed.
 
 ### Step 3 — sing
 
-`module/hymn_manuscript.pya` turns the card into a hymn manuscript: an intro, a
-verse, a chorus, a second verse, a chorus, a bridge, a chorus and an outro,
-with the hook recurring in the intro, the choruses and the outro. The sheet is
-plain bracketed-tag text.
+`module/hymn_manuscript.pya` turns the card into a hymn manuscript with the
+shape of the Yiniana song:
+
+```
+[verse 1] [verse 2] [verse 3] [chorus] [bridge] [chorus] [outro]
+```
+
+There is no intro. The sheet is plain bracketed-tag text.
+
+The chorus is three lines — hook, echo, hook — and the second chorus is written,
+not copied. Its echo line is a new line that escalates the first chorus's echo
+while keeping the refrain identity. The outro carries the crux rather than a
+farewell: its first line is meant to be the hook with one word changed and its
+second line reframes the song. A mechanical phrase-count check holds the total
+hook repetitions between 3 and 6, so a regression toward the old shape fails the
+manuscript rather than shipping.
+
+Measured on the dignity card, old shape against new:
+
+| | old sheet | new sheet |
+|---|---|---|
+| sections | intro, verse, chorus, verse, chorus, bridge, chorus, outro | verse, verse, verse, chorus, bridge, chorus, outro |
+| exact hook occurrences | 8 | 5 |
+| chorus lines repeated verbatim | hook and echo, 3 times each | hook only, once per chorus |
+| chorus echo lines | 1 (the same line 3 times) | 2 (a new, escalated line in the second chorus) |
 
 ACE-Step parses `[verse 1]` as the section "verse" with the numbering stripped,
 so the manuscript is fed to the engine as it is. No tag adapter is needed.
