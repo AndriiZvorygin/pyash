@@ -47,6 +47,22 @@ unlinked.
 None of these make the file authoritative, and none of them should be widened to
 compensate for the older table.
 
+## Recorded repairs
+
+Defect repairs are allowed on a working branch because the encoder still reads
+this table. Each repair is recorded here rather than folded in silently.
+
+| Date | Row | Defect | Repair |
+| --- | --- | --- | --- |
+| 2026-11-25 | `social_` | shared spelling `syi7h` / `0x804F` with `existential_clause_`, so two meanings had one identity | generated layer-16 spelling `kyuh` (`0x5017`) via `generateGrammarCandidates`; verified free before applying |
+| 2026-11-25 | `choice_gender_` | recorded `0x9517`, which is `inductive_mood_`'s identity for `kcu7h` | corrected to `0x5517`, the value `kcuh` encodes to |
+
+`hzef` keeps an empty `en` field by design: it denotes unspecified or blank, so
+the blank gloss is not a defect.
+
+After these repairs the table has zero duplicate HNUCs and every stored HNUC
+equals what `encodePyacWord` derives from its spelling.
+
 ## Rules for Rust VLIW work
 
 - **Do not add rows to `pyashWords.json`.** Vocabulary enters through the
