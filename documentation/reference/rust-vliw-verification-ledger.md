@@ -6,6 +6,38 @@ and exact test outcome. A queued or timed-out job is not a passing test. Entries
 are historical: compare the recorded source revision with `git rev-parse HEAD`
 before assuming the deployed artifact matches the checkout.
 
+## 2026-11-25: Deploy wired into the quiz suite
+
+Building and deploying the CUDA runtime is now a gated quiz,
+`quiz/vliw_cuda_deploy.test.mjs`, backed by
+`container/pyac-vliw-runtime/command/build-and-deploy.sh`.
+
+```sh
+node --test quiz/vliw_cuda_deploy.test.mjs                    # skipped
+PYA_VLIW_DEPLOY_TEST=1 node --test quiz/vliw_cuda_deploy.test.mjs       # build only
+PYA_VLIW_DEPLOY_TEST=deploy node --test quiz/vliw_cuda_deploy.test.mjs  # build + deploy
+```
+
+It is off by default so an ordinary quiz run stays fast and offline-safe, and
+it skips with a reason when Docker or the host `ptxas` is missing. A dirty tree
+still builds and verifies the image but reports `DEPLOYED=0` unless
+`PYA_VLIW_ALLOW_DIRTY_DEPLOY=1`, because a dirty image cannot be reproduced
+from a commit.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261125-0013-rust-vliw-conformance/result.pya` |
+| Source revision / checkout | `2097f8b3279a3cc4ec1c8bb19b274d2466de2a16`; tracked tree dirty during build |
+| Runtime image | `sha256:566f352121453d481f0a4d1950f6ed4d0764df149986c496152e272643c7532f` |
+| Cubin | 3,866,952 bytes; SHA-256 `a99e5a3a2bcaf40011409ad217df2c54919e466000eff8b0051c3263f329b820` |
+| Full verification | 79/79 value cases; 3 typed-dispatch probes; 5/5 expected errors |
+| Total run wall | 123,809.036 ms |
+| Test durations | Build-only run 364,854 ms cache-cold; build + deploy 127,286 ms warm |
+
+The cubin hash is unchanged from the earlier entry because the Rust semantics
+core did not change in this commit, which is the content-addressed tag working
+as intended.
+
 ## 2026-11-25: Combined build-and-deploy command
 
 Exercised the documented one-command path from the committed tree:

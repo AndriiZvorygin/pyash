@@ -36,6 +36,17 @@ Build and deploy in one step:
 bash container/pyac-vliw-runtime/command/build.sh mriczo deploy
 ```
 
+Or through the gated quiz, which is what the branch suite uses:
+
+```sh
+PYA_VLIW_DEPLOY_TEST=deploy node --test quiz/vliw_cuda_deploy.test.mjs
+```
+
+The quiz is skipped by default so an ordinary quiz run stays fast and
+offline-safe, and it skips with a reason when Docker or `ptxas` is missing. A
+dirty tree builds and verifies the image but refuses to deploy unless
+`PYA_VLIW_ALLOW_DIRTY_DEPLOY=1` is set.
+
 Build only; the script prints `CUDA_IMAGE` and the cubin hash:
 
 ```sh
