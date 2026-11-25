@@ -25,6 +25,7 @@ import { buildIwspVectorOpsConformanceCases } from "./vliw_gpu_conformance/iwsp_
 import { buildIwspParameterizedAttentionCases } from "./vliw_gpu_conformance/iwsp_parameterized_attention.mjs";
 import { buildIwspMatrixVectorStorageCase } from "./vliw_gpu_conformance/iwsp_matrix_vector.mjs";
 import { buildIwspEmbeddingLookupCase } from "./vliw_gpu_conformance/iwsp_embedding_lookup.mjs";
+import { buildIwspEmbeddingAttentionCases } from "./vliw_gpu_conformance/iwsp_embedding_attention.mjs";
 
 function programlet(name, source, invocation, expectedValues) {
   const compiled = compilePyashProgramSource(source, { invocation });
@@ -44,7 +45,7 @@ const SECTION_NAMES = [
   "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
   "nineteen", "twenty", "twenty one", "twenty two", "twenty three", "twenty four",
   "twenty five", "twenty six", "twenty seven", "twenty eight", "twenty nine", "zero", "first",
-  "second", "third", "fourth", "fifth"
+  "second", "hwas", "htis", "dlek"
 ];
 
 export function buildVliwGpuConformanceBatches(cases) {
@@ -72,6 +73,13 @@ export function buildVliwGpuConformanceBatches(cases) {
     ].join("\n");
   }).join("\n");
   const sectioned = compilePyashProgramSource(sectionSource);
+  const programletStorageCodelets = programletCases.flatMap(({ storageCodelets = [] }) => storageCodelets);
+  const programletPack = programletStorageCodelets.length
+    ? encodePyacPack([
+      ...decodePyacPack(sectioned.pack).codelets,
+      ...programletStorageCodelets
+    ])
+    : sectioned.pack;
 
   return [
     {
@@ -85,7 +93,7 @@ export function buildVliwGpuConformanceBatches(cases) {
       kind: "programlets",
       name: `programlet sections (${programletCases.length} cases)`,
       cases: programletCases,
-      pack: sectioned.pack,
+      pack: programletPack,
       sectionRanges: sectioned.sections,
       expectedSections: programletCases.map(({ expectedValues }) => expectedValues[0])
     }
@@ -503,6 +511,7 @@ export async function buildVliwGpuConformanceCases() {
     softmaxF64,
     attention,
     ...await buildIwspParameterizedAttentionCases(),
+    ...await buildIwspEmbeddingAttentionCases(),
     projectedAttention,
     minimalTransformerBlock,
     minimalTransformerBlockZeroVariance,

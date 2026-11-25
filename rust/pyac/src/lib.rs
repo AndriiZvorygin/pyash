@@ -339,14 +339,31 @@ fn execute_shared_programlet(
     base_codelet: usize,
     codelet_count: usize,
     error_index: usize,
+    storage: &pyac_vliw_core::StorageView<'_>,
 ) -> Result<PyacValue, PackExecutionError> {
     let mut symbol_words = [0; pyac_vliw_core::MAX_PROGRAMLET_SYMBOL_WORDS];
     let mut frames = pyac_vliw_core::ProgramletStack::EMPTY;
-    let result = pyac_vliw_core::execute_numeric_programlet_at(
+    let mut routine_directory_words = [0; pyac_vliw_core::PROGRAMLET_ROUTINE_DIRECTORY_WORDS];
+    let directory_result = pyac_vliw_core::build_programlet_routine_directory_words(
+        words,
+        base_codelet,
+        codelet_count,
+        &mut routine_directory_words,
+    );
+    if let Err(error) = directory_result {
+        return Err(PackExecutionError {
+            index: error_index,
+            source: programlet_error(error),
+        });
+    }
+    let result = pyac_vliw_core::execute_numeric_programlet_at_with_directory_words_and_storage(
         words,
         base_codelet,
         codelet_count,
         pyac_vliw_core::DEFAULT_PROGRAMLET_STEP_BUDGET,
+        &routine_directory_words,
+        0,
+        storage,
         &mut symbol_words,
         &mut frames,
     );
@@ -396,8 +413,27 @@ fn execute_shared_programlet(
 pub fn execute_pack_sections(
     pack: &PyacPack,
 ) -> Result<Vec<PyacSectionResult>, PackExecutionError> {
-    let words = pack.codelets.as_flattened();
-    if !pyac_vliw_core::has_programlet_section_header(&words, pack.codelets.len()) {
+    let prepared_storage =
+        prepare_storage_sections(&pack.codelets).map_err(|_| PackExecutionError {
+            index: 0,
+            source: SemanticError::MalformedStorageSection,
+        })?;
+    let storage = pyac_vliw_core::StorageView::new(
+        &prepared_storage.descriptors,
+        &prepared_storage.names,
+        &prepared_storage.payload,
+    );
+    let codelet_count = prepared_storage.executable_codelet_count;
+    let words = pack.codelets[..codelet_count].as_flattened();
+    execute_pack_sections_with_storage(&words, codelet_count, storage)
+}
+
+fn execute_pack_sections_with_storage(
+    words: &[impl pyac_vliw_core::VliwWord + Sync],
+    codelet_count: usize,
+    storage: pyac_vliw_core::StorageView<'_>,
+) -> Result<Vec<PyacSectionResult>, PackExecutionError> {
+    if !pyac_vliw_core::has_programlet_section_header(words, codelet_count) {
         return Err(PackExecutionError {
             index: 0,
             source: SemanticError::UnsupportedProgramlet,
@@ -405,15 +441,12 @@ pub fn execute_pack_sections(
     }
     let mut sections =
         [pyac_vliw_core::ProgramletSection::EMPTY; pyac_vliw_core::MAX_PROGRAMLET_SECTIONS];
-    let section_count = pyac_vliw_core::scan_numeric_programlet_sections(
-        &words,
-        pack.codelets.len(),
-        &mut sections,
-    )
-    .map_err(|error| PackExecutionError {
-        index: 0,
-        source: programlet_error(error),
-    })?;
+    let section_count =
+        pyac_vliw_core::scan_numeric_programlet_sections(words, codelet_count, &mut sections)
+            .map_err(|error| PackExecutionError {
+                index: 0,
+                source: programlet_error(error),
+            })?;
 
     let worker_count = std::thread::available_parallelism()
         .map(|count| count.get())
@@ -421,7 +454,13 @@ pub fn execute_pack_sections(
     map_independent_sections(section_count, worker_count, |section_index| {
         let section = sections[section_index];
         let start = section.codelet_start as usize;
-        let value = execute_shared_programlet(&words, start, section.codelet_count as usize, start);
+        let value = execute_shared_programlet(
+            words,
+            start,
+            section.codelet_count as usize,
+            start,
+            &storage,
+        );
         value.map(|value| PyacSectionResult {
             section_index,
             name_words: section.name_words[..section.name_length as usize]
@@ -454,7 +493,7 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
         &prepared_storage.payload,
     );
     if pyac_vliw_core::has_programlet_section_header(&words, codelet_count) {
-        let mut sections = execute_pack_sections(pack)?;
+        let mut sections = execute_pack_sections_with_storage(&words, codelet_count, storage)?;
         // This compatibility API drops section identity, so retain its
         // historical source-order result contract. Callers that need actual
         // completion order should use execute_pack_sections instead.
@@ -462,7 +501,8 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
         return Ok(sections.into_iter().map(|section| section.value).collect());
     }
     if pyac_vliw_core::is_numeric_programlet(&words, codelet_count) {
-        return execute_shared_programlet(&words, 0, codelet_count, 0).map(|value| vec![value]);
+        return execute_shared_programlet(&words, 0, codelet_count, 0, &storage)
+            .map(|value| vec![value]);
     }
 
     let mut values = Vec::new();

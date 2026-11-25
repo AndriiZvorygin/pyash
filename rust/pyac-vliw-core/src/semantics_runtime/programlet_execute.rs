@@ -1,53 +1,13 @@
 use super::*;
 
-#[cfg(not(target_arch = "spirv"))]
-pub fn execute_numeric_programlet(
-    words: &[impl VliwWord],
-    codelet_count: usize,
-    step_budget: u32,
-    symbol_words: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
-    frames: &mut ProgramletStack,
-) -> CoreResult {
-    execute_numeric_programlet_at(words, 0, codelet_count, step_budget, symbol_words, frames)
-}
-
-#[cfg(not(target_arch = "spirv"))]
-pub fn execute_numeric_programlet_at(
-    words: &[impl VliwWord],
-    base_codelet: usize,
-    codelet_count: usize,
-    step_budget: u32,
-    symbol_words: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
-    frames: &mut ProgramletStack,
-) -> CoreResult {
-    let mut routine_directory_words = [0; PROGRAMLET_ROUTINE_DIRECTORY_WORDS];
-    if let Err(error) = build_programlet_routine_directory_words(
-        words,
-        base_codelet,
-        codelet_count,
-        &mut routine_directory_words,
-    ) {
-        return CoreResult::failure(error, 0);
-    }
-    execute_numeric_programlet_at_with_directory_words(
-        words,
-        base_codelet,
-        codelet_count,
-        step_budget,
-        &routine_directory_words,
-        0,
-        symbol_words,
-        frames,
-    )
-}
-
-pub fn execute_numeric_programlet_at_with_directory_words(
+pub fn execute_numeric_programlet_at_with_directory_words_and_storage(
     words: &[impl VliwWord],
     base_codelet: usize,
     codelet_count: usize,
     step_budget: u32,
     routine_directory_words: &[u32],
     directory_offset: usize,
+    storage: &StorageView<'_>,
     symbol_words: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     frames: &mut ProgramletStack,
 ) -> CoreResult {
@@ -70,6 +30,7 @@ pub fn execute_numeric_programlet_at_with_directory_words(
         directory_offset,
         directory_entry_count,
         directory_signature_used,
+        storage,
         symbol_words,
         frames,
     )
@@ -84,6 +45,7 @@ fn execute_numeric_programlet_at_with_directory_view(
     directory_offset: usize,
     directory_entry_count: usize,
     directory_signature_used: usize,
+    storage: &StorageView<'_>,
     symbol_words: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     frames: &mut ProgramletStack,
 ) -> CoreResult {
@@ -280,6 +242,25 @@ fn execute_numeric_programlet_at_with_directory_view(
                 slots,
                 &vector_slots,
                 &frames.vector_values,
+            ) {
+                return CoreResult::failure(error, steps);
+            }
+        } else if frame.state == 1
+            && sentence.mood == DEONTIC
+            && is_programlet_embedding_lookup(words, base_codelet + pc, next_codelet - pc)
+        {
+            frame.action_started = 1;
+            let vector_slots = array_at!(frames.vector_slots, frame_index);
+            if let Err(error) = apply_programlet_embedding_lookup(
+                words,
+                base_codelet + pc,
+                next_codelet - pc,
+                &sentence_view,
+                storage,
+                symbol_words,
+                &vector_slots,
+                &mut frames.vector_values,
+                frame_index,
             ) {
                 return CoreResult::failure(error, steps);
             }

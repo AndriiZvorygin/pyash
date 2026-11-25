@@ -43,20 +43,37 @@ fn value_json(value: PyacValue) -> Value {
 }
 
 fn programlet_diagnostic(pack: &PyacPack) -> Option<String> {
+    let prepared = pyac::prepare_storage_sections(&pack.codelets).ok()?;
+    let codelet_count = prepared.executable_codelet_count;
     let words = pack
         .codelets
+        .get(..codelet_count)?
         .iter()
         .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
         .collect::<Vec<_>>();
-    if !pyac_vliw_core::is_numeric_programlet(&words, pack.codelets.len()) {
+    if !pyac_vliw_core::is_numeric_programlet(&words, codelet_count) {
         return None;
     }
+    let mut directory_words = [0; pyac_vliw_core::PROGRAMLET_ROUTINE_DIRECTORY_WORDS];
+    pyac_vliw_core::build_programlet_routine_directory_words(
+        &words,
+        0,
+        codelet_count,
+        &mut directory_words,
+    )
+    .ok()?;
+    let storage =
+        pyac_vliw_core::StorageView::new(&prepared.descriptors, &prepared.names, &prepared.payload);
     let mut symbol_words = [0; pyac_vliw_core::MAX_PROGRAMLET_SYMBOL_WORDS];
     let mut frames = pyac_vliw_core::ProgramletStack::EMPTY;
-    let result = pyac_vliw_core::execute_numeric_programlet(
+    let result = pyac_vliw_core::execute_numeric_programlet_at_with_directory_words_and_storage(
         &words,
-        pack.codelets.len(),
+        0,
+        codelet_count,
         pyac_vliw_core::DEFAULT_PROGRAMLET_STEP_BUDGET,
+        &directory_words,
+        0,
+        &storage,
         &mut symbol_words,
         &mut frames,
     );

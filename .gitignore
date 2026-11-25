@@ -108,3 +108,4 @@ container/criterion-huggingface/cache/
 container/gpu-housekeeper/service/state/
 __pycache__/
 *.pyc
+/.commandcode/

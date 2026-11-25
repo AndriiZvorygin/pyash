@@ -394,6 +394,10 @@ mod programlet_composition_actions;
 mod programlet_dispatch_index;
 #[path = "semantics_runtime/programlet_dispatch_signature.rs"]
 mod programlet_dispatch_signature;
+#[path = "semantics_runtime/programlet_embedding_lookup.rs"]
+mod programlet_embedding_lookup;
+#[path = "semantics_runtime/programlet_entrypoints.rs"]
+mod programlet_entrypoints;
 #[path = "semantics_runtime/programlet_execute.rs"]
 mod programlet_execute;
 #[path = "semantics_runtime/programlet_execute_call.rs"]
@@ -472,9 +476,15 @@ use programlet_dispatch_index::read_programlet_routine_directory_header;
 use programlet_dispatch_index::resolve_programlet_routine;
 #[cfg(not(target_arch = "spirv"))]
 use programlet_dispatch_index::validate_programlet_routine_directory_words;
-pub use programlet_execute::execute_numeric_programlet_at_with_directory_words;
+use programlet_embedding_lookup::{
+    apply_programlet_embedding_lookup, is_programlet_embedding_lookup,
+};
 #[cfg(not(target_arch = "spirv"))]
-pub use programlet_execute::{execute_numeric_programlet, execute_numeric_programlet_at};
+pub use programlet_entrypoints::{execute_numeric_programlet, execute_numeric_programlet_at};
+pub use programlet_entrypoints::{
+    execute_numeric_programlet_at_with_directory_words,
+    execute_numeric_programlet_at_with_directory_words_and_storage,
+};
 use programlet_execute_call::execute_programlet_call;
 use programlet_execute_declare::declare_programlet_local;
 use programlet_execute_paragraph::close_programlet_paragraph;

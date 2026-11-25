@@ -4,6 +4,44 @@ Use this file as the lookup record for Rust VLIW CPU/GPU conformance runs. Each
 entry records the repository revision, deployed artifact, host/device, route,
 and exact test outcome. A queued or timed-out job is not a passing test.
 
+## 2026-11-25: Programlet-Local Embedding Attention
+
+The programlet `tsoc hsat` action now selects a row from the file-backed
+embedding table using a token ID read from an immutable rank-one sequence, then
+copies that row into a declared local float vector. The Pyash programlet uses
+those local vectors for explicit query/key/value projections, stable softmax,
+and weighted value addition. Changing one embedding-table value changes the
+final result, proving the computation consumes the payload rather than a baked
+constant. This is a small feature-based attention proof, not a trained WSD
+model or benchmark score.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261125-0007-rust-vliw-conformance/result.pya` |
+| Example | `examples/vliw/iwsp-embedding-attention.pya`; baseline output `[0.5, 0.5]`; changed table output `[0.5, 1.5]` |
+| Source revision / checkout | `09d93b93165fb63ebeee27d7ab43e90ea355dbe7`; tracked tree was dirty during build |
+| Tracked patch SHA-256 | `f7b8e042e3bb02817e40811cdb6570437f2a4c5640e1ec4140fe1ce7bbe0b51e` |
+| Host and route | Mriczo -> Mriczo Housekeeper -> temporary Rust CUDA VLIW runtime |
+| GPU / driver | NVIDIA GeForce RTX 3090, driver `550.163.01`, 24,576 MiB |
+| Candidate CUDA image | `sha256:cf27b3e4d10cd055b302979a198aa15b2712279034b00272117f255195b5c600` |
+| Live conformance | 79 matrix cases and 3 positive typed-dispatch probes passed; all 6 expected errors matched |
+| Full run wall | 14,532.415 ms |
+| CPU reference batches | 45 codelet cases: 65.962 ms; 34 programlet sections: 68.074 ms |
+| CUDA event batches | Codelets: 12.358 ms; programlet sections: 135.071 ms |
+| Housekeeper client round trip | Codelets: 1,137.658 ms; programlet sections: 1,133.678 ms |
+| Build time | Rust-GPU compile: 9.14 s; `ptxas`: 47.48 s, 584,120 KiB peak RSS |
+| GPU runtime executable | 9,320,760 bytes; SHA-256 `d53932f03b736f619dbcef05639b9603d1e5c36ab18e4d41d922bd8088b37017` |
+| CUDA cubin | 3,700,808 bytes; SHA-256 `75e2d616e78cc6c7c0f7b82d0ad178099d972664dfd95c779c3725d5eabc1a66` |
+| CPU reference executable | 16,696,136 bytes; SHA-256 `a31ccc9eeca2fa9227e574d37020f393c091169d7839042dbbce4f52fc580da8` |
+| CUDA initialization / readiness | Cubin initialization: 0.12 s; canary ready: 763 ms |
+| Runtime after verification | Prior image `sha256:9889f729ae7906a324915dac8b25c0c5c78b2f6db708f5b6d675866381dbb940` restored and running; Housekeeper queue empty |
+
+The candidate image was tested with the full conformance matrix and then
+restored; it was not retained as Mriczo's active image. The build and run
+artifacts remain in ignored `rust/pyac-gpu/cuda-kernel/target/` and `artifacts/`
+paths. The matrix's two embedding-attention cases share the single programlet
+section batch with all other section cases.
+
 ## 2026-11-25: Payload-Selected Embedding Row
 
 The embedding-row operation now accepts either its existing literal uint16

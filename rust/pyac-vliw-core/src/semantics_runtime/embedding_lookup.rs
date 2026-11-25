@@ -175,29 +175,31 @@ pub(super) fn embedding_lookup_group(
     codelet_count: usize,
     storage: &StorageView<'_>,
 ) -> CoreResult {
-    let binding = match parse_embedding_row_binding(words, start, group_len) {
-        Ok(binding) => binding,
-        Err(error) => return CoreResult::failure(error, group_len as u32),
-    };
-    match storage_has_name(words, start, group_len, binding.result, storage) {
-        Ok(true) => return CoreResult::failure(ERROR_DUPLICATE_SIGNATURE, group_len as u32),
-        Err(error) => return CoreResult::failure(error, group_len as u32),
-        Ok(false) => {}
-    }
-    let row = match resolve_row_index(words, start, group_len, binding, storage) {
-        Ok(row) => row,
-        Err(error) => return CoreResult::failure(error, group_len as u32),
-    };
-    match resolve_storage_section_vector(words, start, group_len, binding.table, Some(row), storage)
-    {
-        Ok(Some(_)) => {
+    match resolve_embedding_row_operand(words, start, group_len, storage) {
+        Ok((_, _)) => {
             let mut result = CoreResult::empty();
             result.consumed_codelets = group_len.min(codelet_count) as u32;
             result
         }
-        Ok(None) => CoreResult::failure(ERROR_UNSUPPORTED, group_len as u32),
         Err(error) => CoreResult::failure(error, group_len as u32),
     }
+}
+
+pub(super) fn resolve_embedding_row_operand(
+    words: &[impl VliwWord],
+    start: usize,
+    group_len: usize,
+    storage: &StorageView<'_>,
+) -> Result<(EmbeddingRowBinding, VectorOperand), u32> {
+    let binding = parse_embedding_row_binding(words, start, group_len)?;
+    if storage_has_name(words, start, group_len, binding.result, storage)? {
+        return Err(ERROR_DUPLICATE_SIGNATURE);
+    }
+    let row = resolve_row_index(words, start, group_len, binding, storage)?;
+    let vector =
+        resolve_storage_section_vector(words, start, group_len, binding.table, Some(row), storage)?
+            .ok_or(ERROR_UNSUPPORTED)?;
+    Ok((binding, vector))
 }
 
 pub(super) fn resolve_prior_embedding_vector(
