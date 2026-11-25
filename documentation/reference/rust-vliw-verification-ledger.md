@@ -6,6 +6,32 @@ and exact test outcome. A queued or timed-out job is not a passing test. Entries
 are historical: compare the recorded source revision with `git rev-parse HEAD`
 before assuming the deployed artifact matches the checkout.
 
+## 2026-11-25: Combined build-and-deploy command
+
+Exercised the documented one-command path from the committed tree:
+`bash container/pyac-vliw-runtime/command/build.sh mriczo deploy`. The build was
+cache-warm (the worker stage finished in 8 s) and produced the same cubin hash;
+the canary ran the full matrix and retained the new image. This confirms the
+script path end to end, not just the build and canary separately.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261125-0012-rust-vliw-conformance/result.pya` |
+| Source revision / checkout | `531e01bd240b9f4128cbbdb19d8e3bb120ef44ca`; tracked tree dirty during build (unrelated untracked files) |
+| Host and route | Mriczo client -> Mriczo Housekeeper -> `rust-cuda-cubin` |
+| GPU | NVIDIA GeForce RTX 3090 |
+| Runtime image | `sha256:755f9531b0451a6e59a86b2b3bdce4fdf1852d1a8b5d00c3a0216644f8c1f90f` (`liberit/pyac-vliw-runtime:cuda-sm86-a99e5a3a2bcaf400`) |
+| Cubin | 3,866,952 bytes; SHA-256 `a99e5a3a2bcaf40011409ad217df2c54919e466000eff8b0051c3263f329b820` |
+| Runtime executable | 9,312,752 bytes; SHA-256 `f3b06fbd5db36ee4d152c672c8b772786245f2e2594316e2ce179ae983ba3966` |
+| Runtime initialization | Cubin load and GPU initialization 0.09 s; ready in 1,013 ms |
+| Full verification | 79/79 value cases passed (45 codelet, 34 programlet); 3 typed-dispatch probes; 5/5 expected errors matched |
+| CPU batches | Codelet batch: 62.771 ms; programlet sections: 67.939 ms |
+| CUDA event batches | Codelet batch: 12.464 ms; programlet sections: 88.107 ms |
+| Housekeeper client round trips | Codelet batch: 1,133.131 ms; section batch: 1,133.750 ms |
+| Total run wall | 13,692.524 ms |
+| Deployment | Retained on Mriczo; prior image `sha256:4cda8d9404573b5705e9e9d203de25a5c410dae4e054ad0b954f206a6034e0e2` is the rollback target |
+| Rollback | `bash container/pyac-vliw-runtime/command/cuda-canary.sh mriczo liberit/pyac-vliw-runtime:cuda-sm86-a99e5a3a2bcaf400 rollback` |
+
 ## 2026-11-25: Dockerized cubin build and redeploy
 
 The CUDA cubin and worker binary are now built inside the image build rather
