@@ -14,7 +14,7 @@ import { id3v2Size, measureMp3Buffer, parseFrameHeader } from "../program/librar
 import { parseTrackName, publicCatalogue, scanCatalogue } from "../program/library/radio/catalogue.mjs";
 import { renderStationPage } from "../program/library/radio/page.mjs";
 import { contractNames, contractWithOrder, inContract, orderTracks, parseLanes, parseRotation, readLanes, readRotation } from "../program/library/radio/rotation.mjs";
-import { createRadioStation } from "../program/library/radio/station.mjs";
+import { createRadioStation, shuffleTracks } from "../program/library/radio/station.mjs";
 import { createRadioServer, formatHost, rotationContract } from "../command/yiniana_radio.mjs";
 import { loadDefaultConfig } from "../command/run_pya_helpers.mjs";
 
@@ -304,13 +304,50 @@ test("the station moves on to the next track when the song ends", async () => {
   const root = await makeTempDir();
   const first = await writeTrack(root, "ace-step-dignity.mp3", { frames: 4 });
   const second = await writeTrack(root, "ace-step-peace.mp3", { frames: 4 });
-  const station = createRadioStation({ tracks: [first, second], gapMs: 10 });
+  const station = createRadioStation({ tracks: [first, second], gapMs: 10, random: () => 0 });
   station.start();
 
   const moved = await waitFor(() => station.state().index === 1);
   assert.ok(moved, "the station stayed on the first track");
   assert.equal(station.state().track.filename, "ace-step-peace.mp3");
   station.stop();
+});
+
+test("the station plays the songs at random, not in order", () => {
+  const tracks = ["a", "b", "c", "d"].map((name) => ({ filename: `${name}.mp3` }));
+  const shuffled = shuffleTracks(tracks, () => 0.5);
+  assert.notDeepEqual(
+    shuffled.map((track) => track.filename),
+    ["a.mp3", "b.mp3", "c.mp3", "d.mp3"],
+    "the songs are not left in order"
+  );
+  assert.deepEqual(
+    [...shuffled].map((track) => track.filename).sort(),
+    ["a.mp3", "b.mp3", "c.mp3", "d.mp3"],
+    "every song is still in the bag"
+  );
+});
+
+test("the station plays every song of the rotation before it plays one twice", async () => {
+  const root = await makeTempDir();
+  const names = ["one", "two", "three", "four"];
+  const tracks = [];
+  for (const name of names) tracks.push(await writeTrack(root, `az-${name}.mp3`, { frames: 2 }));
+  const played = [];
+  const station = createRadioStation({ tracks, gapMs: 0, random: () => 0.42 });
+  station.on("track", ({ track }) => played.push(track.filename));
+  station.start();
+
+  const heard = await waitFor(() => played.length >= names.length);
+  station.stop();
+
+  assert.ok(heard, "the station played the whole rotation");
+  assert.equal(new Set(played.slice(0, names.length)).size, names.length, "no song played twice before the end");
+  assert.deepEqual(
+    [...played.slice(0, names.length)].sort(),
+    names.map((name) => `az-${name}.mp3`).sort(),
+    "every song of the rotation was heard"
+  );
 });
 
 test("the station drops a listener that cannot keep up", async () => {

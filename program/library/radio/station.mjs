@@ -17,16 +17,35 @@ function sleep(ms) {
 }
 
 /**
+ * Shuffle the songs. A radio does not play in alphabetical order, and it does
+ * not play the same programme twice: the station keeps a bag of the songs and
+ * empties it before it fills it again, so every song of the rotation is heard
+ * once before any of them is heard twice.
+ */
+export function shuffleTracks(tracks = [], random = Math.random) {
+  const list = Array.isArray(tracks) ? tracks.filter(Boolean) : [];
+  const shuffled = [...list];
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(random() * (index + 1));
+    const held = shuffled[index];
+    shuffled[index] = shuffled[swap];
+    shuffled[swap] = held;
+  }
+  return shuffled;
+}
+
+/**
  * The station plays the catalogue in a loop and hands the same audio to every
  * listener, the way a broadcast does. The programme advances on its own
  * clock, so the station keeps playing whether or not anyone is listening, and
  * a listener who tunes in late joins the song that is playing.
  */
-export function createRadioStation({ tracks = [], gapMs = 500, now = () => Date.now() } = {}) {
+export function createRadioStation({ tracks = [], gapMs = 500, now = () => Date.now(), random = Math.random } = {}) {
   const emitter = new EventEmitter();
   const clients = new Set();
   let playlist = Array.isArray(tracks) ? tracks.filter(Boolean) : [];
-  let index = playlist.length ? 0 : -1;
+  let index = -1;
+  let bag = [];
   let trackStartedAt = 0;
   let timer = null;
   let stopped = false;
@@ -35,6 +54,26 @@ export function createRadioStation({ tracks = [], gapMs = 500, now = () => Date.
 
   function currentTrack() {
     return index >= 0 ? playlist[index] ?? null : null;
+  }
+
+  /**
+   * The next song to play: the next one out of the bag, and a fresh bag when
+   * the bag is empty. The song that is playing is never put back into the
+   * bag, so no song is heard twice before the rest of the rotation has been.
+   */
+  function nextTrackIndex() {
+    if (!playlist.length) return -1;
+    const playing = currentTrack();
+    if (!bag.length) {
+      const rest = playing ? playlist.filter((track) => track.filename !== playing.filename) : playlist;
+      bag = shuffleTracks(rest, random).map((track) => track.filename);
+    }
+    while (bag.length) {
+      const name = bag.pop();
+      const at = playlist.findIndex((track) => track.filename === name);
+      if (at >= 0) return at;
+    }
+    return Math.floor(random() * playlist.length);
   }
 
   function dropClient(client) {
@@ -112,7 +151,7 @@ export function createRadioStation({ tracks = [], gapMs = 500, now = () => Date.
 
   function advance() {
     if (stopped || !playlist.length) return;
-    index = (index + 1) % playlist.length;
+    index = nextTrackIndex();
     if (gapMs > 0) {
       timer = setTimeout(() => {
         timer = null;
@@ -136,13 +175,15 @@ export function createRadioStation({ tracks = [], gapMs = 500, now = () => Date.
   /**
    * Take a fresh catalogue. The track that is playing keeps playing when it
    * survives the change; when it does not, the station moves to the head of
-   * the new catalogue.
+   * the new catalogue. The bag of songs is emptied, so the new catalogue is
+   * heard in a fresh order.
    */
   function setTracks(next) {
     const list = Array.isArray(next) ? next.filter(Boolean) : [];
     const playing = currentTrack();
     const keep = playing ? list.findIndex((track) => track.filename === playing.filename) : -1;
     playlist = list;
+    bag = [];
     if (!playlist.length) {
       index = -1;
       generation += 1;
@@ -152,7 +193,7 @@ export function createRadioStation({ tracks = [], gapMs = 500, now = () => Date.
       index = keep;
       return;
     }
-    index = 0;
+    index = nextTrackIndex();
     if (playing) {
       generation += 1;
       playCurrent();
@@ -182,6 +223,7 @@ export function createRadioStation({ tracks = [], gapMs = 500, now = () => Date.
     if (started) return;
     started = true;
     stopped = false;
+    index = nextTrackIndex();
     playCurrent();
   }
 

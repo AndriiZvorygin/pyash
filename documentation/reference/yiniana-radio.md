@@ -482,10 +482,17 @@ yiniana radio: the rotation holds 129 song(s), 24 rendered
 
 ### The order of the programme
 
-The programme is not alphabetical. It is the order of `radio/rotation.txt`:
-the songs that came before the radio go first, and after them come the lanes
-of the rotation, in the order of `radio/topics.txt`. A song the rotation file
-does not name plays after both, so nothing is ever left out.
+The station does not play in alphabetical order, and it does not play the same
+programme twice. It keeps a bag of the songs and empties it before it fills it
+again: every song of the rotation is heard once before any of them is heard
+twice. The song that is playing is never put back into the bag, so a song
+cannot come round twice in a row either.
+
+The bag is shuffled when it is filled, so the programme is different every
+time it comes round. The rotation file still decides *which* songs are in the
+rotation and in what order the station lists them — the songs that came before
+the radio first, then the lanes of the rotation — but the order they are
+played in is the station's own choice.
 
 ## 7. The Producer
 
