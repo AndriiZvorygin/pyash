@@ -21,15 +21,23 @@ code-resident tables in `program/verbs/*/**.mjs` by
 
 Atomic verbs spell their English surface and resolve to their pya atom
 (`multiply` -> `hgoc`); compound verbs are already pya sequences
-(`kl6m psas`). Both work, and the current snapshot carries 537 signatures across
-single atoms and 9 compound verbs.
+(`kl6m psas`). Both work, and the current snapshot carries 1,080 signatures
+across 71 verbs.
 
-A skipped row means the **encoder** cannot resolve the verb, not that the
-catalog lacks a linkage. Many skipped verbs do have real dictionary entries —
-`cut` has 47, `evoke` 3, `verify` 2 — but verb resolution still reads the
-deprecated `program/library/pyashWords.json` through
+Type words follow the encoder's own rule: `num`, `bool`, `vec`, and `float`
+resolve to their grammar form (`number_`, `boolean_`, `vector`, `float`); any
+other type word resolves by its own surface. `name <X>` is a named type, so
+`X` is an arbitrary identifier and is not resolved against the vocabulary.
+
+A skipped row means the **encoder** cannot resolve the verb or its types, not
+that the catalog lacks a linkage. Many skipped verbs do have real dictionary
+entries — `cut` has 47, `evoke` 3, `verify` 2 — but verb resolution still reads
+the deprecated `program/library/pyashWords.json` through
 `lookupLegacyWordSequence` instead of the volume, so coverage is bounded by that
-older table. See [`pyashwords-deprecated.md`](../../../documentation/reference/pyashwords-deprecated.md).
+older table. A concrete example is `ob date`: the catalog has `date`
+(`hta2c`), but the encoder has no `date` type word, so those signatures are
+correctly skipped. See
+[`pyashwords-deprecated.md`](../../../documentation/reference/pyashwords-deprecated.md).
 `collectOperationSignatures` reports every skipped row with a reason rather than
 inventing a key.
 

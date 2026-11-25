@@ -39,20 +39,19 @@ const CASE_ENTRY_BY_ROLE = new Map([
   ["atindex", "location_case_"]
 ]);
 
-// Authoritative surface-to-entry map, mirrored from
+// Grammar type words. `num`, `bool`, `vec`, and `date` are sentence type tokens
+// whose vocabulary identity is the trailing-underscore grammar form; the rest
+// resolve by surface through the encoder's own lookup. Mirrored from
 // program/library/vliw/sentence.mjs so the dictionary and lowering agree.
-const TYPE_ENTRY_BY_SURFACE = Object.freeze({
+const TYPE_GRAMMAR_ENTRY = Object.freeze({
   num: "number_",
   number: "number_",
   bool: "boolean_",
   boolean: "boolean_",
   text: "text_",
-  vec: "vector",
-  float: "float",
   name: "name_",
-  filename: "filename_",
-  map: "map_",
-  series: "series_"
+  vec: "vector",
+  float: "float"
 });
 
 // A signature field boundary is any mapped case or any compositional keyword,
@@ -86,9 +85,13 @@ function caseWords(role) {
 function typeWords(tokens) {
   const words = [];
   for (const token of tokens) {
-    const entryName = TYPE_ENTRY_BY_SURFACE[String(token).trim().toLowerCase()];
-    if (!entryName) return null;
-    const entry = entryForName(entryName);
+    const surface = String(token).trim().toLowerCase();
+    const grammarEntry = TYPE_GRAMMAR_ENTRY[surface];
+    // A grammar type resolves to its trailing-underscore form; any other type
+    // word resolves by its own surface, exactly as the encoder does.
+    const entry = grammarEntry
+      ? entryForName(grammarEntry)
+      : entryForName(surface);
     if (!entry) return null;
     words.push(hnucOf(entry));
   }
@@ -112,12 +115,22 @@ function splitArguments(tail) {
     while (end < tail.length && !CASE_WORDS.has(tail[end])) end += 1;
     if (end === index + 1) return null;
     const tokens = tail.slice(index + 1, end);
-    // Leading type words are the value type; a trailing modifier such as
-    // `atmost num` or `among name series` is a constraint, not part of the type.
+    // A field's leading words are its value type. `name <X>` is a named type:
+    // `name` is the type word and `<X>` is an arbitrary identifier, not a
+    // vocabulary entry, so it must not be resolved as a type. A trailing
+    // modifier such as `atmost num` or `among name series` is a constraint.
     const typeTokens = [];
-    for (const token of tokens) {
-      if (TYPE_ENTRY_BY_SURFACE[String(token).toLowerCase()]) typeTokens.push(token);
-      else break;
+    for (let cursor = 0; cursor < tokens.length; cursor += 1) {
+      const surface = String(tokens[cursor]).toLowerCase();
+      if (surface === "name") {
+        // `name <X>`: `name` is the type word and `<X>` is an arbitrary
+        // identifier, not a vocabulary entry.
+        typeTokens.push(tokens[cursor]);
+        if (cursor + 1 < tokens.length) typeTokens.push(tokens[cursor + 1]);
+        break;
+      }
+      if (!(TYPE_GRAMMAR_ENTRY[surface] || entryForName(surface))) break;
+      typeTokens.push(tokens[cursor]);
     }
     if (!typeTokens.length) return null;
     argumentsList.push({
