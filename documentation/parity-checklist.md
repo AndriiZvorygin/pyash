@@ -2,6 +2,12 @@
 
 This checklist tracks parity work with explicit gates.
 
+## Authority and parity classes
+
+See `reference/parity-gate.md`. A new verb or signature declares one class:
+`core`, `pure`, `host`, or `experimental`. A `core` change must pass
+`npm run parity:gate`. The VLIW conformance matrix remains the `pure` gate.
+
 ## 1) Recurrence Grammar Lock
 
 Status: done
@@ -91,3 +97,24 @@ env -u PYA_MIND_RESPONSE -u PYA_HEAR_FIXTURE -u PYA_PIPER_FIXTURE -u PYA_COMMAND
 npm test
 git diff --check
 ```
+
+## 8) Result-level parity gate
+
+Status: done for the declared green families; four known divergences pinned.
+
+Gate:
+- `core` cases produce identical normalized output on the interpreter, compiled JavaScript, and compiled C.
+- Known divergences are pinned per backend; any change, a regression or a fix, fails the gate.
+- The authority map and parity classes are in `reference/parity-gate.md`.
+
+Verification:
+```sh
+npm run parity:gate
+node --test quiz/parity_gate.test.mjs
+```
+
+Pinned divergences:
+- numeric fact write: interpreter value, compiled backends emit the name.
+- ceremony numeric result: interpreter value, compiled `undefined` / `0`.
+- file read result: interpreter contents, compiled filename.
+- nested comparison leaves: interpreter result, compiled exit 1.

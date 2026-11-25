@@ -18,6 +18,7 @@
     "house:api:check": "node command/check_house_api.mjs",
     "measure:balance": "node command/measure_code_balance.mjs",
     "examples:audit": "node command/audit_examples.mjs",
+    "parity:gate": "node command/parity_gate.mjs",
     "android:default": "node command/android_default_device.mjs",
     "android:worker": "node command/android_host_worker.mjs",
     "android:bridge": "node command/android_host_listener.mjs",
