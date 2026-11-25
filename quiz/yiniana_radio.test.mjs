@@ -13,7 +13,7 @@ import { forget, remember } from "../program/remember/index.mjs";
 import { id3v2Size, measureMp3Buffer, parseFrameHeader } from "../program/library/radio/mp3.mjs";
 import { parseTrackName, publicCatalogue, scanCatalogue } from "../program/library/radio/catalogue.mjs";
 import { renderStationPage } from "../program/library/radio/page.mjs";
-import { contractNames, inContract, parseLanes, readLanes } from "../program/library/radio/rotation.mjs";
+import { contractNames, contractWithOrder, inContract, orderTracks, parseLanes, parseRotation, readLanes, readRotation } from "../program/library/radio/rotation.mjs";
 import { createRadioStation } from "../program/library/radio/station.mjs";
 import { createRadioServer, formatHost, rotationContract } from "../command/yiniana_radio.mjs";
 import { loadDefaultConfig } from "../command/run_pya_helpers.mjs";
@@ -215,12 +215,56 @@ test("the lanes of a file that is not there are empty", async () => {
 test("the station builds its rotation from the lanes and the engines", async () => {
   forget();
   await loadDefaultConfig({ cwd: REPO_ROOT, interpretFn: interpret });
-  const contract = await rotationContract({ cwd: REPO_ROOT });
-  assert.ok(contract.has("ace-step-dignity.mp3"), "the first lane of the first engine is in the rotation");
-  assert.ok(contract.has("yue2-love.mp3"), "the last lane of the second engine is in the rotation");
-  assert.ok(!contract.has("ace-step-dignity-reference-shape.mp3"), "an experiment is not in the rotation");
-  assert.equal(contract.size, 24);
+  const { contract, order } = await rotationContract({ cwd: REPO_ROOT });
+  assert.ok(contract.has("ace-step-love.mp3"), "a lane of the first engine is in the rotation");
+  assert.ok(contract.has("ace-step-gratitude.mp3"), "another lane is in the rotation");
+  assert.ok(!contract.has("ace-step-love-reference-shape.mp3"), "an experiment is not in the rotation");
+  assert.ok(contract.has("az-god-remembers.mp3"), "a song of the house is in the rotation");
+  assert.ok(!contract.has("yue2-love.mp3"), "an engine that is on the backburner is not in the rotation");
+  assert.equal(contract.size, order.length, "the contract and the order hold the same songs");
   forget();
+});
+
+test("the songs that came before the radio play first", () => {
+  const tracks = [
+    { filename: "ace-step-love.mp3" },
+    { filename: "az-god-remembers.mp3" },
+    { filename: "az-compassion.mp3" },
+    { filename: "ace-step-gratitude.mp3" }
+  ];
+  const order = parseRotation([
+    "# the songs of the house",
+    "",
+    "az-compassion.mp3",
+    "az-god-remembers"
+  ].join("\n"));
+  assert.deepEqual(order, ["az-compassion.mp3", "az-god-remembers.mp3"], "a name gets its extension");
+
+  const ordered = orderTracks(tracks, order);
+  assert.deepEqual(ordered.map((track) => track.filename), [
+    "az-compassion.mp3",
+    "az-god-remembers.mp3",
+    "ace-step-love.mp3",
+    "ace-step-gratitude.mp3"
+  ]);
+});
+
+test("the rotation file holds the songs of the house and the order of the lanes", async () => {
+  const order = await readRotation(path.join(REPO_ROOT, "radio", "rotation.txt"));
+  assert.ok(order.length > 10, "the house songs are named");
+  assert.ok(order.includes("az-god-remembers.mp3"));
+  assert.deepEqual(await readRotation("/nowhere/at/all/rotation.txt"), [], "a missing file leaves the order empty");
+});
+
+test("the contract holds the lanes and the songs the rotation names", () => {
+  const contract = contractWithOrder({
+    engines: ["ace-step"],
+    topics: ["love", "grace"],
+    order: ["az-god-remembers.mp3"]
+  });
+  assert.equal(contract.size, 3);
+  assert.ok(contract.has("ace-step-love.mp3"));
+  assert.ok(contract.has("az-god-remembers.mp3"));
 });
 
 test("the catalogue keeps its private details to itself", async () => {

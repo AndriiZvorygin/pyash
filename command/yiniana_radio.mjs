@@ -12,7 +12,7 @@ import { interpret } from "../program/bridge/index.mjs";
 import { resolveConfigMap, resolveConfigNum, resolveConfigText } from "../program/configure/env.mjs";
 import { publicCatalogue, scanCatalogue } from "../program/library/radio/catalogue.mjs";
 import { renderStationPage } from "../program/library/radio/page.mjs";
-import { contractNames, readLanes } from "../program/library/radio/rotation.mjs";
+import { contractWithOrder, orderTracks, readLanes, readRotation } from "../program/library/radio/rotation.mjs";
 import { createRadioStation } from "../program/library/radio/station.mjs";
 import { loadDefaultConfig } from "./run_pya_helpers.mjs";
 
@@ -21,7 +21,8 @@ const DEFAULT_PORT = 8090;
 const DEFAULT_CATALOGUE = "radio/audio";
 const DEFAULT_STATION_NAME = "Yiniana Radio";
 const DEFAULT_LANES = "radio/topics.txt";
-const RESCAN_MS = 60 * 1000;
+const DEFAULT_ROTATION = "radio/rotation.txt";
+const RESCAN_MS = 15 * 1000;
 
 function jsonResponse(res, status, value) {
   const body = JSON.stringify(value, null, 2);
@@ -145,8 +146,11 @@ export function createRadioServer({ station, stationName = DEFAULT_STATION_NAME 
 }
 
 /**
- * The songs the station is contracted to play: every lane, every engine. The
- * producer fills exactly this list, so the programme and the work list agree.
+ * The songs the station is contracted to play: every lane of every engine,
+ * and every song the rotation file names. The producer fills the lanes and
+ * the rotation file holds what came before, so the programme and the work
+ * list agree.
+ *
  * A station without lanes or engines has no contract and plays everything it
  * finds.
  */
@@ -154,7 +158,14 @@ export async function rotationContract({ cwd = process.cwd() } = {}) {
   const engines = Object.keys(resolveConfigMap("radio producer engines") ?? {});
   const lanesFile = resolveConfigText("radio producer lanes") || DEFAULT_LANES;
   const topics = await readLanes(path.resolve(cwd, lanesFile));
-  return contractNames({ engines, topics });
+  const rotationFile = resolveConfigText("radio rotation") || DEFAULT_ROTATION;
+  const house = await readRotation(path.resolve(cwd, rotationFile));
+  const lanes = [];
+  for (const topic of topics) {
+    for (const engine of engines) lanes.push(`${engine}-${topic}.mp3`);
+  }
+  const order = [...house, ...lanes];
+  return { contract: contractWithOrder({ engines, topics, order }), order };
 }
 
 /**
@@ -168,8 +179,17 @@ export async function startRadioStation({ cwd = process.cwd(), listen = true } =
   const catalogueDirectory = path.resolve(cwd, resolveConfigText("radio catalogue") || DEFAULT_CATALOGUE);
   const lyricsDirectory = path.resolve(path.dirname(catalogueDirectory), "lyrics");
   const stationName = resolveConfigText("radio station name") || DEFAULT_STATION_NAME;
-  const contract = await rotationContract({ cwd });
-  const tracks = await scanCatalogue({ directory: catalogueDirectory, lyricsDirectory, contract });
+  const buildProgramme = async () => {
+    // The lanes and the rotation file are read every time, so a new lane or
+    // a new song joins the programme without the station being restarted.
+    const { contract, order } = await rotationContract({ cwd });
+    const tracks = orderTracks(
+      await scanCatalogue({ directory: catalogueDirectory, lyricsDirectory, contract }),
+      order
+    );
+    return { contract, tracks };
+  };
+  const { contract, tracks } = await buildProgramme();
   const station = createRadioStation({ tracks });
   station.on("track", ({ track }) => {
     process.stdout.write(`yiniana radio: now playing ${track.title}\n`);
@@ -177,7 +197,7 @@ export async function startRadioStation({ cwd = process.cwd(), listen = true } =
   station.start();
   const { server } = createRadioServer({ station, stationName });
   const rescan = setInterval(async () => {
-    const next = await scanCatalogue({ directory: catalogueDirectory, lyricsDirectory, contract });
+    const { tracks: next } = await buildProgramme();
     const before = station.tracks.map((track) => track.filename).join("\n");
     const after = next.map((track) => track.filename).join("\n");
     if (before === after) return;

@@ -13,7 +13,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { interpret } from "../program/bridge/index.mjs";
-import { resolveConfigMap, resolveConfigMapNum, resolveConfigMapText, resolveConfigNum, resolveConfigText } from "../program/configure/env.mjs";
+import { resolveConfigBool, resolveConfigMap, resolveConfigMapNum, resolveConfigMapText, resolveConfigNum, resolveConfigText } from "../program/configure/env.mjs";
 import { parseLanes } from "../program/library/radio/rotation.mjs";
 import { recoverRate, transcriptText } from "./yiniana_lyric_recovery.mjs";
 import { loadDefaultConfig } from "./run_pya_helpers.mjs";
@@ -226,79 +226,92 @@ export async function produce({
   render = renderSeed,
   score = scoreRender,
   publish = publishSong,
+  loop = false,
+  pauseSeconds = 0,
   log = () => {}
 } = {}) {
   const lanes = parseLanes(await fs.readFile(path.resolve(repoRoot, lanesFile), "utf8"));
   const catalogue = path.resolve(repoRoot, catalogueDirectory);
   const radio = path.resolve(repoRoot, radioDirectory);
   await fs.mkdir(catalogue, { recursive: true });
-  const published = (await fs.readdir(catalogue))
+  const listPublished = async () => (await fs.readdir(catalogue))
     .filter((name) => name.toLowerCase().endsWith(".mp3"));
-  const work = buildWorkList({ lanes, engines, published });
+  let published = await listPublished();
   const summary = {
     lanes: lanes.length,
     engines: engines.length,
     published: published.length,
-    queued: work.length,
+    queued: buildWorkList({ lanes, engines, published }).length,
     songs: []
   };
-  if (!work.length) {
-    log("the catalogue holds every song of the rotation");
-    return summary;
-  }
-  const queue = work.slice(0, Math.max(1, songsPerRun));
-  for (const item of queue) {
-    const record = { topic: item.topic, engine: item.engine, status: "skipped", seeds: [], published: "" };
-    const workflow = workflows[item.engine];
-    const duration = Number(durations[item.engine] ?? DEFAULT_DURATION_SECONDS);
-    const sheetPath = await ensureSheet({ repoRoot, topic: item.topic, radioDirectory: radio, log });
-    const lyrics = await fs.readFile(sheetPath, "utf8");
-    for (let attempt = 0; attempt < Math.max(1, seeds); attempt += 1) {
-      const seed = pickSeed();
-      const renderPath = path.join(repoRoot, "artifacts", "radio-producer", `${item.engine}-${item.topic}-${seed}.mp3`);
-      await fs.mkdir(path.dirname(renderPath), { recursive: true });
-      log(`rendering ${item.engine} ${item.topic} with seed ${seed}`);
-      await render({
-        repoRoot,
-        workflow,
-        lyrics,
-        seed,
-        duration,
-        outputPath: renderPath,
-        comfyHost,
-        housekeeperUrl
-      });
-      const measured = await score({
-        audioPath: renderPath,
-        sheetPath,
-        windowSeconds,
-        hearBin,
-        hearModel,
-        repoRoot
-      });
-      record.seeds.push({ seed, percent: measured.percent, hits: measured.hits, total: measured.total });
-      log(`seed ${seed} carried ${measured.percent}% of the words`);
+  for (;;) {
+    const work = buildWorkList({ lanes, engines, published });
+    summary.queued = work.length;
+    summary.published = published.length;
+    if (!work.length) {
+      log("the catalogue holds every song of the rotation");
+      break;
     }
-    const winner = chooseWinner(record.seeds);
-    if (!winner || Number(winner.percent ?? 0) < Number(minRecovery)) {
-      record.status = "rejected";
-      record.note = `the best seed carried ${winner?.percent ?? 0}% of the words, below the ${minRecovery}% the song needs`;
-      log(record.note);
+    const queue = work.slice(0, Math.max(1, songsPerRun));
+    for (const item of queue) {
+      const record = { topic: item.topic, engine: item.engine, status: "skipped", seeds: [], published: "" };
+      const workflow = workflows[item.engine];
+      const duration = Number(durations[item.engine] ?? DEFAULT_DURATION_SECONDS);
+      const sheetPath = await ensureSheet({ repoRoot, topic: item.topic, radioDirectory: radio, log });
+      const lyrics = await fs.readFile(sheetPath, "utf8");
+      for (let attempt = 0; attempt < Math.max(1, seeds); attempt += 1) {
+        const seed = pickSeed();
+        const renderPath = path.join(repoRoot, "artifacts", "radio-producer", `${item.engine}-${item.topic}-${seed}.mp3`);
+        await fs.mkdir(path.dirname(renderPath), { recursive: true });
+        log(`rendering ${item.engine} ${item.topic} with seed ${seed}`);
+        await render({
+          repoRoot,
+          workflow,
+          lyrics,
+          seed,
+          duration,
+          outputPath: renderPath,
+          comfyHost,
+          housekeeperUrl
+        });
+        const measured = await score({
+          audioPath: renderPath,
+          sheetPath,
+          windowSeconds,
+          hearBin,
+          hearModel,
+          repoRoot
+        });
+        record.seeds.push({ seed, percent: measured.percent, hits: measured.hits, total: measured.total });
+        log(`seed ${seed} carried ${measured.percent}% of the words`);
+      }
+      const winner = chooseWinner(record.seeds);
+      if (!winner || Number(winner.percent ?? 0) < Number(minRecovery)) {
+        record.status = "rejected";
+        record.note = `the best seed carried ${winner?.percent ?? 0}% of the words, below the ${minRecovery}% the song needs`;
+        log(record.note);
+        summary.songs.push(record);
+        continue;
+      }
+      const sourcePath = path.join(repoRoot, "artifacts", "radio-producer", `${item.engine}-${item.topic}-${winner.seed}.mp3`);
+      const target = await publish({
+        sourcePath,
+        catalogueDirectory: catalogue,
+        filename: item.filename
+      });
+      record.status = "published";
+      record.seed = winner.seed;
+      record.percent = winner.percent;
+      record.published = target;
+      log(`published ${item.filename} from seed ${winner.seed}`);
       summary.songs.push(record);
-      continue;
     }
-    const sourcePath = path.join(repoRoot, "artifacts", "radio-producer", `${item.engine}-${item.topic}-${winner.seed}.mp3`);
-    const target = await publish({
-      sourcePath,
-      catalogueDirectory: catalogue,
-      filename: item.filename
-    });
-    record.status = "published";
-    record.seed = winner.seed;
-    record.percent = winner.percent;
-    record.published = target;
-    log(`published ${item.filename} from seed ${winner.seed}`);
-    summary.songs.push(record);
+    if (!loop) break;
+    published = await listPublished();
+    if (pauseSeconds > 0) {
+      log(`waiting ${pauseSeconds}s before the next song`);
+      await new Promise((resolve) => setTimeout(resolve, pauseSeconds * 1000));
+    }
   }
   return summary;
 }
@@ -333,6 +346,8 @@ export async function startProducer({ cwd = process.cwd() } = {}) {
     songsPerRun: resolveConfigNum("radio producer song count") ?? DEFAULT_SONGS_PER_RUN,
     windowSeconds: resolveConfigNum("radio producer window seconds") ?? DEFAULT_WINDOW_SECONDS,
     minRecovery: resolveConfigNum("radio producer min recovery") ?? DEFAULT_MIN_RECOVERY,
+    loop: resolveConfigBool("radio producer loop") ?? false,
+    pauseSeconds: resolveConfigNum("radio producer pause seconds") ?? 0,
     hearBin: resolveConfigText("hear bin") ?? "",
     hearModel: resolveConfigText("hear model") ?? "",
     comfyHost: resolveConfigText("music host") ?? DEFAULT_COMFYUI_HOST,

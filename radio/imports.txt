@@ -1,0 +1,41 @@
+# The songs the house made before the radio.
+#
+# Every line is one song to bring into the rotation:
+#
+#   <name>.mp3 | <source file> | <lyric sheet>
+#
+# The sheet is optional: a song without one is audio we have and words we do
+# not. The name follows the folder contract, so the station reads the engine
+# and the topic off it the way it reads any other song. The "az" engine is
+# Andrii Zvorygin, the house's own voice.
+#
+# The import copies the song into radio/audio/ as an mp3 the station can
+# stream, and the sheet into radio/lyrics/ so the station page can show the
+# words. A song that is already in the catalogue is left alone.
+
+# The neighbour sings: compassion and the open hand.
+az-compassion.mp3 | /home/htaf/pyac/pyash/know/input/AZ-Andrii_Zvorygin_2_20.opus | /home/htaf/pyac/pyash/know/input/AZ-Andrii_Zvorygin_2_20.lyrics.txt
+az-kinder-path.mp3 | /home/htaf/pyac/pyash/know/input/AZ-Andrii_Zvorygin3_15ComfyUI_00307_.opus | /home/htaf/pyac/pyash/know/input/AZ-Andrii_Zvorygin3_15ComfyUI_00307_.lyrics.txt
+az-seed-planted.mp3 | /home/htaf/pyac/pyash/know/input/AZ-Andrii_Zvorygin_For_Owen_Sound.opus | /home/htaf/pyac/pyash/know/input/AZ-Andrii_Zvorygin_For_Owen_Sound.lyrics.txt
+az-every-walk.mp3 | /home/htaf/pyac/pyash/know/input/AZ-Every_walk_one_in_christ.opus | /home/htaf/pyac/pyash/know/input/AZ-Every_walk_one_in_christ.txt
+az-fresh-light.mp3 | /home/htaf/pyac/pyash/know/input/AZ - Fresh Light for Valentina.opus | /home/htaf/pyac/pyash/know/input/AZ - Fresh Light for Valentina.txt
+az-god-remembers.mp3 | /home/htaf/pyac/pyash/know/input/AZ-God_Remembers_All.opus | /home/htaf/pyac/pyash/know/input/AZ-God_Remembers_All.lyrics.txt
+az-voices-speak.mp3 | /home/htaf/pyac/pyash/know/input/AZ-humility-voices-speak-ComfyUI_00219_.opus | /home/htaf/pyac/pyash/know/input/AZ-humility-voices-speak-ComfyUI_00219_.lyrics.txt
+az-love-expands.mp3 | /home/htaf/pyac/pyash/know/input/AZ-love-exapnds-the-light.opus |
+az-love-leads.mp3 | /home/htaf/pyac/pyash/know/input/AZ-Love_leads_the_orchestra.opus | /home/htaf/pyac/pyash/know/input/AZ-Love_leads_the_orchestra.lyrics.txt
+az-armour-of-light.mp3 | /home/htaf/pyac/pyash/know/input/AZ-polish_the_armour_of_light_ComfyUI_00200_.opus | /home/htaf/pyac/pyash/know/input/AZ-polish_the_armour_of_light_ComfyUI_00200_.txt
+az-share-the-light.mp3 | /home/htaf/pyac/pyash/know/input/AZ--share-the-power-expand-the-light-ComfyUI_00258_.opus | /home/htaf/pyac/pyash/know/input/AZ--share-the-power-expand-the-light-ComfyUI_00258_.lyrics.txt
+az-true-power.mp3 | /home/htaf/pyac/pyash/know/input/AZ-true-power-resides-within-and-serves-ComfyUI_00229_.opus | /home/htaf/pyac/pyash/know/input/AZ-true-power-resides-within-and-serves-ComfyUI_00229_.lyrics.txt
+
+# The instrumentals: the same house, without the words.
+az-power-quiet.mp3 | /home/htaf/pyac/pyash/know/input/AZ--we_share_power_to_expand_the_light_ComfyUI_00234_.opus |
+az-go-forth.mp3 | /home/htaf/pyac/pyash/know/input/go_forth_in_your_armour_of_light_ComfyUI_00194_.opus | /home/htaf/pyac/pyash/know/input/go_forth_in_your_armour_of_light_ComfyUI_00194_.txt
+az-preparation.mp3 | /home/htaf/pyac/pyash/know/input/20260307-prepsong2.opus | /home/htaf/pyac/pyash/know/input/20260307-prepsong2.txt
+az-psytrance.mp3 | /home/htaf/Downloads/psytranceComfyUI_00109_.mp3 |
+az-upbeat.mp3 | /home/htaf/Downloads/ComfyUI_00091_.mp3 |
+
+# The ones that came out of the downloads.
+az-balance-love-wisdom.mp3 | /home/htaf/Downloads/dance_festival_ComfyUI_00107_.mp3 |
+az-mirror-stranger.mp3 | /home/htaf/Downloads/AZ - Lover is Closer.mp3 |
+az-samantha.mp3 | /home/htaf/pyac/pyash/know/input/samantha2026.mp3 | /home/htaf/pyac/pyash/know/input/samantha2026.txt
+az-open-the-weights.mp3 | /home/htaf/pyac/pyash/know/input/open_the_weights.mp3 | /home/htaf/pyac/pyash/know/input/open_the_weights.txt

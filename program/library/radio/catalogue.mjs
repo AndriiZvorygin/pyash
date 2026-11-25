@@ -7,7 +7,9 @@ import { inContract } from "./rotation.mjs";
 // The rendered catalogue follows the house folder contract
 // `radio/audio/<engine>-<topic>.mp3`. The engine prefix is known, so the
 // topic can be read off the name without guessing where the engine ends.
-const ENGINE_PREFIXES = ["ace-step", "yue2"];
+// "az" is Andrii Zvorygin, the house's own voice, for the songs the house
+// made before the radio.
+const ENGINE_PREFIXES = ["ace-step", "yue2", "az"];
 
 function titleCase(text) {
   return String(text ?? "")
@@ -40,19 +42,29 @@ export function parseTrackName(filename) {
 }
 
 /**
- * The lyric sheet that belongs to a topic, when the chain has written one.
+ * The lyric sheet that belongs to a song, when the chain has written one.
+ *
+ * A song of the house carries its own sheet, named for the song, so two songs
+ * about the same theme do not fight over one file. A song of the rotation
+ * carries the sheet of its lane.
  */
-export async function findLyricSheet(lyricsDirectory, topic) {
+export async function findLyricSheet(lyricsDirectory, topic, engine = "") {
   const directory = String(lyricsDirectory ?? "").trim();
   const name = String(topic ?? "").trim();
   if (!directory || !name) return "";
-  const candidate = path.join(directory, `song-${name}.txt`);
-  try {
-    await fs.access(candidate);
-    return candidate;
-  } catch {
-    return "";
+  const prefix = String(engine ?? "").trim();
+  const candidates = [];
+  if (prefix) candidates.push(path.join(directory, `song-${prefix}-${name}.txt`));
+  candidates.push(path.join(directory, `song-${name}.txt`));
+  for (const candidate of candidates) {
+    try {
+      await fs.access(candidate);
+      return candidate;
+    } catch {
+      // try the next one
+    }
   }
+  return "";
 }
 
 /**
@@ -103,7 +115,7 @@ export async function scanCatalogue({ directory, lyricsDirectory = "", contract 
       bytes: media.bytes,
       sampleRate: media.sampleRate,
       channels: media.channels,
-      lyricSheet: await findLyricSheet(lyricsDirectory, topic)
+      lyricSheet: await findLyricSheet(lyricsDirectory, topic, engine)
     });
   }
   return tracks;
