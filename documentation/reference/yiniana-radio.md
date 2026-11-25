@@ -220,6 +220,27 @@ failed job, so the runner recognises that shape of failure and tries again with
 the same seed, which produces the same song. `PYA_COMFYUI_ATTEMPTS` sets how
 many tries are allowed (default 3).
 
+### The seed is a lottery
+
+The same sheet, the same style, the same workflow and the same graph can come
+back with the words or come back instrumental. Measured on the reference-shape
+sheet, seed 20261125:
+
+| seed | what came back |
+|---|---|
+| 20261125 | instrumental for the first 156 s; only the outro was sung (7 words) |
+| -36606723980325 | the lyrics, sung in order from 16.6 s |
+| 424242 | the lyrics, sung in order from 30.0 s |
+
+Nothing in the graph differs between those three runs — same nodes, same
+settings, same 175 s latent, only the `PrimitiveInt` value. So a render cannot
+be trusted on its own: the station has to **audition the seed**. Render a few,
+transcribe each, and keep the one that carries the words.
+
+That is the same reason the lyric-recovery check exists. A render can look
+right and still have lost its words, and the recovery number is what tells the
+two apart.
+
 ### Lyric budget
 
 A 175 s YuE2 song carries about 235 lyric words. Above that the ending is
