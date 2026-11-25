@@ -14,17 +14,23 @@ contain 64,573 entries. The current v4 volume is 130 MB. The snapshot includes
 
 ## Operation signatures
 
-The snapshot carries operation signatures for every verb whose words resolve to
-vocabulary atoms. They are generated from the code-resident tables in
-`program/verbs/*/**.mjs` by
+The snapshot carries operation signatures for every verb whose words resolve
+through the encoder's vocabulary table. They are generated from the
+code-resident tables in `program/verbs/*/**.mjs` by
 `program/library/dictionary/operation_signatures.mjs`, never hand-written.
 
 Atomic verbs spell their English surface and resolve to their pya atom
 (`multiply` -> `hgoc`); compound verbs are already pya sequences
 (`kl6m psas`). Both work, and the current snapshot carries 537 signatures across
-single atoms and 9 compound verbs. Verbs whose words have no atom
-(`verify`, `concatenate`, `ratify`) stay code-resident only;
-`collectOperationSignatures` reports every skipped row with a reason instead of
+single atoms and 9 compound verbs.
+
+A skipped row means the **encoder** cannot resolve the verb, not that the
+catalog lacks a linkage. Many skipped verbs do have real dictionary entries —
+`cut` has 47, `evoke` 3, `verify` 2 — but verb resolution still reads the
+deprecated `program/library/pyashWords.json` through
+`lookupLegacyWordSequence` instead of the volume, so coverage is bounded by that
+older table. See [`pyashwords-deprecated.md`](../../../documentation/reference/pyashwords-deprecated.md).
+`collectOperationSignatures` reports every skipped row with a reason rather than
 inventing a key.
 
 The dispatch key is verb, mood, grammatical case, and value type. Argument names

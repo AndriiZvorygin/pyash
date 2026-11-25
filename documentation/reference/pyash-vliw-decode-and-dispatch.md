@@ -151,12 +151,15 @@ exists for the first; the loop does not yet exist for the rest.
 Two scales that are easy to confuse:
 
 - the **lexical catalog** is `program/library/dictionary/reference.pya` and its
-  compiled `reference.pyac`: 64,572 entries and 4,065,444 codelets, generated
-  on `dev-vocab`. It is the vocabulary reference and must not be hand-edited.
-  `program/library/pyashWords.json` is a legacy encoding projection used by JS
-  lowering for HNUC lookup, not the vocabulary reference;
+  compiled `reference.pyac`: the vocabulary reference, generated on `dev-vocab`,
+  never hand-edited. It carries 64,582 keys and 85,553 English surfaces;
 - the **executable namespace** per programlet is bounded (64 routines, 8
   arguments, 8 signature cases, 10 sentence fields, call depth 8).
+
+`program/library/pyashWords.json` is a **deprecated historical asset** with 7,841
+rows. VLIW lowering still resolves vocabulary through it, which is why the
+encoder cannot represent most of the catalog. It is not the vocabulary
+reference; see [`pyashwords-deprecated.md`](pyashwords-deprecated.md).
 
 Growing vocabulary as behavior eventually needs the executable namespace to
 become a persisted, queryable table, not an in-pack array.
