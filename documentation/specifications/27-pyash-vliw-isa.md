@@ -184,14 +184,37 @@ backend even if it can be printed as readable Pyash.
 
 ## 5.1 Runtime signature dispatch
 
-The dispatch key is ordered be-verb HNUCs plus grammatical-case/value-type
-pairs sorted by unsigned HNUC. Preserve types, verb order, and payloads;
-validate mood but exclude mood and literals from key identity. Dispatch MUST
-use numeric data, select at most one handler, and reject unsupported signatures
-without fallback. A handler MAY be a routine body defined earlier in the same
-programlet, so the execution model is threaded code plus signature matching
-rather than a fixed set of opcodes. Structural values MUST validate framing
-first. See
+Dispatch has two levels. The sentence mood selects a class table; within the
+class, the key is the ordered be-verb HNUCs plus grammatical-case/value-type
+pairs sorted by unsigned HNUC.
+
+Level one is the six moods:
+
+| mood | class | phase |
+| --- | --- | --- |
+| `def` | definition | pack load |
+| `prah` | definition close, invocation close | load and frame exit |
+| `ya` | static declaration | load and frame setup |
+| `do` | execution | run loop |
+| `then` | conditional control | within one sentence |
+| `ret` | return control | run loop |
+
+`def` never executes; a run loop that reaches it rejects the sentence. `prah`
+closes a definition at load and an invoked frame at run time. `ya` initializes
+declarations and frame slots. Only the `do` class is consulted for execution.
+
+Level two is keyed by verb. The execution (`do`) key is ordered be-verb HNUCs
+plus `(case, value-type)` pairs sorted by unsigned HNUC, so case source order
+does not affect lookup. Mood is not part of that key because the class is
+already selected; literals and payload values are excluded. The reference
+dictionary's mood-qualified operation key is the flattened global view across
+all classes, of which the `do` table is a projection.
+
+Dispatch MUST use numeric data, select at most one handler, and reject
+unsupported signatures without fallback. A handler MAY be a routine body
+defined earlier in the same programlet, so the execution model is threaded code
+plus signature matching rather than a fixed set of opcodes. Structural values
+MUST validate framing first. See
 [implementation details](../reference/pyac-vliw-semantic-slices.md#runtime-signature-dispatch).
 
 ### 5.1.1 Revision

@@ -82,32 +82,45 @@ new shape and needs no new mechanism. A new value family is runtime work.
 
 ## 5. Dispatch
 
-Dispatch selects at most one handler from a key of ordered verb HNUCs plus
-`(case, value-type)` pairs. Unknown verbs and unsupported shapes fail; there is
-no signature fallback.
+Dispatch is two levels. The sentence mood selects a class table; within the
+class, the key is the ordered verb HNUCs plus `(case, value-type)` pairs.
+
+Level one is the six moods (exactly `is_mood`):
+
+| mood | class | phase | level-2 entries |
+| --- | --- | --- | --- |
+| `def` | definition | pack load | `ceremony`, `myocpfun` |
+| `prah` | definition close, invocation close | load and frame exit | `ceremony`, `myocpfun` |
+| `ya` | static declaration | load and frame setup | `number`, `boolean`, `vector`, `pfun myoc` |
+| `do` | execution | run loop | route handlers and the routine directory |
+| `then` | conditional control | within one sentence | branch/join group |
+| `ret` | return control | run loop | none |
+
+`myocpfun` and `pfun myoc` are compound verbs, not moods. `prah` is the same
+mood at two levels: it closes a definition at load and an invoked frame at run
+time. `ya` initializes declarations and frame slots. Only `do` is consulted for
+execution, so the execution key does not include mood; the class is already
+selected.
 
 A handler may be a routine body defined earlier in the same programlet. That
 makes the model threaded code plus signature matching rather than a fixed
-opcode set: the "opcode" is a key into a table, and the table entry can point at
-user-defined code. The routine directory already implements this for programlet
-routines: it is built once from the bytes, sorted, binary-searched, and passed
-to the GPU as a packed `[u32]` scratch buffer with read-time validation.
+opcode set. The routine directory implements this: built once from the bytes,
+sorted, binary-searched, and passed to the GPU as a packed `[u32]` scratch
+buffer with read-time validation.
 
 ### Dispatch dictionary
 
-The same table should also serve introspection. A dispatch dictionary entry
-would carry:
+The reference dictionary already carries the descriptive table. In
+`rust/pyac/src/dictionary/operation.rs`, `OperationSignature { verb, mood,
+arguments, results }` has `OperationArgument { grammatical_case, value_type,
+name, description }` and `OperationResult { value_type, name, description }`,
+with validation requiring a name and description for every argument and result.
 
-- the canonical signature key;
-- the handler (built-in or routine span);
-- per-slot prose describing what belongs in each case;
-- provenance and review state, like a vocabulary entry.
-
-Such an entry is simultaneously the hardware decode index, the decode cache, and
-the answer to "do I have a word for this?" and "what does this slot expect?".
-That is a stronger justification for a built dispatch table than performance
-alone, and it explains why the table belongs in a published, versioned artifact
-rather than in per-pack ephemeral state.
+That key includes mood because the reference volume is the global view across
+all classes; the execution table is its `do`-only projection. The volume is
+`program/library/dictionary/reference.pyac`, built from `reference.pya`. It
+keeps multiple named results, so the runtime's single destination fold is the
+part that should eventually adopt the dictionary's shape, not the reverse.
 
 ## 6. Revision semantics
 
@@ -132,13 +145,16 @@ exists for the first; the loop does not yet exist for the rest.
 | Define a new word (body) at runtime | Yes: ceremony definitions register a signature at definition time. |
 | Define a new signature shape | Yes: any set of cases and types, within the executable value families. |
 | Persist a definition | No: the registry is rebuilt per pack. Durable vocabulary is a catalog workflow, not yet a runtime act. |
-| Introspect the vocabulary | No in-language reflection; host commands (`vocab_suggest`, `kwon`) only. A dispatch dictionary is the proposed answer. |
+| Introspect the vocabulary | No in-language reflection; host commands (`vocab_suggest`, `kwon`) only. The reference dictionary already carries operation signatures with argument names and descriptions; the runtime does not consume them yet. |
 | Revise a definition | No: duplicate signatures are fatal today; latest-wins is the target. |
 
 Two scales that are easy to confuse:
 
-- the **lexical catalog** is large (tens of thousands of linked senses) and is
-  data used for lowering, translation, and lookup;
+- the **lexical catalog** is `program/library/dictionary/reference.pya` and its
+  compiled `reference.pyac`: 64,572 entries and 4,065,444 codelets, generated
+  on `dev-vocab`. It is the vocabulary reference and must not be hand-edited.
+  `program/library/pyashWords.json` is a legacy encoding projection used by JS
+  lowering for HNUC lookup, not the vocabulary reference;
 - the **executable namespace** per programlet is bounded (64 routines, 8
   arguments, 8 signature cases, 10 sentence fields, call depth 8).
 

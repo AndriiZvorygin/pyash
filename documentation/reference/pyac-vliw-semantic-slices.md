@@ -18,14 +18,20 @@ current support and target architecture, see
 
 ## Runtime signature dispatch
 
-The Rust VLIW runtime selects one semantic handler from the encoded sentence
-signature before execution. The key is ordered be-verb HNUCs plus
+Dispatch is two levels. The sentence mood selects a class table; within the
+execution class, the Rust VLIW runtime selects one semantic handler from the
+encoded signature before execution. `def` is processed at load, `prah` closes a
+definition and an invocation, `ya` is declaration and frame setup, and only
+`do` reaches the execution table. The execution key therefore omits mood; the
+class is already selected. The reference dictionary's mood-qualified operation
+key is the global view across all classes.
+
+The execution key is ordered be-verb HNUCs plus
 `[(case HNUC, value-type descriptor)]`, sorted by ascending unsigned HNUC for
 comparison. Type descriptors preserve quote sort, scalar width, and scalar or
 vector form. Compound-verb HNUCs retain their encoded order. Sorting changes
 only the temporary key; codelet bytes, payloads, and phrase boundaries stay
-unchanged. Mood remains part of validation and handler semantics, but not key
-identity. Identifiers and literal values remain values.
+unchanged. Identifiers and literal values remain values.
 
 Dispatch is independent of surface spelling, English glosses, WordNet/SUMO
 links, and dictionary lookup. The Rust core reads numeric HNUCs and quote
