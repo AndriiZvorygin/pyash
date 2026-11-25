@@ -553,16 +553,22 @@ export function buildAcceptedReferenceSource({
   }
 
   // The declared signature tables describe the verb surface. A verb can carry
-  // signatures only when its words are valid vocabulary atoms, because an entry
-  // key is a Pyash sequence. Verbs outside the vocabulary (for example
-  // `multiply`) are reported by `collectOperationSignatures` and skipped; they
-  // remain code-resident dispatch only.
-  const { byVerb: signaturesByVerb, skipped: skippedSignatures } = collectOperationSignatures();
+  // signatures when every word of its key resolves to a vocabulary atom:
+  // atomic verbs like `multiply` spell their English surface, whose atom is
+  // `hgoc`, while compounds like `kl6m psas` already use pya words. Resolve the
+  // English surface to its canonical pya key before building the entry.
+  const { byVerb: signaturesByVerb } = collectOperationSignatures();
   let attachedSignatures = 0;
   for (const [verbKey, signatures] of signaturesByVerb) {
     const words = verbKey.split(" ").map((word) => word.trim().toLowerCase());
-    if (!words.every((word) => ATOM_BY_PYA.has(word))) continue;
-    const entry = getEntry(words);
+    const canonical = words.map((word) => {
+      if (ATOM_BY_PYA.has(word)) return CANONICAL_PYA_BY_HNUC.get(String(ATOM_BY_PYA.get(word).hnuc).toLowerCase());
+      const englishAtom = atoms.find((row) => String(row.en).toLowerCase() === word);
+      if (!englishAtom) return null;
+      return CANONICAL_PYA_BY_HNUC.get(String(englishAtom.hnuc).toLowerCase());
+    });
+    if (canonical.some((word) => !word)) continue;
+    const entry = getEntry(canonical);
     entry.operationSignatures.push(...signatures);
     attachedSignatures += signatures.length;
   }

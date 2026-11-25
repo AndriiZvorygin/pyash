@@ -1,5 +1,5 @@
 import { builtInSignatures } from "../../verbs/index.mjs";
-import { ROLE_KEYS } from "../grammar/keywords.mjs";
+import { ROLE_KEYS, COMPOSITIONAL_KEYWORDS } from "../grammar/keywords.mjs";
 import pyashWords from "../pyashWords.json" with { type: "json" };
 
 // The declared signature tables are the code-resident dispatch surface. This
@@ -18,9 +18,11 @@ const WORD_BY_EN = new Map(
   pyashWords.map((row) => [String(row.en).toLowerCase(), row])
 );
 
-// Cases are vocabulary rows tagged `<name>_case_`; the sentence role word is the
-// short pya form (`ob` -> `ka`, accusative). This is the same inventory the
-// phrase and arithmetic modules read.
+// Grammatical cases are vocabulary rows tagged `<name>_case_`; the sentence role
+// word is the short pya form (`ob` -> `ka`, accusative). Compositional keywords
+// such as `become`, `fromtext`, or `tostate` are modifiers that ride on a case,
+// not cases of their own, so they are not mapped here: collapsing them onto a
+// neighbouring case would produce two identical arguments in one signature.
 const CASE_ENTRY_BY_ROLE = new Map([
   ["su", "nominative_case_"],
   ["ob", "accusative_case_"],
@@ -31,18 +33,10 @@ const CASE_ENTRY_BY_ROLE = new Map([
   ["as", "essive_case_"],
   ["for", "benefactive_case_"],
   ["during", "temporal_case_"],
-  ["fromstate", "source_case_"],
-  ["tostate", "destination_case_"],
-  ["become", "destination_case_"],
-  ["fromtext", "source_case_"],
-  ["totext", "destination_case_"],
-  ["accordingto", "source_case_"],
-  ["fromindex", "source_case_"],
-  ["toindex", "destination_case_"],
-  ["atindex", "location_case_"],
   ["at", "location_case_"],
   ["vyah", "way_case_"],
-  ["via", "vialis_case_"]
+  ["via", "vialis_case_"],
+  ["atindex", "location_case_"]
 ]);
 
 // Authoritative surface-to-entry map, mirrored from
@@ -61,8 +55,10 @@ const TYPE_ENTRY_BY_SURFACE = Object.freeze({
   series: "series_"
 });
 
+// A signature field boundary is any mapped case or any compositional keyword,
+// because a modifier like `become` still starts a new field group.
 const CASE_WORDS = new Set(
-  ROLE_KEYS.filter((role) => CASE_ENTRY_BY_ROLE.has(role))
+  ROLE_KEYS.filter((role) => CASE_ENTRY_BY_ROLE.has(role) || COMPOSITIONAL_KEYWORDS.includes(role))
 );
 
 // `signatureWords` carries no mood. Execution verbs are callable with `do`; a

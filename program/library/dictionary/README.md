@@ -14,21 +14,25 @@ contain 64,573 entries. The current v4 volume is 130 MB. The snapshot includes
 
 ## Operation signatures
 
-The snapshot carries operation signatures for every verb that is a valid
-vocabulary atom. They are generated from the code-resident tables in
+The snapshot carries operation signatures for every verb whose words resolve to
+vocabulary atoms. They are generated from the code-resident tables in
 `program/verbs/*/**.mjs` by
 `program/library/dictionary/operation_signatures.mjs`, never hand-written.
 
-A verb can only carry signatures when every word of its key is an atom in the
-catalog, because an entry key is a Pyash sequence. Today that is `plus` (28
-signatures) and `go` (2). Verbs such as `multiply`, `verify`, or `concatenate`
-have declared signatures but no vocabulary atoms, so they remain code-resident
-dispatch only. `collectOperationSignatures` reports every skipped row with a
-reason instead of guessing a key.
+Atomic verbs spell their English surface and resolve to their pya atom
+(`multiply` -> `hgoc`); compound verbs are already pya sequences
+(`kl6m psas`). Both work, and the current snapshot carries 537 signatures across
+single atoms and 9 compound verbs. Verbs whose words have no atom
+(`verify`, `concatenate`, `ratify`) stay code-resident only;
+`collectOperationSignatures` reports every skipped row with a reason instead of
+inventing a key.
 
 The dispatch key is verb, mood, grammatical case, and value type. Argument names
 and descriptions are documentation and do not constrain lexical forms, so they
-are derived from the case name rather than authored.
+are derived from the case name rather than authored. Compositional keywords such
+as `become`, `fromtext`, and `tostate` are modifiers on a case, not cases of
+their own, so they are not mapped to a case HNUC; doing so would render two
+identical arguments in one signature.
 
 V4 permits distinct exact WordNet senses for one Pyash key when they have
 different parts of speech; a duplicate sense for the same part of speech is
