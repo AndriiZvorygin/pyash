@@ -243,9 +243,19 @@ two apart.
 
 ### Lyric budget
 
-A 175 s YuE2 song carries about 235 lyric words. Above that the ending is
-where the song runs out, so a sheet longer than the budget loses its outro
-rather than a verse. The 130 wpm ceiling is not the binding constraint.
+The reference song carries 353 words over 175 s, which is 2.0 words per second.
+That is the number to aim at. The old sheet carried about 110 words, and the
+model answered the shortage by dragging the verses to 0.6 words per second and
+ramming the chorus to 3 — the "drawn out, then rushed out of sync" symptom.
+
+The reference-shape sheet carries 325 words, which is 1.86 words per second, and
+the render sings at 2.1 words per second overall with a 16.6 s lead-in against
+the reference's 13.8 s.
+
+The YuE2 budget of about 235 words was measured on the old sheet and does not
+transfer. Above the budget the ending is where the song runs out, so a sheet
+longer than the budget loses its outro rather than a verse; the 130 wpm ceiling
+is not the binding constraint.
 
 ## 6. Verification
 
