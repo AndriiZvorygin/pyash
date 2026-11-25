@@ -434,6 +434,7 @@ mod programlet_vector_values;
 mod scalar_product;
 #[path = "semantics_runtime/sentence.rs"]
 mod sentence;
+#[cfg(test)]
 #[path = "semantics_runtime/sentence_parse_state.rs"]
 mod sentence_parse_state;
 #[path = "semantics_runtime/signature_dispatch.rs"]

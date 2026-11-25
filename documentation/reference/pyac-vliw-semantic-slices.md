@@ -7,6 +7,15 @@ For the full source-to-pack-to-backend picture and the distinction between
 current support and target architecture, see
 [`pyash-vliw-compiler-architecture.md`](pyash-vliw-compiler-architecture.md).
 
+## Known divergences from lwonprom
+
+- **Revision.** lwonprom lets a later definition replace an earlier one. The
+  Rust routine directory currently returns `ERROR_DUPLICATE_SIGNATURE` when two
+  routines share a signature key. The target is latest-wins by definition
+  order, specified in
+  [`27-pyash-vliw-isa.md` §5.1.1](../specifications/27-pyash-vliw-isa.md#511-revision).
+  This divergence is not yet fixed.
+
 ## Runtime signature dispatch
 
 The Rust VLIW runtime selects one semantic handler from the encoded sentence
@@ -362,6 +371,28 @@ completion bit plus one bit per boundary slot. `indexWordFor` in
 vectors agree with it: the numeric plus head `0x0149` marks the accusative,
 destination, and deontic slots, and the named-literal head `0x0065` marks the
 nominative, accusative, and realis slots.
+
+## Bitmap-derived field extraction
+
+The shared Rust core derives sentence fields from the head bitmap rather than
+from a token-by-token state machine. `parse_sentence_range` reads each codelet
+head, enumerates the slots whose bit equals bit 0, filters them by nested-clause
+depth, and classifies each surviving boundary as a case word (closing the
+current field) or the mood word (closing the verb span). Non-boundary payload
+words are value content and are not scanned.
+
+This is the hardware-shaped form the ISA expects: the bitmap is the field map,
+so operand spans are discovered without decoding the payload. The existing
+semantics are preserved exactly, including the role whitelist (a boundary
+`dative`, `genitive`, or `multiplicative` word is still `ERROR_UNSUPPORTED`),
+the rule that the mood word must be the final token, and the distinction
+between `ERROR_MALFORMED` and `ERROR_UNSUPPORTED`. Equivalence with the
+previous state-machine parser is proven by a differential test that compares
+error code, field spans, verb span, and mood over a fixture set covering
+scalar, vector, conditional, and clause-bearing sentences, plus deterministic
+corruptions (flipped head bits, truncated ranges, unbalanced clause markers,
+duplicate roles, misplaced or missing mood words, and non-`u16` payload words)
+and a fixed-seed random corpus.
 
 ## Date literals
 

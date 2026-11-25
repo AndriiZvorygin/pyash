@@ -42,6 +42,44 @@ artifacts remain in ignored `rust/pyac-gpu/cuda-kernel/target/` and `artifacts/`
 paths. The matrix's two embedding-attention cases share the single programlet
 section batch with all other section cases.
 
+## 2026-11-25: Bitmap-derived sentence decode
+
+The shared Rust decoder now derives sentence fields from the codelet head
+bitmap. A clause-free sentence is decoded by enumerating boundary slots and
+classifying only those tokens; a sentence with nested-clause markers takes the
+clause-aware pass. The previous token-by-token state machine is retained only as
+a test oracle. A differential test compares error code, field spans, verb span,
+and mood over fixtures, deterministic corruptions, and a fixed-seed random
+corpus.
+
+The previously deployed CUDA cubin (`sha256:9889f729...`) failed programlet
+section 15 (`iwsp-file-backed-embedding-attention-perturbed-values`) on the
+current 34-section matrix with shared error 3. Rebuilding from the current source
+and redeploying passes that section and the whole matrix, so the failure was a
+stale deployed artifact, not a semantic regression.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261125-0010-rust-vliw-conformance/result.pya` |
+| Source revision / checkout | `8b470488d49cf1198dbc50629ef8aa6829afa9fc`; tracked tree dirty during build |
+| Tracked patch SHA-256 | `37ac7ca68b4ed9aeafde744866c390559890197bedab607588346201d82cd954` |
+| Host and route | Mriczo client -> Mriczo Housekeeper -> `rust-cuda-cubin` |
+| GPU | NVIDIA GeForce RTX 3090 |
+| Runtime image | `sha256:fcf8808f70e71cb8d8678c1c6a60743ed7f4bd3f9476c8eaf55e9b20d50b68bf` (`liberit/pyac-vliw-runtime:cuda-sm86-c711501a97da5319`) |
+| Cubin | 3,878,216 bytes; SHA-256 `c711501a97da53193c7fd33456c1476a236615192b3c8a9720861fb99ee54848` |
+| Runtime executable | 9,309,760 bytes; SHA-256 `4bb59c760194018ec13085e278fdea255d218debdeefad8348fe407abdacec37` |
+| CPU reference executable | 16,699,368 bytes; SHA-256 `77d3e1858d7611035884104897316cce7c501fcf9ef350747fb80216e990d62a` |
+| Runtime initialization | Cubin load and GPU initialization 0.09 s; ready in 513 ms |
+| Full verification | 79/79 value cases passed (45 codelet, 34 programlet); 3 typed-dispatch probes; 5/5 expected errors matched |
+| CPU batches | Codelet batch: 63.833 ms; programlet sections: 67.110 ms |
+| CUDA event batches | Codelet batch: 12.288 ms; programlet sections: 91.685 ms |
+| Housekeeper client round trips | Codelet batch: 1,129.571 ms; section batch: 1,130.997 ms |
+| Deployment | Retained on Mriczo; prior image `sha256:9889f729ae7906a324915dac8b25c0c5c78b2f6db708f5b6d675866381dbb940` is the rollback target |
+| Rollback | `bash container/pyac-vliw-runtime/command/cuda-canary.sh mriczo liberit/pyac-vliw-runtime:cuda-sm86-c711501a97da5319 rollback` |
+
+Batch timings cover the complete case sets, not per-operation latency. This run
+establishes semantic conformance and hardware parity; it is not a speedup claim.
+
 ## 2026-11-25: Payload-Selected Embedding Row
 
 The embedding-row operation now accepts either its existing literal uint16

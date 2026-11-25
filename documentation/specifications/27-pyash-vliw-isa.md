@@ -123,9 +123,22 @@ adds no quote sort or HNUC; flat v1 `.pyac` stores the frame in codelet words.
 
 ### 4.2 VLIW shape
 
-The codelet is sixteen 16-bit words (256 bits / 32 bytes). Its first word is
-the head/index; bits mark phrase boundaries and completion. Remaining words
-encode quote data, cases, verb, mood, and zero tail padding.
+The codelet is sixteen 16-bit words (256 bits / 32 bytes). It is an encoding
+unit, not a bundle of parallel operations: the payload words carry one
+sentence's quote data, cases, verb, and mood, and a codelet is fetched and
+dispatched as a unit.
+
+Its first word is the head/index. Bit 0 marks whether this codelet completes
+the sentence. Bits 1..15 mark phrase-closing slots, where a phrase closes on a
+case word or on the sentence's mood word. A slot is a boundary exactly when its
+bit equals bit 0.
+
+The head is the canonical field map. A decoder SHOULD derive phrase spans by
+enumerating the boundary bits and reading each span at its offsets rather than
+by walking the payload token by token. Both forms MUST produce the same fields,
+verb span, mood, and error. Writers MUST set the boundary bits consistently
+with the case and mood words they emit. Remaining words encode quote data,
+cases, verb, mood, and zero tail padding.
 
 Long paragraph quotes use the original Lwonprom blockquote framing: the
 paragraph-letter quote has the legacy `L` flag and a 16-bit payload-word count.
@@ -175,10 +188,31 @@ The dispatch key is ordered be-verb HNUCs plus grammatical-case/value-type
 pairs sorted by unsigned HNUC. Preserve types, verb order, and payloads;
 validate mood but exclude mood and literals from key identity. Dispatch MUST
 use numeric data, select at most one handler, and reject unsupported signatures
-without fallback. Structural values MUST validate framing first. See
+without fallback. A handler MAY be a routine body defined earlier in the same
+programlet, so the execution model is threaded code plus signature matching
+rather than a fixed set of opcodes. Structural values MUST validate framing
+first. See
 [implementation details](../reference/pyac-vliw-semantic-slices.md#runtime-signature-dispatch).
 
+### 5.1.1 Revision
+
+Within one programlet, a later definition with an equal signature key
+supersedes an earlier one. Decoders MUST resolve the collision by definition
+order and MUST NOT reject it. The directory may stay sorted for comparison, but
+the winner is the latest definition, not an error.
+
+Status: the current Rust routine directory rejects an equal signature key with
+`ERROR_DUPLICATE_SIGNATURE`, which diverges from this contract. The divergence
+is recorded in
+[`pyac-vliw-semantic-slices.md`](../reference/pyac-vliw-semantic-slices.md#known-divergences-from-lwonprom)
+until it is fixed.
+
 ## 5.2 General execution contract
+
+Status: target contract. The current Rust core executes programlets with a
+program counter and a bounded call stack. The ready-work queue described below
+is the target model, not the implemented one; the two must not be conflated
+when reading this section.
 
 Instructions carry numbered input/output references, fulfillment state, and
 working-memory locations, and identify reads and writes. Each dependency region

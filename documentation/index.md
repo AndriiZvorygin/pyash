@@ -28,6 +28,7 @@
 - `documentation/reference/speaker-identification.md` — reference profile for persistent speaker identification/enrollment from audio.
 - `documentation/reference/quantum-randomness-and-evolutionary-computing.md` — evidence and direct-QRNG policy for evolutionary-computing experiments.
 - `documentation/reference/lwonprom-c-pyash-style-analysis.md` — relationship between the lwonprom C implementation, Pyash composition, and complexity discipline.
+- `documentation/reference/pyash-vliw-decode-and-dispatch.md` — sentence / codelet / control-word model, the head bitmap as field map, dispatch dictionary and revision semantics, and the unresolved execution-model choice for an ASIC.
 - `documentation/reference/atlaskv-pyash-style-analysis.md` — relationship between the AtlasKV paper (KG-to-attention injection, hierarchical key pruning) and Pyash knowledge, sense, and evidence surfaces.
 - `documentation/release-preview-0.1.md` — initial release gate, smoke route, and known limits.
 - `documentation/pyash.md` — high-level design goals and interlanguage intent.
