@@ -184,7 +184,8 @@ node command/yiniana_lyric_recovery.mjs radio/lyrics/song-dignity.txt transcript
 The transcript may be plain text, the JSON the hear runner prints, or Whisper's
 segment list.
 
-Measured on the dignity hymn with the station style, 180 s, ACE-Step XL turbo:
+Measured on the pre-restructure dignity hymn with the station style, 180 s,
+ACE-Step XL turbo:
 
 - the file is a real mp3 — ID3v2.4, MPEG layer III, 192 kbps, 48 kHz stereo;
 - duration 180.02 s;
@@ -199,6 +200,16 @@ Measured on the same hymn, 175 s, YuE2:
 The missing 4-grams are the intro-to-verse seam, one re-worded line
 ("warm bread breaks soft" was sung as "warm bread breaks off") and, on the
 YuE2 render, the outro's last line.
+
+Measured on the restructured sheet, 180 s, ACE-Step XL turbo, station style:
+
+- a real mp3 — ID3v2.4, MPEG layer III, 192 kbps, 48 kHz stereo;
+- duration 180.02 s;
+- 167 of 167 4-grams recovered (100.0 %).
+
+The restructured sheet is longer than the old one, so it carries more 4-grams
+(167 against 119). The render is clean: the engine sang every line of the sheet
+back. The only thing it added was a second pass over the outro's hook line.
 
 A caution on the transcriber: Qwen3-ASR heard 63 % of the ACE-Step song's
 4-grams and mis-heard "dignity" as "tragedy". Whisper large-v2 heard 94.1 % of
