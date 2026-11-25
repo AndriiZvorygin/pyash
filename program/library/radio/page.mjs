@@ -1,0 +1,120 @@
+// The station page. It is the front door of the radio: it shows what is
+// playing, it lists the catalogue, and it plays the same stream any other
+// player would.
+
+function escapeText(value) {
+  return String(value ?? "")
+    .replace(/&/gu, "&amp;")
+    .replace(/</gu, "&lt;")
+    .replace(/>/gu, "&gt;")
+    .replace(/"/gu, "&quot;");
+}
+
+function formatDuration(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds ?? 0)));
+  const minutes = Math.floor(total / 60);
+  const rest = total % 60;
+  return `${minutes}:${String(rest).padStart(2, "0")}`;
+}
+
+/**
+ * Render the station page. The stream url is passed in so the page can be
+ * served from any host the station is bound to.
+ */
+export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.mp3", statusUrl = "/status.json", playlistUrl = "/playlist.json" } = {}) {
+  const title = escapeText(stationName);
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title}</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; padding: 2.5rem 1.5rem; background: #0d0f14; color: #e8e6e1;
+         font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 46rem; margin: 0 auto; }
+  h1 { margin: 0 0 .25rem; font-size: 1.9rem; letter-spacing: .01em; }
+  .tagline { margin: 0 0 2rem; color: #8b8f9c; }
+  .now { border: 1px solid #23262f; border-radius: .75rem; padding: 1.25rem; background: #14171e; }
+  .now .label { color: #8b8f9c; font-size: .78rem; text-transform: uppercase; letter-spacing: .12em; }
+  .now .title { font-size: 1.35rem; margin: .35rem 0 .15rem; }
+  .now .meta { color: #8b8f9c; font-size: .9rem; }
+  button { margin-top: 1.25rem; padding: .7rem 1.4rem; border-radius: .5rem; border: 0;
+           background: #d8a657; color: #17140e; font-size: 1rem; font-weight: 600; cursor: pointer; }
+  button:hover { background: #e6b76e; }
+  audio { width: 100%; margin-top: 1.25rem; }
+  h2 { margin: 2.5rem 0 .75rem; font-size: 1.05rem; color: #c9c6bf; }
+  ol { margin: 0; padding-left: 1.2rem; }
+  li { margin: .35rem 0; color: #b9b6af; }
+  li .meta { color: #6f7380; }
+</style>
+</head>
+<body>
+<main>
+  <h1>${title}</h1>
+  <p class="tagline">Plain HTTP stream. Tune in with any player.</p>
+  <section class="now">
+    <div class="label">Now playing</div>
+    <div class="title" id="now-title">Loading the station</div>
+    <div class="meta" id="now-meta"></div>
+    <button id="tune" type="button">Tune in</button>
+    <audio id="player" controls preload="none" src="${escapeText(streamUrl)}"></audio>
+  </section>
+  <h2>Catalogue</h2>
+  <ol id="catalogue"></ol>
+</main>
+<script>
+  const player = document.getElementById("player");
+  const nowTitle = document.getElementById("now-title");
+  const nowMeta = document.getElementById("now-meta");
+  document.getElementById("tune").addEventListener("click", () => player.play());
+
+  async function refresh() {
+    try {
+      const response = await fetch(${JSON.stringify(statusUrl)}, { cache: "no-store" });
+      const status = await response.json();
+      if (!status.track) {
+        nowTitle.textContent = "The catalogue is empty";
+        nowMeta.textContent = "No rendered track is waiting to play.";
+        return;
+      }
+      nowTitle.textContent = status.track.title;
+      const played = Math.floor(status.elapsedSeconds || 0);
+      nowMeta.textContent = status.track.engine + " - " + status.track.topic
+        + " - " + played + "s of " + Math.round(status.track.durationSeconds || 0) + "s"
+        + " - " + status.listeners + " listening";
+    } catch (error) {
+      nowTitle.textContent = "The station is out of reach";
+    }
+  }
+
+  async function loadCatalogue() {
+    try {
+      const response = await fetch(${JSON.stringify(playlistUrl)}, { cache: "no-store" });
+      const payload = await response.json();
+      const list = document.getElementById("catalogue");
+      list.innerHTML = "";
+      for (const track of payload.tracks || []) {
+        const item = document.createElement("li");
+        const meta = document.createElement("span");
+        meta.className = "meta";
+        meta.textContent = " - " + track.engine + " - " + Math.round(track.durationSeconds || 0) + "s";
+        item.append(track.title, meta);
+        list.append(item);
+      }
+    } catch (error) {
+      // the catalogue is a convenience; the stream is the station
+    }
+  }
+
+  refresh();
+  loadCatalogue();
+  setInterval(refresh, 3000);
+</script>
+</body>
+</html>
+`;
+}
+
+export { formatDuration };

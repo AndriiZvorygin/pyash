@@ -1,8 +1,8 @@
 # Yiniana Radio Chain
 
 Status: reference for the local radio station that turns channeling notes into songs.
-Covers the lyrics chain (phase 1) and the music engines (phase 2). The Icecast
-station itself (phase 3) is not in this document yet.
+Covers the lyrics chain (phase 1), the music engines (phase 2) and the radio
+stage that plays the rendered catalogue (phase 3, section 6).
 
 ## 1. Purpose
 
@@ -20,6 +20,8 @@ folded back into pyash, because pyash already owns every step of it.
 
 - Helper command: `command/yiniana_lyrics_chain.mjs` — steps 1 and 2, plus the song verifier.
 - Program: `examples/pyash/yiniana-radio-lyrics.pya` — all three steps, wired as pyash sentences.
+- Station command: `command/yiniana_radio.mjs` — the radio stage, the http stream.
+- Station program: `examples/pyash/yiniana-radio.pya` — the station, wired as pyash sentences.
 - Lanes: `radio/topics.txt` — the curated topic rotation.
 - Music engines: `music/comfyui/audio_ace_step_1_5_xl_turbo.*`, `music/comfyui/audio_yue2_own_melody.*`.
 - Recovery check: `command/yiniana_lyric_recovery.mjs`.
@@ -263,7 +265,95 @@ transfer. Above the budget the ending is where the song runs out, so a sheet
 longer than the budget loses its outro rather than a verse; the 130 wpm ceiling
 is not the binding constraint.
 
-## 6. Verification
+## 6. The Radio Stage
+
+The station is a plain HTTP mp3 stream served by pyash itself. It plays the
+rendered catalogue the way a radio plays: one programme, many listeners, and
+the song changes by itself. There is no Icecast and no liquidsoap — the
+station is a few hundred lines of Node and a small frame reader.
+
+### The pieces
+
+- `program/library/radio/mp3.mjs` — the frame reader: id3 tag size, frame headers, duration, frame clock.
+- `program/library/radio/catalogue.mjs` — the catalogue scan: which files are playable, which engine and topic each one carries, which lyric sheet belongs to it.
+- `program/library/radio/station.mjs` — the programme: the loop, the fan-out to listeners, the now playing state.
+- `program/library/radio/page.mjs` — the station page.
+- `command/yiniana_radio.mjs` — the server.
+- `module/radio_station.pya` — the pyash ceremony `radio station serve`.
+- `examples/pyash/yiniana-radio.pya` — the example wiring.
+- `quiz/yiniana_radio.test.mjs` — the quiz for all of the above.
+
+### The shape of the stream
+
+| Route | What it gives |
+| --- | --- |
+| `GET /stream.mp3` | the live programme: `audio/mpeg`, chunked, never ends |
+| `GET /` | the station page: now playing, the catalogue, a tune-in button |
+| `GET /playlist.json` | the catalogue with titles, engines and lengths |
+| `GET /status.json` | the now playing state and the listener count |
+| `GET /health` | the liveness check |
+
+### Real time, not file speed
+
+The station reads the frames itself and paces them. Every MPEG layer three
+frame carries the same number of samples, so the frame index is the clock:
+the station writes a piece of audio, waits for the frame clock to catch up,
+and writes the next. The bytes that go out are the bytes that were rendered;
+nothing is re-encoded and no external encoder is involved.
+
+A listener who tunes in joins the song that is playing. A listener that
+cannot keep up — its socket buffer passes 4 MB — is dropped rather than
+allowed to hold the station back.
+
+### Configuration
+
+The settings live in the pyash configuration surface, in `configure/default.pya`:
+
+| Fact | Default | Meaning |
+| --- | --- | --- |
+| `radio host` | `0.0.0.0` | the address the station binds |
+| `radio port` | `8090` | the port the station listens on |
+| `radio catalogue` | `radio/audio` | the folder of rendered songs |
+| `radio station name` | `Yiniana Radio` | the name on the page and in the status |
+| `radio station command` | `node command/yiniana_radio.mjs` | the command the pyash ceremony runs |
+
+The environment overrides the same names: `PYA_RADIO_HOST`, `PYA_RADIO_PORT`,
+`PYA_RADIO_CATALOGUE`, `PYA_RADIO_STATION_NAME`.
+
+The default bind is every interface, so the station can be tuned in from
+another machine on the house network. Set `radio host` to `127.0.0.1` when it
+should only answer on this machine.
+
+### Running it
+
+```sh
+cd /home/htaf/pyac/pyash
+node command/yiniana_radio.mjs
+```
+
+or, as pyash sentences:
+
+```sh
+node command/run_pya_program.mjs examples/pyash/yiniana-radio.pya
+```
+
+Then tune in with any player:
+
+```sh
+mpv http://127.0.0.1:8090/stream.mp3
+ffplay http://127.0.0.1:8090/stream.mp3
+```
+
+or open `http://127.0.0.1:8090/` in a browser, where the page shows what is
+playing and holds the same stream.
+
+### The catalogue refreshes
+
+The station rescans the catalogue folder every minute. A render that lands
+while the station is running joins the rotation without a restart, and a track
+that has gone away is dropped from the rotation.
+
+## 7. Verification
 
 A rendered song can look right and still have lost its words. The check is the
 share of the sheet's 4-grams that a transcription carries back:
@@ -334,9 +424,10 @@ Every rendered mp3 carries its own ComfyUI prompt in the ID3 `TXXX` tag, so
 the file says what produced it. Read the tag when a render does not sound like
 the station and the cause is usually the prompt that was passed.
 
-## 7. Existing Quiz Coverage
+## 8. Existing Quiz Coverage
 
 - `quiz/yiniana_lyrics_chain.test.mjs` — the corpus walk, the topic pattern, the atomic write, the card read, the song structure verifier.
 - `quiz/yiniana_lyric_recovery.test.mjs` — tag stripping, n-gram counting, the three transcript shapes.
 - `quiz/music_comfyui_runner.test.mjs` — the workflow and mapping pairs, node detection, the mapping spellings, the save format, and the byte sniffing.
 - `quiz/music_say.test.mjs` — the verb side of the music surface.
+- `quiz/yiniana_radio.test.mjs` — the frame reader, the catalogue scan, the programme loop, the slow listener, the http surface and the pyash ceremony.
