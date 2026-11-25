@@ -20,7 +20,7 @@ test("lowers a typed lookup sentence for a named tensor row view", () => {
 test("rejects lookup sentences without the exact table, row, alias, and verb fields", () => {
   assert.throws(
     () => lowerSentence(parse("from name pset gjat at num 1 to name lyac dlek by name hwas be tsoc hsat do")),
-    /exactly from, at, to, be, and mood/u
+    /requires from, at, optional fromindex/u
   );
 });
 
@@ -37,9 +37,23 @@ test("lowers a payload-backed named index for dynamic embedding-row selection", 
   ]);
 });
 
+test("lowers a token-sequence position into the existing fromindex case", () => {
+  const lowered = lowerSentence(parse(
+    "from name pset gjat at name lwat txik fromindex num 0 to name lyac dlek be tsoc hsat do"
+  ));
+  assert.equal(lowered.length, 2);
+  assert.equal(lowered[0].semantic, "embedding-row-lookup");
+  assert.deepEqual(lowered.flatMap(({ words }) => Array.from(words)), [
+    28398, 8798, 43844, 43442, 12606, 8798, 59659, 11123,
+    9278, 8798, 43307, 10474, 24927, 34845, 0, 25431,
+    9, 60490, 43336, 10590, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0
+  ]);
+});
+
 test("rejects embedding selectors that are not a uint16 literal or named index", () => {
   assert.throws(
     () => lowerSentence(parse("from name pset gjat at text row to name lyac dlek be tsoc hsat do")),
-    /named scalar index section/u
+    /named index/u
   );
 });

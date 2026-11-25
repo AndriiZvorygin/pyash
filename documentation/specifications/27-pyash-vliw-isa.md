@@ -273,11 +273,17 @@ ob name hwas by name lyac dlek be kl6m psas do
 
 Its signature is `SOURCE name`, `DESTINATION name`, `LOCATIVE uint16|name`,
 and `do`. A literal uint16 selects a zero-based row; a named selector reads
-one uint16 from immutable rank-one `number_` storage. The destination is a
-zero-copy view into the row-major float payload. Invalid shapes/types and
-out-of-range rows fail. Resolution scans preceding sentence groups without
-building an index or copying the tensor. The dynamic form consumes one supplied
-token ID per pack; tokenization and word-sense disambiguation are separate work.
+one uint16 from immutable rank-one `number_` storage. Add
+`MULTIPLICATIVE uint16` to select a zero-based position in that named sequence.
+In Pyash, that case is `fromindex num <position>`:
+
+```pya
+from name pset gjat at name lwat txik fromindex num 0 to name lyac dlek be tsoc hsat do
+```
+
+It is zero-copy. Invalid selectors or storage fail. Resolution scans prior
+groups without an index or copy. IDs are supplied; text tokenization and
+word-sense disambiguation remain separate.
 
 ### Pyash VLIW authentication sentence
 

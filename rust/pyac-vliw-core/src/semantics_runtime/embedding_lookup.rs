@@ -3,7 +3,8 @@ use super::canonical_signature::{
 };
 use super::scalar_product::VectorOperand;
 use super::storage_vector::{
-    resolve_storage_section_vector, resolve_storage_u16_scalar, storage_has_name,
+    resolve_storage_section_vector, resolve_storage_u16_scalar, resolve_storage_u16_vector_element,
+    storage_has_name,
 };
 use super::*;
 
@@ -15,6 +16,7 @@ const TYPE_UINT16: u32 = TYPE_QUOTE_TAG | (4 << 12) | (2 << 4);
 enum RowSelector {
     Literal(usize),
     StorageScalar(NameSpan),
+    StorageSequenceElement { name: NameSpan, position: usize },
 }
 
 #[derive(Clone, Copy)]
@@ -70,15 +72,19 @@ pub(super) fn parse_embedding_row_binding(
     group_len: usize,
 ) -> Result<EmbeddingRowBinding, u32> {
     let signature = signature(words, start, group_len);
-    if signature.error != 0
-        || signature.mood != DEONTIC
-        || signature.case_count != 3
-        || case_type(&signature, SOURCE) != Some(TYPE_NAME)
-        || case_type(&signature, DESTINATION) != Some(TYPE_NAME)
-        || !matches!(
+    let selector_is_supported = (signature.case_count == 3
+        && matches!(
             case_type(&signature, LOCATIVE),
             Some(TYPE_UINT16) | Some(TYPE_NAME)
-        )
+        ))
+        || (signature.case_count == 4
+            && case_type(&signature, LOCATIVE) == Some(TYPE_NAME)
+            && case_type(&signature, MULTIPLICATIVE) == Some(TYPE_UINT16));
+    if signature.error != 0
+        || signature.mood != DEONTIC
+        || case_type(&signature, SOURCE) != Some(TYPE_NAME)
+        || case_type(&signature, DESTINATION) != Some(TYPE_NAME)
+        || !selector_is_supported
         || signature.verb_length != 2
         || token_at(words, start, group_len, signature.verb_start) != Some(LOOKUP_FIRST)
         || token_at(words, start, group_len, signature.verb_start + 1) != Some(LOOKUP_SECOND)
@@ -98,7 +104,22 @@ pub(super) fn parse_embedding_row_binding(
             token_at(words, start, group_len, location.start + 1).ok_or(ERROR_MALFORMED)? as usize,
         )
     } else {
-        RowSelector::StorageScalar(named_value(location, words, start, group_len)?)
+        let name = named_value(location, words, start, group_len)?;
+        if signature.case_count == 4 {
+            let position = case_value(words, start, group_len, MULTIPLICATIVE)?;
+            if position.length != 2
+                || token_at(words, start, group_len, position.start) != Some(0x881d)
+            {
+                return Err(ERROR_MALFORMED);
+            }
+            RowSelector::StorageSequenceElement {
+                name,
+                position: token_at(words, start, group_len, position.start + 1)
+                    .ok_or(ERROR_MALFORMED)? as usize,
+            }
+        } else {
+            RowSelector::StorageScalar(name)
+        }
     };
     Ok(EmbeddingRowBinding { table, result, row })
 }
@@ -114,6 +135,11 @@ fn resolve_row_index(
         RowSelector::Literal(row) => Ok(row),
         RowSelector::StorageScalar(name) => {
             resolve_storage_u16_scalar(words, start, group_len, name, storage)?
+                .map(usize::from)
+                .ok_or(ERROR_UNSUPPORTED)
+        }
+        RowSelector::StorageSequenceElement { name, position } => {
+            resolve_storage_u16_vector_element(words, start, group_len, name, position, storage)?
                 .map(usize::from)
                 .ok_or(ERROR_UNSUPPORTED)
         }

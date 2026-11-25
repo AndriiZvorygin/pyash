@@ -76,6 +76,29 @@ pub(super) fn resolve_storage_u16_scalar(
     reference: NameSpan,
     storage: &StorageView<'_>,
 ) -> Result<Option<u16>, u32> {
+    resolve_storage_u16_element(words, start, group_len, reference, 0, true, storage)
+}
+
+pub(super) fn resolve_storage_u16_vector_element(
+    words: &[impl VliwWord],
+    start: usize,
+    group_len: usize,
+    reference: NameSpan,
+    index: usize,
+    storage: &StorageView<'_>,
+) -> Result<Option<u16>, u32> {
+    resolve_storage_u16_element(words, start, group_len, reference, index, false, storage)
+}
+
+fn resolve_storage_u16_element(
+    words: &[impl VliwWord],
+    start: usize,
+    group_len: usize,
+    reference: NameSpan,
+    index: usize,
+    require_scalar: bool,
+    storage: &StorageView<'_>,
+) -> Result<Option<u16>, u32> {
     let mut found = None;
     let mut section = 0;
     while section < storage.section_count() {
@@ -105,15 +128,28 @@ pub(super) fn resolve_storage_u16_scalar(
             if element_type != NUMBER_TYPE || element_width != 2 {
                 return Err(ERROR_UNSUPPORTED);
             }
-            if rank != 1 || element_count != 1 || storage.shape(section, 0) != Some(1) {
+            if rank != 1
+                || element_count == 0
+                || storage.shape(section, 0) != Some(element_count as u32)
+            {
                 return Err(ERROR_UNSUPPORTED);
+            }
+            if require_scalar && element_count != 1 {
+                return Err(ERROR_UNSUPPORTED);
+            }
+            if index >= element_count {
+                return Err(ERROR_VECTOR_WIDTH);
             }
             if payload_offset.checked_add(byte_length).is_none() {
                 return Err(ERROR_MALFORMED);
             }
+            let byte_offset = index
+                .checked_mul(element_width)
+                .and_then(|offset| payload_offset.checked_add(offset))
+                .ok_or(ERROR_MALFORMED)?;
             found = Some(
                 storage
-                    .read_payload_u16(payload_offset)
+                    .read_payload_u16(byte_offset)
                     .ok_or(ERROR_MALFORMED)?,
             );
         }

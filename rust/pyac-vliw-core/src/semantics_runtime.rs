@@ -188,6 +188,7 @@ const NOMINATIVE: u32 = 0x24de;
 const SOURCE: u32 = 0x313e;
 const DESTINATION: u32 = 0x243e;
 const LOCATIVE: u32 = 0x615f;
+const MULTIPLICATIVE: u32 = 0x6357;
 const COMITATIVE: u32 = 0x490f;
 const INSTRUMENTAL: u32 = 0x287e;
 const DATIVE: u32 = 0x207e;

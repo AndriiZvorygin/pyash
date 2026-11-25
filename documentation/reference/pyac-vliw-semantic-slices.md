@@ -153,9 +153,12 @@ example `from name pset gjat at num 1 to name lyac dlek be tsoc hsat do`. The
 view is zero-copy and feeds later `kl6m psas` operations at widths above 16
 lanes. Its selector may instead be `at name lwat txik`; `lwat txik` links to
 Open English WordNet 2025 `n:06652323-n` (an index number/indicator) and names
-an immutable, one-element rank-one `number_` section holding the row as uint16.
-This accepts one supplied token ID per pack, without tokenization or sequence
-gathering. Alias resolution scans preceding sentences in the pack.
+an immutable rank-one `number_` section holding uint16 token IDs. Without
+`fromindex`, that section must contain one ID; with `fromindex num <position>`,
+the zero-based position selects an ID from a sequence. Repeated lookups can
+bind rows for several token IDs in one pack, with each row feeding subsequent
+`kl6m psas` operations. This gathers supplied IDs; it does not tokenize text.
+Alias resolution scans preceding sentences in the pack.
 The lexical links used by this example are:
 
 | Pyash form | Lexical meaning and role |
