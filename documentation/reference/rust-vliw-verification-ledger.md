@@ -30,12 +30,16 @@ The selector is payload data; no runtime index map or tensor copy is built.
 | CUDA event batches | Codelet batch: 12.344 ms; programlet batch: 121.301 ms |
 | Housekeeper client round trips | Codelet batch: 1,129.052 ms; programlet batch: 1,126.719 ms |
 | New dynamic result | `number_` payload index `1` -> embedding row `1` -> dot product `40` on CPU and RTX 3090 |
-| Deployment state | Canary passed; prior persistent runtime was restored afterward. The tested image was not left deployed by this verification run. |
+| Deployment verification | `artifacts/20261125-0005-rust-vliw-conformance/result.pya`; source revision `87a1d0f5516cdf240f7b92c634168ad4321c1c69`; 80/80 value/dispatch cases and 6/6 expected errors passed in 13,537.143 ms |
+| Persistent deployment | Retained on Mriczo as `rust-cuda-cubin`; same image and cubin as above, cubin load 0.09 s, worker ready in 594 ms; post-run Housekeeper queue depth 0 |
+| Rollback | Prior runtime image `sha256:97268cf465fa3af513478bf72a608f0799340882d85a36d7104fbb06e9fe58fa`; use `bash container/pyac-vliw-runtime/command/cuda-canary.sh mriczo liberit/pyac-vliw-runtime:cuda-sm86-1fc07d52d141910c rollback` |
 
 Batch timings include the complete listed case sets; they are not per-operation
 latencies. The six expected errors comprise one absent overload and five
 programlet/runtime guard cases. The final image and evidence are kept in the
-ignored CUDA build target and local `artifacts/` directory respectively.
+ignored CUDA build target and local `artifacts/` directory respectively. The
+first verification was a restoring canary; the follow-up deployment verification
+above retained the tested image as the active Mriczo runtime.
 
 ## 2026-11-25: Payload-backed Matrix-Vector Dot Product
 
