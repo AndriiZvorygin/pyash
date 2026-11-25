@@ -225,8 +225,9 @@ order and MUST NOT reject it. The directory may stay sorted for comparison, but
 the winner is the latest definition, not an error.
 
 Status: the current Rust routine directory rejects an equal signature key with
-`ERROR_DUPLICATE_SIGNATURE`, which diverges from this contract. The divergence
-is recorded in
+`ERROR_DUPLICATE_SIGNATURE`, which diverges from this contract. The JavaScript
+interpreter already applies latest-wins with a warning (`02-core-execution.md`),
+so the Rust pack directory is the outlier. The divergence is recorded in
 [`pyac-vliw-semantic-slices.md`](../reference/pyac-vliw-semantic-slices.md#known-divergences-from-lwonprom)
 until it is fixed.
 

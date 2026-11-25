@@ -2,7 +2,9 @@
 
 Use this file as the lookup record for Rust VLIW CPU/GPU conformance runs. Each
 entry records the repository revision, deployed artifact, host/device, route,
-and exact test outcome. A queued or timed-out job is not a passing test.
+and exact test outcome. A queued or timed-out job is not a passing test. Entries
+are historical: compare the recorded source revision with `git rev-parse HEAD`
+before assuming the deployed artifact matches the checkout.
 
 ## 2026-11-25: Programlet-Local Embedding Attention
 

@@ -91,7 +91,7 @@ Level one is the six moods (exactly `is_mood`):
 | --- | --- | --- | --- |
 | `def` | definition | pack load | `ceremony`, `myocpfun` |
 | `prah` | definition close, invocation close | load and frame exit | `ceremony`, `myocpfun` |
-| `ya` | static declaration | load and frame setup | `number`, `boolean`, `vector`, `pfun myoc` |
+| `ya` | static declaration | load and frame setup | `number`, `boolean`, `variable`, `pfun myoc` |
 | `do` | execution | run loop | route handlers and the routine directory |
 | `then` | conditional control | within one sentence | branch/join group |
 | `ret` | return control | run loop | none |
@@ -173,9 +173,13 @@ silicon and different answers to "can vocabulary grow after tape-out?".
 | Signature/dataflow machine | A codelet is ready when its operands are present and its signature matches a table entry. | Growth is a new table row, not new gates. | Spec 27 §5.2 ("ready-work queue rather than a mandatory program counter"). |
 
 The current implementation is the first. The encoding supports the second: the
-boundary bits already express operand independence. The stated goal — an ASIC
-whose vocabulary can grow through signature dispatch — points at the third.
+boundary bits already express operand independence.
 
-This note does not choose between them. It records that the choice is
-unresolved, that spec 27 currently describes the third while the code implements
-the first, and that the name "VLIW" is earned only by the second or third.
+**Decision:** the target is the third, the signature/dataflow machine, chosen
+for ASIC compatibility and vocabulary growth rather than throughput. The current
+Rust core is a transitional serial implementation of the same two-level
+dispatch: mood selects the class, and the execution class is keyed by verb plus
+sorted case/type pairs. Bundling independent operations per fetched unit remains
+an optional optimization inside that model, not the model itself. Spec 27 §5.2's
+ready-work queue is the target contract; the program-counter loop is the
+current implementation.
