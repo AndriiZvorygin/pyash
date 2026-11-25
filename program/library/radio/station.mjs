@@ -1,6 +1,8 @@
 import fs from "node:fs/promises";
 import { EventEmitter } from "node:events";
 
+import { downloadUrlFor } from "./download.mjs";
+
 // A client that cannot keep up is dropped rather than allowed to hold the
 // station back. The threshold is generous: it covers a slow network for
 // several seconds of audio.
@@ -211,7 +213,8 @@ export function createRadioStation({ tracks = [], gapMs = 500, now = () => Date.
         title: track.title,
         topic: track.topic,
         engine: track.engine,
-        durationSeconds: track.durationSeconds
+        durationSeconds: track.durationSeconds,
+        downloadUrl: downloadUrlFor(track.filename)
       } : null,
       startedAt: trackStartedAt ? new Date(trackStartedAt).toISOString() : "",
       elapsedSeconds: trackStartedAt ? Math.max(0, (now() - trackStartedAt) / 1000) : 0,

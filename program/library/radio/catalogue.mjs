@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { measureMp3Buffer } from "./mp3.mjs";
+import { downloadUrlFor } from "./download.mjs";
 import { inContract } from "./rotation.mjs";
 
 // The rendered catalogue follows the house folder contract
@@ -131,6 +132,7 @@ export function publicCatalogue(tracks = []) {
     topic: track.topic,
     engine: track.engine,
     durationSeconds: track.durationSeconds,
-    lyricSheet: track.lyricSheet ? path.basename(track.lyricSheet) : ""
+    lyricSheet: track.lyricSheet ? path.basename(track.lyricSheet) : "",
+    downloadUrl: downloadUrlFor(track.filename)
   }));
 }

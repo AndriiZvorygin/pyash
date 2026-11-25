@@ -48,6 +48,14 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
   ol { margin: 0; padding-left: 1.2rem; }
   li { margin: .35rem 0; color: #b9b6af; }
   li .meta { color: #6f7380; }
+  li .download { margin-left: .6rem; color: #d8a657; font-size: .85rem; text-decoration: none;
+                 border-bottom: 1px solid #4a3d22; }
+  li .download:hover { color: #e6b76e; }
+  a.download { display: inline-block; margin-left: .6rem; padding: .35rem .8rem; border-radius: .4rem;
+               border: 1px solid #4a3d22; color: #d8a657; font-size: .85rem; text-decoration: none; }
+  a.download:hover { background: #1d212a; color: #e6b76e; }
+  .now a.download { margin-top: .9rem; }
+  .now .playing { color: #d8a657; font-size: .8rem; text-transform: uppercase; letter-spacing: .12em; }
 </style>
 </head>
 <body>
@@ -58,17 +66,30 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
     <div class="label">Now playing</div>
     <div class="title" id="now-title">Loading the station</div>
     <div class="meta" id="now-meta"></div>
+    <div id="now-download"></div>
     <button id="tune" type="button">Tune in</button>
     <audio id="player" controls preload="none" src="${escapeText(streamUrl)}"></audio>
   </section>
   <h2>Catalogue</h2>
+  <p class="tagline">Every song can be taken home.</p>
   <ol id="catalogue"></ol>
 </main>
 <script>
   const player = document.getElementById("player");
   const nowTitle = document.getElementById("now-title");
   const nowMeta = document.getElementById("now-meta");
+  const nowDownload = document.getElementById("now-download");
   document.getElementById("tune").addEventListener("click", () => player.play());
+
+  function downloadLink(url, label) {
+    if (!url) return null;
+    const link = document.createElement("a");
+    link.className = "download";
+    link.href = url;
+    link.textContent = label || "Download";
+    link.setAttribute("download", "");
+    return link;
+  }
 
   async function refresh() {
     try {
@@ -77,6 +98,7 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
       if (!status.track) {
         nowTitle.textContent = "The catalogue is empty";
         nowMeta.textContent = "No rendered track is waiting to play.";
+        nowDownload.replaceChildren();
         return;
       }
       nowTitle.textContent = status.track.title;
@@ -84,6 +106,8 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
       nowMeta.textContent = status.track.engine + " - " + status.track.topic
         + " - " + played + "s of " + Math.round(status.track.durationSeconds || 0) + "s"
         + " - " + status.listeners + " listening";
+      const link = downloadLink(status.track.downloadUrl, "Download this song");
+      nowDownload.replaceChildren(...(link ? [link] : []));
     } catch (error) {
       nowTitle.textContent = "The station is out of reach";
     }
@@ -101,6 +125,8 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
         meta.className = "meta";
         meta.textContent = " - " + track.engine + " - " + Math.round(track.durationSeconds || 0) + "s";
         item.append(track.title, meta);
+        const link = downloadLink(track.downloadUrl, "Download");
+        if (link) item.append(link);
         list.append(item);
       }
     } catch (error) {

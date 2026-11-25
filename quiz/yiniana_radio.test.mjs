@@ -274,6 +274,7 @@ test("the catalogue keeps its private details to itself", async () => {
   const published = publicCatalogue(tracks);
   assert.equal(published.length, 1);
   assert.deepEqual(Object.keys(published[0]).sort(), [
+    "downloadUrl",
     "durationSeconds",
     "engine",
     "filename",
@@ -483,4 +484,68 @@ test("the pyash ceremony runs the station command", async () => {
   const output = String(result?.result?.text ?? result?.ob?.text ?? "");
   assert.match(output, /radio-station-up/u);
   forget();
+});
+
+test("a listener can download the song that is playing", async () => {
+  const root = await makeTempDir();
+  const track = await writeTrack(root, "ace-step-dignity.mp3", { frames: 40 });
+  const station = createRadioStation({ tracks: [track], gapMs: 0 });
+  station.start();
+  const { server } = createRadioServer({ station, stationName: "Yiniana Radio", catalogueDirectory: root });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+
+  const listed = await (await fetch(`${base}/playlist.json`)).json();
+  assert.equal(listed.tracks[0].downloadUrl, "/song/ace-step-dignity.mp3");
+
+  const state = await (await fetch(`${base}/status.json`)).json();
+  assert.equal(state.track.downloadUrl, "/song/ace-step-dignity.mp3");
+
+  const download = await fetch(`${base}/song/ace-step-dignity.mp3`);
+  assert.equal(download.status, 200);
+  assert.equal(download.headers.get("content-type"), "audio/mpeg");
+  assert.match(download.headers.get("content-disposition") ?? "", /attachment; filename="ace-step-dignity\.mp3"/u);
+  const body = Buffer.from(await download.arrayBuffer());
+  assert.equal(body.length, (await fs.stat(track.path)).size);
+  assert.deepEqual(body.subarray(0, 4), Buffer.from([0xff, 0xfb, 0x90, 0x00]));
+
+  await new Promise((resolve) => server.close(resolve));
+  station.stop();
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test("a download serves nothing that is not a song of the programme", async () => {
+  const root = await makeTempDir();
+  const track = await writeTrack(root, "ace-step-dignity.mp3", { frames: 6 });
+  await fs.writeFile(path.join(root, "secret.txt"), "not a song");
+  const station = createRadioStation({ tracks: [track], gapMs: 0 });
+  station.start();
+  const { server } = createRadioServer({ station, stationName: "Yiniana Radio", catalogueDirectory: root });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+
+  for (const asked of [
+    "/song/secret.txt",
+    "/song/../secret.txt",
+    "/song/%2e%2e%2fsecret.txt",
+    "/song/missing.mp3",
+    "/song/"
+  ]) {
+    const answer = await fetch(`${base}${asked}`);
+    assert.equal(answer.status, 404, `${asked} is not a song of the programme`);
+  }
+
+  await new Promise((resolve) => server.close(resolve));
+  station.stop();
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test("the station page offers the download of the song and of the catalogue", () => {
+  const page = renderStationPage({ stationName: "Yiniana Radio", streamUrl: "/stream.mp3" });
+  assert.match(page, /id="now-download"/u);
+  assert.match(page, /downloadLink\(status\.track\.downloadUrl/u);
+  assert.match(page, /downloadLink\(track\.downloadUrl/u);
+  assert.match(page, /setAttribute\("download"/u);
 });

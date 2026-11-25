@@ -353,10 +353,50 @@ station is a few hundred lines of Node and a small frame reader.
 | Route | What it gives |
 | --- | --- |
 | `GET /stream.mp3` | the live programme: `audio/mpeg`, chunked, never ends |
-| `GET /` | the station page: now playing, the catalogue, a tune-in button |
-| `GET /playlist.json` | the catalogue with titles, engines and lengths |
-| `GET /status.json` | the now playing state and the listener count |
+| `GET /` | the station page: now playing, the catalogue, a tune-in button, a download for every song |
+| `GET /playlist.json` | the catalogue with titles, engines, lengths and download urls |
+| `GET /status.json` | the now playing state, its download url and the listener count |
+| `GET /song/<name>` | the song itself, as an attachment a listener may keep |
 | `GET /health` | the liveness check |
+
+### Taking a song home
+
+A radio that plays a song can be asked to hand it over, and this one does:
+every song of the catalogue has a download link on the station page, next to
+the song that is playing and next to every entry of the list.
+
+The route is `GET /song/<name>`, and it is deliberately narrow, because the
+station listens to the open internet:
+
+- only a song of the programme can be downloaded — the name is looked up in
+  the programme, not in the folder;
+- the file is the one the catalogue names, inside the catalogue folder, and
+  a name that carries a separator or a parent step is refused outright;
+- the answer carries `Content-Disposition: attachment`, so a browser saves
+  the mp3 rather than playing it in a tab.
+
+The playlist and the status both carry the download url of their song, so a
+player built on the json does not have to guess the route:
+
+```json
+{
+  "filename": "az-compassion.mp3",
+  "title": "Compassion",
+  "topic": "compassion",
+  "engine": "az",
+  "durationSeconds": 140.064,
+  "lyricSheet": "song-az-compassion.txt",
+  "downloadUrl": "/song/az-compassion.mp3"
+}
+```
+
+### The titles
+
+A song's title is the lane it was made for, written out: `az-compassion.mp3`
+is *Compassion*, `ace-step-love-expands.mp3` is *Love Expands*. The title,
+the engine, the topic and the length travel with the song in the playlist
+and in the now-playing state, so a listener always knows what they are
+hearing.
 
 ### Real time, not file speed
 
@@ -887,7 +927,7 @@ the station and the cause is usually the prompt that was passed.
 - `quiz/yiniana_lyric_recovery.test.mjs` — tag stripping, n-gram counting, the three transcript shapes.
 - `quiz/music_comfyui_runner.test.mjs` — the workflow and mapping pairs, node detection, the mapping spellings, the save format, and the byte sniffing.
 - `quiz/music_say.test.mjs` — the verb side of the music surface.
-- `quiz/yiniana_radio.test.mjs` — the frame reader, the catalogue scan, the programme loop, the slow listener, the http surface, the rotation contract, the order of the programme and the pyash ceremony.
+- `quiz/yiniana_radio.test.mjs` — the frame reader, the catalogue scan, the programme loop, the slow listener, the http surface, the download of a song and what a download refuses, the rotation contract, the order of the programme and the pyash ceremony.
 - `quiz/yiniana_producer.test.mjs` — the lanes, the work list, the seed choice, the publishing, the song that is rejected, the audition window, the sheet that reuses its card, and the pyash ceremony.
 - `quiz/yiniana_song_import.test.mjs` — the manifest, the song that is already there, the sheet naming, the mp3 the station cannot play, the part file that never lands, and the pyash ceremony.
 - `quiz/learn_card_headings.test.mjs` — the two card depths, the headings an argument may name, the headings a card carries, and the card that matches a depth.

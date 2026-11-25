@@ -4,6 +4,8 @@
 // many listeners, the song changes by itself.
 
 import http from "node:http";
+import fsSync from "node:fs";
+import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { interpret } from "../program/bridge/index.mjs";
 import { resolveConfigMap, resolveConfigNum, resolveConfigText } from "../program/configure/env.mjs";
 import { publicCatalogue, scanCatalogue } from "../program/library/radio/catalogue.mjs";
+import { DOWNLOAD_PREFIX, downloadNameFromPath, resolveDownloadPath } from "../program/library/radio/download.mjs";
 import { renderStationPage } from "../program/library/radio/page.mjs";
 import { contractWithOrder, orderTracks, readLanes, readRotation } from "../program/library/radio/rotation.mjs";
 import { createRadioStation } from "../program/library/radio/station.mjs";
@@ -73,8 +76,8 @@ function localAddresses() {
  * The station listens to the open internet, so nothing a stranger sends may
  * take it down: a malformed request is answered and the house keeps playing.
  */
-export function createRadioServer({ station, stationName = DEFAULT_STATION_NAME } = {}) {
-  const handle = (req, res) => {
+export function createRadioServer({ station, stationName = DEFAULT_STATION_NAME, catalogueDirectory = "" } = {}) {
+  const handle = async (req, res) => {
     let pathname = "/";
     try {
       pathname = new URL(req.url ?? "/", "http://localhost").pathname;
@@ -115,6 +118,37 @@ export function createRadioServer({ station, stationName = DEFAULT_STATION_NAME 
       jsonResponse(res, 200, { station: stationName, tracks: publicCatalogue(station.tracks) });
       return;
     }
+    if (pathname.startsWith(DOWNLOAD_PREFIX)) {
+      const name = downloadNameFromPath(pathname);
+      const known = name ? station.tracks.find((track) => track.filename === name) : null;
+      const file = known ? resolveDownloadPath({ catalogueDirectory, filename: name }) : "";
+      if (!known || !file) {
+        jsonResponse(res, 404, { ok: false, error: "no such song" });
+        return;
+      }
+      let size = 0;
+      try {
+        size = (await fs.stat(file)).size;
+      } catch {
+        jsonResponse(res, 404, { ok: false, error: "no such song" });
+        return;
+      }
+      res.writeHead(200, {
+        "content-type": "audio/mpeg",
+        "content-length": size,
+        "content-disposition": `attachment; filename="${known.filename.replace(/"/gu, "")}"`,
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff"
+      });
+      if (req.method === "HEAD") {
+        res.end();
+        return;
+      }
+      const body = fsSync.createReadStream(file);
+      body.on("error", () => res.destroy());
+      body.pipe(res);
+      return;
+    }
     if (pathname === "/status.json") {
       jsonResponse(res, 200, { station: stationName, ...station.state() });
       return;
@@ -127,16 +161,16 @@ export function createRadioServer({ station, stationName = DEFAULT_STATION_NAME 
   };
 
   const server = http.createServer((req, res) => {
-    try {
-      handle(req, res);
-    } catch {
-      // A request must never take the station down.
-      if (res.headersSent) {
-        res.destroy();
-        return;
-      }
-      jsonResponse(res, 500, { ok: false, error: "station fault" });
-    }
+    Promise.resolve()
+      .then(() => handle(req, res))
+      .catch(() => {
+        // A request must never take the station down.
+        if (res.headersSent) {
+          res.destroy();
+          return;
+        }
+        jsonResponse(res, 500, { ok: false, error: "station fault" });
+      });
   });
   server.on("clientError", (error, socket) => {
     if (socket.writable) socket.end("HTTP/1.1 400 Bad Request\r\n\r\n");
@@ -195,7 +229,7 @@ export async function startRadioStation({ cwd = process.cwd(), listen = true } =
     process.stdout.write(`yiniana radio: now playing ${track.title}\n`);
   });
   station.start();
-  const { server } = createRadioServer({ station, stationName });
+  const { server } = createRadioServer({ station, stationName, catalogueDirectory });
   const rescan = setInterval(async () => {
     const { tracks: next } = await buildProgramme();
     const before = station.tracks.map((track) => track.filename).join("\n");
