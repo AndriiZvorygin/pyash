@@ -1,0 +1,71 @@
+{
+  "prompt": {
+    "1": {
+      "class_type": "CheckpointLoaderSimple",
+      "inputs": {
+        "ckpt_name": "yue2_3b_int8_convrot.safetensors"
+      }
+    },
+    "5": {
+      "class_type": "YuE2GenerateMusic",
+      "inputs": {
+        "clip": ["1", 1],
+        "style": "electronic symphony, electroclash techno, 128 bpm, D minor, mature adult European female vocals, mid-30s voice, low monotone speech-singing verses, warm low-mid timbre, indie pop attitude, crisp mid-range sung chorus, orchestral strings, epic brass stabs, cinematic builds, choir pads, heartbeat rhythm, lub-dub double-kick pulse, deep sub kick, acid bassline, supersaw stabs, key change into final chorus",
+        "lyrics": "[Verse]\nYou see a stranger in the mirror and a stranger in the street,\nbut every face is love in costume, and the costume is complete.",
+        "abc": "",
+        "seed": 0,
+        "mode": "full",
+        "max_duration": 175.0,
+        "temperature": 1.0,
+        "top_p": 0.95,
+        "top_k": 100,
+        "repetition_penalty": 1.2,
+        "cfg_scale": 1.01
+      }
+    },
+    "6": {
+      "class_type": "ConditioningZeroOut",
+      "inputs": {
+        "conditioning": ["5", 0]
+      }
+    },
+    "7": {
+      "class_type": "EmptyYuE2LatentAudio",
+      "inputs": {
+        "seconds": ["5", 1],
+        "batch_size": 1
+      }
+    },
+    "8": {
+      "class_type": "KSampler",
+      "inputs": {
+        "model": ["1", 0],
+        "seed": 0,
+        "steps": 32,
+        "cfg": 1.0,
+        "sampler_name": "dpm_2",
+        "scheduler": "sgm_uniform",
+        "positive": ["5", 0],
+        "negative": ["6", 0],
+        "latent_image": ["7", 0],
+        "denoise": 1.0
+      }
+    },
+    "9": {
+      "class_type": "VAEDecodeAudio",
+      "inputs": {
+        "samples": ["8", 0],
+        "vae": ["1", 2]
+      }
+    },
+    "11": {
+      "class_type": "AceStepSFTSaveAudio",
+      "inputs": {
+        "audio": ["9", 0],
+        "filename_prefix": "music/yue2-own-melody",
+        "format": "mp3",
+        "quality": "192k"
+      }
+    }
+  }
+}

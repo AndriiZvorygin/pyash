@@ -1,0 +1,98 @@
+{
+  "prompt": {
+    "3": {
+      "class_type": "AceStepSFTModelLoader",
+      "inputs": {
+        "diffusion_model": "acestep_v1.5_xl_turbo_bf16.safetensors",
+        "text_encoder_1": "qwen_0.6b_ace15.safetensors",
+        "text_encoder_2": "qwen_1.7b_ace15.safetensors",
+        "vae_name": "ace_1.5_vae.safetensors"
+      }
+    },
+    "4": {
+      "class_type": "AceStepSFTTextEncode",
+      "inputs": {
+        "clip": ["3", 1],
+        "caption": "electronic symphony, electroclash techno, 128 bpm, D minor, mature adult European female vocals, mid-30s voice, low monotone speech-singing verses, warm low-mid timbre, indie pop attitude, crisp mid-range sung chorus, orchestral strings, epic brass stabs, cinematic builds, choir pads, heartbeat rhythm, lub-dub double-kick pulse, deep sub kick, acid bassline, supersaw stabs, key change into final chorus",
+        "lyrics": "[Verse]\nYou see a stranger in the mirror and a stranger in the street,\nbut every face is love in costume, and the costume is complete.",
+        "instrumental": false,
+        "seed": 0,
+        "duration": 180.0,
+        "bpm": 128,
+        "timesignature": "4",
+        "language": "en",
+        "keyscale": "D minor",
+        "generate_audio_codes": true,
+        "lm_cfg_scale": 3.0,
+        "lm_temperature": 0.7,
+        "lm_top_p": 0.9,
+        "lm_top_k": 0,
+        "lm_min_p": 0,
+        "lm_negative_prompt": "",
+        "style_bpm": ["21", 0]
+      }
+    },
+    "6": {
+      "class_type": "AceStepSFTGenerate",
+      "inputs": {
+        "model": ["3", 0],
+        "positive": ["4", 0],
+        "negative": ["4", 1],
+        "vae": ["3", 2],
+        "reference_audio": ["11", 0],
+        "seed": 0,
+        "steps": 8,
+        "cfg": 1.0,
+        "sampler_name": "jkass_quality",
+        "scheduler": "ace_step",
+        "denoise": 1.0,
+        "duration": 180.0,
+        "infer_method": "ode",
+        "guidance_mode": "apg",
+        "batch_size": 1,
+        "latent_shift": 0.0,
+        "latent_rescale": 1.0,
+        "fade_in_duration": 0.0,
+        "fade_out_duration": 0.0,
+        "use_tiled_vae": true,
+        "unload_models_after_generate": false,
+        "voice_boost": 3.5,
+        "apg_eta": 0.0,
+        "apg_momentum": -0.75,
+        "apg_norm_threshold": 2.5,
+        "guidance_interval": 0.5,
+        "guidance_schedule": "normal",
+        "min_guidance_scale": 3,
+        "guidance_scale_text": -1.0,
+        "guidance_scale_lyric": -1.0,
+        "omega_scale": 0.0,
+        "erg_scale": 0.0,
+        "cfg_interval_start": 0.0,
+        "cfg_interval_end": 1.0,
+        "shift": 3.0
+      }
+    },
+    "11": {
+      "class_type": "AceStepSFTLoadReferenceAudio",
+      "inputs": {
+        "enabled": false,
+        "audio": ""
+      }
+    },
+    "13": {
+      "class_type": "AceStepSFTSaveAudio",
+      "inputs": {
+        "audio": ["6", 5],
+        "filename_prefix": "music/ace-step-1-5-xl-turbo",
+        "format": "mp3",
+        "quality": "192k"
+      }
+    },
+    "21": {
+      "class_type": "PrimitiveInt",
+      "inputs": {
+        "value": 128
+      }
+    }
+  }
+}

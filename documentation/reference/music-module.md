@@ -70,7 +70,7 @@ su name out
   fromtext text "ambient cinematic"
   ob text "hello world lyric"
   with name opts
-  to filename "artifacts/music/song.opus"
+  to filename "artifacts/music/song.mp3"
 be music say do
 ```
 
@@ -84,16 +84,40 @@ Supported options map value primitives: `text`, `num`, `boolean`.
   3. `draw host`
   4. fallback `http://localhost:8188`
 - Workflow root default: `music workflow root` or `./music/`.
-- Workflow default name: `music workflow default` or `audio_ace_step_1_5_checkpoint`.
+- Workflow default name: `music workflow default` or `audio_ace_step_1_5_xl_turbo`.
 - Missing lyrics is deterministic failure: `music say defective: missing lyrics`.
 
 Outputs:
-- Writes `.opus` audio file.
+- Writes an mp3 audio file by default. The extension names the container the bytes really carry: the runner sniffs what ComfyUI produced and refuses to write a file whose name contradicts its bytes.
 - Writes adjacent `.metadata.json` with canonical JSON fields including:
   - `kind`, `backend`, `workflow`, `host`, `inputSha256`, `outputSha256`, `format`, `streaming`, `options`.
+- `format` is read from the output extension, so the metadata never claims a format the file does not carry.
 - Records artifacts through exchange artifact recording (`kind: say`, metadata artifact kind).
 
-## 8. Existing Quiz Coverage
+## 8. Music Runner Contract
+
+`command/music_comfyui_runner.mjs` submits the ComfyUI prompt through the GPU
+Housekeeper first (`submitManagedGpuJob`, job kind `comfyui-prompt`, VRAM
+request 12000 MB, profile name = the workflow name). The direct ComfyUI
+`/prompt` call is a fallback for hosts with no Housekeeper configured, and the
+runner never takes that path when a Housekeeper URL is reachable.
+
+The runner resolves the graph fields it may override from the companion `.pya`
+mapping, then falls back to node-type detection: `AceStepSFTTextEncode`,
+`YuE2GenerateMusic` and `TextEncodeAceStepAudio1.5` carry lyrics and style;
+`AceStepSFTGenerate` and `KSampler` carry the sampler fields;
+`EmptyYuE2LatentAudio` and `EmptyAceStep1.5LatentAudio` carry the length;
+`AceStepSFTSaveAudio`, `SaveAudioOpus` and `SaveAudio` carry the output.
+
+Option names are accepted in camel case, snake case and spaced form, so
+`voiceBoost`, `voice_boost` and `voice boost` are the same option.
+
+The radio chain and the two engines it drives are described in
+`documentation/reference/yiniana-radio.md`.
+
+## 9. Existing Quiz Coverage
 
 - `quiz/music_video_signatures.test.mjs` validates module signature registration and resolution.
 - `quiz/music_say.test.mjs` validates output writing, options-map propagation, and interpreter signature path.
+- `quiz/music_comfyui_runner.test.mjs` validates the workflow and mapping pairs, node detection, the mapping spellings, the save format, and the byte sniffing.
+- `quiz/comfyui_admin_guard.test.mjs` validates that a discharge does not cancel a ComfyUI job another surface is running.

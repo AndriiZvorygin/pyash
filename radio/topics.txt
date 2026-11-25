@@ -1,0 +1,21 @@
+# The Yiniana radio topic rotation.
+#
+# One teaching lane per line, single words: the lyrics chain turns each topic
+# into a source file, a learnteaching and a song. The lanes match the topics
+# the channeling corpus already supports, so the grep always finds material.
+#
+# The chain is run per topic:
+#   node command/run_pya_program.mjs examples/pyash/yiniana-radio-lyrics.pya \
+#     ob text <topic> to name topic ya ob text radio to name radio_dir
+dignity
+humility
+forgiveness
+peace
+healing
+patience
+attention
+devotion
+joy
+trust
+discipline
+love

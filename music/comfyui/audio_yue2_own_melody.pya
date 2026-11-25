@@ -1,0 +1,16 @@
+su name lyrics path ob text "5.inputs.lyrics" ya
+su name style path ob text "5.inputs.style" ya
+su name max duration path ob text "5.inputs.max_duration" ya
+su name seed path ob text "5.inputs.seed" ya
+su name temperature path ob text "5.inputs.temperature" ya
+su name top p path ob text "5.inputs.top_p" ya
+su name top k path ob text "5.inputs.top_k" ya
+su name repetition penalty path ob text "5.inputs.repetition_penalty" ya
+su name cfg scale path ob text "5.inputs.cfg_scale" ya
+su name steps path ob text "8.inputs.steps" ya
+su name cfg path ob text "8.inputs.cfg" ya
+su name sampler name path ob text "8.inputs.sampler_name" ya
+su name scheduler path ob text "8.inputs.scheduler" ya
+su name denoise path ob text "8.inputs.denoise" ya
+su name quality path ob text "11.inputs.quality" ya
+su name save audio prefix path ob text "11.inputs.filename_prefix" ya
