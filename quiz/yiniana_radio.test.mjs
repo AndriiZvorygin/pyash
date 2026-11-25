@@ -10,7 +10,8 @@ import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
 import { forget, remember } from "../program/remember/index.mjs";
 
-import { id3v2Size, measureMp3Buffer, parseFrameHeader } from "../program/library/radio/mp3.mjs";
+import { measureMp3Buffer, parseFrameHeader } from "../program/library/radio/mp3.mjs";
+import { id3v2Size, writeId3Title } from "../program/library/radio/id3.mjs";
 import { parseTrackName, publicCatalogue, scanCatalogue } from "../program/library/radio/catalogue.mjs";
 import { renderStationPage } from "../program/library/radio/page.mjs";
 import { contractNames, contractWithOrder, inContract, orderTracks, parseLanes, parseRotation, readLanes, readRotation } from "../program/library/radio/rotation.mjs";
@@ -159,6 +160,25 @@ test("the catalogue keeps only the audio it can play", async () => {
 test("the catalogue of a folder that is not there is empty", async () => {
   const tracks = await scanCatalogue({ directory: "/nowhere/at/all", lyricsDirectory: "/nowhere/at/all" });
   assert.deepEqual(tracks, []);
+});
+
+test("a song is named by the title it carries, and by its lane when it carries none", async () => {
+  const root = await makeTempDir();
+  const audio = path.join(root, "audio");
+  await fs.mkdir(audio, { recursive: true });
+  await fs.writeFile(
+    path.join(audio, "az-mirror-stranger.mp3"),
+    writeId3Title(syntheticMp3({ frames: 8 }), "Lover Is Closer")
+  );
+  await fs.writeFile(path.join(audio, "ace-step-dignity.mp3"), syntheticMp3({ frames: 8 }));
+
+  const tracks = await scanCatalogue({ directory: audio });
+
+  const named = tracks.find((track) => track.filename === "az-mirror-stranger.mp3");
+  assert.equal(named.title, "Lover Is Closer", "the song is named by the title it carries");
+  assert.equal(named.topic, "mirror-stranger", "the lane it was made for is still the topic");
+  const lane = tracks.find((track) => track.filename === "ace-step-dignity.mp3");
+  assert.equal(lane.title, "Dignity", "a song without a title is named by its lane");
 });
 
 test("the rotation plays the songs of the contract and keeps the experiments out", async () => {
@@ -509,6 +529,26 @@ test("a listener can download the song that is playing", async () => {
   const body = Buffer.from(await download.arrayBuffer());
   assert.equal(body.length, (await fs.stat(track.path)).size);
   assert.deepEqual(body.subarray(0, 4), Buffer.from([0xff, 0xfb, 0x90, 0x00]));
+
+  await new Promise((resolve) => server.close(resolve));
+  station.stop();
+  await fs.rm(root, { recursive: true, force: true });
+});
+
+test("a song that carries its own name is taken home under that name", async () => {
+  const root = await makeTempDir();
+  const track = await writeTrack(root, "az-mirror-stranger.mp3", { frames: 6 });
+  track.title = "Lover Is Closer";
+  const station = createRadioStation({ tracks: [track], gapMs: 0 });
+  station.start();
+  const { server } = createRadioServer({ station, stationName: "Yiniana Radio", catalogueDirectory: root });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  const base = `http://127.0.0.1:${port}`;
+
+  const download = await fetch(`${base}/song/az-mirror-stranger.mp3`);
+  assert.equal(download.status, 200);
+  assert.match(download.headers.get("content-disposition") ?? "", /attachment; filename="Lover Is Closer\.mp3"/u);
 
   await new Promise((resolve) => server.close(resolve));
   station.stop();

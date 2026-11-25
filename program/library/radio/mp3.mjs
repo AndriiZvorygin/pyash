@@ -2,6 +2,11 @@
 // stands, so it has to know where the audio starts inside a file and how long
 // the file lasts. Both answers come from the frames themselves: no encoder, no
 // external probe, no state on disk.
+//
+// The tag at the head of the file belongs to the id3 module; this reader only
+// needs to know how long it is.
+
+import { id3v2Size } from "./id3.mjs";
 
 const BITRATE_TABLES = {
   "1-1": [0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448, 0],
@@ -17,25 +22,6 @@ const SAMPLE_RATES = {
   2: [22050, 24000, 16000],
   0: [11025, 12000, 8000]
 };
-
-const ID3_HEADER_BYTES = 10;
-
-/**
- * Byte length of the ID3v2 tag at the head of the buffer, zero when there is
- * no tag. The size is stored as four seven-bit bytes, so the header has to be
- * read that way rather than as a plain integer.
- */
-export function id3v2Size(buffer) {
-  if (!Buffer.isBuffer(buffer) || buffer.length < ID3_HEADER_BYTES) return 0;
-  if (buffer[0] !== 0x49 || buffer[1] !== 0x44 || buffer[2] !== 0x33) return 0;
-  const flags = buffer[5];
-  const size = ((buffer[6] & 0x7f) << 21)
-    | ((buffer[7] & 0x7f) << 14)
-    | ((buffer[8] & 0x7f) << 7)
-    | (buffer[9] & 0x7f);
-  const footer = (flags & 0x10) ? ID3_HEADER_BYTES : 0;
-  return ID3_HEADER_BYTES + size + footer;
-}
 
 /**
  * Read one MPEG audio frame header at the given offset. Returns null when the

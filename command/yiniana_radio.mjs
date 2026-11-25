@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 import { interpret } from "../program/bridge/index.mjs";
 import { resolveConfigMap, resolveConfigNum, resolveConfigText } from "../program/configure/env.mjs";
 import { publicCatalogue, scanCatalogue } from "../program/library/radio/catalogue.mjs";
-import { DOWNLOAD_PREFIX, downloadNameFromPath, resolveDownloadPath } from "../program/library/radio/download.mjs";
+import { DOWNLOAD_PREFIX, downloadNameFor, downloadNameFromPath, resolveDownloadPath } from "../program/library/radio/download.mjs";
 import { renderStationPage } from "../program/library/radio/page.mjs";
 import { contractWithOrder, orderTracks, readLanes, readRotation } from "../program/library/radio/rotation.mjs";
 import { createRadioStation } from "../program/library/radio/station.mjs";
@@ -136,7 +136,7 @@ export function createRadioServer({ station, stationName = DEFAULT_STATION_NAME,
       res.writeHead(200, {
         "content-type": "audio/mpeg",
         "content-length": size,
-        "content-disposition": `attachment; filename="${known.filename.replace(/"/gu, "")}"`,
+        "content-disposition": `attachment; filename="${downloadNameFor(known)}"`,
         "cache-control": "no-store",
         "x-content-type-options": "nosniff"
       });

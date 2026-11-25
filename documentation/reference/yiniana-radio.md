@@ -338,7 +338,8 @@ station is a few hundred lines of Node and a small frame reader.
 
 ### The pieces
 
-- `program/library/radio/mp3.mjs` — the frame reader: id3 tag size, frame headers, duration, frame clock.
+- `program/library/radio/mp3.mjs` — the frame reader: frame headers, duration, frame clock.
+- `program/library/radio/id3.mjs` — the tag at the head of a file: the title a song carries, written and read.
 - `program/library/radio/catalogue.mjs` — the catalogue scan: which files are playable, which engine and topic each one carries, which lyric sheet belongs to it.
 - `program/library/radio/rotation.mjs` — the rotation: the lanes, the engines, the names the station is contracted to play.
 - `program/library/radio/station.mjs` — the programme: the loop, the fan-out to listeners, the now playing state.
@@ -373,7 +374,9 @@ station listens to the open internet:
 - the file is the one the catalogue names, inside the catalogue folder, and
   a name that carries a separator or a parent step is refused outright;
 - the answer carries `Content-Disposition: attachment`, so a browser saves
-  the mp3 rather than playing it in a tab.
+  the mp3 rather than playing it in a tab;
+- the file is offered under the name of the song, so *Lover Is Closer* is
+  saved as `Lover Is Closer.mp3` and not under the lane it was made for.
 
 The playlist and the status both carry the download url of their song, so a
 player built on the json does not have to guess the route:
@@ -392,11 +395,17 @@ player built on the json does not have to guess the route:
 
 ### The titles
 
-A song's title is the lane it was made for, written out: `az-compassion.mp3`
-is *Compassion*, `ace-step-love-expands.mp3` is *Love Expands*. The title,
-the engine, the topic and the length travel with the song in the playlist
-and in the now-playing state, so a listener always knows what they are
-hearing.
+A song's title is the name the house gave it. The songs the house made before
+the radio existed carry their own name in the tag of the file: `az-mirror-stranger.mp3`
+is *Lover Is Closer*, `az-fresh-light.mp3` is *Fresh Light for Valentina*.
+A song that carries no name of its own is named by the lane it was made for,
+written out: `ace-step-love.mp3` is *Love*, `ace-step-love-expands.mp3` is
+*Love Expands*.
+
+The title, the engine, the topic and the length travel with the song in the
+playlist and in the now-playing state, so a listener always knows what they are
+hearing. The lane stays the topic either way, so the programme still plays
+the song it contracted to play.
 
 ### Real time, not file speed
 
@@ -729,18 +738,26 @@ are the fastest way to a rotation that is worth listening to.
 `radio/imports.txt` names them, one per line:
 
 ```
-az-god-remembers.mp3 | /home/htaf/pyac/pyash/know/input/AZ-God_Remembers_All.opus | /home/htaf/pyac/pyash/know/input/AZ-God_Remembers_All.lyrics.txt
+az-god-remembers.mp3 | /home/htaf/pyac/pyash/know/input/AZ-God_Remembers_All.opus | /home/htaf/pyac/pyash/know/input/AZ-God_Remembers_All.lyrics.txt | God Remembers All
 ```
 
 The name is the name the song takes in the catalogue. The source is where the
 audio is. The sheet is where the words are, and it is optional: a song without
-a sheet is audio we have and words we do not.
+a sheet is audio we have and words we do not. The title is the name the house
+gave the song, and it is optional too: a song without one is named by its
+lane.
 
 The import turns each song into an mp3 the station can stream, puts it in the
-catalogue, and copies the sheet into `radio/lyrics/` under the song's own
-name. It reads the mp3 back before it publishes it, so a file that came out
-wrong never reaches the air, and it renames the finished file into place, so
-a half written song is never on the air either.
+catalogue, writes the title into the tag of the file, and copies the sheet
+into `radio/lyrics/` under the song's own name. It reads the mp3 back before
+it publishes it, so a file that came out wrong never reaches the air, and it
+renames the finished file into place, so a half written song is never on the
+air either.
+
+A song that is already in the catalogue is left alone, apart from its title:
+the import writes the title into a song that does not carry it yet, and
+touches nothing else. So the import can be run again whenever the house makes
+more songs, and it is how a song gets the name it had before the radio.
 
 ```sh
 cd /home/htaf/pyac/pyash-dev
@@ -921,6 +938,9 @@ Every rendered mp3 carries its own ComfyUI prompt in the ID3 `TXXX` tag, so
 the file says what produced it. Read the tag when a render does not sound like
 the station and the cause is usually the prompt that was passed.
 
+The name of a song lives in the same tag, in the `TIT2` frame. The import
+writes it there, so a file carries its own name with it.
+
 ## 10. Existing Quiz Coverage
 
 - `quiz/yiniana_lyrics_chain.test.mjs` — the corpus walk, the topic pattern, the atomic write, the card read, the song structure verifier.
@@ -929,7 +949,8 @@ the station and the cause is usually the prompt that was passed.
 - `quiz/music_say.test.mjs` — the verb side of the music surface.
 - `quiz/yiniana_radio.test.mjs` — the frame reader, the catalogue scan, the programme loop, the slow listener, the http surface, the download of a song and what a download refuses, the rotation contract, the order of the programme and the pyash ceremony.
 - `quiz/yiniana_producer.test.mjs` — the lanes, the work list, the seed choice, the publishing, the song that is rejected, the audition window, the sheet that reuses its card, and the pyash ceremony.
-- `quiz/yiniana_song_import.test.mjs` — the manifest, the song that is already there, the sheet naming, the mp3 the station cannot play, the part file that never lands, and the pyash ceremony.
+- `quiz/yiniana_song_import.test.mjs` — the manifest, the song that is already there, the song that is named, the sheet naming, the mp3 the station cannot play, the part file that never lands, and the pyash ceremony.
+- `quiz/radio_id3.test.mjs` — the title a file carries, the title written onto a file, the frames that are kept, and the tag the writer leaves alone.
 - `quiz/learn_card_headings.test.mjs` — the two card depths, the headings an argument may name, the headings a card carries, and the card that matches a depth.
 - `quiz/learn_module.test.mjs` — the learn ceremonies, and the radio card's own ceremonies and prompts.
 - `quiz/learn_internal_examples.test.mjs` — the learn examples, and the radio examples that call the radio stages.

@@ -8,10 +8,12 @@
 //
 // The manifest is radio/imports.txt, one song per line:
 //
-//   <name>.mp3 | <source file> | <lyric sheet>
+//   <name>.mp3 | <source file> | <lyric sheet> | <title>
 //
-// The sheet is optional. A song that is already in the catalogue is left
-// alone, so the import can be run again whenever the house makes more songs.
+// The sheet is optional. The title is the name the house gave the song, and
+// it is written into the tag of the file. A song that is already in the
+// catalogue is left alone, so the command can be run again whenever the house
+// makes more songs.
 
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -25,6 +27,7 @@ import { forget } from "../program/remember/index.mjs";
 
 import { parseTrackName, scanCatalogue } from "../program/library/radio/catalogue.mjs";
 import { parseImports, pendingImports } from "../program/library/radio/imports.mjs";
+import { readId3Title } from "../program/library/radio/id3.mjs";
 import {
   importSong,
   importSongs,
@@ -51,8 +54,8 @@ test("the manifest reads the songs the house already made", () => {
   const imports = parseImports([
     "# the songs of the house",
     "",
-    "az-god-remembers.mp3 | /know/AZ-God_Remembers_All.opus | /know/AZ-God_Remembers_All.lyrics.txt",
-    "az-go-forth.mp3 | /know/go_forth.opus |",
+    "az-god-remembers.mp3 | /know/AZ-God_Remembers_All.opus | /know/AZ-God_Remembers_All.lyrics.txt | God Remembers All",
+    "az-go-forth.mp3 | /know/go_forth.opus | |",
     "not a song.txt | /know/notes.txt |",
     "az-god-remembers.mp3 | /know/other.opus |"
   ].join("\n"));
@@ -61,7 +64,9 @@ test("the manifest reads the songs the house already made", () => {
   assert.equal(imports[0].name, "az-god-remembers.mp3");
   assert.equal(imports[0].source, "/know/AZ-God_Remembers_All.opus");
   assert.equal(imports[0].sheet, "/know/AZ-God_Remembers_All.lyrics.txt");
+  assert.equal(imports[0].title, "God Remembers All", "the manifest carries the name of the song");
   assert.equal(imports[1].sheet, "", "a song without a sheet is still a song");
+  assert.equal(imports[1].title, "", "a song without a name is named by its lane");
 });
 
 test("a song that is already in the catalogue is never imported again", () => {
@@ -124,6 +129,46 @@ test("a song that is already there is left alone", async () => {
 
   assert.equal(song.status, "present");
   assert.equal(transcodeCalls, 0, "the song was not made again");
+});
+
+test("a song that is already there is given the name the house gave it", async () => {
+  const root = await makeTempDir();
+  const catalogue = path.join(root, "audio");
+  await fs.mkdir(catalogue, { recursive: true });
+  const published = path.join(catalogue, "az-mirror-stranger.mp3");
+  await fs.writeFile(published, syntheticMp3({ frames: 6 }));
+
+  const song = await importSong({
+    entry: { name: "az-mirror-stranger.mp3", source: "/nowhere/song.opus", sheet: "", title: "Lover Is Closer" },
+    catalogueDirectory: catalogue
+  });
+
+  assert.equal(song.status, "titled");
+  assert.equal(readId3Title(await fs.readFile(published)), "Lover Is Closer");
+  const tracks = await scanCatalogue({ directory: catalogue });
+  assert.equal(tracks[0].title, "Lover Is Closer", "the station shows the name of the song");
+});
+
+test("a song that is brought in is named before it is published", async () => {
+  const root = await makeTempDir();
+  const catalogue = path.join(root, "audio");
+  await fs.mkdir(catalogue, { recursive: true });
+  const source = path.join(root, "song.opus");
+  await fs.writeFile(source, "the song we have");
+
+  await importSong({
+    entry: { name: "az-open-the-weights.mp3", source, sheet: "", title: "Open the Weights" },
+    catalogueDirectory: catalogue,
+    transcode: async ({ outputPath }) => {
+      await fs.writeFile(outputPath, syntheticMp3());
+      return outputPath;
+    }
+  });
+
+  const published = path.join(catalogue, "az-open-the-weights.mp3");
+  assert.equal(readId3Title(await fs.readFile(published)), "Open the Weights");
+  const leftovers = (await fs.readdir(catalogue)).filter((name) => name.endsWith(".part"));
+  assert.deepEqual(leftovers, [], "no part file was left behind");
 });
 
 test("the import never leaves a half written song in the catalogue", async () => {

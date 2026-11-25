@@ -54,3 +54,18 @@ export function resolveDownloadPath({ catalogueDirectory, filename }) {
   if (target !== folder && !target.startsWith(folder + path.sep)) return "";
   return target;
 }
+
+/**
+ * The name a download is given: the name of the song, when the song has one
+ * of its own, and the name of the file in the catalogue otherwise.
+ *
+ * A name that cannot be written in a header is left out, so a strange title
+ * never breaks the download it names.
+ */
+export function downloadNameFor(track) {
+  const fallback = String(track?.filename ?? "").trim();
+  const title = String(track?.title ?? "").trim();
+  if (!title || /[^\x20-\x7e]/u.test(title)) return fallback;
+  const name = `${title}.mp3`.replace(/["\\/]/gu, "");
+  return name || fallback;
+}

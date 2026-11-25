@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { measureMp3Buffer } from "./mp3.mjs";
 import { downloadUrlFor } from "./download.mjs";
+import { readId3Title } from "./id3.mjs";
 import { inContract } from "./rotation.mjs";
 
 // The rendered catalogue follows the house folder contract
@@ -102,7 +103,10 @@ export async function scanCatalogue({ directory, lyricsDirectory = "", contract 
     }
     const media = measureMp3Buffer(buffer);
     if (!media.frames) continue;
-    const { engine, topic, title } = parseTrackName(filename);
+    const { engine, topic, title: laneTitle } = parseTrackName(filename);
+    // A song that carries its own title is named by that title. A song that
+    // carries none is named by the lane it was made for.
+    const title = readId3Title(buffer) || laneTitle;
     tracks.push({
       filename,
       path: filePath,
