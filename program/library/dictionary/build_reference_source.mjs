@@ -218,11 +218,39 @@ function collectAcceptedCompounds(curated, verified) {
   return { all, bySequence };
 }
 
-function chooseSenseWinners(bridgeEntries, compoundGlosses, targetIndex, rankForEnglish, tagCounts) {
+function reviewedSenseSequences(vocabularyReviews, bridgeEntries) {
+  const bridgesBySense = new Map(bridgeEntries.map((row) => [String(row.source ?? "").toLowerCase(), row]));
+  const reviewed = new Map();
+  for (const review of vocabularyReviews) {
+    if (review?.reviewStatus !== "accepted-curated") continue;
+    const senseId = String(review.senseId ?? "").toLowerCase();
+    const bridge = bridgesBySense.get(senseId);
+    if (!bridge) throw new Error(`accepted vocabulary review references missing WordNet sense: ${senseId}`);
+    const bridgePos = String(bridge.targetPartOfSpeech || senseId[0]).toLowerCase();
+    const normalizedBridgePos = bridgePos === "s" ? "a" : bridgePos;
+    const reviewPos = String(review.targetPartOfSpeech ?? "").toLowerCase();
+    const normalizedReviewPos = reviewPos === "s" ? "a" : reviewPos;
+    if (normalizedSurface(review.coverageTarget ?? review.target) !== normalizedSurface(bridge.target)
+      || normalizedReviewPos !== normalizedBridgePos) {
+      throw new Error(`accepted vocabulary review conflicts with WordNet bridge for ${senseId}`);
+    }
+    const sequence = canonicalizeSequence(review.pyashSequence ?? []);
+    if (!sequence.length) throw new Error(`accepted vocabulary review has no Pyash sequence: ${senseId}`);
+    const previous = reviewed.get(senseId);
+    if (previous && sequenceKey(previous) !== sequenceKey(sequence)) {
+      throw new Error(`conflicting accepted vocabulary reviews for ${senseId}`);
+    }
+    reviewed.set(senseId, sequence);
+  }
+  return reviewed;
+}
+
+function chooseSenseWinners(bridgeEntries, compoundGlosses, targetIndex, rankForEnglish, tagCounts, vocabularyReviews = []) {
   const candidates = [];
+  const reviewedSequences = reviewedSenseSequences(vocabularyReviews, bridgeEntries);
   for (const row of bridgeEntries) {
-    const sequence = targetIndex.resolve(row.target);
     const senseId = String(row.source ?? "").toLowerCase();
+    const sequence = reviewedSequences.get(senseId) ?? targetIndex.resolve(row.target);
     if (!sequence || !/^[anrvs]:\d{8}-[anrvs]$/u.test(senseId) || !row.gloss) continue;
     candidates.push({
       senseId,
@@ -238,6 +266,8 @@ function chooseSenseWinners(bridgeEntries, compoundGlosses, targetIndex, rankFor
   for (const row of compoundGlosses) {
     const sequence = Array.isArray(row.pyashSequence) ? canonicalizeSequence(row.pyashSequence) : [];
     const senseId = String(row.senseId ?? "").toLowerCase();
+    const reviewedSequence = reviewedSequences.get(senseId);
+    if (reviewedSequence && sequenceKey(sequence) !== sequenceKey(reviewedSequence)) continue;
     const rawPartOfSpeech = String(row.partOfSpeech ?? senseId[0] ?? "").toLowerCase();
     const partOfSpeech = rawPartOfSpeech === "s" ? "a" : rawPartOfSpeech;
     if (sequence.length < 2 || !/^[anrvs]:\d{8}-[anrvs]$/u.test(senseId)
@@ -453,6 +483,7 @@ export function buildAcceptedReferenceSource({
   bridgeCatalog,
   compoundEntries = [],
   compoundGlosses = [],
+  vocabularyReviews = [],
   cowIndex,
   englishRows = [],
   wordNetFrequencyEntries = [],
@@ -502,7 +533,8 @@ export function buildAcceptedReferenceSource({
     compoundGlosses,
     targetIndex,
     rankForEnglish,
-    tagCounts
+    tagCounts,
+    vocabularyReviews
   );
   const activeSenseToSequence = new Map();
   for (const candidate of selectedSenses.winners) {
@@ -676,7 +708,8 @@ export async function loadReferenceSourceInputs() {
     sumoConceptLinkSource,
     englishSource,
     frequencyResources,
-    legacyDictionaries
+    legacyDictionaries,
+    vocabularyReviewSource
   ] = await Promise.all([
     loadEnglishWordNetBridges(),
     readFile(translation("compound_coverage_curated.pya"), "utf8"),
@@ -698,7 +731,8 @@ export async function loadReferenceSourceInputs() {
     Promise.all(Object.entries(LANGUAGE_FILES).map(async ([language, filename]) => ({
       language,
       rows: await readJson(legacy(filename))
-    })))
+    }))),
+    readFile(translation("vocabulary_entry_reviews.pya"), "utf8")
   ]);
   const curatedEntries = parseCompoundLexicon(curatedSource, {
     name: "translation_compounds_derived_curated",
@@ -715,6 +749,10 @@ export async function loadReferenceSourceInputs() {
     compoundGlossSource,
     "translation_wordnet_compound_sense_glosses"
   ).filter((sentence) => sentence.su.text !== "format"), "WordNet compound glosses");
+  const vocabularyReviews = decodeJsonRows(parseMapRows(
+    vocabularyReviewSource,
+    "translation_vocabulary_entry_reviews"
+  ).filter((sentence) => sentence.su.text !== "format"), "vocabulary entry reviews");
   const cowIndex = parseCowWordNetCrosswalkPya(cowSource);
   const linkRows = parseChineseCharacterAtomLinks(chineseLinksSource);
   const directChineseRows = acceptedChineseCharacterAtomRows(kwonChineseSource, linkRows);
@@ -743,6 +781,7 @@ export async function loadReferenceSourceInputs() {
     : [];
   return {
     bridgeCatalog,
+    vocabularyReviews,
     compoundEntries: compounds.all,
     compoundGlosses: compoundGlossRows,
     cowIndex,
