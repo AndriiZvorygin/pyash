@@ -1387,7 +1387,8 @@ async function recordAndPromoteChoices({ context, candidates }) {
       .map((record) => [record.candidateId, record]));
   } else {
     if (!sweepState.decisionOffsetIndex) {
-      sweepState.decisionOffsetIndex = await createEnglishWordNetCompoundDecisionOffsetIndex({ url: decisionsPath });
+      sweepState.decisionOffsetIndex = context.allocation?.compoundDecisionIndex
+        ?? await createEnglishWordNetCompoundDecisionOffsetIndex({ url: decisionsPath });
     }
     decisionById = (await sweepState.decisionOffsetIndex.load(candidateIds)).byId;
   }
@@ -1437,7 +1438,11 @@ async function recordAndPromoteChoices({ context, candidates }) {
   await persistDecisions(newDecisions);
   const accepted = candidateDecisions.filter((record) => acceptedDecision(record));
   if (accepted.length > 0) {
-    const promoted = await (context.dependencies.promoteAccepted ?? promoteAcceptedCompounds)(accepted, { usedTargetIds, decisionRevision });
+    const promoted = await (context.dependencies.promoteAccepted ?? promoteAcceptedCompounds)(accepted, {
+      usedTargetIds,
+      decisionRevision,
+      readDecisionRows: async () => [...decisionsById.values()]
+    });
     const changedPromotions = [];
     for (const decision of promoted.decisions) {
       const previous = decisionsById.get(decision.candidateId);

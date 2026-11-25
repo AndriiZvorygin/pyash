@@ -7,6 +7,25 @@ For the full source-to-pack-to-backend picture and the distinction between
 current support and target architecture, see
 [`pyash-vliw-compiler-architecture.md`](pyash-vliw-compiler-architecture.md).
 
+## Runtime signature dispatch
+
+The Rust VLIW runtime selects one semantic handler from the encoded sentence
+signature before execution. The key is ordered be-verb HNUCs plus
+`[(case HNUC, value-type descriptor)]`, sorted by ascending unsigned HNUC for
+comparison. Type descriptors preserve quote sort, scalar width, and scalar or
+vector form. Compound-verb HNUCs retain their encoded order. Sorting changes
+only the temporary key; codelet bytes, payloads, and phrase boundaries stay
+unchanged. Mood remains part of validation and handler semantics, but not key
+identity. Identifiers and literal values remain values.
+
+Dispatch is independent of surface spelling, English glosses, WordNet/SUMO
+links, and dictionary lookup. The Rust core reads numeric HNUCs and quote
+headers, uses bounded fixed-capacity storage without allocation or text
+conversion, and selects at most one handler. Unknown verbs and unsupported
+case/type shapes fail without fallback. Continuation-framed values and
+programlet branches use structural routes that validate framing before calling
+shared semantic operations.
+
 ## Numeric plus
 
 The first executable slice uses:
@@ -137,8 +156,19 @@ Open English WordNet 2025 `n:06652323-n` (an index number/indicator) and names
 an immutable, one-element rank-one `number_` section holding the row as uint16.
 This accepts one supplied token ID per pack, without tokenization or sequence
 gathering. Alias resolution scans preceding sentences in the pack.
-Exact WordNet/SUMO anchors, component meanings, and the fact that `lyac dlek`
-is descriptive rather than a curated compound are in the
+The lexical links used by this example are:
+
+| Pyash form | Lexical meaning and role |
+|---|---|
+| `pset gjat` | WordNet `n:05873065-n`, a generalization of a vector; SUMO `Quantity`. Components: `extend` (`pset`) + `magnitude` (`gjat`). It names the embedding table. |
+| `tsoc hsat` | WordNet `n:13574763-n`, table lookup; SUMO `ContentDevelopment`. Components: `searching` (`tsoc`) + `see` (`hsat`). It binds the selected row. |
+| `lyac` | WordNet `v:00599310-v`, learn/acquire knowledge; SUMO `Learning`. Modifier in the result name. |
+| `dlek` | WordNet `n:05873161-n`, a vector quantity resolvable into components; SUMO `FunctionQuantity`. Head of the result name. |
+| `lyac dlek` | Descriptive composition “learned vector,” not asserted as a separately curated compound; names the zero-copy row view. |
+| `lwat txik` | WordNet `n:06652323-n`, an index number/indicator derived from observed facts; names the scalar row-index storage section. |
+
+These labels describe data roles; the lookup does not train or learn stored
+values. The normative encoding and selector contract is in the
 [VLIW ISA specification](../specifications/27-pyash-vliw-isa.md#payload-backed-embedding-row-view).
 
 ## IWSP float-vector primitives

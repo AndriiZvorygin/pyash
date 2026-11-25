@@ -72,6 +72,14 @@ Retrieved 2026-10-31. Raw upstream files are tracked where redistribution terms 
 - Ke (2024), an ancient Chinese segmentation/POS methodology paper, is preserved under its post-2016 ACL CC BY 4.0 terms in [`sources/classical-chinese/references/`](sources/classical-chinese/references/). The paper describes an annotated corpus but does not provide a corpus download in its Anthology record; availability of the annotations remains unverified.
 - CText, PKU CCL, and Kroll are linked as lookup resources, not mirrored. See the access notes in [`CLASSICAL-CORPUS.md`](CLASSICAL-CORPUS.md).
 
+## Chinese Open Wordnet
+
+- Dataset: [`cow-1.1.tar.xz`](sources/chinese-open-wordnet-1.1/cow-1.1.tar.xz), release 1.1, retrieved 2026-11-19 from the [COW project page](https://bond-lab.github.io/cow/).
+- Copyright: Francis Bond and Shan Wang (2013–2014); Francis Bond and Luís Morgado da Costa (2015–2022); Francis Bond (2023–2026), as stated in the included license.
+- License and required copyright/disclaimer notice: [`LICENSE`](sources/chinese-open-wordnet-1.1/LICENSE).
+- SHA-256: `93e9357dda50a38ce626904c2229479afa177df74d9c504aebfeba06ff2f241e`.
+- The Chinese-character atom refinery uses only single-Han-character COW entries with an ILI crosswalk to Open English WordNet. It treats those links as candidate evidence for reviewing existing atom links; it does not copy COW definitions into the Pyash vocabulary or treat every polysemous COW association as a promotion.
+
 ## UD Chinese-GSDSimp snapshot
 
 - Treebank: [UD Chinese-GSDSimp](https://universaldependencies.org/treebanks/zh_gsdsimp/), maintained in the [UniversalDependencies/UD_Chinese-GSDSimp repository](https://github.com/UniversalDependencies/UD_Chinese-GSDSimp).

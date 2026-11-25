@@ -1,9 +1,9 @@
 su name lyin kwon ob text "English Pyash core dictionary" be text ya
 su name lyin kwon ob text "English core vocabulary" as num 2 from text "en" to text "NFC" with text "pyac-vliw-dictionary/4" be text ya
 
-su name vector as text "en" from text "vector" to text "vector" be text ya
-su name vector as text "wordnet" from text "Open English WordNet 2025" to text "n:05873161-n" by text "exact-sense" be text ya
-su name vector as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:05873161-n" with text "A variable quantity that can be resolved into components." be text ya
+su name dlek as text "en" from text "vector" to text "vector" be text ya
+su name dlek as text "wordnet" from text "Open English WordNet 2025" to text "n:05873161-n" by text "exact-sense" be text ya
+su name dlek as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:05873161-n" with text "A variable quantity that can be resolved into components." be text ya
 
 su name drut hnuc as text "en" from text "data" to text "data" be text ya
 su name drut hnuc as text "en" from text "information" to text "information" be text ya

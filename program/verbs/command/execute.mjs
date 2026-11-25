@@ -61,6 +61,18 @@ export async function runCommandText(cmd, { input, timeoutMs, cwd, env, maxOutpu
     let proc;
     let abortTimer = null;
     let aborted = false;
+    const signalProcessTree = (signalName) => {
+      if (!proc) return;
+      if (process.platform !== "win32" && proc.pid) {
+        try {
+          process.kill(-proc.pid, signalName);
+          return;
+        } catch {
+          // Fall back to the child when a process group is unavailable.
+        }
+      }
+      proc.kill(signalName);
+    };
     const cleanupSignal = () => {
       if (abortTimer) clearTimeout(abortTimer);
       signal?.removeEventListener?.("abort", abortProcess);
@@ -68,9 +80,9 @@ export async function runCommandText(cmd, { input, timeoutMs, cwd, env, maxOutpu
     const abortProcess = () => {
       if (!proc || proc.exitCode !== null || proc.signalCode !== null) return;
       aborted = true;
-      proc.kill("SIGINT");
+      signalProcessTree("SIGINT");
       abortTimer = setTimeout(() => {
-        if (proc.exitCode === null && proc.signalCode === null) proc.kill("SIGKILL");
+        if (proc.exitCode === null && proc.signalCode === null) signalProcessTree("SIGKILL");
       }, 1000);
       abortTimer.unref?.();
     };
@@ -81,14 +93,20 @@ export async function runCommandText(cmd, { input, timeoutMs, cwd, env, maxOutpu
     };
     if (canRunDirect(cmd)) {
       const parts = splitCommand(cmd);
-      proc = spawn(resolveDirectProgram(parts[0]), parts.slice(1), spawnOptions);
+      proc = spawn(resolveDirectProgram(parts[0]), parts.slice(1), {
+        ...spawnOptions,
+        detached: process.platform !== "win32"
+      });
     } else {
       const shell = resolveShellCommand();
       if (!shell) {
         reject(new Error("command shell defective: no shell executable found"));
         return;
       }
-      proc = spawn(shell, ["-lc", String(cmd)], spawnOptions);
+      proc = spawn(shell, ["-lc", String(cmd)], {
+        ...spawnOptions,
+        detached: process.platform !== "win32"
+      });
     }
     let stdout = "";
     let stderr = "";
@@ -100,7 +118,7 @@ export async function runCommandText(cmd, { input, timeoutMs, cwd, env, maxOutpu
       if (!(typeof maxOutputBytes === "number" && maxOutputBytes > 0)) return;
       if ((Buffer.byteLength(stdout, "utf8") + Buffer.byteLength(stderr, "utf8")) <= maxOutputBytes) return;
       exceededOutputLimit = true;
-      proc.kill("SIGKILL");
+      signalProcessTree("SIGKILL");
     };
     proc.stdout.on("data", data => {
       const text = data.toString("utf8");
@@ -135,7 +153,7 @@ export async function runCommandText(cmd, { input, timeoutMs, cwd, env, maxOutpu
     if (typeof timeoutMs === "number" && timeoutMs > 0) {
       timeoutHandle = setTimeout(() => {
         timedOut = true;
-        proc.kill("SIGKILL");
+        signalProcessTree("SIGKILL");
         stderr += `timeout after ${timeoutMs}ms`;
       }, timeoutMs);
     }

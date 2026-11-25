@@ -556,19 +556,18 @@ test("coding saddle completion evidence requires a successful edit and a later c
   assert.equal(failedCheck.complete, false);
 });
 
-test("coding saddle worktree review uses bounded read-only Git inspection and omits sensitive paths", () => {
-  const command = buildSaddleWorktreeReviewCommand({ trackedDiffLimit: 999999, untrackedDiffLimit: 1200 });
+test("coding saddle worktree review is a bounded, path-only Git summary", () => {
+  const command = buildSaddleWorktreeReviewCommand();
   assert.match(command, /git -c core\.quotePath=true status --short --untracked-files=all/u);
-  assert.match(command, /git diff --cached --stat/u);
-  assert.match(command, /git diff --cached --no-ext-diff --unified=3/u);
-  assert.match(command, /git diff --stat --/u);
-  assert.match(command, /git diff --no-ext-diff --unified=3 --/u);
-  assert.match(command, /git ls-files -z --others --exclude-standard/u);
-  assert.match(command, /\*credentials\*\|\*token\*/u);
-  assert.match(command, /head -c 12000/u);
-  assert.match(command, /head -c 1200/u);
-  assert.match(command, /pre-existing worktree changes/u);
+  assert.match(command, /\*credentials\*/u);
+  assert.match(command, /\*token\*/u);
+  assert.match(command, /artifacts\/session/u);
+  assert.match(command, /artifacts\/manual\/ollama\/usage/u);
+  assert.match(command, /NR < 21/u);
+  assert.match(command, /additional paths omitted/u);
+  assert.match(command, /pre-existing worktree paths/u);
   assert.equal(classifyCommandText(command), "read_only");
+  assert.doesNotMatch(command, /git diff|--unified|git ls-files/u);
   assert.doesNotMatch(command, /git (?:add|commit|push|reset|clean)\b/u);
 });
 
@@ -588,7 +587,7 @@ test("coding saddle summarizes worktree review errors without echoing command ou
   assert.ok(summary.length <= 240);
 });
 
-test("coding saddle worktree review shows real diffs while omitting sensitive untracked files", async () => {
+test("coding saddle worktree review lists changed paths without printing file contents", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-review-"));
   try {
     execFileSync("git", ["init", "-q"], { cwd: root });
@@ -602,6 +601,10 @@ test("coding saddle worktree review shows real diffs while omitting sensitive un
     await fs.writeFile(path.join(root, ".env"), "tracked-secret-after\n", "utf8");
     await fs.writeFile(path.join(root, "new-file.txt"), "new review content\n", "utf8");
     await fs.writeFile(path.join(root, "api-token.txt"), "untracked-secret-do-not-print\n", "utf8");
+    await fs.mkdir(path.join(root, "artifacts", "session"), { recursive: true });
+    await fs.writeFile(path.join(root, "artifacts", "session", "turn-000077-test.pya"), "SADDLE_SESSION_TRACE_DO_NOT_DUMP\n", "utf8");
+    await fs.mkdir(path.join(root, "artifacts", "manual", "ollama", "usage"), { recursive: true });
+    await fs.writeFile(path.join(root, "artifacts", "manual", "ollama", "usage", "call-test.pya"), "SADDLE_USAGE_ARTIFACT_DO_NOT_DUMP\n", "utf8");
 
     const output = execFileSync("bash", ["-lc", buildSaddleWorktreeReviewCommand()], {
       cwd: root,
@@ -610,11 +613,11 @@ test("coding saddle worktree review shows real diffs while omitting sensitive un
     });
     assert.match(output, /\[worktree status\]/u);
     assert.match(output, /tracked\.txt/u);
-    assert.match(output, /\+after/u);
     assert.match(output, /new-file\.txt/u);
-    assert.match(output, /new review content/u);
-    assert.doesNotMatch(output, /tracked-secret-(?:before|after)|untracked-secret-do-not-print/u);
-    assert.match(output, /pre-existing worktree changes/u);
+    assert.doesNotMatch(output, /after|new review content|tracked-secret-(?:before|after)|untracked-secret-do-not-print/u);
+    assert.doesNotMatch(output, /artifacts\/session|turn-000077-test\.pya|SADDLE_SESSION_TRACE_DO_NOT_DUMP|artifacts\/manual\/ollama\/usage|call-test\.pya|SADDLE_USAGE_ARTIFACT_DO_NOT_DUMP/u);
+    assert.doesNotMatch(output, /diff --git|^@@|^\+|^--- untracked:/mu);
+    assert.match(output, /pre-existing worktree paths/u);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
@@ -634,7 +637,29 @@ test("coding saddle worktree review handles a repository with no initial commit"
 
     assert.match(output, /\[worktree root\]/u);
     assert.match(output, /story\.md/u);
-    assert.match(output, /A new story\./u);
+    assert.doesNotMatch(output, /A new story\./u);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test("coding saddle worktree summary caps large changed-path lists", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "pyash-saddle-review-many-paths-"));
+  try {
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    await Promise.all(Array.from({ length: 24 }, (_, index) =>
+      fs.writeFile(path.join(root, `file-${String(index).padStart(2, "0")}.txt`), "content hidden\n", "utf8")));
+
+    const output = execFileSync("bash", ["-lc", buildSaddleWorktreeReviewCommand()], {
+      cwd: root,
+      encoding: "utf8",
+      maxBuffer: 64 * 1024
+    });
+
+    assert.match(output, /file-00\.txt/u);
+    assert.match(output, /file-19\.txt/u);
+    assert.doesNotMatch(output, /file-20\.txt|content hidden/u);
+    assert.match(output, /\[additional paths omitted\]/u);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

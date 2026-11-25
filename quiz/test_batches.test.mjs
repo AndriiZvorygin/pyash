@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   batchItems,
+  CI_TEST_CONCURRENCY,
   DEFAULT_TEST_CONCURRENCY,
+  MAX_CI_TEST_CONCURRENCY,
   MAX_TEST_BATCH_COUNT,
   recommendedTestConcurrency,
   TEST_HOST_MEMORY_RESERVE_BYTES,
@@ -33,4 +35,6 @@ test("test concurrency leaves a CPU free and stays within available RAM", () => 
   assert.equal(recommendedTestConcurrency({ cpuCount: 32, memoryBytes: 1 * gib }), 1);
   assert.equal(TEST_WORKER_MEMORY_BUDGET_BYTES, 2 * gib);
   assert.equal(TEST_HOST_MEMORY_RESERVE_BYTES, 2 * gib);
+  assert.equal(MAX_CI_TEST_CONCURRENCY, 4);
+  assert.equal(CI_TEST_CONCURRENCY, Math.min(DEFAULT_TEST_CONCURRENCY, MAX_CI_TEST_CONCURRENCY));
 });

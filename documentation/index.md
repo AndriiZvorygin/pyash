@@ -5,11 +5,15 @@
   routing, and operations.
 - `documentation/design.md` — architecture overview and module layout.
 - `documentation/reference.md` — how to run the REPL, traces, and helper scripts.
+- `documentation/reference/pyash-coding-saddle.md` — terminal and web coding saddle controls, state, and operation.
+- `documentation/runbooks/maintaining-coding-saddle.md` — source ownership, scenario tests, and change workflow for Saddle agents.
 - `documentation/state.md` — current scope, goals, and known edges.
 - `documentation/decisions.md` — recorded choices and trade-offs.
 - `documentation/quiz-plan.md` — quiz coverage, gaps, and how to run quizzes.
 - `documentation/examples.md` — notes about the curated `examples/` transcripts.
 - `documentation/recipes/agent-operations.md` — scheduler, channel, and runtime operations runbook.
+- `documentation/runbooks/dev-vocab-operations.md` — end-to-end vocabulary, WordNet sweep, decision review, index, and publishing workflow for the `dev-vocab` branch.
+- `documentation/reference/sumo-concept-sweep.md` — SUMO concept sweep design: evidence sources, link shape and relation semantics, worklist sizing, and the stage graph.
 - `documentation/recipes/pyash-agent-admin.md` — configure/reconcile/debug recipe for Pyash agent administration.
 - `documentation/recipes/channel-stop-control.md` — channel interrupt control (`stop`, `@agent stop`) and verification runbook.
 - `documentation/agent-memory.md` — current agent memory model (session files, summary, and runtime memory).
@@ -28,6 +32,7 @@
 - `documentation/release-preview-0.1.md` — initial release gate, smoke route, and known limits.
 - `documentation/pyash.md` — high-level design goals and interlanguage intent.
 - `documentation/workbook/` — active structured workbooks for vocabulary curation and similar agent work; separate from proposals.
+- [Pyash GPU Housekeeper workbook](workbook/pyash-gpu-housekeeper.md) — how Pyash sends text and image-generation work through Housekeeper.
 - `documentation/pyac.txt` — broader 2019 language/spec background.
 - `documentation/compositional-cases.md` — axis/context grid and keyword mapping.
 - `documentation/suggest/` — proposals awaiting review, kept apart from accepted documentation; see `documentation/suggest/README.md` for what belongs there and how a proposal graduates.

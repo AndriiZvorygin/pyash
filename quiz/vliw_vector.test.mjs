@@ -66,16 +66,13 @@ test("VLIW text arrays count members and preserve each length-framed member", ()
   assert.deepEqual(decoded.ob.ve, sentence.ob.ve);
 });
 
-test("the Pyash program packer canonicalizes vector aliases and round-trips counted arrays", () => {
+test("the Pyash program packer round-trips counted arrays with the canonical vector verb", () => {
   const sentences = [
     parse(`ob ve num ${Array.from({ length: 17 }, (_, index) => index).join(" ")} be vector ya`),
     parse('ob ve text "one" "two words" "three" be vector ya')
   ];
   const program = lowerPyashProgram(sentences);
-  assert.deepEqual(
-    decodePyashProgram(program.vectors),
-    sentences.map((sentence) => ({ ...sentence, be: "vec" }))
-  );
+  assert.deepEqual(decodePyashProgram(program.vectors), sentences);
 });
 
 test("named vector literals carry the name phrase and its nominative case", async () => {

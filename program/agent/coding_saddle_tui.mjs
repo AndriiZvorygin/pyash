@@ -5,7 +5,7 @@ import { splitTerminalGraphemes, terminalCellWidth, terminalGraphemeWidth, trunc
 const markdown = new MarkdownIt({
   html: false,
   breaks: true,
-  linkify: true,
+  linkify: false,
   typographer: true
 });
 
@@ -29,6 +29,24 @@ const ANSI = {
   toolApproval: "\u001b[1;33m",
   toolOther: "\u001b[35m"
 };
+
+export function createSaddleResizeRedrawHandler(draw, { delayMs = 40 } = {}) {
+  if (typeof draw !== "function") throw new TypeError("resize redraw requires a draw function");
+  const delay = Math.max(0, Number(delayMs) || 0);
+  let timer = null;
+  const handler = () => {
+    if (timer !== null) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null;
+      draw();
+    }, delay);
+  };
+  handler.cancel = () => {
+    if (timer !== null) clearTimeout(timer);
+    timer = null;
+  };
+  return handler;
+}
 
 export function stripTerminalControlSequences(value = "") {
   return String(value ?? "")
@@ -298,12 +316,16 @@ function footerHelpLines(width) {
 }
 
 function statusDisplayLines(value, width, height, usage = "") {
-  const compact = String(value || "starting...")
-    .split(" | ")
-    .filter((part) => !part.startsWith("cwd: "))
-    .join("  ·  ");
+  const parts = String(value || "starting...").split(" | ");
+  const project = parts.find((part) => part.startsWith("cwd: "));
+  const compact = parts.filter((part) => !part.startsWith("cwd: ")).join("  ·  ");
   const maxRows = Math.max(1, Math.min(5, height - 6));
-  const lines = wrapPlainLine(compact, width).slice(0, Math.min(3, maxRows));
+  const lines = project
+    ? wrapPlainLine(`project: ${project.slice("cwd: ".length)}`, width).slice(0, maxRows)
+    : [];
+  if (lines.length < maxRows) {
+    lines.push(...wrapPlainLine(compact, width).slice(0, Math.min(3, maxRows - lines.length)));
+  }
   if (usage && lines.length < maxRows) {
     lines.push(...wrapPlainLine(usage, width).slice(0, maxRows - lines.length));
   }

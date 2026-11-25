@@ -1,43 +1,93 @@
-# Pyac VLIW Dictionary Runbook
+# Pyac VLIW Dictionary Source and Runbook
 
-Published source and compiled dictionary volumes live in this directory. The
-format and record grammar are specified in
+Published Pyash source and compiled dictionary volumes live in this directory.
+The volume format and record grammar are specified in
 `documentation/reference/pyac-vliw-dictionary.md`.
 
-## Current Volume
+## Current Volumes
 
 `reference.pya` is the generated source snapshot of accepted Pyash vocabulary.
 Its profile-v3 marker describes the source entry grammar; the Rust build
-converts it to the current profile-v4 runtime volume in `reference.pyac`.
-Both contain 64,572 entries. The v4 file has 4,065,435 codelets and is
-130,093,952 bytes. The snapshot includes 7,084 promoted SUMO links: 5,658
-`superclass-of` and 1,426 `equivalent-to`. The old note about 3,363 unresolved
-keys and a blocked v4 rebuild is obsolete; the accepted source was regenerated
-after curation and the v4 runtime volume has been rebuilt from it. V4 permits
-distinct exact WordNet senses for one Pyac key when they have different parts
-of speech; a duplicate sense for the same part of speech is rejected.
-Each exact linked gloss is an interim definition; a native compositional
-Pyash definition is optional. Chinese multi-character Pinyin or Jyutping is
-composed only when each Han character has one local reading and the surface
-resolves to one Pyac key.
+converts it to the current profile-v4 runtime volume in `reference.pyac`. Both
+contain 64,572 entries. The current v4 volume has 4,065,444 codelets and is
+130,094,240 bytes. The snapshot includes 7,084 promoted SUMO links: 5,658
+`superclass-of` and 1,426 `equivalent-to`.
 
-The IWSP Q/K/V forms are present as Pyac dictionary keys: `hwas` resolves to
+V4 permits distinct exact WordNet senses for one Pyash key when they have
+different parts of speech; a duplicate sense for the same part of speech is
+rejected. Each exact linked gloss is an interim definition; a native
+compositional Pyash definition is optional. Multi-character Chinese Pinyin or
+Jyutping is composed only when each Han character has one local reading and the
+surface resolves to one Pyash key.
+
+The IWSP Q/K/V forms are present as Pyash dictionary keys: `hwas` resolves to
 the English form `question`, `htis hsek` to `key`, and `hnuc gjat` to `value`.
 All three carry exact Open English WordNet 2025 links: `hwas` to
 `n:07208256-n` (question/query), `htis hsek` to `n:05802065-n` (key), and
 `hnuc gjat` to `n:05864972-n` (value). The `attention-query`, `attention-key`,
 and `attention-value` labels are IWSP role names, not English lexical forms;
-the reference volume therefore exposes the canonical English surfaces rather
-than treating those role labels as dictionary aliases. Rust key, surface, and
-source indexes are tested against these entries and exact links.
+the reference volume exposes the canonical English surfaces rather than
+treating those role labels as dictionary aliases. Rust key, surface, and source
+indexes are tested against these entries and exact links.
 
-`english-core.pya` and `.pyac` are a six-entry v4 example volume for vector,
-data, compare, select, sum, and lookup. Its source demonstrates direct Pyac
-keys in `su` and case/type metadata without quoted schema labels. The accepted
-vocabulary source snapshot is generated on the `dev-vocab` branch from the
-canonical vocabulary catalogs; do not hand-edit `reference.pya`.
+`english-core.pya` and `.pyac` are a six-entry v4 example for vector, data,
+compare, select, sum, and lookup. It uses canonical Pyash keys in `su` and
+case/type metadata without quoted schema labels. The accepted vocabulary
+snapshot is generated on `dev-vocab` from canonical catalogs; do not hand-edit
+`reference.pya`.
 
-## Setup Once
+## Generate the Accepted Vocabulary Snapshot
+
+The snapshot includes promoted atoms and compounds, exact linked WordNet senses
+and glosses, SUMO links, Chinese forms selected from accepted links and the COW
+crosswalk, and legacy translations only where an English form resolves to one
+Pyash key. Candidate and decision-history records are not copied.
+
+On `dev-vocab`, generate the snapshot from the current canonical catalogs with:
+
+```sh
+node program/library/dictionary/build_reference_source.mjs
+```
+
+The generator selects one deterministic WordNet sense per Pyash key and part
+of speech, using English30k rank, comparable WordNet tag counts, shorter
+English targets, normalized target, and sense ID. Distinct parts of speech
+remain separate interim definitions under one Pyash key. It resolves duplicate
+HNUC spellings to the first canonical atom spelling. For single Han forms, it
+keeps one Pyash atom per character and drops unresolved frequency ties.
+
+Each WordNet gloss is stored as `source-gloss` attached to its exact
+`source-link`. That linked sense gloss is the interim definition; a native
+Pyash definition is optional. Compound component keys remain ordered.
+
+For multi-character Chinese forms, the snapshot includes composed Mandarin
+Pinyin or Cantonese Jyutping when each Han character has one local reading and
+the whole surface resolves to one Pyash entry. It omits composed readings when
+any character is ambiguous or missing.
+
+## Update and Publish Volumes
+
+Promote new atoms, compounds, English forms, and exact WordNet links through
+their canonical vocabulary workflows on `dev-vocab`. For a compound from
+existing atoms, use `compound_catalog_add.mjs`; record the exact sense and its
+review state with `vocabulary_entry_review.mjs` or the catalog's accepted-LLM
+flow. Regenerate the accepted snapshot as described above and bring the
+generated `reference.pya` into this runtime worktree.
+
+Build the compiled volume from the source with:
+
+```sh
+pyash dictionary volume build from program/library/dictionary/reference.pya to program/library/dictionary/reference.pyac
+```
+
+The build validates and lowers the source, then atomically replaces the
+`.pyac` volume. It does not rebuild the Rust executable. The profile-v3 source
+grammar is converted to the current profile-v4 runtime format. Index records
+are generated from source data; change the catalogs and regenerate instead of
+editing those records. Publish the generated snapshot and compiled volume
+together.
+
+## Build the CLI Once
 
 From the repository root, build the CLI executable once:
 
@@ -51,31 +101,7 @@ compile source. Rebuild it only when the Rust CLI changes, not when entries
 change. If the executable is absent, the command fails with the build
 instruction rather than compiling during use.
 
-## Add Or Update Entries
-
-Promote new atoms, compounds, English forms, and exact WordNet links through
-their canonical vocabulary workflows on `dev-vocab`. For a compound from
-existing atoms, use `compound_catalog_add.mjs`; record the exact sense and its
-review state with `vocabulary_entry_review.mjs` or the catalog's accepted-LLM
-flow. An exact linked WordNet gloss becomes the interim definition. Then
-regenerate the accepted snapshot on `dev-vocab`:
-
-```sh
-node program/library/dictionary/build_reference_source.mjs
-```
-
-Bring the generated `reference.pya` into this runtime worktree and build the
-compiled volume:
-
-```sh
-pyash dictionary volume build from program/library/dictionary/reference.pya to program/library/dictionary/reference.pyac
-```
-
-The build validates and lowers the source, then atomically replaces the
-`.pyac` volume. It does not rebuild the Rust executable. Keep the generated
-snapshot and compiled volume together when publishing runtime data.
-
-## Verify And Use
+## Verify and Use
 
 ```sh
 pyash dictionary forecast
@@ -101,14 +127,14 @@ links, exact glosses, component keys, and an optional native definition.
 Run a warmed file-backed surface lookup benchmark and save its Pyash record:
 
 ```sh
-pyash dictionary volume benchmark <v4-volume.pyac> surface en forecast 100000 to artifacts/dictionary-benchmarks/reference-$(hostname)-$(date +%Y%m%d).pya
+pyash dictionary volume benchmark program/library/dictionary/reference.pyac surface en forecast 100000 to artifacts/dictionary-benchmarks/reference-$(hostname)-$(date +%Y%m%d).pya
 ```
 
-The command requires profile v4, performs five warmups, and records the timestamp, host/platform,
-executable and volume sizes, entry/codelet counts, open time, total/mean lookup
-latency, lookup rate, iteration count, and result count. `artifacts/` is
-git-ignored; use a unique filename for each run and retain/copy the record
-where local benchmark history is maintained.
+The command requires profile v4, performs five warmups, and records the
+timestamp, host/platform, executable and volume sizes, entry/codelet counts,
+open time, total/mean lookup latency, lookup rate, iteration count, and result
+count. `artifacts/` is git-ignored; use a unique filename for each run and
+retain or copy the record where local benchmark history is maintained.
 
 Current reference-volume verification on Mriczo, 2026-11-25: rebuilding
 `reference.pyac` from the checked-in `reference.pya` parsed 100,269,153 source
@@ -123,8 +149,8 @@ bytes. The local Pyash run record is
 The six-entry example volume's earlier benchmark is not representative of this
 full snapshot. The previous 2026-11-20 338 ns figure measured v3 after loading
 runtime indexes; it is not a v4 raw-file lookup result. Legacy v2/v3 lookups
-use seek-and-scan and are intentionally slower. The current published volume
-is v4 and is eligible for the full-volume raw-file benchmark.
+use seek-and-scan and are slower. The current published volume is v4 and is
+eligible for the full-volume raw-file benchmark.
 
 Historical legacy-reader smoke check on this host, 2026-11-23: the then-current
 v3 volume (58,630 entries, 6,261,431 codelets, 200,365,824 bytes) took about
@@ -133,7 +159,7 @@ v3 volume (58,630 entries, 6,261,431 codelets, 200,365,824 bytes) took about
 artifact only; the checked-in runtime file is now v4. For current performance,
 use the warmed v4 full-volume benchmark above.
 
-Before publishing, check the keys and source IDs against the active catalogs,
-build the v4 volume, inspect it, run representative surface/source/read
-lookups, run the dictionary Rust and source-import tests, and commit the source
-and compiled volume together.
+Before publishing, check keys and source IDs against the active catalogs,
+build the matching profile volume, inspect it, run representative
+surface/source/read lookups and the dictionary Rust/source-import tests, then
+publish the source and compiled volume together.

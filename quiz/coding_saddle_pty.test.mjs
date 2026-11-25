@@ -17,6 +17,7 @@ import { resolveSaddleProjectWorldRoot } from "../command/pyash_saddle.mjs";
 const runtimeRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const firstModel = "qwen3.5:9b";
 const secondModel = "SparkLLM/Spark-X2.6-4B:q4_k_m";
+const longResizeResponse = "But your “perhaps not” checks out better than expected. “Pagan Christian forces” were common — Penda died unconverted at Wight. The specific case matters: the defeated king’s heirs were baptised, then executed, as Bede records in Ecclesiastical History IV.16. Bishop Wilfrid asked Cædwalla to baptise the two boys first. One wrinkle: “Arwald” is an editorial spelling; Bede gives Aruald, Arwald, or Atwald. Whatever source you found, you found a rendering.";
 
 function waitForOutput(getOutput, needle, { timeoutMs = 90000, afterIndex = 0 } = {}) {
   const startedAt = Date.now();
@@ -186,7 +187,7 @@ test("saddle CLI preserves a visible Unicode draft, switches Ollama models, and 
       if (payload.model === firstModel) {
         message = {
           role: "assistant",
-          content: `Qwen first model turn passed. ${"1".repeat(51)} 安德里 okay. The name and the practice are the same statement.`
+          content: `Qwen first model turn passed. ${longResizeResponse} ${"1".repeat(51)} 安德里 okay. The name and the practice are the same statement.`
         };
       } else if (lastUserMessage === continuationContext) {
         message = { role: "assistant", content: continuationOffer };
@@ -472,6 +473,15 @@ test("saddle CLI preserves a visible Unicode draft, switches Ollama models, and 
     assert.match(normalizedResponse, /安德里 okay/u, "the response must preserve wide characters and neighboring words");
     assert.equal((normalizedResponse.match(/same statement\./gu) ?? []).length, 1,
       "the PTY screen must render the final response once, without duplicated chunks");
+    child.resize(44, 32);
+    child.resize(38, 28);
+    child.resize(48, 36);
+    const resizedResponseScreen = await waitForVisibleFrame(() => transcript, "Whatever source you found, you found a rendering.");
+    const normalizedResizedScreen = resizedResponseScreen.screen.replace(/[ \t\n]+/gu, " ");
+    assert.ok(normalizedResizedScreen.includes(longResizeResponse.replace(/[ \t\n]+/gu, " ")),
+      "the full response must survive repeated tmux-style pane resizes");
+    child.resize(120, 40);
+    await waitForVisibleFrame(() => transcript, "The name and the practice are the same statement.");
     assert.ok(submissions.some((payload) => payload.model === firstModel
       && payload.messages?.some((message) => message?.role === "user" && message.content === draft)),
     "Enter must submit exactly the visible draft");
@@ -508,6 +518,11 @@ test("saddle CLI preserves a visible Unicode draft, switches Ollama models, and 
     await assert.rejects(fs.access(path.join(projectRoot, "magaiize")), cleanupTranscript.slice(-10000));
 
     const cleanTranscript = stripTerminalControlSequences(transcript);
+    assert.ok(cleanTranscript.includes(projectRoot), "the active project directory must be visible in the terminal status");
+    assert.doesNotMatch(cleanTranscript, /--- untracked:|^diff --git|^@@ /mu,
+      "automatic worktree review must not print diff contents at the end of a turn");
+    assert.doesNotMatch(cleanTranscript, /artifacts\/session\/turn-000077-pty-test\.pya|SADDLE_SESSION_TRACE_MUST_NOT_BE_DUMPED/u,
+      "automatic worktree review must omit the generated session trace path and contents");
     assert.match(cleanTranscript, new RegExp(`model: ${secondModel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`));
     assert.doesNotMatch(cleanTranscript, /command defective: status=1|mind_ollama_runner: missing request payload|EPIPE/u);
     assert.ok(submissions.some((payload) => payload.model === firstModel), "the initial Ollama model must reach Housekeeper");

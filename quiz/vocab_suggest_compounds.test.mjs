@@ -14,7 +14,7 @@ test("vocab_suggest recognizes accepted compound targets from a supplied Pyash c
     await fs.writeFile(sourcePath, "su name blueprint be text ya\n", "utf8");
     await fs.writeFile(catalogPath, [
       "su name translation_compounds_verified be map def",
-      "su text \"blueprint\" ob text \"{\\\"surface\\\":\\\"blueprint\\\",\\\"morphemes\\\":[\\\"blue\\\",\\\"print\\\"],\\\"target\\\":\\\"blueprint\\\",\\\"componentGlosses\\\":[\\\"blue\\\",\\\"print\\\"],\\\"pyashSequence\\\":[\\\"plun\\\",\\\"trat\\\"],\\\"verificationStatus\\\":\\\"accepted-llm\\\",\\\"status\\\":\\\"accepted-llm\\\",\\\"provenance\\\":\\\"fixture\\\",\\\"confidence\\\":\\\"fixture\\\"}\" ya",
+      "su text \"blueprint\" ob text \"{\\\"surface\\\":\\\"blueprint\\\",\\\"morphemes\\\":[\\\"blue\\\",\\\"print\\\"],\\\"target\\\":\\\"blueprint\\\",\\\"gloss\\\":\\\"a plan that describes a design\\\",\\\"componentGlosses\\\":[\\\"blue\\\",\\\"print\\\"],\\\"pyashSequence\\\":[\\\"plun\\\",\\\"trat\\\"],\\\"verificationStatus\\\":\\\"accepted-llm\\\",\\\"status\\\":\\\"accepted-llm\\\",\\\"provenance\\\":\\\"fixture\\\",\\\"confidence\\\":\\\"fixture\\\"}\" ya",
       "su text \"unverifiedword\" ob text \"{\\\"surface\\\":\\\"unverifiedword\\\",\\\"morphemes\\\":[\\\"unverified\\\",\\\"word\\\"],\\\"target\\\":\\\"unverifiedword\\\",\\\"componentGlosses\\\":[\\\"unverified\\\",\\\"word\\\"],\\\"pyashSequence\\\":[\\\"unverified\\\",\\\"word\\\"],\\\"verificationStatus\\\":\\\"uncertain-llm\\\",\\\"status\\\":\\\"uncertain-llm\\\",\\\"provenance\\\":\\\"fixture\\\",\\\"confidence\\\":\\\"fixture\\\"}\" ya",
       "prah",
       ""
@@ -27,12 +27,14 @@ test("vocab_suggest recognizes accepted compound targets from a supplied Pyash c
     assert.equal(result.missing, 0);
     assert.deepEqual(result.foundCompounds, [{
       target: "blueprint",
+      gloss: "a plan that describes a design",
       components: ["blue", "print"],
       pyash: ["plun", "trat"],
       status: "accepted-llm",
       locations: [sourcePath]
     }]);
     assert.match(lines.join("\n"), /blueprint: found compound blue \+ print -> plun trat \(accepted-llm\)/u);
+    assert.match(lines.join("\n"), /blueprint: found compound .*; gloss a plan that describes a design/u);
   } finally {
     await fs.rm(directory, { recursive: true, force: true });
   }
@@ -47,6 +49,7 @@ test("vocab_suggest recognizes repository accepted compounds for direct token ch
   assert.equal(result.missing, 0);
   assert.deepEqual(result.foundCompounds, [{
     target: "blueprint",
+    gloss: "blueprint",
     components: ["blue", "print"],
     pyash: ["plun", "trat"],
     status: "accepted-curated",
@@ -153,6 +156,7 @@ test("vocab_suggest reports the accepted gpu compound", async () => {
   assert.equal(result.missing, 0);
   assert.deepEqual(result.foundCompounds, [{
     target: "gpu",
+    gloss: "gpu",
     components: ["video", "processor", "module"],
     pyash: ["byot", "ples", "myoc"],
     status: "accepted-curated",
@@ -184,6 +188,7 @@ test("vocab_suggest exposes the accepted brain compound from Chinese evidence", 
   assert.equal(result.missing, 0);
   assert.deepEqual(result.foundCompounds, [{
     target: "brainstorm",
+    gloss: "brainstorm",
     components: ["brain", "storm"],
     pyash: ["twum", "hfup"],
     status: "accepted-curated",
@@ -284,10 +289,61 @@ test("vocab_suggest reports the accepted cluster-compress compound", async () =>
   assert.equal(result.missing, 0);
   assert.deepEqual(result.foundCompounds, [{
     target: "cluster-compress",
+    gloss: "cluster compression: compress data using cluster units",
     components: ["cluster", "compress"],
     pyash: ["ksus", "hzip"],
     status: "accepted-curated",
     locations: ["input"]
   }]);
   assert.match(lines.join("\n"), /cluster-compress: found compound cluster \+ compress -> ksus hzip \(accepted-curated\)/u);
+});
+
+test("Chinese dictionary lookup prefers curated multi-atom compounds over component rows", async () => {
+  const cases = [
+    {
+      args: ["bjin hnuc gjat", "to", "zh"],
+      target: "prediction value",
+      gloss: "the numerical quantity produced as a prediction for one item",
+      components: ["bjin", "hnuc", "gjat"],
+      sequence: ["bjin", "hnuc", "gjat"]
+    },
+    {
+      args: ["hrec", "nyac", "hnuc", "gjat", "to", "zh"],
+      target: "reference point value",
+      gloss: "the numerical value assigned to a reference point for comparison with a prediction",
+      components: ["hrec", "nyac", "hnuc", "gjat"],
+      sequence: ["hrec", "nyac", "hnuc", "gjat"]
+    },
+    {
+      args: ["prediction", "value", "to", "zh"],
+      target: "prediction value",
+      gloss: "the numerical quantity produced as a prediction for one item",
+      components: ["prediction", "value"],
+      sequence: ["bjin", "hnuc", "gjat"]
+    },
+    {
+      args: ["prediction value", "to", "zh"],
+      target: "prediction value",
+      gloss: "the numerical quantity produced as a prediction for one item",
+      components: ["prediction", "value"],
+      sequence: ["bjin", "hnuc", "gjat"]
+    }
+  ];
+
+  for (const { args, target, gloss, components, sequence } of cases) {
+    const lines = [];
+    const result = await runVocabSuggest(args, { report: (line) => lines.push(String(line)) });
+    assert.equal(result.exitCode, 0);
+    assert.ok(lines.some((line) => line.includes(`English compound gloss ${gloss}`)));
+    for (const component of components) {
+      assert.equal(lines.some((line) => line.startsWith(`${component}: `)), false, `${component} should be resolved as part of ${target}`);
+    }
+    assert.ok(result.foundCompounds.some((compound) => (
+      compound.target === target && compound.gloss === gloss && compound.pyash.join(" ") === sequence.join(" ")
+    )));
+  }
+
+  const atomLines = [];
+  await runVocabSuggest(["bjin", "to", "zh"], { report: (line) => atomLines.push(String(line)) });
+  assert.ok(atomLines.some((line) => line.startsWith("bjin: ")));
 });

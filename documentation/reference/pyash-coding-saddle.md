@@ -9,6 +9,8 @@ vocabulary.
 
 See the [Coding Saddle Capability Standard](coding-saddle-capability-standard.md)
 for the user-facing baseline, current gaps, and acceptance evidence.
+For source ownership, test selection, and change workflow, see the
+[Coding Saddle maintainer guide](../runbooks/maintaining-coding-saddle.md).
 
 ## Run
 
@@ -85,13 +87,17 @@ implicitly. There is no sudo access.
 
 ## Controls
 
-Enter submits the current request. While a response is active, the editor stays
-available and Enter queues the drafted message for sequential delivery; the
-prompt shows `next>` or `queue N>`. Slash commands wait until the current
-response finishes. Shift+Enter inserts a newline on terminals
-that report the standard modified-key sequence; `Ctrl+J` is the portable
-newline fallback. `Tab` completes slash-command names, and repeated Tab cycles
-matching commands; it does not complete command arguments. `PageUp` and
+Enter submits the current request. While an interruptible response is active,
+Enter requests that turn to stop and steers a restarted turn with the original
+request plus the new context; multiple steering messages are combined in order.
+If the active turn cannot be interrupted, the message waits until Saddle is
+ready. The prompt shows `steer N>` while steering. During a response, Tab queues
+an ordinary message as a separate request for the end of the turn; the prompt
+shows `queue N>`. When idle, Tab completes slash-command names, and repeated
+Tab cycles matching commands; it does not complete command arguments. Slash
+commands cannot be steered or queued during an active response. Shift+Enter
+inserts a newline on terminals that report the standard modified-key sequence;
+`Ctrl+J` is the portable newline fallback. `PageUp` and
 `PageDown` scroll the conversation; new events
 continue to appear while the view is scrolled. `Ctrl+C` writes the existing
 Pyash mind-interrupt signal and `Ctrl+D` exits. The terminal uses a full-screen
@@ -108,6 +114,10 @@ model within that mind. `/plan` shows the current session's coding plan and
 model can update an ordered plan through the saddle tool map; completed steps
 must include validation evidence. Plans are stored in session-isolated
 `conduct/coding-saddle-plan-<session-key>.pya` files.
+
+The status header includes `project:` followed by the active absolute working
+directory. Relative Bash paths resolve from this directory; `PYA_SADDLE_CWD`
+can select it at startup.
 
 Web duty messages can be set to arrive after the current model turn or after
 the next completed tool result. The after-tool boundary is applied after the
@@ -138,6 +148,12 @@ For recognized code-change turns, completion requires a successful edit and a
 relevant validation command run afterward with structured exit code `0`, no
 signal, and no timeout. The saddle reports the command and its observed result;
 missing or failed evidence leaves the task marked incomplete.
+
+After a code-edit turn, the terminal shows a bounded list of changed paths,
+including pre-existing worktree paths. It does not print file contents or diff
+hunks automatically. Use Bash with `git diff` when you need to inspect content;
+the automatic summary excludes credential-like paths and generated session and
+usage artifacts.
 
 ## Durable state
 
@@ -226,11 +242,11 @@ delegation configure` in `configure/default.pya`. The default allows Ollama chil
 `<backend> allowed models` vector can narrow which child models are permitted.
 The child process still uses its configured provider lifecycle and tool map.
 
-After a code-edit turn, the terminal shows a bounded, read-only Git status and
-diff before the completion evidence. It includes the current shared worktree,
-so pre-existing edits can appear alongside this turn's changes. Credential-like
-files are excluded from diff contents; review the paths and diff before
-accepting or committing the work.
+After a code-edit turn, the terminal shows a bounded list of changed paths
+before the completion evidence. It includes the current shared worktree, so
+pre-existing edits can appear alongside this turn's changes. Credential-like
+paths and generated session and usage artifacts are excluded. The summary does
+not print file contents; inspect a detailed diff with Bash when needed.
 
 ## Host Workers
 

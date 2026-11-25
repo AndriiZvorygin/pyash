@@ -31,10 +31,23 @@ It records every branch tip, then merges all fetched `master` tips followed by
 all fetched development branch tips into a disposable candidate worktree. This
 joins commits that arrived on different remotes and promotes one tested
 history to `master` and `dev` on every configured remote; it leaves the source
-feature branch unchanged. A real merge conflict leaves the candidate for
-review. The runner installs dependencies and runs `npm run test:ci` against
-that exact candidate. Existing checkouts, including a dirty local `master`
-worktree, are not checked out or modified.
+feature branch unchanged. If the only merge conflict is the generated Kwon
+Chinese Pinyin index, the runner rebuilds that projection from the merged
+vocabulary and grammar inputs, then completes the merge. For other conflicts,
+Codex is asked to resolve only the conflicted paths in the isolated candidate.
+The runner checks that no unrelated paths or candidate history changed, stages
+the resolved paths, rejects remaining conflict markers, and completes the merge
+before testing. An unsafe or incomplete resolution leaves the candidate for
+review. The runner installs dependencies and runs
+`npm run test:ci` against that exact candidate. Existing checkouts, including
+a dirty local `master` worktree, are not checked out or modified.
+The CI-tier runner uses at most four concurrent test workers to reduce host
+contention; it uses fewer when the resource-based limit is lower.
+The runner adds `$HOME/.cargo/bin` to `PATH` when present so cron can build
+Rust-backed test prerequisites with the installed toolchain.
+After a green suite, it fetches the branch inputs again. If a source advances
+during testing, the runner merges the new tip and reruns the suite, up to two
+refreshes; continued movement preserves the candidate without promotion.
 
 If the full suite fails, Codex `gpt-6-luna` at `xhigh` gets at most two repair
 attempts in that isolated candidate. Each attempt is followed by a complete

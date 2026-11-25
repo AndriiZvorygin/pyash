@@ -3,6 +3,7 @@ import { availableParallelism, freemem } from "node:os";
 import { spawn } from "node:child_process";
 
 export const MAX_TEST_BATCH_COUNT = 3;
+export const MAX_CI_TEST_CONCURRENCY = 4;
 export const TEST_WORKER_MEMORY_BUDGET_BYTES = 2 * 1024 ** 3;
 export const TEST_HOST_MEMORY_RESERVE_BYTES = 2 * 1024 ** 3;
 
@@ -56,6 +57,7 @@ export function recommendedTestConcurrency({
 }
 
 export const DEFAULT_TEST_CONCURRENCY = recommendedTestConcurrency();
+export const CI_TEST_CONCURRENCY = Math.min(DEFAULT_TEST_CONCURRENCY, MAX_CI_TEST_CONCURRENCY);
 
 export function batchItems(items, batchSize) {
   if (!Array.isArray(items)) throw new TypeError("test batch items must be an array");

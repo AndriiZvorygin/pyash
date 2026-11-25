@@ -134,7 +134,7 @@ export const DEFAULT_CODING_SADDLE_SYSTEM_PROMPT = [
   "For substantial multi-step repository, research, or operational work, maintain a concise session plan with the update session plan tool; update step states as work proceeds and mark a step done only after recording concrete verification evidence. Keep plans to the necessary steps and skip them for simple questions or one-step edits.",
   "After the final edit, use command to run the narrowest relevant test, build, syntax check, or execution check. A check run before the final edit does not count.",
   "After a coding task passes its final verification, record only durable project decisions or constraints in the active agent house's absolute memory/MEMORY.md path shown in context (not a project-relative path), with the validation command and a session or artifact evidence reference. Do not store routine task logs, temporary findings, or unverified claims; if no durable decision was made, do not write a memory entry.",
-  "Do not commit or push unless the user explicitly requests it. The harness will show the current worktree status and bounded diff for review before the completion evidence.",
+  "Do not commit or push unless the user explicitly requests it. After code changes, the harness shows at most 20 changed paths from the shared worktree, which may include pre-existing changes; it does not print file contents automatically.",
   "Before reporting completion, state the changed file paths, summarize the change, and give the exact check command and its result. If work or verification is incomplete, say so plainly instead of saying done.",
   "Respond concisely with the result and any remaining blocker."
 ].join(" ");
@@ -456,20 +456,7 @@ export function formatSaddleCompletionEvidence(assessment = {}) {
   return `[saddle evidence] changed: ${changed}; validation: ${assessment.validation.command}; exit: ${assessment.validation.exitCode}${output}`;
 }
 
-export function buildSaddleWorktreeReviewCommand({
-  trackedDiffLimit = 16000,
-  untrackedDiffLimit = 10000,
-  untrackedFileLimit = 2500
-} = {}) {
-  const bounded = (value, fallback, maximum) => {
-    const number = Number(value);
-    return Number.isSafeInteger(number) ? Math.max(1000, Math.min(maximum, number)) : fallback;
-  };
-  const trackedLimit = bounded(trackedDiffLimit, 16000, 24000);
-  const stagedDiffLimit = Math.floor(trackedLimit / 2);
-  const unstagedDiffLimit = trackedLimit - stagedDiffLimit;
-  const untrackedLimit = bounded(untrackedDiffLimit, 10000, 16000);
-  const fileLimit = bounded(untrackedFileLimit, 2500, 5000);
+export function buildSaddleWorktreeReviewCommand() {
   const excludedPathspecs = [
     ".",
     "':(exclude,glob)**/.env'",
@@ -478,23 +465,15 @@ export function buildSaddleWorktreeReviewCommand({
     "':(exclude,glob)**/*.pem'",
     "':(exclude,glob)**/*.key'",
     "':(exclude,glob)**/*credentials*'",
-    "':(exclude,glob)**/*token*'"
+    "':(exclude,glob)**/*token*'",
+    "':(exclude,glob)**/artifacts/session/**'",
+    "':(exclude,glob)**/artifacts/manual/ollama/usage/**'"
   ].join(" ");
   return [
     "set -e; printf '%s\\n' '[worktree root]'; git rev-parse --show-toplevel",
     "printf '%s\\n' '[worktree status]'",
-    "git -c core.quotePath=true status --short --untracked-files=all",
-    "printf '%s\\n' '[staged diff summary]'",
-    `git diff --cached --stat -- ${excludedPathspecs}`,
-    "printf '%s\\n' '[unstaged diff summary]'",
-    `git diff --stat -- ${excludedPathspecs}`,
-    "printf '%s\\n' '[staged diff excerpt; sensitive config paths omitted]'",
-    `git diff --cached --no-ext-diff --unified=3 -- ${excludedPathspecs} | head -c ${stagedDiffLimit} || true`,
-    "printf '%s\\n' '[unstaged diff excerpt; sensitive config paths omitted]'",
-    `git diff --no-ext-diff --unified=3 -- ${excludedPathspecs} | head -c ${unstagedDiffLimit} || true`,
-    "printf '%s\\n' '[untracked text diff excerpts; sensitive paths omitted]'",
-    `git ls-files -z --others --exclude-standard | while IFS= read -r -d '' file; do case "$file" in .env|.env.*|*/.env|*/.env.*|secret.pya|*/secret.pya|*.pem|*.key|*credentials*|*token*) printf '[sensitive untracked path omitted]\\n' ;; *) printf '\\n--- untracked: %q ---\\n' "$file"; git diff --no-index --no-ext-diff --unified=3 /dev/null "$file" | head -c ${fileLimit} || true ;; esac; done | head -c ${untrackedLimit} || true`,
-    "printf '%s\\n' '[diff excerpts are bounded; review includes any pre-existing worktree changes]'"
+    `git -c core.quotePath=true status --short --untracked-files=all -- ${excludedPathspecs} | awk 'NR < 21 { print } NR == 21 { print "[additional paths omitted]"; exit } END { if (NR == 0) print "(clean)" }'`,
+    "printf '%s\\n' '[summary shows paths only; pre-existing worktree paths may be included]'"
   ].join("; ");
 }
 

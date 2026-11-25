@@ -19,6 +19,7 @@ import {
   DEFAULT_PYASH_PROGRAMLET_STEP_BUDGET,
   compilePyashProgramSource,
   decodePyashProgramPack,
+  decodePyashProgramSections,
   executePyashProgramPack
 } from "../program/library/vliw/index.mjs";
 
@@ -107,6 +108,25 @@ test("PyAC source compiles a vector-weight ceremony from existing vector primiti
   );
   assert.equal(compiled.sentences.at(-1).mood, "do");
   assert.ok(compiled.byteLength > 0);
+});
+
+test("PyAC sections resolve ceremony aliases after decoding", () => {
+  const source = [
+    "su name one be myocpfun def",
+    "su name vector weight to name num answer be ceremony def",
+    "ob num 1 to name num answer be plus do",
+    "su name answer ret",
+    "su name vector weight be ceremony prah",
+    "su name count once to name num answer be ceremony def",
+    "to name num first be vector weight do",
+    "su name first ret",
+    "su name count once be ceremony prah",
+    "to name num answer be count once do",
+    "su name one be myocpfun prah"
+  ].join("\n");
+  const compiled = compilePyashProgramSource(source);
+
+  assert.equal(decodePyashProgramSections(compiled.pack).length, 1);
 });
 
 const constantSource = [
