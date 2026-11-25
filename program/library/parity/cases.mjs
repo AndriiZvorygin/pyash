@@ -50,6 +50,42 @@ export const CASES = [
     ]
   },
   {
+    family: "numeric-facts",
+    name: "literal-operators",
+    backends: ["interpreter", "javascript", "c"],
+    expected: "same",
+    lines: [
+      "ob num 9 from num 4 be subtract do",
+      "ob name result be write do",
+      "ob num 6 by num 7 be multiply do",
+      "ob name result be write do",
+      "ob num 8 by num 2 be divide do",
+      "ob name result be write do",
+      "ob num 8 from num 3 be remains do",
+      "ob name result be write do",
+      "ob num 2 from num 10 be exponential do",
+      "ob name result be write do",
+      "ob num 6 to num 3 be xor do",
+      "ob name result be write do"
+    ]
+  },
+  {
+    family: "numeric-facts",
+    name: "divide-by-zero-guard",
+    backends: ["interpreter", "javascript", "c"],
+    expected: {
+      interpreter: { code: 1, lines: [] },
+      javascript: { code: 1, lines: [] },
+      c: { code: 1, lines: [] }
+    },
+    known: "each backend rejects division by zero with exit 1 and no stdout",
+    stderrMatch: "divide: by cannot be zero",
+    lines: [
+      "ob num 1 by num 0 be divide do",
+      "ob name result be write do"
+    ]
+  },
+  {
     family: "ceremony-numeric",
     name: "ceremony-result",
     backends: ["interpreter", "javascript", "c"],

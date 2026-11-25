@@ -35,13 +35,16 @@ function compareCase(testCase, outputs) {
   for (const backend of testCase.backends) {
     const output = outputs[backend];
     const baseline = testCase.expected[backend];
+    const stderrOk = !testCase.stderrMatch || new RegExp(testCase.stderrMatch, "u").test(output.stderr);
     const pass = output.code === baseline.code
       && !output.timedOut
-      && sameLines(output.lines, baseline.lines);
+      && sameLines(output.lines, baseline.lines)
+      && stderrOk;
     report.backends[backend] = {
       status: pass ? "pinned" : "fail",
       actual: { code: output.code, lines: output.lines },
-      expected: baseline
+      expected: baseline,
+      stderrMatch: testCase.stderrMatch ?? null
     };
     if (!pass) report.ok = false;
   }

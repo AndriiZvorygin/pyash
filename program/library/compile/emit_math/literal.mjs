@@ -1,7 +1,42 @@
-const OPERATOR_EXPR = {
-  plus: (left, right) => `(${left} + ${right})`,
-  subtract: (left, right) => `(${left} - ${right})`,
-  multiply: (left, right) => `(${left} * ${right})`
+// Literal-operand arithmetic with no named destination writes the same `result`
+// fact the interpreter produces. Each verb accepts only the operand roles the
+// interpreter accepts, so compiled backends do not invent a value the
+// interpreter would leave unset. Semantics and guards follow
+// program/verbs/mathematics.
+const OPERATORS = {
+  plus: {
+    roles: ["to", "with", "from", "by"],
+    expr: (left, right) => `(${left} + ${right})`
+  },
+  subtract: {
+    roles: ["from"],
+    expr: (left, right) => `(${left} - ${right})`
+  },
+  multiply: {
+    roles: ["by", "with"],
+    expr: (left, right) => `(${left} * ${right})`
+  },
+  divide: {
+    roles: ["by", "with"],
+    expr: (left, right) => `(${left} / ${right})`,
+    guard: (right) => ({ zero: right, message: "divide: by cannot be zero" })
+  },
+  remains: {
+    roles: ["from", "by"],
+    expr: (left, right) => `(${left} % ${right})`,
+    cExpr: (left, right) => `fmod(${left}, ${right})`,
+    guard: (right) => ({ zero: right, message: "remains: from cannot be zero" })
+  },
+  exponential: {
+    roles: ["from", "by"],
+    expr: (left, right) => `(${left} ** ${right})`,
+    cExpr: (left, right) => `pow(${left}, ${right})`
+  },
+  xor: {
+    roles: ["to", "with"],
+    expr: (left, right) => `(${left} ^ ${right})`,
+    cExpr: (left, right) => `((long)(${left}) ^ (long)(${right}))`
+  }
 };
 
 function numericOperand(slot, { lang, locals, declared, sanitizeName }) {
@@ -24,24 +59,35 @@ function numericOperand(slot, { lang, locals, declared, sanitizeName }) {
   return null;
 }
 
-// A literal-operand arithmetic sentence with no named destination writes the
-// same `result` fact the interpreter produces.
 export function handleLiteralMath(context, helpers) {
   const { sentence, baseBe, lang, locals, declared, declaredTypes } = context;
   const { sanitizeName, markDeclared } = helpers;
-  const operator = OPERATOR_EXPR[baseBe];
+  const operator = OPERATORS[baseBe];
   if (!operator) return null;
   if (sentence.to?.name || sentence.to?.genitive) return null;
-  const rightSlot = sentence.to ?? sentence.from ?? sentence.by;
+  const role = operator.roles.find((name) => sentence[name] !== undefined);
+  if (!role) return null;
   const left = numericOperand(sentence.ob, { lang, locals, declared, sanitizeName });
-  const right = numericOperand(rightSlot, { lang, locals, declared, sanitizeName });
+  const right = numericOperand(sentence[role], { lang, locals, declared, sanitizeName });
   if (left == null || right == null) return null;
-  const expr = operator(left, right);
+  const emit = lang === "c" ? (operator.cExpr ?? operator.expr) : operator.expr;
+  const expr = emit(left, right);
   const needsDecl = lang === "c" && !locals?.has("result") && !declared?.has("result");
   if (markDeclared) markDeclared(declared, "result");
   if (declaredTypes) declaredTypes.set("result", "number");
+
+  const guard = operator.guard?.(right);
+  const zeroCheck = guard
+    ? lang === "c"
+      ? `if ((${guard.zero}) == 0) { fprintf(stderr, ${JSON.stringify(`${guard.message}\n`)}); exit(1); }`
+      : `if ((${guard.zero}) === 0) throw new Error(${JSON.stringify(guard.message)});`
+    : null;
+
   if (lang === "c") {
-    return needsDecl ? `double result = ${expr};` : `result = ${expr};`;
+    const decl = needsDecl ? "double result = 0;" : null;
+    const assign = `result = ${expr};`;
+    return [decl, zeroCheck, assign].filter(Boolean).join("\n");
   }
-  return `globalThis.result = { su: { name: "result" }, ob: { num: ${expr} }, be: "number", mood: "ya" };`;
+  const assign = `globalThis.result = { su: { name: "result" }, ob: { num: ${expr} }, be: "number", mood: "ya" };`;
+  return [zeroCheck, assign].filter(Boolean).join("\n");
 }

@@ -118,3 +118,8 @@ Formerly pinned divergences, now green:
 - ceremony numeric result
 - file read result
 - nested comparison leaves
+
+Literal arithmetic covers `plus`, `subtract`, `multiply`, `divide`, `remains`,
+`exponential`, and `xor`, each restricted to the operand roles the interpreter
+accepts. Division by zero must exit 1 with no stdout and the same
+`divide: by cannot be zero` message on every backend.

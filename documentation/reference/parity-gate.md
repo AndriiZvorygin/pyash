@@ -47,17 +47,33 @@ The declared corpus is green:
 - text fact write
 - boolean composition over `exists` leaves (`and`, `or`, `not`)
 - filename `touch` result
-- literal arithmetic writing `result`
+- literal arithmetic writing `result` (`plus`, `subtract`, `multiply`, `divide`, `remains`, `exponential`, `xor`)
+- division-by-zero rejection with exit 1, no stdout, and the same `divide: by cannot be zero` message
 - ceremony numeric result
 - file read contents
 - nested comparison leaves
 
-The last four were previously pinned divergences. They were fixed in the
-compiler: literal arithmetic now writes the `result` fact, `read` exposes the
-contents as `result`, a ceremony's default return is its mutated destination,
-and `boolExprForClause` handles `equally`/`tiny`/`giant` leaves. The pinned-case
-mechanism remains available for future disagreements, so a fix or a regression
-is always visible.
+The earlier pinned divergences were fixed in the compiler: literal arithmetic
+now writes the `result` fact, `read` exposes the contents as `result`, a
+ceremony's default return propagates its mutated destination, and
+`boolExprForClause` handles `equally`/`tiny`/`giant` leaves.
+
+Literal arithmetic accepts only the operand roles the interpreter accepts, so a
+compiled backend never invents a value the interpreter leaves unset:
+
+| Verb | Right-hand role |
+| --- | --- |
+| `plus` | `to`, `with`, `from`, `by` |
+| `subtract` | `from` |
+| `multiply` | `by`, `with` |
+| `divide` | `by`, `with` |
+| `remains` | `from`, `by` |
+| `exponential` | `from`, `by` |
+| `xor` | `to`, `with` |
+
+The pinned-case mechanism remains available for future disagreements. A pin may
+also declare `stderrMatch`, so an error case is proven equivalent rather than
+only matching its exit code.
 
 ## Adding a case
 
