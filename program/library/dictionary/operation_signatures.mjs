@@ -70,11 +70,16 @@ const CASE_WORDS = new Set(
 // future `ya`-callable verb must be added deliberately rather than inferred.
 const DEFAULT_MOOD = "deontic_mood_";
 
+// English first, then the pya spelling. Lowering resolves a verb surface as
+// English and only falls back to a pya spelling, so the same order here keeps
+// the published verb words identical to what the encoder emits. Resolving pya
+// first published `go` as gnomic_aspect_ (0x325E) because that row's spelling is
+// the letters g-o, while the verb is `hkin` (0x6810).
 function entryForName(name) {
   const text = String(name ?? "").trim();
   if (!text) return null;
-  return WORD_BY_PYA.get(text.toLowerCase())
-    ?? WORD_BY_EN.get(text.toLowerCase())
+  return WORD_BY_EN.get(text.toLowerCase())
+    ?? WORD_BY_PYA.get(text.toLowerCase())
     ?? null;
 }
 

@@ -9,7 +9,7 @@ The volume format and record grammar are specified in
 `reference.pya` is the generated source snapshot of accepted Pyash vocabulary.
 Its profile-v3 marker describes the source entry grammar; the Rust build
 converts it to the current profile-v4 runtime volume in `reference.pyac`. Both
-contain 64,593 entries. The current v4 volume is 131,219,680 bytes. The snapshot includes
+contain 64,594 entries. The current v4 volume is 131,217,952 bytes. The snapshot includes
 7,084 promoted SUMO links: 5,658 `superclass-of` and 1,426 `equivalent-to`.
 
 ## Operation signatures
@@ -37,9 +37,20 @@ A primitive is always **one atom**, because the compiled runtime dispatches on
 that atom's identity: `divide`/`dvis` `0x8893`, `xor`/`hkit` `0xA810`,
 `not`/`no` `0x30DE`, `or`/`ba` `0x263E`. `pyashWords.h` carries the grammar
 forms (`exclusive_or_`, `and_or_`, `negatory_quantifier_`), so these are
-existing words rather than new ones. A surface with no existing word is absent
-on purpose — `promptify` and the engine-named TTS verbs (`piper say`,
-`qwen say`) skip rather than take an arbitrary spelling.
+existing words rather than new ones.
+
+A primitive's atom also carries the WordNet sense of the operation it performs,
+not whichever sense the lemma uses most. `dvis` previously held
+`n:08230126-n` "an army unit large enough to sustain combat" because that is the
+highest-frequency sense of the lemma `division`; it now holds `n:00872590-n`
+"an arithmetic operation that is the inverse of multiplication" (SUMO
+`DivisionFn`), and the army-unit sense stays addressable as the `hyim dvis`
+compound. Selecting such a sense needs a bridge row plus an accepted-curated
+review, because a review alone cannot introduce a sense the bridge lacks.
+
+A surface with no existing word is absent on purpose — `promptify` and the
+engine-named TTS verbs (`piper say`, `qwen say`) skip rather than take an
+arbitrary spelling.
 
 Type words follow the encoder's own rule: `num`, `bool`, `vec`, and `float`
 resolve to their grammar form (`number_`, `boolean_`, `vector`, `float`); any
@@ -187,10 +198,10 @@ count. `artifacts/` is git-ignored; use a unique filename for each run and
 retain or copy the record where local benchmark history is maintained.
 
 Current reference-volume verification on Mriczo, 2026-11-25: rebuilding
-`reference.pyac` from the checked-in `reference.pya` parsed 101,440,675 source
-bytes and wrote the volume in about 15 s. The result contains 64,593 entries
-and 4,100,614 codelets, occupies 131,219,680 bytes, and has SHA-256
-`988945f1a3a695bb407013fbf2963154b39334531e64b3dc08ea49180c670a2e`. A
+`reference.pyac` from the checked-in `reference.pya` parsed 101,439,418 source
+bytes and wrote the volume in about 15 s. The result contains 64,594 entries
+and 4,100,560 codelets, occupies 131,217,952 bytes, and has SHA-256
+`c245343f2b1f871af5631f695083036b5578f9b32ba9d86c72d6d89bc692a39b`. A
 10,000-iteration warmed `en`/`tensor` lookup measured 106,218 ns mean
 (9,414.5 lookups/s) on the previous volume, one result per lookup; re-measure
 against this one before quoting a rate. The local Pyash run record for that

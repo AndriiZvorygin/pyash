@@ -17580,6 +17580,9 @@ su text "sense-lemma:n:08226608-n:1" ob text "constabulary" ya
 su text "sense-lemma:n:08226608-n:2" ob text "law" ya
 su text "sense-lemma:n:08226608-n:3" ob text "police" ya
 su text "sense-lemma:n:08226608-n:4" ob text "police force" ya
+su text "n:00872590-n" ob name "divisions" as text "n" with text "deterministic" via text "curated primitive sense: dvis is the arithmetic division operator" ya
+su text "sense-gloss:n:00872590-n" ob text "an arithmetic operation that is the inverse of multiplication" ya
+su text "sense-lemma:n:00872590-n:1" ob text "division" ya
 su text "n:08230126-n" ob name "divisions" as text "n" with text "deterministic" via text "frequency-first anchor allocation: exact lemma division at English30k rank 2357; Princeton WordNet 3.1 tag count 10 (sense key division%1:14:00::)" ya
 su text "sense-gloss:n:08230126-n" ob text "an army unit large enough to sustain combat; two infantry divisions were held in reserve" ya
 su text "sense-lemma:n:08230126-n:1" ob text "division" ya

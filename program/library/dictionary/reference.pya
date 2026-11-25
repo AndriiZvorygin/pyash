@@ -80673,27 +80673,17 @@ su name tlat kwon ob text "dvip" as text "yue-Latn-jyutping" from text "pei5" to
 su name tlat kwon ob text "dvip" as text "zh" from text "婢" to text "婢" at text "lexical-form" be text ya
 su name tlat kwon ob text "dvip" as text "zh-Latn-pinyin" from text "bì" to text "bì" at text "lexical-form" be text ya
 su name tlat kwon ob text "dvis" at text "entry" be text ya
-su name tlat kwon ob text "dvis" as text "ar" from text "الانقسامات" to text "الانقسامات" at text "lexical-form" be text ya
 su name tlat kwon ob text "dvis" as text "en" from text "division" to text "division" at text "lexical-form" be text ya
 su name tlat kwon ob text "dvis" as text "en" from text "divisions" to text "divisions" at text "lexical-form" be text ya
-su name tlat kwon ob text "dvis" as text "es" from text "divisiones" to text "divisiones" at text "lexical-form" be text ya
-su name tlat kwon ob text "dvis" as text "fi" from text "rajapintojen" to text "rajapintojen" at text "lexical-form" be text ya
-su name tlat kwon ob text "dvis" as text "fr" from text "divisions" to text "divisions" at text "lexical-form" be text ya
-su name tlat kwon ob text "dvis" as text "he" from text "חטיבות" to text "חטיבות" at text "lexical-form" be text ya
-su name tlat kwon ob text "dvis" as text "hi" from text "डिवीजनों" to text "डिवीजनों" at text "lexical-form" be text ya
-su name tlat kwon ob text "dvis" as text "ia" from text "divisiones" to text "divisiones" at text "lexical-form" be text ya
-su name tlat kwon ob text "dvis" as text "id" from text "divisi" to text "divisi" at text "lexical-form" be text ya
-su name tlat kwon ob text "dvis" as text "isv" from text "підрозділи" to text "підрозділи" at text "lexical-form" be text ya
-su name tlat kwon ob text "dvis" as text "nl" from text "divisies" to text "divisies" at text "lexical-form" be text ya
-su name tlat kwon ob text "dvis" as text "ru" from text "подразделения" to text "подразделения" at text "lexical-form" be text ya
-su name tlat kwon ob text "dvis" as text "tr" from text "bölünmeler" to text "bölünmeler" at text "lexical-form" be text ya
-su name tlat kwon ob text "dvis" as text "uk" from text "підрозділи" to text "підрозділи" at text "lexical-form" be text ya
+su name tlat kwon ob text "dvis" as text "yue-Latn-jyutping" from text "ceoi4 faat3" to text "ceoi4 faat3" at text "lexical-form" be text ya
 su name tlat kwon ob text "dvis" as text "yue-Latn-jyutping" from text "si1" to text "si1" at text "lexical-form" be text ya
 su name tlat kwon ob text "dvis" as text "zh" from text "师" to text "师" at text "lexical-form" be text ya
+su name tlat kwon ob text "dvis" as text "zh" from text "除法" to text "除法" at text "lexical-form" be text ya
+su name tlat kwon ob text "dvis" as text "zh-Latn-pinyin" from text "chú fǎ" to text "chú fǎ" at text "lexical-form" be text ya
 su name tlat kwon ob text "dvis" as text "zh-Latn-pinyin" from text "shī" to text "shī" at text "lexical-form" be text ya
-su name tlat kwon ob text "dvis" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "MilitaryOrganization" by text "subsumed-by" at text "source-link" be text ya
-su name tlat kwon ob text "dvis" as text "wordnet" from text "Open English WordNet 2025" to text "n:08230126-n" by text "exact-sense" at text "source-link" be text ya
-su name tlat kwon ob text "dvis" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:08230126-n" with text "an army unit large enough to sustain combat; two infantry divisions were held in reserve" at text "source-gloss" be text ya
+su name tlat kwon ob text "dvis" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "DivisionFn" by text "equivalent-to" at text "source-link" be text ya
+su name tlat kwon ob text "dvis" as text "wordnet" from text "Open English WordNet 2025" to text "n:00872590-n" by text "exact-sense" at text "source-link" be text ya
+su name tlat kwon ob text "dvis" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:00872590-n" with text "an arithmetic operation that is the inverse of multiplication" at text "source-gloss" be text ya
 su name tlat kwon ob text "dvis" from ve 19 1 34963 1 10590 3 1 10366 1 12926 1 12606 2 8798 12926 1 9278 2 8798 12926 at text "operation-signature" be text ya
 su name tlat kwon ob text "dvis" as ve 4 1 10366 1 12926 from text "by" to text "value supplied in the by case" at text "operation-argument" be text ya
 su name tlat kwon ob text "dvis" as ve 5 1 12606 2 8798 12926 from text "from" to text "value supplied in the from case" at text "operation-argument" be text ya
@@ -113564,13 +113554,13 @@ su name tlat kwon ob text "glut" at text "entry" be text ya
 su name tlat kwon ob text "glut" as text "en" from text "calculator" to text "calculator" at text "lexical-form" be text ya
 su name tlat kwon ob text "go" at text "entry" be text ya
 su name tlat kwon ob text "go" as text "en" from text "gnomic_aspect_" to text "gnomic_aspect_" at text "lexical-form" be text ya
-su name tlat kwon ob text "go" from ve 9 1 12894 1 10590 1 1 9278 1 2422 at text "operation-signature" be text ya
+su name tlat kwon ob text "go" from ve 9 1 26640 1 10590 1 1 9278 1 2422 at text "operation-signature" be text ya
 su name tlat kwon ob text "go" as ve 4 1 9278 1 2422 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
-su name tlat kwon ob text "go" from ve 10 1 12894 1 10590 1 1 9278 2 8798 2422 at text "operation-signature" be text ya
+su name tlat kwon ob text "go" from ve 10 1 26640 1 10590 1 1 9278 2 8798 2422 at text "operation-signature" be text ya
 su name tlat kwon ob text "go" as ve 5 1 9278 2 8798 2422 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
-su name tlat kwon ob text "go" from ve 10 1 12894 1 10590 1 1 9278 2 8798 22615 at text "operation-signature" be text ya
+su name tlat kwon ob text "go" from ve 10 1 26640 1 10590 1 1 9278 2 8798 22615 at text "operation-signature" be text ya
 su name tlat kwon ob text "go" as ve 5 1 9278 2 8798 22615 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
-su name tlat kwon ob text "go" from ve 9 1 12894 1 10590 1 1 9278 1 22615 at text "operation-signature" be text ya
+su name tlat kwon ob text "go" from ve 9 1 26640 1 10590 1 1 9278 1 22615 at text "operation-signature" be text ya
 su name tlat kwon ob text "go" as ve 4 1 9278 1 22615 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
 su name tlat kwon ob text "gr6n" at text "entry" be text ya
 su name tlat kwon ob text "gr6n" as text "ar" from text "ﺓﺮﺋﺎﻄﻟﺍ ﺔﻧﺯﺍﻮﻣ" to text "ﺓﺮﺋﺎﻄﻟﺍ ﺔﻧﺯﺍﻮﻣ" at text "lexical-form" be text ya
@@ -126026,12 +126016,6 @@ su name tlat kwon ob text "gyik drak" from text "gyik" at text "component" be te
 su name tlat kwon ob text "gyik drak" from text "drak" at text "component" be text ya
 su name tlat kwon ob text "gyik dvis" at text "entry" be text ya
 su name tlat kwon ob text "gyik dvis" as text "en" from text "division" to text "division" at text "lexical-form" be text ya
-su name tlat kwon ob text "gyik dvis" as text "yue-Latn-jyutping" from text "ceoi4 faat3" to text "ceoi4 faat3" at text "lexical-form" be text ya
-su name tlat kwon ob text "gyik dvis" as text "zh" from text "除法" to text "除法" at text "lexical-form" be text ya
-su name tlat kwon ob text "gyik dvis" as text "zh-Latn-pinyin" from text "chú fǎ" to text "chú fǎ" at text "lexical-form" be text ya
-su name tlat kwon ob text "gyik dvis" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "DivisionFn" by text "equivalent-to" at text "source-link" be text ya
-su name tlat kwon ob text "gyik dvis" as text "wordnet" from text "Open English WordNet 2025" to text "n:00872590-n" by text "exact-sense" at text "source-link" be text ya
-su name tlat kwon ob text "gyik dvis" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:00872590-n" with text "an arithmetic operation that is the inverse of multiplication" at text "source-gloss" be text ya
 su name tlat kwon ob text "gyik dvis" from text "gyik" at text "component" be text ya
 su name tlat kwon ob text "gyik dvis" from text "dvis" at text "component" be text ya
 su name tlat kwon ob text "gyik fyak" at text "entry" be text ya
@@ -344821,6 +344805,14 @@ su name tlat kwon ob text "hyim drot" as text "wordnet" from text "Open English 
 su name tlat kwon ob text "hyim drot" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:01135427-n" with text "the control of a country by military forces of a foreign power" at text "source-gloss" be text ya
 su name tlat kwon ob text "hyim drot" from text "hyim" at text "component" be text ya
 su name tlat kwon ob text "hyim drot" from text "drot" at text "component" be text ya
+su name tlat kwon ob text "hyim dvis" at text "entry" be text ya
+su name tlat kwon ob text "hyim dvis" as text "en" from text "division" to text "division" at text "lexical-form" be text ya
+su name tlat kwon ob text "hyim dvis" as text "en" from text "divisions" to text "divisions" at text "lexical-form" be text ya
+su name tlat kwon ob text "hyim dvis" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "MilitaryOrganization" by text "subsumed-by" at text "source-link" be text ya
+su name tlat kwon ob text "hyim dvis" as text "wordnet" from text "Open English WordNet 2025" to text "n:08230126-n" by text "exact-sense" at text "source-link" be text ya
+su name tlat kwon ob text "hyim dvis" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:08230126-n" with text "an army unit large enough to sustain combat; two infantry divisions were held in reserve" at text "source-gloss" be text ya
+su name tlat kwon ob text "hyim dvis" from text "hyim" at text "component" be text ya
+su name tlat kwon ob text "hyim dvis" from text "dvis" at text "component" be text ya
 su name tlat kwon ob text "hyim dzac" at text "entry" be text ya
 su name tlat kwon ob text "hyim dzac" as text "en" from text "mess" to text "mess" at text "lexical-form" be text ya
 su name tlat kwon ob text "hyim dzac" as text "en" from text "mess hall" to text "mess hall" at text "lexical-form" be text ya
