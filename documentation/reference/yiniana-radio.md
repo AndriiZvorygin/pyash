@@ -544,7 +544,8 @@ The station plays what has been rendered. The producer is what makes more.
    the corpus excerpts, the learnteaching card, the hymn manuscript. When the
    radio already holds the card the topic wants, only the hymn is written from
    it — the card is the slow part of the chain, so a retry that only lost the
-   hymn costs a minute and not seven.
+   hymn costs a minute and not seven. Measured: a lane whose card was already
+   on disk went from "writing the lyrics" to the first render in 1 min 18 s.
 3. **Audition.** The seed is a lottery — the same sheet and graph came back
    instrumental for one seed and sung for two others. So the producer renders
    `radio producer seeds` seeds and keeps the one that carries the most of the
@@ -761,6 +762,9 @@ Measured on the humility lane, on this machine, with the full teaching card:
 | an ACE-Step render | 65 s | the two renders at 09:40:26 and 09:41:31 |
 | the audition | 4.3 s | whisper.cpp base over a 60 s window |
 | **a song, end to end** | **about 10 min** | the sum |
+
+The audition now hears the whole render, so it costs about 26 s of whisper
+instead of 4.3 s — see the audition window below for why.
 
 The card is the song's cost, not the render: it is about two thirds of the
 time. The card is ten fixed headings — SEED CONCEPT, CARDINAL TRAINING
