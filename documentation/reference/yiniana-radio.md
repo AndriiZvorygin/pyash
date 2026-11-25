@@ -311,7 +311,7 @@ The settings live in the pyash configuration surface, in `configure/default.pya`
 
 | Fact | Default | Meaning |
 | --- | --- | --- |
-| `radio host` | `0.0.0.0` | the address the station binds |
+| `radio host` | `::` | the address the station binds |
 | `radio port` | `8090` | the port the station listens on |
 | `radio catalogue` | `radio/audio` | the folder of rendered songs |
 | `radio station name` | `Yiniana Radio` | the name on the page and in the status |
@@ -361,6 +361,20 @@ survives a logout and comes back after a crash:
 ```sh
 systemctl --user status yiniana-radio
 journalctl --user -u yiniana-radio -f
+```
+
+The unit lives in `~/.config/systemd/user/yiniana-radio.service`. It runs the
+station from the `dev` checkout, and points the catalogue at the house
+checkout, so a song rendered there joins the rotation without a restart:
+
+```ini
+[Service]
+Type=simple
+WorkingDirectory=/home/htaf/pyac/pyash-dev
+Environment=PYA_RADIO_CATALOGUE=/home/htaf/pyac/pyash/radio/audio
+ExecStart=/home/htaf/.nvm/versions/node/v24.22.1/bin/node command/yiniana_radio.mjs
+Restart=always
+RestartSec=5
 ```
 
 ### Running it
