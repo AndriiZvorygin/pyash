@@ -11,6 +11,7 @@ import {
   camelize,
   detectInputPath,
   detectSaveFormat,
+  isInterruptedExecution,
   formatMatchesExtension,
   mappingLookup,
   readMappingPya,
@@ -154,4 +155,27 @@ test("the ACE-Step workflow carries no file from the ComfyUI input folder", asyn
       );
     }
   }
+});
+
+test("isInterruptedExecution tells an interrupted render from a failed one", () => {
+  const interrupted = {
+    status: {
+      messages: [
+        ["execution_start", { prompt_id: "abc" }],
+        ["execution_interrupted", { node_id: "5", node_type: "YuE2GenerateMusic" }]
+      ]
+    }
+  };
+  const failed = {
+    status: {
+      messages: [
+        ["execution_start", { prompt_id: "abc" }],
+        ["execution_error", { node_type: "KSampler", exception_message: "out of memory" }]
+      ]
+    }
+  };
+  assert.equal(isInterruptedExecution(interrupted), true);
+  assert.equal(isInterruptedExecution(failed), false);
+  assert.equal(isInterruptedExecution({}), false);
+  assert.equal(isInterruptedExecution(null), false);
 });

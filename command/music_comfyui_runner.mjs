@@ -298,6 +298,15 @@ function extractExecutionError(historyEntry) {
   return "";
 }
 
+// Another surface on the shared ComfyUI runtime can interrupt a render that
+// is already under way. That is not the model's fault and the same seed will
+// produce the same song, so the run is worth repeating.
+function isInterruptedExecution(historyEntry) {
+  const status = historyEntry?.status;
+  const messages = Array.isArray(status?.messages) ? status.messages : [];
+  return messages.some((pair) => Array.isArray(pair) && String(pair[0] ?? "") === "execution_interrupted");
+}
+
 function pickFirstAudio(historyEntry) {
   const outputs = historyEntry?.outputs;
   if (!outputs || typeof outputs !== "object") return null;
@@ -492,27 +501,53 @@ async function main() {
   let audio;
   let promptId = "";
   if (managerUrl) {
-    const managed = await submitManagedGpuJob({
-      runtimeName: "comfyui",
-      profileName: resolveWorkflowName(opts),
-      providerUrl: host,
-      managerUrl,
-      jobSpec: {
-        kind: "comfyui-prompt",
-        resourceRequest: { vramRequiredMb: Number.parseInt(String(process.env.PYA_COMFYUI_VRAM_REQUIRED_MB || "12000"), 10) || 12000 },
-        prompt: promptObject,
-        clientId: `pyash-${crypto.randomBytes(6).toString("hex")}`,
-        timeoutSec: Number.parseInt(String(process.env.PYA_COMFYUI_TIMEOUT_SEC || "5400"), 10) || 5400
-      },
-      timeoutMs: (Number.parseInt(String(process.env.PYA_COMFYUI_TIMEOUT_SEC || "5400"), 10) + 300) * 1000
-    });
-    promptId = String(managed?.promptId || "");
-    const history = managed?.history || managed;
-    const errorMessage = extractExecutionError(history);
-    if (errorMessage) {
-      throw new Error(`music_comfyui_runner: execution failed: ${errorMessage}`);
+    const maxAttempts = Math.max(1, Number.parseInt(String(process.env.PYA_COMFYUI_ATTEMPTS || "3"), 10) || 3);
+    const timeoutSec = Number.parseInt(String(process.env.PYA_COMFYUI_TIMEOUT_SEC || "5400"), 10) || 5400;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      let managed;
+      let history = null;
+      try {
+        managed = await submitManagedGpuJob({
+          runtimeName: "comfyui",
+          profileName: resolveWorkflowName(opts),
+          providerUrl: host,
+          managerUrl,
+          jobSpec: {
+            kind: "comfyui-prompt",
+            resourceRequest: { vramRequiredMb: Number.parseInt(String(process.env.PYA_COMFYUI_VRAM_REQUIRED_MB || "12000"), 10) || 12000 },
+            prompt: promptObject,
+            clientId: `pyash-${crypto.randomBytes(6).toString("hex")}`,
+            timeoutSec
+          },
+          timeoutMs: (timeoutSec + 300) * 1000
+        });
+        promptId = String(managed?.promptId || "");
+        history = managed?.history || managed;
+      } catch (err) {
+        // The Housekeeper reports an interrupted render as a failed job, so the
+        // interruption is only visible in the error text.
+        const text = String(err?.message ?? err ?? "");
+        if (!text.includes("execution_interrupted")) throw err;
+        if (attempt >= maxAttempts) {
+          throw new Error(`music_comfyui_runner: render interrupted ${attempt} time(s): ${text}`);
+        }
+        fsSync.writeFileSync(2, `music_comfyui_runner: render interrupted, retrying (${attempt}/${maxAttempts})\n`, "utf8");
+        continue;
+      }
+      const errorMessage = extractExecutionError(history);
+      if (errorMessage) {
+        throw new Error(`music_comfyui_runner: execution failed: ${errorMessage}`);
+      }
+      audio = pickFirstAudio(history);
+      if (audio) break;
+      // A render that another surface interrupted is worth repeating: the same
+      // seed gives the same song, and the interruption was not the model's doing.
+      if (isInterruptedExecution(history) && attempt < maxAttempts) {
+        fsSync.writeFileSync(2, `music_comfyui_runner: render interrupted, retrying (${attempt}/${maxAttempts})\n`, "utf8");
+        continue;
+      }
+      throw new Error("music_comfyui_runner: history audio missing");
     }
-    audio = pickFirstAudio(history);
     if (!audio) throw new Error("music_comfyui_runner: history audio missing");
   } else {
     const queued = await requestJson(`${host.replace(/\/$/, "")}/prompt`, {
@@ -555,6 +590,7 @@ export {
   detectInputPath,
   detectSaveFormat,
   formatMatchesExtension,
+  isInterruptedExecution,
   mappingLookup,
   parseOptions,
   readMappingPya,

@@ -106,13 +106,15 @@ The ACE-Step workflow is self-contained: the style BPM comes from a
 PYA_GPU_HOUSEKEEPER_URL=http://localhost:18886 \
   node command/music_comfyui_runner.mjs \
   --lyrics "$(cat radio/lyrics/song-dignity.txt)" \
-  --style "acoustic worship ballad, warm felt piano, ..." \
   --workflow-name audio_yue2_own_melody \
   --workflow-root ./music/ \
   --host http://localhost:8188 \
   --options-json '{"seed":20261125,"maxDuration":175}' \
   --output radio/audio/yue2-dignity.mp3
 ```
+
+No `--style` is passed, so the workflow's own caption — the station style — is
+what plays.
 
 The runner goes through the GPU Housekeeper first. The direct ComfyUI `/prompt`
 call survives only as a fallback for when no Housekeeper is configured.
@@ -136,6 +138,13 @@ runtime. A discharge that would cancel someone else's work is skipped and says
 so; an explicit `restart` or `stop` still interrupts, because that is what it
 was asked to do.
 
+An explicit discharge from another session still reaches the runtime, and a
+seven-minute render can still be cut short by one. The runner therefore repeats
+a render that was interrupted: the Housekeeper reports an interrupted run as a
+failed job, so the runner recognises that shape of failure and tries again with
+the same seed, which produces the same song. `PYA_COMFYUI_ATTEMPTS` sets how
+many tries are allowed (default 3).
+
 ### Lyric budget
 
 A 175 s YuE2 song carries about 235 lyric words. Above that the ending is
@@ -154,17 +163,17 @@ node command/yiniana_lyric_recovery.mjs radio/lyrics/song-dignity.txt transcript
 The transcript may be plain text, the JSON the hear runner prints, or Whisper's
 segment list.
 
-Measured on the dignity hymn, 180 s, ACE-Step XL turbo:
+Measured on the dignity hymn with the station style, 180 s, ACE-Step XL turbo:
 
 - the file is a real mp3 — ID3v2.4, MPEG layer III, 192 kbps, 48 kHz stereo;
 - duration 180.02 s;
-- 112 of 119 4-grams recovered (94.1 %).
+- 113 of 119 4-grams recovered (95.0 %).
 
 Measured on the same hymn, 175 s, YuE2:
 
 - a real mp3, 192 kbps, 48 kHz stereo;
 - duration 175.03 s;
-- 106 of 119 4-grams recovered (89.1 %).
+- 107 of 119 4-grams recovered (89.9 %).
 
 The missing 4-grams are the intro-to-verse seam, one re-worded line
 ("warm bread breaks soft" was sung as "warm bread breaks off") and, on the
@@ -174,6 +183,28 @@ A caution on the transcriber: Qwen3-ASR heard 63 % of the ACE-Step song's
 4-grams and mis-heard "dignity" as "tragedy". Whisper large-v2 heard 94.1 % of
 the same audio. Measure recovery with a transcriber that can sing, and treat a
 low number as a question about the transcriber first.
+
+### The style prompt
+
+The style prompt is the station's voice. The two workflow files carry it as
+their default caption, byte-identical to claudia's `radio/style.txt`:
+
+```
+electronic symphony, electroclash techno, 128 bpm, D minor, mature adult European
+female vocals, mid-30s voice, low monotone speech-singing verses, warm low-mid
+timbre, indie pop attitude, crisp mid-range sung chorus, orchestral strings,
+epic brass stabs, cinematic builds, choir pads, heartbeat rhythm, lub-dub
+double-kick pulse, deep sub kick, acid bassline, supersaw stabs, key change
+into final chorus
+```
+
+The runner's `--style` overrides that default. A render that is meant to
+represent the station should not pass `--style` at all, so the shipped default
+is what actually plays.
+
+Every rendered mp3 carries its own ComfyUI prompt in the ID3 `TXXX` tag, so
+the file says what produced it. Read the tag when a render does not sound like
+the station and the cause is usually the prompt that was passed.
 
 ## 7. Existing Quiz Coverage
 
