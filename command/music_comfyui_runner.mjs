@@ -2,6 +2,9 @@ import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import { fileURLToPath } from "node:url";
+
+import { resolveGpuHousekeeperUrl, submitManagedGpuJob } from "../program/runtime/gpu/managed-ollama.mjs";
 
 function parseArgs(argv) {
   const args = argv.slice(2);
@@ -44,13 +47,14 @@ function resolveWorkflowRoot(opts) {
 }
 
 function resolveWorkflowName(opts) {
-  return opts.workflowName ?? process.env.PYA_MUSIC_WORKFLOW_DEFAULT ?? "audio_ace_step_1_5_checkpoint";
+  return opts.workflowName ?? process.env.PYA_MUSIC_WORKFLOW_DEFAULT ?? "audio_ace_step_1_5_xl_turbo";
 }
 
-function defaultOutputPath() {
+function defaultOutputPath(format = "mp3") {
   const stamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
   const rand = crypto.randomBytes(3).toString("hex");
-  return path.join("artifacts", "music", `music-${stamp}-${rand}.opus`);
+  const ext = String(format ?? "mp3").trim().replace(/^\./u, "") || "mp3";
+  return path.join("artifacts", "music", `music-${stamp}-${rand}.${ext}`);
 }
 
 async function resolveWorkflowFile(opts) {
@@ -74,7 +78,9 @@ function camelize(input = "") {
   return String(input ?? "")
     .toLowerCase()
     .replace(/[^a-z0-9]+([a-z0-9])/g, (_m, ch) => String(ch).toUpperCase())
-    .replace(/[^a-z0-9]/g, "");
+    // Keep the capitals camelize just produced; stripping them would turn
+    // "voice_boost" into "voiceoost" and every mapping key would miss.
+    .replace(/[^a-zA-Z0-9]/g, "");
 }
 
 async function readMappingPya(workflowFile) {
@@ -100,6 +106,21 @@ async function readMappingPya(workflowFile) {
   } catch {
     return {};
   }
+}
+
+// The mapping .pya spells its keys in words ("voice boost path"); the runner
+// asks for them in camel case ("voiceBoostPath"). Compare them the same way
+// the runner compares option names, so the two spellings meet.
+function mappingLookup(mapping, key) {
+  if (!mapping || typeof mapping !== "object") return null;
+  const wanted = String(key ?? "").trim();
+  if (!wanted) return null;
+  if (mapping[wanted]) return mapping[wanted];
+  const lower = wanted.toLowerCase();
+  for (const [name, value] of Object.entries(mapping)) {
+    if (String(name).toLowerCase() === lower) return value;
+  }
+  return null;
 }
 
 function normalizePromptObject(workflow) {
@@ -160,12 +181,26 @@ function setAtPath(obj, dottedPath, value) {
   cur[parts[parts.length - 1]] = value;
 }
 
+// Reads a dotted path back out, so a caller can tell a plain value from a
+// link to another node.
+function readAtPath(obj, dottedPath) {
+  const parts = String(dottedPath ?? "").split(".");
+  let cur = obj;
+  for (const key of parts) {
+    if (cur === undefined || cur === null || typeof cur !== "object") return undefined;
+    cur = cur[key];
+  }
+  return cur;
+}
+
 function detectInputPath(workflow, promptObject, inputName, preferredNodeType = "") {
   const wanted = String(inputName ?? "").trim().toLowerCase();
-  const preferred = String(preferredNodeType ?? "").trim();
+  const preferred = (Array.isArray(preferredNodeType) ? preferredNodeType : [preferredNodeType])
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean);
   const nodes = Array.isArray(workflow?.nodes) ? workflow.nodes : [];
   for (const node of nodes) {
-    if (preferred && String(node?.type ?? "") !== preferred) continue;
+    if (preferred.length && !preferred.includes(String(node?.type ?? ""))) continue;
     const id = String(node?.id ?? "");
     if (!id) continue;
     const inputs = Array.isArray(node?.inputs) ? node.inputs : [];
@@ -174,7 +209,7 @@ function detectInputPath(workflow, promptObject, inputName, preferredNodeType = 
     }
   }
   for (const [id, entry] of Object.entries(promptObject ?? {})) {
-    if (preferred && String(entry?.class_type ?? "") !== preferred) continue;
+    if (preferred.length && !preferred.includes(String(entry?.class_type ?? ""))) continue;
     const inputs = entry?.inputs;
     if (!inputs || typeof inputs !== "object") continue;
     if (Object.prototype.hasOwnProperty.call(inputs, inputName)) {
@@ -182,6 +217,56 @@ function detectInputPath(workflow, promptObject, inputName, preferredNodeType = 
     }
   }
   return null;
+}
+
+const LYRICS_NODE_TYPES = ["AceStepSFTTextEncode", "YuE2GenerateMusic", "TextEncodeAceStepAudio1.5"];
+const STYLE_NODE_TYPES = ["AceStepSFTTextEncode", "YuE2GenerateMusic", "TextEncodeAceStepAudio1.5"];
+const SAMPLER_NODE_TYPES = ["AceStepSFTGenerate", "KSampler"];
+const LATENT_NODE_TYPES = ["EmptyYuE2LatentAudio", "EmptyAceStep1.5LatentAudio"];
+const SAVE_NODE_TYPES = ["AceStepSFTSaveAudio", "SaveAudioMP3", "SaveAudioOpus", "SaveAudio"];
+
+// A save node may name its format outright or fix it in the node type.
+const SAVE_NODE_FORMATS = { SaveAudioMP3: "mp3", SaveAudioOpus: "opus" };
+
+// The save node knows which container it will write. The output file must
+// carry that extension, because Icecast is handed the bytes as they are.
+function detectSaveFormat(workflow, promptObject) {
+  for (const entry of Object.values(promptObject ?? {})) {
+    const classType = String(entry?.class_type ?? "");
+    if (!SAVE_NODE_TYPES.includes(classType)) continue;
+    const format = String(entry?.inputs?.format ?? "").trim().toLowerCase();
+    if (format) return format;
+    const fixed = SAVE_NODE_FORMATS[classType];
+    if (fixed) return fixed;
+  }
+  return "";
+}
+
+// Reads the container out of the bytes themselves, so the extension we hand
+// on can be checked against what ComfyUI really produced.
+function sniffAudioFormat(bytes) {
+  const buf = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes ?? []);
+  if (buf.length < 4) return "unknown";
+  if (buf.subarray(0, 3).toString("latin1") === "ID3") return "mp3";
+  if (buf.subarray(0, 4).toString("latin1") === "fLaC") return "flac";
+  if (buf.subarray(0, 4).toString("latin1") === "RIFF") return "wav";
+  if (buf.subarray(0, 4).toString("latin1") === "OggS") {
+    const head = buf.subarray(0, 64).toString("latin1");
+    if (head.includes("OpusHead")) return "opus";
+    return "ogg";
+  }
+  if (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0) return "mp3";
+  return "unknown";
+}
+
+function formatMatchesExtension(format, ext) {
+  const want = String(ext ?? "").trim().toLowerCase().replace(/^\./u, "");
+  const got = String(format ?? "").trim().toLowerCase();
+  if (!want || !got || got === "unknown") return true;
+  if (want === got) return true;
+  if (got === "ogg" && want === "opus") return true;
+  if (got === "opus" && want === "ogg") return true;
+  return false;
 }
 
 async function requestJson(url, body) {
@@ -229,6 +314,15 @@ function extractExecutionError(historyEntry) {
     if (message) return message;
   }
   return "";
+}
+
+// Another surface on the shared ComfyUI runtime can interrupt a render that
+// is already under way. That is not the model's fault and the same seed will
+// produce the same song, so the run is worth repeating.
+function isInterruptedExecution(historyEntry) {
+  const status = historyEntry?.status;
+  const messages = Array.isArray(status?.messages) ? status.messages : [];
+  return messages.some((pair) => Array.isArray(pair) && String(pair[0] ?? "") === "execution_interrupted");
 }
 
 function pickFirstAudio(historyEntry) {
@@ -313,26 +407,33 @@ async function main() {
   const opts = parseArgs(process.argv);
   const lyrics = String(opts.lyrics ?? "").trim();
   if (!lyrics) throw new Error("music_comfyui_runner: missing lyrics");
-  const outputPath = opts.output ? String(opts.output) : defaultOutputPath();
-  if (await copyFixtureToOutput(outputPath)) {
-    fsSync.writeFileSync(1, `${outputPath}\n`, "utf8");
-    return;
-  }
 
   const host = resolveHost(opts);
   const workflowFile = await resolveWorkflowFile(opts);
   const workflow = await readWorkflowJson(workflowFile);
   const promptObject = normalizePromptObject(workflow);
+  const saveFormat = detectSaveFormat(workflow, promptObject);
+  const outputPath = opts.output ? String(opts.output) : defaultOutputPath(saveFormat);
+  if (await copyFixtureToOutput(outputPath)) {
+    fsSync.writeFileSync(1, `${outputPath}\n`, "utf8");
+    return;
+  }
+
   const mapping = await readMappingPya(workflowFile);
   const options = parseOptions(opts.optionsJson);
 
-  const lyricsPath = mapping.lyricsPath || detectInputPath(workflow, promptObject, "lyrics", "TextEncodeAceStepAudio1.5");
+  const lyricsPath = mappingLookup(mapping, "lyricsPath")
+    || detectInputPath(workflow, promptObject, "lyrics", LYRICS_NODE_TYPES);
   if (!lyricsPath) throw new Error("music_comfyui_runner: lyrics path unresolved");
   setAtPath(promptObject, lyricsPath, lyrics);
 
   const style = String(opts.style ?? "").trim();
   if (style) {
-    const stylePath = mapping.stylePath || mapping.tagsPath || detectInputPath(workflow, promptObject, "tags", "TextEncodeAceStepAudio1.5");
+    const stylePath = mappingLookup(mapping, "stylePath")
+      || mappingLookup(mapping, "tagsPath")
+      || detectInputPath(workflow, promptObject, "caption", STYLE_NODE_TYPES)
+      || detectInputPath(workflow, promptObject, "style", STYLE_NODE_TYPES)
+      || detectInputPath(workflow, promptObject, "tags", STYLE_NODE_TYPES);
     if (stylePath) setAtPath(promptObject, stylePath, style);
   }
 
@@ -346,15 +447,23 @@ async function main() {
     ["seed", ["seed"]],
     ["steps", ["steps"]],
     ["cfg", ["cfg"]],
-    ["cfgscale", ["cfg_scale", "cfg scale"]],
-    ["temperature", ["temperature"]],
-    ["topp", ["top_p", "top p"]],
-    ["topk", ["top_k", "top k"]],
-    ["minp", ["min_p", "min p"]],
-    ["samplername", ["sampler_name", "sampler", "sampler name"]],
+    ["cfgScale", ["cfgScale", "cfg_scale", "cfg scale", "lmCfgScale", "lm_cfg_scale", "lm cfg scale"]],
+    ["cfgscale", ["cfgscale", "cfg_scale", "cfg scale"]],
+    ["temperature", ["temperature", "lmTemperature", "lm_temperature", "lm temperature"]],
+    ["topP", ["topP", "top_p", "top p"]],
+    ["topp", ["topp", "top_p", "top p"]],
+    ["topK", ["topK", "top_k", "top k"]],
+    ["topk", ["topk", "top_k", "top k"]],
+    ["minP", ["minP", "min_p", "min p"]],
+    ["minp", ["minp", "min_p", "min p"]],
+    ["samplerName", ["samplerName", "sampler_name", "sampler", "sampler name"]],
+    ["samplername", ["samplername", "sampler_name", "sampler", "sampler name"]],
     ["scheduler", ["scheduler"]],
     ["denoise", ["denoise"]],
-    ["quality", ["quality"]]
+    ["quality", ["quality"]],
+    ["maxDuration", ["maxDuration", "max_duration", "max duration"]],
+    ["voiceBoost", ["voiceBoost", "voice_boost", "voice boost"]],
+    ["repetitionPenalty", ["repetitionPenalty", "repetition_penalty", "repetition penalty"]]
   ]);
 
   const optionsByCanonical = {};
@@ -365,49 +474,123 @@ async function main() {
   }
 
   for (const [canonical, aliases] of keyAliases.entries()) {
-    if (!Object.prototype.hasOwnProperty.call(optionsByCanonical, canonical)) continue;
+    let value = optionsByCanonical[canonical];
+    if (value === undefined) value = optionsByCanonical[String(canonical).toLowerCase()];
+    if (value === undefined) continue;
     const pathKey = `${canonical}Path`;
-    let resolvedPath = mapping[pathKey] || null;
+    let resolvedPath = mappingLookup(mapping, pathKey);
     if (!resolvedPath) {
       for (const alias of aliases) {
         const aliasName = String(alias);
         resolvedPath =
-          detectInputPath(workflow, promptObject, aliasName, "TextEncodeAceStepAudio1.5") ||
-          detectInputPath(workflow, promptObject, aliasName, "KSampler") ||
-          detectInputPath(workflow, promptObject, aliasName, "EmptyAceStep1.5LatentAudio") ||
-          detectInputPath(workflow, promptObject, aliasName, "SaveAudioOpus");
+          detectInputPath(workflow, promptObject, aliasName, STYLE_NODE_TYPES) ||
+          detectInputPath(workflow, promptObject, aliasName, SAMPLER_NODE_TYPES) ||
+          detectInputPath(workflow, promptObject, aliasName, LATENT_NODE_TYPES) ||
+          detectInputPath(workflow, promptObject, aliasName, SAVE_NODE_TYPES);
         if (resolvedPath) break;
       }
     }
-    if (resolvedPath) setAtPath(promptObject, resolvedPath, optionsByCanonical[canonical]);
+    if (resolvedPath) setAtPath(promptObject, resolvedPath, value);
   }
 
-  if (mapping.saveAudioPrefixPath) {
+  // The text encoder, the latent and the sampler each carry a length of their
+  // own; they must agree, or the two halves of the song disagree in length.
+  const durationValue = optionsByCanonical.duration
+    ?? optionsByCanonical.Duration
+    ?? optionsByCanonical.maxDuration
+    ?? optionsByCanonical.maxduration;
+  if (durationValue !== undefined) {
+    for (const [wanted, types] of [["duration", STYLE_NODE_TYPES], ["duration", SAMPLER_NODE_TYPES], ["seconds", LATENT_NODE_TYPES]]) {
+      const durationPath = detectInputPath(workflow, promptObject, wanted, types);
+      if (!durationPath) continue;
+      // A linked length is driven by the node it points at; overwriting it
+      // would cut the link and let the two halves drift apart.
+      const current = readAtPath(promptObject, durationPath);
+      if (Array.isArray(current)) continue;
+      setAtPath(promptObject, durationPath, durationValue);
+    }
+  }
+
+  const savePrefixPath = mappingLookup(mapping, "saveAudioPrefixPath");
+  if (savePrefixPath) {
     const base = path.basename(outputPath, path.extname(outputPath));
-    setAtPath(promptObject, mapping.saveAudioPrefixPath, base);
+    setAtPath(promptObject, savePrefixPath, base);
   } else {
-    const savePrefixPath = detectInputPath(workflow, promptObject, "filename_prefix", "SaveAudioOpus");
+    const savePrefixPath = detectInputPath(workflow, promptObject, "filename_prefix", SAVE_NODE_TYPES);
     if (savePrefixPath) {
       const base = path.basename(outputPath, path.extname(outputPath));
       setAtPath(promptObject, savePrefixPath, base);
     }
   }
 
-  const queued = await requestJson(`${host.replace(/\/$/, "")}/prompt`, {
-    client_id: `pyash-${crypto.randomBytes(6).toString("hex")}`,
-    prompt: promptObject
-  });
-  if (queued?.error) {
-    const message = String(queued.error?.message ?? queued.error ?? "prompt rejected");
-    throw new Error(`music_comfyui_runner: prompt rejected: ${message}`);
+  const managerUrl = resolveGpuHousekeeperUrl({ managerUrl: process.env.PYA_GPU_HOUSEKEEPER_URL || "", ollamaUrl: host });
+  let audio;
+  let promptId = "";
+  if (managerUrl) {
+    const maxAttempts = Math.max(1, Number.parseInt(String(process.env.PYA_COMFYUI_ATTEMPTS || "3"), 10) || 3);
+    const timeoutSec = Number.parseInt(String(process.env.PYA_COMFYUI_TIMEOUT_SEC || "5400"), 10) || 5400;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      let managed;
+      let history = null;
+      try {
+        managed = await submitManagedGpuJob({
+          runtimeName: "comfyui",
+          profileName: resolveWorkflowName(opts),
+          providerUrl: host,
+          managerUrl,
+          jobSpec: {
+            kind: "comfyui-prompt",
+            resourceRequest: { vramRequiredMb: Number.parseInt(String(process.env.PYA_COMFYUI_VRAM_REQUIRED_MB || "12000"), 10) || 12000 },
+            prompt: promptObject,
+            clientId: `pyash-${crypto.randomBytes(6).toString("hex")}`,
+            timeoutSec
+          },
+          timeoutMs: (timeoutSec + 300) * 1000
+        });
+        promptId = String(managed?.promptId || "");
+        history = managed?.history || managed;
+      } catch (err) {
+        // The Housekeeper reports an interrupted render as a failed job, so the
+        // interruption is only visible in the error text.
+        const text = String(err?.message ?? err ?? "");
+        if (!text.includes("execution_interrupted")) throw err;
+        if (attempt >= maxAttempts) {
+          throw new Error(`music_comfyui_runner: render interrupted ${attempt} time(s): ${text}`);
+        }
+        fsSync.writeFileSync(2, `music_comfyui_runner: render interrupted, retrying (${attempt}/${maxAttempts})\n`, "utf8");
+        continue;
+      }
+      const errorMessage = extractExecutionError(history);
+      if (errorMessage) {
+        throw new Error(`music_comfyui_runner: execution failed: ${errorMessage}`);
+      }
+      audio = pickFirstAudio(history);
+      if (audio) break;
+      // A render that another surface interrupted is worth repeating: the same
+      // seed gives the same song, and the interruption was not the model's doing.
+      if (isInterruptedExecution(history) && attempt < maxAttempts) {
+        fsSync.writeFileSync(2, `music_comfyui_runner: render interrupted, retrying (${attempt}/${maxAttempts})\n`, "utf8");
+        continue;
+      }
+      throw new Error("music_comfyui_runner: history audio missing");
+    }
+    if (!audio) throw new Error("music_comfyui_runner: history audio missing");
+  } else {
+    const queued = await requestJson(`${host.replace(/\/$/, "")}/prompt`, {
+      client_id: `pyash-${crypto.randomBytes(6).toString("hex")}`,
+      prompt: promptObject
+    });
+    if (queued?.error) {
+      const message = String(queued.error?.message ?? queued.error ?? "prompt rejected");
+      throw new Error(`music_comfyui_runner: prompt rejected: ${message}`);
+    }
+    if (queued?.node_errors && typeof queued.node_errors === "object" && Object.keys(queued.node_errors).length > 0) {
+      throw new Error(`music_comfyui_runner: prompt node_errors: ${JSON.stringify(queued.node_errors)}`);
+    }
+    promptId = queued?.prompt_id;
+    if (!promptId) throw new Error("music_comfyui_runner: missing prompt_id from ComfyUI");
+    audio = await pollHistoryForAudio(host, promptId);
   }
-  if (queued?.node_errors && typeof queued.node_errors === "object" && Object.keys(queued.node_errors).length > 0) {
-    throw new Error(`music_comfyui_runner: prompt node_errors: ${JSON.stringify(queued.node_errors)}`);
-  }
-  const promptId = queued?.prompt_id;
-  if (!promptId) throw new Error("music_comfyui_runner: missing prompt_id from ComfyUI");
-
-  const audio = await pollHistoryForAudio(host, promptId);
   const filename = String(audio?.filename ?? "");
   if (!filename) throw new Error("music_comfyui_runner: history audio missing filename");
   const subfolder = String(audio?.subfolder ?? "");
@@ -416,13 +599,40 @@ async function main() {
     `${host.replace(/\/$/, "")}/view?filename=${encodeURIComponent(filename)}` +
     `&subfolder=${encodeURIComponent(subfolder)}&type=${encodeURIComponent(type)}`;
   const bytes = await requestBytes(viewUrl);
+  const outputExt = path.extname(outputPath).replace(/^\./u, "");
+  const sniffed = sniffAudioFormat(bytes);
+  if (!formatMatchesExtension(sniffed, outputExt)) {
+    throw new Error(
+      `music_comfyui_runner: produced ${sniffed || "unknown"} bytes but the output is named ${outputExt}`
+    );
+  }
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
   await fs.writeFile(outputPath, bytes);
   fsSync.writeFileSync(1, `${outputPath}\n`, "utf8");
 }
 
-main().catch((err) => {
-  const message = err?.message ?? String(err);
-  if (message) fsSync.writeFileSync(2, `${message}\n`, "utf8");
-  process.exit(1);
-});
+export {
+  camelize,
+  detectInputPath,
+  detectSaveFormat,
+  formatMatchesExtension,
+  isInterruptedExecution,
+  mappingLookup,
+  parseOptions,
+  readAtPath,
+  readMappingPya,
+  setAtPath,
+  sniffAudioFormat,
+  LYRICS_NODE_TYPES,
+  SAMPLER_NODE_TYPES,
+  SAVE_NODE_TYPES,
+  STYLE_NODE_TYPES
+};
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  main().catch((err) => {
+    const message = err?.message ?? String(err);
+    if (message) fsSync.writeFileSync(2, `${message}\n`, "utf8");
+    process.exit(1);
+  });
+}

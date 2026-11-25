@@ -1,0 +1,22 @@
+su name lyrics path ob text "94.inputs.lyrics" ya
+su name style path ob text "94.inputs.tags" ya
+su name duration path ob text "94.inputs.duration" ya
+su name max duration path ob text "94.inputs.duration" ya
+su name seconds path ob text "98.inputs.seconds" ya
+su name bpm path ob text "94.inputs.bpm" ya
+su name timesignature path ob text "94.inputs.timesignature" ya
+su name language path ob text "94.inputs.language" ya
+su name keyscale path ob text "94.inputs.keyscale" ya
+su name seed path ob text "109.inputs.value" ya
+su name steps path ob text "3.inputs.steps" ya
+su name cfg path ob text "3.inputs.cfg" ya
+su name sampler name path ob text "3.inputs.sampler_name" ya
+su name scheduler path ob text "3.inputs.scheduler" ya
+su name denoise path ob text "3.inputs.denoise" ya
+su name cfg scale path ob text "94.inputs.cfg_scale" ya
+su name temperature path ob text "94.inputs.temperature" ya
+su name top p path ob text "94.inputs.top_p" ya
+su name top k path ob text "94.inputs.top_k" ya
+su name min p path ob text "94.inputs.min_p" ya
+su name quality path ob text "107.inputs.quality" ya
+su name save audio prefix path ob text "107.inputs.filename_prefix" ya

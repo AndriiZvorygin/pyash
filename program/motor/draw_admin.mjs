@@ -1,4 +1,5 @@
 import { resolveConfigText } from "../configure/env.mjs";
+import { comfyuiRuntimeIsBusy } from "./comfyui_admin_guard.mjs";
 
 function resolveDrawHost({ rememberFn } = {}) {
   return (
@@ -48,6 +49,11 @@ export async function restartDrawBackend({ rememberFn } = {}) {
 
 export async function dischargeDrawBackend({ rememberFn } = {}) {
   const host = resolveDrawHost({ rememberFn }).replace(/\/$/, "");
+  // The draw host and the music host are the same ComfyUI. A render that is
+  // already running must not be cancelled by another surface's discharge.
+  if (await comfyuiRuntimeIsBusy({ providerUrl: host })) {
+    return { host, discharged: false, reason: "a managed ComfyUI job is running on this runtime" };
+  }
   // Be aggressive on discharge so the next GPU platform can claim VRAM reliably.
   // Some backends keep queued/executing state unless interrupted first.
   try {
@@ -61,5 +67,5 @@ export async function dischargeDrawBackend({ rememberFn } = {}) {
     // ignore; queue clear is best-effort
   }
   await postJson(`${host}/free`, { unload_models: true, free_memory: true });
-  return true;
+  return { host, discharged: true };
 }

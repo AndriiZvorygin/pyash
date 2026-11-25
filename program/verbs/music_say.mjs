@@ -35,7 +35,7 @@ function resolveWorkflowRoot({ rememberFn = remember } = {}) {
 }
 
 function resolveWorkflowDefault({ rememberFn = remember } = {}) {
-  return resolveConfigText("music workflow default", { rememberFn }) || "audio_ace_step_1_5_checkpoint";
+  return resolveConfigText("music workflow default", { rememberFn }) || "audio_ace_step_1_5_xl_turbo";
 }
 
 function resolveWorkflowName(sentence, { rememberFn = remember } = {}) {
@@ -48,11 +48,18 @@ function defaultOutputPath() {
   if (runId) {
     const stamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
     const rand = Math.random().toString(16).slice(2, 8).padEnd(6, "0").slice(0, 6);
-    return path.join("artifacts", runId, `music-${stamp}-${rand}.opus`);
+    return path.join("artifacts", runId, `music-${stamp}-${rand}.mp3`);
   }
   const stamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
   const rand = Math.random().toString(16).slice(2, 8).padEnd(6, "0").slice(0, 6);
-  return path.join("artifacts", "music", `music-${stamp}-${rand}.opus`);
+  return path.join("artifacts", "music", `music-${stamp}-${rand}.mp3`);
+}
+
+// The runner writes the bytes ComfyUI produced, so the extension is the truth:
+// the metadata must not claim a format the file does not carry.
+function outputFormat(outputPath) {
+  const ext = path.extname(String(outputPath ?? "")).toLowerCase().replace(/^\./u, "");
+  return ext || "unknown";
 }
 
 function resolveMapPrimitive(entry) {
@@ -175,7 +182,7 @@ export async function musicSay(sentence, { remember: rememberFn = remember, runM
     host,
     inputSha256: sha256(inputBytes),
     outputSha256: sha256(audioBytes),
-    format: "opus",
+    format: outputFormat(outputPath),
     streaming: false,
     options
   };
