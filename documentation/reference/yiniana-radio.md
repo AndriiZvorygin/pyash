@@ -22,6 +22,8 @@ folded back into pyash, because pyash already owns every step of it.
 - Program: `examples/pyash/yiniana-radio-lyrics.pya` — all three steps, wired as pyash sentences.
 - Station command: `command/yiniana_radio.mjs` — the radio stage, the http stream.
 - Station program: `examples/pyash/yiniana-radio.pya` — the station, wired as pyash sentences.
+- Producer command: `command/yiniana_producer.mjs` — the songs the station is missing.
+- Producer program: `examples/pyash/yiniana-radio-producer.pya` — the producer, wired as pyash sentences.
 - Lanes: `radio/topics.txt` — the curated topic rotation.
 - Music engines: `music/comfyui/audio_ace_step_1_5_xl_turbo.*`, `music/comfyui/audio_yue2_own_melody.*`.
 - Recovery check: `command/yiniana_lyric_recovery.mjs`.
@@ -406,7 +408,87 @@ The station rescans the catalogue folder every minute. A render that lands
 while the station is running joins the rotation without a restart, and a track
 that has gone away is dropped from the rotation.
 
-## 7. Verification
+## 7. The Producer
+
+The station plays what has been rendered. The producer is what makes more.
+
+- `command/yiniana_producer.mjs` — the producer.
+- `module/radio_producer.pya` — the ceremony `radio producer run`.
+- `examples/pyash/yiniana-radio-producer.pya` — the example wiring.
+- `quiz/yiniana_producer.test.mjs` — the quiz.
+
+### What one run does
+
+1. **Pick.** The lanes of `radio/topics.txt`, in order. For each lane, every
+   engine that has no song in the catalogue yet. The catalogue is the state: a
+   song that already sits in `radio/audio/` is never made again, so the
+   rotation fills lane by lane and the second engine of a lane reuses the
+   sheet the first one wrote.
+2. **Write.** The sheet for the topic, when the station does not have one yet:
+   the corpus excerpts, the learnteaching card, the hymn manuscript.
+3. **Audition.** The seed is a lottery — the same sheet and graph came back
+   instrumental for one seed and sung for two others. So the producer renders
+   `radio producer seeds` seeds and keeps the one that carries the most of the
+   words. The measurement is the opening of the render: the first
+   `radio producer window seconds` are cut, the hear lane says what it hears,
+   and the lyric recovery says how much of the sheet came back. An
+   instrumental render answers "(upbeat music)" and recovers nothing.
+4. **Publish.** The winner is copied into the catalogue and renamed into
+   place, so a half written song is never on the air. The station's own
+   catalogue scan takes it from there, within the minute.
+
+A song whose best seed carries less than `radio producer min recovery` percent
+of the words is not published. The lane stays open, and the next run tries
+fresh seeds.
+
+### The settings
+
+| Fact | Default | Meaning |
+| --- | --- | --- |
+| `radio producer lanes` | `radio/topics.txt` | the topic rotation |
+| `radio producer engines` | map | the engine and the workflow that serves it |
+| `radio producer durations` | map | the engine and the length of its song |
+| `radio producer seeds` | `2` | seeds rendered per song |
+| `radio producer song count` | `1` | songs made per run |
+| `radio producer window seconds` | `60` | the opening that decides a song |
+| `radio producer min recovery` | `10` | the percent of the words a song must carry |
+| `radio producer command` | `node command/yiniana_producer.mjs` | the command the ceremony runs |
+
+### Running it
+
+```sh
+cd /home/htaf/pyac/pyash
+node command/yiniana_producer.mjs
+```
+
+or, as pyash sentences:
+
+```sh
+node command/run_pya_program.mjs examples/pyash/yiniana-radio-producer.pya
+```
+
+It runs on a systemd timer, `yiniana-radio-producer.timer`, every two hours.
+The timer waits for the run before it fires again, so a long card never gets
+two producers at once.
+
+The producer needs two things from its environment, and the unit sets both:
+
+- `PYA_WORLD_ROOT` — the world the GPU worker watches. The mind calls of the
+  lyrics chain queue there; without it the chain waits forever for a worker
+  that is not looking at this checkout.
+- `PYA_RADIO_CATALOGUE` — the folder the songs are published into. The
+  default is `radio/audio` beside the run.
+
+```ini
+[Service]
+Type=oneshot
+WorkingDirectory=/home/htaf/pyac/pyash-dev
+Environment=PYA_RADIO_CATALOGUE=/home/htaf/pyac/pyash/radio/audio
+Environment=PYA_WORLD_ROOT=/home/htaf/pyac/pyash/world
+ExecStart=/home/htaf/.nvm/versions/node/v24.22.1/bin/node command/yiniana_producer.mjs
+```
+
+## 8. Verification
 
 A rendered song can look right and still have lost its words. The check is the
 share of the sheet's 4-grams that a transcription carries back:
@@ -477,10 +559,11 @@ Every rendered mp3 carries its own ComfyUI prompt in the ID3 `TXXX` tag, so
 the file says what produced it. Read the tag when a render does not sound like
 the station and the cause is usually the prompt that was passed.
 
-## 8. Existing Quiz Coverage
+## 9. Existing Quiz Coverage
 
 - `quiz/yiniana_lyrics_chain.test.mjs` — the corpus walk, the topic pattern, the atomic write, the card read, the song structure verifier.
 - `quiz/yiniana_lyric_recovery.test.mjs` — tag stripping, n-gram counting, the three transcript shapes.
 - `quiz/music_comfyui_runner.test.mjs` — the workflow and mapping pairs, node detection, the mapping spellings, the save format, and the byte sniffing.
 - `quiz/music_say.test.mjs` — the verb side of the music surface.
 - `quiz/yiniana_radio.test.mjs` — the frame reader, the catalogue scan, the programme loop, the slow listener, the http surface and the pyash ceremony.
+- `quiz/yiniana_producer.test.mjs` — the lanes, the work list, the seed choice, the publishing, the song that is rejected, and the pyash ceremony.

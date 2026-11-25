@@ -188,6 +188,20 @@ exists su name radio port ob num 8090 be default ya
 exists su name radio catalogue ob text "radio/audio" be default ya
 exists su name radio station name ob text "Yiniana Radio" be default ya
 exists su name radio station command ob text "node command/yiniana_radio.mjs" be default ya
+exists su name radio producer lanes ob text "radio/topics.txt" be default ya
+exists su name radio producer command ob text "node command/yiniana_producer.mjs" be default ya
+exists su name radio producer seeds ob num 2 be default ya
+exists su name radio producer song count ob num 1 be default ya
+exists su name radio producer window seconds ob num 60 be default ya
+exists su name radio producer min recovery ob num 10 be default ya
+su name radio producer engines be map def
+  su name ace-step ob text "audio_ace_step_1_5_xl_turbo" ya
+  su name yue2 ob text "audio_yue2_own_melody" ya
+prah
+su name radio producer durations be map def
+  su name ace-step ob num 175 ya
+  su name yue2 ob num 180 ya
+prah
 su name web archive configure be map def
   su name web archive prefix ob text "prefix" ya
   su name web archive page maximum ob num 2000 ya
