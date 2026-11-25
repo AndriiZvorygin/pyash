@@ -13,9 +13,14 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { interpret } from "../program/bridge/index.mjs";
-import { resolveConfigMapNum, resolveConfigMapText, resolveConfigNum, resolveConfigText } from "../program/configure/env.mjs";
+import { resolveConfigMap, resolveConfigMapNum, resolveConfigMapText, resolveConfigNum, resolveConfigText } from "../program/configure/env.mjs";
+import { parseLanes } from "../program/library/radio/rotation.mjs";
 import { recoverRate, transcriptText } from "./yiniana_lyric_recovery.mjs";
 import { loadDefaultConfig } from "./run_pya_helpers.mjs";
+
+// The lane parser lives with the rotation now. The producer keeps exporting
+// it, so the producer's own surface does not change under its callers.
+export { parseLanes };
 
 const DEFAULT_LANES = "radio/topics.txt";
 const DEFAULT_SEEDS = 2;
@@ -25,20 +30,6 @@ const DEFAULT_MIN_RECOVERY = 10;
 const DEFAULT_DURATION_SECONDS = 175;
 const DEFAULT_COMFYUI_HOST = "http://localhost:8188";
 const DEFAULT_HOUSEKEEPER_URL = "http://localhost:18886";
-
-/**
- * The lanes of the rotation: one topic per line, comments and blanks ignored.
- */
-export function parseLanes(text) {
-  const lanes = [];
-  for (const raw of String(text ?? "").split(/\r?\n/u)) {
-    const line = raw.trim();
-    if (!line || line.startsWith("#")) continue;
-    if (lanes.includes(line)) continue;
-    lanes.push(line);
-  }
-  return lanes;
-}
 
 /**
  * The songs the catalogue is still missing: every lane, every engine, in the
@@ -312,7 +303,7 @@ export async function startProducer({ cwd = process.cwd() } = {}) {
   const engines = [];
   const workflows = {};
   const durations = {};
-  for (const engine of ["ace-step", "yue2"]) {
+  for (const engine of Object.keys(resolveConfigMap("radio producer engines") ?? {})) {
     const workflow = resolveConfigMapText("radio producer engines", engine);
     if (!workflow) continue;
     engines.push(engine);

@@ -112,3 +112,5 @@ __pycache__/
 # yiniana radio: the topic lanes are tracked, the generated songs are not
 radio/lyrics/
 radio/audio/
+radio/lyrics-experiments/
+radio/audio-experiments/

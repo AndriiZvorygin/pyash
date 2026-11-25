@@ -45,6 +45,17 @@ helper and the `.pya` program build these names independently and must agree.
 `radio/lyrics/` and `radio/audio/` are generated and gitignored. `radio/topics.txt`
 is the tracked part.
 
+Experiments live beside the contract, never in it:
+
+```
+radio/audio-experiments/<engine>-<topic>-<variant>.mp3   a render under test
+radio/lyrics-experiments/song-<topic>-<variant>.txt        its sheet
+```
+
+Both folders are gitignored. They are kept on disk so a render can be listened
+to again, and they are kept out of the rotation so a try does not become the
+programme. See §6, *The rotation contract*.
+
 ## 4. The Lyrics Chain
 
 ### Step 1 — read
@@ -278,6 +289,7 @@ station is a few hundred lines of Node and a small frame reader.
 
 - `program/library/radio/mp3.mjs` — the frame reader: id3 tag size, frame headers, duration, frame clock.
 - `program/library/radio/catalogue.mjs` — the catalogue scan: which files are playable, which engine and topic each one carries, which lyric sheet belongs to it.
+- `program/library/radio/rotation.mjs` — the rotation: the lanes, the engines, the names the station is contracted to play.
 - `program/library/radio/station.mjs` — the programme: the loop, the fan-out to listeners, the now playing state.
 - `program/library/radio/page.mjs` — the station page.
 - `command/yiniana_radio.mjs` — the server.
@@ -407,6 +419,36 @@ playing and holds the same stream.
 The station rescans the catalogue folder every minute. A render that lands
 while the station is running joins the rotation without a restart, and a track
 that has gone away is dropped from the rotation.
+
+### The rotation contract
+
+The rotation is not "whatever is in the folder". It is the contract:
+
+```
+every lane of radio/topics.txt  ×  every engine of the `radio producer engines` map
+```
+
+Twelve lanes and two engines make twenty-four songs, and the station plays
+only those. `rotationContract` reads the lanes file and the engine map and
+builds the set of names, and the catalogue scan leaves everything else out.
+
+That is what keeps the programme and the work list the same list. The producer
+fills the contract and the station plays the contract, so the two can never
+drift apart.
+
+An experiment is a render whose name is not in the contract:
+`ace-step-dignity-reference-shape.mp3` is a try at a seed, a shape and a
+ballad, not a song of the rotation. Such a file stays on disk under
+`radio/audio-experiments/` and the station does not play it. A station with no
+contract — no lanes, no engines — plays everything it finds, so a station that
+has lost its settings still plays something.
+
+The station says the size of the contract and how much of it is rendered when
+it starts:
+
+```
+yiniana radio: the rotation holds 24 song(s), 3 rendered
+```
 
 ## 7. The Producer
 
@@ -565,5 +607,5 @@ the station and the cause is usually the prompt that was passed.
 - `quiz/yiniana_lyric_recovery.test.mjs` — tag stripping, n-gram counting, the three transcript shapes.
 - `quiz/music_comfyui_runner.test.mjs` — the workflow and mapping pairs, node detection, the mapping spellings, the save format, and the byte sniffing.
 - `quiz/music_say.test.mjs` — the verb side of the music surface.
-- `quiz/yiniana_radio.test.mjs` — the frame reader, the catalogue scan, the programme loop, the slow listener, the http surface and the pyash ceremony.
+- `quiz/yiniana_radio.test.mjs` — the frame reader, the catalogue scan, the programme loop, the slow listener, the http surface, the rotation contract and the pyash ceremony.
 - `quiz/yiniana_producer.test.mjs` — the lanes, the work list, the seed choice, the publishing, the song that is rejected, and the pyash ceremony.

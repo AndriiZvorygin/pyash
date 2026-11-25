@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { parse } from "../program/understand/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
@@ -12,8 +13,12 @@ import { forget, remember } from "../program/remember/index.mjs";
 import { id3v2Size, measureMp3Buffer, parseFrameHeader } from "../program/library/radio/mp3.mjs";
 import { parseTrackName, publicCatalogue, scanCatalogue } from "../program/library/radio/catalogue.mjs";
 import { renderStationPage } from "../program/library/radio/page.mjs";
+import { contractNames, inContract, parseLanes, readLanes } from "../program/library/radio/rotation.mjs";
 import { createRadioStation } from "../program/library/radio/station.mjs";
-import { createRadioServer, formatHost } from "../command/yiniana_radio.mjs";
+import { createRadioServer, formatHost, rotationContract } from "../command/yiniana_radio.mjs";
+import { loadDefaultConfig } from "../command/run_pya_helpers.mjs";
+
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const FRAME_BYTES = Math.floor((144 * 128000) / 44100);
 const FRAME_SECONDS = 1152 / 44100;
@@ -154,6 +159,68 @@ test("the catalogue keeps only the audio it can play", async () => {
 test("the catalogue of a folder that is not there is empty", async () => {
   const tracks = await scanCatalogue({ directory: "/nowhere/at/all", lyricsDirectory: "/nowhere/at/all" });
   assert.deepEqual(tracks, []);
+});
+
+test("the rotation plays the songs of the contract and keeps the experiments out", async () => {
+  const root = await makeTempDir();
+  await writeTrack(root, "ace-step-dignity.mp3");
+  await writeTrack(root, "yue2-peace.mp3");
+  await writeTrack(root, "ace-step-dignity-reference-shape.mp3");
+  await writeTrack(root, "ace-step-dignity-seed-424242.mp3");
+
+  const contract = contractNames({ engines: ["ace-step", "yue2"], topics: ["dignity", "peace"] });
+  const tracks = await scanCatalogue({ directory: root, contract });
+
+  assert.deepEqual(tracks.map((track) => track.filename), [
+    "ace-step-dignity.mp3",
+    "yue2-peace.mp3"
+  ]);
+});
+
+test("a station without a contract plays every file it finds", async () => {
+  const root = await makeTempDir();
+  await writeTrack(root, "ace-step-dignity.mp3");
+  await writeTrack(root, "ace-step-dignity-reference-shape.mp3");
+
+  const tracks = await scanCatalogue({ directory: root });
+  assert.equal(tracks.length, 2);
+
+  const empty = await scanCatalogue({ directory: root, contract: contractNames({ engines: [], topics: [] }) });
+  assert.equal(empty.length, 2);
+});
+
+test("the rotation is every lane of every engine", () => {
+  const contract = contractNames({ engines: ["ace-step", "yue2"], topics: ["dignity", "peace"] });
+  assert.equal(contract.size, 4);
+  assert.ok(contract.has("ace-step-dignity.mp3"));
+  assert.ok(contract.has("yue2-peace.mp3"));
+  assert.ok(!contract.has("ace-step-dignity-reference-shape.mp3"));
+
+  const bare = contractNames({ engines: ["ace-step"], topics: [] });
+  assert.equal(bare.size, 0);
+  assert.equal(inContract("anything.mp3", bare), true);
+  assert.equal(inContract("ace-step-dignity.mp3", null), true);
+});
+
+test("the lanes ignore the comments, the blanks and the repeats", () => {
+  const lanes = parseLanes("# a comment\n\ndignity\npeace\ndignity\n  attention  \n");
+  assert.deepEqual(lanes, ["dignity", "peace", "attention"]);
+});
+
+test("the lanes of a file that is not there are empty", async () => {
+  assert.deepEqual(await readLanes("/nowhere/at/all/topics.txt"), []);
+  assert.deepEqual(await readLanes(""), []);
+});
+
+test("the station builds its rotation from the lanes and the engines", async () => {
+  forget();
+  await loadDefaultConfig({ cwd: REPO_ROOT, interpretFn: interpret });
+  const contract = await rotationContract({ cwd: REPO_ROOT });
+  assert.ok(contract.has("ace-step-dignity.mp3"), "the first lane of the first engine is in the rotation");
+  assert.ok(contract.has("yue2-love.mp3"), "the last lane of the second engine is in the rotation");
+  assert.ok(!contract.has("ace-step-dignity-reference-shape.mp3"), "an experiment is not in the rotation");
+  assert.equal(contract.size, 24);
+  forget();
 });
 
 test("the catalogue keeps its private details to itself", async () => {

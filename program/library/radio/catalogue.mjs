@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { measureMp3Buffer } from "./mp3.mjs";
+import { inContract } from "./rotation.mjs";
 
 // The rendered catalogue follows the house folder contract
 // `radio/audio/<engine>-<topic>.mp3`. The engine prefix is known, so the
@@ -58,8 +59,12 @@ export async function findLyricSheet(lyricsDirectory, topic) {
  * Read the catalogue directory and describe every playable track. Files that
  * are not audio, and files whose frames cannot be read, are left out: the
  * station plays what it can play.
+ *
+ * When a contract is given, only the songs of the rotation are read. An
+ * experiment that shares the catalogue folder is kept on disk and stays out
+ * of the programme.
  */
-export async function scanCatalogue({ directory, lyricsDirectory = "" } = {}) {
+export async function scanCatalogue({ directory, lyricsDirectory = "", contract = null } = {}) {
   const folder = String(directory ?? "").trim();
   if (!folder) return [];
   let entries = [];
@@ -74,6 +79,7 @@ export async function scanCatalogue({ directory, lyricsDirectory = "" } = {}) {
     .sort((left, right) => left.localeCompare(right));
   const tracks = [];
   for (const filename of names) {
+    if (!inContract(filename, contract)) continue;
     const filePath = path.join(folder, filename);
     let buffer = null;
     try {

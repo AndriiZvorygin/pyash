@@ -9,9 +9,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { interpret } from "../program/bridge/index.mjs";
-import { resolveConfigNum, resolveConfigText } from "../program/configure/env.mjs";
+import { resolveConfigMap, resolveConfigNum, resolveConfigText } from "../program/configure/env.mjs";
 import { publicCatalogue, scanCatalogue } from "../program/library/radio/catalogue.mjs";
 import { renderStationPage } from "../program/library/radio/page.mjs";
+import { contractNames, readLanes } from "../program/library/radio/rotation.mjs";
 import { createRadioStation } from "../program/library/radio/station.mjs";
 import { loadDefaultConfig } from "./run_pya_helpers.mjs";
 
@@ -19,6 +20,7 @@ const DEFAULT_HOST = "0.0.0.0";
 const DEFAULT_PORT = 8090;
 const DEFAULT_CATALOGUE = "radio/audio";
 const DEFAULT_STATION_NAME = "Yiniana Radio";
+const DEFAULT_LANES = "radio/topics.txt";
 const RESCAN_MS = 60 * 1000;
 
 function jsonResponse(res, status, value) {
@@ -143,6 +145,19 @@ export function createRadioServer({ station, stationName = DEFAULT_STATION_NAME 
 }
 
 /**
+ * The songs the station is contracted to play: every lane, every engine. The
+ * producer fills exactly this list, so the programme and the work list agree.
+ * A station without lanes or engines has no contract and plays everything it
+ * finds.
+ */
+export async function rotationContract({ cwd = process.cwd() } = {}) {
+  const engines = Object.keys(resolveConfigMap("radio producer engines") ?? {});
+  const lanesFile = resolveConfigText("radio producer lanes") || DEFAULT_LANES;
+  const topics = await readLanes(path.resolve(cwd, lanesFile));
+  return contractNames({ engines, topics });
+}
+
+/**
  * Read the station settings from the pyash configuration surface and bring
  * the station up.
  */
@@ -153,7 +168,8 @@ export async function startRadioStation({ cwd = process.cwd(), listen = true } =
   const catalogueDirectory = path.resolve(cwd, resolveConfigText("radio catalogue") || DEFAULT_CATALOGUE);
   const lyricsDirectory = path.resolve(path.dirname(catalogueDirectory), "lyrics");
   const stationName = resolveConfigText("radio station name") || DEFAULT_STATION_NAME;
-  const tracks = await scanCatalogue({ directory: catalogueDirectory, lyricsDirectory });
+  const contract = await rotationContract({ cwd });
+  const tracks = await scanCatalogue({ directory: catalogueDirectory, lyricsDirectory, contract });
   const station = createRadioStation({ tracks });
   station.on("track", ({ track }) => {
     process.stdout.write(`yiniana radio: now playing ${track.title}\n`);
@@ -161,7 +177,7 @@ export async function startRadioStation({ cwd = process.cwd(), listen = true } =
   station.start();
   const { server } = createRadioServer({ station, stationName });
   const rescan = setInterval(async () => {
-    const next = await scanCatalogue({ directory: catalogueDirectory, lyricsDirectory });
+    const next = await scanCatalogue({ directory: catalogueDirectory, lyricsDirectory, contract });
     const before = station.tracks.map((track) => track.filename).join("\n");
     const after = next.map((track) => track.filename).join("\n");
     if (before === after) return;
@@ -182,6 +198,9 @@ export async function startRadioStation({ cwd = process.cwd(), listen = true } =
   }
   if (!tracks.length) {
     process.stdout.write(`yiniana radio has no rendered track yet in ${catalogueDirectory}\n`);
+  }
+  if (contract.size) {
+    process.stdout.write(`yiniana radio: the rotation holds ${contract.size} song(s), ${tracks.length} rendered\n`);
   }
   const close = () => {
     clearInterval(rescan);
