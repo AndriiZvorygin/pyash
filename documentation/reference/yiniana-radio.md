@@ -107,13 +107,19 @@ chorus's four lines, because the assembly reads them.
 
 Measured on the dignity card:
 
-| | old sheet | reference sheet | sheet today |
+| | old sheet | reference song | sheet today |
 |---|---|---|---|
 | sections | intro, verse, chorus, verse, chorus, bridge, chorus, outro | verse, verse, chorus, verse, chorus, bridge, chorus, outro | verse, verse, chorus, verse, chorus, bridge, chorus, outro |
-| words | about 110 | 353 | about 320 |
-| words per second over 175 s | 0.6 | 2.0 | about 1.8 |
+| words | about 110 | 353 | 299 |
+| words per second over 175 s | 0.6 | 2.0 | 1.7 on the sheet, 1.94 sung |
+| lead-in | 0 s | 13.8 s | 7.1 s |
+| longest stall | 18.1 s | 7.0 s | 7.6 s |
 | hook occurrences | 8 | 3 | 3 |
 | chorus lines repeated verbatim | hook and echo, 3 times each | none | none |
+| 4-grams recovered | 113/119, 95.0 % | 247/270, 91.5 % | 196/222, 88.3 % |
+
+The render of that sheet sings all eight sections in order and ends on the
+outro's crux. The song fills its 175 s: singing runs from 7.1 s to 175 s.
 
 The old `ACE-Step parses [verse 1] as the section "verse" with the numbering
 stripped` claim was wrong: the tag is what the model reads, and how it is
