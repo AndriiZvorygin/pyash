@@ -4,6 +4,38 @@ Use this file as the lookup record for Rust VLIW CPU/GPU conformance runs. Each
 entry records the repository revision, deployed artifact, host/device, route,
 and exact test outcome. A queued or timed-out job is not a passing test.
 
+## 2026-11-25: Payload-backed Matrix-Vector Dot Product
+
+Rank-two immutable float storage now feeds the existing Pyash `kl6m psas`
+sentence. Three indexed sentences selected rows 0, 1, and 2 from a 3x4
+row-major matrix and returned `[1, 2, 7]`, matching the Rust CPU reference.
+This verifies the matrix-vector primitive and storage-shape descriptor on the
+GPU; it is not a BERT-WSD inference or Criterion score.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261125-0002-rust-vliw-conformance/result.pya` |
+| Source revision / checkout | `07fac6cbc4bd45e5aea9571560d6433808dcf065`; tracked tree was dirty during build |
+| Tracked patch SHA-256 | `f6aa630236d981a3dd426c3807a20697e123e707349526cfdda62db0f6d19f00` |
+| Host and route | Mriczo client -> Mriczo Housekeeper -> Rust CUDA VLIW runtime |
+| GPU / driver | NVIDIA GeForce RTX 3090, driver `550.163.01`, 24,576 MiB |
+| CUDA image | `sha256:97268cf465fa3af513478bf72a608f0799340882d85a36d7104fbb06e9fe58fa` |
+| Runtime executable | 9,321,128 bytes; SHA-256 `73c455f08098407ae9772ce2a4e939d317db26b531bbb14f88ff23549dd2da19` |
+| Cubin | 3,347,144 bytes; SHA-256 `3f1f4a6befadb4007364f2dc5c27fcfe6f9fff823e3e0c011ce3cd7fffbef83d` |
+| Build timing | Rust-GPU compile 7.91 s; `ptxas` 40.07 s wall, 503,552 KiB peak RSS |
+| Runtime initialization | Cubin/GPU initialization 0.09 s; ready in 561 ms |
+| Full verification | 76/76 value cases and 5/5 expected errors passed; 13,433.372 ms total |
+| CPU request batches | 44 codelet cases: 57.374 ms; 32 programlet sections: 64.739 ms |
+| CUDA event batches | 44 codelet cases: 4.364 ms; 32 programlet sections: 121.093 ms |
+| Housekeeper client round trips | Codelet batch: 1,129.983 ms; section batch: 1,124.937 ms |
+| New matrix-vector result | f32 input `[1,2,3,4]` and row-major 3x4 matrix -> `[1,2,7]` on CPU and RTX 3090 |
+| Route after run | New CUDA worker retained on Mriczo; Housekeeper queue depth 0, dispatch active |
+
+The two CUDA batch timings cover all codelet and section cases respectively;
+they are not isolated per-case matrix-vector latency. Housekeeper round trips
+include its request and polling overhead. No WSD prediction files were scored
+against the five Raganato datasets in this run.
+
 ## 2026-11-25: Minimal Feature-Based Bank-Sense Selection
 
 The Stage 9 example performs prototype-based selection from explicit

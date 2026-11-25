@@ -21,6 +21,7 @@ pub struct StorageSectionRange {
     pub element_count: u32,
     pub element_type: u32,
     pub rank: u32,
+    pub shape: [u32; 8],
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -33,6 +34,7 @@ struct StorageMetadata {
     element_count: u32,
     element_type: u32,
     rank: u32,
+    shape: [u32; 8],
 }
 
 fn vector_span(
@@ -120,6 +122,7 @@ fn storage_metadata(
         return Err(ERROR_MALFORMED);
     }
     let mut element_count = 1u32;
+    let mut shape_dimensions = [0u32; 8];
     for index in 0..dimension_count {
         let dimension = tokens
             .token(dimension_start + index)
@@ -130,6 +133,7 @@ fn storage_metadata(
         element_count = element_count
             .checked_mul(dimension)
             .ok_or(ERROR_MALFORMED)?;
+        shape_dimensions[index] = dimension;
     }
     let dtype_word = tokens.token(dtype.start + 1).ok_or(ERROR_MALFORMED)? as u32;
     let element_width = match dtype_word {
@@ -154,6 +158,7 @@ fn storage_metadata(
         element_count,
         element_type: dtype_word,
         rank: dimension_count as u32,
+        shape: shape_dimensions,
     }))
 }
 
@@ -226,6 +231,7 @@ pub fn scan_storage_sections(
             element_count: metadata.element_count,
             element_type: metadata.element_type,
             rank: metadata.rank,
+            shape: metadata.shape,
         };
         found += 1;
         cursor = payload_end;
@@ -331,6 +337,7 @@ mod tests {
         assert_eq!(sections[0].element_count, 70_000);
         assert_eq!(sections[0].element_width, 1);
         assert_eq!(sections[0].rank, 2);
+        assert_eq!(sections[0].shape, [35_000, 2, 0, 0, 0, 0, 0, 0]);
         assert_eq!(sections[0].payload_codelets, 2_188);
     }
 }

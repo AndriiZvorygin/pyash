@@ -253,6 +253,26 @@ pub(super) fn read_operand(
     codelet_count: usize,
     storage: &StorageView<'_>,
 ) -> Result<VectorOperand, u32> {
+    read_operand_with_row_index(
+        cursor,
+        words,
+        start,
+        group_len,
+        codelet_count,
+        None,
+        storage,
+    )
+}
+
+pub(super) fn read_operand_with_row_index(
+    cursor: &mut Cursor,
+    words: &[impl VliwWord],
+    start: usize,
+    group_len: usize,
+    codelet_count: usize,
+    row_index: Option<usize>,
+    storage: &StorageView<'_>,
+) -> Result<VectorOperand, u32> {
     if cursor.peek(words, false) != Some(NAME_TYPE) {
         let mut vector = read_vector(cursor, words)?;
         vector.storage_backed = false;
@@ -261,7 +281,7 @@ pub(super) fn read_operand(
     }
     let name = read_name_span(cursor, words)?;
     let prior = resolve_prior_vector(words, codelet_count, start, start, group_len, name);
-    let backed = resolve_storage_vector(words, start, group_len, name, storage)?;
+    let backed = resolve_storage_vector(words, start, group_len, name, row_index, storage)?;
     match (prior, backed) {
         (Ok(_), Some(_)) => Err(ERROR_DUPLICATE_SIGNATURE),
         (Ok(result), None) => Ok(VectorOperand {
@@ -352,11 +372,19 @@ pub(super) fn scalar_product_group_with_storage(
     if cursor.read(words, true) != Some(ACCUSATIVE) {
         return Some(CoreResult::failure(ERROR_MALFORMED, group_len as u32));
     }
-    match read_destination(words, &mut cursor) {
-        Ok(_) => {}
+    let destination = match read_destination(words, &mut cursor) {
+        Ok(destination) => destination,
         Err(error) => return Some(CoreResult::failure(error, group_len as u32)),
-    }
-    let right = match read_operand(&mut cursor, words, start, group_len, codelet_count, storage) {
+    };
+    let right = match read_operand_with_row_index(
+        &mut cursor,
+        words,
+        start,
+        group_len,
+        codelet_count,
+        (destination.present != 0).then_some(destination.index),
+        storage,
+    ) {
         Ok(value) => value,
         Err(error) => return Some(CoreResult::failure(error, group_len as u32)),
     };

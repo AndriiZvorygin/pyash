@@ -1,4 +1,4 @@
-use pyac_vliw_core::{MAX_PROGRAMLET_SECTIONS, StorageSectionRange, scan_storage_sections};
+use pyac_vliw_core::{scan_storage_sections, StorageSectionRange, MAX_PROGRAMLET_SECTIONS};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StorageSectionError {
@@ -70,7 +70,7 @@ pub fn prepare_storage_sections(
         });
     }
 
-    let mut descriptors = Vec::with_capacity(1 + count * 8);
+    let mut descriptors = Vec::with_capacity(1 + count * pyac_vliw_core::STORAGE_BINDING_WORDS);
     let mut names = Vec::new();
     let mut payload = Vec::new();
     let mut payload_bytes = 0usize;
@@ -106,6 +106,7 @@ pub fn prepare_storage_sections(
             section.element_type,
             section.rank,
         ]);
+        descriptors.extend_from_slice(&section.shape);
     }
     if names.is_empty() {
         names.push(0);
@@ -138,7 +139,10 @@ mod tests {
         ];
         let prepared = prepare_storage_sections(&codelets).expect("storage packet is valid");
         assert_eq!(prepared.executable_codelet_count, 1);
-        assert_eq!(prepared.descriptors, [1, 0, 1, 0, 4, 1, 4, 0x309e, 1]);
+        assert_eq!(
+            prepared.descriptors,
+            [1, 0, 1, 0, 4, 1, 4, 0x309e, 1, 4, 0, 0, 0, 0, 0, 0, 0]
+        );
         assert_eq!(prepared.names, [0x6844]);
         assert_eq!(prepared.payload, [0x0403_0201]);
     }

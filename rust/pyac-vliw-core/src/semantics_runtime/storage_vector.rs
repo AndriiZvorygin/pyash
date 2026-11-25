@@ -17,6 +17,7 @@ pub(super) fn resolve_storage_vector(
     reference_start: usize,
     reference_group_len: usize,
     reference: NameSpan,
+    row_index: Option<usize>,
     storage: &StorageView<'_>,
 ) -> Result<Option<VectorOperand>, u32> {
     let mut found = None;
@@ -50,7 +51,7 @@ pub(super) fn resolve_storage_vector(
             let element_count = storage.descriptor(section, 5).ok_or(ERROR_MALFORMED)? as usize;
             let element_type = storage.descriptor(section, 6).ok_or(ERROR_MALFORMED)?;
             let rank = storage.descriptor(section, 7).ok_or(ERROR_MALFORMED)?;
-            if element_type != 0xaa6c || rank != 1 || !matches!(element_width, 4 | 8) {
+            if element_type != 0xaa6c || !matches!(element_width, 4 | 8) {
                 return Err(ERROR_UNSUPPORTED);
             }
             if element_count == 0
@@ -59,16 +60,38 @@ pub(super) fn resolve_storage_vector(
             {
                 return Err(ERROR_MALFORMED);
             }
+            let (length, row_offset) = match rank {
+                1 => (element_count, 0),
+                2 => {
+                    let row = row_index.ok_or(ERROR_UNSUPPORTED)?;
+                    let rows = storage.shape(section, 0).ok_or(ERROR_MALFORMED)? as usize;
+                    let columns = storage.shape(section, 1).ok_or(ERROR_MALFORMED)? as usize;
+                    if rows.checked_mul(columns) != Some(element_count) {
+                        return Err(ERROR_MALFORMED);
+                    }
+                    if row >= rows {
+                        return Err(ERROR_VECTOR_WIDTH);
+                    }
+                    let row_offset = row
+                        .checked_mul(columns)
+                        .and_then(|index| index.checked_mul(element_width))
+                        .ok_or(ERROR_MALFORMED)?;
+                    (columns, row_offset)
+                }
+                _ => return Err(ERROR_UNSUPPORTED),
+            };
             found = Some(VectorOperand {
                 kind: if element_width == 4 {
                     VALUE_VECTOR_FLOAT32
                 } else {
                     VALUE_VECTOR_FLOAT64
                 },
-                length: element_count,
+                length,
                 values: [0; RESULT_WORDS],
                 storage_backed: true,
-                storage_byte_offset: payload_offset,
+                storage_byte_offset: payload_offset
+                    .checked_add(row_offset)
+                    .ok_or(ERROR_MALFORMED)?,
             });
         }
         section += 1;

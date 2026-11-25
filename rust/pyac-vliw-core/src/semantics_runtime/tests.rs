@@ -105,6 +105,8 @@ fn interpret(codelets: &[[u32; CODELET_WORDS]]) -> CoreResult {
 mod basic;
 #[path = "tests/iwsp_vector_ops.rs"]
 mod iwsp_vector_ops;
+#[path = "tests/matrix_vector_storage.rs"]
+mod matrix_vector_storage;
 #[path = "tests/pluk_tlas.rs"]
 mod pluk_tlas;
 #[path = "tests/programlet.rs"]

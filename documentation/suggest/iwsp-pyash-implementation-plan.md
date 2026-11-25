@@ -121,7 +121,7 @@ model-building. They are what the agent calls most.
 
 | # | Operation | Required semantics | Domain | Where | Status |
 |---|---|---|---|---|---|
-| A1 | Declare a named parameter with a shape | Bind a name to a typed container with declared dimensions (rows, cols). Shape is part of the declaration, not inferred later. | n/a | host | absent |
+| A1 | Declare a named parameter with a shape | Bind a name to a typed container with declared dimensions (rows, cols). Shape is part of the declaration, not inferred later. | n/a | host | partial — immutable file-backed sections retain one-to-eight dimensions; rank-two float matrices are read row-by-row by dot-product sentences, while general tensor indexing/output remains absent |
 | A2 | Write a parameter element | `w[i][j] := v`, bounds-checked, shape-aware. | task-selected | host | partial — indexed vector element write exists (`write ... at num ... to name vec`, `program/verbs/vector/index.mjs`); no shape or second dimension |
 | A3 | Read a parameter element | Read back for audit, inspection, and the auditor's own checks. | task-selected | host | partial — indexed vector element read exists (`read ... at num ... to name num`, same file) |
 | A4 | Fill a parameter from a pattern | Set every element from a closed-form rule (Gabor coefficients, one-hot codes, sinusoidal codes). Paper: *"hand-built attention circuits and lookup tables"* (p. 3). | task-selected | host | partial |
@@ -137,7 +137,7 @@ Every model the paper describes is built from a small set of kernels. Reading Ta
 
 | # | Operation | Required semantics | Evidence | Domain | Status |
 |---|---|---|---|---|---|
-| B1 | Dot product / matrix-vector | Sum of elementwise products over a dimension. Present in every described model. | p. 20–21 | float64 | implemented as the shared Rust VLIW scalar product for equal-width float32/float64 vectors; matrix-vector remains unimplemented |
+| B1 | Dot product / matrix-vector | Sum of elementwise products over a dimension. Present in every described model. | p. 20–21 | float64 | implemented as the shared Rust VLIW scalar product for equal-width float32/float64 vectors; file-backed rank-two matrices select rows using the indexed output destination, so repeated ordinary dot-product sentences compute the output vector. General matrix-matrix multiplication remains absent |
 | B2 | Matrix-matrix product | Attention needs `QKᵀ` and `AV`. | p. 20–21 | float64 | absent |
 | B3 | Elementwise add / subtract / multiply / divide | Including subtract, which is where sign matters. | p. 20–21 | float64 | partial — integer, scalar float32, and scalar fixed16 arithmetic exist in VLIW; typed float32/float64 vector literals are supported, while model-sized tensor execution is absent |
 | B4 | ReLU | *"2-neuron ReLU MLP"*, *"residual ReLU MLPs"*, *"4 ReLU knots"*. | p. 21 | float64 | absent |
@@ -265,15 +265,14 @@ signed encodings must also spend range on negative values. Binary/low-bit weight
 another possible representation, not a claim that an IEEE float is one bit wide.
 
 The shared core supports dot product for inline or preceding named float32/float64
-vectors, up to 16 lanes; non-empty float-vector sum and maximum reductions; and a
-first-maximum-index result selected by a numeric destination. The small
-`hwas`/`htis hsek`/`hnuc gjat` attention example composes vector-valued role
-projections from those dot products, not from a new matrix opcode. General
-matrix/tensor execution remains absent.
-The `.pyac` pack has no scalable weight-data section: small named vectors fit in
-ordinary vector declarations, but larger model weights need the versioned
-program-image/container design. These are separate execution/data-layout gaps;
-they should not be conflated with scalar numeric-format support.
+vectors, up to 16 inline lanes, plus row-wise dot products over file-backed
+rank-two float32/float64 storage. The `to ... at num row` index selects the
+row; repeating `kl6m psas` computes a matrix-vector output. Non-empty float-vector
+sum and maximum reductions and first-maximum-index are also implemented. The
+small `hwas`/`htis hsek`/`hnuc gjat` attention example composes projections from
+dot products. The VLIW pack already carries scalable immutable storage sections;
+general matrix-matrix products, arbitrary tensor indexing, and mutable tensor
+outputs remain absent.
 
 ### 3.2 How to choose a representation
 
@@ -853,6 +852,30 @@ operation ladder for a tiny WSD task. The context features and prototypes are
 provided directly; this milestone does not encode raw text or implement a
 trained language/WSD network. The complete GPU run, artifact identities, and
 timings are in the [Rust VLIW verification ledger](../reference/rust-vliw-verification-ledger.md).
+
+### Stage 9 follow-up — Parameter-backed matrix-vector projection
+
+**Status: CPU and live GPU verified (2026-11-25).** The shared Rust
+semantics preserve file-backed storage dimensions in the worker descriptor and
+allow a rank-two float32/float64 section as the named `by` operand of
+`kl6m psas`. The indexed `to` destination selects a row; each sentence returns
+one scalar, so repeated rows express a matrix-vector product without adding a
+new opcode or hiding the calculation in Rust. The source and 3x4 fixture are
+[`examples/vliw/iwsp-matrix-vector-storage.pya`](../../examples/vliw/iwsp-matrix-vector-storage.pya);
+the Rust CPU conformance checks `[1, 2, 7]`, malformed shape, and row bounds.
+The full 76-case CUDA conformance matrix and five expected-error cases also
+passed through Housekeeper on Mriczo's RTX 3090; binary identity and timings
+are in the [verification ledger](../reference/rust-vliw-verification-ledger.md).
+
+This is the first dense, file-backed projection needed by a benchmark-sized
+network, not a benchmark result. The Criterion WSD target remains the published
+BPYap/BERT-WSD `BERT-base-augmented` result (78.7% pooled F1 on the five
+Raganato test sets). No Pyash model prediction has been evaluated on those sets.
+Before that evaluation, the model path needs embedding-row lookup, complete
+float projections, BERT encoder operations, and the input/tokenization path;
+then it can emit prediction key files for the existing scorer. Neither the
+feature-prototype selection demo nor this primitive's conformance pass is a WSD
+benchmark score.
 
 ### Stage 10 — Visible candidate iteration
 

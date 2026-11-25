@@ -391,12 +391,25 @@ The resident Rust GPU worker binds the descriptors, Pyac names, and exact
 payload bytes as separate read-only GPU inputs. Its shared Rust semantics
 runtime resolves named rank-one float32/float64 storage vectors for `kl6m psas`
 (dot product); the storage length is not restricted by the inline vector lane
-limit. Inline vector literals retain their independent hardware-oriented lane
-limit. Descriptor dimensions, element widths, exact byte lengths, unique names,
-and final-codelet padding are validated before GPU dispatch. The v1 pack's
+limit. It also accepts a rank-two matrix as the named `by` operand. In this
+form, `to name <output> at num <row>` selects the matrix row whose dot product
+is returned. Repeating that sentence for successive row indices computes a
+matrix-vector product from ordinary dot-product sentences; it adds neither a
+matrix-multiplication opcode nor mutable tensor output. The selected row is
+bounds-checked; flattened rank-two payload elements are row-major, and the
+declared dimensions must multiply to the exact stored element count. Inline
+vector literals retain their independent
+hardware-oriented lane limit. Descriptor dimensions, element widths, exact
+byte lengths, unique names, and final-codelet padding are validated before GPU
+dispatch. The v1 pack's
 uint32 total-byte field is the protocol ceiling; hosts and devices may impose
 lower practical memory limits during allocation, and those failures are
 reported rather than silently falling back to another execution path.
+
+The internal storage descriptor retains all eight possible extents after its
+eight general metadata fields. This is a host/GPU binding structure, not extra
+codelet syntax or a `.pyac` header field. Rank-two float sections use row-major
+flattened payload order for the `kl6m psas` row operation above.
 
 This profile adds no header field, second pack format, sidecar, pointer, or
 runtime-generated index. A reader that does not recognize the storage

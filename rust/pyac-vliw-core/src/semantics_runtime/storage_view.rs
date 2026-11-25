@@ -1,4 +1,5 @@
-pub const STORAGE_BINDING_WORDS: usize = 8;
+pub const STORAGE_BINDING_WORDS: usize = 16;
+const STORAGE_SHAPE_OFFSET: usize = 8;
 
 #[derive(Clone, Copy)]
 pub struct StorageView<'a> {
@@ -38,6 +39,14 @@ impl<'a> StorageView<'a> {
         self.descriptors
             .get(1 + section * STORAGE_BINDING_WORDS + field)
             .copied()
+    }
+
+    pub fn shape(&self, section: usize, dimension: usize) -> Option<u32> {
+        if dimension >= STORAGE_BINDING_WORDS - STORAGE_SHAPE_OFFSET {
+            return None;
+        }
+        self.descriptor(section, STORAGE_SHAPE_OFFSET + dimension)
+            .filter(|extent| *extent != 0)
     }
 
     pub fn name_word(&self, index: usize) -> Option<u32> {

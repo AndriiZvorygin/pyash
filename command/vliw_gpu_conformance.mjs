@@ -23,6 +23,7 @@ import { buildPlukTlasConformanceCase } from "./vliw_gpu_conformance/pluk_tlas.m
 import { buildIwspLinearScorerConformanceCases } from "./vliw_gpu_conformance/iwsp_linear_scorer.mjs";
 import { buildIwspVectorOpsConformanceCases } from "./vliw_gpu_conformance/iwsp_vector_ops.mjs";
 import { buildIwspParameterizedAttentionCases } from "./vliw_gpu_conformance/iwsp_parameterized_attention.mjs";
+import { buildIwspMatrixVectorStorageCase } from "./vliw_gpu_conformance/iwsp_matrix_vector.mjs";
 
 function programlet(name, source, invocation, expectedValues) {
   const compiled = compilePyashProgramSource(source, { invocation });
@@ -528,6 +529,7 @@ export async function buildVliwGpuConformanceCases() {
       leftName: "gjat",
       rightName: "hdi7s"
     }),
+    await buildIwspMatrixVectorStorageCase(),
     vectorPack(
       "uint16-vector-sixteen-lanes",
       `ob ve num ${Array.from({ length: 16 }, (_, index) => index).join(" ")} be vector ya`,
