@@ -100,11 +100,11 @@ git diff --check
 
 ## 8) Result-level parity gate
 
-Status: done for the declared green families; four known divergences pinned.
+Status: done; all declared families agree.
 
 Gate:
 - `core` cases produce identical normalized output on the interpreter, compiled JavaScript, and compiled C.
-- Known divergences are pinned per backend; any change, a regression or a fix, fails the gate.
+- Known divergences can be pinned per backend; any change, a regression or a fix, fails the gate.
 - The authority map and parity classes are in `reference/parity-gate.md`.
 
 Verification:
@@ -113,8 +113,8 @@ npm run parity:gate
 node --test quiz/parity_gate.test.mjs
 ```
 
-Pinned divergences:
-- numeric fact write: interpreter value, compiled backends emit the name.
-- ceremony numeric result: interpreter value, compiled `undefined` / `0`.
-- file read result: interpreter contents, compiled filename.
-- nested comparison leaves: interpreter result, compiled exit 1.
+Formerly pinned divergences, now green:
+- numeric fact write
+- ceremony numeric result
+- file read result
+- nested comparison leaves

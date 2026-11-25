@@ -146,12 +146,21 @@ export function transpileCeremony(defSentence, bodySentences, { lang, declared, 
       }
     }
   }
+  const toTypeWords = Array.isArray(defSentence?.to?.nameTypeWords) ? defSentence.to.nameTypeWords : [];
+  const toIsText = toTypeWords.includes("text") || toTypeWords.includes("filename");
+  const toIsBool = toTypeWords.includes("bool") || toTypeWords.includes("boolean");
   const retLine =
     hasReturn
       ? null
       : lang === "c"
-        ? "return pya_value_none();"
-        : "return sentence;";
+        ? toIsText
+          ? "return pya_value_text(pya_to_text);"
+          : toIsBool
+            ? "return pya_value_num(pya_to_bool ? 1 : 0);"
+            : defSentence?.to
+              ? "return pya_value_num(pya_to_num);"
+              : "return pya_value_none();"
+        : "if (sentence.ob === undefined) sentence.ob = sentence?.to?.ob ?? sentence?.to ?? sentence.ob;\nreturn sentence;";
 
   if (lang === "c") {
     const paramList = "void";

@@ -43,12 +43,7 @@ export const CASES = [
     family: "numeric-facts",
     name: "plus-result",
     backends: ["interpreter", "javascript", "c"],
-    expected: {
-      interpreter: { code: 0, lines: ["7"] },
-      javascript: { code: 0, lines: ["result"] },
-      c: { code: 0, lines: ["result"] }
-    },
-    known: "compiled write emits the name instead of resolving a numeric fact",
+    expected: "same",
     lines: [
       "ob num 3 to num 4 be plus do",
       "ob name result be write do"
@@ -58,12 +53,7 @@ export const CASES = [
     family: "ceremony-numeric",
     name: "ceremony-result",
     backends: ["interpreter", "javascript", "c"],
-    expected: {
-      interpreter: { code: 0, lines: ["7"] },
-      javascript: { code: 0, lines: ["undefined"] },
-      c: { code: 0, lines: ["0"] }
-    },
-    known: "compiled backends do not resolve a numeric ceremony result",
+    expected: "same",
     lines: [
       "exists su name result ob num 5 be number ya",
       "su name plus two to name num result be ceremony def",
@@ -77,12 +67,7 @@ export const CASES = [
     family: "file-read",
     name: "read-result",
     backends: ["interpreter", "javascript", "c"],
-    expected: {
-      interpreter: { code: 0, lines: ["stable"] },
-      javascript: { code: 0, lines: ["<tmp>/parity-read.txt"] },
-      c: { code: 0, lines: ["<tmp>/parity-read.txt"] }
-    },
-    known: "compiled read result is the filename, not the file contents",
+    expected: "same",
     lines: [
       'be touch ob filename "parity-read.txt" do',
       'ob text "stable" to filename "parity-read.txt" be write do',
@@ -94,12 +79,7 @@ export const CASES = [
     family: "boolean-comparison",
     name: "nested-equally-leaves",
     backends: ["interpreter", "javascript", "c"],
-    expected: {
-      interpreter: { code: 0, lines: ["lie"] },
-      javascript: { code: 1, lines: [] },
-      c: { code: 1, lines: [] }
-    },
-    known: "compiled backends fail nested comparison leaves",
+    expected: "same",
     lines: [
       "be and ob la ob num 1 be equally from num 1 do ko with la ob num 1 be equally from num 2 do ko do",
       "ob name result be write do"

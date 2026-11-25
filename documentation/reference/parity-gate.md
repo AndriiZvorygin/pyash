@@ -42,23 +42,22 @@ Two case forms:
   any backend changes, whether it regresses or is fixed; update the pin
   deliberately with the change that causes it.
 
-The first declared families are green:
+The declared corpus is green:
 
 - text fact write
 - boolean composition over `exists` leaves (`and`, `or`, `not`)
 - filename `touch` result
+- literal arithmetic writing `result`
+- ceremony numeric result
+- file read contents
+- nested comparison leaves
 
-The first four pinned divergences:
-
-| Case | Interpreter | Compiled JS | Compiled C | Reason |
-| --- | --- | --- | --- | --- |
-| numeric fact write | `7` | `result` | `result` | compiled `write` emits the name, not the resolved value |
-| ceremony numeric result | `7` | `undefined` | `0` | compiled backends do not resolve a numeric ceremony result |
-| file read result | file contents | filename | filename | compiled `read` result is the locator, not the contents |
-| nested comparison leaves | `lie` | exit 1 | exit 1 | compiled backends fail `la ... ko` comparison leaves |
-
-These are work items, not accepted behavior. The pin exists so a fix is visible
-and so new drift cannot hide behind a success-only check.
+The last four were previously pinned divergences. They were fixed in the
+compiler: literal arithmetic now writes the `result` fact, `read` exposes the
+contents as `result`, a ceremony's default return is its mutated destination,
+and `boolExprForClause` handles `equally`/`tiny`/`giant` leaves. The pinned-case
+mechanism remains available for future disagreements, so a fix or a regression
+is always visible.
 
 ## Adding a case
 
