@@ -26,7 +26,7 @@ where
     }
 }
 
-impl ProgramletWordSource for SentenceView<'_> {
+impl<W: VliwWord> ProgramletWordSource for SentenceView<'_, W> {
     fn word_count(&self) -> usize {
         self.len()
     }
@@ -59,7 +59,7 @@ pub(super) fn names_equal<L: ProgramletWordSource + ?Sized, R: ProgramletWordSou
 }
 
 pub(super) fn store_name(
-    source: &SentenceView<'_>,
+    source: &SentenceView<'_, impl VliwWord>,
     span: NameSpan,
     storage: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     used: &mut usize,
@@ -223,7 +223,7 @@ fn source_word(source: &[u32], index: usize) -> Option<u32> {
 }
 
 pub(super) fn find_local_slot<const SLOTS: usize>(
-    source: &SentenceView<'_>,
+    source: &SentenceView<'_, impl VliwWord>,
     span: NameSpan,
     storage: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     slots: &[NumericLocalSlot; SLOTS],
@@ -293,7 +293,10 @@ where
     None
 }
 
-pub(super) fn is_ceremony_definition(sentence: &ParsedSentence, tokens: &SentenceView<'_>) -> bool {
+pub(super) fn is_ceremony_definition(
+    sentence: &ParsedSentence,
+    tokens: &SentenceView<'_, impl VliwWord>,
+) -> bool {
     sentence.mood == MOOD_DEFINITION
         && sentence.verb_length == 1
         && sentence_at!(*tokens, sentence.verb_start) == CEREMONY

@@ -232,6 +232,16 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> io::Result<()> {
     result
 }
 
+/// The throughput benchmark measures the direct-file indexes of a v4 volume,
+/// so every older profile is refused instead of measured with compatibility
+/// scans.
+fn benchmark_guard_reason(profile_version: &str) -> Option<&'static str> {
+    if profile_version == "pyac-vliw-dictionary/4" {
+        return None;
+    }
+    Some("dictionary throughput benchmark requires v4 direct-file indexes; v2/v3 use compatibility scans")
+}
+
 fn open_reader(path: &Path) -> Result<DictionaryFileReader<File>, Box<dyn std::error::Error>> {
     Ok(DictionaryFileReader::open(File::open(path)?)?)
 }
@@ -395,11 +405,8 @@ fn execute(args: &[String]) -> Result<Value, Box<dyn std::error::Error>> {
             let open_start = Instant::now();
             let mut reader = open_reader(path)?;
             let open_ms = open_start.elapsed().as_secs_f64() * 1000.0;
-            if reader.profile_version() != "pyac-vliw-dictionary/4" {
-                return Err(io::Error::other(
-                    "dictionary throughput benchmark requires v4 direct-file indexes; v2/v3 use compatibility scans",
-                )
-                .into());
+            if let Some(reason) = benchmark_guard_reason(reader.profile_version()) {
+                return Err(io::Error::other(reason).into());
             }
             for _ in 0..5 {
                 std::hint::black_box(reader.lookup_surface(&args[4], &args[5])?);
@@ -443,5 +450,23 @@ fn main() {
             eprintln!("pyac-dictionary: {error}");
             std::process::exit(2);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::benchmark_guard_reason;
+
+    #[test]
+    fn the_benchmark_guard_refuses_every_profile_before_v4() {
+        for profile in [
+            "pyac-vliw-dictionary/2",
+            "pyac-vliw-dictionary/3",
+            "pyac-vliw-dictionary/1",
+        ] {
+            let reason = benchmark_guard_reason(profile).expect("legacy profiles are refused");
+            assert!(reason.contains("requires v4 direct-file indexes"));
+        }
+        assert!(benchmark_guard_reason("pyac-vliw-dictionary/4").is_none());
     }
 }

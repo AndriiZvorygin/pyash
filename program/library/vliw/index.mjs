@@ -392,6 +392,7 @@ export {
   compilePyashProgramSource,
   decodePyashProgramPack,
   decodePyashProgramSections,
+  decodePyashStorageSections,
   executePyashProgramPack,
   evolvePyashProgramSource,
   mutatePyashProgramSource

@@ -4,7 +4,10 @@ import assert from "node:assert/strict";
 import { decodePyacPack, encodePyacPack } from "../program/library/vliw/database.mjs";
 import { parse } from "../program/understand/index.mjs";
 import { lowerSentence } from "../program/library/vliw/index.mjs";
-import { decodePyashProgramSections } from "../program/library/vliw/programlet.mjs";
+import {
+  decodePyashProgramPack,
+  decodePyashProgramSections
+} from "../program/library/vliw/programlet.mjs";
 import {
   buildVliwGpuConformanceCases,
   buildVliwGpuConformanceBatches,
@@ -25,6 +28,9 @@ function valuesForPacks(batches, packs) {
 
 test("VLIW GPU conformance matrix covers the merged typed and control-flow contract", async () => {
   const cases = await buildVliwGpuConformanceCases();
+  const transformerBlock = cases.find(({ name }) => name === "iwsp-minimal-role-projected-block");
+  assert.ok(transformerBlock);
+  assert.ok(decodePyashProgramPack(transformerBlock.pack).some(({ be }) => be === "deviation square"));
 
   assert.deepEqual(cases.map(({ name }) => name), [
     "nested-calls-and-isolated-locals",
@@ -66,10 +72,20 @@ test("VLIW GPU conformance matrix covers the merged typed and control-flow contr
     "iwsp-parameterized-attention-changed-key-weights",
     "iwsp-parameterized-attention-changed-value-weights",
     "iwsp-pyash-projected-attention",
+    "iwsp-minimal-role-projected-block",
+    "iwsp-minimal-role-projected-block-zero-variance",
+    "iwsp-float64-standard-deviation",
     "iwsp-qkv-row-projections",
     "iwsp-maximum-index-float32",
     "iwsp-maximum-index-float64",
+    "iwsp-wsd-bank-financial-context",
+    "iwsp-wsd-bank-river-context",
+    "iwsp-wsd-bank-tied-context",
     "float64-dot-product",
+    "float32-storage-backed-dot-product-32-lanes",
+    "float64-storage-backed-dot-product-17-lanes",
+    "iwsp-float32-storage-backed-matrix-vector-3x4",
+    "iwsp-float32-embedding-row-lookup-3x20",
     "uint16-vector-sixteen-lanes",
     "boolean-vector-sixteen-lanes",
     "float32-vector-sixteen-lanes",
@@ -101,6 +117,30 @@ test("VLIW GPU conformance matrix covers the merged typed and control-flow contr
   }
 });
 
+test("IWSP bank sense selection matches an independent prototype-score reference", async () => {
+  const cases = await buildVliwGpuConformanceCases();
+  const prototypes = [[1, 0], [0, 1]];
+  const contexts = [
+    { name: "iwsp-wsd-bank-financial-context", values: [1, 0.25], expectedSense: "n:08437235-n" },
+    { name: "iwsp-wsd-bank-river-context", values: [0.25, 1], expectedSense: "n:09438462-n" },
+    { name: "iwsp-wsd-bank-tied-context", values: [1, 1], expectedSense: "n:08437235-n" }
+  ];
+
+  for (const context of contexts) {
+    const scores = prototypes.map((prototype) =>
+      context.values.reduce((sum, feature, index) => sum + feature * prototype[index], 0)
+    );
+    const expectedIndex = scores.reduce(
+      (best, score, index) => score > scores[best] ? index : best,
+      0
+    );
+    const testCase = cases.find(({ name }) => name === context.name);
+    assert.ok(testCase, `${context.name} is in the conformance matrix`);
+    assert.equal(testCase.expectedValues.at(-1).value, expectedIndex, context.expectedSense);
+    assert.deepEqual(testCase.expectedValues.at(-1), { type: "unsigned", value: expectedIndex });
+  }
+});
+
 test("VLIW conformance packs independent codelets together and programlets as named sections", async () => {
   const cases = await buildVliwGpuConformanceCases();
   const batches = buildVliwGpuConformanceBatches(cases);
@@ -111,6 +151,13 @@ test("VLIW conformance packs independent codelets together and programlets as na
   assert.equal(batches[0].kind, "codelets");
   assert.equal(batches[0].cases.length, codeletCases.length);
   assert.deepEqual(batches[0].expectedValues, codeletCases.flatMap(({ expectedValues }) => expectedValues));
+  const executableCodelets = codeletCases.flatMap(({ pack, executableCodelets: explicit }) =>
+    explicit ?? decodePyacPack(pack).codelets
+  );
+  const storageCodelets = codeletCases.flatMap(({ storageCodelets: sections = [] }) => sections);
+  const combinedCodelets = decodePyacPack(batches[0].pack).codelets;
+  assert.deepEqual(combinedCodelets.slice(0, executableCodelets.length), executableCodelets);
+  assert.deepEqual(combinedCodelets.slice(executableCodelets.length), storageCodelets);
   assert.equal(batches[1].kind, "programlets");
   assert.equal(batches[1].cases.length, programletCases.length);
   assert.equal(decodePyashProgramSections(batches[1].pack).length, programletCases.length);
@@ -305,7 +352,10 @@ test("programlet runtime failures keep shared error codes across Rust CPU and Vu
   const cases = await buildVliwGpuProgramletFailureCases();
   assert.deepEqual(cases.map(({ name, expectedRuntimeCode }) => [name, expectedRuntimeCode]), [
     ["programlet-division-by-zero", 2],
-    ["programlet-constant-write", 7]
+    ["programlet-constant-write", 7],
+    ["programlet-negative-standard-deviation", 11],
+    ["programlet-negative-variance-with-positive-epsilon", 11],
+    ["programlet-negative-normalization-epsilon", 11]
   ]);
 
   for (const testCase of cases) {

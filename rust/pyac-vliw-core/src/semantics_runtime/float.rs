@@ -10,7 +10,7 @@ pub(super) fn is_finite_f64(value: f64) -> bool {
     value.to_bits() & 0x7ff0_0000_0000_0000 != 0x7ff0_0000_0000_0000
 }
 
-pub(super) fn single_codelet(words: &[u32], codelet: usize) -> Option<CoreResult> {
+pub(super) fn single_codelet(words: &[impl VliwWord], codelet: usize) -> Option<CoreResult> {
     let offset = find_quote(words, codelet)?;
     let header_word = word(words, codelet, offset);
     let header = quote_header(header_word);
@@ -41,7 +41,7 @@ pub(super) fn single_codelet(words: &[u32], codelet: usize) -> Option<CoreResult
     ))
 }
 
-fn quote_bits(words: &[u32], codelet: usize, offset: usize) -> Result<u32, u32> {
+fn quote_bits(words: &[impl VliwWord], codelet: usize, offset: usize) -> Result<u32, u32> {
     if offset + 2 >= CODELET_WORDS {
         return Err(ERROR_MALFORMED);
     }
@@ -64,7 +64,7 @@ fn quote_bits(words: &[u32], codelet: usize, offset: usize) -> Result<u32, u32> 
     Ok(bits)
 }
 
-pub(super) fn arithmetic(words: &[u32], codelet: usize) -> CoreResult {
+pub(super) fn arithmetic(words: &[impl VliwWord], codelet: usize) -> CoreResult {
     let accusative = 4;
     let right_offset = 5;
     let role_case = 8;
@@ -113,7 +113,7 @@ pub(super) fn arithmetic(words: &[u32], codelet: usize) -> CoreResult {
 }
 
 pub(super) fn literal(
-    words: &[u32],
+    words: &[impl VliwWord],
     codelet: usize,
     offset: usize,
     nominative: bool,
@@ -156,7 +156,7 @@ pub(super) fn literal(
 }
 
 fn vector_literal(
-    words: &[u32],
+    words: &[impl VliwWord],
     codelet: usize,
     offset: usize,
     nominative: bool,

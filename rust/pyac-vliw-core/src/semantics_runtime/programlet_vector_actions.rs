@@ -127,6 +127,9 @@ fn apply_f32(
         let other_value = other.map(|value| f32::from_bits(array_at!(value.values, lane)));
         let output = match verb {
             PLUS => input + other_value.ok_or(ERROR_MALFORMED)?,
+            MAXIMUM_FIRST => other_value
+                .map(|other| if other > input { other } else { input })
+                .ok_or(ERROR_MALFORMED)?,
             MULTIPLY => input * scalar_value.ok_or(ERROR_MALFORMED)?,
             SUBTRACT_VERB => input - scalar_value.ok_or(ERROR_MALFORMED)?,
             DIVIDE_VERB => {
@@ -179,6 +182,9 @@ fn apply_f64(
         });
         let output = match verb {
             PLUS => input + other_value.ok_or(ERROR_MALFORMED)?,
+            MAXIMUM_FIRST => other_value
+                .map(|other| if other > input { other } else { input })
+                .ok_or(ERROR_MALFORMED)?,
             MULTIPLY => input * scalar_value.ok_or(ERROR_MALFORMED)?,
             SUBTRACT_VERB => input - scalar_value.ok_or(ERROR_MALFORMED)?,
             DIVIDE_VERB => {
@@ -322,7 +328,7 @@ fn maximum_index(vector: &ProgramletVectorValue) -> Result<u32, u32> {
 
 pub(super) fn is_programlet_vector_verb(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
 ) -> bool {
     matches!(
         (
@@ -338,7 +344,7 @@ pub(super) fn is_programlet_vector_verb(
 
 pub(super) fn is_programlet_vector_action(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     vector_slots: &[ProgramletVectorSlot; MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
@@ -357,7 +363,7 @@ pub(super) fn is_programlet_vector_action(
 #[inline(never)]
 pub(super) fn apply_programlet_vector_action(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     symbols: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     symbol_used: &mut usize,
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
@@ -390,16 +396,15 @@ pub(super) fn apply_programlet_vector_action(
         vector_values,
     )?;
     let verb = if sentence.verb_length == 2 {
-        if sentence_at!(*tokens, sentence.verb_start + 1) != MAXIMUM_SECOND
-            || sentence.field(COMITATIVE).is_some()
-        {
+        if sentence_at!(*tokens, sentence.verb_start + 1) != MAXIMUM_SECOND {
             return Err(ERROR_MALFORMED);
         }
         MAXIMUM_FIRST
     } else {
         sentence_at!(*tokens, sentence.verb_start)
     };
-    if verb == SUM_VERB || verb == MAXIMUM_FIRST {
+    let elementwise_maximum = verb == MAXIMUM_FIRST && sentence.field(COMITATIVE).is_some();
+    if verb == SUM_VERB || (verb == MAXIMUM_FIRST && !elementwise_maximum) {
         if sentence.field(COMITATIVE).is_some() {
             return Err(ERROR_MALFORMED);
         }
@@ -438,7 +443,7 @@ pub(super) fn apply_programlet_vector_action(
         )?;
         return Ok(());
     }
-    let other = if verb == PLUS {
+    let other = if matches!(verb, PLUS | MAXIMUM_FIRST) {
         let field = sentence.field(COMITATIVE).ok_or(ERROR_MALFORMED)?;
         Some(read_programlet_vector(
             tokens,
@@ -461,7 +466,7 @@ pub(super) fn apply_programlet_vector_action(
             ERROR_VECTOR_WIDTH
         });
     }
-    let scalar = if verb == PLUS {
+    let scalar = if matches!(verb, PLUS | MAXIMUM_FIRST) {
         None
     } else {
         match sentence.field(COMITATIVE) {
@@ -471,7 +476,7 @@ pub(super) fn apply_programlet_vector_action(
             None => None,
         }
     };
-    if !matches!(verb, EXPONENTIAL_VERB | PLUS) && scalar.is_none() {
+    if !matches!(verb, EXPONENTIAL_VERB | PLUS | MAXIMUM_FIRST) && scalar.is_none() {
         return Err(ERROR_MALFORMED);
     }
     if let Some(value) = scalar

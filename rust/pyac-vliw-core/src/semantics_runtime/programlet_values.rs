@@ -1,6 +1,9 @@
 use super::*;
 
-pub(super) fn number_value(tokens: &SentenceView<'_>, field: SentenceField) -> Result<u32, u32> {
+pub(super) fn number_value(
+    tokens: &SentenceView<'_, impl VliwWord>,
+    field: SentenceField,
+) -> Result<u32, u32> {
     if field.length != 2 || sentence_at!(*tokens, field.start) != NUMBER_QUOTE {
         return Err(ERROR_MALFORMED);
     }
@@ -150,7 +153,7 @@ pub(super) fn set_loop_register_argument(
 }
 
 pub(super) fn resolve_programlet_value(
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     field: SentenceField,
     symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
@@ -283,7 +286,7 @@ pub(super) fn resolve_programlet_value(
 
 pub(super) fn loop_iterations(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
 ) -> Result<u32, u32> {
     let start = optional_number_field(sentence, FROM_INDEX, tokens)?;
     let end = optional_number_field(sentence, TO_INDEX, tokens)?;
@@ -300,7 +303,7 @@ pub(super) fn loop_iterations(
 pub(super) fn optional_number_field(
     sentence: &ParsedSentence,
     role: u32,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
 ) -> Result<Option<u32>, u32> {
     match sentence.field(role) {
         Some(field) => match number_value(tokens, field) {
@@ -312,7 +315,7 @@ pub(super) fn optional_number_field(
 }
 
 pub(super) fn comparison_operand(
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     start: usize,
     end: usize,
     symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],

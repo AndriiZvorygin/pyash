@@ -72,10 +72,14 @@ pub(super) struct Buffer<'a> {
 
 impl<'a> Buffer<'a> {
     pub(super) fn new(driver: &'a Driver, words: usize) -> Result<Self, String> {
-        let mut address = 0;
         let bytes = words
             .checked_mul(4)
             .ok_or("CUDA allocation size overflow")?;
+        Self::new_bytes(driver, bytes)
+    }
+
+    fn new_bytes(driver: &'a Driver, bytes: usize) -> Result<Self, String> {
+        let mut address = 0;
         check(
             unsafe { (driver.allocate)(&mut address, bytes) },
             "allocate",
@@ -83,16 +87,20 @@ impl<'a> Buffer<'a> {
         Ok(Self { driver, address })
     }
 
-    pub(super) fn upload(driver: &'a Driver, words: &[u32]) -> Result<Self, String> {
-        let buffer = Self::new(driver, words.len())?;
+    pub(super) fn upload<T>(driver: &'a Driver, words: &[T]) -> Result<Self, String> {
+        let bytes = std::mem::size_of_val(words);
+        let buffer = Self::new_bytes(driver, bytes)?;
         check(
-            unsafe {
-                (driver.upload)(
-                    buffer.address,
-                    words.as_ptr().cast(),
-                    std::mem::size_of_val(words),
-                )
-            },
+            unsafe { (driver.upload)(buffer.address, words.as_ptr().cast(), bytes) },
+            "upload",
+        )?;
+        Ok(buffer)
+    }
+
+    pub(super) fn upload_bytes(driver: &'a Driver, bytes: &[u8]) -> Result<Self, String> {
+        let buffer = Self::new_bytes(driver, bytes.len())?;
+        check(
+            unsafe { (driver.upload)(buffer.address, bytes.as_ptr().cast(), bytes.len()) },
             "upload",
         )?;
         Ok(buffer)

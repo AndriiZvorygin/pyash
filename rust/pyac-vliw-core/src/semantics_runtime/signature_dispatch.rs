@@ -2,6 +2,7 @@ use super::canonical_signature::{
     SignatureView, TYPE_BOOLEAN, TYPE_CLAUSE, TYPE_NAME, TYPE_NAME_NUMBER, TYPE_QUOTE_TAG,
     case_type, has_cases, signature, token_at, token_boundary, verb_is,
 };
+use super::embedding_lookup::{LOOKUP_FIRST, LOOKUP_SECOND};
 use super::iwsp_vector_ops::{MAXIMUM_VERB_FIRST, MAXIMUM_VERB_SECOND, SUM_VERB};
 use super::numeric::quote_header;
 use super::pluk_tlas::{PLUK, TLAS};
@@ -34,6 +35,8 @@ pub(super) const ROUTE_LITERAL: u32 = 0x10d;
 pub(super) const ROUTE_VECTOR_FLOAT_ARITHMETIC: u32 = 0x10e;
 pub(super) const ROUTE_VECTOR_SUM: u32 = 0x10f;
 pub(super) const ROUTE_VECTOR_MAXIMUM: u32 = 0x110;
+pub(super) const ROUTE_VECTOR_ARGMAX: u32 = 0x111;
+pub(super) const ROUTE_EMBEDDING_LOOKUP: u32 = 0x112;
 
 const VERB_PLUK_TLAS: u32 = 1;
 const VERB_SCALAR_PRODUCT: u32 = 2;
@@ -46,9 +49,15 @@ const VERB_BOOLEAN_LITERAL: u32 = 8;
 const VERB_LITERAL: u32 = 9;
 const VERB_VECTOR_SUM: u32 = 10;
 const VERB_VECTOR_MAXIMUM: u32 = 11;
+const VERB_EMBEDDING_LOOKUP: u32 = 12;
 const VERB_UNSUPPORTED: u32 = 0;
 
-fn classify_verb(signature: &SignatureView, words: &[u32], start: usize, group_len: usize) -> u32 {
+fn classify_verb(
+    signature: &SignatureView,
+    words: &[impl VliwWord],
+    start: usize,
+    group_len: usize,
+) -> u32 {
     if verb_is(signature, words, start, group_len, PLUK, Some(TLAS)) {
         return VERB_PLUK_TLAS;
     }
@@ -72,6 +81,16 @@ fn classify_verb(signature: &SignatureView, words: &[u32], start: usize, group_l
     ) {
         return VERB_SCALAR_PRODUCT;
     }
+    if verb_is(
+        signature,
+        words,
+        start,
+        group_len,
+        LOOKUP_FIRST,
+        Some(LOOKUP_SECOND),
+    ) {
+        return VERB_EMBEDDING_LOOKUP;
+    }
     if signature.verb_length == 0 {
         return VERB_LITERAL;
     }
@@ -94,7 +113,7 @@ fn classify_verb(signature: &SignatureView, words: &[u32], start: usize, group_l
     }
 }
 
-fn has_boundary_word(words: &[u32], start: usize, group_len: usize, target: u32) -> bool {
+fn has_boundary_word(words: &[impl VliwWord], start: usize, group_len: usize, target: u32) -> bool {
     let capacity = group_len * (CODELET_WORDS - 1);
     let mut index = 0;
     while index < capacity {
@@ -108,7 +127,7 @@ fn has_boundary_word(words: &[u32], start: usize, group_len: usize, target: u32)
     false
 }
 
-fn is_multicodelet_vector_literal(words: &[u32], start: usize, group_len: usize) -> bool {
+fn is_multicodelet_vector_literal(words: &[impl VliwWord], start: usize, group_len: usize) -> bool {
     if group_len < 2 {
         return false;
     }
@@ -228,7 +247,7 @@ fn literal_route(signature: &SignatureView, group_len: usize) -> Result<u32, u32
 }
 
 pub(super) fn select_signature_route(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
 ) -> Result<u32, u32> {
@@ -265,6 +284,19 @@ pub(super) fn select_signature_route(
                 && case_type(&signature, INSTRUMENTAL).is_some() =>
         {
             Ok(ROUTE_SCALAR_PRODUCT)
+        }
+        VERB_EMBEDDING_LOOKUP
+            if signature.mood == DEONTIC
+                && has_cases(
+                    &signature,
+                    &[
+                        (SOURCE, TYPE_NAME),
+                        (DESTINATION, TYPE_NAME),
+                        (LOCATIVE, TYPE_UINT16),
+                    ],
+                ) =>
+        {
+            Ok(ROUTE_EMBEDDING_LOOKUP)
         }
         VERB_MUTABLE_VECTOR
             if case_type(&signature, NOMINATIVE) == Some(TYPE_NAME)
@@ -303,6 +335,16 @@ pub(super) fn select_signature_route(
                 ) =>
         {
             Ok(ROUTE_VECTOR_SUM)
+        }
+        VERB_VECTOR_MAXIMUM
+            if signature.case_count == 2
+                && matches!(
+                    case_type(&signature, ACCUSATIVE),
+                    Some(TYPE_VECTOR_FLOAT32) | Some(TYPE_VECTOR_FLOAT64) | Some(TYPE_NAME)
+                )
+                && case_type(&signature, DESTINATION) == Some(TYPE_NAME_NUMBER) =>
+        {
+            Ok(ROUTE_VECTOR_ARGMAX)
         }
         VERB_VECTOR_MAXIMUM
             if signature.case_count == 1

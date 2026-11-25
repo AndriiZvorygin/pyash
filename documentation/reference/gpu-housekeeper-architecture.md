@@ -119,6 +119,7 @@ unusually long-running job needs a larger recovery window.
 - `POST /capacity/preview`
 - `POST /capacity/prepare` (Strata pre-load admission and idle-runtime handoff)
 - `POST /submit`
+- `POST /submit-pyac` (authenticated raw VLIW pack upload)
 - `GET /job/<remoteJobId>`
 - `POST /discharge`
 - `POST /runtime/begin`
@@ -146,6 +147,24 @@ Housekeeper snapshots advertise protocol capabilities; model provisioning is
 forwarded only to peers that advertise `ollamaModelProvisioning`, so an older
 peer cannot receive an unsupported `ollama-ensure-model` job.
 Different physical devices can execute concurrently without sharing a gate.
+
+The VLIW client uses `/submit-pyac`: the request body is two consecutive
+PyAC-framed packs (a Pyash authentication sentence and the executable pack),
+not JSON or Base64. Configure the same machine-local shared key on every
+federated Housekeeper in `configure/secret.pya`:
+
+```text
+exists su name gpu authentication key ob text "<shared-secret>" be text ya
+```
+
+The GPU Housekeeper container receives that directory read-only at
+`/run/pyash/configure`; the image does not contain the key. A receiver
+validates identity, pack digest, and HMAC before persisting the job pack and
+admitting it to the durable queue. Peer forwarding preserves the signed bytes
+so the destination verifies them independently. The Housekeeper then sends
+the raw pack to the resident Rust VLIW runtime at `/v1/execute-pack`. Existing
+JSON `/submit` and `/v1/execute` interfaces remain for other runtimes and
+previously accepted jobs.
 
 `/queue` lists queued and running jobs with `source` metadata and the selected
 `executionHostId` and `deviceId`; `/job/<id>` includes the same source record,

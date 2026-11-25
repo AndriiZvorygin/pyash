@@ -116,7 +116,7 @@ fn read_word_unchecked(words: &[u32], index: usize) -> u32 {
 
 #[cfg(not(target_arch = "spirv"))]
 pub fn build_programlet_routine_directory_words(
-    words: &[u32],
+    words: &[impl VliwWord],
     base_codelet: usize,
     codelet_count: usize,
     output: &mut [u32; PROGRAMLET_ROUTINE_DIRECTORY_WORDS],

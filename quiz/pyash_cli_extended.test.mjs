@@ -162,6 +162,22 @@ test("pyash dictionary short prefix selects the Pyac reference lookup", () => {
   assert.match(routed.stdout, /love:/u);
 });
 
+test("pyash dictionary resolves the promoted SUMO concept senses", () => {
+  const companionate = runCli(["dictionary", "sumo:CompanionateLove"]);
+  assert.equal(companionate.status, 0, companionate.stderr);
+  assert.match(companionate.stdout, /SUMO CompanionateLove \(superclass-of\)/u);
+  assert.match(companionate.stdout, /SUMO Love \(equivalent-to\)/u);
+
+  const passionate = runCli(["dictionary", "sumo:PassionateLove"]);
+  assert.equal(passionate.status, 0, passionate.stderr);
+  assert.match(passionate.stdout, /SUMO PassionateLove \(superclass-of\)/u);
+
+  // A concept that only the promoted catalog carries resolves the same way.
+  const aariya = runCli(["dictionary", "sumo:AariyaLanguage"]);
+  assert.equal(aariya.status, 0, aariya.stderr);
+  assert.match(aariya.stdout, /SUMO AariyaLanguage \(superclass-of\)/u);
+});
+
 test("ambiguous prefixes report choices and direct Pyash file execution remains available", async () => {
   const ambiguous = runCli(["co"]);
   assert.equal(ambiguous.status, 2);

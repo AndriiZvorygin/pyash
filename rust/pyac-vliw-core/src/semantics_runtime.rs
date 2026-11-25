@@ -1,4 +1,8 @@
 #![no_std]
+#[path = "semantics_runtime/word_input.rs"]
+mod word_input;
+pub use word_input::VliwWord;
+use word_input::input_word_unchecked;
 
 #[cfg(test)]
 extern crate std;
@@ -361,6 +365,8 @@ mod canonical_signature;
 mod conditional;
 #[path = "semantics_runtime/dispatch.rs"]
 mod dispatch;
+#[path = "semantics_runtime/embedding_lookup.rs"]
+mod embedding_lookup;
 #[path = "semantics_runtime/fixed16.rs"]
 mod fixed16;
 #[path = "semantics_runtime/float.rs"]
@@ -381,6 +387,8 @@ mod programlet_actions;
 mod programlet_arguments;
 #[path = "semantics_runtime/programlet_branch.rs"]
 mod programlet_branch;
+#[path = "semantics_runtime/programlet_composition_actions.rs"]
+mod programlet_composition_actions;
 #[path = "semantics_runtime/programlet_dispatch_index.rs"]
 mod programlet_dispatch_index;
 #[path = "semantics_runtime/programlet_dispatch_signature.rs"]
@@ -403,6 +411,8 @@ mod programlet_frame;
 mod programlet_numeric_types;
 #[path = "semantics_runtime/programlet_sections.rs"]
 mod programlet_sections;
+#[path = "semantics_runtime/programlet_standard_deviation.rs"]
+mod programlet_standard_deviation;
 #[path = "semantics_runtime/programlet_symbols.rs"]
 mod programlet_symbols;
 #[path = "semantics_runtime/programlet_values.rs"]
@@ -423,12 +433,20 @@ mod sentence;
 mod sentence_parse_state;
 #[path = "semantics_runtime/signature_dispatch.rs"]
 mod signature_dispatch;
+#[path = "semantics_runtime/storage_sections.rs"]
+mod storage_sections;
+#[path = "semantics_runtime/storage_vector.rs"]
+mod storage_vector;
+#[path = "semantics_runtime/storage_view.rs"]
+mod storage_view;
+#[path = "semantics_runtime/vector_argmax.rs"]
+mod vector_argmax;
 #[path = "semantics_runtime/vector_group.rs"]
 mod vector_group;
 
 use boolean::{boolean_comparison, boolean_composition, evaluate_boolean_expression_with_env};
 use conditional::conditional;
-pub use dispatch::interpret_group;
+pub use dispatch::{interpret_group, interpret_group_with_storage};
 use float::single_codelet;
 use mutable_vector::mutable_vector_declaration;
 pub use numeric::apply_number_operator;
@@ -441,6 +459,9 @@ use programlet_arguments::{capture_programlet_arguments, validate_programlet_arg
 use programlet_branch::{
     first_present_operand, programlet_branch, read_optional_programlet_number,
     unsigned_programlet_operand,
+};
+use programlet_composition_actions::{
+    apply_programlet_composition_action, is_programlet_composition_action,
 };
 pub use programlet_dispatch_index::PROGRAMLET_ROUTINE_DIRECTORY_WORDS;
 #[cfg(not(target_arch = "spirv"))]
@@ -485,8 +506,7 @@ use programlet_values::{
 };
 use programlet_vector_actions::{apply_programlet_vector_action, is_programlet_vector_action};
 use programlet_vector_composition::{
-    apply_programlet_dot_product_store, apply_programlet_vector_select,
-    declare_programlet_vector_local, is_programlet_dot_product_store,
+    apply_programlet_vector_select, declare_programlet_vector_local,
     is_programlet_vector_declaration, is_programlet_vector_select,
 };
 use programlet_vector_values::{
@@ -499,6 +519,8 @@ use sentence::{
     embedded_clause_range, name_span, next_sentence_is_paragraph_end, parse_sentence,
     parse_sentence_range, typed_name_span, typed_output_name,
 };
+pub use storage_sections::{StorageSectionRange, scan_storage_sections};
+pub use storage_view::{STORAGE_BINDING_WORDS, StorageView};
 #[cfg(test)]
 #[path = "semantics_runtime/tests.rs"]
 mod tests;

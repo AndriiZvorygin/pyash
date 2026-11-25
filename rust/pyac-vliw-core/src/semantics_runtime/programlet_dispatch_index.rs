@@ -116,7 +116,7 @@ fn append_name(
 #[cfg(not(target_arch = "spirv"))]
 fn definition_signature(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     directory: &mut ProgramletRoutineDirectory,
 ) -> Result<(usize, usize, NameSpan, usize, usize, usize, u32), u32> {
     let name_field = sentence.field(NOMINATIVE).ok_or(ERROR_MALFORMED)?;
@@ -195,7 +195,7 @@ fn definition_signature(
 
 #[cfg(not(target_arch = "spirv"))]
 pub(super) fn build_programlet_routine_directory(
-    words: &[u32],
+    words: &[impl VliwWord],
     base_codelet: usize,
     codelet_count: usize,
     directory: &mut ProgramletRoutineDirectory,
@@ -323,7 +323,7 @@ struct CallSignature {
 }
 
 impl CallSignature {
-    fn word_at(&self, index: usize, tokens: &SentenceView<'_>) -> Option<u32> {
+    fn word_at(&self, index: usize, tokens: &SentenceView<'_, impl VliwWord>) -> Option<u32> {
         if index >= self.length {
             return None;
         }
@@ -367,7 +367,7 @@ fn make_call_signature(
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     argument_count: u32,
     output_kind: u32,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
 ) -> Result<CallSignature, u32> {
     if argument_count as usize > arguments.len() {
         return Err(ERROR_FRAME_CAPACITY);
@@ -428,7 +428,7 @@ pub(super) fn resolve_programlet_routine(
     entry_count: usize,
     signature_used: usize,
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     symbol_words: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     symbol_used: &mut usize,
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],

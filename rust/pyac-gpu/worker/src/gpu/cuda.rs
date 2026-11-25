@@ -1,4 +1,5 @@
 use super::*;
+use pyac::{PyacPackView, decode_pack_view};
 use sha2::{Digest, Sha256};
 use std::ffi::{CStr, c_char, c_int, c_void};
 use std::ptr::{from_mut, null_mut};
@@ -30,6 +31,22 @@ fn artifact(bytes: &[u8], expected: &str) -> Result<(), String> {
 
 type Reply = (Result<Value, String>, GpuExecutionTiming);
 type Work = (Vec<u8>, SyncSender<Reply>);
+
+fn codelets_from_view<'a>(view: &PyacPackView<'a>) -> Cow<'a, [[u16; pyac::WORDS_PER_CODELET]]> {
+    if view.codelet_count() == 0 {
+        return Cow::Borrowed(&[]);
+    }
+    if let Ok(codelets) =
+        bytemuck::try_cast_slice::<u8, [u16; pyac::WORDS_PER_CODELET]>(view.payload_bytes())
+    {
+        return Cow::Borrowed(codelets);
+    }
+    Cow::Owned(
+        (0..view.codelet_count())
+            .map(|index| view.codelet(index).expect("validated codelet range"))
+            .collect(),
+    )
+}
 
 fn wait_for_device(
     initialized: Receiver<Result<String, String>>,
@@ -161,13 +178,23 @@ impl CudaDevice {
 
     fn execute(&self, pack: &[u8]) -> Reply {
         let started = Instant::now();
-        let decoded = decode_pack(pack);
+        let decoded = decode_pack_view(pack);
         let mut timing = GpuExecutionTiming {
             pack_decode_ms: elapsed(started),
             ..Default::default()
         };
         let result = match decoded {
-            Ok(pack) => self.execute_codelets(&pack.codelets, &mut timing),
+            Ok(view) => {
+                #[cfg(target_endian = "big")]
+                return (
+                    Err("CUDA direct VLIW input requires a little-endian host".to_owned()),
+                    timing,
+                );
+                #[cfg(target_endian = "little")]
+                {
+                    self.execute_codelets(&codelets_from_view(&view), &mut timing)
+                }
+            }
             Err(error) => Err(error.to_string()),
         };
         timing.total_ms = elapsed(started);
@@ -186,9 +213,13 @@ impl CudaDevice {
         let prepared = prepare_pack(codelets);
         timing.classify_ms = elapsed(start);
         let PreparedPack {
+            executable_codelets,
             input_words,
             section_words,
             dispatch_words,
+            storage_descriptors,
+            storage_names,
+            storage_payload,
             section_count,
             programlet,
             result_records,
@@ -196,7 +227,7 @@ impl CudaDevice {
 
         let start = Instant::now();
         let driver = &self.driver;
-        let input = Buffer::upload(driver, &input_words)?;
+        let input = Buffer::upload(driver, input_words)?;
         let result = Buffer::new(driver, result_records)?;
         check(
             unsafe { (driver.clear)(result.address, 0, result_records) },
@@ -204,6 +235,9 @@ impl CudaDevice {
         )?;
         let directory = Buffer::upload(driver, &dispatch_words)?;
         let sections = Buffer::upload(driver, &section_words)?;
+        let storage_descriptor_buffer = Buffer::upload(driver, &storage_descriptors)?;
+        let storage_name_buffer = Buffer::upload(driver, &storage_names)?;
+        let storage_payload_buffer = Buffer::upload(driver, &storage_payload)?;
         let completion = Buffer::upload(driver, &[0])?;
         let before = Event::new(driver)?;
         let after = Event::new(driver)?;
@@ -213,16 +247,32 @@ impl CudaDevice {
         let (mut src, mut dst) = (input.address, result.address);
         let (mut directory, mut descriptors, mut ticket) =
             (directory.address, sections.address, completion.address);
-        let (mut count, mut section_total) = (codelets.len() as u32, section_count as u32);
-        let mut args: [*mut c_void; 7] = [
+        let (mut count, mut section_total) =
+            (executable_codelets.len() as u32, section_count as u32);
+        let (mut storage_descriptor_words, mut storage_name_count, mut storage_payload_words) = (
+            storage_descriptors.len() as u32,
+            storage_names.len() as u32,
+            storage_payload.len() as u32,
+        );
+        let mut args: [*mut c_void; 9] = [
             from_mut(&mut src).cast(),
             from_mut(&mut count).cast(),
             from_mut(&mut dst).cast(),
             null_mut(),
+            from_mut(&mut storage_descriptor_words).cast(),
             null_mut(),
+            from_mut(&mut storage_name_count).cast(),
             null_mut(),
-            null_mut(),
+            from_mut(&mut storage_payload_words).cast(),
         ];
+        let (mut storage_descriptor_address, mut storage_name_address, mut storage_payload_address) = (
+            storage_descriptor_buffer.address,
+            storage_name_buffer.address,
+            storage_payload_buffer.address,
+        );
+        args[3] = from_mut(&mut storage_descriptor_address).cast();
+        args[5] = from_mut(&mut storage_name_address).cast();
+        args[7] = from_mut(&mut storage_payload_address).cast();
         let (entry, blocks, block_size) = if section_count > 0 {
             args[3] = from_mut(&mut descriptors).cast();
             args[4] = from_mut(&mut section_total).cast();
@@ -283,7 +333,7 @@ impl CudaDevice {
         timing.kernel_timing_source = Some("cuda-event");
         timing.submit_wait_readback_ms = elapsed(start);
         decode_pack_result(
-            codelets,
+            executable_codelets,
             &output,
             section_count,
             programlet,
@@ -313,6 +363,40 @@ fn elapsed(start: Instant) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cuda_input_view_uploads_exact_pyac_payload_bytes() {
+        let codelets = [[0x1234u16; pyac::WORDS_PER_CODELET]; 3];
+        let pack = pyac::encode_pack(&codelets).expect("pack encodes");
+        let view = pyac::decode_pack_view(&pack).expect("pack validates");
+        let payload = view.payload_bytes();
+        let words = bytemuck::try_cast_slice::<u8, [u16; pyac::WORDS_PER_CODELET]>(payload)
+            .expect("aligned packet payload borrows as packed words");
+
+        assert_eq!(payload.len(), codelets.len() * pyac::CODELET_BYTES);
+        assert_eq!(payload.as_ptr(), pack[pyac::HEADER_BYTES..].as_ptr());
+        assert_eq!(std::mem::size_of_val(payload), codelets.len() * 16 * 2);
+        assert_eq!(words, codelets);
+    }
+
+    #[test]
+    fn unaligned_packet_borrows_gpu_bytes_and_decodes_host_metadata_safely() {
+        let codelets = [[0x5678u16; pyac::WORDS_PER_CODELET]; 2];
+        let pack = pyac::encode_pack(&codelets).expect("pack encodes");
+        let mut storage = vec![0u8; pack.len() + 1];
+        let start = usize::from((storage.as_ptr() as usize + pyac::HEADER_BYTES).is_multiple_of(2));
+        storage[start..start + pack.len()].copy_from_slice(&pack);
+        let view = pyac::decode_pack_view(&storage[start..start + pack.len()])
+            .expect("unaligned input still validates");
+        let owned_codelets = codelets_from_view(&view);
+
+        assert!(matches!(owned_codelets, Cow::Owned(_)));
+        assert_eq!(&*owned_codelets, codelets);
+        assert_eq!(
+            view.payload_bytes().as_ptr(),
+            storage[start + pyac::HEADER_BYTES..].as_ptr()
+        );
+    }
 
     #[test]
     fn cubin_requires_native_format_and_packaged_hash() {

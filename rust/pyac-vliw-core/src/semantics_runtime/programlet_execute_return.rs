@@ -3,11 +3,11 @@ use super::*;
 #[inline(never)]
 pub(super) fn execute_programlet_return(
     sentence: &ParsedSentence,
-    words: &[u32],
+    words: &[impl VliwWord],
     base_codelet: usize,
     codelet_count: usize,
     next_codelet: usize,
-    sentence_view: &SentenceView<'_>,
+    sentence_view: &SentenceView<'_, impl VliwWord>,
     symbol_words: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     frames: &mut ProgramletStack,
     frame_index: usize,

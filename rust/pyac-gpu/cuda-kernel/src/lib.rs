@@ -6,9 +6,9 @@ use core::slice::{from_raw_parts, from_raw_parts_mut};
 use core::sync::atomic::{AtomicU32, Ordering};
 use pyac_vliw_core::{
     CODELET_WORDS, CoreResult, DEFAULT_PROGRAMLET_STEP_BUDGET, ERROR_MALFORMED,
-    MAX_PROGRAMLET_SYMBOL_WORDS, MAX_PROGRAMLET_SECTION_NAME_WORDS, MAX_PROGRAMLET_SECTIONS,
-    PROGRAMLET_ROUTINE_DIRECTORY_WORDS, ProgramletStack, RESULT_WORDS,
-    execute_numeric_programlet_at_with_directory_words, interpret_group,
+    MAX_PROGRAMLET_SECTION_NAME_WORDS, MAX_PROGRAMLET_SECTIONS, MAX_PROGRAMLET_SYMBOL_WORDS,
+    PROGRAMLET_ROUTINE_DIRECTORY_WORDS, ProgramletStack, RESULT_WORDS, StorageView,
+    execute_numeric_programlet_at_with_directory_words, interpret_group_with_storage,
 };
 
 const RESULT_STRIDE: usize = 4 + RESULT_WORDS;
@@ -46,7 +46,7 @@ fn write_result(result: CoreResult, words: &mut [u32]) {
 }
 
 unsafe fn run_programlet(
-    input: &[u32],
+    input: &[u16],
     start: usize,
     count: usize,
     directory: &[u32],
@@ -68,9 +68,15 @@ unsafe fn run_programlet(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "ptx-kernel" fn execute_pyac_pack(
-    input: *const u32,
+    input: *const u16,
     codelet_count: u32,
     output: *mut u32,
+    storage_descriptors: *const u32,
+    storage_descriptor_words: u32,
+    storage_names: *const u32,
+    storage_name_count: u32,
+    storage_payload: *const u32,
+    storage_payload_words: u32,
 ) {
     let index = unsafe { _block_idx_x() * _block_dim_x() + _thread_idx_x() } as usize;
     let count = codelet_count as usize;
@@ -78,17 +84,23 @@ pub unsafe extern "ptx-kernel" fn execute_pyac_pack(
         return;
     }
     let input = unsafe { from_raw_parts(input, count * CODELET_WORDS) };
+    let descriptors = unsafe {
+        from_raw_parts(storage_descriptors, storage_descriptor_words as usize)
+    };
+    let names = unsafe { from_raw_parts(storage_names, storage_name_count as usize) };
+    let payload = unsafe { from_raw_parts(storage_payload, storage_payload_words as usize) };
+    let storage = StorageView::new(descriptors, names, payload);
     if index > 0 && input[(index - 1) * CODELET_WORDS] & 1 == 0 {
         return;
     }
-    let result = interpret_group(input, index, count);
+    let result = interpret_group_with_storage(input, index, count, &storage);
     let words = unsafe { from_raw_parts_mut(output.add(index * RESULT_STRIDE), RESULT_STRIDE) };
     write_result(result, words);
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "ptx-kernel" fn execute_pyac_programlet(
-    input: *const u32,
+    input: *const u16,
     codelet_count: u32,
     output: *mut u32,
     directory: *const u32,
@@ -105,7 +117,7 @@ pub unsafe extern "ptx-kernel" fn execute_pyac_programlet(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "ptx-kernel" fn execute_pyac_sections(
-    input: *const u32,
+    input: *const u16,
     codelet_count: u32,
     output: *mut u32,
     descriptors: *const u32,

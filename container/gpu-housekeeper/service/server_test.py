@@ -5069,14 +5069,14 @@ class HousekeeperVliwPackTests(unittest.TestCase):
       "jobSpec": self.valid_job_spec()
     }
     result = {"ok": True, "backend": "rust-gpu-vulkan", "values": []}
-    with patch.object(server, "request_vliw_runtime_json", return_value=result) as request:
+    with patch.object(server, "request_vliw_runtime_pack", return_value=result) as request:
       actual = server.execute_vliw_pack_gpu(job)
 
     self.assertEqual(actual, result)
-    payload = request.call_args.args[1]
-    self.assertEqual(payload["protocolVersion"], 1)
-    self.assertEqual(payload["jobId"], "vliw-http-dispatch")
-    self.assertEqual(payload["jobSpec"], job["jobSpec"])
+    pathname, pack, job_id = request.call_args.args[:3]
+    self.assertEqual(pathname, "/v1/execute-pack")
+    self.assertEqual(pack, base64.b64decode(job["jobSpec"]["payload"]["packBase64"]))
+    self.assertEqual(job_id, "vliw-http-dispatch")
 
   def test_vliw_readiness_waits_if_service_is_already_starting(self):
     runtime = dict(server.DEFAULT_RUNTIME_REGISTRY["vliw"])

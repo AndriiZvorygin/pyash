@@ -229,6 +229,62 @@ dynamic loops require an explicit continuation/jump reference and bounded
 termination. Calls enqueue a local frame and rejoin after declared outputs are
 fulfilled; parallel execution requires proven independence.
 
+### IWSP float-vector compositions
+
+These operation forms are part of the shared Rust programlet runtime. They are
+ordinary typed Pyash sentences; they do not introduce transformer-specific
+opcodes.
+
+`kl6m psas` (dot product) has two programlet output forms:
+
+```text
+ob name float vector-left by name float vector-right
+  to name float dot-result be kl6m psas do
+ob name float vector-left by name float vector-right
+  to name dot-lanes at num lane be kl6m psas do
+```
+
+The first writes a float local with the operands' precision. The second writes
+the scalar result into the indicated lane of a declared float vector. Both
+require equal, non-empty, finite float32 or float64 operands of the same
+precision. The generic `float` type preserves the actual float width. An
+unindexed typed scalar destination and an indexed vector-lane destination are
+distinct signatures of the same dot-product operation.
+
+`gjat bwit` (maximum) is a reduction when no comitative vector is present. With
+an equal-width, same-precision comitative vector it is elementwise maximum:
+
+```text
+from name preactivation with name zero-vector
+  to name activated be gjat bwit do
+```
+
+The output is a float vector; ties retain the source lane. A zero vector thus
+expresses ReLU directly as `max(preactivation, zero-vector)`, with no hidden
+activation or host-side callback.
+
+`dwic kwap` is the standard-deviation operation over a scalar variance:
+
+```text
+from name float variance with num epsilon
+  to name float deviation be dwic kwap do
+```
+
+The optional epsilon defaults to zero. Variance and epsilon must be finite,
+non-negative, and the same float width; the result is `sqrt(variance +
+epsilon)` at that width. A negative input or epsilon returns the shared
+float-domain error. The shared no-std implementation uses a bounded Newton
+iteration; it is tested on normal and subnormal values on CPU, and the CUDA
+conformance case exercises it in the full block.
+
+The Stage 8 LayerNorm composition computes mean as a dot product with a uniform
+`1/N` vector, subtracts that scalar from the input, computes population
+variance as a dot product of centered values and values scaled by `1/N`, then
+divides by `dwic kwap` with a small positive epsilon. Residual connections use
+the existing equal-width vector `plus` operation. The runnable Stage 8 example
+is a two-feature proof: it does not add a fused LayerNorm, matrix-multiplication
+opcode, or arbitrary-shape tensor execution.
+
 ### Independent named sections
 
 A sectioned source packet uses matching `myocpfun` paragraph boundaries around
@@ -256,6 +312,155 @@ completion; consumers associate values by source ordinal and Pyash name. The
 deprecated JavaScript interpreter completes in source order; Rust CPU/GPU may
 differ. Dependencies disqualify this form and MUST be expressed in an ordered
 programlet.
+
+### Inline immutable storage sections
+
+An executable pack may end with one or more immutable storage sections. Each
+section is declared by an ordinary Pyash sentence using the existing `pfun
+myoc` section verb:
+
+```text
+exists su name weights from filename "weights.bin"
+  by ve num <length-low-u16> <length-high-u16>
+  as name float with ve num <rows> <columns>
+  be pfun myoc ya
+```
+
+`from filename` is a compile-time asset locator and is omitted from the
+compiled descriptor. `by ve num` contains exactly two unsigned 16-bit words;
+the low word precedes the high word and together they give the exact uint32
+byte length. `as name` selects the element representation. The Pyash numeric
+family's storage widths are fixed:
+
+| Pyash numeric type | storage width |
+| --- | ---: |
+| `paucal_number_` | 8 bits |
+| `number_` | 16 bits |
+| `plural_number_` | 32 bits |
+| `multal_number_` | 64 bits |
+
+These widths describe storage representation, not the arithmetic semantics of
+an operation. `float` selects IEEE floating-point storage and must resolve to
+32- or 64-bit elements from the declared shape and exact payload length.
+`with ve num` contains one through eight positive uint16 dimensions. The
+dimension product times the element width MUST equal the declared byte
+length. The total pack still obeys the v1 uint32 byte-length field.
+
+The compiler emits the descriptor as ordinary sentence codelets, immediately
+followed by `ceil(byteLength / 32)` opaque payload codelets. Bytes occupy the
+little-endian byte order of the 16 uint16 words; only the final codelet may be
+padded, and all padding bytes MUST be zero. The header remains the existing
+32-byte v1 header, its reserved field remains zero, and its codelet count
+includes both descriptor and payload codelets. Executable sentences MUST
+precede storage sections. A reader identifies a section from its complete
+Pyash signature, reads its exact extent, and skips the payload without scanning
+it for sentence boundaries. Payload codelets are data, never executable
+instructions.
+
+The resident Rust GPU worker binds the descriptors, Pyac names, and exact
+payload bytes as separate read-only GPU inputs. Its shared Rust semantics
+runtime resolves named rank-one float32/float64 storage vectors for `kl6m psas`
+(dot product); the storage length is not restricted by the inline vector lane
+limit. It also accepts a rank-two matrix as the named `by` operand. In this
+form, `to name <output> at num <row>` selects the matrix row whose dot product
+is returned. Repeating that sentence for successive row indices computes a
+matrix-vector product from ordinary dot-product sentences; it adds neither a
+matrix-multiplication opcode nor mutable tensor output. The selected row is
+bounds-checked; flattened rank-two payload elements are row-major, and the
+declared dimensions must multiply to the exact stored element count. Inline
+vector literals retain their independent
+hardware-oriented lane limit. Descriptor dimensions, element widths, exact
+byte lengths, unique names, and final-codelet padding are validated before GPU
+dispatch. The v1 pack's
+uint32 total-byte field is the protocol ceiling; hosts and devices may impose
+lower practical memory limits during allocation, and those failures are
+reported rather than silently falling back to another execution path.
+
+### Payload-backed embedding-row view
+
+The matrix row operation can bind a row under a named vector without copying
+its payload into the inline-vector result:
+
+```pya
+from name pset gjat at num 1 to name lyac dlek be tsoc hsat do
+ob name hwas by name lyac dlek be kl6m psas do
+```
+
+The lookup signature is exactly `SOURCE name`, `DESTINATION name`, and
+`LOCATIVE uint16`, with deontic mood. The source names an immutable,
+file-backed rank-two float32/float64 section; `at num` is a zero-based uint16
+row number; the destination names a row view. The row-major payload remains in
+its original storage section. A later named-vector operation in the same pack
+resolves the most recent preceding lookup that assigned that name, then reads
+the selected row directly from the payload. This supports widths above the
+16-lane inline literal limit. An alias colliding with a storage-section name
+is rejected. Missing sections, malformed shapes, unsupported element types,
+and out-of-range rows produce errors; the lookup itself returns no vector
+value.
+
+This first slice uses a literal `at num` row. It does not yet read a dynamic
+token ID from a named runtime value, tokenize text, or choose a WordNet sense.
+Those remain later IWSP stages. Named-view resolution scans preceding sentence
+groups in the submitted pack; it creates no runtime index or copied tensor.
+
+The surface words have these documented lexical meanings:
+
+| Pyash form | Lexical anchor and meaning | Role here |
+|---|---|---|
+| `pset gjat` | Open English WordNet 2025 `n:05873065-n`, “a generalization of the concept of a vector”; SUMO `Quantity` (`+`). Its linked components are `extend` (`pset`) + `magnitude` (`gjat`). | Existing tensor name for the rank-two embedding table. |
+| `tsoc hsat` | Open English WordNet 2025 `n:13574763-n`, a table lookup operation that determines whether one or more items has a specified property; SUMO `ContentDevelopment` (`+`). Existing compound components: `searching` (`tsoc`) + `see` (`hsat`). | Existing lookup verb; binds one indexed row. |
+| `lyac` | Open English WordNet 2025 `v:00599310-v`, learn/acquire knowledge; SUMO `Learning` (`+`). | Modifier in the result label. |
+| `dlek` | Open English WordNet 2025 `n:05873161-n`, a vector quantity resolvable into components; SUMO `FunctionQuantity` (`=`). | Head of the result label. |
+| `lyac dlek` | Descriptive composition “learned vector.” Its atoms link to the senses above, but this sequence is not asserted to be a separately curated compound. | Name of the zero-copy row view. |
+
+The example's learned-embedding wording describes the role of the payload;
+these lexical links do not imply that lookup trains or learns the stored values.
+
+The internal storage descriptor retains all eight possible extents after its
+eight general metadata fields. This is a host/GPU binding structure, not extra
+codelet syntax or a `.pyac` header field. Rank-two float sections use row-major
+flattened payload order for the `kl6m psas` row operation above.
+
+This profile adds no header field, second pack format, sidecar, pointer, or
+runtime-generated index. A reader that does not recognize the storage
+signature MUST reject the pack rather than dispatching opaque payload words as
+instructions. The compiler embeds and validates file-backed sections; the
+runtime extracts their storage bindings while retaining executable codelets as
+the original uint16 input stream.
+
+### Pyash VLIW authentication sentence
+
+The binary Housekeeper upload is two consecutive, independently framed `.pyac`
+packs: an authentication sentence, then the exact job pack. Its Pyash source
+form is:
+
+```text
+su name identity ob text "<username>"
+  from text "<host-id>" to text "<handle-id>"
+  at ve num <8 uint16 nonce words>
+  with ve num <16 uint16 SHA-256 words>
+  by ve num <16 uint16 HMAC-SHA-256 words>
+  be handshake do
+```
+
+The vectors carry fixed-size binary values as little-endian uint16 words: an
+8-word (128-bit) nonce and 16-word digests. The caller signs the UTF-8 bytes of
+`pyac-vliw-upload-v1\0<username>\0<host-id>\0<nonce-hex>\0<handle-id>\0<job-sha256-hex>`
+with HMAC-SHA-256 and the key declared by
+`exists su name gpu authentication key ob text "<secret>" be text ya`
+in machine-local `configure/secret.pya`. The job digest covers every byte of
+the complete following pack, including its existing header and embedded
+storage. The receiver validates both frame boundaries, the Pyash identity
+sentence, the digest, and the HMAC before durable queue admission.
+
+The client posts this raw concatenation to Housekeeper `/submit-pyac` using
+`application/vnd.pyac-vliw-upload`; it does not Base64-encode the program or
+place the pack in JSON. Housekeeper persists the verified job pack by content
+hash, then sends the raw pack to the resident Rust VLIW runtime's
+`/v1/execute-pack` endpoint. If Housekeeper routes the job to a peer, it
+forwards the same signed byte stream and the peer independently authenticates
+it with the shared secret. Queue admission and status remain available through
+the ordinary JSON Housekeeper control API.
 
 ### Hosted PyashForth memory profile
 

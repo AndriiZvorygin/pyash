@@ -136,6 +136,27 @@ build intentionally omits it and rejects float64 dot products while retaining
 float32 support. The JavaScript adapter only lowers the typed sentence; it is
 not the semantic oracle.
 
+File-backed immutable rank-two float32/float64 storage can serve as the named
+`by` operand. In this matrix-vector form, `to name <output> at num <row>`
+selects a row of the declared matrix shape; the sentence returns that row's
+scalar dot product. A sequence of these sentences computes the output rows
+using the existing `kl6m psas` verb. The row index is bounds-checked, and the
+dimension product must match the payload element count. Rank-one named vectors
+retain their prior behavior. The runnable fixture is
+[`examples/vliw/iwsp-matrix-vector-storage.pya`](../../examples/vliw/iwsp-matrix-vector-storage.pya);
+its outputs are covered by the Rust CPU and Housekeeper GPU conformance matrix.
+This is row selection plus dot product, not general matrix multiplication,
+arbitrary tensor indexing, or a complete transformer forward pass.
+
+The `tsoc hsat` lookup form binds a payload-backed row as a named view, for
+example `from name pset gjat at num 1 to name lyac dlek be tsoc hsat do`. The
+view is zero-copy and feeds later `kl6m psas` operations at widths above 16
+lanes. The current row selector is a literal uint16, and alias resolution scans
+preceding sentences in the pack; dynamic token IDs and tokenization remain
+future work. Exact WordNet/SUMO anchors, component meanings, and the fact that
+`lyac dlek` is descriptive rather than a curated compound are in the
+[VLIW ISA specification](../specifications/27-pyash-vliw-isa.md#payload-backed-embedding-row-view).
+
 ## IWSP float-vector primitives
 
 `lowerSentence` encodes float32/float64 vector scale and addition using the

@@ -24,6 +24,7 @@
 - `documentation/reference/verify-envelope.md` — provisional sentence envelope for `verify` outcomes.
 - `documentation/reference/verify-count-modes.md` — reference profile for `verify` word/letter count modes.
 - `documentation/reference/music-module.md` — reference profile for `music video` and `music say` contracts.
+- `documentation/reference/holden-culotta-ai-consciousness-remote-viewing-video.md` — source-linked, timecoded notes on an X video about AI consciousness and remote viewing, including the speaker’s remote-viewing procedure for LLMs as a step-by-step protocol and the short-form narration script cut from it.
 - `documentation/reference/speaker-identification.md` — reference profile for persistent speaker identification/enrollment from audio.
 - `documentation/reference/quantum-randomness-and-evolutionary-computing.md` — evidence and direct-QRNG policy for evolutionary-computing experiments.
 - `documentation/reference/lwonprom-c-pyash-style-analysis.md` — relationship between the lwonprom C implementation, Pyash composition, and complexity discipline.

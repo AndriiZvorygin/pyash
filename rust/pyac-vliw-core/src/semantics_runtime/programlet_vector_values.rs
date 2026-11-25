@@ -77,7 +77,10 @@ pub(super) fn find_programlet_vector_slot(
     None
 }
 
-fn name_from_field(tokens: &SentenceView<'_>, field: SentenceField) -> Result<NameSpan, u32> {
+fn name_from_field(
+    tokens: &SentenceView<'_, impl VliwWord>,
+    field: SentenceField,
+) -> Result<NameSpan, u32> {
     let mut name = NameSpan::EMPTY;
     let mut kind = 0;
     let error = typed_name_span(tokens, field, &mut name, &mut kind);
@@ -88,7 +91,7 @@ fn name_from_field(tokens: &SentenceView<'_>, field: SentenceField) -> Result<Na
 }
 
 fn vector_quote_shape(
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     field: SentenceField,
 ) -> Result<(u32, usize), u32> {
     if field.length == 0 {
@@ -136,7 +139,7 @@ fn vector_quote_shape(
 }
 
 pub(super) fn programlet_vector_argument_reference(
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     field: SentenceField,
     symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
@@ -188,7 +191,7 @@ pub(super) fn programlet_vector_argument_reference(
 }
 
 pub(super) fn programlet_field_is_vector(
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     field: SentenceField,
     symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
@@ -243,7 +246,7 @@ fn find_argument(
 }
 
 pub(super) fn read_programlet_vector(
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     field: SentenceField,
     symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
@@ -301,7 +304,7 @@ pub(super) fn read_programlet_vector(
 }
 
 pub(super) fn write_programlet_vector(
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     output: SentenceField,
     symbols: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     symbol_used: &mut usize,
@@ -354,7 +357,7 @@ pub(super) fn write_programlet_vector(
 }
 
 pub(super) fn write_programlet_vector_lane(
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     output: SentenceField,
     lane: usize,
     value: ProgramletNumber,

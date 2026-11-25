@@ -1,13 +1,16 @@
 #[path = "../gpu.rs"]
 mod gpu_worker;
+#[path = "pack_validation.rs"]
+mod pack_validation;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -18,9 +21,10 @@ use serde_json::{Value, json};
 use tokio::sync::Semaphore;
 use tokio::time::timeout;
 
-const MAX_PACK_BYTES: usize = 16 * 1024 * 1024;
-const MAX_REQUEST_BYTES: usize = 23 * 1024 * 1024;
+const MAX_REQUEST_BYTES: usize = ((u32::MAX as u64 * 4).div_ceil(3) + 64 * 1024) as usize;
 const DEFAULT_TIMEOUT_SECONDS: u64 = 1800;
+
+use pack_validation::{MAX_PACK_BYTES, validate_pack};
 
 enum RuntimeBackend {
     Vulkan(gpu_worker::GpuRuntime),
@@ -128,19 +132,7 @@ fn decode_request(request: ExecuteRequest) -> Result<(String, Vec<u8>), ApiError
             message: format!("packBase64 is invalid: {error}"),
             timings_ms: None,
         })?;
-    if pack.len() > MAX_PACK_BYTES {
-        return Err(ApiError {
-            status: StatusCode::PAYLOAD_TOO_LARGE,
-            message: "PyAC pack exceeds the 16 MiB runtime limit".to_owned(),
-            timings_ms: None,
-        });
-    }
-    pyac::decode_pack(&pack).map_err(|error| ApiError {
-        status: StatusCode::BAD_REQUEST,
-        message: format!("PyAC pack is invalid: {error}"),
-        timings_ms: None,
-    })?;
-    Ok((request.job_id, pack))
+    validate_pack(request.job_id, pack)
 }
 
 async fn health(State(state): State<RuntimeState>) -> impl IntoResponse {
@@ -167,6 +159,37 @@ async fn execute(
 ) -> Result<Json<Value>, ApiError> {
     let request_decode_started = Instant::now();
     let (job_id, pack) = decode_request(request)?;
+    execute_pack(state, job_id, pack, request_decode_started).await
+}
+
+async fn execute_raw_pack(
+    State(state): State<RuntimeState>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Result<Json<Value>, ApiError> {
+    let request_decode_started = Instant::now();
+    if body.len() > MAX_PACK_BYTES {
+        return Err(ApiError {
+            status: StatusCode::PAYLOAD_TOO_LARGE,
+            message: "PyAC pack exceeds the VLIW protocol's 32-bit byte-length limit".to_owned(),
+            timings_ms: None,
+        });
+    }
+    let job_id = headers
+        .get("x-pyac-job-id")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or_default()
+        .to_owned();
+    let (job_id, pack) = validate_pack(job_id, body.to_vec())?;
+    execute_pack(state, job_id, pack, request_decode_started).await
+}
+
+async fn execute_pack(
+    state: RuntimeState,
+    job_id: String,
+    pack: Vec<u8>,
+    request_decode_started: Instant,
+) -> Result<Json<Value>, ApiError> {
     let request_decode_ms = request_decode_started.elapsed().as_secs_f64() * 1000.0;
     let worker_slot_started = Instant::now();
     let _permit = state.workers.acquire().await.map_err(|_| ApiError {
@@ -306,6 +329,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/health", get(health))
         .route("/v1/execute", post(execute))
+        .route("/v1/execute-pack", post(execute_raw_pack))
         .layer(DefaultBodyLimit::max(MAX_REQUEST_BYTES))
         .with_state(state);
     let address: SocketAddr = format!("{host}:{port}").parse()?;
@@ -338,6 +362,32 @@ mod tests {
         pack
     }
 
+    fn valid_storage_pack() -> Vec<u8> {
+        let codelets: [[u16; pyac::WORDS_PER_CODELET]; 3] = [
+            [
+                0xbbb6, 0x225e, 0x6844, 0x24de, 0x225e, 0x309e, 0x414f, 0x891d, 4, 0, 0x287e,
+                0x8e1d, 1, 4, 0x490f, 0x6a84,
+            ],
+            [5, 0xec01, 0x217e, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            [0x0201, 0x0403, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        ];
+        let mut pack = b"PYACVLIW".to_vec();
+        pack.extend_from_slice(&1u16.to_le_bytes());
+        pack.extend_from_slice(&16u16.to_le_bytes());
+        pack.extend_from_slice(&16u16.to_le_bytes());
+        pack.extend_from_slice(&32u16.to_le_bytes());
+        pack.extend_from_slice(&3u32.to_le_bytes());
+        pack.extend_from_slice(&32u32.to_le_bytes());
+        pack.extend_from_slice(&128u32.to_le_bytes());
+        pack.extend_from_slice(&0u32.to_le_bytes());
+        for codelet in codelets {
+            for word in codelet {
+                pack.extend_from_slice(&word.to_le_bytes());
+            }
+        }
+        pack
+    }
+
     fn request(pack: &[u8]) -> ExecuteRequest {
         ExecuteRequest {
             protocol_version: 1,
@@ -356,6 +406,20 @@ mod tests {
         let (job_id, decoded) = decode_request(request(&valid_pack())).unwrap();
         assert_eq!(job_id, "test-job");
         assert_eq!(decoded, valid_pack());
+    }
+
+    #[test]
+    fn raw_runtime_contract_accepts_the_same_framed_pack() {
+        let (job_id, decoded) = validate_pack("raw-job".to_owned(), valid_pack()).unwrap();
+        assert_eq!(job_id, "raw-job");
+        assert_eq!(decoded, valid_pack());
+    }
+
+    #[test]
+    fn runtime_accepts_storage_sections_for_gpu_input_binding() {
+        let (job_id, decoded) = decode_request(request(&valid_storage_pack())).unwrap();
+        assert_eq!(job_id, "test-job");
+        assert_eq!(decoded, valid_storage_pack());
     }
 
     #[test]

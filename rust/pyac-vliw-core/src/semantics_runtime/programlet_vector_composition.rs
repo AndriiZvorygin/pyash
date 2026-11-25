@@ -13,7 +13,7 @@ const SELECT_VERB: u32 = 0xaaa2;
 
 pub(super) fn is_programlet_vector_declaration(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
 ) -> bool {
     sentence.mood == REALIS
         && sentence.verb_length == 1
@@ -22,7 +22,7 @@ pub(super) fn is_programlet_vector_declaration(
 
 pub(super) fn declare_programlet_vector_local(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     symbols: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     symbol_used: &mut usize,
     vector_slots: &mut [ProgramletVectorSlot; MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
@@ -70,7 +70,7 @@ pub(super) fn declare_programlet_vector_local(
 
 pub(super) fn is_programlet_dot_product_store(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
 ) -> bool {
     sentence.mood == DEONTIC
         && sentence.verb_length == 2
@@ -80,14 +80,16 @@ pub(super) fn is_programlet_dot_product_store(
 
 pub(super) fn apply_programlet_dot_product_store(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
-    symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
+    tokens: &SentenceView<'_, impl VliwWord>,
+    symbols: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
+    symbol_used: &mut usize,
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     frame_index: usize,
+    slots: &mut [NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
     vector_slots: &[ProgramletVectorSlot; MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
     vector_values: &mut [u32; MAX_PROGRAMLET_VECTOR_VALUE_WORDS],
 ) -> Result<(), u32> {
-    if sentence.field_count != 4 {
+    if !matches!(sentence.field_count, 3 | 4) {
         return Err(ERROR_MALFORMED);
     }
     let left = read_programlet_vector(
@@ -114,8 +116,6 @@ pub(super) fn apply_programlet_dot_product_store(
     if left.length != right.length {
         return Err(ERROR_VECTOR_WIDTH);
     }
-    let index_field = sentence.field(LOCATIVE).ok_or(ERROR_MALFORMED)?;
-    let index = number_value(tokens, index_field)? as usize;
     let value = if left.kind == VALUE_VECTOR_FLOAT32 {
         let mut sum = 0.0f32;
         let mut lane = 0;
@@ -158,21 +158,35 @@ pub(super) fn apply_programlet_dot_product_store(
             }
         }
     };
-    write_programlet_vector_lane(
-        tokens,
-        sentence.field(DESTINATION).ok_or(ERROR_MALFORMED)?,
-        index,
-        value,
-        symbols,
-        vector_slots,
-        vector_values,
-        frame_index,
-    )
+    let destination = sentence.field(DESTINATION).ok_or(ERROR_MALFORMED)?;
+    if let Some(index_field) = sentence.field(LOCATIVE) {
+        let index = number_value(tokens, index_field)? as usize;
+        write_programlet_vector_lane(
+            tokens,
+            destination,
+            index,
+            value,
+            symbols,
+            vector_slots,
+            vector_values,
+            frame_index,
+        )
+    } else {
+        write_programlet_float(
+            tokens,
+            destination,
+            symbols,
+            symbol_used,
+            VALUE_FLOAT,
+            value,
+            slots,
+        )
+    }
 }
 
 pub(super) fn is_programlet_vector_select(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     vector_slots: &[ProgramletVectorSlot; MAX_PROGRAMLET_VECTOR_LOCAL_SLOTS],
@@ -191,7 +205,7 @@ pub(super) fn is_programlet_vector_select(
 
 pub(super) fn apply_programlet_vector_select(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     symbols: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     symbol_used: &mut usize,
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],

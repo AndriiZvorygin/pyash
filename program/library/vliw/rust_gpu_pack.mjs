@@ -1,11 +1,11 @@
 import crypto from "node:crypto";
-import path from "node:path";
 import { performance } from "node:perf_hooks";
 
-import gpu from "../../verbs/gpu.mjs";
-import { readGpuHandleStatus } from "../../runtime/gpu/handle_status.mjs";
-import { submitManagedGpuJob } from "../../runtime/gpu/managed-ollama.mjs";
+import { resolveConfiguredText } from "../../runtime/gpu/configured-endpoints.mjs";
+import { resolveGpuHousekeeperUrl } from "../../runtime/gpu/managed-ollama.mjs";
+import { resolveGpuSourceIdentity } from "../../runtime/gpu/source_identity.mjs";
 import { decodePyacPack } from "./database.mjs";
+import { createPyacHousekeeperUpload } from "./housekeeper_upload.mjs";
 
 const DEFAULT_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_POLL_INTERVAL_MS = 1000;
@@ -17,23 +17,32 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function makeRemember(worldRoot, agentName, gpuId) {
-  return (name) => {
-    if (name === "world root") return { ob: { filename: worldRoot } };
-    if (name === "mind name") return { ob: { name: agentName } };
-    if (name === "gpu id") return { ob: { text: gpuId } };
-    return null;
-  };
-}
-
 function readResult(status, handleId) {
-  const raw = String(status?.result ?? "").trim();
-  if (!raw) throw new Error(`VLIW Housekeeper job ${handleId} completed without a result`);
+  const raw = status?.result;
+  if (raw && typeof raw === "object") return raw;
+  const text = String(raw ?? "").trim();
+  if (!text) throw new Error(`VLIW Housekeeper job ${handleId} completed without a result`);
   try {
-    return JSON.parse(raw);
+    return JSON.parse(text);
   } catch (error) {
     throw new Error(`VLIW Housekeeper job ${handleId} returned invalid JSON: ${error.message}`);
   }
+}
+
+function errorText(value) {
+  if (typeof value === "string") return value;
+  if (value instanceof Error) return value.message;
+  if (value && typeof value === "object") {
+    for (const key of ["message", "error", "detail"]) {
+      if (typeof value[key] === "string" && value[key]) return value[key];
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "unserializable Housekeeper error";
+    }
+  }
+  return String(value ?? "unknown Housekeeper failure");
 }
 
 function estimateVramMb(codeletCount) {
@@ -53,16 +62,23 @@ function timingRecord(status, handleId, requestStartedAt, requestStartedMs, runt
   return {
     handleId,
     remoteJobId: String(status?.remoteJobId ?? ""),
-    queuedAt: String(status?.queuedAt ?? ""),
+    queuedAt: String(status?.queuedAt ?? status?.submittedAt ?? ""),
     workerStartedAt: String(status?.startedAt ?? ""),
     workerFinishedAt: String(status?.finishedAt ?? ""),
-    remoteSubmittedAt: String(status?.remoteSubmittedAt ?? ""),
-    remoteStartedAt: String(status?.remoteStartedAt ?? ""),
-    remoteFinishedAt: String(status?.remoteFinishedAt ?? ""),
-    localQueueWaitMs: timestampDeltaMs(status?.queuedAt, status?.startedAt),
+    remoteSubmittedAt: String(status?.remoteSubmittedAt ?? status?.submittedAt ?? ""),
+    remoteStartedAt: String(status?.remoteStartedAt ?? status?.startedAt ?? ""),
+    remoteFinishedAt: String(status?.remoteFinishedAt ?? status?.finishedAt ?? ""),
+    executionHostId: String(status?.executionHostId ?? ""),
+    localQueueWaitMs: timestampDeltaMs(status?.queuedAt ?? status?.submittedAt, status?.startedAt),
     workerWallMs: timestampDeltaMs(status?.startedAt, status?.finishedAt),
-    housekeeperQueueWaitMs: timestampDeltaMs(status?.remoteSubmittedAt, status?.remoteStartedAt),
-    housekeeperActiveMs: timestampDeltaMs(status?.remoteStartedAt, status?.remoteFinishedAt),
+    housekeeperQueueWaitMs: timestampDeltaMs(
+      status?.remoteSubmittedAt ?? status?.submittedAt,
+      status?.remoteStartedAt ?? status?.startedAt
+    ),
+    housekeeperActiveMs: timestampDeltaMs(
+      status?.remoteStartedAt ?? status?.startedAt,
+      status?.remoteFinishedAt ?? status?.finishedAt
+    ),
     clientRoundTripMs: Number((performance.now() - requestStartedMs).toFixed(3)),
     requestStartedAt,
     runtimeTimingMs
@@ -120,21 +136,26 @@ function runtimeTimingsFromError(message) {
 }
 
 export function createHousekeeperVliwPackExecutor({
-  worldRoot = path.resolve(process.cwd(), "world"),
   agentName = "vliw-pack-executor",
-  gpuId = process.env.PYA_GPU_ID || "gpu-0",
   deviceId = "",
+  targetHostId = "",
+  hostId = "",
+  username = "",
+  secret = "",
+  managerUrl = "",
   timeoutMs = DEFAULT_TIMEOUT_MS,
   pollIntervalMs = DEFAULT_POLL_INTERVAL_MS,
-  submitDuty = gpu,
-  readStatus = readGpuHandleStatus,
+  fetchImpl = globalThis.fetch,
   sleep = delay,
-  makeHandleId = () => `pyac-pack-${crypto.randomUUID()}`
+  makeHandleId = () => crypto.randomBytes(10).toString("base64url")
 } = {}) {
-  const resolvedWorldRoot = path.resolve(String(worldRoot));
+  const workingDirectory = process.cwd();
   const waitLimit = Math.max(1, Math.trunc(Number(timeoutMs) || DEFAULT_TIMEOUT_MS));
   const pollDelay = Math.max(10, Math.trunc(Number(pollIntervalMs) || DEFAULT_POLL_INTERVAL_MS));
-  const remember = makeRemember(resolvedWorldRoot, agentName, gpuId);
+  const source = resolveGpuSourceIdentity({ hostId, username });
+  const sharedSecret = String(secret || resolveConfiguredText("gpu authentication key", { cwd: workingDirectory })).trim();
+  const housekeeperUrl = resolveGpuHousekeeperUrl({ managerUrl, cwd: workingDirectory });
+  if (typeof fetchImpl !== "function") throw new Error("VLIW Housekeeper executor requires fetch");
 
   return async function executePackThroughHousekeeper(packBytes) {
     const bytes = packBytes instanceof Uint8Array
@@ -144,27 +165,39 @@ export function createHousekeeperVliwPackExecutor({
     if (decoded.codelets.length === 0) throw new Error("VLIW Housekeeper executor requires a non-empty PyAC pack");
     const handleId = String(makeHandleId()).trim();
     if (!handleId) throw new Error("VLIW Housekeeper executor requires a non-empty handle id");
+    if (!sharedSecret) throw new Error("VLIW Housekeeper upload requires `gpu authentication key` in configure/secret.pya");
+    if (!housekeeperUrl) throw new Error("VLIW Housekeeper executor requires PYA_GPU_HOUSEKEEPER_URL or `gpu housekeeper url` configuration");
+    const upload = createPyacHousekeeperUpload({
+      packBytes: bytes,
+      secret: sharedSecret,
+      username: source.username,
+      hostId: source.hostId,
+      handleId
+    });
     const requestStartedAt = new Date().toISOString();
     const requestStartedMs = performance.now();
-    const jobSpec = {
-      kind: "pyac-pack-execute",
-      profileName: "pyac-vliw-rust-gpu",
-      resourceRequest: {
-        vramRequiredMb: estimateVramMb(decoded.codelets.length),
-        ...(String(deviceId).trim() ? { deviceId: String(deviceId).trim() } : {})
+    const submitResponse = await fetchImpl(`${housekeeperUrl}/submit-pyac`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/vnd.pyac-vliw-upload",
+        ...(String(deviceId).trim() ? { "x-pyash-device-id": String(deviceId).trim() } : {}),
+        ...(String(targetHostId).trim() ? { "x-pyash-target-host-id": String(targetHostId).trim() } : {}),
+        "x-pyash-discharge-allowed": "false",
+        "x-pyash-worker-id": String(agentName || "vliw-pack-executor")
       },
-      payload: { packBase64: Buffer.from(bytes).toString("base64") }
-    };
-    await submitDuty({
-      su: { name: handleId },
-      be: "gpu vliw",
-      ob: { text: JSON.stringify(jobSpec) },
-      vyah: { ve: { type: "name", values: ["start", "future"] } }
-    }, { remember });
+      body: upload.stream
+    });
+    const submitted = await submitResponse.json().catch(() => ({}));
+    if (!submitResponse.ok || submitted.accepted !== true || !submitted.remoteJobId) {
+      throw new Error(`VLIW Housekeeper upload failed (${submitResponse.status}): ${submitted.error || submitResponse.statusText || "invalid response"}`);
+    }
+    const remoteJobId = String(submitted.remoteJobId);
 
     const deadline = Date.now() + waitLimit;
     while (Date.now() < deadline) {
-      const status = await readStatus(resolvedWorldRoot, handleId);
+      const response = await fetchImpl(`${housekeeperUrl}/job/${encodeURIComponent(remoteJobId)}`);
+      const status = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(`VLIW Housekeeper status failed (${response.status}): ${status.error || response.statusText}`);
       if (status?.status === "success") {
         let result;
         try {
@@ -188,7 +221,7 @@ export function createHousekeeperVliwPackExecutor({
         };
       }
       if (status?.status === "fail") {
-        const detail = String(status.error || status.message || "unknown Housekeeper failure");
+        const detail = errorText(status.error || status.message || "unknown Housekeeper failure");
         const error = new Error(`VLIW Housekeeper job ${handleId} failed: ${detail}`);
         error.housekeeperTiming = timingRecord(
           status,
@@ -205,50 +238,23 @@ export function createHousekeeperVliwPackExecutor({
   };
 }
 
-export function createPinnedVliwPackExecutor({ targetHostId, timeoutMs, managerUrl, submit = submitManagedGpuJob }) {
+export function createPinnedVliwPackExecutor({ targetHostId, timeoutMs, managerUrl, ...options }) {
   const host = String(targetHostId ?? "").trim().toLowerCase();
   if (!host) throw new Error("pinned VLIW execution requires a host");
+  const execute = createHousekeeperVliwPackExecutor({
+    ...options,
+    managerUrl,
+    timeoutMs,
+    targetHostId: host,
+    deviceId: options.deviceId || "gpu0",
+    agentName: options.agentName || "vliw-gpu-conformance"
+  });
   return async (packBytes) => {
-    const decoded = decodePyacPack(packBytes);
-    const startedMs = performance.now();
-    const startedAt = new Date().toISOString();
-    const handleId = `pyac-pack-${crypto.randomUUID()}`;
-    let terminal;
-    const timing = (runtime) => timingRecord({
-      remoteJobId: terminal?.remoteJobId,
-      remoteSubmittedAt: terminal?.submittedAt,
-      remoteStartedAt: terminal?.startedAt,
-      remoteFinishedAt: terminal?.finishedAt
-    }, handleId, startedAt, startedMs, runtime);
-    const verifyHost = () => {
-      if (terminal?.executionHostId !== host) {
-        throw new Error(`VLIW expected host ${host}, got ${terminal?.executionHostId ?? "unknown"}`);
-      }
-    };
-    try {
-      const result = await submit({
-        runtimeName: "vliw",
-        profileName: "pyac-vliw-rust-gpu",
-        workerId: "vliw-gpu-conformance",
-        targetHostId: host,
-        deviceId: "gpu0",
-        managerUrl,
-        timeoutMs,
-        handleId,
-        dischargeAllowed: false,
-        vramRequiredMb: Math.max(512, estimateVramMb(decoded.codelets.length)),
-        jobSpec: {
-          kind: "pyac-pack-execute",
-          payload: { packBase64: Buffer.from(packBytes).toString("base64") }
-        },
-        onStatus(status) { terminal = status; }
-      });
-      verifyHost();
-      return { ...result, housekeeperTiming: timing(result.runtimeTimingMs ?? null) };
-    } catch (error) {
-      if (terminal) verifyHost();
-      error.housekeeperTiming = timing(runtimeTimingsFromError(error.message));
-      throw error;
+    const result = await execute(packBytes);
+    const executionHostId = result.housekeeperTiming?.executionHostId;
+    if (executionHostId !== host) {
+      throw new Error(`VLIW expected host ${host}, got ${executionHostId || "unknown"}`);
     }
+    return result;
   };
 }

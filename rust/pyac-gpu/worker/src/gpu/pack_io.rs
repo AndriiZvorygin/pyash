@@ -1,9 +1,13 @@
 use super::*;
 
-pub(super) struct PreparedPack {
-    pub(super) input_words: Vec<u32>,
+pub(super) struct PreparedPack<'a> {
+    pub(super) executable_codelets: &'a [[u16; pyac::WORDS_PER_CODELET]],
+    pub(super) input_words: &'a [u16],
     pub(super) section_words: Vec<u32>,
     pub(super) dispatch_words: Vec<u32>,
+    pub(super) storage_descriptors: Vec<u32>,
+    pub(super) storage_names: Vec<u32>,
+    pub(super) storage_payload: Vec<u32>,
     pub(super) section_count: usize,
     pub(super) programlet: bool,
     pub(super) result_records: usize,
@@ -11,18 +15,18 @@ pub(super) struct PreparedPack {
 
 pub(super) fn prepare_pack(
     codelets: &[[u16; pyac::WORDS_PER_CODELET]],
-) -> Result<PreparedPack, String> {
-    let input_words = codelets
-        .iter()
-        .flat_map(|codelet| codelet.iter().map(|word| u32::from(*word)))
-        .collect::<Vec<_>>();
-    let sectioned = pyac_vliw_core::has_programlet_section_header(&input_words, codelets.len());
+) -> Result<PreparedPack<'_>, String> {
+    let storage = pyac::prepare_storage_sections(codelets).map_err(|error| error.to_string())?;
+    let executable_count = storage.executable_codelet_count;
+    let executable_codelets = &codelets[..executable_count];
+    let input_words = executable_codelets.as_flattened();
+    let sectioned = pyac_vliw_core::has_programlet_section_header(input_words, executable_count);
     let mut section_descriptors =
         [pyac_vliw_core::ProgramletSection::EMPTY; pyac_vliw_core::MAX_PROGRAMLET_SECTIONS];
     let section_count = if sectioned {
         match pyac_vliw_core::scan_numeric_programlet_sections(
-            &input_words,
-            codelets.len(),
+            input_words,
+            executable_count,
             &mut section_descriptors,
         ) {
             Ok(count) => count,
@@ -36,16 +40,16 @@ pub(super) fn prepare_pack(
         0
     };
     let programlet =
-        !sectioned && pyac_vliw_core::is_numeric_programlet(&input_words, codelets.len());
+        !sectioned && pyac_vliw_core::is_numeric_programlet(input_words, executable_count);
     let result_records = if sectioned {
         section_count * SECTION_RESULT_STRIDE
     } else if programlet {
         RESULT_STRIDE
     } else {
-        codelets.len() * RESULT_STRIDE
+        executable_count * RESULT_STRIDE
     };
     let dispatch_words = prepare_dispatch_words(
-        &input_words,
+        input_words,
         programlet,
         &section_descriptors[..section_count],
     )?;
@@ -59,10 +63,15 @@ pub(super) fn prepare_pack(
     if section_words.is_empty() {
         section_words.push(0);
     }
+
     Ok(PreparedPack {
+        executable_codelets,
         input_words,
         section_words,
         dispatch_words,
+        storage_descriptors: storage.descriptors,
+        storage_names: storage.names,
+        storage_payload: storage.payload,
         section_count,
         programlet,
         result_records,
@@ -129,4 +138,24 @@ pub(super) fn decode_pack_result(
         );
     }
     Ok(response)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prepared_cuda_input_borrows_packed_words_without_widening() {
+        let codelets = [[0x1234u16; pyac::WORDS_PER_CODELET]; 2];
+        let prepared = prepare_pack(&codelets).expect("valid packet shape");
+        let source = codelets.as_flattened();
+
+        assert_eq!(prepared.input_words.len(), source.len());
+        assert_eq!(
+            std::mem::size_of_val(prepared.input_words),
+            source.len() * 2
+        );
+        assert_eq!(prepared.input_words.as_ptr(), source.as_ptr());
+        assert_eq!(prepared.input_words, source);
+    }
 }

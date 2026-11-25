@@ -110,7 +110,7 @@ pub(super) fn sort_cases(cases: &mut [SignatureCase; MAX_ROUTINE_SIGNATURE_CASES
 }
 
 pub(super) fn formal_type(
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     field: SentenceField,
 ) -> Result<SignatureType, u32> {
     let mut name = NameSpan::EMPTY;

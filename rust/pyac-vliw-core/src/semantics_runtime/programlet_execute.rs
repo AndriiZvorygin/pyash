@@ -2,7 +2,7 @@ use super::*;
 
 #[cfg(not(target_arch = "spirv"))]
 pub fn execute_numeric_programlet(
-    words: &[u32],
+    words: &[impl VliwWord],
     codelet_count: usize,
     step_budget: u32,
     symbol_words: &mut [u32; MAX_PROGRAMLET_SYMBOL_WORDS],
@@ -13,7 +13,7 @@ pub fn execute_numeric_programlet(
 
 #[cfg(not(target_arch = "spirv"))]
 pub fn execute_numeric_programlet_at(
-    words: &[u32],
+    words: &[impl VliwWord],
     base_codelet: usize,
     codelet_count: usize,
     step_budget: u32,
@@ -42,7 +42,7 @@ pub fn execute_numeric_programlet_at(
 }
 
 pub fn execute_numeric_programlet_at_with_directory_words(
-    words: &[u32],
+    words: &[impl VliwWord],
     base_codelet: usize,
     codelet_count: usize,
     step_budget: u32,
@@ -76,7 +76,7 @@ pub fn execute_numeric_programlet_at_with_directory_words(
 }
 
 fn execute_numeric_programlet_at_with_directory_view(
-    words: &[u32],
+    words: &[impl VliwWord],
     base_codelet: usize,
     codelet_count: usize,
     step_budget: u32,
@@ -231,16 +231,23 @@ fn execute_numeric_programlet_at_with_directory_view(
             ) {
                 return CoreResult::failure(error, steps);
             }
-        } else if frame.state == 1 && is_programlet_dot_product_store(&sentence, &sentence_view) {
+        } else if frame.state == 1 && is_programlet_composition_action(&sentence, &sentence_view) {
             frame.action_started = 1;
+            if !frame_row_is_valid::<_, _, MAX_PROGRAMLET_LOCAL_SLOTS>(&frames.slots, frame_index) {
+                return CoreResult::failure(ERROR_MALFORMED, steps);
+            }
             let arguments = array_at!(frames.arguments, frame_index);
+            let slots =
+                frame_row_mut::<_, _, MAX_PROGRAMLET_LOCAL_SLOTS>(&mut frames.slots, frame_index);
             let vector_slots = array_at!(frames.vector_slots, frame_index);
-            if let Err(error) = apply_programlet_dot_product_store(
+            if let Err(error) = apply_programlet_composition_action(
                 &sentence,
                 &sentence_view,
                 symbol_words,
+                &mut symbol_used,
                 &arguments,
                 frame_index,
+                slots,
                 &vector_slots,
                 &mut frames.vector_values,
             ) {

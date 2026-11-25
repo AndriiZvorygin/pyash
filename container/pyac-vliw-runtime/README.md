@@ -16,6 +16,14 @@ rollback target there. Housekeeper uses the same `pyac-pack-execute` protocol
 for both backends. The CUDA image includes only the runtime, cubin, and build
 metadata: there is no PTX, compiler, or fallback to Vulkan or CPU.
 
+PyAC v1 codelet inputs stay 16-bit through CPU and CUDA execution. The shared
+semantics core reads either `u16` or `u32` sources and widens one word only when
+accessing its semantic value; dispatch directories and result records remain
+`u32`. CUDA validates a borrowed pack view and uploads the original codelet
+payload bytes directly, without a pack-sized `u32` expansion. The WebGPU/WGSL
+path converts at its own `u32` storage-buffer boundary and keeps the same pack
+format and runtime behavior.
+
 Build on Mriczo, not SWAC. The pinned nightly must have `rust-src`,
 `llvm-tools`, and `llvm-bitcode-linker`; `ptxas` 12.8 and Docker are used on
 the build host. Then run:
@@ -54,12 +62,19 @@ are in `documentation/reference/rust-vliw-verification-ledger.md`. Use `deploy`
 to persist the verified backend; the default verification mode restores the
 previous runtime.
 
-The internal HTTP contract is protocol version 1:
+The internal HTTP contract is protocol version 1. The framed pack's uint32
+`total_bytes` field is the wire-format ceiling; the former 16 MiB software cap
+has been removed. Practical host/GPU memory or storage-binding limits can
+still reject a particular allocation with an explicit error.
 
 - `GET /health` returns `ready`, `protocolVersion`, and available worker slots.
 - `POST /v1/execute` accepts `{protocolVersion, jobId, jobSpec}` where
   `jobSpec.kind` is `pyac-pack-execute` and `jobSpec.payload.packBase64` is the
-  canonical PyAC pack. Independent `myocpfun` sections are dispatched as
+  canonical PyAC pack. Housekeeper uses the raw pack endpoint to avoid base64
+  expansion. Immutable storage descriptors and payload bytes are bound as
+  separate read-only GPU inputs; named rank-one float32/float64 storage vectors
+  participate in dot products beyond the inline lane limit. Independent
+  `myocpfun` sections are dispatched as
   separate workgroups.
 - The response includes `ok`, `backend`, `device`, and typed `values`. For a
   sectioned pack it also includes named `sections` and `completionOrder`; those

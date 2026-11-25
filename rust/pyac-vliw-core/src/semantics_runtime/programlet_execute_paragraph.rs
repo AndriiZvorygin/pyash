@@ -3,7 +3,7 @@ use super::*;
 #[inline(never)]
 pub(super) fn close_programlet_paragraph(
     sentence: &ParsedSentence,
-    sentence_view: &SentenceView<'_>,
+    sentence_view: &SentenceView<'_, impl VliwWord>,
     symbol_words: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     frames: &mut ProgramletStack,
     frame_index: usize,

@@ -2,7 +2,7 @@ use super::*;
 
 pub(super) fn capture_programlet_arguments(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
@@ -62,7 +62,7 @@ pub(super) fn capture_programlet_arguments(
 }
 
 pub(super) fn validate_programlet_arguments(
-    words: &[u32],
+    words: &[impl VliwWord],
     base_codelet: usize,
     codelet_count: usize,
     definition_start: usize,

@@ -1,14 +1,25 @@
+use super::embedding_lookup::embedding_lookup_group;
 use super::iwsp_vector_ops::{
     vector_float_arithmetic_group, vector_maximum_group, vector_sum_group,
 };
 use super::mutable_vector::mutable_vector_group;
 use super::pluk_tlas::pluk_tlas_group;
-use super::scalar_product::scalar_product_group;
+use super::scalar_product::scalar_product_group_with_storage;
 use super::signature_dispatch::*;
+use super::vector_argmax::vector_argmax_group;
 use super::vector_group::interpret_vector_group;
 use super::*;
 
-pub fn interpret_group(words: &[u32], start: usize, codelet_count: usize) -> CoreResult {
+pub fn interpret_group(words: &[impl VliwWord], start: usize, codelet_count: usize) -> CoreResult {
+    interpret_group_with_storage(words, start, codelet_count, &StorageView::EMPTY)
+}
+
+pub fn interpret_group_with_storage(
+    words: &[impl VliwWord],
+    start: usize,
+    codelet_count: usize,
+    storage: &StorageView<'_>,
+) -> CoreResult {
     if start >= codelet_count || words.len() < codelet_count * CODELET_WORDS {
         return CoreResult::failure(ERROR_MALFORMED, 0);
     }
@@ -26,7 +37,16 @@ pub fn interpret_group(words: &[u32], start: usize, codelet_count: usize) -> Cor
     };
     let result = match route {
         ROUTE_PLUK_TLAS => pluk_tlas_group(words, start, group_len, codelet_count),
-        ROUTE_SCALAR_PRODUCT => scalar_product_group(words, start, group_len, codelet_count),
+        ROUTE_SCALAR_PRODUCT => {
+            scalar_product_group_with_storage(words, start, group_len, codelet_count, storage)
+        }
+        ROUTE_EMBEDDING_LOOKUP => Some(embedding_lookup_group(
+            words,
+            start,
+            group_len,
+            codelet_count,
+            storage,
+        )),
         ROUTE_VECTOR_FLOAT_ARITHMETIC => Some(vector_float_arithmetic_group(
             words,
             start,
@@ -35,6 +55,7 @@ pub fn interpret_group(words: &[u32], start: usize, codelet_count: usize) -> Cor
         )),
         ROUTE_VECTOR_SUM => Some(vector_sum_group(words, start, group_len, codelet_count)),
         ROUTE_VECTOR_MAXIMUM => Some(vector_maximum_group(words, start, group_len, codelet_count)),
+        ROUTE_VECTOR_ARGMAX => Some(vector_argmax_group(words, start, group_len, codelet_count)),
         ROUTE_MUTABLE_VECTOR => mutable_vector_group(words, start, group_len),
         ROUTE_FIXED16 if group_len == 1 => fixed16::single_codelet(words, start),
         ROUTE_FLOAT if group_len == 1 => single_codelet(words, start),

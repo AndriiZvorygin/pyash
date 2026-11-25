@@ -2,7 +2,7 @@ use super::*;
 
 pub(super) fn evaluate_boolean_leaf(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
 ) -> Result<bool, u32> {
     let symbols = [0; MAX_PROGRAMLET_SYMBOL_WORDS];
     let arguments = [ProgramletArgument::EMPTY; MAX_PROGRAMLET_ARGUMENTS];
@@ -12,7 +12,7 @@ pub(super) fn evaluate_boolean_leaf(
 
 pub(super) fn evaluate_boolean_leaf_with_env(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     arguments: &[ProgramletArgument; MAX_PROGRAMLET_ARGUMENTS],
     slots: &[NumericLocalSlot; MAX_PROGRAMLET_LOCAL_SLOTS],
@@ -97,7 +97,7 @@ pub(super) fn evaluate_boolean_leaf_with_env(
 }
 
 pub(super) fn evaluate_boolean_expression(
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     start: usize,
     end: usize,
 ) -> Result<bool, u32> {
@@ -108,7 +108,7 @@ pub(super) fn evaluate_boolean_expression(
 }
 
 pub(super) fn evaluate_boolean_expression_with_env(
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     start: usize,
     end: usize,
     symbols: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
@@ -237,7 +237,7 @@ pub(super) fn evaluate_boolean_expression_with_env(
 }
 
 pub(super) fn boolean_composition(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     codelet_count: usize,
 ) -> Option<CoreResult> {
@@ -268,7 +268,7 @@ pub(super) fn boolean_composition(
 }
 
 pub(super) fn boolean_comparison(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     codelet_count: usize,
 ) -> Option<CoreResult> {

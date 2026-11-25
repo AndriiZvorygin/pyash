@@ -6,17 +6,29 @@ The volume format and record grammar are specified in
 
 ## Current Volumes
 
-`reference.pya` is the generated snapshot of accepted Pyash vocabulary;
-`reference.pyac` is its compiled runtime volume. The checked-in v3 snapshot has
-58,630 entries, including 57,283 selected exact WordNet senses, SUMO links,
-Chinese forms, and unique legacy translations, plus 2,885 single Han-to-atom
-links. It remains v3 pending curation of 3,363 keys with multiple exact Open
-English WordNet 2025 senses. Do not convert it to v4 until those conflicts are
-reviewed. V4 permits one exact sense per dataset release and key; cross-release
-links to the same sense remain valid. Each linked gloss is an interim
-definition; a native Pyash definition is optional. Multi-character Chinese
-Pinyin or Jyutping is composed only when each Han character has one local
-reading and the surface resolves to one Pyash key.
+`reference.pya` is the generated source snapshot of accepted Pyash vocabulary.
+Its profile-v3 marker describes the source entry grammar; the Rust build
+converts it to the current profile-v4 runtime volume in `reference.pyac`. Both
+contain 64,572 entries. The current v4 volume has 4,065,444 codelets and is
+130,094,240 bytes. The snapshot includes 7,084 promoted SUMO links: 5,658
+`superclass-of` and 1,426 `equivalent-to`.
+
+V4 permits distinct exact WordNet senses for one Pyash key when they have
+different parts of speech; a duplicate sense for the same part of speech is
+rejected. Each exact linked gloss is an interim definition; a native
+compositional Pyash definition is optional. Multi-character Chinese Pinyin or
+Jyutping is composed only when each Han character has one local reading and the
+surface resolves to one Pyash key.
+
+The IWSP Q/K/V forms are present as Pyash dictionary keys: `hwas` resolves to
+the English form `question`, `htis hsek` to `key`, and `hnuc gjat` to `value`.
+All three carry exact Open English WordNet 2025 links: `hwas` to
+`n:07208256-n` (question/query), `htis hsek` to `n:05802065-n` (key), and
+`hnuc gjat` to `n:05864972-n` (value). The `attention-query`, `attention-key`,
+and `attention-value` labels are IWSP role names, not English lexical forms;
+the reference volume exposes the canonical English surfaces rather than
+treating those role labels as dictionary aliases. Rust key, surface, and source
+indexes are tested against these entries and exact links.
 
 `english-core.pya` and `.pyac` are a six-entry v4 example for vector, data,
 compare, select, sum, and lookup. It uses canonical Pyash keys in `su` and
@@ -27,9 +39,9 @@ snapshot is generated on `dev-vocab` from canonical catalogs; do not hand-edit
 ## Generate the Accepted Vocabulary Snapshot
 
 The snapshot includes promoted atoms and compounds, exact linked WordNet senses
-and glosses, SUMO links, Chinese forms selected from accepted links and the
-COW crosswalk, and legacy translations only where an English form resolves to
-one Pyash key. Candidate and decision-history records are not copied.
+and glosses, SUMO links, Chinese forms selected from accepted links and the COW
+crosswalk, and legacy translations only where an English form resolves to one
+Pyash key. Candidate and decision-history records are not copied.
 
 On `dev-vocab`, generate the snapshot from the current canonical catalogs with:
 
@@ -59,21 +71,21 @@ Promote new atoms, compounds, English forms, and exact WordNet links through
 their canonical vocabulary workflows on `dev-vocab`. For a compound from
 existing atoms, use `compound_catalog_add.mjs`; record the exact sense and its
 review state with `vocabulary_entry_review.mjs` or the catalog's accepted-LLM
-flow. Then regenerate the accepted snapshot as described above and bring the
+flow. Regenerate the accepted snapshot as described above and bring the
 generated `reference.pya` into this runtime worktree.
 
-Build the compiled volume from the source's declared profile with:
+Build the compiled volume from the source with:
 
 ```sh
 pyash dictionary volume build from program/library/dictionary/reference.pya to program/library/dictionary/reference.pyac
 ```
 
 The build validates and lowers the source, then atomically replaces the
-`.pyac` volume. It does not rebuild the Rust executable. The compiled volume is
-the runtime lookup artifact. After the v4 curation gate clears, regenerate the
-snapshot and build its v4 volume. Index records are generated from source data;
-change the catalogs and regenerate instead of editing those records. Publish
-the generated snapshot and compiled volume together.
+`.pyac` volume. It does not rebuild the Rust executable. The profile-v3 source
+grammar is converted to the current profile-v4 runtime format. Index records
+are generated from source data; change the catalogs and regenerate instead of
+editing those records. Publish the generated snapshot and compiled volume
+together.
 
 ## Build the CLI Once
 
@@ -118,21 +130,34 @@ Run a warmed file-backed surface lookup benchmark and save its Pyash record:
 pyash dictionary volume benchmark program/library/dictionary/reference.pyac surface en forecast 100000 to artifacts/dictionary-benchmarks/reference-$(hostname)-$(date +%Y%m%d).pya
 ```
 
-The command performs five warmups and records the timestamp, host/platform,
-executable and volume sizes, entry/codelet counts, open time, total/mean lookup
-latency, lookup rate, iteration count, and result count. `artifacts/` is
-git-ignored; use a unique filename for each run and retain/copy the record
-where local benchmark history is maintained.
+The command requires profile v4, performs five warmups, and records the
+timestamp, host/platform, executable and volume sizes, entry/codelet counts,
+open time, total/mean lookup latency, lookup rate, iteration count, and result
+count. `artifacts/` is git-ignored; use a unique filename for each run and
+retain or copy the record where local benchmark history is maintained.
 
-The command requires v4 and performs five warmups. The six-entry example's
-benchmark is not representative of the full snapshot. The previous 2026-11-20
-338 ns result measured v3 after loading runtime indexes; it is not a v4 raw-file
-lookup baseline. V2/v3 use seek-and-scan and are slower; do not benchmark them
-for many iterations. The checked-in v3 volume's 2026-11-23 smoke check opened
-58,630 entries, 6,261,431 codelets, and 200,365,824 bytes in about 0.37 seconds;
-one `en`/`map` lookup returned six offsets in about 3.90 seconds. Record a v4
-full-volume baseline after curation clears the gate. `artifacts/` is git-ignored;
-use a unique filename and retain the record with local benchmark history.
+Current reference-volume verification on Mriczo, 2026-11-25: rebuilding
+`reference.pyac` from the checked-in `reference.pya` parsed 100,269,153 source
+bytes in 12.552 s and completed in 17.506 s. The result contains 64,572 entries
+and 4,065,444 codelets, occupies 130,094,240 bytes, and has SHA-256
+`cfd71496549c629263c74316adc3e5fe510746aea1b86b79bdb24bbfa9424c62`. A
+10,000-iteration warmed `en`/`tensor` lookup measured 106,218 ns mean
+(9,414.5 lookups/s), one result per lookup; the release CLI was 1,527,152
+bytes. The local Pyash run record is
+`artifacts/dictionary-benchmarks/reference-mriczo-20261125-iwsp-query-link.pya`.
+
+The six-entry example volume's earlier benchmark is not representative of this
+full snapshot. The previous 2026-11-20 338 ns figure measured v3 after loading
+runtime indexes; it is not a v4 raw-file lookup result. Legacy v2/v3 lookups
+use seek-and-scan and are slower. The current published volume is v4 and is
+eligible for the full-volume raw-file benchmark.
+
+Historical legacy-reader smoke check on this host, 2026-11-23: the then-current
+v3 volume (58,630 entries, 6,261,431 codelets, 200,365,824 bytes) took about
+0.37 seconds to open. A single `en`/`map` lookup returned six offsets in about
+3.90 seconds through the compatibility scan path. This records the older
+artifact only; the checked-in runtime file is now v4. For current performance,
+use the warmed v4 full-volume benchmark above.
 
 Before publishing, check keys and source IDs against the active catalogs,
 build the matching profile volume, inspect it, run representative

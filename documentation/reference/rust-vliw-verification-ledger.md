@@ -4,6 +4,140 @@ Use this file as the lookup record for Rust VLIW CPU/GPU conformance runs. Each
 entry records the repository revision, deployed artifact, host/device, route,
 and exact test outcome. A queued or timed-out job is not a passing test.
 
+## 2026-11-25: Payload-backed Matrix-Vector Dot Product
+
+Rank-two immutable float storage now feeds the existing Pyash `kl6m psas`
+sentence. Three indexed sentences selected rows 0, 1, and 2 from a 3x4
+row-major matrix and returned `[1, 2, 7]`, matching the Rust CPU reference.
+This verifies the matrix-vector primitive and storage-shape descriptor on the
+GPU; it is not a BERT-WSD inference or Criterion score.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261125-0002-rust-vliw-conformance/result.pya` |
+| Source revision / checkout | `07fac6cbc4bd45e5aea9571560d6433808dcf065`; tracked tree was dirty during build |
+| Tracked patch SHA-256 | `f6aa630236d981a3dd426c3807a20697e123e707349526cfdda62db0f6d19f00` |
+| Host and route | Mriczo client -> Mriczo Housekeeper -> Rust CUDA VLIW runtime |
+| GPU / driver | NVIDIA GeForce RTX 3090, driver `550.163.01`, 24,576 MiB |
+| CUDA image | `sha256:97268cf465fa3af513478bf72a608f0799340882d85a36d7104fbb06e9fe58fa` |
+| Runtime executable | 9,321,128 bytes; SHA-256 `73c455f08098407ae9772ce2a4e939d317db26b531bbb14f88ff23549dd2da19` |
+| Cubin | 3,347,144 bytes; SHA-256 `3f1f4a6befadb4007364f2dc5c27fcfe6f9fff823e3e0c011ce3cd7fffbef83d` |
+| Build timing | Rust-GPU compile 7.91 s; `ptxas` 40.07 s wall, 503,552 KiB peak RSS |
+| Runtime initialization | Cubin/GPU initialization 0.09 s; ready in 561 ms |
+| Full verification | 76/76 value cases and 5/5 expected errors passed; 13,433.372 ms total |
+| CPU request batches | 44 codelet cases: 57.374 ms; 32 programlet sections: 64.739 ms |
+| CUDA event batches | 44 codelet cases: 4.364 ms; 32 programlet sections: 121.093 ms |
+| Housekeeper client round trips | Codelet batch: 1,129.983 ms; section batch: 1,124.937 ms |
+| New matrix-vector result | f32 input `[1,2,3,4]` and row-major 3x4 matrix -> `[1,2,7]` on CPU and RTX 3090 |
+| Route after run | New CUDA worker retained on Mriczo; Housekeeper queue depth 0, dispatch active |
+
+The two CUDA batch timings cover all codelet and section cases respectively;
+they are not isolated per-case matrix-vector latency. Housekeeper round trips
+include its request and polling overhead. No WSD prediction files were scored
+against the five Raganato datasets in this run.
+
+## 2026-11-25: Minimal Feature-Based Bank-Sense Selection
+
+The Stage 9 example performs prototype-based selection from explicit
+float32 context features. It scores two named prototypes with the Pyash dot
+product, stores those scores in a prediction vector, and selects the maximum
+index. Financial context selects WordNet 2025 `n:08437235-n`; river context
+selects `n:09438462-n`; the tie case selects the first prototype. The exact
+example was lowered and run through the Rust CPU reference, and the corresponding
+three cases were included in the complete CUDA matrix. This demonstrates the
+VLIW operations needed for a tiny WSD-style classifier; it is not a raw-text
+encoder or a trained WSD network.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261125-0001-rust-vliw-conformance/result.pya` |
+| Source revision / checkout | `0ef2c26a979f0c56a40abe0fd02d4dfc7ccd46ab`; working tree was dirty during run |
+| Tracked patch SHA-256 | `7ae3ebc33796b10e2bc66fc8f04f33296b5267a65988816ec52e4662cd3b73d8` |
+| Host and route | Mriczo client -> Mriczo Housekeeper -> Rust CUDA VLIW runtime |
+| GPU / driver | NVIDIA GeForce RTX 3090, driver `550.163.01`, 24,576 MiB |
+| CUDA image | `sha256:178b01c665acda2ccc0a1b98451a88590862e1ccbef1d541ee3a22a01bf9d776` |
+| Runtime executable | 9,318,808 bytes; SHA-256 `842161492eaf571b4a48a06343cdf57ad4dd72e61f4163da7a34800df7925c0f` |
+| Cubin | 3,341,128 bytes; SHA-256 `671d89f3e45fede729d064cd5f56960ec407ea86da7e59dfeb6dfb631e8eb167` |
+| CPU reference executable | 16,528,720 bytes; SHA-256 `28b62c2aba3a535318d855215f19e2b05d43262fd37f060ca196210f690032a8` |
+| Runtime readiness | CUDA cubin load and GPU initialization: 0.09 s; worker ready in 603 ms |
+| Full verification | 78 successful value/dispatch results and 6 expected errors; 13,442.122 ms total |
+| CPU request batches | 43 codelet cases: 58.339 ms; 32 programlet sections: 65.659 ms |
+| CUDA event batches | 43 codelet cases: 4.302 ms; 32 programlet sections: 121.096 ms |
+| Housekeeper client round trips | Codelet batch: 1,132.205 ms; section batch: 1,129.534 ms |
+| WSD case outputs | Financial `[1, 0.25]` -> scores `[1, 0.25]` -> index `0`; river `[0.25, 1]` -> `[0.25, 1]` -> index `1`; tie `[1, 1]` -> `[1, 1]` -> index `0` |
+| Route after run | New CUDA worker retained on Mriczo; Housekeeper queue drained to zero and dispatch resumed |
+| Idle restart check | After idle shutdown (container exit `137`, `OOMKilled=false`), Housekeeper restarted the worker for river-context job `job-6a0e0e58b76a`; it returned index `1` on the RTX 3090 (CUDA event 2.735 ms, client round trip 1,184.338 ms) |
+
+The CPU/GPU event batches cover the full conformance workloads, not isolated
+WSD latency. Client round trips include Housekeeper and transport overhead;
+these numbers establish correctness and artifact provenance, not a speedup claim.
+
+## 2026-11-24: Minimal Role-Projected Transformer Block
+
+Stage 8 of the IWSP roadmap now has an executable Pyash-level block. It composes
+the existing role-projected attention with residual addition, population
+LayerNorm, ReLU, a two-neuron feed-forward projection, a second residual, and a
+second LayerNorm. The block is intentionally only two features wide; this is a
+correctness/conformance milestone, not a performance claim.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261124-0011-rust-vliw-conformance/result.pya` |
+| Source revision / checkout | `18bd03d6a7c5ca2a740c5f5ce8058243bdc8819c`; working tree was dirty during build |
+| Build-time patch SHA-256 | `1d75b5e76844ac63ba25542f0ab2e279cb851f85e54dccae0a204d344866c9a5` |
+| Conformance-time patch SHA-256 | `31d38dfdcb661f2a85c512b3c262bc979a38a8af758912972bf78cd2b9fa2b58` |
+| Host and route | Mriczo client -> Mriczo Housekeeper -> Rust CUDA VLIW runtime |
+| GPU / driver | NVIDIA GeForce RTX 3090, driver `550.163.01`, 24,576 MiB |
+| CUDA image | `sha256:a73bae1de284227dc32813edbb808f4c52836786a1934bce40c404cc0202f31a` |
+| Runtime executable | 9,318,864 bytes; SHA-256 `fa8db546ec349de0a2d5ae0616d56ec552a815273bb04db20e4a97ec99a05fce` |
+| Cubin | 3,283,400 bytes; SHA-256 `c478d27bd9478c6a1c67de96b0a21f2faf440cad578b7f0c79cbb07cc2b35acb` |
+| CPU reference executable | 16,515,512 bytes; SHA-256 `44f7403eec0a1355fedf14979510e5ffa1704a49979bf5d1f5d80fce71ea3e04` |
+| Build time | Rust-to-PTX succeeded; `ptxas` took 77.37 s wall and peaked at 503,424 KiB RSS |
+| Runtime readiness | Cubin/GPU initialization 0.11 s; worker ready in 771 ms |
+| Full verification | 72 value cases, 3 typed-dispatch successes, 1 missing-overload error, and 5 expected programlet errors passed; 13,443.653 ms total |
+| CPU request batches | 40 codelet cases: 55.915 ms; 32 programlet sections: 64.684 ms |
+| CUDA event batches | 40 codelet cases: 1.322 ms; 32 programlet sections: 121.603 ms |
+| New block outputs | Ordinary input `[-1, 1]`; zero-variance input `[0, 0]`; CPU and RTX 3090 agreed |
+| Float64 primitive | Dot product of `[3,4]` with `[3,4]`, then `dwic kwap`, returned `5` on CPU and RTX 3090 |
+| Route after run | Updated CUDA worker retained on Mriczo; Housekeeper queue empty and VLIW route ready |
+
+The block's small workload runs slower as one GPU programlet batch than on the
+CPU reference (121.603 ms versus 64.684 ms). The result validates semantics and
+hardware parity only; it does not establish a GPU speedup for tiny workloads.
+
+## 2026-11-24: Borrowed `u16` Input and CUDA Pack Upload
+
+The PyAC pack format remains v1: codelet payloads are sixteen `u16` words.
+The CPU interpreter now reads those words directly, the shared core accepts
+both `u16` and `u32` sources while widening only an individual word at
+semantic access, and CUDA uploads the original pack payload bytes without a
+pack-sized `u32` expansion. Dispatch metadata and result buffers remain
+`u32`; WebGPU converts at its existing `u32` storage-buffer boundary.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261124-0003-rust-vliw-conformance/result.pya` |
+| Source revision | `e63ad0f1a052fa9bf61abba60dbb8c67850a9388` plus tracked patch SHA-256 `75f310856e1917b544a49bd1bee83d1ab5e20e37231f6c9f0d1330048e0965fd` at canary build time |
+| Build host / GPU host | Mriczo build and client -> SWAC Housekeeper -> Rust CUDA runtime |
+| GPU | NVIDIA GeForce RTX 3060, driver `535.247.01`, 12,288 MiB |
+| Runtime image | `sha256:28aaaf032af869b410ecca82a1e213b6c72bb2a413fcd67f48ad6468714da79b` |
+| Cubin | 3,201,880 bytes; SHA-256 `e37447150fb9140a5c417baf13b4a7349925d9a9b36b0a94e8a8dcca4ba44938` |
+| Runtime executable | 9,277,288 bytes; SHA-256 `317e898f34defb7044396520e0aca3f281350a2e92f812df88440100553cc674` |
+| CPU reference executable | 16,019,616 bytes; SHA-256 `9495d84c78bd7a77dd2398439eb279bac30d651916f2053c55efec0f081cbad7` |
+| Full run | 7,525.010 ms; 67 matrix cases and 3 standalone dispatch probes passed; both expected errors matched |
+| CPU batches | 38 codelet cases: 58.217 ms; 29 sections: 65.578 ms |
+| CUDA event batches | 38 codelet cases: 3.549 ms; 29 sections: 108.637 ms |
+| CUDA client round trips | Codelet batch: 659.086 ms; section batch: 669.290 ms |
+| Cold runtime | CUDA artifact loaded; runtime initialization 0.11 s; ready in 1.044 s |
+| Container memory | 1 GiB limit; post-run sample 28.77 MiB |
+| Route after verification | Prior CUDA runtime restored and ready; Housekeeper resumed dispatch |
+
+This run covers the configured VLIW matrix, including float vectors, nested
+dispatch, and attention. Targeted tests verify the borrowed pack view and exact
+CUDA payload bytes; unaligned host packets use a host-side decoding copy only,
+while the GPU still receives the original bytes. The `.pya` run record holds
+per-request timings and Housekeeper job IDs.
+
 ## 2026-11-23: Pyash Role-Projected Attention
 
 **Run record:** `artifacts/20261123-0013-rust-vliw-conformance/result.pya`

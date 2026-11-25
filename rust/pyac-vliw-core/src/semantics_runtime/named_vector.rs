@@ -1,7 +1,7 @@
 use super::vector_group::{interpret_vector_group, vector_name_span};
 use super::*;
 
-fn group_length(words: &[u32], start: usize, codelet_count: usize) -> Option<usize> {
+fn group_length(words: &[impl VliwWord], start: usize, codelet_count: usize) -> Option<usize> {
     let mut end = start;
     while end < codelet_count && word(words, end, 0) & 1 == 0 {
         end += 1;
@@ -9,7 +9,7 @@ fn group_length(words: &[u32], start: usize, codelet_count: usize) -> Option<usi
     (end < codelet_count).then_some(end - start + 1)
 }
 
-fn token_at(words: &[u32], start: usize, group_len: usize, offset: usize) -> Option<u32> {
+fn token_at(words: &[impl VliwWord], start: usize, group_len: usize, offset: usize) -> Option<u32> {
     if offset >= group_len * (CODELET_WORDS - 1) {
         return None;
     }
@@ -19,7 +19,7 @@ fn token_at(words: &[u32], start: usize, group_len: usize, offset: usize) -> Opt
 }
 
 fn names_equal(
-    words: &[u32],
+    words: &[impl VliwWord],
     reference_start: usize,
     reference_group_len: usize,
     reference: NameSpan,
@@ -51,7 +51,7 @@ fn names_equal(
 }
 
 pub(super) fn resolve_prior_vector(
-    words: &[u32],
+    words: &[impl VliwWord],
     codelet_count: usize,
     before: usize,
     reference_start: usize,

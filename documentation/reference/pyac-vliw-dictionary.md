@@ -4,10 +4,15 @@ Status: Rust writes dictionary profile v4 and searches its sorted in-band
 indexes directly in the raw `.pyac` file. Profile v2 and v3 remain readable
 through a seek-and-scan compatibility path; those legacy profiles do not get
 runtime-built indexes.
-The accepted-vocabulary reference volume is published in
-`program/library/dictionary/` and currently contains 58,630 entries in its
-existing v3 snapshot. Its regeneration is gated on resolving 3,363 keys with
-multiple exact Open English WordNet 2025 senses; v4 rejects those conflicts.
+The accepted-vocabulary source is published in
+`program/library/dictionary/reference.pya`; its source marker remains profile
+v3 for the established entry-record grammar. Rust compiles it into the current
+v4 runtime volume, `program/library/dictionary/reference.pyac`. Both contain
+64,572 entries. The v4 volume contains 4,065,435 codelets and is 130,093,952
+bytes. This snapshot includes 7,084 promoted SUMO source links (5,658
+`superclass-of` and 1,426 `equivalent-to`). The previously documented
+3,363-key regeneration gate described an older snapshot; the accepted source
+has since been regenerated and the published v4 volume rebuilt from it.
 The separate six-entry `english-core` volume remains a small example fixture.
 The Rust library writer accepts optional already-lowered native definition
 codelets and exact source glosses. The

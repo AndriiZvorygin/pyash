@@ -4,7 +4,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use pyac::{PyacValue, decode_pack};
+#[cfg(test)]
+use pyac::PyacValue;
+use pyac::decode_pack;
 use serde_json::{Value, json};
 
 #[path = "gpu/result.rs"]

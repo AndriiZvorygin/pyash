@@ -9,7 +9,11 @@ pub(super) const SUM_VERB: u32 = 0xbc8a;
 pub(super) const MAXIMUM_VERB_FIRST: u32 = 0xa9b2;
 pub(super) const MAXIMUM_VERB_SECOND: u32 = 0xa831;
 
-fn read_scalar(cursor: &mut Cursor, words: &[u32], vector_kind: u32) -> Result<VectorOperand, u32> {
+fn read_scalar(
+    cursor: &mut Cursor,
+    words: &[impl VliwWord],
+    vector_kind: u32,
+) -> Result<VectorOperand, u32> {
     let header_word = cursor.read(words, false).ok_or(ERROR_MALFORMED)?;
     let header = quote_header(header_word);
     if header.valid == 0
@@ -28,6 +32,8 @@ fn read_scalar(cursor: &mut Cursor, words: &[u32], vector_kind: u32) -> Result<V
         kind: result_kind,
         length: 1,
         values: [0; RESULT_WORDS],
+        storage_backed: false,
+        storage_byte_offset: 0,
     };
     let words_per_value = header.scalar_bytes as usize / 2;
     if !matches!(words_per_value, 1 | 2 | 4) {
@@ -81,7 +87,7 @@ fn read_scalar(cursor: &mut Cursor, words: &[u32], vector_kind: u32) -> Result<V
 
 fn read_numeric_operand(
     cursor: &mut Cursor,
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
     codelet_count: usize,
@@ -100,7 +106,14 @@ fn read_numeric_operand(
             }
         }
     }
-    *result = match read_operand(cursor, words, start, group_len, codelet_count) {
+    *result = match read_operand(
+        cursor,
+        words,
+        start,
+        group_len,
+        codelet_count,
+        &StorageView::EMPTY,
+    ) {
         Ok(value) => value,
         Err(error) => return Err(error),
     };
@@ -127,7 +140,7 @@ fn scalar_bits(operand: &VectorOperand) -> u64 {
 }
 
 pub(super) fn vector_float_arithmetic_group(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
     codelet_count: usize,
@@ -138,7 +151,14 @@ pub(super) fn vector_float_arithmetic_group(
         slot: 1,
         end: start + group_len,
     };
-    let left = match read_operand(&mut cursor, words, start, group_len, codelet_count) {
+    let left = match read_operand(
+        &mut cursor,
+        words,
+        start,
+        group_len,
+        codelet_count,
+        &StorageView::EMPTY,
+    ) {
         Ok(value) => value,
         Err(error) => return CoreResult::failure(error, group_len as u32),
     };
@@ -151,6 +171,8 @@ pub(super) fn vector_float_arithmetic_group(
         kind: 0,
         length: 0,
         values: [0; RESULT_WORDS],
+        storage_backed: false,
+        storage_byte_offset: 0,
     };
     let right_is_vector = match read_numeric_operand(
         &mut cursor,
@@ -256,7 +278,7 @@ pub(super) fn vector_float_arithmetic_group(
 }
 
 pub(super) fn vector_sum_group(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
     codelet_count: usize,
@@ -267,7 +289,14 @@ pub(super) fn vector_sum_group(
         slot: 1,
         end: start + group_len,
     };
-    let vector = match read_operand(&mut cursor, words, start, group_len, codelet_count) {
+    let vector = match read_operand(
+        &mut cursor,
+        words,
+        start,
+        group_len,
+        codelet_count,
+        &StorageView::EMPTY,
+    ) {
         Ok(value) => value,
         Err(error) => return CoreResult::failure(error, group_len as u32),
     };
@@ -318,7 +347,7 @@ pub(super) fn vector_sum_group(
 }
 
 pub(super) fn vector_maximum_group(
-    words: &[u32],
+    words: &[impl VliwWord],
     start: usize,
     group_len: usize,
     codelet_count: usize,
@@ -329,7 +358,14 @@ pub(super) fn vector_maximum_group(
         slot: 1,
         end: start + group_len,
     };
-    let vector = match read_operand(&mut cursor, words, start, group_len, codelet_count) {
+    let vector = match read_operand(
+        &mut cursor,
+        words,
+        start,
+        group_len,
+        codelet_count,
+        &StorageView::EMPTY,
+    ) {
         Ok(value) => value,
         Err(error) => return CoreResult::failure(error, group_len as u32),
     };

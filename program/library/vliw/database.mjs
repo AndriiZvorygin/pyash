@@ -227,6 +227,9 @@ export function encodePyacPack(codelets) {
     fail("invalid-codelets", "PyAC pack input must be an array");
   }
   const totalBytes = PYAC_HEADER_BYTES + codelets.length * PYAC_CODELET_BYTES;
+  if (!Number.isSafeInteger(totalBytes) || totalBytes > 0xffff_ffff) {
+    fail("pack-too-large", "PyAC pack exceeds its uint32 declared byte length", { totalBytes });
+  }
   const bytes = new Uint8Array(totalBytes);
   const view = new DataView(bytes.buffer);
   for (let index = 0; index < PYAC_MAGIC.length; index += 1) {

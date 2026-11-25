@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
@@ -22,6 +23,8 @@ import { buildPlukTlasConformanceCase } from "./vliw_gpu_conformance/pluk_tlas.m
 import { buildIwspLinearScorerConformanceCases } from "./vliw_gpu_conformance/iwsp_linear_scorer.mjs";
 import { buildIwspVectorOpsConformanceCases } from "./vliw_gpu_conformance/iwsp_vector_ops.mjs";
 import { buildIwspParameterizedAttentionCases } from "./vliw_gpu_conformance/iwsp_parameterized_attention.mjs";
+import { buildIwspMatrixVectorStorageCase } from "./vliw_gpu_conformance/iwsp_matrix_vector.mjs";
+import { buildIwspEmbeddingLookupCase } from "./vliw_gpu_conformance/iwsp_embedding_lookup.mjs";
 
 function programlet(name, source, invocation, expectedValues) {
   const compiled = compilePyashProgramSource(source, { invocation });
@@ -40,7 +43,8 @@ const SECTION_NAMES = [
   "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
   "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen",
   "nineteen", "twenty", "twenty one", "twenty two", "twenty three", "twenty four",
-  "twenty five", "twenty six", "twenty seven", "twenty eight", "twenty nine"
+  "twenty five", "twenty six", "twenty seven", "twenty eight", "twenty nine", "zero", "first",
+  "second", "third", "fourth", "fifth"
 ];
 
 export function buildVliwGpuConformanceBatches(cases) {
@@ -53,7 +57,11 @@ export function buildVliwGpuConformanceBatches(cases) {
     throw new Error(`VLIW conformance batch exceeds ${SECTION_NAMES.length} named programlet sections`);
   }
 
-  const codeletPack = encodePyacPack(codeletCases.flatMap(({ pack }) => decodePyacPack(pack).codelets));
+  const executableCodelets = codeletCases.flatMap(({ pack, executableCodelets: explicit }) =>
+    explicit ?? decodePyacPack(pack).codelets
+  );
+  const storageCodelets = codeletCases.flatMap(({ storageCodelets: sections = [] }) => sections);
+  const codeletPack = encodePyacPack([...executableCodelets, ...storageCodelets]);
   const sectionSource = programletCases.map(({ source, invocation }, index) => {
     const name = SECTION_NAMES[index];
     return [
@@ -98,6 +106,52 @@ function codeletPack(name, sources, expectedValues) {
 function vectorPack(name, source, expectedValues) {
   const vectors = lowerPyashProgram([parse(source)]).vectors;
   return { name, kind: "codelets", pack: encodePyacPack(vectors), expectedValues };
+}
+
+async function storageBackedDotProductCase({
+  name,
+  lanes,
+  width,
+  rightValue,
+  leftName = "dlek",
+  rightName = "pset"
+}) {
+  const assetRoot = await mkdtemp(path.join(os.tmpdir(), "pyac-vliw-storage-"));
+  try {
+    const byteLength = lanes * width;
+    const left = Buffer.alloc(byteLength);
+    const right = Buffer.alloc(byteLength);
+    let expected = 0;
+    for (let lane = 0; lane < lanes; lane += 1) {
+      const leftValue = lane + 1;
+      const offset = lane * width;
+      const write = width === 4 ? Buffer.prototype.writeFloatLE : Buffer.prototype.writeDoubleLE;
+      write.call(left, leftValue, offset);
+      write.call(right, rightValue, offset);
+      expected += leftValue * rightValue;
+    }
+    await writeFile(path.join(assetRoot, "left.bin"), left);
+    await writeFile(path.join(assetRoot, "right.bin"), right);
+    const byteLengthWords = [byteLength % 0x1_0000, Math.floor(byteLength / 0x1_0000)];
+    const storageSource = [
+      `exists su name ${leftName} from filename "left.bin" by ve num ${byteLengthWords.join(" ")} as name float with ve num ${lanes} be pfun myoc ya`,
+      `exists su name ${rightName} from filename "right.bin" by ve num ${byteLengthWords.join(" ")} as name float with ve num ${lanes} be pfun myoc ya`
+    ].join("\n");
+    const storagePack = compilePyashProgramSource(storageSource, { assetRoot }).pack;
+    const storageCodelets = decodePyacPack(storagePack).codelets;
+    const dotCodelets = lowerSentence(parse(`ob ${leftName} by ${rightName} be kl6m psas do`))
+      .map(({ words }) => words);
+    return {
+      name,
+      kind: "codelets",
+      executableCodelets: dotCodelets,
+      storageCodelets,
+      pack: encodePyacPack([...dotCodelets, ...storageCodelets]),
+      expectedValues: [{ type: width === 4 ? "float32" : "float64", value: expected }]
+    };
+  } finally {
+    await rm(assetRoot, { recursive: true, force: true });
+  }
 }
 
 export async function buildVliwGpuConformanceCases() {
@@ -229,6 +283,41 @@ export async function buildVliwGpuConformanceCases() {
     "iwsp-pyash-projected-attention",
     [{ type: "vector", elementType: "float32", values: [3, 5] }]
   );
+  const minimalTransformerBlock = await programletExample(
+    "iwsp-minimal-role-projected-block.pya",
+    "iwsp-minimal-role-projected-block",
+    [{ type: "vector", elementType: "float32", values: [-1, 1] }]
+  );
+  const minimalBlockLines = (await readFile(
+    new URL("../examples/pyash/iwsp-minimal-role-projected-block.pya", import.meta.url),
+    "utf8"
+  )).trim().split(/\r?\n/u);
+  const minimalBlockInvocation = minimalBlockLines.pop();
+  const zeroVarianceInvocation = minimalBlockInvocation.replace(
+    "ob ve float32 1 0 from ve float32 1 0 by ve float32 0 1",
+    "ob ve float32 0 0 from ve float32 0 0 by ve float32 0 0"
+  );
+  if (zeroVarianceInvocation === minimalBlockInvocation) {
+    throw new Error("minimal transformer block invocation changed unexpectedly");
+  }
+  const minimalTransformerBlockZeroVariance = programlet(
+    "iwsp-minimal-role-projected-block-zero-variance",
+    minimalBlockLines.join("\n"),
+    zeroVarianceInvocation,
+    [{ type: "vector", elementType: "float32", values: [0, 0] }]
+  );
+  const float64StandardDeviation = programlet(
+    "iwsp-float64-standard-deviation",
+    [
+      "su name candidate prediction to name float answer be ceremony def",
+      "ob ve float64 3 4 by ve float64 3 4 to name float count be kl6m psas do",
+      "from name float count to name float answer be dwic kwap do",
+      "su name answer ret",
+      "su name candidate prediction be ceremony prah"
+    ].join("\n"),
+    "to name float answer be candidate prediction do",
+    [{ type: "float64", value: 5 }]
+  );
   const qkvProjectionText = await readFile(
     new URL("../examples/pyash/iwsp-qkv-projection.pya", import.meta.url),
     "utf8"
@@ -265,6 +354,35 @@ export async function buildVliwGpuConformanceCases() {
     "from ve float64 4 9 9 -2 to name num answer be answer do",
     [{ type: "unsigned", value: 1 }]
   );
+  const bankSenseSource = await readFile(
+    new URL("../examples/pyash/iwsp-wsd-bank-sense-selection.pya", import.meta.url),
+    "utf8"
+  );
+  const bankSenseCases = [
+    ["iwsp-wsd-bank-financial-context", [1, 0.25], 0, ["pcan psas", "hwas tlat", "tlat psas", "hwas psas"]],
+    ["iwsp-wsd-bank-river-context", [0.25, 1], 1, ["hyun kl6m", "htis pcun", "hwas hyun", "kl6m hmi7n"]],
+    ["iwsp-wsd-bank-tied-context", [1, 1], 0, ["dlek tfo2t", "hdi7s hmi7n", "tfo2t pcan", "hmi7n hyun"]]
+  ].map(([name, context, expectedIndex, names]) => {
+    const [featureName, predictionName, firstWeightName, secondWeightName] = names;
+    const source = bankSenseSource
+      .replaceAll("candidate prediction", predictionName)
+      .replaceAll("weight money", firstWeightName)
+      .replaceAll("weight river", secondWeightName)
+      .replaceAll("features", featureName)
+      .replace(
+        `su name ${featureName} ob ve float32 1 0.25`,
+        `su name ${featureName} ob ve float32 ${context.join(" ")}`
+      );
+    return codeletPack(name, source.trim().split(/\r?\n/u), [
+      { type: "vector", elementType: "float32", values: context },
+      { type: "vector", elementType: "float32", values: [1, 0] },
+      { type: "vector", elementType: "float32", values: [0, 1] },
+      { type: "vector", elementType: "float32", values: [0, 0] },
+      { type: "float32", value: context[0] },
+      { type: "float32", value: context[1] },
+      { type: "unsigned", value: expectedIndex }
+    ]);
+  });
 
   const cases = [
     programlet(
@@ -386,14 +504,34 @@ export async function buildVliwGpuConformanceCases() {
     attention,
     ...await buildIwspParameterizedAttentionCases(),
     projectedAttention,
+    minimalTransformerBlock,
+    minimalTransformerBlockZeroVariance,
+    float64StandardDeviation,
     qkvProjection,
     maximumIndex,
     maximumIndexF64,
+    ...bankSenseCases,
     codeletPack(
       "float64-dot-product",
       "ob ve float64 0.1 2 -3 by ve float64 0.2 4 -5 be kl6m psas do",
       [{ type: "float64", value: 23.02 }]
     ),
+    await storageBackedDotProductCase({
+      name: "float32-storage-backed-dot-product-32-lanes",
+      lanes: 32,
+      width: 4,
+      rightValue: 2
+    }),
+    await storageBackedDotProductCase({
+      name: "float64-storage-backed-dot-product-17-lanes",
+      lanes: 17,
+      width: 8,
+      rightValue: 0.25,
+      leftName: "gjat",
+      rightName: "hdi7s"
+    }),
+    await buildIwspMatrixVectorStorageCase(),
+    await buildIwspEmbeddingLookupCase(),
     vectorPack(
       "uint16-vector-sixteen-lanes",
       `ob ve num ${Array.from({ length: 16 }, (_, index) => index).join(" ")} be vector ya`,
@@ -554,6 +692,39 @@ export async function buildVliwGpuProgramletFailureCases() {
   const mutable = compilePyashProgramSource(mutableConstantSource, {
     invocation: "to name num answer be count once do"
   });
+  const negativeStandardDeviationSource = [
+    "su name candidate prediction to name float answer be ceremony def",
+    "ob ve float32 -1 0 by ve float32 1 0 to name float count be kl6m psas do",
+    "from name float count to name float answer be dwic kwap do",
+    "su name answer ret",
+    "su name candidate prediction be ceremony prah"
+  ].join("\n");
+  const negativeStandardDeviation = compilePyashProgramSource(
+    negativeStandardDeviationSource,
+    { invocation: "to name float answer be candidate prediction do" }
+  );
+  const negativeVarianceWithEpsilonSource = [
+    "su name candidate prediction to name float answer be ceremony def",
+    "ob ve float32 -1 0 by ve float32 1 0 to name float count be kl6m psas do",
+    "from name float count with num 1.5 to name float answer be dwic kwap do",
+    "su name answer ret",
+    "su name candidate prediction be ceremony prah"
+  ].join("\n");
+  const negativeVarianceWithEpsilon = compilePyashProgramSource(
+    negativeVarianceWithEpsilonSource,
+    { invocation: "to name float answer be candidate prediction do" }
+  );
+  const negativeEpsilonSource = [
+    "su name candidate prediction to name float answer be ceremony def",
+    "ob ve float32 1 0 by ve float32 1 0 to name float count be kl6m psas do",
+    "from name float count with num -0.1 to name float answer be dwic kwap do",
+    "su name answer ret",
+    "su name candidate prediction be ceremony prah"
+  ].join("\n");
+  const negativeEpsilon = compilePyashProgramSource(
+    negativeEpsilonSource,
+    { invocation: "to name float answer be candidate prediction do" }
+  );
   const constantSentences = decodePyashProgramPack(mutable.pack);
   const declaration = constantSentences.find((sentence) => sentence.be === "number" && sentence.as);
   assert.ok(declaration, "constant-write fixture has a typed local declaration");
@@ -571,6 +742,21 @@ export async function buildVliwGpuProgramletFailureCases() {
       name: "programlet-constant-write",
       pack: constantWritePack,
       expectedRuntimeCode: 7
+    },
+    {
+      name: "programlet-negative-standard-deviation",
+      pack: negativeStandardDeviation.pack,
+      expectedRuntimeCode: 11
+    },
+    {
+      name: "programlet-negative-variance-with-positive-epsilon",
+      pack: negativeVarianceWithEpsilon.pack,
+      expectedRuntimeCode: 11
+    },
+    {
+      name: "programlet-negative-normalization-epsilon",
+      pack: negativeEpsilon.pack,
+      expectedRuntimeCode: 11
     }
   ];
   return cases;

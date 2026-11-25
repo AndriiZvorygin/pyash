@@ -23,6 +23,16 @@ pub(super) fn decode_results(
                 result[1]
             ));
         }
+        if result[0] == 0 {
+            let consumed = result[3] as usize;
+            if consumed == 0 {
+                return Err(format!(
+                    "codelet {index}: shared VLIW core returned no group length"
+                ));
+            }
+            index += consumed;
+            continue;
+        }
         let length = result[2] as usize;
         let data = &result[4..];
         let value = match result[0] {

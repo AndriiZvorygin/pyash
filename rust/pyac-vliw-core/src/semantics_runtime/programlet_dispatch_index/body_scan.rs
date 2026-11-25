@@ -1,7 +1,7 @@
 use super::*;
 
 pub(super) fn find_routine_body_end(
-    words: &[u32],
+    words: &[impl VliwWord],
     base_codelet: usize,
     codelet_count: usize,
     body_start: usize,
@@ -55,7 +55,7 @@ pub(super) fn find_routine_body_end(
 
 fn close_matches_verb(
     sentence: &ParsedSentence,
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     signatures: &[u32; MAX_PROGRAMLET_SYMBOL_WORDS],
     verb_start: usize,
     verb_length: usize,

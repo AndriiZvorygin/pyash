@@ -18,13 +18,22 @@ impl GpuRuntime {
         let prepared = prepare_pack(codelets);
         timings.classify_ms = classify_started.elapsed().as_secs_f64() * 1000.0;
         let PreparedPack {
+            executable_codelets,
             input_words,
             section_words,
             dispatch_words,
+            storage_descriptors,
+            storage_names,
+            storage_payload,
             section_count,
             programlet,
             result_records,
         } = prepared?;
+        // WGSL storage buffers use u32 words; CUDA uploads the same source as u16.
+        let input_words = input_words
+            .iter()
+            .map(|word| u32::from(*word))
+            .collect::<Vec<_>>();
         let sectioned = section_count > 0;
         let pipeline = if sectioned {
             &self.sections_pipeline
@@ -73,6 +82,39 @@ impl GpuRuntime {
         });
         self.queue
             .write_buffer(&dispatch_buffer, 0, bytemuck::cast_slice(&dispatch_words));
+        let storage_descriptor_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Pyash VLIW immutable storage descriptors"),
+            size: std::mem::size_of_val(storage_descriptors.as_slice()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.queue.write_buffer(
+            &storage_descriptor_buffer,
+            0,
+            bytemuck::cast_slice(&storage_descriptors),
+        );
+        let storage_name_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Pyash VLIW storage section names"),
+            size: std::mem::size_of_val(storage_names.as_slice()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.queue.write_buffer(
+            &storage_name_buffer,
+            0,
+            bytemuck::cast_slice(&storage_names),
+        );
+        let storage_payload_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Pyash VLIW read-only storage payload"),
+            size: std::mem::size_of_val(storage_payload.as_slice()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        self.queue.write_buffer(
+            &storage_payload_buffer,
+            0,
+            bytemuck::cast_slice(&storage_payload),
+        );
         let completion_counter = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Pyash VLIW section completion counter"),
             size: 4,
@@ -125,6 +167,18 @@ impl GpuRuntime {
                 wgpu::BindGroupEntry {
                     binding: 4,
                     resource: dispatch_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: storage_descriptor_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
+                    resource: storage_name_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 7,
+                    resource: storage_payload_buffer.as_entire_binding(),
                 },
             ],
         });
@@ -179,7 +233,7 @@ impl GpuRuntime {
             } else if programlet {
                 1
             } else {
-                codelets.len().div_ceil(64) as u32
+                executable_codelets.len().div_ceil(64) as u32
             };
             pass.dispatch_workgroups(workgroups, 1, 1);
         }
@@ -257,7 +311,7 @@ impl GpuRuntime {
         let output = bytemuck::try_cast_slice::<u8, u32>(&mapped)
             .map_err(|error| format!("GPU result buffer was not u32 aligned: {error}"))?;
         decode_pack_result(
-            codelets,
+            executable_codelets,
             output,
             section_count,
             programlet,

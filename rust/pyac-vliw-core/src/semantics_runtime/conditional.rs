@@ -1,6 +1,6 @@
 use super::*;
 
-pub(super) fn conditional(words: &[u32], start: usize, group_len: usize) -> CoreResult {
+pub(super) fn conditional(words: &[impl VliwWord], start: usize, group_len: usize) -> CoreResult {
     if group_len != 2 {
         return CoreResult::failure(ERROR_BRANCH, group_len as u32);
     }

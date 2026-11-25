@@ -32,7 +32,7 @@ macro_rules! write_float64_lane {
 }
 
 pub(super) fn vector_from_quote(
-    tokens: &SentenceView<'_>,
+    tokens: &SentenceView<'_, impl VliwWord>,
     start_word_index: usize,
     token_count: usize,
 ) -> Result<ProgramletVectorValue, u32> {

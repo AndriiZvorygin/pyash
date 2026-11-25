@@ -1,8 +1,12 @@
 import { splitSentences, splitSentencesWithLines } from "../sentenceSplitter.mjs";
 import { parse } from "../../understand/index.mjs";
 import { allRemember, doRemember, forget, remember } from "../../remember/index.mjs";
-import { decodePyashProgram, lowerPyashProgram } from "./sentence.mjs";
+import { decodePyashProgram, lowerPyashProgram, lowerPyashSentence } from "./sentence.mjs";
 import { decodePyacPack, encodePyacPack } from "./database.mjs";
+import {
+  compilePyacStorageSections,
+  splitPyacStoragePack
+} from "./storage_sections.mjs";
 import { lookupLegacyWordSequence } from "./quotes.mjs";
 import { isMutableVectorSentence, normalizeMutableVectorSentence } from "./mutable_vector.mjs";
 import { state as bridgeState } from "../../bridge/state.mjs";
@@ -49,6 +53,8 @@ const PURE_BUILTIN_VERBS = new Set([
   "tfo2t",
   "tot",
   "gjat bwit",
+  "dwic kwap",
+  "deviation square",
   "magnitude boundary",
   "dvis",
   "kl6m psas",
@@ -584,41 +590,70 @@ function parseInvocation(invocation) {
   return sentences[0];
 }
 
-export function compilePyashProgramSource(sourceText, { invocation = "" } = {}) {
+export function compilePyashProgramSource(sourceText, { invocation = "", assetRoot = process.cwd() } = {}) {
   const sentences = parseSource(sourceText);
-  const sections = splitProgramSections(sentences);
+  const storageDeclarations = sentences.filter((sentence) =>
+    sentence?.mood === "ya" && sentence?.be === "pfun myoc" && sentence?.from?.filename !== undefined
+  );
+  const programSource = sentences.filter((sentence) => !storageDeclarations.includes(sentence));
+  const storage = storageDeclarations.length
+    ? compilePyacStorageSections(storageDeclarations, {
+      assetRoot,
+      lowerSentence: lowerPyashSentence,
+      encodePack: encodePyacPack
+    })
+    : { codelets: [], sections: [], byteLength: 0 };
+  const sections = splitProgramSections(programSource);
   if (sections) {
     if (String(invocation ?? "").trim()) {
       fail("sectioned PyAC packets carry one invocation inside each section; do not append an invocation");
     }
-  const lowerableSentences = sentences.map((sentence) =>
+  const lowerableSentences = programSource.map((sentence) =>
     isMutableVectorSentence(sentence) ? normalizeMutableVectorSentence(sentence) : sentence
   );
   const lowered = lowerPyashProgram(lowerableSentences);
-    const pack = encodePyacPack(lowered.vectors);
+    const pack = encodePyacPack([...lowered.vectors, ...storage.codelets]);
     return {
       pack,
-      sentences,
+      sentences: programSource,
       sections: sectionCodeletRanges(sections, lowered.sentences.map(({ vectors }) => vectors.length)),
-      vectorCount: lowered.vectors.length,
+      storageSections: storage.sections.map(({ data: _data, assetPath: _assetPath, ...section }) => section),
+      storageByteLength: storage.byteLength,
+      vectorCount: lowered.vectors.length + storage.codelets.length,
       byteLength: pack.byteLength,
       complexity: sections.reduce((total, section) => total + section.complexity, 0),
       invocationIndex: -1
     };
   }
   const call = String(invocation ?? "").trim() ? parseInvocation(invocation) : null;
-  const program = call ? [...sentences, call] : sentences;
+  const program = call ? [...programSource, call] : programSource;
+  if (!program.length) {
+    if (!storageDeclarations.length) fail("Pyash programlet contains no sentences");
+    return {
+      pack: storage.pack,
+      sentences: [],
+      sections: [],
+      storageSections: storage.sections.map(({ data: _data, assetPath: _assetPath, ...section }) => section),
+      storageByteLength: storage.byteLength,
+      vectorCount: storage.codelets.length,
+      byteLength: storage.pack.byteLength,
+      complexity: 0,
+      invocationIndex: -1
+    };
+  }
   const invocationIndex = call ? program.length - 1 : -1;
   const validation = validatePureProgram(program, { invocationIndex });
   const lowerableProgram = program.map((sentence) =>
     isMutableVectorSentence(sentence) ? normalizeMutableVectorSentence(sentence) : sentence
   );
   const lowered = lowerPyashProgram(lowerableProgram);
-  const pack = encodePyacPack(lowered.vectors);
+  const pack = encodePyacPack([...lowered.vectors, ...storage.codelets]);
   return {
     pack,
     sentences: program,
-    vectorCount: lowered.vectors.length,
+    storageSections: storage.sections.map(({ data: _data, assetPath: _assetPath, ...section }) => section),
+    storageByteLength: storage.byteLength,
+    vectorCount: lowered.vectors.length + storage.codelets.length,
     byteLength: pack.byteLength,
     complexity: validation.complexity,
     invocationIndex
@@ -627,7 +662,12 @@ export function compilePyashProgramSource(sourceText, { invocation = "" } = {}) 
 
 export function decodePyashProgramPack(pack) {
   const decodedPack = decodePyacPack(pack);
-  const sentences = decodePyashProgram(decodedPack.codelets);
+  const { executableCodelets } = splitPyacStoragePack(decodedPack.bytes, {
+    decodePack: decodePyacPack,
+    decodeProgram: decodePyashProgram
+  });
+  const sentences = executableCodelets.length ? decodePyashProgram(executableCodelets) : [];
+  if (!sentences.length) return sentences;
   const sections = splitProgramSections(sentences);
   if (!sections) {
     const invocationIndex = sentences.at(-1)?.mood === "do" ? sentences.length - 1 : -1;
@@ -639,6 +679,13 @@ export function decodePyashProgramPack(pack) {
     if (programletLocalDeclaration(sentence)) sentence.exists = true;
   }
   return sentences;
+}
+
+export function decodePyashStorageSections(pack) {
+  return splitPyacStoragePack(pack, {
+    decodePack: decodePyacPack,
+    decodeProgram: decodePyashProgram
+  }).sections;
 }
 
 export function decodePyashProgramSections(pack) {

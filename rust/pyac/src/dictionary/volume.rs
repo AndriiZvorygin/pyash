@@ -68,7 +68,7 @@ impl Display for DictionaryVolumeError {
                 identifiers,
             } => write!(
                 formatter,
-                "dictionary key {key:?} links to multiple exact WordNet senses in {release}: {identifiers:?}"
+                "dictionary key {key:?} links to multiple exact WordNet senses of one part of speech in {release}: {identifiers:?}"
             ),
             Self::Wire(error) => {
                 write!(formatter, "dictionary sentence encoding failed: {error:?}")
@@ -218,6 +218,21 @@ fn canonicalize_entry(entry: &mut DictionaryVolumeEntry) {
     });
 }
 
+/// The part of speech a WordNet identifier names. The accepted snapshot keeps
+/// one sense per Pyash key and part of speech, so senses of different parts of
+/// speech may sit on one key. Two senses of the same part of speech do not.
+fn wordnet_part_of_speech(identifier: &str) -> &str {
+    match identifier.split_once(':') {
+        Some((part_of_speech, _))
+            if part_of_speech.len() == 1
+                && matches!(part_of_speech, "n" | "v" | "a" | "r" | "s") =>
+        {
+            part_of_speech
+        }
+        _ => identifier,
+    }
+}
+
 pub fn encode_dictionary(volume: &DictionaryVolume) -> Result<Vec<u8>, DictionaryVolumeError> {
     validate_metadata(&volume.metadata)?;
     let mut metadata_copy = volume.metadata.clone();
@@ -230,19 +245,29 @@ pub fn encode_dictionary(volume: &DictionaryVolume) -> Result<Vec<u8>, Dictionar
         .map(|entry| entry.key.as_slice())
         .collect::<std::collections::BTreeSet<_>>();
     for entry in &input_entries {
-        let mut exact_wordnet_senses =
-            std::collections::BTreeMap::<&str, std::collections::BTreeSet<&str>>::new();
+        let mut exact_wordnet_senses = std::collections::BTreeMap::<
+            &str,
+            std::collections::BTreeMap<&str, std::collections::BTreeSet<&str>>,
+        >::new();
         for link in &entry.source_links {
             if link.dataset == "wordnet" && link.relation == "exact-sense" {
                 exact_wordnet_senses
                     .entry(&link.release)
+                    .or_default()
+                    .entry(wordnet_part_of_speech(&link.identifier))
                     .or_default()
                     .insert(&link.identifier);
             }
         }
         if let Some((release, identifiers)) = exact_wordnet_senses
             .into_iter()
-            .find(|(_, identifiers)| identifiers.len() > 1)
+            .filter_map(|(release, by_part_of_speech)| {
+                by_part_of_speech
+                    .into_iter()
+                    .find(|(_, identifiers)| identifiers.len() > 1)
+                    .map(|(_, identifiers)| (release, identifiers))
+            })
+            .next()
         {
             return Err(DictionaryVolumeError::ConflictingExactWordNetSenses {
                 key: entry.key.clone(),
@@ -314,7 +339,10 @@ pub fn encode_dictionary(volume: &DictionaryVolume) -> Result<Vec<u8>, Dictionar
         .iter()
         .map(|entry| encode_entry_v4(entry).map(|group| group.codelets.len()))
         .collect::<Result<Vec<_>, _>>()?;
-    let placeholder_offsets = vec![0; input_entries.len()];
+    // The placeholder offsets keep the grouping of the real ones: an offset is
+    // part of the index row identity, so equal placeholders would collapse the
+    // rows of two entries that share a surface and change the index size.
+    let placeholder_offsets = (0..input_entries.len() as u32).collect::<Vec<_>>();
     let placeholder_index_groups = index_records_v4(&input_entries, &placeholder_offsets)?;
     let mut toc_ranges = vec![(0usize, 0usize); TOC_ROLES_V4.len()];
     let toc_placeholder = toc_records_v4(&toc_ranges)?;
