@@ -10,6 +10,10 @@ const INSTRUMENTAL: u32 = 0x287e;
 const SCALAR_WORD: u32 = 0x0d62;
 const PRODUCE_WORD: u32 = 0x8944;
 const DEONTIC: u32 = 0x295e;
+const SOURCE: u32 = 0x313e;
+const NAME_TYPE: u32 = 0x225e;
+const LOOKUP_FIRST: u32 = 0xec4a;
+const LOOKUP_SECOND: u32 = 0xa948;
 
 fn append_group(words: &mut std::vec::Vec<u32>, tokens: &[u32], boundaries: &[usize]) -> usize {
     let start = words.len() / CODELET_WORDS;
@@ -44,6 +48,45 @@ fn append_matrix_row_dot(words: &mut std::vec::Vec<u32>, row: u16) -> usize {
             DEONTIC,
         ],
         &[2, 5, 8, 11, 14],
+    )
+}
+
+fn append_embedding_lookup(words: &mut std::vec::Vec<u32>, alias: u32, row: u16) -> usize {
+    append_group(
+        words,
+        &[
+            NAME_TYPE,
+            WEIGHTS,
+            SOURCE,
+            NAME_TYPE,
+            alias,
+            DESTINATION,
+            NUMBER_QUOTE,
+            u32::from(row),
+            LOCATIVE,
+            LOOKUP_FIRST,
+            LOOKUP_SECOND,
+            DEONTIC,
+        ],
+        &[2, 5, 8, 11],
+    )
+}
+
+fn append_named_dot(words: &mut std::vec::Vec<u32>, alias: u32) -> usize {
+    append_group(
+        words,
+        &[
+            NAME_TYPE,
+            INPUT,
+            ACCUSATIVE,
+            NAME_TYPE,
+            alias,
+            INSTRUMENTAL,
+            SCALAR_WORD,
+            PRODUCE_WORD,
+            DEONTIC,
+        ],
+        &[2, 5, 8],
     )
 }
 
@@ -218,6 +261,50 @@ fn rejects_matrix_shape_that_does_not_match_its_payload_length() {
     let start = append_matrix_row_dot(&mut words, 0);
     let result = interpret_group_with_storage(&words, start, 1, &storage);
     assert_eq!(result.error, ERROR_MALFORMED);
+}
+
+#[test]
+fn embedding_lookup_binds_storage_backed_rows_wider_than_inline_vectors() {
+    let input = [1.0f32; 20];
+    let matrix = [1.0f32; 20]
+        .into_iter()
+        .chain([2.0f32; 20])
+        .chain([3.0f32; 20])
+        .collect::<std::vec::Vec<_>>();
+    let storage = storage_for_f32(&input, &matrix, 3, 20);
+    let storage = storage.view();
+    let alias = 0x6a71;
+    let mut words = std::vec::Vec::new();
+    let first = append_embedding_lookup(&mut words, alias, 0);
+    let first_dot = append_named_dot(&mut words, alias);
+    let second = append_embedding_lookup(&mut words, alias, 1);
+    let second_dot = append_named_dot(&mut words, alias);
+    let third = append_embedding_lookup(&mut words, alias, 2);
+    let third_dot = append_named_dot(&mut words, alias);
+    let codelet_count = words.len() / CODELET_WORDS;
+
+    for start in [first, second, third] {
+        let result = interpret_group_with_storage(&words, start, codelet_count, &storage);
+        assert_eq!(result.error, 0, "{result:?}");
+        assert_eq!(result.value_kind, 0);
+        assert_eq!(result.consumed_codelets, 1);
+    }
+    let results = [first_dot, second_dot, third_dot].map(|start| {
+        let result = interpret_group_with_storage(&words, start, codelet_count, &storage);
+        assert_eq!(result.error, 0, "{result:?}");
+        f32::from_bits(result.values[0])
+    });
+    assert_eq!(results, [20.0, 40.0, 60.0]);
+}
+
+#[test]
+fn embedding_lookup_rejects_rows_outside_the_matrix() {
+    let storage = storage_for_f32(&[1.0; 4], &[1.0; 12], 3, 4);
+    let storage = storage.view();
+    let mut words = std::vec::Vec::new();
+    let start = append_embedding_lookup(&mut words, 0x6a71, 3);
+    let result = interpret_group_with_storage(&words, start, 1, &storage);
+    assert_eq!(result.error, ERROR_VECTOR_WIDTH);
 }
 
 #[test]

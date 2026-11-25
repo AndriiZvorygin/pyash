@@ -2,6 +2,7 @@ use super::canonical_signature::{
     SignatureView, TYPE_BOOLEAN, TYPE_CLAUSE, TYPE_NAME, TYPE_NAME_NUMBER, TYPE_QUOTE_TAG,
     case_type, has_cases, signature, token_at, token_boundary, verb_is,
 };
+use super::embedding_lookup::{LOOKUP_FIRST, LOOKUP_SECOND};
 use super::iwsp_vector_ops::{MAXIMUM_VERB_FIRST, MAXIMUM_VERB_SECOND, SUM_VERB};
 use super::numeric::quote_header;
 use super::pluk_tlas::{PLUK, TLAS};
@@ -35,6 +36,7 @@ pub(super) const ROUTE_VECTOR_FLOAT_ARITHMETIC: u32 = 0x10e;
 pub(super) const ROUTE_VECTOR_SUM: u32 = 0x10f;
 pub(super) const ROUTE_VECTOR_MAXIMUM: u32 = 0x110;
 pub(super) const ROUTE_VECTOR_ARGMAX: u32 = 0x111;
+pub(super) const ROUTE_EMBEDDING_LOOKUP: u32 = 0x112;
 
 const VERB_PLUK_TLAS: u32 = 1;
 const VERB_SCALAR_PRODUCT: u32 = 2;
@@ -47,6 +49,7 @@ const VERB_BOOLEAN_LITERAL: u32 = 8;
 const VERB_LITERAL: u32 = 9;
 const VERB_VECTOR_SUM: u32 = 10;
 const VERB_VECTOR_MAXIMUM: u32 = 11;
+const VERB_EMBEDDING_LOOKUP: u32 = 12;
 const VERB_UNSUPPORTED: u32 = 0;
 
 fn classify_verb(
@@ -77,6 +80,16 @@ fn classify_verb(
         Some(PRODUCE_WORD),
     ) {
         return VERB_SCALAR_PRODUCT;
+    }
+    if verb_is(
+        signature,
+        words,
+        start,
+        group_len,
+        LOOKUP_FIRST,
+        Some(LOOKUP_SECOND),
+    ) {
+        return VERB_EMBEDDING_LOOKUP;
     }
     if signature.verb_length == 0 {
         return VERB_LITERAL;
@@ -271,6 +284,19 @@ pub(super) fn select_signature_route(
                 && case_type(&signature, INSTRUMENTAL).is_some() =>
         {
             Ok(ROUTE_SCALAR_PRODUCT)
+        }
+        VERB_EMBEDDING_LOOKUP
+            if signature.mood == DEONTIC
+                && has_cases(
+                    &signature,
+                    &[
+                        (SOURCE, TYPE_NAME),
+                        (DESTINATION, TYPE_NAME),
+                        (LOCATIVE, TYPE_UINT16),
+                    ],
+                ) =>
+        {
+            Ok(ROUTE_EMBEDDING_LOOKUP)
         }
         VERB_MUTABLE_VECTOR
             if case_type(&signature, NOMINATIVE) == Some(TYPE_NAME)

@@ -154,6 +154,25 @@ fn decodes_fixed16_codelet_results_and_json_values() {
 }
 
 #[test]
+fn skips_successful_zero_copy_binding_results_and_keeps_later_values() {
+    let mut lookup = [0; pyac::WORDS_PER_CODELET];
+    lookup[0] = 1;
+    let mut dot = [0; pyac::WORDS_PER_CODELET];
+    dot[0] = 1;
+    let mut output = vec![0; RESULT_STRIDE * 2];
+    output[3] = 1;
+    output[RESULT_STRIDE] = pyac_vliw_core::VALUE_FLOAT32;
+    output[RESULT_STRIDE + 2] = 1;
+    output[RESULT_STRIDE + 3] = 1;
+    output[RESULT_STRIDE + 4] = 42.0f32.to_bits();
+
+    assert_eq!(
+        decode_results(&[lookup, dot], &output).unwrap(),
+        vec![PyacValue::Float32(42.0f32.to_bits())]
+    );
+}
+
+#[test]
 fn rejects_invalid_programlet_result_metadata_and_types() {
     let mut output = result_record(pyac_vliw_core::VALUE_UNSIGNED, 17);
     output[2] = 2;

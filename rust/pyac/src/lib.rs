@@ -488,6 +488,10 @@ pub fn execute_pack(pack: &PyacPack) -> Result<Vec<PyacValue>, PackExecutionErro
                 source: SemanticError::Fixed16Domain,
             });
         }
+        if shared.error == 0 && shared.value_kind == 0 && shared.consumed_codelets > 0 {
+            index += shared.consumed_codelets as usize;
+            continue;
+        }
         if shared.error == 0 && shared.value_kind != 0 {
             let value = match shared.value_kind {
                 pyac_vliw_core::VALUE_UNSIGNED => PyacValue::Unsigned(

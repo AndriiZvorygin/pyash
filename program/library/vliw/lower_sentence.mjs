@@ -24,6 +24,7 @@ import { isScalarProductSentence, normalizeScalarProductSentence } from "./scala
 import { isMutableVectorSentence, lowerMutableVectorSentence } from "./mutable_vector.mjs";
 import { isPlukTlasSentence, lowerPlukTlasSentence } from "./pluk_tlas.mjs";
 import { lowerPyashSentence } from "./sentence.mjs";
+import { isEmbeddingLookupSentence, lowerEmbeddingLookupSentence } from "./embedding_lookup.mjs";
 
 function isIwspFloatVectorOperation(sentence) {
   if (sentence?.mood !== "do") return false;
@@ -42,6 +43,9 @@ function isIwspFloatVectorOperation(sentence) {
 }
 
 export function lowerSentence(sentence) {
+  if (isEmbeddingLookupSentence(sentence)) {
+    return lowerEmbeddingLookupSentence(sentence);
+  }
   if (isMutableVectorSentence(sentence)) {
     return lowerMutableVectorSentence(sentence);
   }

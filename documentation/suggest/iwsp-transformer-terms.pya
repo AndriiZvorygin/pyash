@@ -102,7 +102,8 @@ su text "pyash compound" ob text "learned vector" ya
 su text "compound components" ob ve text "learned" "vector" ya
 su text "lookup anchor" ob text "n:13574763-n; ContentDevelopment (+)" ya
 su text "component Pyash links" ob text "learn=lyac; vector=dlek; lookup=searching + see" ya
-su text "status" ob text "compound recorded in plan; learned embedding has no direct sense; lookup is an associated operation" ya
+su text "status" ob text "learned vector is descriptive composition, not a curated compound; row lookup uses existing linked lookup compound" ya
+su text "vliw row lookup surface" ob text "from name pset gjat at num row to name lyac dlek be tsoc hsat do" ya
 prah
 
 su name iwsp transformer term 012 be map def
@@ -322,4 +323,14 @@ su text "wordnet sense" ob text "n:05864972-n" ya
 su text "pyash form" ob text "hnuc gjat" ya
 su text "pyash english" ob text "attention-value" ya
 su text "status" ob text "adopted project mapping; attention-value role is narrower than the source numerical-value sense" ya
+prah
+
+su name iwsp transformer term 037 be map def
+su text "term" ob text "Payload-backed embedding-row view" ya
+su text "wordnet senses" ob ve text "n:05873065-n" "n:13574763-n" "v:00599310-v" "n:05873161-n" ya
+su text "sumo match" ob text "Quantity (+); ContentDevelopment (+); Learning (+); FunctionQuantity (=)" ya
+su text "vliw sentence signature" ob text "SOURCE name; DESTINATION name; LOCATIVE uint16; be tsoc hsat; mood do" ya
+su text "surface example" ob text "from name pset gjat at num 1 to name lyac dlek be tsoc hsat do" ya
+su text "semantics" ob text "binds one row of immutable rank-two float payload as a zero-copy named vector view; static uint16 row only" ya
+su text "lexical qualification" ob text "lyac dlek means learned vector by composition; not a separately curated compound; lookup is tsoc hsat" ya
 prah

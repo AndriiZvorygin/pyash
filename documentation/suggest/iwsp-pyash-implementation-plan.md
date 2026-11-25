@@ -871,11 +871,15 @@ This is the first dense, file-backed projection needed by a benchmark-sized
 network, not a benchmark result. The Criterion WSD target remains the published
 BPYap/BERT-WSD `BERT-base-augmented` result (78.7% pooled F1 on the five
 Raganato test sets). No Pyash model prediction has been evaluated on those sets.
-Before that evaluation, the model path needs embedding-row lookup, complete
-float projections, BERT encoder operations, and the input/tokenization path;
-then it can emit prediction key files for the existing scorer. Neither the
-feature-prototype selection demo nor this primitive's conformance pass is a WSD
-benchmark score.
+The file-backed embedding-row lookup is now implemented as the next small
+slice: `from name pset gjat at num <row> to name lyac dlek be tsoc hsat do`
+binds one row as a zero-copy named vector view that feeds the existing
+`kl6m psas` operation. It supports widths above 16 inline lanes. Its current
+row selector is a literal uint16; dynamic token-ID values, tokenization,
+complete float projections, BERT encoder operations, and prediction-key
+emission remain before evaluating the published WSD benchmark. This
+conformance slice is not itself a WSD score. The exact surface and lexical
+meanings are in the [VLIW ISA specification](../specifications/27-pyash-vliw-isa.md#payload-backed-embedding-row-view).
 
 ### Stage 10 — Visible candidate iteration
 

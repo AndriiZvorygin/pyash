@@ -406,6 +406,46 @@ uint32 total-byte field is the protocol ceiling; hosts and devices may impose
 lower practical memory limits during allocation, and those failures are
 reported rather than silently falling back to another execution path.
 
+### Payload-backed embedding-row view
+
+The matrix row operation can bind a row under a named vector without copying
+its payload into the inline-vector result:
+
+```pya
+from name pset gjat at num 1 to name lyac dlek be tsoc hsat do
+ob name hwas by name lyac dlek be kl6m psas do
+```
+
+The lookup signature is exactly `SOURCE name`, `DESTINATION name`, and
+`LOCATIVE uint16`, with deontic mood. The source names an immutable,
+file-backed rank-two float32/float64 section; `at num` is a zero-based uint16
+row number; the destination names a row view. The row-major payload remains in
+its original storage section. A later named-vector operation in the same pack
+resolves the most recent preceding lookup that assigned that name, then reads
+the selected row directly from the payload. This supports widths above the
+16-lane inline literal limit. An alias colliding with a storage-section name
+is rejected. Missing sections, malformed shapes, unsupported element types,
+and out-of-range rows produce errors; the lookup itself returns no vector
+value.
+
+This first slice uses a literal `at num` row. It does not yet read a dynamic
+token ID from a named runtime value, tokenize text, or choose a WordNet sense.
+Those remain later IWSP stages. Named-view resolution scans preceding sentence
+groups in the submitted pack; it creates no runtime index or copied tensor.
+
+The surface words have these documented lexical meanings:
+
+| Pyash form | Lexical anchor and meaning | Role here |
+|---|---|---|
+| `pset gjat` | Open English WordNet 2025 `n:05873065-n`, “a generalization of the concept of a vector”; SUMO `Quantity` (`+`). Its linked components are `extend` (`pset`) + `magnitude` (`gjat`). | Existing tensor name for the rank-two embedding table. |
+| `tsoc hsat` | Open English WordNet 2025 `n:13574763-n`, a table lookup operation that determines whether one or more items has a specified property; SUMO `ContentDevelopment` (`+`). Existing compound components: `searching` (`tsoc`) + `see` (`hsat`). | Existing lookup verb; binds one indexed row. |
+| `lyac` | Open English WordNet 2025 `v:00599310-v`, learn/acquire knowledge; SUMO `Learning` (`+`). | Modifier in the result label. |
+| `dlek` | Open English WordNet 2025 `n:05873161-n`, a vector quantity resolvable into components; SUMO `FunctionQuantity` (`=`). | Head of the result label. |
+| `lyac dlek` | Descriptive composition “learned vector.” Its atoms link to the senses above, but this sequence is not asserted to be a separately curated compound. | Name of the zero-copy row view. |
+
+The example's learned-embedding wording describes the role of the payload;
+these lexical links do not imply that lookup trains or learns the stored values.
+
 The internal storage descriptor retains all eight possible extents after its
 eight general metadata fields. This is a host/GPU binding structure, not extra
 codelet syntax or a `.pyac` header field. Rank-two float sections use row-major

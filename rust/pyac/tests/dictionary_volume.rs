@@ -413,6 +413,71 @@ fn published_reference_volume_indexes_the_promoted_sumo_concepts() {
 }
 
 #[test]
+fn published_reference_volume_indexes_current_iwsp_vocabulary() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../program/library/dictionary/reference.pyac");
+    let mut reader = DictionaryFileReader::open(
+        File::open(path).expect("tracked reference dictionary is available"),
+    )
+    .expect("open reference dictionary by seeking");
+
+    let vocabulary: [(&[u16], &str); 10] = [
+        (&[0xab44, 0xa9b2], "tensor"), // pset gjat
+        (&[0xec4a, 0xa948], "lookup"), // tsoc hsat
+        (&[0x2b73], "vector"),         // dlek
+        (&[0xe90b], "learn"),          // lyac
+        (&[0xaad3, 0xea30], "data"),   // drut hnuc
+        (&[0xaaa2], "choose"),         // kcut
+        (&[0xbc8a], "tot"),            // tfo2t
+        (&[0x8928], "question"),       // hwas; proposed attention-query label
+        (&[0x8850, 0x2b48], "key"),    // htis hsek; attention-key label
+        (&[0xea30, 0xa9b2], "value"),  // hnuc gjat; attention-value label
+    ];
+
+    for (key, surface) in vocabulary {
+        let range = reader
+            .location(key)
+            .expect("search canonical Pyac key")
+            .unwrap_or_else(|| panic!("reference volume must contain {surface}"));
+        assert!(
+            reader
+                .lookup_surface("en", surface)
+                .expect("search English surface")
+                .contains(&range.start),
+            "surface {surface} must resolve to its Pyac key"
+        );
+        assert!(
+            !reader
+                .read_entry(key)
+                .expect("read the referenced entry")
+                .is_empty(),
+            "entry for {surface} must be readable"
+        );
+    }
+
+    let wordnet_release = "Open English WordNet 2025";
+    for (key, sense) in [
+        (&[0xab44, 0xa9b2][..], "n:05873065-n"),
+        (&[0xec4a, 0xa948][..], "n:13574763-n"),
+        (&[0xaad3, 0xea30][..], "n:08479331-n"),
+        (&[0x8850, 0x2b48][..], "n:05802065-n"),
+        (&[0xea30, 0xa9b2][..], "n:05864972-n"),
+    ] {
+        let range = reader
+            .location(key)
+            .expect("search the source-linked Pyac key")
+            .expect("source-linked Pyac key exists");
+        assert!(
+            reader
+                .lookup_source("wordnet", wordnet_release, sense)
+                .expect("search exact WordNet source")
+                .contains(&range.start),
+            "WordNet sense {sense} must index its Pyac entry"
+        );
+    }
+}
+
+#[test]
 fn throughput_benchmark_runs_on_the_published_v4_volume() {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../program/library/dictionary/reference.pyac");

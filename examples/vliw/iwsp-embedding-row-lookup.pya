@@ -1,0 +1,9 @@
+exists su name hwas tlat from filename "iwsp-embedding-query.bin" by ve num 80 0 as name float with ve num 20 be pfun myoc ya
+exists su name pset gjat from filename "iwsp-embedding-table.bin" by ve num 240 0 as name float with ve num 3 20 be pfun myoc ya
+
+from name pset gjat at num 0 to name lyac dlek be tsoc hsat do
+ob name hwas tlat by name lyac dlek be kl6m psas do
+from name pset gjat at num 1 to name lyac dlek be tsoc hsat do
+ob name hwas tlat by name lyac dlek be kl6m psas do
+from name pset gjat at num 2 to name lyac dlek be tsoc hsat do
+ob name hwas tlat by name lyac dlek be kl6m psas do

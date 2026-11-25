@@ -6,16 +6,29 @@ format and record grammar are specified in
 
 ## Current Volume
 
-`reference.pya` is the generated snapshot of accepted Pyash vocabulary;
-`reference.pyac` is its compiled runtime volume. The checked-in snapshot has
-58,630 entries and remains profile v3 pending curation of 3,363 keys with
-multiple exact Open English WordNet 2025 senses. Do not rebuild that snapshot
-as v4 until those conflicts are reviewed. V4 permits one exact WordNet sense
-per dataset release for each Pyac key; cross-release links to the same sense
-remain valid. Each exact linked gloss is an interim definition; a native
-compositional Pyash definition is optional. Chinese multi-character Pinyin or
-Jyutping is composed only when each Han character has one local reading and
-the surface resolves to one Pyac key.
+`reference.pya` is the generated source snapshot of accepted Pyash vocabulary.
+Its profile-v3 marker describes the source entry grammar; the Rust build
+converts it to the current profile-v4 runtime volume in `reference.pyac`.
+Both contain 64,572 entries. The v4 file has 4,065,435 codelets and is
+130,093,952 bytes. The snapshot includes 7,084 promoted SUMO links: 5,658
+`superclass-of` and 1,426 `equivalent-to`. The old note about 3,363 unresolved
+keys and a blocked v4 rebuild is obsolete; the accepted source was regenerated
+after curation and the v4 runtime volume has been rebuilt from it. V4 permits
+distinct exact WordNet senses for one Pyac key when they have different parts
+of speech; a duplicate sense for the same part of speech is rejected.
+Each exact linked gloss is an interim definition; a native compositional
+Pyash definition is optional. Chinese multi-character Pinyin or Jyutping is
+composed only when each Han character has one local reading and the surface
+resolves to one Pyac key.
+
+The IWSP Q/K/V forms are present as Pyac dictionary keys: `hwas` resolves to
+the English form `question`, `htis hsek` to `key`, and `hnuc gjat` to `value`.
+The latter two carry exact Open English WordNet 2025 links
+`n:05802065-n` and `n:05864972-n`. The `hwas` entry does not currently carry
+the proposed `n:07208256-n` query link, and project labels `attention-query`,
+`attention-key`, and `attention-value` are not English surface aliases in the
+reference volume. Those are vocabulary curation gaps; Rust key, surface, and
+source indexes are tested against the entries and links that are published.
 
 `english-core.pya` and `.pyac` are a six-entry v4 example volume for vector,
 data, compare, select, sum, and lookup. Its source demonstrates direct Pyac
@@ -96,19 +109,28 @@ latency, lookup rate, iteration count, and result count. `artifacts/` is
 git-ignored; use a unique filename for each run and retain/copy the record
 where local benchmark history is maintained.
 
+Current reference-volume verification on Mriczo, 2026-11-25: rebuilding
+`reference.pyac` from the checked-in `reference.pya` parsed 100,269,187 source
+bytes in 12.249 s and completed in 17.063 s. The rebuilt artifact was
+byte-identical to the published file (SHA-256
+`32a4d5dc45ea86d90a24d3087714585349fc4aedec60eca40972b4346f6d1868`). A
+10,000-iteration warmed `en`/`tensor` lookup measured 113,408 ns mean
+(8,817.7 lookups/s), one result per lookup; the release CLI was 1,527,152
+bytes. The local Pyash run record is
+`artifacts/dictionary-benchmarks/reference-mriczo-20261125.pya`.
+
 The six-entry example volume's earlier benchmark is not representative of this
 full snapshot. The previous 2026-11-20 338 ns figure measured v3 after loading
 runtime indexes; it is not a v4 raw-file lookup result. Legacy v2/v3 lookups
-use seek-and-scan and are intentionally slower. Do not run a large iteration
-benchmark against a legacy volume; first migrate it to v4 after the curation
-gate is clear.
+use seek-and-scan and are intentionally slower. The current published volume
+is v4 and is eligible for the full-volume raw-file benchmark.
 
-Legacy-reader smoke check on this host, 2026-11-23: opening the checked-in v3
-volume (58,630 entries, 6,261,431 codelets, 200,365,824 bytes) took about
-0.37 seconds. A single `en`/`map` lookup returned six offsets in about
-3.90 seconds through the legacy scan path. This is a compatibility check, not
-a v4 performance baseline. Record the v4 full-volume benchmark after the
-reference data passes its exact-sense curation gate.
+Historical legacy-reader smoke check on this host, 2026-11-23: the then-current
+v3 volume (58,630 entries, 6,261,431 codelets, 200,365,824 bytes) took about
+0.37 seconds to open. A single `en`/`map` lookup returned six offsets in about
+3.90 seconds through the compatibility scan path. This records the older
+artifact only; the checked-in runtime file is now v4. For current performance,
+use the warmed v4 full-volume benchmark above.
 
 Before publishing, check the keys and source IDs against the active catalogs,
 build the v4 volume, inspect it, run representative surface/source/read

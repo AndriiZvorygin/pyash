@@ -1,3 +1,4 @@
+use super::embedding_lookup::embedding_lookup_group;
 use super::iwsp_vector_ops::{
     vector_float_arithmetic_group, vector_maximum_group, vector_sum_group,
 };
@@ -39,6 +40,13 @@ pub fn interpret_group_with_storage(
         ROUTE_SCALAR_PRODUCT => {
             scalar_product_group_with_storage(words, start, group_len, codelet_count, storage)
         }
+        ROUTE_EMBEDDING_LOOKUP => Some(embedding_lookup_group(
+            words,
+            start,
+            group_len,
+            codelet_count,
+            storage,
+        )),
         ROUTE_VECTOR_FLOAT_ARITHMETIC => Some(vector_float_arithmetic_group(
             words,
             start,

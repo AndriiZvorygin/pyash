@@ -365,6 +365,8 @@ mod canonical_signature;
 mod conditional;
 #[path = "semantics_runtime/dispatch.rs"]
 mod dispatch;
+#[path = "semantics_runtime/embedding_lookup.rs"]
+mod embedding_lookup;
 #[path = "semantics_runtime/fixed16.rs"]
 mod fixed16;
 #[path = "semantics_runtime/float.rs"]

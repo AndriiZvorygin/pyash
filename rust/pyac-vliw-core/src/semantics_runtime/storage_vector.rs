@@ -20,27 +20,77 @@ pub(super) fn resolve_storage_vector(
     row_index: Option<usize>,
     storage: &StorageView<'_>,
 ) -> Result<Option<VectorOperand>, u32> {
+    let direct = resolve_storage_section_vector(
+        words,
+        reference_start,
+        reference_group_len,
+        reference,
+        row_index,
+        storage,
+    )?;
+    let embedded = super::embedding_lookup::resolve_prior_embedding_vector(
+        words,
+        reference_start,
+        reference_group_len,
+        reference,
+        storage,
+    )?;
+    match (direct, embedded) {
+        (Some(_), Some(_)) => Err(ERROR_DUPLICATE_SIGNATURE),
+        (Some(vector), None) | (None, Some(vector)) => Ok(Some(vector)),
+        (None, None) => Ok(None),
+    }
+}
+
+pub(super) fn storage_has_name(
+    words: &[impl VliwWord],
+    start: usize,
+    group_len: usize,
+    reference: NameSpan,
+    storage: &StorageView<'_>,
+) -> Result<bool, u32> {
+    let mut section = 0;
+    while section < storage.section_count() {
+        let name_offset = storage.descriptor(section, 0).ok_or(ERROR_MALFORMED)? as usize;
+        let name_length = storage.descriptor(section, 1).ok_or(ERROR_MALFORMED)? as usize;
+        if name_matches(
+            words,
+            start,
+            group_len,
+            reference,
+            name_offset,
+            name_length,
+            storage,
+        ) {
+            return Ok(true);
+        }
+        section += 1;
+    }
+    Ok(false)
+}
+
+pub(super) fn resolve_storage_section_vector(
+    words: &[impl VliwWord],
+    reference_start: usize,
+    reference_group_len: usize,
+    reference: NameSpan,
+    row_index: Option<usize>,
+    storage: &StorageView<'_>,
+) -> Result<Option<VectorOperand>, u32> {
     let mut found = None;
     let mut section = 0;
     while section < storage.section_count() {
         let name_offset = storage.descriptor(section, 0).ok_or(ERROR_MALFORMED)? as usize;
         let name_length = storage.descriptor(section, 1).ok_or(ERROR_MALFORMED)? as usize;
-        let matches = if reference.length != name_length {
-            false
-        } else {
-            let mut index = 0;
-            let mut same = true;
-            while index < name_length {
-                same &= token_at(
-                    words,
-                    reference_start,
-                    reference_group_len,
-                    reference.start + index,
-                ) == storage.name_word(name_offset + index);
-                index += 1;
-            }
-            same
-        };
+        let matches = name_matches(
+            words,
+            reference_start,
+            reference_group_len,
+            reference,
+            name_offset,
+            name_length,
+            storage,
+        );
         if matches {
             if found.is_some() {
                 return Err(ERROR_DUPLICATE_SIGNATURE);
@@ -61,7 +111,7 @@ pub(super) fn resolve_storage_vector(
                 return Err(ERROR_MALFORMED);
             }
             let (length, row_offset) = match rank {
-                1 => (element_count, 0),
+                1 if row_index.is_none() => (element_count, 0),
                 2 => {
                     let row = row_index.ok_or(ERROR_UNSUPPORTED)?;
                     let rows = storage.shape(section, 0).ok_or(ERROR_MALFORMED)? as usize;
@@ -97,4 +147,26 @@ pub(super) fn resolve_storage_vector(
         section += 1;
     }
     Ok(found)
+}
+
+fn name_matches(
+    words: &[impl VliwWord],
+    start: usize,
+    group_len: usize,
+    reference: NameSpan,
+    storage_offset: usize,
+    storage_length: usize,
+    storage: &StorageView<'_>,
+) -> bool {
+    if reference.length != storage_length {
+        return false;
+    }
+    let mut index = 0;
+    let mut same = true;
+    while index < storage_length {
+        same &= token_at(words, start, group_len, reference.start + index)
+            == storage.name_word(storage_offset + index);
+        index += 1;
+    }
+    same
 }
