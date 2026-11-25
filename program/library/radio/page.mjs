@@ -119,7 +119,13 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
       const payload = await response.json();
       const list = document.getElementById("catalogue");
       list.innerHTML = "";
-      for (const track of payload.tracks || []) {
+      // The list is alphabetical, so a listener can find a song by its name.
+      // The station itself does not play in this order: the programme plays
+      // the house's songs first and then the lanes, and the bag decides the
+      // rest.
+      const tracks = [...(payload.tracks || [])].sort((a, b) =>
+        String(a.title ?? "").localeCompare(String(b.title ?? "")));
+      for (const track of tracks) {
         const item = document.createElement("li");
         const meta = document.createElement("span");
         meta.className = "meta";

@@ -549,3 +549,9 @@ test("the station page offers the download of the song and of the catalogue", ()
   assert.match(page, /downloadLink\(track\.downloadUrl/u);
   assert.match(page, /setAttribute\("download"/u);
 });
+
+test("the station page lists the catalogue in alphabetical order", () => {
+  const page = renderStationPage({ stationName: "Yiniana Radio", streamUrl: "/stream.mp3" });
+  assert.match(page, /sort\(\(a, b\) =>/u);
+  assert.match(page, /String\(a\.title \?\? ""\)\.localeCompare\(String\(b\.title \?\? ""\)\)/u);
+});
