@@ -112849,6 +112849,10 @@ su name tlat kwon ob text "glut" at text "entry" be text ya
 su name tlat kwon ob text "glut" as text "en" from text "calculator" to text "calculator" at text "lexical-form" be text ya
 su name tlat kwon ob text "go" at text "entry" be text ya
 su name tlat kwon ob text "go" as text "en" from text "gnomic_aspect_" to text "gnomic_aspect_" at text "lexical-form" be text ya
+su name tlat kwon ob text "go" from ve 10 1 12894 1 10590 1 1 9278 2 8798 22615 at text "operation-signature" be text ya
+su name tlat kwon ob text "go" as ve 5 1 9278 2 8798 22615 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
+su name tlat kwon ob text "go" from ve 9 1 12894 1 10590 1 1 9278 1 22615 at text "operation-signature" be text ya
+su name tlat kwon ob text "go" as ve 4 1 9278 1 22615 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
 su name tlat kwon ob text "gr6n" at text "entry" be text ya
 su name tlat kwon ob text "gr6n" as text "ar" from text "ﺓﺮﺋﺎﻄﻟﺍ ﺔﻧﺯﺍﻮﻣ" to text "ﺓﺮﺋﺎﻄﻟﺍ ﺔﻧﺯﺍﻮﻣ" at text "lexical-form" be text ya
 su name tlat kwon ob text "gr6n" as text "en" from text "aileron" to text "aileron" at text "lexical-form" be text ya
@@ -384337,6 +384341,15 @@ su name tlat kwon ob text "kl6k xlo2k" from text "kl6k" at text "component" be t
 su name tlat kwon ob text "kl6k xlo2k" from text "xlo2k" at text "component" be text ya
 su name tlat kwon ob text "kl6m" at text "entry" be text ya
 su name tlat kwon ob text "kl6m" as text "en" from text "scalar" to text "scalar" at text "lexical-form" be text ya
+su name tlat kwon ob text "kl6m psas" at text "entry" be text ya
+su name tlat kwon ob text "kl6m psas" as text "en" from text "dot product" to text "dot product" at text "lexical-form" be text ya
+su name tlat kwon ob text "kl6m psas" as text "en" from text "inner product" to text "inner product" at text "lexical-form" be text ya
+su name tlat kwon ob text "kl6m psas" as text "en" from text "scalar product" to text "scalar product" at text "lexical-form" be text ya
+su name tlat kwon ob text "kl6m psas" as text "sumo" from text "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed" to text "MultiplicationFn" by text "subsumed-by" at text "source-link" be text ya
+su name tlat kwon ob text "kl6m psas" as text "wordnet" from text "Open English WordNet 2025" to text "n:05873468-n" by text "exact-sense" at text "source-link" be text ya
+su name tlat kwon ob text "kl6m psas" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:05873468-n" with text "For two equal-length vectors, multiply corresponding components and sum those products to return a scalar." at text "source-gloss" be text ya
+su name tlat kwon ob text "kl6m psas" from text "kl6m" at text "component" be text ya
+su name tlat kwon ob text "kl6m psas" from text "psas" at text "component" be text ya
 su name tlat kwon ob text "kl6n" at text "entry" be text ya
 su name tlat kwon ob text "kl6n" as text "en" from text "melon" to text "melon" at text "lexical-form" be text ya
 su name tlat kwon ob text "kl6n" as text "yue-Latn-jyutping" from text "gwaa1" to text "gwaa1" at text "lexical-form" be text ya
@@ -518643,6 +518656,102 @@ su name tlat kwon ob text "plus" as text "wordnet" from text "Open English WordN
 su name tlat kwon ob text "plus" as text "wordnet" from text "Open English WordNet 2025" to text "s:00065384-s" by text "exact-sense" at text "source-link" be text ya
 su name tlat kwon ob text "plus" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "n:06824844-n" with text "a sign indicating the operation of addition" at text "source-gloss" be text ya
 su name tlat kwon ob text "plus" as text "en" from text "wordnet" to text "Open English WordNet 2025" by text "s:00065384-s" with text "involving advantage or good; a plus (or positive) factor" at text "source-gloss" be text ya
+su name tlat kwon ob text "plus" from ve 14 1 35428 1 10590 2 1 9310 1 12926 1 9278 2 8798 12926 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 9310 1 12926 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 9278 2 8798 12926 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 15 1 35428 1 10590 2 1 9310 2 8798 12926 1 9278 2 8798 12926 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 9310 2 8798 12926 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 9278 2 8798 12926 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 14 1 35428 1 10590 2 1 9310 1 22615 1 9278 2 8798 22615 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 9310 1 22615 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 9278 2 8798 22615 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 18 1 35428 1 10590 3 1 12606 1 22615 1 9310 1 22615 1 9278 2 8798 22615 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 12606 1 22615 from text "from" to text "value supplied in the from case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 9310 1 22615 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 9278 2 8798 22615 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 19 1 35428 1 10590 3 1 12606 2 8798 22615 1 9310 1 22615 1 9278 2 8798 22615 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 12606 2 8798 22615 from text "from" to text "value supplied in the from case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 9310 1 22615 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 9278 2 8798 22615 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 19 1 35428 1 10590 3 1 12606 1 22615 1 9310 2 8798 22615 1 9278 2 8798 22615 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 12606 1 22615 from text "from" to text "value supplied in the from case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 9310 2 8798 22615 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 9278 2 8798 22615 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 20 1 35428 1 10590 3 1 12606 2 8798 22615 1 9310 2 8798 22615 1 9278 2 8798 22615 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 12606 2 8798 22615 from text "from" to text "value supplied in the from case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 9310 2 8798 22615 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 9278 2 8798 22615 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 13 1 35428 1 10590 2 1 9310 1 22615 1 9278 1 22615 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 9310 1 22615 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 9278 1 22615 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 14 1 35428 1 10590 2 1 9310 1 22615 1 9278 2 8798 12926 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 9310 1 22615 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 9278 2 8798 12926 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 14 1 35428 1 10590 2 1 9310 1 12926 1 9278 2 8798 22615 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 9310 1 12926 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 9278 2 8798 22615 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 15 1 35428 1 10590 2 1 9310 2 8798 22615 1 9278 2 8798 22615 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 9310 2 8798 22615 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 9278 2 8798 22615 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 13 1 35428 1 10590 2 1 9310 1 12926 1 9278 1 12926 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 9310 1 12926 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 9278 1 12926 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 9 1 35428 1 10590 1 1 9310 1 12926 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 9310 1 12926 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 13 1 35428 1 10590 2 1 12606 1 12926 1 9310 1 12926 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 12606 1 12926 from text "from" to text "value supplied in the from case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 9310 1 12926 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 13 1 35428 1 10590 2 1 9310 1 12926 1 12606 1 12926 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 9310 1 12926 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 12606 1 12926 from text "from" to text "value supplied in the from case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 14 1 35428 1 10590 2 1 12606 2 8798 12926 1 9310 1 12926 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 12606 2 8798 12926 from text "from" to text "value supplied in the from case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 9310 1 12926 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 14 1 35428 1 10590 2 1 9310 1 12926 1 12606 2 8798 12926 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 9310 1 12926 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 12606 2 8798 12926 from text "from" to text "value supplied in the from case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 10 1 35428 1 10590 1 1 9278 2 8798 12926 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 9278 2 8798 12926 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 18 1 35428 1 10590 3 1 9310 1 12926 1 9278 2 8798 11123 1 11614 1 12926 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 9310 1 12926 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 9278 2 8798 11123 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 11614 1 12926 from text "at" to text "value supplied in the at case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 18 1 35428 1 10590 3 1 9310 1 12926 1 11614 1 12926 1 9278 2 8798 11123 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 9310 1 12926 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 11614 1 12926 from text "at" to text "value supplied in the at case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 9278 2 8798 11123 from text "to" to text "value supplied in the to case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 18 1 35428 1 10590 3 1 9310 2 8798 11123 1 12606 1 12926 1 11614 1 12926 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 9310 2 8798 11123 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 12606 1 12926 from text "from" to text "value supplied in the from case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 11614 1 12926 from text "at" to text "value supplied in the at case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 18 1 35428 1 10590 3 1 11614 1 12926 1 12606 1 12926 1 9310 2 8798 11123 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 11614 1 12926 from text "at" to text "value supplied in the at case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 12606 1 12926 from text "from" to text "value supplied in the from case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 9310 2 8798 11123 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 18 1 35428 1 10590 3 1 11614 1 12926 1 12606 1 12926 1 9310 2 8798 12926 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 11614 1 12926 from text "at" to text "value supplied in the at case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 12606 1 12926 from text "from" to text "value supplied in the from case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 9310 2 8798 12926 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 19 1 35428 1 10590 3 1 11614 1 12926 1 12606 1 12926 1 9310 3 8798 11123 12926 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 11614 1 12926 from text "at" to text "value supplied in the at case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 12606 1 12926 from text "from" to text "value supplied in the from case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 6 1 9310 3 8798 11123 12926 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 18 1 35428 1 10590 3 1 11614 1 12926 1 12606 2 8798 11123 1 9310 1 12926 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 11614 1 12926 from text "at" to text "value supplied in the at case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 12606 2 8798 11123 from text "from" to text "value supplied in the from case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 9310 1 12926 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 19 1 35428 1 10590 3 1 11614 1 12926 1 12606 3 8798 11123 12926 1 9310 1 12926 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 11614 1 12926 from text "at" to text "value supplied in the at case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 6 1 12606 3 8798 11123 12926 from text "from" to text "value supplied in the from case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 9310 1 12926 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 18 1 35428 1 10590 3 1 9310 1 12926 1 11614 1 12926 1 12606 2 8798 11123 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 9310 1 12926 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 11614 1 12926 from text "at" to text "value supplied in the at case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 12606 2 8798 11123 from text "from" to text "value supplied in the from case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" from ve 18 1 35428 1 10590 3 1 9310 1 12926 1 12606 2 8798 11123 1 11614 1 12926 at text "operation-signature" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 9310 1 12926 from text "ob" to text "value supplied in the ob case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 5 1 12606 2 8798 11123 from text "from" to text "value supplied in the from case" at text "operation-argument" be text ya
+su name tlat kwon ob text "plus" as ve 4 1 11614 1 12926 from text "at" to text "value supplied in the at case" at text "operation-argument" be text ya
 su name tlat kwon ob text "plus brin" at text "entry" be text ya
 su name tlat kwon ob text "plus brin" as text "en" from text "inner" to text "inner" at text "lexical-form" be text ya
 su name tlat kwon ob text "plus brin" as text "en" from text "internal" to text "internal" at text "lexical-form" be text ya

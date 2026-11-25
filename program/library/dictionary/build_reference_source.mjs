@@ -18,6 +18,7 @@ import {
   parseChineseCharacterAtomLinks
 } from "../translation/chinese_character_atom_refinery.mjs";
 import { loadEnglishGrammarCatalog } from "../translation/english_grammar.mjs";
+import { collectOperationSignatures } from "./operation_signatures.mjs";
 
 const OUTPUT = new URL("./reference.pya", import.meta.url);
 const RELEASE = "Open English WordNet 2025";
@@ -475,6 +476,31 @@ function pyaEntryLines(entry) {
   for (const component of entry.components) {
     lines.push(`su name tlat kwon ob text ${JSON.stringify(key)} from text ${JSON.stringify(component)} at text "component" be text ya`);
   }
+  for (const signature of entry.operationSignatures ?? []) {
+    const dispatch = [
+      signature.verb.length,
+      ...signature.verb,
+      signature.mood.length,
+      ...signature.mood,
+      signature.arguments.length,
+      ...signature.arguments.flatMap((argument) => [
+        argument.grammatical_case.length,
+        ...argument.grammatical_case,
+        argument.value_type.length,
+        ...argument.value_type
+      ])
+    ];
+    lines.push(`su name tlat kwon ob text ${JSON.stringify(key)} from ve ${dispatch.length} ${dispatch.join(" ")} at text "operation-signature" be text ya`);
+    for (const argument of signature.arguments) {
+      const descriptor = [
+        argument.grammatical_case.length,
+        ...argument.grammatical_case,
+        argument.value_type.length,
+        ...argument.value_type
+      ];
+      lines.push(`su name tlat kwon ob text ${JSON.stringify(key)} as ve ${descriptor.length} ${descriptor.join(" ")} from text ${JSON.stringify(argument.name)} to text ${JSON.stringify(argument.description)} at text "operation-argument" be text ya`);
+    }
+  }
   return lines;
 }
 
@@ -510,7 +536,8 @@ export function buildAcceptedReferenceSource({
         sourceLinkIdentities: new Set(),
         sourceGlosses: [],
         sourceGlossIdentities: new Set(),
-        components: canonicalSequence.length > 1 ? [...canonicalSequence] : []
+        components: canonicalSequence.length > 1 ? [...canonicalSequence] : [],
+        operationSignatures: []
       });
     }
     return entriesByKey.get(key);
@@ -523,6 +550,21 @@ export function buildAcceptedReferenceSource({
   for (const compound of compoundEntries) {
     if (!compound.pyashSequence?.length) continue;
     getEntry(compound.pyashSequence);
+  }
+
+  // The declared signature tables describe the verb surface. A verb can carry
+  // signatures only when its words are valid vocabulary atoms, because an entry
+  // key is a Pyash sequence. Verbs outside the vocabulary (for example
+  // `multiply`) are reported by `collectOperationSignatures` and skipped; they
+  // remain code-resident dispatch only.
+  const { byVerb: signaturesByVerb, skipped: skippedSignatures } = collectOperationSignatures();
+  let attachedSignatures = 0;
+  for (const [verbKey, signatures] of signaturesByVerb) {
+    const words = verbKey.split(" ").map((word) => word.trim().toLowerCase());
+    if (!words.every((word) => ATOM_BY_PYA.has(word))) continue;
+    const entry = getEntry(words);
+    entry.operationSignatures.push(...signatures);
+    attachedSignatures += signatures.length;
   }
 
   const targetIndex = buildUniqueTargetIndex(compoundEntries, atoms);

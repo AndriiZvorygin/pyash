@@ -9,9 +9,26 @@ The volume format and record grammar are specified in
 `reference.pya` is the generated source snapshot of accepted Pyash vocabulary.
 Its profile-v3 marker describes the source entry grammar; the Rust build
 converts it to the current profile-v4 runtime volume in `reference.pyac`. Both
-contain 64,572 entries. The current v4 volume has 4,065,444 codelets and is
-130,094,240 bytes. The snapshot includes 7,084 promoted SUMO links: 5,658
-`superclass-of` and 1,426 `equivalent-to`.
+contain 64,573 entries. The current v4 volume is 130 MB. The snapshot includes
+7,084 promoted SUMO links: 5,658 `superclass-of` and 1,426 `equivalent-to`.
+
+## Operation signatures
+
+The snapshot carries operation signatures for every verb that is a valid
+vocabulary atom. They are generated from the code-resident tables in
+`program/verbs/*/**.mjs` by
+`program/library/dictionary/operation_signatures.mjs`, never hand-written.
+
+A verb can only carry signatures when every word of its key is an atom in the
+catalog, because an entry key is a Pyash sequence. Today that is `plus` (28
+signatures) and `go` (2). Verbs such as `multiply`, `verify`, or `concatenate`
+have declared signatures but no vocabulary atoms, so they remain code-resident
+dispatch only. `collectOperationSignatures` reports every skipped row with a
+reason instead of guessing a key.
+
+The dispatch key is verb, mood, grammatical case, and value type. Argument names
+and descriptions are documentation and do not constrain lexical forms, so they
+are derived from the case name rather than authored.
 
 V4 permits distinct exact WordNet senses for one Pyash key when they have
 different parts of speech; a duplicate sense for the same part of speech is
