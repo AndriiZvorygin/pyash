@@ -23,6 +23,10 @@ The short answer stated up front so a reviewer can stop early if it is wrong:
 
 - **The paper is real and the post's numbers are accurate**, with one
   imprecision about prior work that this document corrects.
+- **The "common language" is narrower than the marketing.** Two models' KV
+  caches share no coordinates and no token boundaries; they share content, an
+  approximately affine-comparable geometry, and a position-free subspace.
+  Turning that into a channel costs a mapper per model pair.
 - **The gap the paper attacks is real in our runtime**: today a Pyash agent
   hands its findings to the next agent as text, and the text is chosen for a
   reader, not for the sender's full state.
@@ -171,6 +175,39 @@ matters to us:
 5. **The "telepathy" name is marketing.** The mechanism is a trained
    cross-attention mapper between two KV-cache spaces.
 
+### 1.7 The rest of the literature
+
+SwaT is one paper in a dense field. Part 2.5 leans on the rest, so they are listed
+here with their primary sources. Every number quoted in Part 2.5 comes from one of
+these, not from a summary of a summary.
+
+| Work | arXiv | What it contributes |
+| --- | --- | --- |
+| Cross-Model KV Cache Transfer in LLM Families | [2608.03893](https://arxiv.org/abs/2608.03893) | Closed-form per-head ridge mapper for same-family pairs; matched KV head count and head dimension are the precondition |
+| Think Before You Speak (CacheFuse) | [2610.16165](https://arxiv.org/abs/2610.16165) | Training-free latent communication when the two models share identical KV geometry |
+| Latent Cache Flow | [2605.22863](https://arxiv.org/abs/2605.22863) | Low-dimensional bottleneck for cache transfer; cross-context transfer without token alignment |
+| Prefill-Free Cross-Family KV Cache Transfer (HeteroFold) | [2609.32259](https://arxiv.org/abs/2609.32259) | First prefill-free cross-family transfer with explicit cross-tokenizer alignment |
+| CacheBridge | [2609.00891](https://arxiv.org/abs/2609.00891) | Serving-system view; within-family transfer supported, cross-family left as future work |
+| A Universal Context-Reuse Layer | [2608.30963](https://arxiv.org/abs/2608.30963) | "Context mobility" as a systems abstraction; layer compatibility is selective |
+| Mixture-of-Translators (MoT) | [2607.28979](https://arxiv.org/abs/2607.28979) | Token-level routing across several translators |
+| Latent Space Communication via K-V Cache Alignment | [2601.06123](https://arxiv.org/abs/2601.06123) | One global shared KV space that any model in a pool can read from and write to |
+| Thinking in Different Spaces | [2603.20406](https://arxiv.org/abs/2603.20406) | Affine compatibility across architectures, with the scale-and-bias caveat |
+| Ventriloquist LLMs | [2603.18908](https://arxiv.org/abs/2603.18908) | Tokenizer compatibility governs alignment quality; the effect localizes to the last layers |
+| Improving Relative Representations with Learned Anchors | [2605.30596](https://arxiv.org/abs/2605.30596) | Anchor-based, affine-invariant shared interface |
+| The Platonic Representation Hypothesis | [2405.07987](https://arxiv.org/abs/2405.07987) | The hypothesis itself (Huh et al.) |
+| Plato's Key | [blog](https://hazyresearch.stanford.edu/blog/2026-11-25-platos-key) | A rotation and one global scale, fit in closed form, transfer factual representations across 12 base LLMs from 8 families |
+| Rotational Dynamics of Factual Constraint Processing | [2603.13259](https://arxiv.org/abs/2603.13259) | Where the rotation-based geometry of factual processing appears, and at what scale |
+| Proving and Improving the PRH with JEPAs | [2610.39302](https://arxiv.org/abs/2610.39302) | A theorem for JEPA-trained models, and why next-token prediction reaches alignment inefficiently |
+| Making open models work for long-horizon agentic workloads (Ollama) | [blog](https://registry.ollama.com/blog/open-models-long-horizon-agents) | Prefix caching as the thing that saves the work in an agent session, and how the cache is matched and kept alive |
+| GPU Housekeeper architecture (this repository) | [reference](../reference/gpu-housekeeper-architecture.md) | The discharge and `keep_alive` policy that decides when our own prefix cache survives |
+
+```bash
+for id in 2608.03893 2610.16165 2605.22863 2609.32259 2609.00891 2601.06123 \
+          2603.20406 2603.18908 2608.30963 2605.30596 2610.39302 2405.07987; do
+  curl -sSL -o /dev/null -w "$id %{http_code}\n" "https://arxiv.org/abs/$id"
+done
+```
+
 ---
 
 ## Part 2 — Why this could matter to Pyash
@@ -216,6 +253,10 @@ claim, and nothing here establishes it. If the knowledge core is to be
 represented in a form several models can share, this paper is a reason to keep
 looking, not a reason to build.
 
+Part 2.5 takes that question up against the rest of the literature, because there
+is more behind the hypothesis than this one paper provides — and because the
+evidence points at a different layer of the stack than the viral summary suggests.
+
 ### 2.4 What would have to exist first
 
 The GPU Housekeeper does not currently expose KV-caches to the agent runtime;
@@ -228,6 +269,154 @@ the inference path hands back text. Opening a cache path would mean:
 - and a fallback when the two models are not a trained pair.
 
 That is a real interface, not a script.
+
+---
+
+## Part 2.5 — The common language: what is actually held in common
+
+The post's framing invites a bigger question than the paper answers: *if two models
+can share a KV cache, what exactly do they share?* The honest answer is narrower
+than "a shared language of thought", and being precise matters here, because the
+precision is what decides whether any of this is useful to us.
+
+In one line: two models' KV caches share no coordinates and no token boundaries.
+What they share is the content, an approximately affine-comparable geometry, and a
+position-free subspace — and turning that into a usable channel has to be paid for
+per model pair.
+
+### 2.5.1 Three different senses of "common language"
+
+| Sense | What it claims | Strongest evidence | What it costs |
+| --- | --- | --- | --- |
+| Shared geometry | Different models' representation spaces are the same space up to a rotation and scale, so one model's state can stand in for another's | Plato's Key: a rotation plus one global scale, fit in closed form, moves factual representations between 12 base LLMs from 8 families at a median 41% transfer accuracy | Fitted per pair, on facts both models already know |
+| Shared reference frame | Models need not share coordinates; they can share anchors, and a state is represented by its similarities to them | Relative representations, and the learned-anchor refinements | Needs an anchor set and a similarity function; applies to embeddings, not to per-layer KV tensors |
+| Shared KV space | One learned space that every model in a pool can read from and write to | Latent Space Communication via K-V Cache Alignment: per-model adapters into and out of a single global space | Two adapters per model, trained |
+
+The first two are about *representations*. Only the third is about caches as such,
+and it is the one SwaT belongs to.
+
+### 2.5.2 What is held in common
+
+1. **The content, not the coordinates.** Two models given the same context compute
+   different tensors. What they agree on is the *content* they encode — the same
+   facts, in the same order, at the same positions. Everything else is a change of
+   coordinates, and every method in this literature is a way of undoing that change.
+2. **An approximately affine-comparable geometry.** Across architectures with no
+   shared weights, a single linear map from a teacher's activation space into a
+   student's coordinate system explains about half the target variance on TruthfulQA
+   and about 40% on GSM8K, over 20 independent model pairs — but the map needs a
+   scale and a bias, not a pure rotation, because architectures differ
+   systematically as well as in orientation.
+3. **A position-free content subspace.** The transferable part of a key is the part
+   that does not encode *where* it sits. Strip RoPE before mapping and let the
+   receiver apply its own positions afterwards, and a fit stops being tied to one
+   context length. Both the closed-form family mapper and the cross-family mapper
+   do this.
+4. **A shared reference frame, if one is built deliberately.** Expressing a state by
+   its similarities to a fixed anchor set is invariant to rotation, scaling and
+   translation — the distortions that actually separate independently trained spaces
+   — and it is the most robust interface in the literature. It is also the slowest,
+   and none of the cache-transfer methods use it.
+
+### 2.5.3 What is not held in common
+
+- **Token boundaries.** Tokenizer compatibility governs how well cross-model
+  alignment works: exact token match rate between model pairs correlates with
+  downstream alignment quality at r = 0.898, and cross-tokenizer work has to fall
+  back on character-boundary heuristics or on pooled summaries.
+- **Layer count and KV geometry.** The cheap cases are precisely defined. Identical
+  KV head count and per-head dimension are enough for a closed-form per-head ridge
+  mapper, where one source layer explains 56% of a target layer's key variance and
+  32% of its value variance on Qwen3 14B→32B, rising to 79% and 65% with several
+  source layers. Fully identical geometry — same KV head count, head dimension and
+  depth — is what the training-free linear interpolation needs.
+- **The middle of the network.** Cross-model alignment has been localized to the
+  final one or two layers: a late-stage, output-space effect rather than evidence of
+  shared internal reasoning. The mid-layer cache mappings that do work are per-layer
+  ridge fits, and even within one family, four of six pairs retained 73–98% of the
+  receiver's standalone-prefill accuracy while two degraded sharply.
+- **Scale below roughly 1.6B parameters.** A separate measurement of four
+  decoder-only models finds the rotation-based geometry of factual processing
+  absent in a 1.5B model and present from 1.6B upward, strengthening with scale.
+  A common language between two small models is a common language with less in
+  it.
+
+### 2.5.4 Pyash already has a common language — in symbols
+
+This is the part worth sitting with. Pyash already builds an explicit shared
+conceptual layer: the SUMO knowledge core, with 10,686 concepts decided and 7,084
+links promoted. It is a common language in the strict sense — model-family
+independent, inspectable, auditable, and readable by every agent that looks it up.
+
+The KV literature is the same idea made implicit and higher-bandwidth. The
+knowledge core's own proposal says plainly that it is "not a vector store",
+because similarity search cannot answer whether two claims are the same. The
+representation line of work is the vector-store cousin: it can carry more than a
+summary, but it cannot tell you what is true, and it cannot tell you which claim is
+which.
+
+So the question is not whether Pyash should have a common language. It has one.
+The question is whether the common language should *also* exist at the
+representation level, as a second and higher-bandwidth channel beside the symbolic
+one — and the answer has to be paid for per model pair.
+
+### 2.5.5 Why our cheap case is the one the paper skipped
+
+The fleet is mostly one family. The model tags this repository uses are
+`qwen3.5:9b`, `qwen3.5:27b`, `qwen3.8:9b`, `qwen3.8:27b`, `qwen3:8b`,
+`qwen2.5:7b`, `llama3.2:3b` and a `Qwen3.8-9B-Distill-GGUF` build.
+
+Two things follow.
+
+**First, a same-family pair with matching KV geometry is exactly the case where
+the literature says the cheapest thing works**: no trained mapper and no adapter,
+just a linear map fit in closed form — or, when the geometry is identical, a
+linear interpolation. The tags do not tell us the KV head count, the head
+dimension or the tokenizer, so that has to be read off the GGUF metadata on the
+host that serves them. That is one command and no new infrastructure.
+
+**Second, and more important: the serving stack already avoids most of the prefill
+we would be trying to avoid — except where our own policy throws it away.**
+
+Ollama caches the KV state of the prompt it processes and reuses it when a later
+request shares a prefix, which its own documentation describes as the thing that
+saves most of the work in a long-horizon agent session. The cache matches from the
+start of the prompt up to the first token that differs, so appending to the end is
+free and changing anything earlier re-processes everything after it. The cache
+lives as long as the model stays loaded, which is governed by `keep_alive`.
+
+Our Housekeeper does two things that cut against it. It discharges every warm
+model that is not the current target with `keep_alive: 0`, which drops that
+model's cache entirely, and it runs the target model with a default
+`keep_alive: 300`, so five idle minutes are enough to lose the prefix. A hand-off
+that crosses a model swap therefore re-prefills from nothing, and a hand-off that
+crosses five idle minutes does the same.
+
+That is the accounting to do first, and it is answerable from the repository's own
+architecture notes rather than from a paper: for a representative hand-off, how
+much of the receiver's prefill is being recomputed today, and is it lost to a
+model swap, to an idle gap, or to the sender's summary being lossy? The first two
+are scheduling problems we already own. Only the third is the one this paper
+attacks.
+
+### 2.5.6 What can be measured before anything is built
+
+Three checks, in increasing order of cost. None of them needs a mapper, a trained
+adapter, or a paper to be replicated.
+
+1. **Prefill accounting.** Take a real agent hand-off and measure the receiver's
+   time-to-first-token against the same call with the shared prefix already warm.
+   The gap is the ceiling on what any cache-transfer scheme could win.
+2. **Geometry check.** Read the KV head count, the head dimension and the tokenizer
+   for the two local models of a candidate pair. If the geometry matches and the
+   tokenizer matches, the training-free path exists on paper.
+3. **Text-channel quality.** Measure how much of the sender's state survives the
+   summary the sender writes for the reader. If the summary loses little, a latent
+   channel has nothing to recover, and the honest conclusion is that our hand-off is
+   already efficient enough.
+
+The third is the one that can end this proposal, and it is the one that should be
+run first.
 
 ---
 
@@ -250,6 +439,11 @@ take two local agents that already share a model, hand one agent's findings to
 the other both ways — as a text summary, and as a cache hand-off — and measure
 the difference in task accuracy and wall-clock. If the difference is small, the
 paper does not concern us and the note stays a note.
+
+Before any of that, the three cheap checks in 2.5.6 come first, in that order:
+prefill accounting, the geometry check, and the text-channel quality measurement.
+The last of those can end the proposal on its own, and it is cheaper than any
+experiment the paper would ask for.
 
 ### Exclusions
 
@@ -284,3 +478,12 @@ This proposal does not propose, and a reviewer should not read it as proposing:
 5. **Where should this land if it lands?** A reference note, a decision, or a
    roadmap package — and what is the acceptance criterion that would tell us
    the observation is done?
+6. **Do two of our local models share KV geometry and a tokenizer?** The cheap
+   path in this literature needs either identical geometry, where a training-free
+   linear interpolation works, or matched KV head count and head dimension, where a
+   closed-form ridge mapper can be fit. Reading those numbers off the GGUF metadata
+   decides whether the cheap path exists at all, and it costs one command.
+7. **Do we want a second common language, or one good one?** We already have a
+   shared conceptual layer in the SUMO knowledge core. A latent channel would be a
+   second, higher-bandwidth, less auditable one. What does it buy that better
+   summaries and a sharper knowledge core do not?
