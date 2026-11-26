@@ -560,9 +560,12 @@ mod scalar_product;
 mod sentence;
 #[path = "semantics_runtime/sentence_encode.rs"]
 mod sentence_encode;
+#[path = "semantics_runtime/text_encode.rs"]
+pub mod text_encode;
 #[path = "semantics_runtime/word_code.rs"]
 pub mod word_code;
 
+pub use text_encode::{ParseError, encode_sentence, first_word_length};
 pub use sentence_encode::{
     Codelets, EncodeError, EncodeField, EncodeSentence, EncodedWord, SentenceWords, is_field_case,
     is_sentence_mood, validate as validate_encode,
