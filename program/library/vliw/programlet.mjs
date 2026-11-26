@@ -59,6 +59,8 @@ const PURE_BUILTIN_VERBS = new Set([
   "dvis",
   "kl6m psas",
   "scalar produce",
+  "tsoc hsat",
+  "searching see",
   "choose",
   "invert",
   "xor"
@@ -341,6 +343,8 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
             });
           }
           const targetSlot = action.to?.name ? activeSlots.get(action.to.name) : null;
+          const embeddingLookupStore = ["tsoc hsat", "searching see"].includes(action.be)
+            && targetSlot?.type === "vec-float";
           const indexedVectorStore = ["kl6m psas", "scalar produce"].includes(action.be)
             && targetSlot?.type === "vec-float"
             && Number.isInteger(action.at?.num)
@@ -353,6 +357,7 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
             targetSlot?.kind === "variable"
             && outputType(action) !== targetSlot.type
             && !indexedVectorStore
+            && !embeddingLookupStore
           ) {
             const message = targetSlot.type === "num"
               ? `numeric variable slot requires a typed num destination: ${action.to.name}`
@@ -363,6 +368,11 @@ function validatePureProgram(sentences, { invocationIndex = -1 } = {}) {
           }
           if (!isCall && !isBranchPredicate && !outputType(action) && !targetSlot) {
             fail(`Pyash programlet ${action.be} action requires a typed to name destination`, {
+              sentence: index + 1
+            });
+          }
+          if (["tsoc hsat", "searching see"].includes(action.be) && !embeddingLookupStore) {
+            fail("Pyash programlet tsoc hsat action requires a declared float-vector local destination", {
               sentence: index + 1
             });
           }
@@ -673,7 +683,7 @@ export function decodePyashProgramPack(pack) {
     const invocationIndex = sentences.at(-1)?.mood === "do" ? sentences.length - 1 : -1;
     validatePureProgram(sentences, { invocationIndex });
   } else {
-    sectionCodeletRanges(sections, decodedSentenceCodeletCounts(decodedPack.codelets));
+    sectionCodeletRanges(sections, decodedSentenceCodeletCounts(executableCodelets));
   }
   for (const sentence of sentences) {
     if (programletLocalDeclaration(sentence)) sentence.exists = true;

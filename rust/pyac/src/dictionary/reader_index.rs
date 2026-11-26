@@ -1,6 +1,6 @@
 use super::reader::{DictionaryReadError, DictionarySection};
 use super::reader_codec::{
-    RecordSubject, expect_end, expect_word, read_codelet, read_sentence, read_sentence_v4,
+    RecordSubject, Sentence, expect_end, expect_word, read_codelet, read_sentence, read_sentence_v4,
     subject_end, take_record_subject, take_text, take_uint32, take_uint32_vector, take_vector,
 };
 use super::volume_records::INDEX_SUBJECT;
@@ -62,8 +62,8 @@ pub(super) fn lookup_v4<R: Read + Seek>(
     let section_end = section.codelet_start + section.codelet_count;
     let mut ordinal = low;
     while ordinal < high && ordinal < section_end {
-        let (words, consumed) = read_sentence_v4(source, ordinal, section_end)?;
-        let record = parse_v4_record(&words, ordinal + consumed)?;
+        let sentence = read_sentence_v4(source, ordinal, section_end)?;
+        let record = parse_v4_record(&sentence, ordinal + sentence.consumed)?;
         match compare_lookup(&record.key, lookup) {
             std::cmp::Ordering::Less => ordinal = record.next,
             std::cmp::Ordering::Equal => return Ok(record.offsets),
@@ -100,8 +100,8 @@ pub(super) fn next_canonical_offset_after<R: Read + Seek>(
     }
     let section_end = section.codelet_start + section.codelet_count;
     if low < section_end {
-        let (words, consumed) = read_sentence_v4(source, low, section_end)?;
-        let record = parse_v4_record(&words, low + consumed)?;
+        let sentence = read_sentence_v4(source, low, section_end)?;
+        let record = parse_v4_record(&sentence, low + sentence.consumed)?;
         let offset = match record.key {
             DirectIndexKey::Canonical(_) => record.offsets[0],
             _ => return Err(invalid("canonical index contains a noncanonical row")),
@@ -126,8 +126,8 @@ fn find_canonical_record_at_or_before<R: Read + Seek>(
         start -= 1;
     }
     let section_end = section.codelet_start + section.codelet_count;
-    let (words, consumed) = read_sentence_v4(source, start, section_end)?;
-    let record = parse_v4_record(&words, start + consumed)?;
+    let sentence = read_sentence_v4(source, start, section_end)?;
+    let record = parse_v4_record(&sentence, start + sentence.consumed)?;
     if !matches!(record.key, DirectIndexKey::Canonical(_)) {
         return Err(invalid("canonical index contains a noncanonical row"));
     }
@@ -147,8 +147,8 @@ fn find_next_record<R: Read + Seek>(
             || (ordinal > section.codelet_start && read_codelet(source, ordinal - 1)?[0] & 1 != 0);
         if starts_here {
             match read_sentence_v4(source, ordinal, section_end) {
-                Ok((words, consumed)) => {
-                    if let Ok(record) = parse_v4_record(&words, ordinal + consumed) {
+                Ok(sentence) => {
+                    if let Ok(record) = parse_v4_record(&sentence, ordinal + sentence.consumed) {
                         return Ok(Some(record));
                     }
                 }
@@ -163,9 +163,13 @@ fn find_next_record<R: Read + Seek>(
     Ok(None)
 }
 
-fn parse_v4_record(words: &[u16], next: u32) -> Result<DirectIndexRecord, DictionaryReadError> {
+fn parse_v4_record(
+    sentence: &Sentence,
+    next: u32,
+) -> Result<DirectIndexRecord, DictionaryReadError> {
+    let words = &sentence.words;
     let mut cursor = 0;
-    let subject = take_record_subject(words, &mut cursor)?;
+    let subject = take_record_subject(sentence, &mut cursor)?;
     let key = match subject {
         RecordSubject::Name(name) => {
             let offset = take_uint32(words, &mut cursor)?;
@@ -368,10 +372,10 @@ fn for_each_sentence<R: Read + Seek>(
     let range = section.range();
     let mut ordinal = range.start;
     while ordinal < range.end {
-        let (words, consumed) = read_sentence(source, ordinal, limit)?;
-        visit(ordinal, &words)?;
+        let sentence = read_sentence(source, ordinal, limit)?;
+        visit(ordinal, &sentence.words)?;
         ordinal = ordinal
-            .checked_add(consumed)
+            .checked_add(sentence.consumed)
             .ok_or_else(|| invalid("index sentence ordinal overflow"))?;
     }
     if ordinal != range.end {

@@ -6,6 +6,7 @@ const WEIGHTS: u32 = 0x4890;
 const NUMBER_QUOTE: u32 = 0x881d;
 const DESTINATION: u32 = 0x243e;
 const LOCATIVE: u32 = 0x615f;
+const MULTIPLICATIVE: u32 = 0x6357;
 const INSTRUMENTAL: u32 = 0x287e;
 const SCALAR_WORD: u32 = 0x0d62;
 const PRODUCE_WORD: u32 = 0x8944;
@@ -14,16 +15,28 @@ const SOURCE: u32 = 0x313e;
 const NAME_TYPE: u32 = 0x225e;
 const LOOKUP_FIRST: u32 = 0xec4a;
 const LOOKUP_SECOND: u32 = 0xa948;
+const INDEX_FIRST: u32 = 0xa92b;
+const INDEX_SECOND: u32 = 0x28ea;
+const NUMBER_WIDTH_TYPE: u32 = 0x327e;
 
 fn append_group(words: &mut std::vec::Vec<u32>, tokens: &[u32], boundaries: &[usize]) -> usize {
     let start = words.len() / CODELET_WORDS;
-    let mut codelet = [0; CODELET_WORDS];
-    codelet[0] = 1;
-    codelet[1..=tokens.len()].copy_from_slice(tokens);
-    for boundary in boundaries {
-        codelet[0] |= 1 << (boundary + 1);
+    for (chunk_index, chunk) in tokens.chunks(CODELET_WORDS - 1).enumerate() {
+        let final_chunk = (chunk_index + 1) * (CODELET_WORDS - 1) >= tokens.len();
+        let mut codelet = [0; CODELET_WORDS];
+        codelet[0] = u32::from(final_chunk);
+        codelet[1..=chunk.len()].copy_from_slice(chunk);
+        let mut slot = 0;
+        while slot < CODELET_WORDS - 1 {
+            let offset = chunk_index * (CODELET_WORDS - 1) + slot;
+            let is_boundary = boundaries.contains(&offset);
+            if is_boundary == final_chunk {
+                codelet[0] |= 1 << (slot + 1);
+            }
+            slot += 1;
+        }
+        words.extend(codelet);
     }
-    words.extend(codelet);
     start
 }
 
@@ -69,6 +82,57 @@ fn append_embedding_lookup(words: &mut std::vec::Vec<u32>, alias: u32, row: u16)
             DEONTIC,
         ],
         &[2, 5, 8, 11],
+    )
+}
+
+fn append_embedding_lookup_from_index(words: &mut std::vec::Vec<u32>, alias: u32) -> usize {
+    append_group(
+        words,
+        &[
+            NAME_TYPE,
+            WEIGHTS,
+            SOURCE,
+            NAME_TYPE,
+            alias,
+            DESTINATION,
+            NAME_TYPE,
+            INDEX_FIRST,
+            INDEX_SECOND,
+            LOCATIVE,
+            LOOKUP_FIRST,
+            LOOKUP_SECOND,
+            DEONTIC,
+        ],
+        &[2, 5, 9, 12],
+    )
+}
+
+fn append_embedding_lookup_from_index_at(
+    words: &mut std::vec::Vec<u32>,
+    alias: u32,
+    position: u16,
+) -> usize {
+    append_group(
+        words,
+        &[
+            NAME_TYPE,
+            WEIGHTS,
+            SOURCE,
+            NAME_TYPE,
+            alias,
+            DESTINATION,
+            NAME_TYPE,
+            INDEX_FIRST,
+            INDEX_SECOND,
+            LOCATIVE,
+            NUMBER_QUOTE,
+            u32::from(position),
+            MULTIPLICATIVE,
+            LOOKUP_FIRST,
+            LOOKUP_SECOND,
+            DEONTIC,
+        ],
+        &[2, 5, 9, 12, 15],
     )
 }
 
@@ -207,6 +271,76 @@ fn storage_for_f64(input: &[f64], matrix: &[f64], rows: u32, columns: u32) -> Ma
     }
 }
 
+fn storage_with_index(
+    input: &[f32],
+    matrix: &[f32],
+    rows: u32,
+    columns: u32,
+    index: u16,
+) -> MatrixStorage {
+    let mut storage = storage_for_f32(input, matrix, rows, columns);
+    let index_offset = ((input.len() + matrix.len()) * 4) as u32;
+    storage.descriptors[0] = 3;
+    storage.descriptors.extend([
+        2,
+        2,
+        index_offset,
+        2,
+        2,
+        1,
+        NUMBER_WIDTH_TYPE,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    ]);
+    storage.names.extend([INDEX_FIRST, INDEX_SECOND]);
+    storage.payload.push(u32::from(index));
+    storage
+}
+
+fn storage_with_index_sequence(
+    input: &[f32],
+    matrix: &[f32],
+    rows: u32,
+    columns: u32,
+    indexes: &[u16],
+) -> MatrixStorage {
+    let mut storage = storage_for_f32(input, matrix, rows, columns);
+    let index_offset = ((input.len() + matrix.len()) * 4) as u32;
+    storage.descriptors[0] = 3;
+    storage.descriptors.extend([
+        2,
+        2,
+        index_offset,
+        (indexes.len() * 2) as u32,
+        2,
+        indexes.len() as u32,
+        NUMBER_WIDTH_TYPE,
+        1,
+        indexes.len() as u32,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    ]);
+    storage.names.extend([INDEX_FIRST, INDEX_SECOND]);
+    for chunk in indexes.chunks(2) {
+        let low = u32::from(chunk[0]);
+        let high = chunk.get(1).copied().map(u32::from).unwrap_or(0);
+        storage.payload.push(low | (high << 16));
+    }
+    storage
+}
+
 #[test]
 fn storage_view_retains_rank_two_dimensions() {
     let storage = storage_for_f32(&[1.0; 4], &[1.0; 12], 3, 4);
@@ -305,6 +439,113 @@ fn embedding_lookup_rejects_rows_outside_the_matrix() {
     let start = append_embedding_lookup(&mut words, 0x6a71, 3);
     let result = interpret_group_with_storage(&words, start, 1, &storage);
     assert_eq!(result.error, ERROR_VECTOR_WIDTH);
+}
+
+#[test]
+fn embedding_lookup_selects_rows_from_a_named_u16_storage_value() {
+    let input = [1.0f32; 20];
+    let matrix = [1.0f32; 20]
+        .into_iter()
+        .chain([2.0f32; 20])
+        .chain([3.0f32; 20])
+        .collect::<std::vec::Vec<_>>();
+    for (index, expected) in [(0, 20.0), (1, 40.0), (2, 60.0)] {
+        let storage_data = storage_with_index(&input, &matrix, 3, 20, index);
+        let storage = storage_data.view();
+        let mut words = std::vec::Vec::new();
+        let lookup = append_embedding_lookup_from_index(&mut words, 0x6a71);
+        let dot = append_named_dot(&mut words, 0x6a71);
+        let codelet_count = words.len() / CODELET_WORDS;
+
+        let bound = interpret_group_with_storage(&words, lookup, codelet_count, &storage);
+        assert_eq!(bound.error, 0, "{bound:?}");
+        let result = interpret_group_with_storage(&words, dot, codelet_count, &storage);
+        assert_eq!(result.error, 0, "{result:?}");
+        assert_eq!(f32::from_bits(result.values[0]), expected);
+    }
+}
+
+#[test]
+fn embedding_lookup_selects_multiple_rows_by_position_from_a_named_u16_sequence() {
+    let input = [1.0f32; 20];
+    let matrix = [1.0f32; 20]
+        .into_iter()
+        .chain([2.0f32; 20])
+        .chain([3.0f32; 20])
+        .collect::<std::vec::Vec<_>>();
+    let storage_data = storage_with_index_sequence(&input, &matrix, 3, 20, &[2, 0]);
+    let storage = storage_data.view();
+    let mut words = std::vec::Vec::new();
+    let first_lookup = append_embedding_lookup_from_index_at(&mut words, 0x6a71, 0);
+    let first_dot = append_named_dot(&mut words, 0x6a71);
+    let second_lookup = append_embedding_lookup_from_index_at(&mut words, 0x6a71, 1);
+    let second_dot = append_named_dot(&mut words, 0x6a71);
+    let codelet_count = words.len() / CODELET_WORDS;
+
+    for lookup in [first_lookup, second_lookup] {
+        let result = interpret_group_with_storage(&words, lookup, codelet_count, &storage);
+        assert_eq!(result.error, 0, "{result:?}");
+        assert_eq!(result.value_kind, 0);
+    }
+    let outputs = [first_dot, second_dot].map(|start| {
+        let result = interpret_group_with_storage(&words, start, codelet_count, &storage);
+        assert_eq!(result.error, 0, "{result:?}");
+        f32::from_bits(result.values[0])
+    });
+    assert_eq!(outputs, [60.0, 20.0]);
+}
+
+#[test]
+fn embedding_lookup_rejects_sequence_position_and_token_id_out_of_bounds() {
+    let input = [1.0f32; 4];
+    let matrix = [1.0f32; 12];
+    let mut words = std::vec::Vec::new();
+    let position_out_of_bounds = append_embedding_lookup_from_index_at(&mut words, 0x6a71, 2);
+    let token_id_out_of_bounds = append_embedding_lookup_from_index_at(&mut words, 0x6a71, 1);
+    let codelet_count = words.len() / CODELET_WORDS;
+
+    let sequence = storage_with_index_sequence(&input, &matrix, 3, 4, &[1, 3]);
+    let sequence = sequence.view();
+    assert_eq!(
+        interpret_group_with_storage(&words, position_out_of_bounds, codelet_count, &sequence)
+            .error,
+        ERROR_VECTOR_WIDTH
+    );
+    assert_eq!(
+        interpret_group_with_storage(&words, token_id_out_of_bounds, codelet_count, &sequence)
+            .error,
+        ERROR_VECTOR_WIDTH
+    );
+}
+
+#[test]
+fn embedding_lookup_checks_dynamic_index_bounds_and_dtype() {
+    let input = [1.0f32; 4];
+    let matrix = [1.0f32; 12];
+    let mut words = std::vec::Vec::new();
+    let lookup = append_embedding_lookup_from_index(&mut words, 0x6a71);
+
+    let out_of_bounds_data = storage_with_index(&input, &matrix, 3, 4, 3);
+    let out_of_bounds = out_of_bounds_data.view();
+    assert_eq!(
+        interpret_group_with_storage(&words, lookup, 1, &out_of_bounds).error,
+        ERROR_VECTOR_WIDTH
+    );
+
+    let mut wrong_type = storage_with_index(&input, &matrix, 3, 4, 1);
+    wrong_type.descriptors[39] = 0xaa6c;
+    let wrong_type = wrong_type.view();
+    assert_eq!(
+        interpret_group_with_storage(&words, lookup, 1, &wrong_type).error,
+        ERROR_UNSUPPORTED
+    );
+
+    let missing_index_data = storage_for_f32(&input, &matrix, 3, 4);
+    let missing_index = missing_index_data.view();
+    assert_eq!(
+        interpret_group_with_storage(&words, lookup, 1, &missing_index).error,
+        ERROR_UNSUPPORTED
+    );
 }
 
 #[test]

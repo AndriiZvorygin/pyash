@@ -871,15 +871,29 @@ This is the first dense, file-backed projection needed by a benchmark-sized
 network, not a benchmark result. The Criterion WSD target remains the published
 BPYap/BERT-WSD `BERT-base-augmented` result (78.7% pooled F1 on the five
 Raganato test sets). No Pyash model prediction has been evaluated on those sets.
-The file-backed embedding-row lookup is now implemented as the next small
-slice: `from name pset gjat at num <row> to name lyac dlek be tsoc hsat do`
-binds one row as a zero-copy named vector view that feeds the existing
-`kl6m psas` operation. It supports widths above 16 inline lanes. Its current
-row selector is a literal uint16; dynamic token-ID values, tokenization,
-complete float projections, BERT encoder operations, and prediction-key
-emission remain before evaluating the published WSD benchmark. This
-conformance slice is not itself a WSD score. The exact surface and lexical
-meanings are in the [VLIW ISA specification](../specifications/27-pyash-vliw-isa.md#payload-backed-embedding-row-view).
+The file-backed embedding-row lookup supports literal rows and data-driven
+`at name lwat txik fromindex num <position>` selection. The named immutable
+rank-one `number_` storage section carries a uint16 token-ID sequence; each
+zero-based position binds a zero-copy matrix row for `kl6m psas`. CPU tests
+cover multiple positions, out-of-range positions and IDs, and type rejection;
+the Pyash-built two-token case is included in the live CUDA conformance matrix.
+This gathers supplied token IDs and does not tokenize text. Complete float
+projections, BERT encoder operations, and prediction-key emission remain
+before evaluating the published WSD benchmark; this conformance slice is not
+itself a WSD score. The exact surface and lexical meanings are in the
+[VLIW ISA specification](../specifications/27-pyash-vliw-isa.md#payload-backed-embedding-row-view).
+
+**Programlet-local follow-up (CPU and live Mriczo CUDA verified 2026-11-25).**
+`tsoc hsat` can now read a token ID from that sequence, select its embedding
+row, and populate a declared local float vector. The runnable
+[`examples/vliw/iwsp-embedding-attention.pya`](../../examples/vliw/iwsp-embedding-attention.pya)
+then expresses query/key/value projections, softmax, and value mixing in
+Pyash. The full GPU matrix checks both the baseline and an independently
+perturbed embedding table; outputs are `[0.5, 0.5]` and `[0.5, 1.5]`.
+Run details and artifact identities are in the
+[VLIW verification ledger](../reference/rust-vliw-verification-ledger.md).
+This verifies data-backed programlet execution, not tokenization, a trained
+encoder, or WSD benchmark accuracy.
 
 ### Stage 10 — Visible candidate iteration
 

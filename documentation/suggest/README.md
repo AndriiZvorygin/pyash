@@ -64,6 +64,10 @@ substance is carried into the governing document, and the entry in
 | [`repository-modularization.md`](repository-modularization.md) | Whether the repository is too monolithic, how comparable projects organize modules and tests, and what reorganization would pay | proposal awaiting review |
 | [`repository-modularization-appendix.md`](repository-modularization-appendix.md) | The two measurement scripts behind the modularization proposal, with their output | evidence for the proposal above |
 | [`riscv-vliw-backend.md`](riscv-vliw-backend.md) | What "compile" means for the VLIW codelet format, and what the first destination should be | proposal awaiting review |
+| [`swarm-telepathy-latent-communication.md`](swarm-telepathy-latent-communication.md) | Whether passing agent state as latent KV-cache instead of text is worth pursuing, what is actually held in common across model representation spaces, and what it would cost us | proposal awaiting review |
+| [`cpu-arc-reasoning-as-code.md`](cpu-arc-reasoning-as-code.md) | Whether one solved task should become a reusable program that later runs execute, what the build cost would be, and how the quiz suite would gate it | proposal awaiting review |
+| [`sparse-reward-subsystem-probing.md`](sparse-reward-subsystem-probing.md) | Whether our models carry a sparse reward subsystem we could read for confidence, and whether our own model changes would damage it | proposal awaiting review |
+| [`sleep-framework-continual-learning.md`](sleep-framework-continual-learning.md) | Whether the sleep paradigm's consolidation and self-improvement split applies to our evolutionary loop, and how our knowledge core answers the same problem differently | proposal awaiting review |
 
 All of them are also posted in the commons room under `world/commons/notes/` for
 live agents to read. See `skills/pyash-world-rooms/SKILL.md` for how that

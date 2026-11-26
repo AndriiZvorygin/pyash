@@ -1,4 +1,5 @@
 import pyashWords from "../pyashWords.json" with { type: "json" };
+import { defaultVerbSpelling } from "../dictionary/verb_defaults.mjs";
 import { decodePyacWord } from "./word_code.mjs";
 import {
   FIXED16_SCALE,
@@ -601,6 +602,11 @@ export function lookupLegacyWordSequence(name) {
   const normalized = name.trim().toLowerCase();
   const direct = lookupLegacyName(normalized);
   if (direct) return [direct];
+  const defaultSpelling = defaultVerbSpelling(normalized);
+  if (defaultSpelling) {
+    const entries = defaultSpelling.map((part) => lookupLegacyName(part));
+    if (entries.every(Boolean)) return entries;
+  }
   const parts = legacyPyashCompoundParts.get(normalized);
   if (!parts) return null;
   const entries = parts.map((part) => lookupLegacyName(part));

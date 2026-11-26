@@ -88,10 +88,16 @@ export function handleReadSentence(context, helpers) {
       const assignLine = alreadyDeclared
         ? `${safeName} = { su: { name: ${JSON.stringify(targetName)} }, ob: { text: ${readExpr} }, be: "text", mood: "ya" };`
         : `const ${safeName} = { su: { name: ${JSON.stringify(targetName)} }, ob: { text: ${readExpr} }, be: "text", mood: "ya" };`;
-      return [
+      const lines = [
         assignLine,
         `globalThis[${JSON.stringify(targetName)}] = ${safeName};`
-      ].join("\n");
+      ];
+      if (targetName !== "result") {
+        markDeclared(declared, "result");
+        if (declaredTypes) declaredTypes.set("result", "text");
+        lines.push(`globalThis.result = ${safeName};`);
+      }
+      return lines.join("\n");
     }
     if (cHelpers) {
       cHelpers.usesExchange = true;
@@ -113,6 +119,13 @@ export function handleReadSentence(context, helpers) {
     lines.push(`${safeName}[${sizeVar}] = '\\0';`);
     lines.push(`fclose(${fileVar});`);
     lines.push(`pya_exchange_record_file(${JSON.stringify(sourceFilename)}, "read", ${JSON.stringify(sentenceId)});`);
+    if (targetName !== "result") {
+      const needsResult = !locals?.has("result") && !declared?.has("result");
+      if (needsResult) lines.push(`char result[PYA_TEXT_CAP] = "";`);
+      markDeclared(declared, "result");
+      if (declaredTypes) declaredTypes.set("result", "text");
+      lines.push(`snprintf(result, PYA_TEXT_CAP, "%s", ${safeName});`);
+    }
     return lines.join("\n");
   }
   if (sourceState === "html" || sourceState === "pdf") {

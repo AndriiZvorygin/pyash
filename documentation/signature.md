@@ -1,3 +1,9 @@
+> Scope and status: the signature format below describes the JavaScript bridge.
+> It does not define the VLIW execution key. For the two-level mood dispatch and
+> the execution key (verb plus sorted case/type pairs, mood excluded because the
+> class is already selected), see `specifications/27-pyash-vliw-isa.md` §5.1.
+> Section 9 is a historical status note (January 2025).
+
 Here’s a cleaned-up `signature.md` focused only on signatures, with no `typeWords`, no mood assumptions, and using `name num` / `name vec num` so it lines up with C/C++ pointer semantics and your JS naming convention.
 
 You can paste this straight over the old file.

@@ -51,11 +51,21 @@ test("programlet branch reduction replaces only the selected executor arm", () =
   const source = fs.readFileSync(path.join(CORE, "programlet_execute.rs"), "utf8");
   const names = listProgramletBranches();
   assert.deepEqual(names, ["local-declaration", "vector-action", "number-action", "boolean-action", "call", "return", "paragraph-close"]);
+  const branchMarkers = {
+    "local-declaration": "declare_programlet_local",
+    "vector-action": "apply_programlet_vector_action",
+    "number-action": "apply_programlet_number_action",
+    "boolean-action": "apply_programlet_boolean_action",
+    call: "execute_programlet_call",
+    return: "execute_programlet_return",
+    "paragraph-close": "close_programlet_paragraph"
+  };
   for (const name of names) {
     const replaced = replaceProgramletBranch(source, name);
     const count = (value) => (value.match(/return CoreResult::failure\(ERROR_UNSUPPORTED, steps\);/gu) || []).length;
-    assert.equal(count(replaced.source), count(source) + 1);
+    assert.equal(count(replaced.source), count(source) - count(replaced.originalBody) + count(replaced.replacementBody));
     assert.ok(replaced.originalBody.length > replaced.replacementBody.length, `${name} arm should shrink`);
+    assert.ok(replaced.originalBody.includes(branchMarkers[name]), `${name} should replace its current executor arm`);
   }
   assert.throws(() => replaceProgramletBranch(source, "unknown"), /unknown programlet branch/u);
 });

@@ -188,6 +188,7 @@ const NOMINATIVE: u32 = 0x24de;
 const SOURCE: u32 = 0x313e;
 const DESTINATION: u32 = 0x243e;
 const LOCATIVE: u32 = 0x615f;
+const MULTIPLICATIVE: u32 = 0x6357;
 const COMITATIVE: u32 = 0x490f;
 const INSTRUMENTAL: u32 = 0x287e;
 const DATIVE: u32 = 0x207e;
@@ -279,6 +280,97 @@ struct ParsedSentence {
     verb_start: usize,
     verb_length: usize,
     mood: u32,
+}
+
+/// One decoded field: its case role and the payload span it covers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DecodedField {
+    /// The case word that closed the field, e.g. `NOMINATIVE` (`na`).
+    pub case: u32,
+    /// Payload span, in words within the sentence.
+    pub start: usize,
+    pub length: usize,
+}
+
+/// The structural shape of one sentence: fields, verb span, and mood.
+///
+/// This is what decoding means here. It involves no execution and no handler:
+/// a sentence is well formed or not by its word layout alone.
+#[derive(Clone, Copy, Debug)]
+pub struct DecodedSentence {
+    fields: [DecodedField; MAX_SENTENCE_FIELDS],
+    field_count: usize,
+    verb_start: usize,
+    verb_length: usize,
+    mood: u32,
+}
+
+impl DecodedSentence {
+    /// The decoded fields, in sentence order.
+    pub fn fields(&self) -> &[DecodedField] {
+        &self.fields[..self.field_count]
+    }
+
+    /// The field closed by `case`, if the sentence has one.
+    pub fn field(&self, case: u32) -> Option<&DecodedField> {
+        self.fields().iter().find(|field| field.case == case)
+    }
+
+    /// The verb payload span.
+    pub fn verb(&self) -> (usize, usize) {
+        (self.verb_start, self.verb_length)
+    }
+
+    /// The mood word that terminated the sentence.
+    pub fn mood(&self) -> u32 {
+        self.mood
+    }
+}
+
+/// Decode the sentence starting at codelet `start`.
+///
+/// Returns the decoded shape and the number of payload words; the words
+/// themselves stay in the caller's slice and are addressed through the field
+/// and verb spans, so nothing is copied. This is a structural read: no
+/// execution, and no handler is involved.
+pub fn decode_sentence(
+    words: &[u32],
+    codelet_count: usize,
+    start: usize,
+) -> Result<(DecodedSentence, usize), u32> {
+    let (token_count, _) = sentence::collect_sentence(words, codelet_count, start)?;
+    let view = SentenceView::new(words, start, token_count);
+    let mut parsed = ParsedSentence::empty();
+    let error = sentence::parse_sentence(&view, &mut parsed);
+    if error != 0 {
+        return Err(error);
+    }
+    Ok((DecodedSentence::from(&parsed), token_count))
+}
+
+impl From<&ParsedSentence> for DecodedSentence {
+    fn from(parsed: &ParsedSentence) -> Self {
+        let mut fields = [DecodedField {
+            case: 0,
+            start: 0,
+            length: 0,
+        }; MAX_SENTENCE_FIELDS];
+        for index in 0..parsed.field_count {
+            let field = parsed.fields[index];
+            fields[index] = DecodedField {
+                case: field.role,
+                start: field.start,
+                length: field.length,
+            };
+        }
+        Self {
+            fields,
+            field_count: parsed.field_count,
+            verb_start: parsed.verb_start,
+            verb_length: parsed.verb_length,
+            mood: parsed.mood,
+        }
+    }
 }
 
 impl ParsedSentence {
@@ -393,6 +485,10 @@ mod programlet_composition_actions;
 mod programlet_dispatch_index;
 #[path = "semantics_runtime/programlet_dispatch_signature.rs"]
 mod programlet_dispatch_signature;
+#[path = "semantics_runtime/programlet_embedding_lookup.rs"]
+mod programlet_embedding_lookup;
+#[path = "semantics_runtime/programlet_entrypoints.rs"]
+mod programlet_entrypoints;
 #[path = "semantics_runtime/programlet_execute.rs"]
 mod programlet_execute;
 #[path = "semantics_runtime/programlet_execute_call.rs"]
@@ -429,6 +525,16 @@ mod programlet_vector_values;
 mod scalar_product;
 #[path = "semantics_runtime/sentence.rs"]
 mod sentence;
+#[path = "semantics_runtime/sentence_encode.rs"]
+mod sentence_encode;
+#[path = "semantics_runtime/word_code.rs"]
+pub mod word_code;
+
+pub use sentence_encode::{
+    Codelets, EncodeError, EncodeField, EncodeSentence, EncodedWord, SentenceWords, is_field_case,
+    is_sentence_mood, validate as validate_encode,
+};
+#[cfg(test)]
 #[path = "semantics_runtime/sentence_parse_state.rs"]
 mod sentence_parse_state;
 #[path = "semantics_runtime/signature_dispatch.rs"]
@@ -471,9 +577,15 @@ use programlet_dispatch_index::read_programlet_routine_directory_header;
 use programlet_dispatch_index::resolve_programlet_routine;
 #[cfg(not(target_arch = "spirv"))]
 use programlet_dispatch_index::validate_programlet_routine_directory_words;
-pub use programlet_execute::execute_numeric_programlet_at_with_directory_words;
+use programlet_embedding_lookup::{
+    apply_programlet_embedding_lookup, is_programlet_embedding_lookup,
+};
 #[cfg(not(target_arch = "spirv"))]
-pub use programlet_execute::{execute_numeric_programlet, execute_numeric_programlet_at};
+pub use programlet_entrypoints::{execute_numeric_programlet, execute_numeric_programlet_at};
+pub use programlet_entrypoints::{
+    execute_numeric_programlet_at_with_directory_words,
+    execute_numeric_programlet_at_with_directory_words_and_storage,
+};
 use programlet_execute_call::execute_programlet_call;
 use programlet_execute_declare::declare_programlet_local;
 use programlet_execute_paragraph::close_programlet_paragraph;

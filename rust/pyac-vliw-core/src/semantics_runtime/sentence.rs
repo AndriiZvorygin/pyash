@@ -1,4 +1,3 @@
-use super::sentence_parse_state::{SentenceParseState, advance_sentence_parse};
 use super::*;
 
 #[derive(Clone, Copy)]
@@ -82,6 +81,24 @@ impl<'a, W: VliwWord> SentenceView<'a, W> {
         } else {
             0
         }
+    }
+
+    /// Head word of the codelet that holds logical token `index`.
+    pub(super) fn header_for(&self, index: usize) -> u32 {
+        let source_index = self.word_index(index);
+        word(self.words, source_index / CODELET_WORDS, 0)
+    }
+
+    /// Slot position (1..CODELET_WORDS) of logical token `index`.
+    pub(super) fn slot_for(&self, index: usize) -> usize {
+        self.word_index(index) % CODELET_WORDS
+    }
+
+    /// Read a payload word by its absolute source index.
+    #[cfg(test)]
+    pub(super) fn source_word(&self, source_index: usize) -> u32 {
+        // SAFETY: callers pass an index validated by the collected sentence span.
+        unsafe { input_word_unchecked(self.words, source_index) }
     }
 
     pub(super) fn boundary(&self, index: usize) -> bool {
@@ -181,6 +198,168 @@ pub(super) fn parse_sentence(
     parse_sentence_range(tokens, 0, tokens.len(), parsed)
 }
 
+struct FieldBuilder {
+    fields: [SentenceField; MAX_SENTENCE_FIELDS],
+    field_count: usize,
+    seen_roles: u32,
+    value_start: usize,
+    verb_start: usize,
+    verb_length: usize,
+    mood: u32,
+}
+
+impl FieldBuilder {
+    const fn new(start: usize) -> Self {
+        Self {
+            fields: [SentenceField::EMPTY; MAX_SENTENCE_FIELDS],
+            field_count: 0,
+            seen_roles: 0,
+            value_start: start,
+            verb_start: 0,
+            verb_length: 0,
+            mood: 0,
+        }
+    }
+
+    fn accept_boundary(&mut self, token: u32, offset: usize, end: usize) -> u32 {
+        let role_bit = match token {
+            NOMINATIVE => 1 << 0,
+            ACCUSATIVE => 1 << 1,
+            ESSIVE => 1 << 2,
+            DESTINATION => 1 << 3,
+            SOURCE => 1 << 4,
+            COMITATIVE => 1 << 5,
+            INSTRUMENTAL => 1 << 6,
+            FROM_INDEX => 1 << 7,
+            TO_INDEX => 1 << 8,
+            LOCATIVE => 1 << 9,
+            _ => 0,
+        };
+        if role_bit != 0 {
+            let field_index = self.field_count;
+            if self.value_start >= offset
+                || field_index >= MAX_SENTENCE_FIELDS
+                || self.seen_roles & role_bit != 0
+            {
+                return ERROR_MALFORMED;
+            }
+            array_put!(
+                &mut self.fields,
+                field_index,
+                SentenceField {
+                    role: token,
+                    start: self.value_start,
+                    length: offset - self.value_start,
+                }
+            );
+            self.seen_roles |= role_bit;
+            self.field_count = field_index + 1;
+            self.value_start = offset + 1;
+            return 0;
+        }
+        if matches!(
+            token,
+            MOOD_DEFINITION | REALIS | DEONTIC | CONDITIONAL | MOOD_RETURN | MOOD_PARAGRAPH
+        ) {
+            let verb_length = offset - self.value_start;
+            if self.mood != 0
+                || (verb_length == 0 && token != MOOD_RETURN)
+                || (verb_length != 0 && token == MOOD_RETURN)
+                || offset + 1 != end
+            {
+                return ERROR_MALFORMED;
+            }
+            self.verb_start = self.value_start;
+            self.verb_length = verb_length;
+            self.mood = token;
+            return 0;
+        }
+        ERROR_UNSUPPORTED
+    }
+
+    /// Clause-free decode: the head bitmap is the field map, so only boundary
+    /// slots are read and value words are never decoded.
+    fn parse_from_boundaries(
+        &mut self,
+        tokens: &SentenceView<'_, impl VliwWord>,
+        start: usize,
+        end: usize,
+    ) -> u32 {
+        let mut offset = start;
+        while offset < end {
+            let header = tokens.header_for(offset);
+            let complete = header & 1 != 0;
+            let mut slot = tokens.slot_for(offset);
+            while slot < CODELET_WORDS && offset < end {
+                if (header & (1 << slot) != 0) == complete {
+                    let token = tokens.token_unchecked(offset);
+                    let error = self.accept_boundary(token, offset, end);
+                    if error != 0 || self.mood != 0 {
+                        return error;
+                    }
+                }
+                slot += 1;
+                offset += 1;
+            }
+        }
+        0
+    }
+
+    /// Clause-aware decode. Clause markers may sit anywhere, so they are
+    /// recognized before the boundary test, exactly as the previous parser did.
+    fn parse_with_clauses(
+        &mut self,
+        tokens: &SentenceView<'_, impl VliwWord>,
+        start: usize,
+        end: usize,
+    ) -> u32 {
+        let mut depth = 0usize;
+        let mut index = start;
+        while index < end {
+            let token = tokens.token_unchecked(index);
+            if token == DEPENDENT_CLAUSE {
+                depth += 1;
+                index += 1;
+                continue;
+            }
+            if token == CLAUSE_TAIL {
+                if depth == 0 {
+                    return ERROR_MALFORMED;
+                }
+                depth -= 1;
+                index += 1;
+                continue;
+            }
+            if depth == 0 && tokens.boundary(index) {
+                let error = self.accept_boundary(token, index, end);
+                if error != 0 || self.mood != 0 {
+                    return error;
+                }
+            }
+            index += 1;
+        }
+        0
+    }
+
+    fn finish(&self, parsed: &mut ParsedSentence) -> u32 {
+        if self.mood == 0 {
+            return ERROR_MALFORMED;
+        }
+        let mut result = ParsedSentence::empty();
+        let mut index = 0;
+        while index < self.field_count {
+            array_put!(&mut result.fields, index, array_at!(self.fields, index));
+            index += 1;
+        }
+        result.field_count = self.field_count;
+        result.verb_start = self.verb_start;
+        result.verb_length = self.verb_length;
+        result.mood = self.mood;
+        *parsed = result;
+        0
+    }
+}
+
 pub(super) fn parse_sentence_range(
     tokens: &SentenceView<'_, impl VliwWord>,
     start: usize,
@@ -190,50 +369,29 @@ pub(super) fn parse_sentence_range(
     if start >= end || end > tokens.len() {
         return ERROR_MALFORMED;
     }
-    let mut result = ParsedSentence::empty();
-    let mut state = SentenceParseState::new(start);
+    // Clause markers are not phrase boundaries, so a sentence without them can
+    // be decoded from the head bitmap alone. This pass cannot fail; it only
+    // chooses the decode form, so error order is unchanged.
+    let mut has_clause = false;
     let mut index = start;
-    let mut source_index = tokens.word_index(start);
-    let mut codelet = source_index / CODELET_WORDS;
-    let mut slot = source_index % CODELET_WORDS;
-    let mut header = unsafe { input_word_unchecked(tokens.words, codelet * CODELET_WORDS) };
     while index < end {
-        let token = unsafe { input_word_unchecked(tokens.words, source_index) };
-        let complete = header & 1 != 0;
-        let boundary = state.clause_depth == 0
-            && token != DEPENDENT_CLAUSE
-            && token != CLAUSE_TAIL
-            && ((header & (1 << slot) != 0) == complete);
-        let transition = advance_sentence_parse(state, token, boundary, index, end);
-        if transition.error != 0 {
-            return transition.error;
-        }
-        state = transition.state;
-        if transition.writes_field {
-            array_put!(&mut result.fields, state.field_count - 1, transition.field);
-        }
-        if transition.complete {
-            result.field_count = state.field_count;
-            result.verb_start = state.verb_start;
-            result.verb_length = state.verb_length;
-            result.mood = state.mood;
-            *parsed = result;
-            return 0;
+        let token = tokens.token_unchecked(index);
+        if token == DEPENDENT_CLAUSE || token == CLAUSE_TAIL {
+            has_clause = true;
+            break;
         }
         index += 1;
-        if index < end {
-            if slot == CODELET_WORDS - 1 {
-                codelet += 1;
-                slot = 1;
-                source_index = codelet * CODELET_WORDS + slot;
-                header = unsafe { input_word_unchecked(tokens.words, codelet * CODELET_WORDS) };
-            } else {
-                slot += 1;
-                source_index += 1;
-            }
-        }
     }
-    ERROR_MALFORMED
+    let mut builder = FieldBuilder::new(start);
+    let error = if has_clause {
+        builder.parse_with_clauses(tokens, start, end)
+    } else {
+        builder.parse_from_boundaries(tokens, start, end)
+    };
+    if error != 0 {
+        return error;
+    }
+    builder.finish(parsed)
 }
 
 pub(super) fn clause_tail(

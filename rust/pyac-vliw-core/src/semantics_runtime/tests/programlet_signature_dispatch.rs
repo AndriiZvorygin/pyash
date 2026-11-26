@@ -266,25 +266,29 @@ fn nested_programlet_calls_use_the_same_signature_directory() {
 }
 
 #[test]
-fn rejects_missing_signatures_and_duplicate_definitions() {
+fn rejects_missing_signatures_and_applies_latest_definition() {
     let mut missing = std::vec::Vec::new();
     append_overload(&mut missing, NUMBER_TYPE, NUMBER_TYPE, &[NUMBER_QUOTE, 41]);
     append_boolean_call(&mut missing, TRUTH);
     assert_eq!(run(&missing).error, ERROR_UNSUPPORTED);
 
-    let mut duplicate = std::vec::Vec::new();
+    // Revision is latest-wins: the second definition of the same signature
+    // replaces the first, so the call returns the newer body.
+    let mut redefined = std::vec::Vec::new();
     append_overload(
-        &mut duplicate,
+        &mut redefined,
         NUMBER_TYPE,
         NUMBER_TYPE,
         &[NUMBER_QUOTE, 41],
     );
     append_overload(
-        &mut duplicate,
+        &mut redefined,
         NUMBER_TYPE,
         NUMBER_TYPE,
         &[NUMBER_QUOTE, 42],
     );
-    append_number_call(&mut duplicate, 7, NUMBER_TYPE);
-    assert_eq!(run(&duplicate).error, ERROR_DUPLICATE_SIGNATURE);
+    append_number_call(&mut redefined, 7, NUMBER_TYPE);
+    let result = run(&redefined);
+    assert_eq!(result.error, 0, "{result:?}");
+    assert_eq!(result.values[0], 42);
 }

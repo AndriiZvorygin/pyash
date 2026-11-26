@@ -40,8 +40,9 @@ Moved out of `specifications/` to keep core spec compact:
 - `documentation/reference/spec-index-map.md`
 - `documentation/reference/spec-implementation-map.md`
 - `documentation/reference/translation-parity-notes.md`
-- `documentation/reference/pyac-vliw-semantic-slices.md`
+- `documentation/reference/pyashwords-deprecated.md`
 - `documentation/reference/pyac-vliw-dictionary.md`
+- `documentation/reference/pyash-vliw-decode-and-dispatch.md`
 - `documentation/reference/instead-replacement.md`
 - `documentation/reference/music-module.md`
 

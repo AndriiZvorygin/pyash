@@ -5,6 +5,7 @@ import { handleMathPlus } from "./emit_math/plus.mjs";
 import { handleMathSubtract } from "./emit_math/subtract.mjs";
 import { handleMathMultiplyDivide } from "./emit_math/multiply_divide.mjs";
 import { handleMathRemains } from "./emit_math/remains.mjs";
+import { handleLiteralMath } from "./emit_math/literal.mjs";
 
 export function handleMathSentence(context, helpers) {
   const conditional = handleMathConditional(context, helpers);
@@ -27,6 +28,9 @@ export function handleMathSentence(context, helpers) {
 
   const remains = handleMathRemains(context, helpers);
   if (remains) return remains;
+
+  const literal = handleLiteralMath(context, helpers);
+  if (literal) return literal;
 
   return null;
 }
