@@ -384,6 +384,43 @@ The synthetic scaling comparison remains available with
 it is an algorithmic baseline, not a substitute for the file-backed CLI
 measurement above.
 
+## 8.1 Maintaining the accepted reference volume
+
+The volume is generated, so an edit made directly to `reference.pyac` is lost on
+the next regeneration. Use `command/reference_dictionary.mjs`:
+
+| Command | Effect |
+| --- | --- |
+| `npm run dictionary:rebuild` | regenerate `reference.pya` and rebuild `reference.pyac` |
+| `npm run dictionary:check` | regenerate into a scratch directory and fail if the committed artifacts are stale |
+| `npm run dictionary:verify` | read every canonical key back from the volume |
+| `npm run dictionary:gloss -- "wa" "text"` | set an authored English gloss, then rebuild |
+
+`verify` is the guard that matters. It walks the canonical index and reads each
+entry by its own key, which is what surfaced the `na` defect below.
+
+### The `na` subject-boundary defect
+
+Four keys — `na`, `pa`, `sa`, and `wa` — could not be read back. The reader
+decoded a name subject by scanning for the `SU` word value, but `na` **is**
+`0x24DE`, so its own key word ended the subject and the entry decoded as empty;
+its neighbours in the same codelet group failed with it.
+
+The codelet header already carries a per-slot case-boundary bitmap, written by
+`pack_words`. `read_sentence` now returns those flags alongside the words, and
+`take_record_subject` ends the key at the first boundary instead of at the first
+`SU` value. The writer marks boundaries positively in a sentence's final codelet
+and negatively in earlier ones, so the flag polarity follows the completion bit.
+
+The same trap applies to any key word equal to a structural marker — `OB`,
+`AS`, `FROM`, `TO`, `BY`, `WITH`, `AT`, `TEXT`, or `TEXT_VERB`. Only `na`
+collides today, but the decoder no longer depends on a value probe.
+
+Known remaining limit: the JavaScript decoder in
+`program/library/vliw/sentence.mjs` still cannot spell a name that ends in an
+underscore, so `pyash dictionary volume read` cannot render `and_`. The Rust
+reader handles it, and the volume itself is correct.
+
 ## 9. Vocabulary-agent workflow
 
 Use the [dictionary vocabulary workbook](../workbook/pyac-vliw-dictionary.md)

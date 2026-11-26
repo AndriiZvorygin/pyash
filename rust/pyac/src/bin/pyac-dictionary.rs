@@ -94,7 +94,7 @@ struct OperationResultInput {
 }
 
 fn usage() -> &'static str {
-    "usage:\n  pyac-dictionary build <volume.pyac>  # Build JSON request is read from stdin.\n  pyac-dictionary inspect <volume.pyac>\n  pyac-dictionary surface <volume.pyac> <language> <surface>\n  pyac-dictionary surface-entries <volume.pyac> <language> <surface>\n  pyac-dictionary source <volume.pyac> <dataset> <release> <identifier>\n  pyac-dictionary source-entries <volume.pyac> <dataset> <release> <identifier>\n  pyac-dictionary key <volume.pyac> <hnuc[,hnuc...]>\n  pyac-dictionary entry <volume.pyac> <hnuc[,hnuc...]>\n  pyac-dictionary benchmark <volume.pyac> <iterations> surface <language> <surface>"
+    "usage:\n  pyac-dictionary build <volume.pyac>  # Build JSON request is read from stdin.\n  pyac-dictionary inspect <volume.pyac>\n  pyac-dictionary surface <volume.pyac> <language> <surface>\n  pyac-dictionary surface-entries <volume.pyac> <language> <surface>\n  pyac-dictionary source <volume.pyac> <dataset> <release> <identifier>\n  pyac-dictionary source-entries <volume.pyac> <dataset> <release> <identifier>\n  pyac-dictionary key <volume.pyac> <hnuc[,hnuc...]>\n  pyac-dictionary entry <volume.pyac> <hnuc[,hnuc...]>\n  pyac-dictionary verify <volume.pyac>  # every canonical key must read back.\n  pyac-dictionary benchmark <volume.pyac> <iterations> surface <language> <surface>"
 }
 
 fn binary_bytes() -> io::Result<u64> {
@@ -395,6 +395,31 @@ fn execute(args: &[String]) -> Result<Value, Box<dyn std::error::Error>> {
                 "volumeBytes": size, "openMs": open_ms, "readNs": read_ns
             })
         }
+        "verify" if args.len() == 2 => {
+            let path = Path::new(&args[1]);
+            let size = fs::metadata(path)?.len();
+            let open_start = Instant::now();
+            let mut reader = open_reader(path)?;
+            let open_ms = open_start.elapsed().as_secs_f64() * 1000.0;
+            let verify_start = Instant::now();
+            let keys = reader.canonical_keys()?;
+            let mut failures: Vec<String> = Vec::new();
+            for key in &keys {
+                match reader.read_entry(key) {
+                    Ok(codelets) if !codelets.is_empty() => {}
+                    Ok(_) => failures.push(format!("key {key:x?}: decoded as empty")),
+                    Err(error) => failures.push(format!("key {key:x?}: {error}")),
+                }
+            }
+            let verify_ns = verify_start.elapsed().as_nanos();
+            let verified = keys.len();
+            json!({
+                "command": "verify", "path": path,
+                "entries": reader.entry_count(), "keys": verified,
+                "failures": failures, "ok": failures.is_empty(),
+                "volumeBytes": size, "openMs": open_ms, "verifyNs": verify_ns
+            })
+        }
         "benchmark" if args.len() == 6 && args[3] == "surface" => {
             let iterations = args[2].parse::<u64>()?;
             if iterations == 0 {
@@ -445,7 +470,15 @@ fn execute(args: &[String]) -> Result<Value, Box<dyn std::error::Error>> {
 
 fn main() {
     match execute(&env::args().skip(1).collect::<Vec<_>>()) {
-        Ok(result) => println!("{result}"),
+        Ok(result) => {
+            // `verify` reports its verdict in the body, so its exit status has to
+            // carry the same answer for a shell or CI step to act on it.
+            let failed_verify = result.get("ok").and_then(|value| value.as_bool()) == Some(false);
+            println!("{result}");
+            if failed_verify {
+                std::process::exit(1);
+            }
+        }
         Err(error) => {
             eprintln!("pyac-dictionary: {error}");
             std::process::exit(2);

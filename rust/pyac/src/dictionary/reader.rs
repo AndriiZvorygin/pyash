@@ -1,7 +1,8 @@
 use super::OperationSignatureKey;
 use super::reader_codec::{
     parse_location, parse_marker, parse_metadata, parse_toc, parse_toc_v4, read_codelet,
-    Sentence, read_sentence, validate_header, validate_sections, validate_sections_v4,
+    RecordSubject, Sentence, read_sentence, read_sentence_v4, take_record_subject,
+    validate_header, validate_sections, validate_sections_v4,
 };
 use super::reader_index::{
     DirectIndexLookup, lookup_legacy_operation, lookup_legacy_source, lookup_legacy_surface,
@@ -242,6 +243,29 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
             .find(|section| section.role == role)
             .ok_or_else(|| DictionaryReadError::MissingSection(role.into()))?;
         self.read_range(section.range())
+    }
+
+    /// Every canonical key the volume indexes, in index order.
+    ///
+    /// A verification pass needs this to check that each advertised entry is
+    /// actually readable; `entry_count` alone cannot tell a corrupt record from
+    /// a missing one.
+    pub fn canonical_keys(&mut self) -> Result<Vec<Vec<u16>>, DictionaryReadError> {
+        let section = self.section("canonical-index")?;
+        let mut keys = Vec::new();
+        let mut ordinal = section.codelet_start;
+        let end = section.codelet_start + section.codelet_count;
+        while ordinal < end {
+            let sentence = read_sentence_v4(&mut self.source, ordinal, end)?;
+            let mut cursor = 0;
+            if let Ok(RecordSubject::Name(name)) = take_record_subject(&sentence, &mut cursor) {
+                keys.push(name);
+            }
+            ordinal = ordinal
+                .checked_add(sentence.consumed)
+                .ok_or(DictionaryReadError::InvalidRecord("index ordinal overflow"))?;
+        }
+        Ok(keys)
     }
 
     pub fn location(&mut self, key: &[u16]) -> Result<Option<Range<u32>>, DictionaryReadError> {

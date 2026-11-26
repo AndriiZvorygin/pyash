@@ -20,7 +20,7 @@ const binaryCandidates = [
 ];
 
 function usageError(message) {
-  return new Error(`${message}\nusage:\n  pyash dict <English word|Chinese form|WordNet sense|sumo:<concept>|Pyash key>\n  pyash dict <Pyash key> to zh\n  pyash dictionary volume build from <source.pya> to <volume.pyac>\n  pyash dictionary volume inspect <volume.pyac>\n  pyash dictionary volume lookup <volume.pyac> surface <language> <surface>\n  pyash dictionary volume lookup <volume.pyac> source <dataset> <release> <identifier>\n  pyash dictionary volume read <volume.pyac> key <pyash-name>\n  pyash dictionary volume benchmark <volume.pyac> surface <language> <surface> <iterations> to <record.pya>`);
+  return new Error(`${message}\nusage:\n  pyash dict <English word|Chinese form|WordNet sense|sumo:<concept>|Pyash key>\n  pyash dict <Pyash key> to zh\n  pyash dictionary volume build from <source.pya> to <volume.pyac>\n  pyash dictionary volume inspect <volume.pyac>\n  pyash dictionary volume lookup <volume.pyac> surface <language> <surface>\n  pyash dictionary volume lookup <volume.pyac> source <dataset> <release> <identifier>\n  pyash dictionary volume read <volume.pyac> key <pyash-name>\n  pyash dictionary volume verify <volume.pyac>\n  pyash dictionary volume benchmark <volume.pyac> surface <language> <surface> <iterations> to <record.pya>`);
 }
 
 async function executablePath() {
@@ -327,6 +327,12 @@ export async function runPyacDictionary(args = process.argv.slice(2), { stdout =
     const canonicalKey = args[3].trim().split(/\s+/u).join(" ");
     Object.assign(result, summarizeDictionaryEntry(result.sentences, canonicalKey));
     delete result.codelets;
+  } else if (args[0] === "verify" && args.length === 2) {
+    result = runBinary(binary, ["verify", path.resolve(args[1])]);
+    if (!result.ok) {
+      const detail = result.failures.slice(0, 10).join("; ");
+      throw new Error(`dictionary verify failed for ${result.failures.length} of ${result.keys} entries: ${detail}`);
+    }
   } else if (args[0] === "benchmark" && args[1] && args[2] === "surface" && args[6] === "to" && args.length === 8) {
     const volumePath = path.resolve(args[1]);
     const iterations = args[5];
