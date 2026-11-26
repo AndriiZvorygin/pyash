@@ -204,6 +204,7 @@ exists su name radio producer loop ob bool lie be default ya
 exists su name radio producer pause seconds ob num 0 be default ya
 exists su name radio producer channel ob text "" be default ya
 exists su name radio producer song style ob bool truth be default ya
+exists su name radio rebuild count ob num 1 be default ya
 su name radio producer engines be map def
   su name ace-step ob text "audio_ace_step_1_5_xl_turbo" ya
   su name night ob text "audio_ace_step_1_5_xl_turbo" ya
