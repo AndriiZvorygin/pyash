@@ -17,6 +17,7 @@ import {
   parseSrt,
   readWords,
   splitSentences,
+  alignedPathFor,
   timedLines,
   transcriptPathFor
 } from "../program/library/radio/ticker.mjs";
@@ -36,8 +37,9 @@ async function makeTempDir(prefix = "yiniana-ticker-") {
   return fs.mkdtemp(path.join(os.tmpdir(), prefix));
 }
 
-test("the transcript of a song lies beside its sheet", () => {
+test("the transcript of a song lies beside its sheet, and the words beside that", () => {
   assert.equal(transcriptPathFor("/radio/lyrics/song-pleasure.txt"), "/radio/lyrics/song-pleasure.srt");
+  assert.equal(alignedPathFor("/radio/lyrics/song-pleasure.txt"), "/radio/lyrics/song-pleasure.aligned.srt");
   assert.equal(transcriptPathFor(""), "");
 });
 
@@ -71,10 +73,10 @@ test("the words of a sheet are the lines of the song, each with its section", ()
   assert.equal(words[1].section, "Chorus");
 });
 
-test("the transcript of the song is what the ticker follows", () => {
-  const words = timedLines({ transcript: SRT, sheet: "[Verse]\nThe words of the sheet\n", durationSeconds: 60 });
+test("the words of the song, placed at the times, are what the ticker follows", () => {
+  const words = timedLines({ aligned: SRT, sheet: "[Verse]\nThe words of the sheet\n", durationSeconds: 60 });
 
-  assert.equal(words.source, "transcript");
+  assert.equal(words.source, "lyrics");
   assert.equal(words.lines.length, 4);
 });
 
@@ -110,12 +112,12 @@ test("the words of a song are read from the files that hold them", async () => {
   await fs.writeFile(sheetPath, "[Verse]\nThe words of the sheet\n");
   await fs.writeFile(transcriptPath, SRT);
 
-  const heard = await readWords({ sheetPath, transcriptPath, durationSeconds: 60 });
-  assert.equal(heard.source, "transcript");
+  const heard = await readWords({ sheetPath, alignedPath: transcriptPath, durationSeconds: 60 });
+  assert.equal(heard.source, "lyrics");
 
   await fs.rm(transcriptPath, { force: true });
-  const sheet = await readWords({ sheetPath, transcriptPath, durationSeconds: 60 });
-  assert.equal(sheet.source, "sheet", "a song that was never heard shows its sheet");
+  const sheet = await readWords({ sheetPath, alignedPath: transcriptPath, durationSeconds: 60 });
+  assert.equal(sheet.source, "sheet", "a song whose words were not placed shows its sheet");
 
   await fs.rm(root, { recursive: true, force: true });
 });

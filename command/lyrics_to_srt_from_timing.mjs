@@ -972,6 +972,35 @@ async function main() {
   await runLyricsToSrt(process.argv.slice(2));
 }
 
+/**
+ * Place the words of a song at the times the hear lane heard them.
+ *
+ * The hear lane says what it heard, and what it heard is not always the song:
+ * a word can come out of the mouth of the song garbled. So the transcript is
+ * not what a listener reads. This is the house's own alignment: the words of
+ * the sheet, placed at the times of the transcript.
+ *
+ * A song whose words cannot be placed is left with its sheet alone, and the
+ * caller is told so.
+ */
+export async function alignWordsToFile({
+  sheetPath = "",
+  timingPath = "",
+  outputPath = "",
+  log = () => {}
+} = {}) {
+  if (!sheetPath || !timingPath || !outputPath) return "";
+  try {
+    await runLyricsToSrt([sheetPath, timingPath, outputPath, "--sentence-cues"], {
+      writeOut: () => {}
+    });
+  } catch (error) {
+    log(`the words could not be placed: ${String(error?.message ?? error)}`);
+    return "";
+  }
+  return outputPath;
+}
+
 export async function runLyricsToSrt(args = process.argv.slice(2), {
   readFile = fs.readFile,
   writeFile = fs.writeFile,

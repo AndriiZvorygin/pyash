@@ -428,7 +428,7 @@ test("the station serves the words of the song that is playing", async () => {
   const lyrics = path.join(root, "lyrics");
   await fs.mkdir(lyrics, { recursive: true });
   await fs.writeFile(path.join(lyrics, "song-dignity.txt"), "[Verse]\nThe words of the sheet\n");
-  await fs.writeFile(path.join(lyrics, "song-dignity.srt"), [
+  await fs.writeFile(path.join(lyrics, "song-dignity.aligned.srt"), [
     "1",
     "00:00:10,000 --> 00:00:20,000",
     "The words the house heard.",
@@ -446,7 +446,7 @@ test("the station serves the words of the song that is playing", async () => {
   const words = await (await fetch(`${base}/lyrics.json`)).json();
 
   assert.equal(words.filename, "ace-step-dignity.mp3");
-  assert.equal(words.source, "transcript", "the words are the ones the house heard");
+  assert.equal(words.source, "lyrics", "the words are the words of the song, placed at the times");
   assert.equal(words.lines.length, 1);
   assert.equal(words.lines[0].text, "The words the house heard.");
   assert.equal(words.lines[0].start, 10);

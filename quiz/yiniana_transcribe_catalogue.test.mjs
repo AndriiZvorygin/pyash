@@ -29,7 +29,7 @@ function syntheticMp3({ frames = 6 } = {}) {
 const SRT = [
   "1",
   "00:00:04,000 --> 00:00:09,000",
-  "The words the house heard.",
+  "The words of the sheet.",
   ""
 ].join("\n");
 
@@ -83,7 +83,9 @@ test("a song is heard by the lane the house trusts", async () => {
   assert.equal(result.status, "heard");
   const transcript = path.join(lyrics, "song-dignity.srt");
   assert.ok(await fs.readFile(transcript, "utf8"), "the transcript is kept beside the sheet");
-  assert.equal(parseSrt(await fs.readFile(transcript, "utf8"))[0].text, "The words the house heard.");
+  const aligned = path.join(lyrics, "song-dignity.aligned.srt");
+  assert.match(await fs.readFile(aligned, "utf8"), /The words of the sheet/u, "the words of the song are placed at the times");
+  assert.equal(parseSrt(await fs.readFile(aligned, "utf8"))[0].start, 4, "the words are placed at the time they were heard");
   const leftovers = (await fs.readdir(path.join(root, "work"))).filter((name) => name.endsWith(".part"));
   assert.deepEqual(leftovers, [], "no part file was left behind");
   await fs.rm(root, { recursive: true, force: true });
@@ -112,7 +114,8 @@ test("a song that was already heard is not heard again", async () => {
     }
   });
 
-  assert.equal(result.status, "present");
+  assert.equal(result.status, "heard", "the words were placed against what was heard before");
+  assert.ok(await fs.readFile(path.join(lyrics, "song-dignity.aligned.srt"), "utf8"), "the words are placed");
   await fs.rm(root, { recursive: true, force: true });
 });
 

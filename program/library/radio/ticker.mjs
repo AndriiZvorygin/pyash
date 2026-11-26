@@ -22,6 +22,20 @@ export function transcriptPathFor(sheetPath) {
 }
 
 /**
+ * Where the aligned words of a song lie: beside its sheet, with the name of
+ * the alignment.
+ *
+ * The alignment is the house's own: the words of the song, as they were
+ * written, placed at the times the hear lane heard them. The raw transcript
+ * beside it is what the machine heard, which is not always the song.
+ */
+export function alignedPathFor(sheetPath) {
+  const sheet = String(sheetPath ?? "");
+  if (!sheet) return "";
+  return sheet.replace(/\.txt$/u, ".aligned.srt");
+}
+
+/**
  * The path of a transcript beside a plain transcript file.
  */
 export function srtPathFor(transcriptPath) {
@@ -106,15 +120,15 @@ export function parseSheet(text) {
 /**
  * The words of a song, with the time of every line.
  *
- * The transcript of the song is what the house heard, so it is what the
- * ticker shows. A song with no transcript falls back to its sheet, with the
- * lines spread over the length of the song and the first of them after the
- * opening the song begins with.
+ * The words are the words of the song, as they were written: the alignment
+ * places them at the times the hear lane heard them. A song that was never
+ * aligned falls back to its sheet, with the lines spread over the length of
+ * the song and the first of them after the opening the song begins with.
  */
-export function timedLines({ transcript = "", sheet = "", durationSeconds = 0 } = {}) {
-  const heard = parseSrt(transcript);
-  if (heard.length) {
-    return { source: "transcript", lines: heard };
+export function timedLines({ aligned = "", sheet = "", durationSeconds = 0 } = {}) {
+  const sung = parseSrt(aligned);
+  if (sung.length) {
+    return { source: "lyrics", lines: sung };
   }
   const words = parseSheet(sheet);
   if (!words.length) return { source: "none", lines: [] };
@@ -158,17 +172,18 @@ export function transcriptNameFor(sheetPath) {
 }
 
 /**
- * The words of a song, read from the files that hold them: the transcript
- * when the house heard the song, and the sheet when it did not.
+ * The words of a song, read from the files that hold them: the alignment
+ * when the house has placed the words of the song at the times it heard
+ * them, and the sheet when it has not.
  */
-export async function readWords({ sheetPath = "", transcriptPath = "", durationSeconds = 0 } = {}) {
-  let transcript = "";
+export async function readWords({ sheetPath = "", alignedPath = "", durationSeconds = 0 } = {}) {
+  let aligned = "";
   let sheet = "";
-  if (transcriptPath) {
+  if (alignedPath) {
     try {
-      transcript = await fs.readFile(transcriptPath, "utf8");
+      aligned = await fs.readFile(alignedPath, "utf8");
     } catch {
-      transcript = "";
+      aligned = "";
     }
   }
   if (sheetPath) {
@@ -178,5 +193,5 @@ export async function readWords({ sheetPath = "", transcriptPath = "", durationS
       sheet = "";
     }
   }
-  return timedLines({ transcript, sheet, durationSeconds });
+  return timedLines({ aligned, sheet, durationSeconds });
 }

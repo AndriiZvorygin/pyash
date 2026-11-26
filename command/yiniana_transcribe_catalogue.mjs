@@ -20,7 +20,8 @@ import { fileURLToPath } from "node:url";
 import { interpret } from "../program/bridge/index.mjs";
 import { resolveConfigText } from "../program/configure/env.mjs";
 import { findLyricSheet, scanCatalogue } from "../program/library/radio/catalogue.mjs";
-import { transcriptPathFor } from "../program/library/radio/ticker.mjs";
+import { alignedPathFor, transcriptPathFor } from "../program/library/radio/ticker.mjs";
+import { alignWordsToFile } from "./lyrics_to_srt_from_timing.mjs";
 import { loadDefaultConfig } from "./run_pya_helpers.mjs";
 
 const DEFAULT_CATALOGUE = "radio/audio";
@@ -56,7 +57,11 @@ export function buildListenArgs({ audioPath, windowPath }) {
 }
 
 /**
- * Listen to one song and keep what was heard beside its sheet.
+ * Listen to one song and keep what was heard beside its sheet, with the
+ * words of the song placed at the times it was heard.
+ *
+ * A song that was already heard is not heard again: the transcript that is
+ * already there is enough to place the words.
  */
 export async function transcribeSong({
   track,
@@ -71,33 +76,60 @@ export async function transcribeSong({
 }) {
   const sheetPath = track.lyricSheet || await findLyricSheet(lyricsDirectory, track.topic, track.engine);
   if (!sheetPath) return { name: track.filename, status: "no-sheet" };
-  const target = transcriptPathFor(sheetPath);
+  const heard = transcriptPathFor(sheetPath);
+  const aligned = alignedPathFor(sheetPath);
   try {
-    await fs.access(target);
+    await fs.access(aligned);
     return { name: track.filename, status: "present" };
   } catch {
-    // not heard yet
+    // the words are not placed yet
   }
   await fs.mkdir(workDirectory, { recursive: true });
   const stem = path.basename(track.filename, ".mp3");
-  const windowPath = path.join(workDirectory, `${stem}.wav`);
-  const transcriptPath = path.join(workDirectory, `${stem}.txt`);
-  await runCommand(ffmpeg, buildListenArgs({ audioPath: track.path, windowPath }), { cwd: repoRoot, label: `listen ${stem}` });
-  await runCommand(process.execPath, [
-    path.join(repoRoot, "command", "whisper_main.mjs"),
-    "--input", windowPath,
-    "--bin", hearBin,
-    "--model", hearModel,
-    "--output", transcriptPath
-  ], { cwd: repoRoot, label: `hear ${stem}` });
-  const srtPath = transcriptPath.replace(/\.txt$/u, ".srt");
-  const staging = `${target}.part`;
-  await fs.copyFile(srtPath, staging);
-  await fs.rename(staging, target);
-  await fs.rm(windowPath, { force: true });
-  await fs.rm(transcriptPath, { force: true });
-  log(`heard ${track.filename}`);
-  return { name: track.filename, status: "heard", transcript: target };
+  let transcript = heard;
+  try {
+    await fs.access(heard);
+    log(`${track.filename} was heard before`);
+  } catch {
+    const windowPath = path.join(workDirectory, `${stem}.wav`);
+    const transcriptPath = path.join(workDirectory, `${stem}.txt`);
+    await runCommand(ffmpeg, buildListenArgs({ audioPath: track.path, windowPath }), { cwd: repoRoot, label: `listen ${stem}` });
+    await runCommand(process.execPath, [
+      path.join(repoRoot, "command", "whisper_main.mjs"),
+      "--input", windowPath,
+      "--bin", hearBin,
+      "--model", hearModel,
+      "--output", transcriptPath
+    ], { cwd: repoRoot, label: `hear ${stem}` });
+    transcript = transcriptPath.replace(/\.txt$/u, ".srt");
+  }
+  const placed = await alignWordsToFile({
+    sheetPath,
+    timingPath: transcript,
+    outputPath: aligned,
+    log
+  });
+  if (!placed) return { name: track.filename, status: "unplaced" };
+  // The words that were heard are kept beside the sheet too: they are the
+  // record of what the house heard, and they are what the words of the song
+  // are placed against.
+  const kept = transcript === heard
+    ? heard
+    : await keepHeard({ from: transcript, to: heard });
+  log(`placed the words of ${track.filename}`);
+  return { name: track.filename, status: "heard", transcript: kept, aligned: placed };
+}
+
+/**
+ * Keep what was heard beside the sheet of the song: the words go to a part
+ * file and the part file is renamed onto the name.
+ */
+export async function keepHeard({ from = "", to = "" } = {}) {
+  if (!from || !to) return "";
+  const staging = `${to}.part`;
+  await fs.copyFile(from, staging);
+  await fs.rename(staging, to);
+  return to;
 }
 
 /**

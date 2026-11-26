@@ -15,8 +15,9 @@ import { fileURLToPath } from "node:url";
 import { interpret } from "../program/bridge/index.mjs";
 import { resolveConfigBool, resolveConfigMap, resolveConfigMapNum, resolveConfigMapText, resolveConfigNum, resolveConfigText } from "../program/configure/env.mjs";
 import { parseLanes } from "../program/library/radio/rotation.mjs";
-import { transcriptPathFor, srtPathFor } from "../program/library/radio/ticker.mjs";
+import { alignedPathFor, srtPathFor, transcriptPathFor } from "../program/library/radio/ticker.mjs";
 import { fileDay, songTags, stampSong } from "../program/library/radio/tags.mjs";
+import { alignWordsToFile } from "./lyrics_to_srt_from_timing.mjs";
 import { recoverRate, transcriptText } from "./yiniana_lyric_recovery.mjs";
 import { readCardIfItMatches } from "./yiniana_lyrics_chain.mjs";
 import { loadDefaultConfig } from "./run_pya_helpers.mjs";
@@ -188,6 +189,37 @@ export async function keepTranscript({ srtPath = "", sheetPath = "", log = () =>
   await fs.rename(staging, target);
   log(`kept the transcript of ${path.basename(sheetPath, ".txt")}`);
   return target;
+}
+
+/**
+ * Place the words of the song at the times the house heard them.
+ *
+ * The hear lane says what it heard, and what it heard is not always the song:
+ * a word can come out of the mouth of the song garbled. So the transcript is
+ * not what a listener reads. The house's own alignment is: the words of the
+ * sheet, placed at the times of the transcript.
+ *
+ * A song whose words cannot be placed is left with its sheet alone.
+ */
+export async function alignWords({
+  srtPath = "",
+  sheetPath = "",
+  alignedPath = "",
+  repoRoot = process.cwd(),
+  log = () => {}
+} = {}) {
+  if (!srtPath || !sheetPath || !alignedPath) return "";
+  try {
+    await fs.access(srtPath);
+  } catch {
+    return "";
+  }
+  return alignWordsToFile({
+    sheetPath,
+    timingPath: srtPath,
+    outputPath: alignedPath,
+    log: (line) => log(`${path.basename(sheetPath, ".txt")}: ${line}`)
+  });
 }
 
 /**
@@ -370,6 +402,14 @@ export async function produce({
       await keepTranscript({
         srtPath: winner.srtPath,
         sheetPath,
+        log
+      });
+      // The words of the song, placed at the times the house heard them.
+      await alignWords({
+        srtPath: winner.srtPath,
+        sheetPath,
+        alignedPath: alignedPathFor(sheetPath),
+        repoRoot,
         log
       });
       // The song is stamped before it is heard: a player shows who made it,

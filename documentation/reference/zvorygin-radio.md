@@ -457,16 +457,19 @@ song is never on the air.
 
 ### The words of the song
 
-A listener wants to read along with the song. The station already knows the
-words: the house hears every song it makes, and what it heard is kept with the
-song.
+A listener wants to read along with the song. The words are the words of the
+song, as they were written — and the times are the times the house heard them.
 
-The producer keeps the transcript of the render it publishes, beside the sheet
-of the song — `radio/lyrics/song-<topic>.srt`, a subtitle with the time of
-every line. The sheet stays the words the song was written from; the
-transcript is the words that came back out of the mouth of the song.
+The hear lane is not the words. What it heard is kept with the song — the
+transcript, `radio/lyrics/song-<topic>.srt` — but a word can come out of the
+mouth of the song garbled, and what the machine heard is not what a listener
+should read. So the house's own alignment does the work: the words of the
+sheet, placed at the times of the transcript. It is the same alignment the
+karaoke subtitles of the music videos use — lyric text with ASR time.
 
-The station serves them on `GET /lyrics.json`:
+The aligned words are kept beside the sheet, in
+`radio/lyrics/song-<topic>.aligned.srt`, and the station serves them on
+`GET /lyrics.json`:
 
 ```json
 {
@@ -474,7 +477,7 @@ The station serves them on `GET /lyrics.json`:
   "filename": "ace-step-pleasure.mp3",
   "title": "Pleasure",
   "durationSeconds": 175.056,
-  "source": "transcript",
+  "source": "lyrics",
   "lines": [
     { "start": 0, "end": 14.9, "text": "We sit quietly in stillness to align with the Father above." },
     { "start": 14.9, "end": 23.1, "text": "Love returns a thousandfold when open hearts serve each other well." }
@@ -488,15 +491,18 @@ playing block. The clock is the station's own — the status carries the seconds
 the song has been playing, and the page keeps its own time against it, so the
 words move with the music and not in steps of the poll.
 
-A song the house has not heard yet falls back to its sheet: the words are
-right, and the timing is an estimate — the lines spread over the length of the
-song, with the first of them after the opening the song begins with. The
-route says which of the two it is showing in its `source`.
+A song whose words the house could not place falls back to its sheet: the
+words are right, and the timing is an estimate — the lines spread over the
+length of the song, with the first of them after the opening the song begins
+with. The route says which of the two it is showing in its `source`: `lyrics`
+for the words placed at the times, `sheet` for the words alone, `none` for a
+song without words.
 
 ### The words of the songs that came before
 
 The songs the house made before the radio were never heard by the machine, so
-they have no transcript yet. The transcript command listens to them:
+they have no transcript yet. The transcript command listens to them, and places
+the words of their sheets at the times it heard them:
 
 ```sh
 cd /home/htaf/pyac/pyash-dev
