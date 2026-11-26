@@ -9,13 +9,13 @@ const ANSWER_NAME: u32 = 0x4930;
 /// `DENOMINATOR_NAME` below both were: two names for one value, used in the
 /// same file to mean different things. The slot names stay as local aliases so
 /// each use still reads as what the test is doing.
-const HGUT_COUNT: u32 = 0xaa90;
-const MAXIMUM_NAME: u32 = HGUT_COUNT;
+const COUNT: u32 = 0xaa90;
+const MAXIMUM_NAME: u32 = COUNT;
 const SHIFTED_NAME: u32 = 0x6844;
 /// `dlek` = vector.
-const DLEK_VECTOR: u32 = 0x2b73;
-const EXPONENTIALS_NAME: u32 = DLEK_VECTOR;
-const DENOMINATOR_NAME: u32 = HGUT_COUNT;
+const VECTOR_WORD: u32 = 0x2b73;
+const EXPONENTIALS_NAME: u32 = VECTOR_WORD;
+const DENOMINATOR_NAME: u32 = COUNT;
 const ANSWER_ROUTINE: u32 = 0x4930;
 
 fn append_sentence(words: &mut std::vec::Vec<u32>, tokens: &[u32], boundaries: &[usize]) {

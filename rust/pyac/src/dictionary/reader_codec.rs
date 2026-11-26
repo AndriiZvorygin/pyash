@@ -5,9 +5,9 @@ use super::volume_records::{
     PROFILE_VERSION_V3, TOC_ROLES, TOC_ROLES_V4,
 };
 use super::words::{
-    GI_NAME, HWUS_TEXT, KA_ACCUSATIVE, LI_REALIS, LWOH_LOCATIVE, MA_DESTINATION, MWAH_COMITATIVE,
-    NA_NOMINATIVE, NUMBER_QUOTE, SO_SOURCE, SWIH_ESSIVE, TEXT_QUOTE, UINT32_QUOTE,
-    YU_INSTRUMENTAL,
+    NAME_MARKER, TEXT_VERB, ACCUSATIVE, REALIS, LOCATIVE, DESTINATION, COMITATIVE,
+    NOMINATIVE, NUMBER_QUOTE, SOURCE, ESSIVE, TEXT_QUOTE, UINT32_QUOTE,
+    INSTRUMENTAL,
 };
 use crate::literal::decode_quote_header;
 use crate::{CODELET_BYTES, FORMAT_VERSION, HEADER_BYTES, MAGIC, PyacError, WORDS_PER_CODELET};
@@ -226,7 +226,7 @@ fn scan_raw_text(
 
 pub(super) fn subject_end(words: &[u16], expected: &[u16]) -> Result<usize, DictionaryReadError> {
     if words.len() < expected.len() + 2
-        || words[0] != GI_NAME
+        || words[0] != NAME_MARKER
         || words[1..1 + expected.len()] != *expected
     {
         return Err(DictionaryReadError::InvalidRecord(
@@ -237,7 +237,7 @@ pub(super) fn subject_end(words: &[u16], expected: &[u16]) -> Result<usize, Dict
     // the value check is unambiguous here. Variable dict keys go through
     // `take_record_subject`, which uses the boundary flags instead.
     let case = 1 + expected.len();
-    if words[case] != NA_NOMINATIVE {
+    if words[case] != NOMINATIVE {
         return Err(DictionaryReadError::InvalidRecord(
             "subject is missing its nominative case boundary",
         ));
@@ -391,10 +391,10 @@ pub(super) fn take_record_subject(
 ) -> Result<RecordSubject, DictionaryReadError> {
     let words = &sentence.words;
     match words.get(*cursor).copied() {
-        Some(GI_NAME) => {
-            // The key runs from after GI_NAME to the first word whose boundary
-            // flag is set. Scanning for the NA_NOMINATIVE *value* is wrong: a key word may
-            // itself be NA_NOMINATIVE, which is exactly the `na` case (0x24DE).
+        Some(NAME_MARKER) => {
+            // The key runs from after NAME_MARKER to the first word whose boundary
+            // flag is set. Scanning for the NOMINATIVE *value* is wrong: a key word may
+            // itself be NOMINATIVE, which is exactly the `na` case (0x24DE).
             *cursor += 1;
             let start = *cursor;
             let end = sentence
@@ -410,7 +410,7 @@ pub(super) fn take_record_subject(
             if end == start {
                 return Err(DictionaryReadError::InvalidRecord("empty name subject"));
             }
-            if words.get(end) != Some(&NA_NOMINATIVE) {
+            if words.get(end) != Some(&NOMINATIVE) {
                 return Err(DictionaryReadError::InvalidRecord(
                     "name subject does not end at a nominative boundary",
                 ));
@@ -420,7 +420,7 @@ pub(super) fn take_record_subject(
         }
         Some(TEXT_QUOTE) => {
             let value = take_text(words, cursor)?;
-            expect_word(words, cursor, NA_NOMINATIVE)?;
+            expect_word(words, cursor, NOMINATIVE)?;
             Ok(RecordSubject::Text(value))
         }
         Some(header)
@@ -428,7 +428,7 @@ pub(super) fn take_record_subject(
                 .is_some_and(|item| item.sort == 4 && item.scalar_bytes == 2) =>
         {
             let value = take_vector(words, cursor)?;
-            expect_word(words, cursor, NA_NOMINATIVE)?;
+            expect_word(words, cursor, NOMINATIVE)?;
             Ok(RecordSubject::Uint16Vector(value))
         }
         _ => Err(DictionaryReadError::InvalidRecord(
@@ -454,8 +454,8 @@ pub(super) fn expect_word(
 }
 
 pub(super) fn expect_end(words: &[u16], cursor: &mut usize) -> Result<(), DictionaryReadError> {
-    expect_word(words, cursor, HWUS_TEXT)?;
-    expect_word(words, cursor, LI_REALIS)?;
+    expect_word(words, cursor, TEXT_VERB)?;
+    expect_word(words, cursor, REALIS)?;
     if *cursor != words.len() {
         return Err(DictionaryReadError::InvalidRecord(
             "record has trailing words",
@@ -467,7 +467,7 @@ pub(super) fn expect_end(words: &[u16], cursor: &mut usize) -> Result<(), Dictio
 pub(super) fn parse_marker(words: &[u16]) -> Result<String, DictionaryReadError> {
     let mut cursor = subject_end(words, &PROFILE_SUBJECT)?;
     let kind = take_text(words, &mut cursor)?;
-    expect_word(words, &mut cursor, KA_ACCUSATIVE)?;
+    expect_word(words, &mut cursor, ACCUSATIVE)?;
     expect_end(words, &mut cursor)?;
     Ok(kind)
 }
@@ -486,29 +486,29 @@ pub(super) fn parse_metadata(
 ) -> Result<(DictionaryMetadata, usize, String, Option<u32>), DictionaryReadError> {
     let mut cursor = subject_end(words, &PROFILE_SUBJECT)?;
     let title = take_text(words, &mut cursor)?;
-    expect_word(words, &mut cursor, KA_ACCUSATIVE)?;
+    expect_word(words, &mut cursor, ACCUSATIVE)?;
     let revision_words = take_vector(words, &mut cursor)?;
     if revision_words.len() != 2 {
         return Err(DictionaryReadError::InvalidRecord(
             "revision must be a uint32 pair",
         ));
     }
-    expect_word(words, &mut cursor, SWIH_ESSIVE)?;
+    expect_word(words, &mut cursor, ESSIVE)?;
     let language_text = take_text(words, &mut cursor)?;
-    expect_word(words, &mut cursor, SO_SOURCE)?;
+    expect_word(words, &mut cursor, SOURCE)?;
     let languages = language_text
         .split(',')
         .map(str::to_owned)
         .collect::<Vec<_>>();
     let normalization_policy = take_text(words, &mut cursor)?;
-    expect_word(words, &mut cursor, MA_DESTINATION)?;
+    expect_word(words, &mut cursor, DESTINATION)?;
     let toc_count = take_number(words, &mut cursor)? as usize;
-    expect_word(words, &mut cursor, YU_INSTRUMENTAL)?;
+    expect_word(words, &mut cursor, INSTRUMENTAL)?;
     let profile_version = take_text(words, &mut cursor)?;
-    expect_word(words, &mut cursor, MWAH_COMITATIVE)?;
+    expect_word(words, &mut cursor, COMITATIVE)?;
     let entry_count = if profile_version == PROFILE_VERSION {
         let value = take_uint32(words, &mut cursor)?;
-        expect_word(words, &mut cursor, LWOH_LOCATIVE)?;
+        expect_word(words, &mut cursor, LOCATIVE)?;
         Some(value)
     } else {
         None
@@ -543,9 +543,9 @@ pub(super) fn parse_toc_v4(
 ) -> Result<DictionarySection, DictionaryReadError> {
     let mut cursor = subject_end(words, &CONTENTS_SUBJECT)?;
     let ordinal = take_number(words, &mut cursor)?;
-    expect_word(words, &mut cursor, KA_ACCUSATIVE)?;
+    expect_word(words, &mut cursor, ACCUSATIVE)?;
     let range = take_vector(words, &mut cursor)?;
-    expect_word(words, &mut cursor, SO_SOURCE)?;
+    expect_word(words, &mut cursor, SOURCE)?;
     expect_end(words, &mut cursor)?;
     if ordinal != expected_ordinal || range.len() != 4 {
         return Err(DictionaryReadError::InvalidRecord(
@@ -562,9 +562,9 @@ pub(super) fn parse_toc_v4(
 pub(super) fn parse_toc(words: &[u16]) -> Result<DictionarySection, DictionaryReadError> {
     let mut cursor = subject_end(words, &CONTENTS_SUBJECT)?;
     let role = take_text(words, &mut cursor)?;
-    expect_word(words, &mut cursor, KA_ACCUSATIVE)?;
+    expect_word(words, &mut cursor, ACCUSATIVE)?;
     let range = take_vector(words, &mut cursor)?;
-    expect_word(words, &mut cursor, SO_SOURCE)?;
+    expect_word(words, &mut cursor, SOURCE)?;
     expect_end(words, &mut cursor)?;
     if range.len() != 4 {
         return Err(DictionaryReadError::InvalidRecord(
@@ -587,13 +587,13 @@ pub(super) fn parse_location(
             "expected an entry-location posting",
         ));
     }
-    expect_word(words, &mut cursor, KA_ACCUSATIVE)?;
+    expect_word(words, &mut cursor, ACCUSATIVE)?;
     let key = take_vector(words, &mut cursor)?;
-    expect_word(words, &mut cursor, SO_SOURCE)?;
+    expect_word(words, &mut cursor, SOURCE)?;
     let range = take_vector(words, &mut cursor)?;
-    expect_word(words, &mut cursor, MA_DESTINATION)?;
+    expect_word(words, &mut cursor, DESTINATION)?;
     let definition_words = take_vector(words, &mut cursor)?;
-    expect_word(words, &mut cursor, MWAH_COMITATIVE)?;
+    expect_word(words, &mut cursor, COMITATIVE)?;
     expect_end(words, &mut cursor)?;
     if key.is_empty() || range.len() != 4 || definition_words.len() != 4 {
         return Err(DictionaryReadError::InvalidRecord(

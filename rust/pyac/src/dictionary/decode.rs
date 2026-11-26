@@ -29,7 +29,7 @@ use super::volume::{
 };
 use crate::WORDS_PER_CODELET;
 use super::words::{
-    MA_DESTINATION, MWAH_COMITATIVE, SO_SOURCE, SWIH_ESSIVE, YU_INSTRUMENTAL,
+    DESTINATION, COMITATIVE, SOURCE, ESSIVE, INSTRUMENTAL,
 };
 
 /// Read every entry of a v4 volume into the editable model.
@@ -122,14 +122,14 @@ fn decode_entry(
         let fields = read_fields(sentence)?;
         let cases: Vec<u16> = fields.iter().map(Field::case).collect();
         match (cases.as_slice(), fields.as_slice()) {
-            ([SWIH_ESSIVE, SO_SOURCE, MA_DESTINATION], [Field::Text(_, language), Field::Text(_, surface), Field::Text(_, normalized)]) => {
+            ([ESSIVE, SOURCE, DESTINATION], [Field::Text(_, language), Field::Text(_, surface), Field::Text(_, normalized)]) => {
                 entry.lexical_forms.push(super::model::LexicalForm {
                     language: language.clone(),
                     surface: surface.clone(),
                     normalized: normalized.clone(),
                 });
             }
-            ([SWIH_ESSIVE, SO_SOURCE, MA_DESTINATION, YU_INSTRUMENTAL], [Field::Text(_, dataset), Field::Text(_, release), Field::Text(_, identifier), Field::Text(_, relation)]) => {
+            ([ESSIVE, SOURCE, DESTINATION, INSTRUMENTAL], [Field::Text(_, dataset), Field::Text(_, release), Field::Text(_, identifier), Field::Text(_, relation)]) => {
                 entry.source_links.push(super::model::SourceLink {
                     dataset: dataset.clone(),
                     release: release.clone(),
@@ -137,7 +137,7 @@ fn decode_entry(
                     relation: relation.clone(),
                 });
             }
-            ([SWIH_ESSIVE, SO_SOURCE, MA_DESTINATION, YU_INSTRUMENTAL, MWAH_COMITATIVE], [Field::Text(_, language), Field::Text(_, dataset), Field::Text(_, release), Field::Text(_, identifier), Field::Text(_, text)]) => {
+            ([ESSIVE, SOURCE, DESTINATION, INSTRUMENTAL, COMITATIVE], [Field::Text(_, language), Field::Text(_, dataset), Field::Text(_, release), Field::Text(_, identifier), Field::Text(_, text)]) => {
                 entry.source_glosses.push(super::model::SourceGloss {
                     language: language.clone(),
                     text: text.clone(),
@@ -146,20 +146,20 @@ fn decode_entry(
                     identifier: identifier.clone(),
                 });
             }
-            ([SO_SOURCE], [Field::Vector(_, component)]) => {
+            ([SOURCE], [Field::Vector(_, component)]) => {
                 entry.component_keys.push(component.clone());
             }
-            ([MWAH_COMITATIVE], [Field::Vector(_, task)]) => {
+            ([COMITATIVE], [Field::Vector(_, task)]) => {
                 entry.task_keys.push(task.clone());
             }
-            ([MA_DESTINATION], [Field::Vector(_, reference)]) => {
+            ([DESTINATION], [Field::Vector(_, reference)]) => {
                 entry.references.push(reference.clone());
             }
-            ([YU_INSTRUMENTAL], [Field::Vector(_, dispatch)]) => {
+            ([INSTRUMENTAL], [Field::Vector(_, dispatch)]) => {
                 entry.operation_signatures.push(decode_signature(dispatch)?);
                 pending_signature = true;
             }
-            ([SWIH_ESSIVE, SO_SOURCE, MA_DESTINATION], [Field::Vector(_, slot), Field::Text(_, label), Field::Text(_, description)]) => {
+            ([ESSIVE, SOURCE, DESTINATION], [Field::Vector(_, slot), Field::Text(_, label), Field::Text(_, description)]) => {
                 if !pending_signature {
                     return Err(DictionaryVolumeError::InvalidEntry(
                         "operation argument precedes its signature",
@@ -177,7 +177,7 @@ fn decode_entry(
                         description: description.clone(),
                     });
             }
-            ([SWIH_ESSIVE, MA_DESTINATION, MWAH_COMITATIVE], [Field::Vector(_, noun_class), Field::Text(_, label), Field::Text(_, description)]) => {
+            ([ESSIVE, DESTINATION, COMITATIVE], [Field::Vector(_, noun_class), Field::Text(_, label), Field::Text(_, description)]) => {
                 if !pending_signature {
                     return Err(DictionaryVolumeError::InvalidEntry(
                         "operation result precedes its signature",
@@ -211,7 +211,7 @@ fn decode_entry(
 /// authored definition. Definitions are ordinary lowered Pyash and may start
 /// with any subject word, so the only reliable test is the record subject.
 pub(super) fn is_record_sentence(sentence: &Sentence) -> bool {
-    sentence.words.first() == Some(&super::words::GI_NAME)
+    sentence.words.first() == Some(&super::words::NAME_MARKER)
 }
 
 /// Read every `value, case` pair in a sentence, after the subject.
@@ -230,7 +230,7 @@ pub(super) fn read_fields(sentence: &Sentence) -> Result<Vec<Field>, DictionaryV
             return Err(fail("record has no closing verb".to_owned()));
         };
         // The closing pair is the text verb then the realis mood.
-        if next == super::words::HWUS_TEXT {
+        if next == super::words::TEXT_VERB {
             break;
         }
         let value = read_value(words, &mut cursor)?;

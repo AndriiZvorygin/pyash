@@ -13,7 +13,7 @@ use super::volume_records::{
     PROFILE_VERSION, PROFILE_VERSION_V2, PROFILE_VERSION_V3, TOC_ROLES, TOC_ROLES_V4,
 };
 use super::words::{
-    MA_DESTINATION, MWAH_COMITATIVE, SO_SOURCE, SWIH_ESSIVE, YU_INSTRUMENTAL,
+    DESTINATION, COMITATIVE, SOURCE, ESSIVE, INSTRUMENTAL,
 };
 use crate::{HEADER_BYTES, PyacError, WORDS_PER_CODELET};
 use std::io::{Read, Seek, SeekFrom};
@@ -289,7 +289,7 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
     ///
     /// A lexical-form sentence is
     /// `name <key> su, text "<language>" as, text "<surface>" from, ...`.
-    /// Values precede their case words, so the language text comes before `SWIH_ESSIVE`.
+    /// Values precede their case words, so the language text comes before `ESSIVE`.
     fn english_forms(&mut self, key: &[u16]) -> Result<Vec<String>, DictionaryReadError> {
         use super::reader_codec::{take_record_subject, take_text};
         let Some(range) = self.location(key)? else {
@@ -310,7 +310,7 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
             );
             if is_ours {
                 // Accept only a record that is exactly `as L from S to N`, i.e.
-                // one whose case words are SWIH_ESSIVE, SO_SOURCE, MA_DESTINATION in that order. A
+                // one whose case words are ESSIVE, SOURCE, DESTINATION in that order. A
                 // source-gloss is `as L from D to R by I with T`; matching the
                 // full case sequence is what distinguishes a surface from a
                 // dataset name, and it is insensitive to multi-codelet text.
@@ -320,12 +320,12 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
                     .iter()
                     .skip(cursor)
                     .copied()
-                    .filter(|word| [SWIH_ESSIVE, SO_SOURCE, MA_DESTINATION, YU_INSTRUMENTAL, MWAH_COMITATIVE].contains(word))
+                    .filter(|word| [ESSIVE, SOURCE, DESTINATION, INSTRUMENTAL, COMITATIVE].contains(word))
                     .collect();
-                if cases == [SWIH_ESSIVE, SO_SOURCE, MA_DESTINATION] {
+                if cases == [ESSIVE, SOURCE, DESTINATION] {
                     let mut probe = cursor;
                     if let Ok(language) = take_text(words, &mut probe) {
-                        if language == "en" && words.get(probe) == Some(&SWIH_ESSIVE) {
+                        if language == "en" && words.get(probe) == Some(&ESSIVE) {
                             probe += 1;
                             if let Ok(surface) = take_text(words, &mut probe) {
                                 if seen.insert(surface.clone()) {
@@ -721,9 +721,9 @@ fn is_v4_entry_metadata(sentence: &Sentence, key: &[u16]) -> Result<bool, Dictio
         return Ok(false);
     }
     let text_shapes: [&[u16]; 3] = [
-        &[SWIH_ESSIVE, SO_SOURCE, MA_DESTINATION],
-        &[SWIH_ESSIVE, SO_SOURCE, MA_DESTINATION, YU_INSTRUMENTAL],
-        &[SWIH_ESSIVE, SO_SOURCE, MA_DESTINATION, YU_INSTRUMENTAL, MWAH_COMITATIVE],
+        &[ESSIVE, SOURCE, DESTINATION],
+        &[ESSIVE, SOURCE, DESTINATION, INSTRUMENTAL],
+        &[ESSIVE, SOURCE, DESTINATION, INSTRUMENTAL, COMITATIVE],
     ];
     for cases in text_shapes {
         let mut position = cursor;
@@ -735,7 +735,7 @@ fn is_v4_entry_metadata(sentence: &Sentence, key: &[u16]) -> Result<bool, Dictio
             return Ok(true);
         }
     }
-    for case in [SO_SOURCE, MWAH_COMITATIVE, MA_DESTINATION, YU_INSTRUMENTAL] {
+    for case in [SOURCE, COMITATIVE, DESTINATION, INSTRUMENTAL] {
         let mut position = cursor;
         if take_vector(words, &mut position).is_ok()
             && expect_word(words, &mut position, case).is_ok()
@@ -747,13 +747,13 @@ fn is_v4_entry_metadata(sentence: &Sentence, key: &[u16]) -> Result<bool, Dictio
     {
         let mut position = cursor;
         if take_vector(words, &mut position).is_ok()
-            && expect_word(words, &mut position, SO_SOURCE).is_ok()
+            && expect_word(words, &mut position, SOURCE).is_ok()
             && expect_end(words, &mut position).is_ok()
         {
             return Ok(true);
         }
     }
-    for cases in [&[SWIH_ESSIVE, SO_SOURCE, MA_DESTINATION][..], &[SWIH_ESSIVE, YU_INSTRUMENTAL, MWAH_COMITATIVE][..]] {
+    for cases in [&[ESSIVE, SOURCE, DESTINATION][..], &[ESSIVE, INSTRUMENTAL, COMITATIVE][..]] {
         let mut position = cursor;
         if take_vector(words, &mut position).is_ok()
             && expect_word(words, &mut position, cases[0]).is_ok()

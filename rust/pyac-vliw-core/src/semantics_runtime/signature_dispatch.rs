@@ -5,7 +5,7 @@ use super::canonical_signature::{
 use super::embedding_lookup::{LOOKUP_FIRST, LOOKUP_SECOND};
 use super::iwsp_vector_ops::{MAXIMUM_VERB_FIRST, MAXIMUM_VERB_SECOND, SUM_VERB};
 use super::numeric::quote_header;
-use super::pluk_tlas::{PLUK, TLAS};
+use super::pluk_tlas::{ASSESS, WORTH};
 use super::scalar_product::{PRODUCE_WORD, SCALAR_WORD};
 use super::vector_group::VECTOR_VERB;
 use super::*;
@@ -58,7 +58,7 @@ fn classify_verb(
     start: usize,
     group_len: usize,
 ) -> u32 {
-    if verb_is(signature, words, start, group_len, PLUK, Some(TLAS)) {
+    if verb_is(signature, words, start, group_len, ASSESS, Some(WORTH)) {
         return VERB_PLUK_TLAS;
     }
     if verb_is(

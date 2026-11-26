@@ -7,12 +7,12 @@ use super::*;
 
 pub(super) const SUM_VERB: u32 = 0xbc8a;
 /// `gjat` = magnitude. The atom, not the phrase "maximum".
-pub(super) const GJAT_MAGNITUDE: u32 = 0xa9b2;
+pub(super) const MAGNITUDE: u32 = 0xa9b2;
 /// `bwit` = boundary.
-pub(super) const BWIT_BOUNDARY: u32 = 0xa831;
+pub(super) const BOUNDARY: u32 = 0xa831;
 /// The maximum verb is the phrase `gjat bwit`: a magnitude boundary.
-pub(super) const MAXIMUM_VERB_FIRST: u32 = GJAT_MAGNITUDE;
-pub(super) const MAXIMUM_VERB_SECOND: u32 = BWIT_BOUNDARY;
+pub(super) const MAXIMUM_VERB_FIRST: u32 = MAGNITUDE;
+pub(super) const MAXIMUM_VERB_SECOND: u32 = BOUNDARY;
 
 fn read_scalar(
     cursor: &mut Cursor,
