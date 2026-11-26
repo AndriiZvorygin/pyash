@@ -8,7 +8,7 @@ use pyac_vliw_core::{
     CODELET_WORDS, CoreResult, DEFAULT_PROGRAMLET_STEP_BUDGET, ERROR_MALFORMED,
     MAX_PROGRAMLET_SECTION_NAME_WORDS, MAX_PROGRAMLET_SECTIONS, MAX_PROGRAMLET_SYMBOL_WORDS,
     PROGRAMLET_ROUTINE_DIRECTORY_WORDS, ProgramletStack, RESULT_WORDS, StorageView,
-    execute_numeric_programlet_at_with_directory_words, interpret_group_with_storage,
+    execute_numeric_programlet_at_with_directory_words_and_storage, interpret_group_with_storage,
 };
 
 const RESULT_STRIDE: usize = 4 + RESULT_WORDS;
@@ -51,16 +51,18 @@ unsafe fn run_programlet(
     count: usize,
     directory: &[u32],
     slot: usize,
+    storage: &StorageView<'_>,
 ) -> CoreResult {
     let frame = unsafe { &mut *(&raw mut FRAMES).cast::<FrameStorage>().add(slot) };
     *frame = FrameStorage::EMPTY;
-    execute_numeric_programlet_at_with_directory_words(
+    execute_numeric_programlet_at_with_directory_words_and_storage(
         input,
         start,
         count,
         DEFAULT_PROGRAMLET_STEP_BUDGET,
         directory,
         slot * PROGRAMLET_ROUTINE_DIRECTORY_WORDS,
+        storage,
         &mut frame.symbols,
         &mut frame.stack,
     )
@@ -84,9 +86,8 @@ pub unsafe extern "ptx-kernel" fn execute_pyac_pack(
         return;
     }
     let input = unsafe { from_raw_parts(input, count * CODELET_WORDS) };
-    let descriptors = unsafe {
-        from_raw_parts(storage_descriptors, storage_descriptor_words as usize)
-    };
+    let descriptors =
+        unsafe { from_raw_parts(storage_descriptors, storage_descriptor_words as usize) };
     let names = unsafe { from_raw_parts(storage_names, storage_name_count as usize) };
     let payload = unsafe { from_raw_parts(storage_payload, storage_payload_words as usize) };
     let storage = StorageView::new(descriptors, names, payload);
@@ -104,6 +105,12 @@ pub unsafe extern "ptx-kernel" fn execute_pyac_programlet(
     codelet_count: u32,
     output: *mut u32,
     directory: *const u32,
+    storage_descriptors: *const u32,
+    storage_descriptor_words: u32,
+    storage_names: *const u32,
+    storage_name_count: u32,
+    storage_payload: *const u32,
+    storage_payload_words: u32,
 ) {
     if unsafe { _block_idx_x() != 0 || _thread_idx_x() != 0 } {
         return;
@@ -111,7 +118,12 @@ pub unsafe extern "ptx-kernel" fn execute_pyac_programlet(
     let count = codelet_count as usize;
     let input = unsafe { from_raw_parts(input, count * CODELET_WORDS) };
     let directory = unsafe { from_raw_parts(directory, PROGRAMLET_ROUTINE_DIRECTORY_WORDS) };
-    let result = unsafe { run_programlet(input, 0, count, directory, 0) };
+    let descriptors =
+        unsafe { from_raw_parts(storage_descriptors, storage_descriptor_words as usize) };
+    let names = unsafe { from_raw_parts(storage_names, storage_name_count as usize) };
+    let payload = unsafe { from_raw_parts(storage_payload, storage_payload_words as usize) };
+    let storage = StorageView::new(descriptors, names, payload);
+    let result = unsafe { run_programlet(input, 0, count, directory, 0, &storage) };
     write_result(result, unsafe { from_raw_parts_mut(output, RESULT_STRIDE) });
 }
 
@@ -124,6 +136,12 @@ pub unsafe extern "ptx-kernel" fn execute_pyac_sections(
     section_count: u32,
     completion: *mut AtomicU32,
     directories: *const u32,
+    storage_descriptors: *const u32,
+    storage_descriptor_words: u32,
+    storage_names: *const u32,
+    storage_name_count: u32,
+    storage_payload: *const u32,
+    storage_payload_words: u32,
 ) {
     let section = unsafe { _block_idx_x() } as usize;
     let section_count = section_count as usize;
@@ -146,6 +164,12 @@ pub unsafe extern "ptx-kernel" fn execute_pyac_sections(
             PROGRAMLET_ROUTINE_DIRECTORY_WORDS * section_count,
         )
     };
+    let storage_descriptors =
+        unsafe { from_raw_parts(storage_descriptors, storage_descriptor_words as usize) };
+    let storage_names = unsafe { from_raw_parts(storage_names, storage_name_count as usize) };
+    let storage_payload =
+        unsafe { from_raw_parts(storage_payload, storage_payload_words as usize) };
+    let storage = StorageView::new(storage_descriptors, storage_names, storage_payload);
     let mut result = unsafe {
         run_programlet(
             input,
@@ -153,6 +177,7 @@ pub unsafe extern "ptx-kernel" fn execute_pyac_sections(
             descriptor[1] as usize,
             directories,
             section,
+            &storage,
         )
     };
     if result.consumed_codelets == 0 && result.error == 0 {

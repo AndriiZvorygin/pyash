@@ -18,10 +18,13 @@ import {
   parseChineseCharacterAtomLinks
 } from "../translation/chinese_character_atom_refinery.mjs";
 import { loadEnglishGrammarCatalog } from "../translation/english_grammar.mjs";
+import { collectOperationSignatures } from "./operation_signatures.mjs";
+import { defaultVerbSpelling } from "./verb_defaults.mjs";
 
 const OUTPUT = new URL("./reference.pya", import.meta.url);
 const RELEASE = "Open English WordNet 2025";
 const SUMO_RELEASE = "WordNet 3.0 mapping snapshot f0c126842d098a312e390479b38ecfbac018f8ed";
+const CURATED_GLOSS_RELEASE = "pyash authored";
 const ACCEPTED_CURATED_STATUSES = new Set(["accepted-curated", "accepted-delimited", "accepted-deterministic"]);
 const ACCEPTED_WORDNET_STATUSES = new Set(["accepted-llm", "repaired-llm", "accepted-deterministic"]);
 const LANGUAGE_FILES = Object.freeze({
@@ -83,6 +86,18 @@ function addSourceLink(entry, dataset, release, identifier, relation) {
     entry.sourceLinkIdentities.add(identity);
     entry.sourceLinks.push({ dataset, release, identifier, relation });
   }
+}
+
+// An authored gloss for a concept with no WordNet sense. It is recorded under
+// its own dataset so a reader can distinguish an authored definition from a
+// WordNet sense gloss.
+function addSourceGloss(entry, language, dataset, release, identifier, gloss) {
+  const text = String(gloss ?? "").normalize("NFC").trim();
+  if (!text) return;
+  const identity = `${language}\u0000${dataset}\u0000${release}\u0000${identifier}\u0000${text}`;
+  if (entry.sourceGlossIdentities.has(identity)) return;
+  entry.sourceGlossIdentities.add(identity);
+  entry.sourceGlosses.push({ language, dataset, release, identifier, text });
 }
 
 function addWordNetSense(entry, candidate) {
@@ -475,6 +490,31 @@ function pyaEntryLines(entry) {
   for (const component of entry.components) {
     lines.push(`su name tlat kwon ob text ${JSON.stringify(key)} from text ${JSON.stringify(component)} at text "component" be text ya`);
   }
+  for (const signature of entry.operationSignatures ?? []) {
+    const dispatch = [
+      signature.verb.length,
+      ...signature.verb,
+      signature.mood.length,
+      ...signature.mood,
+      signature.arguments.length,
+      ...signature.arguments.flatMap((argument) => [
+        argument.grammatical_case.length,
+        ...argument.grammatical_case,
+        argument.value_type.length,
+        ...argument.value_type
+      ])
+    ];
+    lines.push(`su name tlat kwon ob text ${JSON.stringify(key)} from ve ${dispatch.length} ${dispatch.join(" ")} at text "operation-signature" be text ya`);
+    for (const argument of signature.arguments) {
+      const descriptor = [
+        argument.grammatical_case.length,
+        ...argument.grammatical_case,
+        argument.value_type.length,
+        ...argument.value_type
+      ];
+      lines.push(`su name tlat kwon ob text ${JSON.stringify(key)} as ve ${descriptor.length} ${descriptor.join(" ")} from text ${JSON.stringify(argument.name)} to text ${JSON.stringify(argument.description)} at text "operation-argument" be text ya`);
+    }
+  }
   return lines;
 }
 
@@ -494,6 +534,7 @@ export function buildAcceptedReferenceSource({
   legacyDictionaries = [],
   sumoRows = [],
   sumoConceptLinkRows = [],
+  curatedGlosses = [],
   render = true
 } = {}) {
   const entriesByKey = new Map();
@@ -510,7 +551,8 @@ export function buildAcceptedReferenceSource({
         sourceLinkIdentities: new Set(),
         sourceGlosses: [],
         sourceGlossIdentities: new Set(),
-        components: canonicalSequence.length > 1 ? [...canonicalSequence] : []
+        components: canonicalSequence.length > 1 ? [...canonicalSequence] : [],
+        operationSignatures: []
       });
     }
     return entriesByKey.get(key);
@@ -523,6 +565,38 @@ export function buildAcceptedReferenceSource({
   for (const compound of compoundEntries) {
     if (!compound.pyashSequence?.length) continue;
     getEntry(compound.pyashSequence);
+  }
+
+  // The declared signature tables describe the verb surface. A verb can carry
+  // signatures when every word of its key resolves to a vocabulary atom:
+  // atomic verbs like `multiply` spell their English surface, whose atom is
+  // `hgoc`, while compounds like `kl6m psas` already use pya words. Resolve the
+  // English surface to its canonical pya key before building the entry.
+  const { byVerb: signaturesByVerb } = collectOperationSignatures();
+  let attachedSignatures = 0;
+  const canonicalAtom = (token) => {
+    if (ATOM_BY_PYA.has(token)) {
+      return CANONICAL_PYA_BY_HNUC.get(String(ATOM_BY_PYA.get(token).hnuc).toLowerCase());
+    }
+    const englishAtom = atoms.find((row) => String(row.en).toLowerCase() === token);
+    if (!englishAtom) return null;
+    return CANONICAL_PYA_BY_HNUC.get(String(englishAtom.hnuc).toLowerCase());
+  };
+  for (const [verbKey, signatures] of signaturesByVerb) {
+    const words = verbKey.split(" ").map((word) => word.trim().toLowerCase());
+    // A surface with no atom may still carry a chosen default spelling, which is
+    // itself a compound. Resolve through the same table the signature collector
+    // uses so the entry key and the signature's verb words agree.
+    const canonical = words.flatMap((word) => {
+      const direct = canonicalAtom(word);
+      if (direct) return [direct];
+      const spelling = defaultVerbSpelling(word);
+      return spelling ? spelling.map(canonicalAtom) : [null];
+    });
+    if (canonical.some((word) => !word)) continue;
+    const entry = getEntry(canonical);
+    entry.operationSignatures.push(...signatures);
+    attachedSignatures += signatures.length;
   }
 
   const targetIndex = buildUniqueTargetIndex(compoundEntries, atoms);
@@ -644,6 +718,19 @@ export function buildAcceptedReferenceSource({
     if (!Array.isArray(record?.pyashSequence) || record.pyashSequence.length === 0) continue;
     addSourceLink(getEntry(record.pyashSequence), "sumo", SUMO_RELEASE, record.sumoId, record.relation ?? "equivalent-to");
   }
+  // A concept WordNet does not index cannot have an exact linked sense, so its
+  // entry would carry no definition at all. An authored English gloss stands in
+  // as the interim definition, marked with its own dataset so a reader can tell
+  // it apart from a WordNet gloss.
+  for (const record of curatedGlosses) {
+    if (!Array.isArray(record?.pyashSequence) || record.pyashSequence.length === 0) continue;
+    const entry = getEntry(record.pyashSequence);
+    const identifier = record.pyashSequence.join(" ");
+    // The writer requires a gloss to name a source that the entry also links,
+    // so the authored gloss is paired with its own link record.
+    addSourceLink(entry, "pyash-curated", CURATED_GLOSS_RELEASE, identifier, "authored-gloss");
+    addSourceGloss(entry, "en", "pyash-curated", CURATED_GLOSS_RELEASE, identifier, record.gloss);
+  }
 
   const languages = [...new Set([
     "en", ...Object.keys(LANGUAGE_FILES), "zh-Latn-pinyin", "yue-Latn-jyutping"
@@ -709,7 +796,8 @@ export async function loadReferenceSourceInputs() {
     englishSource,
     frequencyResources,
     legacyDictionaries,
-    vocabularyReviewSource
+    vocabularyReviewSource,
+    curatedGlossSource
   ] = await Promise.all([
     loadEnglishWordNetBridges(),
     readFile(translation("compound_coverage_curated.pya"), "utf8"),
@@ -732,7 +820,8 @@ export async function loadReferenceSourceInputs() {
       language,
       rows: await readJson(legacy(filename))
     }))),
-    readFile(translation("vocabulary_entry_reviews.pya"), "utf8")
+    readFile(translation("vocabulary_entry_reviews.pya"), "utf8"),
+    readFile(translation("curated_glosses.pya"), "utf8")
   ]);
   const curatedEntries = parseCompoundLexicon(curatedSource, {
     name: "translation_compounds_derived_curated",
@@ -779,6 +868,15 @@ export async function loadReferenceSourceInputs() {
     ? decodeJsonRows(parseMapRows(sumoConceptLinkSource, "sumo_concept_links")
       .filter((sentence) => sentence.su.text !== "format"), "SUMO concept links")
     : [];
+  // The map key is the Pyash spelling; the value is the authored English gloss.
+  const curatedGlossRows = parseMapRows(curatedGlossSource, "translation_curated_glosses")
+    .filter((sentence) => sentence.su.text !== "format" && sentence.su.text !== "scope")
+    .flatMap((sentence) => {
+      const pya = sentence.su.text.split(/\s+/u).filter(Boolean);
+      const gloss = sentence.ob?.text;
+      if (!pya.length || typeof gloss !== "string" || !gloss.trim()) return [];
+      return [{ pyashSequence: pya, gloss: gloss.trim() }];
+    });
   return {
     bridgeCatalog,
     vocabularyReviews,
@@ -793,7 +891,8 @@ export async function loadReferenceSourceInputs() {
     jyutpingRows,
     legacyDictionaries,
     sumoRows,
-    sumoConceptLinkRows
+    sumoConceptLinkRows,
+    curatedGlosses: curatedGlossRows
   };
 }
 

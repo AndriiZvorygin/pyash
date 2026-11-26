@@ -29,9 +29,9 @@ export const CANDIDATES = [
   { file: "numeric.rs", name: "boolean_literal", expected: "Option", stub: "None" },
   { file: "numeric.rs", name: "numeric_literal", functionName: "literal", expected: "Option", stub: "None" },
   { file: "float.rs", name: "float_literal", functionName: "literal", expected: "CoreResult", stub: "CoreResult::failure(ERROR_UNSUPPORTED, 0)" },
-  { file: "programlet_execute.rs", name: "execute_numeric_programlet_at", expected: "CoreResult", stub: "CoreResult::failure(ERROR_UNSUPPORTED, 0)" },
-  { file: "programlet_execute.rs", name: "execute_numeric_programlet", expected: "CoreResult", stub: "CoreResult::failure(ERROR_UNSUPPORTED, 0)" },
-  { file: "programlet_execute.rs", name: "execute_numeric_programlet_at_with_directory_words", expected: "CoreResult", stub: "CoreResult::failure(ERROR_UNSUPPORTED, 0)" },
+  { file: "programlet_entrypoints.rs", name: "execute_numeric_programlet_at", expected: "CoreResult", stub: "CoreResult::failure(ERROR_UNSUPPORTED, 0)" },
+  { file: "programlet_entrypoints.rs", name: "execute_numeric_programlet", expected: "CoreResult", stub: "CoreResult::failure(ERROR_UNSUPPORTED, 0)" },
+  { file: "programlet_entrypoints.rs", name: "execute_numeric_programlet_at_with_directory_words", expected: "CoreResult", stub: "CoreResult::failure(ERROR_UNSUPPORTED, 0)" },
   {
     file: "programlet_execute.rs",
     name: "execute_numeric_programlet_at_with_directory_view",

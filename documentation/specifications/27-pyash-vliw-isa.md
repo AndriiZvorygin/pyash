@@ -123,9 +123,22 @@ adds no quote sort or HNUC; flat v1 `.pyac` stores the frame in codelet words.
 
 ### 4.2 VLIW shape
 
-The codelet is sixteen 16-bit words (256 bits / 32 bytes). Its first word is
-the head/index; bits mark phrase boundaries and completion. Remaining words
-encode quote data, cases, verb, mood, and zero tail padding.
+The codelet is sixteen 16-bit words (256 bits / 32 bytes). It is an encoding
+unit, not a bundle of parallel operations: the payload words carry one
+sentence's quote data, cases, verb, and mood, and a codelet is fetched and
+dispatched as a unit.
+
+Its first word is the head/index. Bit 0 marks whether this codelet completes
+the sentence. Bits 1..15 mark phrase-closing slots, where a phrase closes on a
+case word or on the sentence's mood word. A slot is a boundary exactly when its
+bit equals bit 0.
+
+The head is the canonical field map. A decoder SHOULD derive phrase spans by
+enumerating the boundary bits and reading each span at its offsets rather than
+by walking the payload token by token. Both forms MUST produce the same fields,
+verb span, mood, and error. Writers MUST set the boundary bits consistently
+with the case and mood words they emit. Remaining words encode quote data,
+cases, verb, mood, and zero tail padding.
 
 Long paragraph quotes use the original Lwonprom blockquote framing: the
 paragraph-letter quote has the legacy `L` flag and a 16-bit payload-word count.
@@ -171,14 +184,57 @@ backend even if it can be printed as readable Pyash.
 
 ## 5.1 Runtime signature dispatch
 
-The dispatch key is ordered be-verb HNUCs plus grammatical-case/value-type
-pairs sorted by unsigned HNUC. Preserve types, verb order, and payloads;
-validate mood but exclude mood and literals from key identity. Dispatch MUST
-use numeric data, select at most one handler, and reject unsupported signatures
-without fallback. Structural values MUST validate framing first. See
+Dispatch has two levels. The sentence mood selects a class table; within the
+class, the key is the ordered be-verb HNUCs plus grammatical-case/value-type
+pairs sorted by unsigned HNUC.
+
+Level one is the six moods:
+
+| mood | class | phase |
+| --- | --- | --- |
+| `def` | definition | pack load |
+| `prah` | definition close, invocation close | load and frame exit |
+| `ya` | static declaration | load and frame setup |
+| `do` | execution | run loop |
+| `then` | conditional control | within one sentence |
+| `ret` | return control | run loop |
+
+`def` never executes; a run loop that reaches it rejects the sentence. `prah`
+closes a definition at load and an invoked frame at run time. `ya` initializes
+declarations and frame slots. Only the `do` class is consulted for execution.
+
+Level two is keyed by verb. The execution (`do`) key is ordered be-verb HNUCs
+plus `(case, value-type)` pairs sorted by unsigned HNUC, so case source order
+does not affect lookup. Mood is not part of that key because the class is
+already selected; literals and payload values are excluded. The reference
+dictionary's mood-qualified operation key is the flattened global view across
+all classes, of which the `do` table is a projection.
+
+Dispatch MUST use numeric data, select at most one handler, and reject
+unsupported signatures without fallback. A handler MAY be a routine body
+defined earlier in the same programlet, so the execution model is threaded code
+plus signature matching rather than a fixed set of opcodes. Structural values
+MUST validate framing first. See
 [implementation details](../reference/pyac-vliw-semantic-slices.md#runtime-signature-dispatch).
 
+### 5.1.1 Revision
+
+Within one programlet, a later definition with an equal signature key
+supersedes an earlier one. Decoders MUST resolve the collision by definition
+order and MUST NOT reject it. The directory may stay sorted for comparison, but
+the winner is the latest definition, not an error.
+
+Status: implemented. The Rust routine directory compacts equal signature keys to
+the latest definition, so a later definition replaces an earlier one. The
+historical JavaScript interpreter also applies latest-wins, with a warning
+(`02-core-execution.md`); that agreement is incidental, not the authority.
+
 ## 5.2 General execution contract
+
+Status: target contract. The current Rust core executes programlets with a
+program counter and a bounded call stack. The ready-work queue described below
+is the target model, not the implemented one; the two must not be conflated
+when reading this section.
 
 Instructions carry numbered input/output references, fulfillment state, and
 working-memory locations, and identify reads and writes. Each dependency region
@@ -271,14 +327,19 @@ from name pset gjat at num 1 to name lyac dlek be tsoc hsat do
 ob name hwas by name lyac dlek be kl6m psas do
 ```
 
-Its signature is `SOURCE name`, `DESTINATION name`, `LOCATIVE uint16`, and
-`do`. The zero-based row stays in the original row-major payload; later named
-vector operations in the same pack resolve the most recent preceding binding.
-This supports rows wider than the 16-lane inline limit. A destination may not
-collide with a storage-section name. Missing sections, malformed shapes,
-unsupported element types, and out-of-range rows fail; lookup returns no vector
-value. Only a literal row index is supported. Resolution scans preceding
-sentence groups and creates no runtime index or copied tensor.
+Its signature is `SOURCE name`, `DESTINATION name`, `LOCATIVE uint16|name`,
+and `do`. A literal uint16 selects a zero-based row; a named selector reads
+one uint16 from immutable rank-one `number_` storage. Add
+`MULTIPLICATIVE uint16` to select a zero-based position in that named sequence.
+In Pyash, that case is `fromindex num <position>`:
+
+```pya
+from name pset gjat at name lwat txik fromindex num 0 to name lyac dlek be tsoc hsat do
+```
+
+It is zero-copy. Invalid selectors or storage fail. Resolution scans prior
+groups without an index or copy. IDs are supplied; text tokenization and
+word-sense disambiguation remain separate.
 
 ### Pyash VLIW authentication sentence
 

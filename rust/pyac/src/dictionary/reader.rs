@@ -1,7 +1,8 @@
 use super::OperationSignatureKey;
 use super::reader_codec::{
     parse_location, parse_marker, parse_metadata, parse_toc, parse_toc_v4, read_codelet,
-    read_sentence, validate_header, validate_sections, validate_sections_v4,
+    RecordSubject, Sentence, read_sentence, read_sentence_v4, take_record_subject,
+    validate_header, validate_sections, validate_sections_v4,
 };
 use super::reader_index::{
     DirectIndexLookup, lookup_legacy_operation, lookup_legacy_source, lookup_legacy_surface,
@@ -164,7 +165,7 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
             });
             let mut toc_sections = Vec::with_capacity(toc_count);
             for (index, role) in TOC_ROLES_V4.iter().enumerate() {
-                let (words, consumed) = read_sentence(&mut source, ordinal, count)?;
+                let Sentence { words, consumed, .. } = read_sentence(&mut source, ordinal, count)?;
                 let section = parse_toc_v4(&words, index as u16, role).map_err(|error| {
                     DictionaryReadError::Context(format!("TOC record {index}"), Box::new(error))
                 })?;
@@ -182,7 +183,7 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
             )?;
         } else {
             for role in TOC_ROLES {
-                let (words, consumed) = read_sentence(&mut source, ordinal, count)?;
+                let Sentence { words, consumed, .. } = read_sentence(&mut source, ordinal, count)?;
                 let section = parse_toc(&words).map_err(|error| {
                     DictionaryReadError::Context(format!("TOC record for {role}"), Box::new(error))
                 })?;
@@ -244,6 +245,102 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
         self.read_range(section.range())
     }
 
+    /// Every canonical key the volume indexes, in index order.
+    ///
+    /// A verification pass needs this to check that each advertised entry is
+    /// actually readable; `entry_count` alone cannot tell a corrupt record from
+    /// a missing one.
+    pub fn canonical_keys(&mut self) -> Result<Vec<Vec<u16>>, DictionaryReadError> {
+        let section = self.section("canonical-index")?;
+        let mut keys = Vec::new();
+        let mut ordinal = section.codelet_start;
+        let end = section.codelet_start + section.codelet_count;
+        while ordinal < end {
+            let sentence = read_sentence_v4(&mut self.source, ordinal, end)?;
+            let mut cursor = 0;
+            if let Ok(RecordSubject::Name(name)) = take_record_subject(&sentence, &mut cursor) {
+                keys.push(name);
+            }
+            ordinal = ordinal
+                .checked_add(sentence.consumed)
+                .ok_or(DictionaryReadError::InvalidRecord("index ordinal overflow"))?;
+        }
+        Ok(keys)
+    }
+
+    /// Every canonical key with all of its English lexical forms.
+    ///
+    /// The reference volume is the authority; this is the projection a consumer
+    /// needs to build its own lookup table from it. Atoms come back as a
+    /// one-word key, compounds as a multi-word key.
+    pub fn entries_with_english(&mut self) -> Result<Vec<(Vec<u16>, Vec<String>)>, DictionaryReadError> {
+        let keys = self.canonical_keys()?;
+        let mut out = Vec::with_capacity(keys.len());
+        for key in keys {
+            let forms = self.english_forms(&key)?;
+            out.push((key, forms));
+        }
+        Ok(out)
+    }
+
+    /// Every `en` lexical form recorded for `key`, in volume order.
+    ///
+    /// A lexical-form sentence is
+    /// `name <key> su, text "<language>" as, text "<surface>" from, ...`.
+    /// Values precede their case words, so the language text comes before `AS`.
+    fn english_forms(&mut self, key: &[u16]) -> Result<Vec<String>, DictionaryReadError> {
+        use super::reader_codec::{take_record_subject, take_text};
+        let Some(range) = self.location(key)? else {
+            return Ok(Vec::new());
+        };
+        let mut forms = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        let mut ordinal = range.start;
+        while ordinal < range.end {
+            // Entry bodies keep the ordinary quote encoding; only the index
+            // sections use the indexed raw-continuation layout.
+            let sentence = read_sentence(&mut self.source, ordinal, range.end)?;
+            let words = &sentence.words;
+            let mut cursor = 0;
+            let is_ours = matches!(
+                take_record_subject(&sentence, &mut cursor),
+                Ok(RecordSubject::Name(ref name)) if name.as_slice() == key
+            );
+            if is_ours {
+                // Accept only a record that is exactly `as L from S to N`, i.e.
+                // one whose case words are AS, FROM, TO in that order. A
+                // source-gloss is `as L from D to R by I with T`; matching the
+                // full case sequence is what distinguishes a surface from a
+                // dataset name, and it is insensitive to multi-codelet text.
+                // Scan only past the subject: a key word can itself equal a case
+                // word (`ma` is 0x243e, the destination marker).
+                let cases: Vec<u16> = words
+                    .iter()
+                    .skip(cursor)
+                    .copied()
+                    .filter(|word| [AS, FROM, TO, BY, WITH].contains(word))
+                    .collect();
+                if cases == [AS, FROM, TO] {
+                    let mut probe = cursor;
+                    if let Ok(language) = take_text(words, &mut probe) {
+                        if language == "en" && words.get(probe) == Some(&AS) {
+                            probe += 1;
+                            if let Ok(surface) = take_text(words, &mut probe) {
+                                if seen.insert(surface.clone()) {
+                                    forms.push(surface);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            ordinal = ordinal
+                .checked_add(sentence.consumed)
+                .ok_or(DictionaryReadError::InvalidRecord("entry ordinal overflow"))?;
+        }
+        Ok(forms)
+    }
+
     pub fn location(&mut self, key: &[u16]) -> Result<Option<Range<u32>>, DictionaryReadError> {
         if !self.version_four {
             return Ok(self.find_legacy_location(key)?.map(|(entry, _)| entry));
@@ -290,8 +387,9 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
         let mut ordinal = entry_range.start;
         let mut definition_start = entry_range.end;
         while ordinal < entry_range.end {
-            let (words, consumed) = read_sentence(&mut self.source, ordinal, entry_range.end)?;
-            if !is_v4_entry_metadata(&words, key)? {
+            let sentence = read_sentence(&mut self.source, ordinal, entry_range.end)?;
+            let consumed = sentence.consumed;
+            if !is_v4_entry_metadata(&sentence, key)? {
                 definition_start = ordinal;
                 break;
             }
@@ -470,7 +568,7 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
         let end = section.codelet_start + section.codelet_count;
         let mut ordinal = section.codelet_start;
         while ordinal < end {
-            let (words, consumed) = read_sentence(&mut self.source, ordinal, end)?;
+            let Sentence { words, consumed, .. } = read_sentence(&mut self.source, ordinal, end)?;
             let (candidate, entry, definition) = parse_location(&words)?;
             match candidate.as_slice().cmp(key) {
                 std::cmp::Ordering::Less => ordinal += consumed,
@@ -489,7 +587,7 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
         let end = section.codelet_start + section.codelet_count;
         let mut ordinal = section.codelet_start;
         while ordinal < end {
-            let (words, consumed) = read_sentence(&mut self.source, ordinal, end)?;
+            let Sentence { words, consumed, .. } = read_sentence(&mut self.source, ordinal, end)?;
             let (_, entry, _) = parse_location(&words)?;
             if entry.start == offset {
                 return Ok(Some(entry));
@@ -509,7 +607,7 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
         let mut previous_key: Option<Vec<u16>> = None;
         let mut count = 0usize;
         while ordinal < locations_end {
-            let (words, consumed) = read_sentence(&mut self.source, ordinal, locations_end)?;
+            let Sentence { words, consumed, .. } = read_sentence(&mut self.source, ordinal, locations_end)?;
             let (key, entry, definition) = parse_location(&words)?;
             if previous_key
                 .as_ref()
@@ -553,10 +651,10 @@ fn read_profile_records<R: Read + Seek>(
     source: &mut R,
     limit: u32,
 ) -> Result<ProfileRecords, DictionaryReadError> {
-    let (marker, marker_count) = read_sentence(source, 0, limit)?;
+    let Sentence { words: marker, consumed: marker_count, .. } = read_sentence(source, 0, limit)?;
     let kind = parse_marker(&marker)
         .map_err(|error| DictionaryReadError::Context("profile marker".into(), Box::new(error)))?;
-    let (metadata_words, metadata_count) = read_sentence(source, marker_count, limit)?;
+    let Sentence { words: metadata_words, consumed: metadata_count, .. } = read_sentence(source, marker_count, limit)?;
     let (metadata, toc_count, profile_version, metadata_entry_count) =
         parse_metadata(&metadata_words).map_err(|error| {
             DictionaryReadError::Context("profile metadata".into(), Box::new(error))
@@ -574,13 +672,14 @@ fn read_profile_records<R: Read + Seek>(
     })
 }
 
-fn is_v4_entry_metadata(words: &[u16], key: &[u16]) -> Result<bool, DictionaryReadError> {
+fn is_v4_entry_metadata(sentence: &Sentence, key: &[u16]) -> Result<bool, DictionaryReadError> {
     use super::reader_codec::{
         RecordSubject, expect_end, expect_word, take_record_subject, take_text, take_vector,
     };
 
+    let words = &sentence.words;
     let mut cursor = 0;
-    if take_record_subject(words, &mut cursor)? != RecordSubject::Name(key.to_vec()) {
+    if take_record_subject(sentence, &mut cursor)? != RecordSubject::Name(key.to_vec()) {
         return Ok(false);
     }
     let text_shapes: [&[u16]; 3] = [

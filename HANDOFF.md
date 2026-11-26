@@ -1,5 +1,11 @@
 # Handoff Summary
 
+> Status: historical checkpoint, not current guidance. Some statements below
+> (single-handler fallback, test status) are superseded. For the current
+> contributor primer use `documentation/handoff.md`; for normative contracts use
+> `documentation/specifications/00-index.md`; for VLIW dispatch use
+> `documentation/specifications/27-pyash-vliw-isa.md` §5.1.
+
 ## Changes since last checkpoint
 - Signature-first dispatch is back on: `handleImperative`/`handleCondition` derive signatures from calls, look up registered signature handlers first, and definitions register signatures on `def`. The verb map is empty and built-ins register through `program/verbs/index.mjs`.
 - `deriveSignatureFromCall` now throws if any case cannot yield type words; name lookups default to `["name","num"]` when the fact is missing, so undefined names can still build a signature key.

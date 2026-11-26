@@ -327,10 +327,11 @@ prah
 
 su name iwsp transformer term 037 be map def
 su text "term" ob text "Payload-backed embedding-row view" ya
-su text "wordnet senses" ob ve text "n:05873065-n" "n:13574763-n" "v:00599310-v" "n:05873161-n" ya
-su text "sumo match" ob text "Quantity (+); ContentDevelopment (+); Learning (+); FunctionQuantity (=)" ya
-su text "vliw sentence signature" ob text "SOURCE name; DESTINATION name; LOCATIVE uint16; be tsoc hsat; mood do" ya
-su text "surface example" ob text "from name pset gjat at num 1 to name lyac dlek be tsoc hsat do" ya
-su text "semantics" ob text "binds one row of immutable rank-two float payload as a zero-copy named vector view; static uint16 row only" ya
+su text "wordnet senses" ob ve text "n:05873065-n" "n:13574763-n" "v:00599310-v" "n:05873161-n" "n:06652323-n" ya
+su text "sumo match" ob text "Quantity (+); ContentDevelopment (+); Learning (+); FunctionQuantity (=); no SUMO link recorded for n:06652323-n" ya
+su text "vliw sentence signature" ob text "SOURCE name; DESTINATION name; LOCATIVE uint16 or name; be tsoc hsat; mood do" ya
+su text "surface example" ob text "from name pset gjat at name lwat txik to name lyac dlek be tsoc hsat do" ya
+su text "semantics" ob text "binds one row of immutable rank-two float payload as a zero-copy named vector view; named selector reads one uint16 from a rank-one number_ storage section of length one" ya
 su text "lexical qualification" ob text "lyac dlek means learned vector by composition; not a separately curated compound; lookup is tsoc hsat" ya
+su text "index label" ob text "lwat txik: WordNet n:06652323-n, index number or indicator derived from observed facts; one-element storage value supplies the row" ya
 prah

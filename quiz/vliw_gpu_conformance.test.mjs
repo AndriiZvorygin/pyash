@@ -6,7 +6,8 @@ import { parse } from "../program/understand/index.mjs";
 import { lowerSentence } from "../program/library/vliw/index.mjs";
 import {
   decodePyashProgramPack,
-  decodePyashProgramSections
+  decodePyashProgramSections,
+  decodePyashStorageSections
 } from "../program/library/vliw/programlet.mjs";
 import {
   buildVliwGpuConformanceCases,
@@ -71,6 +72,8 @@ test("VLIW GPU conformance matrix covers the merged typed and control-flow contr
     "iwsp-parameterized-attention-changed-query-weights",
     "iwsp-parameterized-attention-changed-key-weights",
     "iwsp-parameterized-attention-changed-value-weights",
+    "iwsp-file-backed-embedding-attention",
+    "iwsp-file-backed-embedding-attention-perturbed-values",
     "iwsp-pyash-projected-attention",
     "iwsp-minimal-role-projected-block",
     "iwsp-minimal-role-projected-block-zero-variance",
@@ -85,7 +88,7 @@ test("VLIW GPU conformance matrix covers the merged typed and control-flow contr
     "float32-storage-backed-dot-product-32-lanes",
     "float64-storage-backed-dot-product-17-lanes",
     "iwsp-float32-storage-backed-matrix-vector-3x4",
-    "iwsp-float32-embedding-row-lookup-3x20",
+    "iwsp-float32-token-sequence-embedding-lookup-3x20",
     "uint16-vector-sixteen-lanes",
     "boolean-vector-sixteen-lanes",
     "float32-vector-sixteen-lanes",
@@ -161,6 +164,7 @@ test("VLIW conformance packs independent codelets together and programlets as na
   assert.equal(batches[1].kind, "programlets");
   assert.equal(batches[1].cases.length, programletCases.length);
   assert.equal(decodePyashProgramSections(batches[1].pack).length, programletCases.length);
+  assert.equal(decodePyashStorageSections(batches[1].pack).length, 4);
 });
 
 test("Rust CPU reference matches every declared conformance expectation", async () => {
@@ -189,6 +193,8 @@ test("Rust CPU executes IWSP vector operations, softmax, and attention after VLI
     "iwsp-parameterized-attention-changed-query-weights",
     "iwsp-parameterized-attention-changed-key-weights",
     "iwsp-parameterized-attention-changed-value-weights",
+    "iwsp-file-backed-embedding-attention",
+    "iwsp-file-backed-embedding-attention-perturbed-values",
     "iwsp-pyash-projected-attention",
     "iwsp-qkv-row-projections",
     "iwsp-maximum-index-float32",

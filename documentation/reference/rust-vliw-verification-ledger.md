@@ -2,7 +2,217 @@
 
 Use this file as the lookup record for Rust VLIW CPU/GPU conformance runs. Each
 entry records the repository revision, deployed artifact, host/device, route,
-and exact test outcome. A queued or timed-out job is not a passing test.
+and exact test outcome. A queued or timed-out job is not a passing test. Entries
+are historical: compare the recorded source revision with `git rev-parse HEAD`
+before assuming the deployed artifact matches the checkout.
+
+## 2026-11-25: Deploy wired into the quiz suite
+
+Building and deploying the CUDA runtime is now a gated quiz,
+`quiz/vliw_cuda_deploy.test.mjs`, backed by
+`container/pyac-vliw-runtime/command/build-and-deploy.sh`.
+
+```sh
+node --test quiz/vliw_cuda_deploy.test.mjs                    # skipped
+PYA_VLIW_DEPLOY_TEST=1 node --test quiz/vliw_cuda_deploy.test.mjs       # build only
+PYA_VLIW_DEPLOY_TEST=deploy node --test quiz/vliw_cuda_deploy.test.mjs  # build + deploy
+```
+
+It is off by default so an ordinary quiz run stays fast and offline-safe, and
+it skips with a reason when Docker or the host `ptxas` is missing. A dirty tree
+still builds and verifies the image but reports `DEPLOYED=0` unless
+`PYA_VLIW_ALLOW_DIRTY_DEPLOY=1`, because a dirty image cannot be reproduced
+from a commit.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261125-0013-rust-vliw-conformance/result.pya` |
+| Source revision / checkout | `2097f8b3279a3cc4ec1c8bb19b274d2466de2a16`; tracked tree dirty during build |
+| Runtime image | `sha256:566f352121453d481f0a4d1950f6ed4d0764df149986c496152e272643c7532f` |
+| Cubin | 3,866,952 bytes; SHA-256 `a99e5a3a2bcaf40011409ad217df2c54919e466000eff8b0051c3263f329b820` |
+| Full verification | 79/79 value cases; 3 typed-dispatch probes; 5/5 expected errors |
+| Total run wall | 123,809.036 ms |
+| Test durations | Build-only run 364,854 ms cache-cold; build + deploy 127,286 ms warm |
+
+The cubin hash is unchanged from the earlier entry because the Rust semantics
+core did not change in this commit, which is the content-addressed tag working
+as intended.
+
+## 2026-11-25: Combined build-and-deploy command
+
+Exercised the documented one-command path from the committed tree:
+`bash container/pyac-vliw-runtime/command/build.sh mriczo deploy`. The build was
+cache-warm (the worker stage finished in 8 s) and produced the same cubin hash;
+the canary ran the full matrix and retained the new image. This confirms the
+script path end to end, not just the build and canary separately.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261125-0012-rust-vliw-conformance/result.pya` |
+| Source revision / checkout | `531e01bd240b9f4128cbbdb19d8e3bb120ef44ca`; tracked tree dirty during build (unrelated untracked files) |
+| Host and route | Mriczo client -> Mriczo Housekeeper -> `rust-cuda-cubin` |
+| GPU | NVIDIA GeForce RTX 3090 |
+| Runtime image | `sha256:755f9531b0451a6e59a86b2b3bdce4fdf1852d1a8b5d00c3a0216644f8c1f90f` (`liberit/pyac-vliw-runtime:cuda-sm86-a99e5a3a2bcaf400`) |
+| Cubin | 3,866,952 bytes; SHA-256 `a99e5a3a2bcaf40011409ad217df2c54919e466000eff8b0051c3263f329b820` |
+| Runtime executable | 9,312,752 bytes; SHA-256 `f3b06fbd5db36ee4d152c672c8b772786245f2e2594316e2ce179ae983ba3966` |
+| Runtime initialization | Cubin load and GPU initialization 0.09 s; ready in 1,013 ms |
+| Full verification | 79/79 value cases passed (45 codelet, 34 programlet); 3 typed-dispatch probes; 5/5 expected errors matched |
+| CPU batches | Codelet batch: 62.771 ms; programlet sections: 67.939 ms |
+| CUDA event batches | Codelet batch: 12.464 ms; programlet sections: 88.107 ms |
+| Housekeeper client round trips | Codelet batch: 1,133.131 ms; section batch: 1,133.750 ms |
+| Total run wall | 13,692.524 ms |
+| Deployment | Retained on Mriczo; prior image `sha256:4cda8d9404573b5705e9e9d203de25a5c410dae4e054ad0b954f206a6034e0e2` is the rollback target |
+| Rollback | `bash container/pyac-vliw-runtime/command/cuda-canary.sh mriczo liberit/pyac-vliw-runtime:cuda-sm86-a99e5a3a2bcaf400 rollback` |
+
+## 2026-11-25: Dockerized cubin build and redeploy
+
+The CUDA cubin and worker binary are now built inside the image build rather
+than by a host pre-step. `container/pyac-vliw-runtime/Dockerfile.cuda` has a
+`kernel-builder` stage (pinned nightly, `rust-src`, `llvm-tools`,
+`llvm-bitcode-linker`, host `ptxas` through a named build context) and a minimal
+runtime stage that copies only the artifacts. The build script
+`container/pyac-vliw-runtime/command/build.sh` builds, tags by cubin hash, and
+optionally runs the canary. The worker build receives
+`PYAC_VLIW_BUILD_CUBIN_SHA256`, which it requires at startup.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261125-0011-rust-vliw-conformance/result.pya` |
+| Source revision / checkout | `8f2df2afb788dbff991e321feb923a31c575dd6a`; tracked tree dirty during build |
+| Tracked patch SHA-256 | `59e0cb3e2bf53370d9faae0e41e75fe34feb777851404a1174cd0a4891291981` |
+| Host and route | Mriczo client -> Mriczo Housekeeper -> `rust-cuda-cubin` |
+| GPU | NVIDIA GeForce RTX 3090 |
+| Runtime image | `sha256:4cda8d9404573b5705e9e9d203de25a5c410dae4e054ad0b954f206a6034e0e2` (`liberit/pyac-vliw-runtime:cuda-sm86-a99e5a3a2bcaf400`) |
+| Cubin | 3,866,952 bytes; SHA-256 `a99e5a3a2bcaf40011409ad217df2c54919e466000eff8b0051c3263f329b820` |
+| Runtime executable | 9,312,752 bytes; SHA-256 `f3b06fbd5db36ee4d152c672c8b772786245f2e2594316e2ce179ae983ba3966` |
+| CPU reference executable | 16,700,120 bytes; SHA-256 `006a9b0f25559460ef6293ed088464cc0b9fe8a86193d9654cb93672cdb5f443` |
+| Runtime initialization | Cubin load and GPU initialization 0.09 s; ready in 529 ms |
+| Full verification | 79/79 value cases passed (45 codelet, 34 programlet); 3 typed-dispatch probes; 5/5 expected errors matched |
+| CPU batches | Codelet batch: 64.144 ms; programlet sections: 68.905 ms |
+| CUDA event batches | Codelet batch: 12.327 ms; programlet sections: 88.038 ms |
+| Housekeeper client round trips | Codelet batch: 1,139.148 ms; section batch: 1,140.302 ms |
+| Total run wall | 13,713.187 ms |
+| Deployment | Retained on Mriczo; prior image `sha256:fcf8808f70e71cb8d8678c1c6a60743ed7f4bd3f9476c8eaf55e9b20d50b68bf` is the rollback target |
+| Rollback | `bash container/pyac-vliw-runtime/command/cuda-canary.sh mriczo liberit/pyac-vliw-runtime:cuda-sm86-a99e5a3a2bcaf400 rollback` |
+
+Build note: the first image from this Dockerfile started but exited with "CUDA
+worker was not built with a packaged cubin hash"; the canary restored the prior
+runtime, and the worker step now exports the cubin digest from the builder
+stage. The build also requires `--network=host` on Mriczo because the builder's
+embedded DNS cannot resolve the package archive.
+
+## 2026-11-25: Programlet-Local Embedding Attention
+
+The programlet `tsoc hsat` action now selects a row from the file-backed
+embedding table using a token ID read from an immutable rank-one sequence, then
+copies that row into a declared local float vector. The Pyash programlet uses
+those local vectors for explicit query/key/value projections, stable softmax,
+and weighted value addition. Changing one embedding-table value changes the
+final result, proving the computation consumes the payload rather than a baked
+constant. This is a small feature-based attention proof, not a trained WSD
+model or benchmark score.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261125-0007-rust-vliw-conformance/result.pya` |
+| Example | `examples/vliw/iwsp-embedding-attention.pya`; baseline output `[0.5, 0.5]`; changed table output `[0.5, 1.5]` |
+| Source revision / checkout | `09d93b93165fb63ebeee27d7ab43e90ea355dbe7`; tracked tree was dirty during build |
+| Tracked patch SHA-256 | `f7b8e042e3bb02817e40811cdb6570437f2a4c5640e1ec4140fe1ce7bbe0b51e` |
+| Host and route | Mriczo -> Mriczo Housekeeper -> temporary Rust CUDA VLIW runtime |
+| GPU / driver | NVIDIA GeForce RTX 3090, driver `550.163.01`, 24,576 MiB |
+| Candidate CUDA image | `sha256:cf27b3e4d10cd055b302979a198aa15b2712279034b00272117f255195b5c600` |
+| Live conformance | 79 matrix cases and 3 positive typed-dispatch probes passed; all 6 expected errors matched |
+| Full run wall | 14,532.415 ms |
+| CPU reference batches | 45 codelet cases: 65.962 ms; 34 programlet sections: 68.074 ms |
+| CUDA event batches | Codelets: 12.358 ms; programlet sections: 135.071 ms |
+| Housekeeper client round trip | Codelets: 1,137.658 ms; programlet sections: 1,133.678 ms |
+| Build time | Rust-GPU compile: 9.14 s; `ptxas`: 47.48 s, 584,120 KiB peak RSS |
+| GPU runtime executable | 9,320,760 bytes; SHA-256 `d53932f03b736f619dbcef05639b9603d1e5c36ab18e4d41d922bd8088b37017` |
+| CUDA cubin | 3,700,808 bytes; SHA-256 `75e2d616e78cc6c7c0f7b82d0ad178099d972664dfd95c779c3725d5eabc1a66` |
+| CPU reference executable | 16,696,136 bytes; SHA-256 `a31ccc9eeca2fa9227e574d37020f393c091169d7839042dbbce4f52fc580da8` |
+| CUDA initialization / readiness | Cubin initialization: 0.12 s; canary ready: 763 ms |
+| Runtime after verification | Prior image `sha256:9889f729ae7906a324915dac8b25c0c5c78b2f6db708f5b6d675866381dbb940` restored and running; Housekeeper queue empty |
+
+The candidate image was tested with the full conformance matrix and then
+restored; it was not retained as Mriczo's active image. The build and run
+artifacts remain in ignored `rust/pyac-gpu/cuda-kernel/target/` and `artifacts/`
+paths. The matrix's two embedding-attention cases share the single programlet
+section batch with all other section cases.
+
+## 2026-11-25: Bitmap-derived sentence decode
+
+The shared Rust decoder now derives sentence fields from the codelet head
+bitmap. A clause-free sentence is decoded by enumerating boundary slots and
+classifying only those tokens; a sentence with nested-clause markers takes the
+clause-aware pass. The previous token-by-token state machine is retained only as
+a test oracle. A differential test compares error code, field spans, verb span,
+and mood over fixtures, deterministic corruptions, and a fixed-seed random
+corpus.
+
+The previously deployed CUDA cubin (`sha256:9889f729...`) failed programlet
+section 15 (`iwsp-file-backed-embedding-attention-perturbed-values`) on the
+current 34-section matrix with shared error 3. Rebuilding from the current source
+and redeploying passes that section and the whole matrix, so the failure was a
+stale deployed artifact, not a semantic regression.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261125-0010-rust-vliw-conformance/result.pya` |
+| Source revision / checkout | `8b470488d49cf1198dbc50629ef8aa6829afa9fc`; tracked tree dirty during build |
+| Tracked patch SHA-256 | `37ac7ca68b4ed9aeafde744866c390559890197bedab607588346201d82cd954` |
+| Host and route | Mriczo client -> Mriczo Housekeeper -> `rust-cuda-cubin` |
+| GPU | NVIDIA GeForce RTX 3090 |
+| Runtime image | `sha256:fcf8808f70e71cb8d8678c1c6a60743ed7f4bd3f9476c8eaf55e9b20d50b68bf` (`liberit/pyac-vliw-runtime:cuda-sm86-c711501a97da5319`) |
+| Cubin | 3,878,216 bytes; SHA-256 `c711501a97da53193c7fd33456c1476a236615192b3c8a9720861fb99ee54848` |
+| Runtime executable | 9,309,760 bytes; SHA-256 `4bb59c760194018ec13085e278fdea255d218debdeefad8348fe407abdacec37` |
+| CPU reference executable | 16,699,368 bytes; SHA-256 `77d3e1858d7611035884104897316cce7c501fcf9ef350747fb80216e990d62a` |
+| Runtime initialization | Cubin load and GPU initialization 0.09 s; ready in 513 ms |
+| Full verification | 79/79 value cases passed (45 codelet, 34 programlet); 3 typed-dispatch probes; 5/5 expected errors matched |
+| CPU batches | Codelet batch: 63.833 ms; programlet sections: 67.110 ms |
+| CUDA event batches | Codelet batch: 12.288 ms; programlet sections: 91.685 ms |
+| Housekeeper client round trips | Codelet batch: 1,129.571 ms; section batch: 1,130.997 ms |
+| Deployment | Retained on Mriczo; prior image `sha256:9889f729ae7906a324915dac8b25c0c5c78b2f6db708f5b6d675866381dbb940` is the rollback target |
+| Rollback | `bash container/pyac-vliw-runtime/command/cuda-canary.sh mriczo liberit/pyac-vliw-runtime:cuda-sm86-c711501a97da5319 rollback` |
+
+Batch timings cover the complete case sets, not per-operation latency. This run
+establishes semantic conformance and hardware parity; it is not a speedup claim.
+
+## 2026-11-25: Payload-Selected Embedding Row
+
+The embedding-row operation now accepts either its existing literal uint16
+row or `at name lwat txik`, which reads one token ID from an immutable,
+one-element rank-one `number_` storage section. The conformance fixture supplies
+index `1`, selects row 1 of a 3x20 float32 table, and the existing dot-product
+sentence returns `40` on both the Rust CPU reference and the live CUDA worker.
+The selector is payload data; no runtime index map or tensor copy is built.
+
+| Field | Evidence |
+| --- | --- |
+| Run record | `artifacts/20261125-0004-rust-vliw-conformance/result.pya` |
+| Source revision / checkout | `4f2ed0eaf15ec9aca3c9f71ea37f26cc05edd481`; tracked tree was dirty during build |
+| Tracked patch SHA-256 | `b8a1c4d7764e9a104bf65392e771ea324c82e93980d74f21b8f3a26250630a96` |
+| Host and route | Mriczo client -> Mriczo Housekeeper -> temporary Rust CUDA VLIW canary |
+| GPU / driver | NVIDIA GeForce RTX 3090, driver `550.163.01`, 24,576 MiB |
+| Runtime image | `sha256:e9d22dc233e795b35a3606d1cd7f09e78d89e2c071738ba5b7fe2a4b0c331653` |
+| Runtime executable | 9,315,920 bytes; SHA-256 `2f5a4daadc640d897b9513bf19a33bb24c0d175768d420fad540fab99037148f` |
+| Cubin | 3,448,520 bytes; SHA-256 `1fc07d52d141910c736e9c2ba38084a0598f8f30506edd70afd9caac3f00e66a` |
+| CPU reference executable | 16,580,848 bytes; SHA-256 `f5dc1f4f7b4ca2887dd0539dab2907afeca9111aa4edd1f8c92f8abb5375da3d` |
+| Runtime initialization / readiness | Cubin load 0.09 s; worker ready in 615 ms |
+| Full verification | 77/77 ordinary cases passed (45 codelet, 32 programlet), 3 typed-dispatch positive probes passed, and 6/6 expected errors matched; 13,442.304 ms total |
+| CPU request batches | Codelet batch: 62.032 ms; programlet batch: 63.535 ms |
+| CUDA event batches | Codelet batch: 12.344 ms; programlet batch: 121.301 ms |
+| Housekeeper client round trips | Codelet batch: 1,129.052 ms; programlet batch: 1,126.719 ms |
+| New dynamic result | `number_` payload index `1` -> embedding row `1` -> dot product `40` on CPU and RTX 3090 |
+| Deployment verification | `artifacts/20261125-0005-rust-vliw-conformance/result.pya`; source revision `87a1d0f5516cdf240f7b92c634168ad4321c1c69`; 80/80 value/dispatch cases and 6/6 expected errors passed in 13,537.143 ms |
+| Persistent deployment | Retained on Mriczo as `rust-cuda-cubin`; same image and cubin as above, cubin load 0.09 s, worker ready in 594 ms; post-run Housekeeper queue depth 0 |
+| Rollback | Prior runtime image `sha256:97268cf465fa3af513478bf72a608f0799340882d85a36d7104fbb06e9fe58fa`; use `bash container/pyac-vliw-runtime/command/cuda-canary.sh mriczo liberit/pyac-vliw-runtime:cuda-sm86-1fc07d52d141910c rollback` |
+
+Batch timings include the complete listed case sets; they are not per-operation
+latencies. The six expected errors comprise one absent overload and five
+programlet/runtime guard cases. The final image and evidence are kept in the
+ignored CUDA build target and local `artifacts/` directory respectively. The
+first verification was a restoring canary; the follow-up deployment verification
+above retained the tested image as the active Mriczo runtime.
 
 ## 2026-11-25: Payload-backed Matrix-Vector Dot Product
 
@@ -487,6 +697,8 @@ shader, the eight live vector cases above passed exactly.
 
 ## Repeatable Checks
 
+- Build and deploy the CUDA runtime:
+  `bash container/pyac-vliw-runtime/command/build.sh mriczo deploy`
 - Full CPU + live Housekeeper GPU matrix:
   `PYA_VLIW_CONFORMANCE_TIMEOUT_MS=1800000 node command/vliw_gpu_conformance.mjs`
 - Targeted batching and programlet regression tests:
@@ -713,3 +925,30 @@ Pyash-English glosses are `attention-query`, `attention-key`, and
 The candidate was built on Mriczo, transferred to SWAC, and tested entirely
 through its Housekeeper queue. The canary then restored the original verified
 CUDA image; the candidate was not retained as SWAC's active runtime.
+
+## 2026-11-25: Sequence-Level Embedding Lookup on Mriczo CUDA
+
+**Run record:** `artifacts/20261125-0006-rust-vliw-conformance/result.pya`
+
+| Field | Evidence |
+| --- | --- |
+| Source revision | `856747bf5420cb0c2ca7cc0dff34eff6976fed44`; unrelated pre-existing `.gitignore` change left uncommitted |
+| Client and GPU route | Mriczo -> Mriczo Housekeeper -> Mriczo RTX 3090 CUDA VLIW runtime |
+| GPU | NVIDIA GeForce RTX 3090, driver `550.163.01`, 24,576 MiB |
+| Runtime image | `sha256:9889f729ae7906a324915dac8b25c0c5c78b2f6db708f5b6d675866381dbb940` (90,990,604 bytes) |
+| Final runtime | CUDA image retained on Mriczo; prior image `sha256:e9d22dc233e795b35a3606d1cd7f09e78d89e2c071738ba5b7fe2a4b0c331653` retained for rollback |
+| Live conformance | 80 functional passes (77 matrix cases + 3 typed-dispatch probes); 6 expected errors passed |
+| Sequence lookup output | IDs `[2,0]` selected rows 2 and 0; dot outputs `[60,20]` on CPU and CUDA |
+| Full run wall | 62,086.375 ms |
+| CPU request batches | 45 codelet cases: 67.610 ms; 32 programlet cases: 71.073 ms |
+| Housekeeper GPU client round trip | 45 codelet cases: 4,556.087 ms; 32 programlet cases: 5,176.405 ms (each queued 4 s behind another admitted job) |
+| CUDA event time | Codelet batch: 11.624 ms; programlet sections: 109.763 ms |
+| Runtime initialization | 0.09 s loading the prebuilt cubin; no startup compilation |
+| CPU reference executable | 16,586,464 bytes; SHA-256 `6297fd87fb5370f21c13f112f804bdd5e09052353a57f3f05785c2cadea0f813` |
+| GPU runtime executable | 9,316,056 bytes; SHA-256 `f4b353f37e42324a8a625f55f455e803ed7dc708042d41de14de4de8e4078de5` |
+| CUDA cubin | 3,469,384 bytes; SHA-256 `d980f25532a8305fe5367d141ba9c48e9185b7144b86d514d536aacf27cd1dd5` |
+
+The example uses a rank-one uint16 token-ID sequence and `fromindex num
+<position>` to select each ID. Each selected embedding row remains a zero-copy
+view into the file-backed rank-two float table. Text tokenization and a WSD
+benchmark are not part of this conformance result.

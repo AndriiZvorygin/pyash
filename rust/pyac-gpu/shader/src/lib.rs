@@ -5,7 +5,7 @@ use pyac_vliw_core::{
     CODELET_WORDS, CoreResult, DEFAULT_PROGRAMLET_STEP_BUDGET, ERROR_MALFORMED,
     ERROR_PROGRAM_CAPACITY, ERROR_UNSUPPORTED, MAX_PROGRAMLET_SYMBOL_WORDS,
     PROGRAMLET_ROUTINE_DIRECTORY_WORDS, ProgramletStack,
-    RESULT_WORDS, StorageView, execute_numeric_programlet_at_with_directory_words,
+    RESULT_WORDS, StorageView, execute_numeric_programlet_at_with_directory_words_and_storage,
     interpret_group, interpret_group_with_storage, is_numeric_programlet,
 };
 use spirv_std::spirv;
@@ -66,6 +66,9 @@ pub fn execute_pyac_programlet(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 0)] input: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 1)] output: &mut [u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] routine_directory: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] storage_descriptors: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] storage_names: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] storage_payload: &[u32],
 ) {
     if invocation.x != 0 || output.len() < RESULT_STRIDE {
         return;
@@ -85,15 +88,17 @@ pub fn execute_pyac_programlet(
         } else if routine_directory.len() < PROGRAMLET_ROUTINE_DIRECTORY_WORDS {
             CoreResult::failure(ERROR_MALFORMED, 0)
         } else {
+            let storage = StorageView::new(storage_descriptors, storage_names, storage_payload);
             let mut symbol_words = [0u32; MAX_PROGRAMLET_SYMBOL_WORDS];
             let mut frames = ProgramletStack::EMPTY;
-            execute_numeric_programlet_at_with_directory_words(
+            execute_numeric_programlet_at_with_directory_words_and_storage(
                 input,
                 0,
                 codelet_count,
                 DEFAULT_PROGRAMLET_STEP_BUDGET,
                 routine_directory,
                 0,
+                &storage,
                 &mut symbol_words,
                 &mut frames,
             )
@@ -120,6 +125,9 @@ pub fn execute_pyac_sections(
     #[spirv(storage_buffer, descriptor_set = 0, binding = 2)] sections: &[u32],
     #[spirv(storage_buffer, descriptor_set = 0, binding = 3)] completion_counter: &mut u32,
     #[spirv(storage_buffer, descriptor_set = 0, binding = 4)] routine_directories: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 5)] storage_descriptors: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 6)] storage_names: &[u32],
+    #[spirv(storage_buffer, descriptor_set = 0, binding = 7)] storage_payload: &[u32],
 ) {
     if invocation.x % 64 != 0 || sections.len() % SECTION_DESCRIPTOR_STRIDE != 0 {
         return;
@@ -142,15 +150,17 @@ pub fn execute_pyac_sections(
     } else if !pyac_vliw_core::is_numeric_programlet_at(input, codelet_start, codelet_count) {
         CoreResult::failure(ERROR_UNSUPPORTED, 0)
     } else {
+        let storage = StorageView::new(storage_descriptors, storage_names, storage_payload);
         let mut symbol_words = [0u32; MAX_PROGRAMLET_SYMBOL_WORDS];
         let mut frames = ProgramletStack::EMPTY;
-        pyac_vliw_core::execute_numeric_programlet_at_with_directory_words(
+        pyac_vliw_core::execute_numeric_programlet_at_with_directory_words_and_storage(
             input,
             codelet_start,
             codelet_count,
             DEFAULT_PROGRAMLET_STEP_BUDGET,
             routine_directories,
             section_index * PROGRAMLET_ROUTINE_DIRECTORY_WORDS,
+            &storage,
             &mut symbol_words,
             &mut frames,
         )

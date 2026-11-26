@@ -295,22 +295,32 @@ fn sort_directory(directory: &mut ProgramletRoutineDirectory) -> Result<(), u32>
         array_put!(&mut directory.entries, destination, entry);
         index += 1;
     }
-    let mut index = 1;
-    while index < directory.entry_count {
-        let previous = array_at!(&directory.entries, index - 1);
-        let current = array_at!(&directory.entries, index);
-        if compare_keys(
-            &directory.signatures,
-            previous.signature_start as usize,
-            previous.signature_length as usize,
-            current.signature_start as usize,
-            current.signature_length as usize,
-        ) == 0
+    // Latest definition wins. The sort is stable, so equal keys stay in source
+    // order; compact each equal-key run down to its last (highest
+    // definition offset) entry instead of rejecting the collision.
+    let mut read = 0;
+    let mut write = 0;
+    while read < directory.entry_count {
+        let mut run_end = read + 1;
+        while run_end < directory.entry_count
+            && compare_keys(
+                &directory.signatures,
+                array_at!(&directory.entries, read).signature_start as usize,
+                array_at!(&directory.entries, read).signature_length as usize,
+                array_at!(&directory.entries, run_end).signature_start as usize,
+                array_at!(&directory.entries, run_end).signature_length as usize,
+            ) == 0
         {
-            return Err(ERROR_DUPLICATE_SIGNATURE);
+            run_end += 1;
         }
-        index += 1;
+        let winner = array_at!(&directory.entries, run_end - 1);
+        if write != run_end - 1 {
+            array_put!(&mut directory.entries, write, winner);
+        }
+        write += 1;
+        read = run_end;
     }
+    directory.entry_count = write;
     Ok(())
 }
 

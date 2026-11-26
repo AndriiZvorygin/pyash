@@ -69,6 +69,18 @@ impl<'a> StorageView<'a> {
         Some(value)
     }
 
+    pub fn read_payload_u16(&self, byte_offset: usize) -> Option<u16> {
+        let mut value = 0u16;
+        let mut byte = 0;
+        while byte < 2 {
+            let absolute = byte_offset.checked_add(byte)?;
+            let packed = self.payload_word(absolute / 4)?;
+            value |= (((packed >> ((absolute % 4) * 8)) & 0xff) as u16) << (byte * 8);
+            byte += 1;
+        }
+        Some(value)
+    }
+
     pub fn read_payload_u64(&self, byte_offset: usize) -> Option<u64> {
         let low = self.read_payload_u32(byte_offset)? as u64;
         let high_offset = byte_offset.checked_add(4)?;

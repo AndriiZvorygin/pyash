@@ -9,9 +9,89 @@ The volume format and record grammar are specified in
 `reference.pya` is the generated source snapshot of accepted Pyash vocabulary.
 Its profile-v3 marker describes the source entry grammar; the Rust build
 converts it to the current profile-v4 runtime volume in `reference.pyac`. Both
-contain 64,572 entries. The current v4 volume has 4,065,444 codelets and is
-130,094,240 bytes. The snapshot includes 7,084 promoted SUMO links: 5,658
-`superclass-of` and 1,426 `equivalent-to`.
+contain 64,595 entries. The current v4 volume is 131,233,984 bytes. The snapshot includes
+7,084 promoted SUMO links: 5,658 `superclass-of` and 1,426 `equivalent-to`.
+
+## Operation signatures
+
+The snapshot carries operation signatures for every verb whose words resolve
+through the encoder's vocabulary table. They are generated from the
+code-resident tables in `program/verbs/*/**.mjs` by
+`program/library/dictionary/operation_signatures.mjs`, never hand-written.
+
+Atomic verbs spell their English surface and resolve to their pya atom
+(`multiply` -> `hgoc`); compound verbs are already pya sequences
+(`kl6m psas`). Both work, and the current snapshot carries 1,832 signatures
+across 96 verbs.
+
+A surface the older encoding table does not carry resolves through
+`program/library/dictionary/verb_defaults.mjs`, which records one chosen sense
+per surface. This is a deterministic default, not word-sense disambiguation: a
+`.pya` sentence must round-trip to `.pyac` the same way every time, so each
+surface has exactly one spelling and other senses are written as explicit
+compounds at the call site later. `verify` is `tras drot`, `divide` is
+`dvis` (the runtime's DIVIDE word), and `verify platform` composes both
+surfaces.
+
+A primitive is always **one atom**, because the compiled runtime dispatches on
+that atom's identity: `divide`/`dvis` `0x8893`, `xor`/`hkit` `0xA810`,
+`not`/`no` `0x30DE`, `or`/`ba` `0x263E`. `pyashWords.h` carries the grammar
+forms (`exclusive_or_`, `and_or_`, `negatory_quantifier_`), so these are
+existing words rather than new ones.
+
+A primitive's atom also carries the WordNet sense of the operation it performs,
+not whichever sense the lemma uses most. The arithmetic atoms now hold their
+operation senses: `plus` summing (`n:00873785-n`), `gret` subtraction
+(`n:00873540-n`), `hgoc` multiplication (`n:00873254-n`), `dvis` division
+(`n:00872590-n`), `twic` the division remainder (`n:13755803-n`), `swos`
+exponentiation (`n:00874089-n`), `syip` equality (`n:13969940-n`), `cyon` "very
+small" (`s:01395201-s`), `djan` "of great mass" (`s:01388707-s`), and `no`
+negation (`r:00024432-r`).
+
+Where the highest-frequency sense of a lemma competed for the same atom it moved
+to a compound instead of being dropped: "division" as an army unit is
+`hyim dvis` (`n:08230126-n`) and the exponential function is `gyik swos`
+(`n:13811674-n`). Selecting such a sense needs a bridge row plus an
+accepted-curated review, because a review alone cannot introduce a sense the
+bridge lacks.
+
+WordNet does not index the logical connectives — `and`, `or`, and `xor` have no
+senses at all — so `wa`, `ba`, and `hkit` carry no `wordnet` link. That is a
+property of the lexical resource, not a missing linkage.
+
+Because such an atom would otherwise carry no definition at all, it takes an
+authored English gloss from
+`program/library/translation/curated_glosses.pya`. The gloss is recorded under
+its own `pyash-curated` dataset and paired with a matching `source-link`,
+because the volume writer rejects a gloss that does not name a source the entry
+also links. These are interim definitions, not WordNet senses; a compositional
+Pyash definition remains the long-term form.
+
+A surface with no existing word is absent on purpose — `promptify` and the
+engine-named TTS verbs (`piper say`, `qwen say`) skip rather than take an
+arbitrary spelling.
+
+Type words follow the encoder's own rule: `num`, `bool`, `vec`, and `float`
+resolve to their grammar form (`number_`, `boolean_`, `vector`, `float`); any
+other type word resolves by its own surface. `name <X>` is a named type, so
+`X` is an arbitrary identifier and is not resolved against the vocabulary.
+
+The remaining skips are now dominated by cases and types, not verbs.
+`fromindex` and `toindex` are marked unassigned in the compositional grid, so
+signatures using them stay skipped until those cases are decided — inventing a
+mapping would put two arguments in one case and the volume writer rejects that.
+`ob date` still skips: the catalog has `date` (`hta2c`), but the encoder has no
+`date` type word. See
+[`pyashwords-deprecated.md`](../../../documentation/reference/pyashwords-deprecated.md).
+`collectOperationSignatures` reports every skipped row with a reason rather than
+inventing a key.
+
+The dispatch key is verb, mood, grammatical case, and value type. Argument names
+and descriptions are documentation and do not constrain lexical forms, so they
+are derived from the case name rather than authored. Compositional keywords such
+as `become`, `fromtext`, and `tostate` are modifiers on a case, not cases of
+their own, so they are not mapped to a case HNUC; doing so would render two
+identical arguments in one signature.
 
 V4 permits distinct exact WordNet senses for one Pyash key when they have
 different parts of speech; a duplicate sense for the same part of speech is
@@ -137,13 +217,14 @@ count. `artifacts/` is git-ignored; use a unique filename for each run and
 retain or copy the record where local benchmark history is maintained.
 
 Current reference-volume verification on Mriczo, 2026-11-25: rebuilding
-`reference.pyac` from the checked-in `reference.pya` parsed 100,269,153 source
-bytes in 12.552 s and completed in 17.506 s. The result contains 64,572 entries
-and 4,065,444 codelets, occupies 130,094,240 bytes, and has SHA-256
-`cfd71496549c629263c74316adc3e5fe510746aea1b86b79bdb24bbfa9424c62`. A
+`reference.pyac` from the checked-in `reference.pya` parsed 101,453,130 source
+bytes and wrote the volume in about 20 s. The result contains 64,595 entries
+and 4,101,061 codelets, occupies 131,233,984 bytes, and has SHA-256
+`0c167bf29c41bd0c27dfeef5e71c490715edd3ad1cb0a79c61d661fc2e7f8687`. A
 10,000-iteration warmed `en`/`tensor` lookup measured 106,218 ns mean
-(9,414.5 lookups/s), one result per lookup; the release CLI was 1,527,152
-bytes. The local Pyash run record is
+(9,414.5 lookups/s) on the previous volume, one result per lookup; re-measure
+against this one before quoting a rate. The local Pyash run record for that
+earlier measurement is
 `artifacts/dictionary-benchmarks/reference-mriczo-20261125-iwsp-query-link.pya`.
 
 The six-entry example volume's earlier benchmark is not representative of this
