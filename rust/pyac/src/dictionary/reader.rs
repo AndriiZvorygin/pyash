@@ -268,6 +268,66 @@ impl<R: Read + Seek> DictionaryFileReader<R> {
         Ok(keys)
     }
 
+    /// Single-word canonical keys paired with their English lexical form.
+    ///
+    /// These are the atoms: a key with exactly one HNUC word. Compounds carry a
+    /// multi-word key and are excluded, because the encoder treats a compound as
+    /// a sequence rather than as a vocabulary atom.
+    pub fn atoms(&mut self) -> Result<Vec<(u16, String)>, DictionaryReadError> {
+        let keys = self.canonical_keys()?;
+        let mut atoms = Vec::new();
+        for key in keys {
+            let [word] = key.as_slice() else { continue };
+            // The first `en` lexical form is the atom's name. A key with no
+            // English form is not an atom this table can describe.
+            if let Some(name) = self.first_english_form(&key)? {
+                atoms.push((*word, name));
+            }
+        }
+        atoms.sort_unstable_by_key(|(word, _)| *word);
+        atoms.dedup_by_key(|(word, _)| *word);
+        Ok(atoms)
+    }
+
+    /// The first `en` lexical form recorded for `key`, if any.
+    ///
+    /// A lexical-form sentence is
+    /// `name <key> su, text "<language>" as, text "<surface>" from, ...`.
+    /// Values precede their case words, so the language text comes before `AS`.
+    fn first_english_form(&mut self, key: &[u16]) -> Result<Option<String>, DictionaryReadError> {
+        use super::reader_codec::{take_record_subject, take_text};
+        let Some(range) = self.location(key)? else {
+            return Ok(None);
+        };
+        let mut ordinal = range.start;
+        while ordinal < range.end {
+            // Entry bodies keep the ordinary quote encoding; only the index
+            // sections use the indexed raw-continuation layout.
+            let sentence = read_sentence(&mut self.source, ordinal, range.end)?;
+            let words = &sentence.words;
+            let mut cursor = 0;
+            let is_ours = matches!(
+                take_record_subject(&sentence, &mut cursor),
+                Ok(RecordSubject::Name(ref name)) if name.as_slice() == key
+            );
+            if is_ours {
+                let mut probe = cursor;
+                if let Ok(language) = take_text(words, &mut probe) {
+                    if language == "en" && words.get(probe) == Some(&AS) {
+                        probe += 1;
+                        if let Ok(surface) = take_text(words, &mut probe) {
+                            return Ok(Some(surface));
+                        }
+                    }
+                }
+            }
+            ordinal = ordinal
+                .checked_add(sentence.consumed)
+                .ok_or(DictionaryReadError::InvalidRecord("entry ordinal overflow"))?;
+        }
+        Ok(None)
+    }
+
     pub fn location(&mut self, key: &[u16]) -> Result<Option<Range<u32>>, DictionaryReadError> {
         if !self.version_four {
             return Ok(self.find_legacy_location(key)?.map(|(entry, _)| entry));

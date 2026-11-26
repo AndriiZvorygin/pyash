@@ -94,7 +94,7 @@ struct OperationResultInput {
 }
 
 fn usage() -> &'static str {
-    "usage:\n  pyac-dictionary build <volume.pyac>  # Build JSON request is read from stdin.\n  pyac-dictionary inspect <volume.pyac>\n  pyac-dictionary surface <volume.pyac> <language> <surface>\n  pyac-dictionary surface-entries <volume.pyac> <language> <surface>\n  pyac-dictionary source <volume.pyac> <dataset> <release> <identifier>\n  pyac-dictionary source-entries <volume.pyac> <dataset> <release> <identifier>\n  pyac-dictionary key <volume.pyac> <hnuc[,hnuc...]>\n  pyac-dictionary entry <volume.pyac> <hnuc[,hnuc...]>\n  pyac-dictionary verify <volume.pyac>  # every canonical key must read back.\n  pyac-dictionary benchmark <volume.pyac> <iterations> surface <language> <surface>"
+    "usage:\n  pyac-dictionary build <volume.pyac>  # Build JSON request is read from stdin.\n  pyac-dictionary inspect <volume.pyac>\n  pyac-dictionary surface <volume.pyac> <language> <surface>\n  pyac-dictionary surface-entries <volume.pyac> <language> <surface>\n  pyac-dictionary source <volume.pyac> <dataset> <release> <identifier>\n  pyac-dictionary source-entries <volume.pyac> <dataset> <release> <identifier>\n  pyac-dictionary key <volume.pyac> <hnuc[,hnuc...]>\n  pyac-dictionary entry <volume.pyac> <hnuc[,hnuc...]>\n  pyac-dictionary verify <volume.pyac>  # every canonical key must read back.\n  pyac-dictionary atoms <volume.pyac>  # single-word keys with their English form.\n  pyac-dictionary benchmark <volume.pyac> <iterations> surface <language> <surface>"
 }
 
 fn binary_bytes() -> io::Result<u64> {
@@ -393,6 +393,24 @@ fn execute(args: &[String]) -> Result<Value, Box<dyn std::error::Error>> {
                 "command": command, "path": path, "key": key, "codelets": codelets,
                 "hasDefinition": reader.has_definition(&key)?,
                 "volumeBytes": size, "openMs": open_ms, "readNs": read_ns
+            })
+        }
+        "atoms" if args.len() == 2 => {
+            let path = Path::new(&args[1]);
+            let size = fs::metadata(path)?.len();
+            let open_start = Instant::now();
+            let mut reader = open_reader(path)?;
+            let open_ms = open_start.elapsed().as_secs_f64() * 1000.0;
+            let scan_start = Instant::now();
+            let atoms = reader.atoms()?;
+            let scan_ns = scan_start.elapsed().as_nanos();
+            json!({
+                "command": "atoms", "path": path,
+                "atoms": atoms.iter()
+                    .map(|(word, name)| json!({ "hnuc": word, "en": name }))
+                    .collect::<Vec<_>>(),
+                "count": atoms.len(),
+                "volumeBytes": size, "openMs": open_ms, "scanNs": scan_ns
             })
         }
         "verify" if args.len() == 2 => {
