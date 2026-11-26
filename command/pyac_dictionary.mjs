@@ -8,7 +8,8 @@ import { fileURLToPath } from "node:url";
 import { sentenceToPyash } from "../program/beautiful.mjs";
 import { buildDictionarySource } from "../program/library/dictionary/source.mjs";
 import { decodePyashProgram } from "../program/library/vliw/index.mjs";
-import { lookupLegacyName, lookupLegacyPyaName, lookupLegacyWord, lookupLegacyWordSequence, lookupPyaWordSequence } from "../program/library/vliw/quotes.mjs";
+import { lookupPyaWordSequence } from "../program/library/vliw/quotes.mjs";
+import { decodePyacWord, encodePyacWord, segmentPyacWords } from "../program/library/vliw/word_code.mjs";
 import { resolveConfigText } from "../program/configure/env.mjs";
 import { remember } from "../program/remember/index.mjs";
 import { interpret } from "../program/bridge/index.mjs";
@@ -56,25 +57,61 @@ function runBinary(binary, args, input) {
   }
 }
 
-function binaryKey(name, resolve = lookupLegacyWordSequence) {
+/** The HNUC a written Pyac word encodes to, or null when it is not one word. */
+function hnucOfSpelling(word) {
+  try {
+    return encodePyacWord(String(word).trim().toLowerCase());
+  } catch {
+    // Not a single Pyac word; the caller may still segment it as a compound.
+    return null;
+  }
+}
+
+/** The Pyac spelling an HNUC decodes to, or null when it is not a word. */
+function spellingOfHnuc(hnuc) {
+  try {
+    return decodePyacWord(hnuc);
+  } catch {
+    return null;
+  }
+}
+
+function binaryKey(name, resolve) {
   const words = String(name).trim().split(/\s+/u).filter(Boolean);
   if (!words.length) throw usageError("read requires a Pyash key");
-  return words.flatMap((word) => {
+  const hnucs = [];
+  for (const word of words) {
     // A written compound is one token for the user but several atoms for the
-    // volume (`kl6mpsas` keys as `kl6m,psas`), so expand before keying.
-    const sequence = resolve(word);
-    if (sequence) return sequence.map((entry) => Number.parseInt(entry.hnuc, 16).toString(16));
-    const entry = lookupLegacyPyaName(word);
-    if (!entry?.hnuc) throw new Error(`Pyash dictionary key has no HNUC mapping: ${word}`);
-    return [Number.parseInt(entry.hnuc, 16).toString(16)];
-  }).join(",");
+    // volume (`kl6mpsas` keys as `kl6m,psas`), so split it when asked.
+    const sequence = resolve ? resolve(word) : null;
+    if (sequence) {
+      hnucs.push(...sequence.map((entry) => entry.hnuc.toString(16)));
+      continue;
+    }
+    // Otherwise the word itself encodes to its HNUC; the codec is the identity,
+    // so no lookup table is needed.
+    const direct = hnucOfSpelling(word);
+    if (direct !== null) {
+      hnucs.push(direct.toString(16));
+      continue;
+    }
+    // A run-together compound: segment it on word shapes and key each part.
+    const segmented = segmentPyacWords(word);
+    if (!segmented) throw new Error(`Pyash dictionary key is not a Pyac word: ${word}`);
+    const parts = segmented.map(hnucOfSpelling);
+    if (parts.some((part) => part === null)) {
+      throw new Error(`Pyash dictionary key is not a Pyac word: ${word}`);
+    }
+    hnucs.push(...parts.map((part) => part.toString(16)));
+  }
+  return hnucs.join(",");
 }
 
 export function dictionaryKeyName(words) {
   return words.map((word) => {
-    const entry = lookupLegacyWord(Number(word));
-    if (!entry?.pya) throw new Error(`HNUC has no Pyash spelling: ${word}`);
-    return entry.pya;
+    const spelling = spellingOfHnuc(Number(word));
+    if (!spelling) throw new Error(`HNUC has no Pyash spelling: ${word}`);
+    return spelling;
   }).join(" ");
 }
 
@@ -114,13 +151,13 @@ function metricRecord(result) {
 }
 
 export function summarizeDictionaryEntry(sentences, canonicalKey) {
-  const requestedKey = canonicalKey.split(/\s+/u).map((word) => (
-    Number.parseInt((lookupLegacyPyaName(word) ?? lookupLegacyName(word)).hnuc, 16)
-  ));
-  const structureKey = ["tlat", "kwon"].map((word) => (
-    Number.parseInt((lookupLegacyPyaName(word) ?? lookupLegacyName(word)).hnuc, 16)
-  ));
-  const structureSubject = structureKey.map((word) => lookupLegacyWord(word)?.en).join(" ");
+  // Only the v3 legacy range marker needs a key lookup here, and the reference
+  // volume is v4 so it never fires. Its subject is the fixed string "word
+  // dictionary" — the v3 writer's English rendering of `tlat kwon` — so it is
+  // written literally rather than derived, which would give the spellings and
+  // never match.
+  const requestedKey = canonicalKey.split(/\s+/u).map(hnucOfSpelling).filter((word) => word !== null);
+  const structureSubject = "word dictionary";
   const isEntryRangeMarker = (sentence) => (
     sentence.su?.name === structureSubject
     && JSON.stringify(sentence.ob?.ve?.values) === JSON.stringify(requestedKey)
@@ -216,7 +253,22 @@ function summarizeEntryCodelets(match) {
   return { key, ...summarizeDictionaryEntry(sentences, key) };
 }
 
-function renderReferenceEntry(match, query) {
+/** The English forms the reference volume records for a written Pyac word. */
+function englishFormsFor(binary, spelling) {
+  const hnuc = hnucOfSpelling(spelling);
+  if (hnuc === null) return [];
+  try {
+    const found = runBinary(binary, ["entry", referenceVolumePath, hnuc.toString(16)]);
+    const sentences = decodePyashProgram(found.codelets.map((codelet) => Uint16Array.from(codelet)));
+    return sentences
+      .filter((sentence) => sentence?.as?.text === "en" && typeof sentence?.from?.text === "string")
+      .map((sentence) => sentence.from.text);
+  } catch {
+    return [];
+  }
+}
+
+function renderReferenceEntry(match, query, binary) {
   const english = match.entry.lexicalForms
     .filter((form) => form.language === "en")
     .map((form) => form.surface);
@@ -228,22 +280,26 @@ function renderReferenceEntry(match, query) {
     lines.push(`  SUMO ${link.identifier} (${link.relation})`);
   }
   for (const component of match.entry.components) {
-    const known = lookupLegacyPyaName(component) ?? lookupLegacyName(component);
-    if (known) lines.push(`  component: ${known.en} (${known.pya})`);
+    // The component's English comes from the volume, which is the reference.
+    // The legacy table would answer from a stale snapshot and disagree.
+    const english = binary ? englishFormsFor(binary, component) : [];
+    if (english.length) lines.push(`  component: ${english[0]} (${component})`);
     else lines.push(`  component: ${component}`);
   }
   return lines.join("\n");
 }
 
-function renderChineseEntry(match) {
+function renderChineseEntry(match, binary) {
   const forms = match.entry.lexicalForms;
   const chinese = [...new Set(forms.filter((form) => form.language === "zh").map((form) => form.surface))];
   const mandarin = [...new Set(forms.filter((form) => form.language === "zh-Latn-pinyin").map((form) => form.surface))];
   const cantonese = [...new Set(forms.filter((form) => form.language === "yue-Latn-jyutping").map((form) => form.surface))];
   const english = [...new Set(forms.filter((form) => form.language === "en").map((form) => form.surface))];
   const components = match.entry.components.map((component) => {
-    const known = lookupLegacyPyaName(component) ?? lookupLegacyName(component);
-    return known ? `${known.en} (${known.pya})` : component;
+    // From the volume, like the reference renderer: the legacy table is a stale
+    // snapshot and would disagree with the entry being printed.
+    const form = binary ? englishFormsFor(binary, component) : [];
+    return form.length ? `${form[0]} (${component})` : component;
   });
   return [
     chinese.length ? chinese.join("、") : "(no Chinese form linked)",
@@ -286,7 +342,7 @@ async function runReferenceDictionary(args, { stdout = process.stdout } = {}) {
     const key = args.slice(0, -2).join(" ").trim();
     const result = runBinary(binary, ["entry", referenceVolumePath, binaryKey(key)]);
     const entry = summarizeEntryCodelets(result);
-    stdout.write(`${renderChineseEntry(entry)}\n`);
+    stdout.write(`${renderChineseEntry(entry, binary)}\n`);
     return entry;
   }
 
@@ -317,19 +373,21 @@ async function runReferenceDictionary(args, { stdout = process.stdout } = {}) {
     : "en";
   const impliedSource = explicitSource ?? defaultSource;
 
-  // `from pyac` reads the text as Pyac spelling, so `name` is `na me`, never the
-  // English word whose gloss is "name". Using the English-first resolver here
-  // would return `hnim` for `name` and make the explicit source meaningless.
-  const pyacResolver = explicitSource === "pyac" ? lookupPyaWordSequence : lookupLegacyWordSequence;
+  // Reading a written key is always the codec's job: a spelling encodes to its
+  // HNUC, and a compound splits on word shapes. The distinction that matters is
+  // `lookupPyaWordSequence`, which reads a whole token as Pyac glyphs, versus
+  // segmenting a run-together compound into its atoms.
+  const pyacResolver = explicitSource === "pyac" ? lookupPyaWordSequence : undefined;
   // A key that segments and resolves still may have no volume entry, which is
   // a miss rather than a failure, so fall through to the surface search.
   const keyLookup = () => {
     try {
       return runBinary(binary, ["entry", referenceVolumePath, binaryKey(subject, pyacResolver)]);
     } catch (error) {
-      // A token with no HNUC mapping is not a Pyac word, so it is a miss rather
-      // than a failure — the caller wanted a key and this text is not one.
-      if (/has no entry for Pyac key|no HNUC mapping/u.test(error.message)) return null;
+      // Text that is not a Pyac word, or a word with no volume entry, is a miss
+      // rather than a failure — the caller wanted a key and this text is not
+      // one. Anything else is a real error.
+      if (/has no entry for Pyac key|is not a Pyac word/u.test(error.message)) return null;
       throw error;
     }
   };
@@ -340,7 +398,7 @@ async function runReferenceDictionary(args, { stdout = process.stdout } = {}) {
       return { query: subject, matches: [] };
     }
     const entry = summarizeEntryCodelets(found);
-    stdout.write(`${renderReferenceEntry(entry, subject)}\n`);
+    stdout.write(`${renderReferenceEntry(entry, subject, binary)}\n`);
     return entry;
   };
   // `from pyac name` reads as the two atoms `na me`. The volume may not carry
@@ -352,7 +410,11 @@ async function runReferenceDictionary(args, { stdout = process.stdout } = {}) {
     if (!sequence) return null;
     const lines = [`${subject}: ${sequence.map((atom) => atom.pya).join(" ")}`];
     for (const atom of sequence) {
-      lines.push(`  ${atom.pya} = ${atom.en} (0x${Number.parseInt(atom.hnuc, 16).toString(16)})`);
+      // The English gloss comes from the reference volume, which is the
+      // authority; the codec only supplies the spelling and HNUC.
+      const english = englishFormsFor(binary, atom.pya);
+      const gloss = english.length ? english[0] : "(not in the reference dictionary)";
+      lines.push(`  ${atom.pya} = ${gloss} (0x${Number.parseInt(atom.hnuc, 16).toString(16)})`);
     }
     return { sequence, lines };
   };
@@ -374,7 +436,7 @@ async function runReferenceDictionary(args, { stdout = process.stdout } = {}) {
     if (compound !== null) {
       try {
         const entry = summarizeEntryCodelets(compound);
-        stdout.write(`${renderReferenceEntry(entry, subject)}\n`);
+        stdout.write(`${renderReferenceEntry(entry, subject, binary)}\n`);
         return entry;
       } catch (error) {
         if (!/no recoverable vocabulary name/u.test(error.message)) throw error;
@@ -385,7 +447,10 @@ async function runReferenceDictionary(args, { stdout = process.stdout } = {}) {
       stdout.write(`${reading.lines.join("\n")}\n`);
       return { query: subject, atoms: reading.sequence.map((atom) => atom.pya) };
     }
-    stdout.write(`${subject}: no dictionary entry found\n`);
+    // Not in the volume and not a Pyac word either: `key` is three glyphs with
+    // no valid final consonant and does not segment, so "no dictionary entry"
+    // would be misleading — there is no Pyac word here to have an entry.
+    stdout.write(`${subject}: not a Pyac word\n`);
     return { query: subject, matches: [] };
   }
 
@@ -395,12 +460,13 @@ async function runReferenceDictionary(args, { stdout = process.stdout } = {}) {
     // still a valid query: `dvis` is not English, and someone typing it means the
     // atom. Only fall through when the text actually spells Pyac words.
     if (!explicitSource && impliedSource !== "pyac") {
-      const sequence = lookupLegacyWordSequence(subject) ?? lookupPyaWordSequence(subject);
+      const sequence = lookupPyaWordSequence(subject)
+        ?? (segmentPyacWords(subject) ? [{ pya: subject }] : null);
       if (sequence) {
         const found = keyLookup();
         if (found !== null) {
           const entry = summarizeEntryCodelets(found);
-          stdout.write(`${renderReferenceEntry(entry, subject)}\n`);
+          stdout.write(`${renderReferenceEntry(entry, subject, binary)}\n`);
           return entry;
         }
       }
@@ -408,7 +474,7 @@ async function runReferenceDictionary(args, { stdout = process.stdout } = {}) {
     stdout.write(`${subject}: no dictionary entry found\n`);
     return { query: subject, matches: [] };
   }
-  stdout.write(`${entries.map((entry) => renderReferenceEntry(entry, subject)).join("\n")}\n`);
+  stdout.write(`${entries.map((entry) => renderReferenceEntry(entry, subject, binary)).join("\n")}\n`);
   return { query: subject, matches: entries };
 }
 

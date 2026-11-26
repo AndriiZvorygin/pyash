@@ -170,12 +170,27 @@ test("`from pyac` reports the reading for a grammar-only atom", async () => {
 });
 
 test("`from en` and `from pyac` disagree where the two readings differ", async () => {
-  // `key` is English but not a Pyac atom. The English path finds entries; the
-  // Pyac path must report a miss rather than throwing the binary's key error.
+  // `key` is English but not a Pyac word: three glyphs with no valid final
+  // consonant, and it does not segment. The English path finds entries; the
+  // Pyac path must report that plainly rather than "no dictionary entry", which
+  // would imply a Pyac word exists and simply has no entry.
   const english = await runPyacDictionary(["reference", "from", "en", "key"], silent);
   const pyac = await runPyacDictionary(["reference", "from", "pyac", "key"], silent);
   assert.ok(english.matches.length > 0, "the English word resolves");
   assert.deepEqual(pyac.matches, [], "the Pyac reading is a clean miss");
+});
+
+test("`from pyac` distinguishes a non-word from an unindexed word", async () => {
+  // `key` is not a Pyac word at all. `hnanga` segments into known atoms but is
+  // not a catalogued compound, so it is a word with no entry. The messages must
+  // differ, or a reader cannot tell "you typed nonsense" from "this exists but
+  // the volume has no record".
+  const lines = [];
+  const capture = { stdout: { write: (text) => lines.push(text) } };
+  await runPyacDictionary(["reference", "from", "pyac", "key"], capture);
+  await runPyacDictionary(["reference", "from", "pyac", "hnanga"], capture);
+  assert.match(lines[0], /not a Pyac word/u);
+  assert.doesNotMatch(lines[1], /not a Pyac word/u);
 });
 
 test("the default reading follows the configured language, not the spelling", async () => {
