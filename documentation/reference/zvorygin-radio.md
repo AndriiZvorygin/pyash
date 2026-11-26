@@ -349,7 +349,8 @@ station is a few hundred lines of Node and a small frame reader.
 - `program/library/radio/mp3.mjs` — the frame reader: frame headers, duration, frame clock.
 - `program/library/radio/id3.mjs` — the tag at the head of a file: the title a song carries, the tags a player reads, written and read.
 - `program/library/radio/tags.mjs` — the tags of a song: who made it, what it belongs to, the day the audio was made, and the stamping of the songs of the catalogue.
-- `program/library/radio/ticker.mjs` — the words of a song and the time they are sung: the transcript, the sheet it falls back to, and the line that is sung now.
+- `program/library/radio/ticker.mjs` — the words of a song and the time they are sung: the transcript, the alignment, the placement, the sheet it falls back to, and the line that is sung now.
+- `program/library/radio/placement.mjs` — the placement of the words of a sheet on the words that were heard: every line put where its own words were sung.
 - `program/library/radio/catalogue.mjs` — the catalogue scan: which files are playable, which engine and topic each one carries, which lyric sheet belongs to it.
 - `program/library/radio/rotation.mjs` — the rotation: the lanes, the engines, the names the station is contracted to play.
 - `program/library/radio/station.mjs` — the programme: the loop, the fan-out to listeners, the now playing state.
@@ -368,6 +369,7 @@ station is a few hundred lines of Node and a small frame reader.
 | `GET /playlist.json` | the catalogue with titles, engines, lengths and download urls |
 | `GET /status.json` | the now playing state, its download url and the listener count |
 | `GET /lyrics.json` | the words of the song that is playing, with the time of every line |
+| `GET /events` | the words of the song, streamed in step with the audio the station sends |
 | `GET /song/<name>` | the song itself, as an attachment a listener may keep |
 | `GET /health` | the liveness check |
 
@@ -508,7 +510,9 @@ transcript, `radio/lyrics/song-<topic>.srt` — but a word can come out of the
 mouth of the song garbled, and what the machine heard is not what a listener
 should read. So the house's own alignment does the work: the words of the
 sheet, placed at the times of the transcript. It is the same alignment the
-karaoke subtitles of the music videos use — lyric text with ASR time.
+karaoke subtitles of the music videos use — lyric text with ASR time. The
+aligned words are kept beside the sheet, in
+`radio/lyrics/song-<topic>.aligned.srt`.
 
 The lane hears the song in phrases of twenty seconds at most
 (`PYA_HEAR_MAX_SEGMENT_SECONDS`), not the thirty seconds whisper writes by
@@ -516,9 +520,39 @@ default: the shorter the phrase, the closer the words of the song can be
 placed against the song. A song heard that way gives a line every five to ten
 seconds, which is what a ticker moves at.
 
-The aligned words are kept beside the sheet, in
-`radio/lyrics/song-<topic>.aligned.srt`, and the station serves them on
-`GET /lyrics.json`:
+#### A song the house could not align
+
+The alignment refuses a song whose words it cannot trust: the anchor coverage
+of the sheet against the transcript has to hold, and the house does not loosen
+that bar for the karaoke videos, so it does not loosen it here either.
+
+A refused song still has a transcript, and the transcript knows when the song
+was sung. So the words of the sheet are placed on the words that were heard:
+every line is looked for in the transcript, and put where its own words were
+sung — a word that came out garbled is still recognised, and a line the song
+never sang is left out, because a listener should not read words that are not
+being sung. A song that sings its verses in another order than the sheet is
+placed in the order it was sung.
+
+This is the work of `program/library/radio/placement.mjs`, and it is what the
+route reports as `source: "song"`.
+
+#### The words in step with the music
+
+The words are streamed to the listener with the music, on `GET /events`. The
+station sends the song it is playing, the words of that song with the time of
+every line, and the place that song takes in the audio it has sent; it sends
+the clock of that audio four times a second.
+
+The listener reads the words against the audio that has reached them, not
+against the clock of the station. A browser holds a second or two of audio
+before it plays it, and the words have to wait for that audio — so the page
+measures the buffer of its own player and puts the words on the audio that is
+being heard. The song that is called now playing is the song that is being
+heard, and it changes with the music, not with a poll.
+
+The route `GET /lyrics.json` serves the same words of the song that is
+playing, for a listener that asks for them in one piece:
 
 ```json
 {
@@ -536,16 +570,12 @@ The aligned words are kept beside the sheet, in
 
 The page follows the song with them: a running ticker under the header, and
 the line that is being sung with the one that follows it under the now
-playing block. The clock is the station's own — the status carries the seconds
-the song has been playing, and the page keeps its own time against it, so the
-words move with the music and not in steps of the poll.
+playing block.
 
-A song whose words the house could not place falls back to its sheet: the
-words are right, and the timing is an estimate — the lines spread over the
-length of the song, with the first of them after the opening the song begins
-with. The route says which of the two it is showing in its `source`: `lyrics`
-for the words placed at the times, `sheet` for the words alone, `none` for a
-song without words.
+The `source` says where the words come from: `lyrics` for the words placed at
+the times by the house's alignment, `song` for the words placed on the words
+that were heard, `sheet` for the words alone with an estimated timing, and
+`none` for a song without words.
 
 ### The words of the songs that came before
 
@@ -568,6 +598,10 @@ node command/run_pya_program.mjs examples/pyash/yiniana-radio-transcribe.pya
 It walks the catalogue, listens to the songs that have no transcript, and
 keeps what it heard beside the sheet of the song. A song that was already
 heard is left alone, and a song that cannot be heard does not stop the rest.
+
+The words that were heard are kept even when the house refuses to align
+them: the transcript is the record of the song, and it is what the words of
+the sheet are placed on.
 
 ### Real time, not file speed
 
@@ -1127,7 +1161,8 @@ them there, so a file carries its own name with it.
 - `quiz/yiniana_song_import.test.mjs` — the manifest, the song that is already there, the song that is named, the sheet naming, the mp3 the station cannot play, the part file that never lands, and the pyash ceremony.
 - `quiz/radio_id3.test.mjs` — the title a file carries, the title written onto a file, the frames that are kept, the tag the writer leaves alone, and the tags a player reads.
 - `quiz/radio_tags.test.mjs` — the tags of a song, the voice of an engine, the day a song carries, the day written once, and the catalogue stamped song by song.
-- `quiz/radio_ticker.test.mjs` — the words of a transcript, the sentences of a line, the sheet a song falls back to, and the line that is sung at that moment.
+- `quiz/radio_ticker.test.mjs` — the words of a transcript, the sentences of a line, the placement of a song the house could not align, the words kept inside the song, and the line that is sung at that moment.
+- `quiz/radio_placement.test.mjs` — the placement of the words of a sheet on the words that were heard.
 - `quiz/radio_song_name.test.mjs` — the name the mind gave, the furniture around a name, the reply that is not a name, the name that keeps its first clause, the title case, the line a song repeats, and the pyash ceremony.
 - `quiz/yiniana_transcribe_catalogue.test.mjs` — the song that is heard, the song that was heard already, the catalogue heard song by song, and the pyash ceremony.
 - `quiz/yiniana_tag_catalogue.test.mjs` — the tags of every song of the catalogue, the day of an imported song, and the pyash ceremony.

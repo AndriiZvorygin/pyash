@@ -19,7 +19,8 @@ import {
   splitSentences,
   alignedPathFor,
   timedLines,
-  transcriptPathFor
+  transcriptPathFor,
+  withinSong
 } from "../program/library/radio/ticker.mjs";
 
 const SRT = [
@@ -80,6 +81,77 @@ test("the words of the song, placed at the times, are what the ticker follows", 
   assert.equal(words.lines.length, 4);
 });
 
+test("a song the house could not align is placed on the words that were heard", () => {
+  const words = timedLines({
+    sheet: "[Verse]\nDarkness births a holy light deep within our soul.\n[Chorus]\nWe accept creation calm to heal the whole universe\n",
+    transcript: [
+      "1",
+      "00:00:00,000 --> 00:00:04,000",
+      "Darkness births a holy light deep within our soul",
+      "",
+      "2",
+      "00:00:30,000 --> 00:00:34,000",
+      "We accept creation calm to heal the whole universe",
+      ""
+    ].join("\n"),
+    durationSeconds: 100
+  });
+
+  assert.equal(words.source, "song");
+  assert.equal(words.lines.length, 2);
+  assert.equal(words.lines[0].start, 0, "the first line is sung at the start of the song");
+  assert.equal(words.lines[1].start, 30, "the chorus is sung where it was heard");
+});
+
+test("a line the song never sang is left out of the words", () => {
+  const words = timedLines({
+    sheet: "[Verse]\nA verse the render never sang at all\n[Chorus]\nDarkness births a holy light deep within our soul\n",
+    transcript: [
+      "1",
+      "00:00:00,000 --> 00:00:04,000",
+      "Darkness births a holy light deep within our soul",
+      ""
+    ].join("\n"),
+    durationSeconds: 100
+  });
+
+  assert.equal(words.source, "song");
+  assert.equal(words.lines.length, 1);
+  assert.match(words.lines[0].text, /Darkness births/);
+});
+
+test("the words of a song stay inside the length of the song", () => {
+  const words = timedLines({
+    aligned: [
+      "1",
+      "00:00:00,000 --> 00:00:30,000",
+      "The first line of the song",
+      "",
+      "2",
+      "00:02:30,000 --> 00:03:00,000",
+      "A line the hear lane placed past the end of the song",
+      ""
+    ].join("\n"),
+    durationSeconds: 175
+  });
+
+  assert.equal(words.source, "lyrics");
+  assert.equal(words.lines.length, 2, "the line the hear lane placed late is still part of the song");
+  assert.equal(words.lines[0].end, 30);
+  assert.equal(words.lines[1].end, 175, "the last line is cut at the end of the song");
+});
+
+test("the lines of a song can be cut at the end of the song", () => {
+  const cut = withinSong([
+    { start: 0, end: 10, text: "first" },
+    { start: 170, end: 180, text: "last" }
+  ], 175);
+
+  assert.equal(cut.length, 2);
+  assert.equal(cut[1].end, 175, "the last line is cut at the end of the song");
+  assert.deepEqual(withinSong([{ start: 200, end: 210 }], 175), [], "a line after the song is left out");
+});
+
 test("a song that was never heard falls back to its sheet, with the lines spread over the song", () => {
   const words = timedLines({
     sheet: "[Verse]\nFirst line\n[Chorus]\nSecond line\n",
@@ -109,15 +181,21 @@ test("the words of a song are read from the files that hold them", async () => {
   const root = await makeTempDir();
   const sheetPath = path.join(root, "song-pleasure.txt");
   const transcriptPath = path.join(root, "song-pleasure.srt");
-  await fs.writeFile(sheetPath, "[Verse]\nThe words of the sheet\n");
+  const alignedPath = path.join(root, "song-pleasure.aligned.srt");
+  await fs.writeFile(sheetPath, "[Verse]\nWe sit quietly in stillness.\n");
   await fs.writeFile(transcriptPath, SRT);
+  await fs.writeFile(alignedPath, SRT);
 
-  const heard = await readWords({ sheetPath, alignedPath: transcriptPath, durationSeconds: 60 });
+  const heard = await readWords({ sheetPath, alignedPath, durationSeconds: 60 });
   assert.equal(heard.source, "lyrics");
 
+  await fs.rm(alignedPath, { force: true });
+  const placed = await readWords({ sheetPath, alignedPath, transcriptPath, durationSeconds: 60 });
+  assert.equal(placed.source, "song", "a song whose words were not aligned is placed on the words heard");
+
   await fs.rm(transcriptPath, { force: true });
-  const sheet = await readWords({ sheetPath, alignedPath: transcriptPath, durationSeconds: 60 });
-  assert.equal(sheet.source, "sheet", "a song whose words were not placed shows its sheet");
+  const sheet = await readWords({ sheetPath, alignedPath, transcriptPath, durationSeconds: 60 });
+  assert.equal(sheet.source, "sheet", "a song whose words were never heard shows its sheet");
 
   await fs.rm(root, { recursive: true, force: true });
 });

@@ -107,10 +107,22 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
   const tickerRun = document.getElementById("ticker-run");
   document.getElementById("tune").addEventListener("click", () => player.play());
 
-  // The words of the song that is playing, and the clock of the song itself.
-  let words = { filename: "", source: "none", lines: [] };
-  let clockOffset = 0;
+  // The songs the station has streamed, and the place they take in the audio
+  // it has sent. The words of a song come with the song.
+  let songs = [];
+  // The audio the station has sent, in seconds of song, and the moment the
+  // browser was told about it.
+  let contentSeconds = 0;
+  let contentAt = Date.now();
+  let epoch = "";
+  let listeners = 0;
   let shownLine = -1;
+  let shownSong = "";
+  let shownSecond = -1;
+  // The audio the listener is hearing, and whether the listener has heard any
+  // yet.
+  let heardContent = 0;
+  let hasPlayed = false;
   // The catalogue as the station last reported it, so the listener can find a
   // song by a word of its name without the station being asked again.
   let catalogue = [];
@@ -125,8 +137,36 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
     return link;
   }
 
-  function songSeconds() {
-    return Date.now() / 1000 + clockOffset;
+  // The audio the station has sent, grown by the time that has passed since
+  // the browser was told about it.
+  function sentAudio() {
+    return contentSeconds + Math.max(0, (Date.now() - contentAt) / 1000);
+  }
+
+  // The audio that has reached the browser but has not been played yet. The
+  // listener hears the audio that is behind that.
+  function waitingAudio() {
+    if (!player.buffered.length) return 0;
+    return Math.max(0, player.buffered.end(player.buffered.length - 1) - player.currentTime);
+  }
+
+  // The audio the listener is hearing right now.
+  function heardAudio() {
+    if (hasPlayed && player.paused) return heardContent;
+    const content = sentAudio() - waitingAudio();
+    if (hasPlayed) heardContent = content;
+    return content;
+  }
+
+  // The song that holds that audio.
+  function songAt(content) {
+    let found = null;
+    for (const song of songs) {
+      const start = Number(song.contentStart || 0);
+      const end = start + Number(song.durationSeconds || 0);
+      if (content >= start && content < end) found = song;
+    }
+    return found || songs[songs.length - 1] || null;
   }
 
   function lineIndexAt(lines, seconds) {
@@ -139,9 +179,40 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
     return lines.length - 1;
   }
 
+  function showSong(song) {
+    nowTitle.textContent = song.title || "The station is between its songs";
+    const link = downloadLink(song.downloadUrl, "Download this song");
+    nowDownload.replaceChildren(...(link ? [link] : []));
+    shownSecond = -1;
+  }
+
   function renderWords() {
-    const lines = words.lines || [];
-    const index = lineIndexAt(lines, songSeconds());
+    const content = heardAudio();
+    const song = songAt(content);
+    if (!song) {
+      wordsBox.replaceChildren();
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "The station is getting ready.";
+      wordsBox.append(empty);
+      tickerRun.textContent = "";
+      return;
+    }
+    if (song.filename !== shownSong) {
+      shownSong = song.filename;
+      shownLine = -1;
+      showSong(song);
+    }
+    const seconds = content - Number(song.contentStart || 0);
+    const played = Math.max(0, Math.floor(seconds));
+    if (played !== shownSecond) {
+      shownSecond = played;
+      nowMeta.textContent = song.engine + " - " + song.topic
+        + " - " + played + "s of " + Math.round(Number(song.durationSeconds || 0)) + "s"
+        + " - " + listeners + " listening";
+    }
+    const lines = song.lines || [];
+    const index = lineIndexAt(lines, seconds);
     if (index === shownLine) return;
     shownLine = index;
     const current = index >= 0 ? lines[index] : null;
@@ -150,9 +221,7 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
     if (!current) {
       const empty = document.createElement("div");
       empty.className = "empty";
-      empty.textContent = words.source === "none"
-        ? "The words of the song will follow it here."
-        : "The song is between its words.";
+      empty.textContent = "The song is between its words.";
       wordsBox.append(empty);
       tickerRun.textContent = "";
       return;
@@ -175,47 +244,52 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
     tickerRun.style.animation = "";
   }
 
-  async function loadWords() {
-    try {
-      const response = await fetch(${JSON.stringify(lyricsUrl)}, { cache: "no-store" });
-      const payload = await response.json();
-      if (payload.filename !== words.filename) {
-        words = payload;
-        shownLine = -1;
-        renderWords();
-      }
-    } catch (error) {
-      // the words are a convenience; the stream is the station
-    }
-  }
-
-  async function refresh() {
-    try {
-      const response = await fetch(${JSON.stringify(statusUrl)}, { cache: "no-store" });
-      const status = await response.json();
-      if (!status.track) {
-        nowTitle.textContent = "The catalogue is empty";
-        nowMeta.textContent = "No rendered track is waiting to play.";
-        nowDownload.replaceChildren();
+  // The station streams the words of the song in step with the audio it
+  // sends. A listener hears the song the words belong to.
+  function openStream() {
+    const source = new EventSource("/events");
+    source.addEventListener("song", (event) => {
+      let song = null;
+      try {
+        song = JSON.parse(event.data);
+      } catch (error) {
         return;
       }
-      nowTitle.textContent = status.track.title;
-      const played = Math.floor(status.elapsedSeconds || 0);
-      nowMeta.textContent = status.track.engine + " - " + status.track.topic
-        + " - " + played + "s of " + Math.round(status.track.durationSeconds || 0) + "s"
-        + " - " + status.listeners + " listening";
-      const link = downloadLink(status.track.downloadUrl, "Download this song");
-      nowDownload.replaceChildren(...(link ? [link] : []));
-      clockOffset = Number(status.elapsedSeconds || 0) - Date.now() / 1000;
-      await loadWords();
-    } catch (error) {
-      nowTitle.textContent = "The station is out of reach";
-    }
+      if (epoch && song && songs.length && songs[songs.length - 1].filename === song.filename) {
+        return;
+      }
+      songs = [...songs, song].slice(-6);
+    });
+    source.addEventListener("clock", (event) => {
+      let clock = null;
+      try {
+        clock = JSON.parse(event.data);
+      } catch (error) {
+        return;
+      }
+      if (clock.epoch && epoch && clock.epoch !== epoch) {
+        // the station was restarted: the audio starts over
+        songs = [];
+        shownSong = "";
+        shownLine = -1;
+      }
+      epoch = clock.epoch || epoch;
+      contentSeconds = Number(clock.contentSeconds || 0);
+      contentAt = Date.now();
+      listeners = Number(clock.listeners || 0);
+    });
+    source.addEventListener("error", () => {
+      // the stream will come back on its own
+    });
   }
+
+  player.addEventListener("playing", () => {
+    hasPlayed = true;
+  });
 
   async function loadCatalogue() {
     try {
-      const response = await fetch(${JSON.stringify(playlistUrl)}, { cache: "no-store" });
+      const response = await fetch("/playlist.json", { cache: "no-store" });
       const payload = await response.json();
       // The list is alphabetical, so a listener can find a song by its name.
       // The station itself does not play in this order: the programme plays
@@ -265,10 +339,9 @@ export function renderStationPage({ stationName = "Radio", streamUrl = "/stream.
 
   document.getElementById("find").addEventListener("input", renderCatalogue);
 
-  refresh();
+  openStream();
   loadCatalogue();
-  setInterval(refresh, 3000);
-  // The words follow the song between the polls of the clock.
+  // The words follow the song between the moments the station speaks.
   function follow() {
     renderWords();
     requestAnimationFrame(follow);

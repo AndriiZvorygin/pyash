@@ -13,8 +13,8 @@ import { fileURLToPath } from "node:url";
 import { interpret } from "../program/bridge/index.mjs";
 import { resolveConfigMap, resolveConfigNum, resolveConfigText } from "../program/configure/env.mjs";
 import { publicCatalogue, scanCatalogue } from "../program/library/radio/catalogue.mjs";
-import { DOWNLOAD_PREFIX, downloadNameFor, downloadNameFromPath, resolveDownloadPath } from "../program/library/radio/download.mjs";
-import { alignedPathFor, readWords } from "../program/library/radio/ticker.mjs";
+import { DOWNLOAD_PREFIX, downloadNameFor, downloadNameFromPath, downloadUrlFor, resolveDownloadPath } from "../program/library/radio/download.mjs";
+import { alignedPathFor, readWords, transcriptPathFor } from "../program/library/radio/ticker.mjs";
 import { renderStationPage } from "../program/library/radio/page.mjs";
 import { contractWithOrder, orderTracks, readLanes, readRotation } from "../program/library/radio/rotation.mjs";
 import { createRadioStation } from "../program/library/radio/station.mjs";
@@ -27,6 +27,7 @@ const DEFAULT_STATION_NAME = "Zvorygin Radio";
 const DEFAULT_LANES = "radio/topics.txt";
 const DEFAULT_ROTATION = "radio/rotation.txt";
 const RESCAN_MS = 15 * 1000;
+const CLOCK_MS = 250;
 
 function jsonResponse(res, status, value) {
   const body = JSON.stringify(value, null, 2);
@@ -68,6 +69,23 @@ function localAddresses() {
     }
   }
   return out;
+}
+
+/**
+ * The words of a song, with the time of every line.
+ *
+ * The words of a song are the words of its sheet, placed at the times the
+ * house heard them. A song the house could not align is placed on the words
+ * that were heard; a song that was never heard keeps its sheet alone.
+ */
+export async function wordsOfSong(track) {
+  if (!track?.lyricSheet) return { source: "none", lines: [] };
+  return readWords({
+    sheetPath: track.lyricSheet,
+    alignedPath: alignedPathFor(track.lyricSheet),
+    transcriptPath: transcriptPathFor(track.lyricSheet),
+    durationSeconds: track.durationSeconds
+  });
 }
 
 /**
@@ -115,6 +133,78 @@ export function createRadioServer({ station, stationName = DEFAULT_STATION_NAME,
       station.subscribe(res);
       return;
     }
+    if (pathname === "/events") {
+      // The words of the song, streamed in step with the audio. The station
+      // says which song it is sending and where it stands in the audio it has
+      // sent, so a listener reads the words of the song they are hearing.
+      res.writeHead(200, {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-store",
+        "connection": "keep-alive",
+        "x-accel-buffering": "no",
+        "x-content-type-options": "nosniff"
+      });
+      const send = (event, data) => {
+        try {
+          res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+        } catch {
+          // the listener is gone
+        }
+      };
+      const state = station.state();
+      const current = state.track
+        ? station.tracks.find((entry) => entry.filename === state.track.filename)
+        : null;
+      const entry = state.programme?.[state.programme.length - 1] ?? null;
+      if (current && entry) {
+        const words = await wordsOfSong(current);
+        send("song", {
+          filename: current.filename,
+          title: current.title,
+          topic: current.topic,
+          engine: current.engine,
+          durationSeconds: current.durationSeconds,
+          contentStart: entry.contentStart,
+          downloadUrl: downloadUrlFor(current.filename),
+          source: words.source,
+          lines: words.lines
+        });
+      }
+      send("clock", {
+        epoch: state.epoch,
+        contentSeconds: state.contentSeconds,
+        listeners: state.listeners,
+        playing: state.playing
+      });
+      const off = station.on("track", async ({ track, entry: placed }) => {
+        const words = await wordsOfSong(track);
+        send("song", {
+          filename: track.filename,
+          title: track.title,
+          topic: track.topic,
+          engine: track.engine,
+          durationSeconds: track.durationSeconds,
+          contentStart: placed.contentStart,
+          downloadUrl: downloadUrlFor(track.filename),
+          source: words.source,
+          lines: words.lines
+        });
+      });
+      const beat = setInterval(() => {
+        const now = station.state();
+        send("clock", {
+          epoch: now.epoch,
+          contentSeconds: now.contentSeconds,
+          listeners: now.listeners,
+          playing: now.playing
+        });
+      }, CLOCK_MS);
+      res.on("close", () => {
+        clearInterval(beat);
+        off?.();
+      });
+      return;
+    }
     if (pathname === "/playlist.json") {
       jsonResponse(res, 200, { station: stationName, tracks: publicCatalogue(station.tracks) });
       return;
@@ -129,6 +219,7 @@ export function createRadioServer({ station, stationName = DEFAULT_STATION_NAME,
         ? await readWords({
           sheetPath: track.lyricSheet,
           alignedPath: alignedPathFor(track.lyricSheet),
+          transcriptPath: transcriptPathFor(track.lyricSheet),
           durationSeconds: track.durationSeconds
         })
         : { source: "none", lines: [] };
@@ -187,8 +278,10 @@ export function createRadioServer({ station, stationName = DEFAULT_STATION_NAME,
   const server = http.createServer((req, res) => {
     Promise.resolve()
       .then(() => handle(req, res))
-      .catch(() => {
-        // A request must never take the station down.
+      .catch((error) => {
+        // A request must never take the station down, but the house wants to
+        // know what went wrong.
+        process.stderr.write(`yiniana radio: request fault ${String(error?.stack ?? error)}\n`);
         if (res.headersSent) {
           res.destroy();
           return;

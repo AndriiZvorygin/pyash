@@ -11,6 +11,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { placeSheetLines } from "./placement.mjs";
+
 /**
  * Where the transcript of a song lies: beside its sheet, with the suffix of a
  * subtitle.
@@ -118,20 +120,57 @@ export function parseSheet(text) {
 }
 
 /**
+ * The lines of a song, kept inside the length of the song.
+ *
+ * The hear lane pads what it hears to a whole window of time, so the last
+ * words of a song can be given a time that lies past the end of the song. A
+ * listener must not be shown a line that is sung after the song has ended, so
+ * every line is cut at the end of the song, and a line that begins after the
+ * song is left out.
+ */
+export function withinSong(lines = [], durationSeconds = 0) {
+  const duration = Number(durationSeconds) || 0;
+  const list = Array.isArray(lines) ? lines.filter(Boolean) : [];
+  if (!duration) return list;
+  const kept = [];
+  for (const line of list) {
+    const start = Number(line?.start ?? 0);
+    if (start >= duration) continue;
+    const end = Math.min(Number(line?.end ?? start), duration);
+    kept.push({ ...line, start, end: Math.max(start, end) });
+  }
+  return kept;
+}
+
+/**
  * The words of a song, with the time of every line.
  *
  * The words are the words of the song, as they were written: the alignment
- * places them at the times the hear lane heard them. A song that was never
- * aligned falls back to its sheet, with the lines spread over the length of
- * the song and the first of them after the opening the song begins with.
+ * places them at the times the hear lane heard them.
+ *
+ * A song the house could not align is placed on the words that were heard:
+ * every line of the sheet is put where its own words were sung, and a line
+ * the song never sang is left out. A song that was never heard at all falls
+ * back to its sheet, with the lines spread over the length of the song and
+ * the first of them after the opening the song begins with.
  */
-export function timedLines({ aligned = "", sheet = "", durationSeconds = 0 } = {}) {
+export function timedLines({ aligned = "", sheet = "", transcript = "", durationSeconds = 0 } = {}) {
   const sung = parseSrt(aligned);
   if (sung.length) {
-    return { source: "lyrics", lines: sung };
+    return { source: "lyrics", lines: withinSong(sung, durationSeconds) };
   }
   const words = parseSheet(sheet);
   if (!words.length) return { source: "none", lines: [] };
+  const cues = parseSrt(transcript);
+  if (cues.length) {
+    const placed = placeSheetLines({ lines: words, cues })
+      .filter((line) => line.heard)
+      .map((line) => ({ start: line.start, end: line.end, text: line.text, section: line.section }))
+      .sort((left, right) => left.start - right.start);
+    if (placed.length) {
+      return { source: "song", lines: withinSong(placed, durationSeconds) };
+    }
+  }
   const duration = Number(durationSeconds) || 0;
   const opening = duration ? duration * 0.08 : 0;
   const span = Math.max(1, duration - opening);
@@ -186,24 +225,22 @@ export async function keepFile({ from = "", to = "" } = {}) {
 /**
  * The words of a song, read from the files that hold them: the alignment
  * when the house has placed the words of the song at the times it heard
- * them, and the sheet when it has not.
+ * them, the words heard when the alignment was refused, and the sheet when
+ * the song was never heard at all.
  */
-export async function readWords({ sheetPath = "", alignedPath = "", durationSeconds = 0 } = {}) {
-  let aligned = "";
-  let sheet = "";
-  if (alignedPath) {
+export async function readWords({ sheetPath = "", alignedPath = "", transcriptPath = "", durationSeconds = 0 } = {}) {
+  const read = async (file) => {
+    if (!file) return "";
     try {
-      aligned = await fs.readFile(alignedPath, "utf8");
+      return await fs.readFile(file, "utf8");
     } catch {
-      aligned = "";
+      return "";
     }
-  }
-  if (sheetPath) {
-    try {
-      sheet = await fs.readFile(sheetPath, "utf8");
-    } catch {
-      sheet = "";
-    }
-  }
-  return timedLines({ aligned, sheet, durationSeconds });
+  };
+  const [aligned, transcript, sheet] = await Promise.all([
+    read(alignedPath),
+    read(transcriptPath),
+    read(sheetPath)
+  ]);
+  return timedLines({ aligned, transcript, sheet, durationSeconds });
 }

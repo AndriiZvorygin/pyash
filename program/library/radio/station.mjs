@@ -9,8 +9,16 @@ import { downloadUrlFor } from "./download.mjs";
 const MAX_CLIENT_BUFFER_BYTES = 4 * 1024 * 1024;
 
 // The station hands the listeners audio in pieces of about this size. Small
-// pieces keep the pacing honest; large ones keep the socket quiet.
-const PIECE_BYTES = 32 * 1024;
+// pieces keep the pacing honest: the audio the station has sent runs ahead of
+// the clock of the station by the size of one piece, and a listener reads the
+// words against the audio that has reached them. Large ones keep the socket
+// quiet.
+const PIECE_BYTES = 8 * 1024;
+
+// The programme the station keeps in mind: the songs that went out, and when
+// they went out. A listener needs it to know which song the audio they hear
+// belongs to.
+const PROGRAMME_KEEP = 12;
 
 function sleep(ms) {
   return new Promise((resolve) => {
@@ -53,6 +61,19 @@ export function createRadioStation({ tracks = [], gapMs = 500, now = () => Date.
   let stopped = false;
   let started = false;
   let generation = 0;
+  // The song that is playing, and the song that will play next. The station
+  // is silent for a moment between two songs, and the song that is playing
+  // is still the song that is playing during that moment.
+  let pending = -1;
+  // The audio the station has sent, in seconds of song. It is the clock the
+  // words are timed against: a listener hears the audio the station has
+  // already sent.
+  let contentSeconds = 0;
+  // The songs that went out, and the place they took in the audio.
+  let programme = [];
+  // The identity of this run of the station. A listener that hears the
+  // identity change knows the station was restarted under them.
+  const epoch = `epoch-${now()}-${Math.floor(random() * 1e9)}`;
 
   function currentTrack() {
     return index >= 0 ? playlist[index] ?? null : null;
@@ -103,11 +124,28 @@ export function createRadioStation({ tracks = [], gapMs = 500, now = () => Date.
   }
 
   async function playCurrent() {
+    if (stopped || !playlist.length) return;
+    if (pending < 0 || !playlist[pending]) pending = nextTrackIndex();
+    if (pending < 0) return;
+    index = pending;
+    pending = -1;
     const track = currentTrack();
-    if (stopped || !track) return;
+    if (!track) return;
     const mine = generation;
     trackStartedAt = now();
-    emitter.emit("track", { index, track });
+    // The song takes its place in the audio of the station.
+    const entry = {
+      filename: track.filename,
+      title: track.title,
+      topic: track.topic,
+      engine: track.engine,
+      contentStart: contentSeconds,
+      contentEnd: contentSeconds,
+      startedAt: trackStartedAt,
+      durationSeconds: Number(track.durationSeconds ?? 0)
+    };
+    programme = [...programme, entry].slice(-PROGRAMME_KEEP);
+    emitter.emit("track", { index, track, entry });
     let buffer = null;
     try {
       buffer = await fs.readFile(track.path);
@@ -126,6 +164,8 @@ export function createRadioStation({ tracks = [], gapMs = 500, now = () => Date.
       // the track: the audio is written once and the station waits out the
       // rest of the song.
       fanOut(buffer.subarray(track.dataOffset ?? 0));
+      contentSeconds = entry.contentStart + Number(track.durationSeconds ?? 0);
+      entry.contentEnd = contentSeconds;
       await sleep(Math.max(0, (Number(track.durationSeconds ?? 0) - 0.05) * 1000));
       advance();
       return;
@@ -144,6 +184,9 @@ export function createRadioStation({ tracks = [], gapMs = 500, now = () => Date.
       fanOut(Buffer.concat(pieces, pieceBytes));
       pieces = [];
       pieceBytes = 0;
+      // The audio that has gone out is the clock the words are timed against.
+      contentSeconds = entry.contentStart + (frame + 1) * frameSeconds;
+      entry.contentEnd = contentSeconds;
       const due = started + (frame + 1) * frameSeconds * 1000;
       const wait = due - now();
       if (wait > 0) await sleep(wait);
@@ -153,7 +196,7 @@ export function createRadioStation({ tracks = [], gapMs = 500, now = () => Date.
 
   function advance() {
     if (stopped || !playlist.length) return;
-    index = nextTrackIndex();
+    pending = nextTrackIndex();
     if (gapMs > 0) {
       timer = setTimeout(() => {
         timer = null;
@@ -184,18 +227,22 @@ export function createRadioStation({ tracks = [], gapMs = 500, now = () => Date.
     const list = Array.isArray(next) ? next.filter(Boolean) : [];
     const playing = currentTrack();
     const keep = playing ? list.findIndex((track) => track.filename === playing.filename) : -1;
+    const waiting = pending >= 0 ? playlist[pending] : null;
     playlist = list;
     bag = [];
     if (!playlist.length) {
       index = -1;
+      pending = -1;
       generation += 1;
       return;
     }
     if (keep >= 0) {
       index = keep;
+      // The song that was going to play keeps its place, if it is still here.
+      pending = waiting ? list.findIndex((track) => track.filename === waiting.filename) : -1;
       return;
     }
-    index = nextTrackIndex();
+    pending = nextTrackIndex();
     if (playing) {
       generation += 1;
       playCurrent();
@@ -218,7 +265,10 @@ export function createRadioStation({ tracks = [], gapMs = 500, now = () => Date.
       } : null,
       startedAt: trackStartedAt ? new Date(trackStartedAt).toISOString() : "",
       elapsedSeconds: trackStartedAt ? Math.max(0, (now() - trackStartedAt) / 1000) : 0,
-      listeners: clients.size
+      listeners: clients.size,
+      epoch,
+      contentSeconds,
+      programme: programme.map((entry) => ({ ...entry }))
     };
   }
 
@@ -226,7 +276,7 @@ export function createRadioStation({ tracks = [], gapMs = 500, now = () => Date.
     if (started) return;
     started = true;
     stopped = false;
-    index = nextTrackIndex();
+    pending = nextTrackIndex();
     playCurrent();
   }
 

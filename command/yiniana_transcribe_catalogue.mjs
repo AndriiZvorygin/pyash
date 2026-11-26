@@ -108,13 +108,18 @@ export async function transcribeSong({
     outputPath: path.join(workDirectory, `${stem}.aligned.srt`),
     log
   });
-  if (!placed) return { name: track.filename, status: "unplaced" };
   // The words that were heard are kept beside the sheet too: they are the
   // record of what the house heard, and they are what the words of the song
-  // are placed against.
+  // are placed against. They are kept even when the house refuses to align
+  // them: the words heard are still the words of the song, and the station
+  // places them on the song itself.
   const kept = transcript === heard
     ? heard
     : await keepFile({ from: transcript, to: heard });
+  if (!placed) {
+    log(`kept the words heard for ${track.filename}, unaligned`);
+    return { name: track.filename, status: "unplaced", transcript: kept };
+  }
   const placedAligned = await keepFile({
     from: path.join(workDirectory, `${stem}.aligned.srt`),
     to: aligned
