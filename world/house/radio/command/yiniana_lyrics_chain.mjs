@@ -1,0 +1,374 @@
+#!/usr/bin/env node
+// The Yiniana radio lyrics chain, steps 1 and 2.
+//
+// Step 1 greps one topic out of the channeling corpus and writes the matching
+// excerpts to a source file.
+// Step 2 runs the learning distillation over that source file and writes the
+// learnteaching (the learn card) next to it.
+//
+// Step 3, the lyrics themselves, lives in examples/pyash/yiniana-radio-lyrics.pya
+// because it needs the hymn manuscript ceremony.
+//
+// Usage:
+//   node command/yiniana_lyrics_chain.mjs <topic> [radioDir]
+//   node command/yiniana_lyrics_chain.mjs --verify-song <songPath>
+//
+// The topic is a single word by contract; the curated list in radio/topics.txt
+// keeps it that way so the pyash program and this helper agree on file names.
+
+import fs from "node:fs";
+import fsp from "node:fs/promises";
+import path from "node:path";
+import { spawn } from "node:child_process";
+
+import { validateLearnCard } from "../../../../command/validate_learn_card.mjs";
+import { cardMatchesDepth, headingsForDepth } from "../../../../program/library/learn_card_headings.mjs";
+import { interpret } from "../../../../program/bridge/index.mjs";
+import { resolveConfigText } from "../../../../program/configure/env.mjs";
+import { loadDefaultConfig } from "../../../../command/run_pya_helpers.mjs";
+
+export const DEFAULT_CORPUS_DIR = "/home/htaf/channelingtxt";
+export const DEFAULT_MAX_FILES = 40;
+export const DEFAULT_CONTEXT_LINES = 2;
+export const DEFAULT_MAX_SOURCE_BYTES = 96 * 1024;
+export const DEFAULT_MAX_FILE_BYTES = 256 * 1024;
+export const LEARN_PIPELINE_TIMEOUT_MS = 45 * 60 * 1000;
+export const DEFAULT_CARD_DEPTH = "radio";
+
+// --------------------------------------------------------------------- paths
+
+export function slugifyTopic(topic) {
+  const text = String(topic ?? "").trim().toLowerCase();
+  if (!text || !/^[a-z0-9]+$/u.test(text)) {
+    throw new Error(`yiniana lyrics chain: topic must be a single word, got "${topic}"`);
+  }
+  return text;
+}
+
+export function buildSourcePath(radioDir, topic) {
+  return path.join(radioDir, "lyrics", `source-${slugifyTopic(topic)}.txt`);
+}
+
+export function buildTeachingPath(radioDir, topic) {
+  return path.join(radioDir, "lyrics", `teaching-${slugifyTopic(topic)}.txt`);
+}
+
+export function buildSongPath(radioDir, topic) {
+  return path.join(radioDir, "lyrics", `song-${slugifyTopic(topic)}.txt`);
+}
+
+// ------------------------------------------------------------------ excerpts
+
+export function buildTopicPattern(topic) {
+  const text = String(topic ?? "").trim();
+  if (!text) return null;
+  const escaped = text.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return new RegExp(`(?<![A-Za-z0-9])${escaped}(?![A-Za-z0-9])`, "iu");
+}
+
+export async function listCorpusFiles(corpusDir) {
+  const files = [];
+  const seenDirs = new Set();
+
+  async function walk(dir) {
+    let entries;
+    try {
+      entries = await fsp.readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const full = path.join(dir, entry.name);
+      let stat;
+      try {
+        // stat follows symlinks; the corpus keeps its years behind links.
+        stat = await fsp.stat(full);
+      } catch {
+        continue;
+      }
+      if (stat.isDirectory()) {
+        const real = await fsp.realpath(full).catch(() => full);
+        if (seenDirs.has(real)) continue;
+        seenDirs.add(real);
+        await walk(full);
+        continue;
+      }
+      if (stat.isFile() && entry.name.endsWith(".txt")) files.push(full);
+    }
+  }
+
+  await walk(corpusDir);
+  return files;
+}
+
+export async function collectTopicExcerpts({
+  corpusDir = DEFAULT_CORPUS_DIR,
+  topic,
+  maxFiles = DEFAULT_MAX_FILES,
+  contextLines = DEFAULT_CONTEXT_LINES,
+  maxSourceBytes = DEFAULT_MAX_SOURCE_BYTES,
+  maxFileBytes = DEFAULT_MAX_FILE_BYTES,
+  files = null
+} = {}) {
+  const pattern = buildTopicPattern(topic);
+  if (!pattern) return { text: "", files: [], matches: 0 };
+
+  const corpusFiles = files ?? (await listCorpusFiles(corpusDir));
+  const sections = [];
+  const usedFiles = [];
+  let bytes = 0;
+  let matches = 0;
+
+  for (const file of corpusFiles) {
+    if (usedFiles.length >= maxFiles || bytes >= maxSourceBytes) break;
+    let content;
+    try {
+      content = await fsp.readFile(file, "utf8");
+    } catch {
+      continue;
+    }
+    if (content.length > maxFileBytes) content = content.slice(0, maxFileBytes);
+    const lines = content.split("\n");
+    const hits = [];
+    for (let index = 0; index < lines.length; index += 1) {
+      if (pattern.test(lines[index])) hits.push(index);
+    }
+    if (!hits.length) continue;
+
+    matches += hits.length;
+    const relative = path.relative(corpusDir, file) || path.basename(file);
+    const blocks = [];
+    for (const hit of hits) {
+      const start = Math.max(0, hit - contextLines);
+      const end = Math.min(lines.length - 1, hit + contextLines);
+      const last = blocks[blocks.length - 1];
+      if (last && start <= last.end + 1) {
+        for (let index = last.end + 1; index <= end; index += 1) last.lines.push(lines[index]);
+        last.end = end;
+        continue;
+      }
+      blocks.push({ start, end, lines: lines.slice(start, end + 1) });
+    }
+
+    const body = blocks
+      .map((block) => block.lines
+        .map((line, offset) => `${relative}:${block.start + offset + 1}:${line}`)
+        .join("\n"))
+      .join("\n");
+    const section = `${body}\n`;
+    sections.push(section);
+    bytes += Buffer.byteLength(section, "utf8");
+    usedFiles.push(relative);
+  }
+
+  return { text: sections.join("\n"), files: usedFiles, matches, bytes };
+}
+
+// ------------------------------------------------------------------- writing
+
+export async function writeFileAtomic(target, text) {
+  await fsp.mkdir(path.dirname(target), { recursive: true });
+  const temp = `${target}.tmp-${process.pid}-${Date.now()}`;
+  await fsp.writeFile(temp, text, "utf8");
+  await fsp.rename(temp, target);
+  return target;
+}
+
+// ------------------------------------------------------------- learnteaching
+
+export function runLearnPipeline({ sourcePath, topic, cwd = process.cwd(), cardDepth = DEFAULT_CARD_DEPTH, timeoutMs = LEARN_PIPELINE_TIMEOUT_MS }) {
+  const runner = path.join(cwd, "command", "learn_from_filename_pipeline.mjs");
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [runner, sourcePath, topic], {
+      cwd,
+      env: { ...process.env, PYA_RADIO_CARD_DEPTH: cardDepth },
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error("yiniana lyrics chain: learn pipeline timed out"));
+    }, timeoutMs);
+    child.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
+    child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code !== 0) {
+        reject(new Error(`yiniana lyrics chain: learn pipeline failed (${code}): ${stderr.trim()}`));
+        return;
+      }
+      resolve({ card: stdout.trim(), stderr });
+    });
+  });
+}
+
+export function readCardFromResult(stdout) {
+  const text = String(stdout ?? "");
+  const match = /FINAL_RESULT_FILE:\s*(\S+)/u.exec(text);
+  if (!match) return text.trim();
+  return fs.readFileSync(match[1], "utf8").trim();
+}
+
+// ---------------------------------------------------------------- song check
+
+// The hymn manuscript writes the yiniana reference arrangement: three verses,
+// three choruses, a bridge and a closing outro, in this fixed order. The
+// second chorus repeats the first verbatim and the third chorus keeps the
+// first three lines and turns only the last one, so the sheet must carry
+// exactly eight sections. Section tags use the reference vocabulary
+// ([Verse], [Chorus], [Bridge], [Outro]) and each tag opens its own line.
+export const SONG_SECTION_ORDER = [
+  "verse",
+  "verse",
+  "chorus",
+  "verse",
+  "chorus",
+  "bridge",
+  "chorus",
+  "outro"
+];
+
+export function parseSongSections(text) {
+  const tags = [];
+  for (const match of String(text ?? "").matchAll(/^\s*\[([^\]]+)\]/gmu)) {
+    const inside = String(match[1] ?? "").trim();
+    const name = inside.split("-", 1)[0].replace(/\s+\d+$/u, "").toLowerCase();
+    if (name) tags.push(name);
+  }
+  return tags;
+}
+
+export function verifySongStructure(text) {
+  const tags = parseSongSections(text);
+  const count = (name) => tags.filter((tag) => tag === name).length;
+  const missing = [];
+  if (count("verse") < 3) missing.push("verse");
+  if (count("chorus") < 3) missing.push("chorus");
+  if (!count("bridge")) missing.push("bridge");
+  if (!count("outro")) missing.push("outro");
+  const ordered =
+    tags.length === SONG_SECTION_ORDER.length &&
+    SONG_SECTION_ORDER.every((tag, index) => tags[index] === tag);
+  return { ok: missing.length === 0 && ordered, missing, ordered, tags };
+}
+
+// -------------------------------------------------------------------- driver
+
+export async function runLyricsChain({
+  topic,
+  radioDir,
+  corpusDir = DEFAULT_CORPUS_DIR,
+  runLearn = runLearnPipeline,
+  cardDepth = DEFAULT_CARD_DEPTH,
+  cwd = process.cwd()
+} = {}) {
+  const sourcePath = buildSourcePath(radioDir, topic);
+  const teachingPath = buildTeachingPath(radioDir, topic);
+
+  const excerpts = await collectTopicExcerpts({ corpusDir, topic });
+  if (!excerpts.text.trim()) {
+    throw new Error(`yiniana lyrics chain: no channeling excerpts for "${topic}"`);
+  }
+  await writeFileAtomic(sourcePath, excerpts.text);
+
+  // A card the radio already has is kept when it is the card the radio wants.
+  // The card is the slow part of the chain, so a card that already fits is
+  // never written twice.
+  const kept = await readCardIfItMatches(teachingPath, cardDepth);
+  if (kept) {
+    return {
+      topic,
+      sourcePath,
+      teachingPath,
+      files: excerpts.files,
+      matches: excerpts.matches,
+      bytes: excerpts.bytes,
+      cardDepth,
+      card: kept,
+      reused: true
+    };
+  }
+
+  const learned = await runLearn({ sourcePath, topic, cwd, cardDepth });
+  const card = readCardFromResult(learned.card);
+  const defect = validateLearnCard(card, headingsForDepth(cardDepth));
+  if (defect) throw new Error(`yiniana lyrics chain: ${defect}`);
+  await writeFileAtomic(teachingPath, card);
+
+  return {
+    topic,
+    sourcePath,
+    teachingPath,
+    files: excerpts.files,
+    matches: excerpts.matches,
+    bytes: excerpts.bytes,
+    cardDepth,
+    card,
+    reused: false
+  };
+}
+
+/**
+ * The card the radio already has for a topic, when it is the card the radio
+ * wants. A card of another depth is not kept: the radio wants its own shape.
+ */
+export async function readCardIfItMatches(teachingPath, cardDepth = DEFAULT_CARD_DEPTH) {
+  let text = "";
+  try {
+    text = await fsp.readFile(teachingPath, "utf8");
+  } catch {
+    return "";
+  }
+  if (!cardMatchesDepth(text, cardDepth)) return "";
+  if (validateLearnCard(text, headingsForDepth(cardDepth))) return "";
+  return text.trim();
+}
+
+function parseArgs(argv) {
+  const args = argv.slice(2);
+  if (args[0] === "--verify-song") {
+    return { mode: "verify-song", songPath: args[1] ?? "" };
+  }
+  return { mode: "chain", topic: args[0] ?? "", radioDir: args[1] ?? "" };
+}
+
+async function main() {
+  const args = parseArgs(process.argv);
+
+  if (args.mode === "verify-song") {
+    if (!args.songPath) throw new Error("yiniana lyrics chain: --verify-song needs a path");
+    const text = await fsp.readFile(args.songPath, "utf8");
+    const verdict = verifySongStructure(text);
+    if (!verdict.ok) {
+      const missing = verdict.missing.length ? `missing sections ${verdict.missing.join(", ")}` : "";
+      const order = verdict.ordered
+        ? ""
+        : `section order is ${verdict.tags.join(", ")} but the yiniana reference needs ${SONG_SECTION_ORDER.join(", ")}`;
+      throw new Error(`yiniana lyrics chain: song ${[missing, order].filter(Boolean).join("; ")}`);
+    }
+    process.stdout.write(`${args.songPath}\n`);
+    return;
+  }
+
+  if (!args.topic) {
+    throw new Error("yiniana lyrics chain: usage: node command/yiniana_lyrics_chain.mjs <topic> [radioDir]");
+  }
+  const radioDir = path.resolve(args.radioDir || path.join(process.cwd(), "radio"));
+  const corpusDir = process.env.RADIO_CORPUS_DIR || DEFAULT_CORPUS_DIR;
+  await loadDefaultConfig({ cwd: process.cwd(), interpretFn: interpret });
+  const cardDepth = resolveConfigText("radio card depth") || DEFAULT_CARD_DEPTH;
+  const result = await runLyricsChain({ topic: args.topic, radioDir, corpusDir, cardDepth });
+  process.stdout.write(`${result.teachingPath}\n`);
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((error) => {
+    process.stderr.write(`${error?.message ?? String(error)}\n`);
+    process.exit(1);
+  });
+}

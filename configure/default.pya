@@ -187,15 +187,15 @@ exists su name radio host ob text "::" be default ya
 exists su name radio port ob num 8090 be default ya
 exists su name radio catalogue ob text "radio/audio" be default ya
 exists su name radio station name ob text "Zvorygin Radio" be default ya
-exists su name radio station command ob text "node command/yiniana_radio.mjs" be default ya
-exists su name radio rotation ob text "radio/rotation.txt" be default ya
-exists su name radio channels ob text "radio/channels.txt" be default ya
-exists su name radio song imports ob text "radio/imports.txt" be default ya
-exists su name radio tags command ob text "node command/yiniana_tag_catalogue.mjs" be default ya
-exists su name radio transcribe command ob text "node command/yiniana_transcribe_catalogue.mjs" be default ya
+exists su name radio station command ob text "node world/house/radio/command/yiniana_radio.mjs" be default ya
+exists su name radio rotation ob text "world/house/radio/radio/rotation.txt" be default ya
+exists su name radio channels ob text "world/house/radio/radio/channels.txt" be default ya
+exists su name radio song imports ob text "world/house/radio/radio/imports.txt" be default ya
+exists su name radio tags command ob text "node world/house/radio/command/yiniana_tag_catalogue.mjs" be default ya
+exists su name radio transcribe command ob text "node world/house/radio/command/yiniana_transcribe_catalogue.mjs" be default ya
 exists su name radio card depth ob text "radio" be default ya
-exists su name radio producer lanes ob text "radio/topics.txt" be default ya
-exists su name radio producer command ob text "node command/yiniana_producer.mjs" be default ya
+exists su name radio producer lanes ob text "world/house/radio/radio/topics.txt" be default ya
+exists su name radio producer command ob text "node world/house/radio/command/yiniana_producer.mjs" be default ya
 exists su name radio producer seeds ob num 2 be default ya
 exists su name radio producer song count ob num 1 be default ya
 exists su name radio producer audition seconds ob num 0 be default ya

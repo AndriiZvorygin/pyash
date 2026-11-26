@@ -40,6 +40,10 @@ world/house/*
 !world/house/base/
 !world/house/base/**
 !world/house/refinery-watchdog/
+!world/house/radio/
+!world/house/radio/**
+world/house/radio/artifacts/**
+world/house/radio/node_modules/
 !world/house/refinery-watchdog/**
 world/house/refinery-watchdog/artifacts/**
 !world/house/refinery-watchdog/artifacts/.gitkeep
