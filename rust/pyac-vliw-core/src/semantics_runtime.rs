@@ -527,6 +527,8 @@ mod scalar_product;
 mod sentence;
 #[path = "semantics_runtime/sentence_encode.rs"]
 mod sentence_encode;
+#[path = "semantics_runtime/word_code.rs"]
+pub mod word_code;
 
 pub use sentence_encode::{
     Codelets, EncodeError, EncodeField, EncodeSentence, EncodedWord, SentenceWords, is_field_case,
